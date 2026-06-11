@@ -4,53 +4,21 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// ScriptableObject-обёртка над <see cref="BalanceConfig"/>. Позволяет
-    /// геймдизайнеру крутить весь баланс прямо в инспекторе Unity и иметь
-    /// несколько пресетов (например, Easy/Normal/Hard) как отдельные ассеты.
+    /// ScriptableObject-обёртка над <see cref="BalanceConfig"/> (GDD §18 US-18.3).
+    /// Конфиг вложен напрямую как сериализуемое поле — все числа баланса видны и
+    /// правятся в инспекторе (и в Play-режиме), а добавление нового поля в
+    /// <see cref="BalanceConfig"/> автоматически появляется здесь без правки обёртки.
     ///
-    /// Создание: ПКМ в Project → Create → Alpha → Balance Config.
+    /// Создание: ПКМ в Project → Create → Alpha → Balance Config. Несколько ассетов
+    /// = пресеты сложности (Easy/Normal/Hard).
     /// </summary>
     [CreateAssetMenu(fileName = "BalanceConfig", menuName = "Alpha/Balance Config", order = 0)]
     public sealed class BalanceConfigAsset : ScriptableObject
     {
-        [Header("Прокачка")]
-        public double xpBase = 100.0;
-        public double xpExponent = 1.5;
-        public int maxLevel = 20;
-        public int statPointsPerLevel = 3;
+        [Tooltip("Все числа баланса. Стартовые значения — плейсхолдеры из Приложения Б GDD.")]
+        public BalanceConfig config = new BalanceConfig();
 
-        [Header("Работа на базе")]
-        public int roleXpPerCycle = 20;
-        public int aptitudeMatchThreshold = 5;
-        public double wellSuitedXpMultiplier = 1.5;
-
-        [Header("Производство")]
-        public double globalProductionMultiplier = 1.0;
-        public double injuredProductionMultiplier = 0.5;
-
-        [Header("Восстановление")]
-        public double baseHealingPerCycle = 5.0;
-
-        [Header("Содержание")]
-        public int foodUpkeepPerCompanion = 1;
-
-        /// <summary>Преобразует ассет в чистый конфиг для игровой логики.</summary>
-        public BalanceConfig ToConfig()
-        {
-            return new BalanceConfig
-            {
-                XpBase = xpBase,
-                XpExponent = xpExponent,
-                MaxLevel = maxLevel,
-                StatPointsPerLevel = statPointsPerLevel,
-                RoleXpPerCycle = roleXpPerCycle,
-                AptitudeMatchThreshold = aptitudeMatchThreshold,
-                WellSuitedXpMultiplier = wellSuitedXpMultiplier,
-                GlobalProductionMultiplier = globalProductionMultiplier,
-                InjuredProductionMultiplier = injuredProductionMultiplier,
-                BaseHealingPerCycle = baseHealingPerCycle,
-                FoodUpkeepPerCompanion = foodUpkeepPerCompanion
-            };
-        }
+        /// <summary>Чистый конфиг для игровой логики (копия — чтобы рантайм не мутировал ассет).</summary>
+        public BalanceConfig ToConfig() => (config ?? new BalanceConfig()).Clone();
     }
 }

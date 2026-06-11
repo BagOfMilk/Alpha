@@ -2,107 +2,147 @@ using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
 using Game.Core.Economy;
+using Game.Core.Health;
 using Game.Core.Stats;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
 {
+    /// <summary>
+    /// База: назначения на позиции + продвижение времени (лечение в днях, стройка,
+    /// население). Материалы тут НЕ производятся — экономика проверяется отдельно.
+    /// </summary>
     public class BaseStateTests
     {
-        private static (BaseState state, Companion comp) MakeBaseWithOneSlot(SlotOutputKind kind)
+        private static (BaseState state, Roster roster) MakeBase(BalanceConfig cfg = null)
         {
+            cfg = cfg ?? new BalanceConfig();
             var roster = new Roster();
-            var ledger = new ResourceLedger();
-            var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 0 }; // изолируем от расхода еды
-            var state = new BaseState(roster, ledger, cfg);
+            var state = new BaseState(roster, new ResourceLedger(), cfg);
+            return (state, roster);
+        }
 
-            var arch = new CompanionArchetype("eng", "Инженер");
-            arch.BaseStats.Set(StatType.Engineering, 10);
-            var comp = arch.CreateInstance("eng_1");
-            roster.Add(comp);
+        private static Companion AddCompanion(Roster roster, string id, int medicine = 0)
+        {
+            var c = new Companion(id, new AttributeBlock(3, 3, 3, 3), 4);
+            if (medicine > 0) c.Skills.Set(SkillType.Medicine, medicine);
+            roster.Add(c);
+            return c;
+        }
 
-            var def = new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
-            {
-                OutputKind = kind,
-                OutputResource = ResourceType.Materials,
-                PrimaryAptitude = StatType.Engineering,
-                BaseOutput = 5, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0
-            };
-            state.AddSlot(def);
-            return (state, comp);
+        // ---- Назначения ----
+        [Test]
+        public void Assign_Succeeds_SetsOnDuty()
+        {
+            var (state, roster) = MakeBase();
+            var c = AddCompanion(roster, "c");
+            state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop));
+            Assert.AreEqual(AssignmentResult.Success, state.TryAssign("c", "bench"));
+            Assert.AreEqual(CompanionStatus.OnDuty, c.Status);
         }
 
         [Test]
-        public void Assign_Then_Produce_AddsResources()
+        public void Assign_ToCouncil_SetsOnCouncil()
         {
-            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
-            Assert.AreEqual(AssignmentResult.Success, state.TryAssign(comp.Id, "bench"));
-
-            var report = state.AdvanceCycle();
-            // 5 (base) + 10 (engineering) * 1.0 = 15
-            Assert.AreEqual(15, state.Resources.Get(ResourceType.Materials));
-            Assert.AreEqual(15, report.Produced[ResourceType.Materials]);
+            var (state, roster) = MakeBase();
+            AddCompanion(roster, "c");
+            state.AddSlot(new AssignmentSlotDefinition("seat", "Совет", BaseSectionType.Council));
+            state.TryAssign("c", "seat");
+            Assert.AreEqual(CompanionStatus.OnCouncil, roster.Get("c").Status);
         }
 
         [Test]
-        public void Assign_ToLockedSlot_Fails()
+        public void Assign_LockedSlot_Fails()
         {
-            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
-            state.GetSlot("bench").Unlocked = false;
-            Assert.AreEqual(AssignmentResult.SlotLocked, state.TryAssign(comp.Id, "bench"));
+            var (state, roster) = MakeBase();
+            AddCompanion(roster, "c");
+            state.AddSlot(new AssignmentSlotDefinition("m", "Рынок", BaseSectionType.Market) { UnlockedByDefault = false });
+            Assert.AreEqual(AssignmentResult.SlotLocked, state.TryAssign("c", "m"));
         }
 
         [Test]
         public void Assign_OccupiedSlot_Fails()
         {
-            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
-            var other = new CompanionArchetype("eng2", "Инженер2").CreateInstance("eng_2");
-            state.Roster.Add(other);
-
-            Assert.AreEqual(AssignmentResult.Success, state.TryAssign(comp.Id, "bench"));
-            Assert.AreEqual(AssignmentResult.SlotOccupied, state.TryAssign(other.Id, "bench"));
+            var (state, roster) = MakeBase();
+            AddCompanion(roster, "a");
+            AddCompanion(roster, "b");
+            state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop));
+            state.TryAssign("a", "bench");
+            Assert.AreEqual(AssignmentResult.SlotOccupied, state.TryAssign("b", "bench"));
         }
 
         [Test]
         public void Reassign_MovesCompanion_FreesOldSlot()
         {
-            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
-            var def2 = new AssignmentSlotDefinition("bench2", "Верстак2", BaseSectionType.Workshop)
-            {
-                OutputResource = ResourceType.Materials, PrimaryAptitude = StatType.Engineering
-            };
-            state.AddSlot(def2);
-
-            state.TryAssign(comp.Id, "bench");
-            state.TryAssign(comp.Id, "bench2");
-
-            Assert.IsFalse(state.GetSlot("bench").IsOccupied);
-            Assert.AreEqual(comp.Id, state.GetSlot("bench2").AssignedCompanionId);
+            var (state, roster) = MakeBase();
+            AddCompanion(roster, "a");
+            state.AddSlot(new AssignmentSlotDefinition("b1", "B1", BaseSectionType.Workshop));
+            state.AddSlot(new AssignmentSlotDefinition("b2", "B2", BaseSectionType.Workshop));
+            state.TryAssign("a", "b1");
+            state.TryAssign("a", "b2");
+            Assert.IsFalse(state.GetSlot("b1").IsOccupied);
+            Assert.AreEqual("a", state.GetSlot("b2").AssignedCompanionId);
         }
 
         [Test]
-        public void InjuredCompanion_ProducesLess()
+        public void Assign_InjuredCompanion_Unavailable()
         {
-            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
-            state.TryAssign(comp.Id, "bench");
-            comp.InjuryPoints = 100; // тяжело ранен, но всё ещё на посту
+            var (state, roster) = MakeBase();
+            var c = AddCompanion(roster, "c");
+            c.ApplyInjury(InjuryTier.Light, state.Balance, null);
+            state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop));
+            Assert.AreEqual(AssignmentResult.CompanionUnavailable, state.TryAssign("c", "bench"));
+        }
 
-            state.AdvanceCycle();
-            // 15 * 0.5 (InjuredProductionMultiplier по умолчанию) = 7.5 -> 8
-            Assert.AreEqual(8, state.Resources.Get(ResourceType.Materials));
+        // ---- Продвижение времени ----
+        [Test]
+        public void Injured_HealsOverDays_NaturalOnly()
+        {
+            var cfg = new BalanceConfig { NaturalRecoveryPerDay = 1, InfirmaryRecoveryPerDay = 1, MedicRecoveryPerSkillPoint = 0.2 };
+            var (state, roster) = MakeBase(cfg);
+            var c = AddCompanion(roster, "c");
+            c.ApplyInjury(InjuryTier.Serious, cfg, null); // 5 дней
+
+            state.AdvanceDays(3);
+            Assert.IsTrue(c.IsInjured); // вылечено 3, осталось 2
+
+            state.AdvanceDays(2);
+            Assert.IsFalse(c.IsInjured);
+            Assert.AreEqual(CompanionStatus.InCamp, c.Status);
         }
 
         [Test]
-        public void FoodUpkeep_CausesShortage_WhenEmpty()
+        public void Infirmary_WithMedic_SpeedsHealing()
         {
-            var roster = new Roster();
-            var ledger = new ResourceLedger();
-            var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 5 };
-            var state = new BaseState(roster, ledger, cfg);
-            roster.Add(new CompanionArchetype("x", "X").CreateInstance("x_1"));
+            var cfg = new BalanceConfig { NaturalRecoveryPerDay = 1, InfirmaryRecoveryPerDay = 1, MedicRecoveryPerSkillPoint = 0.2 };
+            var (state, roster) = MakeBase(cfg);
+            var patient = AddCompanion(roster, "p");
+            AddCompanion(roster, "m", medicine: 5);
+            state.AddSlot(new AssignmentSlotDefinition("bed", "Койка", BaseSectionType.Infirmary) { RelevantSkill = SkillType.Medicine });
+            state.TryAssign("m", "bed");
+            patient.ApplyInjury(InjuryTier.Serious, cfg, null); // 5 дней
 
-            var report = state.AdvanceCycle();
-            Assert.IsTrue(report.FoodShortage);
+            // в день: natural 1 + (infirmary 1 + medicine 5*0.2=1) = 3 → 2 дня дают 6 ≥ 5
+            var r = state.AdvanceDays(2);
+            Assert.IsFalse(patient.IsInjured);
+            Assert.Contains("p", r.Recovered);
+        }
+
+        [Test]
+        public void Construction_Completes_UnlocksSlot_AndPopulationGrows()
+        {
+            var cfg = new BalanceConfig { PopulationGrowthPerDay = 1 };
+            var (state, _) = MakeBase(cfg);
+            state.AddSlot(new AssignmentSlotDefinition("stall", "Прилавок", BaseSectionType.Market) { UnlockedByDefault = false });
+            state.StartConstruction(new Construction("c", "Рынок", BaseSectionType.Market, 4, "stall"));
+
+            state.AdvanceDays(3);
+            Assert.IsFalse(state.GetSlot("stall").Unlocked); // 3 < 4
+
+            var r2 = state.AdvanceDays(2); // всего 5 ≥ 4
+            Assert.IsTrue(state.GetSlot("stall").Unlocked);
+            Assert.Contains("Рынок", r2.ConstructionCompleted);
+            Assert.AreEqual(5, r2.Population); // 5 дней × 1/день
         }
     }
 }
