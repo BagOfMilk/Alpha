@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Game.Core.Base;
 using Game.Core.Characters;
+using Game.Core.Combat;
 using Game.Core.Health;
 using Game.Core.Stats;
 using Game.Core.Traits;
@@ -108,5 +109,82 @@ namespace Game.Core
                 }
             };
         }
+
+        // ===== Оружие (мелкий урон 2–8; в Unity станет ItemDefinition-ассетами) =====
+        public static WeaponDefinition Rifle() => new WeaponDefinition("rifle", "Винтовка", SkillType.Ranged)
+        {
+            Damage = DamageType.Ballistic, DamageMin = 3, DamageMax = 5, CritDamageBonus = 2,
+            ApCost = 4, OptimalRange = 6
+        };
+
+        public static WeaponDefinition Pistol() => new WeaponDefinition("pistol", "Пистолет", SkillType.Ranged)
+        {
+            Damage = DamageType.Ballistic, DamageMin = 2, DamageMax = 4, CritDamageBonus = 2,
+            ApCost = 3, OptimalRange = 4
+        };
+
+        public static WeaponDefinition Machete() => new WeaponDefinition("machete", "Мачете", SkillType.Melee)
+        {
+            Damage = DamageType.Ballistic, DamageMin = 3, DamageMax = 6, CritDamageBonus = 3,
+            ApCost = 3, ArmorPierce = 1
+        };
+
+        public static WeaponDefinition BruiserClub() => new WeaponDefinition("club", "Дубина", SkillType.Melee)
+        {
+            Damage = DamageType.Ballistic, DamageMin = 3, DamageMax = 6, CritDamageBonus = 2,
+            ApCost = 4, ShredOnHit = 1
+        };
+
+        public static WeaponDefinition GhoulClaws() => new WeaponDefinition("claws", "Когти", SkillType.Melee)
+        {
+            Damage = DamageType.Ballistic, DamageMin = 2, DamageMax = 4, CritDamageBonus = 2,
+            ApCost = 3, StatusOnHit = StatusType.Bleeding
+        };
+
+        public static WeaponDefinition StunGun() => new WeaponDefinition("stun_gun", "Станнер", SkillType.Ranged)
+        {
+            Damage = DamageType.Energy, DamageMin = 1, DamageMax = 3, CritDamageBonus = 1,
+            ApCost = 3, OptimalRange = 5, StatusOnHit = StatusType.Suppressed
+        };
+
+        // ===== Бестиарий: роль × семейство × профиль × оружие (US-3.14) =====
+        /// <summary>Танк: тянет фокус, резист к баллистике + броня — неси Шред/пробитие или огонь.</summary>
+        public static EnemyDefinition RaiderBruiser() =>
+            new EnemyDefinition("raider_bruiser", "Громила-рейдер", EnemyRole.Tank, EnemyFamily.Human)
+            {
+                MaxHp = 16, MaxAp = 8, Accuracy = 55, Defense = 0, Initiative = 3,
+                CritChance = 5, Armor = 2, Resolve = 3,
+                Resists = new ResistProfile().With(DamageType.Ballistic, 0.75).With(DamageType.Fire, 1.5),
+                Weapon = BruiserClub()
+            };
+
+        /// <summary>Застрельщик: дальний ДПС из укрытия — рви линию обзора или сближайся.</summary>
+        public static EnemyDefinition ScavGunner() =>
+            new EnemyDefinition("scav_gunner", "Стрелок-падальщик", EnemyRole.Skirmisher, EnemyFamily.Human)
+            {
+                MaxHp = 9, MaxAp = 8, Accuracy = 65, Defense = 5, Initiative = 6,
+                CritChance = 10, Armor = 0, Resolve = 0,
+                Weapon = Rifle()
+            };
+
+        /// <summary>Контролёр: вешает Подавление — приоритетная цель; робот (резист токсина, уязвим к энергии).</summary>
+        public static EnemyDefinition RustDrone() =>
+            new EnemyDefinition("rust_drone", "Ржавый дрон", EnemyRole.Controller, EnemyFamily.Robot)
+            {
+                MaxHp = 8, MaxAp = 8, Accuracy = 70, Defense = 5, Initiative = 7,
+                CritChance = 5, Armor = 1, Resolve = 9,
+                Resists = new ResistProfile().With(DamageType.Toxin, 0.5).With(DamageType.Energy, 1.5),
+                Weapon = StunGun()
+            };
+
+        /// <summary>Прорыв: быстрый рывок в ближний, когти с Кровотечением; мутант (уязвим к огню).</summary>
+        public static EnemyDefinition FeralGhoul() =>
+            new EnemyDefinition("feral_ghoul", "Дикий гул", EnemyRole.Breacher, EnemyFamily.Mutant)
+            {
+                MaxHp = 9, MaxAp = 10, Accuracy = 60, Defense = 5, Initiative = 8,
+                CritChance = 10, Armor = 0, Resolve = 0,
+                Resists = new ResistProfile().With(DamageType.Fire, 1.5),
+                Weapon = GhoulClaws()
+            };
     }
 }

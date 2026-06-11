@@ -69,6 +69,17 @@ namespace Game.Core.Balance
         public int SquadSize = 4;              // отряд из 4 (US-3.5)
         public int DownWindowTurns = 2;        // окно на стабилизацию при дауне (US-4.1)
 
+        // -- Реализация боя (ядро WL3) --
+        public int MoveApCostPerTile = 1;          // движение ~1 AP/клетка (Прил. Б)
+        public int AccuracyPerWeaponSkill = 3;     // +точность за очко скила оружия
+        public int DistancePenaltyPerTile = 5;     // −% за тайл дальше оптимала оружия
+        public int HitChanceMin = 1;               // клампы шанса до правил пола/гразы
+        public int HitChanceMax = 99;
+        public int StabilizeApCost = 4;            // стабилизация дауна (активка Медицины)
+        public int ResolvePerStatusTurnReduction = 3;   // каждые N Resolve → −1 ход состояния (мин 1)
+        public int SuppressionAccuracyPenalty = 15;     // Подавление: −точность
+        public double SuppressionMoveCostMultiplier = 1.5; // Подавление: движение дороже (округление вверх)
+
         // ======== Ранения и восстановление (Эпик 4) ========
         // 3 тира ранений → дни лечения (2/5/10).
         public int InjuryDaysLight = 2;
