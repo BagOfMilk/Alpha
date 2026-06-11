@@ -80,6 +80,14 @@ namespace Game.Core.Balance
         public int SuppressionAccuracyPenalty = 15;     // Подавление: −точность
         public double SuppressionMoveCostMultiplier = 1.5; // Подавление: движение дороже (округление вверх)
 
+        // ======== Кампания / экспедиции ========
+        // Айронмен (US-16.1): протагонист теряет сюжетную защиту — его смерть = game over.
+        public bool Ironman = false;
+        // Доля HP, ниже которой выживший после боя получает Лёгкое ранение (без шрама).
+        public double LightInjuryHpFraction = 0.5;
+        // XP каждому выжившему за победную вылазку (US-5.1: опыт с боёв).
+        public int XpPerExpeditionVictory = 80;
+
         // ======== Ранения и восстановление (Эпик 4) ========
         // 3 тира ранений → дни лечения (2/5/10).
         public int InjuryDaysLight = 2;

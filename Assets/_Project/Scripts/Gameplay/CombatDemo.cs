@@ -53,8 +53,8 @@ namespace Game.Gameplay
             Debug.Log(summary.ToString());
         }
 
-        /// <summary>Собирает карту 12×8 с укрытиями/стеной и расставляет отряд 4 против 6 врагов.</summary>
-        public static CombatState BuildSkirmish(BalanceConfig cfg, int seed)
+        /// <summary>Карта 12×8 с укрытиями и стеной — общая арена демо-стычек.</summary>
+        public static GridMap BuildArena()
         {
             var map = new GridMap(12, 8);
             // Сплошная стена в центре — рвёт линии обзора.
@@ -65,27 +65,41 @@ namespace Game.Gameplay
             map.SetCover(new GridPos(3, 5), Direction.East, CoverType.Half);
             map.SetCover(new GridPos(8, 2), Direction.West, CoverType.Half);
             map.SetCover(new GridPos(8, 5), Direction.West, CoverType.Full);
+            return map;
+        }
 
-            var cs = new CombatState(map, cfg, new SeededRng(seed));
+        /// <summary>Стартовые позиции отряда на левом краю арены.</summary>
+        public static readonly GridPos[] SquadSpawns =
+        {
+            new GridPos(1, 2), new GridPos(1, 3), new GridPos(1, 4), new GridPos(1, 5)
+        };
 
-            // Отряд: 4 напарника из бэкграундов + оружие по профилю.
-            var marksman = DefaultContent.Marksman().CreateInstance("marksman", cfg);
-            var brawler = DefaultContent.Brawler().CreateInstance("brawler", cfg);
-            var medic = DefaultContent.Medic().CreateInstance("medic", cfg);
-            var leader = DefaultContent.Leader().CreateInstance("leader", cfg);
-            cs.AddUnit(CombatUnit.FromCompanion(marksman, DefaultContent.Rifle(), cfg), new GridPos(1, 2));
-            cs.AddUnit(CombatUnit.FromCompanion(brawler, DefaultContent.Machete(), cfg), new GridPos(1, 3));
-            cs.AddUnit(CombatUnit.FromCompanion(medic, DefaultContent.Pistol(), cfg), new GridPos(1, 4));
-            cs.AddUnit(CombatUnit.FromCompanion(leader, DefaultContent.Rifle(), cfg), new GridPos(1, 5));
-
-            // Враги: Танк + 2 Застрельщика + Контролёр + 2 Прорыва (база-4 роли).
+        /// <summary>Враги демо: Танк + 2 Застрельщика + Контролёр + 2 Прорыва (база-4 роли).</summary>
+        public static void AddDefaultEnemies(CombatState cs)
+        {
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.RaiderBruiser(), "e_bruiser"), new GridPos(10, 3));
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.ScavGunner(), "e_gunner1"), new GridPos(10, 2));
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.ScavGunner(), "e_gunner2"), new GridPos(10, 5));
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.RustDrone(), "e_drone"), new GridPos(10, 4));
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.FeralGhoul(), "e_ghoul1"), new GridPos(10, 1));
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.FeralGhoul(), "e_ghoul2"), new GridPos(10, 6));
+        }
 
+        /// <summary>Собирает стычку 4 против 6: свежие напарники из бэкграундов против дефолтных врагов.</summary>
+        public static CombatState BuildSkirmish(BalanceConfig cfg, int seed)
+        {
+            var cs = new CombatState(BuildArena(), cfg, new SeededRng(seed));
+
+            var marksman = DefaultContent.Marksman().CreateInstance("marksman", cfg);
+            var brawler = DefaultContent.Brawler().CreateInstance("brawler", cfg);
+            var medic = DefaultContent.Medic().CreateInstance("medic", cfg);
+            var leader = DefaultContent.Leader().CreateInstance("leader", cfg);
+            cs.AddUnit(CombatUnit.FromCompanion(marksman, DefaultContent.Rifle(), cfg), SquadSpawns[0]);
+            cs.AddUnit(CombatUnit.FromCompanion(brawler, DefaultContent.Machete(), cfg), SquadSpawns[1]);
+            cs.AddUnit(CombatUnit.FromCompanion(medic, DefaultContent.Pistol(), cfg), SquadSpawns[2]);
+            cs.AddUnit(CombatUnit.FromCompanion(leader, DefaultContent.Rifle(), cfg), SquadSpawns[3]);
+
+            AddDefaultEnemies(cs);
             cs.Begin();
             return cs;
         }

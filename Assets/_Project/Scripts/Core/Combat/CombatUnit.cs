@@ -40,6 +40,13 @@ namespace Game.Core.Combat
         public int Resolve;       // сокращает длительность состояний
         public int MedicineSkill; // для стабилизации дауна
         public bool CanBeDowned;  // напарники — да; рядовые враги умирают сразу
+
+        /// <summary>
+        /// Сюжетная защита протагониста (US-4.4): окно дауна вышло → теряет сознание
+        /// и выбывает живым (Stabilized), а не погибает. В айронмене выключена.
+        /// </summary>
+        public bool ProtectedFromDeath;
+
         public ResistProfile Resists = new ResistProfile();
     }
 
@@ -117,7 +124,8 @@ namespace Game.Core.Combat
                 Armor = d[DerivedStat.Armor],
                 Resolve = d[DerivedStat.Resolve],
                 MedicineSkill = c.GetSkill(SkillType.Medicine),
-                CanBeDowned = true
+                CanBeDowned = true,
+                ProtectedFromDeath = c.IsProtagonist && !cfg.Ironman
             };
             return new CombatUnit("u_" + c.Id, Side.Player, profile, weapon, c.Id);
         }

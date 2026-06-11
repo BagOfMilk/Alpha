@@ -36,6 +36,12 @@ namespace Game.Core.Characters
         public string Id { get; }
         public string DisplayName { get; set; }
 
+        /// <summary>
+        /// Протагонист-лидер (US-2.7). В обычном режиме защищён от смерти — только
+        /// даунится (US-4.4); в айронмене его гибель = game over (Эпик 16).
+        /// </summary>
+        public bool IsProtagonist { get; set; }
+
         public AttributeBlock Attributes { get; }
         public SkillSet Skills { get; }
         public TraitSet Traits { get; }

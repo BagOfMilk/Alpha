@@ -309,7 +309,17 @@ namespace Game.Core.Combat
                     if (unit.DownWindowRemaining <= 0)
                     {
                         AddLog($"{unit.Profile.DisplayName}: окно спасения вышло…");
-                        Die(unit);
+                        if (unit.Profile.ProtectedFromDeath)
+                        {
+                            // Сюжетная защита протагониста (US-4.4): жив, но выбыл из боя.
+                            unit.LifeState = UnitLifeState.Stabilized;
+                            Map.ClearOccupant(unit.Pos);
+                            AddLog($"  {unit.Profile.DisplayName} теряет сознание, но выживает.");
+                        }
+                        else
+                        {
+                            Die(unit);
+                        }
                         CheckOutcome();
                     }
                     else
