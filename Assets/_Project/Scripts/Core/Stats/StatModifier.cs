@@ -20,7 +20,8 @@ namespace Game.Core.Stats
         Trait = 1,
         Scar = 2,
         State = 3,
-        Buff = 4
+        Buff = 4,
+        Perk = 5
     }
 
     /// <summary>

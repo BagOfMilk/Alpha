@@ -90,14 +90,19 @@ namespace Game.Gameplay
         {
             var cs = new CombatState(BuildArena(), cfg, new SeededRng(seed));
 
+            var abilities = DefaultContent.AbilityCatalog();
+            var perks = DefaultContent.PerkCatalog();
             var marksman = DefaultContent.Marksman().CreateInstance("marksman", cfg);
             var brawler = DefaultContent.Brawler().CreateInstance("brawler", cfg);
             var medic = DefaultContent.Medic().CreateInstance("medic", cfg);
             var leader = DefaultContent.Leader().CreateInstance("leader", cfg);
-            cs.AddUnit(CombatUnit.FromCompanion(marksman, DefaultContent.Rifle(), cfg), SquadSpawns[0]);
-            cs.AddUnit(CombatUnit.FromCompanion(brawler, DefaultContent.Machete(), cfg), SquadSpawns[1]);
-            cs.AddUnit(CombatUnit.FromCompanion(medic, DefaultContent.Pistol(), cfg), SquadSpawns[2]);
-            cs.AddUnit(CombatUnit.FromCompanion(leader, DefaultContent.Rifle(), cfg), SquadSpawns[3]);
+            foreach (var c in new[] { marksman, brawler, medic, leader })
+                c.RefreshPerks(perks); // пассивные бонусы по порогам скилов (US-3.10)
+
+            cs.AddUnit(CombatUnit.FromCompanion(marksman, DefaultContent.Rifle(), cfg, abilities), SquadSpawns[0]);
+            cs.AddUnit(CombatUnit.FromCompanion(brawler, DefaultContent.Machete(), cfg, abilities), SquadSpawns[1]);
+            cs.AddUnit(CombatUnit.FromCompanion(medic, DefaultContent.Pistol(), cfg, abilities), SquadSpawns[2]);
+            cs.AddUnit(CombatUnit.FromCompanion(leader, DefaultContent.Rifle(), cfg, abilities), SquadSpawns[3]);
 
             AddDefaultEnemies(cs);
             cs.Begin();
@@ -130,11 +135,28 @@ namespace Game.Gameplay
                     }
                 }
 
-                // 2. Ближайшая активная цель.
+                // 2. Перевязать тяжело раненного союзника рядом (Перевязка и т.п.).
+                var healAbility = FirstUsableOfKind(u, AbilityEffectKind.Heal);
+                if (healAbility != null)
+                {
+                    var wounded = NearestWoundedAlly(cs, u);
+                    if (wounded != null && GridPos.Chebyshev(u.Pos, wounded.Pos) <= healAbility.Range
+                        && cs.UseAbility(healAbility.Id, wounded == u ? null : wounded.Id) == CombatActionResult.Success)
+                        continue;
+                }
+
+                // 3. Ближайшая активная цель.
                 var target = Nearest(cs, u, sameSide: false, state: UnitLifeState.Active);
                 if (target == null) { cs.EndTurn(); continue; }
 
-                // 3. Атака (Strike — если метр полон); иначе сближение.
+                // 4. Способность по цели (рывок/подавление/очередь...), иначе атака/сближение.
+                var offensive = PickOffensiveAbility(u, target);
+                if (offensive != null && cs.UseAbility(offensive.Id, target.Id) == CombatActionResult.Success)
+                {
+                    if (u.Weapon == null || u.Ap < u.Weapon.ApCost) cs.EndTurn();
+                    continue;
+                }
+
                 bool strike = u.StrikeMeter >= cfg.StrikeGuaranteeAt;
                 var atk = cs.Attack(target.Id, strike);
                 if (atk == CombatActionResult.Success)
@@ -146,6 +168,57 @@ namespace Game.Gameplay
 
                 if (!TryStepToward(cs, u, target.Pos)) cs.EndTurn();
             }
+        }
+
+        /// <summary>Первая готовая способность с эффектом нужного вида (КД 0, AP хватает).</summary>
+        private static AbilityDefinition FirstUsableOfKind(CombatUnit u, AbilityEffectKind kind)
+        {
+            foreach (var a in u.Abilities)
+            {
+                if (u.CooldownRemaining(a.Id) > 0 || u.Ap < a.ApCost) continue;
+                foreach (var fx in a.Effects)
+                    if (fx.Kind == kind) return a;
+            }
+            return null;
+        }
+
+        /// <summary>Ближайший союзник с HP ≤ 50% (включая себя).</summary>
+        private static CombatUnit NearestWoundedAlly(CombatState cs, CombatUnit from)
+        {
+            CombatUnit best = null;
+            int bestDist = int.MaxValue;
+            foreach (var u in cs.Units)
+            {
+                if (u.Side != from.Side || !u.IsActive) continue;
+                if (u.Hp * 2 > u.Profile.MaxHp) continue;
+                int d = GridPos.Chebyshev(from.Pos, u.Pos);
+                if (d < bestDist) { bestDist = d; best = u; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Первая полезная атакующая способность по цели: готова по КД/AP и не
+        /// сводится к наложению уже висящего состояния.
+        /// </summary>
+        private static AbilityDefinition PickOffensiveAbility(CombatUnit u, CombatUnit target)
+        {
+            foreach (var a in u.Abilities)
+            {
+                if (a.Targeting != AbilityTarget.Enemy) continue;
+                if (u.CooldownRemaining(a.Id) > 0 || u.Ap < a.ApCost) continue;
+
+                bool useful = false;
+                foreach (var fx in a.Effects)
+                {
+                    if (fx.Kind == AbilityEffectKind.RemoveStatus) continue;
+                    if (fx.Kind == AbilityEffectKind.ApplyStatus && target.HasStatus(fx.Status)) continue;
+                    useful = true;
+                    break;
+                }
+                if (useful) return a;
+            }
+            return null;
         }
 
         private static CombatUnit Nearest(CombatState cs, CombatUnit from, bool sameSide, UnitLifeState state)

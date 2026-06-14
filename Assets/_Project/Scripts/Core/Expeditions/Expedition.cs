@@ -95,8 +95,12 @@ namespace Game.Core.Expeditions
             return _base.AdvanceDays(Plan.TravelDaysOut);
         }
 
-        /// <summary>Боевые юниты отряда для CombatState; оружие выдаёт «оружейная» вызывающего.</summary>
-        public List<CombatUnit> BuildCombatUnits(Func<Companion, WeaponDefinition> armory)
+        /// <summary>
+        /// Боевые юниты отряда для CombatState; оружие выдаёт «оружейная» вызывающего,
+        /// способности набираются из каталога по порогам скилов.
+        /// </summary>
+        public List<CombatUnit> BuildCombatUnits(Func<Companion, WeaponDefinition> armory,
+                                                 IEnumerable<AbilityDefinition> abilityCatalog = null)
         {
             if (Phase == ExpeditionPhase.Concluded) throw new InvalidOperationException("Вылазка завершена");
             var units = new List<CombatUnit>();
@@ -104,7 +108,7 @@ namespace Game.Core.Expeditions
             {
                 var c = _base.Roster.Get(id);
                 if (c == null) continue;
-                units.Add(CombatUnit.FromCompanion(c, armory != null ? armory(c) : null, _cfg));
+                units.Add(CombatUnit.FromCompanion(c, armory != null ? armory(c) : null, _cfg, abilityCatalog));
             }
             return units;
         }

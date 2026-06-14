@@ -23,6 +23,12 @@ namespace Game.Core.Base
         public int CurrentDay { get; private set; }
         public double Population { get; private set; }
 
+        /// <summary>Тир города (US-7.6, 1..MaxCityTier) — главный двигатель фонового Напряжения.</summary>
+        public int CityTier { get; private set; } = 1;
+
+        /// <summary>Скрытые угрозы (Эпик 11). Подключаются опционально через AttachThreats.</summary>
+        public Threats.ThreatSystem ThreatsSystem { get; private set; }
+
         private readonly Dictionary<string, AssignmentSlot> _slotsById = new Dictionary<string, AssignmentSlot>();
         private readonly List<AssignmentSlot> _slots = new List<AssignmentSlot>();
         private readonly List<Construction> _construction = new List<Construction>();
@@ -53,6 +59,21 @@ namespace Game.Core.Base
         public void StartConstruction(Construction construction)
         {
             if (construction != null) _construction.Add(construction);
+        }
+
+        /// <summary>Подключает систему скрытых угроз — тикается из AdvanceDays.</summary>
+        public void AttachThreats(Threats.ThreatSystem threats) => ThreatsSystem = threats;
+
+        /// <summary>Продвижение тира города (комбинация условий — US-7.6; здесь только механика).</summary>
+        public void AdvanceCityTier()
+        {
+            if (CityTier < Balance.MaxCityTier) CityTier++;
+        }
+
+        /// <summary>Кризис «отток населения» и подобные сливы (не ниже нуля).</summary>
+        internal void RemovePopulation(double amount)
+        {
+            Population = Math.Max(0, Population - amount);
         }
 
         // ---- Назначения ----
@@ -136,6 +157,10 @@ namespace Game.Core.Base
             }
 
             Population += Balance.PopulationGrowthPerDay * days;
+
+            // Скрытые угрозы: фоновый тик Напряжения + роллы инцидентов (Эпик 11).
+            ThreatsSystem?.TickDays(this, days, report);
+
             CurrentDay += days;
             report.ToDay = CurrentDay;
             report.Population = (int)Math.Floor(Population);

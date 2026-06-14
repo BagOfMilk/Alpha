@@ -79,6 +79,9 @@ namespace Game.Core.Balance
         public int ResolvePerStatusTurnReduction = 3;   // каждые N Resolve → −1 ход состояния (мин 1)
         public int SuppressionAccuracyPenalty = 15;     // Подавление: −точность
         public double SuppressionMoveCostMultiplier = 1.5; // Подавление: движение дороже (округление вверх)
+        public int MarkedHitBonus = 10;                 // Метка: +шанс попасть по цели
+        public int KnockdownDefensePenalty = 10;        // Сбит с ног: −защита цели (не ниже 0)
+        public int StandUpApCost = 2;                   // Сбит с ног: встать в начале хода стоит AP
 
         // ======== Кампания / экспедиции ========
         // Айронмен (US-16.1): протагонист теряет сюжетную защиту — его смерть = game over.
@@ -99,6 +102,24 @@ namespace Game.Core.Balance
         public double NaturalRecoveryPerDay = 1.0;        // тикает даже без лазарета
         public double InfirmaryRecoveryPerDay = 1.0;      // лазарет с медиком на посту
         public double MedicRecoveryPerSkillPoint = 0.2;   // + от скила Медицина медика
+
+        // ======== Скрытые шкалы (Эпик 11) ========
+        // «Напряжение» (внутреннее). Игроку число НЕ показывается (US-17.2) —
+        // наружу идут только качественные полосы и фоновые сигналы.
+        public double TensionPerDayPerTier = 0.2; // фоновый тик: тир города × N в день (мягко, US-1.3)
+        public double TensionUneasyAt = 25;       // полосы: Calm < Uneasy < Tense < Critical
+        public double TensionTenseAt = 50;
+        public double TensionCriticalAt = 75;
+        public double IncidentChanceBase = 4;       // % шанс инцидента в день при нулевом Напряжении
+        public double IncidentChancePerTension = 0.4; // +% за пункт Напряжения (частота растёт, US-11.1)
+        public double CrisisExodusPopulation = 3;   // кризис «отток»: −население
+        public int MaxCityTier = 4;                 // тиров города 3–4 (US-7.6)
+
+        // «Готовность» (внешнее/финал, US-11.4). Тоже скрыта.
+        public double ReadinessPerPreparation = 10; // действие совета «Подготовка к угрозе» (вход)
+        public double ReadinessPerFortification = 15; // вклад построенных Укреплений
+        public double ReadinessBracedAt = 25;       // полосы: Unprepared < Braced < Fortified
+        public double ReadinessFortifiedAt = 60;
 
         // ======== База: население и стройка ========
         public double PopulationGrowthPerDay = 0.25;  // пассивный рост (US-7.5); ускоряется Таверной/жильём

@@ -60,6 +60,10 @@ namespace Game.Core.Combat
         public static int DotTick(int baseDamage, DamageType type, CombatUnit target)
             => Math.Max(0, ApplyTypeMultiplier(baseDamage, type, target));
 
+        /// <summary>Фикс урон способности/ловушки: множитель типа + эффективная броня (без крита/гразы).</summary>
+        public static int FlatDamage(int baseDamage, DamageType type, CombatUnit target)
+            => Math.Max(0, ApplyTypeMultiplier(baseDamage, type, target) - target.EffectiveArmor);
+
         private static int ApplyTypeMultiplier(int damage, DamageType type, CombatUnit target)
             => (int)Math.Round(damage * target.Profile.Resists.Multiplier(type));
     }

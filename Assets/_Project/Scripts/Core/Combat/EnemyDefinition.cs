@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Game.Core.Combat
 {
@@ -45,6 +46,9 @@ namespace Game.Core.Combat
 
         public ResistProfile Resists = new ResistProfile();
         public WeaponDefinition Weapon;
+
+        /// <summary>Способности из общего с игроком пула (US-3.14: симметрия, гейтов скила у врагов нет).</summary>
+        public List<AbilityDefinition> Abilities = new List<AbilityDefinition>();
 
         public EnemyDefinition() { }
 

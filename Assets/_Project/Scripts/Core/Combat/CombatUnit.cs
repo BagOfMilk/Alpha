@@ -75,6 +75,39 @@ namespace Game.Core.Combat
 
         public readonly List<StatusInstance> Statuses = new List<StatusInstance>();
 
+        /// <summary>Известные способности (напарник — по порогам скилов; враг — из определения).</summary>
+        public readonly List<AbilityDefinition> Abilities = new List<AbilityDefinition>();
+
+        private readonly Dictionary<string, int> _cooldowns = new Dictionary<string, int>();
+
+        public int CooldownRemaining(string abilityId)
+            => abilityId != null && _cooldowns.TryGetValue(abilityId, out var v) ? v : 0;
+
+        internal void SetCooldown(string abilityId, int turns)
+        {
+            if (!string.IsNullOrEmpty(abilityId) && turns > 0) _cooldowns[abilityId] = turns;
+        }
+
+        /// <summary>Тик кулдаунов в начале СВОЕГО хода.</summary>
+        internal void TickCooldowns()
+        {
+            if (_cooldowns.Count == 0) return;
+            var keys = new List<string>(_cooldowns.Keys);
+            for (int i = 0; i < keys.Count; i++)
+            {
+                int v = _cooldowns[keys[i]] - 1;
+                if (v <= 0) _cooldowns.Remove(keys[i]);
+                else _cooldowns[keys[i]] = v;
+            }
+        }
+
+        public AbilityDefinition FindAbility(string abilityId)
+        {
+            for (int i = 0; i < Abilities.Count; i++)
+                if (Abilities[i].Id == abilityId) return Abilities[i];
+            return null;
+        }
+
         public CombatUnit(string id, Side side, UnitProfile profile, WeaponDefinition weapon,
                           string sourceCompanionId = null)
         {
@@ -107,8 +140,13 @@ namespace Game.Core.Combat
         }
 
         // ---- Фабрики ----
-        /// <summary>Напарник → боевой юнит: производные через единый агрегатор + бонус скила оружия к точности.</summary>
-        public static CombatUnit FromCompanion(Companion c, WeaponDefinition weapon, BalanceConfig cfg)
+        /// <summary>
+        /// Напарник → боевой юнит: производные через единый агрегатор + бонус скила
+        /// оружия к точности. Способности набираются из каталога по порогам скилов
+        /// (US-2.2: гейт уровнем скила).
+        /// </summary>
+        public static CombatUnit FromCompanion(Companion c, WeaponDefinition weapon, BalanceConfig cfg,
+                                               IEnumerable<AbilityDefinition> abilityCatalog = null)
         {
             var d = c.EffectiveDerived(cfg);
             int weaponSkill = weapon != null ? c.GetSkill(weapon.Skill) : 0;
@@ -127,7 +165,15 @@ namespace Game.Core.Combat
                 CanBeDowned = true,
                 ProtectedFromDeath = c.IsProtagonist && !cfg.Ironman
             };
-            return new CombatUnit("u_" + c.Id, Side.Player, profile, weapon, c.Id);
+            var unit = new CombatUnit("u_" + c.Id, Side.Player, profile, weapon, c.Id);
+            if (abilityCatalog != null)
+            {
+                foreach (var ability in abilityCatalog)
+                    if (ability != null && ability.Skill != Stats.SkillType.None
+                        && c.GetSkill(ability.Skill) >= ability.RequiredSkillLevel)
+                        unit.Abilities.Add(ability);
+            }
+            return unit;
         }
 
         /// <summary>Враг → боевой юнит из определения (роль × семейство × профиль × оружие).</summary>
@@ -148,7 +194,11 @@ namespace Game.Core.Combat
                 CanBeDowned = false,
                 Resists = def.Resists ?? new ResistProfile()
             };
-            return new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon);
+            var unit = new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon);
+            if (def.Abilities != null)
+                foreach (var ability in def.Abilities)
+                    if (ability != null) unit.Abilities.Add(ability);
+            return unit;
         }
     }
 }

@@ -39,7 +39,11 @@ namespace Game.Gameplay
             var ledger = new ResourceLedger();
             var baseState = new BaseState(roster, ledger, cfg);
             foreach (var bg in DefaultContent.AllBackgrounds())
-                roster.Add(bg.CreateInstance(bg.Id, cfg));
+            {
+                var companion = bg.CreateInstance(bg.Id, cfg);
+                companion.RefreshPerks(DefaultContent.PerkCatalog()); // пассивы по порогам скилов
+                roster.Add(companion);
+            }
             roster.Get("leader").IsProtagonist = true;
             foreach (var slot in DefaultContent.AllSlots())
                 baseState.AddSlot(slot);
@@ -65,7 +69,7 @@ namespace Game.Gameplay
 
             // --- БОЙ: отряд экспедиции против дефолтных врагов на общей арене ---
             var cs = new CombatState(CombatDemo.BuildArena(), cfg, new SeededRng(seed));
-            var units = expedition.BuildCombatUnits(Armory);
+            var units = expedition.BuildCombatUnits(Armory, DefaultContent.AbilityCatalog());
             for (int i = 0; i < units.Count; i++)
                 cs.AddUnit(units[i], CombatDemo.SquadSpawns[i % CombatDemo.SquadSpawns.Length]);
             CombatDemo.AddDefaultEnemies(cs);

@@ -22,9 +22,17 @@ namespace Game.Core.Combat
         /// <summary>Низкоуровневая чистая формула — для тестов и предпросмотра в UI.</summary>
         public static int Compute(int attackerAccuracy, bool attackerSuppressed,
                                   int targetDefense, CoverType cover, bool ignoreCover,
-                                  int distance, int optimalRange, Balance.BalanceConfig cfg)
+                                  int distance, int optimalRange, Balance.BalanceConfig cfg,
+                                  bool targetMarked = false, bool targetKnockedDown = false,
+                                  int accuracyBonus = 0)
         {
-            int chance = attackerAccuracy - targetDefense;
+            // Сбит с ног — лёгкая цель: защита проседает (не ниже нуля).
+            if (targetKnockedDown)
+                targetDefense = System.Math.Max(0, targetDefense - cfg.KnockdownDefensePenalty);
+
+            int chance = attackerAccuracy + accuracyBonus - targetDefense;
+
+            if (targetMarked) chance += cfg.MarkedHitBonus;
 
             if (!ignoreCover)
             {
@@ -42,8 +50,9 @@ namespace Game.Core.Combat
             return chance;
         }
 
-        /// <summary>Шанс юнита по юниту на карте текущим оружием.</summary>
-        public static int Compute(CombatUnit attacker, CombatUnit target, GridMap map, Balance.BalanceConfig cfg)
+        /// <summary>Шанс юнита по юниту на карте текущим оружием (+бонус точности от способности).</summary>
+        public static int Compute(CombatUnit attacker, CombatUnit target, GridMap map,
+                                  Balance.BalanceConfig cfg, int accuracyBonus = 0)
         {
             var w = attacker.Weapon;
             if (w == null) return 0;
@@ -51,7 +60,9 @@ namespace Game.Core.Combat
             int distance = GridPos.Chebyshev(attacker.Pos, target.Pos);
             return Compute(attacker.Profile.Accuracy, attacker.HasStatus(StatusType.Suppressed),
                            target.Profile.Defense, cover, w.IsMelee,
-                           distance, w.OptimalRange, cfg);
+                           distance, w.OptimalRange, cfg,
+                           target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown),
+                           accuracyBonus);
         }
 
         /// <summary>Ролл d100 против шанса с правилами гразы и пола высокого шанса.</summary>

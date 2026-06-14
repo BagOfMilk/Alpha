@@ -47,6 +47,10 @@ namespace Game.Core.Characters
         public TraitSet Traits { get; }
         public ScarTrack Scars { get; }
 
+        /// <summary>Открытые перки (US-3.10). Пересчитываются из каталога по порогам скилов.</summary>
+        private readonly List<PerkDefinition> _perks = new List<PerkDefinition>();
+        public IReadOnlyList<PerkDefinition> Perks => _perks;
+
         public int Level { get; private set; } = 1;
         public int Xp { get; private set; }
 
@@ -88,11 +92,27 @@ namespace Game.Core.Characters
             => Traits.CheckModifierFor(skill) + Scars.CheckModifierFor(skill);
 
         // ---- Производные статы (через единый агрегатор) ----
-        /// <summary>Модификаторы производных статов: трейты + шрамы (позже — гир/состояния).</summary>
+        /// <summary>Модификаторы производных статов: трейты + шрамы + перки (позже — гир/состояния).</summary>
         public IEnumerable<StatModifier> CollectModifiers()
         {
             foreach (var m in Traits.CombatModifiers()) yield return m;
             foreach (var m in Scars.Modifiers()) yield return m;
+            for (int i = 0; i < _perks.Count; i++)
+                for (int j = 0; j < _perks[i].Modifiers.Count; j++)
+                    yield return _perks[i].Modifiers[j];
+        }
+
+        /// <summary>
+        /// Пересчитывает открытые перки по каталогу (порог скила, US-2.2). Зови после
+        /// траты очков скилов. Идемпотентно: список строится заново — двойного счёта нет.
+        /// </summary>
+        public void RefreshPerks(IEnumerable<PerkDefinition> catalog)
+        {
+            _perks.Clear();
+            if (catalog == null) return;
+            foreach (var perk in catalog)
+                if (perk != null && perk.UnlockedFor(this))
+                    _perks.Add(perk);
         }
 
         public int GetDerived(DerivedStat stat, BalanceConfig cfg)

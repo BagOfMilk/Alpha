@@ -13,7 +13,8 @@ namespace Game.Core.Combat
         NoLineOfSight = 3,
         NotReachable = 4,
         InvalidTarget = 5,
-        InvalidAction = 6
+        InvalidAction = 6,
+        OnCooldown = 7
     }
 
     public enum CombatOutcome
@@ -39,7 +40,10 @@ namespace Game.Core.Combat
         private readonly List<CombatUnit> _units = new List<CombatUnit>();
         private readonly Dictionary<string, CombatUnit> _byId = new Dictionary<string, CombatUnit>();
         private readonly List<string> _log = new List<string>();
+        private readonly List<Trap> _traps = new List<Trap>();
         private TurnSystem _turns;
+
+        public IReadOnlyList<Trap> Traps => _traps;
 
         public IReadOnlyList<CombatUnit> Units => _units;
         public IReadOnlyList<string> Log => _log;
@@ -87,11 +91,9 @@ namespace Game.Core.Combat
             var reachable = ReachableFor(unit);
             if (!reachable.TryGetValue(dest, out int cost)) return CombatActionResult.NotReachable;
 
-            Map.ClearOccupant(unit.Pos);
-            unit.Pos = dest;
-            Map.SetOccupant(dest, unit.Id);
             unit.Ap -= cost;
             AddLog($"{unit.Profile.DisplayName} перемещается в {dest} (−{cost} AP)");
+            PlaceUnitAt(unit, dest);
             return CombatActionResult.Success;
         }
 
@@ -120,18 +122,25 @@ namespace Game.Core.Combat
 
             unit.Ap -= w.ApCost;
 
-            HitOutcome outcome;
-            int chance = HitChanceCalculator.Compute(unit, target, Map, Balance);
             if (useStrike)
             {
                 unit.StrikeMeter = 0;
-                outcome = HitOutcome.Hit;
                 AddLog($"{unit.Profile.DisplayName} тратит Strike — гарантированный удар!");
+                ExecuteAttackRoll(unit, target, w, accuracyBonus: 0, forceHit: true, allowStrikeGain: false);
             }
             else
             {
-                outcome = HitChanceCalculator.Roll(chance, _rng, Balance);
+                ExecuteAttackRoll(unit, target, w, accuracyBonus: 0, forceHit: false, allowStrikeGain: true);
             }
+            return CombatActionResult.Success;
+        }
+
+        /// <summary>Один удар оружием: ролл → урон → проки → Strike. Общий для атаки и способностей.</summary>
+        private void ExecuteAttackRoll(CombatUnit unit, CombatUnit target, WeaponDefinition w,
+                                       int accuracyBonus, bool forceHit, bool allowStrikeGain)
+        {
+            int chance = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
+            var outcome = forceHit ? HitOutcome.Hit : HitChanceCalculator.Roll(chance, _rng, Balance);
 
             switch (outcome)
             {
@@ -150,7 +159,7 @@ namespace Game.Core.Combat
                 case HitOutcome.Hit:
                 {
                     var dmg = DamageResolver.RollAttackDamage(unit, target, w, graze: false, _rng, Balance);
-                    if (!useStrike) unit.StrikeMeter += Balance.StrikePerHit;
+                    if (allowStrikeGain) unit.StrikeMeter += Balance.StrikePerHit;
                     AddLog($"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: " +
                            $"{(dmg.Crit ? "КРИТ, " : "")}{dmg.Amount} урона ({chance}%)");
 
@@ -166,7 +175,6 @@ namespace Game.Core.Combat
                     break;
                 }
             }
-            return CombatActionResult.Success;
         }
 
         /// <summary>Стабилизация дауна союзника рядом (активка Медицины, US-3.11/4.1). Детерминирована.</summary>
@@ -188,6 +196,240 @@ namespace Game.Core.Combat
             AddLog($"{unit.Profile.DisplayName} стабилизирует {target.Profile.DisplayName} — спасён, выбыл из боя");
             CheckOutcome();
             return CombatActionResult.Success;
+        }
+
+        // ---- Способности (US-3.9/3.11) ----
+        /// <summary>
+        /// Применение способности: гейт скила решён при сборке юнита; здесь — КД,
+        /// AP, цель/дальность/LOS и преваляция спец-эффектов ДО списания AP.
+        /// targetUnitId — цель-юнит; targetTile — точка (ловушка/перестановка).
+        /// </summary>
+        public CombatActionResult UseAbility(string abilityId, string targetUnitId = null, GridPos? targetTile = null)
+        {
+            var unit = ActiveCurrentOrNull();
+            if (unit == null) return CombatActionResult.InvalidAction;
+
+            var ability = unit.FindAbility(abilityId);
+            if (ability == null) return CombatActionResult.InvalidAction;
+
+            // Цель по типу таргетинга (как в Attack: сначала цель, потом КД/AP).
+            CombatUnit target = null;
+            switch (ability.Targeting)
+            {
+                case AbilityTarget.Self:
+                    target = unit;
+                    break;
+                case AbilityTarget.Ally:
+                    target = GetUnit(targetUnitId);
+                    if (target == null || target == unit || target.Side != unit.Side || !target.IsActive)
+                        return CombatActionResult.InvalidTarget;
+                    break;
+                case AbilityTarget.AllyOrSelf:
+                    target = targetUnitId == null ? unit : GetUnit(targetUnitId);
+                    if (target == null || target.Side != unit.Side || !target.IsActive)
+                        return CombatActionResult.InvalidTarget;
+                    break;
+                case AbilityTarget.Enemy:
+                    target = GetUnit(targetUnitId);
+                    if (target == null || target.Side == unit.Side || !target.IsActive)
+                        return CombatActionResult.InvalidTarget;
+                    break;
+                case AbilityTarget.Tile:
+                    if (!targetTile.HasValue || !Map.InBounds(targetTile.Value))
+                        return CombatActionResult.InvalidTarget;
+                    break;
+            }
+
+            if (unit.CooldownRemaining(abilityId) > 0) return CombatActionResult.OnCooldown;
+            if (unit.Ap < ability.ApCost) return CombatActionResult.NotEnoughAp;
+
+            // Дальность и LOS (на себя — не проверяются).
+            bool selfTarget = ability.Targeting != AbilityTarget.Tile && target == unit;
+            if (!selfTarget)
+            {
+                GridPos aim = ability.Targeting == AbilityTarget.Tile ? targetTile.Value : target.Pos;
+                if (GridPos.Chebyshev(unit.Pos, aim) > ability.Range) return CombatActionResult.OutOfRange;
+                if (ability.RequiresLineOfSight && !LineOfSight.HasLine(Map, unit.Pos, aim))
+                    return CombatActionResult.NoLineOfSight;
+            }
+
+            // Преваляция спец-эффектов до списания AP.
+            GridPos? lungeDest = null;
+            for (int i = 0; i < ability.Effects.Count; i++)
+            {
+                var fx = ability.Effects[i];
+                if (fx.Kind == AbilityEffectKind.LungeToTarget)
+                {
+                    lungeDest = FindLungeLanding(unit, target);
+                    if (!lungeDest.HasValue) return CombatActionResult.NotReachable;
+                }
+                else if (fx.Kind == AbilityEffectKind.RepositionTarget)
+                {
+                    if (!targetTile.HasValue || !Map.IsFree(targetTile.Value)
+                        || GridPos.Chebyshev(target.Pos, targetTile.Value) > fx.Amount)
+                        return CombatActionResult.NotReachable;
+                }
+                else if (fx.Kind == AbilityEffectKind.PlaceTrap)
+                {
+                    if (!targetTile.HasValue || !Map.IsFree(targetTile.Value) || TrapAt(targetTile.Value) != null)
+                        return CombatActionResult.InvalidTarget;
+                }
+            }
+
+            unit.Ap -= ability.ApCost;
+            unit.SetCooldown(ability.Id, ability.CooldownTurns);
+            AddLog($"{unit.Profile.DisplayName} применяет «{ability.DisplayName}»");
+
+            foreach (var fx in ability.Effects)
+            {
+                if (Outcome != CombatOutcome.Ongoing) break;
+                switch (fx.Kind)
+                {
+                    case AbilityEffectKind.WeaponAttack:
+                        if (unit.Weapon != null && target != null && target.Side != unit.Side && target.IsActive)
+                            ExecuteAttackRoll(unit, target, unit.Weapon, fx.AccuracyBonus, forceHit: false, allowStrikeGain: true);
+                        break;
+
+                    case AbilityEffectKind.FlatDamage:
+                        if (target != null && target.IsActive)
+                        {
+                            int dmg = DamageResolver.FlatDamage(fx.Amount, fx.Damage, target);
+                            AddLog($"  {target.Profile.DisplayName}: −{dmg} HP ({fx.Damage})");
+                            ApplyDamage(target, dmg);
+                        }
+                        break;
+
+                    case AbilityEffectKind.ApplyStatus:
+                        if (target != null && target.IsActive && fx.Status != StatusType.None)
+                            ApplyStatus(target, fx.Status);
+                        break;
+
+                    case AbilityEffectKind.RemoveStatus:
+                        if (target != null && fx.Status != StatusType.None)
+                        {
+                            var s = target.GetStatus(fx.Status);
+                            if (s != null)
+                            {
+                                target.Statuses.Remove(s);
+                                AddLog($"  {target.Profile.DisplayName}: снято состояние {fx.Status}");
+                            }
+                        }
+                        break;
+
+                    case AbilityEffectKind.Shred:
+                        if (target != null && target.IsActive && fx.Amount > 0)
+                        {
+                            target.ArmorShred += fx.Amount;
+                            AddLog($"  Шред: броня {target.Profile.DisplayName} −{fx.Amount} (тек. {target.EffectiveArmor})");
+                        }
+                        break;
+
+                    case AbilityEffectKind.Heal:
+                        if (target != null && target.IsActive)
+                        {
+                            int healed = Math.Min(fx.Amount, target.Profile.MaxHp - target.Hp);
+                            if (healed > 0)
+                            {
+                                target.Hp += healed;
+                                AddLog($"  {target.Profile.DisplayName}: +{healed} HP ({target.Hp}/{target.Profile.MaxHp})");
+                            }
+                        }
+                        break;
+
+                    case AbilityEffectKind.GrantAp:
+                        if (target != null && target.IsActive && fx.Amount > 0)
+                        {
+                            target.Ap += fx.Amount;
+                            AddLog($"  {target.Profile.DisplayName}: +{fx.Amount} AP");
+                        }
+                        break;
+
+                    case AbilityEffectKind.LungeToTarget:
+                        if (lungeDest.HasValue)
+                        {
+                            AddLog($"  {unit.Profile.DisplayName} совершает рывок к {target.Profile.DisplayName}");
+                            PlaceUnitAt(unit, lungeDest.Value);
+                        }
+                        break;
+
+                    case AbilityEffectKind.RepositionTarget:
+                        if (target != null && target.IsActive && targetTile.HasValue && Map.IsFree(targetTile.Value))
+                        {
+                            AddLog($"  {target.Profile.DisplayName} перемещается в {targetTile.Value}");
+                            PlaceUnitAt(target, targetTile.Value);
+                        }
+                        break;
+
+                    case AbilityEffectKind.PlaceTrap:
+                        if (targetTile.HasValue && Map.IsFree(targetTile.Value) && TrapAt(targetTile.Value) == null)
+                        {
+                            _traps.Add(new Trap
+                            {
+                                Pos = targetTile.Value, OwnerSide = unit.Side, Name = ability.DisplayName,
+                                Damage = fx.Amount, DamageType = fx.Damage, StatusOnTrigger = fx.Status
+                            });
+                            AddLog($"  Ловушка установлена в {targetTile.Value}");
+                        }
+                        break;
+                }
+            }
+            return CombatActionResult.Success;
+        }
+
+        public Trap TrapAt(GridPos pos)
+        {
+            for (int i = 0; i < _traps.Count; i++)
+                if (_traps[i].Pos == pos) return _traps[i];
+            return null;
+        }
+
+        /// <summary>Свободная клетка вплотную к цели рывка, ближайшая к атакующему (детерминированно).</summary>
+        private GridPos? FindLungeLanding(CombatUnit unit, CombatUnit target)
+        {
+            GridPos? best = null;
+            int bestDist = int.MaxValue;
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    var p = new GridPos(target.Pos.X + dx, target.Pos.Y + dy);
+                    if (p == unit.Pos) return unit.Pos; // уже вплотную — рывок на месте
+                    if (!Map.IsFree(p)) continue;
+                    int d = GridPos.Chebyshev(unit.Pos, p);
+                    if (d < bestDist) { bestDist = d; best = p; }
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Физическое перемещение (ход/рывок/перестановка) + ловушка в точке прибытия.</summary>
+        private void PlaceUnitAt(CombatUnit unit, GridPos dest)
+        {
+            Map.ClearOccupant(unit.Pos);
+            unit.Pos = dest;
+            Map.SetOccupant(dest, unit.Id);
+            TriggerTrapAt(unit);
+        }
+
+        private void TriggerTrapAt(CombatUnit unit)
+        {
+            for (int i = 0; i < _traps.Count; i++)
+            {
+                var trap = _traps[i];
+                if (trap.Pos != unit.Pos || trap.OwnerSide == unit.Side) continue;
+                _traps.RemoveAt(i);
+                AddLog($"  {unit.Profile.DisplayName} попадает в ловушку «{trap.Name}»!");
+                if (trap.StatusOnTrigger != StatusType.None && unit.IsActive)
+                    ApplyStatus(unit, trap.StatusOnTrigger);
+                int dmg = DamageResolver.FlatDamage(trap.Damage, trap.DamageType, unit);
+                if (dmg > 0)
+                {
+                    AddLog($"  Ловушка: −{dmg} HP");
+                    ApplyDamage(unit, dmg);
+                }
+                return;
+            }
         }
 
         /// <summary>Конец хода: тик длительностей статусов, переход к следующему действующему юниту.</summary>
@@ -330,6 +572,16 @@ namespace Game.Core.Combat
             }
 
             unit.Ap = unit.Profile.MaxAp;
+            unit.TickCooldowns();
+
+            // Сбит с ног: подняться стоит AP (US-3.7), после чего юнит действует.
+            var knocked = unit.GetStatus(StatusType.KnockedDown);
+            if (knocked != null)
+            {
+                unit.Statuses.Remove(knocked);
+                unit.Ap = Math.Max(0, unit.Ap - Balance.StandUpApCost);
+                AddLog($"{unit.Profile.DisplayName} поднимается на ноги (−{Balance.StandUpApCost} AP)");
+            }
 
             // DoT тикают в начале хода носителя (Воля уже сократила длительность при наложении).
             for (int i = 0; i < unit.Statuses.Count && unit.IsActive; i++)

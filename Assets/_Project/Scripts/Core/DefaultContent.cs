@@ -4,6 +4,7 @@ using Game.Core.Characters;
 using Game.Core.Combat;
 using Game.Core.Health;
 using Game.Core.Stats;
+using Game.Core.Threats;
 using Game.Core.Traits;
 
 namespace Game.Core
@@ -177,14 +178,196 @@ namespace Game.Core
                 Weapon = StunGun()
             };
 
-        /// <summary>Прорыв: быстрый рывок в ближний, когти с Кровотечением; мутант (уязвим к огню).</summary>
+        /// <summary>Прорыв: быстрый рывок в ближний (способность из общего пула), когти с Кровотечением.</summary>
         public static EnemyDefinition FeralGhoul() =>
             new EnemyDefinition("feral_ghoul", "Дикий гул", EnemyRole.Breacher, EnemyFamily.Mutant)
             {
                 MaxHp = 9, MaxAp = 10, Accuracy = 60, Defense = 5, Initiative = 8,
                 CritChance = 10, Armor = 0, Resolve = 0,
                 Resists = new ResistProfile().With(DamageType.Fire, 1.5),
-                Weapon = GhoulClaws()
+                Weapon = GhoulClaws(),
+                Abilities = new List<AbilityDefinition> { Lunge() } // симметрия: тот же пул, что у игрока
             };
+
+        // ===== Способности (US-3.9): по 3 на боевой скил; половина — состояния, половина — позиция/AP =====
+
+        // -- Стрелковое --
+        /// <summary>Размен AP на урон: два выстрела со штрафом точности.</summary>
+        public static AbilityDefinition Burst() =>
+            new AbilityDefinition("burst", "Очередь", SkillType.Ranged, 1)
+                .Costs(ap: 6, cooldown: 2).Targets(AbilityTarget.Enemy, range: 8)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.WeaponAttack) { AccuracyBonus = -10 })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.WeaponAttack) { AccuracyBonus = -10 });
+
+        /// <summary>Выстрел + гарантированное Подавление (состояние).</summary>
+        public static AbilityDefinition SuppressingFire() =>
+            new AbilityDefinition("suppressing_fire", "Подавляющий огонь", SkillType.Ranged, 3)
+                .Costs(ap: 4, cooldown: 2).Targets(AbilityTarget.Enemy, range: 8)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.WeaponAttack) { AccuracyBonus = -10 })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.ApplyStatus) { Status = StatusType.Suppressed });
+
+        /// <summary>Метка: +шанс попадания по цели для всех (состояние).</summary>
+        public static AbilityDefinition MarkTarget() =>
+            new AbilityDefinition("mark_target", "Метка", SkillType.Ranged, 5)
+                .Costs(ap: 2, cooldown: 1).Targets(AbilityTarget.Enemy, range: 10)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.ApplyStatus) { Status = StatusType.Marked });
+
+        // -- Ближнее --
+        /// <summary>Рывок к цели + удар (позиция: ломает дистанцию).</summary>
+        public static AbilityDefinition Lunge() =>
+            new AbilityDefinition("lunge", "Рывок", SkillType.Melee, 1)
+                .Costs(ap: 4, cooldown: 2).Targets(AbilityTarget.Enemy, range: 4, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.LungeToTarget))
+                .WithEffect(new AbilityEffect(AbilityEffectKind.WeaponAttack));
+
+        /// <summary>Удар + Сбит с ног (состояние: −защита, встать стоит AP).</summary>
+        public static AbilityDefinition TripStrike() =>
+            new AbilityDefinition("trip_strike", "Подсечка", SkillType.Melee, 3)
+                .Costs(ap: 4, cooldown: 2).Targets(AbilityTarget.Enemy, range: 1, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.WeaponAttack))
+                .WithEffect(new AbilityEffect(AbilityEffectKind.ApplyStatus) { Status = StatusType.KnockedDown });
+
+        /// <summary>Удар + Кровотечение (состояние, True-DoT мимо брони).</summary>
+        public static AbilityDefinition Rend() =>
+            new AbilityDefinition("rend", "Вспороть", SkillType.Melee, 5)
+                .Costs(ap: 3, cooldown: 2).Targets(AbilityTarget.Enemy, range: 1, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.WeaponAttack))
+                .WithEffect(new AbilityEffect(AbilityEffectKind.ApplyStatus) { Status = StatusType.Bleeding });
+
+        // -- Тактика --
+        /// <summary>Размен экономии действий: +AP союзнику.</summary>
+        public static AbilityDefinition Rally() =>
+            new AbilityDefinition("rally", "Перегруппировка", SkillType.Tactics, 1)
+                .Costs(ap: 3, cooldown: 3).Targets(AbilityTarget.Ally, range: 6, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.GrantAp, 4));
+
+        /// <summary>Переставить союзника до 3 клеток (позиция: бесплатное движение).</summary>
+        public static AbilityDefinition MoveOrder() =>
+            new AbilityDefinition("move_order", "Командный рывок", SkillType.Tactics, 3)
+                .Costs(ap: 2, cooldown: 2).Targets(AbilityTarget.Ally, range: 6, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.RepositionTarget, 3));
+
+        /// <summary>Снять с союзника Подавление/Метку/Сбит-с-ног (контр-состояния).</summary>
+        public static AbilityDefinition SnapOut() =>
+            new AbilityDefinition("snap_out", "Очнись!", SkillType.Tactics, 5)
+                .Costs(ap: 2, cooldown: 2).Targets(AbilityTarget.Ally, range: 6, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.RemoveStatus) { Status = StatusType.Suppressed })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.RemoveStatus) { Status = StatusType.Marked })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.RemoveStatus) { Status = StatusType.KnockedDown });
+
+        // -- Утилита (US-3.11) --
+        /// <summary>Медицина: полевой хил вплотную (стабилизация дауна — отдельное действие).</summary>
+        public static AbilityDefinition FieldDressing() =>
+            new AbilityDefinition("field_dressing", "Перевязка", SkillType.Medicine, 1)
+                .Costs(ap: 4, cooldown: 2).Targets(AbilityTarget.AllyOrSelf, range: 1, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Heal, 4));
+
+        /// <summary>Механика: гаджет — энергоурон + Шред брони.</summary>
+        public static AbilityDefinition ShockCharge() =>
+            new AbilityDefinition("shock_charge", "Шоковый разряд", SkillType.Mechanics, 1)
+                .Costs(ap: 3, cooldown: 2).Targets(AbilityTarget.Enemy, range: 5)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.FlatDamage, 3) { Damage = DamageType.Energy })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Shred, 1));
+
+        /// <summary>Выживание: ловушка на тайле — срабатывает на вошедшем враге.</summary>
+        public static AbilityDefinition SetTrap() =>
+            new AbilityDefinition("set_trap", "Ловушка", SkillType.Survival, 1)
+                .Costs(ap: 3, cooldown: 3).Targets(AbilityTarget.Tile, range: 3)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.PlaceTrap, 3) { Status = StatusType.Bleeding });
+
+        /// <summary>Общий пул способностей (игрок — по порогам скилов; враги — по ссылкам в определении).</summary>
+        public static List<AbilityDefinition> AbilityCatalog() => new List<AbilityDefinition>
+        {
+            Burst(), SuppressingFire(), MarkTarget(),
+            Lunge(), TripStrike(), Rend(),
+            Rally(), MoveOrder(), SnapOut(),
+            FieldDressing(), ShockCharge(), SetTrap()
+        };
+
+        // ===== Инциденты «Напряжения» (US-11.3; конкретика — продакшен-наполнение) =====
+        public static IncidentDefinition WarehouseTheft() =>
+            new IncidentDefinition("warehouse_theft", "Кража со склада", IncidentSeverity.Minor)
+            { Skill = SkillType.Survival, Threshold = 2, TensionOnSuccess = -3, TensionOnFailure = 4, Weight = 3 };
+
+        public static IncidentDefinition MarketSquabble() =>
+            new IncidentDefinition("market_squabble", "Свара на рынке", IncidentSeverity.Minor)
+            { Skill = SkillType.Persuasion, Threshold = 2, TensionOnSuccess = -3, TensionOnFailure = 4, Weight = 3 };
+
+        public static IncidentDefinition ProtectionRacket() =>
+            new IncidentDefinition("protection_racket", "Рэкет лавочников", IncidentSeverity.Organized)
+            { Skill = SkillType.Persuasion, Threshold = 4, TensionOnSuccess = -6, TensionOnFailure = 8, Weight = 2 };
+
+        public static IncidentDefinition WorkshopSabotage() =>
+            new IncidentDefinition("workshop_sabotage", "Саботаж в мастерской", IncidentSeverity.Organized)
+            { Skill = SkillType.Mechanics, Threshold = 4, TensionOnSuccess = -5, TensionOnFailure = 8, Weight = 2 };
+
+        /// <summary>Кризис: непредотвратимый отток населения; проверка лишь смягчает дельту.</summary>
+        public static IncidentDefinition NightPogrom() =>
+            new IncidentDefinition("night_pogrom", "Ночной погром", IncidentSeverity.Crisis)
+            {
+                Skill = SkillType.Persuasion, Threshold = 6, TensionOnSuccess = -8, TensionOnFailure = 12,
+                Crisis = CrisisEffect.PopulationExodus, Weight = 1
+            };
+
+        /// <summary>Авторский всплеск порога 75: гибель напарника (не протагониста), US-11.1.</summary>
+        public static IncidentDefinition InsiderStrike() =>
+            new IncidentDefinition("insider_strike", "Удар по своим", IncidentSeverity.Crisis)
+            {
+                Skill = SkillType.Survival, Threshold = 6, TensionOnSuccess = -6, TensionOnFailure = 10,
+                Crisis = CrisisEffect.KillCompanion, Weight = 1
+            };
+
+        public static List<IncidentDefinition> IncidentPool() => new List<IncidentDefinition>
+        {
+            WarehouseTheft(), MarketSquabble(), ProtectionRacket(), WorkshopSabotage(), NightPogrom()
+        };
+
+        public static List<ThresholdSpike> TensionSpikes() => new List<ThresholdSpike>
+        {
+            new ThresholdSpike(75, InsiderStrike())
+        };
+
+        // ===== Фоновая телеграфия (US-11.2/17.2): «температура» читается без чисел =====
+        public static string[] AmbientSignals(TensionBand band)
+        {
+            switch (band)
+            {
+                case TensionBand.Critical:
+                    return new[]
+                    {
+                        "Ночью где-то горело; на улицах пахнет дымом.",
+                        "У ворот толпа: одни требуют впустить, другие — выпустить."
+                    };
+                case TensionBand.Tense:
+                    return new[]
+                    {
+                        "На перекрёстках выросли наспех сколоченные баррикады.",
+                        "Люди ходят группами — по одному никто не рискует."
+                    };
+                case TensionBand.Uneasy:
+                    return new[]
+                    {
+                        "Торговцы запирают лавки задолго до заката.",
+                        "У колодца шепчутся: ночью опять кого-то обчистили."
+                    };
+                default:
+                    return new[]
+                    {
+                        "Рынок гудит, дети носятся между прилавками.",
+                        "Стражник у ворот лениво зевает на солнце."
+                    };
+            }
+        }
+
+        // ===== Перки (US-3.10): пассивные бонусы по порогам скилов, билд через цифры =====
+        public static List<PerkDefinition> PerkCatalog() => new List<PerkDefinition>
+        {
+            new PerkDefinition("steady_hand", "Твёрдая рука", SkillType.Ranged, 2).With(DerivedStat.Accuracy, 5),
+            new PerkDefinition("cold_blood", "Хладнокровие", SkillType.Ranged, 4).With(DerivedStat.CritChance, 5),
+            new PerkDefinition("thick_hide", "Крепкая шкура", SkillType.Melee, 2).With(DerivedStat.MaxHp, 2),
+            new PerkDefinition("battering_ram", "Таран", SkillType.Melee, 4).With(DerivedStat.Armor, 1),
+            new PerkDefinition("light_step", "Лёгкий шаг", SkillType.Tactics, 2).With(DerivedStat.ActionPoints, 1),
+            new PerkDefinition("unshakeable", "Невозмутимость", SkillType.Tactics, 4).With(DerivedStat.Resolve, 3)
+        };
     }
 }
