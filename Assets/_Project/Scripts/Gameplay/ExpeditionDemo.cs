@@ -6,6 +6,7 @@ using Game.Core.Characters;
 using Game.Core.Combat;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
+using Game.Core.Items;
 using UnityEngine;
 
 namespace Game.Gameplay
@@ -57,9 +58,11 @@ namespace Game.Gameplay
             var plan = new ExpeditionPlan("ruins", "Руины водонапорной станции")
             {
                 TravelDaysOut = 2, TravelDaysBack = 2,
-                RewardGold = 120, RewardBuildingMaterial = 8, RewardCraftingMaterial = 5
+                RewardGold = 120, RewardBuildingMaterial = 8, RewardCraftingMaterial = 5,
+                DropTable = DefaultItems.DropTable(), DropCount = 2 // рандом-дроп при победе
             };
-            var expedition = new Expedition(baseState, plan, cfg);
+            plan.NamedRewards.Add(DefaultItems.Widowmaker());      // именная награда за локацию
+            var expedition = new Expedition(baseState, plan, cfg, lootRng: new SeededRng(seed + 7));
             var send = expedition.TrySend(new[] { "marksman", "brawler", "medic", "leader" });
             Debug.Log($"Отправка отряда [{string.Join(", ", expedition.SquadIds)}] → {send}\n" +
                       $"Койка Лазарета занята: {baseState.GetSlot("infirmary_bed").IsOccupied} (медик снят с поста)");
@@ -96,6 +99,12 @@ namespace Game.Gameplay
             }
             if (report.LeveledUp.Count > 0) sb.AppendLine($"Уровень подняли: {string.Join(", ", report.LeveledUp)}");
             if (report.RecoveredOnReturn.Count > 0) sb.AppendLine($"Вылечились в дороге: {string.Join(", ", report.RecoveredOnReturn)}");
+            if (report.LootDropped.Count > 0)
+            {
+                var loot = new System.Collections.Generic.List<string>();
+                foreach (var it in report.LootDropped) loot.Add($"{it.DisplayName} [{it.Rarity}]");
+                sb.AppendLine($"Добыча в сташ ({baseState.Inventory.Count} всего): {string.Join(", ", loot)}");
+            }
             if (report.GameOver) sb.AppendLine("!!! GAME OVER: протагонист погиб (айронмен)");
             Debug.Log(sb.ToString());
 

@@ -47,6 +47,9 @@ namespace Game.Core.Characters
         public TraitSet Traits { get; }
         public ScarTrack Scars { get; }
 
+        /// <summary>Надетый гир (Эпик 6): его модификаторы льются в единый агрегатор (Source = Gear).</summary>
+        public Items.Equipment Equipment { get; }
+
         /// <summary>Открытые перки (US-3.10). Пересчитываются из каталога по порогам скилов.</summary>
         private readonly List<PerkDefinition> _perks = new List<PerkDefinition>();
         public IReadOnlyList<PerkDefinition> Perks => _perks;
@@ -73,6 +76,7 @@ namespace Game.Core.Characters
             Skills = new SkillSet();
             Traits = new TraitSet(traitSlots);
             Scars = new ScarTrack();
+            Equipment = new Items.Equipment();
         }
 
         public bool IsAssigned => !string.IsNullOrEmpty(AssignedSlotId);
@@ -92,9 +96,10 @@ namespace Game.Core.Characters
             => Traits.CheckModifierFor(skill) + Scars.CheckModifierFor(skill);
 
         // ---- Производные статы (через единый агрегатор) ----
-        /// <summary>Модификаторы производных статов: трейты + шрамы + перки (позже — гир/состояния).</summary>
+        /// <summary>Модификаторы производных статов: гир + трейты + шрамы + перки (один агрегатор, US-18.2).</summary>
         public IEnumerable<StatModifier> CollectModifiers()
         {
+            foreach (var m in Equipment.Modifiers()) yield return m;
             foreach (var m in Traits.CombatModifiers()) yield return m;
             foreach (var m in Scars.Modifiers()) yield return m;
             for (int i = 0; i < _perks.Count; i++)

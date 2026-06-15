@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Game.Core.Items;
 
 namespace Game.Core.Expeditions
 {
@@ -22,6 +24,13 @@ namespace Game.Core.Expeditions
         public int RewardGold;
         public int RewardBuildingMaterial;
         public int RewardCraftingMaterial;
+
+        /// <summary>Рандом-дроп лута при победе (Эпик 6.1): таблица + сколько кинуть.</summary>
+        public LootTable DropTable;
+        public int DropCount;
+
+        /// <summary>Заработанные именные предметы (боссы/квесты/локации, US-6.1): фикс, всегда при победе.</summary>
+        public readonly List<ItemDefinition> NamedRewards = new List<ItemDefinition>();
 
         public ExpeditionPlan() { }
 

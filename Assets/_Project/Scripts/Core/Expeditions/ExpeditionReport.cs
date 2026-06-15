@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Game.Core.Combat;
 using Game.Core.Health;
+using Game.Core.Items;
 
 namespace Game.Core.Expeditions
 {
@@ -40,6 +41,9 @@ namespace Game.Core.Expeditions
 
         /// <summary>Кто успел полностью вылечиться уже по дороге домой.</summary>
         public readonly List<string> RecoveredOnReturn = new List<string>();
+
+        /// <summary>Лут, добытый в этой вылазке и сложенный в сташ базы (только при победе).</summary>
+        public readonly List<ItemInstance> LootDropped = new List<ItemInstance>();
 
         public int TravelDaysTotal;
     }

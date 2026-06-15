@@ -29,6 +29,9 @@ namespace Game.Core.Base
         /// <summary>Скрытые угрозы (Эпик 11). Подключаются опционально через AttachThreats.</summary>
         public Threats.ThreatSystem ThreatsSystem { get; private set; }
 
+        /// <summary>Сташ отряда (Эпик 6): лут с вылазок копится здесь — гир для экипировки/крафта.</summary>
+        public Items.Inventory Inventory { get; } = new Items.Inventory();
+
         private readonly Dictionary<string, AssignmentSlot> _slotsById = new Dictionary<string, AssignmentSlot>();
         private readonly List<AssignmentSlot> _slots = new List<AssignmentSlot>();
         private readonly List<Construction> _construction = new List<Construction>();

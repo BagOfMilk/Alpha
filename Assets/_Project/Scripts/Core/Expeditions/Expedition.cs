@@ -6,6 +6,7 @@ using Game.Core.Characters;
 using Game.Core.Combat;
 using Game.Core.Economy;
 using Game.Core.Health;
+using Game.Core.Items;
 
 namespace Game.Core.Expeditions
 {
@@ -40,6 +41,7 @@ namespace Game.Core.Expeditions
         private readonly BaseState _base;
         private readonly BalanceConfig _cfg;
         private readonly Func<Companion, Scar> _scarPicker;
+        private readonly IRng _lootRng;
         private readonly List<string> _squadIds = new List<string>();
         private int _scarCounter;
 
@@ -48,12 +50,13 @@ namespace Game.Core.Expeditions
         public IReadOnlyList<string> SquadIds => _squadIds;
 
         public Expedition(BaseState baseState, ExpeditionPlan plan, BalanceConfig cfg,
-                          Func<Companion, Scar> scarPicker = null)
+                          Func<Companion, Scar> scarPicker = null, IRng lootRng = null)
         {
             _base = baseState ?? throw new ArgumentNullException(nameof(baseState));
             Plan = plan ?? throw new ArgumentNullException(nameof(plan));
             _cfg = cfg ?? throw new ArgumentNullException(nameof(cfg));
             _scarPicker = scarPicker ?? DefaultScarPicker;
+            _lootRng = lootRng;
         }
 
         // ---- Сбор отряда ----
@@ -191,6 +194,8 @@ namespace Game.Core.Expeditions
                     if (comp.GainXp(_cfg.XpPerExpeditionVictory, _cfg).LeveledUp)
                         report.LeveledUp.Add(id);
                 }
+
+                BankLoot(report); // лут в сташ базы (US-6.1; faucet squad-loop → settlement-loop, Эпик 15)
             }
 
             if (_cfg.Ironman)
@@ -208,6 +213,31 @@ namespace Game.Core.Expeditions
 
             Phase = ExpeditionPhase.Concluded;
             return report;
+        }
+
+        /// <summary>
+        /// Складывает добычу в сташ базы: рандом-дроп из таблицы плана (если задан
+        /// lootRng) + заработанные именные предметы (всегда). Только при победе.
+        /// </summary>
+        private void BankLoot(ExpeditionReport report)
+        {
+            if (Plan.DropTable != null && _lootRng != null)
+            {
+                for (int i = 0; i < Plan.DropCount; i++)
+                {
+                    var drop = LootGenerator.Roll(Plan.DropTable, _lootRng);
+                    if (drop == null) continue;
+                    _base.Inventory.Add(drop);
+                    report.LootDropped.Add(drop);
+                }
+            }
+
+            for (int i = 0; i < Plan.NamedRewards.Count; i++)
+            {
+                var named = ItemInstance.NamedFrom(Plan.NamedRewards[i]);
+                _base.Inventory.Add(named);
+                report.LootDropped.Add(named);
+            }
         }
 
         /// <summary>Дефолтный пул шрамов — плейсхолдер на стартовом контенте (ротация).</summary>

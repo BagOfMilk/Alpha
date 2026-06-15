@@ -5,6 +5,7 @@ using Game.Core.Combat;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
 using Game.Core.Health;
+using Game.Core.Items;
 using Game.Core.Stats;
 using NUnit.Framework;
 
@@ -261,6 +262,89 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(report.GameOver, "айронмен: гибель протагониста = game over");
             Assert.IsFalse(roster.Get("prot").IsAlive);
             Assert.IsTrue(report.Companions.Find(o => o.CompanionId == "prot").Died);
+        }
+
+        // ---- Лут с вылазки (Эпик 6/15) ----
+        /// <summary>Победа дропает в сташ базы: рандом из таблицы + заработанные именные.</summary>
+        private static ExpeditionReport RunVictoryWith(BaseState baseState, BalanceConfig cfg,
+                                                       ExpeditionPlan plan, IRng lootRng)
+        {
+            var exp = new Expedition(baseState, plan, cfg, lootRng: lootRng);
+            exp.TrySend(new[] { "a" });
+            exp.Depart();
+            var cs = new CombatState(new GridMap(12, 1), cfg, new ScriptedRng(1, 100, 5));
+            var units = exp.BuildCombatUnits(_ => W(5));
+            cs.AddUnit(units[0], new GridPos(0, 0));
+            cs.AddUnit(Enemy("e", 0, hp: 3, dmg: 5), new GridPos(5, 0));
+            cs.Begin();
+            Assert.AreEqual(CombatActionResult.Success, cs.Attack("e"));
+            Assert.AreEqual(CombatOutcome.Victory, cs.Outcome);
+            return exp.Conclude(cs);
+        }
+
+        [Test]
+        public void Conclude_Victory_DropsLoot_IntoBaseInventory()
+        {
+            var (baseState, roster, cfg) = MakeBase();
+            AddComp(roster, "a");
+
+            var plan = Plan();
+            plan.DropTable = new LootTable().Add(DefaultItems.ArmorVest());
+            plan.DropCount = 2;
+            plan.NamedRewards.Add(DefaultItems.Widowmaker());
+
+            // Пустой ScriptedRng → детерминированные серединные роллы.
+            var report = RunVictoryWith(baseState, cfg, plan, new ScriptedRng());
+
+            Assert.AreEqual(3, report.LootDropped.Count, "2 рандом-дропа + 1 именной");
+            Assert.AreEqual(3, baseState.Inventory.Count, "добыча легла в сташ базы");
+            var named = report.LootDropped.Find(it => it.Definition.IsNamed);
+            Assert.IsNotNull(named);
+            Assert.AreEqual(StatusType.Bleeding, named.Weapon.StatusOnHit, "уникальный прок именной пушки");
+        }
+
+        [Test]
+        public void Conclude_Victory_NamedRewards_DropEvenWithoutLootRng()
+        {
+            var (baseState, roster, cfg) = MakeBase();
+            AddComp(roster, "a");
+
+            var plan = Plan();
+            plan.DropTable = new LootTable().Add(DefaultItems.ArmorVest());
+            plan.DropCount = 5;                            // но lootRng не задан…
+            plan.NamedRewards.Add(DefaultItems.AegisPlate());
+
+            var report = RunVictoryWith(baseState, cfg, plan, lootRng: null);
+
+            Assert.AreEqual(1, report.LootDropped.Count, "только именной — рандом без rng пропущен");
+            Assert.IsTrue(report.LootDropped[0].Definition.IsNamed);
+        }
+
+        [Test]
+        public void Conclude_Defeat_NoItemLoot()
+        {
+            var (baseState, roster, cfg) = MakeBase();
+            AddComp(roster, "victim");
+
+            var plan = Plan();
+            plan.DropTable = new LootTable().Add(DefaultItems.ArmorVest());
+            plan.DropCount = 3;
+            plan.NamedRewards.Add(DefaultItems.Widowmaker());
+
+            var exp = new Expedition(baseState, plan, cfg, lootRng: new ScriptedRng());
+            exp.TrySend(new[] { "victim" });
+            exp.Depart();
+            var cs = new CombatState(new GridMap(12, 1), cfg, new ScriptedRng(1, 100, 10));
+            var units = exp.BuildCombatUnits(_ => W(5));
+            cs.AddUnit(units[0], new GridPos(0, 0));
+            cs.AddUnit(Enemy("e", 10, hp: 50, dmg: 10), new GridPos(5, 0));
+            cs.Begin();
+            cs.Attack("u_victim");
+            Assert.AreEqual(CombatOutcome.Defeat, cs.Outcome);
+
+            var report = exp.Conclude(cs);
+            Assert.AreEqual(0, report.LootDropped.Count, "поражение → лут не банкуется (US-16.2)");
+            Assert.AreEqual(0, baseState.Inventory.Count);
         }
     }
 }
