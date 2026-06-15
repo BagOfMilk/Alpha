@@ -176,6 +176,42 @@ namespace Game.Core.Combat
             return unit;
         }
 
+        /// <summary>
+        /// Перебежчик → босс-юнит на стороне врага (US-9.4): со ВСЕМ своим надетым
+        /// гиром и уровнями (производные через тот же агрегатор, что у напарника).
+        /// Умирает насовсем (CanBeDowned=false) — гир возвращается убийством.
+        /// </summary>
+        public static CombatUnit FromDefector(Companion c, BalanceConfig cfg,
+                                              IEnumerable<AbilityDefinition> abilityCatalog = null)
+        {
+            var weapon = c.Equipment.EquippedWeapon;
+            var d = c.EffectiveDerived(cfg);
+            int weaponSkill = weapon != null ? c.GetSkill(weapon.Skill) : 0;
+            var profile = new UnitProfile
+            {
+                DisplayName = c.DisplayName + " (антагонист)",
+                MaxHp = d[DerivedStat.MaxHp],
+                MaxAp = d[DerivedStat.ActionPoints],
+                Accuracy = d[DerivedStat.Accuracy] + weaponSkill * cfg.AccuracyPerWeaponSkill,
+                Defense = d[DerivedStat.Defense],
+                Initiative = d[DerivedStat.Initiative],
+                CritChance = d[DerivedStat.CritChance],
+                Armor = d[DerivedStat.Armor],
+                Resolve = d[DerivedStat.Resolve],
+                MedicineSkill = c.GetSkill(SkillType.Medicine),
+                CanBeDowned = false
+            };
+            var unit = new CombatUnit("boss_" + c.Id, Side.Enemy, profile, weapon, c.Id);
+            if (abilityCatalog != null)
+            {
+                foreach (var ability in abilityCatalog)
+                    if (ability != null && ability.Skill != Stats.SkillType.None
+                        && c.GetSkill(ability.Skill) >= ability.RequiredSkillLevel)
+                        unit.Abilities.Add(ability);
+            }
+            return unit;
+        }
+
         /// <summary>Враг → боевой юнит из определения (роль × семейство × профиль × оружие).</summary>
         public static CombatUnit FromEnemy(EnemyDefinition def, string instanceId)
         {

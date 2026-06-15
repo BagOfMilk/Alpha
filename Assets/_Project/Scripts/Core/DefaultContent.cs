@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Game.Core.Base;
 using Game.Core.Characters;
 using Game.Core.Combat;
+using Game.Core.Companions;
 using Game.Core.Health;
 using Game.Core.Stats;
 using Game.Core.Threats;
@@ -25,22 +26,22 @@ namespace Game.Core
             .WithCombat(DerivedStat.Accuracy, 5).WithValue("точность");
 
         public static Trait Bruiser() => new Trait("bruiser", "Громила", TraitSign.Virtue)
-            .WithCheck(SkillType.Intimidation, 2).WithCombat(DerivedStat.MaxHp, 2).WithValue("сила");
+            .WithCheck(SkillType.Intimidation, 2).WithCombat(DerivedStat.MaxHp, 2).WithValue("сила").WithValue(DefaultValues.Ruthless);
 
         public static Trait HotTempered() => new Trait("hot_tempered", "Вспыльчивый", TraitSign.Vice)
-            .WithCheck(SkillType.Persuasion, -1).WithValue("гнев");
+            .WithCheck(SkillType.Persuasion, -1).WithValue("гнев").WithValue(DefaultValues.Freedom);
 
         public static Trait Handy() => new Trait("handy", "Рукастый", TraitSign.Virtue)
             .WithCheck(SkillType.Mechanics, 2).WithCheck(SkillType.Hacking, 1).WithValue("техника");
 
         public static Trait SteadyHands() => new Trait("steady_hands", "Спокойные руки", TraitSign.Virtue)
-            .WithCheck(SkillType.Medicine, 2).WithValue("забота");
+            .WithCheck(SkillType.Medicine, 2).WithValue("забота").WithValue(DefaultValues.Mercy);
 
         public static Trait SilverTongue() => new Trait("silver_tongue", "Острый язык", TraitSign.Virtue)
-            .WithCheck(SkillType.Persuasion, 2).WithCheck(SkillType.Trade, 1).WithValue("слово");
+            .WithCheck(SkillType.Persuasion, 2).WithCheck(SkillType.Trade, 1).WithValue("слово").WithValue(DefaultValues.Mercy);
 
         public static Trait BornLeader() => new Trait("born_leader", "Прирождённый лидер", TraitSign.Virtue)
-            .WithCheck(SkillType.Persuasion, 1).WithValue("долг");
+            .WithCheck(SkillType.Persuasion, 1).WithValue("долг").WithValue(DefaultValues.Order).WithValue(DefaultValues.Duty);
 
         // ===== Шрамы (метят при Серьёзном+ ранении, US-4.2) =====
         public static Scar OneEye() => new Scar("one_eye", "Одноглазый").WithCombat(DerivedStat.Accuracy, -10);

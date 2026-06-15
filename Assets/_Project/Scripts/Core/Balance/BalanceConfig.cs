@@ -91,6 +91,13 @@ namespace Game.Core.Balance
         // XP каждому выжившему за победную вылазку (US-5.1: опыт с боёв).
         public int XpPerExpeditionVictory = 80;
 
+        // ======== Напарники: драма ростера (Эпик 9) ========
+        public int MournLoyaltyHit = 8;          // соратник скорбит по павшему (рябь по связям, US-9.6)
+        public int NeutralDeathLoyaltyHit = 2;   // нейтральный — лёгкая просадка
+        public int RivalDeathLoyaltyRelief = 2;  // соперник не скорбит (лёгкое облегчение)
+        public int BetrayalKinLoyaltyHit = 10;   // соратник предателя чувствует себя преданным
+        public int MaxRippleTargets = 3;         // ограждение от каскада: не более N тяжёлых откликов на событие
+
         // ======== Ранения и восстановление (Эпик 4) ========
         // 3 тира ранений → дни лечения (2/5/10).
         public int InjuryDaysLight = 2;

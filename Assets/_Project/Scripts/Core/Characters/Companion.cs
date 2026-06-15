@@ -103,6 +103,17 @@ namespace Game.Core.Characters
         public int CheckModifierFor(SkillType skill)
             => Traits.CheckModifierFor(skill) + Scars.CheckModifierFor(skill);
 
+        /// <summary>Теги ценностей (из трейтов) — основа эмерджентных связей напарников (US-9.6).</summary>
+        public IEnumerable<string> ValueTags
+        {
+            get
+            {
+                foreach (var t in Traits.Traits)
+                    for (int i = 0; i < t.ValueTags.Count; i++)
+                        yield return t.ValueTags[i];
+            }
+        }
+
         // ---- Производные статы (через единый агрегатор) ----
         /// <summary>Модификаторы производных статов: гир + трейты + шрамы + перки (один агрегатор, US-18.2).</summary>
         public IEnumerable<StatModifier> CollectModifiers()
