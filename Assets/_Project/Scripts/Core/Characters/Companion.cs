@@ -42,6 +42,14 @@ namespace Game.Core.Characters
         /// </summary>
         public bool IsProtagonist { get; set; }
 
+        /// <summary>
+        /// Лояльность к лидеру/делу (US-9.2): СКРЫТАЯ шкала 0..100 (старт 50). Игроку
+        /// число не показывается — наружу полоса и реакции. Двигают квест-выборы и
+        /// события (видимая социальная рябь, US-10.3).
+        /// </summary>
+        public int Loyalty { get; private set; } = 50;
+        public LoyaltyBand LoyaltyBand => LoyaltyBands.Of(Loyalty);
+
         public AttributeBlock Attributes { get; }
         public SkillSet Skills { get; }
         public TraitSet Traits { get; }
@@ -155,6 +163,10 @@ namespace Game.Core.Characters
             UnspentSkillPoints--;
             return true;
         }
+
+        /// <summary>Сдвиг лояльности от выбора/события (US-9.2/10.3). Клампится 0..100.</summary>
+        public void AdjustLoyalty(int delta)
+            => Loyalty = Math.Max(0, Math.Min(100, Loyalty + delta));
 
         // ---- Ранения / восстановление / выбытие ----
         /// <summary>

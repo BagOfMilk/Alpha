@@ -1,0 +1,214 @@
+using System.Collections.Generic;
+using Game.Core.Balance;
+using Game.Core.Base;
+using Game.Core.Characters;
+using Game.Core.Checks;
+using Game.Core.Economy;
+using Game.Core.Factions;
+using Game.Core.Items;
+using Game.Core.Threats;
+
+namespace Game.Core.Quests
+{
+    public enum QuestState { Active = 0, Succeeded = 1, Failed = 2 }
+
+    /// <summary>Что произошло на шаге квеста — для UI/лога (число Напряжения наружу не отдаём).</summary>
+    public sealed class QuestStepReport
+    {
+        public string StageId;
+        public QuestStageKind Kind;
+        public string Text;
+
+        public bool Accepted = true;       // для выбора: прошёл ли гейт варианта
+        public bool CheckSuccess;
+        public string ResolvedById;        // кто «вывез» проверку
+        public int CheckValue;
+        public int Threshold;
+        public bool WasLethal;             // провал этой проверки был летальным (телеграф US-13.2)
+        public bool WasUtility;
+
+        public int ChosenOption = -1;
+        public readonly List<string> ReactionLines = new List<string>();
+
+        public int NextIndex;
+        public bool Terminal;
+        public bool QuestSucceeded;
+        public readonly List<string> Notes = new List<string>();
+    }
+
+    /// <summary>
+    /// Прохождение авторской миссии (Эпики 13–14): детерминированный автомат по
+    /// этапам. Проверки — через CheckResolver (US-2.6, кости нет); выборы применяют
+    /// SocialConsequence + реакции лояльности (US-10.3); терминал начисляет награду
+    /// (XP/золото/материалы/именные предметы + соц-часть). Бой ведёт вызывающий код
+    /// и возвращает исход в ResolveCombat. Внешние системы null-терпимы.
+    /// </summary>
+    public sealed class QuestRun
+    {
+        private readonly BaseState _base;
+        private readonly FactionRegistry _factions;
+        private readonly ThreatSystem _threats;
+        private readonly ICollection<string> _flags;
+        private readonly BalanceConfig _cfg;
+
+        public QuestDefinition Def { get; }
+        public int CurrentIndex { get; private set; }
+        public QuestState State { get; private set; } = QuestState.Active;
+
+        public QuestRun(QuestDefinition def, BaseState baseState, BalanceConfig cfg,
+                        FactionRegistry factions = null, ThreatSystem threats = null,
+                        ICollection<string> flags = null)
+        {
+            Def = def ?? throw new System.ArgumentNullException(nameof(def));
+            _base = baseState;
+            _cfg = cfg;
+            _factions = factions;
+            _threats = threats;
+            _flags = flags;
+            CurrentIndex = def.StartIndex;
+        }
+
+        public QuestStage Current => Def.StageAt(CurrentIndex);
+        public bool IsActive => State == QuestState.Active;
+
+        // ---- Проверка (US-13.2) ----
+        public QuestStepReport ResolveCheck(IReadOnlyList<Companion> participants)
+        {
+            var stage = Current;
+            var report = NewReport(stage);
+            if (stage == null || stage.Kind != QuestStageKind.Check) { report.Notes.Add("не этап проверки"); return report; }
+
+            var result = stage.IsSocial
+                ? CheckResolver.ResolveSocial(participants, stage.Approach, stage.Threshold)
+                : CheckResolver.Resolve(participants, stage.CheckSkill, stage.Threshold);
+
+            report.CheckSuccess = result.Success;
+            report.ResolvedById = result.ResolvedById;
+            report.CheckValue = result.Value;
+            report.Threshold = stage.Threshold;
+            report.WasLethal = stage.Lethal;
+            report.WasUtility = stage.Utility;
+
+            if (!result.Success && stage.FailureConsequence != null)
+                stage.FailureConsequence.Apply(_factions, _base, _threats, _flags); // мягкий сетбэк
+
+            GoTo(result.Success ? stage.OnSuccess : stage.OnFailure, report);
+            return report;
+        }
+
+        // ---- Выбор (US-10.3) ----
+        public bool OptionAvailable(QuestOption option, IReadOnlyList<Companion> participants)
+        {
+            if (option == null) return false;
+            if (option.RequiresSkill != Stats.SkillType.None)
+            {
+                int best = BestSkill(participants, option.RequiresSkill);
+                if (best < option.RequiresSkillLevel) return false;
+            }
+            if (!string.IsNullOrEmpty(option.RequiresFaction))
+            {
+                if (_factions == null || !_factions.AtLeast(option.RequiresFaction, option.RequiresBand)) return false;
+            }
+            return true;
+        }
+
+        public QuestStepReport Choose(int optionIndex, IReadOnlyList<Companion> participants)
+        {
+            var stage = Current;
+            var report = NewReport(stage);
+            if (stage == null || stage.Kind != QuestStageKind.Choice) { report.Notes.Add("не этап выбора"); return report; }
+            if (optionIndex < 0 || optionIndex >= stage.Options.Count) { report.Accepted = false; report.Notes.Add("нет такого варианта"); return report; }
+
+            var option = stage.Options[optionIndex];
+            if (!OptionAvailable(option, participants)) { report.Accepted = false; report.Notes.Add("вариант недоступен (гейт)"); return report; }
+
+            report.ChosenOption = optionIndex;
+            option.Consequence?.Apply(_factions, _base, _threats, _flags);
+
+            // Видимая рябь: реакции напарников по лояльности (US-10.3).
+            for (int i = 0; i < option.Reactions.Count; i++)
+            {
+                var r = option.Reactions[i];
+                var comp = _base?.Roster.Get(r.CompanionId);
+                if (comp == null) continue;
+                comp.AdjustLoyalty(r.LoyaltyDelta);
+                string verb = r.LoyaltyDelta >= 0 ? "одобряет" : "осуждает";
+                report.ReactionLines.Add(r.Line ?? $"{comp.DisplayName} {verb} ({comp.LoyaltyBand})");
+            }
+
+            GoTo(option.Next, report);
+            return report;
+        }
+
+        // ---- Бой (ведёт вызывающий) ----
+        public QuestStepReport ResolveCombat(bool won)
+        {
+            var stage = Current;
+            var report = NewReport(stage);
+            if (stage == null || stage.Kind != QuestStageKind.Combat) { report.Notes.Add("не этап боя"); return report; }
+            GoTo(won ? stage.OnWin : stage.OnLoss, report);
+            return report;
+        }
+
+        // ---- Внутренности ----
+        private void GoTo(int index, QuestStepReport report)
+        {
+            CurrentIndex = index;
+            report.NextIndex = index;
+            var next = Current;
+            if (next != null && next.Kind == QuestStageKind.Outcome)
+                Finalize(next, report);
+        }
+
+        private void Finalize(QuestStage outcome, QuestStepReport report)
+        {
+            State = outcome.Success ? QuestState.Succeeded : QuestState.Failed;
+            report.Terminal = true;
+            report.QuestSucceeded = outcome.Success;
+            report.Notes.Add(outcome.Text ?? (outcome.Success ? "Успех" : "Провал"));
+            if (outcome.Reward != null) ApplyReward(outcome.Reward, report);
+        }
+
+        private void ApplyReward(QuestReward reward, QuestStepReport report)
+        {
+            if (_base != null)
+            {
+                if (reward.Gold != 0) _base.Resources.Add(ResourceType.Gold, reward.Gold);
+                if (reward.BuildingMaterial != 0) _base.Resources.Add(ResourceType.BuildingMaterial, reward.BuildingMaterial);
+                if (reward.CraftingMaterial != 0) _base.Resources.Add(ResourceType.CraftingMaterial, reward.CraftingMaterial);
+
+                for (int i = 0; i < reward.NamedItems.Count; i++)
+                    _base.Inventory.Add(ItemInstance.NamedFrom(reward.NamedItems[i]));
+
+                if (reward.Xp > 0 && _cfg != null)
+                    foreach (var c in _base.Roster.All)
+                        if (c.IsAlive) c.GainXp(reward.Xp, _cfg); // квесты дают XP без гринда боёв (US-5.1)
+            }
+
+            reward.Social?.Apply(_factions, _base, _threats, _flags);
+            if (reward.Xp > 0) report.Notes.Add($"+{reward.Xp} XP");
+            if (reward.Gold != 0) report.Notes.Add($"+{reward.Gold} золота");
+        }
+
+        private QuestStepReport NewReport(QuestStage stage) => new QuestStepReport
+        {
+            StageId = stage?.Id,
+            Kind = stage?.Kind ?? QuestStageKind.Outcome,
+            Text = stage?.Text
+        };
+
+        private static int BestSkill(IReadOnlyList<Companion> participants, Stats.SkillType skill)
+        {
+            int best = 0;
+            if (participants != null)
+                for (int i = 0; i < participants.Count; i++)
+                {
+                    var c = participants[i];
+                    if (c == null || !c.IsAlive) continue;
+                    int v = c.GetSkill(skill) + c.CheckModifierFor(skill);
+                    if (v > best) best = v;
+                }
+            return best;
+        }
+    }
+}
