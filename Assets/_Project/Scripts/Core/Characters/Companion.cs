@@ -179,6 +179,19 @@ namespace Game.Core.Characters
         public void AdjustLoyalty(int delta)
             => Loyalty = Math.Max(0, Math.Min(100, Loyalty + delta));
 
+        /// <summary>Восстановление прогресса из сейва (US-16.1). Внутреннее — только для SaveSystem.</summary>
+        internal void RestoreProgress(int level, int xp, int unspentSkillPoints, CompanionStatus status,
+                                      int loyalty, Health.InjuryTier injury, double recoveryDays)
+        {
+            Level = level;
+            Xp = xp;
+            UnspentSkillPoints = unspentSkillPoints;
+            Status = status;
+            Loyalty = Math.Max(0, Math.Min(100, loyalty));
+            CurrentInjury = injury;
+            RecoveryDaysRemaining = recoveryDays;
+        }
+
         // ---- Ранения / восстановление / выбытие ----
         /// <summary>
         /// Применяет ранение тира. Берётся более тяжёлый из текущего и нового;

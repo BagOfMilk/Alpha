@@ -47,6 +47,14 @@ namespace Game.Core
         public static Scar OneEye() => new Scar("one_eye", "Одноглазый").WithCombat(DerivedStat.Accuracy, -10);
         public static Scar Limp() => new Scar("limp", "Хромой").WithCombat(DerivedStat.ActionPoints, -1);
 
+        /// <summary>Каталоги по id (для восстановления из сейва, US-16.1).</summary>
+        public static List<Trait> AllTraits() => new List<Trait>
+        {
+            SharpEye(), Bruiser(), HotTempered(), Handy(), SteadyHands(), SilverTongue(), BornLeader()
+        };
+
+        public static List<Scar> AllScars() => new List<Scar> { OneEye(), Limp() };
+
         // ===== Бэкграунды (классов нет — лишь осмысленно разный старт) =====
         public static Background Marksman() => new Background("marksman", "Стрелок")
             .WithAttributes(3, 6, 4, 3)

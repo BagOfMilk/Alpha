@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core.Combat;
 using Game.Core.Stats;
 
@@ -36,6 +37,12 @@ namespace Game.Core.Items
             .Add(ScavengedRifle())
             .Add(ArmorVest())
             .Add(TargetingScope());
+
+        /// <summary>Все определения предметов по id — для восстановления гира из сейва (US-16.1).</summary>
+        public static List<ItemDefinition> AllDefinitions() => new List<ItemDefinition>
+        {
+            ScavengedRifle(), ArmorVest(), TargetingScope(), Widowmaker(), AegisPlate()
+        };
 
         // ===== Именные предметы (заработанные; фикс + уникальный эффект, US-6.1) =====
         /// <summary>«Вдоводел» — именная винтовка: уникальный прок Кровотечения (через WeaponDefinition).</summary>

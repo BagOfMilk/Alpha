@@ -33,6 +33,19 @@ namespace Game.Core.Items
         public static ItemInstance NamedFrom(ItemDefinition def)
             => new ItemInstance(def, def.NamedRarity, new ScriptedRng());
 
+        /// <summary>
+        /// Восстановление из сейва (US-16.1): редкость и УЖЕ свёрнутые БАЗОВЫЕ роллы
+        /// (<see cref="StatMods"/>) берутся как есть — без повторного броска, чтобы гир
+        /// после загрузки был идентичен. Эффект именного добавится из Definition сам.
+        /// </summary>
+        public static ItemInstance FromSaved(ItemDefinition def, Rarity rarity, IEnumerable<StatModifier> mods)
+        {
+            var inst = new ItemInstance(def, rarity, null);
+            inst._mods.Clear();
+            if (mods != null) inst._mods.AddRange(mods);
+            return inst;
+        }
+
         /// <summary>Все модификаторы: базовые роллы + уникальный эффект (Source = Gear).</summary>
         public IEnumerable<StatModifier> Modifiers()
         {

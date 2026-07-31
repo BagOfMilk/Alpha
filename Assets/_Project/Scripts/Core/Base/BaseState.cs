@@ -79,6 +79,14 @@ namespace Game.Core.Base
             Population = Math.Max(0, Population - amount);
         }
 
+        /// <summary>Восстановление времени/тира/населения из сейва (US-16.1). Только для SaveSystem.</summary>
+        internal void RestoreTime(int day, double population, int cityTier)
+        {
+            CurrentDay = day < 0 ? 0 : day;
+            Population = population < 0 ? 0 : population;
+            CityTier = cityTier < 1 ? 1 : (cityTier > Balance.MaxCityTier ? Balance.MaxCityTier : cityTier);
+        }
+
         // ---- Назначения ----
         /// <summary>
         /// Назначает напарника на позицию. Если он уже стоит на другой — переводит.
