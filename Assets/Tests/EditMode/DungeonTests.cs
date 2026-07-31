@@ -30,6 +30,7 @@ namespace Game.Tests.EditMode
         private static readonly int[] CombatOnly = { 1, 0, 0, 0 };
         private static readonly int[] LootOnly = { 0, 1, 0, 0 };
         private static readonly int[] CheckOnly = { 0, 0, 1, 0 };
+        private static readonly int[] EventOnly = { 0, 0, 0, 1 };
 
         private static Companion Hacker(int hacking)
         {
@@ -163,6 +164,41 @@ namespace Game.Tests.EditMode
             var run = new DungeonRun(Gen(CombatOnly), new SeededRng(1));
             Assert.Throws<System.InvalidOperationException>(() => run.ResolveRoom(Squad()),
                 "боевую комнату резолвит ReportCombat");
+        }
+
+        // ---- Мини-события С ВЫБОРОМ (US-12.3) ----
+        [Test]
+        public void Event_OffersChoices_AutoResolveRejected()
+        {
+            var run = new DungeonRun(Gen(EventOnly), new SeededRng(4));
+            Assert.AreEqual(RoomType.Event, run.CurrentRoom.Type);
+            Assert.GreaterOrEqual(run.CurrentRoom.EventOptions.Count, 2, "у мини-события есть выбор");
+            Assert.Throws<System.InvalidOperationException>(() => run.ResolveRoom(Squad()),
+                "событие резолвится только выбором игрока");
+        }
+
+        [Test]
+        public void Event_GreedyChoice_TradesThreatForGold()
+        {
+            var run = new DungeonRun(Gen(EventOnly), new SeededRng(4));
+            var opt = run.CurrentRoom.EventOptions[0]; // жадный вариант
+            int threatBefore = run.Threat;
+
+            var res = run.ResolveEvent(0);
+            Assert.Greater(opt.ThreatDelta, 0, "жадный вариант шумит");
+            Assert.AreEqual(opt.GoldGain, run.UnbankedGold, "хабар копится в незабанкованное");
+            Assert.AreEqual(threatBefore + opt.ThreatDelta, run.Threat);
+            Assert.AreEqual(opt.Label, res.Note);
+            Assert.IsTrue(run.CurrentCleared);
+        }
+
+        [Test]
+        public void Event_CautiousChoice_KeepsThreatQuiet()
+        {
+            var run = new DungeonRun(Gen(EventOnly), new SeededRng(4));
+            int threatBefore = run.Threat;
+            run.ResolveEvent(1); // осторожный вариант
+            Assert.AreEqual(threatBefore, run.Threat, "тихий вариант угрозу не растит");
         }
     }
 }

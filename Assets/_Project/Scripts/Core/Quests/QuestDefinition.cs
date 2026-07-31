@@ -28,6 +28,8 @@ namespace Game.Core.Quests
 
         // -- Гейтинг входа --
         public string RequiresFlag;
+        /// <summary>Квест закрыт, если флаг УЖЕ стоит (пройденный этап спайна не предлагается заново).</summary>
+        public string BlockedByFlag;
         public string RequiresFaction;
         public FactionBand RequiresBand = FactionBand.Neutral;
         public SkillType RequiresSkill = SkillType.None;
@@ -46,6 +48,7 @@ namespace Game.Core.Quests
         public QuestDefinition Flavor(string flavor) { GiverFlavor = flavor; return this; }
         public QuestDefinition Stage(QuestStage stage) { Stages.Add(stage); return this; }
         public QuestDefinition GateFlag(string flag) { RequiresFlag = flag; return this; }
+        public QuestDefinition BlockFlag(string flag) { BlockedByFlag = flag; return this; }
         public QuestDefinition GateFaction(string factionId, FactionBand band) { RequiresFaction = factionId; RequiresBand = band; return this; }
         public QuestDefinition GateSkill(SkillType skill, int level) { RequiresSkill = skill; RequiresSkillLevel = level; return this; }
 

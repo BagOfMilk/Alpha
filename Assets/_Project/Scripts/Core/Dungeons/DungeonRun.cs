@@ -100,13 +100,15 @@ namespace Game.Core.Dungeons
             return res;
         }
 
-        /// <summary>Резолв небоевой комнаты (лут/проверка/событие) силами отряда.</summary>
+        /// <summary>Резолв небоевой комнаты (лут/проверка) силами отряда. Событие — ResolveEvent (выбор).</summary>
         public RoomResolution ResolveRoom(IReadOnlyList<Companion> squad)
         {
             if (Outcome != DungeonOutcome.InProgress) throw new InvalidOperationException("Прогон завершён");
             if (CurrentRoom == null || CurrentCleared) throw new InvalidOperationException("Нечего резолвить");
             if (CurrentRoom.Type == RoomType.Combat)
                 throw new InvalidOperationException("Боевую комнату резолвит ReportCombat");
+            if (CurrentRoom.Type == RoomType.Event)
+                throw new InvalidOperationException("Событие резолвит ResolveEvent (выбор игрока, US-12.3)");
 
             var room = CurrentRoom;
             var res = new RoomResolution { Type = room.Type, RoomName = room.DisplayName };
@@ -127,12 +129,27 @@ namespace Game.Core.Dungeons
                     else { Threat += room.EventThreatDelta; res.Note = "провал — дальше опаснее"; } // мягкий сетбэк
                     break;
                 }
-
-                case RoomType.Event:
-                    if (room.EventLootGold > 0) AddLoot(room.EventLootGold, 0, 0, res);
-                    if (room.EventThreatDelta > 0) { Threat += room.EventThreatDelta; res.Note = room.DisplayName; }
-                    break;
             }
+
+            CurrentCleared = true;
+            return res;
+        }
+
+        /// <summary>
+        /// Резолв мини-события ВЫБОРОМ игрока (US-12.3): каждый вариант — свой размен
+        /// «золото в незабанкованное ↔ рост угрозы».
+        /// </summary>
+        public RoomResolution ResolveEvent(int optionIndex)
+        {
+            RequireResolvable(RoomType.Event);
+            var room = CurrentRoom;
+            if (optionIndex < 0 || optionIndex >= room.EventOptions.Count)
+                throw new ArgumentOutOfRangeException(nameof(optionIndex), "Нет такого варианта события");
+
+            var opt = room.EventOptions[optionIndex];
+            var res = new RoomResolution { Type = RoomType.Event, RoomName = room.DisplayName, Note = opt.Label };
+            if (opt.GoldGain > 0) AddLoot(opt.GoldGain, 0, 0, res);
+            if (opt.ThreatDelta > 0) Threat += opt.ThreatDelta;
 
             CurrentCleared = true;
             return res;

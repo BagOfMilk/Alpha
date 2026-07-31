@@ -11,7 +11,7 @@ namespace Game.Core.Saves
     [Serializable]
     public sealed class SaveData
     {
-        public int version = 1;
+        public int version = 2;
 
         public int day;
         public int cityTier = 1;
@@ -25,6 +25,10 @@ namespace Game.Core.Saves
         public float readiness;
         public bool ironman;
 
+        // v2: оркестрация кампании (US-16.1 хвосты).
+        public bool inExpedition;
+        public int campaignOutcome; // CampaignOutcome
+
         public float reputation;
         public int influence;
 
@@ -33,6 +37,58 @@ namespace Game.Core.Saves
         public List<SlotDto> assignments = new List<SlotDto>();
         public List<FactionDto> factions = new List<FactionDto>();
         public List<string> flags = new List<string>();
+
+        // v2: город (US-7.1/7.6) — построенные здания, открытые позиции, идущие стройки.
+        public List<int> builtSections = new List<int>();
+        public List<string> unlockedSlots = new List<string>();
+        public List<ConstructionDto> constructions = new List<ConstructionDto>();
+
+        // v2: арки напарников (US-9.5) и трофеи перебежчиков (US-9.4).
+        public List<ArcDto> arcs = new List<ArcDto>();
+        public List<AntagonistDto> antagonists = new List<AntagonistDto>();
+
+        // v2: совет (если был подключён) — КД, активная Инвестиция, баф вылазки.
+        public bool councilAttached;
+        public List<CouncilCooldownDto> councilCooldowns = new List<CouncilCooldownDto>();
+        public int investmentGoldPerDay;
+        public int investmentDaysRemaining;
+        public bool hasExpeditionBuff;
+        public int buffAccuracyBonus;
+        public int buffBonusLootGold;
+    }
+
+    [Serializable]
+    public sealed class CouncilCooldownDto
+    {
+        public string actionId;
+        public int days;
+    }
+
+    [Serializable]
+    public sealed class ConstructionDto
+    {
+        public string id;
+        public string displayName;
+        public int section;
+        public float totalDays;
+        public float remainingDays;
+        public string unlocksSlotId;
+    }
+
+    [Serializable]
+    public sealed class ArcDto
+    {
+        public string arcId;
+        public int state;        // ArcState
+        public int chapterIndex;
+    }
+
+    [Serializable]
+    public sealed class AntagonistDto
+    {
+        public string companionId;
+        public int level;
+        public List<ItemDto> gear = new List<ItemDto>();
     }
 
     [Serializable]

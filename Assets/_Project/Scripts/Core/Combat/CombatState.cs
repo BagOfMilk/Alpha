@@ -476,6 +476,9 @@ namespace Game.Core.Combat
                 case StatusType.Suppressed:
                     baseDuration = 1; // до конца следующего хода цели
                     break;
+                case StatusType.Stunned:
+                    baseDuration = 1; // снимется в начале хода цели, отняв AP (US-3.7)
+                    break;
                 case StatusType.Bleeding:
                     baseDuration = Balance.DotDurationTurns;
                     dot = Balance.DotDamagePerTurn; // True-урон: броню и резисты не трогает
@@ -581,6 +584,15 @@ namespace Game.Core.Combat
                 unit.Statuses.Remove(knocked);
                 unit.Ap = Math.Max(0, unit.Ap - Balance.StandUpApCost);
                 AddLog($"{unit.Profile.DisplayName} поднимается на ноги (−{Balance.StandUpApCost} AP)");
+            }
+
+            // Оглушение: потеря AP хода — юнит пропускает ход (US-3.7); статус расходуется.
+            var stunned = unit.GetStatus(StatusType.Stunned);
+            if (stunned != null)
+            {
+                unit.Statuses.Remove(stunned);
+                unit.Ap = 0;
+                AddLog($"{unit.Profile.DisplayName} оглушён — пропускает ход");
             }
 
             // DoT тикают в начале хода носителя (Воля уже сократила длительность при наложении).

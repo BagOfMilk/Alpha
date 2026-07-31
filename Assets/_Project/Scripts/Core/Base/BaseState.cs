@@ -7,12 +7,33 @@ using Game.Core.Stats;
 
 namespace Game.Core.Base
 {
+    /// <summary>Итог попытки начать стройку (US-7.1: стройка стоит золото/строймат).</summary>
+    public enum ConstructionStartResult
+    {
+        Success = 0,
+        CannotAffordGold = 1,
+        CannotAffordMaterials = 2,
+        AlreadyBuilt = 3,
+        AlreadyQueued = 4
+    }
+
+    /// <summary>
+    /// Система, живущая в календаре базы: тикается из <see cref="BaseState.AdvanceDays"/>
+    /// (напр. Совет — КД действий и доход Инвестиции). Убирает рассинхрон «календарь
+    /// двинулся, а КД нет» — оркестрация без отдельного бога-класса.
+    /// </summary>
+    public interface ITimeSink
+    {
+        void TickDays(int days);
+    }
+
     /// <summary>
     /// Состояние базы и продвижение «мирного» времени (GDD §1). Связывает ростер,
     /// позиции, кошелёк (золото + 2 материала — наполняется вылазками, не базой) и
     /// баланс. <see cref="AdvanceDays"/> продвигает календарь: лечит раненых в днях
-    /// (медик в Лазарете ускоряет), достраивает стройки, растит население. Материалы
-    /// здесь НЕ производятся — рост города требует выходить наружу. Чистый C#.
+    /// (медик в Лазарете ускоряет), достраивает стройки, растит население, применяет
+    /// эффекты построенных спец-зданий. Материалы здесь НЕ производятся — рост города
+    /// требует выходить наружу (стройка СЛИВАЕТ строймат, US-15.1). Чистый C#.
     /// </summary>
     public sealed class BaseState
     {
@@ -35,9 +56,18 @@ namespace Game.Core.Base
         private readonly Dictionary<string, AssignmentSlot> _slotsById = new Dictionary<string, AssignmentSlot>();
         private readonly List<AssignmentSlot> _slots = new List<AssignmentSlot>();
         private readonly List<Construction> _construction = new List<Construction>();
+        private readonly HashSet<BaseSectionType> _builtSections = new HashSet<BaseSectionType>();
+        private readonly List<ITimeSink> _timeSinks = new List<ITimeSink>();
 
         public IReadOnlyList<AssignmentSlot> Slots => _slots;
         public IReadOnlyList<Construction> ConstructionQueue => _construction;
+
+        /// <summary>Построенные здания (US-7.1): дают эффекты в AdvanceDays и считаются в тир (US-7.6).</summary>
+        public IEnumerable<BaseSectionType> BuiltSections => _builtSections;
+        public bool IsBuilt(BaseSectionType section) => _builtSections.Contains(section);
+
+        /// <summary>Пометить здание построенным без стройки (старт кампании, восстановление из сейва).</summary>
+        public void MarkBuilt(BaseSectionType section) => _builtSections.Add(section);
 
         public BaseState(Roster roster, ResourceLedger resources, BalanceConfig balance)
         {
@@ -59,7 +89,31 @@ namespace Game.Core.Base
             return slot;
         }
 
-        public void StartConstruction(Construction construction)
+        /// <summary>
+        /// Начинает стройку, СПИСЫВАЯ цену (US-7.1/15.1): золото и строймат должны
+        /// быть в кошельке. Нулевая цена — бесплатно (совместимость/скрипты).
+        /// </summary>
+        public ConstructionStartResult StartConstruction(Construction construction)
+        {
+            if (construction == null) throw new ArgumentNullException(nameof(construction));
+            if (IsBuilt(construction.Section)) return ConstructionStartResult.AlreadyBuilt; // уровни — US-7.2 [ПОЗЖЕ]
+            for (int i = 0; i < _construction.Count; i++)
+                if (_construction[i].Section == construction.Section)
+                    return ConstructionStartResult.AlreadyQueued; // двойной заказ = двойное списание
+            if (!Resources.CanAfford(Economy.ResourceType.Gold, construction.GoldCost))
+                return ConstructionStartResult.CannotAffordGold;
+            if (!Resources.CanAfford(Economy.ResourceType.BuildingMaterial, construction.BuildingMaterialCost))
+                return ConstructionStartResult.CannotAffordMaterials;
+
+            if (construction.GoldCost > 0) Resources.TrySpend(Economy.ResourceType.Gold, construction.GoldCost);
+            if (construction.BuildingMaterialCost > 0)
+                Resources.TrySpend(Economy.ResourceType.BuildingMaterial, construction.BuildingMaterialCost);
+            _construction.Add(construction);
+            return ConstructionStartResult.Success;
+        }
+
+        /// <summary>Восстановление идущей стройки из сейва (цена уже уплачена). Только для SaveSystem.</summary>
+        internal void RestoreConstruction(Construction construction)
         {
             if (construction != null) _construction.Add(construction);
         }
@@ -67,11 +121,50 @@ namespace Game.Core.Base
         /// <summary>Подключает систему скрытых угроз — тикается из AdvanceDays.</summary>
         public void AttachThreats(Threats.ThreatSystem threats) => ThreatsSystem = threats;
 
-        /// <summary>Продвижение тира города (комбинация условий — US-7.6; здесь только механика).</summary>
+        /// <summary>Подключает систему, живущую в календаре (Совет и т.п.) — тикается из AdvanceDays.</summary>
+        public void AttachTimeSink(ITimeSink sink)
+        {
+            if (sink != null && !_timeSinks.Contains(sink)) _timeSinks.Add(sink);
+        }
+
+        /// <summary>Сырое продвижение тира (без условий — для скриптов/тестов). Условия — TryAdvanceCityTier.</summary>
         public void AdvanceCityTier()
         {
             if (CityTier < Balance.MaxCityTier) CityTier++;
         }
+
+        /// <summary>
+        /// Комбинация условий следующего тира (US-7.6): население + спец-здания +
+        /// репутация города. Ни одно условие не заперто за одной фракцией (Эпик 10).
+        /// </summary>
+        public bool CityTierRequirementsMet(Factions.FactionRegistry factions)
+        {
+            if (CityTier >= Balance.MaxCityTier) return false;
+            int next = CityTier + 1;
+
+            if (Population < Balance.TierPopulationPerStep * next) return false;
+
+            int specialBuilt = 0;
+            foreach (var s in _builtSections)
+                if (!IsCoreSection(s)) specialBuilt++;
+            if (specialBuilt < next - 1) return false;
+
+            double repNeeded = Balance.TierReputationPerStep * (next - 1);
+            if (factions == null || factions.Reputation < repNeeded) return false;
+            return true;
+        }
+
+        /// <summary>Продвижение тира по условиям (US-7.6). true — тир вырос.</summary>
+        public bool TryAdvanceCityTier(Factions.FactionRegistry factions)
+        {
+            if (!CityTierRequirementsMet(factions)) return false;
+            CityTier++;
+            return true;
+        }
+
+        private static bool IsCoreSection(BaseSectionType s)
+            => s == BaseSectionType.Council || s == BaseSectionType.Infirmary
+               || s == BaseSectionType.Workshop || s == BaseSectionType.Storehouse;
 
         /// <summary>Кризис «отток населения» и подобные сливы (не ниже нуля).</summary>
         internal void RemovePopulation(double amount)
@@ -143,6 +236,13 @@ namespace Game.Core.Base
             if (days < 1) days = 1;
             var report = new CycleReport { FromDay = CurrentDay, DaysAdvanced = days };
 
+            // Эффекты зданий считаются по составу НА НАЧАЛО периода: достроенное в
+            // этом же вызове здание работает со следующего продвижения — иначе
+            // чанковый AdvanceDays ретроактивно платил бы за дни до достройки.
+            bool tavernActive = IsBuilt(BaseSectionType.Tavern);
+            bool marketActive = IsBuilt(BaseSectionType.Market);
+            bool templeActive = IsBuilt(BaseSectionType.Temple);
+
             double dailyRecovery = Balance.NaturalRecoveryPerDay + InfirmaryRecoveryBonus();
             double totalRecovery = dailyRecovery * days;
             foreach (var c in Roster.All)
@@ -163,14 +263,29 @@ namespace Game.Core.Base
                     var unlocked = GetSlot(con.UnlocksSlotId);
                     if (unlocked != null) unlocked.Unlocked = true;
                 }
+                _builtSections.Add(con.Section);
+                if (con.Section == BaseSectionType.Fortifications)
+                    ThreatsSystem?.Readiness.AddFortification(); // Укрепления → Готовность (US-11.4)
                 report.ConstructionCompleted.Add(string.IsNullOrEmpty(con.DisplayName) ? con.Id : con.DisplayName);
                 _construction.RemoveAt(i);
             }
 
-            Population += Balance.PopulationGrowthPerDay * days;
+            // Население: пассив + ускорение Таверной (US-7.5).
+            double growth = Balance.PopulationGrowthPerDay * days;
+            if (tavernActive) growth *= Balance.TavernPopulationGrowthMultiplier;
+            Population += growth;
+
+            // Эффекты спец-зданий (US-7.1): Рынок капает золото, Храм остужает город.
+            if (marketActive && Balance.MarketGoldPerDay > 0)
+                Resources.Add(Economy.ResourceType.Gold, Balance.MarketGoldPerDay * days);
+            if (templeActive)
+                ThreatsSystem?.Tension.Add(-Balance.TempleTensionReliefPerDay * days);
 
             // Скрытые угрозы: фоновый тик Напряжения + роллы инцидентов (Эпик 11).
             ThreatsSystem?.TickDays(this, days, report);
+
+            // Системы, живущие в календаре (Совет: КД + доход Инвестиции) — без рассинхрона.
+            for (int i = 0; i < _timeSinks.Count; i++) _timeSinks[i].TickDays(days);
 
             CurrentDay += days;
             report.ToDay = CurrentDay;

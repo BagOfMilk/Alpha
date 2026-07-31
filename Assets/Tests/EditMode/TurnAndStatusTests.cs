@@ -119,5 +119,41 @@ namespace Game.Tests.EditMode
             foreach (var s in other.Statuses) if (s.Type == StatusType.Bleeding) count++;
             Assert.AreEqual(1, count);
         }
+
+        [Test]
+        public void Stunned_LosesTurnAp_StatusConsumed()
+        {
+            var (cs, _, other) = TwoPlusDummy();
+            cs.ApplyStatus(other, StatusType.Stunned);
+            Assert.IsTrue(other.HasStatus(StatusType.Stunned));
+
+            cs.EndTurn(); // начало хода other: Оглушение съедает AP (US-3.7)
+            Assert.AreSame(other, cs.Current);
+            Assert.AreEqual(0, other.Ap, "оглушённый пропускает ход");
+            Assert.IsFalse(other.HasStatus(StatusType.Stunned), "статус расходуется");
+
+            cs.EndTurn(); // dummy
+            cs.EndTurn(); // actor
+            cs.EndTurn(); // снова other
+            Assert.AreSame(other, cs.Current);
+            Assert.AreEqual(8, other.Ap, "следующий ход — полные AP");
+        }
+
+        [Test]
+        public void Burning_TicksFireDot_WithVulnerabilityMultiplier()
+        {
+            var map = new GridMap(5, 1);
+            var cs = new CombatState(map, new BalanceConfig(), new ScriptedRng());
+            var torch = U("torch", Side.Player, 10);
+            var mutant = U("mutant", Side.Enemy, 5, hp: 20);
+            mutant.Profile.Resists = new ResistProfile().With(DamageType.Fire, 1.5); // уязвим к огню
+            cs.AddUnit(torch, new GridPos(0, 0));
+            cs.AddUnit(mutant, new GridPos(4, 0));
+            cs.Begin();
+
+            cs.ApplyStatus(mutant, StatusType.Burning); // Поджог: DoT огнём (US-3.7/3.12)
+            cs.EndTurn(); // начало хода мутанта: тик 2 × 1.5 = 3
+            Assert.AreEqual(17, mutant.Hp, "Поджог тикает типизированным огнём с множителем уязвимости");
+        }
     }
 }

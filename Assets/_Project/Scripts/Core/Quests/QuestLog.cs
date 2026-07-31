@@ -72,6 +72,8 @@ namespace Game.Core.Quests
         {
             if (def == null) return false;
             if (!string.IsNullOrEmpty(def.RequiresFlag) && (flags == null || !flags.Contains(def.RequiresFlag))) return false;
+            // Пройденный контент не предлагается заново (анти-ферма наград после загрузки).
+            if (!string.IsNullOrEmpty(def.BlockedByFlag) && flags != null && flags.Contains(def.BlockedByFlag)) return false;
             if (!string.IsNullOrEmpty(def.RequiresFaction))
             {
                 if (factions == null || !factions.AtLeast(def.RequiresFaction, def.RequiresBand)) return false;

@@ -125,5 +125,12 @@ namespace Game.Core.Companions
             ChapterIndex++;
             State = CurrentChapter == null ? ArcState.Completed : ArcState.Locked;
         }
+
+        /// <summary>Восстановление прогресса из сейва (US-16.1). Только для SaveSystem.</summary>
+        internal void RestoreState(ArcState state, int chapterIndex)
+        {
+            State = state;
+            ChapterIndex = chapterIndex < 0 ? 0 : chapterIndex;
+        }
     }
 }

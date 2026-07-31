@@ -62,6 +62,13 @@ namespace Game.Gameplay
                                    (won ? $"победа (+{res.GainedGold} зол, +{res.GainedBuilding}стр/+{res.GainedCrafting}крф)" : "ВАЙП"));
                     if (!won) break;
                 }
+                else if (room.Type == RoomType.Event)
+                {
+                    // Мини-событие с выбором (US-12.3): демо жадничает — берёт первый (рисковый) вариант.
+                    var res = run.ResolveEvent(0);
+                    log.AppendLine($"  Глуб.{room.Depth} [{room.DisplayName}] выбор: «{res.Note}» → " +
+                                   $"+{res.GainedGold} зол (угроза {run.Threat})");
+                }
                 else
                 {
                     var res = run.ResolveRoom(squad);

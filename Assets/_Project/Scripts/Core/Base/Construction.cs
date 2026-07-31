@@ -4,6 +4,8 @@ namespace Game.Core.Base
     /// Идущая стройка/апгрейд здания (GDD §7.3). Тикает днями на продвижении
     /// времени; имеет 5 визуальных стадий по таймеру (<see cref="Stage"/>). По
     /// завершении может открыть связанную позицию (<see cref="UnlocksSlotId"/>).
+    /// Цена (золото / строймат) списывается при старте (US-7.1/15.1: строймат
+    /// добывается только вылазками — squad-loop кормит рост города).
     /// </summary>
     public sealed class Construction
     {
@@ -12,6 +14,10 @@ namespace Game.Core.Base
         public BaseSectionType Section;
         public double TotalDays;
         public double RemainingDays;
+
+        /// <summary>Цена старта стройки (US-7.1: ядро — золото; спец — золото + строймат).</summary>
+        public int GoldCost;
+        public int BuildingMaterialCost;
 
         /// <summary>Позиция, открываемая по завершении стройки (опц.).</summary>
         public string UnlocksSlotId;
@@ -25,6 +31,13 @@ namespace Game.Core.Base
             TotalDays = totalDays;
             RemainingDays = totalDays;
             UnlocksSlotId = unlocksSlotId;
+        }
+
+        public Construction Costs(int gold, int materials = 0)
+        {
+            GoldCost = gold;
+            BuildingMaterialCost = materials;
+            return this;
         }
 
         public bool IsComplete => RemainingDays <= 0;

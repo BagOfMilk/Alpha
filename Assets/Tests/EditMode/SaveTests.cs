@@ -3,6 +3,7 @@ using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
 using Game.Core.Combat;
+using Game.Core.Companions;
 using Game.Core.Economy;
 using Game.Core.Factions;
 using Game.Core.Items;
@@ -131,6 +132,90 @@ namespace Game.Tests.EditMode
             var campaign = Campaign.NewGame(new BalanceConfig());
             Assert.AreEqual(6, campaign.Roster.Count);
             Assert.IsTrue(campaign.Roster.Get("leader").IsProtagonist);
+        }
+
+        [Test]
+        public void RoundTrip_V2_PreservesCity_Arcs_Antagonists()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            campaign.InExpedition = true;
+            campaign.Roster.Get("marksman").Status = CompanionStatus.InSquad; // «в вылазке»
+
+            // Город: Рынок достроен (позиция открылась), Храм — в процессе.
+            campaign.Base.Resources.Add(ResourceType.Gold, 500);
+            campaign.Base.Resources.Add(ResourceType.BuildingMaterial, 20);
+            Assert.AreEqual(ConstructionStartResult.Success,
+                campaign.Base.StartConstruction(DefaultContent.Blueprint(BaseSectionType.Market, cfg)));
+            campaign.AdvanceDays(cfg.ConstructionLargeDays);
+            Assert.AreEqual(ConstructionStartResult.Success,
+                campaign.Base.StartConstruction(DefaultContent.Blueprint(BaseSectionType.Temple, cfg)));
+
+            // Арка медика: первая глава пройдена (флаг + индекс).
+            var arc = new CompanionArcRun(DefaultArcs.MedicOldDebt(), campaign.Flags);
+            arc.CompleteChapter();
+            campaign.Arcs.Add(arc);
+
+            // Перебежчик уходит с именным гиром.
+            var traitor = campaign.Roster.Get("brawler");
+            traitor.Equipment.Equip(ItemInstance.NamedFrom(DefaultItems.Widowmaker()));
+            campaign.Antagonists.Add(DefectionSystem.Defect(traitor, campaign.Base));
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(campaign));
+            var loaded = SaveSystem.Restore(
+                UnityEngine.JsonUtility.FromJson<SaveData>(json), cfg, ContentCatalog.Default());
+
+            // Вылазка не сериализуется: при загрузке она отменена, отряд дома —
+            // иначе InSquad-статусы лочили бы ростер навсегда (софтлок).
+            Assert.IsFalse(loaded.InExpedition, "прерванная вылазка отменена при загрузке");
+            Assert.AreEqual(CompanionStatus.InCamp, loaded.Roster.Get("marksman").Status,
+                "InSquad нормализован — напарник снова доступен");
+            Assert.IsTrue(loaded.Roster.Get("marksman").IsAvailableForDuty);
+
+            Assert.IsTrue(loaded.Base.IsBuilt(BaseSectionType.Market));
+            Assert.IsTrue(loaded.Base.GetSlot("market_stall").Unlocked, "открытая позиция не запирается заново");
+            Assert.AreEqual(1, loaded.Base.ConstructionQueue.Count, "идущая стройка в сейве");
+            Assert.AreEqual(BaseSectionType.Temple, loaded.Base.ConstructionQueue[0].Section);
+
+            Assert.AreEqual(1, loaded.Arcs.Count);
+            Assert.AreEqual(1, loaded.Arcs[0].ChapterIndex, "прогресс арки в сейве (US-9.5)");
+            Assert.IsTrue(loaded.Flags.Contains("arc_medic_ch1"));
+
+            Assert.AreEqual(1, loaded.Antagonists.Count);
+            var rec = loaded.Antagonists[0];
+            Assert.AreEqual("brawler", rec.CompanionId);
+            Assert.AreEqual(1, rec.CapturedGear.Count);
+            Assert.IsTrue(rec.CapturedGear[0].Definition.IsNamed, "трофей вернётся с босса (US-9.4)");
+            Assert.IsNotNull(rec.Weapon, "оружие босса восстановлено из гира");
+            Assert.AreEqual(CompanionStatus.Antagonist, loaded.Roster.Get("brawler").Status);
+        }
+
+        [Test]
+        public void RoundTrip_V2_RestoresCouncilState()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            campaign.Base.Resources.Add(ResourceType.Gold, 200);
+            campaign.Factions.AddInfluence(5);
+            var council = Game.Core.Council.DefaultCouncil.NewCouncil(
+                campaign.Factions, campaign.Base.Resources, campaign.Base.ThreatsSystem, campaign.Base);
+            campaign.AttachCouncil(council);
+
+            // Инвестиция: −40 золота сейчас, +8/день × 10 дней потом (оплачено!).
+            Assert.IsTrue(council.Execute(Game.Core.Council.DefaultCouncil.Investment).Success);
+            int goldAfterPay = campaign.Base.Resources.Get(ResourceType.Gold);
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(campaign));
+            var loaded = SaveSystem.Restore(
+                UnityEngine.JsonUtility.FromJson<SaveData>(json), cfg, ContentCatalog.Default());
+
+            Assert.IsNotNull(loaded.Council, "совет пере-подключён при загрузке");
+            Assert.Greater(loaded.Council.CooldownRemaining(Game.Core.Council.DefaultCouncil.Investment), 0,
+                "КД пережил сейв — F5/F9 не сбрасывает кулдауны");
+
+            loaded.AdvanceDays(10);
+            Assert.AreEqual(goldAfterPay + 80, loaded.Base.Resources.Get(ResourceType.Gold),
+                "оплаченная Инвестиция капает и после загрузки");
         }
 
         [Test]

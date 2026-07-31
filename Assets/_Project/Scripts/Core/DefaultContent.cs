@@ -120,6 +120,44 @@ namespace Game.Core
             };
         }
 
+        // ===== Чертежи зданий (US-7.1: ядро — золото; спец — золото + строймат) =====
+        /// <summary>
+        /// Стройка здания с ценой из баланса (US-7.1/15.1). Ядро-здания — малая
+        /// стройка за золото; спец — крупная за золото + строймат. Известные позиции
+        /// открываются по достройке (Рынок → прилавок).
+        /// </summary>
+        public static Construction Blueprint(BaseSectionType section, Balance.BalanceConfig cfg)
+        {
+            bool core = section == BaseSectionType.Council || section == BaseSectionType.Infirmary
+                        || section == BaseSectionType.Workshop || section == BaseSectionType.Storehouse;
+            string id = "build_" + section.ToString().ToLowerInvariant();
+            string name = BlueprintName(section);
+            string unlocks = section == BaseSectionType.Market ? "market_stall" : null;
+            var con = new Construction(id, name, section,
+                core ? cfg.ConstructionSmallDays : cfg.ConstructionLargeDays, unlocks);
+            return core
+                ? con.Costs(cfg.CoreConstructionGold)
+                : con.Costs(cfg.SpecialConstructionGold, cfg.SpecialConstructionMaterials);
+        }
+
+        private static string BlueprintName(BaseSectionType section)
+        {
+            switch (section)
+            {
+                case BaseSectionType.Council: return "Зал совета";
+                case BaseSectionType.Infirmary: return "Лазарет";
+                case BaseSectionType.Workshop: return "Мастерская";
+                case BaseSectionType.Storehouse: return "Склад";
+                case BaseSectionType.Market: return "Рынок";
+                case BaseSectionType.Tavern: return "Таверна";
+                case BaseSectionType.Temple: return "Храм";
+                case BaseSectionType.Fortifications: return "Укрепления";
+                case BaseSectionType.Armory: return "Оружейная";
+                case BaseSectionType.Laboratory: return "Лаборатория";
+                default: return section.ToString();
+            }
+        }
+
         // ===== Оружие (мелкий урон 2–8; в Unity станет ItemDefinition-ассетами) =====
         public static WeaponDefinition Rifle() => new WeaponDefinition("rifle", "Винтовка", SkillType.Ranged)
         {
@@ -157,6 +195,13 @@ namespace Game.Core
             ApCost = 3, OptimalRange = 5, StatusOnHit = StatusType.Suppressed
         };
 
+        /// <summary>Токсин-оружие: тип урона накладывает Яд (US-3.12 — «принеси правильный инструмент»).</summary>
+        public static WeaponDefinition VenomSpit() => new WeaponDefinition("venom_spit", "Ядовитый плевок", SkillType.Ranged)
+        {
+            Damage = DamageType.Toxin, DamageMin = 2, DamageMax = 4, CritDamageBonus = 1,
+            ApCost = 3, OptimalRange = 4, StatusOnHit = StatusType.Poisoned
+        };
+
         // ===== Бестиарий: роль × семейство × профиль × оружие (US-3.14) =====
         /// <summary>Танк: тянет фокус, резист к баллистике + броня — неси Шред/пробитие или огонь.</summary>
         public static EnemyDefinition RaiderBruiser() =>
@@ -185,6 +230,16 @@ namespace Game.Core
                 CritChance = 5, Armor = 1, Resolve = 9,
                 Resists = new ResistProfile().With(DamageType.Toxin, 0.5).With(DamageType.Energy, 1.5),
                 Weapon = StunGun()
+            };
+
+        /// <summary>Контролёр-мутант: Яд через токсин-оружие (та же роль, другое семейство/профиль = другой пазл).</summary>
+        public static EnemyDefinition PlagueBearer() =>
+            new EnemyDefinition("plague_bearer", "Чумоносец", EnemyRole.Controller, EnemyFamily.Mutant)
+            {
+                MaxHp = 10, MaxAp = 8, Accuracy = 60, Defense = 3, Initiative = 5,
+                CritChance = 5, Armor = 0, Resolve = 3,
+                Resists = new ResistProfile().With(DamageType.Toxin, 0.5).With(DamageType.Fire, 1.5),
+                Weapon = VenomSpit()
             };
 
         /// <summary>Прорыв: быстрый рывок в ближний (способность из общего пула), когти с Кровотечением.</summary>
@@ -278,6 +333,13 @@ namespace Game.Core
                 .WithEffect(new AbilityEffect(AbilityEffectKind.FlatDamage, 3) { Damage = DamageType.Energy })
                 .WithEffect(new AbilityEffect(AbilityEffectKind.Shred, 1));
 
+        /// <summary>Механика 3: концентрированный разряд — Оглушение (цель теряет ход, US-3.7).</summary>
+        public static AbilityDefinition Concussion() =>
+            new AbilityDefinition("concussion", "Оглушающий разряд", SkillType.Mechanics, 3)
+                .Costs(ap: 4, cooldown: 3).Targets(AbilityTarget.Enemy, range: 4)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.FlatDamage, 2) { Damage = DamageType.Energy })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.ApplyStatus) { Status = StatusType.Stunned });
+
         /// <summary>Выживание: ловушка на тайле — срабатывает на вошедшем враге.</summary>
         public static AbilityDefinition SetTrap() =>
             new AbilityDefinition("set_trap", "Ловушка", SkillType.Survival, 1)
@@ -290,7 +352,7 @@ namespace Game.Core
             Burst(), SuppressingFire(), MarkTarget(),
             Lunge(), TripStrike(), Rend(),
             Rally(), MoveOrder(), SnapOut(),
-            FieldDressing(), ShockCharge(), SetTrap()
+            FieldDressing(), ShockCharge(), Concussion(), SetTrap()
         };
 
         // ===== Инциденты «Напряжения» (US-11.3; конкретика — продакшен-наполнение) =====

@@ -41,15 +41,33 @@ namespace Game.Core.Dungeons
         public int CheckThreshold;
         public int CheckRewardGold;    // успех → в незабанкованное
 
-        // -- Event (мини-событие) --
+        // -- Event (мини-событие С ВЫБОРОМ, US-12.3) --
         public string EventId;
-        public int EventLootGold;      // напр. «тайник»
-        public int EventThreatDelta;   // напр. «обвал/засада» → опаснее дальше
+        public int EventThreatDelta;   // используется и Check-провалом («дальше опаснее»)
+        public readonly List<DungeonEventOption> EventOptions = new List<DungeonEventOption>();
 
         public DungeonRoom(RoomType type, int depth)
         {
             Type = type;
             Depth = depth;
+        }
+    }
+
+    /// <summary>
+    /// Вариант мини-события (US-12.3): у каждого свой размен риск/награда — золото в
+    /// незабанкованное против роста угрозы (шум/время). Резолвит DungeonRun.ResolveEvent.
+    /// </summary>
+    public sealed class DungeonEventOption
+    {
+        public string Label;
+        public int GoldGain;     // в незабанкованное (банк только на экстракте)
+        public int ThreatDelta;  // шум → дальше опаснее
+
+        public DungeonEventOption(string label, int goldGain, int threatDelta)
+        {
+            Label = label;
+            GoldGain = goldGain;
+            ThreatDelta = threatDelta;
         }
     }
 }

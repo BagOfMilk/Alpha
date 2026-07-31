@@ -89,17 +89,25 @@ namespace Game.Core.Dungeons
 
         private void FillEvent(DungeonRoom room, int depth, IRng rng)
         {
+            // Мини-событие с ВЫБОРОМ (US-12.3): размен «жадность ↔ шум» решает игрок.
             if (rng.D100() <= 55)
             {
                 room.EventId = "cache";
                 room.DisplayName = "Тайник";
-                room.EventLootGold = 6 * depth;
+                room.EventOptions.Add(new DungeonEventOption(
+                    "Выгрести всё (шумно)", goldGain: 6 * depth, threatDelta: ThreatPerDepth));
+                room.EventOptions.Add(new DungeonEventOption(
+                    "Взять только сверху и уйти тихо", goldGain: 3 * depth, threatDelta: 0));
             }
             else
             {
                 room.EventId = "collapse";
                 room.DisplayName = "Обвал";
-                room.EventThreatDelta = ThreatPerDepth * 2; // опаснее дальше
+                room.EventOptions.Add(new DungeonEventOption(
+                    "Разобрать завал: под ним хабар, но грохот далеко слышно",
+                    goldGain: 4 * depth, threatDelta: ThreatPerDepth * 2));
+                room.EventOptions.Add(new DungeonEventOption(
+                    "Протиснуться налегке", goldGain: 0, threatDelta: 0));
             }
         }
 

@@ -4,6 +4,7 @@ using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
 using Game.Core.Combat;
+using Game.Core.Companions;
 using Game.Core.Economy;
 using Game.Core.Factions;
 using Game.Core.Health;
@@ -35,6 +36,8 @@ namespace Game.Core.Saves
                 tension = (float)(b.ThreatsSystem != null ? b.ThreatsSystem.Tension.Value : 0),
                 readiness = (float)(b.ThreatsSystem != null ? b.ThreatsSystem.Readiness.Value : 0),
                 ironman = campaign.Ironman,
+                inExpedition = campaign.InExpedition,
+                campaignOutcome = (int)campaign.Outcome,
                 reputation = (float)campaign.Factions.Reputation,
                 influence = campaign.Factions.Influence
             };
@@ -42,11 +45,52 @@ namespace Game.Core.Saves
             foreach (var c in b.Roster.All) data.companions.Add(CaptureCompanion(c));
             foreach (var item in b.Inventory.Items) data.inventory.Add(CaptureItem(item));
             foreach (var slot in b.Slots)
+            {
+                if (slot.Unlocked) data.unlockedSlots.Add(slot.Id);
                 if (slot.IsOccupied)
                     data.assignments.Add(new SlotDto { slotId = slot.Id, companionId = slot.AssignedCompanionId });
+            }
             foreach (var standing in campaign.Factions.Standings)
                 data.factions.Add(new FactionDto { id = standing.Faction.Id, value = (float)standing.Value });
             foreach (var flag in campaign.Flags) data.flags.Add(flag);
+
+            foreach (var section in b.BuiltSections) data.builtSections.Add((int)section);
+            foreach (var con in b.ConstructionQueue)
+                data.constructions.Add(new ConstructionDto
+                {
+                    id = con.Id,
+                    displayName = con.DisplayName,
+                    section = (int)con.Section,
+                    totalDays = (float)con.TotalDays,
+                    remainingDays = (float)con.RemainingDays,
+                    unlocksSlotId = con.UnlocksSlotId
+                });
+
+            foreach (var run in campaign.Arcs)
+                data.arcs.Add(new ArcDto { arcId = run.Arc.Id, state = (int)run.State, chapterIndex = run.ChapterIndex });
+
+            foreach (var rec in campaign.Antagonists)
+            {
+                var dto = new AntagonistDto { companionId = rec.CompanionId, level = rec.Level };
+                foreach (var item in rec.CapturedGear) dto.gear.Add(CaptureItem(item));
+                data.antagonists.Add(dto);
+            }
+
+            if (campaign.Council != null)
+            {
+                data.councilAttached = true;
+                foreach (var kv in campaign.Council.Cooldowns)
+                    data.councilCooldowns.Add(new CouncilCooldownDto { actionId = kv.Key, days = kv.Value });
+                data.investmentGoldPerDay = campaign.Council.InvestmentGoldPerDay;
+                data.investmentDaysRemaining = campaign.Council.InvestmentDaysRemaining;
+                var buff = campaign.Council.PendingExpeditionBuff;
+                if (buff != null)
+                {
+                    data.hasExpeditionBuff = true;
+                    data.buffAccuracyBonus = buff.AccuracyBonus;
+                    data.buffBonusLootGold = buff.BonusLootGold;
+                }
+            }
 
             return data;
         }
@@ -106,12 +150,48 @@ namespace Game.Core.Saves
             var roster = new Roster();
             foreach (var cd in data.companions) roster.Add(RestoreCompanion(cd, cfg, catalog));
 
+            // Вылазка НЕ сериализуется (Expedition/CombatState вне сейва): прерванную
+            // считаем отменённой — «отряд вернулся домой». Иначе восстановленный
+            // InSquad лочит напарников навсегда (софтлок: IsAvailableForDuty=false).
+            foreach (var c in roster.All)
+                if (c.Status == CompanionStatus.InSquad) c.Status = CompanionStatus.InCamp;
+
             var baseState = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) baseState.AddSlot(slot);
             baseState.RestoreTime(data.day, data.population, data.cityTier);
             baseState.Resources.Add(ResourceType.Gold, data.gold);
             baseState.Resources.Add(ResourceType.BuildingMaterial, data.buildingMaterial);
             baseState.Resources.Add(ResourceType.CraftingMaterial, data.craftingMaterial);
+
+            // Город (v2): построенные здания, открытые позиции (до назначений!), идущие стройки.
+            foreach (var s in data.builtSections) baseState.MarkBuilt((BaseSectionType)s);
+            if (data.version < 2)
+            {
+                // Миграция v1: ядро-здания считались стоящими всегда.
+                baseState.MarkBuilt(BaseSectionType.Council);
+                baseState.MarkBuilt(BaseSectionType.Infirmary);
+                baseState.MarkBuilt(BaseSectionType.Workshop);
+                baseState.MarkBuilt(BaseSectionType.Storehouse);
+
+                // В v1 назначить можно было только на ОТКРЫТУЮ позицию — выводим
+                // разблокировки/застройку из назначений (иначе market_stall заперся бы).
+                foreach (var sd in data.assignments)
+                {
+                    var s = baseState.GetSlot(sd.slotId);
+                    if (s == null) continue;
+                    s.Unlocked = true;
+                    baseState.MarkBuilt(s.Definition.Section);
+                }
+            }
+            foreach (var slotId in data.unlockedSlots)
+            {
+                var slot = baseState.GetSlot(slotId);
+                if (slot != null) slot.Unlocked = true;
+            }
+            foreach (var cd in data.constructions)
+                baseState.RestoreConstruction(new Construction(cd.id, cd.displayName,
+                    (BaseSectionType)cd.section, cd.totalDays, cd.unlocksSlotId)
+                { RemainingDays = cd.remainingDays });
 
             var threats = new ThreatSystem(cfg, new SeededRng(0),
                 DefaultContent.IncidentPool(), DefaultContent.TensionSpikes(), startingTension: data.tension);
@@ -131,8 +211,62 @@ namespace Game.Core.Saves
 
             foreach (var sd in data.assignments) baseState.TryAssign(sd.companionId, sd.slotId);
 
-            var campaign = new Campaign(cfg, baseState, factions) { Ironman = data.ironman };
+            // Инвариант «на посту ⇔ есть пост»: если назначение не восстановилось
+            // (потерянный/запертый слот) — напарник возвращается в лагерь.
+            foreach (var c in roster.All)
+                if ((c.Status == CompanionStatus.OnDuty || c.Status == CompanionStatus.OnCouncil) && !c.IsAssigned)
+                    c.Status = CompanionStatus.InCamp;
+
+            var campaign = new Campaign(cfg, baseState, factions)
+            {
+                Ironman = data.ironman,
+                // Прерванная вылазка отменена при загрузке (см. нормализацию InSquad выше);
+                // data.inExpedition остаётся в сейве под будущую полную сериализацию вылазки.
+                InExpedition = false,
+                Outcome = (CampaignOutcome)data.campaignOutcome
+            };
             foreach (var f in data.flags) campaign.Flags.Add(f);
+
+            // Совет (v2): пере-подключаем с пережившими сейв КД/инвестицией/бафом.
+            if (data.councilAttached)
+            {
+                var council = Council.DefaultCouncil.NewCouncil(factions, baseState.Resources, threats, baseState);
+                var cooldowns = new List<KeyValuePair<string, int>>();
+                foreach (var cd in data.councilCooldowns)
+                    cooldowns.Add(new KeyValuePair<string, int>(cd.actionId, cd.days));
+                council.RestoreState(cooldowns,
+                    data.investmentGoldPerDay, data.investmentDaysRemaining,
+                    data.hasExpeditionBuff
+                        ? new Council.ExpeditionBuff
+                        { AccuracyBonus = data.buffAccuracyBonus, BonusLootGold = data.buffBonusLootGold }
+                        : null);
+                campaign.AttachCouncil(council);
+            }
+
+            // Арки напарников (v2): контент по id, прогресс — из сейва.
+            foreach (var ad in data.arcs)
+            {
+                var arc = catalog.GetArc(ad.arcId);
+                if (arc == null) continue;
+                var run = new CompanionArcRun(arc, campaign.Flags);
+                run.RestoreState((ArcState)ad.state, ad.chapterIndex);
+                campaign.Arcs.Add(run);
+            }
+
+            // Трофеи перебежчиков (v2): гир восстанавливается точно, оружие — из гира.
+            foreach (var an in data.antagonists)
+            {
+                var rec = new AntagonistRecord { CompanionId = an.companionId, Level = an.level };
+                foreach (var it in an.gear)
+                {
+                    var inst = RestoreItem(it, catalog);
+                    if (inst == null) continue;
+                    rec.CapturedGear.Add(inst);
+                    if (rec.Weapon == null && inst.Weapon != null) rec.Weapon = inst.Weapon;
+                }
+                campaign.Antagonists.Add(rec);
+            }
+
             return campaign;
         }
 

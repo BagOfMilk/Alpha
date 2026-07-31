@@ -122,6 +122,92 @@ namespace Game.Core.Quests
             LostCaravan(), MinedPass(), StreetShakedown()
         };
 
+        // ===== Сюжетный спайн (US-14.2): линейная цепочка флагов → веха финала =====
+        public const string SpineAct1Flag = "spine_act1_done";
+        /// <summary>Веха финала — совпадает с FinalBattle.ReadyFlag (Core.Story).</summary>
+        public const string FinaleReadyFlag = "finale_ready";
+
+        /// <summary>
+        /// Акт 1 «Тень на горизонте»: разведка подтверждает — снаружи собирается
+        /// нашествие. Спайн линеен и НЕ запирается провалом (US-16.2): любой исход
+        /// двигает флаг, провал лишь дороже (скрытая Напруга).
+        /// </summary>
+        public static QuestDefinition SpineAct1Shadow()
+        {
+            var q = new QuestDefinition("spine_act1", "Тень на горизонте", QuestSource.NpcSettlement)
+                .BlockFlag(SpineAct1Flag) // пройденный акт не предлагается заново (после загрузки)
+                .Flavor("Дозорный с вышки: «На востоке столбы дыма. Это не гроза, командир.»");
+
+            q.Stage(QuestStage.SkillCheck("scout", "Разведать источники дыма на востоке.",
+                        SkillType.Survival, threshold: 2, onSuccess: 1, onFailure: 2)
+                    .AsUtility()
+                    .FailCost(new SocialConsequence().Tension(3)));
+
+            q.Stage(QuestStage.OutcomeStage("confirmed", "Разведка вернулась с картами лагерей. Времени мало, но оно есть.",
+                success: true,
+                new QuestReward(xp: 60, gold: 40)
+                    .WithSocial(new SocialConsequence().Reputation(4).Flag(SpineAct1Flag))));
+
+            // Провал — тоже вперёд (спайн не встаёт колом): узнали меньше, шума больше.
+            q.Stage(QuestStage.OutcomeStage("rumors", "Разведчики вернулись ни с чем — только слухи и тревога.",
+                success: false,
+                new QuestReward(xp: 30)
+                    .WithSocial(new SocialConsequence().Tension(3).Flag(SpineAct1Flag))));
+
+            return q;
+        }
+
+        /// <summary>
+        /// Акт 2 «Сбор бури»: выбор стратегии + пробный бой; ЛЮБОЙ исход ставит веху
+        /// финала (нашествие придёт независимо — авторский исход, US-13.1/14.2).
+        /// </summary>
+        public static QuestDefinition SpineAct2Storm()
+        {
+            var q = new QuestDefinition("spine_act2", "Сбор бури", QuestSource.CouncilBoard)
+                .GateFlag(SpineAct1Flag)
+                .BlockFlag(FinaleReadyFlag) // веха стоит — акт пройден
+                .Flavor("Совет собран: лагеря снаружи сливаются в орду. Как встретим?");
+
+            q.Stage(QuestStage.ChoiceStage("strategy", "Орда близко. Что делаем до штурма?")
+                .Option(new QuestOption("Ударить по передовому лагерю первыми", next: 1)
+                    .With(new SocialConsequence().Faction(DefaultFactions.Garrison, 6).Tension(3))
+                    .React("brawler", +4, "Боец кивает: «Лучше мы к ним, чем они к нам.»")
+                    .React("negotiator", -3, "Переговорщик хмурится: «Кровь до штурма…»"))
+                .Option(new QuestOption("Укрепляться и предупредить окраины", next: 2)
+                    .With(new SocialConsequence().Faction(DefaultFactions.Commune, 6).Faction(DefaultFactions.FreeFolk, 4).Reputation(3))
+                    .React("negotiator", +4, "Переговорщик выдыхает: «Спасаем своих. Верно.»")));
+
+            // 1 — вылазка на передовой лагерь (бой ведёт вызывающий код).
+            q.Stage(QuestStage.CombatStage("raid_camp", "Ночной удар по передовому лагерю орды.", "horde_vanguard",
+                onWin: 3, onLoss: 4));
+
+            // 2 — оборонительный путь: веха сразу (штурм придёт сам).
+            q.Stage(QuestStage.OutcomeStage("dig_in", "Стены подняты, окраины предупреждены. Теперь — ждать бурю.",
+                success: true,
+                new QuestReward(xp: 70)
+                    .WithSocial(new SocialConsequence().Reputation(3).Flag(FinaleReadyFlag))));
+
+            // 3 — удар удался: орда придёт потрёпанной.
+            q.Stage(QuestStage.OutcomeStage("vanguard_broken", "Передовой лагерь разбит. Орда придёт злее — но реже.",
+                success: true,
+                new QuestReward(xp: 90, gold: 60).Materials(4, 2)
+                    .WithSocial(new SocialConsequence().Faction(DefaultFactions.Garrison, 4).Flag(FinaleReadyFlag))));
+
+            // 4 — удар захлебнулся: буря всё равно придёт (мягкий фейл-стейт, US-16.2).
+            q.Stage(QuestStage.OutcomeStage("raid_failed", "Отряд отброшен. Орда идёт как шла — к стенам.",
+                success: false,
+                new QuestReward(xp: 40)
+                    .WithSocial(new SocialConsequence().Tension(5).Flag(FinaleReadyFlag))));
+
+            return q;
+        }
+
+        /// <summary>Спайн целиком (порядок = порядок актов; финал открывает флаг вехи).</summary>
+        public static List<QuestDefinition> StorySpine() => new List<QuestDefinition>
+        {
+            SpineAct1Shadow(), SpineAct2Storm()
+        };
+
         /// <summary>Сюжетный бит акта 1 с цепочкой дублёров (US-14.1): протагонист → надёжные.</summary>
         public static StoryBeat Act1Briefing() =>
             new StoryBeat("act1_briefing", "leader")

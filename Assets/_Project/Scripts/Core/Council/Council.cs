@@ -11,10 +11,11 @@ namespace Game.Core.Council
     /// Совет (GDD §8.4): повторяемые действия с КД (в днях) и ценой (золото/влияние),
     /// бьющие по разным системам через DI — Напряжение/Готовность (ThreatSystem),
     /// фракции/репутация/влияние (FactionRegistry), золото (ResourceLedger). КД и
-    /// доход от Инвестиции тикаются TickDays (зовётся оркестратором при ходе времени).
-    /// threats/baseState — null-терпимы (действия деградируют мягко).
+    /// доход от Инвестиции тикаются TickDays; как <see cref="ITimeSink"/> совет
+    /// подключается к BaseState.AttachTimeSink и тикается из AdvanceDays сам — без
+    /// рассинхрона календаря и КД. threats/baseState — null-терпимы.
     /// </summary>
-    public sealed class Council
+    public sealed class Council : ITimeSink
     {
         private readonly FactionRegistry _factions;
         private readonly ResourceLedger _ledger;
@@ -54,6 +55,26 @@ namespace Game.Core.Council
 
         public int CooldownRemaining(string actionId)
             => actionId != null && _cooldowns.TryGetValue(actionId, out var v) ? v : 0;
+
+        // ---- Сейв (US-16.1): совет — часть кампании, его состояние переживает загрузку ----
+        /// <summary>Снимок КД для сейва.</summary>
+        public IReadOnlyDictionary<string, int> Cooldowns => _cooldowns;
+        public int InvestmentGoldPerDay => _investmentGoldPerDay;
+        public int InvestmentDaysRemaining => _investmentDaysRemaining;
+
+        /// <summary>Восстановление из сейва: КД, активная Инвестиция, купленный баф вылазки.</summary>
+        public void RestoreState(IEnumerable<KeyValuePair<string, int>> cooldowns,
+                                 int investmentGoldPerDay, int investmentDaysRemaining,
+                                 ExpeditionBuff pendingBuff)
+        {
+            _cooldowns.Clear();
+            if (cooldowns != null)
+                foreach (var kv in cooldowns)
+                    if (kv.Key != null && kv.Value > 0) _cooldowns[kv.Key] = kv.Value;
+            _investmentGoldPerDay = investmentGoldPerDay;
+            _investmentDaysRemaining = investmentDaysRemaining;
+            PendingExpeditionBuff = pendingBuff;
+        }
 
         /// <summary>
         /// Выполнить действие. targetFactionId — для Дипломатии (какую фракцию тянем).

@@ -127,12 +127,30 @@ namespace Game.Core.Balance
         public double ReadinessPerFortification = 15; // вклад построенных Укреплений
         public double ReadinessBracedAt = 25;       // полосы: Unprepared < Braced < Fortified
         public double ReadinessFortifiedAt = 60;
+        // Вклад силы ростера в эффективную Готовность финала (US-11.4).
+        public double ReadinessPerAliveCompanion = 2.0;
+        public double ReadinessPerCompanionLevel = 0.5;
 
         // ======== База: население и стройка ========
-        public double PopulationGrowthPerDay = 0.25;  // пассивный рост (US-7.5); ускоряется Таверной/жильём
+        public double PopulationGrowthPerDay = 0.25;  // пассивный рост (US-7.5); ускоряется Таверной
         public int ConstructionSmallDays = 4;         // малая стройка 3–5 дней (Прил. Б)
         public int ConstructionLargeDays = 10;        // крупная 8–12 дней
         public int ConstructionStages = 5;            // 5 визуальных стадий (US-7.3)
+
+        // -- Цены стройки (US-7.1/15.1: ядро — золото; спец — золото + строймат) --
+        public int CoreConstructionGold = 30;
+        public int SpecialConstructionGold = 40;
+        public int SpecialConstructionMaterials = 6;
+
+        // -- Эффекты спец-зданий (US-7.1; Оружейная/Лаборатория гейтят контент — позже) --
+        public double TavernPopulationGrowthMultiplier = 2.0; // Таверна ускоряет рост населения (US-7.5)
+        public int MarketGoldPerDay = 2;                      // Рынок капает золото
+        public double TempleTensionReliefPerDay = 0.3;        // Храм остужает город (−Напряжение)
+
+        // -- Продвижение тира города (US-7.6): комбинация условий на СЛЕДУЮЩИЙ тир --
+        public double TierPopulationPerStep = 10;  // население ≥ N × следующий тир
+        public double TierReputationPerStep = 15;  // репутация ≥ N × (следующий тир − 1)
+        // Спец-зданий построено ≥ (следующий тир − 1) — прямо в BaseState.
 
         /// <summary>Поверхностная копия (все поля — значимые типы), чтобы не мутировать ассет-пресет.</summary>
         public BalanceConfig Clone() => (BalanceConfig)MemberwiseClone();

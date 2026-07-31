@@ -41,7 +41,7 @@ namespace Game.Core.Items
         /// <summary>Все определения предметов по id — для восстановления гира из сейва (US-16.1).</summary>
         public static List<ItemDefinition> AllDefinitions() => new List<ItemDefinition>
         {
-            ScavengedRifle(), ArmorVest(), TargetingScope(), Widowmaker(), AegisPlate()
+            ScavengedRifle(), ArmorVest(), TargetingScope(), Widowmaker(), AegisPlate(), Ember()
         };
 
         // ===== Именные предметы (заработанные; фикс + уникальный эффект, US-6.1) =====
@@ -64,5 +64,16 @@ namespace Game.Core.Items
                 .Fixed(DerivedStat.MaxHp, 5)
                 .Named(Rarity.Rare, new SignatureEffect("Несгибаемость",
                     new StatModifier(DerivedStat.Resolve, 3)));
+
+        /// <summary>«Уголёк» — именной огнемёт-кустарь: огонь + уникальный прок Поджога (US-3.12).</summary>
+        public static ItemDefinition Ember() =>
+            new ItemDefinition("ember", "Уголёк", EquipSlot.Weapon)
+                .WithWeapon(new WeaponDefinition("ember_w", "Уголёк", SkillType.Ranged)
+                {
+                    Damage = DamageType.Fire, DamageMin = 3, DamageMax = 5, CritDamageBonus = 2,
+                    ApCost = 4, OptimalRange = 5, StatusOnHit = StatusType.Burning // Поджог: DoT огнём
+                })
+                .Fixed(DerivedStat.Accuracy, 5)
+                .Named(Rarity.Rare);
     }
 }
