@@ -53,6 +53,7 @@ namespace Game.Core.Saves
             foreach (var standing in campaign.Factions.Standings)
                 data.factions.Add(new FactionDto { id = standing.Faction.Id, value = (float)standing.Value });
             foreach (var flag in campaign.Flags) data.flags.Add(flag);
+            foreach (var ach in campaign.Achievements) data.achievements.Add(ach);
 
             foreach (var section in b.BuiltSections) data.builtSections.Add((int)section);
             foreach (var con in b.ConstructionQueue)
@@ -226,6 +227,7 @@ namespace Game.Core.Saves
                 Outcome = (CampaignOutcome)data.campaignOutcome
             };
             foreach (var f in data.flags) campaign.Flags.Add(f);
+            foreach (var a in data.achievements) campaign.Achievements.Add(a);
 
             // Совет (v2): пере-подключаем с пережившими сейв КД/инвестицией/бафом.
             if (data.councilAttached)
@@ -298,6 +300,9 @@ namespace Game.Core.Saves
 
             c.RestoreProgress(cd.level, cd.xp, cd.unspentSkillPoints, (CompanionStatus)cd.status,
                               cd.loyalty, (InjuryTier)cd.injuryTier, cd.recoveryDays);
+
+            // Перки — производная скилов: не хранятся в сейве, пересчитываются из каталога.
+            c.RefreshPerks(catalog.Perks);
             return c;
         }
 

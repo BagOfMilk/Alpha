@@ -42,7 +42,12 @@ namespace Game.Core.Quests
                     .React("brawler", +4, "Боец ухмыляется: «Давно пора.»"))
                 .Option(new QuestOption("Бросить караван", next: 6)
                     .With(new SocialConsequence().Reputation(-4).Tension(2))
-                    .React("leader", -4)));
+                    .React("leader", -4))
+                // Особая опция от трейта (US-2.6): дурная слава Громилы решает без боя и слов.
+                .Option(new QuestOption("Молча выйти вперёд — репутация Громилы скажет всё", next: 2)
+                    .GateTrait("bruiser")
+                    .With(new SocialConsequence().Faction(DefaultFactions.FreeFolk, -4).Reputation(2).Tension(-1))
+                    .React("brawler", +3, "Боец хрустит кулаками: «Вот так и договорились.»")));
 
             // 2 — мирный исход.
             q.Stage(QuestStage.OutcomeStage("peaceful", "Караван отпущен миром. Торговец благодарен.", success: true,
@@ -187,10 +192,11 @@ namespace Game.Core.Quests
                 new QuestReward(xp: 70)
                     .WithSocial(new SocialConsequence().Reputation(3).Flag(FinaleReadyFlag))));
 
-            // 3 — удар удался: орда придёт потрёпанной.
+            // 3 — удар удался: орда придёт потрёпанной; из пожарища — именной трофей.
             q.Stage(QuestStage.OutcomeStage("vanguard_broken", "Передовой лагерь разбит. Орда придёт злее — но реже.",
                 success: true,
                 new QuestReward(xp: 90, gold: 60).Materials(4, 2)
+                    .Item(Game.Core.Items.DefaultItems.Ember())
                     .WithSocial(new SocialConsequence().Faction(DefaultFactions.Garrison, 4).Flag(FinaleReadyFlag))));
 
             // 4 — удар захлебнулся: буря всё равно придёт (мягкий фейл-стейт, US-16.2).

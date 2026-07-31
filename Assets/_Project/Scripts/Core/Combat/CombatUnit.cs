@@ -48,6 +48,9 @@ namespace Game.Core.Combat
         public bool ProtectedFromDeath;
 
         public ResistProfile Resists = new ResistProfile();
+
+        /// <summary>Семейство (для врагов): роботов можно взломать и переманить (US-3.11/3.14).</summary>
+        public EnemyFamily Family = EnemyFamily.Human;
     }
 
     /// <summary>
@@ -58,7 +61,10 @@ namespace Game.Core.Combat
     public sealed class CombatUnit
     {
         public string Id { get; }
-        public Side Side { get; }
+
+        /// <summary>Сторона. Меняется только взломом робота (US-3.11) — через CombatState.</summary>
+        public Side Side { get; internal set; }
+
         public UnitProfile Profile { get; }
         public WeaponDefinition Weapon { get; }
 
@@ -228,7 +234,8 @@ namespace Game.Core.Combat
                 Resolve = def.Resolve,
                 MedicineSkill = 0,
                 CanBeDowned = false,
-                Resists = def.Resists ?? new ResistProfile()
+                Resists = def.Resists ?? new ResistProfile(),
+                Family = def.Family
             };
             var unit = new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon);
             if (def.Abilities != null)

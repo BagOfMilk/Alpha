@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Game.Core.Characters;
 using Game.Core.Companions;
 using Game.Core.Health;
 using Game.Core.Items;
@@ -17,6 +18,10 @@ namespace Game.Core.Saves
         private readonly Dictionary<string, Scar> _scars = new Dictionary<string, Scar>();
         private readonly Dictionary<string, ItemDefinition> _items = new Dictionary<string, ItemDefinition>();
         private readonly Dictionary<string, CompanionArc> _arcs = new Dictionary<string, CompanionArc>();
+        private readonly Dictionary<string, PerkDefinition> _perks = new Dictionary<string, PerkDefinition>();
+
+        /// <summary>Каталог перков: перки — производная скилов, при загрузке пересчитываются, не хранятся.</summary>
+        public IEnumerable<PerkDefinition> Perks => _perks.Values;
 
         public Trait GetTrait(string id) => id != null && _traits.TryGetValue(id, out var t) ? t : null;
         public Scar GetScar(string id) => id != null && _scars.TryGetValue(id, out var s) ? s : null;
@@ -27,6 +32,7 @@ namespace Game.Core.Saves
         public ContentCatalog AddScar(Scar s) { if (s != null && s.Id != null) _scars[s.Id] = s; return this; }
         public ContentCatalog AddItem(ItemDefinition i) { if (i != null && i.Id != null) _items[i.Id] = i; return this; }
         public ContentCatalog AddArc(CompanionArc a) { if (a != null && a.Id != null) _arcs[a.Id] = a; return this; }
+        public ContentCatalog AddPerk(PerkDefinition p) { if (p != null && p.Id != null) _perks[p.Id] = p; return this; }
 
         /// <summary>Каталог из дефолтного контента (затравка прототипа).</summary>
         public static ContentCatalog Default()
@@ -36,6 +42,8 @@ namespace Game.Core.Saves
             foreach (var s in DefaultContent.AllScars()) c.AddScar(s);
             foreach (var i in DefaultItems.AllDefinitions()) c.AddItem(i);
             c.AddArc(DefaultArcs.MedicOldDebt());
+            c.AddArc(DefaultArcs.BrawlerFistsAndConscience());
+            foreach (var p in DefaultContent.PerkCatalog()) c.AddPerk(p);
             return c;
         }
     }

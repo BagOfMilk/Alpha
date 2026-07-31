@@ -283,5 +283,27 @@ namespace Game.Tests.EditMode
             foreach (var q in DefaultQuests.All())
                 Assert.IsTrue(q.Validate(out var err), $"{q.Id}: {err}");
         }
+
+        // ---- Трейты открывают/закрывают особые опции (US-2.6/10.2) ----
+        [Test]
+        public void Choice_TraitGatedOption_OpensAndCloses()
+        {
+            var cfg = new BalanceConfig();
+            var q = new QuestDefinition("t", "T", QuestSource.RandomEvent)
+                .Stage(QuestStage.ChoiceStage("pick", "Как решаем?")
+                    .Option(new QuestOption("Путь громилы", 1).GateTrait("bruiser"))
+                    .Option(new QuestOption("Тонкая работа — не для вспыльчивых", 1).BlockTrait("hot_tempered")))
+                .Stage(QuestStage.OutcomeStage("end", "Готово.", true));
+
+            var brawler = Game.Core.DefaultContent.Brawler().CreateInstance("brawler", cfg); // bruiser + hot_tempered
+            var medic = Game.Core.DefaultContent.Medic().CreateInstance("medic", cfg);
+
+            var run = new QuestRun(q, null, cfg);
+            var options = q.Stages[0].Options;
+            Assert.IsTrue(run.OptionAvailable(options[0], new[] { brawler }), "носитель трейта открывает опцию");
+            Assert.IsFalse(run.OptionAvailable(options[0], new[] { medic }), "без носителя — закрыто");
+            Assert.IsFalse(run.OptionAvailable(options[1], new[] { brawler }), "порок в отряде закрывает вариант");
+            Assert.IsTrue(run.OptionAvailable(options[1], new[] { medic }));
+        }
     }
 }

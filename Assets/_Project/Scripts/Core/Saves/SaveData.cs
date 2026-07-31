@@ -47,6 +47,9 @@ namespace Game.Core.Saves
         public List<ArcDto> arcs = new List<ArcDto>();
         public List<AntagonistDto> antagonists = new List<AntagonistDto>();
 
+        // v2: ачивки (US-16.1, берутся только в айронмене).
+        public List<string> achievements = new List<string>();
+
         // v2: совет (если был подключён) — КД, активная Инвестиция, баф вылазки.
         public bool councilAttached;
         public List<CouncilCooldownDto> councilCooldowns = new List<CouncilCooldownDto>();

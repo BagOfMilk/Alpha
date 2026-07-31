@@ -99,9 +99,20 @@ namespace Game.Core.Characters
         public int GetAttribute(AttributeType attribute) => Attributes.Get(attribute);
         public int GetSkill(SkillType skill) => Skills.Get(skill);
 
-        /// <summary>Суммарный флэт-модификатор к проверке по скилу от трейтов и шрамов (US-2.6).</summary>
+        /// <summary>Суммарный флэт к проверке по скилу: трейты + шрамы + перки (US-2.6/3.11).</summary>
         public int CheckModifierFor(SkillType skill)
-            => Traits.CheckModifierFor(skill) + Scars.CheckModifierFor(skill);
+        {
+            int sum = Traits.CheckModifierFor(skill) + Scars.CheckModifierFor(skill);
+            for (int i = 0; i < _perks.Count; i++) sum += _perks[i].CheckModifierFor(skill);
+            return sum;
+        }
+
+        public bool HasPerk(string perkId)
+        {
+            for (int i = 0; i < _perks.Count; i++)
+                if (_perks[i].Id == perkId) return true;
+            return false;
+        }
 
         /// <summary>Теги ценностей (из трейтов) — основа эмерджентных связей напарников (US-9.6).</summary>
         public IEnumerable<string> ValueTags
@@ -127,16 +138,33 @@ namespace Game.Core.Characters
         }
 
         /// <summary>
-        /// Пересчитывает открытые перки по каталогу (порог скила, US-2.2). Зови после
-        /// траты очков скилов. Идемпотентно: список строится заново — двойного счёта нет.
+        /// Пересчитывает открытые перки по каталогу (порог скила + пререквизиты,
+        /// US-2.2). Зови после траты очков скилов. Идемпотентно: список строится
+        /// заново — двойного счёта нет. До фикс-пойнта: пререквизит-цепочки
+        /// разрешаются независимо от порядка каталога.
         /// </summary>
         public void RefreshPerks(IEnumerable<PerkDefinition> catalog)
         {
             _perks.Clear();
             if (catalog == null) return;
+            var pool = new List<PerkDefinition>();
             foreach (var perk in catalog)
-                if (perk != null && perk.UnlockedFor(this))
-                    _perks.Add(perk);
+                if (perk != null) pool.Add(perk);
+
+            bool added = true;
+            while (added)
+            {
+                added = false;
+                for (int i = 0; i < pool.Count; i++)
+                {
+                    var perk = pool[i];
+                    if (!HasPerk(perk.Id) && perk.UnlockedFor(this))
+                    {
+                        _perks.Add(perk);
+                        added = true;
+                    }
+                }
+            }
         }
 
         public int GetDerived(DerivedStat stat, BalanceConfig cfg)
@@ -172,6 +200,17 @@ namespace Game.Core.Characters
             if (skill == SkillType.None || UnspentSkillPoints <= 0) return false;
             Skills.Raise(skill, 1);
             UnspentSkillPoints--;
+            return true;
+        }
+
+        /// <summary>
+        /// Трата очка с немедленным пересчётом перков по каталогу — production-путь
+        /// кампании (перк открывается сразу, US-2.2/3.10; превью — BuildPlanner).
+        /// </summary>
+        public bool SpendSkillPoint(SkillType skill, IEnumerable<PerkDefinition> perkCatalog)
+        {
+            if (!SpendSkillPoint(skill)) return false;
+            RefreshPerks(perkCatalog);
             return true;
         }
 

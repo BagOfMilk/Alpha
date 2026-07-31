@@ -137,6 +137,8 @@ namespace Game.Core.Threats
                 var check = CheckResolver.Resolve(new[] { resolver }, incident.Skill, incident.Threshold);
                 report.ResolvedById = resolver.Id;
                 report.Success = check.Success;
+                if (check.Success && incident.XpOnSuccess > 0)
+                    resolver.GainXp(incident.XpOnSuccess, _cfg); // XP с событий (US-5.1)
             }
             else
             {

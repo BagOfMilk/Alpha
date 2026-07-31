@@ -39,5 +39,36 @@ namespace Game.Core.Companions
                     .Option(new QuestOption("Наказать", 1)
                         .With(new SocialConsequence().Faction(DefaultFactions.Garrison, 5).Tension(3))))
                 .Stage(QuestStage.OutcomeStage("closure", "Старый долг закрыт.", true, new QuestReward(60, 50)));
+
+        /// <summary>Арка бойца «Кулаки и совесть»: старый ринг зовёт (Steady) → цена славы (Devoted).</summary>
+        public static CompanionArc BrawlerFistsAndConscience()
+        {
+            return new CompanionArc("arc_brawler", "brawler", "Кулаки и совесть")
+                .Chapter(new ArcChapter("ch1", BrawlerChapter1())
+                    .Loyalty(LoyaltyBand.Steady).SetsFlag("arc_brawler_ch1"))
+                .Chapter(new ArcChapter("ch2", BrawlerChapter2())
+                    .Loyalty(LoyaltyBand.Devoted).NeedsFlag("arc_brawler_ch1").SetsFlag("arc_brawler_done"));
+        }
+
+        private static QuestDefinition BrawlerChapter1() =>
+            new QuestDefinition("arc_brawler_q1", "Старый ринг", QuestSource.NpcSettlement)
+                .Flavor("Бойца зовут «тряхнуть стариной» на подпольном ринге. Долги не забываются.")
+                .Stage(QuestStage.SocialCheck("refuse", "Отговорить устроителей — без крови.",
+                    Game.Core.Checks.CheckApproach.Intimidate, threshold: 3, onSuccess: 1, onFailure: 2))
+                .Stage(QuestStage.OutcomeStage("walked_away", "Ринг остался в прошлом. Боец молчит, но благодарен.", true,
+                    new QuestReward(xp: 40, gold: 20)))
+                .Stage(QuestStage.OutcomeStage("dragged_in", "Пришлось выйти на ринг. Победа — но осадок тяжёлый.", false,
+                    new QuestReward(xp: 30).WithSocial(new SocialConsequence().Tension(2))));
+
+        private static QuestDefinition BrawlerChapter2() =>
+            new QuestDefinition("arc_brawler_q2", "Цена славы", QuestSource.NpcLocation)
+                .Flavor("Старый соперник нашёл Бойца. Он не драться пришёл — просить.")
+                .Stage(QuestStage.ChoiceStage("plea", "Соперник просит вступиться за его семью. Что скажет Боец?")
+                    .Option(new QuestOption("Вступиться", 1)
+                        .With(new SocialConsequence().Faction(DefaultFactions.Commune, 5).Reputation(3)))
+                    .Option(new QuestOption("Отказать: у своих забот хватает", 1)
+                        .With(new SocialConsequence().Reputation(-2).Tension(2))))
+                .Stage(QuestStage.OutcomeStage("respect", "Как бы ни решилось — старый счёт закрыт.", true,
+                    new QuestReward(xp: 60, gold: 40)));
     }
 }

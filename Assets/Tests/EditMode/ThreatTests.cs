@@ -261,5 +261,29 @@ namespace Game.Tests.EditMode
             threats.ApplyHiddenDelta(baseState, -40); // упали ниже порога…
             Assert.IsNull(threats.ApplyHiddenDelta(baseState, 30), "…повторное пересечение не триггерит");
         }
+
+        // ---- XP с событий (US-5.1: опыт не только с боёв/квестов) ----
+        [Test]
+        public void Incident_Success_GrantsResolverXp()
+        {
+            var (baseState, roster, cfg) = MakeBase();
+            baseState.AddSlot(new AssignmentSlotDefinition("dock", "Склад", BaseSectionType.Storehouse)
+            { RelevantSkill = SkillType.Survival });
+            var keeper = AddComp(roster, "keeper", SkillType.Survival, 5);
+            baseState.TryAssign("keeper", "dock");
+
+            var incident = Minor("xp_inc");
+            incident.XpOnSuccess = 40;
+            var threats = new ThreatSystem(cfg, new ScriptedRng(),
+                new List<IncidentDefinition>(),
+                new List<ThresholdSpike> { new ThresholdSpike(50, incident) },
+                startingTension: 45);
+            baseState.AttachThreats(threats);
+
+            var report = threats.ApplyHiddenDelta(baseState, 10); // всплеск → резолв keeper'ом
+            Assert.IsNotNull(report);
+            Assert.IsTrue(report.Success);
+            Assert.AreEqual(40, keeper.Xp, "успешный резолв инцидента даёт XP резолверу");
+        }
     }
 }

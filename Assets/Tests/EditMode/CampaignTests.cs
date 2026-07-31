@@ -1,6 +1,7 @@
 using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Base;
+using Game.Core.Characters;
 using Game.Core.Combat;
 using Game.Core.Council;
 using Game.Core.Economy;
@@ -212,6 +213,122 @@ namespace Game.Tests.EditMode
             Assert.IsNull(campaign.ActiveExpedition);
             Assert.IsTrue(campaign.CanQuickSave);
             Assert.AreEqual(10, campaign.Base.Resources.Get(ResourceType.Gold));
+        }
+
+        // ---- Создание протагониста (US-2.7): point-buy поверх бэкграунда ----
+        [Test]
+        public void ProtagonistBuilder_PointBuy_BudgetsAndCaps()
+        {
+            var cfg = new BalanceConfig
+            { ProtagonistAttributePoints = 2, ProtagonistSkillPoints = 3, CreationSkillMax = 4 };
+            var b = new ProtagonistBuilder(DefaultContent.Leader(), cfg); // старт 4/4/5/5, Тактика 2
+
+            Assert.AreEqual(CreationStep.Ok, b.RaiseAttribute(AttributeType.Strength)); // 4→5
+            Assert.AreEqual(CreationStep.Ok, b.RaiseAttribute(AttributeType.Wits));     // 5→6
+            Assert.AreEqual(CreationStep.NoBudget, b.RaiseAttribute(AttributeType.Will),
+                "бюджет очков атрибутов кончился");
+
+            Assert.AreEqual(CreationStep.Ok, b.RaiseSkill(SkillType.Tactics)); // 2→3
+            Assert.AreEqual(CreationStep.Ok, b.RaiseSkill(SkillType.Tactics)); // 3→4
+            Assert.AreEqual(CreationStep.AtCap, b.RaiseSkill(SkillType.Tactics), "потолок скила при создании");
+
+            b.DisplayName = "Кастомный лидер";
+            var hero = b.Build("leader");
+            Assert.IsTrue(hero.IsProtagonist);
+            Assert.AreEqual(5, hero.GetAttribute(AttributeType.Strength));
+            Assert.AreEqual(4, hero.GetSkill(SkillType.Tactics));
+            Assert.AreEqual("Кастомный лидер", hero.DisplayName);
+        }
+
+        [Test]
+        public void ProtagonistBuilder_ExtraTraits_LimitedByBudget()
+        {
+            var cfg = new BalanceConfig { ProtagonistExtraTraits = 1 };
+            var b = new ProtagonistBuilder(DefaultContent.Marksman(), cfg); // sharp_eye уже в бэкграунде
+            Assert.AreEqual(CreationStep.DuplicateTrait, b.AddTrait(DefaultContent.SharpEye()));
+            Assert.AreEqual(CreationStep.Ok, b.AddTrait(DefaultContent.SilverTongue()));
+            Assert.AreEqual(CreationStep.NoTraitRoom, b.AddTrait(DefaultContent.Handy()),
+                "бюджет стартовых трейтов сверх бэкграунда");
+        }
+
+        [Test]
+        public void NewGame_WithCustomProtagonist_ReplacesLeader()
+        {
+            var cfg = new BalanceConfig();
+            var b = new ProtagonistBuilder(DefaultContent.Medic(), cfg);
+            var campaign = Campaign.NewGame(cfg, b.Build("leader"));
+
+            Assert.AreEqual(6, campaign.Roster.Count, "кастом занял место дефолтного лидера");
+            var hero = campaign.Roster.Get("leader");
+            Assert.IsTrue(hero.IsProtagonist);
+            Assert.AreEqual(3, hero.GetSkill(SkillType.Medicine), "старт бэкграунда Медика при кастоме");
+        }
+
+        [Test]
+        public void NewGame_CustomProtagonist_WrongId_ThrowsInsteadOfSilentLoss()
+        {
+            var cfg = new BalanceConfig();
+            var b = new ProtagonistBuilder(DefaultContent.Medic(), cfg);
+            Assert.Throws<System.ArgumentException>(() => Campaign.NewGame(cfg, b.Build("hero")),
+                "id != leader ломает спайн — явная ошибка вместо тихой потери героя");
+            Assert.Throws<System.ArgumentException>(() => Campaign.NewGame(cfg, b.Build("medic")),
+                "коллизия с бэкграундным id — тоже явная ошибка");
+        }
+
+        [Test]
+        public void Perks_LiveInCampaignLifecycle_NewGameAndSave()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            Assert.IsTrue(campaign.Roster.Get("marksman").HasPerk("steady_hand"),
+                "стартовый ростер сразу с перками (Ranged 3 ≥ порога 2)");
+            Assert.IsTrue(campaign.Roster.Get("leader").HasPerk("light_step"));
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(campaign));
+            var loaded = SaveSystem.Restore(UnityEngine.JsonUtility.FromJson<SaveData>(json),
+                cfg, ContentCatalog.Default());
+            Assert.IsTrue(loaded.Roster.Get("marksman").HasPerk("steady_hand"),
+                "перки пересчитываются при загрузке — чек-бонусы не теряются");
+        }
+
+        // ---- Карта мира (US-1.1): узлы с доступностью ----
+        [Test]
+        public void WorldMap_GatesNodes_ByTierAndFlags()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            var map = DefaultWorld.NewMap();
+
+            var open = map.Available(campaign.Base.CityTier, campaign.Flags);
+            Assert.AreEqual(1, open.Count, "на старте открыт только Восточный тракт");
+            Assert.AreEqual("east_road", open[0].Id);
+            Assert.AreEqual(2, map.Locked(campaign.Base.CityTier, campaign.Flags).Count,
+                "недоступные узлы видимы отдельным списком (US-1.1)");
+
+            campaign.Base.AdvanceCityTier(); // тир 2 открывает дальнюю точку (US-7.6)
+            Assert.IsTrue(map.IsAvailable(map.Get("rusted_works"), campaign.Base.CityTier, campaign.Flags));
+
+            campaign.Flags.Add(FinalBattle.ReadyFlag); // веха открывает финальную окраину
+            Assert.AreEqual(3, map.Available(campaign.Base.CityTier, campaign.Flags).Count);
+        }
+
+        // ---- Ачивки (US-16.1): только в айронмене, персистятся ----
+        [Test]
+        public void Achievements_OnlyInIronman_AndPersist()
+        {
+            var casual = Campaign.NewGame(new BalanceConfig { Ironman = false });
+            casual.Flags.Add(FinalBattle.ReadyFlag);
+            FinalBattle.Resolve(casual, won: true);
+            Assert.AreEqual(0, casual.Achievements.Count, "вне айронмена ачивки не берутся");
+
+            var iron = Campaign.NewGame(new BalanceConfig { Ironman = true });
+            iron.Flags.Add(FinalBattle.ReadyFlag);
+            FinalBattle.Resolve(iron, won: true);
+            Assert.IsTrue(iron.Achievements.Contains(FinalBattle.IronVictoryAchievement));
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(iron));
+            var loaded = SaveSystem.Restore(UnityEngine.JsonUtility.FromJson<SaveData>(json),
+                new BalanceConfig(), ContentCatalog.Default());
+            Assert.IsTrue(loaded.Achievements.Contains(FinalBattle.IronVictoryAchievement), "ачивки в сейве");
         }
 
         private static WeaponDefinition Wpn(int damage) =>

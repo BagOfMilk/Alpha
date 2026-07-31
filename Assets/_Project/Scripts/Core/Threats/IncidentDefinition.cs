@@ -42,6 +42,9 @@ namespace Game.Core.Threats
         public double TensionOnSuccess = -3;
         public double TensionOnFailure = 4;
 
+        /// <summary>XP резолверу за успех (US-5.1: опыт с событий, не только с боёв/квестов).</summary>
+        public int XpOnSuccess;
+
         /// <summary>Для кризисов: жёсткий эффект, срабатывает НЕЗАВИСИМО от проверки.</summary>
         public CrisisEffect Crisis = CrisisEffect.None;
 

@@ -30,7 +30,8 @@ namespace Game.Core.Combat
         GrantAp = 6,          // +AP цели (размен экономии действий)
         LungeToTarget = 7,    // рывок: встать вплотную к цели-врагу (свободная клетка)
         RepositionTarget = 8, // переставить цель-союзника в targetTile (≤ Amount клеток от него)
-        PlaceTrap = 9         // ловушка в targetTile: Amount урона типом Damage + Status
+        PlaceTrap = 9,        // ловушка в targetTile: Amount урона типом Damage + Status
+        HackRobot = 10        // переманить вражеского робота на свою сторону (US-3.11/3.14)
     }
 
     [Serializable]

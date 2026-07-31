@@ -299,5 +299,43 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(enemy.HasStatus(StatusType.Bleeding));
             Assert.AreEqual(0, cs.Traps.Count, "одноразовая");
         }
+
+        // ---- Взлом робота (US-3.11/3.14): переманить на свою сторону ----
+        [Test]
+        public void HackRobot_ConvertsRobot_RejectsFlesh()
+        {
+            var map = new GridMap(12, 1);
+            var cs = NewCombat(map);
+            var hacker = U("hacker", Side.Player, 10, ability: DefaultContent.HackDrone());
+            var drone = CombatUnit.FromEnemy(DefaultContent.RustDrone(), "drone");
+            var raider = CombatUnit.FromEnemy(DefaultContent.RaiderBruiser(), "raider");
+            cs.AddUnit(hacker, new GridPos(0, 0));
+            cs.AddUnit(drone, new GridPos(3, 0));
+            cs.AddUnit(raider, new GridPos(4, 0));
+            cs.Begin();
+
+            Assert.AreEqual(CombatActionResult.InvalidTarget, cs.UseAbility("hack_drone", "raider"),
+                "взлом берёт только роботов (валидация ДО оплаты)");
+            Assert.AreEqual(8, hacker.Ap, "AP не потрачены на невалидную цель");
+
+            Assert.AreEqual(CombatActionResult.Success, cs.UseAbility("hack_drone", "drone"));
+            Assert.AreEqual(Side.Player, drone.Side, "дрон переманен — дерётся за отряд");
+            Assert.AreEqual(CombatOutcome.Ongoing, cs.Outcome, "рейдер ещё стоит");
+        }
+
+        [Test]
+        public void HackRobot_LastEnemy_EndsCombat()
+        {
+            var map = new GridMap(12, 1);
+            var cs = NewCombat(map);
+            var hacker = U("hacker", Side.Player, 10, ability: DefaultContent.HackDrone());
+            var drone = CombatUnit.FromEnemy(DefaultContent.RustDrone(), "drone");
+            cs.AddUnit(hacker, new GridPos(0, 0));
+            cs.AddUnit(drone, new GridPos(3, 0));
+            cs.Begin();
+
+            Assert.AreEqual(CombatActionResult.Success, cs.UseAbility("hack_drone", "drone"));
+            Assert.AreEqual(CombatOutcome.Victory, cs.Outcome, "последний враг переманен — бой окончен");
+        }
     }
 }

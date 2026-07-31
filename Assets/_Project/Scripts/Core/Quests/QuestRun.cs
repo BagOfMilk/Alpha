@@ -109,7 +109,23 @@ namespace Game.Core.Quests
             {
                 if (_factions == null || !_factions.AtLeast(option.RequiresFaction, option.RequiresBand)) return false;
             }
+            // Трейты открывают/закрывают особые опции (US-2.6/10.2).
+            if (!string.IsNullOrEmpty(option.RequiresTraitId) && !AnyoneHasTrait(participants, option.RequiresTraitId))
+                return false;
+            if (!string.IsNullOrEmpty(option.BlockedByTraitId) && AnyoneHasTrait(participants, option.BlockedByTraitId))
+                return false;
             return true;
+        }
+
+        private static bool AnyoneHasTrait(IReadOnlyList<Companion> participants, string traitId)
+        {
+            if (participants == null) return false;
+            for (int i = 0; i < participants.Count; i++)
+            {
+                var c = participants[i];
+                if (c != null && c.IsAlive && c.Traits.Contains(traitId)) return true;
+            }
+            return false;
         }
 
         public QuestStepReport Choose(int optionIndex, IReadOnlyList<Companion> participants)

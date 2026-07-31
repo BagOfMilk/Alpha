@@ -340,6 +340,13 @@ namespace Game.Core
                 .WithEffect(new AbilityEffect(AbilityEffectKind.FlatDamage, 2) { Damage = DamageType.Energy })
                 .WithEffect(new AbilityEffect(AbilityEffectKind.ApplyStatus) { Status = StatusType.Stunned });
 
+        /// <summary>Взлом 3: перехват управления — переманить вражеского робота (US-3.11/3.14).</summary>
+        public static AbilityDefinition HackDrone() =>
+            new AbilityDefinition("hack_drone", "Перехват управления", SkillType.Hacking, 3)
+                .Costs(ap: 5, cooldown: 10) // фактически раз за бой
+                .Targets(AbilityTarget.Enemy, range: 4)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.HackRobot));
+
         /// <summary>Выживание: ловушка на тайле — срабатывает на вошедшем враге.</summary>
         public static AbilityDefinition SetTrap() =>
             new AbilityDefinition("set_trap", "Ловушка", SkillType.Survival, 1)
@@ -352,25 +359,25 @@ namespace Game.Core
             Burst(), SuppressingFire(), MarkTarget(),
             Lunge(), TripStrike(), Rend(),
             Rally(), MoveOrder(), SnapOut(),
-            FieldDressing(), ShockCharge(), Concussion(), SetTrap()
+            FieldDressing(), ShockCharge(), Concussion(), HackDrone(), SetTrap()
         };
 
         // ===== Инциденты «Напряжения» (US-11.3; конкретика — продакшен-наполнение) =====
         public static IncidentDefinition WarehouseTheft() =>
             new IncidentDefinition("warehouse_theft", "Кража со склада", IncidentSeverity.Minor)
-            { Skill = SkillType.Survival, Threshold = 2, TensionOnSuccess = -3, TensionOnFailure = 4, Weight = 3 };
+            { Skill = SkillType.Survival, Threshold = 2, TensionOnSuccess = -3, TensionOnFailure = 4, Weight = 3, XpOnSuccess = 15 };
 
         public static IncidentDefinition MarketSquabble() =>
             new IncidentDefinition("market_squabble", "Свара на рынке", IncidentSeverity.Minor)
-            { Skill = SkillType.Persuasion, Threshold = 2, TensionOnSuccess = -3, TensionOnFailure = 4, Weight = 3 };
+            { Skill = SkillType.Persuasion, Threshold = 2, TensionOnSuccess = -3, TensionOnFailure = 4, Weight = 3, XpOnSuccess = 15 };
 
         public static IncidentDefinition ProtectionRacket() =>
             new IncidentDefinition("protection_racket", "Рэкет лавочников", IncidentSeverity.Organized)
-            { Skill = SkillType.Persuasion, Threshold = 4, TensionOnSuccess = -6, TensionOnFailure = 8, Weight = 2 };
+            { Skill = SkillType.Persuasion, Threshold = 4, TensionOnSuccess = -6, TensionOnFailure = 8, Weight = 2, XpOnSuccess = 25 };
 
         public static IncidentDefinition WorkshopSabotage() =>
             new IncidentDefinition("workshop_sabotage", "Саботаж в мастерской", IncidentSeverity.Organized)
-            { Skill = SkillType.Mechanics, Threshold = 4, TensionOnSuccess = -5, TensionOnFailure = 8, Weight = 2 };
+            { Skill = SkillType.Mechanics, Threshold = 4, TensionOnSuccess = -5, TensionOnFailure = 8, Weight = 2, XpOnSuccess = 25 };
 
         /// <summary>Кризис: непредотвратимый отток населения; проверка лишь смягчает дельту.</summary>
         public static IncidentDefinition NightPogrom() =>
@@ -435,10 +442,22 @@ namespace Game.Core
         {
             new PerkDefinition("steady_hand", "Твёрдая рука", SkillType.Ranged, 2).With(DerivedStat.Accuracy, 5),
             new PerkDefinition("cold_blood", "Хладнокровие", SkillType.Ranged, 4).With(DerivedStat.CritChance, 5),
+            // Пререквизит-цепочка (US-2.2): вершина стрелковой ветки требует «Хладнокровие».
+            new PerkDefinition("dead_eye", "Мёртвый глаз", SkillType.Ranged, 6)
+                .Requires("cold_blood").With(DerivedStat.CritChance, 5).With(DerivedStat.Accuracy, 3),
             new PerkDefinition("thick_hide", "Крепкая шкура", SkillType.Melee, 2).With(DerivedStat.MaxHp, 2),
             new PerkDefinition("battering_ram", "Таран", SkillType.Melee, 4).With(DerivedStat.Armor, 1),
             new PerkDefinition("light_step", "Лёгкий шаг", SkillType.Tactics, 2).With(DerivedStat.ActionPoints, 1),
-            new PerkDefinition("unshakeable", "Невозмутимость", SkillType.Tactics, 4).With(DerivedStat.Resolve, 3)
+            new PerkDefinition("unshakeable", "Невозмутимость", SkillType.Tactics, 4).With(DerivedStat.Resolve, 3),
+            // Утилита/соц (US-3.11: пассив + бонусы к проверкам, активок не дают).
+            new PerkDefinition("triage", "Сортировка раненых", SkillType.Medicine, 2)
+                .With(DerivedStat.Resolve, 2).WithCheck(SkillType.Medicine, 1),
+            new PerkDefinition("grease_monkey", "Смазчик", SkillType.Mechanics, 2)
+                .With(DerivedStat.Initiative, 1).WithCheck(SkillType.Mechanics, 1),
+            new PerkDefinition("scrounger", "Хомяк", SkillType.Survival, 2)
+                .With(DerivedStat.Carry, 2).WithCheck(SkillType.Survival, 1),
+            new PerkDefinition("born_orator", "Прирождённый оратор", SkillType.Persuasion, 3)
+                .WithCheck(SkillType.Persuasion, 1).WithCheck(SkillType.Trade, 1)
         };
     }
 }

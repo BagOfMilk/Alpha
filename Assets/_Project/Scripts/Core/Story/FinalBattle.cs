@@ -39,6 +39,9 @@ namespace Game.Core.Story
         public const string ReadyFlag = "finale_ready";
         public const string WonFlag = "campaign_won";
 
+        /// <summary>Ачивка айронмен-победы (US-16.1: ачивки только в айронмене).</summary>
+        public const string IronVictoryAchievement = "iron_city_stands";
+
         public static bool IsUnlocked(ICollection<string> flags)
             => flags != null && flags.Contains(ReadyFlag);
 
@@ -135,7 +138,11 @@ namespace Game.Core.Story
             var band = BandFor(
                 EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, campaign.Cfg), campaign.Cfg);
             campaign.Outcome = won ? CampaignOutcome.Won : CampaignOutcome.Lost;
-            if (won) campaign.Flags.Add(WonFlag);
+            if (won)
+            {
+                campaign.Flags.Add(WonFlag);
+                campaign.TryUnlockAchievement(IronVictoryAchievement); // только в айронмене
+            }
 
             return new FinaleReport
             {

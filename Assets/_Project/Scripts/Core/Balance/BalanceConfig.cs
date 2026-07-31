@@ -26,6 +26,13 @@ namespace Game.Core.Balance
         // Фикс число активных трейтов-слотов (US-2.4). Шрамы слоты НЕ занимают.
         public int TraitSlots = 4;
 
+        // Point-buy протагониста (US-2.7): очки СВЕРХ бэкграунда + потолки старта.
+        public int ProtagonistAttributePoints = 3;
+        public int ProtagonistSkillPoints = 4;
+        public int ProtagonistExtraTraits = 1;   // трейтов сверх бэкграундных (в пределах слотов)
+        public int CreationAttributeMax = 8;     // потолок атрибута при создании
+        public int CreationSkillMax = 4;         // потолок скила при создании
+
         // ======== Производные из атрибутов (база ДО модификаторов) ========
         // Мелкие числа: HP ~6–20, AP ~8–10 (Прил. Б).
         public double HpBase = 4.0;            // HP = HpBase + Strength*HpPerStrength

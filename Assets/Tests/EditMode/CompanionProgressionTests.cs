@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Stats;
@@ -5,7 +7,10 @@ using NUnit.Framework;
 
 namespace Game.Tests.EditMode
 {
-    /// <summary>Прокачка: XP даёт очки скилов в пул, игрок тратит вручную (классов нет, респека нет; US-2.2/5.1).</summary>
+    /// <summary>
+    /// Прокачка: XP даёт очки скилов в пул, игрок тратит вручную (классов нет,
+    /// респека нет; US-2.2/5.1) + пререквизиты перков и планировщик билда (US-2.3).
+    /// </summary>
     public class CompanionProgressionTests
     {
         private static Companion Make() => new Companion("c", new AttributeBlock(3, 3, 3, 3), 4);
@@ -49,6 +54,98 @@ namespace Game.Tests.EditMode
             // ...но игровой путь — только Raise (повышение), понижения в геймплее нет.
             c.Skills.Raise(SkillType.Melee, 2);
             Assert.AreEqual(3, c.GetSkill(SkillType.Melee));
+        }
+
+        // ---- Пререквизиты перков (US-2.2: «порог скила + пререквизиты») ----
+        [Test]
+        public void Perk_Prerequisite_FixpointAndOrphan()
+        {
+            var a = new PerkDefinition("a", "A", SkillType.Ranged, 2).With(DerivedStat.Accuracy, 5);
+            var b = new PerkDefinition("b", "B", SkillType.Ranged, 2).Requires("a").With(DerivedStat.CritChance, 5);
+            var orphan = new PerkDefinition("orphan", "X", SkillType.Ranged, 2).Requires("missing");
+
+            var c = Make();
+            c.Skills.Set(SkillType.Ranged, 2);
+            c.RefreshPerks(new List<PerkDefinition> { orphan, b, a }); // b раньше a — порядок не важен
+
+            Assert.IsTrue(c.HasPerk("a"));
+            Assert.IsTrue(c.HasPerk("b"), "пререквизит-цепочка разрешается до фикс-пойнта");
+            Assert.IsFalse(c.HasPerk("orphan"), "без открытого пререквизита перк заперт");
+        }
+
+        [Test]
+        public void Perk_CheckModifiers_FlowIntoChecks()
+        {
+            var c = Make();
+            c.Skills.Set(SkillType.Medicine, 2);
+            c.RefreshPerks(DefaultContent.PerkCatalog()); // «Сортировка раненых»: +1 к Медицине
+            Assert.AreEqual(1, c.CheckModifierFor(SkillType.Medicine),
+                "утилита/соц-перки дают пассив к проверкам (US-3.11)");
+        }
+
+        // ---- Планировщик билда (US-2.3): превью БЕЗ мутации ----
+        [Test]
+        public void BuildPlanner_Preview_ShowsPerksAndDeltas_WithoutMutation()
+        {
+            var cfg = new BalanceConfig { SkillPointsPerLevel = 1 };
+            var c = Make();
+            c.Skills.Set(SkillType.Melee, 1);
+            c.RefreshPerks(DefaultContent.PerkCatalog());
+            c.GainXp(ProgressionMath.XpToNext(1, cfg), cfg); // 1 нераспределённое очко
+
+            var preview = BuildPlanner.PreviewSkillPoint(c, SkillType.Melee, cfg, DefaultContent.PerkCatalog());
+
+            Assert.IsTrue(preview.CanSpend);
+            Assert.AreEqual(2, preview.NewLevel);
+            Assert.IsTrue(preview.Irreversible, "явное предупреждение: респека нет");
+            Assert.IsTrue(preview.PerksUnlocked.Exists(p => p.Id == "thick_hide"), "покажет открывающийся перк");
+            Assert.AreEqual(2, preview.DerivedDeltas[DerivedStat.MaxHp], "и дельту статов от него");
+
+            // Превью ничего не мутирует:
+            Assert.AreEqual(1, c.GetSkill(SkillType.Melee));
+            Assert.IsFalse(c.HasPerk("thick_hide"));
+            Assert.AreEqual(1, c.UnspentSkillPoints);
+        }
+
+        [Test]
+        public void BuildPlanner_CheckDelta_CountsPointAndPerkBonus()
+        {
+            var cfg = new BalanceConfig();
+            var c = Make();
+            c.Skills.Set(SkillType.Medicine, 1);
+            var preview = BuildPlanner.PreviewSkillPoint(c, SkillType.Medicine, cfg, DefaultContent.PerkCatalog());
+            Assert.AreEqual(2, preview.CheckValueDelta, "+1 само очко и +1 от «Сортировки раненых»");
+        }
+
+        [Test]
+        public void BuildPlanner_DoesNotAttribute_AlreadyEarnedPerks()
+        {
+            // Перки достижимы ТЕКУЩИМИ уровнями, но RefreshPerks не звали (stale).
+            var cfg = new BalanceConfig();
+            var c = Make();
+            c.Skills.Set(SkillType.Tactics, 2);  // light_step уже заработан
+            c.Skills.Set(SkillType.Medicine, 3); // triage уже заработан
+
+            var survival = BuildPlanner.PreviewSkillPoint(c, SkillType.Survival, cfg, DefaultContent.PerkCatalog());
+            Assert.IsFalse(survival.PerksUnlocked.Exists(p => p.Id == "light_step"),
+                "чужой перк не приписывается очку в несвязанный скил");
+
+            var medicine = BuildPlanner.PreviewSkillPoint(c, SkillType.Medicine, cfg, DefaultContent.PerkCatalog());
+            Assert.IsFalse(medicine.PerksUnlocked.Exists(p => p.Id == "triage"),
+                "уже достигнутый порог — не заслуга нового очка");
+            Assert.AreEqual(1, medicine.CheckValueDelta, "дельта проверки честная: только само очко");
+        }
+
+        [Test]
+        public void SpendSkillPoint_WithCatalog_RefreshesPerksImmediately()
+        {
+            var cfg = new BalanceConfig { SkillPointsPerLevel = 1 };
+            var c = Make();
+            c.Skills.Set(SkillType.Melee, 1);
+            c.GainXp(ProgressionMath.XpToNext(1, cfg), cfg);
+
+            Assert.IsTrue(c.SpendSkillPoint(SkillType.Melee, DefaultContent.PerkCatalog()));
+            Assert.IsTrue(c.HasPerk("thick_hide"), "production-путь траты очка сразу открывает перк");
         }
     }
 }

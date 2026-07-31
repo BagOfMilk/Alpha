@@ -60,6 +60,16 @@ namespace Game.Core.Saves
         /// <summary>Снимки ушедших в антагонисты (US-9.4): гир вернётся с босса — персистятся.</summary>
         public readonly List<AntagonistRecord> Antagonists = new List<AntagonistRecord>();
 
+        /// <summary>Взятые ачивки (US-16.1: только в айронмене) — персистятся.</summary>
+        public readonly HashSet<string> Achievements = new HashSet<string>();
+
+        /// <summary>Ачивки берутся ТОЛЬКО в айронмене (US-16.1). true — взята впервые.</summary>
+        public bool TryUnlockAchievement(string id)
+        {
+            if (!Ironman || string.IsNullOrEmpty(id)) return false;
+            return Achievements.Add(id);
+        }
+
         public Roster Roster => Base.Roster;
 
         public Campaign(BalanceConfig cfg, BaseState baseState, FactionRegistry factions)
@@ -114,14 +124,38 @@ namespace Game.Core.Saves
         }
 
         /// <summary>Новая игра: дефолтный стартовый ростер/база/фракции/угрозы; ядро-здания стоят.</summary>
-        public static Campaign NewGame(BalanceConfig cfg)
+        public static Campaign NewGame(BalanceConfig cfg) => NewGame(cfg, null);
+
+        /// <summary>
+        /// Новая игра с СОЗДАННЫМ протагонистом (US-2.7, ProtagonistBuilder). Кастом
+        /// занимает место дефолтного лидера (id должен быть "leader" — на него
+        /// завязан спайн US-14.1); null — дефолтный командир.
+        /// </summary>
+        public static Campaign NewGame(BalanceConfig cfg, Companion protagonist)
         {
+            if (protagonist != null && protagonist.Id != "leader")
+                throw new ArgumentException(
+                    "Кастомный протагонист обязан иметь id \"leader\" — на него завязан спайн " +
+                    "(US-14.1: StoryBeat/React) и замещение дефолтного командира.", nameof(protagonist));
+
             cfg = cfg ?? new BalanceConfig();
             var roster = new Roster();
             foreach (var bg in DefaultContent.AllBackgrounds())
+            {
+                if (protagonist != null && bg.Id == "leader") continue; // место занято кастомом
                 roster.Add(bg.CreateInstance(bg.Id, cfg));
+            }
+            if (protagonist != null)
+            {
+                protagonist.IsProtagonist = true;
+                roster.Add(protagonist);
+            }
             var leader = roster.Get("leader");
             if (leader != null) leader.IsProtagonist = true;
+
+            // Перки — производная скилов (US-3.10): считаем частью жизненного цикла,
+            // а не заботой UI. Стартовый ростер сразу с открытыми перками.
+            foreach (var c in roster.All) c.RefreshPerks(DefaultContent.PerkCatalog());
 
             var baseState = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) baseState.AddSlot(slot);

@@ -28,7 +28,7 @@ namespace Game.Core.Quests
         }
     }
 
-    /// <summary>Вариант выбора: опц. гейт (скил/фракция), соц-последствия, реакции, переход.</summary>
+    /// <summary>Вариант выбора: опц. гейт (скил/фракция/трейт), соц-последствия, реакции, переход.</summary>
     public sealed class QuestOption
     {
         public string Label;
@@ -36,6 +36,12 @@ namespace Game.Core.Quests
         public int RequiresSkillLevel;
         public string RequiresFaction;
         public FactionBand RequiresBand = FactionBand.Neutral;
+
+        /// <summary>Трейты открывают/закрывают особые опции (US-2.6): нужен носитель трейта…</summary>
+        public string RequiresTraitId;
+        /// <summary>…или наоборот — носитель трейта в отряде закрывает вариант.</summary>
+        public string BlockedByTraitId;
+
         public SocialConsequence Consequence;
         public readonly List<CompanionReaction> Reactions = new List<CompanionReaction>();
         public int Next;
@@ -48,6 +54,8 @@ namespace Game.Core.Quests
 
         public QuestOption GateSkill(SkillType skill, int level) { RequiresSkill = skill; RequiresSkillLevel = level; return this; }
         public QuestOption GateFaction(string factionId, FactionBand band) { RequiresFaction = factionId; RequiresBand = band; return this; }
+        public QuestOption GateTrait(string traitId) { RequiresTraitId = traitId; return this; }
+        public QuestOption BlockTrait(string traitId) { BlockedByTraitId = traitId; return this; }
         public QuestOption With(SocialConsequence consequence) { Consequence = consequence; return this; }
         public QuestOption React(string companionId, int loyaltyDelta, string line = null)
         {

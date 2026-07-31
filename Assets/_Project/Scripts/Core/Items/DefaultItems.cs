@@ -41,7 +41,8 @@ namespace Game.Core.Items
         /// <summary>Все определения предметов по id — для восстановления гира из сейва (US-16.1).</summary>
         public static List<ItemDefinition> AllDefinitions() => new List<ItemDefinition>
         {
-            ScavengedRifle(), ArmorVest(), TargetingScope(), Widowmaker(), AegisPlate(), Ember()
+            ScavengedRifle(), ArmorVest(), TargetingScope(),
+            Widowmaker(), AegisPlate(), Ember(), Whisper(), Sting()
         };
 
         // ===== Именные предметы (заработанные; фикс + уникальный эффект, US-6.1) =====
@@ -75,5 +76,27 @@ namespace Game.Core.Items
                 })
                 .Fixed(DerivedStat.Accuracy, 5)
                 .Named(Rarity.Rare);
+
+        /// <summary>«Шёпот» — именной пистолет: тихий выстрел давит волю (прок Подавления).</summary>
+        public static ItemDefinition Whisper() =>
+            new ItemDefinition("whisper", "Шёпот", EquipSlot.Weapon)
+                .WithWeapon(new WeaponDefinition("whisper_w", "Шёпот", SkillType.Ranged)
+                {
+                    Damage = DamageType.Ballistic, DamageMin = 2, DamageMax = 4, CritDamageBonus = 2,
+                    ApCost = 3, OptimalRange = 5, StatusOnHit = StatusType.Suppressed
+                })
+                .Fixed(DerivedStat.Accuracy, 6)
+                .Named(Rarity.Rare);
+
+        /// <summary>«Жало» — именной токсиновый клинок: Яд сквозь броню (US-3.12).</summary>
+        public static ItemDefinition Sting() =>
+            new ItemDefinition("sting", "Жало", EquipSlot.Weapon)
+                .WithWeapon(new WeaponDefinition("sting_w", "Жало", SkillType.Melee)
+                {
+                    Damage = DamageType.Toxin, DamageMin = 3, DamageMax = 5, CritDamageBonus = 3,
+                    ApCost = 3, ArmorPierce = 1, StatusOnHit = StatusType.Poisoned
+                })
+                .Fixed(DerivedStat.CritChance, 5)
+                .Named(Rarity.Epic);
     }
 }

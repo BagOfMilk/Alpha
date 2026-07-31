@@ -274,6 +274,12 @@ namespace Game.Core.Combat
                     if (!targetTile.HasValue || !Map.IsFree(targetTile.Value) || TrapAt(targetTile.Value) != null)
                         return CombatActionResult.InvalidTarget;
                 }
+                else if (fx.Kind == AbilityEffectKind.HackRobot)
+                {
+                    // Взлом берёт только роботов (US-3.11) — валидируем ДО оплаты AP.
+                    if (target == null || target.Profile.Family != EnemyFamily.Robot)
+                        return CombatActionResult.InvalidTarget;
+                }
             }
 
             unit.Ap -= ability.ApCost;
@@ -369,6 +375,19 @@ namespace Game.Core.Combat
                                 Damage = fx.Amount, DamageType = fx.Damage, StatusOnTrigger = fx.Status
                             });
                             AddLog($"  Ловушка установлена в {targetTile.Value}");
+                        }
+                        break;
+
+                    case AbilityEffectKind.HackRobot:
+                        // Симметрия бестиария (US-3.14): робот переманивается на сторону
+                        // взломщика до конца боя (валидация «только робот» — до оплаты AP).
+                        if (target != null && target.IsActive && target.Side != unit.Side
+                            && target.Profile.Family == EnemyFamily.Robot)
+                        {
+                            target.Side = unit.Side;
+                            AddLog($"  {target.Profile.DisplayName} перехвачен — теперь дерётся за " +
+                                   (unit.Side == Side.Player ? "отряд!" : "врага!"));
+                            CheckOutcome(); // возможно, активных врагов не осталось
                         }
                         break;
                 }
