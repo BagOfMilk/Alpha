@@ -331,6 +331,110 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(loaded.Achievements.Contains(FinalBattle.IronVictoryAchievement), "ачивки в сейве");
         }
 
+        // ---- Онбординг (US-17.4): ведомые шаги + пролог с микс-развилкой (US-17.1) ----
+        [Test]
+        public void Onboarding_GuidedSteps_FollowCampaignState()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            var flow = new OnboardingFlow();
+            Assert.AreEqual(OnboardingStep.Prologue, flow.Step);
+            Assert.IsFalse(string.IsNullOrEmpty(flow.Hint), "у каждого шага есть подсказка");
+
+            // Пролог: бой → развилка «прикрыть переговорщика».
+            var prologue = new QuestRun(DefaultQuests.Prologue(), campaign.Base, campaign.Cfg,
+                campaign.Factions, campaign.Base.ThreatsSystem, campaign.Flags);
+            prologue.ResolveCombat(won: true);
+            var step = prologue.Choose(0, campaign.Roster.All);
+            Assert.IsTrue(step.Terminal && step.QuestSucceeded);
+            Assert.IsTrue(flow.TryAdvance(campaign), "флаг пролога закрывает шаг");
+            Assert.AreEqual(OnboardingStep.SettlementIntro, flow.Step);
+
+            flow.AcknowledgeIntro(campaign);
+            Assert.AreEqual(OnboardingStep.FirstAssignment, flow.Step);
+            Assert.IsFalse(flow.TryAdvance(campaign), "никто не назначен — шаг открыт");
+
+            campaign.Base.TryAssign("medic", "infirmary_bed");
+            Assert.IsTrue(flow.TryAdvance(campaign));
+            Assert.AreEqual(OnboardingStep.FirstWait, flow.Step);
+
+            campaign.AdvanceDays(1);
+            Assert.IsTrue(flow.TryAdvance(campaign));
+            Assert.AreEqual(OnboardingStep.FirstExpedition, flow.Step);
+
+            flow.NotifyExpeditionConcluded(campaign);
+            Assert.IsTrue(flow.IsDone, "петля собрана — системы введены по одной");
+        }
+
+        [Test]
+        public void Onboarding_FastForwards_FromSavedFlags()
+        {
+            // Как после загрузки: флаги в сейве есть, flow создаётся заново.
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            campaign.Flags.Add(DefaultQuests.PrologueDoneFlag);
+            campaign.Flags.Add(OnboardingFlow.IntroAckFlag);
+            campaign.Base.TryAssign("medic", "infirmary_bed");
+            campaign.Flags.Add(OnboardingFlow.WaitedFlag);
+            campaign.Flags.Add(OnboardingFlow.DoneFlag);
+
+            var flow = new OnboardingFlow();
+            while (flow.TryAdvance(campaign)) { }
+            Assert.IsTrue(flow.IsDone, "онбординг восстановился из персистентных флагов");
+        }
+
+        [Test]
+        public void Onboarding_EarlyExpedition_IsSticky()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            var flow = new OnboardingFlow();
+            flow.NotifyExpeditionConcluded(campaign); // вылазка случилась ДО шага — не теряется
+
+            campaign.Flags.Add(DefaultQuests.PrologueDoneFlag);
+            flow.TryAdvance(campaign);          // → SettlementIntro
+            flow.AcknowledgeIntro(campaign);    // → FirstAssignment
+            campaign.Base.TryAssign("medic", "infirmary_bed");
+            flow.TryAdvance(campaign);          // → FirstWait
+            campaign.AdvanceDays(1);
+            flow.TryAdvance(campaign);          // → FirstExpedition
+            Assert.IsTrue(flow.TryAdvance(campaign), "липкое событие закрывает шаг");
+            Assert.IsTrue(flow.IsDone);
+        }
+
+        [Test]
+        public void Prologue_SpurnedPath_SeedsAct1Boss()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            var negotiator = campaign.Roster.Get("negotiator");
+            negotiator.Equipment.Equip(ItemInstance.NamedFrom(DefaultItems.Whisper()));
+
+            var prologue = new QuestRun(DefaultQuests.Prologue(), campaign.Base, campaign.Cfg,
+                campaign.Factions, campaign.Base.ThreatsSystem, campaign.Flags);
+            prologue.ResolveCombat(won: true);
+            prologue.Choose(2, campaign.Roster.All); // «уходить, не оглядываясь»
+
+            Assert.IsTrue(campaign.Flags.Contains(DefaultQuests.PrologueSpurnedFlag));
+            var record = Prologue.TrySeedDefector(campaign);
+            Assert.IsNotNull(record, "переговорщик ушёл к злодею — босс акта 1 засеян (US-17.1)");
+            Assert.AreEqual(CompanionStatus.Antagonist, negotiator.Status);
+            Assert.AreEqual(1, record.CapturedGear.Count, "ушёл со своим гиром (US-9.4)");
+            Assert.IsTrue(campaign.Flags.Contains(Prologue.BossSeededFlag));
+            Assert.IsNull(Prologue.TrySeedDefector(campaign), "сид одноразовый");
+        }
+
+        [Test]
+        public void Prologue_LoyalPath_NoBossSeeded()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            Assert.IsTrue(DefaultQuests.Prologue().Validate(out var err), err);
+
+            var prologue = new QuestRun(DefaultQuests.Prologue(), campaign.Base, campaign.Cfg,
+                campaign.Factions, campaign.Base.ThreatsSystem, campaign.Flags);
+            prologue.ResolveCombat(won: true);
+            prologue.Choose(0, campaign.Roster.All); // прикрыли переговорщика
+
+            Assert.AreEqual(58, campaign.Roster.Get("negotiator").Loyalty, "поддержка видна сразу (US-9.2)");
+            Assert.IsNull(Prologue.TrySeedDefector(campaign), "лояльный путь боссов не сеет");
+        }
+
         private static WeaponDefinition Wpn(int damage) =>
             new WeaponDefinition("w", "Ствол", SkillType.Ranged)
             { DamageMin = damage, DamageMax = damage, CritDamageBonus = 1, ApCost = 3, OptimalRange = 12 };

@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3684c88ee1334c4c94e963cbafdb0e7f, type: 3}
+  m_Name: sting
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.Content.ItemAsset
+  definition:
+    Id: sting
+    DisplayName: "\u0416\u0430\u043B\u043E"
+    Slot: 0
+    IsNamed: 1
+    NamedRarity: 3
+    StatRolls:
+    - Stat: 7
+      Min: 5
+      Max: 5
+    Weapon:
+      Id: sting_w
+      DisplayName: "\u0416\u0430\u043B\u043E"
+      Skill: 2
+      Damage: 3
+      DamageMin: 3
+      DamageMax: 5
+      CritDamageBonus: 3
+      ApCost: 3
+      OptimalRange: 1
+      ArmorPierce: 1
+      ShredOnHit: 0
+      StatusOnHit: 7
+  hasSignatureEffect: 0
+  signatureName: 
+  signatureModifiers: []

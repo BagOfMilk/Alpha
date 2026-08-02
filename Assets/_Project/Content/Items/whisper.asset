@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3684c88ee1334c4c94e963cbafdb0e7f, type: 3}
+  m_Name: whisper
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.Content.ItemAsset
+  definition:
+    Id: whisper
+    DisplayName: "\u0428\u0451\u043F\u043E\u0442"
+    Slot: 0
+    IsNamed: 1
+    NamedRarity: 2
+    StatRolls:
+    - Stat: 3
+      Min: 6
+      Max: 6
+    Weapon:
+      Id: whisper_w
+      DisplayName: "\u0428\u0451\u043F\u043E\u0442"
+      Skill: 1
+      Damage: 1
+      DamageMin: 2
+      DamageMax: 4
+      CritDamageBonus: 2
+      ApCost: 3
+      OptimalRange: 5
+      ArmorPierce: 0
+      ShredOnHit: 0
+      StatusOnHit: 3
+  hasSignatureEffect: 0
+  signatureName: 
+  signatureModifiers: []

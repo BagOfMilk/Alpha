@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3684c88ee1334c4c94e963cbafdb0e7f, type: 3}
+  m_Name: aegis_plate
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.Content.ItemAsset
+  definition:
+    Id: aegis_plate
+    DisplayName: "\u042D\u0433\u0438\u0434\u0430"
+    Slot: 1
+    IsNamed: 1
+    NamedRarity: 2
+    StatRolls:
+    - Stat: 8
+      Min: 3
+      Max: 3
+    - Stat: 1
+      Min: 5
+      Max: 5
+    Weapon:
+      Id: 
+      DisplayName: 
+      Skill: 1
+      Damage: 1
+      DamageMin: 2
+      DamageMax: 5
+      CritDamageBonus: 2
+      ApCost: 4
+      OptimalRange: 6
+      ArmorPierce: 0
+      ShredOnHit: 0
+      StatusOnHit: 0
+  hasSignatureEffect: 1
+  signatureName: "\u041D\u0435\u0441\u0433\u0438\u0431\u0430\u0435\u043C\u043E\u0441\u0442\u044C"
+  signatureModifiers:
+  - Stat: 9
+    Value: 3
+    Mode: 0
+    Source: 0

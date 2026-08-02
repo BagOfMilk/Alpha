@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65ab88aa10c04ba7a41db684160f5a2e, type: 3}
+  m_Name: scav_gunner
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.Content.EnemyAsset
+  definition:
+    Id: scav_gunner
+    DisplayName: "\u0421\u0442\u0440\u0435\u043B\u043E\u043A-\u043F\u0430\u0434\u0430\u043B\u044C\u0449\u0438\u043A"
+    Role: 1
+    Family: 0
+    MaxHp: 9
+    MaxAp: 8
+    Accuracy: 65
+    Defense: 5
+    Initiative: 6
+    CritChance: 10
+    Armor: 0
+    Resolve: 0
+    Weapon:
+      Id: rifle
+      DisplayName: "\u0412\u0438\u043D\u0442\u043E\u0432\u043A\u0430"
+      Skill: 1
+      Damage: 1
+      DamageMin: 3
+      DamageMax: 5
+      CritDamageBonus: 2
+      ApCost: 4
+      OptimalRange: 6
+      ArmorPierce: 0
+      ShredOnHit: 0
+      StatusOnHit: 0
+    Abilities: []
+  resists: []
+  abilities: []

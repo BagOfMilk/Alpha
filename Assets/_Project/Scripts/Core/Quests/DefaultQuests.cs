@@ -127,6 +127,53 @@ namespace Game.Core.Quests
             LostCaravan(), MinedPass(), StreetShakedown()
         };
 
+        // ===== Пролог (US-17.1: первый час, микс-развилка) =====
+        public const string PrologueDoneFlag = "prologue_done";
+        public const string PrologueSpurnedFlag = "prologue_spurned";
+
+        /// <summary>
+        /// Пролог на окраине (US-17.1): учит бой, а сюжетный выбор при отходе задаёт
+        /// стартовые отношения. «Бросить своих» — жёсткий путь: переговорщик может
+        /// уйти к злодею и вернуться боссом акта 1 (сид — Story.Prologue). Ставки
+        /// телеграфированы; провал боя усугубляет, но пролог не запирает кампанию.
+        /// </summary>
+        public static QuestDefinition Prologue()
+        {
+            var q = new QuestDefinition("prologue", "Окраина", QuestSource.NpcLocation)
+                .BlockFlag(PrologueDoneFlag)
+                .Flavor("Засада на окраине. Этот бой — всерьёз: здесь теряют людей.");
+
+            // 0 — пролог-бой (ведёт вызывающий код; поражение не рвёт пролог — отход).
+            q.Stage(QuestStage.CombatStage("ambush", "Отбиться от засады на окраине.", "outskirts_ambush",
+                onWin: 1, onLoss: 1));
+
+            // 1 — микс-развилка: отход под огнём, прикрыть можно ОДНОГО.
+            q.Stage(QuestStage.ChoiceStage("retreat", "Отход под огнём. Кого прикрываешь?")
+                .Option(new QuestOption("Прикрыть переговорщика", next: 2)
+                    .React("negotiator", +8, "Переговорщик выдыхает: «Я этого не забуду.»")
+                    .React("marksman", -4, "Стрелок мрачно перезаряжается."))
+                .Option(new QuestOption("Прикрыть стрелка", next: 2)
+                    .React("marksman", +8, "Стрелок коротко кивает: «Сочтёмся.»")
+                    .React("negotiator", -4, "Переговорщик отстал и молчит всю дорогу."))
+                .Option(new QuestOption("Уходить, не оглядываясь", next: 3)
+                    .With(new SocialConsequence().Tension(3).Reputation(-2))
+                    .React("negotiator", -30, "Переговорщик смотрит вслед: «Вот, значит, как…»")
+                    .React("marksman", -10)));
+
+            // 2 — ушли вместе.
+            q.Stage(QuestStage.OutcomeStage("escaped", "Оторвались. Отряд цел — и это уже победа.",
+                success: true,
+                new QuestReward(xp: 50).WithSocial(new SocialConsequence().Flag(PrologueDoneFlag))));
+
+            // 3 — бросили своих: пролог пройден, но с меткой (возможен сид босса акта 1).
+            q.Stage(QuestStage.OutcomeStage("spurned", "Ушли. За спиной — те, кого не прикрыли.",
+                success: false,
+                new QuestReward(xp: 30)
+                    .WithSocial(new SocialConsequence().Flag(PrologueDoneFlag).Flag(PrologueSpurnedFlag))));
+
+            return q;
+        }
+
         // ===== Сюжетный спайн (US-14.2): линейная цепочка флагов → веха финала =====
         public const string SpineAct1Flag = "spine_act1_done";
         /// <summary>Веха финала — совпадает с FinalBattle.ReadyFlag (Core.Story).</summary>

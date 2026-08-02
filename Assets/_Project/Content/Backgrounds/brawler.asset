@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7935192146e46fab8070d74167606cc, type: 3}
+  m_Name: brawler
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.Content.BackgroundAsset
+  background:
+    Id: brawler
+    DisplayName: "\u0411\u043E\u0435\u0446"
+    StartingAttributes:
+      Strength: 6
+      Agility: 4
+      Wits: 2
+      Will: 4
+    StartingSkills:
+    - Skill: 2
+      Level: 3
+    - Skill: 21
+      Level: 1
+    StartingTraits:
+    - Id: bruiser
+      DisplayName: "\u0413\u0440\u043E\u043C\u0438\u043B\u0430"
+      Sign: 1
+      SlotCost: 1
+      CheckModifiers:
+      - Skill: 21
+        Value: 2
+      CombatModifiers:
+      - Stat: 1
+        Value: 2
+        Mode: 0
+        Source: 1
+      ValueTags:
+      - "\u0441\u0438\u043B\u0430"
+      - ruthless
+    - Id: hot_tempered
+      DisplayName: "\u0412\u0441\u043F\u044B\u043B\u044C\u0447\u0438\u0432\u044B\u0439"
+      Sign: 2
+      SlotCost: 1
+      CheckModifiers:
+      - Skill: 20
+        Value: -1
+      CombatModifiers: []
+      ValueTags:
+      - "\u0433\u043D\u0435\u0432"
+      - freedom
