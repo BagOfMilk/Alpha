@@ -39,6 +39,18 @@ namespace Game.Core.Threats
         public TensionTrack Tension { get; }
         public ReadinessTrack Readiness { get; }
 
+        /// <summary>Поток случайностей — для сериализации состояния в сейв (US-16.1).</summary>
+        internal IRng Rng => _rng;
+
+        /// <summary>Сработавшие одноразовые всплески — тоже в сейв (иначе перевзводятся загрузкой).</summary>
+        internal IEnumerable<double> FiredSpikes => _firedSpikes;
+
+        internal void RestoreFiredSpikes(IEnumerable<double> thresholds)
+        {
+            if (thresholds == null) return;
+            foreach (var t in thresholds) _firedSpikes.Add(t);
+        }
+
         /// <summary>Открытые кризисами враждебные группировки (вход в Эпик 10).</summary>
         public readonly List<string> UnlockedHostileFactions = new List<string>();
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Base;
@@ -216,6 +217,81 @@ namespace Game.Tests.EditMode
             loaded.AdvanceDays(10);
             Assert.AreEqual(goldAfterPay + 80, loaded.Base.Resources.Get(ResourceType.Gold),
                 "оплаченная Инвестиция капает и после загрузки");
+        }
+
+        // ---- Сид кампании и поток случайностей (v3): анти-save-scum ----
+        [Test]
+        public void NewGame_WithoutSeed_IsUnique()
+        {
+            var a = Campaign.NewGame(new BalanceConfig());
+            var b = Campaign.NewGame(new BalanceConfig());
+            Assert.AreNotEqual(a.Seed, b.Seed, "кампании больше не клоны фиксированного SeededRng(0)");
+        }
+
+        [Test]
+        public void SameSeed_SameIncidentStream()
+        {
+            var cfg = new BalanceConfig { IncidentChanceBase = 100, IncidentChancePerTension = 0 };
+            var a = Campaign.NewGame(cfg, null, seed: 123);
+            var b = Campaign.NewGame(cfg, null, seed: 123);
+            CollectionAssert.AreEqual(IncidentIds(a.AdvanceDays(10)), IncidentIds(b.AdvanceDays(10)),
+                "тот же сид — тот же поток (реплей кампании)");
+        }
+
+        [Test]
+        public void Load_ContinuesIncidentStream_NoSaveScum()
+        {
+            var cfg = new BalanceConfig { IncidentChanceBase = 100, IncidentChancePerTension = 0 };
+            var campaign = Campaign.NewGame(cfg, null, seed: 777);
+            campaign.AdvanceDays(5); // прокрутили начало потока
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(campaign));
+            var future = IncidentIds(campaign.AdvanceDays(10)); // ветка А: играем дальше
+
+            var loaded = SaveSystem.Restore(UnityEngine.JsonUtility.FromJson<SaveData>(json),
+                cfg, ContentCatalog.Default());
+            var reloaded = IncidentIds(loaded.AdvanceDays(10)); // ветка Б: load → играем дальше
+
+            CollectionAssert.AreEqual(future, reloaded,
+                "загрузка ПРОДОЛЖАЕТ поток случайностей — рероллить инциденты сейв-скамом нельзя (US-16.1)");
+        }
+
+        [Test]
+        public void Load_DoesNotRefireSpentThresholdSpike()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg, null, seed: 5);
+            var fired = campaign.Base.ThreatsSystem.ApplyHiddenDelta(campaign.Base, 80); // порог 75 пересечён
+            Assert.IsNotNull(fired, "всплеск сработал до сейва");
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(campaign));
+            var loaded = SaveSystem.Restore(UnityEngine.JsonUtility.FromJson<SaveData>(json),
+                cfg, ContentCatalog.Default());
+            Assert.IsNull(loaded.Base.ThreatsSystem.ApplyHiddenDelta(loaded.Base, 1),
+                "одноразовый всплеск не перевзводится загрузкой");
+        }
+
+        [Test]
+        public void Migration_V2_MarksCrossedSpikesAsSpent()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg, null, seed: 9);
+            var data = SaveSystem.Capture(campaign);
+            data.version = 2;                  // старый сейв: fired-набора ещё не было
+            data.tension = 80;                 // порог 75 был пересечён ДО сейва
+            data.firedSpikeThresholds.Clear();
+            data.threatsRngState = null;
+
+            var loaded = SaveSystem.Restore(data, cfg, ContentCatalog.Default());
+            Assert.IsNull(loaded.Base.ThreatsSystem.ApplyHiddenDelta(loaded.Base, 1),
+                "миграция v2: всплеск ≤ tension считается потраченным — одноразовый кризис не повторяется");
+        }
+
+        private static List<string> IncidentIds(CycleReport report)
+        {
+            var ids = new List<string>();
+            foreach (var i in report.Incidents) ids.Add(i.IncidentId);
+            return ids;
         }
 
         [Test]

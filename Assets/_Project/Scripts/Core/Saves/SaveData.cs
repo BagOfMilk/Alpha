@@ -11,7 +11,15 @@ namespace Game.Core.Saves
     [Serializable]
     public sealed class SaveData
     {
-        public int version = 2;
+        public int version = 3;
+
+        // v3: сид кампании + состояние потока случайностей угроз (ulong строкой —
+        // JsonUtility надёжно не сериализует ulong). Загрузка ПРОДОЛЖАЕТ поток.
+        public int campaignSeed;
+        public string threatsRngState;
+        // v3: сработавшие одноразовые пороговые всплески (иначе перевзводятся
+        // загрузкой). double — сужение до float ломало бы нецелые пороги.
+        public List<double> firedSpikeThresholds = new List<double>();
 
         public int day;
         public int cityTier = 1;

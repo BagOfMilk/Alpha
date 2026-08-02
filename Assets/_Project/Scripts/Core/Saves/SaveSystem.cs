@@ -38,9 +38,16 @@ namespace Game.Core.Saves
                 ironman = campaign.Ironman,
                 inExpedition = campaign.InExpedition,
                 campaignOutcome = (int)campaign.Outcome,
+                campaignSeed = campaign.Seed,
                 reputation = (float)campaign.Factions.Reputation,
                 influence = campaign.Factions.Influence
             };
+
+            // Состояние потока угроз: загрузка продолжит его, а не перезапустит.
+            var threatsRng = b.ThreatsSystem != null ? b.ThreatsSystem.Rng as SeededRng : null;
+            if (threatsRng != null) data.threatsRngState = threatsRng.State.ToString();
+            if (b.ThreatsSystem != null)
+                foreach (var t in b.ThreatsSystem.FiredSpikes) data.firedSpikeThresholds.Add(t);
 
             foreach (var c in b.Roster.All) data.companions.Add(CaptureCompanion(c));
             foreach (var item in b.Inventory.Items) data.inventory.Add(CaptureItem(item));
@@ -194,9 +201,24 @@ namespace Game.Core.Saves
                     (BaseSectionType)cd.section, cd.totalDays, cd.unlocksSlotId)
                 { RemainingDays = cd.remainingDays });
 
-            var threats = new ThreatSystem(cfg, new SeededRng(0),
+            // Поток угроз: восстановленное состояние продолжает последовательность
+            // (анти-save-scum); миграция v1/v2 без состояния — пересев от сида+дня.
+            var threatsRng = new SeededRng(Campaign.DeriveSeed(data.campaignSeed, 1) + data.day);
+            if (!string.IsNullOrEmpty(data.threatsRngState) && ulong.TryParse(data.threatsRngState, out var rngState))
+                threatsRng.RestoreState(rngState);
+            var threats = new ThreatSystem(cfg, threatsRng,
                 DefaultContent.IncidentPool(), DefaultContent.TensionSpikes(), startingTension: data.tension);
             threats.Readiness.Add(data.readiness);
+            var spent = new List<double>(data.firedSpikeThresholds);
+            if (data.version < 3)
+            {
+                // Миграция v1/v2: fired-набор не сохранялся, но старый код стрелял
+                // всплеск сразу при достижении порога — всё ≤ tension уже потрачено
+                // (иначе первый тик после загрузки повторил бы одноразовый кризис).
+                foreach (var spike in DefaultContent.TensionSpikes())
+                    if (spike.Threshold <= data.tension) spent.Add(spike.Threshold);
+            }
+            threats.RestoreFiredSpikes(spent);
             baseState.AttachThreats(threats);
 
             foreach (var it in data.inventory)
@@ -224,7 +246,8 @@ namespace Game.Core.Saves
                 // Прерванная вылазка отменена при загрузке (см. нормализацию InSquad выше);
                 // data.inExpedition остаётся в сейве под будущую полную сериализацию вылазки.
                 InExpedition = false,
-                Outcome = (CampaignOutcome)data.campaignOutcome
+                Outcome = (CampaignOutcome)data.campaignOutcome,
+                Seed = data.campaignSeed
             };
             foreach (var f in data.flags) campaign.Flags.Add(f);
             foreach (var a in data.achievements) campaign.Achievements.Add(a);

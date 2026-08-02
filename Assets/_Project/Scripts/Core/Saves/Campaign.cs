@@ -48,6 +48,17 @@ namespace Game.Core.Saves
         /// <summary>Итог кампании: победа в финале / game over (US-16.2, US-11.4).</summary>
         public CampaignOutcome Outcome { get; set; } = CampaignOutcome.Ongoing;
 
+        /// <summary>
+        /// Сид кампании: источник ВСЕХ потоков случайностей (угрозы, лут вылазок).
+        /// Генерируется в NewGame, хранится в сейве — каждая кампания уникальна,
+        /// а загрузка продолжает потоки, не перезапуская их.
+        /// </summary>
+        public int Seed { get; set; }
+
+        /// <summary>Производный сид подсистемы: один сид кампании → независимые потоки.</summary>
+        public static int DeriveSeed(int campaignSeed, int stream)
+            => unchecked(campaignSeed * 486187739 + stream * 1000003);
+
         /// <summary>Совет города (опц.): подключается как time-sink календаря.</summary>
         public Council.Council Council { get; private set; }
 
@@ -99,6 +110,8 @@ namespace Game.Core.Saves
         {
             if (ActiveExpedition != null && ActiveExpedition.Phase != ExpeditionPhase.Concluded)
                 throw new InvalidOperationException("Вылазка уже идёт");
+            // Лут — из потока кампании (сид + день): сейв/лоад не рероллит дроп.
+            lootRng = lootRng ?? new SeededRng(DeriveSeed(Seed, 200 + Base.CurrentDay));
             ActiveExpedition = new Expedition(Base, plan, Cfg, scarPicker, lootRng);
             return ActiveExpedition;
         }
@@ -124,14 +137,15 @@ namespace Game.Core.Saves
         }
 
         /// <summary>Новая игра: дефолтный стартовый ростер/база/фракции/угрозы; ядро-здания стоят.</summary>
-        public static Campaign NewGame(BalanceConfig cfg) => NewGame(cfg, null);
+        public static Campaign NewGame(BalanceConfig cfg) => NewGame(cfg, null, null);
 
         /// <summary>
-        /// Новая игра с СОЗДАННЫМ протагонистом (US-2.7, ProtagonistBuilder). Кастом
-        /// занимает место дефолтного лидера (id должен быть "leader" — на него
-        /// завязан спайн US-14.1); null — дефолтный командир.
+        /// Новая игра с СОЗДАННЫМ протагонистом (US-2.7, ProtagonistBuilder) и/или
+        /// явным сидом. Кастом занимает место дефолтного лидера (id должен быть
+        /// "leader" — на него завязан спайн US-14.1). seed == null → уникальный сид
+        /// (каждая кампания — своя последовательность инцидентов/лута).
         /// </summary>
-        public static Campaign NewGame(BalanceConfig cfg, Companion protagonist)
+        public static Campaign NewGame(BalanceConfig cfg, Companion protagonist, int? seed = null)
         {
             if (protagonist != null && protagonist.Id != "leader")
                 throw new ArgumentException(
@@ -139,6 +153,8 @@ namespace Game.Core.Saves
                     "(US-14.1: StoryBeat/React) и замещение дефолтного командира.", nameof(protagonist));
 
             cfg = cfg ?? new BalanceConfig();
+            int campaignSeed = seed ?? Guid.NewGuid().GetHashCode();
+
             var roster = new Roster();
             foreach (var bg in DefaultContent.AllBackgrounds())
             {
@@ -159,7 +175,7 @@ namespace Game.Core.Saves
 
             var baseState = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) baseState.AddSlot(slot);
-            baseState.AttachThreats(new ThreatSystem(cfg, new SeededRng(0),
+            baseState.AttachThreats(new ThreatSystem(cfg, new SeededRng(DeriveSeed(campaignSeed, 1)),
                 DefaultContent.IncidentPool(), DefaultContent.TensionSpikes()));
 
             // Ядро-здания стоят с самого начала (US-7.1): их позиции открыты по умолчанию.
@@ -168,7 +184,11 @@ namespace Game.Core.Saves
             baseState.MarkBuilt(BaseSectionType.Workshop);
             baseState.MarkBuilt(BaseSectionType.Storehouse);
 
-            return new Campaign(cfg, baseState, DefaultFactions.NewRegistry()) { Ironman = cfg.Ironman };
+            return new Campaign(cfg, baseState, DefaultFactions.NewRegistry())
+            {
+                Ironman = cfg.Ironman,
+                Seed = campaignSeed
+            };
         }
     }
 }
