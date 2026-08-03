@@ -131,7 +131,7 @@ GameObject:
   - component: {fileID: 23217750}
   - component: {fileID: 23217749}
   m_Layer: 0
-  m_Name: BattleScreen
+  m_Name: CampaignScreen
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -146,11 +146,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 23217748}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1f414fd0a8704c298e3f4b7c2ab304f5, type: 3}
+  m_Script: {fileID: 11500000, guid: ab7d0668ffbd4eed9e16e1abe1b5a527, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.UI.BattleScreenController
+  m_EditorClassIdentifier: Game.Gameplay::Game.Gameplay.UI.CampaignScreenController
   balanceAsset: {fileID: 0}
-  seed: 42
 --- !u!114 &23217750
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -165,7 +164,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
   m_PanelSettings: {fileID: 11400000, guid: 44184422de9a2d845ac1d141dc0e2120, type: 2}
   m_ParentUI: {fileID: 0}
-  sourceAsset: {fileID: 9197481963319205126, guid: 7fae7171a793f354c97f6faa73343075, type: 3}
+  sourceAsset: {fileID: 9197481963319205126, guid: f51866b71cd829e41b284b0399113c41, type: 3}
   m_SortingOrder: 0
   m_Position: 0
   m_WorldSpaceSizeMode: 1

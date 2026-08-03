@@ -18,31 +18,37 @@ namespace Game.Tests.PlayMode
     /// </summary>
     public class PlayModeSmokeTests
     {
-        // Тесты трогают БОЕВОЙ quicksave.json в persistentDataPath — бэкапим и
-        // возвращаем, чтобы прогон тестов не съедал сейв разработчика.
-        private string _backup;
+        // Тесты трогают БОЕВЫЕ quicksave.json/autosave.json (и их .bak — ротация
+        // SaveToFile перезаписывает и бэкап) в persistentDataPath — сохраняем и
+        // возвращаем всё, чтобы прогон тестов не съедал сейвы разработчика.
+        private static string[] ProtectedPaths => new[]
+        {
+            SaveSerializer.QuickSavePath, SaveSerializer.QuickSavePath + ".bak",
+            SaveSerializer.AutosavePath, SaveSerializer.AutosavePath + ".bak"
+        };
 
         [SetUp]
-        public void BackupQuickSave()
+        public void BackupDevSaves()
         {
-            _backup = SaveSerializer.QuickSavePath + ".test-bak";
-            if (File.Exists(SaveSerializer.QuickSavePath))
-                File.Copy(SaveSerializer.QuickSavePath, _backup, overwrite: true);
-            else
-                _backup = null;
+            foreach (var path in ProtectedPaths)
+                if (File.Exists(path))
+                    File.Copy(path, path + ".test-bak", overwrite: true);
         }
 
         [TearDown]
-        public void RestoreQuickSave()
+        public void RestoreDevSaves()
         {
-            if (_backup != null)
+            foreach (var path in ProtectedPaths)
             {
-                File.Copy(_backup, SaveSerializer.QuickSavePath, overwrite: true);
-                File.Delete(_backup);
-            }
-            else if (File.Exists(SaveSerializer.QuickSavePath))
-            {
-                File.Delete(SaveSerializer.QuickSavePath);
+                if (File.Exists(path + ".test-bak"))
+                {
+                    File.Copy(path + ".test-bak", path, overwrite: true);
+                    File.Delete(path + ".test-bak");
+                }
+                else if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
             }
         }
 
@@ -95,6 +101,28 @@ namespace Game.Tests.PlayMode
             for (int i = 0; i < 8 && controller.Combat.Log.Count == logBefore; i++)
                 controller.EndPlayerTurn();
             Assert.Greater(controller.Combat.Log.Count, logBefore, "враги сходили — лог боя вырос");
+        }
+
+        [UnityTest]
+        public IEnumerator CampaignScene_NewGame_CityLoop_Autosaves()
+        {
+            GameFlow.Reset();
+            if (File.Exists(SaveSerializer.AutosavePath)) File.Delete(SaveSerializer.AutosavePath);
+
+            yield return SceneManager.LoadSceneAsync("Campaign", LoadSceneMode.Single);
+            yield return null;
+            var controller = Object.FindFirstObjectByType<CampaignScreenController>();
+            Assert.IsNotNull(controller, "в Campaign-сцене есть контроллер");
+
+            controller.OnStartCampaign(); // новая игра с дефолтным билдером
+            Assert.IsNotNull(GameFlow.Campaign, "кампания стартовала");
+            Assert.IsTrue(File.Exists(SaveSerializer.AutosavePath), "автосейв записан на старте");
+
+            int day = GameFlow.Campaign.Base.CurrentDay;
+            controller.OnWaitDay();
+            Assert.AreEqual(day + 1, GameFlow.Campaign.Base.CurrentDay, "«ждать день» двигает календарь");
+
+            GameFlow.Reset(); // не влияем на другие тесты
         }
 
         [UnityTest]

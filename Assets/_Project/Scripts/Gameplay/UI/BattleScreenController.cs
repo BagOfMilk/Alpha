@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Combat;
+using Game.Core.Saves;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -32,7 +33,7 @@ namespace Game.Gameplay.UI
         private VisualElement _abilityBar;
         private Label _roundLabel, _unitName, _unitStats, _targetInfo, _outcomeLabel;
         private ScrollView _logScroll;
-        private Button _strikeButton, _endTurnButton;
+        private Button _strikeButton, _endTurnButton, _continueButton;
 
         private readonly Dictionary<GridPos, Button> _tiles = new Dictionary<GridPos, Button>();
         private string _armedAbilityId; // взведённая способность (следующий клик по цели)
@@ -40,10 +41,20 @@ namespace Game.Gameplay.UI
         private int _shownLogLines;
         private bool _combatStarted;    // Begin() ровно один раз (ре-enable не перезапускает бой)
 
+        private bool _campaignBattle; // бой вылазки из GameFlow (иначе — песочница)
+
         private void Awake()
         {
             _cfg = balanceAsset != null ? balanceAsset.ToConfig() : new BalanceConfig();
-            _cs = BuildSkirmish(_cfg, seed);
+            if (GameFlow.HasPendingBattle)
+            {
+                _cs = GameFlow.PendingBattle; // бой вылазки собрал кампанийный экран
+                _campaignBattle = true;
+            }
+            else
+            {
+                _cs = BuildSkirmish(_cfg, seed);
+            }
         }
 
         private void OnEnable()
@@ -60,6 +71,9 @@ namespace Game.Gameplay.UI
             _logScroll = root.Q<ScrollView>("log-scroll");
             _strikeButton = root.Q<Button>("strike-button");
             _endTurnButton = root.Q<Button>("end-turn-button");
+            _continueButton = root.Q<Button>("continue-button");
+            _continueButton.clicked -= OnContinueAfterBattle;
+            _continueButton.clicked += OnContinueAfterBattle;
 
             // Идемпотентные подписки: ре-enable не даёт дублей.
             _strikeButton.clicked -= ToggleStrike;
@@ -295,7 +309,32 @@ namespace Game.Gameplay.UI
             {
                 _outcomeLabel.text = _cs.Outcome == CombatOutcome.Victory ? "ПОБЕДА" : "ПОРАЖЕНИЕ";
                 _outcomeLabel.AddToClassList("outcome-label--visible");
+                // Кампанийный бой: «Продолжить» уводит в отчёт возвращения.
+                _continueButton.EnableInClassList("continue-button--visible", _campaignBattle);
             }
+        }
+
+        /// <summary>Бой вылазки завершён: последствия в ростер → отчёт в Campaign-сцене.</summary>
+        private void OnContinueAfterBattle()
+        {
+            if (!_campaignBattle || _cs.Outcome == CombatOutcome.Ongoing || GameFlow.Campaign == null) return;
+            var campaign = GameFlow.Campaign;
+            bool victory = _cs.Outcome == CombatOutcome.Victory;
+
+            GameFlow.LastReport = campaign.ConcludeExpedition(_cs);
+
+            // Бонус золота от «Снаряжения экспедиции» — банкуется только при победе.
+            if (victory && GameFlow.PendingBuffGold > 0)
+                campaign.Base.Resources.Add(Game.Core.Economy.ResourceType.Gold, GameFlow.PendingBuffGold);
+
+            // ФИНАЛЬНАЯ битва (US-11.4/14.2): исход кампании решает FinalBattle.Resolve
+            // (победа = кампания выиграна + айронмен-ачивка; поражение = game over).
+            if (GameFlow.PendingFinale && campaign.Outcome == CampaignOutcome.Ongoing)
+                Game.Core.Story.FinalBattle.Resolve(campaign, victory);
+
+            AutoSave.Write(campaign);
+            GameFlow.ClearBattle();
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Campaign");
         }
 
         private void RefreshAbilityBar(CombatUnit current)

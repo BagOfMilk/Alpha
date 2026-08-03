@@ -17,6 +17,7 @@ namespace Game.EditorTools
     {
         private const string BootPath = "Assets/_Project/Scenes/Boot.unity";
         private const string BattlePath = "Assets/_Project/Scenes/Battle.unity";
+        private const string CampaignPath = "Assets/_Project/Scenes/Campaign.unity";
         private const string PanelSettingsPath = "Assets/_Project/UI/BattlePanelSettings.asset";
 
         [MenuItem("Alpha/Create All Scenes")]
@@ -24,6 +25,41 @@ namespace Game.EditorTools
         {
             CreateBootScene();
             CreateBattleScene();
+            CreateCampaignScene();
+        }
+
+        [MenuItem("Alpha/Create Campaign Scene")]
+        public static void CreateCampaignScene()
+        {
+            EnsureScenesFolder();
+            var theme = AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>("Assets/_Project/UI/BattleTheme.tss");
+            var uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/_Project/UI/CampaignScreen.uxml");
+            if (theme == null || uxml == null)
+            {
+                Debug.LogError("[BootstrapSeeder] Не найдены ассеты UI кампании (tss/uxml)");
+                return;
+            }
+
+            var panel = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+            if (panel == null)
+            {
+                panel = ScriptableObject.CreateInstance<PanelSettings>();
+                AssetDatabase.CreateAsset(panel, PanelSettingsPath);
+            }
+            panel.themeStyleSheet = theme;
+            EditorUtility.SetDirty(panel);
+
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            var go = new GameObject("CampaignScreen");
+            var doc = go.AddComponent<UIDocument>();
+            doc.panelSettings = panel;
+            doc.visualTreeAsset = uxml;
+            go.AddComponent<CampaignScreenController>();
+
+            EditorSceneManager.SaveScene(scene, CampaignPath);
+            AddSceneToBuild(CampaignPath);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[BootstrapSeeder] Campaign-сцена создана: " + CampaignPath);
         }
 
         [MenuItem("Alpha/Create Boot Scene")]

@@ -116,6 +116,18 @@ namespace Game.Core.Saves
             return ActiveExpedition;
         }
 
+        /// <summary>
+        /// Отмена несостоявшегося сбора (например, TrySend вернул ошибку): допустима только
+        /// пока отряд пуст — после успешного TrySend напарники уже сняты с позиций.
+        /// </summary>
+        public void CancelExpedition()
+        {
+            if (ActiveExpedition == null) return;
+            if (ActiveExpedition.Phase != ExpeditionPhase.Mustering || ActiveExpedition.SquadIds.Count > 0)
+                throw new InvalidOperationException("Отменить можно только несобранную вылазку");
+            ActiveExpedition = null;
+        }
+
         /// <summary>Выход в путь: календарь двигается, быстрый сейв гейтится айронменом.</summary>
         public CycleReport DepartExpedition()
         {

@@ -1,0 +1,78 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="CampaignScreen.uss" />
+    <ui:VisualElement name="root" class="root">
+
+        <ui:VisualElement name="panel-menu" class="panel menu-panel">
+            <ui:Label text="ALPHA" class="game-title" />
+            <ui:Label text="base-builder RPG — прототип" class="game-subtitle" />
+            <ui:Toggle name="ironman-toggle" label="Айронмен" class="menu-item" />
+            <ui:Button name="new-game-button" text="Новая игра" class="menu-btn" />
+            <ui:Button name="continue-autosave-button" text="Продолжить (автосейв)" class="menu-btn" />
+            <ui:VisualElement name="slot-buttons" class="slot-buttons" />
+            <ui:Button name="sandbox-button" text="Песочница боя" class="menu-btn menu-btn--secondary" />
+            <ui:Label name="menu-note" class="menu-note" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-create" class="panel create-panel">
+            <ui:Label text="Создание протагониста-лидера" class="panel-h1" />
+            <ui:TextField name="leader-name" label="Имя" class="create-name" />
+            <ui:Label text="Бэкграунд:" class="panel-h2" />
+            <ui:VisualElement name="background-list" class="row-wrap" />
+            <ui:Label name="attr-budget" class="budget-label" />
+            <ui:VisualElement name="attr-rows" class="stat-rows" />
+            <ui:Label name="skill-budget" class="budget-label" />
+            <ui:VisualElement name="skill-rows" class="stat-rows" />
+            <ui:Button name="start-campaign-button" text="Начать кампанию" class="menu-btn primary" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-city" class="panel city-panel">
+            <ui:VisualElement class="city-header">
+                <ui:Label name="city-status" class="city-status" />
+                <ui:Label name="onboarding-hint" class="onboarding-hint" />
+            </ui:VisualElement>
+            <ui:VisualElement class="city-columns">
+                <ui:VisualElement class="city-col">
+                    <ui:Label text="Ростер" class="panel-h2" />
+                    <ui:ScrollView name="roster-list" class="roster-list" />
+                </ui:VisualElement>
+                <ui:VisualElement class="city-col">
+                    <ui:Label text="Позиции" class="panel-h2" />
+                    <ui:VisualElement name="slot-list" class="slot-list" />
+                    <ui:Label text="Стройка" class="panel-h2" />
+                    <ui:VisualElement name="build-list" class="build-list" />
+                </ui:VisualElement>
+                <ui:VisualElement class="city-col">
+                    <ui:Label text="Совет" class="panel-h2" />
+                    <ui:VisualElement name="council-list" class="council-list" />
+                    <ui:Label name="city-signals" class="city-signals" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="city-actions">
+                <ui:Button name="wait-button" text="Ждать день" class="action-btn" />
+                <ui:Button name="map-button" text="Карта мира" class="action-btn" />
+                <ui:VisualElement name="save-slot-buttons" class="save-slot-buttons" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-map" class="panel map-panel">
+            <ui:Label text="Карта мира: выбери точку" class="panel-h1" />
+            <ui:VisualElement name="node-list" class="node-list" />
+            <ui:Label name="locked-nodes" class="locked-nodes" />
+            <ui:Label text="Отряд (до 4):" class="panel-h2" />
+            <ui:VisualElement name="squad-picks" class="row-wrap" />
+            <ui:Label name="map-note" class="map-note" />
+            <ui:VisualElement class="city-actions">
+                <ui:Button name="depart-button" text="Выступить" class="action-btn primary" />
+                <ui:Button name="map-back-button" text="В город" class="action-btn" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-report" class="panel report-panel">
+            <ui:Label text="Возвращение отряда" class="panel-h1" />
+            <ui:Label name="report-headline" class="report-headline" />
+            <ui:ScrollView name="report-lines" class="report-lines" />
+            <ui:Button name="report-back-button" text="В город" class="action-btn primary" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

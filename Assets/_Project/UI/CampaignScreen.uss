@@ -1,0 +1,252 @@
+.root {
+    flex-grow: 1;
+    background-color: rgb(24, 26, 30);
+    color: rgb(220, 220, 215);
+    padding: 10px;
+}
+
+.panel {
+    flex-grow: 1;
+    display: none;
+}
+
+.panel--visible {
+    display: flex;
+}
+
+.panel-h1 {
+    font-size: 20px;
+    -unity-font-style: bold;
+    margin-bottom: 8px;
+}
+
+.panel-h2 {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(160, 165, 155);
+    margin: 6px 0 4px 0;
+}
+
+/* Меню */
+.menu-panel {
+    align-items: center;
+    justify-content: center;
+}
+
+.game-title {
+    font-size: 44px;
+    -unity-font-style: bold;
+    letter-spacing: 10px;
+}
+
+.game-subtitle {
+    font-size: 14px;
+    color: rgb(150, 150, 145);
+    margin-bottom: 24px;
+}
+
+.menu-item {
+    margin: 4px;
+}
+
+.menu-btn {
+    width: 320px;
+    height: 38px;
+    margin: 4px;
+    font-size: 15px;
+}
+
+.menu-btn--secondary {
+    opacity: 0.8;
+}
+
+.primary {
+    background-color: rgb(80, 110, 65);
+}
+
+.slot-buttons {
+    flex-direction: row;
+}
+
+.slot-buttons > Button {
+    width: 104px;
+    height: 32px;
+    margin: 2px;
+}
+
+/* Создание */
+.create-panel {
+    padding: 12px;
+}
+
+.create-name {
+    width: 340px;
+}
+
+.row-wrap {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.pick-btn {
+    margin: 3px;
+    padding: 4px 10px;
+}
+
+.pick-btn--active {
+    background-color: rgb(80, 110, 65);
+}
+
+.budget-label {
+    margin-top: 8px;
+    color: rgb(220, 200, 150);
+}
+
+.stat-rows {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.stat-row {
+    flex-direction: row;
+    align-items: center;
+    width: 250px;
+    margin: 2px 8px;
+}
+
+.stat-row > Label {
+    flex-grow: 1;
+    font-size: 12px;
+}
+
+.stat-row > Button {
+    width: 26px;
+    height: 24px;
+}
+
+/* Город */
+.city-header {
+    margin-bottom: 6px;
+}
+
+.city-status {
+    font-size: 14px;
+    white-space: normal;
+}
+
+.onboarding-hint {
+    font-size: 13px;
+    color: rgb(240, 220, 130);
+    white-space: normal;
+    margin-top: 2px;
+}
+
+.city-columns {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.city-col {
+    width: 33%;
+    padding: 4px;
+}
+
+.roster-list {
+    flex-grow: 1;
+}
+
+.roster-card {
+    background-color: rgb(32, 35, 40);
+    border-radius: 5px;
+    padding: 6px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    white-space: normal;
+}
+
+.slot-list > DropdownField, .slot-list > Label {
+    margin: 2px 0;
+    font-size: 12px;
+}
+
+.build-list > Button, .council-list > Button {
+    margin: 2px 0;
+    padding: 3px 8px;
+    font-size: 12px;
+    white-space: normal;
+}
+
+.city-signals {
+    margin-top: 10px;
+    font-size: 12px;
+    color: rgb(170, 175, 165);
+    white-space: normal;
+}
+
+.city-actions {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.action-btn {
+    height: 36px;
+    padding: 2px 14px;
+    margin-right: 6px;
+    font-size: 14px;
+}
+
+.save-slot-buttons {
+    flex-direction: row;
+}
+
+.save-slot-buttons > Button {
+    height: 30px;
+    margin: 2px;
+    font-size: 11px;
+}
+
+/* Карта */
+.node-list > Button {
+    margin: 3px 0;
+    padding: 6px 10px;
+    white-space: normal;
+}
+
+.locked-nodes {
+    font-size: 12px;
+    color: rgb(150, 150, 145);
+    white-space: normal;
+    margin: 4px 0;
+}
+
+.map-note {
+    color: rgb(220, 200, 150);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.menu-note {
+    color: rgb(220, 200, 150);
+    font-size: 13px;
+    margin-top: 12px;
+    white-space: normal;
+}
+
+/* Отчёт */
+.report-headline {
+    font-size: 16px;
+    -unity-font-style: bold;
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.report-lines {
+    flex-grow: 1;
+}
+
+.report-line {
+    font-size: 13px;
+    white-space: normal;
+    margin-bottom: 2px;
+}
