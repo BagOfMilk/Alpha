@@ -113,7 +113,7 @@ namespace Game.Gameplay
                 cs.AddUnit(CombatUnit.FromEnemy(room.Enemies[i], $"e{i}"), new GridPos(10, i));
 
             cs.Begin();
-            CombatDemo.AutoBattle(cs, cfg, 600);
+            CombatAi.AutoResolve(cs, 200);
             return cs.Outcome == CombatOutcome.Victory;
         }
 

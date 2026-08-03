@@ -77,7 +77,7 @@ namespace Game.Gameplay
                 cs.AddUnit(units[i], CombatDemo.SquadSpawns[i % CombatDemo.SquadSpawns.Length]);
             CombatDemo.AddDefaultEnemies(cs);
             cs.Begin();
-            CombatDemo.AutoBattle(cs, cfg, 600);
+            CombatAi.AutoResolve(cs, 200);
 
             var tail = new StringBuilder("=== БОЙ (хвост лога) ===\n");
             int from = Mathf.Max(0, cs.Log.Count - 12);

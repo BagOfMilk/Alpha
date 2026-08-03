@@ -282,6 +282,21 @@ namespace Game.Core.Combat
                 }
             }
 
+            // Мили-оружие бьёт только из контакта (симметрия с Attack); «Рывок»
+            // учитывается — он сперва переставляет юнита вплотную (lungeDest).
+            if (unit.Weapon != null && unit.Weapon.IsMelee && target != null && target.Side != unit.Side)
+            {
+                bool hasWeaponAttack = false;
+                for (int i = 0; i < ability.Effects.Count; i++)
+                    if (ability.Effects[i].Kind == AbilityEffectKind.WeaponAttack) { hasWeaponAttack = true; break; }
+                if (hasWeaponAttack)
+                {
+                    var attackFrom = lungeDest ?? unit.Pos;
+                    if (GridPos.Chebyshev(attackFrom, target.Pos) > unit.Weapon.OptimalRange)
+                        return CombatActionResult.OutOfRange;
+                }
+            }
+
             unit.Ap -= ability.ApCost;
             unit.SetCooldown(ability.Id, ability.CooldownTurns);
             AddLog($"{unit.Profile.DisplayName} применяет «{ability.DisplayName}»");

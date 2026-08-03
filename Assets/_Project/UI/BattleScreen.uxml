@@ -1,0 +1,31 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="BattleScreen.uss" />
+    <ui:VisualElement name="root" class="root">
+        <ui:VisualElement name="top-bar" class="top-bar">
+            <ui:Label name="round-label" class="round-label" text="Раунд 1" />
+            <ui:VisualElement name="initiative-bar" class="initiative-bar" />
+        </ui:VisualElement>
+        <ui:VisualElement name="mid" class="mid">
+            <ui:VisualElement name="unit-panel" class="side-panel">
+                <ui:Label text="Юнит" class="panel-title" />
+                <ui:Label name="unit-name" class="unit-name" text="—" />
+                <ui:Label name="unit-stats" class="unit-stats" text="" />
+                <ui:Label text="Цель" class="panel-title" />
+                <ui:Label name="target-info" class="target-info" text="наведи на врага — покажу шанс и почему" />
+            </ui:VisualElement>
+            <ui:VisualElement name="grid-wrap" class="grid-wrap">
+                <ui:VisualElement name="grid" class="grid" />
+            </ui:VisualElement>
+            <ui:VisualElement name="log-panel" class="side-panel">
+                <ui:Label text="Лог боя" class="panel-title" />
+                <ui:ScrollView name="log-scroll" class="log-scroll" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="bottom-bar" class="bottom-bar">
+            <ui:VisualElement name="ability-bar" class="ability-bar" />
+            <ui:Button name="strike-button" class="action-btn" text="Strike" />
+            <ui:Button name="end-turn-button" class="action-btn end-turn" text="Конец хода" />
+        </ui:VisualElement>
+        <ui:Label name="outcome-label" class="outcome-label" text="" />
+    </ui:VisualElement>
+</ui:UXML>

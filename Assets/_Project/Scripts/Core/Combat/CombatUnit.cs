@@ -51,6 +51,9 @@ namespace Game.Core.Combat
 
         /// <summary>Семейство (для врагов): роботов можно взломать и переманить (US-3.11/3.14).</summary>
         public EnemyFamily Family = EnemyFamily.Human;
+
+        /// <summary>Роль — биас поведения ИИ (US-3.13): танк лезет в клинч, застрельщик держит оптимал.</summary>
+        public EnemyRole Role = EnemyRole.Skirmisher;
     }
 
     /// <summary>
@@ -235,7 +238,8 @@ namespace Game.Core.Combat
                 MedicineSkill = 0,
                 CanBeDowned = false,
                 Resists = def.Resists ?? new ResistProfile(),
-                Family = def.Family
+                Family = def.Family,
+                Role = def.Role
             };
             var unit = new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon);
             if (def.Abilities != null)

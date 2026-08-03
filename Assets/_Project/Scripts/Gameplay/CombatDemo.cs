@@ -41,7 +41,7 @@ namespace Game.Gameplay
                 order.AppendLine($"  {u.Profile.Initiative,2} · {u.Profile.DisplayName} ({(u.Side == Side.Player ? "отряд" : "враг")})");
             Debug.Log(order.ToString());
 
-            AutoBattle(cs, cfg, actionBudget);
+            CombatAi.AutoResolve(cs, 200); // обе стороны ведёт боевой ИИ (итерация 15)
 
             var log = new StringBuilder("=== ЛОГ БОЯ ===\n");
             foreach (var line in cs.Log) log.AppendLine(line);

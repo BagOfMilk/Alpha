@@ -95,7 +95,7 @@ namespace Game.Gameplay
             cs.AddUnit(CombatUnit.FromCompanion(roster.Get("leader"), DefaultContent.Rifle(), cfg, abilities), new GridPos(0, 2));
             cs.AddUnit(DefectionSystem.BuildBossUnit(defector, cfg, abilities), new GridPos(7, 1));
             cs.Begin();
-            CombatDemo.AutoBattle(cs, cfg, 400);
+            CombatAi.AutoResolve(cs, 200);
             return cs.Outcome == CombatOutcome.Victory;
         }
     }

@@ -134,7 +134,7 @@ namespace Game.Gameplay
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.ScavGunner(), "r1"), new GridPos(7, 1));
             cs.AddUnit(CombatUnit.FromEnemy(DefaultContent.ScavGunner(), "r2"), new GridPos(7, 2));
             cs.Begin();
-            CombatDemo.AutoBattle(cs, cfg, 300);
+            CombatAi.AutoResolve(cs, 200);
             return cs.Outcome == CombatOutcome.Victory;
         }
     }

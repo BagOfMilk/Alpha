@@ -1,7 +1,9 @@
 using System.Collections;
 using System.IO;
+using Game.Core.Combat;
 using Game.Core.Economy;
 using Game.Gameplay;
+using Game.Gameplay.UI;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -73,6 +75,26 @@ namespace Game.Tests.PlayMode
             host.QuickLoad();
             Assert.AreEqual(123, host.Session.Base.Resources.Get(ResourceType.Gold),
                 "файловый round-trip через persistentDataPath");
+        }
+
+        [UnityTest]
+        public IEnumerator BattleScene_Loads_AndAiPlaysEnemyTurns()
+        {
+            yield return SceneManager.LoadSceneAsync("Battle", LoadSceneMode.Single);
+            yield return null;
+            var controller = Object.FindFirstObjectByType<BattleScreenController>();
+            Assert.IsNotNull(controller, "в Battle-сцене есть контроллер экрана боя");
+            Assert.IsNotNull(controller.Combat, "бой собран");
+            Assert.AreEqual(CombatOutcome.Ongoing, controller.Combat.Outcome);
+            Assert.AreEqual(Side.Player, controller.Combat.Current.Side,
+                "после загрузки ход у игрока (вражеские ходы ИИ отыграл)");
+
+            // Инициатива напарников выше вражеской — пропускаем ходы игрока,
+            // пока очередь не дойдёт до врагов и ИИ не отыграет их (лог вырастет).
+            int logBefore = controller.Combat.Log.Count;
+            for (int i = 0; i < 8 && controller.Combat.Log.Count == logBefore; i++)
+                controller.EndPlayerTurn();
+            Assert.Greater(controller.Combat.Log.Count, logBefore, "враги сходили — лог боя вырос");
         }
 
         [UnityTest]
