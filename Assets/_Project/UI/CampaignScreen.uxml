@@ -29,6 +29,7 @@
             <ui:VisualElement class="city-header">
                 <ui:Label name="city-status" class="city-status" />
                 <ui:Label name="onboarding-hint" class="onboarding-hint" />
+                <ui:Button name="intro-ack-button" text="Осмотреться в поселении" class="action-btn intro-ack" />
             </ui:VisualElement>
             <ui:VisualElement class="city-columns">
                 <ui:VisualElement class="city-col">
@@ -44,6 +45,8 @@
                 <ui:VisualElement class="city-col">
                     <ui:Label text="Совет" class="panel-h2" />
                     <ui:VisualElement name="council-list" class="council-list" />
+                    <ui:Label text="Доска квестов" class="panel-h2" />
+                    <ui:VisualElement name="quest-board" class="quest-board" />
                     <ui:Label name="city-signals" class="city-signals" />
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -72,6 +75,13 @@
             <ui:Label name="report-headline" class="report-headline" />
             <ui:ScrollView name="report-lines" class="report-lines" />
             <ui:Button name="report-back-button" text="В город" class="action-btn primary" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-quest" class="panel quest-panel">
+            <ui:Label name="quest-title" class="panel-h1" />
+            <ui:Label name="quest-stage-text" class="quest-stage-text" />
+            <ui:ScrollView name="quest-log" class="quest-log" />
+            <ui:VisualElement name="quest-actions" class="quest-actions" />
         </ui:VisualElement>
 
     </ui:VisualElement>

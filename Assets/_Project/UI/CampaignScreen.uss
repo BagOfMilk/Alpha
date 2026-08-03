@@ -233,6 +233,62 @@
     white-space: normal;
 }
 
+/* ===== Квест (US-13.1/17.1) ===== */
+.quest-panel {
+    padding: 24px;
+    max-width: 720px;
+    align-self: center;
+}
+
+.quest-stage-text {
+    font-size: 15px;
+    white-space: normal;
+    margin: 12px 0;
+    color: rgb(230, 225, 210);
+}
+
+.quest-log {
+    max-height: 220px;
+    margin: 8px 0;
+}
+
+.quest-reaction {
+    color: rgb(170, 210, 250);
+    white-space: normal;
+    margin: 2px 0;
+}
+
+.quest-note {
+    color: rgb(200, 190, 160);
+    white-space: normal;
+    margin: 2px 0;
+}
+
+.quest-actions {
+    margin-top: 12px;
+}
+
+.quest-actions > Button {
+    margin: 4px 0;
+    white-space: normal;
+}
+
+.quest-board > Button {
+    white-space: normal;
+    margin: 2px 0;
+}
+
+.quest-board > Label {
+    color: rgb(170, 165, 150);
+    font-size: 12px;
+    margin: 2px 0;
+}
+
+.intro-ack {
+    align-self: flex-start;
+    margin-top: 4px;
+}
+
 /* Отчёт */
 .report-headline {
     font-size: 16px;

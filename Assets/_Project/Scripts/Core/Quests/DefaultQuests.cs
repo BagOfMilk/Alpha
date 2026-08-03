@@ -147,12 +147,16 @@ namespace Game.Core.Quests
             q.Stage(QuestStage.CombatStage("ambush", "Отбиться от засады на окраине.", "outskirts_ambush",
                 onWin: 1, onLoss: 1));
 
-            // 1 — микс-развилка: отход под огнём, прикрыть можно ОДНОГО.
+            // 1 — микс-развилка: отход под огнём, прикрыть можно ОДНОГО. Опции про
+            // конкретного бойца закрыты его смертью в бою этапа; «уходить» доступна
+            // ВСЕГДА (иначе гибель обоих — софтлок этапа).
             q.Stage(QuestStage.ChoiceStage("retreat", "Отход под огнём. Кого прикрываешь?")
                 .Option(new QuestOption("Прикрыть переговорщика", next: 2)
+                    .GateAlive("negotiator")
                     .React("negotiator", +8, "Переговорщик выдыхает: «Я этого не забуду.»")
                     .React("marksman", -4, "Стрелок мрачно перезаряжается."))
                 .Option(new QuestOption("Прикрыть стрелка", next: 2)
+                    .GateAlive("marksman")
                     .React("marksman", +8, "Стрелок коротко кивает: «Сочтёмся.»")
                     .React("negotiator", -4, "Переговорщик отстал и молчит всю дорогу."))
                 .Option(new QuestOption("Уходить, не оглядываясь", next: 3)
@@ -260,6 +264,18 @@ namespace Game.Core.Quests
         {
             SpineAct1Shadow(), SpineAct2Storm()
         };
+
+        /// <summary>
+        /// ВЕСЬ авторский пул (пролог + спайн + сайды) — источник для доски города
+        /// и восстановления журнала из сейва (сейв хранит только id квестов).
+        /// </summary>
+        public static List<QuestDefinition> FullPool()
+        {
+            var pool = new List<QuestDefinition> { Prologue() };
+            pool.AddRange(StorySpine());
+            pool.AddRange(All());
+            return pool;
+        }
 
         /// <summary>Сюжетный бит акта 1 с цепочкой дублёров (US-14.1): протагонист → надёжные.</summary>
         public static StoryBeat Act1Briefing() =>

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Combat;
+using Game.Core.Quests;
 using Game.Core.Saves;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -222,8 +223,21 @@ namespace Game.Gameplay.UI
                 return;
             }
 
-            // Телеграфия честного процента (US-3.3): шанс + ПОЧЕМУ.
-            int chance = _cs.HitChancePreview(current, target);
+            // Телеграфия честного процента (US-3.3): шанс + ПОЧЕМУ. Взведённая
+            // способность меняет точность залпа — превью обязано это учитывать,
+            // иначе показанный процент расходится с роллом (и метрикой R11).
+            int abilityBonus = 0;
+            if (_armedAbilityId != null)
+            {
+                foreach (var ab in current.Abilities)
+                    if (ab.Id == _armedAbilityId)
+                    {
+                        foreach (var fx in ab.Effects)
+                            if (fx.Kind == AbilityEffectKind.WeaponAttack) abilityBonus += fx.AccuracyBonus;
+                        break;
+                    }
+            }
+            int chance = _cs.HitChancePreview(current, target, abilityBonus);
             var cover = _cs.Map.CoverAgainst(target.Pos, current.Pos);
             int dist = GridPos.Chebyshev(current.Pos, target.Pos);
             bool coverApplies = current.Weapon != null && !current.Weapon.IsMelee;
@@ -314,14 +328,41 @@ namespace Game.Gameplay.UI
             }
         }
 
-        /// <summary>Бой вылазки завершён: последствия в ростер → отчёт в Campaign-сцене.</summary>
+        /// <summary>Гард повторного входа: LoadScene отложен до конца кадра — даблклик
+        /// по «Продолжить» иначе применил бы последствия боя дважды.</summary>
+        private bool _concluded;
+
+        /// <summary>Бой вылазки/квеста завершён: последствия в ростер → Campaign-сцена.</summary>
         private void OnContinueAfterBattle()
         {
+            if (_concluded) return;
             if (!_campaignBattle || _cs.Outcome == CombatOutcome.Ongoing || GameFlow.Campaign == null) return;
+            _concluded = true;
             var campaign = GameFlow.Campaign;
             bool victory = _cs.Outcome == CombatOutcome.Victory;
 
+            // Квестовый бой (US-13.1/17.1): последствия в ростер как у вылазки, но без
+            // дороги/лута — награду даёт Outcome-этап; шаг квеста играется в Campaign.
+            if (GameFlow.PendingQuest != null)
+            {
+                var qReport = QuestCombat.ApplyToRoster(_cs, campaign.Roster, campaign.Cfg);
+                if (qReport.ProtagonistDied) campaign.Outcome = CampaignOutcome.Lost;
+                GameFlow.LastQuestStep = GameFlow.PendingQuest.ResolveCombat(victory);
+                // Терминал достигнут прямо боем (награда уже начислена Finalize):
+                // журнал закрывается ДО автосейва — иначе сейв «награда есть, квест
+                // Active» позволял дюп через выход из игры (Restore демотирует Active).
+                if (!GameFlow.PendingQuest.IsActive)
+                    campaign.Quests.Complete(GameFlow.PendingQuest.Def.Id);
+                Telemetry.Event("battle_ended", Telemetry.CombatStats(_cs, "quest"));
+                AutoSave.Write(campaign); // смерти зафиксированы — перезагрузка их не отменит
+                GameFlow.ClearBattle();
+                UnityEngine.SceneManagement.SceneManager.LoadScene("Campaign");
+                return;
+            }
+
             GameFlow.LastReport = campaign.ConcludeExpedition(_cs);
+            Telemetry.Event("battle_ended",
+                Telemetry.CombatStats(_cs, GameFlow.PendingFinale ? "finale" : "expedition"));
 
             // Бонус золота от «Снаряжения экспедиции» — банкуется только при победе.
             if (victory && GameFlow.PendingBuffGold > 0)

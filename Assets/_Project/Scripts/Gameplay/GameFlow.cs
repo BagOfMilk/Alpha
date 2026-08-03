@@ -1,5 +1,6 @@
 using Game.Core.Combat;
 using Game.Core.Expeditions;
+using Game.Core.Quests;
 using Game.Core.Saves;
 
 namespace Game.Gameplay
@@ -29,6 +30,17 @@ namespace Game.Gameplay
         /// <summary>Бонус золота от «Снаряжения экспедиции» (совет) — банкуется при победе.</summary>
         public static int PendingBuffGold;
 
+        /// <summary>
+        /// Активный прогон квеста (пролог/доска, US-14.3/17.1): живёт МЕЖДУ сценами —
+        /// бой квестового этапа идёт в Battle, остальные этапы играются в Campaign.
+        /// null — квест не идёт. Battle-контроллер отличает квестовый бой от вылазки
+        /// по PendingQuest != null (у вылазки вместо него PendingExpedition).
+        /// </summary>
+        public static QuestRun PendingQuest;
+
+        /// <summary>Отчёт последнего шага квеста (реплики/чек) — для панели квеста после боя.</summary>
+        public static QuestStepReport LastQuestStep;
+
         public static bool HasPendingBattle => PendingBattle != null;
 
         public static void ClearBattle()
@@ -37,6 +49,13 @@ namespace Game.Gameplay
             PendingExpedition = null;
             PendingFinale = false;
             PendingBuffGold = 0;
+            // PendingQuest НЕ чистится: квест продолжается в Campaign-сцене после боя.
+        }
+
+        public static void ClearQuest()
+        {
+            PendingQuest = null;
+            LastQuestStep = null;
         }
 
         public static void Reset()
@@ -44,6 +63,7 @@ namespace Game.Gameplay
             Campaign = null;
             LastReport = null;
             ClearBattle();
+            ClearQuest();
         }
     }
 

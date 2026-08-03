@@ -305,5 +305,99 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(run.OptionAvailable(options[1], new[] { brawler }), "порок в отряде закрывает вариант");
             Assert.IsTrue(run.OptionAvailable(options[1], new[] { medic }));
         }
+
+        // ---- Летальная ставка реально стоит жизни (US-13.2, итерация 17) ----
+        [Test]
+        public void LethalCheck_Failure_KillsResolver_ButNotProtagonistOutsideIronman()
+        {
+            var q = new QuestDefinition("boom", "B", QuestSource.NpcLocation)
+                .Stage(QuestStage.SkillCheck("defuse", "Растяжка.", SkillType.Mechanics, threshold: 99,
+                    onSuccess: 1, onFailure: 1).AsLethal())
+                .Stage(QuestStage.OutcomeStage("end", "Тихо.", success: false));
+
+            // Гибнет тот, кто вёл проверку (лучший по скилу).
+            var w = NewWorld();
+            var techie = Comp(w.Roster, "techie", SkillType.Mechanics, 5);
+            Comp(w.Roster, "bystander");
+            var report = Run(w, q).ResolveCheck(w.Roster.All);
+            Assert.IsFalse(report.CheckSuccess);
+            Assert.AreEqual("techie", report.CasualtyId, "погибает ведущий проверку");
+            Assert.IsTrue(report.CasualtyDied);
+            Assert.IsFalse(techie.IsAlive, "смерть насовсем (телеграф был)");
+
+            // Протагонист вне айронмена бессмертен: Критическое ранение вместо смерти.
+            var w2 = NewWorld();
+            var leader = Comp(w2.Roster, "leader", SkillType.Mechanics, 5);
+            leader.IsProtagonist = true;
+            var report2 = Run(w2, q).ResolveCheck(w2.Roster.All);
+            Assert.AreEqual("leader", report2.CasualtyId);
+            Assert.IsFalse(report2.CasualtyDied, "протагонист без айронмена не умирает");
+            Assert.IsTrue(leader.IsAlive);
+            Assert.AreEqual(Game.Core.Health.InjuryTier.Critical, leader.CurrentInjury);
+        }
+
+        [Test]
+        public void NonLethalCheck_Failure_HasNoCasualty()
+        {
+            var q = new QuestDefinition("soft", "S", QuestSource.NpcLocation)
+                .Stage(QuestStage.SkillCheck("try", "Попытка.", SkillType.Mechanics, threshold: 99,
+                    onSuccess: 1, onFailure: 1).AsUtility())
+                .Stage(QuestStage.OutcomeStage("end", "Мимо.", success: false));
+
+            var w = NewWorld();
+            var techie = Comp(w.Roster, "techie", SkillType.Mechanics, 5);
+            var report = Run(w, q).ResolveCheck(w.Roster.All);
+            Assert.IsFalse(report.CheckSuccess);
+            Assert.IsNull(report.CasualtyId, "утилитарный провал — мягкий сетбэк, не смерть");
+            Assert.IsTrue(techie.IsAlive);
+        }
+
+        // ---- Мёртвые не участвуют в развилке (итерация 17) ----
+        [Test]
+        public void PrologueChoice_DeadCompanion_GatedOut_AndSilent()
+        {
+            var w = NewWorld();
+            Comp(w.Roster, "leader").IsProtagonist = true;
+            var negotiator = Comp(w.Roster, "negotiator");
+            var marksman = Comp(w.Roster, "marksman");
+            negotiator.Kill();
+
+            var run = Run(w, DefaultQuests.Prologue());
+            run.ResolveCombat(won: true); // → развилка отхода
+
+            var options = run.Current.Options;
+            Assert.IsFalse(run.OptionAvailable(options[0], w.Roster.All),
+                "«прикрыть переговорщика» закрыто его смертью");
+            Assert.IsTrue(run.OptionAvailable(options[1], w.Roster.All));
+            Assert.IsTrue(run.OptionAvailable(options[2], w.Roster.All),
+                "«уходить» доступна всегда — иначе софтлок этапа");
+
+            // Реакция мёртвого не играется: ни реплики, ни сдвига лояльности трупа.
+            int marksmanLoyalty = marksman.Loyalty;
+            var step = run.Choose(2, w.Roster.All);
+            Assert.AreEqual(50, negotiator.Loyalty, "лояльность трупа не двигается");
+            Assert.AreEqual(marksmanLoyalty - 10, marksman.Loyalty, "живой реагирует как раньше");
+            foreach (var line in step.ReactionLines)
+                Assert.IsFalse(line.Contains("Переговорщик"), "реплика погибшего не печатается");
+        }
+
+        // ---- Restore перепроверяет гейты (итерация 17: анти-ферма спайна) ----
+        [Test]
+        public void QuestRestore_RespectsBlockFlag()
+        {
+            var flags = new HashSet<string>
+            {
+                DefaultQuests.SpineAct1Flag,   // гейт входа акта 2 пройден…
+                DefaultQuests.FinaleReadyFlag  // …но веха финала уже стоит (BlockFlag)
+            };
+            var log = new QuestLog();
+            log.Restore(DefaultQuests.FullPool(), new[] { "spine_act2", "lost_caravan" }, null, null,
+                null, flags, null);
+
+            Assert.IsNull(log.StatusOf("spine_act2"),
+                "демотированный квест с уже стоящим блок-флагом не возвращается на доску");
+            Assert.AreEqual(QuestStatus.Available, log.StatusOf("lost_caravan"),
+                "квест без блок-флага восстанавливается");
+        }
     }
 }

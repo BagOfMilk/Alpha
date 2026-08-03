@@ -9,6 +9,7 @@ using Game.Core.Economy;
 using Game.Core.Factions;
 using Game.Core.Health;
 using Game.Core.Items;
+using Game.Core.Quests;
 using Game.Core.Stats;
 using Game.Core.Threats;
 
@@ -61,6 +62,11 @@ namespace Game.Core.Saves
                 data.factions.Add(new FactionDto { id = standing.Faction.Id, value = (float)standing.Value });
             foreach (var flag in campaign.Flags) data.flags.Add(flag);
             foreach (var ach in campaign.Achievements) data.achievements.Add(ach);
+
+            // Журнал квестов (v4): только id — контент восстановится из пула.
+            foreach (var q in campaign.Quests.Available) data.questsAvailable.Add(q.Id);
+            foreach (var q in campaign.Quests.Active) data.questsActive.Add(q.Id);
+            foreach (var q in campaign.Quests.Completed) data.questsCompleted.Add(q.Id);
 
             foreach (var section in b.BuiltSections) data.builtSections.Add((int)section);
             foreach (var con in b.ConstructionQueue)
@@ -251,6 +257,17 @@ namespace Game.Core.Saves
             };
             foreach (var f in data.flags) campaign.Flags.Add(f);
             foreach (var a in data.achievements) campaign.Achievements.Add(a);
+
+            // Журнал квестов (v4): статусы по id на свежий пул. АКТИВНЫЕ возвращаются
+            // в «доступные» — прогресс прогона (этап) не сериализуется, честнее дать
+            // перепройти с начала, чем оживить полусостояние; гейты (BlockedByFlag)
+            // при этом перепроверяются — квест с уже стоящим блок-флагом не вернётся.
+            // v1–v3 (журнала не было): списки пусты, доска соберётся через CollectFrom.
+            var questsAvailable = new List<string>(data.questsAvailable);
+            questsAvailable.AddRange(data.questsActive);
+            campaign.Quests.Restore(DefaultQuests.FullPool(),
+                questsAvailable, null, data.questsCompleted,
+                factions, campaign.Flags, roster.All);
 
             // Совет (v2): пере-подключаем с пережившими сейв КД/инвестицией/бафом.
             if (data.councilAttached)

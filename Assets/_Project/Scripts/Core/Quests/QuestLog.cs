@@ -67,6 +67,50 @@ namespace Game.Core.Quests
             return true;
         }
 
+        /// <summary>
+        /// Восстановление журнала из сейва: статусы по id накатываются на СВЕЖИЙ пул
+        /// определений (контент живёт в коде/ассетах, сейв хранит только id). Квест
+        /// из сейва, которого больше нет в пуле, тихо отбрасывается (контент-патч).
+        /// «Доступные» дополнительно прогоняются через гейты (как CollectFrom):
+        /// демотированный квест с уже стоящим BlockedByFlag не возвращается на доску
+        /// (анти-ферма: спайн с вехой финала не предлагается заново). Completed
+        /// восстанавливаются без проверки.
+        /// </summary>
+        public void Restore(IEnumerable<QuestDefinition> pool,
+                            IEnumerable<string> availableIds,
+                            IEnumerable<string> activeIds,
+                            IEnumerable<string> completedIds,
+                            FactionRegistry factions = null,
+                            ICollection<string> flags = null,
+                            IReadOnlyList<Companion> roster = null)
+        {
+            _status.Clear(); _byId.Clear();
+            _available.Clear(); _active.Clear(); _completed.Clear();
+
+            var poolById = new Dictionary<string, QuestDefinition>();
+            if (pool != null)
+                foreach (var d in pool)
+                    if (d != null) poolById[d.Id] = d;
+
+            void Place(IEnumerable<string> ids, List<QuestDefinition> bucket, QuestStatus status, bool gated)
+            {
+                if (ids == null) return;
+                foreach (var id in ids)
+                {
+                    if (string.IsNullOrEmpty(id) || _status.ContainsKey(id)) continue;
+                    if (!poolById.TryGetValue(id, out var def)) continue;
+                    if (gated && !GateOpen(def, factions, flags, roster)) continue;
+                    _byId[id] = def;
+                    _status[id] = status;
+                    bucket.Add(def);
+                }
+            }
+
+            Place(availableIds, _available, QuestStatus.Available, gated: true);
+            Place(activeIds, _active, QuestStatus.Active, gated: true);
+            Place(completedIds, _completed, QuestStatus.Completed, gated: false);
+        }
+
         public bool GateOpen(QuestDefinition def, FactionRegistry factions,
                              ICollection<string> flags, IReadOnlyList<Companion> roster)
         {

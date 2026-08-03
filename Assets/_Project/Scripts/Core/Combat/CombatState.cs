@@ -41,12 +41,17 @@ namespace Game.Core.Combat
         private readonly Dictionary<string, CombatUnit> _byId = new Dictionary<string, CombatUnit>();
         private readonly List<string> _log = new List<string>();
         private readonly List<Trap> _traps = new List<Trap>();
+        private readonly List<AttackRecord> _attacks = new List<AttackRecord>();
         private TurnSystem _turns;
 
         public IReadOnlyList<Trap> Traps => _traps;
 
         public IReadOnlyList<CombatUnit> Units => _units;
         public IReadOnlyList<string> Log => _log;
+
+        /// <summary>Структурированная история атак — телеметрия честности RNG (риск R11 GDD):
+        /// показанный игроку шанс против фактического исхода. Не сериализуется.</summary>
+        public IReadOnlyList<AttackRecord> Attacks => _attacks;
         public CombatOutcome Outcome { get; private set; } = CombatOutcome.Ongoing;
         public CombatUnit Current => _turns?.Current;
         public int Round => _turns?.Round ?? 0;
@@ -141,6 +146,8 @@ namespace Game.Core.Combat
         {
             int chance = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
             var outcome = forceHit ? HitOutcome.Hit : HitChanceCalculator.Roll(chance, _rng, Balance);
+            int recDamage = 0;
+            bool recCrit = false;
 
             switch (outcome)
             {
@@ -152,6 +159,8 @@ namespace Game.Core.Combat
                 {
                     var dmg = DamageResolver.RollAttackDamage(unit, target, w, graze: true, _rng, Balance);
                     AddLog($"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: граза, {dmg.Amount} урона ({chance}%)");
+                    recDamage = dmg.Amount;
+                    recCrit = dmg.Crit;
                     ApplyDamage(target, dmg.Amount);
                     break;
                 }
@@ -162,6 +171,8 @@ namespace Game.Core.Combat
                     if (allowStrikeGain) unit.StrikeMeter += Balance.StrikePerHit;
                     AddLog($"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: " +
                            $"{(dmg.Crit ? "КРИТ, " : "")}{dmg.Amount} урона ({chance}%)");
+                    recDamage = dmg.Amount;
+                    recCrit = dmg.Crit;
 
                     if (w.ShredOnHit > 0)
                     {
@@ -175,6 +186,9 @@ namespace Game.Core.Combat
                     break;
                 }
             }
+
+            _attacks.Add(new AttackRecord(Round, unit.Side, unit.Id, target.Id,
+                chance, outcome, recCrit, recDamage, forceHit));
         }
 
         /// <summary>Стабилизация дауна союзника рядом (активка Медицины, US-3.11/4.1). Детерминирована.</summary>
@@ -488,8 +502,10 @@ namespace Game.Core.Combat
                 : baseCost;
         }
 
-        public int HitChancePreview(CombatUnit attacker, CombatUnit target)
-            => HitChanceCalculator.Compute(attacker, target, Map, Balance);
+        /// <summary>Показанный игроку шанс. accuracyBonus — бонус взведённой способности:
+        /// превью обязано совпадать с фактическим роллом (телеграфия US-3.3, метрика R11).</summary>
+        public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
+            => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus);
 
         // ---- Внутренние правила ----
         private CombatUnit ActiveCurrentOrNull()

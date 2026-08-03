@@ -52,5 +52,21 @@ namespace Game.Gameplay.UI
 
         // Бой (кампанийный)
         public const string ContinueAfterBattle = "Продолжить";
+
+        // Квесты (US-14.3/17.1)
+        public const string QuestToBattle = "В бой";
+        public const string QuestContinue = "Продолжить";
+        public const string QuestCheckPrefix = "Проверка: ";
+        public const string QuestLethalMark = "⚠ Смертельная ставка: провал может стоить жизни.";
+        public const string QuestInWork = " (в работе)";
+        public const string QuestCompletedPrefix = "Завершено: ";
+        public const string QuestBusyNote = "Сначала закончи текущее дело.";
+        public const string QuestNoSquad = "Некому идти: бойцы выбыли или на лечении. Вернись позже.";
+        public const string IntroAck = "Осмотреться в поселении";
+        public const string GateNeedSkill = " (нужно: {0} ≥ {1})";
+        public const string GateNeedFaction = " (нужна репутация: {0} ≥ {1})";
+        public const string GateNeedTrait = " (нужен трейт: {0})";
+        public const string GateBlockedByTrait = " (закрыто трейтом: {0})";
+        public const string GateNeedAlive = " ({0} погиб)";
     }
 }

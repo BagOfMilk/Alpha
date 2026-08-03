@@ -2,6 +2,7 @@ using System.Collections;
 using System.IO;
 using Game.Core.Combat;
 using Game.Core.Economy;
+using Game.Core.Quests;
 using Game.Gameplay;
 using Game.Gameplay.UI;
 using NUnit.Framework;
@@ -104,7 +105,7 @@ namespace Game.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator CampaignScene_NewGame_CityLoop_Autosaves()
+        public IEnumerator CampaignScene_NewGame_Prologue_CityLoop_Autosaves()
         {
             GameFlow.Reset();
             if (File.Exists(SaveSerializer.AutosavePath)) File.Delete(SaveSerializer.AutosavePath);
@@ -117,6 +118,21 @@ namespace Game.Tests.PlayMode
             controller.OnStartCampaign(); // новая игра с дефолтным билдером
             Assert.IsNotNull(GameFlow.Campaign, "кампания стартовала");
             Assert.IsTrue(File.Exists(SaveSerializer.AutosavePath), "автосейв записан на старте");
+
+            // Пролог (US-17.1) начинается сразу: квест взят, первый этап — бой.
+            Assert.IsNotNull(GameFlow.PendingQuest, "пролог взят в работу");
+            Assert.AreEqual("prologue", GameFlow.PendingQuest.Def.Id);
+            Assert.AreEqual(QuestStageKind.Combat, GameFlow.PendingQuest.Current.Kind);
+
+            // Прогоняем этапы через Core (бой в Battle-сцене покрыт своим тестом):
+            // победа → развилка «кого прикрываешь» → исход.
+            GameFlow.LastQuestStep = GameFlow.PendingQuest.ResolveCombat(won: true);
+            GameFlow.LastQuestStep = GameFlow.PendingQuest.Choose(0, GameFlow.Campaign.Roster.All);
+            Assert.IsFalse(GameFlow.PendingQuest.IsActive, "пролог дошёл до исхода");
+            controller.ConcludeActiveQuest();
+            Assert.IsNull(GameFlow.PendingQuest, "прогон закрыт");
+            Assert.IsTrue(GameFlow.Campaign.Flags.Contains(DefaultQuests.PrologueDoneFlag),
+                "флаг пролога стоит — повторно не предлагается");
 
             int day = GameFlow.Campaign.Base.CurrentDay;
             controller.OnWaitDay();

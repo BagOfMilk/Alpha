@@ -11,7 +11,7 @@ namespace Game.Core.Saves
     [Serializable]
     public sealed class SaveData
     {
-        public int version = 3;
+        public int version = 4;
 
         // v3: сид кампании + состояние потока случайностей угроз (ulong строкой —
         // JsonUtility надёжно не сериализует ulong). Загрузка ПРОДОЛЖАЕТ поток.
@@ -66,6 +66,13 @@ namespace Game.Core.Saves
         public bool hasExpeditionBuff;
         public int buffAccuracyBonus;
         public int buffBonusLootGold;
+
+        // v4: журнал квестов (US-14.3) — только id, контент восстанавливается из
+        // пула. Прогресс АКТИВНОГО прогона (этап) не сейвится: загрузка возвращает
+        // такие квесты в «доступные» — перепрохождение с начала честнее полу-состояния.
+        public List<string> questsAvailable = new List<string>();
+        public List<string> questsActive = new List<string>();
+        public List<string> questsCompleted = new List<string>();
     }
 
     [Serializable]

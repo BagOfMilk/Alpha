@@ -62,6 +62,9 @@ namespace Game.Core.Saves
         /// <summary>Совет города (опц.): подключается как time-sink календаря.</summary>
         public Council.Council Council { get; private set; }
 
+        /// <summary>Журнал квестов — доска города (US-14.3); статусы персистятся в сейве.</summary>
+        public Quests.QuestLog Quests { get; } = new Quests.QuestLog();
+
         /// <summary>Текущая вылазка (между Launch и Conclude), null — отряд дома.</summary>
         public Expedition ActiveExpedition { get; private set; }
 

@@ -307,5 +307,61 @@ namespace Game.Tests.EditMode
             casual.InExpedition = true;
             Assert.IsTrue(casual.CanQuickSave, "без айронмена — всегда можно");
         }
+
+        // ===== v4: журнал квестов в сейве (US-14.3, итерация 17) =====
+
+        [Test]
+        public void RoundTrip_V4_PreservesQuestJournal_ActiveDemotedToAvailable()
+        {
+            var cfg = new BalanceConfig();
+            var original = Campaign.NewGame(cfg);
+            original.Quests.CollectFrom(Game.Core.Quests.DefaultQuests.FullPool(),
+                original.Factions, original.Flags, original.Roster.All);
+            Assert.IsTrue(original.Quests.Start("prologue"), "пролог взят в работу");
+            Assert.IsTrue(original.Quests.Complete("prologue"), "пролог завершён");
+            Assert.IsTrue(original.Quests.Start("lost_caravan"), "караван активен");
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(original));
+            var loaded = SaveSystem.Restore(
+                UnityEngine.JsonUtility.FromJson<SaveData>(json), cfg, ContentCatalog.Default());
+
+            Assert.AreEqual(Game.Core.Quests.QuestStatus.Completed,
+                loaded.Quests.StatusOf("prologue"), "завершённый квест не предлагается заново");
+            // Прогресс прогона не сериализуется: активный возвращается в «доступные».
+            Assert.AreEqual(Game.Core.Quests.QuestStatus.Available,
+                loaded.Quests.StatusOf("lost_caravan"), "активный после загрузки снова доступен");
+        }
+
+        [Test]
+        public void Migration_V3_EmptyJournal_RecollectsBoard()
+        {
+            var cfg = new BalanceConfig();
+            var data = SaveSystem.Capture(Campaign.NewGame(cfg));
+            // Симуляция сейва v3: журнала не было.
+            data.version = 3;
+            data.questsAvailable.Clear();
+            data.questsActive.Clear();
+            data.questsCompleted.Clear();
+
+            var loaded = SaveSystem.Restore(data, cfg, ContentCatalog.Default());
+            Assert.AreEqual(0, loaded.Quests.Available.Count, "журнал пуст сразу после загрузки");
+
+            // Доска собирается заново из пула (как делает экран города).
+            loaded.Quests.CollectFrom(Game.Core.Quests.DefaultQuests.FullPool(),
+                loaded.Factions, loaded.Flags, loaded.Roster.All);
+            Assert.IsNotNull(loaded.Quests.StatusOf("prologue"), "пролог снова на доске");
+        }
+
+        [Test]
+        public void QuestRestore_UnknownId_IsDroppedSilently()
+        {
+            var log = new Game.Core.Quests.QuestLog();
+            log.Restore(Game.Core.Quests.DefaultQuests.FullPool(),
+                new[] { "prologue", "quest_removed_by_patch" }, null, new[] { "lost_caravan" });
+
+            Assert.AreEqual(Game.Core.Quests.QuestStatus.Available, log.StatusOf("prologue"));
+            Assert.AreEqual(Game.Core.Quests.QuestStatus.Completed, log.StatusOf("lost_caravan"));
+            Assert.IsNull(log.StatusOf("quest_removed_by_patch"), "исчезнувший контент отброшен");
+        }
     }
 }

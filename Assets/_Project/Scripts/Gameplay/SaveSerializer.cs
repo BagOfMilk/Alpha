@@ -44,9 +44,10 @@ namespace Game.Gameplay
             if (!File.Exists(path)) return null;
             try
             {
-                // version у дефолтного SaveData уже 3 — сам по себе он ничего не
-                // доказывает; валиден сейв с хотя бы одним напарником (ростер
-                // кампании не бывает пуст: протагонист обязателен).
+                // version у дефолтного SaveData совпадает с текущим (см.
+                // SaveData.version) — сам по себе он ничего не доказывает; валиден
+                // сейв с хотя бы одним напарником (ростер кампании не бывает пуст:
+                // протагонист обязателен).
                 var data = FromJson(File.ReadAllText(path));
                 return data != null && data.companions != null && data.companions.Count > 0
                     ? data : null;

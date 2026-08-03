@@ -42,6 +42,9 @@ namespace Game.Core.Quests
         /// <summary>…или наоборот — носитель трейта в отряде закрывает вариант.</summary>
         public string BlockedByTraitId;
 
+        /// <summary>Опция о конкретном напарнике: закрывается его смертью (пролог US-17.1).</summary>
+        public string RequiresAliveCompanionId;
+
         public SocialConsequence Consequence;
         public readonly List<CompanionReaction> Reactions = new List<CompanionReaction>();
         public int Next;
@@ -56,6 +59,7 @@ namespace Game.Core.Quests
         public QuestOption GateFaction(string factionId, FactionBand band) { RequiresFaction = factionId; RequiresBand = band; return this; }
         public QuestOption GateTrait(string traitId) { RequiresTraitId = traitId; return this; }
         public QuestOption BlockTrait(string traitId) { BlockedByTraitId = traitId; return this; }
+        public QuestOption GateAlive(string companionId) { RequiresAliveCompanionId = companionId; return this; }
         public QuestOption With(SocialConsequence consequence) { Consequence = consequence; return this; }
         public QuestOption React(string companionId, int loyaltyDelta, string line = null)
         {

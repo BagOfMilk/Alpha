@@ -26,6 +26,8 @@ namespace Game.Core.Quests
         public int Threshold;
         public bool WasLethal;             // провал этой проверки был летальным (телеграф US-13.2)
         public bool WasUtility;
+        public string CasualtyId;          // пострадавший на летальном провале (US-13.2)
+        public bool CasualtyDied;          // true — погиб насовсем; false — Критическое ранение
 
         public int ChosenOption = -1;
         public readonly List<string> ReactionLines = new List<string>();
@@ -92,6 +94,30 @@ namespace Game.Core.Quests
             if (!result.Success && stage.FailureConsequence != null)
                 stage.FailureConsequence.Apply(_factions, _base, _threats, _flags); // мягкий сетбэк
 
+            // Летальная ставка (US-13.2): телеграфированный провал СТОИТ жизни тому,
+            // кто вёл проверку. Протагонист вне айронмена бессмертен (как в бою) —
+            // получает Критическое ранение вместо смерти.
+            if (stage.Lethal && !result.Success && result.ResolvedById != null && _base != null)
+            {
+                var victim = _base.Roster.Get(result.ResolvedById);
+                if (victim != null && victim.IsAlive)
+                {
+                    report.CasualtyId = victim.Id;
+                    bool canDie = !victim.IsProtagonist || (_cfg != null && _cfg.Ironman);
+                    if (canDie)
+                    {
+                        victim.Kill();
+                        report.CasualtyDied = true;
+                        report.Notes.Add($"✝ {victim.DisplayName} погиб(ла) — насовсем.");
+                    }
+                    else
+                    {
+                        victim.ApplyInjury(Health.InjuryTier.Critical, _cfg ?? new BalanceConfig(), null);
+                        report.Notes.Add($"{victim.DisplayName}: Критическое ранение.");
+                    }
+                }
+            }
+
             GoTo(result.Success ? stage.OnSuccess : stage.OnFailure, report);
             return report;
         }
@@ -114,6 +140,13 @@ namespace Game.Core.Quests
                 return false;
             if (!string.IsNullOrEmpty(option.BlockedByTraitId) && AnyoneHasTrait(participants, option.BlockedByTraitId))
                 return false;
+            // Опция про конкретного напарника закрывается его смертью (пролог:
+            // «прикрыть переговорщика» бессмысленно, если он погиб в бою этапа).
+            if (!string.IsNullOrEmpty(option.RequiresAliveCompanionId))
+            {
+                var target = _base?.Roster.Get(option.RequiresAliveCompanionId);
+                if (target == null || !target.IsAlive) return false;
+            }
             return true;
         }
 
@@ -142,11 +175,12 @@ namespace Game.Core.Quests
             option.Consequence?.Apply(_factions, _base, _threats, _flags);
 
             // Видимая рябь: реакции напарников по лояльности (US-10.3).
+            // Мёртвые не реагируют: ни реплики, ни сдвига лояльности трупа.
             for (int i = 0; i < option.Reactions.Count; i++)
             {
                 var r = option.Reactions[i];
                 var comp = _base?.Roster.Get(r.CompanionId);
-                if (comp == null) continue;
+                if (comp == null || !comp.IsAlive) continue;
                 comp.AdjustLoyalty(r.LoyaltyDelta);
                 string verb = r.LoyaltyDelta >= 0 ? "одобряет" : "осуждает";
                 report.ReactionLines.Add(r.Line ?? $"{comp.DisplayName} {verb} ({comp.LoyaltyBand})");

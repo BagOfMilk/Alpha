@@ -7,6 +7,7 @@ using Game.Core.Combat;
 using Game.Core.Council;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
+using Game.Core.Quests;
 using Game.Core.Saves;
 using Game.Core.Stats;
 using Game.Core.Story;
@@ -43,6 +44,14 @@ namespace Game.Gameplay.UI
         private VisualElement _root;
         private readonly Dictionary<string, VisualElement> _panels = new Dictionary<string, VisualElement>();
 
+        /// <summary>Спавны врагов на арене (правый край) — общие для вылазок и квестовых боёв.</summary>
+        private static readonly GridPos[] EnemySpawns =
+        {
+            new GridPos(10, 2), new GridPos(11, 3), new GridPos(10, 4),
+            new GridPos(11, 5), new GridPos(10, 6), new GridPos(11, 1),
+            new GridPos(10, 0), new GridPos(11, 7)
+        };
+
         private void Awake()
         {
             _cfg = balanceAsset != null ? balanceAsset.ToConfig() : new BalanceConfig();
@@ -52,7 +61,8 @@ namespace Game.Gameplay.UI
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
-            foreach (var name in new[] { "panel-menu", "panel-create", "panel-city", "panel-map", "panel-report" })
+            foreach (var name in new[] { "panel-menu", "panel-create", "panel-city", "panel-map",
+                                         "panel-report", "panel-quest" })
                 _panels[name] = _root.Q<VisualElement>(name);
 
             BindMenu();
@@ -63,12 +73,26 @@ namespace Game.Gameplay.UI
 
             // Контроллер пересоздаётся при каждом возврате из Battle-сцены:
             // онбординг фаст-форвардится из персистентных флагов, а не с пролога.
-            if (GameFlow.Campaign != null)
-                while (_onboarding.TryAdvance(GameFlow.Campaign)) { }
+            if (GameFlow.Campaign != null) AdvanceOnboarding(GameFlow.Campaign, silent: true);
 
             if (GameFlow.LastReport != null) ShowReport();
+            else if (GameFlow.Campaign != null && GameFlow.PendingQuest != null) ShowQuest();
             else if (GameFlow.Campaign != null) ShowCity();
             else Show("panel-menu");
+        }
+
+        /// <summary>
+        /// Фаст-форвард онбординга + телеметрия перехода шага (воронка R5).
+        /// silent — восстановление уже достигнутого шага из флагов (пересоздание
+        /// контроллера/загрузка), НЕ реальный переход: событие не шлётся, иначе
+        /// каждый возврат из Battle дублировал бы достижение шага в воронке.
+        /// </summary>
+        private void AdvanceOnboarding(Campaign c, bool silent = false)
+        {
+            var before = _onboarding.Step;
+            while (_onboarding.TryAdvance(c)) { }
+            if (!silent && _onboarding.Step != before)
+                Telemetry.Event("onboarding_step", ("step", _onboarding.Step.ToString()));
         }
 
         private void Show(string panel)
@@ -142,7 +166,24 @@ namespace Game.Gameplay.UI
             GameFlow.Campaign = restored;
             AttachCouncilIfMissing();
             _onboarding = new OnboardingFlow();
-            while (_onboarding.TryAdvance(GameFlow.Campaign)) { } // фаст-форвард из флагов
+            AdvanceOnboarding(restored, silent: true); // фаст-форвард из флагов
+            // Загрузки — часть телеметрии (сигнал save-scum: reload после потерь).
+            if (!Telemetry.Active) Telemetry.Begin(restored);
+            Telemetry.Event("save_loaded", ("file", System.IO.Path.GetFileName(path)));
+
+            // Сейв мог быть сделан ДО завершения пролога (чекпойнт создания или
+            // автосейв после пролог-боя): пролог форсируется, а не выбирается с
+            // доски — без авто-резюме он терялся бы навсегда, а онбординг клинил
+            // на первом шаге (флаг prologue_done ставит только исход пролога).
+            restored.Quests.CollectFrom(DefaultQuests.FullPool(),
+                restored.Factions, restored.Flags, restored.Roster.All);
+            if (!restored.Flags.Contains(DefaultQuests.PrologueDoneFlag)
+                && restored.Quests.StatusOf("prologue") == QuestStatus.Available
+                && GameFlow.PendingQuest == null)
+            {
+                BeginQuest("prologue"); // повтор с начала — семантика демоции v4
+                return;
+            }
             ShowCity();
         }
 
@@ -218,18 +259,27 @@ namespace Game.Gameplay.UI
         /// <summary>Старт кампании из point-buy (публично — для PlayMode-смоука).</summary>
         public void OnStartCampaign()
         {
+            // Даблклик по «Начать кампанию»: первый клик уже создал кампанию и взял
+            // пролог — второй пересоздал бы кампанию под чужой прогон квеста.
+            if (GameFlow.PendingQuest != null) return;
             if (_builder == null) RebuildBuilder(); // прямой вызов без меню (тесты)
             var name = _root.Q<TextField>("leader-name").value;
             if (!string.IsNullOrEmpty(name)) _builder.DisplayName = name;
-            GameFlow.Campaign = Campaign.NewGame(_cfg, _builder.Build("leader"));
+            var c = Campaign.NewGame(_cfg, _builder.Build("leader"));
+            GameFlow.Campaign = c;
             AttachCouncilIfMissing();
             _onboarding = new OnboardingFlow();
-            // Пролог (US-17.1) в UI-подаче — итерация 17 (плейтест-контент); шаг закрываем.
-            GameFlow.Campaign.Flags.Add(Game.Core.Quests.DefaultQuests.PrologueDoneFlag);
-            _onboarding.TryAdvance(GameFlow.Campaign);
-            _onboarding.AcknowledgeIntro(GameFlow.Campaign);
-            AutoSave.Write(GameFlow.Campaign);
-            ShowCity();
+
+            Telemetry.Begin(c);
+            Telemetry.Event("campaign_start",
+                ("ironman", c.Ironman), ("background", _pickedBackgroundId));
+
+            // Чекпойнт «кампания создана» — до пролога (US-17.1: пролог не запирает).
+            AutoSave.Write(c);
+
+            // Пролог (US-17.1): реальный прогон квеста — бой на окраине → развилка.
+            c.Quests.CollectFrom(DefaultQuests.FullPool(), c.Factions, c.Flags, c.Roster.All);
+            BeginQuest("prologue");
         }
 
         private void AttachCouncilIfMissing()
@@ -258,6 +308,22 @@ namespace Game.Gameplay.UI
                 int slot = i;
                 saves.Add(new Button(() => SaveToSlot(slot)) { text = UiText.SaveToSlot + slot });
             }
+
+            var ack = _root.Q<Button>("intro-ack-button");
+            if (ack != null)
+            {
+                ack.clicked -= OnIntroAck;
+                ack.clicked += OnIntroAck;
+            }
+        }
+
+        private void OnIntroAck()
+        {
+            var c = GameFlow.Campaign;
+            if (c == null) return;
+            _onboarding.AcknowledgeIntro(c);
+            Telemetry.Event("onboarding_step", ("step", _onboarding.Step.ToString()));
+            RefreshCity();
         }
 
         private void SaveToSlot(int slot)
@@ -274,7 +340,14 @@ namespace Game.Gameplay.UI
             var c = GameFlow.Campaign;
             if (c == null || c.Outcome != CampaignOutcome.Ongoing) return;
             c.AdvanceDays(1);
-            _onboarding.TryAdvance(c);
+            AdvanceOnboarding(c);
+            Telemetry.Event("day_advanced",
+                ("gold", c.Base.Resources.Get(ResourceType.Gold)),
+                ("buildMat", c.Base.Resources.Get(ResourceType.BuildingMaterial)),
+                ("population", (int)c.Base.Population),
+                ("tier", c.Base.CityTier),
+                ("tension", c.Base.ThreatsSystem != null ? c.Base.ThreatsSystem.Tension.Band.ToString() : "-"),
+                ("readiness", c.Base.ThreatsSystem != null ? c.Base.ThreatsSystem.Readiness.Band.ToString() : "-"));
             AutoSave.Write(c);
             RefreshCity();
         }
@@ -308,6 +381,12 @@ namespace Game.Gameplay.UI
                 (c.Ironman ? " · АЙРОНМЕН" : "");
 
             _root.Q<Label>("onboarding-hint").text = _onboarding.IsDone ? "" : "► " + _onboarding.Hint;
+
+            // Знакомство с поселением (US-17.4): реальный шаг с подтверждением.
+            var ack = _root.Q<Button>("intro-ack-button");
+            if (ack != null)
+                ack.style.display = _onboarding.Step == OnboardingStep.SettlementIntro
+                    ? DisplayStyle.Flex : DisplayStyle.None;
 
             // Скрытые шкалы — полосами и репликами, без чисел (US-17.2).
             var band = b.ThreatsSystem != null ? b.ThreatsSystem.Tension.Band : Game.Core.Threats.TensionBand.Calm;
@@ -358,7 +437,7 @@ namespace Game.Gameplay.UI
                     b.Unassign(slotId);
                     if (e.newValue != UiText.Unassigned && idByLabel.TryGetValue(e.newValue, out var compId))
                         b.TryAssign(compId, slotId);
-                    _onboarding.TryAdvance(c);
+                    AdvanceOnboarding(c);
                     RefreshCity();
                 });
                 slotList.Add(dd);
@@ -399,6 +478,31 @@ namespace Game.Gameplay.UI
                     btn.clicked += () => { c.Council.Execute(id, Game.Core.Factions.DefaultFactions.Garrison); RefreshCity(); };
                     councilList.Add(btn);
                 }
+
+            RefreshQuestBoard(c);
+        }
+
+        /// <summary>Доска квестов (US-14.3): совет базы собирает доступное из авторского пула.</summary>
+        private void RefreshQuestBoard(Campaign c)
+        {
+            var board = _root.Q<VisualElement>("quest-board");
+            if (board == null) return;
+            board.Clear();
+
+            c.Quests.CollectFrom(DefaultQuests.FullPool(), c.Factions, c.Flags, c.Roster.All);
+            foreach (var q in c.Quests.Available)
+            {
+                string id = q.Id;
+                if (id == "prologue") continue; // пролог форсируется стартом кампании, не доской
+                var btn = new Button(() => BeginQuest(id)) { text = q.Title };
+                btn.SetEnabled(GameFlow.PendingQuest == null);
+                if (GameFlow.PendingQuest != null) btn.tooltip = UiText.QuestBusyNote;
+                board.Add(btn);
+            }
+            foreach (var q in c.Quests.Active)
+                board.Add(new Label(q.Title + UiText.QuestInWork));
+            if (c.Quests.Completed.Count > 0)
+                board.Add(new Label(UiText.QuestCompletedPrefix + c.Quests.Completed.Count));
         }
 
         private static string DescribeCompanion(Companion comp)
@@ -493,10 +597,15 @@ namespace Game.Gameplay.UI
             // автосейв = город до выхода; бой после исхода сейвится сразу.
             if (!c.Ironman) AutoSave.Write(c);
 
+            Telemetry.Event("expedition_departed",
+                ("node", _pickedNode.Id), ("squad", _squadPicks.Count));
+
             // Бой вылазки — в Battle-сцене через GameFlow.
             var cs = BuildExpeditionBattle(c, exp, _pickedNode);
             GameFlow.PendingBattle = cs;
             GameFlow.PendingExpedition = exp;
+            Telemetry.Event("battle_started",
+                ("kind", GameFlow.PendingFinale ? "finale" : "expedition"), ("node", _pickedNode.Id));
             SceneManager.LoadScene("Battle");
         }
 
@@ -541,14 +650,8 @@ namespace Game.Gameplay.UI
             for (int i = 0; i < units.Count && i < CombatDemo.SquadSpawns.Length; i++)
                 cs.AddUnit(units[i], CombatDemo.SquadSpawns[i]);
 
-            var spawns = new[]
-            {
-                new GridPos(10, 2), new GridPos(11, 3), new GridPos(10, 4),
-                new GridPos(11, 5), new GridPos(10, 6), new GridPos(11, 1),
-                new GridPos(10, 0), new GridPos(11, 7)
-            };
-            for (int i = 0; i < enemies.Count && i < spawns.Length; i++)
-                cs.AddUnit(CombatUnit.FromEnemy(enemies[i], $"e{i}"), spawns[i]);
+            for (int i = 0; i < enemies.Count && i < EnemySpawns.Length; i++)
+                cs.AddUnit(CombatUnit.FromEnemy(enemies[i], $"e{i}"), EnemySpawns[i]);
 
             return cs;
         }
@@ -560,6 +663,301 @@ namespace Game.Gameplay.UI
                 case "brawler": return DefaultContent.Machete();
                 case "medic": return DefaultContent.Pistol();
                 default: return DefaultContent.Rifle();
+            }
+        }
+
+        // ================= КВЕСТ (US-13.1/14.3/17.1) =================
+        /// <summary>Берёт квест с доски/пролога в работу и открывает панель прогона.</summary>
+        private void BeginQuest(string questId)
+        {
+            var c = GameFlow.Campaign;
+            if (c == null || GameFlow.PendingQuest != null) return;
+
+            c.Quests.Start(questId);
+            QuestDefinition def = null;
+            foreach (var q in c.Quests.Active)
+                if (q.Id == questId) { def = q; break; }
+            if (def == null) return;
+
+            GameFlow.PendingQuest = new QuestRun(def, c.Base, _cfg, c.Factions,
+                c.Base.ThreatsSystem, c.Flags);
+            GameFlow.LastQuestStep = null;
+            Telemetry.Event("quest_started", ("quest", questId));
+            ShowQuest();
+        }
+
+        private void ShowQuest()
+        {
+            var c = GameFlow.Campaign;
+            // Гибель протагониста в квестовом бою (айронмен) терминальна — квест
+            // не продолжается, кампания окончена (US-16.2).
+            if (c == null || c.Outcome != CampaignOutcome.Ongoing)
+            {
+                Telemetry.Event("campaign_ended",
+                    ("outcome", c != null ? c.Outcome.ToString() : "-"));
+                Telemetry.End();
+                GameFlow.Reset();
+                BindMenu();
+                SetMenuNote(UiText.GameOverIronman);
+                Show("panel-menu");
+                return;
+            }
+            RefreshQuestPanel();
+            Show("panel-quest");
+        }
+
+        private void RefreshQuestPanel()
+        {
+            var run = GameFlow.PendingQuest;
+            var c = GameFlow.Campaign;
+            if (run == null || c == null) return;
+
+            _root.Q<Label>("quest-title").text = run.Def.Title;
+
+            var log = _root.Q<ScrollView>("quest-log");
+            log.Clear();
+            void AddLine(string text, string cls)
+            {
+                var l = new Label(text);
+                l.AddToClassList(cls);
+                log.Add(l);
+            }
+            var last = GameFlow.LastQuestStep;
+            if (last != null)
+            {
+                foreach (var line in last.ReactionLines) AddLine(line, "quest-reaction");
+                foreach (var note in last.Notes) AddLine(note, "quest-note");
+            }
+
+            var actions = _root.Q<VisualElement>("quest-actions");
+            actions.Clear();
+
+            // Терминальный исход: текст финального этапа + выход в город.
+            if (!run.IsActive)
+            {
+                _root.Q<Label>("quest-stage-text").text = last != null ? last.Text : "";
+                actions.Add(new Button(ConcludeActiveQuest) { text = UiText.QuestContinue });
+                return;
+            }
+
+            var stage = run.Current;
+            _root.Q<Label>("quest-stage-text").text = stage.Text +
+                (stage.Kind == QuestStageKind.Check && stage.Lethal ? "\n" + UiText.QuestLethalMark : "");
+
+            switch (stage.Kind)
+            {
+                case QuestStageKind.Combat:
+                    actions.Add(new Button(() => StageQuestBattle(stage)) { text = UiText.QuestToBattle });
+                    break;
+
+                case QuestStageKind.Choice:
+                    for (int i = 0; i < stage.Options.Count; i++)
+                    {
+                        int idx = i;
+                        var opt = stage.Options[i];
+                        bool open = run.OptionAvailable(opt, c.Roster.All);
+                        // Телеграфия гейта (US-17.3): закрытая опция объясняет, ЧТО
+                        // нужно — tooltip в рантайме UI Toolkit не рендерится.
+                        var btn = new Button(() => OnQuestChoice(idx))
+                        { text = open ? opt.Label : opt.Label + GateReason(opt, c) };
+                        btn.SetEnabled(open);
+                        actions.Add(btn);
+                    }
+                    break;
+
+                case QuestStageKind.Check:
+                    string what = stage.IsSocial ? stage.Approach.ToString() : stage.CheckSkill.ToString();
+                    actions.Add(new Button(OnQuestCheck)
+                    { text = $"{UiText.QuestCheckPrefix}{what} ≥ {stage.Threshold}" });
+                    break;
+            }
+        }
+
+        /// <summary>Почему опция закрыта — из данных гейта (первый непройденный).</summary>
+        private static string GateReason(QuestOption opt, Campaign c)
+        {
+            if (opt.RequiresSkill != SkillType.None)
+                return string.Format(UiText.GateNeedSkill, opt.RequiresSkill, opt.RequiresSkillLevel);
+            if (!string.IsNullOrEmpty(opt.RequiresFaction))
+                return string.Format(UiText.GateNeedFaction, opt.RequiresFaction, opt.RequiresBand);
+            if (!string.IsNullOrEmpty(opt.RequiresTraitId))
+                return string.Format(UiText.GateNeedTrait, TraitName(opt.RequiresTraitId));
+            if (!string.IsNullOrEmpty(opt.BlockedByTraitId))
+                return string.Format(UiText.GateBlockedByTrait, TraitName(opt.BlockedByTraitId));
+            if (!string.IsNullOrEmpty(opt.RequiresAliveCompanionId))
+            {
+                var comp = c.Roster.Get(opt.RequiresAliveCompanionId);
+                return string.Format(UiText.GateNeedAlive,
+                    comp != null ? comp.DisplayName : opt.RequiresAliveCompanionId);
+            }
+            return "";
+        }
+
+        private static string TraitName(string traitId)
+        {
+            var t = ContentCatalog.Default().GetTrait(traitId);
+            return t != null ? t.DisplayName : traitId;
+        }
+
+        private void OnQuestChoice(int optionIndex)
+        {
+            var run = GameFlow.PendingQuest;
+            var c = GameFlow.Campaign;
+            if (run == null || c == null || !run.IsActive) return;
+            GameFlow.LastQuestStep = run.Choose(optionIndex, c.Roster.All);
+            Telemetry.Event("quest_choice",
+                ("quest", run.Def.Id), ("stage", GameFlow.LastQuestStep.StageId), ("option", optionIndex));
+            RefreshQuestPanel();
+        }
+
+        private void OnQuestCheck()
+        {
+            var run = GameFlow.PendingQuest;
+            var c = GameFlow.Campaign;
+            if (run == null || c == null || !run.IsActive) return;
+            var step = run.ResolveCheck(c.Roster.All);
+            GameFlow.LastQuestStep = step;
+            Telemetry.Event("quest_check",
+                ("quest", run.Def.Id), ("stage", step.StageId),
+                ("success", step.CheckSuccess),
+                ("casualty", step.CasualtyId ?? ""));
+
+            // Летальный провал (US-13.2): гибель протагониста терминальна (айронмен).
+            if (step.CasualtyDied)
+            {
+                var victim = c.Roster.Get(step.CasualtyId);
+                if (victim != null && victim.IsProtagonist)
+                {
+                    c.Outcome = CampaignOutcome.Lost;
+                    AutoSave.Write(c);
+                    ShowQuest(); // терминальный путь ShowQuest уведёт в меню
+                    return;
+                }
+            }
+            RefreshQuestPanel();
+        }
+
+        /// <summary>Бой квестового этапа — в Battle-сцене; PendingQuest переживает смену сцен.</summary>
+        private void StageQuestBattle(QuestStage stage)
+        {
+            var run = GameFlow.PendingQuest;
+            var c = GameFlow.Campaign;
+            if (run == null || c == null) return;
+            var cs = BuildQuestBattle(c, run.Def.Id, stage.EncounterId);
+            if (cs == null)
+            {
+                // Некому идти (все выбыли/лечатся) — бой без отряда завис бы навечно.
+                _root.Q<Label>("quest-stage-text").text = stage.Text + "\n" + UiText.QuestNoSquad;
+                return;
+            }
+            GameFlow.PendingBattle = cs;
+            Telemetry.Event("battle_started",
+                ("kind", "quest"), ("quest", run.Def.Id), ("encounter", stage.EncounterId));
+            SceneManager.LoadScene("Battle");
+        }
+
+        /// <summary>
+        /// Терминальный этап подтверждён: журнал, сид босса пролога, онбординг,
+        /// автосейв, город. Публично — для PlayMode-смоука.
+        /// </summary>
+        public void ConcludeActiveQuest()
+        {
+            var run = GameFlow.PendingQuest;
+            var c = GameFlow.Campaign;
+            if (run == null || c == null || run.IsActive) return;
+
+            c.Quests.Complete(run.Def.Id);
+            Telemetry.Event("quest_finished",
+                ("quest", run.Def.Id), ("succeeded", run.State == QuestState.Succeeded));
+            bool prologue = run.Def.Id == "prologue";
+            GameFlow.ClearQuest();
+
+            if (prologue)
+            {
+                // «Бросил своих»: переговорщик может уйти к злодею — босс акта 1 (US-9.4).
+                var defector = Prologue.TrySeedDefector(c);
+                if (defector != null)
+                    Telemetry.Event("boss_seeded", ("companion", defector.CompanionId));
+                _onboarding.NotifyPrologueResolved();
+            }
+            AdvanceOnboarding(c);
+            AutoSave.Write(c);
+
+            if (c.Outcome != CampaignOutcome.Ongoing) { ShowQuest(); return; } // терминальный путь
+            ShowCity();
+        }
+
+        /// <summary>Состав квестового боя: отряд по сюжету, враги по encounterId.</summary>
+        private CombatState BuildQuestBattle(Campaign c, string questId, string encounterId)
+        {
+            var cs = new CombatState(CombatDemo.BuildArena(), _cfg,
+                new SeededRng(Campaign.DeriveSeed(c.Seed, 400 + c.Base.CurrentDay)));
+
+            // Пролог (GDD §17.1): протагонист + оба «спорных» напарника; прочие
+            // квесты — доступные бойцы, лидер первым, до размера отряда.
+            var squad = new List<Companion>();
+            if (questId == "prologue")
+            {
+                foreach (var id in new[] { "leader", "negotiator", "marksman" })
+                {
+                    var comp = c.Roster.Get(id);
+                    if (comp != null && comp.IsAlive) squad.Add(comp);
+                }
+            }
+            else
+            {
+                var leader = c.Roster.Get("leader");
+                if (leader != null && leader.IsAvailableForDuty) squad.Add(leader);
+                foreach (var comp in c.Roster.All)
+                {
+                    if (squad.Count >= _cfg.SquadSize) break;
+                    if (comp.IsAvailableForDuty && !squad.Contains(comp)) squad.Add(comp);
+                }
+            }
+
+            if (squad.Count == 0) return null; // бой без отряда — мгновенный тупик
+
+            // Симметрично вылазке (TrySend): участники снимаются с позиций/совета —
+            // иначе после боя Status (InCamp/Injured) расходится с занятым слотом,
+            // а погибший навсегда «держит» пост.
+            foreach (var comp in squad)
+            {
+                if (comp.IsAssigned) c.Base.Unassign(comp.AssignedSlotId);
+                comp.Status = CompanionStatus.InSquad;
+            }
+
+            var abilities = DefaultContent.AbilityCatalog();
+            for (int i = 0; i < squad.Count && i < CombatDemo.SquadSpawns.Length; i++)
+                cs.AddUnit(CombatUnit.FromCompanion(squad[i], Armory(squad[i]), _cfg, abilities),
+                    CombatDemo.SquadSpawns[i]);
+
+            var enemies = QuestEncounterEnemies(encounterId);
+            for (int i = 0; i < enemies.Count && i < EnemySpawns.Length; i++)
+                cs.AddUnit(CombatUnit.FromEnemy(enemies[i], $"e{i}"), EnemySpawns[i]);
+
+            return cs;
+        }
+
+        /// <summary>Составы врагов квестовых боёв (авторские, US-13.1).</summary>
+        private static List<EnemyDefinition> QuestEncounterEnemies(string encounterId)
+        {
+            switch (encounterId)
+            {
+                case "outskirts_ambush": // пролог: посильно тройке новичков
+                    return new List<EnemyDefinition>
+                    { DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner(), DefaultContent.FeralGhoul() };
+                case "raiders": // «Пропавший караван»: отступники
+                    return new List<EnemyDefinition>
+                    { DefaultContent.RaiderBruiser(), DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner() };
+                case "horde_vanguard": // акт 2: передовой лагерь орды — жёстче
+                    return new List<EnemyDefinition>
+                    {
+                        DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner(),
+                        DefaultContent.ScavGunner(), DefaultContent.FeralGhoul(), DefaultContent.FeralGhoul()
+                    };
+                default:
+                    return new List<EnemyDefinition>
+                    { DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner(), DefaultContent.FeralGhoul() };
             }
         }
 
@@ -622,6 +1020,9 @@ namespace Game.Gameplay.UI
             // без пересейва: исход терминален (US-16.2).
             if (c == null || c.Outcome != CampaignOutcome.Ongoing)
             {
+                Telemetry.Event("campaign_ended",
+                    ("outcome", c != null ? c.Outcome.ToString() : "-"));
+                Telemetry.End();
                 GameFlow.Reset();
                 BindMenu();
                 SetMenuNote(c != null && c.Outcome == CampaignOutcome.Won
@@ -630,7 +1031,11 @@ namespace Game.Gameplay.UI
                 return;
             }
 
+            var stepBefore = _onboarding.Step;
             _onboarding.NotifyExpeditionConcluded(c);
+            if (_onboarding.Step != stepBefore)
+                Telemetry.Event("onboarding_step", ("step", _onboarding.Step.ToString()));
+            Telemetry.Event("report_acknowledged");
             AutoSave.Write(c);
             ShowCity();
         }

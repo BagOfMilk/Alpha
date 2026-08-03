@@ -231,5 +231,34 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, armored.EffectiveArmor); // 2 − 1
             Assert.IsTrue(armored.HasStatus(StatusType.Bleeding));
         }
+
+        // ---- Телеметрия атак (R11: показанный шанс vs факт) ----
+        [Test]
+        public void AttackHistory_RecordsChanceOutcomeAndDamage()
+        {
+            var map = new GridMap(8, 1);
+            var cs = NewCombat(map, 1, 100, 1); // попадание, без крита, урон 1
+            var hero = U("hero", Side.Player, 10, w: W(1, apCost: 2, range: 8));
+            cs.AddUnit(hero, new GridPos(0, 0));
+            cs.AddUnit(U("bag", Side.Enemy, 5, hp: 50), new GridPos(5, 0));
+            cs.Begin();
+
+            cs.Attack("bag");
+            Assert.AreEqual(1, cs.Attacks.Count, "атака записана в историю");
+            var rec = cs.Attacks[0];
+            Assert.AreEqual("hero", rec.AttackerId);
+            Assert.AreEqual("bag", rec.TargetId);
+            Assert.AreEqual(Side.Player, rec.AttackerSide);
+            Assert.AreEqual(HitOutcome.Hit, rec.Outcome);
+            Assert.AreEqual(1, rec.Damage);
+            Assert.IsFalse(rec.Forced);
+            Assert.Greater(rec.Chance, 0, "показанный шанс зафиксирован");
+
+            // Strike-гарантия помечается Forced — не искажает hit-rate плейтеста.
+            hero.StrikeMeter = cs.Balance.StrikeGuaranteeAt;
+            cs.Attack("bag", useStrike: true);
+            Assert.AreEqual(2, cs.Attacks.Count);
+            Assert.IsTrue(cs.Attacks[1].Forced);
+        }
     }
 }
