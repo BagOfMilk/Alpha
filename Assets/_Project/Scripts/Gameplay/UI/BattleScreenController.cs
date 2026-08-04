@@ -34,7 +34,7 @@ namespace Game.Gameplay.UI
         private VisualElement _abilityBar;
         private Label _roundLabel, _unitName, _unitStats, _targetInfo, _outcomeLabel;
         private ScrollView _logScroll;
-        private Button _strikeButton, _endTurnButton, _continueButton;
+        private Button _strikeButton, _endTurnButton, _continueButton, _exitButton;
 
         private readonly Dictionary<GridPos, Button> _tiles = new Dictionary<GridPos, Button>();
         private string _armedAbilityId; // взведённая способность (следующий клик по цели)
@@ -75,6 +75,16 @@ namespace Game.Gameplay.UI
             _continueButton = root.Q<Button>("continue-button");
             _continueButton.clicked -= OnContinueAfterBattle;
             _continueButton.clicked += OnContinueAfterBattle;
+
+            // Песочница — не тупик: выход в кампанийное меню доступен всегда
+            // (в бою кампании выход только через исход + «Продолжить»).
+            _exitButton = root.Q<Button>("exit-button");
+            if (_exitButton != null)
+            {
+                _exitButton.clicked -= OnExitSandbox;
+                _exitButton.clicked += OnExitSandbox;
+                _exitButton.style.display = _campaignBattle ? DisplayStyle.None : DisplayStyle.Flex;
+            }
 
             // Идемпотентные подписки: ре-enable не даёт дублей.
             _strikeButton.clicked -= ToggleStrike;
@@ -326,6 +336,14 @@ namespace Game.Gameplay.UI
                 // Кампанийный бой: «Продолжить» уводит в отчёт возвращения.
                 _continueButton.EnableInClassList("continue-button--visible", _campaignBattle);
             }
+        }
+
+        /// <summary>Выход из песочницы боя в кампанийное меню (последствий нет).</summary>
+        private void OnExitSandbox()
+        {
+            if (_campaignBattle) return; // кампанийный бой закрывается только исходом
+            GameFlow.ClearBattle();
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Campaign");
         }
 
         /// <summary>Гард повторного входа: LoadScene отложен до конца кадра — даблклик

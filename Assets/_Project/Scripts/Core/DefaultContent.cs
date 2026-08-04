@@ -340,9 +340,13 @@ namespace Game.Core
                 .WithEffect(new AbilityEffect(AbilityEffectKind.FlatDamage, 2) { Damage = DamageType.Energy })
                 .WithEffect(new AbilityEffect(AbilityEffectKind.ApplyStatus) { Status = StatusType.Stunned });
 
-        /// <summary>Взлом 3: перехват управления — переманить вражеского робота (US-3.11/3.14).</summary>
+        /// <summary>
+        /// Взлом 2: перехват управления — переманить вражеского робота (US-3.11/3.14).
+        /// Порог 2 (а не 3): штатный техник ростера имеет ровно Взлом 2, иначе фирменная
+        /// механика не игралась бы ни разу за кампанию без узкого билда протагониста.
+        /// </summary>
         public static AbilityDefinition HackDrone() =>
-            new AbilityDefinition("hack_drone", "Перехват управления", SkillType.Hacking, 3)
+            new AbilityDefinition("hack_drone", "Перехват управления", SkillType.Hacking, 2)
                 .Costs(ap: 5, cooldown: 10) // фактически раз за бой
                 .Targets(AbilityTarget.Enemy, range: 4)
                 .WithEffect(new AbilityEffect(AbilityEffectKind.HackRobot));

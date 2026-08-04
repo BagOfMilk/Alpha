@@ -57,6 +57,8 @@ namespace Game.Core.Characters
         /// <summary>+1 к атрибуту за очко бюджета (потолок создания — CreationAttributeMax).</summary>
         public CreationStep RaiseAttribute(AttributeType type)
         {
+            // None — не атрибут: без гарда очко списывалось в пустоту (симметрично RaiseSkill).
+            if (type == AttributeType.None) return CreationStep.AtCap;
             if (AttributePointsRemaining <= 0) return CreationStep.NoBudget;
             if (_attributes.Get(type) >= _cfg.CreationAttributeMax) return CreationStep.AtCap;
             _attributes.Add(type, 1);

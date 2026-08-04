@@ -5,10 +5,29 @@ namespace Game.Tests.EditMode
 {
     public class ProgressionMathTests
     {
+        // Намеренно НЕ дефолт: эти тесты проверяют форму формулы, а не
+        // опубликованные числа (за них отвечает DefaultCurve_MatchesPublishedTable).
         private BalanceConfig Cfg() => new BalanceConfig
         {
             XpBase = 100, XpExponent = 1.5, MaxLevel = 20
         };
+
+        /// <summary>
+        /// Пин дефолтной кривой: при осознанном тюнинге обнови И этот тест, И
+        /// таблицу в docs/BALANCE.md §1 — они должны меняться одним коммитом.
+        /// </summary>
+        [Test]
+        public void DefaultCurve_MatchesPublishedTable()
+        {
+            var cfg = new BalanceConfig();
+            Assert.AreEqual(60, ProgressionMath.XpToNext(1, cfg));
+            Assert.AreEqual(153, ProgressionMath.XpToNext(2, cfg));
+            Assert.AreEqual(264, ProgressionMath.XpToNext(3, cfg));
+            Assert.AreEqual(527, ProgressionMath.XpToNext(5, cfg));
+            Assert.AreEqual(1343, ProgressionMath.XpToNext(10, cfg));
+            Assert.AreEqual(1394L, ProgressionMath.TotalXpForLevel(6, cfg),
+                "суммарный бюджет до 6-го уровня — обоснование сжатия кривой (итерация 18)");
+        }
 
         [Test]
         public void XpToNext_GrowsWithLevel()

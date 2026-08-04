@@ -289,6 +289,71 @@
     margin-top: 4px;
 }
 
+/* ===== Персонаж (US-2.3/5.1) ===== */
+.character-panel {
+    padding: 24px;
+}
+
+.character-summary {
+    color: rgb(220, 215, 200);
+    font-size: 14px;
+    white-space: normal;
+    margin-bottom: 8px;
+}
+
+.character-columns {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.character-col {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-right: 16px;
+}
+
+.character-col--wide {
+    flex-grow: 2;
+}
+
+.character-points {
+    color: rgb(240, 220, 140);
+    font-size: 13px;
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.character-skills {
+    max-height: 340px;
+}
+
+.character-derived,
+.character-traits {
+    color: rgb(200, 195, 180);
+    font-size: 12px;
+    white-space: normal;
+}
+
+.skill-row {
+    flex-direction: row;
+    align-items: center;
+    margin: 2px 0;
+}
+
+.skill-row > Label {
+    flex-grow: 1;
+    white-space: normal;
+}
+
+.skill-row > Button {
+    width: 28px;
+    margin-left: 6px;
+}
+
+.skill-row--unlock > Label {
+    color: rgb(170, 210, 250);
+}
+
 /* Отчёт */
 .report-headline {
     font-size: 16px;

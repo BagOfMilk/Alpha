@@ -68,14 +68,51 @@ namespace Game.Tests.EditMode
             var cfg = new BalanceConfig();
             var campaign = Campaign.NewGame(cfg);
 
-            // 6 живых 1-го уровня: 6 × (2 + 0.5×1) = 15 — сила ростера (US-11.4).
-            Assert.AreEqual(15, FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg), 0.001);
+            // Сила ростера (US-11.4): 6 живых 1-го уровня.
+            double roster = 6 * (cfg.ReadinessPerAliveCompanion + cfg.ReadinessPerCompanionLevel);
+            Assert.AreEqual(roster,
+                FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg), 0.001);
+            Assert.AreEqual(ReadinessBand.Unprepared,
+                FinalBattle.BandFor(roster, cfg),
+                "нетронутый ростер сам по себе НЕ даёт полосу: её берут вложениями в город");
 
             campaign.Base.ThreatsSystem.Readiness.AddPreparation(); // совет: +10
-            Assert.AreEqual(25, FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg), 0.001);
+            double withPrep = roster + cfg.ReadinessPerPreparation;
+            Assert.AreEqual(withPrep,
+                FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg), 0.001);
 
             campaign.Roster.Get("brawler").Kill(); // потери снижают готовность
-            Assert.AreEqual(22.5, FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg), 0.001);
+            Assert.Less(FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg),
+                withPrep, "смерть бойца ослабляет оборону");
+        }
+
+        [Test]
+        public void Readiness_MaxedRoster_StillNeedsCityInvestment()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            foreach (var c in campaign.Roster.All) c.GainXp(5000, cfg); // потолок реального прогона
+
+            double rosterOnly = FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg);
+            Assert.AreEqual(ReadinessBand.Unprepared, FinalBattle.BandFor(rosterOnly, cfg),
+                "прокачанный ростер без вложений в город не должен брать полосу бесплатно");
+        }
+
+        [Test]
+        public void Readiness_FortifiedBand_IsReachable()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            foreach (var c in campaign.Roster.All) c.GainXp(1400, cfg); // ~6 уровень
+
+            var readiness = campaign.Base.ThreatsSystem.Readiness;
+            readiness.AddFortification(); // Укрепления
+            readiness.AddPreparation();   // единственная «Подготовка» за кампанию
+
+            Assert.AreEqual(ReadinessBand.Fortified,
+                FinalBattle.BandFor(
+                    FinalBattle.EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, cfg), cfg),
+                "верхняя полоса обязана быть достижимой (иначе порог — декорация)");
         }
 
         [Test]
@@ -222,6 +259,11 @@ namespace Game.Tests.EditMode
             var cfg = new BalanceConfig
             { ProtagonistAttributePoints = 2, ProtagonistSkillPoints = 3, CreationSkillMax = 4 };
             var b = new ProtagonistBuilder(DefaultContent.Leader(), cfg); // старт 4/4/5/5, Тактика 2
+
+            // «Пустой» атрибут не съедает очко (симметрично RaiseSkill(None)).
+            int budget = b.AttributePointsRemaining;
+            Assert.AreEqual(CreationStep.AtCap, b.RaiseAttribute(AttributeType.None));
+            Assert.AreEqual(budget, b.AttributePointsRemaining, "очко не сгорело в None");
 
             Assert.AreEqual(CreationStep.Ok, b.RaiseAttribute(AttributeType.Strength)); // 4→5
             Assert.AreEqual(CreationStep.Ok, b.RaiseAttribute(AttributeType.Wits));     // 5→6

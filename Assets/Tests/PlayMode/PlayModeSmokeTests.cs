@@ -9,6 +9,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using UnityEngine.UIElements;
 
 namespace Game.Tests.PlayMode
 {
@@ -102,6 +103,12 @@ namespace Game.Tests.PlayMode
             for (int i = 0; i < 8 && controller.Combat.Log.Count == logBefore; i++)
                 controller.EndPlayerTurn();
             Assert.Greater(controller.Combat.Log.Count, logBefore, "враги сходили — лог боя вырос");
+
+            // Песочница — не тупик: выход в кампанию доступен (итерация 18).
+            var exit = Object.FindFirstObjectByType<UIDocument>().rootVisualElement.Q<Button>("exit-button");
+            Assert.IsNotNull(exit, "в бою есть кнопка выхода");
+            Assert.AreEqual(DisplayStyle.Flex, exit.style.display.value,
+                "в песочнице выход показан (в бою кампании — скрыт)");
         }
 
         [UnityTest]
@@ -138,7 +145,46 @@ namespace Game.Tests.PlayMode
             controller.OnWaitDay();
             Assert.AreEqual(day + 1, GameFlow.Campaign.Base.CurrentDay, "«ждать день» двигает календарь");
 
+            // Стройка не предлагает «пустую» секцию (итерация 18: покупка None
+            // сжигала золото и материалы в никуда).
+            var root = Object.FindFirstObjectByType<UIDocument>().rootVisualElement;
+            foreach (var child in root.Q<VisualElement>("build-list").Children())
+                Assert.IsFalse((child as Button).text.StartsWith("None"),
+                    "секции None в списке стройки быть не должно");
+
             GameFlow.Reset(); // не влияем на другие тесты
+        }
+
+        [UnityTest]
+        public IEnumerator CampaignScene_CharacterPanel_SpendsSkillPoints()
+        {
+            GameFlow.Reset();
+            yield return SceneManager.LoadSceneAsync("Campaign", LoadSceneMode.Single);
+            yield return null;
+            var controller = Object.FindFirstObjectByType<CampaignScreenController>();
+            controller.OnStartCampaign();
+
+            // Пролог отыгрывается через Core, дальше — город.
+            GameFlow.PendingQuest.ResolveCombat(won: true);
+            GameFlow.PendingQuest.Choose(0, GameFlow.Campaign.Roster.All);
+            controller.ConcludeActiveQuest();
+
+            var leader = GameFlow.Campaign.Roster.Get("leader");
+            leader.GainXp(2000, GameFlow.Campaign.Cfg); // кампания прокачала лидера
+            Assert.Greater(leader.UnspentSkillPoints, 0, "уровни дали очки в пул");
+
+            controller.ShowCharacter("leader");
+            var root = Object.FindFirstObjectByType<UIDocument>().rootVisualElement;
+            Assert.IsTrue(root.Q<VisualElement>("panel-character").ClassListContains("panel--visible"),
+                "карточка бойца открывает экран персонажа");
+
+            var rows = root.Q<ScrollView>("character-skills").contentContainer;
+            Assert.AreEqual(10, rows.childCount, "все 10 навыков видны (US-2.2)");
+            var plus = rows[0].Q<Button>();
+            Assert.IsNotNull(plus);
+            Assert.IsTrue(plus.enabledSelf, "при наличии очков «+» активна — очки можно потратить");
+
+            GameFlow.Reset();
         }
 
         [UnityTest]

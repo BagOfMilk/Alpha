@@ -14,8 +14,11 @@ namespace Game.Core.Characters
         public int CurrentLevel;
         public int NewLevel;
 
-        /// <summary>Можно ли вообще потратить (есть очки, скил валиден).</summary>
+        /// <summary>Можно ли вообще потратить (есть очки, скил валиден и не на потолке).</summary>
         public bool CanSpend;
+
+        /// <summary>Скил уже на потолке кампании (cfg.SkillMax) — очко в него не вложить.</summary>
+        public bool AtCap;
 
         /// <summary>Явное предупреждение (US-2.3): вложение НЕ откатывается.</summary>
         public bool Irreversible => true;
@@ -46,7 +49,10 @@ namespace Game.Core.Characters
 
             preview.CurrentLevel = c.GetSkill(skill);
             preview.NewLevel = preview.CurrentLevel + 1;
-            preview.CanSpend = c.UnspentSkillPoints > 0;
+            preview.AtCap = cfg != null && preview.CurrentLevel >= cfg.SkillMax;
+            // Один источник истины с тратой (Companion.SpendSkillPoint): превью и
+            // кнопка UI не должны расходиться в том, можно ли вложить очко.
+            preview.CanSpend = c.UnspentSkillPoints > 0 && !preview.AtCap;
             preview.CheckValueDelta = 1; // само очко: +1 к значению проверки этого скила
 
             if (perkCatalog == null || cfg == null) return preview;

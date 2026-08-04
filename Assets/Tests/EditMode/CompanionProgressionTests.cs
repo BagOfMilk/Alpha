@@ -31,7 +31,7 @@ namespace Game.Tests.EditMode
             var cfg = new BalanceConfig { SkillPointsPerLevel = 2 };
             var c = Make();
             c.GainXp(ProgressionMath.XpToNext(1, cfg), cfg); // +2 очка
-            Assert.IsTrue(c.SpendSkillPoint(SkillType.Ranged));
+            Assert.IsTrue(c.SpendSkillPoint(SkillType.Ranged, cfg));
             Assert.AreEqual(1, c.GetSkill(SkillType.Ranged));
             Assert.AreEqual(1, c.UnspentSkillPoints);
         }
@@ -40,7 +40,7 @@ namespace Game.Tests.EditMode
         public void SpendSkillPoint_WithoutPoints_Fails()
         {
             var c = Make();
-            Assert.IsFalse(c.SpendSkillPoint(SkillType.Ranged));
+            Assert.IsFalse(c.SpendSkillPoint(SkillType.Ranged, new BalanceConfig()));
             Assert.AreEqual(0, c.GetSkill(SkillType.Ranged));
         }
 
@@ -144,8 +144,92 @@ namespace Game.Tests.EditMode
             c.Skills.Set(SkillType.Melee, 1);
             c.GainXp(ProgressionMath.XpToNext(1, cfg), cfg);
 
-            Assert.IsTrue(c.SpendSkillPoint(SkillType.Melee, DefaultContent.PerkCatalog()));
+            Assert.IsTrue(c.SpendSkillPoint(SkillType.Melee, cfg, DefaultContent.PerkCatalog()));
             Assert.IsTrue(c.HasPerk("thick_hide"), "production-путь траты очка сразу открывает перк");
+        }
+
+        // ---- Потолок скила за кампанию (итерация 18) ----
+        [Test]
+        public void SpendSkillPoint_AtSkillMax_Fails_AndKeepsPoint()
+        {
+            var cfg = new BalanceConfig();
+            var c = Make();
+            c.Skills.Set(SkillType.Ranged, cfg.SkillMax);
+            c.GainXp(5000, cfg);
+            int pool = c.UnspentSkillPoints;
+
+            Assert.IsFalse(c.SpendSkillPoint(SkillType.Ranged, cfg, DefaultContent.PerkCatalog()),
+                "выше потолка кампании скил не растёт (иначе точность вылезает за кламп)");
+            Assert.AreEqual(pool, c.UnspentSkillPoints, "очко не сгорело");
+            Assert.AreEqual(cfg.SkillMax, c.GetSkill(SkillType.Ranged));
+
+            var preview = BuildPlanner.PreviewSkillPoint(c, SkillType.Ranged, cfg, DefaultContent.PerkCatalog());
+            Assert.IsTrue(preview.AtCap, "превью и трата — один источник истины");
+            Assert.IsFalse(preview.CanSpend);
+        }
+
+        [Test]
+        public void SkillMax_IsNotBelowCreationCap()
+        {
+            var cfg = new BalanceConfig();
+            Assert.GreaterOrEqual(cfg.SkillMax, cfg.CreationSkillMax,
+                "иначе создание персонажа сможет превысить потолок кампании");
+        }
+
+        // ---- Кривая XP против реальных источников кампании (итерация 18) ----
+        [Test]
+        public void XpCurve_CampaignBudget_ReachesMidLevels()
+        {
+            var cfg = new BalanceConfig(); // дефолтная кривая — та, по которой играют
+            var c = Make();
+
+            // Эталонный прогон док (BALANCE.md §1): 10 победных вылазок (80 каждому
+            // участнику) + весь авторский пул квестов (~400) = 1200 XP.
+            c.GainXp(10 * cfg.XpPerExpeditionVictory + 400, cfg);
+
+            // Границы двусторонние: односторонний ассерт не заметил бы ни отката
+            // дефолтов, ни случайного ускорения кривой — и док разошёлся бы с кодом.
+            Assert.AreEqual(5, c.Level, "эталонный прогон = 5-й уровень (док BALANCE.md §1)");
+            Assert.AreEqual(4 * cfg.SkillPointsPerLevel, c.UnspentSkillPoints,
+                "12 очков — этого хватает на пороги перков/приёмов 4–5");
+        }
+
+        [Test]
+        public void SkillGrowth_UnlocksTopTierAbility()
+        {
+            var cfg = new BalanceConfig();
+            var c = new Companion("m", new AttributeBlock(3, 5, 3, 3), 4) { DisplayName = "Стрелок" };
+            c.Skills.Set(SkillType.Ranged, 4); // потолок создания
+            c.GainXp(5000, cfg);               // кампания прокачала
+
+            var before = Game.Core.Combat.CombatUnit.FromCompanion(
+                c, DefaultContent.Rifle(), cfg, DefaultContent.AbilityCatalog());
+            Assert.IsFalse(HasAbility(before, "mark_target"), "на 4 верхушка ветки закрыта");
+
+            Assert.IsTrue(c.SpendSkillPoint(SkillType.Ranged, cfg, DefaultContent.PerkCatalog()));
+            var after = Game.Core.Combat.CombatUnit.FromCompanion(
+                c, DefaultContent.Rifle(), cfg, DefaultContent.AbilityCatalog());
+            Assert.IsTrue(HasAbility(after, "mark_target"),
+                "трата очка открывает приём порога 5 — прокачка меняет бой");
+        }
+
+        [Test]
+        public void Technician_HasHackDrone_OutOfTheBox()
+        {
+            var cfg = new BalanceConfig();
+            var tech = DefaultContent.Technician().CreateInstance("technician", cfg);
+            var unit = Game.Core.Combat.CombatUnit.FromCompanion(
+                tech, DefaultContent.Pistol(), cfg, DefaultContent.AbilityCatalog());
+
+            Assert.IsTrue(HasAbility(unit, "hack_drone"),
+                "штатный техник обязан уметь взлом робота без узкого билда (US-3.11)");
+        }
+
+        private static bool HasAbility(Game.Core.Combat.CombatUnit unit, string abilityId)
+        {
+            foreach (var a in unit.Abilities)
+                if (a.Id == abilityId) return true;
+            return false;
         }
     }
 }

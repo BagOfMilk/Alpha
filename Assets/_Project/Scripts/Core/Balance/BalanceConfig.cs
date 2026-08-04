@@ -15,8 +15,14 @@ namespace Game.Core.Balance
     {
         // ======== Прокачка (XP / уровни) ========
         // Порог опыта до следующего уровня: XpBase * (level ^ XpExponent).
-        public double XpBase = 100.0;
-        public double XpExponent = 1.5;
+        // Кривая сжата под РЕАЛЬНЫЕ источники кампании (итерация 18): вылазка 80
+        // участникам, весь квестовый пул ~400 всему живому ростеру, инциденты 15–25.
+        // Эталонный прогон (10 победных вылазок + весь пул = 1200 XP) на бойце
+        // ходового состава: было 100×1.5 → уровень 4 и 9 очков; стало 60×1.35 →
+        // уровень 5 и 12 очков (уровень 6 ≈ 13 вылазок). Скамеечный напарник живёт
+        // на одном квестовом пуле и остаётся ниже — это осознанно.
+        public double XpBase = 60.0;
+        public double XpExponent = 1.35;
         public int MaxLevel = 20;
 
         // Очки скилов за уровень — игрок распределяет сам (классов нет, респека нет).
@@ -32,6 +38,14 @@ namespace Game.Core.Balance
         public int ProtagonistExtraTraits = 1;   // трейтов сверх бэкграундных (в пределах слотов)
         public int CreationAttributeMax = 8;     // потолок атрибута при создании
         public int CreationSkillMax = 4;         // потолок скила при создании
+
+        /// <summary>
+        /// Потолок скила ЗА КАМПАНИЮ (трата очков, US-2.2). Без него точность
+        /// (50 + скил×AccuracyPerWeaponSkill) упиралась в кламп 99% и обнуляла
+        /// укрытия/Метку/Подавление — весь тактический слой WL3. Инвариант:
+        /// SkillMax >= CreationSkillMax.
+        /// </summary>
+        public int SkillMax = 8;
 
         // ======== Производные из атрибутов (база ДО модификаторов) ========
         // Мелкие числа: HP ~6–20, AP ~8–10 (Прил. Б).
@@ -133,10 +147,17 @@ namespace Game.Core.Balance
         public double ReadinessPerPreparation = 10; // действие совета «Подготовка к угрозе» (вход)
         public double ReadinessPerFortification = 15; // вклад построенных Укреплений
         public double ReadinessBracedAt = 25;       // полосы: Unprepared < Braced < Fortified
-        public double ReadinessFortifiedAt = 60;
+        // 40 (было 60): достижимый потолок шкалы — Укрепления 15 + «Подготовка» 10
+        // (Влияния хватает на одну за кампанию) + вклад ростера ≈ 20 → 45.
+        // При 60 верхняя полоса не бралась вообще ни при какой игре.
+        public double ReadinessFortifiedAt = 40;
         // Вклад силы ростера в эффективную Готовность финала (US-11.4).
         public double ReadinessPerAliveCompanion = 2.0;
-        public double ReadinessPerCompanionLevel = 0.5;
+        // 0.2 (было 0.5): после сжатия XP-кривой (итерация 18) целый ростер
+        // сам по себе перепрыгивал порог Braced без единого вложения в город —
+        // финал становился лёгким «бесплатно». Теперь ростер 6×L7 = 20.4 < 25,
+        // и полосу переключает именно осознанное вложение (Укрепления/Подготовка).
+        public double ReadinessPerCompanionLevel = 0.2;
 
         // ======== База: население и стройка ========
         public double PopulationGrowthPerDay = 0.25;  // пассивный рост (US-7.5); ускоряется Таверной

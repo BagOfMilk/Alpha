@@ -67,13 +67,17 @@ namespace Game.Gameplay
 
         private void OnGUI()
         {
-            GUILayout.BeginArea(new Rect(10, 10, 760, 96), GUI.skin.box);
-            GUILayout.Label("<b>F5</b> — быстрое сохранение   ·   <b>F9</b> — быстрая загрузка");
+            GUILayout.BeginArea(new Rect(10, 10, 760, 124), GUI.skin.box);
+            GUILayout.Label("Отладочный хост (не игра): <b>F5</b> — быстрое сохранение   ·   <b>F9</b> — быстрая загрузка");
             GUILayout.Label(_status);
             if (Session != null)
                 GUILayout.Label($"День {Session.Base.CurrentDay} · золото " +
                                 $"{Session.Base.Resources.Get(ResourceType.Gold)} · ростер {Session.Roster.Count}" +
                                 (Session.Ironman ? "  ·  АЙРОНМЕН" : ""));
+            // Сцена входа в игру — Campaign; отсюда до неё был тупик (US-17: билд
+            // стартовал в этом демо и не давал попасть в настоящую кампанию).
+            if (GUILayout.Button("Играть кампанию →"))
+                UnityEngine.SceneManagement.SceneManager.LoadScene("Campaign");
             GUILayout.EndArea();
         }
     }

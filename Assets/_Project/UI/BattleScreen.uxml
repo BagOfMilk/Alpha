@@ -25,6 +25,7 @@
             <ui:VisualElement name="ability-bar" class="ability-bar" />
             <ui:Button name="strike-button" class="action-btn" text="Strike" />
             <ui:Button name="end-turn-button" class="action-btn end-turn" text="Конец хода" />
+            <ui:Button name="exit-button" class="action-btn" text="В меню" />
         </ui:VisualElement>
         <ui:Label name="outcome-label" class="outcome-label" text="" />
         <ui:Button name="continue-button" class="continue-button" text="Продолжить" />

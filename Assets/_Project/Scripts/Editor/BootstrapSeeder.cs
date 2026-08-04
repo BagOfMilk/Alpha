@@ -57,7 +57,7 @@ namespace Game.EditorTools
             go.AddComponent<CampaignScreenController>();
 
             EditorSceneManager.SaveScene(scene, CampaignPath);
-            AddSceneToBuild(CampaignPath);
+            AddSceneToBuild(CampaignPath, makeFirst: true); // точка входа игры
             AssetDatabase.SaveAssets();
             Debug.Log("[BootstrapSeeder] Campaign-сцена создана: " + CampaignPath);
         }
@@ -118,13 +118,27 @@ namespace Game.EditorTools
                 AssetDatabase.CreateFolder("Assets/_Project", "Scenes");
         }
 
-        /// <summary>Добавляет сцену в Build Settings, не выбрасывая остальные.</summary>
-        private static void AddSceneToBuild(string path)
+        /// <summary>
+        /// Добавляет сцену в Build Settings, не выбрасывая остальные. makeFirst —
+        /// сцена ВХОДА в игру (индекс 0): собранный билд стартует именно с неё,
+        /// поэтому Campaign обязана быть первой, а отладочный Boot — нет.
+        /// </summary>
+        private static void AddSceneToBuild(string path, bool makeFirst = false)
         {
             var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-            foreach (var s in scenes)
-                if (s.path == path) return;
-            scenes.Add(new EditorBuildSettingsScene(path, true));
+            int index = scenes.FindIndex(s => s.path == path);
+            if (index >= 0)
+            {
+                if (!makeFirst || index == 0) return;
+                var existing = scenes[index];
+                scenes.RemoveAt(index);
+                scenes.Insert(0, existing);
+            }
+            else
+            {
+                var entry = new EditorBuildSettingsScene(path, true);
+                if (makeFirst) scenes.Insert(0, entry); else scenes.Add(entry);
+            }
             EditorBuildSettings.scenes = scenes.ToArray();
         }
     }

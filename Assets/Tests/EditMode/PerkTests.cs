@@ -64,7 +64,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, c.Perks.Count);
 
             c.GainXp(Game.Core.Balance.ProgressionMath.XpToNext(1, cfg), cfg); // +1 очко
-            Assert.IsTrue(c.SpendSkillPoint(SkillType.Ranged));                 // Ranged 1→2
+            Assert.IsTrue(c.SpendSkillPoint(SkillType.Ranged, cfg));            // Ranged 1→2
             c.RefreshPerks(Catalog());
             Assert.AreEqual(1, c.Perks.Count);
         }

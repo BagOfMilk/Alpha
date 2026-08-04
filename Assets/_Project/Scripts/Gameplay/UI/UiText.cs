@@ -34,6 +34,7 @@ namespace Game.Gameplay.UI
         public const string Unassigned = "— пусто —";
         public const string BuiltMark = " (построено)";
         public const string InProgressMark = " (строится)";
+        public const string NoEffectYetMark = " — эффект позже";
 
         // Карта / вылазка
         public const string MapTitle = "Карта мира: выбери точку";
@@ -68,5 +69,54 @@ namespace Game.Gameplay.UI
         public const string GateNeedTrait = " (нужен трейт: {0})";
         public const string GateBlockedByTrait = " (закрыто трейтом: {0})";
         public const string GateNeedAlive = " ({0} погиб)";
+
+        // Персонаж (US-2.3/5.1: трата очков навыков — необратима)
+        public const string CharacterTitle = "Боец";
+        public const string CharacterBack = "В город";
+        public const string SkillPointsPool = "Нераспределённых очков: ";
+        public const string NoSkillPoints = "Очки навыков приходят с уровнями (вылазки, квесты, дежурства).";
+        public const string SpendIrreversible = "Вложение необратимо — респека нет.";
+        public const string UnlocksPerk = " → перк «{0}»";
+        public const string UnlocksAbility = " → приём «{0}»";
+        public const string XpLine = "Уровень {0} · опыт {1}/{2}";
+        public const string XpMaxLine = "Уровень {0} (максимум)";
+        public const string TraitsNone = "—";
+        public const string SkillAtCap = " — максимум";
+        public const string SkillOnlyAccuracy = " → дальше только точность и проверки";
+        public const string NoTrainDead = "Боец погиб. Очки навыков не тратятся.";
+        public const string NoTrainAntagonist = "Ушёл в антагонисты. Очки навыков не тратятся.";
+        public const string ToMainMenu = "В главное меню";
+        public const string SavedToAutosave = "Кампания записана в автосейв — «Продолжить» вернёт в город.";
+
+        /// <summary>Русские имена навыков (enum — идентификатор, не текст для игрока).</summary>
+        public static string SkillName(Game.Core.Stats.SkillType skill)
+        {
+            switch (skill)
+            {
+                case Game.Core.Stats.SkillType.Ranged: return "Стрелковое";
+                case Game.Core.Stats.SkillType.Melee: return "Ближний бой";
+                case Game.Core.Stats.SkillType.Tactics: return "Тактика";
+                case Game.Core.Stats.SkillType.Hacking: return "Взлом";
+                case Game.Core.Stats.SkillType.Mechanics: return "Механика";
+                case Game.Core.Stats.SkillType.Survival: return "Выживание";
+                case Game.Core.Stats.SkillType.Medicine: return "Медицина";
+                case Game.Core.Stats.SkillType.Persuasion: return "Убеждение";
+                case Game.Core.Stats.SkillType.Intimidation: return "Запугивание";
+                case Game.Core.Stats.SkillType.Trade: return "Торговля";
+                default: return skill.ToString();
+            }
+        }
+
+        public static string AttributeName(Game.Core.Stats.AttributeType attribute)
+        {
+            switch (attribute)
+            {
+                case Game.Core.Stats.AttributeType.Strength: return "Сила";
+                case Game.Core.Stats.AttributeType.Agility: return "Ловкость";
+                case Game.Core.Stats.AttributeType.Wits: return "Смекалка";
+                case Game.Core.Stats.AttributeType.Will: return "Воля";
+                default: return attribute.ToString();
+            }
+        }
     }
 }

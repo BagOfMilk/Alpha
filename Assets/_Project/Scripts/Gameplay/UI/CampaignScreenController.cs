@@ -39,6 +39,7 @@ namespace Game.Gameplay.UI
         private string _pickedBackgroundId = "leader";
         private WorldMap _worldMap;
         private WorldNode _pickedNode;
+        private string _openCharacterId; // открытая карточка бойца (панель персонажа)
         private readonly HashSet<string> _squadPicks = new HashSet<string>();
 
         private VisualElement _root;
@@ -62,14 +63,21 @@ namespace Game.Gameplay.UI
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
             foreach (var name in new[] { "panel-menu", "panel-create", "panel-city", "panel-map",
-                                         "panel-report", "panel-quest" })
+                                         "panel-report", "panel-quest", "panel-character" })
                 _panels[name] = _root.Q<VisualElement>(name);
+
+            // Контроллер пересоздаётся при каждом возврате из Battle-сцены, а кампания
+            // живёт в статике GameFlow: берём ЕЁ конфиг. Иначе Awake-дефолт
+            // (Ironman = false) расходится с кампанией и тихо выключает пермасмерть
+            // протагониста в квестовых боях — айронмен переставал быть айронменом.
+            if (GameFlow.Campaign != null) _cfg = GameFlow.Campaign.Cfg;
 
             BindMenu();
             BindCreate();
             BindCity();
             BindMap();
             BindReport();
+            BindCharacter();
 
             // Контроллер пересоздаётся при каждом возврате из Battle-сцены:
             // онбординг фаст-форвардится из персистентных флагов, а не с пролога.
@@ -227,10 +235,11 @@ namespace Game.Gameplay.UI
             attrRows.Clear();
             foreach (AttributeType a in System.Enum.GetValues(typeof(AttributeType)))
             {
+                if (a == AttributeType.None) continue; // «пустой» атрибут — не строка выбора
                 var attr = a;
                 var row = new VisualElement();
                 row.AddToClassList("stat-row");
-                row.Add(new Label($"{attr}: {_builder.Attribute(attr)}"));
+                row.Add(new Label($"{UiText.AttributeName(attr)}: {_builder.Attribute(attr)}"));
                 var plus = new Button(() => { _builder.RaiseAttribute(attr); RefreshCreatePanel(); }) { text = "+" };
                 plus.SetEnabled(_builder.AttributePointsRemaining > 0
                     && _builder.Attribute(attr) < _cfg.CreationAttributeMax);
@@ -247,7 +256,7 @@ namespace Game.Gameplay.UI
                 var skill = s;
                 var row = new VisualElement();
                 row.AddToClassList("stat-row");
-                row.Add(new Label($"{skill}: {_builder.Skill(skill)}"));
+                row.Add(new Label($"{UiText.SkillName(skill)}: {_builder.Skill(skill)}"));
                 var plus = new Button(() => { _builder.RaiseSkill(skill); RefreshCreatePanel(); }) { text = "+" };
                 plus.SetEnabled(_builder.SkillPointsRemaining > 0
                     && _builder.Skill(skill) < _cfg.CreationSkillMax);
@@ -315,6 +324,33 @@ namespace Game.Gameplay.UI
                 ack.clicked -= OnIntroAck;
                 ack.clicked += OnIntroAck;
             }
+
+            var menu = _root.Q<Button>("menu-button");
+            if (menu != null)
+            {
+                menu.clicked -= OnExitToMenu;
+                menu.clicked += OnExitToMenu;
+            }
+        }
+
+        /// <summary>
+        /// Выход в главное меню из города: слоты сохранения были write-only —
+        /// загрузить их можно только из меню, а пути туда не было (US-16.1).
+        /// Сначала фиксируем состояние: стройка/совет/назначения автосейва не пишут.
+        /// </summary>
+        private void OnExitToMenu()
+        {
+            var c = GameFlow.Campaign;
+            if (c == null) { Show("panel-menu"); return; }
+            AutoSave.Write(c);
+            Telemetry.Event("campaign_abandoned", ("day", c.Base.CurrentDay));
+            Telemetry.End();
+
+            GameFlow.Reset();
+            _openCharacterId = null;
+            BindMenu(); // пересобрать доступность слотов/автосейва
+            SetMenuNote(UiText.SavedToAutosave);
+            Show("panel-menu");
         }
 
         private void OnIntroAck()
@@ -400,7 +436,9 @@ namespace Game.Gameplay.UI
             roster.Clear();
             foreach (var comp in c.Roster.All)
             {
-                var card = new Label(DescribeCompanion(comp));
+                // Карточка кликабельна: экран бойца — там тратятся очки навыков (US-2.3).
+                string compId = comp.Id;
+                var card = new Button(() => ShowCharacter(compId)) { text = DescribeCompanion(comp) };
                 card.AddToClassList("roster-card");
                 roster.Add(card);
             }
@@ -448,14 +486,19 @@ namespace Game.Gameplay.UI
             buildList.Clear();
             foreach (BaseSectionType section in System.Enum.GetValues(typeof(BaseSectionType)))
             {
+                if (section == BaseSectionType.None) continue; // «пустая» секция — не здание
                 if (b.IsBuilt(section)) continue;
                 bool inProgress = false;
                 foreach (var con in b.ConstructionQueue)
                     if (con.Section == section) { inProgress = true; break; }
 
                 var blueprint = DefaultContent.Blueprint(section, _cfg);
+                // Честный ценник: здания без эффектов (US-6.4 отложен) помечены,
+                // чтобы стройка не выглядела покупкой, которая ничего не даёт.
+                bool noEffectYet = section == BaseSectionType.Armory || section == BaseSectionType.Laboratory;
                 var text = $"{blueprint.DisplayName}: {blueprint.GoldCost} зол" +
                            (blueprint.BuildingMaterialCost > 0 ? $" + {blueprint.BuildingMaterialCost} мат" : "") +
+                           (noEffectYet ? UiText.NoEffectYetMark : "") +
                            (inProgress ? UiText.InProgressMark : "");
                 var sec = section;
                 var btn = new Button(() => { b.StartConstruction(DefaultContent.Blueprint(sec, _cfg)); RefreshCity(); })
@@ -511,7 +554,145 @@ namespace Game.Gameplay.UI
             if (comp.IsInjured) state += $", лечится {comp.RecoveryDaysRemaining:0.#} дн.";
             return $"{comp.DisplayName}{(comp.IsProtagonist ? " ★" : "")} — {state}\n" +
                    $"Лояльность: {comp.LoyaltyBand} · Ур. {comp.Level}" +
+                   (comp.UnspentSkillPoints > 0 ? $" · очков: {comp.UnspentSkillPoints}" : "") +
                    (comp.Scars.Scars.Count > 0 ? $" · шрамы: {comp.Scars.Scars.Count}" : "");
+        }
+
+        // ================= ПЕРСОНАЖ (US-2.3/5.1) =================
+        private void BindCharacter()
+        {
+            var back = _root.Q<Button>("character-back-button");
+            if (back == null) return;
+            back.clicked -= ShowCity;
+            back.clicked += ShowCity;
+        }
+
+        /// <summary>Экран бойца (публично — для PlayMode-смоука): статы, трейты, трата очков.</summary>
+        public void ShowCharacter(string companionId)
+        {
+            var c = GameFlow.Campaign;
+            if (c == null || c.Roster.Get(companionId) == null) return;
+            _openCharacterId = companionId;
+            RefreshCharacterPanel();
+            Show("panel-character");
+        }
+
+        private void RefreshCharacterPanel()
+        {
+            var c = GameFlow.Campaign;
+            var comp = c != null ? c.Roster.Get(_openCharacterId) : null;
+            if (comp == null) return;
+
+            _root.Q<Label>("character-name").text =
+                comp.DisplayName + (comp.IsProtagonist ? " ★" : "");
+
+            bool maxLevel = comp.Level >= _cfg.MaxLevel;
+            string xpLine = maxLevel
+                ? string.Format(UiText.XpMaxLine, comp.Level)
+                : string.Format(UiText.XpLine, comp.Level, comp.Xp,
+                    Game.Core.Balance.ProgressionMath.XpToNext(comp.Level, _cfg));
+            _root.Q<Label>("character-summary").text =
+                $"{xpLine} · {comp.Status}" +
+                (comp.IsInjured ? $" ({comp.CurrentInjury}, {comp.RecoveryDaysRemaining:0.#} дн.)" : "") +
+                $" · лояльность: {comp.LoyaltyBand}";
+
+            // Атрибуты (растут только аугмент-крафтом — US-6.4, пока не реализован).
+            var attrs = _root.Q<VisualElement>("character-attrs");
+            attrs.Clear();
+            foreach (AttributeType a in System.Enum.GetValues(typeof(AttributeType)))
+            {
+                if (a == AttributeType.None) continue;
+                var row = new Label($"{UiText.AttributeName(a)}: {comp.GetAttribute(a)}");
+                row.AddToClassList("stat-row");
+                attrs.Add(row);
+            }
+
+            // Что боец даёт в бою прямо сейчас (после трейтов/шрамов/перков/гира).
+            var derived = comp.EffectiveDerived(_cfg);
+            // Точность в бою = база + навык ЕГО оружия × AccuracyPerWeaponSkill: без
+            // этого слагаемого игрок не видит, за что платит очками (US-2.3).
+            var weapon = Armory(comp);
+            int weaponSkill = weapon != null ? comp.GetSkill(weapon.Skill) : 0;
+            int accuracyInBattle = derived[DerivedStat.Accuracy] + weaponSkill * _cfg.AccuracyPerWeaponSkill;
+            _root.Q<Label>("character-derived").text =
+                $"HP {derived[DerivedStat.MaxHp]} · AP {derived[DerivedStat.ActionPoints]} · " +
+                $"точность {accuracyInBattle} (база {derived[DerivedStat.Accuracy]} + навык оружия) · " +
+                $"защита {derived[DerivedStat.Defense]} · " +
+                $"инициатива {derived[DerivedStat.Initiative]} · крит {derived[DerivedStat.CritChance]}% · " +
+                $"броня {derived[DerivedStat.Armor]} · воля {derived[DerivedStat.Resolve]}";
+
+            var traitLines = new List<string>();
+            foreach (var t in comp.Traits.Traits) traitLines.Add(t.DisplayName);
+            foreach (var s in comp.Scars.Scars) traitLines.Add("✕ " + s.DisplayName);
+            foreach (var p in comp.Perks) traitLines.Add("★ " + p.DisplayName);
+            _root.Q<Label>("character-traits").text =
+                traitLines.Count > 0 ? string.Join("\n", traitLines) : UiText.TraitsNone;
+
+            // Мёртвым и ушедшим в антагонисты очки не тратятся: карточка остаётся
+            // читаемым «досье», но обещать вложение нельзя (US-9.4).
+            bool canTrain = CanTrain(comp);
+            _root.Q<Label>("character-points").text =
+                !canTrain ? (comp.IsAlive ? UiText.NoTrainAntagonist : UiText.NoTrainDead)
+                : comp.UnspentSkillPoints > 0
+                    ? UiText.SkillPointsPool + comp.UnspentSkillPoints + "\n" + UiText.SpendIrreversible
+                    : UiText.NoSkillPoints;
+
+            // Навыки: превью того, ЧТО откроет очко (перки — BuildPlanner, приёмы — каталог).
+            var skills = _root.Q<ScrollView>("character-skills");
+            skills.Clear();
+            var perkCatalog = DefaultContent.PerkCatalog();
+            foreach (SkillType s in System.Enum.GetValues(typeof(SkillType)))
+            {
+                if (s == SkillType.None) continue;
+                var skill = s;
+                int level = comp.GetSkill(skill);
+                var preview = BuildPlanner.PreviewSkillPoint(comp, skill, _cfg, perkCatalog);
+
+                string hint = "";
+                if (preview.AtCap)
+                {
+                    hint = UiText.SkillAtCap;
+                }
+                else
+                {
+                    foreach (var perk in preview.PerksUnlocked)
+                        hint += string.Format(UiText.UnlocksPerk, perk.DisplayName);
+                    foreach (var ability in DefaultContent.AbilityCatalog())
+                        if (ability.Skill == skill && ability.RequiredSkillLevel == preview.NewLevel)
+                            hint += string.Format(UiText.UnlocksAbility, ability.DisplayName);
+                    // Выше порогов контента очко покупает только точность/проверки —
+                    // игрок должен понимать, за что платит (US-2.3: осознанность).
+                    if (hint.Length == 0 && level >= 5) hint = UiText.SkillOnlyAccuracy;
+                }
+
+                var row = new VisualElement();
+                row.AddToClassList("skill-row");
+                if (hint.Length > 0 && !preview.AtCap) row.AddToClassList("skill-row--unlock");
+                row.Add(new Label($"{UiText.SkillName(skill)}: {level}{hint}"));
+
+                var plus = new Button(() => OnSpendSkillPoint(skill)) { text = "+" };
+                plus.SetEnabled(canTrain && preview.CanSpend);
+                row.Add(plus);
+                skills.Add(row);
+            }
+        }
+
+        /// <summary>Кого вообще можно тренировать: живого и не ушедшего к врагу.</summary>
+        private static bool CanTrain(Companion comp)
+            => comp != null && comp.IsAlive && comp.Status != CompanionStatus.Antagonist;
+
+        private void OnSpendSkillPoint(SkillType skill)
+        {
+            var c = GameFlow.Campaign;
+            var comp = c != null ? c.Roster.Get(_openCharacterId) : null;
+            // Гард здесь, а не только на кнопке: ShowCharacter публичен, а телеметрия
+            // и автосейв не должны срабатывать вхолостую.
+            if (!CanTrain(comp) || !comp.SpendSkillPoint(skill, _cfg, DefaultContent.PerkCatalog())) return;
+
+            Telemetry.Event("skill_point_spent",
+                ("companion", comp.Id), ("skill", skill.ToString()), ("level", comp.GetSkill(skill)));
+            AutoSave.Write(c); // трата необратима — фиксируем как решение (US-16.1)
+            RefreshCharacterPanel();
         }
 
         // ================= КАРТА (US-1.1) =================

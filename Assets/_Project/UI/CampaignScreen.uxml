@@ -54,6 +54,7 @@
                 <ui:Button name="wait-button" text="Ждать день" class="action-btn" />
                 <ui:Button name="map-button" text="Карта мира" class="action-btn" />
                 <ui:VisualElement name="save-slot-buttons" class="save-slot-buttons" />
+                <ui:Button name="menu-button" text="В главное меню" class="action-btn menu-btn--secondary" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -82,6 +83,27 @@
             <ui:Label name="quest-stage-text" class="quest-stage-text" />
             <ui:ScrollView name="quest-log" class="quest-log" />
             <ui:VisualElement name="quest-actions" class="quest-actions" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-character" class="panel character-panel">
+            <ui:Label name="character-name" class="panel-h1" />
+            <ui:Label name="character-summary" class="character-summary" />
+            <ui:VisualElement class="character-columns">
+                <ui:VisualElement class="character-col">
+                    <ui:Label text="Атрибуты" class="panel-h2" />
+                    <ui:VisualElement name="character-attrs" class="stat-rows" />
+                    <ui:Label text="В бою" class="panel-h2" />
+                    <ui:Label name="character-derived" class="character-derived" />
+                    <ui:Label text="Трейты и шрамы" class="panel-h2" />
+                    <ui:Label name="character-traits" class="character-traits" />
+                </ui:VisualElement>
+                <ui:VisualElement class="character-col character-col--wide">
+                    <ui:Label text="Навыки" class="panel-h2" />
+                    <ui:Label name="character-points" class="character-points" />
+                    <ui:ScrollView name="character-skills" class="character-skills" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Button name="character-back-button" text="В город" class="action-btn primary" />
         </ui:VisualElement>
 
     </ui:VisualElement>

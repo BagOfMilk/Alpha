@@ -194,23 +194,22 @@ namespace Game.Core.Characters
             return result;
         }
 
-        /// <summary>Тратит одно нераспределённое очко на повышение скила. true — если получилось.</summary>
-        public bool SpendSkillPoint(SkillType skill)
+        /// <summary>
+        /// Тратит одно нераспределённое очко на повышение скила и сразу пересчитывает
+        /// перки по каталогу (US-2.2/3.10; превью — BuildPlanner). Потолок роста —
+        /// cfg.SkillMax: без него точность уходила за кламп и обнуляла укрытия/Метку
+        /// (весь тактический слой). Очко НЕ списывается, если рост невозможен.
+        /// </summary>
+        public bool SpendSkillPoint(SkillType skill, BalanceConfig cfg,
+                                    IEnumerable<PerkDefinition> perkCatalog = null)
         {
             if (skill == SkillType.None || UnspentSkillPoints <= 0) return false;
+            if (cfg != null && Skills.Get(skill) >= cfg.SkillMax) return false;
             Skills.Raise(skill, 1);
             UnspentSkillPoints--;
-            return true;
-        }
-
-        /// <summary>
-        /// Трата очка с немедленным пересчётом перков по каталогу — production-путь
-        /// кампании (перк открывается сразу, US-2.2/3.10; превью — BuildPlanner).
-        /// </summary>
-        public bool SpendSkillPoint(SkillType skill, IEnumerable<PerkDefinition> perkCatalog)
-        {
-            if (!SpendSkillPoint(skill)) return false;
-            RefreshPerks(perkCatalog);
+            // null-каталог не «обнуляет» перки (RefreshPerks(null) очистил бы список) —
+            // это допустимый вызов там, где перки не нужны (тесты чистой прокачки).
+            if (perkCatalog != null) RefreshPerks(perkCatalog);
             return true;
         }
 
