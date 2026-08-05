@@ -5,6 +5,14 @@ using Game.Core.Saves;
 
 namespace Game.Gameplay
 {
+    /// <summary>ЧЕЙ бой идёт в Battle-сцене: от этого зависит, как резолвится исход.</summary>
+    public enum PendingBattleKind
+    {
+        None = 0,
+        Expedition = 1, // бой вылазки (или финал) → ConcludeExpedition + отчёт возвращения
+        Quest = 2       // боевой этап квеста → QuestRun.ResolveCombat
+    }
+
     /// <summary>
     /// Контекст игровой сессии между сценами (Campaign ↔ Battle): чистые статики —
     /// переживают LoadScene без DontDestroyOnLoad. Кампания одна на сессию;
@@ -52,6 +60,14 @@ namespace Game.Gameplay
         /// <summary>Начало другой кампании (новая игра/загрузка): чужая лента не протекает.</summary>
         public static void ResetChronicle() => Chronicle.Clear();
 
+        /// <summary>
+        /// Тип идущего боя. Раньше Battle-сцена угадывала его по «висит ли квест», и
+        /// отложенный квест перехватывал исход боя ВЫЛАЗКИ: ConcludeExpedition не
+        /// вызывался, ActiveExpedition залипал навсегда (вылазки и финал становились
+        /// недоступны), а боевой этап квеста «проходился» чужим боем.
+        /// </summary>
+        public static PendingBattleKind BattleKind;
+
         public static bool HasPendingBattle => PendingBattle != null;
 
         public static void ClearBattle()
@@ -60,6 +76,7 @@ namespace Game.Gameplay
             PendingExpedition = null;
             PendingFinale = false;
             PendingBuffGold = 0;
+            BattleKind = PendingBattleKind.None;
             // PendingQuest НЕ чистится: квест продолжается в Campaign-сцене после боя.
         }
 

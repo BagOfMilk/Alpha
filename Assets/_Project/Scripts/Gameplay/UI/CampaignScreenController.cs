@@ -1040,6 +1040,13 @@ namespace Game.Gameplay.UI
                 _root.Q<Label>("map-note").text = $"Отряд не больше {_cfg.SquadSize} бойцов.";
                 return;
             }
+            // Предыдущая вылазка ещё не закрыта — читаемый отказ вместо исключения
+            // из LaunchExpedition (кнопка молча «не работала бы»).
+            if (c.ActiveExpedition != null && c.ActiveExpedition.Phase != ExpeditionPhase.Concluded)
+            {
+                _root.Q<Label>("map-note").text = UiText.ExpeditionStillOut;
+                return;
+            }
 
             var exp = c.LaunchExpedition(_pickedNode.Plan);
             var send = exp.TrySend(new List<string>(_squadPicks));
@@ -1063,6 +1070,7 @@ namespace Game.Gameplay.UI
             var cs = BuildExpeditionBattle(c, exp, _pickedNode);
             GameFlow.PendingBattle = cs;
             GameFlow.PendingExpedition = exp;
+            GameFlow.BattleKind = PendingBattleKind.Expedition;
             Telemetry.Event("battle_started",
                 ("kind", GameFlow.PendingFinale ? "finale" : "expedition"), ("node", _pickedNode.Id));
             SceneManager.LoadScene("Battle");
@@ -1332,6 +1340,7 @@ namespace Game.Gameplay.UI
                 return;
             }
             GameFlow.PendingBattle = cs;
+            GameFlow.BattleKind = PendingBattleKind.Quest;
             Telemetry.Event("battle_started",
                 ("kind", "quest"), ("quest", run.Def.Id), ("encounter", stage.EncounterId));
             SceneManager.LoadScene("Battle");

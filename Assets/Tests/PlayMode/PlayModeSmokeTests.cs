@@ -1,7 +1,9 @@
 using System.Collections;
 using System.IO;
+using Game.Core;
 using Game.Core.Combat;
 using Game.Core.Economy;
+using Game.Core.Expeditions;
 using Game.Core.Quests;
 using Game.Gameplay;
 using Game.Gameplay.UI;
@@ -153,6 +155,51 @@ namespace Game.Tests.PlayMode
                     "секции None в списке стройки быть не должно");
 
             GameFlow.Reset(); // не влияем на другие тесты
+        }
+
+        [UnityTest]
+        public IEnumerator PostponedQuest_DoesNotHijackExpeditionBattle()
+        {
+            GameFlow.Reset();
+            yield return SceneManager.LoadSceneAsync("Campaign", LoadSceneMode.Single);
+            yield return null;
+            var controller = Object.FindFirstObjectByType<CampaignScreenController>();
+            controller.OnStartCampaign(); // пролог взят: PendingQuest != null
+
+            Assert.IsNotNull(GameFlow.PendingQuest, "квест висит (игрок его отложил)");
+
+            // Имитируем handoff боя ВЫЛАЗКИ при отложенном квесте.
+            var campaign = GameFlow.Campaign;
+            var exp = campaign.LaunchExpedition(DefaultWorld.NewMap().Get("east_road").Plan);
+            Assert.AreEqual(ExpeditionSendResult.Success, exp.TrySend(new[] { "leader" }));
+            campaign.DepartExpedition();
+            GameFlow.PendingExpedition = exp;
+            GameFlow.BattleKind = PendingBattleKind.Expedition;
+
+            Assert.AreEqual(PendingBattleKind.Expedition, GameFlow.BattleKind,
+                "бой вылазки помечен как вылазочный — отложенный квест его не перехватит");
+            Assert.IsNotNull(campaign.ActiveExpedition);
+
+            // Исход боя вылазки обязан закрывать ИМЕННО вылазку.
+            var cs = new CombatState(CombatDemo.BuildArena(), campaign.Cfg, new ScriptedRng(1, 100, 5));
+            cs.AddUnit(CombatUnit.FromCompanion(campaign.Roster.Get("leader"),
+                DefaultContent.Rifle(), campaign.Cfg), CombatDemo.SquadSpawns[0]);
+            var dummy = new UnitProfile
+            {
+                DisplayName = "мишень", MaxHp = 1, MaxAp = 8, Accuracy = 1,
+                Initiative = 0, CanBeDowned = false
+            };
+            cs.AddUnit(new CombatUnit("e", Side.Enemy, dummy, DefaultContent.Pistol()),
+                CombatDemo.SquadSpawns[1]);
+            cs.Begin();
+            Assert.AreEqual(CombatActionResult.Success, cs.Attack("e"));
+            Assert.AreEqual(CombatOutcome.Victory, cs.Outcome);
+
+            campaign.ConcludeExpedition(cs);
+            Assert.IsNull(campaign.ActiveExpedition, "вылазка завершена, а не залипла навсегда");
+            Assert.IsNotNull(GameFlow.PendingQuest, "отложенный квест при этом цел");
+
+            GameFlow.Reset();
         }
 
         [UnityTest]

@@ -64,6 +64,7 @@ namespace Game.Gameplay.UI
         public const string QuestBusyNote = "Сначала закончи текущее дело.";
         public const string QuestNoSquad = "Некому идти: бойцы выбыли или на лечении. Отложи дело и подлечи отряд.";
         public const string QuestPostpone = "Отложить (в город)";
+        public const string ExpeditionStillOut = "Отряд ещё не вернулся из прошлой вылазки.";
         public const string QuestResume = "Продолжить: {0}";
         public const string IntroAck = "Осмотреться в поселении";
         public const string GateNeedSkill = " (нужно: {0} ≥ {1})";

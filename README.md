@@ -101,7 +101,7 @@ powershell -File tools/run-tests.ps1
 Гоняет EditMode + PlayMode через Unity batchmode и падает с ненулевым кодом при
 провале. В редакторе — **Window → General → Test Runner**.
 
-**283 EditMode-теста + 6 PlayMode-смоуков** (сцены Campaign/Battle/Boot, файловый round-trip сейва): производные
+**283 EditMode-теста + 7 PlayMode-смоуков** (сцены Campaign/Battle/Boot, файловый round-trip сейва): производные
 статы, прокачка, проверки, трейты/шрамы, агрегатор модификаторов, петля базы,
 боевое ядро (укрытия/LOS, попадание/граза, конвейер урона, ходы и состояния,
 даун/стабилизация, Strike-метр), экспедиции (отправка/возврат, последствия,
@@ -271,7 +271,7 @@ docs/
   города** (инциденты/кризисы/достройки больше не происходят молча) и блок
   отношений с выбором цели Дипломатии.
 - **Баланс data-driven** (`BalanceConfig` + `BalanceConfigAsset`), **283 EditMode +
-  6 PlayMode** теста, сцены Campaign/Battle/Boot, `tools/run-tests.ps1`.
+  7 PlayMode** тестов, сцены Campaign/Battle/Boot, `tools/run-tests.ps1`.
 
 ## Дальше по плану
 

@@ -361,7 +361,10 @@ namespace Game.Gameplay.UI
 
             // Квестовый бой (US-13.1/17.1): последствия в ростер как у вылазки, но без
             // дороги/лута — награду даёт Outcome-этап; шаг квеста играется в Campaign.
-            if (GameFlow.PendingQuest != null)
+            // Ветка выбирается по ТИПУ боя, а не по «висит ли квест»: отложенный
+            // квест не должен перехватывать исход боя вылазки (иначе вылазка не
+            // завершается никогда, а этап квеста засчитывается чужим боем).
+            if (GameFlow.BattleKind == PendingBattleKind.Quest && GameFlow.PendingQuest != null)
             {
                 var qReport = QuestCombat.ApplyToRoster(_cs, campaign.Roster, campaign.Cfg,
                     scarPicker: null, inventory: campaign.Base.Inventory);
