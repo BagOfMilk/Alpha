@@ -54,7 +54,31 @@ namespace Game.Core.Items
                 foreach (var m in Definition.Effect.ExtraModifiers()) yield return m;
         }
 
-        /// <summary>Крафт-апгрейд: поднять редкость и пере-катать роллы на новую магнитуду.</summary>
+        /// <summary>
+        /// Крафт-апгрейд (US-6.3): поднимает редкость и МАСШТАБИРУЕТ уже выпавшие
+        /// значения новым множителем — без нового броска. Так апгрейд монотонен:
+        /// раньше пере-ролл мог выдать значение НИЖЕ прежнего (диапазоны редкостей
+        /// перекрываются), и игрок платил дефицитным крафт-компонентом за просадку.
+        /// Побочно снимается и сейв-скам (детерминированно, RNG не участвует).
+        /// </summary>
+        internal void UpgradeTo(Rarity rarity)
+        {
+            if (Definition.IsNamed) return; // именные фиксированы (US-6.1)
+            double from = RarityTuning.MagnitudeMultiplier(Rarity);
+            double to = RarityTuning.MagnitudeMultiplier(rarity);
+            Rarity = rarity;
+            if (from <= 0) return;
+
+            for (int i = 0; i < _mods.Count; i++)
+            {
+                var m = _mods[i];
+                int scaled = (int)Math.Round(m.Value * to / from, MidpointRounding.AwayFromZero);
+                if (scaled == (int)m.Value) scaled = (int)m.Value + 1; // апгрейд обязан быть заметен
+                _mods[i] = new StatModifier(m.Stat, scaled, m.Mode, m.Source);
+            }
+        }
+
+        /// <summary>Пере-катать роллы на заданной редкости (генерация дропа/тесты).</summary>
         internal void RerollAt(Rarity rarity, IRng rng) => Resolve(rarity, rng);
 
         private void Resolve(Rarity rarity, IRng rng)

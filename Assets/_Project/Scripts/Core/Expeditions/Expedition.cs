@@ -110,7 +110,9 @@ namespace Game.Core.Expeditions
             foreach (var id in _squadIds)
             {
                 var c = _base.Roster.Get(id);
-                if (c == null) continue;
+                // Мертвеца на арену не выпускаем: кризис «Напряжения» мог убить
+                // бойца отряда прямо на марше (дни дороги ТУДА — это ход времени).
+                if (c == null || !c.IsAlive) continue;
                 units.Add(CombatUnit.FromCompanion(c, armory != null ? armory(c) : null, _cfg, abilityCatalog));
             }
             return units;
@@ -140,12 +142,15 @@ namespace Game.Core.Expeditions
                 if (unit.Side != Side.Player || unit.SourceCompanionId == null) continue;
                 var comp = _base.Roster.Get(unit.SourceCompanionId);
                 if (comp == null) continue;
+                // Уже мёртв ВНЕ боя (кризис на марше) — не «воскрешать» его исходом боя.
+                if (!comp.IsAlive && unit.LifeState != UnitLifeState.Dead) continue;
 
                 var oc = new CompanionOutcome(comp.Id);
                 switch (unit.LifeState)
                 {
                     case UnitLifeState.Dead:
                         comp.Kill(); // смерть насовсем (US-4.1)
+                        _base.Inventory.RecoverGearFrom(comp); // гир возвращается с телом
                         oc.Died = true;
                         break;
 
@@ -210,6 +215,26 @@ namespace Game.Core.Expeditions
 
             var back = _base.AdvanceDays(Plan.TravelDaysBack); // лечение тикает в дороге
             report.RecoveredOnReturn.AddRange(back.Recovered);
+            // Город жил своей жизнью, пока отряда не было: иначе инциденты дороги
+            // (вплоть до кризисной гибели) и достройки не доезжали ни до отчёта,
+            // ни до хроники — здание просто молча появлялось в списке позиций.
+            report.IncidentsWhileAway.AddRange(back.Incidents);
+            report.ConstructionCompletedWhileAway.AddRange(back.ConstructionCompleted);
+
+            // Кризис дороги домой бьёт уже ПОСЛЕ сбора исходов боя — сверяем, иначе
+            // отчёт спорит сам с собой: «ранение Light» у того, кто дома мёртв.
+            foreach (var id in _squadIds)
+            {
+                var comp = _base.Roster.Get(id);
+                if (comp == null || comp.IsAlive) continue;
+                report.RecoveredOnReturn.Remove(id);
+                var oc = report.Companions.Find(o => o.CompanionId == id);
+                if (oc == null) { oc = new CompanionOutcome(id); report.Companions.Add(oc); }
+                if (oc.Died) continue; // погиб в бою — уже учтено
+                oc.Died = true;
+                oc.DiedOnReturn = true;
+                oc.Injury = InjuryTier.None;
+            }
 
             Phase = ExpeditionPhase.Concluded;
             return report;

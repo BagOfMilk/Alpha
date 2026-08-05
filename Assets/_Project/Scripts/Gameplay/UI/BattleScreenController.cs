@@ -363,7 +363,8 @@ namespace Game.Gameplay.UI
             // дороги/лута — награду даёт Outcome-этап; шаг квеста играется в Campaign.
             if (GameFlow.PendingQuest != null)
             {
-                var qReport = QuestCombat.ApplyToRoster(_cs, campaign.Roster, campaign.Cfg);
+                var qReport = QuestCombat.ApplyToRoster(_cs, campaign.Roster, campaign.Cfg,
+                    scarPicker: null, inventory: campaign.Base.Inventory);
                 if (qReport.ProtagonistDied) campaign.Outcome = CampaignOutcome.Lost;
                 GameFlow.LastQuestStep = GameFlow.PendingQuest.ResolveCombat(victory);
                 // Терминал достигнут прямо боем (награда уже начислена Finalize):
@@ -381,6 +382,10 @@ namespace Game.Gameplay.UI
             GameFlow.LastReport = campaign.ConcludeExpedition(_cs);
             Telemetry.Event("battle_ended",
                 Telemetry.CombatStats(_cs, GameFlow.PendingFinale ? "finale" : "expedition"));
+            // Инциденты дороги домой эмитим ЗДЕСЬ, а не в ShowReport: тот вызывается
+            // при каждом пересоздании контроллера и дублировал бы события воронки.
+            foreach (var incident in GameFlow.LastReport.IncidentsWhileAway)
+                Telemetry.Incident(incident, "travel_back");
 
             // Бонус золота от «Снаряжения экспедиции» — банкуется только при победе.
             if (victory && GameFlow.PendingBuffGold > 0)

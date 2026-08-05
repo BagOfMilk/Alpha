@@ -10,6 +10,9 @@ namespace Game.Core.Expeditions
     {
         public string CompanionId;
         public bool Died;
+
+        /// <summary>Погиб не в бою, а по дороге домой (кризис «Напряжения» в городе).</summary>
+        public bool DiedOnReturn;
         public InjuryTier Injury = InjuryTier.None;
         public string ScarId; // null — без шрама
 
@@ -41,6 +44,16 @@ namespace Game.Core.Expeditions
 
         /// <summary>Кто успел полностью вылечиться уже по дороге домой.</summary>
         public readonly List<string> RecoveredOnReturn = new List<string>();
+
+        /// <summary>Что случилось в городе, пока отряд возвращался (инциденты/кризисы).</summary>
+        public readonly List<Threats.IncidentReport> IncidentsWhileAway = new List<Threats.IncidentReport>();
+
+        /// <summary>Стройки, достроившиеся, пока отряд возвращался.</summary>
+        public readonly List<string> ConstructionCompletedWhileAway = new List<string>();
+
+        /// <summary>Новый тир города, если он вырос за дни вылазки (0 — не рос, US-7.6).</summary>
+        public int CityTierAdvancedTo;
+        public int CityTierAdvancedFrom;
 
         /// <summary>Лут, добытый в этой вылазке и сложенный в сташ базы (только при победе).</summary>
         public readonly List<ItemInstance> LootDropped = new List<ItemInstance>();

@@ -88,16 +88,20 @@ namespace Game.Core.Expeditions
     {
         public static WorldMap NewMap()
         {
+            // Дроп-таблица на узлах (US-6.1): без неё вся ось «редкость/роллы/гир»
+            // не существовала для игрока — вылазка платила только ресурсами.
             return new WorldMap()
                 .Add(new WorldNode(new ExpeditionPlan("east_road", "Восточный тракт")
                 {
                     TravelDaysOut = 2, TravelDaysBack = 2,
-                    RewardGold = 100, RewardBuildingMaterial = 8, RewardCraftingMaterial = 5
+                    RewardGold = 100, RewardBuildingMaterial = 8, RewardCraftingMaterial = 5,
+                    DropTable = Items.DefaultItems.DropTable(), DropCount = 1
                 }))
                 .Add(new WorldNode(new ExpeditionPlan("rusted_works", "Ржавые цеха")
                 {
                     TravelDaysOut = 3, TravelDaysBack = 3,
-                    RewardGold = 60, RewardBuildingMaterial = 12, RewardCraftingMaterial = 8
+                    RewardGold = 60, RewardBuildingMaterial = 12, RewardCraftingMaterial = 8,
+                    DropTable = Items.DefaultItems.DropTable(), DropCount = 2 // дальняя точка щедрее
                 }).Tier(2)) // дальний источник материалов — открывается ростом города
                 .Add(new WorldNode(new ExpeditionPlan("horde_outskirts", "Окраина: лагерь орды")
                 {

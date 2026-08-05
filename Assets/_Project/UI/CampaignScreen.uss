@@ -354,6 +354,54 @@
     color: rgb(170, 210, 250);
 }
 
+.character-equipment {
+    margin-bottom: 6px;
+}
+
+.item-row {
+    flex-direction: row;
+    align-items: center;
+    margin: 2px 0;
+}
+
+.item-row > Label {
+    flex-grow: 1;
+    white-space: normal;
+}
+
+.item-row > Button {
+    margin-left: 4px;
+}
+
+.item-row--named > Label {
+    color: rgb(240, 220, 140);
+}
+
+.factions-list {
+    color: rgb(200, 195, 180);
+    font-size: 12px;
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.council-note {
+    color: rgb(220, 200, 150);
+    font-size: 12px;
+    white-space: normal;
+    margin: 2px 0;
+}
+
+.chronicle-list {
+    max-height: 200px;
+}
+
+.chronicle-line {
+    color: rgb(205, 200, 185);
+    font-size: 12px;
+    white-space: normal;
+    margin: 1px 0;
+}
+
 /* Отчёт */
 .report-headline {
     font-size: 16px;

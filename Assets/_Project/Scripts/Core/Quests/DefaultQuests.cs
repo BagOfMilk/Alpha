@@ -94,9 +94,10 @@ namespace Game.Core.Quests
                         SkillType.Mechanics, threshold: 4, onSuccess: 2, onFailure: 4)
                     .AsLethal());
 
-            // 2 — обезврежено.
-            q.Stage(QuestStage.OutcomeStage("defused", "Растяжка обезврежена. Проход чист.", success: true,
-                new QuestReward(xp: 70, gold: 60)));
+            // 2 — обезврежено: в схроне за растяжкой — именная винтовка (US-6.1).
+            q.Stage(QuestStage.OutcomeStage("defused", "Растяжка обезврежена. В схроне за ней — чужая винтовка.",
+                success: true,
+                new QuestReward(xp: 70, gold: 60).Item(Items.DefaultItems.Widowmaker())));
 
             // 3 — обход.
             q.Stage(QuestStage.OutcomeStage("detour", "Обошли длинным путём — дольше, но целы.", success: true,
@@ -116,8 +117,9 @@ namespace Game.Core.Quests
                 .Flavor("На рынке вымогают долю. Подслушал у лотков — можно вмешаться.")
                 .Stage(QuestStage.SocialCheck("confront", "Осадить вымогателей словом.",
                             CheckApproach.Intimidate, threshold: 3, onSuccess: 1, onFailure: 2))
-                .Stage(QuestStage.OutcomeStage("cowed", "Вымогатели отступили. На рынке выдохнули.", success: true,
-                    new QuestReward(xp: 40).WithSocial(new SocialConsequence().Faction(DefaultFactions.Traders, 6).Reputation(3).Tension(-4))))
+                .Stage(QuestStage.OutcomeStage("cowed", "Вымогатели отступили. Торговцы суют «подарок».", success: true,
+                    new QuestReward(xp: 40).Item(Items.DefaultItems.Whisper())
+                        .WithSocial(new SocialConsequence().Faction(DefaultFactions.Traders, 6).Reputation(3).Tension(-4))))
                 .Stage(QuestStage.OutcomeStage("escalated", "Слово не подействовало — стало только злее.", success: false,
                     new QuestReward().WithSocial(new SocialConsequence().Tension(4))));
         }
@@ -199,9 +201,10 @@ namespace Game.Core.Quests
                     .AsUtility()
                     .FailCost(new SocialConsequence().Tension(3)));
 
-            q.Stage(QuestStage.OutcomeStage("confirmed", "Разведка вернулась с картами лагерей. Времени мало, но оно есть.",
+            q.Stage(QuestStage.OutcomeStage("confirmed",
+                "Разведка вернулась с картами лагерей — и трофейным клинком. Времени мало, но оно есть.",
                 success: true,
-                new QuestReward(xp: 60, gold: 40)
+                new QuestReward(xp: 60, gold: 40).Item(Items.DefaultItems.Sting())
                     .WithSocial(new SocialConsequence().Reputation(4).Flag(SpineAct1Flag))));
 
             // Провал — тоже вперёд (спайн не встаёт колом): узнали меньше, шума больше.

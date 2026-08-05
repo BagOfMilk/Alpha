@@ -107,6 +107,7 @@ namespace Game.Core.Quests
                     if (canDie)
                     {
                         victim.Kill();
+                        _base.Inventory.RecoverGearFrom(victim); // гир возвращается с телом
                         report.CasualtyDied = true;
                         report.Notes.Add($"✝ {victim.DisplayName} погиб(ла) — насовсем.");
                     }

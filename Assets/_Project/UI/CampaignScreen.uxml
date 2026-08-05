@@ -45,9 +45,16 @@
                 <ui:VisualElement class="city-col">
                     <ui:Label text="Совет" class="panel-h2" />
                     <ui:VisualElement name="council-list" class="council-list" />
+                    <ui:Label name="council-note" class="council-note" />
                     <ui:Label text="Доска квестов" class="panel-h2" />
                     <ui:VisualElement name="quest-board" class="quest-board" />
                     <ui:Label name="city-signals" class="city-signals" />
+                </ui:VisualElement>
+                <ui:VisualElement class="city-col">
+                    <ui:Label text="Отношения" class="panel-h2" />
+                    <ui:Label name="factions-list" class="factions-list" />
+                    <ui:Label text="Хроника" class="panel-h2" />
+                    <ui:ScrollView name="chronicle-list" class="chronicle-list" />
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement class="city-actions">
@@ -101,6 +108,13 @@
                     <ui:Label text="Навыки" class="panel-h2" />
                     <ui:Label name="character-points" class="character-points" />
                     <ui:ScrollView name="character-skills" class="character-skills" />
+                </ui:VisualElement>
+                <ui:VisualElement class="character-col character-col--wide">
+                    <ui:Label text="Снаряжение" class="panel-h2" />
+                    <ui:VisualElement name="character-equipment" class="character-equipment" />
+                    <ui:Label text="Сташ отряда" class="panel-h2" />
+                    <ui:Label name="stash-note" class="character-points" />
+                    <ui:ScrollView name="character-stash" class="character-skills" />
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:Button name="character-back-button" text="В город" class="action-btn primary" />

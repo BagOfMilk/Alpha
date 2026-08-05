@@ -47,6 +47,10 @@ namespace Game.Core.Balance
         /// </summary>
         public int SkillMax = 8;
 
+        /// <summary>Цена апгрейда редкости предмета в крафт-компоненте (US-6.3) —
+        /// единственный сток ресурса, пока нет аугментов/модов.</summary>
+        public int CraftUpgradeCost = 4;
+
         // ======== Производные из атрибутов (база ДО модификаторов) ========
         // Мелкие числа: HP ~6–20, AP ~8–10 (Прил. Б).
         public double HpBase = 4.0;            // HP = HpBase + Strength*HpPerStrength

@@ -264,6 +264,86 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(report.Companions.Find(o => o.CompanionId == "prot").Died);
         }
 
+        // ---- Смерть не съедает снаряжение и не воскрешает мертвецов (итерация 19) ----
+        [Test]
+        public void Death_ReturnsGearToStash()
+        {
+            var cfg = new BalanceConfig();
+            var (baseState, roster, _) = MakeBase(cfg);
+            var fighter = AddComp(roster, "a");
+            AddComp(roster, "ally");
+            fighter.Equipment.Equip(ItemInstance.NamedFrom(DefaultItems.Widowmaker()));
+
+            var exp = new Expedition(baseState, Plan(), cfg);
+            exp.TrySend(new[] { "a", "ally" });
+            exp.Depart();
+
+            // Тот же расклад, что в сценарии протагониста: враг сбивает бойца, окно
+            // спасения истекает — смерть насовсем; союзник добивает врага.
+            var cs = new CombatState(new GridMap(12, 1), cfg, new ScriptedRng(1, 100, 10, 1, 100, 5));
+            var units = exp.BuildCombatUnits(_ => W(5));
+            cs.AddUnit(units[0], new GridPos(0, 0)); // a
+            cs.AddUnit(units[1], new GridPos(1, 0)); // ally
+            cs.AddUnit(Enemy("e", 10, hp: 3, dmg: 10), new GridPos(5, 0));
+            cs.Begin();
+
+            Assert.AreEqual(CombatActionResult.Success, cs.Attack("u_a")); // боец падает
+            cs.EndTurn();
+            cs.EndTurn();
+            cs.EndTurn(); // окно вышло — смерть
+            Assert.AreEqual(UnitLifeState.Dead, cs.GetUnit("u_a").LifeState);
+
+            cs.Attack("e");
+            Assert.AreEqual(CombatOutcome.Victory, cs.Outcome);
+            exp.Conclude(cs);
+
+            Assert.IsFalse(fighter.IsAlive);
+            Assert.IsNull(fighter.Equipment.Get(EquipSlot.Weapon), "гир снят с погибшего");
+            Assert.AreEqual(1, baseState.Inventory.Count, "и вернулся в сташ, а не исчез навсегда");
+        }
+
+        [Test]
+        public void RecoverGearFrom_MovesEverySlot_ToStash()
+        {
+            var inventory = new Inventory();
+            var comp = new Companion("c", new AttributeBlock(3, 3, 3, 3), 4);
+            comp.Equipment.Equip(new ItemInstance(DefaultItems.ArmorVest(), Rarity.Rare, new ScriptedRng(2, 2)));
+            comp.Equipment.Equip(new ItemInstance(DefaultItems.TargetingScope(), Rarity.Common, new ScriptedRng(3, 2)));
+
+            Assert.AreEqual(2, inventory.RecoverGearFrom(comp));
+            Assert.AreEqual(2, inventory.Count);
+            Assert.IsNull(comp.Equipment.Get(EquipSlot.Armor));
+            Assert.IsNull(comp.Equipment.Get(EquipSlot.Accessory));
+        }
+
+        [Test]
+        public void DeadOnTheMarch_DoesNotFight_AndIsNotResurrected()
+        {
+            var (baseState, roster, cfg) = MakeBase();
+            AddComp(roster, "a");
+            AddComp(roster, "b");
+
+            var exp = new Expedition(baseState, Plan(), cfg);
+            Assert.AreEqual(ExpeditionSendResult.Success, exp.TrySend(new[] { "a", "b" }));
+            exp.Depart();
+
+            roster.Get("b").Kill(); // кризис «Напряжения» на днях марша
+
+            var units = exp.BuildCombatUnits(_ => W(5));
+            Assert.AreEqual(1, units.Count, "мертвец не выходит на арену");
+
+            var cs = new CombatState(new GridMap(12, 1), cfg, new ScriptedRng(1, 100, 5));
+            cs.AddUnit(units[0], new GridPos(0, 0));
+            cs.AddUnit(Enemy("e", 0, hp: 3, dmg: 5), new GridPos(5, 0));
+            cs.Begin();
+            cs.Attack("e");
+
+            var report = exp.Conclude(cs);
+            Assert.IsFalse(roster.Get("b").IsAlive, "исход боя не воскрешает погибшего в городе");
+            var outcome = report.Companions.Find(o => o.CompanionId == "b");
+            Assert.IsTrue(outcome == null || outcome.Died, "отчёт не выдаёт мертвеца за живого участника");
+        }
+
         // ---- Лут с вылазки (Эпик 6/15) ----
         /// <summary>Победа дропает в сташ базы: рандом из таблицы + заработанные именные.</summary>
         private static ExpeditionReport RunVictoryWith(BaseState baseState, BalanceConfig cfg,

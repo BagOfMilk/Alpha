@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Combat;
@@ -146,6 +147,47 @@ namespace Game.Tests.EditMode
 
             var epic = new ItemInstance(DefaultItems.ArmorVest(), Rarity.Epic, new ScriptedRng(2, 2));
             Assert.AreEqual(CraftResult.AlreadyMaxRarity, CraftSystem.TryUpgrade(epic, poor, 0, new ScriptedRng()));
+        }
+
+        // ---- Апгрейд монотонен (итерация 19): за дефицитный компонент нельзя ослабнуть ----
+        [Test]
+        public void Craft_Upgrade_NeverLowersStats()
+        {
+            var ledger = new ResourceLedger();
+            ledger.Add(ResourceType.CraftingMaterial, 100);
+
+            // Максимальный ролл на Common: пере-ролл легко дал бы значение ниже.
+            var item = new ItemInstance(DefaultItems.ScavengedRifle(), Rarity.Common, new ScriptedRng(5));
+            var before = new List<StatModifier>(item.StatMods);
+            Assert.Greater(before.Count, 0);
+
+            Assert.AreEqual(CraftResult.Success, CraftSystem.TryUpgrade(item, ledger, 4, new ScriptedRng(2)));
+            Assert.AreEqual(Rarity.Uncommon, item.Rarity);
+
+            foreach (var old in before)
+            {
+                double now = 0;
+                foreach (var m in item.StatMods)
+                    if (m.Stat == old.Stat) { now = m.Value; break; }
+                Assert.Greater(now, old.Value,
+                    $"{old.Stat}: апгрейд обязан улучшать, а не перекатывать вслепую");
+            }
+        }
+
+        [Test]
+        public void Craft_Upgrade_IsDeterministic_NoSaveScum()
+        {
+            var ledger = new ResourceLedger();
+            ledger.Add(ResourceType.CraftingMaterial, 100);
+            var a = new ItemInstance(DefaultItems.ArmorVest(), Rarity.Common, new ScriptedRng(2, 2));
+            var b = new ItemInstance(DefaultItems.ArmorVest(), Rarity.Common, new ScriptedRng(2, 2));
+
+            CraftSystem.TryUpgrade(a, ledger, 4, new ScriptedRng(1));
+            CraftSystem.TryUpgrade(b, ledger, 4, new ScriptedRng(9)); // другой rng — результат тот же
+
+            for (int i = 0; i < a.StatMods.Count; i++)
+                Assert.AreEqual(a.StatMods[i].Value, b.StatMods[i].Value,
+                    "результат апгрейда не зависит от RNG — перезагрузкой его не переролить");
         }
 
         // ---- Лут-генерация ----

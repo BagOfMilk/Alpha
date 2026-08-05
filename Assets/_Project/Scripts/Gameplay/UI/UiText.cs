@@ -62,7 +62,9 @@ namespace Game.Gameplay.UI
         public const string QuestInWork = " (в работе)";
         public const string QuestCompletedPrefix = "Завершено: ";
         public const string QuestBusyNote = "Сначала закончи текущее дело.";
-        public const string QuestNoSquad = "Некому идти: бойцы выбыли или на лечении. Вернись позже.";
+        public const string QuestNoSquad = "Некому идти: бойцы выбыли или на лечении. Отложи дело и подлечи отряд.";
+        public const string QuestPostpone = "Отложить (в город)";
+        public const string QuestResume = "Продолжить: {0}";
         public const string IntroAck = "Осмотреться в поселении";
         public const string GateNeedSkill = " (нужно: {0} ≥ {1})";
         public const string GateNeedFaction = " (нужна репутация: {0} ≥ {1})";
@@ -87,6 +89,132 @@ namespace Game.Gameplay.UI
         public const string NoTrainAntagonist = "Ушёл в антагонисты. Очки навыков не тратятся.";
         public const string ToMainMenu = "В главное меню";
         public const string SavedToAutosave = "Кампания записана в автосейв — «Продолжить» вернёт в город.";
+
+        // Снаряжение и крафт (US-6.1/6.2/6.3)
+        public const string Equip = "Надеть";
+        public const string Unequip = "Снять";
+        public const string SlotEmpty = "— пусто —";
+        public const string StashEmpty = "Сташ пуст: трофеи приносят вылазки и квесты.";
+        public const string CraftHint = "Улучшение: {0} крафт-компонента (в наличии {1}).";
+        public const string CraftNeedsWorkshop = "Улучшение недоступно: нужна Мастерская.";
+        public const string CraftUpgrade = "Улучшить";
+        public const string CraftFailed = "Не вышло: ";
+
+        // Хроника города (US-8.2/11.x)
+        public const string ChronicleTitle = "Хроника";
+        public const string ChronicleEmpty = "Пока тихо.";
+        public const string IncidentResolved = "улажено";
+        public const string IncidentFailed = "провал";
+        public const string IncidentNobody = "пост пустовал";
+        public const string ChronicleRecovered = "снова в строю";
+        public const string ChronicleBuilt = "достроено:";
+        public const string ChronicleCityGrew = "ГОРОД ВЫРОС: тир {0} — открылись новые точки на карте";
+
+        // Фракции и влияние (Эпик 10)
+        public const string FactionsTitle = "Отношения";
+        public const string InfluenceLine = "Влияние: {0} · репутация города: {1}";
+        public const string DiplomacyTarget = "Дипломатия: кого тянем";
+        public const string CouncilResultOk = "Готово: ";
+        public const string CouncilResultFail = "Отказ: ";
+
+        // Карта: причины блокировки узла (US-1.1/17.3)
+        public const string LockNeedTier = "нужен тир {0}";
+        public const string LockNeedStory = "по сюжету";
+        public const string LockDone = "пройдено";
+
+        /// <summary>Полосы отношений с фракцией (enum — идентификатор, не текст игроку).</summary>
+        public static string FactionBandName(Game.Core.Factions.FactionBand band)
+        {
+            switch (band)
+            {
+                case Game.Core.Factions.FactionBand.Hostile: return "враждебны";
+                case Game.Core.Factions.FactionBand.Cold: return "холодны";
+                case Game.Core.Factions.FactionBand.Neutral: return "нейтральны";
+                case Game.Core.Factions.FactionBand.Warm: return "расположены";
+                case Game.Core.Factions.FactionBand.Allied: return "союзники";
+                default: return band.ToString();
+            }
+        }
+
+        /// <summary>Полосы репутации города (US-17.2: наружу — полоса, не число).</summary>
+        public static string RepBandName(Game.Core.Factions.ReputationBand band)
+        {
+            switch (band)
+            {
+                case Game.Core.Factions.ReputationBand.Unknown: return "нас не знают";
+                case Game.Core.Factions.ReputationBand.Known: return "о нас слышали";
+                case Game.Core.Factions.ReputationBand.Respected: return "нас уважают";
+                case Game.Core.Factions.ReputationBand.Renowned: return "о нас говорят везде";
+                default: return band.ToString();
+            }
+        }
+
+        public static string RarityName(Game.Core.Items.Rarity rarity)
+        {
+            switch (rarity)
+            {
+                case Game.Core.Items.Rarity.Common: return "обычн.";
+                case Game.Core.Items.Rarity.Uncommon: return "необычн.";
+                case Game.Core.Items.Rarity.Rare: return "редк.";
+                case Game.Core.Items.Rarity.Epic: return "эпич.";
+                default: return rarity.ToString();
+            }
+        }
+
+        public static string CrisisName(Game.Core.Threats.CrisisEffect crisis)
+        {
+            switch (crisis)
+            {
+                case Game.Core.Threats.CrisisEffect.PopulationExodus: return "отток населения";
+                case Game.Core.Threats.CrisisEffect.KillCompanion: return "погиб напарник";
+                case Game.Core.Threats.CrisisEffect.HostileFaction: return "фракция встала против города";
+                default: return crisis.ToString();
+            }
+        }
+
+        /// <summary>Почему действие совета не прошло — человеческим языком.</summary>
+        public static string CouncilFailReason(Game.Core.Council.CouncilActionResult result)
+        {
+            switch (result)
+            {
+                case Game.Core.Council.CouncilActionResult.CannotAffordGold: return "не хватает золота";
+                case Game.Core.Council.CouncilActionResult.CannotAffordInfluence: return "не хватает влияния";
+                case Game.Core.Council.CouncilActionResult.OnCooldown: return "ещё не готовы";
+                case Game.Core.Council.CouncilActionResult.Locked: return "недоступно";
+                case Game.Core.Council.CouncilActionResult.InvalidTarget: return "не та цель";
+                default: return result.ToString();
+            }
+        }
+
+        /// <summary>Русские имена слотов экипировки.</summary>
+        public static string SlotName(Game.Core.Items.EquipSlot slot)
+        {
+            switch (slot)
+            {
+                case Game.Core.Items.EquipSlot.Weapon: return "Оружие";
+                case Game.Core.Items.EquipSlot.Armor: return "Броня";
+                case Game.Core.Items.EquipSlot.Accessory: return "Аксессуар";
+                default: return slot.ToString();
+            }
+        }
+
+        /// <summary>Короткие имена производных статов — для строк предметов.</summary>
+        public static string StatShort(Game.Core.Stats.DerivedStat stat)
+        {
+            switch (stat)
+            {
+                case Game.Core.Stats.DerivedStat.MaxHp: return "HP";
+                case Game.Core.Stats.DerivedStat.ActionPoints: return "AP";
+                case Game.Core.Stats.DerivedStat.Accuracy: return "точн.";
+                case Game.Core.Stats.DerivedStat.Defense: return "защ.";
+                case Game.Core.Stats.DerivedStat.Initiative: return "иниц.";
+                case Game.Core.Stats.DerivedStat.CritChance: return "крит";
+                case Game.Core.Stats.DerivedStat.Armor: return "броня";
+                case Game.Core.Stats.DerivedStat.Resolve: return "воля";
+                case Game.Core.Stats.DerivedStat.Carry: return "перенос";
+                default: return stat.ToString();
+            }
+        }
 
         /// <summary>Русские имена навыков (enum — идентификатор, не текст для игрока).</summary>
         public static string SkillName(Game.Core.Stats.SkillType skill)

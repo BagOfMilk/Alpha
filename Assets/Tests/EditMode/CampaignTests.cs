@@ -86,6 +86,57 @@ namespace Game.Tests.EditMode
                 withPrep, "смерть бойца ослабляет оборону");
         }
 
+        // ---- Рост города и снаряжение (итерация 19) ----
+        [Test]
+        public void AdvanceDays_GrowsCityTier_WhenRequirementsMet_AndOpensMapNode()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            var map = DefaultWorld.NewMap();
+            var rusted = map.Get("rusted_works");
+
+            Assert.IsFalse(map.IsAvailable(rusted, campaign.Base.CityTier, campaign.Flags),
+                "тир-2 точка заперта на старте");
+
+            // Условия тира 2 (US-7.6): население, одна спец-стройка, репутация.
+            campaign.Base.RestoreTime(campaign.Base.CurrentDay,
+                cfg.TierPopulationPerStep * 2, campaign.Base.CityTier);
+            campaign.Base.MarkBuilt(BaseSectionType.Market);
+            campaign.Factions.AdjustReputation(cfg.TierReputationPerStep);
+
+            var report = campaign.AdvanceDays(1);
+            Assert.AreEqual(2, campaign.Base.CityTier, "ход времени двигает тир — иначе он навсегда 1");
+            Assert.AreEqual(2, report.CityTierAdvancedTo, "рост города попадает в сводку для UI");
+            Assert.IsTrue(map.IsAvailable(rusted, campaign.Base.CityTier, campaign.Flags),
+                "новый тир открывает точку карты");
+        }
+
+        [Test]
+        public void Armory_PrefersEquippedWeapon_OverRoleDefault()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            var medic = campaign.Roster.Get("medic");
+
+            var byRole = Game.Gameplay.UI.CampaignScreenController.Armory(medic);
+            Assert.AreEqual("pistol", byRole.Id, "без снаряжения — стартовый ствол роли");
+
+            medic.Equipment.Equip(ItemInstance.NamedFrom(DefaultItems.Widowmaker()));
+            var equipped = Game.Gameplay.UI.CampaignScreenController.Armory(medic);
+            Assert.AreEqual(StatusType.Bleeding, equipped.StatusOnHit,
+                "надетый именной ствол доезжает до боя (US-6.2)");
+        }
+
+        [Test]
+        public void WorldNodes_HaveDropTables_SoLootExists()
+        {
+            var map = DefaultWorld.NewMap();
+            Assert.IsNotNull(map.Get("east_road").Plan.DropTable, "у ближней точки есть дроп");
+            Assert.Greater(map.Get("east_road").Plan.DropCount, 0);
+            Assert.Greater(map.Get("rusted_works").Plan.DropCount,
+                map.Get("east_road").Plan.DropCount, "дальняя точка щедрее");
+        }
+
         [Test]
         public void Readiness_MaxedRoster_StillNeedsCityInvestment()
         {

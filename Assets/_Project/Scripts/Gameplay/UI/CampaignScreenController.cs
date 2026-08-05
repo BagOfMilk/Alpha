@@ -7,6 +7,7 @@ using Game.Core.Combat;
 using Game.Core.Council;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
+using Game.Core.Items;
 using Game.Core.Quests;
 using Game.Core.Saves;
 using Game.Core.Stats;
@@ -40,6 +41,11 @@ namespace Game.Gameplay.UI
         private WorldMap _worldMap;
         private WorldNode _pickedNode;
         private string _openCharacterId; // открытая карточка бойца (панель персонажа)
+        private string _diplomacyTarget; // цель действия совета «Дипломатия» (US-8.4)
+
+        /// <summary>Хроника города живёт в GameFlow — переживает Battle-сцену (US-17.2).</summary>
+        private const int ChronicleLimit = 12;
+        private static List<string> Chronicle => GameFlow.Chronicle;
         private readonly HashSet<string> _squadPicks = new HashSet<string>();
 
         private VisualElement _root;
@@ -172,6 +178,8 @@ namespace Game.Gameplay.UI
             }
 
             GameFlow.Campaign = restored;
+            GameFlow.ResetChronicle(); // лента принадлежит прогону, а не процессу
+            GameFlow.LastReport = null; // отчёт прошлой вылазки к загруженной кампании не относится
             AttachCouncilIfMissing();
             _onboarding = new OnboardingFlow();
             AdvanceOnboarding(restored, silent: true); // фаст-форвард из флагов
@@ -276,6 +284,7 @@ namespace Game.Gameplay.UI
             if (!string.IsNullOrEmpty(name)) _builder.DisplayName = name;
             var c = Campaign.NewGame(_cfg, _builder.Build("leader"));
             GameFlow.Campaign = c;
+            GameFlow.ResetChronicle(); // лента прошлого прогона не протекает в новый
             AttachCouncilIfMissing();
             _onboarding = new OnboardingFlow();
 
@@ -375,7 +384,7 @@ namespace Game.Gameplay.UI
         {
             var c = GameFlow.Campaign;
             if (c == null || c.Outcome != CampaignOutcome.Ongoing) return;
-            c.AdvanceDays(1);
+            RecordCycle(c.AdvanceDays(1));
             AdvanceOnboarding(c);
             Telemetry.Event("day_advanced",
                 ("gold", c.Base.Resources.Get(ResourceType.Gold)),
@@ -386,6 +395,64 @@ namespace Game.Gameplay.UI
                 ("readiness", c.Base.ThreatsSystem != null ? c.Base.ThreatsSystem.Readiness.Band.ToString() : "-"));
             AutoSave.Write(c);
             RefreshCity();
+        }
+
+        /// <summary>
+        /// Хроника города (US-8.2/11.x): раньше CycleReport выбрасывался — инциденты,
+        /// кризисы (вплоть до гибели напарника), выздоровления и достройки
+        /// происходили молча, и стимул занимать позиции был нечитаем.
+        /// </summary>
+        private void RecordCycle(Game.Core.Base.CycleReport report)
+        {
+            if (report == null) return;
+            var c = GameFlow.Campaign;
+
+            foreach (var incident in report.Incidents)
+            {
+                string who = incident.ResolvedById != null
+                    ? NameOfCompanion(c, incident.ResolvedById) : UiText.IncidentNobody;
+                string line = $"[{report.ToDay}] {incident.DisplayName}: " +
+                              (incident.Success ? UiText.IncidentResolved : UiText.IncidentFailed) + $" ({who})";
+                if (incident.CrisisApplied != Game.Core.Threats.CrisisEffect.None)
+                {
+                    line += "\n    ⚠ " + UiText.CrisisName(incident.CrisisApplied);
+                    if (incident.CrisisVictimId != null)
+                        line += ": " + NameOfCompanion(c, incident.CrisisVictimId);
+                }
+                AddChronicle(line);
+                Telemetry.Incident(incident, "home");
+            }
+
+            foreach (var id in report.Recovered)
+                AddChronicle($"[{report.ToDay}] {NameOfCompanion(c, id)}: {UiText.ChronicleRecovered}");
+            foreach (var built in report.ConstructionCompleted)
+                AddChronicle($"[{report.ToDay}] {UiText.ChronicleBuilt} {built}");
+            ReportCityGrowth(report.CityTierAdvancedFrom, report.CityTierAdvancedTo, report.ToDay);
+        }
+
+        /// <summary>Каждый пройденный тир — отдельной строкой: рост 1→3 не должен
+        /// выглядеть как один шаг ни в ленте, ни в воронке телеметрии.</summary>
+        private static void ReportCityGrowth(int from, int to, int day)
+        {
+            if (to <= 0) return;
+            int first = from > 0 ? from + 1 : to;
+            for (int tier = first; tier <= to; tier++)
+            {
+                AddChronicle($"[{day}] {string.Format(UiText.ChronicleCityGrew, tier)}");
+                Telemetry.Event("city_tier_up", ("tier", tier));
+            }
+        }
+
+        private static string NameOfCompanion(Campaign c, string id)
+        {
+            var comp = c != null ? c.Roster.Get(id) : null;
+            return comp != null ? comp.DisplayName : id;
+        }
+
+        private static void AddChronicle(string line)
+        {
+            Chronicle.Add(line);
+            while (Chronicle.Count > ChronicleLimit) Chronicle.RemoveAt(0);
         }
 
         private void OnOpenMap()
@@ -507,10 +574,25 @@ namespace Game.Gameplay.UI
                 buildList.Add(btn);
             }
 
-            // Совет (US-8.4).
+            // Совет (US-8.4): результат действия больше не проглатывается молча,
+            // а Дипломатия тянет ВЫБРАННУЮ фракцию, а не всегда Гарнизон.
             var councilList = _root.Q<VisualElement>("council-list");
             councilList.Clear();
+            var councilNote = _root.Q<Label>("council-note");
+            if (councilNote != null) councilNote.text = ""; // результат — на один рендер
             if (c.Council != null)
+            {
+                var factionChoices = new List<string>();
+                foreach (var st in c.Factions.Standings) factionChoices.Add(st.Faction.DisplayName);
+                if (factionChoices.Count > 0)
+                {
+                    if (_diplomacyTarget == null || !factionChoices.Contains(_diplomacyTarget))
+                        _diplomacyTarget = factionChoices[0];
+                    var target = new DropdownField(UiText.DiplomacyTarget, factionChoices, _diplomacyTarget);
+                    target.RegisterValueChangedCallback(e => { _diplomacyTarget = e.newValue; });
+                    councilList.Add(target);
+                }
+
                 foreach (var action in c.Council.Actions)
                 {
                     int cd = c.Council.CooldownRemaining(action.Id);
@@ -518,11 +600,76 @@ namespace Game.Gameplay.UI
                                                   (cd > 0 ? $" · КД {cd}" : "") };
                     string id = action.Id;
                     btn.SetEnabled(cd == 0);
-                    btn.clicked += () => { c.Council.Execute(id, Game.Core.Factions.DefaultFactions.Garrison); RefreshCity(); };
+                    btn.clicked += () => OnCouncilAction(id);
                     councilList.Add(btn);
                 }
+            }
 
+            RefreshFactions(c);
+            RefreshChronicle();
             RefreshQuestBoard(c);
+        }
+
+        private void OnCouncilAction(string actionId)
+        {
+            var c = GameFlow.Campaign;
+            if (c == null || c.Council == null) return;
+            var report = c.Council.Execute(actionId, FactionIdByName(c, _diplomacyTarget));
+            Telemetry.Event("council_action", ("action", actionId), ("result", report.Result.ToString()));
+
+            // Текст пишем ПОСЛЕ перерисовки: RefreshCity гасит прошлый результат,
+            // иначе устаревший отказ висел бы под советом всю кампанию.
+            string actionName = actionId;
+            foreach (var a in c.Council.Actions)
+                if (a.Id == actionId) { actionName = a.DisplayName; break; }
+            RefreshCity();
+            var note = _root.Q<Label>("council-note");
+            if (note != null)
+                note.text = report.Result == Game.Core.Council.CouncilActionResult.Success
+                    ? UiText.CouncilResultOk + actionName
+                    : UiText.CouncilResultFail + UiText.CouncilFailReason(report.Result);
+        }
+
+        private static string FactionIdByName(Campaign c, string displayName)
+        {
+            foreach (var st in c.Factions.Standings)
+                if (st.Faction.DisplayName == displayName) return st.Faction.Id;
+            return Game.Core.Factions.DefaultFactions.Garrison;
+        }
+
+        /// <summary>Отношения (Эпик 10): полосы фракций, репутация города, запас Влияния.</summary>
+        private void RefreshFactions(Campaign c)
+        {
+            var label = _root.Q<Label>("factions-list");
+            if (label == null) return;
+            var lines = new List<string>
+            {
+                string.Format(UiText.InfluenceLine, c.Factions.Influence,
+                    UiText.RepBandName(c.Factions.RepBand))
+            };
+            foreach (var st in c.Factions.Standings)
+                lines.Add($"{st.Faction.DisplayName}: {UiText.FactionBandName(st.Band)}");
+            label.text = string.Join("\n", lines);
+        }
+
+        private void RefreshChronicle()
+        {
+            var list = _root.Q<ScrollView>("chronicle-list");
+            if (list == null) return;
+            list.Clear();
+            if (Chronicle.Count == 0)
+            {
+                var empty = new Label(UiText.ChronicleEmpty);
+                empty.AddToClassList("chronicle-line");
+                list.Add(empty);
+                return;
+            }
+            for (int i = Chronicle.Count - 1; i >= 0; i--) // свежее сверху
+            {
+                var l = new Label(Chronicle[i]);
+                l.AddToClassList("chronicle-line");
+                list.Add(l);
+            }
         }
 
         /// <summary>Доска квестов (US-14.3): совет базы собирает доступное из авторского пула.</summary>
@@ -533,6 +680,13 @@ namespace Game.Gameplay.UI
             board.Clear();
 
             c.Quests.CollectFrom(DefaultQuests.FullPool(), c.Factions, c.Flags, c.Roster.All);
+
+            // Отложенное дело возвращается сюда (пара к кнопке «Отложить»): без этого
+            // выход из панели квеста был бы билетом в один конец.
+            if (GameFlow.PendingQuest != null)
+                board.Add(new Button(ShowQuest)
+                { text = string.Format(UiText.QuestResume, GameFlow.PendingQuest.Def.Title) });
+
             foreach (var q in c.Quests.Available)
             {
                 string id = q.Id;
@@ -675,11 +829,123 @@ namespace Game.Gameplay.UI
                 row.Add(plus);
                 skills.Add(row);
             }
+
+            RefreshEquipment(c, comp);
         }
 
         /// <summary>Кого вообще можно тренировать: живого и не ушедшего к врагу.</summary>
         private static bool CanTrain(Companion comp)
             => comp != null && comp.IsAlive && comp.Status != CompanionStatus.Antagonist;
+
+        // ---- Снаряжение: сташ ↔ слоты бойца (US-6.1/6.2) ----
+        private void RefreshEquipment(Campaign c, Companion comp)
+        {
+            var equipment = _root.Q<VisualElement>("character-equipment");
+            if (equipment == null) return;
+            equipment.Clear();
+            bool canEquip = CanTrain(comp);
+
+            foreach (EquipSlot slot in System.Enum.GetValues(typeof(EquipSlot)))
+            {
+                var worn = comp.Equipment.Get(slot);
+                var row = new VisualElement();
+                row.AddToClassList("item-row");
+                if (worn != null && worn.Definition.IsNamed) row.AddToClassList("item-row--named");
+                row.Add(new Label($"{UiText.SlotName(slot)}: {DescribeItem(worn)}"));
+
+                if (worn != null && canEquip)
+                {
+                    var slotCopy = slot;
+                    row.Add(new Button(() => OnUnequip(slotCopy)) { text = UiText.Unequip });
+                }
+                equipment.Add(row);
+            }
+
+            var stash = _root.Q<ScrollView>("character-stash");
+            if (stash == null) return;
+            stash.Clear();
+
+            bool workshop = c.Base.IsBuilt(BaseSectionType.Workshop);
+            int craftMats = c.Base.Resources.Get(ResourceType.CraftingMaterial);
+            _root.Q<Label>("stash-note").text = c.Base.Inventory.Count == 0
+                ? UiText.StashEmpty
+                : (workshop ? string.Format(UiText.CraftHint, _cfg.CraftUpgradeCost, craftMats)
+                            : UiText.CraftNeedsWorkshop);
+
+            foreach (var item in c.Base.Inventory.Items)
+            {
+                var it = item;
+                var row = new VisualElement();
+                row.AddToClassList("item-row");
+                if (it.Definition.IsNamed) row.AddToClassList("item-row--named");
+                row.Add(new Label(DescribeItem(it)));
+
+                var equip = new Button(() => OnEquip(it)) { text = UiText.Equip };
+                equip.SetEnabled(canEquip);
+                row.Add(equip);
+
+                // Крафт (US-6.3): единственный сток крафт-компонента.
+                bool upgradable = !it.Definition.IsNamed && it.Rarity < Rarity.Epic;
+                var upgrade = new Button(() => OnUpgradeItem(it)) { text = UiText.CraftUpgrade };
+                upgrade.SetEnabled(workshop && upgradable && craftMats >= _cfg.CraftUpgradeCost);
+                row.Add(upgrade);
+
+                stash.Add(row);
+            }
+        }
+
+        private static string DescribeItem(ItemInstance item)
+        {
+            if (item == null) return UiText.SlotEmpty;
+            string mods = "";
+            foreach (var m in item.StatMods)
+                mods += $" {UiText.StatShort(m.Stat)}+{(int)m.Value}";
+            return $"{item.DisplayName} ({UiText.RarityName(item.Rarity)}){mods}";
+        }
+
+        private void OnEquip(ItemInstance item)
+        {
+            var c = GameFlow.Campaign;
+            var comp = c != null ? c.Roster.Get(_openCharacterId) : null;
+            if (!CanTrain(comp) || item == null) return;
+            if (!c.Base.Inventory.Remove(item)) return;
+
+            var prev = comp.Equipment.Equip(item);
+            if (prev != null) c.Base.Inventory.Add(prev); // снятое возвращается в сташ
+            Telemetry.Event("item_equipped",
+                ("companion", comp.Id), ("item", item.Definition.Id), ("rarity", item.Rarity.ToString()));
+            AutoSave.Write(c);
+            RefreshCharacterPanel();
+        }
+
+        private void OnUnequip(EquipSlot slot)
+        {
+            var c = GameFlow.Campaign;
+            var comp = c != null ? c.Roster.Get(_openCharacterId) : null;
+            if (!CanTrain(comp)) return;
+            var removed = comp.Equipment.Unequip(slot);
+            if (removed == null) return;
+            c.Base.Inventory.Add(removed);
+            AutoSave.Write(c);
+            RefreshCharacterPanel();
+        }
+
+        private void OnUpgradeItem(ItemInstance item)
+        {
+            var c = GameFlow.Campaign;
+            if (c == null || item == null) return;
+            var rng = new SeededRng(Campaign.DeriveSeed(c.Seed, 500 + c.Base.CurrentDay + c.Base.Inventory.Count));
+            var result = CraftSystem.TryUpgrade(item, c.Base.Resources, _cfg.CraftUpgradeCost, rng);
+            if (result != CraftResult.Success)
+            {
+                _root.Q<Label>("stash-note").text = UiText.CraftFailed + result;
+                return;
+            }
+            Telemetry.Event("item_upgraded",
+                ("item", item.Definition.Id), ("rarity", item.Rarity.ToString()));
+            AutoSave.Write(c);
+            RefreshCharacterPanel();
+        }
 
         private void OnSpendSkillPoint(SkillType skill)
         {
@@ -725,11 +991,13 @@ namespace Game.Gameplay.UI
                 nodeList.Add(btn);
             }
 
+            // Закрытые точки — с ПРИЧИНОЙ (US-1.1/17.3: игрок должен понимать, что
+            // открывает узел, иначе рост города не читается как цель).
             var locked = new List<string>();
             foreach (var node in _worldMap.Locked(c.Base.CityTier, c.Flags))
-                locked.Add(node.Plan.DisplayName);
+                locked.Add($"{node.Plan.DisplayName} ({LockReason(node, c)})");
             _root.Q<Label>("locked-nodes").text =
-                locked.Count > 0 ? UiText.LockedNodes + " " + string.Join(", ", locked) : "";
+                locked.Count > 0 ? UiText.LockedNodes + "\n" + string.Join("\n", locked) : "";
 
             var picks = _root.Q<VisualElement>("squad-picks");
             picks.Clear();
@@ -746,6 +1014,16 @@ namespace Game.Gameplay.UI
             }
 
             _root.Q<Label>("map-note").text = "";
+        }
+
+        /// <summary>Почему точка закрыта: тир города, сюжетная веха или «уже пройдено».</summary>
+        private static string LockReason(WorldNode node, Campaign c)
+        {
+            if (c.Base.CityTier < node.RequiresCityTier)
+                return string.Format(UiText.LockNeedTier, node.RequiresCityTier);
+            if (!string.IsNullOrEmpty(node.RequiresFlag) && !c.Flags.Contains(node.RequiresFlag))
+                return UiText.LockNeedStory;
+            return UiText.LockDone;
         }
 
         private void OnDepart()
@@ -772,7 +1050,7 @@ namespace Game.Gameplay.UI
                 return;
             }
 
-            c.DepartExpedition();
+            RecordCycle(c.DepartExpedition()); // дни дороги тоже приносят события города
             // В айронмене НЕ чекпойнтим середину вылазки: загрузка возвращала бы
             // отряд домой «бесплатно» — выход из проигрышного боя. Последний
             // автосейв = город до выхода; бой после исхода сейвится сразу.
@@ -837,8 +1115,15 @@ namespace Game.Gameplay.UI
             return cs;
         }
 
-        private static WeaponDefinition Armory(Companion c)
+        /// <summary>
+        /// Оружие бойца в бой: НАДЕТОЕ (US-6.2) — иначе именные трофеи квестов и
+        /// дроп вылазок не доезжали до боя вообще. Фолбек — стартовый ствол по роли.
+        /// Публично: этот же путь проверяется тестами (одна «оружейная» на все бои).
+        /// </summary>
+        public static WeaponDefinition Armory(Companion c)
         {
+            var equipped = c.Equipment.EquippedWeapon;
+            if (equipped != null) return equipped;
             switch (c.Id)
             {
                 case "brawler": return DefaultContent.Machete();
@@ -952,6 +1237,21 @@ namespace Game.Gameplay.UI
                     { text = $"{UiText.QuestCheckPrefix}{what} ≥ {stage.Threshold}" });
                     break;
             }
+
+            // АНТИ-СОФТЛОК: панель квеста обязана иметь выход в город. Иначе игрок,
+            // взявший дело с боевым этапом при раненом отряде, застревал навсегда:
+            // «В бой» отказывал (некому идти), а лечение тикает только в городе.
+            // Квест остаётся взятым — вернуться к нему кнопкой на доске.
+            actions.Add(new Button(OnPostponeQuest) { text = UiText.QuestPostpone });
+        }
+
+        /// <summary>Отложить дело: в город (квест остаётся в работе, шаг сохраняется).</summary>
+        private void OnPostponeQuest()
+        {
+            var c = GameFlow.Campaign;
+            if (c == null) return;
+            AutoSave.Write(c);
+            ShowCity();
         }
 
         /// <summary>Почему опция закрыта — из данных гейта (первый непройденный).</summary>
@@ -1174,7 +1474,9 @@ namespace Game.Gameplay.UI
             {
                 var comp = campaign != null ? campaign.Roster.Get(oc.CompanionId) : null;
                 string name = comp != null ? comp.DisplayName : oc.CompanionId;
-                if (oc.Died) Add($"✝ {name} погиб(ла) — насовсем.");
+                if (oc.Died) Add(oc.DiedOnReturn
+                    ? $"✝ {name} погиб(ла) по дороге домой — беда пришла в город."
+                    : $"✝ {name} погиб(ла) — насовсем.");
                 else if (oc.Injury != Game.Core.Health.InjuryTier.None)
                     Add($"{name}: ранение {oc.Injury}" + (oc.ScarId != null ? $", вечный шрам ({oc.ScarId})" : ""));
             }
@@ -1188,6 +1490,32 @@ namespace Game.Gameplay.UI
             }
             foreach (var id in report.LeveledUp) Add($"↑ {NameOf(id)}: новый уровень.");
             foreach (var id in report.RecoveredOnReturn) Add($"{NameOf(id)}: раны затянулись в дороге.");
+
+            // Что случилось в городе, пока отряда не было (US-8.2).
+            int day = campaign != null ? campaign.Base.CurrentDay : 0;
+            foreach (var incident in report.IncidentsWhileAway)
+            {
+                string who = incident.ResolvedById != null
+                    ? NameOf(incident.ResolvedById) : UiText.IncidentNobody;
+                string line = $"Дома: {incident.DisplayName} — " +
+                              (incident.Success ? UiText.IncidentResolved : UiText.IncidentFailed) + $" ({who})";
+                if (incident.CrisisApplied != Game.Core.Threats.CrisisEffect.None)
+                    line += $"\n    ⚠ {UiText.CrisisName(incident.CrisisApplied)}" +
+                            (incident.CrisisVictimId != null ? ": " + NameOf(incident.CrisisVictimId) : "");
+                Add(line);
+                AddChronicle($"[{day}] {line}");
+            }
+            foreach (var built in report.ConstructionCompletedWhileAway)
+            {
+                string line = $"{UiText.ChronicleBuilt} {built}";
+                Add(line);
+                AddChronicle($"[{day}] {line}");
+            }
+            if (report.CityTierAdvancedTo > 0)
+            {
+                Add(string.Format(UiText.ChronicleCityGrew, report.CityTierAdvancedTo));
+                ReportCityGrowth(report.CityTierAdvancedFrom, report.CityTierAdvancedTo, day);
+            }
 
             Show("panel-report");
         }

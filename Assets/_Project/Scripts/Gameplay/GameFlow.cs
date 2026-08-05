@@ -41,6 +41,17 @@ namespace Game.Gameplay
         /// <summary>Отчёт последнего шага квеста (реплики/чек) — для панели квеста после боя.</summary>
         public static QuestStepReport LastQuestStep;
 
+        /// <summary>
+        /// Хроника города: живёт в статике, а не в контроллере — иначе лента
+        /// обнулялась КАЖДЫМ походом в Battle-сцену (контроллер пересоздаётся),
+        /// и события дороги «туда» терялись, не показавшись игроку ни разу.
+        /// </summary>
+        public static readonly System.Collections.Generic.List<string> Chronicle =
+            new System.Collections.Generic.List<string>();
+
+        /// <summary>Начало другой кампании (новая игра/загрузка): чужая лента не протекает.</summary>
+        public static void ResetChronicle() => Chronicle.Clear();
+
         public static bool HasPendingBattle => PendingBattle != null;
 
         public static void ClearBattle()
@@ -64,6 +75,7 @@ namespace Game.Gameplay
             LastReport = null;
             ClearBattle();
             ClearQuest();
+            ResetChronicle();
         }
     }
 

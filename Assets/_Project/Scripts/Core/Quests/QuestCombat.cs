@@ -26,8 +26,13 @@ namespace Game.Core.Quests
 
         private static int _scarCounter;
 
+        /// <summary>
+        /// inventory — сташ базы: снаряжение погибших возвращается туда, иначе
+        /// надетый (в т.ч. именной) гир исчезал бы из экономики навсегда.
+        /// </summary>
         public static Report ApplyToRoster(CombatState combat, Roster roster, BalanceConfig cfg,
-                                           Func<Companion, Scar> scarPicker = null)
+                                           Func<Companion, Scar> scarPicker = null,
+                                           Items.Inventory inventory = null)
         {
             if (combat == null) throw new ArgumentNullException(nameof(combat));
             if (combat.Outcome == CombatOutcome.Ongoing)
@@ -48,6 +53,7 @@ namespace Game.Core.Quests
                 {
                     case UnitLifeState.Dead:
                         comp.Kill();
+                        inventory?.RecoverGearFrom(comp);
                         oc.Died = true;
                         if (comp.IsProtagonist) report.ProtagonistDied = true;
                         break;

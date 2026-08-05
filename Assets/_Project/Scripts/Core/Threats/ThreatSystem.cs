@@ -188,15 +188,19 @@ namespace Game.Core.Threats
 
                 case CrisisEffect.KillCompanion:
                 {
-                    // Жертва — живой НЕ-протагонист (US-4.4 защищает лидера и тут).
+                    // Жертва — живой НЕ-протагонист (US-4.4 защищает лидера и тут)
+                    // и обязательно ДОМА: удар по своим бьёт по городу, а не по
+                    // отряду на марше (иначе труп уходил в бой и «воскресал» исходом).
                     var candidates = new List<Companion>();
                     foreach (var c in baseState.Roster.All)
-                        if (c.IsAlive && !c.IsProtagonist) candidates.Add(c);
+                        if (c.IsAlive && !c.IsProtagonist && c.Status != CompanionStatus.InSquad)
+                            candidates.Add(c);
                     if (candidates.Count > 0)
                     {
                         var victim = candidates[_rng.Range(0, candidates.Count - 1)];
                         if (victim.IsAssigned) baseState.Unassign(victim.AssignedSlotId);
                         victim.Kill();
+                        baseState.Inventory.RecoverGearFrom(victim); // гир не пропадает
                         report.CrisisApplied = CrisisEffect.KillCompanion;
                         report.CrisisVictimId = victim.Id;
                     }

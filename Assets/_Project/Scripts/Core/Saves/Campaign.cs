@@ -103,8 +103,33 @@ namespace Game.Core.Saves
             Base.AttachTimeSink(council);
         }
 
-        /// <summary>Единый ход времени кампании: база + все time-sinks (совет) без рассинхрона.</summary>
-        public CycleReport AdvanceDays(int days) => Base.AdvanceDays(days);
+        /// <summary>
+        /// Единый ход времени кампании: база + все time-sinks (совет) без рассинхрона.
+        /// Здесь же проверяется рост города (US-7.6): условия тира зависят от
+        /// населения/зданий/репутации, а двигаются они именно ходом времени — без
+        /// этого вызова тир навсегда оставался 1, и половина карты была заперта.
+        /// </summary>
+        public CycleReport AdvanceDays(int days)
+        {
+            var report = Base.AdvanceDays(days);
+            int before = Base.CityTier;
+            int grown = GrowCity();
+            if (grown > 0) { report.CityTierAdvancedFrom = before; report.CityTierAdvancedTo = grown; }
+            return report;
+        }
+
+        /// <summary>
+        /// Единственный владелец инварианта «город растёт, когда условия сошлись»:
+        /// зовётся ВСЕМИ путями хода времени (ожидание, выход и возвращение вылазки),
+        /// иначе рост зависел бы от того, какой кнопкой игрок двигал календарь.
+        /// Возвращает новый тир или 0, если не рос.
+        /// </summary>
+        private int GrowCity()
+        {
+            int grown = 0;
+            while (Base.TryAdvanceCityTier(Factions)) grown = Base.CityTier;
+            return grown;
+        }
 
         // ---- Жизненный цикл вылазки (оркестрация US-16.1: InExpedition ведётся сам) ----
         /// <summary>Собирает вылазку по плану. Отправка отряда — через TrySend у результата.</summary>
@@ -136,6 +161,9 @@ namespace Game.Core.Saves
         {
             if (ActiveExpedition == null) throw new InvalidOperationException("Вылазка не собрана");
             var report = ActiveExpedition.Depart();
+            int before = Base.CityTier;
+            int grown = GrowCity(); // дни марша — тоже ход времени
+            if (grown > 0) { report.CityTierAdvancedFrom = before; report.CityTierAdvancedTo = grown; }
             InExpedition = true;
             return report;
         }
@@ -147,6 +175,12 @@ namespace Game.Core.Saves
             var report = ActiveExpedition.Conclude(combat);
             InExpedition = false;
             ActiveExpedition = null;
+            // Дни дороги домой — тоже ход времени: город мог дорасти до нового тира.
+            // Факт роста доезжает до отчёта возвращения, иначе новая точка на карте
+            // появлялась бы без всякого объяснения.
+            int before = Base.CityTier;
+            int grown = GrowCity();
+            if (grown > 0) { report.CityTierAdvancedFrom = before; report.CityTierAdvancedTo = grown; }
             if (report.GameOver) Outcome = CampaignOutcome.Lost;
             return report;
         }

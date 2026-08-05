@@ -28,7 +28,9 @@ namespace Game.Core.Items
                 return CraftResult.CannotAfford;
 
             ledger?.TrySpend(ResourceType.CraftingMaterial, craftingCost);
-            item.RerollAt(RarityTuning.Next(item.Rarity), rng);
+            // Масштабирование, а не пере-ролл: апгрейд не может ухудшить предмет
+            // (rng больше не нужен — оставлен в сигнатуре под будущие моды US-6.4).
+            item.UpgradeTo(RarityTuning.Next(item.Rarity));
             return CraftResult.Success;
         }
     }

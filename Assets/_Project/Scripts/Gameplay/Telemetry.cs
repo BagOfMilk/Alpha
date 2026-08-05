@@ -91,6 +91,21 @@ namespace Game.Gameplay
             }
         }
 
+        /// <summary>
+        /// Инцидент «Напряжения» одним форматом из любой фазы: phase = home
+        /// (отряд дома) / travel_out / travel_back. Без общего эмиттера инциденты
+        /// дороги терялись и частота в плейтест-данных занижалась вдвое.
+        /// </summary>
+        public static void Incident(Game.Core.Threats.IncidentReport inc, string phase)
+        {
+            if (inc == null) return;
+            Event("incident",
+                ("id", inc.IncidentId), ("success", inc.Success),
+                ("resolver", inc.ResolvedById ?? ""),
+                ("crisis", inc.CrisisApplied.ToString()),
+                ("phase", phase));
+        }
+
         /// <summary>Агрегаты боя для battle_ended: раунды, атаки, hit-rate vs показанный
         /// шанс (R11). Только атаки ГРАВЦА: врагам шанс не телеграфируется — их роллы
         /// размывали бы метрику честности показанного процента.</summary>

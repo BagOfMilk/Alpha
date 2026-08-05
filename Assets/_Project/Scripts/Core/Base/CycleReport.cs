@@ -23,6 +23,12 @@ namespace Game.Core.Base
         /// <summary>Население после продвижения времени.</summary>
         public int Population;
 
+        /// <summary>Новый тир города, если он вырос за это время (0 — не рос, US-7.6).</summary>
+        public int CityTierAdvancedTo;
+
+        /// <summary>Тир ДО роста — чтобы показать каждый пройденный шаг, а не только итог.</summary>
+        public int CityTierAdvancedFrom;
+
         /// <summary>Инциденты «Напряжения» за период (если подключена система угроз).</summary>
         public readonly List<IncidentReport> Incidents = new List<IncidentReport>();
 
