@@ -27,9 +27,16 @@ namespace Game.Core.Companions
     /// </summary>
     public static class DefectionSystem
     {
-        /// <summary>Готов ли напарник к уходу: жив, не протагонист, лояльность на дне.</summary>
+        /// <summary>
+        /// Готов ли напарник к уходу: жив, не протагонист, ещё НЕ ушёл и лояльность
+        /// на дне. Проверка статуса обязательна: ушедший остаётся в ростере живым и
+        /// с той же лояльностью, поэтому без неё он «дезертировал» бы каждый ход
+        /// времени заново — с дублем записи и новой волной ряби по всему отряду.
+        /// </summary>
         public static bool ShouldDefect(Companion c)
-            => c != null && c.IsAlive && !c.IsProtagonist && c.LoyaltyBand == LoyaltyBand.Resentful;
+            => c != null && c.IsAlive && !c.IsProtagonist
+               && c.Status != CompanionStatus.Antagonist
+               && c.LoyaltyBand == LoyaltyBand.Resentful;
 
         /// <summary>Переводит в антагонисты: снимок гира/уровня, снятие с позиции, статус.</summary>
         public static AntagonistRecord Defect(Companion c, BaseState baseState = null)

@@ -16,6 +16,9 @@ namespace Game.Core.Story
 
         /// <summary>Бонус точности защитникам от Укреплений/подготовки (Fortified прикрывает своих).</summary>
         public int DefenderAccuracyBonus;
+
+        /// <summary>Сколько бойцов орда набрала, пока город тянул с финалом (US-11.4).</summary>
+        public int HordeReinforcements;
     }
 
     public sealed class FinaleReport
@@ -41,6 +44,9 @@ namespace Game.Core.Story
 
         /// <summary>Ачивка айронмен-победы (US-16.1: ачивки только в айронмене).</summary>
         public const string IronVictoryAchievement = "iron_city_stands";
+
+        /// <summary>Сколько врагов физически помещается на арену (спавны Battle-сцены).</summary>
+        public const int ArenaEnemyCapacity = 12;
 
         public static bool IsUnlocked(ICollection<string> flags)
             => flags != null && flags.Contains(ReadyFlag);
@@ -123,7 +129,20 @@ namespace Game.Core.Story
                 throw new InvalidOperationException("Финал ещё не открыт сюжетной вехой (US-14.2)");
             var band = BandFor(
                 EffectiveReadiness(campaign.Base.ThreatsSystem, campaign.Roster, campaign.Cfg), campaign.Cfg);
-            return BuildEncounter(band);
+            var encounter = BuildEncounter(band);
+
+            // Орда СОБИРАЕТСЯ, пока город тянет (US-11.4): каждые
+            // HordeGrowthDays дней после вехи финала добавляют бойца в штурм.
+            // Без этого время после вехи ничего не стоило: можно было бесконечно
+            // качаться и фармить, а финал ждал в одном и том же составе.
+            int delay = campaign.DaysSinceFinaleReady();
+            int extra = campaign.Cfg.HordeGrowthDays > 0 ? delay / campaign.Cfg.HordeGrowthDays : 0;
+            int added = 0;
+            for (int i = 0; i < extra && encounter.Enemies.Count < ArenaEnemyCapacity; i++, added++)
+                encounter.Enemies.Add(i % 2 == 0
+                    ? DefaultContent.FeralGhoul() : DefaultContent.ScavGunner());
+            encounter.HordeReinforcements = added; // ровно то, что реально доехало до арены
+            return encounter;
         }
 
         /// <summary>Исход финала: победа завершает кампанию, поражение — game over (US-16.2).</summary>

@@ -57,6 +57,21 @@ namespace Game.Core.Quests
             return true;
         }
 
+        /// <summary>
+        /// Возвращает завершённое дело на доску (US-9.4: расплата с ВТОРЫМ
+        /// перебежчиком — тот же квест, новая цель). Обычные квесты так не
+        /// переоткрываются: их блокирует BlockedByFlag.
+        /// </summary>
+        public bool Reopen(string id)
+        {
+            if (StatusOf(id) != QuestStatus.Completed) return false;
+            var def = _byId[id];
+            _completed.Remove(def);
+            _available.Add(def);
+            _status[id] = QuestStatus.Available;
+            return true;
+        }
+
         public bool Complete(string id)
         {
             if (StatusOf(id) != QuestStatus.Active) return false;

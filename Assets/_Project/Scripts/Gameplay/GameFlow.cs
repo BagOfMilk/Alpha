@@ -49,6 +49,9 @@ namespace Game.Gameplay
         /// <summary>Отчёт последнего шага квеста (реплики/чек) — для панели квеста после боя.</summary>
         public static QuestStepReport LastQuestStep;
 
+        /// <summary>Id арки, чья глава сейчас играется (US-9.5); null — обычный квест.</summary>
+        public static string PendingArcId;
+
         /// <summary>
         /// Хроника города: живёт в статике, а не в контроллере — иначе лента
         /// обнулялась КАЖДЫМ походом в Battle-сцену (контроллер пересоздаётся),
@@ -84,6 +87,7 @@ namespace Game.Gameplay
         {
             PendingQuest = null;
             LastQuestStep = null;
+            PendingArcId = null;
         }
 
         public static void Reset()
@@ -107,6 +111,20 @@ namespace Game.Gameplay
         {
             if (campaign == null) return;
             SaveSerializer.SaveToFile(SaveSystem.Capture(campaign), SaveSerializer.AutosavePath);
+        }
+
+        /// <summary>
+        /// Чекпойнт на ВЫХОДЕ вылазки (айронмен, US-16.1): фиксирует само решение
+        /// идти. Помечается «бой не доигран» — загрузка резолвит вылазку отступлением,
+        /// а не возвращает отряд домой бесплатно. Без этого выход из игры посреди
+        /// проигрышного боя откатывал решение и не ловился телеметрией save-scum.
+        /// </summary>
+        public static void WriteDepartCheckpoint(Campaign campaign)
+        {
+            if (campaign == null) return;
+            var data = SaveSystem.Capture(campaign);
+            data.expeditionUnresolved = true;
+            SaveSerializer.SaveToFile(data, SaveSerializer.AutosavePath);
         }
     }
 }

@@ -268,13 +268,46 @@ namespace Game.Core.Quests
             SpineAct1Shadow(), SpineAct2Storm()
         };
 
+        // ===== Расплата с перебежчиком (US-9.4) =====
+        public const string BossDefeatedFlag = "act1_boss_resolved";
+        public const string BossEncounterId = "defector_boss";
+
+        /// <summary>
+        /// Босс акта 1 — тот, кого бросили в прологе. Появляется на доске только
+        /// если антагонист реально засеян (флаг act1_boss_seeded), и закрывает
+        /// самую жёсткую развилку первого часа: гир возвращается его убийством.
+        /// Любой исход завершает дело — второй попытки нет, это цена выбора.
+        /// </summary>
+        public static QuestDefinition BossRevenge()
+        {
+            var q = new QuestDefinition("boss_revenge", "Тот, кого бросили", QuestSource.TensionIncident)
+                .GateFlag(Story.Prologue.BossSeededFlag)
+                .BlockFlag(BossDefeatedFlag)
+                .Flavor("Слухи с окраины: банду водит знакомое лицо. Он ждёт именно вас.");
+
+            q.Stage(QuestStage.CombatStage("confront", "Встретиться с перебежчиком и его людьми.",
+                BossEncounterId, onWin: 1, onLoss: 2));
+
+            q.Stage(QuestStage.OutcomeStage("settled", "Счёт закрыт. Его снаряжение вернулось в отряд.",
+                success: true,
+                new QuestReward(xp: 80, gold: 60)
+                    .WithSocial(new SocialConsequence().Reputation(4).Tension(-5).Flag(BossDefeatedFlag))));
+
+            q.Stage(QuestStage.OutcomeStage("escaped", "Он ушёл. Вместе с тем, что забрал у отряда.",
+                success: false,
+                new QuestReward(xp: 30)
+                    .WithSocial(new SocialConsequence().Tension(4).Flag(BossDefeatedFlag))));
+
+            return q;
+        }
+
         /// <summary>
         /// ВЕСЬ авторский пул (пролог + спайн + сайды) — источник для доски города
         /// и восстановления журнала из сейва (сейв хранит только id квестов).
         /// </summary>
         public static List<QuestDefinition> FullPool()
         {
-            var pool = new List<QuestDefinition> { Prologue() };
+            var pool = new List<QuestDefinition> { Prologue(), BossRevenge() };
             pool.AddRange(StorySpine());
             pool.AddRange(All());
             return pool;

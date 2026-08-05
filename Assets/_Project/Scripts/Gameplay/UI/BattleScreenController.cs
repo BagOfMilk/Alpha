@@ -374,7 +374,17 @@ namespace Game.Gameplay.UI
                 // журнал закрывается ДО автосейва — иначе сейв «награда есть, квест
                 // Active» позволял дюп через выход из игры (Restore демотирует Active).
                 if (!GameFlow.PendingQuest.IsActive)
+                {
                     campaign.Quests.Complete(GameFlow.PendingQuest.Def.Id);
+                    // Пейоф применяется ДО автосейва: иначе выход из игры на панели
+                    // итога терял награду (гир перебежчика) навсегда.
+                    if (GameFlow.PendingQuest.Def.Id == "boss_revenge"
+                        && GameFlow.PendingQuest.State == Game.Core.Quests.QuestState.Succeeded)
+                        campaign.ResolveBossRevenge();
+                }
+                // Смерти квестового боя отзываются в ростере (US-9.6).
+                foreach (var oc in qReport.Companions)
+                    if (oc.Died) campaign.NotifyDeath(oc.CompanionId);
                 Telemetry.Event("battle_ended", Telemetry.CombatStats(_cs, "quest"));
                 AutoSave.Write(campaign); // смерти зафиксированы — перезагрузка их не отменит
                 GameFlow.ClearBattle();

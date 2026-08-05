@@ -152,10 +152,11 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(ConstructionStartResult.Success,
                 campaign.Base.StartConstruction(DefaultContent.Blueprint(BaseSectionType.Temple, cfg)));
 
-            // Арка медика: первая глава пройдена (флаг + индекс).
-            var arc = new CompanionArcRun(DefaultArcs.MedicOldDebt(), campaign.Flags);
+            // Арка медика (заводится вместе с кампанией, итерация 20): первая глава
+            // пройдена — проверяем, что прогресс переживает round-trip.
+            var arc = campaign.Arcs.Find(a => a.Arc.CompanionId == "medic");
+            Assert.IsNotNull(arc, "личные арки сеются в NewGame");
             arc.CompleteChapter();
-            campaign.Arcs.Add(arc);
 
             // Перебежчик уходит с именным гиром.
             var traitor = campaign.Roster.Get("brawler");
@@ -178,8 +179,10 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, loaded.Base.ConstructionQueue.Count, "идущая стройка в сейве");
             Assert.AreEqual(BaseSectionType.Temple, loaded.Base.ConstructionQueue[0].Section);
 
-            Assert.AreEqual(1, loaded.Arcs.Count);
-            Assert.AreEqual(1, loaded.Arcs[0].ChapterIndex, "прогресс арки в сейве (US-9.5)");
+            Assert.AreEqual(campaign.Arcs.Count, loaded.Arcs.Count, "арки не задваиваются при загрузке");
+            var loadedMedicArc = loaded.Arcs.Find(a => a.Arc.CompanionId == "medic");
+            Assert.IsNotNull(loadedMedicArc);
+            Assert.AreEqual(1, loadedMedicArc.ChapterIndex, "прогресс арки в сейве (US-9.5)");
             Assert.IsTrue(loaded.Flags.Contains("arc_medic_ch1"));
 
             Assert.AreEqual(1, loaded.Antagonists.Count);
@@ -350,6 +353,25 @@ namespace Game.Tests.EditMode
             loaded.Quests.CollectFrom(Game.Core.Quests.DefaultQuests.FullPool(),
                 loaded.Factions, loaded.Flags, loaded.Roster.All);
             Assert.IsNotNull(loaded.Quests.StatusOf("prologue"), "пролог снова на доске");
+        }
+
+        [Test]
+        public void ArcInProgress_IsDemotedOnLoad_NotStuckForever()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            var arc = campaign.Arcs.Find(a => a.Arc.CompanionId == "medic");
+            Assert.IsTrue(arc.Begin(campaign.Roster.Get("medic")), "глава взята");
+            Assert.AreEqual(Game.Core.Companions.ArcState.InProgress, arc.State);
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(campaign));
+            var loaded = SaveSystem.Restore(
+                UnityEngine.JsonUtility.FromJson<SaveData>(json), cfg, ContentCatalog.Default());
+
+            var loadedArc = loaded.Arcs.Find(a => a.Arc.CompanionId == "medic");
+            Assert.AreEqual(Game.Core.Companions.ArcState.Available, loadedArc.State,
+                "прогон главы не сериализуется — начатую главу возвращаем на доску, " +
+                "иначе InProgress переживает сейв и арка мертва навсегда");
         }
 
         [Test]

@@ -56,6 +56,8 @@ namespace Game.Core.Companions
         {
             var report = new RippleReport { TriggerId = triggerId, Betrayal = betrayal };
             var trigger = roster?.Get(triggerId);
+            // Ушедшие к врагу в ряби не участвуют: их «скорбь» — ложная строка отчёта
+            // и бессмысленный сдвиг лояльности того, кто уже не в отряде.
             if (trigger == null) return report;
 
             int heavyHit = betrayal ? _cfg.BetrayalKinLoyaltyHit : _cfg.MournLoyaltyHit;
@@ -63,7 +65,7 @@ namespace Game.Core.Companions
 
             foreach (var c in roster.All)
             {
-                if (c == trigger || !c.IsAlive) continue;
+                if (c == trigger || !c.IsAlive || c.Status == CompanionStatus.Antagonist) continue;
                 var bond = _bonds.Between(c, trigger);
 
                 int delta;

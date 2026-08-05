@@ -86,6 +86,115 @@ namespace Game.Tests.EditMode
                 withPrep, "смерть бойца ослабляет оборону");
         }
 
+        // ---- Драма и кривые (итерация 20) ----
+        [Test]
+        public void NewGame_SeedsCompanionArcs()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            Assert.Greater(campaign.Arcs.Count, 0, "личные арки заводятся вместе с кампанией (US-9.5)");
+            var medicArc = campaign.Arcs.Find(a => a.Arc.CompanionId == "medic");
+            Assert.IsNotNull(medicArc);
+            Assert.AreEqual(Game.Core.Companions.ArcState.Available, medicArc.State,
+                "стартовая лояльность Steady открывает первую главу");
+        }
+
+        [Test]
+        public void TimePass_DefectsResentfulCompanion_AndOpensRevengeQuest()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            var marksman = campaign.Roster.Get("marksman");
+            marksman.AdjustLoyalty(-50); // 50 → 0: полоса Resentful
+
+            var record = campaign.TryDefectOnTimePass();
+            Assert.IsNotNull(record, "боец на дне лояльности уходит к врагу (US-9.2)");
+            Assert.AreEqual("marksman", record.CompanionId);
+            Assert.AreEqual(CompanionStatus.Antagonist, marksman.Status);
+            Assert.IsTrue(campaign.Flags.Contains(Game.Core.Story.Prologue.BossSeededFlag));
+
+            // Расплата обязана появиться на доске — иначе уход ведёт в пустоту.
+            campaign.Quests.CollectFrom(DefaultQuests.FullPool(),
+                campaign.Factions, campaign.Flags, campaign.Roster.All);
+            Assert.AreEqual(QuestStatus.Available, campaign.Quests.StatusOf("boss_revenge"));
+        }
+
+        [Test]
+        public void Defector_DoesNotDefectTwice()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            campaign.Roster.Get("marksman").AdjustLoyalty(-50);
+
+            Assert.IsNotNull(campaign.TryDefectOnTimePass(), "первый уход состоялся");
+            int after = campaign.Antagonists.Count;
+
+            // Ушедший остаётся в ростере живым и с той же лояльностью — без гарда
+            // он «дезертировал» бы заново КАЖДЫЙ ход времени, плодя записи и рябь.
+            for (int day = 0; day < 5; day++) Assert.IsNull(campaign.TryDefectOnTimePass());
+            Assert.AreEqual(after, campaign.Antagonists.Count, "дубликатов записей нет");
+        }
+
+        [Test]
+        public void BossRevenge_ReturnsGear_AndReopensForSecondDefector()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            campaign.Quests.CollectFrom(DefaultQuests.FullPool(),
+                campaign.Factions, campaign.Flags, campaign.Roster.All);
+
+            // Двое ушли к врагу (первый — с именным стволом).
+            var first = campaign.Roster.Get("marksman");
+            first.Equipment.Equip(ItemInstance.NamedFrom(DefaultItems.Widowmaker()));
+            first.AdjustLoyalty(-50);
+            Assert.IsNotNull(campaign.TryDefectOnTimePass());
+            campaign.Roster.Get("brawler").AdjustLoyalty(-50);
+            Assert.IsNotNull(campaign.TryDefectOnTimePass());
+            Assert.AreEqual(2, campaign.Antagonists.Count);
+
+            campaign.Quests.CollectFrom(DefaultQuests.FullPool(),
+                campaign.Factions, campaign.Flags, campaign.Roster.All);
+            campaign.Quests.Start("boss_revenge");
+            campaign.Quests.Complete("boss_revenge");
+            campaign.Flags.Add(DefaultQuests.BossDefeatedFlag);
+
+            Assert.IsTrue(campaign.ResolveBossRevenge());
+            Assert.AreEqual(1, campaign.Base.Inventory.Count, "гир перебежчика вернулся в сташ");
+            Assert.IsFalse(first.IsAlive, "босс мёртв");
+            Assert.AreEqual(1, campaign.Antagonists.Count, "второй перебежчик остался");
+            Assert.AreEqual(QuestStatus.Available, campaign.Quests.StatusOf("boss_revenge"),
+                "счёт не закрыт — расплата возвращается на доску");
+
+            Assert.IsFalse(campaign.ResolveBossRevenge() && campaign.Antagonists.Count < 0,
+                "повторный вызов не ломает состояние (идемпотентность)");
+        }
+
+        [Test]
+        public void Death_RipplesThroughRoster()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            var victim = campaign.Roster.Get("brawler");
+            victim.Kill();
+
+            var ripple = campaign.NotifyDeath(victim.Id);
+            Assert.IsNotNull(ripple);
+            Assert.Greater(ripple.Effects.Count, 0, "потеря отзывается в ростере (US-9.6)");
+        }
+
+        [Test]
+        public void Finale_HordeGrows_WhileCityStalls()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            campaign.Flags.Add(FinalBattle.ReadyFlag);
+            campaign.AdvanceDays(1); // веха зафиксировала день отсчёта
+            int immediate = FinalBattle.BuildEncounter(campaign).Enemies.Count;
+
+            campaign.AdvanceDays(cfg.HordeGrowthDays * 2);
+            var delayed = FinalBattle.BuildEncounter(campaign);
+
+            Assert.AreEqual(2, delayed.HordeReinforcements, "орда собирается, пока город тянет");
+            Assert.Greater(delayed.Enemies.Count, immediate);
+        }
+
         // ---- Рост города и снаряжение (итерация 19) ----
         [Test]
         public void AdvanceDays_GrowsCityTier_WhenRequirementsMet_AndOpensMapNode()

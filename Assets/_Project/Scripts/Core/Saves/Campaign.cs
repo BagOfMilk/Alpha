@@ -55,6 +55,16 @@ namespace Game.Core.Saves
         /// </summary>
         public int Seed { get; set; }
 
+        /// <summary>
+        /// День, когда сюжет открыл финал (0 — ещё не открыт). От него считается,
+        /// сколько орда успела набрать, пока город тянул (US-11.4).
+        /// </summary>
+        public int FinaleReadyDay { get; set; }
+
+        /// <summary>Сколько дней прошло с открытия финала (0, если веха ещё не стоит).</summary>
+        public int DaysSinceFinaleReady()
+            => FinaleReadyDay <= 0 ? 0 : System.Math.Max(0, Base.CurrentDay - FinaleReadyDay);
+
         /// <summary>Производный сид подсистемы: один сид кампании → независимые потоки.</summary>
         public static int DeriveSeed(int campaignSeed, int stream)
             => unchecked(campaignSeed * 486187739 + stream * 1000003);
@@ -76,6 +86,70 @@ namespace Game.Core.Saves
 
         /// <summary>Взятые ачивки (US-16.1: только в айронмене) — персистятся.</summary>
         public readonly HashSet<string> Achievements = new HashSet<string>();
+
+        /// <summary>
+        /// Драма ростера (US-9.6): рябь лояльности от смертей и предательств.
+        /// Связи считаются на лету из тегов ценностей — состояния не хранит.
+        /// </summary>
+        public Companions.RosterDrama Drama =>
+            _drama ?? (_drama = new Companions.RosterDrama(
+                new Companions.RosterBonds(Companions.DefaultValues.System()), Cfg));
+        private Companions.RosterDrama _drama;
+
+        /// <summary>
+        /// Смерть напарника отзывается в ростере (US-9.6): соратники скорбят,
+        /// соперники — нет. Зовётся ВСЕМИ путями гибели, иначе потеря никого не
+        /// трогает и «дорог ли ростер» проверить нечем.
+        /// </summary>
+        public Companions.RippleReport NotifyDeath(string companionId)
+            => Drama.OnDeath(Roster, companionId);
+
+        /// <summary>
+        /// Ход времени опрашивает ростер на уход (US-9.2): боец на дне лояльности
+        /// уходит к врагу со своим гиром и становится боссом. Возвращает запись
+        /// антагониста (или null) — рябь предательства уже применена.
+        /// </summary>
+        public Companions.AntagonistRecord TryDefectOnTimePass()
+        {
+            foreach (var c in Roster.All)
+            {
+                if (!Companions.DefectionSystem.ShouldDefect(c)) continue;
+                var record = Companions.DefectionSystem.Defect(c, Base);
+                Antagonists.Add(record);
+                Flags.Add(Story.Prologue.BossSeededFlag); // расплата открывается на доске
+                Drama.OnBetrayal(Roster, c.Id);
+                return record;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Пейоф расплаты с перебежчиком (US-9.4): гир возвращается в сташ, сам он
+        /// выбывает окончательно. Идемпотентно — повторный вызов ничего не делает.
+        /// Живёт в Core, чтобы применяться ДО автосейва, закрывающего квест: иначе
+        /// выход из игры на панели итога терял единственную награду навсегда.
+        /// Если перебежчиков несколько — расплата открывается заново.
+        /// </summary>
+        public bool ResolveBossRevenge()
+        {
+            if (Antagonists.Count == 0) return false;
+            var record = Antagonists[0];
+            var traitor = Roster.Get(record.CompanionId);
+            // Гир возвращается РОВНО ОДИН раз: снимок в записи и надетое на
+            // перебежчике — одни и те же экземпляры (Defect их не снимал).
+            if (Base.Inventory.RecoverGearFrom(traitor) == 0)
+                Companions.DefectionSystem.ReturnGearOnKill(record, Base.Inventory); // бойца нет — берём снимок
+            if (traitor != null && traitor.IsAlive) traitor.Kill();
+            Antagonists.RemoveAt(0);
+
+            if (Antagonists.Count > 0)
+            {
+                // Есть ещё ушедшие — счёт не закрыт: возвращаем дело на доску.
+                Flags.Remove(Game.Core.Quests.DefaultQuests.BossDefeatedFlag);
+                Quests.Reopen("boss_revenge");
+            }
+            return true;
+        }
 
         /// <summary>Ачивки берутся ТОЛЬКО в айронмене (US-16.1). true — взята впервые.</summary>
         public bool TryUnlockAchievement(string id)
@@ -111,6 +185,7 @@ namespace Game.Core.Saves
         /// </summary>
         public CycleReport AdvanceDays(int days)
         {
+            MarkFinaleReadyDay(); // якорь ставим ДО продвижения: дни клока не «съедаются»
             var report = Base.AdvanceDays(days);
             int before = Base.CityTier;
             int grown = GrowCity();
@@ -129,6 +204,13 @@ namespace Game.Core.Saves
             int grown = 0;
             while (Base.TryAdvanceCityTier(Factions)) grown = Base.CityTier;
             return grown;
+        }
+
+        /// <summary>Фиксирует день появления вехи финала — точку отсчёта сбора орды.</summary>
+        private void MarkFinaleReadyDay()
+        {
+            if (FinaleReadyDay <= 0 && Story.FinalBattle.IsUnlocked(Flags))
+                FinaleReadyDay = Base.CurrentDay;
         }
 
         // ---- Жизненный цикл вылазки (оркестрация US-16.1: InExpedition ведётся сам) ----
@@ -160,6 +242,7 @@ namespace Game.Core.Saves
         public CycleReport DepartExpedition()
         {
             if (ActiveExpedition == null) throw new InvalidOperationException("Вылазка не собрана");
+            MarkFinaleReadyDay(); // вылазки двигают календарь так же, как «ждать день»
             var report = ActiveExpedition.Depart();
             int before = Base.CityTier;
             int grown = GrowCity(); // дни марша — тоже ход времени
@@ -172,6 +255,7 @@ namespace Game.Core.Saves
         public ExpeditionReport ConcludeExpedition(CombatState combat)
         {
             if (ActiveExpedition == null) throw new InvalidOperationException("Вылазка не собрана");
+            MarkFinaleReadyDay(); // веха могла встать квестом — клок стартует сразу
             var report = ActiveExpedition.Conclude(combat);
             InExpedition = false;
             ActiveExpedition = null;
@@ -233,11 +317,35 @@ namespace Game.Core.Saves
             baseState.MarkBuilt(BaseSectionType.Workshop);
             baseState.MarkBuilt(BaseSectionType.Storehouse);
 
-            return new Campaign(cfg, baseState, DefaultFactions.NewRegistry())
+            var campaign = new Campaign(cfg, baseState, DefaultFactions.NewRegistry())
             {
                 Ironman = cfg.Ironman,
                 Seed = campaignSeed
             };
+            campaign.SeedArcs(ContentCatalog.Default());
+            return campaign;
+        }
+
+        /// <summary>
+        /// Заводит личные арки напарников (US-9.5) по каталогу. Без этого шага
+        /// Campaign.Arcs всегда оставался пустым — весь контент арок был мёртв,
+        /// а полоса лояльности не имела ни одного долгосрочного пейофа.
+        /// </summary>
+        public void SeedArcs(ContentCatalog catalog)
+        {
+            if (catalog == null) return;
+            foreach (var arc in catalog.Arcs)
+            {
+                if (arc == null) continue;
+                bool already = false;
+                foreach (var existing in Arcs)
+                    if (existing.Arc.Id == arc.Id) { already = true; break; }
+                if (already) continue;
+
+                var run = new CompanionArcRun(arc, Flags);
+                run.Refresh(Roster.Get(arc.CompanionId));
+                Arcs.Add(run);
+            }
         }
     }
 }

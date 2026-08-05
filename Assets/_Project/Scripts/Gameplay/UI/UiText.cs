@@ -110,6 +110,11 @@ namespace Game.Gameplay.UI
         public const string ChronicleRecovered = "снова в строю";
         public const string ChronicleBuilt = "достроено:";
         public const string ChronicleCityGrew = "ГОРОД ВЫРОС: тир {0} — открылись новые точки на карте";
+        public const string ChronicleDefected = "{0} ушёл(ла) к врагу. Отряд молчит.";
+        public const string ChronicleRetreated = "Вылазка сорвалась: отряд отступил ни с чем.";
+        public const string ChronicleMourn = "{0}: {1}";
+        public const string BossBeaten = "Счёт с перебежчиком закрыт — его снаряжение вернулось в сташ.";
+        public const string ArcChapter = "Личное: {0} ({1})";
 
         // Фракции и влияние (Эпик 10)
         public const string FactionsTitle = "Отношения";

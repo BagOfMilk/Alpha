@@ -11,7 +11,7 @@ namespace Game.Core.Saves
     [Serializable]
     public sealed class SaveData
     {
-        public int version = 4;
+        public int version = 5;
 
         // v3: сид кампании + состояние потока случайностей угроз (ulong строкой —
         // JsonUtility надёжно не сериализует ulong). Загрузка ПРОДОЛЖАЕТ поток.
@@ -73,6 +73,18 @@ namespace Game.Core.Saves
         public List<string> questsAvailable = new List<string>();
         public List<string> questsActive = new List<string>();
         public List<string> questsCompleted = new List<string>();
+
+        // v5: день появления вехи финала — от него растёт волна штурма (US-11.4).
+        // Старые сейвы: 0 → орда не набирает подкреплений (честно для прошлых прогонов).
+        public int finaleReadyDay;
+
+        /// <summary>
+        /// v5, айронмен: сейв сделан НА ВЫХОДЕ вылазки, бой не доигран. Загрузка
+        /// такого сейва не отматывает решение — вылазка резолвится как отступление
+        /// (без наград и без смертей). Иначе выход из игры в проигрышном бою был
+        /// бесплатным откатом мимо всей телеметрии save-scum (US-16.1).
+        /// </summary>
+        public bool expeditionUnresolved;
     }
 
     [Serializable]

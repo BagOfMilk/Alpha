@@ -4,6 +4,7 @@ using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
 using Game.Core.Combat;
+using Game.Core.Companions;
 using Game.Core.Council;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
@@ -56,7 +57,10 @@ namespace Game.Gameplay.UI
         {
             new GridPos(10, 2), new GridPos(11, 3), new GridPos(10, 4),
             new GridPos(11, 5), new GridPos(10, 6), new GridPos(11, 1),
-            new GridPos(10, 0), new GridPos(11, 7)
+            new GridPos(10, 0), new GridPos(11, 7),
+            // Резерв под волну штурма: без этих мест подкрепления орды (US-11.4)
+            // считались, но на арену не попадали — давление было чисто бумажным.
+            new GridPos(9, 1), new GridPos(9, 3), new GridPos(9, 5), new GridPos(9, 6)
         };
 
         private void Awake()
@@ -181,11 +185,35 @@ namespace Game.Gameplay.UI
             GameFlow.ResetChronicle(); // лента принадлежит прогону, а не процессу
             GameFlow.LastReport = null; // отчёт прошлой вылазки к загруженной кампании не относится
             AttachCouncilIfMissing();
+
             _onboarding = new OnboardingFlow();
             AdvanceOnboarding(restored, silent: true); // фаст-форвард из флагов
+
             // Загрузки — часть телеметрии (сигнал save-scum: reload после потерь).
+            // Сессия открывается ДО событий загрузки: Event при закрытой сессии
+            // молча теряется, и «отступление» не попадало бы в JSONL вообще.
             if (!Telemetry.Active) Telemetry.Begin(restored);
             Telemetry.Event("save_loaded", ("file", System.IO.Path.GetFileName(path)));
+
+            // Чекпойнт «бой не доигран»: решение идти уже принято, загрузка его не
+            // отматывает — вылазка засчитывается отступлением. Отряд возвращается
+            // потрёпанным: иначе выход из проигрышного боя был бы ДЕШЕВЛЕ честного
+            // поражения (там Критические ранения всем и возможные смерти).
+            if (data.expeditionUnresolved)
+            {
+                int hurt = 0;
+                foreach (var dto in data.companions)
+                {
+                    if (dto.status != (int)CompanionStatus.InSquad) continue; // кто был в отряде
+                    var comp = restored.Roster.Get(dto.id);
+                    if (comp == null || !comp.IsAlive) continue;
+                    comp.ApplyInjury(Game.Core.Health.InjuryTier.Serious, _cfg, null);
+                    hurt++;
+                }
+                AddChronicle($"[{restored.Base.CurrentDay}] {UiText.ChronicleRetreated}");
+                Telemetry.Event("expedition_retreat_on_load", ("wounded", hurt));
+                AutoSave.Write(restored); // пометку снимаем: решение отыграно
+            }
 
             // Сейв мог быть сделан ДО завершения пролога (чекпойнт создания или
             // автосейв после пролог-боя): пролог форсируется, а не выбирается с
@@ -385,6 +413,17 @@ namespace Game.Gameplay.UI
             var c = GameFlow.Campaign;
             if (c == null || c.Outcome != CampaignOutcome.Ongoing) return;
             RecordCycle(c.AdvanceDays(1));
+
+            // Ход времени опрашивает ростер на уход (US-9.2): боец на дне лояльности
+            // уходит к врагу — и возвращается боссом на доске «Тот, кого бросили».
+            var defector = c.TryDefectOnTimePass();
+            if (defector != null)
+            {
+                var who = NameOfCompanion(c, defector.CompanionId);
+                AddChronicle($"[{c.Base.CurrentDay}] {string.Format(UiText.ChronicleDefected, who)}");
+                Telemetry.Event("companion_defected", ("companion", defector.CompanionId));
+            }
+
             AdvanceOnboarding(c);
             Telemetry.Event("day_advanced",
                 ("gold", c.Base.Resources.Get(ResourceType.Gold)),
@@ -417,7 +456,12 @@ namespace Game.Gameplay.UI
                 {
                     line += "\n    ⚠ " + UiText.CrisisName(incident.CrisisApplied);
                     if (incident.CrisisVictimId != null)
+                    {
                         line += ": " + NameOfCompanion(c, incident.CrisisVictimId);
+                        // Гибель дома отзывается так же, как гибель в бою (US-9.6).
+                        foreach (var effect in c.NotifyDeath(incident.CrisisVictimId).Effects)
+                            line += $"\n    {NameOfCompanion(c, effect.CompanionId)}: {effect.Note}";
+                    }
                 }
                 AddChronicle(line);
                 Telemetry.Incident(incident, "home");
@@ -696,6 +740,22 @@ namespace Game.Gameplay.UI
                 if (GameFlow.PendingQuest != null) btn.tooltip = UiText.QuestBusyNote;
                 board.Add(btn);
             }
+            // Личные арки напарников (US-9.5): доступная глава — такой же прогон,
+            // но гейтится лояльностью, а не флагами доски.
+            foreach (var arcRun in c.Arcs)
+            {
+                var owner = c.Roster.Get(arcRun.Arc.CompanionId);
+                arcRun.Refresh(owner);
+                if (arcRun.State != ArcState.Available || arcRun.CurrentChapter == null) continue;
+
+                string arcId = arcRun.Arc.Id;
+                var btn = new Button(() => BeginArcChapter(arcId))
+                { text = string.Format(UiText.ArcChapter, arcRun.CurrentChapter.Quest.Title,
+                                       owner != null ? owner.DisplayName : arcRun.Arc.CompanionId) };
+                btn.SetEnabled(GameFlow.PendingQuest == null);
+                board.Add(btn);
+            }
+
             foreach (var q in c.Quests.Active)
                 board.Add(new Label(q.Title + UiText.QuestInWork));
             if (c.Quests.Completed.Count > 0)
@@ -1058,10 +1118,11 @@ namespace Game.Gameplay.UI
             }
 
             RecordCycle(c.DepartExpedition()); // дни дороги тоже приносят события города
-            // В айронмене НЕ чекпойнтим середину вылазки: загрузка возвращала бы
-            // отряд домой «бесплатно» — выход из проигрышного боя. Последний
-            // автосейв = город до выхода; бой после исхода сейвится сразу.
-            if (!c.Ironman) AutoSave.Write(c);
+            // Решение идти фиксируется ВСЕГДА. В айронмене — особой пометкой:
+            // загрузка такого сейва резолвит вылазку отступлением, а не возвращает
+            // отряд домой бесплатно (иначе выход из проигрышного боя был откатом).
+            if (c.Ironman) AutoSave.WriteDepartCheckpoint(c);
+            else AutoSave.Write(c);
 
             Telemetry.Event("expedition_departed",
                 ("node", _pickedNode.Id), ("squad", _squadPicks.Count));
@@ -1098,6 +1159,12 @@ namespace Game.Gameplay.UI
                 var encounter = Game.Core.Story.FinalBattle.BuildEncounter(c);
                 enemies = encounter.Enemies;
                 accuracyBonus += encounter.DefenderAccuracyBonus; // Готовность прикрывает своих (US-11.4)
+
+                // Потери ростера НЕ должны наказывать дважды (меньше бойцов → ниже
+                // полоса → больше врагов). Волна соразмерна тем, кто реально вышел:
+                // сложность составом, а не безнадёжностью (US-3.15).
+                int cap = units.Count + FinaleEnemyMargin(encounter.Band);
+                if (enemies.Count > cap) enemies.RemoveRange(cap, enemies.Count - cap);
             }
             else if (node.Id == "rusted_works")
                 enemies = new List<EnemyDefinition>
@@ -1110,6 +1177,23 @@ namespace Game.Gameplay.UI
                 {
                     DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner(), DefaultContent.FeralGhoul()
                 };
+
+            // Кривая сложности СОСТАВОМ (US-3.15), а не раздутыми HP: пустошь пустеет
+            // не в пользу игрока. Без этого повторная вылазка была тем же боем всю
+            // кампанию, пока отряд рос — то есть становилась всё легче.
+            // Потери учитываются: волна соразмерна тем, кто реально вышел.
+            if (!finale)
+            {
+                if (c.Base.CurrentDay >= _cfg.ExpeditionEscalationDay1 || c.Base.CityTier >= 2)
+                    enemies.Add(DefaultContent.ScavGunner());
+                if (c.Base.CurrentDay >= _cfg.ExpeditionEscalationDay2)
+                    enemies.Add(DefaultContent.FeralGhoul());
+                if (c.Base.CurrentDay >= _cfg.ExpeditionEscalationDay3)
+                    enemies.Add(DefaultContent.RustDrone()); // техника подтягивается позже
+
+                int cap = units.Count + 2;
+                if (enemies.Count > cap) enemies.RemoveRange(cap, enemies.Count - cap);
+            }
 
             // Отряд: бонус точности (баф совета + Укрепления финала) — до входа в бой.
             if (accuracyBonus != 0)
@@ -1158,6 +1242,29 @@ namespace Game.Gameplay.UI
             GameFlow.LastQuestStep = null;
             Telemetry.Event("quest_started", ("quest", questId));
             ShowQuest();
+        }
+
+        /// <summary>Глава личной арки (US-9.5): играется тем же прогоном, что и квесты доски.</summary>
+        private void BeginArcChapter(string arcId)
+        {
+            var c = GameFlow.Campaign;
+            if (c == null || GameFlow.PendingQuest != null) return;
+
+            foreach (var arcRun in c.Arcs)
+            {
+                if (arcRun.Arc.Id != arcId) continue;
+                var owner = c.Roster.Get(arcRun.Arc.CompanionId);
+                var chapter = arcRun.CurrentChapter;
+                if (chapter == null || !arcRun.Begin(owner)) return;
+
+                GameFlow.PendingQuest = new QuestRun(chapter.Quest, c.Base, _cfg,
+                    c.Factions, c.Base.ThreatsSystem, c.Flags);
+                GameFlow.LastQuestStep = null;
+                GameFlow.PendingArcId = arcId;
+                Telemetry.Event("arc_chapter_started", ("arc", arcId), ("chapter", chapter.Id));
+                ShowQuest();
+                return;
+            }
         }
 
         private void ShowQuest()
@@ -1314,6 +1421,8 @@ namespace Game.Gameplay.UI
             // Летальный провал (US-13.2): гибель протагониста терминальна (айронмен).
             if (step.CasualtyDied)
             {
+                foreach (var effect in c.NotifyDeath(step.CasualtyId).Effects)
+                    step.Notes.Add($"{NameOfCompanion(c, effect.CompanionId)}: {effect.Note}");
                 var victim = c.Roster.Get(step.CasualtyId);
                 if (victim != null && victim.IsProtagonist)
                 {
@@ -1360,6 +1469,8 @@ namespace Game.Gameplay.UI
             Telemetry.Event("quest_finished",
                 ("quest", run.Def.Id), ("succeeded", run.State == QuestState.Succeeded));
             bool prologue = run.Def.Id == "prologue";
+            bool bossBeaten = run.Def.Id == "boss_revenge" && run.State == QuestState.Succeeded;
+            string arcId = GameFlow.PendingArcId;
             GameFlow.ClearQuest();
 
             if (prologue)
@@ -1369,6 +1480,29 @@ namespace Game.Gameplay.UI
                 if (defector != null)
                     Telemetry.Event("boss_seeded", ("companion", defector.CompanionId));
                 _onboarding.NotifyPrologueResolved();
+            }
+
+            // Босс повержен: пейоф уже мог примениться в Battle-сцене (до автосейва) —
+            // ResolveBossRevenge идемпотентен, здесь он закрывает путь «терминал без боя».
+            if (bossBeaten && c.ResolveBossRevenge())
+            {
+                AddChronicle($"[{c.Base.CurrentDay}] {UiText.BossBeaten}");
+                Telemetry.Event("boss_defeated");
+            }
+
+            // Глава личной арки сыграна — двигаем арку (даже на провале: иначе
+            // прогон навсегда застрял бы в InProgress).
+            if (arcId != null)
+            {
+                foreach (var arcRun in c.Arcs)
+                    if (arcRun.Arc.Id == arcId)
+                    {
+                        arcRun.CompleteChapter();
+                        arcRun.Refresh(c.Roster.Get(arcRun.Arc.CompanionId));
+                        Telemetry.Event("arc_chapter_done",
+                            ("arc", arcId), ("succeeded", run.State == QuestState.Succeeded));
+                        break;
+                    }
             }
             AdvanceOnboarding(c);
             AutoSave.Write(c);
@@ -1422,10 +1556,36 @@ namespace Game.Gameplay.UI
                     CombatDemo.SquadSpawns[i]);
 
             var enemies = QuestEncounterEnemies(encounterId);
-            for (int i = 0; i < enemies.Count && i < EnemySpawns.Length; i++)
-                cs.AddUnit(CombatUnit.FromEnemy(enemies[i], $"e{i}"), EnemySpawns[i]);
+            int spawn = 0;
+
+            // Босс-перебежчик (US-9.4): дерётся своими статами, гиром и приёмами —
+            // это тот самый напарник, которого бросили в прологе.
+            if (encounterId == DefaultQuests.BossEncounterId && c.Antagonists.Count > 0)
+            {
+                var record = c.Antagonists[0];
+                var traitor = c.Roster.Get(record.CompanionId);
+                if (traitor != null)
+                {
+                    cs.AddUnit(DefectionSystem.BuildBossUnit(traitor, _cfg, abilities), EnemySpawns[spawn++]);
+                    Telemetry.Event("boss_encounter", ("companion", record.CompanionId));
+                }
+            }
+
+            for (int i = 0; i < enemies.Count && spawn < EnemySpawns.Length; i++, spawn++)
+                cs.AddUnit(CombatUnit.FromEnemy(enemies[i], $"e{i}"), EnemySpawns[spawn]);
 
             return cs;
+        }
+
+        /// <summary>На сколько штурм может превышать вышедший отряд — по полосе Готовности.</summary>
+        private static int FinaleEnemyMargin(Game.Core.Threats.ReadinessBand band)
+        {
+            switch (band)
+            {
+                case Game.Core.Threats.ReadinessBand.Fortified: return 1;
+                case Game.Core.Threats.ReadinessBand.Braced: return 2;
+                default: return 4; // неготовый город встречает полную волну
+            }
         }
 
         /// <summary>Составы врагов квестовых боёв (авторские, US-13.1).</summary>
@@ -1445,6 +1605,9 @@ namespace Game.Gameplay.UI
                         DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner(),
                         DefaultContent.ScavGunner(), DefaultContent.FeralGhoul(), DefaultContent.FeralGhoul()
                     };
+                case DefaultQuests.BossEncounterId: // свита перебежчика (сам он — отдельным юнитом)
+                    return new List<EnemyDefinition>
+                    { DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner() };
                 default:
                     return new List<EnemyDefinition>
                     { DefaultContent.RaiderBruiser(), DefaultContent.ScavGunner(), DefaultContent.FeralGhoul() };
@@ -1483,9 +1646,17 @@ namespace Game.Gameplay.UI
             {
                 var comp = campaign != null ? campaign.Roster.Get(oc.CompanionId) : null;
                 string name = comp != null ? comp.DisplayName : oc.CompanionId;
-                if (oc.Died) Add(oc.DiedOnReturn
-                    ? $"✝ {name} погиб(ла) по дороге домой — беда пришла в город."
-                    : $"✝ {name} погиб(ла) — насовсем.");
+                if (oc.Died)
+                {
+                    Add(oc.DiedOnReturn
+                        ? $"✝ {name} погиб(ла) по дороге домой — беда пришла в город."
+                        : $"✝ {name} погиб(ла) — насовсем.");
+                    // Потеря отзывается в ростере (US-9.6): соратники скорбят.
+                    if (campaign != null)
+                        foreach (var effect in campaign.NotifyDeath(oc.CompanionId).Effects)
+                            Add("    " + string.Format(UiText.ChronicleMourn,
+                                NameOf(effect.CompanionId), effect.Note));
+                }
                 else if (oc.Injury != Game.Core.Health.InjuryTier.None)
                     Add($"{name}: ранение {oc.Injury}" + (oc.ScarId != null ? $", вечный шрам ({oc.ScarId})" : ""));
             }

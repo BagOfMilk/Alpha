@@ -23,6 +23,9 @@ namespace Game.Core.Saves
         /// <summary>Каталог перков: перки — производная скилов, при загрузке пересчитываются, не хранятся.</summary>
         public IEnumerable<PerkDefinition> Perks => _perks.Values;
 
+        /// <summary>Все личные арки — Campaign.SeedArcs заводит по ним прогоны (US-9.5).</summary>
+        public IEnumerable<CompanionArc> Arcs => _arcs.Values;
+
         public Trait GetTrait(string id) => id != null && _traits.TryGetValue(id, out var t) ? t : null;
         public Scar GetScar(string id) => id != null && _scars.TryGetValue(id, out var s) ? s : null;
         public ItemDefinition GetItem(string id) => id != null && _items.TryGetValue(id, out var i) ? i : null;

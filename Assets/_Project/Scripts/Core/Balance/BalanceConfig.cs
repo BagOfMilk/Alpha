@@ -150,6 +150,22 @@ namespace Game.Core.Balance
         // «Готовность» (внешнее/финал, US-11.4). Тоже скрыта.
         public double ReadinessPerPreparation = 10; // действие совета «Подготовка к угрозе» (вход)
         public double ReadinessPerFortification = 15; // вклад построенных Укреплений
+        /// <summary>
+        /// Мягкий доом-клок финала (US-11.4): каждые N дней ПОСЛЕ сюжетной вехи орда
+        /// добирает бойца в штурм. Доом-клока на кампанию нет — но и бесконечно
+        /// готовиться нельзя, иначе время после вехи ничего не стоит.
+        /// </summary>
+        public int HordeGrowthDays = 12;
+
+        /// <summary>
+        /// Дни, на которых состав вылазки усиливается (US-3.15): пустошь пустеет не
+        /// в пользу игрока. Волна при этом соразмерна вышедшему отряду — потери не
+        /// наказывают дважды.
+        /// </summary>
+        public int ExpeditionEscalationDay1 = 15;
+        public int ExpeditionEscalationDay2 = 35;
+        public int ExpeditionEscalationDay3 = 60;
+
         public double ReadinessBracedAt = 25;       // полосы: Unprepared < Braced < Fortified
         // 40 (было 60): достижимый потолок шкалы — Укрепления 15 + «Подготовка» 10
         // (Влияния хватает на одну за кампанию) + вклад ростера ≈ 20 → 45.

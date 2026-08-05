@@ -193,8 +193,10 @@ namespace Game.Core.Threats
                     // отряду на марше (иначе труп уходил в бой и «воскресал» исходом).
                     var candidates = new List<Companion>();
                     foreach (var c in baseState.Roster.All)
-                        if (c.IsAlive && !c.IsProtagonist && c.Status != CompanionStatus.InSquad)
-                            candidates.Add(c);
+                        if (c.IsAlive && !c.IsProtagonist
+                            && c.Status != CompanionStatus.InSquad        // не бьём отряд на марше
+                            && c.Status != CompanionStatus.Antagonist)    // ушедший уже не «свой»:
+                            candidates.Add(c);                            // его гир возвращает только босс-бой (US-9.4)
                     if (candidates.Count > 0)
                     {
                         var victim = candidates[_rng.Range(0, candidates.Count - 1)];

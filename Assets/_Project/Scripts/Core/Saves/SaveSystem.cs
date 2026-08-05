@@ -40,6 +40,7 @@ namespace Game.Core.Saves
                 inExpedition = campaign.InExpedition,
                 campaignOutcome = (int)campaign.Outcome,
                 campaignSeed = campaign.Seed,
+                finaleReadyDay = campaign.FinaleReadyDay,
                 reputation = (float)campaign.Factions.Reputation,
                 influence = campaign.Factions.Influence
             };
@@ -253,7 +254,8 @@ namespace Game.Core.Saves
                 // data.inExpedition остаётся в сейве под будущую полную сериализацию вылазки.
                 InExpedition = false,
                 Outcome = (CampaignOutcome)data.campaignOutcome,
-                Seed = data.campaignSeed
+                Seed = data.campaignSeed,
+                FinaleReadyDay = data.finaleReadyDay
             };
             foreach (var f in data.flags) campaign.Flags.Add(f);
             foreach (var a in data.achievements) campaign.Achievements.Add(a);
@@ -291,9 +293,22 @@ namespace Game.Core.Saves
                 var arc = catalog.GetArc(ad.arcId);
                 if (arc == null) continue;
                 var run = new CompanionArcRun(arc, campaign.Flags);
-                run.RestoreState((ArcState)ad.state, ad.chapterIndex);
+                var state = (ArcState)ad.state;
+                // Прогон главы (QuestRun + связь через GameFlow.PendingArcId) не
+                // сериализуется — как и активные квесты доски. Начатую главу
+                // ДЕМОТИРУЕМ, иначе InProgress переживает сейв, Refresh на нём
+                // выходит сразу, а двигать арку нечем — контент мёртв навсегда.
+                if (state == ArcState.InProgress)
+                {
+                    run.RestoreState(ArcState.Locked, ad.chapterIndex);
+                    run.Refresh(roster.Get(arc.CompanionId)); // гейт перепроверится → снова на доску
+                }
+                else run.RestoreState(state, ad.chapterIndex);
                 campaign.Arcs.Add(run);
             }
+            // Сейвы до итерации 20 арок не заводили вовсе — досеиваем недостающие,
+            // иначе старая кампания навсегда осталась бы без личных историй.
+            campaign.SeedArcs(catalog);
 
             // Трофеи перебежчиков (v2): гир восстанавливается точно, оружие — из гира.
             foreach (var an in data.antagonists)
