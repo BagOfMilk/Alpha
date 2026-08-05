@@ -92,7 +92,11 @@ namespace Game.Core.Items
             {
                 var r = rolls[i];
                 int baseRoll = r.Min >= r.Max ? r.Min : (rng != null ? rng.Range(r.Min, r.Max) : r.Min);
-                int value = (int)Math.Round(baseRoll * mult);
+                // AwayFromZero, а не банковское округление по умолчанию: множители
+                // редкости (1.0/1.5/2.0/2.5) на целых роллах регулярно дают ровно .5,
+                // и «к чётному» сворачивало бы 4.5→4, но 7.5→8 — магнитуда зависела
+                // бы от чётности. Правило то же, что в UpgradeTo.
+                int value = (int)Math.Round(baseRoll * mult, MidpointRounding.AwayFromZero);
                 if (value != 0) _mods.Add(new StatModifier(r.Stat, value)); // Mode=Flat, Source=Gear
             }
         }

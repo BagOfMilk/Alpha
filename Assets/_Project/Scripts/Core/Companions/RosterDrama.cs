@@ -65,7 +65,7 @@ namespace Game.Core.Companions
 
             foreach (var c in roster.All)
             {
-                if (c == trigger || !c.IsAlive || c.Status == CompanionStatus.Antagonist) continue;
+                if (c == trigger || !c.IsOnPlayerSide) continue;
                 var bond = _bonds.Between(c, trigger);
 
                 int delta;

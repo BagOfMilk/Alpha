@@ -135,6 +135,28 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Infirmary_InjuredMedic_GivesNoBonus()
+        {
+            var cfg = new BalanceConfig { NaturalRecoveryPerDay = 1, InfirmaryRecoveryPerDay = 1, MedicRecoveryPerSkillPoint = 0.2 };
+            var (state, roster) = MakeBase(cfg);
+            var patient = AddCompanion(roster, "p");
+            var medic = AddCompanion(roster, "m", medicine: 5);
+            state.AddSlot(new AssignmentSlotDefinition("bed", "Койка", BaseSectionType.Infirmary) { RelevantSkill = SkillType.Medicine });
+            state.TryAssign("m", "bed");
+            patient.ApplyInjury(InjuryTier.Serious, cfg, null); // 5 дней
+
+            // Медик выбывает, УЖЕ стоя на посту: ранение слот не освобождает. Пока
+            // бонус считался по «слот занят», пациент на койке лечил сам себя
+            // ускоренно — и укомплектованность Лазарета ничего не стоила.
+            medic.ApplyInjury(InjuryTier.Serious, cfg, null);
+
+            state.AdvanceDays(2); // только natural: 2 < 5
+            Assert.IsTrue(patient.IsInjured, "раненый медик бонуса не даёт");
+            state.AdvanceDays(3);
+            Assert.IsFalse(patient.IsInjured, "natural-лечение своё отработало");
+        }
+
+        [Test]
         public void Construction_Completes_UnlocksSlot_AndPopulationGrows()
         {
             var cfg = new BalanceConfig { PopulationGrowthPerDay = 1 };

@@ -302,7 +302,10 @@ namespace Game.Core.Base
                 var slot = _slots[i];
                 if (slot.Definition.Section != BaseSectionType.Infirmary || !slot.IsOccupied) continue;
                 var medic = Roster.Get(slot.AssignedCompanionId);
-                if (medic == null) continue;
+                // Пациент или труп на койке — не укомплектованность: выбыть, УЖЕ стоя
+                // на посту, можно (ранение/смерть слот не освобождают), а лечить в
+                // таком виде нельзя. Предикат тот же, которым TryAssign пускает на пост.
+                if (medic == null || !medic.IsAvailableForDuty) continue;
                 double bonus = Balance.InfirmaryRecoveryPerDay
                                + medic.GetSkill(SkillType.Medicine) * Balance.MedicRecoveryPerSkillPoint;
                 if (bonus > best) best = bonus;

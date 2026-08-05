@@ -172,7 +172,7 @@ namespace Game.Core.Threats
                 if (!slot.Unlocked || !slot.IsOccupied) continue;
                 if (slot.Definition.RelevantSkill != skill) continue;
                 var companion = baseState.Roster.Get(slot.AssignedCompanionId);
-                if (companion != null && companion.IsAlive) return companion;
+                if (companion != null && companion.IsOnPlayerSide) return companion;
             }
             return null;
         }
@@ -193,10 +193,9 @@ namespace Game.Core.Threats
                     // отряду на марше (иначе труп уходил в бой и «воскресал» исходом).
                     var candidates = new List<Companion>();
                     foreach (var c in baseState.Roster.All)
-                        if (c.IsAlive && !c.IsProtagonist
-                            && c.Status != CompanionStatus.InSquad        // не бьём отряд на марше
-                            && c.Status != CompanionStatus.Antagonist)    // ушедший уже не «свой»:
-                            candidates.Add(c);                            // его гир возвращает только босс-бой (US-9.4)
+                        if (c.IsOnPlayerSide && !c.IsProtagonist         // ушедший к врагу — не жертва кризиса:
+                            && c.Status != CompanionStatus.InSquad)     // его гир возвращает только босс-бой (US-9.4)
+                            candidates.Add(c);                          // и не бьём отряд на марше
                     if (candidates.Count > 0)
                     {
                         var victim = candidates[_rng.Range(0, candidates.Count - 1)];

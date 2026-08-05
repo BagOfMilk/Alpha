@@ -26,7 +26,11 @@ namespace Game.Core.Companions
         private static QuestDefinition Chapter1() =>
             new QuestDefinition("arc_medic_q1", "Письмо из прошлого", QuestSource.NpcSettlement)
                 .Flavor("Медику весть: старый товарищ при смерти. Успеть бы.")
-                .Stage(QuestStage.SkillCheck("treat", "Вытащить товарища с того света.", SkillType.Medicine, 3, 1, 2))
+                // Порог 6 — на очко ВЫШЕ стартового медика (Медицина 3 + Спокойные
+                // руки 2 = 5): глава арки есть проверка того, вкладывались ли в него.
+                // При пороге ≤5 ветка «Опоздали» была недостижима — арка гейтится
+                // живым медиком, значит его значение в ростере всегда присутствует.
+                .Stage(QuestStage.SkillCheck("treat", "Вытащить товарища с того света.", SkillType.Medicine, 6, 1, 2))
                 .Stage(QuestStage.OutcomeStage("saved", "Товарищ выкарабкался.", true, new QuestReward(40, 30)))
                 .Stage(QuestStage.OutcomeStage("lost", "Опоздали. Это останется с медиком.", false));
 
@@ -53,8 +57,11 @@ namespace Game.Core.Companions
         private static QuestDefinition BrawlerChapter1() =>
             new QuestDefinition("arc_brawler_q1", "Старый ринг", QuestSource.NpcSettlement)
                 .Flavor("Бойца зовут «тряхнуть стариной» на подпольном ринге. Долги не забываются.")
+                // Порог 10 — на очко ВЫШЕ стартового бойца (Запугивание 1 + Громила 2
+                // + Сила 6 = 9), см. арку медика: ветка «Пришлось выйти на ринг»
+                // должна быть достижима, а арка гейтится живым Бойцом.
                 .Stage(QuestStage.SocialCheck("refuse", "Отговорить устроителей — без крови.",
-                    Game.Core.Checks.CheckApproach.Intimidate, threshold: 3, onSuccess: 1, onFailure: 2))
+                    Game.Core.Checks.CheckApproach.Intimidate, threshold: 10, onSuccess: 1, onFailure: 2))
                 .Stage(QuestStage.OutcomeStage("walked_away", "Ринг остался в прошлом. Боец молчит, но благодарен.", true,
                     new QuestReward(xp: 40, gold: 20)))
                 .Stage(QuestStage.OutcomeStage("dragged_in", "Пришлось выйти на ринг. Победа — но осадок тяжёлый.", false,

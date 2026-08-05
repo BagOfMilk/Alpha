@@ -69,6 +69,17 @@ namespace Game.Core.Saves
             foreach (var q in campaign.Quests.Active) data.questsActive.Add(q.Id);
             foreach (var q in campaign.Quests.Completed) data.questsCompleted.Add(q.Id);
 
+            // Позиция идущего прогона (v6): без неё загрузка начинала квест заново,
+            // а уже применённые последствия выбора оставались в сейве — их можно
+            // было фармить перезагрузкой (репутация фракций, Напряжение, лояльность).
+            if (campaign.ActiveQuest != null)
+            {
+                data.activeQuestId = campaign.ActiveQuest.Def.Id;
+                data.activeQuestIndex = campaign.ActiveQuest.CurrentIndex;
+                data.activeQuestState = (int)campaign.ActiveQuest.State;
+                data.activeArcId = campaign.ActiveArcId ?? "";
+            }
+
             foreach (var section in b.BuiltSections) data.builtSections.Add((int)section);
             foreach (var con in b.ConstructionQueue)
                 data.constructions.Add(new ConstructionDto
@@ -260,15 +271,28 @@ namespace Game.Core.Saves
             foreach (var f in data.flags) campaign.Flags.Add(f);
             foreach (var a in data.achievements) campaign.Achievements.Add(a);
 
-            // Журнал квестов (v4): статусы по id на свежий пул. АКТИВНЫЕ возвращаются
-            // в «доступные» — прогресс прогона (этап) не сериализуется, честнее дать
-            // перепройти с начала, чем оживить полусостояние; гейты (BlockedByFlag)
-            // при этом перепроверяются — квест с уже стоящим блок-флагом не вернётся.
+            // Идущий прогон (v6) восстанавливается ПОЗИЦИЕЙ: тот же этап, то же
+            // состояние. До v6 квест начинался заново, а уже применённые последствия
+            // (репутация/Напряжение/лояльность) оставались — перезагрузкой их можно
+            // было накручивать сколько угодно.
+            RestoreActiveQuest(data, campaign, catalog);
+
+            // Журнал квестов (v4): статусы по id на свежий пул. Активным остаётся
+            // тот, чей прогон восстановлен; прочие «активные» (сейвы v1–v5 или
+            // потерянный контент) демотируются в «доступные» — перепройти с начала
+            // честнее полусостояния; гейты (BlockedByFlag) при этом перепроверяются,
+            // и квест с уже стоящим блок-флагом на доску не вернётся.
             // v1–v3 (журнала не было): списки пусты, доска соберётся через CollectFrom.
             var questsAvailable = new List<string>(data.questsAvailable);
-            questsAvailable.AddRange(data.questsActive);
+            var questsActive = new List<string>();
+            bool boardRunRestored = campaign.ActiveQuest != null && campaign.ActiveArcId == null;
+            foreach (var id in data.questsActive)
+            {
+                if (boardRunRestored && id == campaign.ActiveQuest.Def.Id) questsActive.Add(id);
+                else questsAvailable.Add(id);
+            }
             campaign.Quests.Restore(DefaultQuests.FullPool(),
-                questsAvailable, null, data.questsCompleted,
+                questsAvailable, questsActive, data.questsCompleted,
                 factions, campaign.Flags, roster.All);
 
             // Совет (v2): пере-подключаем с пережившими сейв КД/инвестицией/бафом.
@@ -294,11 +318,12 @@ namespace Game.Core.Saves
                 if (arc == null) continue;
                 var run = new CompanionArcRun(arc, campaign.Flags);
                 var state = (ArcState)ad.state;
-                // Прогон главы (QuestRun + связь через GameFlow.PendingArcId) не
-                // сериализуется — как и активные квесты доски. Начатую главу
-                // ДЕМОТИРУЕМ, иначе InProgress переживает сейв, Refresh на нём
-                // выходит сразу, а двигать арку нечем — контент мёртв навсегда.
-                if (state == ArcState.InProgress)
+                // Идущая глава остаётся InProgress ТОЛЬКО если её прогон реально
+                // восстановлен (v6). Иначе ДЕМОТИРУЕМ: InProgress пережил бы сейв,
+                // Refresh на нём выходит сразу, а двигать арку нечем — контент мёртв
+                // навсегда.
+                bool chapterRunRestored = campaign.ActiveArcId == ad.arcId;
+                if (state == ArcState.InProgress && !chapterRunRestored)
                 {
                     run.RestoreState(ArcState.Locked, ad.chapterIndex);
                     run.Refresh(roster.Get(arc.CompanionId)); // гейт перепроверится → снова на доску
@@ -325,6 +350,42 @@ namespace Game.Core.Saves
             }
 
             return campaign;
+        }
+
+        /// <summary>
+        /// Восстанавливает идущий прогон квеста/главы арки (v6) на сохранённом
+        /// этапе. Контента нет (пул/арка изменились) — прогон не оживает, и квест
+        /// уходит в «доступные» обычной демоцией: полусостояние хуже перепрохождения.
+        /// </summary>
+        private static void RestoreActiveQuest(SaveData data, Campaign campaign, ContentCatalog catalog)
+        {
+            if (string.IsNullOrEmpty(data.activeQuestId)) return;
+
+            string arcId = string.IsNullOrEmpty(data.activeArcId) ? null : data.activeArcId;
+            QuestDefinition def = null;
+            if (arcId != null)
+            {
+                var arc = catalog.GetArc(arcId);
+                if (arc != null)
+                    foreach (var chapter in arc.Chapters)
+                        if (chapter.Quest != null && chapter.Quest.Id == data.activeQuestId)
+                        { def = chapter.Quest; break; }
+            }
+            else
+            {
+                foreach (var q in DefaultQuests.FullPool())
+                    if (q.Id == data.activeQuestId) { def = q; break; }
+            }
+            if (def == null) return;
+
+            // Индекс из сейва может указывать в никуда, если этапы квеста изменились
+            // между версиями контента — тогда прогон не оживляем.
+            if (def.StageAt(data.activeQuestIndex) == null) return;
+
+            var run = new QuestRun(def, campaign.Base, campaign.Cfg, campaign.Factions,
+                                   campaign.Base.ThreatsSystem, campaign.Flags);
+            run.RestoreTo(data.activeQuestIndex, (QuestState)data.activeQuestState);
+            campaign.SetActiveQuest(run, arcId);
         }
 
         private static Companion RestoreCompanion(CompanionDto cd, BalanceConfig cfg, ContentCatalog catalog)

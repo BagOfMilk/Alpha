@@ -62,7 +62,7 @@ namespace Game.Core.Quests
                 foreach (var id in beat.CarriersInOrder())
                 {
                     var c = roster.Get(id);
-                    if (c != null && c.IsAlive && c.Status != CompanionStatus.Antagonist)
+                    if (c != null && c.IsOnPlayerSide)
                         return new BeatDelivery(c.Id, false, c.DisplayName);
                 }
             }

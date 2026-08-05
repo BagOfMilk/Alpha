@@ -11,7 +11,7 @@ namespace Game.Core.Saves
     [Serializable]
     public sealed class SaveData
     {
-        public int version = 5;
+        public int version = 6;
 
         // v3: сид кампании + состояние потока случайностей угроз (ulong строкой —
         // JsonUtility надёжно не сериализует ulong). Загрузка ПРОДОЛЖАЕТ поток.
@@ -85,6 +85,21 @@ namespace Game.Core.Saves
         /// бесплатным откатом мимо всей телеметрии save-scum (US-16.1).
         /// </summary>
         public bool expeditionUnresolved;
+
+        /// <summary>
+        /// v6: ПОЗИЦИЯ активного прогона квеста (US-14.3). До v6 сохранялся только
+        /// статус, а прогон начинался заново — и последствия уже сделанных выборов
+        /// (репутация фракций, Напряжение, лояльность) применялись повторно при
+        /// каждой загрузке: квест возвращался на доску «чистым», а его эффекты
+        /// оставались в сейве. Теперь этап и состояние переживают загрузку.
+        /// Пусто — активного прогона нет (в т.ч. все сейвы v1–v5).
+        /// </summary>
+        public string activeQuestId = "";
+        public int activeQuestIndex;
+        public int activeQuestState;   // (int)QuestState
+
+        /// <summary>v6: если активный прогон — глава личной арки (US-9.5), её id.</summary>
+        public string activeArcId = "";
     }
 
     [Serializable]

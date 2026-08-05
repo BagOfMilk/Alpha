@@ -184,6 +184,8 @@ namespace Game.Gameplay.UI
             GameFlow.Campaign = restored;
             GameFlow.ResetChronicle(); // лента принадлежит прогону, а не процессу
             GameFlow.LastReport = null; // отчёт прошлой вылазки к загруженной кампании не относится
+            GameFlow.LastReportNarrated = false;
+            GameFlow.LastQuestStep = null; // шаг прошлого прогона к загруженному не относится
             AttachCouncilIfMissing();
 
             _onboarding = new OnboardingFlow();
@@ -215,12 +217,18 @@ namespace Game.Gameplay.UI
                 AutoSave.Write(restored); // пометку снимаем: решение отыграно
             }
 
+            restored.Quests.CollectFrom(DefaultQuests.FullPool(),
+                restored.Factions, restored.Flags, restored.Roster.All);
+
+            // Прогон, прерванный сейвом, продолжается С ТОГО ЖЕ ЭТАПА (v6): его
+            // позиция теперь в сейве, и последствия уже сделанных выборов не
+            // переигрываются.
+            if (GameFlow.PendingQuest != null) { ShowQuest(); return; }
+
             // Сейв мог быть сделан ДО завершения пролога (чекпойнт создания или
             // автосейв после пролог-боя): пролог форсируется, а не выбирается с
             // доски — без авто-резюме он терялся бы навсегда, а онбординг клинил
             // на первом шаге (флаг prologue_done ставит только исход пролога).
-            restored.Quests.CollectFrom(DefaultQuests.FullPool(),
-                restored.Factions, restored.Flags, restored.Roster.All);
             if (!restored.Flags.Contains(DefaultQuests.PrologueDoneFlag)
                 && restored.Quests.StatusOf("prologue") == QuestStatus.Available
                 && GameFlow.PendingQuest == null)
@@ -441,7 +449,13 @@ namespace Game.Gameplay.UI
         /// кризисы (вплоть до гибели напарника), выздоровления и достройки
         /// происходили молча, и стимул занимать позиции был нечитаем.
         /// </summary>
-        private void RecordCycle(Game.Core.Base.CycleReport report)
+        /// <param name="phase">
+        /// Где был отряд в эти дни: "home" (ждали день) или "travel_out" (дни марша
+        /// ТУДА, отряд уже снят с позиций). Фаза уходит в телеметрию: без параметра
+        /// сюда жёстко писалось "home", корзина travel_out оставалась пустой во всех
+        /// сессиях, и сравнение «дома против дороги» из docs/PLAYTEST.md было слепым.
+        /// </param>
+        private void RecordCycle(Game.Core.Base.CycleReport report, string phase = "home")
         {
             if (report == null) return;
             var c = GameFlow.Campaign;
@@ -464,7 +478,7 @@ namespace Game.Gameplay.UI
                     }
                 }
                 AddChronicle(line);
-                Telemetry.Incident(incident, "home");
+                Telemetry.Incident(incident, phase);
             }
 
             foreach (var id in report.Recovered)
@@ -1117,7 +1131,7 @@ namespace Game.Gameplay.UI
                 return;
             }
 
-            RecordCycle(c.DepartExpedition()); // дни дороги тоже приносят события города
+            RecordCycle(c.DepartExpedition(), "travel_out"); // дни дороги тоже приносят события города
             // Решение идти фиксируется ВСЕГДА. В айронмене — особой пометкой:
             // загрузка такого сейва резолвит вылазку отступлением, а не возвращает
             // отряд домой бесплатно (иначе выход из проигрышного боя был откатом).
@@ -1163,7 +1177,11 @@ namespace Game.Gameplay.UI
                 // Потери ростера НЕ должны наказывать дважды (меньше бойцов → ниже
                 // полоса → больше врагов). Волна соразмерна тем, кто реально вышел:
                 // сложность составом, а не безнадёжностью (US-3.15).
-                int cap = units.Count + FinaleEnemyMargin(encounter.Band);
+                // Подкрепления орды идут ПОВЕРХ капа: FinaleEnemyMargin равен
+                // (базовая волна − SquadSize), поэтому при полном отряде кап совпадал
+                // с базовой волной и срезал набранное ордой ровно в ноль — задержка
+                // финала не стоила игроку ничего (US-11.4).
+                int cap = units.Count + FinaleEnemyMargin(encounter.Band) + encounter.HordeReinforcements;
                 if (enemies.Count > cap) enemies.RemoveRange(cap, enemies.Count - cap);
             }
             else if (node.Id == "rusted_works")
@@ -1316,7 +1334,15 @@ namespace Game.Gameplay.UI
             // Терминальный исход: текст финального этапа + выход в город.
             if (!run.IsActive)
             {
-                _root.Q<Label>("quest-stage-text").text = last != null ? last.Text : "";
+                // Прогон мог быть ВОССТАНОВЛЕН из сейва уже терминальным (v6: бой
+                // квеста доводит до Outcome прямо в Battle-сцене, и автосейв пишется
+                // там же). Отчёт шага — процессная статика, его после перезапуска
+                // нет: берём текст у самого Outcome-этапа, иначе панель пустая.
+                var outcome = run.Current;
+                _root.Q<Label>("quest-stage-text").text =
+                    last != null ? last.Text : (outcome != null ? outcome.Text : "");
+                if (last == null && outcome != null && !string.IsNullOrEmpty(outcome.Text))
+                    AddLine(outcome.Text, "quest-note");
                 actions.Add(new Button(ConcludeActiveQuest) { text = UiText.QuestContinue });
                 return;
             }
@@ -1470,6 +1496,8 @@ namespace Game.Gameplay.UI
                 ("quest", run.Def.Id), ("succeeded", run.State == QuestState.Succeeded));
             bool prologue = run.Def.Id == "prologue";
             bool bossBeaten = run.Def.Id == "boss_revenge" && run.State == QuestState.Succeeded;
+            string bossId = GameFlow.PendingBossId;
+            bool payoffApplied = GameFlow.BossPayoffApplied;
             string arcId = GameFlow.PendingArcId;
             GameFlow.ClearQuest();
 
@@ -1482,9 +1510,12 @@ namespace Game.Gameplay.UI
                 _onboarding.NotifyPrologueResolved();
             }
 
-            // Босс повержен: пейоф уже мог примениться в Battle-сцене (до автосейва) —
-            // ResolveBossRevenge идемпотентен, здесь он закрывает путь «терминал без боя».
-            if (bossBeaten && c.ResolveBossRevenge())
+            // Босс повержен. ПРИМЕНЯЕТ пейоф Battle-сцена (до автосейва) — здесь мы
+            // только СООБЩАЕМ о нём. Применение вторым вызовом раньше снимало
+            // следующего по очереди перебежчика: он выбывал и отдавал гир без боя.
+            // Резервный вызов оставлен адресным (id того, кто вышел боссом) — на
+            // случай пути «терминал без боя»; повтор по тому же id ничего не делает.
+            if (bossBeaten && (payoffApplied || c.ResolveBossRevenge(bossId)))
             {
                 AddChronicle($"[{c.Base.CurrentDay}] {UiText.BossBeaten}");
                 Telemetry.Event("boss_defeated");
@@ -1525,7 +1556,10 @@ namespace Game.Gameplay.UI
                 foreach (var id in new[] { "leader", "negotiator", "marksman" })
                 {
                     var comp = c.Roster.Get(id);
-                    if (comp != null && comp.IsAlive) squad.Add(comp);
+                    // Тот же фильтр, что и в общей ветке: пролог, переигранный после
+                    // загрузки (флаг ещё не стоял), иначе тащил на арену раненого и
+                    // затирал ему Status=Injured, оставляя ранение висеть навсегда.
+                    if (comp != null && comp.IsAvailableForDuty) squad.Add(comp);
                 }
             }
             else
@@ -1560,13 +1594,16 @@ namespace Game.Gameplay.UI
 
             // Босс-перебежчик (US-9.4): дерётся своими статами, гиром и приёмами —
             // это тот самый напарник, которого бросили в прологе.
-            if (encounterId == DefaultQuests.BossEncounterId && c.Antagonists.Count > 0)
+            if (encounterId == DefaultQuests.BossEncounterId)
             {
-                var record = c.Antagonists[0];
-                var traitor = c.Roster.Get(record.CompanionId);
+                var record = c.NextRevengeTarget();
+                var traitor = record != null ? c.Roster.Get(record.CompanionId) : null;
                 if (traitor != null)
                 {
                     cs.AddUnit(DefectionSystem.BuildBossUnit(traitor, _cfg, abilities), EnemySpawns[spawn++]);
+                    // Кто вышел боссом — тот и получает пейоф после победы (US-9.4).
+                    GameFlow.PendingBossId = record.CompanionId;
+                    GameFlow.BossPayoffApplied = false;
                     Telemetry.Event("boss_encounter", ("companion", record.CompanionId));
                 }
             }
@@ -1642,24 +1679,24 @@ namespace Game.Gameplay.UI
                 lines.Add(l);
             }
 
+            // Панель ТОЛЬКО рисует: рябь потерь (US-9.6) уже применена в
+            // Campaign.ConcludeExpedition — до автосейва и ровно один раз. Раньше её
+            // применял этот метод, и выход из игры на экране отчёта терял её целиком,
+            // а повторный показ панели множил просадку лояльности.
             foreach (var oc in report.Companions)
             {
                 var comp = campaign != null ? campaign.Roster.Get(oc.CompanionId) : null;
                 string name = comp != null ? comp.DisplayName : oc.CompanionId;
                 if (oc.Died)
-                {
                     Add(oc.DiedOnReturn
                         ? $"✝ {name} погиб(ла) по дороге домой — беда пришла в город."
                         : $"✝ {name} погиб(ла) — насовсем.");
-                    // Потеря отзывается в ростере (US-9.6): соратники скорбят.
-                    if (campaign != null)
-                        foreach (var effect in campaign.NotifyDeath(oc.CompanionId).Effects)
-                            Add("    " + string.Format(UiText.ChronicleMourn,
-                                NameOf(effect.CompanionId), effect.Note));
-                }
                 else if (oc.Injury != Game.Core.Health.InjuryTier.None)
                     Add($"{name}: ранение {oc.Injury}" + (oc.ScarId != null ? $", вечный шрам ({oc.ScarId})" : ""));
             }
+            foreach (var effect in report.DeathRipples)
+                Add("    " + string.Format(UiText.ChronicleMourn,
+                    NameOf(effect.CompanionId), effect.Note));
             if (report.GoldBanked > 0)
                 Add($"Добыча: {report.GoldBanked} зол, {report.BuildingMaterialBanked} строймат, {report.CraftingMaterialBanked} крафт.");
             foreach (var item in report.LootDropped) Add($"Трофей: {item.DisplayName} ({item.Rarity})");
@@ -1672,7 +1709,12 @@ namespace Game.Gameplay.UI
             foreach (var id in report.RecoveredOnReturn) Add($"{NameOf(id)}: раны затянулись в дороге.");
 
             // Что случилось в городе, пока отряда не было (US-8.2).
+            // Лента и воронка пишутся РОВНО ОДИН раз на отчёт: панель показывается
+            // заново при каждом пересоздании контроллера, а строки хроники и события
+            // телеметрии не идемпотентны (ср. инциденты дороги домой — они уже
+            // эмитятся в Battle-сцене по той же причине).
             int day = campaign != null ? campaign.Base.CurrentDay : 0;
+            bool narrate = !GameFlow.LastReportNarrated;
             foreach (var incident in report.IncidentsWhileAway)
             {
                 string who = incident.ResolvedById != null
@@ -1683,19 +1725,20 @@ namespace Game.Gameplay.UI
                     line += $"\n    ⚠ {UiText.CrisisName(incident.CrisisApplied)}" +
                             (incident.CrisisVictimId != null ? ": " + NameOf(incident.CrisisVictimId) : "");
                 Add(line);
-                AddChronicle($"[{day}] {line}");
+                if (narrate) AddChronicle($"[{day}] {line}");
             }
             foreach (var built in report.ConstructionCompletedWhileAway)
             {
                 string line = $"{UiText.ChronicleBuilt} {built}";
                 Add(line);
-                AddChronicle($"[{day}] {line}");
+                if (narrate) AddChronicle($"[{day}] {line}");
             }
             if (report.CityTierAdvancedTo > 0)
             {
                 Add(string.Format(UiText.ChronicleCityGrew, report.CityTierAdvancedTo));
-                ReportCityGrowth(report.CityTierAdvancedFrom, report.CityTierAdvancedTo, day);
+                if (narrate) ReportCityGrowth(report.CityTierAdvancedFrom, report.CityTierAdvancedTo, day);
             }
+            GameFlow.LastReportNarrated = true;
 
             Show("panel-report");
         }
@@ -1703,6 +1746,7 @@ namespace Game.Gameplay.UI
         private void OnReportBack()
         {
             GameFlow.LastReport = null;
+            GameFlow.LastReportNarrated = false;
             var c = GameFlow.Campaign;
 
             // Кампания окончена (победа финала / пермасмерть айронмена) — в меню,

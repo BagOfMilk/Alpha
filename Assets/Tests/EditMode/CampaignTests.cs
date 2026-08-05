@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Base;
@@ -6,6 +7,7 @@ using Game.Core.Combat;
 using Game.Core.Council;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
+using Game.Core.Factions;
 using Game.Core.Items;
 using Game.Core.Quests;
 using Game.Core.Saves;
@@ -156,15 +158,195 @@ namespace Game.Tests.EditMode
             campaign.Quests.Complete("boss_revenge");
             campaign.Flags.Add(DefaultQuests.BossDefeatedFlag);
 
-            Assert.IsTrue(campaign.ResolveBossRevenge());
+            // Пейоф АДРЕСНЫЙ: боссом вышел первый — он и выбывает.
+            var target = campaign.NextRevengeTarget();
+            Assert.AreEqual("marksman", target.CompanionId);
+            Assert.IsTrue(campaign.ResolveBossRevenge(target.CompanionId));
             Assert.AreEqual(1, campaign.Base.Inventory.Count, "гир перебежчика вернулся в сташ");
             Assert.IsFalse(first.IsAlive, "босс мёртв");
             Assert.AreEqual(1, campaign.Antagonists.Count, "второй перебежчик остался");
             Assert.AreEqual(QuestStatus.Available, campaign.Quests.StatusOf("boss_revenge"),
                 "счёт не закрыт — расплата возвращается на доску");
 
-            Assert.IsFalse(campaign.ResolveBossRevenge() && campaign.Antagonists.Count < 0,
-                "повторный вызов не ломает состояние (идемпотентность)");
+            // Повтор по ТОМУ ЖЕ id — no-op. Раньше метод снимал «первого в очереди»,
+            // и второй вызов (путь победы зовёт пейоф дважды: бой + закрытие квеста)
+            // убивал второго перебежчика без боя, отдав его гир даром.
+            var brawler = campaign.Roster.Get("brawler");
+            Assert.IsFalse(campaign.ResolveBossRevenge("marksman"), "повторный вызов ничего не делает");
+            Assert.AreEqual(1, campaign.Antagonists.Count, "второй перебежчик НЕ снят вторым вызовом");
+            Assert.AreEqual(CompanionStatus.Antagonist, brawler.Status, "второй жив и всё ещё у врага");
+            Assert.AreEqual(1, campaign.Base.Inventory.Count, "его гир в сташ не попал — он не побеждён");
+        }
+
+        [Test]
+        public void SecondDefector_AfterClosedRevenge_ReopensTheBoard()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            campaign.Quests.CollectFrom(DefaultQuests.FullPool(),
+                campaign.Factions, campaign.Flags, campaign.Roster.All);
+
+            // Первый счёт открыт и закрыт полностью.
+            campaign.Roster.Get("marksman").AdjustLoyalty(-50);
+            campaign.TryDefectOnTimePass();
+            campaign.Quests.CollectFrom(DefaultQuests.FullPool(), // гейт открылся уходом
+                campaign.Factions, campaign.Flags, campaign.Roster.All);
+            campaign.Quests.Start("boss_revenge");
+            campaign.Quests.Complete("boss_revenge");
+            campaign.Flags.Add(DefaultQuests.BossDefeatedFlag);
+            Assert.IsTrue(campaign.ResolveBossRevenge("marksman"));
+            Assert.AreEqual(0, campaign.Antagonists.Count);
+
+            // Позже уходит ВТОРОЙ. Без переоткрытия доски боя с ним не было бы
+            // вовсе: BossSeededFlag уже стоял (Add — no-op), а BossDefeatedFlag
+            // закрывал гейт навсегда — его гир пропадал бы безвозвратно.
+            var brawler = campaign.Roster.Get("brawler");
+            brawler.Equipment.Equip(ItemInstance.NamedFrom(DefaultItems.Widowmaker()));
+            brawler.AdjustLoyalty(-50);
+            Assert.IsNotNull(campaign.TryDefectOnTimePass(), "второй уход состоялся");
+
+            Assert.IsFalse(campaign.Flags.Contains(DefaultQuests.BossDefeatedFlag),
+                "«дело закрыто» снято — счёт снова открыт");
+            Assert.AreEqual(QuestStatus.Available, campaign.Quests.StatusOf("boss_revenge"),
+                "расплата вернулась на доску под нового босса");
+        }
+
+        [Test]
+        public void ConcludeExpedition_AppliesDeathRipple_ItselfAndReportsIt()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            var exp = campaign.LaunchExpedition(DefaultWorld.NewMap().Get("east_road").Plan);
+            Assert.AreEqual(ExpeditionSendResult.Success, exp.TrySend(new[] { "brawler", "medic" }));
+            campaign.DepartExpedition();
+
+            var loyaltyBefore = campaign.Roster.Get("medic").Loyalty;
+
+            // Враг сбивает бойца, окно спасения истекает — смерть насовсем;
+            // медик добивает врага (расклад из ExpeditionTests).
+            var weapon = new WeaponDefinition("w", "W", SkillType.Ranged)
+            { DamageMin = 5, DamageMax = 5, CritDamageBonus = 1, ApCost = 3, OptimalRange = 12 };
+            var enemyProfile = new UnitProfile
+            {
+                DisplayName = "e", MaxHp = 3, MaxAp = 8, Accuracy = 99, Initiative = 10, CanBeDowned = false
+            };
+            var enemyWeapon = new WeaponDefinition("ew", "EW", SkillType.Ranged)
+            { DamageMin = 99, DamageMax = 99, CritDamageBonus = 1, ApCost = 3, OptimalRange = 12 };
+
+            var cs = new CombatState(new GridMap(12, 1), cfg,
+                new ScriptedRng(1, 100, 99, 1, 100, 5, 1, 100, 5, 1, 100, 5));
+            var units = exp.BuildCombatUnits(_ => weapon);
+            cs.AddUnit(units[0], new GridPos(0, 0)); // brawler
+            cs.AddUnit(units[1], new GridPos(1, 0)); // medic
+            cs.AddUnit(new CombatUnit("e", Side.Enemy, enemyProfile, enemyWeapon), new GridPos(5, 0));
+            cs.Begin();
+
+            Assert.AreEqual(CombatActionResult.Success, cs.Attack("u_brawler")); // боец падает
+            Assert.AreEqual(UnitLifeState.Downed, cs.GetUnit("u_brawler").LifeState);
+            for (int i = 0; i < 20 && cs.GetUnit("u_brawler").LifeState != UnitLifeState.Dead; i++)
+                cs.EndTurn(); // окно спасения истекает — смерть насовсем
+            Assert.AreEqual(UnitLifeState.Dead, cs.GetUnit("u_brawler").LifeState);
+
+            // Медик добивает врага — вылазка закрывается победой.
+            for (int i = 0; i < 20 && cs.Current != null && cs.Current.Id != "u_medic"; i++) cs.EndTurn();
+            cs.Attack("e");
+            Assert.AreEqual(CombatOutcome.Victory, cs.Outcome);
+
+            var report = campaign.ConcludeExpedition(cs);
+
+            // Рябь применяет САМА кампания — до любого автосейва. Пока это делал
+            // экран отчёта, выход из игры на нём терял её целиком, а повторный показ
+            // панели множил просадку лояльности.
+            Assert.Greater(report.DeathRipples.Count, 0, "потеря отозвалась в ростере (US-9.6)");
+            Assert.AreNotEqual(loyaltyBefore, campaign.Roster.Get("medic").Loyalty,
+                "лояльность сдвинута уже здесь, а не при отрисовке отчёта");
+        }
+
+        [Test]
+        public void CrisisOnTheWayHome_MournsTheFallenExactlyOnce()
+        {
+            // Переживший бой боец к моменту дороги домой уже НЕ InSquad — значит
+            // кризис вправе выбрать жертвой его. Тогда он попадает СРАЗУ в два
+            // списка отчёта (Companions.Died и IncidentsWhileAway.CrisisVictimId),
+            // и рябь по нему обязана примениться РОВНО ОДИН раз: AdjustLoyalty не
+            // идемпотентен, двойное горевание тащило бы ростер к дезертирству.
+            var cfg = new BalanceConfig();
+            var roster = new Roster();
+            var leader = new Companion("leader", new AttributeBlock(3, 3, 3, 3), 4) { IsProtagonist = true };
+            var fallen = new Companion("a", new AttributeBlock(3, 3, 3, 3), 4);
+            roster.Add(leader);
+            roster.Add(fallen);
+
+            var baseState = new BaseState(roster, new ResourceLedger(), cfg);
+            var strike = new IncidentDefinition("insider", "Удар по своим", IncidentSeverity.Crisis)
+            { Skill = SkillType.Survival, Crisis = CrisisEffect.KillCompanion, TensionOnFailure = 5 };
+            // Пороговый всплеск: детерминирован (без роллов частоты и весов).
+            // Порог не перейдён на старте — иначе всплеск (одноразовый) сгорел бы
+            // ещё на дороге ТУДА: AdvanceDays клампит days к минимуму 1.
+            baseState.AttachThreats(new ThreatSystem(cfg, new ScriptedRng(),
+                new List<IncidentDefinition>(),
+                spikes: new List<ThresholdSpike> { new ThresholdSpike(50, strike) },
+                startingTension: 0));
+
+            var campaign = new Campaign(cfg, baseState, DefaultFactions.NewRegistry());
+            var exp = campaign.LaunchExpedition(new ExpeditionPlan("p", "P")
+            { TravelDaysOut = 0, TravelDaysBack = 1 });
+            Assert.AreEqual(ExpeditionSendResult.Success, exp.TrySend(new[] { "leader", "a" }));
+            campaign.DepartExpedition();
+            baseState.ThreatsSystem.Tension.Add(60); // город закипел, пока отряда не было
+
+            var weapon = new WeaponDefinition("w", "W", SkillType.Ranged)
+            { DamageMin = 5, DamageMax = 5, CritDamageBonus = 1, ApCost = 3, OptimalRange = 12 };
+            var cs = new CombatState(new GridMap(12, 1), cfg, new ScriptedRng(1, 100, 5));
+            var units = exp.BuildCombatUnits(_ => weapon);
+            cs.AddUnit(units[0], new GridPos(0, 0));
+            cs.AddUnit(units[1], new GridPos(1, 0));
+            cs.AddUnit(new CombatUnit("e", Side.Enemy, new UnitProfile
+            {
+                DisplayName = "e", MaxHp = 1, MaxAp = 8, Accuracy = 1, Initiative = 0, CanBeDowned = false
+            }, weapon), new GridPos(5, 0));
+            cs.Begin();
+            for (int i = 0; i < 10 && cs.Current != null && cs.Current.Side != Side.Player; i++) cs.EndTurn();
+            cs.Attack("e");
+            Assert.AreEqual(CombatOutcome.Victory, cs.Outcome, "бой выигран — оба вернулись живыми");
+
+            var report = campaign.ConcludeExpedition(cs);
+
+            Assert.AreEqual(1, report.IncidentsWhileAway.Count, "всплеск сработал на дороге домой");
+            Assert.AreEqual("a", report.IncidentsWhileAway[0].CrisisVictimId,
+                "жертвой стал вернувшийся боец: он уже не InSquad, а протагонист защищён");
+            Assert.IsFalse(fallen.IsAlive, "кризис дороги домой забрал вернувшегося бойца");
+            int mournLines = 0;
+            foreach (var effect in report.DeathRipples)
+                if (effect.CompanionId == "leader") mournLines++;
+            Assert.AreEqual(1, mournLines, "одна смерть — одна рябь, даже если она в двух списках отчёта");
+        }
+
+        [Test]
+        public void LostBossFight_ClosesTheScore_NoRematchWhenNextDefectorLeaves()
+        {
+            var campaign = Campaign.NewGame(new BalanceConfig());
+            var marksman = campaign.Roster.Get("marksman");
+            marksman.Equipment.Equip(ItemInstance.NamedFrom(DefaultItems.Widowmaker()));
+            marksman.AdjustLoyalty(-50);
+            Assert.IsNotNull(campaign.TryDefectOnTimePass());
+            campaign.Quests.CollectFrom(DefaultQuests.FullPool(),
+                campaign.Factions, campaign.Flags, campaign.Roster.All);
+
+            // Бой проигран: «Он ушёл. Вместе с тем, что забрал у отряда» — по канону
+            // квеста любой исход завершает дело, второй попытки по нему нет.
+            campaign.Quests.Start("boss_revenge");
+            campaign.Quests.Complete("boss_revenge");
+            campaign.Flags.Add(DefaultQuests.BossDefeatedFlag);
+            Assert.IsTrue(campaign.EscapeBossRevenge("marksman"));
+            Assert.AreEqual(0, campaign.Antagonists.Count);
+            Assert.AreEqual(0, campaign.Base.Inventory.Count, "гир ушёл с ним — расплата проиграна");
+
+            // Уходит СЛЕДУЮЩИЙ: дело открывается заново, но боссом выходит ОН,
+            // а не тот, кто уже ушёл победителем (иначе повтор боя и его награды).
+            campaign.Roster.Get("brawler").AdjustLoyalty(-50);
+            Assert.IsNotNull(campaign.TryDefectOnTimePass());
+            Assert.AreEqual("brawler", campaign.NextRevengeTarget().CompanionId);
+            Assert.AreEqual(QuestStatus.Available, campaign.Quests.StatusOf("boss_revenge"));
         }
 
         [Test]

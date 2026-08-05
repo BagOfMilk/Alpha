@@ -78,6 +78,25 @@ namespace Game.Core.Saves
         /// <summary>Текущая вылазка (между Launch и Conclude), null — отряд дома.</summary>
         public Expedition ActiveExpedition { get; private set; }
 
+        /// <summary>
+        /// Идущий прогон квеста/главы арки (US-14.3/9.5). Владелец — кампания, а не
+        /// экран: прогон обязан переживать и смену сцены, и сейв. Пока он жил только
+        /// в статике UI, загрузка начинала квест заново, а уже применённые
+        /// последствия выбора (репутация/Напряжение/лояльность) оставались — их
+        /// можно было фармить перезагрузкой.
+        /// </summary>
+        public Quests.QuestRun ActiveQuest { get; private set; }
+
+        /// <summary>Id арки, чья глава идёт сейчас (null — обычный квест доски).</summary>
+        public string ActiveArcId { get; private set; }
+
+        /// <summary>Взять прогон в работу (null — закрыть текущий).</summary>
+        public void SetActiveQuest(Quests.QuestRun run, string arcId = null)
+        {
+            ActiveQuest = run;
+            ActiveArcId = run != null ? arcId : null;
+        }
+
         /// <summary>Личные арки напарников (US-9.5) — персистятся в сейве.</summary>
         public readonly List<CompanionArcRun> Arcs = new List<CompanionArcRun>();
 
@@ -116,7 +135,7 @@ namespace Game.Core.Saves
                 if (!Companions.DefectionSystem.ShouldDefect(c)) continue;
                 var record = Companions.DefectionSystem.Defect(c, Base);
                 Antagonists.Add(record);
-                Flags.Add(Story.Prologue.BossSeededFlag); // расплата открывается на доске
+                OpenRevengeBoard();
                 Drama.OnBetrayal(Roster, c.Id);
                 return record;
             }
@@ -124,31 +143,72 @@ namespace Game.Core.Saves
         }
 
         /// <summary>
-        /// Пейоф расплаты с перебежчиком (US-9.4): гир возвращается в сташ, сам он
-        /// выбывает окончательно. Идемпотентно — повторный вызов ничего не делает.
+        /// Кто выйдет боссом расплаты сейчас (US-9.4) — первый в очереди ушедших,
+        /// null, если счёт закрыт. Именно этот id обязан прийти в ResolveBossRevenge:
+        /// пейоф адресный, а не «снять первого».
+        /// </summary>
+        public Companions.AntagonistRecord NextRevengeTarget()
+            => Antagonists.Count > 0 ? Antagonists[0] : null;
+
+        /// <summary>
+        /// Пейоф расплаты с КОНКРЕТНЫМ перебежчиком (US-9.4): гир возвращается в
+        /// сташ, сам он выбывает окончательно. Идемпотентно по-настоящему: повторный
+        /// вызов с тем же id не находит записи и возвращает false — раньше метод
+        /// снимал «первого в очереди», и путь победы, зовущий его дважды (бой +
+        /// закрытие квеста), убивал второго перебежчика без боя.
         /// Живёт в Core, чтобы применяться ДО автосейва, закрывающего квест: иначе
         /// выход из игры на панели итога терял единственную награду навсегда.
-        /// Если перебежчиков несколько — расплата открывается заново.
+        /// Если перебежчики ещё остались — расплата открывается заново.
         /// </summary>
-        public bool ResolveBossRevenge()
+        public bool ResolveBossRevenge(string companionId)
         {
-            if (Antagonists.Count == 0) return false;
-            var record = Antagonists[0];
+            if (string.IsNullOrEmpty(companionId)) return false;
+            int index = Antagonists.FindIndex(r => r != null && r.CompanionId == companionId);
+            if (index < 0) return false;
+
+            var record = Antagonists[index];
             var traitor = Roster.Get(record.CompanionId);
             // Гир возвращается РОВНО ОДИН раз: снимок в записи и надетое на
             // перебежчике — одни и те же экземпляры (Defect их не снимал).
             if (Base.Inventory.RecoverGearFrom(traitor) == 0)
                 Companions.DefectionSystem.ReturnGearOnKill(record, Base.Inventory); // бойца нет — берём снимок
             if (traitor != null && traitor.IsAlive) traitor.Kill();
-            Antagonists.RemoveAt(0);
+            Antagonists.RemoveAt(index);
 
-            if (Antagonists.Count > 0)
-            {
-                // Есть ещё ушедшие — счёт не закрыт: возвращаем дело на доску.
-                Flags.Remove(Game.Core.Quests.DefaultQuests.BossDefeatedFlag);
-                Quests.Reopen("boss_revenge");
-            }
+            if (Antagonists.Count > 0) OpenRevengeBoard(); // счёт не закрыт — дело возвращается на доску
             return true;
+        }
+
+        /// <summary>
+        /// Расплата ПРОИГРАНА (US-9.4): перебежчик ушёл окончательно вместе с гиром —
+        /// это и есть цена выбора, второй попытки по нему нет. Запись снимается,
+        /// иначе он остаётся головой очереди, и доска, переоткрытая под СЛЕДУЮЩЕГО
+        /// перебежчика, вывела бы боссом снова его — с повторной наградой за бой,
+        /// который уже проигран.
+        /// </summary>
+        public bool EscapeBossRevenge(string companionId)
+        {
+            if (string.IsNullOrEmpty(companionId)) return false;
+            int index = Antagonists.FindIndex(r => r != null && r.CompanionId == companionId);
+            if (index < 0) return false;
+            Antagonists.RemoveAt(index); // гир НЕ возвращается: он ушёл с ним
+            return true;
+        }
+
+        /// <summary>
+        /// Возвращает расплату на доску: снимает «дело закрыто» и переоткрывает
+        /// квест, если он уже пройден. Зовётся при КАЖДОМ новом перебежчике —
+        /// иначе второй уход после закрытой расплаты не открывал боя вообще, и его
+        /// гир пропадал навсегда (единственный путь возврата — босс-бой).
+        /// Открывается только когда есть КОГО выводить боссом: иначе снятый
+        /// «дело закрыто» переигрывал бы уже отыгранную расплату.
+        /// </summary>
+        private void OpenRevengeBoard()
+        {
+            if (NextRevengeTarget() == null) return;
+            Flags.Add(Story.Prologue.BossSeededFlag);
+            Flags.Remove(Game.Core.Quests.DefaultQuests.BossDefeatedFlag);
+            Quests.Reopen("boss_revenge"); // no-op, если квест ещё не видели или он уже на доске
         }
 
         /// <summary>Ачивки берутся ТОЛЬКО в айронмене (US-16.1). true — взята впервые.</summary>
@@ -265,6 +325,25 @@ namespace Game.Core.Saves
             int before = Base.CityTier;
             int grown = GrowCity();
             if (grown > 0) { report.CityTierAdvancedFrom = before; report.CityTierAdvancedTo = grown; }
+
+            // Рябь от ВСЕХ потерь этой вылазки применяется ЗДЕСЬ (US-9.6): и от
+            // погибших в отряде, и от тех, кого кризис убил дома, пока отряд
+            // возвращался. Раньше это делал экран отчёта — то есть ПОСЛЕ автосейва
+            // (выход из игры на отчёте терял рябь целиком), а смерти дома не
+            // покрывались вовсе: они едут отдельным списком IncidentsWhileAway.
+            // Списки ПЕРЕСЕКАЮТСЯ: переживший бой боец к моменту дороги домой уже
+            // не InSquad, поэтому кризис вправе выбрать жертвой ЕГО — и тогда он
+            // лежит и в IncidentsWhileAway.CrisisVictimId, и в Companions
+            // (Died/DiedOnReturn). AdjustLoyalty не идемпотентен — оплакиваем
+            // каждого ровно один раз.
+            var mourned = new HashSet<string>();
+            foreach (var oc in report.Companions)
+                if (oc.Died && mourned.Add(oc.CompanionId))
+                    report.DeathRipples.AddRange(NotifyDeath(oc.CompanionId).Effects);
+            foreach (var incident in report.IncidentsWhileAway)
+                if (incident.CrisisVictimId != null && mourned.Add(incident.CrisisVictimId))
+                    report.DeathRipples.AddRange(NotifyDeath(incident.CrisisVictimId).Effects);
+
             if (report.GameOver) Outcome = CampaignOutcome.Lost;
             return report;
         }

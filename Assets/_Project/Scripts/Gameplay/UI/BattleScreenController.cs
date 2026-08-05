@@ -236,14 +236,18 @@ namespace Game.Gameplay.UI
             // Телеграфия честного процента (US-3.3): шанс + ПОЧЕМУ. Взведённая
             // способность меняет точность залпа — превью обязано это учитывать,
             // иначе показанный процент расходится с роллом (и метрикой R11).
+            // Бонус берётся у ОДНОГО ролла, а не суммой по залпу: каждый выстрел
+            // «Черги» катится со своим −10, и сумма (−20) не соответствовала бы ни
+            // одному реальному броску. Количество выстрелов показываем отдельно.
             int abilityBonus = 0;
+            int shots = 0;
             if (_armedAbilityId != null)
             {
                 foreach (var ab in current.Abilities)
                     if (ab.Id == _armedAbilityId)
                     {
-                        foreach (var fx in ab.Effects)
-                            if (fx.Kind == AbilityEffectKind.WeaponAttack) abilityBonus += fx.AccuracyBonus;
+                        abilityBonus = ab.PreviewAccuracyBonus();
+                        shots = ab.WeaponAttackCount();
                         break;
                     }
             }
@@ -255,7 +259,8 @@ namespace Game.Gameplay.UI
                 : cover == CoverType.Full ? "полное укрытие −" + _cfg.CoverFullHitPenalty
                 : cover == CoverType.Half ? "полуукрытие −" + _cfg.CoverHalfHitPenalty
                 : "без укрытия";
-            _targetInfo.text = $"{target.Profile.DisplayName}: {chance}% попадания\n" +
+            _targetInfo.text = $"{target.Profile.DisplayName}: {chance}% попадания" +
+                               (shots > 1 ? $" ×{shots} выстрела" : "") + "\n" +
                                $"{coverText} · дистанция {dist}\n" +
                                $"HP {target.Hp}/{target.Profile.MaxHp} · броня {target.EffectiveArmor}";
         }
@@ -377,10 +382,24 @@ namespace Game.Gameplay.UI
                 {
                     campaign.Quests.Complete(GameFlow.PendingQuest.Def.Id);
                     // Пейоф применяется ДО автосейва: иначе выход из игры на панели
-                    // итога терял награду (гир перебежчика) навсегда.
-                    if (GameFlow.PendingQuest.Def.Id == "boss_revenge"
-                        && GameFlow.PendingQuest.State == Game.Core.Quests.QuestState.Succeeded)
-                        campaign.ResolveBossRevenge();
+                    // итога терял награду (гир перебежчика) навсегда. Адресно — по id
+                    // того, кто реально вышел боссом (его выбрал BuildQuestBattle):
+                    // Campaign-сцена зовёт пейоф ещё раз при закрытии квеста, и «снять
+                    // первого в очереди» убивало бы заодно второго перебежчика.
+                    if (GameFlow.PendingQuest.Def.Id == "boss_revenge")
+                    {
+                        if (GameFlow.PendingQuest.State == Game.Core.Quests.QuestState.Succeeded)
+                        {
+                            if (campaign.ResolveBossRevenge(GameFlow.PendingBossId))
+                                GameFlow.BossPayoffApplied = true;
+                        }
+                        // Проигрыш тоже ЗАВЕРШАЕТ дело по этому перебежчику (US-9.4:
+                        // «любой исход, второй попытки нет»): он уходит вместе с
+                        // гиром. Без этого он оставался головой очереди и снова
+                        // выходил боссом, когда доску переоткрывал уже СЛЕДУЮЩИЙ.
+                        else if (GameFlow.PendingQuest.State == Game.Core.Quests.QuestState.Failed)
+                            campaign.EscapeBossRevenge(GameFlow.PendingBossId);
+                    }
                 }
                 // Смерти квестового боя отзываются в ростере (US-9.6).
                 foreach (var oc in qReport.Companions)
@@ -393,6 +412,7 @@ namespace Game.Gameplay.UI
             }
 
             GameFlow.LastReport = campaign.ConcludeExpedition(_cs);
+            GameFlow.LastReportNarrated = false; // новый отчёт — ленту и воронку пишем один раз
             Telemetry.Event("battle_ended",
                 Telemetry.CombatStats(_cs, GameFlow.PendingFinale ? "finale" : "expedition"));
             // Инциденты дороги домой эмитим ЗДЕСЬ, а не в ShowReport: тот вызывается

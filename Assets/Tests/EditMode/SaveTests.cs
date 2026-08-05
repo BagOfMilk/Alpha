@@ -374,6 +374,90 @@ namespace Game.Tests.EditMode
                 "иначе InProgress переживает сейв и арка мертва навсегда");
         }
 
+        // ===== v6: позиция идущего прогона (итерация 21) =====
+
+        [Test]
+        public void RoundTrip_V6_ActiveRun_ResumesAtSameStage_ConsequencesNotReplayed()
+        {
+            var cfg = new BalanceConfig();
+            var original = Campaign.NewGame(cfg);
+            original.Quests.CollectFrom(Game.Core.Quests.DefaultQuests.FullPool(),
+                original.Factions, original.Flags, original.Roster.All);
+            original.Quests.Start("lost_caravan");
+
+            var def = Game.Core.Quests.DefaultQuests.LostCaravan();
+            var run = new Game.Core.Quests.QuestRun(def, original.Base, cfg, original.Factions,
+                original.Base.ThreatsSystem, original.Flags);
+            original.SetActiveQuest(run);
+
+            run.ResolveCheck(original.Roster.All);                 // этап 0 → 1 (развилка)
+            run.Choose(1, original.Roster.All);                    // «Отбить силой»: последствия применены
+            int garrison = (int)original.Factions.Get(DefaultFactions.Garrison).Value;
+            double tension = original.Base.ThreatsSystem.Tension.Value;
+            Assert.Greater(garrison, 0, "последствия выбора применены");
+            Assert.AreEqual(run.CurrentIndex, original.ActiveQuest.CurrentIndex);
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(original));
+            var loaded = SaveSystem.Restore(
+                UnityEngine.JsonUtility.FromJson<SaveData>(json), cfg, ContentCatalog.Default());
+
+            Assert.IsNotNull(loaded.ActiveQuest, "прогон пережил сейв");
+            Assert.AreEqual("lost_caravan", loaded.ActiveQuest.Def.Id);
+            Assert.AreEqual(run.CurrentIndex, loaded.ActiveQuest.CurrentIndex, "тот же этап, а не начало");
+            Assert.AreEqual(Game.Core.Quests.QuestStatus.Active,
+                loaded.Quests.StatusOf("lost_caravan"), "квест не вернулся на доску «чистым»");
+
+            // Главное: последствия НЕ переигрываются. Пока прогон не сериализовался,
+            // квест возвращался в «доступные», а его эффекты оставались в сейве —
+            // репутацию и Напряжение можно было накручивать перезагрузкой.
+            Assert.AreEqual(garrison, (int)loaded.Factions.Get(DefaultFactions.Garrison).Value);
+            Assert.AreEqual(tension, loaded.Base.ThreatsSystem.Tension.Value, 0.001);
+        }
+
+        [Test]
+        public void RoundTrip_V6_ArcChapterRun_StaysInProgress()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            var arc = campaign.Arcs.Find(a => a.Arc.CompanionId == "medic");
+            Assert.IsTrue(arc.Begin(campaign.Roster.Get("medic")));
+
+            var chapter = arc.CurrentChapter;
+            var run = new Game.Core.Quests.QuestRun(chapter.Quest, campaign.Base, cfg, campaign.Factions,
+                campaign.Base.ThreatsSystem, campaign.Flags);
+            campaign.SetActiveQuest(run, arc.Arc.Id);
+
+            var json = UnityEngine.JsonUtility.ToJson(SaveSystem.Capture(campaign));
+            var loaded = SaveSystem.Restore(
+                UnityEngine.JsonUtility.FromJson<SaveData>(json), cfg, ContentCatalog.Default());
+
+            Assert.IsNotNull(loaded.ActiveQuest, "глава арки продолжается");
+            Assert.AreEqual(arc.Arc.Id, loaded.ActiveArcId);
+            var loadedArc = loaded.Arcs.Find(a => a.Arc.CompanionId == "medic");
+            Assert.AreEqual(Game.Core.Companions.ArcState.InProgress, loadedArc.State,
+                "идущая глава остаётся идущей — её прогон восстановлен");
+        }
+
+        [Test]
+        public void Migration_V5_NoActiveRun_KeepsDemotion()
+        {
+            var cfg = new BalanceConfig();
+            var campaign = Campaign.NewGame(cfg);
+            campaign.Quests.CollectFrom(Game.Core.Quests.DefaultQuests.FullPool(),
+                campaign.Factions, campaign.Flags, campaign.Roster.All);
+            campaign.Quests.Start("lost_caravan");
+
+            var data = SaveSystem.Capture(campaign);
+            data.version = 5;               // старый сейв: позиции прогона в нём нет
+            data.activeQuestId = "";
+
+            var loaded = SaveSystem.Restore(data, cfg, ContentCatalog.Default());
+            Assert.IsNull(loaded.ActiveQuest);
+            Assert.AreEqual(Game.Core.Quests.QuestStatus.Available,
+                loaded.Quests.StatusOf("lost_caravan"),
+                "без позиции прогона квест перепроходится с начала — как в v4/v5");
+        }
+
         [Test]
         public void QuestRestore_UnknownId_IsDroppedSilently()
         {

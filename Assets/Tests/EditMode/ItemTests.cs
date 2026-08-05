@@ -190,6 +190,22 @@ namespace Game.Tests.EditMode
                     "результат апгрейда не зависит от RNG — перезагрузкой его не переролить");
         }
 
+        [Test]
+        public void Drop_HalfValues_RoundAwayFromZero_NotToEven()
+        {
+            // Math.Round(double) по умолчанию округляет «к чётному»: 4.5 → 4, но
+            // 7.5 → 8. На множителях редкости (1.5/2.5) целые роллы дают ровно .5
+            // сплошь и рядом — магнитуда зависела от чётности, а крафт (AwayFromZero)
+            // считал ту же величину иначе.
+            // Прицел Uncommon с базовым роллом 3: 3 × 1.5 = 4.5.
+            var scope = new ItemInstance(DefaultItems.TargetingScope(), Rarity.Uncommon, new ScriptedRng(3, 2));
+            Assert.AreEqual(5, ModValue(scope, DerivedStat.Accuracy), "4.5 → 5, а не 4 («к чётному»)");
+
+            // Бронежилет Epic с базовым роллом 1: 1 × 2.5 = 2.5.
+            var vest = new ItemInstance(DefaultItems.ArmorVest(), Rarity.Epic, new ScriptedRng(1, 1));
+            Assert.AreEqual(3, ModValue(vest, DerivedStat.Armor), "2.5 → 3, а не 2");
+        }
+
         // ---- Лут-генерация ----
         [Test]
         public void RollRarity_RespectsWeights()

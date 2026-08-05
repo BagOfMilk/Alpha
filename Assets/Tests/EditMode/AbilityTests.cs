@@ -106,6 +106,31 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Burst_PreviewChance_MatchesActualRoll()
+        {
+            var map = new GridMap(12, 1);
+            var cs = NewCombat(map, 1, 100, 1, 1, 100, 1);
+            var burst = DefaultContent.Burst();
+            var hero = U("hero", Side.Player, 10, acc: 70, w: W(1), ability: burst);
+            var enemy = U("enemy", Side.Enemy, 0);
+            cs.AddUnit(hero, new GridPos(0, 0));
+            cs.AddUnit(enemy, new GridPos(5, 0));
+            cs.Begin();
+
+            // Бонус ОДНОГО ролла, а не сумма по залпу: «Черга» — два выстрела по −10,
+            // и показанные игроку 50% расходились бы с реальными 60% на каждом.
+            Assert.AreEqual(2, burst.WeaponAttackCount(), "«Черга» делает два отдельных ролла");
+            Assert.AreEqual(-10, burst.PreviewAccuracyBonus());
+
+            int preview = cs.HitChancePreview(hero, enemy, burst.PreviewAccuracyBonus());
+            Assert.AreEqual(CombatActionResult.Success, cs.UseAbility("burst", "enemy"));
+
+            Assert.AreEqual(2, cs.Attacks.Count);
+            Assert.AreEqual(preview, cs.Attacks[0].Chance, "показанный процент = тот, против которого катится d100 (US-3.3, R11)");
+            Assert.AreEqual(preview, cs.Attacks[1].Chance);
+        }
+
+        [Test]
         public void SuppressingFire_StatusGuaranteed_EvenOnMiss()
         {
             var map = new GridMap(12, 1);

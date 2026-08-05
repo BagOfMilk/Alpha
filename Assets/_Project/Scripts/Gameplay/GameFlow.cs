@@ -32,6 +32,14 @@ namespace Game.Gameplay
         /// <summary>Итог последней вылазки — для экрана отчёта возвращения.</summary>
         public static ExpeditionReport LastReport;
 
+        /// <summary>
+        /// Хроника и телеметрия этого отчёта уже записаны. Экран отчёта рисуется
+        /// заново при каждом пересоздании контроллера, а строки ленты и события
+        /// воронки — не идемпотентны: без флага один поход множил бы их на каждый
+        /// показ панели.
+        /// </summary>
+        public static bool LastReportNarrated;
+
         /// <summary>Идущий бой — ФИНАЛЬНАЯ битва: исход резолвится FinalBattle.Resolve.</summary>
         public static bool PendingFinale;
 
@@ -42,15 +50,38 @@ namespace Game.Gameplay
         /// Активный прогон квеста (пролог/доска, US-14.3/17.1): живёт МЕЖДУ сценами —
         /// бой квестового этапа идёт в Battle, остальные этапы играются в Campaign.
         /// null — квест не идёт. Battle-контроллер отличает квестовый бой от вылазки
-        /// по PendingQuest != null (у вылазки вместо него PendingExpedition).
+        /// по BattleKind. ХРАНИТСЯ В КАМПАНИИ, а не здесь: прогон обязан переживать
+        /// и смену сцены, и сейв — иначе загрузка начинала квест заново, а уже
+        /// применённые последствия выбора оставались (их фармили перезагрузкой).
         /// </summary>
-        public static QuestRun PendingQuest;
+        public static QuestRun PendingQuest
+        {
+            get => Campaign != null ? Campaign.ActiveQuest : null;
+            set { if (Campaign != null) Campaign.SetActiveQuest(value, PendingArcId); }
+        }
 
         /// <summary>Отчёт последнего шага квеста (реплики/чек) — для панели квеста после боя.</summary>
         public static QuestStepReport LastQuestStep;
 
         /// <summary>Id арки, чья глава сейчас играется (US-9.5); null — обычный квест.</summary>
-        public static string PendingArcId;
+        public static string PendingArcId
+        {
+            get => Campaign != null ? Campaign.ActiveArcId : null;
+            set { if (Campaign != null) Campaign.SetActiveQuest(Campaign.ActiveQuest, value); }
+        }
+
+        /// <summary>
+        /// Кто именно вышел боссом расплаты (US-9.4): пейоф адресный, иначе оба
+        /// пути победы («бой» и «закрытие квеста») снимали бы «первого в очереди» —
+        /// и второй перебежчик выбывал без боя, отдав гир даром.
+        /// </summary>
+        public static string PendingBossId;
+
+        /// <summary>
+        /// Пейоф расплаты уже применён в Battle-сцене — Campaign-сцене остаётся
+        /// только СООБЩИТЬ о нём (хроника/телеметрия), а не применять второй раз.
+        /// </summary>
+        public static bool BossPayoffApplied;
 
         /// <summary>
         /// Хроника города: живёт в статике, а не в контроллере — иначе лента
@@ -88,12 +119,15 @@ namespace Game.Gameplay
             PendingQuest = null;
             LastQuestStep = null;
             PendingArcId = null;
+            PendingBossId = null;
+            BossPayoffApplied = false;
         }
 
         public static void Reset()
         {
             Campaign = null;
             LastReport = null;
+            LastReportNarrated = false;
             ClearBattle();
             ClearQuest();
             ResetChronicle();

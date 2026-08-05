@@ -115,8 +115,12 @@ namespace Game.Core.Quests
         {
             return new QuestDefinition("street_shakedown", "Уличный рэкет", QuestSource.TensionIncident)
                 .Flavor("На рынке вымогают долю. Подслушал у лотков — можно вмешаться.")
+                // Порог 7 против стартового ростера: Боец (Запугивание 1 + Громила 2
+                // + Сила 6 = 9) осаждает, остальные (3–5) — нет, пока не вложат очки.
+                // Порог ≤ 3 делал ветку провала мёртвой: минимальная Сила/Воля в игре
+                // и так равна 3, а проверку ведёт ЛУЧШИЙ в ростере.
                 .Stage(QuestStage.SocialCheck("confront", "Осадить вымогателей словом.",
-                            CheckApproach.Intimidate, threshold: 3, onSuccess: 1, onFailure: 2))
+                            CheckApproach.Intimidate, threshold: 7, onSuccess: 1, onFailure: 2))
                 .Stage(QuestStage.OutcomeStage("cowed", "Вымогатели отступили. Торговцы суют «подарок».", success: true,
                     new QuestReward(xp: 40).Item(Items.DefaultItems.Whisper())
                         .WithSocial(new SocialConsequence().Faction(DefaultFactions.Traders, 6).Reputation(3).Tension(-4))))

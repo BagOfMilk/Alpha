@@ -48,7 +48,7 @@ namespace Game.Core.Checks
             {
                 foreach (var c in participants)
                 {
-                    if (c == null || !c.IsAlive) continue;
+                    if (c == null || !c.IsOnPlayerSide) continue; // ушедший к врагу проверки не вывозит (US-9.4)
                     int v = c.GetSkill(skill) + c.CheckModifierFor(skill);
                     if (!any || v > best) { best = v; bestId = c.Id; any = true; }
                 }
@@ -67,7 +67,7 @@ namespace Game.Core.Checks
             {
                 foreach (var c in participants)
                 {
-                    if (c == null || !c.IsAlive) continue;
+                    if (c == null || !c.IsOnPlayerSide) continue; // см. Resolve: антагонист за игрока не говорит
                     int v = c.GetSkill(skill) + ContextualAttribute(approach, c) + c.CheckModifierFor(skill);
                     if (!any || v > best) { best = v; bestId = c.Id; any = true; }
                 }

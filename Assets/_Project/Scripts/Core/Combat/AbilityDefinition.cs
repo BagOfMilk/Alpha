@@ -107,5 +107,30 @@ namespace Game.Core.Combat
             Effects.Add(effect);
             return this;
         }
+
+        /// <summary>
+        /// Сколько ОТДЕЛЬНЫХ роллов атаки делает способность («Черга» — два выстрела).
+        /// </summary>
+        public int WeaponAttackCount()
+        {
+            int n = 0;
+            for (int i = 0; i < Effects.Count; i++)
+                if (Effects[i] != null && Effects[i].Kind == AbilityEffectKind.WeaponAttack) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Бонус точности ОДНОГО ролла — для честного превью (US-3.3, метрика R11).
+        /// Именно так его берёт CombatState.UseAbility: каждый эффект WeaponAttack
+        /// катится со СВОИМ бонусом, поэтому суммировать бонусы залпа нельзя —
+        /// показанный процент разошёлся бы с роллом (для «Черги» — на 10 пунктов).
+        /// </summary>
+        public int PreviewAccuracyBonus()
+        {
+            for (int i = 0; i < Effects.Count; i++)
+                if (Effects[i] != null && Effects[i].Kind == AbilityEffectKind.WeaponAttack)
+                    return Effects[i].AccuracyBonus;
+            return 0;
+        }
     }
 }

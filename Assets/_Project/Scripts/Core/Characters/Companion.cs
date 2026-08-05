@@ -91,6 +91,14 @@ namespace Game.Core.Characters
         public bool IsInjured => CurrentInjury != InjuryTier.None || RecoveryDaysRemaining > 0;
         public bool IsAlive => Status != CompanionStatus.Dead;
 
+        /// <summary>
+        /// Играет ли за игрока: жив И не ушёл к врагу. IsAlive этого НЕ значит —
+        /// антагонист остаётся в ростере живым (Defection меняет только Status),
+        /// поэтому проверки/награды/реакции обязаны спрашивать именно это (US-9.4).
+        /// Раненые и ушедшие в отряд — свои, поэтому IsAvailableForDuty здесь не годится.
+        /// </summary>
+        public bool IsOnPlayerSide => Status != CompanionStatus.Dead && Status != CompanionStatus.Antagonist;
+
         /// <summary>Может ли стоять на позиции/в совете (не в отряде, не ранен, не выбыл).</summary>
         public bool IsAvailableForDuty =>
             Status == CompanionStatus.InCamp || Status == CompanionStatus.OnDuty || Status == CompanionStatus.OnCouncil;

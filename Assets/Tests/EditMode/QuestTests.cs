@@ -128,6 +128,63 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(rep.CheckSuccess, "Запугивание 1 + Сила 5 = 6 ≥ 5");
         }
 
+        // ---- Ушедший к врагу больше не работает на игрока (US-9.4) ----
+        [Test]
+        public void Antagonist_DoesNotResolveChecks_NorEarnXp_NorOpenTraitOptions()
+        {
+            var w = NewWorld();
+            var traitor = Comp(w.Roster, "t", SkillType.Mechanics, 5);
+            traitor.Traits.TryAdd(Game.Core.DefaultContent.Bruiser());
+            Comp(w.Roster, "a", SkillType.Mechanics, 1); // единственный «свой» — ниже порога
+            traitor.Status = CompanionStatus.Antagonist; // ушёл к врагу, но IsAlive == true
+
+            var def = new QuestDefinition("q", "Q", QuestSource.NpcLocation)
+                .Stage(QuestStage.SkillCheck("fix", "", SkillType.Mechanics, 4, onSuccess: 1, onFailure: 2))
+                .Stage(QuestStage.OutcomeStage("ok", "", true, new QuestReward(xp: 50)))
+                .Stage(QuestStage.OutcomeStage("bad", "", false, new QuestReward(xp: 50)));
+
+            var run = Run(w, def);
+            var rep = run.ResolveCheck(w.Roster.All);
+
+            Assert.IsFalse(rep.CheckSuccess, "проверку ведут только свои: 1 < 4");
+            Assert.AreEqual("a", rep.ResolvedById, "перебежчик не «вывозит» проверку");
+            Assert.AreEqual(0, traitor.Xp, "квесты игрока не качают того, кто ушёл к врагу");
+            Assert.AreEqual(50, w.Roster.Get("a").Xp, "свои XP получили");
+
+            // Его репутация тоже не наша: трейт-гейт закрыт.
+            var choice = new QuestDefinition("q2", "Q2", QuestSource.NpcSettlement)
+                .Stage(QuestStage.ChoiceStage("pick", "")
+                    .Option(new QuestOption("слава Громилы", next: 1).GateTrait("bruiser")))
+                .Stage(QuestStage.OutcomeStage("done", "", true));
+            var run2 = Run(w, choice);
+            Assert.IsFalse(run2.OptionAvailable(run2.Current.Options[0], w.Roster.All),
+                "трейт перебежчика особую опцию не открывает");
+        }
+
+        [Test]
+        public void LethalCheck_FreesTheVictimsPost()
+        {
+            var w = NewWorld();
+            var victim = Comp(w.Roster, "v", SkillType.Mechanics, 1);
+            w.Base.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop));
+            Assert.AreEqual(AssignmentResult.Success, w.Base.TryAssign("v", "bench"), "жертва стоит на посту");
+
+            var def = new QuestDefinition("q", "Q", QuestSource.NpcLocation)
+                .Stage(QuestStage.SkillCheck("defuse", "", SkillType.Mechanics, 4, 1, 2).AsLethal())
+                .Stage(QuestStage.OutcomeStage("ok", "", true))
+                .Stage(QuestStage.OutcomeStage("boom", "", false));
+
+            var rep = Run(w, def).ResolveCheck(w.Roster.All);
+
+            Assert.IsTrue(rep.CasualtyDied, "телеграфированный провал стоит жизни (US-13.2)");
+            Assert.IsFalse(victim.IsAlive);
+            // Kill() чистит только сторону бойца: без явного Unassign слот продолжал
+            // держать мертвеца и «работать» (напр. давал бонус лечения Лазарета).
+            Assert.IsFalse(w.Base.GetSlot("bench").IsOccupied,
+                "пост освобождён — инвариант «на посту ⇔ доступен»");
+            Assert.IsFalse(victim.IsAssigned);
+        }
+
         // ---- Выборы и последствия ----
         [Test]
         public void Choice_AppliesSocialConsequence_AndLoyaltyReactions()
@@ -282,6 +339,29 @@ namespace Game.Tests.EditMode
         {
             foreach (var q in DefaultQuests.All())
                 Assert.IsTrue(q.Validate(out var err), $"{q.Id}: {err}");
+        }
+
+        [Test]
+        public void SocialThresholds_LeaveTheFailureBranchReachable()
+        {
+            // Минимальные Сила/Воля в игре — 3, а проверку ведёт ЛУЧШИЙ в ростере:
+            // любой соц-порог ≤ 3 выполнялся ТОЖДЕСТВЕННО, и ветка провала была
+            // мёртвым контентом. Порог обязан быть выше «дна» ростера.
+            var cfg = new BalanceConfig();
+            var shakedown = DefaultQuests.StreetShakedown();
+            int threshold = shakedown.Stages[0].Threshold;
+
+            var w = NewWorld();
+            var techie = Game.Core.DefaultContent.Technician().CreateInstance("technician", cfg);
+            w.Roster.Add(techie);
+            var repFail = Run(w, shakedown).ResolveCheck(w.Roster.All);
+            Assert.IsFalse(repFail.CheckSuccess,
+                $"без «страшного» бойца порог {threshold} не берётся — исход «стало только злее» достижим");
+
+            var w2 = NewWorld();
+            w2.Roster.Add(Game.Core.DefaultContent.Brawler().CreateInstance("brawler", cfg));
+            Assert.IsTrue(Run(w2, shakedown).ResolveCheck(w2.Roster.All).CheckSuccess,
+                "Боец (Запугивание 1 + Громила 2 + Сила 6 = 9) осаждает вымогателей");
         }
 
         // ---- Трейты открывают/закрывают особые опции (US-2.6/10.2) ----

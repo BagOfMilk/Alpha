@@ -92,7 +92,7 @@ namespace Game.Core.Companions
         {
             if (IsFinished) return;
 
-            if (companion == null || !companion.IsAlive || companion.Status == CompanionStatus.Antagonist)
+            if (companion == null || !companion.IsOnPlayerSide)
             {
                 State = ArcState.Aborted; // обрыв арки (US-9.5)
                 return;

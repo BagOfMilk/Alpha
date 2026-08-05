@@ -42,6 +42,26 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void LineOfSight_IsMutual_InBothDirections()
+        {
+            // Карта арены боя: стены (6,3) и (6,4). Тай-брейк Брезенхэма при трассе
+            // «туда» проходил через стену, а «обратно» — мимо: враг стрелял, а боец
+            // в ответ получал NoLineOfSight. Правила симметричны (US-3.14).
+            var map = new GridMap(12, 8);
+            map.SetWall(new GridPos(6, 3));
+            map.SetWall(new GridPos(6, 4));
+
+            for (int x = 0; x < 12; x++)
+                for (int y = 0; y < 8; y++)
+                {
+                    var a = new GridPos(x, y);
+                    foreach (var b in new[] { new GridPos(4, 3), new GridPos(8, 2), new GridPos(0, 7) })
+                        Assert.AreEqual(LineOfSight.HasLine(map, a, b), LineOfSight.HasLine(map, b, a),
+                            $"видимость {a.X},{a.Y} ↔ {b.X},{b.Y} обязана быть взаимной");
+                }
+        }
+
+        [Test]
         public void Reachable_RespectsBudget_WallsAndOccupants()
         {
             var map = new GridMap(5, 5);

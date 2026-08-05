@@ -144,7 +144,7 @@ namespace Game.Core.Quests
                     for (int i = 0; i < roster.Count; i++)
                     {
                         var c = roster[i];
-                        if (c != null && c.IsAlive) { int v = c.GetSkill(def.RequiresSkill); if (v > best) best = v; }
+                        if (c != null && c.IsOnPlayerSide) { int v = c.GetSkill(def.RequiresSkill); if (v > best) best = v; }
                     }
                 if (best < def.RequiresSkillLevel) return false;
             }

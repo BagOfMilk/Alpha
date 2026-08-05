@@ -31,6 +31,7 @@
 | `expedition_departed` | node, squad | темп петли |
 | `battle_started` | kind, node/encounter | — |
 | `battle_ended` | rounds, attacks, hits/grazes/misses/crits, strikes, avgShownChance, playerDowns/Deaths, enemyDeaths | R7 (живучесть), R9, **R11** (hit-rate vs показанный шанс) |
+| `incident` | id, band, success, resolvedBy, crisis, **phase** (`home`/`travel_out`/`travel_back`) | R8 — частота бед и кто их гасит; фаза отделяет «дома» от дороги |
 | `save_loaded` | file | **сигнал save-scum**: reload после потерь = ростер дорог, но фрустрация |
 | `report_acknowledged` / `campaign_ended` | outcome | R6 |
 

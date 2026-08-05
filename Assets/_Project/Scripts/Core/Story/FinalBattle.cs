@@ -62,7 +62,7 @@ namespace Game.Core.Story
             {
                 foreach (var c in roster.All)
                 {
-                    if (!c.IsAlive || c.Status == CompanionStatus.Antagonist) continue;
+                    if (!c.IsOnPlayerSide) continue;
                     value += cfg.ReadinessPerAliveCompanion + c.Level * cfg.ReadinessPerCompanionLevel;
                 }
             }

@@ -58,6 +58,14 @@ namespace Game.Core.Expeditions
         /// <summary>Лут, добытый в этой вылазке и сложенный в сташ базы (только при победе).</summary>
         public readonly List<ItemInstance> LootDropped = new List<ItemInstance>();
 
+        /// <summary>
+        /// Рябь ростера от потерь этой вылазки (US-9.6) — УЖЕ ПРИМЕНЁННАЯ в
+        /// Campaign.ConcludeExpedition, здесь только для показа. Экран отчёта её не
+        /// применяет: он рисуется повторно при каждом пересоздании контроллера, а
+        /// AdjustLoyalty не идемпотентен — просадка множилась бы на каждый показ.
+        /// </summary>
+        public readonly List<Companions.RippleEffect> DeathRipples = new List<Companions.RippleEffect>();
+
         public int TravelDaysTotal;
     }
 }

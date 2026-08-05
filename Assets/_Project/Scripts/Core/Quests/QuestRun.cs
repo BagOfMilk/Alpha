@@ -73,6 +73,17 @@ namespace Game.Core.Quests
         public QuestStage Current => Def.StageAt(CurrentIndex);
         public bool IsActive => State == QuestState.Active;
 
+        /// <summary>
+        /// Восстановление прогона из сейва (v6): этап и состояние — как были.
+        /// Награду терминала НЕ переигрывает (Finalize не зовётся): она уже была
+        /// начислена и лежит в том же сейве.
+        /// </summary>
+        internal void RestoreTo(int index, QuestState state)
+        {
+            CurrentIndex = index;
+            State = state;
+        }
+
         // ---- Проверка (US-13.2) ----
         public QuestStepReport ResolveCheck(IReadOnlyList<Companion> participants)
         {
@@ -103,6 +114,11 @@ namespace Game.Core.Quests
                 if (victim != null && victim.IsAlive)
                 {
                     report.CasualtyId = victim.Id;
+                    // Инвариант «на посту ⇔ доступен»: снимаем с позиции ДО выбытия.
+                    // Companion.Kill() чистит только AssignedSlotId бойца, сам слот
+                    // продолжает держать AssignedCompanionId — ср. ThreatSystem.ApplyCrisis
+                    // и DefectionSystem, где это делают руками по той же причине.
+                    if (victim.IsAssigned && _base != null) _base.Unassign(victim.AssignedSlotId);
                     bool canDie = !victim.IsProtagonist || (_cfg != null && _cfg.Ironman);
                     if (canDie)
                     {
@@ -141,12 +157,13 @@ namespace Game.Core.Quests
                 return false;
             if (!string.IsNullOrEmpty(option.BlockedByTraitId) && AnyoneHasTrait(participants, option.BlockedByTraitId))
                 return false;
-            // Опция про конкретного напарника закрывается его смертью (пролог:
-            // «прикрыть переговорщика» бессмысленно, если он погиб в бою этапа).
+            // Опция про конкретного напарника закрывается его выбытием (пролог:
+            // «прикрыть переговорщика» бессмысленно, если он погиб в бою этапа —
+            // как и если он уже ушёл к врагу).
             if (!string.IsNullOrEmpty(option.RequiresAliveCompanionId))
             {
                 var target = _base?.Roster.Get(option.RequiresAliveCompanionId);
-                if (target == null || !target.IsAlive) return false;
+                if (target == null || !target.IsOnPlayerSide) return false;
             }
             return true;
         }
@@ -157,7 +174,8 @@ namespace Game.Core.Quests
             for (int i = 0; i < participants.Count; i++)
             {
                 var c = participants[i];
-                if (c != null && c.IsAlive && c.Traits.Contains(traitId)) return true;
+                // Репутация ушедшего к врагу на игрока не работает: его трейт опцию не открывает.
+                if (c != null && c.IsOnPlayerSide && c.Traits.Contains(traitId)) return true;
             }
             return false;
         }
@@ -176,12 +194,12 @@ namespace Game.Core.Quests
             option.Consequence?.Apply(_factions, _base, _threats, _flags);
 
             // Видимая рябь: реакции напарников по лояльности (US-10.3).
-            // Мёртвые не реагируют: ни реплики, ни сдвига лояльности трупа.
+            // Выбывшие не реагируют: ни реплики трупа, ни лояльности того, кто ушёл к врагу.
             for (int i = 0; i < option.Reactions.Count; i++)
             {
                 var r = option.Reactions[i];
                 var comp = _base?.Roster.Get(r.CompanionId);
-                if (comp == null || !comp.IsAlive) continue;
+                if (comp == null || !comp.IsOnPlayerSide) continue;
                 comp.AdjustLoyalty(r.LoyaltyDelta);
                 string verb = r.LoyaltyDelta >= 0 ? "одобряет" : "осуждает";
                 report.ReactionLines.Add(r.Line ?? $"{comp.DisplayName} {verb} ({comp.LoyaltyBand})");
@@ -233,7 +251,7 @@ namespace Game.Core.Quests
 
                 if (reward.Xp > 0 && _cfg != null)
                     foreach (var c in _base.Roster.All)
-                        if (c.IsAlive) c.GainXp(reward.Xp, _cfg); // квесты дают XP без гринда боёв (US-5.1)
+                        if (c.IsOnPlayerSide) c.GainXp(reward.Xp, _cfg); // квесты дают XP без гринда боёв (US-5.1); перебежчик не растёт на наших делах
             }
 
             reward.Social?.Apply(_factions, _base, _threats, _flags);
@@ -255,7 +273,7 @@ namespace Game.Core.Quests
                 for (int i = 0; i < participants.Count; i++)
                 {
                     var c = participants[i];
-                    if (c == null || !c.IsAlive) continue;
+                    if (c == null || !c.IsOnPlayerSide) continue; // как в CheckResolver: скил перебежчика не наш
                     int v = c.GetSkill(skill) + c.CheckModifierFor(skill);
                     if (v > best) best = v;
                 }
