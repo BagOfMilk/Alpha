@@ -101,6 +101,18 @@ powershell -File tools/run-tests.ps1
 Гоняет EditMode + PlayMode через Unity batchmode и падает с ненулевым кодом при
 провале. В редакторе — **Window → General → Test Runner**.
 
+**Билд для тестера** (тестеру Unity не нужен):
+
+```powershell
+powershell -File tools/build.ps1
+```
+
+Сначала прогоняет тесты, затем собирает `Build/Windows/Alpha.exe`. Отдавать
+тестеру **весь каталог** `Build\Windows` (exe без `_Data` не запустится); после
+сессии забрать у него `…\AppData\LocalLow\<company>\Alpha\telemetry\`.
+Критерии приёмки механик — [`docs/TESTPLAN.md`](docs/TESTPLAN.md), разбор
+найденного — [`docs/BUGS.md`](docs/BUGS.md).
+
 **304 EditMode-теста + 7 PlayMode-смоуков** (сцены Campaign/Battle/Boot, файловый round-trip сейва): производные
 статы, прокачка, проверки, трейты/шрамы, агрегатор модификаторов, петля базы,
 боевое ядро (укрытия/LOS, попадание/граза, конвейер урона, ходы и состояния,
@@ -163,11 +175,14 @@ Assets/
   Tests/EditMode/      // юнит-тесты на логику и баланс (рабочая коняка)
   Tests/PlayMode/      // смоук Unity-шва: сцена, файловый сейв
 tools/run-tests.ps1    // прогон всех тестов одной командой (воротарь коммита)
+tools/build.ps1        // играбельный билд для тестера (тесты → Build/Windows/Alpha.exe)
 docs/
   GDD.md               // канон дизайна (v6) — источник истины
   DESIGN.md            // как код реализует канон + дорожная карта
   BALANCE.md           // формулы и «крутилки» баланса
   PLAYTEST.md          // методика плейтеста первого часа + метрики телеметрии
+  TESTPLAN.md          // критерии приёмки механик: что проверено авто, что руками
+  BUGS.md              // шаблон репорта + цикл «корень → фикс → перепроверка»
   AUDIT-MECHANICS.md   // аудит: механики-тупики и разрывы прогрессии + план
 ```
 
