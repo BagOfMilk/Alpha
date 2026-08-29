@@ -13,7 +13,16 @@ namespace Game.Core.Signals
         /// <summary>Реплика напарника: он говорит прямо и по делу.</summary>
         CompanionLine = 1,
         /// <summary>Визуал города: процветание, упадок, наложения.</summary>
-        Moodboard = 2
+        Moodboard = 2,
+
+        /// <summary>Предвестник: что-то зреет. Три ступени громкости.</summary>
+        Forewarning = 3,
+
+        /// <summary>Доклад напарника с позиции — сводка по его домену.</summary>
+        PostReport = 4,
+
+        /// <summary>Фон без адресата: звуки, погода, ночь.</summary>
+        Ambient = 5
     }
 
     /// <summary>

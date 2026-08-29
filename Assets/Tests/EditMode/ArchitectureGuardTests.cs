@@ -45,7 +45,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void SettlementLayer_DoesNotReferenceLegacyTypes()
         {
-            string[] layers = { "Pressure", "Signals", "Loop" };
+            string[] layers = { "Pressure", "Signals", "Loop", "Checks", "World", "Settlement" };
             var forbidden = new Regex(@"Game\.Core\.Stats|Game\.Core\.Economy|\bStatType\b|\bResourceType\b");
             var offenders = new List<string>();
 

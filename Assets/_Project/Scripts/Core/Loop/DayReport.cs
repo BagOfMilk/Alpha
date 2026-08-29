@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Game.Core.Pressure;
 using Game.Core.Signals;
+using Game.Core.World;
 
 namespace Game.Core.Loop
 {
@@ -23,13 +24,25 @@ namespace Game.Core.Loop
         /// <summary>Единственное, что читает городской UI.</summary>
         public SignalDigest Signals { get; }
 
+        /// <summary>
+        /// Исходы инцидентов. ПУБЛИЧНЫ, в отличие от чисел шкал: то, что
+        /// произошло, игрок и так видит — скрывать нужно не события, а метрики.
+        /// </summary>
+        public IReadOnlyList<IncidentOutcome> Incidents { get; }
+
+        /// <summary>Предвестники этой фазы — для отладки и тестов.</summary>
+        internal IReadOnlyList<Forewarning> Forewarnings { get; }
+
         internal DayReport(int day, DayPhase phase,
-            IReadOnlyList<TensionChange> tensionChanges, SignalDigest signals)
+            IReadOnlyList<TensionChange> tensionChanges, SignalDigest signals,
+            IReadOnlyList<IncidentOutcome> incidents, IReadOnlyList<Forewarning> forewarnings)
         {
             Day = day;
             Phase = phase;
             TensionChanges = tensionChanges;
             Signals = signals;
+            Incidents = incidents;
+            Forewarnings = forewarnings;
         }
     }
 }

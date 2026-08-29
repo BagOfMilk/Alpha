@@ -10,7 +10,8 @@ namespace Game.Core.Characters
         Assigned = 1,  // назначен на позицию базы
         OnMission = 2, // в вылазке (Даж)
         Injured = 3,   // ранен, нужно восстановление
-        Resting = 4    // отдыхает/лечится в лазарете
+        Resting = 4,   // отдыхает/лечится в лазарете
+        Dead = 5       // погиб. НЕОБРАТИМО (US-9.1, US-11.1)
     }
 
     /// <summary>
@@ -53,6 +54,21 @@ namespace Game.Core.Characters
 
         public bool IsAssigned => !string.IsNullOrEmpty(AssignedSlotId);
         public bool IsInjured => InjuryPoints > 0.0;
+
+        /// <summary>Погиб. Из этого состояния нет пути назад.</summary>
+        public bool IsDead => Status == CompanionStatus.Dead;
+
+        /// <summary>
+        /// Убить напарника. Переход необратим — это осознанная жёсткость GDD:
+        /// потери должны быть настоящими, иначе привязанность к ростеру ничего
+        /// не стоит. Снимает с позиции: мёртвый пост не держит.
+        /// </summary>
+        internal void MarkDead()
+        {
+            Status = CompanionStatus.Dead;
+            AssignedSlotId = null;
+            InjuryPoints = 0;
+        }
 
         /// <summary>
         /// Начисляет опыт и применяет повышения уровня, выдавая статы по
