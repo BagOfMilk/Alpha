@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless-прогон тестов из Assets/Tests/EditMode.
+    Те же файлы, что видит Unity Test Runner, плюс один локальный shim
+    (UnityShim.cs), которого Unity никогда не увидит — он лежит вне Assets/.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- КРИТИЧНО: ровно это имя стоит в InternalsVisibleTo внутри ядра.
+         Любое другое — и тесты потеряют доступ к internal-членам (CS0122). -->
+    <AssemblyName>Game.Tests.EditMode</AssemblyName>
+    <RootNamespace>Game.Tests</RootNamespace>
+
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Assets/Tests/EditMode/**/*.cs" />
+    <Compile Include="UnityShim.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NUnit 3.x, а НЕ 4.x: в четвёртой версии классический API
+         (Assert.AreEqual/IsTrue/Greater/IsEmpty) переехал в ClassicAssert,
+         и все наши тесты перестали бы компилироваться. -->
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
+  </ItemGroup>
+
+</Project>

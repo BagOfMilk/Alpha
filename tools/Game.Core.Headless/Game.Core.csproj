@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless-сборка ядра: тот же самый код, что компилирует Unity, но без Unity.
+    Файлы НЕ копируются — подключаются ссылкой на исходное дерево Assets/,
+    поэтому расхождение между headless и редактором физически невозможно.
+
+    Работает только потому, что Game.Core спроектирован без зависимостей от
+    движка (asmdef: noEngineReferences = true).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+
+    <!-- Имя обязано совпадать с asmdef: от него зависит InternalsVisibleTo. -->
+    <AssemblyName>Game.Core</AssemblyName>
+    <RootNamespace>Game.Core</RootNamespace>
+
+    <!-- Иначе SDK сгенерирует свой AssemblyInfo и атрибуты задвоятся
+         с нашим Assets/_Project/Scripts/Core/AssemblyInfo.cs -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Assets/_Project/Scripts/Core/**/*.cs" />
+  </ItemGroup>
+
+</Project>

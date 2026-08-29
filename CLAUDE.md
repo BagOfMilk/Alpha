@@ -70,6 +70,18 @@ Base-builder RPG на **Unity 6.4 (6000.4.10f1)**. **Главный луп — �
 - `Assets/_Project/Scripts/Gameplay` — тонкие обёртки Unity (SO, MonoBehaviour).
 - `Assets/Tests/EditMode` — юнит-тесты (`Game.Tests.EditMode`).
   **Прогонять после изменений.**
+- `tools/` — headless-проекты: ядро компилируется и тестируется **без Unity**.
+
+## Проверка кода (обязательно перед push)
+```bash
+./tools/run-tests.sh        # или: dotnet test tools/Alpha.Headless.sln
+```
+Ядро не зависит от движка, поэтому вся логика проверяется за секунды обычным
+.NET. В облачных сессиях SDK ставится автоматически (`.claude/hooks/session-start.sh`),
+на каждом пуше тесты гоняет CI (`.github/workflows/core-tests.yml`).
+
+**Границы:** покрывается только `Game.Core`. `Game.Gameplay` (MonoBehaviour,
+ScriptableObject), сцены и билд — только в Unity. Подробности — `tools/README.md`.
 
 **Городской слой (проектируется):** namespace `Game.Core.{Pressure, World,
 Settlement, Factions, Checks, Signals, Loop}`. Они **не ссылаются** на
