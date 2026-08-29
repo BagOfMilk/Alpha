@@ -18,6 +18,13 @@
 .vscode/
 *.csproj
 *.sln
+
+# Headless-проекты для прогона тестов ядра без Unity — их коммитим.
+# (Правила выше существуют потому, что Unity генерирует свои csproj/sln.)
+!tools/**/*.csproj
+!tools/**/*.sln
+tools/**/bin/
+tools/**/obj/
 *.user
 *.userprefs
 *.pidb

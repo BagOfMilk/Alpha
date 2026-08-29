@@ -1,0 +1,84 @@
+using System;
+using System.Collections.Generic;
+using Game.Core.Balance;
+using Game.Core.Pressure;
+
+namespace Game.Core.Loop
+{
+    /// <summary>
+    /// Продвигает время. Заменяет бесконечный хвост из пост-шагов упорядоченным
+    /// конвейером: порядок задаётся <see cref="DayStepOrder"/> и сортируется один
+    /// раз при создании, поэтому шаги не могут молча поменяться местами.
+    ///
+    /// Полностью детерминирован: одинаковые входы дают одинаковый ход кампании
+    /// (Поправка №3.3).
+    /// </summary>
+    public sealed class DayProcessor
+    {
+        private readonly List<IDayStep> _steps;
+        private readonly BalanceConfig _balance;
+        private readonly TensionState _tension;
+
+        public int CurrentDay { get; private set; }
+
+        /// <summary>Тир поселения: хутор 1 → городок 4.</summary>
+        public int Tier { get; set; } = 1;
+
+        /// <summary>Уклад как индекс; полноценный тип появится на Э3.</summary>
+        public int OrderLevel { get; set; } = 1;
+
+        public TensionState Tension => _tension;
+
+        public DayProcessor(TensionState tension, BalanceConfig balance, IEnumerable<IDayStep> steps)
+        {
+            _tension = tension ?? throw new ArgumentNullException(nameof(tension));
+            _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+
+            _steps = new List<IDayStep>();
+            if (steps != null)
+                foreach (var s in steps)
+                    if (s != null) _steps.Add(s);
+
+            // Стабильная сортировка: при равном Order порядок добавления сохраняется.
+            _steps.Sort((a, b) => a.Order.CompareTo(b.Order));
+        }
+
+        /// <summary>Шаги в порядке исполнения — для тестов и отладки.</summary>
+        public IReadOnlyList<IDayStep> Steps => _steps;
+
+        /// <summary>Стандартный набор шагов этапа Э0.</summary>
+        public static IEnumerable<IDayStep> DefaultSteps()
+        {
+            return new IDayStep[]
+            {
+                new TensionTickStep(),
+                new SignalStep()
+            };
+        }
+
+        public DayReport Advance(DayPhase phase = DayPhase.Day)
+        {
+            CurrentDay++;
+            _tension.BeginDay();
+
+            var ctx = new DayContext(CurrentDay, phase, Tier, OrderLevel, _balance, _tension);
+            for (int i = 0; i < _steps.Count; i++)
+                _steps[i].Execute(ctx);
+
+            _tension.OnDayAdvanced();
+
+            // Копия журнала: отчёт не должен меняться, когда начнётся следующий день.
+            var ledger = new List<TensionChange>(_tension.DayLedger);
+            return new DayReport(ctx.Day, ctx.Phase, ledger, ctx.Signals);
+        }
+
+        /// <summary>Прокрутить N дней подряд (кнопка «ждать», US-1.3).</summary>
+        public List<DayReport> Advance(int days, DayPhase phase = DayPhase.Day)
+        {
+            var reports = new List<DayReport>();
+            for (int i = 0; i < days; i++)
+                reports.Add(Advance(phase));
+            return reports;
+        }
+    }
+}
