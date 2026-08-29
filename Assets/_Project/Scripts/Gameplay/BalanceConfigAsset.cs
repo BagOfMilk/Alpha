@@ -30,6 +30,7 @@ namespace Game.Gameplay
 
         [Header("Восстановление")]
         public double baseHealingPerCycle = 5.0;
+        public double healingPerMedicinePoint = 2.0;
 
         [Header("Содержание")]
         public int foodUpkeepPerCompanion = 1;
@@ -49,6 +50,7 @@ namespace Game.Gameplay
                 GlobalProductionMultiplier = globalProductionMultiplier,
                 InjuredProductionMultiplier = injuredProductionMultiplier,
                 BaseHealingPerCycle = baseHealingPerCycle,
+                HealingPerMedicinePoint = healingPerMedicinePoint,
                 FoodUpkeepPerCompanion = foodUpkeepPerCompanion
             };
         }

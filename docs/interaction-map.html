@@ -1,0 +1,1085 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Карта систем Alpha</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=PT+Sans+Narrow:wght@400;700&display=swap">
+
+<style>
+:root{
+  --ground:#E7EAEE; --surface:#F6F8FA; --surface2:#FFFFFF; --sunk:#DEE2E7;
+  --ink:#161A1F; --ink2:#48525C; --ink3:#78838F;
+  --line:#CBD2D9; --line2:#E0E5EA;
+  --accent:#B4551F; --accent-soft:#F0DDD1;
+  --c-code:#1A7669; --c-gdd:#B4551F; --c-base:#43549B; --c-gap:#9E2340;
+  --c-code-soft:#D5E9E5; --c-gdd-soft:#F2DFD2; --c-base-soft:#DCE1F2; --c-gap-soft:#F2D8DE;
+  --canvas:#DFE3E8; --grid:#D2D8DE;
+  --shadow:0 1px 2px rgba(16,22,28,.08),0 8px 24px rgba(16,22,28,.06);
+  --radius:3px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1216; --surface:#141A20; --surface2:#1B222A; --sunk:#0A0F13;
+    --ink:#E3E8ED; --ink2:#9EAAB5; --ink3:#6A7681;
+    --line:#28313A; --line2:#1E262E;
+    --accent:#DE8A4E; --accent-soft:#3A2A1D;
+    --c-code:#4FBFAD; --c-gdd:#DE8A4E; --c-base:#8B9EE6; --c-gap:#EF6480;
+    --c-code-soft:#12302C; --c-gdd-soft:#33241A; --c-base-soft:#1C2340; --c-gap-soft:#3A1722;
+    --canvas:#090D11; --grid:#161E25;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1216; --surface:#141A20; --surface2:#1B222A; --sunk:#0A0F13;
+  --ink:#E3E8ED; --ink2:#9EAAB5; --ink3:#6A7681;
+  --line:#28313A; --line2:#1E262E;
+  --accent:#DE8A4E; --accent-soft:#3A2A1D;
+  --c-code:#4FBFAD; --c-gdd:#DE8A4E; --c-base:#8B9EE6; --c-gap:#EF6480;
+  --c-code-soft:#12302C; --c-gdd-soft:#33241A; --c-base-soft:#1C2340; --c-gap-soft:#3A1722;
+  --canvas:#090D11; --grid:#161E25;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Golos Text","Segoe UI",system-ui,sans-serif;
+  font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.lbl{font-family:"PT Sans Narrow","Arial Narrow",Arial,sans-serif;}
+.mono{font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;}
+.lbl{
+  text-transform:uppercase; letter-spacing:.09em; font-weight:700;
+  font-size:11px; color:var(--ink3);
+}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- shell ---------- */
+.app{
+  display:grid; grid-template-columns:250px minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
+  height:100vh; min-height:560px;
+}
+header{
+  grid-column:1/-1; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+  padding:12px 18px; background:var(--surface); border-bottom:1px solid var(--line);
+}
+header h1{
+  margin:0; font-size:21px; font-weight:700; letter-spacing:.01em;
+  text-transform:uppercase;
+}
+header h1 .dim{color:var(--ink3);font-weight:400}
+header .sub{color:var(--ink2); font-size:12.5px; max-width:62ch}
+header .counts{margin-left:auto; display:flex; gap:14px; align-items:baseline}
+header .counts b{font-family:"PT Sans Narrow",sans-serif;font-size:19px;font-variant-numeric:tabular-nums}
+header .stamp{
+  flex-basis:100%; font-size:11px; color:var(--ink3);
+  font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;
+}
+header .stamp .stale{color:var(--c-gap)}
+
+.rail{
+  background:var(--surface); border-right:1px solid var(--line);
+  overflow-y:auto; padding:14px 14px 40px; display:flex; flex-direction:column; gap:18px;
+}
+.rail section{display:flex;flex-direction:column;gap:7px}
+main{position:relative; overflow:hidden; display:flex; flex-direction:column; background:var(--ground)}
+
+/* ---------- controls ---------- */
+.search{
+  width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--surface2); color:var(--ink); font-size:13px;
+}
+.search::placeholder{color:var(--ink3)}
+.toggle{
+  display:flex; align-items:center; gap:9px; width:100%; text-align:left;
+  padding:7px 9px; border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--surface2); transition:background .12s,border-color .12s;
+}
+.toggle:hover{border-color:var(--ink3)}
+.toggle .swatch{width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid currentColor}
+.toggle[aria-pressed="true"] .swatch{background:currentColor}
+.toggle .n{margin-left:auto;font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.toggle[aria-pressed="false"]{opacity:.45}
+.t-code{color:var(--c-code)} .t-gdd{color:var(--c-gdd)} .t-base{color:var(--c-base)} .t-gap{color:var(--c-gap)}
+.toggle .name{color:var(--ink);font-weight:500;font-size:13px}
+
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{
+  padding:3px 8px; border:1px solid var(--line); border-radius:99px;
+  background:var(--surface2); font-size:11.5px; color:var(--ink2);
+}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+.hublist{display:flex;flex-direction:column;gap:2px}
+.hub{
+  display:flex;gap:8px;align-items:baseline;padding:4px 6px;border-radius:var(--radius);
+  background:none;border:0;width:100%;text-align:left;font-size:12.5px;
+}
+.hub:hover{background:var(--sunk)}
+.hub .deg{margin-left:auto;font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.hub .dot{width:7px;height:7px;border-radius:99px;flex:none;position:relative;top:-1px}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);background:var(--surface);flex:none}
+.tab{
+  padding:9px 16px;background:none;border:0;border-bottom:2px solid transparent;
+  font-family:"PT Sans Narrow",sans-serif;text-transform:uppercase;letter-spacing:.07em;
+  font-size:13px;font-weight:700;color:var(--ink3);
+}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .badge{
+  font-family:"Golos Text",sans-serif;letter-spacing:0;font-size:10px;
+  background:var(--c-gap);color:#fff;border-radius:99px;padding:0 5px;margin-left:5px;
+}
+.panelwrap{flex:1;min-height:0;position:relative}
+.panel{position:absolute;inset:0;overflow:auto;display:none}
+.panel.on{display:block}
+#p-graph{overflow:hidden}
+
+/* ---------- graph ---------- */
+#stage{position:absolute;inset:0;background:var(--canvas)}
+canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+canvas.drag{cursor:grabbing}
+.stagetools{
+  position:absolute;left:12px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:3;
+}
+.stagetools button{
+  padding:5px 10px;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);font-size:12px;box-shadow:var(--shadow);
+}
+.stagetools button:hover{border-color:var(--ink3)}
+.hint{
+  position:absolute;right:12px;bottom:12px;z-index:3;font-size:11px;color:var(--ink3);
+  background:var(--surface);border:1px solid var(--line2);padding:4px 8px;border-radius:var(--radius);
+}
+#tip{
+  position:absolute;z-index:5;pointer-events:none;max-width:270px;
+  background:var(--surface2);border:1px solid var(--line);border-radius:var(--radius);
+  padding:7px 9px;box-shadow:var(--shadow);font-size:12px;display:none;
+}
+#tip .k{font-size:10.5px;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em}
+#tip b{display:block;font-size:13.5px;margin:1px 0 3px}
+
+/* ---------- inspector ---------- */
+.inspector{
+  position:absolute;top:0;right:0;bottom:0;width:355px;max-width:88vw;z-index:6;
+  background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);
+  transform:translateX(101%);transition:transform .22s ease;
+  display:flex;flex-direction:column;
+}
+.inspector.on{transform:none}
+@media (prefers-reduced-motion:reduce){.inspector{transition:none}}
+.insp-head{padding:14px 16px 10px;border-bottom:1px solid var(--line2);position:relative}
+.insp-head .close{position:absolute;top:10px;right:10px;background:none;border:0;color:var(--ink3);font-size:18px;line-height:1;padding:4px 7px;border-radius:var(--radius)}
+.insp-head .close:hover{background:var(--sunk);color:var(--ink)}
+.insp-head h2{margin:4px 40px 4px 0;font-size:19px;line-height:1.2;text-wrap:balance}
+.insp-body{padding:12px 16px 32px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.tag{
+  display:inline-block;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
+  font-weight:700;padding:1px 6px;border-radius:2px;font-family:"PT Sans Narrow",sans-serif;
+}
+.tag.code{background:var(--c-code-soft);color:var(--c-code)}
+.tag.gdd{background:var(--c-gdd-soft);color:var(--c-gdd)}
+.tag.base{background:var(--c-base-soft);color:var(--c-base)}
+.tag.gap{background:var(--c-gap-soft);color:var(--c-gap)}
+.src{font-size:11.5px;color:var(--ink3);word-break:break-all}
+.desc{font-size:13px;color:var(--ink2)}
+.edgegroup h3{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink3)}
+.edge{
+  display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:6px 8px;margin-bottom:3px;
+  border:1px solid var(--line2);border-left:2px solid var(--line);border-radius:var(--radius);
+  background:var(--surface2);width:100%;text-align:left;
+}
+.edge:hover{border-color:var(--ink3)}
+.edge .rel{grid-column:1/-1;font-size:11.5px;color:var(--ink3)}
+.edge .who{font-weight:600;font-size:13px}
+.edge .arrow{color:var(--ink3);font-size:12px}
+.edge.l-code{border-left-color:var(--c-code)}
+.edge.l-gdd{border-left-color:var(--c-gdd)}
+.edge.l-base{border-left-color:var(--c-base)}
+.edge.l-gap{border-left-color:var(--c-gap);background:var(--c-gap-soft)}
+.figures{
+  border:1px solid var(--line2);border-left:2px solid var(--accent);
+  border-radius:var(--radius);background:var(--surface2);padding:8px 10px;
+}
+.figures h3{
+  margin:0 0 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink3);
+  font-family:"PT Sans Narrow",sans-serif;
+}
+.figures p{
+  margin:0;font-size:12.5px;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.note{
+  font-size:12.5px;padding:8px 10px;border-radius:var(--radius);
+  background:var(--c-gap-soft);color:var(--ink);border:1px solid transparent;
+}
+.note b{color:var(--c-gap)}
+
+/* ---------- tables & gaps ---------- */
+.pad{padding:18px 20px 60px;max-width:1180px}
+.pad h2{margin:0 0 4px;font-size:20px;text-transform:uppercase;letter-spacing:.03em}
+.pad p.lead{margin:0 0 16px;color:var(--ink2);max-width:70ch;font-size:13px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface2)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
+th{
+  position:sticky;top:0;background:var(--surface);z-index:1;
+  font-family:"PT Sans Narrow",sans-serif;text-transform:uppercase;letter-spacing:.07em;
+  font-size:11px;color:var(--ink3);border-bottom:1px solid var(--line);
+}
+tbody tr:hover{background:var(--sunk)}
+td.rel{color:var(--ink2)}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+.gapgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.gapcard{
+  border:1px solid var(--line);border-top:3px solid var(--c-gap);border-radius:var(--radius);
+  background:var(--surface2);padding:12px 14px;display:flex;flex-direction:column;gap:7px;
+}
+.gapcard.sev-low{border-top-color:var(--ink3)}
+.gapcard.sev-mid{border-top-color:var(--accent)}
+.gaphead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gapcard .cat{
+  font-family:"PT Sans Narrow",sans-serif;text-transform:uppercase;letter-spacing:.07em;
+  font-size:10.5px;font-weight:700;color:var(--ink3);border:1px solid var(--line);
+  border-radius:2px;padding:1px 6px;cursor:help;
+}
+.gapcard h3{margin:0;font-size:15.5px;line-height:1.25;text-wrap:balance}
+#gapcats .chip b{font-variant-numeric:tabular-nums;font-weight:700}
+.gapcard .where{font-size:11.5px;color:var(--ink3);word-break:break-word}
+.gapcard p{margin:0;font-size:12.5px;color:var(--ink2)}
+.sevtag{align-self:flex-start}
+.callout{
+  border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface2);
+  padding:12px 14px;border-radius:var(--radius);margin:0 0 16px;font-size:13px;color:var(--ink2);
+}
+.legendrow{display:flex;flex-wrap:wrap;gap:10px 16px;font-size:11.5px;color:var(--ink2);margin-top:2px}
+.legendrow span{display:flex;align-items:center;gap:6px}
+.legendrow i{width:14px;height:0;border-top:2px solid currentColor;display:block}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr)}
+  .rail{
+    border-right:0;border-bottom:1px solid var(--line);max-height:38vh;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;
+  }
+  .rail .hublist-wrap{display:none}
+  header .counts{width:100%;margin-left:0}
+  .inspector{width:100%;max-width:none;top:auto;height:62%;transform:translateY(101%);border-left:0;border-top:1px solid var(--line)}
+  .inspector.on{transform:none}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <h1>Карта систем <span class="dim">Alpha</span></h1>
+    <div class="sub">Всё, что с чем взаимодействует: код итерации 1, дизайн GDD&nbsp;v6 и модуль базы. Слои включаются слева, узел — клик.</div>
+    <div class="counts">
+      <span><b id="cnt-n">0</b> <span class="lbl">узлов</span></span>
+      <span><b id="cnt-e">0</b> <span class="lbl">связей</span></span>
+      <span><b id="cnt-g" style="color:var(--c-gap)">0</b> <span class="lbl">разрывов</span></span>
+    </div>
+    <div class="stamp" id="stamp"></div>
+  </header>
+
+  <aside class="rail">
+    <section>
+      <div class="lbl">Слои</div>
+      <button class="toggle t-code" data-layer="code" aria-pressed="true"><span class="swatch"></span><span class="name">Код</span><span class="n" id="n-code"></span></button>
+      <button class="toggle t-gdd" data-layer="gdd" aria-pressed="true"><span class="swatch"></span><span class="name">Дизайн · GDD v6</span><span class="n" id="n-gdd"></span></button>
+      <button class="toggle t-base" data-layer="base" aria-pressed="true"><span class="swatch"></span><span class="name">База: секции</span><span class="n" id="n-base"></span></button>
+    </section>
+
+    <section>
+      <div class="lbl">Тип связи</div>
+      <div class="chips" id="tagchips"></div>
+      <div class="legendrow">
+        <span style="color:var(--ink3)"><i></i>сплошная — есть в источнике</span>
+        <span style="color:var(--ink3)"><i style="border-top-style:dashed"></i>пунктир — план / разрыв</span>
+      </div>
+    </section>
+
+    <section>
+      <div class="lbl">Поиск</div>
+      <input class="search" id="q" type="search" placeholder="StatType, Напряжение, лазарет…" autocomplete="off">
+    </section>
+
+    <section class="hublist-wrap">
+      <div class="lbl">Узлы-хабы</div>
+      <div class="hublist" id="hubs"></div>
+    </section>
+  </aside>
+
+  <main>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="p-graph">Граф</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-table">Все связи</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-gaps">Разрывы<span class="badge" id="gapbadge">0</span></button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-run">Прогон дня</button>
+    </nav>
+
+    <div class="panelwrap">
+      <div class="panel on" id="p-graph">
+        <div id="stage">
+          <canvas id="cv"></canvas>
+          <div id="tip"></div>
+          <div class="stagetools">
+            <button id="fit">Вписать</button>
+            <button id="reheat">Пересобрать</button>
+            <button id="only-gaps">Только разрывы</button>
+          </div>
+          <div class="hint">колесо — зум · тянуть фон — панорама · тянуть узел — закрепить</div>
+        </div>
+        <aside class="inspector" id="insp">
+          <div class="insp-head">
+            <button class="close" id="insp-close" aria-label="Закрыть">×</button>
+            <div id="insp-tags"></div>
+            <h2 id="insp-title"></h2>
+            <div class="src mono" id="insp-src"></div>
+          </div>
+          <div class="insp-body" id="insp-body"></div>
+        </aside>
+      </div>
+
+      <div class="panel" id="p-table">
+        <div class="pad">
+          <h2>Все связи</h2>
+          <p class="lead">Каждая строка — одно взаимодействие. Тег говорит, откуда оно взято: <b>КОД</b> — вычитано из исходников, <b>ДОК</b> — записано в GDD/DESIGN/BALANCE, <b>ПЛАН</b> — спроектировано, кода ещё нет, <b>РАЗРЫВ</b> — заявлено, но с кодом не сходится.</p>
+          <input class="search" id="tq" type="search" placeholder="Фильтр по строке…" style="max-width:340px;margin-bottom:12px">
+          <div class="tablewrap">
+            <table id="edgetable">
+              <thead><tr><th>Источник</th><th>Взаимодействие</th><th>Цель</th><th>Тег</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="p-gaps">
+        <div class="pad">
+          <h2>Разрывы</h2>
+          <p class="lead">«Разрыв» — не обязательно отсутствие логики. Это шесть разных вещей, и лечатся они по-разному: где-то надо дописать код, где-то — исправить документ, а где-то просто удалить лишнее. Фильтр ниже разбирает их по типу; наведи на тип, чтобы прочитать определение.</p>
+          <div class="chips" id="gapcats" style="margin-bottom:6px"></div>
+          <p class="lead" id="gapshown" style="margin:0 0 12px;font-variant-numeric:tabular-nums"></p>
+          <div class="gapgrid" id="gapgrid"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="p-run">
+        <div class="pad">
+          <h2>Прогон дня 1</h2>
+          <p class="lead">Что реально выдаёт <span class="mono">BaseGameDemo</span> на первом цикле при дефолтном балансе: формула <span class="mono">Base + Primary×k₁ + Secondary×k₂</span>, округление к целому.</p>
+          <div class="callout" id="runnote"></div>
+          <div class="tablewrap">
+            <table id="runtable">
+              <thead><tr><th>Напарник</th><th>Слот</th><th>Формула</th><th class="num">Выход</th><th class="num">Ролевой XP</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   ДАННЫЕ
+   n(id, label, layer, kind, group, src, desc)
+   kind: class|enum|static|struct|so|mono|test|asm|system|section|slot|stat|res|out|arch|mech
+   ========================================================================= */
+const DATA = {"meta":{"builtAt":"2026-08-29 14:35","gitSha":"7a0cdb7","autoGaps":9,"gddWithout":56,"gddTotal":103,"stale":[],"fingerprints":{"docs/GDD.md":"2b407808","docs/DESIGN.md":"96dd1808","docs/BALANCE.md":"e4b7f2ef"}},"nodes":[["c.asmCore","Game.Core","code","asm","Сборки","Core/Game.Core.asmdef","Чистый C# без UnityEngine (noEngineReferences). Вся игровая логика и баланс живут здесь.","19 файлов, 21 тип, 1162 строки. Связей 3: 1 исходящая, 2 входящие."],["c.asmGameplay","Game.Gameplay","code","asm","Сборки","Gameplay/Game.Gameplay.asmdef","Тонкий слой Unity: ScriptableObject и MonoBehaviour-демо. Ссылается на Game.Core.","2 файла, 2 типа, 194 строки. Связей 1: 1 исходящая, 0 входящих."],["c.asmTests","Game.Tests.EditMode","code","asm","Сборки","Tests/EditMode/Game.Tests.EditMode.asmdef","EditMode-тесты на NUnit. Видит internal-члены ядра.","4 файла, 4 типа, 298 строк. Связей 2: 1 исходящая, 1 входящая."],["c.StatType","StatType","code","enum","Stats","Core/Stats/StatType.cs","Один enum на всё: боевые статы (Health, Aim, Defense, Dodge, Mobility, Will, CritChance, Armor, Tech, Psi) и склонности под роли базы (Leadership, Engineering, Science, Medicine, Logistics, Charisma, Scouting, Survival).","19 членов enum, рабочих значений 18. Используют 8 файлов. Связей 8: 0 исходящих, 8 входящих."],["c.StatBlock","StatBlock","code","class","Stats","Core/Stats/StatBlock.cs","Sparse-контейнер значений статов: хранит только заданные, остальные — ноль. Умеет складываться (Plus/AddFrom) — под бонусы гира и трейтов.","63 строк, 9 публичных членов. Используют 4 файла. Связей 5: 1 исходящая, 4 входящие."],["c.CompanionArchetype","CompanionArchetype","code","class","Characters","Core/Characters/CompanionArchetype.cs","Шаблон напарника: стартовый StatBlock + GrowthProfile. CreateInstance() рождает Companion 1-го уровня.","24 строк, 7 публичных членов. Используют 3 файла. Связей 5: 3 исходящие, 2 входящие."],["c.GrowthProfile","GrowthProfile","code","class","Characters","Core/Characters/GrowthProfile.cs","Веса распределения очков при левелапе. AllocatePoints раздаёт очки методом наибольших остатков — сумма всегда точна.","48 строк, 3 публичных члена. Используют 2 файла. Связей 4: 2 исходящие, 2 входящие."],["c.Companion","Companion","code","class","Characters","Core/Characters/Companion.cs","Рантайм-напарник: уровень, XP, статус, привязка к слоту, InjuryPoints. EffectiveStats = архетип + накопленный рост.","52 строк, 14 публичных членов. Используют 5 файлов. Связей 12: 5 исходящих, 7 входящих."],["c.CompanionStatus","CompanionStatus","code","enum","Characters","Core/Characters/Companion.cs:7","Idle · Assigned · OnMission · Injured · Resting. Реально переключаются только Idle ↔ Assigned: Injured, Resting и OnMission не присваивает никто, их ветки в коде мертвы.","5 членов enum. Используют 1 файл. Связей 4: 0 исходящих, 4 входящие."],["c.Roster","Roster","code","class","Characters","Core/Characters/Roster.cs","Список всех напарников с доступом по Id. Его Count задаёт расход еды за цикл.","29 строк, 6 публичных членов. Используют 3 файла. Связей 3: 1 исходящая, 2 входящие."],["c.BaseSectionType","BaseSectionType","code","enum","Base","Core/Base/BaseSectionType.cs","8 секций базы: Совет, Поселение, Мастерская, Лаборатория, Лазарет, Склад, Казарма, Разведпост.","9 членов enum, рабочих значений 8. Используют 3 файла. Связей 3: 0 исходящих, 3 входящие."],["c.SlotOutputKind","SlotOutputKind","code","enum","Base","Core/Base/AssignmentSlotDefinition.cs:7","Три типа выхода слота: Resource (в кошелёк), Healing (лечит раненых), Passive (именованный бонус).","3 члена enum. Используют 3 файла. Связей 3: 0 исходящих, 3 входящие."],["c.AssignmentSlotDefinition","AssignmentSlotDefinition","code","class","Base","Core/Base/AssignmentSlotDefinition.cs","Data-driven описание позиции: секция, тип выхода, ресурс, Primary/Secondary склонности и их коэффициенты. Баланс роли = эти числа.","33 строк, 14 публичных членов. Используют 5 файлов. Связей 7: 4 исходящие, 3 входящие."],["c.AssignmentSlot","AssignmentSlot","code","class","Base","Core/Base/AssignmentSlot.cs","Рантайм-состояние слота: открыт ли (Unlocked) и id назначенного напарника. Сам объект напарника живёт в ростере.","14 строк, 6 публичных членов. Используют 1 файл. Связей 2: 1 исходящая, 1 входящая."],["c.AssignmentResult","AssignmentResult","code","enum","Base","Core/Base/AssignmentResult.cs","Success · SlotNotFound · SlotLocked · SlotOccupied · CompanionNotFound · CompanionUnavailable.","6 членов enum. Используют 2 файла. Связей 1: 0 исходящих, 1 входящая."],["c.ProductionCalculator","ProductionCalculator","code","static","Base","Core/Base/ProductionCalculator.cs:13","Единственная формула выработки и ролевого опыта. Вызывающий пока ровно один — BaseState.AdvanceCycle (строки 117 и 133); вынесена отдельно под будущий UI-предпросмотр и тесты формул.","47 строк, 3 публичных члена. Используют 1 файл. Связей 6: 3 исходящие, 3 входящие."],["c.BaseState","BaseState","code","class","Base","Core/Base/BaseState.cs","Ядро мирной фазы: ростер + слоты + кошелёк + баланс. AdvanceCycle() = один игровой день.","187 строк, 11 публичных членов. Используют 2 файла. Связей 17: 11 исходящих, 6 входящих."],["c.CycleReport","CycleReport","code","class","Base","Core/Base/CycleReport.cs","Сводка дня: произведённые ресурсы, пассивные бонусы, кто поднял уровень, кто вылечился, флаг нехватки еды.","32 строк, 6 публичных членов. Используют 2 файла. Связей 4: 1 исходящая, 3 входящие."],["c.ResourceType","ResourceType","code","enum","Economy","Core/Economy/ResourceType.cs","Supplies · Materials · Intel · Research · Food · Medicine.","7 членов enum, рабочих значений 6. Используют 7 файлов. Связей 6: 0 исходящих, 6 входящих."],["c.ResourceLedger","ResourceLedger","code","class","Economy","Core/Economy/ResourceLedger.cs","Кошелёк базы с CanAfford/TrySpend и событием Changed. В минус не уходит.","51 строк, 8 публичных членов. Используют 3 файла. Связей 3: 1 исходящая, 2 входящие."],["c.BalanceConfig","BalanceConfig","code","class","Balance","Core/Balance/BalanceConfig.cs","Все «магические числа» в одном месте: кривая XP, ролевой опыт, множители производства, лечение, прокорм.","38 строк, 12 публичных членов. Используют 9 файлов. Связей 5: 0 исходящих, 5 входящих."],["c.ProgressionMath","ProgressionMath","code","static","Balance","Core/Balance/ProgressionMath.cs","Чистые формулы прокачки: XpToNext = round(XpBase × level^XpExponent), GrantXp с переливом уровней.","66 строк, 9 публичных членов. Используют 3 файла. Связей 6: 2 исходящие, 4 входящие."],["c.LevelUpResult","LevelUpResult","code","struct","Balance","Core/Balance/ProgressionMath.cs:61","Итог начисления опыта: новый уровень, остаток XP, сколько уровней взято.","14 строк, 5 публичных членов. Используют 1 файл. Связей 1: 0 исходящих, 1 входящая."],["c.DefaultContent","DefaultContent","code","static","Контент","Core/DefaultContent.cs","Затравка контента в коде: 6 архетипов и 8 слотов базы со всеми коэффициентами. Позже заменяется ассетами.","168 строк, 8 публичных членов. Используют 1 файл. Связей 7: 5 исходящих, 2 входящие."],["c.BalanceConfigAsset","BalanceConfigAsset","code","so","Gameplay","Gameplay/BalanceConfigAsset.cs","ScriptableObject-обёртка над BalanceConfig: крутить баланс в инспекторе, держать пресеты сложности.","43 строк, 13 публичных членов. Используют 2 файла. Связей 2: 1 исходящая, 1 входящая."],["c.BaseGameDemo","BaseGameDemo","code","mono","Gameplay","Gameplay/BaseGameDemo.cs","Играбельная демка без UI: собирает базу, расставляет 6 напарников и печатает N дней в консоль.","113 строк, 6 публичных членов. Используют 0 файлов. Связей 6: 5 исходящих, 1 входящая."],["c.tBase","BaseStateTests","code","test","Тесты","Tests/EditMode/BaseStateTests.cs","Шесть тестов: назначение, блокировка закрытого слота, занятый слот, перевод, штраф к выработке у раненого, флаг нехватки еды. Все — на слотах типа Resource: ветка Healing не покрыта.","6 тестов, 109 строк. Связей 2: 2 исходящие, 0 входящих."],["c.tGrowth","GrowthProfileTests","code","test","Тесты","Tests/EditMode/GrowthProfileTests.cs","Раздача очков по весам: сумма точна, пропорции соблюдены, пустой профиль не падает.","3 теста, 44 строк. Связей 1: 1 исходящая, 0 входящих."],["c.tProg","ProgressionMathTests","code","test","Тесты","Tests/EditMode/ProgressionMathTests.cs","Кривая опыта, перелив нескольких уровней за раз, потолок MaxLevel.","4 теста, 55 строк. Связей 1: 1 исходящая, 0 входящих."],["b.m.assign","Назначение","base","mech","Механика","BaseState.TryAssign()","Проверяет: слот есть, открыт, не занят другим; напарник есть и не OnMission. Перевод с прежнего слота — автоматический.","6 кодов возврата, из них ошибок 5. Связей 4: 2 исходящие, 2 входящие."],["b.m.cycle","Цикл дня","base","mech","Механика","BaseState.AdvanceCycle()","Один вызов = один день: производство со всех занятых слотов → ролевой XP → естественная регенерация → прокорм.","За вызов обходит 8 слотов и 6 напарников, шагов 4. Связей 6: 6 исходящих, 0 входящих."],["b.m.production","Формула выработки","base","mech","Механика","ProductionCalculator.OutputPerCycle()","round( (Base + Primary×k₁ + Secondary×k₂) × Global × [ранен ? 0.5 : 1] ).","GlobalProductionMultiplier 1.0, штраф раненому ×0.5. 8 слотов со своими коэффициентами, база от 1 до 6. Связей 9: 4 исходящие, 5 входящих."],["b.m.rolexp","Ролевой опыт","base","mech","Механика","ProductionCalculator.RoleXpPerCycle()","20 XP за цикл, ×1.5 если основной стат ≥ 5. Ставить людей по профилю выгодно вдвойне.","RoleXpPerCycle 20, порог соответствия 5, множитель ×1.5 — то есть 30 против 20. Связей 3: 2 исходящие, 1 входящая."],["b.m.levelup","Левелап","base","mech","Механика","Companion.GainXp()","Порог = round(100 × level^1.5). Уровень даёт 3 очка, они падают по весам архетипа.","XpBase 100, XpExponent 1.5, MaxLevel 20, очков за уровень 3. Пороги: ур.1 → 100, ур.2 → 283, ур.3 → 520, ур.5 → 1118, ур.10 → 3162. Связей 3: 2 исходящие, 1 входящая."],["b.m.heal","Лечение","base","mech","Механика","BaseState.ApplyHealing / ApplyNaturalHealing","5 очков естественной регенерации всем раненым + очки из лазарета самым тяжёлым. При InjuryPoints ≤ 0 напарник попадает в Recovered, но статус в Idle не возвращается: сброс идёт только из Injured/Resting, а их никто не выставляет.","BaseHealingPerCycle 5.0 всем раненым за цикл. Плюс до 18 очков из лазарета на лучшем медике. Связей 5: 2 исходящие, 3 входящие."],["b.m.upkeep","Прокорм","base","mech","Механика","BaseState.ApplyFoodUpkeep()","1 еда × число напарников за цикл. Не хватило — еда обнуляется и поднимается флаг FoodShortage.","FoodUpkeepPerCompanion 1; на 6 напарниках это 6 еды за цикл. Связей 5: 2 исходящие, 3 входящие."],["b.m.unlock","Разблокировка слота","base","mech","Механика","AssignmentSlot.Unlocked","Публичное свойство. Механики стройки, которая его переключает, в коде пока нет.","Закрытых по умолчанию слотов 1 из 8. Связей 1: 1 исходящая, 0 входящих."],["b.m.report","Отчёт дня","base","mech","Механика","CycleReport","То, что видит игрок за день: ресурсы, пассивы, левелапы, выздоровления, нехватка еды.","Полей отчёта 6. Связей 6: 2 исходящие, 4 входящие."],["g.time","Время и календарь","gdd","system","Э1 · Время и мир","GDD Эпик 1","Модель PoE1: время идёт на путешествии, отдыхе и части базовых действий, замирает внутри локации. Внешнего доом-клока нет.","Связей 6: 3 исходящие, 3 входящие."],["g.worldmap","Карта мира","gdd","system","Э1 · Время и мир","US-1.1","Узлы локаций: авторские миссии и данжи; недоступные визуально отличимы.","Числовых значений GDD для этой системы не задаёт. Связей 1: 1 исходящая, 0 входящих."],["g.travel","Путешествие","gdd","system","Э1 · Время и мир","US-1.2","Продвигает календарь на N дней от дистанции; по прибытии все таймеры пересчитаны.","Числовых значений GDD для этой системы не задаёт. Связей 4: 3 исходящие, 1 входящая."],["g.wait","Ожидание дней","gdd","system","Э1 · Время и мир","US-1.3","Явное «ждать N дней»: лечиться можно без рискованной вылазки.","Пережидаемые сроки лечения — 2/5/10 дней по 3 тирам ранений (ПЛЕЙСХОЛДЕР); длительность самого ожидания — N дней, число не задано. Источник: docs/GDD.md:185. Связей 2: 2 исходящие, 0 входящих."],["g.daynight","Цикл день/ночь","gdd","system","Э1 · Время и мир","US-1.5 [ПОЗЖЕ]","Авто-цикл, проматывается только сном или вылазкой. Ночью город закрыт: стража и ночные события.","Числовых значений GDD для этой системы не задаёт. Связей 4: 3 исходящие, 1 входящая."],["g.curfew","Патруль и комендантский час","gdd","system","Э1 · Время и мир","US-1.5","Контригра ночи: не спать и давить преступность ценой отдыха и ресурса.","Числовых значений GDD для этой системы не задаёт. Связей 2: 2 исходящие, 0 входящих."],["g.attrs","Атрибуты (4)","gdd","system","Э2 · Персонаж","Э2.1","Сила, Ловкость, Смекалка, Воля. В уровнях не растут — только крафтом аугмента. Задают HP, AP, точность, защиту, инициативу, крит.","Атрибутов — 4 (Сила, Ловкость, Смекалка, Воля); в уровнях не растут, поднимаются только крафтом в Лаборатории. Источник: docs/GDD.md:69. Связей 7: 4 исходящие, 3 входящие."],["g.skills","Скилы (10)","gdd","system","Э2 · Персонаж","Э2.2","Бой 3 · утилита 4 · соц 3. Классов нет, респека нет; перки гейтятся уровнем скила.","Скилов — 10: бой 3, утилита 4, соц 3. Источник: docs/GDD.md:75. Связей 7: 5 исходящих, 2 входящие."],["g.traits","Трейты","gdd","system","Э2 · Персонаж","Э2.3","Добродетели и пороки в фиксированном числе слотов. Влияют и на события базы, и на бой.","Числовых значений GDD для этой системы не задаёт. Связей 10: 6 исходящих, 4 входящие."],["g.scars","Шрамы","gdd","system","Э2 · Персонаж","US-2.5","Отдельный вечный трек, слотов трейтов не занимают, не сбрасываются. Только от Серьёзных+ ранений.","Числовых значений GDD для этой системы не задаёт. Связей 3: 1 исходящая, 2 входящие."],["g.checks","Детерминированные проверки","gdd","system","Э2 · Персонаж","Э2.4","Скил ≥ порога = успех. Проходит лучший релевантный скил среди присутствующих; порог показан заранее.","Числовых значений GDD для этой системы не задаёт. Связей 5: 2 исходящие, 3 входящие."],["g.protagonist","Протагонист-лидер","gdd","system","Э2 · Персонаж","US-2.7","Полное создание на старте: атрибуты, скилы, трейты, бэкграунд. Кандидат на резолв событий базы наравне с напарниками.","Числовых значений GDD для этой системы не задаёт. Связей 6: 5 исходящих, 1 входящая."],["g.combat","Тактический бой","gdd","system","Э3 · Бой","Эпик 3","WL3-подобный: гибкий AP-пул, индивидуальная инициатива, укрытия и надёжный %, плоская броня, состояния. Отряд 4, HP 6–20, урон 2–8.","Отряд 4; HP 6–20, урон 2–8, броня −1..2 флэт (всё ПЛЕЙСХОЛДЕР). Вертикальный срез боя — стычка 4 против ~6. Источник: docs/GDD.md:110. Связей 19: 9 исходящих, 10 входящих."],["g.ap","AP-пул","gdd","system","Э3 · Бой","US-3.1","8–10 очков на ход, движение и действия списывают из общего пула.","Пул 8–10 AP/ход (ПЛЕЙСХОЛДЕР); движение ~1 AP/клетка, атака 3–4 AP, способности 2–6 AP. Источник: docs/GDD.md:113. Связей 2: 0 исходящих, 2 входящие."],["g.initiative","Индивидуальная инициатива","gdd","system","Э3 · Бой","US-3.2","Каждый юнит ходит по своей инициативе, союзники и враги чередуются.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.cover","Укрытия и % попадания","gdd","system","Э3 · Бой","US-3.3","Шанс = скил/оружие − укрытие (полу −20 / полное −40) − дистанция.","Шанс = скил/оружие − укрытие (полуукрытие −20, полное −40, ПЛЕЙСХОЛДЕР) − дистанция. Источник: docs/GDD.md:119. Связей 3: 2 исходящие, 1 входящая."],["g.graze","Граза","gdd","system","Э3 · Бой","US-3.3","Промах в пределах ≤15% даёт частичный урон; очень высокий шанс не может слиться полностью.","Промах в пределах гразы ≤15% даёт 50% урона; пол ≥85% — очень высокий шанс не может слиться полностью (ПЛЕЙСХОЛДЕР). Источник: docs/GDD.md:508. Связей 1: 0 исходящих, 1 входящая."],["g.strike","Strike-метр","gdd","system","Э3 · Бой","US-3.3 · R11 МОНИТОР","Копится с попаданий, тратится на гарантированный точный удар. «Основное смягчение RNG» — пока не решение, а кандидат-правило риска R11: граза, броня и Strike вместе уплощают тонус, настраивать их надо совместно.","Strike-метр: +1 за попадание, гарантированный точный удар при 3 (ПЛЕЙСХОЛДЕР). Источник: docs/GDD.md:508. Связей 2: 1 исходящая, 1 входящая."],["g.armor","Броня, пробитие, Шред","gdd","system","Э3 · Бой","US-3.4","Флэт −1..2 урона за удар; пробитие игнорирует, Шред снижает. Ось, независимая от типов урона.","Броня −1..2 урона за удар (ПЛЕЙСХОЛДЕР, держать в 1–2 по правилу R13, чтобы в мелких числах не обнулять урон 2–8); пробитие игнорирует N, Шред снижает броню на N. Источник: docs/GDD.md:122. Связей 2: 0 исходящих, 2 входящие."],["g.status","Боевые состояния (7)","gdd","system","Э3 · Бой","Э3.1","Кровотечение, Оглушение, Подавление, Сбит с ног, Метка, Поджог, Яд. Наложение гарантированное, Воля сокращает длительность.","7 состояний + Шред; DoT 2–3 урона/ход × 2–3 хода (ПЛЕЙСХОЛДЕР); в MVP-срезе 2–3 состояния из набора. Источник: docs/GDD.md:130. Связей 7: 0 исходящих, 7 входящих."],["g.damagetypes","Типы урона","gdd","system","Э3 · Бой","Э3.3","Баллистический, огонь, токсин, энергия. Per-враг резист/уязвимость = множитель урона.","4 типа урона (баллистический/огонь/токсин/энергия) + слот под постапок; множитель уязвимости ×1.25–1.5, резиста ×0.5–0.75 (ПЛЕЙСХОЛДЕР). В MVP — пара резист/уязвимость. Источник: docs/GDD.md:156. Связей 3: 2 исходящие, 1 входящая."],["g.abilities","Активные способности","gdd","system","Э3 · Бой","Э3.2","3–4 на боевой скил (~9–12 к MVP): половина про состояния, половина про позицию и AP. Утилита даёт стабилизацию, гаджет, ловушку.","~3–4 активки на боевой скил (Стрелковое/Ближнее/Тактика) → ~9–12 активок к MVP; стоимость 2–6 AP; половина про состояния, половина про позицию и AP. Источник: docs/GDD.md:144. Связей 5: 2 исходящие, 3 входящие."],["g.perks","Перки","gdd","system","Э3 · Бой","US-3.10","Преимущественно пассивные бонусы — билд через цифры. Открываются по уровню скила.","Числовых значений GDD для этой системы не задаёт. Связей 4: 1 исходящая, 3 входящие."],["g.bestiary","Бестиарий","gdd","system","Э3 · Бой","Э3.4","Враг = роль × семейство × профиль резист/уязвимость × способности из общего пула. Симметрия с игроком. Сложность — ролями, не HP.","База-4 роли в MVP (+2 роли [ПОЗЖЕ]); сборка роль × семейство (люди/мутанты/роботы) × профиль резист/уязвимость — 4 роли × 2–3 семейства в корзине значений, в MVP-срезе 4 роли × 1–2 семейства; рост HP минимальный. Источник: docs/GDD.md:164. Связей 6: 4 исходящие, 2 входящие."],["g.overwatch","Overwatch","gdd","system","Э3 · Бой","US-3.6 [ПОЗЖЕ]","Резервирует AP, срабатывает один раз при входе врага в конус.","Числовых значений GDD для этой системы не задаёт. Связей 1: 0 исходящих, 1 входящая."],["g.down","Даун и окно спасения","gdd","system","Э4 · Потери","US-4.1","При 0 HP — даун на N ходов. Стабилизировал — выжил раненым, нет — смерть насовсем.","Связей 5: 2 исходящие, 3 входящие."],["g.death","Смерть насовсем","gdd","system","Э4 · Потери","US-4.1","Необратимый переход FSM. Обрывает личную арку и запускает рябь по ростеру.","Числовых значений GDD для этой системы не задаёт. Связей 9: 3 исходящие, 6 входящих."],["g.wounds","Ранения (3 тира)","gdd","system","Э4 · Потери","US-4.3","2 / 5 / 10 дней восстановления. Серьёзное и выше вешает шрам.","3 тира ранений → 2/5/10 дней восстановления (ПЛЕЙСХОЛДЕР); при 0 HP даун на N ходов (число не задано). Источник: docs/GDD.md:185. Связей 4: 2 исходящие, 2 входящие."],["g.medbay","Лечение в днях","gdd","system","Э4 · Потери","US-4.3","Идёт в Лазарете по календарю; медик на позиции срезает −X% срока.","Сроки лечения в Лазарете 2/5/10 дней по 3 тирам ранений (ПЛЕЙСХОЛДЕР); медик на позиции −X% к сроку — процент не задан. Источник: docs/GDD.md:185. Связей 8: 2 исходящие, 6 входящих."],["g.ironman","Айронмен-канон","gdd","system","Э16 · Мета","US-4.4 · US-16.1","Свободные сейвы в базе, айронмен в экспедиции. Смерть протагониста в айронмене = game over.","Числовых значений GDD для этой системы не задаёт. Связей 3: 3 исходящие, 0 входящих."],["g.xp","XP и уровни","gdd","system","Э5 · Рост","US-5.1","Опыт идёт с боёв и с квестов/событий — гриндить бои не обязательно. Уровень даёт очки скилов.","Квесты дают ≥ половины прогресса столпа №1 (веса — ПЛЕЙСХОЛДЕР); величин XP и порогов уровней GDD не задаёт. Источник: docs/GDD.md:195. Связей 6: 4 исходящие, 2 входящие."],["g.survivability","Живучесть через перки и гир","gdd","system","Э5 · Рост","US-5.2","HP от атрибутов почти плоский: поздняя игра проходима за счёт веток перков и тиров снаряжения.","Рабочая полоса HP 6–20 при уроне 2–8 (ПЛЕЙСХОЛДЕР); HP от атрибутов почти плоский, прирост живучести идёт перками и тирами гира. Источник: docs/GDD.md:527. Связей 2: 0 исходящих, 2 входящие."],["g.recruitcatchup","Каёчап рекрута","gdd","system","Э5 · Рост","US-5.3 [ПОЗЖЕ]","Свежий рекрут приходит с уровнем под стадию игры; гир добывает сам. Анти-спираль после потери ветерана.","Числовых значений GDD для этой системы не задаёт. Связей 1: 1 исходящая, 0 входящих."],["g.loot","Лут","gdd","system","Э6 · Вещи","Э6.1","Гибрид: рандом-дроп с разбросом статов (редкость множит магнитуду) + заработанные именные.","Числовых значений GDD для этой системы не задаёт. Связей 4: 1 исходящая, 3 входящие."],["g.named","Именные предметы","gdd","system","Э6 · Вещи","US-6.1","15–20 к MVP с боссов, наград квестов и авторских локаций. У каждого — уникальный эффект через ItemEffect.","~15–20 именных предметов к MVP; в MVP-срез входит подмножество из этих ~15–20. Источник: docs/GDD.md:212. Связей 3: 1 исходящая, 2 входящие."],["g.gear","Гир","gdd","system","Э6 · Вещи","US-6.2","Крутит числа: урон, броня, крит, точность, бонусы к скилам. Способностей не выдаёт.","Числовых значений GDD для этой системы не задаёт. Связей 9: 3 исходящие, 6 входящих."],["g.gold","Золото","gdd","system","Э6 · Вещи","Э6.2","Валюта отряда. Faucet — вылазки, квесты, боссы, Рынок, Инвестиция совета.","Числовых значений GDD для этой системы не задаёт. Связей 10: 4 исходящие, 6 входящих."],["g.matbuild","Строительный компонент","gdd","system","Э6 · Вещи","Э6.2","Гейтит спец-здания и апгрейды зданий игрока. Источник — только вылазки и награды квестов.","Числовых значений GDD для этой системы не задаёт. Связей 5: 3 исходящие, 2 входящие."],["g.matcraft","Крафтовый компонент","gdd","system","Э6 · Вещи","US-6.3","Гейтит апгрейды и моды гира, расходники и крафт аугмента. Базовый гир не создаёт.","Числовых значений GDD для этой системы не задаёт. Связей 3: 1 исходящая, 2 входящие."],["g.craft","Крафт","gdd","system","Э6 · Вещи","US-6.3","Живёт в Мастерской: апгрейды, моды, расходники.","Числовых значений GDD для этой системы не задаёт. Связей 5: 2 исходящие, 3 входящие."],["g.augment","Аугмент","gdd","system","Э6 · Вещи","US-6.4 [ПОЗЖЕ]","Крафтится в Лаборатории за крафтовый компонент и крутую цену золотом. Единственный вектор роста атрибутов.","Числовых значений GDD для этой системы не задаёт. Связей 3: 1 исходящая, 2 входящие."],["g.city","Город и постройки","gdd","system","Э7 · Город","Эпик 7","Игрок видит только город — построек и развития. Метрик-дашборда нет; под капотом скрытое Напряжение.","Стройка: малое 3–5 дней, крупное 8–12 дней (ПЛЕЙСХОЛДЕР); 5 визуальных стадий на плоте по таймеру. В MVP-срезе — ядро-здания + 1–2 функциональных спец-здания. Источник: docs/GDD.md:508. Связей 25: 12 исходящих, 13 входящих."],["g.b_infirmary","Лазарет","gdd","system","Э7 · Здания","US-7.1","Ядро-здание за золото. Лечение раненых.","Лечение: 3 тира ранений → 2/5/10 дней (ПЛЕЙСХОЛДЕР); медик на позиции −X% к сроку. Источник: docs/GDD.md:185. Связей 2: 1 исходящая, 1 входящая."],["g.b_workshop","Мастерская","gdd","system","Э7 · Здания","US-7.1","Ядро-здание за золото. Крафт.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.b_storehouse","Склад","gdd","system","Э7 · Здания","US-7.1","Ядро-здание за золото. Вместимость.","Числовых значений GDD для этой системы не задаёт. Связей 1: 0 исходящих, 1 входящая."],["g.b_councilhall","Зал совета","gdd","system","Э7 · Здания","US-7.1","Ядро-здание за золото. Открывает действия совета.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.b_market","Рынок","gdd","system","Э7 · Здания","US-7.1","Спец-здание: доход золота + опции Торговли.","Числовых значений GDD для этой системы не задаёт. Связей 3: 2 исходящие, 1 входящая."],["g.b_tavern","Таверна","gdd","system","Э7 · Здания","US-7.1","Спец-здание: рост населения + соц-события.","Числовых значений GDD для этой системы не задаёт. Связей 3: 2 исходящие, 1 входящая."],["g.b_temple","Храм","gdd","system","Э7 · Здания","US-7.1","Спец-здание: −Напряжение и +лояльность.","Числовых значений GDD для этой системы не задаёт. Связей 4: 3 исходящие, 1 входящая."],["g.b_fort","Укрепления","gdd","system","Э7 · Здания","US-7.1","Спец-здание: −Напряжение и +Готовность к финалу.","Числовых значений GDD для этой системы не задаёт. Связей 3: 2 исходящие, 1 входящая."],["g.b_armory","Оружейная","gdd","system","Э7 · Здания","US-7.1","Спец-здание: доступ и скидка на продвинутый гир.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.b_lab","Лаборатория","gdd","system","Э7 · Здания","US-7.1","Спец-здание: рост атрибутов и крафт аугмента. Приходит по надёжному квесту.","Числовых значений GDD для этой системы не задаёт. Связей 3: 2 исходящие, 1 входящая."],["g.patrons","Патроны","gdd","system","Э7 · Город","US-7.4 [ПОЗЖЕ]","Строят И апгрейдят своё сигнатурное здание сами, за свои. Приход гейтится репутацией, тиром города и квестами.","Числовых значений GDD для этой системы не задаёт. Связей 4: 1 исходящая, 3 входящие."],["g.population","Население","gdd","system","Э7 · Город","US-7.5","Абстрактное, растёт пассивно по дням + от Таверны и событий. Рабочие держат здание на базовом уровне.","Числовых значений GDD для этой системы не задаёт. Связей 6: 3 исходящие, 3 входящие."],["g.citytier","Тир города","gdd","system","Э7 · Город","Э7.3","3–4 ступени от зданий + населения + репутации. Открывает плоты и патронов — и растит фон Напряжения.","3–4 тира города (ПЛЕЙСХОЛДЕР). Источник: docs/GDD.md:254. Связей 9: 5 исходящих, 4 входящие."],["g.moodboard","Мудборд города","gdd","system","Э7 · Город","US-7.8 [ПОЗЖЕ]","Визуал процветания или упадка под Напряжение + население + тир. Здоровье города читается глазами.","Числовых значений GDD для этой системы не задаёт. Связей 4: 1 исходящая, 3 входящие."],["g.positions","Позиции","gdd","system","Э8 · База","Э8.1","Напарник на позиции резолвит события через свои трейты и скилы, и уже потом усиливает здание. Рабочие дают только базовый уровень.","Числовых значений GDD для этой системы не задаёт. Связей 9: 4 исходящие, 5 входящих."],["g.baseevents","События базы","gdd","system","Э8 · База","US-8.2","Резолвит релевантный напарник. Некому — базовый, то есть худший, исход.","Числовых значений GDD для этой системы не задаёт. Связей 6: 2 исходящие, 4 входящие."],["g.council","Совет","gdd","system","Э8 · База","US-8.4 [ПОЗЖЕ]","6 повторяемых действий с КД и ценой. Состав кресел открывает и усиливает их. В MVP-срезе (Прил. А) — на минималках или заглушен.","6 повторяемых действий совета с КД и ценой. Источник: docs/GDD.md:280. Связей 12: 8 исходящих, 4 входящие."],["g.c_raid","Облава","gdd","system","Э8 · Совет","US-8.4 [ПОЗЖЕ]","−Напряжение ценой влияния/золота, риск −лояльность у части напарников.","Числовых значений GDD для этой системы не задаёт. Связей 3: 2 исходящие, 1 входящая."],["g.c_edict","Указ","gdd","system","Э8 · Совет","US-8.4 [ПОЗЖЕ]","Фракционный модификатор с разменом: улучшить одну ценой другой.","Числовых значений GDD для этой системы не задаёт. Связей 3: 2 исходящие, 1 входящая."],["g.c_diplomacy","Дипломатия","gdd","system","Э8 · Совет","US-8.4 [ПОЗЖЕ]","Привлечь или улучшить фракцию либо патрона за влияние.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.c_invest","Инвестиция","gdd","system","Э8 · Совет","US-8.4 [ПОЗЖЕ]","Буст дохода золота на время.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.c_prepare","Подготовка к угрозе","gdd","system","Э8 · Совет","US-8.4 [ПОЗЖЕ]","Продвигает Готовность к финалу за ресурс и время.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.c_outfit","Снаряжение экспедиции","gdd","system","Э8 · Совет","US-8.4 [ПОЗЖЕ]","Баф и снабжение отряду на вылазку.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.compfsm","FSM напарника","gdd","system","Э9 · Ростер","US-9.1","в лагере / на позиции / в совете / в отряде / ранен / антагонист / мёртв. Смерть и антагонизм необратимы.","7 состояний автомата (в лагере / на позиции / в совете / в отряде / ранен / антагонист / мёртв); 2 из них необратимы — антагонист и мёртв. Источник: docs/GDD.md:295. Связей 6: 5 исходящих, 1 входящая."],["g.loyalty","Лояльность","gdd","system","Э9 · Ростер","US-9.2","Одна скрытая шкала 0–100, старт ~50. Числа игроку не показывают — риск читается по репликам и поведению.","Одна шкала 0–100 под капотом (ПЛЕЙСХОЛДЕР), старт 50; игроку число не показывается. Источник: docs/GDD.md:298. Связей 11: 4 исходящие, 7 входящих."],["g.recruit","Рекрутинг","gdd","system","Э9 · Ростер","US-9.3 [ПОЗЖЕ]","Сюжет, уговор, найм, миграция. Жёсткого лимита лагеря нет.","4 канала вербовки (сюжет/квест, уговор, найм, миграция); жёсткого лимита лагеря нет — фактический предел равен числу авторских напарников. MVP-костяк: 4–6 именных напарников (не 10+). Источник: docs/GDD.md:303. Связей 3: 1 исходящая, 2 входящие."],["g.betrayal","Уход и предательство","gdd","system","Э9 · Ростер","US-9.4 [ПОЗЖЕ]","Низкая лояльность + сюжетная развилка → антагонист. Уходит со своим надетым гиром и уровнями, встречается боссом.","MVP-срез: ≥1 предательство-в-босса; в ветвящемся прологе — 1 предательство-в-босса (босс акта 1). Числового порога лояльности GDD не задаёт. Источник: docs/GDD.md:489. Связей 6: 4 исходящие, 2 входящие."],["g.personalquests","Личные квесты","gdd","system","Э9 · Ростер","US-9.5 [ПОЗЖЕ]","Многоэтапные арки, гейтятся лояльностью. Смерть или предательство их обрывают.","MVP: арки у фиксированного костяка 4–6 именных напарников (не 10+); числа этапов арки и порога лояльности-гейта GDD не задаёт. Источник: docs/GDD.md:488. Связей 3: 1 исходящая, 2 входящие."],["g.values","Ценностные связи","gdd","system","Э9 · Ростер","US-9.6 [ПОЗЖЕ]","Лёгкий эмерджентный слой на готовых данных: сходятся и конфликтуют по общим ценностям и трейтам. Не NxN-матрица.","MVP-срез: пара ценностных связей напарников (полная NxN-матрица не трекается). Источник: docs/GDD.md:497. Связей 3: 2 исходящие, 1 входящая."],["g.ripple","Рябь от потери","gdd","system","Э9 · Ростер","US-9.6 [ПОЗЖЕ]","Смерть или предательство идут по ценностным связям: друг проседает по лояльности или мстит. Есть ограждение от каскада.","MVP-срез: рябь считается на 1 смерть. Источник: docs/GDD.md:497. Связей 4: 1 исходящая, 3 входящие."],["g.banter","Баентер","gdd","system","Э9 · Ростер","US-9.6 [ПОЗЖЕ]","Контекстные реплики между напарниками в лагере, дороге и городе; питаются ценностями.","Числовых значений GDD для этой системы не задаёт. Связей 1: 0 исходящих, 1 входящая."],["g.factions","Фракции","gdd","system","Э10 · Социум","US-10.1","3–4 фракции со своими шкалами отношения. Гейтят патронов, цены, опции, ветки. Критический путь ни за одной не заперт.","3–4 фракции (ПЛЕЙСХОЛДЕР), у каждой своя шкала отношения, плюс 1 общая репутация города; в MVP фракции на минималках или заглушены. Источник: docs/GDD.md:323. Связей 8: 4 исходящие, 4 входящие."],["g.reputation","Репутация и влияние","gdd","system","Э10 · Социум","US-10.4","Зарабатывается квестами, делами и позитивными событиями. Рычаг роста города и валюта части действий совета.","Числовых значений GDD для этой системы не задаёт. Связей 5: 3 исходящие, 2 входящие."],["g.socialchecks","Соц-проверки","gdd","system","Э10 · Социум","US-10.2","Убеждение, Запугивание, Торговля гейтят опции диалога, обход боя, цены и ветки квестов.","3 соц-скила (Убеждение, Запугивание, Торговля); проверка детерминированная — скил ≥ порога = успех, порог показан заранее. Источник: docs/GDD.md:78. Связей 5: 3 исходящие, 2 входящие."],["g.consequences","Регистрация последствий","gdd","system","Э10 · Социум","US-10.3","Единая модель: соц-выбор двигает лояльность (видимо), репутацию и фракции, сюжетные флаги — и Напряжение (скрыто).","Числовых значений GDD для этой системы не задаёт. Связей 7: 6 исходящих, 1 входящая."],["g.streets","Фракции на улицах","gdd","system","Э10 · Социум","US-10.5 [ПОЗЖЕ]","Присутствие NPC в форме масштабируется стандингом. Положение фракции читается глазами.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.npcmemory","Память NPC","gdd","system","Э10 · Социум","US-10.5 [ПОЗЖЕ]","Горожане и бойцы фракций словесно поминают прошлые выборы.","Числовых значений GDD для этой системы не задаёт. Связей 1: 0 исходящих, 1 входящая."],["g.diegetic","Диегетичные квесты","gdd","system","Э10 · Социум","US-10.5 [ПОЗЖЕ]","Часть квестов добывается наблюдением: подслушал спор на улице — получил квест.","Числовых значений GDD для этой системы не задаёт. Связей 1: 1 исходящая, 0 входящих."],["g.tension","Напряжение","gdd","system","Э11 · Угрозы","Э11.1","Скрытая внутренняя шкала, держит середину игры. Растёт от тира города, выборов в квестах и исходов угроз.","3 уровня серьёзности: низкое → мелкие инциденты, среднее → оргпреступность, высокое → кризис-события. Числовой шкалы, фонового тика и порогов GDD не задаёт (ПЛЕЙСХОЛДЕР: тик/тир + дельты от квест-выборов и исходов угроз, пороги кризисов). Источник: docs/GDD.md:352. Связей 18: 7 исходящих, 11 входящих."],["g.telegraph","Фоновая телеграфия","gdd","system","Э11 · Угрозы","US-11.2","Реплики, визуал, предвестники дают почувствовать «напряжённо» без числа. Планка честности жёстких ударов.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.incidents","Таблицы инцидентов","gdd","system","Э11 · Угрозы","US-11.3","Тированный пул, выбор взвешен уровнем Напряжения и тиром города. Пороги триггерят авторские всплески.","Выбор инцидента взвешен уровнем Напряжения и тиром города (3–4 тира); MVP-срез — пара тиров инцидентов. Источник: docs/GDD.md:362. Связей 7: 2 исходящие, 5 входящих."],["g.crisis","Кризис-события","gdd","system","Э11 · Угрозы","US-11.1","Верхний тир Напряжения. Могут непредотвратимо открыть враждебную фракцию, убить напарника или вызвать отток населения.","3 типа непредотвратимых последствий: новая враждебная фракция, смерть напарника, отток населения. MVP-срез — 1 кризис-исход. Источник: docs/GDD.md:353. Связей 4: 3 исходящие, 1 входящая."],["g.readiness","Готовность","gdd","system","Э11 · Угрозы","Э11.2","Скрытая внешняя шкала: подготовка совета, Укрепления, сила ростера. Задаёт сложность и исход финала.","3 источника роста: действие совета «Подготовка к угрозе», Укрепления, сила ростера. Числовой шкалы и порогов GDD не задаёт; в MVP «Готовность» можно отложить. Источник: docs/GDD.md:366. Связей 5: 1 исходящая, 4 входящие."],["g.finalbattle","Финальная битва","gdd","system","Э11 · Угрозы","US-11.4","Запускается сюжетной вехой, не порогом. Всегда достижима — soft-lock невозможен.","Числовых значений GDD для этой системы не задаёт. Связей 3: 0 исходящих, 3 входящие."],["g.dungeons","Процедурные данжи","gdd","system","Э12 · Вылазки","Эпик 12 [ПОЗЖЕ]","Сборка из префаб-комнат: бои, проверки, мини-события. Основной источник материалов и рандом-лута.","MVP-срез: 1 тип данжа-заглушки, без полной push-your-luck, но уже как источник материалов. Источник: docs/GDD.md:498. Связей 11: 8 исходящих, 3 входящие."],["g.pyl","Push-your-luck","gdd","system","Э12 · Вылазки","US-12.2 [ПОЗЖЕ]","Лут банкуется только при экстракции. Глубже — выше тир врагов, тают расходники, копятся раны; вайп = потеря незабанканного.","Числовых значений GDD для этой системы не задаёт. Связей 5: 3 исходящие, 2 входящие."],["g.missions","Авторские миссии","gdd","system","Э13 · Миссии","Эпик 13","Многоэтапные, без push-your-luck. Летальные проверки только телеграфированные и обходимые.","MVP-срез: 1–2 авторские локации с многоэтапными миссиями. Источник: docs/GDD.md:490. Связей 7: 4 исходящие, 3 входящие."],["g.spine","Сюжетный спайн","gdd","system","Э14 · Сюжет","US-14.2","Линейный, реактивность флаворная. Устойчив к смерти и предательству любого напарника.","MVP-срез требует ≥1 предательства-в-босса и ≥1 смерти-на-проваленной-проверке — спайн обязан пережить оба. Источник: docs/GDD.md:489. Связей 4: 1 исходящая, 3 входящие."],["g.understudy","Дублёры битов","gdd","system","Э14 · Сюжет","US-14.1","Ролевые дублёры несут сюжетный бит, если носитель погиб. Предателям критические биты не назначают на этапе письма.","Ростер MVP — фиксированный костяк 4–6 именных напарников; understudy-цепочки несут спайн (R2). Источник: docs/GDD.md:522. Связей 2: 1 исходящая, 1 входящая."],["g.questsources","Источники квестов","gdd","system","Э14 · Сюжет","US-14.3","NPC поселения и локаций, случайные события, доска и совет базы, инциденты от Напряжения.","Числовых значений GDD для этой системы не задаёт. Связей 8: 3 исходящие, 5 входящих."],["g.loop_settlement","Петля поселения","gdd","system","Э15 · Экономика","US-15.1","Репутация и влияние + фракции + квесты + плоты + население + дни + материалы. Рост непрямой.","ПЛЕЙСХОЛДЕР: стройка малая 3–5 дней, крупная 8–12; тиров города 3–4; фракций 3–4; 5 визуальных стадий стройки на плоте. Источник: docs/GDD.md:508. Связей 2: 1 исходящая, 1 входящая."],["g.loop_squad","Петля отряда","gdd","system","Э15 · Экономика","US-15.1","Золото + лут и гир + 2 материала + расходники. Faucet — вылазки, квесты, боссы; сливы — апгрейды, лечение, найм, аугменты.","Золото + 2 материала (строительный и крафтовый); именных предметов ~15–20 к MVP; лечение — 3 тира по 2/5/10 дней (ПЛЕЙСХОЛДЕР). В MVP-срезе — базовая добыча 1–2 материалов из вылазок и 1 выверенный пресет сложности. Источник: docs/GDD.md:419. Связей 4: 3 исходящие, 1 входящая."],["g.failstates","Мягкие фейл-стейты","gdd","system","Э16 · Мета","US-16.2","Провалы бьют по ресурсам, сюжету, отношениям, населению — но игру непроходимой не делают.","Числовых значений GDD для этой системы не задаёт. Связей 2: 1 исходящая, 1 входящая."],["g.difficulty","Ползунки сложности","gdd","system","Э16 · Мета","US-16.3 [ПОЗЖЕ]","Множители урона и HP, темп экономики, скорость лечения, скорость роста Напряжения, пермадет вкл/выкл.","MVP-срез: 1 выверенный пресет сложности; конкретных значений множителей и темпов GDD не задаёт. Источник: docs/GDD.md:499. Связей 5: 4 исходящие, 1 входящая."],["g.uicity","Экран города","gdd","system","Э17 · UX","US-17.1","Единый экран: постройки, стройки и апгрейды, таймеры; ростер с фильтрами и быстрым доступом к назначениям.","Числовых значений GDD для этой системы не задаёт. Связей 4: 3 исходящие, 1 входящая."],["g.hiddenscales","Шкалы без чисел","gdd","system","Э17 · UX","US-17.2","Напряжение и лояльность как числа не показываются — только качественные сигналы: реплики, поведение, визуал города.","Скрытых шкал — 2 (Напряжение, Готовность); лояльность под капотом 0–100, старт 50 (ПЛЕЙСХОЛДЕР), игроку числа не показываются. Числовой шкалы Напряжения и Готовности GDD не задаёт. Источник: docs/GDD.md:508. Связей 5: 0 исходящих, 5 входящих."],["g.onboarding","Первый час","gdd","system","Э17 · UX","Э17.1","Пролог на окраине (там же будет финал) → село → первая петля базы по одной системе → первый выезд → возврат и крючок.","Первый час поминутно: 0–5 создание, 5–20 пролог-бой, 20–30 доступ в село, 30–44 первая петля базы, 44–57 первый выезд, 57–60 возврат; в прологе 2 потенциальных напарника, на выходе отряд 0–2. Источник: docs/GDD.md:453. Связей 8: 8 исходящих, 0 входящих."],["g.so","Контент как ScriptableObject","gdd","system","Э18 · Архитектура","US-18.1","Предметы, скилы, перки, трейты, шрамы, состояния, здания, действия совета, враги, инциденты — ассеты без нового кода.","Числовых значений GDD для этой системы не задаёт. Связей 9: 9 исходящих, 0 входящих."],["g.modpipeline","Пайплайн модификаторов","gdd","system","Э18 · Архитектура","US-18.2","Финальный стат = база + Σ модификаторов гира, трейтов, шрамов, состояний и баффов по ключу StatType. Один агрегатор, без двойного счёта.","Числовых значений GDD для этой системы не задаёт. Связей 6: 6 исходящих, 0 входящих."],["g.balanceso","Баланс данными","gdd","system","Э18 · Архитектура","US-18.3","Числа в BalanceConfig-ассетах, правятся в Play-режиме. Скрытые шкалы, их драйверы и пороги — тоже данные.","План тюнинга — 6 шагов; шаг 1 — вертикальный срез одного боя (стычка 4 против ~6). Источник: docs/GDD.md:510. Связей 3: 3 исходящие, 0 входящих."],["g.uitoolkit","UI Toolkit","gdd","system","Э18 · Архитектура","US-18.4","Дата-управляемый UI, чтобы плотные экраны оставались поддерживаемыми.","Числовых значений GDD для этой системы не задаёт. Связей 1: 1 исходящая, 0 входящих."],["b.sec.council","Совет","base","section","Секции","BaseSectionType.Council","Стратегические решения, мораль, бонусы фракции.","Значение enum 1. 1 слот, суммарная база 2/цикл. Связей 2: 2 исходящие, 0 входящих."],["b.sec.settlement","Поселение","base","section","Секции","BaseSectionType.Settlement","Население, еда, вербовка.","Значение enum 2. 2 слота, суммарная база 10/цикл. Связей 2: 2 исходящие, 0 входящих."],["b.sec.workshop","Мастерская","base","section","Секции","BaseSectionType.Workshop","Материалы, крафт, починка снаряжения.","Значение enum 3. 1 слот, суммарная база 3/цикл. Связей 2: 1 исходящая, 1 входящая."],["b.sec.lab","Лаборатория","base","section","Секции","BaseSectionType.Laboratory","Исследования. В GDD — ещё и крафт аугмента, то есть единственный рост атрибутов.","Значение enum 4. 1 слот, суммарная база 2/цикл. Связей 2: 1 исходящая, 1 входящая."],["b.sec.infirmary","Лазарет","base","section","Секции","BaseSectionType.Infirmary","Лечение раненых.","Значение enum 5. 1 слот, суммарная база 4/цикл. Связей 1: 1 исходящая, 0 входящих."],["b.sec.storehouse","Склад","base","section","Секции","BaseSectionType.Storehouse","Припасы, логистика.","Значение enum 6. 1 слот, суммарная база 3/цикл, из них закрытых 1. Связей 1: 1 исходящая, 0 входящих."],["b.sec.barracks","Казарма","base","section","Секции","BaseSectionType.Barracks","Тренировка, восстановление воли. Секция объявлена, слотов у неё нет.","Значение enum 7. Слотов 0 — назначить некого. Связей 1: 1 исходящая, 0 входящих."],["b.sec.scout","Разведпост","base","section","Секции","BaseSectionType.ScoutingPost","Интел, открытие точек вылазок.","Значение enum 8. 1 слот, суммарная база 1/цикл. Связей 1: 1 исходящая, 0 входящих."],["b.st.Health","Health","base","stat","Боевые статы","StatType.Health","Запас здоровья (HP).","Значение enum 1. В формулах выработки не участвует. Максимум у архетипов 8 (Боец). Растёт у 2 архетипов: Боец ×2.0, Медик ×1.0. Связей 6: 0 исходящих, 6 входящих."],["b.st.Aim","Aim","base","stat","Боевые статы","StatType.Aim","Меткость, базовый % попадания.","Значение enum 2. В формулах выработки не участвует. Максимум у архетипов 65 (Боец). Растёт у 2 архетипов: Боец ×3.0, Разведчик ×1.0. Связей 5: 0 исходящих, 5 входящих."],["b.st.Mobility","Mobility","base","stat","Боевые статы","StatType.Mobility","Дальность перемещения за одно действие (в тайлах).","Значение enum 5. В формулах выработки не участвует. Максимум у архетипов 7 (Разведчик). Растёт у 1 архетипа: Разведчик ×1.0. Связей 2: 0 исходящих, 2 входящие."],["b.st.Will","Will","base","stat","Боевые статы","StatType.Will","Воля: сопротивление панике/контролю. Боевой стат: живёт в шкале 0–100, тогда как склонности — в 0–7.","Значение enum 6. Primary в 0, Secondary в 1 слотах. Максимум у архетипов 45 (Командир). Растёт у 3 архетипов: Боец ×1.0, Учёный ×1.0, Командир ×1.0. Связей 4: 0 исходящих, 4 входящие."],["b.st.Tech","Tech","base","stat","Боевые статы","StatType.Tech","Эффективность гаджетов/взлома. Боевой стат, подрабатывает вторичным в мастерской и лаборатории.","Значение enum 9. Primary в 0, Secondary в 2 слотах. Максимум у архетипов 5 (Инженер). Растёт у 2 архетипов: Инженер ×2.0, Учёный ×1.0. Связей 4: 0 исходящих, 4 входящие."],["b.st.Leadership","Leadership","base","stat","Склонности","StatType.Leadership","Совет, командование, мораль.","Значение enum 20. Primary в 1, Secondary в 0 слотах (коэффициенты 1.0). Максимум у архетипов 7 (Командир). Растёт у 1 архетипа: Командир ×3.0. Связей 2: 0 исходящих, 2 входящие."],["b.st.Engineering","Engineering","base","stat","Склонности","StatType.Engineering","Мастерская, строительство, ремонт.","Значение enum 21. Primary в 1, Secondary в 1 слотах (коэффициенты 1.2). Максимум у архетипов 6 (Инженер). Растёт у 1 архетипа: Инженер ×3.0. Связей 3: 0 исходящих, 3 входящие."],["b.st.Science","Science","base","stat","Склонности","StatType.Science","Лаборатория, исследования.","Значение enum 22. Primary в 1, Secondary в 0 слотах (коэффициенты 1.3). Максимум у архетипов 7 (Учёный). Растёт у 1 архетипа: Учёный ×3.0. Связей 2: 0 исходящих, 2 входящие."],["b.st.Medicine","Medicine","base","stat","Склонности","StatType.Medicine","Лазарет, лечение, скорость восстановления.","Значение enum 23. Primary в 1, Secondary в 0 слотах (коэффициенты 2.0). Максимум у архетипов 6 (Медик). Растёт у 1 архетипа: Медик ×3.0. Связей 3: 1 исходящая, 2 входящие."],["b.st.Logistics","Logistics","base","stat","Склонности","StatType.Logistics","Склад/снабжение, эффективность ресурсов.","Значение enum 24. Primary в 2, Secondary в 1 слотах (коэффициенты 1.0). Максимум у архетипов 3 (Инженер). Растёт у 1 архетипа: Инженер ×1.0. Связей 4: 0 исходящих, 4 входящие."],["b.st.Charisma","Charisma","base","stat","Склонности","StatType.Charisma","Поселение, вербовка, торговля, дипломатия.","Значение enum 25. Primary в 1, Secondary в 2 слотах (коэффициенты 1.0). Максимум у архетипов 5 (Командир). Растёт у 1 архетипа: Командир ×2.0. Связей 4: 0 исходящих, 4 входящие."],["b.st.Scouting","Scouting","base","stat","Склонности","StatType.Scouting","Разведка, поиск точек вылазок, добыча интела.","Значение enum 26. Primary в 1, Secondary в 0 слотах (коэффициенты 1.0). Максимум у архетипов 6 (Разведчик). Растёт у 1 архетипа: Разведчик ×3.0. Связей 2: 0 исходящих, 2 входящие."],["b.st.Survival","Survival","base","stat","Склонности","StatType.Survival","Живучесть в Дажах, снижение риска ранений.","Значение enum 27. Primary в 0, Secondary в 1 слотах. Максимум у архетипов 5 (Разведчик). Растёт у 2 архетипов: Боец ×1.0, Медик ×1.0. Связей 4: 0 исходящих, 4 входящие."],["b.res.Supplies","Supplies","base","res","Ресурсы","ResourceType.Supplies","Припасы/деньги — универсальная валюта.","Значение enum 1. Производят 2 слота («Рынок поселения» база 4, «Погрузочный док» база 3), потолок на стартовых статах 9/цикл. Трат 0 — только копится. Связей 4: 1 исходящая, 3 входящие."],["b.res.Materials","Materials","base","res","Ресурсы","ResourceType.Materials","Материалы для строительства и крафта.","Значение enum 2. Производят 1 слот («Верстак мастерской» база 3), потолок на стартовых статах 12/цикл. Трат 0 — только копится. Связей 1: 0 исходящих, 1 входящая."],["b.res.Intel","Intel","base","res","Ресурсы","ResourceType.Intel","Разведданные — открывают точки вылазок и сюжет. По дизайну открывает точки вылазок и сюжет.","Значение enum 3. Производят 1 слот («Разведпост» база 1), потолок на стартовых статах 10/цикл. Трат 0 — только копится. Связей 1: 0 исходящих, 1 входящая."],["b.res.Research","Research","base","res","Ресурсы","ResourceType.Research","Очки исследований.","Значение enum 4. Производят 1 слот («Исследовательский стол» база 2), потолок на стартовых статах 12/цикл. Трат 0 — только копится. Связей 1: 0 исходящих, 1 входящая."],["b.res.Food","Food","base","res","Ресурсы","ResourceType.Food","Еда — содержание поселения. Единственный ресурс, который база тратит.","Значение enum 5. Производят 1 слот («Фермы поселения» база 6), потолок на стартовых статах 9/цикл. Тратится: 1 вызов TrySpend. Связей 4: 1 исходящая, 3 входящие."],["b.res.Medicine","Medicine","base","res","Ресурсы","ResourceType.Medicine","Медикаменты — лечение раненых.","Значение enum 6. Производителей 0. Трат 0 — только копится. Связей 1: 1 исходящая, 0 входящих."],["b.out.Morale","Morale (пассив)","base","out","Выходы","PassiveBonusId = \"Morale\"","Пассивный бонус, копится в отчёте дня. Копится в CycleReport.PassiveBonuses и там же заканчивается.","Источников 1: «Место в совете» база 2. Связей 3: 1 исходящая, 2 входящие."],["b.out.Healing","Healing (лечение)","base","out","Выходы","SlotOutputKind.Healing","Лечебные очки за цикл. Очки лечения раздаются самым тяжело раненным первыми.","Источников 1. Плюс естественная регенерация 5.0 очка всем раненым за цикл — она идёт и без лазарета. Связей 3: 1 исходящая, 2 входящие."],["b.slot.council","Место в совете","base","slot","Слоты","Core/DefaultContent.cs:118","Пассивный бонус: Morale. Base 2 + Leadership ×1.0 + Charisma ×0.5.","На стартовых архетипах даёт от 2 до 12 за цикл: лучший — Командир (12). Порог «по профилю» 5 перешагивают 1 из 6 архетипов — им ролевой опыт 30 вместо 20. Связей 6: 3 исходящие, 3 входящие."],["b.slot.farms","Фермы поселения","base","slot","Слоты","Core/DefaultContent.cs:128","Ресурс в кошелёк: Food. Base 6 + Logistics ×1.0 + Charisma ×0.5.","На стартовых архетипах даёт от 6 до 9 за цикл: лучший — Инженер (9). Порог «по профилю» 5 перешагивают 0 из 6 архетипов. Связей 5: 3 исходящие, 2 входящие."],["b.slot.market","Рынок поселения","base","slot","Слоты","Core/DefaultContent.cs:134","Ресурс в кошелёк: Supplies. Base 4 + Charisma ×1.0 + Logistics ×0.5.","На стартовых архетипах даёт от 4 до 9 за цикл: лучший — Командир (9). Порог «по профилю» 5 перешагивают 1 из 6 архетипов — им ролевой опыт 30 вместо 20. Связей 4: 3 исходящие, 1 входящая."],["b.slot.bench","Верстак мастерской","base","slot","Слоты","Core/DefaultContent.cs:142","Ресурс в кошелёк: Materials. Base 3 + Engineering ×1.2 + Tech ×0.4.","На стартовых архетипах даёт от 3 до 12 за цикл: лучший — Инженер (12). Порог «по профилю» 5 перешагивают 1 из 6 архетипов — им ролевой опыт 30 вместо 20. Связей 6: 3 исходящие, 3 входящие."],["b.slot.lab","Исследовательский стол","base","slot","Слоты","Core/DefaultContent.cs:150","Ресурс в кошелёк: Research. Base 2 + Science ×1.3 + Tech ×0.3.","На стартовых архетипах даёт от 2 до 12 за цикл: лучший — Учёный (12). Порог «по профилю» 5 перешагивают 1 из 6 архетипов — им ролевой опыт 30 вместо 20. Связей 5: 3 исходящие, 2 входящие."],["b.slot.bed","Койка лазарета","base","slot","Слоты","Core/DefaultContent.cs:158","Лечение раненых: Healing. Base 4 + Medicine ×2.0 + Survival ×0.5. Коэффициент ×2.0 — самый крутой в стартовом контенте.","На стартовых архетипах даёт от 4 до 18 за цикл: лучший — Медик (18). Порог «по профилю» 5 перешагивают 1 из 6 архетипов — им ролевой опыт 30 вместо 20. Связей 6: 4 исходящие, 2 входящие."],["b.slot.dock","Погрузочный док","base","slot","Слоты","Core/DefaultContent.cs:166","Ресурс в кошелёк: Supplies. Base 3 + Logistics ×1.0 + Engineering ×0.4. Закрыт по умолчанию — требует постройки.","На стартовых архетипах даёт от 3 до 8 за цикл: лучший — Инженер (8). Порог «по профилю» 5 перешагивают 0 из 6 архетипов. Связей 5: 3 исходящие, 2 входящие."],["b.slot.post","Разведпост","base","slot","Слоты","Core/DefaultContent.cs:175","Ресурс в кошелёк: Intel. Base 1 + Scouting ×1.0 + Will ×0.2.","На стартовых архетипах даёт от 1 до 10 за цикл: лучший — Командир (10). Порог «по профилю» 5 перешагивают 1 из 6 архетипов — им ролевой опыт 30 вместо 20. Связей 5: 3 исходящие, 2 входящие."],["b.arch.soldier","Боец","base","arch","Архетипы","DefaultContent.Soldier()","Старт: Health 8, Aim 65, Mobility 5, Will 30, Survival 4. Рост: Aim ×3, Health ×2, Will ×1, Survival ×1.","Стартовых очков 112 на 5 статах. За уровень 3 очка по весам (сумма весов 7.0), то есть Aim ≈ 1.3, Health ≈ 0.9, Will ≈ 0.4, Survival ≈ 0.4 за уровень. Лучший слот — «Разведпост» (7/цикл), худший — «Исследовательский стол» (2). Связей 6: 6 исходящих, 0 входящих."],["b.arch.engineer","Инженер","base","arch","Архетипы","DefaultContent.Engineer()","Старт: Health 6, Aim 55, Engineering 6, Tech 5, Logistics 3. Рост: Engineering ×3, Tech ×2, Logistics ×1.","Стартовых очков 75 на 5 статах. За уровень 3 очка по весам (сумма весов 6.0), то есть Engineering ≈ 1.5, Tech ≈ 1.0, Logistics ≈ 0.5 за уровень. Лучший слот — «Верстак мастерской» (12/цикл), худший — «Разведпост» (1). Связей 6: 6 исходящих, 0 входящих."],["b.arch.scientist","Учёный","base","arch","Архетипы","DefaultContent.Scientist()","Старт: Health 5, Science 7, Tech 4, Will 35. Рост: Science ×3, Tech ×1, Will ×1.","Стартовых очков 51 на 4 статах. За уровень 3 очка по весам (сумма весов 5.0), то есть Science ≈ 1.8, Tech ≈ 0.6, Will ≈ 0.6 за уровень. Лучший слот — «Исследовательский стол» (12/цикл), худший — «Место в совете» (2). Связей 5: 5 исходящих, 0 входящих."],["b.arch.medic","Медик","base","arch","Архетипы","DefaultContent.Medic()","Старт: Health 6, Aim 50, Medicine 6, Survival 3. Рост: Medicine ×3, Survival ×1, Health ×1.","Стартовых очков 65 на 4 статах. За уровень 3 очка по весам (сумма весов 5.0), то есть Medicine ≈ 1.8, Survival ≈ 0.6, Health ≈ 0.6 за уровень. Лучший слот — «Койка лазарета» (18/цикл), худший — «Разведпост» (1). Связей 5: 5 исходящих, 0 входящих."],["b.arch.scout","Разведчик","base","arch","Архетипы","DefaultContent.Scout()","Старт: Health 6, Aim 60, Mobility 7, Scouting 6, Survival 5. Рост: Scouting ×3, Mobility ×1, Aim ×1.","Стартовых очков 84 на 5 статах. За уровень 3 очка по весам (сумма весов 5.0), то есть Scouting ≈ 1.8, Mobility ≈ 0.6, Aim ≈ 0.6 за уровень. Лучший слот — «Разведпост» (7/цикл), худший — «Исследовательский стол» (2). Связей 6: 6 исходящих, 0 входящих."],["b.arch.leader","Командир","base","arch","Архетипы","DefaultContent.Leader()","Старт: Health 7, Aim 60, Leadership 7, Charisma 5, Will 45. Рост: Leadership ×3, Charisma ×2, Will ×1.","Стартовых очков 124 на 5 статах. За уровень 3 очка по весам (сумма весов 6.0), то есть Leadership ≈ 1.5, Charisma ≈ 1.0, Will ≈ 0.5 за уровень. Лучший слот — «Место в совете» (12/цикл), худший — «Исследовательский стол» (2). Связей 6: 6 исходящих, 0 входящих."]],"edges":[["c.asmGameplay","c.asmCore","ссылается (asmdef)","code"],["c.asmTests","c.asmCore","ссылается (asmdef)","code"],["c.asmCore","c.asmTests","открывает internal через InternalsVisibleTo","code"],["c.StatBlock","c.StatType","ключ словаря значений","code"],["c.GrowthProfile","c.StatType","вес роста задаётся на стат","code"],["c.GrowthProfile","c.StatBlock","AllocatePoints возвращает блок очков","code"],["c.CompanionArchetype","c.StatBlock","BaseStats — стартовые статы","code"],["c.CompanionArchetype","c.GrowthProfile","Growth — профиль роста","code"],["c.CompanionArchetype","c.Companion","CreateInstance() создаёт экземпляр","code"],["c.Companion","c.CompanionArchetype","хранит ссылку на шаблон","code"],["c.Companion","c.StatBlock","EffectiveStats = архетип + накопленный рост","code"],["c.Companion","c.CompanionStatus","поле Status","code"],["c.Companion","c.ProgressionMath","GainXp → GrantXp()","code"],["c.Companion","c.BalanceConfig","берёт StatPointsPerLevel при левелапе","code"],["c.Roster","c.Companion","словарь по Id + порядок добавления","code"],["c.ProgressionMath","c.BalanceConfig","XpBase, XpExponent, MaxLevel","code"],["c.ProgressionMath","c.LevelUpResult","возвращает результат начисления","code"],["c.AssignmentSlotDefinition","c.BaseSectionType","поле Section","code"],["c.AssignmentSlotDefinition","c.SlotOutputKind","поле OutputKind","code"],["c.AssignmentSlotDefinition","c.ResourceType","поле OutputResource","code"],["c.AssignmentSlotDefinition","c.StatType","Primary и Secondary склонности","code"],["c.AssignmentSlot","c.AssignmentSlotDefinition","обёртка над определением","code"],["c.ProductionCalculator","c.AssignmentSlotDefinition","читает Base и коэффициенты","code"],["c.ProductionCalculator","c.Companion","берёт статы назначенного","code"],["c.ProductionCalculator","c.BalanceConfig","Global/Injured множители, RoleXp, порог соответствия","code"],["c.BaseState","c.Roster","композиция: ростер","code"],["c.BaseState","c.ResourceLedger","композиция: кошелёк","code"],["c.BaseState","c.BalanceConfig","композиция: баланс","code"],["c.BaseState","c.AssignmentSlot","держит список слотов по Id","code"],["c.BaseState","c.ProductionCalculator","зовёт OutputPerCycle и RoleXpPerCycle","code"],["c.BaseState","c.CycleReport","AdvanceCycle возвращает отчёт","code"],["c.BaseState","c.AssignmentResult","TryAssign возвращает код результата","code"],["c.BaseState","c.CompanionStatus","Idle ↔ Assigned, блокирует OnMission","code"],["c.BaseState","c.SlotOutputKind","switch: Resource / Passive / Healing","code"],["c.BaseState","c.ResourceType","списывает Food на прокорм","code"],["c.BaseState","c.Companion","меняет InjuryPoints и AssignedSlotId (internal)","code"],["c.CycleReport","c.ResourceType","Produced[resource]","code"],["c.ResourceLedger","c.ResourceType","кошелёк по типу ресурса","code"],["c.DefaultContent","c.CompanionArchetype","6 архетипов","code"],["c.DefaultContent","c.AssignmentSlotDefinition","8 слотов со всеми коэффициентами","code"],["c.DefaultContent","c.StatType","проставляет статы и склонности","code"],["c.DefaultContent","c.ResourceType","привязывает слоты к ресурсам","code"],["c.DefaultContent","c.BaseSectionType","раскладывает слоты по секциям","code"],["c.BalanceConfigAsset","c.BalanceConfig","ToConfig() собирает чистый конфиг","code"],["c.BaseGameDemo","c.BaseState","BuildBase() собирает и крутит циклы","code"],["c.BaseGameDemo","c.DefaultContent","берёт архетипы и слоты","code"],["c.BaseGameDemo","c.Roster","заводит по одному напарнику каждого архетипа","code"],["c.BaseGameDemo","c.ResourceLedger","кладёт стартовые 20 еды","code"],["c.BaseGameDemo","c.CycleReport","печатает отчёт по дням в консоль","code"],["c.tBase","c.BaseState","назначение, блокировка, занятый слот, перевод, штраф раненому, нехватка еды","code"],["c.tBase","c.Companion","выставляет InjuryPoints напрямую через internal","code"],["c.tGrowth","c.GrowthProfile","сумма очков точна, пропорции соблюдены","code"],["c.tProg","c.ProgressionMath","кривая, перелив уровней, потолок","code"],["b.m.assign","b.m.production","занятый слот начинает производить со следующего цикла","code"],["b.m.cycle","b.m.production","шаг 1: выработка со всех занятых открытых слотов","code"],["b.m.cycle","b.m.rolexp","шаг 2: ролевой опыт каждому работающему","code"],["b.m.cycle","b.m.heal","шаг 3: естественная регенерация всем раненым","code"],["b.m.cycle","b.m.upkeep","шаг 4: прокорм поселения","code"],["b.m.cycle","b.m.report","возвращает отчёт дня","code"],["b.m.production","b.res.Food","OutputKind = Resource","code"],["b.m.production","b.out.Morale","OutputKind = Passive","code"],["b.m.production","b.out.Healing","OutputKind = Healing","code"],["b.m.rolexp","b.m.levelup","XP копится, порог берёт уровень","code"],["b.m.levelup","b.m.production","новые очки статов повышают выработку","code"],["b.out.Healing","b.m.heal","очки лечения раздаются самым тяжело раненным","code"],["b.m.heal","b.m.production","выздоровел — снят штраф ×0.5 к выработке","code"],["b.m.upkeep","b.res.Food","списывает 1 еду за напарника","code"],["b.m.upkeep","b.m.report","не хватило — FoodShortage = true","code"],["b.out.Morale","b.m.report","копится в PassiveBonuses и дальше ни на что не влияет","gap"],["b.m.report","b.m.upkeep","FoodShortage — только флаг, штрафа за голод в коде нет","gap"],["b.m.cycle","c.BaseState","AdvanceCycle()","code"],["b.m.assign","c.BaseState","TryAssign / Unassign","code"],["b.m.production","c.ProductionCalculator","OutputPerCycle()","code"],["b.m.rolexp","c.ProductionCalculator","RoleXpPerCycle()","code"],["b.m.levelup","c.ProgressionMath","GrantXp()","code"],["b.m.report","c.CycleReport","структура отчёта","code"],["b.slot.bed","c.SlotOutputKind","единственный Healing-слот","code"],["b.st.Medicine","c.StatType","значение enum","code"],["b.res.Food","c.ResourceType","значение enum","code"],["b.sec.council","c.BaseSectionType","значение enum","code"],["g.worldmap","g.travel","выбор узла запускает путешествие","doc"],["g.travel","g.time","продвигает календарь на N дней от дистанции","doc"],["g.travel","g.dungeons","одна из двух точек назначения","doc"],["g.travel","g.missions","одна из двух точек назначения","doc"],["g.time","g.city","дни двигают стройки, апгрейды и лечение","doc"],["g.time","g.population","население растёт пассивно по дням","doc"],["g.wait","g.medbay","лечиться можно не выходя в рискованную вылазку","doc"],["g.wait","g.tension","дни ожидания и лечения Напряжение НЕ растят","doc"],["g.daynight","g.incidents","ночью инциденты и преступность кучнее","doc"],["g.daynight","g.city","ночью торговля и диалоги закрыты","doc"],["g.daynight","g.positions","ночью назначения на позиции закрыты","doc"],["g.curfew","g.incidents","патруль давит ночную преступность","doc"],["g.curfew","g.daynight","не спать — значит не проматывать ночь","doc"],["g.protagonist","g.attrs","распределение на старте","doc"],["g.protagonist","g.skills","базовые скилы на старте","doc"],["g.protagonist","g.traits","стартовые трейты и бэкграунд","doc"],["g.protagonist","g.baseevents","кандидат на резолв события наравне с напарниками","doc"],["g.attrs","g.combat","производные: HP, AP, точность, защита, инициатива, крит","doc"],["g.attrs","g.checks","контекстный атрибут добирает число под подход","doc"],["g.attrs","g.status","Воля сокращает длительность состояний, включая DoT","doc"],["g.skills","g.checks","скил ≥ порога = успех","doc"],["g.skills","g.abilities","активки гейтятся уровнем скила и пререквизитами","doc"],["g.skills","g.perks","перки открываются по порогам скила","doc"],["g.skills","g.socialchecks","Убеждение, Запугивание, Торговля","doc"],["g.skills","g.down","Медицина даёт стабилизацию — петля даун+спасение играбельна","doc"],["g.traits","g.combat","модификаторы и особые опции в бою","doc"],["g.traits","g.status","сопротивление или предрасположенность к состояниям","doc"],["g.traits","g.baseevents","событие резолвится трейтами релевантного напарника","doc"],["g.traits","g.checks","флэт-модификатор и особые опции проверки","doc"],["g.traits","g.values","ценностные связи растут из трейтов и ценностей","doc"],["g.wounds","g.scars","Серьёзное+ ранение вешает шрам навсегда","doc"],["g.scars","g.combat","свои эффекты (напр. Одноглазый −точность), билд не ломают","doc"],["g.checks","g.missions","проверки — половина ткани авторской миссии","doc"],["g.checks","g.dungeons","взлом, ловушки, разведка в комнатах","doc"],["g.combat","g.ap","общий пул на движение и действия","doc"],["g.combat","g.initiative","порядок ходов вперемешку","doc"],["g.combat","g.cover","укрытие снимает шанс попадания","doc"],["g.combat","g.armor","плоское снижение урона","doc"],["g.combat","g.status","слой состояний поверх урона","doc"],["g.combat","g.overwatch","резерв AP на реакцию","doc"],["g.cover","g.graze","промах в пределах гразы даёт частичный урон","doc"],["g.cover","g.strike","Strike-метр копится с попаданий","doc"],["g.strike","g.combat","гарантированный точный удар — основное смягчение RNG","doc"],["g.abilities","g.ap","стоят 2–6 AP","doc"],["g.abilities","g.status","половина активок вешает или снимает состояния","doc"],["g.damagetypes","g.status","огонь и токсин вешают Поджог и Яд","doc"],["g.damagetypes","g.armor","две независимые оси: множитель против флэта","doc"],["g.bestiary","g.combat","роли ставят тактические задачи: кого подавить, кого добить","doc"],["g.bestiary","g.abilities","симметрия: враги берут способности из того же пула","doc"],["g.bestiary","g.damagetypes","профиль резист/уязвимость у каждого семейства","doc"],["g.citytier","g.moodboard","третий драйвер визуала — вместе с Напряжением и населением","doc"],["g.combat","g.down","0 HP → даун на N ходов","doc"],["g.down","g.death","не стабилизировали до конца окна — смерть насовсем","doc"],["g.down","g.wounds","стабилизировали — выжил раненым","doc"],["g.wounds","g.medbay","3 тира ранений: 2 / 5 / 10 дней","doc"],["g.medbay","g.time","лечение тратит календарные дни","doc"],["g.positions","g.medbay","медик на позиции срезает −X% срока","doc"],["g.death","g.ripple","потеря идёт рябью по ценностным связям","doc"],["g.death","g.personalquests","обрывает арку","doc"],["g.death","g.understudy","бит подхватывает ролевой дублёр","doc"],["g.ironman","g.death","в айронмене смерть протагониста завершает игру","doc"],["g.combat","g.xp","опыт за бои","doc"],["g.questsources","g.xp","квесты дают ≥ половины прогресса","doc"],["g.xp","g.skills","уровень даёт очки скилов","doc"],["g.xp","g.perks","новые пороги открывают перки","doc"],["g.perks","g.survivability","ветки перков обязаны давать HP и защиту","doc"],["g.gear","g.survivability","тиры гира обязаны давать HP и защиту","doc"],["g.recruitcatchup","g.recruit","рекрут приходит с уровнем под стадию игры","doc"],["g.dungeons","g.loot","рандом-дроп с разбросом статов","doc"],["g.dungeons","g.matbuild","единственный источник, вместе с квестами","doc"],["g.dungeons","g.matcraft","единственный источник, вместе с квестами","doc"],["g.dungeons","g.gold","добыча","doc"],["g.missions","g.named","награды квестов и авторских локаций","doc"],["g.bestiary","g.named","боссы роняют именные","doc"],["g.loot","g.gear","дроп надевается","doc"],["g.named","g.gear","уникальный эффект через ItemEffect поверх статов","doc"],["g.gear","g.combat","крутит урон, броню, крит, точность","doc"],["g.matcraft","g.craft","гейтит апгрейды, моды и расходники","doc"],["g.craft","g.gear","улучшает, но базовый гир не создаёт","doc"],["g.craft","g.augment","крафт аугмента за компонент и золото","doc"],["g.augment","g.attrs","единственный способ поднять атрибуты","doc"],["g.b_lab","g.augment","аугмент крафтится только здесь","doc"],["g.b_workshop","g.craft","крафт живёт в Мастерской","doc"],["g.matbuild","g.city","гейтит спец-здания и апгрейды","doc"],["g.gold","g.city","ядро-здания строятся за золото","doc"],["g.gold","g.recruit","найм","doc"],["g.gold","g.craft","расходники","doc"],["g.city","g.b_infirmary","ядро-здание","doc"],["g.city","g.b_workshop","ядро-здание","doc"],["g.city","g.b_storehouse","ядро-здание","doc"],["g.city","g.b_councilhall","ядро-здание","doc"],["g.city","g.b_market","спец-здание","doc"],["g.city","g.b_tavern","спец-здание","doc"],["g.city","g.b_temple","спец-здание","doc"],["g.city","g.b_fort","спец-здание","doc"],["g.city","g.b_armory","спец-здание","doc"],["g.city","g.b_lab","спец-здание, приходит по надёжному квесту","doc"],["g.b_infirmary","g.medbay","где лечат раненых","doc"],["g.b_councilhall","g.council","открывает действия совета","doc"],["g.b_market","g.gold","доход золота","doc"],["g.b_market","g.socialchecks","опции Торговли","doc"],["g.b_tavern","g.population","ускоряет рост населения","doc"],["g.b_tavern","g.baseevents","соц-события","doc"],["g.b_temple","g.tension","−Напряжение","doc"],["g.b_temple","g.loyalty","+лояльность","doc"],["g.b_fort","g.tension","−Напряжение","doc"],["g.b_fort","g.readiness","+Готовность","doc"],["g.b_armory","g.gear","доступ и скидка на продвинутый гир","doc"],["g.patrons","g.city","строит и апгрейдит своё здание сам, за свои","doc"],["g.reputation","g.patrons","гейт прихода патрона","doc"],["g.citytier","g.patrons","гейт высших тиров патронов","doc"],["g.questsources","g.patrons","квестом можно направить нужного","doc"],["g.population","g.citytier","одна из трёх составляющих тира","doc"],["g.population","g.city","рабочие держат здания на базовом уровне","doc"],["g.reputation","g.citytier","одна из трёх составляющих тира","doc"],["g.city","g.citytier","ключевые здания — одна из трёх составляющих","doc"],["g.citytier","g.city","открывает новые плоты","doc"],["g.citytier","g.tension","фоновый тик: выше тир — выше фон. Главный двигатель","doc"],["g.citytier","g.incidents","масштабирует серьёзность событий","doc"],["g.tension","g.moodboard","визуал упадка","doc"],["g.population","g.moodboard","визуал многолюдности","doc"],["g.moodboard","g.hiddenscales","фоновый сигнал вместо панели","doc"],["g.positions","g.city","усиливает эффект здания сверх базового","doc"],["g.positions","g.baseevents","триггерит события, завязанные на трейты и скилы","doc"],["g.baseevents","g.positions","позицию никто не держит — базовый, худший исход","doc"],["g.compfsm","g.positions","в отряде ИЛИ на позиции: пока в экспедиции, позиция пустует","doc"],["g.compfsm","g.council","кресло совета занимает того же дефицитного напарника","doc"],["g.council","g.c_raid","действие с КД и ценой","doc"],["g.council","g.c_edict","действие с КД и ценой","doc"],["g.council","g.c_diplomacy","действие с КД и ценой","doc"],["g.council","g.c_invest","действие с КД и ценой","doc"],["g.council","g.c_prepare","действие с КД и ценой","doc"],["g.council","g.c_outfit","действие с КД и ценой","doc"],["g.council","g.questsources","доска и совет базы выдают квесты","doc"],["g.c_raid","g.tension","−Напряжение","doc"],["g.c_raid","g.loyalty","риск −лояльность у части напарников","doc"],["g.c_edict","g.factions","улучшить одну фракцию ценой другой","doc"],["g.c_edict","g.tension","исход указа может двинуть Напряжение","doc"],["g.c_diplomacy","g.factions","привлечь или улучшить","doc"],["g.reputation","g.council","влияние — валюта части действий","doc"],["g.c_invest","g.gold","буст дохода на время","doc"],["g.c_prepare","g.readiness","главный драйвер Готовности","doc"],["g.c_outfit","g.dungeons","баф и снабжение отряду на вылазку","doc"],["g.recruit","g.compfsm","новый напарник входит в автомат состояний","doc"],["g.compfsm","g.death","необратимый переход","doc"],["g.compfsm","g.betrayal","необратимый переход в антагониста","doc"],["g.loyalty","g.betrayal","низкая + сюжетная развилка → уход","doc"],["g.loyalty","g.perks","высокая даёт бонусы и перки","doc"],["g.personalquests","g.loyalty","главный источник роста","doc"],["g.consequences","g.loyalty","видимая рябь: напарник реагирует на глазах","doc"],["g.consequences","g.tension","скрытая рябь: валентность выбора не показана","doc"],["g.consequences","g.factions","двигает отношение фракций","doc"],["g.consequences","g.reputation","двигает репутацию города","doc"],["g.consequences","g.spine","поднимает сюжетные флаги","doc"],["g.consequences","g.npcmemory","горожане поминают прошлые выборы","doc"],["g.tension","g.loyalty","события города давят на ростер","doc"],["g.values","g.ripple","рябь идёт именно по ценностным связям","doc"],["g.values","g.banter","несогласные пикируются, близкие сходятся","doc"],["g.ripple","g.loyalty","друг погибшего проседает или мстит предателю","doc"],["g.betrayal","g.bestiary","возвращается боссом","doc"],["g.betrayal","g.gear","уходит со всем надетым гиром и уровнями","doc"],["g.betrayal","g.personalquests","обрывает арку","doc"],["g.betrayal","g.ripple","предательство бьёт по ростеру как и смерть","doc"],["g.loyalty","g.hiddenscales","число не показывается — только реплики и поведение","doc"],["g.factions","g.gold","стандинг двигает цены","doc"],["g.factions","g.city","гейтит опциональные здания и патронов","doc"],["g.factions","g.questsources","открывает и закрывает ветки","doc"],["g.factions","g.streets","присутствие на улицах масштабируется стандингом","doc"],["g.crisis","g.factions","непредотвратимо открывает новую враждебную фракцию","doc"],["g.streets","g.hiddenscales","стандинг читается глазами, без панели","doc"],["g.socialchecks","g.combat","обход боя","doc"],["g.socialchecks","g.gold","Торговля двигает цены","doc"],["g.socialchecks","g.questsources","открывает ветки квестов","doc"],["g.questsources","g.reputation","дела и выборы приносят влияние","doc"],["g.diegetic","g.questsources","квест добывается наблюдением на улице","doc"],["g.tension","g.incidents","частота растёт с уровнем","doc"],["g.tension","g.crisis","пороги переводят инциденты в кризис","doc"],["g.tension","g.telegraph","нарастающие сигналы вместо числа","doc"],["g.incidents","g.questsources","инцидент приходит как квест","doc"],["g.incidents","g.tension","исход события может Напряжение и снизить, и поднять","doc"],["g.crisis","g.death","может непредотвратимо убить напарника","doc"],["g.crisis","g.population","может вызвать отток населения","doc"],["g.telegraph","g.hiddenscales","главный носитель честности жёстких ударов","doc"],["g.xp","g.readiness","сила ростера — один из драйверов","doc"],["g.gear","g.readiness","снаряжённость ростера — один из драйверов","doc"],["g.readiness","g.finalbattle","задаёт сложность и исход","doc"],["g.spine","g.finalbattle","запускает вехой, а не порогом","doc"],["g.failstates","g.finalbattle","финал достижим всегда — soft-lock невозможен","doc"],["g.dungeons","g.pyl","структура вылазки","doc"],["g.pyl","g.loot","банк только при экстракции","doc"],["g.pyl","g.wounds","глубже — копятся раны и тают расходники","doc"],["g.pyl","g.death","вайп = потеря незабанканного и риск пермадета","doc"],["g.ironman","g.pyl","данжи проектируются под айронмен-канон","doc"],["g.dungeons","g.time","дни съедает дорога туда и обратно; внутри локации время стоит","doc"],["g.missions","g.consequences","сюжетные выборы регистрируются единой моделью","doc"],["g.missions","g.combat","бой — часть этапов","doc"],["g.missions","g.spine","несут главный спайн","doc"],["g.understudy","g.spine","цепочка дублёров держит кампанию","doc"],["g.loop_squad","g.matbuild","squad-loop добывает то, чем растёт город","doc"],["g.loop_squad","g.matcraft","squad-loop кормит крафт","doc"],["g.matbuild","g.loop_settlement","обязательная связка: не-боевого пути роста нет","doc"],["g.loop_settlement","g.citytier","рост города — цель петли","doc"],["g.loop_squad","g.gold","валюта отряда","doc"],["g.dungeons","g.loop_squad","главный faucet","doc"],["g.difficulty","g.tension","ползунок скорости роста","doc"],["g.difficulty","g.combat","множители урона и HP","doc"],["g.difficulty","g.medbay","скорость лечения","doc"],["g.difficulty","g.death","пермадет вкл/выкл","doc"],["g.ironman","g.failstates","провалы бьют, но не запирают","doc"],["g.uicity","g.city","единый экран построек и таймеров","doc"],["g.uicity","g.positions","быстрый доступ к назначениям","doc"],["g.uitoolkit","g.uicity","дата-управляемый UI","doc"],["g.tension","g.hiddenscales","как число не показывается","doc"],["g.onboarding","g.protagonist","0–5: полное создание лидера","doc"],["g.onboarding","g.combat","5–20: ветвящийся пролог-бой на окраине","doc"],["g.onboarding","g.city","20–30: доступ в село, пара ядро-зданий","doc"],["g.onboarding","g.positions","30–44: первое назначение","doc"],["g.onboarding","g.medbay","30–44: первое лечение в днях","doc"],["g.onboarding","g.missions","44–57: первый выезд","doc"],["g.onboarding","g.loyalty","44–57: первая видимая реакция напарника на сюжетный выбор","doc"],["g.onboarding","g.tension","57–60: возврат, банк лута, слабый намёк на фон Напряжения","doc"],["g.protagonist","g.down","стандартно протагонист только даунится — смерти насовсем нет","doc"],["g.baseevents","g.traits","события дают новые трейты; сверх лимита слотов — вытеснить или отказаться","doc"],["g.so","g.abilities","контент ассетами без нового кода","doc"],["g.so","g.traits","контент ассетами без нового кода","doc"],["g.so","g.status","контент ассетами без нового кода","doc"],["g.so","g.bestiary","EnemyDefinition как ScriptableObject","doc"],["g.so","g.incidents","пул инцидентов данными","doc"],["g.so","g.city","здания и апгрейды данными","doc"],["g.so","g.council","действия совета данными","doc"],["g.so","g.loot","ItemDefinition + ItemInstance","doc"],["g.modpipeline","g.gear","модификаторы гира через один агрегатор","doc"],["g.modpipeline","g.traits","модификаторы трейтов через тот же ключ","doc"],["g.modpipeline","g.scars","модификаторы шрамов через тот же ключ","doc"],["g.modpipeline","g.status","модификаторы состояний через тот же ключ","doc"],["g.modpipeline","g.attrs","база, поверх которой всё складывается","doc"],["g.balanceso","g.difficulty","пресеты как ассеты","doc"],["g.balanceso","g.tension","драйверы и пороги — тоже данные","doc"],["g.positions","c.BaseState","реализовано: TryAssign / Unassign / слоты","impl"],["g.time","c.BaseState","реализовано частично: AdvanceCycle = один день","impl"],["g.xp","c.ProgressionMath","реализовано: кривая уровней и перелив","impl"],["g.balanceso","c.BalanceConfigAsset","ассет есть, но ToConfig() никем не вызывается — числа берутся из new BalanceConfig()","gap"],["g.so","c.DefaultContent","пока не ассеты, а статический код-контент","plan"],["g.medbay","b.m.heal","реализовано частично: дни есть, тиров ранений и медик-бонуса нет","impl"],["g.city","b.sec.workshop","секции базы — прообраз зданий города","plan"],["g.council","b.slot.council","в коде совет — один пассивный слот, шести действий нет","gap"],["g.combat","c.StatType","боевые статы объявлены, боевой логики в коде нет","plan"],["g.attrs","c.StatType","GDD разводит 4 атрибута и 10 скилов — в коде один enum на 18 статов с общим механизмом роста","gap"],["g.initiative","c.StatType","боевые статы объявлены, планировщика ходов ещё нет","plan"],["g.matbuild","b.slot.bench","GDD: материалы только из вылазок. Код: верстак печатает Materials на базе","gap"],["g.gold","b.res.Supplies","GDD: золото и 2 компонента. Код: шесть ресурсов","gap"],["g.tension","b.m.report","скрытых шкал в коде нет — есть только флаг FoodShortage","gap"],["g.loyalty","c.Companion","лояльности у Companion нет","gap"],["g.traits","c.Companion","трейтов и шрамов у Companion нет","gap"],["g.compfsm","c.CompanionStatus","в enum нет антагониста и мёртвого; Resting и OnMission не выставляются","gap"],["g.dungeons","c.CompanionStatus","OnMission проверяется, но ставить его некому — вылазок нет","gap"],["g.modpipeline","c.StatBlock","StatBlock умеет складывать — фундамент под агрегатор есть","impl"],["g.b_lab","b.sec.lab","секция есть, аугментов и роста атрибутов нет","plan"],["g.b_temple","g.city","−Напряжение: ни здания, ни шкалы в коде нет","plan"],["g.uicity","c.BaseGameDemo","вместо UI — вывод в консоль","plan"],["b.sec.council","b.slot.council","позиция секции","code"],["b.slot.council","b.st.Leadership","Primary ×1.0","code"],["b.slot.council","b.st.Charisma","Secondary ×0.5","code"],["b.slot.council","b.out.Morale","Passive, base 2","code"],["b.sec.settlement","b.slot.farms","позиция секции","code"],["b.slot.farms","b.st.Logistics","Primary ×1.0","code"],["b.slot.farms","b.st.Charisma","Secondary ×0.5","code"],["b.slot.farms","b.res.Food","Resource, base 6","code"],["b.sec.settlement","b.slot.market","позиция секции","code"],["b.slot.market","b.st.Charisma","Primary ×1.0","code"],["b.slot.market","b.st.Logistics","Secondary ×0.5","code"],["b.slot.market","b.res.Supplies","Resource, base 4","code"],["b.sec.workshop","b.slot.bench","позиция секции","code"],["b.slot.bench","b.st.Engineering","Primary ×1.2","code"],["b.slot.bench","b.st.Tech","Secondary ×0.4","code"],["b.slot.bench","b.res.Materials","Resource, base 3","code"],["b.sec.lab","b.slot.lab","позиция секции","code"],["b.slot.lab","b.st.Science","Primary ×1.3","code"],["b.slot.lab","b.st.Tech","Secondary ×0.3","code"],["b.slot.lab","b.res.Research","Resource, base 2","code"],["b.sec.infirmary","b.slot.bed","позиция секции","code"],["b.slot.bed","b.st.Medicine","Primary ×2.0","code"],["b.slot.bed","b.st.Survival","Secondary ×0.5","code"],["b.slot.bed","b.out.Healing","Healing, base 4","code"],["b.sec.storehouse","b.slot.dock","позиция секции, закрыта по умолчанию","code"],["b.slot.dock","b.st.Logistics","Primary ×1.0","code"],["b.slot.dock","b.st.Engineering","Secondary ×0.4","code"],["b.slot.dock","b.res.Supplies","Resource, base 3","code"],["b.sec.scout","b.slot.post","позиция секции","code"],["b.slot.post","b.st.Scouting","Primary ×1.0","code"],["b.slot.post","b.st.Will","Secondary ×0.2 — но Will в шкале 0–100","gap"],["b.slot.post","b.res.Intel","Resource, base 1","code"],["b.arch.soldier","b.st.Health","Health 8, рост ×2","code"],["b.arch.soldier","b.st.Aim","Aim 65, рост ×3","code"],["b.arch.soldier","b.st.Mobility","Mobility 5","code"],["b.arch.soldier","b.st.Will","Will 30, рост ×1","code"],["b.arch.soldier","b.st.Survival","Survival 4, рост ×1","code"],["b.arch.engineer","b.st.Health","Health 6","code"],["b.arch.engineer","b.st.Aim","Aim 55","code"],["b.arch.engineer","b.st.Engineering","Engineering 6, рост ×3","code"],["b.arch.engineer","b.st.Tech","Tech 5, рост ×2","code"],["b.arch.engineer","b.st.Logistics","Logistics 3, рост ×1","code"],["b.arch.scientist","b.st.Health","Health 5","code"],["b.arch.scientist","b.st.Science","Science 7, рост ×3","code"],["b.arch.scientist","b.st.Tech","Tech 4, рост ×1","code"],["b.arch.scientist","b.st.Will","Will 35, рост ×1","code"],["b.arch.medic","b.st.Health","Health 6, рост ×1","code"],["b.arch.medic","b.st.Aim","Aim 50","code"],["b.arch.medic","b.st.Medicine","Medicine 6, рост ×3","code"],["b.arch.medic","b.st.Survival","Survival 3, рост ×1","code"],["b.arch.scout","b.st.Health","Health 6","code"],["b.arch.scout","b.st.Aim","Aim 60, рост ×1","code"],["b.arch.scout","b.st.Mobility","Mobility 7, рост ×1","code"],["b.arch.scout","b.st.Scouting","Scouting 6, рост ×3","code"],["b.arch.scout","b.st.Survival","Survival 5","code"],["b.arch.leader","b.st.Health","Health 7","code"],["b.arch.leader","b.st.Aim","Aim 60","code"],["b.arch.leader","b.st.Leadership","Leadership 7, рост ×3","code"],["b.arch.leader","b.st.Charisma","Charisma 5, рост ×2","code"],["b.arch.leader","b.st.Will","Will 45, рост ×1","code"],["b.arch.leader","b.slot.council","стартовая расстановка демки","code"],["b.arch.engineer","b.slot.bench","стартовая расстановка демки","code"],["b.arch.scientist","b.slot.lab","стартовая расстановка демки","code"],["b.arch.medic","b.slot.bed","стартовая расстановка демки","code"],["b.arch.scout","b.slot.post","стартовая расстановка демки","code"],["b.arch.soldier","b.slot.farms","стартовая расстановка: Logistics = 0, не по профилю","gap"],["b.sec.barracks","b.m.assign","секция есть в enum, слотов у неё нет","gap"],["b.res.Medicine","b.m.production","ресурс объявлен, но его никто не производит и не тратит","gap"],["b.res.Supplies","b.m.upkeep","кроме Food не тратится ни один ресурс","gap"],["b.m.heal","b.m.assign","InjuryPoints выставляет только тест — источника ранений в игре нет","gap"],["b.m.unlock","b.slot.dock","переключать Unlocked некому","gap"]],"gaps":[["Материалы производятся и в городе, и только в вылазках","docs/GDD.md Э6.2 ↔ Core/DefaultContent.cs (верстак мастерской)","GDD Э6.2 прямо запрещает городское производство материалов: «источник обоих — только вылазки и награды квестов», иначе рвётся связка squad-loop → settlement-loop, на которой держится вся мотивация выходить наружу. В коде верстак мастерской печатает Materials каждый цикл из воздуха — 3–12 за цикл на стартовых архетипах, и это один из 5 производящих слотов. Одну из двух моделей придётся снять.","high","Дизайн ↔ код"],["Две несовместимые модели персонажа","docs/GDD.md Э2 ↔ Core/Stats/StatType.cs","GDD Э2 разводит персонажа на три независимые оси: 4 почти статичных атрибута, 10 скилов и трейты в фиксированном числе слотов, плюс отдельный вечный трек шрамов — с правилом «один эффект — одна система». Код: один enum StatType на 18 стата, где боевые и ролевые склонности растут по одному механизму — 3 очка за уровень по весам архетипа. Ни атрибутов, ни скилов, ни трейтов как отдельных осей нет. Итерация 2 упрётся в это первой.","high","Дизайн ↔ код"],["Экономика: золото и 2 компонента против шести ресурсов","docs/GDD.md Э15 ↔ Core/Economy/ResourceType.cs","GDD Э15: валюта отряда — золото плюс 2 материала, строительный и крафтовый, а в MVP-срезе вообще базовая добыча 1–2 материалов из вылазок. Код: 6 ресурсов, из них производится 5, тратится 1. На GDD ложатся только два — Supplies ≈ золото и Materials ≈ компонент; оставшиеся четыре (Intel, Research, Food, Medicine) в GDD отсутствуют вовсе.","high","Дизайн ↔ код"],["Совет: шесть действий против одного пассивного слота","docs/GDD.md US-8.4 ↔ Core/DefaultContent.cs (место в совете)","В GDD совет — 6 повторяемых действий с КД и ценой: Облава, Указ, Дипломатия, Инвестиция, Подготовка к угрозе, Снаряжение экспедиции; на них завязаны Напряжение, фракции, патроны, Готовность и снабжение отряда. В коде это 1 слот «Место в совете», который капает 2–12 безымянной морали за цикл в отчёт. Реализовано 0 действий из 6.","mid","Нет логики"],["Скрытых шкал нет вообще","docs/GDD.md Э11 · US-9.2 ↔ Assets/_Project/Scripts/Core/","Напряжение, Готовность и лояльность — три несущих конструкции середины и финала: GDD отводит им целый эпик и вешает на них частоту инцидентов, кризис-события, сложность финальной битвы и уход напарников. В коде из «состояний мира» есть ровно 1 булев флаг FoodShortage. Реализовано 0 шкал из 3.","mid","Нет логики"],["Статусы OnMission, Injured, Resting не выставляются","Core/Characters/Companion.cs:11","Присваиваний Status по всему проекту 4, и все они ставят одно из 2 значений: Assigned, Idle. Остальные 3 из 5 значений enum только сравниваются — значит ветки, завязанные на них (возврат в Idle после выздоровления), недостижимы.","mid","Мёртвый код"],["Ранения некому наносить","Core/Base/BaseState.cs · Companion.InjuryPoints","InjuryPoints поднимается в 0 файлах игрового кода — то есть нигде: значение выставляют только тесты через internal. При этом лазарет считает до 18 очков лечения за цикл плюс 5.0 естественной регенерации. Всё в пустоту, пока нет боя и вылазок.","mid","Нет логики"],["Боевой Will в формуле «Разведпост» смешивает шкалы","Core/DefaultContent.cs:175 ↔ docs/BALANCE.md §2","Слот берёт Will как Secondary с коэффициентом ×0.2, но Will — боевой стат в шкале 0–100 (максимум у архетипов 45), тогда как склонности живут в 0–7. Итог: Командир даёт 10, Учёный даёт 8, Боец даёт 7 — профильный архетип оказывается не первым. Заявленное в BALANCE.md §3 «ставить людей по профилю выгодно вдвойне» тут ломается.","mid","Баланс"],["FoodShortage и Morale — флаги в никуда","Core/Base/CycleReport.cs ↔ Core/Base/BaseState.cs","Отчёт цикла честно копит PassiveBonuses (2–12 морали за цикл с места в совете) и поднимает FoodShortage, когда еды не хватило. Потребителей у обоих 0: ни штрафа за голод, ни эффекта морали в коде нет. Из 6 полей отчёта на игру влияют только произведённые ресурсы и левелапы — остальное задел, а не механика.","low","Нет логики"],["Секция Казарма без слотов","Core/BaseSectionType.cs:17 ↔ DefaultContent.AllSlots()","Секция объявлена в enum под значением 7, но слотов у неё 0 — при том что остальные 7 секции держат 8 слотов. Назначить туда некого, секция недостижима.","low","Мёртвый код"],["Ресурс Medicine мёртвый","Core/Economy/ResourceType.cs:15","Значение enum 6, производителей 0 из 8 слотов, вызовов TrySpend 0, стартового запаса 0. Либо слот-источник, либо убрать из enum до времени.","low","Мёртвый код"],["Экономика односторонняя","Core/Base/BaseState.cs:195","TrySpend во всём проекте вызывается 1 раз и только для Food. Остальные 4 ресурса копятся без потолка: Supplies до 9/цикл, Materials до 12/цикл, Research до 12/цикл, Intel до 10/цикл. Сливов в коде ещё нет.","low","Нет логики"],["HealingPerMedicinePoint не используется","Core/Balance/BalanceConfig.cs:44","Значение 2.0, но читателей 0 из 23 файлов вне самого конфига — в BalanceConfigAsset поле перенесено (12 из 12 чисел), но крутить его бесполезно: ни одна формула его не спрашивает.","low","Мёртвый код"],["«Погрузочный док» открыть нечем","Core/Base/AssignmentSlot.cs · DefaultContent.cs:166","Единственный из 8 слотов с UnlockedByDefault = false, а присваиваний Unlocked в игровом коде 0 (одно есть в тестах). Механики стройки, которая его переключит, ещё нет — слот закрыт навсегда, и заложенные в него 3 базы плюс Logistics ×1.0 не работают.","low","Нет логики"],["ResourceLedger.Changed никто не слушает","Core/Economy/ResourceLedger.cs:16","Подписок (+=) во всех 25 файлах проекта 0, вызовов Invoke 1. Событие стреляет в пустоту — оживёт, когда появится UI.","low","Мёртвый код"]],"run":[["Командир","Место в совете","2 + 7×1.0 + 5×0.5 = 11.5","12 Morale","30"],["Инженер","Верстак мастерской","3 + 6×1.2 + 5×0.4 = 12.2","12 Materials","30"],["Учёный","Исследовательский стол","2 + 7×1.3 + 4×0.3 = 12.3","12 Research","30"],["Медик","Койка лазарета","4 + 6×2.0 + 3×0.5 = 17.5","18 Healing","30"],["Разведчик","Разведпост","1 + 6×1.0 + 0×0.2 = 7.0","7 Intel","30"],["Боец","Фермы поселения","6 + 0×1.0 + 0×0.5 = 6.0","6 Food","20"],["— никого","Рынок поселения","слот свободен: некому встать","0 Supplies","—"],["— закрыт","Погрузочный док","UnlockedByDefault = false, открыть нечем","0 Supplies","—"]],"runNote":"Работают 6 слотов из 8: «Рынок поселения» — некому встать; «Погрузочный док» закрыт по умолчанию. За все 10 дней прогона нулём остаются: Supplies, Medicine. Еда: производится 6, прокорм списывает 1 × 6 = 6. Сходится в ноль — стартовые 20 не растут и не тают, седьмой напарник уже уводит базу в минус. Не по профилю: Боец на «Фермы поселения» (Logistics ниже порога 5) — и выработка голая, и ролевой опыт 20 вместо 30. Очки лечения уходят в пустоту: ранения в игре никто не наносит. Порог первого уровня — 100 XP: при 30 XP в день это 4-й день, при 20 XP в день это 5-й день."};
+const RAW_NODES = DATA.nodes, RAW_EDGES = DATA.edges, GAPS = DATA.gaps, RUN = DATA.run;
+const RUN_NOTE = DATA.runNote, META = DATA.meta;
+
+/* =========================================================================
+   МОДЕЛЬ
+   ========================================================================= */
+const KIND_LABEL = {
+  class:"класс", enum:"enum", static:"статический класс", struct:"структура",
+  so:"ScriptableObject", mono:"MonoBehaviour", test:"тесты", asm:"сборка",
+  system:"система", section:"секция", slot:"слот", stat:"склонность",
+  res:"ресурс", out:"выход", arch:"архетип", mech:"механика"
+};
+const LAYER_LABEL = {code:"Код", gdd:"Дизайн", base:"База"};
+const TAG_LABEL = {code:"КОД", doc:"ДОК", plan:"ПЛАН", impl:"РЕАЛИЗ", gap:"РАЗРЫВ"};
+const TAG_HINT = {
+  code:"вычитано из исходников",
+  doc:"записано в GDD / DESIGN / BALANCE",
+  plan:"спроектировано, кода нет",
+  impl:"дизайн, у которого уже есть код",
+  gap:"заявлено, но с кодом не сходится"
+};
+
+const nodes = RAW_NODES.map(function(r,i){
+  return {id:r[0], label:r[1], layer:r[2], kind:r[3], group:r[4], src:r[5], desc:r[6], facts:r[7]||"",
+          idx:i, deg:0, x:0, y:0, vx:0, vy:0, r:5, fixed:false, vis:true};
+});
+const byId = {};
+nodes.forEach(function(n){ byId[n.id]=n; });
+
+const edges = [];
+RAW_EDGES.forEach(function(e){
+  const s = byId[e[0]], t = byId[e[1]];
+  if(!s||!t){ console.warn("нет узла для связи", e); return; }
+  const ed = {s:s, t:t, label:e[2], tag:e[3], vis:true};
+  edges.push(ed); s.deg++; t.deg++;
+});
+nodes.forEach(function(n){ n.r = 4.5 + Math.min(9, Math.sqrt(n.deg)*2.1); });
+
+const adj = {};
+nodes.forEach(function(n){ adj[n.id]=[]; });
+edges.forEach(function(e){ adj[e.s.id].push(e); adj[e.t.id].push(e); });
+
+const state = {
+  layers:{code:true, gdd:true, base:true},
+  tags:{code:true, doc:true, plan:true, impl:true, gap:true},
+  query:"", selected:null, hover:null, onlyGaps:false
+};
+
+/* =========================================================================
+   ПОДСЧЁТЫ И ЛЕВАЯ ПАНЕЛЬ
+   ========================================================================= */
+const gapEdgeCount = edges.filter(function(e){return e.tag==="gap";}).length;
+document.getElementById("cnt-n").textContent = nodes.length;
+document.getElementById("cnt-e").textContent = edges.length;
+document.getElementById("cnt-g").textContent = GAPS.length;
+document.getElementById("gapbadge").textContent = GAPS.length;
+["code","gdd","base"].forEach(function(l){
+  document.getElementById("n-"+l).textContent = nodes.filter(function(n){return n.layer===l;}).length;
+});
+
+(function stamp(){
+  var el = document.getElementById("stamp");
+  if(!el || !META) return;
+  var bits = ["собрано " + META.builtAt];
+  if(META.gitSha) bits.push("коммит " + META.gitSha);
+  bits.push(META.autoGaps + " из " + GAPS.length + " разрывов найдены автопроверками");
+  if(META.gddWithout) bits.push("GDD не задаёт чисел для " + META.gddWithout + " из " + META.gddTotal + " систем дизайна");
+  el.textContent = bits.join(" · ");
+  if(META.stale && META.stale.length){
+    var w = document.createElement("span");
+    w.className = "stale";
+    w.textContent = " · дизайн-слой сверялся с другой версией " + META.stale.join(", ") + " — перечитать";
+    el.appendChild(w);
+  }
+})();
+
+const tagchips = document.getElementById("tagchips");
+Object.keys(TAG_LABEL).forEach(function(t){
+  const b = document.createElement("button");
+  b.className="chip"; b.dataset.tag=t; b.setAttribute("aria-pressed","true");
+  b.textContent = TAG_LABEL[t]; b.title = TAG_HINT[t];
+  b.addEventListener("click", function(){
+    state.tags[t] = !state.tags[t];
+    b.setAttribute("aria-pressed", String(state.tags[t]));
+    applyFilters(); reheat(.5);
+  });
+  tagchips.appendChild(b);
+});
+
+const hubs = document.getElementById("hubs");
+nodes.slice().sort(function(a,b){return b.deg-a.deg;}).slice(0,12).forEach(function(n){
+  const b=document.createElement("button"); b.className="hub";
+  b.innerHTML = '<span class="dot" style="background:var(--c-'+n.layer+')"></span>'+
+                '<span>'+esc(n.label)+'</span><span class="deg">'+n.deg+'</span>';
+  b.addEventListener("click", function(){ select(n); focusNode(n); });
+  hubs.appendChild(b);
+});
+
+document.querySelectorAll(".toggle[data-layer]").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    const l = btn.dataset.layer;
+    state.layers[l] = !state.layers[l];
+    btn.setAttribute("aria-pressed", String(state.layers[l]));
+    applyFilters(); reheat(.9);
+  });
+});
+document.getElementById("q").addEventListener("input", function(e){
+  state.query = e.target.value.trim().toLowerCase();
+  draw();
+});
+
+/* =========================================================================
+   ВКЛАДКИ
+   ========================================================================= */
+document.querySelectorAll(".tab").forEach(function(tab){
+  tab.addEventListener("click", function(){
+    document.querySelectorAll(".tab").forEach(function(t){t.setAttribute("aria-selected","false");});
+    document.querySelectorAll(".panel").forEach(function(p){p.classList.remove("on");});
+    tab.setAttribute("aria-selected","true");
+    document.getElementById(tab.dataset.panel).classList.add("on");
+    if(tab.dataset.panel==="p-graph"){ resize(); }
+  });
+});
+
+/* =========================================================================
+   ФИЛЬТРЫ
+   ========================================================================= */
+function applyFilters(){
+  nodes.forEach(function(n){ n.vis = state.layers[n.layer]; });
+  edges.forEach(function(e){
+    e.vis = e.s.vis && e.t.vis && state.tags[e.tag] && (!state.onlyGaps || e.tag==="gap");
+  });
+  if(state.onlyGaps){
+    nodes.forEach(function(n){ n.vis=false; });
+    edges.forEach(function(e){ if(e.vis){ e.s.vis=true; e.t.vis=true; } });
+  }
+  if(state.selected && !state.selected.vis) closeInspector();
+  draw();
+}
+
+/* =========================================================================
+   СИМУЛЯЦИЯ
+   ========================================================================= */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let W=0, H=0, DPR=1;
+const view = {k:1, x:0, y:0};
+let alpha = 1;
+
+const anchors = {};
+function computeAnchors(){
+  const on = ["code","gdd","base"].filter(function(l){return state.layers[l];});
+  const R = Math.min(W,H)*0.26;
+  if(on.length<=1){ on.forEach(function(l){ anchors[l]={x:W/2,y:H/2}; }); return; }
+  on.forEach(function(l,i){
+    const a = -Math.PI/2 + i*(2*Math.PI/on.length);
+    anchors[l] = {x:W/2 + Math.cos(a)*R, y:H/2 + Math.sin(a)*R};
+  });
+}
+
+function seed(){
+  computeAnchors();
+  nodes.forEach(function(n,i){
+    const a = anchors[n.layer] || {x:W/2,y:H/2};
+    const ang = i*2.399963;
+    const rad = 30 + Math.sqrt(i)*16;
+    n.x = a.x + Math.cos(ang)*rad;
+    n.y = a.y + Math.sin(ang)*rad;
+    n.vx=0; n.vy=0;
+  });
+}
+
+function tick(){
+  if(alpha < 0.002) return false;
+  computeAnchors();
+  const vis = nodes.filter(function(n){return n.vis;});
+  const REP = 1500, SPRING = 0.035, LEN = 62;
+
+  for(let i=0;i<vis.length;i++){
+    const a=vis[i];
+    for(let j=i+1;j<vis.length;j++){
+      const b=vis[j];
+      let dx=b.x-a.x, dy=b.y-a.y;
+      let d2=dx*dx+dy*dy;
+      if(d2<1){ dx=(Math.random()-.5); dy=(Math.random()-.5); d2=1; }
+      if(d2>190000) continue;
+      const d=Math.sqrt(d2);
+      const f=REP/d2;
+      const fx=(dx/d)*f, fy=(dy/d)*f;
+      a.vx-=fx; a.vy-=fy; b.vx+=fx; b.vy+=fy;
+      const minD=a.r+b.r+5;
+      if(d<minD){
+        const push=(minD-d)*0.35;
+        a.vx-=(dx/d)*push; a.vy-=(dy/d)*push;
+        b.vx+=(dx/d)*push; b.vy+=(dy/d)*push;
+      }
+    }
+  }
+  edges.forEach(function(e){
+    if(!e.vis) return;
+    const a=e.s,b=e.t;
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const d=Math.max(1,Math.sqrt(dx*dx+dy*dy));
+    const same = a.layer===b.layer;
+    const f=(d-(same?LEN:LEN*2.1))*SPRING*(same?1:0.55);
+    const fx=(dx/d)*f, fy=(dy/d)*f;
+    a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy;
+  });
+  vis.forEach(function(n){
+    const a = anchors[n.layer] || {x:W/2,y:H/2};
+    n.vx += (a.x-n.x)*0.010;
+    n.vy += (a.y-n.y)*0.010;
+    if(n.fixed){ n.vx=0; n.vy=0; return; }
+    n.vx*=0.82; n.vy*=0.82;
+    n.x += Math.max(-24,Math.min(24,n.vx*alpha));
+    n.y += Math.max(-24,Math.min(24,n.vy*alpha));
+  });
+  alpha *= 0.985;
+  return true;
+}
+function reheat(a){ alpha = Math.max(alpha, a||0.7); loop(); }
+
+/* =========================================================================
+   ОТРИСОВКА
+   ========================================================================= */
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+let PAL = {};
+function readPalette(){
+  PAL = {code:css("--c-code"), gdd:css("--c-gdd"), base:css("--c-base"), gap:css("--c-gap"),
+         ink:css("--ink"), ink2:css("--ink2"), ink3:css("--ink3"),
+         canvas:css("--canvas"), grid:css("--grid"), surface:css("--surface2"), line:css("--line")};
+}
+readPalette();
+if(window.matchMedia){
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  if(mq.addEventListener) mq.addEventListener("change", function(){ readPalette(); draw(); });
+}
+
+function resize(){
+  const st = document.getElementById("stage");
+  const rect = st.getBoundingClientRect();
+  if(rect.width<10||rect.height<10) return;
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  W = rect.width; H = rect.height;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+
+function shape(n, x, y, r){
+  ctx.beginPath();
+  switch(n.kind){
+    case "enum": case "res": {
+      ctx.moveTo(x, y-r); ctx.lineTo(x+r, y); ctx.lineTo(x, y+r); ctx.lineTo(x-r, y); ctx.closePath(); break;
+    }
+    case "section": case "slot": {
+      const s=r*0.92; ctx.rect(x-s, y-s, s*2, s*2); break;
+    }
+    case "class": case "static": case "struct": case "so": case "mono": case "test": case "asm": case "mech": {
+      const w=r*1.25, h=r*0.92, rr=2;
+      ctx.moveTo(x-w+rr,y-h); ctx.lineTo(x+w-rr,y-h); ctx.quadraticCurveTo(x+w,y-h,x+w,y-h+rr);
+      ctx.lineTo(x+w,y+h-rr); ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);
+      ctx.lineTo(x-w+rr,y+h); ctx.quadraticCurveTo(x-w,y+h,x-w,y+h-rr);
+      ctx.lineTo(x-w,y-h+rr); ctx.quadraticCurveTo(x-w,y-h,x-w+rr,y-h); ctx.closePath(); break;
+    }
+    case "arch": {
+      for(let i=0;i<5;i++){
+        const a=-Math.PI/2 + i*2*Math.PI/5;
+        const px=x+Math.cos(a)*r, py=y+Math.sin(a)*r;
+        if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.closePath(); break;
+    }
+    default: ctx.arc(x,y,r,0,Math.PI*2);
+  }
+}
+
+function matches(n){
+  if(!state.query) return false;
+  return (n.label+" "+n.desc+" "+n.group+" "+n.src).toLowerCase().indexOf(state.query)>=0;
+}
+
+function draw(){
+  if(!W) return;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = PAL.canvas; ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.translate(view.x, view.y); ctx.scale(view.k, view.k);
+
+  // сетка
+  const step=48, x0=(-view.x/view.k), y0=(-view.y/view.k);
+  ctx.strokeStyle = PAL.grid; ctx.lineWidth = 1/view.k; ctx.globalAlpha=.85;
+  ctx.beginPath();
+  for(let x=Math.floor(x0/step)*step; x<x0+W/view.k; x+=step){ ctx.moveTo(x,y0); ctx.lineTo(x,y0+H/view.k); }
+  for(let y=Math.floor(y0/step)*step; y<y0+H/view.k; y+=step){ ctx.moveTo(x0,y); ctx.lineTo(x0+W/view.k,y); }
+  ctx.stroke(); ctx.globalAlpha=1;
+
+  const sel = state.selected;
+  const near = {};
+  if(sel){ near[sel.id]=true; adj[sel.id].forEach(function(e){ if(e.vis){ near[e.s.id]=true; near[e.t.id]=true; } }); }
+
+  // рёбра
+  edges.forEach(function(e){
+    if(!e.vis) return;
+    const isNear = sel && (e.s.id===sel.id || e.t.id===sel.id);
+    const dim = sel && !isNear;
+    const col = e.tag==="gap" ? PAL.gap
+              : e.tag==="impl" ? PAL.ink2
+              : (e.s.layer===e.t.layer ? PAL[e.s.layer] : PAL.ink3);
+    ctx.save();
+    ctx.globalAlpha = dim ? .07 : (isNear ? .95 : .3);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = (isNear?1.8:1)/view.k*Math.max(1,view.k*.9);
+    if(e.tag==="plan"||e.tag==="gap") ctx.setLineDash([4/view.k,3/view.k]);
+    ctx.beginPath();
+    const mx=(e.s.x+e.t.x)/2, my=(e.s.y+e.t.y)/2;
+    const dx=e.t.x-e.s.x, dy=e.t.y-e.s.y;
+    const cx=mx-dy*0.09, cy=my+dx*0.09;
+    ctx.moveTo(e.s.x,e.s.y); ctx.quadraticCurveTo(cx,cy,e.t.x,e.t.y);
+    ctx.stroke();
+    if(isNear){
+      // стрелка у цели
+      const ang=Math.atan2(e.t.y-cy, e.t.x-cx);
+      const tipx=e.t.x-Math.cos(ang)*(e.t.r+2), tipy=e.t.y-Math.sin(ang)*(e.t.r+2);
+      const a1=ang+Math.PI*0.86, a2=ang-Math.PI*0.86, L=7;
+      ctx.beginPath(); ctx.moveTo(tipx,tipy);
+      ctx.lineTo(tipx+Math.cos(a1)*L, tipy+Math.sin(a1)*L);
+      ctx.moveTo(tipx,tipy);
+      ctx.lineTo(tipx+Math.cos(a2)*L, tipy+Math.sin(a2)*L);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+
+  // подписи рёбер выбранного узла
+  if(sel && view.k>0.55){
+    ctx.save();
+    ctx.font = "500 10px 'Golos Text', sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    adj[sel.id].forEach(function(e){
+      if(!e.vis) return;
+      const mx=(e.s.x+e.t.x)/2, my=(e.s.y+e.t.y)/2;
+      const dx=e.t.x-e.s.x, dy=e.t.y-e.s.y;
+      const cx=mx-dy*0.045, cy=my+dx*0.045;
+      let txt = e.label; if(txt.length>34) txt = txt.slice(0,33)+"…";
+      const w=ctx.measureText(txt).width;
+      ctx.globalAlpha=.94;
+      ctx.fillStyle=PAL.surface;
+      ctx.fillRect(cx-w/2-3, cy-7, w+6, 14);
+      ctx.strokeStyle=PAL.line; ctx.lineWidth=.6; ctx.strokeRect(cx-w/2-3, cy-7, w+6, 14);
+      ctx.fillStyle = e.tag==="gap"?PAL.gap:PAL.ink2;
+      ctx.fillText(txt, cx, cy);
+    });
+    ctx.restore();
+  }
+
+  // узлы
+  nodes.forEach(function(n){
+    if(!n.vis) return;
+    const dim = sel && !near[n.id];
+    const hit = matches(n);
+    ctx.save();
+    ctx.globalAlpha = dim ? .13 : 1;
+    shape(n, n.x, n.y, n.r);
+    ctx.fillStyle = PAL[n.layer];
+    ctx.fill();
+    if(hit){ ctx.lineWidth=3/Math.max(1,view.k*.8); ctx.strokeStyle=PAL.ink; ctx.stroke(); }
+    else if(n===sel){ ctx.lineWidth=2.5/Math.max(1,view.k*.8); ctx.strokeStyle=PAL.ink; ctx.stroke(); }
+    else if(n===state.hover){ ctx.lineWidth=2/Math.max(1,view.k*.8); ctx.strokeStyle=PAL.ink2; ctx.stroke(); }
+    ctx.restore();
+  });
+
+  // подписи узлов
+  ctx.save();
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  nodes.forEach(function(n){
+    if(!n.vis) return;
+    const dim = sel && !near[n.id];
+    const big = n.deg>=7;
+    const show = n===sel || n===state.hover || matches(n) || (view.k>1.15) || (view.k>0.72 && big) || (sel && near[n.id]);
+    if(!show) return;
+    ctx.globalAlpha = dim?.12:1;
+    ctx.font = (n===sel||matches(n)?"600 ":"500 ") + (big?11.5:10.5) + "px 'Golos Text', sans-serif";
+    let t=n.label; if(t.length>26) t=t.slice(0,25)+"…";
+    const w=ctx.measureText(t).width;
+    ctx.fillStyle=PAL.canvas; ctx.globalAlpha=dim?.1:.72;
+    ctx.fillRect(n.x-w/2-2, n.y+n.r+2, w+4, 13);
+    ctx.globalAlpha=dim?.12:1;
+    ctx.fillStyle=PAL.ink;
+    ctx.fillText(t, n.x, n.y+n.r+3);
+  });
+  ctx.restore();
+  ctx.restore();
+}
+
+let raf=null, touched=false;
+function loop(){
+  if(raf) return;
+  const step=function(){
+    raf=null;
+    const alive = tick();
+    draw();
+    if(alive) raf=requestAnimationFrame(step);
+    else if(!touched) fit();
+  };
+  raf=requestAnimationFrame(step);
+}
+
+/* =========================================================================
+   ВЗАИМОДЕЙСТВИЕ
+   ========================================================================= */
+function toWorld(px,py){ return {x:(px-view.x)/view.k, y:(py-view.y)/view.k}; }
+function pick(px,py){
+  const p=toWorld(px,py);
+  let best=null, bd=1e9;
+  nodes.forEach(function(n){
+    if(!n.vis) return;
+    const dx=n.x-p.x, dy=n.y-p.y, d=dx*dx+dy*dy;
+    const rr=(n.r+7)*(n.r+7);
+    if(d<rr && d<bd){ bd=d; best=n; }
+  });
+  return best;
+}
+
+let dragging=null, panning=false, last={x:0,y:0}, moved=false;
+cv.addEventListener("pointerdown", function(ev){
+  touched=true;
+  cv.setPointerCapture(ev.pointerId);
+  const r=cv.getBoundingClientRect();
+  const px=ev.clientX-r.left, py=ev.clientY-r.top;
+  const n=pick(px,py);
+  moved=false; last={x:px,y:py};
+  if(n){ dragging=n; n.fixed=true; } else { panning=true; cv.classList.add("drag"); }
+});
+cv.addEventListener("pointermove", function(ev){
+  const r=cv.getBoundingClientRect();
+  const px=ev.clientX-r.left, py=ev.clientY-r.top;
+  if(Math.abs(px-last.x)+Math.abs(py-last.y)>3) moved=true;
+  if(dragging){
+    const p=toWorld(px,py);
+    dragging.x=p.x; dragging.y=p.y; dragging.vx=0; dragging.vy=0;
+    reheat(.24); hideTip(); return;
+  }
+  if(panning){
+    view.x += px-last.x; view.y += py-last.y; last={x:px,y:py}; draw(); return;
+  }
+  const n=pick(px,py);
+  if(n!==state.hover){ state.hover=n; draw(); }
+  if(n) showTip(n, px, py); else hideTip();
+});
+function endPointer(){
+  if(dragging){ dragging.fixed=false; dragging=null; }
+  panning=false; cv.classList.remove("drag");
+}
+cv.addEventListener("pointerup", function(ev){
+  const r=cv.getBoundingClientRect();
+  const n=pick(ev.clientX-r.left, ev.clientY-r.top);
+  if(!moved){ if(n) select(n); else closeInspector(); }
+  endPointer();
+});
+cv.addEventListener("pointercancel", endPointer);
+cv.addEventListener("pointerleave", function(){ hideTip(); state.hover=null; draw(); });
+cv.addEventListener("wheel", function(ev){
+  ev.preventDefault(); touched=true;
+  const r=cv.getBoundingClientRect();
+  const px=ev.clientX-r.left, py=ev.clientY-r.top;
+  const before=toWorld(px,py);
+  const k=Math.exp(-ev.deltaY*0.0016);
+  view.k=Math.max(0.22, Math.min(4.2, view.k*k));
+  const after=toWorld(px,py);
+  view.x += (after.x-before.x)*view.k;
+  view.y += (after.y-before.y)*view.k;
+  draw();
+}, {passive:false});
+
+const tip=document.getElementById("tip");
+function showTip(n,px,py){
+  tip.innerHTML = '<span class="k">'+esc(LAYER_LABEL[n.layer])+' · '+esc(KIND_LABEL[n.kind]||n.kind)+'</span>'+
+                  '<b>'+esc(n.label)+'</b>'+
+                  '<span style="color:var(--ink3)">'+n.deg+' связ. · '+esc(n.group)+'</span>';
+  tip.style.display="block";
+  const w=tip.offsetWidth, h=tip.offsetHeight;
+  tip.style.left = Math.min(W-w-8, px+14)+"px";
+  tip.style.top = Math.max(6, Math.min(H-h-8, py-h-12))+"px";
+}
+function hideTip(){ tip.style.display="none"; }
+
+function focusNode(n){
+  touched = true;
+  view.k = Math.max(view.k, 1.1);
+  view.x = W/2 - n.x*view.k;
+  view.y = H/2 - n.y*view.k;
+  draw();
+}
+
+/* ---------- инспектор ---------- */
+const insp=document.getElementById("insp");
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+function select(n){
+  state.selected = n;
+  insp.classList.add("on");
+  document.getElementById("insp-tags").innerHTML =
+    '<span class="tag '+n.layer+'">'+esc(LAYER_LABEL[n.layer])+'</span> '+
+    '<span class="tag" style="color:var(--ink3)">'+esc(KIND_LABEL[n.kind]||n.kind)+'</span>';
+  document.getElementById("insp-title").textContent = n.label;
+  document.getElementById("insp-src").textContent = n.src;
+
+  const body=document.getElementById("insp-body");
+  body.innerHTML="";
+  const d=document.createElement("p"); d.className="desc"; d.textContent=n.desc; body.appendChild(d);
+  if(n.facts){
+    const f=document.createElement("div"); f.className="figures";
+    f.innerHTML='<h3>Числа</h3><p>'+esc(n.facts)+'</p>';
+    body.appendChild(f);
+  }
+
+  const out = adj[n.id].filter(function(e){ return e.vis && e.s.id===n.id; });
+  const inc = adj[n.id].filter(function(e){ return e.vis && e.t.id===n.id; });
+  const gaps = adj[n.id].filter(function(e){ return e.tag==="gap"; });
+  if(gaps.length){
+    const w=document.createElement("div"); w.className="note";
+    w.innerHTML='<b>'+gaps.length+' разрыв'+(gaps.length>1?'а/ов':'')+'</b> на этом узле — смотри вкладку «Разрывы».';
+    body.appendChild(w);
+  }
+  body.appendChild(edgeGroup("Влияет на", out, "t"));
+  body.appendChild(edgeGroup("Зависит от", inc, "s"));
+  draw();
+}
+function edgeGroup(title, list, side){
+  const wrap=document.createElement("div"); wrap.className="edgegroup";
+  const h=document.createElement("h3"); h.textContent=title+" · "+list.length; wrap.appendChild(h);
+  if(!list.length){
+    const p=document.createElement("div"); p.className="desc"; p.style.fontSize="12px";
+    p.textContent="— ничего в текущих фильтрах"; wrap.appendChild(p); return wrap;
+  }
+  list.slice().sort(function(a,b){ return a.tag.localeCompare(b.tag); }).forEach(function(e){
+    const other = side==="t" ? e.t : e.s;
+    const b=document.createElement("button");
+    b.className="edge l-"+(e.tag==="gap"?"gap":other.layer);
+    b.innerHTML = '<span class="arrow">'+(side==="t"?"→":"←")+'</span>'+
+                  '<span class="who">'+esc(other.label)+' <span class="tag '+(e.tag==="gap"?"gap":other.layer)+'">'+TAG_LABEL[e.tag]+'</span></span>'+
+                  '<span class="rel">'+esc(e.label)+'</span>';
+    b.addEventListener("click", function(){ select(other); focusNode(other); });
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+function closeInspector(){ state.selected=null; insp.classList.remove("on"); draw(); }
+document.getElementById("insp-close").addEventListener("click", closeInspector);
+document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeInspector(); });
+
+/* ---------- кнопки сцены ---------- */
+document.getElementById("fit").addEventListener("click", fit);
+document.getElementById("reheat").addEventListener("click", function(){ touched=false; seed(); reheat(1); });
+const gapsBtn=document.getElementById("only-gaps");
+gapsBtn.addEventListener("click", function(){
+  state.onlyGaps=!state.onlyGaps;
+  gapsBtn.textContent = state.onlyGaps ? "Показать всё" : "Только разрывы";
+  applyFilters(); reheat(.8);
+});
+function fit(){
+  const vis=nodes.filter(function(n){return n.vis;});
+  if(!vis.length) return;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  vis.forEach(function(n){
+    minx=Math.min(minx,n.x-n.r); maxx=Math.max(maxx,n.x+n.r);
+    miny=Math.min(miny,n.y-n.r); maxy=Math.max(maxy,n.y+n.r);
+  });
+  const pad=54;
+  const k=Math.min((W-pad*2)/Math.max(1,maxx-minx), (H-pad*2)/Math.max(1,maxy-miny));
+  view.k=Math.max(0.22,Math.min(2.4,k));
+  view.x=W/2-((minx+maxx)/2)*view.k;
+  view.y=H/2-((miny+maxy)/2)*view.k;
+  draw();
+}
+
+/* =========================================================================
+   ТАБЛИЦА СВЯЗЕЙ
+   ========================================================================= */
+(function buildTable(){
+  const tb=document.querySelector("#edgetable tbody");
+  const frag=document.createDocumentFragment();
+  edges.slice().sort(function(a,b){
+    return a.s.layer.localeCompare(b.s.layer) || a.s.label.localeCompare(b.s.label);
+  }).forEach(function(e){
+    const tr=document.createElement("tr");
+    tr.innerHTML =
+      '<td><span class="tag '+e.s.layer+'">'+esc(LAYER_LABEL[e.s.layer])+'</span> '+esc(e.s.label)+'</td>'+
+      '<td class="rel">'+esc(e.label)+'</td>'+
+      '<td>'+esc(e.t.label)+'</td>'+
+      '<td><span class="tag '+(e.tag==="gap"?"gap":(e.tag==="doc"?"gdd":(e.tag==="code"?"code":"base")))+'">'+TAG_LABEL[e.tag]+'</span></td>';
+    tr.dataset.hay=(e.s.label+" "+e.label+" "+e.t.label+" "+TAG_LABEL[e.tag]).toLowerCase();
+    frag.appendChild(tr);
+  });
+  tb.appendChild(frag);
+  document.getElementById("tq").addEventListener("input", function(ev){
+    const q=ev.target.value.trim().toLowerCase();
+    tb.querySelectorAll("tr").forEach(function(tr){
+      tr.style.display = !q || tr.dataset.hay.indexOf(q)>=0 ? "" : "none";
+    });
+  });
+})();
+
+/* =========================================================================
+   РАЗРЫВЫ И ПРОГОН
+   ========================================================================= */
+const CATS = {
+  "Нет логики":   "Механика описана в GDD, кода под неё нет вовсе.",
+  "Дизайн ↔ код": "Код есть, но он противоречит тому, что записано в GDD.",
+  "Док ↔ док":    "Два документа проекта утверждают разное.",
+  "Мёртвый код":  "Объявлено в коде, но ничем не используется.",
+  "Числа в доках":"Документация называет числа, которых код не даёт.",
+  "Баланс":       "Код работает как написан, но числа дают неверный игровой эффект."
+};
+
+(function buildGaps(){
+  const grid=document.getElementById("gapgrid");
+  const SEV={high:["Ломает связку","sev-high"],mid:["Расходится","sev-mid"],low:["Хвост","sev-low"]};
+  const counts={};
+  GAPS.forEach(function(x){ counts[x[4]||"—"]=(counts[x[4]||"—"]||0)+1; });
+
+  const bar=document.getElementById("gapcats");
+  const active=new Set(Object.keys(CATS));
+  Object.keys(CATS).forEach(function(cat){
+    const b=document.createElement("button");
+    b.className="chip"; b.setAttribute("aria-pressed","true");
+    b.title=CATS[cat];
+    b.innerHTML=esc(cat)+' <b>'+(counts[cat]||0)+'</b>';
+    b.addEventListener("click", function(){
+      if(active.has(cat)) active.delete(cat); else active.add(cat);
+      b.setAttribute("aria-pressed", String(active.has(cat)));
+      render();
+    });
+    bar.appendChild(b);
+  });
+
+  function render(){
+    grid.innerHTML="";
+    const shown=GAPS.filter(function(x){ return active.has(x[4]); });
+    shown.forEach(function(x){
+      const c=document.createElement("article");
+      c.className="gapcard "+SEV[x[3]][1];
+      c.innerHTML='<div class="gaphead"><span class="tag gap sevtag">'+SEV[x[3]][0]+'</span>'+
+        '<span class="cat" title="'+esc(CATS[x[4]]||"")+'">'+esc(x[4]||"—")+'</span></div>'+
+        '<h3>'+esc(x[0])+'</h3>'+
+        '<div class="where mono">'+esc(x[1])+'</div>'+
+        '<p>'+esc(x[2])+'</p>';
+      grid.appendChild(c);
+    });
+    document.getElementById("gapshown").textContent =
+      shown.length===GAPS.length ? "" : "Показано "+shown.length+" из "+GAPS.length+".";
+  }
+  render();
+})();
+(function buildRun(){
+  document.getElementById("runnote").textContent = RUN_NOTE;
+  const tb=document.querySelector("#runtable tbody");
+  RUN.forEach(function(r){
+    const tr=document.createElement("tr");
+    tr.innerHTML='<td>'+esc(r[0])+'</td><td>'+esc(r[1])+'</td><td class="mono" style="font-size:11.5px">'+esc(r[2])+'</td>'+
+      '<td class="num"><b>'+esc(r[3])+'</b></td><td class="num">'+esc(r[4])+'</td>';
+    tb.appendChild(tr);
+  });
+})();
+
+/* =========================================================================
+   СТАРТ
+   ========================================================================= */
+window.addEventListener("resize", resize);
+if(window.ResizeObserver){
+  new ResizeObserver(function(){ resize(); if(!touched) fit(); })
+    .observe(document.getElementById("stage"));
+}
+resize();
+seed();
+applyFilters();
+reheat(1);
+setTimeout(fit, 900);
+</script>
+</body>
+</html>

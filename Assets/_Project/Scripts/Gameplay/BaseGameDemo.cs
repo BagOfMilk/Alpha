@@ -35,7 +35,9 @@ namespace Game.Gameplay
         [ContextMenu("Run Simulation")]
         public void RunSimulation()
         {
-            _base = BuildBase(out var assignments);
+            // Ассет с числами баланса, если он положен в инспектор; иначе дефолты из кода.
+            var balance = balanceAsset != null ? balanceAsset.ToConfig() : new BalanceConfig();
+            _base = BuildBase(balance, out var assignments);
 
             var sb = new StringBuilder();
             sb.AppendLine("=== СТАРТОВАЯ РАССТАНОВКА ===");
@@ -56,10 +58,20 @@ namespace Game.Gameplay
             Debug.Log(FormatWallet(_base.Resources));
         }
 
-        /// <summary>Собирает базу из дефолтного контента и делает разумную расстановку.</summary>
+        /// <summary>Собирает базу из дефолтного контента на дефолтных числах баланса.</summary>
         public static BaseState BuildBase(out System.Collections.Generic.List<(string, string)> assignments)
         {
-            var balance = new BalanceConfig();
+            return BuildBase(new BalanceConfig(), out assignments);
+        }
+
+        /// <summary>
+        /// Собирает базу из дефолтного контента на переданных числах баланса и делает
+        /// разумную расстановку. Числа приходят снаружи, чтобы их можно было крутить
+        /// ассетом <see cref="BalanceConfigAsset"/>, не трогая код.
+        /// </summary>
+        public static BaseState BuildBase(BalanceConfig balance, out System.Collections.Generic.List<(string, string)> assignments)
+        {
+            if (balance == null) balance = new BalanceConfig();
             var roster = new Roster();
             var ledger = new ResourceLedger();
             var state = new BaseState(roster, ledger, balance);

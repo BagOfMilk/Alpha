@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/tools/map/hook.mjs\"",
+            "timeout": 60,
+            "statusMessage": "Пересобираю карту взаимодействий"
+          }
+        ]
+      }
+    ]
+  }
+}
