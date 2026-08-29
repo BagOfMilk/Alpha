@@ -34,6 +34,11 @@ namespace Game.Gameplay
         [Header("Содержание")]
         public int foodUpkeepPerCompanion = 1;
 
+        [Header("Городской слой (Поправка №3)")]
+        [Tooltip("Необязательно. Если пусто — берутся значения по умолчанию из кода.")]
+        public TensionBalanceAsset tension;
+        public SignalBalanceAsset signals;
+
         /// <summary>Преобразует ассет в чистый конфиг для игровой логики.</summary>
         public BalanceConfig ToConfig()
         {
@@ -49,7 +54,10 @@ namespace Game.Gameplay
                 GlobalProductionMultiplier = globalProductionMultiplier,
                 InjuredProductionMultiplier = injuredProductionMultiplier,
                 BaseHealingPerCycle = baseHealingPerCycle,
-                FoodUpkeepPerCompanion = foodUpkeepPerCompanion
+                FoodUpkeepPerCompanion = foodUpkeepPerCompanion,
+
+                Tension = tension != null ? tension.ToConfig() : new Game.Core.Balance.TensionBalance(),
+                Signals = signals != null ? signals.ToConfig() : new Game.Core.Balance.SignalBalance()
             };
         }
     }

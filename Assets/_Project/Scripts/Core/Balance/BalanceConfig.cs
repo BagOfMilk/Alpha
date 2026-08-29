@@ -47,5 +47,15 @@ namespace Game.Core.Balance
         // ---- Содержание / прокорм ----
         // Сколько еды потребляет один член поселения за цикл.
         public int FoodUpkeepPerCompanion = 1;
+
+        // ---- Городской слой (Поправка №3) ----
+        // Секции вынесены в отдельные классы: у каждой свой SO-ассет,
+        // чтобы дизайнер правил их независимо и в Play-режиме (US-18.3).
+
+        /// <summary>Скрытая шкала «Напряжение»: пороги полос, тик, белый список драйверов.</summary>
+        public TensionBalance Tension = new TensionBalance();
+
+        /// <summary>Слой сигналов: бюджет внимания и правило «нет немого перехода».</summary>
+        public SignalBalance Signals = new SignalBalance();
     }
 }
