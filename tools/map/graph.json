@@ -1,8 +1,8 @@
 {
  "designCheckedAgainst": {
-  "docs/GDD.md": "2b407808",
-  "docs/DESIGN.md": "96dd1808",
-  "docs/BALANCE.md": "e4b7f2ef"
+  "docs/GDD.md": "701cc75b",
+  "docs/DESIGN.md": "b326bcf5",
+  "docs/BALANCE.md": "d08835cc"
  },
  "bind": {
   "sections": {
@@ -1326,6 +1326,204 @@
    "Э18 · Архитектура",
    "US-18.4",
    "Дата-управляемый UI, чтобы плотные экраны оставались поддерживаемыми."
+  ],
+  [
+   "c.TensionState",
+   "TensionState",
+   "code",
+   "class",
+   "Городской слой",
+   "Core/Pressure/TensionState.cs",
+   "Скрытая шкала «Напряжение». Value объявлен internal: сборка Game.Gameplay физически не может его прочитать, поэтому дашборд метрик нельзя собрать даже по ошибке. Наружу уходит только полоса."
+  ],
+  [
+   "c.TensionBand",
+   "TensionBand",
+   "code",
+   "enum",
+   "Городской слой",
+   "Core/Pressure/TensionBand.cs",
+   "Полосы Напряжения — единственное, что шкала показывает наружу."
+  ],
+  [
+   "c.TensionDriver",
+   "TensionDriver",
+   "code",
+   "enum",
+   "Городской слой",
+   "Core/Pressure/TensionDriver.cs",
+   "Закрытый перечень источников Напряжения: новые системы модулируют существующие драйверы, но своих не добавляют."
+  ],
+  [
+   "c.TensionDrivers",
+   "TensionDrivers",
+   "code",
+   "static",
+   "Городской слой",
+   "Core/Pressure/TensionDrivers.cs",
+   "Публичный вход драйверов. Асимметрия намеренная: писать в шкалу можно снаружи, читать число — нельзя. У каждого драйвера именованный метод, «просто прибавить очков» технически невозможно."
+  ],
+  [
+   "c.TensionChange",
+   "TensionChange",
+   "code",
+   "struct",
+   "Городской слой",
+   "Core/Pressure/TensionChange.cs",
+   "Одна запись дневного журнала изменений шкалы."
+  ],
+  [
+   "c.SignalComposer",
+   "SignalComposer",
+   "code",
+   "static",
+   "Городской слой",
+   "Core/Signals/SignalComposer.cs",
+   "Собирает наблюдаемые сигналы из состояния города: игрок читает обстановку репликами и видом, а не числом."
+  ],
+  [
+   "c.SignalDigest",
+   "SignalDigest",
+   "code",
+   "class",
+   "Городской слой",
+   "Core/Signals/SignalDigest.cs",
+   "Дневная сводка сигналов для слоя подачи."
+  ],
+  [
+   "c.SignalChannel",
+   "SignalChannel",
+   "code",
+   "enum",
+   "Городской слой",
+   "Core/Signals/SignalChannel.cs",
+   "Каналы подачи сигнала и уровни срочности."
+  ],
+  [
+   "c.SignalRequest",
+   "SignalRequest",
+   "code",
+   "struct",
+   "Городской слой",
+   "Core/Signals/SignalRequest.cs",
+   "Заявка на сигнал: ядро выдаёт тему и теги, реплики живут в таблицах — писателю не нужен программист."
+  ],
+  [
+   "c.MoodboardState",
+   "MoodboardState",
+   "code",
+   "struct",
+   "Городской слой",
+   "Core/Signals/MoodboardState.cs",
+   "Визуальное состояние города: процветание или упадок читаются глазами."
+  ],
+  [
+   "c.DayProcessor",
+   "DayProcessor",
+   "code",
+   "class",
+   "Городской слой",
+   "Core/Loop/DayProcessor.cs",
+   "Конвейер дня — главный луп проекта. Прогоняет шаги в фиксированном порядке."
+  ],
+  [
+   "c.DayContext",
+   "DayContext",
+   "code",
+   "class",
+   "Городской слой",
+   "Core/Loop/DayContext.cs",
+   "Состояние, которое шаги дня читают и меняют."
+  ],
+  [
+   "c.DayReport",
+   "DayReport",
+   "code",
+   "class",
+   "Городской слой",
+   "Core/Loop/DayReport.cs",
+   "Итог дня. Числовые поля internal — Gameplay их не видит."
+  ],
+  [
+   "c.DayStepOrder",
+   "DayStepOrder",
+   "code",
+   "static",
+   "Городской слой",
+   "Core/Loop/DayStepOrder.cs",
+   "Единственное место, где задан порядок шагов дня."
+  ],
+  [
+   "c.SignalStep",
+   "SignalStep",
+   "code",
+   "class",
+   "Городской слой",
+   "Core/Loop/SignalStep.cs",
+   "Шаг дня: превращает состояние в сигналы."
+  ],
+  [
+   "c.TensionTickStep",
+   "TensionTickStep",
+   "code",
+   "class",
+   "Городской слой",
+   "Core/Loop/TensionTickStep.cs",
+   "Шаг дня: фоновый тик Напряжения."
+  ],
+  [
+   "c.TensionBalance",
+   "TensionBalance",
+   "code",
+   "class",
+   "Balance",
+   "Core/Balance/TensionBalance.cs",
+   "Числа Напряжения: пороги полос, веса драйверов, темп фонового тика."
+  ],
+  [
+   "c.SignalBalance",
+   "SignalBalance",
+   "code",
+   "class",
+   "Balance",
+   "Core/Balance/SignalBalance.cs",
+   "Числа слоя сигналов."
+  ],
+  [
+   "c.tTension",
+   "TensionStateTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/TensionStateTests.cs",
+   "Полосы, драйверы, детерминизм шкалы."
+  ],
+  [
+   "c.tSignal",
+   "SignalComposerTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/SignalComposerTests.cs",
+   "Сборка сигналов из состояния города."
+  ],
+  [
+   "c.tDay",
+   "DayProcessorTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/DayProcessorTests.cs",
+   "Порядок шагов дня и содержимое отчёта."
+  ],
+  [
+   "c.tArch",
+   "ArchitectureGuardTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/ArchitectureGuardTests.cs",
+   "Заборы архитектуры: грепает исходники и падает, если нарушены инварианты — например, если в ядре завёлся System.Random."
   ]
  ],
  "edges": [
@@ -3368,6 +3566,204 @@
    "c.BaseGameDemo",
    "вместо UI — вывод в консоль",
    "plan"
+  ],
+  [
+   "c.TensionState",
+   "c.TensionBand",
+   "полоса — единственное, что уходит наружу",
+   "code"
+  ],
+  [
+   "c.TensionState",
+   "c.TensionChange",
+   "дневной журнал изменений",
+   "code"
+  ],
+  [
+   "c.TensionState",
+   "c.TensionBalance",
+   "пороги полос и темп тика",
+   "code"
+  ],
+  [
+   "c.TensionDrivers",
+   "c.TensionState",
+   "единственный публичный вход в шкалу",
+   "code"
+  ],
+  [
+   "c.TensionDrivers",
+   "c.TensionDriver",
+   "именованный метод на каждый драйвер",
+   "code"
+  ],
+  [
+   "c.SignalComposer",
+   "c.SignalDigest",
+   "возвращает дневную сводку",
+   "code"
+  ],
+  [
+   "c.SignalComposer",
+   "c.SignalRequest",
+   "заявка на сигнал: тема и теги",
+   "code"
+  ],
+  [
+   "c.SignalComposer",
+   "c.SignalChannel",
+   "канал и срочность",
+   "code"
+  ],
+  [
+   "c.SignalComposer",
+   "c.MoodboardState",
+   "визуальное состояние города",
+   "code"
+  ],
+  [
+   "c.SignalComposer",
+   "c.TensionBand",
+   "читает полосу, а не число",
+   "code"
+  ],
+  [
+   "c.SignalComposer",
+   "c.SignalBalance",
+   "числа слоя сигналов",
+   "code"
+  ],
+  [
+   "c.DayProcessor",
+   "c.DayStepOrder",
+   "порядок шагов задан в одном месте",
+   "code"
+  ],
+  [
+   "c.DayProcessor",
+   "c.DayContext",
+   "прогоняет контекст через шаги",
+   "code"
+  ],
+  [
+   "c.DayProcessor",
+   "c.DayReport",
+   "возвращает итог дня",
+   "code"
+  ],
+  [
+   "c.SignalStep",
+   "c.SignalComposer",
+   "шаг дня зовёт сборщик сигналов",
+   "code"
+  ],
+  [
+   "c.TensionTickStep",
+   "c.DayContext",
+   "двигает шкалу через контекст дня",
+   "code"
+  ],
+  [
+   "c.DayProcessor",
+   "c.SignalStep",
+   "шаг конвейера",
+   "code"
+  ],
+  [
+   "c.DayProcessor",
+   "c.TensionTickStep",
+   "шаг конвейера",
+   "code"
+  ],
+  [
+   "c.tTension",
+   "c.TensionState",
+   "полосы, драйверы, детерминизм",
+   "code"
+  ],
+  [
+   "c.tSignal",
+   "c.SignalComposer",
+   "сборка сигналов",
+   "code"
+  ],
+  [
+   "c.tDay",
+   "c.DayProcessor",
+   "порядок шагов и отчёт",
+   "code"
+  ],
+  [
+   "g.tension",
+   "c.TensionState",
+   "реализовано: скрытая шкала с полосами",
+   "impl"
+  ],
+  [
+   "g.tension",
+   "c.TensionDrivers",
+   "закрытый список драйверов",
+   "impl"
+  ],
+  [
+   "g.hiddenscales",
+   "c.SignalComposer",
+   "реализовано: число не показывается, наружу идут сигналы",
+   "impl"
+  ],
+  [
+   "g.telegraph",
+   "c.SignalComposer",
+   "реализовано: нарастающие сигналы вместо цифры",
+   "impl"
+  ],
+  [
+   "g.moodboard",
+   "c.MoodboardState",
+   "реализовано",
+   "impl"
+  ],
+  [
+   "g.time",
+   "c.DayProcessor",
+   "реализовано: конвейер дня — главный луп",
+   "impl"
+  ],
+  [
+   "g.citytier",
+   "c.TensionDrivers",
+   "фоновый тик от тира города — драйвер шкалы",
+   "impl"
+  ],
+  [
+   "g.questsources",
+   "c.TensionDrivers",
+   "выбор в квесте двигает Напряжение",
+   "impl"
+  ],
+  [
+   "g.balanceso",
+   "c.TensionBalance",
+   "числа шкалы вынесены в конфиг",
+   "impl"
+  ],
+  [
+   "c.TensionTickStep",
+   "c.TensionDriver",
+   "фоновый тик от тира — единственный пассивный источник давления",
+   "code"
+  ],
+  [
+   "c.DayContext",
+   "c.TensionState",
+   "контекст дня держит шкалу",
+   "code"
+  ],
+  [
+   "c.DayContext",
+   "c.SignalDigest",
+   "сводка сигналов за день (internal)",
+   "code"
   ]
  ],
  "gaps": [
@@ -3400,9 +3796,9 @@
    "Нет логики"
   ],
   [
-   "Скрытых шкал нет вообще",
-   "docs/GDD.md Э11 · US-9.2 ↔ Assets/_Project/Scripts/Core/",
-   "Напряжение, Готовность и лояльность — три несущих конструкции середины и финала: GDD отводит им целый эпик и вешает на них частоту инцидентов, кризис-события, сложность финальной битвы и уход напарников. В коде из «состояний мира» есть ровно 1 булев флаг FoodShortage. Реализовано 0 шкал из 3.",
+   "Из трёх скрытых шкал реализована одна",
+   "Core/Pressure/ ↔ docs/GDD.md Э11 · US-9.2",
+   "«Напряжение» написано целиком: 5 полос, закрытый список драйверов, Value под internal, смена полосы обязана породить сигнал. Осталось две шкалы из трёх: «Готовность» отложена самим GDD (Приложение А: «можно отложить»), лояльность напарников не начата. Это не забытый разрыв, а объявленная очередь.",
    "mid",
    "Нет логики"
   ],

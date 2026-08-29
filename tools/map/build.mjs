@@ -567,12 +567,20 @@ for (const s of lockedSlots) {
     "low", "Нет логики", ["b.m.unlock", idSlot(s.id), "переключать Unlocked некому"]);
 }
 
-// события без подписчиков
+// События без потребителя в игровом коде.
+// Границы слова обязательны: без них подписка на BandChanged закрывала карточку
+// про Changed, потому что одно имя — подстрока другого.
 for (const p of CORE_FILES) {
   for (const m of CS[p].matchAll(/public event\s+[\w<>,\s]+\s+(\w+)\s*;/g)) {
-    if (new RegExp(`${m[1]}\\s*\\+=`).test(allCode)) continue;
-    addGap(`${path.basename(p, ".cs")}.${m[1]} никто не слушает`, `${p.replace("Assets/_Project/Scripts/", "")}:${lineOf(CS[p], m.index)}`,
-      `Подписок (+=) во всех ${CS_FILES.length} файлах проекта 0, вызовов Invoke ${(CS[p].match(new RegExp(`${m[1]}\\?\\.Invoke`, "g")) || []).length}. Событие стреляет в пустоту — оживёт, когда появится UI.`,
+    const sub = new RegExp(`\\b${m[1]}\\s*\\+=`);
+    const inGame = CS_FILES.filter((f) => !f.includes("/Tests/") && sub.test(CS[f]));
+    if (inGame.length) continue;
+    const inTests = CS_FILES.filter((f) => f.includes("/Tests/") && sub.test(CS[f]));
+    addGap(`${path.basename(p, ".cs")}.${m[1]} никто не слушает`,
+      `${p.replace("Assets/_Project/Scripts/", "")}:${lineOf(CS[p], m.index)}`,
+      `Подписок в игровом коде 0` +
+      (inTests.length ? ` (${plural(inTests.length, "подписка", "подписки", "подписок")} есть только в тестах)` : "") +
+      `, вызовов Invoke ${(CS[p].match(new RegExp(`\\b${m[1]}\\?\\.Invoke`, "g")) || []).length}. Событие стреляет в пустоту.`,
       "low", "Мёртвый код");
   }
 }
