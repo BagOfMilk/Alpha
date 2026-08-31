@@ -32,14 +32,16 @@ dotnet test tools/Alpha.Headless.sln
 | `Game.Core.Headless/Game.Core.csproj` | Собирает ядро под `netstandard2.0`. Файлы **не копируются** — подключаются ссылкой на `Assets/_Project/Scripts/Core/**`, поэтому headless и редактор не могут разойтись |
 | `Game.Tests.Headless/Game.Tests.EditMode.csproj` | Те же тесты, что видит Unity Test Runner. Имя сборки задано явно — от него зависит `InternalsVisibleTo` в ядре |
 | `Game.Tests.Headless/UnityShim.cs` | Заглушка `UnityEngine.Application.dataPath` для архитектурных тестов, которые грепают исходники. Лежит **вне** `Assets/`, поэтому Unity её не видит |
+| `Game.Gameplay.Lint/` | Компилирует Unity-обёртки с заглушкой UnityEngine. Ловит обычные ошибки C# (опечатки, забытые using, обращение к `internal`-членам ядра) без запуска редактора |
 | `Alpha.Headless.sln` | Чтобы `dotnet test` работал одной командой |
 
 ## Границы
 
 Покрывается **только `Game.Core`** — это вся игровая логика (37 файлов из 42).
 
-**НЕ покрывается `Game.Gameplay`**: там `MonoBehaviour` и `ScriptableObject`,
-их проверяет только Unity. Сцены, префабы, импорт ассетов и сборка билда —
+**`Game.Gameplay` покрыт только линтом сборки**: заглушка UnityEngine проверяет,
+что код компилируется, но НЕ проверяет поведение движка — сериализацию, инспектор,
+жизненный цикл MonoBehaviour. Сцены, префабы, импорт ассетов и сборка билда —
 тоже только в редакторе.
 
 Поэтому зелёные headless-тесты означают «логика верна», но не отменяют

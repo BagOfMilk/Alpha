@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Game.Core.Balance;
+using Game.Core.Checks;
 using Game.Core.Pressure;
+using Game.Core.World;
 
 namespace Game.Core.Signals
 {
@@ -25,9 +27,96 @@ namespace Game.Core.Signals
             int tier,
             SignalBalance cfg)
         {
+            return Compose(band, dayLedger, tier, cfg, null, null, null, false);
+        }
+
+        /// <summary>
+        /// Полная композиция дня: полосы, предвестники, инциденты, доклады с постов.
+        /// </summary>
+        public static SignalDigest Compose(
+            TensionBand band,
+            IReadOnlyList<TensionChange> dayLedger,
+            int tier,
+            SignalBalance cfg,
+            IReadOnlyList<Forewarning> forewarnings,
+            IReadOnlyList<IncidentOutcome> incidents,
+            IReadOnlyList<PostReport> postReports,
+            bool isNight)
+        {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
 
             var candidates = new List<SignalRequest>();
+
+            // Предвестники: чем выше ступень, тем громче. Уровень 2 обязан
+            // назвать домен, уровень 3 — близость. Точный день — никогда.
+            if (forewarnings != null)
+            {
+                for (int i = 0; i < forewarnings.Count; i++)
+                {
+                    var f = forewarnings[i];
+                    candidates.Add(new SignalRequest(
+                        SignalChannel.Forewarning,
+                        "forewarn.level" + f.Level,
+                        UrgencyForForewarn(f.Level),
+                        subjectId: f.SourceId,
+                        isDelta: true,
+                        tags: new[] { "domain:" + f.DomainTag, "level:" + f.Level }));
+                }
+            }
+
+            // Инциденты: то, что уже произошло, игрок обязан узнать.
+            if (incidents != null)
+            {
+                for (int i = 0; i < incidents.Count; i++)
+                {
+                    var inc = incidents[i];
+                    var urgency = inc.WasCrisis
+                        ? SignalUrgency.Imminent
+                        : (inc.Band == OutcomeBand.Worst ? SignalUrgency.Alarming : SignalUrgency.Notable);
+
+                    var tags = new List<string> { "domain:" + inc.DomainTag, "band:" + inc.Band };
+                    if (inc.WasUnmanned) tags.Add("unmanned");
+                    if (inc.WasCrisis) tags.Add("crisis");
+                    if (inc.Bite.HasValue) tags.Add("bite:" + inc.Bite.Value);
+
+                    candidates.Add(new SignalRequest(
+                        SignalChannel.CompanionLine,
+                        inc.TopicId + "." + inc.Band,
+                        urgency,
+                        subjectId: inc.AffectedActorId,
+                        isDelta: true,
+                        tags: tags.ToArray()));
+                }
+            }
+
+            // Доклады с постов: читаемое состояние без панели.
+            if (postReports != null)
+            {
+                for (int i = 0; i < postReports.Count; i++)
+                {
+                    var report = postReports[i];
+                    if (report.IsSilent) continue;
+
+                    candidates.Add(new SignalRequest(
+                        SignalChannel.PostReport,
+                        "post." + report.DomainTag + "." + report.Accuracy,
+                        SignalUrgency.Notable,
+                        subjectId: report.ActorId,
+                        isDelta: false,
+                        tags: new[] { "domain:" + report.DomainTag, "accuracy:" + report.Accuracy }));
+                }
+            }
+
+            // Ночь звучит иначе: горожан не слышно, слышно город.
+            if (isNight)
+            {
+                candidates.Add(new SignalRequest(
+                    SignalChannel.Ambient,
+                    "night.ambient." + band,
+                    SignalUrgency.Ambient,
+                    isDelta: false,
+                    tags: new[] { "night", "band:" + band }));
+            }
 
             // 1. Переходы полос — самое важное, что случилось за день.
             if (dayLedger != null)
@@ -50,13 +139,17 @@ namespace Game.Core.Signals
             }
 
             // 2. Фоновая реплика по текущей полосе — «так сейчас», не «изменилось».
-            candidates.Add(new SignalRequest(
-                SignalChannel.CitizenLine,
-                "tension.ambient." + band,
-                SignalUrgency.Ambient,
-                subjectId: null,
-                isDelta: false,
-                tags: new[] { "band:" + band }));
+            //    Ночью недоступна: диалоги с горожанами закрыты (US-1.5).
+            if (!isNight)
+            {
+                candidates.Add(new SignalRequest(
+                    SignalChannel.CitizenLine,
+                    "tension.ambient." + band,
+                    SignalUrgency.Ambient,
+                    subjectId: null,
+                    isDelta: false,
+                    tags: new[] { "band:" + band }));
+            }
 
             var selected = Select(candidates, cfg);
             return new SignalDigest(selected, BuildMoodboard(band, tier));
@@ -80,6 +173,17 @@ namespace Game.Core.Signals
                 default:
                     return SignalUrgency.Imminent;
             }
+        }
+
+        /// <summary>
+        /// Громкость предвестника растёт со ступенью: «вот-вот» нельзя сообщить
+        /// шёпотом, иначе кризис покажется несправедливым.
+        /// </summary>
+        public static SignalUrgency UrgencyForForewarn(int level)
+        {
+            if (level >= 3) return SignalUrgency.Alarming;
+            if (level == 2) return SignalUrgency.Notable;
+            return SignalUrgency.Ambient;
         }
 
         private static List<SignalRequest> Select(List<SignalRequest> candidates, SignalBalance cfg)

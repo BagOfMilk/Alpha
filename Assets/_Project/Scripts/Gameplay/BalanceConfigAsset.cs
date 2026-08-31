@@ -39,6 +39,8 @@ namespace Game.Gameplay
         [Tooltip("Необязательно. Если пусто — берутся значения по умолчанию из кода.")]
         public TensionBalanceAsset tension;
         public SignalBalanceAsset signals;
+        public PulseBalanceAsset pulse;
+        public CheckBalanceAsset checks;
 
         /// <summary>Преобразует ассет в чистый конфиг для игровой логики.</summary>
         public BalanceConfig ToConfig()
@@ -59,7 +61,9 @@ namespace Game.Gameplay
                 FoodUpkeepPerCompanion = foodUpkeepPerCompanion,
 
                 Tension = tension != null ? tension.ToConfig() : new Game.Core.Balance.TensionBalance(),
-                Signals = signals != null ? signals.ToConfig() : new Game.Core.Balance.SignalBalance()
+                Signals = signals != null ? signals.ToConfig() : new Game.Core.Balance.SignalBalance(),
+                Pulse = pulse != null ? pulse.ToConfig() : new Game.Core.Balance.PulseBalance(),
+                Checks = checks != null ? checks.ToConfig() : new Game.Core.Balance.CheckBalance()
             };
         }
     }
