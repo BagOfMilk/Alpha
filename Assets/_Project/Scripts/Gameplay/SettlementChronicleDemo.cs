@@ -53,7 +53,7 @@ namespace Game.Gameplay
             // Позиции раздаём через публичный API базы: сеттер AssignedSlotId
             // намеренно internal, чтобы состояние не правили мимо правил.
             var baseState = new BaseState(roster, new ResourceLedger(), balance);
-            baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Barracks));
+            baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Fortifications));
             baseState.AddSlot(new AssignmentSlotDefinition("market", "Рынок", BaseSectionType.Settlement));
             baseState.TryAssign("guard", "watch");
             baseState.TryAssign("trader", "market");

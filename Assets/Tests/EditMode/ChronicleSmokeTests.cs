@@ -34,7 +34,7 @@ namespace Game.Tests.EditMode
             }
 
             var baseState = new BaseState(roster, new Game.Core.Economy.ResourceLedger(), cfg);
-            baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Barracks));
+            baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Fortifications));
             baseState.TryAssign("guard", "watch");
 
             var adapter = new RosterAdapter(roster, "hero");
