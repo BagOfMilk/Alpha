@@ -41,6 +41,12 @@ namespace Game.Core.Loop
         /// <summary>Позиции, дающие ежедневный доклад по своему домену.</summary>
         public IReadOnlyList<PostDomain> PostDomains { get; set; }
 
+        /// <summary>
+        /// Вчера поселению не хватило еды (Поправка №4). Порт, а не ссылка на
+        /// модуль базы: конвейер дня не должен знать про BaseState.
+        /// </summary>
+        public bool IsHungry { get; set; }
+
         /// <summary>Предвестники этой фазы — их подхватит слой сигналов.</summary>
         internal List<Forewarning> Forewarnings { get; } = new List<Forewarning>();
 

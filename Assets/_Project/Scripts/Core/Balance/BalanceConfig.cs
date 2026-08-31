@@ -48,6 +48,12 @@ namespace Game.Core.Balance
         // Сколько еды потребляет один член поселения за цикл.
         public int FoodUpkeepPerCompanion = 1;
 
+        /// <summary>Множитель выработки в день после голодного (Поправка №4).</summary>
+        public double HungryProductionMultiplier = 0.5;
+
+        /// <summary>Множитель ролевого опыта в день после голодного (Поправка №4).</summary>
+        public double HungryRoleXpMultiplier = 0.5;
+
         // ---- Городской слой (Поправка №3) ----
         // Секции вынесены в отдельные классы: у каждой свой SO-ассет,
         // чтобы дизайнер правил их независимо и в Play-режиме (US-18.3).

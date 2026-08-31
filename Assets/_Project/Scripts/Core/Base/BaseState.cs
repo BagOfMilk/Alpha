@@ -20,6 +20,13 @@ namespace Game.Core.Base
 
         public int CurrentCycle { get; private set; }
 
+        /// <summary>
+        /// Вчера не поели — сегодня работаем хуже (Поправка №4). Просадка идёт
+        /// следующим циклом, а не тем же: прокорм считается последним шагом дня,
+        /// когда выработка уже начислена.
+        /// </summary>
+        public bool WasHungryLastCycle { get; private set; }
+
         private readonly Dictionary<string, AssignmentSlot> _slotsById = new Dictionary<string, AssignmentSlot>();
         private readonly List<AssignmentSlot> _slots = new List<AssignmentSlot>();
 
@@ -137,6 +144,7 @@ namespace Game.Core.Base
 
                 var def = slot.Definition;
                 int output = ProductionCalculator.OutputPerCycle(companion, def, Balance);
+                if (WasHungryLastCycle) output = (int)Math.Round(output * Balance.HungryProductionMultiplier, MidpointRounding.ToEven);
 
                 switch (def.OutputKind)
                 {
@@ -153,6 +161,7 @@ namespace Game.Core.Base
                 }
 
                 int xp = ProductionCalculator.RoleXpPerCycle(companion, def, Balance);
+                if (WasHungryLastCycle) xp = (int)Math.Round(xp * Balance.HungryRoleXpMultiplier, MidpointRounding.ToEven);
                 var lvl = companion.GainXp(xp, Balance);
                 if (lvl.LeveledUp)
                     report.LeveledUp.Add(companion.Id);
@@ -213,12 +222,18 @@ namespace Game.Core.Base
         private void ApplyFoodUpkeep(CycleReport report)
         {
             int upkeep = Balance.FoodUpkeepPerCompanion * Roster.Count;
-            if (upkeep <= 0) return;
+            if (upkeep <= 0) { WasHungryLastCycle = false; return; }
             if (!Resources.TrySpend(ResourceType.Food, upkeep))
             {
-                // Не хватило еды — флаг для последующего штрафа к морали и т.п.
+                // Голодный день: остатки съедены подчистую, база просядет следующим
+                // циклом, а Напряжение поднимет шаг дня HungerStep (Поправка №4).
                 Resources.Add(ResourceType.Food, -Resources.Get(ResourceType.Food));
                 report.FoodShortage = true;
+                WasHungryLastCycle = true;
+            }
+            else
+            {
+                WasHungryLastCycle = false;
             }
         }
     }

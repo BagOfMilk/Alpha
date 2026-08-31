@@ -32,7 +32,8 @@ namespace Game.Core.Balance
             TensionDriver.CityTierTick,
             TensionDriver.QuestChoice,
             TensionDriver.ThreatOutcome,
-            TensionDriver.PlaystyleBlood
+            TensionDriver.PlaystyleBlood,
+            TensionDriver.Hunger
         };
 
         /// <summary>Кому позволено понижать.</summary>
@@ -56,6 +57,9 @@ namespace Game.Core.Balance
         public double FortificationDrainPerDay = -0.3;
         public int BloodDeltaPerNode = 10;
         public int BloodCapPerExpedition = 50;
+
+        /// <summary>Сколько Напряжения добавляет один голодный день (Поправка №4).</summary>
+        public int HungerDeltaPerDay = 8;
 
         /// <summary>Окно на реакцию после входа в «Излом» до кризиса.</summary>
         public int CrisisGraceDays = 3;
