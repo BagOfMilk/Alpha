@@ -154,8 +154,12 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Crisis_NeverFiresWithoutLevel3Forewarn()
+        public void Crisis_ActuallyHappens_AndIsAlwaysAnnouncedFirst()
         {
+            // Прежняя версия этого теста имела запасной выход «кризис не
+            // наступил — тоже валидный сценарий», и срабатывал именно он:
+            // кризис не наступал НИКОГДА, а тест был зелёным. Теперь
+            // отсутствие кризиса — это провал, а не оправдание.
             var cfg = Cfg();
             var roster = new Roster();
             roster.Add(Guard("hero", 3));
@@ -163,25 +167,38 @@ namespace Game.Tests.EditMode
             roster.Add(Guard("beta", 3));
 
             var p = MakeProcessor(cfg, roster, "hero");
+            p.Tier = 4;
             p.IsPatrolling = true;
 
+            int crises = 0;
             int maxLevelSeen = 0;
-            for (int day = 1; day <= 120; day++)
+
+            for (int day = 1; day <= 200; day++)
             {
-                var report = day % 2 == 0 ? p.Advance(DayPhase.Night) : p.Advance(DayPhase.Day);
-
-                foreach (var f in report.Forewarnings)
-                    if (f.SourceId == "crisis" && f.Level > maxLevelSeen) maxLevelSeen = f.Level;
-
-                if (report.Incidents.Any(i => i.WasCrisis))
+                foreach (var phase in new[] { DayPhase.Day, DayPhase.Night })
                 {
-                    Assert.AreEqual(3, maxLevelSeen,
-                        "Кризис не имеет права ударить без предвестника третьей ступени");
-                    return;
+                    var report = p.Advance(phase);
+
+                    foreach (var f in report.Forewarnings)
+                        if (f.SourceId == "crisis" && f.Level > maxLevelSeen) maxLevelSeen = f.Level;
+
+                    foreach (var incident in report.Incidents)
+                    {
+                        if (!incident.WasCrisis) continue;
+                        crises++;
+                        Assert.AreEqual(3, maxLevelSeen,
+                            "Кризис не имеет права ударить без предвестника третьей ступени");
+                        maxLevelSeen = 0;
+                    }
                 }
+
+                if (day % 5 == 0)
+                    TensionDrivers.QuestChoice(p.Tension, TensionDrivers.ChoiceWeight.Major, "q" + day, cfg);
             }
-            // Кризис мог и не наступить — это нормально, но тогда и предвестника 3 быть не должно.
-            Assert.Pass("Кризис не наступил за 120 дней — тоже валидный сценарий");
+
+            Assert.Greater(crises, 0,
+                "Кризис обязан быть достижим: недостижимый кризис — мёртвая ветка, " +
+                "а не бережный дизайн");
         }
 
         [Test]

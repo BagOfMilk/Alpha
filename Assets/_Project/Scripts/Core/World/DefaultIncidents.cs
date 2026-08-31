@@ -113,7 +113,11 @@ namespace Game.Core.World
             yield return new IncidentDefinition
             {
                 Id = "crisis_riot", TopicId = "incident.crisis_riot", DomainTag = "площадь",
-                MinBand = TensionBand.Fracture, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 100,
+                // Копить давление кризиса источник начинает с «Накала» — значит и
+                // разрешаться кризис обязан с «Накала». Иначе сработавший на
+                // Накале кризис не находил бы себе инцидента и пропадал впустую,
+                // сжигая заряд и уходя на 30 дней кулдауна.
+                MinBand = TensionBand.Heat, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 100,
                 QuietPathSkill = SkillKeys.Persuade, QuietPathThreshold = 10,
                 QuietPathApproach = ApproachForm.Persuade,
                 BloodyPathSkill = SkillKeys.Tactics, BloodyPathThreshold = 9,

@@ -22,7 +22,7 @@ namespace Game.Core.Loop
 
                 // Кризис не имеет права сработать без предвестника 3-й ступени:
                 // жёсткое последствие обязано быть объявлено (US-11.2, риск R8).
-                if (crisis && ctx.Pulse != null && ctx.Pulse.AnnouncedLevelOf(sourceId) < 3)
+                if (crisis && ctx.Pulse != null && ctx.Pulse.LevelAtLastFireOf(sourceId) < 3)
                     continue;
 
                 // Селектор детерминирован: день плюс позиция источника.

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using Game.Core.Balance;
 using Game.Core.Base;
@@ -24,6 +26,10 @@ namespace Game.Gameplay
     /// </summary>
     public sealed class SettlementChronicleDemo : MonoBehaviour
     {
+        [Tooltip("Имя пресета. Идёт префиксом в каждую запись консоли — иначе,\n" +
+                 "если включить два объекта сразу, две хроники смешаются.")]
+        public string presetName = "Поселение";
+
         [Tooltip("Необязательно. Пусто — берутся числа по умолчанию.")]
         public BalanceConfigAsset balanceAsset;
 
@@ -37,6 +43,14 @@ namespace Game.Gameplay
         [Header("Давление")]
         [Tooltip("Дни, когда игрок принимает тяжёлое решение в квесте.")]
         public int[] heavyChoiceDays = { 8, 18, 28, 38, 48, 58 };
+
+        [Header("Вывод")]
+        [Tooltip("Сколько дней в одной записи консоли. Одна запись на всю хронику\n" +
+                 "нечитаема: сотни строк без возможности фильтровать.")]
+        [Min(1)] public int daysPerLogEntry = 10;
+
+        [Tooltip("Писать полный текст в Chronicle-<пресет>.txt рядом с проектом.")]
+        public bool writeToFile = true;
 
         private void Start()
         {
@@ -82,12 +96,21 @@ namespace Game.Gameplay
             };
 
             var choices = new HashSet<int>(heavyChoiceDays ?? new int[0]);
-            var log = new StringBuilder();
-            log.AppendLine($"=== ХРОНИКА ПОСЕЛЕНИЯ: {daysToSimulate} дней ===");
 
+            // full — весь текст для файла; chunk — текущая декада для консоли.
+            var full = new StringBuilder();
+            var chunk = new StringBuilder();
+
+            string head = $"=== {presetName}: {daysToSimulate} дней, тир {tier}, " +
+                          (patrolAtNight ? "ночью патруль" : "ночью сон") + " ===";
+            full.AppendLine(head);
+            Debug.Log($"[{presetName}] {head}");
+
+            int chunkStart = 1;
+            int incidentCount = 0, crisisCount = 0;
             var lastBand = tension.Band;
 
-            for (int i = 0; i < daysToSimulate; i++)
+            for (int day = 1; day <= daysToSimulate; day++)
             {
                 foreach (var phase in new[] { DayPhase.Day, DayPhase.Night })
                 {
@@ -95,30 +118,95 @@ namespace Game.Gameplay
                     string mark = phase == DayPhase.Night ? "ночь" : "день";
 
                     foreach (var line in Describe(report))
-                        log.AppendLine($"[{mark} {report.Day / 2 + 1}] {line}");
+                        Append(full, chunk, $"[{mark} {day}] {line}");
 
                     foreach (var incident in report.Incidents)
-                        log.AppendLine($"[{mark} {report.Day / 2 + 1}] {DescribeIncident(incident, roster)}");
+                    {
+                        incidentCount++;
+                        string text = DescribeIncident(incident, roster);
+                        Append(full, chunk, $"[{mark} {day}] {text}");
+
+                        // Кризис и смерть не имеют права утонуть в общей простыне:
+                        // отдельная запись — её видно по цвету и можно отфильтровать.
+                        if (incident.WasCrisis)
+                        {
+                            crisisCount++;
+                            Debug.LogWarning($"[{presetName}] {mark} {day}: {text}");
+                        }
+                    }
                 }
 
-                if (choices.Contains(i + 1))
+                if (choices.Contains(day))
                 {
-                    TensionDrivers.QuestChoice(tension, TensionDrivers.ChoiceWeight.Major, "q" + i, balance);
-                    log.AppendLine($"[решение] тяжёлый выбор в квесте");
+                    TensionDrivers.QuestChoice(tension, TensionDrivers.ChoiceWeight.Major, "q" + day, balance);
+                    Append(full, chunk, $"[день {day}] тяжёлое решение в квесте");
                 }
 
                 if (tension.Band != lastBand)
                 {
-                    log.AppendLine($"*** город переходит в состояние «{BandName(tension.Band)}» ***");
+                    string move = $"день {day}: город переходит в состояние «{BandName(tension.Band)}»";
+                    full.AppendLine("*** " + move + " ***");
+                    chunk.AppendLine("*** " + move + " ***");
+                    Debug.Log($"[{presetName}] {move}");
                     lastBand = tension.Band;
+                }
+
+                bool lastDay = day == daysToSimulate;
+                if (day % Math.Max(1, daysPerLogEntry) == 0 || lastDay)
+                {
+                    if (chunk.Length > 0)
+                        Debug.Log($"[{presetName}] дни {chunkStart}–{day} — {BandName(tension.Band)}\n{chunk}");
+                    chunk.Length = 0;
+                    chunkStart = day + 1;
                 }
             }
 
-            log.AppendLine($"=== итог: {BandName(tension.Band)} ===");
+            var tail = new StringBuilder();
+            tail.AppendLine($"=== {presetName}: итог за {daysToSimulate} дней ===");
+            tail.AppendLine($"  состояние города: {BandName(tension.Band)}");
+            tail.AppendLine($"  происшествий: {incidentCount}, из них кризисов: {crisisCount}");
             foreach (var c in roster.All)
-                log.AppendLine($"  {c.DisplayName}: {StatusName(c)}");
+                tail.AppendLine($"  {c.DisplayName}: {StatusName(c)}");
 
-            Debug.Log(log.ToString());
+            full.Append(tail);
+            Debug.Log(tail.ToString());
+
+            if (writeToFile) SaveToFile(full.ToString());
+        }
+
+        private static void Append(StringBuilder full, StringBuilder chunk, string line)
+        {
+            full.AppendLine(line);
+            chunk.AppendLine(line);
+        }
+
+        /// <summary>
+        /// Полный текст — в файл рядом с проектом: консоль хороша, чтобы заметить,
+        /// а сравнивать два прогона удобнее в текстовом редакторе.
+        /// </summary>
+        private void SaveToFile(string text)
+        {
+            try
+            {
+                string file = Path.Combine(Application.dataPath, "..",
+                    "Chronicle-" + Sanitize(presetName) + ".txt");
+                File.WriteAllText(Path.GetFullPath(file), text);
+                Debug.Log($"[{presetName}] полная хроника: {Path.GetFullPath(file)}");
+            }
+            catch (Exception e)
+            {
+                // Не смогли записать — это не повод ронять прогон.
+                Debug.LogWarning($"[{presetName}] не удалось записать файл хроники: {e.Message}");
+            }
+        }
+
+        private static string Sanitize(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "preset";
+            var sb = new StringBuilder(name.Length);
+            foreach (var ch in name)
+                sb.Append(Array.IndexOf(Path.GetInvalidFileNameChars(), ch) >= 0 ? '_' : ch);
+            return sb.ToString();
         }
 
         private static Roster BuildRoster()

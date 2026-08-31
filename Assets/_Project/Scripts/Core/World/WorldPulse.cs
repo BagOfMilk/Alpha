@@ -106,10 +106,21 @@ namespace Game.Core.World
             return new PulseTick(fired, forewarnings);
         }
 
-        /// <summary>Ступень предвестника источника — для проверки «кризис был объявлен».</summary>
+        /// <summary>Текущая ступень предвестника источника.</summary>
         internal int AnnouncedLevelOf(string sourceId)
         {
             return _tracks.TryGetValue(sourceId, out var track) ? track.AnnouncedLevel : 0;
+        }
+
+        /// <summary>
+        /// Ступень предвестника на момент последнего срабатывания — именно её
+        /// проверяет разбор инцидента. Спрашивать текущую бессмысленно:
+        /// срабатывание её обнуляет, и проверка «кризис был объявлен» никогда
+        /// не выполнялась бы.
+        /// </summary>
+        internal int LevelAtLastFireOf(string sourceId)
+        {
+            return _tracks.TryGetValue(sourceId, out var track) ? track.LevelAtLastFire : 0;
         }
     }
 }

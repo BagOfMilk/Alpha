@@ -61,9 +61,17 @@ namespace Game.Core.World
             return !_everFired || day - LastFiredDay >= CooldownDays;
         }
 
+        /// <summary>
+        /// Ступень предвестника, на которой накопитель сработал в последний раз.
+        /// Нужна отдельным полем: Fire сбрасывает AnnouncedLevel, а разбор
+        /// инцидента идёт следующим шагом дня и обязан знать, было ли объявление.
+        /// </summary>
+        internal int LevelAtLastFire { get; private set; }
+
         internal void Fire(int day)
         {
             _everFired = true;
+            LevelAtLastFire = AnnouncedLevel;
             Charge -= Threshold;
             if (Charge < 0) Charge = 0;
             LastFiredDay = day;
