@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Линт Unity-обёрток: компилирует Game.Gameplay с заглушкой UnityEngine,
+    чтобы обычные ошибки C# ловились здесь, а не через запуск редактора.
+    Это ПРОВЕРКА СБОРКИ, а не замена Unity: поведение движка не эмулируется.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>Game.Gameplay.Lint</AssemblyName>
+    <RootNamespace>Game.Gameplay</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- Заглушка объявляет пустые атрибуты: неиспользуемые параметры — норма. -->
+    <NoWarn>$(NoWarn);CS0169;CS0649</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="UnityEngineStub.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Game.Core.Balance;
+using Game.Core.Checks;
 using Game.Core.Pressure;
+using Game.Core.Settlement;
+using Game.Core.World;
 
 namespace Game.Core.Loop
 {
@@ -29,6 +32,19 @@ namespace Game.Core.Loop
 
         public TensionState Tension => _tension;
 
+        // ---- Порты городского слоя. Необязательны: без них конвейер
+        //      работает как на Э0, что удобно для узких тестов. ----
+        public IRosterView Roster { get; set; }
+        public PopulationState Population { get; set; }
+        public WorldPulse Pulse { get; set; }
+        public IncidentTable Incidents { get; set; }
+        public IRepeatTracker Repeats { get; set; }
+        public ICasualtySink Casualties { get; set; }
+        public IReadOnlyList<PostDomain> PostDomains { get; set; }
+
+        /// <summary>Ночью: патрулировать вместо сна (Поправка №3.9).</summary>
+        public bool IsPatrolling { get; set; }
+
         public DayProcessor(TensionState tension, BalanceConfig balance, IEnumerable<IDayStep> steps)
         {
             _tension = tension ?? throw new ArgumentNullException(nameof(tension));
@@ -52,6 +68,8 @@ namespace Game.Core.Loop
             return new IDayStep[]
             {
                 new TensionTickStep(),
+                new PulseStep(),
+                new IncidentStep(),
                 new SignalStep()
             };
         }
@@ -61,15 +79,22 @@ namespace Game.Core.Loop
             CurrentDay++;
             _tension.BeginDay();
 
-            var ctx = new DayContext(CurrentDay, phase, Tier, OrderLevel, _balance, _tension);
+            var ctx = new DayContext(CurrentDay, phase, Tier, OrderLevel, _balance, _tension,
+                IsPatrolling, Roster, Population, Pulse, Incidents, Repeats, Casualties)
+            {
+                PostDomains = PostDomains
+            };
+
             for (int i = 0; i < _steps.Count; i++)
                 _steps[i].Execute(ctx);
 
             _tension.OnDayAdvanced();
 
-            // Копия журнала: отчёт не должен меняться, когда начнётся следующий день.
+            // Копии: отчёт не должен меняться, когда начнётся следующий день.
             var ledger = new List<TensionChange>(_tension.DayLedger);
-            return new DayReport(ctx.Day, ctx.Phase, ledger, ctx.Signals);
+            var incidents = new List<IncidentOutcome>(ctx.IncidentOutcomes);
+            var forewarnings = new List<Forewarning>(ctx.Forewarnings);
+            return new DayReport(ctx.Day, ctx.Phase, ledger, ctx.Signals, incidents, forewarnings);
         }
 
         /// <summary>Прокрутить N дней подряд (кнопка «ждать», US-1.3).</summary>
@@ -79,6 +104,15 @@ namespace Game.Core.Loop
             for (int i = 0; i < days; i++)
                 reports.Add(Advance(phase));
             return reports;
+        }
+
+        /// <summary>
+        /// Полные сутки: день, затем ночь. Ночь — окно угроз, поэтому её нельзя
+        /// пропустить: можно только спать (и потерять сигналы) или патрулировать.
+        /// </summary>
+        public List<DayReport> AdvanceFullDay()
+        {
+            return new List<DayReport> { Advance(DayPhase.Day), Advance(DayPhase.Night) };
         }
     }
 }

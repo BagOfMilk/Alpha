@@ -57,5 +57,11 @@ namespace Game.Core.Balance
 
         /// <summary>Слой сигналов: бюджет внимания и правило «нет немого перехода».</summary>
         public SignalBalance Signals = new SignalBalance();
+
+        /// <summary>Детерминированные проверки и полосы исхода.</summary>
+        public CheckBalance Checks = new CheckBalance();
+
+        /// <summary>Накопители давления вместо броска кубика.</summary>
+        public PulseBalance Pulse = new PulseBalance();
     }
 }
