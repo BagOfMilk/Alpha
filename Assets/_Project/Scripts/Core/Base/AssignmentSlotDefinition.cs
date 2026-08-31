@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Game.Core.Economy;
 using Game.Core.Stats;
 
@@ -41,6 +42,13 @@ namespace Game.Core.Base
 
         /// <summary>Открыт ли слот изначально (false — требует постройки/разблокировки).</summary>
         public bool UnlockedByDefault = true;
+
+        /// <summary>
+        /// Цена разблокировки для закрытых слотов. Пусто — слот открыть нельзя
+        /// (заглушка под будущую стройку), поэтому у каждого закрытого слота цена
+        /// должна быть проставлена явно.
+        /// </summary>
+        public Dictionary<ResourceType, int> UnlockCost;
 
         public AssignmentSlotDefinition() { }
 

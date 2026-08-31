@@ -47,6 +47,28 @@ namespace Game.Core.Base
             return slot;
         }
 
+        /// <summary>
+        /// Открывает закрытый слот за ресурсы. До появления полноценной стройки
+        /// (US-7.1, US-7.3) это единственный способ ввести слот в игру — раньше
+        /// закрытый слот оставался закрытым навсегда.
+        ///
+        /// Списание атомарное: если ресурсов не хватает, кошелёк не трогается
+        /// вообще, а слот остаётся закрытым.
+        /// </summary>
+        public UnlockResult TryUnlockSlot(string slotId)
+        {
+            var slot = GetSlot(slotId);
+            if (slot == null) return UnlockResult.SlotNotFound;
+            if (slot.Unlocked) return UnlockResult.AlreadyUnlocked;
+
+            var cost = slot.Definition?.UnlockCost;
+            if (cost == null || cost.Count == 0) return UnlockResult.NoPriceDefined;
+            if (!Resources.TrySpend(cost)) return UnlockResult.CannotAfford;
+
+            slot.Unlocked = true;
+            return UnlockResult.Success;
+        }
+
         // ---- Назначения ----
 
         /// <summary>

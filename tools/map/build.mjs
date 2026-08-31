@@ -470,8 +470,14 @@ for (const sec of sectionTypes) {
     "low", "Мёртвый код", [idSection(sec.name), "b.m.assign", "секция есть в enum, слотов у неё нет"]);
 }
 
-// ресурсы без производителя и без трат
-const spentRes = [...allCode.matchAll(/TrySpend\(ResourceType\.(\w+)/g)].map((m) => m[1]);
+// Ресурсы без производителя и без трат.
+// Тратой считается и прямой TrySpend(ResourceType.X, n), и запись в словаре цены
+// вида { ResourceType.X, n } — словарную перегрузку TrySpend регексп по имени
+// ресурса не увидит, и «экономика односторонняя» висела бы ложно.
+const gameCode = CS_FILES.filter((p) => !p.includes("/Tests/")).map((p) => CS[p]).join("\n");
+const spentDirect = [...gameCode.matchAll(/TrySpend\(ResourceType\.(\w+)/g)].map((m) => m[1]);
+const spentInCosts = [...gameCode.matchAll(/\{\s*ResourceType\.(\w+)\s*,\s*\d+\s*\}/g)].map((m) => m[1]);
+const spentRes = [...spentDirect, ...spentInCosts];
 for (const r of resTypes) {
   if (r.name === "None" || producedRes.has(r.name) || spentRes.includes(r.name) || demo.starting[r.name]) continue;
   addGap(`Ресурс ${r.name} мёртвый`, `Core/Economy/ResourceType.cs:${r.line}`,
@@ -488,7 +494,7 @@ if (spentRes.length && unspent.length) {
     return `${r} до ${maxOf(from.map((s) => maxOf(archetypes.map((a) => roundHalfEven(s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2)), s.base)))}/цикл`;
   });
   addGap("Экономика односторонняя", `Core/Base/BaseState.cs:${spendLine}`,
-    `TrySpend во всём проекте вызывается ${plural(spentRes.length, "раз", "раза", "раз")} и только для ${[...new Set(spentRes)].join(", ")}. Остальные ${plural(unspent.length, "ресурс", "ресурса", "ресурсов")} копятся без потолка: ${perDay.join(", ")}. Сливов в коде ещё нет.`,
+    `Тратятся только ${[...new Set(spentRes)].join(", ")} (${plural(spentDirect.length, "прямой вызов", "прямых вызова", "прямых вызовов")} TrySpend, ${plural(spentInCosts.length, "строка", "строки", "строк")} в словарях цен). Остальные ${plural(unspent.length, "ресурс", "ресурса", "ресурсов")} копятся без потолка: ${perDay.join(", ")}.`,
     "low", "Нет логики", [idRes(unspent[0]), "b.m.upkeep", `кроме ${[...new Set(spentRes)].join(", ")} не тратится ни один ресурс`]);
 }
 
@@ -575,12 +581,15 @@ for (const p of CORE_FILES) {
     const sub = new RegExp(`\\b${m[1]}\\s*\\+=`);
     const inGame = CS_FILES.filter((f) => !f.includes("/Tests/") && sub.test(CS[f]));
     if (inGame.length) continue;
+    // Событие без потребителя, но с тестом — осознанная точка расширения:
+    // контракт зафиксирован и не отвалится молча. Без теста и без подписок —
+    // просто мёртвая проводка.
     const inTests = CS_FILES.filter((f) => f.includes("/Tests/") && sub.test(CS[f]));
+    if (inTests.length) continue;
     addGap(`${path.basename(p, ".cs")}.${m[1]} никто не слушает`,
       `${p.replace("Assets/_Project/Scripts/", "")}:${lineOf(CS[p], m.index)}`,
-      `Подписок в игровом коде 0` +
-      (inTests.length ? ` (${plural(inTests.length, "подписка", "подписки", "подписок")} есть только в тестах)` : "") +
-      `, вызовов Invoke ${(CS[p].match(new RegExp(`\\b${m[1]}\\?\\.Invoke`, "g")) || []).length}. Событие стреляет в пустоту.`,
+      `Подписок 0 во всех ${CS_FILES.length} файлах, теста на контракт тоже нет, ` +
+      `вызовов Invoke ${(CS[p].match(new RegExp(`\\b${m[1]}\\?\\.Invoke`, "g")) || []).length}. Событие стреляет в пустоту.`,
       "low", "Мёртвый код");
   }
 }

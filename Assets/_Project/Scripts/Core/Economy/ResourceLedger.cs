@@ -12,8 +12,9 @@ namespace Game.Core.Economy
     {
         private readonly Dictionary<ResourceType, int> _amounts = new Dictionary<ResourceType, int>();
 
-        /// <summary>Событие на любое изменение баланса (ресурс, новое значение).</summary>
-        public event Action<ResourceType, int> Changed;
+        // Событие на изменение баланса убрано: подписчиков не было ни одного, а
+        // UI, ради которого оно заводилось, придёт вместе с UI Toolkit (Э18).
+        // Опрос через Get/Snapshot покрывает все нынешние нужды.
 
         public int Get(ResourceType resource)
         {
@@ -26,7 +27,6 @@ namespace Game.Core.Economy
             var next = Get(resource) + amount;
             if (next < 0) next = 0;
             _amounts[resource] = next;
-            Changed?.Invoke(resource, next);
         }
 
         public bool CanAfford(ResourceType resource, int cost)

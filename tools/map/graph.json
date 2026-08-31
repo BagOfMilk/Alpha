@@ -12,7 +12,6 @@
    "Laboratory": "b.sec.lab",
    "Infirmary": "b.sec.infirmary",
    "Storehouse": "b.sec.storehouse",
-   "Barracks": "b.sec.barracks",
    "ScoutingPost": "b.sec.scout"
   },
   "slots": {
@@ -41,13 +40,11 @@
   "Laboratory": "Лаборатория",
   "Infirmary": "Лазарет",
   "Storehouse": "Склад",
-  "Barracks": "Казарма",
   "ScoutingPost": "Разведпост",
   "Morale": "Morale (пассив)",
   "Healing": "Healing (лечение)"
  },
  "notes": {
-  "b.sec.barracks": "Секция объявлена, слотов у неё нет.",
   "b.sec.lab": "В GDD — ещё и крафт аугмента, то есть единственный рост атрибутов.",
   "b.slot.bed": "Коэффициент ×2.0 — самый крутой в стартовом контенте.",
   "b.res.Food": "Единственный ресурс, который база тратит.",
@@ -3764,6 +3761,36 @@
    "c.SignalDigest",
    "сводка сигналов за день (internal)",
    "code"
+  ],
+  [
+   "b.m.unlock",
+   "b.slot.dock",
+   "открывает закрытый слот за ресурсы",
+   "code"
+  ],
+  [
+   "b.m.unlock",
+   "c.BaseState",
+   "TryUnlockSlot()",
+   "code"
+  ],
+  [
+   "b.m.unlock",
+   "b.res.Supplies",
+   "списывает цену постройки",
+   "code"
+  ],
+  [
+   "b.m.unlock",
+   "b.res.Materials",
+   "списывает цену постройки",
+   "code"
+  ],
+  [
+   "g.city",
+   "b.m.unlock",
+   "стройка открывает позиции — пока в минимальной форме",
+   "impl"
   ]
  ],
  "gaps": [

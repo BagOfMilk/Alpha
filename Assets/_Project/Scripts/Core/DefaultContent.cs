@@ -168,7 +168,14 @@ namespace Game.Core
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
                 PrimaryAptitude = StatType.Logistics, SecondaryAptitude = StatType.Engineering,
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.4,
-                UnlockedByDefault = false
+                UnlockedByDefault = false,
+                // Цена постройки. Пока это единственный слив ресурсов кроме прокорма —
+                // до появления полноценной стройки и крафта (Э6, Э7).
+                UnlockCost = new Dictionary<ResourceType, int>
+                {
+                    { ResourceType.Supplies, 40 },
+                    { ResourceType.Materials, 25 }
+                }
             });
 
             // Разведпост — интел.
