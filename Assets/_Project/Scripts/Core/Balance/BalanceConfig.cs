@@ -54,6 +54,32 @@ namespace Game.Core.Balance
         /// <summary>Множитель ролевого опыта в день после голодного (Поправка №4).</summary>
         public double HungryRoleXpMultiplier = 0.5;
 
+        // ---- Производные от атрибутов (GDD Э2.1, числа — Приложение Б) ----
+        // Все плейсхолдеры. Считаются один раз в DerivedStats и дальше живут
+        // в агрегаторе как обычные статы, чтобы перки и гир могли их менять.
+
+        public double HpBase = 6.0;
+        public double HpPerStrength = 1.0;
+        public double ApBase = 8.0;
+        public double ApPerAgilityStep = 3.0;
+        public double AccuracyPerAgility = 1.0;
+        public double DefenseBase = 0.0;
+        public double DefensePerAgility = 1.0;
+        public double InitiativeBase = 0.0;
+        public double InitiativePerAgility = 1.0;
+        public double InitiativePerWits = 1.0;
+        public double CritBase = 5.0;
+        public double CritPerWits = 1.0;
+        public double CarryBase = 10.0;
+        public double CarryPerStrength = 2.0;
+        public double StatusDurationReductionPerWill = 0.25;
+        public double MoveApPerTileBase = 1.0;
+
+        /// <summary>Границы шкал: атрибуты 1–10, скилы 0–10.</summary>
+        public int MinAttribute = 1;
+        public int MaxAttribute = 10;
+        public int MaxSkillLevel = 10;
+
         // ---- Городской слой (Поправка №3) ----
         // Секции вынесены в отдельные классы: у каждой свой SO-ассет,
         // чтобы дизайнер правил их независимо и в Play-режиме (US-18.3).
