@@ -31,6 +31,23 @@ namespace Game.Core.Pressure
         /// <summary>Журнал изменений за текущий день — для тестов и слоя сигналов.</summary>
         internal IReadOnlyList<TensionChange> DayLedger => _dayLedger;
 
+        /// <summary>Дробный остаток — часть состояния, без него сейв теряет доли очка.</summary>
+        internal double FractionForSave => _fraction;
+
+        /// <summary>
+        /// Восстановление из слепка. Полоса не хранится, а пересчитывается из
+        /// значения: иначе сейв, сделанный до правки порогов, вернул бы полосу,
+        /// которой это значение больше не соответствует.
+        /// </summary>
+        internal void RestoreForSave(int value, double fraction, int daysInBand)
+        {
+            Value = Clamp(value);
+            _fraction = fraction;
+            _band = _cfg.BandFor(Value);
+            DaysInCurrentBand = daysInBand < 0 ? 0 : daysInBand;
+            _dayLedger.Clear();
+        }
+
         public TensionState(TensionBalance cfg, int startValue = 0)
         {
             _cfg = cfg ?? throw new ArgumentNullException(nameof(cfg));

@@ -74,6 +74,27 @@ namespace Game.Core.Loop
             };
         }
 
+        /// <summary>
+        /// Слепок городского слоя одной строкой. Отдаётся наружу непрозрачным:
+        /// сборка Game.Gameplay кладёт его в систему сохранений, но прочитать
+        /// оттуда скрытые числа случайно не может (см. SettlementSave).
+        /// </summary>
+        public string SaveState()
+        {
+            return SettlementSave.Capture(this);
+        }
+
+        /// <summary>Восстановить состояние из слепка, сделанного SaveState.</summary>
+        public void RestoreState(string blob)
+        {
+            SettlementSave.Restore(this, blob);
+        }
+
+        internal void RestoreDay(int day)
+        {
+            CurrentDay = day < 0 ? 0 : day;
+        }
+
         public DayReport Advance(DayPhase phase = DayPhase.Day)
         {
             // Календарные сутки начинаются с дневной фазы; ночь принадлежит тем

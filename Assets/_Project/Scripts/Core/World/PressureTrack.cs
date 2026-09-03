@@ -32,6 +32,21 @@ namespace Game.Core.World
         internal int DeliveredLevel3Day { get; private set; }
         private bool _deliveredThree;
 
+        internal bool EverFiredForSave => _everFired;
+        internal bool DeliveredThreeForSave => _deliveredThree;
+
+        /// <summary>Восстановление из слепка: без него заряды после загрузки — нули.</summary>
+        internal void RestoreForSave(int charge, int lastFiredDay, bool everFired,
+            int deliveredLevel, int deliveredLevel3Day, bool deliveredThree)
+        {
+            Charge = charge < 0 ? 0 : charge;
+            LastFiredDay = lastFiredDay;
+            _everFired = everFired;
+            DeliveredLevel = deliveredLevel;
+            DeliveredLevel3Day = deliveredLevel3Day;
+            _deliveredThree = deliveredThree;
+        }
+
         public PressureTrack(IPressureSource source, PulseBalance cfg)
         {
             SourceId = source.Id;

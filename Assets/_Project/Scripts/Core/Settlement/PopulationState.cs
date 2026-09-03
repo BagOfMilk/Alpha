@@ -39,6 +39,11 @@ namespace Game.Core.Settlement
             return before - Count;
         }
 
+        internal void RestoreForSave(int count)
+        {
+            Count = count < 0 ? 0 : count;
+        }
+
         internal void Add(int amount)
         {
             if (amount <= 0) return;
