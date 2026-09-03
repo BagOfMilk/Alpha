@@ -154,7 +154,7 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Crisis_NeverFiresWithoutLevel3Forewarn()
+        public void Crisis_NeverArrivesUnannouncedNorBelowHeatBand()
         {
             var cfg = Cfg();
             var roster = new Roster();
@@ -165,23 +165,33 @@ namespace Game.Tests.EditMode
             var p = MakeProcessor(cfg, roster, "hero");
             p.IsPatrolling = true;
 
-            int maxLevelSeen = 0;
+            // Старт 500 — это «Брожение». Город за сотню фаз доходит до верхних
+            // полос сам (исходы инцидентов плюс фоновый тик), поэтому кризис
+            // здесь возможен — но только на своих условиях. Проверяем ровно их.
+            bool heardLevel3 = false;
+            int crises = 0;
+
             for (int day = 1; day <= 120; day++)
             {
                 var report = day % 2 == 0 ? p.Advance(DayPhase.Night) : p.Advance(DayPhase.Day);
 
-                foreach (var f in report.Forewarnings)
-                    if (f.SourceId == "crisis" && f.Level > maxLevelSeen) maxLevelSeen = f.Level;
-
                 if (report.Incidents.Any(i => i.WasCrisis))
                 {
-                    Assert.AreEqual(3, maxLevelSeen,
-                        "Кризис не имеет права ударить без предвестника третьей ступени");
-                    return;
+                    crises++;
+                    Assert.IsTrue(heardLevel3,
+                        $"Фаза {day}: кризис ударил раньше, чем игрок услышал предвестник третьей ступени");
+                    Assert.GreaterOrEqual((int)p.Tension.Band, (int)TensionBand.Heat,
+                        $"Фаза {day}: кризис невозможен ниже «Накала» — накопитель там не активен");
                 }
+
+                // Отмечаем ПОСЛЕ проверки: предвестник этой же фазы не считается
+                // предупреждением для удара этой же фазы.
+                if (report.Forewarnings.Any(f => f.SourceId == "crisis" && f.Level >= 3))
+                    heardLevel3 = true;
             }
-            // Кризис мог и не наступить — это нормально, но тогда и предвестника 3 быть не должно.
-            Assert.Pass("Кризис не наступил за 120 дней — тоже валидный сценарий");
+
+            Assert.Greater(crises, 0,
+                "За 120 фаз с растущим Напряжением кризис обязан случиться хотя бы раз — иначе тест ничего не проверил");
         }
 
         [Test]

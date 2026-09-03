@@ -57,9 +57,6 @@ namespace Game.Core.Balance
         public int BloodDeltaPerNode = 10;
         public int BloodCapPerExpedition = 50;
 
-        /// <summary>Окно на реакцию после входа в «Излом» до кризиса.</summary>
-        public int CrisisGraceDays = 3;
-
         public TensionBand BandFor(int value)
         {
             var t = BandThresholds;

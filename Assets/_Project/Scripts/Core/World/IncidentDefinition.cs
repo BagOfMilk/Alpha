@@ -28,6 +28,13 @@ namespace Game.Core.World
         public string TopicId;
         public string DomainTag;
 
+        /// <summary>
+        /// Какой накопитель порождает этот инцидент. Пусто — подходит любому
+        /// (удобно для узких тестов). Без этой связки предвестник называет один
+        /// домен, а приходит событие из совсем другого.
+        /// </summary>
+        public string SourceId;
+
         /// <summary>С какой полосы Напряжения инцидент вообще возможен.</summary>
         public TensionBand MinBand = TensionBand.Murmur;
         /// <summary>Выше этой полосы мелочь вытесняется серьёзными вещами.</summary>

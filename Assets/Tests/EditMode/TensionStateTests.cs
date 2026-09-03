@@ -63,10 +63,32 @@ namespace Game.Tests.EditMode
                 var cfg = Cfg();
                 var p = MakeProcessor(cfg, tier);
 
-                p.Advance(200); // кампания целиком, без единого действия игрока
+                // Полные сутки, а не дневные фазы: иначе тест меряет полкампании.
+                for (int day = 0; day < 200; day++) p.AdvanceFullDay();
 
                 Assert.LessOrEqual((int)p.Tension.Band, (int)TensionBand.Ferment,
                     $"Пассивный дрейф на тире {tier} не должен доводить город до кризиса");
+            }
+        }
+
+        [Test]
+        public void Tension_PassiveCampaign_HighTiers_DoReachFracture_KnownGap()
+        {
+            // ИЗВЕСТНЫЙ РАЗРЫВ. Якорь §3.1 обещает, что кризис — это выборы, а не
+            // течение времени; на тирах 3 и 4 фоновый тик (4.0 и 7.0 за сутки)
+            // доводит город до «Излома» сам, без единого действия игрока.
+            // Прежний тест перебирал только тиры 1-2 и этого не видел.
+            // Тест фиксирует факт, а не одобряет его: числа тика — плейсхолдеры,
+            // и когда их перебалансируют, он упадёт и потребует решения.
+            foreach (int tier in new[] { 3, 4 })
+            {
+                var cfg = Cfg();
+                var p = MakeProcessor(cfg, tier);
+
+                for (int day = 0; day < 200; day++) p.AdvanceFullDay();
+
+                Assert.AreEqual(TensionBand.Fracture, p.Tension.Band,
+                    $"Тир {tier}: пассивный дрейф доводит до кризиса без действий игрока");
             }
         }
 

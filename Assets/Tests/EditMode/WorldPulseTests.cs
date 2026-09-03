@@ -82,17 +82,35 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Pulse_DefaultSources_SatisfyMinActiveTracks()
+        public void Pulse_ActiveTrackCount_AcrossWholeStateSpace()
         {
             var cfg = Cfg();
             var pulse = new WorldPulse(cfg);
             foreach (var s in DefaultPressureSources.All()) pulse.AddSource(s);
 
-            // Ночь на верхней полосе — момент, когда работают все три.
-            int active = pulse.CountActive(Ctx(1, night: true, band: 4));
+            // Прежняя версия этого теста меряла ОДНУ точку — ночь на верхней
+            // полосе, — то есть ровно тот единственный угол, где инвариант
+            // выполняется. Перебираем весь набор состояний целиком.
+            int min = int.MaxValue, max = 0, meetingInvariant = 0, total = 0;
+            for (int band = 0; band <= 4; band++)
+                foreach (bool night in new[] { false, true })
+                {
+                    int active = pulse.CountActive(Ctx(1, night: night, band: band));
+                    if (active < min) min = active;
+                    if (active > max) max = active;
+                    if (active >= cfg.MinActiveTracks) meetingInvariant++;
+                    total++;
+                }
 
-            Assert.GreaterOrEqual(active, cfg.MinActiveTracks,
-                "Меньше трёх накопителей — и полный детерминизм читается насквозь");
+            // ИЗВЕСТНЫЙ РАЗРЫВ, зафиксированный намеренно: MinActiveTracks = 3
+            // выполняется в 2 состояниях из 10, потому что все три ставки —
+            // функции одной полосы. Тест держит реальную картину на виду; когда
+            // накопители перестанут быть тремя обёртками одной переменной, он
+            // упадёт — и это будет поводом обновить ожидание, а не подогнать его.
+            Assert.AreEqual(1, min, "Худший случай: работает один накопитель");
+            Assert.AreEqual(3, max, "Лучший случай: работают все три");
+            Assert.AreEqual(2, meetingInvariant,
+                $"Инвариант «не меньше трёх» держится в {meetingInvariant} состояниях из {total}");
         }
 
         [Test]

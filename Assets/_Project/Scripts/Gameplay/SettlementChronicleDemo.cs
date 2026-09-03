@@ -95,10 +95,10 @@ namespace Game.Gameplay
                     string mark = phase == DayPhase.Night ? "ночь" : "день";
 
                     foreach (var line in Describe(report))
-                        log.AppendLine($"[{mark} {report.Day / 2 + 1}] {line}");
+                        log.AppendLine($"[{mark} {report.Day}] {line}");
 
                     foreach (var incident in report.Incidents)
-                        log.AppendLine($"[{mark} {report.Day / 2 + 1}] {DescribeIncident(incident, roster)}");
+                        log.AppendLine($"[{mark} {report.Day}] {DescribeIncident(incident, roster)}");
                 }
 
                 if (choices.Contains(i + 1))

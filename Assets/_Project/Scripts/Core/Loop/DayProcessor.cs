@@ -76,7 +76,10 @@ namespace Game.Core.Loop
 
         public DayReport Advance(DayPhase phase = DayPhase.Day)
         {
-            CurrentDay++;
+            // Календарные сутки начинаются с дневной фазы; ночь принадлежит тем
+            // же суткам. Иначе счётчик считает ФАЗЫ, и каждое окно «в днях»
+            // (кулдауны, окно повторов, grace кризиса) вдвое короче заявленного.
+            if (phase == DayPhase.Day) CurrentDay++;
             _tension.BeginDay();
 
             var ctx = new DayContext(CurrentDay, phase, Tier, OrderLevel, _balance, _tension,
@@ -88,7 +91,7 @@ namespace Game.Core.Loop
             for (int i = 0; i < _steps.Count; i++)
                 _steps[i].Execute(ctx);
 
-            _tension.OnDayAdvanced();
+            if (phase == DayPhase.Day) _tension.OnDayAdvanced();
 
             // Копии: отчёт не должен меняться, когда начнётся следующий день.
             var ledger = new List<TensionChange>(_tension.DayLedger);

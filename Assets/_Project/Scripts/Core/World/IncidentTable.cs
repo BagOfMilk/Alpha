@@ -24,14 +24,20 @@ namespace Game.Core.World
             foreach (var d in definitions) Add(d);
         }
 
-        /// <summary>Какие инциденты вообще возможны в этих условиях.</summary>
-        public List<IncidentDefinition> Eligible(TensionBand band, int tier, bool isNight, bool crisisOnly)
+        /// <summary>
+        /// Какие инциденты вообще возможны в этих условиях. Пустой sourceId —
+        /// «любой источник»: так пул ведёт себя как раньше в узких тестах.
+        /// </summary>
+        public List<IncidentDefinition> Eligible(TensionBand band, int tier, bool isNight,
+            bool crisisOnly, string sourceId = null)
         {
             var result = new List<IncidentDefinition>();
             for (int i = 0; i < _all.Count; i++)
             {
                 var d = _all[i];
                 if (d.IsCrisis != crisisOnly) continue;
+                if (!string.IsNullOrEmpty(sourceId) && !string.IsNullOrEmpty(d.SourceId)
+                    && d.SourceId != sourceId) continue;
                 if (band < d.MinBand || band > d.MaxBand) continue;
                 if (tier < d.MinTier) continue;
                 if (d.NightOnly && !isNight) continue;
@@ -45,9 +51,10 @@ namespace Game.Core.World
         /// город, тем тяжелее то, что вылезает (US-11.1: низкое → мелочь,
         /// высокое → организованная преступность).
         /// </summary>
-        public IncidentDefinition Pick(TensionBand band, int tier, bool isNight, bool crisisOnly, int selector)
+        public IncidentDefinition Pick(TensionBand band, int tier, bool isNight, bool crisisOnly,
+            int selector, string sourceId = null)
         {
-            var pool = Eligible(band, tier, isNight, crisisOnly);
+            var pool = Eligible(band, tier, isNight, crisisOnly, sourceId);
             if (pool.Count == 0) return null;
 
             pool.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));

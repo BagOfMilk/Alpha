@@ -20,15 +20,17 @@ namespace Game.Core.Loop
                 string sourceId = ctx.FiredSourceIds[i];
                 bool crisis = sourceId == "crisis";
 
-                // Кризис не имеет права сработать без предвестника 3-й ступени:
-                // жёсткое последствие обязано быть объявлено (US-11.2, риск R8).
-                if (crisis && ctx.Pulse != null && ctx.Pulse.AnnouncedLevelOf(sourceId) < 3)
-                    continue;
+                // Условие «кризис объявлен и услышан» живёт в PressureTrack.IsReady:
+                // сюда дело просто не доходит, и заряд не сгорает впустую.
 
                 // Селектор детерминирован: день плюс позиция источника.
                 int selector = ctx.Day * 31 + sourceId.Length * 7 + i;
 
-                var incident = ctx.Incidents.Pick(ctx.Tension.Band, ctx.Tier, ctx.IsNight, crisis, selector);
+                // Инцидент берётся только из пула СВОЕГО источника: иначе
+                // предвестник называет один домен, а приходит событие из другого
+                // (§5.1, правило «предвестник не врёт»).
+                var incident = ctx.Incidents.Pick(
+                    ctx.Tension.Band, ctx.Tier, ctx.IsNight, crisis, selector, sourceId);
                 if (incident == null) continue;
 
                 var outcome = IncidentResolver.Resolve(

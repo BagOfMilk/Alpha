@@ -6,6 +6,11 @@ namespace Game.Core.World
     /// Накопитель давления. Заменяет бросок кубика — и делает это лучше:
     /// броску нечего сказать заранее, а накопителю есть. Заполнение на 55/80/95 %
     /// превращается в предвестники трёх ступеней.
+    ///
+    /// Ступень считается пройденной только когда игрок её УСЛЫШАЛ. Уровень,
+    /// выданный ночью спящему, остаётся неподтверждённым и будет предложен снова:
+    /// иначе предупреждение сгорало бы молча, а кризис приходил к тому, кто
+    /// ничего не слышал (US-11.2, риск R8).
     /// </summary>
     public sealed class PressureTrack
     {
@@ -20,8 +25,12 @@ namespace Game.Core.World
         private bool _everFired;
         public int CooldownDays { get; }
 
-        /// <summary>Последний выданный уровень предвестника — чтобы не повторяться.</summary>
-        internal int AnnouncedLevel { get; set; }
+        /// <summary>Наибольшая ступень, которая ДОШЛА до игрока (не путать с достигнутой).</summary>
+        internal int DeliveredLevel { get; private set; }
+
+        /// <summary>Календарные сутки, когда игрок услышал третью ступень.</summary>
+        internal int DeliveredLevel3Day { get; private set; }
+        private bool _deliveredThree;
 
         public PressureTrack(IPressureSource source, PulseBalance cfg)
         {
@@ -53,9 +62,32 @@ namespace Game.Core.World
             if (Charge > cap) Charge = cap;
         }
 
-        internal bool IsReady(int day)
+        /// <summary>Игрок услышал предвестник этой ступени.</summary>
+        internal void MarkDelivered(int level, int day)
+        {
+            if (level <= DeliveredLevel) return;
+            DeliveredLevel = level;
+            if (level >= 3 && !_deliveredThree)
+            {
+                _deliveredThree = true;
+                DeliveredLevel3Day = day;
+            }
+        }
+
+        internal bool IsReady(int day, PulseBalance cfg)
         {
             if (Charge < Threshold) return false;
+
+            // Жёсткое последствие обязано быть объявлено И услышано, а после
+            // этого игроку даётся окно на реакцию. Ворота стоят ЗДЕСЬ, а не
+            // после отбора: иначе накопитель сжигал бы заряд впустую, а
+            // инцидент молча пропускался.
+            if (Kind == WorldEventKind.Crisis)
+            {
+                if (!_deliveredThree) return false;
+                if (day - DeliveredLevel3Day < cfg.CrisisGraceDays) return false;
+            }
+
             // Первое срабатывание кулдауном не сдерживается. Отдельный флаг, а не
             // «дата в минус бесконечность»: разность с int.MinValue переполняется.
             return !_everFired || day - LastFiredDay >= CooldownDays;
@@ -64,10 +96,16 @@ namespace Game.Core.World
         internal void Fire(int day)
         {
             _everFired = true;
-            Charge -= Threshold;
-            if (Charge < 0) Charge = 0;
+
+            // Полный разряд, а не перенос остатка: при потолке в два порога
+            // насыщенный накопитель иначе сразу снова стоит на третьей ступени,
+            // и лестница 1 → 2 → 3 вырождается в непрерывное «скоро».
+            Charge = 0;
             LastFiredDay = day;
-            AnnouncedLevel = 0;
+
+            DeliveredLevel = 0;
+            DeliveredLevel3Day = 0;
+            _deliveredThree = false;
         }
     }
 }

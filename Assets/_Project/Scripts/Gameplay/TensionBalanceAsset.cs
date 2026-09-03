@@ -31,8 +31,6 @@ namespace Game.Gameplay
         public double fortificationDrainPerDay = -0.3;
         public int bloodDeltaPerNode = 10;
         public int bloodCapPerExpedition = 50;
-        [Tooltip("Окно на реакцию после входа в «Излом» до кризиса.")]
-        public int crisisGraceDays = 3;
 
         public TensionBalance ToConfig()
         {
@@ -47,8 +45,7 @@ namespace Game.Gameplay
                 TempleDrainPerDay = templeDrainPerDay,
                 FortificationDrainPerDay = fortificationDrainPerDay,
                 BloodDeltaPerNode = bloodDeltaPerNode,
-                BloodCapPerExpedition = bloodCapPerExpedition,
-                CrisisGraceDays = crisisGraceDays
+                BloodCapPerExpedition = bloodCapPerExpedition
 
                 // Белый список драйверов НАМЕРЕННО не выведен в инспектор:
                 // это дизайн-решение уровня поправки к GDD, а не крутилка баланса.
