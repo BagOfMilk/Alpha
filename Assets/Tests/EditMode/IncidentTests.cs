@@ -119,6 +119,8 @@ namespace Game.Tests.EditMode
 
             var strongRoster = new Roster();
             strongRoster.Add(MakeCompanion("ace", charisma: 30));
+            // Присутствие — манёвр: мастер разбирает кражу, только если он на складе.
+            strongRoster.Get("ace").AssignedSlotId = incident.RelevantPositionId;
             var strong = new RosterAdapter(strongRoster, "ace");
             var tensionStrong = new TensionState(cfg.Tension, 300);
             tensionStrong.BeginDay();
@@ -201,6 +203,7 @@ namespace Game.Tests.EditMode
             roster.Add(MakeCompanion("hero", 40));
             roster.Add(MakeCompanion("alpha"));
             roster.Add(MakeCompanion("beta"));
+            roster.Get("hero").AssignedSlotId = crisis.RelevantPositionId;
             var adapter = new RosterAdapter(roster, "hero");
 
             var outcome = IncidentResolver.Resolve(crisis, adapter, null, adapter,
