@@ -68,6 +68,9 @@ namespace Game.Core.World
 
         /// <summary>Есть ли у инцидента прописанный тихий путь.</summary>
         public bool HasQuietPath => !QuietPathSkill.IsNone;
+
+        /// <summary>Есть ли кровавый путь. Обязательным он не является (Поправка №1).</summary>
+        public bool HasBloodyPath => !BloodyPathSkill.IsNone;
     }
 
     /// <summary>Что случилось по итогу — публично, потому что это уже произошло.</summary>

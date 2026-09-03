@@ -33,10 +33,21 @@ namespace Game.Core.Loop
         /// <summary>Предвестники этой фазы — для отладки и тестов.</summary>
         internal IReadOnlyList<Forewarning> Forewarnings { get; }
 
+        /// <summary>
+        /// Событие, ждущее хода игрока. Пока оно здесь, сутки не закончены:
+        /// конвейер остановлен на шаге PlayerResolution.
+        /// </summary>
+        public PendingDecision Pending { get; }
+
+        /// <summary>Отчёт неполон: день ждёт решения.</summary>
+        public bool AwaitsDecision => Pending != null;
+
         internal DayReport(int day, DayPhase phase,
             IReadOnlyList<TensionChange> tensionChanges, SignalDigest signals,
-            IReadOnlyList<IncidentOutcome> incidents, IReadOnlyList<Forewarning> forewarnings)
+            IReadOnlyList<IncidentOutcome> incidents, IReadOnlyList<Forewarning> forewarnings,
+            PendingDecision pending = null)
         {
+            Pending = pending;
             Day = day;
             Phase = phase;
             TensionChanges = tensionChanges;

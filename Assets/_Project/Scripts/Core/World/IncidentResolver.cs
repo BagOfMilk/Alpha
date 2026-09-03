@@ -41,18 +41,16 @@ namespace Game.Core.World
             PopulationState population,
             TensionState tension,
             int day,
-            BalanceConfig balance)
+            BalanceConfig balance,
+            Loop.IncidentPath path = Loop.IncidentPath.Quiet)
         {
             if (incident == null) throw new ArgumentNullException(nameof(incident));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
-            // Тихий путь — основной способ разобраться (Поправка №1).
-            var request = new CheckRequest(
-                incident.QuietPathSkill,
-                incident.QuietPathThreshold,
-                incident.QuietPathApproach,
-                incident.TopicId,
-                incident.RelevantPositionId);
+            // Тихий путь — основной способ разобраться (Поправка №1), но не
+            // единственный: кровавый был выписан в контенте и до появления точки
+            // решения не читался ни одной строкой кода.
+            var request = BuildRequest(incident, path);
 
             var check = CheckResolver.Resolve(request, roster, repeats, day, balance);
 
@@ -65,6 +63,18 @@ namespace Game.Core.World
             }
 
             return ResolveCrisis(incident, check, casualties, population);
+        }
+
+        /// <summary>Проверка под выбранный путь. Кровавого может не быть — тогда тихий.</summary>
+        internal static CheckRequest BuildRequest(IncidentDefinition incident, Loop.IncidentPath path)
+        {
+            bool bloody = path == Loop.IncidentPath.Bloody && incident.HasBloodyPath;
+
+            return bloody
+                ? new CheckRequest(incident.BloodyPathSkill, incident.BloodyPathThreshold,
+                    ApproachForm.Intimidate, incident.TopicId, incident.RelevantPositionId)
+                : new CheckRequest(incident.QuietPathSkill, incident.QuietPathThreshold,
+                    incident.QuietPathApproach, incident.TopicId, incident.RelevantPositionId);
         }
 
         private static void ApplyTension(IncidentDefinition incident, OutcomeBand band,

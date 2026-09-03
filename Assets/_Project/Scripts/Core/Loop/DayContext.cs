@@ -56,6 +56,15 @@ namespace Game.Core.Loop
         /// <summary>Что и когда игрок уже слышал — чтобы сигналы не превращались в обои.</summary>
         internal SignalMemory SignalMemory { get; set; }
 
+        /// <summary>Спрашивать ли игрока, как разбираться с событием.</summary>
+        internal bool RequirePlayerDecision { get; set; }
+
+        /// <summary>Событие, ждущее решения. Публично: это предложение игроку, а не метрика.</summary>
+        public PendingDecision Pending { get; internal set; }
+
+        /// <summary>Само событие — чтобы резолвер получил его после выбора.</summary>
+        internal IncidentDefinition PendingIncident { get; set; }
+
         public DayContext(int day, DayPhase phase, int tier, int orderLevel,
             BalanceConfig balance, TensionState tension,
             bool isPatrolling = false,
