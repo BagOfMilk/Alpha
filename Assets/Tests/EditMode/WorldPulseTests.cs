@@ -52,6 +52,11 @@ namespace Game.Tests.EditMode
             for (int day = 1; day <= 10; day++)
             {
                 var tick = pulse.Advance(Ctx(day));
+
+                // Ступень засчитывается только доставленная — иначе накопитель
+                // честно предлагает одну и ту же снова и снова. В игре это
+                // делает шаг Pulse; здесь мы играем его роль.
+                pulse.MarkDelivered(tick.Forewarnings, day);
                 foreach (var f in tick.Forewarnings) seenLevels.Add(f.Level);
 
                 if (tick.FiredSourceIds.Count > 0)
@@ -71,13 +76,18 @@ namespace Game.Tests.EditMode
             pulse.AddSource(new FixedSource { Rate = 10, Threshold = 100, DomainTag = "склад" });
 
             for (int day = 1; day <= 10; day++)
-                foreach (var f in pulse.Advance(Ctx(day)).Forewarnings)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+
+                foreach (var f in tick.Forewarnings)
                     if (f.Level >= 2)
                     {
                         Assert.AreEqual("склад", f.DomainTag,
                             "Со 2-й ступени игрок обязан узнать, ГДЕ зреет");
                         return;
                     }
+            }
             Assert.Fail("Предвестник 2-й ступени не появился");
         }
 
