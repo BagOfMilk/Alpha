@@ -4,6 +4,7 @@ using Game.Core.Balance;
 using Game.Core.Loop;
 using Game.Core.Pressure;
 using Game.Core.Signals;
+using Game.Core.World;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -149,5 +150,50 @@ namespace Game.Tests.EditMode
             }
             return sb.ToString();
         }
+        // ---- Подавление повторов ----
+
+        [Test]
+        public void Composer_FreshTopic_PushesOutTheOneJustHeard()
+        {
+            var cfg = new SignalBalance { TopicCooldownDays = 2 };
+            var memory = new SignalMemory();
+
+            // Сутки 1: городу есть сказать только фоновую реплику.
+            var first = SignalComposer.Compose(
+                TensionBand.Calm, null, 1, cfg, null, null, null, false, memory, 1);
+            string ambient = first.Requests[0].TopicId;
+            Assert.IsTrue(ambient.StartsWith("tension.ambient."), "Ожидали фоновую реплику полосы");
+
+            // Сутки 2: появилось что-то новое. Вчерашняя фоновая обязана уступить.
+            var fore = new[] { new Forewarning("street", 1, "улицы") };
+            var second = SignalComposer.Compose(
+                TensionBand.Calm, null, 1, cfg, fore, null, null, false, memory, 2);
+
+            var topics = second.Requests.Select(r => r.TopicId).ToList();
+
+            Assert.IsFalse(topics.Contains(ambient),
+                "Реплика, прозвучавшая вчера, не имеет права занимать слот, когда есть свежая");
+            Assert.IsTrue(topics.Any(t => t.StartsWith("forewarn.")),
+                "Свежий предвестник обязан прозвучать");
+        }
+
+        [Test]
+        public void Composer_QuietDay_IsNeverLeftMute()
+        {
+            // Осознанное решение: когда сказать больше нечего, повтор ЛУЧШЕ тишины.
+            // Немой день игрок читает как «игра сломалась», а не как «всё спокойно».
+            var cfg = new SignalBalance { TopicCooldownDays = 30 };
+            var memory = new SignalMemory();
+
+            for (int day = 1; day <= 10; day++)
+            {
+                var digest = SignalComposer.Compose(
+                    TensionBand.Calm, null, 1, cfg, null, null, null, false, memory, day);
+
+                Assert.IsNotEmpty(digest.Requests,
+                    $"Сутки {day}: подавление повторов не имеет права оставить день совсем немым");
+            }
+        }
+
     }
 }

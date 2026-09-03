@@ -32,6 +32,9 @@ namespace Game.Core.Loop
 
         public TensionState Tension => _tension;
 
+        /// <summary>Память слоя сигналов. Живёт вместе с кампанией и попадает в слепок.</summary>
+        internal Signals.SignalMemory SignalMemory { get; } = new Signals.SignalMemory();
+
         // ---- Порты городского слоя. Необязательны: без них конвейер
         //      работает как на Э0, что удобно для узких тестов. ----
         public IRosterView Roster { get; set; }
@@ -106,7 +109,8 @@ namespace Game.Core.Loop
             var ctx = new DayContext(CurrentDay, phase, Tier, OrderLevel, _balance, _tension,
                 IsPatrolling, Roster, Population, Pulse, Incidents, Repeats, Casualties)
             {
-                PostDomains = PostDomains
+                PostDomains = PostDomains,
+                SignalMemory = SignalMemory
             };
 
             for (int i = 0; i < _steps.Count; i++)

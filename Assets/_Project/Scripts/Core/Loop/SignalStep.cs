@@ -22,7 +22,9 @@ namespace Game.Core.Loop
                 ctx.Forewarnings,
                 ctx.IncidentOutcomes,
                 BuildPostReports(ctx),
-                ctx.IsNight);
+                ctx.IsNight,
+                ctx.SignalMemory,
+                ctx.Day);
         }
 
         /// <summary>

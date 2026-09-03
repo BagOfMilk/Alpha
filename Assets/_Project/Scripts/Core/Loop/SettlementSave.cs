@@ -71,6 +71,9 @@ namespace Game.Core.Loop
                 }
             }
 
+            string signalBlob = p.SignalMemory.CaptureState();
+            if (!string.IsNullOrEmpty(signalBlob)) sb.Append(';').Append("sig=").Append(signalBlob);
+
             var repeats = p.Repeats as IStateBlob;
             if (repeats != null)
             {
@@ -105,6 +108,7 @@ namespace Game.Core.Loop
                 else if (key == "pop" && p.Population != null) p.Population.RestoreForSave(ParseInt(value));
                 else if (key == "tension") RestoreTension(p, value);
                 else if (key == "trk") RestoreTrack(p, value);
+                else if (key == "sig") p.SignalMemory.RestoreState(value);
                 else if (key == "rep")
                 {
                     var repeats = p.Repeats as IStateBlob;
