@@ -192,7 +192,9 @@ namespace Alpha.Sim
                           "firstBandChangeDay,firstCrisisDay,incidents,crises,bandChanges," +
                           "bandChangesWithoutSignal,longestNoDeltaPhases,longestNoIncidentPhases," +
                           "signalsPerPhase,distinctTopics,maxTopicRepeats,mostRepeatedTopic," +
-                          "fullLadders,skippedLadderSteps,finalBand,finalPopulation");
+                          "fullLadders,skippedLadderSteps,finalBand,finalPopulation," +
+                          "outWorst,outBase,outGood,outBest," +
+                          "tenTierTick,tenThreat,tenEvent,tenQuest,tenBlood");
 
             foreach (var m in all)
             {
@@ -209,7 +211,16 @@ namespace Alpha.Sim
                   .Append(m.MostRepeatedTopic).Append(',')
                   .Append(m.FullLadders).Append(',').Append(m.SkippedLadderSteps).Append(',')
                   .Append(m.FinalBand).Append(',').Append(m.FinalPopulation)
-                  .AppendLine();
+                  .Append(',').Append(m.OutcomeCounts[0]).Append(',').Append(m.OutcomeCounts[1])
+                  .Append(',').Append(m.OutcomeCounts[2]).Append(',').Append(m.OutcomeCounts[3]);
+
+                foreach (var driver in new[] { "CityTierTick", "ThreatOutcome", "EventOutcome", "QuestChoice", "PlaystyleBlood" })
+                {
+                    int v;
+                    m.TensionByDriver.TryGetValue(driver, out v);
+                    sb.Append(',').Append(v);
+                }
+                sb.AppendLine();
             }
 
             File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));

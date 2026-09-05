@@ -35,6 +35,12 @@ namespace Game.Core.Sim
         /// <summary>Накопители, ударившие в эту фазу. Через ';'.</summary>
         public string FiredSources = string.Empty;
 
+        /// <summary>Полосы исхода случившихся инцидентов. Через ';'.</summary>
+        public string OutcomeBands = string.Empty;
+
+        /// <summary>Сколько очков шкалы прибавил каждый драйвер в эту фазу.</summary>
+        public Dictionary<string, int> TensionByDriver = new Dictionary<string, int>();
+
         /// <summary>Заряд каждого накопителя: то, ради чего трасса и существует.</summary>
         public Dictionary<string, int> Charges = new Dictionary<string, int>();
         /// <summary>Ступень, которую игрок реально услышал.</summary>
@@ -100,5 +106,16 @@ namespace Game.Core.Sim
 
         public int FinalBand;
         public int FinalPopulation;
+
+        /// <summary>
+        /// БЮДЖЕТ ДАВЛЕНИЯ: кто именно загнал город наверх. Без этой разбивки
+        /// «Напряжение только растёт» — наблюдение, а не диагноз: непонятно,
+        /// виноват фоновый тик (то есть само течение времени) или исходы
+        /// событий (то есть игра игрока).
+        /// </summary>
+        public Dictionary<string, int> TensionByDriver = new Dictionary<string, int>();
+
+        /// <summary>Сколько инцидентов разошлось по полосам исхода.</summary>
+        public int[] OutcomeCounts = new int[4];
     }
 }

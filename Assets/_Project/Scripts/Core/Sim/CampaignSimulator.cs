@@ -107,6 +107,31 @@ namespace Game.Core.Sim
             }
             row.Incidents = incidents.ToString();
 
+            var bands = new StringBuilder();
+            if (report.Incidents != null)
+            {
+                for (int i = 0; i < report.Incidents.Count; i++)
+                {
+                    if (bands.Length > 0) bands.Append(';');
+                    bands.Append((int)report.Incidents[i].Band);
+                }
+            }
+            row.OutcomeBands = bands.ToString();
+
+            if (report.TensionChanges != null)
+            {
+                for (int i = 0; i < report.TensionChanges.Count; i++)
+                {
+                    var change = report.TensionChanges[i];
+                    if (change.Rejected || change.Applied == 0) continue;
+
+                    string key = change.Driver.ToString();
+                    int had;
+                    row.TensionByDriver.TryGetValue(key, out had);
+                    row.TensionByDriver[key] = had + change.Applied;
+                }
+            }
+
             var fore = new StringBuilder();
             if (report.Forewarnings != null)
             {
@@ -222,6 +247,24 @@ namespace Game.Core.Sim
 
                 CountTopics(row.Topics, topicCounts);
                 ScanLadder(row, prevDelivered, m);
+
+                foreach (var pair in row.TensionByDriver)
+                {
+                    int had;
+                    m.TensionByDriver.TryGetValue(pair.Key, out had);
+                    m.TensionByDriver[pair.Key] = had + pair.Value;
+                }
+
+                if (!string.IsNullOrEmpty(row.OutcomeBands))
+                {
+                    var parts = row.OutcomeBands.Split(';');
+                    for (int b = 0; b < parts.Length; b++)
+                    {
+                        int band;
+                        if (int.TryParse(parts[b], out band) && band >= 0 && band < 4)
+                            m.OutcomeCounts[band]++;
+                    }
+                }
             }
 
             m.SignalsPerPhase = (double)signals / trace.Rows.Count;
