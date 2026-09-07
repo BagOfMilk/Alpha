@@ -25,7 +25,20 @@ namespace Game.Core.Sim
         /// <summary>Раз в столько суток агрессивная политика делает крупный выбор.</summary>
         private const int ChoiceEveryDays = 10;
 
+        /// <summary>
+        /// Колбэк перед каждыми сутками: вызывающий двигает ростер (кто ушёл,
+        /// кто вернулся) и отвечает, вне города ли сейчас партия. Симулятор
+        /// остаётся развязанным от модели персонажа.
+        /// </summary>
+        internal delegate bool BeforeDay(int day);
+
         internal static CampaignTrace Run(DayProcessor processor, SimPolicy policy, int days, BalanceConfig balance)
+        {
+            return Run(processor, policy, days, balance, null);
+        }
+
+        internal static CampaignTrace Run(DayProcessor processor, SimPolicy policy, int days,
+            BalanceConfig balance, BeforeDay beforeDay)
         {
             var trace = new CampaignTrace { Policy = policy, Tier = processor.Tier };
             var lastFired = new Dictionary<string, int>();
@@ -39,6 +52,8 @@ namespace Game.Core.Sim
 
             for (int day = 1; day <= days; day++)
             {
+                bool away = beforeDay != null && beforeDay(day);
+
                 if (policy == SimPolicy.AggressiveChoices && day % ChoiceEveryDays == 0)
                 {
                     TensionDrivers.QuestChoice(processor.Tension,
@@ -50,10 +65,14 @@ namespace Game.Core.Sim
                 // бы ночные заряды — трасса врала бы ровно в том столбце, ради
                 // которого её и заводили.
                 var dayReport = processor.Advance(DayPhase.Day);
-                trace.Rows.Add(Capture(processor, dayReport, trace.TrackIds, lastFired));
+                var dayRow = Capture(processor, dayReport, trace.TrackIds, lastFired);
+                dayRow.PartyAway = away;
+                trace.Rows.Add(dayRow);
 
                 var nightReport = processor.Advance(DayPhase.Night);
-                trace.Rows.Add(Capture(processor, nightReport, trace.TrackIds, lastFired));
+                var nightRow = Capture(processor, nightReport, trace.TrackIds, lastFired);
+                nightRow.PartyAway = away;
+                trace.Rows.Add(nightRow);
             }
 
             return trace;
@@ -255,14 +274,22 @@ namespace Game.Core.Sim
                     m.TensionByDriver[pair.Key] = had + pair.Value;
                 }
 
+                if (row.PartyAway) m.PhasesAway++; else m.PhasesHome++;
+
+                int gained = 0;
+                foreach (var pair in row.TensionByDriver)
+                    if (pair.Value > 0) gained += pair.Value;
+                if (row.PartyAway) m.TensionGainAway += gained; else m.TensionGainHome += gained;
+
                 if (!string.IsNullOrEmpty(row.OutcomeBands))
                 {
                     var parts = row.OutcomeBands.Split(';');
                     for (int b = 0; b < parts.Length; b++)
                     {
                         int band;
-                        if (int.TryParse(parts[b], out band) && band >= 0 && band < 4)
-                            m.OutcomeCounts[band]++;
+                        if (!int.TryParse(parts[b], out band) || band < 0 || band >= 4) continue;
+                        m.OutcomeCounts[band]++;
+                        if (row.PartyAway) m.OutcomesAway[band]++; else m.OutcomesHome[band]++;
                     }
                 }
             }

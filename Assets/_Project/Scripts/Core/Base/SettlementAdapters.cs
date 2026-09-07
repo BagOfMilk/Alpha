@@ -69,6 +69,12 @@ namespace Game.Core.Base
         private readonly string _protagonistId;
         private readonly List<ISettlementActor> _buffer = new List<ISettlementActor>();
 
+        /// <summary>
+        /// Кто уходит в вылазку. Только для симуляционного харнеса: у самой
+        /// игры партию будет задавать экран сборов, которого пока нет.
+        /// </summary>
+        internal List<Companion> PartyForSim { get; set; }
+
         public RosterAdapter(Roster roster, string protagonistId = null)
         {
             _roster = roster ?? throw new ArgumentNullException(nameof(roster));

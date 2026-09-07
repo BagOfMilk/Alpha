@@ -41,7 +41,7 @@ namespace Alpha.Sim
 
             Directory.CreateDirectory(outDir);
 
-            var policies = new[] { SimPolicy.Passive, SimPolicy.PatrolEveryNight, SimPolicy.AggressiveChoices };
+            var policies = new[] { SimPolicy.Passive, SimPolicy.PatrolEveryNight, SimPolicy.AggressiveChoices, SimPolicy.Expedition };
             var tiers = new[] { 1, 2, 3, 4 };
 
             var summary = new List<CampaignMetrics>();
@@ -50,7 +50,9 @@ namespace Alpha.Sim
                 foreach (int tier in tiers)
                 {
                     var processor = BuildProcessor(tier);
-                    var trace = CampaignSimulator.Run(processor, policy, days, Balance);
+                    var trace = policy == SimPolicy.Expedition
+                        ? RunExpedition(processor, days)
+                        : CampaignSimulator.Run(processor, policy, days, Balance);
                     var metrics = CampaignSimulator.Measure(trace);
                     summary.Add(metrics);
 
@@ -93,6 +95,9 @@ namespace Alpha.Sim
             roster.Add(Make("scout", StatType.Scouting, 6, Positions[5]));
 
             var adapter = new RosterAdapter(roster);
+            // Партия — те, кто держит склад, разведку и мастерскую. Когда они
+            // уходят, эти три поста пустеют: вылазка обязана стоить городу.
+            adapter.PartyForSim = new List<Companion> { roster.Get("guard"), roster.Get("scout"), roster.Get("elder") };
             var pulse = new WorldPulse(cfg.Pulse);
             foreach (var s in DefaultPressureSources.All()) pulse.AddSource(s);
 
@@ -112,6 +117,30 @@ namespace Alpha.Sim
                     new PostDomain(Positions[3], "лазарет", SkillKeys.Medicine, 5)
                 }
             };
+        }
+
+        // ---- вылазка: партия из трёх уходит, три поста пустеют ----
+
+        /// <summary>Каждые сорок суток партия уходит на десять. Четверть кампании — без трёх рук.</summary>
+        private static bool PartyIsAway(int day)
+        {
+            int inCycle = (day - 1) % 40;
+            return inCycle >= 20 && inCycle < 30;
+        }
+
+        private static CampaignTrace RunExpedition(DayProcessor processor, int days)
+        {
+            var adapter = (RosterAdapter)processor.Roster;
+            var party = adapter.PartyForSim;
+
+            return CampaignSimulator.Run(processor, SimPolicy.Expedition, days, Balance, delegate (int day)
+            {
+                bool away = PartyIsAway(day);
+                for (int i = 0; i < party.Count; i++)
+                    if (!party[i].IsDead)
+                        party[i].Status = away ? CompanionStatus.OnMission : CompanionStatus.Assigned;
+                return away;
+            });
         }
 
         private static Companion Make(string id, StatType stat, int value, string position)
@@ -246,6 +275,19 @@ namespace Alpha.Sim
                     m.LongestStreakWithoutDelta, m.MaxTopicRepeats);
             }
 
+            Console.WriteLine();
+            Console.WriteLine("СТЫК ДВУХ ЛУПОВ (только политика Expedition): партия дома против партии в вылазке");
+            Console.WriteLine("{0,4} | {1,6} {2,6} | {3,7} {4,7} | {5,8} {6,8} | {7,9} {8,9}",
+                "тир", "фаз д", "фаз в", "Worst д", "Worst в", "давл д", "давл в", "W/фаза д", "W/фаза в");
+            foreach (var m in all)
+            {
+                if (m.Policy != SimPolicy.Expedition) continue;
+                double wh = m.PhasesHome > 0 ? (double)m.OutcomesHome[0] / m.PhasesHome : 0;
+                double wa = m.PhasesAway > 0 ? (double)m.OutcomesAway[0] / m.PhasesAway : 0;
+                Console.WriteLine("{0,4} | {1,6} {2,6} | {3,7} {4,7} | {5,8} {6,8} | {7,9:0.000} {8,9:0.000}",
+                    m.Tier, m.PhasesHome, m.PhasesAway, m.OutcomesHome[0], m.OutcomesAway[0],
+                    m.TensionGainHome, m.TensionGainAway, wh, wa);
+            }
             Console.WriteLine();
             Console.WriteLine("Столбцы: сутки первого предвестника / инцидента / дельта-сигнала / кризиса;");
             Console.WriteLine("всего инцидентов; полных лестниц 1-2-3; самая длинная тишина без дельты (в фазах);");

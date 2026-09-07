@@ -38,6 +38,9 @@ namespace Game.Core.Sim
         /// <summary>Полосы исхода случившихся инцидентов. Через ';'.</summary>
         public string OutcomeBands = string.Empty;
 
+        /// <summary>Часть ростера в эту фазу вне города (вылазка).</summary>
+        public bool PartyAway;
+
         /// <summary>Сколько очков шкалы прибавил каждый драйвер в эту фазу.</summary>
         public Dictionary<string, int> TensionByDriver = new Dictionary<string, int>();
 
@@ -55,7 +58,13 @@ namespace Game.Core.Sim
         /// <summary>Патрулирует каждую ночь — единственная контригра, что есть в Э1.</summary>
         PatrolEveryNight = 1,
         /// <summary>Спит, но раз в десять суток делает крупный выбор в квесте.</summary>
-        AggressiveChoices = 2
+        AggressiveChoices = 2,
+        /// <summary>
+        /// Партия периодически уходит в вылазку, оставляя посты пустыми.
+        /// Кто именно и когда — решает вызывающий через колбэк: симулятор
+        /// не знает про ростер и знать не должен.
+        /// </summary>
+        Expedition = 3
     }
 
     internal sealed class CampaignTrace
@@ -117,5 +126,17 @@ namespace Game.Core.Sim
 
         /// <summary>Сколько инцидентов разошлось по полосам исхода.</summary>
         public int[] OutcomeCounts = new int[4];
+
+        /// <summary>
+        /// СТЫК ДВУХ ЛУПОВ. Те же исходы, разложенные на «партия дома» и
+        /// «партия в вылазке». Если вылазка ничего не стоит городу, эти
+        /// столбцы совпадут — и тогда ось «время против риска» пуста.
+        /// </summary>
+        public int PhasesAway;
+        public int PhasesHome;
+        public int[] OutcomesAway = new int[4];
+        public int[] OutcomesHome = new int[4];
+        public int TensionGainAway;
+        public int TensionGainHome;
     }
 }
