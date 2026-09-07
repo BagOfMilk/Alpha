@@ -119,6 +119,23 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Catalog_NoCitySlot_ProducesMaterials()
+        {
+            // Правило Эпика 15 и Поправки №4: оба компонента приходят ТОЛЬКО извне.
+            // Слот, производящий материалы внутри города, отменяет экономическую
+            // подставу вылазки — и именно так это и прожило в контенте первой
+            // итерации, пока никто не проверял.
+            var offenders = DefaultContent.AllSlots()
+                .Where(s => s.OutputKind == SlotOutputKind.Resource
+                         && s.OutputResource == Game.Core.Economy.ResourceType.Materials)
+                .Select(s => s.Id)
+                .ToList();
+
+            Assert.IsEmpty(offenders,
+                "Город не производит материалы — они только снаружи: " + string.Join(", ", offenders));
+        }
+
+        [Test]
         public void Catalog_EveryIncident_NamesItsPosition()
         {
             var nameless = DefaultIncidents.All()
