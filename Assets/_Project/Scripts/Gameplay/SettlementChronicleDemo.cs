@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
@@ -55,8 +56,16 @@ namespace Game.Gameplay
             var baseState = new BaseState(roster, new ResourceLedger(), balance);
             baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Fortifications));
             baseState.AddSlot(new AssignmentSlotDefinition("market", "Рынок", BaseSectionType.Settlement));
+
+            // Фермы берём из настоящего контента, а не выдумываем: без крана еды
+            // поселение голодает с первого дня, и хроника показывала бы одну
+            // только нехватку вместо жизни города.
+            baseState.AddSlot(DefaultContent.AllSlots().Find(x => x.Id == "settlement_farms"));
+            baseState.Resources.Add(ResourceType.Food, 20);
+
             baseState.TryAssign("guard", "watch");
             baseState.TryAssign("trader", "market");
+            baseState.TryAssign("scout", "settlement_farms");
 
             var adapter = new RosterAdapter(roster, "hero");
             var tension = new TensionState(balance.Tension);
@@ -64,7 +73,8 @@ namespace Game.Gameplay
             var pulse = new WorldPulse(balance.Pulse);
             foreach (var source in DefaultPressureSources.All()) pulse.AddSource(source);
 
-            var processor = new DayProcessor(tension, balance, DayProcessor.DefaultSteps())
+            var production = new ProductionStep(baseState);
+            var processor = new DayProcessor(tension, balance, SettlementCycle.BuildSteps(production))
             {
                 Tier = tier,
                 Roster = adapter,
@@ -81,6 +91,8 @@ namespace Game.Gameplay
                 }
             };
 
+            var cycle = new SettlementCycle(baseState, processor, production);
+
             var choices = new HashSet<int>(heavyChoiceDays ?? new int[0]);
             var log = new StringBuilder();
             log.AppendLine($"=== ХРОНИКА ПОСЕЛЕНИЯ: {daysToSimulate} дней ===");
@@ -89,10 +101,12 @@ namespace Game.Gameplay
 
             for (int i = 0; i < daysToSimulate; i++)
             {
-                foreach (var phase in new[] { DayPhase.Day, DayPhase.Night })
+                // Сутки целиком и одним вызовом: производство внутри идёт ровно
+                // один раз, ночная фаза отсеивается самим шагом.
+                var reports = cycle.AdvanceCalendarDay();
+                foreach (var report in reports)
                 {
-                    var report = processor.Advance(phase);
-                    string mark = phase == DayPhase.Night ? "ночь" : "день";
+                    string mark = report.Phase == DayPhase.Night ? "ночь" : "день";
 
                     foreach (var line in Describe(report))
                         log.AppendLine($"[{mark} {report.Day / 2 + 1}] {line}");
@@ -100,6 +114,10 @@ namespace Game.Gameplay
                     foreach (var incident in report.Incidents)
                         log.AppendLine($"[{mark} {report.Day / 2 + 1}] {DescribeIncident(incident, roster)}");
                 }
+
+                var produced = cycle.Production.LastReport;
+                if (produced != null && produced.FoodShortage)
+                    log.AppendLine($"[день {i + 1}] ⚠ еды не хватило — завтра все работают хуже");
 
                 if (choices.Contains(i + 1))
                 {

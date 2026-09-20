@@ -4,7 +4,7 @@
   "docs/DESIGN.md": "b326bcf5",
   "docs/BALANCE.md": "4c6b1735",
   "docs/GDD_AMENDMENTS.md": "998e2872",
-  "docs/SETTLEMENT_LAYER.md": "3acead65"
+  "docs/SETTLEMENT_LAYER.md": "a4274124"
  },
  "bind": {
   "sections": {
@@ -182,7 +182,7 @@
    "class",
    "Base",
    "Core/Base/BaseState.cs",
-   "Ядро мирной фазы: ростер + слоты + кошелёк + баланс. AdvanceCycle() = один игровой день."
+   "Состояние базы: ростер, кошелёк, слоты. AdvanceCycle теперь internal — продвинуть время можно только конвейером дня через ProductionStep, и Game.Gameplay физически не может позвать его в обход."
   ],
   [
    "c.CycleReport",
@@ -1821,6 +1821,33 @@
    "Тесты",
    "Tests/EditMode/EconomyClosureTests.cs",
    "У каждого ресурса есть кран и слив; материалы приходят только из вылазки; еда не входит ни в одну цену."
+  ],
+  [
+   "c.ProductionStep",
+   "ProductionStep",
+   "code",
+   "class",
+   "Base",
+   "Core/Base/ProductionStep.cs",
+   "Производство базы как шаг дневного конвейера. Лежит в Base, а не в Loop: зависимость идёт только в одну сторону, через порт IDayStep. Ночью не выполняется — сутки состоят из двух фаз, и без этого база производила бы дважды в день."
+  ],
+  [
+   "c.SettlementCycle",
+   "SettlementCycle",
+   "code",
+   "class",
+   "Base",
+   "Core/Base/SettlementCycle.cs",
+   "Единственный способ продвинуть время в поселении. Связывает модуль базы и конвейер дня так, чтобы «производство идёт» и «день прошёл» перестали быть разными событиями. Здесь же, и только здесь, переносится флаг голода."
+  ],
+  [
+   "c.tCycle",
+   "SettlementCycleTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/SettlementCycleTests.cs",
+   "Сутки производят ровно один раз, ночь не двигает цикл, счётчики расходятся предсказуемо, голод доходит до Напряжения и давит раз в сутки."
   ]
  ],
  "edges": [
@@ -4510,6 +4537,72 @@
    "g.wounds",
    "c.ExpeditionRunner",
    "реализовано: у ранений появился источник",
+   "impl"
+  ],
+  [
+   "c.ProductionStep",
+   "c.BaseState",
+   "зовёт AdvanceCycle — единственный легальный вызывающий",
+   "code"
+  ],
+  [
+   "c.ProductionStep",
+   "c.CycleReport",
+   "отдаёт сводку отдельным каналом",
+   "code"
+  ],
+  [
+   "c.ProductionStep",
+   "c.DayStepOrder",
+   "место в конвейере",
+   "code"
+  ],
+  [
+   "c.ProductionStep",
+   "c.DayContext",
+   "читает фазу дня",
+   "code"
+  ],
+  [
+   "c.SettlementCycle",
+   "c.ProductionStep",
+   "обязан быть зарегистрирован, иначе отказ на старте",
+   "code"
+  ],
+  [
+   "c.SettlementCycle",
+   "c.DayProcessor",
+   "продвигает фазы",
+   "code"
+  ],
+  [
+   "c.SettlementCycle",
+   "c.BaseState",
+   "зеркалит флаг голода в конвейер",
+   "code"
+  ],
+  [
+   "c.BaseGameDemo",
+   "c.SettlementCycle",
+   "крутит дни только через мост",
+   "code"
+  ],
+  [
+   "c.tCycle",
+   "c.SettlementCycle",
+   "сутки нельзя прожить дважды",
+   "code"
+  ],
+  [
+   "b.m.cycle",
+   "c.SettlementCycle",
+   "цикл дня подключён к конвейеру",
+   "impl"
+  ],
+  [
+   "g.wait",
+   "c.SettlementCycle",
+   "дни прокручиваются одним способом",
    "impl"
   ]
  ],

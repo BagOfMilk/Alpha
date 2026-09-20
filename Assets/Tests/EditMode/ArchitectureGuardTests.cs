@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using System.IO;
 using System.Text.RegularExpressions;
 using Game.Core.Loop;
@@ -69,6 +70,46 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Продвинуть время можно только конвейером.
+        ///
+        /// BaseState.AdvanceCycle закрыт от Game.Gameplay модификатором доступа,
+        /// но модификатор можно вернуть одной правкой, и тогда снова появятся
+        /// два дневных цикла. Проверка держит решение как контракт.
+        /// </summary>
+        [Test]
+        public void BaseState_HasNoPublicAdvanceCycle()
+        {
+            var method = typeof(Game.Core.Base.BaseState)
+                .GetMethod("AdvanceCycle", BindingFlags.Public | BindingFlags.Instance);
+
+            Assert.IsNull(method,
+                "AdvanceCycle снова публичный — производство можно позвать в обход конвейера дня");
+        }
+
+        /// <summary>
+        /// Направление зависимости: Base знает про Loop, Loop про Base — никогда.
+        ///
+        /// Существующий забор ищет конкретные типы Stats и Economy и этого не
+        /// ловит: ссылку на сам модуль базы он бы пропустил.
+        /// </summary>
+        [Test]
+        public void Loop_DoesNotReferenceBase()
+        {
+            var dir = Path.Combine(CoreRoot, "Loop");
+            if (!Directory.Exists(dir)) Assert.Pass("слоя Loop нет");
+
+            var forbidden = new Regex(@"Game\.Core\.Base|\bBaseState\b|\bCycleReport\b");
+            var offenders = new List<string>();
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+                if (forbidden.IsMatch(StripComments(File.ReadAllText(file))))
+                    offenders.Add(Path.GetFileName(file));
+
+            Assert.IsEmpty(offenders,
+                "Конвейер дня не должен знать про модуль базы: " + string.Join(", ", offenders));
+        }
+
+        /// <summary>
         /// Инвариант №9: названия настольных систем-источников не упоминаются
         /// нигде в проекте (юридическая гигиена, Поправка №3.11).
         /// </summary>
@@ -97,7 +138,7 @@ namespace Game.Tests.EditMode
             int[] order =
             {
                 DayStepOrder.Clock, DayStepOrder.Construction, DayStepOrder.Production,
-                DayStepOrder.Population, DayStepOrder.Derived, DayStepOrder.Tension,
+                DayStepOrder.Population, DayStepOrder.Derived, DayStepOrder.Hunger, DayStepOrder.Tension,
                 DayStepOrder.Obligations, DayStepOrder.Pulse, DayStepOrder.Incidents,
                 DayStepOrder.Healing, DayStepOrder.Signals, DayStepOrder.Report
             };

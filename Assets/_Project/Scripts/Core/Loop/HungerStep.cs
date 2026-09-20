@@ -12,6 +12,11 @@ namespace Game.Core.Loop
     ///
     /// Стоит перед тиком Напряжения: сегодняшний голод должен войти в сегодняшнюю
     /// полосу, иначе таблица инцидентов взвесится по вчерашней обстановке.
+    ///
+    /// Ночью не срабатывает. Календарные сутки — это две фазы, и без этого
+    /// гейта один голодный день давил бы дважды: темп «полоса за 25 голодных
+    /// дней» превратился бы в 13, а заметить сдвиг можно было бы только сверив
+    /// числа с поправкой.
     /// </summary>
     public sealed class HungerStep : IDayStep
     {
@@ -19,6 +24,7 @@ namespace Game.Core.Loop
 
         public void Execute(DayContext ctx)
         {
+            if (ctx.IsNight) return;
             if (!ctx.IsHungry) return;
             TensionDrivers.Hunger(ctx.Tension, "hunger:day" + ctx.Day, ctx.Balance);
         }

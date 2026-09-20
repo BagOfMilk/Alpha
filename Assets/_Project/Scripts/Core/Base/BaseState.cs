@@ -130,8 +130,14 @@ namespace Game.Core.Base
         /// <summary>
         /// Один цикл (день): производство со всех занятых слотов, начисление
         /// ролевого опыта, естественное лечение и расход еды поселением.
+        ///
+        /// INTERNAL намеренно. Единственный легальный вызывающий — ProductionStep
+        /// внутри дневного конвейера; Game.Gameplay лежит в другой сборке и
+        /// физически не может позвать этот метод в обход. Пока он был публичным,
+        /// демка базы крутила его напрямую, и в проекте существовало два дневных
+        /// цикла, не знающих друг о друге.
         /// </summary>
-        public CycleReport AdvanceCycle()
+        internal CycleReport AdvanceCycle()
         {
             CurrentCycle++;
             var report = new CycleReport { Cycle = CurrentCycle };
