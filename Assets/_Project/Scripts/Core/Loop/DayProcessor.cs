@@ -32,6 +32,9 @@ namespace Game.Core.Loop
 
         public TensionState Tension => _tension;
 
+        /// <summary>Память слоя сигналов. Живёт вместе с кампанией и попадает в слепок.</summary>
+        internal Signals.SignalMemory SignalMemory { get; } = new Signals.SignalMemory();
+
         // ---- Порты городского слоя. Необязательны: без них конвейер
         //      работает как на Э0, что удобно для узких тестов. ----
         public IRosterView Roster { get; set; }
@@ -47,6 +50,19 @@ namespace Game.Core.Loop
 
         /// <summary>Поселению не хватило еды в прошлом цикле (Поправка №4).</summary>
         public bool IsHungry { get; set; }
+
+        /// <summary>
+        /// Спрашивать ли игрока, как разбираться с событием.
+        ///
+        /// Выключено по умолчанию НАМЕРЕННО: включение меняет контракт вызова
+        /// (Advance может вернуть неполные сутки), а интерфейса, который показал
+        /// бы предложение, ещё нет. Архитектура заложена сейчас — пока на
+        /// Advance() не завязались следующие этапы, — а момент переключения
+        /// остаётся решением владельца.
+        /// </summary>
+        public bool RequirePlayerDecision { get; set; }
+
+        private DayContext _awaiting;
 
         public DayProcessor(TensionState tension, BalanceConfig balance, IEnumerable<IDayStep> steps)
         {
@@ -78,28 +94,116 @@ namespace Game.Core.Loop
             };
         }
 
+        /// <summary>
+        /// Слепок городского слоя одной строкой. Отдаётся наружу непрозрачным:
+        /// сборка Game.Gameplay кладёт его в систему сохранений, но прочитать
+        /// оттуда скрытые числа случайно не может (см. SettlementSave).
+        /// </summary>
+        public string SaveState()
+        {
+            return SettlementSave.Capture(this);
+        }
+
+        /// <summary>Восстановить состояние из слепка, сделанного SaveState.</summary>
+        public void RestoreState(string blob)
+        {
+            SettlementSave.Restore(this, blob);
+        }
+
+        internal void RestoreDay(int day)
+        {
+            CurrentDay = day < 0 ? 0 : day;
+        }
+
+        /// <summary>Ждёт ли конвейер хода игрока прямо сейчас.</summary>
+        public bool AwaitsDecision
+        {
+            get { return _awaiting != null; }
+        }
+
         public DayReport Advance(DayPhase phase = DayPhase.Day)
         {
-            CurrentDay++;
+            if (_awaiting != null)
+                throw new InvalidOperationException(
+                    "Сутки не закончены: конвейер ждёт решения. Сначала ResolvePending.");
+
+            // Календарные сутки начинаются с дневной фазы; ночь принадлежит тем
+            // же суткам. Иначе счётчик считает ФАЗЫ, и каждое окно «в днях»
+            // (кулдауны, окно повторов, grace кризиса) вдвое короче заявленного.
+            if (phase == DayPhase.Day) CurrentDay++;
             _tension.BeginDay();
 
             var ctx = new DayContext(CurrentDay, phase, Tier, OrderLevel, _balance, _tension,
                 IsPatrolling, Roster, Population, Pulse, Incidents, Repeats, Casualties)
             {
                 PostDomains = PostDomains,
-                IsHungry = IsHungry
+                IsHungry = IsHungry,
+                SignalMemory = SignalMemory,
+                RequirePlayerDecision = RequirePlayerDecision
             };
 
+            // Первая половина конвейера — до хода игрока.
+            RunSteps(ctx, 0, DayStepOrder.PlayerResolution);
+
+            if (ctx.Pending != null)
+            {
+                // Сутки остановлены. Сигналы намеренно НЕ собираются: они
+                // описывают финальное состояние дня, а день ещё не случился.
+                _awaiting = ctx;
+                return BuildReport(ctx);
+            }
+
+            return Finish(ctx);
+        }
+
+        /// <summary>
+        /// Ход игрока: выбранный путь разбирается, и сутки доигрываются до конца.
+        /// </summary>
+        public DayReport ResolvePending(IncidentPath path)
+        {
+            if (_awaiting == null)
+                throw new InvalidOperationException("Нечего решать: конвейер не остановлен.");
+
+            var ctx = _awaiting;
+            _awaiting = null;
+
+            var outcome = World.IncidentResolver.Resolve(
+                ctx.PendingIncident, ctx.Roster, ctx.Repeats, ctx.Casualties,
+                ctx.Population, ctx.Tension, ctx.Day, ctx.Balance, path);
+
+            ctx.IncidentOutcomes.Add(outcome);
+            ctx.Pending = null;
+            ctx.PendingIncident = null;
+
+            return Finish(ctx);
+        }
+
+        private DayReport Finish(DayContext ctx)
+        {
+            RunSteps(ctx, DayStepOrder.PlayerResolution, int.MaxValue);
+
+            if (ctx.Phase == DayPhase.Day) _tension.OnDayAdvanced();
+            return BuildReport(ctx);
+        }
+
+        private void RunSteps(DayContext ctx, int fromOrderInclusive, int toOrderExclusive)
+        {
             for (int i = 0; i < _steps.Count; i++)
+            {
+                int order = _steps[i].Order;
+                if (order < fromOrderInclusive || order >= toOrderExclusive) continue;
                 _steps[i].Execute(ctx);
+            }
+        }
 
-            _tension.OnDayAdvanced();
-
+        private DayReport BuildReport(DayContext ctx)
+        {
             // Копии: отчёт не должен меняться, когда начнётся следующий день.
             var ledger = new List<TensionChange>(_tension.DayLedger);
             var incidents = new List<IncidentOutcome>(ctx.IncidentOutcomes);
             var forewarnings = new List<Forewarning>(ctx.Forewarnings);
-            return new DayReport(ctx.Day, ctx.Phase, ledger, ctx.Signals, incidents, forewarnings);
+            return new DayReport(ctx.Day, ctx.Phase, ledger, ctx.Signals, incidents,
+                forewarnings, ctx.Pending);
         }
 
         /// <summary>Прокрутить N дней подряд (кнопка «ждать», US-1.3).</summary>

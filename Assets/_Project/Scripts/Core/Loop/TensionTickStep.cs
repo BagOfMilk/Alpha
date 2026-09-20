@@ -15,6 +15,11 @@ namespace Game.Core.Loop
 
         public void Execute(DayContext ctx)
         {
+            // Фоновый тик — СУТОЧНЫЙ. Ночь принадлежит тем же суткам, иначе
+            // город получает две порции фонового давления за день, и якорь
+            // «хутор не доходит до кризиса за кампанию» ломается вдвое.
+            if (ctx.IsNight) return;
+
             var cfg = ctx.Balance.Tension;
             double tick = cfg.TierTick(ctx.Tier, ctx.OrderLevel);
             if (tick != 0.0)

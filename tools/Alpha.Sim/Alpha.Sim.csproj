@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Симуляционный харнес: гоняет кампании и пишет трассу в CSV.
+
+    Отдельный проект, а не тест, потому что у него другая задача: тест отвечает
+    «да/нет», а харнес выдаёт числа, по которым числа баланса и правятся.
+    Метрики он берёт из Game.Core.Sim — те же, что читают тесты темпа, поэтому
+    CLI и CI смотрят на одно и то же.
+
+    Читает internal-члены ядра (заряды накопителей, значение Напряжения) — это
+    инструмент дизайнера. Game.Gameplay такого доступа не получает и получить
+    не может: дашборд в игре по-прежнему невозможно собрать (инвариант 3).
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Alpha.Sim</AssemblyName>
+    <RootNamespace>Alpha.Sim</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
+  </ItemGroup>
+
+</Project>

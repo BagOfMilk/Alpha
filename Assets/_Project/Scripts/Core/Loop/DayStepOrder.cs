@@ -29,6 +29,8 @@ namespace Game.Core.Loop
         public const int Obligations = 600;    // [ПОЗЖЕ] Э4
         public const int Pulse = 700;          // [ПОЗЖЕ] Э1
         public const int Incidents = 800;      // [ПОЗЖЕ] Э1
+        /// <summary>Ход игрока: конвейер останавливается и ждёт решения.</summary>
+        public const int PlayerResolution = 850;
         public const int Healing = 900;
         public const int Signals = 1000;
         public const int Report = 1100;

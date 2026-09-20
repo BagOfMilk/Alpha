@@ -70,12 +70,16 @@ namespace Game.Core.World
 
                 track.Accumulate(source.InsistencePerDay(ctx), _cfg);
 
+                // Кандидат в предвестники. Ступень НЕ засчитывается здесь:
+                // засчитает её тот, кто доставит сигнал игроку (шаг Pulse).
+                //
+                // Выдаётся РОВНО ОДНА ступень за раз, а не текущая. Иначе
+                // накопитель, проскочивший за ночь два порога, доносит сразу
+                // третью, и вторая — единственная, обязанная назвать место —
+                // теряется молча. Лестницу нужно проходить, а не перепрыгивать.
                 int level = track.ForewarnLevel(_cfg);
-                if (level > track.AnnouncedLevel)
-                {
-                    track.AnnouncedLevel = level;
-                    forewarnings.Add(new Forewarning(track.SourceId, level, track.DomainTag));
-                }
+                if (level > track.DeliveredLevel)
+                    forewarnings.Add(new Forewarning(track.SourceId, track.DeliveredLevel + 1, track.DomainTag));
             }
 
             // Отбор сработавших: самые заполненные первыми, ничьи — по Id.
@@ -83,7 +87,7 @@ namespace Game.Core.World
             foreach (var source in _sources)
             {
                 var track = _tracks[source.Id];
-                if (source.IsActive(ctx) && track.IsReady(ctx.Day))
+                if (source.IsActive(ctx) && track.IsReady(ctx.Day, _cfg))
                     ready.Add(track);
             }
 
@@ -106,21 +110,22 @@ namespace Game.Core.World
             return new PulseTick(fired, forewarnings);
         }
 
-        /// <summary>Текущая ступень предвестника источника.</summary>
-        internal int AnnouncedLevelOf(string sourceId)
+        /// <summary>
+        /// Отметить, что предвестники дошли до игрока. Вызывает шаг дня: только он
+        /// знает, спал игрок или патрулировал.
+        /// </summary>
+        public void MarkDelivered(IReadOnlyList<Forewarning> delivered, int day)
         {
-            return _tracks.TryGetValue(sourceId, out var track) ? track.AnnouncedLevel : 0;
+            if (delivered == null) return;
+            for (int i = 0; i < delivered.Count; i++)
+                if (_tracks.TryGetValue(delivered[i].SourceId, out var track))
+                    track.MarkDelivered(delivered[i].Level, day);
         }
 
-        /// <summary>
-        /// Ступень предвестника на момент последнего срабатывания — именно её
-        /// проверяет разбор инцидента. Спрашивать текущую бессмысленно:
-        /// срабатывание её обнуляет, и проверка «кризис был объявлен» никогда
-        /// не выполнялась бы.
-        /// </summary>
-        internal int LevelAtLastFireOf(string sourceId)
+        /// <summary>Ступень, которую игрок УСЛЫШАЛ — для проверок и тестов.</summary>
+        internal int DeliveredLevelOf(string sourceId)
         {
-            return _tracks.TryGetValue(sourceId, out var track) ? track.LevelAtLastFire : 0;
+            return _tracks.TryGetValue(sourceId, out var track) ? track.DeliveredLevel : 0;
         }
     }
 }

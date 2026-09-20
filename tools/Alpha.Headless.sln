@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game.Tests.EditMode", "Game
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game.Gameplay.Lint", "Game.Gameplay.Lint\Game.Gameplay.Lint.csproj", "{CF92A880-8025-4AD7-AAF8-43D88830D3BF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Alpha.Sim", "Alpha.Sim\Alpha.Sim.csproj", "{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{CF92A880-8025-4AD7-AAF8-43D88830D3BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CF92A880-8025-4AD7-AAF8-43D88830D3BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CF92A880-8025-4AD7-AAF8-43D88830D3BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -61,9 +61,6 @@ namespace Game.Core.Balance
         /// <summary>Сколько Напряжения добавляет один голодный день (Поправка №4).</summary>
         public int HungerDeltaPerDay = 8;
 
-        /// <summary>Окно на реакцию после входа в «Излом» до кризиса.</summary>
-        public int CrisisGraceDays = 3;
-
         public TensionBand BandFor(int value)
         {
             var t = BandThresholds;

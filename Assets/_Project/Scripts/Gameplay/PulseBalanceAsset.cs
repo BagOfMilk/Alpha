@@ -33,6 +33,10 @@ namespace Game.Gameplay
         [Tooltip("Меньше трёх накопителей — и система читается насквозь. Проверяется тестом.")]
         [Min(1)] public int minActiveTracks = 3;
 
+        [Header("Кризис")]
+        [Tooltip("Сколько суток у игрока есть после услышанной третьей ступени.")]
+        [Min(0)] public int crisisGraceDays = 3;
+
         public PulseBalance ToConfig()
         {
             return new PulseBalance
@@ -44,7 +48,8 @@ namespace Game.Gameplay
                 Forewarn3At = forewarn3At,
                 MaxFiresPerDay = maxFiresPerDay,
                 MaxFiresPerNight = maxFiresPerNight,
-                MinActiveTracks = minActiveTracks
+                MinActiveTracks = minActiveTracks,
+                CrisisGraceDays = crisisGraceDays
             };
         }
     }

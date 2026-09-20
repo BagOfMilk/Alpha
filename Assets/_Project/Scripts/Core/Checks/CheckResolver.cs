@@ -126,17 +126,28 @@ namespace Game.Core.Checks
                 return all;
             }
 
-            // Позицию держит кто-то один, НО протагонист может вмешаться всегда:
-            // «протагонист — тоже кандидат» (US-8.2). Без этого лидер оказался бы
-            // бессилен в собственном городе.
+            // Позицию держит тот, кто на ней стоит. Протагонист — тоже, но
+            // только там, где он сегодня находится: ПРИСУТСТВИЕ есть манёвр, а не
+            // вездесущность.
+            //
+            // Раньше здесь стояло «|| a.IsProtagonist» по букве US-8.2. Одна эта
+            // строка делала недостижимыми сразу три механики: «незанятая позиция
+            // → Худшая полоса», молчание доклада с пустого поста и «слепоту»
+            // Поправки №3.8. Лидер выигрывал КАЖДУЮ проверку на КАЖДОЙ позиции,
+            // и расстановка переставала быть решением.
+            //
+            // Противоречие живёт в самом GDD: US-8.2 требует и «протагонист —
+            // тоже кандидат», и «если позицию никто не держит → худший исход»,
+            // а второе при первом математически недостижимо. Правило приоритета
+            // проекта разрешает спор: поправки старше GDD.
             var candidates = new List<ISettlementActor>();
             for (int i = 0; i < present.Count; i++)
             {
                 var a = present[i];
                 if (a == null || !a.IsPresentInSettlement) continue;
 
-                bool onPost = string.Equals(a.HeldPositionId, request.RequiredPositionId, StringComparison.Ordinal);
-                if (onPost || a.IsProtagonist) candidates.Add(a);
+                if (string.Equals(a.HeldPositionId, request.RequiredPositionId, StringComparison.Ordinal))
+                    candidates.Add(a);
             }
             return candidates;
         }

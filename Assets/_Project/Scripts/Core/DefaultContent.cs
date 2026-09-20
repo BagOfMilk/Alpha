@@ -139,9 +139,13 @@ namespace Game.Core
             });
 
             // Мастерская — материалы.
+            // Материалы приходят ТОЛЬКО снаружи (Эпик 6.2 / 15, Поправка №5): город их
+            // не производит, иначе вылазка теряет экономический смысл. Настоящая роль
+            // верстака — крафт (Эпик 6), он материалы ТРАТИТ. До крафта верстак чинит
+            // и продаёт мелочь — плейсхолдер, чтобы позиция не была мёртвой.
             slots.Add(new AssignmentSlotDefinition("workshop_bench", "Верстак мастерской", BaseSectionType.Workshop)
             {
-                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Materials,
+                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
                 PrimaryAptitude = StatType.Engineering, SecondaryAptitude = StatType.Tech,
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.2, OutputPerSecondaryPoint = 0.4
             });

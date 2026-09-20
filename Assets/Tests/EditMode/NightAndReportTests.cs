@@ -154,12 +154,8 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Crisis_ActuallyHappens_AndIsAlwaysAnnouncedFirst()
+        public void Crisis_NeverArrivesUnannouncedNorBelowHeatBand()
         {
-            // Прежняя версия этого теста имела запасной выход «кризис не
-            // наступил — тоже валидный сценарий», и срабатывал именно он:
-            // кризис не наступал НИКОГДА, а тест был зелёным. Теперь
-            // отсутствие кризиса — это провал, а не оправдание.
             var cfg = Cfg();
             var roster = new Roster();
             roster.Add(Guard("hero", 3));
@@ -167,38 +163,35 @@ namespace Game.Tests.EditMode
             roster.Add(Guard("beta", 3));
 
             var p = MakeProcessor(cfg, roster, "hero");
-            p.Tier = 4;
             p.IsPatrolling = true;
 
+            // Старт 500 — это «Брожение». Город за сотню фаз доходит до верхних
+            // полос сам (исходы инцидентов плюс фоновый тик), поэтому кризис
+            // здесь возможен — но только на своих условиях. Проверяем ровно их.
+            bool heardLevel3 = false;
             int crises = 0;
-            int maxLevelSeen = 0;
 
-            for (int day = 1; day <= 200; day++)
+            for (int day = 1; day <= 120; day++)
             {
-                foreach (var phase in new[] { DayPhase.Day, DayPhase.Night })
+                var report = day % 2 == 0 ? p.Advance(DayPhase.Night) : p.Advance(DayPhase.Day);
+
+                if (report.Incidents.Any(i => i.WasCrisis))
                 {
-                    var report = p.Advance(phase);
-
-                    foreach (var f in report.Forewarnings)
-                        if (f.SourceId == "crisis" && f.Level > maxLevelSeen) maxLevelSeen = f.Level;
-
-                    foreach (var incident in report.Incidents)
-                    {
-                        if (!incident.WasCrisis) continue;
-                        crises++;
-                        Assert.AreEqual(3, maxLevelSeen,
-                            "Кризис не имеет права ударить без предвестника третьей ступени");
-                        maxLevelSeen = 0;
-                    }
+                    crises++;
+                    Assert.IsTrue(heardLevel3,
+                        $"Фаза {day}: кризис ударил раньше, чем игрок услышал предвестник третьей ступени");
+                    Assert.GreaterOrEqual((int)p.Tension.Band, (int)TensionBand.Heat,
+                        $"Фаза {day}: кризис невозможен ниже «Накала» — накопитель там не активен");
                 }
 
-                if (day % 5 == 0)
-                    TensionDrivers.QuestChoice(p.Tension, TensionDrivers.ChoiceWeight.Major, "q" + day, cfg);
+                // Отмечаем ПОСЛЕ проверки: предвестник этой же фазы не считается
+                // предупреждением для удара этой же фазы.
+                if (report.Forewarnings.Any(f => f.SourceId == "crisis" && f.Level >= 3))
+                    heardLevel3 = true;
             }
 
             Assert.Greater(crises, 0,
-                "Кризис обязан быть достижим: недостижимый кризис — мёртвая ветка, " +
-                "а не бережный дизайн");
+                "За 120 фаз с растущим Напряжением кризис обязан случиться хотя бы раз — иначе тест ничего не проверил");
         }
 
         [Test]

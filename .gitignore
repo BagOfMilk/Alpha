@@ -45,3 +45,6 @@ Thumbs.db
 *.bak
 crashlytics-build.properties
 sysinfo.txt
+
+# Трассы симуляционного харнеса (tools/Alpha.Sim)
+sim-out/

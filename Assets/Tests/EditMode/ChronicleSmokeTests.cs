@@ -37,6 +37,14 @@ namespace Game.Tests.EditMode
             baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Fortifications));
             baseState.TryAssign("guard", "watch");
 
+            // Люди стоят на ТЕХ позициях, которые адресуют инциденты. Иначе город
+            // формально населён, а фактически пуст: каждая проверка идёт без
+            // кандидата и даёт Худшую полосу, и «тихий хутор» тихим не будет.
+            roster.Get("hero").AssignedSlotId = "council_seat";
+            roster.Get("guard").AssignedSlotId = "storehouse_dock";
+            roster.Get("trader").AssignedSlotId = "settlement_market";
+            roster.Get("scout").AssignedSlotId = "scouting_post";
+
             var adapter = new RosterAdapter(roster, "hero");
             var pulse = new WorldPulse(cfg.Pulse);
             foreach (var s in DefaultPressureSources.All()) pulse.AddSource(s);
@@ -51,7 +59,7 @@ namespace Game.Tests.EditMode
                 Incidents = DefaultIncidents.BuildTable(),
                 Repeats = new RepeatTracker(),
                 IsPatrolling = true,
-                PostDomains = new[] { new PostDomain("watch", "улицы", SkillKeys.Survival, 6) }
+                PostDomains = new[] { new PostDomain("storehouse_dock", "склад", SkillKeys.Survival, 6) }
             };
         }
 

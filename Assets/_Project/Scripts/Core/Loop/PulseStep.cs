@@ -27,7 +27,13 @@ namespace Game.Core.Loop
             // Спать — значит потерять сигналы ночи (Поправка №3.9).
             bool canHear = !ctx.IsNight || ctx.IsPatrolling;
             if (canHear)
+            {
                 ctx.Forewarnings.AddRange(tick.Forewarnings);
+
+                // Ступень засчитывается только услышанная. Проспанное
+                // предупреждение не сгорает — накопитель предложит его снова.
+                ctx.Pulse.MarkDelivered(tick.Forewarnings, ctx.Day);
+            }
 
             ctx.FiredSourceIds.AddRange(tick.FiredSourceIds);
         }

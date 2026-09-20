@@ -69,6 +69,12 @@ namespace Game.Core.Base
         private readonly string _protagonistId;
         private readonly List<ISettlementActor> _buffer = new List<ISettlementActor>();
 
+        /// <summary>
+        /// Кто уходит в вылазку. Только для симуляционного харнеса: у самой
+        /// игры партию будет задавать экран сборов, которого пока нет.
+        /// </summary>
+        internal List<Companion> PartyForSim { get; set; }
+
         public RosterAdapter(Roster roster, string protagonistId = null)
         {
             _roster = roster ?? throw new ArgumentNullException(nameof(roster));
@@ -159,9 +165,50 @@ namespace Game.Core.Base
     /// Учёт повторных обращений по темам. Третий подход к одной теме за неделю
     /// дороже первого — защита от спама без единой случайности.
     /// </summary>
-    public sealed class RepeatTracker : IRepeatTracker
+    public sealed class RepeatTracker : IRepeatTracker, Game.Core.Loop.IStateBlob
     {
         private readonly Dictionary<string, List<int>> _byTopic = new Dictionary<string, List<int>>();
+
+        /// <summary>
+        /// Без этого штраф за повторы обнулялся бы каждой загрузкой, и сейв
+        /// становился бы способом снять наказание.
+        /// </summary>
+        public string CaptureState()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var pair in _byTopic)
+            {
+                if (pair.Value.Count == 0) continue;
+                if (sb.Length > 0) sb.Append('~');
+                sb.Append(pair.Key).Append('#');
+                for (int i = 0; i < pair.Value.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(pair.Value[i]);
+                }
+            }
+            return sb.ToString();
+        }
+
+        public void RestoreState(string blob)
+        {
+            _byTopic.Clear();
+            if (string.IsNullOrEmpty(blob)) return;
+
+            foreach (var entry in blob.Split('~'))
+            {
+                int hash = entry.IndexOf('#');
+                if (hash <= 0) continue;
+
+                var days = new List<int>();
+                foreach (var d in entry.Substring(hash + 1).Split(','))
+                {
+                    int v;
+                    if (int.TryParse(d, out v)) days.Add(v);
+                }
+                _byTopic[entry.Substring(0, hash)] = days;
+            }
+        }
 
         public int AttemptsInWindow(string topicId, int day, int windowDays)
         {

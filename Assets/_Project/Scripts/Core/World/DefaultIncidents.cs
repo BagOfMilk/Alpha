@@ -26,7 +26,7 @@ namespace Game.Core.World
             // ---- Ропот: мелочь, которую видно на улице ----
             yield return new IncidentDefinition
             {
-                Id = "petty_theft", TopicId = "incident.petty_theft", DomainTag = "склад",
+                Id = "petty_theft", TopicId = "incident.petty_theft", SourceId = "street", DomainTag = "склад",
                 MinBand = TensionBand.Murmur, MaxBand = TensionBand.Heat, MinTier = 1, Weight = 12,
                 QuietPathSkill = SkillKeys.Persuade, QuietPathThreshold = 5,
                 QuietPathApproach = ApproachForm.Persuade,
@@ -37,7 +37,7 @@ namespace Game.Core.World
 
             yield return new IncidentDefinition
             {
-                Id = "market_brawl", TopicId = "incident.market_brawl", DomainTag = "рынок",
+                Id = "market_brawl", TopicId = "incident.market_brawl", SourceId = "street", DomainTag = "рынок",
                 MinBand = TensionBand.Murmur, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 10,
                 QuietPathSkill = SkillKeys.Trade, QuietPathThreshold = 6,
                 QuietPathApproach = ApproachForm.Trade,
@@ -48,7 +48,7 @@ namespace Game.Core.World
 
             yield return new IncidentDefinition
             {
-                Id = "spoiled_stores", TopicId = "incident.spoiled_stores", DomainTag = "припасы",
+                Id = "spoiled_stores", TopicId = "incident.spoiled_stores", SourceId = "street", DomainTag = "припасы",
                 MinBand = TensionBand.Calm, MaxBand = TensionBand.Heat, MinTier = 1, Weight = 8,
                 QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 5,
                 RelevantPositionId = "settlement_farms",
@@ -57,7 +57,7 @@ namespace Game.Core.World
 
             yield return new IncidentDefinition
             {
-                Id = "sick_child", TopicId = "incident.sick_child", DomainTag = "лазарет",
+                Id = "sick_child", TopicId = "incident.sick_child", SourceId = "street", DomainTag = "лазарет",
                 MinBand = TensionBand.Calm, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 9,
                 QuietPathSkill = SkillKeys.Medicine, QuietPathThreshold = 6,
                 RelevantPositionId = "infirmary_bed",
@@ -67,7 +67,7 @@ namespace Game.Core.World
             // ---- Брожение: организованная преступность ----
             yield return new IncidentDefinition
             {
-                Id = "protection_racket", TopicId = "incident.protection_racket", DomainTag = "рынок",
+                Id = "protection_racket", TopicId = "incident.protection_racket", SourceId = "street", DomainTag = "рынок",
                 MinBand = TensionBand.Ferment, MaxBand = TensionBand.Fracture, MinTier = 2, Weight = 12,
                 QuietPathSkill = SkillKeys.Intimidate, QuietPathThreshold = 8,
                 QuietPathApproach = ApproachForm.Intimidate,
@@ -78,7 +78,7 @@ namespace Game.Core.World
 
             yield return new IncidentDefinition
             {
-                Id = "missing_person", TopicId = "incident.missing_person", DomainTag = "окраина",
+                Id = "missing_person", TopicId = "incident.missing_person", SourceId = "street", DomainTag = "окраина",
                 MinBand = TensionBand.Ferment, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 10,
                 QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 7,
                 BloodyPathSkill = SkillKeys.Melee, BloodyPathThreshold = 6,
@@ -89,7 +89,7 @@ namespace Game.Core.World
             // ---- Ночные ----
             yield return new IncidentDefinition
             {
-                Id = "night_burglary", TopicId = "incident.night_burglary", DomainTag = "ночь",
+                Id = "night_burglary", TopicId = "incident.night_burglary", SourceId = "night", DomainTag = "ночь",
                 MinBand = TensionBand.Murmur, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 14,
                 NightOnly = true,
                 QuietPathSkill = SkillKeys.Lockpick, QuietPathThreshold = 6,
@@ -100,7 +100,7 @@ namespace Game.Core.World
 
             yield return new IncidentDefinition
             {
-                Id = "night_arson", TopicId = "incident.night_arson", DomainTag = "ночь",
+                Id = "night_arson", TopicId = "incident.night_arson", SourceId = "night", DomainTag = "ночь",
                 MinBand = TensionBand.Heat, MaxBand = TensionBand.Fracture, MinTier = 2, Weight = 10,
                 NightOnly = true,
                 QuietPathSkill = SkillKeys.Mechanics, QuietPathThreshold = 8,
@@ -112,11 +112,12 @@ namespace Game.Core.World
             // ---- Кризис ----
             yield return new IncidentDefinition
             {
-                Id = "crisis_riot", TopicId = "incident.crisis_riot", DomainTag = "площадь",
-                // Копить давление кризиса источник начинает с «Накала» — значит и
-                // разрешаться кризис обязан с «Накала». Иначе сработавший на
-                // Накале кризис не находил бы себе инцидента и пропадал впустую,
-                // сжигая заряд и уходя на 30 дней кулдауна.
+                Id = "crisis_riot", TopicId = "incident.crisis_riot", SourceId = "crisis", DomainTag = "площадь",
+                // Источник кризиса копит с «Накала» (IsActive: TensionBandIndex >= 3),
+                // значит и разрешаться кризис обязан с «Накала». Иначе созревший на
+                // Накале кризис не находит себе инцидента: Eligible режет по полосе,
+                // Pick возвращает null, а заряд УЖЕ сгорел в Fire — и источник уходит
+                // на 30 дней кулдауна впустую.
                 MinBand = TensionBand.Heat, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 100,
                 QuietPathSkill = SkillKeys.Persuade, QuietPathThreshold = 10,
                 QuietPathApproach = ApproachForm.Persuade,

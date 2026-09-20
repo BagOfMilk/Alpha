@@ -41,7 +41,9 @@ namespace Game.Core.Signals
             IReadOnlyList<Forewarning> forewarnings,
             IReadOnlyList<IncidentOutcome> incidents,
             IReadOnlyList<PostReport> postReports,
-            bool isNight)
+            bool isNight,
+            SignalMemory memory = null,
+            int day = 0)
         {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
 
@@ -151,7 +153,12 @@ namespace Game.Core.Signals
                     tags: new[] { "band:" + band }));
             }
 
-            var selected = Select(candidates, cfg);
+            var selected = Select(candidates, cfg, memory, day);
+
+            // Показанное запоминается: завтра при равной срочности вперёд пойдёт
+            // то, чего игрок дольше не слышал.
+            if (memory != null) memory.Remember(selected, day);
+
             return new SignalDigest(selected, BuildMoodboard(band, tier));
         }
 
@@ -186,9 +193,23 @@ namespace Game.Core.Signals
             return SignalUrgency.Ambient;
         }
 
-        private static List<SignalRequest> Select(List<SignalRequest> candidates, SignalBalance cfg)
+        private static List<SignalRequest> Select(List<SignalRequest> candidates, SignalBalance cfg,
+            SignalMemory memory, int day)
         {
-            candidates.Sort(Compare);
+            candidates.Sort((a, b) => Compare(a, b, memory, day));
+
+            // Подавление повторов. Снимается только то, что игрок недавно слышал
+            // и что не является дельтой; последний кандидат не отбирается, иначе
+            // день стал бы немым.
+            if (memory != null && cfg.TopicCooldownDays > 0)
+            {
+                for (int i = candidates.Count - 1; i >= 0 && candidates.Count > 1; i--)
+                {
+                    if (candidates[i].IsDelta) continue;
+                    if (memory.Staleness(candidates[i].TopicId, day) >= cfg.TopicCooldownDays) continue;
+                    candidates.RemoveAt(i);
+                }
+            }
 
             int budget = cfg.MaxSignalsPerDay > 0 ? cfg.MaxSignalsPerDay : 1;
             var pickedIndices = new List<int>();
@@ -220,14 +241,27 @@ namespace Game.Core.Signals
             return picked;
         }
 
-        /// <summary>Срочность убыв. → дельта вперёд → ключ по алфавиту (для воспроизводимости).</summary>
-        private static int Compare(SignalRequest a, SignalRequest b)
+        /// <summary>
+        /// Срочность убыв. → дельта вперёд → давно не звучало вперёд → ключ по
+        /// алфавиту (для воспроизводимости).
+        ///
+        /// Третий критерий и есть анти-повтор. Он ничего не запрещает: срочное
+        /// по-прежнему обгоняет всё, а вот два одинаково тихих сигнала больше не
+        /// разрешаются алфавитом раз и навсегда в пользу одного и того же.
+        /// </summary>
+        private static int Compare(SignalRequest a, SignalRequest b, SignalMemory memory, int day)
         {
             int byUrgency = b.Urgency.CompareTo(a.Urgency);
             if (byUrgency != 0) return byUrgency;
 
             int byDelta = b.IsDelta.CompareTo(a.IsDelta);
             if (byDelta != 0) return byDelta;
+
+            if (memory != null)
+            {
+                int byStaleness = memory.Staleness(b.TopicId, day).CompareTo(memory.Staleness(a.TopicId, day));
+                if (byStaleness != 0) return byStaleness;
+            }
 
             return string.CompareOrdinal(a.TopicId, b.TopicId);
         }
