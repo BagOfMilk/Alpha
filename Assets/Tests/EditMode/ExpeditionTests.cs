@@ -82,6 +82,35 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(6, result.Days, "тихий путь длиннее");
         }
 
+        /// <summary>
+        /// Столп целиком, а не половина: тихий путь не ранит НИКОГДА, включая
+        /// провал. Прошлая версия ранила одного при недоборе — ровно тот случай,
+        /// ради которого Поправка №1 и написана.
+        /// </summary>
+        [Test]
+        public void QuietApproach_EvenOnFailure_WoundsNobody()
+        {
+            var cfg = Cfg();
+            var party = Party(cfg, Scout("a", 1, cfg));
+            var result = ExpeditionResolver.Resolve(Site(threshold: 9), ExpeditionApproach.Quiet, party, new SiteLedger(), cfg);
+
+            Assert.AreEqual(OutcomeBand.Worst, result.Band, "подготовки не хватило");
+            CollectionAssert.IsEmpty(result.Wounded, "тихий путь платит днями, а не кровью");
+        }
+
+        /// <summary>Ниже порога — пустые руки. Проверка детерминированная, а не шкала.</summary>
+        [Test]
+        public void BelowThreshold_BringsNothingBack()
+        {
+            var cfg = Cfg();
+            var party = Party(cfg, Scout("a", 1, cfg));
+            var result = ExpeditionResolver.Resolve(Site(threshold: 9), ExpeditionApproach.Quiet, party, new SiteLedger(), cfg);
+
+            Assert.AreEqual(0, result.Materials);
+            Assert.AreEqual(0, result.Gold);
+            Assert.AreEqual(6, result.Days, "дни всё равно потрачены");
+        }
+
         [Test]
         public void ForcefulApproach_IsFasterButWounds()
         {
@@ -126,6 +155,26 @@ namespace Game.Tests.EditMode
             var late = ExpeditionResolver.Preview(site, ExpeditionApproach.Quiet, party, ledger, cfg);
             Assert.AreEqual(cfg.ExpeditionDepletionFloor, late.YieldMultiplier, 1e-9, "есть пол");
             Assert.Greater(late.Materials, 0, "истощённая точка всё ещё что-то даёт");
+        }
+
+        /// <summary>
+        /// Пол истощения проверяется на РЕАЛЬНОЙ стартовой точке, а не на
+        /// удобном синтетическом числе: у «Ближних развалин» база 2, и при
+        /// множителе 0.25 округление к чётному уводило добычу в ноль — точка
+        /// иссякала насухо вопреки собственному полу.
+        /// </summary>
+        [Test]
+        public void RealStartingSite_NeverDriesUpCompletely()
+        {
+            var cfg = Cfg();
+            var ledger = new SiteLedger();
+            var site = DefaultSites.Outskirts();
+            var party = Party(cfg, Scout("a", site.Threshold, cfg));
+
+            for (int i = 0; i < 30; i++) ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet, party, ledger, cfg);
+
+            var late = ExpeditionResolver.Preview(site, ExpeditionApproach.Quiet, party, ledger, cfg);
+            Assert.GreaterOrEqual(late.Materials, 1, $"база {site.BaseMaterials} на множителе {late.YieldMultiplier} ушла в ноль");
         }
 
         /// <summary>Предпросмотр обещает ровно то, что выдаст резолв (US-17.3).</summary>

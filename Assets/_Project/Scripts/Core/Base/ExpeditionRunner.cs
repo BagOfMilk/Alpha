@@ -15,7 +15,8 @@ namespace Game.Core.Base
         EmptyParty = 2,
         PartyTooLarge = 3,
         UnknownCompanion = 4,
-        CompanionUnavailable = 5   // мёртв, ранен или уже в вылазке
+        CompanionUnavailable = 5,  // мёртв, ранен или уже в вылазке
+        DuplicateCompanion = 6     // один и тот же человек дважды в списке
     }
 
     /// <summary>
@@ -41,10 +42,18 @@ namespace Game.Core.Base
             // целиком или не уходит вовсе, иначе половина ростера осталась бы
             // снятой с постов из-за одного мёртвого в списке.
             var chosen = new List<Companion>(companionIds.Count);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < companionIds.Count; i++)
             {
                 var c = state.Roster.Get(companionIds[i]);
                 if (c == null) return DispatchResult.UnknownCompanion;
+
+                // Один человек дважды в списке — не безобидная опечатка: он
+                // добавил бы половину себя к силе отряда и получил бы двойную
+                // рану на возврате. Дедупликация молча скрыла бы ошибку
+                // вызывающего, поэтому отказ явный.
+                if (!seen.Add(c.Id)) return DispatchResult.DuplicateCompanion;
+
                 if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission)
                     return DispatchResult.CompanionUnavailable;
                 chosen.Add(c);
@@ -98,13 +107,15 @@ namespace Game.Core.Base
             }
         }
 
+        // Критический тир вылазка не выдаёт: его источник — бой, которого ещё
+        // нет. Ветка под него не заводится заранее — недостижимый case выглядит
+        // как покрытие, которого на деле нет.
         private static double PointsFor(WoundTier tier, BaseState state)
         {
             switch (tier)
             {
                 case WoundTier.Light: return state.Balance.ExpeditionLightWoundPoints;
                 case WoundTier.Serious: return state.Balance.ExpeditionSeriousWoundPoints;
-                case WoundTier.Critical: return state.Balance.ExpeditionSeriousWoundPoints * 2;
                 default: return 0;
             }
         }

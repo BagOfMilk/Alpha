@@ -58,28 +58,56 @@ namespace Game.Tests.EditMode
             CollectionAssert.Contains(costs.ToList(), ResourceType.Materials);
         }
 
-        /// <summary>Каждый объявленный ресурс должен где-то появляться и где-то деваться.</summary>
+        /// <summary>
+        /// Каждый объявленный ресурс должен где-то появляться и где-то деваться.
+        ///
+        /// Краны и сливы СОБИРАЮТСЯ ИЗ КОНТЕНТА, а не перечисляются в теле
+        /// теста. Прошлая версия сверяла enum со словарём, вписанным сюда же, —
+        /// такой тест выглядит забором, но ловит ровно одно: что кто-то добавил
+        /// член enum и забыл дописать строчку в словарь. Убери завтра выход
+        /// ферм — и он бы этого не заметил.
+        ///
+        /// Кран вылазки нельзя вычитать из контента слотов, поэтому он
+        /// проверяется отдельно (Materials_ComeFromExpedition) и здесь
+        /// добавляется тем же вызовом настоящего резолва.
+        /// </summary>
         [Test]
         public void EveryResource_HasFaucetAndSink()
         {
-            var faucets = new Dictionary<ResourceType, string>
-            {
-                { ResourceType.Gold, "Рынок и Погрузочный док (US-7.1, Поправка №4.1)" },
-                { ResourceType.Food, "Фермы поселения (Поправка №4)" },
-                { ResourceType.Materials, "Вылазка (Э6.2, Приложение А)" },
-            };
-            var sinks = new Dictionary<ResourceType, string>
-            {
-                { ResourceType.Gold, "Разблокировка дока" },
-                { ResourceType.Food, "Ежедневный прокорм" },
-                { ResourceType.Materials, "Разблокировка дока" },
-            };
+            var cfg = Cfg();
+            var slots = DefaultContent.AllSlots();
+
+            var faucets = new HashSet<ResourceType>(slots
+                .Where(s => s.OutputKind == SlotOutputKind.Resource)
+                .Select(s => s.OutputResource));
+
+            // Вылазка — кран материалов. Берём не из списка, а из настоящего
+            // резолва: если она перестанет их приносить, тест это увидит.
+            var arch = new CompanionArchetype("scout", "Разведчик");
+            arch.SetSkill(SkillType.Survival, 8);
+            var scout = arch.CreateInstance("scout_1", cfg);
+            var loot = ExpeditionResolver.Resolve(DefaultSites.Outskirts(), ExpeditionApproach.Quiet,
+                new List<ISettlementActor> { new CompanionActorAdapter(scout, false, cfg) }, new SiteLedger(), cfg);
+            if (loot.Materials > 0) faucets.Add(ResourceType.Materials);
+            if (loot.Gold > 0) faucets.Add(ResourceType.Gold);
+
+            var sinks = new HashSet<ResourceType>(slots
+                .Where(s => s.UnlockCost != null)
+                .SelectMany(s => s.UnlockCost.Keys));
+
+            // Прокорм — слив еды. Тоже проверяется делом: гоняем цикл и смотрим,
+            // убавилось ли в кошельке.
+            var state = new BaseState(new Roster(), new ResourceLedger(), cfg);
+            state.Roster.Add(arch.CreateInstance("eater_1", cfg));
+            state.Resources.Add(ResourceType.Food, 10);
+            state.AdvanceCycle();
+            if (state.Resources.Get(ResourceType.Food) < 10) sinks.Add(ResourceType.Food);
 
             foreach (ResourceType r in Enum.GetValues(typeof(ResourceType)))
             {
                 if (r == ResourceType.None) continue;
-                Assert.IsTrue(faucets.ContainsKey(r), $"{r}: нет крана — откуда он берётся?");
-                Assert.IsTrue(sinks.ContainsKey(r), $"{r}: нет слива — куда он девается?");
+                Assert.IsTrue(faucets.Contains(r), $"{r}: нет крана — откуда он берётся?");
+                Assert.IsTrue(sinks.Contains(r), $"{r}: нет слива — куда он девается?");
             }
         }
 

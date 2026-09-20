@@ -105,9 +105,6 @@ namespace Game.Core.Balance
         public int ExpeditionForcefulWoundsOnWorst = 2;
         public int ExpeditionForcefulWoundsOnBase = 1;
 
-        /// <summary>Тихий путь ранит только при провале — и только одного.</summary>
-        public int ExpeditionQuietWoundsOnWorst = 1;
-
         /// <summary>Во сколько очков восстановления обходится лёгкая рана.</summary>
         public double ExpeditionLightWoundPoints = 20.0;
 

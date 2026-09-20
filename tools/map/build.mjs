@@ -399,6 +399,17 @@ for (const a of archetypes) {
   }
 }
 
+/**
+ * Файлы игрового кода, которые реально наносят ранения.
+ *
+ * Считается ОДИН раз и используется и карточкой разрыва, и заметкой к прогону.
+ * Раньше их было две копии с разными регекспами: карточку починили под «+=»,
+ * а заметка осталась на голом «=» и продолжала уверять, что источника нет.
+ * Две копии одной проверки расходятся всегда — вопрос только когда.
+ */
+const injurySetters = CORE_FILES.filter((p) =>
+  [...CS[p].matchAll(/InjuryPoints\s*\+?=\s*([^;]+);/g)].some((m) => m[1].trim() !== "0"));
+
 /* ──────────────────────── прогон первого дня ──────────────────────── */
 
 const slotById = Object.fromEntries(slots.map((s) => [s.id, s]));
@@ -476,7 +487,7 @@ const runNote = [
   offProfile.length
     ? `Не по профилю: ${offProfile.map((o) => `${o.arch} на «${o.slot}» (${o.stat} ниже порога ${balance.SkillMatchThreshold ?? 5})`).join(", ")} — и выработка голая, и ролевой опыт ${offProfile[0].xp} вместо ${first(xpValues, "—")}.`
     : null,
-  slots.some((s) => s.kind === "Healing") && !/InjuryPoints\s*=/.test(coreCode.replace(/InjuryPoints\s*=\s*0/g, ""))
+  slots.some((s) => s.kind === "Healing") && !injurySetters.length
     ? `Очки лечения уходят в пустоту: ранения в игре никто не наносит.`
     : null,
   levelDays.length
@@ -577,11 +588,7 @@ if (neverSet.length) {
     "mid", "Мёртвый код");
 }
 
-// Ранения без источника. Присваивание ищется и через +=: раны начисляются
-// накопительно, и регексп на голое «=» проглядел бы единственный настоящий
-// источник, продолжая уверять, что его нет.
-const injurySetters = CORE_FILES.filter((p) =>
-  [...CS[p].matchAll(/InjuryPoints\s*\+?=\s*([^;]+);/g)].some((m) => m[1].trim() !== "0"));
+// ранения без источника — вычисление живёт выше, в injurySetters
 if (slots.some((s) => s.kind === "Healing") && !injurySetters.length) {
   const bestHeal = maxOf(slots.filter((s) => s.kind === "Healing")
     .map((s) => maxOf(archetypes.map((a) => roundHalfEven(s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2)), s.base)));

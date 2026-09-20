@@ -61,8 +61,13 @@ namespace Game.Core.Expeditions
             var band = BandFor(margin, cfg.Checks);
 
             double depletion = ledger == null ? 1.0 : ledger.YieldMultiplier(site.Id, cfg);
-            double bandMult = 1.0 + cfg.ExpeditionYieldPerBand * ((int)band - (int)OutcomeBand.Base);
-            if (bandMult < 0) bandMult = 0;
+
+            // Ниже порога — пустые руки, а не «поменьше». Проверка
+            // детерминированная: «скил ≥ порога = успех», и половина добычи за
+            // провал размывала бы это в шкалу без смысла.
+            double bandMult = band == OutcomeBand.Worst
+                ? 0.0
+                : 1.0 + cfg.ExpeditionYieldPerBand * ((int)band - (int)OutcomeBand.Base);
 
             return new ExpeditionPreview
             {
@@ -123,13 +128,20 @@ namespace Game.Core.Expeditions
         }
 
         /// <summary>
-        /// Сколько человек вернётся ранеными. Тихий путь не ранит никого, пока
-        /// подготовки хватает — это Поправка №1 в числах, а не в намерении.
+        /// Сколько человек вернётся ранеными.
+        ///
+        /// Тихий путь не ранит НИКОГДА — ни при каком исходе. Поправка №1
+        /// говорит это без оговорок: «тихий путь: безопасный (без ран/шрамов/
+        /// пермадета), но медленный и дорогой». Раньше здесь стояло «не ранит,
+        /// пока подготовки хватает» — условие, которого в поправке нет, и оно
+        /// ломало столп ровно в том случае, ради которого столп писался.
+        ///
+        /// Провал тихого пути стоит дней и пустых рук, а не крови: отряд неделю
+        /// отсутствовал, люди всё это время ели, а принёс он ничего.
         /// </summary>
         public static int WoundCount(ExpeditionApproach approach, OutcomeBand band, BalanceConfig cfg)
         {
-            if (approach == ExpeditionApproach.Quiet)
-                return band == OutcomeBand.Worst ? cfg.ExpeditionQuietWoundsOnWorst : 0;
+            if (approach == ExpeditionApproach.Quiet) return 0;
 
             switch (band)
             {
@@ -167,11 +179,19 @@ namespace Game.Core.Expeditions
                 result.Wounded.Add(new ExpeditionWound { ActorId = ordered[i].Id, Tier = tier });
         }
 
+        /// <summary>
+        /// Добыча в целых. Если после истощения что-то ещё причитается, но
+        /// округление увело в ноль, выдаётся единица: на «Ближних развалинах»
+        /// с базой 2 выработанная точка давала бы 2 x 0.25 = 0.5 -> 0, то есть
+        /// иссякала бы насухо вопреки собственному полу.
+        /// </summary>
         private static int Scale(int baseValue, double multiplier)
         {
+            if (baseValue <= 0 || multiplier <= 0) return 0;
+
             double v = baseValue * multiplier;
-            int rounded = (int)Math.Round(v, MidpointRounding.ToEven);
-            return rounded < 0 ? 0 : rounded;
+            int rounded = (int)Math.Round(v, MidpointRounding.AwayFromZero);
+            return rounded < 1 ? 1 : rounded;
         }
     }
 }
