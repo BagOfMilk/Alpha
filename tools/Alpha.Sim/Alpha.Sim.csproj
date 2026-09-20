@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
+    <!-- Общий мир с консольной сборкой: одна копия правил на два инструмента. -->
+    <Compile Include="../Shared/SettlementWorld.cs" Link="Shared/SettlementWorld.cs" />
   </ItemGroup>
 
 </Project>

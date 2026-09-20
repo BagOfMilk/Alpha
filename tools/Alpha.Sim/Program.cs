@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Alpha.Shared;
 using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
@@ -73,50 +74,33 @@ namespace Alpha.Sim
         }
 
         // ---- сборка кампании ----
+        //
+        // Мир строит Alpha.Shared.SettlementWorld — тот же код, которым его
+        // строит консольная сборка первого часа. Иначе замеренный темп
+        // относился бы не к той игре, в которую играют.
 
-        private static readonly string[] Positions =
-        {
-            "storehouse_dock", "settlement_market", "settlement_farms",
-            "infirmary_bed", "council_seat", "scouting_post", "workshop_bench"
-        };
+        private static readonly string[] Positions = SettlementWorld.Positions;
 
         private static DayProcessor BuildProcessor(int tier)
         {
-            var cfg = Balance;
-            var roster = new Roster();
+            var roster = SettlementWorld.BuildRoster();
+            var processor = SettlementWorld.BuildProcessor(tier, roster);
 
-            // Шесть напарников с разными профилями: специалист по каждому домену
-            // плюс два середняка. Числа намеренно скромные — «хутор», а не элита.
-            roster.Add(Make("guard", SkillType.Trade, 8, Positions[0]));
-            roster.Add(Make("trader", SkillType.Trade, 7, Positions[1]));
-            roster.Add(Make("farmer", SkillType.Survival, 6, Positions[2]));
-            roster.Add(Make("medic", SkillType.Medicine, 7, Positions[3]));
-            roster.Add(Make("elder", SkillType.Persuade, 6, Positions[4]));
-            roster.Add(Make("scout", SkillType.Survival, 6, Positions[5]));
-
-            var adapter = new RosterAdapter(roster);
-            // Партия — те, кто держит склад, разведку и мастерскую. Когда они
-            // уходят, эти три поста пустеют: вылазка обязана стоить городу.
-            adapter.PartyForSim = new List<Companion> { roster.Get("guard"), roster.Get("scout"), roster.Get("elder") };
-            var pulse = new WorldPulse(cfg.Pulse);
-            foreach (var s in DefaultPressureSources.All()) pulse.AddSource(s);
-
-            return new DayProcessor(new TensionStateFactory().Create(cfg), cfg, DayProcessor.DefaultSteps())
+            // Партия — те, кто держит склад, разведку и совет. Когда они уходят,
+            // эти посты пустеют: вылазка обязана стоить городу.
+            //
+            // Живёт здесь, а не в общем мире: PartyForSim — internal-член ядра,
+            // открытый харнесу и закрытый игре. Консольная сборка первого часа
+            // его не видит и видеть не должна (инвариант 3).
+            var adapter = (RosterAdapter)processor.Roster;
+            var party = new List<Companion>();
+            for (int i = 0; i < SettlementWorld.PartyIds.Length; i++)
             {
-                Tier = tier,
-                Roster = adapter,
-                Casualties = adapter,
-                Population = new PopulationState(),
-                Pulse = pulse,
-                Incidents = DefaultIncidents.BuildTable(),
-                Repeats = new RepeatTracker(),
-                PostDomains = new[]
-                {
-                    new PostDomain(Positions[0], "склад", SkillKeys.Survival, 5),
-                    new PostDomain(Positions[1], "рынок", SkillKeys.Trade, 5),
-                    new PostDomain(Positions[3], "лазарет", SkillKeys.Medicine, 5)
-                }
-            };
+                var member = roster.Get(SettlementWorld.PartyIds[i]);
+                if (member != null) party.Add(member);
+            }
+            adapter.PartyForSim = party;
+            return processor;
         }
 
         // ---- вылазка: партия из трёх уходит, три поста пустеют ----
@@ -141,24 +125,6 @@ namespace Alpha.Sim
                         party[i].Status = away ? CompanionStatus.OnMission : CompanionStatus.Assigned;
                 return away;
             });
-        }
-
-        private static Companion Make(string id, SkillType skill, int value, string position)
-        {
-            var arch = new CompanionArchetype(id, id);
-            arch.SetSkill(skill, value);
-            var c = arch.CreateInstance(id);
-            c.AssignedSlotId = position;
-            return c;
-        }
-
-        /// <summary>Мелкий помощник: TensionState требует секцию баланса, а не весь конфиг.</summary>
-        private sealed class TensionStateFactory
-        {
-            public Game.Core.Pressure.TensionState Create(BalanceConfig cfg)
-            {
-                return new Game.Core.Pressure.TensionState(cfg.Tension);
-            }
         }
 
         // ---- выгрузка ----

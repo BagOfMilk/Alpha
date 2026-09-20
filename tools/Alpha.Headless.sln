@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game.Gameplay.Lint", "Game.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Alpha.Sim", "Alpha.Sim\Alpha.Sim.csproj", "{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Alpha.Play", "Alpha.Play\Alpha.Play.csproj", "{05E85071-A80D-4B0C-A0E0-66ACD4A8B718}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B1E4C22-5A0D-42F1-9C3E-0D6A8F5B1E44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{05E85071-A80D-4B0C-A0E0-66ACD4A8B718}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{05E85071-A80D-4B0C-A0E0-66ACD4A8B718}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{05E85071-A80D-4B0C-A0E0-66ACD4A8B718}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{05E85071-A80D-4B0C-A0E0-66ACD4A8B718}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

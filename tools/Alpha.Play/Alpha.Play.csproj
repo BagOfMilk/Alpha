@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Консольная сборка первого часа (docs/FIRST_HOUR.md §4 п. 6).
+
+    Зачем отдельный инструмент, а не сцена в Unity: срез первого часа нужно
+    ПРОЙТИ и измерить задолго до интерфейса. Текстовая сборка играется уже
+    сегодня, а на вопрос «цепляет ли петля» отвечает тем же ядром, что и игра.
+
+    Мир строится общим с харнесом кодом (tools/Shared): иначе замеренный темп
+    относился бы не к той игре, в которую играли.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Alpha.Play</AssemblyName>
+    <RootNamespace>Alpha.Play</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
+    <Compile Include="../Shared/SettlementWorld.cs" Link="Shared/SettlementWorld.cs" />
+    <Compile Include="../Shared/SignalText.cs" Link="Shared/SignalText.cs" />
+  </ItemGroup>
+
+</Project>
