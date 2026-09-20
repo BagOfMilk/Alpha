@@ -20,6 +20,13 @@ namespace Game.Core.Base
 
         public int CurrentCycle { get; private set; }
 
+        /// <summary>
+        /// Вчера не поели — сегодня работаем хуже (Поправка №4). Просадка идёт
+        /// следующим циклом, а не тем же: прокорм считается последним шагом дня,
+        /// когда выработка уже начислена.
+        /// </summary>
+        public bool WasHungryLastCycle { get; private set; }
+
         private readonly Dictionary<string, AssignmentSlot> _slotsById = new Dictionary<string, AssignmentSlot>();
         private readonly List<AssignmentSlot> _slots = new List<AssignmentSlot>();
 
@@ -45,6 +52,28 @@ namespace Game.Core.Base
             _slotsById.Add(slot.Id, slot);
             _slots.Add(slot);
             return slot;
+        }
+
+        /// <summary>
+        /// Открывает закрытый слот за ресурсы. До появления полноценной стройки
+        /// (US-7.1, US-7.3) это единственный способ ввести слот в игру — раньше
+        /// закрытый слот оставался закрытым навсегда.
+        ///
+        /// Списание атомарное: если ресурсов не хватает, кошелёк не трогается
+        /// вообще, а слот остаётся закрытым.
+        /// </summary>
+        public UnlockResult TryUnlockSlot(string slotId)
+        {
+            var slot = GetSlot(slotId);
+            if (slot == null) return UnlockResult.SlotNotFound;
+            if (slot.Unlocked) return UnlockResult.AlreadyUnlocked;
+
+            var cost = slot.Definition?.UnlockCost;
+            if (cost == null || cost.Count == 0) return UnlockResult.NoPriceDefined;
+            if (!Resources.TrySpend(cost)) return UnlockResult.CannotAfford;
+
+            slot.Unlocked = true;
+            return UnlockResult.Success;
         }
 
         // ---- Назначения ----
@@ -125,6 +154,7 @@ namespace Game.Core.Base
 
                 var def = slot.Definition;
                 int output = ProductionCalculator.OutputPerCycle(companion, def, Balance);
+                if (WasHungryLastCycle) output = (int)Math.Round(output * Balance.HungryProductionMultiplier, MidpointRounding.ToEven);
 
                 switch (def.OutputKind)
                 {
@@ -141,6 +171,7 @@ namespace Game.Core.Base
                 }
 
                 int xp = ProductionCalculator.RoleXpPerCycle(companion, def, Balance);
+                if (WasHungryLastCycle) xp = (int)Math.Round(xp * Balance.HungryRoleXpMultiplier, MidpointRounding.ToEven);
                 var lvl = companion.GainXp(xp, Balance);
                 if (lvl.LeveledUp)
                     report.LeveledUp.Add(companion.Id);
@@ -201,12 +232,18 @@ namespace Game.Core.Base
         private void ApplyFoodUpkeep(CycleReport report)
         {
             int upkeep = Balance.FoodUpkeepPerCompanion * Roster.Count;
-            if (upkeep <= 0) return;
+            if (upkeep <= 0) { WasHungryLastCycle = false; return; }
             if (!Resources.TrySpend(ResourceType.Food, upkeep))
             {
-                // Не хватило еды — флаг для последующего штрафа к морали и т.п.
+                // Голодный день: остатки съедены подчистую, база просядет следующим
+                // циклом, а Напряжение поднимет шаг дня HungerStep (Поправка №4).
                 Resources.Add(ResourceType.Food, -Resources.Get(ResourceType.Food));
                 report.FoodShortage = true;
+                WasHungryLastCycle = true;
+            }
+            else
+            {
+                WasHungryLastCycle = false;
             }
         }
     }

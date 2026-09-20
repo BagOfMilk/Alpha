@@ -19,6 +19,8 @@ namespace Game.Core.Pressure
         ThreatOutcome = 3,
         /// <summary>Стиль прохождения: резня вместо тихого пути (Поправка №1).</summary>
         PlaystyleBlood = 4,
+        /// <summary>Голодный день в поселении (Поправка №4) — стимул выходить наружу.</summary>
+        Hunger = 5,
 
         // ---- Понижают ----
         CouncilRaid = 10,

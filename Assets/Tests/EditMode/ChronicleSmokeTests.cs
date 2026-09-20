@@ -26,15 +26,17 @@ namespace Game.Tests.EditMode
             foreach (var (id, skill) in new[] { ("hero", 9), ("guard", 7), ("trader", 6), ("scout", 5) })
             {
                 var arch = new CompanionArchetype(id, id);
-                arch.BaseStats.Set(StatType.Charisma, skill);
-                arch.BaseStats.Set(StatType.Will, skill);
-                arch.BaseStats.Set(StatType.Survival, skill);
-                arch.BaseStats.Set(StatType.Aim, skill);
+                arch.SetSkill(SkillType.Persuade, skill);
+                arch.SetSkill(SkillType.Intimidate, skill);
+                arch.SetSkill(SkillType.Trade, skill);
+                arch.SetSkill(SkillType.Survival, skill);
+                arch.SetSkill(SkillType.Ranged, skill);
+                arch.SetSkill(SkillType.Melee, skill);
                 roster.Add(arch.CreateInstance(id));
             }
 
             var baseState = new BaseState(roster, new Game.Core.Economy.ResourceLedger(), cfg);
-            baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Barracks));
+            baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Fortifications));
             baseState.TryAssign("guard", "watch");
 
             // Люди стоят на ТЕХ позициях, которые адресуют инциденты. Иначе город

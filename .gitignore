@@ -32,6 +32,9 @@ tools/**/obj/
 *.svd
 *.suo
 
+# Рабочая папка MCP-сервера Serena — индекс проекта, не исходники
+.serena/
+
 # Личные настройки Claude Code (командные лежат в .claude/settings.json)
 .claude/settings.local.json
 

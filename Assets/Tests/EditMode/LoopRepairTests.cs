@@ -26,7 +26,7 @@ namespace Game.Tests.EditMode
         private static Companion Guard(string id, int skill)
         {
             var arch = new CompanionArchetype(id, id);
-            arch.BaseStats.Set(StatType.Survival, skill);
+            arch.SetSkill(SkillType.Survival, skill);
             return arch.CreateInstance(id);
         }
 

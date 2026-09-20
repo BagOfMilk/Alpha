@@ -1,3 +1,4 @@
+using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Stats;
 using NUnit.Framework;
@@ -6,38 +7,72 @@ namespace Game.Tests.EditMode
 {
     public class GrowthProfileTests
     {
+        private static SkillGrowthProfile Profile()
+        {
+            var g = new SkillGrowthProfile();
+            g.SetWeight(SkillType.Ranged, 3);
+            g.SetWeight(SkillType.Melee, 2);
+            g.SetWeight(SkillType.Tactics, 1);
+            return g;
+        }
+
         [Test]
         public void AllocatePoints_DistributesExactTotal()
         {
-            var g = new GrowthProfile();
-            g.SetWeight(StatType.Aim, 3);
-            g.SetWeight(StatType.Health, 2);
-            g.SetWeight(StatType.Will, 1);
-
-            var block = g.AllocatePoints(12);
-            int sum = block.Get(StatType.Aim) + block.Get(StatType.Health) + block.Get(StatType.Will);
-            Assert.AreEqual(12, sum, "Сумма выданных очков должна точно равняться запрошенной");
+            var gained = Profile().AllocatePoints(12);
+            Assert.AreEqual(12, gained.TotalPoints, "Сумма выданных очков должна точно равняться запрошенной");
         }
 
         [Test]
         public void AllocatePoints_RespectsWeightOrder()
         {
-            var g = new GrowthProfile();
-            g.SetWeight(StatType.Aim, 3);
-            g.SetWeight(StatType.Health, 2);
-            g.SetWeight(StatType.Will, 1);
-
-            var block = g.AllocatePoints(60);
-            Assert.Greater(block.Get(StatType.Aim), block.Get(StatType.Health));
-            Assert.Greater(block.Get(StatType.Health), block.Get(StatType.Will));
+            var gained = Profile().AllocatePoints(60);
+            Assert.Greater(gained[SkillType.Ranged], gained[SkillType.Melee]);
+            Assert.Greater(gained[SkillType.Melee], gained[SkillType.Tactics]);
         }
 
         [Test]
         public void AllocatePoints_NoWeights_ReturnsEmpty()
         {
-            var g = new GrowthProfile();
-            var block = g.AllocatePoints(10);
-            Assert.AreEqual(0, block.Values.Count);
+            var gained = new SkillGrowthProfile().AllocatePoints(10);
+            Assert.AreEqual(0, gained.TotalPoints);
+        }
+
+        /// <summary>
+        /// Уровень раздаёт очки СКИЛОВ и только их: атрибуты по US-2.1 поднимает
+        /// один аугмент. Если это правило когда-нибудь потекёт, ломаться начнёт
+        /// здесь, а не в балансе поздней игры.
+        /// </summary>
+        [Test]
+        public void LevelUp_GrowsSkills_ButNeverAttributes()
+        {
+            var cfg = new BalanceConfig();
+            var arch = new CompanionArchetype("sold", "Боец");
+            arch.SetAttribute(AttributeType.Strength, 6);
+            arch.SetSkill(SkillType.Ranged, 2);
+            arch.SetGrowth(SkillType.Ranged, 1);
+
+            var comp = arch.CreateInstance("sold_1", cfg);
+            comp.GainXp(10000, cfg);
+
+            Assert.Greater(comp.Level, 1, "опыта хватило на уровни");
+            Assert.Greater(comp.Skill(SkillType.Ranged), 2, "скил вырос");
+            Assert.AreEqual(6, comp.Attribute(AttributeType.Strength), "атрибут не трогали");
+        }
+
+        /// <summary>Потолок шкалы держит: излишек сгорает, а не течёт за границу.</summary>
+        [Test]
+        public void LevelUp_StopsAtSkillCeiling()
+        {
+            var cfg = new BalanceConfig();
+            var arch = new CompanionArchetype("sold", "Боец");
+            arch.SetSkill(SkillType.Ranged, 9);
+            arch.SetGrowth(SkillType.Ranged, 1);
+
+            var comp = arch.CreateInstance("sold_1", cfg);
+            comp.GainXp(1000000, cfg);
+
+            Assert.AreEqual(cfg.MaxSkillLevel, comp.Skill(SkillType.Ranged));
         }
     }
 }

@@ -80,7 +80,8 @@ const SRC = {
   balance: "Assets/_Project/Scripts/Core/Balance/BalanceConfig.cs",
   demo: "Assets/_Project/Scripts/Gameplay/BaseGameDemo.cs",
   asset: "Assets/_Project/Scripts/Gameplay/BalanceConfigAsset.cs",
-  statType: "Assets/_Project/Scripts/Core/Stats/StatType.cs",
+  attrType: "Assets/_Project/Scripts/Core/Stats/AttributeType.cs",
+  skillType: "Assets/_Project/Scripts/Core/Stats/SkillType.cs",
   resType: "Assets/_Project/Scripts/Core/Economy/ResourceType.cs",
   section: "Assets/_Project/Scripts/Core/Base/BaseSectionType.cs",
   companion: "Assets/_Project/Scripts/Core/Characters/Companion.cs",
@@ -109,16 +110,25 @@ function parseEnum(file, name) {
   return out;
 }
 
-const statTypes = parseEnum(SRC.statType, "StatType");
+const attrTypes = parseEnum(SRC.attrType, "AttributeType").map((a) => ({ ...a, axis: "attr" }));
+const skillTypes = parseEnum(SRC.skillType, "SkillType").map((s) => ({ ...s, axis: "skill" }));
+// Обе оси кладутся в один список: карта показывает их вперемешку, а группа
+// узла берётся из axis и диапазона значения, как и в самом коде.
+const statTypes = [...attrTypes, ...skillTypes];
 const resTypes = parseEnum(SRC.resType, "ResourceType");
 const sectionTypes = parseEnum(SRC.section, "BaseSectionType");
 const statusTypes = parseEnum(SRC.companion, "CompanionStatus");
 
-/** Боевые статы держатся в диапазоне 1–10, ролевые склонности с 20. */
-const isCombatStat = (n) => {
+/** Группа скила читается из десятки значения — ровно как Skills.GroupOf. */
+const statGroup = (n) => {
   const s = statTypes.find((x) => x.name === n);
-  return s ? s.value < 20 : false;
+  if (!s) return "Статы";
+  if (s.axis === "attr") return "Атрибуты";
+  if (s.value >= 20) return "Скилы: соц";
+  if (s.value >= 10) return "Скилы: утилита";
+  return "Скилы: бой";
 };
+const axisOf = (n) => statTypes.find((x) => x.name === n)?.axis ?? null;
 
 /** Архетипы из DefaultContent */
 function parseArchetypes() {
@@ -131,8 +141,9 @@ function parseArchetypes() {
     const head = body.match(/new CompanionArchetype\("([^"]+)",\s*"([^"]+)"\)/);
     if (!head) continue;
     const stats = {}, growth = {};
-    for (const s of body.matchAll(/BaseStats\.Set\(StatType\.(\w+),\s*(-?\d+)\)/g)) stats[s[1]] = +s[2];
-    for (const g of body.matchAll(/Growth\.SetWeight\(StatType\.(\w+),\s*([\d.]+)\)/g)) growth[g[1]] = +g[2];
+    for (const a of body.matchAll(/SetAttribute\(AttributeType\.(\w+),\s*(-?\d+)\)/g)) stats[a[1]] = +a[2];
+    for (const s of body.matchAll(/SetSkill\(SkillType\.(\w+),\s*(-?\d+)\)/g)) stats[s[1]] = +s[2];
+    for (const g of body.matchAll(/SetGrowth\(SkillType\.(\w+),\s*([\d.]+)\)/g)) growth[g[1]] = +g[2];
     out.push({ method: m[1], id: head[1], name: head[2], stats, growth, line: lineOf(text, m.index) });
   }
   if (!out.length) warn("не разобрал ни одного архетипа в DefaultContent.cs");
@@ -163,12 +174,14 @@ function parseSlots() {
       kind: enumVal("OutputKind", "Resource"),
       resource: enumVal("OutputResource", "None"),
       passive: (f("PassiveBonusId") || "").replace(/"/g, "") || null,
-      primary: enumVal("PrimaryAptitude", "None"),
-      secondary: enumVal("SecondaryAptitude", "None"),
+      primary: enumVal("PrimarySkill", "None"),
+      secondary: enumVal("SecondaryAttribute", "None"),
       base: +(f("BaseOutput", "0")),
       k1: +(f("OutputPerPrimaryPoint", "1.0")),
       k2: +(f("OutputPerSecondaryPoint", "0.5")),
       unlocked: f("UnlockedByDefault", "true") !== "false",
+      unlockCost: Object.fromEntries(
+        [...b.matchAll(/\{\s*ResourceType\.(\w+)\s*,\s*(\d+)\s*\}/g)].map((c) => [c[1], +c[2]])),
     });
   }
   if (!out.length) warn("не разобрал ни одного слота в DefaultContent.cs");
@@ -258,14 +271,17 @@ archetypes.forEach((a) => Object.entries(a.stats).forEach(([k, v]) => (statMax[k
 for (const st of statTypes) {
   if (st.name === "None" || !usedStats.has(st.name)) continue;
   const id = idStat(st.name);
-  const group = isCombatStat(st.name) ? "Боевые статы" : "Склонности";
-  push([id, st.name, "base", "stat", group, `StatType.${st.name}`, withNote(id, sentence(st.comment))]);
+  const kind = st.axis === "attr" ? "AttributeType" : "SkillType";
+  push([id, st.name, "base", "stat", statGroup(st.name), `${kind}.${st.name}`, withNote(id, sentence(st.comment))]);
 
   const asPrimary = slots.filter((s) => s.primary === st.name);
   const asSecondary = slots.filter((s) => s.secondary === st.name);
   const top = archetypes.filter((a) => a.stats[st.name]).sort((a, b) => b.stats[st.name] - a.stats[st.name])[0];
   const growers = archetypes.filter((a) => a.growth[st.name]);
-  fact(id, `Значение enum ${st.value}.`,
+  const scale = st.axis === "attr"
+    ? `Атрибут, шкала ${balance.MinAttribute ?? 1}–${balance.MaxAttribute ?? 10}: за уровни не растёт, поднимается аугментом.`
+    : `Скил, шкала 0–${balance.MaxSkillLevel ?? 10}: растёт за очки уровня.`;
+  fact(id, `Значение enum ${st.value}. ${scale}`,
        asPrimary.length || asSecondary.length
          ? `Primary в ${asPrimary.length}, Secondary в ${asSecondary.length} слотах` +
            (asPrimary.length ? ` (коэффициенты ${[...new Set(asPrimary.map((s) => coef(s.k1)))].join(", ")}).` : ".")
@@ -327,18 +343,22 @@ for (const s of slots) {
     name: a.name,
     out: roundHalfEven((s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2) * globalMult),
   })).sort((x, y) => y.out - x.out);
-  const suited = archetypes.filter((a) => (a.stats[s.primary] ?? 0) >= (balance.AptitudeMatchThreshold ?? 5)).length;
+  const suited = archetypes.filter((a) => (a.stats[s.primary] ?? 0) >= (balance.SkillMatchThreshold ?? 5)).length;
   const top = first(perArch), bottom = last(perArch);
   fact(id, top ? `На стартовых архетипах даёт от ${bottom.out} до ${top.out} за цикл: лучший — ${top.name} (${top.out}).` : `Архетипов в контенте нет — выработку не на ком посчитать.`,
-       `Порог «по профилю» ${balance.AptitudeMatchThreshold ?? 5} перешагивают ${suited} из ${archetypes.length} архетипов` +
+       `Порог «по профилю» ${balance.SkillMatchThreshold ?? 5} перешагивают ${suited} из ${archetypes.length} архетипов` +
        (suited ? ` — им ролевой опыт ${roundHalfEven((balance.RoleXpPerCycle ?? 20) * (balance.WellSuitedXpMultiplier ?? 1.5))} вместо ${balance.RoleXpPerCycle ?? 20}.` : "."));
 
   link(idSection(s.section), id, "позиция секции" + (s.unlocked ? "" : ", закрыта по умолчанию"), "code");
   for (const [role, stat, k] of [["Primary", s.primary, s.k1], ["Secondary", s.secondary, s.k2]]) {
     if (stat === "None") continue;
-    const mism = isCombatStat(stat) && (statMax[stat] ?? 0) > 20;
-    link(id, idStat(stat), `${role} ×${coef(k)}` + (mism ? ` — но ${stat} в шкале 0–100` : ""), mism ? "gap" : "code");
-    if (mism) scaleMismatches.push({ slot: s, stat, k, role });
+    // Прежняя проверка ловила боевой стат 0–100 в формуле выработки. Смешать
+    // шкалы теперь нельзя типами: Primary — скил, Secondary — атрибут. Осталась
+    // вторая половина того же вопроса — контент, вылезший за собственную шкалу.
+    const ceiling = axisOf(stat) === "attr" ? (balance.MaxAttribute ?? 10) : (balance.MaxSkillLevel ?? 10);
+    const mism = (statMax[stat] ?? 0) > ceiling;
+    link(id, idStat(stat), `${role} ×${coef(k)}` + (mism ? ` — но ${stat} у архетипов до ${statMax[stat]}` : ""), mism ? "gap" : "code");
+    if (mism) scaleMismatches.push({ slot: s, stat, k, role, ceiling });
   }
   const outId = s.kind === "Resource" ? idRes(s.resource) : s.kind === "Passive" ? idOut(s.passive) : idOut("Healing");
   link(id, outId, `${s.kind}, base ${num(s.base)}`, "code");
@@ -357,7 +377,7 @@ for (const a of archetypes) {
     name: s.name,
     out: roundHalfEven((s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2) * globalMult),
   })).sort((x, y) => y.out - x.out);
-  const perLevel = balance.StatPointsPerLevel ?? 3;
+  const perLevel = balance.SkillPointsPerLevel ?? 3;
   const wTotal = Object.values(a.growth).reduce((s, v) => s + v, 0);
   fact(id, `Стартовых очков ${Object.values(a.stats).reduce((s, v) => s + v, 0)} на ${Object.keys(a.stats).length} статах.`,
        wTotal ? `За уровень ${perLevel} очка по весам (сумма весов ${coef(wTotal)}), то есть ${Object.entries(a.growth).map(([k, v]) => `${k} ≈ ${(perLevel * v / wTotal).toFixed(1)}`).join(", ")} за уровень.` : null,
@@ -390,7 +410,7 @@ for (const as of demo.assignments) {
   const s2 = slot.secondary !== "None" ? (arch.stats[slot.secondary] ?? 0) : 0;
   const raw = slot.base + p * slot.k1 + s2 * slot.k2;
   const out = roundHalfEven(raw * globalMult);
-  const wellSuited = slot.primary !== "None" && p >= (balance.AptitudeMatchThreshold ?? 5);
+  const wellSuited = slot.primary !== "None" && p >= (balance.SkillMatchThreshold ?? 5);
   const xp = roundHalfEven((balance.RoleXpPerCycle ?? 20) * (wellSuited ? balance.WellSuitedXpMultiplier ?? 1.5 : 1));
   const unit = slot.kind === "Resource" ? slot.resource : slot.kind === "Passive" ? slot.passive : "Healing";
   const formula = `${num(slot.base)}` +
@@ -409,7 +429,12 @@ const takenSlots = new Set(demo.assignments.map((a) => a.slot));
 const idleSlots = slots.filter((s) => !takenSlots.has(s.id) && s.unlocked);
 const lockedSlots = slots.filter((s) => !s.unlocked);
 for (const s of [...idleSlots, ...lockedSlots]) {
-  const reason = s.unlocked ? "слот свободен: некому встать" : "UnlockedByDefault = false, открыть нечем";
+  // Про закрытый слот раньше писалось «открыть нечем». Механика разблокировки
+  // появилась, а строка осталась бы врать — цена берётся из самого слота.
+  const cost = Object.entries(s.unlockCost || {}).map(([r, n]) => `${r} ${n}`).join(" + ");
+  const reason = s.unlocked
+    ? "слот свободен: некому встать"
+    : `закрыт: сначала разблокировать${cost ? ` за ${cost}` : ""}`;
   const unit = s.kind === "Resource" ? s.resource : s.kind === "Passive" ? s.passive : "Healing";
   runRows.push([s.unlocked ? "— никого" : "— закрыт", s.name, reason, `0 ${unit}`, "—"]);
 }
@@ -441,7 +466,7 @@ const runNote = [
       ? `. Сходится в ноль — стартовые ${foodStart} не растут и не тают, седьмой напарник уже уводит базу в минус.`
       : foodIn > upkeep ? `, запас растёт на ${foodIn - upkeep} в день.` : `, запас тает на ${upkeep - foodIn} в день.`),
   offProfile.length
-    ? `Не по профилю: ${offProfile.map((o) => `${o.arch} на «${o.slot}» (${o.stat} ниже порога ${balance.AptitudeMatchThreshold ?? 5})`).join(", ")} — и выработка голая, и ролевой опыт ${offProfile[0].xp} вместо ${first(xpValues, "—")}.`
+    ? `Не по профилю: ${offProfile.map((o) => `${o.arch} на «${o.slot}» (${o.stat} ниже порога ${balance.SkillMatchThreshold ?? 5})`).join(", ")} — и выработка голая, и ролевой опыт ${offProfile[0].xp} вместо ${first(xpValues, "—")}.`
     : null,
   slots.some((s) => s.kind === "Healing") && !/InjuryPoints\s*=/.test(coreCode.replace(/InjuryPoints\s*=\s*0/g, ""))
     ? `Очки лечения уходят в пустоту: ранения в игре никто не наносит.`
@@ -470,8 +495,14 @@ for (const sec of sectionTypes) {
     "low", "Мёртвый код", [idSection(sec.name), "b.m.assign", "секция есть в enum, слотов у неё нет"]);
 }
 
-// ресурсы без производителя и без трат
-const spentRes = [...allCode.matchAll(/TrySpend\(ResourceType\.(\w+)/g)].map((m) => m[1]);
+// Ресурсы без производителя и без трат.
+// Тратой считается и прямой TrySpend(ResourceType.X, n), и запись в словаре цены
+// вида { ResourceType.X, n } — словарную перегрузку TrySpend регексп по имени
+// ресурса не увидит, и «экономика односторонняя» висела бы ложно.
+const gameCode = CS_FILES.filter((p) => !p.includes("/Tests/")).map((p) => CS[p]).join("\n");
+const spentDirect = [...gameCode.matchAll(/TrySpend\(ResourceType\.(\w+)/g)].map((m) => m[1]);
+const spentInCosts = [...gameCode.matchAll(/\{\s*ResourceType\.(\w+)\s*,\s*\d+\s*\}/g)].map((m) => m[1]);
+const spentRes = [...spentDirect, ...spentInCosts];
 for (const r of resTypes) {
   if (r.name === "None" || producedRes.has(r.name) || spentRes.includes(r.name) || demo.starting[r.name]) continue;
   addGap(`Ресурс ${r.name} мёртвый`, `Core/Economy/ResourceType.cs:${r.line}`,
@@ -488,7 +519,7 @@ if (spentRes.length && unspent.length) {
     return `${r} до ${maxOf(from.map((s) => maxOf(archetypes.map((a) => roundHalfEven(s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2)), s.base)))}/цикл`;
   });
   addGap("Экономика односторонняя", `Core/Base/BaseState.cs:${spendLine}`,
-    `TrySpend во всём проекте вызывается ${plural(spentRes.length, "раз", "раза", "раз")} и только для ${[...new Set(spentRes)].join(", ")}. Остальные ${plural(unspent.length, "ресурс", "ресурса", "ресурсов")} копятся без потолка: ${perDay.join(", ")}. Сливов в коде ещё нет.`,
+    `Тратятся только ${[...new Set(spentRes)].join(", ")} (${plural(spentDirect.length, "прямой вызов", "прямых вызова", "прямых вызовов")} TrySpend, ${plural(spentInCosts.length, "строка", "строки", "строк")} в словарях цен). Остальные ${plural(unspent.length, "ресурс", "ресурса", "ресурсов")} копятся без потолка: ${perDay.join(", ")}.`,
     "low", "Нет логики", [idRes(unspent[0]), "b.m.upkeep", `кроме ${[...new Set(spentRes)].join(", ")} не тратится ни один ресурс`]);
 }
 
@@ -500,7 +531,10 @@ const assetFields = (CS[SRC.asset] || "").match(/public\s+(?:double|int)\s+\w+/g
 // в BalanceConfigAsset и больше нигде не читается, остаётся мёртвой крутилкой.
 const PLUMBING = new Set([SRC.balance, SRC.asset]);
 for (const field of balanceFields) {
-  const readers = CS_FILES.filter((p) => !PLUMBING.has(p) && new RegExp(`\\b${field}\\b`).test(CS[p]));
+  // Ищем обращение через точку (cfg.Field), а не голое слово: имя поля может
+  // совпадать с именем типа — так TraitSlots считался «используемым», потому
+  // что регексп находил одноимённый класс.
+  const readers = CS_FILES.filter((p) => !PLUMBING.has(p) && new RegExp(`\\.${field}\\b`).test(CS[p]));
   if (readers.length) continue;
   const line = lineOf(balanceText, balanceText.indexOf(`${field} =`));
   const mirrored = new RegExp(`\\b${field[0].toLowerCase()}${field.slice(1)}\\b`).test(CS[SRC.asset] || "");
@@ -551,10 +585,10 @@ for (const m of scaleMismatches) {
   const best = archetypes
     .map((a) => ({ name: a.name, out: roundHalfEven(m.slot.base + (a.stats[m.slot.primary] ?? 0) * m.slot.k1 + (a.stats[m.slot.secondary] ?? 0) * m.slot.k2) }))
     .sort((x, y) => y.out - x.out);
-  addGap(`Боевой ${m.stat} в формуле «${m.slot.name}» смешивает шкалы`,
-    `Core/DefaultContent.cs:${m.slot.line} ↔ docs/BALANCE.md §2`,
-    `Слот берёт ${m.stat} как ${m.role} с коэффициентом ×${coef(m.k)}, но ${m.stat} — боевой стат в шкале 0–100 (максимум у архетипов ${statMax[m.stat]}), тогда как склонности живут в 0–7. ` +
-    `Итог: ${best.slice(0, 3).map((b) => `${b.name} даёт ${b.out}`).join(", ")} — профильный архетип оказывается не первым. Заявленное в BALANCE.md §3 «ставить людей по профилю выгодно вдвойне» тут ломается.`,
+  addGap(`${m.stat} в формуле «${m.slot.name}» вылез за шкалу`,
+    `Core/DefaultContent.cs:${m.slot.line} ↔ Core/Stats/StatScales.cs`,
+    `Слот берёт ${m.stat} как ${m.role} с коэффициентом ×${coef(m.k)}, а у архетипов ${m.stat} доходит до ${statMax[m.stat]} при потолке ${m.ceiling}. ` +
+    `Итог: ${best.slice(0, 3).map((b) => `${b.name} даёт ${b.out}`).join(", ")} — числа несопоставимы с остальными слотами, и «ставить людей по профилю выгодно вдвойне» перестаёт работать.`,
     "mid", "Баланс");
 }
 
@@ -575,12 +609,15 @@ for (const p of CORE_FILES) {
     const sub = new RegExp(`\\b${m[1]}\\s*\\+=`);
     const inGame = CS_FILES.filter((f) => !f.includes("/Tests/") && sub.test(CS[f]));
     if (inGame.length) continue;
+    // Событие без потребителя, но с тестом — осознанная точка расширения:
+    // контракт зафиксирован и не отвалится молча. Без теста и без подписок —
+    // просто мёртвая проводка.
     const inTests = CS_FILES.filter((f) => f.includes("/Tests/") && sub.test(CS[f]));
+    if (inTests.length) continue;
     addGap(`${path.basename(p, ".cs")}.${m[1]} никто не слушает`,
       `${p.replace("Assets/_Project/Scripts/", "")}:${lineOf(CS[p], m.index)}`,
-      `Подписок в игровом коде 0` +
-      (inTests.length ? ` (${plural(inTests.length, "подписка", "подписки", "подписок")} есть только в тестах)` : "") +
-      `, вызовов Invoke ${(CS[p].match(new RegExp(`\\b${m[1]}\\?\\.Invoke`, "g")) || []).length}. Событие стреляет в пустоту.`,
+      `Подписок 0 во всех ${CS_FILES.length} файлах, теста на контракт тоже нет, ` +
+      `вызовов Invoke ${(CS[p].match(new RegExp(`\\b${m[1]}\\?\\.Invoke`, "g")) || []).length}. Событие стреляет в пустоту.`,
       "low", "Мёртвый код");
   }
 }
@@ -673,8 +710,8 @@ for (const n of G.nodes) {
 /* Числовые справки для узлов механики базы — прямо из BalanceConfig. */
 fact("b.m.production", `GlobalProductionMultiplier ${coef(globalMult)}, штраф раненому ×${coef(balance.InjuredProductionMultiplier ?? 1)}.`,
      `${plural(slots.length, "слот", "слота", "слотов")} со своими коэффициентами, база от ${minOf(slots.map((s) => s.base))} до ${maxOf(slots.map((s) => s.base))}.`);
-fact("b.m.rolexp", `RoleXpPerCycle ${balance.RoleXpPerCycle}, порог соответствия ${balance.AptitudeMatchThreshold}, множитель ×${coef(balance.WellSuitedXpMultiplier)} — то есть ${roundHalfEven(balance.RoleXpPerCycle * balance.WellSuitedXpMultiplier)} против ${balance.RoleXpPerCycle}.`);
-fact("b.m.levelup", `XpBase ${num(balance.XpBase)}, XpExponent ${coef(balance.XpExponent)}, MaxLevel ${balance.MaxLevel}, очков за уровень ${balance.StatPointsPerLevel}.`,
+fact("b.m.rolexp", `RoleXpPerCycle ${balance.RoleXpPerCycle}, порог соответствия ${balance.SkillMatchThreshold}, множитель ×${coef(balance.WellSuitedXpMultiplier)} — то есть ${roundHalfEven(balance.RoleXpPerCycle * balance.WellSuitedXpMultiplier)} против ${balance.RoleXpPerCycle}.`);
+fact("b.m.levelup", `XpBase ${num(balance.XpBase)}, XpExponent ${coef(balance.XpExponent)}, MaxLevel ${balance.MaxLevel}, очков за уровень ${balance.SkillPointsPerLevel}.`,
      `Пороги: ${[1, 2, 3, 5, 10].map((l) => `ур.${l} → ${roundHalfEven(balance.XpBase * Math.pow(l, balance.XpExponent))}`).join(", ")}.`);
 fact("b.m.heal", `BaseHealingPerCycle ${coef(balance.BaseHealingPerCycle)} всем раненым за цикл.`,
      `Плюс до ${maxOf(slots.filter((s) => s.kind === "Healing").map((s) => maxOf(archetypes.map((a) => roundHalfEven(s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2)), s.base)))} очков из лазарета на лучшем медике.`);
@@ -725,7 +762,7 @@ const VARS = {
   spentCount: new Set(spentRes).size,
   balanceFieldCount: balanceFields.length,
   assetFieldCount: assetFields,
-  pointsPerLevel: balance.StatPointsPerLevel,
+  pointsPerLevel: balance.SkillPointsPerLevel,
   reportFields: (typeBlock(CS["Assets/_Project/Scripts/Core/Base/CycleReport.cs"] || "", "CycleReport")?.match(/\bpublic\s+(?!class)/g) || []).length,
   benchMin, benchMax, councilMin, councilMax,
 };
@@ -780,7 +817,12 @@ const html = template.replace("/*__DATA__*/null", JSON.stringify(DATA));
 
 const outPath = rel("docs/interaction-map.html");
 const prev = fs.existsSync(outPath) ? fs.readFileSync(outPath, "utf8") : "";
-const strip = (s) => s.replace(/"builtAt":"[^"]*"/, "");
+// Метки сборки из сравнения выкидываются, иначе карта «устаревает» сама по себе:
+// gitSha меняется на каждом коммите, в том числе на том, который её и записал,
+// и --check после любого коммита возвращал бы 1 навсегда.
+const strip = (s) => s
+  .replace(/"builtAt":"[^"]*"/, "")
+  .replace(/"gitSha":("[^"]*"|null)/, "");
 const changed = strip(prev) !== strip(html);
 
 for (const w of warnings) console.error("  ! " + w);

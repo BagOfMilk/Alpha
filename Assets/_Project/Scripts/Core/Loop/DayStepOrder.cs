@@ -24,6 +24,7 @@ namespace Game.Core.Loop
         public const int Production = 200;
         public const int Population = 300;     // [ПОЗЖЕ] Э3
         public const int Derived = 400;        // [ПОЗЖЕ] Э3
+        public const int Hunger = 450;         // голодный день давит до тика Напряжения
         public const int Tension = 500;
         public const int Obligations = 600;    // [ПОЗЖЕ] Э4
         public const int Pulse = 700;          // [ПОЗЖЕ] Э1

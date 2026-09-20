@@ -51,6 +51,20 @@ namespace Game.Core.Pressure
             state.Apply(TensionDriver.EventOutcome, -Weight(weight, balance.Tension), sourceId);
         }
 
+        /// <summary>
+        /// Голодный день в поселении (Поправка №4). Единственный драйвер, который
+        /// заводится не выбором игрока и не исходом угрозы, а состоянием базы:
+        /// пересидеть голод дома нельзя, потому что гасят Напряжение Храм и
+        /// Укрепления, а строятся они за компонент из вылазок.
+        /// </summary>
+        public static void Hunger(TensionState state, string sourceId, BalanceConfig balance)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (balance == null) throw new ArgumentNullException(nameof(balance));
+
+            state.Apply(TensionDriver.Hunger, balance.Tension.HungerDeltaPerDay, sourceId);
+        }
+
         private static int Weight(ChoiceWeight weight, TensionBalance cfg)
         {
             switch (weight)

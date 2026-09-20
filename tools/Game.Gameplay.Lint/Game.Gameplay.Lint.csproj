@@ -21,6 +21,7 @@
   <ItemGroup>
     <Compile Include="UnityEngineStub.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/**/*.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Editor/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>

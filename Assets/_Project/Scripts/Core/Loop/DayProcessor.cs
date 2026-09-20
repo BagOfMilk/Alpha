@@ -54,6 +54,9 @@ namespace Game.Core.Loop
         /// <summary>Ночью: патрулировать вместо сна (Поправка №3.9).</summary>
         public bool IsPatrolling { get; set; }
 
+        /// <summary>Поселению не хватило еды в прошлом цикле (Поправка №4).</summary>
+        public bool IsHungry { get; set; }
+
         /// <summary>
         /// Спрашивать ли игрока, как разбираться с событием.
         ///
@@ -97,6 +100,7 @@ namespace Game.Core.Loop
         {
             var steps = new List<IDayStep>
             {
+                new HungerStep(),
                 new TensionTickStep(),
                 new PulseStep(),
                 new IncidentStep(),
@@ -151,6 +155,7 @@ namespace Game.Core.Loop
                 IsPatrolling, Roster, Population, Pulse, Incidents, Repeats, Casualties)
             {
                 PostDomains = PostDomains,
+                IsHungry = IsHungry,
                 SignalMemory = SignalMemory,
                 RequirePlayerDecision = RequirePlayerDecision,
                 Fear = Fear

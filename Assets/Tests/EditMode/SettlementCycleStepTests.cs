@@ -27,8 +27,8 @@ namespace Game.Tests.EditMode
         {
             var roster = new Roster();
             var arch = new CompanionArchetype("worker", "worker");
-            arch.BaseStats.Set(StatType.Logistics, 8);
-            arch.BaseStats.Set(StatType.Survival, 8);
+            arch.SetSkill(SkillType.Trade, 8);
+            arch.SetSkill(SkillType.Survival, 8);
             roster.Add(arch.CreateInstance("worker"));
 
             var state = new BaseState(roster, new ResourceLedger(), cfg);

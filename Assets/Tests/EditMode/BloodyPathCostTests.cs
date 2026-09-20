@@ -41,9 +41,12 @@ namespace Game.Tests.EditMode
         private static Roster BuildRoster(int skill = 6)
         {
             var roster = new Roster();
-            var arch = new CompanionArchetype("guard", "guard");
-            foreach (var stat in new[] { StatType.Survival, StatType.Charisma, StatType.Will })
-                arch.BaseStats.Set(stat, skill);
+            // Тихий путь кражи идёт Убеждением, кровавый — Запугиванием:
+            // оба скила равны, чтобы цена сравнивалась при одной полосе исхода.
+            var arch = new CompanionArchetype("guard", "guard")
+                .SetSkill(SkillType.Persuade, skill)
+                .SetSkill(SkillType.Intimidate, skill)
+                .SetSkill(SkillType.Survival, skill);
             var c = arch.CreateInstance("guard");
             c.AssignedSlotId = Post;
             roster.Add(c);
@@ -141,8 +144,7 @@ namespace Game.Tests.EditMode
             var cfg = new BalanceConfig();
 
             var roster = new Roster();
-            var arch = new CompanionArchetype("idle", "idle");
-            arch.BaseStats.Set(StatType.Will, 12);
+            var arch = new CompanionArchetype("idle", "idle").SetSkill(SkillType.Intimidate, 12);
             roster.Add(arch.CreateInstance("idle")); // силён, но не на посту
 
             var outcome = Resolve(IncidentPath.Bloody, cfg, roster, FreshTension(cfg));
@@ -201,8 +203,8 @@ namespace Game.Tests.EditMode
             var racket = DefaultIncidents.All().First(i => i.Id == "protection_racket");
 
             var roster = new Roster();
-            var arch = new CompanionArchetype("weak", "weak");
-            arch.BaseStats.Set(StatType.Will, 1); // порог 8 недостижим → Худшая полоса
+            // Порог запугивания 8 недостижим при скиле 1 → Худшая полоса.
+            var arch = new CompanionArchetype("weak", "weak").SetSkill(SkillType.Intimidate, 1);
             var c = arch.CreateInstance("weak");
             c.AssignedSlotId = racket.RelevantPositionId;
             roster.Add(c);
@@ -304,8 +306,7 @@ namespace Game.Tests.EditMode
             for (int i = 0; i < AllPositions.Length; i++)
             {
                 var arch = new CompanionArchetype("actor" + i, "actor" + i);
-                foreach (var stat in new[] { StatType.Survival, StatType.Charisma, StatType.Will, StatType.Medicine })
-                    arch.BaseStats.Set(stat, 7);
+                foreach (var skill in Skills.All) arch.SetSkill(skill, 7);
                 var c = arch.CreateInstance("actor" + i);
                 c.AssignedSlotId = AllPositions[i];
                 roster.Add(c);

@@ -63,12 +63,12 @@ namespace Game.Tests.EditMode
         private static DayProcessor Build(BalanceConfig cfg, int tier)
         {
             var roster = new Roster();
-            roster.Add(Make("guard", StatType.Survival, 8, Positions[0]));
-            roster.Add(Make("trader", StatType.Charisma, 7, Positions[1]));
-            roster.Add(Make("farmer", StatType.Survival, 6, Positions[2]));
-            roster.Add(Make("medic", StatType.Medicine, 7, Positions[3]));
-            roster.Add(Make("elder", StatType.Leadership, 6, Positions[4]));
-            roster.Add(Make("scout", StatType.Scouting, 6, Positions[5]));
+            roster.Add(Make("guard", SkillType.Trade, 8, Positions[0]));
+            roster.Add(Make("trader", SkillType.Trade, 7, Positions[1]));
+            roster.Add(Make("farmer", SkillType.Survival, 6, Positions[2]));
+            roster.Add(Make("medic", SkillType.Medicine, 7, Positions[3]));
+            roster.Add(Make("elder", SkillType.Persuade, 6, Positions[4]));
+            roster.Add(Make("scout", SkillType.Survival, 6, Positions[5]));
 
             var adapter = new RosterAdapter(roster);
             var pulse = new WorldPulse(cfg.Pulse);
@@ -92,10 +92,10 @@ namespace Game.Tests.EditMode
             };
         }
 
-        private static Companion Make(string id, StatType stat, int value, string position)
+        private static Companion Make(string id, SkillType skill, int value, string position)
         {
             var arch = new CompanionArchetype(id, id);
-            arch.BaseStats.Set(stat, value);
+            arch.SetSkill(skill, value);
             var c = arch.CreateInstance(id);
             c.AssignedSlotId = position;
             return c;

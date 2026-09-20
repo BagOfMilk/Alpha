@@ -31,9 +31,9 @@ namespace Game.Tests.EditMode
         private static Companion Make(string id, int skill, string position = null)
         {
             var arch = new CompanionArchetype(id, id);
-            arch.BaseStats.Set(StatType.Survival, skill);
-            arch.BaseStats.Set(StatType.Charisma, skill);
-            arch.BaseStats.Set(StatType.Will, skill);
+            arch.SetSkill(SkillType.Survival, skill);
+            arch.SetSkill(SkillType.Trade, skill);
+            arch.SetSkill(SkillType.Persuade, skill);
             var c = arch.CreateInstance(id);
             c.AssignedSlotId = position;
             return c;
@@ -121,7 +121,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Catalog_NoCitySlot_ProducesMaterials()
         {
-            // Правило Эпика 15 и Поправки №4: оба компонента приходят ТОЛЬКО извне.
+            // Правило Эпика 15 и Поправки №5: оба компонента приходят ТОЛЬКО извне.
             // Слот, производящий материалы внутри города, отменяет экономическую
             // подставу вылазки — и именно так это и прожило в контенте первой
             // итерации, пока никто не проверял.
