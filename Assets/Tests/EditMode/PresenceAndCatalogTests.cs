@@ -31,9 +31,9 @@ namespace Game.Tests.EditMode
         private static Companion Make(string id, int skill, string position = null)
         {
             var arch = new CompanionArchetype(id, id);
-            arch.BaseStats.Set(StatType.Survival, skill);
-            arch.BaseStats.Set(StatType.Charisma, skill);
-            arch.BaseStats.Set(StatType.Will, skill);
+            arch.SetSkill(SkillType.Survival, skill);
+            arch.SetSkill(SkillType.Trade, skill);
+            arch.SetSkill(SkillType.Persuade, skill);
             var c = arch.CreateInstance(id);
             c.AssignedSlotId = position;
             return c;

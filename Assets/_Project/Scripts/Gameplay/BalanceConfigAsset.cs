@@ -17,11 +17,11 @@ namespace Game.Gameplay
         public double xpBase = 100.0;
         public double xpExponent = 1.5;
         public int maxLevel = 20;
-        public int statPointsPerLevel = 3;
+        public int skillPointsPerLevel = 3;
 
         [Header("Работа на базе")]
         public int roleXpPerCycle = 20;
-        public int aptitudeMatchThreshold = 5;
+        public int skillMatchThreshold = 5;
         public double wellSuitedXpMultiplier = 1.5;
 
         [Header("Производство")]
@@ -50,9 +50,9 @@ namespace Game.Gameplay
                 XpBase = xpBase,
                 XpExponent = xpExponent,
                 MaxLevel = maxLevel,
-                StatPointsPerLevel = statPointsPerLevel,
+                SkillPointsPerLevel = skillPointsPerLevel,
                 RoleXpPerCycle = roleXpPerCycle,
-                AptitudeMatchThreshold = aptitudeMatchThreshold,
+                SkillMatchThreshold = skillMatchThreshold,
                 WellSuitedXpMultiplier = wellSuitedXpMultiplier,
                 GlobalProductionMultiplier = globalProductionMultiplier,
                 InjuredProductionMultiplier = injuredProductionMultiplier,

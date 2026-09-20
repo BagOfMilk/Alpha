@@ -36,8 +36,8 @@ namespace Game.Tests.EditMode
         private static Companion Make(string id, int skill, string position)
         {
             var arch = new CompanionArchetype(id, id);
-            foreach (var stat in new[] { StatType.Survival, StatType.Charisma, StatType.Will, StatType.Medicine })
-                arch.BaseStats.Set(stat, skill);
+            foreach (var sk in new[] { SkillType.Survival, SkillType.Trade, SkillType.Persuade, SkillType.Medicine })
+                arch.SetSkill(sk, skill);
             var c = arch.CreateInstance(id);
             c.AssignedSlotId = position;
             return c;

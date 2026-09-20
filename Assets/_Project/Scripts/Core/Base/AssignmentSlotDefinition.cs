@@ -33,9 +33,19 @@ namespace Game.Core.Base
         public string PassiveBonusId;
 
         // ---- Формула выработки за цикл ----
-        // output = Base + Primary*PerPrimary + Secondary*PerSecondary
-        public StatType PrimaryAptitude = StatType.None;
-        public StatType SecondaryAptitude = StatType.None;
+        // output = Base + Skill*PerPrimary + Attribute*PerSecondary
+        //
+        // Первичное — СКИЛ, вторичное — АТРИБУТ, и это разные типы намеренно.
+        // Раньше оба поля были одним enum, и в формулу выработки прилетал боевой
+        // стат в шкале 0–100 против склонности в 0–7: командир обгонял на
+        // разведпосту профильного разведчика. Теперь несопоставимые шкалы в
+        // формулу просто не проходят — сигнатура не пропустит.
+
+        /// <summary>Ремесло позиции: чему человек обучен (шкала 0–10).</summary>
+        public SkillType PrimarySkill = SkillType.None;
+
+        /// <summary>Природная сторона той же работы (шкала 1–10).</summary>
+        public AttributeType SecondaryAttribute = AttributeType.None;
         public double BaseOutput;
         public double OutputPerPrimaryPoint = 1.0;
         public double OutputPerSecondaryPoint = 0.5;

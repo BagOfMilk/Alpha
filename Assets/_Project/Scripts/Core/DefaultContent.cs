@@ -11,7 +11,9 @@ namespace Game.Core
     /// для прототипа — позже её заменят/дополнят ScriptableObject-ассеты, но
     /// благодаря этому проект играбелен сразу, без ручной настройки в редакторе.
     ///
-    /// Здесь же удобно держать стартовые числа баланса на одном экране.
+    /// Бюджеты стартовых архетипов одинаковы: 18 очков атрибутов и 12 очков
+    /// скилов на каждого. Одинаковый бюджет — единственный способ сравнивать
+    /// архетипы между собой, не пересчитывая их каждый раз вручную.
     /// </summary>
     public static class DefaultContent
     {
@@ -20,83 +22,106 @@ namespace Game.Core
         public static CompanionArchetype Soldier()
         {
             var a = new CompanionArchetype("soldier", "Боец");
-            a.BaseStats.Set(StatType.Health, 8);
-            a.BaseStats.Set(StatType.Aim, 65);
-            a.BaseStats.Set(StatType.Mobility, 5);
-            a.BaseStats.Set(StatType.Will, 30);
-            a.BaseStats.Set(StatType.Survival, 4);
-            a.Growth.SetWeight(StatType.Aim, 3);
-            a.Growth.SetWeight(StatType.Health, 2);
-            a.Growth.SetWeight(StatType.Will, 1);
-            a.Growth.SetWeight(StatType.Survival, 1);
+            a.SetAttribute(AttributeType.Strength, 6);
+            a.SetAttribute(AttributeType.Agility, 5);
+            a.SetAttribute(AttributeType.Wits, 3);
+            a.SetAttribute(AttributeType.Will, 4);
+            a.SetSkill(SkillType.Ranged, 5);
+            a.SetSkill(SkillType.Melee, 3);
+            a.SetSkill(SkillType.Tactics, 2);
+            a.SetSkill(SkillType.Survival, 2);
+            a.SetGrowth(SkillType.Ranged, 3);
+            a.SetGrowth(SkillType.Melee, 2);
+            a.SetGrowth(SkillType.Tactics, 1);
+            a.SetGrowth(SkillType.Survival, 1);
             return a;
         }
 
         public static CompanionArchetype Engineer()
         {
             var a = new CompanionArchetype("engineer", "Инженер");
-            a.BaseStats.Set(StatType.Health, 6);
-            a.BaseStats.Set(StatType.Aim, 55);
-            a.BaseStats.Set(StatType.Engineering, 6);
-            a.BaseStats.Set(StatType.Tech, 5);
-            a.BaseStats.Set(StatType.Logistics, 3);
-            a.Growth.SetWeight(StatType.Engineering, 3);
-            a.Growth.SetWeight(StatType.Tech, 2);
-            a.Growth.SetWeight(StatType.Logistics, 1);
+            a.SetAttribute(AttributeType.Strength, 4);
+            a.SetAttribute(AttributeType.Agility, 4);
+            a.SetAttribute(AttributeType.Wits, 6);
+            a.SetAttribute(AttributeType.Will, 4);
+            a.SetSkill(SkillType.Mechanics, 6);
+            a.SetSkill(SkillType.Lockpick, 3);
+            a.SetSkill(SkillType.Ranged, 2);
+            a.SetSkill(SkillType.Survival, 1);
+            a.SetGrowth(SkillType.Mechanics, 3);
+            a.SetGrowth(SkillType.Lockpick, 2);
+            a.SetGrowth(SkillType.Survival, 1);
             return a;
         }
 
         public static CompanionArchetype Scientist()
         {
             var a = new CompanionArchetype("scientist", "Учёный");
-            a.BaseStats.Set(StatType.Health, 5);
-            a.BaseStats.Set(StatType.Science, 7);
-            a.BaseStats.Set(StatType.Tech, 4);
-            a.BaseStats.Set(StatType.Will, 35);
-            a.Growth.SetWeight(StatType.Science, 3);
-            a.Growth.SetWeight(StatType.Tech, 1);
-            a.Growth.SetWeight(StatType.Will, 1);
+            a.SetAttribute(AttributeType.Strength, 3);
+            a.SetAttribute(AttributeType.Agility, 3);
+            a.SetAttribute(AttributeType.Wits, 7);
+            a.SetAttribute(AttributeType.Will, 5);
+            a.SetSkill(SkillType.Mechanics, 4);
+            a.SetSkill(SkillType.Medicine, 4);
+            a.SetSkill(SkillType.Persuade, 3);
+            a.SetSkill(SkillType.Lockpick, 1);
+            a.SetGrowth(SkillType.Mechanics, 3);
+            a.SetGrowth(SkillType.Medicine, 2);
+            a.SetGrowth(SkillType.Persuade, 1);
             return a;
         }
 
         public static CompanionArchetype Medic()
         {
             var a = new CompanionArchetype("medic", "Медик");
-            a.BaseStats.Set(StatType.Health, 6);
-            a.BaseStats.Set(StatType.Aim, 50);
-            a.BaseStats.Set(StatType.Medicine, 6);
-            a.BaseStats.Set(StatType.Survival, 3);
-            a.Growth.SetWeight(StatType.Medicine, 3);
-            a.Growth.SetWeight(StatType.Survival, 1);
-            a.Growth.SetWeight(StatType.Health, 1);
+            a.SetAttribute(AttributeType.Strength, 4);
+            a.SetAttribute(AttributeType.Agility, 4);
+            a.SetAttribute(AttributeType.Wits, 5);
+            a.SetAttribute(AttributeType.Will, 5);
+            a.SetSkill(SkillType.Medicine, 6);
+            a.SetSkill(SkillType.Survival, 3);
+            a.SetSkill(SkillType.Persuade, 2);
+            a.SetSkill(SkillType.Ranged, 1);
+            a.SetGrowth(SkillType.Medicine, 3);
+            a.SetGrowth(SkillType.Survival, 2);
+            a.SetGrowth(SkillType.Persuade, 1);
             return a;
         }
 
         public static CompanionArchetype Scout()
         {
             var a = new CompanionArchetype("scout", "Разведчик");
-            a.BaseStats.Set(StatType.Health, 6);
-            a.BaseStats.Set(StatType.Aim, 60);
-            a.BaseStats.Set(StatType.Mobility, 7);
-            a.BaseStats.Set(StatType.Scouting, 6);
-            a.BaseStats.Set(StatType.Survival, 5);
-            a.Growth.SetWeight(StatType.Scouting, 3);
-            a.Growth.SetWeight(StatType.Mobility, 1);
-            a.Growth.SetWeight(StatType.Aim, 1);
+            a.SetAttribute(AttributeType.Strength, 4);
+            a.SetAttribute(AttributeType.Agility, 6);
+            a.SetAttribute(AttributeType.Wits, 5);
+            a.SetAttribute(AttributeType.Will, 3);
+            a.SetSkill(SkillType.Survival, 5);
+            a.SetSkill(SkillType.Ranged, 3);
+            a.SetSkill(SkillType.Lockpick, 2);
+            a.SetSkill(SkillType.Melee, 2);
+            a.SetGrowth(SkillType.Survival, 3);
+            a.SetGrowth(SkillType.Ranged, 2);
+            a.SetGrowth(SkillType.Lockpick, 1);
             return a;
         }
 
+        // Торговля у Командира не для красоты: рынок и погрузочный док стоят на
+        // ней, и без неё в стартовом ростере на этих позициях профиля нет вовсе —
+        // лучшим торговцем оказывался тот, у кого просто выше Смекалка.
         public static CompanionArchetype Leader()
         {
             var a = new CompanionArchetype("leader", "Командир");
-            a.BaseStats.Set(StatType.Health, 7);
-            a.BaseStats.Set(StatType.Aim, 60);
-            a.BaseStats.Set(StatType.Leadership, 7);
-            a.BaseStats.Set(StatType.Charisma, 5);
-            a.BaseStats.Set(StatType.Will, 45);
-            a.Growth.SetWeight(StatType.Leadership, 3);
-            a.Growth.SetWeight(StatType.Charisma, 2);
-            a.Growth.SetWeight(StatType.Will, 1);
+            a.SetAttribute(AttributeType.Strength, 4);
+            a.SetAttribute(AttributeType.Agility, 4);
+            a.SetAttribute(AttributeType.Wits, 5);
+            a.SetAttribute(AttributeType.Will, 5);
+            a.SetSkill(SkillType.Persuade, 4);
+            a.SetSkill(SkillType.Trade, 4);
+            a.SetSkill(SkillType.Tactics, 3);
+            a.SetSkill(SkillType.Intimidate, 1);
+            a.SetGrowth(SkillType.Persuade, 3);
+            a.SetGrowth(SkillType.Trade, 2);
+            a.SetGrowth(SkillType.Tactics, 1);
             return a;
         }
 
@@ -109,32 +134,36 @@ namespace Game.Core
         }
 
         // ---- Слоты базы ----
+        //
+        // Первичное — скил, вторичное — атрибут: ремесло и природная сторона
+        // одной и той же работы. Коэффициенты прежние, поменялись только оси,
+        // поэтому выработка сопоставима с числами итерации 1.
 
         public static List<AssignmentSlotDefinition> AllSlots()
         {
             var slots = new List<AssignmentSlotDefinition>();
 
-            // Совет — пассивный бонус морали от лидерства.
+            // Совет — пассивный бонус морали: кто умеет говорить с людьми.
             slots.Add(new AssignmentSlotDefinition("council_seat", "Место в совете", BaseSectionType.Council)
             {
                 OutputKind = SlotOutputKind.Passive,
                 PassiveBonusId = "Morale",
-                PrimaryAptitude = StatType.Leadership,
-                SecondaryAptitude = StatType.Charisma,
+                PrimarySkill = SkillType.Persuade,
+                SecondaryAttribute = AttributeType.Will,
                 BaseOutput = 2, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.5
             });
 
-            // Поселение — производит еду и немного припасов через харизму/логистику.
+            // Фермы — еда. Землю кормят те, кто умеет её читать.
             slots.Add(new AssignmentSlotDefinition("settlement_farms", "Фермы поселения", BaseSectionType.Settlement)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Food,
-                PrimaryAptitude = StatType.Logistics, SecondaryAptitude = StatType.Charisma,
+                PrimarySkill = SkillType.Survival, SecondaryAttribute = AttributeType.Will,
                 BaseOutput = 6, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.5
             });
             slots.Add(new AssignmentSlotDefinition("settlement_market", "Рынок поселения", BaseSectionType.Settlement)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
-                PrimaryAptitude = StatType.Charisma, SecondaryAptitude = StatType.Logistics,
+                PrimarySkill = SkillType.Trade, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 4, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.5
             });
 
@@ -146,15 +175,18 @@ namespace Game.Core
             slots.Add(new AssignmentSlotDefinition("workshop_bench", "Верстак мастерской", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
-                PrimaryAptitude = StatType.Engineering, SecondaryAptitude = StatType.Tech,
+                PrimarySkill = SkillType.Mechanics, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.2, OutputPerSecondaryPoint = 0.4
             });
 
-            // Лаборатория — исследования.
+            // Лаборатория — исследования. По US-7.1 у лаборатории одна функция,
+            // крафт аугмента, поэтому ремесло здесь механика: скила «наука» в
+            // GDD нет, и выдумывать его под один слот дороже, чем признать
+            // лабораторию мастерской потоньше.
             slots.Add(new AssignmentSlotDefinition("lab_station", "Исследовательский стол", BaseSectionType.Laboratory)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Research,
-                PrimaryAptitude = StatType.Science, SecondaryAptitude = StatType.Tech,
+                PrimarySkill = SkillType.Mechanics, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 2, OutputPerPrimaryPoint = 1.3, OutputPerSecondaryPoint = 0.3
             });
 
@@ -162,15 +194,15 @@ namespace Game.Core
             slots.Add(new AssignmentSlotDefinition("infirmary_bed", "Койка лазарета", BaseSectionType.Infirmary)
             {
                 OutputKind = SlotOutputKind.Healing,
-                PrimaryAptitude = StatType.Medicine, SecondaryAptitude = StatType.Survival,
+                PrimarySkill = SkillType.Medicine, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 4, OutputPerPrimaryPoint = 2.0, OutputPerSecondaryPoint = 0.5
             });
 
-            // Склад — припасы/логистика (изначально закрыт, требует постройки).
+            // Склад — припасы (изначально закрыт, открывается за ресурсы).
             slots.Add(new AssignmentSlotDefinition("storehouse_dock", "Погрузочный док", BaseSectionType.Storehouse)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
-                PrimaryAptitude = StatType.Logistics, SecondaryAptitude = StatType.Engineering,
+                PrimarySkill = SkillType.Trade, SecondaryAttribute = AttributeType.Strength,
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.4,
                 UnlockedByDefault = false,
                 // Цена постройки. Пока это единственный слив ресурсов кроме прокорма —
@@ -182,11 +214,12 @@ namespace Game.Core
                 }
             });
 
-            // Разведпост — интел.
+            // Разведпост — интел. Разведка в поле — это выживание, отдельного
+            // скила разведки в GDD тоже нет.
             slots.Add(new AssignmentSlotDefinition("scouting_post", "Разведпост", BaseSectionType.ScoutingPost)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Intel,
-                PrimaryAptitude = StatType.Scouting, SecondaryAptitude = StatType.Will,
+                PrimarySkill = SkillType.Survival, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 1, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.2
             });
 

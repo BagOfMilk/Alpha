@@ -43,8 +43,8 @@ XpToNext(level) = round( XpBase * level ^ XpExponent )
 - Больше `XpExponent` → круче кривая (поздние уровни дольше).
 - На `MaxLevel` опыт перестаёт копиться.
 
-**Очки характеристик за уровень:** `StatPointsPerLevel = 3`. Распределяются по
-профилю роста архетипа (`GrowthProfile`) методом наибольших остатков — сумма
+**Очки скилов за уровень:** `SkillPointsPerLevel = 3`. Распределяются по
+профилю роста архетипа (`SkillGrowthProfile`) методом наибольших остатков — сумма
 всегда точна, пропорции соблюдены.
 
 ## 2. Производство на базе
@@ -67,6 +67,10 @@ Output = round( Raw * GlobalProductionMultiplier * [ранен ? InjuredProducti
 
 ### Коэффициенты слотов (стартовые, из `DefaultContent`)
 
+> Таблица ниже — итерация 1, до перестройки модели персонажа. Действующие
+> коэффициенты живут в `DefaultContent.AllSlots()`: Primary там теперь скил,
+> Secondary — атрибут, и склонностей вроде Leadership или Logistics больше нет.
+
 | Слот                | Выход      | Primary (×)        | Secondary (×)      | Base |
 |---------------------|------------|--------------------|--------------------|-----:|
 | Место в совете      | Morale (пас.)| Leadership ×1.0  | Charisma ×0.5      | 2    |
@@ -88,8 +92,8 @@ Output = round( Raw * GlobalProductionMultiplier * [ранен ? InjuredProducti
 ```
 RoleXp = round( RoleXpPerCycle * [хорошее соответствие ? WellSuitedXpMultiplier : 1] )
 ```
-«Хорошее соответствие» = основной стат слота ≥ `AptitudeMatchThreshold`.
-Дефолты: `RoleXpPerCycle = 20`, `AptitudeMatchThreshold = 5`,
+«Хорошее соответствие» = профильный скил слота ≥ `SkillMatchThreshold`.
+Дефолты: `RoleXpPerCycle = 20`, `SkillMatchThreshold = 5`,
 `WellSuitedXpMultiplier = 1.5`.
 
 Намерение: ставить людей «по профилю» выгодно вдвойне — и выработка выше, и

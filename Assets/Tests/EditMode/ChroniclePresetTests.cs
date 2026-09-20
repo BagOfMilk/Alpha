@@ -38,8 +38,8 @@ namespace Game.Tests.EditMode
             foreach (var pair in new[] { ("hero", 9), ("guard", 7), ("trader", 6), ("scout", 5) })
             {
                 var arch = new CompanionArchetype(pair.Item1, pair.Item1);
-                foreach (StatType st in System.Enum.GetValues(typeof(StatType)))
-                    arch.BaseStats.Set(st, pair.Item2);
+                foreach (SkillType sk in System.Enum.GetValues(typeof(SkillType)))
+                    if (sk != SkillType.None) arch.SetSkill(sk, pair.Item2);
                 roster.Add(arch.CreateInstance(pair.Item1));
             }
 

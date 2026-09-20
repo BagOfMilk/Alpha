@@ -31,7 +31,7 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, new ResourceLedger(), cfg);
 
             var arch = new CompanionArchetype("eng", "Инженер");
-            arch.BaseStats.Set(StatType.Engineering, 10);
+            arch.SetSkill(SkillType.Mechanics, 10);
             var comp = arch.CreateInstance("eng_1");
             roster.Add(comp);
 
@@ -39,7 +39,7 @@ namespace Game.Tests.EditMode
             {
                 OutputKind = SlotOutputKind.Resource,
                 OutputResource = ResourceType.Materials,
-                PrimaryAptitude = StatType.Engineering,
+                PrimarySkill = SkillType.Mechanics,
                 BaseOutput = 5,
                 OutputPerPrimaryPoint = 1.0,
                 OutputPerSecondaryPoint = 0

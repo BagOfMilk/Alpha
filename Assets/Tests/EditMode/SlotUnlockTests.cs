@@ -28,7 +28,7 @@ namespace Game.Tests.EditMode
             {
                 OutputKind = SlotOutputKind.Resource,
                 OutputResource = ResourceType.Supplies,
-                PrimaryAptitude = Game.Core.Stats.StatType.Logistics,
+                PrimarySkill = Game.Core.Stats.SkillType.Trade,
                 BaseOutput = 3,
                 UnlockedByDefault = false,
                 UnlockCost = new Dictionary<ResourceType, int>
@@ -109,7 +109,7 @@ namespace Game.Tests.EditMode
             ledger.Add(ResourceType.Materials, 25);
 
             var arch = new CompanionArchetype("hauler", "Грузчик");
-            arch.BaseStats.Set(Game.Core.Stats.StatType.Logistics, 6);
+            arch.SetSkill(Game.Core.Stats.SkillType.Trade, 6);
             var comp = arch.CreateInstance("hauler_1");
             state.Roster.Add(comp);
 

@@ -23,8 +23,9 @@ namespace Game.Tests.EditMode
         private static Companion MakeCompanion(string id, int charisma = 5)
         {
             var arch = new CompanionArchetype(id, id);
-            arch.BaseStats.Set(StatType.Charisma, charisma);
-            arch.BaseStats.Set(StatType.Will, charisma);
+            arch.SetSkill(SkillType.Persuade, charisma);
+            arch.SetSkill(SkillType.Intimidate, charisma);
+            arch.SetSkill(SkillType.Trade, charisma);
             return arch.CreateInstance(id);
         }
 

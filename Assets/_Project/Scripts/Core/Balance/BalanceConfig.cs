@@ -17,17 +17,19 @@ namespace Game.Core.Balance
         public double XpExponent = 1.5;
         public int MaxLevel = 20;
 
-        // Сколько очков характеристик даётся за уровень (распределяется по
-        // ростовому профилю архетипа напарника).
-        public int StatPointsPerLevel = 3;
+        // Сколько очков СКИЛОВ даётся за уровень (распределяется по ростовому
+        // профилю архетипа). Атрибуты уровень не трогает — US-2.1: их поднимает
+        // только крафт аугмента, иначе поздняя игра упирается в потолок 1–10.
+        public int SkillPointsPerLevel = 3;
 
         // ---- Работа на базе ----
         // Базовый опыт роли за один цикл (день) активного назначения.
         public int RoleXpPerCycle = 20;
 
-        // Множитель опыта, если стат-склонность напарника хорошо подходит роли.
-        // Применяется, когда основной стат слота >= AptitudeMatchThreshold.
-        public int AptitudeMatchThreshold = 5;
+        // Множитель опыта, если напарник хорошо подходит роли. Применяется,
+        // когда профильный скил слота >= SkillMatchThreshold. Порог осмыслен:
+        // половина мастерства на единственной шкале 0–10.
+        public int SkillMatchThreshold = 5;
         public double WellSuitedXpMultiplier = 1.5;
 
         // ---- Производство ----
@@ -74,6 +76,9 @@ namespace Game.Core.Balance
         public double CarryPerStrength = 2.0;
         public double StatusDurationReductionPerWill = 0.25;
         public double MoveApPerTileBase = 1.0;
+
+        /// <summary>Сколько трейтов держится активными одновременно (US-2.4, ПЛЕЙСХОЛДЕР).</summary>
+        public int TraitSlots = 4;
 
         /// <summary>Границы шкал: атрибуты 1–10, скилы 0–10.</summary>
         public int MinAttribute = 1;
