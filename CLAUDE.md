@@ -123,6 +123,8 @@ Settlement, Factions, Checks, Signals, Loop}`. Они **не ссылаются*
 |---|---|---|
 | Городской слой (Э0, Э1, дальше) | `claude/unity-base-builder-rpg-ueffab` | ведётся |
 | Карта взаимодействий (`docs/interaction-map.html`, `tools/map/`) | `claude/log-sec-interaction-map-34499e` | ведётся |
+| Планировщик билда (`Core/Characters/Build`) | `claude/unity-base-builder-rpg-ueffab` | ведётся |
+| Консольная сборка первого часа (`tools/Alpha.Play`, §4 п. 6) | `claude/unity-base-builder-rpg-ueffab` | ведётся |
 
 Модель персонажа перестроена и кусок освобождён (2026-09-20). Городской слой
 от неё по-прежнему отделён портами `SkillKey` / `ISettlementActor`: адаптер
