@@ -328,11 +328,17 @@ if (slots.some((s) => s.kind === "Healing")) {
 
 // слоты
 const scaleMismatches = [];
-const KIND_TEXT = { Resource: "Ресурс в кошелёк", Healing: "Лечение раненых", Passive: "Пассивный бонус" };
+const KIND_TEXT = { Resource: "Ресурс в кошелёк", Healing: "Лечение раненых", Passive: "Пассивный бонус",
+                    None: "Выхода нет: позиция есть, механика здания не написана" };
+/** Куда уходит выход слота. None не ведёт никуда — и ребра быть не должно. */
+const slotTarget = (s) =>
+  s.kind === "Resource" ? s.resource : s.kind === "Passive" ? s.passive : s.kind === "Healing" ? "Healing" : null;
+const slotOutId = (s) =>
+  s.kind === "Resource" ? idRes(s.resource) : s.kind === "Passive" ? idOut(s.passive) : s.kind === "Healing" ? idOut("Healing") : null;
 for (const s of slots) {
   const id = idSlot(s.id);
-  const target = s.kind === "Resource" ? s.resource : s.kind === "Passive" ? s.passive : "Healing";
-  const parts = [`${KIND_TEXT[s.kind] || s.kind}: ${target}.`, `Base ${num(s.base)}`];
+  const target = slotTarget(s);
+  const parts = [target ? `${KIND_TEXT[s.kind] || s.kind}: ${target}.` : `${KIND_TEXT.None}.`, `Base ${num(s.base)}`];
   if (s.primary !== "None") parts.push(`+ ${s.primary} ×${coef(s.k1)}`);
   if (s.secondary !== "None") parts.push(`+ ${s.secondary} ×${coef(s.k2)}`);
   const tail = s.unlocked ? "" : " Закрыт по умолчанию — требует постройки.";
@@ -360,8 +366,8 @@ for (const s of slots) {
     link(id, idStat(stat), `${role} ×${coef(k)}` + (mism ? ` — но ${stat} у архетипов до ${statMax[stat]}` : ""), mism ? "gap" : "code");
     if (mism) scaleMismatches.push({ slot: s, stat, k, role, ceiling });
   }
-  const outId = s.kind === "Resource" ? idRes(s.resource) : s.kind === "Passive" ? idOut(s.passive) : idOut("Healing");
-  link(id, outId, `${s.kind}, base ${num(s.base)}`, "code");
+  const outId = slotOutId(s);
+  if (outId) link(id, outId, `${s.kind}, base ${num(s.base)}`, "code");
 }
 
 // архетипы
@@ -412,11 +418,13 @@ for (const as of demo.assignments) {
   const out = roundHalfEven(raw * globalMult);
   const wellSuited = slot.primary !== "None" && p >= (balance.SkillMatchThreshold ?? 5);
   const xp = roundHalfEven((balance.RoleXpPerCycle ?? 20) * (wellSuited ? balance.WellSuitedXpMultiplier ?? 1.5 : 1));
-  const unit = slot.kind === "Resource" ? slot.resource : slot.kind === "Passive" ? slot.passive : "Healing";
+  const unit = slotTarget(slot);
   const formula = `${num(slot.base)}` +
     (slot.primary !== "None" ? ` + ${p}×${coef(slot.k1)}` : "") +
     (slot.secondary !== "None" ? ` + ${s2}×${coef(slot.k2)}` : "") + ` = ${raw.toFixed(1)}`;
-  runRows.push([arch.name, slot.name, formula, `${out} ${unit}`, String(xp)]);
+  // У слота без выхода показывать число бессмысленно: выработка считается,
+  // но её некуда положить. Пишем это словами, иначе строка врёт цифрой.
+  runRows.push([arch.name, slot.name, formula, unit ? `${out} ${unit}` : "выхода нет", String(xp)]);
   if (slot.kind === "Resource") produced[slot.resource] = (produced[slot.resource] ?? 0) + out;
   if (!wellSuited) offProfile.push({ arch: arch.name, slot: slot.name, stat: slot.primary, xp });
 
@@ -435,8 +443,8 @@ for (const s of [...idleSlots, ...lockedSlots]) {
   const reason = s.unlocked
     ? "слот свободен: некому встать"
     : `закрыт: сначала разблокировать${cost ? ` за ${cost}` : ""}`;
-  const unit = s.kind === "Resource" ? s.resource : s.kind === "Passive" ? s.passive : "Healing";
-  runRows.push([s.unlocked ? "— никого" : "— закрыт", s.name, reason, `0 ${unit}`, "—"]);
+  const unit = slotTarget(s);
+  runRows.push([s.unlocked ? "— никого" : "— закрыт", s.name, reason, unit ? `0 ${unit}` : "выхода нет", "—"]);
 }
 
 // баланс еды
@@ -735,7 +743,10 @@ for (const [s, t] of edges) {
 /* ──────────────────────────── сборка файла ──────────────────────────── */
 
 const sha1 = (s) => crypto.createHash("sha1").update(s).digest("hex").slice(0, 8);
-const designSources = ["docs/GDD.md", "docs/DESIGN.md", "docs/BALANCE.md"].filter(exists);
+// Поправки — старший источник истины, и их тут не хватало: правка поправки
+// меняла дизайн, а карта продолжала считать авторский слой свежим.
+const designSources = ["docs/GDD.md", "docs/GDD_AMENDMENTS.md", "docs/SETTLEMENT_LAYER.md",
+                       "docs/DESIGN.md", "docs/BALANCE.md"].filter(exists);
 const fingerprints = Object.fromEntries(designSources.map((p) => [p, sha1(read(p))]));
 const stale = designSources.filter((p) => G.designCheckedAgainst?.[p] && G.designCheckedAgainst[p] !== fingerprints[p]);
 

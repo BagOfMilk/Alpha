@@ -158,6 +158,12 @@ namespace Game.Core.Base
                     case SlotOutputKind.Healing:
                         ApplyHealing(output, report);
                         break;
+                    case SlotOutputKind.None:
+                        // Позиция без выхода — не ошибка и не заглушка на время
+                        // отладки: по GDD у мастерской и лаборатории функция
+                        // крафт, а крафта ещё нет. Ролевой опыт при этом идёт:
+                        // человек на посту всё равно работает.
+                        break;
                 }
 
                 int xp = ProductionCalculator.RoleXpPerCycle(companion, def, Balance);
