@@ -75,6 +75,9 @@ namespace Game.Core.Balance
         public double StatusDurationReductionPerWill = 0.25;
         public double MoveApPerTileBase = 1.0;
 
+        /// <summary>Сколько трейтов держится активными одновременно (US-2.4, ПЛЕЙСХОЛДЕР).</summary>
+        public int TraitSlots = 4;
+
         /// <summary>Границы шкал: атрибуты 1–10, скилы 0–10.</summary>
         public int MinAttribute = 1;
         public int MaxAttribute = 10;

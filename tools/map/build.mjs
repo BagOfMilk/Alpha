@@ -506,7 +506,10 @@ const assetFields = (CS[SRC.asset] || "").match(/public\s+(?:double|int)\s+\w+/g
 // в BalanceConfigAsset и больше нигде не читается, остаётся мёртвой крутилкой.
 const PLUMBING = new Set([SRC.balance, SRC.asset]);
 for (const field of balanceFields) {
-  const readers = CS_FILES.filter((p) => !PLUMBING.has(p) && new RegExp(`\\b${field}\\b`).test(CS[p]));
+  // Ищем обращение через точку (cfg.Field), а не голое слово: имя поля может
+  // совпадать с именем типа — так TraitSlots считался «используемым», потому
+  // что регексп находил одноимённый класс.
+  const readers = CS_FILES.filter((p) => !PLUMBING.has(p) && new RegExp(`\\.${field}\\b`).test(CS[p]));
   if (readers.length) continue;
   const line = lineOf(balanceText, balanceText.indexOf(`${field} =`));
   const mirrored = new RegExp(`\\b${field[0].toLowerCase()}${field.slice(1)}\\b`).test(CS[SRC.asset] || "");
