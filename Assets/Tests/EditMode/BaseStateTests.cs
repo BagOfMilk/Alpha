@@ -17,7 +17,7 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, ledger, cfg);
 
             var arch = new CompanionArchetype("eng", "Инженер");
-            arch.BaseStats.Set(StatType.Engineering, 10);
+            arch.SetSkill(SkillType.Mechanics, 10);
             var comp = arch.CreateInstance("eng_1");
             roster.Add(comp);
 
@@ -25,7 +25,7 @@ namespace Game.Tests.EditMode
             {
                 OutputKind = kind,
                 OutputResource = ResourceType.Materials,
-                PrimaryAptitude = StatType.Engineering,
+                PrimarySkill = SkillType.Mechanics,
                 BaseOutput = 5, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0
             };
             state.AddSlot(def);
@@ -39,7 +39,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(AssignmentResult.Success, state.TryAssign(comp.Id, "bench"));
 
             var report = state.AdvanceCycle();
-            // 5 (base) + 10 (engineering) * 1.0 = 15
+            // 5 (база) + 10 (механика) * 1.0 = 15
             Assert.AreEqual(15, state.Resources.Get(ResourceType.Materials));
             Assert.AreEqual(15, report.Produced[ResourceType.Materials]);
         }
@@ -69,7 +69,7 @@ namespace Game.Tests.EditMode
             var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
             var def2 = new AssignmentSlotDefinition("bench2", "Верстак2", BaseSectionType.Workshop)
             {
-                OutputResource = ResourceType.Materials, PrimaryAptitude = StatType.Engineering
+                OutputResource = ResourceType.Materials, PrimarySkill = SkillType.Mechanics
             };
             state.AddSlot(def2);
 

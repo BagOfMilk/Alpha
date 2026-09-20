@@ -2,7 +2,7 @@
  "designCheckedAgainst": {
   "docs/GDD.md": "701cc75b",
   "docs/DESIGN.md": "b326bcf5",
-  "docs/BALANCE.md": "d08835cc"
+  "docs/BALANCE.md": "4c6b1735"
  },
  "bind": {
   "sections": {
@@ -83,40 +83,13 @@
    "EditMode-тесты на NUnit. Видит internal-члены ядра."
   ],
   [
-   "c.StatType",
-   "StatType",
-   "code",
-   "enum",
-   "Stats",
-   "Core/Stats/StatType.cs",
-   "Один enum на всё: боевые статы (Health, Aim, Defense, Dodge, Mobility, Will, CritChance, Armor, Tech, Psi) и склонности под роли базы (Leadership, Engineering, Science, Medicine, Logistics, Charisma, Scouting, Survival)."
-  ],
-  [
-   "c.StatBlock",
-   "StatBlock",
-   "code",
-   "class",
-   "Stats",
-   "Core/Stats/StatBlock.cs",
-   "Sparse-контейнер значений статов: хранит только заданные, остальные — ноль. Умеет складываться (Plus/AddFrom) — под бонусы гира и трейтов."
-  ],
-  [
    "c.CompanionArchetype",
    "CompanionArchetype",
    "code",
    "class",
    "Characters",
    "Core/Characters/CompanionArchetype.cs",
-   "Шаблон напарника: стартовый StatBlock + GrowthProfile. CreateInstance() рождает Companion 1-го уровня."
-  ],
-  [
-   "c.GrowthProfile",
-   "GrowthProfile",
-   "code",
-   "class",
-   "Characters",
-   "Core/Characters/GrowthProfile.cs",
-   "Веса распределения очков при левелапе. AllocatePoints раздаёт очки методом наибольших остатков — сумма всегда точна."
+   "Шаблон напарника: стартовые атрибуты, стартовые скилы, профиль роста и стартовые трейты. Заполняется сеттерами — одна строка контента на один факт. CreateInstance() рождает Companion 1-го уровня."
   ],
   [
    "c.Companion",
@@ -125,7 +98,7 @@
    "class",
    "Characters",
    "Core/Characters/Companion.cs",
-   "Рантайм-напарник: уровень, XP, статус, привязка к слоту, InjuryPoints. EffectiveStats = архетип + накопленный рост."
+   "Рантайм-напарник: уровень, XP, статус, привязка к слоту, InjuryPoints. Три оси модели плюс трек шрамов и перки. Числа наружу отдаёт только Resolve() — читать поля напрямую нечем, и двойной счёт становится невозможен."
   ],
   [
    "c.CompanionStatus",
@@ -170,7 +143,7 @@
    "class",
    "Base",
    "Core/Base/AssignmentSlotDefinition.cs",
-   "Data-driven описание позиции: секция, тип выхода, ресурс, Primary/Secondary склонности и их коэффициенты. Баланс роли = эти числа."
+   "Data-driven описание позиции: секция, тип выхода, ресурс, профильный скил, вторичный атрибут и коэффициенты. Разные типы у Primary и Secondary — чтобы несопоставимые шкалы в формулу выработки не проходили."
   ],
   [
    "c.AssignmentSlot",
@@ -224,7 +197,7 @@
    "enum",
    "Economy",
    "Core/Economy/ResourceType.cs",
-   "Supplies · Materials · Intel · Research · Food · Medicine."
+   "Supplies · Materials · Intel · Research · Food."
   ],
   [
    "c.ResourceLedger",
@@ -269,7 +242,7 @@
    "static",
    "Контент",
    "Core/DefaultContent.cs",
-   "Затравка контента в коде: 6 архетипов и 8 слотов базы со всеми коэффициентами. Позже заменяется ассетами."
+   "Затравка контента в коде: 6 архетипов с равным бюджетом (18 очков атрибутов, 12 очков скилов) и 8 слотов базы со всеми коэффициентами. Позже заменяется ассетами."
   ],
   [
    "c.BalanceConfigAsset",
@@ -305,7 +278,7 @@
    "test",
    "Тесты",
    "Tests/EditMode/GrowthProfileTests.cs",
-   "Раздача очков по весам: сумма точна, пропорции соблюдены, пустой профиль не падает."
+   "Раздача очков скилов по весам: сумма точна, пропорции соблюдены, пустой профиль не падает. Плюс забор: уровень растит скилы и никогда — атрибуты."
   ],
   [
    "c.tProg",
@@ -1530,6 +1503,195 @@
    "Городской слой",
    "Core/Loop/HungerStep.cs",
    "Шаг дня: голодный день поднимает Напряжение. Отдельным шагом, потому что модуль базы и городской слой намеренно не знают друг о друге — факт голода приходит через порт в контексте дня."
+  ],
+  [
+   "c.AttributeType",
+   "AttributeType",
+   "code",
+   "enum",
+   "Stats",
+   "Core/Stats/AttributeType.cs",
+   "Четыре атрибута: Сила, Ловкость, Смекалка, Воля. Шкала 1–10. За уровни не растут — их поднимает только крафт аугмента, поэтому поздняя игра держится на перках и гире, а не на цифрах характеристик."
+  ],
+  [
+   "c.SkillType",
+   "SkillType",
+   "code",
+   "enum",
+   "Stats",
+   "Core/Stats/SkillType.cs",
+   "Десять скилов, шкала 0–10. Значения разнесены по десяткам: 1–9 бой, 10–19 утилита, 20–29 соц — группа читается из диапазона, второго источника правды нет. KeyId связывает скил со строковым ключом городского слоя."
+  ],
+  [
+   "c.DerivedStat",
+   "DerivedStat",
+   "code",
+   "enum",
+   "Stats",
+   "Core/Stats/DerivedStat.cs",
+   "Производные: HP, AP, точность, защита, инициатива, крит, броня, перенос, сопротивление состояниям. Не считаются в месте использования — сидируются в базовый слой агрегатора, иначе перку «+3 HP» некуда лечь."
+  ],
+  [
+   "c.StatKey",
+   "StatKey",
+   "code",
+   "enum",
+   "Stats",
+   "Core/Stats/StatKey.cs",
+   "Единственный ключ агрегатора. Три оси авторства сходятся в один плоский enum: 100+ атрибуты, 200+ скилы, 300+ производные. Плоский — чтобы модификатор в инспекторе был одним дропдауном, а не парой полей."
+  ],
+  [
+   "c.AttributeSet",
+   "AttributeSet",
+   "code",
+   "class",
+   "Stats",
+   "Core/Stats/AttributeSet.cs",
+   "Четыре атрибута плотным массивом. Словарь не нужен: «не задан» здесь не имеет смысла — значения есть у всех четырёх всегда."
+  ],
+  [
+   "c.SkillSet",
+   "SkillSet",
+   "code",
+   "class",
+   "Stats",
+   "Core/Stats/SkillSet.cs",
+   "Десять скилов плотно. Ноль — осмысленное значение «не умеет», поэтому отсутствие ключа и ноль не должны различаться. AddClamped зажимает прирост уровня по потолку шкалы."
+  ],
+  [
+   "c.StatModifier",
+   "StatModifier",
+   "code",
+   "struct",
+   "Stats",
+   "Core/Stats/StatModifier.cs",
+   "Один вклад в один стат. Гир, трейт, шрам, состояние, бафф, перк выражаются этим типом и ничем другим — в этом и состоит «один эффект — одна система». Source нужен не арифметике, а тултипу и аудиту двойного счёта."
+  ],
+  [
+   "c.IModifierProvider",
+   "IModifierProvider",
+   "code",
+   "enum",
+   "Stats",
+   "Core/Stats/StatModifier.cs:63",
+   "Всё, что умеет добавлять модификаторы: набор трейтов, трек шрамов, перки, будущий гир и состояния. Агрегатору больше ничего знать не нужно."
+  ],
+  [
+   "c.StatResolver",
+   "StatResolver",
+   "code",
+   "static",
+   "Stats",
+   "Core/Stats/StatResolver.cs",
+   "Единый агрегатор (US-18.2). Ровно одно место, где числа персонажа складываются: (база + ΣFlat) × (1 + ΣPercentAdd) × ΠMultiplier, Override перебивает всё. Порядок вставки на результат не влияет."
+  ],
+  [
+   "c.StatSnapshot",
+   "StatSnapshot",
+   "code",
+   "class",
+   "Stats",
+   "Core/Stats/StatSnapshot.cs",
+   "Посчитанные статы на момент времени. Всё, что читает числа персонажа — выработка, проверки, будущий бой — работает со снапшотом, а не с полями. SourcesOf показывает, из чего сложилось значение."
+  ],
+  [
+   "c.DerivedStats",
+   "DerivedStats",
+   "code",
+   "static",
+   "Stats",
+   "Core/Stats/DerivedStats.cs",
+   "Единственное место, где атрибут превращается в производную. Кладёт результат в базовый слой агрегатора, поэтому боевые формулы про атрибуты не знают вовсе."
+  ],
+  [
+   "c.StatScales",
+   "StatScales",
+   "code",
+   "static",
+   "Stats",
+   "Core/Stats/StatScales.cs",
+   "Границы шкал и их проверка. Заведён после того, как боевые статы 0–100 и склонности 0–7 попали в одну формулу выработки: теперь границы объявлены явно и проверяются тестом по стартовому контенту."
+  ],
+  [
+   "c.SkillGrowthProfile",
+   "SkillGrowthProfile",
+   "code",
+   "class",
+   "Characters",
+   "Core/Characters/SkillGrowthProfile.cs",
+   "Веса, по которым очки уровня ложатся на скилы. Именно на скилы: атрибуты уровень не трогает. Раздача методом наибольших остатков — сумма выданных очков всегда точна."
+  ],
+  [
+   "c.WoundTier",
+   "WoundTier",
+   "code",
+   "enum",
+   "Characters",
+   "Core/Characters/WoundTier.cs",
+   "Тир ранения: нет, лёгкое, серьёзное, критическое. Лёгкое следов не оставляет — на этом держится US-4.2."
+  ],
+  [
+   "c.TraitDefinition",
+   "TraitDefinition",
+   "code",
+   "class",
+   "Characters",
+   "Core/Characters/Traits/TraitDefinition.cs",
+   "Трейт как данные: полярность, модификаторы, ценностные теги, открываемые опции диалога. Писателю нужен ассет, а не программист."
+  ],
+  [
+   "c.TraitSlots",
+   "TraitSlots",
+   "code",
+   "class",
+   "Characters",
+   "Core/Characters/Traits/TraitSlots.cs",
+   "Активные трейты в фиксированном числе слотов. Переполнение не бросает исключение и не роняет трейт молча, а возвращает SlotsFull: по дизайну это развилка «вытеснить или отказаться», и интерфейс превращает её в диалог."
+  ],
+  [
+   "c.ScarTrack",
+   "ScarTrack",
+   "code",
+   "class",
+   "Characters",
+   "Core/Characters/Scars/ScarTrack.cs",
+   "Вечный трек шрамов. Метода удаления нет вообще — снять шрам нельзя просто потому, что для этого не существует API. Тест держит это как контракт."
+  ],
+  [
+   "c.PerkDefinition",
+   "PerkDefinition",
+   "code",
+   "class",
+   "Characters",
+   "Core/Characters/Perks/PerkDefinition.cs",
+   "Перк как данные: гейт по уровню скила, пререквизиты, модификаторы, выдаваемая активка."
+  ],
+  [
+   "c.CompanionPerks",
+   "CompanionPerks",
+   "code",
+   "class",
+   "Characters",
+   "Core/Characters/Perks/CompanionPerks.cs",
+   "Взятые перки. Метода «забыть перк» нет — «респека нет» держится отсутствием API, а не памятью разработчика. Evaluate без побочных эффектов: на нём стоит предпросмотр билда."
+  ],
+  [
+   "c.tStats",
+   "StatResolverTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/StatResolverTests.cs",
+   "Порядок свёртки, независимость от порядка вставки, отсутствие двойного счёта, соответствие StatKey осям."
+  ],
+  [
+   "c.tTraits",
+   "TraitsScarsPerksTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/TraitsScarsPerksTests.cs",
+   "Слоты трейтов, вечность шрамов, гейты перков и складывание трёх провайдеров в одно число."
   ]
  ],
  "edges": [
@@ -1552,36 +1714,6 @@
    "code"
   ],
   [
-   "c.StatBlock",
-   "c.StatType",
-   "ключ словаря значений",
-   "code"
-  ],
-  [
-   "c.GrowthProfile",
-   "c.StatType",
-   "вес роста задаётся на стат",
-   "code"
-  ],
-  [
-   "c.GrowthProfile",
-   "c.StatBlock",
-   "AllocatePoints возвращает блок очков",
-   "code"
-  ],
-  [
-   "c.CompanionArchetype",
-   "c.StatBlock",
-   "BaseStats — стартовые статы",
-   "code"
-  ],
-  [
-   "c.CompanionArchetype",
-   "c.GrowthProfile",
-   "Growth — профиль роста",
-   "code"
-  ],
-  [
    "c.CompanionArchetype",
    "c.Companion",
    "CreateInstance() создаёт экземпляр",
@@ -1591,12 +1723,6 @@
    "c.Companion",
    "c.CompanionArchetype",
    "хранит ссылку на шаблон",
-   "code"
-  ],
-  [
-   "c.Companion",
-   "c.StatBlock",
-   "EffectiveStats = архетип + накопленный рост",
    "code"
   ],
   [
@@ -1651,12 +1777,6 @@
    "c.AssignmentSlotDefinition",
    "c.ResourceType",
    "поле OutputResource",
-   "code"
-  ],
-  [
-   "c.AssignmentSlotDefinition",
-   "c.StatType",
-   "Primary и Secondary склонности",
    "code"
   ],
   [
@@ -1775,12 +1895,6 @@
   ],
   [
    "c.DefaultContent",
-   "c.StatType",
-   "проставляет статы и склонности",
-   "code"
-  ],
-  [
-   "c.DefaultContent",
    "c.ResourceType",
    "привязывает слоты к ресурсам",
    "code"
@@ -1837,12 +1951,6 @@
    "c.tBase",
    "c.Companion",
    "выставляет InjuryPoints напрямую через internal",
-   "code"
-  ],
-  [
-   "c.tGrowth",
-   "c.GrowthProfile",
-   "сумма очков точна, пропорции соблюдены",
    "code"
   ],
   [
@@ -1993,12 +2101,6 @@
    "b.slot.bed",
    "c.SlotOutputKind",
    "единственный Healing-слот",
-   "code"
-  ],
-  [
-   "b.st.Medicine",
-   "c.StatType",
-   "значение enum",
    "code"
   ],
   [
@@ -3490,24 +3592,6 @@
    "gap"
   ],
   [
-   "g.combat",
-   "c.StatType",
-   "боевые статы объявлены, боевой логики в коде нет",
-   "plan"
-  ],
-  [
-   "g.attrs",
-   "c.StatType",
-   "GDD разводит 4 атрибута и 10 скилов — в коде один enum на 18 статов с общим механизмом роста",
-   "gap"
-  ],
-  [
-   "g.initiative",
-   "c.StatType",
-   "боевые статы объявлены, планировщика ходов ещё нет",
-   "plan"
-  ],
-  [
    "g.matbuild",
    "b.slot.bench",
    "GDD: материалы только из вылазок. Код: верстак печатает Materials на базе",
@@ -3532,12 +3616,6 @@
    "gap"
   ],
   [
-   "g.traits",
-   "c.Companion",
-   "трейтов и шрамов у Companion нет",
-   "gap"
-  ],
-  [
    "g.compfsm",
    "c.CompanionStatus",
    "в enum нет антагониста и мёртвого; Resting и OnMission не выставляются",
@@ -3548,12 +3626,6 @@
    "c.CompanionStatus",
    "OnMission проверяется, но ставить его некому — вылазок нет",
    "gap"
-  ],
-  [
-   "g.modpipeline",
-   "c.StatBlock",
-   "StatBlock умеет складывать — фундамент под агрегатор есть",
-   "impl"
   ],
   [
    "g.b_lab",
@@ -3842,6 +3914,288 @@
    "b.m.upkeep",
    "голод гонит наружу: гасят Напряжение здания за компонент из вылазок",
    "doc"
+  ],
+  [
+   "c.StatKey",
+   "c.AttributeType",
+   "100 + значение атрибута",
+   "code"
+  ],
+  [
+   "c.StatKey",
+   "c.SkillType",
+   "200 + значение скила",
+   "code"
+  ],
+  [
+   "c.StatKey",
+   "c.DerivedStat",
+   "300 + значение производной",
+   "code"
+  ],
+  [
+   "c.AttributeSet",
+   "c.AttributeType",
+   "индекс = значение enum",
+   "code"
+  ],
+  [
+   "c.SkillSet",
+   "c.SkillType",
+   "плотный массив по позиции в Skills.All",
+   "code"
+  ],
+  [
+   "c.StatModifier",
+   "c.StatKey",
+   "ключ, по которому складывается вклад",
+   "code"
+  ],
+  [
+   "c.StatResolver",
+   "c.StatModifier",
+   "собирает модификаторы провайдеров",
+   "code"
+  ],
+  [
+   "c.StatResolver",
+   "c.DerivedStats",
+   "сидирует производные в базовый слой",
+   "code"
+  ],
+  [
+   "c.StatResolver",
+   "c.StatSnapshot",
+   "возвращает посчитанные статы",
+   "code"
+  ],
+  [
+   "c.StatResolver",
+   "c.IModifierProvider",
+   "единственный источник модификаторов",
+   "code"
+  ],
+  [
+   "c.DerivedStats",
+   "c.BalanceConfig",
+   "коэффициенты производных",
+   "code"
+  ],
+  [
+   "c.StatScales",
+   "c.BalanceConfig",
+   "границы шкал",
+   "code"
+  ],
+  [
+   "c.TraitSlots",
+   "c.TraitDefinition",
+   "что лежит в слотах",
+   "code"
+  ],
+  [
+   "c.TraitSlots",
+   "c.BalanceConfig",
+   "ёмкость из FromConfig",
+   "code"
+  ],
+  [
+   "c.ScarTrack",
+   "c.WoundTier",
+   "шрам достаётся с Серьёзного и выше",
+   "code"
+  ],
+  [
+   "c.CompanionPerks",
+   "c.PerkDefinition",
+   "что взято",
+   "code"
+  ],
+  [
+   "c.CompanionPerks",
+   "c.SkillType",
+   "гейт по уровню скила",
+   "code"
+  ],
+  [
+   "c.SkillGrowthProfile",
+   "c.SkillType",
+   "вес роста задаётся на скил",
+   "code"
+  ],
+  [
+   "c.SkillGrowthProfile",
+   "c.SkillSet",
+   "AllocatePoints возвращает прирост",
+   "code"
+  ],
+  [
+   "c.CompanionArchetype",
+   "c.AttributeSet",
+   "стартовые атрибуты",
+   "code"
+  ],
+  [
+   "c.CompanionArchetype",
+   "c.SkillSet",
+   "стартовые скилы",
+   "code"
+  ],
+  [
+   "c.CompanionArchetype",
+   "c.SkillGrowthProfile",
+   "профиль роста",
+   "code"
+  ],
+  [
+   "c.CompanionArchetype",
+   "c.TraitDefinition",
+   "стартовые трейты",
+   "code"
+  ],
+  [
+   "c.Companion",
+   "c.TraitSlots",
+   "слоты трейтов",
+   "code"
+  ],
+  [
+   "c.Companion",
+   "c.ScarTrack",
+   "вечный трек шрамов",
+   "code"
+  ],
+  [
+   "c.Companion",
+   "c.CompanionPerks",
+   "взятые перки",
+   "code"
+  ],
+  [
+   "c.Companion",
+   "c.StatResolver",
+   "Resolve() — единственный вход к числам",
+   "code"
+  ],
+  [
+   "c.AssignmentSlotDefinition",
+   "c.SkillType",
+   "Primary — ремесло позиции",
+   "code"
+  ],
+  [
+   "c.AssignmentSlotDefinition",
+   "c.AttributeType",
+   "Secondary — природная сторона работы",
+   "code"
+  ],
+  [
+   "c.ProductionCalculator",
+   "c.StatSnapshot",
+   "читает резолвнутые числа, а не поля",
+   "code"
+  ],
+  [
+   "c.DefaultContent",
+   "c.AttributeType",
+   "проставляет атрибуты архетипов",
+   "code"
+  ],
+  [
+   "c.DefaultContent",
+   "c.SkillType",
+   "проставляет скилы и профили слотов",
+   "code"
+  ],
+  [
+   "c.tStats",
+   "c.StatResolver",
+   "порядок свёртки и отсутствие двойного счёта",
+   "code"
+  ],
+  [
+   "c.tTraits",
+   "c.TraitSlots",
+   "переполнение — развилка, а не ошибка",
+   "code"
+  ],
+  [
+   "c.tTraits",
+   "c.ScarTrack",
+   "удалить шрам нечем",
+   "code"
+  ],
+  [
+   "c.tTraits",
+   "c.CompanionPerks",
+   "гейты и отсутствие респека",
+   "code"
+  ],
+  [
+   "c.tGrowth",
+   "c.SkillGrowthProfile",
+   "сумма очков точна, пропорции соблюдены",
+   "code"
+  ],
+  [
+   "g.attrs",
+   "c.AttributeType",
+   "реализовано: 4 атрибута, шкала 1–10, за уровни не растут",
+   "impl"
+  ],
+  [
+   "g.skills",
+   "c.SkillType",
+   "реализовано: 10 скилов, шкала 0–10, без классов",
+   "impl"
+  ],
+  [
+   "g.traits",
+   "c.TraitSlots",
+   "реализовано: трейты в слотах, вытеснить или отказаться",
+   "impl"
+  ],
+  [
+   "g.scars",
+   "c.ScarTrack",
+   "реализовано: вечный трек, снять нечем",
+   "impl"
+  ],
+  [
+   "g.perks",
+   "c.CompanionPerks",
+   "реализовано: гейт по скилу и пререквизиты",
+   "impl"
+  ],
+  [
+   "g.modpipeline",
+   "c.StatResolver",
+   "реализовано: единый агрегатор, один ключ, один порядок свёртки",
+   "impl"
+  ],
+  [
+   "g.combat",
+   "c.DerivedStat",
+   "производные под бой объявлены, боевой логики ещё нет",
+   "plan"
+  ],
+  [
+   "g.initiative",
+   "c.DerivedStat",
+   "инициатива считается из Ловкости и Смекалки, планировщика ходов нет",
+   "plan"
+  ],
+  [
+   "g.augment",
+   "c.AttributeSet",
+   "единственный способ поднять атрибуты — крафта аугмента ещё нет",
+   "plan"
+  ],
+  [
+   "g.survivability",
+   "c.DerivedStats",
+   "HP почти плоский по атрибутам — расти обязаны перки и гир",
+   "impl"
   ]
  ],
  "gaps": [
@@ -3853,16 +4207,9 @@
    "Дизайн ↔ код"
   ],
   [
-   "Две несовместимые модели персонажа",
-   "docs/GDD.md Э2 ↔ Core/Stats/StatType.cs",
-   "GDD Э2 разводит персонажа на три независимые оси: 4 почти статичных атрибута, 10 скилов и трейты в фиксированном числе слотов, плюс отдельный вечный трек шрамов — с правилом «один эффект — одна система». Код: один enum StatType на {{statCount}} стата, где боевые и ролевые склонности растут по одному механизму — {{pointsPerLevel}} очка за уровень по весам архетипа. Ни атрибутов, ни скилов, ни трейтов как отдельных осей нет. Итерация 2 упрётся в это первой.",
-   "high",
-   "Дизайн ↔ код"
-  ],
-  [
    "Экономика: золото и 2 компонента против шести ресурсов",
    "docs/GDD.md Э15 ↔ Core/Economy/ResourceType.cs",
-   "GDD Э15: валюта отряда — золото плюс 2 материала, строительный и крафтовый, а в MVP-срезе вообще базовая добыча 1–2 материалов из вылазок. Код: {{resourceCount}} ресурсов, из них производится {{producedCount}}, тратится {{spentCount}}. На GDD ложатся только два — Supplies ≈ золото и Materials ≈ компонент; оставшиеся четыре (Intel, Research, Food, Medicine) в GDD отсутствуют вовсе.",
+   "GDD Э15: валюта отряда — золото плюс 2 материала, строительный и крафтовый, а в MVP-срезе вообще базовая добыча 1–2 материалов из вылазок. Код: {{resourceCount}} ресурсов, из них производится {{producedCount}}, тратится {{spentCount}}. На GDD ложатся только два — Supplies ≈ золото и Materials ≈ компонент; оставшиеся три (Intel, Research, Food) в GDD отсутствуют вовсе.",
    "high",
    "Дизайн ↔ код"
   ],

@@ -39,14 +39,16 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Инвариант: городской слой не завязан на типы, которые будут переписаны
-        /// при перестройке ядра (StatType, ResourceType и их namespace).
+        /// Инвариант: городской слой не завязан на модель персонажа и экономику.
+        /// Он знает только строковый SkillKey и порты — поэтому перестройка
+        /// модели (которая уже случилась) его не касается, и следующая тоже.
         /// </summary>
         [Test]
         public void SettlementLayer_DoesNotReferenceLegacyTypes()
         {
             string[] layers = { "Pressure", "Signals", "Loop", "Checks", "World", "Settlement" };
-            var forbidden = new Regex(@"Game\.Core\.Stats|Game\.Core\.Economy|\bStatType\b|\bResourceType\b");
+            var forbidden = new Regex(
+                @"Game\.Core\.Stats|Game\.Core\.Economy|\bSkillType\b|\bAttributeType\b|\bStatKey\b|\bResourceType\b");
             var offenders = new List<string>();
 
             foreach (var layer in layers)
@@ -62,7 +64,7 @@ namespace Game.Tests.EditMode
             }
 
             Assert.IsEmpty(offenders,
-                "Городской слой обязан развязываться от умирающих типов через порты: "
+                "Городской слой обязан развязываться от модели персонажа через порты: "
                 + string.Join(", ", offenders));
         }
 

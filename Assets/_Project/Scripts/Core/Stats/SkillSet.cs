@@ -1,4 +1,5 @@
 using System;
+using Game.Core.Balance;
 
 namespace Game.Core.Stats
 {
@@ -25,6 +26,21 @@ namespace Game.Core.Stats
                 int i = Skills2.IndexOf(s);
                 if (i >= 0) _values[i] = value;
             }
+        }
+
+        /// <summary>
+        /// Прибавляет очки другого набора, зажимая каждый скил по шкале.
+        ///
+        /// Излишек выше потолка СГОРАЕТ, а не переливается в соседний скил: иначе
+        /// уровень сам решал бы, чему учиться, а по GDD Э2.2 это выбор игрока.
+        /// Потолок упереться может только у профильного скила архетипа, и тогда
+        /// профиль роста пора менять руками.
+        /// </summary>
+        public void AddClamped(SkillSet delta, BalanceConfig cfg)
+        {
+            if (delta == null || cfg == null) return;
+            for (int i = 0; i < _values.Length; i++)
+                _values[i] = StatScales.ClampSkill(_values[i] + delta._values[i], cfg);
         }
 
         public SkillSet Clone()

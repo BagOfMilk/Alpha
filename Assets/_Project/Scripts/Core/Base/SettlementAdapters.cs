@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Checks;
 using Game.Core.Stats;
@@ -8,37 +9,25 @@ using Game.Core.World;
 namespace Game.Core.Base
 {
     /// <summary>
-    /// Мост между городским слоем и нынешней моделью персонажа.
+    /// Мост между городским слоем и моделью персонажа.
     ///
-    /// Живёт ЗДЕСЬ, в умирающем namespace, а не в Game.Core.Checks — это
-    /// сознательно: когда модель персонажа перепишут под GDD (4 атрибута +
-    /// 10 скилов), умрёт только этот файл, а городской слой не заметит.
-    /// Весь маппинг «ключ навыка → стат» собран в одном месте.
+    /// Живёт ЗДЕСЬ, а не в Game.Core.Checks — сознательно: городской слой знает
+    /// только строковый SkillKey, а про атрибуты, скилы и трейты не знает
+    /// ничего. Перестройка модели меняет этот файл и больше ничей.
+    ///
+    /// Сопоставления «ключ городского слоя → скил» здесь больше нет: оно живёт
+    /// в Skills.KeyId рядом с самим enum. Две таблицы разъезжаются, одна — нет.
     /// </summary>
     public sealed class CompanionActorAdapter : ISettlementActor
     {
-        private static readonly Dictionary<string, StatType> Map = new Dictionary<string, StatType>
-        {
-            // Временное сопоставление на статы Итерации 1. После перестройки
-            // ядра здесь будут настоящие скилы GDD.
-            { "persuade", StatType.Charisma },
-            { "intimidate", StatType.Will },
-            { "trade", StatType.Charisma },
-            { "medicine", StatType.Medicine },
-            { "mechanics", StatType.Engineering },
-            { "survival", StatType.Survival },
-            { "lockpick", StatType.Tech },
-            { "tactics", StatType.Leadership },
-            { "ranged", StatType.Aim },
-            { "melee", StatType.Aim }
-        };
-
         private readonly Companion _companion;
+        private readonly BalanceConfig _balance;
 
-        public CompanionActorAdapter(Companion companion, bool isProtagonist = false)
+        public CompanionActorAdapter(Companion companion, bool isProtagonist = false, BalanceConfig balance = null)
         {
             _companion = companion ?? throw new ArgumentNullException(nameof(companion));
             IsProtagonist = isProtagonist;
+            _balance = balance;
         }
 
         public string Id => _companion.Id;
@@ -52,12 +41,28 @@ namespace Game.Core.Base
 
         public int GetCheckValue(SkillKey skill)
         {
-            if (skill.IsNone) return 0;
-            return Map.TryGetValue(skill.Id, out var stat) ? _companion.GetStat(stat) : 0;
+            var s = Resolve(skill);
+            return s == SkillType.None ? 0 : _companion.Skill(s);
         }
 
-        /// <summary>Трейтов в модели пока нет — появятся при перестройке ядра.</summary>
-        public int GetTraitModifier(SkillKey skill) => 0;
+        /// <summary>
+        /// Всё, что ложится поверх голого скила: трейты, шрамы, перки.
+        ///
+        /// Считается как «резолвнутое минус база», а не суммированием нужных
+        /// модификаторов вручную. Это ровно то разбиение, при котором
+        /// CheckResolver складывает GetCheckValue + GetTraitModifier и получает
+        /// резолвнутое значение без двойного счёта — по построению, а не по
+        /// договорённости.
+        /// </summary>
+        public int GetTraitModifier(SkillKey skill)
+        {
+            var s = Resolve(skill);
+            if (s == SkillType.None) return 0;
+            return _companion.Resolve(_balance).Skill(s) - _companion.Skill(s);
+        }
+
+        private static SkillType Resolve(SkillKey skill)
+            => skill.IsNone ? SkillType.None : Skills.FromKeyId(skill.Id);
 
         internal Companion Companion => _companion;
     }
@@ -67,12 +72,14 @@ namespace Game.Core.Base
     {
         private readonly Roster _roster;
         private readonly string _protagonistId;
+        private readonly BalanceConfig _balance;
         private readonly List<ISettlementActor> _buffer = new List<ISettlementActor>();
 
-        public RosterAdapter(Roster roster, string protagonistId = null)
+        public RosterAdapter(Roster roster, string protagonistId = null, BalanceConfig balance = null)
         {
             _roster = roster ?? throw new ArgumentNullException(nameof(roster));
             _protagonistId = protagonistId;
+            _balance = balance;
         }
 
         public IReadOnlyList<ISettlementActor> PresentActors
@@ -83,7 +90,7 @@ namespace Game.Core.Base
                 var all = _roster.All;
                 for (int i = 0; i < all.Count; i++)
                 {
-                    var actor = new CompanionActorAdapter(all[i], IsProtagonist(all[i].Id));
+                    var actor = new CompanionActorAdapter(all[i], IsProtagonist(all[i].Id), _balance);
                     if (actor.IsPresentInSettlement) _buffer.Add(actor);
                 }
                 return _buffer;
@@ -96,7 +103,7 @@ namespace Game.Core.Base
             {
                 if (string.IsNullOrEmpty(_protagonistId)) return null;
                 var c = _roster.Get(_protagonistId);
-                return c == null ? null : new CompanionActorAdapter(c, true);
+                return c == null ? null : new CompanionActorAdapter(c, true, _balance);
             }
         }
 

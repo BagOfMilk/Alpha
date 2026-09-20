@@ -7,7 +7,7 @@ namespace Game.Tests.EditMode
     {
         private BalanceConfig Cfg() => new BalanceConfig
         {
-            XpBase = 100, XpExponent = 1.5, MaxLevel = 20, StatPointsPerLevel = 3
+            XpBase = 100, XpExponent = 1.5, MaxLevel = 20, SkillPointsPerLevel = 3
         };
 
         [Test]

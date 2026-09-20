@@ -76,9 +76,9 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(100.0, cfg.XpBase, "XpBase");
             Assert.AreEqual(1.5, cfg.XpExponent, "XpExponent");
             Assert.AreEqual(20, cfg.MaxLevel, "MaxLevel");
-            Assert.AreEqual(3, cfg.StatPointsPerLevel, "StatPointsPerLevel");
+            Assert.AreEqual(3, cfg.SkillPointsPerLevel, "SkillPointsPerLevel");
             Assert.AreEqual(20, cfg.RoleXpPerCycle, "RoleXpPerCycle");
-            Assert.AreEqual(5, cfg.AptitudeMatchThreshold, "AptitudeMatchThreshold");
+            Assert.AreEqual(5, cfg.SkillMatchThreshold, "SkillMatchThreshold");
             Assert.AreEqual(1.5, cfg.WellSuitedXpMultiplier, "WellSuitedXpMultiplier");
             Assert.AreEqual(1.0, cfg.GlobalProductionMultiplier, "GlobalProductionMultiplier");
             Assert.AreEqual(0.5, cfg.InjuredProductionMultiplier, "InjuredProductionMultiplier");

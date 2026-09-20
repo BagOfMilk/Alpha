@@ -134,14 +134,9 @@ namespace Game.Gameplay
         private static Companion Make(string id, string name, int skill)
         {
             var arch = new CompanionArchetype(id, name);
-            arch.BaseStats.Set(StatType.Charisma, skill);
-            arch.BaseStats.Set(StatType.Will, skill);
-            arch.BaseStats.Set(StatType.Survival, skill);
-            arch.BaseStats.Set(StatType.Medicine, skill);
-            arch.BaseStats.Set(StatType.Engineering, skill);
-            arch.BaseStats.Set(StatType.Tech, skill);
-            arch.BaseStats.Set(StatType.Leadership, skill);
-            arch.BaseStats.Set(StatType.Aim, skill);
+            // Демка ровняет все скилы под один уровень: её задача — показать
+            // хронику города, а не разницу между людьми.
+            for (int i = 0; i < Skills.All.Length; i++) arch.SetSkill(Skills.All[i], skill);
 
             return arch.CreateInstance(id);
         }
