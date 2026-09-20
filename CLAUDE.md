@@ -105,14 +105,13 @@ Settlement, Factions, Checks, Signals, Loop}`. Они **не ссылаются*
 
 | Кусок | Ветка | Статус |
 |---|---|---|
-| **Перестройка модели персонажа** (4 атрибута / 10 скилов / трейты / шрамы + пайплайн модификаторов) | `claude/log-sec-interaction-map-34499e` | **занято**, начато 2026-08-29 |
 | Городской слой (Э0, Э1, дальше) | `claude/unity-base-builder-rpg-ueffab` | ведётся |
 | Карта взаимодействий (`docs/interaction-map.html`, `tools/map/`) | `claude/log-sec-interaction-map-34499e` | ведётся |
 
-Модель персонажа трогает `Stats/`, `Characters/`, `DefaultContent`, `ProductionCalculator`
-и `AssignmentSlotDefinition`. Городской слой от неё отделён портами
-`SkillKey` / `ISettlementActor` — менять при перестройке надо адаптер
-(`Core/Base/SettlementAdapters.cs`), а не порт.
+Модель персонажа перестроена и кусок освобождён (2026-09-20). Городской слой
+от неё по-прежнему отделён портами `SkillKey` / `ISettlementActor`: адаптер
+`Core/Base/SettlementAdapters.cs` теперь ходит в настоящие скилы через
+`Skills.KeyId`, а порт не менялся — так и задумано.
 
 Освобождая кусок, убирай строку из таблицы.
 
