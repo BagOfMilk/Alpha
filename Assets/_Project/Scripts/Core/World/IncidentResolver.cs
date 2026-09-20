@@ -42,7 +42,8 @@ namespace Game.Core.World
             TensionState tension,
             int day,
             BalanceConfig balance,
-            Loop.IncidentPath path = Loop.IncidentPath.Quiet)
+            Loop.IncidentPath path = Loop.IncidentPath.Quiet,
+            FearState fear = null)
         {
             if (incident == null) throw new ArgumentNullException(nameof(incident));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
@@ -50,31 +51,78 @@ namespace Game.Core.World
             // Тихий путь — основной способ разобраться (Поправка №1), но не
             // единственный: кровавый был выписан в контенте и до появления точки
             // решения не читался ни одной строкой кода.
-            var request = BuildRequest(incident, path);
+            bool bloody = path == Loop.IncidentPath.Bloody && incident.HasBloodyPath;
+            var request = BuildRequest(incident, path, fear, day, balance);
 
             var check = CheckResolver.Resolve(request, roster, repeats, day, balance);
 
             ApplyTension(incident, check.Band, tension, balance);
 
+            // Цена крови. До этого кровавый путь был строго выгоднее тихого:
+            // он решал дело тем же исходом, но ничего не стоил, и первый же
+            // игрок сделал бы вывод «игра про резню» — ровно наоборот Поправке №1.
+            if (bloody) ApplyBloodCost(incident, check, casualties, tension, balance);
+
+            // Боится община и от крови, и от провалившегося запугивания.
+            bool scared = bloody || check.CausedFear;
+            if (scared && fear != null) fear.Remember(day, balance.Checks);
+
             if (!incident.IsCrisis)
             {
                 return new IncidentOutcome(incident.Id, incident.TopicId, incident.DomainTag,
-                    check.Band, check.WasUnmanned, false, null, null, 0);
+                    check.Band, check.WasUnmanned, false, null, null, 0, scared);
             }
 
-            return ResolveCrisis(incident, check, casualties, population);
+            return ResolveCrisis(incident, check, casualties, population, scared);
         }
 
-        /// <summary>Проверка под выбранный путь. Кровавого может не быть — тогда тихий.</summary>
-        internal static CheckRequest BuildRequest(IncidentDefinition incident, Loop.IncidentPath path)
+        /// <summary>
+        /// Проверка под выбранный путь. Кровавого может не быть — тогда тихий.
+        ///
+        /// Страх общины входит в порог ЗДЕСЬ, а не в резолвере проверок,
+        /// потому что и предпросмотр (точка решения), и резолв строят запрос
+        /// этим же методом: инвариант 8 требует, чтобы показанный порог был
+        /// равен применённому, включая надбавку за вчерашнюю кровь.
+        /// </summary>
+        internal static CheckRequest BuildRequest(IncidentDefinition incident, Loop.IncidentPath path,
+            FearState fear = null, int day = 0, BalanceConfig balance = null)
         {
             bool bloody = path == Loop.IncidentPath.Bloody && incident.HasBloodyPath;
 
-            return bloody
-                ? new CheckRequest(incident.BloodyPathSkill, incident.BloodyPathThreshold,
-                    ApproachForm.Intimidate, incident.TopicId, incident.RelevantPositionId)
-                : new CheckRequest(incident.QuietPathSkill, incident.QuietPathThreshold,
-                    incident.QuietPathApproach, incident.TopicId, incident.RelevantPositionId);
+            var skill = bloody ? incident.BloodyPathSkill : incident.QuietPathSkill;
+            int threshold = bloody ? incident.BloodyPathThreshold : incident.QuietPathThreshold;
+            var approach = bloody ? ApproachForm.Intimidate : incident.QuietPathApproach;
+
+            if (fear != null && balance != null && IsSocial(approach))
+                threshold += fear.PenaltyOn(day, balance.Checks);
+
+            return new CheckRequest(skill, threshold, approach,
+                incident.TopicId, incident.RelevantPositionId);
+        }
+
+        /// <summary>Договариваются словом. Запугивание страхом не дешевеет — см. FearState.</summary>
+        private static bool IsSocial(ApproachForm approach)
+        {
+            return approach == ApproachForm.Persuade || approach == ApproachForm.Trade;
+        }
+
+        /// <summary>
+        /// Кровь стоит трёх вещей сразу: Напряжения по своему драйверу, раны
+        /// исполнителю и памяти общины (её ставит вызывающий).
+        /// </summary>
+        private static void ApplyBloodCost(IncidentDefinition incident, CheckOutcome check,
+            ICasualtySink casualties, TensionState tension, BalanceConfig balance)
+        {
+            // Стиль прохождения — отдельный драйвер ЗАКРЫТОГО списка (инвариант 5):
+            // резня растит Напряжение сама по себе, чем бы ни кончился разбор.
+            if (tension != null)
+                tension.Apply(TensionDriver.PlaystyleBlood, balance.Tension.BloodDeltaPerNode,
+                    "blood:" + incident.Id);
+
+            // Рана достаётся тому, кто ходил в дело. Если на посту не стоял никто,
+            // ранить некого: за пустую позицию уже назначена Худшая полоса.
+            if (casualties != null && !string.IsNullOrEmpty(check.ActorId))
+                casualties.Wound(check.ActorId, balance.Checks.BloodyPathInjury);
         }
 
         private static void ApplyTension(IncidentDefinition incident, OutcomeBand band,
@@ -97,7 +145,7 @@ namespace Game.Core.World
         }
 
         private static IncidentOutcome ResolveCrisis(IncidentDefinition incident, CheckOutcome check,
-            ICasualtySink casualties, PopulationState population)
+            ICasualtySink casualties, PopulationState population, bool causedFear)
         {
             // Хороший разбор смягчает удар: кризис непредотвратим, но не обязан
             // быть максимально жестоким при подготовленном городе.
@@ -138,7 +186,7 @@ namespace Game.Core.World
                 lost = population.Remove(incident.PopulationLoss);
 
             return new IncidentOutcome(incident.Id, incident.TopicId, incident.DomainTag,
-                check.Band, check.WasUnmanned, true, victim, bite, lost);
+                check.Band, check.WasUnmanned, true, victim, bite, lost, causedFear);
         }
 
         /// <summary>

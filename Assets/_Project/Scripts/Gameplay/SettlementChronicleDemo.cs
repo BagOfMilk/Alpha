@@ -64,7 +64,9 @@ namespace Game.Gameplay
             var pulse = new WorldPulse(balance.Pulse);
             foreach (var source in DefaultPressureSources.All()) pulse.AddSource(source);
 
-            var processor = new DayProcessor(tension, balance, DayProcessor.DefaultSteps())
+            // Цикл поселения идёт штатным шагом дня: у суток обязан быть
+            // материальный итог, иначе хроника показывает давление без хозяйства.
+            var processor = new DayProcessor(tension, balance, DayProcessor.DefaultSteps(baseState))
             {
                 Tier = tier,
                 Roster = adapter,

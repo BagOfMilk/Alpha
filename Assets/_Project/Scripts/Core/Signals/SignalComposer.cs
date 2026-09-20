@@ -81,6 +81,14 @@ namespace Game.Core.Signals
                     if (inc.WasCrisis) tags.Add("crisis");
                     if (inc.Bite.HasValue) tags.Add("bite:" + inc.Bite.Value);
 
+                    // Страх общины — скрытая цена, и по инварианту 6 у неё обязан
+                    // быть голос: иначе игрок увидит выросший порог социальной
+                    // проверки и не поймёт, чем он это заслужил. Голосом служит
+                    // тег на реплике о самом событии, а не отдельный сигнал:
+                    // бюджет внимания один, и тратить два слота на одно событие
+                    // значит глушить что-то другое (правило 2 слоя сигналов).
+                    if (inc.CausedFear) tags.Add("fear");
+
                     candidates.Add(new SignalRequest(
                         SignalChannel.CompanionLine,
                         inc.TopicId + "." + inc.Band,
