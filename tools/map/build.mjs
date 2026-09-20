@@ -789,7 +789,12 @@ const html = template.replace("/*__DATA__*/null", JSON.stringify(DATA));
 
 const outPath = rel("docs/interaction-map.html");
 const prev = fs.existsSync(outPath) ? fs.readFileSync(outPath, "utf8") : "";
-const strip = (s) => s.replace(/"builtAt":"[^"]*"/, "");
+// Метки сборки из сравнения выкидываются, иначе карта «устаревает» сама по себе:
+// gitSha меняется на каждом коммите, в том числе на том, который её и записал,
+// и --check после любого коммита возвращал бы 1 навсегда.
+const strip = (s) => s
+  .replace(/"builtAt":"[^"]*"/, "")
+  .replace(/"gitSha":("[^"]*"|null)/, "");
 const changed = strip(prev) !== strip(html);
 
 for (const w of warnings) console.error("  ! " + w);
