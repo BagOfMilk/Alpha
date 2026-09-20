@@ -134,6 +134,7 @@ namespace UnityEditor
 
     public static class AssetDatabase
     {
+        public static string[] FindAssets(string filter) { return new string[0]; }
         public static void Refresh() { }
         public static void SaveAssets() { }
         public static void CreateAsset(UnityEngine.Object asset, string path) { }
@@ -186,5 +187,45 @@ namespace UnityEditor.SceneManagement
         {
             return default(UnityEngine.SceneManagement.Scene);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Заглушки графического слоя: ровно столько, сколько нужно скрипту перевода
+// проекта на URP. Линт ловит опечатки и забытые using без редактора, но НЕ
+// проверяет, что настоящий API именно такой — это подтверждается прогоном
+// Unity в batch-режиме, а не этими строками.
+// ---------------------------------------------------------------------------
+namespace UnityEngine
+{
+    public static class QualitySettings
+    {
+        public static string[] names { get { return new string[0]; } }
+        public static int GetQualityLevel() { return 0; }
+        public static void SetQualityLevel(int index, bool applyExpensiveChanges) { }
+        public static UnityEngine.Rendering.RenderPipelineAsset renderPipeline { get; set; }
+    }
+}
+
+namespace UnityEngine.Rendering
+{
+    public class RenderPipelineAsset : ScriptableObject { }
+
+    public static class GraphicsSettings
+    {
+        public static RenderPipelineAsset defaultRenderPipeline { get; set; }
+        public static RenderPipelineAsset currentRenderPipeline { get { return null; } }
+    }
+}
+
+namespace UnityEngine.Rendering.Universal
+{
+    public class ScriptableRendererData : ScriptableObject { }
+
+    public class UniversalRendererData : ScriptableRendererData { }
+
+    public class UniversalRenderPipelineAsset : RenderPipelineAsset
+    {
+        public static UniversalRenderPipelineAsset Create(ScriptableRendererData data) { return null; }
     }
 }
