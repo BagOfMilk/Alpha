@@ -1740,6 +1740,87 @@
    "Тесты",
    "Tests/EditMode/BuildPlannerTests.cs",
    "Предпросмотр ничего не меняет, порог берётся с учётом плановых очков, цепочка перков внутри одного плана работает, потолок показывается, а не зажимается молча."
+  ],
+  [
+   "c.ExpeditionSite",
+   "ExpeditionSite",
+   "code",
+   "class",
+   "Вылазки",
+   "Core/Expeditions/ExpeditionSite.cs",
+   "Точка вылазки — заглушка данжа из Приложения А. Объявляет два подхода с разной ценой: тихий длиннее, силовой быстрее. Ненасильственный путь существует типом, а не по доброй воле контента."
+  ],
+  [
+   "c.ExpeditionApproach",
+   "ExpeditionApproach",
+   "code",
+   "enum",
+   "Вылазки",
+   "Core/Expeditions/ExpeditionSite.cs:13",
+   "Тихо или силой. Это и есть ось Поправки №1 «время против риска», выраженная одним enum: дни против ранений."
+  ],
+  [
+   "c.ExpeditionResolver",
+   "ExpeditionResolver",
+   "code",
+   "static",
+   "Вылазки",
+   "Core/Expeditions/ExpeditionResolver.cs",
+   "Детерминированный резолв: ни одной случайности. Сила отряда — ведущий плюс половина от каждого спутника: сумма сделала бы численность решающей, максимум сделал бы спутников декорацией. Полоса исхода — та же лестница запаса, что у городских проверок."
+  ],
+  [
+   "c.SiteLedger",
+   "SiteLedger",
+   "code",
+   "class",
+   "Вылазки",
+   "Core/Expeditions/SiteLedger.cs",
+   "Сколько раз точку отрабатывали. Добыча падает на фиксированный шаг до пола — предсказуемое истощение вместо случайного отказа, и отряду приходится искать новую точку."
+  ],
+  [
+   "c.ExpeditionResult",
+   "ExpeditionResult",
+   "code",
+   "class",
+   "Вылазки",
+   "Core/Expeditions/ExpeditionResult.cs",
+   "Итог и предпросмотр вылазки. Preview обещает ровно то, что выдаст Resolve — считает их один и тот же код, и тест это держит."
+  ],
+  [
+   "c.DefaultSites",
+   "DefaultSites",
+   "code",
+   "static",
+   "Вылазки",
+   "Core/Expeditions/DefaultSites.cs",
+   "Три стартовые точки с разными порогами и профилями. Три, а не одна: с единственной точкой истощение вырождается в «добыча падает, и всё» — переходить некуда."
+  ],
+  [
+   "c.ExpeditionRunner",
+   "ExpeditionRunner",
+   "code",
+   "static",
+   "Base",
+   "Core/Base/ExpeditionRunner.cs",
+   "Шов «база ↔ вылазка», узкий намеренно: вылазка не знает про слоты и кошелёк, база не знает, как считается исход. Отправка освобождает позицию сразу — пост, который некому держать, и есть цена вылазки."
+  ],
+  [
+   "c.tExped",
+   "ExpeditionTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/ExpeditionTests.cs",
+   "Сила отряда не зависит от порядка, тихий путь при достатке не калечит, истощение предсказуемо и имеет пол, предпросмотр совпадает с резолвом."
+  ],
+  [
+   "c.tEconomy",
+   "EconomyClosureTests",
+   "code",
+   "test",
+   "Тесты",
+   "Tests/EditMode/EconomyClosureTests.cs",
+   "У каждого ресурса есть кран и слив; материалы приходят только из вылазки; еда не входит ни в одну цену."
   ]
  ],
  "edges": [
@@ -4316,6 +4397,120 @@
    "c.BuildPlanner",
    "до подтверждения не меняется ничего",
    "code"
+  ],
+  [
+   "c.ExpeditionSite",
+   "c.ExpeditionApproach",
+   "дни и навык зависят от подхода",
+   "code"
+  ],
+  [
+   "c.ExpeditionResolver",
+   "c.ExpeditionSite",
+   "порог и база добычи",
+   "code"
+  ],
+  [
+   "c.ExpeditionResolver",
+   "c.SiteLedger",
+   "истощение точки",
+   "code"
+  ],
+  [
+   "c.ExpeditionResolver",
+   "c.ExpeditionResult",
+   "предпросмотр и итог",
+   "code"
+  ],
+  [
+   "c.ExpeditionResolver",
+   "c.BalanceConfig",
+   "полосы, истощение, ранения",
+   "code"
+  ],
+  [
+   "c.ExpeditionResolver",
+   "c.WoundTier",
+   "тир раны по подходу и полосе",
+   "code"
+  ],
+  [
+   "c.DefaultSites",
+   "c.ExpeditionSite",
+   "три стартовые точки",
+   "code"
+  ],
+  [
+   "c.ExpeditionRunner",
+   "c.ExpeditionResult",
+   "применяет итог к базе",
+   "code"
+  ],
+  [
+   "c.ExpeditionRunner",
+   "c.BaseState",
+   "кошелёк, ростер, слоты",
+   "code"
+  ],
+  [
+   "c.ExpeditionRunner",
+   "c.ResourceType",
+   "материалы и золото в кошелёк",
+   "code"
+  ],
+  [
+   "c.ExpeditionRunner",
+   "c.Companion",
+   "снимает с поста, вешает раны",
+   "code"
+  ],
+  [
+   "c.tExped",
+   "c.ExpeditionResolver",
+   "детерминизм и полосы",
+   "code"
+  ],
+  [
+   "c.tEconomy",
+   "c.ExpeditionRunner",
+   "материалы приходят только отсюда",
+   "code"
+  ],
+  [
+   "b.res.Materials",
+   "c.ExpeditionRunner",
+   "единственный кран",
+   "code"
+  ],
+  [
+   "g.dungeons",
+   "c.ExpeditionResolver",
+   "заглушка-источник материалов написана; комнат, боёв и push-your-luck нет",
+   "plan"
+  ],
+  [
+   "g.matbuild",
+   "c.ExpeditionRunner",
+   "реализовано: компонент приходит только из вылазки",
+   "impl"
+  ],
+  [
+   "g.gold",
+   "c.ExpeditionRunner",
+   "вылазка — второй кран золота рядом с Рынком",
+   "impl"
+  ],
+  [
+   "g.loop_squad",
+   "c.ExpeditionResolver",
+   "петля отряда завелась: выход, добыча, раны, возврат",
+   "impl"
+  ],
+  [
+   "g.wounds",
+   "c.ExpeditionRunner",
+   "реализовано: у ранений появился источник",
+   "impl"
   ]
  ],
  "gaps": [

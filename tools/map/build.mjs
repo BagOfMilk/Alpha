@@ -577,9 +577,11 @@ if (neverSet.length) {
     "mid", "Мёртвый код");
 }
 
-// ранения без источника
+// Ранения без источника. Присваивание ищется и через +=: раны начисляются
+// накопительно, и регексп на голое «=» проглядел бы единственный настоящий
+// источник, продолжая уверять, что его нет.
 const injurySetters = CORE_FILES.filter((p) =>
-  [...CS[p].matchAll(/InjuryPoints\s*=\s*([^;]+);/g)].some((m) => m[1].trim() !== "0"));
+  [...CS[p].matchAll(/InjuryPoints\s*\+?=\s*([^;]+);/g)].some((m) => m[1].trim() !== "0"));
 if (slots.some((s) => s.kind === "Healing") && !injurySetters.length) {
   const bestHeal = maxOf(slots.filter((s) => s.kind === "Healing")
     .map((s) => maxOf(archetypes.map((a) => roundHalfEven(s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2)), s.base)));
