@@ -86,9 +86,17 @@ namespace Game.Core.World
         public readonly CrisisBite? Bite;
         public readonly int PopulationLost;
 
+        /// <summary>
+        /// Разбор напугал общину: кровавый путь или провалившееся запугивание.
+        /// Слой сигналов обязан это озвучить — страх не имеет права прийти молча.
+        /// </summary>
+        public readonly bool CausedFear;
+
         public IncidentOutcome(string incidentId, string topicId, string domainTag, OutcomeBand band,
-            bool wasUnmanned, bool wasCrisis, string affectedActorId, CrisisBite? bite, int populationLost)
+            bool wasUnmanned, bool wasCrisis, string affectedActorId, CrisisBite? bite, int populationLost,
+            bool causedFear = false)
         {
+            CausedFear = causedFear;
             IncidentId = incidentId;
             TopicId = topicId;
             DomainTag = domainTag;

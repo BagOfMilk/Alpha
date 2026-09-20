@@ -37,6 +37,10 @@ namespace Alpha.Shared
         /// <summary>
         /// Шесть напарников: специалист на каждый домен плюс два середняка.
         /// Числа скромные — это хутор, а не элита.
+        ///
+        /// Навык даётся под ДОМЕН ПОСТА, а не под выработку слота: доклад со
+        /// склада идёт по Выживанию, с рынка — по Торговле, из лазарета — по
+        /// Медицине, совет разбирает дела словом.
         /// </summary>
         public static Roster BuildRoster()
         {
@@ -45,7 +49,7 @@ namespace Alpha.Shared
             var baseState = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) baseState.AddSlot(slot);
 
-            Put(baseState, "guard", SkillType.Trade, 8, Positions[0]);
+            Put(baseState, "guard", SkillType.Survival, 8, Positions[0]);
             Put(baseState, "trader", SkillType.Trade, 7, Positions[1]);
             Put(baseState, "farmer", SkillType.Survival, 6, Positions[2]);
             Put(baseState, "medic", SkillType.Medicine, 7, Positions[3]);

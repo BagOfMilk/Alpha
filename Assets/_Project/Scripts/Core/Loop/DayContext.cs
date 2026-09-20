@@ -33,6 +33,10 @@ namespace Game.Core.Loop
         public IRosterView Roster { get; }
 
         public PopulationState Population { get; }
+
+        /// <summary>Память общины о крови — читается порогами социальных подходов.</summary>
+        internal FearState Fear { get; set; }
+
         public WorldPulse Pulse { get; }
         public IncidentTable Incidents { get; }
         public IRepeatTracker Repeats { get; }

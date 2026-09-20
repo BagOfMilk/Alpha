@@ -3,7 +3,9 @@
     "rootNamespace": "Game.Gameplay.EditorTools",
     "references": [
         "Game.Core",
-        "Game.Gameplay"
+        "Game.Gameplay",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [
         "Editor"

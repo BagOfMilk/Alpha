@@ -55,6 +55,10 @@ namespace Game.Core.Loop
 
             if (p.Population != null) Field(sb, "pop", p.Population.Count);
 
+            // Страх общины: без него загрузка была бы бесплатным способом снять
+            // цену кровавого пути — сохранился, перезагрузился, и никто не помнит.
+            if (p.Fear != null && p.Fear.UntilDay >= 0) Field(sb, "fear", p.Fear.UntilDay);
+
             if (p.Pulse != null)
             {
                 foreach (var pair in p.Pulse.Tracks)
@@ -106,6 +110,7 @@ namespace Game.Core.Loop
                 else if (key == "order") p.OrderLevel = ParseInt(value);
                 else if (key == "patrol") p.IsPatrolling = ParseInt(value) != 0;
                 else if (key == "pop" && p.Population != null) p.Population.RestoreForSave(ParseInt(value));
+                else if (key == "fear" && p.Fear != null) p.Fear.RestoreForSave(ParseInt(value));
                 else if (key == "tension") RestoreTension(p, value);
                 else if (key == "trk") RestoreTrack(p, value);
                 else if (key == "sig") p.SignalMemory.RestoreState(value);

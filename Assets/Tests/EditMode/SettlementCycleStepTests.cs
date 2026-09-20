@@ -42,8 +42,9 @@ namespace Game.Tests.EditMode
 
         private static DayProcessor BuildProcessor(BalanceConfig cfg, BaseState baseState)
         {
-            var steps = new List<IDayStep>(DayProcessor.DefaultSteps());
-            steps.Add(new SettlementCycleStep(baseState));
+            // Цикл подставляется портом в штатный набор шагов: ровно так его
+            // собирают игра и консольная сборка.
+            var steps = new List<IDayStep>(DayProcessor.DefaultSteps(baseState));
 
             return new DayProcessor(new TensionState(cfg.Tension), cfg, steps) { Tier = 1 };
         }

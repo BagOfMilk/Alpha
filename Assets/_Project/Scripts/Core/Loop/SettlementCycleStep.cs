@@ -1,15 +1,13 @@
-using Game.Core.Loop;
-
-namespace Game.Core.Base
+namespace Game.Core.Loop
 {
     /// <summary>
     /// Цикл поселения как шаг дня: производство, ролевой опыт, лечение, прокорм.
     ///
     /// Зачем. До этого шага у суток не было материального результата: конвейер
-    /// крутил давление и сигналы, а <see cref="BaseState.AdvanceCycle"/> жил на
-    /// собственных часах и из лупа не вызывался вообще. Девяносто суток хроники
-    /// проходили так, что ни одно число, которое игрок мог бы потратить, не
-    /// менялось, а очки ранения от кризиса не сходили никогда.
+    /// крутил давление и сигналы, а цикл базы жил на собственных часах и из лупа
+    /// не вызывался вообще. Девяносто суток хроники проходили так, что ни одно
+    /// число, которое игрок мог бы потратить, не менялось, а очки ранения от
+    /// кризиса не сходили никогда.
     ///
     /// ЧЕСТНАЯ ПОМЕТКА. Порядок шагов объявляет Production(200) и Healing(900)
     /// раздельно, и не зря: лечение обязано стоять ПОСЛЕ Напряжения и его не
@@ -22,30 +20,28 @@ namespace Game.Core.Base
     /// это закреплено тестом. Именно в этом и состояла гарантия US-1.3, а не в
     /// номере шага.
     ///
-    /// Живёт в Game.Core.Base намеренно: отсюда видны умирающие типы экономики,
-    /// а городской слой обязан оставаться от них развязанным.
+    /// Шаг живёт в городском слое, а устаревший цикл подставляется через порт
+    /// <see cref="IDailyCycle"/> — поэтому слой остаётся развязанным от типов
+    /// экономики, которые будут переписаны.
     /// </summary>
     public sealed class SettlementCycleStep : IDayStep
     {
-        private readonly BaseState _state;
+        private readonly IDailyCycle _cycle;
 
-        public SettlementCycleStep(BaseState state)
+        public SettlementCycleStep(IDailyCycle cycle)
         {
-            _state = state;
+            _cycle = cycle;
         }
 
         public int Order => DayStepOrder.Production;
-
-        /// <summary>Итог последнего прокрученного цикла — для отладки и демо.</summary>
-        public CycleReport LastCycle { get; private set; }
 
         public void Execute(DayContext ctx)
         {
             // Цикл СУТОЧНЫЙ. Ночь принадлежит тем же суткам, иначе поселение
             // производит и ест дважды за день.
-            if (_state == null || ctx.IsNight) return;
+            if (_cycle == null || ctx.IsNight) return;
 
-            LastCycle = _state.AdvanceCycle();
+            _cycle.RunDay();
         }
     }
 }

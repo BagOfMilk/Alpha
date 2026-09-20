@@ -39,6 +39,12 @@ namespace Game.Core.Loop
         //      работает как на Э0, что удобно для узких тестов. ----
         public IRosterView Roster { get; set; }
         public PopulationState Population { get; set; }
+
+        /// <summary>
+        /// Память общины о крови. Живёт с кампанией и попадает в слепок: иначе
+        /// загрузка была бы бесплатным способом снять цену кровавого пути.
+        /// </summary>
+        public FearState Fear { get; set; } = new FearState();
         public WorldPulse Pulse { get; set; }
         public IncidentTable Incidents { get; set; }
         public IRepeatTracker Repeats { get; set; }
@@ -81,10 +87,18 @@ namespace Game.Core.Loop
         /// <summary>Шаги в порядке исполнения — для тестов и отладки.</summary>
         public IReadOnlyList<IDayStep> Steps => _steps;
 
-        /// <summary>Стандартный набор шагов этапа Э0.</summary>
-        public static IEnumerable<IDayStep> DefaultSteps()
+        /// <summary>
+        /// Стандартный набор шагов дня.
+        ///
+        /// Цикл поселения подставляется портом: с ним у суток есть материальный
+        /// итог (произвели, поели, подлечились), без него конвейер работает как
+        /// на Э0 — это удобно узким тестам, которым база не нужна. Игра и
+        /// консольная сборка обязаны передавать цикл: иначе девяносто суток
+        /// проходят, не меняя ни одного числа, которое игрок может потратить.
+        /// </summary>
+        public static IEnumerable<IDayStep> DefaultSteps(IDailyCycle settlementCycle = null)
         {
-            return new IDayStep[]
+            var steps = new List<IDayStep>
             {
                 new HungerStep(),
                 new TensionTickStep(),
@@ -92,6 +106,10 @@ namespace Game.Core.Loop
                 new IncidentStep(),
                 new SignalStep()
             };
+
+            if (settlementCycle != null) steps.Add(new SettlementCycleStep(settlementCycle));
+
+            return steps;
         }
 
         /// <summary>
@@ -139,7 +157,8 @@ namespace Game.Core.Loop
                 PostDomains = PostDomains,
                 IsHungry = IsHungry,
                 SignalMemory = SignalMemory,
-                RequirePlayerDecision = RequirePlayerDecision
+                RequirePlayerDecision = RequirePlayerDecision,
+                Fear = Fear
             };
 
             // Первая половина конвейера — до хода игрока.
@@ -169,7 +188,7 @@ namespace Game.Core.Loop
 
             var outcome = World.IncidentResolver.Resolve(
                 ctx.PendingIncident, ctx.Roster, ctx.Repeats, ctx.Casualties,
-                ctx.Population, ctx.Tension, ctx.Day, ctx.Balance, path);
+                ctx.Population, ctx.Tension, ctx.Day, ctx.Balance, path, ctx.Fear);
 
             ctx.IncidentOutcomes.Add(outcome);
             ctx.Pending = null;

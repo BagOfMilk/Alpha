@@ -30,7 +30,7 @@ namespace Game.Tests.EditMode
         private static DayProcessor Build(BalanceConfig cfg, int tier = 1)
         {
             var roster = new Roster();
-            roster.Add(Make("guard", SkillType.Trade, 8, "storehouse_dock"));
+            roster.Add(Make("guard", SkillType.Survival, 8, "storehouse_dock"));
             roster.Add(Make("trader", SkillType.Trade, 7, "settlement_market"));
             roster.Add(Make("medic", SkillType.Medicine, 7, "infirmary_bed"));
 

@@ -46,9 +46,12 @@ namespace Game.Core.Loop
                     continue;
                 }
 
+                // Без точки решения всё разбирается тихим путём: кровь — это
+                // выбор игрока, а не то, что случается само.
                 var outcome = IncidentResolver.Resolve(
                     incident, ctx.Roster, ctx.Repeats, ctx.Casualties,
-                    ctx.Population, ctx.Tension, ctx.Day, ctx.Balance);
+                    ctx.Population, ctx.Tension, ctx.Day, ctx.Balance,
+                    IncidentPath.Quiet, ctx.Fear);
 
                 ctx.IncidentOutcomes.Add(outcome);
             }
@@ -75,7 +78,10 @@ namespace Game.Core.Loop
         private static void AddOption(List<DecisionOption> options, DayContext ctx,
             IncidentDefinition incident, IncidentPath path)
         {
-            var request = IncidentResolver.BuildRequest(incident, path);
+            // Запрос строится ровно тем же методом, что и при резолве, — вместе
+            // с надбавкой за страх общины. Иначе игрок увидел бы один порог,
+            // а применился бы другой.
+            var request = IncidentResolver.BuildRequest(incident, path, ctx.Fear, ctx.Day, ctx.Balance);
             var preview = CheckResolver.Preview(request, ctx.Roster, ctx.Repeats, ctx.Day, ctx.Balance);
 
             options.Add(new DecisionOption(path, request.Skill, preview.EffectiveThreshold,
