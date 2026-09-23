@@ -362,3 +362,16 @@ namespace UnityEditor.Build.Reporting
         public BuildSummary summary = new BuildSummary();
     }
 }
+
+namespace UnityEngine
+{
+    public enum ColorSpace { Uninitialized = -1, Gamma = 0, Linear = 1 }
+}
+
+namespace UnityEditor
+{
+    public static class PlayerSettings
+    {
+        public static UnityEngine.ColorSpace colorSpace { get; set; }
+    }
+}

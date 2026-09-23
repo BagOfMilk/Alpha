@@ -22,6 +22,12 @@
   <ItemGroup>
     <Compile Include="../../Assets/Tests/EditMode/**/*.cs" />
     <Compile Include="UnityShim.cs" />
+    <!--
+      Слой показа (VillageView) живёт в Game.Gameplay, но не содержит ни одного
+      типа движка — поэтому headless-тесты берут его исходником напрямую.
+      Так правила показа проверяются обычными тестами, а не глазами на снимке.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/VillageView.cs" />
   </ItemGroup>
 
   <ItemGroup>
