@@ -115,9 +115,9 @@ namespace Game.Core
             a.SetAttribute(AttributeType.Agility, 4);
             a.SetAttribute(AttributeType.Wits, 5);
             a.SetAttribute(AttributeType.Will, 5);
-            a.SetSkill(SkillType.Persuade, 4);
+            a.SetSkill(SkillType.Persuade, 5);
             a.SetSkill(SkillType.Trade, 4);
-            a.SetSkill(SkillType.Tactics, 3);
+            a.SetSkill(SkillType.Tactics, 2);
             a.SetSkill(SkillType.Intimidate, 1);
             a.SetGrowth(SkillType.Persuade, 3);
             a.SetGrowth(SkillType.Trade, 2);
@@ -162,30 +162,31 @@ namespace Game.Core
             });
             slots.Add(new AssignmentSlotDefinition("settlement_market", "Рынок поселения", BaseSectionType.Settlement)
             {
-                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
+                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Gold,
                 PrimarySkill = SkillType.Trade, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 4, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.5
             });
 
-            // Мастерская — материалы.
-            // Материалы приходят ТОЛЬКО снаружи (Эпик 6.2 / 15, Поправка №5): город их
-            // не производит, иначе вылазка теряет экономический смысл. Настоящая роль
-            // верстака — крафт (Эпик 6), он материалы ТРАТИТ. До крафта верстак чинит
-            // и продаёт мелочь — плейсхолдер, чтобы позиция не была мёртвой.
+            // Мастерская — крафт. Материалов НЕ производит: по Э6.2 городского
+            // производства материалов нет вовсе, источник только вылазки. Пока
+            // крафт не написан, позиция даёт ролевой опыт и ничего больше —
+            // это честнее, чем печатать компонент, которого город печатать не
+            // вправе.
             slots.Add(new AssignmentSlotDefinition("workshop_bench", "Верстак мастерской", BaseSectionType.Workshop)
             {
-                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
+                OutputKind = SlotOutputKind.None,
                 PrimarySkill = SkillType.Mechanics, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.2, OutputPerSecondaryPoint = 0.4
             });
 
-            // Лаборатория — исследования. По US-7.1 у лаборатории одна функция,
-            // крафт аугмента, поэтому ремесло здесь механика: скила «наука» в
-            // GDD нет, и выдумывать его под один слот дороже, чем признать
-            // лабораторию мастерской потоньше.
+            // Лаборатория — крафт аугмента (US-6.4, помечен [ПОЗЖЕ]). Очков
+            // исследований в GDD нет ни одного упоминания, поэтому выход снят.
+            // Ремесло здесь механика: скила «наука» в GDD тоже нет, и выдумывать
+            // его под один слот дороже, чем признать лабораторию мастерской
+            // потоньше.
             slots.Add(new AssignmentSlotDefinition("lab_station", "Исследовательский стол", BaseSectionType.Laboratory)
             {
-                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Research,
+                OutputKind = SlotOutputKind.None,
                 PrimarySkill = SkillType.Mechanics, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 2, OutputPerPrimaryPoint = 1.3, OutputPerSecondaryPoint = 0.3
             });
@@ -201,24 +202,28 @@ namespace Game.Core
             // Склад — припасы (изначально закрыт, открывается за ресурсы).
             slots.Add(new AssignmentSlotDefinition("storehouse_dock", "Погрузочный док", BaseSectionType.Storehouse)
             {
-                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Supplies,
+                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Gold,
                 PrimarySkill = SkillType.Trade, SecondaryAttribute = AttributeType.Strength,
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.4,
                 UnlockedByDefault = false,
-                // Цена постройки. Пока это единственный слив ресурсов кроме прокорма —
-                // до появления полноценной стройки и крафта (Э6, Э7).
+                // Цена постройки. Док — не само здание Склада, а его апгрейд,
+                // поэтому по US-7.2 он гейтится строительным компонентом, а не
+                // одним золотом, как ядро-здания. Пока это единственный слив
+                // материалов — до появления стройки и крафта (Э6, Э7).
                 UnlockCost = new Dictionary<ResourceType, int>
                 {
-                    { ResourceType.Supplies, 40 },
+                    { ResourceType.Gold, 40 },
                     { ResourceType.Materials, 25 }
                 }
             });
 
-            // Разведпост — интел. Разведка в поле — это выживание, отдельного
-            // скила разведки в GDD тоже нет.
+            // Разведпост. Интела как ресурса в GDD нет, выход снят. Сам слот
+            // НЕ удаляется: его id — RelevantPositionId двух инцидентов, и по
+            // нему детерминированно выбирается жертва (IncidentResolver). Убрать
+            // слот значит тихо откатить выбор жертвы на «первый по алфавиту».
             slots.Add(new AssignmentSlotDefinition("scouting_post", "Разведпост", BaseSectionType.ScoutingPost)
             {
-                OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Intel,
+                OutputKind = SlotOutputKind.None,
                 PrimarySkill = SkillType.Survival, SecondaryAttribute = AttributeType.Wits,
                 BaseOutput = 1, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.2
             });

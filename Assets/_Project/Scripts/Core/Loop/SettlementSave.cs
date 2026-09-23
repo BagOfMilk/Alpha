@@ -85,6 +85,21 @@ namespace Game.Core.Loop
                 if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("rep=").Append(blob);
             }
 
+            // Ростер и партия в поле (Поправка №5.6 п. 4): без них продолжение
+            // отличимо от непрерывного — люди стоят не там, а ушедшие дома.
+            var roster = p.Roster as IStateBlob;
+            if (roster != null)
+            {
+                string blob = roster.CaptureState();
+                if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("ros=").Append(blob);
+            }
+
+            if (p.Party != null)
+            {
+                string blob = p.Party.CaptureState();
+                if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("party=").Append(blob);
+            }
+
             return sb.ToString();
         }
 
@@ -114,6 +129,15 @@ namespace Game.Core.Loop
                 else if (key == "tension") RestoreTension(p, value);
                 else if (key == "trk") RestoreTrack(p, value);
                 else if (key == "sig") p.SignalMemory.RestoreState(value);
+                else if (key == "ros")
+                {
+                    var roster = p.Roster as IStateBlob;
+                    if (roster != null) roster.RestoreState(value);
+                }
+                else if (key == "party")
+                {
+                    if (p.Party != null) p.Party.RestoreState(value);
+                }
                 else if (key == "rep")
                 {
                     var repeats = p.Repeats as IStateBlob;

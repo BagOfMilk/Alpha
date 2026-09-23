@@ -3,6 +3,7 @@ using Game.Core;
 using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
+using Game.Core.Economy;
 using Game.Core.Stats;
 using NUnit.Framework;
 
@@ -79,6 +80,39 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Несущее правило экономики (Э6.2): город не производит материалов
+        /// нигде и никогда. Проверка стоит на КОНТЕНТЕ, а не на памяти: слот
+        /// с выходом Materials пройти незамеченным не может.
+        ///
+        /// Золото под запрет не попадает — Поправка №4.1: это валюта, и Рынок
+        /// по US-7.1 её производит.
+        /// </summary>
+        [Test]
+        public void NoCitySlot_ProducesMaterials()
+        {
+            foreach (var slot in DefaultContent.AllSlots())
+                Assert.AreNotEqual(ResourceType.Materials, slot.OutputResource,
+                    $"«{slot.DisplayName}» печатает материалы в городе, а Э6.2 это запрещает");
+        }
+
+        /// <summary>
+        /// Город производит ровно две вещи: еду и золото (Поправка №4 и №4.1).
+        /// Список закрыт — третий городской кран должен ломать этот тест, а не
+        /// тихо появляться в контенте.
+        /// </summary>
+        [Test]
+        public void CityProduces_OnlyFoodAndGold()
+        {
+            var allowed = new[] { ResourceType.Food, ResourceType.Gold };
+            foreach (var slot in DefaultContent.AllSlots())
+            {
+                if (slot.OutputKind != SlotOutputKind.Resource) continue;
+                CollectionAssert.Contains(allowed, slot.OutputResource,
+                    $"«{slot.DisplayName}» производит {slot.OutputResource} — список городских кранов закрыт");
+            }
+        }
+
+        /// <summary>
         /// Слот берёт скил как основу и атрибут как добавку — разными типами.
         /// Проверка держит правило на контенте: перепутать их местами нельзя,
         /// но можно забыть задать вовсе, и тогда слот тихо работает от базы.
@@ -90,6 +124,14 @@ namespace Game.Tests.EditMode
             {
                 Assert.AreNotEqual(SkillType.None, slot.PrimarySkill, $"«{slot.DisplayName}»: нет профильного скила");
                 Assert.AreNotEqual(AttributeType.None, slot.SecondaryAttribute, $"«{slot.DisplayName}»: нет вторичного атрибута");
+
+                // Слот без выхода обязан объявить это явно, а не оставить
+                // OutputResource = None при OutputKind = Resource: иначе
+                // «ничего не производит» и «забыли проставить ресурс»
+                // выглядят одинаково.
+                if (slot.OutputKind == SlotOutputKind.Resource)
+                    Assert.AreNotEqual(ResourceType.None, slot.OutputResource,
+                        $"«{slot.DisplayName}»: Resource без ресурса — нужен SlotOutputKind.None");
             }
         }
 

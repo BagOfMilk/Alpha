@@ -27,7 +27,33 @@ namespace Alpha.Shared
 
         public static string Line(SignalRequest r)
         {
-            switch (r.TopicId)
+            // Предвестник называет СВОЙ домен. Ядро их различает (subjectId и
+            // тег domain:), а таблица склеивала две разные угрозы в одну
+            // строку — и игрок видел «Собаки брешут» дважды подряд, не понимая,
+            // что это про разные места.
+            if (r.TopicId != null && r.TopicId.StartsWith("forewarn.level"))
+            {
+                string where = Domain(r);
+                return Text(r.TopicId) + (where == null ? "" : " — " + where);
+            }
+            return Text(r.TopicId);
+        }
+
+        private static string Domain(SignalRequest r)
+        {
+            if (r.Tags == null) return null;
+            for (int i = 0; i < r.Tags.Length; i++)
+                if (r.Tags[i] != null && r.Tags[i].StartsWith("domain:"))
+                {
+                    string value = r.Tags[i].Substring("domain:".Length);
+                    return string.IsNullOrEmpty(value) ? null : value;
+                }
+            return null;
+        }
+
+        private static string Text(string topicId)
+        {
+            switch (topicId)
             {
                 case "tension.ambient.Calm": return "«Хорошо, что вы здесь». Дети во дворах.";
                 case "tension.ambient.Murmur": return "У колодца спорят о ценах.";
@@ -46,9 +72,9 @@ namespace Alpha.Shared
                 case "night.ambient.Fracture": return "Ни одного огня в окнах.";
 
                 default:
-                    if (r.TopicId != null && r.TopicId.StartsWith("post.")) return "сводка по домену";
-                    if (r.TopicId != null && r.TopicId.StartsWith("tension.band.")) return "«Меняется. И не в лучшую сторону».";
-                    return r.TopicId;
+                    if (topicId != null && topicId.StartsWith("post.")) return "сводка по домену";
+                    if (topicId != null && topicId.StartsWith("tension.band.")) return "«Меняется. И не в лучшую сторону».";
+                    return topicId;
             }
         }
     }

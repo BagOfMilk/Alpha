@@ -1,7 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Alpha.Shared;
+using Game.Core.Characters;
+using Game.Core.Scenes;
+using Game.Core.Expeditions;
 using Game.Core.Loop;
 using Game.Core.World;
 
@@ -43,6 +47,10 @@ namespace Alpha.Play
             var processor = SettlementWorld.BuildProcessor(tier: 1);
             processor.RequirePlayerDecision = true;
 
+            // Партия в поле — часть состояния суток и слепка (Поправка №5.6 п. 4).
+            var home = SettlementWorld.LastBase;
+            processor.Party = new ExpeditionParty();
+
             if (loadPath != null && File.Exists(loadPath))
             {
                 processor.RestoreState(File.ReadAllText(loadPath));
@@ -55,9 +63,27 @@ namespace Alpha.Play
             while (processor.CurrentDay < until)
             {
                 Morning(processor);
+
+                // Сутки 1, утро: «Сосед с претензией» (FIRST_HOUR §2.2).
+                // Телеграфия финала — игрок узнаёт антагониста ДО боя.
+                if (processor.CurrentDay == 0)
+                    SceneText.Play(OpeningScenes.NeighbourWithADemand(), Cast(), Console.WriteLine);
+
                 Placement(processor);
 
                 RunPhase(processor, DayPhase.Day, auto, policyPath, tally);
+
+                // Сутки 4 — короткая вылазка (FIRST_HOUR §2.2). Посты уходящих
+                // СНИМАЮТСЯ: город двое суток живёт без трёх рук, и это видно
+                // пометкой, а не попапом.
+                if (processor.CurrentDay == 4 && !processor.Party.IsAway
+                    && processor.Party.Depart(home, SettlementWorld.PartyIds, days: 2))
+                {
+                    Console.WriteLine("    партия ушла: " + string.Join(", ", processor.Party.Away));
+                    foreach (var post in processor.Party.VacatedPositions)
+                        Console.WriteLine("      пост опустел: " + post);
+                    tally.Departures++;
+                }
 
                 processor.IsPatrolling = auto ? policyPatrol : AskPatrol(policyPatrol);
                 if (processor.IsPatrolling) tally.PatrolNights++;
@@ -67,6 +93,13 @@ namespace Alpha.Play
                 // обрабатывалось только для дня, на первом же ночном событии
                 // следующее утро падало с «сутки не закончены».
                 RunPhase(processor, DayPhase.Night, auto, policyPath, tally);
+
+                if (processor.Party.IsAway && processor.Party.TickDay())
+                {
+                    var back = processor.Party.Return(home);
+                    Console.WriteLine("    партия вернулась: " + string.Join(", ", back) +
+                                      " — посты за ними НЕ закреплены, расставь заново");
+                }
             }
 
             Summary(processor, tally, days);
@@ -77,6 +110,14 @@ namespace Alpha.Play
                 Console.WriteLine("— сохранено: " + savePath);
             }
             return 0;
+        }
+
+        /// <summary>Карточки всех, кто может появиться в сценах среза.</summary>
+        private static List<CharacterCard> Cast()
+        {
+            var cast = OpeningCast.All();
+            cast.Add(OpeningScenes.Protagonist());
+            return cast;
         }
 
         // ---- фазы суток ----
@@ -197,6 +238,7 @@ namespace Alpha.Play
             Console.WriteLine("  решений игрока: " + t.Decisions + ", из них кровавых: " + t.BloodyChoices);
             Console.WriteLine("  ночей в патруле: " + t.PatrolNights + " из " + days);
             Console.WriteLine("  реплик города: " + t.Signals);
+            Console.WriteLine("  вылазок: " + t.Departures);
 
             // Срез считается сыгранным, только если игроку было ЧТО решать.
             if (t.Decisions == 0)
@@ -207,7 +249,7 @@ namespace Alpha.Play
 
         private sealed class Tally
         {
-            public int Incidents, Crises, Unmanned, Decisions, BloodyChoices, PatrolNights, Signals;
+            public int Incidents, Crises, Unmanned, Decisions, BloodyChoices, PatrolNights, Signals, Departures;
         }
 
         private static string PathName(IncidentPath path)

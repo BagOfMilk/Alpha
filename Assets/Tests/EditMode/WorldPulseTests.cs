@@ -24,6 +24,7 @@ namespace Game.Tests.EditMode
 
             public int InsistencePerDay(PulseContext ctx) => Rate;
             public bool IsActive(PulseContext ctx) => Active;
+            public bool Announces => true;
         }
 
         private static PulseBalance Cfg() => new PulseBalance();

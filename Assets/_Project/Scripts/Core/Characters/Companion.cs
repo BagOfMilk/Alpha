@@ -53,6 +53,13 @@ namespace Game.Core.Characters
         /// <summary>Скилы. Единственное, что растёт за уровни.</summary>
         public SkillSet Skills { get; }
 
+        /// <summary>
+        /// Карточка (Поправка №5.6 п. 1): имя, откуда взят, что помнит. У
+        /// безымянных её нет — и по замыслу быть не должно: безымянных мобов
+        /// в игре нет вовсе (Поправка №5.2).
+        /// </summary>
+        public CharacterCard Card { get; set; }
+
         public TraitSlots Traits { get; }
         public ScarTrack Scars { get; } = new ScarTrack();
         public CompanionPerks Perks { get; } = new CompanionPerks();
@@ -96,6 +103,13 @@ namespace Game.Core.Characters
 
         /// <summary>Сырое значение атрибута, без модификаторов.</summary>
         public int Attribute(AttributeType attribute) => Attributes[attribute];
+
+        /// <summary>
+        /// Вернуть пост из слепка. Отдельный метод, а не публичный сеттер:
+        /// назначением по-прежнему распоряжается только BaseState, а это —
+        /// восстановление уже принятого решения.
+        /// </summary>
+        internal void RestoreAssignmentForSave(string slotId) => AssignedSlotId = slotId;
 
         public bool IsAssigned => !string.IsNullOrEmpty(AssignedSlotId);
         public bool IsInjured => InjuryPoints > 0.0;

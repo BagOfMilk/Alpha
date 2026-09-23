@@ -24,6 +24,7 @@
     <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
     <Compile Include="../Shared/SettlementWorld.cs" Link="Shared/SettlementWorld.cs" />
     <Compile Include="../Shared/SignalText.cs" Link="Shared/SignalText.cs" />
+    <Compile Include="../Shared/SceneText.cs" Link="Shared/SceneText.cs" />
   </ItemGroup>
 
 </Project>

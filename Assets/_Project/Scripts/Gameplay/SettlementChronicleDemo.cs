@@ -80,7 +80,8 @@ namespace Game.Gameplay
 
             // Цикл поселения идёт штатным шагом дня: у суток обязан быть
             // материальный итог, иначе хроника показывает давление без хозяйства.
-            var processor = new DayProcessor(tension, balance, DayProcessor.DefaultSteps(baseState))
+            var production = new ProductionStep(baseState);
+            var processor = new DayProcessor(tension, balance, SettlementCycle.BuildSteps(production))
             {
                 Tier = tier,
                 Roster = adapter,
@@ -137,6 +138,10 @@ namespace Game.Gameplay
                         }
                     }
                 }
+
+                var produced = production.LastReport;
+                if (produced != null && produced.FoodShortage)
+                    Append(full, chunk, $"[день {day}] ⚠ еды не хватило — завтра все работают хуже");
 
                 if (choices.Contains(day))
                 {

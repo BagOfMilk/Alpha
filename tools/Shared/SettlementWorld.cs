@@ -35,6 +35,17 @@ namespace Alpha.Shared
         public static BalanceConfig Balance() => new BalanceConfig();
 
         /// <summary>
+        /// Таблица инцидентов среза: штатные плюс авторские открытия. Без
+        /// вторых первые пять суток пусты — конвейер исправен, а событий нет.
+        /// </summary>
+        public static IncidentTable BuildIncidents()
+        {
+            var table = DefaultIncidents.BuildTable();
+            foreach (var incident in OpeningContent.All()) table.Add(incident);
+            return table;
+        }
+
+        /// <summary>
         /// Шесть напарников: специалист на каждый домен плюс два середняка.
         /// Числа скромные — это хутор, а не элита.
         ///
@@ -47,6 +58,7 @@ namespace Alpha.Shared
             var cfg = Balance();
             var roster = new Roster();
             var baseState = new BaseState(roster, new ResourceLedger(), cfg);
+            LastBase = baseState;
             foreach (var slot in DefaultContent.AllSlots()) baseState.AddSlot(slot);
 
             Put(baseState, "guard", SkillType.Survival, 8, Positions[0]);
@@ -68,8 +80,23 @@ namespace Alpha.Shared
             var arch = new CompanionArchetype(id, id);
             arch.SetSkill(skill, value);
             baseState.Roster.Add(arch.CreateInstance(id));
-            baseState.TryAssign(id, position);
+
+            // Стартовые посты среза считаются уже открытыми: срез начинается с
+            // работающей общины, а не со стройки. Док склада по умолчанию закрыт
+            // (его открывают за ресурсы), и без этой строки назначение молча
+            // проваливалось — склад стоял без человека, а мир об этом не говорил.
+            var slot = baseState.GetSlot(position);
+            if (slot != null) slot.Unlocked = true;
+
+            var result = baseState.TryAssign(id, position);
+            if (result != AssignmentResult.Success)
+                throw new System.InvalidOperationException(
+                    $"Стартовая расстановка сорвалась: {id} -> {position} ({result}). " +
+                    "Тихая неудача здесь означает пост без человека на весь прогон.");
         }
+
+        /// <summary>База последнего построенного мира: партии нужно снимать людей с постов.</summary>
+        public static BaseState LastBase { get; private set; }
 
         public static DayProcessor BuildProcessor(int tier, Roster roster = null)
         {
@@ -81,6 +108,14 @@ namespace Alpha.Shared
             var pulse = new WorldPulse(cfg.Pulse);
             foreach (var source in DefaultPressureSources.All()) pulse.AddSource(source);
 
+            // Именной накопитель «Тугар»: слух о боярине, которого игрок видел
+            // в сцене открытия, доходит до него на 3-4 сутки (FIRST_HOUR §2.2).
+            pulse.AddSource(new OpeningContent.TuharPressureSource());
+
+            // Авторская последовательность открытия: узел на первые сутки,
+            // припасы на вторые, девочка на третьи (FIRST_HOUR §2.2).
+            foreach (var scripted in OpeningContent.ScriptedSources()) pulse.AddSource(scripted);
+
             return new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
             {
                 Tier = tier,
@@ -88,7 +123,7 @@ namespace Alpha.Shared
                 Casualties = adapter,
                 Population = new PopulationState(),
                 Pulse = pulse,
-                Incidents = DefaultIncidents.BuildTable(),
+                Incidents = BuildIncidents(),
                 Repeats = new RepeatTracker(),
                 PostDomains = new[]
                 {
