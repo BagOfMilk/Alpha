@@ -4,6 +4,8 @@ using Game.Core.Balance;
 using Game.Core.Base;
 using Game.Core.Characters;
 using Game.Core.Economy;
+using Game.Core.Loop;
+using Game.Core.Pressure;
 using UnityEngine;
 
 namespace Game.Gameplay
@@ -25,7 +27,7 @@ namespace Game.Gameplay
         [Min(1)] public int cyclesToSimulate = 10;
         public bool runOnStart = true;
 
-        private BaseState _base;
+        private SettlementCycle _cycle;
 
         private void Start()
         {
@@ -37,25 +39,32 @@ namespace Game.Gameplay
         {
             // Ассет с числами баланса, если он положен в инспектор; иначе дефолты из кода.
             var balance = balanceAsset != null ? balanceAsset.ToConfig() : new BalanceConfig();
-            _base = BuildBase(balance, out var assignments);
+            var state = BuildBase(balance, out var assignments);
+
+            // Время двигает только конвейер: позвать производство в обход него
+            // больше нельзя — AdvanceCycle закрыт для этой сборки.
+            var production = new ProductionStep(state);
+            var processor = new DayProcessor(new TensionState(balance.Tension), balance,
+                SettlementCycle.BuildSteps(production));
+            _cycle = new SettlementCycle(state, processor, production);
 
             var sb = new StringBuilder();
             sb.AppendLine("=== СТАРТОВАЯ РАССТАНОВКА ===");
             foreach (var (companionId, slotId) in assignments)
             {
-                var c = _base.Roster.Get(companionId);
-                var slot = _base.GetSlot(slotId);
+                var c = state.Roster.Get(companionId);
+                var slot = state.GetSlot(slotId);
                 sb.AppendLine($"  {c.DisplayName} (ур.{c.Level}) → {slot.Definition.DisplayName}");
             }
             Debug.Log(sb.ToString());
 
             for (int i = 0; i < cyclesToSimulate; i++)
             {
-                var report = _base.AdvanceCycle();
-                Debug.Log(FormatReport(report));
+                _cycle.AdvanceDay();
+                Debug.Log(FormatReport(_cycle.Production.LastReport));
             }
 
-            Debug.Log(FormatWallet(_base.Resources));
+            Debug.Log(FormatWallet(state.Resources));
         }
 
         /// <summary>Собирает базу из дефолтного контента на дефолтных числах баланса.</summary>
@@ -106,6 +115,7 @@ namespace Game.Gameplay
         private static string FormatReport(CycleReport r)
         {
             var sb = new StringBuilder();
+            if (r == null) return "— день прошёл без производства";
             sb.Append($"— День {r.Cycle}: ");
             if (r.Produced.Count == 0 && r.PassiveBonuses.Count == 0)
                 sb.Append("ничего не произведено");

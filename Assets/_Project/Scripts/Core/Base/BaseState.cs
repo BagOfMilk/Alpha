@@ -130,6 +130,12 @@ namespace Game.Core.Base
         /// <summary>
         /// Один цикл (день): производство со всех занятых слотов, начисление
         /// ролевого опыта, естественное лечение и расход еды поселением.
+        ///
+        /// INTERNAL намеренно. Единственный легальный вызывающий — ProductionStep
+        /// внутри дневного конвейера; Game.Gameplay лежит в другой сборке и
+        /// физически не может позвать этот метод в обход. Пока он был публичным,
+        /// демка базы крутила его напрямую, и в проекте существовало два дневных
+        /// цикла, не знающих друг о друге.
         /// </summary>
         /// <summary>
         /// Порт для дневного конвейера (<see cref="Game.Core.Loop.IDailyCycle"/>):
@@ -141,7 +147,7 @@ namespace Game.Core.Base
             AdvanceCycle();
         }
 
-        public CycleReport AdvanceCycle()
+        internal CycleReport AdvanceCycle()
         {
             CurrentCycle++;
             var report = new CycleReport { Cycle = CurrentCycle };
@@ -167,6 +173,12 @@ namespace Game.Core.Base
                         break;
                     case SlotOutputKind.Healing:
                         ApplyHealing(output, report);
+                        break;
+                    case SlotOutputKind.None:
+                        // Позиция без выхода — не ошибка и не заглушка на время
+                        // отладки: по GDD у мастерской и лаборатории функция
+                        // крафт, а крафта ещё нет. Ролевой опыт при этом идёт:
+                        // человек на посту всё равно работает.
                         break;
                 }
 

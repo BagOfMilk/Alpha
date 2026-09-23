@@ -85,6 +85,32 @@ namespace Game.Core.Balance
         public int MaxAttribute = 10;
         public int MaxSkillLevel = 10;
 
+        // ---- Вылазки (Э6.2, Приложение А) ----
+        // Заглушка данжа — единственный кран материалов: город их не
+        // производит вовсе. Здесь же живёт ось Поправки №1 «время против риска».
+
+        /// <summary>Размер отряда. Больше четырёх на точку не ходит (US-8.3).</summary>
+        public int ExpeditionPartyMax = 4;
+
+        /// <summary>Каждая полоса исхода над Базовой добавляет столько долей базы.</summary>
+        public double ExpeditionYieldPerBand = 0.5;
+
+        /// <summary>Каждая отработка точки срезает добычу на эту долю.</summary>
+        public double ExpeditionDepletionStep = 0.25;
+
+        /// <summary>Ниже этого множителя истощение не опускает точку.</summary>
+        public double ExpeditionDepletionFloor = 0.25;
+
+        /// <summary>Ранений при силовом подходе: провал и обычный исход.</summary>
+        public int ExpeditionForcefulWoundsOnWorst = 2;
+        public int ExpeditionForcefulWoundsOnBase = 1;
+
+        /// <summary>Во сколько очков восстановления обходится лёгкая рана.</summary>
+        public double ExpeditionLightWoundPoints = 20.0;
+
+        /// <summary>То же для серьёзной. По US-4.2 именно она оставляет шрам.</summary>
+        public double ExpeditionSeriousWoundPoints = 60.0;
+
         // ---- Городской слой (Поправка №3) ----
         // Секции вынесены в отдельные классы: у каждой свой SO-ассет,
         // чтобы дизайнер правил их независимо и в Play-режиме (US-18.3).
