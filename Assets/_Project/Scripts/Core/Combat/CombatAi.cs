@@ -113,6 +113,14 @@ namespace Game.Core.Combat
             // 8. Позицию можно улучшить? (сближение/оптимал/укрытие по роли)
             if (TryImprovePosition(cs, unit, target)) return true;
 
+            // 9. Стрелять не по кому, а на выстрел AP хватает — дозор в сторону цели
+            //    (US-3.6). Симметрия: игрок, идущий на такого врага, рискует так же,
+            //    как враг, идущий на дозор игрока. Ближний бой в дозор не встаёт —
+            //    его дело сближаться.
+            if (unit.Weapon != null && !unit.Weapon.IsMelee && unit.Ap >= unit.Weapon.ApCost
+                && cs.Overwatch(target.Pos) == CombatActionResult.Success)
+                return true;
+
             return false; // ничего полезного — конец хода
         }
 

@@ -82,6 +82,15 @@ namespace Game.Core.Combat
         public UnitLifeState LifeState { get; internal set; } = UnitLifeState.Active;
         public int DownWindowRemaining { get; internal set; }
 
+        /// <summary>
+        /// Взведённый overwatch (US-3.6); null — юнит не в дозоре. Ставит и снимает
+        /// только CombatState: вход — действием Overwatch, снятие — выстрелом,
+        /// началом своего хода, оглушением, сбиванием с ног, перестановкой, дауном.
+        /// </summary>
+        public OverwatchStance Overwatch { get; internal set; }
+
+        public bool IsOverwatching => Overwatch != null;
+
         public readonly List<StatusInstance> Statuses = new List<StatusInstance>();
 
         /// <summary>Известные способности (напарник — по порогам скилов; враг — из определения).</summary>

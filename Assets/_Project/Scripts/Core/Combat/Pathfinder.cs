@@ -44,5 +44,44 @@ namespace Game.Core.Combat
             }
             return result;
         }
+
+        /// <summary>
+        /// Кратчайший путь до dest по тем же правилам, что Reachable (ортогональные
+        /// шаги, только свободные клетки), без стартовой клетки. Соседи перебираются
+        /// в том же порядке — путь детерминирован. Длина пути × цена шага равна цене
+        /// из Reachable: оба — BFS по одной сетке. Пусто, если dest недостижим.
+        ///
+        /// Нужен дозору (US-3.6): overwatch обязан видеть сам путь, а не только
+        /// точку прибытия, иначе враг «проходит сквозь» сектор незамеченным.
+        /// </summary>
+        public static List<GridPos> Path(GridMap map, GridPos start, GridPos dest)
+        {
+            var path = new List<GridPos>();
+            if (map == null || start == dest || !map.IsFree(dest)) return path;
+
+            var parent = new Dictionary<GridPos, GridPos>();
+            var visited = new HashSet<GridPos> { start };
+            var frontier = new Queue<GridPos>();
+            frontier.Enqueue(start);
+
+            while (frontier.Count > 0)
+            {
+                var cur = frontier.Dequeue();
+                if (cur == dest) break;
+                foreach (var (dx, dy) in Neighbors)
+                {
+                    var next = new GridPos(cur.X + dx, cur.Y + dy);
+                    if (visited.Contains(next) || !map.IsFree(next)) continue;
+                    visited.Add(next);
+                    parent[next] = cur;
+                    frontier.Enqueue(next);
+                }
+            }
+
+            if (!parent.ContainsKey(dest)) return path;
+            for (var p = dest; p != start; p = parent[p]) path.Add(p);
+            path.Reverse();
+            return path;
+        }
     }
 }

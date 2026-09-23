@@ -26,10 +26,10 @@ namespace Game.Core.Combat
 
     /// <summary>
     /// Оркестратор боя: грид + юниты + индивидуальная инициатива + действия текущего
-    /// юнита (движение/атака/стабилизация/конец хода). Правила Эпиков 3–4: пул AP,
-    /// надёжный %, Strike-метр, статусы (DoT в начале хода, длительность в конце,
-    /// Воля сокращает), даун с окном на спасение (стабилизация Медициной), смерть
-    /// насовсем. Враги симметричны — действуют тем же API.
+    /// юнита (движение/атака/стабилизация/overwatch/конец хода). Правила Эпиков 3–4:
+    /// пул AP, надёжный %, Strike-метр, статусы (DoT в начале хода, длительность в
+    /// конце, Воля сокращает), overwatch (US-3.6), даун с окном на спасение
+    /// (стабилизация Медициной), смерть насовсем. Враги симметричны — действуют тем же API.
     /// </summary>
     public sealed class CombatState
     {
@@ -98,7 +98,52 @@ namespace Game.Core.Combat
 
             unit.Ap -= cost;
             AddLog($"{unit.Profile.DisplayName} перемещается в {dest} (−{cost} AP)");
-            PlaceUnitAt(unit, dest);
+
+            // Путь проходится по клеткам, а не прыжком: дозор противника обязан
+            // видеть сам путь (US-3.6). Реакция может уронить идущего — тогда он
+            // остаётся там, где упал. Ловушка, как и раньше, — только в точке
+            // прибытия, и тем же порядком, что у рывка и перестановки (PlaceUnitAt):
+            // сначала выстрел из дозора, потом ловушка — если дошёл на ногах.
+            var path = Pathfinder.Path(Map, unit.Pos, dest);
+            for (int i = 0; i < path.Count; i++)
+            {
+                StepTo(unit, path[i]);
+                ReactToMovement(unit);
+                if (!unit.IsActive || Outcome != CombatOutcome.Ongoing) return CombatActionResult.Success;
+            }
+            TriggerTrapAt(unit);
+            return CombatActionResult.Success;
+        }
+
+        /// <summary>
+        /// Overwatch (US-3.6): юнит платит цену выстрела оружием заранее и держит
+        /// сектор — конус от своей клетки в сторону aim — до начала своего
+        /// следующего хода. Вход в дозор завершает ход: выстрел оплачен из того же
+        /// пула, что и всё остальное, поэтому «сначала походить, потом залечь» можно,
+        /// а получить выстрел дважды — нет.
+        ///
+        /// Срабатывает ОДИН раз: на первом перемещении противника в сектор — шаг
+        /// хода, приземление рывка, перестановка по приказу (вход или движение
+        /// внутри), — в пределах обзора (дальнее оружие) или контакта (ближнее).
+        /// Без двойного профита: резерв не возвращается, если никто не пришёл;
+        /// выстрел не копит Strike-метр и не может быть Strike; точность — со
+        /// штрафом навскидку. Проки оружия (шред, статус на попадании) работают:
+        /// это свойства самого выстрела, а не второй профит сверх него.
+        /// </summary>
+        public CombatActionResult Overwatch(GridPos aim)
+        {
+            var unit = ActiveCurrentOrNull();
+            if (unit == null || unit.Weapon == null) return CombatActionResult.InvalidAction;
+            if (!Map.InBounds(aim) || aim == unit.Pos) return CombatActionResult.InvalidTarget;
+
+            int reserve = unit.Weapon.ApCost;
+            if (unit.Ap < reserve) return CombatActionResult.NotEnoughAp;
+
+            unit.Ap -= reserve;
+            unit.Overwatch = new OverwatchStance(unit.Pos, aim, reserve);
+            AddLog($"{unit.Profile.DisplayName} берёт сектор под прицел в сторону {aim} " +
+                   $"(резерв −{reserve} AP, до своего следующего хода)");
+            EndTurn();
             return CombatActionResult.Success;
         }
 
@@ -317,7 +362,9 @@ namespace Game.Core.Combat
 
             foreach (var fx in ability.Effects)
             {
-                if (Outcome != CombatOutcome.Ongoing) break;
+                // Исполнителя может уронить дозор посреди способности (после рывка) —
+                // лежащий дальше не бьёт.
+                if (Outcome != CombatOutcome.Ongoing || !unit.IsActive) break;
                 switch (fx.Kind)
                 {
                     case AbilityEffectKind.WeaponAttack:
@@ -383,7 +430,7 @@ namespace Game.Core.Combat
                         if (lungeDest.HasValue)
                         {
                             AddLog($"  {unit.Profile.DisplayName} совершает рывок к {target.Profile.DisplayName}");
-                            PlaceUnitAt(unit, lungeDest.Value);
+                            PlaceUnitAt(unit, lungeDest.Value); // дозор видит рывок (реакция внутри)
                         }
                         break;
 
@@ -414,6 +461,7 @@ namespace Game.Core.Combat
                             && target.Profile.Family == EnemyFamily.Robot)
                         {
                             target.Side = unit.Side;
+                            BreakOverwatch(target, "перехвачен");
                             AddLog($"  {target.Profile.DisplayName} перехвачен — теперь дерётся за " +
                                    (unit.Side == Side.Player ? "отряд!" : "врага!"));
                             CheckOutcome(); // возможно, активных врагов не осталось
@@ -451,13 +499,77 @@ namespace Game.Core.Combat
             return best;
         }
 
-        /// <summary>Физическое перемещение (ход/рывок/перестановка) + ловушка в точке прибытия.</summary>
+        /// <summary>
+        /// Перемещение одним прыжком (рывок, перестановка): свой дозор теряется —
+        /// сектор держится с конкретной клетки; чужой дозор видит приземление;
+        /// ловушка срабатывает последней и только под тем, кто остался на ногах.
+        /// Тот же порядок, что у последнего шага обычного хода (Move) — исход не
+        /// зависит от того, КАК юнит попал на клетку.
+        /// </summary>
         private void PlaceUnitAt(CombatUnit unit, GridPos dest)
         {
+            BreakOverwatch(unit, "сбит с позиции");
+            StepTo(unit, dest);
+            ReactToMovement(unit);
+            if (unit.IsActive && Outcome == CombatOutcome.Ongoing) TriggerTrapAt(unit);
+        }
+
+        /// <summary>Один шаг: только клетка и занятость, без ловушек и реакций.</summary>
+        private void StepTo(CombatUnit unit, GridPos tile)
+        {
             Map.ClearOccupant(unit.Pos);
-            unit.Pos = dest;
-            Map.SetOccupant(dest, unit.Id);
-            TriggerTrapAt(unit);
+            unit.Pos = tile;
+            Map.SetOccupant(tile, unit.Id);
+        }
+
+        // ---- Overwatch (US-3.6) ----
+        /// <summary>
+        /// Реакция дозора на шаг mover. Дозорные перебираются в порядке добавления в
+        /// бой — детерминированно; каждый стреляет не больше раза, и выстрел снимает
+        /// его дозор ДО ролла. Если идущего уронили, остальные уже не стреляют.
+        /// </summary>
+        private void ReactToMovement(CombatUnit mover)
+        {
+            for (int i = 0; i < _units.Count; i++)
+            {
+                if (!mover.IsActive || Outcome != CombatOutcome.Ongoing) return;
+
+                var watcher = _units[i];
+                if (watcher == mover || !watcher.IsActive || watcher.Side == mover.Side) continue;
+                if (!OverwatchCovers(watcher, mover.Pos)) continue;
+
+                watcher.Overwatch = null; // одно срабатывание
+                AddLog($"{watcher.Profile.DisplayName} стреляет из дозора по {mover.Profile.DisplayName}!");
+                ExecuteAttackRoll(watcher, mover, watcher.Weapon,
+                    accuracyBonus: -Balance.OverwatchAccuracyPenalty, forceHit: false, allowStrikeGain: false);
+            }
+        }
+
+        /// <summary>
+        /// Накрывает ли дозор watcher клетку tile: сектор + обзор (дальнее оружие) или
+        /// контакт (ближнее — «страж у двери»). Справка для UI и ИИ: подсветить сектор.
+        /// </summary>
+        public bool OverwatchCovers(CombatUnit watcher, GridPos tile)
+        {
+            var stance = watcher?.Overwatch;
+            var w = watcher?.Weapon;
+            if (stance == null || w == null) return false;
+            if (!stance.Covers(tile, Balance.OverwatchConeSlopeNum, Balance.OverwatchConeSlopeDen)) return false;
+
+            return w.IsMelee
+                ? GridPos.Chebyshev(watcher.Pos, tile) <= w.OptimalRange
+                : LineOfSight.HasLine(Map, watcher.Pos, tile);
+        }
+
+        /// <summary>Показанный шанс выстрела из дозора по цели там, где она стоит (со штрафом навскидку).</summary>
+        public int OverwatchHitChancePreview(CombatUnit watcher, CombatUnit target)
+            => HitChanceCalculator.Compute(watcher, target, Map, Balance, -Balance.OverwatchAccuracyPenalty);
+
+        private void BreakOverwatch(CombatUnit unit, string why)
+        {
+            if (unit?.Overwatch == null) return;
+            unit.Overwatch = null;
+            AddLog($"  {unit.Profile.DisplayName} теряет дозор ({why})");
         }
 
         private void TriggerTrapAt(CombatUnit unit)
@@ -559,6 +671,10 @@ namespace Game.Core.Combat
             else
                 target.Statuses.Add(new StatusInstance(type, duration, dot, dotType));
             AddLog($"  {target.Profile.DisplayName} получает состояние {type} ({duration} х.)");
+
+            // Оглушённый и сбитый с ног сектор не держат (Подавление — держат, со штрафом к точности).
+            if (type == StatusType.Stunned) BreakOverwatch(target, "оглушён");
+            else if (type == StatusType.KnockedDown) BreakOverwatch(target, "сбит с ног");
         }
 
         private void ApplyDamage(CombatUnit target, int amount)
@@ -568,6 +684,7 @@ namespace Game.Core.Combat
             if (target.Hp > 0) return;
 
             target.Hp = 0;
+            BreakOverwatch(target, "выбыл");
             if (target.Profile.CanBeDowned)
             {
                 target.LifeState = UnitLifeState.Downed;
@@ -592,6 +709,14 @@ namespace Game.Core.Combat
         private bool BeginTurn(CombatUnit unit)
         {
             if (unit == null || Outcome != CombatOutcome.Ongoing) return false;
+
+            // Дозор держится «до следующего хода юнита» (US-3.6): не сработал — сгорел
+            // вместе с резервом; новый ход начинается с полного пула, а не с пула + резерв.
+            if (unit.Overwatch != null)
+            {
+                unit.Overwatch = null;
+                AddLog($"{unit.Profile.DisplayName} снимает дозор — никто не вошёл в сектор");
+            }
 
             switch (unit.LifeState)
             {

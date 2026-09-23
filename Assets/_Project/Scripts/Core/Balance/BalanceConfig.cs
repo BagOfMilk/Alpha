@@ -108,6 +108,11 @@ namespace Game.Core.Balance
         public int KnockdownDefensePenalty = 10;        // Сбит с ног: −защита цели (не ниже 0)
         public int StandUpApCost = 2;                   // Сбит с ног: встать в начале хода стоит AP
 
+        // -- Overwatch (US-3.6): резерв AP = цена выстрела оружием, одно срабатывание до своего хода --
+        public int OverwatchAccuracyPenalty = 10;       // выстрел навскидку по движущемуся: −% (ПЛЕЙСХОЛДЕР)
+        public int OverwatchConeSlopeNum = 1;           // полуширина конуса дозора: tg = Num/Den —
+        public int OverwatchConeSlopeDen = 1;           //  1/1 = 45°, конус 90° (ПЛЕЙСХОЛДЕР); целые — детерминизм
+
         // ======== Кампания / экспедиции ========
         // Айронмен (US-16.1): протагонист теряет сюжетную защиту — его смерть = game over.
         public bool Ironman = false;
