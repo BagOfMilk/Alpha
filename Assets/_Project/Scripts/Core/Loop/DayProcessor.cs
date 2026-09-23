@@ -51,6 +51,12 @@ namespace Game.Core.Loop
         public ICasualtySink Casualties { get; set; }
         public IReadOnlyList<PostDomain> PostDomains { get; set; }
 
+        /// <summary>
+        /// Партия в поле (Поправка №5.6 п. 4). Необязателен: без него город
+        /// живёт как раньше, просто никто никуда не уходит.
+        /// </summary>
+        public Expeditions.ExpeditionParty Party { get; set; }
+
         /// <summary>Ночью: патрулировать вместо сна (Поправка №3.9).</summary>
         public bool IsPatrolling { get; set; }
 

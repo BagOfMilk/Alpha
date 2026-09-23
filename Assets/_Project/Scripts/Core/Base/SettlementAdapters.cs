@@ -68,7 +68,7 @@ namespace Game.Core.Base
     }
 
     /// <summary>Взгляд городского слоя на ростер.</summary>
-    public sealed class RosterAdapter : IRosterView, ICasualtySink
+    public sealed class RosterAdapter : IRosterView, ICasualtySink, Game.Core.Loop.IStateBlob
     {
         private readonly Roster _roster;
         private readonly string _protagonistId;
@@ -80,6 +80,49 @@ namespace Game.Core.Base
         /// игры партию будет задавать экран сборов, которого пока нет.
         /// </summary>
         internal List<Companion> PartyForSim { get; set; }
+
+        /// <summary>
+        /// Ростер в слепок (Поправка №5.6 п. 4): кто жив, в каком состоянии и на
+        /// каком посту. Без этого загрузка возвращала людей «как при старте», и
+        /// обещание «продолжение неотличимо от непрерывного» не выполнялось.
+        ///
+        /// Пишутся только изменяемые поля. Имена, статы и карточки приходят из
+        /// контента: дублировать их в сейве значит однажды разъехаться с ним.
+        /// </summary>
+        public string CaptureState()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var c in _roster.All)
+            {
+                if (sb.Length > 0) sb.Append(',');
+                sb.Append(c.Id).Append('>')
+                  .Append((int)c.Status).Append('>')
+                  .Append(c.AssignedSlotId ?? "").Append('>')
+                  .Append(c.InjuryPoints.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return sb.ToString();
+        }
+
+        public void RestoreState(string blob)
+        {
+            if (string.IsNullOrEmpty(blob)) return;
+            foreach (var entry in blob.Split(','))
+            {
+                var f = entry.Split('>');
+                if (f.Length < 4) continue;
+                var c = _roster.Get(f[0]);
+                if (c == null) continue;
+
+                int status;
+                if (int.TryParse(f[1], out status)) c.Status = (CompanionStatus)status;
+                c.RestoreAssignmentForSave(string.IsNullOrEmpty(f[2]) ? null : f[2]);
+
+                double injury;
+                if (double.TryParse(f[3], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out injury))
+                    c.InjuryPoints = injury;
+            }
+        }
         public RosterAdapter(Roster roster, string protagonistId = null, BalanceConfig balance = null)
         {
             _roster = roster ?? throw new ArgumentNullException(nameof(roster));

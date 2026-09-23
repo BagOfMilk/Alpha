@@ -47,6 +47,7 @@ namespace Alpha.Shared
             var cfg = Balance();
             var roster = new Roster();
             var baseState = new BaseState(roster, new ResourceLedger(), cfg);
+            LastBase = baseState;
             foreach (var slot in DefaultContent.AllSlots()) baseState.AddSlot(slot);
 
             Put(baseState, "guard", SkillType.Survival, 8, Positions[0]);
@@ -68,8 +69,23 @@ namespace Alpha.Shared
             var arch = new CompanionArchetype(id, id);
             arch.SetSkill(skill, value);
             baseState.Roster.Add(arch.CreateInstance(id));
-            baseState.TryAssign(id, position);
+
+            // Стартовые посты среза считаются уже открытыми: срез начинается с
+            // работающей общины, а не со стройки. Док склада по умолчанию закрыт
+            // (его открывают за ресурсы), и без этой строки назначение молча
+            // проваливалось — склад стоял без человека, а мир об этом не говорил.
+            var slot = baseState.GetSlot(position);
+            if (slot != null) slot.Unlocked = true;
+
+            var result = baseState.TryAssign(id, position);
+            if (result != AssignmentResult.Success)
+                throw new System.InvalidOperationException(
+                    $"Стартовая расстановка сорвалась: {id} -> {position} ({result}). " +
+                    "Тихая неудача здесь означает пост без человека на весь прогон.");
         }
+
+        /// <summary>База последнего построенного мира: партии нужно снимать людей с постов.</summary>
+        public static BaseState LastBase { get; private set; }
 
         public static DayProcessor BuildProcessor(int tier, Roster roster = null)
         {

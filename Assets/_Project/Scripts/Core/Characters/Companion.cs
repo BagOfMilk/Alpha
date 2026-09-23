@@ -104,6 +104,13 @@ namespace Game.Core.Characters
         /// <summary>Сырое значение атрибута, без модификаторов.</summary>
         public int Attribute(AttributeType attribute) => Attributes[attribute];
 
+        /// <summary>
+        /// Вернуть пост из слепка. Отдельный метод, а не публичный сеттер:
+        /// назначением по-прежнему распоряжается только BaseState, а это —
+        /// восстановление уже принятого решения.
+        /// </summary>
+        internal void RestoreAssignmentForSave(string slotId) => AssignedSlotId = slotId;
+
         public bool IsAssigned => !string.IsNullOrEmpty(AssignedSlotId);
         public bool IsInjured => InjuryPoints > 0.0;
 
