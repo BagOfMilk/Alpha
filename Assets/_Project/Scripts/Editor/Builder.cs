@@ -26,6 +26,7 @@ namespace Game.Gameplay.EditorTools
         [MenuItem("Alpha/Собрать билд (Windows)")]
         public static void BuildWindows()
         {
+            RegisterScenes();
             var scenes = EnabledScenes();
             if (scenes.Length == 0)
             {
@@ -62,6 +63,28 @@ namespace Game.Gameplay.EditorTools
             Debug.Log($"[Builder] Готово: {summary.outputPath} " +
                       $"({summary.totalSize / (1024 * 1024)} МБ, {summary.totalTime.TotalSeconds:F0} с)");
             if (Application.isBatchMode) EditorApplication.Exit(0);
+        }
+
+        /// <summary>
+        /// Что вообще показывать. Сцены собираются кодом, поэтому в Build
+        /// Settings их может не быть вовсе — тогда билд вышел бы пустым.
+        ///
+        /// Село идёт первым: это МЕСТО, с него начинается взгляд. Портретная
+        /// сцена — люди — следом. Перехода между ними пока нет, и это честно:
+        /// они два отдельных вида, а не игра. Игра сейчас — текстовый срез.
+        /// Диагностическая сцена в билд не идёт: она для редактора.
+        /// </summary>
+        private static void RegisterScenes()
+        {
+            var wanted = new List<string>();
+            foreach (var path in new[] { "Assets/Scenes/Village.unity", "Assets/Scenes/Opening.unity" })
+                if (File.Exists(path)) wanted.Add(path);
+
+            if (wanted.Count == 0) return;
+
+            var scenes = new List<EditorBuildSettingsScene>();
+            for (int i = 0; i < wanted.Count; i++) scenes.Add(new EditorBuildSettingsScene(wanted[i], true));
+            EditorBuildSettings.scenes = scenes.ToArray();
         }
 
         /// <summary>Только ВКЛЮЧЁННЫЕ сцены и только реально существующие на диске.</summary>
