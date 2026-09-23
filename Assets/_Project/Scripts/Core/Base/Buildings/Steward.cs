@@ -86,6 +86,9 @@ namespace Game.Core.Base
         {
             if (state == null) return null;
 
+            // Пост погибшего — свободный пост: сначала сверка, потом расстановка.
+            state.ReleaseFallen();
+
             string did = null;
 
             foreach (var slot in state.Slots)

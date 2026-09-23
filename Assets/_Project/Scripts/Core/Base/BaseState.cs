@@ -91,8 +91,12 @@ namespace Game.Core.Base
             var companion = Roster.Get(companionId);
             if (companion == null) return AssignmentResult.CompanionNotFound;
 
-            if (companion.Status == CompanionStatus.OnMission)
+            if (companion.IsDead || companion.Status == CompanionStatus.OnMission)
                 return AssignmentResult.CompanionUnavailable;
+
+            // Пост погибшего свободен, даже если сверка ещё не прошла.
+            if (slot.IsOccupied && IsFallen(slot.AssignedCompanionId))
+                slot.AssignedCompanionId = null;
 
             if (slot.IsOccupied && slot.AssignedCompanionId != companionId)
                 return AssignmentResult.SlotOccupied;
@@ -125,6 +129,34 @@ namespace Game.Core.Base
             }
         }
 
+        /// <summary>
+        /// Освобождает посты, которые держат погибшие (или те, кого уже нет в
+        /// ростере). Смерть приходит из разных мест — кризис, вылазка, позже бой, —
+        /// и не всякое из них знает про базу; поэтому база сверяется сама: перед
+        /// каждым циклом, перед расстановкой хозяина и при назначении на такой пост.
+        ///
+        /// Без этого погибший на посту производил вечно, а пост нельзя было отдать
+        /// живому: слот считался занятым (аудит разрывов, G17).
+        /// Возвращает, сколько постов освобождено.
+        /// </summary>
+        public int ReleaseFallen()
+        {
+            int freed = 0;
+            foreach (var slot in _slots)
+            {
+                if (!slot.IsOccupied || !IsFallen(slot.AssignedCompanionId)) continue;
+                slot.AssignedCompanionId = null;
+                freed++;
+            }
+            return freed;
+        }
+
+        private bool IsFallen(string companionId)
+        {
+            var c = Roster.Get(companionId);
+            return c == null || c.IsDead;
+        }
+
         // ---- Продвижение времени ----
 
         /// <summary>
@@ -142,11 +174,13 @@ namespace Game.Core.Base
             CurrentCycle++;
             var report = new CycleReport { Cycle = CurrentCycle };
 
+            ReleaseFallen();
+
             foreach (var slot in _slots)
             {
                 if (!slot.Unlocked || !slot.IsOccupied) continue;
                 var companion = Roster.Get(slot.AssignedCompanionId);
-                if (companion == null || companion.Status == CompanionStatus.OnMission) continue;
+                if (companion == null || companion.IsDead || companion.Status == CompanionStatus.OnMission) continue;
 
                 var def = slot.Definition;
                 int output = ProductionCalculator.OutputPerCycle(companion, def, Balance);
@@ -233,7 +267,11 @@ namespace Game.Core.Base
 
         private void ApplyFoodUpkeep(CycleReport report)
         {
-            int upkeep = Balance.FoodUpkeepPerCompanion * Roster.Count;
+            // Едят живые: погибший в ростере остаётся (память, рябь), но не ест.
+            int living = 0;
+            foreach (var c in Roster.All)
+                if (!c.IsDead) living++;
+            int upkeep = Balance.FoodUpkeepPerCompanion * living;
             if (upkeep <= 0) { WasHungryLastCycle = false; return; }
             if (!Resources.TrySpend(ResourceType.Food, upkeep))
             {
