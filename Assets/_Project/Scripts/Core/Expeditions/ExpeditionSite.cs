@@ -44,6 +44,12 @@ namespace Game.Core.Expeditions
         public int BaseMaterials = 2;
         public int BaseGold = 10;
 
+        /// <summary>
+        /// Люди, которых отряд приводит на Хорошей или Лучшей полосе (Поправка
+        /// №6.3: «в вилазках можуть бути люди»). Ноль — на этой точке людей нет.
+        /// </summary>
+        public int PeopleOnGood;
+
         public ExpeditionSite() { }
 
         public ExpeditionSite(string id, string displayName)

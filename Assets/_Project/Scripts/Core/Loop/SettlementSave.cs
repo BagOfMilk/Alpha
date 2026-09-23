@@ -53,6 +53,11 @@ namespace Game.Core.Loop
               .Append(p.Tension.FractionForSave.ToString("R", CultureInfo.InvariantCulture)).Append('|')
               .Append(p.Tension.DaysInCurrentBand);
 
+            // Дробные остатки остальных драйверов (храм, укрепления): без них
+            // каждая загрузка незаметно округляла бы их вклад вниз.
+            string fractions = p.Tension.OtherFractionsForSave();
+            if (!string.IsNullOrEmpty(fractions)) sb.Append(';').Append("tfr=").Append(fractions);
+
             if (p.Population != null) Field(sb, "pop", p.Population.Count);
 
             // Страх общины: без него загрузка была бы бесплатным способом снять
@@ -83,6 +88,14 @@ namespace Game.Core.Loop
             {
                 string blob = repeats.CaptureState();
                 if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("rep=").Append(blob);
+            }
+
+            // Городские работы: без них загрузка отменяла бы стройку, за которую
+            // уже заплачено, и откат облавы — бесплатная облава за перезапуск.
+            if (p.CityState != null)
+            {
+                string city = p.CityState.CaptureState();
+                if (!string.IsNullOrEmpty(city)) sb.Append(';').Append("city=").Append(city);
             }
 
             // Ростер и партия в поле (Поправка №5.6 п. 4): без них продолжение
@@ -126,7 +139,9 @@ namespace Game.Core.Loop
                 else if (key == "patrol") p.IsPatrolling = ParseInt(value) != 0;
                 else if (key == "pop" && p.Population != null) p.Population.RestoreForSave(ParseInt(value));
                 else if (key == "fear" && p.Fear != null) p.Fear.RestoreForSave(ParseInt(value));
+                else if (key == "city" && p.CityState != null) p.CityState.RestoreState(value);
                 else if (key == "tension") RestoreTension(p, value);
+                else if (key == "tfr") p.Tension.RestoreOtherFractions(value);
                 else if (key == "trk") RestoreTrack(p, value);
                 else if (key == "sig") p.SignalMemory.RestoreState(value);
                 else if (key == "ros")

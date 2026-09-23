@@ -108,11 +108,13 @@ namespace Game.Gameplay
         /// <summary>Как выглядит город: достаток и упадок словами, а не числами.</summary>
         public static string MoodWords(MoodboardState mood)
         {
+            // Процветание в мудборде — это тир − 1 (Поправка №6.4): с тех пор
+            // как тир растёт, его имя и есть лучшее описание достатка.
             string prosperity;
-            if (mood.Prosperity >= 3) prosperity = "живёт в достатке";
-            else if (mood.Prosperity == 2) prosperity = "держится";
-            else if (mood.Prosperity == 1) prosperity = "перебивается";
-            else prosperity = "бедствует";
+            if (mood.Prosperity >= 3) prosperity = "городок";
+            else if (mood.Prosperity == 2) prosperity = "слобода";
+            else if (mood.Prosperity == 1) prosperity = "село";
+            else prosperity = "хутор";
 
             string decay;
             if (mood.Decay >= 3) decay = ", заколочен и замусорен";
@@ -162,6 +164,7 @@ namespace Game.Gameplay
             if (outcome.WasUnmanned) line += "; на посту никого не было";
             if (outcome.CausedFear) line += "; община напугана";
             if (outcome.PopulationLost > 0) line += "; люди уходят";
+            if (outcome.PeopleArrived > 0) line += "; с ними пришли ещё " + outcome.PeopleArrived;
             if (!string.IsNullOrEmpty(outcome.AffectedActorId)) line += " (" + outcome.AffectedActorId + ")";
 
             return line;
@@ -220,7 +223,66 @@ namespace Game.Gameplay
             if (request.TopicId.StartsWith("tension.ambient."))
                 return AmbientWords(request.TopicId);
 
+            // Что сделал город (Поправка №6): стройка, люди, тир, совет.
+            if (request.TopicId.StartsWith("city.") || request.TopicId.StartsWith("council."))
+                return CityWords(request);
+
             return "· " + request.TopicId;
+        }
+
+        private static string CityWords(SignalRequest request)
+        {
+            string topic = request.TopicId;
+            string reason = Tag(request, "reason:");
+            string count = Tag(request, "count:");
+
+            if (topic.StartsWith("city.built."))
+            {
+                var def = Game.Core.Base.DefaultBuildings.Get(topic.Substring("city.built.".Length));
+                return "Достроили: " + (def != null ? def.DisplayName : topic);
+            }
+
+            if (topic.StartsWith("city.tier."))
+            {
+                switch (topic.Substring("city.tier.".Length))
+                {
+                    case "2": return "Хутор стал селом";
+                    case "3": return "Село разрослось в слободу";
+                    case "4": return "Слобода стала городком";
+                }
+            }
+
+            if (topic == "city.people.arrived")
+            {
+                string who = reason == "council" ? "позвал совет"
+                    : reason == "expedition" ? "привёл отряд"
+                    : "пришли сами";
+                return "Пришли люди" + (count != null ? " (" + count + ")" : "") + ": " + who;
+            }
+
+            if (topic == "city.people.left")
+            {
+                string why = reason == "hunger" ? "голодно"
+                    : reason == "fear" ? "боятся"
+                    : "не держит здесь ничего";
+                return "Ушли люди" + (count != null ? " (" + count + ")" : "") + ": " + why;
+            }
+
+            if (topic.StartsWith("city.crowd."))
+                return Tag(request, "dir:") == "down" ? "Улицы пустеют" : "Людей на улицах стало больше";
+
+            if (topic == "council.raid") return "Облава: стража прошла по дворам";
+
+            return "· " + topic;
+        }
+
+        private static string Tag(SignalRequest request, string prefix)
+        {
+            var tags = request.Tags;
+            if (tags == null) return null;
+            for (int i = 0; i < tags.Length; i++)
+                if (tags[i] != null && tags[i].StartsWith(prefix)) return tags[i].Substring(prefix.Length);
+            return null;
         }
 
         private static string TopicWords(string topicId)

@@ -66,6 +66,13 @@ namespace Game.Core.World
         public CrisisBite Bite = CrisisBite.PopulationOutflow;
         public int PopulationLoss = 20;
 
+        /// <summary>
+        /// Сколько людей приходит в город, если разбор удался на Хорошую или
+        /// Лучшую полосу (Поправка №6.3: «прийти по івенту»). Ноль — событие
+        /// людей не приводит.
+        /// </summary>
+        public int ArrivalsOnGood;
+
         /// <summary>Есть ли у инцидента прописанный тихий путь.</summary>
         public bool HasQuietPath => !QuietPathSkill.IsNone;
 
@@ -87,6 +94,12 @@ namespace Game.Core.World
         public readonly int PopulationLost;
 
         /// <summary>
+        /// Сколько людей пришло в город по итогам разбора (Поправка №6.3:
+        /// «прийти по івенту»). Ноль у большинства событий.
+        /// </summary>
+        public readonly int PeopleArrived;
+
+        /// <summary>
         /// Разбор напугал общину: кровавый путь или провалившееся запугивание.
         /// Слой сигналов обязан это озвучить — страх не имеет права прийти молча.
         /// </summary>
@@ -94,9 +107,10 @@ namespace Game.Core.World
 
         public IncidentOutcome(string incidentId, string topicId, string domainTag, OutcomeBand band,
             bool wasUnmanned, bool wasCrisis, string affectedActorId, CrisisBite? bite, int populationLost,
-            bool causedFear = false)
+            bool causedFear = false, int peopleArrived = 0)
         {
             CausedFear = causedFear;
+            PeopleArrived = peopleArrived;
             IncidentId = incidentId;
             TopicId = topicId;
             DomainTag = domainTag;

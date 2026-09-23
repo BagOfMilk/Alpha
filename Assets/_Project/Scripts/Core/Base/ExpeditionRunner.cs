@@ -78,13 +78,18 @@ namespace Game.Core.Base
         /// требует Э6.2 и Приложение А. Второго входа нет, и его отсутствие
         /// проверяется тестом.
         /// </summary>
-        public static void Complete(BaseState state, ExpeditionResult result)
+        public static void Complete(BaseState state, ExpeditionResult result, CityWorks works = null)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (result == null) return;
 
             if (result.Materials > 0) state.Resources.Add(ResourceType.Materials, result.Materials);
             if (result.Gold > 0) state.Resources.Add(ResourceType.Gold, result.Gold);
+
+            // Найденные люди входят в город ближайшими сутками, а не сейчас:
+            // возврат отряда идёт между фазами, и прирост без сигнала был бы
+            // тихим изменением числа (Поправка №6.3).
+            if (works != null && result.People > 0) works.QueueArrivals(result.People);
 
             var wounded = new HashSet<string>();
             for (int i = 0; i < result.Wounded.Count; i++)

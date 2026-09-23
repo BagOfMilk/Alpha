@@ -16,7 +16,14 @@ namespace Game.Core.Pressure
     {
         private readonly TensionBalance _cfg;
         private readonly List<TensionChange> _dayLedger = new List<TensionChange>();
-        private double _fraction;
+        /// <summary>
+        /// Дробный остаток — СВОЙ у каждого драйвера. Общий остаток смешивал
+        /// вклады: дренаж храма −0.5 тонул в фоновом тике +1.0, суммарное
+        /// Напряжение выходило верным, но журнал записывал снижение тику, а
+        /// храму — ноль. Журнал драйверов — это ответ на вопрос «почему», и он
+        /// обязан отвечать правду.
+        /// </summary>
+        private readonly Dictionary<TensionDriver, double> _fractions = new Dictionary<TensionDriver, double>();
         private TensionBand _band;
 
         /// <summary>Сырое значение. НЕ показывать игроку ни при каких условиях.</summary>
@@ -31,8 +38,52 @@ namespace Game.Core.Pressure
         /// <summary>Журнал изменений за текущий день — для тестов и слоя сигналов.</summary>
         internal IReadOnlyList<TensionChange> DayLedger => _dayLedger;
 
-        /// <summary>Дробный остаток — часть состояния, без него сейв теряет доли очка.</summary>
-        internal double FractionForSave => _fraction;
+        /// <summary>Дробный остаток фонового тика — часть состояния, без него сейв теряет доли очка.</summary>
+        internal double FractionForSave => FractionOf(TensionDriver.CityTierTick);
+
+        internal double FractionOf(TensionDriver driver)
+        {
+            double f;
+            return _fractions.TryGetValue(driver, out f) ? f : 0.0;
+        }
+
+        /// <summary>
+        /// Остатки остальных драйверов — строкой «драйвер:остаток,…» по
+        /// возрастанию номера драйвера, чтобы слепок был детерминированным.
+        /// Остаток тика сюда не входит: он хранится отдельным полем.
+        /// </summary>
+        internal string OtherFractionsForSave()
+        {
+            var keys = new List<TensionDriver>(_fractions.Keys);
+            keys.Sort((a, b) => ((int)a).CompareTo((int)b));
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var k in keys)
+            {
+                if (k == TensionDriver.CityTierTick) continue;
+                double f = _fractions[k];
+                if (f == 0.0) continue;
+                if (sb.Length > 0) sb.Append(',');
+                sb.Append((int)k).Append(':').Append(f.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return sb.ToString();
+        }
+
+        internal void RestoreOtherFractions(string blob)
+        {
+            if (string.IsNullOrEmpty(blob)) return;
+            foreach (var item in blob.Split(','))
+            {
+                var f = item.Split(':');
+                if (f.Length < 2) continue;
+                int id; double v;
+                if (!int.TryParse(f[0], System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out id)) continue;
+                if (!double.TryParse(f[1], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out v)) continue;
+                _fractions[(TensionDriver)id] = v;
+            }
+        }
 
         /// <summary>
         /// Восстановление из слепка. Полоса не хранится, а пересчитывается из
@@ -42,7 +93,8 @@ namespace Game.Core.Pressure
         internal void RestoreForSave(int value, double fraction, int daysInBand)
         {
             Value = Clamp(value);
-            _fraction = fraction;
+            _fractions.Clear();
+            if (fraction != 0.0) _fractions[TensionDriver.CityTierTick] = fraction;
             _band = _cfg.BandFor(Value);
             DaysInCurrentBand = daysInBand < 0 ? 0 : daysInBand;
             _dayLedger.Clear();
@@ -77,9 +129,9 @@ namespace Game.Core.Pressure
             if (!_cfg.IsAllowed(driver, delta))
                 return Record(new TensionChange(driver, (int)Math.Round(delta), 0, from, from, true, sourceId));
 
-            _fraction += delta;
-            int whole = (int)_fraction;
-            _fraction -= whole;
+            double fraction = FractionOf(driver) + delta;
+            int whole = (int)fraction;
+            _fractions[driver] = fraction - whole;
 
             int applied = whole != 0 ? Commit(whole) : 0;
             return Record(new TensionChange(driver, whole, applied, from, _band, false, sourceId));

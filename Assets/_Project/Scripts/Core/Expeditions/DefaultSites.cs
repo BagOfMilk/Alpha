@@ -34,7 +34,9 @@ namespace Game.Core.Expeditions
                 QuietDays = 6, ForcefulDays = 3,
                 QuietSkill = SkillKeys.Mechanics, ForcefulSkill = SkillKeys.Ranged,
                 Threshold = 5,
-                BaseMaterials = 4, BaseGold = 6
+                BaseMaterials = 4, BaseGold = 6,
+                // На этой точке живут уцелевшие: на хорошей полосе отряд приводит их домой.
+                PeopleOnGood = 4
             };
         }
 

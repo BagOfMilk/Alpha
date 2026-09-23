@@ -67,7 +67,8 @@ namespace Game.Tests.EditMode
         {
             // Игрок никогда не видит «достаток 3»: он видит город.
             Assert.AreNotEqual(VillageView.MoodWords(Mood(0, 0)), VillageView.MoodWords(Mood(4, 0)));
-            StringAssert.Contains("бедствует", VillageView.MoodWords(Mood(0, 0)));
+            StringAssert.Contains("хутор", VillageView.MoodWords(Mood(0, 0)));
+            StringAssert.Contains("село", VillageView.MoodWords(Mood(1, 0)));
             StringAssert.Contains("заколочен", VillageView.MoodWords(Mood(2, 4)));
             foreach (char c in VillageView.MoodWords(Mood(3, 2)))
                 Assert.IsFalse(char.IsDigit(c), "В описании города не должно быть цифр");
@@ -147,6 +148,24 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, lines.Count);
             StringAssert.Contains("нечто.неизвестное", lines[0],
                 "Ключ без реплики обязан быть виден, иначе пропажа текста молчит");
+        }
+
+        [Test]
+        public void CityEvents_AreSpokenNotKeys()
+        {
+            var built = Signal(SignalChannel.CitizenLine, "city.built.temple", "building:temple");
+            var tier = Signal(SignalChannel.CitizenLine, "city.tier.2", "tier:2");
+            var left = Signal(SignalChannel.CitizenLine, "city.people.left", "reason:hunger", "count:2");
+            var came = Signal(SignalChannel.CitizenLine, "city.people.arrived", "reason:expedition", "count:4");
+
+            var lines = VillageView.Lines(Report(DayPhase.Day, null, new[] { built, tier, left, came }));
+
+            StringAssert.Contains("Храм", lines[0], "Здание называется по имени, а не ключом");
+            StringAssert.Contains("селом", lines[1], "Смена тира — словами дуги: хутор, село, слобода, городок");
+            StringAssert.Contains("голодно", lines[2], "Уход людей называет причину");
+            StringAssert.Contains("отряд", lines[3], "Пришедшие — откуда пришли");
+            foreach (var line in lines)
+                StringAssert.DoesNotContain("city.", line, "Ни одного сырого ключа в ленте");
         }
 
         [Test]

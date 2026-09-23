@@ -43,11 +43,23 @@ namespace Game.Core.Signals
             IReadOnlyList<PostReport> postReports,
             bool isNight,
             SignalMemory memory = null,
-            int day = 0)
+            int day = 0,
+            IReadOnlyList<CityEvent> cityEvents = null)
         {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
 
             var candidates = new List<SignalRequest>();
+
+            // Что сделал город: стройка, люди, тир (Поправка №6). Горожане
+            // говорят об этом сами — это их улицы и их соседи.
+            if (cityEvents != null)
+                for (int i = 0; i < cityEvents.Count; i++)
+                {
+                    var e = cityEvents[i];
+                    candidates.Add(new SignalRequest(
+                        SignalChannel.CitizenLine, e.TopicId, e.Urgency,
+                        isDelta: true, tags: e.Tags));
+                }
 
             // Предвестники: чем выше ступень, тем громче. Уровень 2 обязан
             // назвать домен, уровень 3 — близость. Точный день — никогда.
@@ -88,6 +100,7 @@ namespace Game.Core.Signals
                     // бюджет внимания один, и тратить два слота на одно событие
                     // значит глушить что-то другое (правило 2 слоя сигналов).
                     if (inc.CausedFear) tags.Add("fear");
+                    if (inc.PeopleArrived > 0) tags.Add("arrived:" + inc.PeopleArrived);
 
                     candidates.Add(new SignalRequest(
                         SignalChannel.CompanionLine,

@@ -83,6 +83,8 @@ namespace Game.Core.World
                 QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 7,
                 BloodyPathSkill = SkillKeys.Melee, BloodyPathThreshold = 6,
                 RelevantPositionId = "scouting_post",
+                // Нашли — и не одного: с пропавшим приходят те, кто прибился в пути.
+                ArrivalsOnGood = 3,
                 TensionByBand = new[] { 40, 15, -10, -25 }
             };
 

@@ -20,9 +20,9 @@ namespace Game.Core.Loop
     public static class DayStepOrder
     {
         public const int Clock = 0;
-        public const int Construction = 100;   // [ПОЗЖЕ] Э3
+        public const int Construction = 100;   // городские работы: совет, стройка, храм (Поправка №6)
         public const int Production = 200;
-        public const int Population = 300;     // [ПОЗЖЕ] Э3
+        public const int Population = 300;     // люди приходят и уходят, тир (Поправка №6)
         public const int Derived = 400;        // [ПОЗЖЕ] Э3
         public const int Hunger = 450;         // голодный день давит до тика Напряжения
         public const int Tension = 500;

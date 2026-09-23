@@ -104,6 +104,7 @@ namespace Game.Core.Expeditions
                 Days = preview.Days,
                 Materials = preview.Materials,
                 Gold = preview.Gold,
+                People = preview.Band >= OutcomeBand.Good ? site.PeopleOnGood : 0,
             };
 
             if (party != null)

@@ -67,8 +67,11 @@ namespace Game.Gameplay.EditorTools
             // Жители на постах — масштаб человека рядом с домами.
             var villagers = Villagers(posts);
 
+            // Участки под здания, которых у хутора ещё нет.
+            var plots = Plots();
+
             // Сутки идут прямо в сцене: свет, жители и лента событий.
-            Life(posts, villagers);
+            Life(posts, villagers, plots);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -139,6 +142,13 @@ namespace Game.Gameplay.EditorTools
             Directory.CreateDirectory(Path.GetDirectoryName(shotPath));
             File.WriteAllBytes(shotPath, shot.EncodeToPNG());
             Debug.Log("Снимок: " + Path.GetFullPath(shotPath));
+
+            // Каждый кадр — текстура 1920×1080 с восьмикратным сглаживанием.
+            // Без освобождения плёнка на шестьдесят фаз съедала всю память и
+            // роняла редактор на тридцатом кадре («System out of memory»).
+            rt.Release();
+            Object.DestroyImmediate(rt);
+            Object.DestroyImmediate(shot);
         }
 
         /// <summary>
@@ -215,7 +225,7 @@ namespace Game.Gameplay.EditorTools
             // Сорок фаз — это двадцать суток. Короче нельзя: харнес показал, что
             // первое происшествие приходит примерно на девятые сутки, и плёнка
             // на пять дней показала бы «ничего не происходит» как приговор.
-            const int phases = 40;
+            const int phases = 60;
             for (int i = 0; i < phases; i++)
             {
                 var report = life.AdvancePhase();
@@ -236,11 +246,11 @@ namespace Game.Gameplay.EditorTools
         /// Хата из модулей: стены по периметру, дверь по фасаду, окна по бокам,
         /// двускатная крыша сверху. Размеры считаются из габаритов самой стены.
         /// </summary>
-        private static void House(Vector3 origin, int width, int depth, bool wood, float facing)
+        private static GameObject House(Vector3 origin, int width, int depth, bool wood, float facing)
         {
             string prefix = wood ? "wall-wood" : "wall";
             var wall = Load(Town + prefix + ".fbx");
-            if (wall == null) return;
+            if (wall == null) return null;
 
             var size = MeasureSize(wall);
             float step = Mathf.Max(size.x, 0.1f);
@@ -284,6 +294,62 @@ namespace Game.Gameplay.EditorTools
             }
             Attach(house, gableEnd, new Vector3(0f, height, depth * step * 0.5f), 270f);
             Attach(house, gableEnd, new Vector3((width - 1) * step, height, depth * step * 0.5f), 90f);
+            return house;
+        }
+
+        /// <summary>
+        /// Участки под здания US-7.1, которых у хутора ещё нет. Здание готово
+        /// заранее, но спрятано: компонент жизни поднимает его пятью стадиями
+        /// по мере стройки (US-7.3) и подписывает, когда оно достроено.
+        /// Имя «plot:&lt;id&gt;» — связь с каталогом зданий ядра.
+        /// </summary>
+        private static GameObject Plots()
+        {
+            var root = new GameObject("Стройка");
+
+            Plot(root, Game.Core.Base.DefaultBuildings.Infirmary, new Vector3(6.0f, 0f, 4.2f), 2, 2, true);
+            Plot(root, Game.Core.Base.DefaultBuildings.Workshop, new Vector3(7.0f, 0f, -6.0f), 2, 2, true);
+            Plot(root, Game.Core.Base.DefaultBuildings.Market, new Vector3(-1.0f, 0f, -2.2f), 3, 2, true);
+            Plot(root, Game.Core.Base.DefaultBuildings.Tavern, new Vector3(-8.6f, 0f, -3.4f), 3, 3, true);
+            Plot(root, Game.Core.Base.DefaultBuildings.Temple, new Vector3(-3.4f, 0f, 5.2f), 3, 3, false);
+            Plot(root, Game.Core.Base.DefaultBuildings.Fortifications, new Vector3(-9.6f, 0f, 5.6f), 2, 2, false);
+            Plot(root, Game.Core.Base.DefaultBuildings.Armory, new Vector3(9.6f, 0f, 4.6f), 2, 2, false);
+
+            return root;
+        }
+
+        private static void Plot(GameObject root, string buildingId, Vector3 at, int width, int depth, bool wood)
+        {
+            var plot = new GameObject("plot:" + buildingId);
+            plot.transform.SetParent(root.transform, false);
+            plot.transform.localPosition = at;
+
+            var model = House(Vector3.zero, width, depth, wood, 0f);
+            if (model != null)
+            {
+                model.name = "model";
+                model.transform.SetParent(plot.transform, false);
+                model.transform.localPosition = Vector3.zero;
+                model.SetActive(false);
+            }
+
+            // Подпись над зданием смотрит в камеру: изометрия не вращается.
+            var def = Game.Core.Base.DefaultBuildings.Get(buildingId);
+            var label = new GameObject("label");
+            label.transform.SetParent(plot.transform, false);
+            label.transform.localPosition = new Vector3(width * 0.5f, 3.2f, depth * 0.5f);
+            label.transform.rotation = Quaternion.Euler(30f, 45f, 0f);
+
+            var text = label.AddComponent<TextMesh>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = 48;
+            text.characterSize = 0.08f;
+            text.anchor = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.text = def != null ? def.DisplayName : buildingId;
+            var renderer = label.GetComponent<MeshRenderer>();
+            if (renderer != null && text.font != null) renderer.sharedMaterial = text.font.material;
+            label.SetActive(false);
         }
 
         /// <summary>Частокол вокруг села: колья по периметру с воротами со стороны дороги.</summary>
@@ -427,7 +493,7 @@ namespace Game.Gameplay.EditorTools
         /// Компонент, который крутит сутки, плюс экранный текст: строка
         /// состояния сверху и лента событий под ней.
         /// </summary>
-        private static void Life(GameObject posts, GameObject villagers)
+        private static void Life(GameObject posts, GameObject villagers, GameObject plots)
         {
             var cameraGo = Object.FindFirstObjectByType<Camera>();
             var sunLight = Object.FindFirstObjectByType<Light>();
@@ -437,6 +503,7 @@ namespace Game.Gameplay.EditorTools
             life.view = cameraGo;
             life.postsRoot = posts.transform;
             life.villagersRoot = villagers.transform;
+            life.plotsRoot = plots.transform;
 
             if (cameraGo != null)
             {

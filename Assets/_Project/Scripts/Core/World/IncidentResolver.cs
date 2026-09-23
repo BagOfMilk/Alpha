@@ -69,8 +69,18 @@ namespace Game.Core.World
 
             if (!incident.IsCrisis)
             {
+                // Хороший разбор может привести людей: нашли пропавшего — а с
+                // ним и тех, кто прибился по дороге. Плохой разбор не приводит
+                // никого: слух о городе, где не справляются, отпугивает.
+                int arrived = 0;
+                if (check.Band >= OutcomeBand.Good && incident.ArrivalsOnGood > 0 && population != null)
+                {
+                    population.Add(incident.ArrivalsOnGood);
+                    arrived = incident.ArrivalsOnGood;
+                }
+
                 return new IncidentOutcome(incident.Id, incident.TopicId, incident.DomainTag,
-                    check.Band, check.WasUnmanned, false, null, null, 0, scared);
+                    check.Band, check.WasUnmanned, false, null, null, 0, scared, arrived);
             }
 
             return ResolveCrisis(incident, check, casualties, population, scared);

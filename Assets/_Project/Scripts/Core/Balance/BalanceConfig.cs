@@ -126,5 +126,8 @@ namespace Game.Core.Balance
 
         /// <summary>Накопители давления вместо броска кубика.</summary>
         public PulseBalance Pulse = new PulseBalance();
+
+        /// <summary>Как город отвечает игроку: люди, совет, тиры (Поправка №6).</summary>
+        public CityBalance City = new CityBalance();
     }
 }

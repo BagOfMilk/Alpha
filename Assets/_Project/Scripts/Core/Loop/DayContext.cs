@@ -60,6 +60,18 @@ namespace Game.Core.Loop
         /// <summary>Что произошло за фазу. Публично: это уже случилось.</summary>
         internal List<IncidentOutcome> IncidentOutcomes { get; } = new List<IncidentOutcome>();
 
+        /// <summary>
+        /// Что город сделал за сутки: достроил, принял людей, потерял их, вырос.
+        /// Наружу уходит только через слой сигналов (Поправка №6).
+        /// </summary>
+        internal List<CityEvent> CityEvents { get; } = new List<CityEvent>();
+
+        /// <summary>
+        /// Тир, до которого город дорос сегодня (0 — не дорос). Сам тир суток
+        /// неизменен до конца фазы; процессор применит новый по её завершении.
+        /// </summary>
+        internal int RaiseTierTo { get; set; }
+
         /// <summary>Заполняется шагом Signals; уходит наружу в отчёте.</summary>
         internal SignalDigest Signals { get; set; }
 

@@ -17,14 +17,17 @@ namespace Game.Core.Loop
             ctx.Signals = SignalComposer.Compose(
                 ctx.Tension.Band,
                 ctx.Tension.DayLedger,
-                ctx.Tier,
+                // Тир, выросший сегодня, виден сегодня же: сигнал «хутор стал
+                // селом» и облик села приходят одним отчётом, а не с отставанием.
+                System.Math.Max(ctx.Tier, ctx.RaiseTierTo),
                 ctx.Balance.Signals,
                 ctx.Forewarnings,
                 ctx.IncidentOutcomes,
                 BuildPostReports(ctx),
                 ctx.IsNight,
                 ctx.SignalMemory,
-                ctx.Day);
+                ctx.Day,
+                ctx.CityEvents);
         }
 
         /// <summary>

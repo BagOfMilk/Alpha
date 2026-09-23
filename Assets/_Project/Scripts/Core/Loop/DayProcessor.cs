@@ -48,6 +48,12 @@ namespace Game.Core.Loop
         public WorldPulse Pulse { get; set; }
         public IncidentTable Incidents { get; set; }
         public IRepeatTracker Repeats { get; set; }
+
+        /// <summary>
+        /// Городские работы (стройка, совет, пришлые) для слепка. Порт, а не
+        /// ссылка: процессор не знает, что за ним модуль базы и экономика.
+        /// </summary>
+        public IStateBlob CityState { get; set; }
         public ICasualtySink Casualties { get; set; }
         public IReadOnlyList<PostDomain> PostDomains { get; set; }
 
@@ -206,6 +212,11 @@ namespace Game.Core.Loop
         private DayReport Finish(DayContext ctx)
         {
             RunSteps(ctx, DayStepOrder.PlayerResolution, int.MaxValue);
+
+            // Город дорос до нового тира (Поправка №6.4). Меняется после фазы:
+            // внутри суток тир — константа, иначе тик Напряжения и таблица
+            // событий считались бы по разным тирам в одной фазе.
+            if (ctx.RaiseTierTo > Tier) Tier = ctx.RaiseTierTo;
 
             if (ctx.Phase == DayPhase.Day) _tension.OnDayAdvanced();
             return BuildReport(ctx);

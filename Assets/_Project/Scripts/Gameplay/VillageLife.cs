@@ -39,11 +39,22 @@ namespace Game.Gameplay
         public bool patrolAtNight;
         [Range(1, 4)] public int tier = 1;
 
+        [Header("Хозяйство (Поправка №6)")]
+        [Tooltip("Рачительный хозяин сам строит, зовёт облаву и принимает людей.\n" +
+                 "Выключи — и увидишь, как город живёт без заботы.")]
+        public bool autoSteward = true;
+        [Min(0)] public int startGold = 150;
+        [Tooltip("Материалы город не производит: стартовый запас — то, что община\n" +
+                 "принесла с собой. Дальше — только вылазки.")]
+        [Min(0)] public int startMaterials = 14;
+        [Min(0)] public int startFood = 120;
+
         [Header("Сцена")]
         public Light sun;
         public Camera view;
         public Transform postsRoot;
         public Transform villagersRoot;
+        public Transform plotsRoot;
         public TextMesh headline;
         public TextMesh log;
 
@@ -51,6 +62,9 @@ namespace Game.Gameplay
         [Min(1)] public int logLines = 9;
 
         private SettlementCycle _cycle;
+        private CityWorks _works;
+        private readonly Steward _steward = new Steward();
+        private BalanceConfig _balance;
         private BaseState _base;
         private Roster _roster;
         private DayPhase _next = DayPhase.Day;
@@ -61,6 +75,7 @@ namespace Game.Gameplay
         /// <summary>Посты по идентификатору: якоря в сцене, к ним привязаны жители и метки.</summary>
         private readonly Dictionary<string, Transform> _posts = new Dictionary<string, Transform>();
         private readonly Dictionary<string, Transform> _villagers = new Dictionary<string, Transform>();
+        private readonly Dictionary<string, Transform> _plots = new Dictionary<string, Transform>();
 
         public DayReport Last { get; private set; }
 
@@ -89,12 +104,22 @@ namespace Game.Gameplay
             BindScene();
 
             var balance = new BalanceConfig();
+            _balance = balance;
 
             _roster = BuildRoster();
             _base = new BaseState(_roster, new Game.Core.Economy.ResourceLedger(), balance);
 
             foreach (var slot in DefaultContent.AllSlots())
                 _base.AddSlot(slot);
+
+            // Хутор встречает с тем, что у общины уже есть; остальное строится,
+            // и пост без своего здания закрыт (Поправка №6.1).
+            _works = new CityWorks(DefaultBuildings.StartingSet);
+            _works.ApplyToSlots(_base);
+
+            _base.Resources.Add(Game.Core.Economy.ResourceType.Gold, startGold);
+            _base.Resources.Add(Game.Core.Economy.ResourceType.Materials, startMaterials);
+            _base.Resources.Add(Game.Core.Economy.ResourceType.Food, startFood);
 
             // Людей меньше, чем постов — так и задумано (Поправка №5.1):
             // расстановка становится решением, а не формальностью.
@@ -107,9 +132,14 @@ namespace Game.Gameplay
             foreach (var source in DefaultPressureSources.All()) pulse.AddSource(source);
 
             var production = new ProductionStep(_base);
-            var processor = new DayProcessor(new TensionState(balance.Tension), balance,
-                SettlementCycle.BuildSteps(production))
+            var steps = new List<IDayStep>(SettlementCycle.BuildSteps(production))
             {
+                new CityWorksStep(_works, _base),
+                new PopulationStep(_works)
+            };
+            var processor = new DayProcessor(new TensionState(balance.Tension), balance, steps)
+            {
+                CityState = _works,
                 Tier = tier,
                 Roster = adapter,
                 Casualties = adapter,
@@ -132,7 +162,7 @@ namespace Game.Gameplay
             _timer = 0f;
             _lines.Clear();
 
-            Say("Село просыпается. " + _roster.All.Count + " человек, постов больше, чем рук.");
+            Say("Хутор просыпается. " + _roster.All.Count + " человек, и не всё ещё построено.");
             Apply(null, DayPhase.Day);
         }
 
@@ -142,6 +172,11 @@ namespace Game.Gameplay
             if (_cycle == null) Initialize();
 
             var phase = _next;
+
+            // Хозяин решает перед днём: ночью стройка и совет не работают.
+            if (autoSteward && phase == DayPhase.Day)
+                SayOrders(_steward.Act(_works, _base, _cycle.Processor, _balance));
+
             var report = _cycle.AdvanceDay(phase);
             _next = phase == DayPhase.Day ? DayPhase.Night : DayPhase.Day;
 
@@ -159,7 +194,7 @@ namespace Game.Gameplay
         {
             var mood = report != null && report.Signals != null
                 ? report.Signals.Moodboard
-                : new Game.Core.Signals.MoodboardState(2, 0, null);
+                : new Game.Core.Signals.MoodboardState(0, 0, null);   // до первых суток — хутор
 
             var sunPose = VillageView.SunFor(phase);
             if (sun != null)
@@ -183,6 +218,7 @@ namespace Game.Gameplay
 
             ShowVillagers(phase);
             ShowMarks(report);
+            ShowPlots();
 
             if (headline != null)
                 headline.text = report != null
@@ -205,20 +241,49 @@ namespace Game.Gameplay
                 var villager = pair.Value;
                 if (villager == null) continue;
 
-                bool alive = _roster == null || !IsDead(pair.Key);
-                villager.gameObject.SetActive(alive && outside);
+                villager.gameObject.SetActive(outside && Staffed(pair.Key));
             }
         }
 
-        private bool IsDead(string postId)
+        /// <summary>
+        /// Фигура стоит на посту, только если там правда кто-то есть: пост
+        /// открыт, занят и занявший жив. Пустой лазарет выглядит пустым.
+        /// </summary>
+        private bool Staffed(string postId)
         {
-            foreach (var pair in PostByVillager)
-                if (pair.Value == postId)
+            if (_base == null) return true;
+
+            var slot = _base.GetSlot(postId);
+            if (slot == null || !slot.Unlocked || !slot.IsOccupied) return false;
+
+            var companion = _roster.Get(slot.AssignedCompanionId);
+            return companion != null && !companion.IsDead;
+        }
+
+        /// <summary>
+        /// Стройка видна глазами: пять стадий (US-7.3). Леса растут снизу вверх,
+        /// готовое здание встаёт в полный рост и получает подпись. Стадия —
+        /// чистая функция прошедших суток из ядра, отдельного геймплея нет.
+        /// </summary>
+        private void ShowPlots()
+        {
+            if (_works == null) return;
+
+            foreach (var pair in _plots)
+            {
+                int stage = _works.StageOf(pair.Key);
+                var model = pair.Value.Find("model");
+                var label = pair.Value.Find("label");
+
+                if (model != null)
                 {
-                    var companion = _roster.Get(pair.Key);
-                    return companion == null || companion.IsDead;
+                    model.gameObject.SetActive(stage > 0);
+                    float height = stage >= 5 ? 1f : Mathf.Max(0.15f, stage / 5f);
+                    model.localScale = new Vector3(1f, height, 1f);
                 }
-            return false;
+
+                if (label != null) label.gameObject.SetActive(stage >= 5);
+            }
         }
 
         /// <summary>Метка над местом происшествия: цвет — полоса исхода.</summary>
@@ -290,6 +355,31 @@ namespace Game.Gameplay
             return _posts.TryGetValue(postId, out anchor);
         }
 
+        /// <summary>Что заказал хозяин — словами, чтобы в ленте было видно, почему город меняется.</summary>
+        private void SayOrders(string did)
+        {
+            if (string.IsNullOrEmpty(did)) return;
+
+            foreach (var part in did.Split(' '))
+            {
+                if (part.StartsWith("build:"))
+                {
+                    var def = DefaultBuildings.Get(part.Substring(6));
+                    Say("Заложили: " + (def != null ? def.DisplayName : part));
+                }
+                else if (part.StartsWith("staff:"))
+                {
+                    var pair = part.Substring(6).Split('@');
+                    var who = pair.Length == 2 ? _roster.Get(pair[0]) : null;
+                    var slot = pair.Length == 2 ? _base.GetSlot(pair[1]) : null;
+                    if (who != null && slot != null)
+                        Say(who.DisplayName + " встал на пост: " + slot.Definition.DisplayName);
+                }
+                else if (part == "raid") Say("Совет позвал облаву");
+                else if (part == "settlers") Say("Совет принимает переселенцев");
+            }
+        }
+
         private void Say(string line)
         {
             if (string.IsNullOrEmpty(line)) return;
@@ -318,6 +408,12 @@ namespace Game.Gameplay
                 foreach (Transform child in villagersRoot)
                     if (child.name.StartsWith("villager:"))
                         _villagers[child.name.Substring(9)] = child;
+
+            _plots.Clear();
+            if (plotsRoot != null)
+                foreach (Transform child in plotsRoot)
+                    if (child.name.StartsWith("plot:"))
+                        _plots[child.name.Substring(5)] = child;
         }
 
         /// <summary>

@@ -50,6 +50,9 @@ namespace Game.Core.Expeditions
         public int Materials;
         public int Gold;
 
+        /// <summary>Люди, найденные на точке. Приходят в город через городские работы.</summary>
+        public int People;
+
         public List<ExpeditionWound> Wounded = new List<ExpeditionWound>();
 
         /// <summary>Кто ходил — в том же порядке, в каком их отправили.</summary>
