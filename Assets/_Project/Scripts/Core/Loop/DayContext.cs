@@ -90,11 +90,14 @@ namespace Game.Core.Loop
         /// <summary>
         /// Очередь решений этой фазы (аудит П10): если в фазе сработало несколько
         /// инцидентов, каждый становится СВОИМ решением по очереди, а не тихо
-        /// разбирается за игрока после первого. IncidentStep кладёт сюда все
-        /// предложения фазы; DayProcessor вынимает их по одному в Pending, пока
-        /// очередь не опустеет.
+        /// разбирается за игрока после первого. IncidentStep кладёт сюда сами
+        /// СОБЫТИЯ фазы (не готовые предложения); DayProcessor строит
+        /// PendingDecision ЛЕНИВО, в момент выемки следующего элемента — иначе
+        /// предложение для второго и далее инцидента строилось бы по состоянию
+        /// Fear/Repeats ДО того, как разрешился первый, и показанный порог
+        /// разошёлся бы с применённым (инвариант 8, регрессия из ревью А1).
         /// </summary>
-        internal Queue<PendingItem> PendingQueue { get; } = new Queue<PendingItem>();
+        internal Queue<IncidentDefinition> PendingQueue { get; } = new Queue<IncidentDefinition>();
 
         /// <summary>
         /// Внешняя очередь Напряжения (R6): что накопил DayProcessor.QueueExternal
@@ -158,19 +161,6 @@ namespace Game.Core.Loop
     {
         int Order { get; }
         void Execute(DayContext ctx);
-    }
-
-    /// <summary>Одно решение фазы, ждущее очереди (см. DayContext.PendingQueue).</summary>
-    internal struct PendingItem
-    {
-        internal readonly PendingDecision Offer;
-        internal readonly IncidentDefinition Incident;
-
-        internal PendingItem(PendingDecision offer, IncidentDefinition incident)
-        {
-            Offer = offer;
-            Incident = incident;
-        }
     }
 
     /// <summary>Одна запись внешней очереди Напряжения (DayProcessor.QueueExternal).</summary>

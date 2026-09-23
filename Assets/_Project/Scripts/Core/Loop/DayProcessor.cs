@@ -162,9 +162,21 @@ namespace Game.Core.Loop
         /// Слепок городского слоя одной строкой. Отдаётся наружу непрозрачным:
         /// сборка Game.Gameplay кладёт его в систему сохранений, но прочитать
         /// оттуда скрытые числа случайно не может (см. SettlementSave).
+        ///
+        /// Слепок НЕ несёт очередь решений фазы (<see cref="AwaitsDecision"/>):
+        /// сохранение посреди открытого решения молча потеряло бы все ещё не
+        /// разобранные инциденты этой фазы при восстановлении (найдено ревью А1).
+        /// Сегодняшние вызывающие (Alpha.Play/Alpha.Sim) всегда дренируют очередь
+        /// до конца перед сохранением; когда появится сохранение из любого места
+        /// экрана (GameSession), эта проверка обязана либо уйти, либо очередь
+        /// обязана попасть в блоб — что раньше.
         /// </summary>
         public string SaveState()
         {
+            if (AwaitsDecision)
+                throw new InvalidOperationException(
+                    "Нельзя сохранять посреди решения фазы: сначала ResolvePending " +
+                    "до конца очереди (AwaitsDecision должен стать false).");
             return SettlementSave.Capture(this);
         }
 
@@ -250,13 +262,20 @@ namespace Game.Core.Loop
             return Finish(ctx);
         }
 
-        /// <summary>Следующее решение очереди фазы — в Pending. false, если очередь пуста.</summary>
+        /// <summary>
+        /// Следующее решение очереди фазы — в Pending. false, если очередь пуста.
+        ///
+        /// Предложение строится ЗДЕСЬ, а не заранее в IncidentStep: только так
+        /// оно читает Fear/Repeats в том состоянии, в каком они окажутся к
+        /// моменту показа — включая эффект уже разрешённых решений этой же
+        /// фазы (регрессия из ревью А1, см. комментарий в IncidentStep.Execute).
+        /// </summary>
         private static bool TryDequeueNextPending(DayContext ctx)
         {
             if (ctx.PendingQueue.Count == 0) return false;
-            var item = ctx.PendingQueue.Dequeue();
-            ctx.Pending = item.Offer;
-            ctx.PendingIncident = item.Incident;
+            var incident = ctx.PendingQueue.Dequeue();
+            ctx.PendingIncident = incident;
+            ctx.Pending = IncidentStep.BuildOffer(ctx, incident);
             return true;
         }
 

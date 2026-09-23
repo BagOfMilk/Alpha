@@ -244,6 +244,102 @@ namespace Game.Tests.EditMode
                 "Оба инцидента фазы обязаны попасть в итоговый отчёт");
         }
 
+        /// <summary>
+        /// Ревью А1 (major): офферы фазы раньше строились ОДНИМ проходом, весь
+        /// сразу, до первого хода игрока (IncidentStep.Execute). Если первый
+        /// инцидент фазы разбирался кровавым путём — страх общины армируется на
+        /// ТЕКУЩИЕ сутки, — а второй инцидент фазы шёл тихим СОЦИАЛЬНЫМ подходом
+        /// (Persuade/Trade), его показанный порог считался по состоянию Fear ДО
+        /// разрешения первого, а применялся — ПОСЛЕ. Показанное и применённое
+        /// расходились: прямое нарушение инварианта 8 («порог, который видит
+        /// игрок, обязан быть тем же, что применится»). Воспроизводимо в обычной
+        /// игре — MaxFiresPerNight/Day=2 по умолчанию.
+        ///
+        /// Чинится тем, что PendingDecision строится ЛЕНИВО, в момент выемки
+        /// следующего элемента очереди (DayProcessor.TryDequeueNextPending), а
+        /// не заранее в IncidentStep.Execute — см. IncidentStep.BuildOffer.
+        /// </summary>
+        [Test]
+        public void Decision_SecondQueuedIncident_ShownThresholdMatchesWhatResolves_AfterFirstArmsFear()
+        {
+            var cfg = new BalanceConfig();
+            cfg.Pulse.MaxFiresPerDay = 2;
+
+            var bloody = new IncidentDefinition
+            {
+                Id = "test_bloody", TopicId = "test.bloody", SourceId = "test.bloody", DomainTag = "тест",
+                MinBand = TensionBand.Calm, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 10,
+                QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 5,
+                BloodyPathSkill = SkillKeys.Tactics, BloodyPathThreshold = 4,
+                RelevantPositionId = Positions[0]
+            };
+            // Тихий путь — СОЦИАЛЬНЫЙ подход: именно такие пороги растут от
+            // страха общины (IncidentResolver.IsSocial: Persuade/Trade).
+            var social = new IncidentDefinition
+            {
+                Id = "test_social", TopicId = "test.social", SourceId = "test.social", DomainTag = "тест",
+                MinBand = TensionBand.Calm, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 10,
+                QuietPathSkill = SkillKeys.Persuade, QuietPathThreshold = 5,
+                QuietPathApproach = ApproachForm.Persuade,
+                RelevantPositionId = Positions[1]
+            };
+
+            var table = new IncidentTable();
+            table.Add(bloody);
+            table.Add(social);
+
+            var roster = new Roster();
+            for (int i = 0; i < Positions.Length; i++)
+                roster.Add(Make("actor" + i, 7, Positions[i]));
+            var adapter = new RosterAdapter(roster);
+
+            var pulse = new WorldPulse(cfg.Pulse);
+            // Порядок отбора при равном заполнении решает Id по возрастанию
+            // (WorldPulse.Advance) — "test.bloody" < "test.social", кровавый
+            // инцидент гарантированно встаёт в очередь первым.
+            pulse.AddSource(new OpeningContent.ScriptedSource("test.bloody", "тест", 1));
+            pulse.AddSource(new OpeningContent.ScriptedSource("test.social", "тест", 1));
+
+            var p = new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
+            {
+                Tier = 1,
+                Roster = adapter,
+                Casualties = adapter,
+                Population = new PopulationState(),
+                Pulse = pulse,
+                Incidents = table,
+                Repeats = new RepeatTracker(),
+                RequirePlayerDecision = true
+            };
+
+            var report1 = p.Advance(DayPhase.Day);
+            Assert.IsTrue(report1.AwaitsDecision);
+            Assert.AreEqual("test_bloody", report1.Pending.IncidentId,
+                "Кровавый инцидент обязан встать в очередь первым (см. комментарий выше про порядок отбора)");
+
+            var report2 = p.ResolvePending(IncidentPath.Bloody);
+            Assert.IsTrue(report2.AwaitsDecision, "Второй инцидент фазы обязан стать отдельным решением (П10)");
+            Assert.AreEqual("test_social", report2.Pending.IncidentId);
+
+            Assert.IsTrue(p.Fear.IsAfraid(report2.Day),
+                "Кровавый путь первого инцидента обязан заармить страх общины на текущие сутки — " +
+                "иначе сценарий не воспроизводит регрессию из ревью");
+
+            var shown = report2.Pending.Options.First(o => o.Path == IncidentPath.Quiet);
+
+            // Пересчитываем НЕЗАВИСИМО, тем же путём, каким резолвер применит
+            // порог при фактическом разборе, — прямо сейчас, пока Fear в том же
+            // состоянии, что увидит ResolvePending(Quiet) следующим вызовом.
+            var request = IncidentResolver.BuildRequest(social, IncidentPath.Quiet, p.Fear, report2.Day, cfg);
+            var preview = CheckResolver.Preview(request, p.Roster, p.Repeats, report2.Day, cfg);
+
+            Assert.AreEqual(preview.EffectiveThreshold, shown.Threshold,
+                "Инвариант 8: порог, показанный игроку, обязан совпадать с тем, что реально применится");
+
+            var done = p.ResolvePending(IncidentPath.Quiet);
+            Assert.IsFalse(done.AwaitsDecision, "Оба инцидента фазы разобраны — очередь обязана опустеть");
+        }
+
         [Test]
         public void Decision_Disabled_KeepsTheOldContract()
         {

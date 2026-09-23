@@ -36,15 +36,24 @@ namespace Game.Core.Loop
                 if (incident == null) continue;
 
                 // Аудит П10: каждый сработавший инцидент фазы — своё решение
-                // игрока, а не только первый. Здесь все они лишь СКЛАДЫВАЮТСЯ в
-                // очередь фазы; DayProcessor вынимает их по одному в Pending и
-                // держит AwaitsDecision=true, пока очередь не опустеет. Раньше
-                // второе и последующие срабатывания фазы (ночью бюджет допускает
-                // два) тихо резолвились сами — выбор без последствия для игрока.
+                // игрока, а не только первый. Здесь они лишь СКЛАДЫВАЮТСЯ в
+                // очередь фазы — событие, а не готовое предложение; DayProcessor
+                // вынимает их по одному и держит AwaitsDecision=true, пока
+                // очередь не опустеет. Раньше второе и последующие срабатывания
+                // фазы (ночью бюджет допускает два) тихо резолвились сами —
+                // выбор без последствия для игрока.
+                //
+                // Предложение (BuildOffer) НЕ строится здесь заранее: если бы
+                // все предложения фазы считались одним проходом до первого хода
+                // игрока, второе и далее показывали бы порог по состоянию
+                // Fear/Repeats ДО разрешения предыдущих — а применялся бы порог
+                // ПОСЛЕ (кровавый путь уже мог заармить страх). Инвариант 8
+                // («показанный порог равен применённому») требует строить
+                // предложение непосредственно в момент выемки — см.
+                // DayProcessor.TryDequeueNextPending.
                 if (ctx.RequirePlayerDecision)
                 {
-                    var offer = BuildOffer(ctx, incident);
-                    ctx.PendingQueue.Enqueue(new PendingItem(offer, incident));
+                    ctx.PendingQueue.Enqueue(incident);
                     continue;
                 }
 
@@ -65,8 +74,12 @@ namespace Game.Core.Loop
         /// Именно здесь наконец приземляется US-2.6 «порог показан заранее»:
         /// раньше предпоказ существовал как метод резолвера, но момента, когда
         /// его можно было бы показать, в конвейере не было.
+        ///
+        /// internal, а не private: DayProcessor.TryDequeueNextPending обязан
+        /// вызывать её ЛЕНИВО, в момент выемки из очереди фазы (см. комментарий
+        /// в Execute выше) — иначе показанный порог мог разойтись с применённым.
         /// </summary>
-        private static PendingDecision BuildOffer(DayContext ctx, IncidentDefinition incident)
+        internal static PendingDecision BuildOffer(DayContext ctx, IncidentDefinition incident)
         {
             var options = new List<DecisionOption>();
             AddOption(options, ctx, incident, IncidentPath.Quiet);
