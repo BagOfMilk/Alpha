@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Alpha.Shared;
+using Game.Core.Characters;
+using Game.Core.Scenes;
 using Game.Core.Loop;
 using Game.Core.World;
 
@@ -55,6 +58,12 @@ namespace Alpha.Play
             while (processor.CurrentDay < until)
             {
                 Morning(processor);
+
+                // Сутки 1, утро: «Сосед с претензией» (FIRST_HOUR §2.2).
+                // Телеграфия финала — игрок узнаёт антагониста ДО боя.
+                if (processor.CurrentDay == 0)
+                    SceneText.Play(OpeningScenes.NeighbourWithADemand(), Cast(), Console.WriteLine);
+
                 Placement(processor);
 
                 RunPhase(processor, DayPhase.Day, auto, policyPath, tally);
@@ -77,6 +86,14 @@ namespace Alpha.Play
                 Console.WriteLine("— сохранено: " + savePath);
             }
             return 0;
+        }
+
+        /// <summary>Карточки всех, кто может появиться в сценах среза.</summary>
+        private static List<CharacterCard> Cast()
+        {
+            var cast = OpeningCast.All();
+            cast.Add(OpeningScenes.Protagonist());
+            return cast;
         }
 
         // ---- фазы суток ----
