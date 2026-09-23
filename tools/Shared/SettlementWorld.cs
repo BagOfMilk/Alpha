@@ -35,6 +35,17 @@ namespace Alpha.Shared
         public static BalanceConfig Balance() => new BalanceConfig();
 
         /// <summary>
+        /// Таблица инцидентов среза: штатные плюс авторские открытия. Без
+        /// вторых первые пять суток пусты — конвейер исправен, а событий нет.
+        /// </summary>
+        public static IncidentTable BuildIncidents()
+        {
+            var table = DefaultIncidents.BuildTable();
+            foreach (var incident in OpeningContent.All()) table.Add(incident);
+            return table;
+        }
+
+        /// <summary>
         /// Шесть напарников: специалист на каждый домен плюс два середняка.
         /// Числа скромные — это хутор, а не элита.
         ///
@@ -97,6 +108,14 @@ namespace Alpha.Shared
             var pulse = new WorldPulse(cfg.Pulse);
             foreach (var source in DefaultPressureSources.All()) pulse.AddSource(source);
 
+            // Именной накопитель «Тугар»: слух о боярине, которого игрок видел
+            // в сцене открытия, доходит до него на 3-4 сутки (FIRST_HOUR §2.2).
+            pulse.AddSource(new OpeningContent.TuharPressureSource());
+
+            // Авторская последовательность открытия: узел на первые сутки,
+            // припасы на вторые, девочка на третьи (FIRST_HOUR §2.2).
+            foreach (var scripted in OpeningContent.ScriptedSources()) pulse.AddSource(scripted);
+
             return new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
             {
                 Tier = tier,
@@ -104,7 +123,7 @@ namespace Alpha.Shared
                 Casualties = adapter,
                 Population = new PopulationState(),
                 Pulse = pulse,
-                Incidents = DefaultIncidents.BuildTable(),
+                Incidents = BuildIncidents(),
                 Repeats = new RepeatTracker(),
                 PostDomains = new[]
                 {
