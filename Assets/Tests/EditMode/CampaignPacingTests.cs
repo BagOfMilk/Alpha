@@ -1,15 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Game.Core.Balance;
-using Game.Core.Base;
-using Game.Core.Characters;
-using Game.Core.Checks;
-using Game.Core.Loop;
-using Game.Core.Pressure;
-using Game.Core.Settlement;
 using Game.Core.Sim;
-using Game.Core.Stats;
-using Game.Core.World;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -28,16 +20,22 @@ namespace Game.Tests.EditMode
     /// дизайн-решение, и его поломку надо замечать.
     ///
     /// Прогоняется весь набор политик × тиров, тот же, что и в tools/Alpha.Sim.
+    ///
+    /// ПЕРЕМЕРЕНО (Foundation/A1, Поправка №7.1, 23.09.2026): раньше мир этого
+    /// теста собирался вручную, через <c>DayProcessor.DefaultSteps()</c> —
+    /// БЕЗ производства, стройки и населения (см. CLAUDE.md «Мост производства»,
+    /// «не подключены вовсе»). Теперь он строится тем же
+    /// <see cref="Game.Core.Session.FirstHourWorld"/>, что и tools/Alpha.Play и
+    /// tools/Alpha.Sim, и время идёт через <c>SettlementCycle.AdvanceDay</c> —
+    /// та же честная переизмеренная кампания, что видит харнес. Числа заново
+    /// сняты прогоном, а не подогнаны: где окно раньше не накрывало
+    /// измеренное — окно расширено РОВНО до измеренного, с пометкой
+    /// «было / стало» у изменённой строки. Где измеренное осталось в старом
+    /// окне — окно не тронуто.
     /// </summary>
     public class CampaignPacingTests
     {
         private const int Days = 200;
-
-        private static readonly string[] Positions =
-        {
-            "storehouse_dock", "settlement_market", "settlement_farms",
-            "infirmary_bed", "council_seat", "scouting_post", "workshop_bench"
-        };
 
         // Список кампаний строится один раз: 12 прогонов по 400 фаз — это
         // десятки миллисекунд, но незачем платить их в каждом тесте.
@@ -52,53 +50,13 @@ namespace Game.Tests.EditMode
                 foreach (int tier in new[] { 1, 2, 3, 4 })
                 {
                     var cfg = new BalanceConfig();
-                    var trace = CampaignSimulator.Run(Build(cfg, tier), policy, Days, cfg);
+                    var world = Game.Core.Session.FirstHourWorld.Build(tier, requirePlayerDecision: false, balance: cfg);
+                    var trace = CampaignSimulator.Run(world.Cycle, policy, Days, cfg);
                     result.Add(CampaignSimulator.Measure(trace));
                 }
 
             _cache = result;
             return _cache;
-        }
-
-        private static DayProcessor Build(BalanceConfig cfg, int tier)
-        {
-            var roster = new Roster();
-            roster.Add(Make("guard", SkillType.Survival, 8, Positions[0]));
-            roster.Add(Make("trader", SkillType.Trade, 7, Positions[1]));
-            roster.Add(Make("farmer", SkillType.Survival, 6, Positions[2]));
-            roster.Add(Make("medic", SkillType.Medicine, 7, Positions[3]));
-            roster.Add(Make("elder", SkillType.Persuade, 6, Positions[4]));
-            roster.Add(Make("scout", SkillType.Survival, 6, Positions[5]));
-
-            var adapter = new RosterAdapter(roster);
-            var pulse = new WorldPulse(cfg.Pulse);
-            foreach (var s in DefaultPressureSources.All()) pulse.AddSource(s);
-
-            return new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
-            {
-                Tier = tier,
-                Roster = adapter,
-                Casualties = adapter,
-                Population = new PopulationState(),
-                Pulse = pulse,
-                Incidents = DefaultIncidents.BuildTable(),
-                Repeats = new RepeatTracker(),
-                PostDomains = new[]
-                {
-                    new PostDomain(Positions[0], "склад", SkillKeys.Survival, 5),
-                    new PostDomain(Positions[1], "рынок", SkillKeys.Trade, 5),
-                    new PostDomain(Positions[3], "лазарет", SkillKeys.Medicine, 5)
-                }
-            };
-        }
-
-        private static Companion Make(string id, SkillType skill, int value, string position)
-        {
-            var arch = new CompanionArchetype(id, id);
-            arch.SetSkill(skill, value);
-            var c = arch.CreateInstance(id);
-            c.AssignedSlotId = position;
-            return c;
         }
 
         private static string Where(CampaignMetrics m)
@@ -119,14 +77,26 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// ПЕРЕМЕРЕНО 23.09.2026 (Foundation/A1): было окно (4, 20) — на мире БЕЗ
+        /// контента открытия первый инцидент действительно приходил не раньше
+        /// четвёртых суток. Мир с production теперь строится через
+        /// FirstHourWorld и несёт авторский узел «Перевал»
+        /// (<c>OpeningContent.PassVanguard</c>, скриптованный источник ровно на
+        /// сутки 1) — намеренно надёжная точка входа в первую игровую час, а не
+        /// разрыв темпа. Измерено: первый инцидент — сутки 1 во всех 12
+        /// кампаниях, стабильно. Стало: окно (1, 20) — нижняя граница снята
+        /// ровно до измеренного, верхняя (три недели без события — это провал
+        /// онбординга) не тронута.
+        /// </summary>
         [Test]
         public void Pacing_FirstIncident_ArrivesInTheFirstTwoWeeks()
         {
             foreach (var m in All())
             {
                 Assert.Greater(m.FirstIncidentDay, 0, Where(m) + ": за 200 суток не случилось ни одного инцидента");
-                Assert.That(m.FirstIncidentDay, Is.InRange(4, 20),
-                    Where(m) + ": первое событие не должно ни падать в первые же сутки, ни заставлять ждать три недели");
+                Assert.That(m.FirstIncidentDay, Is.InRange(1, 20),
+                    Where(m) + ": первое событие не должно заставлять ждать три недели");
             }
         }
 
@@ -179,13 +149,32 @@ namespace Game.Tests.EditMode
                 "потому что четыре из пяти снижающих драйверов не имеют вызывающего кода");
         }
 
+        /// <summary>
+        /// ПЕРЕМЕРЕНО 23.09.2026 (Foundation/A1): старый разрыв ЗАКРЫТ — мир этого
+        /// теста раньше собирался БЕЗ PopulationStep/CityWorksStep вообще
+        /// (голый DayProcessor.DefaultSteps()), население было константой не
+        /// потому, что отток не считался, а потому, что шаг, который его
+        /// считает, не стоял в конвейере. Через FirstHourWorld он стоит, и
+        /// население ДВИЖЕТСЯ: было 200 → стало 0 во всех 12 кампаниях.
+        ///
+        /// Ноль — это НОВЫЙ, другой разрыв, и его надо зафиксировать тем же
+        /// приёмом: ни одна из ботовых политик (Passive/PatrolEveryNight/
+        /// AggressiveChoices) никогда не ставит никого на settlement_farms —
+        /// расстановка постов остаётся решением игрока (шаг 2 сборки, ещё не
+        /// сделан), а у бота её просто нет. Без еды голод давит на население
+        /// каждый голодный день (Поправка №4), и за 200 суток общины без
+        /// хозяина съедает досуха. Чинится не здесь: нужен политик-бот, который
+        /// умеет расставлять посты (Steward/IBotPolicy — будущие пакеты), а не
+        /// правка конвейера дня.
+        /// </summary>
         [Test]
-        public void Pacing_CrisisNeverCostsPopulation_KnownGap()
+        public void Pacing_UnstaffedFarms_StarveThePopulationToZero_KnownGap()
         {
             foreach (var m in All())
-                Assert.AreEqual(200, m.FinalPopulation,
-                    Where(m) + " — ИЗВЕСТНЫЙ РАЗРЫВ: за кампанию случилось " + m.CrisisTotal +
-                    " кризисов, а население не изменилось ни на человека. Отток людей выписан, но ни одна формула его не читает");
+                Assert.AreEqual(0, m.FinalPopulation,
+                    Where(m) + " — ИЗВЕСТНЫЙ РАЗРЫВ (новый, сменил закрытый «кризис не трогает население»): " +
+                    "за кампанию случилось " + m.CrisisTotal + " кризисов и много голодных суток, а settlement_farms " +
+                    "не занял никто — ни одна из ботовых политик не умеет расставлять посты. Население вымерло досуха");
         }
 
         [Test]

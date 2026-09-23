@@ -40,6 +40,33 @@ namespace Game.Core.Sim
         internal static CampaignTrace Run(DayProcessor processor, SimPolicy policy, int days,
             BalanceConfig balance, BeforeDay beforeDay)
         {
+            return RunCore(processor, policy, days, balance, beforeDay, processor.Advance);
+        }
+
+        /// <summary>
+        /// Тот же прогон, но время идёт через <see cref="Base.SettlementCycle"/>
+        /// (Поправка №7.1), а не голым DayProcessor.Advance: только мост
+        /// переносит флаг голода из BaseState в конвейер, поэтому темп на мире
+        /// с производством меряется честно, а не с молчаливо выключенным
+        /// голодом. tools/Alpha.Sim и CampaignPacingTests зовут этот путь.
+        /// </summary>
+        internal static CampaignTrace Run(Base.SettlementCycle cycle, SimPolicy policy, int days, BalanceConfig balance)
+        {
+            return Run(cycle, policy, days, balance, null);
+        }
+
+        internal static CampaignTrace Run(Base.SettlementCycle cycle, SimPolicy policy, int days,
+            BalanceConfig balance, BeforeDay beforeDay)
+        {
+            if (cycle == null) throw new System.ArgumentNullException(nameof(cycle));
+            return RunCore(cycle.Processor, policy, days, balance, beforeDay, cycle.AdvanceDay);
+        }
+
+        private delegate DayReport AdvancePhase(DayPhase phase);
+
+        private static CampaignTrace RunCore(DayProcessor processor, SimPolicy policy, int days,
+            BalanceConfig balance, BeforeDay beforeDay, AdvancePhase advance)
+        {
             var trace = new CampaignTrace { Policy = policy, Tier = processor.Tier };
             var lastFired = new Dictionary<string, int>();
 
@@ -64,12 +91,12 @@ namespace Game.Core.Sim
                 // вернул бы оба отчёта разом, и тогда дневная строка показывала
                 // бы ночные заряды — трасса врала бы ровно в том столбце, ради
                 // которого её и заводили.
-                var dayReport = processor.Advance(DayPhase.Day);
+                var dayReport = advance(DayPhase.Day);
                 var dayRow = Capture(processor, dayReport, trace.TrackIds, lastFired);
                 dayRow.PartyAway = away;
                 trace.Rows.Add(dayRow);
 
-                var nightReport = processor.Advance(DayPhase.Night);
+                var nightReport = advance(DayPhase.Night);
                 var nightRow = Capture(processor, nightReport, trace.TrackIds, lastFired);
                 nightRow.PartyAway = away;
                 trace.Rows.Add(nightRow);

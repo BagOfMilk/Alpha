@@ -36,7 +36,7 @@ namespace Game.Core.Characters
         /// три не связанные строки (чеклист §3 стр. 17).
         /// </summary>
         public static CharacterCard TuharVovk() => new CharacterCard(
-            "tuhar", "Тугар Волк", SourceTier.Literary, Work,
+            "tuhar", "Тугар Вовк", SourceTier.Literary, Work,
             "боярин-чужак: хочет править по-новому и готов договориться с ордой");
 
         /// <summary>Голос общины на совете. В повести умирает в эпилоге — здесь доживает до финала.</summary>
@@ -61,7 +61,7 @@ namespace Game.Core.Characters
         /// что персонаж заявлен и чего ему не хватает.
         /// </summary>
         public static CharacterCard HordeCommander() => new CharacterCard(
-            "horde_commander", "Командир орды", SourceTier.Original, null,
+            "horde_commander", "Командир орди", SourceTier.Original, null,
             "ПЛЕЙСХОЛДЕР: первоисточник не выбран (открытый вопрос §5.7)");
 
         /// <summary>Весь кастинг открытия.</summary>

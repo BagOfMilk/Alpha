@@ -174,6 +174,76 @@ namespace Game.Tests.EditMode
                 "Решать нечего, пока конвейер не остановлен");
         }
 
+        /// <summary>
+        /// Аудит П10: когда в одной фазе срабатывает больше одного инцидента,
+        /// КАЖДЫЙ становится своим решением по очереди — AwaitsDecision не
+        /// отпускает сутки, пока очередь фазы не опустеет. Раньше второе
+        /// срабатывание фазы тихо резолвилось само, и выбор без последствия
+        /// был именно тем дефектом, который правит эта поправка.
+        ///
+        /// Два авторских источника, оба выстрелившие ровно на сутки 1 (тот же
+        /// приём, что и у OpeningContent.ScriptedSource) — детерминированно, а
+        /// не «прогони подольше и надейся на совпадение накопителей».
+        /// </summary>
+        [Test]
+        public void Decision_TwoIncidentsInOnePhase_BothBecomeSeparateDecisions()
+        {
+            var cfg = new BalanceConfig();
+            cfg.Pulse.MaxFiresPerDay = 2; // обе заявки суток 1 обязаны поместиться в один день
+
+            var table = new IncidentTable();
+            table.Add(new IncidentDefinition
+            {
+                Id = "test_a", TopicId = "test.a", SourceId = "test.a", DomainTag = "тест",
+                MinBand = TensionBand.Calm, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 10,
+                QuietPathSkill = SkillKeys.Persuade, QuietPathThreshold = 5,
+                RelevantPositionId = Positions[0]
+            });
+            table.Add(new IncidentDefinition
+            {
+                Id = "test_b", TopicId = "test.b", SourceId = "test.b", DomainTag = "тест",
+                MinBand = TensionBand.Calm, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 10,
+                QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 5,
+                RelevantPositionId = Positions[1]
+            });
+
+            var roster = new Roster();
+            for (int i = 0; i < Positions.Length; i++)
+                roster.Add(Make("actor" + i, 7, Positions[i]));
+            var adapter = new RosterAdapter(roster);
+
+            var pulse = new WorldPulse(cfg.Pulse);
+            pulse.AddSource(new OpeningContent.ScriptedSource("test.a", "тест", 1));
+            pulse.AddSource(new OpeningContent.ScriptedSource("test.b", "тест", 1));
+
+            var p = new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
+            {
+                Tier = 1,
+                Roster = adapter,
+                Casualties = adapter,
+                Population = new PopulationState(),
+                Pulse = pulse,
+                Incidents = table,
+                Repeats = new RepeatTracker(),
+                RequirePlayerDecision = true
+            };
+
+            var report = p.Advance(DayPhase.Day);
+            Assert.IsTrue(report.AwaitsDecision, "Первое из двух сработавших событий обязано остановить сутки");
+
+            report = p.ResolvePending(IncidentPath.Quiet);
+            Assert.IsTrue(report.AwaitsDecision,
+                "Второй инцидент фазы обязан стать ОТДЕЛЬНЫМ решением — очередь фазы не должна " +
+                "опустеть после первого (П10)");
+            Assert.AreEqual(1, report.Day, "Второе решение — те же сутки, а не следующие");
+            Assert.AreEqual(DayPhase.Day, report.Phase, "Второе решение — та же фаза");
+
+            report = p.ResolvePending(IncidentPath.Quiet);
+            Assert.IsFalse(report.AwaitsDecision, "После второго решения очередь фазы обязана быть исчерпана");
+            Assert.AreEqual(2, report.Incidents.Count(o => o.TopicId == "test.a" || o.TopicId == "test.b"),
+                "Оба инцидента фазы обязаны попасть в итоговый отчёт");
+        }
+
         [Test]
         public void Decision_Disabled_KeepsTheOldContract()
         {

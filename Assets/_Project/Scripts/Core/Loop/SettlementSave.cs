@@ -113,6 +113,36 @@ namespace Game.Core.Loop
                 if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("party=").Append(blob);
             }
 
+            // Хозяйство игрока (Foundation/A1, закрывает D10): без кошелька,
+            // открытых слотов и прожитого уровня загрузка возвращала бы игру
+            // без единого заработанного гроша и без единого повышения. Порт, а
+            // не тип базы напрямую — Loop не должен знать про Game.Core.Base
+            // (охранитель Loop_DoesNotReferenceBase), поэтому фактическая форма
+            // блоба собирается на стороне BaseState (Game.Core.Base), который
+            // реализует тот же IStateBlob, что и CityState/Roster/Party ниже.
+            if (p.Economy != null)
+            {
+                string blob = p.Economy.CaptureState();
+                if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("eco=").Append(blob);
+            }
+
+            // Истощение точек вылазки (R15): без него загрузка возвращала бы
+            // каждую точку девственной, и повтор точки после save/load снова
+            // давал бы полную добычу бесплатно.
+            if (p.Sites != null)
+            {
+                string blob = p.Sites.CaptureState();
+                if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("sites=").Append(blob);
+            }
+
+            // Сюжетные флаги (R3): «видел предложение», «зерно зрады посеяно» —
+            // без слепка эти отметки снимались бы каждой загрузкой бесплатно.
+            if (p.Flags != null)
+            {
+                string blob = p.Flags.CaptureState();
+                if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("flags=").Append(blob);
+            }
+
             return sb.ToString();
         }
 
@@ -158,6 +188,9 @@ namespace Game.Core.Loop
                     var repeats = p.Repeats as IStateBlob;
                     if (repeats != null) repeats.RestoreState(value);
                 }
+                else if (key == "eco" && p.Economy != null) p.Economy.RestoreState(value);
+                else if (key == "sites" && p.Sites != null) p.Sites.RestoreState(value);
+                else if (key == "flags" && p.Flags != null) p.Flags.RestoreState(value);
             }
         }
 

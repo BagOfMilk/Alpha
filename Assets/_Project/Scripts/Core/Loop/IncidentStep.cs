@@ -35,14 +35,16 @@ namespace Game.Core.Loop
                     ctx.Tension.Band, ctx.Tier, ctx.IsNight, crisis, selector, sourceId);
                 if (incident == null) continue;
 
-                // Одно решение за фазу. Первое событие уходит игроку, конвейер
-                // на нём останавливается; остальное (ночью бюджет допускает два
-                // срабатывания) разбирается тихим путём само — иначе один ход
-                // превращался бы в очередь модальных окон.
-                if (ctx.RequirePlayerDecision && ctx.Pending == null)
+                // Аудит П10: каждый сработавший инцидент фазы — своё решение
+                // игрока, а не только первый. Здесь все они лишь СКЛАДЫВАЮТСЯ в
+                // очередь фазы; DayProcessor вынимает их по одному в Pending и
+                // держит AwaitsDecision=true, пока очередь не опустеет. Раньше
+                // второе и последующие срабатывания фазы (ночью бюджет допускает
+                // два) тихо резолвились сами — выбор без последствия для игрока.
+                if (ctx.RequirePlayerDecision)
                 {
-                    ctx.Pending = BuildOffer(ctx, incident);
-                    ctx.PendingIncident = incident;
+                    var offer = BuildOffer(ctx, incident);
+                    ctx.PendingQueue.Enqueue(new PendingItem(offer, incident));
                     continue;
                 }
 

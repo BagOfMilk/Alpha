@@ -111,6 +111,18 @@ namespace Game.Core.Characters
         /// </summary>
         internal void RestoreAssignmentForSave(string slotId) => AssignedSlotId = slotId;
 
+        /// <summary>
+        /// Вернуть уровень и опыт из слепка (Foundation/A1, фрагмент eco=).
+        /// Отдельный метод, а не GainXp: GainXp пересчитывает прогрессию с нуля
+        /// и потратил бы очки скилов повторно — здесь же просто ставится уже
+        /// прожитое число, без побочных эффектов.
+        /// </summary>
+        internal void RestoreProgressForSave(int level, int xp)
+        {
+            Level = level < 1 ? 1 : level;
+            Xp = xp < 0 ? 0 : xp;
+        }
+
         public bool IsAssigned => !string.IsNullOrEmpty(AssignedSlotId);
         public bool IsInjured => InjuryPoints > 0.0;
 

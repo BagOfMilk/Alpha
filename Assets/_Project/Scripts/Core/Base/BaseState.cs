@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Economy;
@@ -11,6 +13,15 @@ namespace Game.Core.Base
     /// Связывает ростер, слоты назначений, кошелёк ресурсов и баланс-конфиг,
     /// и продвигает время методом <see cref="AdvanceCycle"/> (один цикл = один
     /// игровой день). Вся логика — чистый C#, без зависимостей от Unity.
+    ///
+    /// НЕ реализует <c>Game.Core.Loop.IStateBlob</c> сама — намеренно:
+    /// охранитель <c>BaseState_HasNoBackdoorToAdvanceTime</c> запрещает этому
+    /// типу реализовывать ЛЮБОЙ контракт из Game.Core.Loop, после истории с
+    /// портом IDailyCycle, который дал ей публичный RunDay(). Слепок хозяйства
+    /// (кошелёк + открытые слоты + уровень/опыт ростера) отдаёт наружу
+    /// <see cref="CaptureState"/>/<see cref="RestoreState"/> как обычные
+    /// публичные методы; в конвейер их заворачивает <see cref="EconomyBlob"/>
+    /// (Foundation/A1) — тем же приёмом, каким RosterAdapter заворачивает Roster.
     /// </summary>
     public sealed class BaseState
     {
@@ -155,6 +166,83 @@ namespace Game.Core.Base
         {
             var c = Roster.Get(companionId);
             return c == null || c.IsDead;
+        }
+
+        // ---- слепок хозяйства (Foundation/A1) ----
+        //
+        // g:<золото>|m:<материалы>|f:<еда>|u:<открытые слоты через ','>|
+        // x:<companionId:уровень:опыт через ',' >
+        // Без «;» и внутреннего «=» — внешний слепок (SettlementSave) режет по
+        // ним на своём уровне. Обычные публичные методы, не реализация
+        // IStateBlob — см. комментарий класса; в порт их заворачивает EconomyBlob.
+
+        public string CaptureState()
+        {
+            var sb = new StringBuilder();
+            sb.Append("g:").Append(Resources.Get(ResourceType.Gold).ToString(CultureInfo.InvariantCulture));
+            sb.Append("|m:").Append(Resources.Get(ResourceType.Materials).ToString(CultureInfo.InvariantCulture));
+            sb.Append("|f:").Append(Resources.Get(ResourceType.Food).ToString(CultureInfo.InvariantCulture));
+
+            var unlocked = new List<string>();
+            for (int i = 0; i < _slots.Count; i++)
+                if (_slots[i].Unlocked) unlocked.Add(_slots[i].Id);
+            unlocked.Sort(StringComparer.Ordinal);
+            sb.Append("|u:").Append(string.Join(",", unlocked.ToArray()));
+
+            var xp = new List<string>();
+            foreach (var c in Roster.All)
+                xp.Add(c.Id + ":" + c.Level.ToString(CultureInfo.InvariantCulture) +
+                       ":" + c.Xp.ToString(CultureInfo.InvariantCulture));
+            xp.Sort(StringComparer.Ordinal);
+            sb.Append("|x:").Append(string.Join(",", xp.ToArray()));
+
+            return sb.ToString();
+        }
+
+        public void RestoreState(string blob)
+        {
+            if (string.IsNullOrEmpty(blob)) return;
+
+            foreach (var part in blob.Split('|'))
+            {
+                if (part.Length < 2 || part[1] != ':') continue;
+                string body = part.Substring(2);
+
+                switch (part[0])
+                {
+                    case 'g':
+                        Resources.Add(ResourceType.Gold, ParseInt(body) - Resources.Get(ResourceType.Gold));
+                        break;
+                    case 'm':
+                        Resources.Add(ResourceType.Materials, ParseInt(body) - Resources.Get(ResourceType.Materials));
+                        break;
+                    case 'f':
+                        Resources.Add(ResourceType.Food, ParseInt(body) - Resources.Get(ResourceType.Food));
+                        break;
+                    case 'u':
+                        var unlocked = new HashSet<string>(body.Split(','));
+                        for (int i = 0; i < _slots.Count; i++)
+                            _slots[i].Unlocked = unlocked.Contains(_slots[i].Id);
+                        break;
+                    case 'x':
+                        if (body.Length == 0) break;
+                        foreach (var item in body.Split(','))
+                        {
+                            var f = item.Split(':');
+                            if (f.Length < 3) continue;
+                            var c = Roster.Get(f[0]);
+                            if (c == null) continue;
+                            c.RestoreProgressForSave(ParseInt(f[1]), ParseInt(f[2]));
+                        }
+                        break;
+                }
+            }
+        }
+
+        private static int ParseInt(string s)
+        {
+            int v;
+            return int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out v) ? v : 0;
         }
 
         // ---- Продвижение времени ----

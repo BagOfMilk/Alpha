@@ -4,6 +4,7 @@ using Game.Core.Balance;
 using Game.Core.Checks;
 using Game.Core.Pressure;
 using Game.Core.Settlement;
+using Game.Core.Story;
 using Game.Core.World;
 
 namespace Game.Core.Loop
@@ -62,6 +63,40 @@ namespace Game.Core.Loop
         /// живёт как раньше, просто никто никуда не уходит.
         /// </summary>
         public Expeditions.ExpeditionParty Party { get; set; }
+
+        /// <summary>
+        /// Кошелёк, база и ролевой опыт (Foundation/A1, закрывает D10): без этого
+        /// свойства слепок хранил календарь и Напряжение, а хозяйство игрока —
+        /// нет, и загрузка возвращала игру без гроша в кармане.
+        ///
+        /// ПОРТ, а не тип базы: конвейер дня не должен знать про Game.Core.Base
+        /// (охранитель Loop_DoesNotReferenceBase — направление зависимости
+        /// «Base знает про Loop, Loop про Base — никогда»). В игре сюда попадает
+        /// сам BaseState — он реализует IStateBlob точно так же, как CityWorks
+        /// уже делает это для CityState ниже.
+        /// </summary>
+        public IStateBlob Economy { get; set; }
+
+        /// <summary>Истощение точек вылазки (R15) — теперь тоже часть слепка.</summary>
+        public Expeditions.SiteLedger Sites { get; set; }
+
+        /// <summary>Сюжетные флаги (R3): чистый контейнер, событий сам не эмитит.</summary>
+        public StoryFlags Flags { get; set; }
+
+        private readonly List<ExternalTensionEntry> _externalTension = new List<ExternalTensionEntry>();
+
+        /// <summary>
+        /// Единственный узаконенный мостик R6: внешние системы (квесты, указы
+        /// совета — придут в следующих пакетах) не трогают Напряжение прямо, а
+        /// кладут заявку сюда. Она применяется через СУЩЕСТВУЮЩИЙ драйвер на
+        /// тике следующей фазы (TensionTickStep) — список драйверов остаётся
+        /// закрытым (инвариант 5), новый узел это не добавляет.
+        /// </summary>
+        public void QueueExternal(TensionDriver driver, int amount)
+        {
+            if (amount == 0) return;
+            _externalTension.Add(new ExternalTensionEntry(driver, amount));
+        }
 
         /// <summary>Ночью: патрулировать вместо сна (Поправка №3.9).</summary>
         public bool IsPatrolling { get; set; }
@@ -169,13 +204,14 @@ namespace Game.Core.Loop
                 IsHungry = IsHungry,
                 SignalMemory = SignalMemory,
                 RequirePlayerDecision = RequirePlayerDecision,
-                Fear = Fear
+                Fear = Fear,
+                ExternalTensionQueue = DrainExternalTension()
             };
 
             // Первая половина конвейера — до хода игрока.
             RunSteps(ctx, 0, DayStepOrder.PlayerResolution);
 
-            if (ctx.Pending != null)
+            if (TryDequeueNextPending(ctx))
             {
                 // Сутки остановлены. Сигналы намеренно НЕ собираются: они
                 // описывают финальное состояние дня, а день ещё не случился.
@@ -187,7 +223,10 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
-        /// Ход игрока: выбранный путь разбирается, и сутки доигрываются до конца.
+        /// Ход игрока: выбранный путь разбирается. Если очередь решений фазы
+        /// (аудит П10) ещё не пуста — следующий инцидент фазы становится новым
+        /// Pending, и AwaitsDecision остаётся true; сутки доигрываются до конца
+        /// только когда очередь опустела.
         /// </summary>
         public DayReport ResolvePending(IncidentPath path)
         {
@@ -195,7 +234,6 @@ namespace Game.Core.Loop
                 throw new InvalidOperationException("Нечего решать: конвейер не остановлен.");
 
             var ctx = _awaiting;
-            _awaiting = null;
 
             var outcome = World.IncidentResolver.Resolve(
                 ctx.PendingIncident, ctx.Roster, ctx.Repeats, ctx.Casualties,
@@ -205,7 +243,29 @@ namespace Game.Core.Loop
             ctx.Pending = null;
             ctx.PendingIncident = null;
 
+            if (TryDequeueNextPending(ctx))
+                return BuildReport(ctx);
+
+            _awaiting = null;
             return Finish(ctx);
+        }
+
+        /// <summary>Следующее решение очереди фазы — в Pending. false, если очередь пуста.</summary>
+        private static bool TryDequeueNextPending(DayContext ctx)
+        {
+            if (ctx.PendingQueue.Count == 0) return false;
+            var item = ctx.PendingQueue.Dequeue();
+            ctx.Pending = item.Offer;
+            ctx.PendingIncident = item.Incident;
+            return true;
+        }
+
+        private List<ExternalTensionEntry> DrainExternalTension()
+        {
+            if (_externalTension.Count == 0) return null;
+            var copy = new List<ExternalTensionEntry>(_externalTension);
+            _externalTension.Clear();
+            return copy;
         }
 
         private DayReport Finish(DayContext ctx)

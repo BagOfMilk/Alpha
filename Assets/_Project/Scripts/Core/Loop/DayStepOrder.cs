@@ -26,6 +26,8 @@ namespace Game.Core.Loop
         public const int Derived = 400;        // [ПОЗЖЕ] Э3
         public const int Hunger = 450;         // голодный день давит до тика Напряжения
         public const int Tension = 500;
+        /// <summary>Готовность общины к финалу (Поправка №7, R8) — копится параллельно Напряжению.</summary>
+        public const int Readiness = 550;
         public const int Obligations = 600;    // [ПОЗЖЕ] Э4
         public const int Pulse = 700;          // [ПОЗЖЕ] Э1
         public const int Incidents = 800;      // [ПОЗЖЕ] Э1

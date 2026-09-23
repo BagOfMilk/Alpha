@@ -15,6 +15,18 @@ namespace Game.Core.Loop
 
         public void Execute(DayContext ctx)
         {
+            // Внешняя очередь (R6, DayProcessor.QueueExternal) сливается на
+            // ПЕРВОМ тике после заявки — фаза не важна, иначе заявка, поданная
+            // вечером, дожидалась бы следующего дня. Драйвер приходит готовым от
+            // вызывающего (список драйверов закрыт — инвариант 5), здесь он
+            // просто применяется тем же путём, что и любой другой.
+            if (ctx.ExternalTensionQueue != null)
+                for (int i = 0; i < ctx.ExternalTensionQueue.Count; i++)
+                {
+                    var entry = ctx.ExternalTensionQueue[i];
+                    ctx.Tension.Apply(entry.Driver, entry.Amount, "external:" + entry.Driver);
+                }
+
             // Фоновый тик — СУТОЧНЫЙ. Ночь принадлежит тем же суткам, иначе
             // город получает две порции фонового давления за день, и якорь
             // «хутор не доходит до кризиса за кампанию» ломается вдвое.

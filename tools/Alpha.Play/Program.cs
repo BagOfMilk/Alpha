@@ -5,7 +5,6 @@ using System.Text;
 using Alpha.Shared;
 using Game.Core.Characters;
 using Game.Core.Scenes;
-using Game.Core.Expeditions;
 using Game.Core.Loop;
 using Game.Core.World;
 
@@ -44,12 +43,15 @@ namespace Alpha.Play
             string savePath = Value(args, "--save", null);
             string loadPath = Value(args, "--load", null);
 
-            var processor = SettlementWorld.BuildProcessor(tier: 1);
-            processor.RequirePlayerDecision = true;
+            // Мир первого часа — теперь общий с харнесом код ядра (FirstHourWorld,
+            // Поправка №7): именной каст на постах, производство и голод в
+            // конвейере. requirePlayerDecision=true — консоль спрашивает игрока.
+            var world = SettlementWorld.Build(tier: 1, requirePlayerDecision: true);
+            var processor = world.Processor;
+            var cycle = world.Cycle;
 
             // Партия в поле — часть состояния суток и слепка (Поправка №5.6 п. 4).
-            var home = SettlementWorld.LastBase;
-            processor.Party = new ExpeditionParty();
+            var home = world.BaseState;
 
             if (loadPath != null && File.Exists(loadPath))
             {
@@ -71,7 +73,7 @@ namespace Alpha.Play
 
                 Placement(processor);
 
-                RunPhase(processor, DayPhase.Day, auto, policyPath, tally);
+                RunPhase(cycle, DayPhase.Day, auto, policyPath, tally);
 
                 // Сутки 4 — короткая вылазка (FIRST_HOUR §2.2). Посты уходящих
                 // СНИМАЮТСЯ: город двое суток живёт без трёх рук, и это видно
@@ -92,7 +94,7 @@ namespace Alpha.Play
                 // ночной инцидент такой же ход игрока, как дневной. Пока это
                 // обрабатывалось только для дня, на первом же ночном событии
                 // следующее утро падало с «сутки не закончены».
-                RunPhase(processor, DayPhase.Night, auto, policyPath, tally);
+                RunPhase(cycle, DayPhase.Night, auto, policyPath, tally);
 
                 if (processor.Party.IsAway && processor.Party.TickDay())
                 {
@@ -126,11 +128,16 @@ namespace Alpha.Play
         /// Одна фаза целиком: продвинуть, показать и — если конвейер встал на
         /// решении — доиграть её до конца. Конвейер не позволит начать
         /// следующую фазу, пока ход игрока не сделан.
+        ///
+        /// Время идёт через SettlementCycle.AdvanceDay, а не голый
+        /// DayProcessor.Advance (Поправка №7.1) — только мост переносит флаг
+        /// голода из BaseState в конвейер.
         /// </summary>
-        private static void RunPhase(DayProcessor p, DayPhase phase, bool auto,
+        private static void RunPhase(Game.Core.Base.SettlementCycle cycle, DayPhase phase, bool auto,
             IncidentPath policyPath, Tally tally)
         {
-            var report = p.Advance(phase);
+            var p = cycle.Processor;
+            var report = cycle.AdvanceDay(phase);
             Print(report, tally);
 
             while (p.AwaitsDecision)

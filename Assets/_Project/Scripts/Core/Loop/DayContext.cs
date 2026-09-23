@@ -87,6 +87,22 @@ namespace Game.Core.Loop
         /// <summary>Само событие — чтобы резолвер получил его после выбора.</summary>
         internal IncidentDefinition PendingIncident { get; set; }
 
+        /// <summary>
+        /// Очередь решений этой фазы (аудит П10): если в фазе сработало несколько
+        /// инцидентов, каждый становится СВОИМ решением по очереди, а не тихо
+        /// разбирается за игрока после первого. IncidentStep кладёт сюда все
+        /// предложения фазы; DayProcessor вынимает их по одному в Pending, пока
+        /// очередь не опустеет.
+        /// </summary>
+        internal Queue<PendingItem> PendingQueue { get; } = new Queue<PendingItem>();
+
+        /// <summary>
+        /// Внешняя очередь Напряжения (R6): что накопил DayProcessor.QueueExternal
+        /// до этой фазы. TensionTickStep сливает её через существующий драйвер и
+        /// очищает — список драйверов остаётся закрытым (инвариант 5).
+        /// </summary>
+        internal List<ExternalTensionEntry> ExternalTensionQueue { get; set; }
+
         public DayContext(int day, DayPhase phase, int tier, int orderLevel,
             BalanceConfig balance, TensionState tension,
             bool isPatrolling = false,
@@ -142,5 +158,31 @@ namespace Game.Core.Loop
     {
         int Order { get; }
         void Execute(DayContext ctx);
+    }
+
+    /// <summary>Одно решение фазы, ждущее очереди (см. DayContext.PendingQueue).</summary>
+    internal struct PendingItem
+    {
+        internal readonly PendingDecision Offer;
+        internal readonly IncidentDefinition Incident;
+
+        internal PendingItem(PendingDecision offer, IncidentDefinition incident)
+        {
+            Offer = offer;
+            Incident = incident;
+        }
+    }
+
+    /// <summary>Одна запись внешней очереди Напряжения (DayProcessor.QueueExternal).</summary>
+    internal struct ExternalTensionEntry
+    {
+        internal readonly Pressure.TensionDriver Driver;
+        internal readonly int Amount;
+
+        internal ExternalTensionEntry(Pressure.TensionDriver driver, int amount)
+        {
+            Driver = driver;
+            Amount = amount;
+        }
     }
 }

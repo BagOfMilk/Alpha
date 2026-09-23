@@ -172,5 +172,102 @@ namespace Game.Tests.EditMode
             // из него дашборд по дороге — нет.
             Assert.IsInstanceOf<string>(blob, "Слепок обязан быть непрозрачным для Game.Gameplay");
         }
+
+        // ================= eco=/sites=/flags= (Foundation/A1) =================
+
+        /// <summary>
+        /// Побайтовый round-trip трёх новых фрагментов сразу: кошелёк+слоты+XP
+        /// (eco=), истощение точек (sites=), сюжетные флаги (flags=). Мир берём
+        /// настоящий — Game.Core.Session.FirstHourWorld, — чтобы Economy/Sites/
+        /// Flags были подключены ровно так, как в игре, а не собраны руками
+        /// мимо DayProcessor.Economy/.Sites/.Flags.
+        /// </summary>
+        [Test]
+        public void Save_EconomySitesFlags_RoundTripIsByteIdentical()
+        {
+            var world = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+
+            // Наполняем все три фрагмента, иначе тест проверяет пустые строки.
+            world.Sites.Register("abandoned_camp");
+            world.Sites.Register("abandoned_camp");
+            world.Flags.Set("tugar_offer_seen");
+            world.Flags.Set("defector_seeded", true);
+
+            for (int day = 0; day < 3; day++)
+            {
+                world.Cycle.AdvanceDay(DayPhase.Day);
+                world.Cycle.AdvanceDay(DayPhase.Night);
+            }
+
+            string blob = world.Processor.SaveState();
+
+            var resumed = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+            resumed.Processor.RestoreState(blob);
+
+            string blob2 = resumed.Processor.SaveState();
+
+            Assert.AreEqual(blob, blob2,
+                "Слепок хозяйства/точек/флагов обязан быть побайтово одинаковым после восстановления");
+
+            StringAssert.Contains("eco=", blob, "Фрагмент eco= обязан попасть в слепок");
+            StringAssert.Contains("sites=", blob, "Фрагмент sites= обязан попасть в слепок");
+            StringAssert.Contains("flags=", blob, "Фрагмент flags= обязан попасть в слепок");
+        }
+
+        [Test]
+        public void Save_Flags_SurviveReload()
+        {
+            var world = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+            world.Flags.Set("tugar_offer_seen");
+
+            var resumed = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+            resumed.Processor.RestoreState(world.Processor.SaveState());
+
+            Assert.IsTrue(resumed.Flags.Get("tugar_offer_seen"), "Флаг обязан пережить загрузку");
+            Assert.IsFalse(resumed.Flags.Get("hafiya_quest_active"), "Невыставленный флаг обязан остаться false");
+        }
+
+        [Test]
+        public void Save_Sites_DepletionSurvivesReload()
+        {
+            var world = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+            world.Sites.Register("abandoned_camp");
+            world.Sites.Register("abandoned_camp");
+            world.Sites.Register("abandoned_camp");
+
+            var resumed = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+            resumed.Processor.RestoreState(world.Processor.SaveState());
+
+            Assert.AreEqual(3, resumed.Sites.TimesWorked("abandoned_camp"),
+                "Без слепка истощение точки обнулялось бы каждой загрузкой — бесплатный ресет");
+        }
+
+        [Test]
+        public void Save_Economy_WalletAndProgressSurviveReload()
+        {
+            var world = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+
+            for (int day = 0; day < 3; day++)
+            {
+                world.Cycle.AdvanceDay(DayPhase.Day);
+                world.Cycle.AdvanceDay(DayPhase.Night);
+            }
+
+            int goldBefore = world.BaseState.Resources.Get(Game.Core.Economy.ResourceType.Gold);
+
+            var resumed = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+            resumed.Processor.RestoreState(world.Processor.SaveState());
+
+            int goldAfter = resumed.BaseState.Resources.Get(Game.Core.Economy.ResourceType.Gold);
+            Assert.AreEqual(goldBefore, goldAfter, "Кошелёк обязан пережить загрузку (закрывает D10)");
+
+            foreach (var c in world.Roster.All)
+            {
+                var restored = resumed.Roster.Get(c.Id);
+                Assert.IsNotNull(restored, "Именной напарник " + c.Id + " обязан существовать после загрузки");
+                Assert.AreEqual(c.Level, restored.Level, c.Id + ": уровень");
+                Assert.AreEqual(c.Xp, restored.Xp, c.Id + ": опыт");
+            }
+        }
     }
 }

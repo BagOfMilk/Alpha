@@ -50,10 +50,10 @@ namespace Alpha.Sim
             foreach (var policy in policies)
                 foreach (int tier in tiers)
                 {
-                    var processor = BuildProcessor(tier);
+                    var world = BuildWorld(tier);
                     var trace = policy == SimPolicy.Expedition
-                        ? RunExpedition(processor, days)
-                        : CampaignSimulator.Run(processor, policy, days, Balance);
+                        ? RunExpedition(world, days)
+                        : CampaignSimulator.Run(world.Cycle, policy, days, Balance);
                     var metrics = CampaignSimulator.Measure(trace);
                     summary.Add(metrics);
 
@@ -75,32 +75,35 @@ namespace Alpha.Sim
 
         // ---- сборка кампании ----
         //
-        // Мир строит Alpha.Shared.SettlementWorld — тот же код, которым его
-        // строит консольная сборка первого часа. Иначе замеренный темп
+        // Мир строит Alpha.Shared.SettlementWorld — тонкий делегат к
+        // Game.Core.Session.FirstHourWorld (Поправка №7): тот же код, которым
+        // его строит консольная сборка первого часа, теперь ещё и с
+        // производством/стройкой/населением в конвейере. Иначе замеренный темп
         // относился бы не к той игре, в которую играют.
 
         private static readonly string[] Positions = SettlementWorld.Positions;
 
-        private static DayProcessor BuildProcessor(int tier)
+        private static Game.Core.Session.FirstHourWorld BuildWorld(int tier)
         {
-            var roster = SettlementWorld.BuildRoster();
-            var processor = SettlementWorld.BuildProcessor(tier, roster);
+            var world = SettlementWorld.Build(tier, requirePlayerDecision: false);
 
-            // Партия — те, кто держит склад, разведку и совет. Когда они уходят,
-            // эти посты пустеют: вылазка обязана стоить городу.
+            // Партия — протагонист, Максим, Мирослава: «в полі» с самого начала
+            // (§3.0 FIRST_HOUR), на посты не назначены. Харнес крутит их между
+            // Idle («дома») и OnMission («в отряде») сам, минуя ExpeditionParty —
+            // это internal-срез только для замера темпа.
             //
             // Живёт здесь, а не в общем мире: PartyForSim — internal-член ядра,
             // открытый харнесу и закрытый игре. Консольная сборка первого часа
             // его не видит и видеть не должна (инвариант 3).
-            var adapter = (RosterAdapter)processor.Roster;
+            var adapter = (RosterAdapter)world.Processor.Roster;
             var party = new List<Companion>();
             for (int i = 0; i < SettlementWorld.PartyIds.Length; i++)
             {
-                var member = roster.Get(SettlementWorld.PartyIds[i]);
+                var member = world.Roster.Get(SettlementWorld.PartyIds[i]);
                 if (member != null) party.Add(member);
             }
             adapter.PartyForSim = party;
-            return processor;
+            return world;
         }
 
         // ---- вылазка: партия из трёх уходит, три поста пустеют ----
@@ -112,17 +115,17 @@ namespace Alpha.Sim
             return inCycle >= 20 && inCycle < 30;
         }
 
-        private static CampaignTrace RunExpedition(DayProcessor processor, int days)
+        private static CampaignTrace RunExpedition(Game.Core.Session.FirstHourWorld world, int days)
         {
-            var adapter = (RosterAdapter)processor.Roster;
+            var adapter = (RosterAdapter)world.Processor.Roster;
             var party = adapter.PartyForSim;
 
-            return CampaignSimulator.Run(processor, SimPolicy.Expedition, days, Balance, delegate (int day)
+            return CampaignSimulator.Run(world.Cycle, SimPolicy.Expedition, days, Balance, delegate (int day)
             {
                 bool away = PartyIsAway(day);
                 for (int i = 0; i < party.Count; i++)
                     if (!party[i].IsDead)
-                        party[i].Status = away ? CompanionStatus.OnMission : CompanionStatus.Assigned;
+                        party[i].Status = away ? CompanionStatus.OnMission : CompanionStatus.Idle;
                 return away;
             });
         }
