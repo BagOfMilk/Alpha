@@ -3,6 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Game.Core.Loop;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -60,8 +61,14 @@ namespace Game.Gameplay.EditorTools
             // Лес вокруг и камни на склоне.
             Forest();
 
+            // Посты: якоря, к которым привязаны жители и метки происшествий.
+            var posts = Posts();
+
             // Жители на постах — масштаб человека рядом с домами.
-            Villagers();
+            var villagers = Villagers(posts);
+
+            // Сутки идут прямо в сцене: свет, жители и лента событий.
+            Life(posts, villagers);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -83,7 +90,12 @@ namespace Game.Gameplay.EditorTools
             }
 
             EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            Capture(shotPath);
+        }
 
+        /// <summary>Снять то, что открыто сейчас, — без перезагрузки сцены.</summary>
+        private static void Capture(string shotPath)
+        {
             var camera = Object.FindFirstObjectByType<Camera>();
             if (camera == null) { Debug.LogError("В сцене нет камеры"); return; }
 
@@ -182,6 +194,40 @@ namespace Game.Gameplay.EditorTools
         {
             Build();
             Shoot();
+        }
+
+        /// <summary>
+        /// Плёнка суток: конвейер крутится прямо в редакторе, каждая фаза
+        /// снимается кадром. Режим игры для этого не нужен — сутки двигает тот
+        /// же метод, что и таймер в игре, поэтому плёнка показывает настоящую
+        /// жизнь села, а не отдельную «демонстрационную» ветку кода.
+        /// </summary>
+        [MenuItem("Alpha/Снять плёнку суток")]
+        public static void FilmDays()
+        {
+            Build();
+
+            var life = Object.FindFirstObjectByType<Game.Gameplay.VillageLife>();
+            if (life == null) { Debug.LogError("В сцене нет компонента жизни"); return; }
+
+            life.Initialize();
+
+            // Сорок фаз — это двадцать суток. Короче нельзя: харнес показал, что
+            // первое происшествие приходит примерно на девятые сутки, и плёнка
+            // на пять дней показала бы «ничего не происходит» как приговор.
+            const int phases = 40;
+            for (int i = 0; i < phases; i++)
+            {
+                var report = life.AdvancePhase();
+                string mark = report.Phase == DayPhase.Night ? "ночь" : "день";
+                Capture(string.Format("Screenshots/life-{0:00}-{1}.png", i + 1, mark));
+                var lines = Game.Gameplay.VillageView.Lines(report);
+                string what = lines.Count > 0 ? string.Join(" | ", lines.ToArray()) : "тихо";
+                Debug.Log("Кадр " + (i + 1) + ": сутки " + report.Day + ", " + mark + " — " + what);
+            }
+
+            EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), ScenePath);
+            Debug.Log("Плёнка снята: " + phases + " фаз");
         }
 
         // ================= постройки =================
@@ -314,30 +360,118 @@ namespace Game.Gameplay.EditorTools
             }
         }
 
-        /// <summary>Жители: четверо на постах плюс двое у ворот.</summary>
-        private static void Villagers()
+        /// <summary>
+        /// Посты поселения как якоря сцены. Имя «post:&lt;id&gt;» — это связь с
+        /// ядром: тот же идентификатор носит слот назначения, по нему компонент
+        /// жизни находит, где стоит человек и где показать происшествие.
+        /// </summary>
+        private static GameObject Posts()
+        {
+            var group = new GameObject("Посты");
+
+            Anchor(group, "council_seat", new Vector3(-1.0f, 0f, 1.2f));
+            Anchor(group, "storehouse_dock", new Vector3(-5.4f, 0f, 0.6f));
+            Anchor(group, "settlement_market", new Vector3(2.2f, 0f, 0.2f));
+            Anchor(group, "infirmary_bed", new Vector3(4.2f, 0f, 0.8f));
+            Anchor(group, "settlement_farms", new Vector3(-3.4f, 0f, -5.0f));
+            Anchor(group, "scouting_post", new Vector3(0.5f, 0f, -8.0f));
+            Anchor(group, "workshop_bench", new Vector3(8.2f, 0f, -1.6f));
+
+            return group;
+        }
+
+        private static void Anchor(GameObject parent, string postId, Vector3 position)
+        {
+            var go = new GameObject("post:" + postId);
+            go.transform.SetParent(parent.transform, false);
+            go.transform.localPosition = position;
+        }
+
+        /// <summary>
+        /// Жители стоят на своих постах. Имя «villager:&lt;postId&gt;» — та же
+        /// связь: ночью компонент прячет именно тех, кто не патрулирует.
+        /// </summary>
+        private static GameObject Villagers(GameObject posts)
         {
             var group = new GameObject("Жители");
 
+            string[] postIds =
+            {
+                "council_seat", "storehouse_dock", "settlement_market",
+                "infirmary_bed", "settlement_farms", "scouting_post"
+            };
             string[] who =
             {
                 Chars + "character-male-a.fbx", Chars + "character-female-b.fbx",
                 Chars + "character-male-c.fbx", Chars + "character-female-d.fbx",
                 Chars + "character-male-e.fbx", Chars + "character-female-f.fbx"
             };
-            Vector3[] where =
-            {
-                new Vector3(0.5f, 0f, -8.2f),   // у ворот
-                new Vector3(-0.8f, 0f, -7.6f),  // у ворот
-                new Vector3(-5.5f, 0f, 0.4f),   // двор хаты
-                new Vector3(2.2f, 0f, 0.2f),    // улица
-                new Vector3(8.2f, 0f, -1.6f),   // у мельницы
-                new Vector3(-3.2f, 0f, -5.6f)   // у дальней хаты
-            };
-            float[] facing = { 200f, 160f, 90f, 250f, 300f, 20f };
+            float[] facing = { 250f, 90f, 200f, 300f, 20f, 160f };
 
-            for (int i = 0; i < who.Length; i++)
-                Attach(group, who[i], where[i], facing[i]);
+            for (int i = 0; i < postIds.Length; i++)
+            {
+                var post = posts.transform.Find("post:" + postIds[i]);
+                if (post == null) continue;
+
+                var holder = new GameObject("villager:" + postIds[i]);
+                holder.transform.SetParent(group.transform, false);
+                holder.transform.position = post.position + new Vector3(0.6f, 0f, 0.4f);
+
+                Attach(holder, who[i], Vector3.zero, facing[i]);
+            }
+
+            return group;
+        }
+
+        /// <summary>
+        /// Компонент, который крутит сутки, плюс экранный текст: строка
+        /// состояния сверху и лента событий под ней.
+        /// </summary>
+        private static void Life(GameObject posts, GameObject villagers)
+        {
+            var cameraGo = Object.FindFirstObjectByType<Camera>();
+            var sunLight = Object.FindFirstObjectByType<Light>();
+
+            var life = new GameObject("Жизнь села").AddComponent<Game.Gameplay.VillageLife>();
+            life.sun = sunLight;
+            life.view = cameraGo;
+            life.postsRoot = posts.transform;
+            life.villagersRoot = villagers.transform;
+
+            if (cameraGo != null)
+            {
+                life.headline = Caption(cameraGo.transform, "Строка состояния",
+                    new Vector3(-18.6f, 10.2f, 12f), 0.16f);
+                life.log = Caption(cameraGo.transform, "Лента событий",
+                    new Vector3(-18.6f, 8.6f, 12f), 0.11f);
+            }
+        }
+
+        /// <summary>
+        /// Текст в мире перед камерой. Встроенный шрифт берётся намеренно:
+        /// свой (Fixel, OFL) появится вместе с интерфейсом, а срез не должен
+        /// ждать вёрстки.
+        /// </summary>
+        private static TextMesh Caption(Transform parent, string name, Vector3 local, float size)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = local;
+            go.transform.localRotation = Quaternion.identity;
+
+            var text = go.AddComponent<TextMesh>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = 64;
+            text.characterSize = size;
+            text.anchor = TextAnchor.UpperLeft;
+            text.color = Color.white;
+            text.text = string.Empty;
+
+            var renderer = go.GetComponent<MeshRenderer>();
+            if (renderer != null && text.font != null)
+                renderer.sharedMaterial = text.font.material;
+
+            return text;
         }
 
         // ================= сцена =================

@@ -31,6 +31,7 @@
       линт давал бы ложное «собирается». Их проверяет сам Unity — оба скрипта
       запускаются в batch-режиме при сборке сцены и снимке.
     -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/VillageLife.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/VillageShowcase.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/KenneyImportSettings.cs" />
   </ItemGroup>
