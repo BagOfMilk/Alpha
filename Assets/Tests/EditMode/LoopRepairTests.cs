@@ -209,6 +209,7 @@ namespace Game.Tests.EditMode
             public int Threshold => 100;
             public int CooldownDays => 0;
             public bool IsActive(PulseContext ctx) => true;
+            public bool Announces => true;
             // Ровно столько, чтобы лестница проходилась по ступени в день.
             public int InsistencePerDay(PulseContext ctx) => 30;
         }

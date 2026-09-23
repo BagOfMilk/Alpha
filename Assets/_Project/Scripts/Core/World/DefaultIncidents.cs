@@ -157,6 +157,9 @@ namespace Game.Core.World
         public int CooldownDays => 4;
         public bool IsActive(PulseContext ctx) => true;
 
+        /// <summary>Угроза, о которой не предупредили, — нечестная.</summary>
+        public bool Announces => true;
+
         public int InsistencePerDay(PulseContext ctx)
         {
             // База 6 плюс по 4 за каждую полосу Напряжения: тихий город почти молчит.
@@ -173,6 +176,9 @@ namespace Game.Core.World
         public int Threshold => 80;
         public int CooldownDays => 3;
         public bool IsActive(PulseContext ctx) => ctx.IsNight;
+
+        /// <summary>Угроза, о которой не предупредили, — нечестная.</summary>
+        public bool Announces => true;
 
         public int InsistencePerDay(PulseContext ctx)
         {
@@ -195,6 +201,9 @@ namespace Game.Core.World
         public int Threshold => 120;
         public int CooldownDays => 30;
         public bool IsActive(PulseContext ctx) => ctx.TensionBandIndex >= 3;
+
+        /// <summary>Угроза, о которой не предупредили, — нечестная.</summary>
+        public bool Announces => true;
 
         public int InsistencePerDay(PulseContext ctx)
         {

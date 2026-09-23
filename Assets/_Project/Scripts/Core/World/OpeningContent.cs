@@ -140,6 +140,13 @@ namespace Game.Core.World
             public int CooldownDays => 999;   // один раз за срез
 
             public bool IsActive(PulseContext ctx) => ctx.Day == _day && !ctx.IsNight;
+
+            /// <summary>
+            /// Авторская сцена о себе не предупреждает: её «предвестник» —
+            /// сама постановка. Иначе поставленный узел сыплет лестницей слухов
+            /// о себе самом, и настоящие предвестники в ней тонут.
+            /// </summary>
+            public bool Announces => false;
             public int InsistencePerDay(PulseContext ctx) => ctx.Day == _day && !ctx.IsNight ? 1 : 0;
         }
 
@@ -173,6 +180,9 @@ namespace Game.Core.World
 
             /// <summary>Боярин договаривается независимо от того, спокойно ли в городе.</summary>
             public bool IsActive(PulseContext ctx) => true;
+
+            /// <summary>Слух о боярине — именно предвестник: он и обязан дойти (§2.2).</summary>
+            public bool Announces => true;
 
             public int InsistencePerDay(PulseContext ctx) => 12;
         }
