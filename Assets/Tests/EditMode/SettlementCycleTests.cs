@@ -184,6 +184,74 @@ namespace Game.Tests.EditMode
             Assert.Less(starvingOutput, fedOutput, "после голодного дня база работает хуже");
         }
 
+        // ================= перенесено со снесённого второго моста =================
+        //
+        // До 23.09.2026 в проекте было два моста производства в конвейер: этот и
+        // порт IDailyCycle + SettlementCycleStep. Порт снесён — он делал цикл базы
+        // публичным. Его гарантии, которых здесь не было, переехали сюда.
+
+        /// <summary>
+        /// У суток через мост есть материальный итог. CalendarDay_ProducesExactlyOnce
+        /// сравнивает двое суток между собой и прошёл бы и при нулевой выработке —
+        /// здесь утверждается сам факт: десять суток что-то произвели.
+        /// </summary>
+        [Test]
+        public void Cycle_ProducesSomethingToSpend()
+        {
+            var cycle = Build(Cfg());
+            int before = cycle.State.Resources.Get(ResourceType.Food);
+
+            for (int day = 0; day < 10; day++) cycle.AdvanceCalendarDay();
+
+            Assert.Greater(cycle.State.Resources.Get(ResourceType.Food), before,
+                "Десять суток через мост обязаны что-то произвести: иначе у дня нет материального результата");
+        }
+
+        /// <summary>Производство подключается одним путём, и узкий набор шагов его не содержит.</summary>
+        [Test]
+        public void BuildSteps_IncludesProduction_DefaultStepsDoesNot()
+        {
+            var state = new BaseState(new Roster(), new ResourceLedger(), Cfg());
+            var production = new ProductionStep(state);
+
+            Assert.IsTrue(SettlementCycle.BuildSteps(production).Contains(production),
+                "Штатный набор с базой обязан содержать производство: иначе у суток нет материального итога");
+            Assert.IsFalse(DayProcessor.DefaultSteps().Any(s => s.Order == DayStepOrder.Production),
+                "Узкий набор остаётся без производства — это нужно тестам, которым база не нужна");
+        }
+
+        /// <summary>Раны от кризиса сходят со временем — и только через мост.</summary>
+        [Test]
+        public void Cycle_HealsWounds_ThatCrisisLeftBehind()
+        {
+            var cycle = Build(Cfg());
+            var farmer = cycle.State.Roster.Get("farmer_1");
+            farmer.InjuryPoints = 20.0;
+
+            for (int day = 0; day < 10; day++) cycle.AdvanceCalendarDay();
+
+            Assert.Less(farmer.InjuryPoints, 20.0,
+                "Раны обязаны сходить со временем: без цикла в конвейере тридцать очков от кризиса оставались навсегда");
+        }
+
+        /// <summary>
+        /// Настоящая гарантия US-1.3 — не номер шага, а то, что дни лечения и
+        /// производства не растят угрозу. Единственный допустимый источник
+        /// движения шкалы за сытые спокойные сутки — фоновый тик от тира.
+        /// </summary>
+        [Test]
+        public void Cycle_NeverTouchesTension_WhenFed()
+        {
+            var cycle = Build(Cfg());
+            cycle.State.Roster.Get("farmer_1").InjuryPoints = 20.0;
+
+            for (int day = 0; day < 20; day++)
+                foreach (var report in cycle.AdvanceCalendarDay())
+                    foreach (var change in report.TensionChanges)
+                        Assert.AreEqual(TensionDriver.CityTierTick, change.Driver,
+                            "Цикл поселения не имеет права двигать Напряжение");
+        }
+
         private static System.Collections.Generic.IReadOnlyList<TensionChange> TensionLedgerOf(DayReport report)
             => report.TensionChanges;
     }

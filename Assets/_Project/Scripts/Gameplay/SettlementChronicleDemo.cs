@@ -72,6 +72,13 @@ namespace Game.Gameplay
             baseState.TryAssign("guard", "watch");
             baseState.TryAssign("trader", "market");
 
+            // Амбар на весь прогон. Хроника показывает давление города, а не
+            // голод: ферм у этой общины нет, и без запаса мост честно довёл бы
+            // голод до Напряжения с первых суток. Голодный пресет — это пустой
+            // амбар, а не отдельный режим.
+            baseState.Resources.Add(ResourceType.Food,
+                balance.FoodUpkeepPerCompanion * roster.Count * (daysToSimulate + 1));
+
             var adapter = new RosterAdapter(roster, "hero");
             var tension = new TensionState(balance.Tension);
 
@@ -98,6 +105,11 @@ namespace Game.Gameplay
                 }
             };
 
+            // Время идёт только через мост: он же переносит в конвейер флаг
+            // голода. Пока хроника крутила processor.Advance напрямую, шаги
+            // производства в ней стояли, а голод не давил никогда.
+            var cycle = new SettlementCycle(baseState, processor, production);
+
             var choices = new HashSet<int>(heavyChoiceDays ?? new int[0]);
 
             // full — весь текст для файла; chunk — текущая декада для консоли.
@@ -117,7 +129,7 @@ namespace Game.Gameplay
             {
                 foreach (var phase in new[] { DayPhase.Day, DayPhase.Night })
                 {
-                    var report = processor.Advance(phase);
+                    var report = cycle.AdvanceDay(phase);
                     string mark = phase == DayPhase.Night ? "ночь" : "день";
 
                     foreach (var line in Describe(report))

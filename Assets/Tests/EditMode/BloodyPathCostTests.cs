@@ -275,23 +275,6 @@ namespace Game.Tests.EditMode
                 "Показанный порог обязан включать надбавку за вчерашнюю кровь");
         }
 
-        // ================= Цикл поселения в конвейере =================
-
-        [Test]
-        public void DefaultSteps_WithCycle_IncludesProduction()
-        {
-            var roster = BuildRoster();
-            var state = new BaseState(roster, new Game.Core.Economy.ResourceLedger(), new BalanceConfig());
-
-            var withCycle = DayProcessor.DefaultSteps(state).ToList();
-            var without = DayProcessor.DefaultSteps().ToList();
-
-            Assert.IsTrue(withCycle.Any(s => s.Order == DayStepOrder.Production),
-                "Штатный набор шагов с циклом обязан содержать производство: иначе у суток нет материального итога");
-            Assert.IsFalse(without.Any(s => s.Order == DayStepOrder.Production),
-                "Без цикла конвейер остаётся узким — это нужно тестам, которым база не нужна");
-        }
-
         // ================= фикстура =================
 
         private static readonly string[] AllPositions =

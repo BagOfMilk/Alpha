@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -84,6 +85,45 @@ namespace Game.Tests.EditMode
 
             Assert.IsNull(method,
                 "AdvanceCycle снова публичный — производство можно позвать в обход конвейера дня");
+        }
+
+        /// <summary>
+        /// Закрытый AdvanceCycle не защищает ничего, если рядом есть открытая
+        /// дверь. Так и было: порт конвейера (IDailyCycle) дал базе публичный
+        /// RunDay(), который звал AdvanceCycle, — и Game.Gameplay снова могла
+        /// прокрутить сутки мимо конвейера, без голода и без отчёта. Порт снесён
+        /// 23.09.2026; проверка держит обе двери: база не реализует контрактов
+        /// конвейера, и ни один её открытый метод без аргументов не двигает время.
+        /// </summary>
+        [Test]
+        public void BaseState_HasNoBackdoorToAdvanceTime()
+        {
+            var type = typeof(Game.Core.Base.BaseState);
+
+            var loopContracts = type.GetInterfaces()
+                .Where(i => i.Namespace == "Game.Core.Loop")
+                .Select(i => i.Name).ToArray();
+            Assert.IsEmpty(loopContracts,
+                "База реализует контракт конвейера — через него сутки идут в обход моста: " +
+                string.Join(", ", loopContracts));
+
+            // Сегодня таких методов нет, и цикл ничего не зовёт — он ждёт новых.
+            // Любой будущий открытый метод базы без аргументов будет вызван здесь
+            // на ПУСТОЙ базе: он обязан это выдерживать. Если метод законно не
+            // может работать без ростера — это повод дать ему аргумент, а не
+            // исключать его из проверки.
+            var cfg = new Game.Core.Balance.BalanceConfig();
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
+                if (method.IsSpecialName || method.GetParameters().Length != 0) continue;
+
+                var state = new Game.Core.Base.BaseState(
+                    new Game.Core.Characters.Roster(), new Game.Core.Economy.ResourceLedger(), cfg);
+                method.Invoke(state, null);
+
+                Assert.AreEqual(0, state.CurrentCycle,
+                    "Открытый метод " + method.Name + " двигает время в обход конвейера дня");
+            }
         }
 
         /// <summary>

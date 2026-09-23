@@ -12,7 +12,7 @@ namespace Game.Core.Base
     /// и продвигает время методом <see cref="AdvanceCycle"/> (один цикл = один
     /// игровой день). Вся логика — чистый C#, без зависимостей от Unity.
     /// </summary>
-    public sealed class BaseState : Game.Core.Loop.IDailyCycle
+    public sealed class BaseState
     {
         public Roster Roster { get; }
         public ResourceLedger Resources { get; }
@@ -137,16 +137,6 @@ namespace Game.Core.Base
         /// демка базы крутила его напрямую, и в проекте существовало два дневных
         /// цикла, не знающих друг о друге.
         /// </summary>
-        /// <summary>
-        /// Порт для дневного конвейера (<see cref="Game.Core.Loop.IDailyCycle"/>):
-        /// городской слой прокручивает сутки, не зная, что за ними стоит
-        /// легаси-экономика.
-        /// </summary>
-        public void RunDay()
-        {
-            AdvanceCycle();
-        }
-
         internal CycleReport AdvanceCycle()
         {
             CurrentCycle++;

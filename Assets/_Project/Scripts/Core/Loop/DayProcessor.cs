@@ -100,15 +100,16 @@ namespace Game.Core.Loop
         public IReadOnlyList<IDayStep> Steps => _steps;
 
         /// <summary>
-        /// Стандартный набор шагов дня.
+        /// Стандартный набор шагов дня — без производства.
         ///
-        /// Цикл поселения подставляется портом: с ним у суток есть материальный
-        /// итог (произвели, поели, подлечились), без него конвейер работает как
-        /// на Э0 — это удобно узким тестам, которым база не нужна. Игра и
-        /// консольная сборка обязаны передавать цикл: иначе девяносто суток
-        /// проходят, не меняя ни одного числа, которое игрок может потратить.
+        /// Материальный итог суток (произвели, поели, подлечились) подключается
+        /// ровно одним путём: <c>SettlementCycle.BuildSteps</c> в модуле базы.
+        /// Второй мост — порт в этом слое — снесён 23.09.2026: он делал цикл
+        /// базы публичным и позволял прокрутить сутки в обход конвейера. Без
+        /// производства конвейер работает как на Э0 — это нужно узким тестам,
+        /// которым база не нужна.
         /// </summary>
-        public static IEnumerable<IDayStep> DefaultSteps(IDailyCycle settlementCycle = null)
+        public static IEnumerable<IDayStep> DefaultSteps()
         {
             var steps = new List<IDayStep>
             {
@@ -118,8 +119,6 @@ namespace Game.Core.Loop
                 new IncidentStep(),
                 new SignalStep()
             };
-
-            if (settlementCycle != null) steps.Add(new SettlementCycleStep(settlementCycle));
 
             return steps;
         }
