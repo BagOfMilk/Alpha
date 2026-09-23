@@ -22,6 +22,17 @@
     <Compile Include="UnityEngineStub.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/**/*.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Editor/**/*.cs" />
+
+    <!--
+      Сборщик сцены и настройки импорта чужих наборов НЕ линтуются.
+      Они ходят в глубину редактора и рендера (PrefabUtility, ModelImporter,
+      RenderTexture, примитивы, свет), и честно смоделировать этот API
+      заглушками нельзя: заглушка молча разошлась бы с настоящей сигнатурой, и
+      линт давал бы ложное «собирается». Их проверяет сам Unity — оба скрипта
+      запускаются в batch-режиме при сборке сцены и снимке.
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/VillageShowcase.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/KenneyImportSettings.cs" />
   </ItemGroup>
 
   <ItemGroup>
