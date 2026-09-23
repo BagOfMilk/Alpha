@@ -53,6 +53,13 @@ namespace Game.Core.Characters
         /// <summary>Скилы. Единственное, что растёт за уровни.</summary>
         public SkillSet Skills { get; }
 
+        /// <summary>
+        /// Карточка (Поправка №5.6 п. 1): имя, откуда взят, что помнит. У
+        /// безымянных её нет — и по замыслу быть не должно: безымянных мобов
+        /// в игре нет вовсе (Поправка №5.2).
+        /// </summary>
+        public CharacterCard Card { get; set; }
+
         public TraitSlots Traits { get; }
         public ScarTrack Scars { get; } = new ScarTrack();
         public CompanionPerks Perks { get; } = new CompanionPerks();
