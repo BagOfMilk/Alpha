@@ -30,9 +30,23 @@ namespace Game.Tests.EditMode
         private static void FastForwardOpeningToMorning(GameSession s)
         {
             Assert.AreEqual(SessionState.Scene, s.State);
-            SceneStepView step;
-            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            RunSceneToFinish(s);
             Assert.AreEqual(SessionState.Morning, s.State);
+        }
+
+        /// <summary>
+        /// Доганяє поточну сцену до кінця (Поправка №7.8): на кожному
+        /// Choice-кроці бере варіант 0 — цей файл перевіряє РЕШТУ конвеєра
+        /// (розв'язку вузла, збереження, конвеєр дня), а не саму розмову;
+        /// зміст вибору сцен покритий окремими тестами (SceneChoiceTests/
+        /// BetrayalConfrontationTests).
+        /// </summary>
+        private static SceneStepView RunSceneToFinish(GameSession s)
+        {
+            SceneStepView step = s.AdvanceScene();
+            while (!step.IsFinished)
+                step = step.IsChoice ? s.ChooseSceneOption(0) : s.AdvanceScene();
+            return step;
         }
 
         /// <summary>
@@ -62,7 +76,7 @@ namespace Game.Tests.EditMode
                 if (s.State == SessionState.Scene)
                 {
                     SceneStepView step;
-                    do { step = s.AdvanceScene(); } while (!step.IsFinished);
+                    step = RunSceneToFinish(s);
                 }
             }
 
@@ -163,7 +177,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(SessionState.Scene, s.State);
 
             SceneStepView step;
-            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            step = RunSceneToFinish(s);
             Assert.AreEqual(SessionState.Evening, s.State);
 
             bool sawResolved = false;
@@ -227,7 +241,7 @@ namespace Game.Tests.EditMode
             Assert.IsNotNull(s.LastDayReport, "день мав завершитись battle-driven резолвом рішення");
 
             SceneStepView step;
-            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            step = RunSceneToFinish(s);
             Assert.AreEqual(SessionState.Evening, s.State);
         }
 
@@ -323,7 +337,7 @@ namespace Game.Tests.EditMode
                 "кроваве рішення вузла 1 через бій мало налякати громаду так само, як CausedFear звичайного кровавого шляху");
 
             SceneStepView step;
-            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            step = RunSceneToFinish(s);
             s.ConfirmEvening();
             s.AdvanceNight();
         }
@@ -397,19 +411,35 @@ namespace Game.Tests.EditMode
 
         // ---- Дефекція (US-9.4, R2/§2 №25): DefectionWatch.Tick + Defection.ShouldDefect ----
 
+        private static Game.Core.Session.Views.CompanionSummary FindCompanion(RosterView roster, string id)
+        {
+            if (roster?.Companions == null) return null;
+            foreach (var c in roster.Companions) if (c.Id == id) return c;
+            return null;
+        }
+
         /// <summary>
-        /// Детермінований 3v2 бій вузла 1 (без хазяїна, як і в
-        /// Day1_BloodyPath_...) заводить Максима вбитим і Мирославу — на
-        /// полосу Base: PassVanguardOutcome сіє "defector_seeded" і реальна
-        /// лояльність падає до Resentful (50-35=15 -> Resentful за §3.1
-        /// коментарем у CompanionSocialBalance). Це рівно та комбінація
-        /// (прапор + полоса ≤ Resentful), за якої Defection.ShouldDefect
-        /// дефектить БЕЗ очікування 5 підряд-діб (seamsForD1 пакета B4) —
-        /// TickDefectionWatch мала підхопити її на найближчому завершенні
-        /// доби, а не мовчати, як до цього пакету.
+        /// Детермінований 3v2 бій вузла 1 (без хазяїна) заводить Максима
+        /// вбитим і Мирославу — на полосу Base: <c>PassVanguardOutcome</c>
+        /// сіє "defector_seeded" і реальна лояльність падає до Resentful
+        /// (50-35=15 -> Resentful за §3.1 коментарем у
+        /// CompanionSocialBalance). До Поправки №7.8 ця сама комбінація
+        /// (прапор + полоса ≤ Resentful) дефектила Мирославу МОВЧКИ, на
+        /// найближчому завершенні доби. Тепер для неї є сценарна нічна
+        /// розмова-конфронтація (доба 3) — <c>GameSession.TickDefectionWatch</c>
+        /// чекає на її розв'язку (<c>CompanionScenes.MyroslavaConfrontationResolvedFlag</c>),
+        /// тож миттєвої мовчазної дефекції на добу 1 більше нема: гравець
+        /// зобов'язаний побачити зраду, що насуває, а не прочитати про неї
+        /// постфактум у стрічці подій.
+        ///
+        /// Полоса лояльності Мирослави природно спливає з Resentful до Wary
+        /// вже на добу 2 (пасивний бонус «Morale» від council_seat,
+        /// <c>LoyaltyRules.OnMorale</c>) — тому «насувана зрада» тут
+        /// перевіряється лише прапором <c>Defection.DefectorSeededFlag</c>, а
+        /// не повторним читанням полоси (GameSession.OfferMyroslavaEveningScene).
         /// </summary>
         [Test]
-        public void Day1_BloodyPath_SeedsDefector_AndDefectionWatchDefectsOnNightEnd()
+        public void Day1_BloodyPath_SeedsDefector_ButDefectionWaitsForNightThreeConfrontation()
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
@@ -436,24 +466,88 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(sawLeft, "детермінований бій мав дати полосу Base/Worst (Мирослава йде) — тест писано під конкретний вихід");
             Assert.IsTrue(sawResentful, "лояльність Мирослави мала впасти рівно до Resentful (§3.1, -35 -> 15)");
 
-            SceneStepView step;
-            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            RunSceneToFinish(s);
             Assert.AreEqual(SessionState.Evening, s.State);
 
             s.ConfirmEvening();
             Assert.AreEqual(SessionState.Night, s.State);
             s.AdvanceNight();
 
-            bool sawDefected = false, sawRipple = false;
+            bool sawDefectedDay1 = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefectedDay1 = true;
+            Assert.IsFalse(sawDefectedDay1,
+                "Поправка №7.8: прапор defector_seeded + Resentful більше НЕ дефектять Мирославу мовчки на " +
+                "найближчій ночі — вона чекає нічної розмови доби 3 (GameSession.OfferMyroslavaEveningScene)");
+
+            var stillPresent = FindCompanion(s.GetRosterView(), "myroslava");
+            Assert.IsNotNull(stillPresent);
+            Assert.AreNotEqual(Game.Core.Characters.CompanionStatus.Antagonist, stillPresent.Status,
+                "вона лишається в поселенні, поки конфронтація доби 3 не розв'язана");
+
+            // Доба 2, тихо — нічого не мало б розв'язати конфронтацію завчасно
+            // (полоса лояльності тим часом спливає з Resentful до Wary —
+            // навмисно: див. коментар над тестом).
+            s.ConfirmMorning();
+            var d2report = s.AdvanceDay();
+            while (d2report != null && d2report.AwaitsDecision)
+                d2report = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene) RunSceneToFinish(s);
+            s.ConfirmEvening();
+            var d2night = s.AdvanceNight();
+            while (d2night != null && d2night.AwaitsDecision)
+                d2night = s.ResolveIncident(IncidentPath.Quiet);
+            Assert.AreEqual(2, s.CurrentView.Day);
+
+            // Доба 3, вечір: конфронтація сама себе пропонує лише тут
+            // (GameSession.OfferMyroslavaEveningScene — той самий контракт,
+            // що BotRunner.MaybeOfferScriptedScene використовує для ботів).
+            s.ConfirmMorning();
+            var day3Report = s.AdvanceDay();
+            while (day3Report != null && day3Report.AwaitsDecision)
+                day3Report = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene) RunSceneToFinish(s);
+            Assert.AreEqual(SessionState.Evening, s.State);
+            Assert.AreEqual(3, s.CurrentView.Day);
+
+            var confrontation = s.OfferMyroslavaEveningScene();
+            Assert.IsNotNull(confrontation, "зрада насуває (defector_seeded і досі не розв'язано) — доба 3 мала відкрити саме конфронтацію, не тиху перевірку");
+
+            bool sawConfrontationBegun = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "scene.betrayal_confrontation.begun") sawConfrontationBegun = true;
+            Assert.IsTrue(sawConfrontationBegun, "§2 нова механіка betrayal_confrontation: подія на відкриття сцени");
+
+            // OfferMyroslavaEveningScene() повертає лише ПЕРШИЙ кадр сцени
+            // (Shot миттю за BeginScene, той самий контракт, що й
+            // BotRunner.DriveSceneStep коментує: "перший кадр, який одразу
+            // повертають OfferMyroslavaEveningScene/OfferZakharCouncilScene");
+            // до вибору доганяємо так само, як RunSceneToFinish/FastForwardScene.
+            while (confrontation != null && !confrontation.IsChoice && !confrontation.IsFinished)
+                confrontation = s.AdvanceScene();
+
+            Assert.IsTrue(confrontation.IsChoice, "конфронтація одразу зупиняється на виборі (переконати/звинуватити/відпустити)");
+            int accuseIndex = -1;
+            for (int i = 0; i < confrontation.Options.Count; i++)
+                if (confrontation.Options[i].SkillKey == Game.Core.Checks.SkillKeys.Intimidate.Id) accuseIndex = i;
+            Assert.GreaterOrEqual(accuseIndex, 0, "варіант «звинуватити» (Залякування) мав бути серед опцій конфронтації");
+
+            s.ChooseSceneOption(accuseIndex);
+
+            bool sawDefectedAfterConfrontation = false, sawRipple = false;
             foreach (var e in s.DayLog)
             {
-                if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefected = true;
+                if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefectedAfterConfrontation = true;
                 if (e.Key == "roster.rippled") sawRipple = true;
             }
-            Assert.IsTrue(sawDefected,
-                "прапор defector_seeded + полоса ≤ Resentful мали дефектити Мирославу негайно (Defection.ShouldDefect), " +
-                "не чекаючи 5 підряд-діб — TickDefectionWatch мала бути звичайно неможливою без виклику з D1a");
+            Assert.IsTrue(sawDefectedAfterConfrontation,
+                "«звинуватити» на нічній розмові виконує дефекцію негайно (GameSession.ApplyBetrayalConfrontationSideEffectsIfNeeded)");
             Assert.IsTrue(sawRipple, "дефекція — це предаство (RosterDrama.OnBetrayal), а не тиха відсутність ряби");
+
+            var afterConfrontation = FindCompanion(s.GetRosterView(), "myroslava");
+            Assert.IsNotNull(afterConfrontation);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, afterConfrontation.Status,
+                "після звинувачення вона переходить у статус Antagonist — так само, як старий мовчазний шлях");
         }
 
         // ---- Морнінг-команди: Assign/Order*/Preview/Depart/Quest/Build/Equip/Craft ----
@@ -831,7 +925,7 @@ namespace Game.Tests.EditMode
             if (s.State == SessionState.Scene)
             {
                 SceneStepView step;
-                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+                step = RunSceneToFinish(s);
             }
             s.ReactToCrisis(CrisisReaction.SpendGold);
             s.ConfirmEvening();
@@ -886,7 +980,7 @@ namespace Game.Tests.EditMode
             if (s.State == SessionState.Scene)
             {
                 SceneStepView step;
-                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+                step = RunSceneToFinish(s);
             }
             s.ReactToCrisis(CrisisReaction.SpendGold);
             s.ConfirmEvening();
@@ -935,7 +1029,7 @@ namespace Game.Tests.EditMode
             if (s.State == SessionState.Scene)
             {
                 SceneStepView step;
-                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+                step = RunSceneToFinish(s);
             }
             s.ReactToCrisis(CrisisReaction.SpendGold);
             s.ConfirmEvening();
@@ -1232,7 +1326,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(SessionState.Scene, source.State);
 
             SceneStepView step;
-            do { step = source.AdvanceScene(); } while (!step.IsFinished);
+            step = RunSceneToFinish(source);
             Assert.AreEqual(SessionState.Morning, source.State);
 
             string blob = source.SaveState(0);
@@ -1388,7 +1482,7 @@ namespace Game.Tests.EditMode
             if (s.State == SessionState.Scene)
             {
                 SceneStepView step;
-                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+                step = RunSceneToFinish(s);
             }
             Assert.AreEqual(SessionState.Evening, s.State);
 

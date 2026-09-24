@@ -58,5 +58,33 @@ namespace Game.Core.Session.Views
         public string ActorId, SecondActorId, SpeakerId, LineKey, EffectKey;
         public bool IsFinished;
         public string TransitionKey;
+
+        /// <summary>
+        /// Поправка №7.8: сцена стоит на выборе реплики — <see cref="Options"/>
+        /// несёт варианты (реюз <see cref="DecisionOptionView"/> — та же форма,
+        /// что у пропозиції квесту/інциденту: ключ тексту, скіл/поріг/полоса-
+        /// прев'ю, жодного прихованого числа, R17). Команда розв'язку —
+        /// <c>GameSession.ChooseSceneOption(int)</c>.
+        /// </summary>
+        public bool IsChoice;
+
+        /// <summary>Id поточного вибору (для журналу механік/ботів) — пусто, якщо IsChoice=false.</summary>
+        public string ChoiceId;
+
+        public IReadOnlyList<DecisionOptionView> Options;
+    }
+
+    /// <summary>
+    /// Журнал механік для тестера (Поправка №7.8): які механіки вже
+    /// трапились у цій партії, які ще ні, і як їх викликати. Дані,
+    /// обчислені з кумулятивних ключів подій сесії — жодного прихованого
+    /// числа.
+    /// </summary>
+    public sealed class MechanicJournalEntryView
+    {
+        public string Id;
+        public string TitleKey;
+        public string HintKey;
+        public bool Seen;
     }
 }

@@ -27,6 +27,8 @@ namespace Game.Core.Session.Bots
             return 0;
         }
 
+        public int ChooseSceneOption(SceneStepView step) => BotSupport.ChooseScenePersuasive(step);
+
         public bool ChoosePatrol(SessionView view) => false; // мінімальна активність уночі
 
         public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city)

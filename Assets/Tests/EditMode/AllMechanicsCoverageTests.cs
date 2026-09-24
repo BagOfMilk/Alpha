@@ -704,6 +704,7 @@ namespace Game.Tests.EditMode
             public string Name => _inner.Name + "+StepByStep";
             public IncidentPath ChooseIncidentPath(PendingOfferView offer) => _inner.ChooseIncidentPath(offer);
             public int ChooseQuestOption(QuestOfferView offer) => _inner.ChooseQuestOption(offer);
+            public int ChooseSceneOption(SceneStepView step) => _inner.ChooseSceneOption(step);
             public bool ChoosePatrol(SessionView view) => _inner.ChoosePatrol(view);
             public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city) => _inner.ChooseAssignments(roster, city);
             public ExpeditionChoice? ChooseExpedition(SessionView view) => _inner.ChooseExpedition(view);
@@ -1017,8 +1018,16 @@ namespace Game.Tests.EditMode
 
         private static void FastForwardScene(GameSession s)
         {
+            // Поправка №7.8: Choice-крок сам собою не рухає сцену далі
+            // (ScenePlayback.Next() короткочасно повертає той самий кадр,
+            // поки чекає на вибір) — беремо варіант 0 (перший виборний), як і
+            // GameSessionTests.RunSceneToFinish: цей хелпер лише доганяє
+            // сесію до Morning, зміст вибору тут не перевіряється.
             while (s.State == SessionState.Scene)
-                s.AdvanceScene();
+            {
+                var step = s.AdvanceScene();
+                if (step != null && step.IsChoice) s.ChooseSceneOption(0);
+            }
         }
 
         /// <summary>Доганяє сесію до ранку доби 5 (State=Morning/FreePlay, Day==4, готова до останнього AdvanceDay+ResolveFinale) під заданою політикою.</summary>

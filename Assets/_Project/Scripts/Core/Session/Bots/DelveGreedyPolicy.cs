@@ -32,6 +32,8 @@ namespace Game.Core.Session.Bots
             return 0;
         }
 
+        public int ChooseSceneOption(SceneStepView step) => BotSupport.ChooseSceneDefault(step);
+
         public bool ChoosePatrol(SessionView view) => false;
 
         public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city)

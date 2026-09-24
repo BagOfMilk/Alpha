@@ -165,14 +165,7 @@ namespace Game.Core.Session.Bots
                     case SessionState.Scene:
                     {
                         var step = session.AdvanceScene();
-                        if (tally != null) tally.ScreenReads++;
-                        onSceneStep?.Invoke(step);
-                        if (viewKeyLog != null && step != null)
-                        {
-                            if (!string.IsNullOrEmpty(step.LineKey)) viewKeyLog.Add(step.LineKey);
-                            if (!string.IsNullOrEmpty(step.EffectKey)) viewKeyLog.Add(step.EffectKey);
-                            if (!string.IsNullOrEmpty(step.TransitionKey)) viewKeyLog.Add(step.TransitionKey);
-                        }
+                        DriveSceneStep(session, policy, step, tally, viewKeyLog, onSceneStep, onChoiceApplied);
                         break;
                     }
 
@@ -230,11 +223,37 @@ namespace Game.Core.Session.Bots
                     }
 
                     case SessionState.Evening:
+                    {
+                        // Поправка №7.8: особисті арки напарників і скриптовані
+                        // сцени доби 3/5 самі себе не пропонують нікому — це
+                        // єдине місце водія, що регулярно заглядає в Evening
+                        // (той самий принцип, що вже й MaybeOfferQuest для
+                        // Гафії). Кожен наступний гачок — лише якщо попередній
+                        // не почав сцену (BeginScene міняє State на Scene, а
+                        // ці ж методи вимагають Evening/Morning/Night/FreePlay
+                        // — другий виклик того самого тіка інакше впав би
+                        // винятком "Немає активної сцени"/RequireAnyState).
                         MaybeOfferQuest(session, policy, tally, onChoiceApplied);
-                        session.SetPatrol(policy.ChoosePatrol(session.CurrentView));
-                        session.ConfirmEvening();
-                        if (tally != null) tally.SimpleCommands += 2;
+
+                        if (session.State == SessionState.Evening)
+                            MaybeAdvanceArcChapterScene(session, "myroslava", policy, tally, viewKeyLog, onSceneStep, onChoiceApplied);
+                        if (session.State == SessionState.Evening)
+                            MaybeAdvanceArcChapterScene(session, "maksym", policy, tally, viewKeyLog, onSceneStep, onChoiceApplied);
+                        if (session.State == SessionState.Evening)
+                            MaybeAdvanceMaksymArcQuest(session, policy, tally, onChoiceApplied);
+                        if (session.State == SessionState.Evening)
+                            MaybeOfferScriptedScene(session, session.OfferMyroslavaEveningScene, policy, tally, viewKeyLog, onSceneStep, onChoiceApplied);
+                        if (session.State == SessionState.Evening)
+                            MaybeOfferScriptedScene(session, session.OfferZakharCouncilScene, policy, tally, viewKeyLog, onSceneStep, onChoiceApplied);
+
+                        if (session.State == SessionState.Evening)
+                        {
+                            session.SetPatrol(policy.ChoosePatrol(session.CurrentView));
+                            session.ConfirmEvening();
+                            if (tally != null) tally.SimpleCommands += 2;
+                        }
                         break;
+                    }
 
                     case SessionState.Night:
                     {
@@ -379,7 +398,19 @@ namespace Game.Core.Session.Bots
         private static void MaybeOfferQuest(GameSession session, IBotPolicy policy, TimingTally tally, Action<ChoiceDiagnostic> onChoiceApplied = null)
         {
             var offer = session.OfferQuestStage(DefaultQuests.HafiyaId);
-            if (offer == null) return; // квест ще не готовий до нового кроку АБО вже завершений
+            ResolveQuestOffer(session, policy, offer, tally, onChoiceApplied);
+        }
+
+        /// <summary>
+        /// Спільний хвіст пропозиції квесту (Поправка №7.8): і Гафіїна
+        /// (`MaybeOfferQuest`), і квестова глава арки Максима йдуть однаково —
+        /// оффер сам каже, готовий до нового кроку чи ні (null — ні готового
+        /// кроку, ні активного квесту).
+        /// </summary>
+        private static void ResolveQuestOffer(GameSession session, IBotPolicy policy, QuestOfferView offer,
+            TimingTally tally, Action<ChoiceDiagnostic> onChoiceApplied)
+        {
+            if (offer == null) return;
             int count = offer.Options != null ? offer.Options.Count : 0;
             int idx = BotSupport.ClampIndex(policy.ChooseQuestOption(offer), count);
             int day = session.CurrentView.Day;
@@ -391,6 +422,92 @@ namespace Game.Core.Session.Bots
                 EventsBefore = before, EventsAfter = session.DayLog.Count
             });
             if (tally != null) tally.Decisions++;
+        }
+
+        /// <summary>
+        /// Максимова глава 1 «Не за кров» — квестова (Поправка №7.8, гейт
+        /// Steady). Один евенінг: якщо глава щойно доступна — відкриває її
+        /// (реєструє визначення в пулі й одразу пропонує перший етап); якщо
+        /// вже йде (реєстрація вже сталась раніше) — просто продовжує тим
+        /// самим <see cref="GameSession.OfferQuestStage"/>, яким і Гафіїн
+        /// квест: <see cref="QuestLog.Start"/> мовчки повертає null для
+        /// незареєстрованого questId, тож виклик до першого Begin — безпечний
+        /// no-op.
+        /// </summary>
+        private static void MaybeAdvanceMaksymArcQuest(GameSession session, IBotPolicy policy, TimingTally tally, Action<ChoiceDiagnostic> onChoiceApplied)
+        {
+            const string companionId = "maksym";
+            if (session.IsArcChapterAvailable(companionId) && session.IsArcChapterQuestContent(companionId))
+            {
+                var offer = session.BeginArcChapterQuest(companionId);
+                ResolveQuestOffer(session, policy, offer, tally, onChoiceApplied);
+                return;
+            }
+
+            var stageOffer = session.OfferQuestStage(DefaultQuests.MaksymCh1Id);
+            ResolveQuestOffer(session, policy, stageOffer, tally, onChoiceApplied);
+        }
+
+        /// <summary>Глава арки, чий зміст — сцена з вибором (Поправка №7.8): відкриває, якщо щойно доступна, і одразу доганяє першим кроком.</summary>
+        private static void MaybeAdvanceArcChapterScene(GameSession session, string companionId, IBotPolicy policy,
+            TimingTally tally, List<string> viewKeyLog, Action<SceneStepView> onSceneStep, Action<ChoiceDiagnostic> onChoiceApplied)
+        {
+            if (!session.IsArcChapterAvailable(companionId) || !session.IsArcChapterSceneContent(companionId)) return;
+            var step = session.BeginArcChapterScene(companionId);
+            DriveSceneStep(session, policy, step, tally, viewKeyLog, onSceneStep, onChoiceApplied);
+        }
+
+        /// <summary>
+        /// Скриптована сцена, що сама гейтить себе по добі й прапору
+        /// розв'язки (Поправка №7.8: нічна розмова-конфронтація/тиха
+        /// перевірка Мирослави доба 3, рада Захара доба 5) — <paramref name="offer"/>
+        /// повертає null, якщо не той день або вже розв'язано, і водій просто
+        /// нічого не робить цей тік.
+        /// </summary>
+        private static void MaybeOfferScriptedScene(GameSession session, Func<SceneStepView> offer, IBotPolicy policy,
+            TimingTally tally, List<string> viewKeyLog, Action<SceneStepView> onSceneStep, Action<ChoiceDiagnostic> onChoiceApplied)
+        {
+            var step = offer();
+            if (step == null) return;
+            DriveSceneStep(session, policy, step, tally, viewKeyLog, onSceneStep, onChoiceApplied);
+        }
+
+        /// <summary>
+        /// Спільний хвіст кроку сцени (Поправка №7.8): і звичайний
+        /// <c>AdvanceScene()</c> у <c>case SessionState.Scene</c>, і перший
+        /// кадр, який одразу повертають <c>BeginArcChapterScene</c>/
+        /// <c>OfferMyroslavaEveningScene</c>/<c>OfferZakharCouncilScene</c> —
+        /// один і той самий кадр, один розбір: Choice-крок сам собою не
+        /// рухає сцену далі (<see cref="ScenePlayback.Next"/> короткочасно
+        /// повертає той самий кадр, поки чекає вибору) — без цієї гілки
+        /// водій молотив би той самий кадр, поки не впаде в MaxSteps.
+        /// </summary>
+        private static void DriveSceneStep(GameSession session, IBotPolicy policy, SceneStepView step,
+            TimingTally tally, List<string> viewKeyLog, Action<SceneStepView> onSceneStep, Action<ChoiceDiagnostic> onChoiceApplied)
+        {
+            if (tally != null) tally.ScreenReads++;
+            onSceneStep?.Invoke(step);
+            if (viewKeyLog != null && step != null)
+            {
+                if (!string.IsNullOrEmpty(step.LineKey)) viewKeyLog.Add(step.LineKey);
+                if (!string.IsNullOrEmpty(step.EffectKey)) viewKeyLog.Add(step.EffectKey);
+                if (!string.IsNullOrEmpty(step.TransitionKey)) viewKeyLog.Add(step.TransitionKey);
+            }
+
+            if (step != null && step.IsChoice)
+            {
+                int count = step.Options != null ? step.Options.Count : 0;
+                int idx = BotSupport.ClampIndex(policy.ChooseSceneOption(step), count);
+                int day = session.CurrentView.Day;
+                int before = session.DayLog.Count;
+                session.ChooseSceneOption(idx);
+                onChoiceApplied?.Invoke(new ChoiceDiagnostic
+                {
+                    Kind = "ChooseSceneOption", Day = day,
+                    EventsBefore = before, EventsAfter = session.DayLog.Count
+                });
+                if (tally != null) tally.Decisions++;
+            }
         }
 
         private static bool PartyIsAway(GameSession session)

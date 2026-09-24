@@ -121,6 +121,55 @@ namespace Game.Core.Session.Bots
             return index;
         }
 
+        // ---- сценовий вибір (§4.10, Поправка №7.8): "характер" політики на Choice-кроці ----
+
+        /// <summary>Індекс першого варіанту з Form=="Intimidate" — -1, якщо такого немає.</summary>
+        private static int FirstByForm(SceneStepView step, string form)
+        {
+            var options = step?.Options;
+            if (options == null) return -1;
+            for (int i = 0; i < options.Count; i++)
+                if (string.Equals(options[i]?.Form, form, StringComparison.Ordinal)) return i;
+            return -1;
+        }
+
+        /// <summary>
+        /// BloodyPolicy (§4.10): найагресивніший варіант — перевірка
+        /// Залякування (звинуватити/погрожувати), а нема такої — останній
+        /// варіант (у сценах цієї збірки саме він, як правило, лишає
+        /// найгостріший наслідок — "відпустити" зрадницю, "тримати перевал").
+        /// </summary>
+        public static int ChooseSceneAggressive(SceneStepView step)
+        {
+            int count = step?.Options?.Count ?? 0;
+            int byIntimidate = FirstByForm(step, "Intimidate");
+            if (byIntimidate >= 0) return byIntimidate;
+            return ClampIndex(count - 1, count);
+        }
+
+        /// <summary>
+        /// PacifistPolicy (§4.10): найм'якший варіант — перевірка Переконання
+        /// (умовити/попросити), а нема такої — перший варіант БЕЗ перевірки
+        /// Залякування (у сценах цієї збірки це або "довіритись", або
+        /// "відмовити словом", ніколи не силове рішення).
+        /// </summary>
+        public static int ChooseScenePersuasive(SceneStepView step)
+        {
+            var options = step?.Options;
+            int count = options?.Count ?? 0;
+            int byPersuade = FirstByForm(step, "Persuade");
+            if (byPersuade >= 0) return byPersuade;
+
+            if (options != null)
+                for (int i = 0; i < options.Count; i++)
+                    if (!string.Equals(options[i]?.Form, "Intimidate", StringComparison.Ordinal)) return i;
+
+            return ClampIndex(0, count);
+        }
+
+        /// <summary>Решта політик (Steward/PatrolAlways/DelveGreedy, §4.10): перший виборний варіант — той самий "обережний за замовчуванням" норов, що й StewardPolicy.ChooseIncidentPath.</summary>
+        public static int ChooseSceneDefault(SceneStepView step) => ClampIndex(0, step?.Options?.Count ?? 0);
+
         // ---- геометрія покрокового бою (§4.10: "хоча б одна політика грає бій ходами") ----
 
         public static int Chebyshev(GridPosView a, GridPosView b)

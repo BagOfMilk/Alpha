@@ -106,6 +106,22 @@ namespace Game.Core.Session
         /// <summary>Прапори гейтингу арок (ArcChapter.RequiresFlag/SetsFlag) — окремі від StoryFlags: без Begin/CompleteChapter (гачок вище) їх ще нікому виставляти.</summary>
         private readonly HashSet<string> _arcFlags = new HashSet<string>();
 
+        // ---- Поправка №7.8: глави арок ПРОГРАЮТЬСЯ (Begin → сцена/квест → CompleteChapter) ----
+
+        /// <summary>
+        /// Companion.Id, чия сцена зараз триває, коли ця сцена — зміст глави
+        /// арки (BeginArcChapterScene). На фініші сцени (BuildSceneStepView)
+        /// глава завершується (CompleteArcChapterFor) — так само, як
+        /// "to.node1.pass" ставить прапор на фініші, лише для арки.
+        /// </summary>
+        private string _activeArcCompanionId;
+
+        /// <summary>QuestId → companionId для квестових глав арки (BeginArcChapterQuest): термінал цього квесту в ResolveQuestChoice завершує главу.</summary>
+        private readonly Dictionary<string, string> _activeArcChapterQuestCompanion = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        /// <summary>Поточний id сцени, що триває (для теми повторів вибору й події scene.choice.made) — null, якщо сцена не активна.</summary>
+        private string _currentSceneId;
+
         // ---- кубик/сід/бій ----
         // НЕ readonly (фікс-ревью): NewGameOptions.Roller — задокументований
         // класовим коментарем і самим полем NewGameOptions як рівноцінний
@@ -181,6 +197,14 @@ namespace Game.Core.Session
         public IReadOnlyList<GameEvent> DayLog => _dayLog;
 
         /// <summary>
+        /// Журнал механік (Поправка №7.8): КУМУЛЯТИВНИЙ (на відміну від
+        /// <see cref="_dayLog"/>, який чистить кожна фаза) набір ключів усіх
+        /// подій, що коли-небудь пішли в DayLog за цей прогін —
+        /// <see cref="GetMechanicsJournal"/> рахує "seen" саме по ньому.
+        /// </summary>
+        private readonly HashSet<string> _seenEventKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
         /// Скільки записів <c>report.Incidents</c> уже перекладено у DayLog цієї
         /// фази (<see cref="TranslateReport"/>). DayProcessor.BuildReport
         /// повертає ПОВНИЙ накопичений список інцидентів фази щоразу (аудит
@@ -248,6 +272,11 @@ namespace Game.Core.Session
             _arcRuns = new List<CompanionArcRun>();
             foreach (var arc in DefaultArcs.All())
                 _arcRuns.Add(new CompanionArcRun(arc, _arcFlags));
+
+            _activeArcCompanionId = null;
+            _activeArcChapterQuestCompanion.Clear();
+            _currentSceneId = null;
+            _seenEventKeys.Clear();
 
             _slots.Clear();
             _dayLog.Clear();
@@ -415,6 +444,7 @@ namespace Game.Core.Session
         {
             _scenePlayback = new ScenePlayback(scene);
             _sceneReturn = afterState;
+            _currentSceneId = scene?.Id;
             State = SessionState.Scene;
             _lastFramedActorId = null;
             _lastFramedSecondActorId = null;
@@ -426,6 +456,63 @@ namespace Game.Core.Session
             if (_scenePlayback == null) throw new InvalidOperationException("Немає активної сцени.");
 
             _scenePlayback.Next();
+            return BuildSceneStepView();
+        }
+
+        /// <summary>
+        /// Розв'язує поточний вибір сцени (Поправка №7.8): визначає
+        /// виконавця (протагоніст, якщо варіант не називає присутнього
+        /// напарника), за наявності — резолвить перевірку ІСНУЮЧИМ
+        /// <see cref="CheckResolver"/> (одна й та сама лестниця, що й в
+        /// інцидентах/квестах), застосовує наслідок ЄДИНИМ застосувачем
+        /// (<see cref="ApplyConsequence"/>) і веде сцену далі
+        /// (<see cref="ScenePlayback.Choose"/>) — на метку, переходом, або
+        /// просто лінійно.
+        /// </summary>
+        public SceneStepView ChooseSceneOption(int optionIndex)
+        {
+            RequireState(SessionState.Scene);
+            if (_scenePlayback == null || !_scenePlayback.IsAwaitingChoice)
+                throw new InvalidOperationException("Сцена не стоїть на виборі.");
+
+            var options = _scenePlayback.PendingOptions;
+            if (options == null || optionIndex < 0 || optionIndex >= options.Count)
+                throw new ArgumentOutOfRangeException(nameof(optionIndex));
+
+            var option = options[optionIndex];
+            string choiceId = _scenePlayback.ChoiceId;
+
+            OutcomeBand band = OutcomeBand.Base;
+            QuestConsequence consequence = option.Consequence ?? QuestConsequence.Empty();
+
+            if (option.HasCheck)
+            {
+                string performerId = ResolveScenePerformerId(option.PerformerCompanionId);
+                var actor = BuildSingleActor(performerId);
+                string topic = (_currentSceneId ?? "scene") + "." + (choiceId ?? "choice") + "." + (option.Id ?? optionIndex.ToString(CultureInfo.InvariantCulture));
+                var request = new CheckRequest(option.CheckSkill, option.Threshold, option.Approach, topic);
+                var outcome = CheckResolver.Resolve(request, new SingleActorRosterView(actor), _repeats, _processor.CurrentDay, _cfg);
+                band = outcome.Band;
+                int bandIndex = (int)band;
+                consequence = option.ConsequenceByBand != null && option.ConsequenceByBand.Length > bandIndex
+                    ? (option.ConsequenceByBand[bandIndex] ?? QuestConsequence.Empty())
+                    : QuestConsequence.Empty();
+            }
+
+            ApplyConsequence(consequence, "scene:" + (_currentSceneId ?? "scene"));
+            LogEvent("scene.choice.made", Args("sceneId", _currentSceneId ?? string.Empty,
+                "optionId", option.Id ?? optionIndex.ToString(CultureInfo.InvariantCulture), "band", band.ToString()));
+
+            ApplyBetrayalConfrontationSideEffectsIfNeeded();
+            ApplyZakharCouncilSideEffectsIfNeeded();
+
+            _scenePlayback.Choose(optionIndex);
+            return BuildSceneStepView();
+        }
+
+        /// <summary>Спільний хвіст AdvanceScene/ChooseSceneOption: показ кадру, слід антагоніста, фініш сцени (+ завершення главы арки, якщо ця сцена — її зміст).</summary>
+        private SceneStepView BuildSceneStepView()
+        {
             var frame = _scenePlayback.Current;
             var view = new SceneStepView
             {
@@ -441,14 +528,104 @@ namespace Game.Core.Session
             LogNamedAntagonistSeen(frame.ActorId, isSecondActorSlot: false);
             LogNamedAntagonistSeen(frame.SecondActorId, isSecondActorSlot: true);
 
+            if (_scenePlayback.IsAwaitingChoice)
+            {
+                view.IsChoice = true;
+                view.ChoiceId = _scenePlayback.ChoiceId;
+                view.Options = BuildSceneChoiceOptions(_scenePlayback.PendingOptions);
+                return view;
+            }
+
             if (_scenePlayback.IsFinished)
             {
                 if (view.TransitionKey == "to.node1.pass") _flags.Set("tugar_offer_seen");
                 State = _sceneReturn;
                 _scenePlayback = null;
                 LogEvent("scene.finished", Args("transition", view.TransitionKey));
+                _currentSceneId = null;
+
+                if (_activeArcCompanionId != null)
+                {
+                    string companionId = _activeArcCompanionId;
+                    _activeArcCompanionId = null;
+                    CompleteArcChapterFor(companionId);
+                }
             }
             return view;
+        }
+
+        /// <summary>Прев'ю варіантів вибору (§4.2 DecisionOptionView-подібно): показує скіл/поріг/полосу-прев'ю заздалегідь (інваріант 8), жодного прихованого числа (R17).</summary>
+        private List<DecisionOptionView> BuildSceneChoiceOptions(IReadOnlyList<SceneChoiceOption> options)
+        {
+            var result = new List<DecisionOptionView>();
+            if (options == null) return result;
+
+            foreach (var opt in options)
+            {
+                if (!opt.HasCheck)
+                {
+                    result.Add(new DecisionOptionView { TextKey = opt.TextKey, HasCandidate = true });
+                    continue;
+                }
+
+                string performerId = ResolveScenePerformerId(opt.PerformerCompanionId);
+                var actor = BuildSingleActor(performerId);
+                string topic = (_currentSceneId ?? "scene") + ".preview." + (opt.Id ?? opt.TextKey ?? "opt");
+                var request = new CheckRequest(opt.CheckSkill, opt.Threshold, opt.Approach, topic);
+                var preview = CheckResolver.Preview(request, new SingleActorRosterView(actor), _repeats, _processor.CurrentDay, _cfg);
+
+                result.Add(new DecisionOptionView
+                {
+                    TextKey = opt.TextKey,
+                    SkillKey = opt.CheckSkill.Id,
+                    Threshold = opt.Threshold,
+                    Form = opt.Approach.ToString(),
+                    BestActorId = preview.BestActorId,
+                    HasCandidate = preview.HasCandidate,
+                    ExpectedBand = preview.ExpectedBand.ToString()
+                });
+            }
+            return result;
+        }
+
+        /// <summary>Виконавець варіанту: названий напарник, якщо він присутній у поселенні — інакше протагоніст (спека виконавця «за замовчуванням»).</summary>
+        private string ResolveScenePerformerId(string namedCompanionId)
+        {
+            if (string.IsNullOrEmpty(namedCompanionId)) return ProtagonistId;
+            var c = _worldRoster?.Get(namedCompanionId);
+            if (c == null) return ProtagonistId;
+            var adapter = new Base.CompanionActorAdapter(c, false, _cfg);
+            return adapter.IsPresentInSettlement ? namedCompanionId : ProtagonistId;
+        }
+
+        private ISettlementActor BuildSingleActor(string companionId)
+        {
+            var c = _worldRoster.Get(companionId);
+            bool isProtagonist = string.Equals(companionId, ProtagonistId, StringComparison.Ordinal);
+            return new Base.CompanionActorAdapter(c, isProtagonist, _cfg);
+        }
+
+        /// <summary>
+        /// Ростер із рівно одним актором (Поправка №7.8): сценовий вибір
+        /// резолвиться конкретним виконавцем ("протагоніст, якщо варіант не
+        /// називає присутнього напарника"), а не "найкращим серед
+        /// присутніх", як звичайний <see cref="CheckResolver"/> робить для
+        /// інцидентів/квестів без прив'язки до конкретної людини. Обгортка
+        /// дозволяє скористатись ТИМ САМИМ резолвером без нового API.
+        /// </summary>
+        private sealed class SingleActorRosterView : IRosterView
+        {
+            private readonly ISettlementActor _actor;
+            private readonly List<ISettlementActor> _list;
+
+            public SingleActorRosterView(ISettlementActor actor)
+            {
+                _actor = actor;
+                _list = new List<ISettlementActor> { actor };
+            }
+
+            public IReadOnlyList<ISettlementActor> PresentActors => _list;
+            public ISettlementActor Protagonist => _actor != null && _actor.IsProtagonist ? _actor : null;
         }
 
         /// <summary>
@@ -694,7 +871,7 @@ namespace Game.Core.Session
                 ? run.Choose(optionIndex, _flags)
                 : run.ResolveCheck(_rosterView, _repeats, _processor.CurrentDay, _cfg);
 
-            ApplyQuestConsequence(step.Consequence);
+            ApplyConsequence(step.Consequence);
 
             // R8 (seamsForD1): завершення квесту — віха Готовності, що трапляється
             // ПОЗА конвеєром дня (ReadinessTickStep бачить лише будівлю/указ/страх),
@@ -709,6 +886,21 @@ namespace Game.Core.Session
                 string.Equals(step.StageId, "grass", StringComparison.Ordinal))
             {
                 LogEvent(step.Band >= OutcomeBand.Good ? DefaultQuests.Stage2FoundKey : DefaultQuests.Stage2MissingKey);
+            }
+
+            // Поправка №7.8: коли цей квест — зміст квестової глави арки
+            // (BeginArcChapterQuest зареєстрував companionId у мапі нижче),
+            // термінал квесту (успіх ЧИ невдача — глава ПРОГРАНА, а не лише
+            // виграна) завершує главу арки тим самим шляхом, що й сценова
+            // глава на фініші сцени (CompleteArcChapterFor).
+            if (step.Terminal)
+            {
+                string arcCompanionId;
+                if (_activeArcChapterQuestCompanion.TryGetValue(run.Def.Id, out arcCompanionId))
+                {
+                    _activeArcChapterQuestCompanion.Remove(run.Def.Id);
+                    CompleteArcChapterFor(arcCompanionId);
+                }
             }
 
             _currentQuestOffer = null;
@@ -1014,8 +1206,28 @@ namespace Game.Core.Session
 
             if (path == IncidentPath.Bloody)
             {
-                bool myroslavaDefected = _flags.Get(PassVanguardOutcome.DefectorSeededFlag);
+                // Поправка №7.8: реальний стан зради — статус Antagonist
+                // (конфронтація/TickDefectionWatch уже виконали
+                // Defection.Defect) АБО, якщо конфронтація ще не встигла
+                // (напр. гравець прискорив фінал вільною грою до доби 3), той
+                // самий сюжетний прапор, що й раніше — але НЕ якщо
+                // конфронтація вже розв'язалась «довірою» (тоді прапор лишився
+                // висіти з вузла 1, а зради не сталося).
+                bool myroslavaConfirmedAntagonist = _worldRoster?.Get("myroslava")?.Status == CompanionStatus.Antagonist;
+                bool myroslavaTrusted = _flags.Get(CompanionScenes.MyroslavaConfrontedTrustFlag);
+                bool myroslavaDefected = myroslavaConfirmedAntagonist ||
+                    (_flags.Get(PassVanguardOutcome.DefectorSeededFlag) && !myroslavaTrusted);
+
                 var plan = Finale.BuildAssault(_readiness.Band, myroslavaDefected ? "myroslava" : null, _cfg.Readiness);
+
+                // Поправка №7.8: «відпустити» на нічній розмові (замість
+                // звинувачення) softening'ить кровавий фінал — на одного
+                // рядового ворога менше, той самий приём, що м'якший фінал
+                // взагалі не буває "чистим" (§7.15), лише тут менша ціна за
+                // менш жорстоке рішення гравця, а не за полосу Готовності.
+                if (_flags.Get(CompanionScenes.MyroslavaConfrontedReleaseFlag) &&
+                    plan.EnemyDefinitionIds.Count > 1)
+                    plan.EnemyDefinitionIds.RemoveAt(plan.EnemyDefinitionIds.Count - 2); // не боса (він останній)
 
                 // Фікс-ревью (блокер, знайдено тур-автоплеєм): партія тут була
                 // жорстко "{ProtagonistId, "maksym"}" незалежно від того, чи
@@ -1645,6 +1857,136 @@ namespace Game.Core.Session
         }
 
         // =====================================================================
+        // Поправка №7.8, п.4 DELIVER: журнал механік для тестера — по одному
+        // запису на кожен рядок §2 TEST_BUILD.md плюс нові механіки цього
+        // пакета (вибір у сцені, глава арки, нічна розмова-конфронтація,
+        // стройка за одну добу). Дані, а не дашборд (R17): лише bool Seen +
+        // два текстові ключі, жодного схованого числа. "Seen" рахується з
+        // КУМУЛЯТИВНИХ ключів подій (<see cref="_seenEventKeys"/>) — той
+        // самий принцип, що вже тримає інваріант 3 (Game.Gameplay бачить
+        // лише ключі/bool, ніколи сирі числа Напруги).
+        //
+        // Рядки без власної події ("похідне" в §2 — presence/empty_post/
+        // signals_no_repeat) прив'язані до найближчого спостережуваного
+        // ключа, який неминуче йде разом із механікою (задокументовано біля
+        // кожного запису) — журнал каже "ця механіка спрацювала хоч раз",
+        // не "усі її розгалуження побачені".
+        // =====================================================================
+
+        private sealed class MechanicJournalDef
+        {
+            public readonly string Id;
+            public readonly string[] ExactKeys;
+            public readonly string[] KeyPrefixes;
+            public readonly Func<GameSession, bool> ExtraSeen;
+
+            public MechanicJournalDef(string id, string[] exactKeys = null, string[] keyPrefixes = null,
+                Func<GameSession, bool> extraSeen = null)
+            {
+                Id = id;
+                ExactKeys = exactKeys ?? Array.Empty<string>();
+                KeyPrefixes = keyPrefixes ?? Array.Empty<string>();
+                ExtraSeen = extraSeen;
+            }
+        }
+
+        private static readonly MechanicJournalDef[] MechanicsJournalRegistry =
+        {
+            new MechanicJournalDef("day_cycle", exactKeys: new[] { "day.advanced" }),
+            new MechanicJournalDef("assignment", exactKeys: new[] { "assign.made" }),
+            // Присутність — похідне (§2 №3, немає власної події): та сама
+            // фільтрація кандидатів спрацьовує на кожному decision.resolved.
+            new MechanicJournalDef("presence", exactKeys: new[] { "decision.resolved" }),
+            new MechanicJournalDef("decision_point", exactKeys: new[] { "decision.resolved" }),
+            new MechanicJournalDef("outcome_bands",
+                exactKeys: new[] { "decision.resolved", "finale.resolved", "quest.choice.resolved" }),
+            // Порожній пост = Найгірша (§2 №6) — той самий ключ, що decision_point:
+            // args["band"]/["noCandidate"] різнять їх, а ключ у _seenEventKeys — ні.
+            new MechanicJournalDef("empty_post", exactKeys: new[] { "decision.resolved" }),
+            new MechanicJournalDef("night_patrol", exactKeys: new[] { "night.forewarn" }),
+            new MechanicJournalDef("forewarn_ladder", keyPrefixes: new[] { "forewarn.level" }),
+            new MechanicJournalDef("crisis", exactKeys: new[]
+                { "crisis.test.warn", "crisis.test.window", "crisis.test.mitigated", "crisis.test.unmitigated" }),
+            new MechanicJournalDef("post_reports", keyPrefixes: new[] { "post." }),
+            // Сигнали без повторів (§2 №11) — похідне, той самий щабель передвісника.
+            new MechanicJournalDef("signals_no_repeat", keyPrefixes: new[] { "forewarn.level" }),
+            new MechanicJournalDef("band_change_signal", exactKeys: new[] { "loyalty.band_changed", "faction.standing_changed" }),
+            new MechanicJournalDef("production", exactKeys: new[]
+                { "production.resource", "production.leveled_up", "production.food_shortage", "production.recovered" }),
+            new MechanicJournalDef("building", keyPrefixes: new[] { "city.built." },
+                exactKeys: new[] { "city.building.ordered", "council.raid.ordered", "council.settlers.ordered" }),
+            new MechanicJournalDef("council_actions", keyPrefixes: new[]
+                { "council.decree", "council.diplomacy", "council.invest", "council.prepare_threat", "council.outfit_expedition" }),
+            new MechanicJournalDef("population_tier", keyPrefixes: new[] { "city.tier." }),
+            new MechanicJournalDef("expedition", exactKeys: new[] { "expedition.departed" }),
+            new MechanicJournalDef("dungeon_delve", exactKeys: new[] { "dungeon.push", "dungeon.extract", "dungeon.wiped", "dungeon.room.bypassed" }),
+            new MechanicJournalDef("loot", exactKeys: new[] { "loot.dropped" }),
+            new MechanicJournalDef("equip", exactKeys: new[] { "equip.changed" }),
+            new MechanicJournalDef("craft", exactKeys: new[] { "craft.upgraded" }),
+            new MechanicJournalDef("scars", exactKeys: new[] { "scar.granted" }),
+            new MechanicJournalDef("loyalty", exactKeys: new[] { "loyalty.band_changed" }),
+            new MechanicJournalDef("roster_drama", exactKeys: new[] { "roster.rippled" }),
+            new MechanicJournalDef("defection", exactKeys: new[] { "companion.defected" }),
+            new MechanicJournalDef("companion_arc", exactKeys: new[] { "arc.chapter_opened" }),
+            new MechanicJournalDef("quests", exactKeys: new[] { "quest.choice.resolved" }),
+            new MechanicJournalDef("factions", exactKeys: new[] { "faction.standing_changed" }),
+            new MechanicJournalDef("readiness_finale", exactKeys: new[] { "finale.resolved" }),
+            new MechanicJournalDef("tactical_combat", exactKeys: new[]
+                { "combat.attack.hit", "combat.attack.miss", "combat.attack.crit", "combat.attack.graze", "combat.overwatch.triggered" }),
+            new MechanicJournalDef("auto_resolve", exactKeys: new[] { "combat.autoresolved" }),
+            new MechanicJournalDef("training_battle", exactKeys: new[] { "combat.training.started" }),
+            new MechanicJournalDef("creation", exactKeys: new[] { "creation.confirmed" }),
+            new MechanicJournalDef("progression", exactKeys: new[] { "progression.level_up" }),
+            new MechanicJournalDef("portrait_scenes", exactKeys: new[] { "scene.finished" }),
+            new MechanicJournalDef("save_load", exactKeys: new[] { "game.saved", "game.loaded" }),
+            // summary/free_play — стан сесії, не подія (AcknowledgeSummary/
+            // AdvanceDay нічого не пишуть у DayLog про це), тож журнал читає
+            // прапорці напряму, а не шукає ключ.
+            new MechanicJournalDef("summary", extraSeen: s => s._summaryAcknowledged),
+            new MechanicJournalDef("free_play", extraSeen: s => s._freePlay),
+
+            // ---- нові механіки Поправки №7.8 ----
+            new MechanicJournalDef("dialogue_choice", exactKeys: new[] { "scene.choice.made" }),
+            new MechanicJournalDef("arc_chapter", exactKeys: new[] { "arc.chapter_completed" }),
+            new MechanicJournalDef("betrayal_confrontation", exactKeys: new[] { "scene.betrayal_confrontation.begun" }),
+            // Стройка за одну добу (Поправка №7.7) — той самий сигнал заверш-
+            // еної будови, що й "building" вище; окремого ключа "за 1 добу"
+            // немає (тривалість — внутрішня деталь CityWorks, не подія).
+            new MechanicJournalDef("building_one_day", keyPrefixes: new[] { "city.built." }),
+        };
+
+        public IReadOnlyList<MechanicJournalEntryView> GetMechanicsJournal()
+        {
+            var result = new List<MechanicJournalEntryView>(MechanicsJournalRegistry.Length);
+            foreach (var def in MechanicsJournalRegistry)
+            {
+                bool seen = def.ExtraSeen != null && def.ExtraSeen(this);
+
+                if (!seen)
+                    foreach (var key in def.ExactKeys)
+                        if (_seenEventKeys.Contains(key)) { seen = true; break; }
+
+                if (!seen && def.KeyPrefixes.Length > 0)
+                    foreach (var seenKey in _seenEventKeys)
+                    {
+                        bool matched = false;
+                        foreach (var prefix in def.KeyPrefixes)
+                            if (seenKey.StartsWith(prefix, StringComparison.Ordinal)) { matched = true; break; }
+                        if (matched) { seen = true; break; }
+                    }
+
+                result.Add(new MechanicJournalEntryView
+                {
+                    Id = def.Id,
+                    TitleKey = "journal." + def.Id + ".title",
+                    HintKey = "journal." + def.Id + ".hint",
+                    Seen = seen
+                });
+            }
+            return result;
+        }
+
+        // =====================================================================
         // Будь-де: зведений публічний стан + допоміжні View
         // =====================================================================
 
@@ -1821,6 +2163,7 @@ namespace Game.Core.Session
         {
             if (string.IsNullOrEmpty(key)) return;
             _dayLog.Add(new GameEvent(key, _processor?.CurrentDay ?? 0, _lastPhase, args));
+            _seenEventKeys.Add(key);
         }
 
         private static IReadOnlyDictionary<string, string> Args(params string[] kv)
@@ -1980,6 +2323,18 @@ namespace Game.Core.Session
             foreach (var c in candidates)
             {
                 if (string.Equals(c.Id, ProtagonistId, StringComparison.Ordinal)) continue;
+
+                // Поправка №7.8: коли зерно зради посіяно (defector_seeded) для
+                // напарника, у якого є СЦЕНАРНА конфронтація («Нічна розмова»,
+                // OfferMyroslavaEveningScene), автоматична дефекція чекає на
+                // її розв'язку — інакше сцена ніколи не встигла б статися
+                // (ShouldDefect повертає true одразу за прапором, задовго до
+                // доби 3). Щойно конфронтація розв'язана (байдуже, якою
+                // гілкою) — прапор знято, і звичний шлях знову діє.
+                if (seeded && string.Equals(c.Id, "myroslava", StringComparison.Ordinal) &&
+                    !_flags.Get(CompanionScenes.MyroslavaConfrontationResolvedFlag))
+                    continue;
+
                 int days = _defectionWatch.DaysAtOrBelowResentful(c.Id);
                 if (!Defection.ShouldDefect(c, isProtagonist: false, days, seeded, _cfg)) continue;
 
@@ -2007,6 +2362,157 @@ namespace Game.Core.Session
                     LogEvent("arc.chapter_opened", Args("companionId", run.Arc.CompanionId, "arcId", run.Arc.Id,
                         "chapterId", run.CurrentChapter?.Id ?? string.Empty));
             }
+        }
+
+        // =====================================================================
+        // Поправка №7.8: глави арок ПРОГРАЮТЬСЯ (Begin → сцена/квест →
+        // CompleteChapter), а не лише сигналізують "arc.chapter_opened".
+        // =====================================================================
+
+        private CompanionArcRun FindArcRun(string companionId)
+        {
+            if (_arcRuns == null || string.IsNullOrEmpty(companionId)) return null;
+            foreach (var run in _arcRuns)
+                if (string.Equals(run.Arc.CompanionId, companionId, StringComparison.Ordinal)) return run;
+            return null;
+        }
+
+        /// <summary>Чи стала глава арки цього напарника доступною (гейт лояльності/прогресу пройдено, Begin ще не викликаний). Дані — bool, не View, тож R17 не застосовний.</summary>
+        public bool IsArcChapterAvailable(string companionId) => FindArcRun(companionId)?.State == ArcState.Available;
+
+        /// <summary>Чи зміст доступної глави — сцена (BeginArcChapterScene). false, якщо глава квестова (BeginArcChapterQuest) або недоступна.</summary>
+        public bool IsArcChapterSceneContent(string companionId)
+        {
+            var run = FindArcRun(companionId);
+            var chapter = run?.CurrentChapter;
+            return chapter != null && CompanionArcContent.SceneFor(companionId, chapter.Id) != null;
+        }
+
+        /// <summary>Чи зміст доступної глави — квест (BeginArcChapterQuest).</summary>
+        public bool IsArcChapterQuestContent(string companionId)
+        {
+            var run = FindArcRun(companionId);
+            var chapter = run?.CurrentChapter;
+            return chapter != null && CompanionArcContent.IsQuestChapter(companionId, chapter.Id);
+        }
+
+        /// <summary>
+        /// Починає доступну главу арки, зміст якої — сцена: Begin() гейту,
+        /// потім звичайна BeginScene/AdvanceScene. На фініші сцени
+        /// (BuildSceneStepView) глава сама завершується — це і є "проиграна",
+        /// а не лише "відкрита" (Поправка №7.8, п. 3 «ARCS PLAYABLE»).
+        /// </summary>
+        public SceneStepView BeginArcChapterScene(string companionId)
+        {
+            RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night, SessionState.FreePlay);
+            var run = FindArcRun(companionId);
+            if (run == null) throw new InvalidOperationException("У напарника «" + companionId + "» немає арки.");
+
+            var companion = _worldRoster.Get(companionId);
+            if (!run.Begin(companion)) throw new InvalidOperationException("Глава арки недоступна.");
+
+            var chapter = run.CurrentChapter;
+            var scene = chapter != null ? CompanionArcContent.SceneFor(companionId, chapter.Id) : null;
+            if (scene == null) throw new InvalidOperationException("Ця глава — квестова (BeginArcChapterQuest), не сценова.");
+
+            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id));
+
+            SessionState returnState = State;
+            _activeArcCompanionId = companionId;
+            BeginScene(scene, returnState);
+            return AdvanceScene();
+        }
+
+        /// <summary>
+        /// Починає доступну квестову главу арки (наразі лише Максим, гл. 1
+        /// «Не за кров»): Begin() гейту, реєструє власне визначення квесту в
+        /// пулі (воно НЕ входить у стартовий <c>DefaultQuests.All</c> — саме
+        /// тому загальний <c>OfferQuestStage</c> не міг би запустити його,
+        /// обійшовши гейт арки), пропонує перший етап. Термінал квесту
+        /// (ResolveQuestChoice) завершує главу — успіх ЧИ невдача, глава
+        /// ПРОГРАНА, а не лише виграна.
+        /// </summary>
+        public QuestOfferView BeginArcChapterQuest(string companionId)
+        {
+            RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night, SessionState.FreePlay);
+            var run = FindArcRun(companionId);
+            if (run == null) throw new InvalidOperationException("У напарника «" + companionId + "» немає арки.");
+
+            var companion = _worldRoster.Get(companionId);
+            if (!run.Begin(companion)) throw new InvalidOperationException("Глава арки недоступна.");
+
+            var chapter = run.CurrentChapter;
+            if (chapter == null || !CompanionArcContent.IsQuestChapter(companionId, chapter.Id))
+                throw new InvalidOperationException("Ця глава — сценова (BeginArcChapterScene), не квестова.");
+
+            if (_quests.DefinitionOf(chapter.QuestId) == null)
+                _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
+
+            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id));
+            _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
+            return OfferQuestStage(chapter.QuestId);
+        }
+
+        private void CompleteArcChapterFor(string companionId)
+        {
+            var run = FindArcRun(companionId);
+            if (run == null || run.IsFinished) return;
+            string arcId = run.Arc.Id;
+            string chapterId = run.CurrentChapter != null ? run.CurrentChapter.Id : null;
+            run.CompleteChapter();
+            LogEvent("arc.chapter_completed", Args("companionId", companionId, "arcId", arcId, "chapterId", chapterId ?? string.Empty));
+        }
+
+        /// <summary>
+        /// Вузол доби 3 (Поправка №7.8, п. 2c): якщо зерно зради Мирослави
+        /// посіяно (<c>Defection.DefectorSeededFlag</c>, вузол 1) — «Нічна
+        /// розмова», інакше — звичайна перевірка стосунків («якщо нікого
+        /// зрада не насуває — сцена Мирослави стає довірчою»). Одноразово;
+        /// null, якщо не доба 3 або вже розв'язано.
+        ///
+        /// Прапор посіяно — єдина умова, полоса лояльності НЕ перевіряється
+        /// повторно: той самий контракт, що й <see cref="TickDefectionWatch"/>,
+        /// де seeded-Мирослава пропускає звичайний поріг ШОДНЯ, поки
+        /// конфронтація не розв'язана. Інакше пасивний бонус «Morale» від
+        /// council_seat (<see cref="LoyaltyRules.OnMorale"/>) встигає підняти
+        /// полосу з Resentful до Wary вже на добу 2 — і насувана зрада тихо
+        /// розчинилась би, так і не показавши гравцю «Нічну розмову».
+        /// </summary>
+        public SceneStepView OfferMyroslavaEveningScene()
+        {
+            RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night, SessionState.FreePlay);
+            if (_processor.CurrentDay != 3) return null;
+            if (_flags.Get(CompanionScenes.MyroslavaConfrontationResolvedFlag)) return null;
+
+            var myroslava = _worldRoster?.Get("myroslava");
+            if (myroslava == null) return null;
+
+            SessionState returnState = State;
+            _flags.Set(CompanionScenes.MyroslavaConfrontationResolvedFlag);
+
+            bool imminent = _flags.Get(Defection.DefectorSeededFlag)
+                && !myroslava.IsDead && myroslava.Status != CompanionStatus.Antagonist;
+
+            var scene = imminent ? CompanionScenes.MyroslavaConfrontation() : CompanionScenes.MyroslavaTrustCheckup();
+            LogEvent(imminent ? "scene.betrayal_confrontation.begun" : "scene.trust_checkup.begun",
+                Args("companionId", "myroslava"));
+
+            BeginScene(scene, returnState);
+            return AdvanceScene();
+        }
+
+        /// <summary>Рада Захара перед фіналом (доба 5, увечері) — готує тихий/кровавий шлях. Одноразово; null, якщо не доба 5 або вже розв'язано.</summary>
+        public SceneStepView OfferZakharCouncilScene()
+        {
+            RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night, SessionState.FreePlay);
+            if (_processor.CurrentDay != 5) return null;
+            if (_flags.Get(CompanionScenes.ZakharCouncilDoneFlag)) return null;
+
+            SessionState returnState = State;
+            _flags.Set(CompanionScenes.ZakharCouncilDoneFlag);
+            LogEvent("scene.zakhar_council.begun");
+            BeginScene(CompanionScenes.ZakharCouncil(), returnState);
+            return AdvanceScene();
         }
 
         /// <summary>
@@ -2169,17 +2675,112 @@ namespace Game.Core.Session
             return result;
         }
 
-        private void ApplyQuestConsequence(QuestConsequence c)
+        /// <summary>
+        /// Єдиний застосувач наслідку (Поправка №7.8): та сама
+        /// <see cref="QuestConsequence"/>, що й квести, тепер несе наслідок
+        /// вибору в портретній сцені й завершення глави арки напарника —
+        /// один тип даних, один застосувач, а не три копії тієї самої логіки
+        /// (Напруга/фракції/лояльність/флаги/предмети/XP), розкидані по
+        /// квестовому, сценовому й арковому шляху окремо.
+        /// </summary>
+        private void ApplyConsequence(QuestConsequence c, string sourceId = "quest")
         {
             if (c == null || c.IsEmpty) return;
             if (c.TensionDelta != 0) _processor.QueueExternal(TensionDriver.QuestChoice, c.TensionDelta);
             foreach (var kv in c.FactionDeltas) ApplyFactionDelta(kv.Key, kv.Value);
-            foreach (var kv in c.LoyaltyDeltas) LogLoyaltyChange(ApplyLoyaltyDelta(kv.Key, kv.Value, "quest"));
+            foreach (var kv in c.LoyaltyDeltas) LogLoyaltyChange(ApplyLoyaltyDelta(kv.Key, kv.Value, sourceId));
             foreach (var flag in c.Flags) _flags.Set(flag);
             foreach (var itemId in c.ItemIds) { GrantNamedItemById(itemId); LogEvent("loot.dropped", Args("itemId", itemId, "named", "1")); }
             if (c.Xp != 0) GrantXp(ProtagonistId, c.Xp);
 
             ApplyHafiyaGrassBonusToSickChildIfNeeded();
+            ApplyBargainedTimeBonusIfNeeded();
+        }
+
+        /// <summary>ПЛЕЙСХОЛДЕР: наскільки торг за час (сцена «Сусід з претензією», варіант «bargain») полегшує тихий шлях вузла 1.</summary>
+        private const int TugarBargainQuietThresholdRelief = 2;
+
+        /// <summary>Ідемпотентно (як і <see cref="ApplyHafiyaGrassBonusToSickChildIfNeeded"/>): застосовується рівно раз за прогін.</summary>
+        private bool _bargainedTimeBonusApplied;
+
+        /// <summary>
+        /// Той самий приём, що <see cref="ApplyHafiyaGrassBonusToSickChildIfNeeded"/>:
+        /// сцена сама тільки виставляє прапор (Поправка №7.8), а числове
+        /// застосування — тут, поруч із рештою "seamsForD1"-хуків цього
+        /// фасаду. Полегшує тихий шлях вузла 1, поки він ще не резолвнутий
+        /// (якщо гравець уже пройшов вузол 1 до цієї сцени — бонус тихо не
+        /// знаходить об'єкта і не застосовується, що чесно: користь торгу
+        /// вже не встигла).
+        /// </summary>
+        private void ApplyBargainedTimeBonusIfNeeded()
+        {
+            if (_bargainedTimeBonusApplied) return;
+            if (_flags == null || !_flags.Get(OpeningScenes.TugarBargainedTimeFlag)) return;
+            if (_processor?.Incidents == null) return;
+
+            foreach (var def in _processor.Incidents.All)
+            {
+                if (string.Equals(def.Id, "pass_vanguard", StringComparison.Ordinal) &&
+                    string.Equals(def.SourceId, "opening.pass", StringComparison.Ordinal))
+                {
+                    def.QuietPathThreshold = Math.Max(1, def.QuietPathThreshold - TugarBargainQuietThresholdRelief);
+                    break;
+                }
+            }
+            _bargainedTimeBonusApplied = true;
+        }
+
+        /// <summary>
+        /// Поправка №7.8: коли варіант конфронтації Мирослави («звинуватити»/
+        /// «погрожувати», «відпустити», або невдалий «переконати») щойно
+        /// виставив свій прапор, зрада відбувається НЕГАЙНО тим самим шляхом,
+        /// що і природний <see cref="TickDefectionWatch"/> — але за рішенням
+        /// гравця в сцені, а не мовчки вночі. Успішний «переконати»
+        /// (<see cref="CompanionScenes.MyroslavaConfrontedTrustFlag"/>) нічого
+        /// не виконує тут: лояльність уже відновлена наслідком сцени.
+        /// </summary>
+        private void ApplyBetrayalConfrontationSideEffectsIfNeeded()
+        {
+            if (_flags == null) return;
+            if (_flags.Get(CompanionScenes.MyroslavaDefectionExecutedFlag)) return;
+
+            bool shouldDefect =
+                _flags.Get(CompanionScenes.MyroslavaConfrontedProvokedFlag) ||
+                _flags.Get(CompanionScenes.MyroslavaConfrontedReleaseFlag) ||
+                _flags.Get(CompanionScenes.MyroslavaConfrontedFailedFlag);
+            if (!shouldDefect) return;
+
+            var c = _worldRoster?.Get("myroslava");
+            if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist) return;
+
+            Defection.Defect(c, _state);
+            _flags.Set(CompanionScenes.MyroslavaDefectionExecutedFlag);
+            LogEvent("companion.defected", Args("companionId", "myroslava"));
+            var ripple = new RosterDrama(new RosterBonds(null), _cfg).OnBetrayal(_worldRoster, "myroslava");
+            LogRipple(ripple);
+        }
+
+        /// <summary>
+        /// Поправка №7.8: рада Захара (доба 5, увечері) готує відповідний
+        /// шлях фіналу. «Загатити річку» додає Готовність тим самим числом,
+        /// що указ ради «Готуватись» (<c>CityWorks.OrderPrepareThreat</c>) —
+        /// нова окрема шкала тут не потрібна (інваріант 6 вже покритий
+        /// Готовністю). «Тримати перевал» лишає прапор для
+        /// <see cref="ResolveFinale"/>, який пом'якшує кровавий фінал на
+        /// одного рядового ворога (softening — так само, як
+        /// <see cref="CompanionScenes.MyroslavaConfrontedReleaseFlag"/> м'якшить
+        /// присутність зрадниці).
+        /// </summary>
+        private void ApplyZakharCouncilSideEffectsIfNeeded()
+        {
+            if (_flags == null) return;
+            if (_flags.Get(CompanionScenes.ZakharPreparedDamFlag) && !_flags.Get("zakhar_dam_bonus_applied"))
+            {
+                _readiness.Add(_cfg.Readiness.PrepareThreatAmount);
+                _flags.Set("zakhar_dam_bonus_applied");
+            }
+            // ZakharPreparedAssaultFlag сам по собі нічого не рахує тут —
+            // його читає ResolveFinale (softening кровавого штурму).
         }
 
         /// <summary>

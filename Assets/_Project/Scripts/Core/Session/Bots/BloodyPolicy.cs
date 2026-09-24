@@ -20,6 +20,8 @@ namespace Game.Core.Session.Bots
             return 0;
         }
 
+        public int ChooseSceneOption(SceneStepView step) => BotSupport.ChooseSceneAggressive(step);
+
         public bool ChoosePatrol(SessionView view) => true; // завжди насторожі
 
         public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city)

@@ -147,6 +147,15 @@ namespace Game.Gameplay
                         _host.Capture("opening-scene-" + sceneShots);
                         yield return 0;
                     }
+                    // Поправка №7.8: Choice-крок сам собою не рухає сцену
+                    // далі (AdvanceScene() короткочасно повертає той самий
+                    // кадр, поки чекає вибору) — без цієї гілки диспетчер
+                    // молотив би той самий кадр, поки не впаде в запобіжник
+                    // MaxLoopSteps вище. Той самий "перший виборний варіант"
+                    // за замовчуванням, що BotSupport.ChooseSceneDefault
+                    // (немає екрана вибору — Поправка №7.8, UI пізніше).
+                    if (step != null && step.IsChoice)
+                        Run(() => Session.ChooseSceneOption(BotSupport.ChooseSceneDefault(step)));
                     continue;
                 }
 

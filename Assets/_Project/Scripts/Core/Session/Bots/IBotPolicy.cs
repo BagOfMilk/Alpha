@@ -73,6 +73,19 @@ namespace Game.Core.Session.Bots
         /// <summary>Індекс варіанту для квесту-вибору АБО події данжу (Type=="Event") — 0, якщо Options порожній.</summary>
         int ChooseQuestOption(QuestOfferView offer);
 
+        /// <summary>
+        /// Індекс варіанту сценового вибору (Поправка №7.8, Choice-крок
+        /// портретної сцени — <see cref="SceneStepView.Options"/>) — 0, якщо
+        /// Options порожній. Той самий "характер", що й
+        /// <see cref="ChooseIncidentPath"/>: BloodyPolicy тягнеться до
+        /// варіанту з перевіркою Залякування (Form=="Intimidate") або, як
+        /// нема такого, до найризикованішого (останнього) варіанту;
+        /// PacifistPolicy — до варіанту з перевіркою Переконання
+        /// (Form=="Persuade"); решта політик — до першого виборного (як
+        /// StewardPolicy.ChooseIncidentPath за замовчуванням бере тихий шлях).
+        /// </summary>
+        int ChooseSceneOption(SceneStepView step);
+
         /// <summary>Патрулювати цю ніч чи спати.</summary>
         bool ChoosePatrol(SessionView view);
 
