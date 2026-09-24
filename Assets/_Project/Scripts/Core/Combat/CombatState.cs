@@ -120,6 +120,23 @@ namespace Game.Core.Combat
             return CombatActionResult.Success;
         }
 
+        /// <summary>
+        /// Безусловный внешний предохранитель (CombatAi.AutoResolve): переводит
+        /// Ongoing в Draw независимо от Round/RoundCap. Нужен, потому что
+        /// гарантия завершаемости автобоя не может зависеть от того, насколько
+        /// щедрый turnBudget передал вызывающий — сам CombatState единственный,
+        /// кто может честно закрыть бой без «наполовину сыгранного» результата.
+        /// На бой, уже завершённый чем угодно другим (Victory/Defeat/Retreat/
+        /// собственный Draw по RoundCap), не действует.
+        /// </summary>
+        public CombatActionResult ForceDraw(string reason)
+        {
+            if (Outcome != CombatOutcome.Ongoing) return CombatActionResult.InvalidAction;
+            Outcome = CombatOutcome.Draw;
+            AddLog($"=== НИЧЬЯ: {reason} ===");
+            return CombatActionResult.Success;
+        }
+
         // ---- Действия текущего юнита ----
         /// <summary>Движение в достижимый тайл; цена за тайл растёт под Подавлением.</summary>
         public CombatActionResult Move(GridPos dest)

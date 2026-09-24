@@ -63,6 +63,15 @@ namespace Game.Core.Combat
     /// Комбат данные о ростере не читает — тот, кто просит бой (PassVanguardOutcome/
     /// DungeonRun/Finale, все — D1), сам резолвит companion id → Companion и
     /// передаёт готовые данные через BattleUnitFactory (см. DefaultCombatContent).
+    ///
+    /// BattleSetup НЕ несёт сид/кубик: для HitRule=Percent сам IDiceRoller —
+    /// отдельный параметр CombatBattleBuilder.Build, и его владелец — вызывающий
+    /// (D1/GameSession), не Core (R1 — Core не реализует IDiceRoller вовсе, см.
+    /// ArchitectureGuardTests.Core_NoTypeImplementsIDiceRoller). Сид игровой сессии
+    /// живёт в NewGameOptions.Seed (§4 TEST_BUILD.md) и превращается в один
+    /// SeededDiceRoller ДО вызова Build — тот же экземпляр должен использоваться
+    /// на весь бой (и, если нужно, на всю сессию), иначе «тот же сид — тот же бой»
+    /// не выполняется.
     /// </summary>
     public sealed class BattleSetup
     {
@@ -84,8 +93,5 @@ namespace Game.Core.Combat
         public GridPos DefectorPos;
 
         public HitRuleKind HitRule = HitRuleKind.Threshold;
-
-        /// <summary>Сид кубика для PercentRule (для ThresholdRule не используется).</summary>
-        public ulong Seed;
     }
 }

@@ -39,16 +39,28 @@ namespace Game.Core.Combat
 
         /// <summary>
         /// Прогоняет бой ИИ-против-ИИ до исхода (автобой — обе стороны играет
-        /// ИИ). turnBudget — дополнительная страховка сверх внутреннего предела
-        /// раундов CombatState (Balance.Combat.RoundCap): завершаемость
-        /// гарантирована ДВАЖДЫ — снаружи (бюджет ходов) и изнутри (Draw по
-        /// раундам), поэтому автобой не зависает даже если обе стороны лечатся
-        /// быстрее, чем наносят урон.
+        /// ИИ). turnBudget — внешняя страховка сверх внутреннего предела раундов
+        /// CombatState (Balance.Combat.RoundCap): по умолчанию (null) считается
+        /// от реального размера боя (RoundCap × число юнитов + запас), а не
+        /// фиксированной константой — иначе достаточно большой ростер (по этой
+        /// же причине хватало и не такого уж большого: раунд у TurnSystem
+        /// считается один на ПОЛНЫЙ проход очереди инициативы, т.е. ~ЧислоЮнитов
+        /// вызовов TakeTurn на раунд) исчерпывал бы старую страховку (400) РАНЬШЕ,
+        /// чем сработает RoundCap внутри CombatState. Независимо от бюджета —
+        /// своего или переданного вызывающим — завершаемость гарантирована
+        /// БЕЗУСЛОВНО: если по выходу из цикла бой всё ещё Ongoing,
+        /// CombatState.ForceDraw закрывает его сам. AutoResolve никогда не
+        /// возвращает управление с Outcome == Ongoing.
         /// </summary>
-        public static void AutoResolve(CombatState cs, int turnBudget = 400)
+        public static void AutoResolve(CombatState cs, int? turnBudget = null)
         {
-            while (cs != null && cs.Outcome == CombatOutcome.Ongoing && turnBudget-- > 0)
+            if (cs == null) return;
+
+            int budget = turnBudget ?? (cs.Balance.Combat.RoundCap * Math.Max(1, cs.Units.Count) + cs.Units.Count + 4);
+            while (cs.Outcome == CombatOutcome.Ongoing && budget-- > 0)
                 TakeTurn(cs);
+
+            cs.ForceDraw("исчерпан внешний бюджет ходов автобоя (AutoResolve)");
         }
 
         // ---- Один осмысленный шаг хода. false — юниту больше нечего делать. ----

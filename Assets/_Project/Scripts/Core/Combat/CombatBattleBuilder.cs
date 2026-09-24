@@ -35,6 +35,15 @@ namespace Game.Core.Combat
     /// </summary>
     public static class CombatBattleBuilder
     {
+        /// <summary>
+        /// roller — единственный источник случайности на весь бой (R1: Core сам
+        /// его не создаёт и не хранит сид — BattleSetup сида не несёт). Для
+        /// HitRule=Threshold можно передать null (ThresholdRule его не читает);
+        /// для HitRule=Percent вызывающий (D1/GameSession) обязан передать
+        /// готовый IDiceRoller (в проде — Gameplay.Combat.SeededDiceRoller,
+        /// построенный из NewGameOptions.Seed) и держать один и тот же экземпляр
+        /// на протяжении боя — иначе детерминизм «тот же сид — тот же бой» рвётся.
+        /// </summary>
         public static CombatState Build(BattleSetup setup, BalanceConfig cfg,
             Func<string, PlayerUnitSource> resolvePlayerUnit,
             Func<string, EnemyDefinition> resolveEnemyDefinition,

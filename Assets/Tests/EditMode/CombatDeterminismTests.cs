@@ -103,6 +103,32 @@ namespace Game.Tests.EditMode
             Assert.Greater(cs.Round, Cfg.Combat.RoundCap, "Draw наступил именно из-за предохранителя раундов");
         }
 
+        // ---- Гарантия завершаемости не деградирует на большом ростере ----
+        [Test]
+        public void AutoResolve_DefaultBudget_TerminatesEvenWithLargeRoster()
+        {
+            // Раунд у TurnSystem — один полный проход очереди инициативы, т.е.
+            // ~ЧислоЮнитов вызовов TakeTurn на раунд. Со старой фиксированной
+            // страховкой (400) отряд из 14 безоружных юнитов исчерпывал бы её
+            // ЗАДОЛГО до внутреннего RoundCap (нужно ~14×40=560 «сырых» ходов) —
+            // AutoResolve возвращался бы с Outcome ещё Ongoing, хотя контракт
+            // гарантирует терминацию (BattleResult.From бросает именно на Ongoing).
+            var map = new GridMap(20, 20);
+            var cs = new CombatState(map, Cfg, new ThresholdRule(Cfg), null);
+            for (int i = 0; i < 7; i++)
+            {
+                cs.AddUnit(Unit($"p{i}", Side.Player), new GridPos(0, i));
+                cs.AddUnit(Unit($"e{i}", Side.Enemy), new GridPos(19, i));
+            }
+            cs.Begin();
+
+            CombatAi.AutoResolve(cs); // бюджет по умолчанию — не передаём
+
+            Assert.AreNotEqual(CombatOutcome.Ongoing, cs.Outcome,
+                "AutoResolve обязан вернуть терминальный исход даже для большого ростера на бюджете по умолчанию");
+            Assert.AreEqual(CombatOutcome.Draw, cs.Outcome, "без урона с обеих сторон исход — Draw (по RoundCap или по внешнему ForceDraw)");
+        }
+
         // ---- Отступление ----
         [Test]
         public void Retreat_EndsCombat_MapsToBattleResultRetreat()
