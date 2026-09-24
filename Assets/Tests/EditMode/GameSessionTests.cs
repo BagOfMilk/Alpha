@@ -667,6 +667,37 @@ namespace Game.Tests.EditMode
             Assert.GreaterOrEqual(s.GetEconomyView().Gold, goldBefore, "Extract має забанкувати незабанковане в BaseState.Resources");
         }
 
+        /// <summary>
+        /// D1b (seamsForD1 B3, «Ріг вивідника» item.scout_horn, ефект
+        /// «forewarn_boost», documented deterministic equivalent через
+        /// новий адитивний шов WorldPulse.BoostCharge): здобуття рогу в
+        /// кімнаті 2 «Схованка» одразу і детерміновано підіймає заповнення
+        /// єдиного Announces-накопичувача кампанії (Тугар, §3.3) — приховане
+        /// число (R17), перевіряється лише IVT-гачком.
+        /// </summary>
+        [Test]
+        public void Dungeon_HiddenCache_GrantsScoutHorn_BoostsTuharPulseFill()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            double fillBefore = s.DebugTuharPulseFill;
+
+            s.DepartExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                new[] { "protagonist", "maksym", "myroslava" }, 2);
+            s.ResolveDungeonRoom(IncidentPath.Quiet); // кімната 1, тихий обхід
+            s.PushDeeper(); // кімната 2: схованка з "Ріг вивідника"
+            s.ResolveDungeonRoom(IncidentPath.Quiet); // грант предмета всередині ApplyDungeonResolution
+
+            bool sawBoostEvent = false;
+            foreach (var e in s.DayLog) if (e.Key == "item.scout_horn.forewarn_boosted") sawBoostEvent = true;
+            Assert.IsTrue(sawBoostEvent, "здобуття рогу мало залогувати item.scout_horn.forewarn_boosted");
+
+            Assert.Greater(s.DebugTuharPulseFill, fillBefore,
+                "Ріг вивідника мав детерміновано підняти заповнення накопичувача Тугара (наступні попередження — раніше/легше)");
+        }
+
         // ---- Фінал доби 5: кровавий шлях → справжній бій (SuspendReason.FinaleAssault) ----
 
         [Test]

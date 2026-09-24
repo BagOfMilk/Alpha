@@ -24,5 +24,18 @@ namespace Game.Core.Balance
         /// в контенті: одна ручка, а не перепис DefaultItems при підкрутці.
         /// </summary>
         public int ScoutHornForewarnCharges = 2;
+
+        /// <summary>
+        /// D1b (seamsForD1 B3, шов "forewarn_boost"): сирий заряд <see cref="Game.Core.World.WorldPulse.BoostCharge"/>
+        /// на ОДИН заряд рогу — множиться на <see cref="ScoutHornForewarnCharges"/>
+        /// при знахідці й іде разово в накопичувач Тугара (єдиний
+        /// Announces-накопичувач кампанії §3.3). Підібрано так, щоб разом
+        /// (2 заряди) впритул наблизити заповнення до Forewarn2At
+        /// (PulseBalance, 0.80 від Threshold=60 у TuharPressureSource) — той
+        /// самий детермінований механізм "рівно одна ступінь за тік"
+        /// (WorldPulse.Advance) сам розтягує це на "наступні 2 попередження
+        /// раніше", а не на миттєвий стрибок на 2 ступені одразу.
+        /// </summary>
+        public int ScoutHornForewarnBoostPerCharge = 15;
     }
 }

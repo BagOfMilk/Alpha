@@ -716,6 +716,18 @@ namespace Game.Core.Session
         internal int DebugTensionValue => _processor?.Tension?.Value ?? 0;
         internal bool DebugCommunityIsAfraid => _processor != null && _processor.Fear != null && _processor.Fear.IsAfraid(_processor.CurrentDay);
 
+        /// <summary>Той самий гачок для scout_horn "forewarn_boost" (D1b) — заповнення накопичувача Тугара (0..1+), приховане від View.</summary>
+        internal double DebugTuharPulseFill
+        {
+            get
+            {
+                Game.Core.World.PressureTrack track;
+                if (_processor?.Pulse != null && _processor.Pulse.Tracks.TryGetValue(OpeningContent.TuharSourceId, out track))
+                    return track.Fill;
+                return 0.0;
+            }
+        }
+
         public SessionState ConfirmMorning()
         {
             if (State != SessionState.Morning && State != SessionState.FreePlay)
@@ -2003,8 +2015,17 @@ namespace Game.Core.Session
 
         private void GrantNamedItemById(string itemId)
         {
-            if (string.Equals(itemId, "scout_horn", StringComparison.Ordinal))
-                _inventory.Add(ItemInstance.NamedFrom(DefaultItems.ScoutHorn(_cfg.Items)));
+            if (!string.Equals(itemId, "scout_horn", StringComparison.Ordinal)) return;
+
+            _inventory.Add(ItemInstance.NamedFrom(DefaultItems.ScoutHorn(_cfg.Items)));
+
+            // seamsForD1 B3 (ефект «forewarn_boost», D1b): "наступні 2
+            // передвісники — раніше/легше" застосовується через адитивний шов
+            // WorldPulse.BoostCharge на єдиний Announces-накопичувач кампанії
+            // (Тугар, §3.3) — детально в ItemBalance.ScoutHornForewarnBoostPerCharge.
+            int boost = _cfg.Items.ScoutHornForewarnCharges * _cfg.Items.ScoutHornForewarnBoostPerCharge;
+            _processor?.Pulse?.BoostCharge(OpeningContent.TuharSourceId, boost);
+            LogEvent("item.scout_horn.forewarn_boosted", Args("charges", _cfg.Items.ScoutHornForewarnCharges.ToString(CultureInfo.InvariantCulture)));
         }
 
         private void ApplyFactionDelta(string factionId, int delta)

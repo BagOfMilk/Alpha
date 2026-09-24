@@ -127,5 +127,24 @@ namespace Game.Core.World
         {
             return _tracks.TryGetValue(sourceId, out var track) ? track.DeliveredLevel : 0;
         }
+
+        /// <summary>
+        /// D1b (seamsForD1 B3, іменний предмет «Ріг вивідника», ефект
+        /// «forewarn_boost»): додатковий, ЧИСТО АДИТИВНИЙ сейв — не змінює
+        /// жодного існуючого члена/поведінки. Одноразово підкидає заряд
+        /// накопичувачу так, ніби він сам накопичив трохи більше за день
+        /// (той самий шлях, що й <see cref="PressureTrack.Accumulate"/> уже
+        /// зве кожен тік) — WorldPulse.Advance сам гарантує "рівно одна
+        /// ступінь за тік" (коментар вище), тож великий разовий заряд
+        /// природно розтягується на кілька НАСТУПНИХ попереджень, що
+        /// приходять РАНІШЕ, ніж прийшли б без нього, а не миттєво всі одразу.
+        /// Немає джерела випадковості (R1) — сума фіксована й детермінована.
+        /// </summary>
+        public void BoostCharge(string sourceId, int amount)
+        {
+            if (amount <= 0) return;
+            if (_tracks.TryGetValue(sourceId, out var track))
+                track.Accumulate(amount, _cfg);
+        }
     }
 }
