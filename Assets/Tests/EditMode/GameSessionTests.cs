@@ -826,6 +826,52 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, after.Status);
         }
 
+        /// <summary>
+        /// Адверсаріал-огляд Поправки №7.8: "prevent"-гілка конфронтації —
+        /// коли зрада НЕ насуває (жоден кровавий вузол 1 не сіяв
+        /// defector_seeded), OfferMyroslavaEveningScene() на добу 3 мала
+        /// відкрити запасну тиху сцену (MyroslavaTrustCheckup), а не
+        /// конфронтацію — до цього тесту тільки структурна валідність цієї
+        /// сцени (SceneTests) була перевірена, сам факт, що ГРА обирає саме
+        /// її гілку runtime-логіки, ще ні.
+        /// </summary>
+        [Test]
+        public void OfferMyroslavaEveningScene_WithoutSeededDefection_OpensCheckupNotConfrontation()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s); // "відмовити" (варіант 0) — жодного зерна зради
+
+            PlayFullDayQuiet(s); // доба 1, тихо
+            PlayFullDayQuiet(s); // доба 2, тихо
+
+            s.ConfirmMorning();
+            var day3Report = s.AdvanceDay();
+            while (day3Report != null && day3Report.AwaitsDecision)
+                day3Report = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene) RunSceneToFinish(s);
+            Assert.AreEqual(SessionState.Evening, s.State);
+            Assert.AreEqual(3, s.CurrentView.Day);
+
+            var offered = s.OfferMyroslavaEveningScene();
+            Assert.IsNotNull(offered, "доба 3 мала запропонувати якусь сцену — зрада не насуває, тож це має бути checkup");
+
+            bool sawCheckupBegun = false, sawConfrontationBegun = false;
+            foreach (var e in s.DayLog)
+            {
+                if (e.Key == "scene.trust_checkup.begun") sawCheckupBegun = true;
+                if (e.Key == "scene.betrayal_confrontation.begun") sawConfrontationBegun = true;
+            }
+            Assert.IsTrue(sawCheckupBegun,
+                "без defector_seeded доба 3 мала відкрити тиху перевірку стосунків, не нічну розмову-конфронтацію");
+            Assert.IsFalse(sawConfrontationBegun);
+
+            var myroslava = FindCompanion(s.GetRosterView(), "myroslava");
+            Assert.IsNotNull(myroslava);
+            Assert.AreNotEqual(Game.Core.Characters.CompanionStatus.Antagonist, myroslava.Status,
+                "тиха гілка того самого вузла не зраджує нікого");
+        }
+
         // ---- Особиста арка (Поправка №7.8, п. 3 «ARCS PLAYABLE»): Begin → зміст → CompleteChapter → arc.chapter_completed ----
 
         /// <summary>
