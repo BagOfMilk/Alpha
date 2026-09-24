@@ -145,7 +145,11 @@ namespace Game.Gameplay.UI
             var current = FindUnit(view, view.CurrentUnitId);
             if (current == null)
             {
-                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.Body);
+                // Полірування (ціль А «HUD», owner: "enemy turn shows one clear
+                // «Хід ворога…» line"): єдине місце, де ця репліка малюється —
+                // DrawActionButtons нижче більше не дублює її на кожній
+                // вимкненій кнопці (раніше рядок повторювався тричі поспіль).
+                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.SubHeader);
                 return;
             }
 
@@ -154,7 +158,9 @@ namespace Game.Gameplay.UI
 
             if (!c.IsPlayerTurn)
             {
-                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.Tooltip);
+                // Той самий рядок, тим самим виразним стилем — ім'я ворога вже
+                // назване рядком вище, тут лише пояснення, чому кнопок немає.
+                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.SubHeader);
                 return;
             }
 
@@ -284,14 +290,13 @@ namespace Game.Gameplay.UI
         {
             GUILayout.BeginHorizontal();
 
-            if (!c.IsPlayerTurn)
-            {
-                Widgets.DisabledButton(UkrainianText.Get("ui.battle.overwatch.button", false),
-                    UkrainianText.Get("ui.battle.enemyturn", false));
-                Widgets.DisabledButton(UkrainianText.Get("ui.battle.endturn", false),
-                    UkrainianText.Get("ui.battle.enemyturn", false));
-            }
-            else
+            // Полірування (ціль А «HUD», owner: "no overlapping disabled
+            // buttons"): раніше тут стояли ДВІ Widgets.DisabledButton, кожна зі
+            // своїм рядком-поясненням "Хід ворога…" — та сама репліка, що вже
+            // намальована один раз у DrawCurrentUnit вище, повторювалась ще
+            // двічі поспіль. Кнопок гравця під час ходу ворога немає взагалі
+            // (нема чим керувати) — порожній ряд лишає тільки Автобій нижче.
+            if (c.IsPlayerTurn)
             {
                 bool overwatchArmed = c.Armed == ArmedAction.OverwatchAim;
                 if (Widgets.SecondaryButton((overwatchArmed ? "» " : string.Empty) + UkrainianText.Get("ui.battle.overwatch.button", false)))

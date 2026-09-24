@@ -113,6 +113,9 @@ namespace Game.Gameplay
         private string _hoveredUnitId;
         private int _hoveredHitChance;
 
+        /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters (§SpawnOrUpdateUnit) — той самий множник контр-масштабує підпис імені (§BuildNameLabel), щоб текст не ріс разом із фігурою.</summary>
+        private const float UnitVisualScale = 1.35f;
+
         private bool _resultPending;
         private string _resultOutcomeKey;
         private string _resultRounds;
@@ -326,7 +329,13 @@ namespace Game.Gameplay
                 var world = BattleArenaView.TileToWorld(x, y);
                 tile.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
                 tile.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                tile.transform.localScale = new Vector3(BattleArenaView.TileSize * 0.96f, BattleArenaView.TileSize * 0.96f, 1f);
+                // Полірування (ціль 3 «Бойові декорації», owner: "a grid
+                // shown as subtle lines"): 0.96 лишало між тайлами прогалину
+                // ~4% розміру клітини, і крізь неї просвічував темний фон
+                // камери — товста чорна сітка, що й читалась як "таблиця".
+                // 0.985 лишає лінію тонкою, а не зникає геть — межа тайла
+                // (укриття/прохідність) все ще читається.
+                tile.transform.localScale = new Vector3(BattleArenaView.TileSize * 0.985f, BattleArenaView.TileSize * 0.985f, 1f);
 
                 var renderer = tile.GetComponent<Renderer>();
                 if (renderer != null && _tileMaterial != null) renderer.sharedMaterial = _tileMaterial;
@@ -379,6 +388,11 @@ namespace Game.Gameplay
                 go = prefab != null ? Instantiate(prefab, _unitRoot) : GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 go.name = "unit:" + unit.Id;
                 go.transform.SetParent(_unitRoot, false);
+                // Полірування (ціль 3 «Бойові декорації», owner: "units
+                // scaled up to read well"): Kenney Mini Characters дрібні
+                // проти клітини 1×1 — на камері зверху фігура губилась між
+                // підписом і кільцем сторони.
+                go.transform.localScale = Vector3.one * UnitVisualScale;
 
                 // Модель Kenney може нести власні колайдери на дочірніх об'єктах —
                 // прибираємо їх усі й тримаємо РІВНО один, на корені, з відомим
@@ -433,6 +447,22 @@ namespace Game.Gameplay
             }
         }
 
+        /// <summary>
+        /// Фікс-ревью (ціль А «Бойові декорації», owner: "readable name labels
+        /// that don't cover neighbours" — знайдено тур-автоплеєм): фіксований
+        /// <c>characterSize=0.1</c> давав ширину підпису, що росте прямо
+        /// пропорційно довжині імені, без стелі. На тісному строю (два
+        /// сусідні тайли — 1 світова одиниця) довгі імена на кшталт
+        /// "Розвідник орди"/"Застрільник орди" налягали на сусідній підпис
+        /// суцільним нечитабельним текстом. Обидва фікси тут:
+        /// (1) <see cref="UnitVisualScale"/> тепер масштабує саму фігуру —
+        /// підпис контр-масштабується на той самий множник, щоб не рости
+        /// разом з нею (інакше довгі імена стали б ще ширшими, ніж до
+        /// збільшення юнітів); (2) розмір символу обернено пропорційний
+        /// довжині імені — короткі імена лишаються великими (стеля = старий
+        /// дефолт 0.1), довгі стають дрібнішими, і сумарна ширина підпису
+        /// тримається приблизно в межах одного тайла незалежно від довжини.
+        /// </summary>
         private void BuildNameLabel(GameObject unitGo, BattleUnitView unit)
         {
             var label = new GameObject("label");
@@ -442,14 +472,20 @@ namespace Game.Gameplay
             // поворот 90° по X) — підпис лежить лицем угору, а не крутиться до
             // камери: той самий підхід, що KitBuilder.Plot для ізометрії хаба.
             label.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            // Батько (unitGo) тепер масштабований на UnitVisualScale — без
+            // контр-масштабу тут підпис ріс би разом із фігурою.
+            label.transform.localScale = Vector3.one / UnitVisualScale;
+
+            string name = ResolveDisplayNameInternal(unit);
+            int len = Mathf.Max(name != null ? name.Length : 0, 9);
 
             var text = label.AddComponent<TextMesh>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.fontSize = 32;
-            text.characterSize = 0.1f;
+            text.characterSize = Mathf.Clamp(0.75f / len, 0.04f, 0.095f);
             text.anchor = TextAnchor.MiddleCenter;
             text.color = Color.white;
-            text.text = ResolveDisplayNameInternal(unit);
+            text.text = name;
 
             var renderer = label.GetComponent<MeshRenderer>();
             if (renderer != null && text.font != null) renderer.sharedMaterial = text.font.material;

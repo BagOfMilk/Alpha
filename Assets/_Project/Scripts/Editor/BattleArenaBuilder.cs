@@ -122,6 +122,41 @@ namespace Game.Gameplay.EditorTools
                 PlaceCorner(root, rockPrefab, new Vector3(-2f, 0f, 12f), 255f);
                 PlaceCorner(root, rockPrefab, new Vector3(12f, 0f, 12f), 195f);
             }
+
+            // Полірування (ціль 3 «Бойові декорації», owner: "scenery around
+            // the arena edges (trees, rocks) for context"): раніше лише
+            // чотири камені по кутах — самé поле лишалось голою рівниною.
+            // Дерева вздовж країв, поза межами будь-якого гріда (макс. 10×10),
+            // тим самим прийомом фіксованого посіву, що вже коректно працює
+            // для кутових каменів (жодного Random — інваріант 1).
+            var treePrefab = Load(Nature + "tree_default.fbx");
+            var treeDarkPrefab = Load(Nature + "tree_default_dark.fbx");
+            if (treePrefab != null && treeDarkPrefab != null)
+            {
+                PlaceCorner(root, treePrefab, new Vector3(-2.5f, 0f, 3.5f), 40f);
+                PlaceCorner(root, treeDarkPrefab, new Vector3(-2.2f, 0f, 7f), 160f);
+                PlaceCorner(root, treeDarkPrefab, new Vector3(3.5f, 0f, -2.5f), 300f);
+                PlaceCorner(root, treePrefab, new Vector3(7f, 0f, -2.2f), 210f);
+                PlaceCorner(root, treePrefab, new Vector3(12.5f, 0f, 4f), 80f);
+                PlaceCorner(root, treeDarkPrefab, new Vector3(4f, 0f, 12.5f), 260f);
+
+                // Фікс-ревью (ціль А, owner: "scenery around the arena edges"
+                // — знайдено тур-автоплеєм): бої зазвичай дрібніші за
+                // максимальний 10×10 грід (спостережено 8×6 у ранньому вузлі
+                // 1) — FrameGrid кадрує камеру ТІСНІШЕ під фактичний розмір,
+                // і всі шість дерев/чотири камені вище (розраховані на повний
+                // 10×10) випадають за межі кадру: поле лишається голою
+                // рівниною без жодної рослинності в кадрі. Грід завжди
+                // починається з (0,0) незалежно від розміру (TileToWorld) —
+                // тому цей кут єдиний, що лишається "поруч із краєм" для
+                // БУДЬ-ЯКОГО розміру бою; тісний посів тут гарантує хоч якусь
+                // видиму рослинність навіть на найдрібнішій арені, не
+                // конфліктуючи з тайлами (від'ємні координати ніколи не
+                // потрапляють у грід).
+                PlaceCorner(root, treePrefab, new Vector3(-1f, 0f, -1f), 55f);
+                PlaceCorner(root, treeDarkPrefab, new Vector3(-1.1f, 0f, 1.6f), 190f);
+                PlaceCorner(root, treeDarkPrefab, new Vector3(1.6f, 0f, -1.1f), 320f);
+            }
         }
 
         private static void PlaceCorner(GameObject root, GameObject prefab, Vector3 pos, float yaw)
