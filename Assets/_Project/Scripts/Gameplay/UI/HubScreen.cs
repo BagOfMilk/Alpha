@@ -276,7 +276,13 @@ namespace Game.Gameplay.UI
                 foreach (var site in SiteIds)
                 {
                     string sid = site;
-                    if (Widgets.SecondaryButton(UkrainianText.Get("site." + site, g), GUILayout.Width(180f)))
+                    // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): фіксовані
+                    // 180px замалі для довших назв ("Покинутий табір
+                    // авангарду") — AlphaSkin.ButtonStyle.wordWrap=false, тож
+                    // текст не переносився, а виїжджав ЗА межі кнопки й
+                    // налягав на сусідню. Без явної ширини GUILayout сам
+                    // підбирає розмір під напис.
+                    if (Widgets.SecondaryButton(UkrainianText.Get("site." + site, g)))
                         shell.TryRun(() => shell.Session.OrderOutfitExpedition(sid));
                 }
                 GUILayout.EndHorizontal();
@@ -294,7 +300,8 @@ namespace Game.Gameplay.UI
                 GUILayout.BeginHorizontal();
                 foreach (var site in SiteIds)
                 {
-                    if (Widgets.TabButton(UkrainianText.Get("site." + site, g), _siteId == site, GUILayout.Width(180f)))
+                    // Той самий фікс ширини, що DrawCouncil вище.
+                    if (Widgets.TabButton(UkrainianText.Get("site." + site, g), _siteId == site))
                     {
                         _siteId = site;
                         _preview = null;
