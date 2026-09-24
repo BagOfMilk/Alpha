@@ -253,13 +253,30 @@ namespace Game.Core.Base
         /// </summary>
         public void Wound(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light)
         {
+            WoundReporting(actorId, injuryPoints, tier);
+        }
+
+        /// <summary>
+        /// Той самий шлях ранення, що і <see cref="Wound"/> (ICasualtySink) —
+        /// винесений окремим методом (а не зміною сигнатури інтерфейсного
+        /// Wound), щоб не ламати ICasualtySink (World/IncidentResolver) і
+        /// PassVanguardOutcome, яким дарований шрам не потрібен. Повертає
+        /// дарований <see cref="Characters.Scars.ScarDefinition"/> (або null) —
+        /// major-фікс ревью: без цього виклик GameSession не мав звідки
+        /// дізнатись, що шрам дарований, і подія "scar.granted" (§2 №23)
+        /// не могла піти в DayLog з жодної з трьох реальних точок ранення.
+        /// </summary>
+        public Characters.Scars.ScarDefinition WoundReporting(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light)
+        {
             var c = _roster.Get(actorId);
             // B4-аудит §4.5: антагонист необратим — рана не затирает его статус.
-            if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist) return;
+            if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist) return null;
             c.InjuryPoints += injuryPoints;
             if (c.Status != CompanionStatus.OnMission)
                 c.Status = CompanionStatus.Injured;
-            Characters.Scars.DefaultScars.TryGrant(c, tier, out _);
+            Characters.Scars.ScarDefinition granted;
+            Characters.Scars.DefaultScars.TryGrant(c, tier, out granted);
+            return granted;
         }
 
         private bool IsProtagonist(string id) =>

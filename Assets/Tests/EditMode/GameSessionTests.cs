@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Game.Core.Base;
@@ -563,6 +564,166 @@ namespace Game.Tests.EditMode
             s.AcknowledgeSummary();
             Assert.AreEqual(SessionState.FreePlay, s.State);
             Assert.IsTrue(s.CurrentView.IsFreePlay);
+        }
+
+        // ---- Фікс-ревью (роль FIXER, пакет D1a): регрес-тести на кожну знахідку ----
+
+        /// <summary>
+        /// Блокер-фікс: раніше AdvanceNight() доби 5 доводив ніч до Summary
+        /// незалежно від того, чи розв'язано ResolveFinale — фінал (R8, "РЕАЛЬНИЙ,
+        /// не прев'ю") можна було мовчки пропустити (ConfirmEvening→AdvanceNight
+        /// напряму), і SummaryView.FinaleOutcomeKey лишався null.
+        /// </summary>
+        [Test]
+        public void AdvanceNight_OnDay5_WithoutResolveFinale_Throws()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            for (int day = 1; day <= 4; day++) PlayFullDayQuiet(s);
+
+            s.ConfirmMorning();
+            var dayReport = s.AdvanceDay();
+            while (dayReport != null && dayReport.AwaitsDecision)
+                dayReport = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene)
+            {
+                SceneStepView step;
+                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            }
+            s.ReactToCrisis(CrisisReaction.SpendGold);
+            s.ConfirmEvening();
+            Assert.AreEqual(SessionState.Night, s.State);
+
+            Assert.Throws<InvalidOperationException>(() => s.AdvanceNight(),
+                "доба 5: AdvanceNight() не повинен мовчки провести ніч повз нерозв'язаний фінал");
+
+            // Право шлях лишається доступним: ResolveFinale все ще можна
+            // викликати після відмови, і AdvanceNight() після нього вже не падає.
+            s.ResolveFinale(IncidentPath.Quiet);
+            Assert.DoesNotThrow(() => s.AdvanceNight());
+            Assert.AreEqual(SessionState.Summary, s.State);
+        }
+
+        /// <summary>
+        /// Блокер-фікс: §4.1 документує OfferQuestStage/ResolveQuestChoice як
+        /// "Morning/Evening" (R6 — поза конвеєром дня), а сценарій доби 2 (§3.2)
+        /// додатково кличе їх УНОЧІ ("Ніч | Квест Гафії, етап 1"). Блок
+        /// Morning-гвардів (2f860c6) помилково звузив обидві команди до
+        /// суцільного RequireState(Morning) — задокументований сценарій падав
+        /// би з InvalidOperationException.
+        /// </summary>
+        [Test]
+        public void OfferQuestStage_And_ResolveQuestChoice_FromNight_Succeeds()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            PlayFullDayQuiet(s); // доба 1 -> Morning доби 2
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay(); // доба 2: інцидент spoiled_stores
+            while (report != null && report.AwaitsDecision)
+                report = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Evening) s.ConfirmEvening();
+            Assert.AreEqual(SessionState.Night, s.State, "доба 2 має дійти до Ночі без сценарних зупинок");
+
+            var offer = s.OfferQuestStage(Game.Core.Quests.DefaultQuests.HafiyaId);
+            Assert.IsNotNull(offer, "OfferQuestStage мав спрацювати вночі (§3.2 сценарій доби 2)");
+
+            var afterChoice = s.ResolveQuestChoice(0);
+            Assert.IsNotNull(afterChoice);
+            bool sawResolved = false;
+            foreach (var e in s.DayLog) if (e.Key == "quest.choice.resolved") sawResolved = true;
+            Assert.IsTrue(sawResolved);
+        }
+
+        /// <summary>
+        /// Майор-фікс: TranslateReport логував "day.advanced" на кожен свій
+        /// виклик, а ResolveIncident/CompletePassVanguard кличуть його ЗНОВУ в
+        /// тій самій фазі (лише довирішуючи вже відкрите рішення, без нового
+        /// DayProcessor.Advance()) — DayLog фіксував по 2 "day.advanced" на
+        /// фазу з хоч одним рішенням.
+        /// </summary>
+        [Test]
+        public void ResolveIncident_DoesNotDuplicate_DayAdvancedEvent()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Assert.IsTrue(report.AwaitsDecision);
+
+            s.ResolveIncident(IncidentPath.Quiet);
+
+            int count = 0;
+            foreach (var e in s.DayLog) if (e.Key == "day.advanced") count++;
+            Assert.AreEqual(1, count,
+                "AdvanceDay рухає DayProcessor рівно раз за фазу — 'day.advanced' не повинен дублюватись " +
+                "довирішенням інциденту в тій самій фазі (DayLog — єдине джерело правди, §4.3)");
+        }
+
+        /// <summary>
+        /// Майор-фікс: конструкторський канал кубика мав пріоритет над
+        /// NewGameOptions.Roller лише формально — guard кидав виняток, щойно
+        /// конструкторське поле було null, НАВІТЬ якщо o.Roller передано, а
+        /// сам клас документує NewGameOptions.Roller як рівноцінний канал
+        /// (клас. коментар GameSession). _roller був readonly — навіть минувши
+        /// guard, o.Roller ніде реально не читався (RequestBattle/ComposeSave/
+        /// ApplySave/NewTrainingBattle бачили лише конструкторське поле).
+        /// </summary>
+        [Test]
+        public void NewGame_PercentRule_HonorsRollerFromNewGameOptions_WhenConstructorRollerIsNull()
+        {
+            var roller = new ScriptedDiceRoller(0.01, 0.99, 0.01, 0.99, 0.01, 0.99, 0.01, 0.99, 0.01, 0.99);
+            var s = new GameSession(); // без кубика в конструкторі
+
+            Assert.DoesNotThrow(() => s.NewGame(new NewGameOptions
+            {
+                SkipCreation = true,
+                HitRule = HitRuleKind.Percent,
+                Roller = roller
+            }), "NewGameOptions.Roller — задокументований рівноцінний канал інжекції кубика");
+
+            FastForwardOpeningToMorning(s);
+
+            // Не лише проходить guard — справді використовується: якби _roller
+            // лишився null (не промотувався за межі NewGame()), тренувальний бій
+            // Percent-правилом впав би на ArgumentNullException при першій атаці.
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Percent });
+            Assert.AreEqual(SessionState.Battle, s.State);
+            Assert.DoesNotThrow(() => s.CombatAutoResolve());
+            Assert.IsNull(s.GetBattleView(), "бій автопройдено — кубик з опцій реально відпрацював");
+        }
+
+        /// <summary>
+        /// Майор-фікс (§2 №27, seamsForD1 пакета B4): особисті арки напарників
+        /// існували в Core/Companions, але Refresh()/подія "arc.chapter_opened"
+        /// не звалися нізвідки з GameSession. Максим стартує на полосі Steady
+        /// (CompanionSocialBalance: "старт Максима 60 -> Steady") — перша глава
+        /// його арки (без RequiresFlag, поріг Steady) мала стати доступною вже
+        /// в кінці доби 1, щойно щоденний тик арок нарешті з'явився.
+        /// </summary>
+        [Test]
+        public void TickCompanionArcs_OpensMaksymChapter1_OnFirstDayEnd_SinceHeStartsAtSteady()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var log = new List<GameEvent>();
+            PlayFullDayQuiet(s, log);
+
+            bool sawArcOpened = false;
+            foreach (var e in log)
+                if (e.Key == "arc.chapter_opened" && e.Args["companionId"] == "maksym") sawArcOpened = true;
+
+            Assert.IsTrue(sawArcOpened,
+                "Максим стартує на Steady — перша глава його арки мала відкритись у кінці доби 1 (§2 №27)");
         }
 
         // ---- R13: побайтова безперервність збереження/завантаження ----

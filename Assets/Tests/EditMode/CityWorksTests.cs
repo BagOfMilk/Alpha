@@ -263,6 +263,40 @@ namespace Game.Tests.EditMode
                 "без отката хутор становился селом на одиннадцатые сутки");
         }
 
+        /// <summary>
+        /// Фікс-ревью (major, DepartExpedition/D1): PeekExpeditionOutfitBuff()
+        /// не знімає накопичений бонус — лише TakeExpeditionOutfitBuff() знімає,
+        /// і рівно раз. До цього фіксу єдиним доступом ззовні був Take, і
+        /// GameSession.DepartExpedition кликав його безумовно на першому ж
+        /// відправленні (навіть на ІНШУ площадку, ніж замовлено), губля разовий
+        /// бонус назавжди — цей тест ловить саме контракт примітиву, від якого
+        /// залежить фікс на боці D1.
+        /// </summary>
+        [Test]
+        public void OutfitExpedition_PeekDoesNotConsume_TakeConsumesExactlyOnce()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg);
+            Give(c.State, cfg.Faction.OutfitExpeditionGoldCost);
+
+            Assert.AreEqual(CouncilOrderResult.Applied, c.Works.OrderOutfitExpedition(c.State, "outskirts", 1, cfg));
+
+            var peeked1 = c.Works.PeekExpeditionOutfitBuff();
+            Assert.IsNotNull(peeked1, "Peek має бачити щойно замовлений бонус");
+            Assert.AreEqual("outskirts", peeked1.SiteId);
+
+            var peeked2 = c.Works.PeekExpeditionOutfitBuff();
+            Assert.IsNotNull(peeked2, "повторний Peek нічого не знімає — бонус лишається на місці");
+            Assert.AreEqual("outskirts", peeked2.SiteId);
+
+            var taken = c.Works.TakeExpeditionOutfitBuff();
+            Assert.IsNotNull(taken);
+            Assert.AreEqual("outskirts", taken.SiteId);
+
+            Assert.IsNull(c.Works.PeekExpeditionOutfitBuff(), "після Take бонуса більше нема — Peek бачить порожньо");
+            Assert.IsNull(c.Works.TakeExpeditionOutfitBuff(), "і Take вдруге теж нічого не бере");
+        }
+
         // ================= люди уходят =================
 
         [Test]

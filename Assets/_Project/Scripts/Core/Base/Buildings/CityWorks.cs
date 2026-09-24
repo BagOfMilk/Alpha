@@ -485,7 +485,17 @@ namespace Game.Core.Base
             return n;
         }
 
-        /// <summary>Забирает и обнуляет разовый бонус снаряжения (для D1).</summary>
+        /// <summary>
+        /// Подсматривает разовый бонус снаряжения БЕЗ его снятия (фикс-ревью):
+        /// D1 (DepartExpedition) должен решить, применим ли бонус К ЭТОМУ
+        /// отправлению (siteId совпадает с заказанным), ДО того, как заберёт
+        /// его — иначе TakeExpeditionOutfitBuff() снимал бонус безусловно на
+        /// первом же отправлении, даже на другую площадку, и он терялся
+        /// навсегда без единого шанса быть применённым туда, куда заказан.
+        /// </summary>
+        internal ExpeditionOutfitBuff PeekExpeditionOutfitBuff() => _pendingOutfitBuff;
+
+        /// <summary>Забирает и обнуляет разовый бонус снаряжения (для D1) — только когда он уже применяется (см. PeekExpeditionOutfitBuff).</summary>
         internal ExpeditionOutfitBuff TakeExpeditionOutfitBuff()
         {
             var b = _pendingOutfitBuff;

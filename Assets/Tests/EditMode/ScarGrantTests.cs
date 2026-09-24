@@ -116,6 +116,40 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, comp.Scars.Count);
         }
 
+        /// <summary>
+        /// Фікс-ревью (major, §2 №23): WoundReporting — той самий шлях, що і
+        /// Wound (ICasualtySink), але повертає дарований шрам, аби GameSession
+        /// мав звідки логувати "scar.granted" з усіх трьох реальних точок
+        /// ранення (ApplyCrisisBite/ApplyBattleCasualties/ApplyFinaleCost).
+        /// </summary>
+        [Test]
+        public void SeriousWound_ThroughWoundReporting_ReturnsGrantedScar()
+        {
+            var roster = new Roster();
+            var comp = Comp();
+            roster.Add(comp);
+            var adapter = new RosterAdapter(roster);
+
+            var granted = adapter.WoundReporting(comp.Id, 10, WoundTier.Serious);
+
+            Assert.IsNotNull(granted, "WoundReporting має повертати дарований шрам");
+            Assert.AreEqual(DefaultScars.OneEyed().Id, granted.Id);
+            Assert.AreEqual(1, comp.Scars.Count, "той самий побічний ефект, що і Wound");
+        }
+
+        [Test]
+        public void LightWound_ThroughWoundReporting_ReturnsNull()
+        {
+            var roster = new Roster();
+            var comp = Comp();
+            roster.Add(comp);
+            var adapter = new RosterAdapter(roster);
+
+            var granted = adapter.WoundReporting(comp.Id, 10);
+
+            Assert.IsNull(granted, "Легка рана — жодного шраму, і жодної помилкової події scar.granted");
+        }
+
         [Test]
         public void DeadCompanion_NeverScarred()
         {

@@ -89,8 +89,34 @@ namespace Game.Core.Session
         /// </summary>
         private DefectionWatch _defectionWatch;
 
+        /// <summary>
+        /// Major-фікс ревью (§2 №27, seamsForD1 пакета B4): особисті арки
+        /// напарників (<see cref="CompanionArc"/>/<see cref="CompanionArcRun"/>)
+        /// існували з пакета B4, але жодного разу не інстанціювались і не
+        /// тікались з GameSession — Refresh() не звав ніхто, подія
+        /// "arc.chapter_opened" не могла піти в DayLog. Тут лише гейтинг
+        /// (лояльність/прапор) тікається щоденно (<see cref="TickCompanionArcs"/>) —
+        /// реальний ЗМІСТ глави (Begin/CompleteChapter через квест з
+        /// ArcChapter.QuestId) лишається відкритим гачком для пакета змісту
+        /// (та сама межа декаплінгу, яку документує сам CompanionArc: "содержание
+        /// главы играет вызывающий, через будущий QuestRun, B6/D1").
+        /// </summary>
+        private List<CompanionArcRun> _arcRuns;
+
+        /// <summary>Прапори гейтингу арок (ArcChapter.RequiresFlag/SetsFlag) — окремі від StoryFlags: без Begin/CompleteChapter (гачок вище) їх ще нікому виставляти.</summary>
+        private readonly HashSet<string> _arcFlags = new HashSet<string>();
+
         // ---- кубик/сід/бій ----
-        private readonly IDiceRoller _roller;
+        // НЕ readonly (фікс-ревью): NewGameOptions.Roller — задокументований
+        // класовим коментарем і самим полем NewGameOptions як рівноцінний
+        // конструктору канал інжекції кубика (той, хто збирає гру, може
+        // лишити конструктор GameSession(roller: null) і передати кубик через
+        // NewGame(o)/ContinueGame(slot, roller) натомість) — NewGame()
+        // промотує o.Roller сюди рівно раз за прогін, якщо конструкторський
+        // канал порожній; без цього поле NewGameOptions.Roller було мертвим
+        // (RequestBattle/ComposeSave/ApplySave/NewTrainingBattle читали лише
+        // конструкторське значення).
+        private IDiceRoller _roller;
         private ulong _seed = 1;
         private HitRuleKind _hitRule = HitRuleKind.Threshold;
         private bool _ironman;
@@ -161,6 +187,14 @@ namespace Game.Core.Session
         {
             o = o ?? new NewGameOptions();
 
+            // Промоція кубика з NewGameOptions.Roller (фікс-ревью, див. коментар
+            // поля _roller): конструкторський канал має пріоритет, якщо задані
+            // обидва; якщо GameSession зібрано з roller:null, а кубик передали
+            // сюди (напр. ContinueGame(slot, roller), де HitRule на момент
+            // виклику ще Threshold-заглушка до LoadState) — саме тут єдине
+            // місце, де він стає "тим самим" кубиком для решти сесії.
+            _roller = _roller ?? o.Roller;
+
             _cfg = new BalanceConfig();
             _world = FirstHourWorld.Build(tier: 1, requirePlayerDecision: true, balance: _cfg);
             _state = _world.BaseState;
@@ -181,6 +215,11 @@ namespace Game.Core.Session
             _repeats = _processor.Repeats;
             _crisis = new ForcedCrisisSource(5, 1);
             _defectionWatch = new DefectionWatch();
+
+            _arcFlags.Clear();
+            _arcRuns = new List<CompanionArcRun>();
+            foreach (var arc in DefaultArcs.All())
+                _arcRuns.Add(new CompanionArcRun(arc, _arcFlags));
 
             _slots.Clear();
             _dayLog.Clear();
@@ -207,8 +246,7 @@ namespace Game.Core.Session
                     throw new InvalidOperationException(
                         "PercentRule потребує IDiceRoller, injected ззовні (Game.Gameplay.Combat.SeededDiceRoller) " +
                         "у конструктор GameSession або NewGameOptions.Roller — Core сам кубик не створює (R1).");
-                var roller = o.Roller ?? _roller;
-                roller.RestoreState(_seed.ToString(CultureInfo.InvariantCulture));
+                _roller.RestoreState(_seed.ToString(CultureInfo.InvariantCulture));
             }
 
             if (o.SkipCreation)
@@ -473,11 +511,19 @@ namespace Game.Core.Session
             // застосовується тут же, поштучним доданням до вже замороженого
             // результату (ExpeditionResult.Gold — публічне поле), не чіпаючи
             // файлів B7 (ExpeditionRunner/ExpeditionResolver — виключно їхні).
-            var buff = _works.TakeExpeditionOutfitBuff();
-            if (buff != null)
+            //
+            // Блокер-фікс ревью: PeekExpeditionOutfitBuff() НЕ знімає бонус —
+            // знімаємо (TakeExpeditionOutfitBuff) лише коли siteId справді
+            // збігається з тим, на який його замовили. Раніше бонус забирався
+            // безумовно на першому ж відправленні (навіть на ІНШУ площадку) і
+            // губився назавжди, ніколи не діставшись тієї, на яку був
+            // замовлений (CityWorks.OrderOutfitExpedition документує це саме
+            // так: "разовый бонус следующей вилазке НА ПЛОЩАДКУ siteId").
+            var buff = _works.PeekExpeditionOutfitBuff();
+            if (buff != null && string.Equals(buff.SiteId, siteId, StringComparison.Ordinal) && _party.PendingResult != null)
             {
-                if (string.Equals(buff.SiteId, siteId, StringComparison.Ordinal) && _party.PendingResult != null)
-                    _party.PendingResult.Gold += buff.BonusValue;
+                _works.TakeExpeditionOutfitBuff();
+                _party.PendingResult.Gold += buff.BonusValue;
             }
 
             LogEvent("expedition.departed", Args("siteId", siteId, "approach", approach.ToString()));
@@ -496,7 +542,7 @@ namespace Game.Core.Session
 
         public QuestOfferView OfferQuestStage(string questId)
         {
-            RequireState(SessionState.Morning);
+            RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night);
             var run = _quests.Get(questId) ?? _quests.Start(questId);
             if (run == null || run.Current == null) return null;
 
@@ -525,7 +571,7 @@ namespace Game.Core.Session
 
         public DayReportView ResolveQuestChoice(int optionIndex)
         {
-            RequireState(SessionState.Morning);
+            RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night);
             if (_currentQuestOffer == null) throw new InvalidOperationException("Немає активної пропозиції квесту.");
             var run = _quests.Get(_currentQuestOffer.QuestId);
             if (run == null) throw new InvalidOperationException("Квест не знайдено.");
@@ -684,6 +730,7 @@ namespace Game.Core.Session
             // кроком конвеєра. Прямий викл _processor.Advance() лишав голод
             // непідключеним: HungerStep читав би завжди застаріле значення.
             var report = _cycle.AdvanceDay(DayPhase.Day);
+            LogEvent("day.advanced", Args("day", report.Day.ToString(CultureInfo.InvariantCulture), "phase", report.Phase.ToString()));
             TranslateReport(report);
             ApplyCycleReport(_world.Cycle.Production.LastReport);
             _lastDayReport = BuildDayReportView(report);
@@ -829,6 +876,20 @@ namespace Game.Core.Session
         public DayReportView AdvanceNight()
         {
             RequireState(SessionState.Night);
+
+            // Блокер-фікс ревью (R8/§7.15): фінал доби 5 — РЕАЛЬНИЙ, а не
+            // прев'ю, і не може бути мовчки пропущений. AdvanceNight() рухає
+            // конвеєр ночі до кінця доби (→ Summary на добу 5) НЕЗАЛЕЖНО від
+            // того, чи розв'язано ResolveFinale — жодного власного гейту тут
+            // не було. Гейтимо саме тут (єдина точка, звідки ніч доби 5 може
+            // "проскочити" у Summary без фіналу): ResolveFinale має піти
+            // ПЕРШИМ, інакше — явний виняток замість тихого порожнього
+            // SummaryView.FinaleOutcomeKey.
+            if (_processor.CurrentDay == 5 && !_finaleResolved)
+                throw new InvalidOperationException(
+                    "Доба 5, ніч: спершу ResolveFinale(path) — фінал не можна пропустити " +
+                    "мовчки (R8, §7.15 «жодна полоса не чиста перемога»).");
+
             ClearDayLog();
             _lastPhase = DayPhase.Night;
 
@@ -837,6 +898,7 @@ namespace Game.Core.Session
             // ігнорує ніч (ctx.IsNight), а WasHungryLastCycle між фазами
             // однієї доби не змінюється (AdvanceCycle іде лише вдень).
             var report = _cycle.AdvanceDay(DayPhase.Night);
+            LogEvent("day.advanced", Args("day", report.Day.ToString(CultureInfo.InvariantCulture), "phase", report.Phase.ToString()));
             TranslateReport(report);
 
             if (_crisis.Phase == CrisisPhase.WindowOpen)
@@ -862,7 +924,14 @@ namespace Game.Core.Session
         {
             var candidates = _rosterAdapter?.KillableActorIds;
             if (candidates != null && candidates.Count > 0)
-                _rosterAdapter.Wound(candidates[0], 20.0, WoundTier.Light);
+                LogScarIfGranted(candidates[0], _rosterAdapter.WoundReporting(candidates[0], 20.0, WoundTier.Light));
+        }
+
+        /// <summary>Major-фікс ревью (§2 №23): "scar.granted" — з усіх трьох реальних точок ранення в GameSession.</summary>
+        private void LogScarIfGranted(string companionId, Game.Core.Characters.Scars.ScarDefinition granted)
+        {
+            if (granted == null) return;
+            LogEvent("scar.granted", Args("companionId", companionId, "scarId", granted.Id));
         }
 
         // =====================================================================
@@ -1248,7 +1317,7 @@ namespace Game.Core.Session
             {
                 var victim = _worldRoster.Get("maksym");
                 if (victim != null && !victim.IsDead)
-                    _rosterAdapter?.Wound("maksym", 40.0, WoundTier.Serious);
+                    LogScarIfGranted("maksym", _rosterAdapter?.WoundReporting("maksym", 40.0, WoundTier.Serious));
             }
         }
 
@@ -1411,6 +1480,23 @@ namespace Game.Core.Session
                 throw new InvalidOperationException("Команда недоступна у стані " + State + " (потрібен " + expected + ").");
         }
 
+        /// <summary>
+        /// Блокер-фікс ревью: §4.1 сам документує OfferQuestStage/ResolveQuestChoice
+        /// як "Morning/Evening" (R6 — квестовий рушій ПОЗА конвеєром дня), а
+        /// сценарій доби 2 (§3.2) додатково кличе їх уночі ("Ніч | Квест Гафії,
+        /// етап 1"). Попередній блок Morning-гвардів (2f860c6) помилково
+        /// причепив сюди суцільний RequireState(Morning) разом з рештою
+        /// ранкових команд — цей метод звужує список легальних станів саме до
+        /// задокументованих трьох, а не до одного.
+        /// </summary>
+        private void RequireAnyState(params SessionState[] allowed)
+        {
+            for (int i = 0; i < allowed.Length; i++)
+                if (State == allowed[i]) return;
+            throw new InvalidOperationException("Команда недоступна у стані " + State + " (потрібен один з: " +
+                string.Join(", ", Array.ConvertAll(allowed, s => s.ToString())) + ").");
+        }
+
         private void ClearDayLog()
         {
             _dayLog.Clear();
@@ -1443,10 +1529,19 @@ namespace Game.Core.Session
                 _translatedIncidentCount = report.Incidents.Count;
         }
 
+        /// <summary>
+        /// Майор-фікс ревью: "day.advanced" раніше логувався тут, а TranslateReport
+        /// кличеться не лише з AdvanceDay/AdvanceNight (де DayProcessor.Advance()
+        /// СПРАВДІ рухає CurrentDay/фазу рівно раз), а й повторно з ResolveIncident/
+        /// CompletePassVanguard у тій самій фазі (лише довирішують уже відкрите
+        /// рішення, без нового Advance()) — той самий клас дубля, що вже було
+        /// пофіксено для "decision.resolved" (_translatedIncidentCount). Тепер
+        /// "day.advanced" логують САМІ виклики AdvanceDay()/AdvanceNight(), а
+        /// TranslateReport відповідає лише за Incidents/Signals.
+        /// </summary>
         private void TranslateReport(DayReport report)
         {
             if (report == null) return;
-            LogEvent("day.advanced", Args("day", report.Day.ToString(CultureInfo.InvariantCulture), "phase", report.Phase.ToString()));
 
             if (report.Incidents != null)
             {
@@ -1495,6 +1590,7 @@ namespace Game.Core.Session
             // Рівно раз на календарну добу, як і задокументовано в
             // DefectionWatch.Tick.
             TickDefectionWatch();
+            TickCompanionArcs();
 
             if (!_freePlay && _processor.CurrentDay >= 5 && !_summaryAcknowledged)
             {
@@ -1539,6 +1635,25 @@ namespace Game.Core.Session
                 LogEvent("companion.defected", Args("companionId", c.Id));
                 var ripple = new RosterDrama(new RosterBonds(null), _cfg).OnBetrayal(_worldRoster, c.Id);
                 LogRipple(ripple);
+            }
+        }
+
+        /// <summary>
+        /// Major-фікс ревью (§2 №27): щоденний перерахунок гейту особистих арок
+        /// напарників — CompanionArcRun.Refresh() сигналізує ПОВЕРНЕННЯМ true,
+        /// що глава щойно стала доступною вперше (не через поллінг State), і
+        /// саме тут ця точка сигналу нарешті має слухача.
+        /// </summary>
+        private void TickCompanionArcs()
+        {
+            if (_arcRuns == null || _worldRoster == null) return;
+            foreach (var run in _arcRuns)
+            {
+                var companion = _worldRoster.Get(run.Arc.CompanionId);
+                if (companion == null) continue;
+                if (run.Refresh(companion))
+                    LogEvent("arc.chapter_opened", Args("companionId", run.Arc.CompanionId, "arcId", run.Arc.Id,
+                        "chapterId", run.CurrentChapter?.Id ?? string.Empty));
             }
         }
 
@@ -1813,7 +1928,7 @@ namespace Game.Core.Session
                 else if (cas.Downed || cas.HpLost > 0)
                 {
                     var tier = cas.Downed ? WoundTier.Serious : WoundTier.Light;
-                    _rosterAdapter?.Wound(cas.CompanionId, cas.HpLost * 5.0, tier);
+                    LogScarIfGranted(cas.CompanionId, _rosterAdapter?.WoundReporting(cas.CompanionId, cas.HpLost * 5.0, tier));
                 }
             }
         }
