@@ -1407,6 +1407,24 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.council.prepare_threat", "Готуватися до загрози");
             AddKey(t, "ui.council.outfit_expedition", "Спорядити відряд");
 
+            // Полірування (ціль 2 «Прозорість дій»): ціна й ефект словами до
+            // кліку для кожної дії ради (Core/Balance/CityBalance.cs,
+            // FactionBalance.cs — числа-плейсхолдери, як і решта балансу).
+            AddKey(t, "ui.council.raid.cost", "до {gold} золота (можлива знижка на ринку)");
+            AddKey(t, "ui.council.raid.effect", "−Напруга, псує стосунки з громадою, кращі — з боярами; відкат");
+            AddKey(t, "ui.council.settlers.cost", "{food} їжі");
+            AddKey(t, "ui.council.settlers.effect", "+люди зараз; відкат на кілька діб");
+            AddKey(t, "ui.council.decree.cost", "{gold} золота");
+            AddKey(t, "ui.council.decree.effect", "рухає уклад, −Напруга; відкат");
+            AddKey(t, "ui.council.diplomacy.cost", "{gold} золота");
+            AddKey(t, "ui.council.diplomacy.effect", "+ставлення обраної фракції; відкат");
+            AddKey(t, "ui.council.investment.cost", "{gold} золота одразу, потім по стільки ж щодня");
+            AddKey(t, "ui.council.investment.effect", "прискорює обрану будівлю, поки триває");
+            AddKey(t, "ui.council.prepare_threat.cost", "{gold} золота");
+            AddKey(t, "ui.council.prepare_threat.effect", "+готовність до нападу; відкат");
+            AddKey(t, "ui.council.outfit_expedition.cost", "{gold} золота");
+            AddKey(t, "ui.council.outfit_expedition.effect", "разовий бонус наступній вилазці на обрану точку");
+
             AddKey(t, "ui.expedition.approach.quiet", "Тихо");
             AddKey(t, "ui.expedition.approach.forceful", "Силою");
             AddKey(t, "ui.expedition.approach.delve", "Спуститися");

@@ -245,15 +245,24 @@ namespace Game.Gameplay.UI
 
         // ===================== Рада =====================
 
+        private static readonly Game.Core.Balance.CityBalance CouncilCity = new Game.Core.Balance.CityBalance();
+        private static readonly Game.Core.Balance.FactionBalance CouncilFaction = new Game.Core.Balance.FactionBalance();
+
+        /// <summary>
+        /// Полірування (ціль 2 «Прозорість дій», owner: "every action button
+        /// ... shows its cost ... and a one-line effect in words ...
+        /// disabled-with-reason"). Раніше кожна дія ради показувала лише
+        /// назву — ціна й наслідок дізнавались тільки постфактум, із рядка
+        /// фідбеку після кліку. Відкат (скільки діб лишилось) тут і раніше
+        /// не показувався — CityWorks тримає його internal-полями без
+        /// публічного геттера; це відома межа цього проходу, не приховано.
+        /// </summary>
         private void DrawCouncil(GameShell shell, Gender g)
         {
             var city = shell.Session.GetCityView();
+            var economy = shell.Session.GetEconomyView();
 
-            // Фікс-ревью (minor, знайдено тур-автоплеєм): фіксована ширина
-            // 200px обрізала довший напис "Прийняти переселенців" по правому
-            // краю панелі. Без явної ширини GUILayout сам підбирає розмір під
-            // напис — той самий прийом, що вже коректно працює нижче для
-            // точок вилазки (§коментар DrawExpedition/DrawCouncil.outfit_expedition).
+            DrawCouncilCostEffect("ui.council.raid", g, "gold", CouncilCity.RaidGoldCost.ToString());
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label(UkrainianText.Get("ui.council.raid", g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
             if (city != null && city.RaidReady)
@@ -261,9 +270,10 @@ namespace Game.Gameplay.UI
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.raid", g)))
                     shell.TryRun(() => shell.Session.OrderRaid());
             }
-            else Widgets.DisabledButton(UkrainianText.Get("ui.council.raid", g), UkrainianText.Get("ui.common.none", g));
+            else Widgets.DisabledButton(UkrainianText.Get("ui.council.raid", g), UkrainianText.Get("ui.council.result.on_cooldown", g));
             GUILayout.EndHorizontal();
 
+            DrawCouncilCostEffect("ui.council.settlers", g, "food", CouncilCity.SettlersFoodCost.ToString());
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label(UkrainianText.Get("ui.council.settlers", g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
             if (city != null && city.SettlersReady)
@@ -271,7 +281,7 @@ namespace Game.Gameplay.UI
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.settlers", g)))
                     shell.TryRun(() => shell.Session.OrderSettlers());
             }
-            else Widgets.DisabledButton(UkrainianText.Get("ui.council.settlers", g), UkrainianText.Get("ui.common.none", g));
+            else Widgets.DisabledButton(UkrainianText.Get("ui.council.settlers", g), UkrainianText.Get("ui.council.result.on_cooldown", g));
             GUILayout.EndHorizontal();
 
             // Фікс-ревью (minor): та сама обрізка, що вище — "Громада
@@ -279,61 +289,91 @@ namespace Game.Gameplay.UI
             // 180px і читалась як "ромада Тухольщин" з обох країв.
             Widgets.Section(UkrainianText.Get("ui.council.decree", g), () =>
             {
+                DrawCouncilCostEffect("ui.council.decree", g, "gold", CouncilFaction.DecreeGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var factionId in FactionIds)
-                {
-                    string fid = factionId;
-                    if (Widgets.SecondaryButton(UkrainianText.Get("faction." + fid, g)))
-                        shell.TryRun(() => shell.Session.OrderDecree(fid));
-                }
+                    DrawCouncilFactionButton(shell, g, factionId, economy, CouncilFaction.DecreeGoldCost, fid => shell.Session.OrderDecree(fid));
                 GUILayout.EndHorizontal();
             });
 
             Widgets.Section(UkrainianText.Get("ui.council.diplomacy", g), () =>
             {
+                DrawCouncilCostEffect("ui.council.diplomacy", g, "gold", CouncilFaction.DiplomacyGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var factionId in FactionIds)
-                {
-                    string fid = factionId;
-                    if (Widgets.SecondaryButton(UkrainianText.Get("faction." + fid, g)))
-                        shell.TryRun(() => shell.Session.OrderDiplomacy(fid));
-                }
+                    DrawCouncilFactionButton(shell, g, factionId, economy, CouncilFaction.DiplomacyGoldCost, fid => shell.Session.OrderDiplomacy(fid));
                 GUILayout.EndHorizontal();
             });
 
             Widgets.Section(UkrainianText.Get("ui.council.investment", g), () =>
             {
+                DrawCouncilCostEffect("ui.council.investment", g, "gold", CouncilFaction.InvestmentGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var id in BuildingIds)
                 {
                     if (StageOf(city, id, out bool built) == 0 && !built) continue;
                     string buildingId = id;
-                    if (Widgets.SecondaryButton(UkrainianText.Get("building." + id, g)))
-                        shell.TryRun(() => shell.Session.OrderInvestment(buildingId));
+                    bool canAfford = economy == null || economy.Gold >= CouncilFaction.InvestmentGoldCost;
+                    if (canAfford)
+                    {
+                        if (Widgets.SecondaryButton(UkrainianText.Get("building." + id, g)))
+                            shell.TryRun(() => shell.Session.OrderInvestment(buildingId));
+                    }
+                    else Widgets.DisabledButton(UkrainianText.Get("building." + id, g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
                 }
                 GUILayout.EndHorizontal();
             });
 
-            if (Widgets.SecondaryButton(UkrainianText.Get("ui.council.prepare_threat", g)))
-                shell.TryRun(() => shell.Session.OrderPrepareThreat());
+            DrawCouncilCostEffect("ui.council.prepare_threat", g, "gold", CouncilFaction.PrepareThreatGoldCost.ToString());
+            if (economy == null || economy.Gold >= CouncilFaction.PrepareThreatGoldCost)
+            {
+                if (Widgets.SecondaryButton(UkrainianText.Get("ui.council.prepare_threat", g)))
+                    shell.TryRun(() => shell.Session.OrderPrepareThreat());
+            }
+            else Widgets.DisabledButton(UkrainianText.Get("ui.council.prepare_threat", g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
 
             Widgets.Section(UkrainianText.Get("ui.council.outfit_expedition", g), () =>
             {
+                DrawCouncilCostEffect("ui.council.outfit_expedition", g, "gold", CouncilFaction.OutfitExpeditionGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var site in SiteIds)
                 {
                     string sid = site;
+                    bool canAfford = economy == null || economy.Gold >= CouncilFaction.OutfitExpeditionGoldCost;
                     // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): фіксовані
                     // 180px замалі для довших назв ("Покинутий табір
                     // авангарду") — AlphaSkin.ButtonStyle.wordWrap=false, тож
                     // текст не переносився, а виїжджав ЗА межі кнопки й
                     // налягав на сусідню. Без явної ширини GUILayout сам
                     // підбирає розмір під напис.
-                    if (Widgets.SecondaryButton(UkrainianText.Get("site." + site, g)))
-                        shell.TryRun(() => shell.Session.OrderOutfitExpedition(sid));
+                    if (canAfford)
+                    {
+                        if (Widgets.SecondaryButton(UkrainianText.Get("site." + site, g)))
+                            shell.TryRun(() => shell.Session.OrderOutfitExpedition(sid));
+                    }
+                    else Widgets.DisabledButton(UkrainianText.Get("site." + site, g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
                 }
                 GUILayout.EndHorizontal();
             });
+        }
+
+        /// <summary>«Ціна: N золота — рухає уклад, −Напруга» — один рядок над кожною групою кнопок ради.</summary>
+        private static void DrawCouncilCostEffect(string actionKey, Gender g, string costArgName, string costArgValue)
+        {
+            string cost = UkrainianText.Format(actionKey + ".cost", g, costArgName, costArgValue);
+            string effect = UkrainianText.Get(actionKey + ".effect", g);
+            GUILayout.Label(cost + " — " + effect, AlphaSkin.Tooltip);
+        }
+
+        private static void DrawCouncilFactionButton(GameShell shell, Gender g, string factionId, EconomyView economy, int goldCost, System.Action<string> order)
+        {
+            bool canAfford = economy == null || economy.Gold >= goldCost;
+            if (canAfford)
+            {
+                if (Widgets.SecondaryButton(UkrainianText.Get("faction." + factionId, g)))
+                    shell.TryRun(() => order(factionId));
+            }
+            else Widgets.DisabledButton(UkrainianText.Get("faction." + factionId, g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
         }
 
         // ===================== Вилазка =====================
