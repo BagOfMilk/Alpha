@@ -466,7 +466,7 @@ namespace Game.Gameplay.UI
                     GUILayout.BeginVertical(GUI.skin.box);
                     GUILayout.Label(ScreenText.ResolveCompanionName(c.Id, g, roster), AlphaSkin.SubHeader);
                     Widgets.LabeledRow(UkrainianText.Format("ui.people.level", g, "level", c.Level.ToString()), "");
-                    Widgets.LabeledRow(UkrainianText.Get("ui.people.status", g), ScreenText.CompanionStatusLabel(c.Status, g));
+                    Widgets.LabeledRow(UkrainianText.Get("ui.people.status", g), ScreenText.CompanionStatusLabel(c.Id, c.Status, g));
                     Widgets.LabeledRow(UkrainianText.Get("ui.people.loyalty", g), ScreenText.LoyaltyLabel(c.Loyalty, g));
                     Widgets.LabeledRow(UkrainianText.Format("ui.people.scars", g, "count", c.ScarCount.ToString()), "");
                     GUILayout.EndVertical();

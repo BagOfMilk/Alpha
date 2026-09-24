@@ -20,8 +20,15 @@ namespace Game.Gameplay.UI
             {
                 _scroll = Widgets.ScrollListBegin(_scroll, GUILayout.ExpandHeight(true));
 
+                // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): Finale.ResolveKey
+                // (Core/Story/Finale.cs) навмисно повертає ГОЛИЙ ключ
+                // ("best"/"good"/"base"/"worst" — власний коментар методу:
+                // "той самий ключ, що озвучують finale.outcome.*"), а таблиця
+                // тримає його з префіксом "finale.outcome." — без префікса
+                // тут гравець бачив видиму заглушку "[worst]" замість
+                // фінального абзацу.
                 if (summary != null && !string.IsNullOrEmpty(summary.FinaleOutcomeKey))
-                    GUILayout.Label(UkrainianText.Get(summary.FinaleOutcomeKey, g), AlphaSkin.Body);
+                    GUILayout.Label(UkrainianText.Get("finale.outcome." + summary.FinaleOutcomeKey, g), AlphaSkin.Body);
 
                 Widgets.Section(UkrainianText.Get("summary.roster", g), () =>
                 {
@@ -30,7 +37,7 @@ namespace Game.Gameplay.UI
                         foreach (var c in list)
                             Widgets.LabeledRow(
                                 ScreenText.ResolveCompanionName(c.Id, g, roster),
-                                ScreenText.CompanionStatusLabel(c.Status, g) + " · " + ScreenText.LoyaltyLabel(c.Loyalty, g));
+                                ScreenText.CompanionStatusLabel(c.Id, c.Status, g) + " · " + ScreenText.LoyaltyLabel(c.Loyalty, g));
                 });
 
                 Widgets.Section(UkrainianText.Get("summary.village", g), () =>

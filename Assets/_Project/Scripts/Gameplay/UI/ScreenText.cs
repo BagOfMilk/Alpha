@@ -173,6 +173,20 @@ namespace Game.Gameplay.UI
 
         // ===================== довідкові підписи роcтера =====================
 
+        /// <summary>
+        /// Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "status.dead"/
+        /// "status.injured" мають варіанти .f/.m (на відміну від
+        /// loyalty.band.*, це вже гендерно-нейтральні прикметники) — стара
+        /// перевантаженість без companionId завжди брала рід ГЛЯДАЧА
+        /// (SummaryScreen/HubScreen.DrawPeople передавали ProtagonistGender),
+        /// тож підсумок писав "Максим Беркут ... Загинула" (жіноча форма)
+        /// щойно гравець обирав жіночий рід для протагоніста — незалежно від
+        /// того, хто насправді загинув. Той самий SubjectGender, що вже
+        /// коректно працює в EventLine.
+        /// </summary>
+        public static string CompanionStatusLabel(string companionId, CompanionStatus status, Gender viewerGender)
+            => CompanionStatusLabel(status, SubjectGender(companionId, viewerGender));
+
         public static string CompanionStatusLabel(CompanionStatus status, Gender gender)
         {
             switch (status)
