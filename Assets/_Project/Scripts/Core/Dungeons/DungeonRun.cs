@@ -133,6 +133,16 @@ namespace Game.Core.Dungeons
 
         private int _roomIndex = -1;
 
+        /// <summary>
+        /// Полоса Threat, яку востаннє побачив виклик, що повернув
+        /// <see cref="RoomResolution"/> (інваріант 4 — фікс блокера ревью B2).
+        /// Threat міняється лише у <see cref="Push"/> і в <see cref="ResolveEvent"/>
+        /// (дельта варіанту), а Push НЕ повертає RoomResolution — тож порівняння
+        /// живе тут і застосовується в <see cref="FinalizeResolution"/> при
+        /// НАСТУПНОМУ розв'язку кімнати, а не лише всередині ResolveEvent.
+        /// </summary>
+        private DungeonThreatBand _lastReportedBand = DungeonThreatBand.Calm;
+
         public string SiteId { get; }
 
         /// <summary>Номер поточної кімнати, 1-base. 0 — ще не увійшли (не буває назовні).</summary>
@@ -215,6 +225,7 @@ namespace Game.Core.Dungeons
                 AddLoot(room.GuaranteedMaterials, room.GuaranteedGold, res);
                 GrantNamedItem(room, res);
                 MarkCleared(res);
+                FinalizeResolution(res);
                 return res;
             }
 
@@ -222,6 +233,7 @@ namespace Game.Core.Dungeons
             if (path == IncidentPath.Bloody)
             {
                 EnterAwaitingBattle(room, res);
+                FinalizeResolution(res);
                 return res;
             }
 
@@ -232,11 +244,13 @@ namespace Game.Core.Dungeons
             {
                 // Не вдалося прослизнути тихо чи вмовити — відряд помічений, бій неминучий.
                 EnterAwaitingBattle(room, res);
+                FinalizeResolution(res);
                 return res;
             }
 
             res.Bypassed = true; // 0 ризику (Поправка №1 для данжу) — жодної нагороди, жодного бою
             MarkCleared(res);
+            FinalizeResolution(res);
             return res;
         }
 
@@ -258,11 +272,13 @@ namespace Game.Core.Dungeons
                 Outcome = DungeonOutcome.Wiped;
                 res.Wiped = true;
                 ClearUnbanked();
+                FinalizeResolution(res);
                 return res;
             }
 
             AddLoot(room.GuaranteedMaterials, room.GuaranteedGold, res);
             MarkCleared(res);
+            FinalizeResolution(res);
             return res;
         }
 
@@ -284,14 +300,11 @@ namespace Game.Core.Dungeons
             AddLoot(opt.MaterialsGain, opt.GoldGain, res);
 
             if (opt.ThreatDelta != 0)
-            {
-                var before = ThreatBand;
                 Threat += opt.ThreatDelta;
-                res.ThreatBandChanged = ThreatBand != before;
-            }
 
             res.Consequence = new DungeonConsequence(opt.CausesFear, opt.FactionDeltas, opt.FlagsToSet);
             MarkCleared(res);
+            FinalizeResolution(res); // ловить і дельту події, і будь-яку ще не здану зміну від Push (див. поле вище)
             return res;
         }
 
@@ -349,6 +362,7 @@ namespace Game.Core.Dungeons
             sb.Append("|um:").Append(UnbankedMaterials.ToString(CultureInfo.InvariantCulture));
             sb.Append("|ug:").Append(UnbankedGold.ToString(CultureInfo.InvariantCulture));
             sb.Append("|it:").Append(string.Join(",", _unbankedItemIds));
+            sb.Append("|lb:").Append(((int)_lastReportedBand).ToString(CultureInfo.InvariantCulture));
             return sb.ToString();
         }
 
@@ -382,6 +396,7 @@ namespace Game.Core.Dungeons
                         _unbankedItemIds.Clear();
                         if (body.Length > 0) _unbankedItemIds.AddRange(body.Split(','));
                         break;
+                    case "lb": _lastReportedBand = (DungeonThreatBand)ParseInt(body); break;
                 }
             }
         }
@@ -400,6 +415,20 @@ namespace Game.Core.Dungeons
             if (string.IsNullOrEmpty(room.NamedItemId)) return;
             _unbankedItemIds.Add(room.NamedItemId);
             res.GrantedItemIds = new List<string> { room.NamedItemId };
+        }
+
+        /// <summary>
+        /// Фікс блокера ревью B2: єдине місце, де смена полоси Threat стає
+        /// видимою (інваріант 4). Threat росте у <see cref="Push"/> (щокроку,
+        /// уключно з першим входом) і в <see cref="ResolveEvent"/> (дельта
+        /// варіанту) — Push сам не повертає RoomResolution, тож зміна чекає тут
+        /// до наступного розв'язку кімнати (ResolveRoom/ReportCombat/ResolveEvent)
+        /// і саме тоді потрапляє в прапорець, який читає D1 (seamsForD1).
+        /// </summary>
+        private void FinalizeResolution(RoomResolution res)
+        {
+            if (ThreatBand != _lastReportedBand) res.ThreatBandChanged = true;
+            _lastReportedBand = ThreatBand;
         }
 
         private void MarkCleared(RoomResolution res)

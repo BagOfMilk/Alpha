@@ -194,6 +194,44 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void ReportCombat_Worst_WithPriorLoot_DestroysNonZeroUnbanked()
+        {
+            // Обидва авторські сайти ставлять Combat першою кімнатою -- вайп там
+            // ніколи не має чого знищувати (незабанковане і так 0). Синтетичний
+            // данж (Cache, потім Combat) доводить, що ClearUnbanked() дійсно
+            // знищує вже накопичений, ненульовий лут і предмети, а не лише
+            // підтверджує вже нульовий стан (R4 Push/Extract/Abandon/Wipe).
+            var cache = new DungeonRoomDefinition("loot_room", "k1", DungeonRoomKind.Cache)
+            {
+                GuaranteedMaterials = 7,
+                GuaranteedGold = 3,
+                NamedItemId = "prewipe_relic"
+            };
+            var combat = new DungeonRoomDefinition("fight_room", "k2", DungeonRoomKind.Combat)
+            {
+                ArenaKey = "arena_synthetic_8x8",
+                GuaranteedMaterials = 5,
+                GuaranteedGold = 5
+            };
+            combat.EnemyIds.Add("test_bandit");
+            var rooms = new List<DungeonRoomDefinition> { cache, combat };
+
+            var run = new DungeonRun("synthetic_wipe_site", rooms, new[] { "protagonist" }, Cfg());
+            run.ResolveRoom(IncidentPath.Quiet, Squad(9)); // Cache — гарантований лут, шлях байдужий
+            Assert.AreEqual(7, run.UnbankedMaterials, "передумова: є що втрачати");
+            CollectionAssert.Contains(run.UnbankedItemIds, "prewipe_relic");
+
+            run.Push();
+            run.ResolveRoom(IncidentPath.Bloody, Squad(9));
+            var res = run.ReportCombat(OutcomeBand.Worst, new[] { "protagonist" });
+
+            Assert.IsTrue(res.Wiped);
+            Assert.AreEqual(0, run.UnbankedMaterials, "лут, накопичений ДО вайпу, теж знищено");
+            Assert.AreEqual(0, run.UnbankedGold);
+            Assert.AreEqual(0, run.UnbankedItemIds.Count, "іменний предмет з Cache теж пропадає");
+        }
+
+        [Test]
         public void ReportCombat_WhileNotAwaitingBattle_Throws()
         {
             var run = NewCampRun();
@@ -242,6 +280,64 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Push_ThreatBandChange_IsSignaledOnNextRoomResolution_NotSilently()
+        {
+            // Фікс блокера ревью B2 (інваріант 4): Push -- єдиний драйвер Threat
+            // у "покинутому таборі" -- сам RoomResolution не повертає, тож зміну
+            // полоси мусить донести НАСТУПНИЙ розв'язок кімнати. З дефолтним
+            // балансом (ThreatPerPush=2, TenseAt=2, DangerousAt=4, DeadlyAt=6) усі
+            // три пуші "покинутого табору" перетинають поріг -- перевіряємо, що
+            // жоден перехід не губиться.
+            var run = NewCampRun();
+
+            var res1 = run.ResolveRoom(IncidentPath.Quiet, Squad(9)); // вхід у room1 (ctor) підняв Calm->Tense
+            Assert.AreEqual(DungeonThreatBand.Tense, run.ThreatBand);
+            Assert.IsTrue(res1.ThreatBandChanged, "room1: Calm->Tense від входу мусить бути видимою");
+
+            run.Push(); // room2: Tense->Dangerous
+            var res2 = run.ResolveRoom(IncidentPath.Quiet, Squad(0));
+            Assert.AreEqual(DungeonThreatBand.Dangerous, run.ThreatBand);
+            Assert.IsTrue(res2.ThreatBandChanged, "room2: Tense->Dangerous від Push мусить бути видимою");
+        }
+
+        [Test]
+        public void Push_ThreatBandChange_TrueOnlyWhenBandActuallyCrosses()
+        {
+            // Синтетичний данж із власним балансом -- ізолює саме Push-драйвер
+            // (без події) і доводить, що прапорець не просто завжди True: коли
+            // Push НЕ перетинає поріг, ThreatBandChanged лишається False.
+            var cfg = new BalanceConfig();
+            cfg.Dungeon.ThreatPerPush = 2;
+            cfg.Dungeon.ThreatTenseAt = 2;
+            cfg.Dungeon.ThreatDangerousAt = 4;
+            cfg.Dungeon.ThreatDeadlyAt = 10; // з запасом -- room3/room4 не дотягнуть
+
+            var rooms = new List<DungeonRoomDefinition>
+            {
+                new DungeonRoomDefinition("r1", "k1", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 },
+                new DungeonRoomDefinition("r2", "k2", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 },
+                new DungeonRoomDefinition("r3", "k3", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 },
+                new DungeonRoomDefinition("r4", "k4", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 }
+            };
+            var run = new DungeonRun("synthetic_site", rooms, new[] { "protagonist" }, cfg);
+
+            var res1 = run.ResolveRoom(IncidentPath.Quiet, Squad(0)); // threat=2: Calm->Tense
+            Assert.IsTrue(res1.ThreatBandChanged);
+
+            run.Push(); // threat=4: Tense->Dangerous
+            var res2 = run.ResolveRoom(IncidentPath.Quiet, Squad(0));
+            Assert.IsTrue(res2.ThreatBandChanged);
+
+            run.Push(); // threat=6: лишається Dangerous (поріг Deadly=10)
+            var res3 = run.ResolveRoom(IncidentPath.Quiet, Squad(0));
+            Assert.IsFalse(res3.ThreatBandChanged, "поріг не перетнуто -- прапорець не мусить брехати True");
+
+            run.Push(); // threat=8: усе ще Dangerous
+            var res4 = run.ResolveRoom(IncidentPath.Quiet, Squad(0));
+            Assert.IsFalse(res4.ThreatBandChanged);
+        }
+
+        [Test]
         public void Push_PastLastRoom_Throws()
         {
             var run = NewCampRun();
@@ -268,7 +364,11 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("greedy", res.EventOptionId);
             Assert.AreEqual(5, res.GainedMaterials);
             Assert.Greater(run.Threat, threatBefore);
-            Assert.IsTrue(res.ThreatBandChanged || run.Threat > threatBefore);
+            // Поріг Deadly (6) вже перетнуто входом у кімнату 3 (Push) і ще не
+            // здано жодним розв'язком — ResolveEvent зобов'язаний піднести цю
+            // зміну разом зі своєю (фікс блокера ревью B2: Push-перехід більше
+            // не губиться мовчки). Реальне значення, не OR-заглушка.
+            Assert.IsTrue(res.ThreatBandChanged);
             Assert.IsTrue(res.Consequence.CausedFear);
             Assert.AreEqual(-5, res.Consequence.FactionDeltas["tuhar_boyars"]);
             CollectionAssert.Contains(res.Consequence.FlagsToSet, "abandoned_camp_grain_taken");
