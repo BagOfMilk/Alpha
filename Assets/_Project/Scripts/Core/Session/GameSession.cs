@@ -123,6 +123,21 @@ namespace Game.Core.Session
         private CombatState _battle;
         private SuspendToken _resume;
 
+        /// <summary>
+        /// Фикс-ревью D1b (мажор): чи саме ЦЕЙ бій довела до кінця команда
+        /// <see cref="CombatAutoResolve"/> (а не покрокові команди гравця). Раніше
+        /// подія "combat.autoresolved" вибиралась за SuspendReason.TrainingSkirmish
+        /// — тобто за тим, ЩО за бій (тренувальний), а не ЯК саме його завершили,
+        /// тож для будь-якого справжнього кампанійного бою (кровавий вузол 1,
+        /// бойові кімнати данжу, фінальний штурм), розв'язаного автобоєм — а це
+        /// панівний шлях "one-game" проходження — ключ "combat.autoresolved" був
+        /// НЕДОСЯЖНИЙ, а покроково дограний тренувальний бій хибно ніс саме цей
+        /// ключ. Прапор виставляється в CombatAutoResolve БЕЗПОСЕРЕДНЬО перед
+        /// AfterCombatAction() і читається (та скидається) один раз в
+        /// OnBattleResolved — саме там, де CombatState.Outcome вже != Ongoing.
+        /// </summary>
+        private bool _battleAutoResolvedThisCall;
+
         // ---- данж ----
         private DungeonRun _dungeon;
 
@@ -230,6 +245,7 @@ namespace Game.Core.Session
             _dungeon = null;
             _battle = null;
             _resume = null;
+            _battleAutoResolvedThisCall = false;
             _summaryAcknowledged = false;
             _freePlay = false;
             _finaleResolved = false;
@@ -1130,10 +1146,9 @@ namespace Game.Core.Session
         public CombatActionResult CombatMove(GridPos dest)
         {
             RequireBattle();
-            string actingId = _battle.Current?.Id;
             int before = _battle.Attacks.Count;
             var r = _battle.Move(dest);
-            LogNewAttacks(actingId, before);
+            LogNewAttacks(before);
             AfterCombatAction();
             return r;
         }
@@ -1141,10 +1156,9 @@ namespace Game.Core.Session
         public CombatActionResult CombatAttack(string targetId, bool useStrike = false)
         {
             RequireBattle();
-            string actingId = _battle.Current?.Id;
             int before = _battle.Attacks.Count;
             var r = _battle.Attack(targetId, useStrike);
-            LogNewAttacks(actingId, before);
+            LogNewAttacks(before);
             AfterCombatAction();
             return r;
         }
@@ -1152,10 +1166,9 @@ namespace Game.Core.Session
         public CombatActionResult CombatUseAbility(string abilityId, string targetUnitId = null, GridPos? targetTile = null)
         {
             RequireBattle();
-            string actingId = _battle.Current?.Id;
             int before = _battle.Attacks.Count;
             var r = _battle.UseAbility(abilityId, targetUnitId, targetTile);
-            LogNewAttacks(actingId, before);
+            LogNewAttacks(before);
             AfterCombatAction();
             return r;
         }
@@ -1165,19 +1178,24 @@ namespace Game.Core.Session
 
         /// <summary>
         /// D1b (§2 рядок 30): перекладає нові записи <see cref="CombatState.Attacks"/>
-        /// (з'явилися за виклик команди Battle вище цього рядка) у стрічку подій —
-        /// єдине джерело доказу бою поза <see cref="BattleView.Log"/> (сирими
-        /// рядками для гравця, не для тесту покриття). Атакуючий, чий Id
-        /// збігається з тим, хто мав хід на момент виклику команди
-        /// (<paramref name="actingUnitId"/>) — це власна атака команди
-        /// (Attack/UseAbility з WeaponAttack-ефектом) → "combat.attack.hit/miss/
-        /// graze/crit" за AttackRecord.Outcome; будь-який ІНШИЙ атакуючий — це
-        /// реакція дозору (ReactToMovement спрацьовує лише під час Move/лаунжа
-        /// способності, стріляє ЧУЖИЙ юніт по тому, хто зараз рухається) →
-        /// "combat.overwatch.triggered" (§2 рядок 30, окремий ключ від
-        /// "combat.attack.*" незалежно від того, влучив дозор чи ні).
+        /// (з'явилися за виклик команди Battle вище цього рядка, включно з
+        /// <see cref="CombatAutoResolve"/>) у стрічку подій — єдине джерело
+        /// доказу бою поза <see cref="BattleView.Log"/> (сирими рядками для
+        /// гравця, не для тесту покриття). Кожен запис класифікується за
+        /// <see cref="AttackRecord.IsReaction"/> — прапором, який ставить сам
+        /// <c>CombatState</c> у точці народження запису (ReactToMovement),
+        /// а не позиційним порівнянням AttackerId із тим, хто мав хід на
+        /// момент виклику команди.
+        ///
+        /// Фикс-ревью D1b (блокер): стара эвристика ("AttackerId != actingUnitId
+        /// → дозор") працювала лише для одиночних команд гравця (один
+        /// "actingUnitId" на виклик) і мовчки ламалась на CombatAutoResolve,
+        /// де CombatAi веде ОБИДВІ сторони через багато юнітів за один виклик —
+        /// єдиного "хто зараз ходить ззовні" просто нема. IsReaction — реальний
+        /// сигнал з Game.Core.Combat, тому той самий метод коректно працює і
+        /// для одиночної команди, і для цілого автобою.
         /// </summary>
-        private void LogNewAttacks(string actingUnitId, int before)
+        private void LogNewAttacks(int before)
         {
             var attacks = _battle?.Attacks;
             if (attacks == null) return;
@@ -1189,7 +1207,7 @@ namespace Game.Core.Session
                     "chance", rec.Chance.ToString(CultureInfo.InvariantCulture),
                     "damage", rec.Damage.ToString(CultureInfo.InvariantCulture));
 
-                if (!string.Equals(rec.AttackerId, actingUnitId, StringComparison.Ordinal))
+                if (rec.IsReaction)
                 {
                     LogEvent("combat.overwatch.triggered", args);
                     continue;
@@ -1205,10 +1223,25 @@ namespace Game.Core.Session
             }
         }
 
+        /// <summary>
+        /// Фикс-ревью D1b (блокер): раніше кликав лише <see cref="CombatAi.AutoResolve"/>
+        /// і одразу <see cref="AfterCombatAction"/> — жоден AttackRecord, зіграний
+        /// ІІ за ОБИДВІ сторони на шляху до результату, не діставався DayLog, хоча
+        /// саме автобій (не покрокова команда) — панівний спосіб розв'язки бою в
+        /// "one-game" проходженні (кровавий вузол 1, бойові кімнати данжу,
+        /// фінальний штурм). Тепер знімок Attacks.Count і LogNewAttacks працюють
+        /// так само, як і в одиночних командах вище — просто на весь бій одразу.
+        /// Прапор <see cref="_battleAutoResolvedThisCall"/> дає OnBattleResolved
+        /// знати, що САМЕ ЦЕЙ виклик довів бій до кінця (для вибору combat.
+        /// autoresolved / combat.battle.resolved — фикс-ревью, мажор).
+        /// </summary>
         public void CombatAutoResolve()
         {
             RequireBattle();
+            int before = _battle.Attacks.Count;
             CombatAi.AutoResolve(_battle);
+            LogNewAttacks(before);
+            _battleAutoResolvedThisCall = true;
             AfterCombatAction();
         }
 
@@ -1335,7 +1368,9 @@ namespace Game.Core.Session
             if (reason != SuspendReason.TrainingSkirmish)
                 ApplyBattleCasualties(result);
 
-            LogEvent(reason == SuspendReason.TrainingSkirmish ? "combat.autoresolved" : "combat.battle.resolved",
+            bool autoResolved = _battleAutoResolvedThisCall;
+            _battleAutoResolvedThisCall = false;
+            LogEvent(autoResolved ? "combat.autoresolved" : "combat.battle.resolved",
                 Args("outcome", result.Outcome.ToString(), "rounds", result.Rounds.ToString(CultureInfo.InvariantCulture), "reason", reason.ToString()));
 
             _battle = null;
@@ -2034,9 +2069,16 @@ namespace Game.Core.Session
             // передвісники — раніше/легше" застосовується через адитивний шов
             // WorldPulse.BoostCharge на єдиний Announces-накопичувач кампанії
             // (Тугар, §3.3) — детально в ItemBalance.ScoutHornForewarnBoostPerCharge.
+            //
+            // Фикс-ревью D1b (мінор): подія логується, лише якщо BoostCharge
+            // реально щось приклав (int applied > 0) — у вузькому вікні, де
+            // Тугар уже впритул до Threshold, клямп у WorldPulse зрізає весь
+            // буст, і "forewarn_boosted" без цієї перевірки обіцяв би ефект,
+            // якого не було (R17 ховає саме число, але не назву події).
             int boost = _cfg.Items.ScoutHornForewarnCharges * _cfg.Items.ScoutHornForewarnBoostPerCharge;
-            _processor?.Pulse?.BoostCharge(OpeningContent.TuharSourceId, boost);
-            LogEvent("item.scout_horn.forewarn_boosted", Args("charges", _cfg.Items.ScoutHornForewarnCharges.ToString(CultureInfo.InvariantCulture)));
+            int applied = _processor?.Pulse?.BoostCharge(OpeningContent.TuharSourceId, boost) ?? 0;
+            if (applied > 0)
+                LogEvent("item.scout_horn.forewarn_boosted", Args("charges", _cfg.Items.ScoutHornForewarnCharges.ToString(CultureInfo.InvariantCulture)));
         }
 
         private void ApplyFactionDelta(string factionId, int delta)
@@ -2311,6 +2353,7 @@ namespace Game.Core.Session
             _currentQuestOffer = null;
             _dungeon = null;
             _battle = null;
+            _battleAutoResolvedThisCall = false;
 
             // Флаг міг бути виставлений ДО збереження (квест-етап "grass"
             // резолвиться задовго до доби 3) — порог sick_child не входить у

@@ -237,7 +237,7 @@ namespace Game.Core.Combat
 
         /// <summary>Один удар оружием: попадание через IHitRule → урон через DamageResolver → проки → Strike.</summary>
         private void ExecuteAttackRoll(CombatUnit unit, CombatUnit target, WeaponDefinition w,
-                                       int accuracyBonus, bool forceHit, bool allowStrikeGain)
+                                       int accuracyBonus, bool forceHit, bool allowStrikeGain, bool isReaction = false)
         {
             int shown = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
             var outcome = forceHit ? AttackOutcome.Hit : _hitRule.Resolve(unit, target, shown, _roller);
@@ -272,7 +272,7 @@ namespace Game.Core.Combat
                     break;
             }
 
-            _attacks.Add(new AttackRecord(Round, unit.Side, unit.Id, target.Id, shown, outcome, dmg.Amount, forceHit));
+            _attacks.Add(new AttackRecord(Round, unit.Side, unit.Id, target.Id, shown, outcome, dmg.Amount, forceHit, isReaction));
         }
 
         /// <summary>Стабилизация дауна союзника рядом (активка Медицины). Детерминирована.</summary>
@@ -571,7 +571,7 @@ namespace Game.Core.Combat
                 watcher.Overwatch = null; // одно срабатывание
                 AddLog($"{watcher.Profile.DisplayName} стреляет из дозора по {mover.Profile.DisplayName}!");
                 ExecuteAttackRoll(watcher, mover, watcher.Weapon,
-                    accuracyBonus: -Balance.Combat.OverwatchAccuracyPenalty, forceHit: false, allowStrikeGain: false);
+                    accuracyBonus: -Balance.Combat.OverwatchAccuracyPenalty, forceHit: false, allowStrikeGain: false, isReaction: true);
             }
         }
 

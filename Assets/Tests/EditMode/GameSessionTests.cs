@@ -231,6 +231,42 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(SessionState.Evening, s.State);
         }
 
+        /// <summary>
+        /// Фикс-ревью D1b (блокер): CombatAutoResolve() на СПРАВЖНЬОМУ бою
+        /// (кровавий вузол 1, не тренувальна пісочниця) мав жодного разу не
+        /// логувати ні "combat.attack.*", ні "combat.overwatch.triggered" — ІІ
+        /// грав обидві сторони 3v2 (з реальними жертвами), а стрічка подій несла
+        /// лише сукупний "combat.autoresolved"/"combat.battle.resolved". Тепер
+        /// LogNewAttacks(before) кличеться і тут — так само, як в одиночних
+        /// командах — тож бій, повністю розв'язаний ІІ, лишає той самий слід
+        /// у DayLog, що й покроково дограний.
+        /// </summary>
+        [Test]
+        public void CombatAutoResolve_OnRealBattle_LogsCombatAttackEvents_InDayLog()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Assert.IsTrue(report.AwaitsDecision);
+
+            var duringBattle = s.ResolveIncident(IncidentPath.Bloody);
+            Assert.IsNull(duringBattle);
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            s.CombatAutoResolve();
+
+            bool sawAttackEvent = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "combat.attack.hit" || e.Key == "combat.attack.miss" ||
+                    e.Key == "combat.attack.graze" || e.Key == "combat.attack.crit")
+                    sawAttackEvent = true;
+            Assert.IsTrue(sawAttackEvent,
+                "CombatAutoResolve на реальному 3v2 бою мав залишити хоч один combat.attack.* у DayLog (§2 рядок 30)");
+        }
+
         private static int CountSide(BattleView view, string side)
         {
             int n = 0;
@@ -640,9 +676,19 @@ namespace Game.Tests.EditMode
             foreach (var e in s.DayLog) if (e.Key == "dungeon.wiped") wiped = true;
             Assert.AreEqual(wiped ? SessionState.Morning : SessionState.Dungeon, s.State);
 
-            bool sawResolvedBattle = false;
-            foreach (var e in s.DayLog) if (e.Key == "combat.battle.resolved") sawResolvedBattle = true;
-            Assert.IsTrue(sawResolvedBattle);
+            // Фикс-ревью D1b (мажор): "combat.autoresolved"/"combat.battle.resolved"
+            // тепер обираються за тим, ЯК саме завершився бій (CombatAutoResolve
+            // vs покрокові команди), а не за SuspendReason — цей бій справжній
+            // (DungeonCombatRoom), але довершений автобоєм, тож несе саме
+            // "combat.autoresolved".
+            bool sawAutoResolved = false, sawManuallyResolved = false;
+            foreach (var e in s.DayLog)
+            {
+                if (e.Key == "combat.autoresolved") sawAutoResolved = true;
+                if (e.Key == "combat.battle.resolved") sawManuallyResolved = true;
+            }
+            Assert.IsTrue(sawAutoResolved, "CombatAutoResolve мав залогувати combat.autoresolved незалежно від SuspendReason");
+            Assert.IsFalse(sawManuallyResolved, "combat.battle.resolved — лише для бою, дограного покроковими командами");
         }
 
         [Test]

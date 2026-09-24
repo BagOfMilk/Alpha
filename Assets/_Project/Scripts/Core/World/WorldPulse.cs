@@ -165,16 +165,28 @@ namespace Game.Core.World
         /// SourceId=="tuhar"-інцидент, або перегляд Threshold/тику Тугара,
         /// або відв'язка Fire() від скидання, коли Pick() повертає null;
         /// жодне з цього не належить до двох переданих знахідок ревью.
+        ///
+        /// Фикс-ревью D1b (мінор): повертає РЕАЛЬНО застосований заряд (0, якщо
+        /// накопичувач невідомий, amount&lt;=0 або room&lt;=0 — впритул до
+        /// порога). Раніше викликач (GameSession.GrantNamedItemById) логував
+        /// "item.scout_horn.forewarn_boosted" БЕЗУМОВНО одразу після виклику —
+        /// у вузькому вікні, де Тугар уже в 1 очці від Threshold, клямп мовчки
+        /// зрізав ВЕСЬ буст (room&lt;=0 → 0 застосовано), а подія все одно
+        /// йшла в лог, обіцяючи ефект, якого не було. Повертаючи прикладену
+        /// суму, даємо викликачу самому вирішити, логувати подію чи ні —
+        /// саме числа клямпа (Threshold-1 як стеля) це не чіпає.
         /// </summary>
-        public void BoostCharge(string sourceId, int amount)
+        public int BoostCharge(string sourceId, int amount)
         {
-            if (amount <= 0) return;
-            if (!_tracks.TryGetValue(sourceId, out var track)) return;
+            if (amount <= 0) return 0;
+            if (!_tracks.TryGetValue(sourceId, out var track)) return 0;
 
             int room = track.Threshold - 1 - track.Charge;
-            if (room <= 0) return;
+            if (room <= 0) return 0;
 
-            track.Accumulate(Math.Min(amount, room), _cfg);
+            int applied = Math.Min(amount, room);
+            track.Accumulate(applied, _cfg);
+            return applied;
         }
     }
 }
