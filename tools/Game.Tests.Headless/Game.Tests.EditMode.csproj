@@ -42,6 +42,13 @@
       headless-тесты (UkrainianTextTests.cs) берут её исходником напрямую.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Text/UkrainianText.cs" />
+    <!--
+      E2: BattleArenaView — чистий C# без UnityEngine, розкладкова математика
+      арени (тайл→світ, кадрування камери, детермінована палітра юнітів).
+      Той самий прийом, що VillageView.cs/UkrainianText.cs вище:
+      BattleArenaViewTests.cs бере її джерелом напряму.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/BattleArenaView.cs" />
   </ItemGroup>
 
   <ItemGroup>

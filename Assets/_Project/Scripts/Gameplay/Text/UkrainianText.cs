@@ -162,6 +162,9 @@ namespace Game.Gameplay.Text
             // EventFeedScreen (D2/E1 підключать пізніше — тут лише текст).
             AddGameEventFeedLines(t);
 
+            // ==== E2: бойова презентація (арена/портрети/HUD) — див. блок унизу файлу. ====
+            AddBattlePresentationE2(t);
+
             return t;
         }
 
@@ -806,6 +809,52 @@ namespace Game.Gameplay.Text
             AddKey(t, "game.saved", "Збережено: слот {slot}.");
             AddKey(t, "game.loaded", "Завантажено: слот {slot}.");
             AddKey(t, "char.seen", "{char} тут.");
+        }
+
+        // ==== E2: бойова презентація — HUD арени (BattleHudScreen), власний блок ====
+        // ==== в кінці таблиці, щоб мердж інших пакетів лишався тривіальним.    ====
+        //
+        // Ключі бойового логу (combat.attack.*/combat.overwatch.triggered.line),
+        // імена юнітів (char.*/enemy.*) і кнопки дозору/автобою (ui.battle.ap*,
+        // ui.battle.overwatch.*, ui.battle.autoresolve, ui.battle.victory/defeat)
+        // уже є в таблиці (§7.20/§7.21) — тут лише те, чого бракувало для
+        // повного HUD: заголовок, чергу ходу, панель здібностей/логу, кінець
+        // ходу, озброєну дію, прев'ю шансу під обидва правила попадання
+        // (R1 — «поріг/точність» замість «%» для ThresholdRule), і панель
+        // результату бою з «Далі» (сама подія завершення й втрати вже мають
+        // ключі — combat.autoresolved/companion.died.*/scar.granted, §7 і
+        // «стрічка подій» вище).
+        private static void AddBattlePresentationE2(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.battle.title", "Бій");
+            AddKey(t, "ui.battle.current_unit", "Хід: {name}");
+            AddKey(t, "ui.battle.enemyturn", "Хід ворога…");
+            AddKey(t, "ui.battle.initiative", "Черга ходу");
+            AddKey(t, "ui.battle.abilities", "Здібності");
+            AddKey(t, "ui.battle.log", "Хід бою");
+            AddKey(t, "ui.battle.endturn", "Кінець ходу");
+            AddKey(t, "ui.battle.unit.downed", "Виведений з бою — потребує допомоги");
+
+            // Озброєна дія (гравець обрав намір, чекає кліку по тайлу/юніту арени;
+            // рух/атака — завжди клік без озброєння, «розумний клік» ArmedAction.None).
+            AddKey(t, "ui.battle.armed.overwatch_aim", "Приціл дозору — клацни напрямок");
+            AddKey(t, "ui.battle.armed.ability", "Ціль здібності «{ability}» — клацни по тайлу чи юніту");
+            AddKey(t, "ui.battle.cancel", "Скасувати (ПКМ)");
+            AddKey(t, "ui.battle.action.rejected", "Дію неможливо виконати зараз.");
+
+            // Прев'ю шансу під курсором (R1: ThresholdRule показує поріг, PercentRule — відсоток).
+            AddKey(t, "ui.battle.hitchance.percent", "Шанс влучення: {value}%");
+            AddKey(t, "ui.battle.hitchance.threshold", "Поріг влучення: {value}");
+
+            // Наслідки бою, яких немає серед band'ів (band.*): Нічия/Відступ.
+            AddKey(t, "ui.battle.outcome.draw", "Нічия");
+            AddKey(t, "ui.battle.outcome.retreat", "Відступ");
+
+            // Панель результату після Outcome != Ongoing.
+            AddKey(t, "ui.battle.result.rounds", "Раундів: {rounds}");
+            AddKey(t, "ui.battle.result.casualties.title", "Втрати:");
+            AddKey(t, "ui.battle.result.casualties.none", "Без видимих втрат.");
+            AddKey(t, "ui.battle.result.next", "Далі");
         }
     }
 }

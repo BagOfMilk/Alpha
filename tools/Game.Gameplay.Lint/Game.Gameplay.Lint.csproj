@@ -49,6 +49,20 @@
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/VillageStage.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/GameSceneBuilder.cs" />
+
+    <!--
+      E2 (Battle presentation & portraits): той самий принцип, що й
+      VillageStage/GameSceneBuilder вище. BattleArenaController.cs —
+      Physics.Raycast/Renderer/MaterialPropertyBlock/Collider/TextMesh;
+      PortraitRig.cs — Camera.Render()/RenderTexture/ReadPixels;
+      Editor/BattleArenaBuilder.cs — PrefabUtility/AssetDatabase (той самий
+      клас гри, що KitBuilder/GameSceneBuilder). BattleArenaView.cs (чиста
+      математика) і Gameplay/UI/BattleHudScreen.cs (IMGUI) НЕ виключені —
+      лінтяться разом з рештою Gameplay/UI, компілюються заглушкою без змін.
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/BattleArenaController.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/PortraitRig.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/BattleArenaBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>
