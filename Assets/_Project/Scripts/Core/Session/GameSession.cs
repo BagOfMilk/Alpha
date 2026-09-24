@@ -2331,11 +2331,21 @@ namespace Game.Core.Session
             LogRipple(ripple);
         }
 
+        /// <summary>
+        /// Фікс-ревью (полірування, ціль 5 «Якість стрічки»): ключ обирається
+        /// з типу зв'язку (Kinship/Friction/Neutral) × причини (загибель/
+        /// зрада) — шість варіантів у UkrainianText, кожен використовує
+        /// companionId (хто реагує) і triggerId (хто загинув/зрадив), а не
+        /// один безликий рядок на всю ряб.
+        /// </summary>
         private void LogRipple(RippleReport report)
         {
             if (report == null) return;
+            string suffix = report.Betrayal ? "betrayal" : "death";
             foreach (var effect in report.Effects)
-                LogEvent("roster.rippled", Args("companionId", effect.CompanionId, "kinship", effect.Bond.ToString()));
+                LogEvent("roster.rippled." + effect.Bond.ToString().ToLowerInvariant() + "." + suffix,
+                    Args("companionId", effect.CompanionId, "triggerId", report.TriggerId,
+                        "kinship", effect.Bond.ToString(), "band", effect.Band.ToString()));
         }
 
         private Combat.PlayerUnitSource ResolvePlayerUnit(string companionId)

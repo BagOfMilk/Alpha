@@ -568,7 +568,11 @@ namespace Game.Tests.EditMode
                 Assert.Ignore("§6.1 №25 GAP: за 5×15 діб жоден напарник не помер і не зрадив — roster.rippled не мав звідки взятись цим прогоном.");
                 return;
             }
-            Assert.IsTrue(Saw(log, "roster.rippled"), "§6.1 №25: roster.rippled мав піти слідом за companion.died/.defected");
+            // Фікс-ревью (полірування, ціль 5 «Якість стрічки»): "roster.rippled"
+            // більше не єдиний ключ — GameSession.LogRipple обирає один із
+            // шести (тип зв'язку × загибель/зрада за префіксом "roster.rippled.").
+            bool sawRipple = log.Exists(e => e.Key.StartsWith("roster.rippled"));
+            Assert.IsTrue(sawRipple, "§6.1 №25: roster.rippled.* мав піти слідом за companion.died/.defected");
         }
 
         // ==== №26 — зрада → антагоніст-бос =======================================

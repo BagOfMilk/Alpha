@@ -60,7 +60,8 @@ progression.level_up
 quest.choice.resolved
 quest.hafiya.stage2.found
 quest.offered
-roster.rippled
+roster.rippled.neutral.betrayal
+roster.rippled.neutral.death
 scar.granted
 scene.finished
 scene.neighbour.elder_refuses

@@ -422,6 +422,8 @@ namespace Game.Gameplay.UI
                 "favored", faction, "scarId", scar, "questId", quest, "arcId", chapter,
                 "attackerId", ResolveCompanionName(Arg(a, "attackerId"), gender, roster),
                 "targetId", ResolveCompanionName(Arg(a, "targetId"), gender, roster),
+                "trigger", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
+                "triggerId", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
                 "incidentId", ContentLabel("incident", Arg(a, "incidentId"), gender),
                 "resource", ContentLabel("resource", Arg(a, "resource"), gender),
             };
@@ -498,6 +500,42 @@ namespace Game.Gameplay.UI
             var parts = new List<string>();
             foreach (var kv in args) parts.Add(kv.Key + "=" + kv.Value);
             return key + " (" + string.Join(", ", parts) + ")";
+        }
+
+        // ===================== стрічка подій: згортання дублів =====================
+
+        /// <summary>Один рядок готової до показу стрічки — текст і скільки разів він повторився ПІДРЯД.</summary>
+        public sealed class FeedLine
+        {
+            public string Text;
+            public int Count;
+        }
+
+        /// <summary>
+        /// Ціль 5 «Якість стрічки» (owner feedback): кілька ідентичних рядків
+        /// підряд (напр. ряба по кільком напарникам з однаковим типом зв'язку,
+        /// або "Ніч минає спокійно" кілька фаз поспіль) згортаються в один із
+        /// «×N» замість того, щоб топити стрічку повторами. Порядок — той
+        /// самий, що GameShell.DrawEventFeed малював раніше (найновіше
+        /// зверху): DayLog зберігає хронологічний порядок, тут ідемо з кінця.
+        /// Порівняння — за вже РЕЗОЛВНЕНИМ текстом (не за ключем/аргументами
+        /// події): два різні ключі, що випадково дали однаковий рядок, теж
+        /// мають право згорнутись — гравець бачить текст, не машинерію.
+        /// </summary>
+        public static List<FeedLine> BuildFeedLines(IReadOnlyList<GameEvent> log, Gender gender, RosterView roster)
+        {
+            var result = new List<FeedLine>();
+            if (log == null) return result;
+            for (int i = log.Count - 1; i >= 0; i--)
+            {
+                string text = EventLine(log[i], gender, roster);
+                if (string.IsNullOrEmpty(text)) continue;
+                if (result.Count > 0 && result[result.Count - 1].Text == text)
+                    result[result.Count - 1].Count++;
+                else
+                    result.Add(new FeedLine { Text = text, Count = 1 });
+            }
+            return result;
         }
     }
 }

@@ -880,7 +880,22 @@ namespace Game.Gameplay.Text
             AddKey(t, "craft.upgraded", "{itemId} покращено.");
             AddKey(t, "scar.granted", "{companionId} носитиме це до кінця: {scarId}.");
             AddKey(t, "loyalty.band_changed", "{companionId}: тепер {band}.");
-            AddKey(t, "roster.rippled", "Звістка розходиться по загону.");
+            // Фікс-ревью (полірування, ціль 5 «Якість стрічки»): раніше єдиний
+            // ключ "roster.rippled" не використовував жодного з аргументів
+            // події (companionId=хто реагує, triggerId=хто загинув/зрадив,
+            // kinship=тип зв'язку) — кожен запис ряби показував той самий
+            // безликий рядок. GameSession.LogRipple тепер обирає один із
+            // шести ключів (тип зв'язку × загибель/зрада); {trigger} лишається
+            // до двокрапки в називному відмінку (без відмінювання імені — той
+            // самий прийом, що "arc.chapter_opened" вище), {companion} —
+            // підмет репліки (SubjectGender у ScreenText.EventLine бере рід
+            // companionId), дієслова — теперішній час, рід-нейтральні.
+            AddKey(t, "roster.rippled.kinship.death", "{trigger}: {companion} тяжко переживає цю втрату.");
+            AddKey(t, "roster.rippled.friction.death", "{trigger}: {companion} чує звістку без жалю.");
+            AddKey(t, "roster.rippled.neutral.death", "{trigger}: {companion} мовчки слухає звістку.");
+            AddKey(t, "roster.rippled.kinship.betrayal", "{trigger}: {companion} важко переживає цю зраду.");
+            AddKey(t, "roster.rippled.friction.betrayal", "{trigger}: {companion} чує про зраду без подиву.");
+            AddKey(t, "roster.rippled.neutral.betrayal", "{trigger}: {companion} мовчки слухає звістку про зраду.");
             AddKey(t, "companion.defected", "{companionId} більше не з нами.");
             AddKey(t, "companion.died.m", "{companionId} загинув на цьому шляху.");
             AddKey(t, "companion.died.f", "{companionId} загинула на цьому шляху.");
@@ -1234,6 +1249,10 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.feed.title", "Стрічка подій");
             AddKey(t, "ui.feed.empty", "Поки що тихо.");
+            // Фікс-ревью (полірування, ціль 5 «Якість стрічки»): однакові рядки
+            // підряд (напр. кілька "тронутий звісткою" за один прохід ряби)
+            // згортаються в один із лічильником — ScreenText.BuildFeedLines.
+            AddKey(t, "ui.feed.repeat", "×{count}");
 
             AddKey(t, "ui.topbar.day", "Доба {day}");
             // Фікс-ревью (major, знайдено тур-автоплеєм): бейдж фази поруч із

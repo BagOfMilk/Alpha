@@ -448,7 +448,10 @@ namespace Game.Tests.EditMode
             foreach (var e in s.DayLog)
             {
                 if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefected = true;
-                if (e.Key == "roster.rippled") sawRipple = true;
+                // Фікс-ревью (полірування, ціль 5 «Якість стрічки»): "roster.rippled"
+                // більше не єдиний ключ — GameSession.LogRipple обирає один із
+                // шести (тип зв'язку × загибель/зрада), тож перевіряємо префікс.
+                if (e.Key.StartsWith("roster.rippled")) sawRipple = true;
             }
             Assert.IsTrue(sawDefected,
                 "прапор defector_seeded + полоса ≤ Resentful мали дефектити Мирославу негайно (Defection.ShouldDefect), " +
