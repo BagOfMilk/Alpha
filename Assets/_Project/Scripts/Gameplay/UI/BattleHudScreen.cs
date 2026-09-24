@@ -373,12 +373,19 @@ namespace Game.Gameplay.UI
                 Widgets.TooltipLine(UkrainianText.Get("ui.battle.cancel", false));
         }
 
+        /// <summary>
+        /// Найновіший рядок — зверху (як у стрічці подій хабу і у фолбеку
+        /// BattleScreen): журнал бою тепер повний — рух, стани, дозор, смерті
+        /// (<see cref="BattleLogText"/>), — і в хронологічному порядку свіжий
+        /// рядок ховався під нижнім краєм прокрутки вже на другому ході.
+        /// </summary>
         private static void DrawLog(IBattleHudData c)
         {
             Widgets.Section(UkrainianText.Get("ui.battle.log", false), () =>
             {
                 _logScroll = Widgets.ScrollListBegin(_logScroll, GUILayout.Height(160f));
-                foreach (var line in c.LogLines) GUILayout.Label(line, AlphaSkin.Body);
+                var lines = c.LogLines;
+                for (int i = lines.Count - 1; i >= 0; i--) GUILayout.Label(lines[i], AlphaSkin.Body);
                 Widgets.ScrollListEnd();
             });
         }

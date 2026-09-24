@@ -221,6 +221,9 @@ namespace Game.Gameplay.Text
             // ==== VillageLife: накази хазяїна й підписи сцени — див. блок унизу файлу. ====
             AddVillageLifeKeys(t);
 
+            // ==== Журнал бою (BattleView.Log, combat.log.*) — див. блок унизу файлу. ====
+            AddCombatLogKeys(t);
+
             return t;
         }
 
@@ -1786,11 +1789,6 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.hp", "Здоров'я: {current}/{max}");
             AddKey(t, "ui.battle.hp.target", "Ціль — здоров'я: {current}/{max}");
 
-            // Fix-ревью (minor): три з чотирьох здібностей не лишають сліду в
-            // бойовому логу (Core не пише Attacks для Lunge/SetTrap/Reposition) —
-            // загальне підтвердження на будь-яке успішне застосування.
-            AddKey(t, "ui.battle.ability.used", "{ability} застосовано.");
-
             // Озброєна дія (гравець обрав намір, чекає кліку по тайлу/юніту арени;
             // рух/атака — завжди клік без озброєння, «розумний клік» ArmedAction.None).
             AddKey(t, "ui.battle.armed.overwatch_aim", "Приціл дозору — клацни напрямок");
@@ -1852,5 +1850,91 @@ namespace Game.Gameplay.Text
             AddKey(t, "char.farmer", "Господар");
             AddKey(t, "char.scout", "Розвідник");
         }
+
+        // ==== Журнал бою: BattleView.Log — власний блок                      ====
+        // ==== в кінці таблиці, щоб мердж інших пакетів лишався тривіальним.  ====
+        //
+        // Раніше BattleView.Log ніс внутрішній трейс CombatState — російський
+        // текст із сирими іменами enum ("получает состояние KnockedDown (2 х.)"),
+        // і фолбек-екран бою показував його як є. Тепер ядро пише ключ +
+        // аргументи (Core/Combat/CombatLog.cs, закритий список CombatLogKeys.All),
+        // а слова — тут; підставляє їх Gameplay/UI/BattleLogText.cs.
+        //
+        // Плейсхолдери: {unit} — підмет рядка, {target} — другий учасник (імена),
+        // {ability}/{status}/{damageType} — перекладені токени, {chance} —
+        // "шанс N%" чи "поріг N" за правилом попадання (R1), решта — числа.
+        // Теперішній час навмисно: дієслово не має роду, і рядок однаково
+        // правильний для Мирослави, Максима й протагоніста будь-якого роду.
+        private static void AddCombatLogKeys(Dictionary<string, string> t)
+        {
+            // рамка бою
+            AddKey(t, "combat.log.started", "Бій почався.");
+            AddKey(t, "combat.log.round", "— Раунд {round} —");
+            AddKey(t, "combat.log.retreat", "Загін відступає й виходить із бою.");
+            AddKey(t, "combat.log.draw.forced", "Бій зупинено — нічия.");
+            AddKey(t, "combat.log.draw.round_cap", "Бій затягнувся понад межу раундів — нічия.");
+            AddKey(t, "combat.log.victory", "Перемога: жодного ворога на ногах.");
+            AddKey(t, "combat.log.defeat", "Поразка: загін більше не може битися.");
+
+            // дії
+            AddKey(t, "combat.log.move", "{unit} переміщується (−{ap} ОД).");
+            AddKey(t, "combat.log.overwatch.set", "{unit} бере сектор під приціл: резерв {ap} ОД до свого наступного ходу.");
+            AddKey(t, "combat.log.strike", "{unit} вкладає все в один удар — влучання гарантоване!");
+            AddKey(t, "combat.log.attack.miss", "{unit} → {target}: промах ({chance}).");
+            AddKey(t, "combat.log.attack.graze", "{unit} → {target}: зачіпає, {damage} шкоди ({chance}).");
+            AddKey(t, "combat.log.attack.hit", "{unit} → {target}: влучання, {damage} шкоди ({chance}).");
+            AddKey(t, "combat.log.attack.crit", "{unit} → {target}: критичне влучання, {damage} шкоди ({chance}).");
+            AddKey(t, "combat.log.chance.percent", "шанс {value}%");
+            AddKey(t, "combat.log.chance.threshold", "поріг {value}");
+            AddKey(t, "combat.log.stabilize", "{unit} надає допомогу: {target} поза небезпекою й виходить із бою.");
+
+            // здібності та їхні наслідки
+            AddKey(t, "combat.log.ability", "{unit} застосовує «{ability}».");
+            AddKey(t, "combat.log.damage", "{unit}: −{damage} здоров'я ({damageType}).");
+            AddKey(t, "combat.log.shred", "{unit}: броню пробито, −{amount} (лишається {armor}).");
+            AddKey(t, "combat.log.heal", "{unit}: +{amount} здоров'я ({hp}/{hpMax}).");
+            AddKey(t, "combat.log.ap_granted", "{unit}: +{amount} ОД.");
+            AddKey(t, "combat.log.lunge", "{unit} робить ривок — ціль: {target}.");
+            AddKey(t, "combat.log.repositioned", "{unit} змінює позицію за наказом.");
+            AddKey(t, "combat.log.trap.placed", "{unit} встановлює пастку.");
+            AddKey(t, "combat.log.hacked.to_player", "{target}: перехоплено — тепер б'ється за загін!");
+            AddKey(t, "combat.log.hacked.to_enemy", "{target}: перехоплено — тепер б'ється за ворога!");
+
+            // дозор
+            AddKey(t, "combat.log.overwatch.fired", "{unit} стріляє з дозору — ціль: {target}!");
+            AddKey(t, "combat.log.overwatch.expired", "{unit} знімає дозор: у сектор ніхто не зайшов.");
+            AddKey(t, "combat.log.overwatch.lost.displaced", "{unit} втрачає дозор: позицію збито.");
+            AddKey(t, "combat.log.overwatch.lost.hacked", "{unit} втрачає дозор: перехоплення.");
+            AddKey(t, "combat.log.overwatch.lost.stunned", "{unit} втрачає дозор: оглушення.");
+            AddKey(t, "combat.log.overwatch.lost.knocked_down", "{unit} втрачає дозор: збито з ніг.");
+            AddKey(t, "combat.log.overwatch.lost.out", "{unit} втрачає дозор: вибуває з бою.");
+
+            // пастки
+            AddKey(t, "combat.log.trap.triggered", "{unit} потрапляє в пастку!");
+            AddKey(t, "combat.log.trap.damage", "{unit}: пастка — −{damage} здоров'я ({damageType}).");
+
+            // стани (назви станів — combat.status.*, вище в AddStatusesAndWoundTiers)
+            AddKey(t, "combat.log.status.applied", "{unit} отримує стан «{status}» (ходів: {turns}).");
+            AddKey(t, "combat.log.status.removed", "{unit}: стан «{status}» знято.");
+            AddKey(t, "combat.log.status.expired", "{unit}: стан «{status}» минає.");
+            AddKey(t, "combat.log.status.dot", "{unit}: «{status}» — −{damage} здоров'я.");
+            AddKey(t, "combat.log.stand_up", "{unit} підводиться на ноги (−{ap} ОД).");
+            AddKey(t, "combat.log.stunned_skip", "{unit} пропускає хід: оглушення.");
+
+            // падіння і смерть
+            AddKey(t, "combat.log.downed", "{unit} падає! Вікно на порятунок — ходів: {turns}.");
+            AddKey(t, "combat.log.bleeding_out", "{unit} стікає кров'ю — ходів на порятунок: {turns}.");
+            AddKey(t, "combat.log.window_expired", "{unit}: вікно порятунку вичерпано…");
+            AddKey(t, "combat.log.survived", "{unit} втрачає свідомість, але виживає.");
+            AddKey(t, "combat.log.died", "{unit} гине.");
+
+            // типи шкоди (токен damageType, CombatLogKeys.DamageTypeId)
+            AddKey(t, "combat.damage_type.true", "чиста шкода");
+            AddKey(t, "combat.damage_type.ballistic", "кінетика");
+            AddKey(t, "combat.damage_type.fire", "вогонь");
+            AddKey(t, "combat.damage_type.toxin", "отрута");
+            AddKey(t, "combat.damage_type.energy", "енергія");
+        }
+        // ==== кінець блоку «Журнал бою» ====
     }
 }

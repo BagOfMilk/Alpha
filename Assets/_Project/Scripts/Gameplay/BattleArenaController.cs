@@ -135,6 +135,14 @@ namespace Game.Gameplay
         private const int MaxLogLines = 40;
 
         /// <summary>
+        /// Скільки рядків <c>BattleView.Log</c> (журнал бою, ключі combat.log.*)
+        /// уже перекладено в <see cref="_logLines"/>. Журнал лише росте, поки
+        /// живе бій, тож курсор — просто лічильник; новий бій починає з нуля
+        /// (<see cref="Enter"/>).
+        /// </summary>
+        private int _battleLogCursor;
+
+        /// <summary>
         /// Фаза F: скільки записів <c>_session.DayLog</c> уже пройшло крізь
         /// <see cref="AfterCommand"/>. RunCommand/RequestAutoResolve рахують
         /// свій власний "before" ЛОКАЛЬНО (бо самі й викликали команду щойно
@@ -183,6 +191,7 @@ namespace Game.Gameplay
             _resultPending = false;
             _resultCasualtyLines.Clear();
             _logLines.Clear();
+            _battleLogCursor = 0;
 
             // Рід протагоніста — за GameSession.GetProtagonistCreationView() (без
             // охорони стану, безпечно в будь-який момент, §GetProtagonistCreationView
@@ -200,6 +209,7 @@ namespace Game.Gameplay
             RebuildGrid(_lastView);
             RebuildUnits(_lastView);
             FrameCamera(_lastView);
+            AppendNewBattleLog(_lastView);
 
             // Фаза F: курсор DayLog стартує від ПОТОЧНОГО розміру — не 0, щоб
             // не перечитувати записи з-ДО цього бою (вони однаково без
@@ -287,6 +297,8 @@ namespace Game.Gameplay
             {
                 _lastView = view;
                 ApplyUnitPositionsAndHighlights(view);
+                // Хід, зроблений повз RunCommand (автопрогон, фолбек), теж потрапляє в журнал.
+                AppendNewBattleLog(view);
             }
         }
 
@@ -800,18 +812,10 @@ namespace Game.Gameplay
                         // Знімаємо ДО RunCommand: AfterCommand скидає
                         // _armedAbilityId на null щойно команда відпрацює.
                         string abilityId = _armedAbilityId;
-                        bool success = RunCommand(() => _session.CombatUseAbility(abilityId, _hoveredUnitId, _hoveredTile));
-
-                        // Фікс-ревью (minor): три з чотирьох здібностей
-                        // (Ривок/Пастка/Наказ пересунутися) не лишають слідів у
-                        // Core.CombatState.Attacks, тож ConsumeEvent їх не
-                        // перекладає — гравець витратив AP і не бачить жодної
-                        // зміни. Загальне підтвердження тут покриває й ці три, і
-                        // "Залп" (для нього це просто зайвий, але не хибний рядок
-                        // поряд із власним combat.attack.*-логом).
-                        if (success)
-                            _logLines.Add(UkrainianText.Format("ui.battle.ability.used", Gender.Male,
-                                "ability", UkrainianText.Get(abilityId, false)));
+                        // Окреме підтвердження "здібність застосовано" більше не
+                        // потрібне: журнал бою сам пише combat.log.ability і наслідки
+                        // (ривок, пастка, перестановка) — AppendNewBattleLog.
+                        RunCommand(() => _session.CombatUseAbility(abilityId, _hoveredUnitId, _hoveredTile));
                     }
                     break;
             }
@@ -865,22 +869,43 @@ namespace Game.Gameplay
             _armedAbilityId = null;
 
             var freshView = _session.GetBattleView();
-            if (freshView != null) _lastView = freshView;
+            if (freshView != null)
+            {
+                _lastView = freshView;
+                AppendNewBattleLog(freshView);
+            }
+        }
+
+        /// <summary>
+        /// Журнал бою — з <c>BattleView.Log</c> (ключі combat.log.* з аргументами),
+        /// слова — <see cref="BattleLogText"/>, імена — тим самим
+        /// <see cref="NameForUnitId"/>, що й решта HUD. Раніше лог збирався з
+        /// DayLog і знав лише атаки та постріл дозору: рух, стани, дозор,
+        /// пастки, падіння й смерть гравець не бачив узагалі.
+        ///
+        /// Якщо команда сама завершила бій, <c>GetBattleView()</c> уже null і
+        /// останні рядки сюди не доходять — їх і не видно: одразу відкривається
+        /// панель результату (<see cref="ResultPending"/>).
+        /// </summary>
+        private void AppendNewBattleLog(BattleView view)
+        {
+            if (view?.Log == null) return;
+            if (_battleLogCursor > view.Log.Count) _battleLogCursor = 0; // інший бій без Enter — почати спочатку
+            for (; _battleLogCursor < view.Log.Count; _battleLogCursor++)
+            {
+                string line = BattleLogText.Line(view.Log[_battleLogCursor], view.IsHitRulePercent, NameForUnitId, IsFemaleCompanion);
+                if (!string.IsNullOrEmpty(line)) _logLines.Add(line);
+            }
+            TrimLog();
         }
 
         private void ConsumeEvent(GameEvent evt)
         {
+            // combat.attack.* / combat.overwatch.triggered тут більше не
+            // перекладаються: ті самі удари вже є в журналі бою
+            // (AppendNewBattleLog), разом із усім, чого DayLog не знає.
             switch (evt.Key)
             {
-                case "combat.attack.hit":
-                case "combat.attack.graze":
-                case "combat.attack.crit":
-                case "combat.attack.miss":
-                    AppendAttackLine(evt);
-                    break;
-                case "combat.overwatch.triggered":
-                    AppendOverwatchLine(evt);
-                    break;
                 case "combat.battle.resolved":
                 case "combat.autoresolved":
                     _resultPending = true;
@@ -897,26 +922,6 @@ namespace Game.Gameplay
                     break;
             }
             TrimLog();
-        }
-
-        private void AppendAttackLine(GameEvent evt)
-        {
-            evt.Args.TryGetValue("attackerId", out var attackerId);
-            evt.Args.TryGetValue("targetId", out var targetId);
-            string attackerName = NameForUnitId(attackerId);
-            string targetName = NameForUnitId(targetId);
-            bool female = IsFemaleCompanion(attackerId);
-            string line = UkrainianText.Get(evt.Key, female);
-            _logLines.Add(attackerName + " → " + targetName + ": " + line);
-        }
-
-        private void AppendOverwatchLine(GameEvent evt)
-        {
-            evt.Args.TryGetValue("attackerId", out var attackerId);
-            evt.Args.TryGetValue("targetId", out var targetId);
-            string line = UkrainianText.Format("combat.overwatch.triggered.line", Gender.Male,
-                "attacker", NameForUnitId(attackerId), "target", NameForUnitId(targetId));
-            _logLines.Add(line);
         }
 
         private void AppendDeathCasualty(GameEvent evt)

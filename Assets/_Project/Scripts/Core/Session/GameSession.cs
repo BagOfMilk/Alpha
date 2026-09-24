@@ -1389,7 +1389,7 @@ namespace Game.Core.Session
         /// D1b (§2 рядок 30): перекладає нові записи <see cref="CombatState.Attacks"/>
         /// (з'явилися за виклик команди Battle вище цього рядка, включно з
         /// <see cref="CombatAutoResolve"/>) у стрічку подій — єдине джерело
-        /// доказу бою поза <see cref="BattleView.Log"/> (сирими рядками для
+        /// доказу бою поза <see cref="BattleView.Log"/> (журнал бою для
         /// гравця, не для тесту покриття). Кожен запис класифікується за
         /// <see cref="AttackRecord.IsReaction"/> — прапором, який ставить сам
         /// <c>CombatState</c> у точці народження запису (ReactToMovement),
@@ -1555,9 +1555,24 @@ namespace Game.Core.Session
                 ReachableTiles = reachable,
                 CurrentUnitId = _battle.Current != null && _battle.Current.IsActive ? _battle.Current.Id : null,
                 InitiativeOrder = initiative,
-                Log = _battle.Log,
+                Log = MapBattleLog(_battle.Journal),
                 IsHitRulePercent = _battle.IsHitRulePercent
             };
+        }
+
+        /// <summary>
+        /// Журнал бою — з <see cref="CombatState.Journal"/> (ключі й аргументи),
+        /// а не з внутрішнього трейсу <c>CombatState.Log</c>: той — російський
+        /// діагностичний текст, його не можна показувати гравцеві (і тепер він
+        /// <c>internal</c>). Аргументи Core не змінює після запису — віддаємо
+        /// той самий словник без копії.
+        /// </summary>
+        private static List<BattleLogLineView> MapBattleLog(IReadOnlyList<CombatLogEntry> journal)
+        {
+            var lines = new List<BattleLogLineView>(journal.Count);
+            foreach (var e in journal)
+                lines.Add(new BattleLogLineView { Round = e.Round, Key = e.Key, Args = e.Args });
+            return lines;
         }
 
         private static List<string> MapStatuses(CombatUnit u)

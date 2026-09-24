@@ -10,6 +10,10 @@ namespace Game.Core.Combat
         public GridPos Pos;
         public Side OwnerSide;
         public string Name;
+
+        /// <summary>Способность, поставившая ловушку, — её ключ называет ловушку игроку (журнал боя, R7); <see cref="Name"/> — только для трейса.</summary>
+        public string AbilityId;
+
         public int Damage;
         public DamageType DamageType = DamageType.True;
         public StatusType StatusOnTrigger = StatusType.None;

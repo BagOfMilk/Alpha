@@ -48,6 +48,12 @@
       вище: headless-тести (ScreenTextTests.cs) беруть його з джерела напряму.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/ScreenText.cs" />
+    <!--
+      Журнал бою: BattleLogText — чистий C# (ключі combat.log.* з BattleView.Log
+      -> українські рядки), тим самим прийомом: BattleLogTextTests.cs бере його
+      з джерела напряму.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/BattleLogText.cs" />
 
     <!--
       E2: BattleArenaView — чистий C# без UnityEngine, розкладкова математика
