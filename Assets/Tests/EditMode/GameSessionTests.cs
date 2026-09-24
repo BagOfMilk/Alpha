@@ -881,6 +881,57 @@ namespace Game.Tests.EditMode
                 "GetMechanicsJournal() мав позначити arc_chapter побаченим");
         }
 
+        /// <summary>
+        /// Фікс-ревью (адверсаріал-огляд Поправки №7.8, save/load): квестова
+        /// глава арки (Максим ч.1) реєструє своє QuestDefinition в пулі
+        /// _quests ЛІНИВО, лише всередині BeginArcChapterQuest — а лінк
+        /// questId→companionId (_activeArcChapterQuestCompanion) живе тільки
+        /// в пам'яті цього інстансу. Жодне з двох НЕ потрапляло в сейв: до
+        /// цього фіксу Save (Morning, дозволено §R13) посередині квесту й
+        /// Load у СВІЖОМУ інстансі (як після перезапуску застосунку — те, що
+        /// й перевіряє цей тест через PreloadSlot+ContinueGame, а не
+        /// LoadState того самого об'єкта) тихо губили прогін квесту цілком
+        /// (QuestLog.RestoreState відкидає запис, чийого визначення нема в
+        /// пулі — ";quests=" іде в блобі ПЕРЕД ";arc=") — глава арки лишалась
+        /// InProgress НАЗАВЖДИ, а термінал квеста ніколи не діставав шансу
+        /// завершити її. Фікс — GameSession.ReattachInProgressArcChapterQuests,
+        /// що читає "arc=" ДО основного проходу ApplySave й реєструє
+        /// визначення заздалегідь.
+        /// </summary>
+        [Test]
+        public void SaveLoad_MidMaksymArcQuest_AcrossInstance_RestoresQuestAndCompletesChapter()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+            PlayFullDayQuiet(s);
+
+            var offer = s.BeginArcChapterQuest("maksym");
+            Assert.IsNotNull(offer);
+            s.ResolveQuestChoice(1); // "path" -> justice_check
+
+            // Save mid-quest, in Morning (allowed, §R13).
+            Assert.AreEqual(SessionState.Morning, s.State);
+            string blob = s.SaveState(0);
+
+            // Свіжий інстанс — так, як після перезапуску застосунку (той самий
+            // контракт, що інші SaveLoad_NewInstance-тести цього файлу).
+            var s2 = new GameSession();
+            s2.PreloadSlot(0, blob);
+            bool ok = s2.ContinueGame(0);
+            Assert.IsTrue(ok, "ContinueGame мав завантажити щойно підкладений слот");
+
+            var stageOffer = s2.OfferQuestStage(Game.Core.Quests.DefaultQuests.MaksymCh1Id);
+            Assert.IsNotNull(stageOffer, "квест «Не за кров» мав відновитись на стадії justice_check після Load у новому інстансі");
+            s2.ResolveQuestChoice(0);
+
+            bool sawCompleted = false;
+            foreach (var e in s2.DayLog)
+                if (e.Key == "arc.chapter_completed" && e.Args["companionId"] == "maksym") sawCompleted = true;
+            Assert.IsTrue(sawCompleted,
+                "лінк questId→companionId мав відновитись разом з квестом — термінал завершив главу арки й після Save/Load");
+        }
+
         // ---- Морнінг-команди: Assign/Order*/Preview/Depart/Quest/Build/Equip/Craft ----
 
         [Test]

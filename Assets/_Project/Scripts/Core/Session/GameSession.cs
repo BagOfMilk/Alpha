@@ -3147,6 +3147,28 @@ namespace Game.Core.Session
                 headPart = headPart.Substring(0, itemsIdx) + headPart.Substring(afterItems);
             }
 
+            // Фікс-ревью (Поправка №7.8, save/load): квестова глава арки
+            // (наразі лише Максим ч.1 «Не за кров») реєструє своє
+            // QuestDefinition у пулі _quests ЛІНИВО, лише всередині
+            // BeginArcChapterQuest — а сейв несе тільки questId (§4.8, як і
+            // решта визначень контенту). Без цього кроку ";quests=" нижче
+            // (QuestLog.RestoreState) мовчки викидає прогін цього квесту на
+            // СВІЖОМУ інстансі (RestoreFromBlob/ContinueGame): визначення в
+            // його пулі ще нема, тож "quest.maksym.ch1" з сейву тихо зникає,
+            // і глава арки лишається InProgress НАЗАВЖДИ (CompleteArcChapterFor
+            // ніколи не викликається — лінк questId→companionId теж не
+            // персистився). Читаємо "arc=" ДО основного проходу нижче — саме
+            // тому, що порядок полів у ComposeSave ставить "quests=" ПЕРЕД
+            // "arc=", а реєстрація повинна встигнути ДО RestoreState квестів.
+            int arcIdx = headPart.IndexOf(";arc=", StringComparison.Ordinal);
+            if (arcIdx >= 0)
+            {
+                int afterKey = arcIdx + ";arc=".Length;
+                int nextSemi = headPart.IndexOf(';', afterKey);
+                string arcValue = nextSemi >= 0 ? headPart.Substring(afterKey, nextSemi - afterKey) : headPart.Substring(afterKey);
+                ReattachInProgressArcChapterQuests(arcValue);
+            }
+
             foreach (var part in headPart.Split(';'))
             {
                 int eq = part.IndexOf('=');
@@ -3270,6 +3292,56 @@ namespace Game.Core.Session
             if (flagsPart.Length > 0)
                 foreach (var flag in flagsPart.Split(','))
                     if (!string.IsNullOrEmpty(flag)) _arcFlags.Add(flag);
+        }
+
+        /// <summary>
+        /// Фікс-ревью (Поправка №7.8, save/load): читає СИРЕ значення "arc="
+        /// (той самий формат, що <see cref="RestoreArcState"/> парсить, але тут
+        /// лише читання — <see cref="_arcRuns"/> ще не змінюємо, тільки
+        /// дивимось у ЇХНІ вже готові <see cref="CompanionArc.Chapters"/>, щоб
+        /// дістати companionId/questId ще ДО RestoreArcState). Для кожної
+        /// глави, що сейв лишив InProgress і зміст якої — квест
+        /// (<see cref="CompanionArcContent.IsQuestChapter"/>), реєструє
+        /// визначення квесту в пулі (той самий приём, що
+        /// <see cref="BeginArcChapterQuest"/>) і відновлює лінк
+        /// questId→companionId (<see cref="_activeArcChapterQuestCompanion"/>)
+        /// — без цього ";quests=" (QuestLog.RestoreState) тихо відкидає прогін
+        /// квеста на свіжому інстансі (визначення в його пулі ще нема), а
+        /// навіть якби не відкидав — термінал квеста ніколи не завершив би
+        /// главу арки без лінку.
+        /// </summary>
+        private void ReattachInProgressArcChapterQuests(string arcValue)
+        {
+            if (string.IsNullOrEmpty(arcValue) || _arcRuns == null) return;
+
+            int tilde = arcValue.IndexOf('~');
+            string runsPart = tilde >= 0 ? arcValue.Substring(0, tilde) : arcValue;
+            if (runsPart.Length == 0) return;
+
+            foreach (var entry in runsPart.Split(','))
+            {
+                var bits = entry.Split(':');
+                if (bits.Length < 3) continue;
+                string arcId = bits[0];
+                var state = (ArcState)ParseInt(bits[1]);
+                if (state != ArcState.InProgress) continue;
+                int chapterIndex = ParseInt(bits[2]);
+
+                for (int i = 0; i < _arcRuns.Count; i++)
+                {
+                    if (_arcRuns[i].Arc.Id != arcId) continue;
+                    var chapters = _arcRuns[i].Arc.Chapters;
+                    var chapter = chapterIndex >= 0 && chapterIndex < chapters.Count ? chapters[chapterIndex] : null;
+                    string companionId = _arcRuns[i].Arc.CompanionId;
+                    if (chapter != null && CompanionArcContent.IsQuestChapter(companionId, chapter.Id))
+                    {
+                        if (_quests.DefinitionOf(chapter.QuestId) == null)
+                            _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
+                        _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
+                    }
+                    break;
+                }
+            }
         }
 
         private static SuspendToken ParseResume(string value)
