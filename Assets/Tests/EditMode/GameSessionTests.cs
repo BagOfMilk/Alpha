@@ -156,6 +156,113 @@ namespace Game.Tests.EditMode
             Assert.IsNull(s.GetBattleView());
         }
 
+        // ---- Доба 1: вибір репліки у сцені відкриття (Поправка №7.8, механіка «dialogue_choice») ----
+
+        /// <summary>Доганяє сцену відкриття до Choice-кроку (не резолвлячи його) — так само, як OfferMyroslavaEveningScene() у тестах вище.</summary>
+        private static SceneStepView AdvanceOpeningToChoice(GameSession s)
+        {
+            Assert.AreEqual(SessionState.Scene, s.State);
+            SceneStepView step = s.AdvanceScene();
+            while (!step.IsChoice && !step.IsFinished)
+                step = s.AdvanceScene();
+            Assert.IsTrue(step.IsChoice, "сцена відкриття мала зупинитись на виборі «відмовити/виторгувати час/спитати Мирославу»");
+            return step;
+        }
+
+        private static int OptionIndexByTextKey(SceneStepView step, string textKey)
+        {
+            for (int i = 0; i < step.Options.Count; i++)
+                if (step.Options[i].TextKey == textKey) return i;
+            return -1;
+        }
+
+        [Test]
+        public void OpeningChoice_Refuse_LogsChoiceMade_WithBaseBand_AndConvergesToElderRefuses()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            var step = AdvanceOpeningToChoice(s);
+
+            int idx = OptionIndexByTextKey(step, "scene.neighbour.option.refuse");
+            Assert.GreaterOrEqual(idx, 0, "варіант «відмовити» мав бути серед опцій");
+            Assert.IsTrue(step.Options[idx].HasCandidate, "просту опцію без перевірки завжди можна обрати");
+
+            s.ChooseSceneOption(idx);
+
+            bool sawChoiceMade = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "scene.choice.made" && e.Args["sceneId"] == "opening.neighbour" &&
+                    e.Args["optionId"] == "refuse" && e.Args["band"] == "Base")
+                    sawChoiceMade = true;
+            Assert.IsTrue(sawChoiceMade, "§2: подія scene.choice.made на кожен вибір репліки — «відмовити» без перевірки завжди Base");
+
+            // Без перевірки шлях сходиться на «elder_refuses» — та сама
+            // репліка, що й у старій (до Поправки №7.8) версії сцени.
+            bool sawElderRefuses = false;
+            SceneStepView tail = s.AdvanceScene();
+            while (!tail.IsFinished)
+            {
+                if (tail.LineKey == "scene.neighbour.elder_refuses") sawElderRefuses = true;
+                tail = s.AdvanceScene();
+            }
+            Assert.IsTrue(sawElderRefuses);
+            Assert.AreEqual("to.node1.pass", tail.TransitionKey);
+        }
+
+        [Test]
+        public void OpeningChoice_Bargain_LogsChoiceMade_WithCheckDeterminedBand()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            var step = AdvanceOpeningToChoice(s);
+
+            int idx = OptionIndexByTextKey(step, "scene.neighbour.option.bargain");
+            Assert.GreaterOrEqual(idx, 0, "варіант «виторгувати час» (Торгівля) мав бути серед опцій");
+            Assert.AreEqual(Game.Core.Checks.SkillKeys.Trade.Id, step.Options[idx].SkillKey);
+            string expectedBand = step.Options[idx].ExpectedBand;
+
+            s.ChooseSceneOption(idx);
+
+            bool sawChoiceMade = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "scene.choice.made" && e.Args["sceneId"] == "opening.neighbour" &&
+                    e.Args["optionId"] == "bargain" && e.Args["band"] == expectedBand)
+                    sawChoiceMade = true;
+            Assert.IsTrue(sawChoiceMade,
+                "band у події мав збігтися з ExpectedBand прев'ю (той самий детермінований CheckResolver, інваріант 8)");
+        }
+
+        [Test]
+        public void OpeningChoice_AskMyroslava_BranchesToRevealLine_InsteadOfElderRefuses()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            var step = AdvanceOpeningToChoice(s);
+
+            int idx = OptionIndexByTextKey(step, "scene.neighbour.option.ask_myroslava");
+            Assert.GreaterOrEqual(idx, 0, "варіант «спитати Мирославу» (Переконання) мав бути серед опцій");
+            Assert.AreEqual(Game.Core.Checks.SkillKeys.Persuade.Id, step.Options[idx].SkillKey);
+
+            s.ChooseSceneOption(idx);
+
+            bool sawChoiceMade = false, sawReveal = false, sawElderRefuses = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "scene.choice.made" && e.Args["optionId"] == "ask_myroslava") sawChoiceMade = true;
+
+            SceneStepView tail = s.AdvanceScene();
+            while (!tail.IsFinished)
+            {
+                if (tail.LineKey == "scene.neighbour.myroslava_reveals") sawReveal = true;
+                if (tail.LineKey == "scene.neighbour.elder_refuses") sawElderRefuses = true;
+                tail = s.AdvanceScene();
+            }
+
+            Assert.IsTrue(sawChoiceMade);
+            Assert.IsTrue(sawReveal, "гілка «спитати Мирославу» веде на окрему репліку-розкриття, а не на «elder_refuses»");
+            Assert.IsFalse(sawElderRefuses, "ця гілка НЕ проходить через «elder_refuses» — інша репліка Захара тут не звучить");
+            Assert.AreEqual("to.node1.pass", tail.TransitionKey, "всі три гілки сходяться в тому самому вузлі 1");
+        }
+
         // ---- Доба 1: тихий шлях вузла 1 (Ж) ----
 
         [Test]
@@ -548,6 +655,187 @@ namespace Game.Tests.EditMode
             Assert.IsNotNull(afterConfrontation);
             Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, afterConfrontation.Status,
                 "після звинувачення вона переходить у статус Antagonist — так само, як старий мовчазний шлях");
+        }
+
+        /// <summary>
+        /// Той самий сетап, що й <see cref="Day1_BloodyPath_SeedsDefector_ButDefectionWaitsForNightThreeConfrontation"/>
+        /// (бій доби 1 сіє defector_seeded, доба 2 тихо, доба 3 увечері
+        /// відкриває конфронтацію) — винесено окремо, бо на неї спираються ще
+        /// два тести гілок «переконати»/«відпустити» нижче. Повертає кадр
+        /// сцени вже НА виборі (переконати/звинуватити/відпустити).
+        /// </summary>
+        private static SceneStepView SeedMyroslavaDefectionAndReachConfrontationChoice(GameSession s)
+        {
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Assert.IsTrue(report.AwaitsDecision);
+            Assert.IsNull(s.ResolveIncident(IncidentPath.Bloody));
+            Assert.AreEqual(SessionState.Battle, s.State);
+            s.CombatAutoResolve();
+            Assert.AreEqual(SessionState.Scene, s.State);
+            RunSceneToFinish(s);
+            s.ConfirmEvening();
+            s.AdvanceNight();
+
+            // Доба 2, тихо.
+            s.ConfirmMorning();
+            var d2report = s.AdvanceDay();
+            while (d2report != null && d2report.AwaitsDecision)
+                d2report = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene) RunSceneToFinish(s);
+            s.ConfirmEvening();
+            var d2night = s.AdvanceNight();
+            while (d2night != null && d2night.AwaitsDecision)
+                d2night = s.ResolveIncident(IncidentPath.Quiet);
+
+            // Доба 3, увечері — конфронтація.
+            s.ConfirmMorning();
+            var day3Report = s.AdvanceDay();
+            while (day3Report != null && day3Report.AwaitsDecision)
+                day3Report = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene) RunSceneToFinish(s);
+            Assert.AreEqual(SessionState.Evening, s.State);
+            Assert.AreEqual(3, s.CurrentView.Day);
+
+            var confrontation = s.OfferMyroslavaEveningScene();
+            Assert.IsNotNull(confrontation, "зрада насуває (defector_seeded і досі не розв'язано) — доба 3 мала відкрити саме конфронтацію");
+
+            while (confrontation != null && !confrontation.IsChoice && !confrontation.IsFinished)
+                confrontation = s.AdvanceScene();
+            Assert.IsTrue(confrontation.IsChoice, "конфронтація одразу зупиняється на виборі (переконати/звинуватити/відпустити)");
+            return confrontation;
+        }
+
+        /// <summary>
+        /// Гілка «переконати» (Persuade): успіх (Good/Best) відновлює довіру і
+        /// лишає Мирославу в поселенні, невдача (Worst/Base) — той самий
+        /// прапор невдачі, що й будь-яка інша гілка, і вона так само йде в
+        /// антагоністи. Викликач бере <c>ExpectedBand</c> прямо з прев'ю
+        /// опції (той самий детермінований <c>CheckResolver</c>, що резолвить
+        /// вибір), тому тест не залежить від конкретних чисел білда.
+        /// </summary>
+        [Test]
+        public void MyroslavaConfrontation_Persuade_StaysOnSuccess_DefectsOnFailure()
+        {
+            var s = new GameSession();
+            var confrontation = SeedMyroslavaDefectionAndReachConfrontationChoice(s);
+
+            int persuadeIndex = -1;
+            for (int i = 0; i < confrontation.Options.Count; i++)
+                if (confrontation.Options[i].SkillKey == Game.Core.Checks.SkillKeys.Persuade.Id) persuadeIndex = i;
+            Assert.GreaterOrEqual(persuadeIndex, 0, "варіант «переконати» (Переконання) мав бути серед опцій конфронтації");
+
+            string expectedBand = confrontation.Options[persuadeIndex].ExpectedBand;
+            bool expectSuccess = expectedBand == "Good" || expectedBand == "Best";
+
+            s.ChooseSceneOption(persuadeIndex);
+
+            bool sawDefected = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefected = true;
+
+            var after = FindCompanion(s.GetRosterView(), "myroslava");
+            Assert.IsNotNull(after);
+
+            if (expectSuccess)
+            {
+                Assert.IsFalse(sawDefected, "успішне «переконати» (полоса " + expectedBand + ") мало відновити довіру, не дефектити");
+                Assert.AreNotEqual(Game.Core.Characters.CompanionStatus.Antagonist, after.Status,
+                    "вона лишається в поселенні після успішного переконання");
+            }
+            else
+            {
+                Assert.IsTrue(sawDefected, "невдале «переконати» (полоса " + expectedBand + ") дефектить так само, як звинувачення/відпускання");
+                Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, after.Status);
+            }
+        }
+
+        /// <summary>«Відпустити» (без перевірки): завжди зрада, але м'якшим прапором — <c>MyroslavaConfrontedReleaseFlag</c>, а не «звинуватити»/провокацію.</summary>
+        [Test]
+        public void MyroslavaConfrontation_Release_AlwaysDefectsSoftened()
+        {
+            var s = new GameSession();
+            var confrontation = SeedMyroslavaDefectionAndReachConfrontationChoice(s);
+
+            int releaseIndex = -1;
+            for (int i = 0; i < confrontation.Options.Count; i++)
+                if (confrontation.Options[i].SkillKey == null || confrontation.Options[i].SkillKey.Length == 0)
+                {
+                    // "відпустити" — єдиний варіант без перевірки в цій сцені.
+                    releaseIndex = i;
+                }
+            Assert.GreaterOrEqual(releaseIndex, 0, "варіант «відпустити» (без перевірки) мав бути серед опцій конфронтації");
+
+            s.ChooseSceneOption(releaseIndex);
+
+            bool sawDefected = false, sawRipple = false;
+            foreach (var e in s.DayLog)
+            {
+                if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefected = true;
+                if (e.Key == "roster.rippled") sawRipple = true;
+            }
+            Assert.IsTrue(sawDefected, "«відпустити» — теж зрада, лише м'якша, за GameSession.ApplyBetrayalConfrontationSideEffectsIfNeeded");
+            Assert.IsTrue(sawRipple);
+
+            var after = FindCompanion(s.GetRosterView(), "myroslava");
+            Assert.IsNotNull(after);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, after.Status);
+        }
+
+        // ---- Особиста арка (Поправка №7.8, п. 3 «ARCS PLAYABLE»): Begin → зміст → CompleteChapter → arc.chapter_completed ----
+
+        /// <summary>
+        /// Арка Максима гл.1 «Не за кров» — квестова (CompanionArcContent.IsQuestChapter),
+        /// без гейту лояльності (Максим стартує на Steady, §6.1 №27). Проходить
+        /// шлях «громадський суд» (Persuade) — м'якший, ЛОГІЧНО детермінований
+        /// тим самим CheckResolver, що й будь-яка інша перевірка; результат
+        /// (успіх/невдача) не важливий для самого факту завершення глави —
+        /// термінал квесту завершує главу арки ЗАВЖДИ (успіх чи ні).
+        /// </summary>
+        [Test]
+        public void Maksym_ArcChapter1_QuestPlayedToTerminal_CompletesChapterAndLogsEvent()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+            PlayFullDayQuiet(s); // доба 1 повна — TickCompanionArcs() відкриває главу без гейту
+
+            Assert.IsTrue(s.IsArcChapterAvailable("maksym"), "Максим стартує на Steady — перша глава без гейту (§6.1 №27)");
+            Assert.IsTrue(s.IsArcChapterQuestContent("maksym"), "глава 1 Максима — квестова («Не за кров»), не сценова");
+            Assert.AreEqual(SessionState.Morning, s.State, "BeginArcChapterQuest кличеться просто в Morning, без ConfirmMorning");
+
+            var offer = s.BeginArcChapterQuest("maksym");
+            Assert.IsNotNull(offer);
+
+            bool sawBegun = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "arc.chapter_begun" && e.Args["companionId"] == "maksym" &&
+                    e.Args["arcId"] == "arc_maksym" && e.Args["chapterId"] == "ch1")
+                    sawBegun = true;
+            Assert.IsTrue(sawBegun);
+
+            // "path"-вибір: 1 = "justice" (громадський суд, next=2 -> justice_check).
+            s.ResolveQuestChoice(1);
+
+            // ResolveQuestChoice ЗАВЖДИ скидає _currentQuestOffer (навіть не
+            // на терміналі) — новий крок треба знову запросити тим самим
+            // OfferQuestStage, яким і водій ботів (BotRunner.MaybeAdvanceMaksymArcQuest)
+            // просуває цю саму главу по одній стадії за раз.
+            s.OfferQuestStage(Game.Core.Quests.DefaultQuests.MaksymCh1Id);
+            // Check-стадія: індекс ігнорується (QuestRun.ResolveCheck), результат
+            // веде прямо на терміналну Outcome-стадію "justice_done" (Terminal=true).
+            s.ResolveQuestChoice(0);
+
+            bool sawCompleted = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "arc.chapter_completed" && e.Args["companionId"] == "maksym" &&
+                    e.Args["arcId"] == "arc_maksym" && e.Args["chapterId"] == "ch1")
+                    sawCompleted = true;
+            Assert.IsTrue(sawCompleted,
+                "термінал квестової глави (успіх чи невдача) мав завершити главу арки тим самим шляхом, що й сценова (CompleteArcChapterFor)");
         }
 
         // ---- Морнінг-команди: Assign/Order*/Preview/Depart/Quest/Build/Equip/Craft ----
