@@ -211,5 +211,33 @@ namespace Game.Tests.EditMode
             source = Regex.Replace(source, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
             return Regex.Replace(source, @"//.*?$", string.Empty, RegexOptions.Multiline);
         }
+
+        // ---- Б1 (Combat): R1 — единственный порт случайности в Core ----
+
+        /// <summary>
+        /// R1: IDiceRoller (Core/Randomness) — единственный порт случайности,
+        /// который Core разрешает себе знать. Ни один ТИП внутри сборки
+        /// Game.Core не имеет права его реализовывать: настоящий бросок —
+        /// SeededDiceRoller — живёт в Game.Gameplay (тестами не ловится
+        /// напрямую, поэтому граница проверяется рефлексией по сборке).
+        /// ThresholdRule/PercentRule в Core.Combat используют интерфейс, но
+        /// не реализуют его.
+        /// </summary>
+        [Test]
+        public void Core_NoTypeImplementsIDiceRoller()
+        {
+            var coreAssembly = typeof(Game.Core.Combat.CombatState).Assembly;
+            var offenders = new List<string>();
+
+            foreach (var type in coreAssembly.GetTypes())
+            {
+                if (type == typeof(Game.Core.Randomness.IDiceRoller)) continue;
+                if (typeof(Game.Core.Randomness.IDiceRoller).IsAssignableFrom(type))
+                    offenders.Add(type.FullName);
+            }
+
+            Assert.IsEmpty(offenders,
+                "В Game.Core не должно быть реализаций IDiceRoller — только порт: " + string.Join(", ", offenders));
+        }
     }
 }

@@ -25,6 +25,9 @@
     <Compile Include="../Shared/SettlementWorld.cs" Link="Shared/SettlementWorld.cs" />
     <Compile Include="../Shared/SignalText.cs" Link="Shared/SignalText.cs" />
     <Compile Include="../Shared/SceneText.cs" Link="Shared/SceneText.cs" />
+    <!-- Б1 (R1): сидированный кубик боя, чистый C# без UnityEngine. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Combat/SeededDiceRoller.cs"
+             Link="Gameplay/Combat/SeededDiceRoller.cs" />
   </ItemGroup>
 
 </Project>

@@ -26,6 +26,9 @@
     <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
     <!-- Общий мир с консольной сборкой: одна копия правил на два инструмента. -->
     <Compile Include="../Shared/SettlementWorld.cs" Link="Shared/SettlementWorld.cs" />
+    <!-- Б1 (R1): сидированный кубик боя, чистый C# без UnityEngine. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Combat/SeededDiceRoller.cs"
+             Link="Gameplay/Combat/SeededDiceRoller.cs" />
   </ItemGroup>
 
 </Project>
