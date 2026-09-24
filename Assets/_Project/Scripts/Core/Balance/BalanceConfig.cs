@@ -129,5 +129,8 @@ namespace Game.Core.Balance
 
         /// <summary>Как город отвечает игроку: люди, совет, тиры (Поправка №6).</summary>
         public CityBalance City = new CityBalance();
+
+        /// <summary>Предметы/крафт: цена подъёма редкости, заряды именных эффектов (B3).</summary>
+        public ItemBalance Items = new ItemBalance();
     }
 }
