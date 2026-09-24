@@ -874,6 +874,9 @@ namespace Game.Core.Session
             }
         }
 
+        /// <summary>Ступінь передвісника Тугара, яку гравець УЖЕ почув (0..3) — той самий гачок, приховане від View.</summary>
+        internal int DebugTuharDeliveredLevel => _processor?.Pulse?.DeliveredLevelOf(OpeningContent.TuharSourceId) ?? 0;
+
         public SessionState ConfirmMorning()
         {
             if (State != SessionState.Morning && State != SessionState.FreePlay)

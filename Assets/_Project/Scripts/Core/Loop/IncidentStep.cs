@@ -17,10 +17,16 @@ namespace Game.Core.Loop
         {
             if (ctx.Incidents == null || ctx.FiredSourceIds.Count == 0) return;
 
+            // Полоса берётся одна на весь шаг — та же, по которой пульс решал,
+            // разряжать ли источник (HasIncidentFor). Исход первого инцидента
+            // двигает Напряжение сразу, и без снимка второй источник фазы
+            // искал бы пул по другой полосе: мог не найти ничего и сгореть молча.
+            var band = ctx.Tension.Band;
+
             for (int i = 0; i < ctx.FiredSourceIds.Count; i++)
             {
                 string sourceId = ctx.FiredSourceIds[i];
-                bool crisis = sourceId == "crisis";
+                bool crisis = IsCrisisSource(sourceId);
 
                 // Условие «кризис объявлен и услышан» живёт в PressureTrack.IsReady:
                 // сюда дело просто не доходит, и заряд не сгорает впустую.
@@ -32,7 +38,7 @@ namespace Game.Core.Loop
                 // предвестник называет один домен, а приходит событие из другого
                 // (§5.1, правило «предвестник не врёт»).
                 var incident = ctx.Incidents.Pick(
-                    ctx.Tension.Band, ctx.Tier, ctx.IsNight, crisis, selector, sourceId);
+                    band, ctx.Tier, ctx.IsNight, crisis, selector, sourceId);
                 if (incident == null) continue;
 
                 // Аудит П10: каждый сработавший инцидент фазы — своё решение
@@ -67,6 +73,22 @@ namespace Game.Core.Loop
                 ctx.IncidentOutcomes.Add(outcome);
             }
         }
+
+        /// <summary>
+        /// Найдётся ли источнику инцидент в этой фазе. Тот же отбор, что в
+        /// Execute: Pick возвращает null ровно тогда, когда пул пуст. Пульс
+        /// спрашивает здесь ДО разряда накопителя (PulseStep): решение «сгорит
+        /// ли заряд» принимает тот, кто знает таблицу. Без таблицы разбирать
+        /// некому вовсе — ни один источник не разряжается.
+        /// </summary>
+        internal static bool HasIncidentFor(DayContext ctx, string sourceId)
+        {
+            if (ctx.Incidents == null) return false;
+            return ctx.Incidents.Eligible(
+                ctx.Tension.Band, ctx.Tier, ctx.IsNight, IsCrisisSource(sourceId), sourceId).Count > 0;
+        }
+
+        private static bool IsCrisisSource(string sourceId) => sourceId == "crisis";
 
         /// <summary>
         /// Предложение игроку: пути, исполнители и ПОКАЗАННЫЕ пороги.
