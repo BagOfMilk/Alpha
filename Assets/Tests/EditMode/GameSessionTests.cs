@@ -1361,6 +1361,17 @@ namespace Game.Tests.EditMode
         /// встигав дійти до гравця в межах короткого тестового прогону —
         /// корінь скарги "майстерня добудовується надто пізно, щоб боти
         /// встигли щось зробити".
+        ///
+        /// Фікс-ревью (major): перевірка «Майстерня готова» тут навмисно
+        /// відокремлена від однієї добою вперед — раніше вона стояла ПІСЛЯ
+        /// чотирьох <c>PlayFullDayQuiet</c> і випадково збігалась із старим
+        /// <c>BuildingDefinition.Days</c> Майстерні (4), тож тест лишався б
+        /// зеленим, навіть якби протяжка прапорця
+        /// <c>NewGameOptions.TestBuildOneDayConstruction</c> крізь
+        /// <c>GameSession.NewGame</c>/<c>FirstHourWorld.Build</c> зламалась і
+        /// стройка мовчки повернулась до проєктних строків. Тепер «готово за
+        /// одну добу» перевіряється ОКРЕМО й одразу після першої доби — саме
+        /// на цьому кроці тест провалиться, якщо протяжка регресує.
         /// </summary>
         [Test]
         public void CraftUpgrade_TestBuild_WorkshopOpensNextMorning_CraftReachableByDay5()
@@ -1377,13 +1388,15 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
 
             var log = new List<GameEvent>();
-            for (int i = 0; i < 4; i++) PlayFullDayQuiet(s, log); // доби 1..4 — до фіналу доби 5 не дійшли
+            PlayFullDayQuiet(s, log); // рівно ОДНА доба — не «стільки ж, скільки був старий Days=4»
 
             bool workshopBuilt = false;
             foreach (var b in s.GetCityView().Built)
                 if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) workshopBuilt = true;
             Assert.IsTrue(workshopBuilt,
                 "Поправка №7.7: Майстерня, заказана уранці доби 1, мала добудуватись за одну добу");
+
+            for (int i = 0; i < 3; i++) PlayFullDayQuiet(s, log); // доби 2..4 — до фіналу доби 5 не дійшли
 
             var stash = s.GetStash();
             Assert.IsTrue(stash.Count > 0, "силовий відряд на outskirts мав повернутись із предметом до доби 4");
@@ -1395,6 +1408,70 @@ namespace Game.Tests.EditMode
                 : Game.Core.Items.CraftResult.CannotAfford;
             Assert.AreEqual(expected, s.CraftUpgrade(item.InstanceId),
                 "§6.1 №22 / Поправка №7.7: CraftUpgrade мав дійти до CraftSystem задовго до фіналу доби 5");
+        }
+
+        /// <summary>
+        /// Фікс-ревью (major, verifier): попередні тести на Поправку №7.7
+        /// або дзвонили просто в конструктор <c>CityWorks</c>
+        /// (<c>CityWorksTests</c> — не проходять крізь
+        /// <c>GameSession</c>/<c>FirstHourWorld</c> взагалі), або збігом
+        /// днів маскували поламану протяжку (див. коментар вище). Цей тест
+        /// — мінімальна пара «позитив/негатив» САМЕ на протяжку прапорця
+        /// крізь реальний шлях виклику (<c>GameSession.NewGame</c> →
+        /// <c>FirstHourWorld.Build</c> → конструктор <c>CityWorks</c>):
+        /// дефолтні <c>NewGameOptions</c> (тестова збірка,
+        /// <c>TestBuildOneDayConstruction=true</c>), замовлення Майстерні,
+        /// РІВНО одна доба — і здание вже готове. Верифікатор довів, що це
+        /// ловить регресію: відкат саме інтеграційної точки (видалений
+        /// аргумент <c>testBuildOneDayConstruction</c> у виклику
+        /// <c>FirstHourWorld.Build</c> з <c>GameSession.NewGame</c>) лишав
+        /// увесь <c>tools/run-tests.sh</c> зеленим, бо жоден тест того часу
+        /// не перевіряв «готово рівно за добу» ізольовано від часу
+        /// повернення відрядження.
+        /// </summary>
+        [Test]
+        public void NewGame_TestBuildDefault_WorkshopOrderedDay1_BuiltAfterExactlyOneDay()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions()); // TestBuildOneDayConstruction=true (дефолт NewGameOptions)
+            FastForwardOpeningToMorning(s);
+
+            Assert.AreEqual(BuildOrderResult.Started, s.OrderBuilding(Game.Core.Base.DefaultBuildings.Workshop));
+
+            PlayFullDayQuiet(s); // рівно одна доба
+
+            bool workshopBuilt = false;
+            foreach (var b in s.GetCityView().Built)
+                if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) workshopBuilt = true;
+            Assert.IsTrue(workshopBuilt,
+                "Поправка №7.7: протяжка GameSession.NewGame→FirstHourWorld.Build→CityWorks мала дати " +
+                "тестовій збірці одноденну стройку — Майстерня мала бути готова рівно за одну добу");
+        }
+
+        /// <summary>
+        /// Пара-негатив до <see cref="NewGame_TestBuildDefault_WorkshopOrderedDay1_BuiltAfterExactlyOneDay"/>:
+        /// та сама протяжка, але з <c>TestBuildOneDayConstruction=false</c>
+        /// (кампанія) — за одну добу Майстерня (Days=4) свідомо ще НЕ готова.
+        /// Без цієї пари позитивний тест міг би ловити не протяжку прапорця,
+        /// а якусь іншу випадкову зміну строку стройки в даних.
+        /// </summary>
+        [Test]
+        public void NewGame_CampaignMode_WorkshopOrderedDay1_NotBuiltAfterOneDay()
+        {
+            var s = new GameSession();
+            s.NewGame(new NewGameOptions
+                { SkipCreation = true, HitRule = HitRuleKind.Threshold, TestBuildOneDayConstruction = false });
+            FastForwardOpeningToMorning(s);
+
+            Assert.AreEqual(BuildOrderResult.Started, s.OrderBuilding(Game.Core.Base.DefaultBuildings.Workshop));
+
+            PlayFullDayQuiet(s); // рівно одна доба
+
+            bool workshopBuilt = false;
+            foreach (var b in s.GetCityView().Built)
+                if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) workshopBuilt = true;
+            Assert.IsFalse(workshopBuilt,
+                "Кампанія (Поправка №6.1, Days=4): Майстерня не мала добудуватись за одну добу");
         }
 
         [Test]

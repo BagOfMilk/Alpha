@@ -67,8 +67,25 @@ namespace Game.Core.Base
         /// сутки замість <see cref="BuildingDefinition.Days"/>. Це параметр
         /// конструктора, не мутне поле — режим гри не міняється всередині
         /// прогону, тому в <see cref="CaptureState"/>/<see cref="RestoreState"/>
-        /// його немає (той, хто відновлює сейв, будує CityWorks з тим самим
-        /// прапорцем, яким збирав світ — <c>FirstHourWorld.Build</c>).
+        /// його немає.
+        ///
+        /// Фікс-ревью (мінор): гарантія «той, хто відновлює сейв, будує
+        /// CityWorks з тим самим прапорцем, яким збирав світ» тримається
+        /// ЛИШЕ для першого <c>GameSession.NewGame</c> у прогоні.
+        /// <c>GameSession.ContinueGame</c> НЕ протягує збережений режим — він
+        /// завжди викликає <c>NewGame</c> без явного
+        /// <c>NewGameOptions.TestBuildOneDayConstruction</c>, тож
+        /// перебудований <c>CityWorks</c> завжди отримує дефолт цього поля
+        /// (тестова збірка, true), незалежно від режиму, в якому сейв
+        /// насправді був створений. Наразі нешкідливо: жоден продакшн-шлях
+        /// не створює сейв кампанії (false) через <c>GameSession</c> —
+        /// кампанійний режим досі перевіряється лише прямими викликами
+        /// <c>FirstHourWorld.Build</c>/<c>CityWorks</c> (CampaignPacingTests,
+        /// SettlementSaveTests, FirstHourWorldTests), у обхід save/continue.
+        /// Якщо колись кампанія піде через <c>GameSession</c>-сейви, прапорець
+        /// доведеться протягнути окремо (напр. через метадані сейву або
+        /// новий параметр <c>ContinueGame</c>) — ця гарантія сама собою не
+        /// з'явиться.
         /// </summary>
         private readonly bool _oneDayConstruction;
 
