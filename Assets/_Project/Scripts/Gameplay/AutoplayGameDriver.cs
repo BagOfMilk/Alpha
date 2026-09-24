@@ -404,9 +404,24 @@ namespace Game.Gameplay
                 // ---- вечір ----
                 if (state == SessionState.Evening)
                 {
+                    // Поправка №7.8, п.1/4: GameShell.MaybeRouteOfferedSceneContent
+                    // штовхає особисті арки/скриптовані сцени лише з OnGUI, а
+                    // OnGUI біжить МІЖ кроками цього ітератора (на кожному
+                    // yield return), не всередині нього. Раніше на добу 2+
+                    // (коли !_eveningShown уже false) цей блок ішов ПОВНІСТЮ
+                    // синхронно до самого ConfirmEvening() — жоден OnGUI між
+                    // ними не встигав спрацювати, тож «Нічна розмова»/рада
+                    // Захара мовчки пропускались тур-автоплеєм (спіймано на
+                    // РЕАЛЬНОМУ прогоні — жоден headless-тест цього не бачить,
+                    // бо там немає окремого OnGUI-проходу). Один явний yield
+                    // тут — перш ніж ЩОСЬ інше в цьому блоці спробує Evening-
+                    // лише команду — дає маршрутизації шанс підхопити сцену
+                    // ДО того, як ми вважатимемо стан незмінним.
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    if (Session.State != SessionState.Evening) continue; // маршрутизація підхопила сценарний зміст — далі йде він
+
                     if (!_eveningShown)
                     {
-                        foreach (var f in WaitFrames(FramesShort)) yield return f;
                         _host.Capture("evening-patrol");
                         yield return 0;
                     }
@@ -462,6 +477,13 @@ namespace Game.Gameplay
                             Session.ResolveQuestChoice(chosen);
                         });
                     }
+
+                    // Той самий захист, що на вході блоку: якщо котрийсь із
+                    // yield'ів вище (наприклад, знімок пропозиції квесту) дав
+                    // маршрутизації підхопити ЩОЙНО відкриту сцену, стан уже
+                    // не Evening — SetPatrol/ConfirmEvening тут були б
+                    // Evening-лише командою на чужому стані.
+                    if (Session.State != SessionState.Evening) continue;
 
                     Run(() => Session.SetPatrol(Session.CurrentView.Day % 2 == 0));
                     Run(() => Session.ConfirmEvening());
