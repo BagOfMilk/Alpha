@@ -6,8 +6,9 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Гачок для майбутнього бот-прогону: коли фасад <c>GameSession</c>
-    /// приїде з трунку, GameShell реалізує цей інтерфейс і підставляє його в
+    /// Гачок бот-прогону: <see cref="AutoplayGameDriver"/> (пакет E1b)
+    /// реалізує цей інтерфейс поверх <c>GameSession</c>/<c>BotRunner</c>, а
+    /// <c>GameShell.Awake</c> підставляє його в
     /// <see cref="AutoplayBootstrap.Driver"/>. Сам гачок навмисно НЕ знає, що
     /// таке «доба» чи «бот-політика» — лише «зроби один крок і скажи, чи є
     /// ще куди йти».
@@ -19,18 +20,26 @@ namespace Game.Gameplay
 
         /// <summary>Короткий людський підсумок щойно зробленого кроку — рядок у autoplay-summary.txt.</summary>
         string DescribeLastStep();
+
+        /// <summary>
+        /// Пакет E1b: true, коли прогін зупинився ЧЕРЕЗ провал (виняток або
+        /// кампанія застрягла), а не тому, що чесно дійшов до Summary/FreePlay.
+        /// <see cref="AutoplayBootstrap"/> читає це лише ПІСЛЯ
+        /// <see cref="RunAutoplayStep"/> повернув false — код виходу мусить
+        /// бути 0 лише коли прогін дійшов до кінця без винятків (R19/§5 E1b).
+        /// </summary>
+        bool Failed { get; }
     }
 
     /// <summary>
     /// Читає прапорець командного рядка «-autoplay», знімає скріншоти під
     /// Screenshots/ каталогу білда, пише Logs/autoplay-summary.txt і завершує
-    /// процес кодом виходу — все, що дим-тесту (R19) треба від процесу, ще
-    /// до того, як з'явиться сам <c>GameSession</c>.
+    /// процес кодом виходу — усе, що дим-тесту (R19) треба від процесу.
     ///
-    /// ЧОГО ТУТ НЕМА НАВМИСНО. Жодної згадки Game.Core.Session: фасад
-    /// пишеться паралельно в трунку й у цьому воркчасті не існує (§5 E1,
-    /// TEST_BUILD.md). Компонент лише готує рейки, якими майбутній
-    /// GameShell поведе бот-політики день за днем.
+    /// ЧОГО ТУТ НЕМА НАВМИСНО. Жодної згадки Game.Core.Session напряму —
+    /// компонент лише крутить <see cref="IAutoplayDriver"/> та обробляє
+    /// виняток/код виходу; сам прогін ГРИ (GameSession/BotRunner) — робота
+    /// <see cref="AutoplayGameDriver"/> (Gameplay/AutoplayGameDriver.cs).
     /// </summary>
     public sealed class AutoplayBootstrap : MonoBehaviour
     {
@@ -80,16 +89,35 @@ namespace Game.Gameplay
 
         private void Step()
         {
-            bool hasMore = Driver != null && Driver.RunAutoplayStep(_step);
-            string what = Driver != null ? Driver.DescribeLastStep() : "гачок не підключено — крок пропущено";
-            _summary.Add("Крок " + _step + ": " + what);
+            bool hasMore;
+            string what;
 
+            try
+            {
+                hasMore = Driver != null && Driver.RunAutoplayStep(_step);
+                what = Driver != null ? Driver.DescribeLastStep() : "гачок не підключено — крок пропущено";
+            }
+            catch (Exception ex)
+            {
+                // Виняток у водії не має піти вгору й зупинити Update() без
+                // підсумку — код виходу все одно мусить бути ненульовим
+                // (R19: "exit code 0 лише якщо прогін дійшов до Summary/
+                // FreePlay без винятків").
+                what = "Виняток на кроці " + _step + ": " + ex.GetType().Name + " — " + ex.Message;
+                _summary.Add("Крок " + _step + ": " + what);
+                CaptureScreenshot(_step);
+                Finish(1);
+                return;
+            }
+
+            _summary.Add("Крок " + _step + ": " + what);
             CaptureScreenshot(_step);
             _step++;
 
             if (!hasMore)
             {
-                Finish(0);
+                bool failed = Driver != null && Driver.Failed;
+                Finish(failed ? 1 : 0);
                 return;
             }
 
