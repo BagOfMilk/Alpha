@@ -593,7 +593,10 @@ namespace Game.Core.Session
             if (approach == ExpeditionApproach.Delve)
             {
                 var rooms = DefaultDungeon.Rooms(siteId);
-                var firstRoom = rooms != null && rooms.Count > 0 ? BuildDungeonRoomView(rooms[0]) : null;
+                // Прев'ю (owner: "the quiet candidate"): _dungeon ще НЕ
+                // існує до реального DepartExpedition — companionIds
+                // параметра (та сама майбутня партія) і є "партія" на цей момент.
+                var firstRoom = rooms != null && rooms.Count > 0 ? BuildDungeonRoomView(rooms[0], companionIds) : null;
                 return new ExpeditionPreviewView { SiteId = siteId, Approach = approach, IsDelve = true, FirstRoom = firstRoom, Days = 2 };
             }
 
@@ -1269,7 +1272,16 @@ namespace Game.Core.Session
             };
         }
 
-        private DungeonRoomView BuildDungeonRoomView(DungeonRoomDefinition room)
+        /// <summary>
+        /// <paramref name="partyIdsOverride"/> — фіксує ПАРТІЮ ДЛЯ КАНДИДАТА
+        /// тихого обходу: null (дефолт) означає "жива партія поточного
+        /// прогону данжу" (<c>_dungeon.PartyIds</c>); PreviewExpedition
+        /// передає МАЙБУТНЮ партію (companionIds параметра), бо викликає цей
+        /// метод ДО DepartExpedition, коли <c>_dungeon</c> ще null —
+        /// фікс-ревью (блокер, знайдено тур-автоплеєм): без override тут
+        /// падав NullReferenceException на КОЖЕН прев'ю вилазки-данжу.
+        /// </summary>
+        private DungeonRoomView BuildDungeonRoomView(DungeonRoomDefinition room, IReadOnlyList<string> partyIdsOverride = null)
         {
             if (room == null) return null;
 
@@ -1291,10 +1303,11 @@ namespace Game.Core.Session
                 view.QuietThreshold = _dungeon != null ? _dungeon.EffectiveQuietThreshold(req) : req.Threshold;
 
                 // Ціль 6 «Рішення» (owner: "the quiet candidate"): найкращий
-                // член ПАРТІЇ данжу (не всього ростеру — інші лишились
-                // вдома) для цього скіла/підходу, та сама формула
-                // (ISettlementActor.GetCheckValue), що резолвить сам обхід.
-                var party = ResolveActors(_dungeon.PartyIds);
+                // член ПАРТІЇ (не всього ростеру — інші лишились вдома) для
+                // цього скіла/підходу, та сама формула (ISettlementActor.
+                // GetCheckValue), що резолвить сам обхід.
+                var partyIds = partyIdsOverride ?? _dungeon?.PartyIds;
+                var party = ResolveActors(partyIds);
                 string bestId = null;
                 int bestValue = int.MinValue;
                 foreach (var actor in party)

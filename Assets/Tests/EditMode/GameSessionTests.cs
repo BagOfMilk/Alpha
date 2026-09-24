@@ -685,6 +685,33 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(building);
         }
 
+        /// <summary>
+        /// Фікс-ревью (блокер, знайдено тур-автоплеєм §"тактичні бої"):
+        /// PreviewExpedition(Delve) кличе BuildDungeonRoomView(rooms[0]) ДО
+        /// DepartExpedition, коли _dungeon ще null — QuietBestActorId
+        /// (ціль 6) раніше безумовно читав _dungeon.PartyIds і падав
+        /// NullReferenceException на КОЖЕН прев'ю вилазки-данжу (тур
+        /// впав з кодом виходу 2 на MaybeDepartDelve).
+        /// </summary>
+        [Test]
+        public void PreviewExpedition_Delve_BeforeDeparture_DoesNotThrow_AndStillNamesQuietCandidate()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            ExpeditionPreviewView preview = null;
+            Assert.DoesNotThrow(() =>
+                preview = s.PreviewExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                    new[] { "protagonist", "maksym", "myroslava" }));
+
+            Assert.IsNotNull(preview);
+            Assert.IsTrue(preview.IsDelve);
+            Assert.IsNotNull(preview.FirstRoom);
+            Assert.IsTrue(preview.FirstRoom.QuietHasCandidate, "кандидат мав рахуватись із МАЙБУТНЬОЇ партії (companionIds), не з ще неіснуючого _dungeon.PartyIds");
+            Assert.AreEqual("maksym", preview.FirstRoom.QuietBestActorId);
+        }
+
         [Test]
         public void PreviewExpedition_And_DepartExpedition_Quiet_TicksHomeAndBanksLoot()
         {
