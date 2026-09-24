@@ -17,6 +17,8 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <IsPackable>false</IsPackable>
     <Nullable>disable</Nullable>
+    <!-- Unity 6 компилирует тесты как C# 9: всё новее сломает сборку в редакторе. -->
+    <LangVersion>9.0</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
