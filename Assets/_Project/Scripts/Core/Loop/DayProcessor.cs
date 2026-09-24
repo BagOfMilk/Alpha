@@ -98,6 +98,22 @@ namespace Game.Core.Loop
             _externalTension.Add(new ExternalTensionEntry(driver, amount));
         }
 
+        /// <summary>
+        /// Копия ещё не осушенной очереди QueueExternal — только для слепка
+        /// (D1a, шов, задокументированный прямо в SaveState() ниже). Заявка,
+        /// положенная сюда МЕЖДУ фазами (наприклад, наслідком квесту, вжитим
+        /// в Morning до AdvanceDay), раньше терялась при save/load: SaveState
+        /// не сохранял <see cref="_externalTension"/> вовсе.
+        /// </summary>
+        internal IReadOnlyList<ExternalTensionEntry> PeekExternalTensionForSave() => _externalTension;
+
+        /// <summary>Восстановить очередь QueueExternal из слепка (см. PeekExternalTensionForSave).</summary>
+        internal void RestoreExternalTensionForSave(List<ExternalTensionEntry> entries)
+        {
+            _externalTension.Clear();
+            if (entries != null) _externalTension.AddRange(entries);
+        }
+
         /// <summary>Ночью: патрулировать вместо сна (Поправка №3.9).</summary>
         public bool IsPatrolling { get; set; }
 
@@ -166,10 +182,11 @@ namespace Game.Core.Loop
         /// Слепок НЕ несёт очередь решений фазы (<see cref="AwaitsDecision"/>):
         /// сохранение посреди открытого решения молча потеряло бы все ещё не
         /// разобранные инциденты этой фазы при восстановлении (найдено ревью А1).
-        /// Сегодняшние вызывающие (Alpha.Play/Alpha.Sim) всегда дренируют очередь
-        /// до конца перед сохранением; когда появится сохранение из любого места
-        /// экрана (GameSession), эта проверка обязана либо уйти, либо очередь
-        /// обязана попасть в блоб — что раньше.
+        /// Очередь QueueExternal (D1a) в блоб ПОПАДАЕТ — см. "extq=" в
+        /// SettlementSave.Capture/Restore: раньше эта заявка терялась молча
+        /// при save/load посреди Morning (до AdvanceDay её ещё не дренирует
+        /// никто), теперь блоб несёт копию, а не дренирует её сам (дренирует
+        /// её только Advance()).
         /// </summary>
         public string SaveState()
         {

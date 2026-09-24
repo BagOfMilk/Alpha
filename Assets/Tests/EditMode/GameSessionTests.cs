@@ -171,6 +171,27 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(sawResolved, "decision.resolved має піти в DayLog (§4.3)");
         }
 
+        /// <summary>
+        /// Аудит П9: підсумок циклу (<see cref="Game.Core.Base.ProductionStep"/>.LastReport)
+        /// нікуди не йшов — до цього пакету ApplyCycleReport не викликався
+        /// взагалі, і жоден production.* не потрапляв у стрічку.
+        /// </summary>
+        [Test]
+        public void AdvanceDay_EmitsProductionEvents_FromCycleReport()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            s.AdvanceDay();
+
+            bool sawResource = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "production.resource") sawResource = true;
+            Assert.IsTrue(sawResource, "П9: CycleReport.Produced мав дійти до стрічки events production.*");
+        }
+
         // ---- Доба 1: кровавий шлях вузла 1 → справжній бій (SuspendReason.PassVanguardBloody) ----
 
         [Test]
@@ -214,6 +235,67 @@ namespace Game.Tests.EditMode
             int n = 0;
             foreach (var u in view.Units) if (u.Side == side) n++;
             return n;
+        }
+
+        // ---- Дефекція (US-9.4, R2/§2 №25): DefectionWatch.Tick + Defection.ShouldDefect ----
+
+        /// <summary>
+        /// Детермінований 3v2 бій вузла 1 (без хазяїна, як і в
+        /// Day1_BloodyPath_...) заводить Максима вбитим і Мирославу — на
+        /// полосу Base: PassVanguardOutcome сіє "defector_seeded" і реальна
+        /// лояльність падає до Resentful (50-35=15 -> Resentful за §3.1
+        /// коментарем у CompanionSocialBalance). Це рівно та комбінація
+        /// (прапор + полоса ≤ Resentful), за якої Defection.ShouldDefect
+        /// дефектить БЕЗ очікування 5 підряд-діб (seamsForD1 пакета B4) —
+        /// TickDefectionWatch мала підхопити її на найближчому завершенні
+        /// доби, а не мовчати, як до цього пакету.
+        /// </summary>
+        [Test]
+        public void Day1_BloodyPath_SeedsDefector_AndDefectionWatchDefectsOnNightEnd()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Assert.IsTrue(report.AwaitsDecision);
+
+            var duringBattle = s.ResolveIncident(IncidentPath.Bloody);
+            Assert.IsNull(duringBattle);
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            s.CombatAutoResolve();
+            Assert.AreEqual(SessionState.Scene, s.State);
+
+            bool sawLeft = false, sawResentful = false;
+            foreach (var e in s.DayLog)
+            {
+                if (e.Key == "companion.left_settlement" && e.Args["companionId"] == "myroslava") sawLeft = true;
+                if (e.Key == "loyalty.band_changed" && e.Args["companionId"] == "myroslava" && e.Args["band"] == "Resentful")
+                    sawResentful = true;
+            }
+            Assert.IsTrue(sawLeft, "детермінований бій мав дати полосу Base/Worst (Мирослава йде) — тест писано під конкретний вихід");
+            Assert.IsTrue(sawResentful, "лояльність Мирослави мала впасти рівно до Resentful (§3.1, -35 -> 15)");
+
+            SceneStepView step;
+            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            Assert.AreEqual(SessionState.Evening, s.State);
+
+            s.ConfirmEvening();
+            Assert.AreEqual(SessionState.Night, s.State);
+            s.AdvanceNight();
+
+            bool sawDefected = false, sawRipple = false;
+            foreach (var e in s.DayLog)
+            {
+                if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefected = true;
+                if (e.Key == "roster.rippled") sawRipple = true;
+            }
+            Assert.IsTrue(sawDefected,
+                "прапор defector_seeded + полоса ≤ Resentful мали дефектити Мирославу негайно (Defection.ShouldDefect), " +
+                "не чекаючи 5 підряд-діб — TickDefectionWatch мала бути звичайно неможливою без виклику з D1a");
+            Assert.IsTrue(sawRipple, "дефекція — це предаство (RosterDrama.OnBetrayal), а не тиха відсутність ряби");
         }
 
         // ---- Морнінг-команди: Assign/Order*/Preview/Depart/Quest/Build/Equip/Craft ----

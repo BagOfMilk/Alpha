@@ -31,6 +31,8 @@ using AssignmentResult = Game.Core.Base.AssignmentResult;
 using BuildOrderResult = Game.Core.Base.BuildOrderResult;
 using CouncilOrderResult = Game.Core.Base.CouncilOrderResult;
 using DefaultBuildingsType = Game.Core.Base.DefaultBuildings;
+using SettlementCycleType = Game.Core.Base.SettlementCycle;
+using CycleReport = Game.Core.Base.CycleReport;
 
 namespace Game.Core.Session
 {
@@ -65,6 +67,7 @@ namespace Game.Core.Session
         private BaseState _state;
         private CityWorksType _works;
         private DayProcessor _processor;
+        private SettlementCycleType _cycle;
         private Roster _worldRoster;
         private ExpeditionParty _party;
         private SiteLedger _sites;
@@ -78,6 +81,13 @@ namespace Game.Core.Session
         private IRosterView _rosterView;
         private IRepeatTracker _repeats;
         private ForcedCrisisSource _crisis;
+
+        /// <summary>
+        /// Годинник дефекції (B4, шов seamsForD1): рахує підряд-дні на дні
+        /// лояльності на кожного напарника. Tick() і перевірка ShouldDefect
+        /// звуться рівно раз на календарну добу — <see cref="TickDefectionWatch"/>.
+        /// </summary>
+        private DefectionWatch _defectionWatch;
 
         // ---- кубик/сід/бій ----
         private readonly IDiceRoller _roller;
@@ -142,6 +152,7 @@ namespace Game.Core.Session
             _state = _world.BaseState;
             _works = _world.CityWorks;
             _processor = _world.Processor;
+            _cycle = _world.Cycle;
             _worldRoster = _world.Roster;
             _party = _world.Party;
             _sites = _world.Sites;
@@ -155,6 +166,7 @@ namespace Game.Core.Session
             _rosterView = _processor.Roster;
             _repeats = _processor.Repeats;
             _crisis = new ForcedCrisisSource(5, 1);
+            _defectionWatch = new DefectionWatch();
 
             _slots.Clear();
             _dayLog.Clear();
@@ -620,8 +632,14 @@ namespace Game.Core.Session
 
             TickExpeditionReturnIfAny();
 
-            var report = _processor.Advance(DayPhase.Day);
+            // Час рухає ЛИШЕ SettlementCycle (CLAUDE.md §"Время идёт только
+            // через SettlementCycle") — саме він переносить прапор голоду
+            // (BaseState.WasHungryLastCycle → DayProcessor.IsHungry) перед
+            // кроком конвеєра. Прямий викл _processor.Advance() лишав голод
+            // непідключеним: HungerStep читав би завжди застаріле значення.
+            var report = _cycle.AdvanceDay(DayPhase.Day);
             TranslateReport(report);
+            ApplyCycleReport(_world.Cycle.Production.LastReport);
             _lastDayReport = BuildDayReportView(report);
             SettleAfterDayReport(report);
 
@@ -749,7 +767,11 @@ namespace Game.Core.Session
             ClearDayLog();
             _lastPhase = DayPhase.Night;
 
-            var report = _processor.Advance(DayPhase.Night);
+            // Той самий SettlementCycle, що й у AdvanceDay (див. коментар там):
+            // повторний SyncHunger перед ніччю нешкідливий — HungerStep сам
+            // ігнорує ніч (ctx.IsNight), а WasHungryLastCycle між фазами
+            // однієї доби не змінюється (AdvanceCycle іде лише вдень).
+            var report = _cycle.AdvanceDay(DayPhase.Night);
             TranslateReport(report);
 
             if (_crisis.Phase == CrisisPhase.WindowOpen)
@@ -1361,6 +1383,13 @@ namespace Game.Core.Session
                 return;
             }
 
+            // Доба справді завершена рівно тут: ніч дороблена (Phase != Day
+            // вище вже відсіяв денний перехід у Evening), а AwaitsDecision
+            // false — жодного нічного рішення не лишилось нерозв'язаним.
+            // Рівно раз на календарну добу, як і задокументовано в
+            // DefectionWatch.Tick.
+            TickDefectionWatch();
+
             if (!_freePlay && _processor.CurrentDay >= 5 && !_summaryAcknowledged)
             {
                 State = SessionState.Summary;
@@ -1369,6 +1398,66 @@ namespace Game.Core.Session
 
             State = _freePlay ? SessionState.FreePlay : SessionState.Morning;
             if (!_freePlay) AutoSave();
+        }
+
+        /// <summary>
+        /// US-9.4/R2 (§2 №25): раз на добу рахує підряд-дні на дні лояльності
+        /// і дефектить, хто набрав поріг (<see cref="Defection.ShouldDefect"/>)
+        /// — або кого вже посіяно сюжетним прапором «defector_seeded» (вузол 1,
+        /// <see cref="PassVanguardOutcome"/>) при полосі ≤ Resentful. Раніше
+        /// цей крок не звав ніхто (seamsForD1 пакета B4) — DefectionWatch.Tick
+        /// не викликався взагалі, тож дефекція не траплялась ніколи, хай яка
+        /// низька лояльність.
+        /// </summary>
+        private void TickDefectionWatch()
+        {
+            if (_defectionWatch == null || _worldRoster == null) return;
+            _defectionWatch.Tick(_worldRoster);
+
+            // Копія: Defect() знімає з посади і міняє Status під час проходу,
+            // тож ітерація по живому Roster.All у момент запису була б
+            // небезпечною.
+            var candidates = new List<Companion>(_worldRoster.All);
+            bool seeded = _flags.Get(Defection.DefectorSeededFlag);
+            foreach (var c in candidates)
+            {
+                if (string.Equals(c.Id, ProtagonistId, StringComparison.Ordinal)) continue;
+                int days = _defectionWatch.DaysAtOrBelowResentful(c.Id);
+                if (!Defection.ShouldDefect(c, isProtagonist: false, days, seeded, _cfg)) continue;
+
+                Defection.Defect(c, _state);
+                LogEvent("companion.defected", Args("companionId", c.Id));
+                var ripple = new RosterDrama(new RosterBonds(null), _cfg).OnBetrayal(_worldRoster, c.Id);
+                LogRipple(ripple);
+            }
+        }
+
+        /// <summary>
+        /// Аудит П9/G25: підсумок циклу (<see cref="ProductionStep.LastReport"/>)
+        /// нікуди не йшов — ні у стрічку подій (П9: "жодних production.*"),
+        /// ні в лояльність (G25: пасивний бонус "Morale" з council_seat
+        /// накопичувався в CycleReport.PassiveBonuses і губився).
+        /// <see cref="LoyaltyRules.OnMorale"/> — готовий, але не викликаний
+        /// метод з B4, чекав саме цього виклику (seamsForD1).
+        /// </summary>
+        private void ApplyCycleReport(CycleReport report)
+        {
+            if (report == null) return;
+
+            foreach (var kv in report.Produced)
+                LogEvent("production.resource", Args("resource", kv.Key.ToString(),
+                    "amount", kv.Value.ToString(CultureInfo.InvariantCulture)));
+
+            foreach (var id in report.LeveledUp)
+                LogEvent("production.leveled_up", Args("companionId", id));
+
+            foreach (var id in report.Recovered)
+                LogEvent("production.recovered", Args("companionId", id));
+
+            if (report.FoodShortage)
+                LogEvent("production.food_shortage");
+
+            LogLoyaltyChanges(LoyaltyRules.OnMorale(report, _worldRoster, _cfg));
         }
 
         private void AutoSave()
@@ -1697,6 +1786,8 @@ namespace Game.Core.Session
             head.Append(";factions=").Append(_factions.CaptureState());
             head.Append(";points=").Append(_points.CaptureState());
             head.Append(";items=").Append(_inventory.CaptureState());
+            head.Append(";defect=").Append(_defectionWatch.CaptureState());
+            head.Append(";crisis=").Append(_crisis.CaptureState());
 
             string coreBlob = _processor.SaveState();
             head.Append(";core=").Append(coreBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(coreBlob);
@@ -1739,6 +1830,8 @@ namespace Game.Core.Session
                     case "factions": _factions.RestoreState(value); break;
                     case "points": _points.RestoreState(value); break;
                     case "items": _inventory.RestoreState(value); break;
+                    case "defect": _defectionWatch.RestoreState(value); break;
+                    case "crisis": _crisis.RestoreState(value); break;
                 }
             }
 

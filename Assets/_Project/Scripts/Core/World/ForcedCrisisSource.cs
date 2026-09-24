@@ -100,7 +100,7 @@ namespace Game.Core.World
             return true;
         }
 
-        // ---- слепок (для round-trip-тесту; DayProcessor цей фрагмент поки не підключає — сеам для D1) ----
+        // ---- слепок (D1a: GameSession.ComposeSave/ApplySave несе фрагмент "crisis=") ----
 
         public string CaptureState()
         {

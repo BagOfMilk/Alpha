@@ -214,6 +214,36 @@ namespace Game.Tests.EditMode
             StringAssert.Contains("flags=", blob, "Фрагмент flags= обязан попасть в слепок");
         }
 
+        /// <summary>
+        /// D1a: заявка QueueExternal, покладена МІЖ фазами (напр. квестовим
+        /// наслідком у Morning до AdvanceDay), досі губилась мовчки — метод
+        /// SaveState() сам документував цей розрив, не вирішуючи його. Тепер
+        /// "extq=" несе копію ще не осушеної черги.
+        /// </summary>
+        [Test]
+        public void Save_ExternalTensionQueue_SurvivesReload()
+        {
+            var world = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+
+            world.Processor.QueueExternal(TensionDriver.QuestChoice, 7);
+            world.Processor.QueueExternal(TensionDriver.CouncilEdict, -3);
+
+            string blob = world.Processor.SaveState();
+            StringAssert.Contains("extq=", blob, "Фрагмент extq= обязан попасть в слепок (D1a)");
+
+            var resumed = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
+            resumed.Processor.RestoreState(blob);
+
+            var before = world.Processor.PeekExternalTensionForSave();
+            var after = resumed.Processor.PeekExternalTensionForSave();
+            Assert.AreEqual(before.Count, after.Count, "Черга QueueExternal мала пережити save/load без осушення");
+            for (int i = 0; i < before.Count; i++)
+            {
+                Assert.AreEqual(before[i].Driver, after[i].Driver, "Драйвер запису " + i);
+                Assert.AreEqual(before[i].Amount, after[i].Amount, "Величина запису " + i);
+            }
+        }
+
         [Test]
         public void Save_Flags_SurviveReload()
         {

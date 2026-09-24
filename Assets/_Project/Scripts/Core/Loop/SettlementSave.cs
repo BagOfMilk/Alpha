@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Game.Core.Pressure;
 
 namespace Game.Core.Loop
 {
@@ -143,6 +144,21 @@ namespace Game.Core.Loop
                 if (!string.IsNullOrEmpty(blob)) sb.Append(';').Append("flags=").Append(blob);
             }
 
+            // Очередь QueueExternal (D1a, шов документирован в SaveState()):
+            // без неё заявка Напруги, положенная извне между фазами (напр.
+            // квестовым наслідком у Morning до AdvanceDay), терялась бы
+            // молча при save/load.
+            var extQueue = p.PeekExternalTensionForSave();
+            if (extQueue.Count > 0)
+            {
+                sb.Append(';').Append("extq=");
+                for (int i = 0; i < extQueue.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append((int)extQueue[i].Driver).Append('|').Append(extQueue[i].Amount);
+                }
+            }
+
             return sb.ToString();
         }
 
@@ -191,7 +207,23 @@ namespace Game.Core.Loop
                 else if (key == "eco" && p.Economy != null) p.Economy.RestoreState(value);
                 else if (key == "sites" && p.Sites != null) p.Sites.RestoreState(value);
                 else if (key == "flags" && p.Flags != null) p.Flags.RestoreState(value);
+                else if (key == "extq") RestoreExternalTensionQueue(p, value);
             }
+        }
+
+        private static void RestoreExternalTensionQueue(DayProcessor p, string value)
+        {
+            var entries = new List<ExternalTensionEntry>();
+            if (!string.IsNullOrEmpty(value))
+            {
+                foreach (var entry in value.Split(','))
+                {
+                    var f = entry.Split('|');
+                    if (f.Length < 2) continue;
+                    entries.Add(new ExternalTensionEntry((Pressure.TensionDriver)ParseInt(f[0]), ParseInt(f[1])));
+                }
+            }
+            p.RestoreExternalTensionForSave(entries);
         }
 
         private static void RestoreTension(DayProcessor p, string value)
