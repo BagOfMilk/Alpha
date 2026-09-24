@@ -76,8 +76,22 @@ namespace Game.Gameplay
 
             bool escapeEligible = state != SessionState.Title && state != SessionState.Creation &&
                                    state != SessionState.Scene && state != SessionState.Battle;
-            if (escapeEligible && Input.GetKeyDown(KeyCode.Escape))
+
+            // Event-based, не сирий Input.GetKeyDown (фікс-ревью, блокер):
+            // OnGUI викликається кілька разів за кадр (Layout, сама подія
+            // KeyDown, Repaint, ...), і Input.GetKeyDown лишається true в
+            // УСІХ цих проходах, тоді як Event.current.type == KeyDown —
+            // тільки в одному, тому цей перемикач тепер спрацьовує рівно раз
+            // на фізичне натискання. GameShell — єдиний власник _escapeOpen:
+            // EscapeMenuScreen/Widgets.Modal більше не чіпають Escape самі
+            // (див. коментар в EscapeMenuScreen.Draw).
+            var escEvt = Event.current;
+            bool escapePressed = escEvt != null && escEvt.type == EventType.KeyDown && escEvt.keyCode == KeyCode.Escape;
+            if (escapeEligible && escapePressed)
+            {
                 _escapeOpen = !_escapeOpen;
+                escEvt.Use();
+            }
 
             bool escapeShown = _escapeOpen && escapeEligible;
             bool wasEnabled = GUI.enabled;
@@ -115,17 +129,33 @@ namespace Game.Gameplay
             }
         }
 
+        /// <summary>
+        /// Фікс-ревью (major): E2's IBattlePresenter — код іншого пакета,
+        /// викликаний напряму, поза TryRun/TryRun&lt;T&gt; (котрі ловлять лише
+        /// InvalidOperationException GameSession, тут не той випадок — це
+        /// виняток самого презентера). Без guard'а падіння Enter/DrawHud
+        /// вивалилось би з OnGUI назовні й повторювалось би щокадру (IsActive
+        /// так і не встановився б), замість тихого відкату до IMGUI-фолбека,
+        /// як робить решта команд цього файлу.
+        /// </summary>
         private void DrawBattle()
         {
             if (BattlePresenter != null)
             {
-                if (!BattlePresenter.IsActive) BattlePresenter.Enter(Session);
-                BattlePresenter.DrawHud(Session);
+                try
+                {
+                    if (!BattlePresenter.IsActive) BattlePresenter.Enter(Session);
+                    BattlePresenter.DrawHud(Session);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError(ex);
+                    LastMessage = ex.Message;
+                }
             }
-            else
-            {
-                DrawFullScreen(() => _battleFallback.Draw(this));
-            }
+
+            DrawFullScreen(() => _battleFallback.Draw(this));
         }
 
         /// <summary>Хаб-стани (Morning/Day/Decision/Evening/Night/Dungeon/FreePlay) — спільна шапка + стрічка подій навколо власного вмісту екрана.</summary>

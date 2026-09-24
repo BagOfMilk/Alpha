@@ -21,7 +21,7 @@ namespace Game.Gameplay.UI
             var g = shell.ProtagonistGender;
             var area = Widgets.CenteredRect(680f, 560f);
             GUILayout.BeginArea(area);
-            Widgets.Panel("Alpha — перевал", () =>
+            Widgets.Panel(UkrainianText.Get("ui.title.header", g), () =>
             {
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.title.newgame", g)))
                 {
@@ -40,7 +40,7 @@ namespace Game.Gameplay.UI
                     _hitRulePercent
                         ? UkrainianText.Get("ui.title.hitrule.percent", g)
                         : UkrainianText.Get("ui.title.hitrule.threshold", g));
-                _skipCreation = GUILayout.Toggle(_skipCreation, "Пропустити створення персонажа");
+                _skipCreation = GUILayout.Toggle(_skipCreation, UkrainianText.Get("ui.title.skip_creation", g));
 
                 GUILayout.Space(10f);
 

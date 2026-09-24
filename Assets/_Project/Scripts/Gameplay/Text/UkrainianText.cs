@@ -171,6 +171,7 @@ namespace Game.Gameplay.Text
             AddE1bFeedback(t);
             AddE1bMissingEventKeys(t);
             AddE1bMoodChips(t);
+            AddE1bReviewFixKeys(t);
             // ==== кінець блоку E1b ====
 
             return t;
@@ -1089,6 +1090,56 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.threat.tense", "Напружено");
             AddKey(t, "ui.threat.dangerous", "Небезпечно");
             AddKey(t, "ui.threat.deadly", "Смертельно");
+        }
+
+        /// <summary>
+        /// Фікс-ревью пакета E1b: сім ключів подій GameSession.LogEvent, які
+        /// вилітали в стрічку без тексту (перевірено grep'ом по реальних
+        /// LogEvent-викликах, не лише по трасі бот-прогону), плюс правильна
+        /// назва оверватч-події (стара "combat.overwatch.triggered.line" у
+        /// §7.20 лишається — ScreenText.EventLine шукає точну назву
+        /// GameSession.LogEvent, не її), плюс полоси результату бою для
+        /// BattleScreen.cs (view.Outcome раніше йшов сирим "Ongoing"/...).
+        /// </summary>
+        private static void AddE1bReviewFixKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "city.building.ordered", "Замовлено будівництво: {building}.");
+            AddKey(t, "equip.changed", "{companion}: спорядження змінено ({item}).");
+            AddKey(t, "progression.build_committed", "{companion}: розподіл очок розвитку підтверджено незворотно.");
+            AddKey(t, "combat.training.started", "Тренувальний бій розпочато.");
+            AddKey(t, "signal.domain", "Звістка з дороги: відряд вирушив ({domain}).");
+            AddKey(t, "companion.left_settlement", "{companion} залишає поселення.");
+
+            // Точна назва події з GameSession.cs:1257 (LogNewAttacks) — без
+            // плейсхолдерів attacker/target: ScreenText.EventLine їх не знає
+            // (передає лише фіксований набір іменованих аргументів), той самий
+            // прийом, що вже в сусідніх combat.attack.*.
+            AddKey(t, "combat.overwatch.triggered.m", "Вистрілив із дозору.");
+            AddKey(t, "combat.overwatch.triggered.f", "Вистрілила з дозору.");
+
+            AddKey(t, "ui.battle.outcome.ongoing", "Триває");
+            AddKey(t, "ui.battle.outcome.victory", "Перемога");
+            AddKey(t, "ui.battle.outcome.defeat", "Поразка");
+            AddKey(t, "ui.battle.outcome.retreat", "Відступ");
+            AddKey(t, "ui.battle.outcome.draw", "Нічия");
+
+            AddKey(t, "ui.battle.overwatch.aim_hint", "Оберіть клітинку — напрямок дозору.");
+            AddKey(t, "ui.battle.abilities.label", "Уміння:");
+
+            AddKey(t, "ui.title.header", "Alpha — перевал");
+            AddKey(t, "ui.title.skip_creation", "Пропустити створення персонажа");
+
+            AddKey(t, "ui.state.day", "день");
+            AddKey(t, "ui.state.decision", "рішення");
+            AddKey(t, "ui.state.dungeon", "підземелля");
+            AddKey(t, "ui.state.evening", "вечір");
+            AddKey(t, "ui.state.night", "ніч");
+            AddKey(t, "ui.state.battle", "бій");
+            AddKey(t, "ui.state.scene", "сцена");
+            AddKey(t, "ui.state.opening", "вступ");
+            AddKey(t, "ui.state.title", "титул");
+            AddKey(t, "ui.state.creation", "створення персонажа");
+            AddKey(t, "ui.state.summary", "підсумок");
         }
     }
 }

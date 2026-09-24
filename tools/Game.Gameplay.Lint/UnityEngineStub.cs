@@ -534,6 +534,36 @@ namespace UnityEngine
     public enum ColorSpace { Uninitialized = -1, Gamma = 0, Linear = 1 }
 }
 
+// ==== E1b: Event/EventType (фікс-ревью — одноразове визначення фізичного
+// натискання під час конкретного OnGUI-проходу, замість Input.GetKeyDown/
+// GetMouseButtonDown, які лишаються true в УСІХ проходах кадру: SceneScreen,
+// Widgets.Modal, GameShell). Поля, не властивості — так само, як у
+// справжньому UnityEngine.Event. ====
+namespace UnityEngine
+{
+    public enum EventType
+    {
+        Ignore = 0, Used = 1,
+        MouseDown = 2, MouseUp = 3, MouseMove = 4, MouseDrag = 5,
+        KeyDown = 6, KeyUp = 7, ScrollWheel = 8,
+        Repaint = 9, Layout = 10,
+        DragUpdated = 11, DragPerform = 12, DragExited = 13,
+        ValidateCommand = 14, ExecuteCommand = 15, ContextClick = 16,
+        MouseEnterWindow = 17, MouseLeaveWindow = 18
+    }
+
+    public class Event
+    {
+        public static Event current;
+
+        public EventType type;
+        public KeyCode keyCode;
+        public int button;
+
+        public void Use() { type = EventType.Used; }
+    }
+}
+
 namespace UnityEditor
 {
     public static class PlayerSettings

@@ -54,6 +54,15 @@ namespace Game.Gameplay.UI
         private Vector2 _buildingsScroll;
         private Vector2 _peopleScroll;
 
+        // Кеш пропозиції квесту (фікс-ревью, блокер): OfferQuestStage сам
+        // логує "quest.offered" на КОЖЕН виклик (GameSession.cs:593-620), а
+        // OnGUI малює DrawQuests кілька разів за кадр і кожен кадр, доки
+        // гравець стоїть на вкладці — без кешу за секунди стрічка топилась у
+        // сотнях дублів "Нова пропозиція: ...". Перезапит лише коли доба
+        // змінилась, або явно скинуто після ResolveQuestChoice.
+        private QuestOfferView _questOffer;
+        private int _questOfferDay = int.MinValue;
+
         public void Draw(GameShell shell)
         {
             var g = shell.ProtagonistGender;
@@ -308,10 +317,18 @@ namespace Game.Gameplay.UI
                     {
                         var legality = ScreenText.AssignCandidateLegality(c);
                         bool wasIn = _party.Contains(c.Id);
+                        // Фікс-ревью (minor): відновлюємо попереднє GUI.enabled,
+                        // а не хардкодимо true — GameShell.DrawHubBody навмисно
+                        // вимикає GUI.enabled=false навколо _hub.Draw() під час
+                        // Decision (модалка сама не блокує клік крізь фон),
+                        // і цей рядок раніше мовчки скасовував той захист до
+                        // кінця виклику HubScreen.Draw, якщо гравець стояв на
+                        // вкладці «Вилазка».
+                        bool previousEnabled = GUI.enabled;
                         GUI.enabled = legality.Enabled || wasIn;
                         bool now = GUILayout.Toggle(wasIn, ScreenText.ResolveCompanionName(c.Id, g, roster) +
                             (legality.Enabled ? "" : " (" + UkrainianText.Get(legality.ReasonKey, g) + ")"));
-                        GUI.enabled = true;
+                        GUI.enabled = previousEnabled;
                         if (now && !wasIn) { _party.Add(c.Id); _preview = null; }
                         else if (!now && wasIn) { _party.Remove(c.Id); _preview = null; }
                     }
@@ -501,9 +518,16 @@ namespace Game.Gameplay.UI
 
         // ===================== Квести =====================
 
-        private static void DrawQuests(GameShell shell, Gender g)
+        private void DrawQuests(GameShell shell, Gender g)
         {
-            var offer = shell.TryRun(() => shell.Session.OfferQuestStage(DefaultQuests.HafiyaId));
+            int day = shell.Session.CurrentView.Day;
+            if (_questOffer == null || _questOfferDay != day)
+            {
+                _questOffer = shell.TryRun(() => shell.Session.OfferQuestStage(DefaultQuests.HafiyaId));
+                _questOfferDay = day;
+            }
+
+            var offer = _questOffer;
             if (offer == null)
             {
                 GUILayout.Label(UkrainianText.Get("ui.quests.none_active", g), AlphaSkin.Tooltip);
@@ -521,7 +545,10 @@ namespace Game.Gameplay.UI
                     var option = offer.Options[i];
                     string label = UkrainianText.Has(option.TextKey, g) ? UkrainianText.Get(option.TextKey, g) : option.TextKey;
                     if (option.HasCandidate && Widgets.PrimaryButton(label))
+                    {
                         shell.TryRun(() => shell.Session.ResolveQuestChoice(index));
+                        _questOffer = null; // етап міг змінитись — перезапит наступним кадром
+                    }
                     else if (!option.HasCandidate)
                         Widgets.DisabledButton(label, UkrainianText.Get("ui.common.none", g));
                 }

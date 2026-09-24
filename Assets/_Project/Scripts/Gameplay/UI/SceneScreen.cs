@@ -56,8 +56,22 @@ namespace Game.Gameplay.UI
             GUILayout.Space(24f);
             GUILayout.EndArea();
 
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
+            // Event-based, не сирий Input.GetKeyDown/GetMouseButtonDown
+            // (фікс-ревью, major): OnGUI викликається кілька разів за кадр
+            // (Layout, сама подія, Repaint, ...), і обидва прапорці лишаються
+            // true в УСІХ цих проходах того самого кадру, тоді як
+            // Event.current.type відповідає рівно одному фізичному
+            // натисканню — той самий прийом, що вже коректно працює через
+            // Update() у прекурсорі ScenePlayer.cs, тут — через сам OnGUI.
+            var evt = Event.current;
+            bool advanceRequested = evt != null &&
+                ((evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Space) ||
+                 (evt.type == EventType.MouseDown && evt.button == 0));
+            if (advanceRequested)
+            {
+                evt.Use();
                 Advance(shell);
+            }
         }
 
         private void Advance(GameShell shell)

@@ -2,6 +2,7 @@ using Game.Core.Characters.Creation;
 using Game.Core.Loop;
 using Game.Core.Quests;
 using Game.Core.Session;
+using Game.Core.Session.Views;
 using Game.Gameplay.Text;
 using UnityEngine;
 
@@ -15,6 +16,15 @@ namespace Game.Gameplay.UI
     /// </summary>
     public sealed class NightScreen
     {
+        // Кеш пропозиції квесту (фікс-ревью, блокер) — той самий прийом, що й
+        // у HubScreen.DrawQuests: OfferQuestStage логує подію на КОЖЕН виклик,
+        // а це вечірній/нічний екран, який малюється щокадру, доки гравець на
+        // ньому сидить. Ключ кешу — доба + стан (Evening/Night — два окремі
+        // візити на добу, кожен вартий свого запиту).
+        private QuestOfferView _questOffer;
+        private int _questOfferDay = int.MinValue;
+        private SessionState _questOfferState = (SessionState)(-1);
+
         public void Draw(GameShell shell)
         {
             var g = shell.ProtagonistGender;
@@ -48,9 +58,18 @@ namespace Game.Gameplay.UI
             }, GUILayout.ExpandWidth(true));
         }
 
-        private static void DrawQuestOffer(GameShell shell, Gender g)
+        private void DrawQuestOffer(GameShell shell, Gender g)
         {
-            var offer = shell.TryRun(() => shell.Session.OfferQuestStage(DefaultQuests.HafiyaId));
+            var view = shell.Session.CurrentView;
+            var state = shell.Session.State;
+            if (_questOffer == null || _questOfferDay != view.Day || _questOfferState != state)
+            {
+                _questOffer = shell.TryRun(() => shell.Session.OfferQuestStage(DefaultQuests.HafiyaId));
+                _questOfferDay = view.Day;
+                _questOfferState = state;
+            }
+
+            var offer = _questOffer;
             if (offer == null) return;
 
             Widgets.Section(UkrainianText.Get("ui.quest.offer.title", g), () =>
@@ -69,7 +88,10 @@ namespace Game.Gameplay.UI
                         if (option.HasCandidate)
                         {
                             if (Widgets.PrimaryButton(label))
+                            {
                                 shell.TryRun(() => shell.Session.ResolveQuestChoice(index));
+                                _questOffer = null; // етап міг змінитись — перезапит наступним кадром
+                            }
                         }
                         else
                         {
@@ -80,6 +102,7 @@ namespace Game.Gameplay.UI
                 else if (Widgets.PrimaryButton(UkrainianText.Get("ui.common.confirm", g)))
                 {
                     shell.TryRun(() => shell.Session.ResolveQuestChoice(0));
+                    _questOffer = null;
                 }
             });
         }

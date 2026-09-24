@@ -1,3 +1,4 @@
+using Game.Core.Characters.Creation;
 using Game.Core.Session;
 using Game.Gameplay.Text;
 using UnityEngine;
@@ -31,7 +32,7 @@ namespace Game.Gameplay.UI
                 else
                 {
                     Widgets.DisabledButton(UkrainianText.Get("ui.escape.save", g),
-                        UkrainianText.Get("ui.common.none", g) + " (" + state + ")");
+                        UkrainianText.Get("ui.common.none", g) + " (" + StateLabel(state, g) + ")");
                 }
 
                 GUILayout.Space(8f);
@@ -41,7 +42,20 @@ namespace Game.Gameplay.UI
 
                 GUILayout.Space(8f);
                 Widgets.TooltipLine(UkrainianText.Get("ui.escape.hint", g));
-            }, () => shell.SetEscapeOpen(false));
+            });
+            // onClose навмисно НЕ передано (фікс-ревью, блокер): GameShell —
+            // єдиний власник переходу _escapeOpen, він же єдиний читач Escape
+            // (Event-based, раз на подію). Другий незалежний слухач тут (через
+            // Widgets.Modal.onClose, теж на сирому Input.GetKeyDown) двічі
+            // перемикав прапорець за той самий кадр — меню встигало лише
+            // промайнути одним Repaint і одразу закривалось.
+        }
+
+        /// <summary>SessionState — англійський enum; тут лише переклад слова причини, а не сам стан (інваріант R7).</summary>
+        private static string StateLabel(SessionState state, Gender g)
+        {
+            string key = "ui.state." + state.ToString().ToLowerInvariant();
+            return UkrainianText.Has(key, g) ? UkrainianText.Get(key, g) : state.ToString();
         }
     }
 }

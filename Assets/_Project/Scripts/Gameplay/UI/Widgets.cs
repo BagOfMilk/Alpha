@@ -148,7 +148,21 @@ namespace Game.Gameplay.UI
             Panel(title, drawBody);
             GUILayout.EndArea();
 
-            if (onClose != null && Input.GetKeyDown(KeyCode.Escape)) onClose();
+            // Event-based, не сирий Input.GetKeyDown (фікс-ревью): останній
+            // лишається true впродовж усіх OnGUI-проходів кадру (Layout, сама
+            // подія, Repaint, ...), тому raw-polling викликав би onClose кілька
+            // разів за одне фізичне натискання. Event.current.type == KeyDown
+            // істинний лише під час ЄДИНОГО проходу, що відповідає цій самій
+            // події.
+            if (onClose != null)
+            {
+                var evt = Event.current;
+                if (evt != null && evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
+                {
+                    evt.Use();
+                    onClose();
+                }
+            }
         }
 
         /// <summary>Дрібний притишений рядок-підказка — під полем, під кнопкою, де завгодно.</summary>

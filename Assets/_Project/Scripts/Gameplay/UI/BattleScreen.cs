@@ -16,7 +16,17 @@ namespace Game.Gameplay.UI
     /// </summary>
     public sealed class BattleScreen
     {
+        private static readonly string[] AbilityIds = { "lunge", "set_trap", "move_order", "volley" };
+
         private string _selectedTargetId;
+
+        /// <summary>
+        /// Фікс-ревью (major): очікуємо клік по сітці як напрямок дозору
+        /// (GameSession.CombatEnterOverwatch(GridPos aim)) замість звичайного
+        /// руху/атаки — той самий грид, інший сенс кліку, поки прапорець
+        /// піднято.
+        /// </summary>
+        private bool _awaitingOverwatchAim;
 
         public void Draw(GameShell shell)
         {
@@ -27,7 +37,7 @@ namespace Game.Gameplay.UI
             Widgets.Panel(UkrainianText.Get("ui.battle.fallback.title", g), () =>
             {
                 GUILayout.Label(UkrainianText.Format("ui.battle.round", g, "round", view.Round.ToString()) +
-                                 " · " + view.Outcome, AlphaSkin.SubHeader);
+                                 " · " + OutcomeLabel(view.Outcome, g), AlphaSkin.SubHeader);
 
                 var current = FindUnit(view, view.CurrentUnitId);
                 if (current != null)
@@ -44,10 +54,49 @@ namespace Game.Gameplay.UI
                     shell.TryRun(() => shell.Session.CombatAutoResolve());
                 if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.end_turn", g)))
                     shell.TryRun(() => shell.Session.CombatEndTurn());
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle.overwatch.button", g), _awaitingOverwatchAim))
+                    _awaitingOverwatchAim = !_awaitingOverwatchAim;
                 GUILayout.EndHorizontal();
+
+                if (_awaitingOverwatchAim)
+                    Widgets.TooltipLine(UkrainianText.Get("ui.battle.overwatch.aim_hint", g));
+
+                DrawAbilities(shell, g);
 
                 DrawLog(view, g);
             }, GUILayout.ExpandWidth(true));
+        }
+
+        /// <summary>
+        /// Фікс-ревью (major): без цього ряду overwatch (US-3.6, CLAUDE.md) і
+        /// вміння (CombatUseAbility) були недоступні гравцю в фолбеку взагалі —
+        /// лише рух/атака/автобій/завершити хід. Кнопки — за відомими
+        /// ability.&lt;id&gt; з таблиці (§7.20/AddEnemyAndWeaponAndAbilityIds);
+        /// GameSession сам відхилить нелегальну (OnCooldown/NotEnoughAp/...) —
+        /// це CombatActionResult, не виняток, тому тут не потрібен TryRun-фідбек
+        /// понад те, що вже показує BattleView.Log.
+        /// </summary>
+        private void DrawAbilities(GameShell shell, Game.Core.Characters.Creation.Gender g)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(UkrainianText.Get("ui.battle.abilities.label", g), AlphaSkin.Body, GUILayout.Width(90f));
+            foreach (var abilityId in AbilityIds)
+            {
+                string id = abilityId;
+                string key = "ability." + id;
+                string label = UkrainianText.Has(key, g) ? UkrainianText.Get(key, g) : id;
+                if (Widgets.SecondaryButton(label, GUILayout.Width(140f)))
+                    shell.TryRun(() => shell.Session.CombatUseAbility(id, _selectedTargetId, null));
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        /// <summary>BattleView.Outcome — сирий рядок enum'а ("Ongoing"/"Victory"/...), тут переклад за ключем (фікс-ревью, major: раніше показувалось англійською напряму).</summary>
+        private static string OutcomeLabel(string rawOutcome, Game.Core.Characters.Creation.Gender g)
+        {
+            if (string.IsNullOrEmpty(rawOutcome)) return "";
+            string key = "ui.battle.outcome." + rawOutcome.ToLowerInvariant();
+            return UkrainianText.Has(key, g) ? UkrainianText.Get(key, g) : rawOutcome;
         }
 
         private void DrawGrid(GameShell shell, BattleView view, BattleUnitView current, Game.Core.Characters.Creation.Gender g)
@@ -87,6 +136,14 @@ namespace Game.Gameplay.UI
 
         private void OnCellClicked(GameShell shell, BattleView view, BattleUnitView current, BattleUnitView occupant, int x, int y, bool canMoveHere)
         {
+            if (_awaitingOverwatchAim)
+            {
+                _awaitingOverwatchAim = false;
+                if (current == null || (current.Pos.X == x && current.Pos.Y == y)) return;
+                shell.TryRun(() => shell.Session.CombatEnterOverwatch(new GridPos(x, y)));
+                return;
+            }
+
             if (occupant != null && current != null && occupant.Id != current.Id)
             {
                 _selectedTargetId = occupant.Id;
