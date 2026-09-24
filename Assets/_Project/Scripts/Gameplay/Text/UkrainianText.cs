@@ -176,6 +176,7 @@ namespace Game.Gameplay.Text
             AddAmbientAndThreatBandKeys(t); // SignalComposer/DungeonRun: Band.ToString() з великої літери
             AddVillageViewKeys(t);          // Gameplay/VillageView.cs — ключі власного ткача стрічки/мудборду
             AddConsoleLabels(t);            // tools/Alpha.Play/Program.cs — дрібні підписи консолі
+            AddScenePlayerKeys(t);          // Gameplay/ScenePlayer.cs — підписи IMGUI портретної сцени
 
             return t;
         }
@@ -1166,6 +1167,19 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "village.city.crowd.up", "Людей на вулицях стало більше.");
             AddKey(t, "village.city.crowd.down", "Вулиці рідшають.");
+        }
+
+        // ==================================================================
+        // Пакет E3b (фікс-ревью, мінорна знахідка №3): Gameplay/ScenePlayer.cs
+        // — чотири жорстко зашиті російські рядки IMGUI-показу портретної
+        // сцени, які раніше минали UkrainianText (R7).
+        // ==================================================================
+        private static void AddScenePlayerKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "scene.player.empty_framing", "— порожньо —");
+            AddKey(t, "scene.player.finished", "Сцену завершено.");
+            AddKey(t, "scene.player.no_portrait", "(портрета нема)");
+            AddKey(t, "scene.player.hint", "пробіл або клік — далі   ·   портрети: Assets/Resources/Portraits/<id>.png");
         }
     }
 }

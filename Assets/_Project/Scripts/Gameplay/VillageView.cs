@@ -175,7 +175,19 @@ namespace Game.Gameplay
             if (outcome.PeopleArrived > 0)
                 line += UkrainianText.Format("village.incident.suffix.people_arrived", NeutralGender,
                     "count", outcome.PeopleArrived.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            if (!string.IsNullOrEmpty(outcome.AffectedActorId)) line += " (" + outcome.AffectedActorId + ")";
+            if (!string.IsNullOrEmpty(outcome.AffectedActorId))
+            {
+                // R7: гравець не бачить сирий Core-id напарника — тільки ім'я
+                // з таблиці ("char.<id>"). Якщо перекладу нема (ще не заведений
+                // напарник), id лишається видимим — пропажа тексту зобов'язана
+                // бути помітною, а не мовчати (той самий принцип, що й вище
+                // для незнайомого ключа сигналу).
+                string charKey = "char." + outcome.AffectedActorId;
+                string name = UkrainianText.Has(charKey, NeutralGender)
+                    ? UkrainianText.Get(charKey, NeutralGender)
+                    : outcome.AffectedActorId;
+                line += " (" + name + ")";
+            }
 
             return line;
         }
@@ -276,7 +288,13 @@ namespace Game.Gameplay
                 return UkrainianText.Get(Tag(request, "dir:") == "down" ? "village.city.crowd.down" : "village.city.crowd.up",
                     NeutralGender);
 
-            if (topic == "council.raid") return UkrainianText.Get("council.raid", NeutralGender);
+            // Реальні council.*-топіки з Core/Base/Buildings/CityWorks*.cs
+            // (council.decree.ordered/diplomacy.ordered/prepare_threat.ordered/
+            // outfit_expedition.ordered/raid/invest.payout) — TopicId сам і є
+            // готовим ключем перекладу (AddCouncilActions у UkrainianText.cs),
+            // так само, як вище для "city.built."/"city.tier.".
+            if (topic.StartsWith("council.") && UkrainianText.Has(topic, NeutralGender))
+                return UkrainianText.Get(topic, NeutralGender);
 
             return "· " + topic;
         }

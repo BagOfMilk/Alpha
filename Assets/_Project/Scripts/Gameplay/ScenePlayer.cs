@@ -79,7 +79,7 @@ namespace Game.Gameplay
 
             if (frame.Framing == ShotFraming.Empty)
             {
-                Centered(new Rect(0, h * 0.35f, w, 40), "— пусто —");
+                Centered(new Rect(0, h * 0.35f, w, 40), UkrainianText.Get("scene.player.empty_framing", protagonistGender));
             }
             else if (frame.Framing == ShotFraming.Two)
             {
@@ -102,11 +102,11 @@ namespace Game.Gameplay
             }
             else if (_play.IsFinished)
             {
-                GUI.Label(new Rect(line.x + 16, line.y + 20, line.width - 32, 40), "Сцена окончена.");
+                GUI.Label(new Rect(line.x + 16, line.y + 20, line.width - 32, 40),
+                    UkrainianText.Get("scene.player.finished", protagonistGender));
             }
 
-            GUI.Label(new Rect(12, h - 24, w - 24, 20),
-                "пробел или клик — дальше   ·   портреты: Assets/Resources/Portraits/<id>.png");
+            GUI.Label(new Rect(12, h - 24, w - 24, 20), UkrainianText.Get("scene.player.hint", protagonistGender));
         }
 
         /// <summary>Портрет по ключу; нет файла — именная заглушка, сцена всё равно идёт.</summary>
@@ -121,7 +121,7 @@ namespace Game.Gameplay
                 GUI.Box(rect, GUIContent.none);
                 Centered(new Rect(rect.x, rect.y + rect.height * 0.45f, rect.width, 30), NameOf(actorId));
                 Centered(new Rect(rect.x, rect.y + rect.height * 0.45f + 26, rect.width, 22),
-                    "(портрета нет)");
+                    UkrainianText.Get("scene.player.no_portrait", protagonistGender));
             }
         }
 

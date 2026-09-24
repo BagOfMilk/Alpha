@@ -169,6 +169,47 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void CouncilActions_AreSpokenNotRawTopics()
+        {
+            // Фікс-ревью пакета E3b: п'ять реальних council.*-топіків з
+            // Core/Base/Buildings/CityWorks*.cs (§2, рядок 15 — «Нові дії
+            // ради») повинні звучати перекладом, а не падати у "· <topic>".
+            var decree = Signal(SignalChannel.CitizenLine, "council.decree.ordered");
+            var diplomacy = Signal(SignalChannel.CitizenLine, "council.diplomacy.ordered");
+            var prepareThreat = Signal(SignalChannel.CitizenLine, "council.prepare_threat.ordered");
+            var outfitExpedition = Signal(SignalChannel.CitizenLine, "council.outfit_expedition.ordered");
+            var investPayout = Signal(SignalChannel.CitizenLine, "council.invest.payout");
+
+            var lines = VillageView.Lines(Report(DayPhase.Day, null,
+                new[] { decree, diplomacy, prepareThreat, outfitExpedition, investPayout }));
+
+            Assert.AreEqual(5, lines.Count);
+            StringAssert.Contains("Рада видає указ", lines[0]);
+            StringAssert.Contains("Посольство вирушає", lines[1]);
+            StringAssert.Contains("Громада готується", lines[2]);
+            StringAssert.Contains("Загін споряджають", lines[3]);
+            StringAssert.Contains("Вкладення ради дало віддачу", lines[4]);
+            foreach (var line in lines)
+                StringAssert.DoesNotContain("council.", line,
+                    "Ни один council.*-топик не должен прорываться сырым ключом в ленту");
+        }
+
+        [Test]
+        public void Crisis_NamesTheCompanionInsteadOfRawId()
+        {
+            // Фікс-ревью пакета E3b: суфікс кризи не має показувати сирий
+            // Core-id напарника — тільки перекладене ім'я з "char.<id>".
+            var crisis = new IncidentOutcome("crisis_riot", "incident.crisis_riot", "площадь",
+                OutcomeBand.Worst, false, true, "maksym", CrisisBite.WoundCompanion, 0);
+
+            var lines = VillageView.Lines(Report(DayPhase.Day, new[] { crisis }, null));
+
+            Assert.AreEqual(1, lines.Count);
+            StringAssert.Contains("Максим Беркут", lines[0], "Напарник обязан быть назван по имени");
+            StringAssert.DoesNotContain("maksym", lines[0], "Сырой Core-id не должен просачиваться в реплику");
+        }
+
+        [Test]
         public void Headline_TellsDayAndPhase()
         {
             var night = VillageView.Headline(Report(DayPhase.Night, null, null), Mood(1, 0));
