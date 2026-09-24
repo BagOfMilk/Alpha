@@ -33,9 +33,12 @@ namespace Game.Core.Base
         public string Id => _companion.Id;
         public bool IsProtagonist { get; }
 
+        // B4-аудит §4.5: Antagonist явно исключён из присутствия (не «!= Dead») —
+        // ушедший в антагонисты не кандидат ни на проверку, ни на пост.
         public bool IsPresentInSettlement =>
             _companion.Status != CompanionStatus.OnMission &&
-            _companion.Status != CompanionStatus.Dead;
+            _companion.Status != CompanionStatus.Dead &&
+            _companion.Status != CompanionStatus.Antagonist;
 
         public string HeldPositionId => _companion.AssignedSlotId;
 
@@ -98,7 +101,11 @@ namespace Game.Core.Base
                 sb.Append(c.Id).Append('>')
                   .Append((int)c.Status).Append('>')
                   .Append(c.AssignedSlotId ?? "").Append('>')
-                  .Append(c.InjuryPoints.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                  .Append(c.InjuryPoints.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+                  // B4/R2: Лояльность — пятое поле, добавлено аддитивно в конец
+                  // записи (§4.8 R13), чтобы старые слепки без него читались же
+                  // (RestoreState ниже толерантна к длине < 5).
+                  .Append('>').Append(c.Loyalty.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             return sb.ToString();
         }
@@ -121,6 +128,16 @@ namespace Game.Core.Base
                 if (double.TryParse(f[3], System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out injury))
                     c.InjuryPoints = injury;
+
+                // B4/R2: пятое поле — не у всех старых слепков есть, поэтому
+                // не в общем "f.Length < 4 continue" выше, а отдельной толерантной проверкой.
+                if (f.Length >= 5)
+                {
+                    int loyalty;
+                    if (int.TryParse(f[4], System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out loyalty))
+                        c.RestoreLoyaltyForSave(loyalty);
+                }
             }
         }
         public RosterAdapter(Roster roster, string protagonistId = null, BalanceConfig balance = null)

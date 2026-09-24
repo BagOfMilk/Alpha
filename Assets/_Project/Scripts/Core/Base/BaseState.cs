@@ -102,7 +102,10 @@ namespace Game.Core.Base
             var companion = Roster.Get(companionId);
             if (companion == null) return AssignmentResult.CompanionNotFound;
 
-            if (companion.IsDead || companion.Status == CompanionStatus.OnMission)
+            // B4-аудит §4.5: Antagonist явно исключён (не «!= Dead») — ушедший в
+            // антагонисты не встаёт обратно на пост, даже если формально жив.
+            if (companion.IsDead || companion.Status == CompanionStatus.OnMission ||
+                companion.Status == CompanionStatus.Antagonist)
                 return AssignmentResult.CompanionUnavailable;
 
             // Пост погибшего свободен, даже если сверка ещё не прошла.

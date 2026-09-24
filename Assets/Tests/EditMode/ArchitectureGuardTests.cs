@@ -211,5 +211,82 @@ namespace Game.Tests.EditMode
             source = Regex.Replace(source, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
             return Regex.Replace(source, @"//.*?$", string.Empty, RegexOptions.Multiline);
         }
+
+        // ==================================================================
+        // B4 (Social): аудит CompanionStatus.Antagonist (§4.5) и укрытие
+        // сырой Лояльности (инвариант 3, R2). Добавлено в конец класса.
+        // ==================================================================
+
+        /// <summary>
+        /// Аудит §4.5: ни одна из точек допуска не пускает антагониста —
+        /// назначение на пост (BaseState.TryAssign), автоназначение
+        /// (Steward.Staff), присутствие (CompanionActorAdapter/RosterAdapter)
+        /// и отправка в отряд (ExpeditionParty.Depart). Четыре точки, что
+        /// названы в §4.5; выделенная валидация GameSession.DepartExpedition
+        /// (R15) появится позже, вместе с самим GameSession (фаза D, пакет B7).
+        /// </summary>
+        [Test]
+        public void Antagonist_NeverAssignable_NeverDispatchable()
+        {
+            var cfg = new Game.Core.Balance.BalanceConfig();
+            var roster = new Game.Core.Characters.Roster();
+            var state = new Game.Core.Base.BaseState(roster, new Game.Core.Economy.ResourceLedger(), cfg);
+            state.AddSlot(new Game.Core.Base.AssignmentSlotDefinition(
+                "post", "Пост", Game.Core.Base.BaseSectionType.Council));
+
+            var antagonist = new Game.Core.Characters.CompanionArchetype("antagonist", "antagonist")
+                .CreateInstance("antagonist", cfg);
+            roster.Add(antagonist);
+            Game.Core.Companions.Defection.Defect(antagonist);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status);
+
+            // 1) BaseState.TryAssign — не встаёт на пост.
+            var assign = state.TryAssign("antagonist", "post");
+            Assert.AreEqual(Game.Core.Base.AssignmentResult.CompanionUnavailable, assign,
+                "антагонист не должен быть назначаем на пост");
+            Assert.IsNull(state.GetSlot("post").AssignedCompanionId);
+
+            // 2) Steward.Staff — не расставляет антагониста на открытый пост,
+            //    даже когда больше некому.
+            Game.Core.Base.Steward.Staff(state);
+            Assert.IsNull(state.GetSlot("post").AssignedCompanionId,
+                "автоназначение хозяина не должно ставить антагониста на пост");
+
+            // 3) Присутствие — адаптеры исключают антагониста.
+            var actorAdapter = new Game.Core.Base.CompanionActorAdapter(antagonist);
+            Assert.IsFalse(actorAdapter.IsPresentInSettlement,
+                "антагонист не присутствует в поселении");
+            var rosterAdapter = new Game.Core.Base.RosterAdapter(roster);
+            CollectionAssert.DoesNotContain(
+                System.Linq.Enumerable.Select(rosterAdapter.PresentActors, a => a.Id), "antagonist",
+                "антагонист не должен попадать в список присутствующих");
+
+            // 4) ExpeditionParty.Depart — не берёт антагониста в отряд.
+            var party = new Game.Core.Expeditions.ExpeditionParty();
+            bool departed = party.Depart(state, new[] { "antagonist" }, days: 2);
+            Assert.IsFalse(departed, "отряд из одного антагониста не должен уйти");
+            Assert.IsFalse(party.IsAway);
+        }
+
+        /// <summary>
+        /// R2/инвариант 3: сырая Лояльность — internal, как и Напряжение.
+        /// Game.Gameplay не может прочитать число, только LoyaltyBand.
+        /// </summary>
+        [Test]
+        public void Companion_LoyaltyRaw_IsInternal_NotReadableFromGameplay()
+        {
+            var type = typeof(Game.Core.Characters.Companion);
+
+            var internalLoyalty = type.GetProperty("Loyalty",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(internalLoyalty, "Companion.Loyalty должен существовать как internal-член");
+
+            var publicLoyalty = type.GetProperty("Loyalty",
+                BindingFlags.Public | BindingFlags.Instance);
+            Assert.IsNull(publicLoyalty, "Companion.Loyalty не должен быть публичным");
+
+            var band = type.GetProperty("LoyaltyBand", BindingFlags.Public | BindingFlags.Instance);
+            Assert.IsNotNull(band, "LoyaltyBand — единственное, что видно наружу");
+        }
     }
 }
