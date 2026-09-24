@@ -238,6 +238,118 @@ namespace Game.Tests.EditMode
             return n;
         }
 
+        /// <summary>
+        /// D1b (seamsForD1 §5 B7/IncidentResolver.ApplyBloodCost): бій замінює
+        /// саму перевірку вузла 1, але не звільняє кровавий шлях від двох цін,
+        /// що платить БУДЬ-ЯКИЙ інший інцидент з HasBloodyPath незалежно від
+        /// того, ЯК саме розв'язано вибір (перевіркою чи боєм) — драйвер
+        /// Напруги PlaystyleBlood (закритий перелік, інваріант 5) і пам'ять
+        /// страху громади (CausedFear). Обидва — приховані числа (R17), тож
+        /// перевіряються лише через IVT-гачок (<see cref="GameSession.DebugTensionValue"/>/
+        /// <see cref="GameSession.DebugCommunityIsAfraid"/>), не через жоден View.
+        /// </summary>
+        [Test]
+        public void Day1_BloodyPath_AppliesPlaystyleBloodTension_AndCausedFear_LikeAnyBloodyIncident()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Assert.IsTrue(report.AwaitsDecision);
+
+            int tensionBeforeBlood = s.DebugTensionValue;
+            Assert.IsFalse(s.DebugCommunityIsAfraid, "страх не мав з'явитися ДО кровавого рішення");
+
+            var duringBattle = s.ResolveIncident(IncidentPath.Bloody);
+            Assert.IsNull(duringBattle);
+            s.CombatAutoResolve();
+
+            // Черга QueueExternal(PlaystyleBlood) — той самий мостик R6, що й у
+            // квестів: споживається лише тіком Напруги НАСТУПНОЇ фази, не
+            // миттєво в момент рішення.
+            if (s.State == SessionState.Scene)
+            {
+                SceneStepView step;
+                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            }
+            s.ConfirmEvening();
+            s.AdvanceNight();
+
+            Assert.Greater(s.DebugTensionValue, tensionBeforeBlood,
+                "PlaystyleBlood мав піднятi Напругу так само, як IncidentResolver.ApplyBloodCost для звичайного кровавого шляху");
+            Assert.IsTrue(s.DebugCommunityIsAfraid,
+                "кроваве рішення вузла 1 через бій мало налякати громаду так само, як CausedFear звичайного кровавого шляху");
+        }
+
+        /// <summary>
+        /// D1b (§2 рядок 30): кожна власна атака команди (Attack/UseAbility з
+        /// WeaponAttack-ефектом) мусить лишити слід у стрічці подій одним із
+        /// "combat.attack.hit/miss/graze/crit" — окремо від сирого
+        /// <see cref="BattleView.Log"/> (рядки для гравця, не доказ для тесту).
+        /// Тренувальний бій (ThresholdRule, детермінований): ініціатива
+        /// trainee_1(6,seq0) → trainee_2(6,seq1) → training_scout_1(6,seq2) →
+        /// training_scout_2(5,seq3) (TurnSystem: спад інціативи, тай-брейк —
+        /// порядок додавання). trainee_1 (спис, мілі) не дістає ворога без
+        /// руху — пропускаємо; trainee_2 (лук) атакує без обмеження дальності
+        /// (Attack() перевіряє лише пряму видимість для дальньої зброї).
+        /// </summary>
+        [Test]
+        public void CombatAttack_LogsCombatAttackOutcomeEvent_InDayLog()
+        {
+            var s = new GameSession();
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            s.CombatEndTurn(); // trainee_1 пропускає хід (мілі, дистанція завелика без руху)
+
+            var result = s.CombatAttack("training_scout_1");
+            Assert.AreEqual(CombatActionResult.Success, result, "trainee_2 (лук) мав влучити пряму видимість без руху");
+
+            bool sawAttackEvent = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "combat.attack.hit" || e.Key == "combat.attack.miss" ||
+                    e.Key == "combat.attack.graze" || e.Key == "combat.attack.crit")
+                    sawAttackEvent = true;
+            Assert.IsTrue(sawAttackEvent, "CombatAttack мав залогувати combat.attack.* у DayLog (§2 рядок 30)");
+        }
+
+        /// <summary>
+        /// D1b (§2 рядок 30): реакція дозору — ОКРЕМИЙ ключ
+        /// "combat.overwatch.triggered", не той самий "combat.attack.*", що й
+        /// власна атака команди — незалежно від того, влучив дозор чи ні
+        /// (§ геометрія — та сама, що в CombatOverwatchTests: конус 90°,
+        /// тангенс півширини 1/1, дальня зброя — без обмеження на дистанцію,
+        /// лише пряма видимість).
+        /// </summary>
+        [Test]
+        public void CombatMove_TriggersOverwatchReaction_LogsCombatOverwatchTriggeredEvent()
+        {
+            var s = new GameSession();
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            s.CombatEndTurn(); // trainee_1 пропускає хід
+
+            // trainee_2 (лук, (1,3)) бере сектор під прицел уздовж свого ряду —
+            // Overwatch() сам резервує AP і завершує хід.
+            var overwatchResult = s.CombatEnterOverwatch(new GridPos(6, 3));
+            Assert.AreEqual(CombatActionResult.Success, overwatchResult);
+
+            // training_scout_1 (6,1): один крок на (5,1) — усередині конуса й
+            // прямої видимості дозору trainee_2. Тест керує юнітом напряму
+            // (як і будь-яка тактична команда GameSession — керування стороною
+            // вирішує викликач, не сам фасад).
+            var moveResult = s.CombatMove(new GridPos(5, 1));
+            Assert.AreEqual(CombatActionResult.Success, moveResult);
+
+            bool sawOverwatchTriggered = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "combat.overwatch.triggered") sawOverwatchTriggered = true;
+            Assert.IsTrue(sawOverwatchTriggered, "рух training_scout_1 у сектор trainee_2 мав спричинити реакцію дозору (§2 рядок 30)");
+        }
+
         // ---- Дефекція (US-9.4, R2/§2 №25): DefectionWatch.Tick + Defection.ShouldDefect ----
 
         /// <summary>
@@ -376,6 +488,48 @@ namespace Game.Tests.EditMode
             for (int i = 0; i < preview.Days + 1 && !SawEvent(log, "expedition.returned"); i++)
                 PlayFullDayQuiet(s, log);
             Assert.IsTrue(SawEvent(log, "expedition.returned"), "відряд мав повернутись протягом заявлених діб");
+        }
+
+        /// <summary>
+        /// D1b: те саме, що Quiet вище, але Forceful-підхід (§4.11 R15 — той
+        /// самий єдиний вхід DepartExpedition, лише інший ForcefulSkill/дні).
+        /// "Ближні розвалини" мають Threshold=3 (DefaultSites.Outskirts); Максим
+        /// (Melee 6) веде відряд — детермінований запас над порогом (без
+        /// жодного кубика, R1), тож preview.ExpectedBand не може бути Worst, а
+        /// ExpectedMaterials/ExpectedGold — додатні (BaseMaterials=2/BaseGold=8,
+        /// bandMult>0 для будь-якої не-Worst полоси). Порівнюємо не сирі суми
+        /// гаманця (їх забруднює звичайне виробництво циклу за ті самі доби), а
+        /// сам факт полоси повернення — той самий доказ, що прев'ю обіцяло.
+        /// </summary>
+        [Test]
+        public void PreviewExpedition_And_DepartExpedition_Forceful_ReturnsNonWorstBand_WithPositiveExpectedMaterials()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var preview = s.PreviewExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
+                new[] { "maksym", "myroslava" });
+            Assert.AreEqual("outskirts", preview.SiteId);
+            Assert.IsFalse(preview.IsDelve);
+            Assert.AreNotEqual("Worst", preview.ExpectedBand, "Максим (Melee 6) мав з запасом здолати Threshold=3 outskirts силою");
+            Assert.Greater(preview.ExpectedMaterials, 0, "детермінований прев'ю (R1) мав пообіцяти матеріали за не-Worst полосою");
+            Assert.Greater(preview.ExpectedGold, 0);
+
+            var dispatch = s.DepartExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
+                new[] { "maksym", "myroslava" }, preview.Days);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+            Assert.AreEqual(SessionState.Morning, s.State, "силова (не-Delve) вилазка не рухає стан з Morning");
+
+            var log = new List<GameEvent>();
+            for (int i = 0; i < preview.Days + 1 && !SawEvent(log, "expedition.returned"); i++)
+                PlayFullDayQuiet(s, log);
+
+            string returnedBand = null;
+            foreach (var e in log)
+                if (e.Key == "expedition.returned") returnedBand = e.Args["band"];
+            Assert.IsNotNull(returnedBand, "силовий відряд мав повернутись протягом заявлених діб");
+            Assert.AreNotEqual("Worst", returnedBand, "фактична полоса повернення мала збігтися з детермінованим прев'ю — матеріали справді прийшли, не 0");
         }
 
         [Test]
@@ -564,6 +718,53 @@ namespace Game.Tests.EditMode
             s.AcknowledgeSummary();
             Assert.AreEqual(SessionState.FreePlay, s.State);
             Assert.IsTrue(s.CurrentView.IsFreePlay);
+        }
+
+        /// <summary>
+        /// D1b: тихий шлях фіналу (§4.14 B6/openIssue — гірша з двох перевірок
+        /// Finale.BuildDam/BuildDamTactics, рішення інтегратора зафіксоване в
+        /// <see cref="GameSession.ResolveFinale"/>) не підвішує в Battle взагалі
+        /// — на відміну від кровавого, DayReportView готовий одразу.
+        /// </summary>
+        [Test]
+        public void Finale_Quiet_OnDay5Night_ResolvesViaChecks_NoBattle_AndReachesSummary()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            for (int day = 1; day <= 4; day++) PlayFullDayQuiet(s);
+
+            s.ConfirmMorning();
+            var dayReport = s.AdvanceDay();
+            while (dayReport != null && dayReport.AwaitsDecision)
+                dayReport = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene)
+            {
+                SceneStepView step;
+                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            }
+            s.ReactToCrisis(CrisisReaction.SpendGold);
+            s.ConfirmEvening();
+            Assert.AreEqual(SessionState.Night, s.State);
+
+            var resolved = s.ResolveFinale(IncidentPath.Quiet);
+            Assert.IsNotNull(resolved, "тихий шлях фіналу — перевірки, не бій: DayReportView готовий без підвісу в Battle");
+            Assert.AreEqual(SessionState.Night, s.State, "CompleteFinale лишає сесію в Night — далі AdvanceNight сама доводить добу до Summary");
+
+            bool sawFinaleResolved = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "finale.resolved" && e.Args["path"] == "Quiet") sawFinaleResolved = true;
+            Assert.IsTrue(sawFinaleResolved, "finale.resolved(path=Quiet) мав піти у стрічку подій");
+
+            s.AdvanceNight();
+            Assert.AreEqual(SessionState.Summary, s.State);
+
+            var summary = s.GetSummaryView();
+            Assert.IsNotNull(summary.FinaleOutcomeKey, "тихий шлях фіналу теж має власну ціну — жодна полоса не «чиста» перемога (§3.5)");
+
+            s.AcknowledgeSummary();
+            Assert.AreEqual(SessionState.FreePlay, s.State);
         }
 
         // ---- Фікс-ревью (роль FIXER, пакет D1a): регрес-тести на кожну знахідку ----
@@ -756,6 +957,62 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(Summarize(continuousReport), Summarize(reloadedReport),
                 "AdvanceDay після SaveState→RestoreFromBlob мав дати структурно ідентичний DayReportView");
+        }
+
+        /// <summary>
+        /// D1b (§4.8 R13, той самий акцептанс, що B7 просив для ExpeditionParty:
+        /// "SaveState посередине вилазки→RestoreState→повернення дає той самий
+        /// результат"): звичайна (не-Delve) вилазка НЕ рухає стан з Morning
+        /// (§4.11), тож SaveState посередині неї — легальний виклик у Morning,
+        /// а не окремий гейт. Партія «в полі» (party.IsAway, ExpeditionResult
+        /// ще НЕ заморожений) мусить дожити збереження/завантаження в новому
+        /// екземплярі й повернутись з тим самим гаманцем, що безперервний прогін.
+        /// </summary>
+        [Test]
+        public void SaveState_WhilePartyIsAwayOnExpedition_RestoresInNewInstance_AndReturnsIdentically()
+        {
+            var baseline = new GameSession();
+            baseline.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(baseline);
+            PlayFullDayQuiet(baseline); // доба 1 -> Morning доби 2 (пости стабілізувались після вузла 1)
+
+            Assert.AreEqual(SessionState.Morning, baseline.State);
+
+            // Forceful (2 доби, не 4 як Quiet) — відряд повертається до доби 5
+            // (форсована криза/фінал), а PlayFullDayQuiet нижче не знає про
+            // ResolveFinale (тест на «SaveState посередині вилазки», не на
+            // фінал — той окремо покритий Finale_Quiet/Finale_Bloody вище).
+            var preview = baseline.PreviewExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
+                new[] { "maksym", "myroslava" });
+            var dispatch = baseline.DepartExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
+                new[] { "maksym", "myroslava" }, preview.Days);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+            Assert.AreEqual(SessionState.Morning, baseline.State, "звичайна (не-Delve) вилазка не рухає стан з Morning");
+
+            string blob = baseline.SaveState(0);
+            Assert.IsFalse(string.IsNullOrEmpty(blob));
+
+            var baselineLog = new List<GameEvent>();
+            for (int i = 0; i < preview.Days + 1 && !SawEvent(baselineLog, "expedition.returned"); i++)
+                PlayFullDayQuiet(baseline, baselineLog);
+            Assert.IsTrue(SawEvent(baselineLog, "expedition.returned"));
+            var baselineEconomy = baseline.GetEconomyView();
+
+            var reloaded = new GameSession();
+            reloaded.NewGame(SkipCreationOptions());
+            reloaded.RestoreFromBlob(blob);
+            Assert.AreEqual(SessionState.Morning, reloaded.State, "відновлення посередині вилазки має лишити сесію в Morning, як і до збереження");
+
+            var reloadedLog = new List<GameEvent>();
+            for (int i = 0; i < preview.Days + 1 && !SawEvent(reloadedLog, "expedition.returned"); i++)
+                PlayFullDayQuiet(reloaded, reloadedLog);
+            Assert.IsTrue(SawEvent(reloadedLog, "expedition.returned"),
+                "відряд мав повернутись так само і після Save/Load посередині вилазки");
+
+            var reloadedEconomy = reloaded.GetEconomyView();
+            Assert.AreEqual(baselineEconomy.Gold, reloadedEconomy.Gold, "гаманець після Save/Load-посередині-вилазки мав дійти до того самого числа, що безперервний прогін");
+            Assert.AreEqual(baselineEconomy.Materials, reloadedEconomy.Materials);
+            Assert.AreEqual(baselineEconomy.Food, reloadedEconomy.Food);
         }
 
         private static string Summarize(DayReportView v)

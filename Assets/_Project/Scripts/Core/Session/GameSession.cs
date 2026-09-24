@@ -705,6 +705,17 @@ namespace Game.Core.Session
         /// <summary>Сташ поселення для UI/тестів (§4.1 Equip/CraftUpgrade адресують предмети звідси за InstanceId).</summary>
         public IReadOnlyList<ItemInstance> GetStash() => _inventory.Items;
 
+        /// <summary>
+        /// Тестовий гачок IVT (<c>AssemblyInfo.cs</c>: <c>Game.Tests.EditMode</c>
+        /// бачить <c>internal</c>-члени <c>Game.Core.*</c> — той самий підхід,
+        /// що вже застосований до <c>Companion.Loyalty</c>): перевірити, що
+        /// ціна кровавого шляху вузла 1 (PlaystyleBlood/CausedFear, D1b) реально
+        /// дійшла до прихованих шкал, БЕЗ появи жодного числа в публічному View
+        /// (R17) — жоден офіційний контракт §4.2 цього не показує навмисно.
+        /// </summary>
+        internal int DebugTensionValue => _processor?.Tension?.Value ?? 0;
+        internal bool DebugCommunityIsAfraid => _processor != null && _processor.Fear != null && _processor.Fear.IsAfraid(_processor.CurrentDay);
+
         public SessionState ConfirmMorning()
         {
             if (State != SessionState.Morning && State != SessionState.FreePlay)
@@ -756,6 +767,21 @@ namespace Game.Core.Session
 
             if (string.Equals(incidentId, "pass_vanguard", StringComparison.Ordinal) && path == IncidentPath.Bloody)
             {
+                // Р5/D1b (seamsForD1): бій замінює саму ПЕРЕВІРКУ вузла 1
+                // (IncidentResolver.Resolve тут не викликається взагалі — його
+                // замінює справжній тактичний бій), але дві ціни кровавого
+                // шляху, що не залежать від того, ЯК саме розв'язано кровавий
+                // вибір (перевіркою чи боєм), лишаються тими самими, що й для
+                // будь-якого іншого інциденту з HasBloodyPath (IncidentResolver.
+                // ApplyBloodCost): драйвер PlaystyleBlood закритого переліку
+                // (інваріант 5) і пам'ять страху громади (CausedFear — кроваве
+                // рішення само лякає, незалежно від виходу бою). Рана виконавцю
+                // тут НЕ дублюється: справжні втрати вже рахує ApplyBattleCasualties
+                // після резолву бою (RosterAdapter.Wound/Kill), а не абстрактний
+                // "казуальний" удар check.ActorId, якого при бою просто немає.
+                _processor.QueueExternal(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode);
+                _processor.Fear?.Remember(_processor.CurrentDay, _cfg.Checks);
+
                 var setup = BuildBattleSetup(new[] { ProtagonistId, "maksym", "myroslava" },
                     new[] { "horde_scout", "horde_scout" }, 8, 8);
                 RequestBattle(setup, SuspendReason.PassVanguardBloody, SessionState.Decision);
@@ -1078,11 +1104,83 @@ namespace Game.Core.Session
         // Battle
         // =====================================================================
 
-        public CombatActionResult CombatMove(GridPos dest) { RequireBattle(); var r = _battle.Move(dest); AfterCombatAction(); return r; }
-        public CombatActionResult CombatAttack(string targetId, bool useStrike = false) { RequireBattle(); var r = _battle.Attack(targetId, useStrike); AfterCombatAction(); return r; }
-        public CombatActionResult CombatUseAbility(string abilityId, string targetUnitId = null, GridPos? targetTile = null) { RequireBattle(); var r = _battle.UseAbility(abilityId, targetUnitId, targetTile); AfterCombatAction(); return r; }
+        public CombatActionResult CombatMove(GridPos dest)
+        {
+            RequireBattle();
+            string actingId = _battle.Current?.Id;
+            int before = _battle.Attacks.Count;
+            var r = _battle.Move(dest);
+            LogNewAttacks(actingId, before);
+            AfterCombatAction();
+            return r;
+        }
+
+        public CombatActionResult CombatAttack(string targetId, bool useStrike = false)
+        {
+            RequireBattle();
+            string actingId = _battle.Current?.Id;
+            int before = _battle.Attacks.Count;
+            var r = _battle.Attack(targetId, useStrike);
+            LogNewAttacks(actingId, before);
+            AfterCombatAction();
+            return r;
+        }
+
+        public CombatActionResult CombatUseAbility(string abilityId, string targetUnitId = null, GridPos? targetTile = null)
+        {
+            RequireBattle();
+            string actingId = _battle.Current?.Id;
+            int before = _battle.Attacks.Count;
+            var r = _battle.UseAbility(abilityId, targetUnitId, targetTile);
+            LogNewAttacks(actingId, before);
+            AfterCombatAction();
+            return r;
+        }
+
         public CombatActionResult CombatEnterOverwatch(GridPos aim) { RequireBattle(); var r = _battle.Overwatch(aim); AfterCombatAction(); return r; }
         public CombatActionResult CombatEndTurn() { RequireBattle(); var r = _battle.EndTurn(); AfterCombatAction(); return r; }
+
+        /// <summary>
+        /// D1b (§2 рядок 30): перекладає нові записи <see cref="CombatState.Attacks"/>
+        /// (з'явилися за виклик команди Battle вище цього рядка) у стрічку подій —
+        /// єдине джерело доказу бою поза <see cref="BattleView.Log"/> (сирими
+        /// рядками для гравця, не для тесту покриття). Атакуючий, чий Id
+        /// збігається з тим, хто мав хід на момент виклику команди
+        /// (<paramref name="actingUnitId"/>) — це власна атака команди
+        /// (Attack/UseAbility з WeaponAttack-ефектом) → "combat.attack.hit/miss/
+        /// graze/crit" за AttackRecord.Outcome; будь-який ІНШИЙ атакуючий — це
+        /// реакція дозору (ReactToMovement спрацьовує лише під час Move/лаунжа
+        /// способності, стріляє ЧУЖИЙ юніт по тому, хто зараз рухається) →
+        /// "combat.overwatch.triggered" (§2 рядок 30, окремий ключ від
+        /// "combat.attack.*" незалежно від того, влучив дозор чи ні).
+        /// </summary>
+        private void LogNewAttacks(string actingUnitId, int before)
+        {
+            var attacks = _battle?.Attacks;
+            if (attacks == null) return;
+
+            for (int i = before; i < attacks.Count; i++)
+            {
+                var rec = attacks[i];
+                var args = Args("attackerId", rec.AttackerId, "targetId", rec.TargetId,
+                    "chance", rec.Chance.ToString(CultureInfo.InvariantCulture),
+                    "damage", rec.Damage.ToString(CultureInfo.InvariantCulture));
+
+                if (!string.Equals(rec.AttackerId, actingUnitId, StringComparison.Ordinal))
+                {
+                    LogEvent("combat.overwatch.triggered", args);
+                    continue;
+                }
+
+                switch (rec.Outcome)
+                {
+                    case AttackOutcome.Miss: LogEvent("combat.attack.miss", args); break;
+                    case AttackOutcome.Graze: LogEvent("combat.attack.graze", args); break;
+                    case AttackOutcome.Hit: LogEvent("combat.attack.hit", args); break;
+                    case AttackOutcome.Crit: LogEvent("combat.attack.crit", args); break;
+                }
+            }
+        }
 
         public void CombatAutoResolve()
         {
