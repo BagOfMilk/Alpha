@@ -527,6 +527,45 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(sawOverwatchTriggered, "рух training_scout_1 у сектор trainee_2 мав спричинити реакцію дозору (§2 рядок 30)");
         }
 
+        // ---- Полірування (ціль 3 «Бойові декорації»): вороги — не один стовпець ----
+
+        /// <summary>
+        /// Owner feedback: "Enemy deployments must be sensible formations
+        /// with cover (not a single column)". Вузол 1 кроваво — 2 вороги
+        /// (Node1BloodyEnemyIds) — мали стояти на РІЗНИХ X (зигзаг), і хоч
+        /// один нести укриття на своєму тайлі (BattleGridView.TileCover
+        /// читає той самий тайл, що юніт займає).
+        /// </summary>
+        [Test]
+        public void Day1_BloodyBattle_EnemyFormation_IsNotASingleColumn_AndCarriesCover()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            s.AdvanceDay();
+            s.ResolveIncident(IncidentPath.Bloody);
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            var battle = s.GetBattleView();
+            Assert.IsNotNull(battle);
+
+            var enemyXs = new System.Collections.Generic.HashSet<int>();
+            bool anyEnemyCovered = false;
+            foreach (var u in battle.Units)
+            {
+                if (u.Side != "Enemy") continue;
+                enemyXs.Add(u.Pos.X);
+                int idx = u.Pos.X + u.Pos.Y * battle.Grid.Width;
+                if (idx >= 0 && idx < battle.Grid.TileCover.Count && battle.Grid.TileCover[idx] != "None")
+                    anyEnemyCovered = true;
+            }
+
+            Assert.Greater(enemyXs.Count, 1, "два вороги на РІЗНИХ X — не один стовпець");
+            Assert.IsTrue(anyEnemyCovered, "хоч один ворог мав стояти на тайлі з укриттям (не лише декоративне укриття посеред мапи)");
+        }
+
         // ---- Дефекція (US-9.4, R2/§2 №25): DefectionWatch.Tick + Defection.ShouldDefect ----
 
         /// <summary>

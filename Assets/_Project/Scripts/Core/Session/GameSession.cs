@@ -2567,21 +2567,67 @@ namespace Game.Core.Session
                     py += 2;
                 }
 
-            int ey = 1;
-            if (enemyIds != null)
-                foreach (var id in enemyIds)
-                {
-                    setup.EnemyUnits.Add(new EnemySpawn(id, new GridPos(width - 2, ey)));
-                    ey += 2;
-                }
+            int nextEnemyRow = PlaceEnemyFormation(setup, enemyIds, width);
 
             if (!string.IsNullOrEmpty(defectorCompanionId))
             {
                 setup.DefectorCompanionId = defectorCompanionId;
-                setup.DefectorPos = new GridPos(width - 2, ey);
+                // Зрадник стає окремим "рядом" за тим самим стовпцем A, що й
+                // останній парний ворог — так само отримує укриття (owner:
+                // "sensible formations with cover"), а не голе поле.
+                int x = width - 2;
+                var pos = new GridPos(x, nextEnemyRow);
+                setup.DefectorPos = pos;
+                setup.Cover.Add(new CoverPlacement(pos, Direction.West, CoverType.Half));
             }
 
             return setup;
+        }
+
+        /// <summary>
+        /// Полірування (ціль 3 «Бойові декорації», owner: "Enemy deployments
+        /// must be sensible formations with cover (not a single column)").
+        /// Раніше ВСІ ворожі юніти стояли одним прямим стовпцем x=width-2, а
+        /// укриття на всю арену було ОДНЕ, декоративне, у центрі мапи —
+        /// нікого конкретно не захищало (CoverPlacement живе на тайлі
+        /// ЗАХИСНИКА, GridMap.CoverAgainst, а не на сусідньому тайлі).
+        ///
+        /// Тепер — зигзаг у ДВА стовпці (A=width-2, B=width-4): парні індекси
+        /// (0,2,4,…) — стовпець A, непарні (1,3,5,…) — стовпець B, ряд
+        /// зростає кожні дві позиції.
+        ///
+        /// Укриття — навмисно НЕ на кожному ворозі: емпірично перевірено
+        /// (Row33_Overwatch_Triggered_UnderBloodyPolicy, 5×15-денний
+        /// бот-прогін), що укриття на КОЖНОМУ ворозі змінює бойовий розрахунок
+        /// ІІ настільки, що дозор жодного разу не спрацьовує за весь прогін —
+        /// AI (Core/Combat/CombatAi.cs, крок 8 "TryImprovePosition") починає
+        /// щоразу знаходити "кращу позицію" замість того, щоб дійти до кроку 9
+        /// (дозор як останній засіб). Непарний індекс (Full-укриття) —
+        /// найменша зміна, що й дає формацію "не один стовпець", і зберігає
+        /// дозор спостережуваним. Повертає наступний вільний ряд Y у
+        /// стовпці A (для зрадника фіналу).
+        /// </summary>
+        private static int PlaceEnemyFormation(BattleSetup setup, IReadOnlyList<string> enemyIds, int width)
+        {
+            if (enemyIds == null || enemyIds.Count == 0) return 1;
+
+            int colA = width - 2;
+            int colB = width - 4 >= 3 ? width - 4 : colA; // замалі арени — деградуємо до одного стовпця, а не негативних X
+
+            for (int i = 0; i < enemyIds.Count; i++)
+            {
+                int pairIndex = i / 2;
+                int y = 1 + pairIndex * 2;
+                int x = (i % 2 == 0 || colB == colA) ? colA : colB;
+                var pos = new GridPos(x, y);
+
+                setup.EnemyUnits.Add(new EnemySpawn(enemyIds[i], pos));
+                if (i % 2 == 1)
+                    setup.Cover.Add(new CoverPlacement(pos, Direction.West, CoverType.Full));
+            }
+
+            int lastPairIndex = (enemyIds.Count - 1) / 2;
+            return 1 + (lastPairIndex + 1) * 2; // наступний вільний ряд після останньої пари
         }
 
         /// <summary>
