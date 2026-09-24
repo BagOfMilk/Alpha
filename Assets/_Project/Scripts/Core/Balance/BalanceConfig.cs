@@ -129,5 +129,8 @@ namespace Game.Core.Balance
 
         /// <summary>Как город отвечает игроку: люди, совет, тиры (Поправка №6).</summary>
         public CityBalance City = new CityBalance();
+
+        /// <summary>Тактический бой (Б1): точность/урон/overwatch/статусы. Своя секция — R14.</summary>
+        public CombatBalance Combat = new CombatBalance();
     }
 }
