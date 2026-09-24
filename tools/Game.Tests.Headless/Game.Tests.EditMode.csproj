@@ -36,6 +36,12 @@
       VillageView.cs выше, и SceneText.cs/SignalText.cs в Alpha.Play.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Combat/SeededDiceRoller.cs" />
+    <!--
+      E3 (R7): UkrainianText — чистый C# без UnityEngine, единая текстовая
+      таблица. Тем же приёмом, что и VillageView.cs/SeededDiceRoller.cs выше:
+      headless-тесты (UkrainianTextTests.cs) берут её исходником напрямую.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Text/UkrainianText.cs" />
   </ItemGroup>
 
   <ItemGroup>
