@@ -318,6 +318,13 @@ namespace Game.Gameplay
                     string text = line.Count > 1
                         ? line.Text + " " + UkrainianText.Format("ui.feed.repeat", ProtagonistGender, "count", line.Count.ToString())
                         : line.Text;
+                    // Фікс-ревью (minor, знайдено QA): групова реакція складу
+                    // (FeedLine.AlsoNames, §ScreenText.BuildFeedLines) — імена
+                    // решти реагуючих одним переліком поруч із першим рядком,
+                    // а не окремим рядком на кожне ім'я.
+                    if (line.AlsoNames != null && line.AlsoNames.Count > 0)
+                        text += " (" + UkrainianText.Format("ui.feed.also", ProtagonistGender,
+                            "names", string.Join(", ", line.AlsoNames)) + ")";
                     GUILayout.Label(text, AlphaSkin.Body);
                 }
                 Widgets.ScrollListEnd();

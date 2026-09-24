@@ -26,6 +26,23 @@ namespace Game.Gameplay.EditorTools
         private const string Chars = "Assets/ThirdParty/Kenney/MiniCharacters/Models/";
         private const string Nature = "Assets/ThirdParty/Kenney/NatureKit/Models/";
 
+        /// <summary>
+        /// Фікс-ревью (major, знайдено QA): раніше кожен тайл грида —
+        /// голий <c>GameObject.CreatePrimitive(PrimitiveType.Quad)</c> з
+        /// одним спільним нефарбованим URP/Lit-матеріалом, і лише колір
+        /// (MaterialPropertyBlock, §BattleArenaController.ApplyTileTint)
+        /// відрізняв тайли — читалось як таблиця, не "земля". Nature Kit не
+        /// має ЖОДНОЇ текстури на всі 329 моделей (0 PNG/JPG,
+        /// §KenneyImportSettings.IsNatureKit) — "накласти текстуру" з
+        /// набору фізично нема чим. Але <c>ground_grass.fbx</c> виміряно
+        /// (тимчасовий Editor-пробник, разово, і рендером зверху — це
+        /// звичайний осьовий квадрат, не ромб, на відміну від
+        /// <c>cliff_block_rock.fbx</c> нижче) РІВНО 1×0×1 з центром у
+        /// (0,0,0): він і є "готовий тайл ґрунту" набору, збіг зі
+        /// <see cref="BattleArenaView.TileSize"/> точний, без підбору масштабу.
+        /// </summary>
+        private const string GroundTileModel = Nature + "ground_grass.fbx";
+
         private static readonly string[] MaleModels =
         {
             "character-male-a.fbx", "character-male-b.fbx", "character-male-c.fbx",
@@ -44,10 +61,23 @@ namespace Game.Gameplay.EditorTools
             "fence_simple.fbx", "fence_simpleHigh.fbx", "log.fbx", "log_stack.fbx"
         };
 
+        /// <summary>
+        /// Фікс-ревью (major, знайдено QA, "big flat green diamond primitive
+        /// ... does not match any Kenney rock/cliff/fence asset silhouette"):
+        /// винесено <c>cliff_block_rock.fbx</c> — розібрано тимчасовим
+        /// Editor-пробником (разово, знято): зверху це РІВНО один плаский
+        /// зелений квадрат без жодного рельєфу/фактури (на відміну від решти
+        /// чотирьох — у них зверху видно зелений верх ІЗ земляним/скельним
+        /// обвідом), а <see cref="PlaceCoverProp"/> ще й крутить кожне
+        /// укриття на детермінований, але довільний кут (Hash01
+        /// "cover_yaw_x_y") — плаский квадрат під кутом близьким до 45°
+        /// читається саме як "зелений ромб", не як камінь. Решта чотирьох —
+        /// перевірені тим самим пробником, кожна дає впізнаваний силует
+        /// каменя/скелі під будь-яким поворотом.
+        /// </summary>
         private static readonly string[] CoverFullModels =
         {
-            "rock_largeA.fbx", "rock_largeC.fbx", "rock_largeE.fbx",
-            "cliff_block_rock.fbx", "cliff_half_rock.fbx"
+            "rock_largeA.fbx", "rock_largeC.fbx", "rock_largeE.fbx", "cliff_half_rock.fbx"
         };
 
         /// <summary>Викликається <c>GameSceneBuilder</c> (E1b) рефлексією — сигнатура фіксована швом, не змінювати без узгодження.</summary>
@@ -72,6 +102,7 @@ namespace Game.Gameplay.EditorTools
             controller.FemaleCharacterPrefabs = femalePool;
             controller.CoverHalfPrefabs = coverHalfPool;
             controller.CoverFullPrefabs = coverFullPool;
+            controller.TileGroundPrefab = Load(GroundTileModel);
 
             var portraits = arenaRoot.GetComponent<PortraitRig>();
             if (portraits == null) portraits = arenaRoot.AddComponent<PortraitRig>();
@@ -89,6 +120,19 @@ namespace Game.Gameplay.EditorTools
         /// під конкретний грид кожного бою): широка земля під ЛЮБИЙ розмір
         /// грида (макс. 10×10, §TEST_BUILD.md R9) з запасом і кілька каменів
         /// по кутах, щоб порожнеча навколо грида не була голою площиною.
+        ///
+        /// Фікс-ревью (minor, знайдено QA): попередній масштаб (1.8× — плоскінь
+        /// 18×18) рахувався на розмір самого грида, не на те, що РЕАЛЬНО
+        /// бачить ортографічна камера. <see cref="BattleArenaView.FrameGrid"/>
+        /// на повному 10×10 дає orthographicSize=6.5, а
+        /// <see cref="BattleArenaController.HudPanelShiftWorldX"/> зверху
+        /// зсуває кадр ще на купу світових одиниць вліво (компенсація лівої
+        /// панелі HUD) — на екрані 1600×900 (§TEST_BUILD.md UI-тур) видимий
+        /// діапазон X виходить далеко за межі колишньої плоскіні (порахунок:
+        /// ліворуч аж до ≈-15, а не -4). Дерева на дальніх кутах опинялись за
+        /// краєм землі — "плавали" на тлі. 5× замість 1.8× (плоскінь 50×50,
+        /// той самий центр) — запас, що покриває і найширший екран, і
+        /// найбільший зсув камери під HUD, без перерахунку щоразу вручну.
         /// </summary>
         private static void BuildStaticProps(GameObject arenaRoot)
         {
@@ -102,13 +146,23 @@ namespace Game.Gameplay.EditorTools
             ground.name = "ArenaGround";
             ground.transform.SetParent(root.transform, false);
             ground.transform.localPosition = new Vector3(5f, -0.02f, 5f);
-            ground.transform.localScale = new Vector3(1.8f, 1f, 1.8f); // Plane 10×10 юнітів на localScale=1
+            ground.transform.localScale = new Vector3(5f, 1f, 5f); // Plane 10×10 юнітів на localScale=1
 
             var lit = Shader.Find("Universal Render Pipeline/Lit");
             if (lit != null)
             {
                 var mat = new Material(lit);
-                mat.SetColor("_BaseColor", new Color(0.16f, 0.15f, 0.13f));
+                // Фікс-ревью (minor, знайдено QA): попередній колір
+                // (0.16,0.15,0.13) — темніший за сам фон "порожньої" сцени
+                // поза ареною (заміряно по скріншоту: фон ≈(50,50,46)/255,
+                // цей колір ≈(41,38,33)/255) — навіть після того, як
+                // плоскінь зробили в 5× ширшою (§BuildStaticProps вище), вона
+                // лишалась НЕВИДИМА: темніша за темряву, дерева на її площі
+                // однаково читались як "у повітрі". Той самий зелений тон, що
+                // й трав'яний тайл без укриття за замовчуванням
+                // (§BattleArenaView.CoverTint "None") — земля читається
+                // продовженням того самого поля, не окремою чорною плямою.
+                mat.SetColor("_BaseColor", new Color(0.27f, 0.42f, 0.22f));
                 if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.05f);
                 var renderer = ground.GetComponent<Renderer>();
                 if (renderer != null) renderer.sharedMaterial = mat;
@@ -156,6 +210,20 @@ namespace Game.Gameplay.EditorTools
                 PlaceCorner(root, treePrefab, new Vector3(-1f, 0f, -1f), 55f);
                 PlaceCorner(root, treeDarkPrefab, new Vector3(-1.1f, 0f, 1.6f), 190f);
                 PlaceCorner(root, treeDarkPrefab, new Vector3(1.6f, 0f, -1.1f), 320f);
+
+                // Фікс-ревью (minor, знайдено QA, "increase prop density
+                // around the edges"): земля тепер набагато ширша (5× замість
+                // 1.8×, див. коментар вище BuildStaticProps) — і дальні краї,
+                // за колишньою межею плоскіні, тепер безпечно нести дерева, не
+                // лишаючи їх "у повітрі". Ще один пруток уздовж усіх чотирьох
+                // сторін, поза 10×10-гридом (від'ємні/>10 координати ніколи
+                // не потрапляють у тайли — той самий доказ, що й вище).
+                PlaceCorner(root, treeDarkPrefab, new Vector3(-3f, 0f, 5f), 75f);
+                PlaceCorner(root, treePrefab, new Vector3(5f, 0f, -3f), 15f);
+                PlaceCorner(root, treeDarkPrefab, new Vector3(13.5f, 0f, 7.5f), 135f);
+                PlaceCorner(root, treePrefab, new Vector3(7.5f, 0f, 13.5f), 225f);
+                PlaceCorner(root, treePrefab, new Vector3(-2f, 0f, 9.5f), 20f);
+                PlaceCorner(root, treeDarkPrefab, new Vector3(9.5f, 0f, -2f), 340f);
             }
         }
 

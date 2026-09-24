@@ -74,6 +74,26 @@ namespace Game.Tests.EditMode
             CollectionAssert.IsEmpty(problems, "Непарні варіанти роду: " + string.Join("; ", problems));
         }
 
+        /// <summary>
+        /// Фікс-ревью (major, знайдено QA): "production.recovered" тримав
+        /// сиру дужкову нотацію роду ("одужав(-ла)") замість розщеплення на
+        /// .m/.f (той самий клас бага, що вже стався й був закритий для
+        /// companion.died/ui.reason.*) — гравець бачив дужки буквально.
+        /// Охоронець тут, щоб таке не повернулося непоміченим: жоден текст
+        /// таблиці не має нести сирої "(-...)"-нотації.
+        /// </summary>
+        [Test]
+        public void AllKeys_NoRawParentheticalGenderNotation()
+        {
+            var problems = new List<string>();
+            foreach (var key in UkrainianText.AllKeys)
+            {
+                string text = UkrainianText.Get(key, Gender.Male);
+                if (text.Contains("(-")) problems.Add(key + ": " + text);
+            }
+            CollectionAssert.IsEmpty(problems, "Сира дужкова нотація роду (мало бути розщеплено на .m/.f): " + string.Join("; ", problems));
+        }
+
         [Test]
         public void Get_UnknownKey_ReturnsVisibleMarker()
         {

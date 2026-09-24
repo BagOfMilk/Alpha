@@ -526,6 +526,15 @@ namespace Game.Gameplay.UI
 
             Widgets.Section(UkrainianText.Get("ui.gear.stash.title", g), () =>
             {
+                // Фікс-ревью (minor, знайдено QA): раніше повідомлення про
+                // Майстерню малювалось лише крізь DrawCraftButton — на
+                // предметах схованки. Порожня схованка (типовий старт)
+                // показувала тільки "Схованка порожня." — жодного натяку,
+                // чому крафту нема і чого бракує, на відміну від Buildings/
+                // Council, де причина видно завжди, ще до кліку.
+                if (!workshopOpen)
+                    GUILayout.Label(UkrainianText.Get("ui.gear.craft.workshop_note", g), AlphaSkin.Tooltip);
+
                 if (stash == null || stash.Count == 0)
                 {
                     GUILayout.Label(UkrainianText.Get("ui.gear.stash.empty", g), AlphaSkin.Tooltip);

@@ -411,5 +411,51 @@ namespace Game.Tests.EditMode
             StringAssert.Contains("Мирослава", lines[0].Text); // найновіше — перше
             StringAssert.Contains("Максим Беркут", lines[1].Text);
         }
+
+        /// <summary>
+        /// Фікс-ревью (minor, знайдено QA): один і той самий triggerId/тип
+        /// ряби, кілька РІЗНИХ реагуючих (companionId) підряд — раніше п'ять
+        /// окремих рядків з різними іменами (×N бачить лише буквально
+        /// однаковий текст, а тут ім'я щоразу інше). Тепер це ОДИН рядок,
+        /// решта імен — у AlsoNames.
+        /// </summary>
+        [Test]
+        public void BuildFeedLines_GroupReaction_SameTriggerDifferentSubjects_CollapseIntoAlsoNames()
+        {
+            var log = new List<GameEvent>
+            {
+                new GameEvent("roster.rippled.neutral.betrayal", 1, Game.Core.Loop.DayPhase.Day,
+                    new Dictionary<string, string> { { "companionId", "maksym" }, { "triggerId", "myroslava" } }),
+                new GameEvent("roster.rippled.neutral.betrayal", 1, Game.Core.Loop.DayPhase.Day,
+                    new Dictionary<string, string> { { "companionId", "zakhar" }, { "triggerId", "myroslava" } }),
+            };
+
+            var lines = ScreenText.BuildFeedLines(log, Gender.Male, null);
+
+            Assert.AreEqual(1, lines.Count, "Група реакцій на ту саму подію — один рядок, не два.");
+            // Стрічка — найновіше перше (§BuildFeedLines_PreservesNewestFirstOrder):
+            // "zakhar" стоїть ДРУГИМ у DayLog (хронологічно пізніше) — його рядок
+            // лишається основним Text, "maksym" (раніше) іде в AlsoNames.
+            StringAssert.Contains("Захар Беркут", lines[0].Text);
+            Assert.IsNotNull(lines[0].AlsoNames);
+            Assert.AreEqual(1, lines[0].AlsoNames.Count);
+            StringAssert.Contains("Максим", lines[0].AlsoNames[0]);
+        }
+
+        [Test]
+        public void BuildFeedLines_GroupReaction_DifferentTrigger_DoesNotCollapse()
+        {
+            var log = new List<GameEvent>
+            {
+                new GameEvent("roster.rippled.neutral.betrayal", 1, Game.Core.Loop.DayPhase.Day,
+                    new Dictionary<string, string> { { "companionId", "maksym" }, { "triggerId", "myroslava" } }),
+                new GameEvent("roster.rippled.neutral.death", 1, Game.Core.Loop.DayPhase.Day,
+                    new Dictionary<string, string> { { "companionId", "zakhar" }, { "triggerId", "someoneelse" } }),
+            };
+
+            var lines = ScreenText.BuildFeedLines(log, Gender.Male, null);
+
+            Assert.AreEqual(2, lines.Count, "Різний тригер/ключ — не одна й та сама хвиля ряби.");
+        }
     }
 }

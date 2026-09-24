@@ -1330,6 +1330,9 @@ namespace Game.Gameplay.Text
             // підряд (напр. кілька "тронутий звісткою" за один прохід ряби)
             // згортаються в один із лічильником — ScreenText.BuildFeedLines.
             AddKey(t, "ui.feed.repeat", "×{count}");
+            // Фікс-ревью (minor, знайдено QA): групова реакція складу
+            // (roster.rippled.*) — див. FeedLine.AlsoNames у ScreenText.cs.
+            AddKey(t, "ui.feed.also", "також: {names}");
 
             AddKey(t, "ui.topbar.day", "Доба {day}");
             // Фікс-ревью (major, знайдено тур-автоплеєм): бейдж фази поруч із
@@ -1517,7 +1520,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "expedition.returned", "Відряд повернувся: {site} — {band}.");
             AddKey(t, "scene.finished", "Сцена завершена.");
             AddKey(t, "production.resource", "Виробництво дало плоди.");
-            AddKey(t, "production.recovered", "{companion} одужав(-ла) і повернувся(-лась) до справ.");
+            // Фікс-ревью (major, раунд «фіксер 1», знайдено QA): той самий клас
+            // бага, що вже описаний вище для ui.reason.*/companion.died.* — один
+            // ключ із сирою дужковою нотацією роду ("одужав(-ла)"), яку
+            // Format/ResolveVariant не розбирають: варіанта ".m"/".f" не було,
+            // тож гравець бачив дужки буквально ("Мирослава одужав(-ла)...").
+            // Розбито так само, за родом ІМЕННОГО суб'єкта (companionId) —
+            // EventLine уже рахує subjectGender для цього ключа, бракувало лише
+            // самих .m/.f записів у таблиці.
+            AddKey(t, "production.recovered.m", "{companion} одужав і повернувся до справ.");
+            AddKey(t, "production.recovered.f", "{companion} одужала і повернулася до справ.");
             AddKey(t, "production.food_shortage", "Їжі не вистачає — це вже видно.");
             AddKey(t, "item.scout_horn.forewarn_boosted", "Ріг розвідника чує далі: {charges} наступні передвісники чутніші.");
         }
@@ -1561,6 +1573,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.gear.stash.empty", "Схованка порожня.");
             AddKey(t, "ui.gear.stash.title", "Схованка");
             AddKey(t, "ui.gear.craft", "Покращити");
+            // Фікс-ревью (minor, знайдено QA): крафт-кнопка з причиною
+            // "workshop_closed" малювалась ЛИШЕ на предметах схованки — коли
+            // схованка порожня (найпоширеніший стан на старті), розділ не
+            // показував про Майстерню взагалі нічого, на відміну від Buildings/
+            // Council, де причина недоступності видно ДО кліку завжди.
+            AddKey(t, "ui.gear.craft.workshop_note", "Крафт недоступний: потрібна Майстерня.");
 
             // Полірування (ціль 2 «Прозорість дій», owner: "show the stash
             // with items (name, rarity, what it improves) ... Craft upgrade

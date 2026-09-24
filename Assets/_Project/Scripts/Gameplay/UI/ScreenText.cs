@@ -572,6 +572,19 @@ namespace Game.Gameplay.UI
         {
             public string Text;
             public int Count;
+
+            /// <summary>
+            /// Фікс-ревью (minor, знайдено QA): групова реакція складу
+            /// (roster.rippled.*) — той самий шаблон, той самий тригер, але
+            /// РІЗНИЙ підмет (companionId), тож звичайне ×N-згортання вище
+            /// (порівняння за вже резолвненим текстом, де ім'я вже вшите) їх
+            /// не бачить: п'ять "Мирослава: ... мовчки слухає ..." рядків з
+            /// різними іменами топили невелику панель стрічки. Імена решти
+            /// реагуючих — тут, а не в <see cref="Text"/>: перший рядок
+            /// лишається граматично цілим (однина дієслова), решта учасників
+            /// дописуються окремим переліком (GameShell.DrawEventFeed).
+            /// </summary>
+            public List<string> AlsoNames;
         }
 
         /// <summary>
@@ -589,16 +602,47 @@ namespace Game.Gameplay.UI
         {
             var result = new List<FeedLine>();
             if (log == null) return result;
+            GameEvent prevEvt = null;
             for (int i = log.Count - 1; i >= 0; i--)
             {
-                string text = EventLine(log[i], gender, roster);
+                var evt = log[i];
+                string text = EventLine(evt, gender, roster);
                 if (string.IsNullOrEmpty(text)) continue;
+
                 if (result.Count > 0 && result[result.Count - 1].Text == text)
+                {
                     result[result.Count - 1].Count++;
+                }
+                else if (result.Count > 0 && IsGroupReactionOf(prevEvt, evt))
+                {
+                    // Той самий тригер/подія, інший реагуючий підмет (див.
+                    // FeedLine.AlsoNames) — не новий рядок, а ім'я до вже
+                    // доданого.
+                    var last = result[result.Count - 1];
+                    if (last.AlsoNames == null) last.AlsoNames = new List<string>();
+                    last.AlsoNames.Add(ResolveCompanionName(Arg(evt.Args, "companionId"), gender, roster));
+                }
                 else
+                {
                     result.Add(new FeedLine { Text = text, Count = 1 });
+                }
+                prevEvt = evt;
             }
             return result;
+        }
+
+        /// <summary>Див. <see cref="FeedLine.AlsoNames"/>: групова реакція — той самий ключ і той самий triggerId, інший companionId.</summary>
+        private static bool IsGroupReactionOf(GameEvent prev, GameEvent evt)
+        {
+            if (prev == null || evt == null) return false;
+            if (!string.Equals(prev.Key, evt.Key, System.StringComparison.Ordinal)) return false;
+            if (prev.Key == null || !prev.Key.StartsWith("roster.rippled.", System.StringComparison.Ordinal)) return false;
+            string prevTrigger = Arg(prev.Args, "triggerId");
+            string evtTrigger = Arg(evt.Args, "triggerId");
+            if (string.IsNullOrEmpty(prevTrigger) || !string.Equals(prevTrigger, evtTrigger, System.StringComparison.Ordinal)) return false;
+            string prevSubject = Arg(prev.Args, "companionId");
+            string evtSubject = Arg(evt.Args, "companionId");
+            return !string.Equals(prevSubject, evtSubject, System.StringComparison.Ordinal);
         }
     }
 }
