@@ -302,5 +302,22 @@ namespace Game.Tests.EditMode
             StringAssert.Contains("дорога", line);
             StringAssert.DoesNotContain("road", line);
         }
+
+        // Фікс-ревью (major, раунд 2, знайдено QA): GameSession.LogEvent(
+        // "char.seen", Args("char", actorId)) називає суб'єкта через сирий
+        // аргумент "char", а не "companionId" — EventLine раніше читав лише
+        // "companionId", тож {char} підставлявся порожнім рядком і стрічка
+        // показувала " тут." замість "Тугар Вовк тут.".
+        [Test]
+        public void EventLine_CharSeen_ResolvesNameFromRawCharArg()
+        {
+            var args = new Dictionary<string, string> { { "char", "tuhar" } };
+            var evt = new GameEvent("char.seen", 1, Game.Core.Loop.DayPhase.Day, args);
+
+            string line = ScreenText.EventLine(evt, Gender.Male, null);
+
+            StringAssert.Contains("Тугар Вовк", line);
+            StringAssert.AreEqualIgnoringCase("Тугар Вовк тут.", line);
+        }
     }
 }

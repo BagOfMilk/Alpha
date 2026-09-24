@@ -345,7 +345,7 @@ namespace Game.Gameplay.UI
                         bool previousEnabled = GUI.enabled;
                         GUI.enabled = legality.Enabled || wasIn;
                         bool now = GUILayout.Toggle(wasIn, ScreenText.ResolveCompanionName(c.Id, g, roster) +
-                            (legality.Enabled ? "" : " (" + UkrainianText.Get(legality.ReasonKey, g) + ")"));
+                            (legality.Enabled ? "" : " (" + ScreenText.ReasonText(legality, g) + ")"));
                         GUI.enabled = previousEnabled;
                         if (now && !wasIn) { _party.Add(c.Id); _preview = null; }
                         else if (!now && wasIn) { _party.Remove(c.Id); _preview = null; }
@@ -363,7 +363,7 @@ namespace Game.Gameplay.UI
             }
             else
             {
-                Widgets.DisabledButton(UkrainianText.Get("ui.expedition.preview", g), UkrainianText.Get(partyLegality.ReasonKey, g), GUILayout.Width(200f));
+                Widgets.DisabledButton(UkrainianText.Get("ui.expedition.preview", g), ScreenText.ReasonText(partyLegality, g), GUILayout.Width(200f));
             }
 
             if (_preview != null && partyLegality.Enabled)

@@ -257,9 +257,23 @@ namespace Game.Gameplay
             // Фікс-ревью (major): тут стояв сирий view.Phase.ToString() — енум-
             // назва ("Day"/"Night") друкувалась прямо в HUD англійською на
             // майже кожному екрані після відкриття (R7 такого не дозволяє).
-            string phaseKey = view.Phase == Game.Core.Loop.DayPhase.Night
-                ? "ui.topbar.phase.night"
-                : "ui.topbar.phase.day";
+            //
+            // Фікс-ревью (minor, раунд 2, знайдено QA): view.Phase — це
+            // внутрішня модель ДВОХ фаз конвеєра дня і ще не перемикається на
+            // Day, доки гравець не натисне "Почати день" (HubScreen.Draw —
+            // ця кнопка малюється однаково на Morning І на FreePlay, обидва
+            // стани йдуть тим самим _hub.Draw) — GameSession лишає Phase=Night
+            // до ConfirmMorning/AdvanceDay, тож хаб-екран "Доба N, Почати
+            // день" показував суперечливе "Ніч" у шапці. На обох цих станах
+            // підпис веде Session.State (ранок настав для гравця вже зараз),
+            // а не внутрішня фаза конвеєра.
+            string phaseKey;
+            if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
+                phaseKey = "ui.topbar.phase.morning";
+            else
+                phaseKey = view.Phase == Game.Core.Loop.DayPhase.Night
+                    ? "ui.topbar.phase.night"
+                    : "ui.topbar.phase.day";
             GUILayout.Label(UkrainianText.Get(phaseKey, g), AlphaSkin.Body, GUILayout.ExpandWidth(false));
             GUILayout.Space(12f);
             GUILayout.Label(UkrainianText.Format("ui.topbar.mood", g, "band", ScreenText.MoodChip(view.TensionBand, g)), AlphaSkin.Body, GUILayout.ExpandWidth(false));

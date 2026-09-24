@@ -1575,7 +1575,13 @@ namespace Game.Core.Session
             }
             else
             {
-                BeginScene(OpeningScenes.PassResolution(PassVanguardOutcome.ResolveKey(band, wasBloody)), SessionState.Evening);
+                // Фікс-ревью (major, раунд 2): справжній тактичний бій міг уже
+                // вбити Максима (ApplyBattleCasualties, раніше в цьому ж
+                // FinishBattle) — сценарний текст полос good/worst не повинен
+                // стверджувати "поранений" про того, хто щойно "загинув" у
+                // стрічці подій вище.
+                bool maksymDead = _state.Roster.Get(PassVanguardOutcome.MaksymId)?.IsDead == true;
+                BeginScene(OpeningScenes.PassResolution(PassVanguardOutcome.ResolveKey(band, wasBloody, maksymDead)), SessionState.Evening);
             }
         }
 
@@ -1881,8 +1887,34 @@ namespace Game.Core.Session
 
             if (report.Signals != null && report.Signals.Requests != null)
                 foreach (var req in report.Signals.Requests)
-                    LogEvent(req.TopicId, Args("channel", req.Channel.ToString(), "urgency", req.Urgency.ToString(),
+                    LogEvent(AdjustPassVanguardTopicIfMaksymDead(req.TopicId),
+                        Args("channel", req.Channel.ToString(), "urgency", req.Urgency.ToString(),
                         "subject", req.SubjectId, "delta", req.IsDelta ? "1" : "0"));
+        }
+
+        /// <summary>
+        /// Фікс-ревью (major, раунд 2, знайдено QA): SignalComposer (Core,
+        /// чистий C#) генерує ключ стрічки подій для вузла 1 механічно —
+        /// <c>inc.TopicId + "." + inc.Band</c> → "incident.pass_vanguard.Good"/
+        /// "...Worst" — той самий 4-полосний абстрактний розв'язок, що й
+        /// <see cref="PassVanguardOutcome.ResolveKey"/> (яка вже враховує
+        /// maksymDead для сценарного "«…»"), але ЦЕЙ ключ живе окремо в
+        /// сигнальному шарі й друкується прямо у стрічку подій (DayLog) —
+        /// саме його показав QA-скріншот. Core не знає про "справжня смерть у
+        /// тактичному бою" (Gameplay-концепт), тож підміна — тут, на межі,
+        /// де GameSession уже має і ready-to-log топік, і справжній стан
+        /// ростера. Чіпає ЛИШЕ ці два топіки — усі інші сигнали проходять без
+        /// змін.
+        /// </summary>
+        private string AdjustPassVanguardTopicIfMaksymDead(string topicId)
+        {
+            if (string.IsNullOrEmpty(topicId)) return topicId;
+            bool good = string.Equals(topicId, "incident.pass_vanguard.Good", StringComparison.Ordinal);
+            bool worst = string.Equals(topicId, "incident.pass_vanguard.Worst", StringComparison.Ordinal);
+            if (!good && !worst) return topicId;
+
+            bool maksymDead = _state?.Roster.Get(PassVanguardOutcome.MaksymId)?.IsDead == true;
+            return maksymDead ? topicId + "_dead" : topicId;
         }
 
         private void SettleAfterDayReport(DayReport report)

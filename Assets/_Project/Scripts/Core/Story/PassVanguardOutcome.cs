@@ -49,6 +49,25 @@ namespace Game.Core.Story
 
         /// <summary>"best"|"good"|"base"|"worst" — той самий формат, що <c>Finale.ResolveKey</c>.</summary>
         public static string ResolveKey(OutcomeBand band, bool wasBloody)
+            => ResolveKey(band, wasBloody, maksymDead: false);
+
+        /// <summary>
+        /// Фікс-ревью (major, раунд 2, знайдено QA): "good"/"worst" — єдині
+        /// полоси, чий канонічний текст стверджує "Максим поранений". Це
+        /// АБСТРАКТНИЙ розв'язок вузла (§3.1) — окремо від нього справжній
+        /// тактичний бій (CombatAutoResolve) міг того самого Максима вже
+        /// вбити по-справжньому (ApplyBattleCasualties → RosterAdapter.Kill,
+        /// раніше в тому самому виклику GameSession.FinishBattle). Стан
+        /// ростера лишався коректним (WoundReporting не чіпає вже мертвого —
+        /// <c>c.IsDead</c> guard), але гравець читав СЛОВА "поранений" одразу
+        /// після рядка стрічки подій "Максим Беркут загинув" — пряма
+        /// суперечність. <paramref name="maksymDead"/> — це вже зафіксований
+        /// (справжній, посмертний) стан ростера на момент виклику, тож
+        /// good/worst перемикаються на "_dead"-варіант тексту, а не на нову
+        /// класифікацію полоси (полоса й далі описує ЯКІСТЬ бою — склад/
+        /// Мирослава — незалежно від Максима).
+        /// </summary>
+        public static string ResolveKey(OutcomeBand band, bool wasBloody, bool maksymDead)
         {
             // wasBloody не змінює САМ ключ (розв'язки однакові по суті що для
             // тихого, що для кровавого шляху, §3.1) — параметр лишений для
@@ -57,9 +76,9 @@ namespace Game.Core.Story
             switch (band)
             {
                 case OutcomeBand.Best: return "best";
-                case OutcomeBand.Good: return "good";
+                case OutcomeBand.Good: return maksymDead ? "good_dead" : "good";
                 case OutcomeBand.Base: return "base";
-                default: return "worst";
+                default: return maksymDead ? "worst_dead" : "worst";
             }
         }
 

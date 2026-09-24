@@ -65,6 +65,21 @@ namespace Game.Gameplay
         public Camera ArenaCamera;
         public string HubCameraName = "HubCamera";
 
+        /// <summary>
+        /// Фікс-ревью (minor, раунд 2, знайдено QA): <c>World/Hub</c> і
+        /// <c>World/BattleArena</c> ділять ту саму систему координат
+        /// (GameSceneBuilder жодного разу не зсуває арену — обидва корені
+        /// починаються з (0,0,0) під <c>World</c>), тому грид бою (світовий
+        /// X/Z 0..~10, <see cref="BattleArenaView.TileToWorld"/>) впритул
+        /// накладається на розкладку хутора (пости/будівлі приблизно в тому
+        /// самому діапазоні). Раніше <see cref="SwapToArenaCamera"/> міняла
+        /// лише КАМЕРИ — хаб (жителі на постах і т.д.) лишався активним і
+        /// потрапляв у кадр камери бою згори як непідписана фігура без
+        /// кільця сторони. Повний шлях (не голе "Hub" — під <c>UI/</c> є
+        /// однойменний порожній корінь) знаходить саме 3D-хаб.
+        /// </summary>
+        public string HubRootName = "World/Hub";
+
         public GameObject[] MaleCharacterPrefabs = new GameObject[0];
         public GameObject[] FemaleCharacterPrefabs = new GameObject[0];
         public GameObject[] CoverHalfPrefabs = new GameObject[0];
@@ -81,6 +96,7 @@ namespace Game.Gameplay
         private Transform _propRoot;
         private Material _tileMaterial;
         private Camera _hubCamera;
+        private GameObject _hubRoot;
 
         private BattleView _lastView;
         private int _gridWidth, _gridHeight;
@@ -930,8 +946,13 @@ namespace Game.Gameplay
                 var hub = GameObject.Find(HubCameraName);
                 _hubCamera = hub != null ? hub.GetComponent<Camera>() : null;
             }
+            if (_hubRoot == null) _hubRoot = GameObject.Find(HubRootName);
 
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(false);
+            // Ховаємо і сам 3D-хаб (див. коментар на HubRootName) — інакше
+            // жителі на постах лишаються в кадрі арени, накладеної на ту
+            // саму систему координат.
+            if (_hubRoot != null) _hubRoot.SetActive(false);
             if (ArenaCamera != null) ArenaCamera.gameObject.SetActive(true);
         }
 
@@ -939,6 +960,7 @@ namespace Game.Gameplay
         {
             if (ArenaCamera != null) ArenaCamera.gameObject.SetActive(false);
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(true);
+            if (_hubRoot != null) _hubRoot.SetActive(true);
         }
 
         /// <summary>

@@ -7,6 +7,14 @@ namespace Game.Core.Base
     ///
     /// Цены и сроки — ПЛЕЙСХОЛДЕР. Разбивка по цене — из самого GDD: ядро-здания
     /// строятся за золото, специальные — за золото и строительный компонент.
+    ///
+    /// <c>DisplayName</c> — Core-контентное поле, гравець його НЕ бачить (R7,
+    /// CLAUDE.md): показ іде через <c>UkrainianText.Get("building.&lt;id&gt;", …)</c>
+    /// (Gameplay/Text/UkrainianText.cs). Раніше тут лежав російський текст —
+    /// фікс-ревью (раунд 2, blocker): 3D-мітка ділянки читала це поле напряму
+    /// й показувала гравцю "Мастерская" замість "Майстерня". Поле лишили —
+    /// прибрати цілком дорожче, ніж переписати — але тепер воно теж українською,
+    /// щоб жоден інший шлях читання DisplayName більше не міг протягти РФ-текст.
     /// </summary>
     public static class DefaultBuildings
     {
@@ -38,7 +46,7 @@ namespace Game.Core.Base
             };
             yield return new BuildingDefinition
             {
-                Id = Workshop, DisplayName = "Мастерская",
+                Id = Workshop, DisplayName = "Майстерня",
                 GoldCost = 30, Days = 4,
                 Effect = BuildingEffect.OpensPost, OpensSlotId = "workshop_bench"
             };
@@ -50,7 +58,7 @@ namespace Game.Core.Base
             };
             yield return new BuildingDefinition
             {
-                Id = CouncilHall, DisplayName = "Зал совета",
+                Id = CouncilHall, DisplayName = "Зала ради",
                 GoldCost = 40, Days = 5,
                 Effect = BuildingEffect.CouncilActions, OpensSlotId = "council_seat"
             };
@@ -58,7 +66,7 @@ namespace Game.Core.Base
             // ---- Специальные: золото + строительный компонент ----
             yield return new BuildingDefinition
             {
-                Id = Market, DisplayName = "Рынок",
+                Id = Market, DisplayName = "Ринок",
                 GoldCost = 40, MaterialsCost = 4, Days = 6,
                 Effect = BuildingEffect.OpensPost, OpensSlotId = "settlement_market"
             };
@@ -76,19 +84,19 @@ namespace Game.Core.Base
             };
             yield return new BuildingDefinition
             {
-                Id = Fortifications, DisplayName = "Укрепления",
+                Id = Fortifications, DisplayName = "Укріплення",
                 GoldCost = 45, MaterialsCost = 8, Days = 8,
                 Effect = BuildingEffect.Fortifications
             };
             yield return new BuildingDefinition
             {
-                Id = Armory, DisplayName = "Оружейная",
+                Id = Armory, DisplayName = "Збройня",
                 GoldCost = 60, MaterialsCost = 6, Days = 8,
                 Effect = BuildingEffect.Awaiting, AwaitingNote = "ждёт снаряжения (Э4)"
             };
             yield return new BuildingDefinition
             {
-                Id = Laboratory, DisplayName = "Лаборатория",
+                Id = Laboratory, DisplayName = "Лабораторія",
                 GoldCost = 80, MaterialsCost = 10, Days = 10, QuestOnly = true,
                 Effect = BuildingEffect.Awaiting, AwaitingNote = "приходит по квесту, ждёт аугментов (Э6)"
             };

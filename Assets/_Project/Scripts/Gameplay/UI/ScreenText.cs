@@ -32,13 +32,35 @@ namespace Game.Gameplay.UI
             public readonly bool Enabled;
             public readonly string ReasonKey;
 
-            public Legality(bool enabled, string reasonKey)
+            /// <summary>
+            /// Id підмета причини (той, хто "Загинув"/"недоступний"), коли
+            /// відомий — фікс-ревью (major, раунд 2): без нього
+            /// ReasonText брав рід ГЛЯДАЧА для чужого стану, і "ui.reason.*"
+            /// показувались із неперекритою чоловічою заглушкою "(-ла)"/
+            /// "(-на)" замість дібраної форми (Мирослава читала "недоступний
+            /// (-на)" замість "недоступна").
+            /// </summary>
+            public readonly string SubjectId;
+
+            public Legality(bool enabled, string reasonKey, string subjectId = null)
             {
                 Enabled = enabled;
                 ReasonKey = reasonKey;
+                SubjectId = subjectId;
             }
 
             public static readonly Legality Ok = new Legality(true, null);
+        }
+
+        /// <summary>
+        /// Текст причини недоступності — рід підмета (<see cref="Legality.SubjectId"/>),
+        /// не глядача, тим самим <see cref="SubjectGender"/>, що вже коректно
+        /// працює в EventLine/CompanionStatusLabel.
+        /// </summary>
+        public static string ReasonText(Legality legality, Gender viewerGender)
+        {
+            if (string.IsNullOrEmpty(legality.ReasonKey)) return string.Empty;
+            return UkrainianText.Get(legality.ReasonKey, SubjectGender(legality.SubjectId, viewerGender));
         }
 
         /// <summary>
@@ -53,9 +75,9 @@ namespace Game.Gameplay.UI
             if (companion == null) return new Legality(false, "ui.reason.unknown_companion");
             switch (companion.Status)
             {
-                case CompanionStatus.Dead: return new Legality(false, "ui.reason.dead");
-                case CompanionStatus.OnMission: return new Legality(false, "ui.reason.on_mission");
-                case CompanionStatus.Antagonist: return new Legality(false, "ui.reason.antagonist");
+                case CompanionStatus.Dead: return new Legality(false, "ui.reason.dead", companion.Id);
+                case CompanionStatus.OnMission: return new Legality(false, "ui.reason.on_mission", companion.Id);
+                case CompanionStatus.Antagonist: return new Legality(false, "ui.reason.antagonist", companion.Id);
                 default: return Legality.Ok;
             }
         }
@@ -342,7 +364,15 @@ namespace Game.Gameplay.UI
             if (evt == null || string.IsNullOrEmpty(evt.Key)) return string.Empty;
             var a = evt.Args;
 
-            string companion = ResolveCompanionName(Arg(a, "companionId"), gender, roster);
+            // Фікс-ревью (major, раунд 2, знайдено QA): "char.seen" (і будь-яка
+            // інша подія, що називає суб'єкта через сирий аргумент "char", а не
+            // "companionId" — GameSession.LogEvent("char.seen", Args("char",
+            // actorId))) раніше давала companion = "" (ResolveCompanionName з
+            // null), і цей порожній рядок ставав парою "char" РАНІШЕ за сирий
+            // цикл-фолбек нижче — стрічка показувала " тут." замість "Тугар
+            // Вовк тут.". Тепер companionId-аргумент має пріоритет, а "char" —
+            // резервне джерело id того самого підмета.
+            string companion = ResolveCompanionName(Arg(a, "companionId") ?? Arg(a, "char"), gender, roster);
             string post = ContentLabel("post", Arg(a, "slotId") ?? Arg(a, "post"), gender);
             string band = BandWordsFor(Arg(a, "band"), gender);
             string item = ContentLabel("item", Arg(a, "itemId") ?? Arg(a, "item"), gender);
@@ -373,7 +403,7 @@ namespace Game.Gameplay.UI
             // загинула" (жіноча форма), щойно протагоніст обирав жіночий рід,
             // незалежно від того, хто насправді загинув. Ключ вибирається за
             // родом ІМЕННОГО суб'єкта події (companionId), коли він відомий.
-            Gender subjectGender = SubjectGender(Arg(a, "companionId"), gender);
+            Gender subjectGender = SubjectGender(Arg(a, "companionId") ?? Arg(a, "char"), gender);
             if (!UkrainianText.Has(evt.Key, subjectGender)) return FallbackLine(evt.Key, a);
 
             // Шаблоны таблицы пишут подстановки двумя способами: читаемыми

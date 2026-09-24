@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
+using Game.Core.Characters.Creation;
+using Game.Gameplay.Text;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -303,8 +305,11 @@ namespace Game.Gameplay.EditorTools
 
         private static void Plot(GameObject root, string buildingId, Vector3 at, int width, int depth, bool wood)
         {
-            var def = Game.Core.Base.DefaultBuildings.Get(buildingId);
-            KitBuilder.Plot(Town, root, buildingId, def != null ? def.DisplayName : buildingId, at, width, depth, wood);
+            // R7/CLAUDE.md: гравець ніколи не бачить Core-контентний DisplayName —
+            // 3D-мітка йде через ту саму таблицю "building.<id>", що й UI-панелі
+            // (HubScreen/SummaryScreen), а не через def.DisplayName (Core, RU).
+            string label = UkrainianText.Get("building." + buildingId, Gender.Male);
+            KitBuilder.Plot(Town, root, buildingId, label, at, width, depth, wood);
         }
     }
 }

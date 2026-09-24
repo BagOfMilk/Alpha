@@ -922,6 +922,14 @@ namespace Game.Gameplay.Text
             AddKey(t, "scene.pass.good", "«Максим не встане пару днів. Але склад цілий».");
             AddKey(t, "scene.pass.base", "«Вона пішла за батьком. А склад вичистили до дощок».");
             AddKey(t, "scene.pass.worst", "«Максим поранений, її нема, складу нема. Громада дивиться й мовчить».");
+            // Фікс-ревью (major, раунд 2, знайдено QA): справжній тактичний
+            // бій (CombatAutoResolve) міг уже вбити Максима до того, як
+            // спрацює цей абстрактний розв'язок вузла (§3.1) — good/worst не
+            // мають права стверджувати "поранений" про того, хто щойно
+            // "загинув" у стрічці подій. PassVanguardOutcome.ResolveKey
+            // перемикає на ці ключі, коли Roster.Get("maksym").IsDead.
+            AddKey(t, "scene.pass.good_dead", "«Максима не вберегли. Але склад цілий».");
+            AddKey(t, "scene.pass.worst_dead", "«Максима не вберегли, її нема, складу нема. Громада дивиться й мовчить».");
 
             // Transition-ключі ScenePlayback.TransitionKey (SceneStepView) —
             // текст не показується напряму (переходи мовчазні), але §6.2
@@ -1021,6 +1029,14 @@ namespace Game.Gameplay.Text
                 "Ти з Максимом стоїш. Мирослава йде за батьком — назад до орди. Склад розграбований.");
             AddKey(t, "incident.pass_vanguard.Worst",
                 "Максим ранений. Мирослава йде. Склад розграбований, і громада тепер боїться голосно говорити.");
+            // Фікс-ревью (major, раунд 2, знайдено QA): той самий case, що
+            // scene.pass.good_dead/worst_dead вище — справжній тактичний бій
+            // міг уже вбити Максима до того, як цей сигнал потрапить у
+            // стрічку подій (GameSession.AdjustPassVanguardTopicIfMaksymDead
+            // перемикає топік на ці ключі, коли Roster.Get("maksym").IsDead).
+            AddKey(t, "incident.pass_vanguard.Good_dead", "Максима не вберегли. Мирослава з тобою. Склад цілий.");
+            AddKey(t, "incident.pass_vanguard.Worst_dead",
+                "Максима не вберегли. Мирослава йде. Склад розграбований, і громада тепер боїться голосно говорити.");
         }
 
         private static void AddIncidentBand(Dictionary<string, string> t, string incidentId,
@@ -1223,6 +1239,10 @@ namespace Game.Gameplay.Text
             // відкриття.
             AddKey(t, "ui.topbar.phase.day", "День");
             AddKey(t, "ui.topbar.phase.night", "Ніч");
+            // Фікс-ревью (minor, раунд 2, знайдено QA): екран Morning
+            // ("Почати день") — окремий підпис, не внутрішня Phase=Night, що
+            // лишається з попередньої ночі, доки гравець не натисне кнопку.
+            AddKey(t, "ui.topbar.phase.morning", "Ранок");
             AddKey(t, "ui.topbar.tier", "Тір {tier}");
             AddKey(t, "ui.topbar.crowd", "Люди: {band}");
             AddKey(t, "ui.topbar.mood", "Настрій: {band}");
@@ -1392,8 +1412,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.people.status", "Стан: {status}");
             AddKey(t, "ui.people.equipped", "Спорядження: {items}");
             AddKey(t, "ui.people.equipped.none", "нічого");
-            AddKey(t, "ui.people.sheet.limited",
-                "Повний листок персонажа (атрибути/скіли/трейти) GameSession поки не віддає в жодному View — тут лише те, що видно назовні.");
+            // Фікс-ревью (minor, раунд 2, знайдено QA): текст цього ключа
+            // раніше був інженерною заміткою-TODO ("GameSession поки не
+            // віддає в жодному View") — читався як баг, а не як ігровий
+            // текст, і показувався на кожному візиті вкладки "Люди". Технічне
+            // пояснення (чому листка нема) лишилось тут, у коментарі; гравцю
+            // тепер — нейтральний підпис.
+            AddKey(t, "ui.people.sheet.limited", "Видимі відомості про персонажа");
 
             AddKey(t, "ui.buildplanner.invest", "+1");
             AddKey(t, "ui.buildplanner.commit", "Підтвердити незворотно");
@@ -1413,9 +1438,19 @@ namespace Game.Gameplay.Text
         // ---- Текстовий фідбек результатів команд (AssignmentResult/BuildOrderResult/...) ----
         private static void AddE1bFeedback(Dictionary<string, string> t)
         {
-            AddKey(t, "ui.reason.dead", "Загинув(-ла) — не годиться.");
-            AddKey(t, "ui.reason.on_mission", "У полі — недоступний(-на).");
-            AddKey(t, "ui.reason.antagonist", "Проти нас — недоступний(-на).");
+            // Фікс-ревью (major, раунд 2, знайдено QA): раніше — один ключ
+            // із сирою дужковою нотацією роду ("Загинув(-ла)",
+            // "недоступний(-на)"), яку ScreenText/HubScreen ніколи не
+            // розбирали — гравець бачив нерозкриту заглушку буквально.
+            // Розбито на .m/.f за тим самим принципом, що й усі інші
+            // гендеровані ключі таблиці (R7); підбирає ScreenText.ReasonText
+            // за родом ПІДМЕТА (Legality.SubjectId), не глядача.
+            AddKey(t, "ui.reason.dead.m", "Загинув — не годиться.");
+            AddKey(t, "ui.reason.dead.f", "Загинула — не годиться.");
+            AddKey(t, "ui.reason.on_mission.m", "У полі — недоступний.");
+            AddKey(t, "ui.reason.on_mission.f", "У полі — недоступна.");
+            AddKey(t, "ui.reason.antagonist.m", "Проти нас — недоступний.");
+            AddKey(t, "ui.reason.antagonist.f", "Проти нас — недоступна.");
             AddKey(t, "ui.reason.unknown_companion", "Такого напарника немає.");
             AddKey(t, "ui.reason.empty_party", "Оберіть хоч когось у відряд.");
             AddKey(t, "ui.reason.duplicate_companion", "Один і той самий двічі в списку.");
