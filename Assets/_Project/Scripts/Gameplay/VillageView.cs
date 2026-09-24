@@ -114,6 +114,22 @@ namespace Game.Gameplay
                 "mood", MoodWords(mood));
         }
 
+        /// <summary>Заголовок до перших діб: доба 0, ранок, вигляд міста.</summary>
+        public static string OpeningHeadline(MoodboardState mood)
+        {
+            return UkrainianText.Format("village.headline", NeutralGender,
+                "day", "0",
+                "phase", UkrainianText.Get("village.headline.phase.morning", NeutralGender),
+                "mood", MoodWords(mood));
+        }
+
+        /// <summary>Перший рядок стрічки: хутір прокидається, скільки в ньому людей.</summary>
+        public static string OpeningLine(int people)
+        {
+            return UkrainianText.Format("village.opening", NeutralGender,
+                "count", people.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
         /// <summary>Как выглядит город: достаток и упадок словами, а не числами.</summary>
         public static string MoodWords(MoodboardState mood)
         {
@@ -161,6 +177,50 @@ namespace Game.Gameplay
             return lines;
         }
 
+        /// <summary>
+        /// Що замовив хазяїн — словами, щоб у стрічці було видно, чому місто
+        /// змінюється. Вхід — рядок <c>Steward.Act</c>: токени через пробіл
+        /// ("build:&lt;id&gt;", "staff:&lt;хто&gt;@&lt;пост&gt;", "raid", "settlers").
+        ///
+        /// R7: назви будівлі, жителя й поста — лише з таблиці за id
+        /// ("building.&lt;id&gt;", "char.&lt;id&gt;", "post.&lt;id&gt;"), а не
+        /// Core-контентний DisplayName. Нема перекладу — лишається сирий id:
+        /// пропажа тексту має бути видна, а не мовчати.
+        /// </summary>
+        public static List<string> OrderLines(string did)
+        {
+            var lines = new List<string>();
+            if (string.IsNullOrEmpty(did)) return lines;
+
+            foreach (var part in did.Split(' '))
+            {
+                if (part.StartsWith("build:"))
+                {
+                    lines.Add(UkrainianText.Format("village.order.build", NeutralGender,
+                        "building", NameById("building.", part.Substring(6))));
+                }
+                else if (part.StartsWith("staff:"))
+                {
+                    var pair = part.Substring(6).Split('@');
+                    if (pair.Length == 2 && pair[0].Length > 0 && pair[1].Length > 0)
+                        lines.Add(UkrainianText.Format("village.order.staff", NeutralGender,
+                            "who", NameById("char.", pair[0]),
+                            "post", NameById("post.", pair[1])));
+                }
+                else if (part == "raid") lines.Add(UkrainianText.Get("village.order.raid", NeutralGender));
+                else if (part == "settlers") lines.Add(UkrainianText.Get("village.order.settlers", NeutralGender));
+            }
+
+            return lines;
+        }
+
+        /// <summary>Назва за ключем "&lt;prefix&gt;&lt;id&gt;"; нема в таблиці — сам id, щоб пропажу було видно.</summary>
+        private static string NameById(string prefix, string id)
+        {
+            string key = prefix + id;
+            return UkrainianText.Has(key, NeutralGender) ? UkrainianText.Get(key, NeutralGender) : id;
+        }
+
         private static string IncidentLine(IncidentOutcome outcome)
         {
             string what = TopicWords(outcome.TopicId);
@@ -182,11 +242,7 @@ namespace Game.Gameplay
                 // напарник), id лишається видимим — пропажа тексту зобов'язана
                 // бути помітною, а не мовчати (той самий принцип, що й вище
                 // для незнайомого ключа сигналу).
-                string charKey = "char." + outcome.AffectedActorId;
-                string name = UkrainianText.Has(charKey, NeutralGender)
-                    ? UkrainianText.Get(charKey, NeutralGender)
-                    : outcome.AffectedActorId;
-                line += " (" + name + ")";
+                line += " (" + NameById("char.", outcome.AffectedActorId) + ")";
             }
 
             return line;

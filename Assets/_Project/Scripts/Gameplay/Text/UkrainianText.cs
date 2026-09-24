@@ -193,6 +193,9 @@ namespace Game.Gameplay.Text
             // ==== E2: бойова презентація (арена/портрети/HUD) — див. блок унизу файлу. ====
             AddBattlePresentationE2(t);
 
+            // ==== VillageLife: накази хазяїна й підписи сцени — див. блок унизу файлу. ====
+            AddVillageLifeKeys(t);
+
             return t;
         }
 
@@ -1551,6 +1554,40 @@ namespace Game.Gameplay.Text
             // екран без виходу неприпустимий (§BattleHudScreen.DrawUnavailablePanel).
             AddKey(t, "ui.battle.unavailable", "Бій зараз недоступний.");
             AddKey(t, "ui.battle.unavailable.exit", "Назад");
+        }
+
+        // ==== VillageLife: накази хазяїна й підписи сцени села — власний блок ====
+        // ==== в кінці таблиці, щоб мердж інших пакетів лишався тривіальним.   ====
+        //
+        // Фікс-ревью (R7): Gameplay/VillageLife.cs писав у стрічку подій села
+        // російські літерали ("Заложили: …", "… встал на пост: …", "Совет
+        // позвал облаву", "Совет принимает переселенцев") і читав Core-контентні
+        // DisplayName будівлі, жителя й поста напряму. Тепер рядки складає
+        // VillageView.OrderLines: назви — за ключами building.<id>/post.<id>
+        // (уже є вище, AddBuildingIds/AddPostsAndAssignment) і char.<id> (нижче).
+        private static void AddVillageLifeKeys(Dictionary<string, string> t)
+        {
+            // "заступає" навмисно без роду: у Companion його немає, тож
+            // варіант .m/.f обирати нема за чим.
+            AddKey(t, "village.order.build", "Заклали: {building}.");
+            AddKey(t, "village.order.staff", "{who} заступає на пост: {post}.");
+            AddKey(t, "village.order.raid", "Рада скликала облаву.");
+            AddKey(t, "village.order.settlers", "Рада приймає переселенців.");
+
+            // Перший рядок стрічки й заголовок до перших діб ("Доба 0 · ранок · хутір").
+            AddKey(t, "village.opening", "Хутір прокидається. Людей — {count}, і ще не все збудовано.");
+            AddKey(t, "village.headline.phase.morning", "ранок");
+
+            // Службовий ростер сцени села (VillageLife.BuildRoster) — імена за
+            // id, як і в іменних персонажів. Іменний ростер прийде з карткою
+            // персонажа (Поправка №5.2), і ці рядки підуть разом зі службовими
+            // id. char.medic/char.scout — ті самі id, що в DefaultContent.
+            AddKey(t, "char.hero", "Ватажок");
+            AddKey(t, "char.guard", "Вартовий");
+            AddKey(t, "char.trader", "Міняйло");
+            AddKey(t, "char.medic", "Лікар");
+            AddKey(t, "char.farmer", "Господар");
+            AddKey(t, "char.scout", "Розвідник");
         }
     }
 }

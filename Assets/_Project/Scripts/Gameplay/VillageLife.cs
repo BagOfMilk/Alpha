@@ -162,7 +162,7 @@ namespace Game.Gameplay
             _timer = 0f;
             _lines.Clear();
 
-            Say("Хутор просыпается. " + _roster.All.Count + " человек, и не всё ещё построено.");
+            Say(VillageView.OpeningLine(_roster.All.Count));
             Apply(null, DayPhase.Day);
         }
 
@@ -223,7 +223,7 @@ namespace Game.Gameplay
             if (headline != null)
                 headline.text = report != null
                     ? VillageView.Headline(report, mood)
-                    : "Сутки 0 · утро · " + VillageView.MoodWords(mood);
+                    : VillageView.OpeningHeadline(mood);
 
             if (log != null) log.text = string.Join("\n", _lines.ToArray());
         }
@@ -355,29 +355,14 @@ namespace Game.Gameplay
             return _posts.TryGetValue(postId, out anchor);
         }
 
-        /// <summary>Что заказал хозяин — словами, чтобы в ленте было видно, почему город меняется.</summary>
+        /// <summary>
+        /// Что заказал хозяин — словами, чтобы в ленте было видно, почему город
+        /// меняется. Слова считает <see cref="VillageView.OrderLines"/> по
+        /// ключам таблицы (R7): здесь ни литералов, ни DisplayName из ядра.
+        /// </summary>
         private void SayOrders(string did)
         {
-            if (string.IsNullOrEmpty(did)) return;
-
-            foreach (var part in did.Split(' '))
-            {
-                if (part.StartsWith("build:"))
-                {
-                    var def = DefaultBuildings.Get(part.Substring(6));
-                    Say("Заложили: " + (def != null ? def.DisplayName : part));
-                }
-                else if (part.StartsWith("staff:"))
-                {
-                    var pair = part.Substring(6).Split('@');
-                    var who = pair.Length == 2 ? _roster.Get(pair[0]) : null;
-                    var slot = pair.Length == 2 ? _base.GetSlot(pair[1]) : null;
-                    if (who != null && slot != null)
-                        Say(who.DisplayName + " встал на пост: " + slot.Definition.DisplayName);
-                }
-                else if (part == "raid") Say("Совет позвал облаву");
-                else if (part == "settlers") Say("Совет принимает переселенцев");
-            }
+            foreach (var line in VillageView.OrderLines(did)) Say(line);
         }
 
         private void Say(string line)
