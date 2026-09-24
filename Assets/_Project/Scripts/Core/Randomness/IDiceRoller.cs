@@ -7,7 +7,7 @@ namespace Game.Core.Randomness
     /// (Core_NoTypeImplementsIDiceRoller) держит это рефлексией по сборке.
     /// Настоящая сидированная реализация (SeededDiceRoller) — чистый C# в
     /// Game.Gameplay, подключённый к headless-инструментам прямым
-    /// &lt;Compile Include&gt;, как SceneText.cs/SignalText.cs. В режиме
+    /// &lt;Compile Include&gt;, как UkrainianText.cs (пакет E3b). В режиме
     /// ThresholdRule этот интерфейс не вызывается вовсе — бой полностью
     /// детерминирован без него.
     /// </summary>

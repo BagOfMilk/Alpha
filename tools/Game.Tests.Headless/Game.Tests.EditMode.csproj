@@ -33,7 +33,7 @@
     <!--
       Б1 (R1): SeededDiceRoller — чистый C# без UnityEngine, реализация
       IDiceRoller для тестов детерминизма/автобоя. Тем же приёмом, что и
-      VillageView.cs выше, и SceneText.cs/SignalText.cs в Alpha.Play.
+      VillageView.cs выше, и UkrainianText.cs ниже (пакет E3b) в Alpha.Play.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Combat/SeededDiceRoller.cs" />
     <!--

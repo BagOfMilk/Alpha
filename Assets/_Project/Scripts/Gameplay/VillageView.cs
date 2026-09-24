@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using Game.Core.Characters.Creation;
 using Game.Core.Checks;
 using Game.Core.Loop;
 using Game.Core.Signals;
 using Game.Core.World;
+using Game.Gameplay.Text;
 
 namespace Game.Gameplay
 {
@@ -98,11 +100,18 @@ namespace Game.Gameplay
                 backR, backG, backB);
         }
 
+        /// <summary>Слова гравцю, а не рід протагоніста (VillageView сама його не знає) — стала стать лукапу.</summary>
+        private const Gender NeutralGender = Gender.Male;
+
         /// <summary>Строка состояния: сутки, фаза и вид города словами.</summary>
         public static string Headline(DayReport report, MoodboardState mood)
         {
-            string phase = report.Phase == DayPhase.Night ? "ночь" : "день";
-            return "Сутки " + report.Day + " · " + phase + " · " + MoodWords(mood);
+            string phaseKey = report.Phase == DayPhase.Night ? "village.headline.phase.night" : "village.headline.phase.day";
+            string phase = UkrainianText.Get(phaseKey, NeutralGender);
+            return UkrainianText.Format("village.headline", NeutralGender,
+                "day", report.Day.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "phase", phase,
+                "mood", MoodWords(mood));
         }
 
         /// <summary>Как выглядит город: достаток и упадок словами, а не числами.</summary>
@@ -110,17 +119,16 @@ namespace Game.Gameplay
         {
             // Процветание в мудборде — это тир − 1 (Поправка №6.4): с тех пор
             // как тир растёт, его имя и есть лучшее описание достатка.
-            string prosperity;
-            if (mood.Prosperity >= 3) prosperity = "городок";
-            else if (mood.Prosperity == 2) prosperity = "слобода";
-            else if (mood.Prosperity == 1) prosperity = "село";
-            else prosperity = "хутор";
+            int tier = mood.Prosperity >= 3 ? 3 : (mood.Prosperity < 0 ? 0 : mood.Prosperity);
+            int decayStep = mood.Decay >= 3 ? 3 : (mood.Decay < 0 ? 0 : mood.Decay);
 
-            string decay;
-            if (mood.Decay >= 3) decay = ", заколочен и замусорен";
-            else if (mood.Decay == 2) decay = ", обветшал";
-            else if (mood.Decay == 1) decay = ", кое-где запущен";
-            else decay = "";
+            string tierKey = "village.mood.tier." + tier;
+            string prosperity = UkrainianText.Get(tierKey, NeutralGender);
+
+            // decayStep==0 навмисно немає рядка в таблиці (AddKey забороняє
+            // порожній текст) — порожній суфікс і є правильним результатом.
+            string decayKey = "village.mood.decay." + decayStep;
+            string decay = UkrainianText.Has(decayKey, NeutralGender) ? UkrainianText.Get(decayKey, NeutralGender) : "";
 
             return prosperity + decay;
         }
@@ -129,11 +137,11 @@ namespace Game.Gameplay
         /// Человеческие строки о прошедшей фазе: сначала что случилось, потом
         /// что слышно.
         ///
-        /// ЧЕСТНАЯ ПОМЕТКА. Тексты здесь временные. По Поправке №3.4 реплики
-        /// живут в таблицах контента, ядро отдаёт только ключ и теги, и
-        /// писателю не нужен программист. Пока таблиц нет, ключи переводятся
-        /// этим словарём, а незнакомый ключ показывается как есть — чтобы
-        /// пропажа реплики была ВИДНА, а не молчала.
+        /// Пакет E3b: реплики идут через <see cref="UkrainianText"/> (Поправка
+        /// №3.4 — писателю не нужен программист, R7 — Core отдаёт только ключ).
+        /// Незнакомый ключ (которого таблица ещё не знает) по-прежнему
+        /// показывается как есть ("· topicId") — пропажа реплики обязана быть
+        /// ВИДНА, а не молчать.
         /// </summary>
         public static List<string> Lines(DayReport report)
         {
@@ -158,13 +166,15 @@ namespace Game.Gameplay
             string what = TopicWords(outcome.TopicId);
             string how = BandWords(outcome.Band);
 
-            string line = outcome.WasCrisis ? "КРИЗИС: " + what : what;
-            line += " — " + how;
+            string template = outcome.WasCrisis ? "village.incident.crisis_line" : "village.incident.line";
+            string line = UkrainianText.Format(template, NeutralGender, "what", what, "how", how);
 
-            if (outcome.WasUnmanned) line += "; на посту никого не было";
-            if (outcome.CausedFear) line += "; община напугана";
-            if (outcome.PopulationLost > 0) line += "; люди уходят";
-            if (outcome.PeopleArrived > 0) line += "; с ними пришли ещё " + outcome.PeopleArrived;
+            if (outcome.WasUnmanned) line += UkrainianText.Get("village.incident.suffix.unmanned", NeutralGender);
+            if (outcome.CausedFear) line += UkrainianText.Get("village.incident.suffix.fear", NeutralGender);
+            if (outcome.PopulationLost > 0) line += UkrainianText.Get("village.incident.suffix.population_lost", NeutralGender);
+            if (outcome.PeopleArrived > 0)
+                line += UkrainianText.Format("village.incident.suffix.people_arrived", NeutralGender,
+                    "count", outcome.PeopleArrived.ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (!string.IsNullOrEmpty(outcome.AffectedActorId)) line += " (" + outcome.AffectedActorId + ")";
 
             return line;
@@ -197,9 +207,11 @@ namespace Game.Gameplay
                     }
                 }
 
-            if (level >= 3) return "Беда близко, и она про " + (domain ?? "город");
-            if (level == 2) return "Тревожно: разговоры про " + (domain ?? "город");
-            return "Что-то назревает";
+            if (level >= 3)
+                return UkrainianText.Format("village.forewarn.level3", NeutralGender, "domain", domain ?? "місто");
+            if (level == 2)
+                return UkrainianText.Format("village.forewarn.level2", NeutralGender, "domain", domain ?? "місто");
+            return UkrainianText.Get("village.forewarn.level1", NeutralGender);
         }
 
         private static string SignalLine(SignalRequest request)
@@ -214,14 +226,14 @@ namespace Game.Gameplay
             // Реплики об инцидентах уже выведены строкой исхода.
             if (request.TopicId.StartsWith("incident.")) return null;
 
-            if (request.TopicId.StartsWith("tension.band."))
-                return BandChangeWords(request.TopicId);
-
-            // Ежедневный «как оно сегодня» — короткой строкой. Повторы гасит
-            // лента: одна и та же фраза два дня подряд превращается в обои,
-            // а слой сигналов существует ровно против этого (Поправка №3.4).
-            if (request.TopicId.StartsWith("tension.ambient."))
-                return AmbientWords(request.TopicId);
+            // "tension.band.<Band>"/"tension.ambient.<Band>" — TopicId САМ і є
+            // ключем таблиці (SignalComposer.Compose будує його буквально так,
+            // AddAmbientAndThreatBandKeys у UkrainianText.cs): жодного окремого
+            // switch/EndsWith тут більше не треба, ключ береться як є.
+            if (request.TopicId.StartsWith("tension.band.") || request.TopicId.StartsWith("tension.ambient."))
+                return UkrainianText.Has(request.TopicId, NeutralGender)
+                    ? UkrainianText.Get(request.TopicId, NeutralGender)
+                    : "· " + request.TopicId;
 
             // Что сделал город (Поправка №6): стройка, люди, тир, совет.
             if (request.TopicId.StartsWith("city.") || request.TopicId.StartsWith("council."))
@@ -236,45 +248,41 @@ namespace Game.Gameplay
             string reason = Tag(request, "reason:");
             string count = Tag(request, "count:");
 
-            if (topic.StartsWith("city.built."))
-            {
-                var def = Game.Core.Base.DefaultBuildings.Get(topic.Substring("city.built.".Length));
-                return "Достроили: " + (def != null ? def.DisplayName : topic);
-            }
-
-            if (topic.StartsWith("city.tier."))
-            {
-                switch (topic.Substring("city.tier.".Length))
-                {
-                    case "2": return "Хутор стал селом";
-                    case "3": return "Село разрослось в слободу";
-                    case "4": return "Слобода стала городком";
-                }
-            }
+            // "city.built.<id>"/"city.tier.<n>" — TopicId сам і є готовим
+            // ключем (уже повне речення, "Збудовано: <Здание>."/"<Тир-фраза>."
+            // — AddCityAndCouncilEvents у UkrainianText.cs): R7 більше не
+            // читає Core-контентний DefaultBuildings.Get(id).DisplayName напряму.
+            if ((topic.StartsWith("city.built.") || topic.StartsWith("city.tier.")) &&
+                UkrainianText.Has(topic, NeutralGender))
+                return UkrainianText.Get(topic, NeutralGender);
 
             if (topic == "city.people.arrived")
             {
-                string who = reason == "council" ? "позвал совет"
-                    : reason == "expedition" ? "привёл отряд"
-                    : "пришли сами";
-                return "Пришли люди" + (count != null ? " (" + count + ")" : "") + ": " + who;
+                string key = reason == "council" ? "village.city.people.arrived.council"
+                    : reason == "expedition" ? "village.city.people.arrived.expedition"
+                    : "village.city.people.arrived.other";
+                return UkrainianText.Get(key, NeutralGender) + CountSuffix(count);
             }
 
             if (topic == "city.people.left")
             {
-                string why = reason == "hunger" ? "голодно"
-                    : reason == "fear" ? "боятся"
-                    : "не держит здесь ничего";
-                return "Ушли люди" + (count != null ? " (" + count + ")" : "") + ": " + why;
+                string key = reason == "hunger" ? "village.city.people.left.hunger"
+                    : reason == "fear" ? "village.city.people.left.fear"
+                    : "village.city.people.left.other";
+                return UkrainianText.Get(key, NeutralGender) + CountSuffix(count);
             }
 
             if (topic.StartsWith("city.crowd."))
-                return Tag(request, "dir:") == "down" ? "Улицы пустеют" : "Людей на улицах стало больше";
+                return UkrainianText.Get(Tag(request, "dir:") == "down" ? "village.city.crowd.down" : "village.city.crowd.up",
+                    NeutralGender);
 
-            if (topic == "council.raid") return "Облава: стража прошла по дворам";
+            if (topic == "council.raid") return UkrainianText.Get("council.raid", NeutralGender);
 
             return "· " + topic;
         }
+
+        private static string CountSuffix(string count) =>
+            count == null ? "" : UkrainianText.Format("village.city.count_suffix", NeutralGender, "count", count);
 
         private static string Tag(SignalRequest request, string prefix)
         {
@@ -285,53 +293,23 @@ namespace Game.Gameplay
             return null;
         }
 
+        /// <summary>"incident.&lt;id&gt;.title" — той самий ключ, яким Core-топік вже і є (§7.6/§7.8/AddIncidentHeadlinesAndOutcomes), лише з суфіксом ".title".</summary>
         private static string TopicWords(string topicId)
         {
-            switch (topicId)
-            {
-                case "incident.petty_theft": return "Со склада пропадает припас";
-                case "incident.market_brawl": return "Драка на рынке";
-                case "incident.spoiled_stores": return "Запасы портятся";
-                case "incident.sick_child": return "Больной ребёнок";
-                case "incident.protection_racket": return "К торговцам ходят за долей";
-                case "incident.missing_person": return "Пропал человек";
-                case "incident.night_burglary": return "Ночная кража";
-                case "incident.night_arson": return "Поджог";
-                case "incident.crisis_riot": return "Бунт на площади";
-                default: return topicId;
-            }
+            if (string.IsNullOrEmpty(topicId)) return topicId;
+            string key = topicId + ".title";
+            return UkrainianText.Has(key, NeutralGender) ? UkrainianText.Get(key, NeutralGender) : topicId;
         }
 
         private static string BandWords(OutcomeBand band)
         {
             switch (band)
             {
-                case OutcomeBand.Best: return "разобрались лучше некуда";
-                case OutcomeBand.Good: return "разобрались чисто";
-                case OutcomeBand.Base: return "кое-как уладили";
-                default: return "вышло скверно";
+                case OutcomeBand.Best: return UkrainianText.Get("village.band.best", NeutralGender);
+                case OutcomeBand.Good: return UkrainianText.Get("village.band.good", NeutralGender);
+                case OutcomeBand.Base: return UkrainianText.Get("village.band.base", NeutralGender);
+                default: return UkrainianText.Get("village.band.worst", NeutralGender);
             }
-        }
-
-        /// <summary>Фоновое ощущение дня: одна короткая фраза вместо ключа.</summary>
-        private static string AmbientWords(string topicId)
-        {
-            if (topicId.EndsWith("Calm")) return "Тихо";
-            if (topicId.EndsWith("Murmur")) return "На улицах бурчат";
-            if (topicId.EndsWith("Ferment")) return "Народ переговаривается по углам";
-            if (topicId.EndsWith("Heat")) return "Взгляды тяжёлые";
-            if (topicId.EndsWith("Fracture")) return "Каждый разговор на грани крика";
-            return "· " + topicId;
-        }
-
-        private static string BandChangeWords(string topicId)
-        {
-            if (topicId.EndsWith("Calm")) return "Город притих";
-            if (topicId.EndsWith("Murmur")) return "По улицам пошёл ропот";
-            if (topicId.EndsWith("Ferment")) return "Люди сбиваются в кучки и спорят";
-            if (topicId.EndsWith("Heat")) return "Воздух густой: вот-вот вспыхнет";
-            if (topicId.EndsWith("Fracture")) return "Город трещит по швам";
-            return "· " + topicId;
         }
 
         private static float Clamp01(float v) { return v < 0f ? 0f : (v > 1f ? 1f : v); }

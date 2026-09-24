@@ -67,9 +67,9 @@ namespace Game.Tests.EditMode
         {
             // Игрок никогда не видит «достаток 3»: он видит город.
             Assert.AreNotEqual(VillageView.MoodWords(Mood(0, 0)), VillageView.MoodWords(Mood(4, 0)));
-            StringAssert.Contains("хутор", VillageView.MoodWords(Mood(0, 0)));
+            StringAssert.Contains("хутір", VillageView.MoodWords(Mood(0, 0)));
             StringAssert.Contains("село", VillageView.MoodWords(Mood(1, 0)));
-            StringAssert.Contains("заколочен", VillageView.MoodWords(Mood(2, 4)));
+            StringAssert.Contains("забитий", VillageView.MoodWords(Mood(2, 4)));
             foreach (char c in VillageView.MoodWords(Mood(3, 2)))
                 Assert.IsFalse(char.IsDigit(c), "В описании города не должно быть цифр");
         }
@@ -85,8 +85,8 @@ namespace Game.Tests.EditMode
             var lines = VillageView.Lines(Report(DayPhase.Day, new[] { crisis }, null));
 
             Assert.AreEqual(1, lines.Count);
-            StringAssert.Contains("КРИЗИС", lines[0], "Кризис не имеет права выглядеть как рядовое происшествие");
-            StringAssert.Contains("люди уходят", lines[0], "Отток населения обязан прозвучать словами");
+            StringAssert.Contains("КРИЗА", lines[0], "Кризис не имеет права выглядеть как рядовое происшествие");
+            StringAssert.Contains("люди йдуть", lines[0], "Отток населения обязан прозвучать словами");
         }
 
         [Test]
@@ -97,7 +97,7 @@ namespace Game.Tests.EditMode
 
             var lines = VillageView.Lines(Report(DayPhase.Day, new[] { outcome }, null));
 
-            StringAssert.Contains("на посту никого не было", lines[0],
+            StringAssert.Contains("на посту нікого не було", lines[0],
                 "Цена пустого поста — урок расстановки, и он обязан быть произнесён");
         }
 
@@ -109,7 +109,7 @@ namespace Game.Tests.EditMode
 
             var lines = VillageView.Lines(Report(DayPhase.Day, new[] { outcome }, null));
 
-            StringAssert.Contains("напугана", lines[0],
+            StringAssert.Contains("налякана", lines[0],
                 "Страх общины — скрытая цена; по инварианту 6 у неё обязан быть голос");
         }
 
@@ -161,9 +161,9 @@ namespace Game.Tests.EditMode
             var lines = VillageView.Lines(Report(DayPhase.Day, null, new[] { built, tier, left, came }));
 
             StringAssert.Contains("Храм", lines[0], "Здание называется по имени, а не ключом");
-            StringAssert.Contains("селом", lines[1], "Смена тира — словами дуги: хутор, село, слобода, городок");
+            StringAssert.Contains("селом", lines[1], "Смена тира — словами дуги: хутір, село, слобода, містечко");
             StringAssert.Contains("голодно", lines[2], "Уход людей называет причину");
-            StringAssert.Contains("отряд", lines[3], "Пришедшие — откуда пришли");
+            StringAssert.Contains("загін", lines[3], "Пришедшие — откуда пришли");
             foreach (var line in lines)
                 StringAssert.DoesNotContain("city.", line, "Ни одного сырого ключа в ленте");
         }
@@ -173,8 +173,8 @@ namespace Game.Tests.EditMode
         {
             var night = VillageView.Headline(Report(DayPhase.Night, null, null), Mood(1, 0));
 
-            StringAssert.Contains("Сутки 7", night);
-            StringAssert.Contains("ночь", night);
+            StringAssert.Contains("Доба 7", night);
+            StringAssert.Contains("ніч", night);
         }
 
         private static SignalRequest Signal(SignalChannel channel, string topicId, params string[] tags)
