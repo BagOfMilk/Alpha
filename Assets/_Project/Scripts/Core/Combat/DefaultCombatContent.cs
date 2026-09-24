@@ -118,10 +118,12 @@ namespace Game.Core.Combat
         /// копиться лише з Hit/Crit (GDD.md:119 "копится с попаданий" — не з
         /// будь-якої атаки, і це навмисно, не правиться тут) — то без Hit
         /// Strike ніколи не набереться, і пастка не відкривається НІКОЛИ для
-        /// цього конкретного бою. Accuracy 65 -> 80: margin проти Defense 0..10
-        /// стає 10..30 -> завжди Hit (мінімум margin=15 при найгіршому Defense
-        /// =10), інколи Crit при слабшому захисті — саме "б'є боляче" з
-        /// коментаря вище, тепер справджується. Доведено
+        /// цього конкретного бою. Accuracy 65 -> 80: margin (chance=Accuracy−
+        /// Defense, margin=chance−ThresholdBaseline(50)) проти Defense 0..10
+        /// стає 20..30 — цілком у смузі Hit (ThresholdCritBand=35, до Crit тут
+        /// не дістає навіть при найкращому Defense=0) — гарантований Hit, не
+        /// "інколи Crit", саме "б'є боляче" з коментаря вище, тепер
+        /// справджується. Доведено
         /// <see cref="Game.Tests.EditMode.CombatStatusDebugTests"/>.
         /// </summary>
         public static EnemyDefinition Burunda() =>

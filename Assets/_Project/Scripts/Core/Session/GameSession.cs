@@ -120,6 +120,9 @@ namespace Game.Core.Session
         private ulong _seed = 1;
         private HitRuleKind _hitRule = HitRuleKind.Threshold;
         private bool _ironman;
+
+        /// <summary>Поправка №7.7: див. <see cref="NewGameOptions.FastConstruction"/> — передається в <c>CityWorks.Order</c>, не входить у слепок (значення осідає вже в TotalDays проекту).</summary>
+        private bool _fastConstruction = true;
         private CombatState _battle;
         private SuspendToken _resume;
 
@@ -269,6 +272,7 @@ namespace Game.Core.Session
             _hitRule = o.HitRule;
             _seed = o.Seed;
             _ironman = o.Ironman;
+            _fastConstruction = o.FastConstruction;
 
             if (_hitRule == HitRuleKind.Percent)
             {
@@ -514,7 +518,7 @@ namespace Game.Core.Session
         public BuildOrderResult OrderBuilding(string id)
         {
             RequireMorningOrFreePlay();
-            var r = _works.Order(id, _state, _processor.CurrentDay, _cfg);
+            var r = _works.Order(id, _state, _processor.CurrentDay, _cfg, _fastConstruction);
             if (r == BuildOrderResult.Started) LogEvent("city.building.ordered", Args("buildingId", id));
             return r;
         }

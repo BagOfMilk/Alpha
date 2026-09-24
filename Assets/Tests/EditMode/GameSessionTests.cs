@@ -23,8 +23,8 @@ namespace Game.Tests.EditMode
     /// </summary>
     public class GameSessionTests
     {
-        private static NewGameOptions SkipCreationOptions()
-            => new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold };
+        private static NewGameOptions SkipCreationOptions(bool fastConstruction = true)
+            => new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, FastConstruction = fastConstruction };
 
         /// <summary>Доганяє сесію крізь відкриваючу сцену до Morning доби 1 (State доступний одразу після NewGame(SkipCreation=true)).</summary>
         private static void FastForwardOpeningToMorning(GameSession s)
@@ -1293,12 +1293,17 @@ namespace Game.Tests.EditMode
         /// <c>Rarity.Rare</c> — ніколи не Epic/іменний, тож <c>CraftUpgrade</c>
         /// не може впертися в AlreadyMaxRarity/NamedNotUpgradable і чесно
         /// перевіряє саме шов "чи відкрита Майстерня" (workshopOpen з CityWorks).
+        ///
+        /// <c>FastConstruction: false</c> (Поправка №7.7 діє лише за замовчуванням) —
+        /// цей тест навмисно перевіряє реальний проектний строк (Days=4), інакше
+        /// вікно "замовлено, але ще не готово" звузилось би до однієї доби і шов
+        /// WorkshopClosed перестав би детерміновано ловитись під час вилазки.
         /// </summary>
         [Test]
         public void CraftUpgrade_WorkshopClosed_ThenReachesCraftSystem_OnceWorkshopBuilt()
         {
             var s = new GameSession();
-            s.NewGame(SkipCreationOptions());
+            s.NewGame(SkipCreationOptions(fastConstruction: false));
             FastForwardOpeningToMorning(s);
 
             var buildResult = s.OrderBuilding(Game.Core.Base.DefaultBuildings.Workshop);

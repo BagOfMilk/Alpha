@@ -166,8 +166,18 @@ namespace Game.Core.Base
         /// (по умолчанию цена без скидки, как раньше): без них AUDIT G12 не
         /// работает, но старые вызовы не ломаются. С ними — золото скидывается,
         /// если рынок поселения занят и открыт (см. <see cref="TradeDiscount"/>).
+        ///
+        /// <paramref name="fastConstruction"/> — Поправка №7.7 (решение владельца
+        /// 24.09.2026): в тестовой сборке каждое здание строится ровно одни
+        /// сутки, чтобы цепочка «стройка → пост → крафт/эффект» успевала дойти
+        /// до игрока за короткий тест-прогон. По умолчанию false — проектные
+        /// <see cref="BuildingDefinition.Days"/> (Поправка №6.1, ПЛЕЙСХОЛДЕР)
+        /// не трогаются: это настройка вызова (<c>GameSession</c> передаёт её из
+        /// <c>NewGameOptions.FastConstruction</c>), а не баланс кампании —
+        /// симуляционный харнес и <see cref="Steward"/> зовут этот метод без неё.
         /// </summary>
-        public BuildOrderResult Order(string buildingId, BaseState state, int today = 0, BalanceConfig balance = null)
+        public BuildOrderResult Order(string buildingId, BaseState state, int today = 0, BalanceConfig balance = null,
+            bool fastConstruction = false)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
 
@@ -191,7 +201,8 @@ namespace Game.Core.Base
             state.Resources.TrySpend(ResourceType.Gold, goldCost);
             state.Resources.TrySpend(ResourceType.Materials, def.MaterialsCost);
 
-            _projects.Add(new Project { Id = def.Id, DaysLeft = Math.Max(1, def.Days), TotalDays = Math.Max(1, def.Days) });
+            int days = fastConstruction ? 1 : Math.Max(1, def.Days);
+            _projects.Add(new Project { Id = def.Id, DaysLeft = days, TotalDays = days });
             return BuildOrderResult.Started;
         }
 

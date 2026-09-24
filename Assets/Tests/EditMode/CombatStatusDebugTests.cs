@@ -24,8 +24,10 @@ namespace Game.Tests.EditMode
     /// бою: не рідкість, а структурна недосяжність.
     ///
     /// Виправлено: <c>DefaultCombatContent.Burunda().Accuracy</c> 65 -> 80
-    /// (margin проти Defense 0..10 стає 10..30 — завжди Hit, при Defense ≤ 5 —
-    /// Crit). AllMechanicsCoverageTests.Row32 також вимагав другого виправлення
+    /// (margin проти Defense 0..10 стає 20..30 — цілком у смузі Hit,
+    /// ThresholdCritBand=35, до Crit для цього матчапу не дістає навіть при
+    /// Defense=0 — гарантований Hit, не "інколи Crit"). AllMechanicsCoverageTests.Row32
+    /// також вимагав другого виправлення
     /// (не тут): наївний тестовий водій бою (BotRunner.ExecuteCombatAction) не
     /// вміє зближувати мілі-юнітів способністю і програвав явно нерівний бій
     /// раніше, ніж Бурунда встигав дійти до контакту — <c>CombatIntent.
