@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -53,7 +52,7 @@ namespace Game.Gameplay.EditorTools
             House(new Vector3(2f, 0f, -4.5f), 3, 2, wood: false, facing: 180f);
 
             // Мельница у воды — ориентир, по которому село узнаётся с первого кадра.
-            Place(Town + "watermill.fbx", new Vector3(9f, 0f, -1f), 210f, "Мельница");
+            KitBuilder.Place(Town + "watermill.fbx", new Vector3(9f, 0f, -1f), 210f, "Мельница");
 
             // Частокол: община на краю обитаемого мира огораживается.
             Palisade();
@@ -245,56 +244,13 @@ namespace Game.Gameplay.EditorTools
         /// <summary>
         /// Хата из модулей: стены по периметру, дверь по фасаду, окна по бокам,
         /// двускатная крыша сверху. Размеры считаются из габаритов самой стены.
+        /// Сама раскладка теперь в <see cref="KitBuilder.House"/> (B8) — общий
+        /// примитив, которым сможет воспользоваться будущий сборщик игровой
+        /// сцены; здесь только путь к набору построек этой витрины.
         /// </summary>
         private static GameObject House(Vector3 origin, int width, int depth, bool wood, float facing)
         {
-            string prefix = wood ? "wall-wood" : "wall";
-            var wall = Load(Town + prefix + ".fbx");
-            if (wall == null) return null;
-
-            var size = MeasureSize(wall);
-            float step = Mathf.Max(size.x, 0.1f);
-            float height = Mathf.Max(size.y, 0.1f);
-
-            var house = new GameObject(wood ? "Хата" : "Дом");
-            house.transform.position = origin;
-            house.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-
-            string door = Town + prefix + "-door.fbx";
-            string window = Town + prefix + "-window-small.fbx";
-
-            for (int x = 0; x < width; x++)
-            {
-                // Фасад: посередине дверь.
-                bool isDoor = x == width / 2;
-                Attach(house, isDoor ? door : Town + prefix + ".fbx",
-                    new Vector3(x * step, 0f, 0f), 0f);
-
-                // Задняя стена.
-                Attach(house, Town + prefix + ".fbx",
-                    new Vector3(x * step, 0f, depth * step), 180f);
-            }
-
-            for (int z = 1; z < depth; z++)
-            {
-                bool isWindow = z == depth / 2;
-                Attach(house, isWindow ? window : Town + prefix + ".fbx",
-                    new Vector3(0f, 0f, z * step), 270f);
-                Attach(house, isWindow ? window : Town + prefix + ".fbx",
-                    new Vector3((width - 1) * step, 0f, z * step), 90f);
-            }
-
-            // Крыша: скаты вдоль фасада, конёк поверх.
-            string gable = Town + "roof-gable.fbx";
-            string gableEnd = Town + "roof-gable-end.fbx";
-            for (int x = 0; x < width; x++)
-            {
-                Attach(house, gable, new Vector3(x * step, height, 0f), 0f);
-                Attach(house, gable, new Vector3(x * step, height, depth * step), 180f);
-            }
-            Attach(house, gableEnd, new Vector3(0f, height, depth * step * 0.5f), 270f);
-            Attach(house, gableEnd, new Vector3((width - 1) * step, height, depth * step * 0.5f), 90f);
-            return house;
+            return KitBuilder.House(Town, origin, width, depth, wood, facing);
         }
 
         /// <summary>
@@ -320,110 +276,32 @@ namespace Game.Gameplay.EditorTools
 
         private static void Plot(GameObject root, string buildingId, Vector3 at, int width, int depth, bool wood)
         {
-            var plot = new GameObject("plot:" + buildingId);
-            plot.transform.SetParent(root.transform, false);
-            plot.transform.localPosition = at;
-
-            var model = House(Vector3.zero, width, depth, wood, 0f);
-            if (model != null)
-            {
-                model.name = "model";
-                model.transform.SetParent(plot.transform, false);
-                model.transform.localPosition = Vector3.zero;
-                model.SetActive(false);
-            }
-
-            // Подпись над зданием смотрит в камеру: изометрия не вращается.
+            // Раскладка участка — в KitBuilder (B8), здесь только своя связь
+            // с каталогом зданий ядра (подпись по DisplayName).
             var def = Game.Core.Base.DefaultBuildings.Get(buildingId);
-            var label = new GameObject("label");
-            label.transform.SetParent(plot.transform, false);
-            label.transform.localPosition = new Vector3(width * 0.5f, 3.2f, depth * 0.5f);
-            label.transform.rotation = Quaternion.Euler(30f, 45f, 0f);
-
-            var text = label.AddComponent<TextMesh>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 48;
-            text.characterSize = 0.08f;
-            text.anchor = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.text = def != null ? def.DisplayName : buildingId;
-            var renderer = label.GetComponent<MeshRenderer>();
-            if (renderer != null && text.font != null) renderer.sharedMaterial = text.font.material;
-            label.SetActive(false);
+            KitBuilder.Plot(Town, root, buildingId, def != null ? def.DisplayName : buildingId,
+                at, width, depth, wood);
         }
 
-        /// <summary>Частокол вокруг села: колья по периметру с воротами со стороны дороги.</summary>
+        /// <summary>
+        /// Частокол вокруг села: колья по периметру с воротами со стороны дороги.
+        /// Раскладка — в <see cref="KitBuilder.Palisade"/> (B8); здесь только
+        /// геометрия этой конкретной витрины.
+        /// </summary>
         private static void Palisade()
         {
-            var fence = Load(Town + "fence.fbx");
-            if (fence == null) return;
-
-            float step = Mathf.Max(MeasureSize(fence).x, 0.5f);
-            var group = new GameObject("Частокол");
-
             const float left = -11f, right = 12f, near = -9f, far = 8f;
-
-            for (float x = left; x <= right; x += step)
-            {
-                // Ворота посередине ближней стороны: село не глухая коробка.
-                bool gate = Mathf.Abs(x - 0.5f) < step;
-                Attach(group, gate ? Town + "fence-gate.fbx" : Town + "fence.fbx",
-                    new Vector3(x, 0f, near), 0f);
-                Attach(group, Town + "fence.fbx", new Vector3(x, 0f, far), 180f);
-            }
-
-            for (float z = near; z <= far; z += step)
-            {
-                Attach(group, Town + "fence.fbx", new Vector3(left, 0f, z), 90f);
-                Attach(group, Town + "fence.fbx", new Vector3(right, 0f, z), 270f);
-            }
+            // Ворота посередине ближней стороны (x≈0.5): село не глухая коробка.
+            KitBuilder.Palisade(Town, left, right, near, far, gateX: 0.5f);
         }
 
-        /// <summary>Лес и камни. Разброс детерминированный — сцена пересобирается один в один.</summary>
+        /// <summary>
+        /// Лес и камни. Раскладка (разброс, детерминированный хеш) — в
+        /// <see cref="KitBuilder.Forest"/> (B8); здесь только путь к набору.
+        /// </summary>
         private static void Forest()
         {
-            string[] trees =
-            {
-                Nature + "tree_default.fbx", Nature + "tree_oak.fbx",
-                Nature + "tree_cone.fbx", Nature + "tree_thin.fbx",
-                Nature + "tree_default_dark.fbx", Nature + "tree_fat.fbx"
-            };
-            string[] rocks =
-            {
-                Nature + "rock_largeA.fbx", Nature + "rock_smallA.fbx",
-                Nature + "cliff_blockHalf_rock.fbx"
-            };
-
-            var group = new GameObject("Лес");
-
-            for (int i = 0; i < 90; i++)
-            {
-                float a = Hash(i, 1) * Mathf.PI * 2f;
-                float r = 14f + Hash(i, 2) * 9f;
-                var pos = new Vector3(Mathf.Cos(a) * r + 0.5f, 0f, Mathf.Sin(a) * r * 0.8f - 0.5f);
-
-                var go = Attach(group, trees[i % trees.Length], pos, Hash(i, 3) * 360f);
-                if (go != null)
-                {
-                    float s = 0.8f + Hash(i, 4) * 0.7f;
-                    go.transform.localScale = new Vector3(s, s + Hash(i, 5) * 0.3f, s);
-                }
-            }
-
-            for (int i = 0; i < 24; i++)
-            {
-                float a = Hash(i, 6) * Mathf.PI * 2f;
-                float r = 11f + Hash(i, 7) * 12f;
-                Attach(group, rocks[i % rocks.Length],
-                    new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r * 0.8f), Hash(i, 8) * 360f);
-            }
-
-            // Трава внутри ограды, чтобы двор не выглядел вытоптанной плитой.
-            for (int i = 0; i < 40; i++)
-            {
-                var pos = new Vector3(-10f + Hash(i, 9) * 21f, 0f, -8f + Hash(i, 10) * 16f);
-                Attach(group, Nature + "grass.fbx", pos, Hash(i, 11) * 360f);
-            }
+            KitBuilder.Forest(Nature);
         }
 
         /// <summary>
@@ -446,11 +324,10 @@ namespace Game.Gameplay.EditorTools
             return group;
         }
 
+        /// <summary>Тонкая обёртка над <see cref="KitBuilder.Anchor"/> (B8) — сохраняет старое имя параметра.</summary>
         private static void Anchor(GameObject parent, string postId, Vector3 position)
         {
-            var go = new GameObject("post:" + postId);
-            go.transform.SetParent(parent.transform, false);
-            go.transform.localPosition = position;
+            KitBuilder.Anchor(parent, postId, position);
         }
 
         /// <summary>
@@ -483,7 +360,7 @@ namespace Game.Gameplay.EditorTools
                 holder.transform.SetParent(group.transform, false);
                 holder.transform.position = post.position + new Vector3(0.6f, 0f, 0.4f);
 
-                Attach(holder, who[i], Vector3.zero, facing[i]);
+                KitBuilder.Attach(holder, who[i], Vector3.zero, facing[i]);
             }
 
             return group;
@@ -543,23 +420,10 @@ namespace Game.Gameplay.EditorTools
 
         // ================= сцена =================
 
+        /// <summary>Раскладка — в <see cref="KitBuilder.Ground"/> (B8); здесь только цвет и путь витрины.</summary>
         private static void BuildGround()
         {
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Земля";
-            ground.transform.localScale = new Vector3(6f, 1f, 6f);
-
-            var lit = Shader.Find("Universal Render Pipeline/Lit");
-            if (lit != null)
-            {
-                var mat = new Material(lit);
-                mat.SetColor("_BaseColor", new Color(0.33f, 0.40f, 0.22f));
-                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0f);
-
-                Directory.CreateDirectory("Assets/Scenes");
-                AssetDatabase.CreateAsset(mat, "Assets/Scenes/Ground.mat");
-                ground.GetComponent<Renderer>().sharedMaterial = mat;
-            }
+            KitBuilder.Ground(new Color(0.33f, 0.40f, 0.22f), new Vector3(6f, 1f, 6f), "Assets/Scenes/Ground.mat");
         }
 
         private static void BuildLight()
@@ -607,73 +471,8 @@ namespace Game.Gameplay.EditorTools
             RenderSettings.skybox = null;
         }
 
-        // ================= мелочи =================
-
-        private static GameObject Attach(GameObject parent, string path, Vector3 local, float yaw)
-        {
-            var prefab = Load(path);
-            if (prefab == null) return null;
-
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            if (go == null) return null;
-
-            go.transform.SetParent(parent.transform, false);
-            go.transform.localPosition = local;
-            go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-            return go;
-        }
-
-        private static GameObject Place(string path, Vector3 position, float yaw, string name)
-        {
-            var prefab = Load(path);
-            if (prefab == null) return null;
-
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            if (go == null) return null;
-
-            go.name = name;
-            go.transform.position = position;
-            go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-            return go;
-        }
-
-        private static readonly Dictionary<string, GameObject> Cache = new Dictionary<string, GameObject>();
-
-        private static GameObject Load(string path)
-        {
-            GameObject cached;
-            if (Cache.TryGetValue(path, out cached)) return cached;
-
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (prefab == null) Debug.LogWarning("Модель не найдена: " + path);
-            Cache[path] = prefab;
-            return prefab;
-        }
-
-        /// <summary>Габариты модели по мешам — основа раскладки вместо догадок о пивоте.</summary>
-        private static Vector3 MeasureSize(GameObject prefab)
-        {
-            var filters = prefab.GetComponentsInChildren<MeshFilter>();
-            if (filters == null || filters.Length == 0) return Vector3.one;
-
-            var bounds = new Bounds(filters[0].sharedMesh.bounds.center, filters[0].sharedMesh.bounds.size);
-            for (int i = 1; i < filters.Length; i++)
-                if (filters[i].sharedMesh != null)
-                    bounds.Encapsulate(filters[i].sharedMesh.bounds);
-
-            return bounds.size;
-        }
-
-        /// <summary>Детерминированный «шум» 0..1: те же числа при каждой пересборке.</summary>
-        private static float Hash(int i, int salt)
-        {
-            unchecked
-            {
-                int h = i * 374761393 + salt * 668265263;
-                h = (h ^ (h >> 13)) * 1274126177;
-                h ^= h >> 16;
-                return ((h & 0x7fffffff) % 10000) / 10000f;
-            }
-        }
+        // Attach/Place/Load/MeasureSize/Hash/Cache переехали в KitBuilder (B8) —
+        // это общие примитивы без данных этой конкретной витрины, ими
+        // напрямую пользуются House/Palisade/Forest/Plot/Villagers выше.
     }
 }
