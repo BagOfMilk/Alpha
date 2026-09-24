@@ -423,11 +423,24 @@ namespace Game.Gameplay.UI
                         // вкладці «Вилазка».
                         bool previousEnabled = GUI.enabled;
                         GUI.enabled = legality.Enabled || wasIn;
-                        bool now = GUILayout.Toggle(wasIn, ScreenText.ResolveCompanionName(c.Id, g, roster) +
-                            (legality.Enabled ? "" : " (" + ScreenText.ReasonText(legality, g) + ")"));
+                        // Фікс-ревью (ціль D, знайдено тур-автоплеєм): голий
+                        // GUILayout.Toggle малює НЕЗМІНЕНИМ вбудованим скіном
+                        // Unity (AlphaSkin.Build() не перевизначає skin.toggle
+                        // — той самий розрив, що вже задокументований і
+                        // закритий для TitleScreen.cs, §Widgets.TabButton) —
+                        // на темній темі це чекбокс зі СВІТЛИМ текстом за
+                        // замовчуванням для світлого скіну, майже невидимий на
+                        // темному тлі. TabButton — та сама кнопка, акцентна,
+                        // коли обрано: той самий прийом, що вже коректно
+                        // читається у "Тихо"/"Силою" рядком вище.
+                        string label = ScreenText.ResolveCompanionName(c.Id, g, roster) +
+                            (legality.Enabled ? "" : " (" + ScreenText.ReasonText(legality, g) + ")");
+                        if (Widgets.TabButton(label, wasIn))
+                        {
+                            if (wasIn) _party.Remove(c.Id); else _party.Add(c.Id);
+                            _preview = null;
+                        }
                         GUI.enabled = previousEnabled;
-                        if (now && !wasIn) { _party.Add(c.Id); _preview = null; }
-                        else if (!now && wasIn) { _party.Remove(c.Id); _preview = null; }
                     }
             });
 
