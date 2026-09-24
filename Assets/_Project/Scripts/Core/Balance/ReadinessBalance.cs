@@ -47,6 +47,16 @@ namespace Game.Core.Balance
         /// <summary>«Загатити річку»: поріг Mechanics за полосою Готовності (Unprepared..Fortified).</summary>
         public int[] DamThresholdByBand = { 9, 7, 5, 3 };
 
+        /// <summary>
+        /// «Загатити річку»: поріг Tactics за полосою Готовності — ДРУГА перевірка
+        /// тихого шляху фіналу (TEST_BUILD.md R8, §3.5 «перевірки Mechanics≥7/
+        /// Tactics≥5», §7.15 <c>finale.option.quiet</c> — обидва навики в тексті).
+        /// Тихий шлях фіналу — не одна перевірка, а дві: <see cref="Finale.BuildDam"/>
+        /// (Mechanics) і <see cref="Finale.BuildDamTactics"/> (цей поріг). Індекс 1
+        /// (Bracing) навмисно = 5 — узгоджено з буквальним прикладом §3.5.
+        /// </summary>
+        public int[] TacticsThresholdByBand = { 7, 5, 3, 2 };
+
         /// <summary>Скільки рядових ворогів у фінальному штурмі за полосою (Бурунда — завжди понад це).</summary>
         public int[] AssaultEnemyCountByBand = { 6, 5, 4, 3 };
 

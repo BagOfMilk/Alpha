@@ -50,6 +50,7 @@ namespace Game.Core.Story
         public const string RankAndFileEnemyId = "horde_skirmisher";
         public const string ArenaKeyValue = "finale_pass";
         public const string DamTopicId = "finale.dam";
+        public const string DamTacticsTopicId = "finale.dam.tactics";
 
         /// <summary>
         /// Кроваво: «тримати перевал». Рядових більше при гіршій Готовності;
@@ -70,15 +71,33 @@ namespace Game.Core.Story
         }
 
         /// <summary>
-        /// Тихо: «загатити річку». Поріг Mechanics зсунутий полосою Готовності —
+        /// Тихо: «загатити річку», перша з ДВОХ перевірок шляху (§3.5: «перевірки
+        /// Mechanics≥7/Tactics≥5» — множина; §7.15 <c>finale.option.quiet</c>
+        /// називає обидва навики). Поріг Mechanics зсунутий полосою Готовності —
         /// гірша Готовність, вищий поріг (важче). Показаний заздалегідь, як і
-        /// будь-яка інша перевірка (інваріант 8).
+        /// будь-яка інша перевірка (інваріант 8). Друга перевірка — <see cref="BuildDamTactics"/>;
+        /// обидві резолвить D1 через звичайний <c>CheckResolver</c>. Як саме дві
+        /// полоси зводяться в одну (гірша з двох? обидві мають пройти?) специфікація
+        /// не фіксує — відкрите питання власнику (openIssues пакета B6, не §9 —
+        /// дописано пізніше за аудит розривів).
         /// </summary>
         public static CheckRequest BuildDam(ReadinessBand band, ReadinessBalance cfg = null)
         {
             var balance = cfg ?? new ReadinessBalance();
             int threshold = ReadinessBalance.Pick(balance.DamThresholdByBand, (int)band, 5);
             return new CheckRequest(SkillKeys.Mechanics, threshold, ApproachForm.Neutral, DamTopicId);
+        }
+
+        /// <summary>
+        /// Тихо: «загатити річку», ДРУГА перевірка шляху — Tactics, зсунута тією ж
+        /// полосою Готовності (§3.5/§7.15, фікс-рев'ю B6: раніше тихий шлях мав
+        /// лише перевірку Mechanics, а специфікація вимагає обидві).
+        /// </summary>
+        public static CheckRequest BuildDamTactics(ReadinessBand band, ReadinessBalance cfg = null)
+        {
+            var balance = cfg ?? new ReadinessBalance();
+            int threshold = ReadinessBalance.Pick(balance.TacticsThresholdByBand, (int)band, 5);
+            return new CheckRequest(SkillKeys.Tactics, threshold, ApproachForm.Neutral, DamTacticsTopicId);
         }
 
         /// <summary>"best"|"good"|"base"|"worst" — той самий ключ, що озвучують <c>finale.outcome.*</c> (§7.15).</summary>

@@ -66,10 +66,14 @@ namespace Game.Core.Quests
                 nextByBand: new[] { 3, 3, 2, 2 }, // Worst,Base -> missing(3); Good,Best -> found(2)
                 consequenceByBand: new[]
                 {
-                    new QuestConsequence().Tension(q.TensionByBand[0]),
-                    new QuestConsequence().Tension(q.TensionByBand[1]),
-                    new QuestConsequence().Tension(q.TensionByBand[2]).Flag(HafiyaGrassFoundFlag),
-                    new QuestConsequence().Tension(q.TensionByBand[3]).Flag(HafiyaGrassFoundFlag)
+                    // Захищений доступ (QuestBalance.Pick), а не пряма індексація:
+                    // TensionByBand — правлений власником Balance SO масив (R14), і
+                    // короткий контентний масив деградує до fallback=0, а не валить
+                    // побудову квесту винятком (фікс-рев'ю B6).
+                    new QuestConsequence().Tension(QuestBalance.Pick(q.TensionByBand, 0, 0)),
+                    new QuestConsequence().Tension(QuestBalance.Pick(q.TensionByBand, 1, 0)),
+                    new QuestConsequence().Tension(QuestBalance.Pick(q.TensionByBand, 2, 0)).Flag(HafiyaGrassFoundFlag),
+                    new QuestConsequence().Tension(QuestBalance.Pick(q.TensionByBand, 3, 0)).Flag(HafiyaGrassFoundFlag)
                 }));
 
             // 2 — трава знайдена: подяка при всіх (найкраща розв'язка лінії).

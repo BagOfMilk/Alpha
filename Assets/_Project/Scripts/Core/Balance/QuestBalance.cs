@@ -37,5 +37,20 @@ namespace Game.Core.Balance
         /// робота D1 (аудит G7/П10, TEST_BUILD.md §5 рядок B6).
         /// </summary>
         public int HafiyaGrassBonusToSickChild = 2;
+
+        /// <summary>
+        /// Захищений доступ до масиву за полосою (той самий приём, що
+        /// <see cref="ReadinessBalance.Pick"/>): <see cref="TensionByBand"/> —
+        /// публічне поле, власник править його через Balance SO без
+        /// перекомпіляції (R14), і скорочений контентом масив не має валити
+        /// побудову квесту винятком, як і будь-який інший баланс-масив у грі.
+        /// </summary>
+        internal static int Pick(int[] arr, int index, int fallback)
+        {
+            if (arr == null || arr.Length == 0) return fallback;
+            if (index < 0) index = 0;
+            if (index >= arr.Length) index = arr.Length - 1;
+            return arr[index];
+        }
     }
 }

@@ -248,6 +248,22 @@ namespace Game.Tests.EditMode
             CollectionAssert.DoesNotContain(check.Consequence.Flags, DefaultQuests.HafiyaGrassFoundFlag);
         }
 
+        /// <summary>
+        /// Фікс-рев'ю B6: <c>QuestBalance.TensionByBand</c> — правлений власником
+        /// Balance SO масив (R14); контентна правка, що скоротила його нижче 4
+        /// елементів, не має валити побудову квесту <c>IndexOutOfRangeException</c> —
+        /// так само, як короткий масив деградує у <c>IncidentResolver</c>/
+        /// <c>ReadinessBalance</c>.
+        /// </summary>
+        [Test]
+        public void Hafiya_ToleratesShortTensionByBand_NoException()
+        {
+            var cfg = Cfg();
+            cfg.Quest.TensionByBand = new[] { 40 }; // контент-патч скоротив масив до одного елемента
+
+            Assert.DoesNotThrow(() => DefaultQuests.Hafiya(cfg));
+        }
+
         [Test]
         public void Hafiya_Declined_EndsWithoutCheck()
         {

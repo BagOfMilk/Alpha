@@ -193,6 +193,32 @@ namespace Game.Tests.EditMode
                 Finale.BuildDam(ReadinessBand.Ready).Threshold);
         }
 
+        // ---- Фікс-рев'ю B6: тихий шлях фіналу — ДВІ перевірки, не одна (§3.5: ----
+        // ---- «перевірки Mechanics≥7/Tactics≥5»; §7.15 finale.option.quiet)     ----
+
+        [Test]
+        public void BuildDamTactics_WorseReadiness_MeansHigherThreshold()
+        {
+            var worst = Finale.BuildDamTactics(ReadinessBand.Unprepared);
+            var best = Finale.BuildDamTactics(ReadinessBand.Fortified);
+
+            Assert.Greater(worst.Threshold, best.Threshold,
+                "друга перевірка тихого шляху (Tactics) теж монотонно важча при гіршій Готовності");
+            Assert.AreEqual(SkillKeys.Tactics, worst.Skill);
+        }
+
+        [Test]
+        public void BuildDamTactics_IsASeparateCheckFromMechanics_DifferentTopic()
+        {
+            var mechanics = Finale.BuildDam(ReadinessBand.Ready);
+            var tactics = Finale.BuildDamTactics(ReadinessBand.Ready);
+
+            Assert.AreEqual(SkillKeys.Mechanics, mechanics.Skill);
+            Assert.AreEqual(SkillKeys.Tactics, tactics.Skill);
+            Assert.AreNotEqual(mechanics.TopicId, tactics.TopicId,
+                "окремі теми — повторний підхід до однієї не штрафує лічильник іншої");
+        }
+
         [Test]
         public void Resolve_MapsBandToKeyAndCost_NoBandIsFree()
         {
