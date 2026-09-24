@@ -129,5 +129,8 @@ namespace Game.Core.Balance
 
         /// <summary>Как город отвечает игроку: люди, совет, тиры (Поправка №6).</summary>
         public CityBalance City = new CityBalance();
+
+        /// <summary>Фракции и новые указы рады (R5, B5).</summary>
+        public FactionBalance Faction = new FactionBalance();
     }
 }

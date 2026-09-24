@@ -1,3 +1,4 @@
+using Game.Core.Economy;
 using Game.Core.Loop;
 using Game.Core.Pressure;
 using Game.Core.Signals;
@@ -46,6 +47,16 @@ namespace Game.Core.Base
 
             Arrive(ctx, _works.TakeSettlers(ctx.Day), "council");
             Arrive(ctx, _works.TakeArrivals(), "expedition");
+
+            // ---- B5: выплата Инвестиции — растянута по суткам, поэтому здесь,
+            //      а не в момент заказа (см. CityWorks.OrderInvestment) ----
+            int investmentPayout = _works.TakeInvestmentPayout();
+            if (investmentPayout > 0)
+            {
+                _state.Resources.Add(ResourceType.Gold, investmentPayout);
+                ctx.CityEvents.Add(new CityEvent("council.invest.payout", SignalUrgency.Notable,
+                    "amount:" + investmentPayout));
+            }
 
             // ---- стройка ----
             foreach (var id in _works.AdvanceConstruction())
