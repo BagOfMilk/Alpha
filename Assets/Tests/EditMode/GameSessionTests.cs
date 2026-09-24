@@ -247,6 +247,16 @@ namespace Game.Tests.EditMode
         /// страху громади (CausedFear). Обидва — приховані числа (R17), тож
         /// перевіряються лише через IVT-гачок (<see cref="GameSession.DebugTensionValue"/>/
         /// <see cref="GameSession.DebugCommunityIsAfraid"/>), не через жоден View.
+        ///
+        /// Фикс-ревью D1b: раніше PlaystyleBlood лягав через QueueExternal
+        /// (мостик R6), який TensionTickStep дренує лише на ПЕРШОМУ тіку
+        /// НАСТУПНОЇ фази — це давало ціні крові запізнення на цілу фазу
+        /// проти Напруги полоси виходу (яка лягає синхронно тим самим
+        /// викликом). Тепер обидва застосовуються атомарно: перевіряємо це
+        /// ОДРАЗУ після CombatAutoResolve (яке синхронно кличе
+        /// OnBattleResolved → ResolvePendingWithBand), без жодного наступного
+        /// AdvanceNight — якби цінa крові й досі йшла через відкладену черг,
+        /// це порівняння впало б ще ДО AdvanceNight.
         /// </summary>
         [Test]
         public void Day1_BloodyPath_AppliesPlaystyleBloodTension_AndCausedFear_LikeAnyBloodyIncident()
@@ -266,21 +276,20 @@ namespace Game.Tests.EditMode
             Assert.IsNull(duringBattle);
             s.CombatAutoResolve();
 
-            // Черга QueueExternal(PlaystyleBlood) — той самий мостик R6, що й у
-            // квестів: споживається лише тіком Напруги НАСТУПНОЇ фази, не
-            // миттєво в момент рішення.
-            if (s.State == SessionState.Scene)
-            {
-                SceneStepView step;
-                do { step = s.AdvanceScene(); } while (!step.IsFinished);
-            }
-            s.ConfirmEvening();
-            s.AdvanceNight();
-
+            // Синхронно, одразу після автобою — БЕЗ переходу в Scene/Evening/
+            // Night: PlaystyleBlood і CausedFear мають лягти в тому самому
+            // виклику, що й Напруга полоси виходу бою (ResolvePendingWithBand
+            // усередині OnBattleResolved), а не фазою пізніше.
+            Assert.AreEqual(SessionState.Scene, s.State);
             Assert.Greater(s.DebugTensionValue, tensionBeforeBlood,
-                "PlaystyleBlood мав піднятi Напругу так само, як IncidentResolver.ApplyBloodCost для звичайного кровавого шляху");
+                "PlaystyleBlood мав піднятi Напругу СИНХРОННО, так само, як IncidentResolver.ApplyBloodCost для звичайного кровавого шляху");
             Assert.IsTrue(s.DebugCommunityIsAfraid,
                 "кроваве рішення вузла 1 через бій мало налякати громаду так само, як CausedFear звичайного кровавого шляху");
+
+            SceneStepView step;
+            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            s.ConfirmEvening();
+            s.AdvanceNight();
         }
 
         /// <summary>
@@ -696,6 +705,64 @@ namespace Game.Tests.EditMode
 
             Assert.Greater(s.DebugTuharPulseFill, fillBefore,
                 "Ріг вивідника мав детерміновано підняти заповнення накопичувача Тугара (наступні попередження — раніше/легше)");
+        }
+
+        /// <summary>
+        /// Фикс-ревью D1b (WorldPulse.BoostCharge): одноразовий стрибок
+        /// боста не сміє сам дістати чи перескочити Threshold. У Тугара
+        /// (Kind=InternalThreat) PressureTrack.IsReady() вимагає лише
+        /// Charge&gt;=Threshold — без прив'язки до почутих попереджень, а
+        /// зареєстрованого інциденту з SourceId=="tuhar" ще нема (в перші
+        /// 5 діб у нього тільки драбина передвісників, справжня розв'язка —
+        /// в сценарному Фіналі), тож WorldPulse.Fire() тут мовчки скидає
+        /// Charge/DeliveredLevel без жодної події в лозі. Якщо гравець
+        /// знаходить ріг ПІЗНІШЕ (не на добу 1, а після кількох діб
+        /// природного накопичення — саме так за сценарієм §3.4 і буває,
+        /// ріг лежить у кімнаті 2 доби 4), одноразовий +30 заряду міг ЗРАЗУ,
+        /// в тому самому виклику BoostCharge, перескочити Threshold — це
+        /// найгостріший і повністю усувний випадок дефекту, і саме його
+        /// закриває клямп у WorldPulse.BoostCharge.
+        ///
+        /// ВІДКРИТЕ ПИТАННЯ (задокументовано, не приховано): звичне щоденне
+        /// накопичення Тугара (тіка КОЖНУ фазу — §1 рядок 8 — тобто вдвічі
+        /// частіше за календарну добу) саме по собі перетинає Threshold=60
+        /// близько доби 3 навіть БЕЗ рогу і без жодного гравецького предмета
+        /// (перевірено окремим сценарієм: day1=0.4→0.8, day3 day-фаза=1.0→
+        /// нульове скидання в ту саму фазу) — це вже існуючий, не внесений
+        /// D1b дефект (Тугар ще не має власного IncidentDefinition; його
+        /// розв'язка — сценарний Фінал, не WorldPulse.Fire), і клямп однієї
+        /// точки входу (BoostCharge) його не закриває. Спробу довести це
+        /// тестом на кілька діб УПЕРЕД (без коригування Threshold/Fire —
+        /// поза межами двох переданих знахідок) свідомо не робимо: вона
+        /// впала б і без рогу, отже перевіряла б не наш фікс.
+        /// </summary>
+        [Test]
+        public void ScoutHornBoost_WhenChargeAlreadyNearThreshold_ClampsInsteadOfOvershooting()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            // Дві тихі доби природного накопичення Тугара (~0.8 заповнення на
+            // кінець доби 2 — day2 end=48/60 у сценарії §3.2-3.3), АНАЛОГІЧНО
+            // до того, як за сценарієм §3.4 ріг насправді лежить не на добу 1,
+            // а на добу 4 — Тугар на той момент уже НЕ порожній.
+            PlayFullDayQuiet(s);
+            PlayFullDayQuiet(s);
+            double fillBeforeHorn = s.DebugTuharPulseFill;
+            Assert.Less(fillBeforeHorn, 1.0, "передумова: до рогу накопичувач ще не мав вистрелити сам");
+
+            s.DepartExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                new[] { "protagonist", "maksym", "myroslava" }, 2);
+            s.ResolveDungeonRoom(IncidentPath.Quiet);
+            s.PushDeeper();
+            s.ResolveDungeonRoom(IncidentPath.Quiet); // грант рогу — одноразовий +30 заряду
+
+            double fillAfterHorn = s.DebugTuharPulseFill;
+            Assert.Greater(fillAfterHorn, fillBeforeHorn, "ріг усе одно мав підняти заповнення");
+            Assert.Less(fillAfterHorn, 1.0,
+                "одноразовий буст НЕ сміє сам дістати чи перескочити Threshold (інакше миттєвий мовчазний Fire без інциденту " +
+                "«з'їдає» саме ту вигоду, яку ріг обіцяє)");
         }
 
         // ---- Фінал доби 5: кровавий шлях → справжній бій (SuspendReason.FinaleAssault) ----

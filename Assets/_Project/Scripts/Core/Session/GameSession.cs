@@ -791,7 +791,18 @@ namespace Game.Core.Session
                 // тут НЕ дублюється: справжні втрати вже рахує ApplyBattleCasualties
                 // після резолву бою (RosterAdapter.Wound/Kill), а не абстрактний
                 // "казуальний" удар check.ActorId, якого при бою просто немає.
-                _processor.QueueExternal(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode);
+                //
+                // Фикс-ревью D1b: раніше тут стояв _processor.QueueExternal(...),
+                // а це — мостик R6, який за контрактом TensionTickStep дренує
+                // заявку лише на ПЕРШОМУ тіку НАСТУПНОЇ фази, тоді як
+                // IncidentResolver.ApplyBloodCost для будь-якого іншого
+                // кровавого інциденту застосовує PlaystyleBlood СИНХРОННО, в
+                // тому самому виклику, що й Напругу полоси виходу. Викликаємо
+                // TensionState.Apply напряму (internal, той самий Game.Core,
+                // що й IncidentResolver) — так ціна крові лягає атомарно з
+                // рештою наслідків цього ж вузла, а не фазою пізніше.
+                _processor.Tension.Apply(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode,
+                    "blood:" + incidentId);
                 _processor.Fear?.Remember(_processor.CurrentDay, _cfg.Checks);
 
                 var setup = BuildBattleSetup(new[] { ProtagonistId, "maksym", "myroslava" },
