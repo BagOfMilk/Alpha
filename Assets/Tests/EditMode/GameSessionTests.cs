@@ -858,7 +858,12 @@ namespace Game.Tests.EditMode
             foreach (var e in s.DayLog)
             {
                 if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefectedAfterConfrontation = true;
-                if (e.Key == "roster.rippled") sawRipple = true;
+                // Полірування ціль 5 (trunk, уже злите до tb/choices): ключ
+                // ряби несе тип зв'язку й причину суфіксом ("roster.rippled."
+                // + bond + "." + betrayal/death, GameSession.LogRipple) —
+                // перевіряємо префіксом, як і AllMechanicsCoverageTests.cs
+                // рядок 595 та GameSessionTests.cs рядок 994 нижче.
+                if (e.Key.StartsWith("roster.rippled", StringComparison.Ordinal)) sawRipple = true;
             }
             Assert.IsTrue(sawDefectedAfterConfrontation,
                 "«звинуватити» на нічній розмові виконує дефекцію негайно (GameSession.ApplyBetrayalConfrontationSideEffectsIfNeeded)");
