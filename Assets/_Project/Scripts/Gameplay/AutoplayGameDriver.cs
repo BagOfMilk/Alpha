@@ -47,7 +47,7 @@ namespace Game.Gameplay
         private static readonly string[] HubTabSlugs =
         {
             "hub-posts", "hub-buildings", "hub-council", "hub-expedition", "hub-gear",
-            "hub-people", "hub-quests", "hub-factions", "hub-readiness", "hub-save"
+            "hub-people", "hub-quests", "hub-factions", "hub-readiness", "hub-save", "hub-journal"
         };
 
         private readonly IAutoplayHost _host;
@@ -63,6 +63,14 @@ namespace Game.Gameplay
         private bool _nightShown;
         private bool _delveDeparted;
         private bool _crisisFinaleAttempted;
+
+        /// <summary>
+        /// Поправка №7.8, п.4: іменовані знімки Choice-кроків/наслідків/
+        /// квестових глав — за id, не за лічильником, тож кожен показується
+        /// РІВНО раз за тур, скільки б разів диспетчер не заглянув у той самий
+        /// стан (кілька вечорів поспіль без нового вибору тощо).
+        /// </summary>
+        private readonly HashSet<string> _capturedOnce = new HashSet<string>();
 
         public AutoplayGameDriver(IAutoplayHost host, GameShell shell, bool useThresholdRule)
         {
@@ -136,26 +144,52 @@ namespace Game.Gameplay
 
                 var state = Session.State;
 
-                // ---- портретна сцена ----
+                // ---- портретна сцена (Поправка №7.8, п.1/4) ----
                 if (state == SessionState.Scene)
                 {
-                    var step = Run(() => Session.AdvanceScene());
+                    // ЦЕЙ САМИЙ SceneScreen, що малює OnGUI — водій просуває
+                    // курсор через нього (не Session.AdvanceScene() напряму),
+                    // інакше в екрана з'явився б другий, розсинхронізований
+                    // курсор: скріншоти фіксували б застиглий перший кадр,
+                    // поки Session тихо пішла далі під капотом (див. коментар
+                    // над SceneScreen.DriverAdvance).
+                    var scene = _shell.Scene;
+                    var step = scene.DriverAdvance(_shell);
+                    LogIfMessage();
                     foreach (var f in WaitFrames(FramesShort)) yield return f;
-                    if (step != null && sceneShots < 6 && (!string.IsNullOrEmpty(step.LineKey) || step.IsFinished))
+
+                    if (step != null && step.IsChoice)
+                    {
+                        string choiceId = step.ChoiceId ?? "choice";
+                        if (_capturedOnce.Add("choice-" + choiceId))
+                        {
+                            _host.Capture("choice-" + choiceId);
+                            yield return 0;
+                        }
+
+                        scene.DriverChoose(_shell, ChooseSceneOptionIndex(step));
+                        LogIfMessage();
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+
+                        if (scene.IsShowingConsequence)
+                        {
+                            if (_capturedOnce.Add("consequence-" + choiceId))
+                            {
+                                _host.Capture("consequence-" + choiceId);
+                                yield return 0;
+                            }
+                            scene.DriverContinueConsequence();
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        }
+                        continue;
+                    }
+
+                    if (step != null && sceneShots < 10 && (!string.IsNullOrEmpty(step.LineKey) || step.IsFinished))
                     {
                         sceneShots++;
-                        _host.Capture("opening-scene-" + sceneShots);
+                        _host.Capture("scene-line-" + sceneShots);
                         yield return 0;
                     }
-                    // Поправка №7.8: Choice-крок сам собою не рухає сцену
-                    // далі (AdvanceScene() короткочасно повертає той самий
-                    // кадр, поки чекає вибору) — без цієї гілки диспетчер
-                    // молотив би той самий кадр, поки не впаде в запобіжник
-                    // MaxLoopSteps вище. Той самий "перший виборний варіант"
-                    // за замовчуванням, що BotSupport.ChooseSceneDefault
-                    // (немає екрана вибору — Поправка №7.8, UI пізніше).
-                    if (step != null && step.IsChoice)
-                        Run(() => Session.ChooseSceneOption(BotSupport.ChooseSceneDefault(step)));
                     continue;
                 }
 
@@ -175,6 +209,18 @@ namespace Game.Gameplay
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _host.Capture("freeplay-day" + day);
                             yield return 0;
+
+                            // Поправка №7.8, п.4: журнал механік наостанок —
+                            // до цього моменту тур пройшов бій/квести/вилазку/
+                            // данж/сцени-вибори/раду, тож рахунок "побачено"
+                            // тут найповніший за весь прогін (порівняй із
+                            // "hub-journal" дня 1, де побачено майже нічого).
+                            _shell.SetHubTab(10);
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                            _host.Capture("mechanics-journal-final");
+                            yield return 0;
+                            _shell.SetHubTab(0);
+
                             _host.Log("FreePlay доби " + day + " досягнуто (стартувало на добу " + _freePlayStartDay + ") — тур завершено успішно.");
                             yield break;
                         }
@@ -380,7 +426,41 @@ namespace Game.Gameplay
                         for (int i = 0; i < quest.Options.Count; i++)
                             if (quest.Options[i].HasCandidate) { idx = i; break; }
                         int chosen = idx;
-                        Run(() => Session.ResolveQuestChoice(chosen));
+                        // Гафіїна й Максимова лінії квесту ділять ОДИН
+                        // GameSession._currentQuestOffer (див. той самий фікс
+                        // у HubScreen.DrawQuestOffer) — перезапит ЦІЄЇ лінії
+                        // просто ПЕРЕД ResolveQuestChoice синхронізує вказівник
+                        // назад на неї, бо нижче ми так само запитуємо Максимову.
+                        Run(() =>
+                        {
+                            Session.OfferQuestStage(DefaultQuests.HafiyaId);
+                            Session.ResolveQuestChoice(chosen);
+                        });
+                    }
+
+                    // Максимова квестова глава арки «Не за кров» (Поправка
+                    // №7.8, п.4): GameShell.MaybeRouteOfferedSceneContent уже
+                    // зареєстрував визначення в пулі (BeginArcChapterQuest),
+                    // коли главу відкрито (гейт Steady) — тут лише доганяємо
+                    // тим самим OfferQuestStage, яким і Гафіїн квест вище.
+                    var maksymQuest = Run(() => Session.OfferQuestStage(DefaultQuests.MaksymCh1Id));
+                    if (maksymQuest != null && _capturedOnce.Add("arc-quest-choice"))
+                    {
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("arc-quest-choice");
+                        yield return 0;
+                    }
+                    if (maksymQuest?.Options != null && maksymQuest.Options.Count > 0)
+                    {
+                        int idx = 0;
+                        for (int i = 0; i < maksymQuest.Options.Count; i++)
+                            if (maksymQuest.Options[i].HasCandidate) { idx = i; break; }
+                        int chosen = idx;
+                        Run(() =>
+                        {
+                            Session.OfferQuestStage(DefaultQuests.MaksymCh1Id);
+                            Session.ResolveQuestChoice(chosen);
+                        });
                     }
 
                     Run(() => Session.SetPatrol(Session.CurrentView.Day % 2 == 0));
@@ -479,6 +559,23 @@ namespace Game.Gameplay
                 foreach (var o in offer.Options)
                     if (o.Path == IncidentPathView.Bloody && o.HasCandidate) return IncidentPath.Bloody;
             return StewardPath(offer);
+        }
+
+        /// <summary>
+        /// Поправка №7.8, п.4: два тури мають обирати РІЗНЕ, інакше знімки
+        /// обох прогонів показують той самий вибір двічі. Автори сцен
+        /// послідовно кладуть найризикованіший/найкровавіший варіант ОСТАННІМ
+        /// у списку (Захарова рада: "загата"/"assault" — тихий/кровавий;
+        /// Мирославина довіра: "довіритись"/…/"відіслати") — тур із форсованим
+        /// кровавим шляхом (<see cref="_useThresholdRule"/>) тримається його,
+        /// другий лишає перший (той самий "перший варіант" за замовчуванням,
+        /// що й <see cref="BotSupport.ChooseSceneDefault"/>).
+        /// </summary>
+        private int ChooseSceneOptionIndex(SceneStepView step)
+        {
+            int count = step?.Options != null ? step.Options.Count : 0;
+            if (count == 0) return 0;
+            return _useThresholdRule ? count - 1 : BotSupport.ChooseSceneDefault(step);
         }
 
         private static IncidentPath StewardPath(PendingOfferView offer)

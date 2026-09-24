@@ -54,6 +54,59 @@ namespace Game.Gameplay.UI
         private static readonly System.Collections.Generic.Dictionary<string, Texture2D> _cardTextureCache =
             new System.Collections.Generic.Dictionary<string, Texture2D>();
 
+        // ===================== API тур-автоплею (Поправка №7.8, п.4) =====================
+        //
+        // AutoplayGameDriver раніше кликав GameSession.AdvanceScene()/
+        // ChooseSceneOption() НАПРЯМУ, в обхід цього екрана — той самий
+        // Session, який малює Draw() нижче, отримував ДРУГИЙ, незалежний від
+        // UI прохід по сцені. Це не нешкідливо: SceneScreen має ВЛАСНИЙ курсор
+        // (_current), що оновлюється лише зі свого Draw()/Advance() — прямий
+        // виклик ядра з боку водія рухав _scenePlayback УПЕРЕД, а _current тут
+        // лишався незмінним (перший кадр, отриманий Draw() при його першому
+        // виклику), тож знімки тура фіксували б один і той самий застиглий
+        // кадр, поки водій-звіт по кроках уже пішов далі. Водій відтепер
+        // керує ЦИМ САМИМ курсором через методи нижче — так само, як людський
+        // клік, лише без клавіатури/миші.
+
+        /// <summary>Поточний кадр, який зараз показаний на екрані — те, що тур-автоплей знімає скріншотом.</summary>
+        public SceneStepView Current => _current;
+
+        /// <summary>Панель наслідку вибору зараз на екрані замість кнопок/«Далі».</summary>
+        public bool IsShowingConsequence => _showingConsequence;
+
+        /// <summary>Нові рядки DayLog, які щойно зроблений вибір дописав — те, що показує панель наслідку.</summary>
+        public IReadOnlyList<GameEvent> ConsequenceEvents => _consequenceEvents;
+
+        /// <summary>Той самий крок, що кнопка «Далі»/клік/Пробіл: просуває сцену на один крок, якщо екран не стоїть на виборі й не показує наслідок.</summary>
+        public SceneStepView DriverAdvance(GameShell shell)
+        {
+            if (_current == null)
+            {
+                _lastSpeakerId = null;
+                _lastLineKey = null;
+                SetCurrent(shell.TryRun(() => shell.Session.AdvanceScene()));
+                return _current;
+            }
+            if (_showingConsequence || _current.IsChoice) return _current; // тут крокує ChooseOption/ContinueAfterConsequence, не Advance
+            Advance(shell);
+            return _current;
+        }
+
+        /// <summary>Той самий клік по кнопці варіанту — лише коли екран справді стоїть на виборі.</summary>
+        public SceneStepView DriverChoose(GameShell shell, int optionIndex)
+        {
+            if (_current == null || !_current.IsChoice || _showingConsequence) return _current;
+            ChooseOption(shell, optionIndex);
+            return _current;
+        }
+
+        /// <summary>Той самий клік «Далі» на панелі наслідку — закриває її й відкриває наступний кадр сцени.</summary>
+        public SceneStepView DriverContinueConsequence()
+        {
+            if (_showingConsequence) ContinueAfterConsequence();
+            return _current;
+        }
+
         public void Draw(GameShell shell)
         {
             if (_current == null)
@@ -199,13 +252,17 @@ namespace Game.Gameplay.UI
 
             GUILayout.Space(8f);
             if (Widgets.PrimaryButton(UkrainianText.Get("ui.scene.next", g), GUILayout.Width(180f)))
-            {
-                _showingConsequence = false;
-                _consequenceEvents = null;
-                var next = _pendingAfterChoice;
-                _pendingAfterChoice = null;
-                SetCurrent(next != null && !next.IsFinished ? next : null);
-            }
+                ContinueAfterConsequence();
+        }
+
+        /// <summary>Спільний хвіст «Далі» на панелі наслідку — та сама дія, яку тур-автоплей викликає через <see cref="DriverContinueConsequence"/>.</summary>
+        private void ContinueAfterConsequence()
+        {
+            _showingConsequence = false;
+            _consequenceEvents = null;
+            var next = _pendingAfterChoice;
+            _pendingAfterChoice = null;
+            SetCurrent(next != null && !next.IsFinished ? next : null);
         }
 
         /// <summary>Оновлює поточний кадр і, за наявності, пам'ятає останню непорожню репліку (§_lastSpeakerId) для показу над наступним Choice-кроком.</summary>

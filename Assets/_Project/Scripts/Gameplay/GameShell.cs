@@ -30,6 +30,16 @@ namespace Game.Gameplay
         private readonly TitleScreen _title = new TitleScreen();
         private readonly CreationScreen _creation = new CreationScreen();
         private readonly SceneScreen _scene = new SceneScreen();
+
+        /// <summary>
+        /// Тур-автоплей (Поправка №7.8, п.4): цей самий екземпляр малює
+        /// <c>OnGUI</c> — водій просуває сцену/вибір через нього
+        /// (<c>SceneScreen.DriverAdvance/DriverChoose/DriverContinueConsequence</c>),
+        /// а не напряму через <c>Session</c>, інакше в екрана з'явився б
+        /// ДРУГИЙ, розсинхронізований курсор (див. коментар над цими
+        /// методами в SceneScreen.cs).
+        /// </summary>
+        public SceneScreen Scene => _scene;
         private readonly HubScreen _hub = new HubScreen();
         private readonly DecisionScreen _decision = new DecisionScreen();
         private readonly NightScreen _night = new NightScreen();
