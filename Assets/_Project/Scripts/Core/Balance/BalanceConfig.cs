@@ -141,5 +141,8 @@ namespace Game.Core.Balance
 
         /// <summary>Push-your-luck данж: коэффициенты скрытой шкалы Threat (Core/Dungeons, R4).</summary>
         public DungeonBalance Dungeon = new DungeonBalance();
+
+        /// <summary>Фракции и новые указы рады (R5, B5).</summary>
+        public FactionBalance Faction = new FactionBalance();
     }
 }

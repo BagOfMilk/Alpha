@@ -360,5 +360,22 @@ namespace Game.Tests.EditMode
                 "Core/Dungeons не повинен посилатися на бій чи предмети напряму: "
                 + string.Join(", ", offenders));
         }
+
+        // ================= B5: Factions + Council extensions (R5) =================
+
+        /// <summary>
+        /// Инвариант 3, применённый к отношению фракции так же, как к Напряжению:
+        /// сырое значение (FactionStanding.Value) не должно быть читаемо снаружи
+        /// ядра — наружу уходит только полоса (FactionStandingBand).
+        /// </summary>
+        [Test]
+        public void FactionStanding_ValueStaysInternal()
+        {
+            var prop = typeof(Game.Core.Factions.FactionStanding).GetProperty("Value",
+                BindingFlags.Public | BindingFlags.Instance);
+
+            Assert.IsNull(prop,
+                "FactionStanding.Value обязано быть internal — иначе Game.Gameplay сможет прочитать сырое число фракции");
+        }
     }
 }
