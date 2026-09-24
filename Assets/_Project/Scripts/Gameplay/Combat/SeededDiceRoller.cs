@@ -7,7 +7,7 @@ namespace Game.Gameplay.Combat
     /// Сидированная реализация IDiceRoller (R1): splitmix64-подобный поток,
     /// чистый C#, БЕЗ UnityEngine — подключается к tools/Alpha.Play,
     /// tools/Alpha.Sim и headless-тестам прямым &lt;Compile Include&gt;, как
-    /// уже сделано для SceneText.cs/SignalText.cs, и линтуется вместе со
+    /// и UkrainianText.cs (пакет E3b), и линтуется вместе со
     /// всем Gameplay/**/*.cs без исключения (файл не трогает движок).
     ///
     /// Состояние — один ulong: сейв хранит его строкой (CaptureState), чтобы

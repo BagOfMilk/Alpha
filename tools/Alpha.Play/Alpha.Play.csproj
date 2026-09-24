@@ -7,8 +7,8 @@
     ПРОЙТИ и измерить задолго до интерфейса. Текстовая сборка играется уже
     сегодня, а на вопрос «цепляет ли петля» отвечает тем же ядром, что и игра.
 
-    Мир строится общим с харнесом кодом (tools/Shared): иначе замеренный темп
-    относился бы не к той игре, в которую играли.
+    Мир строится тим самим GameSession, що й Unity/тести (SettlementWorld.cs
+    прибрано пакетом D2 — GameSession будує світ сам усередині NewGame).
   -->
 
   <PropertyGroup>
@@ -22,18 +22,17 @@
 
   <ItemGroup>
     <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
-    <!--
-      Пакет D2: Alpha.Play більше не будує світ сам (SettlementWorld.cs
-      прибрано — тонкий делегат до FirstHourWorld лишився без жодного
-      споживача, GameSession будує світ сам усередині NewGame). SignalText/
-      SceneText лишаються — Program.cs друкує через них ключі, доки E3 не
-      завела справжню текстову таблицю (§6.2 TEST_BUILD.md).
-    -->
-    <Compile Include="../Shared/SignalText.cs" Link="Shared/SignalText.cs" />
-    <Compile Include="../Shared/SceneText.cs" Link="Shared/SceneText.cs" />
     <!-- Б1 (R1): сидированный кубик боя, чистый C# без UnityEngine. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Combat/SeededDiceRoller.cs"
              Link="Gameplay/Combat/SeededDiceRoller.cs" />
+    <!--
+      Пакет E3b (R7): єдина текстова таблиця, чистий C# без UnityEngine —
+      той самий прийом Compile Include, що вже є для SeededDiceRoller.cs
+      вище. Замінила Alpha.Shared.SceneText/SignalText (tools/Shared/,
+      видалено цим пакетом): Program.cs друкує через неї, як і Unity.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Text/UkrainianText.cs"
+             Link="Gameplay/Text/UkrainianText.cs" />
   </ItemGroup>
 
 </Project>

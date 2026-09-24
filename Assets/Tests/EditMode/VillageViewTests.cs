@@ -67,9 +67,9 @@ namespace Game.Tests.EditMode
         {
             // Игрок никогда не видит «достаток 3»: он видит город.
             Assert.AreNotEqual(VillageView.MoodWords(Mood(0, 0)), VillageView.MoodWords(Mood(4, 0)));
-            StringAssert.Contains("хутор", VillageView.MoodWords(Mood(0, 0)));
+            StringAssert.Contains("хутір", VillageView.MoodWords(Mood(0, 0)));
             StringAssert.Contains("село", VillageView.MoodWords(Mood(1, 0)));
-            StringAssert.Contains("заколочен", VillageView.MoodWords(Mood(2, 4)));
+            StringAssert.Contains("забитий", VillageView.MoodWords(Mood(2, 4)));
             foreach (char c in VillageView.MoodWords(Mood(3, 2)))
                 Assert.IsFalse(char.IsDigit(c), "В описании города не должно быть цифр");
         }
@@ -85,8 +85,8 @@ namespace Game.Tests.EditMode
             var lines = VillageView.Lines(Report(DayPhase.Day, new[] { crisis }, null));
 
             Assert.AreEqual(1, lines.Count);
-            StringAssert.Contains("КРИЗИС", lines[0], "Кризис не имеет права выглядеть как рядовое происшествие");
-            StringAssert.Contains("люди уходят", lines[0], "Отток населения обязан прозвучать словами");
+            StringAssert.Contains("КРИЗА", lines[0], "Кризис не имеет права выглядеть как рядовое происшествие");
+            StringAssert.Contains("люди йдуть", lines[0], "Отток населения обязан прозвучать словами");
         }
 
         [Test]
@@ -97,7 +97,7 @@ namespace Game.Tests.EditMode
 
             var lines = VillageView.Lines(Report(DayPhase.Day, new[] { outcome }, null));
 
-            StringAssert.Contains("на посту никого не было", lines[0],
+            StringAssert.Contains("на посту нікого не було", lines[0],
                 "Цена пустого поста — урок расстановки, и он обязан быть произнесён");
         }
 
@@ -109,7 +109,7 @@ namespace Game.Tests.EditMode
 
             var lines = VillageView.Lines(Report(DayPhase.Day, new[] { outcome }, null));
 
-            StringAssert.Contains("напугана", lines[0],
+            StringAssert.Contains("налякана", lines[0],
                 "Страх общины — скрытая цена; по инварианту 6 у неё обязан быть голос");
         }
 
@@ -161,11 +161,52 @@ namespace Game.Tests.EditMode
             var lines = VillageView.Lines(Report(DayPhase.Day, null, new[] { built, tier, left, came }));
 
             StringAssert.Contains("Храм", lines[0], "Здание называется по имени, а не ключом");
-            StringAssert.Contains("селом", lines[1], "Смена тира — словами дуги: хутор, село, слобода, городок");
+            StringAssert.Contains("селом", lines[1], "Смена тира — словами дуги: хутір, село, слобода, містечко");
             StringAssert.Contains("голодно", lines[2], "Уход людей называет причину");
-            StringAssert.Contains("отряд", lines[3], "Пришедшие — откуда пришли");
+            StringAssert.Contains("загін", lines[3], "Пришедшие — откуда пришли");
             foreach (var line in lines)
                 StringAssert.DoesNotContain("city.", line, "Ни одного сырого ключа в ленте");
+        }
+
+        [Test]
+        public void CouncilActions_AreSpokenNotRawTopics()
+        {
+            // Фікс-ревью пакета E3b: п'ять реальних council.*-топіків з
+            // Core/Base/Buildings/CityWorks*.cs (§2, рядок 15 — «Нові дії
+            // ради») повинні звучати перекладом, а не падати у "· <topic>".
+            var decree = Signal(SignalChannel.CitizenLine, "council.decree.ordered");
+            var diplomacy = Signal(SignalChannel.CitizenLine, "council.diplomacy.ordered");
+            var prepareThreat = Signal(SignalChannel.CitizenLine, "council.prepare_threat.ordered");
+            var outfitExpedition = Signal(SignalChannel.CitizenLine, "council.outfit_expedition.ordered");
+            var investPayout = Signal(SignalChannel.CitizenLine, "council.invest.payout");
+
+            var lines = VillageView.Lines(Report(DayPhase.Day, null,
+                new[] { decree, diplomacy, prepareThreat, outfitExpedition, investPayout }));
+
+            Assert.AreEqual(5, lines.Count);
+            StringAssert.Contains("Рада видає указ", lines[0]);
+            StringAssert.Contains("Посольство вирушає", lines[1]);
+            StringAssert.Contains("Громада готується", lines[2]);
+            StringAssert.Contains("Загін споряджають", lines[3]);
+            StringAssert.Contains("Вкладення ради дало віддачу", lines[4]);
+            foreach (var line in lines)
+                StringAssert.DoesNotContain("council.", line,
+                    "Ни один council.*-топик не должен прорываться сырым ключом в ленту");
+        }
+
+        [Test]
+        public void Crisis_NamesTheCompanionInsteadOfRawId()
+        {
+            // Фікс-ревью пакета E3b: суфікс кризи не має показувати сирий
+            // Core-id напарника — тільки перекладене ім'я з "char.<id>".
+            var crisis = new IncidentOutcome("crisis_riot", "incident.crisis_riot", "площадь",
+                OutcomeBand.Worst, false, true, "maksym", CrisisBite.WoundCompanion, 0);
+
+            var lines = VillageView.Lines(Report(DayPhase.Day, new[] { crisis }, null));
+
+            Assert.AreEqual(1, lines.Count);
+            StringAssert.Contains("Максим Беркут", lines[0], "Напарник обязан быть назван по имени");
+            StringAssert.DoesNotContain("maksym", lines[0], "Сырой Core-id не должен просачиваться в реплику");
         }
 
         [Test]
@@ -173,8 +214,8 @@ namespace Game.Tests.EditMode
         {
             var night = VillageView.Headline(Report(DayPhase.Night, null, null), Mood(1, 0));
 
-            StringAssert.Contains("Сутки 7", night);
-            StringAssert.Contains("ночь", night);
+            StringAssert.Contains("Доба 7", night);
+            StringAssert.Contains("ніч", night);
         }
 
         private static SignalRequest Signal(SignalChannel channel, string topicId, params string[] tags)

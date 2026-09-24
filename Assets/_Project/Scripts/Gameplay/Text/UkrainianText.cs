@@ -17,17 +17,17 @@ namespace Game.Gameplay.Text
     /// ключа <c>"x"</c> існує варіант <c>"x.m"</c>/<c>"x.f"</c>, обирається він,
     /// інакше повертається сам ключ <c>"x"</c> (§7, підсумковий абзац).
     ///
-    /// Замінює (коли D2 переключить викликачів — R7/§5.1, координовано, не
-    /// зараз): <c>Gameplay/SceneLines.cs</c>, <c>tools/Shared/SceneText.cs</c>,
-    /// <c>tools/Shared/SignalText.cs</c> і текстову частину <c>VillageView</c>.
-    /// Ці три файли навмисно НЕ видалені й НЕ перемкнуті цим пакетом (E3) — вони
-    /// самодостатні (власна таблиця всередині) і працюють, як і раніше, доки їх
-    /// користувачів не перевели на цю таблицю.
+    /// Замінила (пакет E3b, R7/§5.1): <c>Gameplay/SceneLines.cs</c> (видалено —
+    /// <see cref="Game.Gameplay.ScenePlayer"/> тепер читає цю таблицю напряму),
+    /// <c>tools/Shared/SceneText.cs</c>/<c>SignalText.cs</c> (видалено —
+    /// <c>tools/Alpha.Play/Program.cs</c> так само) і текстову частину
+    /// <c>Gameplay/VillageView.cs</c> (переведена на ключі цієї таблиці, її
+    /// власна математика світла/кольору — ні).
     ///
     /// Чиста C# (без <c>UnityEngine</c>) — компілюється і в
-    /// <c>Game.Gameplay.Lint</c>, і в <c>tools/Game.Tests.Headless</c> прямим
-    /// <c>&lt;Compile Include&gt;</c> (той самий прийом, що вже є для
-    /// <c>SceneText.cs</c>/<c>SignalText.cs</c>/<c>SeededDiceRoller.cs</c>).
+    /// <c>Game.Gameplay.Lint</c>, і в <c>tools/Game.Tests.Headless</c>, і в
+    /// <c>tools/Alpha.Play</c>/<c>Alpha.Sim</c> прямим <c>&lt;Compile Include&gt;</c>
+    /// (той самий прийом, що вже є для <c>SeededDiceRoller.cs</c>).
     /// </summary>
     public static class UkrainianText
     {
@@ -147,12 +147,11 @@ namespace Game.Gameplay.Text
             AddStatusesAndWoundTiers(t);
             AddCouncilResultFeedback(t);
 
-            // Портовано з тимчасових текстових заглушок (SceneLines/SceneText/
-            // SignalText/VillageView) — амбієнт напруги/ночі, заголовки
-            // інцидентів і подій міста, слова настрою. Старі файли НЕ
-            // видалені (E3 цього не робить — узгоджено з D2), але їхній вміст
-            // тут перевикладений українською під конвенцію ключів R7, щоб D2
-            // мав звідки перемикати виклики без другого проходу перекладу.
+            // Портовано з колишніх тимчасових текстових заглушок (SceneLines/
+            // SceneText/SignalText/VillageView) — амбієнт напруги/ночі,
+            // заголовки інцидентів і подій міста, слова настрою. Пакет E3b
+            // видалив усі три старі файли й перевів VillageView на цю
+            // таблицю (§5, "Own: ... Gameplay/VillageView.cs text parts").
             AddIncidentHeadlinesAndOutcomes(t);
             AddCityAndCouncilEvents(t);
             AddAmbientSignals(t);
@@ -161,6 +160,23 @@ namespace Game.Gameplay.Text
             // потрапляє у DayLog як окрема подія і повинен мати рядок для
             // EventFeedScreen (D2/E1 підключать пізніше — тут лише текст).
             AddGameEventFeedLines(t);
+
+            // ==================================================================
+            // Пакет E3b: ключі, якими код НАСПРАВДІ говорить, а не якими його
+            // задумав §7 TEST_BUILD.md. Знайдено читанням GameSession.LogEvent/
+            // SignalComposer/OpeningScenes (жоден пакет цього не звіряв — §6.2
+            // тест-покриття не існував до E3b): TEST_BUILD_KEYS.txt (пакет D2,
+            // машинний прогін бот-політик) розійшовся з таблицею §7 у форматі
+            // кількох конвенцій. Нижче — фактичні ключі, а не переклад §7 ще раз.
+            // ==================================================================
+            AddRealOpeningSceneKeys(t);     // Core/Scenes/OpeningScenes.cs — інша сцена й інші ключі за §7.1
+            AddRealCommandFeedbackKeys(t);  // GameSession.LogEvent "голі" ключі команд, яких немає в §7
+            AddIncidentBandKeys(t);         // SignalComposer: TopicId + "." + Band (Best/Good/Base/Worst), не "outcome.<band>"
+            AddPostReportBandKeys(t);       // SignalComposer: "post." + кириличний DomainTag + "." + Accuracy
+            AddAmbientAndThreatBandKeys(t); // SignalComposer/DungeonRun: Band.ToString() з великої літери
+            AddVillageViewKeys(t);          // Gameplay/VillageView.cs — ключі власного ткача стрічки/мудборду
+            AddConsoleLabels(t);            // tools/Alpha.Play/Program.cs — дрібні підписи консолі
+            AddScenePlayerKeys(t);          // Gameplay/ScenePlayer.cs — підписи IMGUI портретної сцени
 
             return t;
         }
@@ -498,6 +514,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "loyalty.band.steady", "Стійка");
             AddKey(t, "loyalty.band.devoted", "Віддана");
 
+            // SessionView.TensionBand — сирий TensionBand.ToString() (Calm/
+            // Murmur/Ferment/Heat/Fracture); короткий підпис-слово для
+            // бейджа/шапки UI (не плутати з "tension.band.<Band>" вище —
+            // те повне речення-оголошення зміни полоси на подію signal.domain).
+            AddKey(t, "tension.band.label.calm", "Спокій");
+            AddKey(t, "tension.band.label.murmur", "Ропіт");
+            AddKey(t, "tension.band.label.ferment", "Бродіння");
+            AddKey(t, "tension.band.label.heat", "Накал");
+            AddKey(t, "tension.band.label.fracture", "Злам");
+
             AddKey(t, "readiness.band.unprepared", "Непідготовлена");
             AddKey(t, "readiness.band.bracing", "Насторожена");
             AddKey(t, "readiness.band.ready", "Готова");
@@ -651,15 +677,17 @@ namespace Game.Gameplay.Text
         }
 
         // ==================================================================
-        // Перевикладено з тимчасових заглушок (SceneLines/SceneText/SignalText/
-        // VillageView) — заголовки інцидентів, події міста, амбієнт напруги.
-        // Стара нейборська сцена (SceneLines/SceneText: "Сосед с претензией")
-        // НЕ перенесена буквально — її переграла й замінила краща й іменна
-        // §7.1 ("Сусід з претензією" → Тугар/Захар/Мирослава). Старі ключі
-        // scene.opening.neighbour.*/scene.neighbour.*/scene.pass.title|best|
-        // good|base|worst/sfx.door.slam лишаються тільки в SceneLines.cs/
-        // SceneText.cs (самодостатні, не читають цю таблицю) — звіт пакета
-        // E3 називає це рішення явно.
+        // Перевикладено з колишніх тимчасових заглушок (SceneLines.cs/
+        // SceneText.cs/SignalText.cs — усі три видалено пакетом E3b; VillageView
+        // тепер читає цю таблицю, а не власний switch) — заголовки інцидентів,
+        // події міста, амбієнт напруги. Стара нейборська сцена ("Сосед с
+        // претензией") — це сцена, яку РЕАЛЬНО грає Core/Scenes/OpeningScenes.cs
+        // СЬОГОДНІ (§7.1 "Сусід з претензією" з Тугаром/Захаром/Мирославою —
+        // чернетка наступної ітерації сцени, поки ніхто не перепідключив
+        // OpeningScenes на неї): її буквальні ключі (scene.opening.neighbour.*/
+        // scene.neighbour.*/scene.pass.title|best|good|base|worst/sfx.door.slam/
+        // to.node1.pass/to.settlement.evening) — в AddRealOpeningSceneKeys
+        // (кінець файлу, пакет E3b).
         // ==================================================================
 
         private static void AddIncidentHeadlinesAndOutcomes(Dictionary<string, string> t)
@@ -779,33 +807,379 @@ namespace Game.Gameplay.Text
         }
 
         // ---- Стрічка подій: рядок на кожен GameEvent.Key із §2/§4.3/§6.1. ----
+        //
+        // Пакет E3b (фікс-ревью): плейсхолдери нижче ПЕРЕЙМЕНОВАНО, щоб буквально
+        // збігатися з іменами GameEvent.Args, якими GameSession.LogEvent їх
+        // насправді наповнює (grep по GameSession.cs) — раніше тут стояли
+        // аспіраційні назви ("{companion}", "{item}", "{post}", "{scar}",
+        // "{quest}", "{faction}", "{chapter}"), яких немає в жодному
+        // Args(...)-виклику: Format() підставляє ЛИШЕ пари, які прийшли,
+        // тож старий текст показав би сирі фігурні дужки в консолі/UI замість
+        // значення — саме той дефект, який §6.2/деливрабл (4) пакета мали ловити.
         private static void AddGameEventFeedLines(Dictionary<string, string> t)
         {
             AddKey(t, "day.advanced", "Настав день {day}.");
-            AddKey(t, "assign.made", "{companion} стає на {post}.");
-            AddKey(t, "assign.cleared", "{post} звільнено.");
+            AddKey(t, "assign.made", "{companionId} стає на {slotId}.");
+            AddKey(t, "assign.cleared", "{slotId} звільнено.");
             AddKey(t, "night.forewarn", "Уночі щось почулося — {domain}.");
-            AddKey(t, "production.leveled_up", "Виробництво на {post} зросло.");
+            AddKey(t, "production.leveled_up", "{companionId}: виробництво на посту зросло.");
             AddKey(t, "dungeon.push", "Загін іде глибше у підземелля.");
-            AddKey(t, "loot.dropped", "Здобич: {item}.");
-            AddKey(t, "craft.upgraded", "{item} покращено.");
-            AddKey(t, "scar.granted", "{companion} носитиме це до кінця: {scar}.");
-            AddKey(t, "loyalty.band_changed", "{companion}: тепер {band}.");
+            AddKey(t, "loot.dropped", "Здобич: {itemId}.");
+            AddKey(t, "craft.upgraded", "{itemId} покращено.");
+            AddKey(t, "scar.granted", "{companionId} носитиме це до кінця: {scarId}.");
+            AddKey(t, "loyalty.band_changed", "{companionId}: тепер {band}.");
             AddKey(t, "roster.rippled", "Звістка розходиться по загону.");
-            AddKey(t, "companion.defected", "{companion} більше не з нами.");
-            AddKey(t, "companion.died.m", "{companion} загинув на цьому шляху.");
-            AddKey(t, "companion.died.f", "{companion} загинула на цьому шляху.");
-            AddKey(t, "arc.chapter_opened", "Нова глава: {chapter}.");
-            AddKey(t, "quest.choice.resolved", "{quest}: рішення ухвалено.");
-            AddKey(t, "faction.standing_changed", "{faction}: тепер {band}.");
+            AddKey(t, "companion.defected", "{companionId} більше не з нами.");
+            AddKey(t, "companion.died.m", "{companionId} загинув на цьому шляху.");
+            AddKey(t, "companion.died.f", "{companionId} загинула на цьому шляху.");
+            AddKey(t, "arc.chapter_opened", "{companionId}: нова глава — {chapterId}.");
+            AddKey(t, "quest.choice.resolved", "{questId}: рішення ухвалено — {band}.");
+            AddKey(t, "faction.standing_changed", "{factionId}: тепер {band}.");
             AddKey(t, "finale.resolved", "Фінал: {band}.");
             AddKey(t, "combat.autoresolved", "Бій вирішено автобоєм.");
             AddKey(t, "creation.confirmed", "Шлях обрано.");
-            AddKey(t, "progression.level_up.m", "{companion} став сильнішим.");
-            AddKey(t, "progression.level_up.f", "{companion} стала сильнішою.");
+            AddKey(t, "progression.level_up.m", "{companionId} став сильнішим (рівень {level}).");
+            AddKey(t, "progression.level_up.f", "{companionId} стала сильнішою (рівень {level}).");
             AddKey(t, "game.saved", "Збережено: слот {slot}.");
             AddKey(t, "game.loaded", "Завантажено: слот {slot}.");
             AddKey(t, "char.seen", "{char} тут.");
+        }
+
+        // ==================================================================
+        // Пакет E3b: сцена відкриття, ЯК ВОНА РЕАЛЬНО ЗАВЕДЕНА в
+        // Core/Scenes/OpeningScenes.cs — не §7.1 (задум §7.1 лишається
+        // текстом у AddScenePassNeighbour вище як чернетка для наступної
+        // ітерації сцени, коли хтось перепідключить OpeningScenes на неї;
+        // сьогодні ScenePlayer/Alpha.Play програють САМЕ цю сцену).
+        // ==================================================================
+        private static void AddRealOpeningSceneKeys(Dictionary<string, string> t)
+        {
+            // Без імені підмета всередині рядка (на відміну від §7.1-style
+            // "Ім'я: «…»" у AddScenePassNeighbour вище): і ScenePlayer (GUI), і
+            // Alpha.Play (PrintSceneStep) уже друкують ім'я мовця окремо через
+            // SceneStepView.SpeakerId/ActorId → "char.<id>" — вбудований префікс
+            // дублював би його ("Тугар Вовк: Тугар Вовк: «…»").
+            AddKey(t, "scene.opening.neighbour.title", "Сусід з претензією");
+            AddKey(t, "scene.neighbour.offer",
+                "«Пропусти їх через перевал. Візьмуть своє й підуть. Тобі — доля».");
+            AddKey(t, "scene.neighbour.threat",
+                "«Не пустиш по-доброму — пройдуть по-іншому. І спитають уже з громади».");
+            AddKey(t, "scene.neighbour.elder_refuses",
+                "«Перевал не мій і не твій. Він громадський. Схід вирішить».");
+            AddKey(t, "sfx.door.slam", "грюкнули двері");
+
+            AddKey(t, "scene.pass.title", "Після перевалу");
+            AddKey(t, "scene.pass.best", "«Склад цілий. І всі повернулися».");
+            AddKey(t, "scene.pass.good", "«Максим не встане пару днів. Але склад цілий».");
+            AddKey(t, "scene.pass.base", "«Вона пішла за батьком. А склад вичистили до дощок».");
+            AddKey(t, "scene.pass.worst", "«Максим поранений, її нема, складу нема. Громада дивиться й мовчить».");
+
+            // Transition-ключі ScenePlayback.TransitionKey (SceneStepView) —
+            // текст не показується напряму (переходи мовчазні), але §6.2
+            // все одно зобов'язує мати рядок на КОЖЕН ключ, що вилітає з
+            // View-шару: тримаємо коротку діагностичну підпис.
+            AddKey(t, "to.node1.pass", "Перехід: до вузла 1 (перевал).");
+            AddKey(t, "to.settlement.evening", "Перехід: до вечора в поселенні.");
+        }
+
+        // ==================================================================
+        // Пакет E3b: "голі" ключі, якими GameSession.LogEvent НАСПРАВДІ пише
+        // DayLog для команд/наслідків, яких §7 не називає (§7 або дає їм інший
+        // формат — "*.ordered" через CityWorks-сигнал, — або не знає про них
+        // узагалі). "*.ordered"-варіанти з §7.13 — це ОКРЕМІ, теж реальні
+        // ключі (оголошення через CityWorks/SignalComposer, з затримкою на
+        // добу); ключі нижче — миттєвий відгук самої команди GameSession.
+        // ==================================================================
+        private static void AddRealCommandFeedbackKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "combat.battle.started", "Бій починається.");
+            AddKey(t, "combat.battle.resolved", "Бій закінчено покроково.");
+            AddKey(t, "combat.training.started", "Тренувальний бій починається.");
+            AddKey(t, "scene.finished", "Сцена закінчена.");
+            AddKey(t, "combat.overwatch.triggered", "{attackerId} стріляє з дозору по {targetId}.");
+
+            AddKey(t, "companion.left_settlement", "{companionId} залишає поселення.");
+
+            AddKey(t, "council.decree", "Рада зважує указ: {favored} проти {cost}.");
+            AddKey(t, "council.diplomacy", "Посольство вирушає до {factionId}.");
+            AddKey(t, "council.invest", "Рада вкладає золото в {buildingId}.");
+            AddKey(t, "council.prepare_threat", "Громада готується до наступного удару.");
+            AddKey(t, "council.outfit_expedition", "Загін споряджають краще перед виходом на {siteId}.");
+
+            AddKey(t, "city.building.ordered", "Рада замовляє будівлю: {buildingId}.");
+
+            AddKey(t, "decision.resolved", "{incidentId}: рішення ухвалено — {band}.");
+
+            AddKey(t, "dungeon.threat_band_changed", "Загроза в підземеллі тепер: {band}.");
+
+            AddKey(t, "expedition.departed", "Загін вирушає до точки {siteId}.");
+            AddKey(t, "expedition.returned", "Загін повернувся з {siteId}: {band}.");
+
+            AddKey(t, "item.scout_horn.forewarn_boosted",
+                "Ріг розвідника підсилює наступні передвісники (лишилось зарядів: {charges}).");
+
+            AddKey(t, "production.resource", "Виробництво: {resource} +{amount}.");
+            AddKey(t, "production.recovered", "{companionId}: виробництво відновлено.");
+            AddKey(t, "production.food_shortage", "Їжі не вистачає — люди це відчувають.");
+
+            AddKey(t, "progression.build_committed", "{companionId}: вибір білда підтверджено, назад не буде.");
+            AddKey(t, "equip.changed", "{companionId}: спорядження змінено ({slot}).");
+
+            AddKey(t, "signal.domain", "Загін іде за домен: {domain}.");
+            AddKey(t, "quest.offered", "Нова пропозиція квесту: {questId} (етап {stage}).");
+
+            // Finale.DamTopicId/.DamTacticsTopicId (Core/Story/Finale.cs) — теми
+            // тихого фіналу («загатити річку»), показуються як пороги перевірки
+            // ще ДО резолву, тим самим шляхом, що dungeon.abandoned_camp.room1.
+            AddKey(t, "finale.dam", "Загатити річку (Механіка).");
+            AddKey(t, "finale.dam.tactics", "Тримати позицію на дамбі (Тактика).");
+        }
+
+        // ==================================================================
+        // Пакет E3b: SignalComposer.Compose будує ключ інциденту як буквальний
+        // конкатенат <c>inc.TopicId + "." + inc.Band</c> (Core/Signals/
+        // SignalComposer.cs, ~рядок 107) — <c>OutcomeBand</c> ("Best"/"Good"/
+        // "Base"/"Worst", З ВЕЛИКОЇ). §7.6/§7.8 і AddIncidentHeadlinesAndOutcomes
+        // вище дають ЦЕЙ САМИЙ зміст під ключами "incident.<id>.outcome.<band>"
+        // (нижній регістр, окреме слово "outcome") — тими користується UI, що
+        // читає структурований DayReportView.Incidents; ключі нижче — тим, хто
+        // читає СИРУ стрічку сигналів/DayLog (GameEvent.Key/SignalLineView.TopicId).
+        // Текст навмисно ідентичний відповідним "outcome.<band>" вище.
+        // ==================================================================
+        private static void AddIncidentBandKeys(Dictionary<string, string> t)
+        {
+            AddIncidentBand(t, "petty_theft",
+                "Крадія знайшли, і майже все повернулося на місце.",
+                "Половину зниклого повернуто.",
+                "Розібралися абияк — крадій пішов непокараний.",
+                "Нічого не знайшли, і крадуть далі.");
+            AddIncidentBand(t, "market_brawl",
+                "Сторони розійшлися самі, без синців і без боргів.",
+                "Бійку розвели, торг триває.",
+                "Розвели силою — ринок ще довго гуде.",
+                "Ринок стоїть — торгувати нікому, всі налякані.");
+            AddIncidentBand(t, "spoiled_stores",
+                "Дід Овсій знаходить майже все.",
+                "Половину повернено.",
+                "Повернено мало.",
+                "Нічого не повернено, і по селу шепочуть.");
+            AddIncidentBand(t, "sick_child",
+                "Гафія впоралася без зайвого дня.",
+                "Дитина одужає за кілька днів.",
+                "Одужання йде важко.",
+                "Лазарет порожній — нікому було лікувати.");
+            AddIncidentBand(t, "protection_racket",
+                "Побори скасовано — торговці дихнули вільно.",
+                "Побори зменшено, поки що.",
+                "Побори лишились — торговці платять і мовчать.",
+                "Побори зросли. Торговці шукають іншого ринку.");
+            AddIncidentBand(t, "missing_person",
+                "Знайшли живим — і не одного: із ним прибилися ще люди.",
+                "Знайшли живим.",
+                "Знайшли, але пізно — рана вже своя.",
+                "Не знайшли. Громада знає, що це означає.");
+            AddIncidentBand(t, "night_burglary",
+                "Злодія взяли на гарячому — украдене повернулося.",
+                "Злодія прогнали, частину майна повернули.",
+                "Злодій утік із половиною здобичі.",
+                "Склад обчищено — і ніхто нічого не бачив.");
+            AddIncidentBand(t, "night_arson",
+                "Вогонь погашено, поки не побачив ніхто, крім вартового.",
+                "Вогонь погашено, згоріло небагато.",
+                "Погасили пізно — сарай не врятувати.",
+                "Погасити не встигли. Громада бачила заграву.");
+            AddIncidentBand(t, "crisis_riot",
+                "Натовп розійшовся мирно — слово подіяло.",
+                "Бунт стих, обійшлося без крові.",
+                "Бунт придушили силою — рахунок за це прийде.",
+                "Площа в крові. Це надовго запам'ятають.");
+
+            // pass_vanguard: та сама розв'язка вузла 1, що й node1.outcome.* /
+            // scene.pass.*, але у форматі, яким сигнальний шар РЕАЛЬНО емітить
+            // "incident.pass_vanguard.<Band>" (SignalComposer, окремо від
+            // "decision.resolved"/incidentId="pass_vanguard" і від сцени
+            // розв'язки). Best/Good — короткий нейтральний виклад без роду
+            // (сигнальна репліка — не пряма мова протагоніста).
+            AddKey(t, "incident.pass_vanguard.Best", "Максим і Мирослава — обидва з тобою. Склад цілий.");
+            AddKey(t, "incident.pass_vanguard.Good", "Максим ранений, лежить у лазареті. Мирослава з тобою. Склад цілий.");
+            AddKey(t, "incident.pass_vanguard.Base",
+                "Ти з Максимом стоїш. Мирослава йде за батьком — назад до орди. Склад розграбований.");
+            AddKey(t, "incident.pass_vanguard.Worst",
+                "Максим ранений. Мирослава йде. Склад розграбований, і громада тепер боїться голосно говорити.");
+        }
+
+        private static void AddIncidentBand(Dictionary<string, string> t, string incidentId,
+            string best, string good, string @base, string worst)
+        {
+            AddKey(t, "incident." + incidentId + ".Best", best);
+            AddKey(t, "incident." + incidentId + ".Good", good);
+            AddKey(t, "incident." + incidentId + ".Base", @base);
+            AddKey(t, "incident." + incidentId + ".Worst", worst);
+        }
+
+        // ==================================================================
+        // Пакет E3b: доповіді з постів (SignalComposer, ~рядок 125) —
+        // "post." + PostDomain.DomainTag + "." + OutcomeBand. DomainTag —
+        // КИРИЛИЦЕЮ вже в Core (Session/FirstHourWorld.cs: "рада"/"склад"/
+        // "лазарет" — усвідомлений відступ від латиниці §7 "конвенції ключів",
+        // не помилка E3b: домен постів — єдине місце, де Core сам вписує
+        // українське слово в ключ, бо це буквально назва посади). Лише ЦІ
+        // три пости мають PostDomain на сьогодні (FirstHourWorld) — інші 4
+        // (ринок/ферми/верстак/розвідпост) не доповідають узагалі (те саме
+        // G13/G14 AUDIT-GAPS, зафіксовано в §7.5 TEST_BUILD.md як відомий
+        // розрив вільної гри); "post.report.<domain>.good/.silence" §7.5 —
+        // окрема, наразі недосяжна конвенція для тих чотирьох постів, лишена
+        // в таблиці про запас (AddPostReports вище).
+        // ==================================================================
+        private static void AddPostReportBandKeys(Dictionary<string, string> t)
+        {
+            AddPostReportBand(t, "рада",
+                "Захар Беркут: «Рада йде, як має йти — і трохи краще».",
+                "Захар Беркут: «Рада йде, як має йти».",
+                "Захар Беркут: «Рада йде — так собі, але йде».",
+                "Захар Беркут: «Раді сьогодні не до ладу».");
+            AddPostReportBand(t, "склад",
+                "Дід Овсій: «Рахунок сходиться день у день, тютелька в тютельку».",
+                "Дід Овсій: «Рахунок сходиться. Поки що».",
+                "Дід Овсій: «Рахунок приблизний, але не бреше».",
+                "Дід Овсій: «Щось у рахунку не сходиться, а що — не скажу».");
+            AddPostReportBand(t, "лазарет",
+                "Знахарка Гафія: «Усі на ногах, кому годиться».",
+                "Знахарка Гафія: «Рани гояться, як має. Тримайте їх у теплі».",
+                "Знахарка Гафія: «Рани гояться, тільки повільно».",
+                "Знахарка Гафія: «Сьогодні не встигаю за всіма».");
+        }
+
+        private static void AddPostReportBand(Dictionary<string, string> t, string domainTagCyrillic,
+            string best, string good, string @base, string worst)
+        {
+            AddKey(t, "post." + domainTagCyrillic + ".Best", best);
+            AddKey(t, "post." + domainTagCyrillic + ".Good", good);
+            AddKey(t, "post." + domainTagCyrillic + ".Base", @base);
+            AddKey(t, "post." + domainTagCyrillic + ".Worst", worst);
+        }
+
+        // ==================================================================
+        // Пакет E3b: амбієнт/переходи полос, ЯК ЇХ РЕАЛЬНО буквує
+        // SignalComposer.Compose — "night.ambient."/"tension.ambient."/
+        // "tension.band." + TensionBand.ToString() (Calm/Murmur/Ferment/Heat/
+        // Fracture, З ВЕЛИКОЇ), не lowercase §7.4/§7.9-стиль з
+        // AddNight/AddAmbientSignals вище. Та ж причина, що в incident-блоці:
+        // нижній регістр лишається для того, хто читає вже структурований
+        // домен (band-слово саме по собі), ключі нижче — для сирого
+        // GameEvent.Key/SignalLineView.TopicId. Плюс DungeonThreatBand —
+        // довідкові підписи, які код поки нікуди в GameEvent не пише (лише
+        // DungeonView.ThreatBand — сирий рядок view-поля), але знадобляться
+        // будь-якому UI, що покаже загрозу підземелля словом.
+        // ==================================================================
+        private static void AddAmbientAndThreatBandKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "tension.ambient.Calm", "«Добре, що ви тут.» Діти у дворах.");
+            AddKey(t, "tension.ambient.Murmur", "У колодязя сперечаються про ціни.");
+            AddKey(t, "tension.ambient.Ferment", "Розмова стихає, коли підходиш.");
+            AddKey(t, "tension.ambient.Heat", "Ставні зачинені вдень. Патруль ходить парами.");
+            AddKey(t, "tension.ambient.Fracture", "Площа порожня. Зброю носять відкрито.");
+
+            AddKey(t, "night.ambient.Calm", "Тихо. Лише вітер.");
+            AddKey(t, "night.ambient.Murmur", "Десь хлопнула ставня.");
+            AddKey(t, "night.ambient.Ferment", "Кроки за рогом стихли, коли обернувся.");
+            AddKey(t, "night.ambient.Heat", "Вогні в бочках. Голоси не місцеві.");
+            AddKey(t, "night.ambient.Fracture", "Ані одного вогника у вікнах.");
+
+            AddKey(t, "tension.band.Calm", "«Стихає. Нарешті».");
+            AddKey(t, "tension.band.Murmur", "«З'явився ропіт — чути по дворах».");
+            AddKey(t, "tension.band.Ferment", "«Бродить. Люди сходяться гуртками».");
+            AddKey(t, "tension.band.Heat", "«Накалюється. Це вже не приховати».");
+            AddKey(t, "tension.band.Fracture", "«Змінюється. І не в кращий бік».");
+
+            AddKey(t, "dungeon.threat.calm", "Спокійно");
+            AddKey(t, "dungeon.threat.tense", "Напружено");
+            AddKey(t, "dungeon.threat.dangerous", "Небезпечно");
+            AddKey(t, "dungeon.threat.deadly", "Смертельно");
+        }
+
+        // ==================================================================
+        // Пакет E3b: tools/Alpha.Play/Program.cs — консольні підписи, яких не
+        // несе жоден GameEvent/View (звертання до протагоніста, порожній
+        // актор сцени). Дрібні, але теж "текст, що бачить гравець" (R7).
+        // ==================================================================
+        private static void AddConsoleLabels(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.console.you", "ти");
+            AddKey(t, "ui.console.empty_actor", "порожньо");
+        }
+
+        // ==================================================================
+        // Пакет E3b: Gameplay/VillageView.cs (сцена "Село живе сутками",
+        // CLAUDE.md) — раніше своя вбудована таблиця словами замінена цими
+        // ключами. Мудборд/лінт-ткач сцени — не §7 TEST_BUILD.md (той описує
+        // GameSession/GameEvent), тому власні, окремі ключі; де вже є готовий
+        // ключ ("city.built.&lt;id&gt;", "city.tier.&lt;n&gt;", "council.raid",
+        // "tension.ambient.&lt;Band&gt;", "night.ambient.&lt;Band&gt;",
+        // "tension.band.&lt;Band&gt;" — усі вище в AddAmbientAndThreatBandKeys/
+        // AddCityAndCouncilEvents/AddCouncilActions) — VillageView читає його
+        // напряму, без дублю.
+        // ==================================================================
+        private static void AddVillageViewKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "village.headline", "Доба {day} · {phase} · {mood}");
+            AddKey(t, "village.headline.phase.day", "день");
+            AddKey(t, "village.headline.phase.night", "ніч");
+
+            AddKey(t, "village.mood.tier.0", "хутір");
+            AddKey(t, "village.mood.tier.1", "село");
+            AddKey(t, "village.mood.tier.2", "слобода");
+            AddKey(t, "village.mood.tier.3", "містечко");
+            // decay.0 навмисно відсутній у таблиці — AddKey забороняє порожній
+            // текст (сторожа проти "забули дописати рядок"), а тут порожній
+            // рядок і Є правильним значенням (без суфікса). VillageView.MoodWords
+            // обробляє відсутність ключа для decayStep==0 як порожній суфікс.
+            AddKey(t, "village.mood.decay.1", ", подекуди занедбаний");
+            AddKey(t, "village.mood.decay.2", ", занепалий");
+            AddKey(t, "village.mood.decay.3", ", забитий і засмічений");
+
+            // Короткі дієслівні фрази для стрічки подій (не плутати з
+            // одиничними словами "band.best/good/base/worst" §7.21 — ті йдуть
+            // як підпис на бейдж, ці — у складене речення про інцидент).
+            AddKey(t, "village.band.best", "розібралися якнайкраще");
+            AddKey(t, "village.band.good", "впоралися чисто");
+            AddKey(t, "village.band.base", "якось владнали");
+            AddKey(t, "village.band.worst", "вийшло погано");
+
+            AddKey(t, "village.incident.line", "{what} — {how}");
+            AddKey(t, "village.incident.crisis_line", "КРИЗА: {what} — {how}");
+            AddKey(t, "village.incident.suffix.unmanned", "; на посту нікого не було");
+            AddKey(t, "village.incident.suffix.fear", "; громада налякана");
+            AddKey(t, "village.incident.suffix.population_lost", "; люди йдуть");
+            AddKey(t, "village.incident.suffix.people_arrived", "; з ними прийшли ще {count}");
+
+            AddKey(t, "village.forewarn.level1", "Щось назріває");
+            AddKey(t, "village.forewarn.level2", "Тривожно: розмови про {domain}");
+            AddKey(t, "village.forewarn.level3", "Біда близько, і вона про {domain}");
+
+            AddKey(t, "village.city.people.left.hunger", "Люди йдуть — голодно.");
+            AddKey(t, "village.city.people.left.fear", "Люди йдуть — бояться.");
+            AddKey(t, "village.city.people.left.other", "Люди йдуть — ніщо тут не тримає.");
+            AddKey(t, "village.city.people.arrived.council", "Прийшли люди — покликала рада.");
+            AddKey(t, "village.city.people.arrived.expedition", "Прийшли люди — привів загін.");
+            AddKey(t, "village.city.people.arrived.other", "Прийшли люди самі.");
+            AddKey(t, "village.city.count_suffix", " ({count})");
+
+            AddKey(t, "village.city.crowd.up", "Людей на вулицях стало більше.");
+            AddKey(t, "village.city.crowd.down", "Вулиці рідшають.");
+        }
+
+        // ==================================================================
+        // Пакет E3b (фікс-ревью, мінорна знахідка №3): Gameplay/ScenePlayer.cs
+        // — чотири жорстко зашиті російські рядки IMGUI-показу портретної
+        // сцени, які раніше минали UkrainianText (R7).
+        // ==================================================================
+        private static void AddScenePlayerKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "scene.player.empty_framing", "— порожньо —");
+            AddKey(t, "scene.player.finished", "Сцену завершено.");
+            AddKey(t, "scene.player.no_portrait", "(портрета нема)");
+            AddKey(t, "scene.player.hint", "пробіл або клік — далі   ·   портрети: Assets/Resources/Portraits/<id>.png");
         }
     }
 }

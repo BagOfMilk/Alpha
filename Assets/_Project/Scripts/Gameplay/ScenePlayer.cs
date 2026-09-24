@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Game.Core.Characters;
+using Game.Core.Characters.Creation;
 using Game.Core.Scenes;
+using Game.Gameplay.Text;
 using UnityEngine;
 
 namespace Game.Gameplay
@@ -26,6 +28,9 @@ namespace Game.Gameplay
 
         [Tooltip("Играть автоматически. Выключено — шаг по клику или пробелу.")]
         public bool autoAdvance = true;
+
+        [Tooltip("Рід протагоніста — обирає варіант .m/.f у UkrainianText, коли репліка розщеплена (E3b/R7).")]
+        public Gender protagonistGender = Gender.Male;
 
         private ScenePlayback _play;
         private List<CharacterCard> _cast;
@@ -74,7 +79,7 @@ namespace Game.Gameplay
 
             if (frame.Framing == ShotFraming.Empty)
             {
-                Centered(new Rect(0, h * 0.35f, w, 40), "— пусто —");
+                Centered(new Rect(0, h * 0.35f, w, 40), UkrainianText.Get("scene.player.empty_framing", protagonistGender));
             }
             else if (frame.Framing == ShotFraming.Two)
             {
@@ -93,15 +98,15 @@ namespace Game.Gameplay
             {
                 GUI.Label(new Rect(line.x + 16, line.y + 10, line.width - 32, 26), NameOf(frame.SpeakerId));
                 GUI.Label(new Rect(line.x + 16, line.y + 40, line.width - 32, line.height - 50),
-                    SceneLines.Text(frame.LineKey));
+                    UkrainianText.Get(frame.LineKey, protagonistGender));
             }
             else if (_play.IsFinished)
             {
-                GUI.Label(new Rect(line.x + 16, line.y + 20, line.width - 32, 40), "Сцена окончена.");
+                GUI.Label(new Rect(line.x + 16, line.y + 20, line.width - 32, 40),
+                    UkrainianText.Get("scene.player.finished", protagonistGender));
             }
 
-            GUI.Label(new Rect(12, h - 24, w - 24, 20),
-                "пробел или клик — дальше   ·   портреты: Assets/Resources/Portraits/<id>.png");
+            GUI.Label(new Rect(12, h - 24, w - 24, 20), UkrainianText.Get("scene.player.hint", protagonistGender));
         }
 
         /// <summary>Портрет по ключу; нет файла — именная заглушка, сцена всё равно идёт.</summary>
@@ -116,7 +121,7 @@ namespace Game.Gameplay
                 GUI.Box(rect, GUIContent.none);
                 Centered(new Rect(rect.x, rect.y + rect.height * 0.45f, rect.width, 30), NameOf(actorId));
                 Centered(new Rect(rect.x, rect.y + rect.height * 0.45f + 26, rect.width, 22),
-                    "(портрета нет)");
+                    UkrainianText.Get("scene.player.no_portrait", protagonistGender));
             }
         }
 
@@ -130,12 +135,22 @@ namespace Game.Gameplay
             return texture;
         }
 
+        /// <summary>
+        /// Ім'я за ключем "char.&lt;id&gt;" (R7: Core-контентний
+        /// <see cref="CharacterCard.DisplayName"/> гравець не бачить) — карта
+        /// <see cref="_cast"/> лишається лише щоб перевірити, що актор узагалі
+        /// в касті (сирий id як фолбек, якщо ключа в таблиці ще нема).
+        /// </summary>
         private string NameOf(string actorId)
         {
             if (string.IsNullOrEmpty(actorId)) return "";
+            bool known = false;
             for (int i = 0; i < _cast.Count; i++)
-                if (_cast[i].Id == actorId) return _cast[i].DisplayName;
-            return actorId;
+                if (_cast[i].Id == actorId) { known = true; break; }
+            if (!known) return actorId;
+
+            string key = "char." + actorId;
+            return UkrainianText.Has(key, protagonistGender) ? UkrainianText.Get(key, protagonistGender) : actorId;
         }
 
         private static void Centered(Rect rect, string text)
