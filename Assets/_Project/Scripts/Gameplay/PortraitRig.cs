@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Game.Core.Characters.Creation;
+using Game.Core.Session;
 using Game.Gameplay.UI;
 using UnityEngine;
 
@@ -38,6 +40,16 @@ namespace Game.Gameplay
         public GameObject[] MaleCharacterPrefabs = new GameObject[0];
         public GameObject[] FemaleCharacterPrefabs = new GameObject[0];
         public int TextureSize = 512;
+
+        /// <summary>
+        /// Рід протагоніста — <c>IPortraitProvider.GetPortrait</c> не приймає
+        /// сесію (фіксована сигнатура шва Presenters.cs), тож
+        /// <see cref="BattleArenaController.Enter"/> (сусідній компонент на
+        /// тому самому <c>ArenaRoot</c>) виставляє це поле з
+        /// <c>GameSession.GetProtagonistCreationView().Gender</c> перед боєм.
+        /// За замовчуванням — Male, як і в самому фасаді до створення персонажа.
+        /// </summary>
+        public Gender ProtagonistGender = Gender.Male;
 
         private Camera _camera;
         private Transform _stage;
@@ -104,7 +116,9 @@ namespace Game.Gameplay
 
         private GameObject PickPrefab(string characterId)
         {
-            bool female = string.Equals(characterId, "myroslava", System.StringComparison.Ordinal);
+            bool female = string.Equals(characterId, "myroslava", System.StringComparison.Ordinal) ||
+                (string.Equals(characterId, GameSession.ProtagonistId, System.StringComparison.Ordinal) &&
+                 ProtagonistGender == Gender.Female);
             var pool = female ? FemaleCharacterPrefabs : MaleCharacterPrefabs;
             if (pool == null || pool.Length == 0) return null;
             int index = (int)(BattleArenaView.Hash01(characterId) * pool.Length);

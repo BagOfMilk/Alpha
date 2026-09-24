@@ -855,6 +855,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.result.casualties.title", "Втрати:");
             AddKey(t, "ui.battle.result.casualties.none", "Без видимих втрат.");
             AddKey(t, "ui.battle.result.next", "Далі");
+
+            // Крайовий випадок шва E1b/E2 (фікс-ревью): Enter(session) міг
+            // спрацювати, поки GetBattleView() ще повертає null — порожній
+            // екран без виходу неприпустимий (§BattleHudScreen.DrawUnavailablePanel).
+            AddKey(t, "ui.battle.unavailable", "Бій зараз недоступний.");
+            AddKey(t, "ui.battle.unavailable.exit", "Назад");
         }
     }
 }

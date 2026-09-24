@@ -27,11 +27,17 @@ namespace Game.Gameplay
     /// пакета E2): (1) <c>BattleUnitView.DisplayNameKey</c> сьогодні несе НЕ
     /// готовий ключ таблиці, а сирий службовий рядок (<c>Companion.DisplayName</c>
     /// для гравця, короткий id <c>EnemyDefinition.DisplayName</c> для ворога) —
-    /// <see cref="ResolveNameKey"/> відновлює справжній ключ евристикою за Id/
-    /// стороною; (2) рід протагоніста ніде не виданий назовні (лишається
-    /// приватним полем фасаду) — бойовий лог узгоджує рід лише за відомими
-    /// іменами кастингу (Мирослава), протагоніст типово чоловічого роду
-    /// граматично, поки фасад не віддасть справжній рід; (3) немає
+    /// <see cref="ResolveNameKey"/> відновлює справжній ключ за Id/стороною
+    /// (<c>BattleUnitView.Side</c>), а для player-side юніта без відомого
+    /// префікса id (Тренувальний бій: "trainee_1"/"trainee_2") віддає
+    /// <c>DisplayNameKey</c> як є замість позначки відсутнього ключа; (2) рід
+    /// протагоніста читається з <c>GameSession.GetProtagonistCreationView().Gender</c>
+    /// (без охорони стану — безпечно в будь-який момент, кешується в
+    /// <c>_protagonistGender</c> на <see cref="Enter"/> і передається сусідньому
+    /// <see cref="PortraitRig"/>, бо його <c>IPortraitProvider.GetPortrait</c> не
+    /// приймає сесію) — для решти акторок без власного поля роду (майбутні
+    /// напарниці поза кастингом) бойовий лог і далі узгоджує рід за іменем
+    /// кастингу (Мирослава); (3) немає
     /// <c>GameSession.CombatStabilize</c>/<c>CombatRetreat</c> — <c>CombatState</c>
     /// має обидва методи, фасад жоден не обгортає, тому кнопок
     /// «Стабілізувати»/«Відступ» тут немає (сам TEST_BUILD.md позначає
@@ -70,9 +76,12 @@ namespace Game.Gameplay
 
         private BattleView _lastView;
         private int _gridWidth, _gridHeight;
+        private Gender _protagonistGender = Gender.Male;
         private readonly Dictionary<string, GameObject> _tileObjects = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+        private readonly Dictionary<string, MaterialPropertyBlock> _tileBlocks = new Dictionary<string, MaterialPropertyBlock>(StringComparer.Ordinal);
         private readonly Dictionary<string, GameObject> _unitObjects = new Dictionary<string, GameObject>(StringComparer.Ordinal);
         private readonly Dictionary<string, MaterialPropertyBlock> _unitBlocks = new Dictionary<string, MaterialPropertyBlock>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Renderer[]> _unitRenderers = new Dictionary<string, Renderer[]>(StringComparer.Ordinal);
 
         private ArmedAction _armed = ArmedAction.None;
         private string _armedAbilityId;
@@ -126,6 +135,15 @@ namespace Game.Gameplay
             _resultPending = false;
             _resultCasualtyLines.Clear();
             _logLines.Clear();
+
+            // Рід протагоніста — за GameSession.GetProtagonistCreationView() (без
+            // охорони стану, безпечно в будь-який момент, §GetProtagonistCreationView
+            // реального коду): PortraitRig не бачить GameSession (фіксована сигнатура
+            // IPortraitProvider.GetPortrait не приймає сесію), тож контролер — єдине
+            // місце шва, що його знає, — передає рід сусідньому компоненту напряму.
+            _protagonistGender = _session?.GetProtagonistCreationView()?.Gender ?? Gender.Male;
+            var portraitRig = ArenaRoot != null ? ArenaRoot.GetComponent<PortraitRig>() : null;
+            if (portraitRig != null) portraitRig.ProtagonistGender = _protagonistGender;
 
             if (ArenaRoot != null) ArenaRoot.SetActive(true);
             SwapToArenaCamera();
@@ -222,6 +240,7 @@ namespace Game.Gameplay
             ClearChildren(_tileRoot);
             ClearChildren(_propRoot);
             _tileObjects.Clear();
+            _tileBlocks.Clear();
 
             if (view?.Grid == null) { _gridWidth = 0; _gridHeight = 0; return; }
 
@@ -246,8 +265,9 @@ namespace Game.Gameplay
                 var renderer = tile.GetComponent<Renderer>();
                 if (renderer != null && _tileMaterial != null) renderer.sharedMaterial = _tileMaterial;
 
-                _tileObjects[x + "_" + y] = tile;
-                ApplyTileTint(tile, cover, walkable, isReachable: false, isCurrent: false, isHovered: false);
+                string key = x + "_" + y;
+                _tileObjects[key] = tile;
+                ApplyTileTint(tile, key, cover, walkable, isReachable: false, isCurrent: false, isHovered: false);
 
                 if (walkable && !string.Equals(cover, "None", StringComparison.Ordinal))
                     PlaceCoverProp(x, y, cover, world);
@@ -279,6 +299,7 @@ namespace Game.Gameplay
             ClearChildren(_unitRoot);
             _unitObjects.Clear();
             _unitBlocks.Clear();
+            _unitRenderers.Clear();
 
             if (view?.Units == null) return;
             foreach (var unit in view.Units) SpawnOrUpdateUnit(unit);
@@ -307,6 +328,11 @@ namespace Game.Gameplay
 
                 _unitObjects[unit.Id] = go;
                 _unitBlocks[unit.Id] = new MaterialPropertyBlock();
+                // Кешуємо набір рендерів РІВНО раз при спавні: тіло моделі не
+                // змінюється між кадрами (кільце "overwatch" додається/знімається
+                // окремо і в цей масив не входить — ApplyUnitVisual все одно
+                // фільтрує його за ім'ям, тож відсутність у кеші нешкідлива).
+                _unitRenderers[unit.Id] = go.GetComponentsInChildren<Renderer>();
             }
 
             ApplyUnitVisual(go, unit);
@@ -384,6 +410,7 @@ namespace Game.Gameplay
                 if (_unitObjects[id] != null) Destroy(_unitObjects[id]);
                 _unitObjects.Remove(id);
                 _unitBlocks.Remove(id);
+                _unitRenderers.Remove(id);
             }
 
             var reachable = new HashSet<string>(StringComparer.Ordinal);
@@ -404,30 +431,42 @@ namespace Game.Gameplay
 
                 // Тайл поточного юніта перефарбовується другим проходом нижче
                 // (isCurrent тут завжди false) — так координата не рахується двічі.
-                ApplyTileTint(tile, cover, walkable, isReachable, false, isHovered);
+                ApplyTileTint(tile, key, cover, walkable, isReachable, false, isHovered);
             }
 
             var current = CurrentUnit();
-            if (current != null && _tileObjects.TryGetValue(current.Pos.X + "_" + current.Pos.Y, out var currentTile) && currentTile != null)
+            string currentKey = current != null ? current.Pos.X + "_" + current.Pos.Y : null;
+            if (currentKey != null && _tileObjects.TryGetValue(currentKey, out var currentTile) && currentTile != null)
             {
                 int index = current.Pos.X + current.Pos.Y * _gridWidth;
                 string cover = view.Grid.TileCover != null && index < view.Grid.TileCover.Count ? view.Grid.TileCover[index] : "None";
                 bool walkable = view.Grid.TileWalkable == null || index >= view.Grid.TileWalkable.Count || view.Grid.TileWalkable[index];
                 bool isHovered = _hoveredTile.HasValue && _hoveredTile.Value.X == current.Pos.X && _hoveredTile.Value.Y == current.Pos.Y;
-                ApplyTileTint(currentTile, cover, walkable, isReachable: false, isCurrent: true, isHovered: isHovered);
+                ApplyTileTint(currentTile, currentKey, cover, walkable, isReachable: false, isCurrent: true, isHovered: isHovered);
             }
 
             UpdateHitChancePreview(current);
         }
 
-        private void ApplyTileTint(GameObject tile, string cover, bool walkable, bool isReachable, bool isCurrent, bool isHovered)
+        /// <summary>
+        /// Перефарбовує тайл щокадрово (Refresh -&gt; ApplyUnitPositionsAndHighlights
+        /// для всього грида, до 10×10 — §TEST_BUILD.md R9) — тому, як і
+        /// <see cref="ApplyUnitVisual"/> з <c>_unitBlocks</c>, тримаємо ОДИН
+        /// <see cref="MaterialPropertyBlock"/> на тайл у <see cref="_tileBlocks"/>
+        /// замість <c>new MaterialPropertyBlock()</c> щокадру на кожен з ~100 тайлів.
+        /// </summary>
+        private void ApplyTileTint(GameObject tile, string key, string cover, bool walkable, bool isReachable, bool isCurrent, bool isHovered)
         {
             var renderer = tile.GetComponent<Renderer>();
             if (renderer == null) return;
 
             var tint = BattleArenaView.TintFor(cover, walkable, isReachable, isCurrent, isHovered);
-            var block = new MaterialPropertyBlock();
-            renderer.GetPropertyBlock(block);
+            if (!_tileBlocks.TryGetValue(key, out var block) || block == null)
+            {
+                block = new MaterialPropertyBlock();
+                _tileBlocks[key] = block;
+            }
+            block.Clear();
             block.SetColor("_BaseColor", new Color(tint.R, tint.G, tint.B, tint.A));
             renderer.SetPropertyBlock(block);
         }
@@ -439,7 +478,9 @@ namespace Game.Gameplay
             go.transform.localPosition = new Vector3(world.X, sink, world.Z);
             go.transform.localRotation = unit.IsDowned ? Quaternion.Euler(90f, 0f, 0f) : Quaternion.identity;
 
-            var renderers = go.GetComponentsInChildren<Renderer>();
+            var renderers = _unitRenderers.TryGetValue(unit.Id, out var cachedRenderers) && cachedRenderers != null
+                ? cachedRenderers
+                : go.GetComponentsInChildren<Renderer>();
             var palette = BattleArenaView.CharacterTint(unit.Id, unit.Side, unit.DisplayNameKey);
             var block = _unitBlocks.TryGetValue(unit.Id, out var b) ? b : new MaterialPropertyBlock();
             block.Clear();
@@ -496,6 +537,14 @@ namespace Game.Gameplay
             return null;
         }
 
+        private BattleUnitView FindUnitById(string id)
+        {
+            if (string.IsNullOrEmpty(id) || _lastView?.Units == null) return null;
+            foreach (var u in _lastView.Units)
+                if (string.Equals(u.Id, id, StringComparison.Ordinal)) return u;
+            return null;
+        }
+
         // ================= ввід миші =================
 
         /// <summary>Лише читає, куди дивиться курсор — жодної команди. Викликається до <see cref="Refresh"/>, щоб підсвітка/прев'ю шансу цього ж кадру бачили свіжий наведений тайл/юніт.</summary>
@@ -544,7 +593,21 @@ namespace Game.Gameplay
                     else if (_hoveredTile.HasValue) RunCommand(() => _session.CombatMove(_hoveredTile.Value));
                     break;
                 case ArmedAction.OverwatchAim:
-                    if (_hoveredTile.HasValue) RunCommand(() => _session.CombatEnterOverwatch(_hoveredTile.Value));
+                    if (_hoveredTile.HasValue)
+                    {
+                        RunCommand(() => _session.CombatEnterOverwatch(_hoveredTile.Value));
+                    }
+                    else if (!string.IsNullOrEmpty(_hoveredUnitId))
+                    {
+                        // Курсор навів на модель юніта (тайл/юніт-колайдери взаємовиключні,
+                        // UpdateHover ставить рівно одне з двох) — CombatState.Overwatch
+                        // приймає зайнятий тайл у межах грида так само, як порожній: клік по
+                        // ворогу мусить прицілити дозор на клітину під ним, а не мовчки
+                        // нічого не робити.
+                        var aimUnit = FindUnitById(_hoveredUnitId);
+                        if (aimUnit != null)
+                            RunCommand(() => _session.CombatEnterOverwatch(new GridPos(aimUnit.Pos.X, aimUnit.Pos.Y)));
+                    }
                     break;
                 case ArmedAction.Ability:
                     if (!string.IsNullOrEmpty(_armedAbilityId))
@@ -688,6 +751,16 @@ namespace Game.Gameplay
             if (key != null && UkrainianText.Has(key, female)) return UkrainianText.Get(key, female);
             if (!string.IsNullOrEmpty(unit.DisplayNameKey) && UkrainianText.Has(unit.DisplayNameKey, female))
                 return UkrainianText.Get(unit.DisplayNameKey, female);
+
+            // Player-side юніт без ключа таблиці (Тренувальний бій, §2 рядок 32:
+            // Core.DefaultCombatContent.Training() дає id "trainee_1"/"trainee_2"
+            // без "u_"-префіксу й DisplayNameKey = вже готовий український текст
+            // "Провідник"/"Максим", не ключ) — показуємо це ім'я як є, а не
+            // позначкою [ключ]: гравець ніколи не бачить сирий маркер там, де
+            // текст уже український і готовий до показу.
+            if (string.Equals(unit.Side, "Player", StringComparison.Ordinal) && !string.IsNullOrEmpty(unit.DisplayNameKey))
+                return unit.DisplayNameKey;
+
             return UkrainianText.MissingMarker(key ?? unit.DisplayNameKey ?? unit.Id);
         }
 
@@ -697,13 +770,32 @@ namespace Game.Gameplay
             string id = unit.Id ?? string.Empty;
             if (id.StartsWith("u_", StringComparison.Ordinal)) return "char." + id.Substring(2);
             if (id.StartsWith("defector_", StringComparison.Ordinal)) return "char." + id.Substring(9);
-            return !string.IsNullOrEmpty(unit.DisplayNameKey) ? "enemy." + unit.DisplayNameKey : null;
+
+            // Сторона, не лише префікс id, вирішує «ворог це чи ні» — інакше
+            // player-side юніт з несподіваним id (Тренувальний бій:
+            // "trainee_1"/"trainee_2", без "u_") хибно йде в "enemy."-ключ,
+            // якого в таблиці нема, і падає на MissingMarker. Тут повертаємо
+            // null — ResolveDisplayNameInternal сам впаде на DisplayNameKey
+            // напряму для Player-сторони.
+            if (!string.Equals(unit.Side, "Player", StringComparison.Ordinal) &&
+                !string.IsNullOrEmpty(unit.DisplayNameKey))
+                return "enemy." + unit.DisplayNameKey;
+
+            return null;
         }
 
-        /// <summary>Див. пункт (2) у зведенні розривів у шапці файлу.</summary>
-        private static bool IsFemaleCompanion(string unitId)
+        /// <summary>Див. пункт (2) у зведенні розривів у шапці файлу — тепер зважає на справжній рід протагоніста.</summary>
+        private bool IsFemaleCompanion(string unitId)
         {
             if (string.IsNullOrEmpty(unitId)) return false;
+
+            string bare = unitId;
+            if (bare.StartsWith("u_", StringComparison.Ordinal)) bare = bare.Substring(2);
+            else if (bare.StartsWith("defector_", StringComparison.Ordinal)) bare = bare.Substring(9);
+
+            if (string.Equals(bare, GameSession.ProtagonistId, StringComparison.Ordinal))
+                return _protagonistGender == Gender.Female;
+
             return unitId.IndexOf("myroslava", StringComparison.Ordinal) >= 0;
         }
 

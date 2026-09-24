@@ -37,7 +37,18 @@ namespace Game.Gameplay.UI
             }
 
             var view = controller.View;
-            if (view == null) return;
+            if (view == null)
+            {
+                // Крайовий випадок шва E1b/E2: Enter(session) викликаний, поки
+                // GetBattleView() ще/вже повертає null (View лишається null,
+                // доки перший непустий BattleView не прийде через Refresh() —
+                // §BattleArenaController.cs). Порожній екран без жодного
+                // виходу порушував би «кожен стан має видимий шлях вперед» —
+                // тут мінімум повідомлення й вихід назад, без Combat*-команд
+                // (їх викликати нема на чому — бою й немає).
+                DrawUnavailablePanel(controller);
+                return;
+            }
 
             float padding = Widgets.ScreenPadding();
             float width = Clamp(Screen.width * 0.34f, 420f, 620f);
@@ -226,6 +237,19 @@ namespace Game.Gameplay.UI
                 _logScroll = Widgets.ScrollListBegin(_logScroll, GUILayout.Height(160f));
                 foreach (var line in c.LogLines) GUILayout.Label(line, AlphaSkin.Body);
                 Widgets.ScrollListEnd();
+            });
+        }
+
+        // ================= бою немає (крайовий випадок шва) =================
+
+        private static void DrawUnavailablePanel(IBattleHudData c)
+        {
+            Widgets.Modal(UkrainianText.Get("ui.battle.title", false), () =>
+            {
+                GUILayout.Label(UkrainianText.Get("ui.battle.unavailable", false), AlphaSkin.Body);
+                GUILayout.Space(14f);
+                if (Widgets.PrimaryButton(UkrainianText.Get("ui.battle.unavailable.exit", false)))
+                    c.AcknowledgeResult();
             });
         }
 
