@@ -32,12 +32,20 @@ namespace Game.Gameplay
     /// префікса id (Тренувальний бій: "trainee_1"/"trainee_2") віддає
     /// <c>DisplayNameKey</c> як є замість позначки відсутнього ключа; (2) рід
     /// протагоніста читається з <c>GameSession.GetProtagonistCreationView().Gender</c>
-    /// (без охорони стану — безпечно в будь-який момент, кешується в
+    /// (сам виклик без охорони стану — безпечно в будь-який момент, кешується в
     /// <c>_protagonistGender</c> на <see cref="Enter"/> і передається сусідньому
     /// <see cref="PortraitRig"/>, бо його <c>IPortraitProvider.GetPortrait</c> не
-    /// приймає сесію) — для решти акторок без власного поля роду (майбутні
-    /// напарниці поза кастингом) бойовий лог і далі узгоджує рід за іменем
-    /// кастингу (Мирослава); (3) немає
+    /// приймає сесію) — АЛЕ ЦЕ ЧИТАННЯ НЕ ПОВНЕ (фікс-ревью, major, розрив ЯДРА
+    /// поза файлами E2): <c>GameSession.ComposeSave</c>/<c>ApplySave</c> не
+    /// серіалізують ані <c>_pendingGender</c>, ані <c>_protagonistGender</c>, а
+    /// <c>ContinueGame(slot)</c> йде крізь <c>NewGame(SkipCreation:true)</c>, що
+    /// оминає гілку скидання <c>_pendingGender</c> на дефолт — у щойно
+    /// відкритому процесі після «Продовжити збереження» це поле стоїть на
+    /// дефолтному <c>Gender.Male</c> незалежно від того, якою протагоністку
+    /// створив гравець, тож і бойовий рід, і портрет <see cref="PortraitRig"/>
+    /// мовчки помиляються саме в найпоширенішому потоці (відкрити гру →
+    /// продовжити → бій). Не закривається звідси: справжній фікс — персистити
+    /// gender= у ComposeSave/ApplySave, це власник GameSession.cs; (3) немає
     /// <c>GameSession.CombatStabilize</c>/<c>CombatRetreat</c> — <c>CombatState</c>
     /// має обидва методи, фасад жоден не обгортає, тому кнопок
     /// «Стабілізувати»/«Відступ» тут немає (сам TEST_BUILD.md позначає
@@ -185,7 +193,17 @@ namespace Game.Gameplay
         {
             if (_session == null) return;
             int before = _session.DayLog.Count;
-            _session.CombatAutoResolve();
+            try
+            {
+                _session.CombatAutoResolve();
+            }
+            catch (InvalidOperationException)
+            {
+                // Див. коментар у RunCommand — той самий перегон "бій щойно
+                // розв'язався кліком, що протік крізь HUD" стосується й
+                // кнопки Автобою (фікс-ревью, major).
+                _logLines.Add(UkrainianText.Get("ui.battle.action.rejected", Gender.Male));
+            }
             AfterCommand(before);
         }
 
@@ -552,7 +570,7 @@ namespace Game.Gameplay
         {
             _hoveredTile = null;
             _hoveredUnitId = null;
-            if (ArenaCamera == null) return;
+            if (ArenaCamera == null || IsPointerOverHud()) return;
 
             var ray = ArenaCamera.ScreenPointToRay(Input.mousePosition);
             if (!Physics.Raycast(ray, out var hit, 500f)) return;
@@ -573,8 +591,37 @@ namespace Game.Gameplay
             }
         }
 
+        /// <summary>
+        /// Фікс-ревью (блокер): HUD (<see cref="BattleHudScreen"/>) малює IMGUI-
+        /// панель у лівій третині екрана (padding..padding+width), а
+        /// <see cref="FrameCamera"/> кадрує ВВЕСЬ грід під ортографічною
+        /// камерою — тобто арена рендериться і під панеллю теж, і без цієї
+        /// перевірки Physics.Raycast з тієї ж точки екрана однаково влучає в
+        /// реальний тайл/юніт під кнопкою HUD. GUI-простір (початок
+        /// зверху-зліва), тому Y віддзеркалюємо від Unity screen-простору
+        /// <c>Input.mousePosition</c> (початок знизу-зліва) — той самий
+        /// перехід, що GUIUtility.ScreenToGUIPoint без залежності від неї.
+        /// </summary>
+        private static bool IsPointerOverHud()
+        {
+            var panel = BattleHudScreen.PanelRect;
+            if (panel.width <= 0f || panel.height <= 0f) return false;
+            var guiPos = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+            return panel.Contains(guiPos);
+        }
+
         private void HandleClicks()
         {
+            // Фікс-ревью (блокер): курсор над панеллю BattleHudScreen — жодного
+            // 3D-кліку цього кадру взагалі (навіть ПКМ-скасування: ПКМ по
+            // кнопці HUD — не жест скасування прицілу). UpdateHover() того ж
+            // кадру вже не поставив _hoveredTile/_hoveredUnitId у цьому
+            // випадку, тож None/OverwatchAim-гілки нижче й так нічого б не
+            // зробили — але ArmedAction.Ability кличе CombatUseAbility
+            // незалежно від наведення (порожня ціль → ядро відхилить), і клік
+            // по кнопці HUD не мусить витрачати цю спробу.
+            if (IsPointerOverHud()) return;
+
             if (Input.GetMouseButtonDown(1))
             {
                 CancelArmed();
@@ -611,21 +658,56 @@ namespace Game.Gameplay
                     break;
                 case ArmedAction.Ability:
                     if (!string.IsNullOrEmpty(_armedAbilityId))
-                        RunCommand(() => _session.CombatUseAbility(_armedAbilityId, _hoveredUnitId, _hoveredTile));
+                    {
+                        // Знімаємо ДО RunCommand: AfterCommand скидає
+                        // _armedAbilityId на null щойно команда відпрацює.
+                        string abilityId = _armedAbilityId;
+                        bool success = RunCommand(() => _session.CombatUseAbility(abilityId, _hoveredUnitId, _hoveredTile));
+
+                        // Фікс-ревью (minor): три з чотирьох здібностей
+                        // (Ривок/Пастка/Наказ пересунутися) не лишають слідів у
+                        // Core.CombatState.Attacks, тож ConsumeEvent їх не
+                        // перекладає — гравець витратив AP і не бачить жодної
+                        // зміни. Загальне підтвердження тут покриває й ці три, і
+                        // "Залп" (для нього це просто зайвий, але не хибний рядок
+                        // поряд із власним combat.attack.*-логом).
+                        if (success)
+                            _logLines.Add(UkrainianText.Format("ui.battle.ability.used", Gender.Male,
+                                "ability", UkrainianText.Get(abilityId, false)));
+                    }
                     break;
             }
         }
 
         // ================= виконання команд + переклад стрічки подій =================
 
-        private void RunCommand(Func<CombatActionResult> command)
+        /// <summary>Повертає true, коли команда справді пройшла (Success) — виклики, яким важливо це знати (озброєна здібність, §HandleClicks), дописують власний рядок логу лише в цьому разі.</summary>
+        private bool RunCommand(Func<CombatActionResult> command)
         {
-            if (_session == null) return;
+            if (_session == null) return false;
             int before = _session.DayLog.Count;
-            var result = command();
-            if (result != CombatActionResult.Success)
+            bool success;
+            try
+            {
+                success = command() == CombatActionResult.Success;
+            }
+            catch (InvalidOperationException)
+            {
+                // Фікс-ревью (major): жоден GameSession.Combat*-метод не ловився
+                // тут — усі йдуть крізь RequireBattle(), яка кидає це саме
+                // виключення, щойно State != Battle / _battle вже null. Саме
+                // такий перегон відкриває клік-протік крізь HUD (фікс-ревью,
+                // блокер вище): смарт-клік розв'язує бій, а той самий кадр ще
+                // встигає натиснути кнопку HUD, що кличе Combat* на вже
+                // порожньому бою. Без catch виняток летів би крізь
+                // Update()/OnGUI() і лишав розбалансованим стек
+                // GUILayout.Begin/End-груп для цього кадру.
+                success = false;
+            }
+            if (!success)
                 _logLines.Add(UkrainianText.Get("ui.battle.action.rejected", Gender.Male));
             AfterCommand(before);
+            return success;
         }
 
         private void AfterCommand(int dayLogCountBefore)

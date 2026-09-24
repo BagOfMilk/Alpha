@@ -835,6 +835,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.endturn", "Кінець ходу");
             AddKey(t, "ui.battle.unit.downed", "Виведений з бою — потребує допомоги");
 
+            // Fix-ревью (major): HP ніде не показувався — ні для поточного
+            // юніта, ні для наведеної цілі під прев'ю шансу.
+            AddKey(t, "ui.battle.hp", "Здоров'я: {current}/{max}");
+            AddKey(t, "ui.battle.hp.target", "Ціль — здоров'я: {current}/{max}");
+
+            // Fix-ревью (minor): три з чотирьох здібностей не лишають сліду в
+            // бойовому логу (Core не пише Attacks для Lunge/SetTrap/Reposition) —
+            // загальне підтвердження на будь-яке успішне застосування.
+            AddKey(t, "ui.battle.ability.used", "{ability} застосовано.");
+
             // Озброєна дія (гравець обрав намір, чекає кліку по тайлу/юніту арени;
             // рух/атака — завжди клік без озброєння, «розумний клік» ArmedAction.None).
             AddKey(t, "ui.battle.armed.overwatch_aim", "Приціл дозору — клацни напрямок");

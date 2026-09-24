@@ -24,6 +24,21 @@ namespace Game.Gameplay.UI
     {
         private static Vector2 _logScroll;
 
+        /// <summary>
+        /// Останній намальований прямокутник панелі HUD, у GUI-просторі (початок
+        /// зверху-зліва — те, що використовує <c>GUILayout.BeginArea</c>, НЕ
+        /// Unity screen-простір <c>Input.mousePosition</c>, де початок знизу).
+        /// Fix-ревью (блокер): <c>BattleArenaController</c> звіряє курсор із цим
+        /// прямокутником ДО <c>Physics.Raycast</c> у <c>UpdateHover</c>/
+        /// <c>HandleClicks</c> — інакше клік по кнопці HUD (Кінець ходу,
+        /// здібність, Дозор, Автобій, скрол логу) одночасно потрапляє променем
+        /// у 3D-арену під тією самою ділянкою екрана (FrameCamera кадрує ввесь
+        /// грід, а не «решту після HUD») і викликає CombatMove/Attack/Overwatch
+        /// тим самим кліком. За замовчуванням (до першого Draw) — Rect.zero,
+        /// що не містить жодної реальної точки курсора.
+        /// </summary>
+        public static Rect PanelRect { get; private set; }
+
         public static void Draw(IBattleHudData controller)
         {
             if (controller == null) return;
@@ -32,6 +47,11 @@ namespace Game.Gameplay.UI
 
             if (controller.ResultPending)
             {
+                // Widgets.Modal сам засвічує весь екран (Rect(0,0,Screen.width,
+                // Screen.height)) — панель результату блокує курсор так само
+                // на всій площі; HandleClicks() і так не викликається, поки
+                // ResultPending (Update()), але тримаємо PanelRect чесним.
+                PanelRect = new Rect(0f, 0f, Screen.width, Screen.height);
                 DrawResultPanel(controller);
                 return;
             }
@@ -46,6 +66,7 @@ namespace Game.Gameplay.UI
                 // виходу порушував би «кожен стан має видимий шлях вперед» —
                 // тут мінімум повідомлення й вихід назад, без Combat*-команд
                 // (їх викликати нема на чому — бою й немає).
+                PanelRect = new Rect(0f, 0f, Screen.width, Screen.height);
                 DrawUnavailablePanel(controller);
                 return;
             }
@@ -54,6 +75,7 @@ namespace Game.Gameplay.UI
             float width = Clamp(Screen.width * 0.34f, 420f, 620f);
             float height = Screen.height - padding * 2f;
             var area = new Rect(padding, padding, width, height);
+            PanelRect = area;
 
             GUILayout.BeginArea(area);
             Widgets.Panel(UkrainianText.Get("ui.battle.title", false), () => DrawBody(controller, view));
@@ -120,8 +142,21 @@ namespace Game.Gameplay.UI
                 return;
             }
 
+            DrawHpLine(current);
             DrawApBar(current);
             if (current.IsDowned) GUILayout.Label(UkrainianText.Get("ui.battle.unit.downed", false), AlphaSkin.Tooltip);
+        }
+
+        /// <summary>
+        /// Fix-ревью (major): Hp/HpMax дозволені гравцю (TEST_BUILD.md R17), але
+        /// ніде в HUD не показувались — AP-бар був, HP не було ніде. Простий
+        /// текстовий рядок, той самий стиль, що <see cref="DrawApBar"/>.
+        /// </summary>
+        private static void DrawHpLine(BattleUnitView unit)
+        {
+            GUILayout.Label(UkrainianText.Format("ui.battle.hp", false,
+                "current", unit.Hp.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "max", unit.HpMax.ToString(System.Globalization.CultureInfo.InvariantCulture)), AlphaSkin.Body);
         }
 
         private static void DrawApBar(BattleUnitView unit)
@@ -172,6 +207,16 @@ namespace Game.Gameplay.UI
             string key = view.IsHitRulePercent ? "ui.battle.hitchance.percent" : "ui.battle.hitchance.threshold";
             GUILayout.Label(UkrainianText.Format(key, false, "value",
                 c.HoveredHitChance.ToString(System.Globalization.CultureInfo.InvariantCulture)), AlphaSkin.Body);
+
+            // Fix-ревью (major, той самий пункт, що DrawHpLine): гравець вирішує
+            // «атакувати/відступити» саме за HP цілі — прев'ю шансу без HP цілі
+            // поруч примушувало гадати. Ціль може зникнути з view між кадрами
+            // (щойно впала) — тоді просто нічого не домальовуємо.
+            var target = FindUnit(view, c.HoveredUnitId);
+            if (target != null)
+                GUILayout.Label(UkrainianText.Format("ui.battle.hp.target", false,
+                    "current", target.Hp.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    "max", target.HpMax.ToString(System.Globalization.CultureInfo.InvariantCulture)), AlphaSkin.Body);
         }
 
         private static void DrawAbilities(IBattleHudData c)
@@ -188,7 +233,15 @@ namespace Game.Gameplay.UI
                     if (armed) label = "» " + label;
 
                     if (Widgets.SecondaryButton(label))
-                        c.ArmAbility(armed ? null : abilityId);
+                    {
+                        // Fix-ревью (major): c.ArmAbility(null) НЕ повертає Armed
+                        // у None (контролер ставить _armed=Ability незалежно від
+                        // id) — гравець лишався «застряглим» з озброєною
+                        // порожньою здібністю (тултип малював [] — сирий маркер
+                        // відсутнього ключа). Той самий патерн, що вже коректно
+                        // працює для кнопки Дозору нижче.
+                        if (armed) c.CancelArmed(); else c.ArmAbility(abilityId);
+                    }
                 }
                 GUILayout.EndHorizontal();
 
