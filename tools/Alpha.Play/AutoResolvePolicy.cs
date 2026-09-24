@@ -29,6 +29,8 @@ namespace Alpha.Play
 
         public int ChooseQuestOption(QuestOfferView offer) => _inner.ChooseQuestOption(offer);
 
+        public int ChooseSceneOption(SceneStepView step) => _inner.ChooseSceneOption(step);
+
         public bool ChoosePatrol(SessionView view) => _inner.ChoosePatrol(view);
 
         public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city)

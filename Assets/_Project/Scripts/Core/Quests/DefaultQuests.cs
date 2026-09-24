@@ -91,5 +91,76 @@ namespace Game.Core.Quests
         }
 
         public static List<QuestDefinition> All(BalanceConfig cfg) => new List<QuestDefinition> { Hafiya(cfg) };
+
+        // ---------------------------------------------------------------
+        // Квест Максима «Не за кров» (Поправка №7.8, глава 1 арки Максима):
+        // ЗАВМИСНО поза DefaultQuests.All() — це зміст квестової глави арки
+        // (CompanionArcContent.IsQuestChapter), і реєструється в пулі лише
+        // GameSession.BeginArcChapterQuest, коли главу справді відкрито
+        // (гейт лояльності Steady). Загальний OfferQuestStage не міг би
+        // запустити цей квест напряму, обійшовши гейт арки, — саме тому він
+        // не в загальному пулі з самого початку прогону.
+        // ---------------------------------------------------------------
+
+        public const string MaksymId = "maksym";
+        public const string MaksymCh1Id = "quest.maksym.ch1";
+
+        public const string MaksymCh1OfferKey = "quest.maksym.ch1.offer";
+        public const string MaksymCh1RevengeKey = "quest.maksym.ch1.offer.option.revenge";
+        public const string MaksymCh1JusticeKey = "quest.maksym.ch1.offer.option.justice";
+        public const string MaksymCh1RevengeDoneKey = "quest.maksym.ch1.revenge_done";
+        public const string MaksymCh1JusticeDoneKey = "quest.maksym.ch1.justice_done";
+
+        /// <summary>
+        /// «Не за кров»: гонитель авангарду вбив когось із Максимових — вибір
+        /// між помстою (Intimidate — залякати/покарати самотужки) і громадським
+        /// судом (Persuade — довести до ради). Обидва шляхи — перевірка з 4
+        /// полосами (Поправка №3.7), наслідок — лояльність Максима, ставлення
+        /// громади (Faction) і Напруга через єдиний мостик
+        /// <c>TensionDriver.QuestChoice</c> (R6, інваріант 5).
+        /// </summary>
+        public static QuestDefinition MaksymCh1(BalanceConfig cfg)
+        {
+            var def = new QuestDefinition(MaksymCh1Id, MaksymCh1OfferKey);
+
+            def.Stage(QuestStage.ChoiceStage("path", MaksymCh1OfferKey)
+                .Option(new QuestOption(MaksymCh1RevengeKey, next: 1))
+                .Option(new QuestOption(MaksymCh1JusticeKey, next: 2)));
+
+            def.Stage(QuestStage.Check(
+                id: "revenge_check", textKey: null,
+                skill: SkillKeys.Intimidate, threshold: 5, approach: ApproachForm.Intimidate,
+                nextByBand: new[] { 3, 3, 3, 3 },
+                consequenceByBand: new[]
+                {
+                    new QuestConsequence().Loyalty(MaksymId, -15).Tension(20).Faction("community", -10),
+                    new QuestConsequence().Loyalty(MaksymId, -10).Tension(10),
+                    new QuestConsequence().Loyalty(MaksymId, -5).Tension(5),
+                    new QuestConsequence().Loyalty(MaksymId, 0).Tension(0).Flag("maksym_ch1_revenge_clean")
+                }));
+
+            def.Stage(QuestStage.Check(
+                id: "justice_check", textKey: null,
+                skill: SkillKeys.Persuade, threshold: 5, approach: ApproachForm.Persuade,
+                nextByBand: new[] { 4, 4, 4, 4 },
+                consequenceByBand: new[]
+                {
+                    new QuestConsequence().Loyalty(MaksymId, 5).Faction("community", -5),
+                    new QuestConsequence().Loyalty(MaksymId, 10),
+                    new QuestConsequence().Loyalty(MaksymId, 15).Faction("community", 5),
+                    new QuestConsequence().Loyalty(MaksymId, 20).Faction("community", 10)
+                }));
+
+            // Прапор гейтингу глави 2 ("arc_maksym_ch1") ставить сам
+            // CompanionArcRun.CompleteChapter() у СВІЙ контейнер (_arcFlags,
+            // GameSession) — НЕ StoryFlags; тож термінал квесту його не
+            // дублює (два різні контейнери, дублювання лише заплутало б).
+            def.Stage(QuestStage.OutcomeStage("revenge_done", MaksymCh1RevengeDoneKey, success: true,
+                new QuestConsequence().WithXp(20)));
+            def.Stage(QuestStage.OutcomeStage("justice_done", MaksymCh1JusticeDoneKey, success: true,
+                new QuestConsequence().WithXp(25)));
+
+            return def;
+        }
     }
 }

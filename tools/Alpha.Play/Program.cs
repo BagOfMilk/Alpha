@@ -55,7 +55,7 @@ namespace Alpha.Play
         /// із <c>NewGame</c>, і консоль лукапить тим самим родом, щоб не
         /// розійтися з тим, що реально бачить рушій.
         /// </summary>
-        private const Gender ProtagonistGender = Gender.Male;
+        internal const Gender ProtagonistGender = Gender.Male;
 
         /// <summary>Деливрабл (4): true, коли консоль впіймала <see cref="UkrainianText.MissingMarker"/> у власному виводі за весь прогін.</summary>
         private static bool s_sawMissingTextMarker;

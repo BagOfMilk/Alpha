@@ -224,6 +224,11 @@ namespace Game.Gameplay.Text
             // ==== Журнал бою (BattleView.Log, combat.log.*) — див. блок унизу файлу. ====
             AddCombatLogKeys(t);
 
+            // ==== Поправка №7.8: вибори в діалогах/квестах — механіка, яку
+            // тестує предательство (черновой текст ассистента) — див. блок
+            // унизу файлу. ====
+            AddScene78Choices(t);
+
             return t;
         }
 
@@ -1936,5 +1941,222 @@ namespace Game.Gameplay.Text
             AddKey(t, "combat.damage_type.energy", "енергія");
         }
         // ==== кінець блоку «Журнал бою» ====
+
+        // ==================================================================
+        // Поправка №7.8 (черновой текст ассистента, узгоджено з тоном решти
+        // таблиці — жорстко, без пом'якшень): вибір у сцені «Сусід з
+        // претензією» (доба 1), глави арок Мирослави/Максима, нічна розмова-
+        // конфронтація зради, запасна довірча сцена того самого вузла, рада
+        // Захара перед фіналом і квест Максима «Не за кров». Усі тексти —
+        // Core/Scenes/OpeningScenes.cs (нові кроки), Core/Scenes/
+        // CompanionScenes.cs, Core/Quests/DefaultQuests.cs (MaksymCh1). .m/.f
+        // лише там, де підметом репліки є сам протагоніст у минулому часі —
+        // вибір-кнопки (інфінітив/наказовий спосіб) роду не потребують.
+        // ==================================================================
+        private static void AddScene78Choices(Dictionary<string, string> t)
+        {
+            // ---- доба 1, ранок: «Сусід з претензією» — вибір після Захара ----
+            AddKey(t, "scene.neighbour.zakhar_yields_floor",
+                "Захар Беркут (тихо, тобі): «Слово тепер твоє. Кажи, поки Тугар слухає.»");
+            AddKey(t, "scene.neighbour.option.refuse",
+                "Відмовити від імені громади: перевал не на продаж.");
+            AddKey(t, "scene.neighbour.option.bargain",
+                "Виграти час торгом із боярами Тугара.");
+            AddKey(t, "scene.neighbour.option.ask_myroslava",
+                "Тихо спитати Мирославу, чого не договорює батько.");
+            AddKey(t, "scene.neighbour.myroslava_reveals",
+                "Мирослава (тихо, тобі): «Батько торгується не за себе. Слухай не слова — паузи між ними.»");
+
+            // ---- арка Мирослави, глава 1 (доба 2, вечір): «Донька боярина» ----
+            AddKey(t, "scene.myroslava.ch1.title", "Донька боярина");
+            AddKey(t, "scene.myroslava.ch1.open",
+                "Мирослава: «Мій батько зрадив свою кров заради чужої вигоди. Я досі не знаю, чия я — його чи громади.»");
+            AddKey(t, "scene.myroslava.ch1.option.trust",
+                "Довіритися їй без застережень.");
+            AddKey(t, "scene.myroslava.ch1.option.watch",
+                "Тримати її під приглядом — довіра почекає.");
+            AddKey(t, "scene.myroslava.ch1.option.send_away",
+                "Відіслати її подалі від ради й постів.");
+
+            // ---- арка Мирослави, глава 2 (епілог, гейт Devoted) ----
+            AddKey(t, "scene.myroslava.ch2.title", "Вибір лишитися");
+            AddKey(t, "scene.myroslava.ch2.open",
+                "Мирослава: «Я лишилася не з обов'язку. Скажи — це ще щось важить для тебе?»");
+            AddKey(t, "scene.myroslava.ch2.option.remember",
+                "Пригадати вголос перевал і все, що після нього.");
+            AddKey(t, "scene.myroslava.ch2.option.silence",
+                "Промовчати — і просто лишитися поруч.");
+
+            // ---- арка Максима, глава 2 (епілог, гейт Devoted) ----
+            AddKey(t, "scene.maksym.ch2.title", "Побратим до кінця");
+            AddKey(t, "scene.maksym.ch2.open",
+                "Максим: «Я не проситиму пробачення вдруге. Питаю просто — чи стоїмо ми далі поруч?»");
+            AddKey(t, "scene.maksym.ch2.option.forgive",
+                "Пробачити вголос і піти далі разом.");
+            AddKey(t, "scene.maksym.ch2.option.guard",
+                "Нічого не казати — і мовчки стати в стрій поруч.");
+
+            // ---- нічна розмова: конфронтація зради Мирослави (доба 3) ----
+            AddKey(t, "scene.myroslava.confrontation.title", "Нічна розмова");
+            AddKey(t, "scene.myroslava.confrontation.open",
+                "Мирослава: «Ти прийшов не спати. Кажи прямо — ти ще довіряєш мені, чи вже ні?»");
+            AddKey(t, "scene.myroslava.confrontation.option.persuade",
+                "Переконати її лишитися (Переконання).");
+            AddKey(t, "scene.myroslava.confrontation.option.accuse",
+                "Звинуватити її прямо, без манівців (Залякування).");
+            AddKey(t, "scene.myroslava.confrontation.option.release",
+                "Відпустити її — без бою, без зайвих слів.");
+
+            // ---- запасна сцена того самого вузла, коли зрада не насуває (доба 3) ----
+            AddKey(t, "scene.myroslava.checkup.title", "Тиха розмова");
+            AddKey(t, "scene.myroslava.checkup.open",
+                "Мирослава: «Просто скажи — ми ще тримаємось одне одного, чи мені лише здається?»");
+            AddKey(t, "scene.myroslava.checkup.option.reassure",
+                "Запевнити її, що довіра ще стоїть.");
+            AddKey(t, "scene.myroslava.checkup.option.space",
+                "Дати їй час і не тиснути.");
+
+            // ---- рада Захара перед фіналом (доба 5, вечір) ----
+            AddKey(t, "scene.zakhar.council.title", "Рада перед перевалом");
+            AddKey(t, "scene.zakhar.council.open",
+                "Захар Беркут: «Завтра орда стане під стіни. Кажи, як зустрічаємо — річкою чи мечем.»");
+            AddKey(t, "scene.zakhar.council.option.dam",
+                "Готувати загату на річці — тихий шлях фіналу.");
+            AddKey(t, "scene.zakhar.council.option.assault",
+                "Готувати оборону перевалу — кровавий шлях фіналу.");
+
+            // ---- діагностичні підписи переходів (мовчазні, як і to.node1.pass) ----
+            AddKey(t, "to.arc.myroslava.ch1.done", "Перехід: глава 1 арки Мирослави завершена.");
+            AddKey(t, "to.arc.myroslava.ch2.done", "Перехід: глава 2 арки Мирослави завершена.");
+            AddKey(t, "to.arc.maksym.ch2.done", "Перехід: глава 2 арки Максима завершена.");
+            AddKey(t, "to.confrontation.resolved", "Перехід: нічна розмова розв'язана.");
+            AddKey(t, "to.checkup.resolved", "Перехід: тиха розмова завершена.");
+            AddKey(t, "to.council.resolved", "Перехід: рада Захара завершена.");
+
+            // ---- квест Максима «Не за кров», глава 1 арки (доба 3-4) ----
+            AddKey(t, "quest.maksym.ch1.offer",
+                "Максим: «Гонитель убив одного з наших біля старого броду. Кажи — помста чи суд громади.»");
+            AddKey(t, "quest.maksym.ch1.offer.option.revenge",
+                "Покарати самотужки (Залякування).");
+            AddKey(t, "quest.maksym.ch1.offer.option.justice",
+                "Довести справу до суду громади (Переконання).");
+            AddKey(t, "quest.maksym.ch1.revenge_done",
+                "Гонитель мертвий від твоєї руки. Максим мовчить — і громада теж мовчить.");
+            AddKey(t, "quest.maksym.ch1.justice_done",
+                "Рада винесла вирок при всіх. Максим киває — це його шлях теж.");
+            // Фікс-ревью (мінор): questId у DayLog-подіях квесту — MaksymCh1Id
+            // ("quest.maksym.ch1"), уже з префіксом "quest." — ScreenText.
+            // ContentLabel("quest", questId, ...) шукає "quest." + questId
+            // ("quest.quest.maksym.ch1"), не голий MaksymCh1Id (той самий
+            // принцип, що й "quest.hafiya" вище для HafiyaId="hafiya").
+            AddKey(t, "quest.quest.maksym.ch1", "Максим");
+
+            // ---- нові події журналу подій (Поправка №7.8) ----
+            AddKey(t, "arc.chapter_begun", "{companionId}: глава {chapterId} почалася.");
+            AddKey(t, "arc.chapter_completed", "{companionId}: главу {chapterId} пройдено.");
+            AddKey(t, "scene.choice.made", "{sceneId}: вибір ухвалено — {optionId} ({band}).");
+            AddKey(t, "scene.betrayal_confrontation.begun", "{companionId}: розмова, якої не уникнути.");
+            AddKey(t, "scene.trust_checkup.begun", "{companionId}: коротка розмова про довіру.");
+            AddKey(t, "scene.zakhar_council.begun", "Рада зібралася востаннє перед перевалом.");
+
+            // ---- журнал механік (тестерський вигляд, GameSession.GetMechanicsJournal) ----
+            AddMechanicsJournalKeys(t);
+        }
+
+        /// <summary>
+        /// Заголовки й підказки журналу механік (Поправка №7.8, п. 4
+        /// DELIVER) — по одному запису на кожен рядок §2 TEST_BUILD.md плюс
+        /// нові механіки цього пакета. Підказка каже, ЯК механіку викликати —
+        /// без жодного схованого числа (R17), лише команда/тригер.
+        /// </summary>
+        private static void AddMechanicsJournalKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "journal.day_cycle.title", "Конвеєр дня/ночі");
+            AddKey(t, "journal.day_cycle.hint", "Як викликати: ConfirmMorning() -> AdvanceDay() -> ConfirmEvening() -> AdvanceNight().");
+            AddKey(t, "journal.assignment.title", "Розстановка на пости");
+            AddKey(t, "journal.assignment.hint", "Як викликати: Assign(companionId, slotId) уранці.");
+            AddKey(t, "journal.presence.title", "Присутність напарників");
+            AddKey(t, "journal.presence.hint", "Похідне: хто у вилазці/помер/зрадив — не кандидат на перевірку.");
+            AddKey(t, "journal.decision_point.title", "Точка рішення тихо/кроваво");
+            AddKey(t, "journal.decision_point.hint", "Як викликати: ResolveIncident(path), коли AwaitsDecision.");
+            AddKey(t, "journal.outcome_bands.title", "Чотири полоси наслідку");
+            AddKey(t, "journal.outcome_bands.hint", "Похідне: band у decision.resolved/finale.resolved/quest.choice.resolved.");
+            AddKey(t, "journal.empty_post.title", "Порожній пост = Найгірша");
+            AddKey(t, "journal.empty_post.hint", "Похідне: лишити пост порожнім і дочекатись перевірки на ньому.");
+            AddKey(t, "journal.night_patrol.title", "Ніч: патруль чи сон");
+            AddKey(t, "journal.night_patrol.hint", "Як викликати: SetPatrol(bool) перед AdvanceNight().");
+            AddKey(t, "journal.forewarn_ladder.title", "Драбина передвісників");
+            AddKey(t, "journal.forewarn_ladder.hint", "Похідне: патрулюй кілька ночей поспіль — щабель росте 1→2→3.");
+            AddKey(t, "journal.crisis.title", "Криза з вікном на реакцію");
+            AddKey(t, "journal.crisis.hint", "Як викликати: ReactToCrisis(reaction) у вікні кризи доби 5.");
+            AddKey(t, "journal.post_reports.title", "Доповіді з постів");
+            AddKey(t, "journal.post_reports.hint", "Похідне: тримай пости зайнятими — доповідь приходить щоранку.");
+            AddKey(t, "journal.signals_no_repeat.title", "Сигнали без повторів");
+            AddKey(t, "journal.signals_no_repeat.hint", "Похідне: той самий сигнал не приходить двічі підряд за добу.");
+            AddKey(t, "journal.band_change_signal.title", "Зміна полоси чутна");
+            AddKey(t, "journal.band_change_signal.hint", "Похідне: будь-яка зміна лояльності/фракції дає подію.");
+            AddKey(t, "journal.production.title", "Виробництво/голод/лікування");
+            AddKey(t, "journal.production.hint", "Похідне: конвеєр дня рахує це щодоби сам, дивись EconomyView.");
+            AddKey(t, "journal.building.title", "Будівництво + рада");
+            AddKey(t, "journal.building.hint", "Як викликати: OrderBuilding(id)/OrderRaid()/OrderSettlers().");
+            AddKey(t, "journal.council_actions.title", "Нові дії ради");
+            AddKey(t, "journal.council_actions.hint", "Як викликати: OrderDecree/OrderDiplomacy/OrderInvestment/OrderPrepareThreat/OrderOutfitExpedition(...).");
+            AddKey(t, "journal.population_tier.title", "Населення/тір поселення");
+            AddKey(t, "journal.population_tier.hint", "Похідне: населення й тір ростуть від забудови й подій.");
+            AddKey(t, "journal.expedition.title", "Вилазка (тихо/силою)");
+            AddKey(t, "journal.expedition.hint", "Як викликати: DepartExpedition(siteId, approach, ids, days).");
+            AddKey(t, "journal.dungeon_delve.title", "Вилазка-данж (Delve)");
+            AddKey(t, "journal.dungeon_delve.hint", "Як викликати: DepartExpedition(siteId, Delve, ids, days) -> EnterDungeon().");
+            AddKey(t, "journal.loot.title", "Лут");
+            AddKey(t, "journal.loot.hint", "Похідне: полоса вилазки/данжу визначає здобич.");
+            AddKey(t, "journal.equip.title", "Гір/екіпірування");
+            AddKey(t, "journal.equip.hint", "Як викликати: Equip(companionId, itemInstanceId, slot).");
+            AddKey(t, "journal.craft.title", "Крафт");
+            AddKey(t, "journal.craft.hint", "Як викликати: CraftUpgrade(itemInstanceId) при відкритій Майстерні.");
+            AddKey(t, "journal.scars.title", "Шрами");
+            AddKey(t, "journal.scars.hint", "Похідне: серйозна рана в бою/вузлі лишає шрам назавжди.");
+            AddKey(t, "journal.loyalty.title", "Лояльність напарників");
+            AddKey(t, "journal.loyalty.hint", "Похідне: майже кожне рішення зсуває лояльність причетного напарника.");
+            AddKey(t, "journal.roster_drama.title", "Зв'язки/бантер/драма загону");
+            AddKey(t, "journal.roster_drama.hint", "Похідне: смерть чи зрада напарника хвилею зачіпає решту загону.");
+            AddKey(t, "journal.defection.title", "Зрада/дефекція");
+            AddKey(t, "journal.defection.hint", "Похідне: лояльність ≤ «Ображена» кілька діб поспіль — або нічна розмова доби 3.");
+            AddKey(t, "journal.companion_arc.title", "Особиста арка напарника");
+            AddKey(t, "journal.companion_arc.hint", "Як викликати: BeginArcChapterScene(companionId)/BeginArcChapterQuest(companionId), коли глава доступна.");
+            AddKey(t, "journal.quests.title", "Квести (ранкова/вечірня пропозиція)");
+            AddKey(t, "journal.quests.hint", "Як викликати: OfferQuestStage(questId) -> ResolveQuestChoice(optionIndex).");
+            AddKey(t, "journal.factions.title", "Фракції/репутація");
+            AddKey(t, "journal.factions.hint", "Похідне: OrderDiplomacy/OrderDecree або наслідок вибору зсувають фракцію.");
+            AddKey(t, "journal.readiness_finale.title", "Готовність + фінал");
+            AddKey(t, "journal.readiness_finale.hint", "Як викликати: ResolveFinale(path) уночі доби 5.");
+            AddKey(t, "journal.tactical_combat.title", "Тактичний бій");
+            AddKey(t, "journal.tactical_combat.hint", "Як викликати: RequestBattle(...) -> CombatMove/Attack/UseAbility/EnterOverwatch/EndTurn.");
+            AddKey(t, "journal.auto_resolve.title", "Автобій");
+            AddKey(t, "journal.auto_resolve.hint", "Як викликати: CombatAutoResolve() у стані Battle.");
+            AddKey(t, "journal.training_battle.title", "Тренувальний бій");
+            AddKey(t, "journal.training_battle.hint", "Як викликати: NewTrainingBattle(options) з Title.");
+            AddKey(t, "journal.creation.title", "Створення протагоніста");
+            AddKey(t, "journal.creation.hint", "Як викликати: NewGame(options) з SkipCreation=false -> SetProtagonistName/Gender/Background -> ConfirmCreation().");
+            AddKey(t, "journal.progression.title", "XP/рівні/білд-планувальник");
+            AddKey(t, "journal.progression.hint", "Як викликати: PreviewBuildPlan(plan)/CommitBuildPlan(plan), коли є SpendablePoints.");
+            AddKey(t, "journal.portrait_scenes.title", "Портретні сцени");
+            AddKey(t, "journal.portrait_scenes.hint", "Як викликати: AdvanceScene(), доки не IsFinished.");
+            AddKey(t, "journal.save_load.title", "Збереження/завантаження");
+            AddKey(t, "journal.save_load.hint", "Як викликати: SaveState(slot)/ContinueGame(slot) у стані Morning.");
+            AddKey(t, "journal.summary.title", "Підсумок доби 5");
+            AddKey(t, "journal.summary.hint", "Як викликати: AcknowledgeSummary() після фіналу.");
+            AddKey(t, "journal.free_play.title", "Вільна гра");
+            AddKey(t, "journal.free_play.hint", "Похідне: той самий цикл триває після доби 5, без сценарних вузлів.");
+
+            // ---- нові механіки Поправки №7.8 ----
+            AddKey(t, "journal.dialogue_choice.title", "Вибір у діалозі/сцені");
+            AddKey(t, "journal.dialogue_choice.hint", "Як викликати: ChooseSceneOption(optionIndex), коли SceneStepView.IsChoice.");
+            AddKey(t, "journal.arc_chapter.title", "Глава арки напарника пройдена");
+            AddKey(t, "journal.arc_chapter.hint", "Як викликати: BeginArcChapterScene/BeginArcChapterQuest -> розв'яжи зміст глави до кінця.");
+            AddKey(t, "journal.betrayal_confrontation.title", "Нічна розмова-конфронтація зради");
+            AddKey(t, "journal.betrayal_confrontation.hint", "Як викликати: OfferMyroslavaEveningScene() на добу 3, коли зрада насуває.");
+            AddKey(t, "journal.building_one_day.title", "Стройка будівлі за одну добу");
+            AddKey(t, "journal.building_one_day.hint", "Як викликати: OrderBuilding(id) — Поправка №7.7 добудовує за одну добу.");
+        }
     }
 }

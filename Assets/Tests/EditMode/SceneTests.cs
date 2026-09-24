@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Game.Core.Characters;
+using Game.Core.Companions;
 using Game.Core.Scenes;
 using NUnit.Framework;
 
@@ -31,6 +32,33 @@ namespace Game.Tests.EditMode
             foreach (var key in new[] { "best", "good", "base", "worst" })
                 Assert.IsTrue(SceneValidator.IsValid(OpeningScenes.PassResolution(key), Cast(), out var problem),
                     problem);
+        }
+
+        /// <summary>
+        /// Адверсаріал-огляд Поправки №7.8: GameSession.BeginScene НІКОЛИ не
+        /// кличе SceneValidator сам (лише проходить сценарій) — жодна з шести
+        /// нових Choice-сцен (арки Мирослави/Максима, конфронтація зради,
+        /// тиха перевірка, рада Захара) до цього тесту не мала жодної
+        /// автоматичної перевірки постановки (карток/міток/наслідків
+        /// кожного варіанту): усе покриття GameSessionTests обирає ЗАВЖДИ
+        /// конкретний варіант, а не проганяє валідатор по всіх гілках.
+        /// </summary>
+        [Test]
+        public void EveryNewCompanionScene_Poprawka78_IsValid()
+        {
+            var scenes = new Dictionary<string, Scene>
+            {
+                ["arc.myroslava.ch1"] = CompanionScenes.MyroslavaTrustArc(),
+                ["arc.myroslava.ch2"] = CompanionScenes.MyroslavaEpilogue(),
+                ["arc.maksym.ch2"] = CompanionScenes.MaksymEpilogue(),
+                ["scene.myroslava.confrontation"] = CompanionScenes.MyroslavaConfrontation(),
+                ["scene.myroslava.checkup"] = CompanionScenes.MyroslavaTrustCheckup(),
+                ["scene.zakhar.council"] = CompanionScenes.ZakharCouncil(),
+            };
+
+            foreach (var kv in scenes)
+                Assert.IsTrue(SceneValidator.IsValid(kv.Value, Cast(), out var problem),
+                    kv.Key + ": " + problem);
         }
 
         /// <summary>Голос из ниоткуда: реплика раньше первого плана.</summary>

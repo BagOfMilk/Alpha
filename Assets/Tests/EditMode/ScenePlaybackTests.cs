@@ -87,14 +87,34 @@ namespace Game.Tests.EditMode
             Assert.IsNull(play.Current.EffectKey, "эффект сработал дважды");
         }
 
+        /// <summary>
+        /// Доигрывает сцену до конца, на каждом Choice-шаге беря вариант 0
+        /// (Поправка №7.8): <see cref="ScenePlayback.Next"/> сам не движется
+        /// дальше выбора (короткочасно возвращает тот же кадр, пока не придёт
+        /// <see cref="ScenePlayback.Choose"/>) — без этого `while (play.Next())`
+        /// висел бы вечно, ровно так, как повис бы наивный вызывающий, не
+        /// умеющий выбирать (см. комментарий у <see cref="ScenePlayback.IsAwaitingChoice"/>).
+        /// </summary>
+        private static int RunToEnd(ScenePlayback play)
+        {
+            int steps = 0;
+            bool advanced = play.Next();
+            while (advanced)
+            {
+                steps++;
+                if (play.IsAwaitingChoice) play.Choose(0);
+                advanced = play.Next();
+            }
+            return steps;
+        }
+
         /// <summary>Сцена открытия проигрывается целиком и заканчивается переходом в узел.</summary>
         [Test]
         public void OpeningScene_PlaysToItsTransition()
         {
             var play = new ScenePlayback(OpeningScenes.NeighbourWithADemand());
 
-            int steps = 0;
-            while (play.Next()) steps++;
+            int steps = RunToEnd(play);
 
             Assert.Greater(steps, 5, "сцена открытия короче, чем поставлена");
             Assert.IsTrue(play.IsFinished);
@@ -107,14 +127,17 @@ namespace Game.Tests.EditMode
         public void EveryOpeningSpeaker_IsOnScreenOrOffScreenByDesign()
         {
             var play = new ScenePlayback(OpeningScenes.NeighbourWithADemand());
-            while (play.Next())
+            bool advanced = play.Next();
+            while (advanced)
             {
                 var frame = play.Current;
-                if (string.IsNullOrEmpty(frame.SpeakerId)) continue;
-                if (frame.Framing == ShotFraming.Empty) continue;
+                bool voiceOver = string.IsNullOrEmpty(frame.SpeakerId) || frame.Framing == ShotFraming.Empty;
+                if (!voiceOver)
+                    Assert.IsTrue(frame.SpeakerId == frame.ActorId || frame.SpeakerId == frame.SecondActorId,
+                        $"говорит {frame.SpeakerId}, а в кадре {frame.ActorId}");
 
-                Assert.IsTrue(frame.SpeakerId == frame.ActorId || frame.SpeakerId == frame.SecondActorId,
-                    $"говорит {frame.SpeakerId}, а в кадре {frame.ActorId}");
+                if (play.IsAwaitingChoice) play.Choose(0);
+                advanced = play.Next();
             }
         }
     }

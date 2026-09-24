@@ -36,6 +36,8 @@ namespace Game.Core.Session.Bots
             return 0;
         }
 
+        public int ChooseSceneOption(SceneStepView step) => BotSupport.ChooseSceneDefault(step);
+
         /// <summary>Чергується день через день (парність доби) — гарантує в одному прогоні і "patrol=true", і "patrol=false" (§6.1 рядок 7: "лише коли patrol=true У ТОЙ САМИЙ прогін").</summary>
         public bool ChoosePatrol(SessionView view) => view != null && view.Day % 2 == 0;
 

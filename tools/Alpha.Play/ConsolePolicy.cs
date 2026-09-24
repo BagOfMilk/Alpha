@@ -5,6 +5,7 @@ using Game.Core.Loop;
 using Game.Core.Session;
 using Game.Core.Session.Bots;
 using Game.Core.Session.Views;
+using Game.Gameplay.Text;
 
 namespace Alpha.Play
 {
@@ -57,6 +58,25 @@ namespace Alpha.Play
             Console.Write("  вибір (1.." + offer.Options.Count + "): ");
             var line = Console.ReadLine();
             if (int.TryParse(line, out var choice) && choice >= 1 && choice <= offer.Options.Count)
+                return choice - 1;
+            return 0;
+        }
+
+        /// <summary>Вибір репліки (Поправка №7.8, Choice-крок сцени) — той самий формат, що й ChooseQuestOption: список варіантів, зчитуємо номер зі стрічки.</summary>
+        public int ChooseSceneOption(SceneStepView step)
+        {
+            if (step?.Options == null || step.Options.Count == 0) return 0;
+            Console.WriteLine("  ВИБІР:");
+            for (int i = 0; i < step.Options.Count; i++)
+            {
+                var o = step.Options[i];
+                string suffix = string.IsNullOrEmpty(o.SkillKey) ? string.Empty :
+                    " (" + o.SkillKey + " проти " + o.Threshold + ", очікування — " + o.ExpectedBand + ")";
+                Console.WriteLine("   " + (i + 1) + ") " + UkrainianText.Get(o.TextKey, Program.ProtagonistGender) + suffix);
+            }
+            Console.Write("  вибір (1.." + step.Options.Count + "): ");
+            var line = Console.ReadLine();
+            if (int.TryParse(line, out var choice) && choice >= 1 && choice <= step.Options.Count)
                 return choice - 1;
             return 0;
         }
