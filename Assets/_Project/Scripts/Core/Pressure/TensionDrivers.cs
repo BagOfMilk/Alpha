@@ -65,7 +65,13 @@ namespace Game.Core.Pressure
             state.Apply(TensionDriver.Hunger, balance.Tension.HungerDeltaPerDay, sourceId);
         }
 
-        private static int Weight(ChoiceWeight weight, TensionBalance cfg)
+        /// <summary>
+        /// internal, а не private (G22): DayProcessor.QueueQuestChoice/
+        /// QueueEventOutcome (мостик R6) считают той же таблицей весов — список
+        /// драйверов остаётся закрытым (инвариант 5), а число не дублируется
+        /// в двух местах.
+        /// </summary>
+        internal static int Weight(ChoiceWeight weight, TensionBalance cfg)
         {
             switch (weight)
             {

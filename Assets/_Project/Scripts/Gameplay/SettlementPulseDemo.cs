@@ -67,14 +67,17 @@ namespace Game.Gameplay
 
                 if (choiceDays.Contains(report.Day))
                 {
-                    TensionDrivers.QuestChoice(tension, TensionDrivers.ChoiceWeight.Major,
-                        "demo.choice." + report.Day, balance);
+                    // G22: сутки уже закрыты (Advance() выше отдал отчёт) —
+                    // прямой TensionDrivers.QuestChoice(tension, …) здесь терял
+                    // мандатный сигнал смены полосы (BeginDay() следующей фазы
+                    // стирал журнал раньше SignalStep). QueueQuestChoice кладёт
+                    // заявку мостиком R6 — тик следующей фазы её услышит.
+                    processor.QueueQuestChoice(TensionDrivers.ChoiceWeight.Major);
                     log.AppendLine($"[день {report.Day}] тяжёлое решение в квесте");
                 }
                 else if (calmDays.Contains(report.Day))
                 {
-                    TensionDrivers.EventOutcome(tension, TensionDrivers.ChoiceWeight.Major,
-                        "demo.relief." + report.Day, balance);
+                    processor.QueueEventOutcome(TensionDrivers.ChoiceWeight.Major);
                     log.AppendLine($"[день {report.Day}] город выдохнул: событие разрешилось хорошо");
                 }
 

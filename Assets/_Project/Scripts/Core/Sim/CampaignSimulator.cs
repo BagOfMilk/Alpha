@@ -83,8 +83,17 @@ namespace Game.Core.Sim
 
                 if (policy == SimPolicy.AggressiveChoices && day % ChoiceEveryDays == 0)
                 {
-                    TensionDrivers.QuestChoice(processor.Tension,
-                        TensionDrivers.ChoiceWeight.Major, "quest:" + day, balance);
+                    // G22: сутки на этой точке цикла уже ЗАКРЫТЫ (прошлая фаза
+                    // отдала свой отчёт, следующая ещё не начата) — прямой
+                    // TensionDrivers.QuestChoice(processor.Tension, …) здесь
+                    // менял полосу, но следующий Advance() стирал журнал
+                    // (TensionState.BeginDay()) раньше, чем SignalStep успевал
+                    // его прочитать: смена полосы происходила БЕЗ мандатного
+                    // сигнала G21, и находилась она не из-за бюджета, а потому,
+                    // что кандидата вообще не строилось. QueueQuestChoice —
+                    // мостик R6: заявка ляжет на тик следующей фазы, ДО
+                    // SignalStep той же фазы, и полосу услышат в её отчёте.
+                    processor.QueueQuestChoice(TensionDrivers.ChoiceWeight.Major);
                 }
 
                 // Снимок берётся ПОСЛЕ КАЖДОЙ фазы отдельно. AdvanceFullDay

@@ -99,6 +99,34 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
+        /// Квест поднял Напряжение, а сутки уже закрыты (между Advance() —
+        /// день дописан, следующий ещё не начат). Это ЕДИНСТВЕННЫЙ безопасный
+        /// вход в этом окне (G22): заявка идёт мостиком R6 и ложится на тик
+        /// СЛЕДУЮЩЕЙ фазы (TensionTickStep, ДО SignalStep), поэтому смену
+        /// полосы услышат в том же отчёте, где она случилась (инвариант 4).
+        ///
+        /// Прямой <see cref="TensionDrivers.QuestChoice"/> на <see cref="Tension"/>
+        /// в этом же окне опасен: следующий Advance() начинается с
+        /// <c>TensionState.BeginDay()</c>, который стирает дневной журнал ДО
+        /// того, как SignalStep успевает его прочитать, — полоса меняется
+        /// по-настоящему, а мандатный сигнал G21 не строится вовсе, потому что
+        /// строить его не из чего. Раньше так делал CampaignSimulator
+        /// (AggressiveChoices) — 200-суточная кампания теряла ровно два перехода
+        /// полосы (сутки 20 и 40), и <c>CampaignPacingTests.Pacing_
+        /// BandChangeIsNeverMute</c> это ловил.
+        /// </summary>
+        public void QueueQuestChoice(TensionDrivers.ChoiceWeight weight)
+        {
+            QueueExternal(TensionDriver.QuestChoice, TensionDrivers.Weight(weight, _balance.Tension));
+        }
+
+        /// <summary>Тот же мостик для исхода, разряжающего обстановку — см. <see cref="QueueQuestChoice"/>.</summary>
+        public void QueueEventOutcome(TensionDrivers.ChoiceWeight weight)
+        {
+            QueueExternal(TensionDriver.EventOutcome, -TensionDrivers.Weight(weight, _balance.Tension));
+        }
+
+        /// <summary>
         /// Копия ещё не осушенной очереди QueueExternal — только для слепка
         /// (D1a, шов, задокументированный прямо в SaveState() ниже). Заявка,
         /// положенная сюда МЕЖДУ фазами (наприклад, наслідком квесту, вжитим

@@ -157,7 +157,12 @@ namespace Game.Gameplay
 
                 if (choices.Contains(day))
                 {
-                    TensionDrivers.QuestChoice(tension, TensionDrivers.ChoiceWeight.Major, "q" + day, balance);
+                    // G22: сутки уже закрыты (обе фазы дня отданы выше) —
+                    // прямой TensionDrivers.QuestChoice(tension, …) здесь терял
+                    // мандатный сигнал смены полосы (BeginDay() следующей фазы
+                    // стирал журнал раньше SignalStep). QueueQuestChoice кладёт
+                    // заявку мостиком R6 — тик следующей фазы её услышит.
+                    processor.QueueQuestChoice(TensionDrivers.ChoiceWeight.Major);
                     Append(full, chunk, $"[день {day}] тяжёлое решение в квесте");
                 }
 
