@@ -188,6 +188,10 @@ namespace Game.Core.Base
                     var c = all[i];
                     if (c.IsDead || IsProtagonist(c.Id)) continue;
                     if (c.Status == CompanionStatus.OnMission) continue;
+                    // B4-аудит §4.5: антагонист (необратимо ушедший, см. enum)
+                    // не жертва обычного кризиса — иначе Kill/Wound ниже
+                    // молча затирают его статус ещё до финала (R8).
+                    if (c.Status == CompanionStatus.Antagonist) continue;
                     ids.Add(c.Id);
                 }
                 ids.Sort(StringComparer.Ordinal);
@@ -209,14 +213,16 @@ namespace Game.Core.Base
         public void Kill(string actorId)
         {
             var c = _roster.Get(actorId);
-            if (c == null || IsProtagonist(actorId)) return;
+            // B4-аудит §4.5: антагонист необратим — обычный Kill его не трогает.
+            if (c == null || IsProtagonist(actorId) || c.Status == CompanionStatus.Antagonist) return;
             c.MarkDead();
         }
 
         public void Wound(string actorId, double injuryPoints)
         {
             var c = _roster.Get(actorId);
-            if (c == null || c.IsDead) return;
+            // B4-аудит §4.5: антагонист необратим — рана не затирает его статус.
+            if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist) return;
             c.InjuryPoints += injuryPoints;
             if (c.Status != CompanionStatus.OnMission)
                 c.Status = CompanionStatus.Injured;

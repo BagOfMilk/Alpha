@@ -44,11 +44,7 @@ namespace Game.Core.Expeditions
             foreach (var id in companionIds)
             {
                 var companion = baseState.Roster.Get(id);
-                // B4-аудит §4.5: Antagonist явно исключён — ушедший в антагонисты
-                // больше не свой и в отряд не идёт (одноточечная правка; полную
-                // валидацию dead/injured/on-mission/duplicate/over-max с этим же
-                // условием R15 сводит в GameSession.DepartExpedition, B7).
-                if (companion == null || companion.IsDead || companion.Status == CompanionStatus.Antagonist) continue;
+                if (companion == null || companion.IsDead) continue;
 
                 if (!string.IsNullOrEmpty(companion.AssignedSlotId))
                 {

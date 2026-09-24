@@ -218,12 +218,17 @@ namespace Game.Tests.EditMode
         // ==================================================================
 
         /// <summary>
-        /// Аудит §4.5: ни одна из точек допуска не пускает антагониста —
-        /// назначение на пост (BaseState.TryAssign), автоназначение
-        /// (Steward.Staff), присутствие (CompanionActorAdapter/RosterAdapter)
-        /// и отправка в отряд (ExpeditionParty.Depart). Четыре точки, что
-        /// названы в §4.5; выделенная валидация GameSession.DepartExpedition
-        /// (R15) появится позже, вместе с самим GameSession (фаза D, пакет B7).
+        /// Аудит §4.5: ни одна из точек допуска, что владеет файлами B4, не
+        /// пускает антагониста — назначение на пост (BaseState.TryAssign),
+        /// автоназначение (Steward.Staff), присутствие (CompanionActorAdapter/
+        /// RosterAdapter). Четвёртая точка §4.5 — «ExpeditionRunner/новий
+        /// GameSession.DepartExpedition» — по §5.1 файл B7-эксклюзивный
+        /// (`Core/Expeditions/*`), а сам `GameSession.DepartExpedition` (R15)
+        /// ещё не существует в этом воркчасте; тестировать его здесь нечем.
+        /// ПРЕЖНЯЯ версия этого теста точечно правила `ExpeditionParty.Depart`
+        /// (чужой файл вне §5.1-владения B4) — правка отменена ревью, см.
+        /// deviationsFromSpec пакета B4; точка осталась швом для B7/D1 (§4.11:
+        /// валидация, включая Antagonist, происходит ПЕРЕД вызовом Depart).
         /// </summary>
         [Test]
         public void Antagonist_NeverAssignable_NeverDispatchable()
@@ -260,12 +265,42 @@ namespace Game.Tests.EditMode
             CollectionAssert.DoesNotContain(
                 System.Linq.Enumerable.Select(rosterAdapter.PresentActors, a => a.Id), "antagonist",
                 "антагонист не должен попадать в список присутствующих");
+        }
 
-            // 4) ExpeditionParty.Depart — не берёт антагониста в отряд.
-            var party = new Game.Core.Expeditions.ExpeditionParty();
-            bool departed = party.Depart(state, new[] { "antagonist" }, days: 2);
-            Assert.IsFalse(departed, "отряд из одного антагониста не должен уйти");
-            Assert.IsFalse(party.IsAway);
+        /// <summary>
+        /// Блокер ревью пакета B4: дневной кризис (`IncidentResolver.ResolveCrisis`
+        /// через `Core/Loop/IncidentStep.cs`) выбирает жертву из
+        /// `RosterAdapter.KillableActorIds` и бьёт по ней `Kill`/`Wound` — это
+        /// тоже точка допуска по `CompanionStatus`, которую пропустил
+        /// исходный аудит §4.5 (он назвал только TryAssign/Staff/Presence/
+        /// Depart). Без исключения обычный кризис молча стирал необратимый
+        /// статус антагониста обратно в Dead/Injured ДО того, как финал успевал
+        /// использовать дефектора как босса (R8, FromDefector).
+        /// </summary>
+        [Test]
+        public void Antagonist_NeverKillableByOrdinaryIncident()
+        {
+            var cfg = new Game.Core.Balance.BalanceConfig();
+            var roster = new Game.Core.Characters.Roster();
+
+            var antagonist = new Game.Core.Characters.CompanionArchetype("antagonist2", "antagonist2")
+                .CreateInstance("antagonist2", cfg);
+            roster.Add(antagonist);
+            Game.Core.Companions.Defection.Defect(antagonist);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status);
+
+            var rosterAdapter = new Game.Core.Base.RosterAdapter(roster);
+
+            CollectionAssert.DoesNotContain(rosterAdapter.KillableActorIds, "antagonist2",
+                "антагонист не должен считаться допустимой жертвой кризиса");
+
+            rosterAdapter.Wound("antagonist2", 30);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status,
+                "Wound не должен затирать статус антагониста");
+
+            rosterAdapter.Kill("antagonist2");
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status,
+                "Kill не должен затирать статус антагониста");
         }
 
         /// <summary>
