@@ -20,8 +20,15 @@ namespace Game.Core.Checks
         /// <summary>Id позиции, которую держит; null — свободен.</summary>
         string HeldPositionId { get; }
 
-        /// <summary>Значение навыка вместе с контекстным атрибутом подхода.</summary>
-        int GetCheckValue(SkillKey skill);
+        /// <summary>
+        /// Значение навыка вместе с контекстным атрибутом подхода (G16/GDD:98):
+        /// Убеждение и Торговля добирают Смекалку, Запугивание — Волю; для
+        /// <see cref="ApproachForm.Neutral"/> (утилитарные проверки) атрибут не
+        /// добавляется вовсе. Параметр необязателен намеренно — вызывающие,
+        /// которым подход не важен (вылазка бьётся утилитарными скилами),
+        /// продолжают работать без изменений.
+        /// </summary>
+        int GetCheckValue(SkillKey skill, ApproachForm approach = ApproachForm.Neutral);
 
         /// <summary>
         /// Флэт-модификатор поверх голого навыка (US-2.6): трейты, шрамы, перки.

@@ -20,7 +20,7 @@ namespace Game.Tests.EditMode
             public int Value { get; set; }
             public int Trait { get; set; }
 
-            public int GetCheckValue(SkillKey skill) => Value;
+            public int GetCheckValue(SkillKey skill, ApproachForm approach = ApproachForm.Neutral) => Value;
             public int GetTraitModifier(SkillKey skill) => Trait;
         }
 

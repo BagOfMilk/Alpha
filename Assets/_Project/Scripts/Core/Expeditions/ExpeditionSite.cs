@@ -12,7 +12,16 @@ namespace Game.Core.Expeditions
     public enum ExpeditionApproach
     {
         Quiet = 0,     // скрытность и переговоры: дольше, но без ран
-        Forceful = 1   // силой: быстрее, но ранения почти неизбежны
+        Forceful = 1,  // силой: быстрее, но ранения почти неизбежны
+
+        /// <summary>
+        /// Данж (R15/B7-B2): партия заходит внутрь и играет комнатами
+        /// (<c>Core/Dungeons</c>), а не одним резолвом на пороге. Диспетчинг
+        /// для Delve дальше по потоку ведёт D1 вместе с данж-пакетом —
+        /// <see cref="Base.ExpeditionRunner.Depart"/> лишь снаряжает отряд и
+        /// НЕ зовёт <see cref="ExpeditionResolver.Resolve"/> для этого подхода.
+        /// </summary>
+        Delve = 2
     }
 
     /// <summary>
@@ -59,9 +68,27 @@ namespace Game.Core.Expeditions
         }
 
         public int DaysFor(ExpeditionApproach approach)
-            => approach == ExpeditionApproach.Quiet ? QuietDays : ForcefulDays;
+        {
+            switch (approach)
+            {
+                case ExpeditionApproach.Quiet: return QuietDays;
+                case ExpeditionApproach.Forceful: return ForcefulDays;
+                // Delve: данж считает свои сутки сам, по числу комнат (B2/D1) —
+                // это число здесь не используется резолвом (R15 его пропускает).
+                default: return ForcefulDays;
+            }
+        }
 
         public SkillKey SkillFor(ExpeditionApproach approach)
-            => approach == ExpeditionApproach.Quiet ? QuietSkill : ForcefulSkill;
+        {
+            switch (approach)
+            {
+                case ExpeditionApproach.Quiet: return QuietSkill;
+                case ExpeditionApproach.Forceful: return ForcefulSkill;
+                // Delve: заходят тем же скилом, что и тихий подход — дальше
+                // решают комнаты данжа, а не порог точки.
+                default: return QuietSkill;
+            }
+        }
     }
 }

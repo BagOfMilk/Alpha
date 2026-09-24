@@ -30,7 +30,7 @@ namespace Game.Core.Checks
             for (int i = 0; i < candidates.Count; i++)
             {
                 var actor = candidates[i];
-                int value = actor.GetCheckValue(request.Skill) + actor.GetTraitModifier(request.Skill);
+                int value = actor.GetCheckValue(request.Skill, request.Approach) + actor.GetTraitModifier(request.Skill);
 
                 // Ничьи разрешаются по Id — иначе результат зависел бы от порядка
                 // в списке, и воспроизводимость кампании поехала бы.

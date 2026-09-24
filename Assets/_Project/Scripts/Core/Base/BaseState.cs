@@ -306,7 +306,15 @@ namespace Game.Core.Base
             return report;
         }
 
-        /// <summary>Распределяет лечебные очки по самым тяжело раненным.</summary>
+        /// <summary>
+        /// Распределяет лечебные очки по самым тяжело раненным.
+        ///
+        /// G26: пока лечение в лазарете идёт, а сама рана ещё не закрылась,
+        /// свободный (не держащий пост) раненый переходит в Resting — статус
+        /// был объявлен, но никогда не присваивался. Тот, кто продолжает
+        /// работать через рану (пост держит — <c>InjuredCompanion_ProducesLess</c>),
+        /// остаётся Injured: он не «отдыхает», он работает с пенальти.
+        /// </summary>
         private void ApplyHealing(int healing, CycleReport report)
         {
             if (healing <= 0) return;
@@ -329,6 +337,10 @@ namespace Game.Core.Base
                     if (c.Status == CompanionStatus.Injured || c.Status == CompanionStatus.Resting)
                         c.Status = CompanionStatus.Idle;
                     report.Recovered.Add(c.Id);
+                }
+                else if (heal > 0 && !c.IsAssigned && c.Status == CompanionStatus.Injured)
+                {
+                    c.Status = CompanionStatus.Resting;
                 }
             }
         }

@@ -211,5 +211,45 @@ namespace Game.Tests.EditMode
             source = Regex.Replace(source, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
             return Regex.Replace(source, @"//.*?$", string.Empty, RegexOptions.Multiline);
         }
+
+        // ---- B7: уніфікація вилазки (R15), G16, G26 ----
+
+        /// <summary>
+        /// R15: `ExpeditionRunner.Send` был отдельным, никем не вызываемым
+        /// входом — вылазка была косметической. Он удалён, а не оставлен
+        /// мёртвым кодом (риск, что кто-то снова позовёт его напрямую в обход
+        /// <c>Depart</c>). Тест держит это решение: метод не должен вернуться.
+        /// </summary>
+        [Test]
+        public void ExpeditionRunner_Send_NoLongerExists()
+        {
+            var method = typeof(Game.Core.Base.ExpeditionRunner)
+                .GetMethod("Send", BindingFlags.Public | BindingFlags.Static);
+
+            Assert.IsNull(method,
+                "ExpeditionRunner.Send вернулся — второй, необъединённый вход в вылазку снова возможен (R15)");
+        }
+
+        /// <summary>
+        /// G16: соц-подходы обязаны добирать контекстный атрибут (GDD:98), а
+        /// утилитарные — нет. Тест держит именно распределение по подходам, а
+        /// не конкретные числа баланса.
+        /// </summary>
+        [Test]
+        public void ContextAttribute_OnlyAppliesToSocialApproaches()
+        {
+            var cfg = new Game.Core.Balance.BalanceConfig();
+            var arch = new Game.Core.Characters.CompanionArchetype("guard_g16", "guard_g16");
+            arch.SetSkill(Game.Core.Stats.SkillType.Persuade, 3);
+            arch.SetAttribute(Game.Core.Stats.AttributeType.Wits, 7);
+            var companion = arch.CreateInstance("guard_g16", cfg);
+            var adapter = new Game.Core.Base.CompanionActorAdapter(companion, false, cfg);
+
+            int neutral = adapter.GetCheckValue(Game.Core.Checks.SkillKeys.Persuade, Game.Core.Checks.ApproachForm.Neutral);
+            int persuade = adapter.GetCheckValue(Game.Core.Checks.SkillKeys.Persuade, Game.Core.Checks.ApproachForm.Persuade);
+
+            Assert.AreEqual(3, neutral, "Neutral не добирает атрибут");
+            Assert.AreEqual(10, persuade, "Persuade добирает Смекалку поверх голого скила (GDD:98)");
+        }
     }
 }
