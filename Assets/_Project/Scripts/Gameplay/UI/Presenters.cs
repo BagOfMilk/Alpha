@@ -10,6 +10,19 @@ namespace Game.Gameplay.UI
         void Exit();
         bool IsActive { get; }
         void DrawHud(GameSession session);
+
+        /// <summary>
+        /// Фаза F (UI-tour autoplay): чи показано модалку результату бою, яку
+        /// ще не підтверджено (той самий прапорець, що читає
+        /// <see cref="IBattleHudData.ResultPending"/> у BattleHudScreen.cs).
+        /// Обидва члени вже публічно реалізовані <c>BattleArenaController</c>
+        /// (E2) — інтерфейс лише називає їх, жодної нової логіки презентеру
+        /// не потрібно.
+        /// </summary>
+        bool ResultPending { get; }
+
+        /// <summary>Той самий виклик, що й кнопка "Далі" на панелі результату — автопрогону потрібен без кліку по HUD.</summary>
+        void AcknowledgeResult();
     }
 
     /// <summary>Шов для портретов: живой рендер модели персонажа (E2) или именная заглушка.</summary>

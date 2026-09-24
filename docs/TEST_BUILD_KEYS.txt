@@ -1,5 +1,6 @@
 arc.chapter_opened
 assign.made
+char.seen
 city.building.ordered
 city.built.infirmary
 city.built.tavern

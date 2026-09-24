@@ -33,6 +33,16 @@
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Text/UkrainianText.cs"
              Link="Gameplay/Text/UkrainianText.cs" />
+    <!--
+      Фаза F (CORE GAPS, docs/TEST_BUILD.md): та сама формула рядка стрічки
+      подій, що й HUD Unity (GameShell.DrawEventFeed -> ScreenText.EventLine) —
+      чиста C# без UnityEngine (сам файл про це каже прямим текстом), той
+      самий прийом Compile Include, що вже підключив UkrainianText.cs вище.
+      Program.cs друкує DayLog через неї, щоб консоль і вікно гри не могли
+      розійтися текстом того самого запису.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/ScreenText.cs"
+             Link="Gameplay/UI/ScreenText.cs" />
   </ItemGroup>
 
 </Project>

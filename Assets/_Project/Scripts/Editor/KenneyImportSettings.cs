@@ -147,5 +147,43 @@ namespace Game.Gameplay.EditorTools
             AssetDatabase.Refresh();
             Debug.Log("Наборы Kenney переимпортированы");
         }
+
+        /// <summary>
+        /// Фаза F (FOLIAGE): версія палітри — правиш <see cref="NaturePalette"/>
+        /// (додаєш/міняєш колір) → піднімаєш цей рядок. Порівнюється з
+        /// позначкою в <see cref="MarkerPath"/> (локальний файл під
+        /// <c>Library/</c> — не в репозиторії, живе на конкретній машині разом
+        /// із самим імпортованим кешем).
+        /// </summary>
+        private const string PaletteVersion = "carpathian-2";
+
+        private static string MarkerPath =>
+            Path.Combine("Library", "KenneyPaletteVersion.txt");
+
+        /// <summary>
+        /// Грабли CLAUDE.md: <see cref="NaturePalette"/> в <see cref="OnPostprocessMaterial"/>
+        /// перефарбовує матеріал лише ПІД ЧАС імпорту — якщо Library вже тепла
+        /// (модель імпортована ДО того, як з'явилась/змінилась палітра), крони
+        /// й трава лишаються бірюзовими доти, доки хтось руками не натисне
+        /// «Alpha/Переимпортировать…». <c>GameSceneBuilder.Build()</c> кличе
+        /// цей метод ПЕРШИМ кроком щоразу — дешева перевірка позначки, реальний
+        /// (повільний) <see cref="Reimport"/> лише коли версія розійшлась.
+        /// </summary>
+        public static void ReimportIfPaletteChanged()
+        {
+            string existing = File.Exists(MarkerPath) ? File.ReadAllText(MarkerPath).Trim() : null;
+            if (existing == PaletteVersion)
+            {
+                Debug.Log("[Kenney] палітра не змінилась (" + PaletteVersion + ") — переімпорт пропущено.");
+                return;
+            }
+
+            Debug.Log("[Kenney] позначка палітри '" + (existing ?? "(немає)") + "' != '" + PaletteVersion +
+                       "' — переімпортовую набори перед збіркою сцени.");
+            Reimport();
+
+            Directory.CreateDirectory("Library");
+            File.WriteAllText(MarkerPath, PaletteVersion);
+        }
     }
 }

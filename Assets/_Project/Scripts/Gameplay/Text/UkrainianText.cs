@@ -36,6 +36,28 @@ namespace Game.Gameplay.Text
 
         private static readonly Dictionary<string, string> Table = BuildTable();
 
+        /// <summary>
+        /// Фаза F (UI-tour autoplay, docs/TEST_BUILD.md): лічильник ключів, для
+        /// яких <see cref="Get(string,Gender)"/> повернув видиму заглушку —
+        /// гачок для <c>AutoplayBootstrap</c>, щоб дим-тест міг повернути код
+        /// виходу 3 і перелічити прогалини в підсумковому логу, а не лише
+        /// покластися на те, що хтось помітить "[...]" на скріншоті.
+        /// </summary>
+        private static readonly Dictionary<string, int> MissingKeyCountsInternal = new Dictionary<string, int>();
+
+        /// <summary>Скидає лічильник відсутніх ключів — викликається на старті прогону автопрогону, щоб не змішати лічильник з попереднім прогоном у тому самому процесі.</summary>
+        public static void ResetMissingKeyTracking() => MissingKeyCountsInternal.Clear();
+
+        /// <summary>Ключі, повернуті заглушкою відколи викликали <see cref="ResetMissingKeyTracking"/> (або від старту процесу), з кількістю показів кожного.</summary>
+        public static IReadOnlyDictionary<string, int> MissingKeyCounts => MissingKeyCountsInternal;
+
+        private static void TrackMissing(string key)
+        {
+            string k = key ?? "null";
+            MissingKeyCountsInternal.TryGetValue(k, out int count);
+            MissingKeyCountsInternal[k] = count + 1;
+        }
+
         /// <summary>Усі ключі таблиці (варіанти <c>.m</c>/<c>.f</c> — окремими записами).</summary>
         public static IReadOnlyList<string> AllKeys { get; } =
             Table.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
@@ -63,9 +85,11 @@ namespace Game.Gameplay.Text
         /// </summary>
         public static string Get(string key, Gender gender)
         {
-            if (string.IsNullOrEmpty(key)) return MissingMarker(key);
+            if (string.IsNullOrEmpty(key)) { TrackMissing(key); return MissingMarker(key); }
             string resolved = ResolveVariant(key, gender);
-            return Table.TryGetValue(resolved, out var text) ? text : MissingMarker(key);
+            if (Table.TryGetValue(resolved, out var text)) return text;
+            TrackMissing(key);
+            return MissingMarker(key);
         }
 
         public static string Get(string key, bool isFemale) => Get(key, isFemale ? Gender.Female : Gender.Male);
@@ -468,6 +492,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.quit", "Вийти");
             AddKey(t, "ui.title.hitrule.percent", "Правило попадання: показаний відсоток");
             AddKey(t, "ui.title.hitrule.threshold", "Правило попадання: показаний поріг");
+            AddKey(t, "ui.title.hitrule.section", "Правило попадання");
             AddKey(t, "ui.save.slot", "Слот {slot}: {headline}, доба {day}");
             AddKey(t, "ui.save.slot.empty", "Слот {slot}: порожньо");
             AddKey(t, "ui.save.autosave", "Автозбереження — щоранку");

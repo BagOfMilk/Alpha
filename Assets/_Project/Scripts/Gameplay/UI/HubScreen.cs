@@ -38,6 +38,9 @@ namespace Game.Gameplay.UI
 
         private int _tab;
 
+        /// <summary>Фаза F (UI-tour autoplay): дозволяє <c>GameShell.SetHubTab</c> перемкнути вкладку ззовні, щоб дим-тест міг зняти скріншот кожної.</summary>
+        public void SetTab(int tab) => _tab = tab < 0 ? 0 : (tab > 9 ? 9 : tab);
+
         // Expedition
         private string _siteId = SiteIds[0];
         private ExpeditionApproach _approach = ExpeditionApproach.Quiet;

@@ -1,99 +1,502 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+using Game.Core.Base;
+using Game.Core.Characters.Creation;
 using Game.Core.Combat;
+using Game.Core.Expeditions;
+using Game.Core.Loop;
+using Game.Core.Quests;
 using Game.Core.Session;
 using Game.Core.Session.Bots;
-using Game.Gameplay.Combat;
+using Game.Core.Session.Views;
+using Game.Gameplay.UI;
 
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Реалізація <see cref="IAutoplayDriver"/> для дим-тесту (R19): власна,
-    /// ІЗОЛЬОВАНА від інтерактивної сесії <see cref="GameShell"/> копія
-    /// <c>GameSession</c>, яку <see cref="BotRunner"/> веде політикою
-    /// <see cref="StewardPolicy"/> — той самий водій, яким водять
-    /// AllMechanicsCoverageTests і <c>tools/Alpha.Play -- --auto</c> (§1.1
-    /// TEST_BUILD.md: "боти в ядрі... їх однаково споживають тести Unity,
-    /// автопрогін і tools/*").
+    /// Фаза F (docs/TEST_BUILD.md, "PHASE F LOOP", ціль 1 "UI-TOUR AUTOPLAY"):
+    /// жене РЕАЛЬНИЙ <see cref="GameShell"/> (той самий <c>Session</c>, який
+    /// малює <c>OnGUI</c>) крізь усі екрани тестової збірки — на відміну від
+    /// попередньої версії цього файлу, яка крутила ІЗОЛЬОВАНУ копію
+    /// <c>GameSession</c> поза <c>GameShell</c>, тож екран весь прогін бачив
+    /// незмінний Title.
     ///
-    /// Один крок <see cref="RunAutoplayStep"/> = рівно одна КАЛЕНДАРНА доба
-    /// (<see cref="BotRunner.Drive"/> з <c>days: 1</c> завжди повертається у
-    /// стан Morning/FreePlay наступної доби) — це й дає "скріншот на кожен
-    /// ранок" безкоштовно: <see cref="AutoplayBootstrap"/> знімає кадр після
-    /// КОЖНОГО кроку. Доба 5→6 в одному виклику проходить крізь ніч (фінал) і
-    /// Summary (AcknowledgeSummary), тож той самий кадр — це й "скріншот
-    /// після фіналу/підсумку".
+    /// Команди йдуть через <c>shell.TryRun</c> (як і всі реальні кнопки
+    /// екранів) — це і ловить <c>InvalidOperationException</c> без падіння
+    /// туру, і годує <c>VillageStageBridge.Feed</c> (3D-хаб оновлює постаті на
+    /// постах/стадії будівництва), інакше хаб на скріншотах лишався б
+    /// незмінним, хоч сесія і просунулась.
+    ///
+    /// Один прохід стану-диспетчера (той самий принцип, що й
+    /// <c>BotRunner.Drive</c>, з яким цей файл ділить-логіку рішень через
+    /// <see cref="BotSupport"/>) — з інʼєкцією скріншотів/hub-туру в потрібних
+    /// місцях замість сліпого прогону. Кровавий шлях форсується РІВНО там, де
+    /// він гарантовано дає бій (перше рішення — вузол 1; ніч доби 5 — фінал),
+    /// щоб "Battle: ... коли бій починається" й "day 5: ... фінальний бій"
+    /// (ціль 1) не залежали від того, чи має протагоніст кандидата на кровавий
+    /// шлях цього конкретного сида.
     /// </summary>
-    public sealed class AutoplayGameDriver : IAutoplayDriver
+    public sealed class AutoplayGameDriver
     {
-        /// <summary>5 сценарних діб + 10 вільної гри (§3.6 TEST_BUILD.md) — той самий обсяг, що й тест покриття механік.</summary>
-        private const int TotalDays = 15;
+        private const int FramesShort = 2;
+        private const int FramesMedium = 4;
+        private const int FramesBattleEnter = 6;
+        private const int MaxLoopSteps = 6000;
+        private const int MaxManualBattleSteps = 3;
 
-        private readonly IBotPolicy _policy = new StewardPolicy();
-        private GameSession _session;
-        private string _lastDescription = "";
-
-        public bool Failed { get; private set; }
-
-        public bool RunAutoplayStep(int stepIndex)
+        private static readonly string[] HubTabSlugs =
         {
-            try
+            "hub-posts", "hub-buildings", "hub-council", "hub-expedition", "hub-gear",
+            "hub-people", "hub-quests", "hub-factions", "hub-readiness", "hub-save"
+        };
+
+        private readonly IAutoplayHost _host;
+        private readonly GameShell _shell;
+        private readonly bool _useThresholdRule;
+
+        private int _freePlayStartDay = -1;
+        private bool _hubToured;
+        private bool _battleShown;
+        private bool _dungeonShown;
+        private bool _decisionShown;
+        private bool _eveningShown;
+        private bool _nightShown;
+
+        public AutoplayGameDriver(IAutoplayHost host, GameShell shell, bool useThresholdRule)
+        {
+            _host = host ?? throw new ArgumentNullException(nameof(host));
+            _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+            _useThresholdRule = useThresholdRule;
+        }
+
+        private GameSession Session => _shell.Session;
+
+        public IEnumerator<int> Run()
+        {
+            // ---------------- Титул -> Нова гра ----------------
+            foreach (var f in WaitFrames(FramesMedium)) yield return f;
+            _host.Capture("title");
+
+            var hitRule = _useThresholdRule ? HitRuleKind.Threshold : HitRuleKind.Percent;
+            Run(() => Session.NewGame(new NewGameOptions
             {
-                if (_session == null)
+                HitRule = hitRule,
+                Seed = 1,
+                Roller = _shell.Roller,
+                SkipCreation = false
+            }));
+            _host.Log("Титул: Нова гра (" + hitRule + ").");
+
+            // ---------------- Створення протагоніста ----------------
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("creation-default");
+
+            var creationView = Session.GetProtagonistCreationView();
+            var backgrounds = creationView?.AvailableBackgrounds;
+            string backgroundId = backgrounds != null && backgrounds.Count > 1 ? backgrounds[1]
+                : (backgrounds != null && backgrounds.Count > 0 ? backgrounds[0] : null);
+
+            Run(() => Session.SetProtagonistName("Оксана"));
+            Run(() => Session.SetProtagonistGender(Gender.Female));
+            _shell.ProtagonistGender = Gender.Female;
+            if (!string.IsNullOrEmpty(backgroundId))
+            {
+                string bg = backgroundId;
+                Run(() => Session.SetProtagonistBackground(bg));
+            }
+
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("creation-filled");
+
+            Run(() => Session.ConfirmCreation());
+            _host.Log("Створення підтверджено: Оксана, жіночий рід, передісторія " + (backgroundId ?? "?") + ".");
+
+            // ---------------- Головний диспетчер станів ----------------
+            int sceneShots = 0;
+            int guard = 0;
+
+            while (true)
+            {
+                guard++;
+                if (guard > MaxLoopSteps)
                 {
-                    var roller = new SeededDiceRoller(1);
-                    var options = new NewGameOptions
-                    {
-                        HitRule = HitRuleKind.Threshold,
-                        Seed = 1,
-                        Roller = roller,
-                        SkipCreation = false
-                    };
-                    _session = new GameSession(roller);
-                    _session.NewGame(options);
-                    _lastDescription = "Нова гра почата (seed=1, поріг влучання, політика " + _policy.Name + ").";
-                    return true;
+                    _host.Log("Запобіжник maxSteps (" + MaxLoopSteps + ") — можливе зациклення тура; зупинено примусово.");
+                    yield break;
                 }
 
-                int dayBefore = SafeDay();
-                var events = new List<GameEvent>();
-                BotRunner.Drive(_session, _policy, 1, fullLog: events);
-                _lastDescription = DescribeDay(dayBefore, _session.State, events);
+                var state = Session.State;
 
-                bool reachedEnd = _session.State == SessionState.FreePlay && SafeDay() >= TotalDays;
-                return !reachedEnd;
-            }
-            catch (Exception ex)
-            {
-                Failed = true;
-                _lastDescription = "Виняток на кроці " + stepIndex + ": " + ex.GetType().Name + " — " + ex.Message;
-                return false;
+                // ---- портретна сцена ----
+                if (state == SessionState.Scene)
+                {
+                    var step = Run(() => Session.AdvanceScene());
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    if (step != null && sceneShots < 6 && (!string.IsNullOrEmpty(step.LineKey) || step.IsFinished))
+                    {
+                        sceneShots++;
+                        _host.Capture("opening-scene-" + sceneShots);
+                    }
+                    continue;
+                }
+
+                // ---- ранок / вільна гра ----
+                if (state == SessionState.Morning || state == SessionState.FreePlay)
+                {
+                    int day = Session.CurrentView.Day;
+
+                    if (state == SessionState.FreePlay)
+                    {
+                        if (_freePlayStartDay < 0)
+                        {
+                            _freePlayStartDay = day;
+                        }
+                        else if (day > _freePlayStartDay)
+                        {
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                            _host.Capture("freeplay-day" + day);
+                            _host.Log("FreePlay доби " + day + " досягнуто (стартувало на добу " + _freePlayStartDay + ") — тур завершено успішно.");
+                            yield break;
+                        }
+                    }
+
+                    if (!_hubToured && day == 1 && state == SessionState.Morning)
+                    {
+                        _hubToured = true;
+                        for (int tab = 0; tab < HubTabSlugs.Length; tab++)
+                        {
+                            _shell.SetHubTab(tab);
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                            _host.Capture(HubTabSlugs[tab]);
+                        }
+                        _shell.SetHubTab(0);
+                        _host.Log("Хаб: усі " + HubTabSlugs.Length + " вкладок відвідано й знято.");
+                    }
+
+                    // "issue the bot's morning commands" — та сама розстановка
+                    // за замовчуванням, що й BotSupport.DefaultAssignments
+                    // (Steward), через shell.TryRun, щоб 3D-хаб оновив постаті.
+                    var roster = Session.GetRosterView();
+                    var assignments = BotSupport.DefaultAssignments(roster);
+                    foreach (var kv in assignments)
+                    {
+                        string companionId = kv.Key;
+                        string slotId = kv.Value;
+                        Run(() => Session.Assign(companionId, slotId));
+                    }
+
+                    MaybeOrderBuilding(day);
+                    if (day == 4) MaybeDepartDelve();
+
+                    if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
+                    {
+                        Run(() => Session.ConfirmMorning());
+                        _host.Log("Ранок доби " + day + " підтверджено.");
+                    }
+                    continue;
+                }
+
+                // ---- день (конвеєр) ----
+                if (state == SessionState.Day)
+                {
+                    Run(() => Session.AdvanceDay());
+                    continue;
+                }
+
+                // ---- точка рішення ----
+                if (state == SessionState.Decision)
+                {
+                    var offer = Session.GetPendingOffer();
+                    if (!_decisionShown)
+                    {
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("decision-day" + Session.CurrentView.Day);
+                        _decisionShown = true;
+                    }
+
+                    var path = !_battleShown ? BloodyIfPossible(offer) : StewardPath(offer);
+                    Run(() => Session.ResolveIncident(path));
+                    continue;
+                }
+
+                // ---- бій (3D-арена + HUD) ----
+                if (state == SessionState.Battle)
+                {
+                    foreach (var f in WaitFrames(FramesBattleEnter)) yield return f;
+
+                    bool firstBattle = !_battleShown;
+                    _battleShown = true;
+                    _host.Capture(firstBattle ? "battle-start" : "battle-secondary-start");
+
+                    if (firstBattle)
+                    {
+                        for (int i = 0; i < MaxManualBattleSteps; i++)
+                        {
+                            var view = Session.GetBattleView();
+                            if (view == null || view.Outcome != "Ongoing") break;
+                            PlayOneBattleStep(view);
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        }
+                        _host.Capture("battle-after-turns");
+                    }
+
+                    Run(() => Session.CombatAutoResolve());
+                    foreach (var f in WaitFrames(FramesMedium)) yield return f;
+                    _host.Capture(firstBattle ? "battle-result" : "battle-secondary-result");
+                    AcknowledgeBattleIfPending();
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    continue;
+                }
+
+                // ---- данж ----
+                if (state == SessionState.Dungeon)
+                {
+                    if (!_dungeonShown)
+                    {
+                        _dungeonShown = true;
+                        int roomGuard = 0;
+                        while (Session.State == SessionState.Dungeon && roomGuard++ < 12)
+                        {
+                            var view = Session.GetDungeonView();
+                            if (view == null) break;
+
+                            if (view.CurrentRoom != null)
+                            {
+                                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                                _host.Capture("dungeon-room-" + (view.RoomsCleared + 1));
+
+                                var room = view.CurrentRoom;
+                                if (room.Type == "Combat")
+                                {
+                                    if (room.HasQuietBypass) Run(() => Session.ResolveDungeonRoom(IncidentPath.Quiet));
+                                    else Run(() => Session.ResolveDungeonRoom(IncidentPath.Bloody));
+                                }
+                                else if (room.Type == "Event")
+                                {
+                                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                                    _host.Capture("dungeon-event");
+                                    Run(() => Session.ResolveDungeonEvent(1));
+                                }
+                                else
+                                {
+                                    Run(() => Session.ResolveDungeonRoom(IncidentPath.Quiet));
+                                }
+
+                                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                                if (Session.State == SessionState.Battle) break; // головний цикл сам розбере бій
+                            }
+                            else if (view.RoomsCleared < 3)
+                            {
+                                Run(() => Session.PushDeeper());
+                                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                            }
+                            else
+                            {
+                                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                                _host.Capture("dungeon-extract");
+                                Run(() => Session.ExtractDungeon());
+                                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var view = Session.GetDungeonView();
+                        if (view != null && view.CurrentRoom == null) Run(() => Session.ExtractDungeon());
+                        else if (view != null) Run(() => Session.ResolveDungeonRoom(IncidentPath.Quiet));
+                    }
+                    continue;
+                }
+
+                // ---- вечір ----
+                if (state == SessionState.Evening)
+                {
+                    if (!_eveningShown)
+                    {
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("evening-patrol");
+                    }
+
+                    var quest = Run(() => Session.OfferQuestStage(DefaultQuests.HafiyaId));
+                    if (!_eveningShown && quest != null)
+                    {
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("evening-quest-offer");
+                    }
+                    _eveningShown = true;
+
+                    if (quest?.Options != null && quest.Options.Count > 0)
+                    {
+                        int idx = 0;
+                        for (int i = 0; i < quest.Options.Count; i++)
+                            if (quest.Options[i].HasCandidate) { idx = i; break; }
+                        int chosen = idx;
+                        Run(() => Session.ResolveQuestChoice(chosen));
+                    }
+
+                    Run(() => Session.SetPatrol(Session.CurrentView.Day % 2 == 0));
+                    Run(() => Session.ConfirmEvening());
+                    continue;
+                }
+
+                // ---- ніч (патруль / криза доби 5 / фінал) ----
+                if (state == SessionState.Night)
+                {
+                    int day = Session.CurrentView.Day;
+
+                    if (day == 5)
+                    {
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("crisis-day5");
+                        Run(() => Session.ReactToCrisis(CrisisReaction.SpendGold));
+
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("finale-choice");
+                        // Кроваво — навмисно (ціль 1: "фінальний бій" мусить
+                        // трапитись, не залежно від того, чи є тихий кандидат).
+                        Run(() => Session.ResolveFinale(IncidentPath.Bloody));
+                        continue;
+                    }
+
+                    if (!_nightShown)
+                    {
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("night");
+                        _nightShown = true;
+                    }
+                    Run(() => Session.AdvanceNight());
+                    continue;
+                }
+
+                // ---- підсумок доби 5 ----
+                if (state == SessionState.Summary)
+                {
+                    foreach (var f in WaitFrames(FramesMedium)) yield return f;
+                    _host.Capture("summary");
+                    Run(() => Session.AcknowledgeSummary());
+                    continue;
+                }
+
+                _host.Log("Тур зупинено в непередбаченому стані " + state + ".");
+                yield break;
             }
         }
 
-        public string DescribeLastStep() => _lastDescription;
+        // ===================== виконання команд =====================
 
-        private int SafeDay() => _session != null ? _session.CurrentView.Day : 0;
-
-        private static string DescribeDay(int dayBefore, SessionState endState, List<GameEvent> events)
+        private void Run(Action action)
         {
-            var sb = new StringBuilder();
-            sb.Append("доба ").Append(dayBefore.ToString(CultureInfo.InvariantCulture))
-              .Append(" -> стан ").Append(endState)
-              .Append(", подій: ").Append(events.Count.ToString(CultureInfo.InvariantCulture));
+            _shell.TryRun(action);
+            LogIfMessage();
+        }
 
-            int shown = 0;
-            for (int i = 0; i < events.Count && shown < 6; i++)
+        private T Run<T>(Func<T> action)
+        {
+            var result = _shell.TryRun(action);
+            LogIfMessage();
+            return result;
+        }
+
+        private void LogIfMessage()
+        {
+            if (!string.IsNullOrEmpty(_shell.LastMessage))
+                _host.Log("  (" + _shell.LastMessage + ")");
+        }
+
+        private static IEnumerable<int> WaitFrames(int frames)
+        {
+            for (int i = 0; i < frames; i++) yield return 0;
+        }
+
+        // ===================== рішення =====================
+
+        private static IncidentPath BloodyIfPossible(PendingOfferView offer)
+        {
+            if (offer?.Options != null)
+                foreach (var o in offer.Options)
+                    if (o.Path == IncidentPathView.Bloody && o.HasCandidate) return IncidentPath.Bloody;
+            return StewardPath(offer);
+        }
+
+        private static IncidentPath StewardPath(PendingOfferView offer)
+        {
+            if (offer?.Options != null)
             {
-                if (i > 0) sb.Append(i == 1 ? " [" : ", ");
-                sb.Append(events[i].Key);
-                shown++;
+                foreach (var o in offer.Options)
+                    if (o.Path == IncidentPathView.Quiet && o.HasCandidate) return IncidentPath.Quiet;
+                foreach (var o in offer.Options)
+                    if (o.Path == IncidentPathView.Bloody && o.HasCandidate) return IncidentPath.Bloody;
             }
-            if (events.Count > 0) sb.Append(']');
+            return IncidentPath.Quiet;
+        }
 
-            return sb.ToString();
+        // ===================== ранок: рада / вилазка =====================
+
+        private void MaybeOrderBuilding(int day)
+        {
+            if (day != 2) return; // §3.2 TEST_BUILD.md: рада замовляє Майстерню на добу 2
+            Run(() => Session.OrderBuilding(DefaultBuildings.Workshop));
+        }
+
+        /// <summary>§3.4: збори у вилазку-данж «Покинутий табір авангарду» на добу 4 — трійка з протагоніста/Максима/Мирослави, якщо всі легальні кандидати.</summary>
+        private void MaybeDepartDelve()
+        {
+            var roster = Session.GetRosterView();
+            var candidateIds = new[] { GameSession.ProtagonistId, "maksym", "myroslava" };
+            var party = new List<string>();
+            foreach (var id in candidateIds)
+            {
+                var c = ScreenText.FindCompanion(roster, id);
+                if (ScreenText.AssignCandidateLegality(c).Enabled) party.Add(id);
+            }
+            if (party.Count == 0) return;
+
+            var preview = Run(() => Session.PreviewExpedition("abandoned_camp", ExpeditionApproach.Delve, party));
+            if (preview == null) return;
+            int days = preview.Days;
+            Run(() => Session.DepartExpedition("abandoned_camp", ExpeditionApproach.Delve, party, days));
+        }
+
+        // ===================== бій: хід гравця =====================
+
+        private void PlayOneBattleStep(BattleView view)
+        {
+            var current = BotSupport.FindCurrent(view);
+            if (current == null) { Run(() => Session.CombatEndTurn()); return; }
+
+            if (!string.Equals(current.Side, "Player", StringComparison.Ordinal))
+            {
+                Run(() => Session.CombatEndTurn());
+                return;
+            }
+
+            var target = BotSupport.FindNearestOpposite(view, current);
+            if (target == null) { Run(() => Session.CombatEndTurn()); return; }
+
+            if (BotSupport.Chebyshev(current.Pos, target.Pos) <= 1)
+            {
+                string targetId = target.Id;
+                Run(() => Session.CombatAttack(targetId));
+                return;
+            }
+
+            var step = BotSupport.StepToward(view, current, target.Pos);
+            if (step.HasValue)
+            {
+                var dest = new GridPos(step.Value.X, step.Value.Y);
+                Run(() => Session.CombatMove(dest));
+            }
+            else
+            {
+                Run(() => Session.CombatEndTurn());
+            }
+        }
+
+        private void AcknowledgeBattleIfPending()
+        {
+            var presenter = _shell.BattlePresenter;
+            if (presenter != null && presenter.ResultPending)
+                presenter.AcknowledgeResult();
         }
     }
 }

@@ -19,7 +19,7 @@ namespace Game.Gameplay.UI
         public void Draw(GameShell shell)
         {
             var g = shell.ProtagonistGender;
-            var area = Widgets.CenteredRect(680f, 560f);
+            var area = Widgets.CenteredRect(680f, 620f);
             GUILayout.BeginArea(area);
             Widgets.Panel(UkrainianText.Get("ui.title.header", g), () =>
             {
@@ -36,11 +36,23 @@ namespace Game.Gameplay.UI
                     shell.ProtagonistGender = Gender.Male;
                 }
 
-                _hitRulePercent = GUILayout.Toggle(_hitRulePercent,
-                    _hitRulePercent
-                        ? UkrainianText.Get("ui.title.hitrule.percent", g)
-                        : UkrainianText.Get("ui.title.hitrule.threshold", g));
-                _skipCreation = GUILayout.Toggle(_skipCreation, UkrainianText.Get("ui.title.skip_creation", g));
+                // Фікс-ревью (Фаза F): GUILayout.Toggle малює НЕЗМІНЕНИМ
+                // вбудованим стилем Unity (AlphaSkin.Build() не заповнює
+                // GUISkin.toggle) — крихітний чекбокс і дрібний текст замість
+                // теплого темного скіну решти екрана, ледь читний на 1280×720.
+                // TabButton — той самий "клікабельний перемикач" (Widgets.cs),
+                // яким уже показані рід протагоніста/підхід вилазки/вкладки
+                // хаба: великий, темний, з акцентним кольором обраного стану.
+                Widgets.Section(UkrainianText.Get("ui.title.hitrule.section", g), () =>
+                {
+                    if (Widgets.TabButton(UkrainianText.Get("ui.title.hitrule.threshold", g), !_hitRulePercent))
+                        _hitRulePercent = false;
+                    if (Widgets.TabButton(UkrainianText.Get("ui.title.hitrule.percent", g), _hitRulePercent))
+                        _hitRulePercent = true;
+                });
+
+                if (Widgets.TabButton(UkrainianText.Get("ui.title.skip_creation", g), _skipCreation))
+                    _skipCreation = !_skipCreation;
 
                 GUILayout.Space(10f);
 
@@ -85,6 +97,13 @@ namespace Game.Gameplay.UI
                             shell.Session.PreloadSlot(slot, blob);
                             shell.Session.ContinueGame(slot, shell.Roller);
                         });
+                        // Фікс-ревью (Фаза F, "CORE GAPS"): рід протагоніста
+                        // живе в GameSession (_pendingGender/ApplySave), не в
+                        // GameShell — без цього рядка після Continue текст
+                        // лишався б граматично неправильним (шкурка досі
+                        // читає лише shell.ProtagonistGender), навіть коли
+                        // сам сейв уже відновив правильний рід.
+                        shell.ProtagonistGender = shell.Session.GetProtagonistCreationView()?.Gender ?? shell.ProtagonistGender;
                     }
                 }
                 else

@@ -39,6 +39,13 @@ namespace Game.Gameplay.EditorTools
         [MenuItem("Alpha/Собрать сцену «Игра»")]
         public static void Build()
         {
+            // Фаза F (FOLIAGE): крок ПЕРЕД усім іншим — дешева перевірка
+            // позначки палітри Kenney (Library/KenneyPaletteVersion.txt);
+            // реальний переімпорт лише якщо вона розійшлась із поточною.
+            // Без цього тепла Library (імпортована до появи/зміни палітри)
+            // тримала б бірюзові крони/траву в кожній наступній збірці мовчки.
+            KenneyImportSettings.ReimportIfPaletteChanged();
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             var sun = BuildSun();
@@ -62,8 +69,14 @@ namespace Game.Gameplay.EditorTools
             uiBattle.transform.SetParent(ui.transform, false);
 
             var boot = new GameObject("Boot");
-            boot.AddComponent<Game.Gameplay.GameShell>();
-            boot.AddComponent<Game.Gameplay.AutoplayBootstrap>();
+            var shell = boot.AddComponent<Game.Gameplay.GameShell>();
+            var autoplay = boot.AddComponent<Game.Gameplay.AutoplayBootstrap>();
+            // Фаза F: пряме посилання, виставлене тут (Editor-only виклик
+            // GetComponent — тому саме тут, а не в самому AutoplayBootstrap.cs,
+            // який лінтується заглушкою без GetComponent<T>) і збережене в
+            // сцені — рантайму не потрібен FindAnyObjectByType/рефлексія, щоб
+            // дим-тест знайшов GameShell на своєму ж об'єкті.
+            autoplay.Shell = shell;
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);

@@ -1209,6 +1209,51 @@ namespace Game.Tests.EditMode
                 "невдалий ContinueGame не повинен лишати сесію на півдорозі в новозбудованому світі — це досі Title");
         }
 
+        /// <summary>
+        /// Фаза F (UI-tour autoplay, докладено §"CORE GAPS" TEST_BUILD.md):
+        /// ComposeSave/ApplySave раніше НІКОЛИ не переносили
+        /// _pendingName/_pendingGender/_pendingBackgroundId — ContinueGame()
+        /// кличе NewGame(SkipCreation:true), яка навмисно НЕ скидає ці поля
+        /// (лишає дефолти щойно сконструйованого інстансу), тож після Load
+        /// GetProtagonistCreationView() і сам об'єкт протагоніста в ростері
+        /// мовчки відкочувались до Gender.Male/"warrior"/дефолтного імені.
+        /// </summary>
+        [Test]
+        public void ContinueGame_PreservesProtagonistGenderNameAndBackground()
+        {
+            var source = new GameSession();
+            source.NewGame(new NewGameOptions { SkipCreation = false, HitRule = HitRuleKind.Threshold });
+            Assert.AreEqual(SessionState.Creation, source.State);
+
+            source.SetProtagonistName("Оксана");
+            source.SetProtagonistGender(Game.Core.Characters.Creation.Gender.Female);
+            source.SetProtagonistBackground("healer");
+            source.ConfirmCreation();
+            Assert.AreEqual(SessionState.Scene, source.State);
+
+            SceneStepView step;
+            do { step = source.AdvanceScene(); } while (!step.IsFinished);
+            Assert.AreEqual(SessionState.Morning, source.State);
+
+            string blob = source.SaveState(0);
+
+            var s = new GameSession();
+            Assert.AreEqual(SessionState.Title, s.State);
+            s.PreloadSlot(0, blob);
+            bool ok = s.ContinueGame(0);
+            Assert.IsTrue(ok, "ContinueGame мав завантажити щойно підкладений слот");
+
+            var view = s.GetProtagonistCreationView();
+            Assert.AreEqual(Game.Core.Characters.Creation.Gender.Female, view.Gender, "рід протагоніста мав пережити Save/Load");
+            Assert.AreEqual("healer", view.BackgroundId, "передісторія мала пережити Save/Load");
+
+            var roster = s.GetRosterView();
+            Game.Core.Session.Views.CompanionSummary protagonist = null;
+            foreach (var c in roster.Companions) if (c.Id == GameSession.ProtagonistId) protagonist = c;
+            Assert.IsNotNull(protagonist);
+            Assert.AreEqual("Оксана", protagonist.DisplayName, "ім'я протагоніста мало пережити Save/Load");
+        }
+
         [Test]
         public void CommitBuildPlan_WithoutConfirmation_ReturnsNotConfirmed_AndLogsNothing()
         {

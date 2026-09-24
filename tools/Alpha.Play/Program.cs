@@ -10,6 +10,7 @@ using Game.Core.Session.Bots;
 using Game.Core.Session.Views;
 using Game.Gameplay.Combat;
 using Game.Gameplay.Text;
+using Game.Gameplay.UI;
 
 namespace Alpha.Play
 {
@@ -214,38 +215,25 @@ namespace Alpha.Play
                     break;
             }
 
-            if (e.Key == "decision.resolved" || e.Key == "finale.resolved")
+            // Фаза F (CORE GAPS): той самий формат рядка, що й HUD-стрічка подій
+            // Unity (GameShell.DrawEventFeed -> ScreenText.EventLine) — одна
+            // формула на обидві збірки, консоль і вікно гри не можуть
+            // розійтися текстом того самого запису GameEvent. Ключа НЕМАЄ в
+            // таблиці — діагностичний дамп (той самий формат, що ловить
+            // UkrainianText.MissingMarker/--verify-text) замість мовчазного
+            // пропуску: реальна діра в таблиці має бути ВИДНА.
+            if (!UkrainianText.Has(e.Key, ProtagonistGender))
             {
-                string mark = e.Args.GetValueOrDefault("noCandidate", "0") == "1" ? "!!" : "  ";
-                string incidentId = e.Args.GetValueOrDefault("incidentId", e.Key);
-                Write("  " + mark + " " + UkrainianText.Format(e.Key, ProtagonistGender,
-                    "incidentId", TranslateArg("incidentId", incidentId), "band", TranslateArg("band", e.Args.GetValueOrDefault("band", null))));
+                var argsText = new StringBuilder();
+                foreach (var kv in e.Args)
+                    argsText.Append(' ').Append(kv.Key).Append('=').Append(kv.Value);
+                Write("    " + UkrainianText.MissingMarker(e.Key) + argsText);
                 return;
             }
 
-            // Решта ключів (assign.*, council.*, combat.*, dungeon.*, quest.*,
-            // тощо) — E3b: через UkrainianText.Format із аргументами самої
-            // події (§4.3 — Args-пари, чиї ІМЕНА тепер збігаються з
-            // плейсхолдерами шаблону, GameSession.LogEvent grep-звірено),
-            // кожен ЗНАЧУЩИЙ id (companionId/slotId/itemId/...) — ще й через
-            // TranslateArg, інакше в стрічці лишався б сирий id
-            // ("myroslava стає на settlement_farms." замість "Мирослава стає
-            // на Ферми поселення.") — те, що R7 забороняє показувати напряму.
-            // Ключа НЕМАЄ в таблиці — діагностичний дамп (той самий формат,
-            // що ловить UkrainianText.MissingMarker/--verify-text) замість
-            // мовчазного пропуску: реальна діра в таблиці має бути ВИДНА.
-            if (UkrainianText.Has(e.Key, ProtagonistGender))
-            {
-                var pairs = new List<string>(e.Args.Count * 2);
-                foreach (var kv in e.Args) { pairs.Add(kv.Key); pairs.Add(TranslateArg(kv.Key, kv.Value)); }
-                Write("    " + UkrainianText.Format(e.Key, ProtagonistGender, pairs.ToArray()));
-                return;
-            }
-
-            var argsText = new StringBuilder();
-            foreach (var kv in e.Args)
-                argsText.Append(' ').Append(kv.Key).Append('=').Append(kv.Value);
-            Write("    " + UkrainianText.MissingMarker(e.Key) + argsText);
+            string mark = (e.Key == "decision.resolved" || e.Key == "finale.resolved") &&
+                          e.Args.GetValueOrDefault("noCandidate", "0") == "1" ? "  !! " : "    ";
+            Write(mark + ScreenText.EventLine(e, ProtagonistGender, session.GetRosterView()));
         }
 
         /// <summary>

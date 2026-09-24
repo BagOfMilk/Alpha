@@ -50,11 +50,16 @@ namespace Game.Gameplay
             _roller = new SeededDiceRoller(1);
             Session = new GameSession(_roller);
 
-            if (AutoplayBootstrap.RequestedFromCommandLine())
-                AutoplayBootstrap.Driver = new AutoplayGameDriver();
-
             DiscoverPresenters();
         }
+
+        /// <summary>
+        /// Фаза F (UI-tour autoplay): гачок для <c>AutoplayGameDriver</c>, щоб
+        /// той міг перемкнути вкладку РЕАЛЬНОГО <see cref="HubScreen"/> (поле
+        /// приватне — екран сам вирішує, яку вкладку малювати) і зняти
+        /// скріншот кожної, не тримаючи власної копії стану екрана.
+        /// </summary>
+        public void SetHubTab(int tab) => _hub.SetTab(tab);
 
         /// <summary>
         /// Пости постановки (Presenters.cs — контракт E1b/E2, § "Cross-package

@@ -1,70 +1,81 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using Game.Gameplay.Text;
 using UnityEngine;
 
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Гачок бот-прогону: <see cref="AutoplayGameDriver"/> (пакет E1b)
-    /// реалізує цей інтерфейс поверх <c>GameSession</c>/<c>BotRunner</c>, а
-    /// <c>GameShell.Awake</c> підставляє його в
-    /// <see cref="AutoplayBootstrap.Driver"/>. Сам гачок навмисно НЕ знає, що
-    /// таке «доба» чи «бот-політика» — лише «зроби один крок і скажи, чи є
-    /// ще куди йти».
+    /// Фаза F (docs/TEST_BUILD.md, "PHASE F LOOP"): дрібні послуги, які
+    /// <see cref="AutoplayGameDriver"/> просить у хоста — знімок екрана з
+    /// осмисленим ім'ям і рядок у підсумковий лог. Driver — чиста ігрова
+    /// логіка (крокує <c>GameSession</c>/реальний <c>GameShell</c>), Bootstrap —
+    /// рушійна обв'язка (коли саме кликати наступний крок, куди писати файли,
+    /// яким кодом виходу завершити процес). Розділ той самий, що вже тримає
+    /// решту файлу *Screen.cs/Widgets.cs: малювання/дані нарізно.
     /// </summary>
-    public interface IAutoplayDriver
+    public interface IAutoplayHost
     {
-        /// <summary>Один крок автопрогону. false — прогону більше нема куди йти (кампанія скінчилась/провалилась).</summary>
-        bool RunAutoplayStep(int stepIndex);
-
-        /// <summary>Короткий людський підсумок щойно зробленого кроку — рядок у autoplay-summary.txt.</summary>
-        string DescribeLastStep();
+        /// <summary>Один рядок у Logs/autoplay-summary.txt.</summary>
+        void Log(string line);
 
         /// <summary>
-        /// Пакет E1b: true, коли прогін зупинився ЧЕРЕЗ провал (виняток або
-        /// кампанія застрягла), а не тому, що чесно дійшов до Summary/FreePlay.
-        /// <see cref="AutoplayBootstrap"/> читає це лише ПІСЛЯ
-        /// <see cref="RunAutoplayStep"/> повернув false — код виходу мусить
-        /// бути 0 лише коли прогін дійшов до кінця без винятків (R19/§5 E1b).
+        /// Знімок екрана під Screenshots/, ім'я файлу — "NN-slug.png"
+        /// (наростаючий лічильник + короткий опис екрана, напр. "hub-posts").
         /// </summary>
-        bool Failed { get; }
+        void Capture(string slug);
     }
 
     /// <summary>
-    /// Читає прапорець командного рядка «-autoplay», знімає скріншоти під
-    /// Screenshots/ каталогу білда, пише Logs/autoplay-summary.txt і завершує
-    /// процес кодом виходу — усе, що дим-тесту (R19) треба від процесу.
+    /// Точка входу дим-тесту (R19/Фаза F): читає прапорці командного рядка
+    /// "-autoplay"/"-autoplay-threshold", жене <see cref="AutoplayGameDriver"/>
+    /// крізь РЕАЛЬНИЙ <see cref="GameShell"/> цієї ж сцени (не ізольовану копію
+    /// сесії — попередня версія цього файлу саме так і губила візуальний тур:
+    /// GameShell.OnGUI малював незмінний Title, бо жоден екран так і не бачив,
+    /// що бот-прогін узагалі йде), пише Logs/autoplay-summary.txt і завершує
+    /// процес кодом виходу.
     ///
-    /// ЧОГО ТУТ НЕМА НАВМИСНО. Жодної згадки Game.Core.Session напряму —
-    /// компонент лише крутить <see cref="IAutoplayDriver"/> та обробляє
-    /// виняток/код виходу; сам прогін ГРИ (GameSession/BotRunner) — робота
-    /// <see cref="AutoplayGameDriver"/> (Gameplay/AutoplayGameDriver.cs).
+    /// Крокування — БЕЗ UnityEngine-корутин (StartCoroutine/WaitForSeconds):
+    /// <see cref="AutoplayGameDriver.Run"/> — звичайний C#-ітератор
+    /// (<c>IEnumerator&lt;int&gt;</c>, "yield return 0" = почекати один
+    /// намальований кадр), який ЦЕЙ файл прокручує по одному кроку за
+    /// <see cref="Update"/>. Так весь тур лишається лінтованим
+    /// (tools/Game.Gameplay.Lint) звичайним C#, а не рушійним API, якого
+    /// заглушка не знає.
+    ///
+    /// Коди виходу (§1 "PHASE F LOOP" завдання): 0 — тур дійшов до кінця без
+    /// винятків і без пропущених ключів тексту; 2 — будь-який виняток; 3 —
+    /// тур дійшов до кінця, але <see cref="UkrainianText"/> хоч раз повернула
+    /// видиму заглушку "[ключ]" (лічильник — <see cref="UkrainianText.MissingKeyCounts"/>).
     /// </summary>
-    public sealed class AutoplayBootstrap : MonoBehaviour
+    public sealed class AutoplayBootstrap : MonoBehaviour, IAutoplayHost
     {
         public const string CommandLineFlag = "-autoplay";
+        public const string ThresholdFlag = "-autoplay-threshold";
 
-        [Tooltip("Пауза між кроками — дає рендеру встигнути замалювати кадр перед скріншотом.")]
-        [Min(0f)] public float secondsPerStep = 0.5f;
+        /// <summary>
+        /// Виставляється <c>GameSceneBuilder.Build()</c> одразу після
+        /// <c>AddComponent</c> — той самий GameObject "Boot", що й
+        /// <see cref="GameShell"/> (Editor-only <c>GetComponent</c> там, не
+        /// тут: цей файл лінтується заглушкою, у якій його немає).
+        /// </summary>
+        public GameShell Shell;
 
-        [Tooltip("Запобіжник: без підключеного гачка чи зі зламаною кампанією прогон не крутиться вічно.")]
-        [Min(1)] public int maxSteps = 40;
-
-        /// <summary>Підставляється майбутнім GameShell, коли фасад GameSession приїде з трунку.</summary>
-        public static IAutoplayDriver Driver;
-
-        private bool _active;
-        private int _step;
-        private float _timer;
+        private IEnumerator<int> _tour;
+        private bool _hadException;
+        private int _shotIndex = 1;
         private readonly List<string> _summary = new List<string>();
 
         /// <summary>Чи просив командний рядок автопрогон — перевіряється один раз при старті.</summary>
-        public static bool RequestedFromCommandLine()
+        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag);
+
+        private static bool HasArg(string flag)
         {
             var args = Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length; i++)
-                if (args[i] == CommandLineFlag) return true;
+                if (args[i] == flag) return true;
             return false;
         }
 
@@ -72,72 +83,70 @@ namespace Game.Gameplay
         {
             if (!RequestedFromCommandLine()) return;
 
-            _active = true;
-            _summary.Add("Автопрогон запущено: " + DateTime.UtcNow.ToString("u"));
+            if (Shell == null)
+            {
+                Log("АВТОПРОГОН: GameShell не підключено (GameSceneBuilder мав виставити AutoplayBootstrap.Shell) — прогін неможливий.");
+                Finish(2);
+                return;
+            }
+
+            UkrainianText.ResetMissingKeyTracking();
+            bool threshold = HasArg(ThresholdFlag);
+            Log("Автопрогон почато: " + DateTime.UtcNow.ToString("u", CultureInfo.InvariantCulture) +
+                " (правило влучання: " + (threshold ? "поріг" : "відсоток") + ")");
+
+            var driver = new AutoplayGameDriver(this, Shell, threshold);
+            _tour = driver.Run();
         }
 
         private void Update()
         {
-            if (!_active) return;
+            if (_tour == null) return;
 
-            _timer += Time.deltaTime;
-            if (_timer < secondsPerStep) return;
-
-            _timer = 0f;
-            Step();
-        }
-
-        private void Step()
-        {
-            bool hasMore;
-            string what;
-
+            bool more;
             try
             {
-                hasMore = Driver != null && Driver.RunAutoplayStep(_step);
-                what = Driver != null ? Driver.DescribeLastStep() : "гачок не підключено — крок пропущено";
+                more = _tour.MoveNext();
             }
             catch (Exception ex)
             {
-                // Виняток у водії не має піти вгору й зупинити Update() без
-                // підсумку — код виходу все одно мусить бути ненульовим
-                // (R19: "exit code 0 лише якщо прогін дійшов до Summary/
-                // FreePlay без винятків").
-                what = "Виняток на кроці " + _step + ": " + ex.GetType().Name + " — " + ex.Message;
-                _summary.Add("Крок " + _step + ": " + what);
-                CaptureScreenshot(_step);
-                Finish(1);
+                _hadException = true;
+                Log("ВИНЯТОК: " + ex.GetType().Name + " — " + ex.Message);
+                Log(ex.StackTrace ?? "(без стектрейсу)");
+                _tour = null;
+                Capture("exception");
+                Finish(2);
                 return;
             }
 
-            _summary.Add("Крок " + _step + ": " + what);
-            CaptureScreenshot(_step);
-            _step++;
-
-            if (!hasMore)
+            if (!more)
             {
-                bool failed = Driver != null && Driver.Failed;
-                Finish(failed ? 1 : 0);
-                return;
-            }
-
-            if (_step >= maxSteps)
-            {
-                _summary.Add("Зупинено запобіжником maxSteps=" + maxSteps + " — гачок ще сигналив «є ще»");
-                Finish(1);
+                _tour = null;
+                int missing = UkrainianText.MissingKeyCounts.Count;
+                if (missing > 0)
+                {
+                    Log("Відсутні ключі тексту за прогін (" + missing + "):");
+                    foreach (var kv in UkrainianText.MissingKeyCounts)
+                        Log("  " + UkrainianText.MissingMarker(kv.Key) + " x" + kv.Value.ToString(CultureInfo.InvariantCulture));
+                }
+                Finish(_hadException ? 2 : (missing > 0 ? 3 : 0));
             }
         }
 
-        private void CaptureScreenshot(int step)
+        public void Log(string line) => _summary.Add(line ?? string.Empty);
+
+        public void Capture(string slug)
         {
             string dir = Path.Combine(BuildRoot(), "Screenshots");
             Directory.CreateDirectory(dir);
-            ScreenCapture.CaptureScreenshot(Path.Combine(dir, string.Format("autoplay-{0:00}.png", step)));
+            string file = string.Format(CultureInfo.InvariantCulture, "{0:00}-{1}.png", _shotIndex++, slug);
+            ScreenCapture.CaptureScreenshot(Path.Combine(dir, file));
+            Log("Скріншот " + file + " (стан: " + (Shell != null ? Shell.Session?.State.ToString() ?? "?" : "?") + ")");
         }
 
         private void Finish(int exitCode)
         {
-            _active = false;
+            Log("Автопрогон завершено, код виходу " + exitCode.ToString(CultureInfo.InvariantCulture) + ".");
             WriteSummary();
             Application.Quit(exitCode);
         }

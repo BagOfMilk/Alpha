@@ -403,6 +403,8 @@ namespace Game.Core.Session
             _scenePlayback = new ScenePlayback(scene);
             _sceneReturn = afterState;
             State = SessionState.Scene;
+            _lastFramedActorId = null;
+            _lastFramedSecondActorId = null;
         }
 
         public SceneStepView AdvanceScene()
@@ -423,6 +425,9 @@ namespace Game.Core.Session
                 TransitionKey = _scenePlayback.TransitionKey
             };
 
+            LogNamedAntagonistSeen(frame.ActorId, isSecondActorSlot: false);
+            LogNamedAntagonistSeen(frame.SecondActorId, isSecondActorSlot: true);
+
             if (_scenePlayback.IsFinished)
             {
                 if (view.TransitionKey == "to.node1.pass") _flags.Set("tugar_offer_seen");
@@ -431,6 +436,46 @@ namespace Game.Core.Session
                 LogEvent("scene.finished", Args("transition", view.TransitionKey));
             }
             return view;
+        }
+
+        /// <summary>
+        /// §6.1 рядок 39 (докладено Фазою F): коли кадр сцени/сигналу показує
+        /// іменного антагоніста, пишемо char.seen у DayLog — окремий
+        /// нарративний слід появи персонажа, який AllMechanicsCoverageTests
+        /// звіряє по всіх бот-прогонах. Список навмисно короткий: сьогодні
+        /// єдиний антагоніст із реальним кадром у сцені — Тугар Вовк
+        /// (R7/Поправка №5.10); командир орди (`horde_commander`) лишається
+        /// карткою-заглушкою без першоджерела (§5.7) і кадру в жодній сцені
+        /// цієї збірки, тож у список поки не входить.
+        /// </summary>
+        private static readonly HashSet<string> NamedAntagonistIds = new HashSet<string> { "tuhar" };
+
+        /// <summary>
+        /// <see cref="SceneFrame.ActorId"/>/<see cref="SceneFrame.SecondActorId"/>
+        /// ТРИМАЮТЬСЯ між кроками (ScenePlayback.Next(): лише Shot-крок їх
+        /// міняє, Line/Beat/Effect лишають як є) — тож "хто в кадрі" не
+        /// змінюється, поки камера не переріже на інший план. char.seen мав
+        /// би відзначати САМУ появу (новий план), а не кожен наступний
+        /// AdvanceScene()-крок, поки той самий план тримається (інакше одна
+        /// поява давала б 2 записи — Shot і репліка під тим самим планом).
+        /// </summary>
+        private string _lastFramedActorId;
+        private string _lastFramedSecondActorId;
+
+        private void LogNamedAntagonistSeen(string actorId, bool isSecondActorSlot)
+        {
+            if (string.IsNullOrEmpty(actorId))
+            {
+                if (isSecondActorSlot) _lastFramedSecondActorId = actorId; else _lastFramedActorId = actorId;
+                return;
+            }
+
+            string previous = isSecondActorSlot ? _lastFramedSecondActorId : _lastFramedActorId;
+            if (isSecondActorSlot) _lastFramedSecondActorId = actorId; else _lastFramedActorId = actorId;
+
+            if (actorId == previous) return; // той самий план — уже зараховано
+            if (!NamedAntagonistIds.Contains(actorId)) return;
+            LogEvent("char.seen", Args("char", actorId));
         }
 
         // =====================================================================
@@ -2350,6 +2395,20 @@ namespace Game.Core.Session
             // "<arcId>:<state>:<chapterIndex>,..." — '~' — "<flag>,...".
             head.Append(";arc=").Append(CaptureArcState());
 
+            // Фаза F (UI-tour autoplay): ім'я/рід/передісторія протагоніста
+            // (R12, _pendingName/_pendingGender/_pendingBackgroundId) раніше
+            // НІКОЛИ не потрапляли в сейв — ContinueGame() кличе NewGame(
+            // SkipCreation:true), яка свідомо НЕ чіпає ці поля (лишає їх такими,
+            // якими вони були на щойно сконструйованому інстансі), тож
+            // GetProtagonistCreationView() після Load мовчки повертав дефолти
+            // (Gender.Male/"warrior"/null-ім'я), а не те, що гравець обрав на
+            // екрані створення. Ім'я — Base64 (UTF-8): гравець вільний ввести
+            // будь-які символи в textField (включно з ';'/'='), а формат сейву —
+            // рядок полів через ';'.
+            head.Append(";pname=").Append(_pendingName == null ? "-" : System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(_pendingName)));
+            head.Append(";pgender=").Append((int)_pendingGender);
+            head.Append(";pbg=").Append(_pendingBackgroundId ?? "");
+
             // Довжина-префікс (як і "core=" нижче): Inventory.CaptureState() сам
             // з'єднує предмети через ';' (Inventory.cs), тож наївний
             // headPart.Split(';') у ApplySave інакше сплутав би роздільник
@@ -2421,11 +2480,28 @@ namespace Game.Core.Session
                     case "defect": _defectionWatch.RestoreState(value); break;
                     case "crisis": _crisis.RestoreState(value); break;
                     case "arc": RestoreArcState(value); break;
+                    case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;
+                    case "pgender": _pendingGender = (Gender)ParseInt(value); _protagonistGender = _pendingGender; break;
+                    case "pbg": if (!string.IsNullOrEmpty(value)) _pendingBackgroundId = value; break;
                 }
             }
 
             _inventory.RestoreState(itemsPart);
             if (corePart != null) _processor.RestoreState(corePart);
+
+            // Доважок до "pname=" вище: RosterAdapter.CaptureState() навмисно
+            // НЕ пише DisplayName (коментар у RosterAdapter.cs — ім'я/статі/
+            // картки приходять із контенту, дублювати їх у сейві означає
+            // одного дня розійтися з ним), тож ім'я, яке гравець ввів на
+            // екрані створення, треба повернути на об'єкт протагоніста тут
+            // окремо — інакше після Load воно тихо відкочується до дефолтного
+            // "Провідник"/"Провідниця" з архетипу, хоча сам рядок уже
+            // відновлено в _pendingName. НЕ через ProtagonistCreation.Apply —
+            // той перезаписує атрибути/скіли пресетом і стер би прогрес
+            // білд-планувальника (R11), якого це поле не стосується.
+            var protagonist = _worldRoster?.Get(ProtagonistId);
+            if (protagonist != null && !string.IsNullOrEmpty(_pendingName))
+                protagonist.DisplayName = _pendingName;
 
             _currentPending = null;
             _currentQuestOffer = null;
