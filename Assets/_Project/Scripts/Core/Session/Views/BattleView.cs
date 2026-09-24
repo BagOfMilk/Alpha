@@ -65,7 +65,27 @@ namespace Game.Core.Session.Views
         public string CurrentUnitId;
 
         public IReadOnlyList<string> InitiativeOrder;
-        public IReadOnlyList<string> Log;
+
+        /// <summary>
+        /// Журнал бою для гравця (R7): ключі таблиці з аргументами, НЕ готові
+        /// рядки. Слова підставляє Gameplay (<c>BattleLogText</c>). Раніше тут
+        /// ішов внутрішній трейс <c>CombatState.Log</c> — російський текст із
+        /// сирими іменами enum, і фолбек-екран бою показував його гравцю як є.
+        /// </summary>
+        public IReadOnlyList<BattleLogLineView> Log;
+
         public bool IsHitRulePercent;
+    }
+
+    /// <summary>
+    /// Один рядок журналу бою: ключ <c>combat.log.*</c> + аргументи — id юнітів
+    /// (<c>unitId</c> — підмет рядка, <c>targetId</c> — другий учасник), числа
+    /// і токени (<c>status</c>, <c>damageType</c>, <c>abilityId</c>).
+    /// </summary>
+    public sealed class BattleLogLineView
+    {
+        public int Round;
+        public string Key;
+        public IReadOnlyDictionary<string, string> Args;
     }
 }

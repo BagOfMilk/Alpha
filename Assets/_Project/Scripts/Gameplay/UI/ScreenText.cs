@@ -505,7 +505,7 @@ namespace Game.Gameplay.UI
         /// шва — тут не викликаний напряму, щоб ScreenText лишався чистим C#
         /// без залежності на лінт-виключений Gameplay-файл).
         /// </summary>
-        private static Gender SubjectGender(string companionId, Gender viewerGender)
+        public static Gender SubjectGender(string companionId, Gender viewerGender)
         {
             if (string.IsNullOrEmpty(companionId)) return viewerGender;
             if (companionId == GameSession.ProtagonistId) return viewerGender;

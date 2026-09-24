@@ -393,7 +393,7 @@ public sealed class BattleView {
     public IReadOnlyList<BattleUnitView> Units;
     public IReadOnlyList<GridPosView> ReachableTiles; // для активного юніта
     public IReadOnlyList<string> InitiativeOrder; // Ids за порядком ходу
-    public IReadOnlyList<string> Log; // готовые строки-ключи с args, см. §4.3
+    public IReadOnlyList<BattleLogLineView> Log; // журнал боя: {Round, Key "combat.log.*", Args} из CombatState.Journal; слова — Gameplay/UI/BattleLogText (внутренний трейс CombatState.Log — internal, игроку не идёт)
     public bool IsHitRulePercent; // какое правило попадания в этом бою
 }
 public sealed class BattleGridView {

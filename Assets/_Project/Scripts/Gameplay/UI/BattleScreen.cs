@@ -39,10 +39,13 @@ namespace Game.Gameplay.UI
                 GUILayout.Label(UkrainianText.Format("ui.battle.round", g, "round", view.Round.ToString()) +
                                  " · " + OutcomeLabel(view.Outcome, g), AlphaSkin.SubHeader);
 
+                // Ім'я — за тим самим правилом, що й у журналі бою (BattleLogText.UnitName):
+                // id юніта бою ("u_maksym") — не id компаньйона, і ResolveCompanionName
+                // показував його сирим. Плейсхолдер таблиці — {name}, не {companion}.
                 var current = FindUnit(view, view.CurrentUnitId);
                 if (current != null)
                     GUILayout.Label(UkrainianText.Format("ui.battle.current_unit", g,
-                        "companion", ScreenText.ResolveCompanionName(current.Id, g, shell.Session.GetRosterView())), AlphaSkin.Body);
+                        "name", BattleLogText.UnitName(view, current.Id, g)), AlphaSkin.Body);
 
                 DrawGrid(shell, view, current, g);
                 GUILayout.Space(8f);
@@ -179,11 +182,10 @@ namespace Game.Gameplay.UI
         private static void DrawUnitList(GameShell shell, BattleView view, Game.Core.Characters.Creation.Gender g)
         {
             if (view.Units == null) return;
-            var roster = shell.Session.GetRosterView();
             foreach (var u in view.Units)
             {
-                string name = ScreenText.ResolveCompanionName(u.Id, g, roster);
-                string hp = "HP " + u.Hp + "/" + u.HpMax;
+                string name = BattleLogText.UnitName(view, u.Id, g);
+                string hp = UkrainianText.Format("ui.battle.hp", g, "current", u.Hp.ToString(), "max", u.HpMax.ToString());
                 string ap = UkrainianText.Format("ui.battle.ap", g, "current", u.Ap.ToString(), "max", u.ApMax.ToString());
                 string tail = hp + " · " + ap + (u.IsOverwatching ? " · " + UkrainianText.Get("ui.battle.overwatch.indicator", g) : "");
                 Widgets.LabeledRow(name, tail);
@@ -191,19 +193,15 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>
-        /// BattleView.Log — "готові рядки-ключі з args" (§4.2.1 TEST_BUILD.md):
-        /// якщо рядок сам є ключем таблиці — локалізуємо, інакше показуємо як
-        /// є (GameSession уже склав рядок сам — рідкісний, але задокументований
-        /// випадок, коли фолбек чеснiше показати сире значення, ніж мовчати).
+        /// BattleView.Log — ключі <c>combat.log.*</c> з аргументами (§4.2.1
+        /// TEST_BUILD.md), слова — <see cref="BattleLogText"/>. Раніше тут був
+        /// фолбек «не ключ — показати як є», і гравець бачив сирий російський
+        /// трейс ядра: жоден його рядок ключем таблиці не був.
         /// </summary>
         private static void DrawLog(BattleView view, Game.Core.Characters.Creation.Gender g)
         {
-            if (view.Log == null) return;
-            for (int i = view.Log.Count - 1; i >= 0 && i >= view.Log.Count - 8; i--)
-            {
-                string line = view.Log[i];
-                GUILayout.Label(UkrainianText.Has(line, g) ? UkrainianText.Get(line, g) : line, AlphaSkin.Tooltip);
-            }
+            foreach (var line in BattleLogText.RecentLines(view, 8, g))
+                GUILayout.Label(line, AlphaSkin.Tooltip);
         }
 
         private static BattleUnitView FindUnit(BattleView view, string id)

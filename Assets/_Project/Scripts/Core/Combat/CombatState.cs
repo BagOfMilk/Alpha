@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Game.Core.Balance;
 using Game.Core.Randomness;
 
@@ -46,6 +47,7 @@ namespace Game.Core.Combat
         private readonly List<CombatUnit> _units = new List<CombatUnit>();
         private readonly Dictionary<string, CombatUnit> _byId = new Dictionary<string, CombatUnit>();
         private readonly List<string> _log = new List<string>();
+        private readonly List<CombatLogEntry> _journal = new List<CombatLogEntry>();
         private readonly List<Trap> _traps = new List<Trap>();
         private readonly List<AttackRecord> _attacks = new List<AttackRecord>();
         private TurnSystem _turns;
@@ -54,11 +56,21 @@ namespace Game.Core.Combat
         public IReadOnlyList<CombatUnit> Units => _units;
 
         /// <summary>
-        /// Внутренний диагностический трейс (свободный текст) — НЕ то, что видит
-        /// игрок: BattleView.Log (D1) строится из <see cref="Attacks"/> и других
-        /// структурированных событий через текстовые ключи (R7), не отсюда.
+        /// Внутренний диагностический трейс (свободный текст по-русски, с
+        /// сырыми именами enum) — НЕ то, что видит игрок. <c>internal</c>
+        /// намеренно, как числа дневного отчёта (инвариант 3): Game.Gameplay
+        /// физически не может его прочитать, и показать его игроку нельзя даже
+        /// по ошибке. Игроку идёт <see cref="Journal"/> — те же события
+        /// ключами (R7), строка к строке.
         /// </summary>
-        public IReadOnlyList<string> Log => _log;
+        internal IReadOnlyList<string> Log => _log;
+
+        /// <summary>
+        /// Журнал боя для игрока: ключ + аргументы на каждую строку трейса
+        /// <see cref="Log"/>, в том же порядке (оба пишет только <see cref="Record"/>).
+        /// Источник BattleView.Log; слова к ключам подставляет Gameplay.
+        /// </summary>
+        public IReadOnlyList<CombatLogEntry> Journal => _journal;
 
         /// <summary>Структурированная история атак — телеметрия честности броска:
         /// показанное игроку число против фактического исхода. Не сериализуется.</summary>
@@ -102,7 +114,7 @@ namespace Game.Core.Combat
         public void Begin()
         {
             _turns = new TurnSystem(_units);
-            AddLog("=== БОЙ НАЧАЛСЯ (раунд 1) ===");
+            Record(CombatLogKeys.Started, "=== БОЙ НАЧАЛСЯ (раунд 1) ===");
             if (!BeginTurn(_turns.Current))
                 AdvanceUntilActorReady();
         }
@@ -116,7 +128,7 @@ namespace Game.Core.Combat
         {
             if (Outcome != CombatOutcome.Ongoing) return CombatActionResult.InvalidAction;
             Outcome = CombatOutcome.Retreat;
-            AddLog("=== ОТСТУПЛЕНИЕ: отряд разрывает бой ===");
+            Record(CombatLogKeys.Retreat, "=== ОТСТУПЛЕНИЕ: отряд разрывает бой ===");
             return CombatActionResult.Success;
         }
 
@@ -133,7 +145,8 @@ namespace Game.Core.Combat
         {
             if (Outcome != CombatOutcome.Ongoing) return CombatActionResult.InvalidAction;
             Outcome = CombatOutcome.Draw;
-            AddLog($"=== НИЧЬЯ: {reason} ===");
+            // Причина — служебный текст вызывающего (CombatAi), игроку не идёт.
+            Record(CombatLogKeys.DrawForced, $"=== НИЧЬЯ: {reason} ===");
             return CombatActionResult.Success;
         }
 
@@ -148,7 +161,8 @@ namespace Game.Core.Combat
             if (!reachable.TryGetValue(dest, out int cost)) return CombatActionResult.NotReachable;
 
             unit.Ap -= cost;
-            AddLog($"{unit.Profile.DisplayName} перемещается в {dest} (−{cost} AP)");
+            Record(CombatLogKeys.Move, $"{unit.Profile.DisplayName} перемещается в {dest} (−{cost} AP)",
+                "unitId", unit.Id, "ap", I(cost), "x", I(dest.X), "y", I(dest.Y));
 
             // Путь проходится по клеткам, а не прыжком: дозор противника обязан
             // видеть сам путь. Реакция может уронить идущего — тогда он
@@ -191,8 +205,10 @@ namespace Game.Core.Combat
 
             unit.Ap -= reserve;
             unit.Overwatch = new OverwatchStance(unit.Pos, aim, reserve);
-            AddLog($"{unit.Profile.DisplayName} берёт сектор под прицел в сторону {aim} " +
-                   $"(резерв −{reserve} AP, до своего следующего хода)");
+            Record(CombatLogKeys.OverwatchSet,
+                $"{unit.Profile.DisplayName} берёт сектор под прицел в сторону {aim} " +
+                $"(резерв −{reserve} AP, до своего следующего хода)",
+                "unitId", unit.Id, "ap", I(reserve), "x", I(aim.X), "y", I(aim.Y));
             EndTurn();
             return CombatActionResult.Success;
         }
@@ -225,7 +241,8 @@ namespace Game.Core.Combat
             if (useStrike)
             {
                 unit.StrikeMeter = 0;
-                AddLog($"{unit.Profile.DisplayName} тратит Strike — гарантированный удар!");
+                Record(CombatLogKeys.Strike, $"{unit.Profile.DisplayName} тратит Strike — гарантированный удар!",
+                    "unitId", unit.Id);
                 ExecuteAttackRoll(unit, target, w, accuracyBonus: 0, forceHit: true, allowStrikeGain: false);
             }
             else
@@ -242,28 +259,32 @@ namespace Game.Core.Combat
             int shown = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
             var outcome = forceHit ? AttackOutcome.Hit : _hitRule.Resolve(unit, target, shown, _roller);
             var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance);
+            string attackKey = CombatLogKeys.Attack(outcome);
 
             switch (outcome)
             {
                 case AttackOutcome.Miss:
-                    AddLog($"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: промах ({shown})");
+                    Record(attackKey, $"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: промах ({shown})",
+                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(0));
                     break;
 
                 case AttackOutcome.Graze:
-                    AddLog($"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: граза, {dmg.Amount} урона ({shown})");
+                    Record(attackKey, $"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: граза, {dmg.Amount} урона ({shown})",
+                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(dmg.Amount));
                     ApplyDamage(target, dmg.Amount);
                     break;
 
                 case AttackOutcome.Hit:
                 case AttackOutcome.Crit:
                     if (allowStrikeGain) unit.StrikeMeter += Balance.Combat.StrikePerHit;
-                    AddLog($"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: " +
-                           $"{(outcome == AttackOutcome.Crit ? "КРИТ, " : "")}{dmg.Amount} урона ({shown})");
+                    Record(attackKey, $"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: " +
+                           $"{(outcome == AttackOutcome.Crit ? "КРИТ, " : "")}{dmg.Amount} урона ({shown})",
+                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(dmg.Amount));
 
                     if (w.ShredOnHit > 0)
                     {
                         target.ArmorShred += w.ShredOnHit;
-                        AddLog($"  Шред: броня {target.Profile.DisplayName} −{w.ShredOnHit} (тек. {target.EffectiveArmor})");
+                        RecordShred(target, w.ShredOnHit);
                     }
                     if (w.StatusOnHit != StatusType.None && target.LifeState == UnitLifeState.Active)
                         ApplyStatus(target, w.StatusOnHit);
@@ -291,7 +312,9 @@ namespace Game.Core.Combat
             unit.Ap -= Balance.Combat.StabilizeApCost;
             target.LifeState = UnitLifeState.Stabilized;
             Map.ClearOccupant(target.Pos);
-            AddLog($"{unit.Profile.DisplayName} стабилизирует {target.Profile.DisplayName} — спасён, выбыл из боя");
+            Record(CombatLogKeys.Stabilize,
+                $"{unit.Profile.DisplayName} стабилизирует {target.Profile.DisplayName} — спасён, выбыл из боя",
+                "unitId", unit.Id, "targetId", target.Id);
             CheckOutcome();
             return CombatActionResult.Success;
         }
@@ -393,7 +416,8 @@ namespace Game.Core.Combat
 
             unit.Ap -= ability.ApCost;
             unit.SetCooldown(ability.Id, ability.CooldownTurns);
-            AddLog($"{unit.Profile.DisplayName} применяет «{ability.DisplayName}»");
+            Record(CombatLogKeys.Ability, $"{unit.Profile.DisplayName} применяет «{ability.DisplayName}»",
+                "unitId", unit.Id, "abilityId", ability.Id);
 
             foreach (var fx in ability.Effects)
             {
@@ -409,7 +433,8 @@ namespace Game.Core.Combat
                         if (target != null && target.IsActive)
                         {
                             int dmg = DamageResolver.FlatDamage(fx.Amount, fx.Damage, target);
-                            AddLog($"  {target.Profile.DisplayName}: −{dmg} HP ({fx.Damage})");
+                            Record(CombatLogKeys.Damage, $"  {target.Profile.DisplayName}: −{dmg} HP ({fx.Damage})",
+                                "unitId", target.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(fx.Damage));
                             ApplyDamage(target, dmg);
                         }
                         break;
@@ -426,7 +451,8 @@ namespace Game.Core.Combat
                             if (s != null)
                             {
                                 target.Statuses.Remove(s);
-                                AddLog($"  {target.Profile.DisplayName}: снято состояние {fx.Status}");
+                                Record(CombatLogKeys.StatusRemoved, $"  {target.Profile.DisplayName}: снято состояние {fx.Status}",
+                                    "unitId", target.Id, "status", CombatLogKeys.StatusId(fx.Status));
                             }
                         }
                         break;
@@ -435,7 +461,7 @@ namespace Game.Core.Combat
                         if (target != null && target.IsActive && fx.Amount > 0)
                         {
                             target.ArmorShred += fx.Amount;
-                            AddLog($"  Шред: броня {target.Profile.DisplayName} −{fx.Amount} (тек. {target.EffectiveArmor})");
+                            RecordShred(target, fx.Amount);
                         }
                         break;
 
@@ -446,7 +472,8 @@ namespace Game.Core.Combat
                             if (healed > 0)
                             {
                                 target.Hp += healed;
-                                AddLog($"  {target.Profile.DisplayName}: +{healed} HP ({target.Hp}/{target.Profile.MaxHp})");
+                                Record(CombatLogKeys.Heal, $"  {target.Profile.DisplayName}: +{healed} HP ({target.Hp}/{target.Profile.MaxHp})",
+                                    "unitId", target.Id, "amount", I(healed), "hp", I(target.Hp), "hpMax", I(target.Profile.MaxHp));
                             }
                         }
                         break;
@@ -455,14 +482,16 @@ namespace Game.Core.Combat
                         if (target != null && target.IsActive && fx.Amount > 0)
                         {
                             target.Ap += fx.Amount;
-                            AddLog($"  {target.Profile.DisplayName}: +{fx.Amount} AP");
+                            Record(CombatLogKeys.ApGranted, $"  {target.Profile.DisplayName}: +{fx.Amount} AP",
+                                "unitId", target.Id, "amount", I(fx.Amount));
                         }
                         break;
 
                     case AbilityEffectKind.LungeToTarget:
                         if (lungeDest.HasValue)
                         {
-                            AddLog($"  {unit.Profile.DisplayName} совершает рывок к {target.Profile.DisplayName}");
+                            Record(CombatLogKeys.Lunge, $"  {unit.Profile.DisplayName} совершает рывок к {target.Profile.DisplayName}",
+                                "unitId", unit.Id, "targetId", target.Id);
                             PlaceUnitAt(unit, lungeDest.Value);
                         }
                         break;
@@ -470,7 +499,8 @@ namespace Game.Core.Combat
                     case AbilityEffectKind.RepositionTarget:
                         if (target != null && target.IsActive && targetTile.HasValue && Map.IsFree(targetTile.Value))
                         {
-                            AddLog($"  {target.Profile.DisplayName} перемещается в {targetTile.Value}");
+                            Record(CombatLogKeys.Repositioned, $"  {target.Profile.DisplayName} перемещается в {targetTile.Value}",
+                                "unitId", target.Id, "targetId", unit.Id, "x", I(targetTile.Value.X), "y", I(targetTile.Value.Y));
                             PlaceUnitAt(target, targetTile.Value);
                         }
                         break;
@@ -481,9 +511,12 @@ namespace Game.Core.Combat
                             _traps.Add(new Trap
                             {
                                 Pos = targetTile.Value, OwnerSide = unit.Side, Name = ability.DisplayName,
+                                AbilityId = ability.Id,
                                 Damage = fx.Amount, DamageType = fx.Damage, StatusOnTrigger = fx.Status
                             });
-                            AddLog($"  Ловушка установлена в {targetTile.Value}");
+                            Record(CombatLogKeys.TrapPlaced, $"  Ловушка установлена в {targetTile.Value}",
+                                "unitId", unit.Id, "abilityId", ability.Id,
+                                "x", I(targetTile.Value.X), "y", I(targetTile.Value.Y));
                         }
                         break;
 
@@ -492,9 +525,11 @@ namespace Game.Core.Combat
                             && target.Profile.Family == EnemyFamily.Robot)
                         {
                             target.Side = unit.Side;
-                            BreakOverwatch(target, "перехвачен");
-                            AddLog($"  {target.Profile.DisplayName} перехвачен — теперь дерётся за " +
-                                   (unit.Side == Side.Player ? "отряд!" : "врага!"));
+                            BreakOverwatch(target, CombatLogKeys.OverwatchLostHacked, "перехвачен");
+                            Record(unit.Side == Side.Player ? CombatLogKeys.HackedToPlayer : CombatLogKeys.HackedToEnemy,
+                                $"  {target.Profile.DisplayName} перехвачен — теперь дерётся за " +
+                                (unit.Side == Side.Player ? "отряд!" : "врага!"),
+                                "unitId", unit.Id, "targetId", target.Id);
                             CheckOutcome();
                         }
                         break;
@@ -538,7 +573,7 @@ namespace Game.Core.Combat
         /// </summary>
         private void PlaceUnitAt(CombatUnit unit, GridPos dest)
         {
-            BreakOverwatch(unit, "сбит с позиции");
+            BreakOverwatch(unit, CombatLogKeys.OverwatchLostDisplaced, "сбит с позиции");
             StepTo(unit, dest);
             ReactToMovement(unit);
             if (unit.IsActive && Outcome == CombatOutcome.Ongoing) TriggerTrapAt(unit);
@@ -569,7 +604,8 @@ namespace Game.Core.Combat
                 if (!OverwatchCovers(watcher, mover.Pos)) continue;
 
                 watcher.Overwatch = null; // одно срабатывание
-                AddLog($"{watcher.Profile.DisplayName} стреляет из дозора по {mover.Profile.DisplayName}!");
+                Record(CombatLogKeys.OverwatchFired, $"{watcher.Profile.DisplayName} стреляет из дозора по {mover.Profile.DisplayName}!",
+                    "unitId", watcher.Id, "targetId", mover.Id);
                 ExecuteAttackRoll(watcher, mover, watcher.Weapon,
                     accuracyBonus: -Balance.Combat.OverwatchAccuracyPenalty, forceHit: false, allowStrikeGain: false, isReaction: true);
             }
@@ -595,11 +631,12 @@ namespace Game.Core.Combat
         public int OverwatchHitChancePreview(CombatUnit watcher, CombatUnit target)
             => HitChanceCalculator.Compute(watcher, target, Map, Balance, -Balance.Combat.OverwatchAccuracyPenalty);
 
-        private void BreakOverwatch(CombatUnit unit, string why)
+        /// <summary>key — причина для журнала (CombatLogKeys.OverwatchLost*), why — она же для трейса.</summary>
+        private void BreakOverwatch(CombatUnit unit, string key, string why)
         {
             if (unit?.Overwatch == null) return;
             unit.Overwatch = null;
-            AddLog($"  {unit.Profile.DisplayName} теряет дозор ({why})");
+            Record(key, $"  {unit.Profile.DisplayName} теряет дозор ({why})", "unitId", unit.Id);
         }
 
         private void TriggerTrapAt(CombatUnit unit)
@@ -609,13 +646,15 @@ namespace Game.Core.Combat
                 var trap = _traps[i];
                 if (trap.Pos != unit.Pos || trap.OwnerSide == unit.Side) continue;
                 _traps.RemoveAt(i);
-                AddLog($"  {unit.Profile.DisplayName} попадает в ловушку «{trap.Name}»!");
+                Record(CombatLogKeys.TrapTriggered, $"  {unit.Profile.DisplayName} попадает в ловушку «{trap.Name}»!",
+                    "unitId", unit.Id, "abilityId", trap.AbilityId);
                 if (trap.StatusOnTrigger != StatusType.None && unit.IsActive)
                     ApplyStatus(unit, trap.StatusOnTrigger);
                 int dmg = DamageResolver.FlatDamage(trap.Damage, trap.DamageType, unit);
                 if (dmg > 0)
                 {
-                    AddLog($"  Ловушка: −{dmg} HP");
+                    Record(CombatLogKeys.TrapDamage, $"  Ловушка: −{dmg} HP",
+                        "unitId", unit.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(trap.DamageType));
                     ApplyDamage(unit, dmg);
                 }
                 return;
@@ -666,6 +705,10 @@ namespace Game.Core.Combat
         /// <summary>Наложение статуса: гарантированное; Resolve (StatusDurationReduction) сокращает длительность, мин 1. Повтор — освежает.</summary>
         public void ApplyStatus(CombatUnit target, StatusType type)
         {
+            // «Никакого состояния» наложить нельзя: все внутренние вызовы уже
+            // фильтруют None, а у журнала для него нет токена (CombatLogKeys.StatusId).
+            if (type == StatusType.None) return;
+
             int baseDuration;
             int dot = 0;
             var dotType = DamageType.True;
@@ -706,10 +749,11 @@ namespace Game.Core.Combat
                 existing.RemainingTurns = Math.Max(existing.RemainingTurns, duration);
             else
                 target.Statuses.Add(new StatusInstance(type, duration, dot, dotType));
-            AddLog($"  {target.Profile.DisplayName} получает состояние {type} ({duration} х.)");
+            Record(CombatLogKeys.StatusApplied, $"  {target.Profile.DisplayName} получает состояние {type} ({duration} х.)",
+                "unitId", target.Id, "status", CombatLogKeys.StatusId(type), "turns", I(duration));
 
-            if (type == StatusType.Stunned) BreakOverwatch(target, "оглушён");
-            else if (type == StatusType.KnockedDown) BreakOverwatch(target, "сбит с ног");
+            if (type == StatusType.Stunned) BreakOverwatch(target, CombatLogKeys.OverwatchLostStunned, "оглушён");
+            else if (type == StatusType.KnockedDown) BreakOverwatch(target, CombatLogKeys.OverwatchLostKnockedDown, "сбит с ног");
         }
 
         private void ApplyDamage(CombatUnit target, int amount)
@@ -719,12 +763,13 @@ namespace Game.Core.Combat
             if (target.Hp > 0) return;
 
             target.Hp = 0;
-            BreakOverwatch(target, "выбыл");
+            BreakOverwatch(target, CombatLogKeys.OverwatchLostOut, "выбыл");
             if (target.Profile.CanBeDowned)
             {
                 target.LifeState = UnitLifeState.Downed;
                 target.DownWindowRemaining = Balance.Combat.DownWindowTurns;
-                AddLog($"  {target.Profile.DisplayName} ПАДАЕТ! Окно на спасение: {target.DownWindowRemaining} х.");
+                Record(CombatLogKeys.Downed, $"  {target.Profile.DisplayName} ПАДАЕТ! Окно на спасение: {target.DownWindowRemaining} х.",
+                    "unitId", target.Id, "turns", I(target.DownWindowRemaining));
             }
             else
             {
@@ -737,7 +782,7 @@ namespace Game.Core.Combat
         {
             unit.LifeState = UnitLifeState.Dead;
             Map.ClearOccupant(unit.Pos);
-            AddLog($"  {unit.Profile.DisplayName} погибает.");
+            Record(CombatLogKeys.Died, $"  {unit.Profile.DisplayName} погибает.", "unitId", unit.Id);
         }
 
         /// <summary>Начало хода юнита. true — юнит готов действовать (AP выданы).</summary>
@@ -748,7 +793,8 @@ namespace Game.Core.Combat
             if (unit.Overwatch != null)
             {
                 unit.Overwatch = null;
-                AddLog($"{unit.Profile.DisplayName} снимает дозор — никто не вошёл в сектор");
+                Record(CombatLogKeys.OverwatchExpired, $"{unit.Profile.DisplayName} снимает дозор — никто не вошёл в сектор",
+                    "unitId", unit.Id);
             }
 
             switch (unit.LifeState)
@@ -761,12 +807,14 @@ namespace Game.Core.Combat
                     unit.DownWindowRemaining--;
                     if (unit.DownWindowRemaining <= 0)
                     {
-                        AddLog($"{unit.Profile.DisplayName}: окно спасения вышло…");
+                        Record(CombatLogKeys.WindowExpired, $"{unit.Profile.DisplayName}: окно спасения вышло…",
+                            "unitId", unit.Id);
                         if (unit.Profile.ProtectedFromDeath)
                         {
                             unit.LifeState = UnitLifeState.Stabilized;
                             Map.ClearOccupant(unit.Pos);
-                            AddLog($"  {unit.Profile.DisplayName} теряет сознание, но выживает.");
+                            Record(CombatLogKeys.Survived, $"  {unit.Profile.DisplayName} теряет сознание, но выживает.",
+                                "unitId", unit.Id);
                         }
                         else
                         {
@@ -776,7 +824,8 @@ namespace Game.Core.Combat
                     }
                     else
                     {
-                        AddLog($"{unit.Profile.DisplayName} истекает кровью (окно: {unit.DownWindowRemaining} х.)");
+                        Record(CombatLogKeys.BleedingOut, $"{unit.Profile.DisplayName} истекает кровью (окно: {unit.DownWindowRemaining} х.)",
+                            "unitId", unit.Id, "turns", I(unit.DownWindowRemaining));
                     }
                     return false;
             }
@@ -789,7 +838,8 @@ namespace Game.Core.Combat
             {
                 unit.Statuses.Remove(knocked);
                 unit.Ap = Math.Max(0, unit.Ap - Balance.Combat.StandUpApCost);
-                AddLog($"{unit.Profile.DisplayName} поднимается на ноги (−{Balance.Combat.StandUpApCost} AP)");
+                Record(CombatLogKeys.StandUp, $"{unit.Profile.DisplayName} поднимается на ноги (−{Balance.Combat.StandUpApCost} AP)",
+                    "unitId", unit.Id, "ap", I(Balance.Combat.StandUpApCost));
             }
 
             var stunned = unit.GetStatus(StatusType.Stunned);
@@ -797,7 +847,7 @@ namespace Game.Core.Combat
             {
                 unit.Statuses.Remove(stunned);
                 unit.Ap = 0;
-                AddLog($"{unit.Profile.DisplayName} оглушён — пропускает ход");
+                Record(CombatLogKeys.StunnedSkip, $"{unit.Profile.DisplayName} оглушён — пропускает ход", "unitId", unit.Id);
             }
 
             for (int i = 0; i < unit.Statuses.Count && unit.IsActive; i++)
@@ -807,7 +857,8 @@ namespace Game.Core.Combat
                 int dmg = DamageResolver.DotTick(s.DotDamagePerTurn, s.DotType, unit);
                 if (dmg > 0)
                 {
-                    AddLog($"{unit.Profile.DisplayName} страдает от {s.Type}: −{dmg} HP");
+                    Record(CombatLogKeys.StatusDot, $"{unit.Profile.DisplayName} страдает от {s.Type}: −{dmg} HP",
+                        "unitId", unit.Id, "status", CombatLogKeys.StatusId(s.Type), "damage", I(dmg));
                     ApplyDamage(unit, dmg);
                 }
             }
@@ -823,7 +874,8 @@ namespace Game.Core.Combat
                 s.RemainingTurns--;
                 if (s.RemainingTurns <= 0)
                 {
-                    AddLog($"  {unit.Profile.DisplayName}: состояние {s.Type} спадает");
+                    Record(CombatLogKeys.StatusExpired, $"  {unit.Profile.DisplayName}: состояние {s.Type} спадает",
+                        "unitId", unit.Id, "status", CombatLogKeys.StatusId(s.Type));
                     unit.Statuses.RemoveAt(i);
                 }
             }
@@ -834,6 +886,7 @@ namespace Game.Core.Combat
             int safety = _units.Count * 2 + 2;
             while (safety-- > 0 && Outcome == CombatOutcome.Ongoing)
             {
+                int roundBefore = Round;
                 var next = _turns.Advance();
 
                 // Гарантия завершаемости (B1): раунд перевалил за предохранитель —
@@ -841,9 +894,14 @@ namespace Game.Core.Combat
                 if (Round > Balance.Combat.RoundCap)
                 {
                     Outcome = CombatOutcome.Draw;
-                    AddLog("=== НИЧЬЯ: превышен предел раундов ===");
+                    Record(CombatLogKeys.DrawRoundCap, "=== НИЧЬЯ: превышен предел раундов ===");
                     return;
                 }
+
+                // Граница раунда — событие для игрока: без неё журнал на
+                // два-три раунда читается сплошной лентой.
+                if (Round != roundBefore)
+                    Record(CombatLogKeys.RoundStarted, $"--- раунд {Round} ---", "round", I(Round));
 
                 if (BeginTurn(next)) return;
             }
@@ -864,15 +922,42 @@ namespace Game.Core.Combat
             if (!enemyStanding)
             {
                 Outcome = CombatOutcome.Victory;
-                AddLog("=== ПОБЕДА: враги выбыли ===");
+                Record(CombatLogKeys.Victory, "=== ПОБЕДА: враги выбыли ===");
             }
             else if (!playerStanding)
             {
                 Outcome = CombatOutcome.Defeat;
-                AddLog("=== ПОРАЖЕНИЕ: отряд не может продолжать бой ===");
+                Record(CombatLogKeys.Defeat, "=== ПОРАЖЕНИЕ: отряд не может продолжать бой ===");
             }
         }
 
-        private void AddLog(string line) => _log.Add(line);
+        private void RecordShred(CombatUnit target, int amount)
+            => Record(CombatLogKeys.Shred, $"  Шред: броня {target.Profile.DisplayName} −{amount} (тек. {target.EffectiveArmor})",
+                "unitId", target.Id, "amount", I(amount), "armor", I(target.EffectiveArmor));
+
+        /// <summary>
+        /// ЕДИНСТВЕННЫЙ способ что-то записать о бое: строка трейса (<see cref="Log"/>,
+        /// internal, для отладки) и запись журнала (<see cref="Journal"/>, ключ R7
+        /// для игрока) рождаются вместе. Отдельного AddLog нет намеренно — строка
+        /// без ключа снова утекла бы к игроку сырым текстом.
+        /// args — пары «имя, значение» подряд.
+        /// </summary>
+        private void Record(string key, string trace, params string[] args)
+        {
+            _log.Add(trace);
+            _journal.Add(new CombatLogEntry(Round, key, ToArgs(args)));
+        }
+
+        private static IReadOnlyDictionary<string, string> ToArgs(string[] pairs)
+        {
+            if (pairs == null || pairs.Length == 0) return null;
+            if (pairs.Length % 2 != 0)
+                throw new ArgumentException("Аргументы журнала боя — пары «имя, значение»", nameof(pairs));
+            var args = new Dictionary<string, string>(pairs.Length / 2, StringComparer.Ordinal);
+            for (int i = 0; i < pairs.Length; i += 2) args[pairs[i]] = pairs[i + 1];
+            return args;
+        }
+
+        private static string I(int value) => value.ToString(CultureInfo.InvariantCulture);
     }
 }
