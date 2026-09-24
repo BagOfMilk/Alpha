@@ -129,5 +129,11 @@ namespace Game.Core.Balance
 
         /// <summary>Как город отвечает игроку: люди, совет, тиры (Поправка №6).</summary>
         public CityBalance City = new CityBalance();
+
+        /// <summary>Квестовий рушій поза конвеєром дня (R6, пакет B6).</summary>
+        public QuestBalance Quest = new QuestBalance();
+
+        /// <summary>Готовність громади до фіналу (R8, пакет B6).</summary>
+        public ReadinessBalance Readiness = new ReadinessBalance();
     }
 }
