@@ -48,6 +48,16 @@ namespace Game.Core.Base
             Arrive(ctx, _works.TakeSettlers(ctx.Day), "council");
             Arrive(ctx, _works.TakeArrivals(), "expedition");
 
+            // ---- B5 ревью-фикс (major): Напруга Указа применяется ЗДЕСЬ, тем
+            //      же приёмом, каким Облава выше кладёт CouncilRaid прямо в
+            //      ctx.Tension, а не через DayProcessor.QueueExternal — та
+            //      очередь не входит в SettlementSave, и «Указ → SaveState →
+            //      загрузка» (оба легальны в Morning) тихо съедало бы уплаченный
+            //      сдвиг (см. CityWorks._pendingCouncilEdictTension) ----
+            int councilEdictTension = _works.TakeCouncilEdictTension();
+            if (councilEdictTension != 0)
+                ctx.Tension.Apply(TensionDriver.CouncilEdict, councilEdictTension, "council:decree");
+
             // ---- B5: Указ/Дипломатия/Підготовка/Спорядження применяются СРАЗУ
             //      (вне конвейера, см. CityWorks.OrderDecree и соседей), но
             //      объявляются здесь же, в первый дневной шаг после заказа —

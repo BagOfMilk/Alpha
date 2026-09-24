@@ -79,6 +79,20 @@ namespace Game.Core.Base
         private ExpeditionOutfitBuff _pendingOutfitBuff;
 
         /// <summary>
+        /// Ревью-фикс (major): Напруга от Указа копится ЗДЕСЬ, а не через
+        /// DayProcessor.QueueExternal. Очередь QueueExternal (_externalTension)
+        /// не входит в SettlementSave.Capture/Restore — а Order* и SaveState
+        /// оба легальны в фазе Morning (docs/TEST_BUILD.md §4.1), поэтому
+        /// «Указ → SaveState → загрузка» тихо съедало бы уплаченный сдвиг
+        /// Напруги, притом что золото, Уклад и фракции из того же вызова уже
+        /// применились и сохранились. CityWorks сам входит в слепок (см.
+        /// CaptureState/RestoreState), поэтому поле переживает сохранение —
+        /// применяет его CityWorksStep.Execute тем же приёмом, каким Облава
+        /// уже кладёт CouncilRaid прямо в ctx.Tension, а не через очередь.
+        /// </summary>
+        private int _pendingCouncilEdictTension;
+
+        /// <summary>
         /// Ревью-фикс: Указ/Дипломатия/Подготовка/Снаряжение применяются СРАЗУ
         /// (CouncilOrderResult.Applied), в отличие от Облавы/Переселенцев/Инвестиции,
         /// которых исполняет и объявляет CityWorksStep. Без этой очереди «применилось
@@ -289,18 +303,21 @@ namespace Game.Core.Base
 
             processor.OrderLevel = ClampOrderLevel(processor.OrderLevel + balance.Faction.DecreeOrderLevelStep);
 
-            // Ревью-фикс: раньше факции и Напруга двигались напрямую (ApplySocialConsequence
-            // + QueueExternal), в обход SocialConsequence — единственной точки, где список
-            // разрешённых драйверов реально проверяется (allow-list иначе был мёртвым кодом
-            // для этого места). Теперь Указ идёт через неё же.
+            // Ревью-фикс: факции двигаются через SocialConsequence — единственную
+            // точку, где список разрешённых драйверов реально проверяется
+            // (allow-list иначе был мёртвым кодом для этого места). Напругу
+            // SocialConsequence.Apply НЕ отдаём processor'у (см. комментарий на
+            // _pendingCouncilEdictTension) — копим её сами и применяем в
+            // CityWorksStep.Execute тем же днём, чтобы она переживала сейв.
             string costTarget = !string.IsNullOrEmpty(costFactionId) && costFactionId != favoredFactionId
                 ? costFactionId
                 : null;
-            new SocialConsequence()
+            var socialConsequence = new SocialConsequence()
                 .Faction(favoredFactionId, balance.Faction.DecreeFactionDelta)
                 .Faction(costTarget, -balance.Faction.DecreeFactionDelta)
-                .Tension(TensionDriver.CouncilEdict, -Math.Abs(balance.Faction.DecreeTensionDelta))
-                .Apply(factions, processor);
+                .Tension(TensionDriver.CouncilEdict, -Math.Abs(balance.Faction.DecreeTensionDelta));
+            socialConsequence.Apply(factions, null);
+            _pendingCouncilEdictTension += socialConsequence.Amount;
 
             _pendingCouncilAnnouncements.Add(new CityEvent("council.decree.ordered", SignalUrgency.Notable,
                 "favored:" + favoredFactionId, "cost:" + (costTarget ?? string.Empty)));
@@ -448,6 +465,18 @@ namespace Game.Core.Base
             return _investmentGoldPerDay;
         }
 
+        /// <summary>
+        /// Забирает и обнуляет накопленную Напругу Указа (ревью-фикс, см.
+        /// _pendingCouncilEdictTension). Вызывается CityWorksStep тем же
+        /// приёмом, каким она уже забирает TakeRaid/TakeSettlers/...
+        /// </summary>
+        internal int TakeCouncilEdictTension()
+        {
+            int v = _pendingCouncilEdictTension;
+            _pendingCouncilEdictTension = 0;
+            return v;
+        }
+
         /// <summary>Забирает и обнуляет накопленные маркеры готовности (для D1/B6).</summary>
         internal int TakeReadinessMilestones()
         {
@@ -551,6 +580,7 @@ namespace Game.Core.Base
         // B5 (AUDIT П8/G12/G20, аддитивно): |d:<lastDecreeDay>|y:<lastDiplomacyDay>
         // |t:<lastPrepareThreatDay>|i:<goldPerDay>:<daysLeft>|m:<milestonesQueued>
         // |o:<siteId>:<bonusValue> (пусто — бонуса нет)
+        // |e:<pendingCouncilEdictTension> (ревью-фикс: Напруга Указа переживает сейв)
         public string CaptureState()
         {
             var sb = new StringBuilder();
@@ -580,6 +610,7 @@ namespace Game.Core.Base
             sb.Append("|i:").Append(_investmentGoldPerDay.ToString(CultureInfo.InvariantCulture))
               .Append(':').Append(_investmentDaysLeft.ToString(CultureInfo.InvariantCulture));
             sb.Append("|m:").Append(_readinessMilestonesQueued.ToString(CultureInfo.InvariantCulture));
+            sb.Append("|e:").Append(_pendingCouncilEdictTension.ToString(CultureInfo.InvariantCulture));
             sb.Append("|o:");
             if (_pendingOutfitBuff != null)
                 sb.Append(_pendingOutfitBuff.SiteId ?? string.Empty).Append(':')
@@ -605,6 +636,7 @@ namespace Game.Core.Base
             _investmentDaysLeft = 0;
             _readinessMilestonesQueued = 0;
             _pendingOutfitBuff = null;
+            _pendingCouncilEdictTension = 0;
 
             if (string.IsNullOrEmpty(blob)) return;
 
@@ -650,6 +682,7 @@ namespace Game.Core.Base
                         if (ip.Length > 1) _investmentDaysLeft = ParseInt(ip[1]);
                         break;
                     case 'm': _readinessMilestonesQueued = ParseInt(body); break;
+                    case 'e': _pendingCouncilEdictTension = ParseInt(body); break;
                     case 'o':
                         if (body.Length == 0) break;
                         var op = body.Split(':');

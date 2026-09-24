@@ -192,6 +192,38 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(4, c.Processor.OrderLevel, "Десять указов подряд обязаны упереться в потолок, а не переполнить его");
         }
 
+        /// <summary>
+        /// Ревью-фикс (major): раньше Указ клал Напругу в DayProcessor.QueueExternal
+        /// (_externalTension) — эта очередь не входит в SettlementSave. Order* и
+        /// SaveState оба легальны в фазе Morning (docs/TEST_BUILD.md §4.1), значит
+        /// "Указ -> SaveState -> перезагрузка -> Advance" — легальная последовательность,
+        /// и раньше она тихо теряла уплаченный CouncilEdict, хотя золото/Уклад/фракции
+        /// из того же вызова уже сохранились. Теперь Напруга Указа копится в самом
+        /// CityWorks (входит в его CaptureState) и применяется CityWorksStep напрямую.
+        /// </summary>
+        [Test]
+        public void Decree_TensionSurvivesSaveAndLoad_BeforeNextAdvance()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg);
+            Give(c.State, 100);
+
+            var result = c.Works.OrderDecree(c.State, c.Processor, c.Factions,
+                DefaultFactions.TuharBoyars, DefaultFactions.Community, 1, cfg);
+            Assert.AreEqual(CouncilOrderResult.Applied, result);
+
+            string blob = c.Processor.SaveState();
+
+            var fresh = Build(cfg);
+            fresh.Processor.RestoreState(blob);
+
+            var report = fresh.Processor.Advance();
+            var edict = report.TensionChanges.Where(x => x.Driver == TensionDriver.CouncilEdict).ToList();
+            Assert.IsNotEmpty(edict,
+                "Напруга Указа обязана пережить Order -> SaveState -> перезагрузку, а не только немедленный Advance без сейва");
+            Assert.Less(edict[0].Applied, 0, "Указ остаётся понижающим драйвером и после перезагрузки");
+        }
+
         // ================= Дипломатия =================
 
         [Test]
@@ -412,6 +444,19 @@ namespace Game.Tests.EditMode
             int outfitSpentBare = goldBeforeOutfitBare - bare.State.Resources.Get(ResourceType.Gold);
 
             Assert.Less(outfitSpentStaffed, outfitSpentBare, "Скидка обязана работать и для Спорядження експедиції");
+
+            // ---- інвестиція (buildingId: null — минуємо перевірку «здание уже
+            //      построено», тут перевіряємо тільки знижку) ----
+            int goldBeforeInvestStaffed = staffed.State.Resources.Get(ResourceType.Gold);
+            int goldBeforeInvestBare = bare.State.Resources.Get(ResourceType.Gold);
+
+            staffed.Works.OrderInvestment(staffed.State, null, 1, cfg);
+            bare.Works.OrderInvestment(bare.State, null, 1, cfg);
+
+            int investSpentStaffed = goldBeforeInvestStaffed - staffed.State.Resources.Get(ResourceType.Gold);
+            int investSpentBare = goldBeforeInvestBare - bare.State.Resources.Get(ResourceType.Gold);
+
+            Assert.Less(investSpentStaffed, investSpentBare, "Скидка обязана работать и для Инвестиции");
         }
 
         // ================= регрессия: старые заказы совета не сломаны =================
