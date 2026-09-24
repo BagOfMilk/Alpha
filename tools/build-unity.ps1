@@ -1,8 +1,11 @@
-﻿# Собирает Unity-билд с визуальной сценой открытия.
+﻿# Собирает Unity-билд тестовой сборки «все механики сразу» (Поправка №7):
+# ОДНА сцена Game.unity (титул → создание → хаб → финал), пересобранная
+# кодом заново при каждом запуске — сцена не лежит в репозитории (ссылки на
+# скрипты по GUID из .meta создаются локально), поэтому её всегда собирают
+# перед билдом, а не полагаются на закомиченный файл (R19).
 #
 # Текстовый срез отдаётся через tools/publish-play.ps1 и ничего от Unity не
-# требует. Этот скрипт — про картинку: портретная сцена, которую можно
-# посмотреть глазами.
+# требует. Этот скрипт — про играбельный билд.
 #
 # Использование:  powershell -File tools/build-unity.ps1
 param(
@@ -36,9 +39,13 @@ function Invoke-Unity([string]$method, [string]$logName) {
 if (-not $SkipScene) {
     # Сцены в репозитории нет намеренно: она ссылается на скрипты по GUID из
     # .meta, а те создаются локально. Поэтому сначала собираем её.
-    Write-Host "Сборка сцены «Открытие»..." -ForegroundColor Cyan
-    $log = Invoke-Unity 'Game.Gameplay.EditorTools.OpeningSceneBuilder.Rebuild' 'scene.log'
-    if (-not (Test-Path (Join-Path $proj "Assets\Scenes\Opening.unity"))) {
+    #
+    # Импорт Kenney (KenneyImportSettings) здесь НЕ перезапускается — это
+    # отдельный, медленный шаг, нужный только когда сами исходники набора
+    # меняются, а не при каждой пересборке сцены/билда.
+    Write-Host "Сборка сцены «Игра»..." -ForegroundColor Cyan
+    $log = Invoke-Unity 'Game.Gameplay.EditorTools.GameSceneBuilder.Build' 'scene.log'
+    if (-not (Test-Path (Join-Path $proj "Assets\Scenes\Game.unity"))) {
         Write-Host "Сцена не собралась. Лог: $log" -ForegroundColor Red
         Select-String -Path $log -Pattern 'error CS|Exception' | Select-Object -First 10 |
             ForEach-Object { Write-Host "  $($_.Line)" -ForegroundColor Red }

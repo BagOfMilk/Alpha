@@ -42,6 +42,8 @@ namespace UnityEngine
     {
         public static bool isBatchMode { get { return false; } }
         public static string dataPath { get { return "."; } }
+        public static string persistentDataPath { get { return "."; } }
+        public static void Quit(int exitCode) { }
     }
 
     public static class Debug
@@ -253,7 +255,75 @@ namespace UnityEngine
         }
     }
 
-    public class Texture2D : Object { }
+    // Минимум, нужный IMGUI-раскладке (скролл-позиция, разброс не нужен —
+    // никакого Random, инвариант 1 держится и на уровне заглушки).
+    public struct Vector2
+    {
+        public float x, y;
+        public static readonly Vector2 zero = new Vector2(0f, 0f);
+
+        public Vector2(float x, float y) { this.x = x; this.y = y; }
+    }
+
+    // r/g/b/a 0..1, как в настоящем Unity; сравнений и арифметики нет —
+    // палитра AlphaSkin складывается из готовых констант, а не вычислением.
+    public struct Color
+    {
+        public float r, g, b, a;
+
+        public Color(float r, float g, float b, float a = 1f)
+        {
+            this.r = r; this.g = g; this.b = b; this.a = a;
+        }
+    }
+
+    // Байтовая палитра (0..255) — так тёплые тёмные тона читаются в коде
+    // числами, привычными для RGB, а не дробями. Неявное преобразование —
+    // как в настоящем Unity, поэтому Color32 можно передать всюду, где
+    // ожидается Color, без явного каста на каждой константе.
+    public struct Color32
+    {
+        public byte r, g, b, a;
+
+        public Color32(byte r, byte g, byte b, byte a)
+        {
+            this.r = r; this.g = g; this.b = b; this.a = a;
+        }
+
+        public static implicit operator Color(Color32 c)
+        {
+            return new Color(c.r / 255f, c.g / 255f, c.b / 255f, c.a / 255f);
+        }
+
+        public static implicit operator Color32(Color c)
+        {
+            return new Color32((byte)(c.r * 255f), (byte)(c.g * 255f), (byte)(c.b * 255f), (byte)(c.a * 255f));
+        }
+    }
+
+    public enum FilterMode { Point = 0, Bilinear = 1, Trilinear = 2 }
+    public enum TextureWrapMode { Repeat = 0, Clamp = 1, Mirror = 2, MirrorOnce = 3 }
+
+    /// <summary>
+    /// Только то, что нужно AlphaSkin: сплошная текстура-заливка 2×2 под фон
+    /// стиля. Настоящий Texture2D умеет заметно больше (форматы, мип-уровни,
+    /// сжатие) — сюда это не попало намеренно, заливка одним цветом этого не
+    /// требует.
+    /// </summary>
+    public class Texture2D : Object
+    {
+        public FilterMode filterMode { get; set; }
+        public TextureWrapMode wrapMode { get; set; }
+
+        public Texture2D(int width, int height) { }
+
+        public void SetPixels(Color[] colors) { }
+        public void SetPixel(int x, int y, Color color) { }
+        public void Apply() { }
+    }
+
+    /// <summary>Заглушка шрифта: реальный экземпляр отдаёт Resources.GetBuiltinResource, здесь он просто ссылка.</summary>
+    public class Font : Object { }
 
     public static class Screen
     {
@@ -266,7 +336,7 @@ namespace UnityEngine
         public static float deltaTime { get { return 0f; } }
     }
 
-    public enum KeyCode { None = 0, Space = 32 }
+    public enum KeyCode { None = 0, Escape = 27, Space = 32 }
 
     public static class Input
     {
@@ -277,15 +347,47 @@ namespace UnityEngine
     public static class Resources
     {
         public static T Load<T>(string path) where T : Object { return null; }
+
+        /// <summary>Встроенный шрифт Unity ("LegacyRuntime.ttf") рендерит кириллицу без единого загруженного файла.</summary>
+        public static T GetBuiltinResource<T>(string path) where T : Object { return null; }
+    }
+
+    /// <summary>Скриншоты автопрогона: заглушка ничего не пишет на диск, только проверяет сигнатуру вызова.</summary>
+    public static class ScreenCapture
+    {
+        public static void CaptureScreenshot(string filename) { }
+        public static void CaptureScreenshot(string filename, int superSize) { }
     }
 
     public enum TextAnchor { UpperLeft = 0, MiddleCenter = 4 }
 
     public enum ScaleMode { StretchToFill = 0, ScaleAndCrop = 1, ScaleToFit = 2 }
 
+    public enum FontStyle { Normal = 0, Bold = 1, Italic = 2, BoldAndItalic = 3 }
+
     public class GUIContent
     {
         public static readonly GUIContent none = new GUIContent();
+    }
+
+    /// <summary>Три состояния оформления, которые реально различает AlphaSkin: покой/наведение/нажатие.</summary>
+    public class GUIStyleState
+    {
+        public Texture2D background;
+        public Color textColor;
+    }
+
+    /// <summary>Отступы стиля. Настоящий RectOffset хранит их свойствами — здесь поля, семантика вызова та же.</summary>
+    public class RectOffset
+    {
+        public int left, right, top, bottom;
+
+        public RectOffset() { }
+
+        public RectOffset(int left, int right, int top, int bottom)
+        {
+            this.left = left; this.right = right; this.top = top; this.bottom = bottom;
+        }
     }
 
     public class GUIStyle
@@ -293,23 +395,87 @@ namespace UnityEngine
         public GUIStyle() { }
         public GUIStyle(GUIStyle other) { }
         public TextAnchor alignment { get; set; }
+        public FontStyle fontStyle { get; set; }
+        public int fontSize { get; set; }
+        public bool wordWrap { get; set; }
+        public bool richText { get; set; }
+        public GUIStyleState normal { get; set; } = new GUIStyleState();
+        public GUIStyleState hover { get; set; } = new GUIStyleState();
+        public GUIStyleState active { get; set; } = new GUIStyleState();
+        public RectOffset padding { get; set; } = new RectOffset();
+        public RectOffset margin { get; set; } = new RectOffset();
     }
 
-    public class GUISkin
+    /// <summary>
+    /// Настоящий GUISkin — ScriptableObject (US-18-подобная связь для
+    /// CreateInstance&lt;T&gt;); без этого наследования AlphaSkin.Build() не
+    /// собрался бы даже здесь, в заглушке.
+    /// </summary>
+    public class GUISkin : ScriptableObject
     {
+        public Font font;
         public GUIStyle label = new GUIStyle();
         public GUIStyle box = new GUIStyle();
+        public GUIStyle button = new GUIStyle();
+        public GUIStyle window = new GUIStyle();
+        public GUIStyle textField = new GUIStyle();
+        public GUIStyle horizontalScrollbar = new GUIStyle();
+        public GUIStyle horizontalScrollbarThumb = new GUIStyle();
+        public GUIStyle verticalScrollbar = new GUIStyle();
+        public GUIStyle verticalScrollbarThumb = new GUIStyle();
     }
 
     public static class GUI
     {
         public static GUISkin skin = new GUISkin();
+        public static Color color = new Color(1f, 1f, 1f, 1f);
+        public static Color backgroundColor = new Color(1f, 1f, 1f, 1f);
+        public static bool enabled = true;
 
         public static void Box(Rect position, GUIContent content) { }
         public static void Box(Rect position, string text) { }
         public static void Label(Rect position, string text) { }
         public static void Label(Rect position, string text, GUIStyle style) { }
         public static void DrawTexture(Rect position, Texture2D image, ScaleMode scaleMode) { }
+    }
+
+    /// <summary>Opaque-маркер параметра раскладки — как в настоящем Unity, создаётся только через GUILayout.*.</summary>
+    public sealed class GUILayoutOption
+    {
+        internal GUILayoutOption() { }
+    }
+
+    /// <summary>
+    /// Часть IMGUI-раскладки, которой пользуются Widgets/AlphaSkin/GameShell.
+    /// Ни один метод не рисует — заглушка только проверяет, что вызовы
+    /// собираются с теми же именами и типами аргументов, что настоящий API.
+    /// </summary>
+    public static class GUILayout
+    {
+        public static void Label(string text, params GUILayoutOption[] options) { }
+        public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
+        public static bool Button(string text, params GUILayoutOption[] options) { return false; }
+        public static bool Button(string text, GUIStyle style, params GUILayoutOption[] options) { return false; }
+        public static void Box(string text, params GUILayoutOption[] options) { }
+        public static void Box(string text, GUIStyle style, params GUILayoutOption[] options) { }
+        public static void BeginHorizontal(params GUILayoutOption[] options) { }
+        public static void BeginHorizontal(GUIStyle style, params GUILayoutOption[] options) { }
+        public static void EndHorizontal() { }
+        public static void BeginVertical(params GUILayoutOption[] options) { }
+        public static void BeginVertical(GUIStyle style, params GUILayoutOption[] options) { }
+        public static void EndVertical() { }
+        public static Vector2 BeginScrollView(Vector2 scrollPosition, params GUILayoutOption[] options) { return scrollPosition; }
+        public static void EndScrollView() { }
+        public static void BeginArea(Rect screenRect) { }
+        public static void EndArea() { }
+        public static void Space(float pixels) { }
+        public static void FlexibleSpace() { }
+        public static string TextField(string text, params GUILayoutOption[] options) { return text; }
+        public static bool Toggle(bool value, string text, params GUILayoutOption[] options) { return value; }
+        public static GUILayoutOption Width(float width) { return new GUILayoutOption(); }
+        public static GUILayoutOption Height(float height) { return new GUILayoutOption(); }
+        public static GUILayoutOption ExpandWidth(bool expand) { return new GUILayoutOption(); }
+        public static GUILayoutOption ExpandHeight(bool expand) { return new GUILayoutOption(); }
     }
 }
 
