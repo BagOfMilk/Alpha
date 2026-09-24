@@ -43,6 +43,7 @@ namespace UnityEngine
         public static bool isBatchMode { get { return false; } }
         public static string dataPath { get { return "."; } }
         public static string persistentDataPath { get { return "."; } }
+        public static bool runInBackground { get; set; }
         public static void Quit(int exitCode) { }
 
         /// <summary>Реальна сигнатура — <c>public static event Func&lt;bool&gt; wantsToQuit</c> (GameShell.cs, фікс краху при виході).</summary>

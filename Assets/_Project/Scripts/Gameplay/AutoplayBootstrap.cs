@@ -95,6 +95,14 @@ namespace Game.Gameplay
 
         private void Start()
         {
+            // Автопрогон и плейн-выход идут без человека у окна: если окно
+            // стартовало без фокуса, плеер с runInBackground=0 (ProjectSettings)
+            // не крутит кадры, и прогон висит до таймаута (замер 24.09.2026:
+            // один из четырёх запусков подряд завис ещё до титула). Игроку
+            // это не мешает — флаг меняется только в этих режимах.
+            if (HasArg(QuitAfterTitleFlag) || RequestedFromCommandLine())
+                Application.runInBackground = true;
+
             if (HasArg(QuitAfterTitleFlag))
             {
                 // Два кадри — титул точно встиг намалюватися бодай раз
