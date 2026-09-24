@@ -158,5 +158,27 @@ namespace Game.Core.Characters
             Xp = result.RemainderXp;
             return result;
         }
+
+        // ---- B7: банк очков протагониста (R11) ----
+        //
+        // Тот же прирост уровня, что и у GainXp, но БЕЗ авто-траты очков
+        // скилов: они остаются на руках вызывающего (SpendablePoints), который
+        // сам решает, куда их положить. Единственный потребитель — протагонист;
+        // напарники, как и раньше, идут через GainXp и тратят очки сразу
+        // (US-2.1 для них не меняется).
+
+        /// <summary>
+        /// Начисляет опыт и считает повышение уровня, НЕ тратя очки скилов
+        /// автоматически — в отличие от <see cref="GainXp"/>. Возвращает,
+        /// сколько уровней получено, чтобы вызывающий (BaseState/GameSession)
+        /// положил соответствующие очки в <c>SpendablePoints</c>.
+        /// </summary>
+        public ProgressionMath.LevelUpResult GainXpNoAutoSpend(int amount, BalanceConfig cfg)
+        {
+            var result = ProgressionMath.GrantXp(Level, Xp, amount, cfg);
+            Level = result.Level;
+            Xp = result.RemainderXp;
+            return result;
+        }
     }
 }

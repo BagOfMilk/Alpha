@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Game.Core.Balance;
 using Game.Core.Characters;
+using Game.Core.Characters.Scars;
 using Game.Core.Checks;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
@@ -15,8 +17,9 @@ namespace Game.Core.Base
         EmptyParty = 2,
         PartyTooLarge = 3,
         UnknownCompanion = 4,
-        CompanionUnavailable = 5,  // мёртв, ранен или уже в вылазке
-        DuplicateCompanion = 6     // один и тот же человек дважды в списке
+        CompanionUnavailable = 5,  // мёртв, ранен, уже в вылазке или враждебен (Antagonist)
+        DuplicateCompanion = 6,    // один и тот же человек дважды в списке
+        PartyAlreadyAway = 7       // прошлый отряд ещё не вернулся (R15: партия одна)
     }
 
     /// <summary>
@@ -29,14 +32,27 @@ namespace Game.Core.Base
     /// </summary>
     public static class ExpeditionRunner
     {
-        public static DispatchResult Send(BaseState state, ExpeditionSite site,
-            IReadOnlyList<string> companionIds, out List<ISettlementActor> party)
+        /// <summary>
+        /// Единая точка входа вылазки (R15, закрывает D10): валидирует состав →
+        /// <see cref="ExpeditionParty.Depart"/> → если подход не Delve, тут же
+        /// РОВНО ОДИН РАЗ резолвит исход (<see cref="ExpeditionResolver.Resolve"/>)
+        /// и замораживает его в блобе партии (<see cref="ExpeditionParty.FreezeResult"/>).
+        /// Дальше до возвращения к исходу никто не притрагивается — поэтому сейв
+        /// посреди вылазки и обычное продолжение дают один и тот же результат.
+        ///
+        /// Для Delve резолв НЕ вызывается: дальше вылазка играется комнатами
+        /// данжа (Core/Dungeons, B2), а диспетчинг в данж ведёт D1.
+        /// </summary>
+        public static DispatchResult Depart(BaseState state, ExpeditionParty party, ExpeditionSite site,
+            ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days,
+            SiteLedger ledger, BalanceConfig cfg = null)
         {
-            party = null;
             if (state == null) throw new ArgumentNullException(nameof(state));
+            if (party == null) throw new ArgumentNullException(nameof(party));
             if (site == null) return DispatchResult.NoSuchSite;
             if (companionIds == null || companionIds.Count == 0) return DispatchResult.EmptyParty;
             if (companionIds.Count > state.Balance.ExpeditionPartyMax) return DispatchResult.PartyTooLarge;
+            if (party.IsAway) return DispatchResult.PartyAlreadyAway;
 
             // Сначала проверяем всех, потом меняем хоть кого-то: отряд уходит
             // целиком или не уходит вовсе, иначе половина ростера осталась бы
@@ -54,22 +70,39 @@ namespace Game.Core.Base
                 // вызывающего, поэтому отказ явный.
                 if (!seen.Add(c.Id)) return DispatchResult.DuplicateCompanion;
 
-                if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission)
+                if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission || IsAntagonist(c.Status))
                     return DispatchResult.CompanionUnavailable;
                 chosen.Add(c);
             }
 
-            party = new List<ISettlementActor>(chosen.Count);
-            for (int i = 0; i < chosen.Count; i++)
+            if (!party.Depart(state, companionIds, days))
+                return DispatchResult.CompanionUnavailable;
+
+            // Delve пропускает резолв (R15/§4.11): дальше — комнаты данжа.
+            if (approach != ExpeditionApproach.Delve)
             {
-                var c = chosen[i];
-                if (c.IsAssigned) state.Unassign(c.AssignedSlotId);
-                c.Status = CompanionStatus.OnMission;
-                party.Add(new CompanionActorAdapter(c, false, state.Balance));
+                var actors = new List<ISettlementActor>(chosen.Count);
+                for (int i = 0; i < chosen.Count; i++)
+                    actors.Add(new CompanionActorAdapter(chosen[i], false, cfg ?? state.Balance));
+
+                var result = ExpeditionResolver.Resolve(site, approach, actors, ledger, cfg ?? state.Balance);
+                party.FreezeResult(result);
             }
 
             return DispatchResult.Success;
         }
+
+        /// <summary>
+        /// Допуск к вылазке исключает враждебных (R2/B4): проверка по ИМЕНИ
+        /// статуса, а не по значению enum — <c>CompanionStatus.Antagonist</c> в
+        /// этом рабочем дереве ещё не существует (его заводит параллельный
+        /// пакет B4), и код обязан остаться верным без правки, когда он
+        /// появится после мерджа. Сегодня метод всегда возвращает false — это
+        /// ожидаемо, не заглушка «на будущее без эффекта сейчас»: враждебных
+        /// напарников в этом дереве ещё нет вовсе.
+        /// </summary>
+        private static bool IsAntagonist(CompanionStatus status) =>
+            string.Equals(status.ToString(), "Antagonist", StringComparison.Ordinal);
 
         /// <summary>
         /// Возврат отряда: добыча в кошелёк, раны на людей, статусы назад.
@@ -101,6 +134,11 @@ namespace Game.Core.Base
                 c.InjuryPoints += PointsFor(w.Tier, state);
                 c.Status = CompanionStatus.Injured;
                 wounded.Add(w.ActorId);
+
+                // Рана с вылазки (R16/G10): та же единая точка решения, что и
+                // у RosterAdapter.Wound — DefaultScars.TryGrant, а не вторая
+                // копия правила «Серьёзная+ даёт шрам».
+                DefaultScars.TryGrant(c, w.Tier, out _);
             }
 
             for (int i = 0; i < result.PartyIds.Count; i++)

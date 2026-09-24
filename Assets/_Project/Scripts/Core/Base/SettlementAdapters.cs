@@ -33,16 +33,47 @@ namespace Game.Core.Base
         public string Id => _companion.Id;
         public bool IsProtagonist { get; }
 
+        // ВНИМАНИЕ ИНТЕГРАТОРУ (ревью B7, не в §5.1): этот файл — не в таблице
+        // владения §5.1, но пакет B4 по §4.5 обязан добавить исключение
+        // Antagonist ИМЕННО в IsPresentInSettlement сразу ниже, в этом же
+        // классе, где B7 добавил GetCheckValue/ContextAttributeFor (G16) чуть
+        // дальше. При мердже B4+B7 в фазе C эти две правки нужно свести
+        // руками в одном классе, а не блайндовым git merge — как и
+        // предупреждает ревью пакета.
         public bool IsPresentInSettlement =>
             _companion.Status != CompanionStatus.OnMission &&
             _companion.Status != CompanionStatus.Dead;
 
         public string HeldPositionId => _companion.AssignedSlotId;
 
-        public int GetCheckValue(SkillKey skill)
+        /// <summary>
+        /// G16 (GDD:98): соц-проверки добирают контекстный атрибут подхода
+        /// поверх голого скила — «Запугать → Воля» (тот же атрибут, что и
+        /// сопротивление состояниям, см. AttributeType.Will), «Убедить →
+        /// Смекалка», «Торговля → Смекалка». Утилитарные (Neutral) проверки
+        /// атрибут не добирают — вылазка и доклады с постов от этого не
+        /// сдвигаются.
+        /// </summary>
+        public int GetCheckValue(SkillKey skill, ApproachForm approach = ApproachForm.Neutral)
         {
             var s = Resolve(skill);
-            return s == SkillType.None ? 0 : _companion.Skill(s);
+            if (s == SkillType.None) return 0;
+
+            int value = _companion.Skill(s);
+            var attribute = ContextAttributeFor(approach);
+            if (attribute != AttributeType.None) value += _companion.Attribute(attribute);
+            return value;
+        }
+
+        private static AttributeType ContextAttributeFor(ApproachForm approach)
+        {
+            switch (approach)
+            {
+                case ApproachForm.Intimidate: return AttributeType.Will;
+                case ApproachForm.Persuade: return AttributeType.Wits;
+                case ApproachForm.Trade: return AttributeType.Wits;
+                default: return AttributeType.None;
+            }
         }
 
         /// <summary>
@@ -196,13 +227,23 @@ namespace Game.Core.Base
             c.MarkDead();
         }
 
-        public void Wound(string actorId, double injuryPoints)
+        /// <summary>
+        /// Единая точка ранения (R16/R5, закрывает G10): инциденты сегодня не
+        /// знают тира раны и зовут её без третьего аргумента (Light по
+        /// умолчанию — шрам не положен, ровно то же поведение, что было до
+        /// этого пакета). Вылазка ранит через <c>ExpeditionRunner.Complete</c> —
+        /// вторая, отдельная точка входа с тем же именем правила внутри
+        /// (<c>DefaultScars.TryGrant</c>), а не дублирующая копия. Бой (когда
+        /// появится) обязан ранить ТОЛЬКО отсюда, уже передавая настоящий тир.
+        /// </summary>
+        public void Wound(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light)
         {
             var c = _roster.Get(actorId);
             if (c == null || c.IsDead) return;
             c.InjuryPoints += injuryPoints;
             if (c.Status != CompanionStatus.OnMission)
                 c.Status = CompanionStatus.Injured;
+            Characters.Scars.DefaultScars.TryGrant(c, tier, out _);
         }
 
         private bool IsProtagonist(string id) =>

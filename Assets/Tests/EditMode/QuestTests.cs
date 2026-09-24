@@ -24,7 +24,7 @@ namespace Game.Tests.EditMode
             public string HeldPositionId { get; set; }
             public int Value { get; set; }
 
-            public int GetCheckValue(SkillKey skill) => Value;
+            public int GetCheckValue(SkillKey skill, ApproachForm approach = ApproachForm.Neutral) => Value;
             public int GetTraitModifier(SkillKey skill) => 0;
         }
 

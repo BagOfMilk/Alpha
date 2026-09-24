@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Game.Core.Balance;
+using Game.Core.Characters;
 using Game.Core.Checks;
 using Game.Core.Pressure;
 using Game.Core.Settlement;
@@ -20,7 +21,14 @@ namespace Game.Core.World
         string ActorOnPosition(string positionId);
 
         void Kill(string actorId);
-        void Wound(string actorId, double injuryPoints);
+
+        /// <summary>
+        /// Тир по умолчанию — Light (R16/B7): существующие вызовы этого метода
+        /// не знают тира и не должны начать выдавать шрамы задним числом —
+        /// это решение владельца по конкретным инцидентам, не побочный эффект
+        /// правки контракта.
+        /// </summary>
+        void Wound(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light);
     }
 
     /// <summary>

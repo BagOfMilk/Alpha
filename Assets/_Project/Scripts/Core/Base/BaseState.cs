@@ -120,6 +120,13 @@ namespace Game.Core.Base
             companion.AssignedSlotId = slotId;
             if (companion.Status == CompanionStatus.Idle)
                 companion.Status = CompanionStatus.Assigned;
+            // G26 (ревью B7): Resting — это "свободен и лечится", а не ярлык,
+            // который переживает назначение на пост. Тот, кто держит пост,
+            // работает через рану (Injured), а не отдыхает — назначение
+            // обязано вернуть статус к Injured, иначе ярлык застревал бы на
+            // Resting до полного излечения даже у занятого постом.
+            else if (companion.Status == CompanionStatus.Resting)
+                companion.Status = CompanionStatus.Injured;
 
             return AssignmentResult.Success;
         }
@@ -306,7 +313,15 @@ namespace Game.Core.Base
             return report;
         }
 
-        /// <summary>Распределяет лечебные очки по самым тяжело раненным.</summary>
+        /// <summary>
+        /// Распределяет лечебные очки по самым тяжело раненным.
+        ///
+        /// G26: пока лечение в лазарете идёт, а сама рана ещё не закрылась,
+        /// свободный (не держащий пост) раненый переходит в Resting — статус
+        /// был объявлен, но никогда не присваивался. Тот, кто продолжает
+        /// работать через рану (пост держит — <c>InjuredCompanion_ProducesLess</c>),
+        /// остаётся Injured: он не «отдыхает», он работает с пенальти.
+        /// </summary>
         private void ApplyHealing(int healing, CycleReport report)
         {
             if (healing <= 0) return;
@@ -329,6 +344,10 @@ namespace Game.Core.Base
                     if (c.Status == CompanionStatus.Injured || c.Status == CompanionStatus.Resting)
                         c.Status = CompanionStatus.Idle;
                     report.Recovered.Add(c.Id);
+                }
+                else if (heal > 0 && !c.IsAssigned && c.Status == CompanionStatus.Injured)
+                {
+                    c.Status = CompanionStatus.Resting;
                 }
             }
         }
