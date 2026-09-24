@@ -192,7 +192,7 @@ namespace Game.Gameplay
             // самому прогоні): див. той самий фікс у GameShell.HandleWantsToQuit,
             // яка ловить і решту тригерів виходу (кнопка, Alt+F4, закриття
             // вікна) тим самим способом.
-            Environment.Exit(exitCode);
+            HardExit.Now(exitCode); // Environment.Exit зависал на выходе — см. HardExit
         }
 
         private void WriteSummary()

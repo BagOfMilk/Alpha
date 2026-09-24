@@ -76,7 +76,7 @@ namespace Game.Gameplay
         /// </summary>
         private bool HandleWantsToQuit()
         {
-            Environment.Exit(0);
+            HardExit.Now(0); // TerminateProcess: Environment.Exit зависал, Application.Quit падал (см. HardExit)
             return false; // формальність — рядком вище процес уже завершено
         }
 
@@ -121,7 +121,7 @@ namespace Game.Gameplay
         /// <summary>§_quitRequested — безпечна точка виходу (не OnGUI/корутина, прив'язана до рендеру).</summary>
         private void Update()
         {
-            if (_quitRequested) Environment.Exit(0); // §HandleWantsToQuit — той самий безпечний вихід, без Application.Quit
+            if (_quitRequested) HardExit.Now(0); // §HandleWantsToQuit — той самий безпечний вихід (HardExit)
         }
 
         private void OnGUI()
