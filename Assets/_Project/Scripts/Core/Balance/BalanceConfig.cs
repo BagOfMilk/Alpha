@@ -138,5 +138,8 @@ namespace Game.Core.Balance
 
         /// <summary>Готовність громади до фіналу (R8, пакет B6).</summary>
         public ReadinessBalance Readiness = new ReadinessBalance();
+
+        /// <summary>Push-your-luck данж: коэффициенты скрытой шкалы Threat (Core/Dungeons, R4).</summary>
+        public DungeonBalance Dungeon = new DungeonBalance();
     }
 }

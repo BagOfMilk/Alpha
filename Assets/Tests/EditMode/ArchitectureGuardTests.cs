@@ -333,5 +333,32 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(3, neutral, "Neutral не добирает атрибут");
             Assert.AreEqual(10, persuade, "Persuade добирает Смекалку поверх голого скила (GDD:98)");
         }
+
+        // ---- B2 (Dungeons) ----
+
+        /// <summary>
+        /// R4/B2: данж лише ПРОСИТЬ бій даними (BattleRequest: id ворогів/арена/
+        /// партія) і чекає ReportCombat(OutcomeBand) — сам бій веде викликач.
+        /// Пряма залежність від Game.Core.Combat чи Game.Core.Items прив'язала б
+        /// паралельний пакет B2 до типів, яких у його воркчасті не існує.
+        /// </summary>
+        [Test]
+        public void Dungeons_DoNotReferenceCombatOrItems()
+        {
+            var dir = Path.Combine(CoreRoot, "Dungeons");
+            var forbidden = new Regex(@"Game\.Core\.Combat|Game\.Core\.Items");
+            var offenders = new List<string>();
+
+            if (Directory.Exists(dir))
+            {
+                foreach (var file in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+                    if (forbidden.IsMatch(StripComments(File.ReadAllText(file))))
+                        offenders.Add(Path.GetFileName(file));
+            }
+
+            Assert.IsEmpty(offenders,
+                "Core/Dungeons не повинен посилатися на бій чи предмети напряму: "
+                + string.Join(", ", offenders));
+        }
     }
 }
