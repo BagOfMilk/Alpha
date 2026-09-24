@@ -41,6 +41,7 @@ dungeon.push
 dungeon.room.bypassed
 dungeon.threat_band_changed
 expedition.departed
+expedition.returned
 faction.standing_changed
 finale.resolved
 forewarn.level1

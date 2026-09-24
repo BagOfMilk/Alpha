@@ -16,6 +16,15 @@ namespace Game.Core.Signals
     /// 2) бюджет внимания — не больше MaxSignalsPerDay, иначе шум;
     /// 3) минимум один слот отдан под «что изменилось со вчера».
     ///
+    /// Из правила 2 есть ровно одно исключение, и оно намеренное (G21,
+    /// закрыто 24.09.2026): кандидаты со <see cref="SignalRequest.Mandatory"/>
+    /// (смена полосы, ступень предвестника) идут в дайджест СВЕРХ бюджета и
+    /// не делят общий резерв правила 3 (<see cref="Balance.SignalBalance.MinDeltaSlots"/>)
+    /// с прочими дельтами. До этого исправления оба правила ДОБАВЛЯЛИ
+    /// кандидата, но не резервировали ему слот — в густой день бюджет или
+    /// конкурирующая дельта могли вытеснить именно смену полосы или именно
+    /// ступень лестницы, и правило 1 нарушалось молча. См. <see cref="Select"/>.
+    ///
     /// Полностью детерминирован: порядок отбора задан правилами и лексикографией
     /// ключей, никакого Random (Поправка №3.3).
     /// </summary>
@@ -74,7 +83,13 @@ namespace Game.Core.Signals
                         UrgencyForForewarn(f.Level),
                         subjectId: f.SourceId,
                         isDelta: true,
-                        tags: new[] { "domain:" + f.DomainTag, "level:" + f.Level }));
+                        tags: new[] { "domain:" + f.DomainTag, "level:" + f.Level },
+                        // Мандатно (G21): накопитель уже засчитал эту ступень
+                        // услышанной (WorldPulse.MarkDelivered — PulseStep, ДО
+                        // этого шага). Если бюджет её здесь выбросит, лестница
+                        // молча продвинется дальше, а игрок эту ступень не
+                        // услышит никогда — это и есть «пропущенная ступень».
+                        mandatory: true));
                 }
             }
 
@@ -157,7 +172,14 @@ namespace Game.Core.Signals
                         UrgencyForBand(change.To),
                         subjectId: null,
                         isDelta: true,
-                        tags: new[] { rising ? "rising" : "falling", "band:" + change.To }));
+                        tags: new[] { rising ? "rising" : "falling", "band:" + change.To },
+                        // Мандатно (G21, инвариант 4): смена полосы — самое
+                        // важное, что случилось за сутки. Раньше этот кандидат
+                        // ТОЛЬКО добавлялся и мог быть вытеснен бюджетом внимания
+                        // (или другой дельтой за общий MinDeltaSlots) — тогда
+                        // переход оставался немым. Теперь он гарантирован сверх
+                        // бюджета, а не конкурирует за общий резерв дельт.
+                        mandatory: true));
                 }
             }
 
@@ -226,7 +248,7 @@ namespace Game.Core.Signals
             {
                 for (int i = candidates.Count - 1; i >= 0 && candidates.Count > 1; i--)
                 {
-                    if (candidates[i].IsDelta) continue;
+                    if (candidates[i].IsDelta || candidates[i].Mandatory) continue;
                     if (memory.Staleness(candidates[i].TopicId, day) >= cfg.TopicCooldownDays) continue;
                     candidates.RemoveAt(i);
                 }
@@ -254,6 +276,20 @@ namespace Game.Core.Signals
                     pickedIndices[victimSlot] = i;
                     haveDelta++;
                 }
+            }
+
+            // Гарантия мандатных сигналов (G21, инвариант 4): смена полосы и
+            // ступень предвестника попадают в дайджест ВСЕГДА, даже сверх
+            // бюджета — они не делят один общий резерв с прочими дельтами
+            // (MinDeltaSlots) и не могут быть вытеснены густым днём. Это
+            // единственное намеренное исключение из бюджета внимания: не
+            // услышанная смена полосы читается как «игра сломалась», а не
+            // услышанная ступень лестницы — как пропущенная навсегда (лестница
+            // продвинулась молча — WorldPulse уже считает её услышанной).
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (!candidates[i].Mandatory || pickedIndices.Contains(i)) continue;
+                pickedIndices.Add(i);
             }
 
             var picked = new List<SignalRequest>(pickedIndices.Count);

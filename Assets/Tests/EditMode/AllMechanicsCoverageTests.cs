@@ -255,6 +255,39 @@ namespace Game.Tests.EditMode
 
         // ==== №8 — драбина передвісників 1→2→3 =================================
 
+        /// <summary>
+        /// РЕГРЕССІЯ G21 (закрыто 24.09.2026): раніше цей тест був
+        /// <c>Assert.Ignore</c>'нутим "відомим розривом" — насправді за ним
+        /// стояли ДВІ РІЗНІ речі, зведені в одну.
+        ///
+        /// (1) Справжній архітектурний розрив (SignalComposer.cs, Select()):
+        /// бюджет сигналів/день і загальний резерв дельт (MinDeltaSlots)
+        /// поділявся МІЖ УСІМА дельтами — зміна полоси, ступінь предвісника,
+        /// інцидент. WorldPulse.MarkDelivered() (PulseStep, ДО SignalStep)
+        /// зараховував ступінь почутою БЕЗУМОВНО, і якщо композитор потім
+        /// викидав саме її бюджетом — гравець цю ступінь не чув НІКОЛИ, а
+        /// драбина мовчки рухалась далі. Закрито: смена полосы та ступінь
+        /// предвісника тепер <see cref="Game.Core.Signals.SignalRequest.Mandatory"/>
+        /// і потрапляють у дайджест ПОВЕРХ бюджету (SignalComposer.Select).
+        ///
+        /// (2) Побічний АРТЕФАКТ САМОГО ТЕСТУ (не пов'язаний з (1)): стара
+        /// версія рахувала драбину лише по фазі Day, щоб не плутати "нічну
+        /// тишу без патруля" зі справжнім перескоком. Але для політик, які
+        /// патрулюють щоночі (canHear=true і вночі — PulseStep.cs), ступінь
+        /// цілком легітимно доставлялась УНОЧІ, і фільтр "лише Day" робив її
+        /// невидимою — наступна денна ступінь виглядала перескоком ЗОВНІ, хоча
+        /// всередині драбина пройшла 1→2→3 без жодного пропуску (перевірено
+        /// дампом лога: GameSession Day2/Day forewarn.level1;
+        /// Day2/Night forewarn.level2; Day3/Day forewarn.level3 — усі три
+        /// ступені доставлені, просто друга вночі). Тепер рахуємо драбину по
+        /// УСІХ фазах: ніч без патруля просто не пише forewarn.level* у лог
+        /// зовсім (canHear=false — LoopRepairTests.Forewarn_SleptThrough_
+        /// IsOfferedAgainLater), тож нема що фільтрувати.
+        ///
+        /// Мутаційна перевірка: прибрати <c>Mandatory</c>-форсування в
+        /// SignalComposer.Select() — і цей тест впаде знову, бо густий день
+        /// (багато інцидентів/подій) знову зможе викинути ступінь бюджетом.
+        /// </summary>
         [Test]
         public void Row08_ForewarnLadder_NeverSkipsAStep()
         {
@@ -262,42 +295,35 @@ namespace Game.Tests.EditMode
             // SignalComposer.cs) — кілька накопичувачів (Тугар + звичайні
             // DefaultPressureSources) тикають незалежно, і мірити один спільний
             // рахунок на всі впало б у хибний "перескок" там, де просто заговорило
-            // ІНШЕ джерело. Лише фаза Day (PulseStep.cs: canHear = !IsNight ||
-            // IsPatrolling — уночі без патруля щабель мовчить, хоча внутрішньо
-            // рахунок все одно посувається; це власне рядок §6.1 №7, не №8) —
-            // інакше нічна тиша без патруля виглядала б як "перескок" ЗОВНІ,
-            // хоча всередині щабель не пропущено (охоронець тому — LoopRepairTests).
+            // ІНШЕ джерело.
             string violation = null;
             foreach (var rec in AllRuns())
             {
                 var lastLevelBySubject = new Dictionary<string, int>();
                 foreach (var e in rec.Log)
                 {
-                    if (e.Key == null || !e.Key.StartsWith("forewarn.level") || e.Phase != DayPhase.Day) continue;
+                    if (e.Key == null || !e.Key.StartsWith("forewarn.level")) continue;
                     int level = int.Parse(e.Key.Substring("forewarn.level".Length));
                     string subject = e.Args != null && e.Args.TryGetValue("subject", out var subj) ? subj : "?";
 
                     int lastLevel;
                     lastLevelBySubject.TryGetValue(subject, out lastLevel);
-                    if (violation == null && level > lastLevel + 1)
-                        violation = "джерело " + subject + ": " + lastLevel + " -> " + level + " (доба " + e.Day + ")";
-                    if (level > lastLevel) lastLevelBySubject[subject] = level;
+
+                    // level == 1 завжди легітимний: або перший крик джерела,
+                    // або перезапуск драбини після Fire() (PressureTrack.cs) —
+                    // накопичувач розряджається і рахує з нуля. Справжній
+                    // пропуск ступені ніколи не виглядає як "1": він виглядає
+                    // як дірка (2 без 1, 3 без 2) у зростаючій послідовності.
+                    if (violation == null && level != 1 && level != lastLevel + 1)
+                        violation = "джерело " + subject + ": " + lastLevel + " -> " + level +
+                            " (доба " + e.Day + "/" + e.Phase + ")";
+                    lastLevelBySubject[subject] = level;
                 }
             }
 
-            if (violation != null)
-            {
-                // Це не помилка бота: це вже відомий, свідомо відкладений розрив
-                // інваріанта 4 (CLAUDE.md/seamsForD1 B7 — "немой переход полосы
-                // при переполненном бюджете сигналов, ForceSignalOnBandChange не
-                // резервирует слот"; тест-охоронець CampaignPacingTests.
-                // Pacing_BandChangeCanBeMute_KnownGap уже документує його прямо
-                // над DayProcessor). Бот-прогін лише знову зловив ту саму,
-                // архітектурно відкриту дірку — не слабшаємо тест мовчки.
-                Assert.Ignore("§6.1 №8 GAP (відомий, не новий): " + violation + " — той самий архітектурний розрив " +
-                    "інваріанта 4 (бюджет сигналів/добу може мовчки проковтнути проміжний щабель), що документує " +
-                    "CampaignPacingTests.Pacing_BandChangeCanBeMute_KnownGap. Не в межах пакету D2.");
-            }
+            Assert.IsNull(violation,
+                "§6.1 №8: " + violation + " — драбина предвісників пропустила ступінь; " +
+                "інвариант 4 (CLAUDE.md) вимагає почути кожну");
         }
 
         // ==== №9 — криза з вікном на реакцію ===================================

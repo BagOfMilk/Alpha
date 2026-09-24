@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Game.Core.Balance;
 using Game.Core.Base;
@@ -196,6 +197,63 @@ namespace Game.Tests.EditMode
 
             Assert.GreaterOrEqual(fires, 2,
                 "Нужно хотя бы два удара: вырождение лестницы видно только на втором круге");
+        }
+
+        // ============ 6. BotRunner не губить записи DayLog між фазами ============
+
+        /// <summary>
+        /// РЕГРЕСІЯ (знайдено при діагностиці G21 24.09.2026, реальним прогоном
+        /// Steward): <c>BotRunner.CollectDelta</c> визначав нову фазу за
+        /// розміром логу (<c>log.Count &lt; курсор</c>) — ознака мовчки не
+        /// спрацьовує, коли ClearDayLog() почав нову фазу, а вона встигла дати
+        /// записів БІЛЬШЕ, ніж курсор мав на кінець попередньої (коротка
+        /// Evening-фаза з парою команд, за нею — щільний AdvanceDay з
+        /// десятком). Перші count-курсор записів нової фази тоді тихо не
+        /// доходили до <c>fullLog</c>/<c>onEvent</c> — хоча <c>session.DayLog</c>
+        /// їх мав, гра не постраждала, тільки читач. Так "forewarn.level2"
+        /// Тугара (доба 6/День, Steward) зникав з бот-логу, хоч і був у самому
+        /// SignalComposer — саме це і виглядало зовні як пропущена ступінь
+        /// лестниці, хоча G21 (SignalComposer.Select) тут ні до чого.
+        ///
+        /// Мутаційна перевірка: прибрати <see cref="GameSession.DayLogVersion"/>-
+        /// засновану ознаку в CollectDelta (повернути висновок за розміром) —
+        /// і цей тест впаде знову, бо Steward регулярно чергує короткі й щільні
+        /// фази саме так.
+        /// </summary>
+        [Test]
+        public void BotRunner_FullLog_NeverLosesEventsAcrossAShortToDenseTransition()
+        {
+            var log = new List<Game.Core.Session.GameEvent>();
+            var session = new Game.Core.Session.GameSession(null);
+            session.NewGame(new Game.Core.Session.NewGameOptions());
+            Game.Core.Session.Bots.BotRunner.Drive(session, new Game.Core.Session.Bots.StewardPolicy(), 15, fullLog: log);
+
+            var levelsBySubject = new Dictionary<string, List<int>>();
+            foreach (var e in log)
+            {
+                if (e.Key == null || !e.Key.StartsWith("forewarn.level")) continue;
+                int level = int.Parse(e.Key.Substring("forewarn.level".Length));
+                string subject = e.Args != null && e.Args.TryGetValue("subject", out var s) ? s : "?";
+                if (!levelsBySubject.TryGetValue(subject, out var list))
+                    levelsBySubject[subject] = list = new List<int>();
+                list.Add(level);
+            }
+
+            Assert.IsTrue(levelsBySubject.ContainsKey("tuhar"),
+                "За 15 діб Steward жодного forewarn.level* від tuhar — прогін зламано, перевіряти нічого");
+
+            foreach (var pair in levelsBySubject)
+            {
+                int lastLevel = 0;
+                foreach (var level in pair.Value)
+                {
+                    // level == 1 легітимний завжди (перший крик або перезапуск
+                    // після Fire()) — те саме правило, що в Row08.
+                    Assert.IsTrue(level == 1 || level == lastLevel + 1,
+                        $"джерело {pair.Key}: {lastLevel} -> {level} — fullLog загубив проміжний запис (CollectDelta)");
+                    lastLevel = level;
+                }
+            }
         }
 
         private sealed class SteadySource : IPressureSource
