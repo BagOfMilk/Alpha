@@ -22,7 +22,13 @@
 
   <ItemGroup>
     <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
-    <Compile Include="../Shared/SettlementWorld.cs" Link="Shared/SettlementWorld.cs" />
+    <!--
+      Пакет D2: Alpha.Play більше не будує світ сам (SettlementWorld.cs
+      прибрано — тонкий делегат до FirstHourWorld лишився без жодного
+      споживача, GameSession будує світ сам усередині NewGame). SignalText/
+      SceneText лишаються — Program.cs друкує через них ключі, доки E3 не
+      завела справжню текстову таблицю (§6.2 TEST_BUILD.md).
+    -->
     <Compile Include="../Shared/SignalText.cs" Link="Shared/SignalText.cs" />
     <Compile Include="../Shared/SceneText.cs" Link="Shared/SceneText.cs" />
     <!-- Б1 (R1): сидированный кубик боя, чистый C# без UnityEngine. -->

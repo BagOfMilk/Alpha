@@ -439,7 +439,7 @@ namespace Game.Core.Session
 
         public AssignmentResult Assign(string companionId, string slotId)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var result = _state.TryAssign(companionId, slotId);
             if (result == AssignmentResult.Success)
                 LogEvent("assign.made", Args("companionId", companionId, "slotId", slotId));
@@ -448,14 +448,14 @@ namespace Game.Core.Session
 
         public void Unassign(string slotId)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             _state.Unassign(slotId);
             LogEvent("assign.cleared", Args("slotId", slotId));
         }
 
         public BuildOrderResult OrderBuilding(string id)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.Order(id, _state, _processor.CurrentDay, _cfg);
             if (r == BuildOrderResult.Started) LogEvent("city.building.ordered", Args("buildingId", id));
             return r;
@@ -463,7 +463,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderRaid()
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.OrderRaid(_state, _processor.CurrentDay, _cfg, _factions);
             if (r == CouncilOrderResult.Queued) LogEvent("council.raid.ordered");
             return r;
@@ -471,7 +471,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderSettlers()
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.OrderSettlers(_state, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Queued) LogEvent("council.settlers.ordered");
             return r;
@@ -479,7 +479,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderDecree(string favoredFactionId, string costFactionId = null)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.OrderDecree(_state, _processor, _factions, favoredFactionId, costFactionId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied)
                 LogEvent("council.decree", Args("favored", favoredFactionId, "cost", costFactionId ?? string.Empty));
@@ -488,7 +488,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderDiplomacy(string factionId)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.OrderDiplomacy(_state, _factions, factionId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied) LogEvent("council.diplomacy", Args("factionId", factionId));
             return r;
@@ -496,7 +496,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderInvestment(string buildingId)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.OrderInvestment(_state, buildingId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Queued) LogEvent("council.invest", Args("buildingId", buildingId ?? string.Empty));
             return r;
@@ -504,7 +504,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderPrepareThreat()
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.OrderPrepareThreat(_state, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied) LogEvent("council.prepare_threat");
             return r;
@@ -512,7 +512,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderOutfitExpedition(string siteId)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var r = _works.OrderOutfitExpedition(_state, siteId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied) LogEvent("council.outfit_expedition", Args("siteId", siteId));
             return r;
@@ -520,7 +520,7 @@ namespace Game.Core.Session
 
         public ExpeditionPreviewView PreviewExpedition(string siteId, ExpeditionApproach approach, IReadOnlyList<string> companionIds)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             if (approach == ExpeditionApproach.Delve)
             {
                 var rooms = DefaultDungeon.Rooms(siteId);
@@ -550,7 +550,7 @@ namespace Game.Core.Session
 
         public DispatchResult DepartExpedition(string siteId, ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var site = approach == ExpeditionApproach.Delve ? new ExpeditionSite(siteId, siteId) : FindSite(siteId);
             if (site == null) return DispatchResult.NoSuchSite;
 
@@ -653,14 +653,14 @@ namespace Game.Core.Session
 
         public BuildPreview PreviewBuildPlan(string companionId, BuildPlan plan)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var c = _worldRoster.Get(companionId);
             return BuildPlanner.Preview(c, plan, _points.Get(companionId), null, _cfg);
         }
 
         public BuildPlanStatus CommitBuildPlan(string companionId, BuildPlan plan, bool confirmedIrreversible)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var c = _worldRoster.Get(companionId);
             int cost = plan?.PointCost ?? 0;
             var status = BuildPlanner.Commit(c, plan, _points.Get(companionId), null, _cfg, confirmedIrreversible);
@@ -674,7 +674,7 @@ namespace Game.Core.Session
 
         public bool Equip(string companionId, string itemInstanceId, EquipSlot slot)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var c = _worldRoster.Get(companionId);
             if (c == null) return false;
             var item = _inventory.FindAnywhere(_worldRoster.All, itemInstanceId);
@@ -690,7 +690,7 @@ namespace Game.Core.Session
 
         public bool Unequip(string companionId, EquipSlot slot)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var c = _worldRoster.Get(companionId);
             if (c == null) return false;
             var item = c.Equipment.Unequip(slot);
@@ -703,7 +703,7 @@ namespace Game.Core.Session
 
         public CraftResult CraftUpgrade(string itemInstanceId)
         {
-            RequireState(SessionState.Morning);
+            RequireMorningOrFreePlay();
             var item = _inventory.FindAnywhere(_worldRoster.All, itemInstanceId);
             bool workshopOpen = _works.Has(DefaultBuildingsType.Workshop);
             var result = CraftSystem.TryUpgrade(item, _state.Resources, workshopOpen, _cfg.Items);
@@ -1036,6 +1036,18 @@ namespace Game.Core.Session
         // =====================================================================
         // Dungeon
         // =====================================================================
+
+        /// <summary>
+        /// Пакет D2 (шов для бот-прогону): стан поточного данжу без виклику
+        /// команди, що його змінює. PushDeeper/ResolveDungeonRoom/ResolveDungeonEvent
+        /// повертають DungeonView лише як РЕЗУЛЬТАТ дії, а `DepartExpedition`
+        /// (Delve) — ні (повертає DispatchResult, штовхає в кімнату 1 мовчки) —
+        /// без цього гетера бот, щойно увійшовши в підвішений стан Dungeon, не
+        /// має звідки дізнатись, яка кімната перед ним і яка вона за типом
+        /// (Combat/Treasure/Event), щоб узагалі вибрати команду. Null поза
+        /// Dungeon — як і решта GetXView() гетерів файлу.
+        /// </summary>
+        public DungeonView GetDungeonView() => BuildDungeonView();
 
         public DungeonView PushDeeper()
         {
@@ -1668,6 +1680,23 @@ namespace Game.Core.Session
         {
             if (State != expected)
                 throw new InvalidOperationException("Команда недоступна у стані " + State + " (потрібен " + expected + ").");
+        }
+
+        /// <summary>
+        /// Пакет D2 (§3.6 "Вільна гра": "той самий цикл Morning→Night"; ConfirmMorning
+        /// вже трактує Morning/FreePlay як один хаб — див. коментар над ним):
+        /// усі команди ранку (Assign/Order*/PreviewExpedition/DepartExpedition/
+        /// PreviewBuildPlan/CommitBuildPlan/Equip/Unequip/CraftUpgrade) досі були
+        /// прибиті ЛИШЕ до Morning — після AcknowledgeSummary State назавжди стає
+        /// FreePlay (SettleAfterDayReport: "State = _freePlay ? FreePlay : Morning"),
+        /// тож ЖОДНА команда ранку не могла спрацювати вже починаючи з доби 6.
+        /// Бот-прогін (D2, AllMechanicsCoverageTests §42 "Вільна гра") це й виявив
+        /// напряму: без цієї правки данж/квест/фракції/стройка не мають чим
+        /// спрацювати у вікні днів 6–15 — не слабшаємо тест, а замикаємо шов.
+        /// </summary>
+        private void RequireMorningOrFreePlay()
+        {
+            RequireAnyState(SessionState.Morning, SessionState.FreePlay);
         }
 
         /// <summary>

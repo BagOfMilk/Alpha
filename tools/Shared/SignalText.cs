@@ -51,6 +51,17 @@ namespace Alpha.Shared
             return null;
         }
 
+        /// <summary>
+        /// Пакет D2: обгортка над <see cref="Text"/> для викликачів, у яких є
+        /// лише голий TopicId (GameSession.GameEvent.Key), а не цілий
+        /// <see cref="SignalRequest"/> із тегами — Alpha.Play друкує стрічку
+        /// подій GameSession, не сирий SignalDigest. Без домену (тег "domain:"
+        /// у GameEvent.Args не переноситься — §4.3 конвенція аргументів його
+        /// не включає) — трохи бідніше за <see cref="Line"/>, чесно для "E3
+        /// замінить текст пізніше".
+        /// </summary>
+        public static string TextForTopic(string topicId) => Text(topicId);
+
         private static string Text(string topicId)
         {
             switch (topicId)

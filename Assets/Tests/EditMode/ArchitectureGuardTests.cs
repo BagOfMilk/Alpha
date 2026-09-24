@@ -660,5 +660,31 @@ namespace Game.Tests.EditMode
                 "View з Core/Session/Views показує невнесене в allow-list число прихованої шкали: " +
                 string.Join(", ", offenders));
         }
+
+        /// <summary>
+        /// Пакет D2 (§4.10/§1.1: "Боти — у ядрі... їх споживають тести Unity,
+        /// автопрогін і tools/* однаково"): Core/Session/Bots/*.cs мусить лишатись
+        /// придатним для Unity-споживача (майбутній AutoplayBootstrap, Е1) так
+        /// само, як для headless tools/тестів — жодного UnityEngine (це ще не
+        /// Gameplay) і жодного Console/File I/O (політика/водій — чиста логіка
+        /// над GameSession, вивід/введення — робота викликача).
+        /// </summary>
+        [Test]
+        public void Bots_AreEngineAgnostic_NoUnityNoConsoleNoFileIO()
+        {
+            var dir = Path.Combine(CoreRoot, "Session", "Bots");
+            Assert.IsTrue(Directory.Exists(dir), "Core/Session/Bots має існувати (пакет D2)");
+
+            var forbidden = new Regex(@"\bUnityEngine\b|\bSystem\.Console\b|\bConsole\.(Write|Read)|\bSystem\.IO\.File\b|\bFile\.(Read|Write)");
+            var offenders = new List<string>();
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+                if (forbidden.IsMatch(StripComments(File.ReadAllText(file))))
+                    offenders.Add(Path.GetFileName(file));
+
+            Assert.IsEmpty(offenders,
+                "Core/Session/Bots мусить лишатись чистою логікою над GameSession, без рушія/консолі/файлів: " +
+                string.Join(", ", offenders));
+        }
     }
 }

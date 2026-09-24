@@ -24,8 +24,11 @@
 
   <ItemGroup>
     <ProjectReference Include="../Game.Core.Headless/Game.Core.csproj" />
-    <!-- Общий мир с консольной сборкой: одна копия правил на два инструмента. -->
-    <Compile Include="../Shared/SettlementWorld.cs" Link="Shared/SettlementWorld.cs" />
+    <!--
+      Пакет D2: більше не будує світ сам (SettlementWorld.cs прибрано —
+      GameSession/FirstHourWorld робить це всередині NewGame, той самий світ,
+      що й Alpha.Play/Unity/тести).
+    -->
     <!-- Б1 (R1): сидированный кубик боя, чистый C# без UnityEngine. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Combat/SeededDiceRoller.cs"
              Link="Gameplay/Combat/SeededDiceRoller.cs" />

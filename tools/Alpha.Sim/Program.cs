@@ -3,178 +3,110 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using Alpha.Shared;
-using Game.Core.Balance;
-using Game.Core.Base;
-using Game.Core.Characters;
-using Game.Core.Checks;
-using Game.Core.Loop;
-using Game.Core.Settlement;
-using Game.Core.Sim;
-using Game.Core.Stats;
-using Game.Core.World;
+using Game.Core.Combat;
+using Game.Core.Session;
+using Game.Core.Session.Bots;
+using Game.Gameplay.Combat;
 
 namespace Alpha.Sim
 {
     /// <summary>
-    /// Прогон кампаний и выгрузка трассы в CSV.
+    /// Харнес темпу (пакет D2, §5: "tools/Alpha.Sim to use FirstHourWorld/
+    /// GameSession bots"). Раніше гонив кампанії напряму через DayProcessor/
+    /// SettlementCycle (Game.Core.Sim.CampaignSimulator) — окремий, менш
+    /// повний шлях, що обходив GameSession і читав internal-стан. Тепер той
+    /// самий <see cref="BotRunner"/> (Core/Session/Bots), що й
+    /// AllMechanicsCoverageTests/Alpha.Play — гонить усі 5 політик §4.10 через
+    /// ПУБЛІЧНИЙ фасад GameSession і пише трасу з <see cref="GameSession.DayLog"/>
+    /// (§4.3), а не з внутрішнього стану: харнес бачить рівно те саме, що й гра.
     ///
-    /// Зачем: детерминизм ядра оплачен дорого, а главную его выгоду мы не
-    /// использовали. Раз кампания воспроизводима до байта, темп можно измерить,
-    /// а не обсуждать. Тесты темпа читают те же метрики через
-    /// CampaignSimulator.Measure, поэтому CLI и CI смотрят на одни числа.
+    /// Game.Core.Sim.CampaignSimulator (тір/політика-розгортка для калібровки
+    /// балансу, CampaignPacingTests) лишається окремим — цей інструмент його
+    /// НЕ замінює і не чіпає, лише більше сам його не викликає.
     ///
-    /// Запуск:  dotnet run --project tools/Alpha.Sim -- --days 200 --out sim-out
+    /// Запуск:  dotnet run --project tools/Alpha.Sim -- --days 90 --out sim-out
     /// </summary>
     internal static class Program
     {
         private static int Main(string[] args)
         {
-            int days = 200;
+            Console.OutputEncoding = Encoding.UTF8;
+
+            int days = 90;
             string outDir = "sim-out";
+            ulong seed = 1;
 
             for (int i = 0; i < args.Length - 1; i++)
             {
                 if (args[i] == "--days") int.TryParse(args[i + 1], out days);
                 if (args[i] == "--out") outDir = args[i + 1];
+                if (args[i] == "--seed") ulong.TryParse(args[i + 1], out seed);
             }
             if (days < 1) days = 1;
 
             Directory.CreateDirectory(outDir);
 
-            var policies = new[] { SimPolicy.Passive, SimPolicy.PatrolEveryNight, SimPolicy.AggressiveChoices, SimPolicy.Expedition };
-            var tiers = new[] { 1, 2, 3, 4 };
-
-            var summary = new List<CampaignMetrics>();
+            var policies = FivePolicies();
+            var summaries = new List<PolicySummary>();
 
             foreach (var policy in policies)
-                foreach (int tier in tiers)
-                {
-                    var world = BuildWorld(tier);
-                    var trace = policy == SimPolicy.Expedition
-                        ? RunExpedition(world, days)
-                        : CampaignSimulator.Run(world.Cycle, policy, days, Balance);
-                    var metrics = CampaignSimulator.Measure(trace);
-                    summary.Add(metrics);
+            {
+                var roller = new SeededDiceRoller(seed);
+                var options = new NewGameOptions { SkipCreation = false, HitRule = HitRuleKind.Threshold, Seed = seed, Roller = roller };
+                var log = new List<GameEvent>();
 
-                    string file = Path.Combine(outDir,
-                        string.Format(CultureInfo.InvariantCulture, "trace-{0}-tier{1}.csv", policy, tier));
-                    WriteCsv(file, trace);
-                }
+                var session = BotRunner.PlayDays(policy, days, options, log);
 
-            string summaryPath = Path.Combine(outDir, "summary.csv");
-            WriteSummary(summaryPath, summary);
-            PrintSummary(summary, days, outDir);
+                string tracePath = Path.Combine(outDir, "trace-" + policy.Name + ".csv");
+                WriteTrace(tracePath, policy.Name, log);
+
+                summaries.Add(Summarize(policy.Name, session, log, days));
+            }
+
+            WriteSummary(Path.Combine(outDir, "summary.csv"), summaries);
+            PrintSummary(summaries, days, outDir);
             return 0;
         }
 
-        private static BalanceConfig Balance
+        private static IBotPolicy[] FivePolicies()
         {
-            get { return new BalanceConfig(); }
-        }
-
-        // ---- сборка кампании ----
-        //
-        // Мир строит Alpha.Shared.SettlementWorld — тонкий делегат к
-        // Game.Core.Session.FirstHourWorld (Поправка №7): тот же код, которым
-        // его строит консольная сборка первого часа, теперь ещё и с
-        // производством/стройкой/населением в конвейере. Иначе замеренный темп
-        // относился бы не к той игре, в которую играют.
-
-        private static readonly string[] Positions = SettlementWorld.Positions;
-
-        private static Game.Core.Session.FirstHourWorld BuildWorld(int tier)
-        {
-            var world = SettlementWorld.Build(tier, requirePlayerDecision: false);
-
-            // Партия — протагонист, Максим, Мирослава: «в полі» с самого начала
-            // (§3.0 FIRST_HOUR), на посты не назначены. Харнес крутит их между
-            // Idle («дома») и OnMission («в отряде») сам, минуя ExpeditionParty —
-            // это internal-срез только для замера темпа.
-            //
-            // Живёт здесь, а не в общем мире: PartyForSim — internal-член ядра,
-            // открытый харнесу и закрытый игре. Консольная сборка первого часа
-            // его не видит и видеть не должна (инвариант 3).
-            var adapter = (RosterAdapter)world.Processor.Roster;
-            var party = new List<Companion>();
-            for (int i = 0; i < SettlementWorld.PartyIds.Length; i++)
+            return new IBotPolicy[]
             {
-                var member = world.Roster.Get(SettlementWorld.PartyIds[i]);
-                if (member != null) party.Add(member);
-            }
-            adapter.PartyForSim = party;
-            return world;
+                new StewardPolicy(), new PacifistPolicy(), new BloodyPolicy(),
+                new PatrolAlwaysPolicy(), new DelveGreedyPolicy()
+            };
         }
 
-        // ---- вылазка: партия из трёх уходит, три поста пустеют ----
+        // ---- трасa: рядок на подію DayLog (§4.3) ----
 
-        /// <summary>Каждые сорок суток партия уходит на десять. Четверть кампании — без трёх рук.</summary>
-        private static bool PartyIsAway(int day)
-        {
-            int inCycle = (day - 1) % 40;
-            return inCycle >= 20 && inCycle < 30;
-        }
-
-        private static CampaignTrace RunExpedition(Game.Core.Session.FirstHourWorld world, int days)
-        {
-            var adapter = (RosterAdapter)world.Processor.Roster;
-            var party = adapter.PartyForSim;
-
-            return CampaignSimulator.Run(world.Cycle, SimPolicy.Expedition, days, Balance, delegate (int day)
-            {
-                bool away = PartyIsAway(day);
-                for (int i = 0; i < party.Count; i++)
-                    if (!party[i].IsDead)
-                        party[i].Status = away ? CompanionStatus.OnMission : CompanionStatus.Idle;
-                return away;
-            });
-        }
-
-        // ---- выгрузка ----
-
-        private static void WriteCsv(string path, CampaignTrace trace)
+        private static void WriteTrace(string path, string policyName, List<GameEvent> log)
         {
             var sb = new StringBuilder();
-
-            sb.Append("policy,tier,day,phase,tension,band,daysInBand,population,")
-              .Append("signals,deltas,bandSignal,incidents,crisis");
-            foreach (var id in trace.TrackIds) sb.Append(",charge_").Append(id);
-            foreach (var id in trace.TrackIds) sb.Append(",heard_").Append(id);
-            sb.AppendLine(",topics,incidentIds,forewarnings,fired");
-
-            foreach (var row in trace.Rows)
+            sb.AppendLine("policy,day,phase,key,args");
+            foreach (var e in log)
             {
-                sb.Append(trace.Policy).Append(',')
-                  .Append(trace.Tier).Append(',')
-                  .Append(row.Day).Append(',')
-                  .Append(row.Phase).Append(',')
-                  .Append(row.TensionValue).Append(',')
-                  .Append(row.Band).Append(',')
-                  .Append(row.DaysInBand).Append(',')
-                  .Append(row.Population).Append(',')
-                  .Append(row.SignalCount).Append(',')
-                  .Append(row.DeltaCount).Append(',')
-                  .Append(row.HadBandSignal ? 1 : 0).Append(',')
-                  .Append(row.IncidentCount).Append(',')
-                  .Append(row.HadCrisis ? 1 : 0);
-
-                foreach (var id in trace.TrackIds) sb.Append(',').Append(Get(row.Charges, id));
-                foreach (var id in trace.TrackIds) sb.Append(',').Append(Get(row.Delivered, id));
-
-                sb.Append(',').Append(Quote(row.Topics))
-                  .Append(',').Append(Quote(row.Incidents))
-                  .Append(',').Append(Quote(row.Forewarnings))
-                  .Append(',').Append(Quote(row.FiredSources))
+                sb.Append(policyName).Append(',')
+                  .Append(e.Day).Append(',')
+                  .Append(e.Phase).Append(',')
+                  .Append(Quote(e.Key)).Append(',')
+                  .Append(Quote(ArgsToString(e.Args)))
                   .AppendLine();
             }
-
             File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
         }
 
-        private static int Get(Dictionary<string, int> map, string key)
+        private static string ArgsToString(IReadOnlyDictionary<string, string> args)
         {
-            int v;
-            return map.TryGetValue(key, out v) ? v : 0;
+            if (args == null || args.Count == 0) return string.Empty;
+            var sb = new StringBuilder();
+            bool first = true;
+            foreach (var kv in args)
+            {
+                if (!first) sb.Append(';');
+                sb.Append(kv.Key).Append('=').Append(kv.Value);
+                first = false;
+            }
+            return sb.ToString();
         }
 
         private static string Quote(string s)
@@ -183,89 +115,77 @@ namespace Alpha.Sim
             return "\"" + s.Replace("\"", "\"\"") + "\"";
         }
 
-        private static void WriteSummary(string path, List<CampaignMetrics> all)
+        // ---- підсумок за політику ----
+
+        private sealed class PolicySummary
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("policy,tier,days,firstForewarnDay,firstIncidentDay,firstDeltaDay," +
-                          "firstBandChangeDay,firstCrisisDay,incidents,crises,bandChanges," +
-                          "bandChangesWithoutSignal,longestNoDeltaPhases,longestNoIncidentPhases," +
-                          "signalsPerPhase,distinctTopics,maxTopicRepeats,mostRepeatedTopic," +
-                          "fullLadders,skippedLadderSteps,finalBand,finalPopulation," +
-                          "outWorst,outBase,outGood,outBest," +
-                          "tenTierTick,tenThreat,tenEvent,tenQuest,tenBlood");
+            public string Policy;
+            public int Days;
+            public int TotalEvents;
+            public int Decisions, BloodyDecisions, Battles, Crises;
+            public string FinalTensionBand, FinalCrowdBand, FinaleOutcomeKey;
+            public int FinalGold, FinalMaterials, FinalFood, FinalTier;
+        }
 
-            foreach (var m in all)
+        private static PolicySummary Summarize(string policyName, GameSession session, List<GameEvent> log, int days)
+        {
+            var s = new PolicySummary { Policy = policyName, Days = days, TotalEvents = log.Count };
+            foreach (var e in log)
             {
-                sb.Append(m.Policy).Append(',').Append(m.Tier).Append(',').Append(m.Days).Append(',')
-                  .Append(m.FirstForewarnDay).Append(',').Append(m.FirstIncidentDay).Append(',')
-                  .Append(m.FirstDeltaDay).Append(',').Append(m.FirstBandChangeDay).Append(',')
-                  .Append(m.FirstCrisisDay).Append(',').Append(m.IncidentTotal).Append(',')
-                  .Append(m.CrisisTotal).Append(',').Append(m.BandChangesTotal).Append(',')
-                  .Append(m.BandChangesWithoutSignal).Append(',')
-                  .Append(m.LongestStreakWithoutDelta).Append(',')
-                  .Append(m.LongestStreakWithoutIncident).Append(',')
-                  .Append(m.SignalsPerPhase.ToString("0.00", CultureInfo.InvariantCulture)).Append(',')
-                  .Append(m.DistinctTopics).Append(',').Append(m.MaxTopicRepeats).Append(',')
-                  .Append(m.MostRepeatedTopic).Append(',')
-                  .Append(m.FullLadders).Append(',').Append(m.SkippedLadderSteps).Append(',')
-                  .Append(m.FinalBand).Append(',').Append(m.FinalPopulation)
-                  .Append(',').Append(m.OutcomeCounts[0]).Append(',').Append(m.OutcomeCounts[1])
-                  .Append(',').Append(m.OutcomeCounts[2]).Append(',').Append(m.OutcomeCounts[3]);
-
-                foreach (var driver in new[] { "CityTierTick", "ThreatOutcome", "EventOutcome", "QuestChoice", "PlaystyleBlood" })
+                if (e.Key == "decision.resolved")
                 {
-                    int v;
-                    m.TensionByDriver.TryGetValue(driver, out v);
-                    sb.Append(',').Append(v);
+                    s.Decisions++;
+                    if (e.Args != null && e.Args.TryGetValue("path", out var p) && p == "Bloody") s.BloodyDecisions++;
                 }
-                sb.AppendLine();
+                if (e.Key == "combat.battle.started") s.Battles++;
+                if (e.Key == "crisis.test.warn") s.Crises++;
             }
 
+            var view = session.CurrentView;
+            s.FinalTensionBand = view.TensionBand;
+            s.FinalCrowdBand = view.CrowdBand;
+            s.FinalTier = view.Tier;
+
+            var econ = session.GetEconomyView();
+            s.FinalGold = econ.Gold;
+            s.FinalMaterials = econ.Materials;
+            s.FinalFood = econ.Food;
+
+            var summary = session.GetSummaryView();
+            s.FinaleOutcomeKey = summary?.FinaleOutcomeKey;
+
+            return s;
+        }
+
+        private static void WriteSummary(string path, List<PolicySummary> all)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("policy,days,totalEvents,decisions,bloodyDecisions,battles,crises,finalTensionBand,finalCrowdBand,finalTier,finalGold,finalMaterials,finalFood,finaleOutcomeKey");
+            foreach (var m in all)
+            {
+                sb.Append(m.Policy).Append(',').Append(m.Days).Append(',').Append(m.TotalEvents).Append(',')
+                  .Append(m.Decisions).Append(',').Append(m.BloodyDecisions).Append(',').Append(m.Battles).Append(',')
+                  .Append(m.Crises).Append(',').Append(m.FinalTensionBand).Append(',').Append(m.FinalCrowdBand).Append(',')
+                  .Append(m.FinalTier).Append(',').Append(m.FinalGold).Append(',').Append(m.FinalMaterials).Append(',')
+                  .Append(m.FinalFood).Append(',').Append(m.FinaleOutcomeKey)
+                  .AppendLine();
+            }
             File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
         }
 
-        private static void PrintSummary(List<CampaignMetrics> all, int days, string outDir)
+        private static void PrintSummary(List<PolicySummary> all, int days, string outDir)
         {
-            Console.OutputEncoding = Encoding.UTF8;
             Console.WriteLine();
-            Console.WriteLine("Кампаний: {0} по {1} суток. Трассы: {2}", all.Count, days, outDir);
+            Console.WriteLine("Прогонів: {0} по {1} діб (GameSession/BotRunner, §4.10). Траси: {2}", all.Count, days, outDir);
             Console.WriteLine();
-            Console.WriteLine("{0,-18} {1,4} {2,7} {3,7} {4,7} {5,7} {6,6} {7,7} {8,8} {9,8}",
-                "политика", "тир", "1-й пре", "1-й инц", "1-я дел", "1-я кри", "инц", "лестниц", "тишина", "повтор");
-            Console.WriteLine(new string('-', 96));
-
+            Console.WriteLine("{0,-14} {1,6} {2,10} {3,7} {4,8} {5,6} {6,9} {7,7}",
+                "політика", "подій", "рішень", "кров'ю", "боїв", "криз", "напруга", "тир");
+            Console.WriteLine(new string('-', 76));
             foreach (var m in all)
             {
-                Console.WriteLine("{0,-18} {1,4} {2,7} {3,7} {4,7} {5,7} {6,6} {7,7} {8,8} {9,8}",
-                    m.Policy, m.Tier,
-                    Show(m.FirstForewarnDay), Show(m.FirstIncidentDay),
-                    Show(m.FirstDeltaDay), Show(m.FirstCrisisDay),
-                    m.IncidentTotal, m.FullLadders,
-                    m.LongestStreakWithoutDelta, m.MaxTopicRepeats);
+                Console.WriteLine("{0,-14} {1,6} {2,10} {3,7} {4,8} {5,6} {6,9} {7,7}",
+                    m.Policy, m.TotalEvents, m.Decisions, m.BloodyDecisions, m.Battles, m.Crises, m.FinalTensionBand, m.FinalTier);
             }
-
-            Console.WriteLine();
-            Console.WriteLine("СТЫК ДВУХ ЛУПОВ (только политика Expedition): партия дома против партии в вылазке");
-            Console.WriteLine("{0,4} | {1,6} {2,6} | {3,7} {4,7} | {5,8} {6,8} | {7,9} {8,9}",
-                "тир", "фаз д", "фаз в", "Worst д", "Worst в", "давл д", "давл в", "W/фаза д", "W/фаза в");
-            foreach (var m in all)
-            {
-                if (m.Policy != SimPolicy.Expedition) continue;
-                double wh = m.PhasesHome > 0 ? (double)m.OutcomesHome[0] / m.PhasesHome : 0;
-                double wa = m.PhasesAway > 0 ? (double)m.OutcomesAway[0] / m.PhasesAway : 0;
-                Console.WriteLine("{0,4} | {1,6} {2,6} | {3,7} {4,7} | {5,8} {6,8} | {7,9:0.000} {8,9:0.000}",
-                    m.Tier, m.PhasesHome, m.PhasesAway, m.OutcomesHome[0], m.OutcomesAway[0],
-                    m.TensionGainHome, m.TensionGainAway, wh, wa);
-            }
-            Console.WriteLine();
-            Console.WriteLine("Столбцы: сутки первого предвестника / инцидента / дельта-сигнала / кризиса;");
-            Console.WriteLine("всего инцидентов; полных лестниц 1-2-3; самая длинная тишина без дельты (в фазах);");
-            Console.WriteLine("сколько раз повторился самый частый ключ реплики.");
-        }
-
-        private static string Show(int day)
-        {
-            return day < 0 ? "-" : day.ToString(CultureInfo.InvariantCulture);
         }
     }
 }

@@ -74,8 +74,14 @@ namespace Alpha.Shared
             }
         }
 
-        /// <summary>Текст по ключу. Таблица плейсхолдерная — настоящая придёт из SO.</summary>
-        private static string Line(string key)
+        /// <summary>
+        /// Текст по ключу. Таблица плейсхолдерная — настоящая придёт із SO
+        /// (E3, UkrainianText). Публічний (пакет D2): Alpha.Play друкує сцену
+        /// покроково через GameSession.AdvanceScene()/SceneStepView, а не через
+        /// <see cref="Play"/> (тому потрібен ключ→рядок сам по собі, без цілої
+        /// <see cref="Game.Core.Scenes.Scene"/>, якої фасад назовні не віддає).
+        /// </summary>
+        public static string Line(string key)
         {
             switch (key)
             {
