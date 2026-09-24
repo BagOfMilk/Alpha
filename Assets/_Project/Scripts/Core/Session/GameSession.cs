@@ -5,6 +5,7 @@ using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Characters.Build;
 using Game.Core.Characters.Creation;
+using Game.Core.Characters.Perks;
 using Game.Core.Characters.Progression;
 using Game.Core.Checks;
 using Game.Core.Combat;
@@ -20,6 +21,7 @@ using Game.Core.Quests;
 using Game.Core.Randomness;
 using Game.Core.Scenes;
 using Game.Core.Session.Views;
+using Game.Core.Stats;
 using Game.Core.Story;
 using Game.Core.World;
 using BaseState = Game.Core.Base.BaseState;
@@ -1720,6 +1722,97 @@ namespace Game.Core.Session
                 });
             }
             return new RosterView { Companions = list };
+        }
+
+        /// <summary>
+        /// Повна картка персонажа (полірування, ціль 1 «Картка персонажа»):
+        /// 4 атрибути, 10 скілів, активні трейти, шрами, доступні перки,
+        /// рівень/xp, стан, лояльність-БАНД, спорядження, ключові похідні
+        /// бойові стати — усе одним StatSnapshot (<see cref="Companion.Resolve"/>),
+        /// тим самим агрегатором, що й бій, щоб картка й арена не розходились
+        /// у числах. Null, якщо такого companionId немає в ростері.
+        /// </summary>
+        public Views.CharacterSheetView GetCharacterSheet(string companionId)
+        {
+            var c = _worldRoster?.Get(companionId);
+            if (c == null) return null;
+
+            var snapshot = c.Resolve(_cfg);
+
+            var attributes = new List<Views.AttributeLineView>();
+            foreach (var a in Stats.Attributes.All)
+                attributes.Add(new Views.AttributeLineView { AttributeKey = a.ToString().ToLowerInvariant(), Score = snapshot.Attribute(a) });
+
+            var skills = new List<Views.SkillLineView>();
+            foreach (var s in Stats.Skills.All)
+                skills.Add(new Views.SkillLineView { SkillKey = Stats.Skills.KeyId(s), Score = snapshot.Skill(s) });
+
+            var traits = new List<Views.TraitLineView>();
+            foreach (var t in c.Traits.Active)
+                traits.Add(new Views.TraitLineView { TraitId = t.Id, Polarity = t.Polarity.ToString() });
+
+            var scarIds = new List<string>();
+            foreach (var sc in c.Scars.Scars) scarIds.Add(sc.Id);
+
+            var unlockedPerkIds = new List<string>();
+            foreach (var p in c.Perks.Taken) unlockedPerkIds.Add(p.Id);
+
+            var availablePerks = new List<Views.PerkPreviewLineView>();
+            foreach (var p in Characters.Perks.DefaultPerks.All())
+            {
+                if (c.Perks.Has(p.Id)) continue;
+                var verdict = c.Perks.Evaluate(p, c.Skills);
+                availablePerks.Add(new Views.PerkPreviewLineView
+                {
+                    PerkId = p.Id,
+                    Available = verdict == Characters.Perks.PerkAvailability.Available,
+                    ReasonKey = PerkReasonKey(verdict)
+                });
+            }
+
+            return new Views.CharacterSheetView
+            {
+                CompanionId = c.Id,
+                Level = c.Level,
+                Xp = c.Xp,
+                XpToNextLevel = Balance.ProgressionMath.XpToNext(c.Level, _cfg),
+                Status = c.Status,
+                Loyalty = c.Card != null && c.Card.CanBeCompanion ? (LoyaltyBand?)c.LoyaltyBand : null,
+                Attributes = attributes,
+                Skills = skills,
+                Traits = traits,
+                ScarIds = scarIds,
+                UnlockedPerkIds = unlockedPerkIds,
+                AvailablePerks = availablePerks,
+                Combat = new Views.CombatStatsView
+                {
+                    HpMax = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.MaxHp)),
+                    ApMax = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.MaxAp)),
+                    Initiative = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Initiative)),
+                    Accuracy = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Accuracy)),
+                    Defense = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Defense)),
+                    Armor = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Armor)),
+                    CritChance = (int)System.Math.Round(snapshot.Get(Stats.StatKeys.Of(Stats.DerivedStat.CritChance)) * 100.0)
+                },
+                Equipment = new Views.EquipmentSheetView
+                {
+                    WeaponId = c.Equipment.Get(EquipSlot.Weapon)?.Definition.Id,
+                    ArmorId = c.Equipment.Get(EquipSlot.Armor)?.Definition.Id,
+                    AccessoryId = c.Equipment.Get(EquipSlot.Accessory)?.Definition.Id
+                }
+            };
+        }
+
+        private static string PerkReasonKey(Characters.Perks.PerkAvailability verdict)
+        {
+            switch (verdict)
+            {
+                case Characters.Perks.PerkAvailability.SkillTooLow: return "ui.reason.perk.skill_too_low";
+                case Characters.Perks.PerkAvailability.MissingPrerequisite: return "ui.reason.perk.missing_prerequisite";
+                case Characters.Perks.PerkAvailability.AlreadyTaken: return "ui.reason.perk.already_taken";
+                case Characters.Perks.PerkAvailability.Invalid: return "ui.reason.perk.invalid";
+                default: return null;
+            }
         }
 
         public SignalsFeed GetSignalsFeed()

@@ -155,6 +155,7 @@ namespace Game.Gameplay.Text
             AddSaveTitleTraining(t);         // §7.19
             AddBattleUiAndLog(t);            // §7.20
             AddSkillsAttrsResourcesBandsChars(t); // §7.21
+            AddCharacterSheetKeys(t);              // полірування, ціль 1 «Картка персонажа»
 
             // За межами §7, буквально: ідентифікатори контенту з Core (R7:
             // "building.<id>, post.<id>, site.<id>, skill.<key>, attr.<key>,
@@ -593,6 +594,68 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "enemy.horde_skirmisher", "Застрільник орди");
             AddKey(t, "enemy.horde_raider", "Наскочник орди");
+        }
+
+        /// <summary>
+        /// Полірування (ціль 1 «Картка персонажа»): назви/короткий ефект для
+        /// Core/Characters/Traits/DefaultTraits.cs і Core/Characters/Perks/
+        /// DefaultPerks.cs (обидва — новий контент цього пакета, раніше
+        /// системи слотів існували без жодного екземпляра), плюс підписи
+        /// знаку трейта і причини недоступності перка (та ж легальність-з-
+        /// причиною, що ScreenText.Legality для кнопок § ціль 2).
+        /// </summary>
+        private static void AddCharacterSheetKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "trait.steadfast", "Незламний");
+            AddKey(t, "trait.steadfast.effect", "довше опирається станам страху й приголомшення");
+            AddKey(t, "trait.hot_blooded", "Гарячий норов");
+            AddKey(t, "trait.hot_blooded.effect", "гірше переконує — говорить надто різко");
+            AddKey(t, "trait.wary", "Обережна");
+            AddKey(t, "trait.wary.effect", "діє раніше за інших у бою");
+            AddKey(t, "trait.sharp_eyed", "Гострозора");
+            AddKey(t, "trait.sharp_eyed.effect", "точніше б'є");
+            AddKey(t, "trait.meticulous", "Прискіпливий");
+            AddKey(t, "trait.meticulous.effect", "вигідніше торгує, але важче домовляється по-доброму");
+            AddKey(t, "trait.blunt", "Прямий");
+            AddKey(t, "trait.blunt.effect", "краще лікує, але гірше торгується");
+
+            AddKey(t, "ui.trait.polarity.virtue", "чеснота");
+            AddKey(t, "ui.trait.polarity.neutral", "риса");
+            AddKey(t, "ui.trait.polarity.vice", "вада");
+
+            AddKey(t, "perk.hardened_fighter", "Загартований");
+            AddKey(t, "perk.hardened_fighter.effect", "більше живучості в бою");
+            AddKey(t, "perk.field_medic", "Польовий лікар");
+            AddKey(t, "perk.field_medic.effect", "стани минають швидше — і в союзників теж");
+            AddKey(t, "perk.master_trader", "Бувалий торговець");
+            AddKey(t, "perk.master_trader.effect", "несе більше з вилазки");
+            AddKey(t, "perk.sharpshooter", "Влучний стрілець");
+            AddKey(t, "perk.sharpshooter.effect", "частіше б'є критично");
+
+            AddKey(t, "ui.reason.perk.skill_too_low", "потрібен вищий скіл");
+            AddKey(t, "ui.reason.perk.missing_prerequisite", "потрібен інший перк спочатку");
+            AddKey(t, "ui.reason.perk.already_taken", "вже взято");
+            AddKey(t, "ui.reason.perk.invalid", "недоступно");
+
+            AddKey(t, "ui.sheet.title", "Картка персонажа");
+            AddKey(t, "ui.sheet.pick_someone", "Оберіть когось зі списку ліворуч.");
+            AddKey(t, "ui.sheet.section.attributes", "Атрибути");
+            AddKey(t, "ui.sheet.section.skills", "Скіли");
+            AddKey(t, "ui.sheet.section.traits", "Трейти");
+            AddKey(t, "ui.sheet.section.scars", "Шрами");
+            AddKey(t, "ui.sheet.section.perks_unlocked", "Перки (взято)");
+            AddKey(t, "ui.sheet.section.perks_available", "Перки (доступні)");
+            AddKey(t, "ui.sheet.section.combat", "Бойові стати");
+            AddKey(t, "ui.sheet.section.equipment", "Спорядження");
+            AddKey(t, "ui.sheet.none", "—");
+            AddKey(t, "ui.sheet.xp", "Досвід: {xp} / {next}");
+            AddKey(t, "ui.sheet.combat.hp", "Живучість: {value}");
+            AddKey(t, "ui.sheet.combat.ap", "Очки дій: {value}");
+            AddKey(t, "ui.sheet.combat.initiative", "Ініціатива: {value}");
+            AddKey(t, "ui.sheet.combat.accuracy", "Точність: {value}");
+            AddKey(t, "ui.sheet.combat.defense", "Захист: {value}");
+            AddKey(t, "ui.sheet.combat.armor", "Броня: {value}");
+            AddKey(t, "ui.sheet.combat.crit", "Крит: {value}%");
         }
 
         // ==================================================================

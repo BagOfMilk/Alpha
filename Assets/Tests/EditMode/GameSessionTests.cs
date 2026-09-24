@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Game.Core.Base;
+using Game.Core.Characters;
 using Game.Core.Combat;
 using Game.Core.Dungeons;
 using Game.Core.Items;
@@ -140,6 +141,108 @@ namespace Game.Tests.EditMode
             s.CombatAutoResolve();
             Assert.AreEqual(SessionState.Title, s.State, "TrainingSkirmish повинен повернути ReturnState=Title");
             Assert.IsNull(s.GetBattleView());
+        }
+
+        // ==== Полірування (ціль 1 «Картка персонажа»): GetCharacterSheet ====
+
+        [Test]
+        public void GetCharacterSheet_UnknownCompanion_ReturnsNull()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            Assert.IsNull(s.GetCharacterSheet("no_such_companion"));
+        }
+
+        [Test]
+        public void GetCharacterSheet_Maksym_HasFourAttributesTenSkillsAndStartingTraits()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var sheet = s.GetCharacterSheet("maksym");
+            Assert.IsNotNull(sheet);
+            Assert.AreEqual("maksym", sheet.CompanionId);
+            Assert.AreEqual(4, sheet.Attributes.Count, "чотири атрибути (Сила/Спритність/Кмітливість/Воля)");
+            Assert.AreEqual(10, sheet.Skills.Count, "десять скілів");
+            Assert.AreEqual(1, sheet.Level);
+            Assert.AreEqual(CompanionStatus.Idle, sheet.Status, "Максим у полі — не на посту (§3.0)");
+            Assert.IsNotNull(sheet.Loyalty, "Максим — напарник, Loyalty не null");
+
+            // Стартові трейти (DefaultTraits, FirstHourWorld.BuildRoster): steadfast+hot_blooded.
+            var traitIds = new List<string>();
+            foreach (var t in sheet.Traits) traitIds.Add(t.TraitId);
+            CollectionAssert.Contains(traitIds, "steadfast");
+            CollectionAssert.Contains(traitIds, "hot_blooded");
+
+            Assert.IsNotNull(sheet.Combat);
+            Assert.Greater(sheet.Combat.HpMax, 0);
+            Assert.Greater(sheet.Combat.ApMax, 0);
+
+            Assert.IsNull(sheet.Equipment.WeaponId, "нічого не надіто на старті");
+        }
+
+        [Test]
+        public void GetCharacterSheet_Protagonist_HasNoStartingTraits()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var sheet = s.GetCharacterSheet(GameSession.ProtagonistId);
+            Assert.IsNotNull(sheet);
+            Assert.AreEqual(0, sheet.Traits.Count, "протагоніст — кастомна збірка (R12), стартових трейтів архетипу немає");
+        }
+
+        [Test]
+        public void GetCharacterSheet_Equip_ReflectsInEquipmentSlots()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var stash = s.GetStash();
+            Assert.IsNotNull(stash);
+            ItemInstance weapon = null;
+            foreach (var it in stash) if (it.Slot == EquipSlot.Weapon) { weapon = it; break; }
+
+            if (weapon == null)
+                Assert.Ignore("У стартовому сташі немає предмета в слот Weapon — нема що екіпірувати цим тестом.");
+
+            Assert.IsTrue(s.Equip("maksym", weapon.InstanceId, EquipSlot.Weapon));
+            var sheet = s.GetCharacterSheet("maksym");
+            Assert.AreEqual(weapon.Definition.Id, sheet.Equipment.WeaponId);
+        }
+
+        [Test]
+        public void GetCharacterSheet_AvailablePerks_MarksSkillTooLow_ForZeroSkillCompanion()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            // Дід Овсій (keeper): Trade 7 -> master_trader (гейт Trade>=6) мав
+            // бути Available; Medicine 0 -> field_medic (гейт Medicine>=6) мав
+            // бути SkillTooLow. Обидва — з DefaultPerks (полірування, ціль 1).
+            var sheet = s.GetCharacterSheet("keeper");
+            Assert.IsNotNull(sheet);
+
+            Game.Core.Session.Views.PerkPreviewLineView trader = null, medic = null;
+            foreach (var p in sheet.AvailablePerks)
+            {
+                if (p.PerkId == "master_trader") trader = p;
+                if (p.PerkId == "field_medic") medic = p;
+            }
+
+            Assert.IsNotNull(trader);
+            Assert.IsTrue(trader.Available, "Trade 7 >= гейт 6 у master_trader");
+            Assert.IsNull(trader.ReasonKey);
+
+            Assert.IsNotNull(medic);
+            Assert.IsFalse(medic.Available);
+            Assert.AreEqual("ui.reason.perk.skill_too_low", medic.ReasonKey);
         }
 
         // ---- Доба 1: тихий шлях вузла 1 (Ж) ----
