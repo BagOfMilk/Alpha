@@ -98,6 +98,8 @@ namespace Game.Core.Base
                 Companion best = null;
                 foreach (var companion in state.Roster.All)
                 {
+                    // B4-аудит §4.5: разрешён ТОЛЬКО Idle (allow-list, не «!= Dead») —
+                    // Antagonist явно не подходит, как и любой другой занятый статус.
                     if (companion.IsAssigned || companion.Status != CompanionStatus.Idle) continue;
                     if (SkillFor(companion, slot) < 1) continue;
                     if (best == null || SkillFor(companion, slot) > SkillFor(best, slot))

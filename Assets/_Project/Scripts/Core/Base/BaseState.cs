@@ -102,7 +102,10 @@ namespace Game.Core.Base
             var companion = Roster.Get(companionId);
             if (companion == null) return AssignmentResult.CompanionNotFound;
 
-            if (companion.IsDead || companion.Status == CompanionStatus.OnMission)
+            // B4-аудит §4.5: Antagonist явно исключён (не «!= Dead») — ушедший в
+            // антагонисты не встаёт обратно на пост, даже если формально жив.
+            if (companion.IsDead || companion.Status == CompanionStatus.OnMission ||
+                companion.Status == CompanionStatus.Antagonist)
                 return AssignmentResult.CompanionUnavailable;
 
             // Пост погибшего свободен, даже если сверка ещё не прошла.
@@ -155,6 +158,16 @@ namespace Game.Core.Base
         ///
         /// Без этого погибший на посту производил вечно, а пост нельзя было отдать
         /// живому: слот считался занятым (аудит разрывов, G17).
+        ///
+        /// B4-фикс ревью: та же дыра повторялась для Antagonist — переход в
+        /// антагонисты (<see cref="Game.Core.Companions.Defection.Defect"/>)
+        /// без явной ссылки на эту базу чистит только сторону напарника
+        /// (<c>Companion.AssignedSlotId</c>), а бухгалтерия слота
+        /// (<c>AssignmentSlot.AssignedCompanionId</c>) не знает об уходе и
+        /// оставалась занятой навсегда — пост нельзя отдать живому, а
+        /// дефектор продолжал бы производить и получать опыт с поста
+        /// (AdvanceCycle ниже сверяется через тот же ReleaseFallen). IsFallen
+        /// явно включает Antagonist — не «!= Dead», как и везде в аудите §4.5.
         /// Возвращает, сколько постов освобождено.
         /// </summary>
         public int ReleaseFallen()
@@ -172,7 +185,7 @@ namespace Game.Core.Base
         private bool IsFallen(string companionId)
         {
             var c = Roster.Get(companionId);
-            return c == null || c.IsDead;
+            return c == null || c.IsDead || c.Status == CompanionStatus.Antagonist;
         }
 
         // ---- слепок хозяйства (Foundation/A1) ----
@@ -275,7 +288,14 @@ namespace Game.Core.Base
             {
                 if (!slot.Unlocked || !slot.IsOccupied) continue;
                 var companion = Roster.Get(slot.AssignedCompanionId);
-                if (companion == null || companion.IsDead || companion.Status == CompanionStatus.OnMission) continue;
+                // B4-фикс ревью: ReleaseFallen() чуть выше уже освобождает
+                // слот антагониста (тот же IsFallen), но допуск к производству
+                // держим явным списком — «не Dead» не исключает Antagonist
+                // по построению enum, а слот, отпущенный этим же тиком, сюда
+                // и не попадёт (IsOccupied уже false); явная проверка — тот же
+                // стиль защиты, что и в TryAssign/Steward.Staff (§4.5).
+                if (companion == null || companion.IsDead || companion.Status == CompanionStatus.OnMission ||
+                    companion.Status == CompanionStatus.Antagonist) continue;
 
                 var def = slot.Definition;
                 int output = ProductionCalculator.OutputPerCycle(companion, def, Balance);

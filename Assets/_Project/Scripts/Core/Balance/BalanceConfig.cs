@@ -147,5 +147,8 @@ namespace Game.Core.Balance
 
         /// <summary>Предметы/крафт: цена подъёма редкости, заряды именных эффектов (B3).</summary>
         public ItemBalance Items = new ItemBalance();
+
+        /// <summary>Лояльность напарников, рябь ростера, дефекция (B4/R2).</summary>
+        public CompanionSocialBalance CompanionSocial = new CompanionSocialBalance();
     }
 }

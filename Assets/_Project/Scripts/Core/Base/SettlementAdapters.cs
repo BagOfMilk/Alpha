@@ -33,16 +33,12 @@ namespace Game.Core.Base
         public string Id => _companion.Id;
         public bool IsProtagonist { get; }
 
-        // ВНИМАНИЕ ИНТЕГРАТОРУ (ревью B7, не в §5.1): этот файл — не в таблице
-        // владения §5.1, но пакет B4 по §4.5 обязан добавить исключение
-        // Antagonist ИМЕННО в IsPresentInSettlement сразу ниже, в этом же
-        // классе, где B7 добавил GetCheckValue/ContextAttributeFor (G16) чуть
-        // дальше. При мердже B4+B7 в фазе C эти две правки нужно свести
-        // руками в одном классе, а не блайндовым git merge — как и
-        // предупреждает ревью пакета.
+        // B4-аудит §4.5: Antagonist явно исключён из присутствия (не «!= Dead») —
+        // ушедший в антагонисты не кандидат ни на проверку, ни на пост.
         public bool IsPresentInSettlement =>
             _companion.Status != CompanionStatus.OnMission &&
-            _companion.Status != CompanionStatus.Dead;
+            _companion.Status != CompanionStatus.Dead &&
+            _companion.Status != CompanionStatus.Antagonist;
 
         public string HeldPositionId => _companion.AssignedSlotId;
 
@@ -129,7 +125,11 @@ namespace Game.Core.Base
                 sb.Append(c.Id).Append('>')
                   .Append((int)c.Status).Append('>')
                   .Append(c.AssignedSlotId ?? "").Append('>')
-                  .Append(c.InjuryPoints.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                  .Append(c.InjuryPoints.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+                  // B4/R2: Лояльность — пятое поле, добавлено аддитивно в конец
+                  // записи (§4.8 R13), чтобы старые слепки без него читались же
+                  // (RestoreState ниже толерантна к длине < 5).
+                  .Append('>').Append(c.Loyalty.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             return sb.ToString();
         }
@@ -152,6 +152,16 @@ namespace Game.Core.Base
                 if (double.TryParse(f[3], System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out injury))
                     c.InjuryPoints = injury;
+
+                // B4/R2: пятое поле — не у всех старых слепков есть, поэтому
+                // не в общем "f.Length < 4 continue" выше, а отдельной толерантной проверкой.
+                if (f.Length >= 5)
+                {
+                    int loyalty;
+                    if (int.TryParse(f[4], System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out loyalty))
+                        c.RestoreLoyaltyForSave(loyalty);
+                }
             }
         }
         public RosterAdapter(Roster roster, string protagonistId = null, BalanceConfig balance = null)
@@ -202,6 +212,10 @@ namespace Game.Core.Base
                     var c = all[i];
                     if (c.IsDead || IsProtagonist(c.Id)) continue;
                     if (c.Status == CompanionStatus.OnMission) continue;
+                    // B4-аудит §4.5: антагонист (необратимо ушедший, см. enum)
+                    // не жертва обычного кризиса — иначе Kill/Wound ниже
+                    // молча затирают его статус ещё до финала (R8).
+                    if (c.Status == CompanionStatus.Antagonist) continue;
                     ids.Add(c.Id);
                 }
                 ids.Sort(StringComparer.Ordinal);
@@ -223,7 +237,8 @@ namespace Game.Core.Base
         public void Kill(string actorId)
         {
             var c = _roster.Get(actorId);
-            if (c == null || IsProtagonist(actorId)) return;
+            // B4-аудит §4.5: антагонист необратим — обычный Kill его не трогает.
+            if (c == null || IsProtagonist(actorId) || c.Status == CompanionStatus.Antagonist) return;
             c.MarkDead();
         }
 
@@ -239,7 +254,8 @@ namespace Game.Core.Base
         public void Wound(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light)
         {
             var c = _roster.Get(actorId);
-            if (c == null || c.IsDead) return;
+            // B4-аудит §4.5: антагонист необратим — рана не затирает его статус.
+            if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist) return;
             c.InjuryPoints += injuryPoints;
             if (c.Status != CompanionStatus.OnMission)
                 c.Status = CompanionStatus.Injured;

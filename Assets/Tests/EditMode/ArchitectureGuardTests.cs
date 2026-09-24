@@ -414,5 +414,192 @@ namespace Game.Tests.EditMode
             Assert.Contains(typeof(Game.Core.Stats.IModifierProvider), interfaces,
                 "Game.Core.Items.Equipment обязан реализовывать IModifierProvider");
         }
+
+        // ==================================================================
+        // B4 (Social): аудит CompanionStatus.Antagonist (§4.5) и укрытие
+        // сырой Лояльности (инвариант 3, R2). Добавлено в конец класса.
+        // ==================================================================
+
+        /// <summary>
+        /// Аудит §4.5: ни одна из точек допуска, что владеет файлами B4, не
+        /// пускает антагониста — назначение на пост (BaseState.TryAssign),
+        /// автоназначение (Steward.Staff), присутствие (CompanionActorAdapter/
+        /// RosterAdapter). Четвёртая точка §4.5 — «ExpeditionRunner/новий
+        /// GameSession.DepartExpedition» — по §5.1 файл B7-эксклюзивный
+        /// (`Core/Expeditions/*`), а сам `GameSession.DepartExpedition` (R15)
+        /// ещё не существует в этом воркчасте; тестировать его здесь нечем.
+        /// ПРЕЖНЯЯ версия этого теста точечно правила `ExpeditionParty.Depart`
+        /// (чужой файл вне §5.1-владения B4) — правка отменена ревью, см.
+        /// deviationsFromSpec пакета B4; точка осталась швом для B7/D1 (§4.11:
+        /// валидация, включая Antagonist, происходит ПЕРЕД вызовом Depart).
+        /// </summary>
+        [Test]
+        public void Antagonist_NeverAssignable_NeverDispatchable()
+        {
+            var cfg = new Game.Core.Balance.BalanceConfig();
+            var roster = new Game.Core.Characters.Roster();
+            var state = new Game.Core.Base.BaseState(roster, new Game.Core.Economy.ResourceLedger(), cfg);
+            state.AddSlot(new Game.Core.Base.AssignmentSlotDefinition(
+                "post", "Пост", Game.Core.Base.BaseSectionType.Council));
+
+            var antagonist = new Game.Core.Characters.CompanionArchetype("antagonist", "antagonist")
+                .CreateInstance("antagonist", cfg);
+            roster.Add(antagonist);
+            Game.Core.Companions.Defection.Defect(antagonist);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status);
+
+            // 1) BaseState.TryAssign — не встаёт на пост.
+            var assign = state.TryAssign("antagonist", "post");
+            Assert.AreEqual(Game.Core.Base.AssignmentResult.CompanionUnavailable, assign,
+                "антагонист не должен быть назначаем на пост");
+            Assert.IsNull(state.GetSlot("post").AssignedCompanionId);
+
+            // 2) Steward.Staff — не расставляет антагониста на открытый пост,
+            //    даже когда больше некому.
+            Game.Core.Base.Steward.Staff(state);
+            Assert.IsNull(state.GetSlot("post").AssignedCompanionId,
+                "автоназначение хозяина не должно ставить антагониста на пост");
+
+            // 3) Присутствие — адаптеры исключают антагониста.
+            var actorAdapter = new Game.Core.Base.CompanionActorAdapter(antagonist);
+            Assert.IsFalse(actorAdapter.IsPresentInSettlement,
+                "антагонист не присутствует в поселении");
+            var rosterAdapter = new Game.Core.Base.RosterAdapter(roster);
+            CollectionAssert.DoesNotContain(
+                System.Linq.Enumerable.Select(rosterAdapter.PresentActors, a => a.Id), "antagonist",
+                "антагонист не должен попадать в список присутствующих");
+        }
+
+        /// <summary>
+        /// Блокер ревью пакета B4: дневной кризис (`IncidentResolver.ResolveCrisis`
+        /// через `Core/Loop/IncidentStep.cs`) выбирает жертву из
+        /// `RosterAdapter.KillableActorIds` и бьёт по ней `Kill`/`Wound` — это
+        /// тоже точка допуска по `CompanionStatus`, которую пропустил
+        /// исходный аудит §4.5 (он назвал только TryAssign/Staff/Presence/
+        /// Depart). Без исключения обычный кризис молча стирал необратимый
+        /// статус антагониста обратно в Dead/Injured ДО того, как финал успевал
+        /// использовать дефектора как босса (R8, FromDefector).
+        /// </summary>
+        [Test]
+        public void Antagonist_NeverKillableByOrdinaryIncident()
+        {
+            var cfg = new Game.Core.Balance.BalanceConfig();
+            var roster = new Game.Core.Characters.Roster();
+
+            var antagonist = new Game.Core.Characters.CompanionArchetype("antagonist2", "antagonist2")
+                .CreateInstance("antagonist2", cfg);
+            roster.Add(antagonist);
+            Game.Core.Companions.Defection.Defect(antagonist);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status);
+
+            var rosterAdapter = new Game.Core.Base.RosterAdapter(roster);
+
+            CollectionAssert.DoesNotContain(rosterAdapter.KillableActorIds, "antagonist2",
+                "антагонист не должен считаться допустимой жертвой кризиса");
+
+            rosterAdapter.Wound("antagonist2", 30);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status,
+                "Wound не должен затирать статус антагониста");
+
+            rosterAdapter.Kill("antagonist2");
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status,
+                "Kill не должен затирать статус антагониста");
+        }
+
+        /// <summary>
+        /// R2/инвариант 3: сырая Лояльность — internal, как и Напряжение.
+        /// Game.Gameplay не может прочитать число, только LoyaltyBand.
+        /// </summary>
+        [Test]
+        public void Companion_LoyaltyRaw_IsInternal_NotReadableFromGameplay()
+        {
+            var type = typeof(Game.Core.Characters.Companion);
+
+            var internalLoyalty = type.GetProperty("Loyalty",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(internalLoyalty, "Companion.Loyalty должен существовать как internal-член");
+
+            var publicLoyalty = type.GetProperty("Loyalty",
+                BindingFlags.Public | BindingFlags.Instance);
+            Assert.IsNull(publicLoyalty, "Companion.Loyalty не должен быть публичным");
+
+            var band = type.GetProperty("LoyaltyBand", BindingFlags.Public | BindingFlags.Instance);
+            Assert.IsNotNull(band, "LoyaltyBand — единственное, что видно наружу");
+        }
+
+        /// <summary>
+        /// Блокер фикс-ревью пакета B4: <c>Defection.Defect(c)</c> без явного
+        /// <c>BaseState</c> (сигнатура и §7-таблица спецификации не требуют
+        /// его передавать) чистит только <c>Companion.AssignedSlotId</c> —
+        /// бухгалтерия слота (<c>AssignmentSlot.AssignedCompanionId</c>) не
+        /// узнаёт об уходе и раньше оставалась занятой навсегда: пост нельзя
+        /// было отдать живому, а дефектор молча продолжал бы производить и
+        /// получать опыт с поста каждый цикл (тот же класс дыры, что и G17
+        /// для погибших). Фикс — <c>BaseState.IsFallen</c> считает Antagonist
+        /// «упавшим» наравне с IsDead, так что и опережающая сверка
+        /// (<c>ReleaseFallen</c>, тикает первым шагом AdvanceCycle и перед
+        /// Steward.Staff), и сам TryAssign освобождают пост без чьей-либо
+        /// подсказки о статусе.
+        /// </summary>
+        [Test]
+        public void Defect_WithoutBaseState_PostIsFreedByReleaseFallenAndStopsProducing()
+        {
+            var cfg = new Game.Core.Balance.BalanceConfig { FoodUpkeepPerCompanion = 0 };
+            var roster = new Game.Core.Characters.Roster();
+            var state = new Game.Core.Base.BaseState(roster, new Game.Core.Economy.ResourceLedger(), cfg);
+
+            var arch = new Game.Core.Characters.CompanionArchetype("defector", "Дефектор");
+            arch.SetSkill(Game.Core.Stats.SkillType.Mechanics, 10);
+            var companion = arch.CreateInstance("defector_1");
+            roster.Add(companion);
+
+            state.AddSlot(new Game.Core.Base.AssignmentSlotDefinition("bench", "Верстак",
+                Game.Core.Base.BaseSectionType.Workshop)
+            {
+                OutputKind = Game.Core.Base.SlotOutputKind.Resource,
+                OutputResource = Game.Core.Economy.ResourceType.Materials,
+                PrimarySkill = Game.Core.Stats.SkillType.Mechanics,
+                BaseOutput = 5, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0
+            });
+            Assert.AreEqual(Game.Core.Base.AssignmentResult.Success, state.TryAssign("defector_1", "bench"));
+
+            // Дефекция БЕЗ baseState — ровно тот вызов, что не покрывал старый
+            // аудит §4.5 и не покрывает контрактная таблица §7 спецификации.
+            Game.Core.Companions.Defection.Defect(companion);
+            Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, companion.Status);
+            Assert.IsNull(companion.AssignedSlotId, "напарник сам себя снял с поста при уходе");
+
+            // Бухгалтерия слота ДО фикса осталась бы занятой навсегда.
+            Assert.AreEqual("defector_1", state.GetSlot("bench").AssignedCompanionId,
+                "сразу после Defect слот ещё занят — сверка происходит на следующем шаге, не внутри Defect");
+
+            var freed = state.ReleaseFallen();
+            Assert.AreEqual(1, freed, "ReleaseFallen должен опознать антагониста как упавшего и освободить пост");
+            Assert.IsNull(state.GetSlot("bench").AssignedCompanionId, "пост свободен для живого");
+
+            // Пост можно отдать другому живому.
+            var other = new Game.Core.Characters.CompanionArchetype("other", "Другой").CreateInstance("other_1");
+            roster.Add(other);
+            Assert.AreEqual(Game.Core.Base.AssignmentResult.Success, state.TryAssign("other_1", "bench"),
+                "после освобождения пост должен принять нового человека");
+            state.Unassign("bench");
+
+            // Второй антагонист на том же посту — AdvanceCycle не должен ничего
+            // ему производить/начислять, даже если бы бухгалтерия слота как-то
+            // осталась занятой (защита в глубину, не только через ReleaseFallen).
+            var second = new Game.Core.Characters.CompanionArchetype("defector2", "Дефектор2");
+            second.SetSkill(Game.Core.Stats.SkillType.Mechanics, 10);
+            var companion2 = second.CreateInstance("defector2_1");
+            roster.Add(companion2);
+            Assert.AreEqual(Game.Core.Base.AssignmentResult.Success, state.TryAssign("defector2_1", "bench"));
+            Game.Core.Companions.Defection.Defect(companion2);
+
+            var before = state.Resources.Get(Game.Core.Economy.ResourceType.Materials);
+            state.AdvanceCycle();
+            Assert.AreEqual(before, state.Resources.Get(Game.Core.Economy.ResourceType.Materials),
+                "антагонист не должен производить ресурсы с поста, на котором технически остался");
+            Assert.IsNull(state.GetSlot("bench").AssignedCompanionId,
+                "AdvanceCycle сверяется через тот же ReleaseFallen первым шагом — пост освобождён");
+        }
     }
 }

@@ -15,7 +15,59 @@ namespace Game.Core.Characters
         OnMission = 2, // в вылазке (Даж)
         Injured = 3,   // ранен, нужно восстановление
         Resting = 4,   // отдыхает/лечится в лазарете
-        Dead = 5       // погиб. НЕОБРАТИМО (US-9.1, US-11.1)
+        Dead = 5,      // погиб. НЕОБРАТИМО (US-9.1, US-11.1)
+
+        // ---- B4 (Social): аудит §4.5 ----
+        // Ушёл в антагонисты (дефекция, R2/§2 №25). НЕОБРАТИМО, как и Dead:
+        // не допускается ни на пост, ни в отряд, ни в присутствующие —
+        // см. ArchitectureGuardTests.Antagonist_NeverAssignable_NeverDispatchable.
+        Antagonist = 6
+    }
+
+    /// <summary>
+    /// Полоса лояльности напарника (R2, GDD Э9): 0..100 -> 5 полос. Якорь —
+    /// насколько напарник верит в твой путь и в общину; потребитель —
+    /// <see cref="Game.Core.Companions.Defection"/> (низкая полоса N дней ->
+    /// зрада) и <see cref="Game.Core.Companions.CompanionArc"/> (главы гейтятся
+    /// полосой); сигнал — событие смены полосы на каждое изменение (инвариант 4,
+    /// см. <see cref="Companion.ApplyLoyaltyDelta"/>), текстовый ключ
+    /// «loyalty.band.&lt;band&gt;» (§7.21).
+    /// </summary>
+    public enum LoyaltyBand
+    {
+        Broken = 0,
+        Resentful = 1,
+        Wary = 2,
+        Steady = 3,
+        Devoted = 4
+    }
+
+    /// <summary>
+    /// Результат <see cref="Companion.ApplyLoyaltyDelta"/>: данные для события
+    /// D1 (§2 №23: «loyalty.band_changed{companionId,band}»). Сырое значение
+    /// («Delta») намеренно internal — тот же контур укрытия, что у <see
+    /// cref="Companion.Loyalty"/> (инвариант 3): за пределы Game.Core ничего,
+    /// кроме полос, не уходит.
+    /// </summary>
+    public readonly struct LoyaltyChange
+    {
+        public readonly string CompanionId;
+        public readonly LoyaltyBand From;
+        public readonly LoyaltyBand To;
+        internal readonly int Delta;
+        internal readonly string SourceId;
+
+        internal LoyaltyChange(string companionId, int delta, LoyaltyBand from, LoyaltyBand to, string sourceId)
+        {
+            CompanionId = companionId;
+            Delta = delta;
+            From = from;
+            To = to;
+            SourceId = sourceId;
+        }
+
+        /// <summary>Нет немого перехода полосы (инвариант 4) — вот что проверяют на это.</summary>
+        public bool BandChanged => From != To;
     }
 
     /// <summary>
@@ -185,6 +237,71 @@ namespace Game.Core.Characters
             Level = result.Level;
             Xp = result.RemainderXp;
             return result;
+        }
+
+        // ==================================================================
+        // B4 (Social): Лояльность (R2) и аудит CompanionStatus.Antagonist.
+        // Единственный контиguous-блок пакета B4 в общем файле (§5.1 — B3
+        // добавляет Equipment, B7 — GainXpNoAutoSpend; сюда не заходят).
+        // ==================================================================
+
+        /// <summary>
+        /// Пороги полос читаются из плейсхолдер-дефолта секции баланса, а не из
+        /// того, что передали в конструктор: конструктор — общий код, который
+        /// пакету B4 трогать нельзя (см. правило "только свой блок" §5.1).
+        /// Как только SO-обёртка баланса (R14, отложено) станет читаемой на
+        /// инстансе, сюда заходит перенос на реальный BalanceConfig.CompanionSocial.
+        /// </summary>
+        private static readonly CompanionSocialBalance DefaultSocialBalance = new CompanionSocialBalance();
+
+        /// <summary>
+        /// Сырое значение лояльности 0..100. Internal — как и Напряжение
+        /// (инвариант 3): Game.Gameplay физически не видит число, только
+        /// <see cref="LoyaltyBand"/>. Проверяется рефлексией в
+        /// ArchitectureGuardTests (лінт "не читается з Game.Gameplay").
+        /// </summary>
+        internal int Loyalty { get; private set; } = 50;
+
+        /// <summary>Полоса — единственное, что видно наружу (инвариант 3/6).</summary>
+        public LoyaltyBand LoyaltyBand => DefaultSocialBalance.BandFor(Loyalty);
+
+        /// <summary>
+        /// Меняет сырое значение (кламп 0..100) и возвращает данные для сигнала
+        /// (инвариант 4: смена полосы обязана дать событие — <see
+        /// cref="LoyaltyChange.BandChanged"/> отвечает на это; вызывающий,
+        /// а не Companion, решает, во что превращать смену полосы дальше —
+        /// GameEvent соберёт D1). Внутренний метод: лояльность двигают только
+        /// системы Core/Companions (LoyaltyRules/RosterDrama/Defection).
+        /// </summary>
+        internal LoyaltyChange ApplyLoyaltyDelta(int delta, string sourceId = null)
+        {
+            var from = LoyaltyBand;
+            int next = Loyalty + delta;
+            Loyalty = next < 0 ? 0 : (next > 100 ? 100 : next);
+            var to = LoyaltyBand;
+            return new LoyaltyChange(Id, delta, from, to, sourceId);
+        }
+
+        /// <summary>
+        /// Слепок хозяйства (Foundation/A1, фрагмент roster=) добавляет
+        /// Лояльность как значение из сейва (аудит §4.8 R13) без побочных
+        /// эффектов "дельты" — как и <see cref="RestoreProgressForSave"/>.
+        /// </summary>
+        internal void RestoreLoyaltyForSave(int loyalty)
+        {
+            Loyalty = loyalty < 0 ? 0 : (loyalty > 100 ? 100 : loyalty);
+        }
+
+        /// <summary>
+        /// Необратимый уход в антагонисты (R2/§2 №25). Снимает с поста, если
+        /// был назначен — вызывающий (<see cref="Game.Core.Companions.Defection"/>)
+        /// делает это до вызова, здесь только фиксируется статус, зеркалом
+        /// <see cref="MarkDead"/>.
+        /// </summary>
+        internal void MarkAntagonist()
+        {
+            Status = CompanionStatus.Antagonist;
+            AssignedSlotId = null;
         }
     }
 }
