@@ -47,11 +47,16 @@ namespace Game.Core.Session
         /// сьогодні ЄДИНИЙ споживач <see cref="FirstHourWorld"/> і Є тестовою
         /// сборкою; окремого "звичайного" режиму кампанії поки не існує. Це
         /// НАЛАШТУВАННЯ виклику, не баланс: проектні <c>BuildingDefinition.Days</c>
-        /// (<c>Core/Base/Buildings/DefaultBuildings.cs</c>) цим не змінюються і
-        /// лишаються для симуляційного харнеса (<c>tools/Alpha.Sim</c>,
-        /// <c>Steward</c>, <c>CityWorksTests</c>) — вони кличуть
-        /// <c>CityWorks.Order</c> напряму, без <see cref="NewGameOptions"/>, і тому
-        /// це поле на них не впливає.
+        /// (<c>Core/Base/Buildings/DefaultBuildings.cs</c>) цим не змінюються.
+        /// <c>Steward</c> і <c>CityWorksTests</c> кличуть <c>CityWorks.Order</c>
+        /// напряму, без <see cref="NewGameOptions"/> взагалі, і тому це поле на
+        /// них справді не впливає. <c>tools/Alpha.Sim</c> — інша справа: він
+        /// веде кампанію через <see cref="GameSession"/>/<c>BotRunner</c>, той
+        /// самий шлях, що й <c>tools/Alpha.Play</c>, тож цей дефолт на нього
+        /// поширювався б мовчки, якщо його не перекрити. Калібрування балансу
+        /// потребує проектних строків, тому
+        /// <c>tools/Alpha.Sim/Program.cs</c> явно ставить
+        /// <c>FastConstruction = false</c> у своєму <see cref="NewGameOptions"/>.
         /// </summary>
         public bool FastConstruction = true;
     }
