@@ -121,6 +121,76 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(res.Bypassed, "переконання окремо теж проходить (амендмент 1 — АБО)");
         }
 
+        // ---- Фікс блокера ревʼю B2: вхідний Push не мусить тихцем підіймати
+        // ---- порог тихого обходу ПЕРШОЇ кімнати понад документовані §3.4/§7.11 ----
+
+        [Test]
+        public void EffectiveQuietThreshold_Room1_MatchesDocumentedValue_NotInflatedByEntryPush()
+        {
+            var run = NewCampRun();
+
+            // Конструктор уже зробив один Push (вхід у кімнату 1) -- саме він
+            // підіймав живу ThreatBand до Tense ДО того, як тихий обхід кімнати
+            // 1 хоч раз перевірявся (блокер ревʼю B2). EffectiveQuietThreshold
+            // мусить лишатися рівно документованим числом, а не +1.
+            var survivalCheck = run.CurrentRoom.QuietChecks[0];
+            var persuadeCheck = run.CurrentRoom.QuietChecks[1];
+
+            Assert.AreEqual(5, run.EffectiveQuietThreshold(survivalCheck),
+                "документований поріг room1 (Виживання ≥5, §3.4/§7.11) не мусить рости від вхідного Push");
+            Assert.AreEqual(5, run.EffectiveQuietThreshold(persuadeCheck),
+                "документований поріг room1 (Переконання ≥5, §3.4/§7.11) не мусить рости від вхідного Push");
+        }
+
+        [Test]
+        public void QuietBypass_SurvivalExactlyAtDocumentedThreshold_Succeeds_IsolatedFromPersuadeCushion()
+        {
+            // Ізолюємо шлях Виживання (Переконання лишається 0): подушка
+            // Переконання (PersuadeCushion) на старому коді маскувала блокер
+            // лише для свого шляху -- цей тест саме тому не використовує Squad,
+            // де Value застосовується до БУДЬ-ЯКОГО навику.
+            var scout = new FakeActor { Id = "scout", Value = 0 };
+            scout.Skills[SkillKeys.Survival.Id] = 5; // рівно документований порог
+            var run = NewCampRun();
+
+            var res = run.ResolveRoom(IncidentPath.Quiet, new List<ISettlementActor> { scout });
+
+            Assert.AreNotEqual(OutcomeBand.Worst, res.QuietBand,
+                "Виживання=5 (документований §3.4/§7.11 порог) мусить рівно проходити тихо, а не вимагати 6");
+            Assert.IsTrue(res.Bypassed);
+            Assert.IsFalse(res.NeedsBattle);
+        }
+
+        [Test]
+        public void QuietBypass_PersuadeExactlyAtDocumentedThreshold_Succeeds()
+        {
+            var negotiator = new FakeActor { Id = "negotiator", Value = 0 };
+            negotiator.Skills[SkillKeys.Persuade.Id] = 5; // рівно документований порог
+            var run = NewCampRun();
+
+            var res = run.ResolveRoom(IncidentPath.Quiet, new List<ISettlementActor> { negotiator });
+
+            Assert.AreNotEqual(OutcomeBand.Worst, res.QuietBand);
+            Assert.IsTrue(res.Bypassed);
+        }
+
+        [Test]
+        public void CaptureState_RestoreState_PreservesRoomEntryThreatBand_ForQuietThreshold()
+        {
+            // Фікс блокера ревʼю B2 без цього поля в слепку: рестор би штрафував
+            // тихий обхід поточної кімнати живою (уже піднятою) ThreatBand
+            // замість зафіксованої на вході -- застосований порог тихо зсунувся б.
+            var run = NewCampRun();
+            var blob = run.CaptureState();
+
+            var restored = NewCampRun();
+            restored.RestoreState(blob);
+
+            var req = restored.CurrentRoom.QuietChecks[0];
+            Assert.AreEqual(run.EffectiveQuietThreshold(req), restored.EffectiveQuietThreshold(req));
+            Assert.AreEqual(5, restored.EffectiveQuietThreshold(req));
+        }
+
         [Test]
         public void QuietBypass_Fails_ForcesBattle_NeverResolvesItself()
         {
@@ -441,6 +511,49 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(DungeonOutcome.Abandoned, run.Outcome);
             Assert.AreNotEqual(DungeonOutcome.Wiped, run.Outcome, "обережний вихід — не вайп");
             Assert.AreEqual(0, run.UnbankedMaterials);
+        }
+
+        // ---- Фікс мажора ревʼю B2: Extract/Abandon так само завершують прогін
+        // ---- і не мусять губити зміну полоси Threat мовчки (інваріант 4) ----
+
+        [Test]
+        public void Extract_BeforeResolvingEnteredRoom_SurfacesThreatBandChange_NotSilently()
+        {
+            // Конструктор уже зробив Push у room1 (Calm->Tense), і room1 ще НЕ
+            // розв'язана -- жоден RoomResolution цей перехід ще не здав.
+            var run = NewCampRun();
+            var baseState = new BaseState(new Roster(), new ResourceLedger(), new BalanceConfig());
+
+            var rep = run.Extract(baseState);
+
+            Assert.IsTrue(rep.ThreatBandChanged,
+                "Extract не мусить губити мовчки перехід полоси, який ще ніхто не бачив (мажор ревʼю B2)");
+        }
+
+        [Test]
+        public void Abandon_AfterPushIntoUnresolvedRoom_SurfacesThreatBandChange_NotSilently()
+        {
+            var run = NewCampRun();
+            run.ResolveRoom(IncidentPath.Quiet, Squad(9)); // room1: Calm->Tense вже здано тут
+            run.Push(); // room2: Tense->Dangerous, ще НЕ розв'язана
+
+            var rep = run.Abandon();
+
+            Assert.IsTrue(rep.ThreatBandChanged,
+                "Abandon не мусить губити мовчки перехід полоси від Push у ще не розв'язану кімнату");
+        }
+
+        [Test]
+        public void Extract_WhenBandChangeAlreadyReportedByRoomResolution_DoesNotFalselyRepeat()
+        {
+            var run = NewCampRun();
+            run.ResolveRoom(IncidentPath.Quiet, Squad(9)); // room1: Calm->Tense вже здано тут
+            var baseState = new BaseState(new Roster(), new ResourceLedger(), new BalanceConfig());
+
+            var rep = run.Extract(baseState);
+
+            Assert.IsFalse(rep.ThreatBandChanged,
+                "перехід уже повідомлений розв'язком кімнати -- Extract не мусить видавати його вдруге");
         }
 
         // ---- Детермінізм ----

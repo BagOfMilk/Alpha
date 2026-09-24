@@ -110,6 +110,14 @@ namespace Game.Core.Dungeons
         public int Gold;
         public int DepthReached;
         public IReadOnlyList<string> ItemIds = Array.Empty<string>();
+
+        /// <summary>
+        /// Фікс мажора ревʼю B2 (інваріант 4): Extract/Abandon теж завершують
+        /// прогін і мусять донести зміну полоси Threat, якщо гравець вийшов,
+        /// не розв'язавши щойно відкриту Push-ом кімнату (тоді жоден
+        /// RoomResolution з цим переходом уже не прийде).
+        /// </summary>
+        public bool ThreatBandChanged;
     }
 
     /// <summary>
@@ -142,6 +150,22 @@ namespace Game.Core.Dungeons
         /// НАСТУПНОМУ розв'язку кімнати, а не лише всередині ResolveEvent.
         /// </summary>
         private DungeonThreatBand _lastReportedBand = DungeonThreatBand.Calm;
+
+        /// <summary>
+        /// Полоса Threat, зафіксована ПЕРЕД входом у поточну кімнату (до
+        /// власного <see cref="Push"/>) — фікс БЛОКЕРА ревью B2 (інваріант 8:
+        /// «показаний порог = застосований»). <see cref="EffectiveThreshold"/>
+        /// штрафує тихий обхід ЦІЄЮ полосою, а не живою <see cref="ThreatBand"/>:
+        /// інакше вхідний Push у кожну кімнату (уключно з першою — він
+        /// одразу підіймає Threat ще в конструкторі) підіймав би власний порог
+        /// кімнати ДО того, як гравець у ній хоч щось зробив, і документований
+        /// «Виживання ≥5 / Переконання ≥5» кімнати 1 (§3.4/§7.11) мовчки ставав
+        /// би ≥6. Оновлюється лише в <see cref="Push"/>, тож дельта
+        /// <see cref="ResolveEvent"/> у ПОТОЧНІЙ кімнаті законно НЕ штрафує
+        /// власний тихий чек цієї ж кімнати, але вже враховується для
+        /// наступної.
+        /// </summary>
+        private DungeonThreatBand _roomEntryThreatBand = DungeonThreatBand.Calm;
 
         public string SiteId { get; }
 
@@ -193,6 +217,11 @@ namespace Game.Core.Dungeons
             if (_roomIndex + 1 >= _rooms.Count)
                 throw new InvalidOperationException("Далі немає кімнат — лишається лише Extract/Abandon");
 
+            // Знімок ДО власного підвищення Threat -- саме він, а не свіжа
+            // ThreatBand, штрафує тихий обхід кімнати, у яку зараз заходимо
+            // (фікс блокера ревью B2, див. коментар над полем).
+            _roomEntryThreatBand = ThreatBand;
+
             _roomIndex++;
             Threat += _cfg.Dungeon.ThreatPerPush;
             CurrentCleared = false;
@@ -200,6 +229,16 @@ namespace Game.Core.Dungeons
             PendingBattle = null;
             return CurrentRoom;
         }
+
+        /// <summary>
+        /// Фікс мажора ревью B2: реальний порог тихого обходу для цього запиту
+        /// у поточній кімнаті — той самий, що застосовує <see cref="BestQuietBand"/>
+        /// зсередини, з урахуванням штрафу Threat. D1 показує гравцю САМЕ це
+        /// число (інваріант 8), а не сирий
+        /// <see cref="DungeonRoomDefinition.QuietChecks"/>[i].Threshold, який
+        /// без цього методу був єдиним, що бачив назовні світ (seamsForD1).
+        /// </summary>
+        public int EffectiveQuietThreshold(CheckRequest req) => EffectiveThreshold(req.Threshold);
 
         /// <summary>
         /// Розв'язок Combat- чи Cache-кімнати шляхом тихо/кроваво (Event —
@@ -318,7 +357,12 @@ namespace Game.Core.Dungeons
                 Materials = UnbankedMaterials,
                 Gold = UnbankedGold,
                 DepthReached = Depth,
-                ItemIds = new List<string>(_unbankedItemIds)
+                ItemIds = new List<string>(_unbankedItemIds),
+                // Фікс мажора ревью B2: якщо гравець зайшов у нову кімнату
+                // Push-ом і екстрактнувся, не розв'язавши її, жоден
+                // RoomResolution з цим переходом полоси більше не прийде --
+                // тож саме тут забираємо його з тим самим лічильником.
+                ThreatBandChanged = ConsumeThreatBandChange()
             };
 
             if (baseState != null)
@@ -336,7 +380,13 @@ namespace Game.Core.Dungeons
         public DungeonExtractReport Abandon()
         {
             RequireInProgress();
-            var rep = new DungeonExtractReport { DepthReached = Depth };
+            // Той самий фікс, що й у Extract: обережний вихід так само
+            // завершує прогін і не повинен ковтнути ще не здану зміну полоси.
+            var rep = new DungeonExtractReport
+            {
+                DepthReached = Depth,
+                ThreatBandChanged = ConsumeThreatBandChange()
+            };
             ClearUnbanked();
             Outcome = DungeonOutcome.Abandoned;
             return rep;
@@ -363,6 +413,11 @@ namespace Game.Core.Dungeons
             sb.Append("|ug:").Append(UnbankedGold.ToString(CultureInfo.InvariantCulture));
             sb.Append("|it:").Append(string.Join(",", _unbankedItemIds));
             sb.Append("|lb:").Append(((int)_lastReportedBand).ToString(CultureInfo.InvariantCulture));
+            // Фікс блокера ревью B2: без цього поля відновлений прогін штрафував
+            // би тихий обхід поточної кімнати живою ThreatBand (уже після
+            // власного Push) замість зафіксованої "на вході" -- сейв/рестор
+            // тихо зсунув би застосований порог.
+            sb.Append("|eb:").Append(((int)_roomEntryThreatBand).ToString(CultureInfo.InvariantCulture));
             return sb.ToString();
         }
 
@@ -397,6 +452,7 @@ namespace Game.Core.Dungeons
                         if (body.Length > 0) _unbankedItemIds.AddRange(body.Split(','));
                         break;
                     case "lb": _lastReportedBand = (DungeonThreatBand)ParseInt(body); break;
+                    case "eb": _roomEntryThreatBand = (DungeonThreatBand)ParseInt(body); break;
                 }
             }
         }
@@ -427,8 +483,22 @@ namespace Game.Core.Dungeons
         /// </summary>
         private void FinalizeResolution(RoomResolution res)
         {
-            if (ThreatBand != _lastReportedBand) res.ThreatBandChanged = true;
+            res.ThreatBandChanged = ConsumeThreatBandChange();
+        }
+
+        /// <summary>
+        /// Спільна точка порівняння живої <see cref="ThreatBand"/> з останньою
+        /// повідомленою (фікс мажора ревью B2): раніше нею користувався лише
+        /// <see cref="FinalizeResolution"/>, тепер і <see cref="Extract"/> з
+        /// <see cref="Abandon"/> — обидва так само завершують прогін і так
+        /// само здатні "проковтнути" ще не здану зміну полоси (гравець
+        /// Push-нув у нову кімнату й вийшов, не розв'язавши її).
+        /// </summary>
+        private bool ConsumeThreatBandChange()
+        {
+            bool changed = ThreatBand != _lastReportedBand;
             _lastReportedBand = ThreatBand;
+            return changed;
         }
 
         private void MarkCleared(RoomResolution res)
@@ -479,7 +549,7 @@ namespace Game.Core.Dungeons
         }
 
         private int EffectiveThreshold(int baseThreshold)
-            => baseThreshold + _cfg.Dungeon.ThreatQuietPenaltyStep * (int)ThreatBand;
+            => baseThreshold + _cfg.Dungeon.ThreatQuietPenaltyStep * (int)_roomEntryThreatBand;
 
         /// <summary>
         /// Сила відряду на одному навику: лідер (найкраще значення) плюс
