@@ -290,5 +290,121 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("bbb_own", firstIncident,
                 "Сработал накопитель ticker — значит и событие обязано быть из его пула, иначе предвестник называл один домен, а пришёл другой");
         }
+
+        // ============ 6. Накопитель без своего инцидента не сгорает молча ============
+
+        /// <summary>
+        /// Раньше пульс разряжал всякий готовый накопитель, а шаг инцидентов,
+        /// не найдя его пула, просто шёл дальше: заряд и услышанная лестница
+        /// обнулялись без единого следа в отчёте (так жил «Тугар» в срезе
+        /// первого часа). Теперь пульс спрашивает шаг инцидентов, есть ли
+        /// источнику чем сработать. Сирота стоит раньше по Id: без вопроса он
+        /// брал бы ничью за слот дня и отнимал его у ticker.
+        /// </summary>
+        [Test]
+        public void Pulse_SourceWithoutIncident_NeverDischargesSilently_AndLeavesTheSlot()
+        {
+            var cfg = Cfg();
+            var table = new IncidentTable();
+            table.Add(new IncidentDefinition
+            {
+                Id = "own", TopicId = "incident.own", DomainTag = "своё",
+                SourceId = "ticker", MinBand = TensionBand.Calm, Weight = 1,
+                QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 5
+            });
+
+            var pulse = new WorldPulse(cfg.Pulse);
+            pulse.AddSource(new SteadySource("aaa_orphan"));
+            pulse.AddSource(new SteadySource("ticker"));
+
+            var p = new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
+            {
+                Tier = 1,
+                Pulse = pulse,
+                Incidents = table,
+                Population = new PopulationState(),
+                Repeats = new RepeatTracker()
+            };
+
+            int firstIncidentDay = -1;
+            double lastFill = 0.0;
+            int lastLevel = 0;
+            for (int i = 0; i < 8; i++)
+            {
+                var report = p.Advance(DayPhase.Day);
+                if (firstIncidentDay < 0 && report.Incidents.Count > 0) firstIncidentDay = report.Day;
+
+                double fill = pulse.Tracks["aaa_orphan"].Fill;
+                int level = pulse.DeliveredLevelOf("aaa_orphan");
+                Assert.GreaterOrEqual(fill, lastFill, $"Сутки {report.Day}: заряд сироты сброшен, а события нет");
+                Assert.GreaterOrEqual(level, lastLevel, $"Сутки {report.Day}: услышанная ступень сироты откатилась");
+                lastFill = fill;
+                lastLevel = level;
+            }
+
+            Assert.AreEqual(3, lastLevel, "Лестница сироты дошла до конца и стоит, а не начинается заново");
+            Assert.AreEqual(4, firstIncidentDay,
+                "Ставка 30, порог 100: ticker готов на четвёртые сутки, и слот его — сирота не должна его занять");
+        }
+
+        /// <summary>
+        /// Пульс решает «есть ли чем сработать» по полосе на момент своего шага,
+        /// а шаг инцидентов обязан выбирать по ТОЙ ЖЕ полосе. Исход первого
+        /// инцидента фазы двигает Напряжение сразу: без снимка второй источник
+        /// искал бы пул уже по новой полосе, не находил ничего и сгорал молча.
+        /// </summary>
+        [Test]
+        public void IncidentStep_PicksEveryFiredSource_ByTheBandThePulseAskedAbout()
+        {
+            var cfg = Cfg();
+            var table = new IncidentTable();
+            table.Add(new IncidentDefinition
+            {
+                Id = "surge", TopicId = "incident.surge", DomainTag = "площадь",
+                SourceId = "s1", MinBand = TensionBand.Calm, MaxBand = TensionBand.Fracture, Weight = 1,
+                QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 5,
+                TensionByBand = new[] { 300, 300, 300, 300 }
+            });
+            table.Add(new IncidentDefinition
+            {
+                Id = "calm_only", TopicId = "incident.calm_only", DomainTag = "рынок",
+                SourceId = "s2", MinBand = TensionBand.Calm, MaxBand = TensionBand.Calm, Weight = 1,
+                QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 5
+            });
+
+            var pulse = new WorldPulse(cfg.Pulse);
+            pulse.AddSource(new OneNightSource("s1"));
+            pulse.AddSource(new OneNightSource("s2"));
+
+            var p = new DayProcessor(new TensionState(cfg.Tension, 150), cfg, DayProcessor.DefaultSteps())
+            {
+                Tier = 1,
+                Pulse = pulse,
+                Incidents = table,
+                Population = new PopulationState(),
+                Repeats = new RepeatTracker()
+            };
+
+            var report = p.Advance(DayPhase.Night);
+
+            Assert.Greater(p.Tension.Band, TensionBand.Calm, "предпосылка: первый инцидент фазы сдвинул полосу");
+            CollectionAssert.AreEquivalent(new[] { "surge", "calm_only" }, report.Incidents.Select(o => o.IncidentId).ToArray(),
+                "Оба сработавших источника разобраны: пульс разрядил s2 при Спокойствии, и пул ищется по Спокойствию");
+        }
+
+        /// <summary>Готов ровно в первую ночь: два таких дают две разрядки в одной фазе.</summary>
+        private sealed class OneNightSource : IPressureSource
+        {
+            public OneNightSource(string id) { Id = id; }
+
+            public string Id { get; }
+            public WorldEventKind Kind => WorldEventKind.InternalThreat;
+            public string DomainTag => "домен";
+            public int Threshold => 1;
+            public int CooldownDays => 999;
+            public bool IsActive(PulseContext ctx) => ctx.IsNight;
+            public bool Announces => false;
+            public int InsistencePerDay(PulseContext ctx) => 1;
+        }
     }
 }

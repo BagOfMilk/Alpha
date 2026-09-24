@@ -163,6 +163,44 @@ namespace Game.Tests.EditMode
                 "Ночью инциденты кучнее (US-11.1)");
         }
 
+        /// <summary>
+        /// Готовый источник, которому нечем сработать, не разряжается: заряд и
+        /// услышанная лестница остаются, единственный слот дня уходит тому, у
+        /// кого последствие есть. Сирота нарочно стоит раньше по Id: без вопроса
+        /// о последствии ничью брал бы он — и сгорал бы молча, отнимая слот.
+        /// </summary>
+        [Test]
+        public void Pulse_ReadySourceWithoutConsequence_HoldsItsChargeAndLadder_AndYieldsTheSlot()
+        {
+            var cfg = Cfg();
+            var pulse = new WorldPulse(cfg);
+            pulse.AddSource(new FixedSource { Id = "a_orphan", Rate = 25, Threshold = 100 });
+            pulse.AddSource(new FixedSource { Id = "b_real", Rate = 25, Threshold = 100 });
+            System.Func<string, bool> hasConsequence = id => id == "b_real";
+
+            var orphanLevels = new List<int>();
+            int realFiredOn = -1;
+            double lastFill = 0.0;
+            for (int day = 1; day <= 10; day++)
+            {
+                var tick = pulse.Advance(Ctx(day), hasConsequence);
+                pulse.MarkDelivered(tick.Forewarnings, day);
+
+                CollectionAssert.DoesNotContain(tick.FiredSourceIds, "a_orphan", $"День {day}: сироте нечем сработать");
+                if (realFiredOn < 0 && tick.FiredSourceIds.Contains("b_real")) realFiredOn = day;
+                orphanLevels.AddRange(tick.Forewarnings.Where(f => f.SourceId == "a_orphan").Select(f => f.Level));
+
+                double fill = pulse.Tracks["a_orphan"].Fill;
+                Assert.GreaterOrEqual(fill, lastFill, $"День {day}: заряд сироты сброшен без события");
+                lastFill = fill;
+            }
+
+            Assert.AreEqual(4, realFiredOn, "Слот дня, в который оба дошли до порога, достаётся источнику с последствием");
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, orphanLevels,
+                "Лестница сироты проходится один раз и стоит на третьей ступени, а не начинается заново");
+            Assert.AreEqual(3, pulse.DeliveredLevelOf("a_orphan"));
+        }
+
         [Test]
         public void Pulse_Patrol_SlowsNightCrime()
         {

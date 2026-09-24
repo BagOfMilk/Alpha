@@ -769,18 +769,13 @@ namespace Game.Tests.EditMode
         /// найгостріший і повністю усувний випадок дефекту, і саме його
         /// закриває клямп у WorldPulse.BoostCharge.
         ///
-        /// ВІДКРИТЕ ПИТАННЯ (задокументовано, не приховано): звичне щоденне
-        /// накопичення Тугара (тіка КОЖНУ фазу — §1 рядок 8 — тобто вдвічі
-        /// частіше за календарну добу) саме по собі перетинає Threshold=60
-        /// близько доби 3 навіть БЕЗ рогу і без жодного гравецького предмета
-        /// (перевірено окремим сценарієм: day1=0.4→0.8, day3 day-фаза=1.0→
-        /// нульове скидання в ту саму фазу) — це вже існуючий, не внесений
-        /// D1b дефект (Тугар ще не має власного IncidentDefinition; його
-        /// розв'язка — сценарний Фінал, не WorldPulse.Fire), і клямп однієї
-        /// точки входу (BoostCharge) його не закриває. Спробу довести це
-        /// тестом на кілька діб УПЕРЕД (без коригування Threshold/Fire —
-        /// поза межами двох переданих знахідок) свідомо не робимо: вона
-        /// впала б і без рогу, отже перевіряла б не наш фікс.
+        /// ЗАКРИТО 24.09.2026 (було відкритим питанням цього тесту): звичне
+        /// накопичення Тугара (тіка КОЖНУ фазу — §1 рядок 8) саме по собі
+        /// дістає Threshold=60 на добі 3 і без рогу, а інциденту Тугара нема —
+        /// WorldPulse мовчки скидав заряд. Тепер Advance розряджає лише
+        /// джерело, для якого є інцидент (IncidentStep.HasIncidentFor); сторож
+        /// на кілька діб уперед —
+        /// <see cref="TuharPulse_QuietFirstHour_NeverRegressesWithoutALoggedIncident"/>.
         /// </summary>
         [Test]
         public void ScoutHornBoost_WhenChargeAlreadyNearThreshold_ClampsInsteadOfOvershooting()
@@ -809,6 +804,99 @@ namespace Game.Tests.EditMode
             Assert.Less(fillAfterHorn, 1.0,
                 "одноразовий буст НЕ сміє сам дістати чи перескочити Threshold (інакше миттєвий мовчазний Fire без інциденту " +
                 "«з'їдає» саме ту вигоду, яку ріг обіцяє)");
+        }
+
+        /// <summary>
+        /// Накопичувач Тугара не розряджається мовчки (закриває ВІДКРИТЕ
+        /// ПИТАННЯ тесту вище). Тугар тіка кожну фазу (§1 рядок 8) і сам
+        /// дістає Threshold=60 на денну фазу доби 3, а інциденту з
+        /// SourceId=="tuhar" у першій годині немає — його розв'язка це
+        /// сценарний Фінал. Раніше WorldPulse.Fire() тут-таки скидав заряд у
+        /// нуль, IncidentStep не знаходив інциденту і мовчки йшов далі.
+        ///
+        /// Правило, яке тримає тест: заповнення і почута ступінь Тугара між
+        /// фазами НЕ падають, якщо в лозі цієї фази немає decision.resolved
+        /// інциденту Тугара. Пул таких інцидентів збирається тут з того ж
+        /// контенту, що й FirstHourWorld, — тест не зламається, коли Тугар
+        /// дістане власний інцидент. І драбина 1→2→3 доходить до гравця ДО
+        /// Фіналу, кожна ступінь — окремою подією forewarn.level{n}.
+        /// </summary>
+        [Test]
+        public void TuharPulse_QuietFirstHour_NeverRegressesWithoutALoggedIncident()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var tuharIncidentIds = new HashSet<string>();
+            foreach (var d in Game.Core.World.DefaultIncidents.All())
+                if (d.SourceId == Game.Core.World.OpeningContent.TuharSourceId) tuharIncidentIds.Add(d.Id);
+            foreach (var d in Game.Core.World.OpeningContent.All())
+                if (d.SourceId == Game.Core.World.OpeningContent.TuharSourceId) tuharIncidentIds.Add(d.Id);
+
+            double lastFill = s.DebugTuharPulseFill;
+            int lastLevel = s.DebugTuharDeliveredLevel;
+            var heardLevels = new List<int>();
+
+            // Лог фази читається ПІСЛЯ всіх рішень фази: DayLog очищують лише
+            // AdvanceDay/AdvanceNight, тож на цей момент він повний.
+            void CheckPhase(string phase)
+            {
+                bool dischargedByIncident = false;
+                foreach (var e in s.DayLog)
+                {
+                    if (e.Key == "decision.resolved" && e.Args.TryGetValue("incidentId", out var id)
+                        && tuharIncidentIds.Contains(id))
+                        dischargedByIncident = true;
+
+                    if (e.Key.StartsWith("forewarn.level", StringComparison.Ordinal)
+                        && e.Args.TryGetValue("subject", out var subject)
+                        && subject == Game.Core.World.OpeningContent.TuharSourceId)
+                        heardLevels.Add(int.Parse(e.Key.Substring("forewarn.level".Length)));
+                }
+
+                double fill = s.DebugTuharPulseFill;
+                int level = s.DebugTuharDeliveredLevel;
+                if (!dischargedByIncident)
+                {
+                    Assert.GreaterOrEqual(fill, lastFill,
+                        $"{phase}: заповнення Тугара впало {lastFill:0.00} → {fill:0.00} без інциденту Тугара в лозі — мовчазний розряд");
+                    Assert.GreaterOrEqual(level, lastLevel,
+                        $"{phase}: почута ступінь Тугара впала {lastLevel} → {level} без інциденту Тугара в лозі");
+                }
+                lastFill = fill;
+                lastLevel = level;
+            }
+
+            for (int day = 1; day <= 5; day++)
+            {
+                s.ConfirmMorning();
+                var report = s.AdvanceDay();
+                while (report != null && report.AwaitsDecision)
+                    report = s.ResolveIncident(IncidentPath.Quiet);
+                if (s.State == SessionState.Scene)
+                {
+                    SceneStepView step;
+                    do { step = s.AdvanceScene(); } while (!step.IsFinished);
+                }
+                CheckPhase($"доба {day}, день");
+
+                // Ніч доби 5 — Фінал, його розв'язує ResolveFinale, а не
+                // конвеєр: вікно першої години закінчується перед ним.
+                if (day == 5) break;
+
+                if (s.State == SessionState.Evening) s.ConfirmEvening();
+                Assert.AreEqual(SessionState.Night, s.State, $"доба {day}: тихий шлях мав дійти до ночі");
+                var night = s.AdvanceNight();
+                while (night != null && night.AwaitsDecision)
+                    night = s.ResolveIncident(IncidentPath.Quiet);
+                CheckPhase($"доба {day}, ніч");
+            }
+
+            Assert.AreEqual(3, s.DebugTuharDeliveredLevel,
+                "до Фіналу гравець мав почути всю драбину Тугара — інакше Фінал приходить без попередження");
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, heardLevels,
+                "драбина Тугара звучить рівно раз на ступінь, по порядку, і не починається знову");
         }
 
         // ---- Фінал доби 5: кровавий шлях → справжній бій (SuspendReason.FinaleAssault) ----

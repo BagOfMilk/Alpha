@@ -21,7 +21,10 @@ namespace Game.Core.Loop
                 (int)ctx.Tension.Band,
                 ctx.IsPatrolling);
 
-            var tick = ctx.Pulse.Advance(pulseCtx);
+            // Разряжается только источник, которому есть чем сработать: решает
+            // тот же отбор, что следом применит шаг инцидентов. Без этого
+            // накопитель без своего инцидента сбрасывался молча.
+            var tick = ctx.Pulse.Advance(pulseCtx, sourceId => IncidentStep.HasIncidentFor(ctx, sourceId));
 
             // Ночью предвестники достаются только тому, кто не спит.
             // Спать — значит потерять сигналы ночи (Поправка №3.9).
