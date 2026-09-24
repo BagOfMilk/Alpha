@@ -287,5 +287,20 @@ namespace Game.Tests.EditMode
         {
             Assert.AreEqual(string.Empty, ScreenText.EventLine(null, Gender.Male, null));
         }
+
+        // Фікс-ревью (major): ExpeditionSite.DomainTag ("road"/"craft"/"trade")
+        // раніше підставлявся у signal.domain сирим — EventLine мав перекладати
+        // його так само, як item/building/site/faction/scar, а не пропускати.
+        [Test]
+        public void EventLine_SignalDomain_TranslatesDomainTag()
+        {
+            var args = new Dictionary<string, string> { { "domain", "road" } };
+            var evt = new GameEvent("signal.domain", 1, Game.Core.Loop.DayPhase.Day, args);
+
+            string line = ScreenText.EventLine(evt, Gender.Male, null);
+
+            StringAssert.Contains("дорога", line);
+            StringAssert.DoesNotContain("road", line);
+        }
     }
 }

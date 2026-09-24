@@ -86,7 +86,7 @@ namespace Game.Gameplay.UI
                 string key = "ability." + id;
                 string label = UkrainianText.Has(key, g) ? UkrainianText.Get(key, g) : id;
                 if (Widgets.SecondaryButton(label, GUILayout.Width(140f)))
-                    shell.TryRun(() => shell.Session.CombatUseAbility(id, _selectedTargetId, null));
+                    shell.TryRun(() => shell.Session.CombatUseAbility(key, _selectedTargetId, null));
             }
             GUILayout.EndHorizontal();
         }

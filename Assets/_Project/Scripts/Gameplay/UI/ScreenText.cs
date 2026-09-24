@@ -320,7 +320,7 @@ namespace Game.Gameplay.UI
             string site = ContentLabel("site", Arg(a, "siteId"), gender);
             string faction = ContentLabel("faction", Arg(a, "factionId") ?? Arg(a, "favored"), gender);
             string scar = ContentLabel("scar", Arg(a, "scarId"), gender);
-            string domain = Arg(a, "domain") ?? "";
+            string domain = ContentLabel("domain", Arg(a, "domain"), gender);
             string day = Arg(a, "day") ?? "";
             string slot = Arg(a, "slot") ?? "";
             string level = Arg(a, "level") ?? "";

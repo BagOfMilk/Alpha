@@ -1110,6 +1110,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "signal.domain", "Звістка з дороги: відряд вирушив ({domain}).");
             AddKey(t, "companion.left_settlement", "{companion} залишає поселення.");
 
+            // Фікс-ревью (major): ExpeditionSite.DomainTag (DefaultSites.cs) —
+            // сирі латинські "road"/"craft"/"trade", які EventLine раніше
+            // підставляв у signal.domain напряму (Arg(a,"domain") без
+            // ContentLabel) — англійське слово посеред українського речення
+            // на кожній вилазці. Тепер ContentLabel("domain", ...) шукає ці
+            // ключі, як і item/building/site/faction/scar поруч.
+            AddKey(t, "domain.road", "дорога");
+            AddKey(t, "domain.craft", "ремесло");
+            AddKey(t, "domain.trade", "торгівля");
+
             // Точна назва події з GameSession.cs:1257 (LogNewAttacks) — без
             // плейсхолдерів attacker/target: ScreenText.EventLine їх не знає
             // (передає лише фіксований набір іменованих аргументів), той самий
