@@ -223,7 +223,8 @@ namespace Game.Core.Session
             _roller = _roller ?? o.Roller;
 
             _cfg = new BalanceConfig();
-            _world = FirstHourWorld.Build(tier: 1, requirePlayerDecision: true, balance: _cfg);
+            _world = FirstHourWorld.Build(tier: 1, requirePlayerDecision: true, balance: _cfg,
+                testBuildOneDayConstruction: o.TestBuildOneDayConstruction);
             _state = _world.BaseState;
             _state.ProtagonistId = ProtagonistId;
             _works = _world.CityWorks;

@@ -4,6 +4,7 @@ char.seen
 city.building.ordered
 city.built.infirmary
 city.built.tavern
+city.built.workshop
 city.crowd.1
 city.people.left
 city.tier.2
@@ -23,6 +24,7 @@ council.prepare_threat
 council.prepare_threat.ordered
 council.raid
 council.raid.ordered
+craft.upgraded
 creation.confirmed
 crisis.test.mitigated
 crisis.test.unmitigated

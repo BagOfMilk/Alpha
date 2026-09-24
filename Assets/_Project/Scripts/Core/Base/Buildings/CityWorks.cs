@@ -62,6 +62,16 @@ namespace Game.Core.Base
         private readonly HashSet<string> _built = new HashSet<string>(StringComparer.Ordinal);
         private readonly List<Project> _projects = new List<Project>();
 
+        /// <summary>
+        /// Поправка №7.7: у тестовій збірці кожне здание будується рівно одні
+        /// сутки замість <see cref="BuildingDefinition.Days"/>. Це параметр
+        /// конструктора, не мутне поле — режим гри не міняється всередині
+        /// прогону, тому в <see cref="CaptureState"/>/<see cref="RestoreState"/>
+        /// його немає (той, хто відновлює сейв, будує CityWorks з тим самим
+        /// прапорцем, яким збирав світ — <c>FirstHourWorld.Build</c>).
+        /// </summary>
+        private readonly bool _oneDayConstruction;
+
         private bool _raidQueued;
         private int _lastRaidDay = int.MinValue / 2;
         private int _settlersQueued;
@@ -118,8 +128,16 @@ namespace Game.Core.Base
             public int BonusValue;
         }
 
-        public CityWorks(IEnumerable<string> alreadyBuilt = null)
+        /// <summary>
+        /// <paramref name="oneDayConstruction"/> — Поправка №7.7, за
+        /// замовчуванням false: прямі викликачі (тести, старий код) і надалі
+        /// отримують проєктні строки стройки з <see cref="DefaultBuildings"/>
+        /// без явної згоди на тестову збірку. <see cref="FirstHourWorld.Build"/>
+        /// — єдине місце, де він стає true за замовчуванням.
+        /// </summary>
+        public CityWorks(IEnumerable<string> alreadyBuilt = null, bool oneDayConstruction = false)
         {
+            _oneDayConstruction = oneDayConstruction;
             if (alreadyBuilt != null)
                 foreach (var id in alreadyBuilt)
                     if (!string.IsNullOrEmpty(id)) _built.Add(id);
@@ -191,7 +209,12 @@ namespace Game.Core.Base
             state.Resources.TrySpend(ResourceType.Gold, goldCost);
             state.Resources.TrySpend(ResourceType.Materials, def.MaterialsCost);
 
-            _projects.Add(new Project { Id = def.Id, DaysLeft = Math.Max(1, def.Days), TotalDays = Math.Max(1, def.Days) });
+            // Поправка №7.7: тестова збірка стирає проєктний строк — заказ
+            // уранці, готово до наступного ранку, незалежно від того, скільки
+            // діб просить BuildingDefinition.Days (Храм/Укріплення/Лабораторія
+            // просять аж 8–10 — саме вони й доходили до гравця надто пізно).
+            int days = _oneDayConstruction ? 1 : Math.Max(1, def.Days);
+            _projects.Add(new Project { Id = def.Id, DaysLeft = days, TotalDays = days });
             return BuildOrderResult.Started;
         }
 

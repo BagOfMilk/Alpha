@@ -1293,12 +1293,19 @@ namespace Game.Tests.EditMode
         /// <c>Rarity.Rare</c> — ніколи не Epic/іменний, тож <c>CraftUpgrade</c>
         /// не може впертися в AlreadyMaxRarity/NamedNotUpgradable і чесно
         /// перевіряє саме шов "чи відкрита Майстерня" (workshopOpen з CityWorks).
+        ///
+        /// <c>TestBuildOneDayConstruction = false</c> — навмисно: цей тест
+        /// перевіряє БАЛАНС КАМПАНІЇ (проєктні п'ять стадій, Майстерня
+        /// Days=4), а не тестову збірку (Поправка №7.7). Тестову збірку (один
+        /// день, дефолт) перевіряє
+        /// <see cref="CraftUpgrade_TestBuild_WorkshopOpensNextMorning_CraftReachableByDay5"/>.
         /// </summary>
         [Test]
         public void CraftUpgrade_WorkshopClosed_ThenReachesCraftSystem_OnceWorkshopBuilt()
         {
             var s = new GameSession();
-            s.NewGame(SkipCreationOptions());
+            s.NewGame(new NewGameOptions
+                { SkipCreation = true, HitRule = HitRuleKind.Threshold, TestBuildOneDayConstruction = false });
             FastForwardOpeningToMorning(s);
 
             var buildResult = s.OrderBuilding(Game.Core.Base.DefaultBuildings.Workshop);
@@ -1338,6 +1345,56 @@ namespace Game.Tests.EditMode
                 : Game.Core.Items.CraftResult.CannotAfford;
             Assert.AreEqual(expected, s.CraftUpgrade(item.InstanceId),
                 "після побудови Майстерні CraftUpgrade мав дійти до CraftSystem і розв'язатись лише афордом");
+        }
+
+        /// <summary>
+        /// Поправка №7.7 (рішення власника 24.09.2026): у тестовій збірці
+        /// (SkipCreationOptions лишає TestBuildOneDayConstruction=true — це
+        /// дефолт NewGameOptions, тим самим шляхом ідуть Unity нова гра,
+        /// Alpha.Play і боти) Майстерня, заказана уранці доби 1, відкриває
+        /// пост уже до ранку доби 2 — замість Days=4. Той самий детермінований
+        /// розклад відрядження (margin 3, Good, безіменний Rare), що і в
+        /// <see cref="CraftUpgrade_WorkshopClosed_ThenReachesCraftSystem_OnceWorkshopBuilt"/>,
+        /// повертає предмет на добу 3 — і за 4 доби, задовго до форсованого
+        /// фіналу доби 5 (§3.5), CraftUpgrade дістає до CraftSystem. Раніше
+        /// (Days=4, а Майстерня остання в BuildPriority бота) цей ланцюг не
+        /// встигав дійти до гравця в межах короткого тестового прогону —
+        /// корінь скарги "майстерня добудовується надто пізно, щоб боти
+        /// встигли щось зробити".
+        /// </summary>
+        [Test]
+        public void CraftUpgrade_TestBuild_WorkshopOpensNextMorning_CraftReachableByDay5()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var buildResult = s.OrderBuilding(Game.Core.Base.DefaultBuildings.Workshop);
+            Assert.AreEqual(BuildOrderResult.Started, buildResult);
+
+            var dispatch = s.DepartExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
+                new[] { "maksym" }, 2);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+
+            var log = new List<GameEvent>();
+            for (int i = 0; i < 4; i++) PlayFullDayQuiet(s, log); // доби 1..4 — до фіналу доби 5 не дійшли
+
+            bool workshopBuilt = false;
+            foreach (var b in s.GetCityView().Built)
+                if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) workshopBuilt = true;
+            Assert.IsTrue(workshopBuilt,
+                "Поправка №7.7: Майстерня, заказана уранці доби 1, мала добудуватись за одну добу");
+
+            var stash = s.GetStash();
+            Assert.IsTrue(stash.Count > 0, "силовий відряд на outskirts мав повернутись із предметом до доби 4");
+            var item = stash[0];
+
+            var economy = s.GetEconomyView();
+            var expected = economy.Gold >= 5 && economy.Materials >= 3
+                ? Game.Core.Items.CraftResult.Success
+                : Game.Core.Items.CraftResult.CannotAfford;
+            Assert.AreEqual(expected, s.CraftUpgrade(item.InstanceId),
+                "§6.1 №22 / Поправка №7.7: CraftUpgrade мав дійти до CraftSystem задовго до фіналу доби 5");
         }
 
         [Test]

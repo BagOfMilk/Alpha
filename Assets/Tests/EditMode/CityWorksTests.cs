@@ -174,6 +174,70 @@ namespace Game.Tests.EditMode
                 "Готовое здание обязано прозвучать: город не меняется молча");
         }
 
+        /// <summary>
+        /// Поправка №7.7 (рішення власника 24.09.2026, дослівно: «на момент
+        /// тесту механік та геймплей лупу усі будівлі 1 день»). Прапорець
+        /// конструктора <c>oneDayConstruction</c> (проведений сюди
+        /// <c>FirstHourWorld.Build</c>/<c>GameSession.NewGame</c> через
+        /// <c>NewGameOptions.TestBuildOneDayConstruction</c>) стирає
+        /// <c>BuildingDefinition.Days</c> ЛЮБОГО здания — навіть Храму
+        /// (Days=8), який годами не встигав до кінця короткого тестового
+        /// прогону.
+        /// </summary>
+        [Test]
+        public void Build_TestBuildOneDayConstruction_CompletesAnyBuildingInOneDay()
+        {
+            var cfg = new BalanceConfig();
+            var roster = new Roster();
+            var state = new BaseState(roster, new ResourceLedger(), cfg);
+            foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
+
+            var works = new CityWorks(DefaultBuildings.StartingSet, oneDayConstruction: true);
+            var temple = DefaultBuildings.Get(DefaultBuildings.Temple);
+            Give(state, temple.GoldCost, temple.MaterialsCost);
+
+            Assert.AreEqual(BuildOrderResult.Started, works.Order(DefaultBuildings.Temple, state));
+            Assert.IsFalse(works.Has(DefaultBuildings.Temple), "до першого AdvanceConstruction — ще не готово");
+            Assert.AreEqual(1, works.StageOf(DefaultBuildings.Temple));
+
+            var done = works.AdvanceConstruction();
+            Assert.IsTrue(done.Contains(DefaultBuildings.Temple),
+                "тестова збірка: Храм (Days=8) мав добудуватись за одну добу, а не за вісім");
+            Assert.IsTrue(works.Has(DefaultBuildings.Temple));
+            Assert.AreEqual(5, works.StageOf(DefaultBuildings.Temple), "стадія одразу «готово», а не проміжна");
+        }
+
+        /// <summary>
+        /// Регресія: без явного <c>oneDayConstruction</c> (кампанія, харнес
+        /// темпу CampaignPacingTests) строк лишається проєктним — саме це
+        /// поламала б необережна зміна дефолту конструктора. Це — баланс
+        /// кампанії, а не тестової збірки (Поправка №7.7).
+        /// </summary>
+        [Test]
+        public void Build_CampaignMode_DefaultConstructor_KeepsBuildingDefinition_Days_Unchanged()
+        {
+            var cfg = new BalanceConfig();
+            var roster = new Roster();
+            var state = new BaseState(roster, new ResourceLedger(), cfg);
+            foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
+
+            var works = new CityWorks(DefaultBuildings.StartingSet); // oneDayConstruction: false (дефолт)
+            var temple = DefaultBuildings.Get(DefaultBuildings.Temple);
+            Give(state, temple.GoldCost, temple.MaterialsCost);
+
+            Assert.AreEqual(BuildOrderResult.Started, works.Order(DefaultBuildings.Temple, state));
+
+            for (int d = 0; d < temple.Days - 1; d++)
+            {
+                var early = works.AdvanceConstruction();
+                Assert.IsFalse(early.Contains(DefaultBuildings.Temple),
+                    "Храм не мав добудуватись раніше свого проєктного строку (Days=8)");
+            }
+            var last = works.AdvanceConstruction();
+            Assert.IsTrue(last.Contains(DefaultBuildings.Temple));
+            Assert.IsTrue(works.Has(DefaultBuildings.Temple));
+        }
+
         // ================= действие построенного =================
 
         [Test]
