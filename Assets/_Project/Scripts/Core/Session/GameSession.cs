@@ -61,6 +61,15 @@ namespace Game.Core.Session
     {
         public const string ProtagonistId = FirstHourWorld.ProtagonistId;
 
+        /// <summary>
+        /// Полірування (ціль 6 «Рішення»): ворог вузла 1 (кроваво) — одна
+        /// назва в ОБОХ місцях, що його читають (BuildBattleSetup виклику
+        /// нижче й DecisionOptionView.TacticalBattleEnemyCount у
+        /// BuildPendingOfferView), замість двох незалежних літералів "2",
+        /// які могли б розійтись при правці контенту.
+        /// </summary>
+        private static readonly string[] Node1BloodyEnemyIds = { "horde_scout", "horde_scout" };
+
         public SessionState State { get; private set; } = SessionState.Title;
 
         // ---- світ (заповнюється NewGame/ContinueGame) ----
@@ -921,7 +930,7 @@ namespace Game.Core.Session
                 _processor.Fear?.Remember(_processor.CurrentDay, _cfg.Checks);
 
                 var setup = BuildBattleSetup(new[] { ProtagonistId, "maksym", "myroslava" },
-                    new[] { "horde_scout", "horde_scout" }, 8, 8);
+                    Node1BloodyEnemyIds, 8, 8);
                 RequestBattle(setup, SuspendReason.PassVanguardBloody, SessionState.Decision);
                 return null;
             }
@@ -1004,6 +1013,20 @@ namespace Game.Core.Session
             }
 
             return _lastDayReport;
+        }
+
+        /// <summary>
+        /// Полірування (ціль 6 «Рішення», owner: "тактичний бій: N ворогів"):
+        /// прев'ю кількості ворогів кровавого шляху фіналу ДО кліку — та
+        /// сама чиста функція (<see cref="Finale.BuildAssault"/>), що
+        /// <see cref="ResolveFinale"/> викликає для реального бою; викликати
+        /// її двічі безпечно (жодної мутації стану, лише читає Готовність).
+        /// </summary>
+        public int GetFinaleEnemyCount()
+        {
+            bool myroslavaDefected = _flags.Get(PassVanguardOutcome.DefectorSeededFlag);
+            var plan = Finale.BuildAssault(_readiness.Band, myroslavaDefected ? "myroslava" : null, _cfg.Readiness);
+            return plan.EnemyDefinitionIds.Count;
         }
 
         public DayReportView ResolveFinale(IncidentPath path)
@@ -1241,7 +1264,8 @@ namespace Game.Core.Session
                 UnbankedMaterials = _dungeon.UnbankedMaterials,
                 CurrentRoom = _dungeon.CurrentCleared ? null : BuildDungeonRoomView(_dungeon.CurrentRoom),
                 Outcome = _dungeon.Outcome.ToString(),
-                AwaitingBattle = _dungeon.AwaitingBattle
+                AwaitingBattle = _dungeon.AwaitingBattle,
+                PartyIds = _dungeon.PartyIds
             };
         }
 
@@ -1253,7 +1277,10 @@ namespace Game.Core.Session
             {
                 Id = room.Id,
                 DisplayName = room.DisplayNameKey,
-                Type = room.Kind == DungeonRoomKind.Cache ? "Treasure" : room.Kind.ToString()
+                Type = room.Kind == DungeonRoomKind.Cache ? "Treasure" : room.Kind.ToString(),
+                // Ціль 6 «Рішення»: "тактичний бій: N ворогів" у самому тексті
+                // варіанту кроваво, не лише поріг тихого обходу поруч.
+                EnemyCount = room.EnemyIds?.Count ?? 0
             };
 
             if (room.Kind == DungeonRoomKind.Combat && room.QuietChecks.Count > 0)
@@ -1262,6 +1289,21 @@ namespace Game.Core.Session
                 view.HasQuietBypass = true;
                 view.QuietSkillKey = req.Skill.Id;
                 view.QuietThreshold = _dungeon != null ? _dungeon.EffectiveQuietThreshold(req) : req.Threshold;
+
+                // Ціль 6 «Рішення» (owner: "the quiet candidate"): найкращий
+                // член ПАРТІЇ данжу (не всього ростеру — інші лишились
+                // вдома) для цього скіла/підходу, та сама формула
+                // (ISettlementActor.GetCheckValue), що резолвить сам обхід.
+                var party = ResolveActors(_dungeon.PartyIds);
+                string bestId = null;
+                int bestValue = int.MinValue;
+                foreach (var actor in party)
+                {
+                    int v = actor.GetCheckValue(req.Skill, req.Approach);
+                    if (v > bestValue) { bestValue = v; bestId = actor.Id; }
+                }
+                view.QuietBestActorId = bestId;
+                view.QuietHasCandidate = bestId != null;
             }
 
             if (room.Kind == DungeonRoomKind.Event)
@@ -2207,6 +2249,10 @@ namespace Game.Core.Session
         {
             if (pd == null) return null;
 
+            // pd.TopicId несе префікс "incident." (для ключів тексту), а
+            // ResolveIncident розпізнає вузол 1 за pd.IncidentId (сирий,
+            // без префіксу) — та сама пара полів, порівнюємо тим самим.
+            bool isNode1 = string.Equals(pd.IncidentId, "pass_vanguard", StringComparison.Ordinal);
             var options = new List<DecisionOptionView>();
             foreach (var opt in pd.Options)
             {
@@ -2218,7 +2264,11 @@ namespace Game.Core.Session
                     Form = opt.Form.ToString(),
                     BestActorId = opt.BestActorId,
                     HasCandidate = opt.HasCandidate,
-                    ExpectedBand = opt.ExpectedBand.ToString()
+                    ExpectedBand = opt.ExpectedBand.ToString(),
+                    // Ціль 6 «Рішення»: вузол 1 кроваво — ЗАВЖДИ тактичний бій
+                    // (Node1BloodyEnemyIds, не перевірка), а не поріг навички —
+                    // гравець має побачити це в самому тексті варіанту.
+                    TacticalBattleEnemyCount = (isNode1 && opt.Path == IncidentPath.Bloody) ? Node1BloodyEnemyIds.Length : 0
                 });
             }
 

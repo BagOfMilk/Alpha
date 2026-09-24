@@ -130,6 +130,16 @@ namespace Game.Gameplay.UI
             string path = option.Path == IncidentPathView.Bloody
                 ? UkrainianText.Get("ui.decision.path.bloody", gender)
                 : UkrainianText.Get("ui.decision.path.quiet", gender);
+
+            // Полірування (ціль 6 «Рішення», owner: "the option text says so
+            // (тактичний бій: N ворогів), not just a skill threshold"): такий
+            // вузол не має порогу навички взагалі (перевірка не
+            // викликається — кроваво завжди бій), тож звичайний шаблон
+            // "{skill} ≥ {threshold}" тут би збрехав про механіку.
+            if (option.TacticalBattleEnemyCount > 0)
+                return UkrainianText.Format("ui.decision.option_line.battle", gender,
+                    "path", path, "count", option.TacticalBattleEnemyCount.ToString());
+
             string skill = SkillLabel(option.SkillKey, gender);
             string candidate = option.HasCandidate
                 ? UkrainianText.Format("ui.decision.candidate", gender, "name", ResolveCompanionName(option.BestActorId, gender, null))

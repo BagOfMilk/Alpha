@@ -247,6 +247,35 @@ namespace Game.Tests.EditMode
 
         // ---- Доба 1: тихий шлях вузла 1 (Ж) ----
 
+        // ---- Полірування (ціль 6 «Рішення»): вузол 1 кроваво каже "тактичний бій: N" ----
+
+        [Test]
+        public void Day1_Decision_BloodyOption_CarriesTacticalBattleEnemyCount()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            s.AdvanceDay();
+            var offer = s.GetPendingOffer();
+            Assert.IsNotNull(offer);
+            Assert.AreEqual("incident.pass_vanguard", offer.TopicId);
+
+            Game.Core.Session.Views.DecisionOptionView quiet = null, bloody = null;
+            foreach (var opt in offer.Options)
+            {
+                if (opt.Path == Game.Core.Session.Views.IncidentPathView.Quiet) quiet = opt;
+                if (opt.Path == Game.Core.Session.Views.IncidentPathView.Bloody) bloody = opt;
+            }
+
+            Assert.IsNotNull(bloody, "вузол 1 завжди має кровавий варіант");
+            Assert.AreEqual(2, bloody.TacticalBattleEnemyCount, "owner: 'тактичний бій: N ворогів' — Node1BloodyEnemyIds несе двох");
+
+            Assert.IsNotNull(quiet, "вузол 1 завжди має тихий варіант");
+            Assert.AreEqual(0, quiet.TacticalBattleEnemyCount, "тихий шлях вузла 1 — перевірка, не бій");
+        }
+
         [Test]
         public void Day1_QuietPath_ResolvesPassVanguard_AndAppliesOutcome()
         {
@@ -797,6 +826,32 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(sawManuallyResolved, "combat.battle.resolved — лише для бою, дограного покроковими командами");
         }
 
+        // ---- Полірування (ціль 6 «Рішення»): картка кімнати данжу ----
+
+        [Test]
+        public void GetDungeonView_CombatRoom_ExposesPartyEnemyCountAndQuietCandidate()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var dispatch = s.DepartExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                new[] { "protagonist", "maksym", "myroslava" }, 2);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+
+            var view = s.GetDungeonView();
+            Assert.IsNotNull(view);
+            CollectionAssert.AreEquivalent(new[] { "protagonist", "maksym", "myroslava" }, view.PartyIds,
+                "owner: 'dungeon room card shows the party'");
+
+            var room = view.CurrentRoom;
+            Assert.IsNotNull(room);
+            Assert.AreEqual(2, room.EnemyCount, "room1 (scouts_left_behind) несе двох horde_skirmisher — owner: 'тактичний бій: N ворогів'");
+            Assert.IsTrue(room.HasQuietBypass);
+            Assert.IsTrue(room.QuietHasCandidate, "owner: 'the quiet candidate'");
+            Assert.AreEqual("maksym", room.QuietBestActorId, "Максим — Survival 5, найкращий у party на перший QuietCheck (Survival≥5)");
+        }
+
         [Test]
         public void Dungeon_PushDeeper_ResolveEvent_Extract_BanksLootToBaseState()
         {
@@ -943,6 +998,14 @@ namespace Game.Tests.EditMode
             s.ConfirmEvening();
 
             Assert.AreEqual(SessionState.Night, s.State);
+
+            // Полірування (ціль 6 «Рішення», owner: "тактичний бій: N ворогів"):
+            // прев'ю ДО кліку має збігтись із реальним боєм — чиста функція,
+            // виклик двічі поспіль дає те саме число.
+            int previewedCount = s.GetFinaleEnemyCount();
+            Assert.Greater(previewedCount, 0, "фінальний штурм завжди має бодай Бурунду");
+            Assert.AreEqual(previewedCount, s.GetFinaleEnemyCount(), "GetFinaleEnemyCount — чисте читання, без побічних ефектів");
+
             var duringBattle = s.ResolveFinale(IncidentPath.Bloody);
             Assert.IsNull(duringBattle);
             Assert.AreEqual(SessionState.Battle, s.State);
@@ -950,8 +1013,14 @@ namespace Game.Tests.EditMode
             var battle = s.GetBattleView();
             Assert.IsNotNull(battle);
             bool hasBurunda = false;
-            foreach (var u in battle.Units) if (u.Id.Contains("burunda")) hasBurunda = true;
+            int actualEnemyCount = 0;
+            foreach (var u in battle.Units)
+            {
+                if (u.Id.Contains("burunda")) hasBurunda = true;
+                if (u.Side == "Enemy") actualEnemyCount++;
+            }
             Assert.IsTrue(hasBurunda, "фінальний штурм завжди включає Бурунду-бегадира");
+            Assert.AreEqual(previewedCount, actualEnemyCount, "прев'ю мало назвати ТУ САМУ кількість, що реально вийшла на поле");
 
             s.CombatAutoResolve();
             // OnBattleResolved повертає State=_resume.ReturnState=Night для

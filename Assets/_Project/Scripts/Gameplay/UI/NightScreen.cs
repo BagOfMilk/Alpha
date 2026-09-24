@@ -148,6 +148,15 @@ namespace Game.Gameplay.UI
                     shell.TryRun(() => shell.Session.ResolveFinale(IncidentPath.Quiet));
 
                 GUILayout.Label(UkrainianText.Get("finale.option.bloody", g), AlphaSkin.Body);
+                // Полірування (ціль 6 «Рішення», owner: "тактичний бій:
+                // N ворогів"): раніше текст казав лише "тактичний бій" без
+                // числа — GetFinaleEnemyCount() рахує ТОЙ САМИЙ план
+                // (Finale.BuildAssault), що й реальний бій, без побічних
+                // ефектів — чисте читання, не команда (без shell.TryRun,
+                // щоб не смикати FeedVillageStage на кожен OnGUI-кадр).
+                int enemyCount = shell.Session.GetFinaleEnemyCount();
+                if (enemyCount > 0)
+                    GUILayout.Label(UkrainianText.Format("ui.night.finale.enemy_count", g, "count", enemyCount.ToString()), AlphaSkin.Tooltip);
                 if (Widgets.DangerButton(UkrainianText.Get("ui.decision.path.bloody", g)))
                     shell.TryRun(() => shell.Session.ResolveFinale(IncidentPath.Bloody));
             });

@@ -34,6 +34,13 @@ namespace Game.Core.Session.Views
 
         /// <summary>Зараз чекає результату бою бойової кімнати.</summary>
         public bool AwaitingBattle;
+
+        /// <summary>
+        /// Полірування (ціль 6 «Рішення», owner: "dungeon room card shows
+        /// the party"). Хто пішов у цей данж — companionId, той самий
+        /// порядок, що DungeonRun.PartyIds.
+        /// </summary>
+        public IReadOnlyList<string> PartyIds;
     }
 
     public sealed class DungeonRoomView
@@ -45,5 +52,21 @@ namespace Game.Core.Session.Views
         public string BloodySkillKey;
         public int BloodyThreshold;
         public IReadOnlyList<string> EventOptionKeys;
+
+        /// <summary>
+        /// Полірування (ціль 6 «Рішення», owner: "the quiet candidate ...
+        /// expected band"). Найкращий член ПАРТІЇ данжу (не всього ростеру)
+        /// для тихого обходу цієї кімнати — <c>ISettlementActor.GetCheckValue</c>,
+        /// та сама формула, що резолвить сам обхід (DungeonRun.BestQuietBand).
+        /// </summary>
+        public string QuietBestActorId;
+        public bool QuietHasCandidate;
+
+        /// <summary>
+        /// Полірування (ціль 6 «Рішення», owner: "тактичний бій: N ворогів").
+        /// Скільки ворогів у бойовій кімнаті — з <c>DungeonRoomDefinition.EnemyIds</c>,
+        /// 0 для не-бойових кімнат.
+        /// </summary>
+        public int EnemyCount;
     }
 }

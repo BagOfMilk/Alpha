@@ -22,6 +22,17 @@ namespace Game.Gameplay.UI
             {
                 Widgets.LabeledRow(UkrainianText.Get("ui.dungeon.depth", g), view.Depth.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("ui.dungeon.threat", g), ScreenText.ThreatChip(view.ThreatBand, g));
+
+                // Полірування (ціль 6 «Рішення», owner: "dungeon room card
+                // shows the party"): хто пішов у цей данж — раніше картка
+                // цього не показувала взагалі.
+                if (view.PartyIds != null && view.PartyIds.Count > 0)
+                {
+                    var roster = shell.Session.GetRosterView();
+                    var names = new System.Collections.Generic.List<string>();
+                    foreach (var id in view.PartyIds) names.Add(ScreenText.ResolveCompanionName(id, g, roster));
+                    Widgets.LabeledRow(UkrainianText.Get("ui.dungeon.party", g), string.Join(", ", names));
+                }
                 // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "ui.dungeon.unbanked" —
                 // ШАБЛОН із плейсхолдерами (Format-ключ), а не готовий підпис;
                 // LabeledRow.label раніше кликав Get() на тому самому ключі —
@@ -55,13 +66,17 @@ namespace Game.Gameplay.UI
                         // спільного "ui.decision.option_line" (звичайна точка
                         // рішення) — той шаблон закінчується
                         // "— {candidate}, очікувана полоса: {band}.", а в
-                        // данжі candidate/band не існує (Поправка №1: тихий
-                        // обхід — 0 ризику, без кандидата й полоси), тож
-                        // гравець бачив би висячі "— , очікувана полоса: .".
+                        // данжі band не існує (Поправка №1: тихий обхід —
+                        // 0 ризику, без полоси); {candidate} додано ціллю 6
+                        // «Рішення» (owner: "the quiet candidate").
+                        string candidate = room.QuietHasCandidate
+                            ? UkrainianText.Format("ui.decision.candidate", g, "name", ScreenText.ResolveCompanionName(room.QuietBestActorId, g, shell.Session.GetRosterView()))
+                            : UkrainianText.Get("ui.decision.no_candidate", g);
                         string quiet = UkrainianText.Format("ui.dungeon.option_line", g,
                             "path", UkrainianText.Get("ui.dungeon.quiet", g),
                             "skill", ScreenText.SkillLabel(room.QuietSkillKey, g),
-                            "threshold", room.QuietThreshold.ToString());
+                            "threshold", room.QuietThreshold.ToString(),
+                            "candidate", candidate);
                         if (Widgets.PrimaryButton(quiet)) Resolve(shell, IncidentPath.Quiet);
                     }
                     else
@@ -69,15 +84,13 @@ namespace Game.Gameplay.UI
                         Widgets.DisabledButton(UkrainianText.Get("ui.dungeon.quiet", g), UkrainianText.Get("ui.common.none", g));
                     }
 
-                    // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): кроваво в
-                    // бойовій кімнаті данжу — завжди бій без перевірки навички
-                    // (DungeonRun.ResolveRoom: Bloody одразу EnterAwaitingBattle,
-                    // жодного порогу) — GameSession.BuildDungeonRoomView НІКОЛИ
-                    // не заповнює BloodySkillKey/BloodyThreshold (лишаються
-                    // null/0), тож стара формула "{skill} ≥ {threshold}"
-                    // показувала порожній навик і "≥ 0". Без штучного порогу,
-                    // яким і так ніхто не керує.
-                    if (Widgets.DangerButton(UkrainianText.Get("ui.dungeon.bloody_fight", g)))
+                    // Полірування (ціль 6 «Рішення», owner: "тактичний бій:
+                    // N ворогів"): кроваво в бойовій кімнаті данжу — завжди
+                    // бій без перевірки навички (DungeonRun.ResolveRoom:
+                    // Bloody одразу EnterAwaitingBattle) — раніше кнопка
+                    // казала лише "Битися", без кількості ворогів.
+                    string bloody = UkrainianText.Format("ui.dungeon.bloody_fight", g, "count", room.EnemyCount.ToString());
+                    if (Widgets.DangerButton(bloody))
                         Resolve(shell, IncidentPath.Bloody);
                     break;
 

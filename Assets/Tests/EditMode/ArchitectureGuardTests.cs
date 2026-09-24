@@ -637,7 +637,12 @@ namespace Game.Tests.EditMode
                 // бойові стати. Це характеристики персонажа (owner: "they are
                 // character stats, not hidden scales"), не приховані шкали
                 // міста — Score покриває і AttributeLineView, і SkillLineView.
-                "XpToNextLevel", "Score", "Accuracy", "Defense", "Initiative", "Armor", "CritChance"
+                "XpToNextLevel", "Score", "Accuracy", "Defense", "Initiative", "Armor", "CritChance",
+                // Розширення (полірування, ціль 6 «Рішення»): скільки ворогів
+                // у тактичному бою, на який веде цей шлях/ця кімната —
+                // видима механічна деталь рішення (owner: "тактичний бій:
+                // N ворогів"), не прихована шкала.
+                "TacticalBattleEnemyCount", "EnemyCount"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

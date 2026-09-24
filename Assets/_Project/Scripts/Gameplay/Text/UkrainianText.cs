@@ -1458,6 +1458,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.decision.title", "Рішення чекає");
             AddKey(t, "ui.decision.option_line",
                 "{path}: {skill} ≥ {threshold} — {candidate}, очікувана полоса: {band}.");
+            // Полірування (ціль 6 «Рішення»): DecisionOptionView.TacticalBattleEnemyCount>0.
+            AddKey(t, "ui.decision.option_line.battle", "{path}: тактичний бій — {count} ворогів.");
             AddKey(t, "ui.decision.candidate", "візьметься {name}");
             AddKey(t, "ui.decision.no_candidate", "нікому взятися");
             AddKey(t, "ui.decision.path.quiet", "Тихо");
@@ -1486,12 +1488,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.dungeon.quiet", "Тихо");
             AddKey(t, "ui.dungeon.bloody", "Криваво");
             AddKey(t, "ui.dungeon.unbanked", "Незбережено: {materials} матеріалів, {gold} золота");
-            // Фаза F: короткий рядок кімнати данжу (тільки шлях/навик/поріг,
-            // без candidate/band, яких у данжі немає — див. коментар у
-            // DungeonScreen.DrawRoom) і окремий підпис кровавого шляху бойової
-            // кімнати, де перевірки взагалі немає (завжди бій).
-            AddKey(t, "ui.dungeon.option_line", "{path}: {skill} ≥ {threshold}.");
-            AddKey(t, "ui.dungeon.bloody_fight", "Криваво: бій неминучий, перевірки немає.");
+            // Полірування (ціль 6 «Рішення», owner: "shows the party ... the
+            // quiet candidate ... тактичний бій: N ворогів"): party — хто
+            // пішов у цей данж; {candidate} — найкращий з ПАРТІЇ на тихий
+            // обхід (band у данжі й досі немає — Поправка №1: 0 ризику).
+            AddKey(t, "ui.dungeon.party", "Партія");
+            AddKey(t, "ui.dungeon.option_line", "{path}: {skill} ≥ {threshold} — {candidate}.");
+            AddKey(t, "ui.dungeon.bloody_fight", "Криваво: тактичний бій — {count} ворогів.");
             AddKey(t, "dungeon.threat_band_changed", "Загроза підземелля тепер: {band}.");
 
             AddKey(t, "ui.night.crisis.title", "Вікно реакції на кризу");
@@ -1500,6 +1503,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.night.crisis.ignore", "Не реагувати");
 
             AddKey(t, "ui.night.finale.title", "Фінал доби 5");
+            // Полірування (ціль 6 «Рішення»): GameSession.GetFinaleEnemyCount().
+            AddKey(t, "ui.night.finale.enemy_count", "Тактичний бій: {count} ворогів.");
             AddKey(t, "ui.advance_night", "До ранку");
             AddKey(t, "ui.night.evening.title", "Вечір");
             AddKey(t, "ui.night.night.title", "Ніч");
