@@ -34,6 +34,9 @@
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/VillageLife.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/VillageShowcase.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/KenneyImportSettings.cs" />
+    <!-- B8: общие примитивы VillageShowcase (PrefabUtility/ModelImporter-соседи,
+         TextMesh, AssetDatabase.CreateAsset…) — та же причина исключения. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/KitBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>
