@@ -51,8 +51,8 @@ namespace Game.Core.Items
         /// Один дроп за полосою — детермінований вибір (без випадковості):
         /// той самий пул + та сама полоса завжди дають той самий предмет і ту
         /// саму рідкість. Найкраща полоса з непорожнім <see cref="_named"/>
-        /// віддає перший іменний предмет; інакше — предмет пулу з індексом
-        /// полоси (затиснутим до розміру пулу).
+        /// віддає перший іменний предмет; інакше — предмет пулу за позицією,
+        /// на яку масштабується полоса (<see cref="IndexForBand"/>).
         /// </summary>
         public ItemInstance Roll(OutcomeBand band)
         {
@@ -60,12 +60,31 @@ namespace Game.Core.Items
                 return ItemInstance.NamedFrom(_named[0]);
 
             if (Pool.Count == 0) return null;
-            int idx = Math.Min((int)band, Pool.Count - 1);
-            if (idx < 0) idx = 0;
+            int idx = IndexForBand(band, Pool.Count);
 
             var def = Pool[idx];
             if (def.IsNamed) return ItemInstance.NamedFrom(def);
             return new ItemInstance(def, RarityFor(band));
+        }
+
+        /// <summary>
+        /// Позиція в пулі за полосою виходу. <see cref="OutcomeBand"/> має рівно
+        /// 4 значення (Worst..Best) — для пулу з ≤4 позицій індекс просто
+        /// дорівнює значенню полоси (затиснутим до розміру пулу, як і раніше).
+        /// Для БІЛЬШОГО пулу індекс полоси НЕ клемпиться (це раніше лишало
+        /// позиції 4+ назавжди недосяжними, а Найкраща полоса на такому пулі
+        /// віддавала б item[3] — предмет із середини пулу, а не найкращий) —
+        /// натомість 0..3 рівномірно розтягуються на 0..Pool.Count-1, тож
+        /// Найгірша й Найкраща полоси завжди впираються у справжні краї пулу.
+        /// </summary>
+        internal static int IndexForBand(OutcomeBand band, int poolCount)
+        {
+            const int bandCount = 4; // OutcomeBand: Worst, Base, Good, Best
+            if (poolCount <= 1) return 0;
+            if (poolCount <= bandCount) return Math.Min((int)band, poolCount - 1);
+
+            double scaled = (double)(int)band / (bandCount - 1) * (poolCount - 1);
+            return (int)Math.Round(scaled, MidpointRounding.AwayFromZero);
         }
     }
 }

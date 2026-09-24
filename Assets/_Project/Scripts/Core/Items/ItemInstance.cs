@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Game.Core.Stats;
 
 namespace Game.Core.Items
@@ -13,8 +14,26 @@ namespace Game.Core.Items
     /// </summary>
     public sealed class ItemInstance
     {
+        // Лічильник для InstanceId — НЕ джерело випадковості (інваріант 1):
+        // просте монотонне зростання, детерміноване порядком створення
+        // об'єктів у процесі, не System.Random/хеш/сід. Guid.NewGuid() свідомо
+        // не використаний — RFC 4122 v4 бере ентропію з ОС, це і є прихований
+        // источник випадковості в ядрі.
+        private static long _nextInstanceSeq = 1;
+
         public ItemDefinition Definition { get; }
         public Rarity Rarity { get; private set; }
+
+        /// <summary>
+        /// Стабільний ідентифікатор ЦЬОГО конкретного екземпляра (на відміну
+        /// від Definition.Id, спільного для всіх дропів однієї бази) — потрібен
+        /// контракту GameSession (docs/TEST_BUILD.md §4.1): Equip(companionId,
+        /// itemInstanceId, slot) і CraftUpgrade(itemInstanceId) адресують ОДИН
+        /// предмет, а два Common-дропи «Потертого каптана» інакше нічим не
+        /// розрізнити. Переживає save/load — див. Inventory.CaptureState/
+        /// RestoreState і FromSaved нижче.
+        /// </summary>
+        public string InstanceId { get; private set; }
 
         private readonly List<StatModifier> _mods = new List<StatModifier>();
         public IReadOnlyList<StatModifier> StatMods => _mods;
@@ -25,6 +44,7 @@ namespace Game.Core.Items
         public ItemInstance(ItemDefinition definition, Rarity rarity)
         {
             Definition = definition ?? throw new ArgumentNullException(nameof(definition));
+            InstanceId = NextInstanceId();
             Resolve(rarity);
         }
 
@@ -41,14 +61,39 @@ namespace Game.Core.Items
         /// Так крафт-апгрейд (масштабування ВІД поточного значення, а не від
         /// авторського) лишається побайтово точним після save/load — прямий
         /// Resolve(рідкість) з бази дав би інше число після ≥2 апгрейдів
-        /// (округлення накопичується по-різному).
+        /// (округлення накопичується по-різному). <paramref name="instanceId"/> —
+        /// той самий id, що був до збереження (не перегенерований): інакше
+        /// команда Equip/CraftUpgrade, видана до збереження, після завантаження
+        /// адресувала б уже неіснуючий id.
         /// </summary>
-        public static ItemInstance FromSaved(ItemDefinition def, Rarity rarity, IEnumerable<StatModifier> mods)
+        public static ItemInstance FromSaved(ItemDefinition def, Rarity rarity, IEnumerable<StatModifier> mods, string instanceId)
         {
             var inst = new ItemInstance(def, rarity);
             inst._mods.Clear();
             if (mods != null) inst._mods.AddRange(mods);
+            if (!string.IsNullOrEmpty(instanceId))
+            {
+                inst.InstanceId = instanceId;
+                AdvanceCounterPast(instanceId);
+            }
             return inst;
+        }
+
+        private static string NextInstanceId()
+            => "item_" + (_nextInstanceSeq++).ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// Підіймає лічильник, щоб НОВІ предмети, створені після завантаження
+        /// сейву, не отримали id, який уже зайнятий відновленим предметом.
+        /// </summary>
+        private static void AdvanceCounterPast(string instanceId)
+        {
+            const string prefix = "item_";
+            if (!instanceId.StartsWith(prefix, StringComparison.Ordinal)) return;
+            long n;
+            if (long.TryParse(instanceId.Substring(prefix.Length), NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out n) && n >= _nextInstanceSeq)
+                _nextInstanceSeq = n + 1;
         }
 
         /// <summary>Усі модифікатори: базові роли + унікальний ефект іменного (якщо є).</summary>

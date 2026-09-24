@@ -360,5 +360,135 @@ namespace Game.Tests.EditMode
             ((IStateBlob)restored).RestoreState(blob);
             Assert.AreEqual(0, restored.Count);
         }
+
+        // ---- Стабільний InstanceId (докладено ревізією: контракт GameSession
+        // §4.1 адресує ОДИН предмет рядком itemInstanceId — Definition.Id і
+        // Rarity спільні для всіх дропів однієї бази, тож самі по собі не
+        // розрізняють два Common-«Потерті каптани») ----
+
+        [Test]
+        public void ItemInstance_InstanceId_IsUnique_ForEachDrop_OfSameDefinition()
+        {
+            var a = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
+            var b = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
+
+            Assert.IsFalse(string.IsNullOrEmpty(a.InstanceId));
+            Assert.IsFalse(string.IsNullOrEmpty(b.InstanceId));
+            Assert.AreNotEqual(a.InstanceId, b.InstanceId,
+                "два дропи однієї бази й рідкості мусять лишатись адресовними окремо");
+        }
+
+        [Test]
+        public void Inventory_Find_LocatesByInstanceId_NotByDefinitionOrRarityAlone()
+        {
+            var inv = new Inventory();
+            var a = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
+            var b = new ItemInstance(DefaultItems.WornVest(), Rarity.Common); // той самий def+рідкість
+            inv.Add(a);
+            inv.Add(b);
+
+            Assert.AreSame(a, inv.Find(a.InstanceId));
+            Assert.AreSame(b, inv.Find(b.InstanceId));
+            Assert.IsNull(inv.Find("no_such_id"));
+            Assert.IsNull(inv.Find(null));
+        }
+
+        [Test]
+        public void Inventory_SaveRoundTrip_PreservesInstanceId()
+        {
+            var inv = new Inventory();
+            var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Rare);
+            inv.Add(item);
+
+            var blob = ((IStateBlob)inv).CaptureState();
+            var restored = new Inventory();
+            ((IStateBlob)restored).RestoreState(blob);
+
+            Assert.AreEqual(item.InstanceId, restored.Items[0].InstanceId,
+                "id мусить пережити save/load — інакше команда Equip/CraftUpgrade, " +
+                "видана до збереження, після завантаження адресує вже неіснуючий id");
+            Assert.AreSame(restored.Items[0], restored.Find(item.InstanceId));
+        }
+
+        // ---- Повернення гіра загиблого (гап-фікс ревізії: без цього надітий
+        // предмет, зокрема єдиний іменний предмет кампанії, зникає назавжди
+        // разом із Companion.MarkDead() — виклик MarkDead живе поза Items,
+        // тож саме повернення гіра мусить бути готовим портом тут) ----
+
+        [Test]
+        public void Inventory_RecoverGearFrom_ReturnsAllEquippedSlots_ToStash()
+        {
+            var c = MakeCompanion("fallen");
+            var weapon = new ItemInstance(DefaultItems.HuntersBow(), Rarity.Common);
+            var armor = ItemInstance.NamedFrom(DefaultItems.AegisPlate());
+            c.Equipment.Equip(weapon);
+            c.Equipment.Equip(armor);
+
+            var inv = new Inventory();
+            inv.RecoverGearFrom(c);
+
+            Assert.AreEqual(2, inv.Count);
+            Assert.IsNull(c.Equipment.Get(EquipSlot.Weapon));
+            Assert.IsNull(c.Equipment.Get(EquipSlot.Armor));
+            Assert.AreSame(weapon, inv.Find(weapon.InstanceId));
+            Assert.AreSame(armor, inv.Find(armor.InstanceId));
+        }
+
+        [Test]
+        public void Inventory_RecoverGearFrom_NoEquipment_DoesNothing()
+        {
+            var c = MakeCompanion("bare");
+            var inv = new Inventory();
+            Assert.DoesNotThrow(() => inv.RecoverGearFrom(c));
+            Assert.AreEqual(0, inv.Count);
+        }
+
+        // ---- LootTable: масштабування індексу для пулу, ширшого за 4 полоси
+        // (гап-фікс ревізії: клемпінг «індекс = значення полоси» лишав позиції
+        // 4+ назавжди недосяжними, і Найкраща полоса на такому пулі віддавала
+        // б предмет із середини, а не найкращий) ----
+
+        [Test]
+        public void Loot_Roll_ScalesIndexAcrossPool_WhenLargerThanFourBands()
+        {
+            var table = new LootTable();
+            var defs = new List<ItemDefinition>();
+            for (int i = 0; i < 7; i++)
+            {
+                var def = new ItemDefinition("pool_" + i, "P" + i, EquipSlot.Accessory);
+                defs.Add(def);
+                table.Add(def);
+            }
+
+            var worst = table.Roll(OutcomeBand.Worst);
+            var best = table.Roll(OutcomeBand.Best);
+
+            Assert.AreEqual(defs[0].Id, worst.Definition.Id,
+                "найгірша полоса — перший (найгірший) предмет пулу");
+            Assert.AreEqual(defs[defs.Count - 1].Id, best.Definition.Id,
+                "найкраща полоса — останній (найкращий) предмет пулу, а не index=3 клемпінгом");
+
+            int prevIdx = -1;
+            var bands = new[] { OutcomeBand.Worst, OutcomeBand.Base, OutcomeBand.Good, OutcomeBand.Best };
+            for (int i = 0; i < bands.Length; i++)
+            {
+                var item = table.Roll(bands[i]);
+                int idx = defs.FindIndex(d => d.Id == item.Definition.Id);
+                Assert.GreaterOrEqual(idx, prevIdx, "гірша чи рівна полоса не мусить давати кращу позицію пулу");
+                prevIdx = idx;
+            }
+        }
+
+        [Test]
+        public void Loot_Roll_IndexForBand_UnchangedForPoolsUpToFour()
+        {
+            // Регресія: дефолтний пул (4 предмети) і будь-який менший мусять
+            // і далі мапитись «індекс == значення полоси», як до фіксу.
+            Assert.AreEqual(0, LootTable.IndexForBand(OutcomeBand.Worst, 4));
+            Assert.AreEqual(1, LootTable.IndexForBand(OutcomeBand.Base, 4));
+            Assert.AreEqual(2, LootTable.IndexForBand(OutcomeBand.Good, 4));
+            Assert.AreEqual(3, LootTable.IndexForBand(OutcomeBand.Best, 4));
+            Assert.AreEqual(1, LootTable.IndexForBand(OutcomeBand.Best, 2), "менший пул — затиснуто до останньої позиції");
+        }
     }
 }

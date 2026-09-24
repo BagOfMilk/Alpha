@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Game.Core.Characters;
 using Game.Core.Loop;
 using Game.Core.Stats;
 
@@ -27,13 +29,49 @@ namespace Game.Core.Items
 
         public bool Remove(ItemInstance item) => _items.Remove(item);
 
+        /// <summary>
+        /// Пошук за стабільним <see cref="ItemInstance.InstanceId"/> — саме так
+        /// контракт GameSession (docs/TEST_BUILD.md §4.1) адресує ОДИН
+        /// конкретний предмет у команди Equip/CraftUpgrade, коли в сташі лежить
+        /// кілька дропів однієї бази (напр. два Common «Потерті каптани»).
+        /// </summary>
+        public ItemInstance Find(string instanceId)
+        {
+            if (string.IsNullOrEmpty(instanceId)) return null;
+            for (int i = 0; i < _items.Count; i++)
+                if (string.Equals(_items[i].InstanceId, instanceId, StringComparison.Ordinal))
+                    return _items[i];
+            return null;
+        }
+
+        /// <summary>
+        /// Знімає з напарника ВСЕ надіте спорядження і повертає його в сташ
+        /// (порт архівного Inventory.RecoverGearFrom). Викликати ПЕРЕД/ПРИ
+        /// Companion.MarkDead() — сам Items цей виклик не робить (MarkDead()
+        /// зветься з Core/Base/SettlementAdapters.cs, чужий пакет), інакше
+        /// надітий гір, зокрема єдиний іменний предмет кампанії, зникає
+        /// назавжди разом із загиблим.
+        /// </summary>
+        public void RecoverGearFrom(Companion companion)
+        {
+            if (companion == null) return;
+            foreach (EquipSlot slot in Enum.GetValues(typeof(EquipSlot)))
+            {
+                var recovered = companion.Equipment.Unequip(slot);
+                if (recovered != null) Add(recovered);
+            }
+        }
+
         // ---- Слепок (формат непрозорий назовні, як і решта IStateBlob): ----
-        // <defId>:<rarity>:<statKey>=<value>,...;<defId2>:...
+        // <defId>:<rarity>:<instanceId>:<statKey>=<value>,...;<defId2>:...
         // Значення персистяться, а не пере-обчислюються з бази (Definition):
         // крафт-апгрейд масштабує ВІД поточного значення (ItemInstance.
         // UpgradeTo), тож лише збережене число відновлює предмет побайтово
         // точно — прямий Resolve(рідкість) після ≥2 апгрейдів дав би інше
-        // округлення (див. коментар ItemInstance.FromSaved).
+        // округлення (див. коментар ItemInstance.FromSaved). InstanceId теж
+        // персистується (не перегенеровується): інакше команда Equip/
+        // CraftUpgrade, видана до збереження, після завантаження адресувала б
+        // уже неіснуючий id (докладніше — ItemInstance.FromSaved).
 
         public string CaptureState()
         {
@@ -52,7 +90,8 @@ namespace Game.Core.Items
                         + m.Value.ToString("R", CultureInfo.InvariantCulture));
                 }
 
-                parts.Add(item.Definition.Id + ":" + (int)item.Rarity + ":" + string.Join(",", mods.ToArray()));
+                parts.Add(item.Definition.Id + ":" + (int)item.Rarity + ":" + item.InstanceId + ":"
+                    + string.Join(",", mods.ToArray()));
             }
 
             return string.Join(";", parts.ToArray());
@@ -78,10 +117,12 @@ namespace Game.Core.Items
                 if (!defsById.TryGetValue(f[0], out def)) continue; // невідомий предмет — пропускаємо, не кидаємо
 
                 var rarity = (Rarity)ParseInt(f[1]);
+                string instanceId = f.Length > 2 ? f[2] : null; // порожнє — FromSaved згенерує новий лічильником
+
                 var mods = new List<StatModifier>();
-                if (f.Length > 2 && f[2].Length > 0)
+                if (f.Length > 3 && f[3].Length > 0)
                 {
-                    foreach (var pair in f[2].Split(','))
+                    foreach (var pair in f[3].Split(','))
                     {
                         var kv = pair.Split('=');
                         if (kv.Length != 2) continue;
@@ -91,7 +132,7 @@ namespace Game.Core.Items
                     }
                 }
 
-                _items.Add(ItemInstance.FromSaved(def, rarity, mods));
+                _items.Add(ItemInstance.FromSaved(def, rarity, mods, instanceId));
             }
         }
 
