@@ -173,15 +173,32 @@ namespace Game.Gameplay.UI
 
         // ===================== Будівлі =====================
 
+        /// <summary>
+        /// Полірування (ціль 2 «Прозорість дій», owner: "every action button
+        /// ... shows its cost, time/stages ... and a one-line effect in
+        /// words ... disabled-with-reason"). Раніше картка показувала лише
+        /// назву й стан — ціна й ефект дізнавались тільки постфактум, із
+        /// рядка фідбеку після кліку.
+        /// </summary>
         private void DrawBuildings(GameShell shell, Gender g)
         {
             var city = shell.Session.GetCityView();
+            var economy = shell.Session.GetEconomyView();
             _buildingsScroll = Widgets.ScrollListBegin(_buildingsScroll, GUILayout.ExpandHeight(true));
             foreach (var id in BuildingIds)
             {
-                GUILayout.BeginHorizontal(GUI.skin.box);
-                GUILayout.Label(UkrainianText.Get("building." + id, g), AlphaSkin.Body, GUILayout.Width(220f));
+                var def = Game.Core.Base.DefaultBuildings.Get(id);
+                GUILayout.BeginVertical(GUI.skin.box);
 
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Get("building." + id, g), AlphaSkin.SubHeader, GUILayout.Width(220f));
+                if (def != null) GUILayout.Label(ScreenText.BuildingCostLine(def, g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
+                GUILayout.EndHorizontal();
+
+                if (UkrainianText.Has("building." + id + ".effect", g))
+                    GUILayout.Label(UkrainianText.Get("building." + id + ".effect", g), AlphaSkin.Tooltip);
+
+                GUILayout.BeginHorizontal();
                 int stage = StageOf(city, id, out bool built);
                 if (built)
                     GUILayout.Label(UkrainianText.Get("ui.buildings.built", g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
@@ -190,13 +207,26 @@ namespace Game.Gameplay.UI
                 else
                     GUILayout.Label(UkrainianText.Get("ui.common.empty", g), AlphaSkin.Tooltip, GUILayout.ExpandWidth(true));
 
-                if (!built && stage == 0)
+                if (!built && stage == 0 && def != null)
                 {
                     string buildingId = id;
-                    if (Widgets.PrimaryButton(UkrainianText.Get("ui.buildings.order", g), GUILayout.Width(160f)))
-                        shell.TryRun(() => shell.Session.OrderBuilding(buildingId));
+                    bool enoughGold = economy == null || economy.Gold >= def.GoldCost;
+                    bool enoughMaterials = economy == null || economy.Materials >= def.MaterialsCost;
+                    if (def.QuestOnly)
+                        Widgets.DisabledButton(UkrainianText.Get("ui.buildings.order", g), UkrainianText.Get("ui.feedback.build.quest_only", g), GUILayout.Width(160f));
+                    else if (enoughGold && enoughMaterials)
+                    {
+                        if (Widgets.PrimaryButton(UkrainianText.Get("ui.buildings.order", g), GUILayout.Width(160f)))
+                            shell.TryRun(() => shell.Session.OrderBuilding(buildingId));
+                    }
+                    else
+                    {
+                        string reasonKey = !enoughGold ? "ui.feedback.build.not_enough_gold" : "ui.feedback.build.not_enough_materials";
+                        Widgets.DisabledButton(UkrainianText.Get("ui.buildings.order", g), UkrainianText.Get(reasonKey, g), GUILayout.Width(160f));
+                    }
                 }
                 GUILayout.EndHorizontal();
+                GUILayout.EndVertical();
             }
             Widgets.ScrollListEnd();
         }
@@ -406,27 +436,36 @@ namespace Game.Gameplay.UI
 
         // ===================== Спорядження / Крафт =====================
 
+        /// <summary>
+        /// Полірування (ціль 2 «Прозорість дій», owner: "show the stash with
+        /// items (name, rarity, what it improves), Equip to a chosen
+        /// person/slot, show Unequip only for occupied slots, Craft upgrade
+        /// with cost and before→after preview"). Раніше "Зняти" малювалось
+        /// для ВСІХ трьох слотів завжди, і схованка не показувала ані
+        /// рідкість, ані що саме предмет покращує, ані ціну/наслідок крафту.
+        /// </summary>
         private static void DrawGear(GameShell shell, Gender g)
         {
             var roster = shell.Session.GetRosterView();
             var stash = shell.Session.GetStash();
+            var city = shell.Session.GetCityView();
+            var economy = shell.Session.GetEconomyView();
+            StageOf(city, Game.Core.Base.DefaultBuildings.Workshop, out bool workshopOpen);
 
             Widgets.Section(UkrainianText.Get("ui.tab.people", g), () =>
             {
                 if (roster?.Companions == null) return;
                 foreach (var c in roster.Companions)
                 {
+                    var sheet = shell.Session.GetCharacterSheet(c.Id);
+                    if (sheet == null) continue;
                     GUILayout.BeginVertical(GUI.skin.box);
                     GUILayout.Label(ScreenText.ResolveCompanionName(c.Id, g, roster), AlphaSkin.SubHeader);
-                    string equipped = (c.Equipped != null && c.Equipped.Count > 0)
-                        ? string.Join(", ", ToLabels(c.Equipped, g))
-                        : UkrainianText.Get("ui.people.equipped.none", g);
-                    GUILayout.Label(UkrainianText.Format("ui.people.equipped", g, "items", equipped), AlphaSkin.Body);
 
                     GUILayout.BeginHorizontal();
-                    DrawUnequip(shell, c.Id, EquipSlot.Weapon, "ui.gear.slot.weapon", g);
-                    DrawUnequip(shell, c.Id, EquipSlot.Armor, "ui.gear.slot.armor", g);
-                    DrawUnequip(shell, c.Id, EquipSlot.Accessory, "ui.gear.slot.accessory", g);
+                    DrawSlot(shell, sheet.CompanionId, EquipSlot.Weapon, sheet.Equipment.WeaponId, "ui.gear.slot.weapon", g);
+                    DrawSlot(shell, sheet.CompanionId, EquipSlot.Armor, sheet.Equipment.ArmorId, "ui.gear.slot.armor", g);
+                    DrawSlot(shell, sheet.CompanionId, EquipSlot.Accessory, sheet.Equipment.AccessoryId, "ui.gear.slot.accessory", g);
                     GUILayout.EndHorizontal();
                     GUILayout.EndVertical();
                 }
@@ -442,10 +481,14 @@ namespace Game.Gameplay.UI
 
                 foreach (var item in stash)
                 {
-                    GUILayout.BeginHorizontal(GUI.skin.box);
-                    GUILayout.Label(UkrainianText.Has("item." + item.Definition.Id, g) ? UkrainianText.Get("item." + item.Definition.Id, g) : item.Definition.Id,
-                        AlphaSkin.Body, GUILayout.ExpandWidth(true));
+                    GUILayout.BeginVertical(GUI.skin.box);
 
+                    string name = UkrainianText.Has("item." + item.Definition.Id, g) ? UkrainianText.Get("item." + item.Definition.Id, g) : item.Definition.Id;
+                    string rarity = UkrainianText.Get("rarity." + item.Rarity.ToString().ToLowerInvariant(), g);
+                    GUILayout.Label(name + " (" + rarity + ")", AlphaSkin.Body);
+                    GUILayout.Label(UkrainianText.Format("ui.gear.improves", g, "stats", ScreenText.ItemStatSummary(item, g)), AlphaSkin.Tooltip);
+
+                    GUILayout.BeginHorizontal();
                     string instanceId = item.InstanceId;
                     var slot = item.Slot;
                     if (roster?.Companions != null)
@@ -456,24 +499,65 @@ namespace Game.Gameplay.UI
                             if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.equip", g) + ": " + ScreenText.ResolveCompanionName(companionId, g, roster), GUILayout.Width(260f)))
                                 shell.TryRun(() => shell.Session.Equip(companionId, instanceId, slot));
                         }
-
-                    if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.craft", g), GUILayout.Width(140f)))
-                        shell.TryRun(() => shell.Session.CraftUpgrade(instanceId));
                     GUILayout.EndHorizontal();
+
+                    DrawCraftButton(shell, g, item, workshopOpen, economy);
+                    GUILayout.EndVertical();
                 }
             });
         }
 
-        private static void DrawUnequip(GameShell shell, string companionId, EquipSlot slot, string labelKey, Gender g)
+        private static void DrawSlot(GameShell shell, string companionId, EquipSlot slot, string itemId, string labelKey, Gender g)
         {
-            if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.unequip", g) + ": " + UkrainianText.Get(labelKey, g), GUILayout.Width(220f)))
-                shell.TryRun(() => shell.Session.Unequip(companionId, slot));
+            GUILayout.BeginVertical(GUILayout.Width(230f));
+            string itemLabel = string.IsNullOrEmpty(itemId)
+                ? UkrainianText.Get("ui.sheet.none", g)
+                : (UkrainianText.Has("item." + itemId, g) ? UkrainianText.Get("item." + itemId, g) : itemId);
+            GUILayout.Label(UkrainianText.Get(labelKey, g) + ": " + itemLabel, AlphaSkin.Body);
+
+            // Owner: "show Unequip only for occupied slots" — раніше кнопка
+            // малювалась завжди, навіть для порожнього слота.
+            if (!string.IsNullOrEmpty(itemId))
+            {
+                if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.unequip", g), GUILayout.Width(220f)))
+                    shell.TryRun(() => shell.Session.Unequip(companionId, slot));
+            }
+            GUILayout.EndVertical();
         }
 
-        private static IEnumerable<string> ToLabels(IReadOnlyList<string> itemIds, Gender g)
+        private static void DrawCraftButton(GameShell shell, Gender g, Game.Core.Items.ItemInstance item, bool workshopOpen, EconomyView economy)
         {
-            foreach (var id in itemIds)
-                yield return UkrainianText.Has("item." + id, g) ? UkrainianText.Get("item." + id, g) : id;
+            if (item.Definition.IsNamed)
+            {
+                Widgets.DisabledButton(UkrainianText.Get("ui.gear.craft", g), UkrainianText.Get("ui.feedback.craft.named_not_upgradable", g));
+                return;
+            }
+            if (item.Rarity >= Game.Core.Items.Rarity.Epic)
+            {
+                Widgets.DisabledButton(UkrainianText.Get("ui.gear.craft", g), UkrainianText.Get("ui.feedback.craft.already_max_rarity", g));
+                return;
+            }
+
+            var itemBalance = new Game.Core.Balance.ItemBalance();
+            var preview = Game.Core.Items.CraftSystem.PreviewUpgrade(item);
+            string previewText = ScreenText.CraftPreviewText(preview, g);
+            string costLine = UkrainianText.Format("ui.gear.craft_cost", g, "gold", itemBalance.CraftGoldCost.ToString(), "materials", itemBalance.CraftMaterialsCost.ToString());
+            GUILayout.Label(costLine + (string.IsNullOrEmpty(previewText) ? "" : " · " + previewText), AlphaSkin.Tooltip);
+
+            if (!workshopOpen)
+            {
+                Widgets.DisabledButton(UkrainianText.Get("ui.gear.craft", g), UkrainianText.Get("ui.feedback.craft.workshop_closed", g), GUILayout.Width(220f));
+                return;
+            }
+            if (economy != null && (economy.Gold < itemBalance.CraftGoldCost || economy.Materials < itemBalance.CraftMaterialsCost))
+            {
+                Widgets.DisabledButton(UkrainianText.Get("ui.gear.craft", g), UkrainianText.Get("ui.feedback.craft.cannot_afford", g), GUILayout.Width(220f));
+                return;
+            }
+
+            string instanceId = item.InstanceId;
+            if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.craft", g), GUILayout.Width(220f)))
+                shell.TryRun(() => shell.Session.CraftUpgrade(instanceId));
         }
 
         // ===================== Люди =====================

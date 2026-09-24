@@ -202,6 +202,47 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, ledger.Get(ResourceType.Gold));
         }
 
+        // ---- Прев'ю "до→після" (полірування, ціль 2 «Прозорість дій») ----
+
+        [Test]
+        public void PreviewUpgrade_MatchesActualUpgrade_WithoutMutatingTheItem()
+        {
+            var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Common); // Armor=1, MaxHp=1
+            var before = new Dictionary<StatKey, double>();
+            foreach (var m in item.StatMods) before[m.Key] = m.Value;
+
+            var preview = CraftSystem.PreviewUpgrade(item);
+            Assert.AreEqual(2, preview.Count, "WornVest несе два статMods (Armor, MaxHp)");
+
+            // Предмет НЕ змінився від самого виклику прев'ю.
+            Assert.AreEqual(Rarity.Common, item.Rarity);
+            foreach (var m in item.StatMods) Assert.AreEqual(before[m.Key], m.Value);
+
+            // Реальний апгрейд дає ТІ САМІ числа, що прев'ю обіцяло.
+            var ledger = new ResourceLedger();
+            ledger.Add(ResourceType.Materials, 3);
+            ledger.Add(ResourceType.Gold, 5);
+            CraftSystem.TryUpgrade(item, ledger, true, 3, 5);
+
+            foreach (var line in preview)
+            {
+                double actual = 0;
+                foreach (var m in item.StatMods) if (m.Key == line.Key) actual = m.Value;
+                Assert.AreEqual(line.After, (int)System.Math.Round(actual),
+                    "прев'ю " + line.Key + " мало збігтись із реальним наслідком крафту");
+            }
+        }
+
+        [Test]
+        public void PreviewUpgrade_NamedOrMaxRarity_ReturnsEmpty()
+        {
+            var named = ItemInstance.NamedFrom(DefaultItems.AegisPlate());
+            CollectionAssert.IsEmpty(CraftSystem.PreviewUpgrade(named), "іменний предмет не апгрейдиться (US-6.1)");
+
+            var epic = new ItemInstance(DefaultItems.WornVest(), Rarity.Epic);
+            CollectionAssert.IsEmpty(CraftSystem.PreviewUpgrade(epic), "Epic — стеля рідкості");
+        }
+
         // ---- Апгрейд монотонний: за дефіцитний компонент не можна ослабнути ----
         [Test]
         public void Craft_Upgrade_NeverLowersStats()

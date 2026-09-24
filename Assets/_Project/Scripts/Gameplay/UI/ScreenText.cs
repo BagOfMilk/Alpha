@@ -7,6 +7,7 @@ using Game.Core.Checks;
 using Game.Core.Items;
 using Game.Core.Session;
 using Game.Core.Session.Views;
+using Game.Core.Stats;
 using Game.Gameplay.Text;
 
 namespace Game.Gameplay.UI
@@ -279,6 +280,58 @@ namespace Game.Gameplay.UI
                 case AssignmentResult.CompanionNotFound: return UkrainianText.Get("ui.feedback.assign.companion_not_found", g);
                 default: return UkrainianText.Get("ui.feedback.assign.companion_unavailable", g);
             }
+        }
+
+        /// <summary>
+        /// Полірування (ціль 2 «Прозорість дій»): «золото/матеріали, N діб» —
+        /// той самий рядок, що і в OrderBuilding-фідбеку, але ДО кліку, поруч
+        /// із назвою будівлі, а не лише постфактум у LastMessage.
+        /// </summary>
+        public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g)
+        {
+            if (def == null) return string.Empty;
+            string cost = def.MaterialsCost > 0
+                ? UkrainianText.Format("ui.buildings.cost_both", g,
+                    "gold", def.GoldCost.ToString(), "materials", def.MaterialsCost.ToString())
+                : UkrainianText.Format("ui.buildings.cost_gold", g, "gold", def.GoldCost.ToString());
+            return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", def.Days.ToString());
+        }
+
+        /// <summary>
+        /// Коротка назва статy для рядка "Покращує: ..." — skill./attr. для
+        /// тих осей (той самий текст, що й картка персонажа), "ui.stat.&lt;x&gt;"
+        /// для похідних (Армія/Точність/...). Ніколи не сире ім'я enum'а.
+        /// </summary>
+        public static string StatKeyLabel(StatKey key, Gender g)
+        {
+            if (StatKeys.TryToAttribute(key, out var a)) return UkrainianText.Get("attr." + a.ToString().ToLowerInvariant(), g);
+            if (StatKeys.TryToSkill(key, out var s)) return UkrainianText.Get("skill." + Game.Core.Stats.Skills.KeyId(s), g);
+            string shortKey = "ui.stat." + key.ToString().ToLowerInvariant();
+            return UkrainianText.Has(shortKey, g) ? UkrainianText.Get(shortKey, g) : key.ToString();
+        }
+
+        /// <summary>Рядок "Броня +1, Живучість +1" — усі статMods предмета, той самий підпис для "Покращує:" на схованці.</summary>
+        public static string ItemStatSummary(ItemInstance item, Gender g)
+        {
+            if (item == null) return string.Empty;
+            var parts = new List<string>();
+            foreach (var m in item.StatMods)
+            {
+                string sign = m.Value >= 0 ? "+" : "";
+                parts.Add(StatKeyLabel(m.Key, g) + " " + sign + m.Value.ToString("0.#"));
+            }
+            return parts.Count == 0 ? UkrainianText.Get("ui.sheet.none", g) : string.Join(", ", parts);
+        }
+
+        /// <summary>Рядок "Броня 1→2, Живучість 1→2" — CraftSystem.PreviewUpgrade без мутації предмета.</summary>
+        public static string CraftPreviewText(IReadOnlyList<Game.Core.Items.StatPreviewLine> preview, Gender g)
+        {
+            if (preview == null || preview.Count == 0) return string.Empty;
+            var parts = new List<string>();
+            foreach (var line in preview)
+                parts.Add(UkrainianText.Format("ui.gear.craft_preview", g,
+                    "stat", StatKeyLabel(line.Key, g), "before", line.Before.ToString(), "after", line.After.ToString()));
+            return string.Join(", ", parts);
         }
 
         public static string BuildResultText(BuildOrderResult r, Gender g)

@@ -675,6 +675,20 @@ namespace Game.Gameplay.Text
             AddKey(t, "building.fortifications", "Укріплення");
             AddKey(t, "building.armory", "Збройня");
             AddKey(t, "building.laboratory", "Лабораторія");
+
+            // Полірування (ціль 2 «Прозорість дій»): один рядок «що це
+            // змінює» словами (owner: "a one-line effect in words") поруч із
+            // кожною будівлею на вкладці — Core/Base/Buildings/BuildingEffect.
+            AddKey(t, "building.infirmary.effect", "відкриває пост — лікування поранених у лазареті");
+            AddKey(t, "building.workshop.effect", "відкриває пост — крафт і апгрейд спорядження");
+            AddKey(t, "building.storehouse.effect", "відкриває пост — облік і збереження припасів");
+            AddKey(t, "building.council_hall.effect", "відкриває пост і дії ради (облава, укази, дипломатія)");
+            AddKey(t, "building.market.effect", "відкриває пост — торгівля, знижує ціну наступних замовлень");
+            AddKey(t, "building.tavern.effect", "щодня приводить нових людей понад природний приріст");
+            AddKey(t, "building.temple.effect", "щодня знижує Напругу");
+            AddKey(t, "building.fortifications.effect", "щодня знижує Напругу, готує до нападу");
+            AddKey(t, "building.armory.effect", "чекає на систему спорядження — поки без ефекту");
+            AddKey(t, "building.laboratory.effect", "лише за квестом; чекає на аугменти — поки без ефекту");
         }
 
         // Core/DefaultContent.cs (AllSlots) — усі слоти бази, включно з lab_station,
@@ -1379,6 +1393,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.buildings.built", "Збудовано");
             AddKey(t, "ui.buildings.in_progress", "Стадія {stage} з 5");
 
+            // Полірування (ціль 2 «Прозорість дій»): ціна/термін видно ДО
+            // кліку (ScreenText.BuildingCostLine), а не лише постфактум.
+            AddKey(t, "ui.buildings.cost_gold", "{gold} золота");
+            AddKey(t, "ui.buildings.cost_both", "{gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.buildings.days", "{days} діб");
+
             AddKey(t, "ui.council.raid", "Облава");
             AddKey(t, "ui.council.settlers", "Прийняти переселенців");
             AddKey(t, "ui.council.decree", "Указ");
@@ -1518,6 +1538,29 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.gear.stash.empty", "Схованка порожня.");
             AddKey(t, "ui.gear.stash.title", "Схованка");
             AddKey(t, "ui.gear.craft", "Покращити");
+
+            // Полірування (ціль 2 «Прозорість дій», owner: "show the stash
+            // with items (name, rarity, what it improves) ... Craft upgrade
+            // with cost and before→after preview").
+            AddKey(t, "rarity.common", "звичайний");
+            AddKey(t, "rarity.uncommon", "незвичайний");
+            AddKey(t, "rarity.rare", "рідкісний");
+            AddKey(t, "rarity.epic", "епічний");
+            AddKey(t, "ui.gear.improves", "Покращує: {stats}");
+            AddKey(t, "ui.gear.craft_cost", "Ціна: {gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.gear.craft_preview", "{stat} {before}→{after}");
+
+            AddKey(t, "ui.stat.maxhp", "Живучість");
+            AddKey(t, "ui.stat.maxap", "Очки дій");
+            AddKey(t, "ui.stat.accuracy", "Точність");
+            AddKey(t, "ui.stat.defense", "Захист");
+            AddKey(t, "ui.stat.initiative", "Ініціатива");
+            AddKey(t, "ui.stat.critchance", "Крит");
+            AddKey(t, "ui.stat.armor", "Броня");
+            AddKey(t, "ui.stat.carrycapacity", "Ноша");
+            AddKey(t, "ui.stat.statusdurationreduction", "Стійкість до станів");
+            AddKey(t, "ui.stat.damagebonus", "Шкода");
+            AddKey(t, "ui.stat.moveappertile", "Рух");
         }
 
         // ---- Текстовий фідбек результатів команд (AssignmentResult/BuildOrderResult/...) ----
