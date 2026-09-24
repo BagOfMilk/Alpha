@@ -601,5 +601,64 @@ namespace Game.Tests.EditMode
             Assert.IsNull(state.GetSlot("bench").AssignedCompanionId,
                 "AdvanceCycle сверяется через тот же ReleaseFallen первым шагом — пост освобождён");
         }
+
+        // ==== Пакет D1 (GameSession facade): §4.9 TEST_BUILD.md — R17 ====
+
+        /// <summary>
+        /// R17/§4.9: жоден *View з <c>Core/Session/Views</c> не показує сире
+        /// число прихованої шкали. Allow-list — за ІМЕНЕМ члена (рефлексія за
+        /// типом однаково не відрізнить дозволений <c>int Gold</c> від
+        /// забороненого прихованого <c>int Tension.Value</c> — обидва просто
+        /// <c>int</c>), точно як задокументовано в §4.9. Перевіряються лише
+        /// типи, оголошені в namespace <c>Game.Core.Session.Views</c> —
+        /// публічні безпечні типи інших namespace (напр.
+        /// <c>Game.Core.World.IncidentOutcome</c>, який DayReportView лише
+        /// переносить далі як є) цим тестом не торкаються: вони вже пройшли
+        /// свій власний контур (internal-поля власних скритих шкал).
+        /// </summary>
+        [Test]
+        public void GameSession_Views_NeverExposeRawHiddenNumbers()
+        {
+            var allowed = new HashSet<string>
+            {
+                "Gold", "Materials", "Food", "Xp", "Level", "Day", "DaysInBand", "Tier",
+                "Stage", "StageOf", "Hp", "HpMax", "Ap", "ApMax", "ApReserved", "Round",
+                "Threshold", "QuietThreshold", "BloodyThreshold", "PartyValue", "Days",
+                "ExpectedMaterials", "ExpectedGold",
+                "ExpectedWounded", "Depth", "RoomsCleared", "UnbankedGold",
+                "UnbankedMaterials", "PointsAvailable", "MilestonesReached",
+                "MilestonesTotal", "Slot", "ScarCount", "HitChancePreview", "X", "Y", "Width", "Height",
+                // Розширення D1 понад літеральний список §4.9: SkillChangeView.From/To —
+                // рівень скила (0..10, звичайне видиме число персонажа US-2.6),
+                // а не прихована шкала — той самий рівень прозорості, що і Level/Hp.
+                "From", "To"
+            };
+            var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
+
+            var sessionAssembly = typeof(Game.Core.Session.GameSession).Assembly;
+            var offenders = new List<string>();
+
+            foreach (var type in sessionAssembly.GetTypes())
+            {
+                if (type.Namespace != "Game.Core.Session.Views") continue;
+                if (!type.IsPublic || type.IsEnum) continue;
+
+                foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (numericTypes.Contains(prop.PropertyType) && !allowed.Contains(prop.Name))
+                        offenders.Add(type.Name + "." + prop.Name);
+                }
+
+                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (numericTypes.Contains(field.FieldType) && !allowed.Contains(field.Name))
+                        offenders.Add(type.Name + "." + field.Name);
+                }
+            }
+
+            Assert.IsEmpty(offenders,
+                "View з Core/Session/Views показує невнесене в allow-list число прихованої шкали: " +
+                string.Join(", ", offenders));
+        }
     }
 }

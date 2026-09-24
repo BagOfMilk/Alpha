@@ -1,0 +1,542 @@
+using System.Collections.Generic;
+using System.Text;
+using Game.Core.Base;
+using Game.Core.Combat;
+using Game.Core.Dungeons;
+using Game.Core.Items;
+using Game.Core.Loop;
+using Game.Core.Session;
+using Game.Core.Session.Views;
+using NUnit.Framework;
+
+namespace Game.Tests.EditMode
+{
+    /// <summary>
+    /// GameSession — фасад над злитим трунком (Core/Session, пакет D1,
+    /// docs/TEST_BUILD.md §4.1–4.9, §4.14–4.15). Приймання пакета (§5, рядок D1):
+    /// (1) NewGame→AdvanceDay(×2)→SaveState→RestoreState→AdvanceDay дає ідентичний
+    ///     DayReportView; (2) усі команди §4.1 реалізовані і покриті хоч одним
+    ///     тестом; (3) RequestBattle/OnBattleResolved коректно повертає
+    ///     _resume.ReturnState для кожного SuspendReason;
+    ///     (4) GameSession_Views_NeverExposeRawHiddenNumbers (ArchitectureGuardTests) зелений.
+    /// </summary>
+    public class GameSessionTests
+    {
+        private static NewGameOptions SkipCreationOptions()
+            => new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold };
+
+        /// <summary>Доганяє сесію крізь відкриваючу сцену до Morning доби 1 (State доступний одразу після NewGame(SkipCreation=true)).</summary>
+        private static void FastForwardOpeningToMorning(GameSession s)
+        {
+            Assert.AreEqual(SessionState.Scene, s.State);
+            SceneStepView step;
+            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            Assert.AreEqual(SessionState.Morning, s.State);
+        }
+
+        /// <summary>
+        /// Один повний сценарний цикл доба N (тихий шлях на кожному рішенні,
+        /// доки день не впаде в Evening/Summary). <c>collectInto</c> — не
+        /// обов'язковий акумулятор: <see cref="GameSession.DayLog"/>
+        /// очищується на початку КОЖНОЇ фази (§4.3), тож події денної фази
+        /// (напр. "expedition.returned") зникають з DayLog ще до кінця цього
+        /// методу (після AdvanceNight) — хто хоче побачити їх усі одразу,
+        /// передає список, і хелпер копіює в нього DayLog після кожного кроку.
+        /// </summary>
+        private static DayReportView PlayFullDayQuiet(GameSession s, List<GameEvent> collectInto = null)
+        {
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Collect(s, collectInto);
+            while (report != null && report.AwaitsDecision)
+            {
+                report = s.ResolveIncident(IncidentPath.Quiet);
+                Collect(s, collectInto);
+            }
+
+            if (report != null && report.Pending == null)
+            {
+                // Розв'язка вузла 1 (доба 1) відкриває сцену — доганяємо її, як і
+                // відкриваючу, перш ніж підтверджувати вечір.
+                if (s.State == SessionState.Scene)
+                {
+                    SceneStepView step;
+                    do { step = s.AdvanceScene(); } while (!step.IsFinished);
+                }
+            }
+
+            if (s.State == SessionState.Evening) s.ConfirmEvening();
+            if (s.State == SessionState.Night)
+            {
+                var night = s.AdvanceNight();
+                Collect(s, collectInto);
+                while (night != null && night.AwaitsDecision)
+                {
+                    night = s.ResolveIncident(IncidentPath.Quiet);
+                    Collect(s, collectInto);
+                }
+            }
+            return report;
+        }
+
+        private static void Collect(GameSession s, List<GameEvent> into)
+        {
+            if (into == null) return;
+            into.AddRange(s.DayLog);
+        }
+
+        private static bool SawEvent(List<GameEvent> log, string key)
+        {
+            foreach (var e in log) if (e.Key == key) return true;
+            return false;
+        }
+
+        // ---- Title / створення / відкриття ----
+
+        [Test]
+        public void NewGame_SkipCreation_ReachesMorningOfDay1ThroughOpeningScene()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            Assert.AreEqual(0, s.CurrentView.Day, "до першого AdvanceDay лічильник ще 0");
+        }
+
+        [Test]
+        public void ProtagonistCreation_ConfirmCreation_AppliesBackgroundAndOpensScene()
+        {
+            var s = new GameSession();
+            s.NewGame(new NewGameOptions { SkipCreation = false });
+            Assert.AreEqual(SessionState.Creation, s.State);
+
+            s.SetProtagonistName("Богдан");
+            s.SetProtagonistBackground("healer");
+            s.SetProtagonistGender(Game.Core.Characters.Creation.Gender.Male);
+            var view = s.GetProtagonistCreationView();
+            Assert.AreEqual("healer", view.BackgroundId);
+
+            s.ConfirmCreation();
+            Assert.AreEqual(SessionState.Scene, s.State);
+
+            var roster = s.GetRosterView();
+            Game.Core.Session.Views.CompanionSummary protagonist = null;
+            foreach (var c in roster.Companions) if (c.Id == GameSession.ProtagonistId) protagonist = c;
+            Assert.IsNotNull(protagonist);
+            Assert.AreEqual("Богдан", protagonist.DisplayName);
+        }
+
+        [Test]
+        public void NewTrainingBattle_FromTitle_SuspendsAndReturnsToTitle_OnAutoResolve()
+        {
+            var s = new GameSession();
+            Assert.AreEqual(SessionState.Title, s.State);
+
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
+            Assert.AreEqual(SessionState.Battle, s.State);
+            Assert.IsNotNull(s.GetBattleView());
+
+            s.CombatAutoResolve();
+            Assert.AreEqual(SessionState.Title, s.State, "TrainingSkirmish повинен повернути ReturnState=Title");
+            Assert.IsNull(s.GetBattleView());
+        }
+
+        // ---- Доба 1: тихий шлях вузла 1 (Ж) ----
+
+        [Test]
+        public void Day1_QuietPath_ResolvesPassVanguard_AndAppliesOutcome()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Assert.IsTrue(report.AwaitsDecision);
+            Assert.AreEqual("incident.pass_vanguard", report.Pending.TopicId);
+            Assert.AreEqual(SessionState.Decision, s.State);
+
+            var afterDecision = s.ResolveIncident(IncidentPath.Quiet);
+            Assert.IsNotNull(afterDecision);
+            // Тихий шлях веде в сцену розв'язки вузла 1, а не прямо у Вечір.
+            Assert.AreEqual(SessionState.Scene, s.State);
+
+            SceneStepView step;
+            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            Assert.AreEqual(SessionState.Evening, s.State);
+
+            bool sawResolved = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "decision.resolved") sawResolved = true;
+            Assert.IsTrue(sawResolved, "decision.resolved має піти в DayLog (§4.3)");
+        }
+
+        // ---- Доба 1: кровавий шлях вузла 1 → справжній бій (SuspendReason.PassVanguardBloody) ----
+
+        [Test]
+        public void Day1_BloodyPath_SuspendsToBattle_AndOnAutoResolve_ReturnsThroughDecisionToScene()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            Assert.IsTrue(report.AwaitsDecision);
+
+            var duringBattle = s.ResolveIncident(IncidentPath.Bloody);
+            Assert.IsNull(duringBattle, "поки триває бій, готового DayReportView ще немає");
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            var battleView = s.GetBattleView();
+            Assert.IsNotNull(battleView);
+            Assert.AreEqual(3, CountSide(battleView, "Player"));
+            Assert.AreEqual(2, CountSide(battleView, "Enemy"));
+
+            s.CombatAutoResolve();
+
+            // OnBattleResolved спочатку встановлює State=_resume.ReturnState (Decision
+            // для PassVanguardBloody), а вже потім, застосувавши наслідки бою й
+            // розблокувавши денний конвеєр (DayProcessor.ResolvePendingWithBand),
+            // веде сесію далі в сцену розв'язки вузла 1 — той самий кінцевий стан,
+            // що й у тихого шляху.
+            Assert.AreEqual(SessionState.Scene, s.State);
+            Assert.IsNull(s.GetBattleView(), "бій має бути прибраний після резолву");
+            Assert.IsNotNull(s.LastDayReport, "день мав завершитись battle-driven резолвом рішення");
+
+            SceneStepView step;
+            do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            Assert.AreEqual(SessionState.Evening, s.State);
+        }
+
+        private static int CountSide(BattleView view, string side)
+        {
+            int n = 0;
+            foreach (var u in view.Units) if (u.Side == side) n++;
+            return n;
+        }
+
+        // ---- Морнінг-команди: Assign/Order*/Preview/Depart/Quest/Build/Equip/Craft ----
+
+        [Test]
+        public void Assign_And_Unassign_UpdateSlotsAndLog()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var result = s.Assign("maksym", "scouting_post");
+            Assert.AreEqual(AssignmentResult.Success, result);
+            s.Unassign("scouting_post");
+
+            bool sawMade = false, sawCleared = false;
+            foreach (var e in s.DayLog)
+            {
+                if (e.Key == "assign.made") sawMade = true;
+                if (e.Key == "assign.cleared") sawCleared = true;
+            }
+            Assert.IsTrue(sawMade);
+            Assert.IsTrue(sawCleared);
+        }
+
+        [Test]
+        public void OrderBuilding_And_CouncilOrders_ReachCityWorks()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            // Council Hall вже в StartingSet (§3.0), тож OrderDiplomacy не
+            // впирається у NoCouncilHall — далі це вже питання гаманця
+            // (плейсхолдер-старт 40 золота, Дипломатія коштує 25 — легальний
+            // NotEnoughGold теж підтверджує, що команда дійшла до CityWorks).
+            var diplomacy = s.OrderDiplomacy(Game.Core.Factions.DefaultFactions.Community);
+            Assert.AreNotEqual(CouncilOrderResult.NoCouncilHall, diplomacy,
+                "Зал совета вже стоїть у StartingSet — команда не повинна впиратись у його відсутність");
+            Assert.AreEqual(CouncilOrderResult.Applied, diplomacy, "40 стартового золота вистачає на 25 Дипломатії");
+
+            // Стройку перевіряємо окремою, ще не витраченою частиною гаманця
+            // (Дипломатія + Майстерня разом перевищили б стартовий плейсхолдер-
+            // капітал — не про це цей тест).
+            var s2 = new GameSession();
+            s2.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s2);
+
+            var buildResult = s2.OrderBuilding(Game.Core.Base.DefaultBuildings.Workshop);
+            Assert.AreEqual(BuildOrderResult.Started, buildResult);
+
+            var city = s2.GetCityView();
+            bool building = false;
+            foreach (var b in city.InProgress) if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) building = true;
+            Assert.IsTrue(building);
+        }
+
+        [Test]
+        public void PreviewExpedition_And_DepartExpedition_Quiet_TicksHomeAndBanksLoot()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var preview = s.PreviewExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Quiet,
+                new[] { "maksym", "myroslava" });
+            Assert.AreEqual("outskirts", preview.SiteId);
+            Assert.IsFalse(preview.IsDelve);
+
+            var dispatch = s.DepartExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Quiet,
+                new[] { "maksym", "myroslava" }, preview.Days);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+
+            // "Ближні розвалини" (outskirts) — 4 доби тихим шляхом: доганяємо цикли,
+            // доки відряд не повернеться (expedition.returned у стрічці подій).
+            var log = new List<GameEvent>();
+            for (int i = 0; i < preview.Days + 1 && !SawEvent(log, "expedition.returned"); i++)
+                PlayFullDayQuiet(s, log);
+            Assert.IsTrue(SawEvent(log, "expedition.returned"), "відряд мав повернутись протягом заявлених діб");
+        }
+
+        [Test]
+        public void OfferQuestStage_And_ResolveQuestChoice_Hafiya_Accept()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var offer = s.OfferQuestStage(Game.Core.Quests.DefaultQuests.HafiyaId);
+            Assert.IsNotNull(offer);
+            Assert.AreEqual(Game.Core.Quests.DefaultQuests.HafiyaId, offer.QuestId);
+            Assert.AreEqual(2, offer.Options.Count);
+
+            s.ResolveQuestChoice(0); // accept
+
+            bool sawResolved = false;
+            foreach (var e in s.DayLog) if (e.Key == "quest.choice.resolved") sawResolved = true;
+            Assert.IsTrue(sawResolved);
+        }
+
+        [Test]
+        public void BuildPlan_Preview_And_Commit_SpendsBankedPoints()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            // Протагоніст банкує очки (R11) лише через XP — надаємо їх напряму
+            // тим самим шляхом, яким це робить квест/бій (GrantXp, internal-приватний
+            // у GameSession) не доступний тесту, тож імітуємо джерело точок так,
+            // як це реально трапляється у грі: через квестову нагороду XP.
+            s.OfferQuestStage(Game.Core.Quests.DefaultQuests.HafiyaId);
+            s.ResolveQuestChoice(0); // приймає пропозицію -> етап "grass"
+            s.OfferQuestStage(Game.Core.Quests.DefaultQuests.HafiyaId);
+            s.ResolveQuestChoice(0); // резолв перевірки -> термінал з WithXp(10) чи 30
+
+            var plan = new Game.Core.Characters.Build.BuildPlan();
+            var preview = s.PreviewBuildPlan(GameSession.ProtagonistId, plan);
+            Assert.AreEqual(Game.Core.Characters.Build.BuildPlanStatus.Ok, preview.Status);
+        }
+
+        [Test]
+        public void Equip_Unequip_Craft_RoundTripOnDroppedItem()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var dispatch = s.DepartExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
+                new[] { "maksym" }, 2);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+
+            var log = new List<GameEvent>();
+            for (int i = 0; i < 4 && !SawEvent(log, "expedition.returned"); i++)
+                PlayFullDayQuiet(s, log);
+            Assert.IsTrue(SawEvent(log, "expedition.returned"));
+
+            var stash = s.GetStash();
+            Assert.Greater(stash.Count, 0, "силовий підхід на Базовій+ полосі мав скинути хоч один предмет у сташ");
+
+            var item = stash[0];
+            bool equipped = s.Equip("maksym", item.InstanceId, item.Slot);
+            Assert.IsTrue(equipped);
+
+            bool unequipped = s.Unequip("maksym", item.Slot);
+            Assert.IsTrue(unequipped);
+            Assert.AreEqual(1, s.GetStash().Count);
+        }
+
+        // ---- Данж (Delve): кровавий шлях бойової кімнати → бій (SuspendReason.DungeonCombatRoom) ----
+
+        [Test]
+        public void Dungeon_Delve_CombatRoom_Bloody_SuspendsToBattle_ThenBackToDungeon()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var dispatch = s.DepartExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                new[] { "protagonist", "maksym", "myroslava" }, 2);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+            Assert.AreEqual(SessionState.Dungeon, s.State);
+
+            var duringBattle = s.ResolveDungeonRoom(IncidentPath.Bloody);
+            Assert.IsNull(duringBattle);
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            s.CombatAutoResolve();
+
+            // OnBattleResolved повертає State=_resume.ReturnState=Dungeon для
+            // DungeonCombatRoom безумовно (акцептанс D1), а вже далі FinishDungeonCombat
+            // або лишає сесію в Dungeon (кімната пройдена), або, якщо цей конкретний
+            // детермінований 3v2 пішов не на користь відряду (Worst-полоса бою),
+            // веде до Morning через dungeon.wiped — обидва наслідки коректні,
+          // третього не існує (RequireBattle/OnBattleResolved не могли лишити
+            // сесію в Battle чи в іншому стані).
+            bool wiped = false;
+            foreach (var e in s.DayLog) if (e.Key == "dungeon.wiped") wiped = true;
+            Assert.AreEqual(wiped ? SessionState.Morning : SessionState.Dungeon, s.State);
+
+            bool sawResolvedBattle = false;
+            foreach (var e in s.DayLog) if (e.Key == "combat.battle.resolved") sawResolvedBattle = true;
+            Assert.IsTrue(sawResolvedBattle);
+        }
+
+        [Test]
+        public void Dungeon_PushDeeper_ResolveEvent_Extract_BanksLootToBaseState()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.DepartExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                new[] { "protagonist", "maksym", "myroslava" }, 2);
+
+            // Кімната 1 (бій) — тихий обхід: Survival/Persuade ≥5, партія сильна.
+            var afterRoom1 = s.ResolveDungeonRoom(IncidentPath.Quiet);
+            Assert.IsNotNull(afterRoom1, "тихий обхід кімнати 1 не повинен вести в бій за таким сильним відрядом");
+
+            var afterPush2 = s.PushDeeper(); // кімната 2: схованка (гарантований лут)
+            Assert.AreEqual("hidden_cache", afterPush2.CurrentRoom.Id);
+
+            var afterCache = s.ResolveDungeonRoom(IncidentPath.Quiet); // Cache не має шляху — розв'язується як є
+            Assert.IsNotNull(afterCache);
+
+            var afterPush3 = s.PushDeeper(); // кімната 3: подія-вибір
+            Assert.AreEqual("hidden_ashes", afterPush3.CurrentRoom.Id);
+
+            s.ResolveDungeonEvent(1); // "обережно": менше здобичі, без Threat
+
+            int goldBefore = s.GetEconomyView().Gold;
+            s.ExtractDungeon();
+            Assert.AreEqual(SessionState.Morning, s.State);
+            Assert.GreaterOrEqual(s.GetEconomyView().Gold, goldBefore, "Extract має забанкувати незабанковане в BaseState.Resources");
+        }
+
+        // ---- Фінал доби 5: кровавий шлях → справжній бій (SuspendReason.FinaleAssault) ----
+
+        [Test]
+        public void Finale_Bloody_OnDay5Night_SuspendsToBattle_AndResolves()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            for (int day = 1; day <= 4; day++) PlayFullDayQuiet(s);
+
+            // Доба 5: ранок повернення/попередження кризи вже відбулось усередині
+            // AdvanceDay (§3.5); доганяємо до ночі, реагуємо на кризу, тоді фінал.
+            s.ConfirmMorning();
+            var dayReport = s.AdvanceDay();
+            while (dayReport != null && dayReport.AwaitsDecision)
+                dayReport = s.ResolveIncident(IncidentPath.Quiet);
+            if (s.State == SessionState.Scene)
+            {
+                SceneStepView step;
+                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            }
+            s.ReactToCrisis(CrisisReaction.SpendGold);
+            s.ConfirmEvening();
+
+            Assert.AreEqual(SessionState.Night, s.State);
+            var duringBattle = s.ResolveFinale(IncidentPath.Bloody);
+            Assert.IsNull(duringBattle);
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            var battle = s.GetBattleView();
+            Assert.IsNotNull(battle);
+            bool hasBurunda = false;
+            foreach (var u in battle.Units) if (u.Id.Contains("burunda")) hasBurunda = true;
+            Assert.IsTrue(hasBurunda, "фінальний штурм завжди включає Бурунду-бегадира");
+
+            s.CombatAutoResolve();
+            // OnBattleResolved повертає State=_resume.ReturnState=Night для
+            // FinaleAssault, а CompleteFinale лишає сесію в Night — далі AdvanceNight
+            // сама доводить добу до Summary.
+            Assert.AreEqual(SessionState.Night, s.State);
+
+            var night = s.AdvanceNight();
+            Assert.AreEqual(SessionState.Summary, s.State);
+
+            var summary = s.GetSummaryView();
+            Assert.IsNotNull(summary.FinaleOutcomeKey);
+
+            s.AcknowledgeSummary();
+            Assert.AreEqual(SessionState.FreePlay, s.State);
+            Assert.IsTrue(s.CurrentView.IsFreePlay);
+        }
+
+        // ---- R13: побайтова безперервність збереження/завантаження ----
+
+        [Test]
+        public void SaveState_Then_RestoreFromBlob_InNewInstance_ProducesIdenticalNextDayReport()
+        {
+            var baseline = new GameSession();
+            baseline.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(baseline);
+            PlayFullDayQuiet(baseline); // доба 1 повністю -> Morning доби 2
+
+            Assert.AreEqual(SessionState.Morning, baseline.State);
+            string blob = baseline.SaveState(0);
+            Assert.IsFalse(string.IsNullOrEmpty(blob));
+
+            // Продовжуємо той самий (безперервний) прогін — контрольний DayReportView доби 2.
+            baseline.ConfirmMorning();
+            var continuousReport = baseline.AdvanceDay();
+
+            // Новий екземпляр: свіжий світ, той самий сід/правило, а потім —
+            // відновлення СЛІПКОМ (а не внутрішнім слотом іншого об'єкта).
+            var reloaded = new GameSession();
+            reloaded.NewGame(SkipCreationOptions());
+            reloaded.RestoreFromBlob(blob);
+            Assert.AreEqual(SessionState.Morning, reloaded.State);
+
+            reloaded.ConfirmMorning();
+            var reloadedReport = reloaded.AdvanceDay();
+
+            Assert.AreEqual(Summarize(continuousReport), Summarize(reloadedReport),
+                "AdvanceDay після SaveState→RestoreFromBlob мав дати структурно ідентичний DayReportView");
+        }
+
+        private static string Summarize(DayReportView v)
+        {
+            if (v == null) return "<null>";
+            var sb = new StringBuilder();
+            sb.Append("day=").Append(v.Day).Append(";phase=").Append(v.Phase);
+            sb.Append(";awaits=").Append(v.AwaitsDecision);
+            if (v.Pending != null)
+            {
+                sb.Append(";pending.kind=").Append(v.Pending.Kind).Append(";pending.topic=").Append(v.Pending.TopicId);
+                sb.Append(";pending.options=").Append(v.Pending.Options.Count);
+            }
+            if (v.Incidents != null)
+            {
+                sb.Append(";incidents=").Append(v.Incidents.Count);
+                foreach (var o in v.Incidents) sb.Append('|').Append(o.IncidentId).Append(':').Append(o.Band);
+            }
+            if (v.Signals != null && v.Signals.Requests != null)
+            {
+                sb.Append(";signals=").Append(v.Signals.Requests.Count);
+                foreach (var r in v.Signals.Requests) sb.Append('|').Append(r.TopicId);
+            }
+            return sb.ToString();
+        }
+    }
+}

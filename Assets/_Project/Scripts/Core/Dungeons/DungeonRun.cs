@@ -64,6 +64,22 @@ namespace Game.Core.Dungeons
     /// </summary>
     public sealed class DungeonConsequence
     {
+        // Фікс D1: порядок статичних полів у C# ВАЖИТЬ — ініціалізатори
+        // виконуються ЗГОРИ ВНИЗ у тексті класу (beforefieldinit). None
+        // раніше йшов ПЕРШИМ і своїм конструктором читав EmptyDeltas/EmptyFlags
+        // ДО того, як їхні власні ініціалізатори встигали відпрацювати — обидва
+        // лишались null, і None.FactionDeltas/FlagsToSet виявлялись null
+        // всупереч власному коментарю конструктора ("?? EmptyDeltas"). Кожен
+        // виклик DungeonRun.ResolveRoom/ResolveEvent, що лишає RoomResolution.
+        // Consequence дефолтним (None) — тобто щоразу для звичайної (не-подієвої)
+        // кімнати — віддавав приховану міну: перший-ліпший foreach по
+        // .FactionDeltas у викликача (D1/GameSession) падав NullReferenceException.
+        // Спіймано юніт-тестом GameSessionTests.Dungeon_PushDeeper_ResolveEvent_
+        // Extract_BanksLootToBaseState (тихий обхід кімнати 1). Порожні колекції
+        // мусять бути оголошені РАНІШЕ None, що тепер і зроблено.
+        private static readonly Dictionary<string, int> EmptyDeltas = new Dictionary<string, int>();
+        private static readonly List<string> EmptyFlags = new List<string>();
+
         public static readonly DungeonConsequence None = new DungeonConsequence(false, null, null);
 
         public readonly bool CausedFear;
@@ -77,9 +93,6 @@ namespace Game.Core.Dungeons
             FactionDeltas = factionDeltas ?? EmptyDeltas;
             FlagsToSet = flagsToSet ?? EmptyFlags;
         }
-
-        private static readonly Dictionary<string, int> EmptyDeltas = new Dictionary<string, int>();
-        private static readonly List<string> EmptyFlags = new List<string>();
     }
 
     /// <summary>

@@ -1,11 +1,15 @@
 using System.Collections.Generic;
 using Game.Core.Balance;
 using Game.Core.Characters;
+using Game.Core.Characters.Progression;
 using Game.Core.Checks;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
+using Game.Core.Factions;
+using Game.Core.Items;
 using Game.Core.Loop;
 using Game.Core.Pressure;
+using Game.Core.Quests;
 using Game.Core.Scenes;
 using Game.Core.Settlement;
 using Game.Core.Stats;
@@ -75,8 +79,29 @@ namespace Game.Core.Session
         public SiteLedger Sites { get; }
         public StoryFlags Flags { get; }
 
+        /// <summary>
+        /// Доповнення D1 (Фаза D): квести (R6, поза конвеєром), фракції (R5),
+        /// банк очків білда протагоніста (R11) і Готовність громади (R8).
+        /// Жоден з чотирьох не заводив A1 у першій збірці світу — тут вони
+        /// нарешті отримують контент/реєстр/крок конвеєра, симетрично тому, як
+        /// A1 вже підключив Sites/Flags/Party вище. Правка цього файлу —
+        /// виняток із §5.1 (A1-виключний), санкціонований інтегратором Фази D:
+        /// без реального гачка в конвеєрі дня жодна з чотирьох систем не могла
+        /// би працювати з живого GameSession, лишаючись «підключи сам» на
+        /// довільний виклик ззовні, якого в контракті §4.1 просто немає.
+        /// </summary>
+        public QuestLog Quests { get; }
+        public FactionRegistry Factions { get; }
+        public SpendablePoints Points { get; }
+        public ReadinessTrack Readiness { get; }
+
+        /// <summary>Сташ поселення (B3): лут із вилазок/данжу і ціль Equip/CraftUpgrade (§4.1 D1).</summary>
+        public Inventory Inventory { get; }
+
         private FirstHourWorld(BaseState baseState, CityWorksType cityWorks, DayProcessor processor,
-            SettlementCycleType cycle, Roster roster, ExpeditionParty party, SiteLedger sites, StoryFlags flags)
+            SettlementCycleType cycle, Roster roster, ExpeditionParty party, SiteLedger sites, StoryFlags flags,
+            QuestLog quests, FactionRegistry factions, SpendablePoints points, ReadinessTrack readiness,
+            Inventory inventory)
         {
             BaseState = baseState;
             CityWorks = cityWorks;
@@ -86,6 +111,11 @@ namespace Game.Core.Session
             Party = party;
             Sites = sites;
             Flags = flags;
+            Quests = quests;
+            Factions = factions;
+            Points = points;
+            Readiness = readiness;
+            Inventory = inventory;
         }
 
         /// <summary>
@@ -142,16 +172,30 @@ namespace Game.Core.Session
             var incidents = DefaultIncidents.BuildTable();
             foreach (var incident in OpeningContent.All()) incidents.Add(incident);
 
+            var readiness = new ReadinessTrack(cfg.Readiness);
+
             var production = new ProductionStep(baseState);
             var steps = new List<IDayStep>(SettlementCycleType.BuildSteps(production))
             {
                 new CityWorksStep(works, baseState),
-                new PopulationStep(works)
+                new PopulationStep(works),
+                // R8 (Готовність громади до фіналу): без цього кроку
+                // ReadinessTickStep ніколи не викликається — будинок, добудований
+                // сьогодні, і спокійна доба без страху проходили б повз трек.
+                new ReadinessTickStep(readiness, cfg.Readiness)
             };
 
             var sites = new SiteLedger();
             var flags = new StoryFlags();
             var party = new ExpeditionParty();
+
+            // R6: квести поза конвеєром дня — пул реєструється тут же, разом з
+            // рештою контенту відкриття, щоб GameSession міг одразу почати
+            // "hafiya" на добу 2 без додаткового виклику зовні.
+            var quests = new QuestLog(DefaultQuests.All(cfg));
+
+            // R5: три фракції зрізу зі стартовим нейтральним ставленням.
+            var factions = DefaultFactions.NewRegistry(cfg.Faction);
 
             var processor = new DayProcessor(tension, cfg, steps)
             {
@@ -180,7 +224,11 @@ namespace Game.Core.Session
 
             var cycle = new SettlementCycleType(baseState, processor, production);
 
-            return new FirstHourWorld(baseState, works, processor, cycle, roster, party, sites, flags);
+            var points = new SpendablePoints();
+            var inventory = new Inventory();
+
+            return new FirstHourWorld(baseState, works, processor, cycle, roster, party, sites, flags,
+                quests, factions, points, readiness, inventory);
         }
 
         private static void Assign(BaseState baseState, string companionId, string positionId)

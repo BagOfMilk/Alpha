@@ -263,6 +263,60 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
+        /// D1/R8: розв'язок поточного очікуваного рішення заданою НАПРЯМУ
+        /// полосою, а не перевіркою навички. Єдиний легальний споживач —
+        /// GameSession, коли пороговий інцидент денного конвеєра (вузол 1 "бій
+        /// на перевалі", фінал доби 5) кровавим шляхом веде на справжній
+        /// тактичний бій замість перевірки: полоса приходить із
+        /// BattleResult→OutcomeBand, а не з CheckResolver, і викликати звичний
+        /// ResolvePending для неї не можна — той сам порахує перевірку ще раз і
+        /// застосує Напругу вдруге. Напруга рухається ТИМ САМИМ правилом, що і
+        /// звичний шлях (<see cref="IncidentDefinition.TensionByBand"/>, індекс —
+        /// полоса, знак дельти вибирає драйвер із закритого списку — інваріант
+        /// 5): дві точки резолву лишаються однією конвенцією. Рана виконавцю й
+        /// страх громади для цього шляху вже рахує сам викликач (бій ранить
+        /// лише через RosterAdapter.Wound, Р5) — тут це НЕ повторюється.
+        /// </summary>
+        public DayReport ResolvePendingWithBand(OutcomeBand band)
+        {
+            if (_awaiting == null)
+                throw new InvalidOperationException(
+                    "Нечего решать: конвейер не остановлен.");
+
+            var ctx = _awaiting;
+            var incident = ctx.PendingIncident;
+
+            if (incident != null)
+            {
+                var deltas = incident.TensionByBand;
+                if (deltas != null && deltas.Length > 0)
+                {
+                    int index = (int)band;
+                    if (index >= deltas.Length) index = deltas.Length - 1;
+                    int delta = deltas[index];
+                    if (delta != 0)
+                    {
+                        var driver = delta > 0 ? TensionDriver.ThreatOutcome : TensionDriver.EventOutcome;
+                        _tension.Apply(driver, delta, "incident:" + incident.Id);
+                    }
+                }
+
+                ctx.IncidentOutcomes.Add(new IncidentOutcome(incident.Id, incident.TopicId, incident.DomainTag,
+                    band, wasUnmanned: false, wasCrisis: false, affectedActorId: null, bite: null,
+                    populationLost: 0, causedFear: false, peopleArrived: 0));
+            }
+
+            ctx.Pending = null;
+            ctx.PendingIncident = null;
+
+            if (TryDequeueNextPending(ctx))
+                return BuildReport(ctx);
+
+            _awaiting = null;
+            return Finish(ctx);
+        }
+
+        /// <summary>
         /// Следующее решение очереди фазы — в Pending. false, если очередь пуста.
         ///
         /// Предложение строится ЗДЕСЬ, а не заранее в IncidentStep: только так
