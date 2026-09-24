@@ -239,5 +239,59 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(offenders,
                 "В Game.Core не должно быть реализаций IDiceRoller — только порт: " + string.Join(", ", offenders));
         }
+
+        // ==== Пакет B6 (Quests + Story): §1.1 TEST_BUILD.md — фаза B справді ====
+        // ==== паралельна, B6 не залежить від B1 (бій)/B4 (лояльність/зрада). ====
+
+        /// <summary>
+        /// Декуплінг §1.1: <c>Core/Quests</c> і <c>Core/Story</c> не посилаються
+        /// на типи пакетів B1/B4/B5, яких у цьому робочому дереві ще нема
+        /// (паралельна фаза B). <c>Finale.BuildAssault</c> повертає бойо-
+        /// агностичний <c>AssaultPlan</c>, а не <c>BattleSetup</c> — саме це тут
+        /// і перевіряється.
+        /// </summary>
+        [Test]
+        public void Quests_And_Story_DoNotReferenceParallelPackages()
+        {
+            string[] layers = { "Quests", "Story" };
+            var forbidden = new Regex(
+                @"Game\.Core\.Combat|\bBattleSetup\b|Game\.Core\.Factions|\bFactionRegistry\b|" +
+                @"\bLoyaltyBand\b|CompanionStatus\.Antagonist");
+            var offenders = new List<string>();
+
+            foreach (var layer in layers)
+            {
+                var dir = Path.Combine(CoreRoot, layer);
+                if (!Directory.Exists(dir)) continue;
+
+                foreach (var file in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+                    if (forbidden.IsMatch(StripComments(File.ReadAllText(file))))
+                        offenders.Add(layer + "/" + Path.GetFileName(file));
+            }
+
+            Assert.IsEmpty(offenders,
+                "Пакет B6 паралельний B1/B4/B5 — посилання на їхні типи означає приховану залежність: "
+                + string.Join(", ", offenders));
+        }
+
+        /// <summary>
+        /// R6/інваріант 5: <c>QuestConsequence</c> — єдиний спосіб квесту
+        /// торкнутись Напруги, і в ньому структурно НЕМА поля-драйвера — лише
+        /// <c>int TensionDelta</c>, який завжди йде через
+        /// <c>TensionDriver.QuestChoice</c>. Новий драйвер квест підмінити не
+        /// може навіть по помилці — перевіряємо це по типу, а не по дисципліні.
+        /// </summary>
+        [Test]
+        public void QuestConsequence_CarriesNoTensionDriverField()
+        {
+            var type = typeof(Game.Core.Quests.QuestConsequence);
+            var driverFields = type.GetFields()
+                .Where(f => f.FieldType == typeof(Game.Core.Pressure.TensionDriver))
+                .Select(f => f.Name).ToArray();
+
+            Assert.IsEmpty(driverFields,
+                "QuestConsequence не повинен нести окреме поле TensionDriver — драйвер завжди QuestChoice (R6): "
+                + string.Join(", ", driverFields));
+        }
     }
 }

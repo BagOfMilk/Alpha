@@ -132,5 +132,11 @@ namespace Game.Core.Balance
 
         /// <summary>Тактический бой (Б1): точность/урон/overwatch/статусы. Своя секция — R14.</summary>
         public CombatBalance Combat = new CombatBalance();
+
+        /// <summary>Квестовий рушій поза конвеєром дня (R6, пакет B6).</summary>
+        public QuestBalance Quest = new QuestBalance();
+
+        /// <summary>Готовність громади до фіналу (R8, пакет B6).</summary>
+        public ReadinessBalance Readiness = new ReadinessBalance();
     }
 }
