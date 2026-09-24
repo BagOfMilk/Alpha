@@ -192,7 +192,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "node1.decision.title", "Авангард орди вийшов на перевал. Часу на раду немає.");
             AddKey(t, "node1.option.quiet", "Тихо: умовити Тугара (Переконання ≥ P) — відступ за добу, нуль ран.");
-            AddKey(t, "node1.option.bloody", "Криваво: засідка на стежці (Тактика ≥ T) — бій, тримати скалу над стежкою.");
+            AddKey(t, "node1.option.bloody", "Криваво: засідка на стежці (Тактика ≥ T) — бій, тримати скелю над стежкою.");
             AddKey(t, "battle.pass_vanguard.intro", "Розвідники орди вже на стежці. Максим і Мирослава — поруч.");
 
             AddKey(t, "node1.outcome.best.m",
@@ -234,7 +234,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.night.title", "Патрулювати чи спати?");
             AddKey(t, "ui.night.patrol", "Патрулювати (втрачаєш відпочинок, чуєш більше)");
             AddKey(t, "ui.night.sleep", "Спати (лікуєшся швидше, чуєш менше)");
-            AddKey(t, "forewarn.level1", "Собака третю ніч бреше на щось за частоколом.");
+            AddKey(t, "forewarn.level1", "Собака третю ніч гавкає на щось за частоколом.");
             AddKey(t, "forewarn.level2", "Третій день топчеться одна й та сама пара слідів біля межі.");
             AddKey(t, "forewarn.level3", "Щось готують. Скоро.");
         }
@@ -334,8 +334,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "dungeon.room3.title", "Прихований попіл — і під ним ще щось ціле.");
             AddKey(t, "dungeon.room3.greedy", "Забрати все зерно (більше здобичі, вищий ризик).");
             AddKey(t, "dungeon.room3.cautious", "Забрати менше, спалити слід (менше здобичі, спокійніше).");
-            AddKey(t, "dungeon.extract", "Здобич забанковано: {materials} матеріалів, {gold} золота.");
-            AddKey(t, "dungeon.wiped", "Бій пішов не так. Усе незабанковане втрачено — троє повертаються з порожніми руками, але живі.");
+            AddKey(t, "dungeon.extract", "Здобич збережено: {materials} матеріалів, {gold} золота.");
+            AddKey(t, "dungeon.wiped", "Бій пішов не так. Усе незбережене втрачено — троє повертаються з порожніми руками, але живі.");
             AddKey(t, "dungeon.room.bypassed", "Кімнату пройдено без бою.");
         }
 
@@ -361,7 +361,7 @@ namespace Game.Gameplay.Text
             // словами вище — інтегратор ще не звів назви; лишаю обидва набори,
             // щоб покриття не впало, коли D1 підключить стрічку подій напряму
             // до сирих ключів CityEvent, а не до перелічених вище "*.ordered").
-            AddKey(t, "council.raid", "Стража виходить в облаву — вулиці спокійніші за кілька днів.");
+            AddKey(t, "council.raid", "Варта виходить в облаву — вулиці спокійніші за кілька днів.");
             AddKey(t, "council.invest.payout", "Вкладення ради дало віддачу: золото повернулося з надлишком.");
             AddKey(t, "council.trade_discount", "Торговий підхід на посту зіграв — ціна нижча.");
         }
@@ -436,7 +436,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.training", "Тренувальний бій");
             AddKey(t, "ui.title.quit", "Вийти");
             AddKey(t, "ui.title.hitrule.percent", "Правило попадання: показаний відсоток");
-            AddKey(t, "ui.title.hitrule.threshold", "Правило попадання: показаний порог");
+            AddKey(t, "ui.title.hitrule.threshold", "Правило попадання: показаний поріг");
             AddKey(t, "ui.save.slot", "Слот {slot}: {headline}, доба {day}");
             AddKey(t, "ui.save.slot.empty", "Слот {slot}: порожньо");
             AddKey(t, "ui.save.autosave", "Автозбереження — щоранку");
@@ -479,7 +479,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "skill.trade", "Торгівля");
 
             AddKey(t, "attr.strength", "Сила");
-            AddKey(t, "attr.agility", "Ловкість");
+            AddKey(t, "attr.agility", "Спритність");
             AddKey(t, "attr.wits", "Кмітливість");
             AddKey(t, "attr.will", "Воля");
 
@@ -498,10 +498,10 @@ namespace Game.Gameplay.Text
             AddKey(t, "loyalty.band.steady", "Стійка");
             AddKey(t, "loyalty.band.devoted", "Віддана");
 
-            AddKey(t, "readiness.band.unprepared", "Непідготовлені");
-            AddKey(t, "readiness.band.bracing", "Насторожені");
-            AddKey(t, "readiness.band.ready", "Готові");
-            AddKey(t, "readiness.band.fortified", "Укріплені");
+            AddKey(t, "readiness.band.unprepared", "Непідготовлена");
+            AddKey(t, "readiness.band.bracing", "Насторожена");
+            AddKey(t, "readiness.band.ready", "Готова");
+            AddKey(t, "readiness.band.fortified", "Укріплена");
 
             AddKey(t, "char.maksym", "Максим Беркут");
             AddKey(t, "char.myroslava", "Мирослава");
@@ -632,7 +632,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "combat.status.suppressed", "Придушення");
             AddKey(t, "combat.status.knocked_down", "Збитий з ніг");
             AddKey(t, "combat.status.marked", "Позначений");
-            AddKey(t, "combat.status.burning", "Горить");
+            AddKey(t, "combat.status.burning", "Горіння");
             AddKey(t, "combat.status.poisoned", "Отруєний");
         }
 
@@ -697,7 +697,7 @@ namespace Game.Gameplay.Text
             // sick_child) мають власні — див. §7.6/§7.8, ці не перекривають їх.
             AddKey(t, "incident.petty_theft.outcome.best", "Крадія знайшли, і майже все повернулося на місце.");
             AddKey(t, "incident.petty_theft.outcome.good", "Половину зниклого повернуто.");
-            AddKey(t, "incident.petty_theft.outcome.base", "Розібралися абияк — крадій пішов необраний.");
+            AddKey(t, "incident.petty_theft.outcome.base", "Розібралися абияк — крадій пішов непокараний.");
             AddKey(t, "incident.petty_theft.outcome.worst", "Нічого не знайшли, і крадуть далі.");
 
             AddKey(t, "incident.market_brawl.outcome.best", "Сторони розійшлися самі, без синців і без боргів.");
@@ -713,10 +713,10 @@ namespace Game.Gameplay.Text
             AddKey(t, "incident.missing_person.outcome.best", "Знайшли живим — і не одного: із ним прибилися ще люди.");
             AddKey(t, "incident.missing_person.outcome.good", "Знайшли живим.");
             AddKey(t, "incident.missing_person.outcome.base", "Знайшли, але пізно — рана вже своя.");
-            AddKey(t, "incident.missing_person.outcome.worst", "Не знайшли. Община знає, що це означає.");
+            AddKey(t, "incident.missing_person.outcome.worst", "Не знайшли. Громада знає, що це означає.");
 
             AddKey(t, "incident.night_burglary.outcome.best", "Злодія взяли на гарячому — украдене повернулося.");
-            AddKey(t, "incident.night_burglary.outcome.good", "Злодія прогнали, частину майна вернули.");
+            AddKey(t, "incident.night_burglary.outcome.good", "Злодія прогнали, частину майна повернули.");
             AddKey(t, "incident.night_burglary.outcome.base", "Злодій утік із половиною здобичі.");
             AddKey(t, "incident.night_burglary.outcome.worst", "Склад обчищено — і ніхто нічого не бачив.");
 
@@ -751,7 +751,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "city.tier.4", "Слобода стала містечком.");
 
             AddKey(t, "city.people.arrived", "Прийшли нові люди.");
-            AddKey(t, "city.people.left", "Люди йдуть із поселення.");
+            AddKey(t, "city.people.left", "Люди пішли з поселення.");
 
             AddKey(t, "city.crowd.0", "На вулицях майже нікого.");
             AddKey(t, "city.crowd.1", "Вулиці рідшають.");
@@ -763,13 +763,13 @@ namespace Game.Gameplay.Text
         // ---- Амбієнт напруги/ночі — переклад SignalText.Text(topicId) ----
         private static void AddAmbientSignals(Dictionary<string, string> t)
         {
-            AddKey(t, "tension.ambient.calm", "«Добре, що ви тут». Діти у дворах.");
+            AddKey(t, "tension.ambient.calm", "«Добре, що ви тут.» Діти у дворах.");
             AddKey(t, "tension.ambient.murmur", "У колодязя сперечаються про ціни.");
             AddKey(t, "tension.ambient.ferment", "Розмова стихає, коли підходиш.");
             AddKey(t, "tension.ambient.heat", "Ставні зачинені вдень. Патруль ходить парами.");
             AddKey(t, "tension.ambient.fracture", "Площа порожня. Зброю носять відкрито.");
 
-            AddKey(t, "tension.band.risen", "«Змінюється. І не в кращий бік».");
+            AddKey(t, "tension.band.risen", "«Змінюється. І не в кращий бік.»");
 
             AddKey(t, "night.ambient.calm", "Тихо. Лише вітер.");
             AddKey(t, "night.ambient.murmur", "Десь хлопнула ставня.");
@@ -786,7 +786,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "assign.cleared", "{post} звільнено.");
             AddKey(t, "night.forewarn", "Уночі щось почулося — {domain}.");
             AddKey(t, "production.leveled_up", "Виробництво на {post} зросло.");
-            AddKey(t, "dungeon.push", "Загін іде глибше в данж.");
+            AddKey(t, "dungeon.push", "Загін іде глибше у підземелля.");
             AddKey(t, "loot.dropped", "Здобич: {item}.");
             AddKey(t, "craft.upgraded", "{item} покращено.");
             AddKey(t, "scar.granted", "{companion} носитиме це до кінця: {scar}.");

@@ -111,7 +111,7 @@ namespace Game.Tests.EditMode
         public void Format_SubstitutesNamedPlaceholders()
         {
             string result = UkrainianText.Format("dungeon.extract", Gender.Male, "materials", "5", "gold", "10");
-            Assert.AreEqual("Здобич забанковано: 5 матеріалів, 10 золота.", result);
+            Assert.AreEqual("Здобич збережено: 5 матеріалів, 10 золота.", result);
         }
 
         [Test]
