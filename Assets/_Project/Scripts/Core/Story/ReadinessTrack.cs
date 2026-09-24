@@ -31,6 +31,14 @@ namespace Game.Core.Story
         /// <summary>Сире значення. Гравцю НЕ показується ніколи — лише полоса.</summary>
         internal int Value { get; private set; }
 
+        /// <summary>
+        /// Скільки віх Готовності вже зараховано (кожен непорожній <see cref="Add"/>
+        /// — одна віха: вилазка/квест/стройка/страх/указ ради). Гравцю показується
+        /// (§4.2 <c>ReadinessView.MilestonesReached</c>) — сама лише лічильник подій,
+        /// не приховане число (allow-list §4.9), тому internal тут не потрібен.
+        /// </summary>
+        public int MilestonesReached { get; private set; }
+
         public ReadinessBand Band => _band;
 
         /// <summary>Смена полосы обязана породить сигнал (інваріант 4).</summary>
@@ -53,6 +61,8 @@ namespace Game.Core.Story
         {
             if (amount == 0) return;
 
+            MilestonesReached++;
+
             int before = Value;
             Value += amount;
             if (Value < 0) Value = 0;
@@ -69,7 +79,14 @@ namespace Game.Core.Story
 
         // ---- слепок ----
 
-        public string CaptureState() => Value.ToString(CultureInfo.InvariantCulture);
+        /// <summary>
+        /// "<c>значення|лічильник_віх</c>" (§4.8: "внутреннее значение + счётчик
+        /// достигнутых меток") — MilestonesReached персистується тут же, а не
+        /// перераховується з нуля, інакше після Save/Load лічильник завжди
+        /// показував би 0, хай скільки віх було зараховано до збереження.
+        /// </summary>
+        public string CaptureState() =>
+            Value.ToString(CultureInfo.InvariantCulture) + "|" + MilestonesReached.ToString(CultureInfo.InvariantCulture);
 
         /// <summary>
         /// Полоса НЕ зберігається окремо, а перераховується зі значення — так
@@ -77,12 +94,31 @@ namespace Game.Core.Story
         /// патчами, стара сборка не поверне полосу, якій значення більше не
         /// відповідає. Подія на відновленні НЕ емітиться (те саме рішення, що
         /// й у TensionState) — завантаження не подія гри, а її продовження.
+        /// Формат зворотно сумісний зі старим "<c>значення</c>" без лічильника
+        /// (частина без '|' — лічильник тоді 0).
         /// </summary>
         public void RestoreState(string blob)
         {
+            string valuePart = blob;
+            string countPart = null;
+            if (!string.IsNullOrEmpty(blob))
+            {
+                int bar = blob.IndexOf('|');
+                if (bar >= 0)
+                {
+                    valuePart = blob.Substring(0, bar);
+                    countPart = blob.Substring(bar + 1);
+                }
+            }
+
             int v;
-            Value = int.TryParse(blob, NumberStyles.Integer, CultureInfo.InvariantCulture, out v) && v > 0 ? v : 0;
+            Value = int.TryParse(valuePart, NumberStyles.Integer, CultureInfo.InvariantCulture, out v) && v > 0 ? v : 0;
             _band = _cfg.BandFor(Value);
+
+            int reached;
+            MilestonesReached = countPart != null &&
+                int.TryParse(countPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out reached) && reached > 0
+                ? reached : 0;
         }
     }
 }

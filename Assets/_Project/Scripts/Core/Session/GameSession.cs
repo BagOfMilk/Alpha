@@ -128,6 +128,20 @@ namespace Game.Core.Session
         public IReadOnlyList<GameEvent> DayLog => _dayLog;
 
         /// <summary>
+        /// Скільки записів <c>report.Incidents</c> уже перекладено у DayLog цієї
+        /// фази (<see cref="TranslateReport"/>). DayProcessor.BuildReport
+        /// повертає ПОВНИЙ накопичений список інцидентів фази щоразу (аудит
+        /// П10: 2+ рішення в одній фазі), тож без цього лічильника кожен
+        /// наступний виклик TranslateReport у тій самій фазі перекладав би вже
+        /// перекладені інциденти заново — дублікати "decision.resolved" у
+        /// DayLog (§4.3: єдине джерело правди для рахунку наслідків).
+        /// </summary>
+        private int _translatedIncidentCount;
+
+        /// <summary>Ідемпотентний бонус Гафії (D1, seamsForD1): застосовується рівно раз за прогін.</summary>
+        private bool _hafiyaGrassBonusApplied;
+
+        /// <summary>
         /// GameSession отримує кубик ЛИШЕ звідси (конструктор) або через
         /// <see cref="NewGameOptions.Roller"/> — ніколи не будує його сам.
         /// Той самий екземпляр можна передати в кілька сесій підряд (Title →
@@ -180,6 +194,8 @@ namespace Game.Core.Session
             _freePlay = false;
             _finaleResolved = false;
             _finaleOutcomeKey = null;
+            _translatedIncidentCount = 0;
+            _hafiyaGrassBonusApplied = false;
 
             _hitRule = o.HitRule;
             _seed = o.Seed;
@@ -335,6 +351,7 @@ namespace Game.Core.Session
 
         public AssignmentResult Assign(string companionId, string slotId)
         {
+            RequireState(SessionState.Morning);
             var result = _state.TryAssign(companionId, slotId);
             if (result == AssignmentResult.Success)
                 LogEvent("assign.made", Args("companionId", companionId, "slotId", slotId));
@@ -343,12 +360,14 @@ namespace Game.Core.Session
 
         public void Unassign(string slotId)
         {
+            RequireState(SessionState.Morning);
             _state.Unassign(slotId);
             LogEvent("assign.cleared", Args("slotId", slotId));
         }
 
         public BuildOrderResult OrderBuilding(string id)
         {
+            RequireState(SessionState.Morning);
             var r = _works.Order(id, _state, _processor.CurrentDay, _cfg);
             if (r == BuildOrderResult.Started) LogEvent("city.building.ordered", Args("buildingId", id));
             return r;
@@ -356,6 +375,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderRaid()
         {
+            RequireState(SessionState.Morning);
             var r = _works.OrderRaid(_state, _processor.CurrentDay, _cfg, _factions);
             if (r == CouncilOrderResult.Queued) LogEvent("council.raid.ordered");
             return r;
@@ -363,6 +383,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderSettlers()
         {
+            RequireState(SessionState.Morning);
             var r = _works.OrderSettlers(_state, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Queued) LogEvent("council.settlers.ordered");
             return r;
@@ -370,6 +391,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderDecree(string favoredFactionId, string costFactionId = null)
         {
+            RequireState(SessionState.Morning);
             var r = _works.OrderDecree(_state, _processor, _factions, favoredFactionId, costFactionId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied)
                 LogEvent("council.decree", Args("favored", favoredFactionId, "cost", costFactionId ?? string.Empty));
@@ -378,6 +400,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderDiplomacy(string factionId)
         {
+            RequireState(SessionState.Morning);
             var r = _works.OrderDiplomacy(_state, _factions, factionId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied) LogEvent("council.diplomacy", Args("factionId", factionId));
             return r;
@@ -385,6 +408,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderInvestment(string buildingId)
         {
+            RequireState(SessionState.Morning);
             var r = _works.OrderInvestment(_state, buildingId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Queued) LogEvent("council.invest", Args("buildingId", buildingId ?? string.Empty));
             return r;
@@ -392,6 +416,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderPrepareThreat()
         {
+            RequireState(SessionState.Morning);
             var r = _works.OrderPrepareThreat(_state, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied) LogEvent("council.prepare_threat");
             return r;
@@ -399,6 +424,7 @@ namespace Game.Core.Session
 
         public CouncilOrderResult OrderOutfitExpedition(string siteId)
         {
+            RequireState(SessionState.Morning);
             var r = _works.OrderOutfitExpedition(_state, siteId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied) LogEvent("council.outfit_expedition", Args("siteId", siteId));
             return r;
@@ -406,6 +432,7 @@ namespace Game.Core.Session
 
         public ExpeditionPreviewView PreviewExpedition(string siteId, ExpeditionApproach approach, IReadOnlyList<string> companionIds)
         {
+            RequireState(SessionState.Morning);
             if (approach == ExpeditionApproach.Delve)
             {
                 var rooms = DefaultDungeon.Rooms(siteId);
@@ -435,6 +462,7 @@ namespace Game.Core.Session
 
         public DispatchResult DepartExpedition(string siteId, ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days)
         {
+            RequireState(SessionState.Morning);
             var site = approach == ExpeditionApproach.Delve ? new ExpeditionSite(siteId, siteId) : FindSite(siteId);
             if (site == null) return DispatchResult.NoSuchSite;
 
@@ -468,6 +496,7 @@ namespace Game.Core.Session
 
         public QuestOfferView OfferQuestStage(string questId)
         {
+            RequireState(SessionState.Morning);
             var run = _quests.Get(questId) ?? _quests.Start(questId);
             if (run == null || run.Current == null) return null;
 
@@ -496,6 +525,7 @@ namespace Game.Core.Session
 
         public DayReportView ResolveQuestChoice(int optionIndex)
         {
+            RequireState(SessionState.Morning);
             if (_currentQuestOffer == null) throw new InvalidOperationException("Немає активної пропозиції квесту.");
             var run = _quests.Get(_currentQuestOffer.QuestId);
             if (run == null) throw new InvalidOperationException("Квест не знайдено.");
@@ -505,6 +535,12 @@ namespace Game.Core.Session
                 : run.ResolveCheck(_rosterView, _repeats, _processor.CurrentDay, _cfg);
 
             ApplyQuestConsequence(step.Consequence);
+
+            // R8 (seamsForD1): завершення квесту — віха Готовності, що трапляється
+            // ПОЗА конвеєром дня (ReadinessTickStep бачить лише будівлю/указ/страх),
+            // тож зараховує її сюди безпосередньо D1, як і задокументовано.
+            if (step.Terminal && step.Succeeded)
+                _readiness.Add(_cfg.Readiness.QuestDoneAmount);
 
             LogEvent("quest.choice.resolved",
                 Args("questId", run.Def.Id, "stage", step.StageId, "band", step.Band.ToString()));
@@ -521,12 +557,14 @@ namespace Game.Core.Session
 
         public BuildPreview PreviewBuildPlan(string companionId, BuildPlan plan)
         {
+            RequireState(SessionState.Morning);
             var c = _worldRoster.Get(companionId);
             return BuildPlanner.Preview(c, plan, _points.Get(companionId), null, _cfg);
         }
 
         public BuildPlanStatus CommitBuildPlan(string companionId, BuildPlan plan, bool confirmedIrreversible)
         {
+            RequireState(SessionState.Morning);
             var c = _worldRoster.Get(companionId);
             int cost = plan?.PointCost ?? 0;
             var status = BuildPlanner.Commit(c, plan, _points.Get(companionId), null, _cfg, confirmedIrreversible);
@@ -540,6 +578,7 @@ namespace Game.Core.Session
 
         public bool Equip(string companionId, string itemInstanceId, EquipSlot slot)
         {
+            RequireState(SessionState.Morning);
             var c = _worldRoster.Get(companionId);
             if (c == null) return false;
             var item = _inventory.FindAnywhere(_worldRoster.All, itemInstanceId);
@@ -555,6 +594,7 @@ namespace Game.Core.Session
 
         public bool Unequip(string companionId, EquipSlot slot)
         {
+            RequireState(SessionState.Morning);
             var c = _worldRoster.Get(companionId);
             if (c == null) return false;
             var item = c.Equipment.Unequip(slot);
@@ -567,6 +607,7 @@ namespace Game.Core.Session
 
         public CraftResult CraftUpgrade(string itemInstanceId)
         {
+            RequireState(SessionState.Morning);
             var item = _inventory.FindAnywhere(_worldRoster.All, itemInstanceId);
             bool workshopOpen = _works.Has(DefaultBuildingsType.Workshop);
             var result = CraftSystem.TryUpgrade(item, _state.Resources, workshopOpen, _cfg.Items);
@@ -577,8 +618,13 @@ namespace Game.Core.Session
 
         public string SaveState(int slot)
         {
-            if (State != SessionState.Morning)
-                throw new InvalidOperationException("Збереження лише в Morning (R13).");
+            // Morning і FreePlay — той самий хаб (ConfirmMorning уже трактує їх
+            // однаково); після фіналу доби 5 гра ЗАВЖДИ у FreePlay, тож заборона
+            // збереження лише в Morning робила б ручний сейв неможливим до кінця
+            // прогону (R13: 3 слоти + автосейв щоранку — обидва мають працювати
+            // й у FreePlay).
+            if (State != SessionState.Morning && State != SessionState.FreePlay)
+                throw new InvalidOperationException("Збереження лише в Morning/FreePlay (R13).");
             string blob = ComposeSave();
             _slots[slot] = blob;
             LogEvent("game.saved", Args("slot", slot.ToString(CultureInfo.InvariantCulture)));
@@ -681,6 +727,11 @@ namespace Game.Core.Session
                 LogLoyaltyChanges(LoyaltyRules.OnBloodyChoice(_worldRoster, _cfg));
 
             LogEvent("decision.resolved", Args("path", path.ToString(), "band", FindBand(report, incidentId).ToString(), "incidentId", incidentId));
+            // Щойно розв'язаний інцидент уже залогований рядком вище (з "path",
+            // якого TranslateReport не знає) — позначаємо його перекладеним,
+            // інакше цикл TranslateReport нижче залогує "decision.resolved" для
+            // нього вдруге (аудит дубля DayLog).
+            MarkIncidentsAlreadyTranslated(report);
             TranslateReport(report);
             _lastDayReport = BuildDayReportView(report);
             SettleAfterDayReport(report);
@@ -700,11 +751,25 @@ namespace Game.Core.Session
 
         public void SetPatrol(bool patrol)
         {
+            // Задокументовано в пакеті (§4.1 "Evening -> Night: SetPatrol,
+            // AdvanceNight") як команда вечора — саме тут гравець вирішує
+            // нічну варту, ДО того, як AdvanceNight (Night-лише) прочитає
+            // IsPatrolling.
+            RequireState(SessionState.Evening);
             _processor.IsPatrolling = patrol;
         }
 
         public DayReportView ReactToCrisis(CrisisReaction action)
         {
+            // _crisis з'являється лише в NewGame — команда до нього (як і решта
+            // команд файлу) повинна впасти чистим InvalidOperationException, а
+            // не NullReferenceException. Стан НЕ обмежуємо однією фазою: вікно
+            // реакції відкривається під час AdvanceDay (§3.5) і лишається
+            // відкритим крізь Evening аж до Bite() у AdvanceNight — легальний
+            // виклик з обох станів (ReactToCrisis_Bloody тест кличе його ще в
+            // Evening, до ConfirmEvening).
+            if (_crisis == null)
+                throw new InvalidOperationException("Немає активної сесії (NewGame не викликано).");
             if (_crisis.Phase != CrisisPhase.WindowOpen)
                 throw new InvalidOperationException("Вікно реакції на кризу закрите.");
 
@@ -1137,6 +1202,9 @@ namespace Game.Core.Session
 
             LogEvent("decision.resolved", Args("path", wasBloody ? "Bloody" : "Quiet", "band", band.ToString(), "incidentId", "pass_vanguard"));
 
+            // Той самий фікс дубля, що в ResolveIncident: pass_vanguard уже
+            // залогований рядком вище.
+            MarkIncidentsAlreadyTranslated(report);
             TranslateReport(report);
             _lastDayReport = BuildDayReportView(report);
 
@@ -1319,7 +1387,18 @@ namespace Game.Core.Session
 
         public ReadinessView GetReadinessView()
         {
-            return new ReadinessView { Band = _readiness.Band.ToString(), MilestonesReached = 0, MilestonesTotal = 0 };
+            // MilestonesReached — реальний лічильник (ReadinessTrack.Add
+            // інкрементує його щоразу, коли віха таки застосована). MilestonesTotal
+            // ПЛЕЙСХОЛДЕР (§9, як і решта чисел зрізу): дизайн не фіксує "загальну"
+            // кількість віх як ціль — тут це кількість РІЗНОВИДІВ віхи, визначених
+            // у ReadinessBalance (вилазка/квест/стройка/страх/указ ради), а не
+            // прогрес-бар до конкретного числа.
+            return new ReadinessView
+            {
+                Band = _readiness.Band.ToString(),
+                MilestonesReached = _readiness.MilestonesReached,
+                MilestonesTotal = 5
+            };
         }
 
         // =====================================================================
@@ -1332,7 +1411,11 @@ namespace Game.Core.Session
                 throw new InvalidOperationException("Команда недоступна у стані " + State + " (потрібен " + expected + ").");
         }
 
-        private void ClearDayLog() => _dayLog.Clear();
+        private void ClearDayLog()
+        {
+            _dayLog.Clear();
+            _translatedIncidentCount = 0;
+        }
 
         private void LogEvent(string key, IReadOnlyDictionary<string, string> args = null)
         {
@@ -1348,15 +1431,38 @@ namespace Game.Core.Session
             return dict;
         }
 
+        /// <summary>
+        /// Позначає всі інциденти поточного <paramref name="report"/> (звідси і
+        /// раніше в цій фазі) уже перекладеними — викликач щойно залогував
+        /// останній з них явно (з даними, яких TranslateReport не має, напр.
+        /// "path"), і цикл у TranslateReport нижче не повинен зробити це вдруге.
+        /// </summary>
+        private void MarkIncidentsAlreadyTranslated(DayReport report)
+        {
+            if (report?.Incidents != null && report.Incidents.Count > _translatedIncidentCount)
+                _translatedIncidentCount = report.Incidents.Count;
+        }
+
         private void TranslateReport(DayReport report)
         {
             if (report == null) return;
             LogEvent("day.advanced", Args("day", report.Day.ToString(CultureInfo.InvariantCulture), "phase", report.Phase.ToString()));
 
             if (report.Incidents != null)
-                foreach (var outcome in report.Incidents)
+            {
+                // DayProcessor.BuildReport завжди повертає ПОВНИЙ накопичений
+                // report.Incidents цієї фази (не лише щойно розв'язаний) — тож
+                // перекладаємо лише хвіст, якого ще не бачили (_translatedIncidentCount),
+                // інакше повторний виклик у фазі з 2+ рішеннями (аудит П10)
+                // дублював би "decision.resolved" для вже залогованих інцидентів.
+                for (int i = _translatedIncidentCount; i < report.Incidents.Count; i++)
+                {
+                    var outcome = report.Incidents[i];
                     LogEvent("decision.resolved", Args("incidentId", outcome.IncidentId, "band", outcome.Band.ToString(),
                         "noCandidate", outcome.WasUnmanned ? "1" : "0"));
+                }
+                _translatedIncidentCount = report.Incidents.Count;
+            }
 
             if (report.Signals != null && report.Signals.Requests != null)
                 foreach (var req in report.Signals.Requests)
@@ -1397,7 +1503,11 @@ namespace Game.Core.Session
             }
 
             State = _freePlay ? SessionState.FreePlay : SessionState.Morning;
-            if (!_freePlay) AutoSave();
+            // Автосейв щоранку (R13) — і в FreePlay теж: раніше гейт `!_freePlay`
+            // вимикав автосейв назавжди одразу після фіналу доби 5, хоча
+            // SaveState тепер (той самий фікс) дозволяє FreePlay так само, як
+            // Morning.
+            AutoSave();
         }
 
         /// <summary>
@@ -1476,6 +1586,13 @@ namespace Game.Core.Session
             var returned = _party.Return(_state, out result);
             ExpeditionRunner.Complete(_state, result, _works);
             LogEvent("expedition.returned", Args("siteId", result?.SiteId, "band", result?.Band.ToString()));
+
+            // R8 (seamsForD1): вилазка — віха Готовності, що трапляється ПОЗА
+            // конвеєром дня (ReadinessTickStep її не бачить), тож зараховує
+            // безпосередньо D1 — лише за Хорошою/Найкращою полосою виходу
+            // (ReadinessBalance.ExpeditionSuccessAmount, за коментарем поля).
+            if (result != null && result.Band >= OutcomeBand.Good)
+                _readiness.Add(_cfg.Readiness.ExpeditionSuccessAmount);
 
             // §2 рядок 19 ("Лут ... за полосою"): звичайна вилазка (не данж)
             // теж крапає гір, детерміновано за полосою виходу — той самий
@@ -1581,6 +1698,46 @@ namespace Game.Core.Session
             foreach (var flag in c.Flags) _flags.Set(flag);
             foreach (var itemId in c.ItemIds) { GrantNamedItemById(itemId); LogEvent("loot.dropped", Args("itemId", itemId, "named", "1")); }
             if (c.Xp != 0) GrantXp(ProtagonistId, c.Xp);
+
+            ApplyHafiyaGrassBonusToSickChildIfNeeded();
+        }
+
+        /// <summary>
+        /// Seam B6→D1 (seamsForD1, TEST_BUILD.md §5 рядок B6): трава Гафії
+        /// (<see cref="DefaultQuests.HafiyaGrassFoundFlag"/>) полегшує поріг
+        /// тихого шляху інциденту <c>sick_child</c> (доба 3) на
+        /// <see cref="Game.Core.Balance.QuestBalance.HafiyaGrassBonusToSickChild"/>.
+        /// OpeningContent.cs (A1) НЕ чіпаємо — <c>IncidentDefinition</c> об'єкт
+        /// мутабельний і живе єдиним екземпляром у <c>_processor.Incidents</c> на
+        /// весь прогін (FirstHourWorld.Build викликає OpeningContent.All() рівно
+        /// раз), тож зменшення поля тут — застосування "чужого" числа своїм кодом,
+        /// а не редагування чужого файлу. Ідемпотентно (<see cref="_hafiyaGrassBonusApplied"/>)
+        /// — і на випадок Save/Load ДО доби 3 (прапор персистується, а IncidentTable
+        /// ні, тож без повторного виклику при ApplySave бонус губився б).
+        /// </summary>
+        private void ApplyHafiyaGrassBonusToSickChildIfNeeded()
+        {
+            if (_hafiyaGrassBonusApplied) return;
+            if (_flags == null || !_flags.Get(DefaultQuests.HafiyaGrassFoundFlag)) return;
+            if (_processor?.Incidents == null) return;
+
+            // Id "sick_child" НЕ унікальний у таблиці: DefaultIncidents.BuildTable()
+            // заводить свій загальний вуличний "sick_child" (SourceId="street",
+            // поза сюжетом), а OpeningContent.SickChild() — окремий сюжетний
+            // інцидент доби 3 (SourceId="opening.child", ScriptedSource з тим
+            // самим Id) з ІНШИМ порогом. Матчити лише по Id — застосувати бонус
+            // не до того об'єкта (перший знайдений — вуличний, не сюжетний).
+            foreach (var def in _processor.Incidents.All)
+            {
+                if (string.Equals(def.Id, "sick_child", StringComparison.Ordinal) &&
+                    string.Equals(def.SourceId, "opening.child", StringComparison.Ordinal))
+                {
+                    def.QuietPathThreshold = Math.Max(1, def.QuietPathThreshold - _cfg.Quest.HafiyaGrassBonusToSickChild);
+                    break;
+                }
+            }
+
+            _hafiyaGrassBonusApplied = true;
         }
 
         private void GrantXp(string companionId, int amount)
@@ -1785,7 +1942,15 @@ namespace Game.Core.Session
             head.Append(";quests=").Append(_quests.CaptureState());
             head.Append(";factions=").Append(_factions.CaptureState());
             head.Append(";points=").Append(_points.CaptureState());
-            head.Append(";items=").Append(_inventory.CaptureState());
+
+            // Довжина-префікс (як і "core=" нижче): Inventory.CaptureState() сам
+            // з'єднує предмети через ';' (Inventory.cs), тож наївний
+            // headPart.Split(';') у ApplySave інакше сплутав би роздільник
+            // предметів із роздільником полів заголовка і губив усі предмети,
+            // крім першого (аудит: сташ 2+ предметів після Save/Load).
+            string itemsBlob = _inventory.CaptureState();
+            head.Append(";items=").Append(itemsBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(itemsBlob);
+
             head.Append(";defect=").Append(_defectionWatch.CaptureState());
             head.Append(";crisis=").Append(_crisis.CaptureState());
 
@@ -1806,6 +1971,23 @@ namespace Game.Core.Session
                 int caret = blob.IndexOf('^', afterKey);
                 int len = ParseInt(blob.Substring(afterKey, caret - afterKey));
                 corePart = blob.Substring(caret + 1, len);
+            }
+
+            // "items=" так само довжина-префіксований (ComposeSave) і так само
+            // вирізається ЦІЛИМ фрагментом ДО наївного Split(';') нижче — інакше
+            // ';' усередині Inventory.CaptureState() (роздільник предметів)
+            // сплутався б із роздільником полів заголовка (той самий фікс, що
+            // й для "core=").
+            string itemsPart = null;
+            int itemsIdx = headPart.IndexOf(";items=", StringComparison.Ordinal);
+            if (itemsIdx >= 0)
+            {
+                int afterKey = itemsIdx + ";items=".Length;
+                int caret = headPart.IndexOf('^', afterKey);
+                int len = ParseInt(headPart.Substring(afterKey, caret - afterKey));
+                itemsPart = headPart.Substring(caret + 1, len);
+                int afterItems = caret + 1 + len;
+                headPart = headPart.Substring(0, itemsIdx) + headPart.Substring(afterItems);
             }
 
             foreach (var part in headPart.Split(';'))
@@ -1829,18 +2011,24 @@ namespace Game.Core.Session
                     case "quests": _quests.RestoreState(value); break;
                     case "factions": _factions.RestoreState(value); break;
                     case "points": _points.RestoreState(value); break;
-                    case "items": _inventory.RestoreState(value); break;
                     case "defect": _defectionWatch.RestoreState(value); break;
                     case "crisis": _crisis.RestoreState(value); break;
                 }
             }
 
+            _inventory.RestoreState(itemsPart);
             if (corePart != null) _processor.RestoreState(corePart);
 
             _currentPending = null;
             _currentQuestOffer = null;
             _dungeon = null;
             _battle = null;
+
+            // Флаг міг бути виставлений ДО збереження (квест-етап "grass"
+            // резолвиться задовго до доби 3) — порог sick_child не входить у
+            // жоден слепок (визначення інцидентів не персистяться), тож без
+            // цього виклику бонус мовчки губився б після Save/Load.
+            ApplyHafiyaGrassBonusToSickChildIfNeeded();
         }
 
         private static SuspendToken ParseResume(string value)
