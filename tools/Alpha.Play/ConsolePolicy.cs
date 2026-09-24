@@ -81,5 +81,7 @@ namespace Alpha.Play
 
         /// <summary>Завжди true — консоль грає бої лише «Автобоєм» (§1.1).</summary>
         public bool ChooseAutoResolve(BattleView battle) => true;
+
+        public bool ChoosePushDeeper(DungeonView view) => false;
     }
 }

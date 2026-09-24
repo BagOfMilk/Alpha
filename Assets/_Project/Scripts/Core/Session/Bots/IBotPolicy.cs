@@ -6,14 +6,13 @@ using Game.Core.Session.Views;
 namespace Game.Core.Session.Bots
 {
     /// <summary>
-    /// Стратегія бота на один хід тактичного бою (§4.10 TEST_BUILD.md). Сам
-    /// <see cref="BattleView"/> не каже, хто зараз "поточний" юніт (§4.2.1 такого
-    /// поля не несе) — <c>BotRunner</c> вгадує його за єдиним надійним сигналом
-    /// (єдина ЗАЙНЯТА клітинка серед <see cref="BattleView.ReachableTiles"/> — це
-    /// клітинка того, хто ходить: чужі юніти стоять на СВОЇХ тайлах і в прохідні
-    /// не входять), а Intent лише задає, ЩО він хоче зробити зі своїм ходом.
-    /// Якщо погана видимість не дає визначити поточного юніта (0 AP лишилось) —
-    /// BotRunner просто завершує хід, як і зробив би обережний гравець.
+    /// Стратегія бота на один хід тактичного бою (§4.10 TEST_BUILD.md).
+    /// <see cref="BattleView.CurrentUnitId"/> каже, хто зараз "поточний" юніт
+    /// (фікс-ревью D2 — раніше поля не було, <c>BotRunner</c> вгадував його за
+    /// ReachableTiles-евристикою, яка ніколи не спрацьовувала: Pathfinder не
+    /// включає власний тайл юніта в Reachable), а Intent лише задає, ЩО він
+    /// хоче зробити зі своїм ходом. Якщо активного юніта немає (бій завершився)
+    /// — BotRunner просто завершує хід, як і зробив би обережний гравець.
     /// </summary>
     public enum CombatIntent
     {
@@ -88,5 +87,16 @@ namespace Game.Core.Session.Bots
 
         /// <summary>true — натиснути «Автобій» одразу, як бій розпочався; false — грати покроково.</summary>
         bool ChooseAutoResolve(BattleView battle);
+
+        /// <summary>
+        /// Фікс-ревью пакета D2 (minor): чи штовхати данж глибше (PushDeeper)
+        /// після щойно розв'язаної кімнати, замість витягу (ExtractDungeon).
+        /// Раніше <c>BotRunner.DoDungeonRoutine</c> вирішував це через
+        /// <c>policy is DelveGreedyPolicy</c> — типова перевірка конкретного
+        /// класу, яку жодна СТОРОННЯ реалізація <see cref="IBotPolicy"/> не
+        /// могла б задіяти. Тепер це явний член контракту: true в
+        /// <c>DelveGreedyPolicy</c>, false в решті.
+        /// </summary>
+        bool ChoosePushDeeper(DungeonView view);
     }
 }

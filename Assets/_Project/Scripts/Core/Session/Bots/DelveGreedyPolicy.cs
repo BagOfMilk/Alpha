@@ -40,5 +40,8 @@ namespace Game.Core.Session.Bots
         public CombatAction ChooseCombatAction(BattleView battle) => new CombatAction(CombatIntent.AttackNearest);
 
         public bool ChooseAutoResolve(BattleView battle) => true;
+
+        /// <summary>Жадібність за іменем політики — завжди штовхає глибше, доки в данжі лишаються кімнати.</summary>
+        public bool ChoosePushDeeper(DungeonView view) => true;
     }
 }

@@ -1357,6 +1357,7 @@ namespace Game.Core.Session
                 Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable },
                 Units = units,
                 ReachableTiles = reachable,
+                CurrentUnitId = _battle.Current != null && _battle.Current.IsActive ? _battle.Current.Id : null,
                 InitiativeOrder = initiative,
                 Log = _battle.Log,
                 IsHitRulePercent = _battle.IsHitRulePercent

@@ -55,6 +55,24 @@ namespace Game.Core.Session.Bots
             public double TotalMinutes() => TotalSeconds() / 60.0;
         }
 
+        /// <summary>
+        /// Фікс-ревью пакета D2 (§6.1 рядок 43, major): знімок ОДНОГО виклику
+        /// ResolveIncident/ResolveQuestChoice/ResolveFinale — саме ці три
+        /// команди §6.1 рядок 43 зобов'язує дати відмінну від "нічого" подію.
+        /// <see cref="HadConsequence"/> порівнює DayLog ДО і ПІСЛЯ САМЕ цього
+        /// виклику (DayLog чиститься лише на межі AdvanceDay/AdvanceNight, а не
+        /// між командами всередині фази, тож before/after навколо одного
+        /// виклику ніколи не зачіпає сусідні команди).
+        /// </summary>
+        public sealed class ChoiceDiagnostic
+        {
+            public string Kind;
+            public int Day;
+            public int EventsBefore;
+            public int EventsAfter;
+            public bool HadConsequence => EventsAfter > EventsBefore;
+        }
+
         public const string DefaultProtagonistName = "Богдан";
 
         /// <summary>Кімнат у "Покинутому таборі авангарду" (DefaultDungeon.AbandonedCamp) — жадібна політика штовхає рівно стільки, перш ніж банкувати.</summary>
@@ -78,11 +96,11 @@ namespace Game.Core.Session.Bots
             List<GameEvent> fullLog = null, Action<GameEvent> onEvent = null,
             List<PendingOfferView> offerLog = null, List<string> viewKeyLog = null,
             List<RosterView> offerRosterLog = null, TimingTally tally = null,
-            Action<SceneStepView> onSceneStep = null)
+            Action<SceneStepView> onSceneStep = null, Action<ChoiceDiagnostic> onChoiceApplied = null)
         {
             var session = new GameSession(options?.Roller);
             session.NewGame(options ?? new NewGameOptions());
-            Drive(session, policy, days, fullLog, onEvent, offerLog, viewKeyLog, offerRosterLog, tally, onSceneStep);
+            Drive(session, policy, days, fullLog, onEvent, offerLog, viewKeyLog, offerRosterLog, tally, onSceneStep, onChoiceApplied);
             return session;
         }
 
@@ -100,7 +118,7 @@ namespace Game.Core.Session.Bots
             List<GameEvent> fullLog = null, Action<GameEvent> onEvent = null,
             List<PendingOfferView> offerLog = null, List<string> viewKeyLog = null,
             List<RosterView> offerRosterLog = null, TimingTally tally = null,
-            Action<SceneStepView> onSceneStep = null)
+            Action<SceneStepView> onSceneStep = null, Action<ChoiceDiagnostic> onChoiceApplied = null)
         {
             if (session == null) throw new ArgumentNullException(nameof(session));
             if (policy == null) throw new ArgumentNullException(nameof(policy));
@@ -199,13 +217,20 @@ namespace Game.Core.Session.Bots
                             offerRosterLog?.Add(session.GetRosterView());
                         }
                         var path = policy.ChooseIncidentPath(offer);
+                        int decisionDay = session.CurrentView.Day;
+                        int decisionBefore = session.DayLog.Count;
                         session.ResolveIncident(path);
+                        onChoiceApplied?.Invoke(new ChoiceDiagnostic
+                        {
+                            Kind = "ResolveIncident", Day = decisionDay,
+                            EventsBefore = decisionBefore, EventsAfter = session.DayLog.Count
+                        });
                         if (tally != null) tally.Decisions++;
                         break;
                     }
 
                     case SessionState.Evening:
-                        MaybeOfferQuest(session, policy, tally);
+                        MaybeOfferQuest(session, policy, tally, onChoiceApplied);
                         session.SetPatrol(policy.ChoosePatrol(session.CurrentView));
                         session.ConfirmEvening();
                         if (tally != null) tally.SimpleCommands += 2;
@@ -229,7 +254,14 @@ namespace Game.Core.Session.Bots
                             finaleResolvedDay5 = true;
                             var offer = BotSupport.SyntheticOffer("Finale", "finale");
                             var path = policy.ChooseIncidentPath(offer);
+                            int finaleDay = session.CurrentView.Day;
+                            int finaleBefore = session.DayLog.Count;
                             session.ResolveFinale(path);
+                            onChoiceApplied?.Invoke(new ChoiceDiagnostic
+                            {
+                                Kind = "ResolveFinale", Day = finaleDay,
+                                EventsBefore = finaleBefore, EventsAfter = session.DayLog.Count
+                            });
                             if (tally != null) tally.Decisions++;
                         }
                         else
@@ -344,13 +376,20 @@ namespace Game.Core.Session.Bots
             return false;
         }
 
-        private static void MaybeOfferQuest(GameSession session, IBotPolicy policy, TimingTally tally)
+        private static void MaybeOfferQuest(GameSession session, IBotPolicy policy, TimingTally tally, Action<ChoiceDiagnostic> onChoiceApplied = null)
         {
             var offer = session.OfferQuestStage(DefaultQuests.HafiyaId);
             if (offer == null) return; // квест ще не готовий до нового кроку АБО вже завершений
             int count = offer.Options != null ? offer.Options.Count : 0;
             int idx = BotSupport.ClampIndex(policy.ChooseQuestOption(offer), count);
+            int day = session.CurrentView.Day;
+            int before = session.DayLog.Count;
             session.ResolveQuestChoice(idx);
+            onChoiceApplied?.Invoke(new ChoiceDiagnostic
+            {
+                Kind = "ResolveQuestChoice", Day = day,
+                EventsBefore = before, EventsAfter = session.DayLog.Count
+            });
             if (tally != null) tally.Decisions++;
         }
 
@@ -412,9 +451,12 @@ namespace Game.Core.Session.Bots
             if (session.State != SessionState.Dungeon) return; // підвис у Battle або Wipe -> Morning
 
             var after = session.GetDungeonView();
-            bool greedy = policy is DelveGreedyPolicy;
+            // Фікс-ревью D2 (minor): чи штовхати глибше вирішує сама політика
+            // (ChoosePushDeeper), а не type-test "policy is DelveGreedyPolicy" —
+            // будь-яка стороння реалізація IBotPolicy тепер теж може обрати
+            // "жадібне" делве, не лише зашитий у BotRunner клас.
             bool moreRooms = after != null && after.RoomsCleared < AbandonedCampRoomCount;
-            if (greedy && moreRooms) session.PushDeeper();
+            if (moreRooms && policy.ChoosePushDeeper(after)) session.PushDeeper();
             else session.ExtractDungeon();
             if (tally != null) tally.SimpleCommands++;
         }
@@ -440,12 +482,23 @@ namespace Game.Core.Session.Bots
 
         /// <summary>
         /// Перекладає намір політики в конкретні Combat*-команди GameSession.
-        /// "Поточний" юніт визначається евристикою <see cref="BotSupport.FindCurrent"/>
-        /// (§4.2.1 BattleView не позначає його напряму) — керує тим, хто ходить,
-        /// незалежно від сторони: у покроковому режимі водій veде обидві сторони,
+        /// "Поточний" юніт береться напряму з <see cref="BattleView.CurrentUnitId"/>
+        /// через <see cref="BotSupport.FindCurrent"/> — керує тим, хто ходить,
+        /// незалежно від сторони: у покроковому режимі водій веде обидві сторони,
         /// так само як існуючі GameSessionTests керують ворожим юнітом напряму
         /// (CombatMove на training_scout_1) — тактичні команди GameSession
         /// навмисно side-агностичні.
+        ///
+        /// Фікс-ревью пакета D2 (доважок до блокера): "Overwatch, поки далеко"
+        /// сам по собі — глухий кут, якщо його симетрично виконують ОБИДВІ
+        /// сторони (як у PacifistPolicy — тактика не залежить від Side). Ніхто
+        /// ніколи не наближається, тож ніхто не перетинає чужий сектор, і
+        /// combat.overwatch.triggered НІКОЛИ не спрацьовує — бій тягнеться до
+        /// RoundCap-нічиєї. <c>view.Round &lt;= 1</c> обмежує "візьми на приціл"
+        /// ПЕРШИМ раундом: із другого раунду й далі водій штовхає юніта вперед
+        /// (атака впритул або StepToward+Move), тож дистанція реально
+        /// скорочується — і watch-стійки, взяті в раунді 1, отримують шанс
+        /// СПРАЦЮВАТИ на чужому русі, а не просто оновлюватись нескінченно.
         /// </summary>
         private static void ExecuteCombatAction(GameSession session, BattleView view, CombatAction action)
         {
@@ -457,7 +510,7 @@ namespace Game.Core.Session.Bots
 
             int dist = BotSupport.Chebyshev(current.Pos, target.Pos);
 
-            if (action.Intent == CombatIntent.Overwatch && dist > 1)
+            if (action.Intent == CombatIntent.Overwatch && dist > 1 && !current.IsOverwatching && view.Round <= 1)
             {
                 var aim = new GridPos(target.Pos.X, target.Pos.Y);
                 if (session.CombatEnterOverwatch(aim) == CombatActionResult.Success) return;

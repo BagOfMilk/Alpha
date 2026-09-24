@@ -41,5 +41,7 @@ namespace Game.Core.Session.Bots
         public CombatAction ChooseCombatAction(BattleView battle) => new CombatAction(CombatIntent.Overwatch);
 
         public bool ChooseAutoResolve(BattleView battle) => false;
+
+        public bool ChoosePushDeeper(DungeonView view) => false;
     }
 }

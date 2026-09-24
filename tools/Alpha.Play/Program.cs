@@ -48,9 +48,13 @@ namespace Alpha.Play
             var roller = new SeededDiceRoller(seed);
             var session = new GameSession(roller);
 
+            // Фікс-ревью D2 (minor, §1.1): --auto теж мав би грати бої лише
+            // «Автобоєм» — ConsolePolicy.ChooseAutoResolve уже форсує true для
+            // ручного шляху, AutoResolvePolicy дає ту саму гарантію для
+            // готових політик (Pacifist.ChooseAutoResolve саме по собі false).
             IBotPolicy policy = !auto
                 ? new ConsolePolicy()
-                : (pathArg == "bloody" ? (IBotPolicy)new BloodyPolicy() : new PacifistPolicy());
+                : new AutoResolvePolicy(pathArg == "bloody" ? (IBotPolicy)new BloodyPolicy() : new PacifistPolicy());
 
             if (loadPath != null && File.Exists(loadPath))
             {

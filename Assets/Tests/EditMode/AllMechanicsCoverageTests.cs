@@ -36,6 +36,9 @@ namespace Game.Tests.EditMode
             public List<GameEvent> Log;
             public List<PendingOfferView> Offers;
             public List<string> ViewKeys;
+
+            /// <summary>Фікс-ревью D2 (§6.1 рядок 43): знімок КОЖНОГО виклику ResolveIncident/ResolveQuestChoice/ResolveFinale за цей прогін.</summary>
+            public List<BotRunner.ChoiceDiagnostic> Choices;
         }
 
         private static readonly Dictionary<string, RunRecord> Cache = new Dictionary<string, RunRecord>();
@@ -57,10 +60,12 @@ namespace Game.Tests.EditMode
             var log = new List<GameEvent>();
             var offers = new List<PendingOfferView>();
             var viewKeys = new List<string>();
+            var choices = new List<BotRunner.ChoiceDiagnostic>();
             var options = new NewGameOptions { SkipCreation = false, HitRule = HitRuleKind.Threshold, Seed = 1 };
-            var session = BotRunner.PlayDays(policy, RunDays, options, log, null, offers, viewKeys);
+            var session = BotRunner.PlayDays(policy, RunDays, options, log, null, offers, viewKeys,
+                null, null, null, choices.Add);
 
-            rec = new RunRecord { Session = session, Log = log, Offers = offers, ViewKeys = viewKeys };
+            rec = new RunRecord { Session = session, Log = log, Offers = offers, ViewKeys = viewKeys, Choices = choices };
             Cache[policy.Name] = rec;
             return rec;
         }
@@ -78,6 +83,7 @@ namespace Game.Tests.EditMode
 
         private static List<GameEvent> AllLogs() => AllRuns().SelectMany(r => r.Log).ToList();
         private static List<PendingOfferView> AllOffers() => AllRuns().SelectMany(r => r.Offers).ToList();
+        private static List<BotRunner.ChoiceDiagnostic> AllChoices() => AllRuns().SelectMany(r => r.Choices).ToList();
 
         private static bool Saw(IEnumerable<GameEvent> log, string key) => log.Any(e => e.Key == key);
         private static int Count(IEnumerable<GameEvent> log, string key) => log.Count(e => e.Key == key);
@@ -364,6 +370,11 @@ namespace Game.Tests.EditMode
         {
             var log = AllLogs();
             Assert.IsTrue(Saw(log, "production.resource"), "§6.1 №13: production.resource мав піти хоч раз");
+            // Фікс-ревью D2 (minor): рядок §6.1 №13 у назві просить і подію
+            // РІВНЯ ("Production_EmitsResourceAndLevelEvents"), не лише ресурсу —
+            // production.leveled_up справді трапляється за ці 5×15 діб (є в
+            // docs/TEST_BUILD_KEYS.txt), просто раніше не перевірявся.
+            Assert.IsTrue(Saw(log, "production.leveled_up"), "§6.1 №13: production.leveled_up мав піти хоч раз");
         }
 
         // ==== №14 — будівництво + рада ===========================================
@@ -393,14 +404,18 @@ namespace Game.Tests.EditMode
         [Test]
         public void Row16_Population_TierCanRiseWithASignal()
         {
-            var log = AllLogs();
-            // Тір показаний у SessionView.Tier (allow-list §4.9); "чутність"
-            // росту тіра йде тим самим CityEvent-звітом, що й "city.*" ключі —
-            // достатній публічний доказ: тір хоч десь за 5×15 діб >= 1 (стартове
-            // значення), а сам факт руху перевіряє CityWorksTests (Steward)
-            // окремо. Тут — що SessionView взагалі несе Tier без прихованого числа.
+            // Тір показаний у SessionView.Tier (allow-list §4.9) — достатній
+            // публічний доказ, що тір хоч десь за 5×15 діб >= 1 (стартове значення).
             var rec = Steward();
             Assert.GreaterOrEqual(rec.Session.CurrentView.Tier, 1, "§6.1 №16: SessionView.Tier мав лишитись видимим і не менше стартового");
+
+            // Фікс-ревью D2 (minor): рядок §6.1 №16 буквально вимагає СИГНАЛ
+            // росту, не лише видимість самого числа — city.tier.<n> справді
+            // трапляється за ці 5×15 діб (є в docs/TEST_BUILD_KEYS.txt), тепер
+            // перевіряємо це напряму, а не лише видимість Tier.
+            var log = AllLogs();
+            Assert.IsTrue(log.Any(e => e.Key != null && e.Key.StartsWith("city.tier.", StringComparison.Ordinal)),
+                "§6.1 №16: подія city.tier.<n> мала супроводжувати ріст тіра хоч раз за 5×15 діб");
         }
 
         // ==== №17 — вилазка знімає пости ==========================================
@@ -631,29 +646,54 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(sawAttack, "§6.1 №32: хоч один combat.attack.* мав трапитись");
         }
 
+        /// <summary>
+        /// Фікс-ревью пакета D2 (blocker+major): попередня версія "проходила"
+        /// або через BloodyPolicy.CombatAutoResolve (внутрішній CombatAi бою,
+        /// що взагалі не звертається до BotRunner/BotSupport.FindCurrent), або
+        /// через фолбек, що кликав GameSession.Combat* НАПРЯМУ, обходячи
+        /// BotRunner повністю — жодна гілка не доводила заявлене "хоча б одна
+        /// політика грає бій ХОДАМИ через BotRunner". Причина, чому бот-водій
+        /// ніколи туди не доходив: <c>BotSupport.FindCurrent</c> шукав юніт, чия
+        /// ВЛАСНА клітинка входить у <c>BattleView.ReachableTiles</c> — а
+        /// <c>Pathfinder.Reachable</c> навмисно НЕ включає стартовий тайл у
+        /// видачу, тож пошук завжди повертав null, і
+        /// <c>BotRunner.ExecuteCombatAction</c> щоразу падав у CombatEndTurn.
+        /// Фікс: <see cref="BattleView.CurrentUnitId"/> дає активного юніта
+        /// напряму. Цей тест примусово заводить PacifistPolicy (єдина з 5, що
+        /// грає бій ПОКРОКОВО — ChooseAutoResolve=false) у детермінований
+        /// тренувальний бій і веде його ВИКЛЮЧНО через <see cref="BotRunner.Drive"/>
+        /// — жодного прямого виклику GameSession.Combat* з тіла тесту.
+        /// </summary>
         [Test]
         public void Row33_Overwatch_Triggered()
         {
-            // Найнадійніший доказ — покроковий бій PacifistPolicy (§4.10: "хоча б
-            // одна політика грає бій ходами" — саме вона керує CombatMove/Attack/
-            // CombatEnterOverwatch напряму, BotRunner.ExecuteCombatAction). Якщо
-            // жоден реальний бій цього прогону не форсував Pacifist у бій —
-            // підстраховуємось детермінованим тренувальним боєм (той самий
-            // сценарій геометрії, що й GameSessionTests.CombatMove_Triggers...).
-            var log = AllLogs();
-            if (Saw(log, "combat.overwatch.triggered"))
-            {
-                Assert.Pass("combat.overwatch.triggered спостережено в бот-прогоні.");
-                return;
-            }
+            var pacifist = new PacifistPolicy();
 
             var s = new GameSession();
+            s.NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Seed = 1 });
+            BotRunner.Drive(s, pacifist, 0); // лише до першого Morning (доба 0) — без побічних дій
+
+            Assert.IsTrue(s.State == SessionState.Morning || s.State == SessionState.FreePlay,
+                "§6.1 №33 (підготовка): сесія мала дійти до Morning/FreePlay ПЕРЕД тренувальним боєм");
+
             s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
-            s.CombatEndTurn(); // trainee_1 пропускає (мілі, дистанція завелика без руху)
-            s.CombatEnterOverwatch(new Game.Core.Combat.GridPos(6, 3));
-            s.CombatMove(new Game.Core.Combat.GridPos(5, 1));
-            Assert.IsTrue(s.DayLog.Any(e => e.Key == "combat.overwatch.triggered"),
-                "§6.1 №33: combat.overwatch.triggered мав трапитись хоч у детермінованому тренувальному бою");
+            Assert.AreEqual(SessionState.Battle, s.State, "§6.1 №33 (підготовка): NewTrainingBattle мав перевести сесію в Battle");
+
+            var log = new List<GameEvent>();
+            BotRunner.Drive(s, pacifist, 0, log);
+
+            Assert.IsTrue(Saw(log, "combat.overwatch.triggered"),
+                "§6.1 №33: PacifistPolicy мала протиснути combat.overwatch.triggered через справжній BotRunner-водій " +
+                "(CombatMove/CombatAttack/CombatEnterOverwatch), а не лише через автобій чи прямі виклики GameSession з тесту");
+            // combat.overwatch.triggered сам по собі можливий лише як наслідок
+            // РЕАЛЬНОГО CombatMove чужої сторони в зайнятий сектор (двигун
+            // бою реагує лише на рух) — водночас перевіряємо, що й
+            // CombatAttack справді пройшов через той самий покроковий шлях
+            // (не автобій): без цього combat.attack.* тут узагалі не взявся б.
+            bool sawAttack = Saw(log, "combat.attack.hit") || Saw(log, "combat.attack.miss") ||
+                              Saw(log, "combat.attack.crit") || Saw(log, "combat.attack.graze");
+            Assert.IsTrue(sawAttack,
+                "§6.1 №33: той самий покроковий прогін мав дати й хоч один combat.attack.* (CombatAttack через BotRunner)");
         }
 
         [Test]
@@ -803,14 +843,30 @@ namespace Game.Tests.EditMode
 
         // ==== №43 — вибір без наслідку — 0 =========================================
 
+        /// <summary>
+        /// Фікс-ревью пакета D2 (major): попередня версія лише перевіряла
+        /// відсутність ключа "choice.no_visible_consequence" у лозі — ключа, який
+        /// НІДЕ в GameSession не заводиться, тож перевірка була тавтологією
+        /// (зелена завжди, незалежно від реального стану інваріанту). §6.1 №43
+        /// вимагає справжній діагностичний степ: кожен ResolveIncident/
+        /// ResolveQuestChoice/ResolveFinale зобов'язаний дати ≥1 нову подію
+        /// DayLog у ТІЙ САМІЙ команді. <see cref="BotRunner.ChoiceDiagnostic"/>
+        /// (BotRunner.onChoiceApplied) знімає DayLog.Count безпосередньо ДО і
+        /// ПІСЛЯ кожного з цих трьох викликів за всі 5×15-денні прогони — якщо
+        /// хоч один виклик не додав жодної події, тест явно провалюється з
+        /// Kind/Day цього виклику (це і є "степ явно логує розрив із місцем у
+        /// коді", лише замість продакшн-ключа — повідомлення падаючого Assert).
+        /// </summary>
         [Test]
         public void Row43_NoChoiceWithoutConsequence()
         {
-            var log = AllLogs();
-            Assert.IsFalse(Saw(log, "choice.no_visible_consequence"),
-                "§6.1 №43: жоден ResolveIncident/ResolveQuestChoice/ResolveFinale не повинен був лишити \"нічого\" за добу " +
-                "(діагностичний ключ choice.no_visible_consequence не заведений у GameSession — сам факт його відсутності " +
-                "в лозі є доказом ВІДСУТНОСТІ розриву; якби він існував і жодного разу не спрацював, це тільки посилило б доказ)");
+            var choices = AllChoices();
+            Assert.IsNotEmpty(choices,
+                "§6.1 №43: діагностика мала зібрати хоч один виклик ResolveIncident/ResolveQuestChoice/ResolveFinale за 5×15 діб");
+
+            var silent = choices.Where(c => !c.HadConsequence).ToList();
+            Assert.IsEmpty(silent, "§6.1 №43: розрив — команда(и) без жодної нової події DayLog: " +
+                string.Join("; ", silent.Select(c => c.Kind + "@день" + c.Day)));
         }
 
         // =======================================================================

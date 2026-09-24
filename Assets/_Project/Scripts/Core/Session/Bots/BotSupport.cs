@@ -131,22 +131,20 @@ namespace Game.Core.Session.Bots
         }
 
         /// <summary>
-        /// Хто зараз ходить: єдиний юніт, чия клітинка входить у
-        /// <see cref="BattleView.ReachableTiles"/> — чужі тайли ЗАЙНЯТІ іншими
-        /// юнітами і в прохідні не входять (Pathfinder), тож лише власна
-        /// клітинка активного юніта може лишитись "досяжною" (стояти на місці
-        /// коштує 0 АР). Null, якщо АР активного юніта вже вичерпано (порожній
-        /// ReachableTiles) — BotRunner тоді просто завершує хід.
+        /// Хто зараз ходить: пряме зіставлення за <see cref="BattleView.CurrentUnitId"/>
+        /// (§4.2.1, фікс-ревью D2-блокера). Раніше тут стояла евристика "чия
+        /// клітинка входить у ReachableTiles" — хибна, бо
+        /// <c>Pathfinder.Reachable</c> навмисно НЕ включає стартовий тайл у
+        /// видачу (див. doc-коментар класу): жоден юніт "не входив" у власні
+        /// прохідні тайли, і FindCurrent завжди повертав null, тож BotRunner
+        /// ніколи не доходив до CombatMove/Attack/EnterOverwatch, лише спамив
+        /// CombatEndTurn. Null, якщо активного юніта немає (бій завершився).
         /// </summary>
         public static BattleUnitView FindCurrent(BattleView battle)
         {
-            if (battle?.Units == null || battle.ReachableTiles == null) return null;
+            if (battle?.Units == null || string.IsNullOrEmpty(battle.CurrentUnitId)) return null;
             foreach (var u in battle.Units)
-            {
-                if (u.IsDowned) continue;
-                foreach (var tile in battle.ReachableTiles)
-                    if (tile.X == u.Pos.X && tile.Y == u.Pos.Y) return u;
-            }
+                if (string.Equals(u.Id, battle.CurrentUnitId, StringComparison.Ordinal)) return u;
             return null;
         }
 

@@ -53,6 +53,17 @@ namespace Game.Core.Session.Views
         /// <summary>Достяжні тайли для активного юніта — {x,y,apCost} лінеаризовано парами Pos/Ap не тут; лишень позиції.</summary>
         public IReadOnlyList<GridPosView> ReachableTiles;
 
+        /// <summary>
+        /// Фікс-ревью пакета D2 (блокер): Id юніта, чий зараз хід, null поза боєм
+        /// активного юніта (Outcome != Ongoing). Раніше водій ботів вгадував його
+        /// за тим, чия клітинка входить у <see cref="ReachableTiles"/> — хибно,
+        /// бо <c>Pathfinder.Reachable</c> НЕ включає стартовий тайл юніта в
+        /// результат (див. коментар класу), тож евристика ніколи не спрацьовувала.
+        /// Явне поле — прямий проекція <c>CombatState.Current.Id</c>, того самого
+        /// джерела, яким уже рахується <see cref="ReachableTiles"/>.
+        /// </summary>
+        public string CurrentUnitId;
+
         public IReadOnlyList<string> InitiativeOrder;
         public IReadOnlyList<string> Log;
         public bool IsHitRulePercent;

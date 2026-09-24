@@ -51,5 +51,7 @@ namespace Game.Core.Session.Bots
         public CombatAction ChooseCombatAction(BattleView battle) => new CombatAction(CombatIntent.AttackNearest);
 
         public bool ChooseAutoResolve(BattleView battle) => true;
+
+        public bool ChoosePushDeeper(DungeonView view) => false;
     }
 }
