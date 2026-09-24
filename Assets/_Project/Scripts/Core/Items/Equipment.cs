@@ -15,6 +15,24 @@ namespace Game.Core.Items
 
         public ItemInstance Get(EquipSlot slot) => _slots.TryGetValue(slot, out var i) ? i : null;
 
+        /// <summary>
+        /// Пошук серед НАДІТОГО за стабільним <see cref="ItemInstance.InstanceId"/> —
+        /// дзеркало <see cref="Inventory.Find"/> для другої точки зберігання предмета.
+        /// Контракт GameSession (docs/TEST_BUILD.md §4.1) адресує предмет лише
+        /// itemInstanceId, а сам предмет може лежати в сташі АБО вже бути надітим
+        /// (напр. перенадіти на іншого напарника, чи апгрейднути вже надіте);
+        /// D1 резолвить id спершу через Inventory.Find, а тут — по кожному
+        /// напарнику роздачі, чиє спорядження варто перевірити.
+        /// </summary>
+        public ItemInstance Find(string instanceId)
+        {
+            if (string.IsNullOrEmpty(instanceId)) return null;
+            foreach (var item in _slots.Values)
+                if (string.Equals(item.InstanceId, instanceId, System.StringComparison.Ordinal))
+                    return item;
+            return null;
+        }
+
         /// <summary>Надіває предмет у його слот; повертає раніше надіте в цьому слоті (або null).</summary>
         public ItemInstance Equip(ItemInstance item)
         {

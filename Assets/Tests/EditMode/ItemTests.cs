@@ -490,5 +490,31 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(3, LootTable.IndexForBand(OutcomeBand.Best, 4));
             Assert.AreEqual(1, LootTable.IndexForBand(OutcomeBand.Best, 2), "менший пул — затиснуто до останньої позиції");
         }
+
+        // ---- Equipment.Find: друга точка зберігання (гап-фікс ревізії, дзеркало
+        // Inventory.Find) — D1 резолвить itemInstanceId контракту GameSession, а
+        // предмет може вже бути надітим, не лежати в сташі ----
+
+        [Test]
+        public void Equipment_Find_LocatesEquippedItem_ByInstanceId_NotPresentInInventory()
+        {
+            var eq = new Equipment();
+            var weapon = new ItemInstance(DefaultItems.HuntersBow(), Rarity.Common);
+            eq.Equip(weapon);
+
+            var inv = new Inventory();
+            Assert.IsNull(inv.Find(weapon.InstanceId), "предмет надітий, а не в сташі");
+            Assert.AreSame(weapon, eq.Find(weapon.InstanceId));
+        }
+
+        [Test]
+        public void Equipment_Find_ReturnsNull_ForUnknownOrNullId()
+        {
+            var eq = new Equipment();
+            eq.Equip(new ItemInstance(DefaultItems.WornVest(), Rarity.Common));
+
+            Assert.IsNull(eq.Find("no_such_id"));
+            Assert.IsNull(eq.Find(null));
+        }
     }
 }
