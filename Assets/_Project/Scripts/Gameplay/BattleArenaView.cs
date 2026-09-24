@@ -301,6 +301,32 @@ namespace Game.Gameplay
             if (apMax <= 0) return 0f;
             return Clamp01((float)apCurrent / apMax);
         }
+
+        // ================= стани бою: значок -> ключ UkrainianText =================
+
+        /// <summary>
+        /// Дебаг §6.1 №32 (24.09.2026): <c>BattleUnitView.Statuses</c> ніде не
+        /// малювався в HUD — ключі <c>combat.status.*</c> в UkrainianText вже
+        /// існували (E3), але жоден екран їх не читав, тож навіть коли Core
+        /// коректно заповнював статуси, гравець їх не бачив. Явне зіставлення
+        /// (не PascalCase->snake_case конвертер): нове значення StatusType без
+        /// свого рядка тут краще впасти на очевидний фолбек, ніж мовчки дати
+        /// зламаний ключ.
+        /// </summary>
+        public static string StatusLabelKey(string statusTypeName)
+        {
+            switch (statusTypeName)
+            {
+                case "Bleeding": return "combat.status.bleeding";
+                case "Stunned": return "combat.status.stunned";
+                case "Suppressed": return "combat.status.suppressed";
+                case "KnockedDown": return "combat.status.knocked_down";
+                case "Marked": return "combat.status.marked";
+                case "Burning": return "combat.status.burning";
+                case "Poisoned": return "combat.status.poisoned";
+                default: return null;
+            }
+        }
     }
 
     // ================= легкі структури-результати (жодного типу движка) =================

@@ -579,6 +579,13 @@ namespace Game.Core.Session.Bots
         /// </summary>
         private static void ExecuteCombatAction(GameSession session, BattleView view, CombatAction action)
         {
+            // SmartAiTurn (дебаг §6.1 №32): ОДНА дія CombatAi.TryAct за виклик,
+            // не весь хід одразу, щоб спостерігач (тест/UI) побачив BattleView
+            // МІЖ окремими ударами того самого ходу, не лише після нього. Не
+            // наївний "йди до найближчого" нижче. Не потребує current/target —
+            // GameSession.CombatAiStepOneAction сама читає CombatState.Current.
+            if (action.Intent == CombatIntent.SmartAiTurn) { session.CombatAiStepOneAction(); return; }
+
             var current = BotSupport.FindCurrent(view);
             if (current == null) { session.CombatEndTurn(); return; }
 

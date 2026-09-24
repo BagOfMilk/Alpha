@@ -24,8 +24,9 @@ namespace Game.Tests.EditMode
     /// </summary>
     public class GameSessionTests
     {
-        private static NewGameOptions SkipCreationOptions()
-            => new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold };
+        private static NewGameOptions SkipCreationOptions(bool testBuildOneDayConstruction = true)
+            => new NewGameOptions
+                { SkipCreation = true, HitRule = HitRuleKind.Threshold, TestBuildOneDayConstruction = testBuildOneDayConstruction };
 
         /// <summary>Доганяє сесію крізь відкриваючу сцену до Morning доби 1 (State доступний одразу після NewGame(SkipCreation=true)).</summary>
         private static void FastForwardOpeningToMorning(GameSession s)

@@ -131,6 +131,7 @@ namespace Game.Core.Session
         private ulong _seed = 1;
         private HitRuleKind _hitRule = HitRuleKind.Threshold;
         private bool _ironman;
+
         private CombatState _battle;
         private SuspendToken _resume;
 
@@ -1450,6 +1451,38 @@ namespace Game.Core.Session
             CombatAi.AutoResolve(_battle);
             LogNewAttacks(before);
             _battleAutoResolvedThisCall = true;
+            AfterCombatAction();
+        }
+
+        /// <summary>
+        /// Дебаг §6.1 №32 (24.09.2026): ОДНА дія того самого "розумного" ІІ
+        /// (<see cref="CombatAi.TryAct"/>), що веде АвтоБій — цільовий
+        /// скоринг, зближення клінч-ролей способністю (Рывок), лікування,
+        /// статус-здібності, — а не наївне "йди до найближчого і бий" у
+        /// <c>BotRunner.ExecuteCombatAction</c>, написане лише для того, щоб
+        /// водій ботів МІГ вести бій покроково для тестів на UI/View. Коли
+        /// <c>TryAct</c> каже "нічого більше" (false) — завершує хід сама,
+        /// точнісінько як внутрішній цикл <see cref="CombatAi.TakeTurn"/>.
+        /// Side-агностичний, як і решта Combat*-команд.
+        ///
+        /// ОДНА дія, не весь хід (<see cref="CombatAi.TakeTurn"/> цілком) —
+        /// юніт із запасом AP на 2+ атаки за хід (саме випадок Бурунди, 10 AP /
+        /// 4 за удар) інакше відпрацював би весь хід за один виклик, і
+        /// зовнішній спостерігач побачив би BattleView лише ПІСЛЯ обох ударів,
+        /// коли ціль уже могла загинути від другого — а короткий статус
+        /// (наложений першим ударом, ціль ще жива) залишився б непоміченим.
+        /// Саме ця різниця й ламала №32: наївний водій програвав фінальний
+        /// штурм за 9 атак, перш ніж Бурунда встигав дійти до контакту.
+        /// </summary>
+        public void CombatAiStepOneAction()
+        {
+            RequireBattle();
+            int before = _battle.Attacks.Count;
+            var unit = _battle.Current;
+            bool didSomething = unit != null && unit.IsActive && _battle.Outcome == CombatOutcome.Ongoing
+                && CombatAi.TryAct(_battle, unit);
+            if (!didSomething) _battle.EndTurn();
+            LogNewAttacks(before);
             AfterCombatAction();
         }
 

@@ -201,6 +201,13 @@ namespace Game.Core.Base
         /// (по умолчанию цена без скидки, как раньше): без них AUDIT G12 не
         /// работает, но старые вызовы не ломаются. С ними — золото скидывается,
         /// если рынок поселения занят и открыт (см. <see cref="TradeDiscount"/>).
+        ///
+        /// Одни сутки на любое здание вместо проектных
+        /// <see cref="BuildingDefinition.Days"/> — не параметр этого вызова, а
+        /// режим самого <see cref="CityWorks"/> (см. <see cref="_oneDayConstruction"/>
+        /// и конструктор): симуляционный харнес и <see cref="Steward"/> зовут
+        /// этот метод на инстансе, собранном без него, и потому строят по
+        /// проектным срокам.
         /// </summary>
         public BuildOrderResult Order(string buildingId, BaseState state, int today = 0, BalanceConfig balance = null)
         {

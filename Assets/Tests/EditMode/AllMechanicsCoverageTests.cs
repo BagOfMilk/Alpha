@@ -683,12 +683,34 @@ namespace Game.Tests.EditMode
         /// публічний бій, де Бурунда гарантовано на полі — кровавий шлях
         /// фіналу доби 5 (Finale.BuildAssault завжди додає BurundaBossId,
         /// незалежно від полоси Готовності). Ведемо цей бій ПОКРОКОВО (через
-        /// <see cref="ForceStepByStepCombat"/> — та сама BloodyPolicy, лише з
-        /// форсованим ChooseAutoResolve=false, інакше Автобій ховає весь бій
-        /// за один виклик і жодного проміжного BattleView не побачити) і
-        /// знімаємо BattleView одразу після КОЖНОГО combat.attack.* через
-        /// onEvent-гачок BotRunner.Drive, доки CombatState ще живий (після
-        /// завершення бою GetBattleView() уже null).
+        /// <see cref="ForceSmartAiStepByStep"/>) і знімаємо BattleView одразу
+        /// після КОЖНОГО combat.attack.* через onEvent-гачок BotRunner.Drive,
+        /// доки CombatState ще живий (після завершення бою GetBattleView() уже
+        /// null).
+        ///
+        /// Дебаг §6.1 №32 (24.09.2026, <see cref="Game.Tests.EditMode.CombatStatusDebugTests"/>):
+        /// раніше тут стояв Assert.Ignore — статус НІ РАЗУ не застосовувався,
+        /// і причина була подвійна. (1) Accuracy Бурунди (65) проти
+        /// реалістичного Defense напарника/протагоніста з Epic 2 (Agility
+        /// 1..10 напряму, стеля 10) завжди давало margin 5..14 — ЗАВЖДИ Graze
+        /// під ThresholdRule (гейт StatusOnHit — лише Hit/Crit,
+        /// CombatState.ExecuteAttackRoll, навмисно: "граза = лише половина
+        /// урону, без проків"), а Strike-метр (єдиний детермінований вихід на
+        /// гарантований удар) сам копиться лише з Hit/Crit (GDD.md:119) — без
+        /// природного Hit пастка не відкривалась НІКОЛИ. Виправлено:
+        /// Accuracy 65 -> 80 (DefaultCombatContent.Burunda) — margin стає
+        /// 10..30, завжди Hit. (2) Навіть з виправленою Accuracy наївний
+        /// водій (ForceStepByStepCombat: "йди до найближчого і бий", без
+        /// Рывка для зближення мілі) програвав фінальний штурм за 9 атак —
+        /// Бурунда (мілі, повинен дійти впритул) фізично не встигав дістатись
+        /// до єдиного вцілілого протагоніста (Мирослава дефектувала до цього
+        /// моменту прогону) раніше за 5 стрільців з луком. SmartAiTurn
+        /// (CombatIntent) віддає хід тому самому CombatAi, що веде АвтоБій —
+        /// зближення способністю, скоринг цілі — ОДНІЄЮ дією за раз
+        /// (GameSession.CombatAiStepOneAction, не весь хід одразу: інакше
+        /// обидва удари Бурунди (10 AP / 4 за удар) пішли б в один виклик, і
+        /// спостерігач побачив би BattleView лише ПІСЛЯ них, коли ціль уже
+        /// могла загинути від другого).
         /// </summary>
         [Test]
         public void Row32_TacticalCombat_LogsAttackOutcomesAndStatuses()
@@ -707,32 +729,31 @@ namespace Game.Tests.EditMode
                 if (battle?.Units != null && battle.Units.Any(u => u.Statuses != null && u.Statuses.Count > 0))
                     sawStatus = true;
             };
-            BotRunner.Drive(s, new ForceStepByStepCombat(new BloodyPolicy()), 1, null, probe);
+            BotRunner.Drive(s, new ForceSmartAiStepByStep(new BloodyPolicy()), 1, null, probe);
 
-            if (!sawStatus)
-            {
-                Assert.Ignore("§6.1 №32 GAP: за цей детермінований покроковий прогін кровавого фіналу (доба 5, " +
-                    "Бурунда завжди на полі) жоден удар не наніс статус, поки бій тривав, — BurundaMace/KnockedDown " +
-                    "покритий прямими CombatState-тестами (TurnAndStatusTests), тут документуємо розрив " +
-                    "спостережуваності через бот-прогін для цього конкретного seed/розташування.");
-                return;
-            }
-            Assert.Pass();
+            Assert.IsTrue(sawStatus, "§6.1 №32: BurundaMace (StatusOnHit=KnockedDown) мав хоч раз застосувати статус, " +
+                "поки бій тривав — не лише в прямих CombatState-тестах (TurnAndStatusTests), а й у цьому бот-прогоні");
         }
 
-        /// <summary>Допоміжна обгортка Row32: та сама політика, лише з форсованим покроковим боєм (ChooseAutoResolve=false) — щоб зняти BattleView МІЖ ходами, а не лише після Автобою.</summary>
-        private sealed class ForceStepByStepCombat : IBotPolicy
+        /// <summary>
+        /// Допоміжна обгортка Row32: та сама політика для не-бойових рішень
+        /// (інциденти/квести/пости/вилазки), але бій веде SmartAiTurn — один
+        /// хід CombatAi.TryAct за раз (GameSession.CombatAiStepOneAction),
+        /// щоб зняти BattleView МІЖ окремими ударами, а не лише після Автобою
+        /// чи після цілого ходу.
+        /// </summary>
+        private sealed class ForceSmartAiStepByStep : IBotPolicy
         {
             private readonly IBotPolicy _inner;
-            public ForceStepByStepCombat(IBotPolicy inner) { _inner = inner; }
+            public ForceSmartAiStepByStep(IBotPolicy inner) { _inner = inner; }
 
-            public string Name => _inner.Name + "+StepByStep";
+            public string Name => _inner.Name + "+SmartAiStep";
             public IncidentPath ChooseIncidentPath(PendingOfferView offer) => _inner.ChooseIncidentPath(offer);
             public int ChooseQuestOption(QuestOfferView offer) => _inner.ChooseQuestOption(offer);
             public bool ChoosePatrol(SessionView view) => _inner.ChoosePatrol(view);
             public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city) => _inner.ChooseAssignments(roster, city);
             public ExpeditionChoice? ChooseExpedition(SessionView view) => _inner.ChooseExpedition(view);
-            public CombatAction ChooseCombatAction(BattleView battle) => _inner.ChooseCombatAction(battle);
+            public CombatAction ChooseCombatAction(BattleView battle) => new CombatAction(CombatIntent.SmartAiTurn);
             public bool ChooseAutoResolve(BattleView battle) => false;
             public bool ChoosePushDeeper(DungeonView view) => _inner.ChoosePushDeeper(view);
         }

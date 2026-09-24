@@ -52,7 +52,19 @@ namespace Alpha.Sim
             foreach (var policy in policies)
             {
                 var roller = new SeededDiceRoller(seed);
-                var options = new NewGameOptions { SkipCreation = false, HitRule = HitRuleKind.Threshold, Seed = seed, Roller = roller };
+                // TestBuildOneDayConstruction = false: цей харнес калібрує баланс
+                // кампанії (тир/темп/economy на 90 діб), тож стройка має йти за
+                // проектними BuildingDefinition.Days (Steward/CityWorksTests бачать
+                // те саме, бо кличуть CityWorks.Order напряму). Без цього поле
+                // відкату до дефолту NewGameOptions.TestBuildOneDayConstruction=true
+                // (Поправка №7.7, тестова сборка) мовчки підмінило б усі строки
+                // стройки на одну добу — саме тому, що BotRunner.PlayDays веде
+                // сесію через той самий GameSession, що й tools/Alpha.Play.
+                var options = new NewGameOptions
+                {
+                    SkipCreation = false, HitRule = HitRuleKind.Threshold, Seed = seed, Roller = roller,
+                    TestBuildOneDayConstruction = false
+                };
                 var log = new List<GameEvent>();
 
                 var session = BotRunner.PlayDays(policy, days, options, log);

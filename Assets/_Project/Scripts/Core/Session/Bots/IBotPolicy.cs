@@ -23,7 +23,21 @@ namespace Game.Core.Session.Bots
         Overwatch,
 
         /// <summary>Нічого не робити цим ходом (пасивна політика поза бойовими вузлами).</summary>
-        EndTurn
+        EndTurn,
+
+        /// <summary>
+        /// Дебаг §6.1 №32 (24.09.2026): віддати одну дію того самому
+        /// "розумному" Game.Core.Combat.CombatAi.TryAct, що веде АвтоБій
+        /// (цільовий скоринг, зближення клінч-ролей, лікування, статус-
+        /// здібності) — через GameSession.CombatAiStepOneAction, одна дія за
+        /// раз (не весь хід і не весь бій одразу, як GameSession.
+        /// CombatAutoResolve). Дає покрокову спостережуваність BattleView між
+        /// окремими діями, як AttackNearest/Overwatch, але без наївної
+        /// тактики BotRunner.ExecuteCombatAction, яка не вміє зближувати
+        /// мілі-юнітів способністю (Рывок) і програє явно нерівні бої раніше,
+        /// ніж мілі-боєць встигає дійти до контакту.
+        /// </summary>
+        SmartAiTurn
     }
 
     /// <summary>Рішення політики на один хід бою (§4.10) — BotRunner перекладає його у конкретні Combat*-команди GameSession.</summary>
