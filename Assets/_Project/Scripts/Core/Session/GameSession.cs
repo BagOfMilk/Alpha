@@ -280,16 +280,49 @@ namespace Game.Core.Session
         }
 
         /// <summary>
+        /// Занести в пам'ять сесії готовий слепок диска (той самий рядок,
+        /// що повернув <see cref="SaveState"/> у МИНУЛОМУ запуску застосунку)
+        /// під номером слота — ДО виклику <see cref="ContinueGame"/>. Core сам
+        /// файли не читає (той самий принцип, що й у <see cref="RestoreFromBlob"/>):
+        /// фактичне читання файлу слота — робота викликача (Alpha.Play/Unity
+        /// SaveLoadScreen), <c>_slots</c> лишається пам'яттю самого інстансу.
+        /// Легально лише з Title — той самий стан, з якого йде подальший
+        /// <see cref="ContinueGame"/>.
+        /// </summary>
+        public void PreloadSlot(int slot, string blob)
+        {
+            RequireState(SessionState.Title);
+            if (!string.IsNullOrEmpty(blob)) _slots[slot] = blob;
+        }
+
+        /// <summary>
         /// Продовжити збережену гру. Сигнатура додає необов'язковий
         /// <paramref name="roller"/> понад §4.1 (<c>bool ContinueGame(int slot)</c>)
         /// свідомо: інакше сесія Percent-бою не мала б звідки взяти кубик до
         /// того, як прочитає збережений <c>hitRule</c> зі слота (той самий
         /// R1-конфлікт, що й у <see cref="NewGameOptions.Roller"/>).
+        ///
+        /// Фікс-ревью (реальний блокер): раніше тут спершу викликався
+        /// <see cref="NewGame"/>, який БЕЗУМОВНО чистить <c>_slots</c>
+        /// (свіжий світ — порожні слоти), а вже ПОТІМ <see cref="LoadState"/>
+        /// читав той самий, щойно спорожнений словник — команда НІКОЛИ не
+        /// могла успішно завантажити жоден слот, і при цьому невдалий виклик
+        /// однаково встигав збудувати нову гру і піти зі стану <c>Title</c>
+        /// (SkipCreation=true → <c>State=Scene</c>) ще до повернення <c>false</c>,
+        /// тож "не вдалось продовжити" мовчки лишало сесію в невідомому світі
+        /// замість чесного <c>Title</c>. Тепер слепок читається ДО <see cref="NewGame"/>
+        /// (і без нього рано виходимо, не чіпаючи стан), а після — повертається
+        /// назад у словник для <see cref="LoadState"/>.
         /// </summary>
         public bool ContinueGame(int slot, IDiceRoller roller = null)
         {
             RequireState(SessionState.Title);
+
+            string blob;
+            if (!_slots.TryGetValue(slot, out blob) || string.IsNullOrEmpty(blob)) return false;
+
             NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Roller = roller });
+            _slots[slot] = blob;
             return LoadState(slot);
         }
 

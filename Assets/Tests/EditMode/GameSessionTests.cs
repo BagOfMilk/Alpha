@@ -1159,6 +1159,233 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(baselineEconomy.Food, reloadedEconomy.Food);
         }
 
+        // ---- Фикс-ревью (наступний прохід D1): команди §4.1 без жодного тесту ----
+
+        /// <summary>
+        /// Блокер-фікс: <c>ContinueGame(slot)</c> раніше НІКОЛИ не міг успішно
+        /// завантажити жоден слот — <c>NewGame()</c> усередині безумовно чистить
+        /// <c>_slots</c> ДО того, як <c>LoadState(slot)</c> встигав його прочитати
+        /// (той самий словник, спорожнений щойно викликаним <c>NewGame</c>), і при
+        /// цьому невдалий виклик однаково встигав збудувати нову гру й піти зі
+        /// стану <c>Title</c> перш ніж повернути <c>false</c>. Реальний потік
+        /// (Alpha.Play/Unity SaveLoadScreen читає файл слота з диска і кладе
+        /// рядок у сесію через новий <c>PreloadSlot</c>, аналогічно тому, як
+        /// <see cref="GameSession.RestoreFromBlob"/> уже робить для наскрізного
+        /// «зберегти → перезапустити застосунок → відновити») — перевіряємо тут.
+        /// </summary>
+        [Test]
+        public void ContinueGame_FromTitle_WithPreloadedSlot_RestoresSavedDay()
+        {
+            var source = new GameSession();
+            source.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(source);
+            PlayFullDayQuiet(source); // доба 1 -> Morning доби 2
+            Assert.AreEqual(SessionState.Morning, source.State);
+            int savedDay = source.CurrentView.Day;
+            string blob = source.SaveState(0);
+
+            // Свіжий інстанс — так, як після перезапуску застосунку: Title,
+            // порожні слоти, жодного NewGame ще не було.
+            var s = new GameSession();
+            Assert.AreEqual(SessionState.Title, s.State);
+            s.PreloadSlot(0, blob);
+
+            bool ok = s.ContinueGame(0);
+            Assert.IsTrue(ok, "ContinueGame мав завантажити щойно підкладений слот");
+            Assert.AreEqual(SessionState.Morning, s.State);
+            Assert.AreEqual(savedDay, s.CurrentView.Day, "день після ContinueGame мав збігтися зі збереженим");
+        }
+
+        [Test]
+        public void ContinueGame_FromTitle_EmptySlot_ReturnsFalse_AndDoesNotMoveOffTitle()
+        {
+            var s = new GameSession();
+            Assert.AreEqual(SessionState.Title, s.State);
+
+            bool ok = s.ContinueGame(2);
+
+            Assert.IsFalse(ok, "порожній слот не можна продовжити");
+            Assert.AreEqual(SessionState.Title, s.State,
+                "невдалий ContinueGame не повинен лишати сесію на півдорозі в новозбудованому світі — це досі Title");
+        }
+
+        [Test]
+        public void CommitBuildPlan_WithoutConfirmation_ReturnsNotConfirmed_AndLogsNothing()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var plan = new Game.Core.Characters.Build.BuildPlan();
+            var status = s.CommitBuildPlan(GameSession.ProtagonistId, plan, confirmedIrreversible: false);
+
+            Assert.AreEqual(Game.Core.Characters.Build.BuildPlanStatus.NotConfirmed, status);
+            Assert.IsFalse(SawEvent(new List<GameEvent>(s.DayLog), "progression.build_committed"));
+        }
+
+        [Test]
+        public void CommitBuildPlan_Confirmed_AppliesPlan_AndLogsProgressionCommitted()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var plan = new Game.Core.Characters.Build.BuildPlan();
+            var status = s.CommitBuildPlan(GameSession.ProtagonistId, plan, confirmedIrreversible: true);
+
+            Assert.AreEqual(Game.Core.Characters.Build.BuildPlanStatus.Ok, status);
+            bool sawCommitted = false;
+            foreach (var e in s.DayLog) if (e.Key == "progression.build_committed") sawCommitted = true;
+            Assert.IsTrue(sawCommitted, "CommitBuildPlan мав залогувати progression.build_committed (§2 рядок 30)");
+        }
+
+        /// <summary>
+        /// Детермінований (R1, без кубика) розклад: Forceful+"maksym" самотою
+        /// на outskirts (Threshold=3, ForcefulSkill=Melee, Максим Melee=6, без
+        /// трейтів/атрибутного бонуса на Neutral-підході) дає запас (margin) 3 —
+        /// рівно <c>CheckBalance.GoodMargin</c>, отже полоса Good: <c>DropTable</c>
+        /// (без <c>AddNamed</c>) віддає безіменний <c>HuntersBow</c> рідкості
+        /// <c>Rarity.Rare</c> — ніколи не Epic/іменний, тож <c>CraftUpgrade</c>
+        /// не може впертися в AlreadyMaxRarity/NamedNotUpgradable і чесно
+        /// перевіряє саме шов "чи відкрита Майстерня" (workshopOpen з CityWorks).
+        /// </summary>
+        [Test]
+        public void CraftUpgrade_WorkshopClosed_ThenReachesCraftSystem_OnceWorkshopBuilt()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var buildResult = s.OrderBuilding(Game.Core.Base.DefaultBuildings.Workshop);
+            Assert.AreEqual(BuildOrderResult.Started, buildResult);
+
+            var dispatch = s.DepartExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
+                new[] { "maksym" }, 2);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+
+            Game.Core.Items.ItemInstance item = null;
+            bool workshopBuilt = false;
+            var log = new List<GameEvent>();
+            for (int i = 0; i < 6 && !workshopBuilt; i++)
+            {
+                PlayFullDayQuiet(s, log);
+
+                if (item == null && s.GetStash().Count > 0) item = s.GetStash()[0];
+
+                foreach (var b in s.GetCityView().Built)
+                    if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) workshopBuilt = true;
+
+                // Лут уже прийшов, а Майстерня (Days=4) ще будується — CraftUpgrade
+                // мав впертись САМЕ в WorkshopClosed.
+                if (item != null && !workshopBuilt)
+                    Assert.AreEqual(Game.Core.Items.CraftResult.WorkshopClosed, s.CraftUpgrade(item.InstanceId));
+            }
+
+            Assert.IsNotNull(item, "силовий відряд на outskirts мав скинути хоч один предмет у сташ");
+            Assert.IsFalse(item.Definition.IsNamed, "передумова детермінізму: DropTable outskirts не містить іменних предметів");
+            Assert.Less((int)item.Rarity, (int)Game.Core.Items.Rarity.Epic,
+                "передумова детермінізму: Good-полоса (margin=3) дає Rare, не Epic");
+            Assert.IsTrue(workshopBuilt, "майстерня (Days=4) мала добудуватись за відведені доби циклу");
+
+            var economy = s.GetEconomyView();
+            var expected = economy.Gold >= 5 && economy.Materials >= 3
+                ? Game.Core.Items.CraftResult.Success
+                : Game.Core.Items.CraftResult.CannotAfford;
+            Assert.AreEqual(expected, s.CraftUpgrade(item.InstanceId),
+                "після побудови Майстерні CraftUpgrade мав дійти до CraftSystem і розв'язатись лише афордом");
+        }
+
+        [Test]
+        public void LoadState_UnoccupiedSlot_ReturnsFalse()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            bool ok = s.LoadState(1);
+            Assert.IsFalse(ok, "слот 1 нічого не зберігав — LoadState має чесно повернути false, а не кинути виняток");
+        }
+
+        [Test]
+        public void LoadState_OccupiedSlot_RestoresSameDay()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+            PlayFullDayQuiet(s);
+            int savedDay = s.CurrentView.Day;
+            s.SaveState(1);
+
+            PlayFullDayQuiet(s); // рухаємо стан далі, щоб LoadState справді щось відновлював
+
+            bool ok = s.LoadState(1);
+            Assert.IsTrue(ok);
+            Assert.AreEqual(savedDay, s.CurrentView.Day);
+            Assert.AreEqual(SessionState.Morning, s.State);
+        }
+
+        [Test]
+        public void SetPatrol_InEvening_SetsIsPatrolling_VisibleOnSessionView()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            // Той самий шлях до Evening, що й перша половина PlayFullDayQuiet
+            // (доба 1 завжди зупиняється на Decision вузла 1, §3.1) — лише БЕЗ
+            // завершального ConfirmEvening, інакше нема на чому перевірити
+            // SetPatrol (команда саме стану Evening, до AdvanceNight).
+            s.ConfirmMorning();
+            var report = s.AdvanceDay();
+            while (report != null && report.AwaitsDecision)
+                report = s.ResolveIncident(IncidentPath.Quiet);
+
+            if (s.State == SessionState.Scene)
+            {
+                SceneStepView step;
+                do { step = s.AdvanceScene(); } while (!step.IsFinished);
+            }
+            Assert.AreEqual(SessionState.Evening, s.State);
+
+            Assert.IsFalse(s.CurrentView.IsPatrolling, "передумова: патруль вимкнено, доки гравець не попросив");
+            s.SetPatrol(true);
+            Assert.IsTrue(s.CurrentView.IsPatrolling, "SetPatrol мав одразу відбитись у processor.IsPatrolling/SessionView");
+        }
+
+        [Test]
+        public void AbandonDungeon_BeforeAnyRoomResolved_ReturnsToMorning_AndLogsDepart()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var dispatch = s.DepartExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                new[] { "protagonist", "maksym", "myroslava" }, 2);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+            Assert.AreEqual(SessionState.Dungeon, s.State);
+
+            var view = s.AbandonDungeon();
+
+            Assert.IsNull(view, "AbandonDungeon завершує підвішений Dungeon-стан, як і ResolveDungeonRoom/ExtractDungeon — DungeonView більше нема що показувати");
+            Assert.AreEqual(SessionState.Morning, s.State);
+            bool sawDepart = false;
+            foreach (var e in s.DayLog) if (e.Key == "dungeon.depart") sawDepart = true;
+            Assert.IsTrue(sawDepart, "AbandonDungeon мав залогувати dungeon.depart (§4.1)");
+        }
+
+        [Test]
+        public void CombatUseAbility_UnknownAbilityId_ReturnsInvalidAction_WithoutThrowing()
+        {
+            var s = new GameSession();
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            var result = s.CombatUseAbility("no_such_ability_id");
+
+            Assert.AreEqual(CombatActionResult.InvalidAction, result,
+                "невідомий abilityId детерміновано не знаходиться в CombatUnit.FindAbility — обгортка має повернути InvalidAction, не кинути");
+        }
+
         private static string Summarize(DayReportView v)
         {
             if (v == null) return "<null>";
