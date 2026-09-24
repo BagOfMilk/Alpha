@@ -8,9 +8,15 @@ namespace Game.Core.Session.Bots
 {
     /// <summary>
     /// Завжди штовхає данж глибше, поки не Wipe (§4.10): щоранку, тільки-но
-    /// відряд вільний, іде в "Покинутий табір авангарду" (Delve) — BotRunner
-    /// читає <see cref="System.Type"/> цієї політики, щоб після кожної кімнати
-    /// PushDeeper() замість ExtractDungeon(), доки лишаються кімнати.
+    /// відряд вільний, іде в "Покинутий табір авангарду" (Delve). Жадібність
+    /// сама по собі — явний член контракту <see cref="IBotPolicy.ChoosePushDeeper"/>
+    /// (<c>true</c> тут, <c>false</c> в решти політик): BotRunner
+    /// (<c>DoDungeonRoutine</c>) питає ЙОГО після кожної розв'язаної кімнати,
+    /// щоб вибрати PushDeeper() замість ExtractDungeon(), доки лишаються
+    /// кімнати — фікс-ревью пакета D2 замінило колишню перевірку
+    /// <c>policy is DelveGreedyPolicy</c> (типовий тест конкретного класу,
+    /// недоступний жодній сторонній реалізації <see cref="IBotPolicy"/>) саме
+    /// цим явним членом.
     /// </summary>
     public sealed class DelveGreedyPolicy : IBotPolicy
     {

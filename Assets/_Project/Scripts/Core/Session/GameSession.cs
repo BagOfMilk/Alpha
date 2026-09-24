@@ -2336,6 +2336,20 @@ namespace Game.Core.Session
             head.Append(";factions=").Append(_factions.CaptureState());
             head.Append(";points=").Append(_points.CaptureState());
 
+            // Фікс-ревью D2 (major): особисті арки напарників (_arcRuns/
+            // _arcFlags) раніше НІКОЛИ не потрапляли в сейв — NewGame(), крізь
+            // який іде кожен ContinueGame()/LoadState()/RestoreFromBlob(),
+            // завжди скидав кожну арку в ArcState.Locked/ChapterIndex=0 і
+            // чистив _arcFlags, тож будь-яке проміжне збереження мовчки
+            // губило прогрес арки: наступний TickCompanionArcs() бачив
+            // "Locked" там, де ДО сейву вже було Available/InProgress, і
+            // ВІДКРИВАВ ту саму главу ВДРУГЕ (дубль arc.chapter_opened).
+            // Формат значення без ';' (щоб не плутати з роздільником полів
+            // заголовка вище — той самий принцип, що й у items=/core=, лише
+            // без довжина-префіксу, бо тут немає символу '^' усередині):
+            // "<arcId>:<state>:<chapterIndex>,..." — '~' — "<flag>,...".
+            head.Append(";arc=").Append(CaptureArcState());
+
             // Довжина-префікс (як і "core=" нижче): Inventory.CaptureState() сам
             // з'єднує предмети через ';' (Inventory.cs), тож наївний
             // headPart.Split(';') у ApplySave інакше сплутав би роздільник
@@ -2406,6 +2420,7 @@ namespace Game.Core.Session
                     case "points": _points.RestoreState(value); break;
                     case "defect": _defectionWatch.RestoreState(value); break;
                     case "crisis": _crisis.RestoreState(value); break;
+                    case "arc": RestoreArcState(value); break;
                 }
             }
 
@@ -2423,6 +2438,70 @@ namespace Game.Core.Session
             // жоден слепок (визначення інцидентів не персистяться), тож без
             // цього виклику бонус мовчки губився б після Save/Load.
             ApplyHafiyaGrassBonusToSickChildIfNeeded();
+        }
+
+        /// <summary>
+        /// Фікс-ревью D2 (major, доважок до ComposeSave): формат
+        /// <c>arcId:state:chapterIndex</c>, через кому — для кожного
+        /// <see cref="CompanionArcRun"/> у <see cref="_arcRuns"/>, далі '~' і
+        /// прапори через кому — для <see cref="_arcFlags"/>. Жодних ';'
+        /// усередині (щоб не плутати з роздільником полів заголовка) —
+        /// ідентифікатори арок/прапорів (DefaultArcs.cs) лишень [a-z0-9_],
+        /// тому ':'/','/'~' безпечні.
+        /// </summary>
+        private string CaptureArcState()
+        {
+            var sb = new System.Text.StringBuilder();
+            if (_arcRuns != null)
+                for (int i = 0; i < _arcRuns.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    var run = _arcRuns[i];
+                    sb.Append(run.Arc.Id).Append(':').Append((int)run.State).Append(':')
+                      .Append(run.ChapterIndex.ToString(CultureInfo.InvariantCulture));
+                }
+            sb.Append('~');
+            bool first = true;
+            foreach (var flag in _arcFlags)
+            {
+                if (!first) sb.Append(',');
+                sb.Append(flag);
+                first = false;
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>Зворотне до <see cref="CaptureArcState"/> — за Id зіставляє з уже інстанційованими <see cref="_arcRuns"/> (NewGame() будує їх з DefaultArcs.All() ДО ApplySave) і кличе <see cref="CompanionArcRun.RestoreState"/>; невідомі за старим сейвом без "arc=" поля лишає як є (NewGame-дефолт — Locked/0, зворотна сумісність).</summary>
+        private void RestoreArcState(string value)
+        {
+            if (string.IsNullOrEmpty(value) || _arcRuns == null) return;
+
+            int tilde = value.IndexOf('~');
+            string runsPart = tilde >= 0 ? value.Substring(0, tilde) : value;
+            string flagsPart = tilde >= 0 ? value.Substring(tilde + 1) : string.Empty;
+
+            if (runsPart.Length > 0)
+            {
+                foreach (var entry in runsPart.Split(','))
+                {
+                    var bits = entry.Split(':');
+                    if (bits.Length < 3) continue;
+                    string arcId = bits[0];
+                    var state = (ArcState)ParseInt(bits[1]);
+                    int chapterIndex = ParseInt(bits[2]);
+                    for (int i = 0; i < _arcRuns.Count; i++)
+                    {
+                        if (_arcRuns[i].Arc.Id != arcId) continue;
+                        _arcRuns[i].RestoreState(state, chapterIndex);
+                        break;
+                    }
+                }
+            }
+
+            _arcFlags.Clear();
+            if (flagsPart.Length > 0)
+                foreach (var flag in flagsPart.Split(','))
+                    if (!string.IsNullOrEmpty(flag)) _arcFlags.Add(flag);
         }
 
         private static SuspendToken ParseResume(string value)

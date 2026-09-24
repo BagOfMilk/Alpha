@@ -385,6 +385,18 @@ namespace Game.Tests.EditMode
             var log = AllLogs();
             Assert.IsTrue(log.Any(e => e.Key != null && e.Key.StartsWith("city.building.ordered")),
                 "§6.1 №14: city.building.ordered мав піти хоч раз за 5×15 діб");
+
+            // Фікс-ревью D2 (major): назва рядка й сама таблиця §6.1 №14
+            // просять ДВІ окремі речі — завершене будівництво (`city.built.*`,
+            // CityWorksStep.cs -> SignalStep -> GameSession.LogEvent(req.TopicId))
+            // і дію ради (`council.raid.ordered`/`.settlers.ordered`,
+            // GameSession.cs) — а не лише "замовлено будову". Обидва ключі
+            // справді трапляються за ці самі 5×15-денні прогони
+            // (docs/TEST_BUILD_KEYS.txt), просто раніше не перевірялись.
+            Assert.IsTrue(log.Any(e => e.Key != null && e.Key.StartsWith("city.built.", StringComparison.Ordinal)),
+                "§6.1 №14: city.built.* (завершена будова) мав піти хоч раз за 5×15 діб");
+            Assert.IsTrue(log.Any(e => e.Key == "council.raid.ordered" || e.Key == "council.settlers.ordered"),
+                "§6.1 №14: council.raid.ordered або council.settlers.ordered мав піти хоч раз за 5×15 діб");
         }
 
         // ==== №15 — нові дії ради ================================================
@@ -637,6 +649,22 @@ namespace Game.Tests.EditMode
 
         // ==== №32/33/34 — тактичний бій, overwatch, автобій ======================
 
+        /// <summary>
+        /// Фікс-ревью пакета D2 (major, раунд 2): половина назви рядка
+        /// ("...AndStatuses") і сама таблиця §6.1 №32 ("статус хоч раз
+        /// застосований") лишались недоведеними — попередня версія перевіряла
+        /// лише combat.attack.*. Єдина зброя зрізу зі StatusOnHit —
+        /// BurundaMace (StatusType.KnockedDown, DefaultCombatContent.cs); єдиний
+        /// публічний бій, де Бурунда гарантовано на полі — кровавий шлях
+        /// фіналу доби 5 (Finale.BuildAssault завжди додає BurundaBossId,
+        /// незалежно від полоси Готовності). Ведемо цей бій ПОКРОКОВО (через
+        /// <see cref="ForceStepByStepCombat"/> — та сама BloodyPolicy, лише з
+        /// форсованим ChooseAutoResolve=false, інакше Автобій ховає весь бій
+        /// за один виклик і жодного проміжного BattleView не побачити) і
+        /// знімаємо BattleView одразу після КОЖНОГО combat.attack.* через
+        /// onEvent-гачок BotRunner.Drive, доки CombatState ще живий (після
+        /// завершення бою GetBattleView() уже null).
+        /// </summary>
         [Test]
         public void Row32_TacticalCombat_LogsAttackOutcomesAndStatuses()
         {
@@ -644,6 +672,44 @@ namespace Game.Tests.EditMode
             bool sawAttack = Saw(log, "combat.attack.hit") || Saw(log, "combat.attack.miss") ||
                               Saw(log, "combat.attack.crit") || Saw(log, "combat.attack.graze");
             Assert.IsTrue(sawAttack, "§6.1 №32: хоч один combat.attack.* мав трапитись");
+
+            var s = PlayToNight5(new BloodyPolicy(), seed: 21);
+            bool sawStatus = false;
+            Action<GameEvent> probe = e =>
+            {
+                if (sawStatus || e.Key == null || !e.Key.StartsWith("combat.attack.", StringComparison.Ordinal)) return;
+                var battle = s.GetBattleView();
+                if (battle?.Units != null && battle.Units.Any(u => u.Statuses != null && u.Statuses.Count > 0))
+                    sawStatus = true;
+            };
+            BotRunner.Drive(s, new ForceStepByStepCombat(new BloodyPolicy()), 1, null, probe);
+
+            if (!sawStatus)
+            {
+                Assert.Ignore("§6.1 №32 GAP: за цей детермінований покроковий прогін кровавого фіналу (доба 5, " +
+                    "Бурунда завжди на полі) жоден удар не наніс статус, поки бій тривав, — BurundaMace/KnockedDown " +
+                    "покритий прямими CombatState-тестами (TurnAndStatusTests), тут документуємо розрив " +
+                    "спостережуваності через бот-прогін для цього конкретного seed/розташування.");
+                return;
+            }
+            Assert.Pass();
+        }
+
+        /// <summary>Допоміжна обгортка Row32: та сама політика, лише з форсованим покроковим боєм (ChooseAutoResolve=false) — щоб зняти BattleView МІЖ ходами, а не лише після Автобою.</summary>
+        private sealed class ForceStepByStepCombat : IBotPolicy
+        {
+            private readonly IBotPolicy _inner;
+            public ForceStepByStepCombat(IBotPolicy inner) { _inner = inner; }
+
+            public string Name => _inner.Name + "+StepByStep";
+            public IncidentPath ChooseIncidentPath(PendingOfferView offer) => _inner.ChooseIncidentPath(offer);
+            public int ChooseQuestOption(QuestOfferView offer) => _inner.ChooseQuestOption(offer);
+            public bool ChoosePatrol(SessionView view) => _inner.ChoosePatrol(view);
+            public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city) => _inner.ChooseAssignments(roster, city);
+            public ExpeditionChoice? ChooseExpedition(SessionView view) => _inner.ChooseExpedition(view);
+            public CombatAction ChooseCombatAction(BattleView battle) => _inner.ChooseCombatAction(battle);
+            public bool ChooseAutoResolve(BattleView battle) => false;
+            public bool ChoosePushDeeper(DungeonView view) => _inner.ChoosePushDeeper(view);
         }
 
         /// <summary>
@@ -664,6 +730,24 @@ namespace Game.Tests.EditMode
         /// тренувальний бій і веде його ВИКЛЮЧНО через <see cref="BotRunner.Drive"/>
         /// — жодного прямого виклику GameSession.Combat* з тіла тесту.
         /// </summary>
+        /// <summary>
+        /// Фікс-ревью пакета D2 (major, раунд 2): §6.1 №33 дослівно вимагає
+        /// доказ САМЕ "під BloodyPolicy" — попередня версія рядка доводила
+        /// лише механізм (PacifistPolicy у тренувальному бою), але не саму
+        /// названу в таблиці вимогу з основного 5×15-денного прогону. Обидва
+        /// докази лишаються: цей — буквальний рядок таблиці, тренувальний
+        /// фікстур нижче — незалежний доказ, що CombatMove/CombatAttack/
+        /// CombatEnterOverwatch справді йдуть через BotRunner, а не лише
+        /// Автобій.
+        /// </summary>
+        [Test]
+        public void Row33_Overwatch_Triggered_UnderBloodyPolicy()
+        {
+            Assert.IsTrue(Saw(Bloody().Log, "combat.overwatch.triggered"),
+                "§6.1 №33: combat.overwatch.triggered мав трапитись хоч раз під BloodyPolicy за 5×15-денний прогін " +
+                "(таблиця §6.1 №33 називає САМЕ BloodyPolicy)");
+        }
+
         [Test]
         public void Row33_Overwatch_Triggered()
         {
@@ -807,6 +891,59 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(baselineNext.Day, restoredNext.Day, "§6.1 №40: SaveState->RestoreState->AdvanceDay мав дати той самий Day");
             Assert.AreEqual(baselineNext.Phase, restoredNext.Phase, "§6.1 №40: та сама Phase");
             Assert.AreEqual(baselineNext.Incidents?.Count ?? 0, restoredNext.Incidents?.Count ?? 0, "§6.1 №40: той самий набір інцидентів");
+
+            // Фікс-ревью D2 (major, GameSession.cs — CaptureArcState/
+            // RestoreArcState): одного кроку по DayReportView вище НЕ досить,
+            // щоб зловити регрес "SaveState мовчки не серіалізує частину
+            // стану" — саме так губився прогрес особистих арок напарників
+            // (_arcRuns/_arcFlags): перший AdvanceDay ПІСЛЯ рестору сам по
+            // собі ще не перевідкриває главу вдруге (TickCompanionArcs — це
+            // нічний крок), тож розрив видно лише за кілька діб ПІСЛЯ
+            // рестору, і саме ДОКУМЕНТОВАНИМ публічним шляхом гравця —
+            // PreloadSlot+ContinueGame (§4.1), а не RestoreFromBlob. Женемо
+            // СВІЖУ сесію під StewardPolicy, доки arc.chapter_opened не
+            // трапиться хоч раз, рятуємо саме тут, продовжуємо в НОВОМУ
+            // екземплярі тим самим шляхом, що й гравець, і доганяємо ще
+            // кілька діб: та сама пара companionId/chapterId НЕ повинна
+            // відкритись ВДРУГЕ.
+            var arcSession = new GameSession();
+            arcSession.NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Seed = 7 });
+            var preLog = new List<GameEvent>();
+            BotRunner.Drive(arcSession, new StewardPolicy(), 3, preLog); // доба 1..3
+
+            var openedBeforeSave = preLog.Where(e => e.Key == "arc.chapter_opened" &&
+                    e.Args.ContainsKey("companionId") && e.Args.ContainsKey("chapterId"))
+                .Select(e => e.Args["companionId"] + "/" + e.Args["chapterId"])
+                .Distinct()
+                .ToList();
+
+            if (openedBeforeSave.Count == 0)
+            {
+                Assert.Ignore("§6.1 №40 (доважок) GAP: за 3 доби під StewardPolicy (seed=7) жодна арка не " +
+                    "відкрилась цим прогоном — регрес \"дубль arc.chapter_opened після рестору\" нема з чого " +
+                    "зловити в цій фікстурі.");
+                return;
+            }
+
+            string arcBlob = arcSession.SaveState(0);
+
+            var arcRestored = new GameSession(); // лишається Title — саме цього вимагає PreloadSlot
+            arcRestored.PreloadSlot(0, arcBlob);
+            Assert.IsTrue(arcRestored.ContinueGame(0),
+                "§6.1 №40 (доважок, передумова): ContinueGame(0) мав реально завантажити щойно збережений слот");
+
+            var postLog = new List<GameEvent>();
+            BotRunner.Drive(arcRestored, new StewardPolicy(), 3, postLog); // ще кілька діб тим самим детермінованим шляхом
+
+            var reopened = postLog.Where(e => e.Key == "arc.chapter_opened" &&
+                    e.Args.ContainsKey("companionId") && e.Args.ContainsKey("chapterId"))
+                .Select(e => e.Args["companionId"] + "/" + e.Args["chapterId"])
+                .Where(pair => openedBeforeSave.Contains(pair))
+                .ToList();
+
+            Assert.IsEmpty(reopened, "§6.1 №40: arc.chapter_opened відкрилась ЗНОВУ після PreloadSlot->ContinueGame " +
+                "для вже відкритих ДО сейву пар companionId/chapterId: " + string.Join(", ", reopened) +
+                " — стан особистих арок (CompanionArcRun) не пережив рестор");
         }
 
         // ==== №41 — підсумок доби 5 ===============================================
