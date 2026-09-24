@@ -123,20 +123,50 @@ namespace Game.Gameplay.UI
             GUILayout.Label(UkrainianText.Get(key, false), AlphaSkin.Tooltip);
         }
 
+        /// <summary>
+        /// Фікс-ревью (major, раунд 2, знайдено QA): раніше один суцільний
+        /// <c>BeginHorizontal</c> на всю чергу ходу — на п'ятьох+ юнітах
+        /// (довгі імена на кшталт "Розвідник орди" двічі) останній(і) бейдж(і)
+        /// фізично виїжджав(ли) за праву межу панелі HUD прямо в 3D-арену,
+        /// не обрізаний по рамці, а НАМАЛЬОВАНИЙ ПОВЕРХ сцени — IMGUI не
+        /// клипає дочірні елементи горизонтальної групи по контейнеру.
+        /// Загортаємо в новий ряд, щойно накопичена ширина перевищує вміст
+        /// панелі (<see cref="Widgets.BadgeWidth"/> — той самий стиль, що й
+        /// сам бейдж, тож оцінка рівно та, що піде на екран).
+        /// </summary>
         private static void DrawInitiativeStrip(IBattleHudData c, BattleView view)
         {
             Widgets.Section(UkrainianText.Get("ui.battle.initiative", false), () =>
             {
-                GUILayout.BeginHorizontal();
+                float maxWidth = PanelWidthPixels() - Widgets.PanelContentInset();
+                float rowWidth = 0f;
+                bool rowOpen = false;
+
                 if (view.InitiativeOrder != null)
                     foreach (var id in view.InitiativeOrder)
                     {
                         var unit = FindUnit(view, id);
                         string name = unit != null ? c.ResolveDisplayName(unit) : id;
                         bool current = string.Equals(id, view.CurrentUnitId, System.StringComparison.Ordinal);
+                        float badgeWidth = Widgets.BadgeWidth(name);
+
+                        if (rowOpen && rowWidth + badgeWidth > maxWidth)
+                        {
+                            GUILayout.EndHorizontal();
+                            rowOpen = false;
+                            rowWidth = 0f;
+                        }
+                        if (!rowOpen)
+                        {
+                            GUILayout.BeginHorizontal();
+                            rowOpen = true;
+                        }
+
                         Widgets.Badge(name, current ? AlphaSkin.Accent : AlphaSkin.BgRaised);
+                        rowWidth += badgeWidth;
                     }
-                GUILayout.EndHorizontal();
+
+                if (rowOpen) GUILayout.EndHorizontal();
             });
         }
 
@@ -145,7 +175,11 @@ namespace Game.Gameplay.UI
             var current = FindUnit(view, view.CurrentUnitId);
             if (current == null)
             {
-                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.Body);
+                // Полірування (ціль А «HUD», owner: "enemy turn shows one clear
+                // «Хід ворога…» line"): єдине місце, де ця репліка малюється —
+                // DrawActionButtons нижче більше не дублює її на кожній
+                // вимкненій кнопці (раніше рядок повторювався тричі поспіль).
+                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.SubHeader);
                 return;
             }
 
@@ -154,7 +188,9 @@ namespace Game.Gameplay.UI
 
             if (!c.IsPlayerTurn)
             {
-                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.Tooltip);
+                // Той самий рядок, тим самим виразним стилем — ім'я ворога вже
+                // назване рядком вище, тут лише пояснення, чому кнопок немає.
+                GUILayout.Label(UkrainianText.Get("ui.battle.enemyturn", false), AlphaSkin.SubHeader);
                 return;
             }
 
@@ -284,14 +320,13 @@ namespace Game.Gameplay.UI
         {
             GUILayout.BeginHorizontal();
 
-            if (!c.IsPlayerTurn)
-            {
-                Widgets.DisabledButton(UkrainianText.Get("ui.battle.overwatch.button", false),
-                    UkrainianText.Get("ui.battle.enemyturn", false));
-                Widgets.DisabledButton(UkrainianText.Get("ui.battle.endturn", false),
-                    UkrainianText.Get("ui.battle.enemyturn", false));
-            }
-            else
+            // Полірування (ціль А «HUD», owner: "no overlapping disabled
+            // buttons"): раніше тут стояли ДВІ Widgets.DisabledButton, кожна зі
+            // своїм рядком-поясненням "Хід ворога…" — та сама репліка, що вже
+            // намальована один раз у DrawCurrentUnit вище, повторювалась ще
+            // двічі поспіль. Кнопок гравця під час ходу ворога немає взагалі
+            // (нема чим керувати) — порожній ряд лишає тільки Автобій нижче.
+            if (c.IsPlayerTurn)
             {
                 bool overwatchArmed = c.Armed == ArmedAction.OverwatchAim;
                 if (Widgets.SecondaryButton((overwatchArmed ? "» " : string.Empty) + UkrainianText.Get("ui.battle.overwatch.button", false)))

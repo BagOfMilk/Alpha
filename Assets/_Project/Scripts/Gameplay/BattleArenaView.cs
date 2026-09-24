@@ -120,15 +120,46 @@ namespace Game.Gameplay
             if (!walkable) return new TileTint(0.07f, 0.06f, 0.05f, 1f);
             if (isCurrentUnit) return new TileTint(0.95f, 0.83f, 0.32f, 1f);
             if (isHovered) return new TileTint(0.70f, 0.74f, 0.95f, 1f);
-            if (isReachable) return new TileTint(0.42f, 0.76f, 0.44f, 0.92f);
+            if (isReachable)
+            {
+                // Фікс-ревью (ціль А «HUD/арена», owner: "reachable tiles as a
+                // subtle translucent overlay"): тайл — ОДИН Quad із матеріалом
+                // Opaque URP/Lit (BattleArenaController._tileMaterial, спільний
+                // на всі тайли — і на укриття, і на "поточний"/"наведений", де
+                // альфа=1 таки мусить лишатись суцільною). Opaque-поверхня
+                // альфа-канал _BaseColor ІГНОРУЄ на рендері — попередня версія
+                // (альфа 0.92, потім 0.45) не була видно взагалі: "прозорий"
+                // тайл рендерився суцільним кольором підсвітки, ховаючи
+                // укриття під собою так само, як і повна заливка. Замість
+                // реальної альфа-змішки (окремий blend-матеріал зламав би
+                // сортування копланарних тайлів під ортографічною камерою
+                // згори) — змішуємо колір ТУТ, у C#, з базовим кольором
+                // укриття: результат непрозорий (альфа завжди 1, як і
+                // рендериться насправді), але видима "прозорість" та сама —
+                // 45% підсвітки поверх 55% справжнього кольору тайла.
+                var baseTint = CoverTint(cover);
+                const float highlight = 0.45f;
+                float r = Lerp(baseTint.R, 0.46f, highlight);
+                float g = Lerp(baseTint.G, 0.80f, highlight);
+                float b = Lerp(baseTint.B, 0.48f, highlight);
+                return new TileTint(r, g, b, 1f);
+            }
 
+            return CoverTint(cover);
+        }
+
+        /// <summary>Природний колір самого тайла за типом укриття — трава/земля/камінь замість однакової темної оливи для всього поля.</summary>
+        private static TileTint CoverTint(string cover)
+        {
             switch (cover)
             {
-                case "Full": return new TileTint(0.30f, 0.30f, 0.35f, 1f);
-                case "Half": return new TileTint(0.40f, 0.43f, 0.31f, 1f);
-                default: return new TileTint(0.21f, 0.24f, 0.19f, 1f);
+                case "Full": return new TileTint(0.36f, 0.36f, 0.40f, 1f);  // сірий камінь
+                case "Half": return new TileTint(0.45f, 0.40f, 0.26f, 1f);  // суха земля/тин
+                default: return new TileTint(0.27f, 0.42f, 0.22f, 1f);      // трава
             }
         }
+
+        private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
         // ================= юніти: детермінована палітра =================
 

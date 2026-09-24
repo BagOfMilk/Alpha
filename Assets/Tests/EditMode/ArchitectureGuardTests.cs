@@ -631,7 +631,18 @@ namespace Game.Tests.EditMode
                 // Розширення D1 понад літеральний список §4.9: SkillChangeView.From/To —
                 // рівень скила (0..10, звичайне видиме число персонажа US-2.6),
                 // а не прихована шкала — той самий рівень прозорості, що і Level/Hp.
-                "From", "To"
+                "From", "To",
+                // Розширення (полірування, ціль 1 «Картка персонажа»):
+                // CharacterSheetView.* — атрибути (1..10)/скіли (0..10)/похідні
+                // бойові стати. Це характеристики персонажа (owner: "they are
+                // character stats, not hidden scales"), не приховані шкали
+                // міста — Score покриває і AttributeLineView, і SkillLineView.
+                "XpToNextLevel", "Score", "Accuracy", "Defense", "Initiative", "Armor", "CritChance",
+                // Розширення (полірування, ціль 6 «Рішення»): скільки ворогів
+                // у тактичному бою, на який веде цей шлях/ця кімната —
+                // видима механічна деталь рішення (owner: "тактичний бій:
+                // N ворогів"), не прихована шкала.
+                "TacticalBattleEnemyCount", "EnemyCount"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

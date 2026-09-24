@@ -209,6 +209,32 @@ namespace Game.Gameplay.UI
             GUI.backgroundColor = previous;
         }
 
+        /// <summary>
+        /// Фікс-ревью (major, раунд 2, знайдено QA): ширина <see cref="Badge"/>
+        /// для гравця, що загортає ряд бейджів (черга ходу бою — до 6+ юнітів,
+        /// довгі імена на кшталт "Розвідник орди"), щоб не впертися суцільним
+        /// рядком у праву межу панелі HUD і не обрізати останні бейджі за
+        /// кадром (значення "margin" не входить у CalcSize, тому додаємо його
+        /// подвоєним вручну — той самий відступ, що Tintable().margin).
+        /// </summary>
+        public static float BadgeWidth(string text)
+        {
+            return Tintable().CalcSize(new GUIContent(text ?? string.Empty)).x + Tintable().margin.left + Tintable().margin.right;
+        }
+
+        /// <summary>
+        /// Лівий+правий padding <see cref="Panel"/> (GUI.skin.box — §AlphaSkin.
+        /// PanelStyle) у пікселях: те, наскільки вміст панелі вужчий за саму
+        /// панель. Викликачі, що самі загортають рядок по ширині (§ фікс-ревью
+        /// <c>BattleHudScreen.DrawInitiativeStrip</c>), рахують доступну ширину
+        /// звідси, а не дублюють число "18+18" магічною константою.
+        /// </summary>
+        public static float PanelContentInset()
+        {
+            var box = GUI.skin != null ? GUI.skin.box : null;
+            return box != null ? box.padding.left + box.padding.right : 36f;
+        }
+
         // ================= відповідна розкладка =================
 
         /// <summary>Масштаб від контрольної ширини 1280 — на 2560×1440 елементи не тонуть у порожньому полі.</summary>

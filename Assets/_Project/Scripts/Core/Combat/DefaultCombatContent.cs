@@ -162,8 +162,16 @@ namespace Game.Core.Combat
             cs.AddUnit(trainee1, new GridPos(1, 1));
             cs.AddUnit(trainee2, new GridPos(1, 3));
 
+            // Полірування (ціль 3 «Бойові декорації», owner: "not a single
+            // column"): раніше обидва вороги стояли на тому самому x=6 —
+            // тепер зсунуті й КОЖЕН несе власне укриття на своєму тайлі
+            // (GridMap.CoverAgainst читає укриття із тайла ЗАХИСНИКА, не
+            // сусіднього — одна декоративна плитка в центрі нікого не
+            // захищала).
             cs.AddUnit(CombatUnit.FromEnemy(HordeScout(), "training_scout_1"), new GridPos(6, 1));
-            cs.AddUnit(CombatUnit.FromEnemy(HordeSkirmisher(), "training_scout_2"), new GridPos(6, 4));
+            map.SetCover(new GridPos(6, 1), Direction.West, CoverType.Half);
+            cs.AddUnit(CombatUnit.FromEnemy(HordeSkirmisher(), "training_scout_2"), new GridPos(5, 4));
+            map.SetCover(new GridPos(5, 4), Direction.West, CoverType.Full);
 
             cs.Begin();
             return cs;

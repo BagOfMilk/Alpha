@@ -155,6 +155,7 @@ namespace Game.Gameplay.Text
             AddSaveTitleTraining(t);         // §7.19
             AddBattleUiAndLog(t);            // §7.20
             AddSkillsAttrsResourcesBandsChars(t); // §7.21
+            AddCharacterSheetKeys(t);              // полірування, ціль 1 «Картка персонажа»
 
             // За межами §7, буквально: ідентифікатори контенту з Core (R7:
             // "building.<id>, post.<id>, site.<id>, skill.<key>, attr.<key>,
@@ -595,6 +596,68 @@ namespace Game.Gameplay.Text
             AddKey(t, "enemy.horde_raider", "Наскочник орди");
         }
 
+        /// <summary>
+        /// Полірування (ціль 1 «Картка персонажа»): назви/короткий ефект для
+        /// Core/Characters/Traits/DefaultTraits.cs і Core/Characters/Perks/
+        /// DefaultPerks.cs (обидва — новий контент цього пакета, раніше
+        /// системи слотів існували без жодного екземпляра), плюс підписи
+        /// знаку трейта і причини недоступності перка (та ж легальність-з-
+        /// причиною, що ScreenText.Legality для кнопок § ціль 2).
+        /// </summary>
+        private static void AddCharacterSheetKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "trait.steadfast", "Незламний");
+            AddKey(t, "trait.steadfast.effect", "довше опирається станам страху й приголомшення");
+            AddKey(t, "trait.hot_blooded", "Гарячий норов");
+            AddKey(t, "trait.hot_blooded.effect", "гірше переконує — говорить надто різко");
+            AddKey(t, "trait.wary", "Обережна");
+            AddKey(t, "trait.wary.effect", "діє раніше за інших у бою");
+            AddKey(t, "trait.sharp_eyed", "Гострозора");
+            AddKey(t, "trait.sharp_eyed.effect", "точніше б'є");
+            AddKey(t, "trait.meticulous", "Прискіпливий");
+            AddKey(t, "trait.meticulous.effect", "вигідніше торгує, але важче домовляється по-доброму");
+            AddKey(t, "trait.blunt", "Прямий");
+            AddKey(t, "trait.blunt.effect", "краще лікує, але гірше торгується");
+
+            AddKey(t, "ui.trait.polarity.virtue", "чеснота");
+            AddKey(t, "ui.trait.polarity.neutral", "риса");
+            AddKey(t, "ui.trait.polarity.vice", "вада");
+
+            AddKey(t, "perk.hardened_fighter", "Загартований");
+            AddKey(t, "perk.hardened_fighter.effect", "більше живучості в бою");
+            AddKey(t, "perk.field_medic", "Польовий лікар");
+            AddKey(t, "perk.field_medic.effect", "стани минають швидше — і в союзників теж");
+            AddKey(t, "perk.master_trader", "Бувалий торговець");
+            AddKey(t, "perk.master_trader.effect", "несе більше з вилазки");
+            AddKey(t, "perk.sharpshooter", "Влучний стрілець");
+            AddKey(t, "perk.sharpshooter.effect", "частіше б'є критично");
+
+            AddKey(t, "ui.reason.perk.skill_too_low", "потрібен вищий скіл");
+            AddKey(t, "ui.reason.perk.missing_prerequisite", "потрібен інший перк спочатку");
+            AddKey(t, "ui.reason.perk.already_taken", "вже взято");
+            AddKey(t, "ui.reason.perk.invalid", "недоступно");
+
+            AddKey(t, "ui.sheet.title", "Картка персонажа");
+            AddKey(t, "ui.sheet.pick_someone", "Оберіть когось зі списку ліворуч.");
+            AddKey(t, "ui.sheet.section.attributes", "Атрибути");
+            AddKey(t, "ui.sheet.section.skills", "Скіли");
+            AddKey(t, "ui.sheet.section.traits", "Трейти");
+            AddKey(t, "ui.sheet.section.scars", "Шрами");
+            AddKey(t, "ui.sheet.section.perks_unlocked", "Перки (взято)");
+            AddKey(t, "ui.sheet.section.perks_available", "Перки (доступні)");
+            AddKey(t, "ui.sheet.section.combat", "Бойові стати");
+            AddKey(t, "ui.sheet.section.equipment", "Спорядження");
+            AddKey(t, "ui.sheet.none", "—");
+            AddKey(t, "ui.sheet.xp", "Досвід: {xp} / {next}");
+            AddKey(t, "ui.sheet.combat.hp", "Живучість: {value}");
+            AddKey(t, "ui.sheet.combat.ap", "Очки дій: {value}");
+            AddKey(t, "ui.sheet.combat.initiative", "Ініціатива: {value}");
+            AddKey(t, "ui.sheet.combat.accuracy", "Точність: {value}");
+            AddKey(t, "ui.sheet.combat.defense", "Захист: {value}");
+            AddKey(t, "ui.sheet.combat.armor", "Броня: {value}");
+            AddKey(t, "ui.sheet.combat.crit", "Крит: {value}%");
+        }
+
         // ==================================================================
         // За межами §7: ідентифікатори з Default*.cs (Core), знайдені grep'ом.
         // ==================================================================
@@ -612,6 +675,20 @@ namespace Game.Gameplay.Text
             AddKey(t, "building.fortifications", "Укріплення");
             AddKey(t, "building.armory", "Збройня");
             AddKey(t, "building.laboratory", "Лабораторія");
+
+            // Полірування (ціль 2 «Прозорість дій»): один рядок «що це
+            // змінює» словами (owner: "a one-line effect in words") поруч із
+            // кожною будівлею на вкладці — Core/Base/Buildings/BuildingEffect.
+            AddKey(t, "building.infirmary.effect", "відкриває пост — лікування поранених у лазареті");
+            AddKey(t, "building.workshop.effect", "відкриває пост — крафт і апгрейд спорядження");
+            AddKey(t, "building.storehouse.effect", "відкриває пост — облік і збереження припасів");
+            AddKey(t, "building.council_hall.effect", "відкриває пост і дії ради (облава, укази, дипломатія)");
+            AddKey(t, "building.market.effect", "відкриває пост — торгівля, знижує ціну наступних замовлень");
+            AddKey(t, "building.tavern.effect", "щодня приводить нових людей понад природний приріст");
+            AddKey(t, "building.temple.effect", "щодня знижує Напругу");
+            AddKey(t, "building.fortifications.effect", "щодня знижує Напругу, готує до нападу");
+            AddKey(t, "building.armory.effect", "чекає на систему спорядження — поки без ефекту");
+            AddKey(t, "building.laboratory.effect", "лише за квестом; чекає на аугменти — поки без ефекту");
         }
 
         // Core/DefaultContent.cs (AllSlots) — усі слоти бази, включно з lab_station,
@@ -880,7 +957,22 @@ namespace Game.Gameplay.Text
             AddKey(t, "craft.upgraded", "{itemId} покращено.");
             AddKey(t, "scar.granted", "{companionId} носитиме це до кінця: {scarId}.");
             AddKey(t, "loyalty.band_changed", "{companionId}: тепер {band}.");
-            AddKey(t, "roster.rippled", "Звістка розходиться по загону.");
+            // Фікс-ревью (полірування, ціль 5 «Якість стрічки»): раніше єдиний
+            // ключ "roster.rippled" не використовував жодного з аргументів
+            // події (companionId=хто реагує, triggerId=хто загинув/зрадив,
+            // kinship=тип зв'язку) — кожен запис ряби показував той самий
+            // безликий рядок. GameSession.LogRipple тепер обирає один із
+            // шести ключів (тип зв'язку × загибель/зрада); {trigger} лишається
+            // до двокрапки в називному відмінку (без відмінювання імені — той
+            // самий прийом, що "arc.chapter_opened" вище), {companion} —
+            // підмет репліки (SubjectGender у ScreenText.EventLine бере рід
+            // companionId), дієслова — теперішній час, рід-нейтральні.
+            AddKey(t, "roster.rippled.kinship.death", "{trigger}: {companion} тяжко переживає цю втрату.");
+            AddKey(t, "roster.rippled.friction.death", "{trigger}: {companion} чує звістку без жалю.");
+            AddKey(t, "roster.rippled.neutral.death", "{trigger}: {companion} мовчки слухає звістку.");
+            AddKey(t, "roster.rippled.kinship.betrayal", "{trigger}: {companion} важко переживає цю зраду.");
+            AddKey(t, "roster.rippled.friction.betrayal", "{trigger}: {companion} чує про зраду без подиву.");
+            AddKey(t, "roster.rippled.neutral.betrayal", "{trigger}: {companion} мовчки слухає звістку про зраду.");
             AddKey(t, "companion.defected", "{companionId} більше не з нами.");
             AddKey(t, "companion.died.m", "{companionId} загинув на цьому шляху.");
             AddKey(t, "companion.died.f", "{companionId} загинула на цьому шляху.");
@@ -1234,6 +1326,13 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.feed.title", "Стрічка подій");
             AddKey(t, "ui.feed.empty", "Поки що тихо.");
+            // Фікс-ревью (полірування, ціль 5 «Якість стрічки»): однакові рядки
+            // підряд (напр. кілька "тронутий звісткою" за один прохід ряби)
+            // згортаються в один із лічильником — ScreenText.BuildFeedLines.
+            AddKey(t, "ui.feed.repeat", "×{count}");
+            // Фікс-ревью (minor, знайдено QA): групова реакція складу
+            // (roster.rippled.*) — див. FeedLine.AlsoNames у ScreenText.cs.
+            AddKey(t, "ui.feed.also", "також: {names}");
 
             AddKey(t, "ui.topbar.day", "Доба {day}");
             // Фікс-ревью (major, знайдено тур-автоплеєм): бейдж фази поруч із
@@ -1297,6 +1396,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.buildings.built", "Збудовано");
             AddKey(t, "ui.buildings.in_progress", "Стадія {stage} з 5");
 
+            // Полірування (ціль 2 «Прозорість дій»): ціна/термін видно ДО
+            // кліку (ScreenText.BuildingCostLine), а не лише постфактум.
+            AddKey(t, "ui.buildings.cost_gold", "{gold} золота");
+            AddKey(t, "ui.buildings.cost_both", "{gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.buildings.days", "{days} діб");
+
             AddKey(t, "ui.council.raid", "Облава");
             AddKey(t, "ui.council.settlers", "Прийняти переселенців");
             AddKey(t, "ui.council.decree", "Указ");
@@ -1304,6 +1409,24 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.council.investment", "Вкласти в будівлю");
             AddKey(t, "ui.council.prepare_threat", "Готуватися до загрози");
             AddKey(t, "ui.council.outfit_expedition", "Спорядити відряд");
+
+            // Полірування (ціль 2 «Прозорість дій»): ціна й ефект словами до
+            // кліку для кожної дії ради (Core/Balance/CityBalance.cs,
+            // FactionBalance.cs — числа-плейсхолдери, як і решта балансу).
+            AddKey(t, "ui.council.raid.cost", "до {gold} золота (можлива знижка на ринку)");
+            AddKey(t, "ui.council.raid.effect", "−Напруга, псує стосунки з громадою, кращі — з боярами; відкат");
+            AddKey(t, "ui.council.settlers.cost", "{food} їжі");
+            AddKey(t, "ui.council.settlers.effect", "+люди зараз; відкат на кілька діб");
+            AddKey(t, "ui.council.decree.cost", "{gold} золота");
+            AddKey(t, "ui.council.decree.effect", "рухає уклад, −Напруга; відкат");
+            AddKey(t, "ui.council.diplomacy.cost", "{gold} золота");
+            AddKey(t, "ui.council.diplomacy.effect", "+ставлення обраної фракції; відкат");
+            AddKey(t, "ui.council.investment.cost", "{gold} золота одразу, потім по стільки ж щодня");
+            AddKey(t, "ui.council.investment.effect", "прискорює обрану будівлю, поки триває");
+            AddKey(t, "ui.council.prepare_threat.cost", "{gold} золота");
+            AddKey(t, "ui.council.prepare_threat.effect", "+готовність до нападу; відкат");
+            AddKey(t, "ui.council.outfit_expedition.cost", "{gold} золота");
+            AddKey(t, "ui.council.outfit_expedition.effect", "разовий бонус наступній вилазці на обрану точку");
 
             AddKey(t, "ui.expedition.approach.quiet", "Тихо");
             AddKey(t, "ui.expedition.approach.forceful", "Силою");
@@ -1338,6 +1461,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.decision.title", "Рішення чекає");
             AddKey(t, "ui.decision.option_line",
                 "{path}: {skill} ≥ {threshold} — {candidate}, очікувана полоса: {band}.");
+            // Полірування (ціль 6 «Рішення»): DecisionOptionView.TacticalBattleEnemyCount>0.
+            AddKey(t, "ui.decision.option_line.battle", "{path}: тактичний бій — {count} ворогів.");
             AddKey(t, "ui.decision.candidate", "візьметься {name}");
             AddKey(t, "ui.decision.no_candidate", "нікому взятися");
             AddKey(t, "ui.decision.path.quiet", "Тихо");
@@ -1366,12 +1491,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.dungeon.quiet", "Тихо");
             AddKey(t, "ui.dungeon.bloody", "Криваво");
             AddKey(t, "ui.dungeon.unbanked", "Незбережено: {materials} матеріалів, {gold} золота");
-            // Фаза F: короткий рядок кімнати данжу (тільки шлях/навик/поріг,
-            // без candidate/band, яких у данжі немає — див. коментар у
-            // DungeonScreen.DrawRoom) і окремий підпис кровавого шляху бойової
-            // кімнати, де перевірки взагалі немає (завжди бій).
-            AddKey(t, "ui.dungeon.option_line", "{path}: {skill} ≥ {threshold}.");
-            AddKey(t, "ui.dungeon.bloody_fight", "Криваво: бій неминучий, перевірки немає.");
+            // Полірування (ціль 6 «Рішення», owner: "shows the party ... the
+            // quiet candidate ... тактичний бій: N ворогів"): party — хто
+            // пішов у цей данж; {candidate} — найкращий з ПАРТІЇ на тихий
+            // обхід (band у данжі й досі немає — Поправка №1: 0 ризику).
+            AddKey(t, "ui.dungeon.party", "Партія");
+            AddKey(t, "ui.dungeon.option_line", "{path}: {skill} ≥ {threshold} — {candidate}.");
+            AddKey(t, "ui.dungeon.bloody_fight", "Криваво: тактичний бій — {count} ворогів.");
             AddKey(t, "dungeon.threat_band_changed", "Загроза підземелля тепер: {band}.");
 
             AddKey(t, "ui.night.crisis.title", "Вікно реакції на кризу");
@@ -1380,6 +1506,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.night.crisis.ignore", "Не реагувати");
 
             AddKey(t, "ui.night.finale.title", "Фінал доби 5");
+            // Полірування (ціль 6 «Рішення»): GameSession.GetFinaleEnemyCount().
+            AddKey(t, "ui.night.finale.enemy_count", "Тактичний бій: {count} ворогів.");
             AddKey(t, "ui.advance_night", "До ранку");
             AddKey(t, "ui.night.evening.title", "Вечір");
             AddKey(t, "ui.night.night.title", "Ніч");
@@ -1392,7 +1520,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "expedition.returned", "Відряд повернувся: {site} — {band}.");
             AddKey(t, "scene.finished", "Сцена завершена.");
             AddKey(t, "production.resource", "Виробництво дало плоди.");
-            AddKey(t, "production.recovered", "{companion} одужав(-ла) і повернувся(-лась) до справ.");
+            // Фікс-ревью (major, раунд «фіксер 1», знайдено QA): той самий клас
+            // бага, що вже описаний вище для ui.reason.*/companion.died.* — один
+            // ключ із сирою дужковою нотацією роду ("одужав(-ла)"), яку
+            // Format/ResolveVariant не розбирають: варіанта ".m"/".f" не було,
+            // тож гравець бачив дужки буквально ("Мирослава одужав(-ла)...").
+            // Розбито так само, за родом ІМЕННОГО суб'єкта (companionId) —
+            // EventLine уже рахує subjectGender для цього ключа, бракувало лише
+            // самих .m/.f записів у таблиці.
+            AddKey(t, "production.recovered.m", "{companion} одужав і повернувся до справ.");
+            AddKey(t, "production.recovered.f", "{companion} одужала і повернулася до справ.");
             AddKey(t, "production.food_shortage", "Їжі не вистачає — це вже видно.");
             AddKey(t, "item.scout_horn.forewarn_boosted", "Ріг розвідника чує далі: {charges} наступні передвісники чутніші.");
         }
@@ -1436,6 +1573,35 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.gear.stash.empty", "Схованка порожня.");
             AddKey(t, "ui.gear.stash.title", "Схованка");
             AddKey(t, "ui.gear.craft", "Покращити");
+            // Фікс-ревью (minor, знайдено QA): крафт-кнопка з причиною
+            // "workshop_closed" малювалась ЛИШЕ на предметах схованки — коли
+            // схованка порожня (найпоширеніший стан на старті), розділ не
+            // показував про Майстерню взагалі нічого, на відміну від Buildings/
+            // Council, де причина недоступності видно ДО кліку завжди.
+            AddKey(t, "ui.gear.craft.workshop_note", "Крафт недоступний: потрібна Майстерня.");
+
+            // Полірування (ціль 2 «Прозорість дій», owner: "show the stash
+            // with items (name, rarity, what it improves) ... Craft upgrade
+            // with cost and before→after preview").
+            AddKey(t, "rarity.common", "звичайний");
+            AddKey(t, "rarity.uncommon", "незвичайний");
+            AddKey(t, "rarity.rare", "рідкісний");
+            AddKey(t, "rarity.epic", "епічний");
+            AddKey(t, "ui.gear.improves", "Покращує: {stats}");
+            AddKey(t, "ui.gear.craft_cost", "Ціна: {gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.gear.craft_preview", "{stat} {before}→{after}");
+
+            AddKey(t, "ui.stat.maxhp", "Живучість");
+            AddKey(t, "ui.stat.maxap", "Очки дій");
+            AddKey(t, "ui.stat.accuracy", "Точність");
+            AddKey(t, "ui.stat.defense", "Захист");
+            AddKey(t, "ui.stat.initiative", "Ініціатива");
+            AddKey(t, "ui.stat.critchance", "Крит");
+            AddKey(t, "ui.stat.armor", "Броня");
+            AddKey(t, "ui.stat.carrycapacity", "Ноша");
+            AddKey(t, "ui.stat.statusdurationreduction", "Стійкість до станів");
+            AddKey(t, "ui.stat.damagebonus", "Шкода");
+            AddKey(t, "ui.stat.moveappertile", "Рух");
         }
 
         // ---- Текстовий фідбек результатів команд (AssignmentResult/BuildOrderResult/...) ----

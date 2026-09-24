@@ -309,8 +309,24 @@ namespace Game.Gameplay
 
                 var roster = Session.GetRosterView();
                 _feedScroll = Widgets.ScrollListBegin(_feedScroll, GUILayout.ExpandHeight(true));
-                for (int i = log.Count - 1; i >= 0; i--)
-                    GUILayout.Label(ScreenText.EventLine(log[i], ProtagonistGender, roster), AlphaSkin.Body);
+                // Ціль 5 «Якість стрічки»: однакові рядки підряд згортаються в
+                // один із "×N" (ScreenText.BuildFeedLines) замість того, щоб
+                // топити стрічку буквальними повторами того самого тексту.
+                var lines = ScreenText.BuildFeedLines(log, ProtagonistGender, roster);
+                foreach (var line in lines)
+                {
+                    string text = line.Count > 1
+                        ? line.Text + " " + UkrainianText.Format("ui.feed.repeat", ProtagonistGender, "count", line.Count.ToString())
+                        : line.Text;
+                    // Фікс-ревью (minor, знайдено QA): групова реакція складу
+                    // (FeedLine.AlsoNames, §ScreenText.BuildFeedLines) — імена
+                    // решти реагуючих одним переліком поруч із першим рядком,
+                    // а не окремим рядком на кожне ім'я.
+                    if (line.AlsoNames != null && line.AlsoNames.Count > 0)
+                        text += " (" + UkrainianText.Format("ui.feed.also", ProtagonistGender,
+                            "names", string.Join(", ", line.AlsoNames)) + ")";
+                    GUILayout.Label(text, AlphaSkin.Body);
+                }
                 Widgets.ScrollListEnd();
             }, GUILayout.ExpandHeight(true));
         }

@@ -1,8 +1,30 @@
+using System.Collections.Generic;
 using Game.Core.Balance;
 using Game.Core.Economy;
+using Game.Core.Stats;
 
 namespace Game.Core.Items
 {
+    /// <summary>
+    /// Один стат «до → після» крафт-апгрейду (полірування, ціль 2
+    /// «Прозорість дій», owner: "Craft upgrade with cost and before→after
+    /// preview"). Ціле округлення — те, що бачить гравець; сирий double
+    /// лишається деталлю <see cref="ItemInstance.UpgradeTo"/>.
+    /// </summary>
+    public readonly struct StatPreviewLine
+    {
+        public readonly StatKey Key;
+        public readonly int Before;
+        public readonly int After;
+
+        public StatPreviewLine(StatKey key, int before, int after)
+        {
+            Key = key;
+            Before = before;
+            After = after;
+        }
+    }
+
     public enum CraftResult
     {
         Success = 0,
@@ -50,6 +72,33 @@ namespace Game.Core.Items
         {
             cfg = cfg ?? new ItemBalance();
             return TryUpgrade(item, ledger, workshopOpen, cfg.CraftMaterialsCost, cfg.CraftGoldCost);
+        }
+
+        /// <summary>
+        /// Прев'ю «до → після» БЕЗ мутації предмета: та сама формула
+        /// масштабування, що й <see cref="ItemInstance.UpgradeTo"/> (округлення
+        /// AwayFromZero, +1 якщо округлення дало те саме число), винесена
+        /// сюди read-only — інакше екран мусив би або дублювати правило
+        /// вручну (розсинхрон гарантований), або справді апгрейдити предмет,
+        /// щоб побачити наслідок. Порожній список — іменний/уже Epic предмет
+        /// (нема що апгрейдити, той самий гейт, що в TryUpgrade).
+        /// </summary>
+        public static List<StatPreviewLine> PreviewUpgrade(ItemInstance item)
+        {
+            var result = new List<StatPreviewLine>();
+            if (item == null || item.Definition.IsNamed || item.Rarity >= Rarity.Epic) return result;
+
+            double from = RarityTuning.MagnitudeMultiplier(item.Rarity);
+            double to = RarityTuning.MagnitudeMultiplier(RarityTuning.Next(item.Rarity));
+            if (from <= 0) return result;
+
+            foreach (var m in item.StatMods)
+            {
+                double scaled = System.Math.Round(m.Value * to / from, System.MidpointRounding.AwayFromZero);
+                if (scaled == m.Value) scaled = m.Value + 1; // апгрейд зобов'язаний бути помітним (той самий рядок, що в UpgradeTo)
+                result.Add(new StatPreviewLine(m.Key, (int)System.Math.Round(m.Value), (int)scaled));
+            }
+            return result;
         }
     }
 }

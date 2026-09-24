@@ -85,6 +85,17 @@ namespace Game.Gameplay
         public GameObject[] CoverHalfPrefabs = new GameObject[0];
         public GameObject[] CoverFullPrefabs = new GameObject[0];
 
+        /// <summary>
+        /// Фікс-ревью (major, знайдено QA): земля тайла — більше не голий
+        /// <c>PrimitiveType.Quad</c> з одним суцільним кольором (§RebuildGrid).
+        /// <c>ground_grass.fbx</c> (Kenney Nature Kit) — виміряно РІВНО 1×0×1 з
+        /// центром у (0,0,0), той самий тайл-модуль, що вже дає
+        /// <c>cliff_block_rock.fbx</c> для Full-укриття: підганяти масштаб не
+        /// треба. <c>null</c> — фолбек на старий Quad (наприклад, якщо
+        /// BattleArenaBuilder не знайшов модель), не порожня арена.
+        /// </summary>
+        public GameObject TileGroundPrefab;
+
         // ================= рантайм-стан =================
 
         private GameSession _session;
@@ -112,6 +123,9 @@ namespace Game.Gameplay
         private GridPos? _hoveredTile;
         private string _hoveredUnitId;
         private int _hoveredHitChance;
+
+        /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters (§SpawnOrUpdateUnit) — той самий множник контр-масштабує підпис імені (§BuildNameLabel), щоб текст не ріс разом із фігурою.</summary>
+        private const float UnitVisualScale = 1.35f;
 
         private bool _resultPending;
         private string _resultOutcomeKey;
@@ -320,24 +334,68 @@ namespace Game.Gameplay
                 string cover = view.Grid.TileCover != null && index < view.Grid.TileCover.Count ? view.Grid.TileCover[index] : "None";
                 bool walkable = view.Grid.TileWalkable == null || index >= view.Grid.TileWalkable.Count || view.Grid.TileWalkable[index];
 
-                var tile = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                tile.name = "tile:" + x + "_" + y;
-                tile.transform.SetParent(_tileRoot, false);
                 var world = BattleArenaView.TileToWorld(x, y);
-                tile.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
-                tile.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                tile.transform.localScale = new Vector3(BattleArenaView.TileSize * 0.96f, BattleArenaView.TileSize * 0.96f, 1f);
+                GameObject tile = BuildTileGameObject(world);
+                tile.name = "tile:" + x + "_" + y;
 
-                var renderer = tile.GetComponent<Renderer>();
-                if (renderer != null && _tileMaterial != null) renderer.sharedMaterial = _tileMaterial;
+                var renderers = tile.GetComponentsInChildren<Renderer>();
+                if (_tileMaterial != null)
+                    foreach (var r in renderers) r.sharedMaterial = _tileMaterial;
 
                 string key = x + "_" + y;
                 _tileObjects[key] = tile;
                 ApplyTileTint(tile, key, cover, walkable, isReachable: false, isCurrent: false, isHovered: false);
 
-                if (walkable && !string.Equals(cover, "None", StringComparison.Ordinal))
+                // Фікс-ревью (major, знайдено QA): раніше вимагало "walkable
+                // &&" — непрохідні тайли з укриттям (Full-камінь/скеля
+                // ЗАЗВИЧАЙ саме непрохідні) лишались БЕЗ моделі, тільки
+                // тьмяний тінт (§ApplyTileTint, walkable=false завжди темний
+                // незалежно від cover) — гравець бачив однакову темну
+                // пляму замість каменя/скелі. PlaceCoverProp сам знімає
+                // колайдери моделі (декоративне, не ціль променя), тож
+                // непрохідність тайла це не ламає.
+                if (!string.Equals(cover, "None", StringComparison.Ordinal))
                     PlaceCoverProp(x, y, cover, world);
             }
+        }
+
+        /// <summary>
+        /// Один тайл ґрунту: реальна модель Kenney (<see cref="TileGroundPrefab"/>,
+        /// 1×0×1 з центром у (0,0,0) — жодного підбору масштабу не треба, §поле
+        /// TileGroundPrefab) або фолбек-Quad, коли модель не призначено (Editor
+        /// не знайшов файл — арена все одно має чим стояти). FBX-префаб не несе
+        /// власного колайдера (на відміну від <c>CreatePrimitive</c>, що додає
+        /// його сам) — тому колайдер тут завжди свій, один, на корені з ім'ям
+        /// "tile:x_y" (задає викликач одразу після повернення): той самий
+        /// контракт, що й <see cref="SpawnOrUpdateUnit"/> для юнітів, потрібен
+        /// <see cref="UpdateHover"/> (читає ім'я об'єкта під променем напряму).
+        /// </summary>
+        private GameObject BuildTileGameObject(WorldPos world)
+        {
+            if (TileGroundPrefab == null)
+            {
+                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                quad.transform.SetParent(_tileRoot, false);
+                quad.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
+                quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                // Полірування (ціль 3 «Бойові декорації», owner: "a grid
+                // shown as subtle lines"): 0.985 лишає межу тайла тонкою
+                // лінією, не суцільною чорною сіткою (§ стара версія цього
+                // коментаря вище RebuildGrid).
+                quad.transform.localScale = new Vector3(BattleArenaView.TileSize * 0.985f, BattleArenaView.TileSize * 0.985f, 1f);
+                return quad;
+            }
+
+            var tile = Instantiate(TileGroundPrefab, _tileRoot);
+            tile.transform.SetParent(_tileRoot, false);
+            tile.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
+            tile.transform.localRotation = Quaternion.identity; // модель уже лежить лицем угору — не Quad, 90° по X тут зайві
+
+            foreach (var stale in tile.GetComponentsInChildren<Collider>()) Destroy(stale);
+            var box = tile.AddComponent<BoxCollider>();
+            box.center = new Vector3(0f, 0.05f, 0f);
+            box.size = new Vector3(BattleArenaView.TileSize, 0.1f, BattleArenaView.TileSize);
+            return tile;
         }
 
         private void PlaceCoverProp(int x, int y, string cover, WorldPos world)
@@ -379,6 +437,11 @@ namespace Game.Gameplay
                 go = prefab != null ? Instantiate(prefab, _unitRoot) : GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 go.name = "unit:" + unit.Id;
                 go.transform.SetParent(_unitRoot, false);
+                // Полірування (ціль 3 «Бойові декорації», owner: "units
+                // scaled up to read well"): Kenney Mini Characters дрібні
+                // проти клітини 1×1 — на камері зверху фігура губилась між
+                // підписом і кільцем сторони.
+                go.transform.localScale = Vector3.one * UnitVisualScale;
 
                 // Модель Kenney може нести власні колайдери на дочірніх об'єктах —
                 // прибираємо їх усі й тримаємо РІВНО один, на корені, з відомим
@@ -433,6 +496,22 @@ namespace Game.Gameplay
             }
         }
 
+        /// <summary>
+        /// Фікс-ревью (ціль А «Бойові декорації», owner: "readable name labels
+        /// that don't cover neighbours" — знайдено тур-автоплеєм): фіксований
+        /// <c>characterSize=0.1</c> давав ширину підпису, що росте прямо
+        /// пропорційно довжині імені, без стелі. На тісному строю (два
+        /// сусідні тайли — 1 світова одиниця) довгі імена на кшталт
+        /// "Розвідник орди"/"Застрільник орди" налягали на сусідній підпис
+        /// суцільним нечитабельним текстом. Обидва фікси тут:
+        /// (1) <see cref="UnitVisualScale"/> тепер масштабує саму фігуру —
+        /// підпис контр-масштабується на той самий множник, щоб не рости
+        /// разом з нею (інакше довгі імена стали б ще ширшими, ніж до
+        /// збільшення юнітів); (2) розмір символу обернено пропорційний
+        /// довжині імені — короткі імена лишаються великими (стеля = старий
+        /// дефолт 0.1), довгі стають дрібнішими, і сумарна ширина підпису
+        /// тримається приблизно в межах одного тайла незалежно від довжини.
+        /// </summary>
         private void BuildNameLabel(GameObject unitGo, BattleUnitView unit)
         {
             var label = new GameObject("label");
@@ -442,14 +521,20 @@ namespace Game.Gameplay
             // поворот 90° по X) — підпис лежить лицем угору, а не крутиться до
             // камери: той самий підхід, що KitBuilder.Plot для ізометрії хаба.
             label.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            // Батько (unitGo) тепер масштабований на UnitVisualScale — без
+            // контр-масштабу тут підпис ріс би разом із фігурою.
+            label.transform.localScale = Vector3.one / UnitVisualScale;
+
+            string name = ResolveDisplayNameInternal(unit);
+            int len = Mathf.Max(name != null ? name.Length : 0, 9);
 
             var text = label.AddComponent<TextMesh>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.fontSize = 32;
-            text.characterSize = 0.1f;
+            text.characterSize = Mathf.Clamp(0.75f / len, 0.04f, 0.095f);
             text.anchor = TextAnchor.MiddleCenter;
             text.color = Color.white;
-            text.text = ResolveDisplayNameInternal(unit);
+            text.text = name;
 
             var renderer = label.GetComponent<MeshRenderer>();
             if (renderer != null && text.font != null) renderer.sharedMaterial = text.font.material;
@@ -523,8 +608,13 @@ namespace Game.Gameplay
         /// </summary>
         private void ApplyTileTint(GameObject tile, string key, string cover, bool walkable, bool isReachable, bool isCurrent, bool isHovered)
         {
-            var renderer = tile.GetComponent<Renderer>();
-            if (renderer == null) return;
+            // Фікс-ревью (major, знайдено QA): тайл тепер може бути моделлю
+            // Kenney (§BuildTileGameObject), не гарантовано ОДНИМ рендером,
+            // як був голий Quad — той самий MaterialPropertyBlock іде на всі
+            // рендери під коренем, інакше частина меша лишалась би в
+            // кольорі матеріалу за замовчуванням, поки решта фарбувалась.
+            var renderers = tile.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return;
 
             var tint = BattleArenaView.TintFor(cover, walkable, isReachable, isCurrent, isHovered);
             if (!_tileBlocks.TryGetValue(key, out var block) || block == null)
@@ -534,7 +624,7 @@ namespace Game.Gameplay
             }
             block.Clear();
             block.SetColor("_BaseColor", new Color(tint.R, tint.G, tint.B, tint.A));
-            renderer.SetPropertyBlock(block);
+            foreach (var renderer in renderers) renderer.SetPropertyBlock(block);
         }
 
         private void ApplyUnitVisual(GameObject go, BattleUnitView unit)

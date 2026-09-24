@@ -7,6 +7,7 @@ using Game.Core.Checks;
 using Game.Core.Items;
 using Game.Core.Session;
 using Game.Core.Session.Views;
+using Game.Core.Stats;
 using Game.Gameplay.Text;
 
 namespace Game.Gameplay.UI
@@ -129,6 +130,16 @@ namespace Game.Gameplay.UI
             string path = option.Path == IncidentPathView.Bloody
                 ? UkrainianText.Get("ui.decision.path.bloody", gender)
                 : UkrainianText.Get("ui.decision.path.quiet", gender);
+
+            // Полірування (ціль 6 «Рішення», owner: "the option text says so
+            // (тактичний бій: N ворогів), not just a skill threshold"): такий
+            // вузол не має порогу навички взагалі (перевірка не
+            // викликається — кроваво завжди бій), тож звичайний шаблон
+            // "{skill} ≥ {threshold}" тут би збрехав про механіку.
+            if (option.TacticalBattleEnemyCount > 0)
+                return UkrainianText.Format("ui.decision.option_line.battle", gender,
+                    "path", path, "count", option.TacticalBattleEnemyCount.ToString());
+
             string skill = SkillLabel(option.SkillKey, gender);
             string candidate = option.HasCandidate
                 ? UkrainianText.Format("ui.decision.candidate", gender, "name", ResolveCompanionName(option.BestActorId, gender, null))
@@ -281,6 +292,58 @@ namespace Game.Gameplay.UI
             }
         }
 
+        /// <summary>
+        /// Полірування (ціль 2 «Прозорість дій»): «золото/матеріали, N діб» —
+        /// той самий рядок, що і в OrderBuilding-фідбеку, але ДО кліку, поруч
+        /// із назвою будівлі, а не лише постфактум у LastMessage.
+        /// </summary>
+        public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g)
+        {
+            if (def == null) return string.Empty;
+            string cost = def.MaterialsCost > 0
+                ? UkrainianText.Format("ui.buildings.cost_both", g,
+                    "gold", def.GoldCost.ToString(), "materials", def.MaterialsCost.ToString())
+                : UkrainianText.Format("ui.buildings.cost_gold", g, "gold", def.GoldCost.ToString());
+            return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", def.Days.ToString());
+        }
+
+        /// <summary>
+        /// Коротка назва статy для рядка "Покращує: ..." — skill./attr. для
+        /// тих осей (той самий текст, що й картка персонажа), "ui.stat.&lt;x&gt;"
+        /// для похідних (Армія/Точність/...). Ніколи не сире ім'я enum'а.
+        /// </summary>
+        public static string StatKeyLabel(StatKey key, Gender g)
+        {
+            if (StatKeys.TryToAttribute(key, out var a)) return UkrainianText.Get("attr." + a.ToString().ToLowerInvariant(), g);
+            if (StatKeys.TryToSkill(key, out var s)) return UkrainianText.Get("skill." + Game.Core.Stats.Skills.KeyId(s), g);
+            string shortKey = "ui.stat." + key.ToString().ToLowerInvariant();
+            return UkrainianText.Has(shortKey, g) ? UkrainianText.Get(shortKey, g) : key.ToString();
+        }
+
+        /// <summary>Рядок "Броня +1, Живучість +1" — усі статMods предмета, той самий підпис для "Покращує:" на схованці.</summary>
+        public static string ItemStatSummary(ItemInstance item, Gender g)
+        {
+            if (item == null) return string.Empty;
+            var parts = new List<string>();
+            foreach (var m in item.StatMods)
+            {
+                string sign = m.Value >= 0 ? "+" : "";
+                parts.Add(StatKeyLabel(m.Key, g) + " " + sign + m.Value.ToString("0.#"));
+            }
+            return parts.Count == 0 ? UkrainianText.Get("ui.sheet.none", g) : string.Join(", ", parts);
+        }
+
+        /// <summary>Рядок "Броня 1→2, Живучість 1→2" — CraftSystem.PreviewUpgrade без мутації предмета.</summary>
+        public static string CraftPreviewText(IReadOnlyList<Game.Core.Items.StatPreviewLine> preview, Gender g)
+        {
+            if (preview == null || preview.Count == 0) return string.Empty;
+            var parts = new List<string>();
+            foreach (var line in preview)
+                parts.Add(UkrainianText.Format("ui.gear.craft_preview", g,
+                    "stat", StatKeyLabel(line.Key, g), "before", line.Before.ToString(), "after", line.After.ToString()));
+            return string.Join(", ", parts);
+        }
+
         public static string BuildResultText(BuildOrderResult r, Gender g)
         {
             switch (r)
@@ -422,6 +485,8 @@ namespace Game.Gameplay.UI
                 "favored", faction, "scarId", scar, "questId", quest, "arcId", chapter,
                 "attackerId", ResolveCompanionName(Arg(a, "attackerId"), gender, roster),
                 "targetId", ResolveCompanionName(Arg(a, "targetId"), gender, roster),
+                "trigger", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
+                "triggerId", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
                 "incidentId", ContentLabel("incident", Arg(a, "incidentId"), gender),
                 "resource", ContentLabel("resource", Arg(a, "resource"), gender),
             };
@@ -498,6 +563,86 @@ namespace Game.Gameplay.UI
             var parts = new List<string>();
             foreach (var kv in args) parts.Add(kv.Key + "=" + kv.Value);
             return key + " (" + string.Join(", ", parts) + ")";
+        }
+
+        // ===================== стрічка подій: згортання дублів =====================
+
+        /// <summary>Один рядок готової до показу стрічки — текст і скільки разів він повторився ПІДРЯД.</summary>
+        public sealed class FeedLine
+        {
+            public string Text;
+            public int Count;
+
+            /// <summary>
+            /// Фікс-ревью (minor, знайдено QA): групова реакція складу
+            /// (roster.rippled.*) — той самий шаблон, той самий тригер, але
+            /// РІЗНИЙ підмет (companionId), тож звичайне ×N-згортання вище
+            /// (порівняння за вже резолвненим текстом, де ім'я вже вшите) їх
+            /// не бачить: п'ять "Мирослава: ... мовчки слухає ..." рядків з
+            /// різними іменами топили невелику панель стрічки. Імена решти
+            /// реагуючих — тут, а не в <see cref="Text"/>: перший рядок
+            /// лишається граматично цілим (однина дієслова), решта учасників
+            /// дописуються окремим переліком (GameShell.DrawEventFeed).
+            /// </summary>
+            public List<string> AlsoNames;
+        }
+
+        /// <summary>
+        /// Ціль 5 «Якість стрічки» (owner feedback): кілька ідентичних рядків
+        /// підряд (напр. ряба по кільком напарникам з однаковим типом зв'язку,
+        /// або "Ніч минає спокійно" кілька фаз поспіль) згортаються в один із
+        /// «×N» замість того, щоб топити стрічку повторами. Порядок — той
+        /// самий, що GameShell.DrawEventFeed малював раніше (найновіше
+        /// зверху): DayLog зберігає хронологічний порядок, тут ідемо з кінця.
+        /// Порівняння — за вже РЕЗОЛВНЕНИМ текстом (не за ключем/аргументами
+        /// події): два різні ключі, що випадково дали однаковий рядок, теж
+        /// мають право згорнутись — гравець бачить текст, не машинерію.
+        /// </summary>
+        public static List<FeedLine> BuildFeedLines(IReadOnlyList<GameEvent> log, Gender gender, RosterView roster)
+        {
+            var result = new List<FeedLine>();
+            if (log == null) return result;
+            GameEvent prevEvt = null;
+            for (int i = log.Count - 1; i >= 0; i--)
+            {
+                var evt = log[i];
+                string text = EventLine(evt, gender, roster);
+                if (string.IsNullOrEmpty(text)) continue;
+
+                if (result.Count > 0 && result[result.Count - 1].Text == text)
+                {
+                    result[result.Count - 1].Count++;
+                }
+                else if (result.Count > 0 && IsGroupReactionOf(prevEvt, evt))
+                {
+                    // Той самий тригер/подія, інший реагуючий підмет (див.
+                    // FeedLine.AlsoNames) — не новий рядок, а ім'я до вже
+                    // доданого.
+                    var last = result[result.Count - 1];
+                    if (last.AlsoNames == null) last.AlsoNames = new List<string>();
+                    last.AlsoNames.Add(ResolveCompanionName(Arg(evt.Args, "companionId"), gender, roster));
+                }
+                else
+                {
+                    result.Add(new FeedLine { Text = text, Count = 1 });
+                }
+                prevEvt = evt;
+            }
+            return result;
+        }
+
+        /// <summary>Див. <see cref="FeedLine.AlsoNames"/>: групова реакція — той самий ключ і той самий triggerId, інший companionId.</summary>
+        private static bool IsGroupReactionOf(GameEvent prev, GameEvent evt)
+        {
+            if (prev == null || evt == null) return false;
+            if (!string.Equals(prev.Key, evt.Key, System.StringComparison.Ordinal)) return false;
+            if (prev.Key == null || !prev.Key.StartsWith("roster.rippled.", System.StringComparison.Ordinal)) return false;
+            string prevTrigger = Arg(prev.Args, "triggerId");
+            string evtTrigger = Arg(evt.Args, "triggerId");
+            if (string.IsNullOrEmpty(prevTrigger) || !string.Equals(prevTrigger, evtTrigger, System.StringComparison.Ordinal)) return false;
+            string prevSubject = Arg(prev.Args, "companionId");
+            string evtSubject = Arg(evt.Args, "companionId");
+            return !string.Equals(prevSubject, evtSubject, System.StringComparison.Ordinal);
         }
     }
 }

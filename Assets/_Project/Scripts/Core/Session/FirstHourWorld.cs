@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Characters.Progression;
+using Game.Core.Characters.Traits;
 using Game.Core.Checks;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
@@ -250,37 +251,47 @@ namespace Game.Core.Session
         {
             var roster = new Roster();
 
+            // Стартові трейти (полірування, ціль 1 «Картка персонажа»):
+            // Game.Core.Characters.Traits.DefaultTraits — інакше секція
+            // "Трейти" картки персонажа порожня для всього іменного касту.
             roster.Add(Named("zakhar", OpeningCast.Zakhar(), cfg, arch => arch
                 .SetAttribute(AttributeType.Will, 6).SetAttribute(AttributeType.Wits, 5)
                 .SetAttribute(AttributeType.Strength, 3).SetAttribute(AttributeType.Agility, 3)
                 .SetSkill(SkillType.Persuade, 8).SetSkill(SkillType.Tactics, 5)
-                .SetSkill(SkillType.Intimidate, 3).SetSkill(SkillType.Trade, 3)));
+                .SetSkill(SkillType.Intimidate, 3).SetSkill(SkillType.Trade, 3)
+                .AddStartingTrait(DefaultTraits.Steadfast())));
 
             roster.Add(Named("keeper", OpeningCast.Keeper(), cfg, arch => arch
                 .SetAttribute(AttributeType.Strength, 5).SetAttribute(AttributeType.Wits, 4)
                 .SetAttribute(AttributeType.Will, 4).SetAttribute(AttributeType.Agility, 3)
                 .SetSkill(SkillType.Survival, 8).SetSkill(SkillType.Trade, 7)
-                .SetSkill(SkillType.Persuade, 4)));
+                .SetSkill(SkillType.Persuade, 4)
+                .AddStartingTrait(DefaultTraits.Meticulous())));
 
             roster.Add(Named("healer", OpeningCast.Healer(), cfg, arch => arch
                 .SetAttribute(AttributeType.Wits, 6).SetAttribute(AttributeType.Will, 5)
                 .SetAttribute(AttributeType.Agility, 4).SetAttribute(AttributeType.Strength, 3)
                 .SetSkill(SkillType.Medicine, 8).SetSkill(SkillType.Survival, 4)
-                .SetSkill(SkillType.Persuade, 3)));
+                .SetSkill(SkillType.Persuade, 3)
+                .AddStartingTrait(DefaultTraits.Blunt())));
 
             // Максим Беркут — Persuade 4 / Tactics 4, Melee 6 / Survival 5 (§3.0).
             roster.Add(Named("maksym", OpeningCast.Maksym(), cfg, arch => arch
                 .SetAttribute(AttributeType.Strength, 6).SetAttribute(AttributeType.Agility, 5)
                 .SetAttribute(AttributeType.Wits, 4).SetAttribute(AttributeType.Will, 5)
                 .SetSkill(SkillType.Melee, 6).SetSkill(SkillType.Survival, 5)
-                .SetSkill(SkillType.Tactics, 4).SetSkill(SkillType.Persuade, 4)));
+                .SetSkill(SkillType.Tactics, 4).SetSkill(SkillType.Persuade, 4)
+                .AddStartingTrait(DefaultTraits.Steadfast())
+                .AddStartingTrait(DefaultTraits.HotBlooded())));
 
             // Мирослава — Persuade 5, Ranged 6 / Trade 4 (§3.0).
             roster.Add(Named("myroslava", OpeningCast.Myroslava(), cfg, arch => arch
                 .SetAttribute(AttributeType.Agility, 6).SetAttribute(AttributeType.Wits, 5)
                 .SetAttribute(AttributeType.Will, 4).SetAttribute(AttributeType.Strength, 3)
                 .SetSkill(SkillType.Ranged, 6).SetSkill(SkillType.Persuade, 5)
-                .SetSkill(SkillType.Trade, 4)));
+                .SetSkill(SkillType.Trade, 4)
+                .AddStartingTrait(DefaultTraits.Wary())
+                .AddStartingTrait(DefaultTraits.SharpEyed())));
 
             // Протагонист: сборный старт-плейсхолдер. Полноценное создание
             // (R12, ProtagonistCreation/Backgrounds) — работа пакета B7, ещё не

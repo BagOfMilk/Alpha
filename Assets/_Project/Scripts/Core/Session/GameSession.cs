@@ -5,6 +5,7 @@ using Game.Core.Balance;
 using Game.Core.Characters;
 using Game.Core.Characters.Build;
 using Game.Core.Characters.Creation;
+using Game.Core.Characters.Perks;
 using Game.Core.Characters.Progression;
 using Game.Core.Checks;
 using Game.Core.Combat;
@@ -20,6 +21,7 @@ using Game.Core.Quests;
 using Game.Core.Randomness;
 using Game.Core.Scenes;
 using Game.Core.Session.Views;
+using Game.Core.Stats;
 using Game.Core.Story;
 using Game.Core.World;
 using BaseState = Game.Core.Base.BaseState;
@@ -58,6 +60,15 @@ namespace Game.Core.Session
     public sealed class GameSession
     {
         public const string ProtagonistId = FirstHourWorld.ProtagonistId;
+
+        /// <summary>
+        /// Полірування (ціль 6 «Рішення»): ворог вузла 1 (кроваво) — одна
+        /// назва в ОБОХ місцях, що його читають (BuildBattleSetup виклику
+        /// нижче й DecisionOptionView.TacticalBattleEnemyCount у
+        /// BuildPendingOfferView), замість двох незалежних літералів "2",
+        /// які могли б розійтись при правці контенту.
+        /// </summary>
+        private static readonly string[] Node1BloodyEnemyIds = { "horde_scout", "horde_scout" };
 
         public SessionState State { get; private set; } = SessionState.Title;
 
@@ -582,7 +593,10 @@ namespace Game.Core.Session
             if (approach == ExpeditionApproach.Delve)
             {
                 var rooms = DefaultDungeon.Rooms(siteId);
-                var firstRoom = rooms != null && rooms.Count > 0 ? BuildDungeonRoomView(rooms[0]) : null;
+                // Прев'ю (owner: "the quiet candidate"): _dungeon ще НЕ
+                // існує до реального DepartExpedition — companionIds
+                // параметра (та сама майбутня партія) і є "партія" на цей момент.
+                var firstRoom = rooms != null && rooms.Count > 0 ? BuildDungeonRoomView(rooms[0], companionIds) : null;
                 return new ExpeditionPreviewView { SiteId = siteId, Approach = approach, IsDelve = true, FirstRoom = firstRoom, Days = 2 };
             }
 
@@ -919,7 +933,7 @@ namespace Game.Core.Session
                 _processor.Fear?.Remember(_processor.CurrentDay, _cfg.Checks);
 
                 var setup = BuildBattleSetup(new[] { ProtagonistId, "maksym", "myroslava" },
-                    new[] { "horde_scout", "horde_scout" }, 8, 8);
+                    Node1BloodyEnemyIds, 8, 8);
                 RequestBattle(setup, SuspendReason.PassVanguardBloody, SessionState.Decision);
                 return null;
             }
@@ -1002,6 +1016,20 @@ namespace Game.Core.Session
             }
 
             return _lastDayReport;
+        }
+
+        /// <summary>
+        /// Полірування (ціль 6 «Рішення», owner: "тактичний бій: N ворогів"):
+        /// прев'ю кількості ворогів кровавого шляху фіналу ДО кліку — та
+        /// сама чиста функція (<see cref="Finale.BuildAssault"/>), що
+        /// <see cref="ResolveFinale"/> викликає для реального бою; викликати
+        /// її двічі безпечно (жодної мутації стану, лише читає Готовність).
+        /// </summary>
+        public int GetFinaleEnemyCount()
+        {
+            bool myroslavaDefected = _flags.Get(PassVanguardOutcome.DefectorSeededFlag);
+            var plan = Finale.BuildAssault(_readiness.Band, myroslavaDefected ? "myroslava" : null, _cfg.Readiness);
+            return plan.EnemyDefinitionIds.Count;
         }
 
         public DayReportView ResolveFinale(IncidentPath path)
@@ -1239,11 +1267,21 @@ namespace Game.Core.Session
                 UnbankedMaterials = _dungeon.UnbankedMaterials,
                 CurrentRoom = _dungeon.CurrentCleared ? null : BuildDungeonRoomView(_dungeon.CurrentRoom),
                 Outcome = _dungeon.Outcome.ToString(),
-                AwaitingBattle = _dungeon.AwaitingBattle
+                AwaitingBattle = _dungeon.AwaitingBattle,
+                PartyIds = _dungeon.PartyIds
             };
         }
 
-        private DungeonRoomView BuildDungeonRoomView(DungeonRoomDefinition room)
+        /// <summary>
+        /// <paramref name="partyIdsOverride"/> — фіксує ПАРТІЮ ДЛЯ КАНДИДАТА
+        /// тихого обходу: null (дефолт) означає "жива партія поточного
+        /// прогону данжу" (<c>_dungeon.PartyIds</c>); PreviewExpedition
+        /// передає МАЙБУТНЮ партію (companionIds параметра), бо викликає цей
+        /// метод ДО DepartExpedition, коли <c>_dungeon</c> ще null —
+        /// фікс-ревью (блокер, знайдено тур-автоплеєм): без override тут
+        /// падав NullReferenceException на КОЖЕН прев'ю вилазки-данжу.
+        /// </summary>
+        private DungeonRoomView BuildDungeonRoomView(DungeonRoomDefinition room, IReadOnlyList<string> partyIdsOverride = null)
         {
             if (room == null) return null;
 
@@ -1251,7 +1289,10 @@ namespace Game.Core.Session
             {
                 Id = room.Id,
                 DisplayName = room.DisplayNameKey,
-                Type = room.Kind == DungeonRoomKind.Cache ? "Treasure" : room.Kind.ToString()
+                Type = room.Kind == DungeonRoomKind.Cache ? "Treasure" : room.Kind.ToString(),
+                // Ціль 6 «Рішення»: "тактичний бій: N ворогів" у самому тексті
+                // варіанту кроваво, не лише поріг тихого обходу поруч.
+                EnemyCount = room.EnemyIds?.Count ?? 0
             };
 
             if (room.Kind == DungeonRoomKind.Combat && room.QuietChecks.Count > 0)
@@ -1260,6 +1301,22 @@ namespace Game.Core.Session
                 view.HasQuietBypass = true;
                 view.QuietSkillKey = req.Skill.Id;
                 view.QuietThreshold = _dungeon != null ? _dungeon.EffectiveQuietThreshold(req) : req.Threshold;
+
+                // Ціль 6 «Рішення» (owner: "the quiet candidate"): найкращий
+                // член ПАРТІЇ (не всього ростеру — інші лишились вдома) для
+                // цього скіла/підходу, та сама формула (ISettlementActor.
+                // GetCheckValue), що резолвить сам обхід.
+                var partyIds = partyIdsOverride ?? _dungeon?.PartyIds;
+                var party = ResolveActors(partyIds);
+                string bestId = null;
+                int bestValue = int.MinValue;
+                foreach (var actor in party)
+                {
+                    int v = actor.GetCheckValue(req.Skill, req.Approach);
+                    if (v > bestValue) { bestValue = v; bestId = actor.Id; }
+                }
+                view.QuietBestActorId = bestId;
+                view.QuietHasCandidate = bestId != null;
             }
 
             if (room.Kind == DungeonRoomKind.Event)
@@ -1722,6 +1779,97 @@ namespace Game.Core.Session
             return new RosterView { Companions = list };
         }
 
+        /// <summary>
+        /// Повна картка персонажа (полірування, ціль 1 «Картка персонажа»):
+        /// 4 атрибути, 10 скілів, активні трейти, шрами, доступні перки,
+        /// рівень/xp, стан, лояльність-БАНД, спорядження, ключові похідні
+        /// бойові стати — усе одним StatSnapshot (<see cref="Companion.Resolve"/>),
+        /// тим самим агрегатором, що й бій, щоб картка й арена не розходились
+        /// у числах. Null, якщо такого companionId немає в ростері.
+        /// </summary>
+        public Views.CharacterSheetView GetCharacterSheet(string companionId)
+        {
+            var c = _worldRoster?.Get(companionId);
+            if (c == null) return null;
+
+            var snapshot = c.Resolve(_cfg);
+
+            var attributes = new List<Views.AttributeLineView>();
+            foreach (var a in Stats.Attributes.All)
+                attributes.Add(new Views.AttributeLineView { AttributeKey = a.ToString().ToLowerInvariant(), Score = snapshot.Attribute(a) });
+
+            var skills = new List<Views.SkillLineView>();
+            foreach (var s in Stats.Skills.All)
+                skills.Add(new Views.SkillLineView { SkillKey = Stats.Skills.KeyId(s), Score = snapshot.Skill(s) });
+
+            var traits = new List<Views.TraitLineView>();
+            foreach (var t in c.Traits.Active)
+                traits.Add(new Views.TraitLineView { TraitId = t.Id, Polarity = t.Polarity.ToString() });
+
+            var scarIds = new List<string>();
+            foreach (var sc in c.Scars.Scars) scarIds.Add(sc.Id);
+
+            var unlockedPerkIds = new List<string>();
+            foreach (var p in c.Perks.Taken) unlockedPerkIds.Add(p.Id);
+
+            var availablePerks = new List<Views.PerkPreviewLineView>();
+            foreach (var p in Characters.Perks.DefaultPerks.All())
+            {
+                if (c.Perks.Has(p.Id)) continue;
+                var verdict = c.Perks.Evaluate(p, c.Skills);
+                availablePerks.Add(new Views.PerkPreviewLineView
+                {
+                    PerkId = p.Id,
+                    Available = verdict == Characters.Perks.PerkAvailability.Available,
+                    ReasonKey = PerkReasonKey(verdict)
+                });
+            }
+
+            return new Views.CharacterSheetView
+            {
+                CompanionId = c.Id,
+                Level = c.Level,
+                Xp = c.Xp,
+                XpToNextLevel = Balance.ProgressionMath.XpToNext(c.Level, _cfg),
+                Status = c.Status,
+                Loyalty = c.Card != null && c.Card.CanBeCompanion ? (LoyaltyBand?)c.LoyaltyBand : null,
+                Attributes = attributes,
+                Skills = skills,
+                Traits = traits,
+                ScarIds = scarIds,
+                UnlockedPerkIds = unlockedPerkIds,
+                AvailablePerks = availablePerks,
+                Combat = new Views.CombatStatsView
+                {
+                    HpMax = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.MaxHp)),
+                    ApMax = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.MaxAp)),
+                    Initiative = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Initiative)),
+                    Accuracy = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Accuracy)),
+                    Defense = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Defense)),
+                    Armor = snapshot.GetInt(Stats.StatKeys.Of(Stats.DerivedStat.Armor)),
+                    CritChance = (int)System.Math.Round(snapshot.Get(Stats.StatKeys.Of(Stats.DerivedStat.CritChance)) * 100.0)
+                },
+                Equipment = new Views.EquipmentSheetView
+                {
+                    WeaponId = c.Equipment.Get(EquipSlot.Weapon)?.Definition.Id,
+                    ArmorId = c.Equipment.Get(EquipSlot.Armor)?.Definition.Id,
+                    AccessoryId = c.Equipment.Get(EquipSlot.Accessory)?.Definition.Id
+                }
+            };
+        }
+
+        private static string PerkReasonKey(Characters.Perks.PerkAvailability verdict)
+        {
+            switch (verdict)
+            {
+                case Characters.Perks.PerkAvailability.SkillTooLow: return "ui.reason.perk.skill_too_low";
+                case Characters.Perks.PerkAvailability.MissingPrerequisite: return "ui.reason.perk.missing_prerequisite";
+                case Characters.Perks.PerkAvailability.AlreadyTaken: return "ui.reason.perk.already_taken";
+                case Characters.Perks.PerkAvailability.Invalid: return "ui.reason.perk.invalid";
+                default: return null;
+            }
+        }
+
         public SignalsFeed GetSignalsFeed()
         {
             var lines = new List<SignalLineView>();
@@ -2114,6 +2262,10 @@ namespace Game.Core.Session
         {
             if (pd == null) return null;
 
+            // pd.TopicId несе префікс "incident." (для ключів тексту), а
+            // ResolveIncident розпізнає вузол 1 за pd.IncidentId (сирий,
+            // без префіксу) — та сама пара полів, порівнюємо тим самим.
+            bool isNode1 = string.Equals(pd.IncidentId, "pass_vanguard", StringComparison.Ordinal);
             var options = new List<DecisionOptionView>();
             foreach (var opt in pd.Options)
             {
@@ -2125,7 +2277,11 @@ namespace Game.Core.Session
                     Form = opt.Form.ToString(),
                     BestActorId = opt.BestActorId,
                     HasCandidate = opt.HasCandidate,
-                    ExpectedBand = opt.ExpectedBand.ToString()
+                    ExpectedBand = opt.ExpectedBand.ToString(),
+                    // Ціль 6 «Рішення»: вузол 1 кроваво — ЗАВЖДИ тактичний бій
+                    // (Node1BloodyEnemyIds, не перевірка), а не поріг навички —
+                    // гравець має побачити це в самому тексті варіанту.
+                    TacticalBattleEnemyCount = (isNode1 && opt.Path == IncidentPath.Bloody) ? Node1BloodyEnemyIds.Length : 0
                 });
             }
 
@@ -2331,11 +2487,21 @@ namespace Game.Core.Session
             LogRipple(ripple);
         }
 
+        /// <summary>
+        /// Фікс-ревью (полірування, ціль 5 «Якість стрічки»): ключ обирається
+        /// з типу зв'язку (Kinship/Friction/Neutral) × причини (загибель/
+        /// зрада) — шість варіантів у UkrainianText, кожен використовує
+        /// companionId (хто реагує) і triggerId (хто загинув/зрадив), а не
+        /// один безликий рядок на всю ряб.
+        /// </summary>
         private void LogRipple(RippleReport report)
         {
             if (report == null) return;
+            string suffix = report.Betrayal ? "betrayal" : "death";
             foreach (var effect in report.Effects)
-                LogEvent("roster.rippled", Args("companionId", effect.CompanionId, "kinship", effect.Bond.ToString()));
+                LogEvent("roster.rippled." + effect.Bond.ToString().ToLowerInvariant() + "." + suffix,
+                    Args("companionId", effect.CompanionId, "triggerId", report.TriggerId,
+                        "kinship", effect.Bond.ToString(), "band", effect.Band.ToString()));
         }
 
         private Combat.PlayerUnitSource ResolvePlayerUnit(string companionId)
@@ -2414,21 +2580,67 @@ namespace Game.Core.Session
                     py += 2;
                 }
 
-            int ey = 1;
-            if (enemyIds != null)
-                foreach (var id in enemyIds)
-                {
-                    setup.EnemyUnits.Add(new EnemySpawn(id, new GridPos(width - 2, ey)));
-                    ey += 2;
-                }
+            int nextEnemyRow = PlaceEnemyFormation(setup, enemyIds, width);
 
             if (!string.IsNullOrEmpty(defectorCompanionId))
             {
                 setup.DefectorCompanionId = defectorCompanionId;
-                setup.DefectorPos = new GridPos(width - 2, ey);
+                // Зрадник стає окремим "рядом" за тим самим стовпцем A, що й
+                // останній парний ворог — так само отримує укриття (owner:
+                // "sensible formations with cover"), а не голе поле.
+                int x = width - 2;
+                var pos = new GridPos(x, nextEnemyRow);
+                setup.DefectorPos = pos;
+                setup.Cover.Add(new CoverPlacement(pos, Direction.West, CoverType.Half));
             }
 
             return setup;
+        }
+
+        /// <summary>
+        /// Полірування (ціль 3 «Бойові декорації», owner: "Enemy deployments
+        /// must be sensible formations with cover (not a single column)").
+        /// Раніше ВСІ ворожі юніти стояли одним прямим стовпцем x=width-2, а
+        /// укриття на всю арену було ОДНЕ, декоративне, у центрі мапи —
+        /// нікого конкретно не захищало (CoverPlacement живе на тайлі
+        /// ЗАХИСНИКА, GridMap.CoverAgainst, а не на сусідньому тайлі).
+        ///
+        /// Тепер — зигзаг у ДВА стовпці (A=width-2, B=width-4): парні індекси
+        /// (0,2,4,…) — стовпець A, непарні (1,3,5,…) — стовпець B, ряд
+        /// зростає кожні дві позиції.
+        ///
+        /// Укриття — навмисно НЕ на кожному ворозі: емпірично перевірено
+        /// (Row33_Overwatch_Triggered_UnderBloodyPolicy, 5×15-денний
+        /// бот-прогін), що укриття на КОЖНОМУ ворозі змінює бойовий розрахунок
+        /// ІІ настільки, що дозор жодного разу не спрацьовує за весь прогін —
+        /// AI (Core/Combat/CombatAi.cs, крок 8 "TryImprovePosition") починає
+        /// щоразу знаходити "кращу позицію" замість того, щоб дійти до кроку 9
+        /// (дозор як останній засіб). Непарний індекс (Full-укриття) —
+        /// найменша зміна, що й дає формацію "не один стовпець", і зберігає
+        /// дозор спостережуваним. Повертає наступний вільний ряд Y у
+        /// стовпці A (для зрадника фіналу).
+        /// </summary>
+        private static int PlaceEnemyFormation(BattleSetup setup, IReadOnlyList<string> enemyIds, int width)
+        {
+            if (enemyIds == null || enemyIds.Count == 0) return 1;
+
+            int colA = width - 2;
+            int colB = width - 4 >= 3 ? width - 4 : colA; // замалі арени — деградуємо до одного стовпця, а не негативних X
+
+            for (int i = 0; i < enemyIds.Count; i++)
+            {
+                int pairIndex = i / 2;
+                int y = 1 + pairIndex * 2;
+                int x = (i % 2 == 0 || colB == colA) ? colA : colB;
+                var pos = new GridPos(x, y);
+
+                setup.EnemyUnits.Add(new EnemySpawn(enemyIds[i], pos));
+                if (i % 2 == 1)
+                    setup.Cover.Add(new CoverPlacement(pos, Direction.West, CoverType.Full));
+            }
+
+            int lastPairIndex = (enemyIds.Count - 1) / 2;
+            return 1 + (lastPairIndex + 1) * 2; // наступний вільний ряд після останньої пари
         }
 
         /// <summary>

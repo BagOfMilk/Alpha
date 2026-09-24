@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Game.Core.Base;
+using Game.Core.Characters;
 using Game.Core.Combat;
 using Game.Core.Dungeons;
 using Game.Core.Items;
@@ -142,7 +143,138 @@ namespace Game.Tests.EditMode
             Assert.IsNull(s.GetBattleView());
         }
 
+        // ==== Полірування (ціль 1 «Картка персонажа»): GetCharacterSheet ====
+
+        [Test]
+        public void GetCharacterSheet_UnknownCompanion_ReturnsNull()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            Assert.IsNull(s.GetCharacterSheet("no_such_companion"));
+        }
+
+        [Test]
+        public void GetCharacterSheet_Maksym_HasFourAttributesTenSkillsAndStartingTraits()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var sheet = s.GetCharacterSheet("maksym");
+            Assert.IsNotNull(sheet);
+            Assert.AreEqual("maksym", sheet.CompanionId);
+            Assert.AreEqual(4, sheet.Attributes.Count, "чотири атрибути (Сила/Спритність/Кмітливість/Воля)");
+            Assert.AreEqual(10, sheet.Skills.Count, "десять скілів");
+            Assert.AreEqual(1, sheet.Level);
+            Assert.AreEqual(CompanionStatus.Idle, sheet.Status, "Максим у полі — не на посту (§3.0)");
+            Assert.IsNotNull(sheet.Loyalty, "Максим — напарник, Loyalty не null");
+
+            // Стартові трейти (DefaultTraits, FirstHourWorld.BuildRoster): steadfast+hot_blooded.
+            var traitIds = new List<string>();
+            foreach (var t in sheet.Traits) traitIds.Add(t.TraitId);
+            CollectionAssert.Contains(traitIds, "steadfast");
+            CollectionAssert.Contains(traitIds, "hot_blooded");
+
+            Assert.IsNotNull(sheet.Combat);
+            Assert.Greater(sheet.Combat.HpMax, 0);
+            Assert.Greater(sheet.Combat.ApMax, 0);
+
+            Assert.IsNull(sheet.Equipment.WeaponId, "нічого не надіто на старті");
+        }
+
+        [Test]
+        public void GetCharacterSheet_Protagonist_HasNoStartingTraits()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var sheet = s.GetCharacterSheet(GameSession.ProtagonistId);
+            Assert.IsNotNull(sheet);
+            Assert.AreEqual(0, sheet.Traits.Count, "протагоніст — кастомна збірка (R12), стартових трейтів архетипу немає");
+        }
+
+        [Test]
+        public void GetCharacterSheet_Equip_ReflectsInEquipmentSlots()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var stash = s.GetStash();
+            Assert.IsNotNull(stash);
+            ItemInstance weapon = null;
+            foreach (var it in stash) if (it.Slot == EquipSlot.Weapon) { weapon = it; break; }
+
+            if (weapon == null)
+                Assert.Ignore("У стартовому сташі немає предмета в слот Weapon — нема що екіпірувати цим тестом.");
+
+            Assert.IsTrue(s.Equip("maksym", weapon.InstanceId, EquipSlot.Weapon));
+            var sheet = s.GetCharacterSheet("maksym");
+            Assert.AreEqual(weapon.Definition.Id, sheet.Equipment.WeaponId);
+        }
+
+        [Test]
+        public void GetCharacterSheet_AvailablePerks_MarksSkillTooLow_ForZeroSkillCompanion()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            // Дід Овсій (keeper): Trade 7 -> master_trader (гейт Trade>=6) мав
+            // бути Available; Medicine 0 -> field_medic (гейт Medicine>=6) мав
+            // бути SkillTooLow. Обидва — з DefaultPerks (полірування, ціль 1).
+            var sheet = s.GetCharacterSheet("keeper");
+            Assert.IsNotNull(sheet);
+
+            Game.Core.Session.Views.PerkPreviewLineView trader = null, medic = null;
+            foreach (var p in sheet.AvailablePerks)
+            {
+                if (p.PerkId == "master_trader") trader = p;
+                if (p.PerkId == "field_medic") medic = p;
+            }
+
+            Assert.IsNotNull(trader);
+            Assert.IsTrue(trader.Available, "Trade 7 >= гейт 6 у master_trader");
+            Assert.IsNull(trader.ReasonKey);
+
+            Assert.IsNotNull(medic);
+            Assert.IsFalse(medic.Available);
+            Assert.AreEqual("ui.reason.perk.skill_too_low", medic.ReasonKey);
+        }
+
         // ---- Доба 1: тихий шлях вузла 1 (Ж) ----
+
+        // ---- Полірування (ціль 6 «Рішення»): вузол 1 кроваво каже "тактичний бій: N" ----
+
+        [Test]
+        public void Day1_Decision_BloodyOption_CarriesTacticalBattleEnemyCount()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            s.AdvanceDay();
+            var offer = s.GetPendingOffer();
+            Assert.IsNotNull(offer);
+            Assert.AreEqual("incident.pass_vanguard", offer.TopicId);
+
+            Game.Core.Session.Views.DecisionOptionView quiet = null, bloody = null;
+            foreach (var opt in offer.Options)
+            {
+                if (opt.Path == Game.Core.Session.Views.IncidentPathView.Quiet) quiet = opt;
+                if (opt.Path == Game.Core.Session.Views.IncidentPathView.Bloody) bloody = opt;
+            }
+
+            Assert.IsNotNull(bloody, "вузол 1 завжди має кровавий варіант");
+            Assert.AreEqual(2, bloody.TacticalBattleEnemyCount, "owner: 'тактичний бій: N ворогів' — Node1BloodyEnemyIds несе двох");
+
+            Assert.IsNotNull(quiet, "вузол 1 завжди має тихий варіант");
+            Assert.AreEqual(0, quiet.TacticalBattleEnemyCount, "тихий шлях вузла 1 — перевірка, не бій");
+        }
 
         [Test]
         public void Day1_QuietPath_ResolvesPassVanguard_AndAppliesOutcome()
@@ -395,6 +527,45 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(sawOverwatchTriggered, "рух training_scout_1 у сектор trainee_2 мав спричинити реакцію дозору (§2 рядок 30)");
         }
 
+        // ---- Полірування (ціль 3 «Бойові декорації»): вороги — не один стовпець ----
+
+        /// <summary>
+        /// Owner feedback: "Enemy deployments must be sensible formations
+        /// with cover (not a single column)". Вузол 1 кроваво — 2 вороги
+        /// (Node1BloodyEnemyIds) — мали стояти на РІЗНИХ X (зигзаг), і хоч
+        /// один нести укриття на своєму тайлі (BattleGridView.TileCover
+        /// читає той самий тайл, що юніт займає).
+        /// </summary>
+        [Test]
+        public void Day1_BloodyBattle_EnemyFormation_IsNotASingleColumn_AndCarriesCover()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            s.ConfirmMorning();
+            s.AdvanceDay();
+            s.ResolveIncident(IncidentPath.Bloody);
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            var battle = s.GetBattleView();
+            Assert.IsNotNull(battle);
+
+            var enemyXs = new System.Collections.Generic.HashSet<int>();
+            bool anyEnemyCovered = false;
+            foreach (var u in battle.Units)
+            {
+                if (u.Side != "Enemy") continue;
+                enemyXs.Add(u.Pos.X);
+                int idx = u.Pos.X + u.Pos.Y * battle.Grid.Width;
+                if (idx >= 0 && idx < battle.Grid.TileCover.Count && battle.Grid.TileCover[idx] != "None")
+                    anyEnemyCovered = true;
+            }
+
+            Assert.Greater(enemyXs.Count, 1, "два вороги на РІЗНИХ X — не один стовпець");
+            Assert.IsTrue(anyEnemyCovered, "хоч один ворог мав стояти на тайлі з укриттям (не лише декоративне укриття посеред мапи)");
+        }
+
         // ---- Дефекція (US-9.4, R2/§2 №25): DefectionWatch.Tick + Defection.ShouldDefect ----
 
         /// <summary>
@@ -448,7 +619,10 @@ namespace Game.Tests.EditMode
             foreach (var e in s.DayLog)
             {
                 if (e.Key == "companion.defected" && e.Args["companionId"] == "myroslava") sawDefected = true;
-                if (e.Key == "roster.rippled") sawRipple = true;
+                // Фікс-ревью (полірування, ціль 5 «Якість стрічки»): "roster.rippled"
+                // більше не єдиний ключ — GameSession.LogRipple обирає один із
+                // шести (тип зв'язку × загибель/зрада), тож перевіряємо префікс.
+                if (e.Key.StartsWith("roster.rippled")) sawRipple = true;
             }
             Assert.IsTrue(sawDefected,
                 "прапор defector_seeded + полоса ≤ Resentful мали дефектити Мирославу негайно (Defection.ShouldDefect), " +
@@ -509,6 +683,33 @@ namespace Game.Tests.EditMode
             bool building = false;
             foreach (var b in city.InProgress) if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) building = true;
             Assert.IsTrue(building);
+        }
+
+        /// <summary>
+        /// Фікс-ревью (блокер, знайдено тур-автоплеєм §"тактичні бої"):
+        /// PreviewExpedition(Delve) кличе BuildDungeonRoomView(rooms[0]) ДО
+        /// DepartExpedition, коли _dungeon ще null — QuietBestActorId
+        /// (ціль 6) раніше безумовно читав _dungeon.PartyIds і падав
+        /// NullReferenceException на КОЖЕН прев'ю вилазки-данжу (тур
+        /// впав з кодом виходу 2 на MaybeDepartDelve).
+        /// </summary>
+        [Test]
+        public void PreviewExpedition_Delve_BeforeDeparture_DoesNotThrow_AndStillNamesQuietCandidate()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            ExpeditionPreviewView preview = null;
+            Assert.DoesNotThrow(() =>
+                preview = s.PreviewExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                    new[] { "protagonist", "maksym", "myroslava" }));
+
+            Assert.IsNotNull(preview);
+            Assert.IsTrue(preview.IsDelve);
+            Assert.IsNotNull(preview.FirstRoom);
+            Assert.IsTrue(preview.FirstRoom.QuietHasCandidate, "кандидат мав рахуватись із МАЙБУТНЬОЇ партії (companionIds), не з ще неіснуючого _dungeon.PartyIds");
+            Assert.AreEqual("maksym", preview.FirstRoom.QuietBestActorId);
         }
 
         [Test]
@@ -691,6 +892,32 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(sawManuallyResolved, "combat.battle.resolved — лише для бою, дограного покроковими командами");
         }
 
+        // ---- Полірування (ціль 6 «Рішення»): картка кімнати данжу ----
+
+        [Test]
+        public void GetDungeonView_CombatRoom_ExposesPartyEnemyCountAndQuietCandidate()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var dispatch = s.DepartExpedition(DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve,
+                new[] { "protagonist", "maksym", "myroslava" }, 2);
+            Assert.AreEqual(Game.Core.Base.DispatchResult.Success, dispatch);
+
+            var view = s.GetDungeonView();
+            Assert.IsNotNull(view);
+            CollectionAssert.AreEquivalent(new[] { "protagonist", "maksym", "myroslava" }, view.PartyIds,
+                "owner: 'dungeon room card shows the party'");
+
+            var room = view.CurrentRoom;
+            Assert.IsNotNull(room);
+            Assert.AreEqual(2, room.EnemyCount, "room1 (scouts_left_behind) несе двох horde_skirmisher — owner: 'тактичний бій: N ворогів'");
+            Assert.IsTrue(room.HasQuietBypass);
+            Assert.IsTrue(room.QuietHasCandidate, "owner: 'the quiet candidate'");
+            Assert.AreEqual("maksym", room.QuietBestActorId, "Максим — Survival 5, найкращий у party на перший QuietCheck (Survival≥5)");
+        }
+
         [Test]
         public void Dungeon_PushDeeper_ResolveEvent_Extract_BanksLootToBaseState()
         {
@@ -837,6 +1064,14 @@ namespace Game.Tests.EditMode
             s.ConfirmEvening();
 
             Assert.AreEqual(SessionState.Night, s.State);
+
+            // Полірування (ціль 6 «Рішення», owner: "тактичний бій: N ворогів"):
+            // прев'ю ДО кліку має збігтись із реальним боєм — чиста функція,
+            // виклик двічі поспіль дає те саме число.
+            int previewedCount = s.GetFinaleEnemyCount();
+            Assert.Greater(previewedCount, 0, "фінальний штурм завжди має бодай Бурунду");
+            Assert.AreEqual(previewedCount, s.GetFinaleEnemyCount(), "GetFinaleEnemyCount — чисте читання, без побічних ефектів");
+
             var duringBattle = s.ResolveFinale(IncidentPath.Bloody);
             Assert.IsNull(duringBattle);
             Assert.AreEqual(SessionState.Battle, s.State);
@@ -844,8 +1079,14 @@ namespace Game.Tests.EditMode
             var battle = s.GetBattleView();
             Assert.IsNotNull(battle);
             bool hasBurunda = false;
-            foreach (var u in battle.Units) if (u.Id.Contains("burunda")) hasBurunda = true;
+            int actualEnemyCount = 0;
+            foreach (var u in battle.Units)
+            {
+                if (u.Id.Contains("burunda")) hasBurunda = true;
+                if (u.Side == "Enemy") actualEnemyCount++;
+            }
             Assert.IsTrue(hasBurunda, "фінальний штурм завжди включає Бурунду-бегадира");
+            Assert.AreEqual(previewedCount, actualEnemyCount, "прев'ю мало назвати ТУ САМУ кількість, що реально вийшла на поле");
 
             s.CombatAutoResolve();
             // OnBattleResolved повертає State=_resume.ReturnState=Night для

@@ -19,6 +19,10 @@ companion.died
 companion.left_settlement
 council.decree
 council.decree.ordered
+council.diplomacy
+council.diplomacy.ordered
+council.outfit_expedition
+council.outfit_expedition.ordered
 council.prepare_threat
 council.prepare_threat.ordered
 council.raid
@@ -60,7 +64,9 @@ progression.level_up
 quest.choice.resolved
 quest.hafiya.stage2.found
 quest.offered
-roster.rippled
+roster.rippled.kinship.death
+roster.rippled.neutral.betrayal
+roster.rippled.neutral.death
 scar.granted
 scene.finished
 scene.neighbour.elder_refuses

@@ -367,7 +367,11 @@ namespace UnityEngine
 
     public class GUIContent
     {
+        public string text;
         public static readonly GUIContent none = new GUIContent();
+
+        public GUIContent() { }
+        public GUIContent(string text) { this.text = text; }
     }
 
     /// <summary>Три состояния оформления, которые реально различает AlphaSkin: покой/наведение/нажатие.</summary>
@@ -404,6 +408,20 @@ namespace UnityEngine
         public GUIStyleState active { get; set; } = new GUIStyleState();
         public RectOffset padding { get; set; } = new RectOffset();
         public RectOffset margin { get; set; } = new RectOffset();
+        public float fixedWidth { get; set; }
+        public float fixedHeight { get; set; }
+
+        /// <summary>
+        /// Реальний Unity міряє текст шрифтом стилю; заглушка не рендерить
+        /// нічого (§клас, шапка файлу) — довжина рядка чесно наближає лише
+        /// ПОРЯДОК величини, досить для компіляції коду, що загортає ряди
+        /// (BattleHudScreen.DrawInitiativeStrip), поведінку перевіряє Unity.
+        /// </summary>
+        public Vector2 CalcSize(GUIContent content)
+        {
+            int len = content?.text?.Length ?? 0;
+            return new Vector2(len * fontSize * 0.6f, fontSize + 4f);
+        }
     }
 
     /// <summary>
