@@ -516,5 +516,57 @@ namespace Game.Tests.EditMode
             Assert.IsNull(eq.Find("no_such_id"));
             Assert.IsNull(eq.Find(null));
         }
+
+        // ---- Inventory.FindAnywhere: обидві точки зберігання ОДНИМ викликом —
+        // seam для D1 (GameSession.Equip/CraftUpgrade), який замінює ручний цикл
+        // "Inventory.Find, а якщо null — перебрати roster і покликати
+        // companion.Equipment.Find на кожному" ----
+
+        [Test]
+        public void FindAnywhere_LocatesStashedItem_WithoutNeedingRoster()
+        {
+            var inv = new Inventory();
+            var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
+            inv.Add(item);
+
+            Assert.AreSame(item, inv.FindAnywhere(null, item.InstanceId), "сташ перевіряється незалежно від roster");
+        }
+
+        [Test]
+        public void FindAnywhere_LocatesItem_EquippedOnSomeoneInRoster_NotPresentInStash()
+        {
+            var inv = new Inventory();
+            var bench = MakeCompanion("bench");
+            var wearer = MakeCompanion("wearer");
+            var weapon = new ItemInstance(DefaultItems.HuntersBow(), Rarity.Common);
+            wearer.Equipment.Equip(weapon);
+            var roster = new List<Companion> { bench, wearer };
+
+            Assert.IsNull(inv.Find(weapon.InstanceId), "предмет надітий, а не в сташі");
+            Assert.AreSame(weapon, inv.FindAnywhere(roster, weapon.InstanceId));
+        }
+
+        [Test]
+        public void FindAnywhere_PrefersStash_OverRoster_WhenSomehowInBoth()
+        {
+            var inv = new Inventory();
+            var stashed = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
+            inv.Add(stashed);
+            var wearer = MakeCompanion("wearer2");
+            wearer.Equipment.Equip(new ItemInstance(DefaultItems.HuntersBow(), Rarity.Common));
+
+            Assert.AreSame(stashed, inv.FindAnywhere(new List<Companion> { wearer }, stashed.InstanceId));
+        }
+
+        [Test]
+        public void FindAnywhere_ReturnsNull_WhenNotFoundAnywhere_AndTolerantOfNullEntries()
+        {
+            var inv = new Inventory();
+            var roster = new List<Companion> { null, MakeCompanion("empty_handed") };
+
+            Assert.IsNull(inv.FindAnywhere(null, "no_such_id"));
+            Assert.IsNull(inv.FindAnywhere(roster, "no_such_id"));
+            Assert.IsNull(inv.FindAnywhere(roster, null));
+        }
     }
 }

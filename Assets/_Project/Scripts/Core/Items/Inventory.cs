@@ -30,10 +30,12 @@ namespace Game.Core.Items
         public bool Remove(ItemInstance item) => _items.Remove(item);
 
         /// <summary>
-        /// Пошук за стабільним <see cref="ItemInstance.InstanceId"/> — саме так
-        /// контракт GameSession (docs/TEST_BUILD.md §4.1) адресує ОДИН
+        /// Пошук за стабільним <see cref="ItemInstance.InstanceId"/> у сташі —
+        /// саме так контракт GameSession (docs/TEST_BUILD.md §4.1) адресує ОДИН
         /// конкретний предмет у команди Equip/CraftUpgrade, коли в сташі лежить
         /// кілька дропів однієї бази (напр. два Common «Потерті каптани»).
+        /// Дивиться лише сюди — надіте на напарників не бачить, для цього
+        /// <see cref="FindAnywhere"/> нижче.
         /// </summary>
         public ItemInstance Find(string instanceId)
         {
@@ -41,6 +43,29 @@ namespace Game.Core.Items
             for (int i = 0; i < _items.Count; i++)
                 if (string.Equals(_items[i].InstanceId, instanceId, StringComparison.Ordinal))
                     return _items[i];
+            return null;
+        }
+
+        /// <summary>
+        /// Seam для D1: єдиний виклик, що резолвить itemInstanceId контракту
+        /// GameSession.Equip/CraftUpgrade незалежно від того, де предмет лежить —
+        /// у сташі (тут) АБО вже надітий на когось з roster (напр. перенадіти
+        /// на іншого напарника, чи апгрейднути вже надіте). Раніше цей seam
+        /// описувався як "спершу Inventory.Find, потім — вручну переберіть
+        /// roster і покличте Equipment.Find на кожному" — тепер D1 не пише цей
+        /// цикл сам: <c>inventory.FindAnywhere(roster.All, id)</c> робить те
+        /// саме одним викликом. Порядок пошуку той самий (сташ спершу).
+        /// </summary>
+        public ItemInstance FindAnywhere(IEnumerable<Companion> roster, string instanceId)
+        {
+            var stashed = Find(instanceId);
+            if (stashed != null) return stashed;
+            if (roster == null) return null;
+            foreach (var companion in roster)
+            {
+                var equipped = companion?.Equipment.Find(instanceId);
+                if (equipped != null) return equipped;
+            }
             return null;
         }
 

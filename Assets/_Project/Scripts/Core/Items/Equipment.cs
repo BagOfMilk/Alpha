@@ -16,13 +16,12 @@ namespace Game.Core.Items
         public ItemInstance Get(EquipSlot slot) => _slots.TryGetValue(slot, out var i) ? i : null;
 
         /// <summary>
-        /// Пошук серед НАДІТОГО за стабільним <see cref="ItemInstance.InstanceId"/> —
-        /// дзеркало <see cref="Inventory.Find"/> для другої точки зберігання предмета.
-        /// Контракт GameSession (docs/TEST_BUILD.md §4.1) адресує предмет лише
-        /// itemInstanceId, а сам предмет може лежати в сташі АБО вже бути надітим
-        /// (напр. перенадіти на іншого напарника, чи апгрейднути вже надіте);
-        /// D1 резолвить id спершу через Inventory.Find, а тут — по кожному
-        /// напарнику роздачі, чиє спорядження варто перевірити.
+        /// Пошук серед НАДІТОГО на цього напарника за стабільним
+        /// <see cref="ItemInstance.InstanceId"/> — дзеркало <see cref="Inventory.Find"/>
+        /// для другої точки зберігання предмета. Це первинний примітив (одне
+        /// спорядження); D1 не мусить перебирати roster вручну і викликати
+        /// його по одному — готовий, вже правильно впорядкований пошук по обох
+        /// точках зберігання одразу — <see cref="Inventory.FindAnywhere"/>.
         /// </summary>
         public ItemInstance Find(string instanceId)
         {
