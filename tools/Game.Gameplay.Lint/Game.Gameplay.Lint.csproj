@@ -14,8 +14,8 @@
     <LangVersion>7.3</LangVersion>
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
-    <!-- Заглушка объявляет пустые атрибуты: неиспользуемые параметры — норма. -->
-    <NoWarn>$(NoWarn);CS0169;CS0649</NoWarn>
+    <!-- Заглушка объявляет пустые атрибуты и события: неиспользуемые параметры и события, которые сама заглушка никогда не поднимает, — норма. -->
+    <NoWarn>$(NoWarn);CS0169;CS0649;CS0067</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

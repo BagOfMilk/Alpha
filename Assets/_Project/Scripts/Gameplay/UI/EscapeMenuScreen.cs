@@ -38,7 +38,7 @@ namespace Game.Gameplay.UI
                 GUILayout.Space(8f);
 
                 if (Widgets.DangerButton(UkrainianText.Get("ui.escape.quit", g)))
-                    Application.Quit(0);
+                    shell.RequestQuit(); // §GameShell._quitRequested — не кликати Application.Quit просто з OnGUI
 
                 GUILayout.Space(8f);
                 Widgets.TooltipLine(UkrainianText.Get("ui.escape.hint", g));
