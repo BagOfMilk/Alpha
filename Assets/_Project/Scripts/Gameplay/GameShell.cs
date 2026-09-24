@@ -254,7 +254,13 @@ namespace Game.Gameplay
 
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label(UkrainianText.Format("ui.topbar.day", g, "day", view.Day.ToString()), AlphaSkin.SubHeader, GUILayout.ExpandWidth(false));
-            GUILayout.Label(view.Phase.ToString(), AlphaSkin.Body, GUILayout.ExpandWidth(false));
+            // Фікс-ревью (major): тут стояв сирий view.Phase.ToString() — енум-
+            // назва ("Day"/"Night") друкувалась прямо в HUD англійською на
+            // майже кожному екрані після відкриття (R7 такого не дозволяє).
+            string phaseKey = view.Phase == Game.Core.Loop.DayPhase.Night
+                ? "ui.topbar.phase.night"
+                : "ui.topbar.phase.day";
+            GUILayout.Label(UkrainianText.Get(phaseKey, g), AlphaSkin.Body, GUILayout.ExpandWidth(false));
             GUILayout.Space(12f);
             GUILayout.Label(UkrainianText.Format("ui.topbar.mood", g, "band", ScreenText.MoodChip(view.TensionBand, g)), AlphaSkin.Body, GUILayout.ExpandWidth(false));
             GUILayout.Label(UkrainianText.Format("ui.topbar.crowd", g, "band", ScreenText.CrowdChip(view.CrowdBand, g)), AlphaSkin.Body, GUILayout.ExpandWidth(false));

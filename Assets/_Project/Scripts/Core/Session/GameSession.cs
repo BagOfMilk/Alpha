@@ -154,6 +154,18 @@ namespace Game.Core.Session
         // ---- рішення/квест/фінал/підсумок ----
         private PendingDecision _currentPending;
         private QuestOfferView _currentQuestOffer;
+        // Фікс-ревью (major, знайдено тур-автоплеєм): OfferQuestStage — по суті
+        // запит стану ("що зараз пропонується"), але логував "quest.offered" на
+        // КОЖЕН виклик. І HubScreen, і NightScreen малюють свою пропозицію
+        // щокадру й самі кешують результат ПРО СЕБЕ (щоб не топити стрічку
+        // подій дублями всередині одного екрана) — але два різні екрани того
+        // самого дня (ранковий хаб і вечірній/нічний) кожен тримає ВЛАСНИЙ кеш,
+        // тож обидва однаково викликають цей метод і разом дають два підряд
+        // однакові рядки "Нова пропозиція: ..." за одну добу — Поправка №3.7/
+        // §2 рядок 11 такого не дозволяє. Один вибір і той самий етап того
+        // самого квесту логується рівно раз — ключ скидається, щойно етап
+        // справді змінюється (ResolveQuestChoice/NewGame/ApplySave).
+        private string _lastLoggedQuestOfferKey;
         private DayReportView _lastDayReport;
         private DayPhase _lastPhase = DayPhase.Day;
         private bool _summaryAcknowledged;
@@ -241,6 +253,7 @@ namespace Game.Core.Session
             _dayLog.Clear();
             _currentPending = null;
             _currentQuestOffer = null;
+            _lastLoggedQuestOfferKey = null;
             _lastDayReport = null;
             _dungeon = null;
             _battle = null;
@@ -660,7 +673,13 @@ namespace Game.Core.Session
             }
 
             _currentQuestOffer = offer;
-            LogEvent("quest.offered", Args("questId", questId, "stage", run.CurrentIndex.ToString(CultureInfo.InvariantCulture)));
+
+            string offerKey = questId + "#" + run.CurrentIndex.ToString(CultureInfo.InvariantCulture);
+            if (!string.Equals(_lastLoggedQuestOfferKey, offerKey, StringComparison.Ordinal))
+            {
+                LogEvent("quest.offered", Args("questId", questId, "stage", run.CurrentIndex.ToString(CultureInfo.InvariantCulture)));
+                _lastLoggedQuestOfferKey = offerKey;
+            }
             return offer;
         }
 
@@ -997,7 +1016,18 @@ namespace Game.Core.Session
             {
                 bool myroslavaDefected = _flags.Get(PassVanguardOutcome.DefectorSeededFlag);
                 var plan = Finale.BuildAssault(_readiness.Band, myroslavaDefected ? "myroslava" : null, _cfg.Readiness);
-                var setup = BuildBattleSetup(new[] { ProtagonistId, "maksym" }, plan.EnemyDefinitionIds, 10, 10,
+
+                // Фікс-ревью (блокер, знайдено тур-автоплеєм): партія тут була
+                // жорстко "{ProtagonistId, "maksym"}" незалежно від того, чи
+                // Максим ще живий на добу 5 — вузол 1 (доба 1) може поранити
+                // або вбити його ще на самому початку, а фінал однаково
+                // виставляв його на грід. Той самий allow-list присутності, що
+                // вже фільтрує пости й вилазку (RosterAdapter.IsPresentInSettlement),
+                // тепер фільтрує й фінальну партію.
+                var partyIds = new List<string> { ProtagonistId };
+                if (IsCompanionBattleReady("maksym")) partyIds.Add("maksym");
+
+                var setup = BuildBattleSetup(partyIds, plan.EnemyDefinitionIds, 10, 10,
                     plan.DefectorCompanionId);
                 RequestBattle(setup, SuspendReason.FinaleAssault, SessionState.Night);
                 return null;
@@ -2310,6 +2340,21 @@ namespace Game.Core.Session
             return null;
         }
 
+        /// <summary>
+        /// Фікс-ревью (блокер): чи може цей напарник ще стояти на грід —
+        /// той самий вирок, що <c>Base.CompanionActorAdapter.IsPresentInSettlement</c>
+        /// уже дає постам і вилазці (не OnMission/Dead/Antagonist). Досі не
+        /// існувало жодної точки, що перевіряла це для АВТОСКЛАДЕНОЇ партії
+        /// (вузол 1/фінал не дають гравцю обирати склад — на відміну від
+        /// вилазки/данжу, де ExpeditionPartyLegality відсікає це ще в Gameplay
+        /// до самого виклику).
+        /// </summary>
+        private bool IsCompanionBattleReady(string companionId)
+        {
+            var c = _worldRoster?.Get(companionId);
+            return c != null && new Game.Core.Base.CompanionActorAdapter(c).IsPresentInSettlement;
+        }
+
         private BattleSetup BuildBattleSetup(IReadOnlyList<string> partyIds, IReadOnlyList<string> enemyIds,
             int width, int height, string defectorCompanionId = null)
         {
@@ -2518,6 +2563,7 @@ namespace Game.Core.Session
 
             _currentPending = null;
             _currentQuestOffer = null;
+            _lastLoggedQuestOfferKey = null;
             _dungeon = null;
             _battle = null;
             _battleAutoResolvedThisCall = false;

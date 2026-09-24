@@ -39,6 +39,22 @@ namespace Game.Gameplay.UI
         /// </summary>
         public static Rect PanelRect { get; private set; }
 
+        /// <summary>
+        /// Права межа панелі в пікселях — та сама формула ширини, що й
+        /// <see cref="Draw"/> нижче (не дублює магічні числа окремо).
+        /// <see cref="BattleArenaController.FrameCamera"/> кличе це, щоб
+        /// зсунути кадр камери й не ховати перші колонки грида під панеллю
+        /// (фікс-ревью, major) — і працює будь-якої миті, ще до першого
+        /// <see cref="Draw"/> цього кадру, бо формула залежить лише від
+        /// поточного <c>Screen.width</c>, не від стану бою.
+        /// </summary>
+        public static float PanelRightEdgePixels()
+        {
+            return Widgets.ScreenPadding() + PanelWidthPixels();
+        }
+
+        private static float PanelWidthPixels() => Clamp(Screen.width * 0.34f, 420f, 620f);
+
         public static void Draw(IBattleHudData controller)
         {
             if (controller == null) return;
@@ -72,7 +88,7 @@ namespace Game.Gameplay.UI
             }
 
             float padding = Widgets.ScreenPadding();
-            float width = Clamp(Screen.width * 0.34f, 420f, 620f);
+            float width = PanelWidthPixels();
             float height = Screen.height - padding * 2f;
             var area = new Rect(padding, padding, width, height);
             PanelRect = area;
@@ -225,25 +241,38 @@ namespace Game.Gameplay.UI
 
             Widgets.Section(UkrainianText.Get("ui.battle.abilities", false), () =>
             {
-                GUILayout.BeginHorizontal();
-                foreach (var abilityId in BattleArenaView.KnownAbilityIds)
+                // Фікс-ревью (major, знайдено тур-автоплеєм): один суцільний
+                // ряд на всі здібності не влазив у панель — найдовший підпис
+                // ("Наказ пересунутися") з'їдав майже весь ряд, і "Залп"
+                // обрізався по правому краю панелі (жодної рамки/паддінга —
+                // просто впирався в межу BeginArea). Дві кнопки на ряд:
+                // фіксований вибір, а не виміряний flow-layout, бо каталог тут
+                // — короткий сталий масив (BattleArenaView.KnownAbilityIds,
+                // §4.2.1 контракту), не список, що росте під час бою.
+                const int perRow = 2;
+                for (int row = 0; row * perRow < BattleArenaView.KnownAbilityIds.Length; row++)
                 {
-                    bool armed = c.Armed == ArmedAction.Ability && c.ArmedAbilityId == abilityId;
-                    string label = UkrainianText.Get(abilityId, false);
-                    if (armed) label = "» " + label;
-
-                    if (Widgets.SecondaryButton(label))
+                    GUILayout.BeginHorizontal();
+                    for (int i = row * perRow; i < BattleArenaView.KnownAbilityIds.Length && i < (row + 1) * perRow; i++)
                     {
-                        // Fix-ревью (major): c.ArmAbility(null) НЕ повертає Armed
-                        // у None (контролер ставить _armed=Ability незалежно від
-                        // id) — гравець лишався «застряглим» з озброєною
-                        // порожньою здібністю (тултип малював [] — сирий маркер
-                        // відсутнього ключа). Той самий патерн, що вже коректно
-                        // працює для кнопки Дозору нижче.
-                        if (armed) c.CancelArmed(); else c.ArmAbility(abilityId);
+                        string abilityId = BattleArenaView.KnownAbilityIds[i];
+                        bool armed = c.Armed == ArmedAction.Ability && c.ArmedAbilityId == abilityId;
+                        string label = UkrainianText.Get(abilityId, false);
+                        if (armed) label = "» " + label;
+
+                        if (Widgets.SecondaryButton(label))
+                        {
+                            // Fix-ревью (major): c.ArmAbility(null) НЕ повертає Armed
+                            // у None (контролер ставить _armed=Ability незалежно від
+                            // id) — гравець лишався «застряглим» з озброєною
+                            // порожньою здібністю (тултип малював [] — сирий маркер
+                            // відсутнього ключа). Той самий патерн, що вже коректно
+                            // працює для кнопки Дозору нижче.
+                            if (armed) c.CancelArmed(); else c.ArmAbility(abilityId);
+                        }
                     }
+                    GUILayout.EndHorizontal();
                 }
-                GUILayout.EndHorizontal();
 
                 if (c.Armed == ArmedAction.Ability)
                     Widgets.TooltipLine(UkrainianText.Format("ui.battle.armed.ability", false,

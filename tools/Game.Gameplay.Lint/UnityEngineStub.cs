@@ -477,6 +477,18 @@ namespace UnityEngine
         public static GUILayoutOption ExpandWidth(bool expand) { return new GUILayoutOption(); }
         public static GUILayoutOption ExpandHeight(bool expand) { return new GUILayoutOption(); }
     }
+
+    /// <summary>
+    /// SceneScreen.cs (фікс-ревью, блокер) кличе GetLastRect одразу після
+    /// Widgets.Panel, щоб дізнатись, де насправді розклалась діалогова
+    /// панель, і прикріпити до неї портрет замість фіксованої позиції
+    /// посеред екрана. Заглушка — нульовий Rect завжди: справжня поведінка
+    /// (Layout=нуль, Repaint=реальний рект) перевіряється тільки в Unity.
+    /// </summary>
+    public static class GUILayoutUtility
+    {
+        public static Rect GetLastRect() { return new Rect(0f, 0f, 0f, 0f); }
+    }
 }
 
 // ---------------------------------------------------------------------------

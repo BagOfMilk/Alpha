@@ -21,19 +21,6 @@ namespace Game.Gameplay.UI
 
             var g = shell.ProtagonistGender;
 
-            bool hasSecond = !string.IsNullOrEmpty(_current.SecondActorId);
-            float portraitSize = Mathf01Clamp(Screen.height * 0.4f, 180f, 360f);
-            float portraitTop = Screen.height * 0.12f;
-            if (hasSecond)
-            {
-                DrawPortrait(shell, _current.ActorId, g, new Rect(Screen.width * 0.5f - portraitSize - 20f, portraitTop, portraitSize, portraitSize));
-                DrawPortrait(shell, _current.SecondActorId, g, new Rect(Screen.width * 0.5f + 20f, portraitTop, portraitSize, portraitSize));
-            }
-            else
-            {
-                DrawPortrait(shell, _current.ActorId, g, new Rect(Screen.width * 0.5f - portraitSize * 0.5f, portraitTop, portraitSize, portraitSize));
-            }
-
             var area = new Rect(0f, 0f, Screen.width, Screen.height);
             GUILayout.BeginArea(area);
             GUILayout.FlexibleSpace();
@@ -53,8 +40,18 @@ namespace Game.Gameplay.UI
                 GUILayout.EndHorizontal();
             }, GUILayout.Width(Screen.width * 0.8f));
 
+            // Фікс-ревью (блокер, знайдено тур-автоплеєм): рект діалогової
+            // панелі ЩОЙНО повністю розкладений (GetLastRect всередині того ж
+            // BeginArea, ДО EndArea — координати екрана, бо area починається з
+            // (0,0)). Під час події Layout цей рект ще нульовий — портрети
+            // нижче тоді просто не малюються цього проходу, і це нешкідливо:
+            // Layout нічого не рендерить на екран, лише рахує розміри.
+            var dialogueRect = GUILayoutUtility.GetLastRect();
+
             GUILayout.Space(24f);
             GUILayout.EndArea();
+
+            DrawPortraits(shell, _current, g, dialogueRect);
 
             // Event-based, не сирий Input.GetKeyDown/GetMouseButtonDown
             // (фікс-ревью, major): OnGUI викликається кілька разів за кадр
@@ -81,10 +78,46 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>
+        /// Фікс-ревью (блокер, знайдено тур-автоплеєм): раніше портрет(и)
+        /// малювались фіксованим великим розміром (до 360px) по центру
+        /// ЕКРАНА, над діалоговою панеллю, — квадрат аж на чверть екрана,
+        /// що ніяк не пов'язаний позицією з панеллю знизу. Тепер портрет —
+        /// невеликий «бюст» (VN-стиль), прикріплений до ВЕРХНЬОГО краю
+        /// діалогової панелі (<paramref name="dialogueRect"/>, щойно знятий
+        /// <c>GUILayoutUtility.GetLastRect()</c> у <see cref="Draw"/>), трохи
+        /// заходить на нього — читається як «портрет належить цій панелі»,
+        /// а не як окремий, нічим не пояснений об'єкт посеред сцени.
+        /// </summary>
+        private static void DrawPortraits(GameShell shell, SceneStepView current, Game.Core.Characters.Creation.Gender g, Rect dialogueRect)
+        {
+            // Подія Layout — рект ще Rect.zero (GetLastRect до першого Repaint):
+            // нічого не малюємо цього проходу, Layout однаково не рендерить пікселі.
+            if (dialogueRect.width <= 0f || dialogueRect.height <= 0f) return;
+
+            bool hasSecond = !string.IsNullOrEmpty(current.SecondActorId);
+            float portraitSize = Mathf01Clamp(Screen.height * 0.22f, 120f, 200f);
+            float overlap = portraitSize * 0.12f;
+            float top = dialogueRect.y - portraitSize + overlap;
+            if (top < 8f) top = 8f;
+
+            if (hasSecond)
+            {
+                DrawPortrait(shell, current.ActorId, g, new Rect(dialogueRect.x + 16f, top, portraitSize, portraitSize));
+                DrawPortrait(shell, current.SecondActorId, g, new Rect(dialogueRect.x + dialogueRect.width - portraitSize - 16f, top, portraitSize, portraitSize));
+            }
+            else
+            {
+                DrawPortrait(shell, current.ActorId, g, new Rect(dialogueRect.x + 16f, top, portraitSize, portraitSize));
+            }
+        }
+
+        /// <summary>
         /// Живий рендер (E2's <see cref="IPortraitProvider"/>) — абсолютний Rect
         /// через <see cref="GUI.DrawTexture"/>, а не GUILayout: стаб лінту не
         /// знає перевантаження <c>GUILayout.Box(Texture,...)</c>, і додавати
-        /// його заради одного кадру дорожче, ніж малювати руками.
+        /// його заради одного кадру дорожче, ніж малювати руками. Підпис імені —
+        /// НАД портретом (не під ним, як раніше): знизу тепер одразу починається
+        /// діалогова панель, і підпис під портретом ліг би просто на неї.
         /// </summary>
         private static void DrawPortrait(GameShell shell, string characterId, Game.Core.Characters.Creation.Gender g, Rect rect)
         {
@@ -98,7 +131,8 @@ namespace Game.Gameplay.UI
                 GUI.Box(rect, UkrainianText.Get("ui.scene.portrait.placeholder", g));
             }
 
-            var nameRect = new Rect(rect.x, rect.y + rect.height + 4f, rect.width, 32f);
+            var nameRect = new Rect(rect.x, rect.y - 24f, rect.width, 22f);
+            if (nameRect.y < 0f) nameRect.y = 0f;
             GUI.Label(nameRect, ScreenText.ResolveCompanionName(characterId, g, shell.Session.GetRosterView()), AlphaSkin.Body);
         }
 

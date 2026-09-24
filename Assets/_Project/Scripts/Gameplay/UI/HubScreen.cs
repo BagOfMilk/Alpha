@@ -210,33 +210,41 @@ namespace Game.Gameplay.UI
         {
             var city = shell.Session.GetCityView();
 
+            // Фікс-ревью (minor, знайдено тур-автоплеєм): фіксована ширина
+            // 200px обрізала довший напис "Прийняти переселенців" по правому
+            // краю панелі. Без явної ширини GUILayout сам підбирає розмір під
+            // напис — той самий прийом, що вже коректно працює нижче для
+            // точок вилазки (§коментар DrawExpedition/DrawCouncil.outfit_expedition).
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label(UkrainianText.Get("ui.council.raid", g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
             if (city != null && city.RaidReady)
             {
-                if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.raid", g), GUILayout.Width(200f)))
+                if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.raid", g)))
                     shell.TryRun(() => shell.Session.OrderRaid());
             }
-            else Widgets.DisabledButton(UkrainianText.Get("ui.council.raid", g), UkrainianText.Get("ui.common.none", g), GUILayout.Width(200f));
+            else Widgets.DisabledButton(UkrainianText.Get("ui.council.raid", g), UkrainianText.Get("ui.common.none", g));
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label(UkrainianText.Get("ui.council.settlers", g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
             if (city != null && city.SettlersReady)
             {
-                if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.settlers", g), GUILayout.Width(200f)))
+                if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.settlers", g)))
                     shell.TryRun(() => shell.Session.OrderSettlers());
             }
-            else Widgets.DisabledButton(UkrainianText.Get("ui.council.settlers", g), UkrainianText.Get("ui.common.none", g), GUILayout.Width(200f));
+            else Widgets.DisabledButton(UkrainianText.Get("ui.council.settlers", g), UkrainianText.Get("ui.common.none", g));
             GUILayout.EndHorizontal();
 
+            // Фікс-ревью (minor): та сама обрізка, що вище — "Громада
+            // Тухольщини" (найдовша назва фракції) не влазила у фіксовані
+            // 180px і читалась як "ромада Тухольщин" з обох країв.
             Widgets.Section(UkrainianText.Get("ui.council.decree", g), () =>
             {
                 GUILayout.BeginHorizontal();
                 foreach (var factionId in FactionIds)
                 {
                     string fid = factionId;
-                    if (Widgets.SecondaryButton(UkrainianText.Get("faction." + fid, g), GUILayout.Width(180f)))
+                    if (Widgets.SecondaryButton(UkrainianText.Get("faction." + fid, g)))
                         shell.TryRun(() => shell.Session.OrderDecree(fid));
                 }
                 GUILayout.EndHorizontal();
@@ -248,7 +256,7 @@ namespace Game.Gameplay.UI
                 foreach (var factionId in FactionIds)
                 {
                     string fid = factionId;
-                    if (Widgets.SecondaryButton(UkrainianText.Get("faction." + fid, g), GUILayout.Width(180f)))
+                    if (Widgets.SecondaryButton(UkrainianText.Get("faction." + fid, g)))
                         shell.TryRun(() => shell.Session.OrderDiplomacy(fid));
                 }
                 GUILayout.EndHorizontal();
@@ -261,7 +269,7 @@ namespace Game.Gameplay.UI
                 {
                     if (StageOf(city, id, out bool built) == 0 && !built) continue;
                     string buildingId = id;
-                    if (Widgets.SecondaryButton(UkrainianText.Get("building." + id, g), GUILayout.Width(180f)))
+                    if (Widgets.SecondaryButton(UkrainianText.Get("building." + id, g)))
                         shell.TryRun(() => shell.Session.OrderInvestment(buildingId));
                 }
                 GUILayout.EndHorizontal();
@@ -466,16 +474,30 @@ namespace Game.Gameplay.UI
             var roster = shell.Session.GetRosterView();
             Widgets.TooltipLine(UkrainianText.Get("ui.people.sheet.limited", g));
 
-            _peopleScroll = Widgets.ScrollListBegin(_peopleScroll, GUILayout.ExpandHeight(true));
+            // Фікс-ревью (major, знайдено тур-автоплеєм): GUILayout.ExpandHeight(true)
+            // тут ділив «зайву» висоту з build-планувальником і кнопкою «Почати
+            // день» нижче в тому самому вертикальному потоці — на практиці
+            // скролвʼю діставалось ледь на 1.3 картки (Захара обрізало
+            // посередині), і план будівництва одразу починався просто під
+            // ним без жодної видимої межі/скролбару. Фіксована висота — те,
+            // чим керуємо, а не сподіваємось на розподіл GUILayout.
+            _peopleScroll = Widgets.ScrollListBegin(_peopleScroll, GUILayout.Height(320f));
             if (roster?.Companions != null)
                 foreach (var c in roster.Companions)
                 {
                     GUILayout.BeginVertical(GUI.skin.box);
                     GUILayout.Label(ScreenText.ResolveCompanionName(c.Id, g, roster), AlphaSkin.SubHeader);
-                    Widgets.LabeledRow(UkrainianText.Format("ui.people.level", g, "level", c.Level.ToString()), "");
-                    Widgets.LabeledRow(UkrainianText.Get("ui.people.status", g), ScreenText.CompanionStatusLabel(c.Id, c.Status, g));
-                    Widgets.LabeledRow(UkrainianText.Get("ui.people.loyalty", g), ScreenText.LoyaltyLabel(c.Loyalty, g));
-                    Widgets.LabeledRow(UkrainianText.Format("ui.people.scars", g, "count", c.ScarCount.ToString()), "");
+                    GUILayout.Label(UkrainianText.Format("ui.people.level", g, "level", c.Level.ToString()), AlphaSkin.Body);
+                    // Фікс-ревью (major): Widgets.LabeledRow тут розтягувало
+                    // підпис на всю ширину картки (ExpandWidth(true)) і
+                    // притискало значення до ПРАВОГО краю — на широкій
+                    // (~1200px) картці "Стан:" і "На посту" опинялись на
+                    // протилежних кінцях того самого рядка, і читалось як
+                    // «значення відсутнє». Тепер підпис+значення — один рядок
+                    // Format(), як і "Рівень"/"Шрамів" нижче.
+                    GUILayout.Label(UkrainianText.Format("ui.people.status", g, "status", ScreenText.CompanionStatusLabel(c.Id, c.Status, g)), AlphaSkin.Body);
+                    GUILayout.Label(UkrainianText.Format("ui.people.loyalty", g, "loyalty", ScreenText.LoyaltyLabel(c.Loyalty, g)), AlphaSkin.Body);
+                    GUILayout.Label(UkrainianText.Format("ui.people.scars", g, "count", c.ScarCount.ToString()), AlphaSkin.Body);
                     GUILayout.EndVertical();
                 }
             Widgets.ScrollListEnd();
@@ -544,9 +566,22 @@ namespace Game.Gameplay.UI
                 return;
             }
 
-            GUILayout.Label(UkrainianText.Format("ui.quests.stage", g, "stage", offer.Stage.ToString()), AlphaSkin.SubHeader);
-            if (offer.Stage == 0 && UkrainianText.Has(DefaultQuests.OfferKey, g))
+            // Фікс-ревью (minor, знайдено тур-автоплеєм): за межами Stage==0
+            // (пропозиція) ця вкладка не показувала НІЧОГО, крім голого
+            // "Етап N" — ні імені квесту, ні підказки, чому нема ні тексту, ні
+            // кнопок (проміжний етап-перевірка "grass" резолвиться самою
+            // вечірньою/нічною пропозицією, не тут) — з боку виглядало як
+            // недороблена вкладка. "quest.<id>" — той самий ключ, що тепер
+            // резолвить і стрічку подій (ScreenText.EventLine).
+            string questKey = "quest." + offer.QuestId;
+            string questName = UkrainianText.Has(questKey, g) ? UkrainianText.Get(questKey, g) : offer.QuestId;
+            GUILayout.Label(UkrainianText.Format("ui.quests.stage_named", g, "quest", questName, "stage", offer.Stage.ToString()), AlphaSkin.SubHeader);
+
+            bool hasStageText = offer.Stage == 0 && UkrainianText.Has(DefaultQuests.OfferKey, g);
+            if (hasStageText)
                 GUILayout.Label(UkrainianText.Get(DefaultQuests.OfferKey, g), AlphaSkin.Body);
+            else if (offer.Options == null || offer.Options.Count == 0)
+                GUILayout.Label(UkrainianText.Get("ui.quests.check_stage_hint", g), AlphaSkin.Tooltip);
 
             if (offer.Options != null)
                 for (int i = 0; i < offer.Options.Count; i++)

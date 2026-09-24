@@ -941,12 +941,50 @@ namespace Game.Gameplay
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(true);
         }
 
+        /// <summary>
+        /// Фікс-ревью (major, знайдено тур-автоплеєм): камера кадрувала ввесь
+        /// грід по центру ВСЬОГО екрана, не рахуючи ліву панель HUD
+        /// (<see cref="BattleHudScreen"/>, ~34% ширини) — перші 1-2 колонки
+        /// грида (і підписи юнітів на них, напр. "Мирослава"/"Максим Беркут")
+        /// опинялись під панеллю, обрізані. Камера — ортографічна згори
+        /// (<c>GameSceneBuilder.BuildArenaCamera</c>, поворот 90° по X): її
+        /// світовий X напряму мапиться на горизонталь екрана, тож зсуваємо
+        /// центр кадру вправо (камеру — вліво) рівно на стільки, щоб лівий
+        /// край грида (світовий X=0) опинявся не під панеллю, а одразу за нею.
+        /// </summary>
         private void FrameCamera(BattleView view)
         {
             if (ArenaCamera == null || view?.Grid == null) return;
             var frame = BattleArenaView.FrameGrid(view.Grid.Width, view.Grid.Height);
-            ArenaCamera.transform.position = new Vector3(frame.CenterX, ArenaCamera.transform.position.y, frame.CenterZ);
+
+            float shiftX = HudPanelShiftWorldX(frame);
+            ArenaCamera.transform.position = new Vector3(frame.CenterX - shiftX, ArenaCamera.transform.position.y, frame.CenterZ);
             if (ArenaCamera.orthographic) ArenaCamera.orthographicSize = frame.OrthographicSize;
+        }
+
+        private static float HudPanelShiftWorldX(CameraFrame frame)
+        {
+            if (Screen.width <= 0 || Screen.height <= 0) return 0f;
+
+            float aspect = (float)Screen.width / Screen.height;
+            float halfWorldWidth = frame.OrthographicSize * aspect;
+            float worldPerPixel = (halfWorldWidth * 2f) / Screen.width;
+            if (worldPerPixel <= 0f) return 0f;
+
+            // Де на екрані сьогодні опиняється лівий край грида (світовий X=0),
+            // за формулою кадру ДО зсуву.
+            float gridLeftEdgeScreenX = (halfWorldWidth - frame.CenterX) / worldPerPixel;
+            float targetLeftEdgeScreenX = BattleHudScreen.PanelRightEdgePixels() + 24f; // трохи запасу, щоб колонка не впиралась прямо в рамку
+
+            float shiftWorld = 0f;
+            if (gridLeftEdgeScreenX < targetLeftEdgeScreenX)
+                shiftWorld = (targetLeftEdgeScreenX - gridLeftEdgeScreenX) * worldPerPixel;
+
+            // Не даємо зсуву виштовхнути правий край грида за екран (вузькі
+            // грiди на широких екранах мають достатньо запасу, але захист
+            // лишається явним, а не «зазвичай працює»).
+            float maxShift = halfWorldWidth * 0.7f;
+            return shiftWorld > maxShift ? maxShift : shiftWorld;
         }
 
         private void TeardownAndDeactivate()

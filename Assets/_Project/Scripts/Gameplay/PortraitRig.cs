@@ -51,6 +51,18 @@ namespace Game.Gameplay
         /// </summary>
         public Gender ProtagonistGender = Gender.Male;
 
+        /// <summary>
+        /// Фікс-ревью (блокер): шар 30 (незайнятий у TagManager.asset — усі
+        /// шари 8..31 без імені) ізолює світло/камеру станка від решти сцени.
+        /// Без цього обидва <c>Light</c> станка (напрямні — освітлюють УСЮ
+        /// сцену за напрямком, незалежно від позиції) підсвічували б заразом
+        /// хаб/арену боєвки нагорі: cullingMask на камері й на світлі + цей
+        /// шар на щойно заспавненій моделі (і всіх її дітях) тримають рендер
+        /// станка повністю відрізаним від решти гри — так само, як YOffset=-400
+        /// вже ізолює його просторово для самої камери.
+        /// </summary>
+        private const int StageLayer = 30;
+
         private Camera _camera;
         private Transform _stage;
         private GameObject _currentModel;
@@ -112,8 +124,10 @@ namespace Game.Gameplay
             _currentModel = Instantiate(prefab, _stage);
             _currentModel.transform.localPosition = Vector3.zero;
             _currentModel.transform.localRotation = Quaternion.Euler(0f, 200f, 0f);
+            SetLayerRecursively(_currentModel);
 
             TintModel(_currentModel, characterId);
+            FrameCameraOnModel(_currentModel);
 
             var rt = new RenderTexture(TextureSize, TextureSize, 16);
             var previousTarget = _camera.targetTexture;
@@ -141,6 +155,48 @@ namespace Game.Gameplay
             var block = new MaterialPropertyBlock();
             block.SetColor("_BaseColor", new Color(palette.R, palette.G, palette.B));
             foreach (var r in model.GetComponentsInChildren<Renderer>()) r.SetPropertyBlock(block);
+        }
+
+        /// <summary>
+        /// Фікс-ревью (блокер, знайдено тур-автоплеєм): камера рахувалась на
+        /// один вигаданий зріст моделі наперед (фіксована позиція/FOV) — на
+        /// різних Kenney-моделях (Mini Characters, зріст різниться) це давало
+        /// або суцільне тло, або ледь верхівку голови в кадрі (скріншот
+        /// "лише верхівка голови, обрізана по підборіддю, на чорному тлі").
+        /// Кадруємо по РЕАЛЬНИХ межах щойно заспавненої моделі (Renderer.bounds
+        /// охоплює всіх дітей одразу після Instantiate, до першого Render) —
+        /// «бюст» (верхні ~42% зросту — голова й плечі) завжди влучає в кадр,
+        /// хоч би яку модель з пулу підібрав <see cref="PickPrefab"/>.
+        /// </summary>
+        private void FrameCameraOnModel(GameObject model)
+        {
+            if (_camera == null || model == null) return;
+
+            var renderers = model.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return;
+
+            var bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            if (bounds.size.y <= 0f) return;
+
+            // Kenney Mini Characters — «чіબі»-пропорції: голова сама ~40-50%
+            // від зросту моделі. Перша спроба (0.42 зросту, запас ×1.25)
+            // виявилась ще ЗАНАДТО тісною на реальному знімку — кадр впирався
+            // просто в очі/рот, не показуючи голову цілком. 0.6 зросту з
+            // запасом ×1.7 лишає видимою всю голову з невеликим повітрям
+            // навколо, а не тільки її нижню частину.
+            float bustHeight = bounds.size.y * 0.6f;
+            float focusY = bounds.max.y - bustHeight * 0.5f;
+
+            float halfFovRad = _camera.fieldOfView * 0.5f * Mathf.Deg2Rad;
+            float distance = (bustHeight * 0.5f) / Mathf.Tan(halfFovRad) * 1.7f;
+
+            var focusLocal = _stage.InverseTransformPoint(new Vector3(bounds.center.x, focusY, bounds.center.z));
+            _camera.transform.localPosition = new Vector3(focusLocal.x, focusLocal.y, focusLocal.z - distance);
+            // Камера й фокус тепер на однаковій локальній X/Y станка — дивимось
+            // прямо вздовж +Z станка, без нахилу (той нахил, що був тут
+            // раніше, рахувався на фіксовану позицію камери, якої більше нема).
+            _camera.transform.localRotation = Quaternion.identity;
         }
 
         private GameObject PickPrefab(string characterId)
@@ -171,9 +227,9 @@ namespace Game.Gameplay
 
             var camGo = new GameObject("PortraitCamera");
             camGo.transform.SetParent(_stage, false);
-            camGo.transform.localPosition = new Vector3(0f, 1.1f, -2.2f);
-            camGo.transform.localRotation = Quaternion.Euler(6f, 0f, 0f);
-
+            // Позиція/поворот тут — заглушка на перший кадр: FrameCameraOnModel
+            // перераховує обидва щоразу з реальних меж моделі, перш ніж
+            // камера взагалі рендерить (RenderPortrait кличе його до Render()).
             _camera = camGo.AddComponent<Camera>();
             _camera.orthographic = false;
             _camera.fieldOfView = 24f;
@@ -182,13 +238,35 @@ namespace Game.Gameplay
             _camera.nearClipPlane = 0.05f;
             _camera.farClipPlane = 20f;
             _camera.enabled = false;
+            _camera.cullingMask = 1 << StageLayer;
 
-            var lightGo = new GameObject("PortraitLight");
-            lightGo.transform.SetParent(_stage, false);
-            lightGo.transform.localRotation = Quaternion.Euler(35f, -25f, 0f);
-            var light = lightGo.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 1.1f;
+            // Фікс-ревью (блокер): ключове світло було одне й доволі тьмяне
+            // (1.1) — разом зі старою обрізаною рамкою кадру портрет читався
+            // як «майже чорний». Друге, м'якше світло з протилежного боку
+            // (fill) прибирає повністю чорну half-face сторону моделі, не
+            // подвоюючи яскравість напряму в камеру.
+            var keyGo = new GameObject("PortraitKeyLight");
+            keyGo.transform.SetParent(_stage, false);
+            keyGo.transform.localRotation = Quaternion.Euler(35f, -25f, 0f);
+            var key = keyGo.AddComponent<Light>();
+            key.type = LightType.Directional;
+            key.intensity = 1.7f;
+            key.cullingMask = 1 << StageLayer;
+
+            var fillGo = new GameObject("PortraitFillLight");
+            fillGo.transform.SetParent(_stage, false);
+            fillGo.transform.localRotation = Quaternion.Euler(25f, 150f, 0f);
+            var fill = fillGo.AddComponent<Light>();
+            fill.type = LightType.Directional;
+            fill.intensity = 0.6f;
+            fill.cullingMask = 1 << StageLayer;
+        }
+
+        /// <summary>Шар станка (див. <see cref="StageLayer"/>) — рекурсивно, бо GameObject.layer не успадковується дітьми автоматично.</summary>
+        private static void SetLayerRecursively(GameObject go)
+        {
+            go.layer = StageLayer;
+            foreach (Transform child in go.transform) SetLayerRecursively(child.gameObject);
         }
     }
 }

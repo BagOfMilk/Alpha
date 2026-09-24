@@ -328,6 +328,14 @@ namespace Game.Gameplay.Text
         // ---- §7.7 Квест Гафії «Гірка розрада» (+ phase-B: keys-phaseB.json) ----
         private static void AddQuestHafiya(Dictionary<string, string> t)
         {
+            // Фікс-ревью (major, знайдено тур-автоплеєм): "quest"/"questId" у
+            // "quest.offered"/"quest.choice.resolved" (нижче) підставляли
+            // СИРИЙ QuestDefinition.Id ("hafiya") просто через Arg(a,
+            // "questId") — на відміну від companion/post/item/building/site/
+            // faction/scar/domain, у ScreenText.EventLine не було жодного
+            // "quest."-резолву через ContentLabel. Стрічка подій показувала
+            // "Нова пропозиція: hafiya." замість людського імені.
+            AddKey(t, "quest.hafiya", "Гафія");
             AddKey(t, "quest.hafiya.offer", "Знахарка Гафія: «На дальніх схилах росте гірка трава. Принесіть, якщо буде час.»");
             AddKey(t, "quest.hafiya.offer.option.accept", "Принести траву");
             AddKey(t, "quest.hafiya.offer.option.decline", "Не зараз");
@@ -1209,6 +1217,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.feed.empty", "Поки що тихо.");
 
             AddKey(t, "ui.topbar.day", "Доба {day}");
+            // Фікс-ревью (major, знайдено тур-автоплеєм): бейдж фази поруч із
+            // "Доба N" друкував сирий view.Phase.ToString() ("Day"/"Night") —
+            // єдине помітне англійське слово на майже кожному екрані після
+            // відкриття.
+            AddKey(t, "ui.topbar.phase.day", "День");
+            AddKey(t, "ui.topbar.phase.night", "Ніч");
             AddKey(t, "ui.topbar.tier", "Тір {tier}");
             AddKey(t, "ui.topbar.crowd", "Люди: {band}");
             AddKey(t, "ui.topbar.mood", "Настрій: {band}");
@@ -1222,6 +1236,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.escape.hint", "Esc — відкрити/закрити це меню.");
 
             AddKey(t, "ui.creation.confirm", "Вирушати");
+            AddKey(t, "ui.creation.background.selected", "Обрано");
             AddKey(t, "background.warrior.label", "Вигнанець зі зброєю");
             AddKey(t, "background.trader.label", "Мандрівний торговець");
             AddKey(t, "background.healer.label", "Учень знахарки");
@@ -1280,6 +1295,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.quests.title", "Квести");
             AddKey(t, "ui.quests.none_active", "Пропозицій наразі немає.");
             AddKey(t, "ui.quests.stage", "Етап {stage}");
+            // Фікс-ревью (minor, знайдено тур-автоплеєм): голого "Етап N" на
+            // окремій вкладці Хабу (без контексту сусідньої "Пропозиція",
+            // яку дає NightScreen) було замало — вкладка читалась як
+            // порожня/недороблена. Ім'я квесту в підписі + підказка на
+            // проміжному етапі без тексту/кнопок.
+            AddKey(t, "ui.quests.stage_named", "{quest} — етап {stage}");
+            AddKey(t, "ui.quests.check_stage_hint", "Тут нема чого показати — переглянь пропозицію цього етапу ввечері чи вранці.");
 
             AddKey(t, "ui.factions.title", "Фракції");
 
@@ -1358,13 +1380,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.people.title", "Люди");
             AddKey(t, "ui.people.level", "Рівень {level}");
             AddKey(t, "ui.people.scars", "Шрамів: {count}");
-            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): HubScreen.DrawPeople
-            // читає обидва ключі через Get(), не Format() (значення приходить
-            // ОКРЕМИМ другим стовпцем LabeledRow — ScreenText.CompanionStatusLabel/
-            // LoyaltyLabel), тож "{status}"/"{band}" у самому шаблоні ніколи не
-            // підставлялись — гравець бачив рядок буквально "Стан: {status}".
-            AddKey(t, "ui.people.loyalty", "Довіра:");
-            AddKey(t, "ui.people.status", "Стан:");
+            // Фікс-ревью (major, знайдено тур-автоплеєм): HubScreen.DrawPeople
+            // раніше малював ці два як Widgets.LabeledRow(label, value) — той
+            // самий хелпер, що коректно розтягує "Стан:"/"Довіра:" на всю
+            // ширину РЯДКА (ExpandWidth(true) на підписі), а значення прибиває
+            // до ПРАВОГО краю широкої картки персонажа: на панелі ~1200px
+            // "Стан:" і "На посту" опинялись на протилежних кінцях того самого
+            // рядка, і гравець читав це як "значення відсутнє". Тепер підпис і
+            // значення — один рядок Format() поруч, як "Рівень {level}" нижче.
+            AddKey(t, "ui.people.loyalty", "Довіра: {loyalty}");
+            AddKey(t, "ui.people.status", "Стан: {status}");
             AddKey(t, "ui.people.equipped", "Спорядження: {items}");
             AddKey(t, "ui.people.equipped.none", "нічого");
             AddKey(t, "ui.people.sheet.limited",

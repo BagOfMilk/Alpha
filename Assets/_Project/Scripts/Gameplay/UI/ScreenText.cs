@@ -355,7 +355,14 @@ namespace Game.Gameplay.UI
             string slot = Arg(a, "slot") ?? "";
             string level = Arg(a, "level") ?? "";
             string chapter = Arg(a, "arcId") ?? "";
-            string quest = Arg(a, "questId") ?? "";
+            // Фікс-ревью (major, знайдено тур-автоплеєм): раніше тут був сирий
+            // Arg(a, "questId") ?? "" — на відміну від companion/post/item/
+            // building/site/faction/scar/domain нижче, questId НЕ проходив
+            // через ContentLabel, тож стрічка подій показувала гравцю сирий
+            // QuestDefinition.Id ("Нова пропозиція: hafiya.") замість
+            // перекладеного імені ("quest.<id>" у таблиці — той самий
+            // префіксний принцип, що й решта).
+            string quest = ContentLabel("quest", Arg(a, "questId"), gender);
             string path = PathWords(Arg(a, "path"), gender);
 
             // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "companion.died.m"/
