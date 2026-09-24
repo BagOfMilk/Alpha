@@ -28,7 +28,15 @@ namespace Game.Gameplay.UI
             if (offer.IsCrisis)
                 Widgets.Badge("!", AlphaSkin.Danger);
 
-            string titleKey = "incident." + offer.TopicId + ".title";
+            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): PendingOfferView.
+            // TopicId ВЖЕ несе префікс "incident." (DefaultIncidents.cs/
+            // OpeningContent.cs: кожен запис — `TopicId = "incident.<id>"`),
+            // а таблиця тримає ключі як "incident.<id>.title" (один префікс,
+            // без подвоєння). Старий рядок додавав "incident." ЗНОВУ —
+            // "incident.incident.pass_vanguard.title" ніколи не існував, тож
+            // МОДАЛКА КОЖНОГО рішення в грі показувала сирий TopicId
+            // ("incident.pass_vanguard") замість перекладеного заголовка.
+            string titleKey = offer.TopicId + ".title";
             GUILayout.Label(UkrainianText.Has(titleKey, g) ? UkrainianText.Get(titleKey, g) : offer.TopicId, AlphaSkin.Body);
             GUILayout.Space(10f);
 

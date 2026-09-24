@@ -110,6 +110,24 @@ namespace Game.Gameplay
 
         private void DrawStateScreen(SessionState state)
         {
+            // Фіх-ревью (Фаза F, знайдено тур-автоплеєм): бій може
+            // розв'язатись СИНХРОННО всередині будь-якої Combat*-команди
+            // (GameSession.OnBattleResolved зсуває State ДАЛІ в тому самому
+            // виклику — §4.1) — без цієї перевірки панель результату бою
+            // (BattlePresenter.ResultPending) НІКОЛИ не встигала б
+            // відмалюватись жодному гравцю: диспетчер нижче перемикався б на
+            // наступний екран за той самий кадр, у якому бій щойно скінчився,
+            // і BattleHudScreen.DrawResultPanel лишалась мертвим кодом.
+            // Презентер сам знімає активність (TeardownAndDeactivate) лише
+            // коли гравець підтвердить панель ("Далі" → AcknowledgeResult) —
+            // доти тримаємо його на екрані, незалежно від того, куди вже
+            // пішов Session.State.
+            if (BattlePresenter != null && BattlePresenter.IsActive && BattlePresenter.ResultPending)
+            {
+                DrawBattle();
+                return;
+            }
+
             switch (state)
             {
                 case SessionState.Title:

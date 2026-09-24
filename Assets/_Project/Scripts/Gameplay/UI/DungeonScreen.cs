@@ -22,9 +22,15 @@ namespace Game.Gameplay.UI
             {
                 Widgets.LabeledRow(UkrainianText.Get("ui.dungeon.depth", g), view.Depth.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("ui.dungeon.threat", g), ScreenText.ThreatChip(view.ThreatBand, g));
-                Widgets.LabeledRow(UkrainianText.Get("ui.dungeon.unbanked", g),
-                    UkrainianText.Format("ui.dungeon.unbanked", g,
-                        "materials", view.UnbankedMaterials.ToString(), "gold", view.UnbankedGold.ToString()));
+                // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "ui.dungeon.unbanked" —
+                // ШАБЛОН із плейсхолдерами (Format-ключ), а не готовий підпис;
+                // LabeledRow.label раніше кликав Get() на тому самому ключі —
+                // гравець бачив буквальний рядок "Незбережено: {materials}
+                // матеріалів, {gold} золота" у лівій колонці. Value-колонка
+                // (Format) уже рахувала правильно — просто дублювала
+                // непотрібний підпис.
+                GUILayout.Label(UkrainianText.Format("ui.dungeon.unbanked", g,
+                    "materials", view.UnbankedMaterials.ToString(), "gold", view.UnbankedGold.ToString()), AlphaSkin.Body);
 
                 GUILayout.Space(10f);
 
@@ -44,11 +50,18 @@ namespace Game.Gameplay.UI
                 case "Combat":
                     if (room.HasQuietBypass)
                     {
-                        string quiet = UkrainianText.Format("ui.decision.option_line", g,
+                        // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): окремий
+                        // короткий ключ "ui.dungeon.option_line" замість
+                        // спільного "ui.decision.option_line" (звичайна точка
+                        // рішення) — той шаблон закінчується
+                        // "— {candidate}, очікувана полоса: {band}.", а в
+                        // данжі candidate/band не існує (Поправка №1: тихий
+                        // обхід — 0 ризику, без кандидата й полоси), тож
+                        // гравець бачив би висячі "— , очікувана полоса: .".
+                        string quiet = UkrainianText.Format("ui.dungeon.option_line", g,
                             "path", UkrainianText.Get("ui.dungeon.quiet", g),
                             "skill", ScreenText.SkillLabel(room.QuietSkillKey, g),
-                            "threshold", room.QuietThreshold.ToString(),
-                            "candidate", "", "band", "");
+                            "threshold", room.QuietThreshold.ToString());
                         if (Widgets.PrimaryButton(quiet)) Resolve(shell, IncidentPath.Quiet);
                     }
                     else
@@ -56,12 +69,16 @@ namespace Game.Gameplay.UI
                         Widgets.DisabledButton(UkrainianText.Get("ui.dungeon.quiet", g), UkrainianText.Get("ui.common.none", g));
                     }
 
-                    string bloody = UkrainianText.Format("ui.decision.option_line", g,
-                        "path", UkrainianText.Get("ui.dungeon.bloody", g),
-                        "skill", ScreenText.SkillLabel(room.BloodySkillKey, g),
-                        "threshold", room.BloodyThreshold.ToString(),
-                        "candidate", "", "band", "");
-                    if (Widgets.DangerButton(bloody)) Resolve(shell, IncidentPath.Bloody);
+                    // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): кроваво в
+                    // бойовій кімнаті данжу — завжди бій без перевірки навички
+                    // (DungeonRun.ResolveRoom: Bloody одразу EnterAwaitingBattle,
+                    // жодного порогу) — GameSession.BuildDungeonRoomView НІКОЛИ
+                    // не заповнює BloodySkillKey/BloodyThreshold (лишаються
+                    // null/0), тож стара формула "{skill} ≥ {threshold}"
+                    // показувала порожній навик і "≥ 0". Без штучного порогу,
+                    // яким і так ніхто не керує.
+                    if (Widgets.DangerButton(UkrainianText.Get("ui.dungeon.bloody_fight", g)))
+                        Resolve(shell, IncidentPath.Bloody);
                     break;
 
                 case "Treasure":

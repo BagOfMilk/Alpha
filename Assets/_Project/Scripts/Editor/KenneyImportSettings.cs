@@ -72,30 +72,24 @@ namespace Game.Gameplay.EditorTools
             importer.importBlendShapes = false;
         }
 
+        /// <summary>
+        /// Фаза F знахідка: у Unity 6000.4 цей класичний колбек
+        /// <c>AssetPostprocessor.OnPostprocessMaterial</c> НЕ викликається для
+        /// матеріалів, які FBX-імпортер видобуває зовнішніми файлами через
+        /// <c>ModelImporterMaterialImportMode.ImportViaMaterialDescription</c>
+        /// (сам `materialLocation.External`, який це вмикав, тепер ще й
+        /// позначений obsolete редактором — "no longer supported"). Файли
+        /// .mat усе одно з'являються (новий, недокументований шлях
+        /// видобування), просто без цього хука. Перевірено діагностичним
+        /// логом під час переимпорту: жодного виклику за ~500 моделей.
+        /// Тому колір/матовість тепер правляться ПІСЛЯ переімпорту, напряму
+        /// по вже створених .mat-файлах — <see cref="ApplyMaterialFixups"/>,
+        /// викликається з <see cref="Reimport"/>. Метод лишається тут
+        /// незадіяним, а не видаленим — задокументувати граблі для того, хто
+        /// наступного разу здивується, чому колбек "є, а не працює".
+        /// </summary>
         private void OnPostprocessMaterial(Material material)
         {
-            if (!IsKenney || material == null) return;
-
-            // Шейдер НЕ трогаем — его выбрал импортёр под активный пайплайн.
-            // Правим только вид поверхности: стилизованные модели не блестят,
-            // иначе хаты и кроны выглядят мокрыми под любым светом.
-            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0f);
-            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0f);
-
-            // Nature Kit без текстур: цвет материала — сырой diffuse из самого
-            // FBX (проверено по тексту файла, B8), не баг импортёра и не гамма.
-            // У части имён эта заготовка — бирюза/пастель, а не зелень/камень:
-            // "leafsGreen" — (0.1608, 0.7882, 0.6706), "leafsDark" —
-            // (0.1686, 0.6510, 0.6667), "grass" — (0.1725, 0.8471, 0.7216),
-            // "stone" — (0.7216, 0.8863, 0.9098). Правим точечно по имени
-            // материала на правдоподобные карпатские тона; остальные имена
-            // набора (цветы, берёзовая кора, вода, кукуруза, тан гриба…) уже
-            // выглядят правдоподобно как есть и не трогаются.
-            if (IsNatureKit && NaturePalette.TryGetValue(material.name, out var believable))
-            {
-                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", believable);
-                if (material.HasProperty("_Color")) material.SetColor("_Color", believable);
-            }
         }
 
         /// <summary>
@@ -146,6 +140,60 @@ namespace Game.Gameplay.EditorTools
                 ImportAssetOptions.ForceUpdate | ImportAssetOptions.ImportRecursive);
             AssetDatabase.Refresh();
             Debug.Log("Наборы Kenney переимпортированы");
+
+            ApplyMaterialFixups();
+        }
+
+        /// <summary>
+        /// Заміна непрацюючого <see cref="OnPostprocessMaterial"/> (див.
+        /// коментар там): матовість — усім матеріалам усіх наборів; палітра
+        /// Nature Kit — лише тим .mat-файлам під <see cref="NatureKitRoot"/>,
+        /// чиє ім'я (== ім'я файлу без розширення, той самий рядок, що й ключ
+        /// <see cref="NaturePalette"/>) там знайдене.
+        /// </summary>
+        private static void ApplyMaterialFixups()
+        {
+            var guids = AssetDatabase.FindAssets("t:Material", new[] { Root.TrimEnd('/') });
+            int matte = 0, painted = 0;
+            foreach (var guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (mat == null) continue;
+
+                // Шейдер НЕ трогаем — его выбрал импортёр под активный
+                // пайплайн. Правим только вид поверхности: стилизованные
+                // модели не блестят, иначе хаты и кроны выглядят мокрыми под
+                // любым светом.
+                bool changed = false;
+                if (mat.HasProperty("_Smoothness") && mat.GetFloat("_Smoothness") != 0f)
+                { mat.SetFloat("_Smoothness", 0f); changed = true; }
+                if (mat.HasProperty("_Glossiness") && mat.GetFloat("_Glossiness") != 0f)
+                { mat.SetFloat("_Glossiness", 0f); changed = true; }
+                if (changed) matte++;
+
+                // Nature Kit без текстур: цвет материала — сырой diffuse из
+                // самого FBX (проверено по тексту файла, B8), не баг
+                // импортёра и не гамма. У части имён эта заготовка —
+                // бирюза/пастель, а не зелень/камень: "leafsGreen" —
+                // (0.1608, 0.7882, 0.6706), "leafsDark" — (0.1686, 0.6510,
+                // 0.6667), "grass" — (0.1725, 0.8471, 0.7216), "stone" —
+                // (0.7216, 0.8863, 0.9098). Правим точечно по имени
+                // материала (= имя файла) на правдоподобные карпатские тона.
+                if (path.StartsWith(NatureKitRoot, System.StringComparison.Ordinal) &&
+                    NaturePalette.TryGetValue(mat.name, out var believable))
+                {
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", believable);
+                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", believable);
+                    painted++;
+                    changed = true;
+                }
+
+                if (changed) EditorUtility.SetDirty(mat);
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Kenney] матовість виправлено у " + matte + " матеріалах, палітру Nature Kit застосовано до " + painted + ".");
         }
 
         /// <summary>
@@ -155,14 +203,14 @@ namespace Game.Gameplay.EditorTools
         /// <c>Library/</c> — не в репозиторії, живе на конкретній машині разом
         /// із самим імпортованим кешем).
         /// </summary>
-        private const string PaletteVersion = "carpathian-2";
+        private const string PaletteVersion = "carpathian-3";
 
         private static string MarkerPath =>
             Path.Combine("Library", "KenneyPaletteVersion.txt");
 
         /// <summary>
-        /// Грабли CLAUDE.md: <see cref="NaturePalette"/> в <see cref="OnPostprocessMaterial"/>
-        /// перефарбовує матеріал лише ПІД ЧАС імпорту — якщо Library вже тепла
+        /// Грабли CLAUDE.md: <see cref="NaturePalette"/> в <see cref="ApplyMaterialFixups"/>
+        /// перефарбовує матеріал лише ПІСЛЯ явного переімпорту — якщо Library вже тепла
         /// (модель імпортована ДО того, як з'явилась/змінилась палітра), крони
         /// й трава лишаються бірюзовими доти, доки хтось руками не натисне
         /// «Alpha/Переимпортировать…». <c>GameSceneBuilder.Build()</c> кличе

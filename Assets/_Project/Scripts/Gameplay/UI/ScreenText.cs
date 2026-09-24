@@ -207,11 +207,27 @@ namespace Game.Gameplay.UI
 
         // ===================== збереження =====================
 
+        /// <summary>
+        /// Той самий сентинел, що <c>Game.Gameplay.SaveFileStore.AutosaveSlot</c>
+        /// (не звертаємось до нього напряму — SaveFileStore.cs не підключений
+        /// до tools/Alpha.Play, куди цей файл теж іде прямим Compile Include).
+        /// </summary>
+        private const int AutosaveSlotSentinel = -1;
+
+        /// <summary>
+        /// Фікс-ревью (Фаза F, знайдено тур-автоплеєм): SaveFileStore.ListHeaders
+        /// завжди додає слот автозбереження (AutosaveSlot = -1) до звичайних
+        /// іменованих слотів — без цієї підстановки гравець бачив би
+        /// "Слот -1: порожньо" замість людського підпису.
+        /// </summary>
         public static string SaveSlotLine(int slot, bool occupied, string headline, int day, Gender gender)
         {
+            string slotLabel = slot == AutosaveSlotSentinel
+                ? UkrainianText.Get("ui.save.slot.auto_label", gender)
+                : slot.ToString();
             return occupied
-                ? UkrainianText.Format("ui.save.slot", gender, "slot", slot.ToString(), "headline", headline ?? "", "day", day.ToString())
-                : UkrainianText.Format("ui.save.slot.empty", gender, "slot", slot.ToString());
+                ? UkrainianText.Format("ui.save.slot", gender, "slot", slotLabel, "headline", headline ?? "", "day", day.ToString())
+                : UkrainianText.Format("ui.save.slot.empty", gender, "slot", slotLabel);
         }
 
         // ===================== фідбек результатів команд =====================
@@ -328,7 +344,16 @@ namespace Game.Gameplay.UI
             string quest = Arg(a, "questId") ?? "";
             string path = PathWords(Arg(a, "path"), gender);
 
-            if (!UkrainianText.Has(evt.Key, gender)) return FallbackLine(evt.Key, a);
+            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "companion.died.m"/
+            // ".f" (і подібні ключі, що описують КОГОСЬ конкретного, а не
+            // мовця) раніше завжди обирались за родом ГЛЯДАЧА (переданий
+            // `gender` — рід протагоніста, DrawEventFeed передає
+            // ProtagonistGender) — стрічка показувала "Максим Беркут
+            // загинула" (жіноча форма), щойно протагоніст обирав жіночий рід,
+            // незалежно від того, хто насправді загинув. Ключ вибирається за
+            // родом ІМЕННОГО суб'єкта події (companionId), коли він відомий.
+            Gender subjectGender = SubjectGender(Arg(a, "companionId"), gender);
+            if (!UkrainianText.Has(evt.Key, subjectGender)) return FallbackLine(evt.Key, a);
 
             // Шаблоны таблицы пишут подстановки двумя способами: читаемыми
             // именами ({companion}, {post}) и сырыми именами аргументов события
@@ -352,7 +377,30 @@ namespace Game.Gameplay.UI
             if (a != null)
                 foreach (var kv in a) { pairs.Add(kv.Key); pairs.Add(kv.Value); }
 
-            return UkrainianText.Format(evt.Key, gender, pairs.ToArray());
+            return UkrainianText.Format(evt.Key, subjectGender, pairs.ToArray());
+        }
+
+        /// <summary>
+        /// Рід ІМЕННОГО суб'єкта (companionId), не глядача: фіксований каст
+        /// (§3.0 TEST_BUILD.md) має відомий рід кожного, крім протагоніста —
+        /// той бере рід глядача (<paramref name="viewerGender"/>), бо глядач
+        /// його й обрав (той самий принцип, що вже коректно працює в
+        /// BattleArenaController.IsFemaleCompanion, окремій копії для боєвого
+        /// шва — тут не викликаний напряму, щоб ScreenText лишався чистим C#
+        /// без залежності на лінт-виключений Gameplay-файл).
+        /// </summary>
+        private static Gender SubjectGender(string companionId, Gender viewerGender)
+        {
+            if (string.IsNullOrEmpty(companionId)) return viewerGender;
+            if (companionId == GameSession.ProtagonistId) return viewerGender;
+            switch (companionId)
+            {
+                case "myroslava":
+                case "healer": // Знахарка Гафія
+                    return Gender.Female;
+                default:
+                    return Gender.Male; // Максим, Захар, Дід Овсій, вороги/NPC — чоловічий рід за замовчуванням
+            }
         }
 
         private static string PathWords(string raw, Gender gender)
@@ -371,6 +419,11 @@ namespace Game.Gameplay.UI
             if (UkrainianText.Has("loyalty.band." + lower, gender)) return UkrainianText.Get("loyalty.band." + lower, gender);
             if (UkrainianText.Has("faction.band." + lower, gender)) return UkrainianText.Get("faction.band." + lower, gender);
             if (UkrainianText.Has("readiness.band." + lower, gender)) return UkrainianText.Get("readiness.band." + lower, gender);
+            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "dungeon.threat_band_changed"
+            // (GameSession.cs) шле сирий DungeonThreatBand.ToString() ("Dangerous",
+            // "Tense", "Deadly", "Calm") як "band" — без цього рядка стрічка подій
+            // показувала англійське слово напряму (R7 такого не дозволяє).
+            if (UkrainianText.Has("dungeon.threat." + lower, gender)) return UkrainianText.Get("dungeon.threat." + lower, gender);
             return rawBand;
         }
 

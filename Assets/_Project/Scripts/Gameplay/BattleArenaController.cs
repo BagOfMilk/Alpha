@@ -104,6 +104,16 @@ namespace Game.Gameplay
         private readonly List<string> _logLines = new List<string>();
         private const int MaxLogLines = 40;
 
+        /// <summary>
+        /// Фаза F: скільки записів <c>_session.DayLog</c> уже пройшло крізь
+        /// <see cref="AfterCommand"/>. RunCommand/RequestAutoResolve рахують
+        /// свій власний "before" ЛОКАЛЬНО (бо самі й викликали команду щойно
+        /// перед цим) — це поле держить той самий курсор МІЖ кадрами, щоб
+        /// <see cref="DetectExternalResolution"/> (Update(), не команда)
+        /// знала, з якого місця читати нові записи.
+        /// </summary>
+        private int _lastKnownDayLogCount;
+
         // ================= публічний зріз для BattleHudScreen =================
 
         public BattleView View => _lastView;
@@ -160,6 +170,12 @@ namespace Game.Gameplay
             RebuildGrid(_lastView);
             RebuildUnits(_lastView);
             FrameCamera(_lastView);
+
+            // Фаза F: курсор DayLog стартує від ПОТОЧНОГО розміру — не 0, щоб
+            // не перечитувати записи з-ДО цього бою (вони однаково без
+            // combat.*-ключів, ConsumeEvent їх ігнорує, але навіщо зайва
+            // робота щоразу, коли бій розв'язується зовнішньою командою).
+            _lastKnownDayLogCount = _session?.DayLog.Count ?? 0;
         }
 
         public void Exit()
@@ -215,7 +231,23 @@ namespace Game.Gameplay
             UpdateHover();  // спершу курсор — щоб підсвітка й прев'ю нижче бачили цей самий кадр, не попередній
             Refresh();
             HandleClicks();
+
+            // Фаха F знахідка (тур-автоплей): бій може розв'язатись командою,
+            // що обійшла RunCommand/RequestAutoResolve — напр.
+            // AutoplayGameDriver кличе GameSession.Combat* напряму через
+            // shell.TryRun (як і IMGUI-фолбек BattleScreen.cs). GameSession.
+            // State вже пішов ДАЛІ (OnBattleResolved зсуває його синхронно
+            // всередині самої команди), а презентер про завершення бою не
+            // дізнався б: жоден AfterCommand не викликався, _resultPending
+            // лишався б false НАЗАВЖДИ, GameShell більше не малює DrawBattle()
+            // для стану поза Battle — і TeardownAndDeactivate ніколи не
+            // спрацьовував би. Арена (юніти, підписи, камера) лишалась би
+            // видимою У ФОНІ кожного наступного екрана до кінця гри.
+            if (_session != null && _session.State != SessionState.Battle)
+                DetectExternalResolution();
         }
+
+        private void DetectExternalResolution() => AfterCommand(_lastKnownDayLogCount);
 
         private void Refresh()
         {
@@ -715,6 +747,7 @@ namespace Game.Gameplay
             var log = _session.DayLog;
             for (int i = dayLogCountBefore; i < log.Count; i++)
                 ConsumeEvent(log[i]);
+            _lastKnownDayLogCount = log.Count; // Фаза F: курсор для DetectExternalResolution/наступного AfterCommand
 
             // Кожна дія — одноразовий намір: гравець свідомо озброює наступну
             // (менше випадкових повторних кліків, ніж «здібність лишається
@@ -785,7 +818,12 @@ namespace Game.Gameplay
             evt.Args.TryGetValue("companionId", out var companionId);
             bool female = IsFemaleCompanion(companionId);
             string name = ResolveCompanionName(companionId, female);
-            string line = UkrainianText.Format(female ? "companion.died.f" : "companion.died.m", female, "companion", name);
+            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): таблиця тримає
+            // плейсхолдер "{companionId}" (той самий рядок аргументу, що йде
+            // з GameEvent.Args — див. UkrainianText.cs "companion.died.*"),
+            // не "{companion}" — панель результату бою показувала гравцю
+            // буквальний рядок "{companionId} загинув на цьому шляху."
+            string line = UkrainianText.Format(female ? "companion.died.f" : "companion.died.m", female, "companionId", name);
             _resultCasualtyLines.Add(line);
         }
 
@@ -796,7 +834,9 @@ namespace Game.Gameplay
             bool female = IsFemaleCompanion(companionId);
             string name = ResolveCompanionName(companionId, female);
             string scarText = UkrainianText.Get("scar." + scarId, female);
-            string line = UkrainianText.Format("scar.granted", female, "companion", name, "scar", scarText);
+            // Той самий фікс, що й AppendDeathCasualty вище: таблиця "scar.granted"
+            // тримає "{companionId}"/"{scarId}", не "{companion}"/"{scar}".
+            string line = UkrainianText.Format("scar.granted", female, "companionId", name, "scarId", scarText);
             _resultCasualtyLines.Add(line);
         }
 

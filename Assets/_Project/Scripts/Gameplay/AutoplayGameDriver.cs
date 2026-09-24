@@ -61,6 +61,8 @@ namespace Game.Gameplay
         private bool _decisionShown;
         private bool _eveningShown;
         private bool _nightShown;
+        private bool _delveDeparted;
+        private bool _crisisFinaleAttempted;
 
         public AutoplayGameDriver(IAutoplayHost host, GameShell shell, bool useThresholdRule)
         {
@@ -76,6 +78,7 @@ namespace Game.Gameplay
             // ---------------- Титул -> Нова гра ----------------
             foreach (var f in WaitFrames(FramesMedium)) yield return f;
             _host.Capture("title");
+            yield return 0;
 
             var hitRule = _useThresholdRule ? HitRuleKind.Threshold : HitRuleKind.Percent;
             Run(() => Session.NewGame(new NewGameOptions
@@ -90,6 +93,7 @@ namespace Game.Gameplay
             // ---------------- Створення протагоніста ----------------
             foreach (var f in WaitFrames(FramesShort)) yield return f;
             _host.Capture("creation-default");
+            yield return 0;
 
             var creationView = Session.GetProtagonistCreationView();
             var backgrounds = creationView?.AvailableBackgrounds;
@@ -107,6 +111,7 @@ namespace Game.Gameplay
 
             foreach (var f in WaitFrames(FramesShort)) yield return f;
             _host.Capture("creation-filled");
+            yield return 0;
 
             Run(() => Session.ConfirmCreation());
             _host.Log("Створення підтверджено: Оксана, жіночий рід, передісторія " + (backgroundId ?? "?") + ".");
@@ -120,8 +125,13 @@ namespace Game.Gameplay
                 guard++;
                 if (guard > MaxLoopSteps)
                 {
-                    _host.Log("Запобіжник maxSteps (" + MaxLoopSteps + ") — можливе зациклення тура; зупинено примусово.");
-                    yield break;
+                    // Виняток, НЕ yield break: запобіжник — це провал тура
+                    // (ознака зациклення десь у диспетчері станів), а не чесне
+                    // завершення. AutoplayBootstrap ловить будь-який виняток і
+                    // завершує процес кодом 2 — те саме мало б статися й тут,
+                    // а не тихий код виходу 0 з незавершеним туром.
+                    throw new InvalidOperationException("Запобіжник maxSteps (" + MaxLoopSteps +
+                        ") — тур застряг у стані " + Session.State + " (можливе зациклення диспетчера).");
                 }
 
                 var state = Session.State;
@@ -135,6 +145,7 @@ namespace Game.Gameplay
                     {
                         sceneShots++;
                         _host.Capture("opening-scene-" + sceneShots);
+                        yield return 0;
                     }
                     continue;
                 }
@@ -154,6 +165,7 @@ namespace Game.Gameplay
                         {
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _host.Capture("freeplay-day" + day);
+                            yield return 0;
                             _host.Log("FreePlay доби " + day + " досягнуто (стартувало на добу " + _freePlayStartDay + ") — тур завершено успішно.");
                             yield break;
                         }
@@ -167,6 +179,7 @@ namespace Game.Gameplay
                             _shell.SetHubTab(tab);
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _host.Capture(HubTabSlugs[tab]);
+                            yield return 0;
                         }
                         _shell.SetHubTab(0);
                         _host.Log("Хаб: усі " + HubTabSlugs.Length + " вкладок відвідано й знято.");
@@ -185,7 +198,7 @@ namespace Game.Gameplay
                     }
 
                     MaybeOrderBuilding(day);
-                    if (day == 4) MaybeDepartDelve();
+                    if (day == 4 && !_delveDeparted) MaybeDepartDelve();
 
                     if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
                     {
@@ -210,6 +223,7 @@ namespace Game.Gameplay
                     {
                         foreach (var f in WaitFrames(FramesShort)) yield return f;
                         _host.Capture("decision-day" + Session.CurrentView.Day);
+                        yield return 0;
                         _decisionShown = true;
                     }
 
@@ -226,6 +240,7 @@ namespace Game.Gameplay
                     bool firstBattle = !_battleShown;
                     _battleShown = true;
                     _host.Capture(firstBattle ? "battle-start" : "battle-secondary-start");
+                    yield return 0;
 
                     if (firstBattle)
                     {
@@ -235,13 +250,33 @@ namespace Game.Gameplay
                             if (view == null || view.Outcome != "Ongoing") break;
                             PlayOneBattleStep(view);
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
+                            if (Session.State != SessionState.Battle) break; // ручний хід сам добив бій
                         }
-                        _host.Capture("battle-after-turns");
+                        if (Session.State == SessionState.Battle)
+                        {
+                            _host.Capture("battle-after-turns");
+                            yield return 0;
+                        }
                     }
 
-                    Run(() => Session.CombatAutoResolve());
-                    foreach (var f in WaitFrames(FramesMedium)) yield return f;
+                    // Ручні ходи могли вже добити бій (Session.State пішов
+                    // далі) — CombatAutoResolve() на порожньому бою кидає
+                    // InvalidOperationException (RequireBattle), TryRun її
+                    // ковтає, але немає сенсу й кликати.
+                    if (Session.State == SessionState.Battle)
+                    {
+                        Run(() => Session.CombatAutoResolve());
+                        foreach (var f in WaitFrames(FramesMedium)) yield return f;
+                    }
+
+                    // Панель результату (GameShell.DrawStateScreen: показує її,
+                    // доки BattlePresenter.ResultPending — незалежно від того,
+                    // куди вже пішов Session.State) — чекаємо, доки презентер
+                    // сам її підхопить (BattleArenaController.Update →
+                    // DetectExternalResolution), тоді знімаємо.
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
                     _host.Capture(firstBattle ? "battle-result" : "battle-secondary-result");
+                    yield return 0;
                     AcknowledgeBattleIfPending();
                     foreach (var f in WaitFrames(FramesShort)) yield return f;
                     continue;
@@ -263,6 +298,7 @@ namespace Game.Gameplay
                             {
                                 foreach (var f in WaitFrames(FramesShort)) yield return f;
                                 _host.Capture("dungeon-room-" + (view.RoomsCleared + 1));
+                                yield return 0;
 
                                 var room = view.CurrentRoom;
                                 if (room.Type == "Combat")
@@ -274,6 +310,7 @@ namespace Game.Gameplay
                                 {
                                     foreach (var f in WaitFrames(FramesShort)) yield return f;
                                     _host.Capture("dungeon-event");
+                                    yield return 0;
                                     Run(() => Session.ResolveDungeonEvent(1));
                                 }
                                 else
@@ -293,6 +330,7 @@ namespace Game.Gameplay
                             {
                                 foreach (var f in WaitFrames(FramesShort)) yield return f;
                                 _host.Capture("dungeon-extract");
+                                yield return 0;
                                 Run(() => Session.ExtractDungeon());
                                 foreach (var f in WaitFrames(FramesShort)) yield return f;
                                 break;
@@ -315,6 +353,7 @@ namespace Game.Gameplay
                     {
                         foreach (var f in WaitFrames(FramesShort)) yield return f;
                         _host.Capture("evening-patrol");
+                        yield return 0;
                     }
 
                     var quest = Run(() => Session.OfferQuestStage(DefaultQuests.HafiyaId));
@@ -322,6 +361,7 @@ namespace Game.Gameplay
                     {
                         foreach (var f in WaitFrames(FramesShort)) yield return f;
                         _host.Capture("evening-quest-offer");
+                        yield return 0;
                     }
                     _eveningShown = true;
 
@@ -344,14 +384,27 @@ namespace Game.Gameplay
                 {
                     int day = Session.CurrentView.Day;
 
-                    if (day == 5)
+                    if (day == 5 && !_crisisFinaleAttempted)
                     {
+                        // Один раз за тур (той самий принцип, що й
+                        // _delveDeparted): якщо ReactToCrisis/ResolveFinale
+                        // не просунули Session.State з якоїсь причини (вікно
+                        // кризи вже закрите, фінал уже розв'язано раніше
+                        // тощо), TryRun ковтає виняток мовчки — без цього
+                        // прапорця головний цикл повторював би весь блок
+                        // щокроку до запобіжника maxSteps (спіймано
+                        // тур-автоплеєм: тисячі дублів crisis-day5/
+                        // finale-choice).
+                        _crisisFinaleAttempted = true;
+
                         foreach (var f in WaitFrames(FramesShort)) yield return f;
                         _host.Capture("crisis-day5");
+                        yield return 0;
                         Run(() => Session.ReactToCrisis(CrisisReaction.SpendGold));
 
                         foreach (var f in WaitFrames(FramesShort)) yield return f;
                         _host.Capture("finale-choice");
+                        yield return 0;
                         // Кроваво — навмисно (ціль 1: "фінальний бій" мусить
                         // трапитись, не залежно від того, чи є тихий кандидат).
                         Run(() => Session.ResolveFinale(IncidentPath.Bloody));
@@ -362,6 +415,7 @@ namespace Game.Gameplay
                     {
                         foreach (var f in WaitFrames(FramesShort)) yield return f;
                         _host.Capture("night");
+                        yield return 0;
                         _nightShown = true;
                     }
                     Run(() => Session.AdvanceNight());
@@ -373,12 +427,12 @@ namespace Game.Gameplay
                 {
                     foreach (var f in WaitFrames(FramesMedium)) yield return f;
                     _host.Capture("summary");
+                    yield return 0;
                     Run(() => Session.AcknowledgeSummary());
                     continue;
                 }
 
-                _host.Log("Тур зупинено в непередбаченому стані " + state + ".");
-                yield break;
+                throw new InvalidOperationException("Тур не знає, як показати стан " + state + " — диспетчер не покриває його.");
             }
         }
 
@@ -438,9 +492,18 @@ namespace Game.Gameplay
             Run(() => Session.OrderBuilding(DefaultBuildings.Workshop));
         }
 
-        /// <summary>§3.4: збори у вилазку-данж «Покинутий табір авангарду» на добу 4 — трійка з протагоніста/Максима/Мирослави, якщо всі легальні кандидати.</summary>
+        /// <summary>
+        /// §3.4: збори у вилазку-данж «Покинутий табір авангарду» на добу 4 —
+        /// трійка з протагоніста/Максима/Мирослави, якщо всі легальні
+        /// кандидати. <c>_delveDeparted</c> виставляється ОДРАЗУ (навіть якщо
+        /// цей конкретний виклик нічого не відправив) — інакше, якщо
+        /// повернення з данжу не одразу зсуває <c>CurrentView.Day</c> за межі
+        /// 4, головний цикл кликав би цей метод ЗНОВУ щоранку доби 4, доки не
+        /// впреться в запобіжник maxSteps (спіймано тур-автоплеєм).
+        /// </summary>
         private void MaybeDepartDelve()
         {
+            _delveDeparted = true;
             var roster = Session.GetRosterView();
             var candidateIds = new[] { GameSession.ProtagonistId, "maksym", "myroslava" };
             var party = new List<string>();
@@ -495,8 +558,17 @@ namespace Game.Gameplay
         private void AcknowledgeBattleIfPending()
         {
             var presenter = _shell.BattlePresenter;
-            if (presenter != null && presenter.ResultPending)
+            if (presenter == null || !presenter.IsActive) return;
+
+            if (presenter.ResultPending)
                 presenter.AcknowledgeResult();
+            else if (Session.State != SessionState.Battle)
+                // Запобіжник: ResultPending з якоїсь причини не встиг
+                // виставитись (не той шлях завершення бою), а бою вже немає —
+                // краще явний Exit(), ніж арена, що лишається у фоні до кінця
+                // тура (той самий "привид арени" за Hub-скріном, що вже
+                // спіймав тур-автоплей).
+                presenter.Exit();
         }
     }
 }

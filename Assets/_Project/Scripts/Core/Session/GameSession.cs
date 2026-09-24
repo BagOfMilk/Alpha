@@ -1184,6 +1184,19 @@ namespace Game.Core.Session
             foreach (var flag in consequence.FlagsToSet) _flags.Set(flag);
         }
 
+        /// <summary>
+        /// Фіх-ревью (Фаза F, знайдено тур-автоплеєм): <c>DungeonRun.CurrentRoom</c>
+        /// (визначення) — це просто <c>_rooms[_roomIndex]</c>, тож лишається
+        /// НЕ-null і ПІСЛЯ того, як кімнату вже розв'язано (<c>CurrentCleared
+        /// == true</c>) — індекс рухає лише явний <c>Push()</c>. Але
+        /// <see cref="DungeonScreen"/> (і будь-який інший читач View-шару)
+        /// вирішує "малювати кімнату чи Push/Extract/Abandon" рівно за
+        /// <c>view.CurrentRoom != null</c> (§DungeonScreen.cs, той самий
+        /// прийом, що вже й <c>AutoplayGameDriver</c>) — без цієї умови гравець
+        /// (чи бот), що затримався на вкладці після розв'язку кімнати, бачив
+        /// би ті самі кнопки "тихо/кроваво" ЗНОВУ й отримував
+        /// InvalidOperationException "кімната вже пройдена" на кожен клік.
+        /// </summary>
         private DungeonView BuildDungeonView()
         {
             if (_dungeon == null) return null;
@@ -1194,7 +1207,7 @@ namespace Game.Core.Session
                 RoomsCleared = _dungeon.RoomsCleared,
                 UnbankedGold = _dungeon.UnbankedGold,
                 UnbankedMaterials = _dungeon.UnbankedMaterials,
-                CurrentRoom = BuildDungeonRoomView(_dungeon.CurrentRoom),
+                CurrentRoom = _dungeon.CurrentCleared ? null : BuildDungeonRoomView(_dungeon.CurrentRoom),
                 Outcome = _dungeon.Outcome.ToString(),
                 AwaitingBattle = _dungeon.AwaitingBattle
             };

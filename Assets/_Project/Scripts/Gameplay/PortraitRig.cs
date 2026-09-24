@@ -56,6 +56,14 @@ namespace Game.Gameplay
         private GameObject _currentModel;
         private readonly Dictionary<string, Texture2D> _cache = new Dictionary<string, Texture2D>();
 
+        /// <summary>
+        /// Фаза F знахідка: перший запит нового id не рендерить одразу —
+        /// накопичується тут, рендер іде з <see cref="LateUpdate"/> (див. її
+        /// коментар — <c>Camera.Render()</c> не можна кликати з середини
+        /// OnGUI під URP).
+        /// </summary>
+        private readonly HashSet<string> _pendingRenders = new HashSet<string>();
+
         public Texture2D GetPortrait(string characterId)
         {
             if (string.IsNullOrEmpty(characterId)) return null;
@@ -68,9 +76,30 @@ namespace Game.Gameplay
                 return overrideTex;
             }
 
-            var rendered = RenderPortrait(characterId);
-            _cache[characterId] = rendered;
-            return rendered;
+            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): цей метод кличе
+            // SceneScreen.DrawPortrait ЗСЕРЕДИНИ GameShell.OnGUI — того самого
+            // кадрового вікна, у якому основна камера ще НЕ завершила Submit.
+            // Синхронний виклик _camera.Render() тут кидав
+            // InvalidOperationException ("UniversalCameraData has already
+            // been created") — URP не дозволяє реєнтерабельний Camera.Render()
+            // усередині рендеру іншої камери. Замість негайного рендеру —
+            // черга: цей кадр повертаємо null (SceneScreen малює іменну
+            // заглушку — не порожньо), а сам рендер іде з LateUpdate()
+            // (окрема фаза кадру, поза Submit), портрет з'являється з
+            // наступного кадру.
+            _pendingRenders.Add(characterId);
+            return null;
+        }
+
+        private void LateUpdate()
+        {
+            if (_pendingRenders.Count == 0) return;
+            foreach (var id in _pendingRenders)
+            {
+                if (_cache.ContainsKey(id)) continue;
+                _cache[id] = RenderPortrait(id);
+            }
+            _pendingRenders.Clear();
         }
 
         private Texture2D RenderPortrait(string characterId)

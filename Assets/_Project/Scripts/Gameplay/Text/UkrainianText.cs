@@ -495,6 +495,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.hitrule.section", "Правило попадання");
             AddKey(t, "ui.save.slot", "Слот {slot}: {headline}, доба {day}");
             AddKey(t, "ui.save.slot.empty", "Слот {slot}: порожньо");
+            AddKey(t, "ui.save.slot.auto_label", "Автозбереження");
             AddKey(t, "ui.save.autosave", "Автозбереження — щоранку");
             AddKey(t, "ui.training.title", "Тренувальний бій — оцінка механіки бою поза кампанією.");
         }
@@ -1320,6 +1321,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.dungeon.quiet", "Тихо");
             AddKey(t, "ui.dungeon.bloody", "Криваво");
             AddKey(t, "ui.dungeon.unbanked", "Незбережено: {materials} матеріалів, {gold} золота");
+            // Фаза F: короткий рядок кімнати данжу (тільки шлях/навик/поріг,
+            // без candidate/band, яких у данжі немає — див. коментар у
+            // DungeonScreen.DrawRoom) і окремий підпис кровавого шляху бойової
+            // кімнати, де перевірки взагалі немає (завжди бій).
+            AddKey(t, "ui.dungeon.option_line", "{path}: {skill} ≥ {threshold}.");
+            AddKey(t, "ui.dungeon.bloody_fight", "Криваво: бій неминучий, перевірки немає.");
             AddKey(t, "dungeon.threat_band_changed", "Загроза підземелля тепер: {band}.");
 
             AddKey(t, "ui.night.crisis.title", "Вікно реакції на кризу");
@@ -1351,8 +1358,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.people.title", "Люди");
             AddKey(t, "ui.people.level", "Рівень {level}");
             AddKey(t, "ui.people.scars", "Шрамів: {count}");
-            AddKey(t, "ui.people.loyalty", "Довіра: {band}");
-            AddKey(t, "ui.people.status", "Стан: {status}");
+            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): HubScreen.DrawPeople
+            // читає обидва ключі через Get(), не Format() (значення приходить
+            // ОКРЕМИМ другим стовпцем LabeledRow — ScreenText.CompanionStatusLabel/
+            // LoyaltyLabel), тож "{status}"/"{band}" у самому шаблоні ніколи не
+            // підставлялись — гравець бачив рядок буквально "Стан: {status}".
+            AddKey(t, "ui.people.loyalty", "Довіра:");
+            AddKey(t, "ui.people.status", "Стан:");
             AddKey(t, "ui.people.equipped", "Спорядження: {items}");
             AddKey(t, "ui.people.equipped.none", "нічого");
             AddKey(t, "ui.people.sheet.limited",
