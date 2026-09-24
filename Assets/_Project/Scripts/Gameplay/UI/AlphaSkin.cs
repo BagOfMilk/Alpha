@@ -208,16 +208,39 @@ namespace Game.Gameplay.UI
             return style;
         }
 
+        /// <summary>
+        /// Фікс-ревью (блокер, раунд 2, знайдено QA): без <c>fixedWidth</c>/
+        /// <c>fixedHeight</c> Unity малює смугу прокрутки шириною/висотою 0 —
+        /// не тьмяну, а буквально відсутню (перевірено кропом скріншота: на
+        /// правому краю картки персонажа й списку будівель немає жодного
+        /// пікселя доріжки чи повзунка). Той самий клас бага, що вже був
+        /// закритий для <c>GUILayout.Toggle</c> у DrawExpedition — елемент,
+        /// невидимий на власному скіні, не існує для гравця, навіть якщо
+        /// прокрутка технічно працює колесом миші. 16px — той самий порядок,
+        /// що вбудований скін Unity (~15px).
+        /// </summary>
+        private const float ScrollbarThickness = 16f;
+
         private static GUIStyle TrackStyle()
         {
-            var style = new GUIStyle { padding = new RectOffset(0, 0, 0, 0) };
+            var style = new GUIStyle
+            {
+                padding = new RectOffset(0, 0, 0, 0),
+                fixedWidth = ScrollbarThickness,
+                fixedHeight = ScrollbarThickness
+            };
             style.normal.background = SolidTexture(BgDark);
             return style;
         }
 
         private static GUIStyle ThumbStyle()
         {
-            var style = new GUIStyle { padding = new RectOffset(0, 0, 0, 0) };
+            var style = new GUIStyle
+            {
+                padding = new RectOffset(0, 0, 0, 0),
+                fixedWidth = ScrollbarThickness,
+                fixedHeight = ScrollbarThickness
+            };
             style.normal.background = SolidTexture(AccentSoftTone());
             style.hover.background = SolidTexture(Accent);
             style.active.background = SolidTexture(AccentActive);

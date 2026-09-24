@@ -123,20 +123,50 @@ namespace Game.Gameplay.UI
             GUILayout.Label(UkrainianText.Get(key, false), AlphaSkin.Tooltip);
         }
 
+        /// <summary>
+        /// Фікс-ревью (major, раунд 2, знайдено QA): раніше один суцільний
+        /// <c>BeginHorizontal</c> на всю чергу ходу — на п'ятьох+ юнітах
+        /// (довгі імена на кшталт "Розвідник орди" двічі) останній(і) бейдж(і)
+        /// фізично виїжджав(ли) за праву межу панелі HUD прямо в 3D-арену,
+        /// не обрізаний по рамці, а НАМАЛЬОВАНИЙ ПОВЕРХ сцени — IMGUI не
+        /// клипає дочірні елементи горизонтальної групи по контейнеру.
+        /// Загортаємо в новий ряд, щойно накопичена ширина перевищує вміст
+        /// панелі (<see cref="Widgets.BadgeWidth"/> — той самий стиль, що й
+        /// сам бейдж, тож оцінка рівно та, що піде на екран).
+        /// </summary>
         private static void DrawInitiativeStrip(IBattleHudData c, BattleView view)
         {
             Widgets.Section(UkrainianText.Get("ui.battle.initiative", false), () =>
             {
-                GUILayout.BeginHorizontal();
+                float maxWidth = PanelWidthPixels() - Widgets.PanelContentInset();
+                float rowWidth = 0f;
+                bool rowOpen = false;
+
                 if (view.InitiativeOrder != null)
                     foreach (var id in view.InitiativeOrder)
                     {
                         var unit = FindUnit(view, id);
                         string name = unit != null ? c.ResolveDisplayName(unit) : id;
                         bool current = string.Equals(id, view.CurrentUnitId, System.StringComparison.Ordinal);
+                        float badgeWidth = Widgets.BadgeWidth(name);
+
+                        if (rowOpen && rowWidth + badgeWidth > maxWidth)
+                        {
+                            GUILayout.EndHorizontal();
+                            rowOpen = false;
+                            rowWidth = 0f;
+                        }
+                        if (!rowOpen)
+                        {
+                            GUILayout.BeginHorizontal();
+                            rowOpen = true;
+                        }
+
                         Widgets.Badge(name, current ? AlphaSkin.Accent : AlphaSkin.BgRaised);
+                        rowWidth += badgeWidth;
                     }
-                GUILayout.EndHorizontal();
+
+                if (rowOpen) GUILayout.EndHorizontal();
             });
         }
 
