@@ -8,8 +8,8 @@ namespace Game.Gameplay.Text
     /// <summary>
     /// ЄДИНА текстова таблиця тестової збірки (R7, docs/TEST_BUILD.md §7): Core
     /// віддає лише ключі (building.&lt;id&gt;, post.&lt;id&gt;, skill.&lt;key&gt;, TopicId
-    /// подій, ...), а слова живуть тут. Українською, без винятків: жодний
-    /// Core-контентний <c>DisplayName</c> гравець не бачить — тільки текст із
+    /// подій, ...), а слова живуть тут. Українською, без винятків: жодного
+    /// Core-контентного <c>DisplayName</c> гравець не бачить — тільки текст із
     /// цієї таблиці за ключем.
     ///
     /// Рід протагоніста (і будь-якого іншого підмета репліки — компаньйона,
@@ -43,7 +43,7 @@ namespace Game.Gameplay.Text
         /// <summary>
         /// Явний перелік для тесту покриття §6.2 (<c>Coverage_EveryEmittedKeyExistsInTable</c>):
         /// D2 порівнює цей список із тим, що фактично вилетіло з бот-прогону.
-        /// Сьогодні — увесь стіл (кожен ключ тут навмисний, жодного «про запас»).
+        /// Сьогодні — уся таблиця (кожен ключ тут навмисний, жодного «про запас»).
         /// </summary>
         public static IReadOnlyList<string> RequiredKeys() => AllKeys;
 
@@ -191,8 +191,8 @@ namespace Game.Gameplay.Text
         private static void AddNode1(Dictionary<string, string> t)
         {
             AddKey(t, "node1.decision.title", "Авангард орди вийшов на перевал. Часу на раду немає.");
-            AddKey(t, "node1.option.quiet", "Тихо: умовити Тугара (Переконання ≥ P) — відступ за добу, ноль ран.");
-            AddKey(t, "node1.option.bloody", "Кроваво: засідка на стежці (Тактика ≥ T) — бій, тримати скалу над стежкою.");
+            AddKey(t, "node1.option.quiet", "Тихо: умовити Тугара (Переконання ≥ P) — відступ за добу, нуль ран.");
+            AddKey(t, "node1.option.bloody", "Криваво: засідка на стежці (Тактика ≥ T) — бій, тримати скалу над стежкою.");
             AddKey(t, "battle.pass_vanguard.intro", "Розвідники орди вже на стежці. Максим і Мирослава — поруч.");
 
             AddKey(t, "node1.outcome.best.m",
@@ -234,7 +234,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.night.title", "Патрулювати чи спати?");
             AddKey(t, "ui.night.patrol", "Патрулювати (втрачаєш відпочинок, чуєш більше)");
             AddKey(t, "ui.night.sleep", "Спати (лікуєшся швидше, чуєш менше)");
-            AddKey(t, "forewarn.level1", "Собаки третю ніч бреше на щось за частоколом.");
+            AddKey(t, "forewarn.level1", "Собака третю ніч бреше на щось за частоколом.");
             AddKey(t, "forewarn.level2", "Третій день топчеться одна й та сама пара слідів біля межі.");
             AddKey(t, "forewarn.level3", "Щось готують. Скоро.");
         }
@@ -263,7 +263,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "incident.spoiled_stores.title", "Частина запасів зіпсована або забрана.");
             AddKey(t, "incident.spoiled_stores.option.quiet", "Тихо: домовитися чи вивідати правду (Торгівля/Виживання ≥ 5).");
-            AddKey(t, "incident.spoiled_stores.option.bloody", "Кроваво: вибити зізнання силою (Залякування ≥ 6).");
+            AddKey(t, "incident.spoiled_stores.option.bloody", "Криваво: вибити зізнання силою (Залякування ≥ 6).");
             AddKey(t, "incident.spoiled_stores.outcome.best", "Дід Овсій знаходить майже все.");
             AddKey(t, "incident.spoiled_stores.outcome.good", "Половину повернено.");
             AddKey(t, "incident.spoiled_stores.outcome.base", "Повернено мало.");
@@ -277,7 +277,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "quest.hafiya.offer.option.accept", "Принести траву");
             AddKey(t, "quest.hafiya.offer.option.decline", "Не зараз");
             AddKey(t, "quest.hafiya.declined", "Гафія лише кивнула. «Не всі встигають усе.»");
-            AddKey(t, "quest.hafiya.stage2.found", "Трава знайдена. Гафія кивнула, задоволена рідко коли.");
+            AddKey(t, "quest.hafiya.stage2.found", "Трава знайдена. Гафія кивнула — а таке буває нечасто.");
             AddKey(t, "quest.hafiya.stage2.missing", "Трави нема. «Обійдемося тим, що є.»");
             AddKey(t, "quest.hafiya.stage3.best", "Дитина одужує. Гафія лишає обряд собі — а подяку віддає тобі при всіх.");
             AddKey(t, "quest.hafiya.stage3.worst", "Дитина одужує повільніше, ніж могла б. Гафія цього не забуде.");
@@ -308,7 +308,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "signal.faction.tuhar_boyars.wary", "Тугар усе ще вичікує — але недовго.");
             AddKey(t, "signal.faction.tuhar_boyars.hostile", "Тугар більше не вдає, що на нашому боці.");
             AddKey(t, "forewarn.tugar.level1", "Хтось бачив боярина за частоколом.");
-            AddKey(t, "forewarn.tugar.level2", "Тугар усе частіше зникає з двору саме тоді, коли треба радитись.");
+            AddKey(t, "forewarn.tugar.level2", "Тугар усе частіше зникає з двору саме тоді, коли треба радитися.");
             AddKey(t, "forewarn.tugar.level3", "Боярин уже не приховує, з ким вечеряє.");
         }
 
@@ -325,11 +325,11 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "site.abandoned_camp", "Покинутий табір авангарду");
             AddKey(t, "dungeon.depart", "Троє йдуть повернути забране. Пости лишаються порожні на дві доби.");
-            AddKey(t, "dungeon.room1.title", "Кілька розвідників орди не встигли втекти з табором.");
+            AddKey(t, "dungeon.room1.title", "Кілька розвідників орди не встигли втекти з табору.");
             AddKey(t, "dungeon.room1.quiet", "Тихо: обійти (Виживання ≥ 5) або переконати здатися (Переконання ≥ 5).");
-            AddKey(t, "dungeon.room1.bloody", "Кроваво: короткий бій (Ближній бій/Тактика ≥ 6).");
+            AddKey(t, "dungeon.room1.bloody", "Криваво: короткий бій (Ближній бій/Тактика ≥ 6).");
             AddKey(t, "dungeon.room2.title", "У схованці під возом — те, що орда не встигла забрати.");
-            AddKey(t, "item.scout_horn.found", "Ріг вивідника. Той самий, яким орда подавала сигнали — тепер він подаватиме їх нам.");
+            AddKey(t, "item.scout_horn.found", "Ріг розвідника. Той самий, яким орда подавала сигнали — тепер він подаватиме їх нам.");
             AddKey(t, "item.scout_horn.effect", "Ефект: наступні два передвісники чуються чіткіше й раніше.");
             AddKey(t, "dungeon.room3.title", "Прихований попіл — і під ним ще щось ціле.");
             AddKey(t, "dungeon.room3.greedy", "Забрати все зерно (більше здобичі, вищий ризик).");
@@ -342,8 +342,8 @@ namespace Game.Gameplay.Text
         // ---- §7.12 Крафт ----
         private static void AddCraft(Dictionary<string, string> t)
         {
-            AddKey(t, "craft.confirm", "Підняти якість Рогу вивідника коштуватиме матеріалів майстерні. Назад не буде.");
-            AddKey(t, "craft.done", "Ріг вивідника тепер чутніший, ніж будь-коли.");
+            AddKey(t, "craft.confirm", "Підняти якість Рогу розвідника коштуватиме матеріалів майстерні. Назад не буде.");
+            AddKey(t, "craft.done", "Ріг розвідника тепер чутніший, ніж будь-коли.");
         }
 
         // ---- §7.13 Рада (нові дії) — + реальні ключі CityWorks/CityWorksStep ----
@@ -355,7 +355,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "council.diplomacy.ordered", "Посольство вирушає — слово коштує дешевше за зброю, поки воно діє.");
             AddKey(t, "council.investment.ordered", "Рада вкладає золото наперед — і чекає віддачі не одразу.");
             AddKey(t, "council.prepare_threat.ordered", "Громада готується — це видно не сьогодні, а тоді, коли знадобиться.");
-            AddKey(t, "council.outfit_expedition.ordered", "Відряд споряджають краще, ніж завжди — за це заплачено наперед.");
+            AddKey(t, "council.outfit_expedition.ordered", "Загін споряджають краще, ніж завжди — за це заплачено наперед.");
 
             // Реальні літерали з Core/Base/Buildings/CityWorks*.cs (не однакові зі
             // словами вище — інтегратор ще не звів назви; лишаю обидва набори,
@@ -383,7 +383,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "finale.myroslava.ally", "Мирослава — у строю громади, попри батька.");
             AddKey(t, "finale.myroslava.enemy", "Мирослава — серед чужих. Вона не дивиться в твій бік.");
             AddKey(t, "finale.option.quiet", "Тихо: загатити річку (Механіка/Тактика — пороги залежать від Готовності громади).");
-            AddKey(t, "finale.option.bloody", "Кроваво: тримати перевал — тактичний бій, сила орди залежить від Готовності громади.");
+            AddKey(t, "finale.option.bloody", "Криваво: тримати перевал — тактичний бій, сила орди залежить від Готовності громади.");
             AddKey(t, "battle.finale.intro", "Перевал за тобою. Орда — попереду. Хто з громади готовий — поруч.");
             AddKey(t, "finale.outcome.best", "Річка бере на себе те, що мала б узяти громада. Перевал цілий. Ціна — шлях назад для декого з тих, хто пішов з водою.");
             AddKey(t, "finale.outcome.good", "Дамба тримає. Дехто заплатив тим, що лишився на тому боці.");
@@ -410,9 +410,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.creation.gender", "Рід");
             AddKey(t, "ui.creation.background.title.m", "Звідки ти прийшов");
             AddKey(t, "ui.creation.background.title.f", "Звідки ти прийшла");
-            AddKey(t, "background.warrior", "Вигнанець зі зброєю: більше Сили й Ближнього бою, менше Кмітливості.");
-            AddKey(t, "background.trader", "Мандрівний торговець: більше Кмітливості й Торгівлі, менше Сили.");
-            AddKey(t, "background.healer", "Учень знахарки: більше Волі й Медицини, менше Ловкості.");
+            AddKey(t, "background.warrior.m", "Вигнанець зі зброєю: більше Сили й Ближнього бою, менше Кмітливості.");
+            AddKey(t, "background.warrior.f", "Вигнанка зі зброєю: більше Сили й Ближнього бою, менше Кмітливості.");
+            AddKey(t, "background.trader.m", "Мандрівний торговець: більше Кмітливості й Торгівлі, менше Сили.");
+            AddKey(t, "background.trader.f", "Мандрівна торговка: більше Кмітливості й Торгівлі, менше Сили.");
+            AddKey(t, "background.healer.m", "Учень знахарки: більше Волі й Медицини, менше Ловкості.");
+            AddKey(t, "background.healer.f", "Учениця знахарки: більше Волі й Медицини, менше Ловкості.");
         }
 
         // ---- §7.18 Білд-планувальник (R11) ----
@@ -464,7 +467,7 @@ namespace Game.Gameplay.Text
         // ---- §7.21 Довідкові підписи (скіли/атрибути/ресурси/полоси/лояльність) ----
         private static void AddSkillsAttrsResourcesBandsChars(Dictionary<string, string> t)
         {
-            AddKey(t, "skill.ranged", "Стрілецька");
+            AddKey(t, "skill.ranged", "Стрілецтво");
             AddKey(t, "skill.melee", "Ближній бій");
             AddKey(t, "skill.tactics", "Тактика");
             AddKey(t, "skill.lockpick", "Злом");
@@ -557,7 +560,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "item.hunters_bow", "Мисливський лук");
             AddKey(t, "item.scouting_gear", "Розвідницьке спорядження");
             AddKey(t, "item.aegis_plate", "Егіда");
-            AddKey(t, "item.scout_horn", "Ріг вивідника");
+            AddKey(t, "item.scout_horn", "Ріг розвідника");
         }
 
         // Core/Combat/DefaultCombatContent.cs — вороги/зброя/здібності доби 1 і фіналу.
@@ -612,10 +615,12 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "status.idle", "Вільний");
             AddKey(t, "status.assigned", "На посту");
-            AddKey(t, "status.on_mission", "У відряді");
-            AddKey(t, "status.injured", "Ранений");
+            AddKey(t, "status.on_mission", "У загоні");
+            AddKey(t, "status.injured.m", "Ранений");
+            AddKey(t, "status.injured.f", "Ранена");
             AddKey(t, "status.resting", "На лікуванні");
-            AddKey(t, "status.dead", "Загинув");
+            AddKey(t, "status.dead.m", "Загинув");
+            AddKey(t, "status.dead.f", "Загинула");
             AddKey(t, "status.antagonist", "Проти нас");
 
             AddKey(t, "wound.light", "Легка рана");
@@ -672,19 +677,19 @@ namespace Game.Gameplay.Text
 
             // Пороги — з Core/World/DefaultIncidents.cs (SkillKeys/Threshold буквально).
             AddKey(t, "incident.petty_theft.option.quiet", "Тихо: домовитися (Переконання ≥ 5).");
-            AddKey(t, "incident.petty_theft.option.bloody", "Кроваво: залякати винного (Залякування ≥ 4).");
+            AddKey(t, "incident.petty_theft.option.bloody", "Криваво: залякати винного (Залякування ≥ 4).");
             AddKey(t, "incident.market_brawl.option.quiet", "Тихо: розвести сторони торгом (Торгівля ≥ 6).");
-            AddKey(t, "incident.market_brawl.option.bloody", "Кроваво: розігнати бійку силою (Ближній бій ≥ 5).");
+            AddKey(t, "incident.market_brawl.option.bloody", "Криваво: розігнати бійку силою (Ближній бій ≥ 5).");
             AddKey(t, "incident.protection_racket.option.quiet", "Тихо: пригрозити без зброї (Залякування ≥ 8).");
-            AddKey(t, "incident.protection_racket.option.bloody", "Кроваво: показати зброю (Стрілецька ≥ 6).");
+            AddKey(t, "incident.protection_racket.option.bloody", "Криваво: показати зброю (Стрілецтво ≥ 6).");
             AddKey(t, "incident.missing_person.option.quiet", "Тихо: прочесати околиці (Виживання ≥ 7).");
-            AddKey(t, "incident.missing_person.option.bloody", "Кроваво: силою розпитати підозрюваних (Ближній бій ≥ 6).");
+            AddKey(t, "incident.missing_person.option.bloody", "Криваво: силою розпитати підозрюваних (Ближній бій ≥ 6).");
             AddKey(t, "incident.night_burglary.option.quiet", "Тихо: вистежити злодія (Злом ≥ 6).");
-            AddKey(t, "incident.night_burglary.option.bloody", "Кроваво: чекати з клинком у темряві (Ближній бій ≥ 5).");
+            AddKey(t, "incident.night_burglary.option.bloody", "Криваво: чекати з клинком у темряві (Ближній бій ≥ 5).");
             AddKey(t, "incident.night_arson.option.quiet", "Тихо: погасити й змовчати (Механіка ≥ 8).");
-            AddKey(t, "incident.night_arson.option.bloody", "Кроваво: знайти й покарати підпалювача (Стрілецька ≥ 7).");
+            AddKey(t, "incident.night_arson.option.bloody", "Криваво: знайти й покарати підпалювача (Стрілецтво ≥ 7).");
             AddKey(t, "incident.crisis_riot.option.quiet", "Тихо: заспокоїти натовп словом (Переконання ≥ 10).");
-            AddKey(t, "incident.crisis_riot.option.bloody", "Кроваво: придушити бунт тактично (Тактика ≥ 9).");
+            AddKey(t, "incident.crisis_riot.option.bloody", "Криваво: придушити бунт тактично (Тактика ≥ 9).");
 
             // Загальні полоси наслідку — коли в інцидента нема своєї фрази (переклад
             // VillageView.Verb(OutcomeBand): "разобрались лучше некуда" / "...чисто" /
@@ -730,16 +735,16 @@ namespace Game.Gameplay.Text
         // ключі з Core/Base/Buildings/CityWorksStep.cs і PopulationStep.cs. ----
         private static void AddCityAndCouncilEvents(Dictionary<string, string> t)
         {
-            AddKey(t, "city.built.infirmary", "Достроєно: Лазарет.");
-            AddKey(t, "city.built.workshop", "Достроєно: Майстерня.");
-            AddKey(t, "city.built.storehouse", "Достроєно: Склад.");
-            AddKey(t, "city.built.council_hall", "Достроєно: Зала ради.");
-            AddKey(t, "city.built.market", "Достроєно: Ринок.");
-            AddKey(t, "city.built.tavern", "Достроєно: Таверна.");
-            AddKey(t, "city.built.temple", "Достроєно: Храм.");
-            AddKey(t, "city.built.fortifications", "Достроєно: Укріплення.");
-            AddKey(t, "city.built.armory", "Достроєно: Збройня.");
-            AddKey(t, "city.built.laboratory", "Достроєно: Лабораторія.");
+            AddKey(t, "city.built.infirmary", "Збудовано: Лазарет.");
+            AddKey(t, "city.built.workshop", "Збудовано: Майстерня.");
+            AddKey(t, "city.built.storehouse", "Збудовано: Склад.");
+            AddKey(t, "city.built.council_hall", "Збудовано: Зала ради.");
+            AddKey(t, "city.built.market", "Збудовано: Ринок.");
+            AddKey(t, "city.built.tavern", "Збудовано: Таверна.");
+            AddKey(t, "city.built.temple", "Збудовано: Храм.");
+            AddKey(t, "city.built.fortifications", "Збудовано: Укріплення.");
+            AddKey(t, "city.built.armory", "Збудовано: Збройня.");
+            AddKey(t, "city.built.laboratory", "Збудовано: Лабораторія.");
 
             AddKey(t, "city.tier.2", "Хутір став селом.");
             AddKey(t, "city.tier.3", "Село розрослося в слободу.");
@@ -786,7 +791,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "craft.upgraded", "{item} покращено.");
             AddKey(t, "scar.granted", "{companion} носитиме це до кінця: {scar}.");
             AddKey(t, "loyalty.band_changed", "{companion}: тепер {band}.");
-            AddKey(t, "roster.rippled", "Звістка розходиться по відряду.");
+            AddKey(t, "roster.rippled", "Звістка розходиться по загону.");
             AddKey(t, "companion.defected", "{companion} більше не з нами.");
             AddKey(t, "companion.died.m", "{companion} загинув на цьому шляху.");
             AddKey(t, "companion.died.f", "{companion} загинула на цьому шляху.");
