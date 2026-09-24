@@ -106,6 +106,11 @@ namespace Game.Tests.EditMode
             Assert.IsNotEmpty(edict, "CouncilEdict стоял в белом списке без единого вызова — теперь указ его вызывает");
             Assert.Less(edict[0].Applied, 0, "Указ снижает Напругу (понижающий драйвер)");
 
+            // Ревью-фикс: указ применился СРАЗУ (Applied), но обязан и прозвучать —
+            // иначе город меняется молча (docs/TEST_BUILD.md §2 стр. 15, §7.13).
+            Assert.IsTrue(Heard(new[] { report }).Any(r => r.TopicId == "council.decree.ordered"),
+                "Указ обязан объявить о себе тем же днём, когда заказан");
+
             Assert.AreEqual(CouncilOrderResult.OnCooldown,
                 c.Works.OrderDecree(c.State, c.Processor, c.Factions,
                     DefaultFactions.TuharBoyars, DefaultFactions.Community, 1, cfg),
@@ -122,6 +127,48 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CouncilOrderResult.NoCouncilHall,
                 c.Works.OrderDecree(c.State, c.Processor, c.Factions,
                     DefaultFactions.TuharBoyars, DefaultFactions.Community, 1, cfg));
+        }
+
+        /// <summary>
+        /// Ревью-фикс: без этой проверки указ на незарегистрированную фракцию
+        /// списывал золото, двигал Уклад и молча не трогал ни одной фракции —
+        /// вызывающий не мог отличить это от успеха (обе ветки возвращали
+        /// Applied). CouncilOrderResult.UnknownFaction для того и заведён.
+        /// </summary>
+        [Test]
+        public void Decree_UnknownFavoredFaction_DoesNothing_ReturnsUnknownFaction()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg);
+            Give(c.State, 100);
+
+            int goldBefore = c.State.Resources.Get(ResourceType.Gold);
+            int orderLevelBefore = c.Processor.OrderLevel;
+
+            var result = c.Works.OrderDecree(c.State, c.Processor, c.Factions,
+                "no_such_faction_favored", DefaultFactions.Community, 1, cfg);
+
+            Assert.AreEqual(CouncilOrderResult.UnknownFaction, result);
+            Assert.AreEqual(goldBefore, c.State.Resources.Get(ResourceType.Gold), "Золото не списано — эффекта не было");
+            Assert.AreEqual(orderLevelBefore, c.Processor.OrderLevel, "Уклад не сдвинут — эффекта не было");
+        }
+
+        [Test]
+        public void Decree_UnknownCostFaction_DoesNothing_ReturnsUnknownFaction()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg);
+            Give(c.State, 100);
+
+            int goldBefore = c.State.Resources.Get(ResourceType.Gold);
+
+            var result = c.Works.OrderDecree(c.State, c.Processor, c.Factions,
+                DefaultFactions.TuharBoyars, "no_such_faction_cost", 1, cfg);
+
+            Assert.AreEqual(CouncilOrderResult.UnknownFaction, result);
+            Assert.AreEqual(goldBefore, c.State.Resources.Get(ResourceType.Gold));
+            Assert.AreEqual(50, c.Factions.Get(DefaultFactions.TuharBoyars).Value,
+                "Незнакомая costFactionId обязана заблокировать весь заказ, а не только свою половину");
         }
 
         [Test]
@@ -163,6 +210,10 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CouncilOrderResult.Applied, result);
             Assert.AreEqual(50 + cfg.Faction.DiplomacyFactionDelta, c.Factions.Get(DefaultFactions.Horde).Value);
             Assert.AreEqual(goldBefore - cfg.Faction.DiplomacyGoldCost, c.State.Resources.Get(ResourceType.Gold));
+
+            var reports = c.Processor.AdvanceFullDay();
+            Assert.IsTrue(Heard(reports).Any(r => r.TopicId == "council.diplomacy.ordered"),
+                "Дипломатия применилась сразу, но обязана прозвучать тем же днём");
 
             Assert.AreEqual(CouncilOrderResult.OnCooldown,
                 c.Works.OrderDiplomacy(c.State, c.Factions, DefaultFactions.Horde, 1, cfg));
@@ -224,6 +275,10 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CouncilOrderResult.Applied, result);
             Assert.AreEqual(goldBefore - cfg.Faction.PrepareThreatGoldCost, c.State.Resources.Get(ResourceType.Gold));
 
+            var reports = c.Processor.AdvanceFullDay();
+            Assert.IsTrue(Heard(reports).Any(r => r.TopicId == "council.prepare_threat.ordered"),
+                "Подготовка применилась сразу, но обязана прозвучать тем же днём");
+
             Assert.AreEqual(CouncilOrderResult.OnCooldown, c.Works.OrderPrepareThreat(c.State, 1, cfg));
 
             Assert.AreEqual(1, c.Works.TakeReadinessMilestones(),
@@ -248,6 +303,10 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CouncilOrderResult.AlreadyQueued,
                 c.Works.OrderOutfitExpedition(c.State, "abandoned_camp", 1, cfg),
                 "Разовый бонус не копится второй раз, пока первый не забрали");
+
+            var reports = c.Processor.AdvanceFullDay();
+            Assert.IsTrue(Heard(reports).Any(r => r.TopicId == "council.outfit_expedition.ordered"),
+                "Снаряжение применилось сразу, но обязано прозвучать тем же днём");
 
             var buff = c.Works.TakeExpeditionOutfitBuff();
             Assert.IsNotNull(buff);
@@ -317,9 +376,79 @@ namespace Game.Tests.EditMode
             int decreeSpentBare = goldBeforeDecreeBare - bare.State.Resources.Get(ResourceType.Gold);
 
             Assert.Less(decreeSpentStaffed, decreeSpentBare, "Скидка обязана работать и для указов рады, не только стройки");
+
+            // ---- дипломатия ----
+            int goldBeforeDiplomacyStaffed = staffed.State.Resources.Get(ResourceType.Gold);
+            int goldBeforeDiplomacyBare = bare.State.Resources.Get(ResourceType.Gold);
+
+            staffed.Works.OrderDiplomacy(staffed.State, staffed.Factions, DefaultFactions.Horde, 1, cfg);
+            bare.Works.OrderDiplomacy(bare.State, bare.Factions, DefaultFactions.Horde, 1, cfg);
+
+            int diplomacySpentStaffed = goldBeforeDiplomacyStaffed - staffed.State.Resources.Get(ResourceType.Gold);
+            int diplomacySpentBare = goldBeforeDiplomacyBare - bare.State.Resources.Get(ResourceType.Gold);
+
+            Assert.Less(diplomacySpentStaffed, diplomacySpentBare, "Скидка обязана работать и для Дипломатии");
+
+            // ---- підготовка до загрози ----
+            int goldBeforePrepareStaffed = staffed.State.Resources.Get(ResourceType.Gold);
+            int goldBeforePrepareBare = bare.State.Resources.Get(ResourceType.Gold);
+
+            staffed.Works.OrderPrepareThreat(staffed.State, 1, cfg);
+            bare.Works.OrderPrepareThreat(bare.State, 1, cfg);
+
+            int prepareSpentStaffed = goldBeforePrepareStaffed - staffed.State.Resources.Get(ResourceType.Gold);
+            int prepareSpentBare = goldBeforePrepareBare - bare.State.Resources.Get(ResourceType.Gold);
+
+            Assert.Less(prepareSpentStaffed, prepareSpentBare, "Скидка обязана работать и для Подготовки к угрозе");
+
+            // ---- спорядження експедиції ----
+            int goldBeforeOutfitStaffed = staffed.State.Resources.Get(ResourceType.Gold);
+            int goldBeforeOutfitBare = bare.State.Resources.Get(ResourceType.Gold);
+
+            staffed.Works.OrderOutfitExpedition(staffed.State, "abandoned_camp", 1, cfg);
+            bare.Works.OrderOutfitExpedition(bare.State, "abandoned_camp", 1, cfg);
+
+            int outfitSpentStaffed = goldBeforeOutfitStaffed - staffed.State.Resources.Get(ResourceType.Gold);
+            int outfitSpentBare = goldBeforeOutfitBare - bare.State.Resources.Get(ResourceType.Gold);
+
+            Assert.Less(outfitSpentStaffed, outfitSpentBare, "Скидка обязана работать и для Спорядження експедиції");
         }
 
         // ================= регрессия: старые заказы совета не сломаны =================
+
+        /// <summary>
+        /// docs/TEST_BUILD.md §5 (акцептанс B5) называет этот тест по имени:
+        /// облава — силовой метод, и теперь, когда реестр фракций существует,
+        /// она обязана двигать не только Напругу, но и отношения (бояри Тугара
+        /// довольны порядком, громаде не нравится нагайка на своих).
+        /// </summary>
+        [Test]
+        public void Raid_LowersTension_PaysCosts_ShiftsFactions()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg);
+            Give(c.State, 200);
+
+            int goldBefore = c.State.Resources.Get(ResourceType.Gold);
+
+            var result = c.Works.OrderRaid(c.State, 1, cfg, c.Factions);
+            Assert.AreEqual(CouncilOrderResult.Queued, result);
+            Assert.AreEqual(goldBefore - cfg.City.RaidGoldCost, c.State.Resources.Get(ResourceType.Gold),
+                "Облава платится сразу");
+
+            Assert.AreEqual(50 + cfg.Faction.RaidFactionFavoredDelta, c.Factions.Get(DefaultFactions.TuharBoyars).Value,
+                "Силовой метод доволен боярам");
+            Assert.AreEqual(50 - cfg.Faction.RaidFactionCostDelta, c.Factions.Get(DefaultFactions.Community).Value,
+                "Громаде нагайка на своих не нравится");
+
+            var report = c.Processor.Advance();
+            var raidTension = report.TensionChanges.Where(x => x.Driver == TensionDriver.CouncilRaid).ToList();
+            Assert.IsNotEmpty(raidTension, "Облава обязана снизить Напругу — она и заводилась для этого");
+            Assert.Less(raidTension[0].Applied, 0, "Облава — понижающий драйвер");
+
+            Assert.IsTrue(Heard(new[] { report }).Any(r => r.TopicId == "council.raid"),
+                "Облава обязана прозвучать тем же приёмом, что и раньше (B5 её не трогает)");
+        }
 
         [Test]
         public void Raid_And_Settlers_StillWork_AfterB5()

@@ -7,6 +7,7 @@ using Game.Core.Checks;
 using Game.Core.Economy;
 using Game.Core.Factions;
 using Game.Core.Pressure;
+using Game.Core.Signals;
 
 namespace Game.Core.Base
 {
@@ -76,6 +77,18 @@ namespace Game.Core.Base
         /// <summary>Маркеры готовности для B6/D1 — этот пакет ReadinessTrack не заводит (§1.1).</summary>
         private int _readinessMilestonesQueued;
         private ExpeditionOutfitBuff _pendingOutfitBuff;
+
+        /// <summary>
+        /// Ревью-фикс: Указ/Дипломатия/Подготовка/Снаряжение применяются СРАЗУ
+        /// (CouncilOrderResult.Applied), в отличие от Облавы/Переселенцев/Инвестиции,
+        /// которых исполняет и объявляет CityWorksStep. Без этой очереди «применилось
+        /// сразу» означало «применилось молча» — в лупе не было ни одного
+        /// Game.Core.Signals.CityEvent на эти пять действий (docs/TEST_BUILD.md §2
+        /// строка 15, §7.13). Очередь — тем же приёмом, каким уже собраны
+        /// _pendingOutfitBuff/_readinessMilestonesQueued: копится здесь, забирается
+        /// и звучит в CityWorksStep.Execute в тот же (или ближайший) дневной шаг.
+        /// </summary>
+        private readonly List<CityEvent> _pendingCouncilAnnouncements = new List<CityEvent>();
 
         /// <summary>Рынок поселения — единственная позиция, торговый подход к которой скидывает цену (AUDIT G12).</summary>
         public const string MarketSlotId = "settlement_market";
@@ -171,8 +184,15 @@ namespace Game.Core.Base
         /// <summary>
         /// Облава: разовое снижение Напряжения драйвером CouncilRaid. Требует
         /// Зал совета, стоит золота, имеет откат.
+        ///
+        /// <paramref name="factions"/> необязателен (по умолчанию — как до B5,
+        /// без фракций): силовой метод задевает и отношения — бояри Тугара
+        /// довольны порядком, громаде не нравится нагайка на своих (ревью-фикс,
+        /// см. тест Raid_LowersTension_PaysCosts_ShiftsFactions). Сдвиг —
+        /// разовый, сразу; сама облава по-прежнему исполняется и звучит
+        /// CityWorksStep на её собственный день (TakeRaid).
         /// </summary>
-        public CouncilOrderResult OrderRaid(BaseState state, int today, BalanceConfig balance)
+        public CouncilOrderResult OrderRaid(BaseState state, int today, BalanceConfig balance, FactionRegistry factions = null)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
@@ -186,6 +206,13 @@ namespace Game.Core.Base
                 return CouncilOrderResult.NotEnoughGold;
 
             _raidQueued = true;
+
+            if (factions != null)
+                new SocialConsequence()
+                    .Faction(DefaultFactions.TuharBoyars, balance.Faction.RaidFactionFavoredDelta)
+                    .Faction(DefaultFactions.Community, -balance.Faction.RaidFactionCostDelta)
+                    .Apply(factions, null);
+
             return CouncilOrderResult.Queued;
         }
 
@@ -234,6 +261,12 @@ namespace Game.Core.Base
         /// было решительно нечем, а понижающий драйвер CouncilEdict стоял в
         /// белом списке без единого вызова). costFactionId необязателен: без
         /// него указ просто поднимает выгодную фракцию, не трогая остальные.
+        ///
+        /// Ревью-фикс: favoredFactionId ОБЯЗАН быть зарегистрирован в
+        /// factions — иначе указ («поменять одну фракцию на другую») спишет
+        /// золото, толкнёт Уклад и молча не поменяет ни одной фракции.
+        /// Проверка — до всех трат, тем же приёмом, что уже стоит в
+        /// OrderDiplomacy.
         /// </summary>
         public CouncilOrderResult OrderDecree(BaseState state, Loop.DayProcessor processor, FactionRegistry factions,
             string favoredFactionId, string costFactionId, int today, BalanceConfig balance)
@@ -243,6 +276,9 @@ namespace Game.Core.Base
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
             if (!Has(DefaultBuildings.CouncilHall)) return CouncilOrderResult.NoCouncilHall;
+            if (factions == null || factions.Get(favoredFactionId) == null) return CouncilOrderResult.UnknownFaction;
+            if (!string.IsNullOrEmpty(costFactionId) && factions.Get(costFactionId) == null)
+                return CouncilOrderResult.UnknownFaction;
             if (today - _lastDecreeDay < balance.Faction.DecreeCooldownDays) return CouncilOrderResult.OnCooldown;
 
             int price = DiscountedPrice(balance.Faction.DecreeGoldCost, TradeDiscount(state, balance, today));
@@ -252,14 +288,22 @@ namespace Game.Core.Base
             _lastDecreeDay = today;
 
             processor.OrderLevel = ClampOrderLevel(processor.OrderLevel + balance.Faction.DecreeOrderLevelStep);
-            processor.QueueExternal(TensionDriver.CouncilEdict, -Math.Abs(balance.Faction.DecreeTensionDelta));
 
-            if (factions != null && !string.IsNullOrEmpty(favoredFactionId))
-            {
-                factions.ApplySocialConsequence(favoredFactionId, balance.Faction.DecreeFactionDelta);
-                if (!string.IsNullOrEmpty(costFactionId) && costFactionId != favoredFactionId)
-                    factions.ApplySocialConsequence(costFactionId, -balance.Faction.DecreeFactionDelta);
-            }
+            // Ревью-фикс: раньше факции и Напруга двигались напрямую (ApplySocialConsequence
+            // + QueueExternal), в обход SocialConsequence — единственной точки, где список
+            // разрешённых драйверов реально проверяется (allow-list иначе был мёртвым кодом
+            // для этого места). Теперь Указ идёт через неё же.
+            string costTarget = !string.IsNullOrEmpty(costFactionId) && costFactionId != favoredFactionId
+                ? costFactionId
+                : null;
+            new SocialConsequence()
+                .Faction(favoredFactionId, balance.Faction.DecreeFactionDelta)
+                .Faction(costTarget, -balance.Faction.DecreeFactionDelta)
+                .Tension(TensionDriver.CouncilEdict, -Math.Abs(balance.Faction.DecreeTensionDelta))
+                .Apply(factions, processor);
+
+            _pendingCouncilAnnouncements.Add(new CityEvent("council.decree.ordered", SignalUrgency.Notable,
+                "favored:" + favoredFactionId, "cost:" + (costTarget ?? string.Empty)));
 
             return CouncilOrderResult.Applied;
         }
@@ -281,6 +325,10 @@ namespace Game.Core.Base
 
             _lastDiplomacyDay = today;
             factions.ApplySocialConsequence(factionId, balance.Faction.DiplomacyFactionDelta);
+
+            _pendingCouncilAnnouncements.Add(new CityEvent("council.diplomacy.ordered", SignalUrgency.Notable,
+                "faction:" + factionId));
+
             return CouncilOrderResult.Applied;
         }
 
@@ -326,6 +374,9 @@ namespace Game.Core.Base
 
             _lastPrepareThreatDay = today;
             _readinessMilestonesQueued++;
+
+            _pendingCouncilAnnouncements.Add(new CityEvent("council.prepare_threat.ordered", SignalUrgency.Notable));
+
             return CouncilOrderResult.Applied;
         }
 
@@ -347,6 +398,10 @@ namespace Game.Core.Base
                 return CouncilOrderResult.NotEnoughGold;
 
             _pendingOutfitBuff = new ExpeditionOutfitBuff { SiteId = siteId, BonusValue = balance.Faction.OutfitExpeditionBonusValue };
+
+            _pendingCouncilAnnouncements.Add(new CityEvent("council.outfit_expedition.ordered", SignalUrgency.Notable,
+                "site:" + (siteId ?? string.Empty)));
+
             return CouncilOrderResult.Applied;
         }
 
@@ -407,6 +462,19 @@ namespace Game.Core.Base
             var b = _pendingOutfitBuff;
             _pendingOutfitBuff = null;
             return b;
+        }
+
+        /// <summary>
+        /// Забирает и обнуляет очередь объявлений об Указе/Дипломатии/Підготовці/
+        /// Спорядженні — вызывается CityWorksStep, тем же приёмом, каким она уже
+        /// забирает TakeRaid/TakeSettlers/TakeArrivals/TakeInvestmentPayout.
+        /// </summary>
+        internal List<CityEvent> TakeCouncilAnnouncements()
+        {
+            if (_pendingCouncilAnnouncements.Count == 0) return null;
+            var events = new List<CityEvent>(_pendingCouncilAnnouncements);
+            _pendingCouncilAnnouncements.Clear();
+            return events;
         }
 
         // ================= исполнение внутри суток =================

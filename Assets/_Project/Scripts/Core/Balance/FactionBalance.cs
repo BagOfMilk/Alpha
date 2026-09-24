@@ -17,6 +17,12 @@ namespace Game.Core.Balance
         /// <summary>Стартовое отношение всех фракций — середина шкалы (Нейтральність).</summary>
         public int StartingStanding = 50;
 
+        // ---- Облава (OrderRaid): силовой метод трогает и фракции, не только
+        //      Напругу — бояри довольны порядком, громаде не нравится нагайка
+        //      на своїх (ревью-фікс, тест Raid_LowersTension_PaysCosts_ShiftsFactions) ----
+        public int RaidFactionFavoredDelta = 6;
+        public int RaidFactionCostDelta = 8;
+
         // ---- Указ (OrderDecree): двигает Уклад и Напругу (AUDIT П8+G20) ----
         public int DecreeGoldCost = 20;
         public int DecreeCooldownDays = 8;

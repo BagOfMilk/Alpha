@@ -48,6 +48,15 @@ namespace Game.Core.Base
             Arrive(ctx, _works.TakeSettlers(ctx.Day), "council");
             Arrive(ctx, _works.TakeArrivals(), "expedition");
 
+            // ---- B5: Указ/Дипломатия/Підготовка/Спорядження применяются СРАЗУ
+            //      (вне конвейера, см. CityWorks.OrderDecree и соседей), но
+            //      объявляются здесь же, в первый дневной шаг после заказа —
+            //      иначе они двигали бы город молча (ревью-фикс §2 стр. 15) ----
+            var councilAnnouncements = _works.TakeCouncilAnnouncements();
+            if (councilAnnouncements != null)
+                foreach (var evt in councilAnnouncements)
+                    ctx.CityEvents.Add(evt);
+
             // ---- B5: выплата Инвестиции — растянута по суткам, поэтому здесь,
             //      а не в момент заказа (см. CityWorks.OrderInvestment) ----
             int investmentPayout = _works.TakeInvestmentPayout();
