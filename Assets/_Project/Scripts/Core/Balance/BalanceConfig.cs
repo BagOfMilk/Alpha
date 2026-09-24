@@ -144,5 +144,8 @@ namespace Game.Core.Balance
 
         /// <summary>Фракции и новые указы рады (R5, B5).</summary>
         public FactionBalance Faction = new FactionBalance();
+
+        /// <summary>Предметы/крафт: цена подъёма редкости, заряды именных эффектов (B3).</summary>
+        public ItemBalance Items = new ItemBalance();
     }
 }

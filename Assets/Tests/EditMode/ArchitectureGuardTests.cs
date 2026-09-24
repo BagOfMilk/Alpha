@@ -377,5 +377,42 @@ namespace Game.Tests.EditMode
             Assert.IsNull(prop,
                 "FactionStanding.Value обязано быть internal — иначе Game.Gameplay сможет прочитать сырое число фракции");
         }
+
+        // ---- B3 (Items/Equipment/Craft) ----
+
+        /// <summary>
+        /// Items — пакет B3, собранный параллельно с Combat (B1): типов боя
+        /// (Game.Core.Combat) в его воркчасти ещё не существует физически, и
+        /// охранитель держит это решение как контракт и после слияния — гир
+        /// крутит числа через StatKey, а не хранит WeaponDefinition/DamageType.
+        /// </summary>
+        [Test]
+        public void Items_DoesNotReferenceCombatTypes()
+        {
+            var dir = Path.Combine(CoreRoot, "Items");
+            if (!Directory.Exists(dir)) { Assert.Pass("нет папки Items"); return; }
+
+            var forbidden = new Regex(@"Game\.Core\.Combat|\bWeaponDefinition\b|\bDamageType\b|\bStatusType\b");
+            var offenders = new List<string>();
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+                if (forbidden.IsMatch(StripComments(File.ReadAllText(file))))
+                    offenders.Add(Path.GetFileName(file));
+
+            Assert.IsEmpty(offenders,
+                "Items не должен знать о бое (B1 собирается параллельно): " + string.Join(", ", offenders));
+        }
+
+        /// <summary>
+        /// Companion.Equipment обязан течь в единый агрегатор (US-6.2/18.2) —
+        /// без реализации IModifierProvider надетый гир молча не считался бы.
+        /// </summary>
+        [Test]
+        public void Equipment_IsAModifierProvider()
+        {
+            var interfaces = typeof(Game.Core.Items.Equipment).GetInterfaces();
+            Assert.Contains(typeof(Game.Core.Stats.IModifierProvider), interfaces,
+                "Game.Core.Items.Equipment обязан реализовывать IModifierProvider");
+        }
     }
 }

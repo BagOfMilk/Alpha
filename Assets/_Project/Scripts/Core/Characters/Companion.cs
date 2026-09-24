@@ -3,6 +3,7 @@ using Game.Core.Balance;
 using Game.Core.Characters.Perks;
 using Game.Core.Characters.Scars;
 using Game.Core.Characters.Traits;
+using Game.Core.Items;
 using Game.Core.Stats;
 
 namespace Game.Core.Characters
@@ -64,6 +65,11 @@ namespace Game.Core.Characters
         public ScarTrack Scars { get; } = new ScarTrack();
         public CompanionPerks Perks { get; } = new CompanionPerks();
 
+        // ---- B3 (Items/Equipment/Craft): гір як провайдер агрегатора (US-6.2) ----
+        // Надіте спорядження крутить числа так само, як трейти/шрами/перки —
+        // окремого «боевого» шляху для гіра немає (правило «один эффект — одна система»).
+        public Equipment Equipment { get; } = new Equipment();
+
         // Порядок провайдеров фиксирован: от него зависит, чей Override победит,
         // а результат обязан быть воспроизводимым.
         private readonly IModifierProvider[] _providers;
@@ -84,7 +90,7 @@ namespace Game.Core.Characters
             if (starting != null)
                 for (int i = 0; i < starting.Count; i++) Traits.TryAdd(starting[i]);
 
-            _providers = new IModifierProvider[] { Traits, Scars, Perks };
+            _providers = new IModifierProvider[] { Traits, Scars, Perks, Equipment };
         }
 
         /// <summary>
