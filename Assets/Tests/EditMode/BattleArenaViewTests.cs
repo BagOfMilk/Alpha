@@ -1,4 +1,8 @@
+using System;
+using Game.Core.Characters.Creation;
+using Game.Core.Combat;
 using Game.Gameplay;
+using Game.Gameplay.Text;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -216,6 +220,50 @@ namespace Game.Tests.EditMode
                       && System.Math.Abs(a.G - b.G) < 1e-4f
                       && System.Math.Abs(a.B - b.B) < 1e-4f;
             Assert.IsFalse(same, "Кольори мали відрізнятися, а вийшли однакові");
+        }
+
+        // ================= стани бою: значок -> ключ UkrainianText =================
+
+        /// <summary>
+        /// Дебаг §6.1 №32 (24.09.2026): <c>combat.status.*</c> ключі в
+        /// UkrainianText існували з пакету E3, але <c>StatusLabelKey</c> (і
+        /// HUD, що його читає) з'явились лише тепер — кожне значення
+        /// <see cref="StatusType"/> (крім <see cref="StatusType.None"/>) мусить
+        /// мати мапінг на ІСНУЮЧИЙ ключ, інакше гравець побачить порожній
+        /// значок або (гірше) нічого замість накладеного стану.
+        /// </summary>
+        [TestCase(StatusType.Bleeding)]
+        [TestCase(StatusType.Stunned)]
+        [TestCase(StatusType.Suppressed)]
+        [TestCase(StatusType.KnockedDown)]
+        [TestCase(StatusType.Marked)]
+        [TestCase(StatusType.Burning)]
+        [TestCase(StatusType.Poisoned)]
+        public void StatusLabelKey_MapsToExistingUkrainianTextKey(StatusType status)
+        {
+            string key = BattleArenaView.StatusLabelKey(status.ToString());
+            Assert.IsNotNull(key, $"{status}: StatusLabelKey не мав повернути null для реалізованого стану");
+            Assert.IsTrue(UkrainianText.Has(key, Gender.Male), $"{status}: ключ '{key}' відсутній у UkrainianText");
+            Assert.IsTrue(UkrainianText.Has(key, Gender.Female), $"{status}: ключ '{key}' відсутній у UkrainianText (жін.)");
+        }
+
+        [Test]
+        public void StatusLabelKey_UnknownName_ReturnsNull()
+        {
+            Assert.IsNull(BattleArenaView.StatusLabelKey("НевідомийСтан"));
+            Assert.IsNull(BattleArenaView.StatusLabelKey(StatusType.None.ToString()));
+        }
+
+        /// <summary>Жоден стан з реального enum'а (крім None) не лишився без мапінгу — інакше майбутній StatusType мовчки випаде з HUD.</summary>
+        [Test]
+        public void StatusLabelKey_CoversEveryStatusTypeExceptNone()
+        {
+            foreach (StatusType status in Enum.GetValues(typeof(StatusType)))
+            {
+                if (status == StatusType.None) continue;
+                Assert.IsNotNull(BattleArenaView.StatusLabelKey(status.ToString()),
+                    $"{status}: додай мапінг у BattleArenaView.StatusLabelKey (і за потреби ключ combat.status.* у UkrainianText)");
+            }
         }
     }
 }

@@ -160,7 +160,30 @@ namespace Game.Gameplay.UI
 
             DrawHpLine(current);
             DrawApBar(current);
+            DrawStatuses(current);
             if (current.IsDowned) GUILayout.Label(UkrainianText.Get("ui.battle.unit.downed", false), AlphaSkin.Tooltip);
+        }
+
+        /// <summary>
+        /// Дебаг §6.1 №32 (24.09.2026): <c>BattleUnitView.Statuses</c> раніше
+        /// не малювався НІДЕ в HUD — гравець не бачив накладені стани навіть
+        /// коли Core коректно їх рахував. Той самий стиль значка, що дозор
+        /// (<see cref="DrawApBar"/>, <c>Widgets.Badge</c>); ключ без мапінгу
+        /// (<see cref="BattleArenaView.StatusLabelKey"/> повернув null) —
+        /// пропускаємо значок, а не показуємо сирий enum-рядок гравцю.
+        /// </summary>
+        private static void DrawStatuses(BattleUnitView unit)
+        {
+            if (unit.Statuses == null || unit.Statuses.Count == 0) return;
+
+            GUILayout.BeginHorizontal();
+            foreach (var status in unit.Statuses)
+            {
+                string key = BattleArenaView.StatusLabelKey(status);
+                if (key == null) continue;
+                Widgets.Badge(UkrainianText.Get(key, false), AlphaSkin.Danger);
+            }
+            GUILayout.EndHorizontal();
         }
 
         /// <summary>
@@ -230,9 +253,12 @@ namespace Game.Gameplay.UI
             // (щойно впала) — тоді просто нічого не домальовуємо.
             var target = FindUnit(view, c.HoveredUnitId);
             if (target != null)
+            {
                 GUILayout.Label(UkrainianText.Format("ui.battle.hp.target", false,
                     "current", target.Hp.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     "max", target.HpMax.ToString(System.Globalization.CultureInfo.InvariantCulture)), AlphaSkin.Body);
+                DrawStatuses(target);
+            }
         }
 
         private static void DrawAbilities(IBattleHudData c)

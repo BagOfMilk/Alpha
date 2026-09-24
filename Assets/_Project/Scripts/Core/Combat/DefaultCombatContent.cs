@@ -102,11 +102,32 @@ namespace Game.Core.Combat
                 Abilities = { Lunge() }
             };
 
-        /// <summary>Бурунда-бегадир — фінальний бос (R8): тримає удар і б'є боляче, без роздування HP окремо від ролі.</summary>
+        /// <summary>
+        /// Бурунда-бегадир — фінальний бос (R8): тримає удар і б'є боляче, без
+        /// роздування HP окремо від ролі.
+        ///
+        /// Дебаг §6.1 №32 (24.09.2026): Accuracy був 65 — проти реалістичного
+        /// Defense напарника/протагоніста з Epic 2 (= Agility 1..10 напряму,
+        /// DerivedStats.cs: DefenseBase 0 + Agility×1, стеля 10) показане число
+        /// падало в 55..64, а StatusOnHit/ShredOnHit гейтовані ЛИШЕ на Hit/Crit
+        /// (CombatState.ExecuteAttackRoll — навмисно, граза = лише половина
+        /// урону, без проків). Під ThresholdRule (інваріант 1, за замовчуванням
+        /// у GameSession) це не "рідко" — це ПОСТІЙНО: margin 5..14 назавжди
+        /// нижче ThresholdGrazeBand=15, і жодного природного Hit не буває, а
+        /// Strike-метр (єдиний детермінований вихід на гарантований удар) сам
+        /// копиться лише з Hit/Crit (GDD.md:119 "копится с попаданий" — не з
+        /// будь-якої атаки, і це навмисно, не правиться тут) — то без Hit
+        /// Strike ніколи не набереться, і пастка не відкривається НІКОЛИ для
+        /// цього конкретного бою. Accuracy 65 -> 80: margin проти Defense 0..10
+        /// стає 10..30 -> завжди Hit (мінімум margin=15 при найгіршому Defense
+        /// =10), інколи Crit при слабшому захисті — саме "б'є боляче" з
+        /// коментаря вище, тепер справджується. Доведено
+        /// <see cref="Game.Tests.EditMode.CombatStatusDebugTests"/>.
+        /// </summary>
         public static EnemyDefinition Burunda() =>
             new EnemyDefinition("enemy.burunda", "burunda", EnemyRole.Tank, EnemyFamily.Human)
             {
-                MaxHp = 30, MaxAp = 10, Accuracy = 65, Defense = 4, Initiative = 7, CritChance = 12, Armor = 2,
+                MaxHp = 30, MaxAp = 10, Accuracy = 80, Defense = 4, Initiative = 7, CritChance = 12, Armor = 2,
                 Resolve = 3,
                 Weapon = BurundaMace(),
                 Abilities = { Lunge() }
