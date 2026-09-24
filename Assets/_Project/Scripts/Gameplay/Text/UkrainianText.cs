@@ -1377,6 +1377,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.scene.hint", "Пробіл або клік — далі.");
             AddKey(t, "ui.scene.portrait.placeholder", "?");
 
+            // Поправка №7.8 (тест-збірка, п.1): екран сцени показує Choice-
+            // крок кнопками, а не автопрогоном "Далі" — прев'ю перевірки
+            // заздалегідь (інваріант 8), як і в DecisionScreen.
+            AddKey(t, "ui.scene.option_check_line",
+                "{text} — {skill} ≥ {threshold}, виконує: {performer}, очікувана полоса: {band}.");
+            AddKey(t, "ui.scene.consequence.title", "Наслідок:");
+
             AddKey(t, "ui.start_day", "Почати день");
             AddKey(t, "ui.confirm_evening", "До ночі");
             AddKey(t, "ui.summary.continue", "Грати далі");

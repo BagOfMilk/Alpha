@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Game.Core.Session;
 using Game.Core.Session.Views;
 using Game.Gameplay.Text;
 using UnityEngine;
@@ -8,10 +10,38 @@ namespace Game.Gameplay.UI
     /// Портретна сцена (§4.1 <c>AdvanceScene</c>): портрет(и) із
     /// <see cref="IPortraitProvider"/> або іменна заглушка, ім'я мовця й
     /// репліка з <see cref="UkrainianText"/>, «Далі» / Пробіл / клік.
+    ///
+    /// Тест-збірка (Поправка №7.8, п.1): коли поточний крок — Choice
+    /// (<see cref="SceneStepView.IsChoice"/>), замість «Далі» малюються
+    /// варіанти кнопками (<see cref="ScreenText.SceneOptionLine"/> — текст
+    /// варіанту, а за наявності перевірки ще й скіл/поріг/виконавець/
+    /// очікувана полоса заздалегідь, інваріант 8). Обраний варіант іде через
+    /// <c>GameSession.ChooseSceneOption</c>, а до продовження сцени гравцю
+    /// показується наслідок — нові рядки <c>DayLog</c>, які саме цей вибір
+    /// щойно дописав (<see cref="_consequenceEvents"/>), а не автоматичний
+    /// перехід одразу на наступний кадр.
     /// </summary>
     public sealed class SceneScreen
     {
         private SceneStepView _current;
+
+        /// <summary>Наступний кадр сцени, отриманий від ChooseSceneOption — тримається, поки гравець не закриє панель наслідку.</summary>
+        private SceneStepView _pendingAfterChoice;
+
+        /// <summary>Нові події DayLog, які саме щойно зроблений вибір дописав (межа лічена ДО виклику ChooseSceneOption) — порожньо/null, коли наслідку нема що показати.</summary>
+        private List<GameEvent> _consequenceEvents;
+
+        /// <summary>Показуємо панель наслідку вибору на екрані замість кнопок варіантів чи «Далі».</summary>
+        private bool _showingConsequence;
+
+        /// <summary>
+        /// Контекст останньої репліки (Поправка №7.8): Choice-крок сам не
+        /// несе ані SpeakerId, ані LineKey (<c>ScenePlayback.Next</c> скидає
+        /// їх на будь-якому кроці, включно з Choice) — без цього кешу питання,
+        /// щойно сказане перед вибором ("Кажи прямо..."), зникало б з екрана
+        /// саме тоді, коли гравцю треба на нього відповісти.
+        /// </summary>
+        private string _lastSpeakerId, _lastLineKey;
 
         /// <summary>
         /// Кеш карткового фону за id (§DrawNameCardFallback) — інакше кожен
@@ -27,7 +57,13 @@ namespace Game.Gameplay.UI
         public void Draw(GameShell shell)
         {
             if (_current == null)
-                _current = shell.TryRun(() => shell.Session.AdvanceScene());
+            {
+                // Межа сцени: нова сцена не має пам'ятати останню репліку
+                // ЧУЖОЇ, щойно закінченої сцени (§_lastSpeakerId нижче).
+                _lastSpeakerId = null;
+                _lastLineKey = null;
+                SetCurrent(shell.TryRun(() => shell.Session.AdvanceScene()));
+            }
             if (_current == null) return;
 
             var g = shell.ProtagonistGender;
@@ -38,17 +74,35 @@ namespace Game.Gameplay.UI
 
             Widgets.Panel(null, () =>
             {
-                if (!string.IsNullOrEmpty(_current.SpeakerId))
-                    GUILayout.Label(ScreenText.ResolveCompanionName(_current.SpeakerId, g, shell.Session.GetRosterView()), AlphaSkin.SubHeader);
-                if (!string.IsNullOrEmpty(_current.LineKey))
-                    GUILayout.Label(UkrainianText.Get(_current.LineKey, g), AlphaSkin.Body);
+                // Контекст останньої репліки (§_lastSpeakerId) — ЛИШЕ на
+                // Choice-кроці й на панелі наслідку: власні SpeakerId/LineKey
+                // кадру там порожні (ScenePlayback скидає їх на будь-якому
+                // кроці), і без відкату гравець бачив би порожню панель над
+                // кнопками замість щойно сказаної фрази/питання. Для звичайних
+                // Shot/Beat-кроків МІЖ репліками (портрет змінюється, тексту
+                // немає) фолбек НЕ застосовуємо — це навмисна порожня панель
+                // із самим "Далі", як і завжди.
+                bool wantsContext = _current.IsChoice || _showingConsequence;
+                string speakerId = !string.IsNullOrEmpty(_current.SpeakerId) ? _current.SpeakerId : (wantsContext ? _lastSpeakerId : null);
+                string lineKey = !string.IsNullOrEmpty(_current.LineKey) ? _current.LineKey : (wantsContext ? _lastLineKey : null);
+                if (!string.IsNullOrEmpty(speakerId))
+                    GUILayout.Label(ScreenText.ResolveCompanionName(speakerId, g, shell.Session.GetRosterView()), AlphaSkin.SubHeader);
+                if (!string.IsNullOrEmpty(lineKey))
+                    GUILayout.Label(UkrainianText.Get(lineKey, g), AlphaSkin.Body);
 
                 GUILayout.Space(8f);
-                GUILayout.BeginHorizontal();
-                if (Widgets.PrimaryButton(UkrainianText.Get("ui.scene.next", g), GUILayout.Width(180f)))
-                    Advance(shell);
-                Widgets.TooltipLine(UkrainianText.Get("ui.scene.hint", g));
-                GUILayout.EndHorizontal();
+                if (_showingConsequence)
+                    DrawConsequence(shell, g);
+                else if (_current.IsChoice)
+                    DrawChoiceOptions(shell, g);
+                else
+                {
+                    GUILayout.BeginHorizontal();
+                    if (Widgets.PrimaryButton(UkrainianText.Get("ui.scene.next", g), GUILayout.Width(180f)))
+                        Advance(shell);
+                    Widgets.TooltipLine(UkrainianText.Get("ui.scene.hint", g));
+                    GUILayout.EndHorizontal();
+                }
             }, GUILayout.Width(Screen.width * 0.8f));
 
             // Фікс-ревью (блокер, знайдено тур-автоплеєм): рект діалогової
@@ -71,8 +125,16 @@ namespace Game.Gameplay.UI
             // Event.current.type відповідає рівно одному фізичному
             // натисканню — той самий прийом, що вже коректно працює через
             // Update() у прекурсорі ScenePlayer.cs, тут — через сам OnGUI.
+            //
+            // Поправка №7.8 (тест-збірка, п.1): на Choice-кроці й на панелі
+            // наслідку вибір/продовження йде ЛИШЕ явною кнопкою — випадковий
+            // клік по фону сцени більше не проковтує вибір гравця мовчки
+            // (раніше й тут спрацював би загальний Advance(), який на
+            // Choice-кроці — нешкідливий, але зайвий, но-оп; для консистент-
+            // ності з панеллю наслідку — де мовчазний скіп справді був би
+            // помилкою — вимикаємо обидва разом).
             var evt = Event.current;
-            bool advanceRequested = evt != null &&
+            bool advanceRequested = evt != null && !_current.IsChoice && !_showingConsequence &&
                 ((evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Space) ||
                  (evt.type == EventType.MouseDown && evt.button == 0));
             if (advanceRequested)
@@ -82,10 +144,83 @@ namespace Game.Gameplay.UI
             }
         }
 
+        /// <summary>Варіанти Choice-кроку кнопками (Поправка №7.8, п.1) — текст варіанту, а за наявності перевірки ще й скіл/поріг/виконавець/полоса заздалегідь.</summary>
+        private void DrawChoiceOptions(GameShell shell, Game.Core.Characters.Creation.Gender g)
+        {
+            if (_current.Options == null) return;
+            var roster = shell.Session.GetRosterView();
+            for (int i = 0; i < _current.Options.Count; i++)
+            {
+                int index = i;
+                string label = ScreenText.SceneOptionLine(_current.Options[i], g, roster);
+                if (Widgets.PrimaryButton(label))
+                    ChooseOption(shell, index);
+            }
+        }
+
+        /// <summary>
+        /// Розв'язує вибір і одразу лічить, які рядки DayLog саме цей вибір
+        /// дописав (межа ДО виклику, а не порівняння знімків — той самий
+        /// принцип, що вже коректно рахує вплив вибору в BotRunner.
+        /// ChoiceDiagnostic), щоб показати їх панеллю наслідку, а не
+        /// проковтнути мовчки, як і будь-яку іншу команду через TryRun.
+        /// </summary>
+        private void ChooseOption(GameShell shell, int optionIndex)
+        {
+            int before = shell.Session.DayLog.Count;
+            var next = shell.TryRun(() => shell.Session.ChooseSceneOption(optionIndex));
+            var log = shell.Session.DayLog;
+            var consequence = new List<GameEvent>();
+            if (log != null)
+                for (int i = before; i < log.Count; i++)
+                    consequence.Add(log[i]);
+
+            _consequenceEvents = consequence;
+            _pendingAfterChoice = next;
+            _showingConsequence = true;
+        }
+
+        /// <summary>Панель наслідку (Поправка №7.8, п.1): рядки DayLog, які цей вибір щойно дописав — «Далі» лише тепер відкриває наступний кадр сцени.</summary>
+        private void DrawConsequence(GameShell shell, Game.Core.Characters.Creation.Gender g)
+        {
+            GUILayout.Label(UkrainianText.Get("ui.scene.consequence.title", g), AlphaSkin.SubHeader);
+            if (_consequenceEvents == null || _consequenceEvents.Count == 0)
+                GUILayout.Label(UkrainianText.Get("ui.common.empty", g), AlphaSkin.Tooltip);
+            else
+            {
+                var roster = shell.Session.GetRosterView();
+                foreach (var evt in _consequenceEvents)
+                {
+                    string line = ScreenText.EventLine(evt, g, roster);
+                    if (!string.IsNullOrEmpty(line))
+                        GUILayout.Label("• " + line, AlphaSkin.Body);
+                }
+            }
+
+            GUILayout.Space(8f);
+            if (Widgets.PrimaryButton(UkrainianText.Get("ui.scene.next", g), GUILayout.Width(180f)))
+            {
+                _showingConsequence = false;
+                _consequenceEvents = null;
+                var next = _pendingAfterChoice;
+                _pendingAfterChoice = null;
+                SetCurrent(next != null && !next.IsFinished ? next : null);
+            }
+        }
+
+        /// <summary>Оновлює поточний кадр і, за наявності, пам'ятає останню непорожню репліку (§_lastSpeakerId) для показу над наступним Choice-кроком.</summary>
+        private void SetCurrent(SceneStepView view)
+        {
+            _current = view;
+            if (view == null) return;
+            if (!string.IsNullOrEmpty(view.SpeakerId)) _lastSpeakerId = view.SpeakerId;
+            if (!string.IsNullOrEmpty(view.LineKey)) _lastLineKey = view.LineKey;
+        }
+
         private void Advance(GameShell shell)
         {
             var next = shell.TryRun(() => shell.Session.AdvanceScene());
-            _current = (next != null && !next.IsFinished) ? next : null;
+            SetCurrent(next != null && !next.IsFinished ? next : null);
         }
 
         /// <summary>

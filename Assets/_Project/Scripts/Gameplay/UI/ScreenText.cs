@@ -151,6 +151,30 @@ namespace Game.Gameplay.UI
                 "candidate", candidate, "band", band);
         }
 
+        /// <summary>
+        /// Один рядок варіанту сценового вибору (Поправка №7.8, тест-збірка,
+        /// п.1): сам текст варіанту (TextKey) — завжди; якщо варіант несе
+        /// перевірку (SkillKey не порожній) — дописуємо скіл/поріг/виконавця/
+        /// очікувану полосу заздалегідь (інваріант 8), тим самим шаблоном
+        /// прозорості, що вже <see cref="DecisionOptionLine"/> для рішень.
+        /// </summary>
+        public static string SceneOptionLine(DecisionOptionView option, Gender gender, RosterView roster)
+        {
+            if (option == null) return string.Empty;
+            string text = UkrainianText.Has(option.TextKey, gender) ? UkrainianText.Get(option.TextKey, gender) : option.TextKey;
+            if (string.IsNullOrEmpty(option.SkillKey)) return text;
+
+            string skill = SkillLabel(option.SkillKey, gender);
+            string performer = option.HasCandidate
+                ? ResolveCompanionName(option.BestActorId, gender, roster)
+                : UkrainianText.Get("ui.decision.no_candidate", gender);
+            string band = string.IsNullOrEmpty(option.ExpectedBand) ? "" : BandWordsFor(option.ExpectedBand, gender);
+
+            return UkrainianText.Format("ui.scene.option_check_line", gender,
+                "text", text, "skill", skill, "threshold", option.Threshold.ToString(),
+                "performer", performer, "band", band);
+        }
+
         public static string SkillLabel(string skillKey, Gender gender)
         {
             if (string.IsNullOrEmpty(skillKey)) return string.Empty;
