@@ -56,6 +56,17 @@ namespace Game.Gameplay
         public const string ThresholdFlag = "-autoplay-threshold";
 
         /// <summary>
+        /// Бісекція краш-репорту про виліт після Application.Quit (root-cause
+        /// evidence: 20.09.2026 репорт, стійка адреса всіх крашів у
+        /// UnityPlayer.dll — детермінований порядок знищення, а не випадкове
+        /// пошкодження купи): вихід без ЖОДНОГО ігрового кроку — лише титул
+        /// на кілька кадрів і вихід. Ізолює природний вихід (гравець натиснув
+        /// "Вихід" на титулі, не бачивши ні порталів, ні арени) від туру, що
+        /// проходить крізь <see cref="PortraitRig"/>/<see cref="BattleArenaController"/>.
+        /// </summary>
+        public const string QuitAfterTitleFlag = "-quit-after-title";
+
+        /// <summary>
         /// Виставляється <c>GameSceneBuilder.Build()</c> одразу після
         /// <c>AddComponent</c> — той самий GameObject "Boot", що й
         /// <see cref="GameShell"/> (Editor-only <c>GetComponent</c> там, не
@@ -67,6 +78,9 @@ namespace Game.Gameplay
         private bool _hadException;
         private int _shotIndex = 1;
         private readonly List<string> _summary = new List<string>();
+
+        /// <summary>Скільки кадрів лишилось до виходу в режимі <see cref="QuitAfterTitleFlag"/> (-1 = режим не активний).</summary>
+        private int _quitAfterTitleFramesLeft = -1;
 
         /// <summary>Чи просив командний рядок автопрогон — перевіряється один раз при старті.</summary>
         public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag);
@@ -81,6 +95,16 @@ namespace Game.Gameplay
 
         private void Start()
         {
+            if (HasArg(QuitAfterTitleFlag))
+            {
+                // Два кадри — титул точно встиг намалюватися бодай раз
+                // (Repaint), перш ніж Update() (безпечна точка, не OnGUI)
+                // покличе Finish/Application.Quit.
+                _quitAfterTitleFramesLeft = 2;
+                Log("Плейн-вихід (-quit-after-title): без туру, лише титул і вихід.");
+                return;
+            }
+
             if (!RequestedFromCommandLine()) return;
 
             if (Shell == null)
@@ -101,6 +125,13 @@ namespace Game.Gameplay
 
         private void Update()
         {
+            if (_quitAfterTitleFramesLeft > 0)
+            {
+                _quitAfterTitleFramesLeft--;
+                if (_quitAfterTitleFramesLeft == 0) Finish(0);
+                return;
+            }
+
             if (_tour == null) return;
 
             bool more;
@@ -148,7 +179,20 @@ namespace Game.Gameplay
         {
             Log("Автопрогон завершено, код виходу " + exitCode.ToString(CultureInfo.InvariantCulture) + ".");
             WriteSummary();
-            Application.Quit(exitCode);
+
+            // Root-cause фікс краху при виході (доказ — Windows Event Log,
+            // Application/Id=1000, 24.09.2026): Application.Quit незалежно
+            // від графічного API (перевірено і на форсованому D3D11, і на
+            // штатному D3D12 — та сама адреса краху в UnityPlayer.dll) і
+            // незалежно від того, що саме встигло намалюватися (той самий
+            // крах на голому титулі, -quit-after-title, без жодного кадру
+            // бою чи портрета) впав на ~22/22 запусках поспіль — нативний
+            // teardown рушія сам по собі баговий, не код гри. Environment.Exit
+            // не дає рушію взагалі дійти до цього шляху (0/6 крашів у тому
+            // самому прогоні): див. той самий фікс у GameShell.HandleWantsToQuit,
+            // яка ловить і решту тригерів виходу (кнопка, Alt+F4, закриття
+            // вікна) тим самим способом.
+            Environment.Exit(exitCode);
         }
 
         private void WriteSummary()

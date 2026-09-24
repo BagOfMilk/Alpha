@@ -72,7 +72,7 @@ namespace Game.Gameplay.UI
                 GUILayout.Space(20f);
 
                 if (Widgets.DangerButton(UkrainianText.Get("ui.title.quit", g)))
-                    Application.Quit(0);
+                    shell.RequestQuit(); // §GameShell._quitRequested — не кликати Application.Quit просто з OnGUI
             }, GUILayout.Width(680f));
             GUILayout.EndArea();
         }

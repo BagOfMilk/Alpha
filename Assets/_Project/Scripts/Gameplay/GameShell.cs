@@ -41,6 +41,45 @@ namespace Game.Gameplay
         private bool _escapeOpen;
         private SeededDiceRoller _roller;
 
+        /// <summary>
+        /// Безпечна точка виходу: <see cref="TitleScreen"/>/<see cref="EscapeMenuScreen"/>
+        /// більше не кличуть рушійний вихід напряму зсередини <c>OnGUI</c> —
+        /// того самого кадрового вікна, у якому URP ще не завершив Submit
+        /// поточного кадру. Прапорець ставиться з OnGUI, сам вихід
+        /// відкладається до наступного <see cref="Update"/>. Це другий шар
+        /// поверх головного фіксу нижче (<see cref="HandleWantsToQuit"/>) —
+        /// сам механізм виходу той самий (root-cause evidence там).
+        /// </summary>
+        private bool _quitRequested;
+
+        public void RequestQuit() => _quitRequested = true;
+
+        /// <summary>
+        /// Root-cause фікс краху при виході (доказ — Windows Event Log,
+        /// Application/Id=1000, 24.09.2026, ~22 запуски поспіль): будь-який
+        /// шлях, що доходить до нативного teardown рушія після
+        /// <c>Application.Quit</c>, падає в UnityPlayer.dll на тій самій
+        /// детермінованій адресі — незалежно від графічного API (перевірено
+        /// і форсований D3D11, і штатний D3D12 — та сама адреса) і незалежно
+        /// від того, що встигло намалюватись (той самий крах на голому
+        /// титулі, без жодного кадру бою чи портрета). Це баг самого
+        /// нативного teardown, не код гри — тому лагодиться не там, де
+        /// щось руйнується руками (PortraitRig/BattleArenaController тут ні
+        /// до чого), а тим, що рушій узагалі НЕ пускається цим шляхом:
+        /// <c>Application.wantsToQuit</c> — найперша подія послідовності
+        /// виходу (до <c>Application.quitting</c>, до самого teardown) і
+        /// єдина, що ловить УСІ тригери — не лише кнопку "Вихід", а й
+        /// Alt+F4/закриття вікна/сигнал ОС. <see cref="Environment.Exit"/>
+        /// тут завершує процес одразу, той самий спосіб, що вже підтверджено
+        /// в <see cref="AutoplayBootstrap.Finish"/> (0 крашів на 6 запусках
+        /// проти 100% крашів через Application.Quit).
+        /// </summary>
+        private bool HandleWantsToQuit()
+        {
+            Environment.Exit(0);
+            return false; // формальність — рядком вище процес уже завершено
+        }
+
         private static readonly MethodInfo FeedVillageStageMethod = ResolveBridgeMethod("VillageStageBridge", "Feed");
         private static readonly MethodInfo FindBattlePresenterMethod = ResolveBridgeMethod("PresenterDiscoveryBridge", "FindBattlePresenter");
         private static readonly MethodInfo FindPortraitProviderMethod = ResolveBridgeMethod("PresenterDiscoveryBridge", "FindPortraitProvider");
@@ -51,6 +90,13 @@ namespace Game.Gameplay
             Session = new GameSession(_roller);
 
             DiscoverPresenters();
+
+            Application.wantsToQuit += HandleWantsToQuit; // §HandleWantsToQuit
+        }
+
+        private void OnDestroy()
+        {
+            Application.wantsToQuit -= HandleWantsToQuit;
         }
 
         /// <summary>
@@ -70,6 +116,12 @@ namespace Game.Gameplay
         {
             BattlePresenter = FindBattlePresenterMethod?.Invoke(null, null) as IBattlePresenter;
             PortraitProvider = FindPortraitProviderMethod?.Invoke(null, null) as IPortraitProvider;
+        }
+
+        /// <summary>§_quitRequested — безпечна точка виходу (не OnGUI/корутина, прив'язана до рендеру).</summary>
+        private void Update()
+        {
+            if (_quitRequested) Environment.Exit(0); // §HandleWantsToQuit — той самий безпечний вихід, без Application.Quit
         }
 
         private void OnGUI()
