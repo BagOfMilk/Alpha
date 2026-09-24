@@ -36,6 +36,9 @@ namespace Game.Tests.EditMode
     ///    переданий у <c>UkrainianText.Get/Format</c>, не повинен бути відсутнім
     ///    у таблиці (це ж покриє ключі E1b/E2 після мержу — вони пишуть у свої
     ///    блоки того самого файлу).
+    /// 4. <see cref="VillageLife_FeedGoesThroughTable_AndEveryVillagerHasName"/> —
+    ///    (додано фікс-ревью після E3b) скан <c>Gameplay/VillageLife.cs</c>:
+    ///    стрічка села без літералів і без Core-контентного DisplayName.
     /// </summary>
     public class UkrainianTextCoverageTests
     {
@@ -208,6 +211,36 @@ namespace Game.Tests.EditMode
             CollectionAssert.IsEmpty(problems,
                 "Літеральні ключі UkrainianText.Get/Format без тексту в таблиці (" + problems.Count + "):\n" +
                 string.Join("\n", problems));
+        }
+
+        // =====================================================================
+        // 4) Gameplay/VillageLife.cs — MonoBehaviour, headless його не
+        //    запустити; слова стрічки рахує VillageView (тести у
+        //    VillageViewTests), а тут скан вихідника стереже шов: сцена не
+        //    пише в стрічку літерал і не читає Core-контентний DisplayName
+        //    (R7), а кожен житель службового ростеру (Make("<id>", …)) має
+        //    ім'я char.<id> — інакше наказ "staff:<id>@…" покаже сирий id.
+        // =====================================================================
+
+        [Test]
+        public void VillageLife_FeedGoesThroughTable_AndEveryVillagerHasName()
+        {
+            string path = Path.Combine(RepoRoot(), "Assets", "_Project", "Scripts", "Gameplay", "VillageLife.cs");
+            Assert.IsTrue(File.Exists(path), "Не знайдено " + path);
+            string text = File.ReadAllText(path);
+
+            Assert.AreEqual(0, Regex.Matches(text, "Say\\s*\\(\\s*\"").Count,
+                "VillageLife.cs пише в стрічку рядковий літерал — текст має йти через UkrainianText");
+            StringAssert.DoesNotContain(".DisplayName", text,
+                "VillageLife.cs читає Core-контентний DisplayName — назва має йти за id через таблицю");
+
+            var ids = Regex.Matches(text, "Make\\s*\\(\\s*\"([^\"]+)\"")
+                .Cast<Match>().Select(m => m.Groups[1].Value).ToList();
+            Assert.Greater(ids.Count, 0, "Скан не знайшов жодного Make(\"<id>\", …) — змінився вигляд BuildRoster?");
+
+            var nameless = ids.Where(id => !HasEitherGender("char." + id)).ToList();
+            CollectionAssert.IsEmpty(nameless,
+                "Жителі VillageLife без імені char.<id> в UkrainianText: " + string.Join(", ", nameless));
         }
 
         // =====================================================================
