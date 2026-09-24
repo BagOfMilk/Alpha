@@ -66,25 +66,23 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Что вообще показывать. Сцены собираются кодом, поэтому в Build
-        /// Settings их может не быть вовсе — тогда билд вышел бы пустым.
+        /// Что вообще показывать. R18: билд тестовой сборки — ОДНА сцена,
+        /// <c>Game.unity</c> (титул → создание → хаб → финал, всё в ней же).
+        /// Она собирается кодом (<c>GameSceneBuilder</c>, пакет E1), поэтому в
+        /// Build Settings до пересборки её может не быть вовсе — тогда билд
+        /// вышел бы пустым, и это явная ошибка, а не тихый пропуск.
         ///
-        /// Село идёт первым: это МЕСТО, с него начинается взгляд. Портретная
-        /// сцена — люди — следом. Перехода между ними пока нет, и это честно:
-        /// они два отдельных вида, а не игра. Игра сейчас — текстовый срез.
-        /// Диагностическая сцена в билд не идёт: она для редактора.
+        /// Village.unity и Opening.unity (витрина села и портретная сцена
+        /// первых суток) остаются editor-only: их можно открыть и посмотреть
+        /// в редакторе, но в Build Settings они больше не попадают — список
+        /// заменяется целиком, а не дополняется.
         /// </summary>
         private static void RegisterScenes()
         {
-            var wanted = new List<string>();
-            foreach (var path in new[] { "Assets/Scenes/Village.unity", "Assets/Scenes/Opening.unity" })
-                if (File.Exists(path)) wanted.Add(path);
+            const string gamePath = "Assets/Scenes/Game.unity";
+            if (!File.Exists(gamePath)) return;
 
-            if (wanted.Count == 0) return;
-
-            var scenes = new List<EditorBuildSettingsScene>();
-            for (int i = 0; i < wanted.Count; i++) scenes.Add(new EditorBuildSettingsScene(wanted[i], true));
-            EditorBuildSettings.scenes = scenes.ToArray();
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(gamePath, true) };
         }
 
         /// <summary>Только ВКЛЮЧЁННЫЕ сцены и только реально существующие на диске.</summary>

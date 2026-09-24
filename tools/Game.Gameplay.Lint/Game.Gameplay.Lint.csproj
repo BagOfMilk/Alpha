@@ -37,6 +37,18 @@
     <!-- B8: общие примитивы VillageShowcase (PrefabUtility/ModelImporter-соседи,
          TextMesh, AssetDatabase.CreateAsset…) — та же причина исключения. -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/KitBuilder.cs" />
+
+    <!--
+      E1: та же причина, тот же принцип, что и у VillageLife/VillageShowcase
+      выше. VillageStage — компонент сцены (Light/Camera/Renderer/Material/
+      Shader.Find, RenderSettings), GameSceneBuilder — сборщик сцены
+      (PrefabUtility, ModelImporter-соседи через KitBuilder, UniversalAdditio-
+      nalCameraData). Настоящий Unity проверяет их сам в batch-режиме при
+      сборке сцены «Игра» (см. tools/build-unity.ps1) — заглушка честно не
+      покрыла бы этот API без риска молча разойтись с настоящими сигнатурами.
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/VillageStage.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/GameSceneBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>
