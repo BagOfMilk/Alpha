@@ -128,6 +128,14 @@ namespace Game.Core.World
                 fired.Add(ready[i].SourceId);
             }
 
+            // Ударивший источник в этом же тике не предупреждает: удар сам и
+            // есть событие. Иначе ступень, набранная вместе с ударом, уходила
+            // игроку рядом с инцидентом, а засчитывалась (MarkDelivered — после
+            // Advance) уже на обнулённый трек: следующий круг начинался с
+            // «третья услышана» и молчал до самого удара.
+            if (fired.Count > 0)
+                forewarnings.RemoveAll(f => fired.Contains(f.SourceId));
+
             forewarnings.Sort((a, b) => string.CompareOrdinal(a.SourceId, b.SourceId));
             return new PulseTick(fired, forewarnings);
         }

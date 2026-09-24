@@ -198,6 +198,60 @@ namespace Game.Tests.EditMode
                 "Нужно хотя бы два удара: вырождение лестницы видно только на втором круге");
         }
 
+        /// <summary>
+        /// То же обещание через настоящий конвейер: засчитывает ступени шаг
+        /// Pulse, и засчитывает ПОСЛЕ того, как пульс отстрелялся. Тест выше
+        /// проверяет только «не перепрыгивает» — молчащий круг он пропускает:
+        /// без предвестников нечего и перепрыгивать. Здесь каждый инцидент
+        /// ticker обязан прийти после своих первой и второй ступени, и ни одна
+        /// ступень не звучит в одном отчёте с самим инцидентом.
+        /// </summary>
+        [Test]
+        public void Forewarn_EveryIncident_IsAnnounced_OnEveryCycle_ThroughTheDayPipeline()
+        {
+            var cfg = Cfg();
+            var table = new IncidentTable();
+            table.Add(new IncidentDefinition
+            {
+                Id = "own", TopicId = "incident.own", DomainTag = "своё",
+                SourceId = "ticker", MinBand = TensionBand.Calm, MaxBand = TensionBand.Fracture, Weight = 1,
+                QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 5
+            });
+
+            var pulse = new WorldPulse(cfg.Pulse);
+            pulse.AddSource(new SteadySource("ticker"));
+
+            var p = new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
+            {
+                Tier = 1,
+                Pulse = pulse,
+                Incidents = table,
+                Population = new PopulationState(),
+                Repeats = new RepeatTracker()
+            };
+
+            var heardThisCycle = new System.Collections.Generic.List<int>();
+            int incidents = 0;
+            for (int i = 0; i < 16; i++)
+            {
+                var report = p.Advance(DayPhase.Day);
+                var levels = report.Forewarnings.Where(f => f.SourceId == "ticker").Select(f => f.Level).ToList();
+                bool struck = report.Incidents.Any(o => o.IncidentId == "own");
+
+                if (struck)
+                    Assert.IsEmpty(levels, $"Сутки {report.Day}: ступень в одном отчёте с самим инцидентом ни о чём не предупреждает");
+                heardThisCycle.AddRange(levels);
+
+                if (!struck) continue;
+                incidents++;
+                CollectionAssert.AreEqual(new[] { 1, 2 }, heardThisCycle,
+                    $"Инцидент №{incidents} (сутки {report.Day}) пришёл без своей лестницы");
+                heardThisCycle.Clear();
+            }
+
+            Assert.GreaterOrEqual(incidents, 3, "Нужно несколько кругов: вырождение видно со второго");
+        }
+
         private sealed class SteadySource : IPressureSource
         {
             private readonly string _id;

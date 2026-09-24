@@ -70,6 +70,45 @@ namespace Game.Tests.EditMode
             Assert.Fail("Источник так и не сработал");
         }
 
+        /// <summary>
+        /// Предупреждение обязано предшествовать КАЖДОМУ удару, а не только
+        /// первому. Ставка 30 при пороге 100: на 4-е сутки накопитель и
+        /// доходит до третьей ступени, и бьёт — в одном тике. Раньше эта
+        /// ступень выдавалась вместе с ударом, а засчитывалась (MarkDelivered
+        /// после Advance) уже на обнулённый трек: второй круг начинался с
+        /// «третья услышана» и молчал до следующего удара.
+        /// </summary>
+        [Test]
+        public void Pulse_EveryCycle_HasItsOwnLadder_BeforeTheFire()
+        {
+            var pulse = new WorldPulse(Cfg());
+            pulse.AddSource(new FixedSource { Rate = 30, Threshold = 100 });
+
+            var heardThisCycle = new List<int>();
+            int fires = 0;
+            for (int day = 1; day <= 20; day++)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+                bool fired = tick.FiredSourceIds.Contains("src");
+
+                if (fired)
+                    Assert.IsEmpty(tick.Forewarnings,
+                        $"День {day}: удар сам и есть событие — предвестник в том же тике ничего не предупреждает");
+                heardThisCycle.AddRange(tick.Forewarnings.Select(f => f.Level));
+
+                if (!fired) continue;
+                fires++;
+                CollectionAssert.AreEqual(new[] { 1, 2 }, heardThisCycle,
+                    $"Удар №{fires} (день {day}): его круг обязан пройти свою лестницу, а не молчать");
+                Assert.AreEqual(0, pulse.DeliveredLevelOf("src"),
+                    $"День {day}: после удара лестница начинается с нуля, а не с засчитанной задним числом ступени");
+                heardThisCycle.Clear();
+            }
+
+            Assert.GreaterOrEqual(fires, 3, "Нужно несколько кругов: вырождение видно со второго");
+        }
+
         [Test]
         public void Pulse_ForewarnLevel2_NamesDomain()
         {
