@@ -49,6 +49,19 @@
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/VillageStage.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/GameSceneBuilder.cs" />
+
+    <!--
+      E1b: VillageStageBridge посилається на VillageStage/VillageStageData
+      (обидва — усередині VillageStage.cs, вище в цьому ж списку) і на
+      Object.FindAnyObjectByType — той самий "глибокий рушій", що вже
+      виключив сам VillageStage.cs. GameShell.cs (лінтується) кличе його
+      через рефлексію (Type.GetType), тому лінт-проєкт цей файл не бачить
+      узагалі і про відсутній тип не дізнається.
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/VillageStageBridge.cs" />
+
+    <!-- E1b: Object.FindObjectsByType&lt;T&gt;(FindObjectsInactive, FindObjectsSortMode) — Unity 6 API поза вузькою поверхнею заглушки; GameShell.cs кличе через рефлексію. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/PresenterDiscoveryBridge.cs" />
   </ItemGroup>
 
   <ItemGroup>

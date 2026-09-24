@@ -162,6 +162,17 @@ namespace Game.Gameplay.Text
             // EventFeedScreen (D2/E1 підключать пізніше — тут лише текст).
             AddGameEventFeedLines(t);
 
+            // ==== E1b: оболонка екранів (Gameplay/UI/*Screen.cs) ====
+            AddE1bShellCommon(t);
+            AddE1bHubTabs(t);
+            AddE1bDecisionAndBattleUi(t);
+            AddE1bDungeonAndNightUi(t);
+            AddE1bPeopleGearUi(t);
+            AddE1bFeedback(t);
+            AddE1bMissingEventKeys(t);
+            AddE1bMoodChips(t);
+            // ==== кінець блоку E1b ====
+
             return t;
         }
 
@@ -806,6 +817,278 @@ namespace Game.Gameplay.Text
             AddKey(t, "game.saved", "Збережено: слот {slot}.");
             AddKey(t, "game.loaded", "Завантажено: слот {slot}.");
             AddKey(t, "char.seen", "{char} тут.");
+        }
+
+        // ==================================================================
+        // E1b — оболонка екранів. Свій блок наприкінці таблиці (як просить
+        // §5 пакета E1b): нові ключі для GameShell/*Screen.cs, щоб мердж із
+        // E2/E3 лишався тривіальним (жоден рядок вище не зачіпається). Імена
+        // — lowercase dotted latin, як і решта таблиці.
+        // ==================================================================
+
+        // ---- Загальне: заголовок, вихід, панель подій, скасування ----
+        private static void AddE1bShellCommon(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.common.back", "Назад");
+            AddKey(t, "ui.common.cancel", "Скасувати");
+            AddKey(t, "ui.common.confirm", "Підтвердити");
+            AddKey(t, "ui.common.close", "Закрити");
+            AddKey(t, "ui.common.none", "—");
+            AddKey(t, "ui.common.empty", "Порожньо.");
+
+            AddKey(t, "ui.feed.title", "Стрічка подій");
+            AddKey(t, "ui.feed.empty", "Поки що тихо.");
+
+            AddKey(t, "ui.topbar.day", "Доба {day}");
+            AddKey(t, "ui.topbar.tier", "Тір {tier}");
+            AddKey(t, "ui.topbar.crowd", "Люди: {band}");
+            AddKey(t, "ui.topbar.mood", "Настрій: {band}");
+            AddKey(t, "ui.topbar.freeplay", "Вільна гра");
+            AddKey(t, "ui.topbar.patrolling", "На варті");
+
+            AddKey(t, "ui.escape.title", "Пауза");
+            AddKey(t, "ui.escape.resume", "Повернутися до гри");
+            AddKey(t, "ui.escape.save", "Зберегти й вийти в меню");
+            AddKey(t, "ui.escape.quit", "Вийти без збереження");
+            AddKey(t, "ui.escape.hint", "Esc — відкрити/закрити це меню.");
+
+            AddKey(t, "ui.creation.confirm", "Вирушати");
+            AddKey(t, "background.warrior.label", "Вигнанець зі зброєю");
+            AddKey(t, "background.trader.label", "Мандрівний торговець");
+            AddKey(t, "background.healer.label", "Учень знахарки");
+            AddKey(t, "ui.creation.gender.male", "Він");
+            AddKey(t, "ui.creation.gender.female", "Вона");
+
+            AddKey(t, "ui.scene.next", "Далі");
+            AddKey(t, "ui.scene.hint", "Пробіл або клік — далі.");
+            AddKey(t, "ui.scene.portrait.placeholder", "?");
+
+            AddKey(t, "ui.start_day", "Почати день");
+            AddKey(t, "ui.confirm_evening", "До ночі");
+            AddKey(t, "ui.summary.continue", "Грати далі");
+        }
+
+        // ---- Хаб: назви вкладок і базові підписи вкладок ----
+        private static void AddE1bHubTabs(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.tab.posts", "Пости");
+            AddKey(t, "ui.tab.buildings", "Будівлі");
+            AddKey(t, "ui.tab.council", "Рада");
+            AddKey(t, "ui.tab.expedition", "Вилазка");
+            AddKey(t, "ui.tab.gear", "Спорядження");
+            AddKey(t, "ui.tab.people", "Люди");
+            AddKey(t, "ui.tab.quests", "Квести");
+            AddKey(t, "ui.tab.factions", "Фракції");
+            AddKey(t, "ui.tab.readiness", "Готовність");
+            AddKey(t, "ui.tab.save", "Збереження");
+
+            AddKey(t, "ui.posts.assign", "Призначити");
+            AddKey(t, "ui.posts.unassign", "Звільнити");
+            AddKey(t, "ui.posts.empty_slot", "Пост порожній.");
+
+            AddKey(t, "ui.buildings.order", "Замовити");
+            AddKey(t, "ui.buildings.built", "Збудовано");
+            AddKey(t, "ui.buildings.in_progress", "Стадія {stage} з 5");
+
+            AddKey(t, "ui.council.raid", "Облава");
+            AddKey(t, "ui.council.settlers", "Прийняти переселенців");
+            AddKey(t, "ui.council.decree", "Указ");
+            AddKey(t, "ui.council.diplomacy", "Посольство");
+            AddKey(t, "ui.council.investment", "Вкласти в будівлю");
+            AddKey(t, "ui.council.prepare_threat", "Готуватися до загрози");
+            AddKey(t, "ui.council.outfit_expedition", "Спорядити відряд");
+
+            AddKey(t, "ui.expedition.approach.quiet", "Тихо");
+            AddKey(t, "ui.expedition.approach.forceful", "Силою");
+            AddKey(t, "ui.expedition.approach.delve", "Спуститися");
+            AddKey(t, "ui.expedition.preview", "Прев'ю");
+            AddKey(t, "ui.expedition.depart", "Вирушати");
+            AddKey(t, "ui.expedition.days", "Днів у полі: {days}");
+            AddKey(t, "ui.expedition.threshold", "Поріг: {threshold}");
+            AddKey(t, "ui.expedition.party_value", "Сила відряду: {value}");
+            AddKey(t, "ui.expedition.expected", "Очікувана полоса: {band}");
+
+            AddKey(t, "ui.quests.title", "Квести");
+            AddKey(t, "ui.quests.none_active", "Пропозицій наразі немає.");
+            AddKey(t, "ui.quests.stage", "Етап {stage}");
+
+            AddKey(t, "ui.factions.title", "Фракції");
+
+            AddKey(t, "ui.readiness.title", "Готовність громади");
+            AddKey(t, "ui.readiness.milestones", "Віхи: {reached} з {total}");
+        }
+
+        // ---- Рішення / бій ----
+        private static void AddE1bDecisionAndBattleUi(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.decision.title", "Рішення чекає");
+            AddKey(t, "ui.decision.option_line",
+                "{path}: {skill} ≥ {threshold} — {candidate}, очікувана полоса: {band}.");
+            AddKey(t, "ui.decision.candidate", "візьметься {name}");
+            AddKey(t, "ui.decision.no_candidate", "нікому взятися");
+            AddKey(t, "ui.decision.path.quiet", "Тихо");
+            AddKey(t, "ui.decision.path.bloody", "Криваво");
+            AddKey(t, "decision.resolved", "Рішення ухвалено: {path} — {band}.");
+
+            AddKey(t, "ui.battle.fallback.title", "Тактичний бій (спрощений вигляд)");
+            AddKey(t, "ui.battle.move", "Рух");
+            AddKey(t, "ui.battle.attack", "Атака");
+            AddKey(t, "ui.battle.end_turn", "Завершити хід");
+            AddKey(t, "ui.battle.round", "Раунд {round}");
+            AddKey(t, "ui.battle.current_unit", "Хід: {companion}");
+            AddKey(t, "ui.battle.no_target", "Ціль не обрана.");
+            AddKey(t, "combat.battle.started", "Бій почався.");
+            AddKey(t, "combat.battle.resolved", "Бій завершено: {band}.");
+        }
+
+        // ---- Підземелля / вечір-ніч ----
+        private static void AddE1bDungeonAndNightUi(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.dungeon.title", "Підземелля");
+            AddKey(t, "ui.dungeon.depth", "Глибина");
+            AddKey(t, "ui.dungeon.threat", "Загроза");
+            AddKey(t, "ui.dungeon.push", "Глибше");
+            AddKey(t, "ui.dungeon.extract", "Витягти здобич і вийти");
+            AddKey(t, "ui.dungeon.abandon", "Відступити (усе незбережене втрачено)");
+            AddKey(t, "ui.dungeon.quiet", "Тихо");
+            AddKey(t, "ui.dungeon.bloody", "Криваво");
+            AddKey(t, "ui.dungeon.unbanked", "Незбережено: {materials} матеріалів, {gold} золота");
+            AddKey(t, "dungeon.threat_band_changed", "Загроза підземелля тепер: {band}.");
+
+            AddKey(t, "ui.night.crisis.title", "Вікно реакції на кризу");
+            AddKey(t, "ui.night.crisis.spend_gold", "Витратити золото");
+            AddKey(t, "ui.night.crisis.send_defender", "Відрядити людину з поста");
+            AddKey(t, "ui.night.crisis.ignore", "Не реагувати");
+
+            AddKey(t, "ui.night.finale.title", "Фінал доби 5");
+            AddKey(t, "ui.advance_night", "До ранку");
+            AddKey(t, "ui.night.evening.title", "Вечір");
+            AddKey(t, "ui.night.night.title", "Ніч");
+            AddKey(t, "ui.night.patrol.section", "Патруль чи сон");
+
+            AddKey(t, "ui.quest.offer.title", "Пропозиція");
+            AddKey(t, "quest.offered", "Нова пропозиція: {quest}.");
+
+            AddKey(t, "expedition.departed", "Відряд вирушив: {site}.");
+            AddKey(t, "expedition.returned", "Відряд повернувся: {site} — {band}.");
+            AddKey(t, "scene.finished", "Сцена завершена.");
+            AddKey(t, "production.resource", "Виробництво дало плоди.");
+            AddKey(t, "production.recovered", "{companion} одужав(-ла) і повернувся(-лась) до справ.");
+            AddKey(t, "production.food_shortage", "Їжі не вистачає — це вже видно.");
+            AddKey(t, "item.scout_horn.forewarn_boosted", "Ріг розвідника чує далі: {charges} наступні передвісники чутніші.");
+        }
+
+        // ---- Люди / спорядження ----
+        private static void AddE1bPeopleGearUi(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.people.title", "Люди");
+            AddKey(t, "ui.people.level", "Рівень {level}");
+            AddKey(t, "ui.people.scars", "Шрамів: {count}");
+            AddKey(t, "ui.people.loyalty", "Довіра: {band}");
+            AddKey(t, "ui.people.status", "Стан: {status}");
+            AddKey(t, "ui.people.equipped", "Спорядження: {items}");
+            AddKey(t, "ui.people.equipped.none", "нічого");
+            AddKey(t, "ui.people.sheet.limited",
+                "Повний листок персонажа (атрибути/скіли/трейти) GameSession поки не віддає в жодному View — тут лише те, що видно назовні.");
+
+            AddKey(t, "ui.buildplanner.invest", "+1");
+            AddKey(t, "ui.buildplanner.commit", "Підтвердити незворотно");
+            AddKey(t, "ui.buildplanner.reset", "Скинути план");
+            AddKey(t, "ui.buildplanner.no_points", "Вільних очок немає.");
+
+            AddKey(t, "ui.gear.slot.weapon", "Зброя");
+            AddKey(t, "ui.gear.slot.armor", "Броня");
+            AddKey(t, "ui.gear.slot.accessory", "Аксесуар");
+            AddKey(t, "ui.gear.equip", "Одягти");
+            AddKey(t, "ui.gear.unequip", "Зняти");
+            AddKey(t, "ui.gear.stash.empty", "Схованка порожня.");
+            AddKey(t, "ui.gear.stash.title", "Схованка");
+            AddKey(t, "ui.gear.craft", "Покращити");
+        }
+
+        // ---- Текстовий фідбек результатів команд (AssignmentResult/BuildOrderResult/...) ----
+        private static void AddE1bFeedback(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.reason.dead", "Загинув(-ла) — не годиться.");
+            AddKey(t, "ui.reason.on_mission", "У полі — недоступний(-на).");
+            AddKey(t, "ui.reason.antagonist", "Проти нас — недоступний(-на).");
+            AddKey(t, "ui.reason.unknown_companion", "Такого напарника немає.");
+            AddKey(t, "ui.reason.empty_party", "Оберіть хоч когось у відряд.");
+            AddKey(t, "ui.reason.duplicate_companion", "Один і той самий двічі в списку.");
+
+            AddKey(t, "ui.feedback.assign.success", "Призначено.");
+            AddKey(t, "ui.feedback.assign.slot_not_found", "Такого поста немає.");
+            AddKey(t, "ui.feedback.assign.slot_locked", "Пост ще закритий.");
+            AddKey(t, "ui.feedback.assign.slot_occupied", "Пост уже зайнятий.");
+            AddKey(t, "ui.feedback.assign.companion_not_found", "Такого напарника немає.");
+            AddKey(t, "ui.feedback.assign.companion_unavailable", "Зараз не може стати на пост.");
+
+            AddKey(t, "ui.feedback.build.started", "Замовлено.");
+            AddKey(t, "ui.feedback.build.unknown_building", "Такої будівлі не існує.");
+            AddKey(t, "ui.feedback.build.already_built", "Уже збудовано.");
+            AddKey(t, "ui.feedback.build.already_in_progress", "Уже будується.");
+            AddKey(t, "ui.feedback.build.quest_only", "Ця будівля відкривається лише сюжетом.");
+            AddKey(t, "ui.feedback.build.not_enough_gold", "Золота не досить.");
+            AddKey(t, "ui.feedback.build.not_enough_materials", "Матеріалів не досить.");
+
+            AddKey(t, "ui.feedback.dispatch.success", "Відряд вирушив.");
+            AddKey(t, "ui.feedback.dispatch.no_such_site", "Такої точки немає.");
+            AddKey(t, "ui.feedback.dispatch.empty_party", "Відряд порожній.");
+            AddKey(t, "ui.feedback.dispatch.party_too_large", "Забагато людей для одного відряду.");
+            AddKey(t, "ui.feedback.dispatch.unknown_companion", "Такого напарника немає.");
+            AddKey(t, "ui.feedback.dispatch.companion_unavailable", "Хтось у списку зараз недоступний.");
+            AddKey(t, "ui.feedback.dispatch.duplicate_companion", "Один і той самий двічі в списку.");
+            AddKey(t, "ui.feedback.dispatch.party_already_away", "Відряд ще не повернувся з попередньої вилазки.");
+
+            AddKey(t, "ui.feedback.craft.success", "Покращено.");
+            AddKey(t, "ui.feedback.craft.invalid_item", "Такого предмета немає в схованці.");
+            AddKey(t, "ui.feedback.craft.named_not_upgradable", "Іменний предмет уже досконалий — далі нікуди.");
+            AddKey(t, "ui.feedback.craft.already_max_rarity", "Вища якість уже неможлива.");
+            AddKey(t, "ui.feedback.craft.workshop_closed", "Майстерня ще не збудована.");
+            AddKey(t, "ui.feedback.craft.cannot_afford", "Не вистачає матеріалів або золота.");
+
+            AddKey(t, "ui.feedback.buildplan.ok", "Готово до підтвердження.");
+            AddKey(t, "ui.feedback.buildplan.not_enough_points", "Вільних очок не досить.");
+            AddKey(t, "ui.feedback.buildplan.above_skill_ceiling", "Вище стелі скіла.");
+            AddKey(t, "ui.feedback.buildplan.perk_unavailable", "Перк ще недоступний.");
+            AddKey(t, "ui.feedback.buildplan.not_confirmed", "Не підтверджено.");
+        }
+
+        // ---- Буквальні ключі подій GameSession, яких немає в §7.13/§7.16 (звірено з реальним LogEvent) ----
+        private static void AddE1bMissingEventKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "council.decree", "Рада видає указ.");
+            AddKey(t, "council.diplomacy", "Посольство вирушає.");
+            AddKey(t, "council.invest", "Рада вкладає в будівлю.");
+            AddKey(t, "council.prepare_threat", "Громада готується до загрози.");
+            AddKey(t, "council.outfit_expedition", "Відряд споряджають краще, ніж завжди.");
+        }
+
+        // ---- Короткі слова-чіпи для верхньої панелі: настрій (TensionBand — уже
+        // й так лише слово, R17/інваріант 3, тут коротший синонім за прозові
+        // tension.ambient.*) і натовп (CrowdBand словом, а не реченням §7.5). ----
+        private static void AddE1bMoodChips(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.mood.calm", "Спокій");
+            AddKey(t, "ui.mood.murmur", "Ропіт");
+            AddKey(t, "ui.mood.ferment", "Бродіння");
+            AddKey(t, "ui.mood.heat", "Накал");
+            AddKey(t, "ui.mood.fracture", "Розкол");
+
+            // SessionView.CrowdBand — рядок GameSession.CrowdBandName(int), буквально
+            // "Hamlet"/"Village"/"Settlement"/"Town"/"City" (той самий тір поселення,
+            // що й city.tier.*, лише англійським словом-ідентифікатором) — ключ тут
+            // за цим словом у нижньому регістрі, не за числом.
+            AddKey(t, "ui.crowd.hamlet", "Хутір");
+            AddKey(t, "ui.crowd.village", "Село");
+            AddKey(t, "ui.crowd.settlement", "Слобода");
+            AddKey(t, "ui.crowd.town", "Містечко");
+            AddKey(t, "ui.crowd.city", "Город");
+
+            AddKey(t, "ui.threat.calm", "Спокійно");
+            AddKey(t, "ui.threat.tense", "Напружено");
+            AddKey(t, "ui.threat.dangerous", "Небезпечно");
+            AddKey(t, "ui.threat.deadly", "Смертельно");
         }
     }
 }

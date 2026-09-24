@@ -43,7 +43,7 @@ namespace Game.Gameplay.EditorTools
 
             var sun = BuildSun();
             var hubCamera = BuildHubCamera();
-            BuildArenaCamera();
+            var arenaCamera = BuildArenaCamera();
 
             var world = new GameObject("World");
             var hub = new GameObject("Hub");
@@ -53,6 +53,7 @@ namespace Game.Gameplay.EditorTools
             battleArena.SetActive(false);
 
             BuildHub(hub, sun, hubCamera);
+            BuildBattleArenaHook(battleArena, arenaCamera);
 
             var ui = new GameObject("UI");
             var uiHub = new GameObject("Hub");
@@ -147,6 +148,22 @@ namespace Game.Gameplay.EditorTools
 
             go.SetActive(false);
             return cam;
+        }
+
+        /// <summary>
+        /// Шов E1b/E2 (§ "Cross-package seams" TEST_BUILD.md): наповнює
+        /// <c>World/BattleArena</c> через рефлексію, щоб цей файл компілювався
+        /// БЕЗ жорсткого посилання на <c>Game.Gameplay.Editor</c> (складання
+        /// E1b могло відбутися раніше, ніж E2 додав свій файл до трунку).
+        /// Немає типу/методу в збірці — тиха відсутність (мовчазний null-check),
+        /// не помилка: арена лишається порожнім вимкненим коренем, як і
+        /// сьогодні, поки E2 не приїде.
+        /// </summary>
+        private static void BuildBattleArenaHook(GameObject arenaRoot, Camera arenaCamera)
+        {
+            var method = System.Type.GetType("Game.Gameplay.EditorTools.BattleArenaBuilder, Game.Gameplay.Editor")
+                ?.GetMethod("Build");
+            method?.Invoke(null, new object[] { arenaRoot, arenaCamera });
         }
 
         // ================= World/Hub =================

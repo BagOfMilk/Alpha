@@ -66,6 +66,16 @@ namespace Game.Gameplay.UI
             return GUILayout.Button(label, _secondaryButton, options);
         }
 
+        /// <summary>
+        /// Кнопка-вкладка/перемикач (E1b): акцентна, коли обрана, інакше
+        /// звичайна — те саме, що дав би <c>GUILayout.Toggle(bool,string,
+        /// GUIStyle,...)</c>, але без перевантаження, якого немає в стабі
+        /// лінту (<c>tools/Game.Gameplay.Lint/UnityEngineStub.cs</c> навмисно
+        /// вузький). Клік завжди повертає true — викликач сам присвоює вибір.
+        /// </summary>
+        public static bool TabButton(string label, bool selected, params GUILayoutOption[] options)
+            => selected ? PrimaryButton(label, options) : SecondaryButton(label, options);
+
         /// <summary>Незворотна/ризикова дія (кроваво, підтвердження) — темно-червоний тон.</summary>
         public static bool DangerButton(string label, params GUILayoutOption[] options)
         {

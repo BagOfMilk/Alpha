@@ -42,6 +42,12 @@
       headless-тесты (UkrainianTextTests.cs) берут её исходником напрямую.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Text/UkrainianText.cs" />
+    <!--
+      E1b: ScreenText — чистий C# формат/легальність для екранів (Gameplay/
+      UI/*Screen.cs), тим самим прийомом, що UkrainianText.cs/VillageView.cs
+      вище: headless-тести (ScreenTextTests.cs) беруть його з джерела напряму.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/ScreenText.cs" />
   </ItemGroup>
 
   <ItemGroup>
