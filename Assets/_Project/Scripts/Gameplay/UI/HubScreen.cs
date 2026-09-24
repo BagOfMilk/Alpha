@@ -76,6 +76,16 @@ namespace Game.Gameplay.UI
         private QuestOfferView _questOffer;
         private int _questOfferDay = int.MinValue;
 
+        /// <summary>
+        /// Максимова квестова глава арки «Не за кров» (Поправка №7.8, п.1):
+        /// той самий кеш, що вище, для ДРУГОЇ незалежної лінії квесту —
+        /// GameShell.MaybeRouteOfferedSceneContent реєструє її визначення в
+        /// пулі (BeginArcChapterQuest), коли главу відкрито; до того
+        /// OfferQuestStage мовчки повертає null.
+        /// </summary>
+        private QuestOfferView _maksymQuestOffer;
+        private int _maksymQuestOfferDay = int.MinValue;
+
         public void Draw(GameShell shell)
         {
             var g = shell.ProtagonistGender;
@@ -837,27 +847,62 @@ namespace Game.Gameplay.UI
                 _questOfferDay = day;
             }
 
-            var offer = _questOffer;
-            if (offer == null)
+            // Максимова квестова глава арки (Поправка №7.8, п.1): та сама
+            // конструкція, ДРУГА незалежна лінія — до BeginArcChapterQuest
+            // (GameShell.MaybeRouteOfferedSceneContent) questId ще не
+            // зареєстрований, і OfferQuestStage мовчки повертає null.
+            if (_maksymQuestOffer == null || _maksymQuestOfferDay != day)
             {
-                GUILayout.Label(UkrainianText.Get("ui.quests.none_active", g), AlphaSkin.Tooltip);
-                return;
+                _maksymQuestOffer = shell.TryRun(() => shell.Session.OfferQuestStage(DefaultQuests.MaksymCh1Id));
+                _maksymQuestOfferDay = day;
             }
 
-            // Фікс-ревью (minor, знайдено тур-автоплеєм): за межами Stage==0
-            // (пропозиція) ця вкладка не показувала НІЧОГО, крім голого
-            // "Етап N" — ні імені квесту, ні підказки, чому нема ні тексту, ні
-            // кнопок (проміжний етап-перевірка "grass" резолвиться самою
-            // вечірньою/нічною пропозицією, не тут) — з боку виглядало як
-            // недороблена вкладка. "quest.<id>" — той самий ключ, що тепер
-            // резолвить і стрічку подій (ScreenText.EventLine).
+            bool any = false;
+            if (_questOffer != null)
+            {
+                any = true;
+                if (DrawQuestOffer(shell, g, _questOffer)) _questOffer = null; // етап міг змінитись — перезапит наступним кадром
+            }
+            if (_maksymQuestOffer != null)
+            {
+                any = true;
+                if (DrawQuestOffer(shell, g, _maksymQuestOffer)) _maksymQuestOffer = null;
+            }
+
+            if (!any)
+                GUILayout.Label(UkrainianText.Get("ui.quests.none_active", g), AlphaSkin.Tooltip);
+        }
+
+        /// <summary>
+        /// Один рядок пропозиції квесту (Поправка №7.8, п.1: узагальнено з
+        /// однієї Гафіїної лінії на будь-яку — Максимова квестова глава арки
+        /// малюється тим самим кодом). Фікс-ревью (minor, знайдено
+        /// тур-автоплеєм): за межами Stage==0 (пропозиція) ця вкладка не
+        /// показувала НІЧОГО, крім голого "Етап N" — ні імені квесту, ні
+        /// підказки, чому нема ні тексту, ні кнопок (проміжний етап-перевірка
+        /// "grass" резолвиться самою вечірньою/нічною пропозицією, не тут) —
+        /// з боку виглядало як недороблена вкладка. "quest.<id>" — той самий
+        /// ключ, що тепер резолвить і стрічку подій (ScreenText.EventLine).
+        /// </summary>
+        private static bool DrawQuestOffer(GameShell shell, Gender g, QuestOfferView offer)
+        {
+            bool consumed = false;
             string questKey = "quest." + offer.QuestId;
             string questName = UkrainianText.Has(questKey, g) ? UkrainianText.Get(questKey, g) : offer.QuestId;
+            GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label(UkrainianText.Format("ui.quests.stage_named", g, "quest", questName, "stage", offer.Stage.ToString()), AlphaSkin.SubHeader);
 
-            bool hasStageText = offer.Stage == 0 && UkrainianText.Has(DefaultQuests.OfferKey, g);
+            // Гафіїн questId ("hafiya") не несе префікса "quest.", Максимів
+            // ("quest.maksym.ch1") вже несе — той самий розлад конвенції,
+            // що вже задокументований для "quest.quest.maksym.ch1" вище в
+            // UkrainianText.AddScene78Choices. Пробуємо обидва варіанти
+            // складання ключа замість того, щоб чіпляти правильний вручну.
+            string offerKeyPrefixed = "quest." + offer.QuestId + ".offer";
+            string offerKeyBare = offer.QuestId + ".offer";
+            string offerBodyKey = UkrainianText.Has(offerKeyPrefixed, g) ? offerKeyPrefixed : offerKeyBare;
+            bool hasStageText = offer.Stage == 0 && UkrainianText.Has(offerBodyKey, g);
             if (hasStageText)
-                GUILayout.Label(UkrainianText.Get(DefaultQuests.OfferKey, g), AlphaSkin.Body);
+                GUILayout.Label(UkrainianText.Get(offerBodyKey, g), AlphaSkin.Body);
             else if (offer.Options == null || offer.Options.Count == 0)
                 GUILayout.Label(UkrainianText.Get("ui.quests.check_stage_hint", g), AlphaSkin.Tooltip);
 
@@ -865,16 +910,31 @@ namespace Game.Gameplay.UI
                 for (int i = 0; i < offer.Options.Count; i++)
                 {
                     int index = i;
+                    string questId = offer.QuestId;
                     var option = offer.Options[i];
                     string label = UkrainianText.Has(option.TextKey, g) ? UkrainianText.Get(option.TextKey, g) : option.TextKey;
                     if (option.HasCandidate && Widgets.PrimaryButton(label))
                     {
-                        shell.TryRun(() => shell.Session.ResolveQuestChoice(index));
-                        _questOffer = null; // етап міг змінитись — перезапит наступним кадром
+                        // Дві незалежні лінії квесту водночас (Гафія +
+                        // Максим) ділять ОДИН вказівник GameSession.
+                        // _currentQuestOffer — рендер обох за той самий кадр
+                        // (вище) лишає його на тому, що було запитано
+                        // ОСТАННІМ. Перезапит саме ЦЬОГО questId ПРЯМО перед
+                        // ResolveQuestChoice синхронізує вказівник назад на
+                        // нього, інакше клік на першій лінії міг би
+                        // розв'язати вибір другої.
+                        shell.TryRun(() =>
+                        {
+                            shell.Session.OfferQuestStage(questId);
+                            shell.Session.ResolveQuestChoice(index);
+                        });
+                        consumed = true;
                     }
                     else if (!option.HasCandidate)
                         Widgets.DisabledButton(label, UkrainianText.Get("ui.common.none", g));
                 }
+            GUILayout.EndVertical();
+            return consumed;
         }
 
         // ===================== Фракції =====================

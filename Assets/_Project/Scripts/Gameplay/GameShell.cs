@@ -129,6 +129,19 @@ namespace Game.Gameplay
             GUI.skin = AlphaSkin.Build();
             if (Session == null) return;
 
+            // Поправка №7.8, п.1 (тест-збірка): у стані Evening сесія НІКОМУ
+            // сама не штовхає сценарний зміст (особисті арки напарників,
+            // «Нічна розмова»/тиха перевірка Мирослави доба 3, рада Захара
+            // доба 5) — GameSession лише ДОЗВОЛЯЄ його викликати
+            // (RequireAnyState), а хто саме й коли викликає — вирішує
+            // сторона, що керує сесією (у headless-прогонах це
+            // BotRunner.MaybeOfferQuest/MaybeAdvanceArcChapterScene/
+            // MaybeOfferScriptedScene). У Unity-збірці керує гравець, тож цю
+            // саму роль тут бере оболонка — інакше жоден із цих сценаріїв
+            // ніколи не показався б людині, хоч ядро повністю готове його
+            // зіграти.
+            MaybeRouteOfferedSceneContent();
+
             var state = Session.State;
 
             bool escapeEligible = state != SessionState.Title && state != SessionState.Creation &&
@@ -231,6 +244,57 @@ namespace Game.Gameplay
             }
 
             DrawFullScreen(() => _battleFallback.Draw(this));
+        }
+
+        /// <summary>
+        /// Порядок і гейти — буквально ті самі, що <c>BotRunner.DoTick</c>
+        /// (<c>case SessionState.Evening</c>): особисті арки Мирослави й
+        /// Максима (сцена — глава 1/епілог), квестова глава Максима (реєструє
+        /// й одразу пропонує; далі гравець резолвить її вкладкою «Квести»,
+        /// як і Гафіїн квест), «Нічна розмова»/тиха перевірка Мирослави доба
+        /// 3, рада Захара доба 5. Кожен крок сам собою гейтований (флаг/день/
+        /// <c>IsArcChapterAvailable</c>) — повторний виклик того самого кадру,
+        /// коли попередній крок УЖЕ перевів сесію зі стану Evening (сцена
+        /// почалась), нешкідливий но-оп: наступний крок просто не пробує
+        /// нічого, побачивши чужий стан.
+        /// </summary>
+        private void MaybeRouteOfferedSceneContent()
+        {
+            if (Session.State != SessionState.Evening) return;
+            TryBeginArcSceneIfAvailable("myroslava");
+
+            if (Session.State != SessionState.Evening) return;
+            TryBeginArcSceneIfAvailable("maksym");
+
+            if (Session.State != SessionState.Evening) return;
+            TryBeginArcQuestIfAvailable("maksym");
+
+            if (Session.State != SessionState.Evening) return;
+            TryRun(() => Session.OfferMyroslavaEveningScene(), null);
+
+            if (Session.State != SessionState.Evening) return;
+            TryRun(() => Session.OfferZakharCouncilScene(), null);
+        }
+
+        /// <summary>Глава арки, чий зміст — сцена з вибором (<see cref="GameSession.BeginArcChapterScene"/>) — лише коли вона щойно доступна.</summary>
+        private void TryBeginArcSceneIfAvailable(string companionId)
+        {
+            if (!Session.IsArcChapterAvailable(companionId) || !Session.IsArcChapterSceneContent(companionId)) return;
+            TryRun(() => Session.BeginArcChapterScene(companionId), null);
+        }
+
+        /// <summary>
+        /// Глава арки, чий зміст — квест (<see cref="GameSession.BeginArcChapterQuest"/>,
+        /// наразі лише Максим ч.1): реєструє визначення в пулі й пропонує
+        /// перший етап — сесія лишається в Evening (на відміну від сценової
+        /// глави, це НЕ SessionState.Scene), тож подальші етапи гравець
+        /// резолвить вкладкою «Квести» (<c>HubScreen.DrawQuests</c>), тим
+        /// самим шляхом, що й Гафіїн квест.
+        /// </summary>
+        private void TryBeginArcQuestIfAvailable(string companionId)
+        {
+            if (!Session.IsArcChapterAvailable(companionId) || !Session.IsArcChapterQuestContent(companionId)) return;
+            TryRun(() => Session.BeginArcChapterQuest(companionId), null);
         }
 
         /// <summary>Хаб-стани (Morning/Day/Decision/Evening/Night/Dungeon/FreePlay) — спільна шапка + стрічка подій навколо власного вмісту екрана.</summary>
