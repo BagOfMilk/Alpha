@@ -181,6 +181,22 @@ namespace Game.Core.Session
         public IReadOnlyList<GameEvent> DayLog => _dayLog;
 
         /// <summary>
+        /// Лічильник очищень <see cref="_dayLog"/> (росте на кожен <see cref="ClearDayLog"/>
+        /// і на скидання в NewGame). Призначення — дати <c>BotRunner.CollectDelta</c>
+        /// (і будь-якому іншому інкрементальному читачу DayLog) НАДІЙНУ ознаку
+        /// «це вже нова фаза, курсор читання треба скинути в нуль», замість
+        /// висновку з розміру логу (`log.Count &lt; cursor`), який мовчки не
+        /// спрацьовує, коли нова фаза встигла дати записів БІЛЬШЕ, ніж курсор
+        /// мав на кінець попередньої, — перші записи нової фази тоді тихо
+        /// губляться для читача (не для самої гри: LogEvent/DayLog їх бачить,
+        /// тільки бот-водій їх не забирає). Саме так один реальний прогін
+        /// Steward зловив "forewarn.level2" (Тугар, доба 6/День), що є в
+        /// DayLog, але не доходить до bot-логу.
+        /// </summary>
+        private int _dayLogVersion;
+        internal int DayLogVersion => _dayLogVersion;
+
+        /// <summary>
         /// Скільки записів <c>report.Incidents</c> уже перекладено у DayLog цієї
         /// фази (<see cref="TranslateReport"/>). DayProcessor.BuildReport
         /// повертає ПОВНИЙ накопичений список інцидентів фази щоразу (аудит
@@ -251,6 +267,7 @@ namespace Game.Core.Session
 
             _slots.Clear();
             _dayLog.Clear();
+            _dayLogVersion++;
             _currentPending = null;
             _currentQuestOffer = null;
             _lastLoggedQuestOfferKey = null;
@@ -1814,6 +1831,7 @@ namespace Game.Core.Session
         private void ClearDayLog()
         {
             _dayLog.Clear();
+            _dayLogVersion++;
             _translatedIncidentCount = 0;
         }
 

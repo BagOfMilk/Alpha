@@ -137,6 +137,7 @@ namespace Game.Core.Session.Bots
             // "додати весь DayLog після кожного кроку" дублювало б кожен запис
             // стільки разів, скільки команд лишилось до кінця фази.
             int collectedInPhase = 0;
+            int lastDayLogVersion = session.DayLogVersion;
 
             while (true)
             {
@@ -289,16 +290,40 @@ namespace Game.Core.Session.Bots
                         throw new InvalidOperationException("BotRunner: невідомий стан " + state);
                 }
 
-                CollectDelta(session, fullLog, onEvent, ref collectedInPhase);
+                CollectDelta(session, fullLog, onEvent, ref collectedInPhase, ref lastDayLogVersion);
             }
         }
 
-        /// <summary>Переносить лише НОВІ (від <paramref name="collectedInPhase"/>) записи DayLog — не весь список щоразу (див. коментар над полем у Drive).</summary>
-        private static void CollectDelta(GameSession session, List<GameEvent> fullLog, Action<GameEvent> onEvent, ref int collectedInPhase)
+        /// <summary>
+        /// Переносить лише НОВІ (від <paramref name="collectedInPhase"/>) записи DayLog —
+        /// не весь список щоразу (див. коментар над полем у Drive).
+        ///
+        /// РЕГРЕСІЯ (знайдено бот-прогоном Steward, "forewarn.level2" Тугара на
+        /// добу 6 губилося з <c>fullLog</c>/<c>onEvent</c>, хоч і БУЛО в
+        /// <c>session.DayLog</c>): стара ознака нової фази — "лог коротший за
+        /// курсор" (<c>log.Count &lt; collectedInPhase</c>) — мовчки НЕ
+        /// спрацьовує, коли ClearDayLog() очистив лог, а нова фаза встигла
+        /// дати БІЛЬШЕ записів, ніж курсор мав на кінець попередньої (типово:
+        /// коротка Evening/SetPatrol-фаza з парою записів, за нею — щільний
+        /// AdvanceDay з десятком). Курсор тоді лишається старим і перші
+        /// count-курсор записів свіжої фази йдуть повз читача — гра їх бачить
+        /// (LogEvent/DayLog не постраждали), а бот-водій (і CampaignSimulator/
+        /// AllMechanicsCoverageTests/tools/Alpha.Play, які на ньому стоять) —
+        /// ні. Правильна ознака нової фази — сам факт ClearDayLog(), а не
+        /// висновок за розміром: <see cref="GameSession.DayLogVersion"/> росте
+        /// рівно там, курсор скидається, коли версія змінилась.
+        /// </summary>
+        private static void CollectDelta(GameSession session, List<GameEvent> fullLog, Action<GameEvent> onEvent,
+            ref int collectedInPhase, ref int lastDayLogVersion)
         {
-            var log = session.DayLog;
-            if (log.Count < collectedInPhase) collectedInPhase = 0; // ClearDayLog() — нова фаза
+            int version = session.DayLogVersion;
+            if (version != lastDayLogVersion)
+            {
+                collectedInPhase = 0; // ClearDayLog() — нова фаза
+                lastDayLogVersion = version;
+            }
 
+            var log = session.DayLog;
             if (fullLog != null || onEvent != null)
                 for (int i = collectedInPhase; i < log.Count; i++)
                 {

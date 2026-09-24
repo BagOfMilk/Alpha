@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Game.Core.Balance;
+using Game.Core.Checks;
 using Game.Core.Loop;
 using Game.Core.Pressure;
 using Game.Core.Signals;
@@ -46,6 +47,15 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(SignalUrgency.Alarming, SignalComposer.UrgencyForBand(TensionBand.Heat));
         }
 
+        /// <summary>
+        /// Бюджет внимания ограничивает ОБЫЧНЫЕ сигналы (то, что не мандатно) —
+        /// смена полосы и ступень предвестника в этот бюджет не входят
+        /// (см. следующий тест). Раньше это был единственный тест на бюджет, и он
+        /// строил ровно тот густой день, в котором смена полосы могла остаться
+        /// немой (G21) — только через кандидатов из dayLedger, которые ТЕПЕРЬ
+        /// мандатны. Проверяем ту же перегрузку через city-events: они дельты, но
+        /// не мандатны, и бюджет обязан их резать по-прежнему.
+        /// </summary>
         [Test]
         public void Signals_NeverExceedBudget()
         {
@@ -54,14 +64,83 @@ namespace Game.Tests.EditMode
 
             var state = new TensionState(cfg.Tension);
             state.BeginDay();
-            // Несколько переходов за один день — кандидатов больше бюджета.
+
+            var events = new List<CityEvent>
+            {
+                new CityEvent("city.a", SignalUrgency.Notable, "a"),
+                new CityEvent("city.b", SignalUrgency.Notable, "b"),
+                new CityEvent("city.c", SignalUrgency.Notable, "c"),
+            };
+
+            var digest = SignalComposer.Compose(state.Band, state.DayLedger, 1, cfg.Signals,
+                null, null, null, false, null, 0, events);
+
+            Assert.LessOrEqual(digest.Requests.Count, 2,
+                "Бюджет внимания превышать нельзя — иначе шум (для немандатных сигналов)");
+        }
+
+        /// <summary>
+        /// РЕГРЕССИЯ G21 (закрыто 24.09.2026). Раньше именно этот сценарий —
+        /// несколько переходов полосы за один густой день — доказывал дырку
+        /// инварианта 4: <c>ForceSignalOnBandChange</c> только ДОБАВЛЯЛ
+        /// кандидата, слота не резервировал, и бюджет/конкурирующая дельта могли
+        /// вытеснить любой из переходов молча (см. также
+        /// <c>CampaignPacingTests.Pacing_BandChangeIsNeverMute</c>, теперь
+        /// снятый). Мутационная проверка: если убрать резервирование
+        /// (<c>Mandatory</c> у смены полосы в <see cref="SignalComposer"/> или
+        /// его форсированный отбор в <c>Select</c>), этот тест обязан упасть —
+        /// три перехода при бюджете 2 не пройдут иначе.
+        /// </summary>
+        [Test]
+        public void Signals_MandatoryBandChanges_AlwaysGetThrough_EvenOverBudget()
+        {
+            var cfg = Cfg();
+            cfg.Signals.MaxSignalsPerDay = 2;
+
+            var state = new TensionState(cfg.Tension);
+            state.BeginDay();
+            // Три перехода за один день — Спокойно -> Брожение -> Ферментация -> Накал.
             state.Apply(TensionDriver.QuestChoice, 250, "a");
             state.Apply(TensionDriver.QuestChoice, 250, "b");
             state.Apply(TensionDriver.QuestChoice, 250, "c");
 
             var digest = SignalComposer.Compose(state.Band, state.DayLedger, 1, cfg.Signals);
 
-            Assert.LessOrEqual(digest.Requests.Count, 2, "Бюджет внимания превышать нельзя — иначе шум");
+            Assert.Greater(digest.Requests.Count, 2,
+                "При трёх переходах мандатные сигналы обязаны превысить бюджет 2 — иначе один из них немой");
+            foreach (var target in new[] { TensionBand.Murmur, TensionBand.Ferment, TensionBand.Heat })
+                Assert.IsTrue(digest.Requests.Any(r => r.TopicId == "tension.band." + target),
+                    $"Переход в «{target}» пропал из густого дня — инвариант 4 нарушен молча");
+        }
+
+        /// <summary>
+        /// РЕГРЕССИЯ G21: та же дырка, но для лестницы предвестников. Ступень
+        /// уже засчитана услышанной накопителем (WorldPulse.MarkDelivered,
+        /// PulseStep) ДО того, как этот шаг решает бюджет — если бы она не
+        /// прошла в дайджест, игрок эту ступень не услышал бы никогда, а
+        /// лестница снаружи выглядела бы перепрыгнувшей её. Конкуренты —
+        /// несколько кризисных инцидентов (Imminent, самая громкая срочность) и
+        /// бюджет ровно на них.
+        /// </summary>
+        [Test]
+        public void Signals_DenseDay_ForewarningStepIsNeverMute()
+        {
+            var cfg = Cfg();
+            cfg.Signals.MaxSignalsPerDay = 3;
+
+            var forewarnings = new List<Forewarning> { new Forewarning("street", 1, "улицы") };
+            var incidents = new List<IncidentOutcome>
+            {
+                new IncidentOutcome("i1", "incident.i1", "домен1", OutcomeBand.Worst, false, true, null, null, 0),
+                new IncidentOutcome("i2", "incident.i2", "домен2", OutcomeBand.Worst, false, true, null, null, 0),
+                new IncidentOutcome("i3", "incident.i3", "домен3", OutcomeBand.Worst, false, true, null, null, 0),
+            };
+
+            var digest = SignalComposer.Compose(TensionBand.Calm, null, 1, cfg.Signals,
+                forewarnings, incidents, null, false);
+
+            Assert.IsTrue(digest.Requests.Any(r => r.TopicId == "forewarn.level1"),
+                "Ступень предвестника обязана прозвучать даже когда все слоты бюджета забрали более громкие кризисы");
         }
 
         [Test]

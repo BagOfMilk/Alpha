@@ -15,10 +15,23 @@ namespace Game.Core.Signals
         public readonly string SubjectId;
         /// <summary>true — сигнал отвечает на «что изменилось со вчера».</summary>
         public readonly bool IsDelta;
+
+        /// <summary>
+        /// true — сигнал обязан попасть в дневной дайджест независимо от бюджета
+        /// внимания (инвариант 4 CLAUDE.md: нет немого перехода полосы). Ставится
+        /// смене полосы любой скрытой шкалы и ступени лестницы предвестников —
+        /// единственные два случая, где пропуск читается как «игра сломалась» или
+        /// как настоящий необратимый пропуск ступени (G21). Обычный бюджет
+        /// (<see cref="Balance.SignalBalance.MaxSignalsPerDay"/>) ограничивает всё
+        /// остальное; мандатные кандидаты — гарантия СВЕРХ него, не конкурент за
+        /// общий резерв дельт (<see cref="Balance.SignalBalance.MinDeltaSlots"/>).
+        /// </summary>
+        public readonly bool Mandatory;
+
         public readonly string[] Tags;
 
         public SignalRequest(SignalChannel channel, string topicId, SignalUrgency urgency,
-            string subjectId = null, bool isDelta = false, string[] tags = null)
+            string subjectId = null, bool isDelta = false, string[] tags = null, bool mandatory = false)
         {
             Channel = channel;
             TopicId = topicId;
@@ -26,6 +39,7 @@ namespace Game.Core.Signals
             SubjectId = subjectId;
             IsDelta = isDelta;
             Tags = tags ?? System.Array.Empty<string>();
+            Mandatory = mandatory;
         }
     }
 }
