@@ -129,5 +129,8 @@ namespace Game.Core.Balance
 
         /// <summary>Как город отвечает игроку: люди, совет, тиры (Поправка №6).</summary>
         public CityBalance City = new CityBalance();
+
+        /// <summary>Push-your-luck данж: коэффициенты скрытой шкалы Threat (Core/Dungeons, R4).</summary>
+        public DungeonBalance Dungeon = new DungeonBalance();
     }
 }
