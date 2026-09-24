@@ -26,6 +26,15 @@ namespace Game.Core.Base
         /// <summary>Не хватило еды на содержание поселения.</summary>
         public bool FoodShortage;
 
+        /// <summary>
+        /// R11: сколько уровней постовая XP дала протагонисту в этом цикле
+        /// (0, если протагонист не назначен на пост или не поднял уровень).
+        /// BaseState.AdvanceCycle не тратит эти уровни за протагониста сама —
+        /// GameSession читает это поле и банкует очки через SpendablePoints,
+        /// тем же путём, что и боевая/квестовая/инцидентная XP.
+        /// </summary>
+        public int ProtagonistLevelsGained;
+
         internal void AddProduced(ResourceType resource, int amount)
         {
             if (resource == ResourceType.None || amount == 0) return;

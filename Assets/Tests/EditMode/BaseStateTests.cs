@@ -104,5 +104,50 @@ namespace Game.Tests.EditMode
             var report = state.AdvanceCycle();
             Assert.IsTrue(report.FoodShortage);
         }
+
+        /// <summary>
+        /// R11 (seamsForD1 B7): постова XP протагоніста мусить банкуватись, а
+        /// не витрачатись автоматично — інакше призначення протагоніста на пост
+        /// тихо обходить R11 (єдину гілку раніше мав лише GameSession.GrantXp
+        /// для бойової/квестової/інцидентної XP).
+        /// </summary>
+        [Test]
+        public void AdvanceCycle_ProtagonistOnPost_LevelsUp_ReportsProtagonistLevelsGained()
+        {
+            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
+            state.ProtagonistId = comp.Id;
+            Assert.AreEqual(AssignmentResult.Success, state.TryAssign(comp.Id, "bench"));
+
+            int levelBefore = comp.Level;
+            CycleReport report = null;
+            int totalGained = 0;
+            for (int i = 0; i < 20 && comp.Level == levelBefore; i++)
+            {
+                report = state.AdvanceCycle();
+                totalGained += report.ProtagonistLevelsGained;
+            }
+
+            Assert.Greater(comp.Level, levelBefore, "постова XP мусить піднімати рівень і протагоністу так само, як будь-кому іншому");
+            Assert.Greater(totalGained, 0, "CycleReport.ProtagonistLevelsGained мусить відобразити підвищення рівня протагоніста");
+            Assert.AreEqual(comp.Level - levelBefore, totalGained, "кожен здобутий рівень протагоніста мусить бути врахований рівно раз");
+        }
+
+        /// <summary>Контроль: без встановленого ProtagonistId (звичайний напарник) поле лишається нульовим.</summary>
+        [Test]
+        public void AdvanceCycle_NonProtagonistOnPost_LevelsUp_DoesNotReportProtagonistLevelsGained()
+        {
+            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
+            Assert.AreEqual(AssignmentResult.Success, state.TryAssign(comp.Id, "bench"));
+
+            int levelBefore = comp.Level;
+            CycleReport report = null;
+            for (int i = 0; i < 20 && comp.Level == levelBefore; i++)
+            {
+                report = state.AdvanceCycle();
+                Assert.AreEqual(0, report.ProtagonistLevelsGained);
+            }
+
+            Assert.Greater(comp.Level, levelBefore, "звичайний напарник так само піднімає рівень постовою XP");
+        }
     }
 }

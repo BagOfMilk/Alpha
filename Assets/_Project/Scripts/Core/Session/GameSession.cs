@@ -198,6 +198,7 @@ namespace Game.Core.Session
             _cfg = new BalanceConfig();
             _world = FirstHourWorld.Build(tier: 1, requirePlayerDecision: true, balance: _cfg);
             _state = _world.BaseState;
+            _state.ProtagonistId = ProtagonistId;
             _works = _world.CityWorks;
             _processor = _world.Processor;
             _cycle = _world.Cycle;
@@ -1555,6 +1556,18 @@ namespace Game.Core.Session
                     var outcome = report.Incidents[i];
                     LogEvent("decision.resolved", Args("incidentId", outcome.IncidentId, "band", outcome.Band.ToString(),
                         "noCandidate", outcome.WasUnmanned ? "1" : "0"));
+
+                    // Кризис із природного інциденту (CrisisBite.KillCompanion,
+                    // DefaultIncidents) вбиває через IncidentResolver/ICasualtySink
+                    // ДО того, як цей report дійшов сюди (RosterAdapter.Kill уже
+                    // відпрацював) — тож тут лише довершуємо той самий шов смерті,
+                    // що й бойові втрати нижче (ApplyBattleCasualties): повернути
+                    // гір і сповістити. Без цього гір загиблого від кризи зникав би
+                    // назавжди, а "companion.died"/"roster.rippled" не пішли б
+                    // жодного разу для цього шляху смерті (seamsForD1 B3/B4: "whoever
+                    // wires death must call RecoverGearFrom").
+                    if (outcome.Bite == CrisisBite.KillCompanion && !string.IsNullOrEmpty(outcome.AffectedActorId))
+                        HandleCompanionDeath(outcome.AffectedActorId);
                 }
                 _translatedIncidentCount = report.Incidents.Count;
             }
@@ -1681,6 +1694,19 @@ namespace Game.Core.Session
 
             if (report.FoodShortage)
                 LogEvent("production.food_shortage");
+
+            // R11 (seamsForD1 B7): постова XP протагоніста вже НЕ витрачена
+            // автоматично (BaseState.AdvanceCycle тепер зве GainXpNoAutoSpend
+            // для нього) — тут банкуємо очки тим самим шляхом, що й бойова/
+            // квестова/інцидентна XP (GrantXp), інакше рівень піднявся б, а
+            // очок для BuildPlanner так і не з'явилось.
+            if (report.ProtagonistLevelsGained > 0)
+            {
+                _points.Grant(ProtagonistId, report.ProtagonistLevelsGained * _cfg.SkillPointsPerLevel);
+                var protagonist = _worldRoster?.Get(ProtagonistId);
+                if (protagonist != null)
+                    LogEvent("progression.level_up", Args("companionId", ProtagonistId, "level", protagonist.Level.ToString(CultureInfo.InvariantCulture)));
+            }
 
             LogLoyaltyChanges(LoyaltyRules.OnMorale(report, _worldRoster, _cfg));
         }
@@ -1921,9 +1947,7 @@ namespace Game.Core.Session
                 if (cas.Dead)
                 {
                     _rosterAdapter?.Kill(cas.CompanionId);
-                    LogEvent("companion.died", Args("companionId", cas.CompanionId));
-                    var ripple = new RosterDrama(new RosterBonds(null), _cfg).OnDeath(_worldRoster, cas.CompanionId);
-                    LogRipple(ripple);
+                    HandleCompanionDeath(cas.CompanionId);
                 }
                 else if (cas.Downed || cas.HpLost > 0)
                 {
@@ -1931,6 +1955,25 @@ namespace Game.Core.Session
                     LogScarIfGranted(cas.CompanionId, _rosterAdapter?.WoundReporting(cas.CompanionId, cas.HpLost * 5.0, tier));
                 }
             }
+        }
+
+        /// <summary>
+        /// Єдина точка довершення смерті (незалежно від того, хто вже позначив
+        /// <see cref="CompanionStatus.Dead"/> — бій вище чи IncidentResolver
+        /// всередині DayProcessor.Advance): повернути гір у загальний склад
+        /// (<see cref="Inventory.RecoverGearFrom"/>, інакше найменований предмет
+        /// зникає назавжди — seamsForD1 B3) і сповістити подіями "companion.died"
+        /// та "roster.rippled". Companion.MarkDead() гір не чіпає, тож на момент
+        /// виклику знаряддя ще на персонажі.
+        /// </summary>
+        private void HandleCompanionDeath(string companionId)
+        {
+            if (string.IsNullOrEmpty(companionId)) return;
+            var companion = _worldRoster?.Get(companionId);
+            if (companion != null) _inventory?.RecoverGearFrom(companion);
+            LogEvent("companion.died", Args("companionId", companionId));
+            var ripple = new RosterDrama(new RosterBonds(null), _cfg).OnDeath(_worldRoster, companionId);
+            LogRipple(ripple);
         }
 
         private void LogRipple(RippleReport report)

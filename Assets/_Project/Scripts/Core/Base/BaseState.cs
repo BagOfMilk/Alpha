@@ -43,6 +43,17 @@ namespace Game.Core.Base
 
         public IReadOnlyList<AssignmentSlot> Slots => _slots;
 
+        /// <summary>
+        /// R11 (seamsForD1 B7): BaseState сам протагоніста не знає, тож ця
+        /// властивість — єдиний спосіб для GameSession повідомити
+        /// <see cref="AdvanceCycle"/>, кому з ростера не можна автоматично
+        /// витрачати очки скілів при підвищенні рівня від постової XP (як і
+        /// решта XP-джерел протагоніста — бій/квест/інцидент, які вже банкують
+        /// через GameSession.GrantXp). Порожньо за замовчуванням — виклики без
+        /// GameSession (тести, Alpha.Sim) поведінку не міняють.
+        /// </summary>
+        public string ProtagonistId { get; set; }
+
         public BaseState(Roster roster, ResourceLedger resources, BalanceConfig balance)
         {
             Roster = roster ?? throw new ArgumentNullException(nameof(roster));
@@ -323,9 +334,26 @@ namespace Game.Core.Base
 
                 int xp = ProductionCalculator.RoleXpPerCycle(companion, def, Balance);
                 if (WasHungryLastCycle) xp = (int)Math.Round(xp * Balance.HungryRoleXpMultiplier, MidpointRounding.ToEven);
-                var lvl = companion.GainXp(xp, Balance);
-                if (lvl.LeveledUp)
-                    report.LeveledUp.Add(companion.Id);
+
+                // R11: постова XP протагоніста банкується так само, як бойова/
+                // квестова/інцидентна (GameSession.GrantXp) — інакше призначення
+                // протагоніста на пост тихо обходило б R11 і витрачало його очки
+                // автоматично (seamsForD1 B7: "функционально мёртв" без цієї гілки).
+                if (!string.IsNullOrEmpty(ProtagonistId) && string.Equals(companion.Id, ProtagonistId, StringComparison.Ordinal))
+                {
+                    var pres = companion.GainXpNoAutoSpend(xp, Balance);
+                    if (pres.LeveledUp)
+                    {
+                        report.LeveledUp.Add(companion.Id);
+                        report.ProtagonistLevelsGained += pres.LevelsGained;
+                    }
+                }
+                else
+                {
+                    var lvl = companion.GainXp(xp, Balance);
+                    if (lvl.LeveledUp)
+                        report.LeveledUp.Add(companion.Id);
+                }
             }
 
             ApplyNaturalHealing(report);
