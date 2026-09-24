@@ -218,6 +218,67 @@ namespace Game.Tests.EditMode
             StringAssert.Contains("ніч", night);
         }
 
+        // ================= накази хазяїна (VillageLife.SayOrders) =================
+
+        [Test]
+        public void StewardOrders_AreUkrainianWords_NotRawIdsOrOldLiterals()
+        {
+            // Фікс-ревью (R7): чотири накази Steward.Act ішли в стрічку
+            // російськими літералами й сирим DisplayName ядра, минаючи таблицю.
+            var lines = VillageView.OrderLines("build:temple staff:medic@infirmary_bed raid settlers");
+
+            Assert.AreEqual(4, lines.Count);
+            StringAssert.Contains("Заклали", lines[0]);
+            StringAssert.Contains("Храм", lines[0], "Будівля — на ім'я з building.<id>");
+            StringAssert.Contains("Лікар", lines[1], "Житель — на ім'я з char.<id>");
+            StringAssert.Contains("Койка лазарету", lines[1], "Пост — на ім'я з post.<id>");
+            StringAssert.Contains("облаву", lines[2]);
+            StringAssert.Contains("переселенців", lines[3]);
+
+            string[] leaks =
+            {
+                "temple", "medic", "infirmary_bed", "build:", "staff:", "[",
+                "Заложили", "встал", "Совет", "позвал", "принимает", "Лекарь"
+            };
+            foreach (var line in lines)
+            {
+                foreach (var leak in leaks)
+                    StringAssert.DoesNotContain(leak, line,
+                        "У стрічці — ні сирого id, ні заглушки, ні старого російського літерала");
+                foreach (char c in "ыэъё")
+                    Assert.IsFalse(line.IndexOf(c) >= 0, "Російська літера «" + c + "» у рядку: " + line);
+            }
+        }
+
+        [Test]
+        public void StewardOrder_WithoutTranslation_ShowsRawIdNotSilence()
+        {
+            // Id без рядка в таблиці лишається видимим — так само, як незнайомий
+            // ключ сигналу (MissingLine_IsVisibleNotSilent). Биті токени не
+            // вигадують рядка.
+            var lines = VillageView.OrderLines("build:no_such_hall staff:broken staff:stranger@no_such_post");
+
+            Assert.AreEqual(2, lines.Count);
+            StringAssert.Contains("no_such_hall", lines[0]);
+            StringAssert.Contains("stranger", lines[1]);
+            StringAssert.Contains("no_such_post", lines[1]);
+            CollectionAssert.IsEmpty(VillageView.OrderLines(null));
+            CollectionAssert.IsEmpty(VillageView.OrderLines(""));
+        }
+
+        [Test]
+        public void Opening_IsSpokenInUkrainian()
+        {
+            var headline = VillageView.OpeningHeadline(Mood(0, 0));
+            StringAssert.Contains("Доба 0", headline);
+            StringAssert.Contains("ранок", headline);
+            StringAssert.Contains("хутір", headline);
+
+            var line = VillageView.OpeningLine(6);
+            StringAssert.Contains("Хутір прокидається", line);
+            StringAssert.Contains("6", line);
+        }
+
         private static SignalRequest Signal(SignalChannel channel, string topicId, params string[] tags)
         {
             return new SignalRequest(channel, topicId, SignalUrgency.Notable, null, true, tags);
