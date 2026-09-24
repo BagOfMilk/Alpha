@@ -13,6 +13,17 @@ namespace Game.Gameplay.UI
     {
         private SceneStepView _current;
 
+        /// <summary>
+        /// Кеш карткового фону за id (§DrawNameCardFallback) — інакше кожен
+        /// прохід OnGUI (Layout/Repaint щокадру, поки живий портрет ще не
+        /// зрендерився — <c>PortraitRig.GetPortrait</c> віддає null перший
+        /// кадр запиту) створював би нову <c>Texture2D</c> тим самим кольором.
+        /// Той самий принцип, що <c>_tileBlocks</c>/<c>_unitBlocks</c> у
+        /// <see cref="BattleArenaController"/>.
+        /// </summary>
+        private static readonly System.Collections.Generic.Dictionary<string, Texture2D> _cardTextureCache =
+            new System.Collections.Generic.Dictionary<string, Texture2D>();
+
         public void Draw(GameShell shell)
         {
             if (_current == null)
@@ -95,19 +106,26 @@ namespace Game.Gameplay.UI
             if (dialogueRect.width <= 0f || dialogueRect.height <= 0f) return;
 
             bool hasSecond = !string.IsNullOrEmpty(current.SecondActorId);
-            float portraitSize = Mathf01Clamp(Screen.height * 0.22f, 120f, 200f);
-            float overlap = portraitSize * 0.12f;
-            float top = dialogueRect.y - portraitSize + overlap;
+            // Полірування (ціль B «Портрети», owner: "a large portrait panel
+            // (~300x380 at 1600x900) per speaker"): попередній «VN-бюст»
+            // 120–200px квадратом читався як маленька іконка, не як портрет
+            // мовця. Частки екрана (не фіксовані пікселі) — той самий портрет
+            // лишається пропорційним на інших роздільностях, а на цільових
+            // 1600×900 дає рівно ~300×380.
+            float portraitWidth = Mathf01Clamp(Screen.width * 0.1875f, 180f, 340f);
+            float portraitHeight = Mathf01Clamp(Screen.height * 0.4222f, 220f, 420f);
+            float overlap = portraitHeight * 0.12f;
+            float top = dialogueRect.y - portraitHeight + overlap;
             if (top < 8f) top = 8f;
 
             if (hasSecond)
             {
-                DrawPortrait(shell, current.ActorId, g, new Rect(dialogueRect.x + 16f, top, portraitSize, portraitSize));
-                DrawPortrait(shell, current.SecondActorId, g, new Rect(dialogueRect.x + dialogueRect.width - portraitSize - 16f, top, portraitSize, portraitSize));
+                DrawPortrait(shell, current.ActorId, g, new Rect(dialogueRect.x + 16f, top, portraitWidth, portraitHeight));
+                DrawPortrait(shell, current.SecondActorId, g, new Rect(dialogueRect.x + dialogueRect.width - portraitWidth - 16f, top, portraitWidth, portraitHeight));
             }
             else
             {
-                DrawPortrait(shell, current.ActorId, g, new Rect(dialogueRect.x + 16f, top, portraitSize, portraitSize));
+                DrawPortrait(shell, current.ActorId, g, new Rect(dialogueRect.x + 16f, top, portraitWidth, portraitHeight));
             }
         }
 
@@ -121,19 +139,74 @@ namespace Game.Gameplay.UI
         /// </summary>
         private static void DrawPortrait(GameShell shell, string characterId, Game.Core.Characters.Creation.Gender g, Rect rect)
         {
+            string name = ScreenText.ResolveCompanionName(characterId, g, shell.Session.GetRosterView());
             Texture2D portrait = shell.PortraitProvider?.GetPortrait(characterId);
             if (portrait != null)
-            {
                 GUI.DrawTexture(rect, portrait, ScaleMode.ScaleToFit);
-            }
             else
-            {
-                GUI.Box(rect, UkrainianText.Get("ui.scene.portrait.placeholder", g));
-            }
+                DrawNameCardFallback(rect, characterId, name);
 
             var nameRect = new Rect(rect.x, rect.y - 24f, rect.width, 22f);
             if (nameRect.y < 0f) nameRect.y = 0f;
-            GUI.Label(nameRect, ScreenText.ResolveCompanionName(characterId, g, shell.Session.GetRosterView()), AlphaSkin.Body);
+            GUI.Label(nameRect, name, AlphaSkin.Body);
+        }
+
+        /// <summary>
+        /// Полірування (ціль B «Портрети», owner: "if unavailable a styled
+        /// name card (initials, colour by id, name) — never a bare «?»"):
+        /// раніше тут стояв <c>GUI.Box(rect, "?")</c> — той самий бляклий
+        /// прямокутник ДЛЯ БУДЬ-КОГО, поки живий рендер/PNG не готовий (перший
+        /// кадр після запиту, §PortraitRig.GetPortrait — черга на LateUpdate).
+        /// Тепер — карткою: та сама детермінована палітра, що в
+        /// <see cref="PortraitRig.TintModel"/> (кольором за id, а не одним
+        /// сірим для всіх), великі ініціали й повне ім'я — читається як
+        /// свідомо намальована заглушка персонажа, не як «зламане місце».
+        /// </summary>
+        private static void DrawNameCardFallback(Rect rect, string characterId, string name)
+        {
+            if (!_cardTextureCache.TryGetValue(characterId ?? string.Empty, out var cardTexture) || cardTexture == null)
+            {
+                var palette = BattleArenaView.CharacterTint("u_" + characterId, "Player", characterId);
+                var cardColor = new Color32(
+                    (byte)(palette.R * 255f), (byte)(palette.G * 255f), (byte)(palette.B * 255f), 255);
+                cardTexture = AlphaSkin.SolidTexture(cardColor);
+                _cardTextureCache[characterId ?? string.Empty] = cardTexture;
+            }
+
+            // Стаб лінту (Game.Gameplay.Lint/UnityEngineStub.cs) свідомо
+            // покриває лише мінімум IMGUI: GUI.DrawTexture тут вимагає
+            // scaleMode явно (не переобтяжує заглушку зайвим перевантаженням),
+            // а TextAnchor стубу має лише UpperLeft/MiddleCenter — тих самих
+            // числових значень, що й справжній UnityEngine.TextAnchor, тож
+            // MiddleCenter у власному вузькому Rect нижче й так читається як
+            // «по центру нижньої смуги», без LowerCenter.
+            GUI.DrawTexture(rect, cardTexture, ScaleMode.StretchToFill);
+
+            float minSide = rect.width < rect.height ? rect.width : rect.height;
+            var initialsStyle = new GUIStyle(AlphaSkin.Header)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = (int)(minSide * 0.4f)
+            };
+            initialsStyle.normal.textColor = new Color(0.08f, 0.07f, 0.06f, 0.85f); // темний — картка сама світла/насичена
+            GUI.Label(rect, Initials(name), initialsStyle);
+
+            var nameStyle = new GUIStyle(AlphaSkin.Body) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            nameStyle.normal.textColor = new Color(0.08f, 0.07f, 0.06f, 0.9f);
+            var nameBand = new Rect(rect.x + 4f, rect.y + rect.height - 34f, rect.width - 8f, 30f);
+            GUI.Label(nameBand, name, nameStyle);
+        }
+
+        /// <summary>Перші літери першого й (за наявності) другого слова — «Тугар Вовк» → «ТВ», «Провідниця» → «ПР».</summary>
+        private static string Initials(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "?";
+            var words = name.Split(' ');
+            if (words.Length >= 2 && words[0].Length > 0 && words[1].Length > 0)
+                return char.ToUpperInvariant(words[0][0]).ToString() + char.ToUpperInvariant(words[1][0]);
+            return words[0].Length >= 2
+                ? words[0].Substring(0, 2).ToUpperInvariant()
+                : words[0].Substring(0, 1).ToUpperInvariant();
         }
 
         private static float Mathf01Clamp(float v, float min, float max) => v < min ? min : (v > max ? max : v);
