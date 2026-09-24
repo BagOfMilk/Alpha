@@ -124,5 +124,34 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(AssignmentResult.Success, result,
                 "как и Injured, Resting не блокирует назначение — только Dead/OnMission блокируют его сегодня");
         }
+
+        /// <summary>
+        /// Ревью B7: назначение — не только "разрешено", но и обязано вернуть
+        /// ярлык статуса к Injured. Иначе тот, кто держит пост через рану,
+        /// читался бы как "отдыхает" (Resting) до полного излечения — пока
+        /// собственный комментарий ApplyHealing обещает ровно обратное.
+        /// </summary>
+        [Test]
+        public void RestingCompanion_Assigned_BecomesInjured_NotLeftResting()
+        {
+            var roster = new Roster();
+            var state = new BaseState(roster, new ResourceLedger(), new BalanceConfig { FoodUpkeepPerCompanion = 0 });
+            state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
+            {
+                OutputKind = SlotOutputKind.Resource,
+                OutputResource = Game.Core.Economy.ResourceType.Materials,
+                PrimarySkill = SkillType.Mechanics
+            });
+
+            var comp = new CompanionArchetype("r", "r").CreateInstance("r");
+            comp.Status = CompanionStatus.Resting;
+            comp.InjuryPoints = 5; // Resting всегда означает "ещё лечится"
+            roster.Add(comp);
+
+            state.TryAssign("r", "bench");
+
+            Assert.AreEqual(CompanionStatus.Injured, comp.Status,
+                "держит пост, ещё ранен — значит работает через рану, а не отдыхает");
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using Game.Core.Base;
 using Game.Core.Characters;
@@ -129,10 +130,25 @@ namespace Game.Core.Expeditions
                 sb.Append('>').Append(_vacated.TryGetValue(_away[i], out var slot) ? slot : "");
             }
 
-            // Замороженный результат (R15) — за отдельным разделителем ';', чтобы
-            // не путаться с ',' и '>' записи выше при разборе.
+            // Замороженный результат (R15) — с ПРЕФИКСОМ ДЛИНЫ, а не за
+            // отдельным разделителем ';'. Составной сейв (Core/Loop/
+            // SettlementSave.cs, ведёт исключительно Foundation/A1) делит ВЕСЬ
+            // слепок по ';' одним проходом ДО того, как отдать значение поля
+            // party= сюда — поэтому любой ';' внутри собственного блоба
+            // партии обрезал бы хвост молча, и замороженный результат
+            // терялся бы при восстановлении через настоящий путь сохранения
+            // (найдено ревью пакета B7: сейв посреди вылазки через
+            // DayProcessor.SaveState теряет результат, хотя изолированный
+            // CaptureState()/RestoreState() этого не показывает). Префикс
+            // длины делает разбор нечувствительным к содержимому результата:
+            // что бы в нём ни было, ниже читается ровно len символов, а не
+            // ищется разделитель.
             if (PendingResult != null)
-                sb.Append(';').Append(PendingResult.ToBlob());
+            {
+                string resultBlob = PendingResult.ToBlob();
+                sb.Append('^').Append(resultBlob.Length.ToString(CultureInfo.InvariantCulture))
+                  .Append('^').Append(resultBlob);
+            }
 
             return sb.ToString();
         }
@@ -146,11 +162,21 @@ namespace Game.Core.Expeditions
             if (string.IsNullOrEmpty(blob)) return;
 
             string head = blob;
-            int semicolon = blob.IndexOf(';');
-            if (semicolon >= 0)
+            int caret = blob.IndexOf('^');
+            if (caret >= 0)
             {
-                head = blob.Substring(0, semicolon);
-                PendingResult = ExpeditionResult.FromBlob(blob.Substring(semicolon + 1));
+                head = blob.Substring(0, caret);
+                int secondCaret = blob.IndexOf('^', caret + 1);
+                if (secondCaret > caret)
+                {
+                    int len;
+                    if (int.TryParse(blob.Substring(caret + 1, secondCaret - caret - 1),
+                            NumberStyles.Integer, CultureInfo.InvariantCulture, out len) &&
+                        len >= 0 && secondCaret + 1 + len <= blob.Length)
+                    {
+                        PendingResult = ExpeditionResult.FromBlob(blob.Substring(secondCaret + 1, len));
+                    }
+                }
             }
 
             var parts = head.Split(',');

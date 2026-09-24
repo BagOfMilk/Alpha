@@ -120,6 +120,13 @@ namespace Game.Core.Base
             companion.AssignedSlotId = slotId;
             if (companion.Status == CompanionStatus.Idle)
                 companion.Status = CompanionStatus.Assigned;
+            // G26 (ревью B7): Resting — это "свободен и лечится", а не ярлык,
+            // который переживает назначение на пост. Тот, кто держит пост,
+            // работает через рану (Injured), а не отдыхает — назначение
+            // обязано вернуть статус к Injured, иначе ярлык застревал бы на
+            // Resting до полного излечения даже у занятого постом.
+            else if (companion.Status == CompanionStatus.Resting)
+                companion.Status = CompanionStatus.Injured;
 
             return AssignmentResult.Success;
         }

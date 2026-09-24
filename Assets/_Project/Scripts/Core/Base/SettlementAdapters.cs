@@ -33,6 +33,13 @@ namespace Game.Core.Base
         public string Id => _companion.Id;
         public bool IsProtagonist { get; }
 
+        // ВНИМАНИЕ ИНТЕГРАТОРУ (ревью B7, не в §5.1): этот файл — не в таблице
+        // владения §5.1, но пакет B4 по §4.5 обязан добавить исключение
+        // Antagonist ИМЕННО в IsPresentInSettlement сразу ниже, в этом же
+        // классе, где B7 добавил GetCheckValue/ContextAttributeFor (G16) чуть
+        // дальше. При мердже B4+B7 в фазе C эти две правки нужно свести
+        // руками в одном классе, а не блайндовым git merge — как и
+        // предупреждает ревью пакета.
         public bool IsPresentInSettlement =>
             _companion.Status != CompanionStatus.OnMission &&
             _companion.Status != CompanionStatus.Dead;

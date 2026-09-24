@@ -4,6 +4,8 @@ using Game.Core.Characters;
 using Game.Core.Checks;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
+using Game.Core.Loop;
+using Game.Core.Pressure;
 using Game.Core.Stats;
 using NUnit.Framework;
 
@@ -98,6 +100,61 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(direct.Gold, afterReload.Gold);
             Assert.AreEqual(direct.Band, afterReload.Band);
             Assert.AreEqual(direct.Wounded.Count, afterReload.Wounded.Count);
+        }
+
+        /// <summary>
+        /// Ревью B7 (блокер): предыдущий тест
+        /// <see cref="SaveMidExpedition_RestoreState_ReturnGivesTheSameResult"/>
+        /// зовёт <c>party.CaptureState()</c>/<c>RestoreState()</c> напрямую и
+        /// поэтому не ловит разрыв в НАСТОЯЩЕМ пути сохранения игры:
+        /// составной слепок (<c>Core/Loop/SettlementSave.cs</c>, ведёт
+        /// исключительно Foundation/A1) делит ВЕСЬ слепок по ';' одним
+        /// проходом и режет значение поля <c>party=</c> на первом же
+        /// встреченном ';' — старый формат прятал замороженный результат
+        /// именно за этим символом. Этот тест идёт через
+        /// <see cref="DayProcessor.SaveState"/>/<see cref="DayProcessor.RestoreState"/>
+        /// — ровно тот путь, которым сохраняется настоящая игра.
+        /// </summary>
+        [Test]
+        public void SaveMidExpedition_ThroughDayProcessor_KeepsFrozenResult()
+        {
+            var cfg = Cfg();
+            var state = Build(cfg, out var party, out var ledger);
+            var site = Site();
+
+            var adapter = new RosterAdapter(state.Roster);
+            var processor = new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
+            {
+                Roster = adapter,
+                Casualties = adapter,
+                Party = party,
+                Sites = ledger
+            };
+
+            ExpeditionRunner.Depart(state, party, site, ExpeditionApproach.Forceful,
+                new[] { "scout_1" }, days: 2, ledger, cfg);
+            Assert.IsNotNull(party.PendingResult, "результат заморожен сразу при отправке (R15)");
+
+            // Сейв ЧЕРЕЗ настоящий путь игры, не через party.CaptureState() напрямую.
+            string blob = processor.SaveState();
+
+            var reloadedParty = new ExpeditionParty();
+            var reloadedProcessor = new DayProcessor(new TensionState(cfg.Tension), cfg, DayProcessor.DefaultSteps())
+            {
+                Party = reloadedParty,
+                Sites = new SiteLedger()
+            };
+            reloadedProcessor.RestoreState(blob);
+
+            Assert.IsTrue(reloadedParty.IsAway, "партия всё ещё в поле после восстановления через DayProcessor");
+            Assert.IsNotNull(reloadedParty.PendingResult,
+                "замороженный результат обязан переживать сейв через DayProcessor.SaveState/RestoreState " +
+                "(не только через ExpeditionParty напрямую) — иначе на возврате Complete получает null и " +
+                "добыча вылазки бесшумно пропадает");
+            Assert.AreEqual(party.PendingResult.Materials, reloadedParty.PendingResult.Materials);
+            Assert.AreEqual(party.PendingResult.Gold, reloadedParty.PendingResult.Gold);
+            Assert.AreEqual(party.PendingResult.Band, reloadedParty.PendingResult.Band);
+            Assert.AreEqual(party.PendingResult.Wounded.Count, reloadedParty.PendingResult.Wounded.Count);
         }
 
         [Test]

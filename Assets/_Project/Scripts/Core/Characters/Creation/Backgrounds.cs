@@ -4,14 +4,14 @@ using Game.Core.Stats;
 namespace Game.Core.Characters.Creation
 {
     /// <summary>
-    /// Один преset передісторії (R12/US-2.7): готовий набір атрибутів і базових
-    /// скілів, а не бюджет очок. Поправка №5.9 скасовує повне поінт-бай
-    /// створення (US-2.7) для основного темпу гри — тестова сборка показує
-    /// саму механіку швидким екраном: preset вибирається, а не збирається по
-    /// очку, як робив архівний <c>ProtagonistBuilder</c>.
+    /// Один преset предыстории (R12/US-2.7): готовый набор атрибутов и базовых
+    /// скилов, а не бюджет очков. Поправка №5.9 отменяет полное поинт-бай
+    /// создание (US-2.7) для основного темпа игры — тестовая сборка показывает
+    /// саму механику быстрым экраном: preset выбирается, а не собирается по
+    /// очку, как делал архивный <c>ProtagonistBuilder</c>.
     ///
-    /// <c>DisplayNameKey</c> — ключ (R7): Core не знає українського тексту,
-    /// сам текст живе в <c>UkrainianText</c> (E3), тут лише ключ і авторські
+    /// <c>DisplayNameKey</c> — ключ (R7): Core не знает украинского текста,
+    /// сам текст живёт в <c>UkrainianText</c> (E3), тут только ключ и авторские
     /// числа.
     /// </summary>
     public sealed class BackgroundPreset
@@ -24,16 +24,16 @@ namespace Game.Core.Characters.Creation
     }
 
     /// <summary>
-    /// Три преsety передісторії — порт ідей архівного <c>Background.cs</c> /
-    /// <c>ProtagonistBuilder.cs</c> (архівна лінія, коміт <c>20b8dcf</c>) на нову
-    /// модель персонажа (4 атрибути / 10 скілів, GDD Э2). Числа — ПЛЕЙСХОЛДЕР,
-    /// як і решта балансу цієї сборки: кожен преset тримає ту саму суму очок
-    /// (16 атрибутів, 13 скілів), що й заглушка протагоніста
-    /// <see cref="Session.FirstHourWorld"/> ставила раніше самотужки.
+    /// Три преsety предыстории — порт идей архивного <c>Background.cs</c> /
+    /// <c>ProtagonistBuilder.cs</c> (архивная линия, коммит <c>20b8dcf</c>) на новую
+    /// модель персонажа (4 атрибута / 10 скилов, GDD Э2). Числа — ПЛЕЙСХОЛДЕР,
+    /// как и весь остальной баланс этой сборки: каждый преset держит ту же сумму
+    /// очков (16 атрибутов, 13 скилов), что и заглушка протагониста
+    /// <see cref="Session.FirstHourWorld"/> ставила раньше самостоятельно.
     /// </summary>
     public static class Backgrounds
     {
-        /// <summary>Вигнанець зі зброєю: більше Сили й Ближнього бою, менше Кмітливості.</summary>
+        /// <summary>Изгнанник с оружием: больше Силы и Ближнего боя, меньше Смекалки.</summary>
         public static BackgroundPreset Warrior()
         {
             var preset = new BackgroundPreset { Id = "warrior", DisplayNameKey = "background.warrior" };
@@ -48,7 +48,7 @@ namespace Game.Core.Characters.Creation
             return preset;
         }
 
-        /// <summary>Мандрівний торговець: більше Кмітливості й Торгівлі, менше Сили.</summary>
+        /// <summary>Странствующий торговец: больше Смекалки и Торговли, меньше Силы.</summary>
         public static BackgroundPreset Trader()
         {
             var preset = new BackgroundPreset { Id = "trader", DisplayNameKey = "background.trader" };
@@ -63,7 +63,7 @@ namespace Game.Core.Characters.Creation
             return preset;
         }
 
-        /// <summary>Учень знахарки: більше Волі й Медицини, менше Ловкості.</summary>
+        /// <summary>Ученик знахарки: больше Воли и Медицины, меньше Ловкости.</summary>
         public static BackgroundPreset Healer()
         {
             var preset = new BackgroundPreset { Id = "healer", DisplayNameKey = "background.healer" };
