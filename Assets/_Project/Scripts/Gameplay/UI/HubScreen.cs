@@ -39,7 +39,7 @@ namespace Game.Gameplay.UI
         private int _tab;
 
         /// <summary>Фаза F (UI-tour autoplay): дозволяє <c>GameShell.SetHubTab</c> перемкнути вкладку ззовні, щоб дим-тест міг зняти скріншот кожної.</summary>
-        public void SetTab(int tab) => _tab = tab < 0 ? 0 : (tab > 9 ? 9 : tab);
+        public void SetTab(int tab) => _tab = tab < 0 ? 0 : (tab > 10 ? 10 : tab);
 
         // Expedition
         private string _siteId = SiteIds[0];
@@ -57,6 +57,7 @@ namespace Game.Gameplay.UI
         private Vector2 _buildingsScroll;
         private Vector2 _peopleListScroll;
         private Vector2 _sheetScroll;
+        private Vector2 _journalScroll;
 
         /// <summary>
         /// Полірування (ціль 1 «Картка персонажа»): хто обраний у лівому
@@ -94,6 +95,7 @@ namespace Game.Gameplay.UI
                 case 7: DrawFactions(shell, g); break;
                 case 8: DrawReadiness(shell, g); break;
                 case 9: DrawSave(shell, g); break;
+                case 10: DrawMechanicsJournal(shell, g); break;
             }
 
             GUILayout.FlexibleSpace();
@@ -107,7 +109,7 @@ namespace Game.Gameplay.UI
             {
                 "ui.tab.posts", "ui.tab.buildings", "ui.tab.council", "ui.tab.expedition",
                 "ui.tab.gear", "ui.tab.people", "ui.tab.quests", "ui.tab.factions",
-                "ui.tab.readiness", "ui.tab.save"
+                "ui.tab.readiness", "ui.tab.save", "ui.tab.journal"
             };
 
             GUILayout.BeginHorizontal();
@@ -192,7 +194,7 @@ namespace Game.Gameplay.UI
 
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(UkrainianText.Get("building." + id, g), AlphaSkin.SubHeader, GUILayout.Width(220f));
-                if (def != null) GUILayout.Label(ScreenText.BuildingCostLine(def, g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
+                if (def != null) GUILayout.Label(ScreenText.BuildingCostLine(def, g, city != null && city.TestBuildOneDayConstruction), AlphaSkin.Body, GUILayout.ExpandWidth(true));
                 GUILayout.EndHorizontal();
 
                 if (UkrainianText.Has("building." + id + ".effect", g))
@@ -917,6 +919,46 @@ namespace Game.Gameplay.UI
                 }
                 GUILayout.EndHorizontal();
             }
+        }
+
+        // ===================== Журнал механік (тестерський вигляд) =====================
+
+        /// <summary>
+        /// Тест-збірка (Поправка №7.8, п.2): для кожного запису
+        /// <c>GameSession.GetMechanicsJournal()</c> — назва, підказка «як
+        /// викликати» і бачив/не бачив, лічені за подіями DayLog самої цієї
+        /// партії (жодного прихованого числа — R17). Рахунок наверху —
+        /// скільки з усіх механік тестер уже бачив цим прогоном.
+        /// </summary>
+        private void DrawMechanicsJournal(GameShell shell, Gender g)
+        {
+            var journal = shell.Session.GetMechanicsJournal();
+            int total = journal != null ? journal.Count : 0;
+            int seen = 0;
+            if (journal != null)
+                foreach (var entry in journal)
+                    if (entry.Seen) seen++;
+
+            GUILayout.Label(UkrainianText.Format("ui.journal.progress", g, "seen", seen.ToString(), "total", total.ToString()), AlphaSkin.SubHeader);
+            GUILayout.Space(6f);
+
+            _journalScroll = Widgets.ScrollListBegin(_journalScroll, GUILayout.ExpandHeight(true));
+            if (journal != null)
+                foreach (var entry in journal)
+                {
+                    GUILayout.BeginHorizontal(GUI.skin.box);
+                    string mark = UkrainianText.Get(entry.Seen ? "ui.journal.seen" : "ui.journal.not_seen", g);
+                    GUILayout.Label(mark, entry.Seen ? AlphaSkin.Body : AlphaSkin.Tooltip, GUILayout.Width(50f));
+
+                    GUILayout.BeginVertical();
+                    string title = UkrainianText.Has(entry.TitleKey, g) ? UkrainianText.Get(entry.TitleKey, g) : entry.TitleKey;
+                    GUILayout.Label(title, AlphaSkin.Body);
+                    string hint = UkrainianText.Has(entry.HintKey, g) ? UkrainianText.Get(entry.HintKey, g) : entry.HintKey;
+                    GUILayout.Label(hint, AlphaSkin.Tooltip);
+                    GUILayout.EndVertical();
+                    GUILayout.EndHorizontal();
+                }
+            Widgets.ScrollListEnd();
         }
     }
 }

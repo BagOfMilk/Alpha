@@ -1402,6 +1402,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.tab.factions", "Фракції");
             AddKey(t, "ui.tab.readiness", "Готовність");
             AddKey(t, "ui.tab.save", "Збереження");
+            AddKey(t, "ui.tab.journal", "Журнал механік");
 
             AddKey(t, "ui.posts.assign", "Призначити");
             AddKey(t, "ui.posts.unassign", "Звільнити");
@@ -1468,6 +1469,11 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.readiness.title", "Готовність громади");
             AddKey(t, "ui.readiness.milestones", "Віхи: {reached} з {total}");
+
+            // Тест-збірка (Поправка №7.8, п.2): вкладка «Журнал механік».
+            AddKey(t, "ui.journal.progress", "Побачено: {seen} з {total}");
+            AddKey(t, "ui.journal.seen", "✓");
+            AddKey(t, "ui.journal.not_seen", "ще ні");
         }
 
         // ---- Рішення / бій ----

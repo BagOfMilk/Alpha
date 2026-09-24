@@ -321,14 +321,22 @@ namespace Game.Gameplay.UI
         /// той самий рядок, що і в OrderBuilding-фідбеку, але ДО кліку, поруч
         /// із назвою будівлі, а не лише постфактум у LastMessage.
         /// </summary>
-        public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g)
+        /// <summary>
+        /// Тест-збірка (Поправка №7.8, п.3): <paramref name="testBuildOneDayConstruction"/>
+        /// (<c>CityView.TestBuildOneDayConstruction</c>) підмінює проєктний
+        /// <c>def.Days</c> ЕФЕКТИВНИМ терміном (1 доба) — картка показує те
+        /// число, яке справді діє в цьому режимі, а не те, яке ніколи не
+        /// спрацює (R17: жодного невірного/прихованого числа).
+        /// </summary>
+        public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g, bool testBuildOneDayConstruction = false)
         {
             if (def == null) return string.Empty;
             string cost = def.MaterialsCost > 0
                 ? UkrainianText.Format("ui.buildings.cost_both", g,
                     "gold", def.GoldCost.ToString(), "materials", def.MaterialsCost.ToString())
                 : UkrainianText.Format("ui.buildings.cost_gold", g, "gold", def.GoldCost.ToString());
-            return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", def.Days.ToString());
+            int days = testBuildOneDayConstruction ? 1 : def.Days;
+            return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", days.ToString());
         }
 
         /// <summary>
