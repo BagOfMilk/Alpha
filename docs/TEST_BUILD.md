@@ -149,6 +149,10 @@
 | 36 | Збереження/завантаження | `SaveState()`/`LoadState(slot)` — лише коли `State==Morning` | композитний блоб R13 | подія `game.saved{slot}`/`game.loaded{slot}` |
 | 37 | Підсумок доби 5 | `AcknowledgeSummary()` | `SummaryView` зі стрічки подій усього прогону | `State: Summary → FreePlay` |
 | 38 | Вільна гра | (той самий цикл Morning→Night, без сценарних вузлів) | той самий `DayProcessor`/`GameSession`, `SessionView.IsFreePlay=true` | ті самі механіки продовжують працювати (данж/квести/фракції отримують шанс спрацювати, якщо не встигли в дні 1–5) |
+| 39 | Вибір репліки в сцені (Поправка №7.8) | сцена зупиняється на `SceneStepView.IsChoice=true` (відкриття доби 1, глави арок, конфронтація, рада Захара) → `ChooseSceneOption(optionIndex)` | за наявності перевірки — той самий `CheckResolver` (порогі показані заздалегідь, інваріант 8); наслідок — єдиним `ApplyConsequence`, спільним із квестами (лояльність/фракції/Напруга через закритий список драйверів/прапори/предмети/XP) | подія `scene.choice.made{sceneId,optionId,band}` на кожен вибір; §10 |
+| 40 | Особиста арка ПРОГРАЄТЬСЯ, не лише відкривається (Поправка №7.8) | `BeginArcChapterScene(companionId)`/`BeginArcChapterQuest(companionId)` на доступній главі (№26 сигналізує лише «доступна») | `CompanionArcRun.Begin()` → зміст (сцена АБО квест, `CompanionArcContent` каже, який) → термінал (фініш сцени/квесту) кличе `CompleteArcChapterFor` | подія `arc.chapter_completed{companionId,arcId,chapterId}`; §10 |
+| 41 | Конфронтація зради «Нічна розмова» (Поправка №7.8) | доба 3, увечері: `OfferMyroslavaEveningScene()` — насувана зрада (прапор `defector_seeded`, ще не розв'язана) відкриває саме конфронтацію, інакше — тиху перевірку стосунків | 3 варіанти: переконати (перевірка Persuade — успіх лишає й відновлює довіру, невдача дефектить так само, як інші), звинуватити (завжди дефектить негайно), відпустити (завжди дефектить, м'якший прапор для фіналу) — `ApplyBetrayalConfrontationSideEffectsIfNeeded` | подія `scene.betrayal_confrontation.begun` на відкриття; далі `companion.defected`+`roster.rippled` або відновлена лояльність; §10 |
+| 42 | Журнал механік для тестера (Поправка №7.8) | (похідне; без команди) `GetMechanicsJournal()` | рахує "seen" по кумулятивних ключах подій усієї сесії (`MechanicJournalDef[]`, реєстр із рядків цієї таблиці + нових) | `IReadOnlyList<MechanicJournalEntryView>{Id,TitleKey,HintKey,Seen}` — жодного прихованого числа (R17); §10 |
 
 ---
 
@@ -1432,3 +1436,89 @@ Get(key, gender)` сам обирає варіант; де рід не впли�
 - **Council/Threats-архів (`Council.cs`, `ThreatSystem`, `TensionTrack`)** —
   не переноситься взагалі; `CityWorks`/`WorldPulse`/`TensionState` головні —
   звірка, не перенос (реєстр рішень, узгоджений в усіх трьох ролях).
+
+## 10. Вибори в діалогах, зрада цілком, журнал механік (Поправка №7.8)
+
+Рішення власника (24.09.2026, цитата в амендменті): «Выборы в диалогах или
+квестах должны влиять это же тоже механики которые нужно протестировать как
+и предательство. Это все должно быть в первом билде». Рядки §2 №39–42.
+
+### 10.1 Що додано
+
+- **Choice-крок у портретних сценах** (`Core/Scenes/Scene.cs`,
+  `SceneStep.Choice`, `SceneChoiceOption.Simple`/`WithCheck`) — варіант може
+  нести перевірку (порогі/полоси прев'ю заздалегідь, той самий
+  `DecisionOptionView`, що й у квестів/інцидентів, R17). Розв'язує
+  `GameSession.ChooseSceneOption(optionIndex)` — ОДНИМ застосувачем наслідку
+  (`ApplyConsequence`), спільним із квестовим рушієм.
+- **Сцена відкриття доби 1** («Сусід з претензією», `OpeningScenes.cs`) —
+  замість того, щоб Захар мовчки відмовляв сам, відповідь тепер вибір
+  протагоніста: **відмовити** від імені громади (без перевірки, Faction
+  community/tuhar_boyars), **виторгувати час** (перевірка Торгівлі — на
+  Good/Best ставить прапор `TugarBargainedTimeFlag`, що полегшує тихий шлях
+  вузла 1), **спитати Мирославу** (перевірка Переконання — окрема гілка
+  репліки-розкриття `scene.neighbour.myroslava_reveals` замість
+  `elder_refuses`). Усі три сходяться в тому самому вузлі 1.
+- **Арка Мирослави гл.1 «Донька боярина»** (`CompanionScenes.MyroslavaTrustArc`,
+  гейт Steady) — довіритись/пильнувати/відіслати.
+- **Конфронтація зради «Нічна розмова»** (`CompanionScenes.MyroslavaConfrontation`,
+  доба 3 увечері, коли `defector_seeded` і досі не розв'язано) — переконати
+  (Persuade, успіх лишає й відновлює довіру, невдача дефектить), звинуватити
+  (Intimidate, завжди дефектить негайно), відпустити (без перевірки, завжди
+  дефектить, м'якший прапор `MyroslavaConfrontedReleaseFlag` для фіналу).
+  Насувана зрада перевіряється лише прапором `Defection.DefectorSeededFlag` —
+  НЕ повторним читанням поточної полоси лояльності, яка встигає природно
+  спливти вище Resentful пасивним бонусом «Morale» (`LoyaltyRules.OnMorale`)
+  ще до доби 3.
+- **Квест Максима гл.1 «Не за кров»** (`DefaultQuests.MaksymCh1`, гейт Steady —
+  без гейту, старт вже Steady) — помста (Intimidate) проти громадського суду
+  (Persuade); квестова глава арки, реєструється в пулі лише через
+  `GameSession.BeginArcChapterQuest`, не в загальному `DefaultQuests.All()`.
+- **Рада Захара перед фіналом** (`CompanionScenes.ZakharCouncil`, доба 5
+  увечері) — загатити річку (додає Готовність тим самим числом, що указ
+  ради) проти тримати перевал (пом'якшує кровавий фінал на рядового ворога).
+- **Арки ПРОГРАЮТЬСЯ, не лише сигналізують**: `BeginArcChapterScene`/
+  `BeginArcChapterQuest` → зміст → термінал (фініш сцени/квесту) кличе
+  `CompleteArcChapterFor` → подія `arc.chapter_completed{companionId,arcId,chapterId}`.
+  Гейтить наступну главу (`NeedsFlag`), персистується (`CaptureArcState`).
+- **Журнал механік для тестера** (`GameSession.GetMechanicsJournal()`) —
+  реєстр `MechanicJournalDef[]` із рядків §2 (включно з новими №39–42):
+  Id, `TitleKey`/`HintKey` (українською, `Gameplay/Text/UkrainianText.cs`,
+  блок «журнал механік») і `Seen` — рахує по кумулятивних ключах подій
+  `RunLog` усієї сесії, а не поточної фази. Жодного прихованого числа.
+
+### 10.2 Тестове покриття (Game.Tests.EditMode, `GameSessionTests.cs`)
+
+| Механіка | Тест |
+|---|---|
+| Вибір репліки, проста опція (без перевірки) | `OpeningChoice_Refuse_LogsChoiceMade_WithBaseBand_AndConvergesToElderRefuses` |
+| Вибір репліки, опція з перевіркою | `OpeningChoice_Bargain_LogsChoiceMade_WithCheckDeterminedBand` |
+| Вибір репліки, гілкування сюжету | `OpeningChoice_AskMyroslava_BranchesToRevealLine_InsteadOfElderRefuses` |
+| Арка ПРОГРАЄТЬСЯ (квестова глава, Begin→Offer→термінал→CompleteChapter) | `Maksym_ArcChapter1_QuestPlayedToTerminal_CompletesChapterAndLogsEvent` |
+| Конфронтація зради — звинуватити (завжди дефектить негайно) | `Day1_BloodyPath_SeedsDefector_ButDefectionWaitsForNightThreeConfrontation` |
+| Конфронтація зради — переконати (успіх/невдача за ExpectedBand) | `MyroslavaConfrontation_Persuade_StaysOnSuccess_DefectsOnFailure` |
+| Конфронтація зради — відпустити (завжди дефектить, м'якше) | `MyroslavaConfrontation_Release_AlwaysDefectsSoftened` |
+| Журнал механік: unseen на свіжій грі, Seen після dialogue_choice | `GetMechanicsJournal_DialogueChoice_BecomesSeenAfterFirstSceneChoice` |
+| Журнал механік: Seen для arc_chapter/betrayal_confrontation | асерт у кінці двох тестів вище (той самий сценарій, що й доводить механіку) |
+
+Усі — детерміновані (інваріант 8): гілки з перевіркою читають
+`ExpectedBand` прямо з прев'ю опції (той самий `CheckResolver`, яким її
+резолвить `ChooseSceneOption`), а не підганяють число білда під заздалегідь
+обчислений результат — тест лишається зеленим, навіть якщо баланс перевірки
+зміниться.
+
+### 10.3 Відкрито
+
+- **UI під журнал і Choice-екран — наступний крок** (за задумом самого
+  DELIVER: «NO IMGUI screens — UI comes in a later step»). Сьогодні
+  споживачі — лише боти (`IBotPolicy.ChooseSceneOption`) і тести;
+  `tools/Alpha.Play` показує кадр сцени текстом, але власного меню під
+  журнал механік ще не малює.
+- **Числова полегша `TugarBargainedTimeFlag`/`ApplyBargainedTimeBonusIfNeeded`**
+  застосована й ідемпотентна, але без прямого теста ефекту на поріг
+  `pass_vanguard` (лише опосередковано — через сам факт вибору й події
+  `scene.choice.made`, §10.2). Той самий шов і той самий пробіл, що й у
+  Гафіїної трави (`ApplyHafiyaGrassBonusToSickChildIfNeeded`, `QuestTests.cs`
+  перевіряє лише прапор квесту, не сам ефект на поріг `sick_child`) —
+  не нова діра цієї поправки, а вже наявна, просто повторена тим самим
+  прийомом.

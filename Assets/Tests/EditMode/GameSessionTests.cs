@@ -176,6 +176,45 @@ namespace Game.Tests.EditMode
             return -1;
         }
 
+        private static Game.Core.Session.Views.MechanicJournalEntryView FindJournalEntry(
+            System.Collections.Generic.IReadOnlyList<Game.Core.Session.Views.MechanicJournalEntryView> journal, string id)
+        {
+            foreach (var e in journal) if (e.Id == id) return e;
+            return null;
+        }
+
+        /// <summary>
+        /// GameSession.GetMechanicsJournal() (Поправка №7.8, п. 4): реєстр
+        /// рахує "seen" по кумулятивних ключах подій усієї сесії
+        /// (`_seenEventKeys`), а не поточної фази/дня — тож усе унсін на
+        /// свіжій грі, і рівно одна опція вибору репліки вже досить, щоб
+        /// "dialogue_choice" стало Seen=true (решта нових Id тут ще ні —
+        /// покрито окремо в тестах арки/конфронтації нижче, де журнал
+        /// перевіряється в кінці того самого сценарію).
+        /// </summary>
+        [Test]
+        public void GetMechanicsJournal_DialogueChoice_BecomesSeenAfterFirstSceneChoice()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+
+            var before = s.GetMechanicsJournal();
+            Assert.IsNotNull(FindJournalEntry(before, "dialogue_choice"), "реєстр мав містити нову механіку «dialogue_choice»");
+            Assert.IsNotNull(FindJournalEntry(before, "arc_chapter"));
+            Assert.IsNotNull(FindJournalEntry(before, "betrayal_confrontation"));
+            Assert.IsFalse(FindJournalEntry(before, "dialogue_choice").Seen, "на свіжій грі жодна механіка ще не бачена");
+            Assert.IsFalse(FindJournalEntry(before, "arc_chapter").Seen);
+            Assert.IsFalse(FindJournalEntry(before, "betrayal_confrontation").Seen);
+
+            var step = AdvanceOpeningToChoice(s);
+            s.ChooseSceneOption(OptionIndexByTextKey(step, "scene.neighbour.option.refuse"));
+
+            var after = s.GetMechanicsJournal();
+            Assert.IsTrue(FindJournalEntry(after, "dialogue_choice").Seen, "scene.choice.made мав позначити dialogue_choice побаченим");
+            Assert.IsFalse(FindJournalEntry(after, "arc_chapter").Seen, "інші дві нові механіки ще НЕ трапились у цьому сценарії");
+            Assert.IsFalse(FindJournalEntry(after, "betrayal_confrontation").Seen);
+        }
+
         [Test]
         public void OpeningChoice_Refuse_LogsChoiceMade_WithBaseBand_AndConvergesToElderRefuses()
         {
@@ -624,6 +663,8 @@ namespace Game.Tests.EditMode
             foreach (var e in s.DayLog)
                 if (e.Key == "scene.betrayal_confrontation.begun") sawConfrontationBegun = true;
             Assert.IsTrue(sawConfrontationBegun, "§2 нова механіка betrayal_confrontation: подія на відкриття сцени");
+            Assert.IsTrue(FindJournalEntry(s.GetMechanicsJournal(), "betrayal_confrontation").Seen,
+                "GetMechanicsJournal() мав позначити betrayal_confrontation побаченим");
 
             // OfferMyroslavaEveningScene() повертає лише ПЕРШИЙ кадр сцени
             // (Shot миттю за BeginScene, той самий контракт, що й
@@ -836,6 +877,8 @@ namespace Game.Tests.EditMode
                     sawCompleted = true;
             Assert.IsTrue(sawCompleted,
                 "термінал квестової глави (успіх чи невдача) мав завершити главу арки тим самим шляхом, що й сценова (CompleteArcChapterFor)");
+            Assert.IsTrue(FindJournalEntry(s.GetMechanicsJournal(), "arc_chapter").Seen,
+                "GetMechanicsJournal() мав позначити arc_chapter побаченим");
         }
 
         // ---- Морнінг-команди: Assign/Order*/Preview/Depart/Quest/Build/Equip/Craft ----
