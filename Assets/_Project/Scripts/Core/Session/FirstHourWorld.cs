@@ -123,8 +123,19 @@ namespace Game.Core.Session
         /// Собрать мир первого часа. Деталь: тир и режим точки решения —
         /// параметры (Alpha.Play спрашивает игрока, Alpha.Sim меряет темп в
         /// автономном режиме), всё остальное — фиксированный контент открытия.
+        ///
+        /// <paramref name="testBuildOneDayConstruction"/> — Поправка №7.7.
+        /// Default здесь — false: прямые вызовы Build() (CampaignPacingTests,
+        /// SettlementSaveTests, FirstHourWorldTests) — это замер темпа/баланса
+        /// кампании, а не тестовая сборка, и не должны тихо поменять поведение
+        /// от одного лишь добавления параметра. GameSession.NewGame —
+        /// единственный вызывающий, который явно передаёт значение из
+        /// NewGameOptions (там default true) — так тестовая сборка (Unity,
+        /// Alpha.Play, боты) получает один день, а кампания и харнес темпа —
+        /// нет.
         /// </summary>
-        public static FirstHourWorld Build(int tier = 1, bool requirePlayerDecision = false, BalanceConfig balance = null)
+        public static FirstHourWorld Build(int tier = 1, bool requirePlayerDecision = false, BalanceConfig balance = null,
+            bool testBuildOneDayConstruction = false)
         {
             var cfg = balance ?? new BalanceConfig();
 
@@ -136,7 +147,7 @@ namespace Game.Core.Session
 
             // Совет и склад уже стоят — хутор встречает игрока работающей
             // общиной, а не стройплощадкой (Поправка №6.1, §3.0 FIRST_HOUR).
-            var works = new CityWorksType(DefaultBuildings.StartingSet);
+            var works = new CityWorksType(DefaultBuildings.StartingSet, testBuildOneDayConstruction);
             works.ApplyToSlots(baseState);
 
             // Лазарет открывается зданием, которого в StartingSet нет — но

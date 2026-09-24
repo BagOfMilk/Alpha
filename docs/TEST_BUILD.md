@@ -273,7 +273,7 @@ Evening → Night → [Decision]* → (Morning наступної доби) → 
 
 | Стан | Команда | Сигнатура | Що робить |
 |---|---|---|---|
-| Title | `NewGame` | `void NewGame(NewGameOptions o)` | `o={HitRule,Seed?,Ironman,SkipCreation}`; будує `FirstHourWorld`; якщо `!SkipCreation` → `State=Creation` |
+| Title | `NewGame` | `void NewGame(NewGameOptions o)` | `o={HitRule,Seed?,Ironman,SkipCreation,TestBuildOneDayConstruction}` (Поправка №7.7, дефолт true); будує `FirstHourWorld`; якщо `!SkipCreation` → `State=Creation` |
 | Title | `ContinueGame` | `bool ContinueGame(int slot)` | `RestoreState` з файлу слота (§4.8) |
 | Title | `NewTrainingBattle` | `void NewTrainingBattle(TrainingBattleOptions o)` | канонічний ростер/вороги, без кампанії; `State=Battle`, `_resume.ReturnState=Title` |
 | Creation | `SetProtagonistName/Gender/Background` | `void SetProtagonistName(string)` / `void SetProtagonistGender(Gender)` / `void SetProtagonistBackground(string presetId)` | накопичує вибір у `ProtagonistCreationView` |

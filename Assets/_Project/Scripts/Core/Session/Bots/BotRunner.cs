@@ -81,14 +81,32 @@ namespace Game.Core.Session.Bots
         /// <summary>Запобіжник від зациклення (реальний баг у водії/політиці мав би впасти тестом, а не повиснути назавжди).</summary>
         private const int MaxSteps = 20000;
 
+        /// <summary>
+        /// Поправка №7.7 — корінь дефекту "Майстерня добудовується надто
+        /// пізно, щоб боти встигли щось зробити" був не лише у Days=4:
+        /// <see cref="ApplyCouncilRoutine"/> замовляє РІВНО одну стройку за
+        /// ранок і завжди саме ПЕРШУ незбудовану позицію цього списку — поки
+        /// вона не по кишені, черга стоїть, і жодна пізніша позиція (навіть
+        /// дешевша) не пробується. Зі старим порядком Майстерня (30 золота,
+        /// без будматеріалів — одна з найдешевших) чекала за Тавернею/Храмом/
+        /// Ринком/Укріпленнями (разом ~215 золота + 21 будматеріалу), і 15-
+        /// денний тестовий прогін не встигав туди дійти навіть після переходу
+        /// на один день стройки. Тут вона — друга: одразу за Лазаретом
+        /// (лікування — теж дешево і рано), щоб ланцюг "стройка → пост →
+        /// крафт" (§6.1 №22) встигав спрацювати до фіналу доби 5.
+        ///
+        /// Кампанійний порядок (<c>Steward.BuildPriority</c>, 90-денний замір
+        /// клапана Поправки №6) цей файл НЕ чіпає — то баланс кампанії, а не
+        /// тестової збірки.
+        /// </summary>
         private static readonly string[] BuildPriority =
         {
             Game.Core.Base.DefaultBuildings.Infirmary,
+            Game.Core.Base.DefaultBuildings.Workshop,
             Game.Core.Base.DefaultBuildings.Tavern,
             Game.Core.Base.DefaultBuildings.Temple,
             Game.Core.Base.DefaultBuildings.Market,
-            Game.Core.Base.DefaultBuildings.Fortifications,
-            Game.Core.Base.DefaultBuildings.Workshop
+            Game.Core.Base.DefaultBuildings.Fortifications
         };
 
         /// <summary>Нова сесія (NewGame викликається тут) + прогін на <paramref name="days"/> календарних діб під <paramref name="policy"/>.</summary>
@@ -349,6 +367,8 @@ namespace Game.Core.Session.Bots
             if (city.RaidReady) { session.OrderRaid(); if (tally != null) tally.SimpleCommands++; }
             if (city.SettlersReady) { session.OrderSettlers(); if (tally != null) tally.SimpleCommands++; }
 
+            MaybeCraft(session, city, tally);
+
             if (day % 3 == 0)
             {
                 session.OrderPrepareThreat();
@@ -364,6 +384,38 @@ namespace Game.Core.Session.Bots
             {
                 session.OrderDiplomacy("tuhar_boyars");
                 if (tally != null) tally.SimpleCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Спільна "добра економіка" (§6.1 рядок 22, Поправка №7.7 — стройка
+        /// відкриває Майстерню швидко в тестовій збірці, але доти жоден бот
+        /// не пробував нею скористатись): коли Майстерня вже стоїть і в
+        /// сташі є хоч один предмет, пробуємо підняти рідкість — так само,
+        /// як зробив би гравець, щойно побачив відкритий пост. Одна спроба
+        /// на ранок, як і решта дій цього методу; неуспіх (іменний предмет,
+        /// вже Epic, чи не по кишені) тихо пропускається — CraftUpgrade сам
+        /// вирішує, чи застосувати команду.
+        /// </summary>
+        private static void MaybeCraft(GameSession session, CityView city, TimingTally tally)
+        {
+            bool workshopBuilt = false;
+            if (city?.Built != null)
+                foreach (var b in city.Built)
+                    if (b.Id == Game.Core.Base.DefaultBuildings.Workshop) { workshopBuilt = true; break; }
+            if (!workshopBuilt) return;
+
+            var stash = session.GetStash();
+            if (stash == null || stash.Count == 0) return;
+
+            foreach (var item in stash)
+            {
+                var result = session.CraftUpgrade(item.InstanceId);
+                if (result == Game.Core.Items.CraftResult.Success)
+                {
+                    if (tally != null) tally.SimpleCommands++;
+                    return; // одна стройка/крафт за ранок — той самий темп, що й у стройки вище
+                }
             }
         }
 
