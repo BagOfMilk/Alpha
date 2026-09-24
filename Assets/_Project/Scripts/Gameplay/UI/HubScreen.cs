@@ -55,7 +55,16 @@ namespace Game.Gameplay.UI
         // позицію, її треба тримати як стан екрана, не як Vector2.zero).
         private Vector2 _postsScroll;
         private Vector2 _buildingsScroll;
-        private Vector2 _peopleScroll;
+        private Vector2 _peopleListScroll;
+        private Vector2 _sheetScroll;
+
+        /// <summary>
+        /// Полірування (ціль 1 «Картка персонажа»): хто обраний у лівому
+        /// списку вкладки Люди — persist між кадрами, як і скрол-позиції
+        /// вище. null до першого малювання → DrawPeople підставляє
+        /// протагоніста (завжди є в ростері).
+        /// </summary>
+        private string _selectedCompanionId;
 
         // Кеш пропозиції квесту (фікс-ревью, блокер): OfferQuestStage сам
         // логує "quest.offered" на КОЖЕН виклик (GameSession.cs:593-620), а
@@ -469,41 +478,162 @@ namespace Game.Gameplay.UI
 
         // ===================== Люди =====================
 
+        private const float SheetHeight = 460f;
+        private const float PeopleListWidth = 260f;
+
+        /// <summary>
+        /// Полірування (ціль 1 «Картка персонажа», owner feedback: "roster
+        /// list on the left and the full sheet of the selected person on the
+        /// right ... NO overlapping panels — today the planner is drawn over
+        /// the roster"). Раніше короткий список карток і план білда йшли
+        /// одне під одним у тому самому вертикальному потоці й ділили
+        /// фіксовану висоту — тепер дві незалежні колонки в одній рамці:
+        /// список зліва (вибір), повна картка обраного справа.
+        /// </summary>
         private void DrawPeople(GameShell shell, Gender g)
         {
             var roster = shell.Session.GetRosterView();
-            Widgets.TooltipLine(UkrainianText.Get("ui.people.sheet.limited", g));
+            if (string.IsNullOrEmpty(_selectedCompanionId))
+                _selectedCompanionId = Game.Core.Session.GameSession.ProtagonistId;
 
-            // Фікс-ревью (major, знайдено тур-автоплеєм): GUILayout.ExpandHeight(true)
-            // тут ділив «зайву» висоту з build-планувальником і кнопкою «Почати
-            // день» нижче в тому самому вертикальному потоці — на практиці
-            // скролвʼю діставалось ледь на 1.3 картки (Захара обрізало
-            // посередині), і план будівництва одразу починався просто під
-            // ним без жодної видимої межі/скролбару. Фіксована висота — те,
-            // чим керуємо, а не сподіваємось на розподіл GUILayout.
-            _peopleScroll = Widgets.ScrollListBegin(_peopleScroll, GUILayout.Height(320f));
+            GUILayout.BeginHorizontal(GUILayout.Height(SheetHeight));
+            DrawPeopleList(g, roster);
+            DrawCharacterSheet(shell, g, roster);
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawPeopleList(Gender g, RosterView roster)
+        {
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(PeopleListWidth), GUILayout.Height(SheetHeight));
+            GUILayout.Label(UkrainianText.Get("ui.tab.people", g), AlphaSkin.SubHeader);
+            _peopleListScroll = Widgets.ScrollListBegin(_peopleListScroll, GUILayout.ExpandHeight(true));
             if (roster?.Companions != null)
                 foreach (var c in roster.Companions)
                 {
-                    GUILayout.BeginVertical(GUI.skin.box);
-                    GUILayout.Label(ScreenText.ResolveCompanionName(c.Id, g, roster), AlphaSkin.SubHeader);
-                    GUILayout.Label(UkrainianText.Format("ui.people.level", g, "level", c.Level.ToString()), AlphaSkin.Body);
-                    // Фікс-ревью (major): Widgets.LabeledRow тут розтягувало
-                    // підпис на всю ширину картки (ExpandWidth(true)) і
-                    // притискало значення до ПРАВОГО краю — на широкій
-                    // (~1200px) картці "Стан:" і "На посту" опинялись на
-                    // протилежних кінцях того самого рядка, і читалось як
-                    // «значення відсутнє». Тепер підпис+значення — один рядок
-                    // Format(), як і "Рівень"/"Шрамів" нижче.
-                    GUILayout.Label(UkrainianText.Format("ui.people.status", g, "status", ScreenText.CompanionStatusLabel(c.Id, c.Status, g)), AlphaSkin.Body);
-                    GUILayout.Label(UkrainianText.Format("ui.people.loyalty", g, "loyalty", ScreenText.LoyaltyLabel(c.Loyalty, g)), AlphaSkin.Body);
-                    GUILayout.Label(UkrainianText.Format("ui.people.scars", g, "count", c.ScarCount.ToString()), AlphaSkin.Body);
-                    GUILayout.EndVertical();
+                    bool selected = c.Id == _selectedCompanionId;
+                    if (Widgets.TabButton(ScreenText.ResolveCompanionName(c.Id, g, roster), selected, GUILayout.ExpandWidth(true)))
+                        _selectedCompanionId = c.Id;
                 }
             Widgets.ScrollListEnd();
-
-            DrawBuildPlanner(shell, g);
+            GUILayout.EndVertical();
         }
+
+        private void DrawCharacterSheet(GameShell shell, Gender g, RosterView roster)
+        {
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandWidth(true), GUILayout.Height(SheetHeight));
+
+            var sheet = shell.Session.GetCharacterSheet(_selectedCompanionId);
+            if (sheet == null)
+            {
+                GUILayout.Label(UkrainianText.Get("ui.sheet.pick_someone", g), AlphaSkin.Tooltip);
+                GUILayout.EndVertical();
+                return;
+            }
+
+            _sheetScroll = Widgets.ScrollListBegin(_sheetScroll, GUILayout.ExpandHeight(true));
+
+            GUILayout.Label(ScreenText.ResolveCompanionName(sheet.CompanionId, g, roster), AlphaSkin.Header);
+            GUILayout.Label(UkrainianText.Format("ui.people.level", g, "level", sheet.Level.ToString()), AlphaSkin.Body);
+            GUILayout.Label(UkrainianText.Format("ui.sheet.xp", g, "xp", sheet.Xp.ToString(), "next", sheet.XpToNextLevel.ToString()), AlphaSkin.Body);
+            GUILayout.Label(UkrainianText.Format("ui.people.status", g, "status", ScreenText.CompanionStatusLabel(sheet.CompanionId, sheet.Status, g)), AlphaSkin.Body);
+            GUILayout.Label(UkrainianText.Format("ui.people.loyalty", g, "loyalty", ScreenText.LoyaltyLabel(sheet.Loyalty, g)), AlphaSkin.Body);
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.attributes", g), () =>
+            {
+                GUILayout.BeginHorizontal();
+                foreach (var a in sheet.Attributes)
+                    GUILayout.Label(UkrainianText.Get("attr." + a.AttributeKey, g) + ": " + a.Score, AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.EndHorizontal();
+            });
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.skills", g), () =>
+            {
+                // Два стовпці по п'ять — десять скілів одним рядком не влізли б.
+                for (int row = 0; row < sheet.Skills.Count; row += 2)
+                {
+                    GUILayout.BeginHorizontal();
+                    for (int col = 0; col < 2 && row + col < sheet.Skills.Count; col++)
+                    {
+                        var s = sheet.Skills[row + col];
+                        GUILayout.Label(UkrainianText.Get("skill." + s.SkillKey, g) + ": " + s.Score, AlphaSkin.Body, GUILayout.Width(220f));
+                    }
+                    GUILayout.EndHorizontal();
+                }
+            });
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.traits", g), () =>
+            {
+                if (sheet.Traits.Count == 0) { GUILayout.Label(UkrainianText.Get("ui.sheet.none", g), AlphaSkin.Tooltip); return; }
+                foreach (var tr in sheet.Traits)
+                {
+                    string polarity = UkrainianText.Get("ui.trait.polarity." + tr.Polarity.ToLowerInvariant(), g);
+                    GUILayout.Label("• " + UkrainianText.Get("trait." + tr.TraitId, g) + " (" + polarity + "): " +
+                        UkrainianText.Get("trait." + tr.TraitId + ".effect", g), AlphaSkin.Body);
+                }
+            });
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.scars", g), () =>
+            {
+                if (sheet.ScarIds.Count == 0) { GUILayout.Label(UkrainianText.Get("ui.sheet.none", g), AlphaSkin.Tooltip); return; }
+                foreach (var scarId in sheet.ScarIds)
+                    GUILayout.Label("• " + UkrainianText.Get("scar." + scarId, g), AlphaSkin.Body);
+            });
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.perks_unlocked", g), () =>
+            {
+                if (sheet.UnlockedPerkIds.Count == 0) { GUILayout.Label(UkrainianText.Get("ui.sheet.none", g), AlphaSkin.Tooltip); return; }
+                foreach (var perkId in sheet.UnlockedPerkIds)
+                    GUILayout.Label("• " + UkrainianText.Get("perk." + perkId, g) + ": " + UkrainianText.Get("perk." + perkId + ".effect", g), AlphaSkin.Body);
+            });
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.perks_available", g), () =>
+            {
+                if (sheet.AvailablePerks.Count == 0) { GUILayout.Label(UkrainianText.Get("ui.sheet.none", g), AlphaSkin.Tooltip); return; }
+                foreach (var p in sheet.AvailablePerks)
+                {
+                    string line = UkrainianText.Get("perk." + p.PerkId, g) + ": " + UkrainianText.Get("perk." + p.PerkId + ".effect", g);
+                    if (p.Available) GUILayout.Label("• " + line, AlphaSkin.Body);
+                    else GUILayout.Label("• " + line + " (" + UkrainianText.Get(p.ReasonKey, g) + ")", AlphaSkin.Tooltip);
+                }
+            });
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.combat", g), () =>
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Format("ui.sheet.combat.hp", g, "value", sheet.Combat.HpMax.ToString()), AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.Label(UkrainianText.Format("ui.sheet.combat.ap", g, "value", sheet.Combat.ApMax.ToString()), AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.Label(UkrainianText.Format("ui.sheet.combat.initiative", g, "value", sheet.Combat.Initiative.ToString()), AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Format("ui.sheet.combat.accuracy", g, "value", sheet.Combat.Accuracy.ToString()), AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.Label(UkrainianText.Format("ui.sheet.combat.defense", g, "value", sheet.Combat.Defense.ToString()), AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.Label(UkrainianText.Format("ui.sheet.combat.armor", g, "value", sheet.Combat.Armor.ToString()), AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.Label(UkrainianText.Format("ui.sheet.combat.crit", g, "value", sheet.Combat.CritChance.ToString()), AlphaSkin.Body, GUILayout.Width(150f));
+                GUILayout.EndHorizontal();
+            });
+
+            Widgets.Section(UkrainianText.Get("ui.sheet.section.equipment", g), () =>
+            {
+                GUILayout.Label(UkrainianText.Get("ui.gear.slot.weapon", g) + ": " + EquipLabel(sheet.Equipment.WeaponId, g), AlphaSkin.Body);
+                GUILayout.Label(UkrainianText.Get("ui.gear.slot.armor", g) + ": " + EquipLabel(sheet.Equipment.ArmorId, g), AlphaSkin.Body);
+                GUILayout.Label(UkrainianText.Get("ui.gear.slot.accessory", g) + ": " + EquipLabel(sheet.Equipment.AccessoryId, g), AlphaSkin.Body);
+            });
+
+            // Білд-планувальник протагоніста — чиста секція КАРТКИ (owner:
+            // "the protagonist's build planner ... is a clean section of the
+            // sheet — NO overlapping panels"), не окремий блок під ростером,
+            // як було раніше (план малювався просто під скролвʼю списку).
+            if (sheet.CompanionId == Game.Core.Session.GameSession.ProtagonistId)
+                DrawBuildPlanner(shell, g);
+
+            Widgets.ScrollListEnd();
+            GUILayout.EndVertical();
+        }
+
+        private static string EquipLabel(string itemId, Gender g)
+            => string.IsNullOrEmpty(itemId)
+                ? UkrainianText.Get("ui.sheet.none", g)
+                : (UkrainianText.Has("item." + itemId, g) ? UkrainianText.Get("item." + itemId, g) : itemId);
 
         private void DrawBuildPlanner(GameShell shell, Gender g)
         {
