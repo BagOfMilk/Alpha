@@ -216,6 +216,47 @@ namespace Game.Tests.EditMode
                 "шкідник (кроваво, порожні пости, без патруля, без Облави/Храму) мусить дійти до бунту раніше еталону");
         }
 
+        // ================= передвісник не бреше =================
+
+        /// <summary>
+        /// SETTLEMENT_LAYER §5.1, правило 4: третя ступінь «площі» обіцяє бунт —
+        /// і він мусить прийти. Знайдено 25.09.2026: із кампанійним відкатом
+        /// кризи (30 діб) заряд порогу 9 відновлювався за дві фази, драбина
+        /// звучала знову наутро після бунту, а бунту за нею не було — у
+        /// шкідника друга драбина (доби 24-26) висіла в повітрі. Кожна почута
+        /// третя ступінь, після якої прогін триває ще щонайменше
+        /// <see cref="PromiseWindowDays"/> діб, мусить закінчитись бунтом у
+        /// цьому вікні.
+        /// </summary>
+        private const int PromiseWindowDays = 4;
+
+        [TestCase("reference")]
+        [TestCase("neglect")]
+        public void CrisisLadder_Level3_IsAlwaysFollowedByARiot(string who)
+        {
+            var (log, _) = who == "neglect"
+                ? Run(new NeglectPolicy(), suppressCouncilRoutine: true)
+                : Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+
+            var riots = new List<int>();
+            foreach (var e in log)
+                if (e.Key == "decision.resolved" && e.Args.TryGetValue("incidentId", out var id) && id == "crisis_riot")
+                    riots.Add(e.Day);
+
+            int checkedLadders = 0;
+            foreach (var e in log)
+            {
+                if (e.Key != "forewarn.level3" || !e.Args.TryGetValue("subject", out var s) || s != "crisis") continue;
+                if (e.Day + PromiseWindowDays > Days) continue;
+                checkedLadders++;
+                int day = e.Day;
+                Assert.IsTrue(riots.Exists(r => r > day && r <= day + PromiseWindowDays),
+                    who + ": третя ступінь «площі» на добу " + day + " не завершилась бунтом до доби " +
+                    (day + PromiseWindowDays) + " — передвісник збрехав (бунти: " + string.Join(",", riots) + ")");
+            }
+            Assert.Greater(checkedLadders, 0, who + ": за 30 діб мала прозвучати хоч одна повна драбина «площі»");
+        }
+
         // ================= бите/лог кризи =================
 
         [Test]

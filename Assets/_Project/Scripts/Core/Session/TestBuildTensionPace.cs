@@ -46,6 +46,18 @@ namespace Game.Core.Session
         public const int CrisisGraceDays = 1;
 
         /// <summary>
+        /// Відкат кризи — 5 діб замість 30. Не заради частоти бунтів: заряд
+        /// накопичувача з порогом 9 відновлюється за дві фази, і драбина
+        /// «площі» звучала знову вже наступного ранку після бунту — а з
+        /// кампанійним відкатом 30 діб за нею нічого не йшло, передвісник
+        /// брехав (SETTLEMENT_LAYER §5.1, правило 4). З відкатом 5 діб
+        /// повторна драбина чесно веде до другого бунту, якщо місто не
+        /// заспокоїли (облава, храм, укріплення). Знайдено перевіркою
+        /// 25.09.2026 (подобовий прогін еталонного бота).
+        /// </summary>
+        public const int CrisisCooldownDays = 5;
+
+        /// <summary>
         /// Тестова копія <see cref="TensionBalance"/>: пороги смуг замінені, тик
         /// і дренаж Храму/Укріплень масштабовані тим самим <see cref="TierTickCompressionFactor"/>.
         /// Решта полів (вибори квестів, кров, голод, Облава) — БУКВАЛЬНО ті самі
@@ -94,10 +106,10 @@ namespace Game.Core.Session
             };
         }
 
-        /// <summary>Джерело кризи зі стиснутим порогом — ставки накопичення й Kind/DomainTag/CooldownDays лишаються кампанійними (конструктор <see cref="CrisisPressureSource"/>).</summary>
+        /// <summary>Джерело кризи зі стиснутим порогом і відкатом — ставки накопичення й Kind/DomainTag лишаються кампанійними (конструктор <see cref="CrisisPressureSource"/>).</summary>
         public static CrisisPressureSource BuildCrisisSource()
         {
-            return new CrisisPressureSource(threshold: CrisisThreshold);
+            return new CrisisPressureSource(threshold: CrisisThreshold, cooldownDays: CrisisCooldownDays);
         }
 
         private static double[] Scale(double[] src, double factor)
