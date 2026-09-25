@@ -249,7 +249,7 @@ namespace Game.Gameplay
             var state = Session.State;
 
             bool escapeEligible = state != SessionState.Title && state != SessionState.Creation &&
-                                   state != SessionState.Scene && state != SessionState.Battle;
+                                   state != SessionState.Scene;
 
             // Event-based, не сирий Input.GetKeyDown (фікс-ревью, блокер):
             // OnGUI викликається кілька разів за кадр (Layout, сама подія
@@ -263,7 +263,33 @@ namespace Game.Gameplay
             bool escapePressed = escEvt != null && escEvt.type == EventType.KeyDown && escEvt.keyCode == KeyCode.Escape;
             if (escapeEligible && escapePressed)
             {
-                _escapeOpen = !_escapeOpen;
+                // Бій v2 (docs/COMBAT_V2.md §3, доручення власника 25.09.2026 —
+                // «коли наступив хід опонентів гра тупа зупинилась»): Esc у
+                // бою раніше не робив НІЧОГО (Battle був виключений з
+                // escapeEligible вище) — «Esc» не скасовував озброєну дію і
+                // не відкривав меню паузи, єдиний вихід із зависання був
+                // Alt+F4. Тепер: озброєна дія (Дозор/здібність) → скасувати
+                // її (той самий жест, що ПКМ); інакше — звичайне меню паузи.
+                bool armedCancelled = false;
+                // ResultPending — модалка перемоги/поразки вже сама показує
+                // єдиний вихід («Далі»/AcknowledgeResult): відкривати поверх
+                // неї ще й меню паузи — плутанина, яку модалку закривати
+                // першою (закрити ВЖЕ відкрите меню паузи Esc усе одно може —
+                // гравець ніколи не застрягає без виходу).
+                bool battleResultPending = BattlePresenter != null && BattlePresenter.ResultPending;
+                bool suppressPauseToggle = state == SessionState.Battle && !_escapeOpen && battleResultPending;
+
+                if (state == SessionState.Battle && !_escapeOpen && !battleResultPending)
+                {
+                    var battleInput = BattlePresenter as IBattleInput;
+                    if (battleInput != null && battleInput.Armed != ArmedAction.None)
+                    {
+                        battleInput.CancelArmed();
+                        armedCancelled = true;
+                    }
+                }
+
+                if (!armedCancelled && !suppressPauseToggle) _escapeOpen = !_escapeOpen;
                 escEvt.Use();
             }
 

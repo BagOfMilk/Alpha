@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Game.Core.Characters.Creation;
 using Game.Core.Session.Views;
 using Game.Gameplay.Text;
@@ -44,6 +45,12 @@ namespace Game.Gameplay.UI
                 "status", Content("combat.status.", Arg(a, "status"), female),
                 "damageType", Content("combat.damage_type.", Arg(a, "damageType"), female),
                 "chance", Chance(Arg(a, "chance"), hitRulePercent, female),
+                // Бій v2 (docs/COMBAT_V2.md §7.3): причина атаки — ціна в ОД і
+                // напрямлене укриття цілі — суфіксом до рядка attack.*.
+                // Порожній рядок, доки Core не пише ці args (§AddCombatV2HudKeys.
+                // combat.log.suffix.*) — жодного сліду плейсхолдера в тексті.
+                "ap_suffix", ApSuffix(Arg(a, "ap"), female),
+                "cover_suffix", CoverSuffix(Arg(a, "cover"), female),
             };
             if (a != null)
                 foreach (var kv in a) { pairs.Add(kv.Key); pairs.Add(kv.Value); }
@@ -85,14 +92,42 @@ namespace Game.Gameplay.UI
             var unit = FindUnit(view, unitId);
             bool female = UnitIsFemale(unitId, protagonistGender);
             string key = NameKey(unitId, unit);
-            if (key != null && UkrainianText.Has(key, female)) return UkrainianText.Get(key, female);
+            string resolved;
+            if (key != null && UkrainianText.Has(key, female)) resolved = UkrainianText.Get(key, female);
+            else if (unit != null && !string.IsNullOrEmpty(unit.DisplayNameKey) && UkrainianText.Has(unit.DisplayNameKey, female))
+                resolved = UkrainianText.Get(unit.DisplayNameKey, female);
+            else if (unit != null && !string.IsNullOrEmpty(unit.DisplayNameKey) && string.Equals(unit.Side, "Player", StringComparison.Ordinal))
+                resolved = unit.DisplayNameKey;
+            else
+                return UkrainianText.MissingMarker(key ?? unitId);
 
-            if (unit != null && !string.IsNullOrEmpty(unit.DisplayNameKey))
-            {
-                if (UkrainianText.Has(unit.DisplayNameKey, female)) return UkrainianText.Get(unit.DisplayNameKey, female);
-                if (string.Equals(unit.Side, "Player", StringComparison.Ordinal)) return unit.DisplayNameKey;
-            }
-            return UkrainianText.MissingMarker(key ?? unitId);
+            return WithOrdinal(resolved, unit);
+        }
+
+        /// <summary>
+        /// Бій v2 (docs/COMBAT_V2.md §7.1, аудит HUD п.2): два вороги з тим
+        /// самим DisplayNameKey («Розвідник орди» двічі) нерозрізнювані в
+        /// журналі й черзі ходу — <c>BattleUnitView.Ordinal</c> (0 — ім'я
+        /// унікальне в бою; 1, 2, … — порядковий серед юнітів з тим самим
+        /// іменем) додає римський номер, той самий принцип, що вже показує
+        /// підпис на арені (<see cref="IBattleHudData.ResolveDisplayName"/>).
+        /// </summary>
+        private static string WithOrdinal(string name, BattleUnitView unit)
+        {
+            if (unit == null || unit.Ordinal <= 0) return name;
+            return name + " " + RomanNumeral(unit.Ordinal);
+        }
+
+        /// <summary>Римська цифра 1..3999 — досить для будь-якої кількості дублікатів одного ворога в одному бою.</summary>
+        public static string RomanNumeral(int n)
+        {
+            if (n <= 0) return n.ToString(CultureInfo.InvariantCulture);
+            var values = new[] { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
+            var symbols = new[] { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < values.Length && n > 0; i++)
+                while (n >= values[i]) { sb.Append(symbols[i]); n -= values[i]; }
+            return sb.ToString();
         }
 
         /// <summary>Рід юніта бою: протагоніст — рід, обраний гравцем, решта — за фіксованим кастом (<see cref="ScreenText.SubjectGender"/>).</summary>
@@ -147,16 +182,44 @@ namespace Game.Gameplay.UI
             if (entry == null || string.IsNullOrEmpty(entry.Key)) return null;
             var a = entry.Args;
             var kind = KindOf(entry);
+            bool female = false;
             switch (kind)
             {
                 case BattleLogKind.Miss:
                     return new BattleFloatingSpec { UnitId = Arg(a, "targetId"), Text = UkrainianText.Get("ui.battle.float.miss", false), Kind = kind };
                 case BattleLogKind.Graze:
                     return new BattleFloatingSpec { UnitId = Arg(a, "targetId"), Text = UkrainianText.Get("ui.battle.float.graze", false), Kind = kind };
+                case BattleLogKind.Hit:
+                    return new BattleFloatingSpec { UnitId = Arg(a, "targetId"), Text = UkrainianText.Get("ui.battle.float.hit", false), Kind = kind };
                 case BattleLogKind.Crit:
                     return new BattleFloatingSpec { UnitId = Arg(a, "targetId"), Text = UkrainianText.Get("ui.battle.float.crit", false), Kind = kind, Big = true };
                 case BattleLogKind.Damage:
                     return new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Format("ui.battle.float.damage", false, "amount", Arg(a, "damage")), Kind = kind };
+                case BattleLogKind.Heal:
+                    return new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Format("ui.battle.float.heal", false, "amount", Arg(a, "amount")), Kind = kind };
+                case BattleLogKind.Status:
+                    // Лише накладення нового стану — «спадає»/«знято» без напису
+                    // (докучливо мигтить над юнітом щоразу, коли DoT просто цокає).
+                    if (entry.Key != "combat.log.status.applied") return null;
+                    return new BattleFloatingSpec
+                    {
+                        UnitId = Arg(a, "unitId"),
+                        Text = UkrainianText.Format("ui.battle.float.status", female, "status", Content("combat.status.", Arg(a, "status"), female)),
+                        Kind = kind
+                    };
+                case BattleLogKind.Ability:
+                    return new BattleFloatingSpec
+                    {
+                        UnitId = Arg(a, "unitId"),
+                        Text = UkrainianText.Format("ui.battle.float.ability", female, "ability", Content(null, Arg(a, "abilityId"), female)),
+                        Kind = kind
+                    };
+                case BattleLogKind.Overwatch:
+                    // «Дозор!» лише коли юніт ЗАЙМАЄ дозор або СТРІЛЯЄ з нього —
+                    // зняття/втрата дозору (expired/lost.*) вже мають свій рядок
+                    // журналу, другий спливаючий напис на те саме був би шумом.
+                    if (entry.Key != "combat.log.overwatch.set" && entry.Key != "combat.log.overwatch.fired") return null;
+                    return new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Get("ui.battle.float.overwatch", false), Kind = kind };
                 case BattleLogKind.Downed:
                     return entry.Key == "combat.log.downed"
                         ? new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Get("ui.battle.float.downed", false), Kind = kind, Big = true }
@@ -206,6 +269,22 @@ namespace Game.Gameplay.UI
             if (string.IsNullOrEmpty(raw)) return string.Empty;
             return UkrainianText.Format(hitRulePercent ? "combat.log.chance.percent" : "combat.log.chance.threshold",
                 female, "value", raw);
+        }
+
+        /// <summary>Бій v2 (§7.3): " · ціна N ОД" поруч із рядком атаки — порожньо, доки args["ap"] відсутній.</summary>
+        private static string ApSuffix(string rawAp, bool female)
+        {
+            if (string.IsNullOrEmpty(rawAp)) return string.Empty;
+            return UkrainianText.Format("combat.log.suffix.ap", female, "ap", rawAp);
+        }
+
+        /// <summary>Бій v2 (§7.3): ", укриття цілі: половинне/повне" — порожньо, доки args["cover"] відсутній або ціль без укриття ("None").</summary>
+        private static string CoverSuffix(string rawCover, bool female)
+        {
+            if (string.IsNullOrEmpty(rawCover) || string.Equals(rawCover, "None", StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+            string label = UkrainianText.Get("combat.cover.label." + rawCover.ToLowerInvariant(), female);
+            return UkrainianText.Format("combat.log.suffix.cover", female, "cover", label);
         }
 
         private static BattleUnitView FindUnit(BattleView view, string unitId)

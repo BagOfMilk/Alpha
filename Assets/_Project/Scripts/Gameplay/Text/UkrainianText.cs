@@ -118,6 +118,30 @@ namespace Game.Gameplay.Text
         public static string Format(string key, bool isFemale, params string[] args) =>
             Format(key, isFemale ? Gender.Female : Gender.Male, args);
 
+        /// <summary>
+        /// Бій v2 (docs/COMBAT_V2.md, аудит HUD: «х.» непослідовне поруч із
+        /// виписаними повністю «Здоров'я»/«Очки дій»): українське відмінювання
+        /// лічильника ходів — «ще 1 хід» / «ще 2 ходи» / «ще 5 ходів» (і так
+        /// само 11–14, за винятковим правилом). Використовується для відкату
+        /// здібності (ключ <c>ui.battle.ability.cooldown</c>) і вікна порятунку
+        /// зваленого — обидва місця раніше показували голе число з «х.».
+        /// </summary>
+        public static string DeclineTurns(int n)
+        {
+            return "ще " + n.ToString(System.Globalization.CultureInfo.InvariantCulture) + " " + TurnNoun(n);
+        }
+
+        private static string TurnNoun(int n)
+        {
+            int abs = Math.Abs(n);
+            int rem100 = abs % 100;
+            int rem10 = abs % 10;
+            if (rem100 >= 11 && rem100 <= 14) return "ходів";
+            if (rem10 == 1) return "хід";
+            if (rem10 >= 2 && rem10 <= 4) return "ходи";
+            return "ходів";
+        }
+
         private static string ResolveVariant(string key, Gender gender)
         {
             string variant = key + (gender == Gender.Female ? ".f" : ".m");
@@ -231,6 +255,9 @@ namespace Game.Gameplay.Text
 
             // ==== Дебаг 25.09.2026: видимі відмови й збереження — див. блок унизу файлу. ====
             AddDebugPassKeys(t);
+
+            // ==== Бій v2 (docs/COMBAT_V2.md): новий HUD, фолбек, журнал — див. блок унизу файлу. ====
+            AddCombatV2HudKeys(t);
 
             return t;
         }
@@ -753,8 +780,12 @@ namespace Game.Gameplay.Text
             AddKey(t, "enemy.burunda", "Бурунда-бегадир");
             // enemy.horde_skirmisher / .horde_raider — уже в §7.21 (буквально зі спеки).
 
-            AddKey(t, "weapon.horde_bow", "Лук орди");
-            AddKey(t, "weapon.horde_spear", "Спис орди");
+            // Дебаг «Бій v2» (HUD, аудит п.13): цю зброю носять і СВОЇ бійці
+            // (трофей/спільний пул) — назва «...орди» на власному персонажі
+            // читалась як помилка присвоєння сторони. Нейтральна назва без
+            // прив'язки до фракції власника.
+            AddKey(t, "weapon.horde_bow", "Лук");
+            AddKey(t, "weapon.horde_spear", "Спис");
             AddKey(t, "weapon.boyar_saber", "Шабля боярина");
             AddKey(t, "weapon.burunda_mace", "Булава Бурунди");
 
@@ -1914,8 +1945,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.action.rejected.oncooldown", "Ще на відкаті.");
 
             // Причина на сірій кнопці здібності (§BattleHudScreen.DrawAbilities).
-            AddKey(t, "ui.battle.ability.cooldown", "відкат: {turns} х.");
-            AddKey(t, "ui.battle.ability.not_enough_ap", "бракує AP");
+            // Дебаг «Бій v2» (аудит п.«х.» непослідовне): {turns} тепер
+            // приходить уже відмінованим текстом (UkrainianText.DeclineTurns —
+            // «ще 1 хід» / «ще 2 ходи» / «ще 5 ходів»), а не голим числом з
+            // абревіатурою — той самий рівень мови, що виписані повністю
+            // «Здоров'я»/«Очки дій» поруч.
+            AddKey(t, "ui.battle.ability.cooldown", "відкат: {turns}");
+            AddKey(t, "ui.battle.ability.not_enough_ap", "бракує ОД");
 
             // Прев'ю шансу під курсором (R1: ThresholdRule показує поріг, PercentRule — відсоток).
             AddKey(t, "ui.battle.hitchance.percent", "Шанс влучення: {value}%");
@@ -2001,10 +2037,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "combat.log.move", "{unit} переміщується (−{ap} ОД).");
             AddKey(t, "combat.log.overwatch.set", "{unit} бере сектор під приціл: резерв {ap} ОД до свого наступного ходу.");
             AddKey(t, "combat.log.strike", "{unit} вкладає все в один удар — влучання гарантоване!");
-            AddKey(t, "combat.log.attack.miss", "{unit} → {target}: промах ({chance}).");
-            AddKey(t, "combat.log.attack.graze", "{unit} → {target}: зачіпає, {damage} шкоди ({chance}).");
-            AddKey(t, "combat.log.attack.hit", "{unit} → {target}: влучання, {damage} шкоди ({chance}).");
-            AddKey(t, "combat.log.attack.crit", "{unit} → {target}: критичне влучання, {damage} шкоди ({chance}).");
+            // {cover_suffix}/{ap_suffix} — Бій v2 (докладно в AddCombatV2HudKeys,
+            // combat.log.suffix.*): порожні, доки Core не пише args["cover"]/
+            // args["ap"] для рядка атаки, самі проявляються, щойно з'являться.
+            AddKey(t, "combat.log.attack.miss", "{unit} → {target}: промах ({chance}){cover_suffix}{ap_suffix}.");
+            AddKey(t, "combat.log.attack.graze", "{unit} → {target}: зачіпає, {damage} шкоди ({chance}){cover_suffix}{ap_suffix}.");
+            AddKey(t, "combat.log.attack.hit", "{unit} → {target}: влучання, {damage} шкоди ({chance}){cover_suffix}{ap_suffix}.");
+            AddKey(t, "combat.log.attack.crit", "{unit} → {target}: критичне влучання, {damage} шкоди ({chance}){cover_suffix}{ap_suffix}.");
             AddKey(t, "combat.log.chance.percent", "шанс {value}%");
             AddKey(t, "combat.log.chance.threshold", "поріг {value}");
             AddKey(t, "combat.log.stabilize", "{unit} надає допомогу: {target} поза небезпекою й виходить із бою.");
@@ -2318,6 +2357,87 @@ namespace Game.Gameplay.Text
             // Родовий для тега тестової кризи (ForcedCrisisSource): без нього
             // «навколо {domain}» отримувало сире «в'їзд» замість «в'їзду».
             AddKey(t, "domain.в'їзд", "в'їзду");
+        }
+
+        // ==================================================================
+        // Бій v2 (docs/COMBAT_V2.md, доручення власника 25.09.2026 —
+        // «Боевка полный пиздец»): нові ключі частини «HUD» — власний блок
+        // у кінці таблиці, щоб мердж інших частин лишався тривіальним.
+        // ==================================================================
+        private static void AddCombatV2HudKeys(Dictionary<string, string> t)
+        {
+            // ---- §7.2 розклад шансу: підпис доданка за ключем ChanceTermView.Key ----
+            AddKey(t, "ui.battle.term.accuracy", "Точність");
+            AddKey(t, "ui.battle.term.ability", "Здібність");
+            AddKey(t, "ui.battle.term.defense", "Захист цілі");
+            AddKey(t, "ui.battle.term.knocked_down", "Ціль збита з ніг");
+            AddKey(t, "ui.battle.term.marked", "Ціль позначена");
+            AddKey(t, "ui.battle.term.cover_half", "Укриття: половинне");
+            AddKey(t, "ui.battle.term.cover_full", "Укриття: повне");
+            AddKey(t, "ui.battle.term.distance", "Дистанція");
+            AddKey(t, "ui.battle.term.suppressed", "Придушення");
+            AddKey(t, "ui.battle.term.clamp", "Межа правила");
+
+            // ---- укриття цілі описом (прев'ю атаки/тайла) ----
+            AddKey(t, "ui.battle.cover.none", "Укриття немає");
+            AddKey(t, "ui.battle.cover.half", "Укриття: половинне");
+            AddKey(t, "ui.battle.cover.full", "Укриття: повне");
+
+            // ---- ціна дії, показана ДО кліку (аудит HUD пп.4-5, REFS «ціна дії видно в точці рішення») ----
+            AddKey(t, "ui.battle.ap_cost", "Ціна: {cost} ОД");
+            // Картка юніта (§3): «Спис · удар 4 ОД · дальність 1» — буквально за прикладом специфікації.
+            AddKey(t, "ui.battle.weapon.detail", "{name} · удар {cost} ОД · дальність {range}");
+            AddKey(t, "ui.battle.move.cost", "Рух: −{cost} ОД");
+            AddKey(t, "ui.battle.move.unreachable", "Недосяжно");
+            AddKey(t, "ui.battle.move.threatened", "Під ворожим дозором!");
+
+            // ---- підпис кнопки здібності: гаряча клавіша + назва + ціна (§3) ----
+            AddKey(t, "ui.battle.ability.button", "[{hotkey}] {name} · {cost} ОД");
+            AddKey(t, "ui.battle.ability.button.armed", "» [{hotkey}] {name} · {cost} ОД");
+            // Фолбек-екран (BattleScreen) без гарячих клавіш — той самий підпис без "[{hotkey}]".
+            AddKey(t, "ui.battle.ability.button.plain", "{name} · {cost} ОД");
+
+            // ---- гарячі клавіші дій панелі (§3: «Дозор [O]», «Кінець ходу [Пробіл]», «Прискорити [Пробіл]») ----
+            AddKey(t, "ui.battle.hotkey.overwatch", "Дозор [O]");
+            AddKey(t, "ui.battle.hotkey.endturn", "Кінець ходу [Пробіл]");
+            AddKey(t, "ui.battle.hotkey.fastforward", "Прискорити [Пробіл]");
+            AddKey(t, "ui.battle.stabilize", "Стабілізувати");
+
+            // ---- автобій з підтвердженням (аудит HUD, inventory п.9) ----
+            AddKey(t, "ui.battle.autoresolve.confirm.title", "Автобій");
+            AddKey(t, "ui.battle.autoresolve.confirm.body", "Віддати решту бою ШІ?");
+
+            // ---- спливаючий напис «Влучання» (§2 таблиця кольорів; miss/graze/crit уже мали свій) ----
+            AddKey(t, "ui.battle.float.hit", "Влучання");
+
+            // ---- впалий: вікно на порятунок повністю виписаним текстом (не «х.») ----
+            AddKey(t, "ui.battle.downed.window", "Вікно на порятунок: {turns}");
+            // Оверлей над юнітом на арені — компактний, той самий сенс, що
+            // «Вікно на порятунок», але коротко (§3: «Впав · N х.» — тут
+            // навмисно скорочено, це підпис ПІД фігуркою, не панель дій).
+            AddKey(t, "ui.battle.overlay.downed", "Впав · {turns} х.");
+            AddKey(t, "ui.battle.overlay.overwatch", "Дозор");
+
+            // ---- відмова "InvalidAction" (CombatActionResult) — загальна причина без власного тексту раніше ----
+            AddKey(t, "ui.battle.action.rejected.invalidaction", "Дію неможливо виконати зараз.");
+
+            // ---- прив'язка суфіксів причини до рядка атаки в журналі (§7.3: args["cover"]/args["ap"]) ----
+            // Порожні, доки Core не пише ці args для атак (CombatState.
+            // ExecuteAttackRoll ще не передає "cover"/"ap" — контракт §7.3
+            // це обіцяє, реалізація — частина «ядро»): BattleLogText.Line
+            // підставляє тут порожній рядок, і текст лишається без сліду
+            // плейсхолдера. Щойно аргументи з'являться — суфікс сам візьметься.
+            AddKey(t, "combat.log.suffix.ap", " · ціна {ap} ОД");
+            AddKey(t, "combat.log.suffix.cover", ", укриття цілі: {cover}");
+            AddKey(t, "combat.cover.label.none", "немає");
+            AddKey(t, "combat.cover.label.half", "половинне");
+            AddKey(t, "combat.cover.label.full", "повне");
+
+            // ---- описи здібностей (аудит HUD п.10: жодного опису ефекту не було ні в даних, ні на екрані) ----
+            AddKey(t, "ability.lunge.desc", "Ривок у ближній контакт із ціллю поза дистанцією удару.");
+            AddKey(t, "ability.set_trap.desc", "Ставить приховану пастку на клітинці — шкода й стан тому, хто в неї ступить.");
+            AddKey(t, "ability.move_order.desc", "Командний ривок: переставляє союзника на кілька клітин.");
+            AddKey(t, "ability.volley.desc", "Черга: два постріли поспіль поточною зброєю з невеликим штрафом до точності кожного.");
         }
     }
 }
