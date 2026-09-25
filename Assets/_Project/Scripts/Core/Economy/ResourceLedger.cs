@@ -4,17 +4,17 @@ using System.Collections.Generic;
 namespace Game.Core.Economy
 {
     /// <summary>
-    /// Кошелёк базы: текущее количество каждого ресурса. Понимает попытку
-    /// списания (CanAfford / TrySpend), чтобы экономика не уходила в минус.
+    /// Гаманець бази: поточна кількість кожного ресурсу. Розуміє спробу
+    /// списання (CanAfford / TrySpend), щоб економіка не йшла в мінус.
     /// </summary>
     [Serializable]
     public sealed class ResourceLedger
     {
         private readonly Dictionary<ResourceType, int> _amounts = new Dictionary<ResourceType, int>();
 
-        // Событие на изменение баланса убрано: подписчиков не было ни одного, а
-        // UI, ради которого оно заводилось, придёт вместе с UI Toolkit (Э18).
-        // Опрос через Get/Snapshot покрывает все нынешние нужды.
+        // Подію на зміну балансу прибрано: підписників не було жодного, а
+        // UI, заради якого вона заводилась, прийде разом з UI Toolkit (Е18).
+        // Опитування через Get/Snapshot покриває всі нинішні потреби.
 
         public int Get(ResourceType resource)
         {

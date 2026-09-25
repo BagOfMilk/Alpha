@@ -5,7 +5,7 @@ using Game.Core.Session.Views;
 
 namespace Game.Core.Session.Bots
 {
-    /// <summary>Завжди кроваво, атакує (§4.10): Bloody на кожному розгалуженні; «Автобій» за замовчуванням для темпу.</summary>
+    /// <summary>Завжди криваво, атакує (§4.10): Bloody на кожному розгалуженні; «Автобій» за замовчуванням для темпу.</summary>
     public sealed class BloodyPolicy : IBotPolicy
     {
         public string Name => "Bloody";
@@ -16,7 +16,7 @@ namespace Game.Core.Session.Bots
         {
             if (offer?.Options == null || offer.Options.Count == 0) return 0;
             if (offer.QuestId == BotSupport.DungeonEventQuestId)
-                return BotSupport.ClampIndex(0, offer.Options.Count); // "забрати все зерно" — жадібний/кровавий норов
+                return BotSupport.ClampIndex(0, offer.Options.Count); // "забрати все зерно" — жадібний/кривавий норов
             return 0;
         }
 

@@ -7,14 +7,14 @@ using UnityEngine.SceneManagement;
 namespace Game.Gameplay.EditorTools
 {
     /// <summary>
-    /// Собирает сцену «Хроника» сам, чтобы владельцу проекта не приходилось
-    /// вручную создавать объект и вешать на него компонент.
+    /// Сама збирає сцену «Хроніка», щоб власнику проекту не доводилось
+    /// вручну створювати об'єкт і вішати на нього компонент.
     ///
-    /// Почему сцена не лежит в репозитории готовой: сцена Unity ссылается на
-    /// скрипт по GUID из его .meta-файла, а .meta генерируются локально и в
-    /// репозиторий не закоммичены. Готовая сцена из репозитория ссылалась бы
-    /// в пустоту («Missing (Mono Script)»). Скрипт этой проблемы не имеет:
-    /// Unity связывает компонент по типу C#, GUID подставляются сами.
+    /// Чому сцена не лежить у репозиторії готовою: сцена Unity посилається на
+    /// скрипт за GUID із його .meta-файлу, а .meta генеруються локально і в
+    /// репозиторій не закомічені. Готова сцена з репозиторію посилалась би
+    /// у порожнечу («Missing (Mono Script)»). Скрипт цієї проблеми не має:
+    /// Unity зв'язує компонент за типом C#, GUID підставляються самі.
     /// </summary>
     [InitializeOnLoad]
     public static class ChronicleSceneBuilder
@@ -23,12 +23,12 @@ namespace Game.Gameplay.EditorTools
         private const string ScenePath = SceneFolder + "/Chronicle.unity";
         private const string BalanceFolder = "Assets/_Project/Balance";
 
-        /// <summary>Чтобы удалённую вручную сцену не воскрешать против воли владельца.</summary>
+        /// <summary>Щоб вручну видалену сцену не воскрешати проти волі власника.</summary>
         private const string AutoCreatedKey = "Alpha.ChronicleScene.AutoCreated";
 
         static ChronicleSceneBuilder()
         {
-            // delayCall: во время InitializeOnLoad AssetDatabase ещё не готова.
+            // delayCall: під час InitializeOnLoad AssetDatabase ще не готова.
             EditorApplication.delayCall += AutoCreateOnce;
         }
 
@@ -49,15 +49,15 @@ namespace Game.Gameplay.EditorTools
 
         private static void Build()
         {
-            // Решаем ДО создания аддитивной сцены: после неё активная сцена
-            // может смениться, и проверка перестанет означать то, что нужно.
+            // Вирішуємо ДО створення адитивної сцени: після неї активна сцена
+            // може змінитися, і перевірка перестане означати те, що потрібно.
             bool nothingToLose = CurrentSceneIsIdle();
 
             var config = EnsureBalanceAssets();
             EnsureFolder("Assets", "Scenes");
 
-            // Аддитивно, а не Single: NewSceneMode.Single закрыл бы сцену,
-            // открытую у владельца, вместе с несохранёнными правками.
+            // Адитивно, а не Single: NewSceneMode.Single закрив би сцену,
+            // відкриту у власника, разом із незбереженими правками.
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
 
             AddPreset(scene, config, "1. Тихий хутор", "Тихий хутор",
@@ -88,9 +88,9 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Три пресета с одними и теми же правилами, но разной судьбой —
-        /// наглядно, что исход определяют решения игрока, а не бросок кубика.
-        /// Активен только первый: иначе три хроники смешаются в консоли.
+        /// Три пресети з однаковими правилами, але різною долею —
+        /// наочно, що результат визначають рішення гравця, а не кидок кубика.
+        /// Активний лише перший: інакше три хроніки змішаються в консолі.
         /// </summary>
         private static void AddPreset(Scene scene, BalanceConfigAsset config,
             string objectName, string presetName,
@@ -120,9 +120,9 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Ассеты баланса создаём сразу: владелец правит числа в инспекторе,
-        /// а не лезет за ними в код. Значения по умолчанию совпадают с кодом,
-        /// поэтому поведение не меняется — меняется доступность.
+        /// Ассети балансу створюємо одразу: власник править числа в інспекторі,
+        /// а не лізе за ними в код. Значення за замовчуванням збігаються з кодом,
+        /// тому поведінка не змінюється — змінюється доступність.
         /// </summary>
         private static BalanceConfigAsset EnsureBalanceAssets()
         {
@@ -166,8 +166,8 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Можно ли открыть новую сцену, ничего не потеряв: активная сцена
-        /// без файла, без правок и без объектов.
+        /// Чи можна відкрити нову сцену, нічого не втративши: активна сцена
+        /// без файлу, без правок і без об'єктів.
         /// </summary>
         private static bool CurrentSceneIsIdle()
         {

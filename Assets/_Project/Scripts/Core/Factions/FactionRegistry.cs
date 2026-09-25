@@ -6,8 +6,8 @@ using System.Text;
 namespace Game.Core.Factions
 {
     /// <summary>
-    /// Реестр отношений фракций (R5) — часть слепка кампании (IStateBlob), тем
-    /// же приёмом, каким CityWorks уже отдаёт себя в CityState.
+    /// Реєстр стосунків фракцій (R5) — частина зліпка кампанії (IStateBlob), тим
+    /// самим прийомом, яким CityWorks уже віддає себе в CityState.
     /// </summary>
     public sealed class FactionRegistry : Loop.IStateBlob
     {
@@ -39,13 +39,13 @@ namespace Game.Core.Factions
         public FactionStandingBand BandOf(string factionId) => Get(factionId)?.Band ?? FactionStandingBand.Neutral;
 
         /// <summary>
-        /// Единственная точка, которой позволено двигать отношение фракции извне
-        /// (Decree/Diplomacy/квесты/угрозы — все проходят здесь, а не лезут в
-        /// FactionStanding.Apply напрямую, он internal).
+        /// Єдина точка, якій дозволено рухати ставлення фракції ззовні
+        /// (Decree/Diplomacy/квести/погрози — усі проходять тут, а не лізуть у
+        /// FactionStanding.Apply напряму, він internal).
         /// </summary>
         public void ApplySocialConsequence(string factionId, int delta) => Get(factionId)?.Apply(delta, "social");
 
-        // ---- слепок: f:<id>:<value>,... ----
+        // ---- зліпок: f:<id>:<value>,... ----
         public string CaptureState()
         {
             var sb = new StringBuilder();

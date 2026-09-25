@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace Game.Core.Stats
 {
     /// <summary>
-    /// Посчитанные статы персонажа на момент времени: база плюс все модификаторы,
-    /// свёрнутые один раз. Всё, что читает числа персонажа — формулы базы, бой,
-    /// проверки — работает со снапшотом, а не с сырыми полями.
+    /// Пораховані стати персонажа на момент часу: база плюс усі модифікатори,
+    /// згорнуті один раз. Усе, що читає числа персонажа — формули бази, бій,
+    /// перевірки — працює зі знімком, а не з сирими полями.
     /// </summary>
     public sealed class StatSnapshot
     {
@@ -20,10 +20,10 @@ namespace Game.Core.Stats
             _sources = sources ?? new Dictionary<StatKey, List<StatModifier>>();
         }
 
-        /// <summary>Неизвестный ключ — ноль, а не исключение: контент data-driven.</summary>
+        /// <summary>Невідомий ключ — нуль, а не виняток: контент data-driven.</summary>
         public double Get(StatKey key) => _values.TryGetValue(key, out var v) ? v : 0.0;
 
-        /// <summary>Целое значение. Округление к чётному — как везде в проекте.</summary>
+        /// <summary>Ціле значення. Округлення до парного — як усюди в проєкті.</summary>
         public int GetInt(StatKey key) => (int)Math.Round(Get(key), MidpointRounding.ToEven);
 
         public int Attribute(AttributeType a) => GetInt(StatKeys.Of(a));
@@ -32,7 +32,7 @@ namespace Game.Core.Stats
 
         private static readonly StatModifier[] NoModifiers = new StatModifier[0];
 
-        /// <summary>Из чего сложилось значение — для тултипа и для аудита двойного счёта.</summary>
+        /// <summary>З чого склалося значення — для тултіпа і для аудиту подвійного рахунку.</summary>
         public IReadOnlyList<StatModifier> SourcesOf(StatKey key) =>
             _sources.TryGetValue(key, out var list) ? (IReadOnlyList<StatModifier>)list : NoModifiers;
     }

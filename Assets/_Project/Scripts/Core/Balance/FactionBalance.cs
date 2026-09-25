@@ -4,56 +4,56 @@ using Game.Core.Factions;
 namespace Game.Core.Balance
 {
     /// <summary>
-    /// Числа фракций и новых указов рады (R5; AUDIT П8/G12/G20). ПЛЕЙСХОЛДЕР —
-    /// как и остальные секции городского слоя (Поправка №6): важно, что
-    /// механика видна в тестах, точные числа ставит харнес.
+    /// Числа фракцій і нових указів ради (R5; AUDIT П8/G12/G20). ПЛЕЙСХОЛДЕР —
+    /// як і решта секцій міського шару (Поправка №6): важливо, щоб
+    /// механіка була видна в тестах, точні числа ставить харнес.
     /// </summary>
     [Serializable]
     public sealed class FactionBalance
     {
-        /// <summary>Границы полос: ниже первой — Ворожість, выше последней — Союз.</summary>
+        /// <summary>Межі полос: нижче першої — Ворожість, вище останньої — Союз.</summary>
         public int[] BandThresholds = { 20, 40, 60, 80 };
 
-        /// <summary>Стартовое отношение всех фракций — середина шкалы (Нейтральність).</summary>
+        /// <summary>Стартове ставлення всіх фракцій — середина шкали (Нейтральність).</summary>
         public int StartingStanding = 50;
 
-        // ---- Облава (OrderRaid): силовой метод трогает и фракции, не только
-        //      Напругу — бояри довольны порядком, громаде не нравится нагайка
+        // ---- Облава (OrderRaid): силовий метод чіпає і фракції, не тільки
+        //      Напругу — бояри задоволені порядком, громаді не подобається нагайка
         //      на своїх (ревью-фікс, тест Raid_LowersTension_PaysCosts_ShiftsFactions) ----
         public int RaidFactionFavoredDelta = 6;
         public int RaidFactionCostDelta = 8;
 
-        // ---- Указ (OrderDecree): двигает Уклад и Напругу (AUDIT П8+G20) ----
+        // ---- Указ (OrderDecree): рухає Уклад і Напругу (AUDIT П8+G20) ----
         public int DecreeGoldCost = 20;
         public int DecreeCooldownDays = 8;
-        /// <summary>На сколько шагов двигает DayProcessor.OrderLevel (индекс 1..4).</summary>
+        /// <summary>На скільки кроків рухає DayProcessor.OrderLevel (індекс 1..4).</summary>
         public int DecreeOrderLevelStep = 1;
-        /// <summary>Понижающая заявка в Напругу драйвером CouncilEdict (в QueueExternal идёт со знаком минус).</summary>
+        /// <summary>Знижувальна заявка в Напругу драйвером CouncilEdict (у QueueExternal іде зі знаком мінус).</summary>
         public int DecreeTensionDelta = 6;
         public int DecreeFactionDelta = 8;
 
-        // ---- Дипломатия ----
+        // ---- Дипломатія ----
         public int DiplomacyGoldCost = 25;
         public int DiplomacyCooldownDays = 6;
         public int DiplomacyFactionDelta = 10;
 
-        // ---- Инвестиция: платит золото сутками, потом останавливается ----
+        // ---- Інвестиція: платить золото добами, потім зупиняється ----
         public int InvestmentGoldCost = 40;
         public int InvestmentGoldPerDay = 8;
         public int InvestmentDays = 10;
 
-        // ---- Подготовка к угрозе: маркер для Готовности (B6 забирает позже) ----
+        // ---- Підготовка до загрози: маркер для Готовності (B6 забирає пізніше) ----
         public int PrepareThreatGoldCost = 15;
         public int PrepareThreatCooldownDays = 6;
 
-        // ---- Снаряжение экспедиции: разовый бонус следующей вылазке ----
+        // ---- Спорядження експедиції: разовий бонус наступній вилазці ----
         public int OutfitExpeditionGoldCost = 25;
         public int OutfitExpeditionBonusValue = 10;
 
         /// <summary>
-        /// Порог показанной проверки Торговли, которой решает скидка на заказы
-        /// (AUDIT G12): чем ниже порог, тем чаще занятый рынок даёт хотя бы
-        /// Базовую полосу и хотя бы минимальную скидку.
+        /// Поріг показаної перевірки Торгівлі, якою вирішується знижка на замовлення
+        /// (AUDIT G12): чим нижче поріг, тим частіше зайнятий ринок дає хоча б
+        /// Базову полосу і хоча б мінімальну знижку.
         /// </summary>
         public int TradeDiscountThreshold = 4;
 

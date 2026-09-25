@@ -3,36 +3,36 @@ using Game.Core.Randomness;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Исход броска атаки. Крит — своя полоса исхода, а не отдельный флаг поверх
-    /// Hit (R1): и ThresholdRule (по марже), и PercentRule (по дополнительному
-    /// броску) решают эту полосу сами, одним и тем же способом, которым решают
+    /// Результат кидка атаки. Крит — своя смуга результату, а не окремий прапорець
+    /// поверх Hit (R1): і ThresholdRule (за маржею), і PercentRule (за додатковим
+    /// кидком) вирішують цю смугу самі, тим самим способом, яким вирішують
     /// Miss/Graze/Hit.
     /// </summary>
     public enum AttackOutcome
     {
         Miss = 0,
-        Graze = 1,   // частичное попадание (доля урона, без крита и проков оружия)
+        Graze = 1,   // часткове влучання (частка урону, без криту й проків зброї)
         Hit = 2,
         Crit = 3
     }
 
     /// <summary>
-    /// R1: единственный порт «попал/не попал» в Core. Ровно две реализации:
-    /// ThresholdRule (полностью детерминированная — margin по показанному
-    /// порогу, IDiceRoller не трогает вовсе) и PercentRule (показанный %,
-    /// требует IDiceRoller). Обе живут в Core (сами правила — не случайность),
-    /// а бросает кубик только внедрённый IDiceRoller (интерфейс — тоже в Core,
-    /// реализация — в Game.Gameplay). CombatState никогда не обращается к
-    /// случайности напрямую — только через этот порт.
+    /// R1: єдиний порт «влучив/не влучив» у Core. Рівно дві реалізації:
+    /// ThresholdRule (повністю детермінована — margin за показаним
+    /// порогом, IDiceRoller не чіпає зовсім) і PercentRule (показаний %,
+    /// потребує IDiceRoller). Обидві живуть у Core (самі правила — не випадковість),
+    /// а кидає кубик лише впроваджений IDiceRoller (інтерфейс — теж у Core,
+    /// реалізація — у Game.Gameplay). CombatState ніколи не звертається до
+    /// випадковості напряму — тільки через цей порт.
     /// </summary>
     public interface IHitRule
     {
         /// <summary>
-        /// shownChanceOrThreshold — то самое число, которое видит игрок:
-        /// для PercentRule это % (0..100), для ThresholdRule — порог, который
-        /// margin проверяет относительно CombatBalance.ThresholdBaseline.
-        /// Оба числа считает один и тот же HitChanceCalculator.Compute —
-        /// разница только в том, как эта реализация его читает.
+        /// shownChanceOrThreshold — те саме число, яке бачить гравець:
+        /// для PercentRule це % (0..100), для ThresholdRule — поріг, який
+        /// margin перевіряє відносно CombatBalance.ThresholdBaseline.
+        /// Обидва числа рахує один і той самий HitChanceCalculator.Compute —
+        /// різниця лише в тому, як ця реалізація його читає.
         /// </summary>
         AttackOutcome Resolve(CombatUnit attacker, CombatUnit target, int shownChanceOrThreshold, IDiceRoller roller);
     }

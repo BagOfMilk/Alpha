@@ -6,11 +6,11 @@ using Game.Core.Characters;
 namespace Game.Core.Companions
 {
     /// <summary>
-    /// Снимок ушедшего в антагонисты (US-9.4, порт B4): id + уровень на момент
-    /// ухода. Гир/оружие сюда сознательно НЕ входят — <c>Companion.Equipment</c>
-    /// заводит пакет B3 в параллельном воркчасті и в этом дереве недоступен;
-    /// расширение записи (снимок гира, `ReturnGearOnKill`) — шов для D1/B3
-    /// после фазы C (см. seamsForD1 отчёта пакета).
+    /// Знімок того, хто пішов в антагоністи (US-9.4, порт B4): id + рівень на момент
+    /// відходу. Гір/зброя сюди свідомо НЕ входять — <c>Companion.Equipment</c>
+    /// заводить пакет B3 у паралельній робочій частині і в цьому дереві недоступний;
+    /// розширення запису (знімок гіра, `ReturnGearOnKill`) — шов для D1/B3
+    /// після фази C (див. seamsForD1 звіту пакета).
     /// </summary>
     public sealed class AntagonistRecord
     {
@@ -25,31 +25,31 @@ namespace Game.Core.Companions
     }
 
     /// <summary>
-    /// Уход напарника в антагонисты (US-9.4, R2/§2 №25): срабатывает при низкой
-    /// лояльности (полоса ≤ Resentful), выдержанной N дней подряд, либо при
-    /// сюжетном флаге «defector_seeded» (Поправка №7 R2/§4.6) плюс та же низкая
-    /// полоса. Переход необратим (<see cref="Companion.MarkAntagonist"/>).
-    /// Протагонист предать не может — решает вызывающий (протагонист не имеет
-    /// собственного флага на Companion в этой модели, см. §4.5).
+    /// Перехід напарника в антагоністи (US-9.4, R2/§2 №25): спрацьовує при низькій
+    /// лояльності (смуга ≤ Resentful), витриманій N днів поспіль, або при
+    /// сюжетному флагу «defector_seeded» (Поправка №7 R2/§4.6) плюс та сама низька
+    /// смуга. Перехід незворотний (<see cref="Companion.MarkAntagonist"/>).
+    /// Протагоніст зрадити не може — вирішує викликач (протагоніст не має
+    /// власного флага на Companion у цій моделі, див. §4.5).
     /// </summary>
     public static class Defection
     {
-        /// <summary>Флаг StoryFlags (A1, §4.6): низкая лояльность плюс сюжетный посев.</summary>
+        /// <summary>Флаг StoryFlags (A1, §4.6): низька лояльність плюс сюжетний посів.</summary>
         public const string DefectorSeededFlag = "defector_seeded";
 
         private static readonly CompanionSocialBalance DefaultSocial = new CompanionSocialBalance();
 
         /// <summary>
-        /// Готов ли напарник к уходу. <paramref name="consecutiveDaysAtOrBelowResentful"/>
-        /// считает <see cref="DefectionWatch"/> (тикается раз в сутки — кто
-        /// зовёт Tick(), решает D1, шов в seamsForD1: в DayStepOrder сегодня нет
-        /// для этого отдельного шага).
+        /// Чи готовий напарник до відходу. <paramref name="consecutiveDaysAtOrBelowResentful"/>
+        /// рахує <see cref="DefectionWatch"/> (тікається раз на добу — хто
+        /// кличе Tick(), вирішує D1, шов у seamsForD1: у DayStepOrder сьогодні немає
+        /// для цього окремого кроку).
         /// </summary>
         public static bool ShouldDefect(Companion c, bool isProtagonist,
             int consecutiveDaysAtOrBelowResentful, bool defectorSeeded, BalanceConfig cfg = null)
         {
             if (c == null || c.IsDead || isProtagonist) return false;
-            if (c.Status == CompanionStatus.Antagonist) return false; // уже ушёл — не дефектит дважды
+            if (c.Status == CompanionStatus.Antagonist) return false; // вже пішов — не дефектить двічі
             if (c.LoyaltyBand > LoyaltyBand.Resentful) return false;
 
             var social = cfg?.CompanionSocial ?? DefaultSocial;
@@ -57,23 +57,23 @@ namespace Game.Core.Companions
             return defectorSeeded;
         }
 
-        /// <summary>Переводит в антагонисты: снимок уровня, снятие с позиции, статус.</summary>
+        /// <summary>Переводить в антагоністи: знімок рівня, зняття з позиції, статус.</summary>
         public static AntagonistRecord Defect(Companion c, BaseState baseState = null)
         {
             if (c == null) return null;
             var record = new AntagonistRecord(c.Id, c.Level);
 
             if (c.IsAssigned) baseState?.Unassign(c.AssignedSlotId);
-            c.MarkAntagonist(); // необратимо (US-9.1)
+            c.MarkAntagonist(); // незворотно (US-9.1)
             return record;
         }
     }
 
     /// <summary>
-    /// Считает подряд идущие сутки на дне лояльности (Broken/Resentful) на
-    /// напарника — вход для порога дефекции (R2/§2 №25 "N діб"). Персистится
-    /// как IStateBlob (шов для D1: подключить фрагментом слепка рядом с
-    /// eco=/sites=/flags=, §4.8 R13 — сейчас не подключено нигде).
+    /// Рахує послідовні доби на дні лояльності (Broken/Resentful) на
+    /// напарника — вхід для порогу дефекції (R2/§2 №25 "N діб"). Персистується
+    /// як IStateBlob (шов для D1: підключити фрагментом зліпка поряд з
+    /// eco=/sites=/flags=, §4.8 R13 — зараз не підключено ніде).
     /// </summary>
     public sealed class DefectionWatch : Game.Core.Loop.IStateBlob
     {
@@ -82,7 +82,7 @@ namespace Game.Core.Companions
         public int DaysAtOrBelowResentful(string companionId)
             => companionId != null && _daysLow.TryGetValue(companionId, out var d) ? d : 0;
 
-        /// <summary>Вызывается раз в сутки конвейера для каждого напарника состава.</summary>
+        /// <summary>Викликається раз на добу конвеєра для кожного напарника складу.</summary>
         public void Tick(Roster roster)
         {
             if (roster == null) return;

@@ -1,16 +1,16 @@
 namespace Game.Core.Base
 {
-    /// <summary>Результат попытки разблокировать закрытый слот.</summary>
+    /// <summary>Результат спроби розблокувати закритий слот.</summary>
     public enum UnlockResult
     {
         Success = 0,
         SlotNotFound = 1,
         AlreadyUnlocked = 2,
-        NoPriceDefined = 3, // цена не проставлена — открыть нечем
+        NoPriceDefined = 3, // ціна не проставлена — відкрити нічим
         CannotAfford = 4
     }
 
-    /// <summary>Результат попытки назначить напарника на слот.</summary>
+    /// <summary>Результат спроби призначити напарника на слот.</summary>
     public enum AssignmentResult
     {
         Success = 0,
@@ -18,6 +18,6 @@ namespace Game.Core.Base
         SlotLocked = 2,
         SlotOccupied = 3,
         CompanionNotFound = 4,
-        CompanionUnavailable = 5 // в вылазке и т.п. — работать на базе не может
+        CompanionUnavailable = 5 // у вилазці тощо — працювати на базі не може
     }
 }

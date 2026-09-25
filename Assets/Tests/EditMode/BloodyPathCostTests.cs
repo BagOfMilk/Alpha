@@ -15,14 +15,14 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Цена кровавого пути.
+    /// Ціна кривавого шляху.
     ///
-    /// Точка решения оживила кровавый путь, но оживила его БЕСПЛАТНЫМ: он давал
-    /// тот же исход теми же навыками и не стоил ничего. Тихий путь по Поправке
-    /// №1 обязан быть медленным и дорогим, а кровавый — быстрым и ОЧЕНЬ тяжёлым;
-    /// на деле выходило наоборот, и первый же игрок сделал бы вывод «игра про
-    /// резню». Здесь эта инверсия закрыта тремя ценами разом: Напряжение по
-    /// собственному драйверу, рана исполнителю, страх общины на несколько суток.
+    /// Точка рішення оживила кривавий шлях, але оживила його БЕЗКОШТОВНИМ: він давав
+    /// той самий підсумок тими самими навичками і не коштував нічого. Тихий шлях за
+    /// Поправкою №1 зобов'язаний бути повільним і дорогим, а кривавий — швидким і
+    /// ДУЖЕ важким; на ділі виходило навпаки, і перший же гравець зробив би висновок
+    /// «гра про різанину». Тут ця інверсія закрита трьома цінами разом: Напруга за
+    /// власним драйвером, рана виконавцю, страх громади на кілька діб.
     /// </summary>
     public class BloodyPathCostTests
     {
@@ -30,19 +30,19 @@ namespace Game.Tests.EditMode
 
         private static IncidentDefinition Theft()
         {
-            // Инцидент с обоими путями: тихий — Убеждение (социальный подход,
-            // по которому и бьёт страх), кровавый — Запугивание.
+            // Інцидент з обома шляхами: тихий — Переконання (соціальний підхід,
+            // по якому й б'є страх), кривавий — Залякування.
             return DefaultIncidents.All().First(i => i.Id == "petty_theft");
         }
 
-        // Навык 6 подобран так, чтобы ОБА пути давали Базовую полосу: тихий
-        // требует 5, кровавый 4. Иначе сравнение цены было бы нечестным —
-        // кровавый путь выигрывал бы полосой, а не ценой.
+        // Навичка 6 підібрана так, щоб ОБИДВА шляхи давали Базову полосу: тихий
+        // вимагає 5, кривавий 4. Інакше порівняння ціни було б нечесним —
+        // кривавий шлях вигравав би полосою, а не ціною.
         private static Roster BuildRoster(int skill = 6)
         {
             var roster = new Roster();
-            // Тихий путь кражи идёт Убеждением, кровавый — Запугиванием:
-            // оба скила равны, чтобы цена сравнивалась при одной полосе исхода.
+            // Тихий шлях крадіжки йде Переконанням, кривавий — Залякуванням:
+            // обидва скіли рівні, щоб ціна порівнювалась при одній полосі підсумку.
             var arch = new CompanionArchetype("guard", "guard")
                 .SetSkill(SkillType.Persuade, skill)
                 .SetSkill(SkillType.Intimidate, skill)
@@ -68,7 +68,7 @@ namespace Game.Tests.EditMode
                 tension, day, cfg, path, fear);
         }
 
-        // ================= Напряжение =================
+        // ================= Напруга =================
 
         [Test]
         public void Blood_RaisesTension_ByItsOwnDriver()
@@ -96,9 +96,9 @@ namespace Game.Tests.EditMode
         [Test]
         public void Blood_IsNotStrictlyBetterThanQuiet()
         {
-            // Главный тест этого файла: при ОДИНАКОВОМ исходе кровь обязана
-            // обойтись дороже. Иначе выбор пути — не выбор, а ловушка для тех,
-            // кто отыгрывает мирно.
+            // Головний тест цього файлу: за ОДНАКОВОГО підсумку кров зобов'язана
+            // обійтись дорожче. Інакше вибір шляху — не вибір, а пастка для тих,
+            // хто грає мирно.
             var cfg = new BalanceConfig();
 
             var quietTension = FreshTension(cfg);
@@ -123,7 +123,7 @@ namespace Game.Tests.EditMode
                 "Тихий путь ран не оставляет");
         }
 
-        // ================= Рана исполнителю =================
+        // ================= Рана виконавцю =================
 
         [Test]
         public void Blood_WoundsTheOneWhoWentIn()
@@ -145,7 +145,7 @@ namespace Game.Tests.EditMode
 
             var roster = new Roster();
             var arch = new CompanionArchetype("idle", "idle").SetSkill(SkillType.Intimidate, 12);
-            roster.Add(arch.CreateInstance("idle")); // силён, но не на посту
+            roster.Add(arch.CreateInstance("idle")); // сильний, але не на посту
 
             var outcome = Resolve(IncidentPath.Bloody, cfg, roster, FreshTension(cfg));
 
@@ -154,7 +154,7 @@ namespace Game.Tests.EditMode
                 "Ранить некого: за пустой пост уже назначена Худшая полоса, второй раз не наказываем");
         }
 
-        // ================= Страх общины =================
+        // ================= Страх громади =================
 
         [Test]
         public void Fear_AfterBlood_MakesTalkingMoreExpensive()
@@ -179,8 +179,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void Fear_DoesNotDiscountIntimidation()
         {
-            // Если бы страх удешевлял запугивание, кровавый путь окупал бы сам
-            // себя и инверсия вернулась бы с другой стороны.
+            // Якби страх здешевлював залякування, кривавий шлях окупав би сам
+            // себе, і інверсія повернулася б з іншого боку.
             var cfg = new BalanceConfig();
             var racket = DefaultIncidents.All().First(i => i.Id == "protection_racket");
             Assert.AreEqual(ApproachForm.Intimidate, racket.QuietPathApproach, "Предпосылка теста");
@@ -197,13 +197,13 @@ namespace Game.Tests.EditMode
         [Test]
         public void Fear_FailedIntimidation_CountsToo()
         {
-            // Второй источник страха — провалившееся запугивание. Он существовал
-            // в CheckOutcome с Э1 и не читался никем.
+            // Друге джерело страху — провалене залякування. Воно існувало
+            // в CheckOutcome з Е1 і не читалося ніким.
             var cfg = new BalanceConfig();
             var racket = DefaultIncidents.All().First(i => i.Id == "protection_racket");
 
             var roster = new Roster();
-            // Порог запугивания 8 недостижим при скиле 1 → Худшая полоса.
+            // Поріг залякування 8 недосяжний при скілі 1 → Найгірша полоса.
             var arch = new CompanionArchetype("weak", "weak").SetSkill(SkillType.Intimidate, 1);
             var c = arch.CreateInstance("weak");
             c.AssignedSlotId = racket.RelevantPositionId;
@@ -222,8 +222,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void Fear_IsNeverSilent()
         {
-            // Инвариант 6: у новой шкалы обязан быть сигнал. Скрытая цена,
-            // о которой игрок не может узнать, — это не механика, а подлость.
+            // Інваріант 6: у нової шкали зобов'язаний бути сигнал. Прихована ціна,
+            // про яку гравець не може дізнатися, — це не механіка, а підлість.
             var cfg = new BalanceConfig();
             var scared = new IncidentOutcome("petty_theft", "incident.petty_theft", "склад",
                 OutcomeBand.Base, false, false, null, null, 0, causedFear: true);
@@ -256,11 +256,11 @@ namespace Game.Tests.EditMode
         [Test]
         public void Fear_ShownThreshold_EqualsApplied()
         {
-            // Инвариант 8 под страхом: порог, который игрок ВИДИТ в предложении,
-            // обязан быть тем же, что применится при разборе.
+            // Інваріант 8 під страхом: поріг, який гравець БАЧИТЬ у пропозиції,
+            // зобов'язаний бути тим самим, що застосується при розборі.
             var cfg = new BalanceConfig();
             var p = BuildProcessor(cfg, askPlayer: true);
-            p.Fear.RestoreForSave(9999); // община боится всё время прогона
+            p.Fear.RestoreForSave(9999); // громада боїться весь час прогону
 
             var report = RunUntilAsked(p);
             Assert.IsNotNull(report, "За отведённые сутки конвейер не остановился");
@@ -275,7 +275,7 @@ namespace Game.Tests.EditMode
                 "Показанный порог обязан включать надбавку за вчерашнюю кровь");
         }
 
-        // ================= фикстура =================
+        // ================= фікстура =================
 
         private static readonly string[] AllPositions =
         {

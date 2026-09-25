@@ -3,10 +3,10 @@ using System.Collections.Generic;
 namespace Game.Core.Base
 {
     /// <summary>
-    /// Каталог зданий — US-7.1 GDD целиком (Поправка №6.1).
+    /// Каталог будівель — US-7.1 GDD цілком (Поправка №6.1).
     ///
-    /// Цены и сроки — ПЛЕЙСХОЛДЕР. Разбивка по цене — из самого GDD: ядро-здания
-    /// строятся за золото, специальные — за золото и строительный компонент.
+    /// Ціни і строки — ПЛЕЙСХОЛДЕР. Розбивка за ціною — із самого GDD: ядро-будівлі
+    /// будуються за золото, спеціальні — за золото і будівельний компонент.
     ///
     /// <c>DisplayName</c> — Core-контентное поле, гравець його НЕ бачить (R7,
     /// CLAUDE.md): показ іде через <c>UkrainianText.Get("building.&lt;id&gt;", …)</c>
@@ -30,14 +30,14 @@ namespace Game.Core.Base
         public const string Laboratory = "laboratory";
 
         /// <summary>
-        /// С чем община встречает игрока. ПРЕДЛОЖЕНИЕ, не решение владельца:
-        /// у хутора уже есть старший и амбар, остальное строится (Поправка №6.1).
+        /// З чим громада зустрічає гравця. ПРОПОЗИЦІЯ, не рішення власника:
+        /// у хутора вже є старший і амбар, решта будується (Поправка №6.1).
         /// </summary>
         public static readonly string[] StartingSet = { CouncilHall, Storehouse };
 
         public static IEnumerable<BuildingDefinition> All()
         {
-            // ---- Ядро: строит игрок, платит золотом ----
+            // ---- Ядро: будує гравець, платить золотом ----
             yield return new BuildingDefinition
             {
                 Id = Infirmary, DisplayName = "Лазарет",
@@ -63,7 +63,7 @@ namespace Game.Core.Base
                 Effect = BuildingEffect.CouncilActions, OpensSlotId = "council_seat"
             };
 
-            // ---- Специальные: золото + строительный компонент ----
+            // ---- Спеціальні: золото + будівельний компонент ----
             yield return new BuildingDefinition
             {
                 Id = Market, DisplayName = "Ринок",

@@ -3,13 +3,13 @@ using System;
 namespace Game.Core.Balance
 {
     /// <summary>
-    /// Чистые формулы прокачки. Не хранит состояния — на вход уровень/опыт и
-    /// конфиг, на выход пороги и результат начисления. Это упрощает unit-тесты
-    /// и гарантирует, что бой и база считают прогресс одинаково.
+    /// Чисті формули прокачки. Не зберігає стану — на вхід рівень/досвід і
+    /// конфіг, на вихід пороги і результат нарахування. Це спрощує unit-тести
+    /// і гарантує, що бій і база рахують прогрес однаково.
     /// </summary>
     public static class ProgressionMath
     {
-        /// <summary>Опыт, необходимый для перехода с уровня level на level+1.</summary>
+        /// <summary>Досвід, потрібний для переходу з рівня level на level+1.</summary>
         public static int XpToNext(int level, BalanceConfig cfg)
         {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
@@ -19,8 +19,8 @@ namespace Game.Core.Balance
         }
 
         /// <summary>
-        /// Совокупный опыт, необходимый чтобы достичь уровня targetLevel с нуля
-        /// (полезно для предпросмотра кривой и отладки баланса).
+        /// Сукупний досвід, потрібний щоб досягти рівня targetLevel з нуля
+        /// (корисно для передперегляду кривої і налагодження балансу).
         /// </summary>
         public static long TotalXpForLevel(int targetLevel, BalanceConfig cfg)
         {
@@ -31,8 +31,8 @@ namespace Game.Core.Balance
         }
 
         /// <summary>
-        /// Начисляет опыт и возвращает, сколько уровней получено и остаток XP.
-        /// Не превышает cfg.MaxLevel: лишний опыт «срезается».
+        /// Нараховує досвід і повертає, скільки рівнів отримано і залишок XP.
+        /// Не перевищує cfg.MaxLevel: зайвий досвід «зрізається».
         /// </summary>
         public static LevelUpResult GrantXp(int level, int currentXp, int gainedXp, BalanceConfig cfg)
         {
@@ -53,7 +53,7 @@ namespace Game.Core.Balance
             }
 
             if (level >= cfg.MaxLevel)
-                xp = 0; // на максимальном уровне опыт не копится
+                xp = 0; // на максимальному рівні досвід не накопичується
 
             return new LevelUpResult(level, xp, levelsGained);
         }

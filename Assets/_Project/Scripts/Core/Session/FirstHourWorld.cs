@@ -30,33 +30,33 @@ using SettlementCycleType = Game.Core.Base.SettlementCycle;
 namespace Game.Core.Session
 {
     /// <summary>
-    /// Мир первого часа «Перевал» (Поправка №7, аудит G8/G9/G15) — построение
-    /// перенесено из tools/Shared/SettlementWorld СЮДА, в ядро, чтобы Unity,
-    /// консольная сборка и харнес темпа собирали ОДИН И ТОТ ЖЕ мир, а не три
-    /// похожих копии.
+    /// Світ першої години «Перевал» (Поправка №7, аудит G8/G9/G15) — побудову
+    /// перенесено з tools/Shared/SettlementWorld СЮДИ, в ядро, щоб Unity,
+    /// консольна збірка і харнес темпу збирали ОДИН І ТОЙ САМИЙ світ, а не три
+    /// схожі копії.
     ///
-    /// Раньше ростер среза был generic-архетипами («guard», «trader», ...), а
-    /// именной каст открытия существовал только как текст сцен — карточки не
-    /// были на ростере, протагонист не был актором (аудит G8/G9). Здесь ростер
-    /// — сам именной каст: Захар на совете, Дід Овсій на складе, Знахарка Гафія
-    /// в лазареті, Максим и Мирослава в поле (доступны вилазці доби 4),
-    /// протагонист — Companion с id "protagonist", зарегистрированный в
-    /// RosterAdapter как актор.
+    /// Раніше ростер зрізу був generic-архетипами («guard», «trader», ...), а
+    /// іменний каст відкриття існував лише як текст сцен — картки не
+    /// були на ростері, протагоніст не був актором (аудит G8/G9). Тут ростер
+    /// — сам іменний каст: Захар на раді, Дід Овсій на складі, Знахарка Гафія
+    /// в лазареті, Максим і Мирослава в полі (доступні вилазці доби 4),
+    /// протагоніст — Companion з id "protagonist", зареєстрований у
+    /// RosterAdapter як актор.
     ///
-    /// Городской цикл подключён ПОЛНОСТЬЮ: производство, стройка (совет уже
-    /// стоит, склад уже стоит — <see cref="DefaultBuildings.StartingSet"/>),
-    /// население. Раньше срез и харнес темпа собирались через
-    /// DayProcessor.DefaultSteps() — без единого зерна выработки и без голода
-    /// (см. CLAUDE.md «Мост производства»). Поправка №7.1 подключает их здесь.
+    /// Міський цикл підключений ПОВНІСТЮ: виробництво, будівництво (рада вже
+    /// стоїть, склад вже стоїть — <see cref="DefaultBuildings.StartingSet"/>),
+    /// населення. Раніше зріз і харнес темпу збирались через
+    /// DayProcessor.DefaultSteps() — без жодного зерна виробітку і без голоду
+    /// (див. CLAUDE.md «Міст виробництва»). Поправка №7.1 підключає їх тут.
     ///
-    /// Полностью детерминирован: два вызова Build с одними аргументами дают
-    /// тождественные по структуре миры (никакого System.Random — инвариант 1).
+    /// Повністю детермінований: два виклики Build з тими самими аргументами дають
+    /// тотожні за структурою світи (жодного System.Random — інваріант 1).
     /// </summary>
     public sealed class FirstHourWorld
     {
         public const string ProtagonistId = "protagonist";
 
-        /// <summary>Семь постов общины — тот же порядок, что у tools/Shared/SettlementWorld раньше.</summary>
+        /// <summary>Сім постів громади — той самий порядок, що й у tools/Shared/SettlementWorld раніше.</summary>
         public static readonly string[] Positions =
         {
             "storehouse_dock", "settlement_market", "settlement_farms",
@@ -64,8 +64,8 @@ namespace Game.Core.Session
         };
 
         /// <summary>
-        /// Кто по умолчанию доступен для вилазки доби 4 (FIRST_HOUR §2.2): сам
-        /// протагонист и двое напарників у полі — Максим і Мирослава. Всі троє
+        /// Хто за замовчуванням доступний для вилазки доби 4 (FIRST_HOUR §2.2): сам
+        /// протагоніст і двоє напарників у полі — Максим і Мирослава. Всі троє
         /// не стоять на посту зі старту (§3.0), тож відряд не звільняє чужого
         /// поста.
         /// </summary>
@@ -120,22 +120,22 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// Собрать мир первого часа. Деталь: тир и режим точки решения —
-        /// параметры (Alpha.Play спрашивает игрока, Alpha.Sim меряет темп в
-        /// автономном режиме), всё остальное — фиксированный контент открытия.
+        /// Зібрати світ першої години. Деталь: тир і режим точки рішення —
+        /// параметри (Alpha.Play питає гравця, Alpha.Sim міряє темп в
+        /// автономному режимі), все інше — фіксований контент відкриття.
         ///
         /// <paramref name="testBuildOneDayConstruction"/> — Поправка №7.7.
-        /// Default здесь — false: прямые вызовы Build() (CampaignPacingTests,
-        /// SettlementSaveTests, FirstHourWorldTests) — это замер темпа/баланса
-        /// кампании, а не тестовая сборка, и не должны тихо поменять поведение
-        /// от одного лишь добавления параметра. GameSession.NewGame —
-        /// единственный вызывающий, который явно передаёт значение из
-        /// NewGameOptions (там default true) — так тестовая сборка (Unity,
-        /// Alpha.Play, боты) получает один день, а кампания и харнес темпа —
-        /// нет.
+        /// Default тут — false: прямі виклики Build() (CampaignPacingTests,
+        /// SettlementSaveTests, FirstHourWorldTests) — це замір темпу/балансу
+        /// кампанії, а не тестова збірка, і не повинні мовчки змінити поведінку
+        /// від самого лише додавання параметра. GameSession.NewGame —
+        /// єдиний викликач, який явно передає значення з
+        /// NewGameOptions (там default true) — так тестова збірка (Unity,
+        /// Alpha.Play, боти) отримує один день, а кампанія і харнес темпу —
+        /// ні.
         ///
         /// <paramref name="testBuildTensionPace"/> — Поправка №7 (рішення власника
-        /// 24.09.2026, <see cref="TestBuildTensionPace"/>): той самий приём, що й
+        /// 24.09.2026, <see cref="TestBuildTensionPace"/>): той самий прийом, що й
         /// <paramref name="testBuildOneDayConstruction"/> вище. Default — false з
         /// тієї самої причини: прямі виклики Build() (CampaignPacingTests,
         /// SettlementSaveTests, CityWorksTests, FirstHourWorldTests) міряють темп/
@@ -164,23 +164,23 @@ namespace Game.Core.Session
 
             foreach (var slot in Game.Core.DefaultContent.AllSlots()) baseState.AddSlot(slot);
 
-            // Совет и склад уже стоят — хутор встречает игрока работающей
-            // общиной, а не стройплощадкой (Поправка №6.1, §3.0 FIRST_HOUR).
+            // Рада і склад уже стоять — хутір зустрічає гравця працюючою
+            // громадою, а не будмайданчиком (Поправка №6.1, §3.0 FIRST_HOUR).
             var works = new CityWorksType(DefaultBuildings.StartingSet, testBuildOneDayConstruction);
             works.ApplyToSlots(baseState);
 
-            // Лазарет открывается зданием, которого в StartingSet нет — но
-            // Знахарка Гафія стоит на посту с вечера первых суток (§3.0), а не
-            // ждёт стройки. Пост среза считается уже оборудованным: срез
-            // начинается с работающей общины, а не со строительной площадки
-            // (тот же приём раньше держал открытым storehouse_dock).
+            // Лазарет відкривається будівлею, якої в StartingSet немає — але
+            // Знахарка Гафія стоїть на посту з вечора перших діб (§3.0), а не
+            // чекає будівництва. Пост зрізу вважається вже облаштованим: зріз
+            // починається з працюючою громадою, а не з будмайданчиком
+            // (той самий прийом раніше тримав відкритим storehouse_dock).
             var infirmary = baseState.GetSlot("infirmary_bed");
             if (infirmary != null) infirmary.Unlocked = true;
 
-            // Стартовый кошелёк — ПЛЕЙСХОЛДЕР (числа баланса поправит владелец):
-            // хватает на первые сутки без паники, не хватает навсегда — фермы
-            // никто не держит все пять суток открытия (§3.0-3.5), и голод —
-            // честная, а не срежиссированная цена этого пробела.
+            // Стартовий гаманець — ПЛЕЙСХОЛДЕР (числа балансу виправить власник):
+            // вистачає на перші доби без паніки, не вистачає назавжди — ферми
+            // ніхто не тримає всі п'ять діб відкриття (§3.0-3.5), і голод —
+            // чесна, а не зрежисована ціна цієї прогалини.
             resources.Add(ResourceType.Gold, 40);
             resources.Add(ResourceType.Materials, 10);
             resources.Add(ResourceType.Food, 20);
@@ -188,7 +188,7 @@ namespace Game.Core.Session
             Assign(baseState, "zakhar", "council_seat");
             Assign(baseState, "keeper", "storehouse_dock");
             Assign(baseState, "healer", "infirmary_bed");
-            // maksym/myroslava/протагонист — в полі (§3.0): на посты НЕ ставятся.
+            // maksym/myroslava/протагоніст — в полі (§3.0): на пости НЕ ставляться.
 
             var adapter = new RosterAdapter(roster, ProtagonistId, cfg);
 
@@ -196,9 +196,9 @@ namespace Game.Core.Session
             var pulse = new WorldPulse(cfg.Pulse);
             var crisisSource = testBuildTensionPace ? TestBuildTensionPace.BuildCrisisSource() : null;
             foreach (var source in DefaultPressureSources.All(crisisSource)) pulse.AddSource(source);
-            // Именной накопитель «Тугар» — слух о боярине из сцены открытия.
+            // Іменний накопичувач «Тугар» — чутка про боярина зі сцени відкриття.
             pulse.AddSource(new OpeningContent.TuharPressureSource());
-            // Авторская последовательность открытия: узел / припасы / девочка.
+            // Авторська послідовність відкриття: вузол / припаси / дівчинка.
             foreach (var scripted in OpeningContent.ScriptedSources()) pulse.AddSource(scripted);
 
             var incidents = DefaultIncidents.BuildTable();
@@ -244,8 +244,8 @@ namespace Game.Core.Session
                 Flags = flags,
                 Party = party,
                 RequirePlayerDecision = requirePlayerDecision,
-                // Три поста, что реально держат люди на старте (§3.0) — доклад
-                // с пустого поста молчит сам по себе (правило §2 табл. строка 6).
+                // Три пости, які реально тримають люди на старті (§3.0) — доповідь
+                // з пустого поста мовчить сама по собі (правило §2 табл. рядок 6).
                 PostDomains = new[]
                 {
                     new PostDomain("council_seat", "рада", SkillKeys.Persuade, 5),
@@ -273,10 +273,10 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// Именной каст (аудит G8/G9): карточки берутся из <see cref="OpeningCast"/>,
-        /// протагонист — из <see cref="OpeningScenes.Protagonist"/>. Числа скилов
-        /// расставлены под домены их постов и под §3.0 FIRST_HOUR — сами по себе
-        /// они ПЛЕЙСХОЛДЕР, как и весь остальной баланс среза.
+        /// Іменний каст (аудит G8/G9): картки беруться з <see cref="OpeningCast"/>,
+        /// протагоніст — з <see cref="OpeningScenes.Protagonist"/>. Числа скілів
+        /// розставлені під домени їхніх постів і під §3.0 FIRST_HOUR — самі по собі
+        /// вони ПЛЕЙСХОЛДЕР, як і весь інший баланс зрізу.
         /// </summary>
         private static Roster BuildRoster(BalanceConfig cfg)
         {
@@ -324,9 +324,9 @@ namespace Game.Core.Session
                 .AddStartingTrait(DefaultTraits.Wary())
                 .AddStartingTrait(DefaultTraits.SharpEyed())));
 
-            // Протагонист: сборный старт-плейсхолдер. Полноценное создание
-            // (R12, ProtagonistCreation/Backgrounds) — работа пакета B7, ещё не
-            // смерджена; здесь — только чтобы актор существовал и был в ростере.
+            // Протагоніст: збірний старт-плейсхолдер. Повноцінне створення
+            // (R12, ProtagonistCreation/Backgrounds) — робота пакета B7, ще не
+            // змерджена; тут — лише щоб актор існував і був у ростері.
             roster.Add(Named(ProtagonistId, OpeningScenes.Protagonist(), cfg, arch => arch
                 .SetAttribute(AttributeType.Strength, 4).SetAttribute(AttributeType.Agility, 4)
                 .SetAttribute(AttributeType.Wits, 4).SetAttribute(AttributeType.Will, 4)

@@ -4,9 +4,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// StoryFlags (R3, Foundation/A1) — чистый контейнер: Get/Set/CaptureState/
-    /// RestoreState и ничего больше. Событий сам не эмитит — это работа
-    /// GameSession, когда он появится (см. комментарий класса).
+    /// StoryFlags (R3, Foundation/A1) — чистий контейнер: Get/Set/CaptureState/
+    /// RestoreState і нічого більше. Подій сам не емітить — це робота
+    /// GameSession, коли він з'явиться (див. коментар класу).
     /// </summary>
     public class StoryFlagsTests
     {
@@ -56,7 +56,7 @@ namespace Game.Tests.EditMode
             var flags = new StoryFlags();
             flags.Set("tugar_offer_seen");
             flags.Set("defector_seeded", true);
-            flags.Set("crisis_test_mitigated", false); // выставлен, но в false — не должен попасть в блоб
+            flags.Set("crisis_test_mitigated", false); // виставлений, але в false — не повинен потрапити в блоб
 
             string blob = flags.CaptureState();
 

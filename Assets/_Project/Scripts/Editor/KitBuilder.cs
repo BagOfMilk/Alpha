@@ -6,28 +6,28 @@ using UnityEngine;
 namespace Game.Gameplay.EditorTools
 {
     /// <summary>
-    /// Общие строительные примитивы для сборщиков сцен из наборов Kenney.
+    /// Спільні будівельні примітиви для збирачів сцен із наборів Kenney.
     ///
-    /// Пакет B8: вынесены из <see cref="VillageShowcase"/>, где раньше жили как
-    /// приватные методы одного файла. Причина выноса — будущий
-    /// <c>GameSceneBuilder</c> (пакет E1) собирает ту же самую единственную
-    /// сцену билда (<c>Game.unity</c>, R18) из тех же наборов и нуждается в
-    /// тех же кирпичиках (хата из стен, частокол, лес, участок под здание,
-    /// якорь поста, детерминированный «шум»), но со своей раскладкой и своими
-    /// путями к моделям — поэтому здесь всё параметризовано путём набора
-    /// (<c>kitPath</c>), а не завязано на константы одной витрины.
+    /// Пакет B8: винесені з <see cref="VillageShowcase"/>, де раніше жили як
+    /// приватні методи одного файлу. Причина винесення — майбутній
+    /// <c>GameSceneBuilder</c> (пакет E1) збирає ту саму єдину
+    /// сцену білда (<c>Game.unity</c>, R18) із тих самих наборів і потребує
+    /// тих самих цеглинок (хата зі стін, частокол, ліс, ділянка під будівлю,
+    /// якір поста, детермінований «шум»), але зі своєю розкладкою і своїми
+    /// шляхами до моделей — тому тут усе параметризовано шляхом набору
+    /// (<c>kitPath</c>), а не прив'язано до констант однієї вітрини.
     ///
-    /// <see cref="VillageShowcase"/> не изменил поведения: он передаёт сюда те
-    /// же константы и числа, что раньше были зашиты внутри его собственных
-    /// методов, и получает те же объекты сцены.
+    /// <see cref="VillageShowcase"/> не змінив поведінки: він передає сюди ті
+    /// самі константи і числа, що раніше були зашиті всередині його власних
+    /// методів, і отримує ті самі об'єкти сцени.
     /// </summary>
     public static class KitBuilder
     {
         private static readonly Dictionary<string, GameObject> Cache = new Dictionary<string, GameObject>();
 
-        // ================= кэш и примитивы загрузки =================
+        // ================= кеш і примітиви завантаження =================
 
-        /// <summary>Загрузка префаба с кэшем — набор кладёт по одному файлу на модуль, дублировать чтение не нужно.</summary>
+        /// <summary>Завантаження префаба з кешем — набір кладе по одному файлу на модуль, дублювати читання не потрібно.</summary>
         public static GameObject Load(string path)
         {
             GameObject cached;
@@ -39,7 +39,7 @@ namespace Game.Gameplay.EditorTools
             return prefab;
         }
 
-        /// <summary>Поставить модуль набора как ребёнка родителя в локальных координатах.</summary>
+        /// <summary>Поставити модуль набору як дитину батька в локальних координатах.</summary>
         public static GameObject Attach(GameObject parent, string path, Vector3 local, float yaw)
         {
             var prefab = Load(path);
@@ -54,7 +54,7 @@ namespace Game.Gameplay.EditorTools
             return go;
         }
 
-        /// <summary>Поставить модуль набора в мировых координатах (без родителя) — ориентиры сцены.</summary>
+        /// <summary>Поставити модуль набору у світових координатах (без батька) — орієнтири сцени.</summary>
         public static GameObject Place(string path, Vector3 position, float yaw, string name)
         {
             var prefab = Load(path);
@@ -69,7 +69,7 @@ namespace Game.Gameplay.EditorTools
             return go;
         }
 
-        /// <summary>Габариты модели по мешам — основа раскладки вместо догадок о пивоте.</summary>
+        /// <summary>Габарити моделі за мешами — основа розкладки замість здогадок про півот.</summary>
         public static Vector3 MeasureSize(GameObject prefab)
         {
             var filters = prefab.GetComponentsInChildren<MeshFilter>();
@@ -83,7 +83,7 @@ namespace Game.Gameplay.EditorTools
             return bounds.size;
         }
 
-        /// <summary>Детерминированный «шум» 0..1: те же числа при каждой пересборке (инвариант 1 — никакого Random).</summary>
+        /// <summary>Детермінований «шум» 0..1: ті самі числа за кожної перезбірки (інваріант 1 — жодного Random).</summary>
         public static float Hash(int i, int salt)
         {
             unchecked
@@ -97,7 +97,7 @@ namespace Game.Gameplay.EditorTools
 
         // ================= земля =================
 
-        /// <summary>Плоскость земли под URP-цвет без блеска — общая подложка для любой сцены набора.</summary>
+        /// <summary>Площина землі під URP-колір без блиску — спільна підкладка для будь-якої сцени набору.</summary>
         public static GameObject Ground(Color baseColor, Vector3 scale, string materialSavePath)
         {
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
@@ -119,13 +119,13 @@ namespace Game.Gameplay.EditorTools
             return ground;
         }
 
-        // ================= постройки =================
+        // ================= будівлі =================
 
         /// <summary>
-        /// Хата из модулей: стены по периметру, дверь по фасаду, окна по бокам,
-        /// двускатная крыша сверху. Размеры считаются из габаритов самой стены.
-        /// <paramref name="kitPath"/> — путь к папке Models набора построек
-        /// (например, Fantasy Town Kit), с завершающим слэшем.
+        /// Хата з модулів: стіни по периметру, двері по фасаду, вікна по боках,
+        /// двосхилий дах зверху. Розміри рахуються з габаритів самої стіни.
+        /// <paramref name="kitPath"/> — шлях до папки Models набору будівель
+        /// (наприклад, Fantasy Town Kit), із завершальним слешем.
         /// </summary>
         public static GameObject House(string kitPath, Vector3 origin, int width, int depth, bool wood, float facing)
         {
@@ -146,12 +146,12 @@ namespace Game.Gameplay.EditorTools
 
             for (int x = 0; x < width; x++)
             {
-                // Фасад: посередине дверь.
+                // Фасад: посередині двері.
                 bool isDoor = x == width / 2;
                 Attach(house, isDoor ? door : kitPath + prefix + ".fbx",
                     new Vector3(x * step, 0f, 0f), 0f);
 
-                // Задняя стена.
+                // Задня стіна.
                 Attach(house, kitPath + prefix + ".fbx",
                     new Vector3(x * step, 0f, depth * step), 180f);
             }
@@ -165,7 +165,7 @@ namespace Game.Gameplay.EditorTools
                     new Vector3((width - 1) * step, 0f, z * step), 90f);
             }
 
-            // Крыша: скаты вдоль фасада, конёк поверх.
+            // Дах: скати вздовж фасаду, коньок зверху.
             string gable = kitPath + "roof-gable.fbx";
             string gableEnd = kitPath + "roof-gable-end.fbx";
             for (int x = 0; x < width; x++)
@@ -179,10 +179,10 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Участок под здание: спрятанная модель + подпись, обе выключены —
-        /// компонент жизни поднимает участок по стадиям стройки и подписывает,
-        /// когда здание готово. Имя объекта — «plot:&lt;plotId&gt;», это связь
-        /// с ядром (тот же id носит здание в каталоге).
+        /// Ділянка під будівлю: прихована модель + підпис, обидва вимкнені —
+        /// компонент життя піднімає ділянку за стадіями будівництва і підписує,
+        /// коли будівля готова. Ім'я об'єкта — «plot:&lt;plotId&gt;», це зв'язок
+        /// з ядром (той самий id носить будівля в каталозі).
         /// </summary>
         public static GameObject Plot(string kitPath, GameObject root, string plotId, string labelText,
             Vector3 at, int width, int depth, bool wood)
@@ -200,7 +200,7 @@ namespace Game.Gameplay.EditorTools
                 model.SetActive(false);
             }
 
-            // Подпись над зданием смотрит в камеру: изометрия не вращается.
+            // Підпис над будівлею дивиться в камеру: ізометрія не обертається.
             var label = new GameObject("label");
             label.transform.SetParent(plot.transform, false);
             label.transform.localPosition = new Vector3(width * 0.5f, 3.2f, depth * 0.5f);
@@ -220,7 +220,7 @@ namespace Game.Gameplay.EditorTools
             return plot;
         }
 
-        /// <summary>Частокол по прямоугольному периметру с воротами на одной из ближних сторон.</summary>
+        /// <summary>Частокіл по прямокутному периметру з ворітьми на одній із ближніх сторін.</summary>
         public static GameObject Palisade(string kitPath, float left, float right, float near, float far, float gateX)
         {
             var fence = Load(kitPath + "fence.fbx");
@@ -247,9 +247,9 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Лес и камни вокруг поляны, трава внутри неё. Разброс детерминированный
-        /// (инвариант 1) — те же деревья на тех же местах при каждой пересборке.
-        /// <paramref name="naturePath"/> — путь к папке Models Nature Kit.
+        /// Ліс і каміння навколо галявини, трава всередині неї. Розкид детермінований
+        /// (інваріант 1) — ті самі дерева на тих самих місцях за кожної перезбірки.
+        /// <paramref name="naturePath"/> — шлях до папки Models Nature Kit.
         /// </summary>
         public static GameObject Forest(string naturePath)
         {
@@ -289,7 +289,7 @@ namespace Game.Gameplay.EditorTools
                     new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r * 0.8f), Hash(i, 8) * 360f);
             }
 
-            // Трава внутри ограды, чтобы двор не выглядел вытоптанной плитой.
+            // Трава всередині огорожі, щоб двір не виглядав витоптаною плитою.
             for (int i = 0; i < 40; i++)
             {
                 var pos = new Vector3(-10f + Hash(i, 9) * 21f, 0f, -8f + Hash(i, 10) * 16f);
@@ -299,12 +299,12 @@ namespace Game.Gameplay.EditorTools
             return group;
         }
 
-        // ================= посты =================
+        // ================= пости =================
 
         /// <summary>
-        /// Якорь поста поселения. Имя «post:&lt;id&gt;» — связь с ядром: тот
-        /// же идентификатор носит слот назначения, по нему компонент жизни
-        /// находит, где стоит человек и где показать происшествие.
+        /// Якір поста поселення. Ім'я «post:&lt;id&gt;» — зв'язок з ядром: той
+        /// самий ідентифікатор носить слот призначення, за ним компонент життя
+        /// знаходить, де стоїть людина і де показати подію.
         /// </summary>
         public static GameObject Anchor(GameObject parent, string id, Vector3 position)
         {

@@ -565,11 +565,11 @@ namespace Game.Gameplay.UI
             Gender subjectGender = SubjectGender(Arg(a, "companionId") ?? Arg(a, "char"), gender);
             if (!UkrainianText.Has(evt.Key, subjectGender)) return FallbackLine(evt.Key, a);
 
-            // Шаблоны таблицы пишут подстановки двумя способами: читаемыми
-            // именами ({companion}, {post}) и сырыми именами аргументов события
-            // ({companionId}, {slotId}). Оба варианта получают ПЕРЕВЕДЁННОЕ
-            // значение — игрок не должен видеть id. Format берёт первое
-            // совпадение имени, поэтому переводы идут раньше сырых аргументов.
+            // Шаблони таблиці пишуть підстановки двома способами: читабельними
+            // іменами ({companion}, {post}) і сирими іменами аргументів події
+            // ({companionId}, {slotId}). Обидва варіанти отримують ПЕРЕКЛАДЕНЕ
+            // значення — гравець не повинен бачити id. Format бере перший
+            // збіг імені, тому переклади йдуть раніше сирих аргументів.
             var pairs = new List<string>
             {
                 "companion", companion, "post", post, "band", band, "item", item,

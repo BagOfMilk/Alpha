@@ -86,7 +86,7 @@ namespace Game.Gameplay
             Bind();
         }
 
-        /// <summary>Посты/жители/участки шукаються по іменах — та ж угода, що й у <see cref="VillageLife.BindScene"/>.</summary>
+        /// <summary>Пости/жителі/ділянки шукаються за іменами — та ж угода, що й у <see cref="VillageLife.BindScene"/>.</summary>
         public void Bind()
         {
             _posts.Clear();

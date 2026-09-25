@@ -4,10 +4,10 @@ using System.Collections.Generic;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Индивидуальная инициатива вперемешку: каждый юнит ходит по своей
-    /// инициативе, порядок виден (<see cref="Order"/>), союзники и враги чередуются
-    /// естественно. Тай-брейк стабильный — по порядку добавления. Сама очередь не
-    /// знает правил жизни/смерти: пропуски решает CombatState.
+    /// Індивідуальна ініціатива впереміш: кожен юніт ходить за своєю
+    /// ініціативою, порядок видно (<see cref="Order"/>), союзники і вороги чергуються
+    /// природно. Тай-брейк стабільний — за порядком додавання. Сама черга не
+    /// знає правил життя/смерті: пропуски вирішує CombatState.
     /// </summary>
     public sealed class TurnSystem
     {
@@ -25,14 +25,14 @@ namespace Game.Core.Combat
             var indexed = new List<(CombatUnit unit, int seq)>();
             int seq = 0;
             foreach (var u in units) indexed.Add((u, seq++));
-            // Стабильная сортировка: инициатива по убыванию, при равенстве — порядок добавления.
+            // Стабільне сортування: ініціатива за спаданням, при рівності — порядок додавання.
             indexed.Sort((a, b) => a.unit.Profile.Initiative != b.unit.Profile.Initiative
                 ? b.unit.Profile.Initiative.CompareTo(a.unit.Profile.Initiative)
                 : a.seq.CompareTo(b.seq));
             foreach (var (unit, _) in indexed) _order.Add(unit);
         }
 
-        /// <summary>Переходит к следующему юниту; на обороте очереди начинается новый раунд.</summary>
+        /// <summary>Переходить до наступного юніта; на обороті черги починається новий раунд.</summary>
         public CombatUnit Advance()
         {
             if (_order.Count == 0) return null;

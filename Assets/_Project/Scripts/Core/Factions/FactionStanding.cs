@@ -3,9 +3,9 @@ using System;
 namespace Game.Core.Factions
 {
     /// <summary>
-    /// Полоса отношения фракции к игроку — единственное, что уходит наружу
-    /// (US-17.2, инвариант 3). Само число (<see cref="FactionStanding.Value"/>)
-    /// игроку не показывается никогда.
+    /// Полоса ставлення фракції до гравця — єдине, що виходить назовні
+    /// (US-17.2, інваріант 3). Саме число (<see cref="FactionStanding.Value"/>)
+    /// гравцю не показується ніколи.
     /// </summary>
     public enum FactionStandingBand
     {
@@ -17,23 +17,23 @@ namespace Game.Core.Factions
     }
 
     /// <summary>
-    /// Рантайм-отношение одной фракции (R5). Построена по тому же шаблону, что
-    /// <see cref="Game.Core.Pressure.TensionState"/>: сырое значение — internal,
-    /// полоса — public, смена полосы обязана породить сигнал (инвариант 4) —
-    /// здесь это C#-событие <see cref="BandChanged"/>, тот же приём, каким
-    /// Напряжение уже решает эту задачу.
+    /// Рантайм-відношення однієї фракції (R5). Побудована за тим самим шаблоном, що
+    /// <see cref="Game.Core.Pressure.TensionState"/>: сире значення — internal,
+    /// полоса — public, зміна полоси зобов'язана породити сигнал (інваріант 4) —
+    /// тут це C#-подія <see cref="BandChanged"/>, той самий прийом, яким
+    /// Напруга вже вирішує це завдання.
     /// </summary>
     public sealed class FactionStanding
     {
         private readonly Balance.FactionBalance _cfg;
         private FactionStandingBand _band;
 
-        /// <summary>Сырое значение 0..100. НЕ показывать игроку ни при каких условиях.</summary>
+        /// <summary>Сире значення 0..100. НЕ показувати гравцю за жодних умов.</summary>
         internal int Value { get; private set; }
 
         public FactionStandingBand Band => _band;
 
-        /// <summary>Инвариант 4: немого перехода полосы не бывает.</summary>
+        /// <summary>Інваріант 4: німого переходу полоси не буває.</summary>
         public event Action<FactionStandingBand, FactionStandingBand> BandChanged;
 
         public FactionStanding(Balance.FactionBalance cfg, int startValue)
@@ -44,9 +44,9 @@ namespace Game.Core.Factions
         }
 
         /// <summary>
-        /// Двигает отношение. sourceId — контекст для будущего журнала (по
-        /// аналогии с TensionChange.SourceId); сам тип его пока не хранит —
-        /// у фракций нет дневного леджера, только полоса и сигнал смены.
+        /// Рухає відношення. sourceId — контекст для майбутнього журналу (за
+        /// аналогією з TensionChange.SourceId); сам тип його поки не зберігає —
+        /// у фракцій немає денного леджера, тільки полоса і сигнал зміни.
         /// </summary>
         internal void Apply(int delta, string sourceId)
         {
@@ -65,9 +65,9 @@ namespace Game.Core.Factions
         }
 
         /// <summary>
-        /// Восстановление из слепка. Полоса не хранится, а пересчитывается из
-        /// значения — тем же приёмом, каким это делает TensionState.RestoreForSave:
-        /// правка порогов между сохранением и загрузкой не оставит несогласованную
+        /// Відновлення зі зліпка. Полоса не зберігається, а перераховується зі
+        /// значення — тим самим прийомом, яким це робить TensionState.RestoreForSave:
+        /// правка порогів між збереженням і завантаженням не лишить неузгоджену
         /// полосу.
         /// </summary>
         internal void RestoreForSave(int value)

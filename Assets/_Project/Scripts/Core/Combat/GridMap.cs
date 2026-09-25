@@ -4,11 +4,11 @@ using System.Collections.Generic;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Боевая сетка: проходимость, блокировка обзора (стены/глыбы), укрытия по
-    /// сторонам тайлов и занятость юнитами. Чистые данные + запросы; правил боя
-    /// здесь нет. Укрытие направленное: защищает, если элемент стоит на стороне
-    /// тайла защитника, обращённой к атакующему, — фланкирование возникает само
-    /// (зашёл с открытой стороны → штрафа укрытия нет).
+    /// Бойова сітка: прохідність, блокування огляду (стіни/брили), укриття по
+    /// сторонах тайлів і зайнятість юнітами. Чисті дані + запити; правил бою
+    /// тут немає. Укриття напрямлене: захищає, якщо елемент стоїть на стороні
+    /// тайла захисника, повернутій до атакуючого, — фланкування виникає само
+    /// (зайшов з відкритої сторони → штрафу укриття нема).
     /// </summary>
     public sealed class GridMap
     {
@@ -35,21 +35,21 @@ namespace Game.Core.Combat
 
         public bool InBounds(GridPos p) => p.X >= 0 && p.X < Width && p.Y >= 0 && p.Y < Height;
 
-        // ---- Проходимость и обзор ----
+        // ---- Прохідність і огляд ----
         public bool IsWalkable(GridPos p) => InBounds(p) && _walkable[p.X, p.Y];
         public void SetWalkable(GridPos p, bool walkable) { if (InBounds(p)) _walkable[p.X, p.Y] = walkable; }
 
         public bool BlocksSight(GridPos p) => InBounds(p) && _blocksSight[p.X, p.Y];
         public void SetBlocksSight(GridPos p, bool blocks) { if (InBounds(p)) _blocksSight[p.X, p.Y] = blocks; }
 
-        /// <summary>Сплошная стена: непроходима и непрозрачна.</summary>
+        /// <summary>Суцільна стіна: непрохідна і непрозора.</summary>
         public void SetWall(GridPos p)
         {
             SetWalkable(p, false);
             SetBlocksSight(p, true);
         }
 
-        // ---- Укрытия ----
+        // ---- Укриття ----
         public CoverType GetCover(GridPos p, Direction side)
             => InBounds(p) ? _cover[p.X, p.Y, (int)side] : CoverType.None;
 
@@ -59,9 +59,9 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Укрытие защитника против атаки с позиции атакующего: смотрим стороны
-        /// тайла защитника, обращённые к атакующему (по диагонали — обе), берём
-        /// лучшее. Атакующий на открытой стороне = укрытия нет (фланг).
+        /// Укриття захисника проти атаки з позиції атакуючого: дивимось сторони
+        /// тайла захисника, повернуті до атакуючого (по діагоналі — обидві), беремо
+        /// найкраще. Атакуючий на відкритій стороні = укриття нема (фланг).
         /// </summary>
         public CoverType CoverAgainst(GridPos defender, GridPos attacker)
         {
@@ -76,7 +76,7 @@ namespace Game.Core.Combat
             return best;
         }
 
-        // ---- Занятость ----
+        // ---- Зайнятість ----
         public bool IsOccupied(GridPos p) => _occupants.ContainsKey(p);
         public string OccupantAt(GridPos p) => _occupants.TryGetValue(p, out var id) ? id : null;
 
@@ -89,7 +89,7 @@ namespace Game.Core.Combat
 
         public void ClearOccupant(GridPos p) => _occupants.Remove(p);
 
-        /// <summary>Свободна для входа: в границах, проходима и не занята.</summary>
+        /// <summary>Вільна для входу: в межах, прохідна і не зайнята.</summary>
         public bool IsFree(GridPos p) => IsWalkable(p) && !IsOccupied(p);
     }
 }

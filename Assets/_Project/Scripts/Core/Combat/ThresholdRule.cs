@@ -4,17 +4,17 @@ using Game.Core.Randomness;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// R1: правило попадания «точность ≥ показанный порог», полностью
-    /// детерминированное. IDiceRoller НЕ вызывается ни разу — параметр
-    /// присутствует только чтобы правило подходило под интерфейс IHitRule.
+    /// R1: правило влучання «точність ≥ показаний поріг», повністю
+    /// детерміноване. IDiceRoller НЕ викликається жодного разу — параметр
+    /// присутній лише щоб правило підходило під інтерфейс IHitRule.
     ///
-    /// shownChanceOrThreshold трактуется как margin-от-равновесия: margin =
-    /// shown − ThresholdBaseline. Отрицательный margin — промах; дальше —
-    /// две полосы ширины ThresholdGrazeBand/ThresholdCritBand (обе из
-    /// CombatBalance, крутятся балансом без перекомпиляции). Показанное
-    /// игроку число считает тот же HitChanceCalculator.Compute, что и для
-    /// PercentRule — порог не отдельная формула, а то же самое надёжное
-    /// число, прочитанное иначе.
+    /// shownChanceOrThreshold трактується як margin-від-рівноваги: margin =
+    /// shown − ThresholdBaseline. Від'ємний margin — промах; далі —
+    /// дві смуги шириною ThresholdGrazeBand/ThresholdCritBand (обидві з
+    /// CombatBalance, крутяться балансом без перекомпіляції). Показане
+    /// гравцю число рахує той самий HitChanceCalculator.Compute, що й для
+    /// PercentRule — поріг не окрема формула, а те саме надійне
+    /// число, прочитане інакше.
     /// </summary>
     public sealed class ThresholdRule : IHitRule
     {

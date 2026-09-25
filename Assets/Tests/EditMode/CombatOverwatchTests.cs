@@ -7,25 +7,25 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Overwatch (перенесено из архивной ветки claude/combat-overwatch, коммит
-    /// 20b8dcf, US-3.6): «вход в overwatch резервирует AP; срабатывает один раз
-    /// при входе врага в конус до следующего хода юнита; без двойного профита».
-    /// Адаптировано на IHitRule/IDiceRoller (R1) — вооружённые сценарии играются
-    /// через ThresholdRule с точностью 99, чтобы дозорный выстрел ГАРАНТИРОВАННО
-    /// попадал (margin 49 ≥ CritBand — Crit, но нам важен только факт попадания
-    /// и урон, а не полоса).
+    /// Overwatch (перенесено з архівної гілки claude/combat-overwatch, коміт
+    /// 20b8dcf, US-3.6): «вхід в overwatch резервує AP; спрацьовує один раз
+    /// при вході ворога в конус до наступного ходу юніта; без подвійного профіту».
+    /// Адаптовано під IHitRule/IDiceRoller (R1) — озброєні сценарії розігруються
+    /// через ThresholdRule з точністю 99, щоб дозорний постріл ГАРАНТОВАНО
+    /// влучав (margin 49 ≥ CritBand — Crit, але нам важливий лише факт влучання
+    /// і шкода, а не полоса).
     ///
-    /// Геометрия сценариев: поле 10×5, дозорный в (0,2) смотрит вдоль оси X на
-    /// (9,2); конус 90° (tg полуширины = 1/1). Враг идёт по нижнему ряду y=4 из
-    /// (0,4): клетка (1,4) вне конуса, (2,4) — ровно на его краю, дальше — внутри.
+    /// Геометрія сценаріїв: поле 10×5, дозорний у (0,2) дивиться вздовж осі X на
+    /// (9,2); конус 90° (tg напівширини = 1/1). Ворог іде по нижньому ряду y=4 з
+    /// (0,4): клітина (1,4) поза конусом, (2,4) — рівно на його краю, далі — всередині.
     /// </summary>
     public class CombatOverwatchTests
     {
         private static readonly BalanceConfig Cfg = new BalanceConfig();
 
-        // 85 − штраф навскидку (10) = 75 → margin 25, гарантированно Hit (не Graze,
-        // не Crit: полосы по умолчанию Baseline=50/GrazeBand=15/CritBand=35),
-        // чтобы урон дозорного выстрела был фиксированным весом оружия.
+        // 85 − штраф навмання (10) = 75 → margin 25, гарантовано Hit (не Graze,
+        // не Crit: полоси за замовчуванням Baseline=50/GrazeBand=15/CritBand=35),
+        // щоб шкода дозорного пострілу була фіксованою вагою зброї.
         private static CombatUnit U(string id, Side side, int init, int hp = 50, int ap = 8,
                                     int acc = 85, WeaponDefinition w = null)
         {
@@ -38,7 +38,7 @@ namespace Game.Tests.EditMode
             return new CombatUnit(id, side, p, w);
         }
 
-        /// <summary>Оружие с фиксированным уроном.</summary>
+        /// <summary>Зброя з фіксованою шкодою.</summary>
         private static WeaponDefinition W(int damage = 3, int apCost = 3, bool melee = false)
             => new WeaponDefinition("w", "W", melee ? SkillType.Melee : SkillType.Ranged)
             {
@@ -49,7 +49,7 @@ namespace Game.Tests.EditMode
         private static CombatState NewCombat(GridMap map)
             => new CombatState(map, Cfg, new ThresholdRule(Cfg), null);
 
-        /// <summary>Дозорный в (0,2) и враг в enemyAt; ход у дозорного.</summary>
+        /// <summary>Дозорний у (0,2) і ворог у enemyAt; хід у дозорного.</summary>
         private static (CombatState cs, CombatUnit watcher, CombatUnit enemy) Scene(
             GridPos enemyAt, int enemyHp = 50, GridMap map = null, WeaponDefinition watcherWeapon = null,
             GridPos? watcherAt = null)
@@ -67,7 +67,7 @@ namespace Game.Tests.EditMode
         private static int ShotsBy(CombatState cs, string attackerId)
             => cs.Attacks.Count(a => a.AttackerId == attackerId);
 
-        // ---- Вход в дозор ----
+        // ---- Вхід у дозор ----
 
         [Test]
         public void Overwatch_ReservesWeaponAp_StoresStance_AndEndsTurn()
@@ -108,7 +108,7 @@ namespace Game.Tests.EditMode
             Assert.AreSame(poor, cs.Current);
         }
 
-        // ---- Срабатывание ----
+        // ---- Спрацьовування ----
 
         [Test]
         public void Overwatch_FiresOnce_OnFirstStepIntoSector_AndMoverKeepsWalking()
@@ -116,7 +116,7 @@ namespace Game.Tests.EditMode
             var (cs, watcher, enemy) = Scene(new GridPos(0, 4));
             cs.Overwatch(new GridPos(9, 2));
 
-            // Путь (1,4)→(2,4)→(3,4)→(4,4): выстрел на (2,4), дальше — ни одного.
+            // Шлях (1,4)→(2,4)→(3,4)→(4,4): постріл на (2,4), далі — жодного.
             Assert.AreEqual(CombatActionResult.Success, cs.Move(new GridPos(4, 4)));
 
             Assert.AreEqual(1, ShotsBy(cs, "watcher"), "одно срабатывание, хотя в секторе три шага");
@@ -152,7 +152,7 @@ namespace Game.Tests.EditMode
             cs.Overwatch(new GridPos(9, 2));
 
             Assert.AreSame(ally, cs.Current);
-            cs.Move(new GridPos(4, 4)); // тот же путь по сектору, что у врага в сценариях выше
+            cs.Move(new GridPos(4, 4)); // той самий шлях по сектору, що у ворога в сценаріях вище
 
             Assert.AreEqual(0, ShotsBy(cs, "watcher"), "по своим дозор не стреляет");
             Assert.AreEqual(50, ally.Hp);
@@ -267,7 +267,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(50, bait.Hp, "упавший в рывке уже не бьёт");
         }
 
-        // ---- Без двойного профита ----
+        // ---- Без подвійного профіту ----
 
         [Test]
         public void Overwatch_Shot_HasPenalty_MatchesPreview_AndFeedsNoStrike()
@@ -289,7 +289,7 @@ namespace Game.Tests.EditMode
         {
             var (cs, watcher, _) = Scene(new GridPos(0, 0), watcherAt: new GridPos(4, 2));
             cs.Overwatch(new GridPos(9, 2));
-            cs.Move(new GridPos(0, 4)); // мимо сектора
+            cs.Move(new GridPos(0, 4)); // повз сектор
             cs.EndTurn();
 
             Assert.AreSame(watcher, cs.Current);
@@ -315,7 +315,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(watcher2.IsOverwatching, "сбитый с ног — нет");
         }
 
-        // ---- Геометрия конуса: только целые числа ----
+        // ---- Геометрія конуса: тільки цілі числа ----
 
         [Test]
         public void Cone_IsIntegerExact_EdgeIncluded_BackAndSideExcluded()
@@ -339,7 +339,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(OverwatchStance.InCone(o, aim, new GridPos(-4, 0), 0, 1), "ось назад — не ось вперёд");
         }
 
-        // ---- ИИ: симметрия ----
+        // ---- ШІ: симетрія ----
 
         [Test]
         public void Ai_WithNoShot_TakesOverwatch_TowardItsTarget()

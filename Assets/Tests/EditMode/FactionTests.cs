@@ -10,11 +10,11 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Пакет B5: фракции (R5). Порт архивных FactionTests на новую модель —
-    /// там был отдельный FactionBand с Reputation/Influence и ThreatSystem
-    /// (Эпик 10, снят вместе с архивным слоем угроз), здесь — internal Value +
-    /// public Band тем же шаблоном, что TensionState (§4.15), и три конкретные
-    /// фракции среза вместо сид-плейсхолдеров прототипа.
+    /// Пакет B5: фракції (R5). Порт архівних FactionTests на нову модель —
+    /// там був окремий FactionBand з Reputation/Influence і ThreatSystem
+    /// (Епік 10, знятий разом з архівним шаром загроз), тут — internal Value +
+    /// public Band тим самим шаблоном, що TensionState (§4.15), і три конкретні
+    /// фракції зрізу замість сід-плейсхолдерів прототипу.
     /// </summary>
     public class FactionTests
     {
@@ -68,14 +68,14 @@ namespace Game.Tests.EditMode
         [Test]
         public void FactionStanding_BandChange_FiresSignal()
         {
-            // Инвариант 4: немого перехода полосы не бывает.
+            // Інваріант 4: німого переходу полоси не буває.
             var cfg = new BalanceConfig();
             var standing = new FactionStanding(cfg.Faction, 50); // Neutral
 
             var seen = new List<(FactionStandingBand From, FactionStandingBand To)>();
             standing.BandChanged += (from, to) => seen.Add((from, to));
 
-            standing.Apply(5, "test"); // 55, всё ещё Neutral
+            standing.Apply(5, "test"); // 55, все ще Neutral
             Assert.IsEmpty(seen, "Изменение внутри полосы не должно звать сигнал");
 
             standing.Apply(10, "test"); // 65 -> Awaiting
@@ -90,7 +90,7 @@ namespace Game.Tests.EditMode
             var cfg = new BalanceConfig();
             var reg = DefaultFactions.NewRegistry(cfg.Faction);
 
-            // Не должно бросать — неизвестная фракция просто не двигается никем.
+            // Не повинно кидати — невідома фракція просто не рухається ніким.
             reg.ApplySocialConsequence("no_such_faction", 20);
             Assert.IsNull(reg.Get("no_such_faction"));
         }
@@ -140,7 +140,7 @@ namespace Game.Tests.EditMode
 
             new SocialConsequence().Tension(TensionDriver.QuestChoice, 15).Apply(null, processor);
 
-            var report = processor.Advance(); // тик следующей фазы сливает очередь
+            var report = processor.Advance(); // тік наступної фази зливає чергу
             var applied = report.TensionChanges.Where(x => x.Driver == TensionDriver.QuestChoice).ToList();
 
             Assert.IsNotEmpty(applied, "Заявка обязана примениться существующим драйвером на тике");
@@ -149,8 +149,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void SocialConsequence_NeverIntroducesNewDriver()
         {
-            // Список драйверов, разрешённых социальным последствиям, — закрытая
-            // тройка (QuestChoice/ThreatOutcome/CouncilEdict), а не весь enum.
+            // Список драйверів, дозволених соціальним наслідкам, — закрита
+            // трійка (QuestChoice/ThreatOutcome/CouncilEdict), а не весь enum.
             Assert.Throws<ArgumentException>(() =>
                 new SocialConsequence().Tension(TensionDriver.PlaystyleBlood, 10));
             Assert.Throws<ArgumentException>(() =>

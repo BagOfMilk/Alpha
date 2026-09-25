@@ -6,9 +6,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Личные арки напарников (B4, порт US-9.5 на модель Э2): гейт лояльностью/
-    /// прогрессом, обрыв смертью/уходом в антагонисты. Содержание глав —
-    /// id/ключи (<see cref="ArcChapter.QuestId"/>/<see cref="ArcChapter.TitleKey"/>),
+    /// Особисті арки напарників (B4, порт US-9.5 на модель Е2): гейт лояльністю/
+    /// прогресом, обрив смертю/переходом в антагоністи. Зміст глав —
+    /// id/ключі (<see cref="ArcChapter.QuestId"/>/<see cref="ArcChapter.TitleKey"/>),
     /// сам квест-рушій — B6, декаплінг рядком (§1.1).
     /// </summary>
     public class CompanionArcTests
@@ -20,7 +20,7 @@ namespace Game.Tests.EditMode
             return c;
         }
 
-        // ---- Гейт лояльности ----
+        // ---- Гейт лояльності ----
         [Test]
         public void Chapter_LockedUntilLoyalty()
         {
@@ -52,7 +52,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(run.Refresh(c), "друге звернення без змін — вже не подія");
         }
 
-        // ---- Последовательность глав по флагу ----
+        // ---- Послідовність глав за прапорцем ----
         [Test]
         public void Chapters_GateByProgressFlag()
         {
@@ -77,7 +77,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(ArcState.Available, run.State);
         }
 
-        // ---- Обрыв арки ----
+        // ---- Обрив арки ----
         [Test]
         public void Arc_AbortsOnDeath()
         {
@@ -107,7 +107,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(ArcState.Aborted, run.State, "уход в антагонисты обрывает арку");
         }
 
-        // ---- Завершение ----
+        // ---- Завершення ----
         [Test]
         public void Arc_Completes_AfterLastChapter()
         {
@@ -122,7 +122,7 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(run.IsFinished);
         }
 
-        // ---- Содержательная честность контента (id/ключи, а не текст) ----
+        // ---- Змістовна чесність контенту (id/ключі, а не текст) ----
         [Test]
         public void DefaultArcs_Chapters_HaveContentIdsAndConsistentFlagChain()
         {

@@ -5,14 +5,14 @@ using Game.Core.Stats;
 namespace Game.Core.Characters
 {
     /// <summary>
-    /// Ростовой профиль архетипа: веса, по которым очки уровня ложатся на скилы.
+    /// Ростовий профіль архетипу: ваги, за якими очки рівня лягають на скіли.
     ///
-    /// Именно на СКИЛЫ, а не на статы вообще: по GDD Э2.1 атрибуты почти
-    /// статичны и поднимаются только крафтом аугмента, поэтому уровню больше
-    /// нечего раздавать. Раньше один профиль кормил и боевые статы, и ролевые
-    /// склонности — отсюда и брался перекос шкал.
+    /// Саме на СКІЛИ, а не на стати взагалі: за GDD Е2.1 атрибути майже
+    /// статичні й піднімаються тільки крафтом аугмента, тому рівню більше
+    /// нічого роздавати. Раніше один профіль годував і бойові стати, і рольові
+    /// схильності — звідси й брався перекіс шкал.
     ///
-    /// Веса нормируются: важны пропорции, а не абсолютные значения.
+    /// Ваги нормуються: важливі пропорції, а не абсолютні значення.
     /// </summary>
     [Serializable]
     public sealed class SkillGrowthProfile
@@ -29,12 +29,12 @@ namespace Game.Core.Characters
         public IReadOnlyList<KeyValuePair<SkillType, double>> Weights => _weights;
 
         /// <summary>
-        /// Детерминированно распределяет <paramref name="points"/> очков по скилам
-        /// согласно весам. Метод наибольших остатков (Хэйра): сумма выданных очков
-        /// точно равна points, без дробей и накопления ошибки округления.
+        /// Детерміновано розподіляє <paramref name="points"/> очок за скілами
+        /// згідно з вагами. Метод найбільших залишків (Хейра): сума виданих очок
+        /// точно дорівнює points, без дробів і накопичення похибки округлення.
         ///
-        /// Возвращает ПРИРОСТ, а не итог — зажимать по потолку шкалы будет тот,
-        /// кто его применит (см. SkillSet.AddClamped).
+        /// Повертає ПРИРІСТ, а не підсумок — затискати за стелею шкали буде той,
+        /// хто його застосує (див. SkillSet.AddClamped).
         /// </summary>
         public SkillSet AllocatePoints(int points)
         {
@@ -45,8 +45,8 @@ namespace Game.Core.Characters
             for (int i = 0; i < _weights.Count; i++) totalWeight += _weights[i].Value;
             if (totalWeight <= 0) return result;
 
-            // Целые части + сбор остатков.
-            var remainders = new List<KeyValuePair<int, double>>(); // index -> остаток
+            // Цілі частини + збір залишків.
+            var remainders = new List<KeyValuePair<int, double>>(); // index -> залишок
             int assigned = 0;
             for (int i = 0; i < _weights.Count; i++)
             {
@@ -58,7 +58,7 @@ namespace Game.Core.Characters
                 remainders.Add(new KeyValuePair<int, double>(i, exact - whole));
             }
 
-            // Раздаём оставшиеся очки тем, у кого наибольший дробный остаток.
+            // Роздаємо очки, що лишилися, тим, у кого найбільший дробовий залишок.
             int leftover = points - assigned;
             remainders.Sort((a, b) => b.Value.CompareTo(a.Value));
             for (int i = 0; i < leftover && i < remainders.Count; i++)

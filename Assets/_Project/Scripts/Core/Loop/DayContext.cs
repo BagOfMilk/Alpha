@@ -10,31 +10,31 @@ using Game.Core.World;
 namespace Game.Core.Loop
 {
     /// <summary>
-    /// Состояние, которое шаги дня читают и дополняют. Живёт один день.
+    /// Стан, який кроки дня читають і доповнюють. Живе один день.
     /// </summary>
     public sealed class DayContext
     {
         public int Day { get; }
         public DayPhase Phase { get; }
 
-        /// <summary>Тир поселения: 1 хутор → 4 городок. Двигатель фонового тика.</summary>
+        /// <summary>Тір поселення: 1 хутір → 4 містечко. Двигун фонового тику.</summary>
         public int Tier { get; }
 
-        /// <summary>Уклад как индекс (0 Вольница → 3 Затвор). Полноценный тип — на Э3.</summary>
+        /// <summary>Уклад як індекс (0 Вольниця → 3 Затвор). Повноцінний тип — на Е3.</summary>
         public int OrderLevel { get; }
 
         public BalanceConfig Balance { get; }
         public TensionState Tension { get; }
 
-        /// <summary>Ночью игрок либо спит, либо патрулирует (Поправка №3.9).</summary>
+        /// <summary>Вночі гравець або спить, або патрулює (Поправка №3.9).</summary>
         public bool IsPatrolling { get; }
 
-        /// <summary>Кто сегодня в городе и может отвечать за события.</summary>
+        /// <summary>Хто сьогодні в місті і може відповідати за події.</summary>
         public IRosterView Roster { get; }
 
         public PopulationState Population { get; }
 
-        /// <summary>Память общины о крови — читается порогами социальных подходов.</summary>
+        /// <summary>Пам'ять громади про кров — читається порогами соціальних підходів.</summary>
         internal FearState Fear { get; set; }
 
         public WorldPulse Pulse { get; }
@@ -42,67 +42,67 @@ namespace Game.Core.Loop
         public IRepeatTracker Repeats { get; }
         public ICasualtySink Casualties { get; }
 
-        /// <summary>Позиции, дающие ежедневный доклад по своему домену.</summary>
+        /// <summary>Позиції, що дають щоденну доповідь за своїм доменом.</summary>
         public IReadOnlyList<PostDomain> PostDomains { get; set; }
 
         /// <summary>
-        /// Вчера поселению не хватило еды (Поправка №4). Порт, а не ссылка на
-        /// модуль базы: конвейер дня не должен знать про BaseState.
+        /// Учора поселенню не вистачило їжі (Поправка №4). Порт, а не посилання на
+        /// модуль бази: конвеєр дня не повинен знати про BaseState.
         /// </summary>
         public bool IsHungry { get; set; }
 
-        /// <summary>Предвестники этой фазы — их подхватит слой сигналов.</summary>
+        /// <summary>Передвісники цієї фази — їх підхопить шар сигналів.</summary>
         internal List<Forewarning> Forewarnings { get; } = new List<Forewarning>();
 
-        /// <summary>Источники, переполнившиеся в эту фазу.</summary>
+        /// <summary>Джерела, що переповнилися в цю фазу.</summary>
         internal List<string> FiredSourceIds { get; } = new List<string>();
 
-        /// <summary>Что произошло за фазу. Публично: это уже случилось.</summary>
+        /// <summary>Що відбулося за фазу. Публічно: це вже сталося.</summary>
         internal List<IncidentOutcome> IncidentOutcomes { get; } = new List<IncidentOutcome>();
 
         /// <summary>
-        /// Что город сделал за сутки: достроил, принял людей, потерял их, вырос.
-        /// Наружу уходит только через слой сигналов (Поправка №6).
+        /// Що місто зробило за добу: добудувало, прийняло людей, втратило їх, виросло.
+        /// Назовні виходить лише через шар сигналів (Поправка №6).
         /// </summary>
         internal List<CityEvent> CityEvents { get; } = new List<CityEvent>();
 
         /// <summary>
-        /// Тир, до которого город дорос сегодня (0 — не дорос). Сам тир суток
-        /// неизменен до конца фазы; процессор применит новый по её завершении.
+        /// Тір, до якого місто доросло сьогодні (0 — не доросло). Сам тір доби
+        /// незмінний до кінця фази; процесор застосує новий по її завершенні.
         /// </summary>
         internal int RaiseTierTo { get; set; }
 
-        /// <summary>Заполняется шагом Signals; уходит наружу в отчёте.</summary>
+        /// <summary>Заповнюється кроком Signals; виходить назовні у звіті.</summary>
         internal SignalDigest Signals { get; set; }
 
-        /// <summary>Что и когда игрок уже слышал — чтобы сигналы не превращались в обои.</summary>
+        /// <summary>Що і коли гравець уже чув — щоб сигнали не перетворювалися на шпалери.</summary>
         internal SignalMemory SignalMemory { get; set; }
 
-        /// <summary>Спрашивать ли игрока, как разбираться с событием.</summary>
+        /// <summary>Чи запитувати гравця, як розбиратися з подією.</summary>
         internal bool RequirePlayerDecision { get; set; }
 
-        /// <summary>Событие, ждущее решения. Публично: это предложение игроку, а не метрика.</summary>
+        /// <summary>Подія, що чекає рішення. Публічно: це пропозиція гравцю, а не метрика.</summary>
         public PendingDecision Pending { get; internal set; }
 
-        /// <summary>Само событие — чтобы резолвер получил его после выбора.</summary>
+        /// <summary>Сама подія — щоб резолвер отримав її після вибору.</summary>
         internal IncidentDefinition PendingIncident { get; set; }
 
         /// <summary>
-        /// Очередь решений этой фазы (аудит П10): если в фазе сработало несколько
-        /// инцидентов, каждый становится СВОИМ решением по очереди, а не тихо
-        /// разбирается за игрока после первого. IncidentStep кладёт сюда сами
-        /// СОБЫТИЯ фазы (не готовые предложения); DayProcessor строит
-        /// PendingDecision ЛЕНИВО, в момент выемки следующего элемента — иначе
-        /// предложение для второго и далее инцидента строилось бы по состоянию
-        /// Fear/Repeats ДО того, как разрешился первый, и показанный порог
-        /// разошёлся бы с применённым (инвариант 8, регрессия из ревью А1).
+        /// Черга рішень цієї фази (аудит П10): якщо у фазі спрацювало декілька
+        /// інцидентів, кожен стає СВОЇМ рішенням по черзі, а не тихо
+        /// розбирається за гравця після першого. IncidentStep кладе сюди самі
+        /// ПОДІЇ фази (не готові пропозиції); DayProcessor будує
+        /// PendingDecision ЛІНИВО, у момент вилучення наступного елемента — інакше
+        /// пропозиція для другого і далі інциденту будувалася б за станом
+        /// Fear/Repeats ДО того, як розв'язався перший, і показаний поріг
+        /// розійшовся б із застосованим (інваріант 8, регресія з ревью А1).
         /// </summary>
         internal Queue<IncidentDefinition> PendingQueue { get; } = new Queue<IncidentDefinition>();
 
         /// <summary>
-        /// Внешняя очередь Напряжения (R6): что накопил DayProcessor.QueueExternal
-        /// до этой фазы. TensionTickStep сливает её через существующий драйвер и
-        /// очищает — список драйверов остаётся закрытым (инвариант 5).
+        /// Зовнішня черга Напруги (R6): що накопичив DayProcessor.QueueExternal
+        /// до цієї фази. TensionTickStep зливає її через наявний драйвер і
+        /// очищає — список драйверів лишається закритим (інваріант 5).
         /// </summary>
         internal List<ExternalTensionEntry> ExternalTensionQueue { get; set; }
 
@@ -135,8 +135,8 @@ namespace Game.Core.Loop
     }
 
     /// <summary>
-    /// Позиция, которая умеет докладывать: домен, навык и порог «внятности».
-    /// Рабочие докладов не дают — только напарники (US-7.5, US-8.1).
+    /// Позиція, яка вміє доповідати: домен, навичка і поріг «виразності».
+    /// Робітники доповідей не дають — лише напарники (US-7.5, US-8.1).
     /// </summary>
     public sealed class PostDomain
     {
@@ -156,14 +156,14 @@ namespace Game.Core.Loop
         }
     }
 
-    /// <summary>Один шаг дневного конвейера. Порядок берётся из DayStepOrder.</summary>
+    /// <summary>Один крок денного конвеєра. Порядок береться з DayStepOrder.</summary>
     public interface IDayStep
     {
         int Order { get; }
         void Execute(DayContext ctx);
     }
 
-    /// <summary>Одна запись внешней очереди Напряжения (DayProcessor.QueueExternal).</summary>
+    /// <summary>Один запис зовнішньої черги Напруги (DayProcessor.QueueExternal).</summary>
     internal struct ExternalTensionEntry
     {
         internal readonly Pressure.TensionDriver Driver;

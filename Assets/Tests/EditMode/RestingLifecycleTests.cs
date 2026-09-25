@@ -8,10 +8,10 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// G26: <c>CompanionStatus.Resting</c> был объявлен, но никогда не
-    /// присваивался — «отдыхает в лазарете» не наступало. Свободный (не на
-    /// посту) раненый, которого лечит лазарет, теперь переходит в Resting,
-    /// пока рана не закрылась, и обратно в Idle, когда закрылась.
+    /// G26: <c>CompanionStatus.Resting</c> був оголошений, але ніколи не
+    /// присвоювався — «відпочиває в лазареті» не наставало. Вільний (не на
+    /// посту) поранений, якого лікує лазарет, тепер переходить у Resting,
+    /// поки рана не закрилася, і назад в Idle, коли закрилася.
     /// </summary>
     public class RestingLifecycleTests
     {
@@ -38,8 +38,8 @@ namespace Game.Tests.EditMode
         {
             var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 0, BaseHealingPerCycle = 0 };
             var state = BuildWithHealer(cfg, out var patient);
-            patient.InjuryPoints = 1000; // заведомо не долечится за один цикл
-            patient.Status = CompanionStatus.Injured; // как после настоящего Wound()
+            patient.InjuryPoints = 1000; // свідомо не долікується за один цикл
+            patient.Status = CompanionStatus.Injured; // як після справжнього Wound()
 
             state.AdvanceCycle();
 
@@ -53,8 +53,8 @@ namespace Game.Tests.EditMode
         {
             var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 0 };
             var state = BuildWithHealer(cfg, out var patient);
-            patient.InjuryPoints = 1; // долечится за первый же цикл
-            patient.Status = CompanionStatus.Resting; // как будто уже отдыхал прошлые сутки
+            patient.InjuryPoints = 1; // долікується за перший же цикл
+            patient.Status = CompanionStatus.Resting; // наче вже відпочивав минулі доби
 
             state.AdvanceCycle();
 
@@ -68,9 +68,9 @@ namespace Game.Tests.EditMode
             var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 0, BaseHealingPerCycle = 0 };
             var state = BuildWithHealer(cfg, out var patient);
 
-            // Пациент занимает свой собственный пост и работает через рану —
-            // это уже покрыто BaseStateTests.InjuredCompanion_ProducesLess,
-            // здесь проверяется именно ярлык статуса: он НЕ должен стать Resting.
+            // Пацієнт займає свій власний пост і працює через рану —
+            // це вже покрито BaseStateTests.InjuredCompanion_ProducesLess,
+            // тут перевіряється саме ярлик статусу: він НЕ повинен стати Resting.
             var slot = new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.Resource,
@@ -80,7 +80,7 @@ namespace Game.Tests.EditMode
             state.AddSlot(slot);
             state.TryAssign(patient.Id, "bench");
             patient.InjuryPoints = 1000;
-            patient.Status = CompanionStatus.Injured; // явное ранение, как после Wound()
+            patient.Status = CompanionStatus.Injured; // явне поранення, як після Wound()
 
             state.AdvanceCycle();
 
@@ -106,8 +106,8 @@ namespace Game.Tests.EditMode
         {
             var roster = new Roster();
             var state = new BaseState(roster, new ResourceLedger(), new BalanceConfig { FoodUpkeepPerCompanion = 0 });
-            // Свой слот, открытый по умолчанию (UnlockedByDefault=true) — не
-            // зависим от того, какие посты в DefaultContent сегодня закрыты.
+            // Свій слот, відкритий за замовчуванням (UnlockedByDefault=true) — не
+            // залежимо від того, які пости в DefaultContent сьогодні закриті.
             state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.Resource,
@@ -126,10 +126,10 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Ревью B7: назначение — не только "разрешено", но и обязано вернуть
-        /// ярлык статуса к Injured. Иначе тот, кто держит пост через рану,
-        /// читался бы как "отдыхает" (Resting) до полного излечения — пока
-        /// собственный комментарий ApplyHealing обещает ровно обратное.
+        /// Рев'ю B7: призначення — не тільки "дозволено", а й зобов'язане повернути
+        /// ярлик статусу до Injured. Інакше той, хто тримає пост через рану,
+        /// читався б як "відпочиває" (Resting) до повного одужання — тоді як
+        /// власний коментар ApplyHealing обіцяє рівно протилежне.
         /// </summary>
         [Test]
         public void RestingCompanion_Assigned_BecomesInjured_NotLeftResting()
@@ -145,7 +145,7 @@ namespace Game.Tests.EditMode
 
             var comp = new CompanionArchetype("r", "r").CreateInstance("r");
             comp.Status = CompanionStatus.Resting;
-            comp.InjuryPoints = 5; // Resting всегда означает "ещё лечится"
+            comp.InjuryPoints = 5; // Resting завжди означає "ще лікується"
             roster.Add(comp);
 
             state.TryAssign("r", "bench");

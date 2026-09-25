@@ -6,8 +6,8 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Проверки — фундамент всего резолва в игре. Здесь защищается US-2.6
-    /// (костей нет, порог виден заранее) и Поправка №3.7 (полосы исхода).
+    /// Перевірки — фундамент усього резолву в грі. Тут захищається US-2.6
+    /// (костей немає, поріг видно заздалегідь) і Поправка №3.7 (полоси наслідку).
     /// </summary>
     public class CheckResolverTests
     {
@@ -41,7 +41,7 @@ namespace Game.Tests.EditMode
             return r;
         }
 
-        // ---- US-2.6: лучший релевантный скил среди присутствующих ----
+        // ---- US-2.6: найкращий релевантний скіл серед присутніх ----
 
         [Test]
         public void Check_UsesBestSkillAmongPresent()
@@ -83,7 +83,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(8, preview.BestValue);
         }
 
-        // ---- US-8.2: незанятая позиция даёт худший исход ----
+        // ---- US-8.2: незайнята позиція дає найгірший підсумок ----
 
         [Test]
         public void Check_UnmannedPosition_YieldsWorstBand()
@@ -113,7 +113,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(outcome.WasUnmanned);
         }
 
-        // ---- US-17.3: показанный порог равен применённому ----
+        // ---- US-17.3: показаний поріг дорівнює застосованому ----
 
         [Test]
         public void Check_PreviewEqualsResolve()
@@ -130,17 +130,17 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(preview.Margin, outcome.Margin);
         }
 
-        // ---- Поправка №3.7: формы подходов ----
+        // ---- Поправка №3.7: форми підходів ----
 
         [Test]
         public void Check_Persuade_NeverWorstWithinCushion()
         {
             var cfg = Cfg();
-            // Недобор 2 при подушке 2 — Убеждение обязано вытянуть до Базовой.
+            // Недобір 2 при подушці 2 — Переконання зобов'язане витягнути до Базової.
             var band = CheckResolver.BandFor(-2, ApproachForm.Persuade, cfg.Checks);
             Assert.AreEqual(OutcomeBand.Base, band);
 
-            // А недобор 3 — уже нет.
+            // А недобір 3 — вже ні.
             Assert.AreEqual(OutcomeBand.Worst, CheckResolver.BandFor(-3, ApproachForm.Persuade, cfg.Checks));
         }
 
@@ -157,12 +157,12 @@ namespace Game.Tests.EditMode
         {
             var cfg = Cfg();
 
-            // Хвост вверх: Лучшая доступна с меньшим запасом.
+            // Хвіст вгору: Найкраща доступна з меншим запасом.
             int early = cfg.Checks.BestMargin - cfg.Checks.IntimidateBestBonus;
             Assert.AreEqual(OutcomeBand.Best, CheckResolver.BandFor(early, ApproachForm.Intimidate, cfg.Checks));
             Assert.AreEqual(OutcomeBand.Good, CheckResolver.BandFor(early, ApproachForm.Neutral, cfg.Checks));
 
-            // Хвост вниз: провал добавляет страх.
+            // Хвіст вниз: провал додає страх.
             var roster = RosterOf(new FakeActor { Id = "a", Value = 1 });
             var outcome = CheckResolver.Resolve(
                 new CheckRequest(SkillKeys.Intimidate, 10, ApproachForm.Intimidate), roster, null, 1, cfg);
@@ -184,7 +184,7 @@ namespace Game.Tests.EditMode
             Assert.Less(outcome.PriceMultiplier, 1.0, "Хороший торг — это скидка, а не драма");
         }
 
-        // ---- Защита от спама обращений ----
+        // ---- Захист від спаму звернень ----
 
         [Test]
         public void Check_RepeatWithinWindow_RaisesThreshold()

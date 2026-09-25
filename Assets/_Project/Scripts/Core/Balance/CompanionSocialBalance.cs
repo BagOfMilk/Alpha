@@ -4,21 +4,21 @@ using Game.Core.Characters;
 namespace Game.Core.Balance
 {
     /// <summary>
-    /// Числа социального слоя напарников (B4/R2): пороги полос Лояльности,
-    /// рябь ростера от смерти/предательства, таблица наслідків (LoyaltyRules) и
-    /// порог дефекции. Отдельный файл-секция (R14) — B4 подключает его одной
-    /// строкой в <see cref="BalanceConfig"/>, не трогая остальные поля.
+    /// Числа соціального шару напарників (B4/R2): пороги полос Лояльності,
+    /// брижі ростера від смерті/зради, таблиця наслідків (LoyaltyRules) і
+    /// поріг дефекції. Окремий файл-секція (R14) — B4 підключає його одним
+    /// рядком у <see cref="BalanceConfig"/>, не чіпаючи решту полів.
     ///
-    /// Все числа — ПЛЕЙСХОЛДЕРЫ: тестовая сборка их не настраивала харнесом,
-    /// как City/Tension (см. docs/TEST_BUILD.md §9).
+    /// Усі числа — ПЛЕЙСХОЛДЕРИ: тестова збірка їх не налаштовувала харнесом,
+    /// як City/Tension (див. docs/TEST_BUILD.md §9).
     /// </summary>
     [Serializable]
     public sealed class CompanionSocialBalance
     {
-        // ---- Полосы Лояльности 0..100 (Broken/Resentful/Wary/Steady/Devoted) ----
-        // Подобраны так, чтобы совпасть с якорными точками сценария доба 1
+        // ---- Полоси Лояльності 0..100 (Broken/Resentful/Wary/Steady/Devoted) ----
+        // Підібрані так, щоб збігтися з якірними точками сценарію доба 1
         // (docs/TEST_BUILD.md §3.1): старт Мирослави 45 -> Wary, старт Максима
-        // 60 -> Steady; "-20 -> 25" и "-35 -> 10" из розв'язки вузла 1 обидва
+        // 60 -> Steady; "-20 -> 25" і "-35 -> 10" із розв'язки вузла 1 обидва
         // лежать в Resentful (не в Broken) — тому Broken лише нижче 10.
         public int[] LoyaltyBandThresholds = { 10, 30, 50, 70 };
 
@@ -31,22 +31,22 @@ namespace Game.Core.Balance
             return (LoyaltyBand)t.Length;
         }
 
-        // ---- Рябь ростера (RosterDrama, US-9.6 порт) ----
-        /// <summary>Тяжёлый отклик соратника на смерть (в пределах MaxRippleTargets).</summary>
+        // ---- Брижі ростера (RosterDrama, US-9.6 порт) ----
+        /// <summary>Важкий відгук соратника на смерть (у межах MaxRippleTargets).</summary>
         public int MournLoyaltyHit = 12;
-        /// <summary>Тяжёлый отклик соратника на предательство — сильнее, чем на смерть.</summary>
+        /// <summary>Важкий відгук соратника на зраду — сильніший, ніж на смерть.</summary>
         public int BetrayalKinLoyaltyHit = 18;
-        /// <summary>Соперник павшего/предателя не скорбит — небольшое облегчение.</summary>
+        /// <summary>Суперник полеглого/зрадника не сумує — невелике полегшення.</summary>
         public int RivalDeathLoyaltyRelief = 4;
-        /// <summary>Нейтральный слегка тронут — лёгкий отклик и каскадный "хвост" после MaxRippleTargets.</summary>
+        /// <summary>Нейтральний трохи зворушений — легкий відгук і каскадний "хвіст" після MaxRippleTargets.</summary>
         public int NeutralDeathLoyaltyHit = 3;
-        /// <summary>Ограждение от каскада: не больше стольки тяжёлых откликов за одну рябь.</summary>
+        /// <summary>Огородження від каскаду: не більше стількох важких відгуків за одну брижу.</summary>
         public int MaxRippleTargets = 3;
 
-        // ---- Таблица наслідків (LoyaltyRules) ----
-        /// <summary>Кровавий шлях: удар лояльності мирно-ціннісного напарника.</summary>
+        // ---- Таблиця наслідків (LoyaltyRules) ----
+        /// <summary>Кривавий шлях: удар лояльності мирно-ціннісного напарника.</summary>
         public int BloodyChoiceValuedHit = 6;
-        /// <summary>Кровавий шлях: полегшення жорстко-ціннісному напарнику.</summary>
+        /// <summary>Кривавий шлях: полегшення жорстко-ціннісному напарнику.</summary>
         public int BloodyChoiceRuthlessRelief = 3;
         /// <summary>Ігнорована прохання/квест-етап напарника.</summary>
         public int RequestIgnoredHit = 10;

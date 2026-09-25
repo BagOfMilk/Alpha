@@ -4,43 +4,43 @@ using Game.Core.Quests;
 
 namespace Game.Core.Scenes
 {
-    /// <summary>Что делает шаг сцены (Поправка №5.8, Choice — Поправка №7.8).</summary>
+    /// <summary>Що робить крок сцени (Поправка №5.8, Choice — Поправка №7.8).</summary>
     public enum SceneStepKind
     {
-        /// <summary>План: кто в кадре и как.</summary>
+        /// <summary>План: хто в кадрі і як.</summary>
         Shot = 0,
 
-        /// <summary>Реплика: кто говорит и по какому ключу подбирается текст.</summary>
+        /// <summary>Репліка: хто говорить і за яким ключем підбирається текст.</summary>
         Line = 1,
 
-        /// <summary>Пауза: держим кадр.</summary>
+        /// <summary>Пауза: тримаємо кадр.</summary>
         Beat = 2,
 
-        /// <summary>Эффект: ключ VFX или звука.</summary>
+        /// <summary>Ефект: ключ VFX або звуку.</summary>
         Effect = 3,
 
-        /// <summary>Переход: сцена кончилась и передаёт управление.</summary>
+        /// <summary>Перехід: сцена закінчилася і передає керування.</summary>
         Transition = 4,
 
         /// <summary>
-        /// Выбор реплики (Поправка №7.8): 2-4 варианта, у каждого — свой ключ,
-        /// необязательная проверка и наслідок (<see cref="SceneChoiceOption"/>).
-        /// Сцена ждёт на этом шаге, пока <c>GameSession.ChooseSceneOption</c>
-        /// не разрешит его — см. <see cref="ScenePlayback.IsAwaitingChoice"/>.
+        /// Вибір репліки (Поправка №7.8): 2-4 варіанти, у кожного — свій ключ,
+        /// необов'язкова перевірка і наслідок (<see cref="SceneChoiceOption"/>).
+        /// Сцена чекає на цьому кроці, поки <c>GameSession.ChooseSceneOption</c>
+        /// не вирішить його — див. <see cref="ScenePlayback.IsAwaitingChoice"/>.
         /// </summary>
         Choice = 5
     }
 
     /// <summary>
-    /// Один вариант выбора реплики (Поправка №7.8): реюзает модель наслідку
-    /// квеста (<see cref="QuestConsequence"/>) — ОДИН применятель наслідков на
-    /// квесты/сцены/главы арок, как того требует владелец («выборы в диалогах
-    /// или квестах должны влиять это же тоже механики»). Вариант либо резолвит
-    /// проверку через существующий <c>CheckResolver</c> (порог показан
-    /// заранее, инвариант 8) — исполнитель протагонист, если не назван
-    /// присутствующий напарник (<see cref="PerformerCompanionId"/>) — либо
-    /// применяет наслідок без проверки. Ведёт либо на метку внутри сцены
-    /// (<see cref="NextLabel"/>), либо завершает сцену переходом
+    /// Один варіант вибору репліки (Поправка №7.8): реюзає модель наслідку
+    /// квесту (<see cref="QuestConsequence"/>) — ОДИН застосувач наслідків на
+    /// квести/сцени/глави арок, як того вимагає власник («выборы в диалогах
+    /// или квестах должны влиять это же тоже механики»). Варіант або резолвить
+    /// перевірку через існуючий <c>CheckResolver</c> (поріг показаний
+    /// заздалегідь, інваріант 8) — виконавець протагоніст, якщо не названий
+    /// присутній напарник (<see cref="PerformerCompanionId"/>) — або
+    /// застосовує наслідок без перевірки. Веде або на мітку всередині сцени
+    /// (<see cref="NextLabel"/>), або завершує сцену переходом
     /// (<see cref="TransitionKey"/>).
     /// </summary>
     public sealed class SceneChoiceOption
@@ -53,19 +53,19 @@ namespace Game.Core.Scenes
         public int Threshold;
         public ApproachForm Approach = ApproachForm.Neutral;
 
-        /// <summary>null — исполнитель протагонист; иначе — конкретный напарник (если присутствует, иначе откат на протагониста).</summary>
+        /// <summary>null — виконавець протагоніст; інакше — конкретний напарник (якщо присутній, інакше відкат на протагоніста).</summary>
         public string PerformerCompanionId;
 
-        /// <summary>Наслідок без проверки (HasCheck=false).</summary>
+        /// <summary>Наслідок без перевірки (HasCheck=false).</summary>
         public QuestConsequence Consequence;
 
-        /// <summary>Наслідок по полосе исхода (HasCheck=true; индекс = (int)OutcomeBand).</summary>
+        /// <summary>Наслідок за полосою результату (HasCheck=true; індекс = (int)OutcomeBand).</summary>
         public QuestConsequence[] ConsequenceByBand;
 
-        /// <summary>Метка шага сцены, на который переходим (см. <see cref="SceneStep.WithLabel"/>). Пусто — вариант не ветвится внутри сцены.</summary>
+        /// <summary>Мітка кроку сцени, на який переходимо (див. <see cref="SceneStep.WithLabel"/>). Пусто — варіант не розгалужується всередині сцени.</summary>
         public string NextLabel;
 
-        /// <summary>Ключ перехода, которым вариант сразу завершает сцену. Пусто — вариант ведёт на <see cref="NextLabel"/> (или продолжает линейно).</summary>
+        /// <summary>Ключ переходу, яким варіант одразу завершує сцену. Пусто — варіант веде на <see cref="NextLabel"/> (або продовжує лінійно).</summary>
         public string TransitionKey;
 
         public static SceneChoiceOption Simple(string id, string textKey, QuestConsequence consequence,
@@ -102,44 +102,44 @@ namespace Game.Core.Scenes
         }
     }
 
-    /// <summary>Как снят план.</summary>
+    /// <summary>Як знято план.</summary>
     public enum ShotFraming
     {
         None = 0,
-        Close = 1,   // крупный: одно лицо
-        Two = 2,     // двойной: двое в кадре
-        Empty = 3    // пустой: место без людей
+        Close = 1,   // крупний: одне обличчя
+        Two = 2,     // подвійний: двоє в кадрі
+        Empty = 3    // порожній: місце без людей
     }
 
     /// <summary>
-    /// Один шаг сценария. Текста здесь нет — только ключи: реплики живут в
-    /// таблицах, как и сигналы, поэтому писателю не нужен программист.
+    /// Один крок сценарію. Тексту тут нема — лише ключі: репліки живуть у
+    /// таблицях, як і сигнали, тому письменнику не потрібен програміст.
     /// </summary>
     public sealed class SceneStep
     {
         public SceneStepKind Kind;
 
-        /// <summary>Кто в кадре или кто говорит — id карточки персонажа. Для Choice — id самого выбора (журнал/боты).</summary>
+        /// <summary>Хто в кадрі або хто говорить — id картки персонажа. Для Choice — id самого вибору (журнал/боти).</summary>
         public string ActorId;
 
-        /// <summary>Второй участник двойного плана.</summary>
+        /// <summary>Другий учасник подвійного плану.</summary>
         public string SecondActorId;
 
         public ShotFraming Framing = ShotFraming.None;
 
-        /// <summary>Ключ реплики, эффекта или перехода. Не текст.</summary>
+        /// <summary>Ключ репліки, ефекту або переходу. Не текст.</summary>
         public string Key;
 
-        /// <summary>Длительность паузы в долях секунды — подсказка интерпретатору.</summary>
+        /// <summary>Тривалість паузи в частках секунди — підказка інтерпретатору.</summary>
         public double Seconds;
 
-        /// <summary>Варианты выбора (Kind == Choice, Поправка №7.8).</summary>
+        /// <summary>Варіанти вибору (Kind == Choice, Поправка №7.8).</summary>
         public List<SceneChoiceOption> Options;
 
         /// <summary>
-        /// Метка шага — цель ветвления (<see cref="SceneChoiceOption.NextLabel"/>).
-        /// Пусто у большинства шагов: метки нужны только там, куда варианты
-        /// выбора действительно прыгают.
+        /// Мітка кроку — ціль розгалуження (<see cref="SceneChoiceOption.NextLabel"/>).
+        /// Пусто у більшості кроків: мітки потрібні лише там, куди варіанти
+        /// вибору справді стрибають.
         /// </summary>
         public string Label;
 
@@ -158,11 +158,11 @@ namespace Game.Core.Scenes
         public static SceneStep Transition(string key)
             => new SceneStep { Kind = SceneStepKind.Transition, Key = key };
 
-        /// <summary>Выбор реплики (Поправка №7.8): 2-4 варианта — <see cref="SceneValidator"/> проверяет границы.</summary>
+        /// <summary>Вибір репліки (Поправка №7.8): 2-4 варіанти — <see cref="SceneValidator"/> перевіряє межі.</summary>
         public static SceneStep Choice(string id, List<SceneChoiceOption> options)
             => new SceneStep { Kind = SceneStepKind.Choice, ActorId = id, Options = options ?? new List<SceneChoiceOption>() };
 
-        /// <summary>Помечает шаг меткой — целью ветвления варианта выбора.</summary>
+        /// <summary>Позначає крок міткою — ціллю розгалуження варіанта вибору.</summary>
         public SceneStep WithLabel(string label)
         {
             Label = label;
@@ -171,13 +171,13 @@ namespace Game.Core.Scenes
     }
 
     /// <summary>
-    /// Портретная сцена как ДАННЫЕ (Поправка №5.8): ядро хранит и проверяет
-    /// сценарий, Game.Gameplay воспроизводит его интерпретатором, консоль
-    /// печатает текстом.
+    /// Портретна сцена як ДАНІ (Поправка №5.8): ядро зберігає і перевіряє
+    /// сценарій, Game.Gameplay відтворює його інтерпретатором, консоль
+    /// друкує текстом.
     ///
-    /// Смысл ровно в этом: сцену можно поставить и проверить без редактора —
-    /// порядок шагов, существование ключей, наличие карточки у каждого
-    /// участника. Интерпретатор пишется один раз.
+    /// Сенс саме в цьому: сцену можна поставити і перевірити без редактора —
+    /// порядок кроків, існування ключів, наявність картки у кожного
+    /// учасника. Інтерпретатор пишеться один раз.
     /// </summary>
     public sealed class Scene
     {
@@ -200,15 +200,15 @@ namespace Game.Core.Scenes
             return this;
         }
 
-        /// <summary>Все, кто появляется в сцене: по ним проверяются карточки.</summary>
+        /// <summary>Усі, хто з'являється в сцені: за ними перевіряються картки.</summary>
         public List<string> Participants()
         {
             var result = new List<string>();
             for (int i = 0; i < Steps.Count; i++)
             {
-                // Choice-шаг несёт в ActorId id самого выбора (не персонажа) —
-                // участником сцены его считать нельзя, иначе валидатор искал
-                // бы карточку для "myroslava_trust_choice".
+                // Choice-крок несе в ActorId id самого вибору (не персонажа) —
+                // учасником сцени його вважати не можна, інакше валідатор шукав
+                // би картку для "myroslava_trust_choice".
                 if (Steps[i].Kind == SceneStepKind.Choice) continue;
                 Add(result, Steps[i].ActorId);
                 Add(result, Steps[i].SecondActorId);

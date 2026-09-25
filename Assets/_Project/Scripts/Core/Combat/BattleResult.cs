@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Game.Core.Combat
 {
-    /// <summary>Итог тактического боя, как его видит городской луп.</summary>
+    /// <summary>Підсумок тактичного бою, як його бачить міський луп.</summary>
     public enum BattleOutcome
     {
         Victory = 0,
@@ -13,11 +13,11 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Что случилось с одним юнитом отряда игрока. SourceCompanionId — единственная
-    /// связь с ростером; сам Combat роль/пост/статус напарника НЕ трогает (§1.1:
-    /// «бій ранить ЛИШЕ через RosterAdapter.Wound», Б7). Для юнитов без
-    /// SourceCompanionId (обычные враги) запись не создаётся — раны считаются
-    /// только по стороне игрока.
+    /// Що сталося з одним юнітом загону гравця. SourceCompanionId — єдиний
+    /// зв'язок з ростером; сам Combat роль/пост/статус напарника НЕ чіпає (§1.1:
+    /// «бій ранить ЛИШЕ через RosterAdapter.Wound», Б7). Для юнітів без
+    /// SourceCompanionId (звичайні вороги) запис не створюється — рани рахуються
+    /// тільки по стороні гравця.
     /// </summary>
     public sealed class BattleCasualty
     {
@@ -36,11 +36,11 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Выход тактического боя обратно в луп (§2 таблицы «одна гра», строка 30):
-    /// Outcome маппится на OutcomeBand вызывающим (PassVanguardOutcome/DungeonRun/
-    /// Finale — все D1), а не здесь — у каждого вызывающего своя лестница
-    /// разъяснений. BattleResult сам ростер не трогает и не выдаёт шрамов: это
-    /// прямо запрещено пакету Б1, Р5 отдан RosterAdapter.Wound.
+    /// Вихід тактичного бою назад у луп (§2 таблиці «одна гра», рядок 30):
+    /// Outcome мапиться на OutcomeBand викликачем (PassVanguardOutcome/DungeonRun/
+    /// Finale — усі D1), а не тут — у кожного викликача своя драбина
+    /// роз'яснень. BattleResult сам ростер не чіпає і не видає шрамів: це
+    /// прямо заборонено пакету Б1, Р5 віддано RosterAdapter.Wound.
     /// </summary>
     public sealed class BattleResult
     {
@@ -48,13 +48,13 @@ namespace Game.Core.Combat
         public int Rounds;
         public IReadOnlyList<BattleCasualty> Casualties;
 
-        /// <summary>Id боевых юнитов игрока, которые дожили и остались на ногах (Active) — для сборки партии обратно.</summary>
+        /// <summary>Id бойових юнітів гравця, які дожили і лишилися на ногах (Active) — для збірки партії назад.</summary>
         public IReadOnlyList<string> SurvivingCompanionIds;
 
         /// <summary>
-        /// Строит BattleResult из завершённого CombatState. Бросает, если бой
-        /// ещё Ongoing — вызывающий обязан дождаться исхода (Victory/Defeat/
-        /// Retreat/Draw), у комбата нет «наполовину сыгранного» результата.
+        /// Будує BattleResult із завершеного CombatState. Кидає, якщо бій
+        /// ще Ongoing — викликач зобов'язаний дочекатися наслідку (Victory/Defeat/
+        /// Retreat/Draw), у комбату немає «напівзіграного» результату.
         /// </summary>
         public static BattleResult From(CombatState cs)
         {
@@ -93,7 +93,7 @@ namespace Game.Core.Combat
                 case CombatOutcome.Victory: return BattleOutcome.Victory;
                 case CombatOutcome.Defeat: return BattleOutcome.Defeat;
                 case CombatOutcome.Retreat: return BattleOutcome.Retreat;
-                default: return BattleOutcome.Draw; // Draw и любой будущий предохранитель — не «чистая» победа
+                default: return BattleOutcome.Draw; // Draw і будь-який майбутній запобіжник — не «чиста» перемога
             }
         }
     }

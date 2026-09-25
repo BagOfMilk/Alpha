@@ -3,19 +3,19 @@ using System.Collections.Generic;
 
 namespace Game.Core.Scenes
 {
-    /// <summary>Что сейчас на экране: результат проигрывания, а не сам сценарий.</summary>
+    /// <summary>Що зараз на екрані: результат програвання, а не сам сценарій.</summary>
     public readonly struct SceneFrame
     {
-        /// <summary>Кто в кадре (может быть пусто — пустой план).</summary>
+        /// <summary>Хто в кадрі (може бути пусто — порожній план).</summary>
         public readonly string ActorId;
         public readonly string SecondActorId;
         public readonly ShotFraming Framing;
 
-        /// <summary>Кто говорит сейчас и ключ реплики (пусто — реплики нет).</summary>
+        /// <summary>Хто говорить зараз і ключ репліки (пусто — репліки нема).</summary>
         public readonly string SpeakerId;
         public readonly string LineKey;
 
-        /// <summary>Ключ эффекта, сработавшего на этом шаге.</summary>
+        /// <summary>Ключ ефекту, що спрацював на цьому кроці.</summary>
         public readonly string EffectKey;
 
         public SceneFrame(string actorId, string secondActorId, ShotFraming framing,
@@ -31,14 +31,14 @@ namespace Game.Core.Scenes
     }
 
     /// <summary>
-    /// Проигрывание портретной сцены (Поправка №5.8).
+    /// Програвання портретної сцени (Поправка №5.8).
     ///
-    /// Живёт в ядре, а не в движке, по той же причине, по какой сцена — данные:
-    /// «кто сейчас в кадре и что он говорит» проверяется тестом без редактора.
-    /// Движку остаётся нарисовать кадр, консоли — напечатать его.
+    /// Живе в ядрі, а не в рушії, з тієї самої причини, з якої сцена — дані:
+    /// «хто зараз у кадрі і що він говорить» перевіряється тестом без редактора.
+    /// Рушію лишається намалювати кадр, консолі — надрукувати його.
     ///
-    /// План ДЕРЖИТСЯ, пока не сменится: реплика не стирает кадр, иначе после
-    /// первой же фразы говорящий исчезал бы с экрана.
+    /// План ТРИМАЄТЬСЯ, поки не зміниться: репліка не стирає кадр, інакше після
+    /// першої ж фрази той, хто говорить, зникав би з екрана.
     /// </summary>
     public sealed class ScenePlayback
     {
@@ -58,37 +58,37 @@ namespace Game.Core.Scenes
                 if (!string.IsNullOrEmpty(_steps[i].Label)) _labels[_steps[i].Label] = i;
         }
 
-        /// <summary>Сцена доиграна: дальше показывать нечего.</summary>
+        /// <summary>Сцена дограна: далі показувати нема чого.</summary>
         public bool IsFinished { get; private set; }
 
-        /// <summary>Ключ перехода, которым сцена закончилась (null, пока идёт).</summary>
+        /// <summary>Ключ переходу, яким сцена закінчилася (null, поки йде).</summary>
         public string TransitionKey { get; private set; }
 
-        /// <summary>Сколько держать текущий кадр: пауза задаёт, остальное — мгновенно.</summary>
+        /// <summary>Скільки тримати поточний кадр: пауза задає, решта — миттєво.</summary>
         public double HoldSeconds { get; private set; }
 
         /// <summary>
-        /// Сцена стоит на выборе реплики (Поправка №7.8) и ждёт
-        /// <see cref="Choose"/> — <see cref="Next"/> сам не движется, пока это
-        /// true (иначе наивный вызывающий, не умеющий выбирать, тихо
-        /// пропустил бы выбор, а не завис бы на нём явно).
+        /// Сцена стоїть на виборі репліки (Поправка №7.8) і чекає
+        /// <see cref="Choose"/> — <see cref="Next"/> сам не рухається, поки це
+        /// true (інакше наївний викликач, що не вміє вибирати, тихо
+        /// пропустив би вибір, а не завис би на ньому явно).
         /// </summary>
         public bool IsAwaitingChoice { get; private set; }
 
-        /// <summary>Id текущего шага-выбора (§4.10-подобный ключ для ботов/журнала) — пусто, если не ждём выбора.</summary>
+        /// <summary>Id поточного кроку-вибору (§4.10-подібний ключ для ботів/журналу) — пусто, якщо не чекаємо вибору.</summary>
         public string ChoiceId { get; private set; }
 
-        /// <summary>Варианты текущего выбора — пусто, если не ждём выбора.</summary>
+        /// <summary>Варіанти поточного вибору — пусто, якщо не чекаємо вибору.</summary>
         public IReadOnlyList<SceneChoiceOption> PendingOptions => _pendingOptions;
 
         public SceneFrame Current => new SceneFrame(_actor, _second, _framing, _speaker, _line, _effect);
 
         /// <summary>
-        /// Следующий шаг. Возвращает false, когда сцена кончилась.
+        /// Наступний крок. Повертає false, коли сцена закінчилася.
         ///
-        /// Реплика и эффект живут ровно один шаг — это события; план держится,
-        /// пока его не сменит другой. Остановившись на выборе, повторные
-        /// вызовы возвращают тот же кадр, пока не придёт <see cref="Choose"/>.
+        /// Репліка і ефект живуть рівно один крок — це події; план тримається,
+        /// поки його не змінить інший. Зупинившись на виборі, повторні
+        /// виклики повертають той самий кадр, поки не прийде <see cref="Choose"/>.
         /// </summary>
         public bool Next()
         {
@@ -145,13 +145,13 @@ namespace Game.Core.Scenes
         }
 
         /// <summary>
-        /// Разрешает текущий выбор (только когда <see cref="IsAwaitingChoice"/>):
-        /// вариант с <see cref="SceneChoiceOption.TransitionKey"/> завершает
-        /// сцену на месте (как обычный Transition-шаг); вариант с
-        /// <see cref="SceneChoiceOption.NextLabel"/> прыгает на метку; вариант
-        /// без обоих продолжает сцену линейно со следующего шага. Наслідок и
-        /// проверку резолвит вызывающий (GameSession) ДО этого вызова — сама
-        /// сцена ни того, ни другого не знает.
+        /// Вирішує поточний вибір (лише коли <see cref="IsAwaitingChoice"/>):
+        /// варіант з <see cref="SceneChoiceOption.TransitionKey"/> завершує
+        /// сцену на місці (як звичайний Transition-крок); варіант з
+        /// <see cref="SceneChoiceOption.NextLabel"/> стрибає на мітку; варіант
+        /// без обох продовжує сцену лінійно з наступного кроку. Наслідок і
+        /// перевірку резолвить викликач (GameSession) ДО цього виклику — сама
+        /// сцена ні того, ні іншого не знає.
         /// </summary>
         public void Choose(int optionIndex)
         {
@@ -176,13 +176,13 @@ namespace Game.Core.Scenes
                 int target;
                 if (_labels.TryGetValue(option.NextLabel, out target))
                 {
-                    // Next() увеличит индекс перед тем, как прочитать шаг —
-                    // ставим на "предыдущий перед целью", а не на саму цель.
+                    // Next() збільшить індекс перед тим, як прочитати крок —
+                    // ставимо на "попередній перед ціллю", а не на саму ціль.
                     _index = target - 1;
                 }
             }
-            // Ни того, ни другого — сцена просто продолжает со следующего
-            // шага после Choice (индекс уже на нём).
+            // Ні того, ні іншого — сцена просто продовжує з наступного
+            // кроку після Choice (індекс уже на ньому).
         }
     }
 }

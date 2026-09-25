@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Пересобирает docs/interaction-map.html.
+ * Пересобирає docs/interaction-map.html.
  *
- * Что откуда берётся:
- *   tools/map/graph.json  — авторский слой: код-узлы, дизайн-слой GDD, ручные разрывы.
- *   Assets/**\/*.cs        — всё, что можно вычитать из кода: секции, слоты, склонности,
- *                           ресурсы, архетипы, их числа, прогон первого дня и автопроверки.
- *   docs/*.md, ProjectSettings — сверка документации с кодом.
+ * Що звідки береться:
+ *   tools/map/graph.json  — авторський шар: код-вузли, дизайн-шар GDD, ручні розриви.
+ *   Assets/**\/*.cs        — усе, що можна вичитати з коду: секції, слоти, схильності,
+ *                           ресурси, архетипи, їхні числа, прогін першого дня й автоперевірки.
+ *   docs/*.md, ProjectSettings — звірка документації з кодом.
  *
  * Запуск:  node tools/map/build.mjs [--check]
- *   --check  ничего не пишет, только сообщает, устарел ли файл (код возврата 1).
+ *   --check  нічого не пише, лише повідомляє, чи застарів файл (код повернення 1).
  */
 
 import fs from "node:fs";
@@ -27,9 +27,9 @@ const CHECK_ONLY = process.argv.includes("--check");
 const warnings = [];
 const warn = (m) => warnings.push(m);
 
-/* ──────────────────────────── утилиты ──────────────────────────── */
+/* ──────────────────────────── утиліти ──────────────────────────── */
 
-/** Округление как в C# Math.Round — к ближайшему чётному на .5 */
+/** Округлення як у C# Math.Round — до найближчого парного на .5 */
 function roundHalfEven(x) {
   const f = Math.floor(x);
   const d = x - f;
@@ -45,21 +45,21 @@ const sentence = (s) => {
   return /[.!?]$/.test(t) ? t : t + ".";
 };
 const num = (n) => (n === undefined || n === null || Number.isNaN(n) ? "—" : String(n));
-/** Коэффициент как в BALANCE.md: всегда хотя бы один знак после точки. */
+/** Коефіцієнт як у BALANCE.md: завжди хоча б один знак після крапки. */
 const coef = (n) =>
   n === undefined || n === null || Number.isNaN(n) ? "—" : Number.isInteger(n) ? n.toFixed(1) : String(n);
 
 /**
- * Безопасные агрегаты. На пустом наборе Math.max(...[]) даёт -Infinity, а arr.at(-1)
- * даёт undefined — и генератор падает ровно тогда, когда контент временно пуст
- * посреди рефакторинга. Каждый агрегат ниже возвращает запасное значение.
+ * Безпечні агрегати. На порожньому наборі Math.max(...[]) дає -Infinity, а arr.at(-1)
+ * дає undefined — і генератор падає рівно тоді, коли контент тимчасово порожній
+ * посеред рефакторингу. Кожен агрегат нижче повертає запасне значення.
  */
 const maxOf = (arr, fallback = 0) => (arr.length ? Math.max(...arr) : fallback);
 const minOf = (arr, fallback = 0) => (arr.length ? Math.min(...arr) : fallback);
 const first = (arr, fallback = null) => (arr.length ? arr[0] : fallback);
 const last = (arr, fallback = null) => (arr.length ? arr[arr.length - 1] : fallback);
 
-/* ──────────────────────── сбор исходников ──────────────────────── */
+/* ──────────────────────── збір вихідників ──────────────────────── */
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(rel(dir), { withFileTypes: true })) {
@@ -90,7 +90,7 @@ const SRC = {
 };
 for (const [k, p] of Object.entries(SRC)) if (!exists(p)) warn(`нет файла ${p} (ключ ${k}) — карта соберётся неполной`);
 
-/* ──────────────────────────── парсеры ──────────────────────────── */
+/* ──────────────────────────── парсери ──────────────────────────── */
 
 /** enum → [{name, value, comment, line}] */
 function parseEnum(file, name) {
@@ -112,14 +112,14 @@ function parseEnum(file, name) {
 
 const attrTypes = parseEnum(SRC.attrType, "AttributeType").map((a) => ({ ...a, axis: "attr" }));
 const skillTypes = parseEnum(SRC.skillType, "SkillType").map((s) => ({ ...s, axis: "skill" }));
-// Обе оси кладутся в один список: карта показывает их вперемешку, а группа
-// узла берётся из axis и диапазона значения, как и в самом коде.
+// Обидві осі кладуться в один список: карта показує їх упереміш, а група
+// вузла береться з axis і діапазону значення, так само як і в самому коді.
 const statTypes = [...attrTypes, ...skillTypes];
 const resTypes = parseEnum(SRC.resType, "ResourceType");
 const sectionTypes = parseEnum(SRC.section, "BaseSectionType");
 const statusTypes = parseEnum(SRC.companion, "CompanionStatus");
 
-/** Группа скила читается из десятки значения — ровно как Skills.GroupOf. */
+/** Група скіла читається з десятки значення — рівно як Skills.GroupOf. */
 const statGroup = (n) => {
   const s = statTypes.find((x) => x.name === n);
   if (!s) return "Статы";
@@ -130,7 +130,7 @@ const statGroup = (n) => {
 };
 const axisOf = (n) => statTypes.find((x) => x.name === n)?.axis ?? null;
 
-/** Архетипы из DefaultContent */
+/** Архетипи з DefaultContent */
 function parseArchetypes() {
   const text = CS[SRC.defaults] || "";
   const out = [];
@@ -150,7 +150,7 @@ function parseArchetypes() {
   return out;
 }
 
-/** Слоты из DefaultContent */
+/** Слоти з DefaultContent */
 function parseSlots() {
   const text = CS[SRC.defaults] || "";
   const out = [];
@@ -188,7 +188,7 @@ function parseSlots() {
   return out;
 }
 
-/** Числа баланса */
+/** Числа балансу */
 function parseBalance() {
   const text = CS[SRC.balance] || "";
   const out = {};
@@ -196,7 +196,7 @@ function parseBalance() {
   return out;
 }
 
-/** Стартовая расстановка и запасы из демки */
+/** Стартова розстановка і запаси з демки */
 function parseDemo() {
   const text = CS[SRC.demo] || "";
   const list = text.match(/assignments\s*=\s*new[\s\S]*?\{([\s\S]*?)\}/);
@@ -214,7 +214,7 @@ const balance = parseBalance();
 const demo = parseDemo();
 const globalMult = balance.GlobalProductionMultiplier ?? 1;
 
-/* ─────────────────── генерация узлов слоя «База» ─────────────────── */
+/* ─────────────────── генерація вузлів шару «База» ─────────────────── */
 
 const G = JSON.parse(read("tools/map/graph.json"));
 const bind = G.bind || {};
@@ -234,7 +234,7 @@ const edges = [...G.edges];
 const push = (n) => nodes.push(n);
 const link = (s, t, l, tag) => edges.push([s, t, l, tag]);
 
-/** Числовая справка узла — считается из исходников, дописывается седьмым полем. */
+/** Числова довідка вузла — рахується з вихідників, дописується сьомим полем. */
 const facts = {};
 const fact = (id, ...parts) => {
   const s = parts.filter(Boolean).join(" ");
@@ -245,7 +245,7 @@ const plural = (n, one, few, many) => {
   return `${n} ${a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many}`;
 };
 
-// секции
+// секції
 const slotsBySection = {};
 slots.forEach((s) => (slotsBySection[s.section] ||= []).push(s));
 for (const sec of sectionTypes) {
@@ -261,7 +261,7 @@ for (const sec of sectionTypes) {
          : `Слотов 0 — назначить некого.`);
 }
 
-// склонности (только те, что где-то участвуют)
+// схильності (лише ті, що десь беруть участь)
 const usedStats = new Set();
 slots.forEach((s) => { if (s.primary !== "None") usedStats.add(s.primary); if (s.secondary !== "None") usedStats.add(s.secondary); });
 archetypes.forEach((a) => { Object.keys(a.stats).forEach((k) => usedStats.add(k)); Object.keys(a.growth).forEach((k) => usedStats.add(k)); });
@@ -290,7 +290,7 @@ for (const st of statTypes) {
        growers.length ? `Растёт у ${plural(growers.length, "архетипа", "архетипов", "архетипов")}: ${growers.map((a) => `${a.name} ×${coef(a.growth[st.name])}`).join(", ")}.` : null);
 }
 
-// ресурсы
+// ресурси
 const producedRes = new Set(slots.filter((s) => s.kind === "Resource").map((s) => s.resource));
 const spendCalls = [...allCode.matchAll(/TrySpend\(ResourceType\.(\w+)/g)].map((m) => m[1]);
 for (const r of resTypes) {
@@ -309,7 +309,7 @@ for (const r of resTypes) {
          : `Трат 0 — только копится.`);
 }
 
-// именованные выходы
+// іменовані виходи
 const passiveIds = [...new Set(slots.filter((s) => s.kind === "Passive" && s.passive).map((s) => s.passive))];
 for (const p of passiveIds) {
   const from = slots.filter((s) => s.passive === p);
@@ -326,11 +326,11 @@ if (slots.some((s) => s.kind === "Healing")) {
        `Плюс естественная регенерация ${coef(balance.BaseHealingPerCycle ?? 0)} очка всем раненым за цикл — она идёт и без лазарета.`);
 }
 
-// слоты
+// слоти
 const scaleMismatches = [];
 const KIND_TEXT = { Resource: "Ресурс в кошелёк", Healing: "Лечение раненых", Passive: "Пассивный бонус",
                     None: "Выхода нет: позиция есть, механика здания не написана" };
-/** Куда уходит выход слота. None не ведёт никуда — и ребра быть не должно. */
+/** Куди йде вихід слоту. None не веде нікуди — і ребра бути не повинно. */
 const slotTarget = (s) =>
   s.kind === "Resource" ? s.resource : s.kind === "Passive" ? s.passive : s.kind === "Healing" ? "Healing" : null;
 const slotOutId = (s) =>
@@ -358,9 +358,9 @@ for (const s of slots) {
   link(idSection(s.section), id, "позиция секции" + (s.unlocked ? "" : ", закрыта по умолчанию"), "code");
   for (const [role, stat, k] of [["Primary", s.primary, s.k1], ["Secondary", s.secondary, s.k2]]) {
     if (stat === "None") continue;
-    // Прежняя проверка ловила боевой стат 0–100 в формуле выработки. Смешать
-    // шкалы теперь нельзя типами: Primary — скил, Secondary — атрибут. Осталась
-    // вторая половина того же вопроса — контент, вылезший за собственную шкалу.
+    // Попередня перевірка ловила бойовий стат 0–100 у формулі виробітку. Змішати
+    // шкали тепер не можна типами: Primary — скіл, Secondary — атрибут. Лишилась
+    // друга половина того самого питання — контент, що виліз за власну шкалу.
     const ceiling = axisOf(stat) === "attr" ? (balance.MaxAttribute ?? 10) : (balance.MaxSkillLevel ?? 10);
     const mism = (statMax[stat] ?? 0) > ceiling;
     link(id, idStat(stat), `${role} ×${coef(k)}` + (mism ? ` — но ${stat} у архетипов до ${statMax[stat]}` : ""), mism ? "gap" : "code");
@@ -370,7 +370,7 @@ for (const s of slots) {
   if (outId) link(id, outId, `${s.kind}, base ${num(s.base)}`, "code");
 }
 
-// архетипы
+// архетипи
 const instanceArch = (instanceId) => instanceId.replace(/_\d+$/, "");
 for (const a of archetypes) {
   const id = idArch(a.id);
@@ -400,17 +400,17 @@ for (const a of archetypes) {
 }
 
 /**
- * Файлы игрового кода, которые реально наносят ранения.
+ * Файли ігрового коду, які реально завдають поранень.
  *
- * Считается ОДИН раз и используется и карточкой разрыва, и заметкой к прогону.
- * Раньше их было две копии с разными регекспами: карточку починили под «+=»,
- * а заметка осталась на голом «=» и продолжала уверять, что источника нет.
- * Две копии одной проверки расходятся всегда — вопрос только когда.
+ * Рахується ОДИН раз і використовується і карткою розриву, і заміткою до прогону.
+ * Раніше їх було дві копії з різними регекспами: картку полагодили під «+=»,
+ * а замітка лишилась на голому «=» і продовжувала запевняти, що джерела нема.
+ * Дві копії однієї перевірки розходяться завжди — питання лише коли.
  */
 const injurySetters = CORE_FILES.filter((p) =>
   [...CS[p].matchAll(/InjuryPoints\s*\+?=\s*([^;]+);/g)].some((m) => m[1].trim() !== "0"));
 
-/* ──────────────────────── прогон первого дня ──────────────────────── */
+/* ──────────────────────── прогін першого дня ──────────────────────── */
 
 const slotById = Object.fromEntries(slots.map((s) => [s.id, s]));
 const archById = Object.fromEntries(archetypes.map((a) => [a.id, a]));
@@ -433,8 +433,8 @@ for (const as of demo.assignments) {
   const formula = `${num(slot.base)}` +
     (slot.primary !== "None" ? ` + ${p}×${coef(slot.k1)}` : "") +
     (slot.secondary !== "None" ? ` + ${s2}×${coef(slot.k2)}` : "") + ` = ${raw.toFixed(1)}`;
-  // У слота без выхода показывать число бессмысленно: выработка считается,
-  // но её некуда положить. Пишем это словами, иначе строка врёт цифрой.
+  // У слоту без виходу показувати число безглуздо: виробіток рахується,
+  // але його нема куди покласти. Пишемо це словами, інакше рядок бреше цифрою.
   runRows.push([arch.name, slot.name, formula, unit ? `${out} ${unit}` : "выхода нет", String(xp)]);
   if (slot.kind === "Resource") produced[slot.resource] = (produced[slot.resource] ?? 0) + out;
   if (!wellSuited) offProfile.push({ arch: arch.name, slot: slot.name, stat: slot.primary, xp });
@@ -448,8 +448,8 @@ const takenSlots = new Set(demo.assignments.map((a) => a.slot));
 const idleSlots = slots.filter((s) => !takenSlots.has(s.id) && s.unlocked);
 const lockedSlots = slots.filter((s) => !s.unlocked);
 for (const s of [...idleSlots, ...lockedSlots]) {
-  // Про закрытый слот раньше писалось «открыть нечем». Механика разблокировки
-  // появилась, а строка осталась бы врать — цена берётся из самого слота.
+  // Про закритий слот раніше писалося «відкрити нічим». Механіка розблокування
+  // з'явилась, а рядок лишився б брехати — ціна береться із самого слоту.
   const cost = Object.entries(s.unlockCost || {}).map(([r, n]) => `${r} ${n}`).join(" + ");
   const reason = s.unlocked
     ? "слот свободен: некому встать"
@@ -458,18 +458,18 @@ for (const s of [...idleSlots, ...lockedSlots]) {
   runRows.push([s.unlocked ? "— никого" : "— закрыт", s.name, reason, unit ? `0 ${unit}` : "выхода нет", "—"]);
 }
 
-// баланс еды
+// баланс їжі
 const companions = new Set(demo.assignments.map((a) => a.instance)).size || archetypes.length;
 const upkeep = (balance.FoodUpkeepPerCompanion ?? 1) * companions;
 const foodIn = produced.Food ?? 0;
 const foodStart = demo.starting.Food ?? 0;
 
-// день первого уровня
+// день першого рівня
 const xpToNext1 = roundHalfEven((balance.XpBase ?? 100) * Math.pow(1, balance.XpExponent ?? 1.5));
 const xpValues = [...new Set(runRows.filter((r) => r[4] !== "—").map((r) => +r[4]))].sort((a, b) => b - a);
 const levelDays = xpValues.map((v) => ({ xp: v, day: Math.ceil(xpToNext1 / v) }));
 
-// ресурсы, которые за прогон остаются нулём
+// ресурси, які за прогін лишаються нулем
 const zeroRes = resTypes
   .filter((r) => r.name !== "None" && !(produced[r.name] > 0) && !(demo.starting[r.name] > 0))
   .map((r) => r.name);
@@ -496,16 +496,16 @@ const runNote = [
     : `Порог первого уровня — ${xpToNext1} XP, но ролевой опыт сейчас никто не набирает.`,
 ].filter(Boolean).join(" ");
 
-/* ──────────────────────────── автопроверки ──────────────────────────── */
+/* ──────────────────────────── автоперевірки ──────────────────────────── */
 
 const autoGaps = [];
-/** cat — что это за разрыв: см. CATS в шаблоне. */
+/** cat — що це за розрив: див. CATS у шаблоні. */
 const addGap = (title, where, text, sev, cat, edge) => {
   autoGaps.push([title, where, text, sev, cat]);
   if (edge) link(edge[0], edge[1], edge[2], "gap");
 };
 
-// секции без слотов
+// секції без слотів
 for (const sec of sectionTypes) {
   if (sec.name === "None" || slotsBySection[sec.name]) continue;
   addGap(`Секция ${label(sec.name, sec.name)} без слотов`,
@@ -514,10 +514,10 @@ for (const sec of sectionTypes) {
     "low", "Мёртвый код", [idSection(sec.name), "b.m.assign", "секция есть в enum, слотов у неё нет"]);
 }
 
-// Ресурсы без производителя и без трат.
-// Тратой считается и прямой TrySpend(ResourceType.X, n), и запись в словаре цены
-// вида { ResourceType.X, n } — словарную перегрузку TrySpend регексп по имени
-// ресурса не увидит, и «экономика односторонняя» висела бы ложно.
+// Ресурси без виробника і без витрат.
+// Витратою вважається і прямий TrySpend(ResourceType.X, n), і запис у словнику ціни
+// вигляду { ResourceType.X, n } — словникове перевантаження TrySpend регексп за іменем
+// ресурсу не побачить, і «экономика односторонняя» висіло б хибно.
 const gameCode = CS_FILES.filter((p) => !p.includes("/Tests/")).map((p) => CS[p]).join("\n");
 const spentDirect = [...gameCode.matchAll(/TrySpend\(ResourceType\.(\w+)/g)].map((m) => m[1]);
 const spentInCosts = [...gameCode.matchAll(/\{\s*ResourceType\.(\w+)\s*,\s*\d+\s*\}/g)].map((m) => m[1]);
@@ -529,7 +529,7 @@ for (const r of resTypes) {
     "low", "Мёртвый код", [idRes(r.name), "b.m.production", "ресурс объявлен, но его никто не производит и не тратит"]);
 }
 
-// односторонняя экономика
+// однобічна економіка
 const unspent = [...producedRes].filter((r) => !spentRes.includes(r));
 if (spentRes.length && unspent.length) {
   const spendLine = lineOf(CS[SRC.baseState] || "", (CS[SRC.baseState] || "").indexOf("TrySpend("));
@@ -542,17 +542,17 @@ if (spentRes.length && unspent.length) {
     "low", "Нет логики", [idRes(unspent[0]), "b.m.upkeep", `кроме ${[...new Set(spentRes)].join(", ")} не тратится ни один ресурс`]);
 }
 
-// поля баланса, которые никто не читает
+// поля балансу, які ніхто не читає
 const balanceText = CS[SRC.balance] || "";
 const balanceFields = Object.keys(balance);
 const assetFields = (CS[SRC.asset] || "").match(/public\s+(?:double|int)\s+\w+/g)?.length ?? 0;
-// Ассет — это проводка конфига, а не потребитель: поле, которое только зеркалится
-// в BalanceConfigAsset и больше нигде не читается, остаётся мёртвой крутилкой.
+// Ассет — це проводка конфігу, а не споживач: поле, яке лише дзеркалиться
+// в BalanceConfigAsset і більше ніде не читається, лишається мертвою крутилкою.
 const PLUMBING = new Set([SRC.balance, SRC.asset]);
 for (const field of balanceFields) {
-  // Ищем обращение через точку (cfg.Field), а не голое слово: имя поля может
-  // совпадать с именем типа — так TraitSlots считался «используемым», потому
-  // что регексп находил одноимённый класс.
+  // Шукаємо звернення через крапку (cfg.Field), а не голе слово: ім'я поля може
+  // збігатися з іменем типу — так TraitSlots вважався «використовуваним», бо
+  // регексп знаходив однойменний клас.
   const readers = CS_FILES.filter((p) => !PLUMBING.has(p) && new RegExp(`\\.${field}\\b`).test(CS[p]));
   if (readers.length) continue;
   const line = lineOf(balanceText, balanceText.indexOf(`${field} =`));
@@ -565,7 +565,7 @@ for (const field of balanceFields) {
     "low", "Мёртвый код");
 }
 
-// ScriptableObject-конфиг, который никто не применяет
+// ScriptableObject-конфіг, який ніхто не застосовує
 if (exists(SRC.asset)) {
   const assetText = CS[SRC.asset];
   const callers = CS_FILES.filter((p) => p !== SRC.asset && /ToConfig\s*\(/.test(CS[p]));
@@ -577,7 +577,7 @@ if (exists(SRC.asset)) {
   }
 }
 
-// статусы, которые никто не присваивает
+// статуси, які ніхто не присвоює
 const assigned = new Set([...allCode.matchAll(/Status\s*=\s*CompanionStatus\.(\w+)/g)].map((m) => m[1]));
 const neverSet = statusTypes.filter((s) => !assigned.has(s.name)).map((s) => s.name);
 if (neverSet.length) {
@@ -588,7 +588,7 @@ if (neverSet.length) {
     "mid", "Мёртвый код");
 }
 
-// ранения без источника — вычисление живёт выше, в injurySetters
+// поранення без джерела — обчислення живе вище, в injurySetters
 if (slots.some((s) => s.kind === "Healing") && !injurySetters.length) {
   const bestHeal = maxOf(slots.filter((s) => s.kind === "Healing")
     .map((s) => maxOf(archetypes.map((a) => roundHalfEven(s.base + (a.stats[s.primary] ?? 0) * s.k1 + (a.stats[s.secondary] ?? 0) * s.k2)), s.base)));
@@ -597,7 +597,7 @@ if (slots.some((s) => s.kind === "Healing") && !injurySetters.length) {
     "mid", "Нет логики", ["b.m.heal", "b.m.assign", "InjuryPoints выставляет только тест — источника ранений в игре нет"]);
 }
 
-// боевой стат в формуле выработки: шкалы 0–100 и 0–7 несопоставимы
+// бойовий стат у формулі виробітку: шкали 0–100 і 0–7 непорівнянні
 for (const m of scaleMismatches) {
   const best = archetypes
     .map((a) => ({ name: a.name, out: roundHalfEven(m.slot.base + (a.stats[m.slot.primary] ?? 0) * m.slot.k1 + (a.stats[m.slot.secondary] ?? 0) * m.slot.k2) }))
@@ -609,7 +609,7 @@ for (const m of scaleMismatches) {
     "mid", "Баланс");
 }
 
-// закрытые слоты, которые нечем открыть
+// закриті слоти, які нічим відкрити
 const unlockSetters = CORE_FILES.filter((p) => /\.Unlocked\s*=/.test(CS[p]));
 for (const s of lockedSlots) {
   if (unlockSetters.length) break;
@@ -618,17 +618,17 @@ for (const s of lockedSlots) {
     "low", "Нет логики", ["b.m.unlock", idSlot(s.id), "переключать Unlocked некому"]);
 }
 
-// События без потребителя в игровом коде.
-// Границы слова обязательны: без них подписка на BandChanged закрывала карточку
-// про Changed, потому что одно имя — подстрока другого.
+// Події без споживача в ігровому коді.
+// Межі слова обов'язкові: без них підписка на BandChanged закривала картку
+// про Changed, бо одне ім'я — підрядок іншого.
 for (const p of CORE_FILES) {
   for (const m of CS[p].matchAll(/public event\s+[\w<>,\s]+\s+(\w+)\s*;/g)) {
     const sub = new RegExp(`\\b${m[1]}\\s*\\+=`);
     const inGame = CS_FILES.filter((f) => !f.includes("/Tests/") && sub.test(CS[f]));
     if (inGame.length) continue;
-    // Событие без потребителя, но с тестом — осознанная точка расширения:
-    // контракт зафиксирован и не отвалится молча. Без теста и без подписок —
-    // просто мёртвая проводка.
+    // Подія без споживача, але з тестом — усвідомлена точка розширення:
+    // контракт зафіксований і не відвалиться мовчки. Без теста і без підписок —
+    // просто мертва проводка.
     const inTests = CS_FILES.filter((f) => f.includes("/Tests/") && sub.test(CS[f]));
     if (inTests.length) continue;
     addGap(`${path.basename(p, ".cs")}.${m[1]} никто не слушает`,
@@ -639,7 +639,7 @@ for (const p of CORE_FILES) {
   }
 }
 
-// версия Unity
+// версія Unity
 if (exists("ProjectSettings/ProjectVersion.txt") && exists("docs/GDD.md")) {
   const editor = read("ProjectSettings/ProjectVersion.txt").match(/m_EditorVersion:\s*(\S+)/)?.[1];
   const gddVer = read("docs/GDD.md").match(/Unity\s+(\d+\.\d+)/)?.[1];
@@ -652,7 +652,7 @@ if (exists("ProjectSettings/ProjectVersion.txt") && exists("docs/GDD.md")) {
   }
 }
 
-// таблица опыта в BALANCE.md против формулы
+// таблиця досвіду в BALANCE.md проти формули
 if (exists("docs/BALANCE.md")) {
   const bal = read("docs/BALANCE.md");
   const xpToNext = (lvl) => roundHalfEven((balance.XpBase ?? 100) * Math.pow(lvl, balance.XpExponent ?? 1.5));
@@ -671,7 +671,7 @@ if (exists("docs/BALANCE.md")) {
   }
 }
 
-/* ──────────────────── сверка авторского слоя с кодом ──────────────────── */
+/* ──────────────────── звірка авторського шару з кодом ──────────────────── */
 
 const nodeById = Object.fromEntries(nodes.map((n) => [n[0], n]));
 const typeFile = {};
@@ -682,7 +682,7 @@ for (const n of G.nodes) {
   if (guess) typeFile[n[0]] = guess;
   else if (!n[5].startsWith("Tests/") && !/asmdef/.test(n[5])) warn(`узел ${n[0]}: не нашёл файл «${n[5]}»`);
 }
-/* Числовые справки для узлов кода — размер типа, кто им пользуется. */
+/* Числові довідки для вузлів коду — розмір типу, хто ним користується. */
 function typeBlock(text, name) {
   const m = text.match(new RegExp(`(?:class|struct|enum|interface)\\s+${name}\\b`));
   if (!m) return null;
@@ -724,7 +724,7 @@ for (const n of G.nodes) {
   }
 }
 
-/* Числовые справки для узлов механики базы — прямо из BalanceConfig. */
+/* Числові довідки для вузлів механіки бази — прямо з BalanceConfig. */
 fact("b.m.production", `GlobalProductionMultiplier ${coef(globalMult)}, штраф раненому ×${coef(balance.InjuredProductionMultiplier ?? 1)}.`,
      `${plural(slots.length, "слот", "слота", "слотов")} со своими коэффициентами, база от ${minOf(slots.map((s) => s.base))} до ${maxOf(slots.map((s) => s.base))}.`);
 fact("b.m.rolexp", `RoleXpPerCycle ${balance.RoleXpPerCycle}, порог соответствия ${balance.SkillMatchThreshold}, множитель ×${coef(balance.WellSuitedXpMultiplier)} — то есть ${roundHalfEven(balance.RoleXpPerCycle * balance.WellSuitedXpMultiplier)} против ${balance.RoleXpPerCycle}.`);
@@ -749,11 +749,11 @@ for (const [s, t] of edges) {
   if (!nodeById[t]) warn(`связь ссылается на несуществующий узел ${t}`);
 }
 
-/* ──────────────────────────── сборка файла ──────────────────────────── */
+/* ──────────────────────────── збірка файлу ──────────────────────────── */
 
 const sha1 = (s) => crypto.createHash("sha1").update(s).digest("hex").slice(0, 8);
-// Поправки — старший источник истины, и их тут не хватало: правка поправки
-// меняла дизайн, а карта продолжала считать авторский слой свежим.
+// Поправки — старший источник істини, і їх тут бракувало: правка поправки
+// міняла дизайн, а карта продовжувала вважати авторський шар свіжим.
 const designSources = ["docs/GDD.md", "docs/GDD_AMENDMENTS.md", "docs/SETTLEMENT_LAYER.md",
                        "docs/DESIGN.md", "docs/BALANCE.md"].filter(exists);
 const fingerprints = Object.fromEntries(designSources.map((p) => [p, sha1(read(p))]));
@@ -762,7 +762,7 @@ const stale = designSources.filter((p) => G.designCheckedAgainst?.[p] && G.desig
 let gitSha = null;
 try { gitSha = execFileSync("git", ["-C", ROOT, "rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim(); } catch {}
 
-/* Подстановки {{...}} для авторских текстов — чтобы числа в них не протухали. */
+/* Підстановки {{...}} для авторських текстів — щоб числа в них не протухали. */
 const slotOut = (id) => {
   const s = slotById[id];
   if (!s) return [0, 0];
@@ -791,7 +791,7 @@ const subst = (text) => String(text).replace(/\{\{(\w+)\}\}/g, (m, k) => {
   return String(VARS[k]);
 });
 
-/* Числовые справки дизайн-слоя: числа из GDD там, где они есть, и честная пометка там, где их нет. */
+/* Числові довідки дизайн-шару: числа з GDD там, де вони є, і чесна позначка там, де їх нема. */
 let gddWithout = 0;
 for (const n of G.nodes) {
   if (n[2] !== "gdd") continue;
@@ -800,7 +800,7 @@ for (const n of G.nodes) {
   else if (!/\d/.test(n[6] || "")) { fact(n[0], "Числовых значений GDD для этой системы не задаёт."); gddWithout++; }
 }
 
-/* Каждому узлу — его вес в графе. Гарантирует числа даже там, где их нет в источниках. */
+/* Кожному вузлу — його вага в графі. Гарантує числа навіть там, де їх нема в джерелах. */
 const degIn = {}, degOut = {};
 for (const [s, t] of edges) { degOut[s] = (degOut[s] ?? 0) + 1; degIn[t] = (degIn[t] ?? 0) + 1; }
 for (const n of nodes) {
@@ -837,9 +837,9 @@ const html = template.replace("/*__DATA__*/null", JSON.stringify(DATA));
 
 const outPath = rel("docs/interaction-map.html");
 const prev = fs.existsSync(outPath) ? fs.readFileSync(outPath, "utf8") : "";
-// Метки сборки из сравнения выкидываются, иначе карта «устаревает» сама по себе:
-// gitSha меняется на каждом коммите, в том числе на том, который её и записал,
-// и --check после любого коммита возвращал бы 1 навсегда.
+// Мітки збірки з порівняння викидаються, інакше карта «застаріває» сама собою:
+// gitSha міняється на кожному коміті, зокрема й на тому, який її й записав,
+// і --check після будь-якого коміту повертав би 1 назавжди.
 const strip = (s) => s
   .replace(/"builtAt":"[^"]*"/, "")
   .replace(/"gitSha":("[^"]*"|null)/, "");
@@ -853,7 +853,7 @@ if (CHECK_ONLY) {
   console.log(changed ? "docs/interaction-map.html устарел" : "docs/interaction-map.html актуален");
   process.exit(changed ? 1 : 0);
 }
-// Копия без обёртки документа — для публикации артефактом (её каркас добавляет платформа).
+// Копія без обгортки документа — для публікації артефактом (її каркас додає платформа).
 const artifactIdx = process.argv.indexOf("--artifact");
 if (artifactIdx > -1 && process.argv[artifactIdx + 1]) {
   const bare = html

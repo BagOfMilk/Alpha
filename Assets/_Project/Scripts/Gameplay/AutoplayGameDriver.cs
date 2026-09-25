@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using Game.Core.Base;
 using Game.Core.Characters.Creation;
+using Game.Core.Checks;
 using Game.Core.Combat;
+using Game.Core.Dungeons;
 using Game.Core.Expeditions;
 using Game.Core.Loop;
 using Game.Core.Quests;
+using Game.Core.Scenes;
 using Game.Core.Session;
 using Game.Core.Session.Bots;
 using Game.Core.Session.Views;
@@ -77,7 +80,7 @@ namespace Game.Gameplay
         private bool _delveDeparted;
         private bool _crisisFinaleAttempted;
 
-        /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" приём, що <see cref="_capturedOnce"/> нижче.</summary>
+        /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" прийом, що <see cref="_capturedOnce"/> нижче.</summary>
         private int _dayLogScanIndex;
 
         /// <summary>
@@ -99,6 +102,44 @@ namespace Game.Gameplay
         /// стан (кілька вечорів поспіль без нового вибору тощо).
         /// </summary>
         private readonly HashSet<string> _capturedOnce = new HashSet<string>();
+
+        // ===================== -autoplay-journal: журнальний тур =====================
+        //
+        // Ціль 1 (пряме доручення власника 25.09.2026): "Ти протестив що гру можна
+        // почати, створити персонажа, взяти в команду і тд та пройти першу кризу?
+        // Усі механіки можна виконати по журналу?" — той самий сценарій, що вже
+        // доведений у Core (MechanicsJournalCompletionTests.
+        // JournalPlayer_OnePlaythrough_SeesAllFortyFourEntries), тут же — крізь
+        // РЕАЛЬНІ екрани (GameShell/*Screen.cs), тими самими командами, якими
+        // грає людина: жодного прямого виклику GameSession в обхід TryRun/
+        // SceneScreen.Driver*, яких цей файл і так уже не робить у Run() вище.
+
+        /// <summary>Стеля доби журнального туру — вище цільової доби природного бунту (§7.9 CLAUDE.md, ~доба 25) з запасом на повільніший підбір без Стюарда/патруля щоночі.</summary>
+        public const int JournalDayCap = 60;
+        private const int JournalMaxLoopSteps = 20000;
+
+        private bool _jBattleShown; // перший бій (вузол 1) — кровавий шлях форсовано і ведеться ПОКРОКОВО наївною тактикою; решта — «Автобій».
+        private int _jLastMorningDay = int.MinValue;
+        private bool _jEquipped;
+        private bool _jCrafted;
+        private bool _jTrained;
+        private bool _jSaved;
+        private bool _jCrisisFinaleAttempted;
+
+        /// <summary>Id журнальних записів, уже знятих скріншотом "journal-&lt;id&gt;" — рівно один раз за тур, у момент, коли вони вперше стають Seen.</summary>
+        private readonly HashSet<string> _jSeenIds = new HashSet<string>();
+
+        private static readonly string[] JournalBuildPriority =
+        {
+            DefaultBuildings.Infirmary, DefaultBuildings.Workshop, DefaultBuildings.Tavern,
+            DefaultBuildings.Temple, DefaultBuildings.Market, DefaultBuildings.Fortifications
+        };
+
+        /// <summary>Скільки з 44 записів <c>GetMechanicsJournal()</c> побачено на кінець туру — <see cref="AutoplayBootstrap"/> читає це для коду виходу 4.</summary>
+        public int JournalSeenCount { get; private set; }
+
+        /// <summary>Скільки всього записів у реєстрі журналу (44 на час написання) — рахується динамічно, нічого не хардкодиться.</summary>
+        public int JournalTotalCount { get; private set; }
 
         public AutoplayGameDriver(IAutoplayHost host, GameShell shell, bool useThresholdRule, bool longTour = false)
         {
@@ -321,7 +362,9 @@ namespace Game.Gameplay
 
                     if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
                     {
-                        Run(() => Session.ConfirmMorning());
+                        // Рівно та сама дія, що й кнопка «Почати день» (HubScreen.StartDay),
+                        // а не виклик ядра в обхід екрана.
+                        Run(() => UI.HubScreen.StartDay(Session));
                         _host.Log("Ранок доби " + day + " підтверджено.");
                     }
                     continue;
@@ -330,7 +373,7 @@ namespace Game.Gameplay
                 // ---- день (конвеєр) ----
                 if (state == SessionState.Day)
                 {
-                    Run(() => Session.AdvanceDay());
+                    Run(() => UI.HubScreen.StartDay(Session));
                     continue;
                 }
 
@@ -623,6 +666,546 @@ namespace Game.Gameplay
             }
         }
 
+        /// <summary>
+        /// -autoplay-journal (ціль 1): один прогін, тими самими командами, що
+        /// й кнопки реальних екранів (той самий принцип, що <see cref="Run"/>
+        /// вище), доки <c>GameSession.GetMechanicsJournal()</c> не покаже всі
+        /// 44 записи побаченими, або тур не впреться в <see cref="JournalDayCap"/>.
+        /// Сценарій — той самий, що вже доведений у Core
+        /// (MechanicsJournalCompletionTests.JournalPlayer_OnePlaythrough_
+        /// SeesAllFortyFourEntries): доби 1–3 ведуться вручну (кровавий вузол
+        /// 1 наївною тактикою до Base/Worst без смерті Максима → «Нічна
+        /// розмова» доби 3 → «Звинуватити»), з доби 4 — та сама «добра
+        /// економіка», що й довгий тур/боти (розстановка, рада, вилазка/данж,
+        /// патруль через парність), плюс гір/крафт/тренувальний бій/
+        /// збереження при першій нагоді.
+        /// </summary>
+        public IEnumerator<int> RunJournal()
+        {
+            // ---------------- Титул -> Нова гра (детермінований поріг) ----------------
+            foreach (var f in WaitFrames(FramesMedium)) yield return f;
+            _host.Capture("title");
+            yield return 0;
+
+            Run(() => Session.NewGame(new NewGameOptions
+            {
+                HitRule = HitRuleKind.Threshold,
+                Seed = 1,
+                Roller = _shell.Roller,
+                SkipCreation = false
+            }));
+            _host.Log("Журнальний тур: Нова гра (поріг — перевірки детерміновані, інваріант 8).");
+
+            // ---------------- Створення протагоніста ----------------
+            // Учениця знахарки (Healer), НЕ Warrior: наївна тактика бою вузла 1
+            // нижче рахує саме на слабшого в бою протагоніста — з бійцем той
+            // самий наївний бій вигравається чисто (Good), і полоса Base/Worst
+            // (потрібна для betrayal_confrontation/defection/roster_drama) не
+            // настає ніколи (те саме емпіричне спостереження, що вже задокумен-
+            // товане в MechanicsJournalCompletionTests).
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("creation-default");
+            yield return 0;
+
+            Run(() => Session.SetProtagonistName("Ярина"));
+            Run(() => Session.SetProtagonistGender(Gender.Female));
+            _shell.ProtagonistGender = Gender.Female;
+            Run(() => Session.SetProtagonistBackground(Backgrounds.Healer().Id));
+
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("creation-filled");
+            yield return 0;
+
+            Run(() => Session.ConfirmCreation());
+            _host.Log("Створення підтверджено: Ярина, жіночий рід, передісторія healer.");
+
+            // ---------------- Головний диспетчер станів ----------------
+            int guard = 0;
+            while (true)
+            {
+                guard++;
+                if (guard > JournalMaxLoopSteps)
+                    throw new InvalidOperationException("Журнальний тур: запобіжник maxSteps (" + JournalMaxLoopSteps +
+                        ") — застряг у стані " + Session.State + " (можливе зациклення диспетчера).");
+
+                var state = Session.State;
+
+                // Скріншот "journal-<id>" рівно раз на кожен запис, у момент,
+                // коли він щойно став Seen — незалежно від того, у якому стані
+                // диспетчер саме зараз (сигнали/лічильники приходять конвеєром
+                // дня, не лише в Decision/Evening).
+                foreach (var f in ScanJournalDeltas()) yield return f;
+
+                bool checkpoint = state == SessionState.Morning || state == SessionState.FreePlay;
+                if (checkpoint && AllJournalSeen())
+                {
+                    _host.Log("Журнал: усі 44 записи побачено на добу " + Session.CurrentView.Day + " — тур завершено успішно.");
+                    break;
+                }
+                if (checkpoint && Session.CurrentView.Day > JournalDayCap)
+                {
+                    _host.Log("Журнальний тур упирається в стелю доби " + JournalDayCap + " із непобаченими записами.");
+                    break;
+                }
+
+                // ---- портретна сцена (та сама механіка, що й Run() вище) ----
+                if (state == SessionState.Scene)
+                {
+                    var scene = _shell.Scene;
+                    var step = scene.DriverAdvance(_shell);
+                    LogIfMessage();
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+
+                    if (step != null && step.IsChoice)
+                    {
+                        scene.DriverChoose(_shell, ChooseJournalSceneOptionIndex(step));
+                        LogIfMessage();
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+
+                        if (scene.IsShowingConsequence)
+                        {
+                            scene.DriverContinueConsequence();
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        }
+                    }
+                    continue;
+                }
+
+                // ---- ранок / вільна гра ----
+                if (state == SessionState.Morning || state == SessionState.FreePlay)
+                {
+                    int day = Session.CurrentView.Day;
+                    if (_jLastMorningDay != day)
+                    {
+                        _jLastMorningDay = day;
+
+                        var roster = Session.GetRosterView();
+                        var assignments = BotSupport.DefaultAssignments(roster);
+                        foreach (var kv in assignments)
+                        {
+                            string companionId = kv.Key;
+                            string slotId = kv.Value;
+                            Run(() => Session.Assign(companionId, slotId));
+                        }
+
+                        // §CLAUDE.md "Приймання клапана": стройка/рада/крафт
+                        // лише з доби 2 — доба 1 сама по собі веде лише до
+                        // вузла 1 (нижче), як і в ручному сценарії Core-теста.
+                        if (day >= 2)
+                        {
+                            JournalCouncilRoutine(day);
+                            JournalOpportunisticGearAndTraining(day);
+                        }
+                        if (day >= 4) JournalMaybeDepartExpedition(day);
+                    }
+
+                    if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
+                        Run(() => UI.HubScreen.StartDay(Session));
+                    continue;
+                }
+
+                // ---- день (конвеєр) ----
+                if (state == SessionState.Day)
+                {
+                    Run(() => UI.HubScreen.StartDay(Session));
+                    continue;
+                }
+
+                // ---- точка рішення ----
+                if (state == SessionState.Decision)
+                {
+                    var offer = Session.GetPendingOffer();
+                    var path = !_jBattleShown ? BloodyIfPossible(offer) : StewardPath(offer);
+                    Run(() => Session.ResolveIncident(path));
+                    continue;
+                }
+
+                // ---- бій: вузол 1 — ПОКРОКОВО наївною тактикою обох сторін до кінця; решта — «Автобій» ----
+                if (state == SessionState.Battle)
+                {
+                    foreach (var f in WaitFrames(FramesBattleEnter)) yield return f;
+
+                    if (!_jBattleShown)
+                    {
+                        _jBattleShown = true;
+                        foreach (var f in PlayJournalBattleNaively()) yield return f;
+                    }
+                    else if (Session.State == SessionState.Battle)
+                    {
+                        Run(() => Session.CombatAutoResolve());
+                        foreach (var f in WaitFrames(FramesMedium)) yield return f;
+                    }
+
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    AcknowledgeBattleIfPending();
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    continue;
+                }
+
+                // ---- данж ----
+                if (state == SessionState.Dungeon)
+                {
+                    var view = Session.GetDungeonView();
+                    if (view == null) { continue; }
+
+                    if (view.CurrentRoom != null)
+                    {
+                        var room = view.CurrentRoom;
+                        if (room.Type == "Combat")
+                        {
+                            if (room.HasQuietBypass) Run(() => Session.ResolveDungeonRoom(IncidentPath.Quiet));
+                            else Run(() => Session.ResolveDungeonRoom(IncidentPath.Bloody));
+                        }
+                        else if (room.Type == "Event")
+                        {
+                            Run(() => Session.ResolveDungeonEvent(0));
+                        }
+                        else
+                        {
+                            Run(() => Session.ResolveDungeonRoom(IncidentPath.Quiet));
+                        }
+                    }
+                    else if (view.RoomsCleared < 3)
+                    {
+                        Run(() => Session.PushDeeper());
+                    }
+                    else
+                    {
+                        Run(() => Session.ExtractDungeon());
+                    }
+                    continue;
+                }
+
+                // ---- вечір ----
+                if (state == SessionState.Evening)
+                {
+                    // Особисті арки, «Нічна розмова»/тиха перевірка Мирослави
+                    // доба 3, рада Захара доба 5 — той самий гачок, що й
+                    // реальний GameShell.OnGUI кличе щокадру для людини.
+                    _shell.RouteOfferedSceneContentIfAvailable();
+                    if (Session.State != SessionState.Evening) continue;
+
+                    JournalAdvanceQuest(DefaultQuests.HafiyaId);
+                    JournalAdvanceQuest(DefaultQuests.MaksymCh1Id);
+
+                    if (Session.State != SessionState.Evening) continue;
+
+                    Run(() => Session.SetPatrol(Session.CurrentView.Day % 2 == 0));
+                    Run(() => Session.ConfirmEvening());
+                    continue;
+                }
+
+                // ---- ніч (патруль / криза доби 5 / фінал) ----
+                if (state == SessionState.Night)
+                {
+                    int day = Session.CurrentView.Day;
+
+                    if (day == 5 && !_jCrisisFinaleAttempted)
+                    {
+                        _jCrisisFinaleAttempted = true;
+                        Run(() => Session.ReactToCrisis(CrisisReaction.SpendGold));
+                        // Кроваво — навмисно (ціль 1: "фінальний бій" мусить
+                        // трапитись, як і в -autoplay/-autoplay-long вище).
+                        Run(() => Session.ResolveFinale(IncidentPath.Bloody));
+                        continue;
+                    }
+
+                    Run(() => Session.AdvanceNight());
+                    continue;
+                }
+
+                // ---- підсумок доби 5 ----
+                if (state == SessionState.Summary)
+                {
+                    Run(() => Session.AcknowledgeSummary());
+                    continue;
+                }
+
+                throw new InvalidOperationException("Журнальний тур не знає, як показати стан " + state + " — диспетчер не покриває його.");
+            }
+
+            // ---- журнал наостанок: вкладка «Журнал механік» + підсумок у лог ----
+            _shell.SetHubTab(10);
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("journal-final");
+            yield return 0;
+            _shell.SetHubTab(0);
+
+            var finalJournal = Session.GetMechanicsJournal();
+            JournalTotalCount = finalJournal != null ? finalJournal.Count : 0;
+            int seenCount = 0;
+            var stillUnseen = new List<string>();
+            if (finalJournal != null)
+                foreach (var e in finalJournal)
+                {
+                    if (e.Seen) seenCount++;
+                    else stillUnseen.Add(e.Id);
+                }
+            JournalSeenCount = seenCount;
+
+            _host.Log("Журнал механік: побачено " + JournalSeenCount + "/" + JournalTotalCount + ".");
+            if (stillUnseen.Count > 0)
+                _host.Log("Непобачені: " + string.Join(", ", stillUnseen));
+        }
+
+        /// <summary>Нові Seen-записи журналу з останнього виклику — знімок "journal-&lt;id&gt;" рівно раз на запис, незалежно від поточного стану диспетчера.</summary>
+        private IEnumerable<int> ScanJournalDeltas()
+        {
+            var journal = Session.GetMechanicsJournal();
+            if (journal == null) yield break;
+
+            foreach (var entry in journal)
+            {
+                if (!entry.Seen) continue;
+                if (!_jSeenIds.Add(entry.Id)) continue;
+
+                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                _host.Capture("journal-" + entry.Id);
+                yield return 0;
+                _host.Log("Журнал: уперше побачено «" + entry.Id + "».");
+            }
+        }
+
+        private bool AllJournalSeen()
+        {
+            var journal = Session.GetMechanicsJournal();
+            if (journal == null) return false;
+            foreach (var e in journal)
+                if (!e.Seen) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Вибір варіанту сцени журнального туру: конфронтація Мирослави доби 3
+        /// (<see cref="CompanionScenes.MyroslavaConfrontationChoiceId"/>) свідомо
+        /// бере «звинуватити» (перевірка Залякування) — той самий вибір, що
+        /// в Core-тесті, єдиний, що доводить defection/roster_drama/
+        /// betrayal_confrontation за один прогін. Решта сцен — перший
+        /// доступний варіант (той самий "обережний за замовчуванням" норов,
+        /// що <see cref="BotSupport.ChooseSceneDefault"/>).
+        /// </summary>
+        private static int ChooseJournalSceneOptionIndex(SceneStepView step)
+        {
+            int count = step?.Options != null ? step.Options.Count : 0;
+            if (count == 0) return 0;
+
+            if (step.ChoiceId == CompanionScenes.MyroslavaConfrontationChoiceId)
+                for (int i = 0; i < step.Options.Count; i++)
+                    if (step.Options[i].SkillKey == SkillKeys.Intimidate.Id) return i;
+
+            return BotSupport.ChooseSceneDefault(step);
+        }
+
+        /// <summary>
+        /// Бій вузла 1 ПОКРОКОВО, наївною тактикою обох сторін ("йди до
+        /// найближчого і бий", та сама команда, якою грають усі бот-політики
+        /// звичайний бій — не «розумний» автобій): без цього наївного шляху
+        /// вузол 1 вигравається чисто (Good), і полоса Base/Worst, потрібна
+        /// для defection/betrayal_confrontation/roster_drama, не настає
+        /// ніколи (емпірично, MechanicsJournalCompletionTests).
+        /// </summary>
+        private IEnumerable<int> PlayJournalBattleNaively()
+        {
+            int guard = 0;
+            while (Session.State == SessionState.Battle && guard++ < 500)
+            {
+                var view = Session.GetBattleView();
+                var current = BotSupport.FindCurrent(view);
+                var target = current != null ? BotSupport.FindNearestOpposite(view, current) : null;
+
+                if (target == null)
+                {
+                    Run(() => Session.CombatEndTurn());
+                }
+                else
+                {
+                    string targetId = target.Id;
+                    var attackResult = Run(() => Session.CombatAttack(targetId));
+                    if (attackResult != CombatActionResult.Success)
+                    {
+                        var step = BotSupport.StepToward(view, current, target.Pos);
+                        if (step.HasValue)
+                        {
+                            var dest = new GridPos(step.Value.X, step.Value.Y);
+                            Run(() => Session.CombatMove(dest));
+                        }
+                        else
+                        {
+                            Run(() => Session.CombatEndTurn());
+                        }
+                    }
+                }
+
+                yield return 0; // один кадр на хід — довгий бій не має блокувати кадр Unity.
+            }
+        }
+
+        // ---- ранок журнального туру: рада / гір / крафт / тренування / збереження ----
+
+        private void JournalCouncilRoutine(int day)
+        {
+            var city = Session.GetCityView();
+
+            foreach (var id in JournalBuildPriority)
+            {
+                if (IsBuiltOrBuilding(city, id)) continue;
+                string buildingId = id;
+                Run(() => Session.OrderBuilding(buildingId));
+                break; // одна стройка за ранок, як і в бот-водіях (BotRunner.ApplyCouncilRoutine).
+            }
+
+            if (city != null && city.RaidReady) Run(() => Session.OrderRaid());
+            if (city != null && city.SettlersReady) Run(() => Session.OrderSettlers());
+
+            if (day % 3 == 0)
+            {
+                Run(() => Session.OrderPrepareThreat());
+                Run(() => Session.OrderOutfitExpedition("outskirts"));
+            }
+            if (day % 4 == 0) Run(() => Session.OrderDecree("tuhar_boyars"));
+            if (day % 5 == 0) Run(() => Session.OrderDiplomacy("tuhar_boyars"));
+        }
+
+        private static bool IsBuiltOrBuilding(CityView city, string id)
+        {
+            if (city?.Built != null)
+                foreach (var b in city.Built) if (b.Id == id) return true;
+            if (city?.InProgress != null)
+                foreach (var b in city.InProgress) if (b.Id == id) return true;
+            return false;
+        }
+
+        /// <summary>Гір/крафт при першій нагоді (equip/craft журналу), тренувальний бій і збереження — рівно один раз кожне за тур, тими самими командами, що кнопки вкладок «Спорядження»/«Готовність»/«Збереження».</summary>
+        private void JournalOpportunisticGearAndTraining(int day)
+        {
+            if (!_jEquipped || !_jCrafted)
+            {
+                var stash = Session.GetStash();
+                if (stash != null && stash.Count > 0)
+                {
+                    if (!_jEquipped)
+                    {
+                        var roster = Session.GetRosterView();
+                        foreach (var item in stash)
+                        {
+                            string instanceId = item.InstanceId;
+                            var slot = item.Slot;
+                            bool done = false;
+                            if (roster?.Companions != null)
+                                foreach (var c in roster.Companions)
+                                {
+                                    string companionId = c.Id;
+                                    bool ok = Run(() => Session.Equip(companionId, instanceId, slot));
+                                    if (ok) { done = true; break; }
+                                }
+                            if (done) { _jEquipped = true; break; }
+                        }
+                    }
+
+                    if (!_jCrafted && IsBuiltOrBuilt(city: Session.GetCityView(), id: DefaultBuildings.Workshop))
+                    {
+                        foreach (var item in Session.GetStash())
+                        {
+                            string instanceId = item.InstanceId;
+                            var result = Run(() => Session.CraftUpgrade(instanceId));
+                            if (result == Game.Core.Items.CraftResult.Success) { _jCrafted = true; break; }
+                        }
+                    }
+                }
+            }
+
+            if (!_jTrained)
+            {
+                _jTrained = true; // ставимо ДО виклику: NewTrainingBattle сама лишає партію в тій самій фазі (SuspendReason.TrainingSkirmish), повторний виклик того самого ранку — без потреби.
+                Run(() => Session.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold }));
+            }
+
+            if (!_jSaved)
+            {
+                const int slot = 0;
+                string blob = Run(() => Session.SaveState(slot));
+                if (blob != null)
+                {
+                    var view = Session.CurrentView;
+                    SaveFileStore.Write(slot, blob, view.TensionBand, view.Day);
+                    _jSaved = true;
+                }
+            }
+        }
+
+        private static bool IsBuiltOrBuilt(CityView city, string id)
+        {
+            if (city?.Built == null) return false;
+            foreach (var b in city.Built) if (b.Id == id) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Захар — єдиний здоровий "не-польовий" (не протагоніст/Максим/
+        /// Мирослава) кандидат у полі з доби 4: Мирослава дефектила доба 3
+        /// (ExpeditionRunner.Depart сам відмовляє Antagonist), Максим
+        /// поранений тим самим кривавим вузлом 1 (відмовляє IsInjured) —
+        /// той самий склад, що в MechanicsJournalCompletionTests. Чергуємо
+        /// звичайну вилазку (парні доби, дає loot.dropped на поверненні) і
+        /// данж-делве (непарні, dungeon_delve/scars/loot іменного предмета) —
+        /// без парного дня "craft" фізично недосяжний (дженерик-лут капає
+        /// лише зі звичайної вилазки).
+        /// </summary>
+        private void JournalMaybeDepartExpedition(int day)
+        {
+            var roster = Session.GetRosterView();
+            if (roster?.Companions != null)
+                foreach (var c in roster.Companions)
+                    if ((c.Id == GameSession.ProtagonistId || c.Id == "zakhar") &&
+                        c.Status == Game.Core.Characters.CompanionStatus.OnMission)
+                        return; // партія вже в полі — не відправляємо другий відряд.
+
+            // Чергування «через раз», а не за парністю доби: звичайна вилазка
+            // триває парну кількість діб, і з парністю загін щоразу повертався
+            // в парну добу — до підземелля черга не доходила ніколи (журнальний
+            // тур 25.09.2026: 42/44, без dungeon_delve).
+            bool delve = _jNextDelve;
+            string siteId = delve ? DefaultDungeon.AbandonedCamp : "outskirts";
+            var approach = delve ? ExpeditionApproach.Delve : ExpeditionApproach.Quiet;
+            var party = new List<string> { GameSession.ProtagonistId, "zakhar" };
+
+            var preview = Run(() => Session.PreviewExpedition(siteId, approach, party));
+            if (preview == null) return;
+            int days = preview.Days;
+            Run(() => Session.DepartExpedition(siteId, approach, party, days));
+            _jNextDelve = !delve;
+        }
+
+        /// <summary>Наступне підземелля в журнальному турі: чергується з вилазкою після кожного виходу.</summary>
+        private bool _jNextDelve = true;
+
+        /// <summary>
+        /// Журнальний тур: крок квесту тією самою дією, що й вечірня панель
+        /// (NightScreen): на етапі-виборі — перший варіант, доступний кандидату;
+        /// на етапі без варіантів (перевірка чи підсумок) — кнопка
+        /// «Спробувати»/«Підтвердити», тобто OfferQuestStage + ResolveQuestChoice(0).
+        /// Без другого квест зупинявся на перевірці назавжди, і глава арки
+        /// Максима не завершувалась (журнальний тур 25.09.2026: без arc_chapter).
+        /// </summary>
+        private void JournalAdvanceQuest(string questId)
+        {
+            var offer = Run(() => Session.OfferQuestStage(questId));
+            if (offer == null) return;
+            int chosen = 0;
+            if (offer.Options != null && offer.Options.Count > 0)
+            {
+                bool any = false;
+                for (int i = 0; i < offer.Options.Count; i++)
+                    if (offer.Options[i].HasCandidate) { chosen = i; any = true; break; }
+                if (!any) return; // жоден варіант недоступний — кнопки неактивні, як і в людини
+            }
+            Run(() =>
+            {
+                Session.OfferQuestStage(questId);
+                Session.ResolveQuestChoice(chosen);
+            });
+        }
+
         // ===================== виконання команд =====================
 
         private void Run(Action action)
@@ -695,7 +1278,7 @@ namespace Game.Gameplay
         /// рядки <see cref="GameSession.DayLog"/> і знімає рівно по одному
         /// скріншоту на кожен зсув смуги Напруги, кожен щабель передвісника
         /// природної кризи (<c>SubjectId=="crisis"</c>) і саму розв'язку
-        /// бунту на площі — той самий "не повторюй" приём, що
+        /// бунту на площі — той самий "не повторюй" прийом, що
         /// <see cref="_capturedOnce"/> для choice/consequence вище.
         /// </summary>
         private IEnumerable<int> ScanForGreatCrisisSignals()

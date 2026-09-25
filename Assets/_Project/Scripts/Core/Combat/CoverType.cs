@@ -1,8 +1,8 @@
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Укрытие: снижает ШАНС ПОПАСТЬ по защищающемуся (полу/полное, числа — в
-    /// CombatBalance), а не прибавляет отдельную «защиту».
+    /// Укриття: знижує ШАНС ПОПАСТИ по тому, хто захищається (напів/повне, числа — в
+    /// CombatBalance), а не додає окремий «захист».
     /// </summary>
     public enum CoverType
     {
@@ -11,7 +11,7 @@ namespace Game.Core.Combat
         Full = 2
     }
 
-    /// <summary>Сторона тайла, на которой стоит элемент укрытия.</summary>
+    /// <summary>Сторона тайла, на якій стоїть елемент укриття.</summary>
     public enum Direction
     {
         North = 0, // +Y

@@ -12,72 +12,72 @@ namespace Game.Core.Combat
         Enemy = 1
     }
 
-    /// <summary>Жизненное состояние юнита в бою: даун + окно на спасение.</summary>
+    /// <summary>Життєвий стан юніта в бою: даун + вікно на порятунок.</summary>
     public enum UnitLifeState
     {
         Active = 0,
-        Downed = 1,     // 0 HP, тикает окно на стабилизацию (только юниты с CanBeDowned)
-        Stabilized = 2, // спасён, выбыл из боя живым (ранение применится на базе — RosterAdapter.Wound, Р5)
-        Dead = 3        // смерть насовсем
+        Downed = 1,     // 0 HP, тікає вікно на стабілізацію (тільки юніти з CanBeDowned)
+        Stabilized = 2, // врятований, вибув із бою живим (поранення застосується на базі — RosterAdapter.Wound, Р5)
+        Dead = 3        // смерть насовсім
     }
 
     /// <summary>
-    /// Боевой профиль юнита — снимок чисел на момент входа в бой. Для напарника
-    /// строится из ВСЕХ релевантных производных статов через единый агрегатор
-    /// (StatResolver/StatSnapshot, аудит G18: 11 боевых производных наконец
-    /// читаются), для врага — из EnemyDefinition. Дальше бой работает только с
-    /// профилем — враги и напарники симметричны.
+    /// Бойовий профіль юніта — знімок чисел на момент входу в бій. Для напарника
+    /// будується з УСІХ релевантних похідних статів через єдиний агрегатор
+    /// (StatResolver/StatSnapshot, аудит G18: 11 бойових похідних нарешті
+    /// читаються), для ворога — з EnemyDefinition. Далі бій працює тільки з
+    /// профілем — вороги і напарники симетричні.
     /// </summary>
     public sealed class UnitProfile
     {
         public string DisplayName;
         public int MaxHp;
         public int MaxAp;
-        public int Accuracy;      // база (для напарника уже включает бонус скила оружия)
+        public int Accuracy;      // база (для напарника вже включає бонус скіла зброї)
         public int Defense;
         public int Initiative;
         public int CritChance;
         public int Armor;
-        public int Resolve;       // из DerivedStat.StatusDurationReduction — сокращает длительность состояний
-        public int DamageBonus;   // из DerivedStat.DamageBonus — плюс к урону оружия (канал гира/перков)
-        public int MoveApPerTile; // из DerivedStat.MoveApPerTile — цена шага движения ЭТОГО юнита
-        public int MedicineSkill; // для стабилизации дауна
-        public bool CanBeDowned;  // напарники — да; рядовые враги умирают сразу
+        public int Resolve;       // з DerivedStat.StatusDurationReduction — скорочує тривалість станів
+        public int DamageBonus;   // з DerivedStat.DamageBonus — плюс до урону зброї (канал гіру/перків)
+        public int MoveApPerTile; // з DerivedStat.MoveApPerTile — ціна кроку руху ЦЬОГО юніта
+        public int MedicineSkill; // для стабілізації дауну
+        public bool CanBeDowned;  // напарники — так; рядові вороги вмирають одразу
 
         /// <summary>
-        /// Сюжетная защита протагониста: окно дауна вышло → теряет сознание и
-        /// выбывает живым (Stabilized), а не погибает. Параметр приходит СНАРУЖИ
-        /// (FromCompanion), потому что «это протагонист» и «включён айронмен»
-        /// живут в GameSession/NewGameOptions — пакетах, которых в этом рабочем
-        /// дереве ещё нет (D1). Combat не завязан на их API — только на bool.
+        /// Сюжетний захист протагоніста: вікно дауну вийшло → втрачає свідомість і
+        /// вибуває живим (Stabilized), а не гине. Параметр приходить ЗЗОВНІ
+        /// (FromCompanion), тому що «це протагоніст» і «увімкнений айронмен»
+        /// живуть у GameSession/NewGameOptions — пакетах, яких у цьому робочому
+        /// дереві ще нема (D1). Combat не зав'язаний на їхнє API — тільки на bool.
         /// </summary>
         public bool ProtectedFromDeath;
 
         public ResistProfile Resists = new ResistProfile();
 
-        /// <summary>Семейство (для врагов): роботов можно взломать и переманить.</summary>
+        /// <summary>Сімейство (для ворогів): роботів можна зламати і переманити.</summary>
         public EnemyFamily Family = EnemyFamily.Human;
 
-        /// <summary>Роль — биас поведения ИИ: танк лезет в клинч, застрельщик держит оптимал.</summary>
+        /// <summary>Роль — біас поведінки ШІ: танк лізе в клінч, застрільщик тримає оптимал.</summary>
         public EnemyRole Role = EnemyRole.Skirmisher;
     }
 
     /// <summary>
-    /// Юнит в бою: профиль + рантайм-состояние (HP/AP/позиция/Strike-метр/шред
-    /// брони/статусы/окно дауна). Правила (переходы, урон, тики) применяет
-    /// CombatState — юнит только хранит и отдаёт данные.
+    /// Юніт у бою: профіль + рантайм-стан (HP/AP/позиція/Strike-метр/шред
+    /// броні/статуси/вікно дауну). Правила (переходи, урон, тики) застосовує
+    /// CombatState — юніт тільки зберігає і віддає дані.
     /// </summary>
     public sealed class CombatUnit
     {
         public string Id { get; }
 
-        /// <summary>Сторона. Меняется только взломом робота — через CombatState.</summary>
+        /// <summary>Сторона. Змінюється тільки зламом робота — через CombatState.</summary>
         public Side Side { get; internal set; }
 
         public UnitProfile Profile { get; }
         public WeaponDefinition Weapon { get; }
 
-        /// <summary>Id напарника-источника (null для рядовых врагов) — для последствий на базе (D1/RosterAdapter).</summary>
+        /// <summary>Id напарника-джерела (null для рядових ворогів) — для наслідків на базі (D1/RosterAdapter).</summary>
         public string SourceCompanionId { get; }
 
         public GridPos Pos { get; internal set; }
@@ -89,9 +89,9 @@ namespace Game.Core.Combat
         public int DownWindowRemaining { get; internal set; }
 
         /// <summary>
-        /// Взведённый overwatch; null — юнит не в дозоре. Ставит и снимает
-        /// только CombatState: вход — действием Overwatch, снятие — выстрелом,
-        /// началом своего хода, оглушением, сбиванием с ног, перестановкой, дауном.
+        /// Зведений overwatch; null — юніт не в дозорі. Ставить і знімає
+        /// тільки CombatState: вхід — дією Overwatch, зняття — пострілом,
+        /// початком свого ходу, оглушенням, збиттям з ніг, перестановкою, дауном.
         /// </summary>
         public OverwatchStance Overwatch { get; internal set; }
 
@@ -99,7 +99,7 @@ namespace Game.Core.Combat
 
         public readonly List<StatusInstance> Statuses = new List<StatusInstance>();
 
-        /// <summary>Известные способности (напарник — по порогам скилов; враг — из определения).</summary>
+        /// <summary>Відомі здібності (напарник — за порогами скілів; ворог — з визначення).</summary>
         public readonly List<AbilityDefinition> Abilities = new List<AbilityDefinition>();
 
         private readonly Dictionary<string, int> _cooldowns = new Dictionary<string, int>();
@@ -112,7 +112,7 @@ namespace Game.Core.Combat
             if (!string.IsNullOrEmpty(abilityId) && turns > 0) _cooldowns[abilityId] = turns;
         }
 
-        /// <summary>Тик кулдаунов в начале СВОЕГО хода.</summary>
+        /// <summary>Тик кулдаунів на початку СВОГО ходу.</summary>
         internal void TickCooldowns()
         {
             if (_cooldowns.Count == 0) return;
@@ -141,12 +141,12 @@ namespace Game.Core.Combat
             Weapon = weapon;
             SourceCompanionId = sourceCompanionId;
             Hp = profile.MaxHp;
-            Ap = 0; // выдаётся в начале хода
+            Ap = 0; // видається на початку ходу
         }
 
         public bool IsActive => LifeState == UnitLifeState.Active;
 
-        /// <summary>Эффективная броня с учётом накопленного Шреда (не ниже нуля).</summary>
+        /// <summary>Ефективна броня з урахуванням накопиченого Шреду (не нижче нуля).</summary>
         public int EffectiveArmor => Math.Max(0, Profile.Armor - ArmorShred);
 
         public bool HasStatus(StatusType type)
@@ -165,7 +165,7 @@ namespace Game.Core.Combat
 
         // ---- Фабрики ----
 
-        /// <summary>Снимок производных + бонус скила оружия → боевой профиль. Общая часть FromCompanion/FromDefector.</summary>
+        /// <summary>Знімок похідних + бонус скіла зброї → бойовий профіль. Спільна частина FromCompanion/FromDefector.</summary>
         private static UnitProfile ProfileFromCompanion(Companion c, WeaponDefinition weapon, BalanceConfig cfg,
                                                          out int weaponSkill)
         {
@@ -189,10 +189,10 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Напарник → боевой юнит: производные через единый агрегатор + бонус скила
-        /// оружия к точности (аудит G18 — все релевантные производные читаются,
-        /// не только видимые в UI). Способности набираются из каталога по порогам
-        /// скилов. protectedFromDeath — см. UnitProfile.ProtectedFromDeath.
+        /// Напарник → бойовий юніт: похідні через єдиний агрегатор + бонус скіла
+        /// зброї до точності (аудит G18 — усі релевантні похідні читаються,
+        /// не тільки видимі в UI). Здібності набираються з каталогу за порогами
+        /// скілів. protectedFromDeath — див. UnitProfile.ProtectedFromDeath.
         /// </summary>
         public static CombatUnit FromCompanion(Companion c, WeaponDefinition weapon, BalanceConfig cfg,
                                                bool protectedFromDeath = false,
@@ -211,12 +211,12 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Перебежчик → враг-босс со ВСЕМ своим уровнем и снаряжением (боевой
-        /// профиль строится тем же агрегатором, что у напарника — симметрия
-        /// правил). Умирает насовсем (CanBeDowned=false): гир возвращается убийством.
-        /// weapon передаётся параметром — Combat не читает Companion.Equipment
-        /// (Items/Equipment — пакет Б3, в этом рабочем дереве ещё не существует);
-        /// D1 передаёт актуально надетое оружие дефектора, когда Б3 вольётся.
+        /// Перебіжчик → ворог-бос з УСІМ своїм рівнем і спорядженням (бойовий
+        /// профіль будується тим самим агрегатором, що й у напарника — симетрія
+        /// правил). Помирає насовсім (CanBeDowned=false): гір повертається вбивством.
+        /// weapon передається параметром — Combat не читає Companion.Equipment
+        /// (Items/Equipment — пакет Б3, у цьому робочому дереві ще не існує);
+        /// D1 передає актуально надіту зброю дефектора, коли Б3 влиється.
         /// </summary>
         public static CombatUnit FromDefector(Companion c, WeaponDefinition weapon, BalanceConfig cfg,
                                               IEnumerable<AbilityDefinition> abilityCatalog = null)
@@ -241,7 +241,7 @@ namespace Game.Core.Combat
                     unit.Abilities.Add(ability);
         }
 
-        /// <summary>Враг → боевой юнит из определения (роль × семейство × профиль × оружие).</summary>
+        /// <summary>Ворог → бойовий юніт із визначення (роль × сімейство × профіль × зброя).</summary>
         public static CombatUnit FromEnemy(EnemyDefinition def, string instanceId)
         {
             if (def == null) throw new ArgumentNullException(nameof(def));

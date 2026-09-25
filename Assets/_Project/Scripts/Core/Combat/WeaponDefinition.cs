@@ -4,10 +4,10 @@ using Game.Core.Stats;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Оружие: чистые данные (в Unity обернётся ScriptableObject/ItemDefinition,
-    /// когда подключится Items — Б3). Гир крутит ЧИСЛА; способности живут в скилах.
-    /// Урон мелкий (2–8). Проки статусов на попадании — гарантированные (граза
-    /// прок не даёт).
+    /// Зброя: чисті дані (у Unity обгорнеться ScriptableObject/ItemDefinition,
+    /// коли підключиться Items — Б3). Гір крутить ЧИСЛА; здібності живуть у скілах.
+    /// Урон дрібний (2–8). Проки статусів на влучанні — гарантовані (граза
+    /// проку не дає).
     /// </summary>
     [Serializable]
     public sealed class WeaponDefinition
@@ -15,7 +15,7 @@ namespace Game.Core.Combat
         public string Id;
         public string DisplayName;
 
-        /// <summary>Каким боевым скилом стреляет/бьёт (Стрелковое/Ближнее).</summary>
+        /// <summary>Яким бойовим скілом стріляє/б'є (Стрілецьке/Ближній бій).</summary>
         public SkillType Skill = SkillType.Ranged;
 
         public DamageType Damage = DamageType.Ballistic;
@@ -24,13 +24,13 @@ namespace Game.Core.Combat
         public int CritDamageBonus = 2;  // крит = DamageMax + бонус
 
         public int ApCost = 4;           // атака 3–4 AP
-        public int OptimalRange = 6;     // тайлы (Чебышёв); дальше — штраф за дистанцию
-        public int ArmorPierce = 0;      // пробитие: игнорирует N брони
+        public int OptimalRange = 6;     // тайли (Чебишов); далі — штраф за дистанцію
+        public int ArmorPierce = 0;      // пробиття: ігнорує N броні
 
-        /// <summary>Шред: на попадании снижает броню цели на N (копится).</summary>
+        /// <summary>Шред: на влучанні знижує броню цілі на N (накопичується).</summary>
         public int ShredOnHit = 0;
 
-        /// <summary>Статус, гарантированно накладываемый на полном попадании (None — нет прока).</summary>
+        /// <summary>Статус, який гарантовано накладається на повному влучанні (None — нема проку).</summary>
         public StatusType StatusOnHit = StatusType.None;
 
         public bool IsMelee => Skill == SkillType.Melee;

@@ -5,13 +5,13 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Проигрывание сцены (Поправка №5.8). Живёт в ядре, поэтому «кто сейчас в
-    /// кадре и что он говорит» проверяется без редактора — ровно так же, как
-    /// сама сцена проверяется без него валидатором.
+    /// Програвання сцени (Поправка №5.8). Живе в ядрі, тому «хто зараз у
+    /// кадрі і що він каже» перевіряється без редактора — рівно так само, як
+    /// сама сцена перевіряється без нього валідатором.
     /// </summary>
     public class ScenePlaybackTests
     {
-        /// <summary>План держится, пока его не сменят: иначе говорящий исчезал бы после первой фразы.</summary>
+        /// <summary>План тримається, поки його не змінять: інакше той, хто говорить, зникав би після першої фрази.</summary>
         [Test]
         public void ShotHolds_UntilAnotherShotReplacesIt()
         {
@@ -35,7 +35,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("b", play.Current.LineKey);
         }
 
-        /// <summary>Реплика — событие: она не тянется в следующий кадр.</summary>
+        /// <summary>Репліка — подія: вона не тягнеться в наступний кадр.</summary>
         [Test]
         public void LineLastsExactlyOneStep()
         {
@@ -88,12 +88,12 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Доигрывает сцену до конца, на каждом Choice-шаге беря вариант 0
-        /// (Поправка №7.8): <see cref="ScenePlayback.Next"/> сам не движется
-        /// дальше выбора (короткочасно возвращает тот же кадр, пока не придёт
-        /// <see cref="ScenePlayback.Choose"/>) — без этого `while (play.Next())`
-        /// висел бы вечно, ровно так, как повис бы наивный вызывающий, не
-        /// умеющий выбирать (см. комментарий у <see cref="ScenePlayback.IsAwaitingChoice"/>).
+        /// Дограє сцену до кінця, на кожному Choice-кроці беручи варіант 0
+        /// (Поправка №7.8): <see cref="ScenePlayback.Next"/> сам не рухається
+        /// далі вибору (короткочасно повертає той самий кадр, поки не прийде
+        /// <see cref="ScenePlayback.Choose"/>) — без цього `while (play.Next())`
+        /// висів би вічно, рівно так, як повис би наївний викликач, який не
+        /// вміє вибирати (див. коментар у <see cref="ScenePlayback.IsAwaitingChoice"/>).
         /// </summary>
         private static int RunToEnd(ScenePlayback play)
         {
@@ -108,7 +108,7 @@ namespace Game.Tests.EditMode
             return steps;
         }
 
-        /// <summary>Сцена открытия проигрывается целиком и заканчивается переходом в узел.</summary>
+        /// <summary>Сцена відкриття програється цілком і закінчується переходом у вузол.</summary>
         [Test]
         public void OpeningScene_PlaysToItsTransition()
         {
@@ -122,7 +122,7 @@ namespace Game.Tests.EditMode
                 "открытие обязано вести в узел первых суток");
         }
 
-        /// <summary>Каждый говорящий в открытии виден: в кадре он или объявлен голосом за кадром.</summary>
+        /// <summary>Кожен, хто говорить у відкритті, видимий: у кадрі він або оголошений голосом за кадром.</summary>
         [Test]
         public void EveryOpeningSpeaker_IsOnScreenOrOffScreenByDesign()
         {

@@ -3,24 +3,24 @@ using Game.Core.Characters;
 
 namespace Game.Core.Companions
 {
-    /// <summary>Жизненный цикл главы/арки напарника (US-9.5, порт B4).</summary>
+    /// <summary>Життєвий цикл глави/арки напарника (US-9.5, порт B4).</summary>
     public enum ArcState
     {
-        Locked = 0,     // гейт не пройден (лояльность/прогресс)
-        Available = 1,  // можно начать
-        InProgress = 2, // глава идёт
+        Locked = 0,     // гейт не пройдений (лояльність/прогрес)
+        Available = 1,  // можна почати
+        InProgress = 2, // глава йде
         Completed = 3,  // вся арка завершена
-        Aborted = 4     // напарник погиб/предал — арка оборвана (US-9.5)
+        Aborted = 4     // напарник загинув/зрадив — арка обірвана (US-9.5)
     }
 
     /// <summary>
-    /// Глава арки: содержание — квест по id (<see cref="QuestId"/>), НЕ
-    /// встроенный тип квеста. Core/Quests принадлежит пакету B6 и в этом
-    /// дереве недоступен (§1.1 «фаза B — справді паралельна») — декаплинг
-    /// строкой, как и требует интеграционный контракт; playthrough связывает
-    /// D1/B6 после фазы C (шов в seamsForD1). Гейтится полосой лояльности и
-    /// опц. прогресс-флагом (прошлая глава); при завершении ставит свой флаг,
-    /// открывая следующую. <see cref="TitleKey"/> — ключ текста (R7), не текст.
+    /// Глава арки: зміст — квест за id (<see cref="QuestId"/>), НЕ
+    /// вбудований тип квеста. Core/Quests належить пакету B6 і в цьому
+    /// дереві недоступний (§1.1 «фаза B — справді паралельна») — декаплінг
+    /// рядком, як і вимагає інтеграційний контракт; playthrough зв'язує
+    /// D1/B6 після фази C (шов у seamsForD1). Гейтиться смугою лояльності і
+    /// опц. прогрес-флагом (минула глава); при завершенні ставить свій флаг,
+    /// відкриваючи наступну. <see cref="TitleKey"/> — ключ тексту (R7), не текст.
     /// </summary>
     public sealed class ArcChapter
     {
@@ -43,7 +43,7 @@ namespace Game.Core.Companions
         public ArcChapter SetsFlag(string flag) { CompletionFlag = flag; return this; }
     }
 
-    /// <summary>Авторская личная арка напарника (US-9.5, порт B4): многоэтапная, привязана к именному напарнику по id.</summary>
+    /// <summary>Авторська особиста арка напарника (US-9.5, порт B4): багатоетапна, прив'язана до іменного напарника за id.</summary>
     public sealed class CompanionArc
     {
         public readonly string Id;
@@ -66,9 +66,9 @@ namespace Game.Core.Companions
     }
 
     /// <summary>
-    /// Прохождение арки: гейтит главы лояльностью/прогрессом и обрывается
-    /// смертью или уходом в антагонисты (US-9.5). Содержание главы играет
-    /// вызывающий (через будущий QuestRun, B6/D1); по успеху зовёт
+    /// Проходження арки: гейтить глави лояльністю/прогресом і обривається
+    /// смертю або переходом в антагоністи (US-9.5). Зміст глави грає
+    /// викликач (через майбутній QuestRun, B6/D1); по успіху кличе
     /// <see cref="CompleteChapter"/>.
     /// </summary>
     public sealed class CompanionArcRun
@@ -90,12 +90,12 @@ namespace Game.Core.Companions
         public bool IsFinished => State == ArcState.Completed || State == ArcState.Aborted;
 
         /// <summary>
-        /// Пересчёт доступности: смерть/уход в антагонисты → Aborted; иначе
-        /// гейт текущей главы по полосе лояльности и прогресс-флагу. Идущую
-        /// главу (InProgress) не трогает (кроме обрыва). Возвращает true, если
-        /// именно этим вызовом глава стала доступной впервые — сигнальная точка
-        /// для события «arc.chapter_opened» (§2 №26, инвариант 4): D1 сравнивает
-        /// возврат, а не polls State сам.
+        /// Перерахунок доступності: смерть/перехід в антагоністи → Aborted; інакше
+        /// гейт поточної глави за смугою лояльності і прогрес-флагом. Главу, що
+        /// йде (InProgress), не чіпає (крім обриву). Повертає true, якщо
+        /// саме цим викликом глава стала доступною вперше — сигнальна точка
+        /// для події «arc.chapter_opened» (§2 №26, інваріант 4): D1 порівнює
+        /// повернення, а не робить polls State сам.
         /// </summary>
         public bool Refresh(Companion companion)
         {
@@ -104,7 +104,7 @@ namespace Game.Core.Companions
 
             if (companion == null || companion.IsDead || companion.Status == CompanionStatus.Antagonist)
             {
-                State = ArcState.Aborted; // обрыв арки (US-9.5)
+                State = ArcState.Aborted; // обрив арки (US-9.5)
                 return false;
             }
             if (State == ArcState.InProgress) return false;
@@ -119,7 +119,7 @@ namespace Game.Core.Companions
             return State == ArcState.Available && !wasAvailable;
         }
 
-        /// <summary>Начинает доступную главу (её содержание дальше играет вызывающий).</summary>
+        /// <summary>Починає доступну главу (її зміст далі грає викликач).</summary>
         public bool Begin(Companion companion)
         {
             Refresh(companion);
@@ -128,7 +128,7 @@ namespace Game.Core.Companions
             return true;
         }
 
-        /// <summary>Завершает текущую главу (после успешного прохождения): ставит флаг, двигает дальше.</summary>
+        /// <summary>Завершує поточну главу (після успішного проходження): ставить флаг, рухає далі.</summary>
         public void CompleteChapter()
         {
             if (IsFinished) return;
@@ -138,7 +138,7 @@ namespace Game.Core.Companions
             State = CurrentChapter == null ? ArcState.Completed : ArcState.Locked;
         }
 
-        /// <summary>Восстановление прогресса из сейва. Только для системы сохранений.</summary>
+        /// <summary>Відновлення прогресу з сейву. Тільки для системи збережень.</summary>
         internal void RestoreState(ArcState state, int chapterIndex)
         {
             State = state;

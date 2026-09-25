@@ -14,19 +14,19 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Контракт сохранения городского слоя.
+    /// Контракт збереження міського шару.
     ///
-    /// До этого детерминизм был действителен только в пределах одного процесса:
-    /// заряды накопителей, значение Напряжения и услышанные ступени нигде не
-    /// хранились, поэтому после загрузки мир начинался с нулей, а игрок получал
-    /// кризис без предупреждения. Проверяется ровно одно, зато главное:
-    /// продолжение из слепка неотличимо от непрерывного прогона.
+    /// До цього детермінізм був чинним тільки в межах одного процесу:
+    /// заряди накопичувачів, значення Напруги і почуті ступені ніде не
+    /// зберігалися, тому після завантаження світ починався з нулів, а гравець отримував
+    /// кризу без попередження. Перевіряється рівно одне, зате головне:
+    /// продовження зі зліпка невідрізнене від безперервного прогону.
     /// </summary>
     public class SettlementSaveTests
     {
-        // Тир 1 при Укладе 0 даёт фоновый тик 1.25 за сутки — НЕ целое число.
-        // Это намеренно: с целым тиком дробный остаток Напряжения всегда ноль,
-        // и round-trip прошёл бы, даже если остаток вообще не сохранять.
+        // Тір 1 при Укладі 0 дає фоновий тик 1.25 за добу — НЕ ціле число.
+        // Це навмисно: з цілим тиком дробовий залишок Напруги завжди нуль,
+        // і round-trip пройшов би, навіть якщо залишок узагалі не зберігати.
         private static DayProcessor Build(BalanceConfig cfg, int tier = 1)
         {
             var roster = new Roster();
@@ -75,15 +75,15 @@ namespace Game.Tests.EditMode
         {
             var cfg = new BalanceConfig();
 
-            // A: сто суток подряд.
+            // A: сто діб поспіль.
             var continuous = CampaignSimulator.Run(Build(cfg), SimPolicy.Passive, 100, cfg);
 
-            // B: пятьдесят суток, слепок.
+            // B: п'ятдесят діб, зліпок.
             var first = Build(cfg);
             CampaignSimulator.Run(first, SimPolicy.Passive, 50, cfg);
             string blob = first.SaveState();
 
-            // C: СВЕЖИЙ конвейер, восстановление, ещё пятьдесят суток.
+            // C: СВІЖИЙ конвеєр, відновлення, ще п'ятдесят діб.
             var resumed = Build(cfg);
             resumed.RestoreState(blob);
             var tail = CampaignSimulator.Run(resumed, SimPolicy.Passive, 50, cfg);
@@ -139,8 +139,8 @@ namespace Game.Tests.EditMode
             var restored = Build(cfg);
             restored.RestoreState(p.SaveState());
 
-            // Штраф за повторы обязан пережить загрузку, иначе сейв становится
-            // способом снять наказание, ничего не отдав взамен.
+            // Штраф за повтори зобов'язаний пережити завантаження, інакше сейв стає
+            // способом зняти покарання, нічого не віддавши натомість.
             var before = (RepeatTracker)p.Repeats;
             var after = (RepeatTracker)restored.Repeats;
 
@@ -167,27 +167,27 @@ namespace Game.Tests.EditMode
 
             object blob = p.SaveState();
 
-            // Наружу уходит строка, а не DTO с полями. Это и есть компромисс,
-            // описанный в SettlementSave: сохранить состояние можно, а собрать
-            // из него дашборд по дороге — нет.
+            // Назовні йде рядок, а не DTO з полями. Це і є компроміс,
+            // описаний у SettlementSave: зберегти стан можна, а зібрати
+            // з нього дашборд по дорозі — ні.
             Assert.IsInstanceOf<string>(blob, "Слепок обязан быть непрозрачным для Game.Gameplay");
         }
 
         // ================= eco=/sites=/flags= (Foundation/A1) =================
 
         /// <summary>
-        /// Побайтовый round-trip трёх новых фрагментов сразу: кошелёк+слоты+XP
-        /// (eco=), истощение точек (sites=), сюжетные флаги (flags=). Мир берём
-        /// настоящий — Game.Core.Session.FirstHourWorld, — чтобы Economy/Sites/
-        /// Flags были подключены ровно так, как в игре, а не собраны руками
-        /// мимо DayProcessor.Economy/.Sites/.Flags.
+        /// Побайтовий round-trip трьох нових фрагментів одразу: гаманець+слоти+XP
+        /// (eco=), виснаження точок (sites=), сюжетні прапорці (flags=). Світ беремо
+        /// справжній — Game.Core.Session.FirstHourWorld, — щоб Economy/Sites/
+        /// Flags були підключені рівно так, як у грі, а не зібрані руками
+        /// повз DayProcessor.Economy/.Sites/.Flags.
         /// </summary>
         [Test]
         public void Save_EconomySitesFlags_RoundTripIsByteIdentical()
         {
             var world = Game.Core.Session.FirstHourWorld.Build(tier: 1, requirePlayerDecision: false, balance: new BalanceConfig());
 
-            // Наполняем все три фрагмента, иначе тест проверяет пустые строки.
+            // Наповнюємо всі три фрагменти, інакше тест перевіряє порожні рядки.
             world.Sites.Register("abandoned_camp");
             world.Sites.Register("abandoned_camp");
             world.Flags.Set("tugar_offer_seen");

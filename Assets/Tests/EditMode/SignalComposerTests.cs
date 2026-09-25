@@ -11,9 +11,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Слой сигналов — единственный канал знания игрока о скрытых шкалах.
-    /// Эти тесты защищают три правила: нет немого перехода, бюджет внимания,
-    /// обязательный слот под «что изменилось».
+    /// Шар сигналів — єдиний канал знання гравця про приховані шкали.
+    /// Ці тести захищають три правила: немає німого переходу, бюджет уваги,
+    /// обов'язковий слот під «що змінилося».
     /// </summary>
     public class SignalComposerTests
     {
@@ -24,7 +24,7 @@ namespace Game.Tests.EditMode
         {
             var cfg = Cfg();
 
-            // Проходим по всем переходам вверх и проверяем, что каждый заметен.
+            // Проходимо по всіх переходах вгору і перевіряємо, що кожен помітний.
             foreach (var target in new[] { TensionBand.Murmur, TensionBand.Ferment, TensionBand.Heat, TensionBand.Fracture })
             {
                 var state = new TensionState(cfg.Tension);
@@ -48,13 +48,13 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Бюджет внимания ограничивает ОБЫЧНЫЕ сигналы (то, что не мандатно) —
-        /// смена полосы и ступень предвестника в этот бюджет не входят
-        /// (см. следующий тест). Раньше это был единственный тест на бюджет, и он
-        /// строил ровно тот густой день, в котором смена полосы могла остаться
-        /// немой (G21) — только через кандидатов из dayLedger, которые ТЕПЕРЬ
-        /// мандатны. Проверяем ту же перегрузку через city-events: они дельты, но
-        /// не мандатны, и бюджет обязан их резать по-прежнему.
+        /// Бюджет уваги обмежує ЗВИЧАЙНІ сигнали (те, що не мандатне) —
+        /// зміна полоси і ступінь передвісника в цей бюджет не входять
+        /// (див. наступний тест). Раніше це був єдиний тест на бюджет, і він
+        /// будував саме той густий день, у якому зміна полоси могла лишитися
+        /// німою (G21) — тільки через кандидатів з dayLedger, які ТЕПЕР
+        /// мандатні. Перевіряємо те саме перевантаження через city-events: вони дельти, але
+        /// не мандатні, і бюджет зобов'язаний різати їх як і раніше.
         /// </summary>
         [Test]
         public void Signals_NeverExceedBudget()
@@ -80,16 +80,16 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// РЕГРЕССИЯ G21 (закрыто 24.09.2026). Раньше именно этот сценарий —
-        /// несколько переходов полосы за один густой день — доказывал дырку
-        /// инварианта 4: <c>ForceSignalOnBandChange</c> только ДОБАВЛЯЛ
-        /// кандидата, слота не резервировал, и бюджет/конкурирующая дельта могли
-        /// вытеснить любой из переходов молча (см. также
-        /// <c>CampaignPacingTests.Pacing_BandChangeIsNeverMute</c>, теперь
-        /// снятый). Мутационная проверка: если убрать резервирование
-        /// (<c>Mandatory</c> у смены полосы в <see cref="SignalComposer"/> или
-        /// его форсированный отбор в <c>Select</c>), этот тест обязан упасть —
-        /// три перехода при бюджете 2 не пройдут иначе.
+        /// РЕГРЕСІЯ G21 (закрито 24.09.2026). Раніше саме цей сценарій —
+        /// кілька переходів полоси за один густий день — доводив дірку
+        /// інваріанта 4: <c>ForceSignalOnBandChange</c> тільки ДОДАВАВ
+        /// кандидата, слот не резервував, і бюджет/конкурентна дельта могли
+        /// витіснити будь-який з переходів мовчки (див. також
+        /// <c>CampaignPacingTests.Pacing_BandChangeIsNeverMute</c>, тепер
+        /// знятий). Мутаційна перевірка: якщо прибрати резервування
+        /// (<c>Mandatory</c> у зміни полоси в <see cref="SignalComposer"/> або
+        /// його форсований відбір у <c>Select</c>), цей тест зобов'язаний впасти —
+        /// три переходи при бюджеті 2 інакше не пройдуть.
         /// </summary>
         [Test]
         public void Signals_MandatoryBandChanges_AlwaysGetThrough_EvenOverBudget()
@@ -99,7 +99,7 @@ namespace Game.Tests.EditMode
 
             var state = new TensionState(cfg.Tension);
             state.BeginDay();
-            // Три перехода за один день — Спокойно -> Брожение -> Ферментация -> Накал.
+            // Три переходи за один день — Спокій -> Ропіт -> Бродіння -> Розпал.
             state.Apply(TensionDriver.QuestChoice, 250, "a");
             state.Apply(TensionDriver.QuestChoice, 250, "b");
             state.Apply(TensionDriver.QuestChoice, 250, "c");
@@ -114,13 +114,13 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// РЕГРЕССИЯ G21: та же дырка, но для лестницы предвестников. Ступень
-        /// уже засчитана услышанной накопителем (WorldPulse.MarkDelivered,
-        /// PulseStep) ДО того, как этот шаг решает бюджет — если бы она не
-        /// прошла в дайджест, игрок эту ступень не услышал бы никогда, а
-        /// лестница снаружи выглядела бы перепрыгнувшей её. Конкуренты —
-        /// несколько кризисных инцидентов (Imminent, самая громкая срочность) и
-        /// бюджет ровно на них.
+        /// РЕГРЕСІЯ G21: та сама дірка, але для драбини передвісників. Ступінь
+        /// вже зарахована почутою накопичувачем (WorldPulse.MarkDelivered,
+        /// PulseStep) ДО того, як цей крок вирішує бюджет — якби вона не
+        /// пройшла в дайджест, гравець цю ступінь не почув би ніколи, а
+        /// драбина ззовні виглядала б такою, що перестрибнула її. Конкуренти —
+        /// кілька кризових інцидентів (Imminent, найгучніша терміновість) і
+        /// бюджет рівно на них.
         /// </summary>
         [Test]
         public void Signals_DenseDay_ForewarningStepIsNeverMute()
@@ -147,7 +147,7 @@ namespace Game.Tests.EditMode
         public void Signals_AlwaysIncludeDeltaWhenSomethingChanged()
         {
             var cfg = Cfg();
-            cfg.Signals.MaxSignalsPerDay = 1; // бюджет ровно на один сигнал
+            cfg.Signals.MaxSignalsPerDay = 1; // бюджет рівно на один сигнал
 
             var state = new TensionState(cfg.Tension);
             state.BeginDay();
@@ -192,7 +192,7 @@ namespace Game.Tests.EditMode
             var cfg = Cfg();
             var empty = new List<TensionChange>();
 
-            // Богатый и напряжённый против бедного и спокойного.
+            // Багатий і напружений проти бідного і спокійного.
             var richTense = SignalComposer.Compose(TensionBand.Heat, empty, 4, cfg.Signals).Moodboard;
             var poorCalm = SignalComposer.Compose(TensionBand.Calm, empty, 1, cfg.Signals).Moodboard;
 
@@ -229,7 +229,7 @@ namespace Game.Tests.EditMode
             }
             return sb.ToString();
         }
-        // ---- Подавление повторов ----
+        // ---- Придушення повторів ----
 
         [Test]
         public void Composer_FreshTopic_PushesOutTheOneJustHeard()
@@ -237,13 +237,13 @@ namespace Game.Tests.EditMode
             var cfg = new SignalBalance { TopicCooldownDays = 2 };
             var memory = new SignalMemory();
 
-            // Сутки 1: городу есть сказать только фоновую реплику.
+            // Доба 1: місту є що сказати тільки фонову репліку.
             var first = SignalComposer.Compose(
                 TensionBand.Calm, null, 1, cfg, null, null, null, false, memory, 1);
             string ambient = first.Requests[0].TopicId;
             Assert.IsTrue(ambient.StartsWith("tension.ambient."), "Ожидали фоновую реплику полосы");
 
-            // Сутки 2: появилось что-то новое. Вчерашняя фоновая обязана уступить.
+            // Доба 2: з'явилося щось нове. Вчорашня фонова зобов'язана поступитися.
             var fore = new[] { new Forewarning("street", 1, "улицы") };
             var second = SignalComposer.Compose(
                 TensionBand.Calm, null, 1, cfg, fore, null, null, false, memory, 2);
@@ -259,8 +259,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void Composer_QuietDay_IsNeverLeftMute()
         {
-            // Осознанное решение: когда сказать больше нечего, повтор ЛУЧШЕ тишины.
-            // Немой день игрок читает как «игра сломалась», а не как «всё спокойно».
+            // Усвідомлене рішення: коли сказати більше нічого, повтор КРАЩИЙ за тишу.
+            // Німий день гравець читає як «гра зламалася», а не як «усе спокійно».
             var cfg = new SignalBalance { TopicCooldownDays = 30 };
             var memory = new SignalMemory();
 

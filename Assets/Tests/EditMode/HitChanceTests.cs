@@ -5,9 +5,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Надёжное число (состав формулы, клампы) — общее для обоих правил
-    /// попадания (R1). Перенесено из архивной боевой линии, адаптировано на
-    /// BalanceConfig.Combat (R14: числа боя — своя секция).
+    /// Надійне число (склад формули, клампи) — спільне для обох правил
+    /// влучання (R1). Перенесено з архівної бойової лінії, адаптовано на
+    /// BalanceConfig.Combat (R14: числа бою — своя секція).
     /// </summary>
     public class HitChanceTests
     {
@@ -77,9 +77,9 @@ namespace Game.Tests.EditMode
             var a = Attacker();
             var t = Defender();
 
-            // Шанс ≥85 → худшее возможное — Graze, даже на плохом ролле.
+            // Шанс ≥85 → найгірше можливе — Graze, навіть на поганому роллі.
             Assert.AreEqual(AttackOutcome.Graze, rule.Resolve(a, t, 90, new ScriptedDiceRoller(0.999)));
-            // Контроль: при шансе ниже пола тот же ролл — промах.
+            // Контроль: при шансі нижче підлоги той самий ролл — промах.
             Assert.AreEqual(AttackOutcome.Miss, rule.Resolve(a, t, 80, new ScriptedDiceRoller(0.999)));
         }
 
@@ -90,20 +90,20 @@ namespace Game.Tests.EditMode
             var a = Attacker(critChance: 50);
             var t = Defender();
 
-            // Первый ролл 0.1 < 50% → Hit-ветка; второй ролл 0.4 < 50% крита → Crit.
+            // Перший ролл 0.1 < 50% → Hit-гілка; другий ролл 0.4 < 50% крита → Crit.
             Assert.AreEqual(AttackOutcome.Crit, rule.Resolve(a, t, 50, new ScriptedDiceRoller(0.1, 0.4)));
-            // Второй ролл 0.9 ≥ 50% крита → обычный Hit, без третьего броска.
+            // Другий ролл 0.9 ≥ 50% крита → звичайний Hit, без третього кидка.
             Assert.AreEqual(AttackOutcome.Hit, rule.Resolve(a, t, 50, new ScriptedDiceRoller(0.1, 0.9)));
         }
 
-        // ---- ThresholdRule: полностью детерминировано, roller не трогает ----
+        // ---- ThresholdRule: повністю детерміновано, roller не чіпає ----
 
         [Test]
         public void ThresholdRule_BandsByMarginFromBaseline_NoRollerCalls()
         {
             var cfg = new BalanceConfig(); // Baseline=50, GrazeBand=15, CritBand=35
             var rule = new ThresholdRule(cfg);
-            var roller = new ScriptedDiceRoller(); // пустая очередь — если тронут, вернёт 0.5, но мы проверим, что не тронут
+            var roller = new ScriptedDiceRoller(); // порожня черга — якщо торкнуться, поверне 0.5, але ми перевіримо, що не торкнуться
 
             Assert.AreEqual(AttackOutcome.Miss, rule.Resolve(null, null, 49, roller));
             Assert.AreEqual(AttackOutcome.Graze, rule.Resolve(null, null, 50, roller));

@@ -5,8 +5,8 @@ using Game.Core.Signals;
 namespace Game.Core.Loop
 {
     /// <summary>
-    /// Последний содержательный шаг дня: превращает финальное состояние
-    /// в то, что игрок увидит и услышит.
+    /// Останній змістовний крок дня: перетворює фінальний стан
+    /// на те, що гравець побачить і почує.
     /// </summary>
     public sealed class SignalStep : IDayStep
     {
@@ -17,8 +17,8 @@ namespace Game.Core.Loop
             ctx.Signals = SignalComposer.Compose(
                 ctx.Tension.Band,
                 ctx.Tension.DayLedger,
-                // Тир, выросший сегодня, виден сегодня же: сигнал «хутор стал
-                // селом» и облик села приходят одним отчётом, а не с отставанием.
+                // Тір, що виріс сьогодні, видно сьогодні ж: сигнал «хутір став
+                // селом» і вигляд села приходять одним звітом, а не з відставанням.
                 System.Math.Max(ctx.Tier, ctx.RaiseTierTo),
                 ctx.Balance.Signals,
                 ctx.Forewarnings,
@@ -31,8 +31,8 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
-        /// Доклады с постов. Ночью город спит — докладывают только утром.
-        /// Точность считается тем же резолвером, что и всё остальное.
+        /// Доповіді з постів. Вночі місто спить — доповідають тільки вранці.
+        /// Точність рахується тим самим резолвером, що і все інше.
         /// </summary>
         private static List<PostReport> BuildPostReports(DayContext ctx)
         {
@@ -49,8 +49,8 @@ namespace Game.Core.Loop
                     "post:" + domain.PositionId,
                     domain.PositionId);
 
-                // Повторы здесь не штрафуем: доклад — ежедневная рутина,
-                // а не обращение к фракции.
+                // Повтори тут не штрафуємо: доповідь — щоденна рутина,
+                // а не звернення до фракції.
                 var preview = CheckResolver.Preview(request, ctx.Roster, null, ctx.Day, ctx.Balance);
 
                 reports.Add(preview.HasCandidate

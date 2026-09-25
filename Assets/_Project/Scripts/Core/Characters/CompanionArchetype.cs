@@ -7,13 +7,13 @@ using Game.Core.Stats;
 namespace Game.Core.Characters
 {
     /// <summary>
-    /// Шаблон напарника. Чистые данные: стартовые атрибуты, стартовые скилы,
-    /// профиль роста и стартовые трейты. В Unity оборачивается ScriptableObject,
-    /// но логика создания напарника живёт здесь, чтобы тестироваться без движка.
+    /// Шаблон напарника. Чисті дані: стартові атрибути, стартові скіли,
+    /// профіль росту і стартові трейти. В Unity обгортається ScriptableObject,
+    /// але логіка створення напарника живе тут, щоб тестуватися без рушія.
     ///
-    /// Заполняется сеттерами, а не объектным инициализатором: одна строка — один
-    /// факт контента. Так диффы читаемы, а генератор карты разбирает архетип
-    /// простым регекспом вместо разбора вложенных блоков.
+    /// Заповнюється сеттерами, а не об'єктним ініціалізатором: один рядок — один
+    /// факт контенту. Так дифи читані, а генератор карти розбирає архетип
+    /// простим регекспом замість розбору вкладених блоків.
     /// </summary>
     [Serializable]
     public sealed class CompanionArchetype
@@ -21,16 +21,16 @@ namespace Game.Core.Characters
         public string Id;
         public string DisplayName;
 
-        /// <summary>Стартовые атрибуты (шкала 1–10). За уровни не растут.</summary>
+        /// <summary>Стартові атрибути (шкала 1–10). За рівні не ростуть.</summary>
         public AttributeSet Attributes = new AttributeSet();
 
-        /// <summary>Стартовые скилы (шкала 0–10). Ноль означает «не умеет».</summary>
+        /// <summary>Стартові скіли (шкала 0–10). Нуль означає «не вміє».</summary>
         public SkillSet Skills = new SkillSet();
 
-        /// <summary>Веса распределения очков скилов при повышении уровня.</summary>
+        /// <summary>Ваги розподілу очок скілів при підвищенні рівня.</summary>
         public SkillGrowthProfile Growth = new SkillGrowthProfile();
 
-        /// <summary>Трейты, с которыми напарник приходит (US-2.4).</summary>
+        /// <summary>Трейти, з якими напарник приходить (US-2.4).</summary>
         public List<TraitDefinition> StartingTraits = new List<TraitDefinition>();
 
         public CompanionArchetype() { }
@@ -66,8 +66,8 @@ namespace Game.Core.Characters
         }
 
         /// <summary>
-        /// Создаёт нового напарника 1-го уровня по этому архетипу.
-        /// Баланс нужен для ёмкости слотов трейтов: null означает дефолты.
+        /// Створює нового напарника 1-го рівня за цим архетипом.
+        /// Баланс потрібен для ємності слотів трейтів: null означає дефолти.
         /// </summary>
         public Companion CreateInstance(string instanceId, BalanceConfig cfg = null)
         {

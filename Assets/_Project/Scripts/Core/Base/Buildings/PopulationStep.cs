@@ -5,13 +5,13 @@ using Game.Core.Signals;
 namespace Game.Core.Base
 {
     /// <summary>
-    /// Люди приходят и уходят, и от них растёт село (Поправка №6.3–6.4).
+    /// Люди приходять і йдуть, і від них росте село (Поправка №6.3–6.4).
     ///
-    /// ЧТО СЛЫШНО, А ЧТО НЕТ. Медленный естественный прирост и таверна —
-    /// тихие: сигнал на каждого нового человека превратился бы в обои. Но
-    /// когда людность переходит в другую полосу, это слышно (инвариант 4:
-    /// немого перехода полосы не бывает). Уход людей слышен всегда — это
-    /// следствие, которое игрок обязан заметить. Смена тира слышна всегда.
+    /// ЩО ЧУТНО, А ЩО НІ. Повільний природний приріст і таверна —
+    /// тихі: сигнал на кожну нову людину перетворився б на шпалери. Але
+    /// коли людність переходить в іншу смугу, це чутно (інваріант 4:
+    /// німого переходу смуги не буває). Відхід людей чутний завжди — це
+    /// наслідок, який гравець зобов'язаний помітити. Зміна тіра чутна завжди.
     /// </summary>
     public sealed class PopulationStep : IDayStep
     {
@@ -31,13 +31,13 @@ namespace Game.Core.Base
             var cfg = ctx.Balance.City;
             int bandBefore = ctx.Population.CrowdBand;
 
-            // ---- приход: тихий ----
+            // ---- прихід: тихий ----
             int arrived = 0;
             if (cfg.NaturalGrowthEveryDays > 0 && ctx.Day % cfg.NaturalGrowthEveryDays == 0) arrived++;
             if (_works != null && _works.Has(DefaultBuildings.Tavern)) arrived += cfg.TavernArrivalsPerDay;
             if (arrived > 0) ctx.Population.Add(arrived);
 
-            // ---- уход: слышен всегда ----
+            // ---- відхід: чутний завжди ----
             if (ctx.IsHungry) Leave(ctx, cfg.HungryDepartures, "hunger");
             if (ctx.Fear != null && ctx.Fear.IsAfraid(ctx.Day)) Leave(ctx, cfg.FearDepartures, "fear");
 
@@ -46,7 +46,7 @@ namespace Game.Core.Base
                 ctx.CityEvents.Add(new CityEvent("city.crowd." + bandAfter, SignalUrgency.Notable,
                     bandAfter > bandBefore ? "dir:up" : "dir:down"));
 
-            // ---- тир: только вверх, слышен всегда ----
+            // ---- тір: тільки вгору, чутний завжди ----
             int next = NextTier(ctx.Tier, ctx.Population.Count, _works, cfg);
             if (next > ctx.Tier)
             {
@@ -66,16 +66,16 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Тир растёт от людей И ключевого здания (Поправка №6.4, GDD US-7.6).
-        /// Одних людей мало — толпа без таверны не село; одного здания мало —
-        /// таверна в пустом хуторе не делает его селом. Порог по одной ступени
-        /// за сутки: перепрыгнуть тир нельзя, как и ступень предвестника.
+        /// Тір росте від людей І ключової будівлі (Поправка №6.4, GDD US-7.6).
+        /// Самих людей мало — натовп без таверни не село; самої будівлі мало —
+        /// таверна в порожньому хуторі не робить його селом. Поріг по одному ступеню
+        /// за добу: перестрибнути тір не можна, як і ступінь передвісника.
         /// </summary>
         internal static int NextTier(int tier, int population, CityWorks works, CityBalance cfg)
         {
             if (works == null || cfg == null || cfg.TierPopulation == null) return tier;
 
-            int index = tier - 1; // порог следующего тира
+            int index = tier - 1; // поріг наступного тіра
             if (index < 0 || index >= cfg.TierPopulation.Length) return tier;
             if (population < cfg.TierPopulation[index]) return tier;
 

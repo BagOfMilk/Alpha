@@ -6,7 +6,7 @@ using Game.Core.Checks;
 
 namespace Game.Core.Expeditions
 {
-    /// <summary>Кого и насколько задело.</summary>
+    /// <summary>Кого і наскільки зачепило.</summary>
     public struct ExpeditionWound
     {
         public string ActorId;
@@ -14,8 +14,8 @@ namespace Game.Core.Expeditions
     }
 
     /// <summary>
-    /// Что игрок видит ДО отправки (US-17.3: пороги показываются заранее).
-    /// Ровно те же числа, что применит резолв — считает их один и тот же код.
+    /// Що гравець бачить ДО відправки (US-17.3: пороги показуються заздалегідь).
+    /// Рівно ті самі числа, що застосує резолв — рахує їх один і той самий код.
     /// </summary>
     public sealed class ExpeditionPreview
     {
@@ -31,17 +31,17 @@ namespace Game.Core.Expeditions
         public int Materials;
         public int Gold;
 
-        /// <summary>Сколько раз точку уже отрабатывали и во сколько это обошлось добыче.</summary>
+        /// <summary>Скільки разів точку вже відпрацьовували і в скільки це обійшлося здобичі.</summary>
         public int TimesWorked;
         public double YieldMultiplier;
 
-        /// <summary>Сколько человек вернётся ранеными. Показывается заранее — это и есть цена.</summary>
+        /// <summary>Скільки людей повернеться пораненими. Показується заздалегідь — це і є ціна.</summary>
         public int ExpectedWounded;
 
         public bool HasParty => PartyValue > 0 || Threshold <= 0;
     }
 
-    /// <summary>Итог вылазки.</summary>
+    /// <summary>Підсумок вилазки.</summary>
     public sealed class ExpeditionResult
     {
         public string SiteId;
@@ -52,22 +52,22 @@ namespace Game.Core.Expeditions
         public int Materials;
         public int Gold;
 
-        /// <summary>Люди, найденные на точке. Приходят в город через городские работы.</summary>
+        /// <summary>Люди, знайдені на точці. Приходять у місто через міські роботи.</summary>
         public int People;
 
         public List<ExpeditionWound> Wounded = new List<ExpeditionWound>();
 
-        /// <summary>Кто ходил — в том же порядке, в каком их отправили.</summary>
+        /// <summary>Хто ходив — у тому самому порядку, у якому їх відправили.</summary>
         public List<string> PartyIds = new List<string>();
 
-        // ---- слепок (R15) ----
+        // ---- зліпок (R15) ----
         //
-        // Результат резолвится РОВНО ОДИН РАЗ, в момент отправки (§4.11), и
-        // должен пережить сохранение/загрузку до самого возвращения партии —
-        // иначе сейв посреди вылазки менял бы уже решённый исход. Формат
-        // плоский, разделитель полей '|' не пересекается с разделителями
-        // ExpeditionParty ('>' и ',' — там свои сущности), а список ран/id
-        // партии внутри поля разделён '~'.
+        // Результат резолвиться РІВНО ОДИН РАЗ, у момент відправки (§4.11), і
+        // мусить пережити збереження/завантаження до самого повернення партії —
+        // інакше сейв посеред вилазки міняв би вже вирішений результат. Формат
+        // плаский, роздільник полів '|' не перетинається з роздільниками
+        // ExpeditionParty ('>' і ',' — там свої сутності), а список ран/id
+        // партії всередині поля розділений '~'.
 
         public string ToBlob()
         {

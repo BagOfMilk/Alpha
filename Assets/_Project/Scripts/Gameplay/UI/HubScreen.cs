@@ -5,6 +5,7 @@ using Game.Core.Characters.Creation;
 using Game.Core.Expeditions;
 using Game.Core.Items;
 using Game.Core.Quests;
+using Game.Core.Session;
 using Game.Core.Session.Views;
 using Game.Core.Stats;
 using Game.Gameplay.Text;
@@ -110,7 +111,31 @@ namespace Game.Gameplay.UI
 
             GUILayout.FlexibleSpace();
             if (Widgets.PrimaryButton(UkrainianText.Get("ui.start_day", g)))
-                shell.TryRun(() => shell.Session.ConfirmMorning());
+                StartDay(shell);
+        }
+
+        /// <summary>
+        /// Дія кнопки «Почати день»: підтвердити ранок і прокрутити день до
+        /// першого рішення або до вечора. Раніше кнопка лише підтверджувала
+        /// ранок (стан «День»), а сам день (<see cref="GameSession.AdvanceDay"/>)
+        /// не викликала жодна кнопка — людина застрягала на першому ранку;
+        /// автотур цього не бачив, бо кликав ядро напряму (знайдено аудитом
+        /// журналу 25.09.2026). Тепер і кнопка, і водій автотуру йдуть через
+        /// цей метод. Якщо гра вже стоїть у стані «День», він просто
+        /// продовжує день.
+        /// </summary>
+        public static void StartDay(GameShell shell)
+        {
+            shell.TryRun(() => StartDay(shell.Session));
+        }
+
+        /// <summary>Логіка кнопки без перехоплення винятків — її кличе і водій автотуру (свій облік помилок).</summary>
+        public static void StartDay(GameSession s)
+        {
+            if (s.State == SessionState.Morning || s.State == SessionState.FreePlay)
+                s.ConfirmMorning();
+            if (s.State == SessionState.Day)
+                s.AdvanceDay();
         }
 
         private void DrawTabBar(Gender g)
@@ -960,6 +985,25 @@ namespace Game.Gameplay.UI
             Widgets.LabeledRow(UkrainianText.Get("ui.readiness.title", g), ScreenText.ReadinessLabel(view.Band, g));
             Widgets.LabeledRow(UkrainianText.Format("ui.readiness.milestones", g,
                 "reached", view.MilestonesReached.ToString(), "total", view.MilestonesTotal.ToString()), "");
+
+            GUILayout.Space(10f);
+
+            // Тренувальний бій усередині партії (фікс-ревью — журнал механік
+            // тестера, MechanicsJournalCompletionTests): раніше єдиний вхід у
+            // NewTrainingBattle стояв на TitleScreen, ДО NewGame — гравець, що
+            // спробував його спершу, а тоді почав кампанію, бачив запис
+            // "Тренувальний бій" знову непоміченим (NewGame() безумовно чистить
+            // журнал разом з рештою прогону). NewTrainingBattle сам по собі
+            // держить бій "пісочницею" (SuspendReason.TrainingSkirmish,
+            // OnBattleResolved повертає State=fromState БЕЗ виклику NewGame) —
+            // тож виклик просто ЗВІДСИ, з Morning/FreePlay, лишає всю партію і
+            // журнал незайманими, і той самий запис лишається побаченим.
+            if (Widgets.SecondaryButton(UkrainianText.Get("ui.readiness.training", g)))
+            {
+                var options = new Game.Core.Session.TrainingBattleOptions { HitRule = shell.Session.HitRule };
+                shell.TryRun(() => shell.Session.NewTrainingBattle(options));
+            }
+            Widgets.TooltipLine(UkrainianText.Get("ui.readiness.training.hint", g));
         }
 
         // ===================== Збереження =====================

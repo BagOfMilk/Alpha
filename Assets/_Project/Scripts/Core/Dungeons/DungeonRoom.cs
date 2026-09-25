@@ -3,7 +3,7 @@ using Game.Core.Checks;
 
 namespace Game.Core.Dungeons
 {
-    /// <summary>Тип кімнати данжу (Эпик 12, R4): бій / гарантований лут / подія-вибір.</summary>
+    /// <summary>Тип кімнати данжу (Епік 12, R4): бій / гарантований лут / подія-вибір.</summary>
     public enum DungeonRoomKind
     {
         Combat = 0,

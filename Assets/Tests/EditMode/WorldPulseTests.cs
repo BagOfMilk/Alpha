@@ -7,8 +7,8 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Пульс — замена кубику. Здесь защищается главное обещание дизайна:
-    /// прежде чем ударить, мир предупреждает.
+    /// Пульс — заміна кубику. Тут захищається головна обіцянка дизайну:
+    /// перш ніж вдарити, світ попереджає.
     /// </summary>
     public class WorldPulseTests
     {
@@ -54,9 +54,9 @@ namespace Game.Tests.EditMode
             {
                 var tick = pulse.Advance(Ctx(day));
 
-                // Ступень засчитывается только доставленная — иначе накопитель
-                // честно предлагает одну и ту же снова и снова. В игре это
-                // делает шаг Pulse; здесь мы играем его роль.
+                // Ступінь зараховується лише доставлена — інакше накопичувач
+                // чесно пропонує одну й ту саму знову і знову. У грі це
+                // робить крок Pulse; тут ми граємо його роль.
                 pulse.MarkDelivered(tick.Forewarnings, day);
                 foreach (var f in tick.Forewarnings) seenLevels.Add(f.Level);
 
@@ -71,12 +71,12 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Предупреждение обязано предшествовать КАЖДОМУ удару, а не только
-        /// первому. Ставка 30 при пороге 100: на 4-е сутки накопитель и
-        /// доходит до третьей ступени, и бьёт — в одном тике. Раньше эта
-        /// ступень выдавалась вместе с ударом, а засчитывалась (MarkDelivered
-        /// после Advance) уже на обнулённый трек: второй круг начинался с
-        /// «третья услышана» и молчал до следующего удара.
+        /// Попередження зобов'язане передувати КОЖНОМУ удару, а не лише
+        /// першому. Ставка 30 при порозі 100: на 4-ту добу накопичувач і
+        /// доходить до третьої ступені, і б'є — в одному тіку. Раніше ця
+        /// ступінь видавалася разом з ударом, а зараховувалась (MarkDelivered
+        /// після Advance) вже на обнулений трек: друге коло починалося з
+        /// «третя почута» і мовчало до наступного удару.
         /// </summary>
         [Test]
         public void Pulse_EveryCycle_HasItsOwnLadder_BeforeTheFire()
@@ -109,6 +109,102 @@ namespace Game.Tests.EditMode
             Assert.GreaterOrEqual(fires, 3, "Нужно несколько кругов: вырождение видно со второго");
         }
 
+        /// <summary>
+        /// «Передвісник не бреше» (SETTLEMENT_LAYER §5.1, правило 4). Криза
+        /// копиться і під час відкату, і раніше її драбина знову доходила до
+        /// третьої ступені через кілька діб після кризи — а наступний
+        /// відкат пускав лише через 30: «скоро» висіло 25 діб. Тепер кожна
+        /// почута третя ступінь веде до кризи не довше ніж за вікно на
+        /// реакцію плюс довжину драбини, а дні криз ті самі — рівно через
+        /// відкат (драбина встигає до його кінця).
+        /// </summary>
+        [Test]
+        public void Pulse_CrisisLadder_NeverPromisesACrisisTheCooldownForbids()
+        {
+            var cfg = Cfg();
+            var pulse = new WorldPulse(cfg);
+            pulse.AddSource(new FixedSource
+            {
+                Id = "crisis", Kind = WorldEventKind.Crisis, Rate = 12, Threshold = 120, CooldownDays = 30
+            });
+
+            const int days = 130;
+            var level3Days = new List<int>();
+            var fireDays = new List<int>();
+            for (int day = 1; day <= days; day++)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+                if (tick.FiredSourceIds.Contains("crisis")) fireDays.Add(day);
+                level3Days.AddRange(tick.Forewarnings.Where(f => f.Level == 3).Select(f => day));
+            }
+
+            Assert.GreaterOrEqual(fireDays.Count, 3, "нужно несколько кругов: ложь видна со второго");
+            for (int i = 1; i < fireDays.Count; i++)
+                Assert.AreEqual(30, fireDays[i] - fireDays[i - 1],
+                    "насыщенный кризис бьёт ровно через откат — лестница не должна его задерживать");
+
+            int promise = cfg.CrisisGraceDays + cfg.CrisisLadderLeadDays;
+            foreach (int d3 in level3Days)
+            {
+                if (d3 + promise > days) continue;
+                Assert.IsTrue(fireDays.Exists(f => f > d3 && f <= d3 + promise),
+                    $"третья ступень на сутки {d3} не привела к кризису до суток {d3 + promise} (кризисы: {string.Join(",", fireDays)})");
+            }
+        }
+
+        /// <summary>
+        /// Перша криза не утримується: відкату ще не було, і драбина
+        /// звучить за заповненням, як завжди. Знайдено рев'ю 25.09.2026: без
+        /// цієї перевірки зняття винятку «ще не спрацьовував» зсувало першу
+        /// кризу з 13-ї доби на 30-ту, а кампанійні тести мовчали — у них
+        /// накопичувач починає копитися (з «Розпалу») вже після 30-ї доби.
+        /// </summary>
+        [Test]
+        public void Pulse_FirstCrisis_IsNotHeldBack_ByAnUnstartedCooldown()
+        {
+            var cfg = Cfg();
+            var pulse = new WorldPulse(cfg);
+            pulse.AddSource(new FixedSource
+            {
+                Id = "crisis", Kind = WorldEventKind.Crisis, Rate = 12, Threshold = 120, CooldownDays = 30
+            });
+
+            int firstLevel1 = -1, firstFire = -1;
+            for (int day = 1; day <= 40 && firstFire < 0; day++)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+                if (firstLevel1 < 0 && tick.Forewarnings.Any(f => f.Level == 1)) firstLevel1 = day;
+                if (tick.FiredSourceIds.Contains("crisis")) firstFire = day;
+            }
+
+            Assert.AreEqual(6, firstLevel1, "ставка 12, порог 120: первая ступень — на 6-е сутки (55%), без удержания");
+            Assert.AreEqual(10 + cfg.CrisisGraceDays, firstFire,
+                "третья ступень на 10-е сутки + окно на реакцию — первый кризис не ждёт отката, которого не было");
+        }
+
+        /// <summary>Утримання стосується лише кризи: інші загрози з коротким відкатом попереджають, як раніше.</summary>
+        [Test]
+        public void Pulse_NonCrisisSource_ForewarnsDuringCooldown_AsBefore()
+        {
+            var pulse = new WorldPulse(Cfg());
+            pulse.AddSource(new FixedSource { Rate = 60, Threshold = 100, CooldownDays = 10 });
+
+            int fireDay = -1;
+            for (int day = 1; day <= 12 && fireDay < 0; day++)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+                if (tick.FiredSourceIds.Count > 0) fireDay = day;
+            }
+            Assert.Greater(fireDay, 0);
+
+            var next = pulse.Advance(Ctx(fireDay + 1));
+            Assert.IsTrue(next.Forewarnings.Any(f => f.Level == 1),
+                "не-кризисная угроза начинает новую лестницу сразу после удара, как и раньше");
+        }
+
         [Test]
         public void Pulse_ForewarnLevel2_NamesDomain()
         {
@@ -138,9 +234,9 @@ namespace Game.Tests.EditMode
             var pulse = new WorldPulse(cfg);
             foreach (var s in DefaultPressureSources.All()) pulse.AddSource(s);
 
-            // Прежняя версия этого теста меряла ОДНУ точку — ночь на верхней
-            // полосе, — то есть ровно тот единственный угол, где инвариант
-            // выполняется. Перебираем весь набор состояний целиком.
+            // Попередня версія цього тесту міряла ОДНУ точку — ніч на верхній
+            // полосі, — тобто рівно той єдиний кут, де інваріант
+            // виконується. Перебираємо весь набір станів цілком.
             int min = int.MaxValue, max = 0, meetingInvariant = 0, total = 0;
             for (int band = 0; band <= 4; band++)
                 foreach (bool night in new[] { false, true })
@@ -152,11 +248,11 @@ namespace Game.Tests.EditMode
                     total++;
                 }
 
-            // ИЗВЕСТНЫЙ РАЗРЫВ, зафиксированный намеренно: MinActiveTracks = 3
-            // выполняется в 2 состояниях из 10, потому что все три ставки —
-            // функции одной полосы. Тест держит реальную картину на виду; когда
-            // накопители перестанут быть тремя обёртками одной переменной, он
-            // упадёт — и это будет поводом обновить ожидание, а не подогнать его.
+            // ВІДОМИЙ РОЗРИВ, зафіксований навмисно: MinActiveTracks = 3
+            // виконується у 2 станах з 10, тому що всі три ставки —
+            // функції однієї полоси. Тест тримає реальну картину на видноті; коли
+            // накопичувачі перестануть бути трьома обгортками однієї змінної, він
+            // впаде — і це буде приводом оновити очікування, а не підігнати його.
             Assert.AreEqual(1, min, "Худший случай: работает один накопитель");
             Assert.AreEqual(3, max, "Лучший случай: работают все три");
             Assert.AreEqual(2, meetingInvariant,
@@ -203,10 +299,10 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Готовый источник, которому нечем сработать, не разряжается: заряд и
-        /// услышанная лестница остаются, единственный слот дня уходит тому, у
-        /// кого последствие есть. Сирота нарочно стоит раньше по Id: без вопроса
-        /// о последствии ничью брал бы он — и сгорал бы молча, отнимая слот.
+        /// Готове джерело, якому нічим спрацювати, не розряджається: заряд і
+        /// почута драбина лишаються, єдиний слот доби йде тому, у
+        /// кого наслідок є. Сирота навмисно стоїть раніше за Id: без питання
+        /// про наслідок нічию брав би він — і згорав би мовчки, забираючи слот.
         /// </summary>
         [Test]
         public void Pulse_ReadySourceWithoutConsequence_HoldsItsChargeAndLadder_AndYieldsTheSlot()

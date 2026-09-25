@@ -9,7 +9,7 @@ using Game.Core.Expeditions;
 
 namespace Game.Core.Base
 {
-    /// <summary>Почему отряд не вышел.</summary>
+    /// <summary>Чому загін не вийшов.</summary>
     public enum DispatchResult
     {
         Success = 0,
@@ -17,31 +17,31 @@ namespace Game.Core.Base
         EmptyParty = 2,
         PartyTooLarge = 3,
         UnknownCompanion = 4,
-        CompanionUnavailable = 5,  // мёртв, ранен, уже в вылазке или враждебен (Antagonist)
-        DuplicateCompanion = 6,    // один и тот же человек дважды в списке
-        PartyAlreadyAway = 7       // прошлый отряд ещё не вернулся (R15: партия одна)
+        CompanionUnavailable = 5,  // мертвий, поранений, уже у вилазці або ворожий (Antagonist)
+        DuplicateCompanion = 6,    // та сама людина двічі у списку
+        PartyAlreadyAway = 7       // минулий загін ще не повернувся (R15: партія одна)
     }
 
     /// <summary>
-    /// Мост «база ↔ вылазка». Шов узкий намеренно: вылазка не знает про слоты
-    /// и кошелёк, база не знает, как считается исход.
+    /// Міст «база ↔ вилазка». Шов вузький навмисно: вилазка не знає про слоти
+    /// і гаманець, база не знає, як рахується підсумок.
     ///
-    /// Отправка освобождает позицию сразу (US-8.3): пост, который некому
-    /// держать, — это цена вылазки, и платится она в тот же день, а не по
-    /// возвращении.
+    /// Відправлення звільняє позицію одразу (US-8.3): пост, який нікому
+    /// тримати, — це ціна вилазки, і платиться вона того самого дня, а не по
+    /// поверненню.
     /// </summary>
     public static class ExpeditionRunner
     {
         /// <summary>
-        /// Единая точка входа вылазки (R15, закрывает D10): валидирует состав →
-        /// <see cref="ExpeditionParty.Depart"/> → если подход не Delve, тут же
-        /// РОВНО ОДИН РАЗ резолвит исход (<see cref="ExpeditionResolver.Resolve"/>)
-        /// и замораживает его в блобе партии (<see cref="ExpeditionParty.FreezeResult"/>).
-        /// Дальше до возвращения к исходу никто не притрагивается — поэтому сейв
-        /// посреди вылазки и обычное продолжение дают один и тот же результат.
+        /// Єдина точка входу вилазки (R15, закриває D10): валідує склад →
+        /// <see cref="ExpeditionParty.Depart"/> → якщо підхід не Delve, тут же
+        /// РІВНО ОДИН РАЗ резолвить підсумок (<see cref="ExpeditionResolver.Resolve"/>)
+        /// і заморожує його в блобі партії (<see cref="ExpeditionParty.FreezeResult"/>).
+        /// Далі до повернення до підсумку ніхто не торкається — тому сейв
+        /// посеред вилазки і звичайне продовження дають той самий результат.
         ///
-        /// Для Delve резолв НЕ вызывается: дальше вылазка играется комнатами
-        /// данжа (Core/Dungeons, B2), а диспетчинг в данж ведёт D1.
+        /// Для Delve резолв НЕ викликається: далі вилазка грається кімнатами
+        /// данжа (Core/Dungeons, B2), а диспетчинг у данж веде D1.
         /// </summary>
         public static DispatchResult Depart(BaseState state, ExpeditionParty party, ExpeditionSite site,
             ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days,
@@ -54,9 +54,9 @@ namespace Game.Core.Base
             if (companionIds.Count > state.Balance.ExpeditionPartyMax) return DispatchResult.PartyTooLarge;
             if (party.IsAway) return DispatchResult.PartyAlreadyAway;
 
-            // Сначала проверяем всех, потом меняем хоть кого-то: отряд уходит
-            // целиком или не уходит вовсе, иначе половина ростера осталась бы
-            // снятой с постов из-за одного мёртвого в списке.
+            // Спочатку перевіряємо всіх, потім міняємо хоч когось: загін іде
+            // цілком або не йде зовсім, інакше половина ростера лишилась би
+            // знятою з постів через одного мертвого у списку.
             var chosen = new List<Companion>(companionIds.Count);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < companionIds.Count; i++)
@@ -64,10 +64,10 @@ namespace Game.Core.Base
                 var c = state.Roster.Get(companionIds[i]);
                 if (c == null) return DispatchResult.UnknownCompanion;
 
-                // Один человек дважды в списке — не безобидная опечатка: он
-                // добавил бы половину себя к силе отряда и получил бы двойную
-                // рану на возврате. Дедупликация молча скрыла бы ошибку
-                // вызывающего, поэтому отказ явный.
+                // Одна людина двічі у списку — не безневинна одруківка: вона
+                // додала б половину себе до сили загону і отримала б подвійну
+                // рану на поверненні. Дедуплікація мовчки приховала б помилку
+                // викликача, тому відмова явна.
                 if (!seen.Add(c.Id)) return DispatchResult.DuplicateCompanion;
 
                 if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission || IsAntagonist(c.Status))
@@ -78,7 +78,7 @@ namespace Game.Core.Base
             if (!party.Depart(state, companionIds, days))
                 return DispatchResult.CompanionUnavailable;
 
-            // Delve пропускает резолв (R15/§4.11): дальше — комнаты данжа.
+            // Delve пропускає резолв (R15/§4.11): далі — кімнати данжа.
             if (approach != ExpeditionApproach.Delve)
             {
                 var actors = new List<ISettlementActor>(chosen.Count);
@@ -93,23 +93,23 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Допуск к вылазке исключает враждебных (R2/B4): проверка по ИМЕНИ
-        /// статуса, а не по значению enum — <c>CompanionStatus.Antagonist</c> в
-        /// этом рабочем дереве ещё не существует (его заводит параллельный
-        /// пакет B4), и код обязан остаться верным без правки, когда он
-        /// появится после мерджа. Сегодня метод всегда возвращает false — это
-        /// ожидаемо, не заглушка «на будущее без эффекта сейчас»: враждебных
-        /// напарников в этом дереве ещё нет вовсе.
+        /// Допуск до вилазки виключає ворожих (R2/B4): перевірка за ІМЕНЕМ
+        /// статусу, а не за значенням enum — <c>CompanionStatus.Antagonist</c> у
+        /// цьому робочому дереві ще не існує (його заводить паралельний
+        /// пакет B4), і код зобов'язаний лишитись вірним без правки, коли він
+        /// з'явиться після мерджу. Сьогодні метод завжди повертає false — це
+        /// очікувано, не заглушка «на майбутнє без ефекту зараз»: ворожих
+        /// напарників у цьому дереві ще немає зовсім.
         /// </summary>
         private static bool IsAntagonist(CompanionStatus status) =>
             string.Equals(status.ToString(), "Antagonist", StringComparison.Ordinal);
 
         /// <summary>
-        /// Возврат отряда: добыча в кошелёк, раны на людей, статусы назад.
+        /// Повернення загону: здобич у гаманець, рани на людей, статуси назад.
         ///
-        /// Материалы попадают в игру ТОЛЬКО отсюда — это и есть кран, которого
-        /// требует Э6.2 и Приложение А. Второго входа нет, и его отсутствие
-        /// проверяется тестом.
+        /// Матеріали потрапляють у гру ТІЛЬКИ звідси — це і є кран, якого
+        /// вимагає Е6.2 і Додаток А. Другого входу немає, і його відсутність
+        /// перевіряється тестом.
         /// </summary>
         public static void Complete(BaseState state, ExpeditionResult result, CityWorks works = null)
         {
@@ -119,9 +119,9 @@ namespace Game.Core.Base
             if (result.Materials > 0) state.Resources.Add(ResourceType.Materials, result.Materials);
             if (result.Gold > 0) state.Resources.Add(ResourceType.Gold, result.Gold);
 
-            // Найденные люди входят в город ближайшими сутками, а не сейчас:
-            // возврат отряда идёт между фазами, и прирост без сигнала был бы
-            // тихим изменением числа (Поправка №6.3).
+            // Знайдені люди входять у місто найближчою добою, а не зараз:
+            // повернення загону йде між фазами, і приріст без сигналу був би
+            // тихою зміною числа (Поправка №6.3).
             if (works != null && result.People > 0) works.QueueArrivals(result.People);
 
             var wounded = new HashSet<string>();
@@ -135,9 +135,9 @@ namespace Game.Core.Base
                 c.Status = CompanionStatus.Injured;
                 wounded.Add(w.ActorId);
 
-                // Рана с вылазки (R16/G10): та же единая точка решения, что и
-                // у RosterAdapter.Wound — DefaultScars.TryGrant, а не вторая
-                // копия правила «Серьёзная+ даёт шрам».
+                // Рана з вилазки (R16/G10): та сама єдина точка рішення, що і
+                // у RosterAdapter.Wound — DefaultScars.TryGrant, а не друга
+                // копія правила «Серйозна+ дає шрам».
                 DefaultScars.TryGrant(c, w.Tier, out _);
             }
 
@@ -150,9 +150,9 @@ namespace Game.Core.Base
             }
         }
 
-        // Критический тир вылазка не выдаёт: его источник — бой, которого ещё
-        // нет. Ветка под него не заводится заранее — недостижимый case выглядит
-        // как покрытие, которого на деле нет.
+        // Критичний тір вилазка не видає: його джерело — бій, якого ще
+        // немає. Гілка під нього не заводиться заздалегідь — недосяжний case виглядає
+        // як покриття, якого насправді немає.
         private static double PointsFor(WoundTier tier, BaseState state)
         {
             switch (tier)

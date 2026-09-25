@@ -5,12 +5,12 @@ using Game.Core.Stats;
 namespace Game.Core.Characters.Perks
 {
     /// <summary>
-    /// Перк — преимущественно пассивный бонус (GDD US-3.10). Билд строится
-    /// вложением в скилы, а перки превращают вложение в числа.
+    /// Перк — переважно пасивний бонус (GDD US-3.10). Білд будується
+    /// вкладенням у скіли, а перки перетворюють вкладення на числа.
     ///
-    /// Именно сюда ложится рост живучести: US-5.2 требует, чтобы HP и защита
-    /// росли перками и гиром при почти статичных атрибутах, и перк это умеет,
-    /// потому что производные живут в агрегаторе как обычные статы.
+    /// Саме сюди лягає ріст живучості: US-5.2 вимагає, щоб HP і захист
+    /// росли перками й гіром при майже статичних атрибутах, і перк це вміє,
+    /// бо похідні живуть в агрегаторі як звичайні стати.
     /// </summary>
     [Serializable]
     public sealed class PerkDefinition
@@ -18,16 +18,16 @@ namespace Game.Core.Characters.Perks
         public string Id;
         public string DisplayName;
 
-        /// <summary>Скил-гейт: какой скил и до какого уровня надо вкачать.</summary>
+        /// <summary>Скіл-гейт: який скіл і до якого рівня треба прокачати.</summary>
         public SkillType GatingSkill = SkillType.None;
         public int RequiredSkillLevel;
 
-        /// <summary>Перки, без которых этот недоступен.</summary>
+        /// <summary>Перки, без яких цей недоступний.</summary>
         public List<string> PrerequisitePerkIds = new List<string>();
 
         public List<StatModifier> Modifiers = new List<StatModifier>();
 
-        /// <summary>Активная способность, если перк её выдаёт (редкий случай).</summary>
+        /// <summary>Активна здатність, якщо перк її дає (рідкісний випадок).</summary>
         public string GrantedAbilityId;
 
         public PerkDefinition() { }
@@ -53,7 +53,7 @@ namespace Game.Core.Characters.Perks
         }
     }
 
-    /// <summary>Почему перк недоступен. Причина нужна интерфейсу, чтобы объяснить игроку.</summary>
+    /// <summary>Чому перк недоступний. Причина потрібна інтерфейсу, щоб пояснити гравцю.</summary>
     public enum PerkAvailability
     {
         Available = 0,

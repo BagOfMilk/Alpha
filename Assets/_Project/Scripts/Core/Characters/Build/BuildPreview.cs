@@ -4,7 +4,7 @@ using Game.Core.Stats;
 
 namespace Game.Core.Characters.Build
 {
-    /// <summary>Почему план нельзя подтвердить (или Ok, если можно).</summary>
+    /// <summary>Чому план не можна підтвердити (або Ok, якщо можна).</summary>
     public enum BuildPlanStatus
     {
         Ok = 0,
@@ -12,11 +12,11 @@ namespace Game.Core.Characters.Build
         AboveSkillCeiling = 2,
         PerkUnavailable = 3,
 
-        /// <summary>Подтверждения не было — Commit ничего не сделал.</summary>
+        /// <summary>Підтвердження не було — Commit нічого не зробив.</summary>
         NotConfirmed = 4
     }
 
-    /// <summary>Скил до и после плана.</summary>
+    /// <summary>Скіл до і після плану.</summary>
     public struct SkillChange
     {
         public SkillType Skill;
@@ -24,7 +24,7 @@ namespace Game.Core.Characters.Build
         public int To;
     }
 
-    /// <summary>Производная величина до и после плана.</summary>
+    /// <summary>Похідна величина до і після плану.</summary>
     public struct StatChange
     {
         public StatKey Key;
@@ -32,7 +32,7 @@ namespace Game.Core.Characters.Build
         public double To;
     }
 
-    /// <summary>Перк плана и вердикт по нему НА МОМЕНТ плана, а не сейчас.</summary>
+    /// <summary>Перк плану і вердикт щодо нього НА МОМЕНТ плану, а не зараз.</summary>
     public struct PerkVerdict
     {
         public PerkDefinition Perk;
@@ -42,25 +42,25 @@ namespace Game.Core.Characters.Build
     }
 
     /// <summary>
-    /// Что игрок увидит до подтверждения: эффект на скилы и статы, вердикты по
-    /// перкам плана и то, что план ОТКРОЕТ сверх запланированного.
+    /// Що гравець побачить до підтвердження: ефект на скіли й стати, вердикти по
+    /// перках плану і те, що план ВІДКРИЄ понад заплановане.
     ///
-    /// Ничего не применяет: превью и применение разведены намеренно, иначе
-    /// «посмотреть» стоило бы столько же, сколько «сделать» (US-2.3).
+    /// Нічого не застосовує: превью і застосування розведені навмисно, інакше
+    /// «подивитися» коштувало б стільки ж, скільки «зробити» (US-2.3).
     /// </summary>
     public sealed class BuildPreview
     {
         /// <summary>
-        /// Текст предупреждения показывается РЯДОМ с кнопкой подтверждения.
-        /// Живёт здесь, а не в UI: правило необратимости — часть правил, и
-        /// вторая копия текста в другом слое разъехалась бы с этой.
+        /// Текст попередження показується ПОРУЧ із кнопкою підтвердження.
+        /// Живе тут, а не в UI: правило незворотності — частина правил, і
+        /// друга копія тексту в іншому шарі розійшлася б із цією.
         /// </summary>
         public const string IrreversibleWarning =
             "Распределение необратимо: отменить или перераспределить вложенное нельзя.";
 
         public BuildPlanStatus Status = BuildPlanStatus.Ok;
 
-        /// <summary>Сколько очков просит план и сколько их есть.</summary>
+        /// <summary>Скільки очок просить план і скільки їх є.</summary>
         public int PointCost;
         public int PointsAvailable;
 
@@ -69,9 +69,9 @@ namespace Game.Core.Characters.Build
         public readonly List<PerkVerdict> Perks = new List<PerkVerdict>();
 
         /// <summary>
-        /// Что откроется, если план подтвердить, — из перков, которых игрок НЕ
-        /// планировал. Ради этого списка планировщик и существует: очко тратится
-        /// осознанно, когда видно не только эффект, но и следующую дверь.
+        /// Що відкриється, якщо план підтвердити, — з перків, яких гравець НЕ
+        /// планував. Заради цього списку планувальник і існує: очко витрачається
+        /// усвідомлено, коли видно не лише ефект, а й наступні двері.
         /// </summary>
         public readonly List<PerkDefinition> Unlocks = new List<PerkDefinition>();
 

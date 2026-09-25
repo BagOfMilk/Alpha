@@ -1,54 +1,66 @@
-# Тестовая сборка «все механики сразу» — спецификация (Поправка №7)
+# Тестова збірка «усі механіки разом» — специфікація (Поправка №7)
 
-> **Реализовано 24.09.2026** на `claude/first-hour-build`. Как собрать и
-> проверить, архитектура и грабли — `CLAUDE.md`, раздел «Тестовая сборка «все
-> механики»». Отклонения реализации от этой спецификации записаны в коммитах
-> и в §10.
+> **Реалізовано 24.09.2026** на `claude/first-hour-build`. Як зібрати і
+> перевірити, архітектура і граблі — `CLAUDE.md`, розділ «Тестова збірка «усі
+> механіки»». Відхилення реалізації від цієї специфікації записані в комітах
+> і в §10.
 
-> **Статус: черновой текст ассистента (Поправка №7.3).** Не канон, пока владелец
-> не поправит. Поправка №7 сама ЧЕРНОВИК («в силу вступает после утверждения
-> владельцем») — этот документ проектирует в её границах, но не заменяет
-> утверждение.
+> **Статус: чернетка тексту асистента (Поправка №7.3).** Не канон, поки власник
+> не поправить. Поправка №7 сама ЧЕРНЕТКА («набуває чинності після затвердження
+> власником») — цей документ проєктує в її межах, але не замінює
+> затвердження.
 >
-> **Порядок источника истины:** поправки (`docs/GDD_AMENDMENTS.md`) > GDD
-> (`docs/GDD.md`, `docs/SETTLEMENT_LAYER.md`) > `docs/FIRST_HOUR.md` > этот
-> документ > код. Внутри этого документа раздел **1 («Решения R1–R20»)
-> обязателен и старше всех остальных его разделов** — он записывает решения
-> интегратора, которые прямо переопределяют три ролевых документа
-> (`design-architecture.md`, `design-script.md`, `design-unity.md`) там, где
-> они не совпали. Где этот документ ссылается на роль-документ без пометки
-> «переопределено R…», роль-документ остаётся рабочим черновиком по деталям,
-> не зафиксированным здесь.
+> **Порядок джерела істини:** поправки (`docs/GDD_AMENDMENTS.md`) > GDD
+> (`docs/GDD.md`, `docs/SETTLEMENT_LAYER.md`) > `docs/FIRST_HOUR.md` > цей
+> документ > код. Всередині цього документа розділ **1 («Рішення R1–R20»)
+> обов'язковий і старший за всі інші його розділи** — він записує рішення
+> інтегратора, які прямо перевизначають три рольові документи
+> (`design-architecture.md`, `design-script.md`, `design-unity.md`) там, де
+> вони не збіглися. Де цей документ посилається на роль-документ без позначки
+> «перевизначено R…», роль-документ лишається робочою чернеткою за деталями,
+> не зафіксованими тут.
 >
-> **Как проверить, что сборка соответствует документу:**
+> **Як перевірити, що збірка відповідає документу:**
 > ```bash
-> dotnet test tools/Alpha.Headless.sln                 # ядро + линт Gameplay
-> dotnet run --project tools/Alpha.Play -- --auto       # текстовый прогон на GameSession
-> powershell -File tools/build-unity.ps1                # пересборка сцены(-ей) + Windows-билд
+> dotnet test tools/Alpha.Headless.sln                 # ядро + лінт Gameplay
+> dotnet run --project tools/Alpha.Play -- --auto       # текстовий прогін на GameSession
+> powershell -File tools/build-unity.ps1                # перезбірка сцени(сцен) + Windows-білд
 > Build/Windows/Alpha.exe -autoplay -screen-fullscreen 0 -screen-width 1600 -screen-height 900; echo $?
 > Build/Windows/Alpha.exe -autoplay-long -screen-fullscreen 0 -screen-width 1600 -screen-height 900; echo $?
+> Build/Windows/Alpha.exe -autoplay-journal -screen-fullscreen 0 -screen-width 1600 -screen-height 900; echo $?
 > ```
-> Автопрогон — в окне, не `-batchmode`: снимки (`Build/Windows/Screenshots/`)
-> снимаются с настоящего кадра. Итог — `Build/Windows/Logs/autoplay-summary.txt`;
-> каждый прогон перезаписывает обе папки.
-> Раздел 6 — что именно проверяет каждая команда (тест покрытия механик,
-> покрытие ключей текста, замер темпа).
+> Автопрогін — у вікні, не `-batchmode`: знімки (`Build/Windows/Screenshots/`)
+> знімаються зі справжнього кадру. Підсумок — `Build/Windows/Logs/autoplay-summary.txt`;
+> кожен прогін перезаписує обидві теки.
+> Розділ 6 — що саме перевіряє кожна команда (тест покриття механік,
+> покриття ключів тексту, замір темпу). `-autoplay-journal` (ціль 1, доручення
+> власника 25.09.2026 — «Ти протестив що гру можна почати, створити персонажа,
+> взяти в команду і тд та пройти першу кризу? Усі механіки можна виконати по
+> журналу?») веде ОДИН прогін крізь реальні екрани, доки вкладка «Журнал
+> механік» не покаже всі 44 записи Seen: доби 1–3 вручну (кровавий вузол 1
+> наївною тактикою до Base/Worst → «Нічна розмова» доби 3 → «Звинуватити»),
+> з доби 4 — та сама економіка, що в довгому турі, плюс гір/крафт/
+> тренувальний бій/збереження при першій нагоді. Знімає `journal-<id>.png` на
+> кожен запис у момент, коли він щойно стає Seen, і `journal-final.png` —
+> саму вкладку наприкінці. Код виходу **4** — тур дійшов до кінця, але хоч
+> один запис лишився непобаченим (лог перелічує, які саме); коди 0/2/3 —
+> ті самі, що в решти режимів.
 
 ---
 
-## 1. Решения интегратора R1–R20 (обязательны; переопределяют три документа)
+## 1. Рішення інтегратора R1–R20 (обов'язкові; перевизначають три документи)
 
-Ниже — не пересказ трёх документов, а **решения**, которые их развели там, где
-они расходились (см. `critiques.json` — оба критика независимо нашли одни и те
-же четыре блокера и семь разрывов между документами). Каждое решение — то, чем
-руководствуется весь остальной документ.
+Нижче — не переказ трьох документів, а **рішення**, які їх розвели там, де
+вони розходилися (див. `critiques.json` — обидва критики незалежно знайшли ті
+самі чотири блокери і сім розривів між документами). Кожне рішення — те, чим
+керується весь інший документ.
 
 | # | Решение | Причина (коротко) |
 |---|---|---|
-| **R1** | В `Game.Core` **нет вообще никакого источника случайности**. Попадание в бою — через `IHitRule` в Core: `ThresholdRule` (детерминированно: попадание, если точность ≥ показанный порог; градация «частично/крит» по марже) и `PercentRule` (показанный %, нужен внедрённый `IDiceRoller`; интерфейс — в Core, сидированная реализация `SeededDiceRoller` — в `Game.Gameplay`, чистый C# без `UnityEngine`, подключается к `tools/Alpha.Play`, `Alpha.Sim` и тестам прямым `<Compile Include>`, как уже сделано для `SceneText.cs`/`SignalText.cs`). Состояние кубика сохраняется/восстанавливается через интерфейс, объявленный в Core. Комнаты данжа и лут — **детерминированные** (авторские комнаты; дроп по полосе исхода; никакого генераторного рандома). `ArchitectureGuardTests` получает: (а) расширение `Core_ContainsNoRandom` — grep уже есть; (б) новый `Core_NoTypeImplementsIDiceRoller` — reflection по сборке `Game.Core`, ни один тип не реализует `IDiceRoller`. Архивный `Rng.cs`/`SeededRng` **не переносится** в Core вообще. | Инвариант 1 буквально («в ядре нет `System.Random`»); Поправка №7.6 санкционирует показанный-но-недетерминированный кубик как *открытый вопрос для боя*, а не как разрешение держать источник случайности в Core. Оба критика указали на этот риск как на самый серьёзный; решение — вариант, который они сами предложили как безопасный (кубик в тонкой обёртке `Game.Gameplay`, Core получает готовый детерминированный отчёт). |
-| **R2** | Лояльность — **не отдельный класс/namespace**, а `int`-поле с приватным сеттером/геттером (недоступно из `Game.Gameplay`) + публичный `LoyaltyBand Band` (enum) **прямо на `Companion`** (`Core/Characters/Companion.cs`, рядом с существующим `CompanionStatus`). Смена полосы эмитит сигнал (инвариант 4); якорь/потребитель/сигнал — §4.5. Социальная логика (`RosterBonds`, `Banter`, `RosterDrama`, `Defection`, `CompanionArc`) — в новом `Core/Companions/`. `CompanionStatus.Antagonist` добавлен + аудит **каждого** сравнения с `CompanionStatus` в Core (назначение на пост и допуск в вылазку/данж исключают `Antagonist`), с тестом-регрессией. | Design 1 предлагал `Core/Companions/Loyalty.cs` (свой namespace), Design 2 — `Core/Characters/Loyalty/LoyaltyState.cs`; независимый аудит архива (`archive.json`) рекомендовал самый дешёвый вариант — простое поле на `Companion`, без второго класса и без конфликта namespace на файле, который и так правят три пакета подряд (B3→B4→B7). |
-| **R3** | Сюжетные флаги — `Core/Story/StoryFlags.cs`, персистятся через новое свойство `DayProcessor.Flags`, которое добавляет пакет Foundation (A1). | Design 1 и Design 2 независимо завели два разных файла для одной концепции (`Core/Story/StoryFlags.cs` против `Core/Loop/StoryFlags.cs`); правило «`Core/Loop/*` и `SettlementSave.cs` редактирует исключительно владелец Foundation» (см. R-таблицу файлов §5) разрешает конфликт: контейнер — в `Story`, персистентность — через свойство, которое заводит Foundation, а не через прямую правку `Loop`-файлов вторым пакетом. |
-| **R4** | Данж — движок в `Core/Dungeons` (перенесённый push-your-luck, детерминированный: без генератора случайности вообще — комнаты и их порядок авторские, не рандомизированные). Данж на сутки 4 «Покинутий табір авангарду» — контент `DefaultDungeon`, входится как **новый** `ExpeditionApproach.Delve` на точке вылазки. **Каждая** бойова комната имеет тихий обход (Поправка №1). Кровавый выбор в бойовой комнате → тактический бой через `GameSession`. | Design 1 (полный рушій) и Design 2 (окремий легкий `DungeonRoom.cs` без рушія) описали дві несумісні реалізації однієї механіки; Design 3 (презентація) вже прив'язана до API Design 1. Обраний варіант — той, під який уже написана презентація, і той, що і критики визнали коректним. R1 додатково забирає з нього рандом-генератор ваги кімнати, який Design 1 планував через `SeededRng`. |
+| **R1** | У `Game.Core` **немає взагалі жодного джерела випадковості**. Влучання в бою — через `IHitRule` у Core: `ThresholdRule` (детерміновано: влучання, якщо точність ≥ показаний поріг; градація «частково/крит» за марджином) і `PercentRule` (показаний %, потрібен впроваджений `IDiceRoller`; інтерфейс — у Core, сідована реалізація `SeededDiceRoller` — у `Game.Gameplay`, чистий C# без `UnityEngine`, підключається до `tools/Alpha.Play`, `Alpha.Sim` і тестів прямим `<Compile Include>`, як уже зроблено для `SceneText.cs`/`SignalText.cs`). Стан кубика зберігається/відновлюється через інтерфейс, оголошений у Core. Кімнати данжу і лут — **детерміновані** (авторські кімнати; дроп за полосою наслідку; жодного генераторного рандому). `ArchitectureGuardTests` отримує: (а) розширення `Core_ContainsNoRandom` — grep уже є; (б) новий `Core_NoTypeImplementsIDiceRoller` — reflection по збірці `Game.Core`, жоден тип не реалізує `IDiceRoller`. Архівний `Rng.cs`/`SeededRng` **не переноситься** в Core взагалі. | Інваріант 1 буквально («в ядрі немає `System.Random`»); Поправка №7.6 санкціонує показаний-але-недетермінований кубик як *відкрите питання для бою*, а не як дозвіл тримати джерело випадковості в Core. Обидва критики вказали на цей ризик як на найсерйозніший; рішення — варіант, який вони самі запропонували як безпечний (кубик у тонкій обгортці `Game.Gameplay`, Core отримує готовий детермінований звіт). |
+| **R2** | Лояльність — **не окремий клас/namespace**, а `int`-поле з приватним сеттером/геттером (недоступне з `Game.Gameplay`) + публічний `LoyaltyBand Band` (enum) **прямо на `Companion`** (`Core/Characters/Companion.cs`, поруч з наявним `CompanionStatus`). Зміна полоси емітить сигнал (інваріант 4); якір/споживач/сигнал — §4.5. Соціальна логіка (`RosterBonds`, `Banter`, `RosterDrama`, `Defection`, `CompanionArc`) — у новому `Core/Companions/`. `CompanionStatus.Antagonist` доданий + аудит **кожного** порівняння з `CompanionStatus` у Core (призначення на пост і допуск у вилазку/данж виключають `Antagonist`), з тестом-регресією. | Design 1 пропонував `Core/Companions/Loyalty.cs` (свій namespace), Design 2 — `Core/Characters/Loyalty/LoyaltyState.cs`; незалежний аудит архіву (`archive.json`) рекомендував найдешевший варіант — просте поле на `Companion`, без другого класу і без конфлікту namespace на файлі, який і так правлять три пакети поспіль (B3→B4→B7). |
+| **R3** | Сюжетні прапори — `Core/Story/StoryFlags.cs`, персистуються через нову властивість `DayProcessor.Flags`, яку додає пакет Foundation (A1). | Design 1 і Design 2 незалежно завели два різні файли для однієї концепції (`Core/Story/StoryFlags.cs` проти `Core/Loop/StoryFlags.cs`); правило «`Core/Loop/*` і `SettlementSave.cs` редагує виключно власник Foundation» (див. R-таблицю файлів §5) розв'язує конфлікт: контейнер — у `Story`, персистентність — через властивість, яку заводить Foundation, а не через пряму правку `Loop`-файлів другим пакетом. |
+| **R4** | Данж — рушій у `Core/Dungeons` (перенесений push-your-luck, детермінований: без генератора випадковості взагалі — кімнати і їх порядок авторські, не рандомізовані). Данж на добу 4 «Покинутий табір авангарду» — контент `DefaultDungeon`, входиться як **новий** `ExpeditionApproach.Delve` на точці вилазки. **Кожна** бойова кімната має тихий обхід (Поправка №1). Кровавий вибір у бойовій кімнаті → тактичний бій через `GameSession`. | Design 1 (повний рушій) і Design 2 (окремий легкий `DungeonRoom.cs` без рушія) описали дві несумісні реалізації однієї механіки; Design 3 (презентація) вже прив'язана до API Design 1. Обраний варіант — той, під який уже написана презентація, і той, що і критики визнали коректним. R1 додатково забирає з нього рандом-генератор ваги кімнати, який Design 1 планував через `SeededRng`. |
 | **R5** | «Ставлення Тугара» — це репутація **фракції** всередині `Core/Factions.FactionRegistry`, не окрема прихована шкала. Три фракції: **Громада Тухольщини** (легітимність — своя ж громада як соціальний якір), **Бояри Тугара** (замінює `TuharStanding`), **Орда (Бурунда)**. Значення `internal`, полоса `public`, зміна полоси → сигнал. Окремої шкали `TuharStanding` немає. | Design 2 завів окрему `Core/Settlement/TuharStanding.cs` для персонажа, який за сюжетом і так стає лідером ворожої фракції — дублювання термінології «репутація/ставлення» без потреби, обидва критики вказали на це незалежно. |
 | **R6** | Квести — **поза конвеєром дня**. `GameSession` подає етапи квесту як **ранкові/вечірні сюжетні пропозиції** (вибір + перевірка через наявний `CheckResolver` → `OutcomeBand`, 4 полоси). Наслідки для Напруги йдуть через **нову** черга `DayProcessor.QueueExternal(TensionDriver.QuestChoice, amount)`, яку споживає тік Напруги наступної фази (список драйверів лишається закритим — інваріант 5). Єдине джерело точки рішення в самому конвеєрі — інциденти. Коли в одній фазі спрацьовує більше одного інциденту, **кожен стає окремим рішенням гравця по черзі** (`AwaitsDecision` після `ResolvePending` знову `true`, поки черга фази не вичерпана) — Поправка №7.4 «вибір у кожній події»; переписано інтегратором за аудитом `docs/AUDIT-GAPS.md` П10, див. §1.1. | Найбільший розрив, знайдений критиками: WP9 Design 1 вимагав генералізації єдиного слоту `DayContext.Pending` (сьогодні жорстко прив'язаного до `IncidentStep`) під два незалежні джерела рішення, а жоден пакет цю сантехніку не володів. Винесення квестів із конвеєра знімає потребу в генералізації повністю — і одночасно виконує вимогу «жодного вибору без наслідку» (Поправка №7.4) через явну черга-мостик до вже існуючого драйвера. |
 | **R7** | Текст — **один** файл `Assets/_Project/Scripts/Gameplay/Text/UkrainianText.cs` (чистий C#), що замінює `Gameplay/SceneLines.cs`, `tools/Shared/SceneText.cs`, `tools/Shared/SignalText.cs` і текстову частину `VillageView`. Core віддає лише ключі; Core-контентні `DisplayName` гравець ніколи не бачить (текст за ключем: `building.<id>`, `post.<id>`, `site.<id>`, `skill.<key>`, `attr.<key>`, `item.<id>`, `enemy.<id>`, `char.<id>`, `faction.<id>`, …). Виправляються `DisplayName` в `OpeningCast` («Тугар Вовк», «Командир орди» — зараз «Тугар Волк»/«Командир орды», Поправка №5.10). Рід протагоніста m/f: ключі можуть мати варіанти `.m`/`.f`, вибір — за родом. Тест: кожен ключ, що вилетів під час бот-прогонів (усі політики) і кожен ключ, використаний у view-шарах, існує в таблиці. | Три документи завели три різні файли для одної концепції (`UkrainianText.cs` двічі з однаковим шляхом — випадково узгоджено, плюс третій `UiText.cs` у Design 3) — D9 постановки вимагає рівно один. |
@@ -127,7 +139,7 @@
 | 5 | Чотири полоси наслідку | (похідне з №4/№15/№18/№28/№8-battle) | `OutcomeBand{Worst,Base,Good,Best}` — одна лестниця скрізь | подія несе `band` в args; тест вимагає ≥3 з 4 за прогін |
 | 6 | Порожній пост = Найгірша | (похідне з №2+№4) | `CheckResolver.Preview` без кандидата → `Worst` | подія `decision.resolved{band=Worst,noCandidate=true}` |
 | 7 | Ніч: патруль/сон | `SetPatrol(bool)` перед `AdvanceNight()` | `IsPatrolling` читає `PulseStep`/`SignalStep` | `night.forewarn` лише коли `patrol=true` |
-| 8 | Драбина передвісників 1→2→3 | (похідне; накопичувач тіка кожну фазу) | `WorldPulse`/`PressureTrack`, рівень не перепрыгує | сигнал `forewarn.level{1..3}` у `SignalsFeed` |
+| 8 | Драбина передвісників 1→2→3 | (похідне; накопичувач тіка кожну фазу) | `WorldPulse`/`PressureTrack`, рівень не перестрибує | сигнал `forewarn.level{1..3}` у `SignalsFeed` |
 | 9 | Криза з вікном на реакцію | форсоване джерело доби 5 (`Announces=true`) + `ReactToCrisis()` вдень | `IncidentTable`/`CrisisStep` | `crisis.test.warn`→`crisis.test.window`→`crisis.test.mitigated`/`.unmitigated` |
 | 10 | Доповіді з постів | (похідне; щоранку) | `PostReport` за доменом зайнятого поста | `post.report{silent=false}`; порожній пост — тиша |
 | 11 | Сигнали без повторів | (похідне) | `SignalMemory`/`TopicCooldownDays` | той самий `TopicId` не двічі підряд |
@@ -208,9 +220,9 @@ R7/Поправка №5.10), з'являється 3 рази; **Бурунда
 | Час | Біт | Механіка | Команда | Гравець бачить | Наслідок |
 |---|---|---|---|---|---|
 | Ранок | Доповіді з постів | 10 | (авто) | Овсій/Гафія доповідають за доменом; порожні пости — тиша | — |
-| День | Інцидент `spoiled_stores` **Ж** | 4,5 | `ResolveIncident(path)` | тихо: Trade/Survival ≥5 (в Овсія обидва — виправлений баг «Худший при будь-якому виборі»); кроваво: Intimidate ≥6, додає до `CausedFear` | 4 полоси: майже все вернено / половину / мало / нічого + шепіт |
+| День | Інцидент `spoiled_stores` **Ж** | 4,5 | `ResolveIncident(path)` | тихо: Trade/Survival ≥5 (в Овсія обидва — виправлений баг «Худший при будь-якому виборі»); кроваво: Intimidate ≥6, додає до `CausedFear` | 4 полоси: майже все повернено / половину / мало / нічого + шепіт |
 | Вечір | Рада: замовлення Майстерні | 14 | `OrderBuilding("workshop")` | 5 стадій до доби 5 → відкриває `workshop_bench` | плата одразу, будівництво в конвеєрі |
-| Ніч | Квест Гафії, етап 1 (пропозиція) | 27 | `OfferQuestStage("hafiya")`→`ResolveQuestChoice(0)` (взятися) | Гафія просить гірку траву на дальніх схилах | `QuestRun("hafiya").Stage=1`; наслідок для сутки 3 |
+| Ніч | Квест Гафії, етап 1 (пропозиція) | 27 | `OfferQuestStage("hafiya")`→`ResolveQuestChoice(0)` (взятися) | Гафія просить гірку траву на дальніх схилах | `QuestRun("hafiya").Stage=1`; наслідок для доби 3 |
 
 ### 3.3 Доба 3
 
@@ -365,7 +377,7 @@ public sealed class QuestOfferView : PendingOfferView { public string QuestId; p
 public sealed class ExpeditionPreviewView {
     public string SiteId; public ExpeditionApproach Approach; public int Threshold, PartyValue, Days;
     public string ExpectedBand; public int ExpectedMaterials, ExpectedGold, ExpectedWounded;
-    public bool IsDelve; public DungeonRoomView FirstRoom; // только если IsDelve
+    public bool IsDelve; public DungeonRoomView FirstRoom; // лише якщо IsDelve
 }
 public sealed class DungeonView {
     public int Depth; public string ThreatBand; public int RoomsCleared;
@@ -406,8 +418,8 @@ public sealed class BattleView {
     public IReadOnlyList<BattleUnitView> Units;
     public IReadOnlyList<GridPosView> ReachableTiles; // для активного юніта
     public IReadOnlyList<string> InitiativeOrder; // Ids за порядком ходу
-    public IReadOnlyList<BattleLogLineView> Log; // журнал боя: {Round, Key "combat.log.*", Args} из CombatState.Journal; слова — Gameplay/UI/BattleLogText (внутренний трейс CombatState.Log — internal, игроку не идёт)
-    public bool IsHitRulePercent; // какое правило попадания в этом бою
+    public IReadOnlyList<BattleLogLineView> Log; // журнал бою: {Round, Key "combat.log.*", Args} з CombatState.Journal; слова — Gameplay/UI/BattleLogText (внутрішній трейс CombatState.Log — internal, гравцю не йде)
+    public bool IsHitRulePercent; // яке правило влучання в цьому бою
 }
 public sealed class BattleGridView {
     public int Width, Height;
@@ -418,7 +430,7 @@ public sealed class BattleUnitView {
     public string Id, DisplayNameKey; public GridPosView Pos; public string Side; // "Player"|"Enemy"|"FromDefector"
     public int Hp, HpMax, Ap, ApMax, ApReserved; public bool IsOverwatching;
     public IReadOnlyList<string> Statuses; public bool IsDowned;
-    public int HitChancePreview; // 0, если этот юнит не текущая цель предпросмотра
+    public int HitChancePreview; // 0, якщо цей юніт не поточна ціль прев'ю
 }
 public readonly struct GridPosView { public int X, Y; }
 ```
@@ -455,10 +467,10 @@ public interface IHitRule {
     AttackOutcome Resolve(CombatUnit attacker, CombatUnit target, int shownChanceOrThreshold, IDiceRoller roller);
 }
 public sealed class ThresholdRule : IHitRule {
-    // попадание, если accuracy >= shownThreshold; градация Graze/Crit — по марже (margin bands, детерминировано)
+    // влучання, якщо accuracy >= shownThreshold; градація Graze/Crit — за марджином (margin bands, детерміновано)
 }
 public sealed class PercentRule : IHitRule {
-    // попадание, если roller.Roll01(streamId) < shownChance/100.0
+    // влучання, якщо roller.Roll01(streamId) < shownChance/100.0
 }
 public enum AttackOutcome { Miss, Graze, Hit, Crit }
 
@@ -471,9 +483,9 @@ public interface IDiceRoller {
 ```
 
 ```csharp
-// Game.Gameplay.Combat — чистый C#, БЕЗ using UnityEngine
+// Game.Gameplay.Combat — чистий C#, БЕЗ using UnityEngine
 public sealed class SeededDiceRoller : IDiceRoller {
-    public SeededDiceRoller(ulong seed) { ... } // splitmix64-подобный, детерминированный поток по streamId
+    public SeededDiceRoller(ulong seed) { ... } // splitmix64-подібний, детермінований потік за streamId
     public double Roll01(string streamId) { ... }
     public string CaptureState() { ... }
     public void RestoreState(string blob) { ... }
@@ -489,8 +501,8 @@ public sealed class SeededDiceRoller : IDiceRoller {
 
 `ArchitectureGuardTests` (додає B1):
 ```
-Core_NoTypeImplementsIDiceRoller  // reflection по сборке Game.Core: 0 типов implements IDiceRoller
-Core_ContainsNoRandom             // расширение существующего grep-теста — без изменений паттерна
+Core_NoTypeImplementsIDiceRoller  // reflection по збірці Game.Core: 0 типів implements IDiceRoller
+Core_ContainsNoRandom             // розширення наявного grep-тесту — без змін патерну
 ```
 
 Стан кубика входить у слепок гри через `IStateBlob`-подібний контракт, але
@@ -508,10 +520,10 @@ public enum LoyaltyBand { Broken, Resentful, Wary, Steady, Devoted } // 0..100 -
 
 public sealed class Companion {
     // ... существующие поля ...
-    internal int Loyalty { get; private set; } = 50; // число — только ядру и тестам (IVT), Game.Gameplay его не видит
+    internal int Loyalty { get; private set; } = 50; // число — лише ядру і тестам (IVT), Game.Gameplay його не бачить
     public LoyaltyBand LoyaltyBand => BandFor(Loyalty);
 
-    internal void ApplyLoyaltyDelta(int delta, /* сигнал-контекст */) { ... } // меняет полосу -> эмитит сигнал
+    internal void ApplyLoyaltyDelta(int delta, /* сигнал-контекст */) { ... } // змінює полосу -> емітить сигнал
 }
 ```
 
@@ -537,7 +549,7 @@ ShouldDefect` (низька полоса N діб → зрада) і `CompanionA
 ```csharp
 public sealed class StoryFlags : IStateBlob {
     public bool Get(string flagId);
-    public void Set(string flagId, bool value = true); // эмитит story.flag_set{flagId} при первом переходе false->true
+    public void Set(string flagId, bool value = true); // емітить story.flag_set{flagId} за першого переходу false->true
     public string CaptureState();
     public void RestoreState(string blob);
 }
@@ -552,12 +564,12 @@ public sealed class StoryFlags : IStateBlob {
 ```csharp
 public sealed class DayProcessor {
     // ... существующее ...
-    public BaseState Economy { get; set; }              // новое свойство: кошелёк/XP видны в save (закрывает D10)
-    public Expeditions.SiteLedger Sites { get; set; }    // новое: истощение точек — теперь в слепке
-    public StoryFlags Flags { get; set; }                // новое (R3)
+    public BaseState Economy { get; set; }              // нова властивість: гаманець/XP видно в save (закриває D10)
+    public Expeditions.SiteLedger Sites { get; set; }    // нове: виснаження точок — тепер у зліпку
+    public StoryFlags Flags { get; set; }                // нове (R3)
 
-    /// <summary>Внешняя очередь Напряжения — единственный узаконенный мостик R6.</summary>
-    public void QueueExternal(TensionDriver driver, int amount); // применяется тиком следующей TensionTickStep
+    /// <summary>Зовнішня черга Напруги — єдиний узаконений місток R6.</summary>
+    public void QueueExternal(TensionDriver driver, int amount); // застосовується тіком наступного TensionTickStep
 }
 ```
 
@@ -577,7 +589,7 @@ Roster(розширений — Level/Xp/Equipment/Loyalty/Scars/Antagonist)/Par
 ```
 gs1;state=<SessionState>;protagonist=<id>;seed=<ulong>;hitRule=<Percent|Threshold>;
     roller=<IDiceRoller.CaptureState()>;resume=<SuspendReason>|<ReturnState>;
-    readiness=<ReadinessTrack внутреннее значение + счётчик достигнутых меток>;
+    readiness=<ReadinessTrack внутрішнє значення + лічильник досягнутих міток>;
     quests=<QuestLog.CaptureState()>;factions=<FactionRegistry.CaptureState()>;
     points=<SpendablePoints.CaptureState()>
 ```
@@ -597,8 +609,8 @@ gs1;state=<SessionState>;protagonist=<id>;seed=<ulong>;hitRule=<Percent|Threshol
 [Test]
 public void GameSession_Views_NeverExposeRawHiddenNumbers()
 {
-    // reflection по всем публичным типам в Core/Session/Views/*
-    // разрешённые числовые имена членов (allow-list по имени, не по типу):
+    // reflection по всіх публічних типах в Core/Session/Views/*
+    // дозволені числові імена членів (allow-list за іменем, не за типом):
     var allowed = new HashSet<string> {
         "Gold","Materials","Food","Xp","Level","Day","DaysInBand","Tier",
         "Stage","StageOf","Hp","HpMax","Ap","ApMax","ApReserved","Round",
@@ -608,7 +620,7 @@ public void GameSession_Views_NeverExposeRawHiddenNumbers()
         "UnbankedMaterials","PointsAvailable","MilestonesReached",
         "MilestonesTotal","Slot","ScarCount","HitChancePreview","X","Y","Width","Height"
     };
-    // любой другой public int/double/float член любого *View — провал
+    // будь-який інший public int/double/float член будь-якого *View — провал
 }
 ```
 
@@ -622,9 +634,9 @@ public interface IBotPolicy {
     int ChooseQuestOption(QuestOfferView offer);
     bool ChoosePatrol(SessionView view);
     IReadOnlyDictionary<string,string> ChooseAssignments(RosterView roster, CityView city);
-    ExpeditionChoice? ChooseExpedition(SessionView view); // может выбрать Delve
+    ExpeditionChoice? ChooseExpedition(SessionView view); // може обрати Delve
     CombatAction ChooseCombatAction(BattleView battle);
-    bool ChooseAutoResolve(BattleView battle); // некоторые политики всегда жмут «Автобій»
+    bool ChooseAutoResolve(BattleView battle); // деякі політики завжди тиснуть «Автобій»
 }
 ```
 
@@ -663,7 +675,7 @@ public enum ExpeditionApproach { Quiet = 0, Forceful = 1, Delve = 2 }
 public sealed class SpendablePoints : IStateBlob {
     public int Get(string companionId);
     public void Grant(string companionId, int amount);
-    public void Spend(string companionId, int amount); // вызывается CommitBuildPlan
+    public void Spend(string companionId, int amount); // викликається CommitBuildPlan
     public string CaptureState(); public void RestoreState(string blob);
 }
 ```
@@ -686,7 +698,7 @@ public sealed class BackgroundPreset {
     public AttributeSet Attributes; public SkillSet Skills; // point-buy, авторские значения
 }
 public static class Backgrounds {
-    public static IReadOnlyList<BackgroundPreset> All(); // 3 преста, портированные с архивного Background/ProtagonistBuilder
+    public static IReadOnlyList<BackgroundPreset> All(); // 3 преста, портовані з архівного Background/ProtagonistBuilder
 }
 ```
 
@@ -702,22 +714,22 @@ public static class Backgrounds {
 ```csharp
 public enum ReadinessBand { Unprepared, Bracing, Ready, Fortified }
 public sealed class ReadinessTrack : IStateBlob {
-    internal int Value { get; private set; } // якорь: сколько подготовки накопила община
-    public ReadinessBand Band { get; }        // публично — только полоса
-    internal void Add(int amount);            // вызывается ReadinessTickStep по вехам (вылазка/квест/стройка/страх)
+    internal int Value { get; private set; } // якір: скільки підготовки накопичила громада
+    public ReadinessBand Band { get; }        // публічно — лише полоса
+    internal void Add(int amount);            // викликається ReadinessTickStep за віхами (вилазка/квест/будівництво/страх)
 }
 public sealed class ReadinessTickStep : IDayStep { public int Order => DayStepOrder.Readiness; /* = 550 */ }
 
 public static class PassVanguardOutcome {
     public static string ResolveKey(OutcomeBand band, bool wasBloody); // -> "best"|"good"|"base"|"worst"
     public static void Apply(BaseState state, OutcomeBand band, bool wasBloody, StoryFlags flags);
-    // мутирует Companion(maksym).Status/InjuryPoints, Companion(myroslava) — уходит/остаётся,
-    // склад (Resources), выставляет flags.defector_seeded при Базовой/Худшей
+    // мутує Companion(maksym).Status/InjuryPoints, Companion(myroslava) — йде/лишається,
+    // склад (Resources), виставляє flags.defector_seeded при Базовій/Найгіршій
 }
 public sealed class Finale {
-    public static BattleSetup BuildAssault(ReadinessBand band, bool myroslavaIsDefector); // сила орды растёт при худшей Готовности
-    public static CheckRequest BuildDam(ReadinessBand band); // «загатити річку»: пороги сдвинуты полосой
-    public static OutcomeBand Resolve(...); // -> 4 полосы, у каждой цена
+    public static BattleSetup BuildAssault(ReadinessBand band, bool myroslavaIsDefector); // сила орди росте за гіршої Готовності
+    public static CheckRequest BuildDam(ReadinessBand band); // «загатити річку»: пороги зсунуті полосою
+    public static OutcomeBand Resolve(...); // -> 4 полоси, у кожної ціна
 }
 ```
 
@@ -731,7 +743,7 @@ public enum FactionStandingBand { Hostile, Wary, Neutral, Awaiting, Allied }
 public sealed class FactionStanding {
     internal int Value { get; private set; } // 0..100
     public FactionStandingBand Band { get; }
-    internal void Apply(int delta, /* сигнал-контекст */); // меняет полосу -> сигнал (инвариант 4)
+    internal void Apply(int delta, /* сигнал-контекст */); // змінює полосу -> сигнал (інваріант 4)
 }
 public sealed class FactionRegistry : IStateBlob {
     public FactionStanding Get(string factionId);
@@ -746,9 +758,9 @@ public static class DefaultFactions {
 ```csharp
 CouncilOrderResult OrderDecree(BaseState state, string tradeFactionId, string forFactionId, int today, BalanceConfig cfg);
 CouncilOrderResult OrderDiplomacy(BaseState state, string factionId, int today, BalanceConfig cfg);
-CouncilOrderResult OrderInvestment(BaseState state, string buildingId, BalanceConfig cfg); // платит золото со временем
-CouncilOrderResult OrderPrepareThreat(BaseState state, BalanceConfig cfg);    // двигает ReadinessTrack
-CouncilOrderResult OrderOutfitExpedition(BaseState state, string siteId, BalanceConfig cfg); // разовый бонус к следующей вилазке
+CouncilOrderResult OrderInvestment(BaseState state, string buildingId, BalanceConfig cfg); // платить золото з часом
+CouncilOrderResult OrderPrepareThreat(BaseState state, BalanceConfig cfg);    // рухає ReadinessTrack
+CouncilOrderResult OrderOutfitExpedition(BaseState state, string siteId, BalanceConfig cfg); // разовий бонус до наступної вилазки
 ```
 
 Усі нові наслідки для Напруги йдуть виключно через `TensionDriver.
@@ -786,7 +798,7 @@ QuestChoice`/`ThreatOutcome` (уже існуючі драйвери) — не �
 
 | | |
 |---|---|
-| **Мета** | Перенести тактичний бій із `archive-read` (коміт `20b8dcf`, з overwatch) на модель Э2, увести `IHitRule`/`IDiceRoller`. |
+| **Мета** | Перенести тактичний бій із `archive-read` (коміт `20b8dcf`, з overwatch) на модель Е2, увести `IHitRule`/`IDiceRoller`. |
 | **Володіє** | `Core/Combat/{GridMap,GridPos,Pathfinder,LineOfSight,CoverType,TurnSystem,HitChanceCalculator,DamageResolver,DamageType,IHitRule,ThresholdRule,PercentRule,AttackRecord,CombatUnit,CombatState,StatusType,OverwatchStance,Trap,AbilityDefinition,WeaponDefinition,EnemyDefinition,CombatAi,DefaultCombatContent}.cs`; `Core/Randomness/IDiceRoller.cs`; `Gameplay/Combat/SeededDiceRoller.cs` |
 | **Спільні (черга)** | `Core/Balance/CombatBalance.cs`(новий, власний файл-секція, R14) + один рядок підключення в `BalanceConfig.cs`; `ArchitectureGuardTests.cs` (додає в кінець) |
 | **Залежить від** | A1 |
@@ -798,7 +810,7 @@ QuestChoice`/`ThreatOutcome` (уже існуючі драйвери) — не �
 | | |
 |---|---|
 | **Мета** | Данж push-your-luck як третій підхід вилазки (детермінований, без генератора). |
-| **Володіє** | `Core/Dungeons/{DungeonRun,DungeonRoom,DefaultDungeon}.cs` (без `DungeonGenerator.cs` — R1/R4: комнати авторские и порядок фиксирован, генератора нет) |
+| **Володіє** | `Core/Dungeons/{DungeonRun,DungeonRoom,DefaultDungeon}.cs` (без `DungeonGenerator.cs` — R1/R4: кімнати авторські, і порядок фіксований, генератора немає) |
 | **Спільні (черга)** | `Core/Balance/DungeonBalance.cs`(новий) + рядок у `BalanceConfig.cs`; `ArchitectureGuardTests.cs` |
 | **Залежить від** | A1. **Не** залежить від B1 і **не** посилається на `Game.Core.Combat`: бойова кімната віддає назовні лише запит «потрібен бій» (id ворогів/арени) і приймає `ReportCombat(OutcomeBand)` — сам бій запускає D1 (§1.1) |
 | **Приймання** | Перенесені `DungeonTests` (заміни `StatKey`/`ResourceType.Materials`) зелені; **не** торкається `Core/Expeditions/*` жодним файлом (Delve заводить B7 — див. нижче); `DefaultDungeon.Rooms("abandoned_camp")` повертає 3 авторські кімнати з §3.4; кожна `Combat`-кімната має `QuietBypass`; хоч один тестовий прогін проходить кімнату без бою; `Extract()` банкує в той самий `BaseState.Resources` |
@@ -959,7 +971,7 @@ Readiness); жодний файл зі списку §5.1 (нижче) не по
 якщо він існує), оновлення `CLAUDE.md`/`FIRST_HOUR.md`/нотатки поправки №7,
 пакет для тестера, звіт власнику.
 
-**Приймання:** запис у `CLAUDE.md` «Кто что делает прямо сейчас» звільнений;
+**Приймання:** запис у `CLAUDE.md` «Хто що робить просто зараз» звільнений;
 `docs/FIRST_HOUR.md` §3 (чеклист) позначає рядок 14 закритою насправді (не
 лише в тестах); список відомих розривів/плейсхолдерів зведений в один розділ
 (перетин із §9 цього документа); власнику — короткий звіт із посиланням на
@@ -1385,7 +1397,7 @@ Get(key, gender)` сам обирає варіант; де рід не впли�
 | 5 | Список драйверів Напруги закритий | `QueueExternal` (R6) і `SocialConsequence` (R5) мапляться ВИКЛЮЧНО на `TensionDriver.QuestChoice`/`ThreatOutcome` — тест `SocialConsequence_NeverIntroducesNewDriver` |
 | 6 | Нова шкала — якір+потребитель+сигнал | Розписано для Лояльності (§4.5), Фракцій (§4.15), Готовності (§4.14) — кожна має явний якір/потребитель/сигнал у тексті контракту |
 | 7 | Порядок кроків дня — лише `DayStepOrder` | Один новий слот `Readiness=550` (Foundation, виключно); слот `Quests` НЕ заводиться (R6) |
-| 8 | Проверки детерминированы, порог показан заранее | `ThresholdRule`/`PercentRule` обидва показують порог/%; `CheckResolver`/`ExpeditionResolver`/`Finale` — та сама лестниця `OutcomeBand` скрізь |
+| 8 | Перевірки детерміновані, поріг показаний заздалегідь | `ThresholdRule`/`PercentRule` обидва показують поріг/%; `CheckResolver`/`ExpeditionResolver`/`Finale` — та сама драбина `OutcomeBand` скрізь |
 | 9 | Настільні системи-джерела не називаються | Жодного тексту цього документа/UI/коду не називає конкретну настільну систему; тактичний бій описується як «модель Wasteland 3» лише в `CLAUDE.md` (внутрішній нотатці для розробника, не в грі і не в цьому документі — тут і надалі «пул AP, укриття, надійний %») |
 
 ---
@@ -1433,14 +1445,14 @@ Get(key, gender)` сам обирає варіант; де рід не впли�
   гри.
 - **Природний великий бунт на площі тепер досяжний у вільній грі** (Поправка
   №7, 24.09.2026, `docs/GDD_AMENDMENTS.md` §7.9): стиснутий темп Напруги
-  (`NewGameOptions.TestBuildTensionPace`, дефолт true) робить Ропот/Брожение/
-  Накал/бунт видимими за ~15/20/22-23/25 діб вільної гри для гравця, що не
+  (`NewGameOptions.TestBuildTensionPace`, дефолт true) робить Ропіт/Бродіння/
+  Розпал/бунт видимими за ~15/20/22-23/25 діб вільної гри для гравця, що не
   замовляє облав і не будує Храм/Укріплення — раніше жоден прогін не бачив
   ЖОДНОЇ зміни полоси за 25 діб. Скриптована пожежа доби 5 (R10 вище) —
   окрема, перша криза; природний бунт — друга, пізніша, і журнал механік їх
   не плутає («Пожежа: вікно на реакцію (доба 5)» проти «Великий бунт на
   площі»). Перевірка руками: `Build/Windows/Alpha.exe -autoplay-long` —
-  автопрогон веде вільну гру далі руками прочь (без облав/Храму/Укріплень)
+  автопрогон веде вільну гру далі без втручання (без облав/Храму/Укріплень)
   до розв'язки бунту або доби 32, зі знімками на кожну зміну полоси, кожну
   ступінь передвісника кризи й саму розв'язку.
 - **Реальний фінал компресований у добу 5** — у справжній кампанії це

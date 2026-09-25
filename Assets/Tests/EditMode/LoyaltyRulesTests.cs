@@ -9,7 +9,7 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Лояльность на Companion (R2), таблица наслідків (LoyaltyRules, B4) и
+    /// Лояльність на Companion (R2), таблиця наслідків (LoyaltyRules, B4) і
     /// сейв-безперервність. Якір/споживач/сигнал (інваріант 6) — див.
     /// коментар над <see cref="Companion.LoyaltyBand"/>: якір "наскільки
     /// напарник вірить у твій шлях і громаду", споживач — Defection/CompanionArc,
@@ -31,7 +31,7 @@ namespace Game.Tests.EditMode
             return c;
         }
 
-        // ---- Полосы 0..100 -> 5, якорные точки сценария доба 1 ----
+        // ---- Полоси 0..100 -> 5, якорні точки сценарію доба 1 ----
         [Test]
         public void Default_Loyalty_Is50_Steady()
         {
@@ -54,10 +54,10 @@ namespace Game.Tests.EditMode
         [Test]
         public void ApplyLoyaltyDelta_ReportsBandChange_OnlyWhenBandCrossed()
         {
-            var c = new CompanionArchetype("c", "c").CreateInstance("c"); // 50 = Steady (нижняя граница полосы)
-            c.ApplyLoyaltyDelta(10); // 60 — уверенно в середине Steady, подальше от границы
+            var c = new CompanionArchetype("c", "c").CreateInstance("c"); // 50 = Steady (нижня межа полоси)
+            c.ApplyLoyaltyDelta(10); // 60 — впевнено в середині Steady, подалі від межі
 
-            var small = c.ApplyLoyaltyDelta(-1); // 59, всё ещё Steady
+            var small = c.ApplyLoyaltyDelta(-1); // 59, все ще Steady
             Assert.IsFalse(small.BandChanged);
 
             var big = c.ApplyLoyaltyDelta(-25); // 34 -> Wary
@@ -76,7 +76,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(LoyaltyBand.Devoted, c.LoyaltyBand);
         }
 
-        // ---- Таблица наслідків ----
+        // ---- Таблиця наслідків ----
         [Test]
         public void OnBloodyChoice_HurtsPeaceValued_ReliefsRuthless_SparesNeutral()
         {
@@ -115,10 +115,10 @@ namespace Game.Tests.EditMode
             dead.MarkDead();
             var cfg = new BalanceConfig();
 
-            // Реальный путь: слот council_seat с PassiveBonusId="Morale" через
-            // BaseState.AdvanceCycle кладёт в CycleReport.PassiveBonuses. Здесь
-            // собираем минимальный CycleReport тем же путём, каким его строит
-            // BaseState — через слот с Passive-выходом.
+            // Справжній шлях: слот council_seat з PassiveBonusId="Morale" через
+            // BaseState.AdvanceCycle кладе в CycleReport.PassiveBonuses. Тут
+            // збираємо мінімальний CycleReport тим самим шляхом, яким його будує
+            // BaseState — через слот із Passive-виходом.
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             var slot = new AssignmentSlotDefinition("council_seat", "Рада", BaseSectionType.Council)
             {
@@ -138,8 +138,8 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(changes.Exists(c => c.CompanionId == "dead"), "мёртвый не получает моральный бонус");
         }
 
-        // AdvanceCycle — internal у BaseState (единственный легальный вызывающий —
-        // ProductionStep конвейера); тесты имеют доступ через InternalsVisibleTo.
+        // AdvanceCycle — internal у BaseState (єдиний легальний викликач —
+        // ProductionStep конвеєра); тести мають доступ через InternalsVisibleTo.
         private static CycleReport InvokeAdvanceCycle(BaseState state)
         {
             var method = typeof(BaseState).GetMethod("AdvanceCycle",
@@ -147,7 +147,7 @@ namespace Game.Tests.EditMode
             return (CycleReport)method.Invoke(state, null);
         }
 
-        // ---- Сейв-безперервність (§4.8 R13: Loyalty входит в roster=) ----
+        // ---- Сейв-безперервність (§4.8 R13: Loyalty входить в roster=) ----
         [Test]
         public void RosterAdapter_SaveRoundTrip_KeepsLoyalty()
         {
@@ -159,7 +159,7 @@ namespace Game.Tests.EditMode
             string blob = adapter.CaptureState();
 
             var reloadedRoster = new Roster();
-            Comp(reloadedRoster, "c"); // дефолт 50, как «пустой» инстанс перед загрузкой
+            Comp(reloadedRoster, "c"); // дефолт 50, як «порожній» інстанс перед завантаженням
             var reloadedAdapter = new RosterAdapter(reloadedRoster);
             reloadedAdapter.RestoreState(blob);
 
@@ -170,13 +170,13 @@ namespace Game.Tests.EditMode
         [Test]
         public void RosterAdapter_RestoreState_ToleratesOldBlobWithoutLoyaltyField()
         {
-            // Старый формат (4 поля, без Лояльности) — не должен падать и не
-            // должен трогать дефолт.
+            // Старий формат (4 поля, без Лояльності) — не повинен падати і не
+            // повинен чіпати дефолт.
             var roster = new Roster();
             var c = Comp(roster, "c");
             var adapter = new RosterAdapter(roster);
 
-            string oldBlob = "c>0>>0"; // id>status>slot>injury, без пятого поля
+            string oldBlob = "c>0>>0"; // id>status>slot>injury, без п'ятого поля
             adapter.RestoreState(oldBlob);
 
             Assert.AreEqual(50, c.Loyalty, "старый слепок без пятого поля не трогает лояльность");

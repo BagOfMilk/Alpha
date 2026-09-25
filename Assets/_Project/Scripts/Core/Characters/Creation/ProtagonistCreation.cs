@@ -2,7 +2,7 @@ using Game.Core.Stats;
 
 namespace Game.Core.Characters.Creation
 {
-    /// <summary>Пол протагониста (R7): грамматика, не боевые числа.</summary>
+    /// <summary>Стать протагоніста (R7): граматика, не бойові числа.</summary>
     public enum Gender
     {
         Male = 0,
@@ -10,28 +10,28 @@ namespace Game.Core.Characters.Creation
     }
 
     /// <summary>
-    /// Применение быстрого экрана создания (R12) к уже существующему
-    /// протагонисту <see cref="Session.FirstHourWorld"/>. GameSession (D1)
-    /// зовёт <see cref="Apply"/> в <c>ConfirmCreation()</c> до первого
-    /// <c>AdvanceDay()</c> — здесь лишь чистая функция без состояния экрана: она
-    /// не знает ни про <c>SessionState</c>, ни про UI, только про
-    /// <see cref="Companion"/> и <see cref="BackgroundPreset"/>.
+    /// Застосування швидкого екрана створення (R12) до вже наявного
+    /// протагоніста <see cref="Session.FirstHourWorld"/>. GameSession (D1)
+    /// кличе <see cref="Apply"/> у <c>ConfirmCreation()</c> до першого
+    /// <c>AdvanceDay()</c> — тут лише чиста функція без стану екрана: вона
+    /// не знає ні про <c>SessionState</c>, ні про UI, тільки про
+    /// <see cref="Companion"/> і <see cref="BackgroundPreset"/>.
     ///
-    /// Пол (<see cref="Gender"/>) сам по себе не меняет ни одного числа — GDD не
-    /// заводит боевых различий по полу. Он нужен только текстовому
-    /// слою (E3, ключи <c>.m</c>/<c>.f</c>) и поэтому здесь не применяется к
-    /// Companion, а остаётся параметром вызова для того, кто его хранит
+    /// Стать (<see cref="Gender"/>) сама по собі не змінює жодного числа — GDD не
+    /// заводить бойових відмінностей за статтю. Вона потрібна лише текстовому
+    /// шару (E3, ключі <c>.m</c>/<c>.f</c>) і тому тут не застосовується до
+    /// Companion, а лишається параметром виклику для того, хто його зберігає
     /// (GameSession/ProtagonistCreationView, D1).
     /// </summary>
     public static class ProtagonistCreation
     {
         /// <summary>
-        /// Переписывает атрибуты и скилы протагониста значениями выбранного
-        /// preset'а и, если задано, имя. Пустое/null имя не трогает
-        /// <see cref="Companion.DisplayName"/>: по умолчанию текстовый слой
-        /// сам выберет ключ <c>ui.creation.name.default.m</c>/<c>.f</c> (§7.17) —
-        /// Core не решает, какую строку показать игроку (инвариант «Core отдаёт
-        /// только ключи»).
+        /// Переписує атрибути і скіли протагоніста значеннями обраного
+        /// preset'а і, якщо задано, ім'я. Порожнє/null ім'я не чіпає
+        /// <see cref="Companion.DisplayName"/>: за замовчуванням текстовий шар
+        /// сам обере ключ <c>ui.creation.name.default.m</c>/<c>.f</c> (§7.17) —
+        /// Core не вирішує, який рядок показати гравцю (інваріант «Core віддає
+        /// лише ключі»).
         /// </summary>
         public static void Apply(Companion protagonist, BackgroundPreset preset, string customName = null)
         {

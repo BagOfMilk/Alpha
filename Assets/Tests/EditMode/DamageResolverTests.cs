@@ -6,10 +6,10 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Конвейер урона: значение по AttackOutcome → +DamageBonus → множитель типа →
-    /// плоская броня (пробитие/Шред) → граза. DoT обходят броню. Перенесено из
-    /// архивной боевой линии, адаптировано на AttackOutcome/IDiceRoller (R1) —
-    /// «попал ли атакующий» решает IHitRule снаружи, этот класс решает только «сколько».
+    /// Конвеєр шкоди: значення за AttackOutcome → +DamageBonus → множник типу →
+    /// плоска броня (пробиття/Шред) → граза. DoT обходять броню. Перенесено з
+    /// архівної бойової лінії, адаптовано під AttackOutcome/IDiceRoller (R1) —
+    /// «чи влучив атакуючий» вирішує IHitRule зовні, цей клас вирішує тільки «скільки».
     /// </summary>
     public class DamageResolverTests
     {
@@ -44,7 +44,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Percent_Hit_RollsWithinRange_MinusArmor()
         {
-            // roll=0.5 -> min(3) + round(0.5*(5-3)) = 3+1 = 4; минус броня 1 = 3.
+            // roll=0.5 -> min(3) + round(0.5*(5-3)) = 3+1 = 4; мінус броня 1 = 3.
             var report = DamageResolver.RollAttackDamage(Unit(), Unit(armor: 1), Rifle(), AttackOutcome.Hit,
                 new ScriptedDiceRoller(0.5), deterministic: false, cfg: Cfg);
             Assert.AreEqual(3, report.Amount);
@@ -54,7 +54,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Threshold_Hit_IsFixedMidpoint_NoRollerCall()
         {
-            // Детерминированный режим: середина диапазона (3+5)/2=4, минус броня 1 = 3.
+            // Детермінований режим: середина діапазону (3+5)/2=4, мінус броня 1 = 3.
             var roller = new ScriptedDiceRoller();
             var report = DamageResolver.RollAttackDamage(Unit(), Unit(armor: 1), Rifle(), AttackOutcome.Hit,
                 roller, deterministic: true, cfg: Cfg);
@@ -67,7 +67,7 @@ namespace Game.Tests.EditMode
         {
             var report = DamageResolver.RollAttackDamage(Unit(), Unit(armor: 2), Rifle(pierce: 1), AttackOutcome.Hit,
                 null, deterministic: true, cfg: Cfg);
-            Assert.AreEqual(3, report.Amount); // (3+5)/2=4, броня 2 − пробитие 1 = 1
+            Assert.AreEqual(3, report.Amount); // (3+5)/2=4, броня 2 − пробиття 1 = 1
         }
 
         [Test]
@@ -77,7 +77,7 @@ namespace Game.Tests.EditMode
             target.ArmorShred = 1;
             var report = DamageResolver.RollAttackDamage(Unit(), target, Rifle(), AttackOutcome.Hit,
                 null, deterministic: true, cfg: Cfg);
-            Assert.AreEqual(3, report.Amount); // эффективная броня 1
+            Assert.AreEqual(3, report.Amount); // ефективна броня 1
         }
 
         [Test]
@@ -86,7 +86,7 @@ namespace Game.Tests.EditMode
             var target = Unit(armor: 1, resists: new ResistProfile().With(DamageType.Ballistic, 1.5));
             var report = DamageResolver.RollAttackDamage(Unit(), target, Rifle(), AttackOutcome.Hit,
                 null, deterministic: true, cfg: Cfg);
-            Assert.AreEqual(5, report.Amount); // round(4×1.5)=6 → −1 брони
+            Assert.AreEqual(5, report.Amount); // round(4×1.5)=6 → −1 броні
         }
 
         [Test]
@@ -104,7 +104,7 @@ namespace Game.Tests.EditMode
             var attacker = Unit(damageBonus: 3);
             var report = DamageResolver.RollAttackDamage(attacker, Unit(), Rifle(), AttackOutcome.Hit,
                 null, deterministic: true, cfg: Cfg);
-            Assert.AreEqual(7, report.Amount); // (4+3) − 0 брони
+            Assert.AreEqual(7, report.Amount); // (4+3) − 0 броні
         }
 
         [Test]
@@ -139,8 +139,8 @@ namespace Game.Tests.EditMode
         public void Dot_BypassesArmor_AppliesTypeMultiplier()
         {
             var target = Unit(armor: 5, resists: new ResistProfile().With(DamageType.Fire, 1.5));
-            Assert.AreEqual(3, DamageResolver.DotTick(2, DamageType.Fire, target)); // броня не считается
-            Assert.AreEqual(2, DamageResolver.DotTick(2, DamageType.True, target)); // True — без множителей
+            Assert.AreEqual(3, DamageResolver.DotTick(2, DamageType.Fire, target)); // броня не враховується
+            Assert.AreEqual(2, DamageResolver.DotTick(2, DamageType.True, target)); // True — без множників
         }
 
         [Test]

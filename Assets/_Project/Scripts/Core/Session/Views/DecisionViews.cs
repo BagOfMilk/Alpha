@@ -20,10 +20,10 @@ namespace Game.Core.Session.Views
         /// <summary>
         /// Полірування (ціль 6 «Рішення», owner: "the option text says so
         /// (тактичний бій: N ворогів), not just a skill threshold"). >0 —
-        /// цей шлях веде у тактичний бій (порогу немає — кроваво на такому
+        /// цей шлях веде у тактичний бій (порогу немає — криваво на такому
         /// вузлі завжди бій, IncidentResolver.Resolve не викликається
         /// взагалі); 0 — звичайна перевірка. Наразі заповнюється лише для
-        /// вузла 1 (pass_vanguard, кроваво) — дунж/фінал мають власні View.
+        /// вузла 1 (pass_vanguard, криваво) — данж/фінал мають власні View.
         /// </summary>
         public int TacticalBattleEnemyCount;
     }

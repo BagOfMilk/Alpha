@@ -13,8 +13,8 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Инциденты и кризис. Здесь защищается тезис этапа: кризис бьёт больно,
-    /// но честно — и никогда не загоняет игру в тупик.
+    /// Інциденти і криза. Тут захищається теза етапу: криза б'є боляче,
+    /// але чесно — і ніколи не заганяє гру в глухий кут.
     /// </summary>
     public class IncidentTests
     {
@@ -36,7 +36,7 @@ namespace Game.Tests.EditMode
             return (roster, new RosterAdapter(roster, protagonistId));
         }
 
-        // ---- Поправка №1: тихий путь есть везде ----
+        // ---- Поправка №1: тихий шлях є всюди ----
 
         [Test]
         public void Content_EveryIncident_HasNonViolentPath()
@@ -103,7 +103,7 @@ namespace Game.Tests.EditMode
             }
         }
 
-        // ---- Резолв и Напряжение ----
+        // ---- Резолв і Напруга ----
 
         [Test]
         public void Incident_BadOutcome_RaisesTension_GoodOutcome_Lowers()
@@ -120,7 +120,7 @@ namespace Game.Tests.EditMode
 
             var strongRoster = new Roster();
             strongRoster.Add(MakeCompanion("ace", charisma: 30));
-            // Присутствие — манёвр: мастер разбирает кражу, только если он на складе.
+            // Присутність — маневр: майстер розбирає крадіжку, лише якщо він на складі.
             strongRoster.Get("ace").AssignedSlotId = incident.RelevantPositionId;
             var strong = new RosterAdapter(strongRoster, "ace");
             var tensionStrong = new TensionState(cfg.Tension, 300);
@@ -130,7 +130,7 @@ namespace Game.Tests.EditMode
             Assert.Less(tensionStrong.Value, 300, "Хороший разбор разряжает");
         }
 
-        // ---- Кризис: зубы и ограждения ----
+        // ---- Криза: зуби і огородження ----
 
         [Test]
         public void Crisis_KillsCompanion_AndDeathIsIrreversible()
@@ -243,7 +243,7 @@ namespace Game.Tests.EditMode
             adapter.Kill("x");
             Assert.IsTrue(c.IsDead);
 
-            // Попытка «полечить» мёртвого не должна его воскрешать.
+            // Спроба «полікувати» мертвого не повинна його воскрешати.
             adapter.Wound("x", 10);
             Assert.IsTrue(c.IsDead, "Из смерти нет пути назад");
             Assert.IsFalse(adapter.KillableActorIds.Contains("x"));

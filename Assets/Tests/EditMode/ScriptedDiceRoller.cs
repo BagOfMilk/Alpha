@@ -4,11 +4,11 @@ using Game.Core.Randomness;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Тестовый кубик Б1: выдаёт заранее заданную очередь [0,1)-значений вне
-    /// зависимости от streamId (детерминированный сценарий вручную). Когда
-    /// очередь пуста — возвращает 0.5 (предсказуемая середина), как архивный
-    /// ScriptedRng. Живёт в Tests/EditMode (не в Core!) — Core не реализует
-    /// IDiceRoller нигде (R1, ArchitectureGuardTests.Core_NoTypeImplementsIDiceRoller).
+    /// Тестовий кубик Б1: видає заздалегідь задану чергу [0,1)-значень поза
+    /// залежністю від streamId (детермінований сценарій вручну). Коли
+    /// черга порожня — повертає 0.5 (передбачувана середина), як архівний
+    /// ScriptedRng. Живе в Tests/EditMode (не в Core!) — Core не реалізує
+    /// IDiceRoller ніде (R1, ArchitectureGuardTests.Core_NoTypeImplementsIDiceRoller).
     /// </summary>
     internal sealed class ScriptedDiceRoller : IDiceRoller
     {
@@ -24,6 +24,6 @@ namespace Game.Tests.EditMode
         }
 
         public string CaptureState() => _values.Count.ToString();
-        public void RestoreState(string blob) { /* тестовый двойник — не сериализуется */ }
+        public void RestoreState(string blob) { /* тестовий двійник — не серіалізується */ }
     }
 }

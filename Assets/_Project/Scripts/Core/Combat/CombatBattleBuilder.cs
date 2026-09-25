@@ -7,10 +7,10 @@ using Game.Core.Randomness;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Источник боевого юнита игрока: напарник + оружие (Combat не читает
-    /// Companion.Equipment — Items/Б3 в этом рабочем дереве не существует) +
-    /// признак сюжетной защиты от смерти (UnitProfile.ProtectedFromDeath).
-    /// Вызывающий (D1) резолвит это из Roster/GameSession; Combat — нет.
+    /// Джерело бойового юніта гравця: напарник + зброя (Combat не читає
+    /// Companion.Equipment — Items/Б3 у цьому робочому дереві не існує) +
+    /// ознака сюжетного захисту від смерті (UnitProfile.ProtectedFromDeath).
+    /// Викликач (D1) резолвить це з Roster/GameSession; Combat — ні.
     /// </summary>
     public sealed class PlayerUnitSource
     {
@@ -27,22 +27,22 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Собирает готовый CombatState из BattleSetup — единственная точка, где
-    /// данные (id напарника/id EnemyDefinition) превращаются в живые
-    /// CombatUnit. Комбат этим не трогает Roster/BaseState напрямую: id
-    /// резолвит вызывающий через переданные делегаты (§1.1 — «дункан просит
-    /// бій по даним»), поэтому Combat тестируется без единого другого пакета.
+    /// Збирає готовий CombatState із BattleSetup — єдина точка, де
+    /// дані (id напарника/id EnemyDefinition) перетворюються на живі
+    /// CombatUnit. Комбат цим не чіпає Roster/BaseState напряму: id
+    /// резолвить викликач через передані делегати (§1.1 — «дункан просить
+    /// бій по даним»), тому Combat тестується без жодного іншого пакета.
     /// </summary>
     public static class CombatBattleBuilder
     {
         /// <summary>
-        /// roller — единственный источник случайности на весь бой (R1: Core сам
-        /// его не создаёт и не хранит сид — BattleSetup сида не несёт). Для
-        /// HitRule=Threshold можно передать null (ThresholdRule его не читает);
-        /// для HitRule=Percent вызывающий (D1/GameSession) обязан передать
-        /// готовый IDiceRoller (в проде — Gameplay.Combat.SeededDiceRoller,
-        /// построенный из NewGameOptions.Seed) и держать один и тот же экземпляр
-        /// на протяжении боя — иначе детерминизм «тот же сид — тот же бой» рвётся.
+        /// roller — єдине джерело випадковості на весь бій (R1: Core сам
+        /// його не створює і не зберігає сід — BattleSetup сіда не несе). Для
+        /// HitRule=Threshold можна передати null (ThresholdRule його не читає);
+        /// для HitRule=Percent викликач (D1/GameSession) зобов'язаний передати
+        /// готовий IDiceRoller (у проді — Gameplay.Combat.SeededDiceRoller,
+        /// побудований із NewGameOptions.Seed) і тримати той самий екземпляр
+        /// протягом бою — інакше детермінізм «той самий сід — той самий бій» рветься.
         /// </summary>
         public static CombatState Build(BattleSetup setup, BalanceConfig cfg,
             Func<string, PlayerUnitSource> resolvePlayerUnit,

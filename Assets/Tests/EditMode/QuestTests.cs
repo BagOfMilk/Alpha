@@ -50,7 +50,7 @@ namespace Game.Tests.EditMode
         public void Check_Success_BranchesAndRewards()
         {
             var cfg = Cfg();
-            var roster = RosterOf(new FakeActor { Id = "a", Value = 8 }); // порог 3, запас 5 -> Хороша
+            var roster = RosterOf(new FakeActor { Id = "a", Value = 8 }); // поріг 3, запас 5 -> Хороша
 
             var def = new QuestDefinition("q", "offer")
                 .Stage(QuestStage.Check("c", null, SkillKeys.Survival, 3, ApproachForm.Neutral,
@@ -92,8 +92,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// «Контекст перевірки» у моделі R6 — це ApproachForm (Убеждення/
-        /// Запугивание/Торговля змінюють ФОРМУ лестниці — CheckResolver.BandFor),
+        /// «Контекст перевірки» у моделі R6 — це ApproachForm (Переконання/
+        /// Залякування/Торгівля змінюють ФОРМУ драбини — CheckResolver.BandFor),
         /// а не окремий атрибут, як у колишньому рушії. Тут перевіряємо, що
         /// квестова перевірка чесно передає Approach у той самий CheckResolver,
         /// що й будь-яка інша перевірка гри.

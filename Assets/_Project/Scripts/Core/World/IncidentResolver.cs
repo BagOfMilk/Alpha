@@ -9,35 +9,35 @@ using Game.Core.Settlement;
 namespace Game.Core.World
 {
     /// <summary>
-    /// Порт «кого можно убить». Держится отдельно от резолвера, чтобы кризис
-    /// не знал ничего о модели персонажа — она ещё будет переписана.
+    /// Порт «кого можна вбити». Тримається окремо від резолвера, щоб криза
+    /// не знала нічого про модель персонажа — вона ще буде переписана.
     /// </summary>
     public interface ICasualtySink
     {
-        /// <summary>Живые непротагонисты, отсортированные детерминированно.</summary>
+        /// <summary>Живі непротагоністи, відсортовані детерміновано.</summary>
         IReadOnlyList<string> KillableActorIds { get; }
 
-        /// <summary>Кто держит позицию этого домена (может быть null).</summary>
+        /// <summary>Хто тримає позицію цього домену (може бути null).</summary>
         string ActorOnPosition(string positionId);
 
         void Kill(string actorId);
 
         /// <summary>
-        /// Тир по умолчанию — Light (R16/B7): существующие вызовы этого метода
-        /// не знают тира и не должны начать выдавать шрамы задним числом —
-        /// это решение владельца по конкретным инцидентам, не побочный эффект
-        /// правки контракта.
+        /// Тір за замовчуванням — Light (R16/B7): наявні виклики цього методу
+        /// не знають тіра і не повинні почати видавати шрами заднім числом —
+        /// це рішення власника щодо конкретних інцидентів, а не побічний ефект
+        /// правки контракту.
         /// </summary>
         void Wound(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light);
     }
 
     /// <summary>
-    /// Резолв инцидента: проверка → полоса исхода → последствия.
+    /// Резолв інцидента: перевірка → полоса наслідку → наслідки.
     ///
-    /// Кризис бьёт по-настоящему (US-11.1), но в жёсткость встроены ограждения:
-    /// протагонист неприкосновенен, последнего напарника не убивают, а вместо
-    /// убийства выбирается отток населения. Жёсткость не должна превращаться
-    /// в софт-лок.
+    /// Криза б'є по-справжньому (US-11.1), але в жорсткість вбудовані огородження:
+    /// протагоніст недоторканний, останнього напарника не вбивають, а замість
+    /// вбивства обирається відтік населення. Жорсткість не повинна перетворюватися
+    /// на софт-лок.
     /// </summary>
     public static class IncidentResolver
     {
@@ -56,9 +56,9 @@ namespace Game.Core.World
             if (incident == null) throw new ArgumentNullException(nameof(incident));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
-            // Тихий путь — основной способ разобраться (Поправка №1), но не
-            // единственный: кровавый был выписан в контенте и до появления точки
-            // решения не читался ни одной строкой кода.
+            // Тихий шлях — основний спосіб розібратися (Поправка №1), але не
+            // єдиний: кривавий був виписаний у контенті і до появи точки
+            // рішення не читався жодним рядком коду.
             bool bloody = path == Loop.IncidentPath.Bloody && incident.HasBloodyPath;
             var request = BuildRequest(incident, path, fear, day, balance);
 
@@ -66,20 +66,21 @@ namespace Game.Core.World
 
             ApplyTension(incident, check.Band, tension, balance);
 
-            // Цена крови. До этого кровавый путь был строго выгоднее тихого:
-            // он решал дело тем же исходом, но ничего не стоил, и первый же
-            // игрок сделал бы вывод «игра про резню» — ровно наоборот Поправке №1.
+            // Ціна крові. До цього кривавий шлях був строго вигідніший за тихий:
+            // він вирішував справу тим самим наслідком, але нічого не коштував, і
+            // перший же гравець зробив би висновок «гра про різанину» — рівно
+            // навпаки Поправці №1.
             if (bloody) ApplyBloodCost(incident, check, casualties, tension, balance);
 
-            // Боится община и от крови, и от провалившегося запугивания.
+            // Боїться громада і від крові, і від провального залякування.
             bool scared = bloody || check.CausedFear;
             if (scared && fear != null) fear.Remember(day, balance.Checks);
 
             if (!incident.IsCrisis)
             {
-                // Хороший разбор может привести людей: нашли пропавшего — а с
-                // ним и тех, кто прибился по дороге. Плохой разбор не приводит
-                // никого: слух о городе, где не справляются, отпугивает.
+                // Хороший розбір може привести людей: знайшли зниклого — а з
+                // ним і тих, хто прибився по дорозі. Поганий розбір не приводить
+                // нікого: чутка про місто, де не справляються, відлякує.
                 int arrived = 0;
                 if (check.Band >= OutcomeBand.Good && incident.ArrivalsOnGood > 0 && population != null)
                 {
@@ -95,12 +96,12 @@ namespace Game.Core.World
         }
 
         /// <summary>
-        /// Проверка под выбранный путь. Кровавого может не быть — тогда тихий.
+        /// Перевірка під обраний шлях. Кривавого може не бути — тоді тихий.
         ///
-        /// Страх общины входит в порог ЗДЕСЬ, а не в резолвере проверок,
-        /// потому что и предпросмотр (точка решения), и резолв строят запрос
-        /// этим же методом: инвариант 8 требует, чтобы показанный порог был
-        /// равен применённому, включая надбавку за вчерашнюю кровь.
+        /// Страх громади входить у поріг САМЕ ТУТ, а не в резолвері перевірок,
+        /// бо і передперегляд (точка рішення), і резолв будують запит цим
+        /// самим методом: інваріант 8 вимагає, щоб показаний поріг дорівнював
+        /// застосованому, включно з надбавкою за вчорашню кров.
         /// </summary>
         internal static CheckRequest BuildRequest(IncidentDefinition incident, Loop.IncidentPath path,
             FearState fear = null, int day = 0, BalanceConfig balance = null)
@@ -118,27 +119,27 @@ namespace Game.Core.World
                 incident.TopicId, incident.RelevantPositionId);
         }
 
-        /// <summary>Договариваются словом. Запугивание страхом не дешевеет — см. FearState.</summary>
+        /// <summary>Домовляються словом. Залякування страхом не дешевшає — див. FearState.</summary>
         private static bool IsSocial(ApproachForm approach)
         {
             return approach == ApproachForm.Persuade || approach == ApproachForm.Trade;
         }
 
         /// <summary>
-        /// Кровь стоит трёх вещей сразу: Напряжения по своему драйверу, раны
-        /// исполнителю и памяти общины (её ставит вызывающий).
+        /// Кров коштує трьох речей одразу: Напруги за своїм драйвером, рани
+        /// виконавцю і пам'яті громади (її ставить викликач).
         /// </summary>
         private static void ApplyBloodCost(IncidentDefinition incident, CheckOutcome check,
             ICasualtySink casualties, TensionState tension, BalanceConfig balance)
         {
-            // Стиль прохождения — отдельный драйвер ЗАКРЫТОГО списка (инвариант 5):
-            // резня растит Напряжение сама по себе, чем бы ни кончился разбор.
+            // Стиль проходження — окремий драйвер ЗАКРИТОГО списку (інваріант 5):
+            // різанина ростить Напругу сама по собі, чим би не закінчився розбір.
             if (tension != null)
                 tension.Apply(TensionDriver.PlaystyleBlood, balance.Tension.BloodDeltaPerNode,
                     "blood:" + incident.Id);
 
-            // Рана достаётся тому, кто ходил в дело. Если на посту не стоял никто,
-            // ранить некого: за пустую позицию уже назначена Худшая полоса.
+            // Рана дістається тому, хто ходив у справу. Якщо на посту не стояв
+            // ніхто, ранити нікого: за пусту позицію вже призначена Найгірша полоса.
             if (casualties != null && !string.IsNullOrEmpty(check.ActorId))
                 casualties.Wound(check.ActorId, balance.Checks.BloodyPathInjury);
         }
@@ -156,8 +157,8 @@ namespace Game.Core.World
             int delta = deltas[index];
             if (delta == 0) return;
 
-            // Исход угрозы умеет и поднимать, и опускать — но через РАЗНЫЕ драйверы,
-            // потому что белый список разрешает каждому только одну сторону.
+            // Наслідок загрози вміє і підіймати, і опускати — але через РІЗНІ
+            // драйвери, бо білий список дозволяє кожному лише одну сторону.
             var driver = delta > 0 ? TensionDriver.ThreatOutcome : TensionDriver.EventOutcome;
             tension.Apply(driver, delta, "incident:" + incident.Id);
         }
@@ -165,8 +166,8 @@ namespace Game.Core.World
         private static IncidentOutcome ResolveCrisis(IncidentDefinition incident, CheckOutcome check,
             ICasualtySink casualties, PopulationState population, bool causedFear)
         {
-            // Хороший разбор смягчает удар: кризис непредотвратим, но не обязан
-            // быть максимально жестоким при подготовленном городе.
+            // Хороший розбір пом'якшує удар: криза невідворотна, але не зобов'язана
+            // бути максимально жорстокою при підготовленому місті.
             var bite = check.Band >= OutcomeBand.Good ? CrisisBite.WoundCompanion : incident.Bite;
 
             string victim = null;
@@ -178,12 +179,12 @@ namespace Game.Core.World
 
                 if (victim == null)
                 {
-                    // Некого трогать — бьём по населению. Ограждение от софт-лока.
+                    // Нікого чіпати — б'ємо по населенню. Огородження від софт-локу.
                     bite = CrisisBite.PopulationOutflow;
                 }
                 else if (bite == CrisisBite.KillCompanion)
                 {
-                    // Последнего живого напарника не убиваем никогда.
+                    // Останнього живого напарника не вбиваємо ніколи.
                     if (casualties.KillableActorIds.Count <= 1)
                     {
                         bite = CrisisBite.WoundCompanion;
@@ -208,9 +209,9 @@ namespace Game.Core.World
         }
 
         /// <summary>
-        /// Выбор жертвы детерминирован: сначала тот, кто держал релевантную
-        /// позицию (он был на переднем крае), иначе первый по Id. Никакого
-        /// «случайно кто-то умер» — это было бы нечестно при полном детерминизме.
+        /// Вибір жертви детермінований: спочатку той, хто тримав релевантну
+        /// позицію (він був на передньому краї), інакше перший за Id. Жодного
+        /// «випадково хтось помер» — це було б нечесно за повного детермінізму.
         /// </summary>
         private static string PickVictim(IncidentDefinition incident, ICasualtySink casualties)
         {

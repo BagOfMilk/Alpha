@@ -4,15 +4,15 @@ using Game.Core.Checks;
 namespace Game.Core.Expeditions
 {
     /// <summary>
-    /// Стартовые точки вылазок — затравка контента, как DefaultContent для базы.
+    /// Стартові точки вилазок — затравка контенту, як DefaultContent для бази.
     ///
-    /// Три точки с разными порогами и разной ценой подхода: это минимум, при
-    /// котором истощение имеет смысл. С одной точкой игроку некуда переходить,
-    /// и механика вырождается в «добыча падает, и всё».
+    /// Три точки з різними порогами і різною ціною підходу: це мінімум, за
+    /// якого виснаження має сенс. З однією точкою гравцю нема куди переходити,
+    /// і механіка вироджується в «здобич падає, і все».
     /// </summary>
     public static class DefaultSites
     {
-        /// <summary>Ближний обход: дёшево, безопасно, быстро иссякает.</summary>
+        /// <summary>Ближній обхід: дешево, безпечно, швидко вичерпується.</summary>
         public static ExpeditionSite Outskirts()
         {
             return new ExpeditionSite("outskirts", "Ближние развалины")
@@ -25,7 +25,7 @@ namespace Game.Core.Expeditions
             };
         }
 
-        /// <summary>Заброшенная мастерская: материалов больше, но нужен механик.</summary>
+        /// <summary>Покинута майстерня: матеріалів більше, але потрібен механік.</summary>
         public static ExpeditionSite Workshop()
         {
             return new ExpeditionSite("old_workshop", "Заброшенная мастерская")
@@ -35,12 +35,12 @@ namespace Game.Core.Expeditions
                 QuietSkill = SkillKeys.Mechanics, ForcefulSkill = SkillKeys.Ranged,
                 Threshold = 5,
                 BaseMaterials = 4, BaseGold = 6,
-                // На этой точке живут уцелевшие: на хорошей полосе отряд приводит их домой.
+                // На цій точці живуть ті, хто вцілів: на хорошій полосі відряд приводить їх додому.
                 PeopleOnGood = 4
             };
         }
 
-        /// <summary>Дальний тракт: золото у торговых обозов, но и планка выше.</summary>
+        /// <summary>Дальній тракт: золото у торгових обозів, але і планка вища.</summary>
         public static ExpeditionSite Highway()
         {
             return new ExpeditionSite("far_highway", "Дальний тракт")

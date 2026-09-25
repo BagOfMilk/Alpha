@@ -5,8 +5,8 @@ using Game.Core.Stats;
 namespace Game.Core.Characters.Scars
 {
     /// <summary>
-    /// Шрам — вечная отметина (GDD US-2.5). Даёт свои эффекты, но слот трейта
-    /// не занимает: билд остаётся выбором игрока, а история остаётся видимой.
+    /// Шрам — вічна позначка (GDD US-2.5). Дає свої ефекти, але слот трейта
+    /// не займає: білд лишається вибором гравця, а історія лишається видимою.
     /// </summary>
     [Serializable]
     public sealed class ScarDefinition
@@ -14,7 +14,7 @@ namespace Game.Core.Characters.Scars
         public string Id;
         public string DisplayName;
 
-        /// <summary>С какого тира ранения шрам вообще может достаться (US-4.2).</summary>
+        /// <summary>З якого тіру поранення шрам узагалі може дістатися (US-4.2).</summary>
         public WoundTier MinTier = WoundTier.Serious;
 
         public List<StatModifier> Modifiers = new List<StatModifier>();
@@ -36,11 +36,11 @@ namespace Game.Core.Characters.Scars
     }
 
     /// <summary>
-    /// Вечный трек шрамов.
+    /// Вічний трек шрамів.
     ///
-    /// Метода удаления здесь НЕТ, и это не упущение: «все шрамы несбрасываемы»
-    /// (US-2.5) держится типом, а не дисциплиной вызывающего. Снять шрам нельзя
-    /// просто потому, что для этого нет API.
+    /// Методу видалення тут НЕМАЄ, і це не недогляд: «усі шрами незнімні»
+    /// (US-2.5) тримається типом, а не дисципліною того, хто викликає. Зняти шрам
+    /// не можна просто тому, що для цього немає API.
     /// </summary>
     public sealed class ScarTrack : IModifierProvider
     {
@@ -57,7 +57,7 @@ namespace Game.Core.Characters.Scars
             return false;
         }
 
-        /// <summary>Повторное присвоение того же шрама ничего не меняет.</summary>
+        /// <summary>Повторне присвоєння того самого шраму нічого не змінює.</summary>
         public bool Add(ScarDefinition scar)
         {
             if (scar == null || string.IsNullOrEmpty(scar.Id)) return false;
@@ -67,8 +67,8 @@ namespace Game.Core.Characters.Scars
         }
 
         /// <summary>
-        /// Достаётся ли шрам за рану такой тяжести. Лёгкие раны следов не
-        /// оставляют — это прямое правило US-4.2, а не тюнинг.
+        /// Чи дістається шрам за рану такої тяжкості. Легкі рани слідів не
+        /// лишають — це пряме правило US-4.2, а не тюнінг.
         /// </summary>
         public static bool IsEarnedBy(ScarDefinition scar, WoundTier tier)
             => scar != null && tier != WoundTier.None && tier >= scar.MinTier;

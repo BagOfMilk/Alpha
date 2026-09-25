@@ -522,7 +522,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.hitrule.threshold", "Правило попадання: показаний поріг");
             AddKey(t, "ui.title.hitrule.section", "Правило попадання");
             // Поправка №7 (стиснутий темп шкали Напруги, тестова збірка):
-            // перемикач на титулі за тим самим приёмом, що правило попадання
+            // перемикач на титулі за тим самим прийомом, що правило попадання
             // вище — TabButton, не GUILayout.Toggle (фікс-ревью Фази F про
             // нечитний вбудований стиль, коментар біля Widgets.TabButton у
             // TitleScreen.Draw).
@@ -598,7 +598,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "tension.band.label.calm", "Спокій");
             AddKey(t, "tension.band.label.murmur", "Ропіт");
             AddKey(t, "tension.band.label.ferment", "Бродіння");
-            AddKey(t, "tension.band.label.heat", "Накал");
+            AddKey(t, "tension.band.label.heat", "Розпал");
             AddKey(t, "tension.band.label.fracture", "Злам");
 
             AddKey(t, "readiness.band.unprepared", "Непідготовлена");
@@ -765,7 +765,7 @@ namespace Game.Gameplay.Text
         //
         // Фікс-ревью раунд 2 (QA, minor): бракувало ".f"-пари — ResolveVariant
         // падав на бару ".m"-форму навіть для протагоністки-жінки ("Одноокий"
-        // замість "Одноока"). Той самий .m/.f-приём, що вже стоїть на
+        // замість "Одноока"). Той самий .m/.f-прийом, що вже стоїть на
         // "companion.died.m/.f" вище: жодного нейтрального бару-ключа, обидва
         // роди — явними записами. "broken_hand" — іменникова фраза ("Перебита
         // рука"), роду персонажа не узгоджує, тож .f = .m буквально.
@@ -884,8 +884,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "incident.crisis_riot.option.bloody", "Криваво: придушити бунт тактично (Тактика ≥ 9).");
 
             // Загальні полоси наслідку — коли в інцидента нема своєї фрази (переклад
-            // VillageView.Verb(OutcomeBand): "разобрались лучше некуда" / "...чисто" /
-            // "кое-как уладили" / "вышло скверно"). Специфічні інциденти (spoiled_stores,
+            // VillageView.Verb(OutcomeBand): "розібралися ідеально" / "...чисто" /
+            // "абияк владнали" / "вийшло погано"). Специфічні інциденти (spoiled_stores,
             // sick_child) мають власні — див. §7.6/§7.8, ці не перекривають їх.
             AddKey(t, "incident.petty_theft.outcome.best", "Крадія знайшли, і майже все повернулося на місце.");
             AddKey(t, "incident.petty_theft.outcome.good", "Половину зниклого повернуто.");
@@ -1250,7 +1250,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "tension.band.Calm", "«Стихає. Нарешті».");
             AddKey(t, "tension.band.Murmur", "«З'явився ропіт — чути по дворах».");
             AddKey(t, "tension.band.Ferment", "«Бродить. Люди сходяться гуртками».");
-            AddKey(t, "tension.band.Heat", "«Накалюється. Це вже не приховати».");
+            AddKey(t, "tension.band.Heat", "«Розпалюється. Це вже не приховати».");
             // Фікс-ревью (Поправка №7, тестовий темп): раніше цей рядок був
             // буквально той самий текст, що й "tension.band.risen" — слабкий
             // навіть для проміжного зсуву, а тут це ВЕРХНЯ полоса, за крок
@@ -1501,6 +1501,11 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.readiness.title", "Готовність громади");
             AddKey(t, "ui.readiness.milestones", "Віхи: {reached} з {total}");
+            // Фікс-ревью (журнал механік тестера): тренувальний бій усередині
+            // партії, не лише з титульного екрана — GameSession.NewTrainingBattle
+            // сам повертає в Morning/FreePlay після бою, кампанію не займає.
+            AddKey(t, "ui.readiness.training", "Тренувальний бій");
+            AddKey(t, "ui.readiness.training.hint", "Пісочниця поза кампанією — добу/пости/сейв не займає, можна хоч щоранку.");
 
             // Тест-збірка (Поправка №7.8, п.2): вкладка «Журнал механік».
             AddKey(t, "ui.journal.progress", "Побачено: {seen} з {total}");
@@ -1736,8 +1741,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.mood.calm", "Спокій");
             AddKey(t, "ui.mood.murmur", "Ропіт");
             AddKey(t, "ui.mood.ferment", "Бродіння");
-            AddKey(t, "ui.mood.heat", "Накал");
-            AddKey(t, "ui.mood.fracture", "Розкол");
+            AddKey(t, "ui.mood.heat", "Розпал");
+            AddKey(t, "ui.mood.fracture", "Злам");
 
             // SessionView.CrowdBand — рядок GameSession.CrowdBandName(int), буквально
             // "Hamlet"/"Village"/"Settlement"/"Town"/"City" (той самий тір поселення,
@@ -1747,7 +1752,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.crowd.village", "Село");
             AddKey(t, "ui.crowd.settlement", "Слобода");
             AddKey(t, "ui.crowd.town", "Містечко");
-            AddKey(t, "ui.crowd.city", "Город");
+            AddKey(t, "ui.crowd.city", "Місто");
 
             AddKey(t, "ui.threat.calm", "Спокійно");
             AddKey(t, "ui.threat.tense", "Напружено");
@@ -2153,7 +2158,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.assignment.hint", "Доба 1, ранок: вкладка Пости — під порожнім постом натисни «Призначити: <ім'я напарника>».");
             AddKey(t, "journal.presence.title", "Присутність напарників");
             AddKey(t, "journal.presence.hint", "Відбувається само: хто зараз у вилазці, помер або зрадив, не пропонується виконавцем перевірки — серед кандидатів на постах, вилазці чи в рішеннях таких просто нема.");
-            AddKey(t, "journal.decision_point.title", "Точка рішення тихо/кроваво");
+            AddKey(t, "journal.decision_point.title", "Точка рішення тихо/криваво");
             AddKey(t, "journal.decision_point.hint", "Коли посеред дня на екрані з'явиться «Рішення чекає», обери «Тихо» або «Криваво» під одним із варіантів.");
             AddKey(t, "journal.outcome_bands.title", "Чотири полоси наслідку");
             AddKey(t, "journal.outcome_bands.hint", "Відбувається само: після будь-якого рішення, фіналу чи вибору в квесті стрічка подій показує полосу наслідку — від найгіршої до найкращої.");
@@ -2167,11 +2172,11 @@ namespace Game.Gameplay.Text
             // «great_crisis» нижче (природний великий бунт на площі,
             // тестовий темп Поправки №7): це дві різні кризи тестової збірки.
             AddKey(t, "journal.crisis.title", "Пожежа: вікно на реакцію (доба 5)");
-            AddKey(t, "journal.crisis.hint", "Доба 5, вночі: якщо відкриється «Вікно реакції на кризу», обери «Витратити золото», «Відрядити людину з поста» або «Не реагувати».");
+            AddKey(t, "journal.crisis.hint", "Доба 5, увечері або вночі: якщо відкриється «Вікно реакції на кризу», обери «Витратити золото», «Відрядити людину з поста» або «Не реагувати».");
             AddKey(t, "journal.tension_band_change.title", "Настрій міста рухається");
             AddKey(t, "journal.tension_band_change.hint", "Відбувається само: у тестовому темпі перший помітний зсув настрою — близько п'ятнадцятої доби, другий — близько двадцятої. Облава ради, Храм і Укріплення відсувають це далі; кровавий шлях, голод і порожні пости — наближають.");
             AddKey(t, "journal.great_crisis.title", "Великий бунт на площі");
-            AddKey(t, "journal.great_crisis.hint", "Відбувається само: коли настрій міста доходить до Накалу, на площі накопичується власна загроза — три перестороги про натовп, остання за добу-дві до розв'язки, і сам бунт близько двадцять п'ятої доби, якщо нічого не робити. Рада, Храм і Укріплення відсувають його; кров, голод і порожні пости — прискорюють. Не плутай із пожежею доби п'ятої вище — це друга, пізніша криза.");
+            AddKey(t, "journal.great_crisis.hint", "Відбувається само: коли настрій міста доходить до Розпалу, на площі накопичується власна загроза — три перестороги про натовп, остання за добу-дві до розв'язки, і сам бунт близько двадцять п'ятої доби, якщо нічого не робити. Рада, Храм і Укріплення відсувають його; кров, голод і порожні пости — прискорюють. Не плутай із пожежею доби п'ятої вище — це друга, пізніша криза.");
             AddKey(t, "journal.post_reports.title", "Доповіді з постів");
             AddKey(t, "journal.post_reports.hint", "Відбувається само: тримай пости зайнятими (вкладка Пости) — щоранку в стрічці подій приходить доповідь із кожного зайнятого поста.");
             AddKey(t, "journal.signals_no_repeat.title", "Сигнали без повторів");
@@ -2217,7 +2222,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.auto_resolve.title", "Автобій");
             AddKey(t, "journal.auto_resolve.hint", "У бою натисни кнопку «Автобій» — гра сама розіграє решту сутички.");
             AddKey(t, "journal.training_battle.title", "Тренувальний бій");
-            AddKey(t, "journal.training_battle.hint", "Головний екран: кнопка «Тренувальний бій» — оцінка бойової механіки поза кампанією.");
+            // Фікс-ревью (журнал механік тестера, MechanicsJournalCompletionTests):
+            // старий текст називав лише титульний екран — там кнопка стоїть ДО
+            // NewGame, і NewGame() безумовно чистить журнал разом з рештою
+            // прогону, тож запис, побачений так, «губився» одразу після старту
+            // кампанії. Той самий бій, вкладка Готовність, посеред партії, journal
+            // не займає.
+            AddKey(t, "journal.training_battle.hint", "Головний екран ДО «Нової гри» — або будь-коли всередині партії, вкладка Готовність, кнопка «Тренувальний бій».");
             AddKey(t, "journal.creation.title", "Створення протагоніста");
             AddKey(t, "journal.creation.hint", "Головний екран: «Нова гра» (не вмикай «Пропустити створення персонажа») — впиши ім'я, обери «Він»/«Вона» й передісторію, тисни «Вирушати».");
             AddKey(t, "journal.progression.title", "XP/рівні/білд-планувальник");
@@ -2225,7 +2236,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.portrait_scenes.title", "Портретні сцени");
             AddKey(t, "journal.portrait_scenes.hint", "У сцені з репліками тисни «Далі» (або Пробіл, або клік) — доки сцена не закінчиться.");
             AddKey(t, "journal.save_load.title", "Збереження/завантаження");
-            AddKey(t, "journal.save_load.hint", "Вранці, вкладка Збереження: обери слот і тисни «Підтвердити», щоб зберегти. Завантажити збережене — з головного екрана кнопкою «Продовжити».");
+            AddKey(t, "journal.save_load.hint", "Вранці, вкладка Збереження: обери слот і тисни «Підтвердити», щоб зберегти. Завантажити збережене — з головного екрана кнопкою «Продовжити» розгорни список слотів і тисни «→» біля потрібного.");
             AddKey(t, "journal.summary.title", "Підсумок доби 5");
             AddKey(t, "journal.summary.hint", "Після фіналу доби 5 сама з'явиться підсумкова панель — прочитай і тисни «Грати далі».");
             AddKey(t, "journal.free_play.title", "Вільна гра");

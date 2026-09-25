@@ -7,15 +7,15 @@ using Game.Core.Loop;
 namespace Game.Core.Characters.Progression
 {
     /// <summary>
-    /// Банк очков скилов, которые ещё НЕ потрачены (R11/G19). Протагонист
-    /// банкует их вместо авто-траты (<see cref="Companion.GainXpNoAutoSpend"/>),
-    /// а планировщик билда (<c>BuildPlanner.Preview/Commit</c>) берёт
-    /// <c>pointsAvailable</c> отсюда — API планировщика уже готово к этому
-    /// (он и раньше брал это число параметром, поэтому не меняется).
+    /// Банк очок скілів, які ще НЕ витрачені (R11/G19). Протагоніст
+    /// банкує їх замість автотрати (<see cref="Companion.GainXpNoAutoSpend"/>),
+    /// а планувальник білда (<c>BuildPlanner.Preview/Commit</c>) бере
+    /// <c>pointsAvailable</c> звідси — API планувальника вже готове до цього
+    /// (воно й раніше брало це число параметром, тому не змінюється).
     ///
-    /// Карта id→очки, а не одно число: в будущем банковать может не только
-    /// протагонист (например, напарник с подходящим трейтом), поэтому ключ —
-    /// companionId с самого начала, а не догадка «точно один банк на игру».
+    /// Карта id→очки, а не одне число: в майбутньому банкувати може не лише
+    /// протагоніст (наприклад, напарник із відповідним трейтом), тому ключ —
+    /// companionId із самого початку, а не здогад «точно один банк на гру».
     /// </summary>
     public sealed class SpendablePoints : IStateBlob
     {
@@ -27,7 +27,7 @@ namespace Game.Core.Characters.Progression
             return _points.TryGetValue(companionId, out var n) ? n : 0;
         }
 
-        /// <summary>Кладёт очки на банк. Отрицательное/нулевое amount игнорируется.</summary>
+        /// <summary>Кладе очки на банк. Від'ємне/нульове amount ігнорується.</summary>
         public void Grant(string companionId, int amount)
         {
             if (string.IsNullOrEmpty(companionId) || amount <= 0) return;
@@ -35,9 +35,9 @@ namespace Game.Core.Characters.Progression
         }
 
         /// <summary>
-        /// Списывает очки. Атомарно: если их не хватает, банк не трогается и
-        /// возвращается false — так же, как <c>ResourceLedger.TrySpend</c>
-        /// не оставляет кошелёк в промежуточном состоянии при отказе.
+        /// Списує очки. Атомарно: якщо їх не вистачає, банк не чіпається і
+        /// повертається false — так само, як <c>ResourceLedger.TrySpend</c>
+        /// не лишає гаманець у проміжному стані при відмові.
         /// </summary>
         public bool Spend(string companionId, int amount)
         {
@@ -50,7 +50,7 @@ namespace Game.Core.Characters.Progression
             return true;
         }
 
-        // ---- слепок ----
+        // ---- зліпок ----
 
         public string CaptureState()
         {
@@ -60,7 +60,7 @@ namespace Game.Core.Characters.Progression
             var sb = new StringBuilder();
             for (int i = 0; i < keys.Count; i++)
             {
-                if (_points[keys[i]] == 0) continue; // ноль восстановится дефолтом — не стоит хранить
+                if (_points[keys[i]] == 0) continue; // нуль відновиться дефолтом — не варто зберігати
                 if (sb.Length > 0) sb.Append(',');
                 sb.Append(keys[i]).Append(':').Append(_points[keys[i]].ToString(CultureInfo.InvariantCulture));
             }

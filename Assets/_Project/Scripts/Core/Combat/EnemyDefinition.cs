@@ -3,16 +3,16 @@ using System.Collections.Generic;
 
 namespace Game.Core.Combat
 {
-    /// <summary>Тактическая роль врага. База-4 для среза; расширение [ПОЗЖЕ].</summary>
+    /// <summary>Тактична роль ворога. База-4 для зрізу; розширення [ПІЗНІШЕ].</summary>
     public enum EnemyRole
     {
-        Tank = 0,       // Громила: тянет фокус, ближняя угроза — нужен Шред/пробитие
-        Skirmisher = 1, // Застрельщик: дальний ДПС из укрытия — рви LOS/сближайся
-        Controller = 2, // Контролёр: вешает состояния — приоритетная цель
-        Breacher = 3    // Прорыв: рывок в ближний, ломает позицию
+        Tank = 0,       // Громила: тягне фокус, ближня загроза — потрібен Шред/пробиття
+        Skirmisher = 1, // Застрільщик: дальній ДПС з укриття — рви LOS/зближуйся
+        Controller = 2, // Контролер: вішає стани — пріоритетна ціль
+        Breacher = 3    // Прорив: ривок у ближній, ламає позицію
     }
 
-    /// <summary>Семейство врага: та же роль в другом семействе = другой пазл.</summary>
+    /// <summary>Сімейство ворога: та сама роль в іншому сімействі = інший пазл.</summary>
     public enum EnemyFamily
     {
         Human = 0,
@@ -21,10 +21,10 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Модульная сборка врага: роль × семейство × профиль резист/уязвимость ×
-    /// оружие (позже + способности из общего пула). Чистые данные; в Unity
-    /// обернётся ScriptableObject. Сложность масштабируется ролями/профилями,
-    /// НЕ раздуванием HP. Враги симметричны игроку по правилам.
+    /// Модульна збірка ворога: роль × сімейство × профіль резист/вразливість ×
+    /// зброя (пізніше + здібності із загального пулу). Чисті дані; в Unity
+    /// обгорнеться ScriptableObject. Складність масштабується ролями/профілями,
+    /// НЕ роздуванням HP. Вороги симетричні гравцю за правилами.
     /// </summary>
     [Serializable]
     public sealed class EnemyDefinition
@@ -34,7 +34,7 @@ namespace Game.Core.Combat
         public EnemyRole Role;
         public EnemyFamily Family;
 
-        // Статы напрямую (у врагов нет атрибутов — их «производные» заданы руками).
+        // Стати напряму (у ворогів немає атрибутів — їхні «похідні» задані руками).
         public int MaxHp = 8;
         public int MaxAp = 8;
         public int Accuracy = 60;
@@ -47,7 +47,7 @@ namespace Game.Core.Combat
         public ResistProfile Resists = new ResistProfile();
         public WeaponDefinition Weapon;
 
-        /// <summary>Способности из общего с игроком пула (симметрия, гейтов скила у врагов нет).</summary>
+        /// <summary>Здібності із загального з гравцем пулу (симетрія, гейтів скіла у ворогів немає).</summary>
         public List<AbilityDefinition> Abilities = new List<AbilityDefinition>();
 
         public EnemyDefinition() { }

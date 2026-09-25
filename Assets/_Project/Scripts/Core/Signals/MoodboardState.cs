@@ -1,17 +1,17 @@
 namespace Game.Core.Signals
 {
     /// <summary>
-    /// Визуальное состояние города. Два НЕЗАВИСИМЫХ числа, а не одно: богатый и
-    /// напряжённый город должен выглядеть иначе, чем бедный и спокойный —
-    /// одной шкалой это не показать.
+    /// Візуальний стан міста. Два НЕЗАЛЕЖНИХ числа, а не одне: багате і
+    /// напружене місто має виглядати інакше, ніж бідне і спокійне —
+    /// однією шкалою це не показати.
     /// </summary>
     public readonly struct MoodboardState
     {
-        /// <summary>Процветание 0..4: стройки, людность, ухоженность.</summary>
+        /// <summary>Процвітання 0..4: стройки, людність, доглянутість.</summary>
         public readonly int Prosperity;
-        /// <summary>Упадок 0..4: заколоченное, мусор, баррикады.</summary>
+        /// <summary>Занепад 0..4: забите дошками, сміття, барикади.</summary>
         public readonly int Decay;
-        /// <summary>Точечные наложения: «баррикады», «палатки», «граффити:X».</summary>
+        /// <summary>Точкові накладення: «барикади», «намети», «графіті:X».</summary>
         public readonly string[] Overlays;
 
         public MoodboardState(int prosperity, int decay, string[] overlays)

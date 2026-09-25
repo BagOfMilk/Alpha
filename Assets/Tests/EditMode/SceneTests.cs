@@ -7,8 +7,8 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Формат сцены (Поправка №5.8). Ради этих проверок сцена и сделана
-    /// данными: постановку видно до редактора.
+    /// Формат сцени (Поправка №5.8). Заради цих перевірок сцена й зроблена
+    /// даними: постановку видно до редактора.
     /// </summary>
     public class SceneTests
     {
@@ -61,7 +61,7 @@ namespace Game.Tests.EditMode
                     kv.Key + ": " + problem);
         }
 
-        /// <summary>Голос из ниоткуда: реплика раньше первого плана.</summary>
+        /// <summary>Голос нізвідки: репліка раніше першого плану.</summary>
         [Test]
         public void LineBeforeAnyShot_IsRefused()
         {
@@ -87,8 +87,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Говорит тот, кого видно. Голос за кадром — законный приём, но он
-        /// объявляется пустым планом, а не получается из забытого.
+        /// Говорить той, кого видно. Голос за кадром — законний прийом, але він
+        /// оголошується порожнім планом, а не виходить із забутого.
         /// </summary>
         [Test]
         public void SpeakerOutOfFrame_IsRefused()
@@ -124,7 +124,7 @@ namespace Game.Tests.EditMode
                 string.Join("; ", SceneValidator.Validate(scene, Cast())));
         }
 
-        /// <summary>Шаги после перехода не проиграются — это молчаливая потеря постановки.</summary>
+        /// <summary>Кроки після переходу не програються — це мовчазна втрата постановки.</summary>
         [Test]
         public void StepsAfterTransition_AreRefused()
         {
@@ -148,7 +148,7 @@ namespace Game.Tests.EditMode
                 string.Join("; ", SceneValidator.Validate(scene, Cast())));
         }
 
-        /// <summary>Антагонист заявлен ДО боя — иначе финал не расплата, а сюрприз.</summary>
+        /// <summary>Антагоніст заявлений ДО бою — інакше фінал не розплата, а сюрприз.</summary>
         [Test]
         public void OpeningScene_IntroducesTheNamedAntagonist()
         {

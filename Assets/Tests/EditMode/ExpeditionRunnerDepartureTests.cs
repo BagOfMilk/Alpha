@@ -80,7 +80,7 @@ namespace Game.Tests.EditMode
             ExpeditionRunner.Depart(state, party, site, ExpeditionApproach.Forceful,
                 new[] { "scout_1" }, days: 2, ledger, cfg);
 
-            // Сейв посреди открытой вылазки — до возвращения.
+            // Сейв посеред відкритої вилазки — до повернення.
             string blob = party.CaptureState();
 
             var reloadedParty = new ExpeditionParty();
@@ -91,7 +91,7 @@ namespace Game.Tests.EditMode
 
             party.Return(state, out var direct);
 
-            var reloadedState = Build(cfg, out _, out _); // независимая база с тем же ростером
+            var reloadedState = Build(cfg, out _, out _); // незалежна база з тим самим ростером
             reloadedParty.Return(reloadedState, out var afterReload);
 
             Assert.IsNotNull(direct);
@@ -103,17 +103,17 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Ревью B7 (блокер): предыдущий тест
+        /// Рев'ю B7 (блокер): попередній тест
         /// <see cref="SaveMidExpedition_RestoreState_ReturnGivesTheSameResult"/>
-        /// зовёт <c>party.CaptureState()</c>/<c>RestoreState()</c> напрямую и
-        /// поэтому не ловит разрыв в НАСТОЯЩЕМ пути сохранения игры:
-        /// составной слепок (<c>Core/Loop/SettlementSave.cs</c>, ведёт
-        /// исключительно Foundation/A1) делит ВЕСЬ слепок по ';' одним
-        /// проходом и режет значение поля <c>party=</c> на первом же
-        /// встреченном ';' — старый формат прятал замороженный результат
-        /// именно за этим символом. Этот тест идёт через
+        /// кличе <c>party.CaptureState()</c>/<c>RestoreState()</c> напряму і
+        /// тому не ловить розрив у СПРАВЖНЬОМУ шляху збереження гри:
+        /// складовий зліпок (<c>Core/Loop/SettlementSave.cs</c>, веде
+        /// виключно Foundation/A1) ділить ВЕСЬ зліпок за ';' одним
+        /// проходом і ріже значення поля <c>party=</c> на першому ж
+        /// зустрінутому ';' — старий формат ховав заморожений результат
+        /// саме за цим символом. Цей тест іде через
         /// <see cref="DayProcessor.SaveState"/>/<see cref="DayProcessor.RestoreState"/>
-        /// — ровно тот путь, которым сохраняется настоящая игра.
+        /// — рівно той шлях, яким зберігається справжня гра.
         /// </summary>
         [Test]
         public void SaveMidExpedition_ThroughDayProcessor_KeepsFrozenResult()
@@ -135,7 +135,7 @@ namespace Game.Tests.EditMode
                 new[] { "scout_1" }, days: 2, ledger, cfg);
             Assert.IsNotNull(party.PendingResult, "результат заморожен сразу при отправке (R15)");
 
-            // Сейв ЧЕРЕЗ настоящий путь игры, не через party.CaptureState() напрямую.
+            // Сейв ЧЕРЕЗ справжній шлях гри, не через party.CaptureState() напряму.
             string blob = processor.SaveState();
 
             var reloadedParty = new ExpeditionParty();

@@ -11,11 +11,11 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Правила показа села.
+    /// Правила показу села.
     ///
-    /// Сцена — тоже код, и её поведение проверяется тестами, а не разглядыванием
-    /// скриншота. Здесь закреплено главное: ночь отличается от дня, состояние
-    /// города видно по свету, а пропавшая реплика ВИДНА в ленте, а не молчит.
+    /// Сцена — теж код, і її поведінка перевіряється тестами, а не розглядуванням
+    /// скриншота. Тут закріплено головне: ніч відрізняється від дня, стан
+    /// міста видно по світлу, а зникла репліка ВИДНА в стрічці, а не мовчить.
     /// </summary>
     public class VillageViewTests
     {
@@ -32,7 +32,7 @@ namespace Game.Tests.EditMode
                 incidents ?? new List<IncidentOutcome>(), new List<Forewarning>(), null);
         }
 
-        // ================= свет =================
+        // ================= світло =================
 
         [Test]
         public void Night_IsDarkerAndColderThanDay()
@@ -65,7 +65,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Mood_IsWordsNotNumbers()
         {
-            // Игрок никогда не видит «достаток 3»: он видит город.
+            // Гравець ніколи не бачить «процвітання 3»: він бачить місто.
             Assert.AreNotEqual(VillageView.MoodWords(Mood(0, 0)), VillageView.MoodWords(Mood(4, 0)));
             StringAssert.Contains("хутір", VillageView.MoodWords(Mood(0, 0)));
             StringAssert.Contains("село", VillageView.MoodWords(Mood(1, 0)));
@@ -74,7 +74,7 @@ namespace Game.Tests.EditMode
                 Assert.IsFalse(char.IsDigit(c), "В описании города не должно быть цифр");
         }
 
-        // ================= лента =================
+        // ================= стрічка =================
 
         [Test]
         public void Crisis_IsNamedCrisis()
@@ -140,8 +140,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void MissingLine_IsVisibleNotSilent()
         {
-            // Пока таблиц реплик нет, незнакомый ключ показывается как есть.
-            // Молчание было бы хуже: пропажа текста осталась бы незамеченной.
+            // Поки таблиць реплік нема, незнайомий ключ показується як є.
+            // Мовчання було б гірше: пропажа тексту лишилася б непоміченою.
             var unknown = Signal(SignalChannel.CompanionLine, "нечто.неизвестное");
             var lines = VillageView.Lines(Report(DayPhase.Day, null, new[] { unknown }));
 

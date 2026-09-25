@@ -6,40 +6,40 @@ using Game.Core.World;
 namespace Game.Core.Loop
 {
     /// <summary>
-    /// Итог дня.
+    /// Підсумок дня.
     ///
-    /// АРХИТЕКТУРНАЯ ГАРАНТИЯ: числовые секции объявлены internal, поэтому
-    /// сборка Game.Gameplay не скомпилируется при попытке их прочитать.
-    /// Наружу выходит только <see cref="Signals"/> — дашборд метрик невозможно
-    /// собрать даже по ошибке (US-7.1, US-17.2, Поправка №3.4).
+    /// АРХІТЕКТУРНА ГАРАНТІЯ: числові секції оголошені internal, тому
+    /// збірка Game.Gameplay не скомпілюється при спробі їх прочитати.
+    /// Назовні виходить тільки <see cref="Signals"/> — дашборд метрик неможливо
+    /// зібрати навіть помилково (US-7.1, US-17.2, Поправка №3.4).
     /// </summary>
     public sealed class DayReport
     {
         public int Day { get; }
         public DayPhase Phase { get; }
 
-        /// <summary>Числа скрытой шкалы: только для ядра и тестов.</summary>
+        /// <summary>Числа прихованої шкали: тільки для ядра і тестів.</summary>
         internal IReadOnlyList<TensionChange> TensionChanges { get; }
 
-        /// <summary>Единственное, что читает городской UI.</summary>
+        /// <summary>Єдине, що читає міський UI.</summary>
         public SignalDigest Signals { get; }
 
         /// <summary>
-        /// Исходы инцидентов. ПУБЛИЧНЫ, в отличие от чисел шкал: то, что
-        /// произошло, игрок и так видит — скрывать нужно не события, а метрики.
+        /// Наслідки інцидентів. ПУБЛІЧНІ, на відміну від чисел шкал: те, що
+        /// сталося, гравець і так бачить — приховувати треба не події, а метрики.
         /// </summary>
         public IReadOnlyList<IncidentOutcome> Incidents { get; }
 
-        /// <summary>Предвестники этой фазы — для отладки и тестов.</summary>
+        /// <summary>Передвісники цієї фази — для налагодження і тестів.</summary>
         internal IReadOnlyList<Forewarning> Forewarnings { get; }
 
         /// <summary>
-        /// Событие, ждущее хода игрока. Пока оно здесь, сутки не закончены:
-        /// конвейер остановлен на шаге PlayerResolution.
+        /// Подія, що чекає ходу гравця. Поки вона тут, доба не закінчена:
+        /// конвеєр зупинений на кроці PlayerResolution.
         /// </summary>
         public PendingDecision Pending { get; }
 
-        /// <summary>Отчёт неполон: день ждёт решения.</summary>
+        /// <summary>Звіт неповний: день чекає рішення.</summary>
         public bool AwaitsDecision => Pending != null;
 
         internal DayReport(int day, DayPhase phase,

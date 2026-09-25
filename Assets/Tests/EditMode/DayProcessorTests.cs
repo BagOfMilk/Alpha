@@ -16,7 +16,7 @@ namespace Game.Tests.EditMode
             var cfg = Cfg();
             var tension = new TensionState(cfg.Tension);
 
-            // Подаём шаги в обратном порядке — процессор обязан их упорядочить.
+            // Подаємо кроки у зворотному порядку — процесор зобов'язаний їх упорядкувати.
             var p = new DayProcessor(tension, cfg, new IDayStep[] { new SignalStep(), new TensionTickStep() });
 
             Assert.AreEqual(DayStepOrder.Tension, p.Steps[0].Order);

@@ -3,19 +3,19 @@ using Game.Core.Balance;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Надёжный % / порог:
-    ///   число = точность (скил/оружие) − защита цели − укрытие (полу −20 / полное −40)
-    ///           − дистанция за оптималом − Подавление [+ Метка]; кламп в границы
+    /// Надійний % / поріг:
+    ///   число = точність (скіл/зброя) − захист цілі − укриття (напів −20 / повне −40)
+    ///           − дистанція за оптималом − Придушення [+ Мітка]; клемп у межі
     ///           CombatBalance.HitChanceMin..HitChanceMax.
     ///
-    /// ОДНА формула кормит ОБА правила попадания (R1): PercentRule читает
-    /// результат как %, ThresholdRule — как margin-от-равновесия (см.
-    /// ThresholdRule.Resolve). Сам этот класс броском кубика не занимается —
-    /// это дело IHitRule/IDiceRoller.
+    /// ОДНА формула годує ОБИДВА правила влучання (R1): PercentRule читає
+    /// результат як %, ThresholdRule — як margin-від-рівноваги (див.
+    /// ThresholdRule.Resolve). Сам цей клас киданням кубика не займається —
+    /// це справа IHitRule/IDiceRoller.
     /// </summary>
     public static class HitChanceCalculator
     {
-        /// <summary>Низкоуровневая чистая формула — для тестов и предпросмотра в UI.</summary>
+        /// <summary>Низькорівнева чиста формула — для тестів і передперегляду в UI.</summary>
         public static int Compute(int attackerAccuracy, bool attackerSuppressed,
                                   int targetDefense, CoverType cover, bool ignoreCover,
                                   int distance, int optimalRange, BalanceConfig cfg,
@@ -24,7 +24,7 @@ namespace Game.Core.Combat
         {
             var c = cfg.Combat;
 
-            // Сбит с ног — лёгкая цель: защита проседает (не ниже нуля).
+            // Збитий з ніг — легка ціль: захист просідає (не нижче нуля).
             if (targetKnockedDown)
                 targetDefense = System.Math.Max(0, targetDefense - c.KnockdownDefensePenalty);
 
@@ -48,7 +48,7 @@ namespace Game.Core.Combat
             return chance;
         }
 
-        /// <summary>Число юнита по юниту на карте текущим оружием (+бонус точности от способности).</summary>
+        /// <summary>Число юніта по юніту на карті поточною зброєю (+бонус точності від здібності).</summary>
         public static int Compute(CombatUnit attacker, CombatUnit target, GridMap map,
                                   BalanceConfig cfg, int accuracyBonus = 0)
         {

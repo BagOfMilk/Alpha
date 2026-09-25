@@ -5,12 +5,12 @@ using Game.Core.Pressure;
 namespace Game.Core.World
 {
     /// <summary>
-    /// Стартовый пул инцидентов — ЗАГЛУШКИ. Текст заменится, когда нарративная
-    /// мастерская выдаст канон (мир, фракции, имена); механика от этого не
-    /// зависит, потому что инциденты по US-11.3 — данные.
+    /// Стартовий пул інцидентів — ЗАГЛУШКИ. Текст заміниться, коли наративна
+    /// майстерня видасть канон (світ, фракції, імена); механіка від цього не
+    /// залежить, тому що інциденти за US-11.3 — дані.
     ///
-    /// У КАЖДОГО прописан тихий путь (Поправка №1) — это проверяется тестом
-    /// по всему пулу, а не остаётся на совести автора.
+    /// У КОЖНОГО прописаний тихий шлях (Поправка №1) — це перевіряється тестом
+    /// по всьому пулу, а не лишається на совісті автора.
     /// </summary>
     public static class DefaultIncidents
     {
@@ -23,7 +23,7 @@ namespace Game.Core.World
 
         public static IEnumerable<IncidentDefinition> All()
         {
-            // ---- Ропот: мелочь, которую видно на улице ----
+            // ---- Ропіт: дрібниця, яку видно на вулиці ----
             yield return new IncidentDefinition
             {
                 Id = "petty_theft", TopicId = "incident.petty_theft", SourceId = "street", DomainTag = "склад",
@@ -64,7 +64,7 @@ namespace Game.Core.World
                 TensionByBand = new[] { 25, 10, -8, -20 }
             };
 
-            // ---- Брожение: организованная преступность ----
+            // ---- Бродіння: організована злочинність ----
             yield return new IncidentDefinition
             {
                 Id = "protection_racket", TopicId = "incident.protection_racket", SourceId = "street", DomainTag = "рынок",
@@ -83,12 +83,12 @@ namespace Game.Core.World
                 QuietPathSkill = SkillKeys.Survival, QuietPathThreshold = 7,
                 BloodyPathSkill = SkillKeys.Melee, BloodyPathThreshold = 6,
                 RelevantPositionId = "scouting_post",
-                // Нашли — и не одного: с пропавшим приходят те, кто прибился в пути.
+                // Знайшли — і не одного: разом із зниклим приходять ті, хто прибився в дорозі.
                 ArrivalsOnGood = 3,
                 TensionByBand = new[] { 40, 15, -10, -25 }
             };
 
-            // ---- Ночные ----
+            // ---- Нічні ----
             yield return new IncidentDefinition
             {
                 Id = "night_burglary", TopicId = "incident.night_burglary", SourceId = "night", DomainTag = "ночь",
@@ -111,15 +111,15 @@ namespace Game.Core.World
                 TensionByBand = new[] { 50, 20, -12, -28 }
             };
 
-            // ---- Кризис ----
+            // ---- Криза ----
             yield return new IncidentDefinition
             {
                 Id = "crisis_riot", TopicId = "incident.crisis_riot", SourceId = "crisis", DomainTag = "площадь",
-                // Источник кризиса копит с «Накала» (IsActive: TensionBandIndex >= 3),
-                // значит и разрешаться кризис обязан с «Накала». Иначе созревший на
-                // Накале кризис не находит себе инцидента: Eligible режет по полосе,
-                // Pick возвращает null, а заряд УЖЕ сгорел в Fire — и источник уходит
-                // на 30 дней кулдауна впустую.
+                // Джерело кризи накопичує з «Розпалу» (IsActive: TensionBandIndex >= 3),
+                // отже й розв'язуватися криза зобов'язана з «Розпалу». Інакше визріла на
+                // Розпалі криза не знаходить собі інциденту: Eligible ріже за полосою,
+                // Pick повертає null, а заряд УЖЕ згорів у Fire — і джерело йде
+                // на 30 днів кулдауну даремно.
                 MinBand = TensionBand.Heat, MaxBand = TensionBand.Fracture, MinTier = 1, Weight = 100,
                 QuietPathSkill = SkillKeys.Persuade, QuietPathThreshold = 10,
                 QuietPathApproach = ApproachForm.Persuade,
@@ -134,10 +134,10 @@ namespace Game.Core.World
     }
 
     /// <summary>
-    /// Стартовые источники давления. Их ТРИ с разными ставками — это инвариант
-    /// детерминизма, а не украшение: один накопитель читался бы насквозь.
-    /// Ставки зависят от состояния мира, поэтому расчётный срок «плывёт» после
-    /// каждого действия игрока.
+    /// Стартові джерела тиску. Їх ТРИ з різними ставками — це інваріант
+    /// детермінізму, а не прикраса: один накопичувач читався б наскрізь.
+    /// Ставки залежать від стану світу, тому розрахунковий строк «пливе» після
+    /// кожної дії гравця.
     /// </summary>
     public static class DefaultPressureSources
     {
@@ -155,7 +155,7 @@ namespace Game.Core.World
         }
     }
 
-    /// <summary>Улица: копит быстрее, когда город напряжён.</summary>
+    /// <summary>Вулиця: накопичує швидше, коли місто напружене.</summary>
     public sealed class StreetPressureSource : IPressureSource
     {
         public string Id => "street";
@@ -165,17 +165,17 @@ namespace Game.Core.World
         public int CooldownDays => 4;
         public bool IsActive(PulseContext ctx) => true;
 
-        /// <summary>Угроза, о которой не предупредили, — нечестная.</summary>
+        /// <summary>Загроза, про яку не попередили, — нечесна.</summary>
         public bool Announces => true;
 
         public int InsistencePerDay(PulseContext ctx)
         {
-            // База 6 плюс по 4 за каждую полосу Напряжения: тихий город почти молчит.
+            // База 6 плюс по 4 за кожну полосу Напруги: тихе місто майже мовчить.
             return 6 + ctx.TensionBandIndex * 4;
         }
     }
 
-    /// <summary>Ночь: активна только в тёмную фазу; патруль сбивает темп.</summary>
+    /// <summary>Ніч: активна лише в темну фазу; патруль збиває темп.</summary>
     public sealed class NightPressureSource : IPressureSource
     {
         public string Id => "night";
@@ -185,21 +185,21 @@ namespace Game.Core.World
         public int CooldownDays => 3;
         public bool IsActive(PulseContext ctx) => ctx.IsNight;
 
-        /// <summary>Угроза, о которой не предупредили, — нечестная.</summary>
+        /// <summary>Загроза, про яку не попередили, — нечесна.</summary>
         public bool Announces => true;
 
         public int InsistencePerDay(PulseContext ctx)
         {
             int rate = 10 + ctx.TensionBandIndex * 5;
-            // Патруль — небоевая контригра: давит ночную преступность (US-1.5).
+            // Патруль — небойова контргра: тисне нічну злочинність (US-1.5).
             if (ctx.IsPatrolling) rate /= 3;
             return rate;
         }
     }
 
     /// <summary>
-    /// Кризис: копит только на верхних полосах и медленно — чтобы у игрока было
-    /// время увидеть три ступени предвестников и успеть вмешаться.
+    /// Криза: накопичує лише на верхніх полосах і повільно — щоб у гравця було
+    /// час побачити три ступені передвісників і встигнути втрутитися.
     /// </summary>
     public sealed class CrisisPressureSource : IPressureSource
     {
@@ -233,7 +233,7 @@ namespace Game.Core.World
         public int CooldownDays => _cooldownDays;
         public bool IsActive(PulseContext ctx) => ctx.TensionBandIndex >= 3;
 
-        /// <summary>Угроза, о которой не предупредили, — нечестная.</summary>
+        /// <summary>Загроза, про яку не попередили, — нечесна.</summary>
         public bool Announces => true;
 
         public int InsistencePerDay(PulseContext ctx)

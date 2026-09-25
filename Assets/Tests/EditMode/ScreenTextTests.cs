@@ -308,6 +308,17 @@ namespace Game.Tests.EditMode
                 "етап-вибір не показує рядка перевірки");
         }
 
+        // Одна смуга Напруги — одна назва: панель настрою (ui.mood.*) і решта
+        // гри (tension.band.label.*) раніше розходились («Розкол» проти «Злам»,
+        // а до того — «Накал»).
+        [Test]
+        public void MoodChip_AndBandLabel_NameEveryTensionBandTheSame()
+        {
+            foreach (var band in new[] { "calm", "murmur", "ferment", "heat", "fracture" })
+                Assert.AreEqual(Game.Gameplay.Text.UkrainianText.Get("tension.band.label." + band, Gender.Male),
+                    Game.Gameplay.Text.UkrainianText.Get("ui.mood." + band, Gender.Male), band);
+        }
+
         [Test]
         public void EventLine_UnknownKey_FallsBackReadably()
         {
@@ -336,7 +347,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(string.Empty, ScreenText.EventLine(null, Gender.Male, null));
         }
 
-        // Фікс-ревью (major): ExpeditionSite.DomainTag ("road"/"craft"/"trade")
+        // Фікс-рев'ю (major): ExpeditionSite.DomainTag ("road"/"craft"/"trade")
         // раніше підставлявся у signal.domain сирим — EventLine мав перекладати
         // його так само, як item/building/site/faction/scar, а не пропускати.
         [Test]
@@ -351,7 +362,7 @@ namespace Game.Tests.EditMode
             StringAssert.DoesNotContain("road", line);
         }
 
-        // Фікс-ревью (major, раунд 2, знайдено QA): GameSession.LogEvent(
+        // Фікс-рев'ю (major, раунд 2, знайдено QA): GameSession.LogEvent(
         // "char.seen", Args("char", actorId)) називає суб'єкта через сирий
         // аргумент "char", а не "companionId" — EventLine раніше читав лише
         // "companionId", тож {char} підставлявся порожнім рядком і стрічка
@@ -368,7 +379,7 @@ namespace Game.Tests.EditMode
             StringAssert.AreEqualIgnoringCase("Тугар Вовк тут.", line);
         }
 
-        // Фікс-ревью (major, знайдено QA): "scene.choice.made" — єдина подія,
+        // Фікс-рев'ю (major, знайдено QA): "scene.choice.made" — єдина подія,
         // чиї sceneId/optionId ішли СИРИМИ в стрічку ("opening.neighbour:
         // вибір ухвалено — refuse (Базова)." замість перекладеного заголовка
         // й тексту варіанту), доки решта аргументів події вже перекладались
@@ -520,7 +531,7 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Фікс-ревью (minor, знайдено QA): один і той самий triggerId/тип
+        /// Фікс-рев'ю (minor, знайдено QA): один і той самий triggerId/тип
         /// ряби, кілька РІЗНИХ реагуючих (companionId) підряд — раніше п'ять
         /// окремих рядків з різними іменами (×N бачить лише буквально
         /// однаковий текст, а тут ім'я щоразу інше). Тепер це ОДИН рядок,

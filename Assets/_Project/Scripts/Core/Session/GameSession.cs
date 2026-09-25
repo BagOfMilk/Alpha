@@ -62,7 +62,7 @@ namespace Game.Core.Session
         public const string ProtagonistId = FirstHourWorld.ProtagonistId;
 
         /// <summary>
-        /// Полірування (ціль 6 «Рішення»): ворог вузла 1 (кроваво) — одна
+        /// Полірування (ціль 6 «Рішення»): ворог вузла 1 (криваво) — одна
         /// назва в ОБОХ місцях, що його читають (BuildBattleSetup виклику
         /// нижче й DecisionOptionView.TacticalBattleEnemyCount у
         /// BuildPendingOfferView), замість двох незалежних літералів "2",
@@ -109,8 +109,8 @@ namespace Game.Core.Session
         /// (лояльність/прапор) тікається щоденно (<see cref="TickCompanionArcs"/>) —
         /// реальний ЗМІСТ глави (Begin/CompleteChapter через квест з
         /// ArcChapter.QuestId) лишається відкритим гачком для пакета змісту
-        /// (та сама межа декаплінгу, яку документує сам CompanionArc: "содержание
-        /// главы играет вызывающий, через будущий QuestRun, B6/D1").
+        /// (та сама межа декаплінгу, яку документує сам CompanionArc: "зміст
+        /// глави грає викликач, через майбутній QuestRun, B6/D1").
         /// </summary>
         private List<CompanionArcRun> _arcRuns;
 
@@ -148,6 +148,15 @@ namespace Game.Core.Session
         private HitRuleKind _hitRule = HitRuleKind.Threshold;
 
         /// <summary>
+        /// Правило попадання поточної партії (§7.6, ще ВІДКРИТО власником) —
+        /// публічний гачок для UI-точок входу, які мають повторити те саме
+        /// правило, з яким іде кампанія (напр. тренувальний бій усередині
+        /// гри, HubScreen.DrawReadiness): titульний екран задає його один раз
+        /// у NewGame, і жодна команда всередині партії його не міняє.
+        /// </summary>
+        public HitRuleKind HitRule => _hitRule;
+
+        /// <summary>
         /// Темп Напруги, з яким побудовано світ цієї партії
         /// (<see cref="NewGameOptions.TestBuildTensionPace"/>). Живе в сейві:
         /// інакше «Продовжити» будувало світ із типовими опціями, і партія,
@@ -161,11 +170,11 @@ namespace Game.Core.Session
         private SuspendToken _resume;
 
         /// <summary>
-        /// Фикс-ревью D1b (мажор): чи саме ЦЕЙ бій довела до кінця команда
+        /// Фікс-ревью D1b (мажор): чи саме ЦЕЙ бій довела до кінця команда
         /// <see cref="CombatAutoResolve"/> (а не покрокові команди гравця). Раніше
         /// подія "combat.autoresolved" вибиралась за SuspendReason.TrainingSkirmish
         /// — тобто за тим, ЩО за бій (тренувальний), а не ЯК саме його завершили,
-        /// тож для будь-якого справжнього кампанійного бою (кровавий вузол 1,
+        /// тож для будь-якого справжнього кампанійного бою (кривавий вузол 1,
         /// бойові кімнати данжу, фінальний штурм), розв'язаного автобоєм — а це
         /// панівний шлях "one-game" проходження — ключ "combat.autoresolved" був
         /// НЕДОСЯЖНИЙ, а покроково дограний тренувальний бій хибно ніс саме цей
@@ -377,7 +386,7 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// Занести в пам'ять сесії готовий слепок диска (той самий рядок,
+        /// Занести в пам'ять сесії готовий зліпок диска (той самий рядок,
         /// що повернув <see cref="SaveState"/> у МИНУЛОМУ запуску застосунку)
         /// під номером слота — ДО виклику <see cref="ContinueGame"/>. Core сам
         /// файли не читає (той самий принцип, що й у <see cref="RestoreFromBlob"/>):
@@ -407,7 +416,7 @@ namespace Game.Core.Session
         /// однаково встигав збудувати нову гру і піти зі стану <c>Title</c>
         /// (SkipCreation=true → <c>State=Scene</c>) ще до повернення <c>false</c>,
         /// тож "не вдалось продовжити" мовчки лишало сесію в невідомому світі
-        /// замість чесного <c>Title</c>. Тепер слепок читається ДО <see cref="NewGame"/>
+        /// замість чесного <c>Title</c>. Тепер зліпок читається ДО <see cref="NewGame"/>
         /// (і без нього рано виходимо, не чіпаючи стан), а після — повертається
         /// назад у словник для <see cref="LoadState"/>.
         /// </summary>
@@ -572,7 +581,7 @@ namespace Game.Core.Session
             return BuildSceneStepView();
         }
 
-        /// <summary>Спільний хвіст AdvanceScene/ChooseSceneOption: показ кадру, слід антагоніста, фініш сцени (+ завершення главы арки, якщо ця сцена — її зміст).</summary>
+        /// <summary>Спільний хвіст AdvanceScene/ChooseSceneOption: показ кадру, слід антагоніста, фініш сцени (+ завершення глави арки, якщо ця сцена — її зміст).</summary>
         private SceneStepView BuildSceneStepView()
         {
             var frame = _scenePlayback.Current;
@@ -865,10 +874,10 @@ namespace Game.Core.Session
             // Блокер-фікс ревью: PeekExpeditionOutfitBuff() НЕ знімає бонус —
             // знімаємо (TakeExpeditionOutfitBuff) лише коли siteId справді
             // збігається з тим, на який його замовили. Раніше бонус забирався
-            // безумовно на першому ж відправленні (навіть на ІНШУ площадку) і
+            // безумовно на першому ж відправленні (навіть на ІНШУ точку) і
             // губився назавжди, ніколи не діставшись тієї, на яку був
             // замовлений (CityWorks.OrderOutfitExpedition документує це саме
-            // так: "разовый бонус следующей вилазке НА ПЛОЩАДКУ siteId").
+            // так: «одноразовий бонус наступній вилазці НА ТОЧКУ siteId».
             var buff = _works.PeekExpeditionOutfitBuff();
             if (buff != null && string.Equals(buff.SiteId, siteId, StringComparison.Ordinal) && _party.PendingResult != null)
             {
@@ -1066,7 +1075,7 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// Відновлення з готового слепка (той самий рядок, що повертає
+        /// Відновлення з готового зліпка (той самий рядок, що повертає
         /// <see cref="SaveState"/>), а не з внутрішнього слота цього екземпляра.
         /// Потрібне для акцептансу D1 "SaveState → LoadState У НОВОМУ
         /// екземплярі GameSession": слоти (<see cref="_slots"/>) — пам'ять
@@ -1087,7 +1096,7 @@ namespace Game.Core.Session
         /// Тестовий гачок IVT (<c>AssemblyInfo.cs</c>: <c>Game.Tests.EditMode</c>
         /// бачить <c>internal</c>-члени <c>Game.Core.*</c> — той самий підхід,
         /// що вже застосований до <c>Companion.Loyalty</c>): перевірити, що
-        /// ціна кровавого шляху вузла 1 (PlaystyleBlood/CausedFear, D1b) реально
+        /// ціна кривавого шляху вузла 1 (PlaystyleBlood/CausedFear, D1b) реально
         /// дійшла до прихованих шкал, БЕЗ появи жодного числа в публічному View
         /// (R17) — жоден офіційний контракт §4.2 цього не показує навмисно.
         /// </summary>
@@ -1135,8 +1144,8 @@ namespace Game.Core.Session
 
             TickExpeditionReturnIfAny();
 
-            // Час рухає ЛИШЕ SettlementCycle (CLAUDE.md §"Время идёт только
-            // через SettlementCycle") — саме він переносить прапор голоду
+            // Час рухає ЛИШЕ SettlementCycle (CLAUDE.md §«Час іде тільки
+            // через SettlementCycle») — саме він переносить прапор голоду
             // (BaseState.WasHungryLastCycle → DayProcessor.IsHungry) перед
             // кроком конвеєра. Прямий викл _processor.Advance() лишав голод
             // непідключеним: HungerStep читав би завжди застаріле значення.
@@ -1168,22 +1177,22 @@ namespace Game.Core.Session
             {
                 // Р5/D1b (seamsForD1): бій замінює саму ПЕРЕВІРКУ вузла 1
                 // (IncidentResolver.Resolve тут не викликається взагалі — його
-                // замінює справжній тактичний бій), але дві ціни кровавого
-                // шляху, що не залежать від того, ЯК саме розв'язано кровавий
+                // замінює справжній тактичний бій), але дві ціни кривавого
+                // шляху, що не залежать від того, ЯК саме розв'язано кривавий
                 // вибір (перевіркою чи боєм), лишаються тими самими, що й для
                 // будь-якого іншого інциденту з HasBloodyPath (IncidentResolver.
                 // ApplyBloodCost): драйвер PlaystyleBlood закритого переліку
-                // (інваріант 5) і пам'ять страху громади (CausedFear — кроваве
+                // (інваріант 5) і пам'ять страху громади (CausedFear — криваве
                 // рішення само лякає, незалежно від виходу бою). Рана виконавцю
                 // тут НЕ дублюється: справжні втрати вже рахує ApplyBattleCasualties
                 // після резолву бою (RosterAdapter.Wound/Kill), а не абстрактний
                 // "казуальний" удар check.ActorId, якого при бою просто немає.
                 //
-                // Фикс-ревью D1b: раніше тут стояв _processor.QueueExternal(...),
+                // Фікс-ревью D1b: раніше тут стояв _processor.QueueExternal(...),
                 // а це — мостик R6, який за контрактом TensionTickStep дренує
                 // заявку лише на ПЕРШОМУ тіку НАСТУПНОЇ фази, тоді як
                 // IncidentResolver.ApplyBloodCost для будь-якого іншого
-                // кровавого інциденту застосовує PlaystyleBlood СИНХРОННО, в
+                // кривавого інциденту застосовує PlaystyleBlood СИНХРОННО, в
                 // тому самому виклику, що й Напругу полоси виходу. Викликаємо
                 // TensionState.Apply напряму (internal, той самий Game.Core,
                 // що й IncidentResolver) — так ціна крові лягає атомарно з
@@ -1302,7 +1311,7 @@ namespace Game.Core.Session
 
         /// <summary>
         /// Полірування (ціль 6 «Рішення», owner: "тактичний бій: N ворогів"):
-        /// прев'ю кількості ворогів кровавого шляху фіналу ДО кліку — та
+        /// прев'ю кількості ворогів кривавого шляху фіналу ДО кліку — та
         /// сама чиста функція (<see cref="Finale.BuildAssault"/>), що
         /// <see cref="ResolveFinale"/> викликає для реального бою; викликати
         /// її двічі безпечно (жодної мутації стану, лише читає Готовність).
@@ -1339,8 +1348,8 @@ namespace Game.Core.Session
                 var plan = Finale.BuildAssault(_readiness.Band, myroslavaDefected ? "myroslava" : null, _cfg.Readiness);
 
                 // Поправка №7.8: «відпустити» на нічній розмові (замість
-                // звинувачення) softening'ить кровавий фінал — на одного
-                // рядового ворога менше, той самий приём, що м'якший фінал
+                // звинувачення) пом'якшує кривавий фінал — на одного
+                // рядового ворога менше, той самий прийом, що м'якший фінал
                 // взагалі не буває "чистим" (§7.15), лише тут менша ціна за
                 // менш жорстоке рішення гравця, а не за полосу Готовності.
                 if (_flags.Get(CompanionScenes.MyroslavaConfrontedReleaseFlag) &&
@@ -1555,7 +1564,7 @@ namespace Game.Core.Session
         /// <c>view.CurrentRoom != null</c> (§DungeonScreen.cs, той самий
         /// прийом, що вже й <c>AutoplayGameDriver</c>) — без цієї умови гравець
         /// (чи бот), що затримався на вкладці після розв'язку кімнати, бачив
-        /// би ті самі кнопки "тихо/кроваво" ЗНОВУ й отримував
+        /// би ті самі кнопки "тихо/криваво" ЗНОВУ й отримував
         /// InvalidOperationException "кімната вже пройдена" на кожен клік.
         /// </summary>
         private DungeonView BuildDungeonView()
@@ -1594,7 +1603,7 @@ namespace Game.Core.Session
                 DisplayName = room.DisplayNameKey,
                 Type = room.Kind == DungeonRoomKind.Cache ? "Treasure" : room.Kind.ToString(),
                 // Ціль 6 «Рішення»: "тактичний бій: N ворогів" у самому тексті
-                // варіанту кроваво, не лише поріг тихого обходу поруч.
+                // варіанту криваво, не лише поріг тихого обходу поруч.
                 EnemyCount = room.EnemyIds?.Count ?? 0
             };
 
@@ -1680,7 +1689,7 @@ namespace Game.Core.Session
         /// а не позиційним порівнянням AttackerId із тим, хто мав хід на
         /// момент виклику команди.
         ///
-        /// Фикс-ревью D1b (блокер): стара эвристика ("AttackerId != actingUnitId
+        /// Фікс-ревью D1b (блокер): стара евристика ("AttackerId != actingUnitId
         /// → дозор") працювала лише для одиночних команд гравця (один
         /// "actingUnitId" на виклик) і мовчки ламалась на CombatAutoResolve,
         /// де CombatAi веде ОБИДВІ сторони через багато юнітів за один виклик —
@@ -1717,11 +1726,11 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// Фикс-ревью D1b (блокер): раніше кликав лише <see cref="CombatAi.AutoResolve"/>
+        /// Фікс-ревью D1b (блокер): раніше кликав лише <see cref="CombatAi.AutoResolve"/>
         /// і одразу <see cref="AfterCombatAction"/> — жоден AttackRecord, зіграний
         /// ІІ за ОБИДВІ сторони на шляху до результату, не діставався DayLog, хоча
         /// саме автобій (не покрокова команда) — панівний спосіб розв'язки бою в
-        /// "one-game" проходженні (кровавий вузол 1, бойові кімнати данжу,
+        /// "one-game" проходженні (кривавий вузол 1, бойові кімнати данжу,
         /// фінальний штурм). Тепер знімок Attacks.Count і LogNewAttacks працюють
         /// так само, як і в одиночних командах вище — просто на весь бій одразу.
         /// Прапор <see cref="_battleAutoResolvedThisCall"/> дає OnBattleResolved
@@ -1741,7 +1750,7 @@ namespace Game.Core.Session
         /// <summary>
         /// Дебаг §6.1 №32 (24.09.2026): ОДНА дія того самого "розумного" ІІ
         /// (<see cref="CombatAi.TryAct"/>), що веде АвтоБій — цільовий
-        /// скоринг, зближення клінч-ролей способністю (Рывок), лікування,
+        /// скоринг, зближення клінч-ролей способністю (Ривок), лікування,
         /// статус-здібності, — а не наївне "йди до найближчого і бий" у
         /// <c>BotRunner.ExecuteCombatAction</c>, написане лише для того, щоб
         /// водій ботів МІГ вести бій покроково для тестів на UI/View. Коли
@@ -2131,7 +2140,17 @@ namespace Game.Core.Session
             new MechanicJournalDef("craft", exactKeys: new[] { "craft.upgraded" }),
             new MechanicJournalDef("scars", exactKeys: new[] { "scar.granted" }),
             new MechanicJournalDef("loyalty", exactKeys: new[] { "loyalty.band_changed" }),
-            new MechanicJournalDef("roster_drama", exactKeys: new[] { "roster.rippled" }),
+            // Фікс-ревью (журнал механік тестера, MechanicsJournalCompletionTests):
+            // цей запис був НЕДОСЯЖНИЙ фізично — LogRipple (нижче) ніколи не
+            // логує голий ключ "roster.rippled", лише суфіксовані варіанти
+            // "roster.rippled.<тип зв'язку>.<загибель/зрада>" (полірування,
+            // ціль 5 «Якість стрічки», задокументовано коментарем над самим
+            // LogRipple), тож жоден Death/Defection за жоден прогін не міг
+            // позначити цей запис побаченим. AllMechanicsCoverageTests.Row25
+            // і GameSessionTests уже перевіряють подію префіксом
+            // (<c>StartsWith("roster.rippled")</c>) — журнал реєстру мав
+            // робити те саме.
+            new MechanicJournalDef("roster_drama", keyPrefixes: new[] { "roster.rippled" }),
             new MechanicJournalDef("defection", exactKeys: new[] { "companion.defected" }),
             new MechanicJournalDef("companion_arc", exactKeys: new[] { "arc.chapter_opened" }),
             new MechanicJournalDef("quests", exactKeys: new[] { "quest.choice.resolved" }),
@@ -2838,7 +2857,7 @@ namespace Game.Core.Session
             return AdvanceScene();
         }
 
-        /// <summary>Рада Захара перед фіналом (доба 5, увечері) — готує тихий/кровавий шлях. Одноразово; null, якщо не доба 5 або вже розв'язано.</summary>
+        /// <summary>Рада Захара перед фіналом (доба 5, увечері) — готує тихий/кривавий шлях. Одноразово; null, якщо не доба 5 або вже розв'язано.</summary>
         public SceneStepView OfferZakharCouncilScene()
         {
             RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night, SessionState.FreePlay);
@@ -2973,7 +2992,7 @@ namespace Game.Core.Session
                     BestActorId = opt.BestActorId,
                     HasCandidate = opt.HasCandidate,
                     ExpectedBand = opt.ExpectedBand.ToString(),
-                    // Ціль 6 «Рішення»: вузол 1 кроваво — ЗАВЖДИ тактичний бій
+                    // Ціль 6 «Рішення»: вузол 1 криваво — ЗАВЖДИ тактичний бій
                     // (Node1BloodyEnemyIds, не перевірка), а не поріг навички —
                     // гравець має побачити це в самому тексті варіанту.
                     TacticalBattleEnemyCount = (isNode1 && opt.Path == IncidentPath.Bloody) ? Node1BloodyEnemyIds.Length : 0
@@ -3049,7 +3068,7 @@ namespace Game.Core.Session
         private bool _bargainedTimeBonusApplied;
 
         /// <summary>
-        /// Той самий приём, що <see cref="ApplyHafiyaGrassBonusToSickChildIfNeeded"/>:
+        /// Той самий прийом, що <see cref="ApplyHafiyaGrassBonusToSickChildIfNeeded"/>:
         /// сцена сама тільки виставляє прапор (Поправка №7.8), а числове
         /// застосування — тут, поруч із рештою "seamsForD1"-хуків цього
         /// фасаду. Полегшує тихий шлях вузла 1, поки він ще не резолвнутий
@@ -3111,7 +3130,7 @@ namespace Game.Core.Session
         /// що указ ради «Готуватись» (<c>CityWorks.OrderPrepareThreat</c>) —
         /// нова окрема шкала тут не потрібна (інваріант 6 вже покритий
         /// Готовністю). «Тримати перевал» лишає прапор для
-        /// <see cref="ResolveFinale"/>, який пом'якшує кровавий фінал на
+        /// <see cref="ResolveFinale"/>, який пом'якшує кривавий фінал на
         /// одного рядового ворога (softening — так само, як
         /// <see cref="CompanionScenes.MyroslavaConfrontedReleaseFlag"/> м'якшить
         /// присутність зрадниці).
@@ -3125,7 +3144,7 @@ namespace Game.Core.Session
                 _flags.Set("zakhar_dam_bonus_applied");
             }
             // ZakharPreparedAssaultFlag сам по собі нічого не рахує тут —
-            // його читає ResolveFinale (softening кровавого штурму).
+            // його читає ResolveFinale (softening кривавого штурму).
         }
 
         /// <summary>
@@ -3199,7 +3218,7 @@ namespace Game.Core.Session
             // WorldPulse.BoostCharge на єдиний Announces-накопичувач кампанії
             // (Тугар, §3.3) — детально в ItemBalance.ScoutHornForewarnBoostPerCharge.
             //
-            // Фикс-ревью D1b (мінор): подія логується, лише якщо BoostCharge
+            // Фікс-ревью D1b (мінор): подія логується, лише якщо BoostCharge
             // реально щось приклав (int applied > 0) — у вузькому вікні, де
             // Тугар уже впритул до Threshold, клямп у WorldPulse зрізає весь
             // буст, і "forewarn_boosted" без цієї перевірки обіцяв би ефект,
@@ -3468,12 +3487,35 @@ namespace Game.Core.Session
             var offersLogged = new List<string>(_loggedQuestOfferKeys);
             offersLogged.Sort(StringComparer.Ordinal);
             head.Append(";offersLogged=").Append(string.Join(",", offersLogged));
+
+            // Фікс-ревью (Поправка №7.8, журнал механік тестера): раніше
+            // _seenEventKeys НІКОЛИ не потрапляв у сейв — ContinueGame() іде
+            // крізь NewGame(SkipCreation:true), яка БЕЗУМОВНО чистить його
+            // (свіжий прогін — порожній журнал), а вже ПОТІМ LoadState читає
+            // цей самий зліпок. Реальний плейтест 25.09.2026 (MechanicsJournal-
+            // CompletionTests) зловив наслідок: гравець, що зберігся й
+            // завантажився з головного екрана (єдиний UI-шлях), бачив
+            // «Журнал механік» порожнім заново — увесь прогрес, накопичений
+            // ДО збереження, тихо губився, хоча сама партія (доба/ростер/
+            // будівлі) відновлювалась коректно. Ключі подій безпечні для
+            // ',' — самі events лише [a-z0-9._] (LogEvent), той самий
+            // принцип, що й offersLogged вище.
+            var journalSeen = new List<string>(_seenEventKeys);
+            journalSeen.Sort(StringComparer.Ordinal);
+            head.Append(";journalSeen=").Append(string.Join(",", journalSeen));
             if (_roller != null) head.Append(";roller=").Append(_roller.CaptureState());
             head.Append(";resume=").Append(_resume == null ? "-" :
                 ((int)_resume.Reason).ToString(CultureInfo.InvariantCulture) + "|" +
                 ((int)_resume.ReturnState).ToString(CultureInfo.InvariantCulture));
             head.Append(";freeplay=").Append(_freePlay ? 1 : 0);
             head.Append(";summary=").Append(_summaryAcknowledged ? 1 : 0);
+            // Фікс-ревью (журнал механік тестера): той самий трап, що
+            // journalSeen= вище, окремим полем — night_patrol читає ЦЕЙ
+            // прапорець напряму (ExtraSeen), не через _seenEventKeys, і
+            // раніше НІКОЛИ не потрапляв у сейв. Гравець, що патрулював ніч
+            // 1, зберігся й завантажив партію з титулу, бачив "Патруль"
+            // знову непобаченим — журнал і партія розходились між собою.
+            head.Append(";patrolled=").Append(_patrolledANight ? 1 : 0);
             head.Append(";finale=").Append(_finaleResolved ? 1 : 0);
             head.Append(";readiness=").Append(_readiness.CaptureState());
             head.Append(";quests=").Append(_quests.CaptureState());
@@ -3524,7 +3566,7 @@ namespace Game.Core.Session
             return head.ToString();
         }
 
-        /// <summary>Поле "tensionPace" із заголовка слепка (до ";core="), або null для старого сейву без нього.</summary>
+        /// <summary>Поле "tensionPace" із заголовка зліпка (до ";core="), або null для старого сейву без нього.</summary>
         private static bool? PeekTensionPace(string blob)
         {
             if (string.IsNullOrEmpty(blob)) return null;
@@ -3541,8 +3583,8 @@ namespace Game.Core.Session
         {
             // Слот з іншим темпом Напруги, ніж світ цієї партії: світ
             // перебудовується тим самим шляхом, що й «Продовжити» (NewGame +
-            // застосування слепка), — пороги смуг і накопичувач кризи живуть
-            // у побудові світу, а не в слепку. Слоти переживають перебудову.
+            // застосування зліпка), — пороги смуг і накопичувач кризи живуть
+            // у побудові світу, а не в зліпку. Слоти переживають перебудову.
             bool? savedPace = PeekTensionPace(blob);
             if (savedPace.HasValue && savedPace.Value != _tensionPace)
             {
@@ -3608,6 +3650,7 @@ namespace Game.Core.Session
             }
 
             string offersLoggedValue = null;
+            string journalSeenValue = null;
             foreach (var part in headPart.Split(';'))
             {
                 int eq = part.IndexOf('=');
@@ -3618,6 +3661,7 @@ namespace Game.Core.Session
                 switch (key)
                 {
                     case "offersLogged": offersLoggedValue = value; break;
+                    case "journalSeen": journalSeenValue = value; break;
                     case "state": State = (SessionState)ParseInt(value); break;
                     case "seed": ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _seed); break;
                     case "hitRule": _hitRule = (HitRuleKind)ParseInt(value); break;
@@ -3625,6 +3669,7 @@ namespace Game.Core.Session
                     case "resume": _resume = value == "-" ? null : ParseResume(value); break;
                     case "freeplay": _freePlay = value == "1"; break;
                     case "summary": _summaryAcknowledged = value == "1"; break;
+                    case "patrolled": _patrolledANight = value == "1"; break;
                     case "finale": _finaleResolved = value == "1"; break;
                     case "readiness": _readiness.RestoreState(value); break;
                     case "quests": _quests.RestoreState(value); break;
@@ -3673,13 +3718,23 @@ namespace Game.Core.Session
             if (!string.IsNullOrEmpty(offersLoggedValue))
                 foreach (var offerKey in offersLoggedValue.Split(','))
                     if (offerKey.Length > 0) _loggedQuestOfferKeys.Add(offerKey);
+
+            // Журнал механік переживає Save/Load (див. коментар ComposeSave):
+            // Clear() тут ідемпотентний і для свіжого інстансу (RestoreFromBlob
+            // у щойно сконструйований GameSession, D1: набір і так порожній), і
+            // для ContinueGame (NewGame уже почистив його раніше в тому самому
+            // виклику) — так само, як _loggedQuestOfferKeys.Clear() вище.
+            _seenEventKeys.Clear();
+            if (!string.IsNullOrEmpty(journalSeenValue))
+                foreach (var seenKey in journalSeenValue.Split(','))
+                    if (seenKey.Length > 0) _seenEventKeys.Add(seenKey);
             _dungeon = null;
             _battle = null;
             _battleAutoResolvedThisCall = false;
 
             // Флаг міг бути виставлений ДО збереження (квест-етап "grass"
             // резолвиться задовго до доби 3) — порог sick_child не входить у
-            // жоден слепок (визначення інцидентів не персистяться), тож без
+            // жоден зліпок (визначення інцидентів не персистяться), тож без
             // цього виклику бонус мовчки губився б після Save/Load.
             ApplyHafiyaGrassBonusToSickChildIfNeeded();
         }
@@ -3756,7 +3811,7 @@ namespace Game.Core.Session
         /// дістати companionId/questId ще ДО RestoreArcState). Для поточної
         /// глави, що сейв лишив InProgress і зміст якої — квест
         /// (<see cref="CompanionArcContent.IsQuestChapter"/>), реєструє
-        /// визначення квесту в пулі (той самий приём, що
+        /// визначення квесту в пулі (той самий прийом, що
         /// <see cref="BeginArcChapterQuest"/>) і відновлює лінк
         /// questId→companionId (<see cref="_activeArcChapterQuestCompanion"/>)
         /// — без цього ";quests=" (QuestLog.RestoreState) тихо відкидає прогін
@@ -3847,7 +3902,7 @@ namespace Game.Core.Session
             return false;
         }
 
-        /// <summary>Сире значення поля "key" (напр. ";quests=") із заголовка слепка ДО наступного ';' — той самий приём, що вже читає "arc=" вище, узагальнений для повторного використання.</summary>
+        /// <summary>Сире значення поля "key" (напр. ";quests=") із заголовка зліпка ДО наступного ';' — той самий прийом, що вже читає "arc=" вище, узагальнений для повторного використання.</summary>
         private static string ExtractHeadField(string headPart, string key)
         {
             int idx = headPart.IndexOf(key, StringComparison.Ordinal);

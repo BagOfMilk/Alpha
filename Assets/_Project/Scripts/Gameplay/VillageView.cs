@@ -8,7 +8,7 @@ using Game.Gameplay.Text;
 
 namespace Game.Gameplay
 {
-    /// <summary>Положение солнца и общий свет для одной фазы суток.</summary>
+    /// <summary>Положення сонця і загальне світло для однієї фази доби.</summary>
     public readonly struct SunPose
     {
         public readonly float Pitch;
@@ -23,7 +23,7 @@ namespace Game.Gameplay
         }
     }
 
-    /// <summary>Заливающий свет: небо, горизонт, земля. Числа 0..1.</summary>
+    /// <summary>Заливне світло: небо, горизонт, земля. Числа 0..1.</summary>
     public readonly struct AmbientPose
     {
         public readonly float SkyR, SkyG, SkyB;
@@ -41,21 +41,21 @@ namespace Game.Gameplay
     }
 
     /// <summary>
-    /// Что сцена показывает про прошедшую фазу.
+    /// Що сцена показує про минулу фазу.
     ///
-    /// ЗАЧЕМ ОТДЕЛЬНО ОТ MonoBehaviour. Здесь нет ни одного типа движка,
-    /// поэтому правила показа проверяются обычными тестами и линтом сборки, а
-    /// не глазами на скриншоте. Компонент сцены только применяет то, что
-    /// посчитано здесь.
+    /// НАВІЩО ОКРЕМО ВІД MonoBehaviour. Тут нема жодного типу рушія,
+    /// тому правила показу перевіряються звичайними тестами і лінтом збірки, а
+    /// не очима на скриншоті. Компонент сцени лише застосовує те, що
+    /// пораховано тут.
     ///
-    /// ГРАНИЦА, КОТОРУЮ НЕЛЬЗЯ ПЕРЕЙТИ (инвариант 3): сюда приходит только то,
-    /// что ядро отдаёт наружу — фаза, сутки, сигналы с ключами и тегами,
-    /// исходы инцидентов и мудборд. Значения скрытых шкал недоступны физически,
-    /// и собрать из этого дашборд Напряжения нельзя.
+    /// МЕЖА, ЯКУ НЕ МОЖНА ПЕРЕЙТИ (інваріант 3): сюди приходить лише те,
+    /// що ядро віддає назовні — фаза, доба, сигнали з ключами й тегами,
+    /// наслідки інцидентів і мудборд. Значення прихованих шкал недоступні фізично,
+    /// і зібрати з цього дашборд Напруги не можна.
     /// </summary>
     public static class VillageView
     {
-        /// <summary>Утреннее солнце против ночного: низкое, холодное и тусклое.</summary>
+        /// <summary>Ранкове сонце проти нічного: низьке, холодне і тьмяне.</summary>
         public static SunPose SunFor(DayPhase phase)
         {
             return phase == DayPhase.Night
@@ -64,10 +64,10 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Заливающий свет и цвет неба. День и ночь задают основу, мудборд её
-        /// сдвигает: упадок гасит и обесцвечивает, достаток добавляет тепла.
-        /// Это единственный разрешённый способ показать состояние города —
-        /// через вид, а не через число.
+        /// Заливне світло і колір неба. День і ніч задають основу, мудборд її
+        /// зсуває: занепад гасить і знебарвлює, достаток додає тепла.
+        /// Це єдиний дозволений спосіб показати стан міста —
+        /// через вигляд, а не через число.
         /// </summary>
         public static AmbientPose AmbientFor(DayPhase phase, MoodboardState mood)
         {
@@ -84,13 +84,13 @@ namespace Game.Gameplay
             float backG = night ? 0.11f : 0.68f;
             float backB = night ? 0.20f : 0.78f;
 
-            // Упадок: свет сереет (каналы сходятся к среднему) и падает.
+            // Занепад: світло сіріє (канали сходяться до середнього) і падає.
             float grey = (skyR + skyG + skyB) / 3f;
             skyR = Mix(skyR, grey, decay * 0.7f) * (1f - decay * 0.25f);
             skyG = Mix(skyG, grey, decay * 0.7f) * (1f - decay * 0.25f);
             skyB = Mix(skyB, grey, decay * 0.7f) * (1f - decay * 0.25f);
 
-            // Достаток: чуть теплее и светлее, но без ухода в карамель.
+            // Достаток: трохи тепліше і світліше, але без відходу в карамель.
             skyR = Clamp01(skyR + prosperity * 0.06f);
             skyG = Clamp01(skyG + prosperity * 0.03f);
 
@@ -103,7 +103,7 @@ namespace Game.Gameplay
         /// <summary>Слова гравцю, а не рід протагоніста (VillageView сама його не знає) — стала стать лукапу.</summary>
         private const Gender NeutralGender = Gender.Male;
 
-        /// <summary>Строка состояния: сутки, фаза и вид города словами.</summary>
+        /// <summary>Рядок стану: доба, фаза і вигляд міста словами.</summary>
         public static string Headline(DayReport report, MoodboardState mood)
         {
             string phaseKey = report.Phase == DayPhase.Night ? "village.headline.phase.night" : "village.headline.phase.day";
@@ -130,11 +130,11 @@ namespace Game.Gameplay
                 "count", people.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
-        /// <summary>Как выглядит город: достаток и упадок словами, а не числами.</summary>
+        /// <summary>Як виглядає місто: достаток і занепад словами, а не числами.</summary>
         public static string MoodWords(MoodboardState mood)
         {
-            // Процветание в мудборде — это тир − 1 (Поправка №6.4): с тех пор
-            // как тир растёт, его имя и есть лучшее описание достатка.
+            // Процвітання в мудборді — це тір − 1 (Поправка №6.4): відколи
+            // тір росте, його назва і є найкращим описом достатку.
             int tier = mood.Prosperity >= 3 ? 3 : (mood.Prosperity < 0 ? 0 : mood.Prosperity);
             int decayStep = mood.Decay >= 3 ? 3 : (mood.Decay < 0 ? 0 : mood.Decay);
 
@@ -150,14 +150,14 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Человеческие строки о прошедшей фазе: сначала что случилось, потом
-        /// что слышно.
+        /// Людські рядки про минулу фазу: спершу що сталося, потім
+        /// що чутно.
         ///
-        /// Пакет E3b: реплики идут через <see cref="UkrainianText"/> (Поправка
-        /// №3.4 — писателю не нужен программист, R7 — Core отдаёт только ключ).
-        /// Незнакомый ключ (которого таблица ещё не знает) по-прежнему
-        /// показывается как есть ("· topicId") — пропажа реплики обязана быть
-        /// ВИДНА, а не молчать.
+        /// Пакет E3b: репліки йдуть через <see cref="UkrainianText"/> (Поправка
+        /// №3.4 — письменнику не потрібен програміст, R7 — Core віддає лише ключ).
+        /// Незнайомий ключ (якого таблиця ще не знає) як і раніше
+        /// показується як є ("· topicId") — пропажа репліки зобов'язана бути
+        /// ВИДНА, а не мовчати.
         /// </summary>
         public static List<string> Lines(DayReport report)
         {
@@ -249,9 +249,9 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Предвестник читается ТОЛЬКО из сигнала: список предвестников в отчёте
-        /// internal и сцене недоступен (инвариант 3). Ступень и домен приходят
-        /// тегами — ровно столько, сколько игроку и положено знать.
+        /// Передвісник читається ТІЛЬКИ з сигналу: список передвісників у звіті
+        /// internal і сцені недоступний (інваріант 3). Ступінь і домен приходять
+        /// тегами — рівно стільки, скільки гравцю й належить знати.
         /// </summary>
         private static string ForewarnLine(SignalRequest request)
         {
@@ -284,14 +284,14 @@ namespace Game.Gameplay
 
         private static string SignalLine(SignalRequest request)
         {
-            // Доклады с постов и ночной эмбиент — фон, они не должны забивать
-            // ленту: в ней остаётся то, что изменилось.
+            // Доповіді з постів і нічний ембієнт — фон, вони не мають забивати
+            // стрічку: у ній лишається те, що змінилося.
             if (request.Channel == SignalChannel.PostReport) return null;
             if (request.Channel == SignalChannel.Ambient) return null;
             if (request.Channel == SignalChannel.Forewarning) return ForewarnLine(request);
             if (request.TopicId == null) return null;
 
-            // Реплики об инцидентах уже выведены строкой исхода.
+            // Репліки про інциденти вже виведені рядком наслідку.
             if (request.TopicId.StartsWith("incident.")) return null;
 
             // "tension.band.<Band>"/"tension.ambient.<Band>" — TopicId САМ і є
@@ -303,7 +303,7 @@ namespace Game.Gameplay
                     ? UkrainianText.Get(request.TopicId, NeutralGender)
                     : "· " + request.TopicId;
 
-            // Что сделал город (Поправка №6): стройка, люди, тир, совет.
+            // Що зробило місто (Поправка №6): стройка, люди, тір, рада.
             if (request.TopicId.StartsWith("city.") || request.TopicId.StartsWith("council."))
                 return CityWords(request);
 

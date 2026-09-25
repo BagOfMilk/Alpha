@@ -8,15 +8,15 @@ using UnityEngine;
 namespace Game.Gameplay.EditorTools
 {
     /// <summary>
-    /// Сборка играбельного билда: тестер не должен ставить Unity — ему нужен
-    /// каталог с .exe, который запускается двойным кликом.
+    /// Збірка грайбельного білда: тестер не повинен ставити Unity — йому потрібен
+    /// каталог з .exe, який запускається подвійним кліком.
     ///
-    /// Запуск: меню Alpha → Собрать билд (Windows), либо batchmode
+    /// Запуск: меню Alpha → Зібрати білд (Windows), або batchmode
     /// -executeMethod Game.Gameplay.EditorTools.Builder.BuildWindows
-    /// (см. tools/build-unity.ps1).
+    /// (див. tools/build-unity.ps1).
     ///
-    /// Сцены берутся из Build Settings — ровно те, что открываются в редакторе:
-    /// иначе билд показал бы тестеру не ту игру, в которую играли здесь.
+    /// Сцени беруться з Build Settings — рівно ті, що відкриваються в редакторі:
+    /// інакше білд показав би тестеру не ту гру, в яку грали тут.
     /// </summary>
     public static class Builder
     {
@@ -44,8 +44,8 @@ namespace Game.Gameplay.EditorTools
                 locationPathName = Path.Combine(outDir, ExeName),
                 target = BuildTarget.StandaloneWindows64,
                 targetGroup = BuildTargetGroup.Standalone,
-                // Development-билд намеренно: плейтест нужен с консолью и стек-трейсами,
-                // иначе репорт «оно упало» невозможно связать с местом падения.
+                // Development-білд навмисно: плейтест потрібен з консоллю і стек-трейсами,
+                // інакше репорт «воно впало» неможливо пов'язати з місцем падіння.
                 options = BuildOptions.Development
             };
 
@@ -66,16 +66,16 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Что вообще показывать. R18: билд тестовой сборки — ОДНА сцена,
-        /// <c>Game.unity</c> (титул → создание → хаб → финал, всё в ней же).
-        /// Она собирается кодом (<c>GameSceneBuilder</c>, пакет E1), поэтому в
-        /// Build Settings до пересборки её может не быть вовсе — тогда билд
-        /// вышел бы пустым, и это явная ошибка, а не тихый пропуск.
+        /// Що взагалі показувати. R18: білд тестової збірки — ОДНА сцена,
+        /// <c>Game.unity</c> (титул → створення → хаб → фінал, усе в ній же).
+        /// Вона збирається кодом (<c>GameSceneBuilder</c>, пакет E1), тому в
+        /// Build Settings до перезбірки її може не бути зовсім — тоді білд
+        /// вийшов би пустим, і це явна помилка, а не тихий пропуск.
         ///
-        /// Village.unity и Opening.unity (витрина села и портретная сцена
-        /// первых суток) остаются editor-only: их можно открыть и посмотреть
-        /// в редакторе, но в Build Settings они больше не попадают — список
-        /// заменяется целиком, а не дополняется.
+        /// Village.unity і Opening.unity (вітрина села і портретна сцена
+        /// перших діб) лишаються editor-only: їх можна відкрити і подивитися
+        /// в редакторі, але в Build Settings вони більше не потрапляють — список
+        /// замінюється цілком, а не доповнюється.
         /// </summary>
         private static void RegisterScenes()
         {
@@ -85,7 +85,7 @@ namespace Game.Gameplay.EditorTools
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(gamePath, true) };
         }
 
-        /// <summary>Только ВКЛЮЧЁННЫЕ сцены и только реально существующие на диске.</summary>
+        /// <summary>Тільки УВІМКНЕНІ сцени і тільки реально наявні на диску.</summary>
         private static string[] EnabledScenes()
         {
             var paths = new List<string>();
@@ -102,7 +102,7 @@ namespace Game.Gameplay.EditorTools
             return paths.ToArray();
         }
 
-        /// <summary>В batchmode падаем с ненулевым кодом — иначе CI/скрипт «зелёный» на пустом месте.</summary>
+        /// <summary>У batchmode падаємо з ненульовим кодом — інакше CI/скрипт «зелений» на порожньому місці.</summary>
         private static void Fail(string message)
         {
             Debug.LogError("[Builder] " + message);

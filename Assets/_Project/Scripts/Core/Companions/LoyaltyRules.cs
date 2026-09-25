@@ -22,7 +22,7 @@ namespace Game.Core.Companions
         private static readonly CompanionSocialBalance DefaultSocial = new CompanionSocialBalance();
 
         /// <summary>
-        /// Кровавий шлях (Поправка №1, "PlaystyleBlood"): б'є по лояльності
+        /// Кривавий шлях (Поправка №1, "PlaystyleBlood"): б'є по лояльності
         /// мирно-ціннісних (mercy/order), полегшує жорстко-ціннісним
         /// (ruthless/freedom). Проходить по всьому присутньому складу — той
         /// самий генеричний механізм, що працює на будь-якій "Ж"-точці

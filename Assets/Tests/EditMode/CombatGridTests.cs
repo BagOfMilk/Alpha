@@ -4,9 +4,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Сетка: направленное укрытие, линия обзора, достижимость по AP.
-    /// Перенесено из архивной боевой линии (коммит 20b8dcf) без изменений —
-    /// GridMap/Pathfinder/LineOfSight не завязаны на модель персонажа.
+    /// Сітка: спрямоване укриття, лінія огляду, досяжність за AP.
+    /// Перенесено з архівної бойової лінії (коміт 20b8dcf) без змін —
+    /// GridMap/Pathfinder/LineOfSight не зав'язані на модель персонажа.
     /// </summary>
     public class CombatGridTests
     {
@@ -17,8 +17,8 @@ namespace Game.Tests.EditMode
             var defender = new GridPos(5, 5);
             map.SetCover(defender, Direction.East, CoverType.Half);
 
-            Assert.AreEqual(CoverType.Half, map.CoverAgainst(defender, new GridPos(8, 5))); // атака с востока
-            Assert.AreEqual(CoverType.None, map.CoverAgainst(defender, new GridPos(2, 5))); // фланг с запада
+            Assert.AreEqual(CoverType.Half, map.CoverAgainst(defender, new GridPos(8, 5))); // атака зі сходу
+            Assert.AreEqual(CoverType.None, map.CoverAgainst(defender, new GridPos(2, 5))); // фланг із заходу
         }
 
         [Test]
