@@ -1,0 +1,51 @@
+namespace Game.Gameplay.UI
+{
+    /// <summary>
+    /// Бій v2, раунд 2 (docs/COMBAT_V2.md §3, аудит знімків 25.09.2026,
+    /// «підказка прилипає до лівого верхнього кута поверх «Раунд 1»»):
+    /// чиста математика розміщення підказки біля курсора — де мають бути
+    /// x/y, щоб панель стояла ПОРУЧ із ціллю (наведений юніт/тайл), а не в
+    /// сталому куті, і НЕ лягала на верхню смугу, нижню панель дій чи
+    /// журнал праворуч.
+    ///
+    /// Жодного типу рушія (жодного <c>UnityEngine.Rect</c>/<c>Vector2</c>) —
+    /// самі float, тому <see cref="BattleHudScreenTests"/> (headless)
+    /// перевіряють клемп без Unity. <see cref="BattleHudScreen.DrawCursorTooltip"/>
+    /// лише підставляє екранні координати з <see cref="IBattleHudData"/> й малює
+    /// готовий прямокутник.
+    /// </summary>
+    public static class BattleTooltipLayout
+    {
+        /// <summary>
+        /// Прямокутник підказки: за замовчуванням трохи правіше й нижче
+        /// точки-якоря (оверлей наведеного юніта чи екранна точка наведеного
+        /// тайла), потім затиснутий у вільну прямокутну область
+        /// [<paramref name="freeLeft"/>..<paramref name="freeRight"/>] ×
+        /// [<paramref name="freeTop"/>..<paramref name="freeBottom"/>] — та,
+        /// що лишається поза верхньою смугою, нижньою панеллю дій і
+        /// журналом. Якщо підказка ширша/вища за вільну область — притискає
+        /// до її ближнього краю, а не ламає розмір.
+        /// </summary>
+        public static (float x, float y) PlaceNearAnchor(
+            float anchorX, float anchorY, float width, float height,
+            float freeLeft, float freeTop, float freeRight, float freeBottom)
+        {
+            const float offsetX = 22f;
+            const float offsetY = 12f;
+
+            float x = ClampInto(anchorX + offsetX, width, freeLeft, freeRight);
+            float y = ClampInto(anchorY + offsetY, height, freeTop, freeBottom);
+            return (x, y);
+        }
+
+        /// <summary>Верхній лівий кут відрізка довжини <paramref name="size"/> у межах [<paramref name="min"/>..<paramref name="max"/>], притиснутий до ближнього краю, якщо не влазить.</summary>
+        private static float ClampInto(float start, float size, float min, float max)
+        {
+            float upperBound = max - size;
+            if (upperBound < min) upperBound = min; // область вужча за підказку — притиснути до min, не ламати
+            if (start < min) return min;
+            if (start > upperBound) return upperBound;
+            return start;
+        }
+    }
+}

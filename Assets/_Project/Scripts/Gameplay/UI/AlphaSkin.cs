@@ -60,6 +60,19 @@ namespace Game.Gameplay.UI
         public static readonly Color32 BattleEnemySide = new Color32(235, 71, 56, 255);
         public static readonly Color32 BattleDefectorSide = new Color32(179, 102, 242, 255);
         public static readonly Color32 BattleCurrentUnit = new Color32(255, 204, 77, 255);
+        /// <summary>Текст на золотому тлі поточного юніта (§2 «поточний — золоте тло + темний текст»): світлий TextMain на BattleCurrentUnit нечитний (аудит знімків, п.2 «жовтий на жовтому»).</summary>
+        public static readonly Color32 BattleCurrentUnitText = new Color32(43, 33, 24, 255);
+        /// <summary>
+        /// Приглушені тони сторони — тло бейджа НЕ-поточного юніта в стрічці
+        /// ініціативи (Бій v2, раунд 2, аудит знімків п.2): насичені
+        /// <see cref="BattlePlayerSide"/>/<see cref="BattleEnemySide"/> поруч
+        /// зі світлим текстом читались гірше, ніж приглушений тон + білий
+        /// текст — і залишають насичені кольори унікальними для арени
+        /// (кільця, укриття), не плутаючи їх з рядовим бейджем черги ходу.
+        /// </summary>
+        public static readonly Color32 BattlePlayerSideMuted = new Color32(38, 64, 104, 255);
+        public static readonly Color32 BattleEnemySideMuted = new Color32(102, 46, 40, 255);
+        public static readonly Color32 BattleDefectorSideMuted = new Color32(78, 52, 100, 255);
         public static readonly Color32 BattleMiss = new Color32(179, 179, 179, 255);
         public static readonly Color32 BattleGraze = new Color32(230, 217, 191, 255);
         public static readonly Color32 BattleHit = new Color32(255, 255, 255, 255);
@@ -81,6 +94,7 @@ namespace Game.Gameplay.UI
         private static GUIStyle _subHeader;
         private static GUIStyle _body;
         private static GUIStyle _tooltip;
+        private static GUIStyle _hintLine;
         private static GUIStyle _dangerText;
         private static GUIStyle _critText;
         private static GUIStyle _overlayName;
@@ -155,6 +169,23 @@ namespace Game.Gameplay.UI
                     _tooltip.fontStyle = FontStyle.Italic;
                 }
                 return _tooltip;
+            }
+        }
+
+        /// <summary>
+        /// Бій v2, раунд 2 (аудит знімків, п.4/п.5: «доданки звичайним світлим
+        /// текстом ≥17px без курсиву», «Правило влучання... не курсивом,
+        /// читабельно»): те саме місце, що <see cref="Tooltip"/>, але БЕЗ
+        /// курсиву й світлим (<see cref="TextMain"/>, не притишеним
+        /// <see cref="TextDim"/>) кольором — для важливої інформації, яку
+        /// гравець зважує ДО кліку, а не для другорядної підказки-опису.
+        /// </summary>
+        public static GUIStyle HintLine
+        {
+            get
+            {
+                if (_hintLine == null) _hintLine = TextOnlyStyle(18, TextMain);
+                return _hintLine;
             }
         }
 

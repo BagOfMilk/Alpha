@@ -213,13 +213,41 @@ namespace Game.Gameplay.UI
         /// Тег-чіп: короткий підпис на кольоровому тлі — так полоси, показані
         /// словами (band-як-слово, R17/Поправка №3.7), лишаються видимими
         /// одним погладом, а не читанням тексту.
+        ///
+        /// <paramref name="textColor"/> (Бій v2, раунд 2, фікс-ревью «жовтий
+        /// текст на жовтому/синій на синьому», аудит знімків п.2): бейдж
+        /// малює текст сталим <see cref="AlphaSkin.TextMain"/>, який на
+        /// світлому тлі (золото поточного юніта, приглушений тон сторони)
+        /// зливається з фоном — виклик, якому потрібен інший контраст,
+        /// підставляє свій колір, не мутуючи спільний кешований стиль
+        /// назавжди (значення повертається одразу після малювання).
         /// </summary>
-        public static void Badge(string text, Color32 tint)
+        public static void Badge(string text, Color32 tint, Color32? textColor = null)
         {
-            var previous = GUI.backgroundColor;
+            var style = Tintable();
+            var previousText = style.normal.textColor;
+            if (textColor.HasValue) style.normal.textColor = textColor.Value;
+
+            var previousBg = GUI.backgroundColor;
             GUI.backgroundColor = tint;
-            GUILayout.Box(text, Tintable(), GUILayout.ExpandWidth(false));
-            GUI.backgroundColor = previous;
+            GUILayout.Box(text, style, GUILayout.ExpandWidth(false));
+            GUI.backgroundColor = previousBg;
+
+            style.normal.textColor = previousText;
+        }
+
+        /// <summary>
+        /// Бій v2, раунд 2 (§2 «поточний — золоте тло + темний текст + рамка»):
+        /// той самий <see cref="Badge"/>, обгорнутий тонкою рамкою кольору
+        /// <paramref name="borderTint"/> — другий канал розрізнення поточного
+        /// юніта в стрічці ініціативи, крім кольору тла (аудит знімків: колір
+        /// сам по собі губився серед інших бейджів того самого тону).
+        /// </summary>
+        public static void BorderedBadge(string text, Color32 bgTint, Color32 textColor, Color32 borderTint)
+        {
+            GUILayout.BeginVertical(BorderStyle(borderTint), GUILayout.ExpandWidth(false));
+            Badge(text, bgTint, textColor);
+            GUILayout.EndVertical();
         }
 
         /// <summary>
@@ -300,6 +328,33 @@ namespace Game.Gameplay.UI
         }
 
         // ================= внутрішнє =================
+
+        private static GUIStyle _borderStyle;
+        private static Color32 _borderStyleTint;
+
+        /// <summary>
+        /// Стиль-«рамка» для <see cref="BorderedBadge"/>: суцільне тло
+        /// кольору рамки під тонким відступом, крізь який проглядає вкладений
+        /// <see cref="Badge"/> — той самий трюк, що обвідка картки в решті
+        /// застосунку, лише в один колір без окремої 9-slice текстури.
+        /// </summary>
+        private static GUIStyle BorderStyle(Color32 tint)
+        {
+            if (_borderStyle == null || !ColorsEqual(_borderStyleTint, tint))
+            {
+                _borderStyle = new GUIStyle
+                {
+                    padding = new RectOffset(2, 2, 2, 2),
+                    margin = new RectOffset(2, 2, 2, 2)
+                };
+                _borderStyle.normal.background = AlphaSkin.SolidTexture(tint);
+                _borderStyleTint = tint;
+            }
+            return _borderStyle;
+        }
+
+        private static bool ColorsEqual(Color32 a, Color32 b)
+            => a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 
         private static GUIStyle Tintable()
         {

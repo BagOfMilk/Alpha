@@ -236,7 +236,9 @@ namespace Game.Tests.EditMode
         public void TextTable_HasNoRussianLettersOrKnownRussisms()
         {
             var russianLetters = new Regex("[ыэъёЫЭЪЁ]");
-            var russisms = new Regex("(?<![а-яіїєґА-ЯІЇЄҐ'])(полос|накал|излом|брожен|ропот|кровав|стройк|слепок|протагонист)",
+            // «попадан» додано Бій v2, раунд 2 (доручення власника: «Правило
+            // попадання» — калька з рос. «попадание», правильно — «влучання»).
+            var russisms = new Regex("(?<![а-яіїєґА-ЯІЇЄҐ'])(полос|накал|излом|брожен|ропот|кровав|стройк|слепок|протагонист|попадан)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
             var problems = new List<string>();
