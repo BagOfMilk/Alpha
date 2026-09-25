@@ -2579,7 +2579,8 @@ namespace Game.Core.Session
                 if (companion == null) continue;
                 if (run.Refresh(companion))
                     LogEvent("arc.chapter_opened", Args("companionId", run.Arc.CompanionId, "arcId", run.Arc.Id,
-                        "chapterId", run.CurrentChapter?.Id ?? string.Empty));
+                        "chapterId", run.CurrentChapter?.Id ?? string.Empty,
+                        "chapterTitleKey", run.CurrentChapter?.TitleKey ?? string.Empty));
             }
         }
 
@@ -2634,7 +2635,8 @@ namespace Game.Core.Session
             var scene = chapter != null ? CompanionArcContent.SceneFor(companionId, chapter.Id) : null;
             if (scene == null) throw new InvalidOperationException("Ця глава — квестова (BeginArcChapterQuest), не сценова.");
 
-            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id));
+            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id,
+                "chapterTitleKey", chapter.TitleKey ?? string.Empty));
 
             SessionState returnState = State;
             _activeArcCompanionId = companionId;
@@ -2667,7 +2669,8 @@ namespace Game.Core.Session
             if (_quests.DefinitionOf(chapter.QuestId) == null)
                 _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
 
-            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id));
+            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id,
+                "chapterTitleKey", chapter.TitleKey ?? string.Empty));
             _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
             return OfferQuestStage(chapter.QuestId);
         }
@@ -2678,8 +2681,12 @@ namespace Game.Core.Session
             if (run == null || run.IsFinished) return;
             string arcId = run.Arc.Id;
             string chapterId = run.CurrentChapter != null ? run.CurrentChapter.Id : null;
+            // Ключ назви глави їде в подію поруч із id: стрічка показує назву,
+            // а не службовий "ch1" (id глави унікальний лише всередині арки).
+            string chapterTitleKey = run.CurrentChapter != null ? run.CurrentChapter.TitleKey : null;
             run.CompleteChapter();
-            LogEvent("arc.chapter_completed", Args("companionId", companionId, "arcId", arcId, "chapterId", chapterId ?? string.Empty));
+            LogEvent("arc.chapter_completed", Args("companionId", companionId, "arcId", arcId, "chapterId", chapterId ?? string.Empty,
+                "chapterTitleKey", chapterTitleKey ?? string.Empty));
         }
 
         /// <summary>

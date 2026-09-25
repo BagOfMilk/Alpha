@@ -260,6 +260,26 @@ namespace Game.Tests.EditMode
             StringAssert.Contains("Місце в раді", line);
         }
 
+        // Знайдено власником у білді 24.09.2026: «Максим Беркут: нова глава —
+        // ch1». Стрічка мусить показувати назву глави, а не службовий id.
+        [Test]
+        public void EventLine_ArcChapterOpened_ShowsChapterTitle_NotRawId()
+        {
+            var args = new Dictionary<string, string>
+            {
+                { "companionId", "maksym" }, { "arcId", "arc_maksym" },
+                { "chapterId", "ch1" }, { "chapterTitleKey", "arc.maksym.ch1.title" }
+            };
+            foreach (var key in new[] { "arc.chapter_opened", "arc.chapter_begun", "arc.chapter_completed" })
+            {
+                string line = ScreenText.EventLine(new GameEvent(key, 2, Game.Core.Loop.DayPhase.Day, args), Gender.Male, null);
+
+                StringAssert.Contains("Максим Беркут", line, key);
+                StringAssert.Contains("Вірність понад образу", line, key);
+                StringAssert.DoesNotContain("ch1", line, key);
+            }
+        }
+
         [Test]
         public void EventLine_UnknownKey_FallsBackReadably()
         {
