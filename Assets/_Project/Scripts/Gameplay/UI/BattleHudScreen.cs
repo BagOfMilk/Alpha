@@ -86,7 +86,7 @@ namespace Game.Gameplay.UI
             blockingRects.Add(rightRect);
 
             float bottomWidth = BottomPanelWidth();
-            float bottomHeight = BottomPanelHeight();
+            float bottomHeight = BottomPanelHeight(c, view);
             var bottomRect = new Rect((Screen.width - rightWidth - pad - bottomWidth) * 0.5f,
                 Screen.height - bottomHeight - pad, bottomWidth, bottomHeight);
             GUILayout.BeginArea(bottomRect, GUI.skin.box);
@@ -276,55 +276,67 @@ namespace Game.Gameplay.UI
                 return;
             }
 
+            // Раунд 3 (знімки 720p/1080p): колонка кнопок мала явну ширину не мала —
+            // кнопки вилазили за праву межу панелі, а «Кінець ходу» виштовхувало
+            // з панелі зовсім. Тепер ширина колонки — рівно те, що лишилось після
+            // картки, і кожна кнопка знає свою ширину.
+            float columnWidth = ButtonsColumnWidth();
             GUILayout.BeginHorizontal();
 
-            // Аудит знімків п.1: картка юніта — фіксовані ~360px (те саме
-            // число, що в специфікації), не частка від панелі — панель тепер
-            // сама лічена за вмістом (§BottomPanelWidth), а не за вільним
-            // місцем екрана.
             GUILayout.BeginVertical(GUILayout.Width(BottomCardWidth));
             DrawUnitCard(c, current);
             GUILayout.EndVertical();
 
-            GUILayout.BeginVertical();
-            DrawAbilities(c, view, current);
+            GUILayout.Space(Widgets.ScreenPadding());
+
+            GUILayout.BeginVertical(GUILayout.Width(columnWidth));
+            DrawAbilities(c, view, current, columnWidth);
             GUILayout.Space(6f);
-            DrawActionButtons(c, view, current);
+            DrawActionButtons(c, view, current, columnWidth);
+
+            // Відмова — червоним; інакше, на своєму ході без озброєної дії, —
+            // підказка керування. Обидва — всередині колонки: висота панелі їх
+            // уже врахувала (EstimateColumnHeight).
+            if (!string.IsNullOrEmpty(c.LastRejectionText))
+                GUILayout.Label(c.LastRejectionText, AlphaSkin.DangerText, GUILayout.Width(columnWidth));
+            else if (c.IsPlayerTurn && c.Armed == ArmedAction.None)
+                GUILayout.Label(UkrainianText.Get("ui.battle.hint.controls", false), AlphaSkin.HintLine, GUILayout.Width(columnWidth));
             GUILayout.EndVertical();
 
             GUILayout.EndHorizontal();
-
-            if (!string.IsNullOrEmpty(c.LastRejectionText))
-                GUILayout.Label(c.LastRejectionText, AlphaSkin.DangerText);
-
-            // Аудит знімків п.1: рядок-підказка керування на ході гравця —
-            // лише коли нічого не озброєно (озброєна дія вже пояснює себе
-            // через ui.battle.armed.*/ui.battle.cancel нижче в DrawAbilities/
-            // DrawActionButtons — другий рядок про те саме був би шумом).
-            if (c.IsPlayerTurn && c.Armed == ArmedAction.None)
-                GUILayout.Label(UkrainianText.Get("ui.battle.hint.controls", false), AlphaSkin.HintLine);
         }
 
         /// <summary>
-        /// Картка юніта: ім'я, HP числом і смужкою, ОД піпсами і «ОД 7/9»,
-        /// зброя «назва · удар N ОД · дальність N», стани з тривалістю. На
-        /// ході ворога — та сама картка, лише для читання (жодних кнопок
-        /// поруч — ті малює <see cref="DrawActionButtons"/>, вимкнені).
+        /// Картка юніта: ім'я, здоров'я і ОД — кожне ОДНИМ рядком «підпис +
+        /// смужка/піпси» (раунд 3: картка нижча, панель не з'їдає арену),
+        /// зброя дрібнішим рядком, стани з тривалістю. На ході ворога — та
+        /// сама картка лише для читання.
         /// </summary>
         private static void DrawUnitCard(IBattleHudData c, BattleUnitView unit)
         {
             string name = c.ResolveDisplayName(unit);
             GUILayout.Label(UkrainianText.Format("ui.battle.current_unit", false, "name", name), AlphaSkin.SubHeader);
 
+            GUILayout.BeginHorizontal();
             GUILayout.Label(UkrainianText.Format("ui.battle.hp", false,
-                "current", I(unit.Hp), "max", I(unit.HpMax)), AlphaSkin.Body);
-            Widgets.FilledBarAt(GUILayoutBarRect(220f, 10f), FilledFraction(unit.Hp, unit.HpMax), SideColor(unit.Side));
+                "current", I(unit.Hp), "max", I(unit.HpMax)), AlphaSkin.Body, GUILayout.Width(CardLabelWidth));
+            GUILayout.BeginVertical();
+            GUILayout.Space(11f);
+            Widgets.FilledBarAt(GUILayoutBarRect(150f, 10f), FilledFraction(unit.Hp, unit.HpMax), SideColor(unit.Side));
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
 
-            GUILayout.Space(4f);
-            GUILayout.Label(UkrainianText.Format("ui.battle.ap", false, "current", I(unit.Ap), "max", I(unit.ApMax)), AlphaSkin.Body);
-            Widgets.ProgressPips(unit.Ap, unit.ApMax, 14f);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(UkrainianText.Format("ui.battle.ap", false, "current", I(unit.Ap), "max", I(unit.ApMax)),
+                AlphaSkin.Body, GUILayout.Width(CardLabelWidth));
+            GUILayout.BeginVertical();
+            GUILayout.Space(9f);
+            Widgets.ProgressPips(unit.Ap, unit.ApMax, 12f);
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+
             if (unit.ApReserved > 0)
-                Widgets.TooltipLine(UkrainianText.Format("ui.battle.ap_reserved", false, "reserved", I(unit.ApReserved)));
+                GUILayout.Label(UkrainianText.Format("ui.battle.ap_reserved", false, "reserved", I(unit.ApReserved)), AlphaSkin.HintLine);
 
             if (!string.IsNullOrEmpty(unit.WeaponId))
             {
@@ -333,13 +345,11 @@ namespace Game.Gameplay.UI
                     ? UkrainianText.Format("ui.battle.weapon.detail", false,
                         "name", weaponName, "cost", I(unit.AttackApCost), "range", I(unit.WeaponRange))
                     : weaponName;
-                GUILayout.Label(UkrainianText.Format("ui.battle.weapon", false, "name", weaponLine), AlphaSkin.Body);
+                GUILayout.Label(UkrainianText.Format("ui.battle.weapon", false, "name", weaponLine), AlphaSkin.HintLine);
             }
 
             // Ключ статусу — той самий переклад "Bleeding"→"combat.status.bleeding",
-            // що вже дає BattleArenaView.StatusLabelKey (частина «3D») для
-            // старого HUD: одна мапа сирого імені на ключ таблиці, не дублюємо
-            // її тут другим списком case'ів.
+            // що дає BattleArenaView.StatusLabelKey: одна мапа на обидва шляхи.
             if (unit.StatusDetails != null && unit.StatusDetails.Count > 0)
             {
                 GUILayout.BeginHorizontal();
@@ -372,13 +382,49 @@ namespace Game.Gameplay.UI
                     AlphaSkin.DangerText);
         }
 
-        /// <summary>Реальний список здібностей ПОТОЧНОГО юніта (не фіксований каталог) — [1..9], ціна, відкат, опис при наведенні, сіре з причиною.</summary>
-        private static void DrawAbilities(IBattleHudData c, BattleView view, BattleUnitView current)
+        /// <summary>Підпис кнопки здібності: гаряча клавіша, назва, ціна; для недоступної — причина В САМІЙ кнопці.</summary>
+        private static string AbilityLabel(IBattleHudData c, BattleUnitView current, BattleAbilityView ability, int index, out bool usable)
+        {
+            bool armed = c.Armed == ArmedAction.Ability && c.ArmedAbilityId == ability.Id;
+            string label = UkrainianText.Format(armed ? "ui.battle.ability.button.armed" : "ui.battle.ability.button", false,
+                "hotkey", (index + 1).ToString(CultureInfo.InvariantCulture), "name", UkrainianText.Get(ability.Id, false), "cost", I(ability.ApCost));
+
+            bool enemyTurn = !c.IsPlayerTurn;
+            bool onCooldown = ability.CooldownRemaining > 0;
+            bool notEnoughAp = current.Ap < ability.ApCost;
+            usable = !(enemyTurn || onCooldown || notEnoughAp);
+            if (usable || enemyTurn) return label; // на ході ворога причина одна на всю панель — не дублюємо її в кожній кнопці
+
+            // Раунд 3 (знімок 720p): причина збоку малювалась вузьким
+            // стовпчиком по літері й виштовхувала решту кнопок з панелі.
+            string reason = onCooldown
+                ? UkrainianText.Format("ui.battle.ability.cooldown", false, "turns", UkrainianText.DeclineTurns(ability.CooldownRemaining))
+                : UkrainianText.Get("ui.battle.ability.not_enough_ap", false);
+            return label + " · " + reason;
+        }
+
+        /// <summary>Скільки кнопок здібностей у ряд влазить у колонку (1 або 2) — за найдовшим підписом.</summary>
+        private static int AbilitiesPerRow(IBattleHudData c, BattleUnitView current, float columnWidth)
+        {
+            if (current.Abilities == null || current.Abilities.Count < 2) return 1;
+            float longest = 0f;
+            for (int i = 0; i < current.Abilities.Count; i++)
+            {
+                string label = AbilityLabel(c, current, current.Abilities[i], i, out _);
+                float w = label.Length * ButtonCharWidth + ButtonTextPadding;
+                if (w > longest) longest = w;
+            }
+            return longest * 2f + 6f <= columnWidth ? 2 : 1;
+        }
+
+        /// <summary>Реальний список здібностей ПОТОЧНОГО юніта — [1..9], ціна, відкат/причина в самій кнопці, опис при наведенні.</summary>
+        private static void DrawAbilities(IBattleHudData c, BattleView view, BattleUnitView current, float columnWidth)
         {
             if (current.Abilities == null || current.Abilities.Count == 0) return;
 
             string hoveredDesc = null;
-            const int perRow = 2;
+            int perRow = AbilitiesPerRow(c, current, columnWidth);
+            float buttonWidth = (columnWidth - 6f * (perRow - 1)) / perRow;
             for (int row = 0; row * perRow < current.Abilities.Count; row++)
             {
                 GUILayout.BeginHorizontal();
@@ -386,24 +432,11 @@ namespace Game.Gameplay.UI
                 {
                     var ability = current.Abilities[i];
                     bool armed = c.Armed == ArmedAction.Ability && c.ArmedAbilityId == ability.Id;
-                    string hotkey = (i + 1).ToString(CultureInfo.InvariantCulture);
-                    string label = UkrainianText.Format(armed ? "ui.battle.ability.button.armed" : "ui.battle.ability.button", false,
-                        "hotkey", hotkey, "name", UkrainianText.Get(ability.Id, false), "cost", I(ability.ApCost));
+                    string label = AbilityLabel(c, current, ability, i, out bool usable);
 
-                    bool enemyTurn = !c.IsPlayerTurn;
-                    bool onCooldown = ability.CooldownRemaining > 0;
-                    bool notEnoughAp = current.Ap < ability.ApCost;
-
-                    if (enemyTurn || onCooldown || notEnoughAp)
-                    {
-                        string reason = enemyTurn
-                            ? UkrainianText.Get("ui.battle.enemyturn", false)
-                            : (onCooldown
-                                ? UkrainianText.Format("ui.battle.ability.cooldown", false, "turns", UkrainianText.DeclineTurns(ability.CooldownRemaining))
-                                : UkrainianText.Get("ui.battle.ability.not_enough_ap", false));
-                        Widgets.DisabledButton(label, reason);
-                    }
-                    else if (Widgets.SecondaryButton(label))
+                    if (!usable)
+                        Widgets.DisabledButton(label, null, GUILayout.Width(buttonWidth));
+                    else if (Widgets.SecondaryButton(label, GUILayout.Width(buttonWidth)))
                     {
                         if (armed) c.CancelArmed(); else c.ArmAbility(ability.Id);
                     }
@@ -413,52 +446,99 @@ namespace Game.Gameplay.UI
                 GUILayout.EndHorizontal();
             }
 
-            string descKey = (hoveredDesc ?? (c.Armed == ArmedAction.Ability ? c.ArmedAbilityId : null)) + ".desc";
-            if (hoveredDesc != null || c.Armed == ArmedAction.Ability)
-                Widgets.TooltipLine(UkrainianText.Has(descKey, false) ? UkrainianText.Get(descKey, false) : string.Empty);
+            // Опис здібності — наведеної або озброєної; рядок зарезервований у
+            // висоті панелі завжди, щоб панель не «стрибала» при наведенні.
+            string descId = hoveredDesc ?? (c.Armed == ArmedAction.Ability ? c.ArmedAbilityId : null);
+            string desc = descId != null && UkrainianText.Has(descId + ".desc", false) ? UkrainianText.Get(descId + ".desc", false) : string.Empty;
+            GUILayout.Label(desc, AlphaSkin.HintLine, GUILayout.Width(columnWidth));
 
-            // Аудит знімків п.4/п.5: важлива інструкція («по чому саме
-            // клацнути») — не курсивна другорядна підказка, HintLine.
+            // Важлива інструкція («по чому саме клацнути») — HintLine, не курсив.
             if (c.Armed == ArmedAction.Ability)
                 GUILayout.Label(UkrainianText.Format("ui.battle.armed.ability", false,
-                    "ability", UkrainianText.Get(c.ArmedAbilityId ?? string.Empty, false)), AlphaSkin.HintLine);
+                    "ability", UkrainianText.Get(c.ArmedAbilityId ?? string.Empty, false)), AlphaSkin.HintLine, GUILayout.Width(columnWidth));
         }
 
-        private static void DrawActionButtons(IBattleHudData c, BattleView view, BattleUnitView current)
+        private static void DrawActionButtons(IBattleHudData c, BattleView view, BattleUnitView current, float columnWidth)
         {
             GUILayout.BeginHorizontal();
 
             if (c.IsPlayerTurn)
             {
+                var downedAlly = FindAdjacentDownedAlly(view, current);
+                int count = downedAlly != null ? 3 : 2;
+                float w = (columnWidth - 6f * (count - 1)) / count;
+
                 bool overwatchArmed = c.Armed == ArmedAction.OverwatchAim;
                 string owLabel = (overwatchArmed ? "» " : string.Empty) + UkrainianText.Get("ui.battle.hotkey.overwatch", false);
-                if (Widgets.SecondaryButton(owLabel))
+                if (Widgets.SecondaryButton(owLabel, GUILayout.Width(w)))
                 {
                     if (overwatchArmed) c.CancelArmed(); else c.ArmOverwatchAim();
                 }
-                if (overwatchArmed) GUILayout.Label(UkrainianText.Get("ui.battle.armed.overwatch_aim", false), AlphaSkin.HintLine);
 
-                var downedAlly = FindAdjacentDownedAlly(view, current);
-                if (downedAlly != null)
-                {
-                    if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.stabilize", false)))
-                        c.RequestStabilize(downedAlly.Id);
-                }
+                if (downedAlly != null && Widgets.SecondaryButton(UkrainianText.Get("ui.battle.stabilize", false), GUILayout.Width(w)))
+                    c.RequestStabilize(downedAlly.Id);
 
-                if (Widgets.PrimaryButton(UkrainianText.Get("ui.battle.hotkey.endturn", false)))
+                if (Widgets.PrimaryButton(UkrainianText.Get("ui.battle.hotkey.endturn", false), GUILayout.Width(w)))
                     c.RequestEndTurn();
             }
             else
             {
                 bool fast = c.FastEnemyTurns;
-                if (Widgets.TabButton(UkrainianText.Get("ui.battle.hotkey.fastforward", false), fast))
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle.hotkey.fastforward", false), fast, GUILayout.Width(columnWidth)))
                     c.FastEnemyTurns = !fast;
             }
 
             GUILayout.EndHorizontal();
 
+            if (c.Armed == ArmedAction.OverwatchAim)
+                GUILayout.Label(UkrainianText.Get("ui.battle.armed.overwatch_aim", false), AlphaSkin.HintLine, GUILayout.Width(columnWidth));
             if (c.Armed != ArmedAction.None)
-                GUILayout.Label(UkrainianText.Get("ui.battle.cancel", false), AlphaSkin.HintLine);
+                GUILayout.Label(UkrainianText.Get("ui.battle.cancel", false), AlphaSkin.HintLine, GUILayout.Width(columnWidth));
+        }
+
+        // ---- висота нижньої панелі — від вмісту (раунд 3) ----
+
+        /// <summary>Висота картки юніта — ті самі рядки, що малює <see cref="DrawUnitCard"/>.</summary>
+        private static float EstimateCardHeight(BattleUnitView u)
+        {
+            float h = 36f + 30f + 30f; // ім'я, здоров'я, ОД
+            if (u.ApReserved > 0) h += 24f;
+            if (!string.IsNullOrEmpty(u.WeaponId)) h += 26f;
+            if ((u.StatusDetails != null && u.StatusDetails.Count > 0) || (u.Statuses != null && u.Statuses.Count > 0)) h += 32f;
+            if (u.IsOverwatching) h += 32f;
+            if (u.IsDowned) h += 28f;
+            return h;
+        }
+
+        /// <summary>Висота колонки кнопок — ті самі рядки, що малюють <see cref="DrawAbilities"/> і <see cref="DrawActionButtons"/>.</summary>
+        private static float EstimateColumnHeight(IBattleHudData c, BattleUnitView u, float columnWidth)
+        {
+            float h = 0f;
+            int abilities = u.Abilities != null ? u.Abilities.Count : 0;
+            if (abilities > 0)
+            {
+                int perRow = AbilitiesPerRow(c, u, columnWidth);
+                h += ((abilities + perRow - 1) / perRow) * 44f;
+                h += 26f; // рядок опису
+                if (c.Armed == ArmedAction.Ability) h += 26f;
+            }
+            h += 6f + 44f; // ряд Дозор/Стабілізувати/Кінець ходу або Прискорити
+            if (c.Armed == ArmedAction.OverwatchAim) h += 26f;
+            if (c.Armed != ArmedAction.None) h += 26f;
+            h += 28f; // відмова або підказка керування
+            return h;
+        }
+
+        private static float _lastBottomPanelHeight = 170f;
+
+        private static float BottomPanelHeight(IBattleHudData c, BattleView view)
+        {
+            var current = FindUnit(view, view.CurrentUnitId);
+            float h = current == null
+                ? 80f
+                : Math.Max(EstimateCardHeight(current), EstimateColumnHeight(c, current, ButtonsColumnWidth())) + 24f;
+            _lastBottomPanelHeight = Clamp(h, 90f, Screen.height * 0.4f);
+            return _lastBottomPanelHeight;
         }
 
         /// <summary>Чебишовська відстань 1 від поточного юніта до звааленого союзника — «Стабілізувати» видно лише коли є кого (§3).</summary>
@@ -532,7 +612,8 @@ namespace Game.Gameplay.UI
 
         // ================= підказка біля курсора (§3, аудит знімків п.4) =================
 
-        private const float TooltipWidth = 300f;
+        /// <summary>Раунд 3: ширша підказка — «Шанс влучення: 25%» не переноситься на два рядки.</summary>
+        private static float TooltipWidth => Screen.width >= 1600f ? 380f : 340f;
 
         /// <summary>
         /// Аудит знімків п.4: підказка прилипала до лівого верхнього кута
@@ -572,7 +653,7 @@ namespace Game.Gameplay.UI
             float height = attack != null ? EstimateAttackTooltipHeight(attack) : EstimatePathTooltipHeight(c, view);
 
             float freeTop = TopBarHeight(scale) + 8f;
-            float freeBottom = Screen.height - BottomPanelHeight() - 8f;
+            float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
             float freeRight = Screen.width - RightPanelWidth() - 8f;
 
             var (x, y) = BattleTooltipLayout.PlaceNearAnchor(anchorX, anchorY, TooltipWidth, height,
@@ -601,28 +682,29 @@ namespace Game.Gameplay.UI
         /// <summary>Грубий підрахунок висоти підказки атаки з реальних рядків, які вона намалює — трохи із запасом, аби ніколи не обрізати вміст (BeginArea мовчки кадрує зайве, а не скролить).</summary>
         private static float EstimateAttackTooltipHeight(AttackPreviewView p)
         {
-            float h = 16f + 30f; // відступ + заголовок
+            // Раунд 3: оцінка була впритул, і «Ціна: N ОД» обрізалась знизу.
+            float h = 24f + 34f; // відступи + заголовок
             if (p.HasAttackRoll)
             {
-                h += 32f; // велике «Шанс влучення N%»
+                h += 42f; // велике «Шанс влучення N%»
                 if (p.Terms != null)
                     foreach (var term in p.Terms)
-                        if (term.ChanceDelta != 0) h += 22f;
-                h += 26f; // шкода
+                        if (term.ChanceDelta != 0) h += 26f;
+                h += 30f; // шкода
             }
-            h += 26f; // «Ціна: N ОД»
-            h += 26f; // «Здоров'я цілі: N/M»
+            h += 30f; // «Ціна: N ОД»
+            h += 30f; // «Здоров'я цілі: N/M»
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
-                h += 24f;
-            if (p.Result != "Success") h += 26f;
+                h += 28f;
+            if (p.Result != "Success") h += 30f;
             return h;
         }
 
         private static float EstimatePathTooltipHeight(IBattleHudData c, BattleView view)
         {
-            float h = 16f + 30f + 26f; // відступ + «Рух» + рядок ціни/відмови
-            if (view.Grid != null && c.HasHoveredTile) h += 24f; // укриття клітинки
-            h += 26f; // «Під ворожим дозором!» — з запасом, навіть коли порожньо
+            float h = 24f + 34f + 30f; // відступи + заголовок + рядок ціни/відмови
+            if (view.Grid != null && c.HasHoveredTile) h += 28f; // укриття клітинки
+            h += 30f; // «Під ворожим дозором!» — з запасом, навіть коли порожньо
             return h;
         }
 
@@ -718,20 +800,46 @@ namespace Game.Gameplay.UI
         private static void DrawOverlays(IBattleHudData c, BattleView view)
         {
             if (c.Overlays == null) return;
+
+            // Раунд 3 (знімки): імена сусідніх бійців налазили одне на одне
+            // («ПровідниЗастрільник орди»). Спершу розсуваємо блоки по
+            // вертикалі (чиста функція з тестом), тоді малюємо.
+            var visible = new List<BattleUnitOverlay>();
+            var units = new List<BattleUnitView>();
             foreach (var ov in c.Overlays)
             {
                 if (!ov.OnScreen) continue;
                 var unit = FindUnit(view, ov.UnitId);
                 if (unit == null) continue;
-                DrawUnitOverlay(c, unit, ov);
+                visible.Add(ov);
+                units.Add(unit);
             }
+
+            int n = visible.Count;
+            var centerX = new float[n];
+            var top = new float[n];
+            var width = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                centerX[i] = visible[i].ScreenX;
+                top[i] = visible[i].ScreenY;
+                width[i] = OverlayNameWidth(c.ResolveDisplayName(units[i]));
+            }
+            float blockHeight = AlphaSkin.OverlayNameFontSize + 6f + 6f + 18f; // ім'я + HP + один значок
+            var resolved = BattleTooltipLayout.ResolveVerticalOverlaps(centerX, top, width, blockHeight, 2f);
+
+            for (int i = 0; i < n; i++)
+                DrawUnitOverlay(c, units[i], visible[i], resolved[i]);
         }
 
-        private static void DrawUnitOverlay(IBattleHudData c, BattleUnitView unit, BattleUnitOverlay ov)
+        private static float OverlayNameWidth(string name)
+            => Clamp(name.Length * AlphaSkin.OverlayNameFontSize * 0.62f + 12f, 60f, 220f);
+
+        private static void DrawUnitOverlay(IBattleHudData c, BattleUnitView unit, BattleUnitOverlay ov, float topY)
         {
             string name = c.ResolveDisplayName(unit);
-            float nameWidth = Clamp(name.Length * AlphaSkin.OverlayNameFontSize * 0.62f + 12f, 60f, 220f);
-            var nameRect = new Rect(ov.ScreenX - nameWidth * 0.5f, ov.ScreenY, nameWidth, AlphaSkin.OverlayNameFontSize + 6f);
+            float nameWidth = OverlayNameWidth(name);
+            var nameRect = new Rect(ov.ScreenX - nameWidth * 0.5f, topY, nameWidth, AlphaSkin.OverlayNameFontSize + 6f);
             Widgets.SolidRect(nameRect, new Color32(12, 10, 8, 190));
 
             // Ворог під курсором, якого ЗАРАЗ можна атакувати, — яскрава рамка
@@ -878,31 +986,19 @@ namespace Game.Gameplay.UI
 
         /// <summary>Ширина картки поточного юніта в нижній панелі (§DrawActionPanel) — фіксоване число зі специфікації, не частка від ширини панелі.</summary>
         private const float BottomCardWidth = 360f;
-        /// <summary>Оцінка ширини колонки здібностей/кнопок (2 кнопки в ряд) — рахує природну ширину нижньої панелі, не вимірюючи вміст наперед (IMGUI однопрохідний).</summary>
-        private const float BottomButtonsColumnEstimate = 420f;
+        /// <summary>Ширина підпису «Здоров'я: 14/14» / «Очки дій: 9/9» у картці — смужка й піпси праворуч.</summary>
+        private const float CardLabelWidth = 172f;
+
+        /// <summary>Оцінка ширини символу й полів кнопки (IMGUI однопрохідний — вимірювати наперед нема чим).</summary>
+        private const float ButtonCharWidth = 11f;
+        private const float ButtonTextPadding = 26f;
+
+        /// <summary>Колонка кнопок — усе, що лишилось у панелі після картки.</summary>
+        private static float ButtonsColumnWidth()
+            => Math.Max(260f, BottomPanelWidth() - BottomCardWidth - Widgets.ScreenPadding() * 3f - 16f);
 
         private static float TopBarHeight(float scale) => Clamp(44f * scale, 40f, 56f);
 
-        /// <summary>
-        /// Аудит знімків п.1: «НИЖНЯ ПАНЕЛЬ ВЕЛИЧЕЗНА І ПОРОЖНЯ (займає нижню
-        /// третину, ховає юнітів)» — була 200–260px незалежно від фактичного
-        /// вмісту (картка + два рядки кнопок). Тепер ≈150–170px на 1080p,
-        /// рахована від ВИСОТИ екрана (панель горизонтальна, її висота має
-        /// стежити за вертикальним масштабом, а не горизонтальним, як робив
-        /// старий Widgets.ScaleForScreen).
-        ///
-        /// Нижня межа 150, НЕ пропорційно менша на 900/720p: шрифти
-        /// <see cref="AlphaSkin"/> — сталі пікселі, не масштабовані під
-        /// роздільність (<c>BodyFontSize</c>/<c>SubHeaderFontSize</c> —
-        /// константи), тож реальний вміст картки юніта (<see cref="DrawUnitCard"/>:
-        /// заголовок + HP + смужка + ОД + піпси + зброя) потребує ~155–160px
-        /// РІВНО СТІЛЬКИ Ж пікселів екрана на 720p, що й на 1080p — менша
-        /// межа обрізала б рядок зброї. Формула лишає пропорційний ВЕРХНІЙ
-        /// клемп (170 на 1080p+) і підіймає нижній рівно до потреби вмісту,
-        /// а не до літери «пропорційно менше», яка конфліктувала б із
-        /// власним же п.7 («1280×720: усе влазить»).
-        /// </summary>
-        private static float BottomPanelHeight() => Clamp(Screen.height * (160f / 1080f), 150f, 170f);
 
         private static float RightPanelWidth() => Screen.width >= 1600f ? 360f : 300f;
 
@@ -916,10 +1012,10 @@ namespace Game.Gameplay.UI
         /// </summary>
         private static float BottomPanelWidth()
         {
-            float natural = BottomCardWidth + BottomButtonsColumnEstimate + Widgets.ScreenPadding() * 3f;
-            float available = Screen.width - RightPanelWidth() - Widgets.ScreenPadding() * 3f;
-            float upperBound = available < 560f ? 560f : available;
-            return Clamp(natural, 560f, upperBound);
+            // Раунд 3: панель — до 1180 px, але не ширша за вільне місце лівіше
+            // журналу; кнопки всередині самі діляться на ряди (AbilitiesPerRow).
+            float available = Screen.width - RightPanelWidth() - Widgets.ScreenPadding() * 4f;
+            return Clamp(available, 560f, 1180f);
         }
 
         private static Rect FullScreenRect() => new Rect(0f, 0f, Screen.width, Screen.height);

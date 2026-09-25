@@ -12,6 +12,35 @@ namespace Game.Tests.EditMode
     public class BattleTooltipLayoutTests
     {
         [Test]
+        public void ResolveVerticalOverlaps_SideBySideNames_AreStackedNotMerged()
+        {
+            // Два сусідні юніти: імена на тій самій висоті й перетинаються по x.
+            var top = BattleTooltipLayout.ResolveVerticalOverlaps(
+                new[] { 400f, 450f }, new[] { 300f, 300f }, new[] { 120f, 160f }, 30f, 2f);
+            Assert.AreEqual(300f, top[0], 0.01f, "перший лишається на місці");
+            Assert.AreEqual(300f - 30f - 2f, top[1], 0.01f, "другий піднімається рівно над першим");
+        }
+
+        [Test]
+        public void ResolveVerticalOverlaps_FarApart_Untouched()
+        {
+            var top = BattleTooltipLayout.ResolveVerticalOverlaps(
+                new[] { 100f, 600f, 350f }, new[] { 300f, 300f, 120f }, new[] { 120f, 120f, 120f }, 30f, 2f);
+            CollectionAssert.AreEqual(new[] { 300f, 300f, 120f }, top);
+        }
+
+        [Test]
+        public void ResolveVerticalOverlaps_ThreeInAPile_NoPairOverlapsAfter()
+        {
+            float[] cx = { 500f, 510f, 520f };
+            float[] w = { 140f, 140f, 140f };
+            var top = BattleTooltipLayout.ResolveVerticalOverlaps(cx, new[] { 400f, 402f, 398f }, w, 30f, 2f);
+            for (int i = 0; i < 3; i++)
+                for (int j = i + 1; j < 3; j++)
+                    Assert.GreaterOrEqual(System.Math.Abs(top[i] - top[j]), 32f - 0.01f, i + "/" + j);
+        }
+
+        [Test]
         public void PlacesTooltip_RightAndBelow_TheAnchor_WhenRoomAllows()
         {
             var (x, y) = BattleTooltipLayout.PlaceNearAnchor(

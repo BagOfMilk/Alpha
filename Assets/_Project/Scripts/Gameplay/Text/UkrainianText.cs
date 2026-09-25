@@ -1905,7 +1905,7 @@ namespace Game.Gameplay.Text
             // Бій v2, раунд 2 (аудит знімків п.6): заголовок панелі журналу —
             // «Журнал бою» (був «Хід бою», плутався зі щоденниковим «Хід:
             // {name}» картки поточного юніта — ui.battle.current_unit нижче).
-            AddKey(t, "ui.battle.log", "Журнал бою");
+            AddKey(t, "ui.battle.log", "Журнал");
             AddKey(t, "ui.battle.endturn", "Кінець ходу");
             AddKey(t, "ui.battle.unit.downed", "Виведений з бою — потребує допомоги");
 
@@ -1945,7 +1945,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.hint.controls", "ЛКМ: ворог — атака, клітинка — рух · ПКМ — скасувати");
             // Заголовок підказки біля курсора над ворогом (§3/COMBAT_V2 п.4).
             AddKey(t, "ui.battle.hover.attack_title", "Атака: {target}");
-            AddKey(t, "ui.battle.hover.move_title", "Рух");
+            AddKey(t, "ui.battle.hover.move_title", "Перейти сюди");
             AddKey(t, "ui.battle.action.rejected", "Дію неможливо виконати зараз.");
 
             // Конкретна причина відмови (CombatActionResult, фікс: гравець бачить

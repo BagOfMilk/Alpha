@@ -204,7 +204,13 @@ namespace Game.Gameplay
         /// <summary>Бій v2, раунд 2 (п.6): «піднімаються помітно (~40–60 px)» — 42px/с даю ~42px за звичайні 1.0с і ~59px за Big 1.4с.</summary>
         private const float FloatingRiseSpeedPxPerSecond = 42f;
 
-        private sealed class FloatingRuntime { public BattleFloatingText Data; public float Age; public float Duration; }
+        /// <summary>
+        /// Напис прив'язаний до ТОЧКИ У СВІТІ над ціллю (World), а екранна позиція
+        /// перераховується щокадру: раніше вона бралась один раз при появі, і
+        /// під час перельоту камери напис «відставав» від цілі на півекрана
+        /// (знімки раунду 2: «Промах»/«Влучання» посеред поля).
+        /// </summary>
+        private sealed class FloatingRuntime { public BattleFloatingText Data; public Vector3 World; public float Age; public float Duration; }
         private readonly List<FloatingRuntime> _floatingRuntime = new List<FloatingRuntime>();
         private readonly List<BattleFloatingText> _floatingTextsExposed = new List<BattleFloatingText>();
 
@@ -1219,7 +1225,13 @@ namespace Game.Gameplay
                 Alpha = 1f,
                 Big = spec.Big
             };
-            _floatingRuntime.Add(new FloatingRuntime { Data = text, Age = 0f, Duration = spec.Big ? 1.4f : 1.0f });
+            _floatingRuntime.Add(new FloatingRuntime
+            {
+                Data = text,
+                World = new Vector3(world.X, BattleArenaView.NameLabelHeight, world.Z),
+                Age = 0f,
+                Duration = spec.Big ? 1.4f : 1.0f
+            });
         }
 
         private void ApplyHitReaction(ActiveTact tact)
@@ -1514,7 +1526,16 @@ namespace Game.Gameplay
             {
                 var r = _floatingRuntime[i];
                 r.Age += dt;
-                r.Data.ScreenY -= FloatingRiseSpeedPxPerSecond * dt;
+                if (ArenaCamera != null)
+                {
+                    var anchor = WorldToGui(r.World);
+                    r.Data.ScreenX = anchor.x;
+                    r.Data.ScreenY = anchor.y - FloatingSpawnGapAboveNamePx - FloatingRiseSpeedPxPerSecond * r.Age;
+                }
+                else
+                {
+                    r.Data.ScreenY -= FloatingRiseSpeedPxPerSecond * dt;
+                }
                 r.Data.Alpha = Mathf.Clamp01(1f - r.Age / r.Duration);
                 if (r.Age >= r.Duration) _floatingRuntime.RemoveAt(i);
             }

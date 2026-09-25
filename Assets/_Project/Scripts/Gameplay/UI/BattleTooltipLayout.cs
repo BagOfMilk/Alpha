@@ -38,6 +38,48 @@ namespace Game.Gameplay.UI
             return (x, y);
         }
 
+        /// <summary>
+        /// Раунд 3 (знімки: «ПровідниЗастрільник орди»): розсуває підписи над
+        /// юнітами по вертикалі, щоб блоки не накладались. Нижчі на екрані
+        /// стоять на місці, вищі (і рівні — за порядком) піднімаються над
+        /// тими, з якими перетинаються. Детерміновано: той самий вхід — той
+        /// самий вихід. Повертає нові верхні межі (y згори, як у GUI).
+        /// </summary>
+        public static float[] ResolveVerticalOverlaps(float[] centerX, float[] top, float[] width, float height, float gap)
+        {
+            int n = top.Length;
+            var result = (float[])top.Clone();
+            var order = new int[n];
+            for (int i = 0; i < n; i++) order[i] = i;
+            System.Array.Sort(order, (a, b) =>
+            {
+                int byY = top[b].CompareTo(top[a]); // нижчі на екрані — першими
+                return byY != 0 ? byY : a.CompareTo(b);
+            });
+
+            var placed = new System.Collections.Generic.List<int>(n);
+            foreach (int i in order)
+            {
+                for (int guard = 0; guard <= n; guard++)
+                {
+                    bool moved = false;
+                    foreach (int j in placed)
+                    {
+                        bool overlapX = System.Math.Abs(centerX[i] - centerX[j]) < (width[i] + width[j]) * 0.5f + gap;
+                        bool overlapY = System.Math.Abs(result[i] - result[j]) < height + gap;
+                        if (overlapX && overlapY)
+                        {
+                            result[i] = result[j] - height - gap;
+                            moved = true;
+                        }
+                    }
+                    if (!moved) break;
+                }
+                placed.Add(i);
+            }
+            return result;
+        }
+
         /// <summary>Верхній лівий кут відрізка довжини <paramref name="size"/> у межах [<paramref name="min"/>..<paramref name="max"/>], притиснутий до ближнього краю, якщо не влазить.</summary>
         private static float ClampInto(float start, float size, float min, float max)
         {
