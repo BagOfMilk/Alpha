@@ -35,17 +35,9 @@ namespace Game.Gameplay
     /// (сам виклик без охорони стану — безпечно в будь-який момент, кешується в
     /// <c>_protagonistGender</c> на <see cref="Enter"/> і передається сусідньому
     /// <see cref="PortraitRig"/>, бо його <c>IPortraitProvider.GetPortrait</c> не
-    /// приймає сесію) — АЛЕ ЦЕ ЧИТАННЯ НЕ ПОВНЕ (фікс-ревью, major, розрив ЯДРА
-    /// поза файлами E2): <c>GameSession.ComposeSave</c>/<c>ApplySave</c> не
-    /// серіалізують ані <c>_pendingGender</c>, ані <c>_protagonistGender</c>, а
-    /// <c>ContinueGame(slot)</c> йде крізь <c>NewGame(SkipCreation:true)</c>, що
-    /// оминає гілку скидання <c>_pendingGender</c> на дефолт — у щойно
-    /// відкритому процесі після «Продовжити збереження» це поле стоїть на
-    /// дефолтному <c>Gender.Male</c> незалежно від того, якою протагоністку
-    /// створив гравець, тож і бойовий рід, і портрет <see cref="PortraitRig"/>
-    /// мовчки помиляються саме в найпоширенішому потоці (відкрити гру →
-    /// продовжити → бій). Не закривається звідси: справжній фікс — персистити
-    /// gender= у ComposeSave/ApplySave, це власник GameSession.cs; (3) немає
+    /// приймає сесію). Рід переживає «Продовжити»: зліпок несе <c>pgender=</c>
+    /// (GameSession.ComposeSave/ApplySave, тест
+    /// <c>ContinueGame_PreservesProtagonistGenderNameAndBackground</c>); (3) немає
     /// <c>GameSession.CombatStabilize</c>/<c>CombatRetreat</c> — <c>CombatState</c>
     /// має обидва методи, фасад жоден не обгортає, тому кнопок
     /// «Стабілізувати»/«Відступ» тут немає (сам TEST_BUILD.md позначає

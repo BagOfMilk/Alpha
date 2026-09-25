@@ -45,6 +45,13 @@ namespace Game.Core.Session.Views
 
         /// <summary>Тест-збірка (Поправка №7.8, п.3): кожна будівля будується рівно 1 добу, а не за <c>BuildingDefinition.Days</c> — картка вкладки «Будівлі» показує саме цей ефективний термін, коли прапорець true.</summary>
         public bool TestBuildOneDayConstruction;
+
+        /// <summary>
+        /// Id відкритих постів. Закритий пост (його будівля ще не стоїть) не
+        /// приймає людей — вкладка «Пости» показує причину замість кнопок
+        /// «Призначити», які раніше мовчки нічого не робили.
+        /// </summary>
+        public IReadOnlyList<string> OpenPosts;
     }
 
     public sealed class RosterView

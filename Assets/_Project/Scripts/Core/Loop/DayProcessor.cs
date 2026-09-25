@@ -220,8 +220,7 @@ namespace Game.Core.Loop
         {
             if (AwaitsDecision)
                 throw new InvalidOperationException(
-                    "Нельзя сохранять посреди решения фазы: сначала ResolvePending " +
-                    "до конца очереди (AwaitsDecision должен стать false).");
+                    "Не можна зберігати посеред рішення фази: спершу розв'яжи всі рішення, що чекають.");
             return SettlementSave.Capture(this);
         }
 
@@ -246,7 +245,7 @@ namespace Game.Core.Loop
         {
             if (_awaiting != null)
                 throw new InvalidOperationException(
-                    "Сутки не закончены: конвейер ждёт решения. Сначала ResolvePending.");
+                    "Доба не завершена: спершу розв'яжи рішення, що чекає.");
 
             // Календарна доба починається з денної фази; ніч належить тій
             // самій добі. Інакше лічильник рахує ФАЗИ, і кожне вікно «в днях»
@@ -288,7 +287,7 @@ namespace Game.Core.Loop
         public DayReport ResolvePending(IncidentPath path)
         {
             if (_awaiting == null)
-                throw new InvalidOperationException("Нечего решать: конвейер не остановлен.");
+                throw new InvalidOperationException("Немає рішення, що чекало б на розв'язок.");
 
             var ctx = _awaiting;
 
@@ -326,7 +325,7 @@ namespace Game.Core.Loop
         {
             if (_awaiting == null)
                 throw new InvalidOperationException(
-                    "Нечего решать: конвейер не остановлен.");
+                    "Немає рішення, що чекало б на розв'язок.");
 
             var ctx = _awaiting;
             var incident = ctx.PendingIncident;

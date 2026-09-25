@@ -357,6 +357,7 @@ namespace Game.Core.Session
             _finaleOutcomeKey = null;
             _translatedIncidentCount = 0;
             _hafiyaGrassBonusApplied = false;
+            _bargainedTimeBonusApplied = false;
 
             _hitRule = o.HitRule;
             _tensionPace = o.TestBuildTensionPace;
@@ -1114,7 +1115,7 @@ namespace Game.Core.Session
         /// </summary>
         public void RestoreFromBlob(string blob)
         {
-            if (string.IsNullOrEmpty(blob)) throw new ArgumentException("Порожній слепок", nameof(blob));
+            if (string.IsNullOrEmpty(blob)) throw new ArgumentException("Порожній зліпок збереження", nameof(blob));
             ApplySave(blob);
             LogEvent("game.loaded", Args("slot", "external"));
         }
@@ -1132,8 +1133,18 @@ namespace Game.Core.Session
         /// </summary>
         internal int DebugTensionValue => _processor?.Tension?.Value ?? 0;
 
+        /// <summary>Поріг тихого шляху інциденту в поточному світі — щоб тест бачив, чи дійшов числовий наслідок вибору (торг, трава Гафії) до самого порогу.</summary>
+        internal int DebugQuietThreshold(string incidentId, string sourceId)
+        {
+            if (_processor?.Incidents == null) return -1;
+            foreach (var def in _processor.Incidents.All)
+                if (def.Id == incidentId && def.SourceId == sourceId) return def.QuietPathThreshold;
+            return -1;
+        }
+
         /// <summary>IVT-гачок: з яким темпом Напруги побудовано світ (прапорець і фактичний поріг накопичувача кризи).</summary>
         internal bool DebugTensionPace => _tensionPace;
+        internal bool DebugIronman => _ironman;
 
         internal int DebugCrisisThreshold =>
             _processor?.Pulse != null && _processor.Pulse.Tracks.TryGetValue("crisis", out var track) ? track.Threshold : 0;
@@ -2291,8 +2302,11 @@ namespace Game.Core.Session
 
         public CityView GetCityView()
         {
+            // Порядок каталогу, а не HashSet: інакше після завантаження той самий
+            // набір будівель ішов у вкладку в іншому порядку (аудит сейвів 25.09.2026).
             var built = new List<BuildingView>();
-            foreach (var id in _works.Built) built.Add(new BuildingView { Id = id, StageOf = 5 });
+            foreach (var def in DefaultBuildingsType.All())
+                if (_works.Has(def.Id)) built.Add(new BuildingView { Id = def.Id, StageOf = 5 });
 
             var inProgress = new List<BuildingView>();
             foreach (var def in DefaultBuildingsType.All())
@@ -2303,8 +2317,9 @@ namespace Game.Core.Session
                 Built = built,
                 InProgress = inProgress,
                 RaidReady = _works.RaidReady(_processor.CurrentDay, _cfg),
-                SettlersReady = _works.Has(DefaultBuildingsType.CouncilHall),
-                TestBuildOneDayConstruction = _works.OneDayConstruction
+                SettlersReady = _works.SettlersReady(_processor.CurrentDay, _cfg),
+                TestBuildOneDayConstruction = _works.OneDayConstruction,
+                OpenPosts = OpenPostIds()
             };
         }
 
@@ -2959,8 +2974,33 @@ namespace Game.Core.Session
 
         private void AutoSave()
         {
-            try { _slots[-1] = ComposeSave(); }
+            try
+            {
+                _slots[-1] = ComposeSave();
+                AutosaveVersion++;
+            }
             catch { /* автосейв best-effort — провал не повинен рвати денний конвеєр */ }
+        }
+
+        /// <summary>
+        /// Росте з кожним ранковим автосейвом. Ядро файлів не пише (див.
+        /// <see cref="PreloadSlot"/>), тому оболонка звіряє це число між кадрами
+        /// й записує <see cref="AutosaveBlob"/> на диск, щойно воно змінилось.
+        /// Без цього автосейв жив лише в пам'яті процесу, і «Продовжити» після
+        /// перезапуску гри його не бачило (дебаг 25.09.2026).
+        /// </summary>
+        public int AutosaveVersion { get; private set; }
+
+        /// <summary>Останній ранковий автосейв цієї сесії або null, якщо його ще не було.</summary>
+        public string AutosaveBlob => _slots.TryGetValue(-1, out var blob) ? blob : null;
+
+        /// <summary>Пости, які вже відкриті (будівля, що їх відкриває, стоїть) — тільки на них можна призначити людину.</summary>
+        private List<string> OpenPostIds()
+        {
+            var open = new List<string>();
+            foreach (var slot in _state.Slots)
+                if (slot.Unlocked) open.Add(slot.Id);
+            return open;
         }
 
         private void TickExpeditionReturnIfAny()
@@ -3561,6 +3601,12 @@ namespace Game.Core.Session
             // 1, зберігся й завантажив партію з титулу, бачив "Патруль"
             // знову непобаченим — журнал і партія розходились між собою.
             head.Append(";patrolled=").Append(_patrolledANight ? 1 : 0);
+            // Дебаг 25.09.2026 (аудит сейвів): ironman і фаза доби не входили в
+            // зліпок. Після «Продовжити» ContinueGame будує гру з
+            // NewGameOptions за замовчуванням — захист протагоніста від смерті
+            // мовчки вмикався знову, а заголовок показував «день» замість ночі.
+            head.Append(";ironman=").Append(_ironman ? 1 : 0);
+            head.Append(";phase=").Append((int)_lastPhase);
             head.Append(";finale=").Append(_finaleResolved ? 1 : 0);
             head.Append(";readiness=").Append(_readiness.CaptureState());
             head.Append(";quests=").Append(_quests.CaptureState());
@@ -3715,6 +3761,8 @@ namespace Game.Core.Session
                     case "freeplay": _freePlay = value == "1"; break;
                     case "summary": _summaryAcknowledged = value == "1"; break;
                     case "patrolled": _patrolledANight = value == "1"; break;
+                    case "ironman": _ironman = value == "1"; break;
+                    case "phase": _lastPhase = (DayPhase)ParseInt(value); break;
                     case "finale": _finaleResolved = value == "1"; break;
                     case "readiness": _readiness.RestoreState(value); break;
                     case "quests": _quests.RestoreState(value); break;
@@ -3782,6 +3830,9 @@ namespace Game.Core.Session
             // жоден зліпок (визначення інцидентів не персистяться), тож без
             // цього виклику бонус мовчки губився б після Save/Load.
             ApplyHafiyaGrassBonusToSickChildIfNeeded();
+            // Той самий випадок для торгу з Тугаром: прапор у зліпку є, а поріг
+            // тихого шляху вузла 1 — ні (дебаг 25.09.2026).
+            ApplyBargainedTimeBonusIfNeeded();
         }
 
         /// <summary>

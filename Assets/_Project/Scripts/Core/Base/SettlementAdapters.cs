@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Game.Core.Balance;
 using Game.Core.Characters;
+using Game.Core.Characters.Scars;
 using Game.Core.Checks;
 using Game.Core.Stats;
 using Game.Core.World;
@@ -129,7 +130,11 @@ namespace Game.Core.Base
                   // B4/R2: Лояльність — п'яте поле, додане адитивно в кінець
                   // запису (§4.8 R13), щоб старі зліпки без нього так само читались
                   // (RestoreState нижче толерантна до довжини < 5).
-                  .Append('>').Append(c.Loyalty.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                  .Append('>').Append(c.Loyalty.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                  // Шосте поле — шрами (id через '+'). Раніше вічний трек не
+                  // потрапляв у зліпок зовсім: після «Продовжити» шрами зникали
+                  // разом зі своїми модифікаторами статів (дебаг 25.09.2026).
+                  .Append('>').Append(ScarIds(c));
             }
             return sb.ToString();
         }
@@ -162,7 +167,30 @@ namespace Game.Core.Base
                             System.Globalization.CultureInfo.InvariantCulture, out loyalty))
                         c.RestoreLoyaltyForSave(loyalty);
                 }
+
+                // Шрами — шосте поле; старі зліпки без нього лишають трек як є.
+                if (f.Length >= 6)
+                    c.Scars.RestoreFromSave(ScarsFromIds(f[5]));
             }
+        }
+
+        private static string ScarIds(Companion c)
+        {
+            var ids = new List<string>();
+            foreach (var scar in c.Scars.Scars) ids.Add(scar.Id);
+            return string.Join("+", ids);
+        }
+
+        /// <summary>Визначення шрамів — статичний контент (<see cref="DefaultScars"/>), у зліпку лише id.</summary>
+        private static List<ScarDefinition> ScarsFromIds(string field)
+        {
+            var scars = new List<ScarDefinition>();
+            if (string.IsNullOrEmpty(field)) return scars;
+            var catalog = DefaultScars.All();
+            foreach (var id in field.Split('+'))
+                for (int i = 0; i < catalog.Count; i++)
+                    if (catalog[i].Id == id) { scars.Add(catalog[i]); break; }
+            return scars;
         }
         public RosterAdapter(Roster roster, string protagonistId = null, BalanceConfig balance = null)
         {

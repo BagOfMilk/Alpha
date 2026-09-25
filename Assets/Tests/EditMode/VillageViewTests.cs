@@ -123,8 +123,11 @@ namespace Game.Tests.EditMode
             var late = VillageView.Lines(Report(DayPhase.Day, null, new[] { third }));
 
             Assert.AreNotEqual(early[0], late[0], "Ступени предвестника обязаны звучать по-разному");
-            StringAssert.Contains("улицы", late[0], "Вторая ступень и выше называет домен");
-            StringAssert.DoesNotContain("улицы", early[0], "Первая ступень домена НЕ называет");
+            // Домен називається словом гри, а не внутрішнім тегом ядра: раніше
+            // тег «улицы» йшов у стрічку сирим — «розмови про улицы» (дебаг 25.09.2026).
+            StringAssert.Contains("вулиці", late[0], "Друга ступінь і вище називає домен");
+            StringAssert.DoesNotContain("вулиці", early[0], "Перша ступінь домену НЕ називає");
+            StringAssert.DoesNotContain("улицы", late[0], "Внутрішній тег ядра не доходить до гравця");
         }
 
         [Test]

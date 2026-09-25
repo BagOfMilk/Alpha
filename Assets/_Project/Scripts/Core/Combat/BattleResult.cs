@@ -60,7 +60,7 @@ namespace Game.Core.Combat
         {
             if (cs == null) throw new ArgumentNullException(nameof(cs));
             if (cs.Outcome == CombatOutcome.Ongoing)
-                throw new InvalidOperationException("BattleResult.From вызван до конца боя (Outcome == Ongoing)");
+                throw new InvalidOperationException("Підсумок бою запитано, поки бій ще триває.");
 
             var casualties = new List<BattleCasualty>();
             var survivors = new List<string>();

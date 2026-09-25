@@ -144,7 +144,7 @@ namespace Game.Core.Combat
                 case StatusType.Marked: return "marked";
                 case StatusType.Burning: return "burning";
                 case StatusType.Poisoned: return "poisoned";
-                default: throw new ArgumentOutOfRangeException(nameof(type), type, "Состояние без токена журнала боя");
+                default: throw new ArgumentOutOfRangeException(nameof(type), type, "Стан без токена журналу бою");
             }
         }
 
@@ -158,7 +158,7 @@ namespace Game.Core.Combat
                 case DamageType.Fire: return "fire";
                 case DamageType.Toxin: return "toxin";
                 case DamageType.Energy: return "energy";
-                default: throw new ArgumentOutOfRangeException(nameof(type), type, "Тип урона без токена журнала боя");
+                default: throw new ArgumentOutOfRangeException(nameof(type), type, "Тип шкоди без токена журналу бою");
             }
         }
     }

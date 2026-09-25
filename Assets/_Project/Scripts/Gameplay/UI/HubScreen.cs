@@ -194,6 +194,7 @@ namespace Game.Gameplay.UI
         private void DrawPosts(GameShell shell, Gender g)
         {
             var roster = shell.Session.GetRosterView();
+            var openPosts = shell.Session.GetCityView()?.OpenPosts;
             _postsScroll = Widgets.ScrollListBegin(_postsScroll, GUILayout.ExpandHeight(true));
             foreach (var postId in PostIds)
             {
@@ -213,7 +214,18 @@ namespace Game.Gameplay.UI
                 }
                 GUILayout.EndHorizontal();
 
-                if (roster?.Companions != null)
+                // Закритий пост (його будівля ще не стоїть) людей не приймає:
+                // раніше тут стояли ті самі кнопки «Призначити», і клік мовчки
+                // нічого не робив.
+                bool open = openPosts == null || Contains(openPosts, postId);
+                if (!open)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(24f);
+                    GUILayout.Label(ScreenText.PostLockedReason(postId, g), AlphaSkin.Tooltip);
+                    GUILayout.EndHorizontal();
+                }
+                else if (roster?.Companions != null)
                 {
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(24f);
@@ -225,12 +237,19 @@ namespace Game.Gameplay.UI
                         string slot = postId;
                         string companionId = c.Id;
                         if (Widgets.SecondaryButton(UkrainianText.Get("ui.posts.assign", g) + ": " + ScreenText.ResolveCompanionName(companionId, g, roster), GUILayout.Width(280f)))
-                            shell.TryRun(() => shell.Session.Assign(companionId, slot));
+                            shell.TryRunReported(() => shell.Session.Assign(companionId, slot), r => ScreenText.AssignFailure(r, g));
                     }
                     GUILayout.EndHorizontal();
                 }
             }
             Widgets.ScrollListEnd();
+        }
+
+        private static bool Contains(System.Collections.Generic.IReadOnlyList<string> ids, string id)
+        {
+            for (int i = 0; i < ids.Count; i++)
+                if (ids[i] == id) return true;
+            return false;
         }
 
         private static string FindOccupant(RosterView roster, string postId)
@@ -287,7 +306,7 @@ namespace Game.Gameplay.UI
                     else if (enoughGold && enoughMaterials)
                     {
                         if (Widgets.PrimaryButton(UkrainianText.Get("ui.buildings.order", g), GUILayout.Width(160f)))
-                            shell.TryRun(() => shell.Session.OrderBuilding(buildingId));
+                            shell.TryRunReported(() => shell.Session.OrderBuilding(buildingId), r => ScreenText.BuildFailure(r, g));
                     }
                     else
                     {
@@ -338,7 +357,7 @@ namespace Game.Gameplay.UI
             if (city != null && city.RaidReady)
             {
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.raid", g)))
-                    shell.TryRun(() => shell.Session.OrderRaid());
+                    shell.TryRunReported(() => shell.Session.OrderRaid(), r => ScreenText.CouncilFailure(r, g));
             }
             else Widgets.DisabledButton(UkrainianText.Get("ui.council.raid", g), UkrainianText.Get("ui.council.result.on_cooldown", g));
             GUILayout.EndHorizontal();
@@ -349,7 +368,7 @@ namespace Game.Gameplay.UI
             if (city != null && city.SettlersReady)
             {
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.council.settlers", g)))
-                    shell.TryRun(() => shell.Session.OrderSettlers());
+                    shell.TryRunReported(() => shell.Session.OrderSettlers(), r => ScreenText.CouncilFailure(r, g));
             }
             else Widgets.DisabledButton(UkrainianText.Get("ui.council.settlers", g), UkrainianText.Get("ui.council.result.on_cooldown", g));
             GUILayout.EndHorizontal();
@@ -387,7 +406,7 @@ namespace Game.Gameplay.UI
                     if (canAfford)
                     {
                         if (Widgets.SecondaryButton(UkrainianText.Get("building." + id, g)))
-                            shell.TryRun(() => shell.Session.OrderInvestment(buildingId));
+                            shell.TryRunReported(() => shell.Session.OrderInvestment(buildingId), r => ScreenText.CouncilFailure(r, g));
                     }
                     else Widgets.DisabledButton(UkrainianText.Get("building." + id, g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
                 }
@@ -398,7 +417,7 @@ namespace Game.Gameplay.UI
             if (economy == null || economy.Gold >= CouncilFaction.PrepareThreatGoldCost)
             {
                 if (Widgets.SecondaryButton(UkrainianText.Get("ui.council.prepare_threat", g)))
-                    shell.TryRun(() => shell.Session.OrderPrepareThreat());
+                    shell.TryRunReported(() => shell.Session.OrderPrepareThreat(), r => ScreenText.CouncilFailure(r, g));
             }
             else Widgets.DisabledButton(UkrainianText.Get("ui.council.prepare_threat", g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
 
@@ -419,7 +438,7 @@ namespace Game.Gameplay.UI
                     if (canAfford)
                     {
                         if (Widgets.SecondaryButton(UkrainianText.Get("site." + site, g)))
-                            shell.TryRun(() => shell.Session.OrderOutfitExpedition(sid));
+                            shell.TryRunReported(() => shell.Session.OrderOutfitExpedition(sid), r => ScreenText.CouncilFailure(r, g));
                     }
                     else Widgets.DisabledButton(UkrainianText.Get("site." + site, g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
                 }
@@ -435,13 +454,13 @@ namespace Game.Gameplay.UI
             GUILayout.Label(cost + " — " + effect, AlphaSkin.Tooltip);
         }
 
-        private static void DrawCouncilFactionButton(GameShell shell, Gender g, string factionId, EconomyView economy, int goldCost, System.Action<string> order)
+        private static void DrawCouncilFactionButton(GameShell shell, Gender g, string factionId, EconomyView economy, int goldCost, System.Func<string, CouncilOrderResult> order)
         {
             bool canAfford = economy == null || economy.Gold >= goldCost;
             if (canAfford)
             {
                 if (Widgets.SecondaryButton(UkrainianText.Get("faction." + factionId, g)))
-                    shell.TryRun(() => order(factionId));
+                    shell.TryRunReported(() => order(factionId), r => ScreenText.CouncilFailure(r, g));
             }
             else Widgets.DisabledButton(UkrainianText.Get("faction." + factionId, g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
         }
@@ -533,7 +552,7 @@ namespace Game.Gameplay.UI
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.expedition.depart", g), GUILayout.Width(200f)))
                 {
                     var days = _preview.Days;
-                    shell.TryRun(() => shell.Session.DepartExpedition(_siteId, _approach, partyIds, days));
+                    shell.TryRunReported(() => shell.Session.DepartExpedition(_siteId, _approach, partyIds, days), r => ScreenText.DispatchFailure(r, g));
                     _preview = null;
                     _party.Clear();
                 }
@@ -542,6 +561,8 @@ namespace Game.Gameplay.UI
 
             if (_preview != null)
             {
+                // Підпис — без числа: число стоїть окремою колонкою LabeledRow.
+                // Раніше шаблони несли плейсхолдер, і гравець бачив «Поріг: {threshold}  7».
                 Widgets.LabeledRow(UkrainianText.Get("ui.expedition.threshold", g), _preview.Threshold.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("ui.expedition.party_value", g), _preview.PartyValue.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("ui.expedition.days", g), _preview.Days.ToString());
@@ -689,7 +710,7 @@ namespace Game.Gameplay.UI
 
             string instanceId = item.InstanceId;
             if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.craft", g), GUILayout.Width(220f)))
-                shell.TryRun(() => shell.Session.CraftUpgrade(instanceId));
+                shell.TryRunReported(() => shell.Session.CraftUpgrade(instanceId), r => ScreenText.CraftFailure(r, g));
         }
 
         // ===================== Люди =====================
@@ -1056,6 +1077,7 @@ namespace Game.Gameplay.UI
                     {
                         var view = shell.Session.CurrentView;
                         Game.Gameplay.SaveFileStore.Write(slot, blob, view.TensionBand, view.Day);
+                        shell.Notify(UkrainianText.Format("game.saved", g, "slot", ScreenText.SavedToLabel(slot, g)));
                     }
                 }
                 GUILayout.EndHorizontal();

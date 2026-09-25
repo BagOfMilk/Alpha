@@ -276,10 +276,25 @@ namespace Game.Gameplay
                 }
 
             if (level >= 3)
-                return UkrainianText.Format("village.forewarn.level3", NeutralGender, "domain", domain ?? "місто");
+                return UkrainianText.Format("village.forewarn.level3", NeutralGender, "domain", DomainAccusative(domain));
             if (level == 2)
-                return UkrainianText.Format("village.forewarn.level2", NeutralGender, "domain", domain ?? "місто");
+                return UkrainianText.Format("village.forewarn.level2", NeutralGender, "domain", DomainAccusative(domain));
             return UkrainianText.Get("village.forewarn.level1", NeutralGender);
+        }
+
+        /// <summary>
+        /// Тег домену ядра («площадь», «улицы», «ночь» — внутрішні, російські)
+        /// словом для «розмови про {domain}» — знахідний відмінок
+        /// (<c>domain.acc.*</c>). Раніше тег ішов у стрічку сирим: «Тривожно:
+        /// розмови про улицы». Невідомий тег — загальне «місто», не сирий рядок.
+        /// </summary>
+        private static string DomainAccusative(string domain)
+        {
+            if (string.IsNullOrEmpty(domain)) return UkrainianText.Get("domain.acc.default", NeutralGender);
+            string key = "domain.acc." + domain;
+            return UkrainianText.Has(key, NeutralGender)
+                ? UkrainianText.Get(key, NeutralGender)
+                : UkrainianText.Get("domain.acc.default", NeutralGender);
         }
 
         private static string SignalLine(SignalRequest request)

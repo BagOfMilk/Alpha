@@ -229,6 +229,9 @@ namespace Game.Gameplay.Text
             // унизу файлу. ====
             AddScene78Choices(t);
 
+            // ==== Дебаг 25.09.2026: видимі відмови й збереження — див. блок унизу файлу. ====
+            AddDebugPassKeys(t);
+
             return t;
         }
 
@@ -1019,7 +1022,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "creation.confirmed", "Шлях обрано.");
             AddKey(t, "progression.level_up.m", "{companionId} став сильнішим (рівень {level}).");
             AddKey(t, "progression.level_up.f", "{companionId} стала сильнішою (рівень {level}).");
-            AddKey(t, "game.saved", "Збережено: слот {slot}.");
+            AddKey(t, "game.saved", "Збережено: {slot}.");
             AddKey(t, "game.loaded", "Завантажено: слот {slot}.");
             AddKey(t, "char.seen", "{char} тут.");
         }
@@ -1393,7 +1396,7 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.escape.title", "Пауза");
             AddKey(t, "ui.escape.resume", "Повернутися до гри");
-            AddKey(t, "ui.escape.save", "Зберегти й вийти в меню");
+            AddKey(t, "ui.escape.save", "Зберегти гру");
             AddKey(t, "ui.escape.quit", "Вийти без збереження");
             AddKey(t, "ui.escape.hint", "Esc — відкрити/закрити це меню.");
 
@@ -1413,7 +1416,7 @@ namespace Game.Gameplay.Text
             // крок кнопками, а не автопрогоном "Далі" — прев'ю перевірки
             // заздалегідь (інваріант 8), як і в DecisionScreen.
             AddKey(t, "ui.scene.option_check_line",
-                "{text} — {skill} ≥ {threshold}, виконує: {performer}, очікувана полоса: {band}.");
+                "{text} — {skill} ≥ {threshold}, виконує: {performer}, очікувана смуга: {band}.");
             AddKey(t, "ui.scene.consequence.title", "Наслідок:");
 
             AddKey(t, "ui.start_day", "Почати день");
@@ -1498,10 +1501,10 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.expedition.approach.delve", "Спуститися");
             AddKey(t, "ui.expedition.preview", "Прев'ю");
             AddKey(t, "ui.expedition.depart", "Вирушати");
-            AddKey(t, "ui.expedition.days", "Днів у полі: {days}");
-            AddKey(t, "ui.expedition.threshold", "Поріг: {threshold}");
-            AddKey(t, "ui.expedition.party_value", "Сила відряду: {value}");
-            AddKey(t, "ui.expedition.expected", "Очікувана полоса: {band}");
+            AddKey(t, "ui.expedition.days", "Днів у полі");
+            AddKey(t, "ui.expedition.threshold", "Поріг");
+            AddKey(t, "ui.expedition.party_value", "Сила відряду");
+            AddKey(t, "ui.expedition.expected", "Очікувана смуга");
 
             AddKey(t, "ui.quests.title", "Квести");
             AddKey(t, "ui.quests.none_active", "Пропозицій наразі немає.");
@@ -1535,7 +1538,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "ui.decision.title", "Рішення чекає");
             AddKey(t, "ui.decision.option_line",
-                "{path}: {skill} ≥ {threshold} — {candidate}, очікувана полоса: {band}.");
+                "{path}: {skill} ≥ {threshold} — {candidate}, очікувана смуга: {band}.");
             // Полірування (ціль 6 «Рішення»): DecisionOptionView.TacticalBattleEnemyCount>0.
             AddKey(t, "ui.decision.option_line.battle", "{path}: тактичний бій — {enemies}.");
             AddKey(t, "ui.decision.candidate", "візьметься {name}");
@@ -2180,8 +2183,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.presence.hint", "Відбувається само: хто зараз у вилазці, помер або зрадив, не пропонується виконавцем перевірки — серед кандидатів на постах, вилазці чи в рішеннях таких просто нема.");
             AddKey(t, "journal.decision_point.title", "Точка рішення тихо/криваво");
             AddKey(t, "journal.decision_point.hint", "Коли посеред дня на екрані з'явиться «Рішення чекає», обери «Тихо» або «Криваво» під одним із варіантів.");
-            AddKey(t, "journal.outcome_bands.title", "Чотири полоси наслідку");
-            AddKey(t, "journal.outcome_bands.hint", "Відбувається само: після будь-якого рішення, фіналу чи вибору в квесті стрічка подій показує полосу наслідку — від найгіршої до найкращої.");
+            AddKey(t, "journal.outcome_bands.title", "Чотири смуги наслідку");
+            AddKey(t, "journal.outcome_bands.hint", "Відбувається само: після будь-якого рішення, фіналу чи вибору в квесті стрічка подій показує смугу наслідку — від найгіршої до найкращої.");
             AddKey(t, "journal.empty_post.title", "Порожній пост = Найгірша");
             AddKey(t, "journal.empty_post.hint", "Відбувається само: вкладка Пости — лиши пост порожнім (нікого не признач) і дочекайся дня, коли на ньому трапиться перевірка — вона піде найгіршим шляхом.");
             AddKey(t, "journal.night_patrol.title", "Ніч: патруль чи сон");
@@ -2201,8 +2204,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.post_reports.hint", "Відбувається само: тримай пости зайнятими (вкладка Пости) — щоранку в стрічці подій приходить доповідь із кожного зайнятого поста.");
             AddKey(t, "journal.signals_no_repeat.title", "Сигнали без повторів");
             AddKey(t, "journal.signals_no_repeat.hint", "Відбувається само: той самий сигнал у стрічці подій не повторюється двічі підряд за одну добу.");
-            AddKey(t, "journal.band_change_signal.title", "Зміна полоси чутна");
-            AddKey(t, "journal.band_change_signal.hint", "Відбувається само: щойно лояльність напарника чи ставлення фракції зсувається на іншу полосу, стрічка подій одразу про це повідомляє.");
+            AddKey(t, "journal.band_change_signal.title", "Зміна смуги чутна");
+            AddKey(t, "journal.band_change_signal.hint", "Відбувається само: щойно лояльність напарника чи ставлення фракції зсувається на іншу смугу, стрічка подій одразу про це повідомляє.");
             AddKey(t, "journal.production.title", "Виробництво/голод/лікування");
             AddKey(t, "journal.production.hint", "Відбувається само щодня, коли тиснеш «Почати день»: рахуються їжа й золото, застосовуються голод і лікування — перевір гаманець і стан людей на вкладках Люди й Пости.");
             AddKey(t, "journal.building.title", "Будівництво + рада");
@@ -2216,7 +2219,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.dungeon_delve.title", "Вилазка-данж (Delve)");
             AddKey(t, "journal.dungeon_delve.hint", "Вкладка Вилазка: обери точку «Покинутий табір авангарду», підхід «Спуститися», зберни загін і тисни «Вирушати» — далі відкриється підземелля.");
             AddKey(t, "journal.loot.title", "Лут");
-            AddKey(t, "journal.loot.hint", "Відбувається само: яка полоса наслідку випаде на вилазці чи в підземеллі, така й здобич — від найгіршої до найкращої.");
+            AddKey(t, "journal.loot.hint", "Відбувається само: яка смуга наслідку випаде на вилазці чи в підземеллі, така й здобич — від найгіршої до найкращої.");
             AddKey(t, "journal.equip.title", "Гір/екіпірування");
             AddKey(t, "journal.equip.hint", "Вкладка Спорядження: у Схованці натисни «Одягти: <ім'я>» біля потрібного предмета.");
             AddKey(t, "journal.craft.title", "Крафт");
@@ -2228,7 +2231,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.roster_drama.title", "Зв'язки/бантер/драма загону");
             AddKey(t, "journal.roster_drama.hint", "Відбувається само: смерть чи зрада напарника хвилею зачіпає решту загону — це видно в стрічці подій.");
             AddKey(t, "journal.defection.title", "Зрада/дефекція");
-            AddKey(t, "journal.defection.hint", "Відбувається само: тримай лояльність напарника низькою («Ображена» і нижче) кілька діб поспіль, або дочекайся вечора доби 3 — зрада прийде сценою «Нічна розмова».");
+            AddKey(t, "journal.defection.hint", "Відбувається само: тримай лояльність напарника низькою («Ображена» і нижче) кілька діб поспіль. Або: якщо перевал на добу 1 закінчився гірше, ніж «добре», і Мирослава пішла за батьком, увечері доби 3 зрада прийде сценою «Нічна розмова».");
             AddKey(t, "journal.companion_arc.title", "Особиста арка напарника");
             AddKey(t, "journal.companion_arc.hint", "Відбувається само ввечері, щойно стане доступна наступна глава арки напарника — вона з'явиться сценою або новим пунктом на вкладці Квести.");
             AddKey(t, "journal.quests.title", "Квести (ранкова/вечірня пропозиція)");
@@ -2268,9 +2271,39 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.arc_chapter.title", "Глава арки напарника пройдена");
             AddKey(t, "journal.arc_chapter.hint", "Пройди главу арки напарника до кінця — сценою (кнопки «Далі»/вибір репліки) або квестом на вкладці Квести, залежно від того, чим вона прийшла.");
             AddKey(t, "journal.betrayal_confrontation.title", "Нічна розмова-конфронтація зради");
-            AddKey(t, "journal.betrayal_confrontation.hint", "Дійде сама ввечері доби 3, якщо зрада вже насуває: почнеться сцена «Нічна розмова» — проходь її репліками.");
-            AddKey(t, "journal.building_one_day.title", "Стройка будівлі за одну добу");
+            AddKey(t, "journal.betrayal_confrontation.hint", "Дійде сама ввечері доби 3, якщо зрада вже насувається: почнеться сцена «Нічна розмова» — проходь її репліками.");
+            AddKey(t, "journal.building_one_day.title", "Будівництво за одну добу");
             AddKey(t, "journal.building_one_day.hint", "Вкладка Будівлі: «Замовити» будь-яку будівлю — у тест-збірці вона добудовується за одну добу.");
+        }
+
+        // ==== Дебаг 25.09.2026: видимі відмови й збереження — власний блок ====
+        // ==== у кінці таблиці, щоб мердж інших пакетів лишався тривіальним. ====
+        private static void AddDebugPassKeys(Dictionary<string, string> t)
+        {
+            // Закритий пост: замість кнопок «Призначити», які мовчки нічого не робили.
+            AddKey(t, "ui.posts.locked_by", "Закрито — пост відкриє будівля «{building}».");
+
+            // «Збережено: {slot}.» — куди саме.
+            AddKey(t, "ui.save.to.slot", "слот {slot}");
+            AddKey(t, "ui.save.to.auto", "автозбереження");
+            AddKey(t, "ui.save.failed", "Не вдалося записати збереження на диск: {reason}");
+
+            // Домен передвісника в сцені села — знахідний відмінок для «розмови
+            // про {domain}» (domain.* вище — родовий, під «навколо {domain}»).
+            // Теги — внутрішні теги ядра (DefaultIncidents, ForcedCrisisSource,
+            // DefaultSites), гравець їх не бачить.
+            AddKey(t, "domain.acc.площадь", "площу");
+            AddKey(t, "domain.acc.улицы", "вулиці");
+            AddKey(t, "domain.acc.ночь", "ніч");
+            AddKey(t, "domain.acc.перевал", "перевал");
+            AddKey(t, "domain.acc.в'їзд", "в'їзд");
+            AddKey(t, "domain.acc.road", "дорогу");
+            AddKey(t, "domain.acc.craft", "ремесло");
+            AddKey(t, "domain.acc.trade", "торгівлю");
+            AddKey(t, "domain.acc.default", "місто");
+            // Родовий для тега тестової кризи (ForcedCrisisSource): без нього
+            // «навколо {domain}» отримувало сире «в'їзд» замість «в'їзду».
+            AddKey(t, "domain.в'їзд", "в'їзду");
         }
     }
 }

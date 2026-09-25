@@ -293,6 +293,19 @@ namespace Game.Core.Base
         }
 
         /// <summary>
+        /// Чи прийме рада переселенців просто зараз — ті самі умови, що й
+        /// <see cref="OrderSettlers"/>, крім їжі (її брак кнопка показує
+        /// відмовою). Раніше CityView брав лише «зала ради стоїть», і кнопка
+        /// лишалась активною на відкаті, а клік мовчки нічого не робив.
+        /// </summary>
+        public bool SettlersReady(int today, BalanceConfig balance)
+        {
+            return Has(DefaultBuildings.CouncilHall)
+                && _settlersQueued == 0
+                && today - _lastSettlersDay >= balance.City.SettlersCooldownDays;
+        }
+
+        /// <summary>
         /// Приймання переселенців — «рішення в місті» зі слів власника. Платиться
         /// їжею: нові роти треба годувати, і це чесна ціна зростання.
         /// </summary>

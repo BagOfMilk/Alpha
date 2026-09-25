@@ -165,11 +165,11 @@ namespace Game.Core.Loop
         internal static void Restore(DayProcessor p, string blob)
         {
             if (p == null) throw new ArgumentNullException(nameof(p));
-            if (string.IsNullOrEmpty(blob)) throw new ArgumentException("Пустой слепок", nameof(blob));
+            if (string.IsNullOrEmpty(blob)) throw new ArgumentException("Порожній зліпок збереження", nameof(blob));
 
             var parts = blob.Split(';');
             if (parts.Length == 0 || parts[0] != Version)
-                throw new InvalidOperationException("Слепок другой версии: " + (parts.Length > 0 ? parts[0] : "?"));
+                throw new InvalidOperationException("Збереження іншої версії гри: " + (parts.Length > 0 ? parts[0] : "?"));
 
             for (int i = 1; i < parts.Length; i++)
             {

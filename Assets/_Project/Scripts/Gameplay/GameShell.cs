@@ -199,12 +199,39 @@ namespace Game.Gameplay
         private void Update()
         {
             if (_quitRequested) HardExit.Now(0); // §HandleWantsToQuit — той самий безпечний вихід (HardExit)
+            PersistAutosaveIfNew();
+        }
+
+        /// <summary>Версія автосейву, уже записана на диск (<see cref="GameSession.AutosaveVersion"/>).</summary>
+        private int _persistedAutosaveVersion;
+
+        /// <summary>
+        /// Ранковий автосейв ядро кладе лише в пам'ять сесії — файл пишемо тут,
+        /// щойно з'явилась нова версія. Раніше на диск не потрапляв жоден
+        /// автосейв, і «Продовжити» після перезапуску його не знаходило.
+        /// </summary>
+        private void PersistAutosaveIfNew()
+        {
+            if (Session == null || Session.AutosaveVersion == _persistedAutosaveVersion) return;
+            _persistedAutosaveVersion = Session.AutosaveVersion;
+            string blob = Session.AutosaveBlob;
+            if (blob == null) return;
+            var view = Session.CurrentView;
+            try
+            {
+                SaveFileStore.Write(SaveFileStore.AutosaveSlot, blob, view?.TensionBand, view?.Day ?? 0);
+            }
+            catch (System.IO.IOException ex)
+            {
+                LastMessage = UkrainianText.Format("ui.save.failed", ProtagonistGender, "reason", ex.Message);
+            }
         }
 
         private void OnGUI()
         {
             GUI.skin = AlphaSkin.Build();
             if (Session == null) return;
+            if (PortraitProvider != null) PortraitProvider.ProtagonistGender = ProtagonistGender;
 
             // Поправка №7.8, п.1 (тест-збірка): у стані Evening сесія НІКОМУ
             // сама не штовхає сценарний зміст (особисті арки напарників,
@@ -645,6 +672,35 @@ namespace Game.Gameplay
                 LastMessage = ex.Message;
             }
         }
+
+        /// <summary>
+        /// Команда, що відмовляє КОДОМ, а не винятком (AssignmentResult,
+        /// BuildOrderResult, CouncilOrderResult, DispatchResult, CraftResult):
+        /// <paramref name="failureText"/> повертає текст відмови або null для
+        /// успіху, і відмову видно рядком під екраном. Раніше екрани кликали
+        /// звичайний <see cref="TryRun"/>, код губився, і клік на відкаті чи на
+        /// закритому пості просто нічого не робив (дебаг 25.09.2026).
+        /// </summary>
+        public T TryRunReported<T>(Func<T> action, Func<T, string> failureText, T fallback = default)
+        {
+            if (action == null) return fallback;
+            try
+            {
+                var result = action();
+                string failure = failureText != null ? failureText(result) : null;
+                LastMessage = failure ?? string.Empty;
+                FeedVillageStage();
+                return result;
+            }
+            catch (InvalidOperationException ex)
+            {
+                LastMessage = ex.Message;
+                return fallback;
+            }
+        }
+
+        /// <summary>Підтвердження дії, у якої немає власного рядка в стрічці (напр. збереження на диск).</summary>
+        public void Notify(string message) => LastMessage = message ?? string.Empty;
 
         public T TryRun<T>(Func<T> action, T fallback = default)
         {

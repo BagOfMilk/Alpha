@@ -25,7 +25,17 @@ namespace Game.Gameplay.UI
                 {
                     if (Widgets.SecondaryButton(UkrainianText.Get("ui.escape.save", g)))
                     {
-                        shell.TryRun(() => shell.Session.SaveState(Game.Gameplay.SaveFileStore.AutosaveSlot));
+                        // SaveState лише кладе зліпок у пам'ять сесії — файл пише
+                        // оболонка. Раніше ця кнопка файл не писала взагалі, і після
+                        // виходу з гри «збережене» зникало (дебаг 25.09.2026).
+                        int slot = Game.Gameplay.SaveFileStore.AutosaveSlot;
+                        string blob = shell.TryRun(() => shell.Session.SaveState(slot));
+                        if (blob != null)
+                        {
+                            var view = shell.Session.CurrentView;
+                            Game.Gameplay.SaveFileStore.Write(slot, blob, view.TensionBand, view.Day);
+                            shell.Notify(UkrainianText.Format("game.saved", g, "slot", ScreenText.SavedToLabel(slot, g)));
+                        }
                         shell.SetEscapeOpen(false);
                     }
                 }

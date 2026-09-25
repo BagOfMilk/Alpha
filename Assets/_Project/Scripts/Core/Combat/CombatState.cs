@@ -103,7 +103,7 @@ namespace Game.Core.Combat
         public void AddUnit(CombatUnit unit, GridPos pos)
         {
             if (unit == null || _byId.ContainsKey(unit.Id)) return;
-            if (!Map.IsFree(pos)) throw new InvalidOperationException($"Тайл {pos} занят или непроходим");
+            if (!Map.IsFree(pos)) throw new InvalidOperationException($"Клітинка {pos} зайнята або непрохідна");
             unit.Pos = pos;
             Map.SetOccupant(pos, unit.Id);
             _units.Add(unit);
@@ -956,7 +956,7 @@ namespace Game.Core.Combat
         {
             if (pairs == null || pairs.Length == 0) return null;
             if (pairs.Length % 2 != 0)
-                throw new ArgumentException("Аргументы журнала боя — пары «имя, значение»", nameof(pairs));
+                throw new ArgumentException("Аргументи журналу бою — пари «ім'я, значення»", nameof(pairs));
             var args = new Dictionary<string, string>(pairs.Length / 2, StringComparer.Ordinal);
             for (int i = 0; i < pairs.Length; i += 2) args[pairs[i]] = pairs[i + 1];
             return args;

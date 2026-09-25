@@ -328,6 +328,29 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Дебаг 25.09.2026: CityView.SettlersReady брав лише «зала ради стоїть»,
+        /// і кнопка переселенців лишалась активною в черзі й на відкаті, а клік
+        /// мовчки нічого не робив. Готовність — ті самі умови, що в OrderSettlers
+        /// (крім їжі: її брак кнопка показує відмовою).
+        /// </summary>
+        [Test]
+        public void SettlersReady_FollowsQueueAndCooldown()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg, population: 80);
+            Assert.IsTrue(c.Works.SettlersReady(1, cfg));
+
+            Give(c.State, 0, 0, cfg.City.SettlersFoodCost);
+            Assert.AreEqual(CouncilOrderResult.Queued, c.Works.OrderSettlers(c.State, 1, cfg));
+            Assert.IsFalse(c.Works.SettlersReady(1, cfg), "переселенці вже в черзі");
+
+            c.Processor.AdvanceFullDay();
+            int today = c.Processor.CurrentDay + 1;
+            Assert.IsFalse(c.Works.SettlersReady(today, cfg), "на відкаті");
+            Assert.IsTrue(c.Works.SettlersReady(today + cfg.City.SettlersCooldownDays, cfg), "відкат минув");
+        }
+
+        /// <summary>
         /// Фікс-ревью (major, DepartExpedition/D1): PeekExpeditionOutfitBuff()
         /// не знімає накопичений бонус — лише TakeExpeditionOutfitBuff() знімає,
         /// і рівно раз. До цього фіксу єдиним доступом ззовні був Take, і

@@ -43,13 +43,22 @@ namespace Game.Gameplay
 
         /// <summary>
         /// Рід протагоніста — <c>IPortraitProvider.GetPortrait</c> не приймає
-        /// сесію (фіксована сигнатура шва Presenters.cs), тож
-        /// <see cref="BattleArenaController.Enter"/> (сусідній компонент на
-        /// тому самому <c>ArenaRoot</c>) виставляє це поле з
-        /// <c>GameSession.GetProtagonistCreationView().Gender</c> перед боєм.
-        /// За замовчуванням — Male, як і в самому фасаді до створення персонажа.
+        /// сесію, тож рід виставляє оболонка (<c>GameShell</c>, щокадру) і
+        /// контролер бою на вході в бій. Зміна роду скидає вже намальований
+        /// портрет протагоніста: інакше в кеші лишалась би модель іншої статі.
         /// </summary>
-        public Gender ProtagonistGender = Gender.Male;
+        public Gender ProtagonistGender
+        {
+            get => _protagonistGender;
+            set
+            {
+                if (_protagonistGender == value) return;
+                _protagonistGender = value;
+                _cache.Remove(GameSession.ProtagonistId);
+            }
+        }
+
+        private Gender _protagonistGender = Gender.Male;
 
         /// <summary>
         /// Фікс-ревью (блокер): шар 30 (незайнятий у TagManager.asset — усі
@@ -201,9 +210,9 @@ namespace Game.Gameplay
 
         private GameObject PickPrefab(string characterId)
         {
-            bool female = string.Equals(characterId, "myroslava", System.StringComparison.Ordinal) ||
-                (string.Equals(characterId, GameSession.ProtagonistId, System.StringComparison.Ordinal) &&
-                 ProtagonistGender == Gender.Female);
+            // Той самий фіксований каст, що й у граматиці стрічки (ScreenText.SubjectGender):
+            // раніше тут була лише Мирослава, і знахарка Гафія отримувала чоловічу модель.
+            bool female = Game.Gameplay.UI.ScreenText.SubjectGender(characterId, ProtagonistGender) == Gender.Female;
             var pool = female ? FemaleCharacterPrefabs : MaleCharacterPrefabs;
             if (pool == null || pool.Length == 0) return null;
             int index = (int)(BattleArenaView.Hash01(characterId) * pool.Length);

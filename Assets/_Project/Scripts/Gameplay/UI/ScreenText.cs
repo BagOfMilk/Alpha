@@ -358,13 +358,23 @@ namespace Game.Gameplay.UI
         /// </summary>
         public static string SaveSlotLine(int slot, bool occupied, string headline, int day, Gender gender)
         {
-            string slotLabel = slot == AutosaveSlotSentinel
-                ? UkrainianText.Get("ui.save.slot.auto_label", gender)
-                : slot.ToString();
+            string slotLabel = SlotLabel(slot, gender);
+            // Заголовок слота — сира смуга Напруги ("Calm"), яку пише SaveFileStore.Write;
+            // раніше вона йшла на титул і вкладку збереження англійським словом.
             return occupied
-                ? UkrainianText.Format("ui.save.slot", gender, "slot", slotLabel, "headline", headline ?? "", "day", day.ToString())
+                ? UkrainianText.Format("ui.save.slot", gender, "slot", slotLabel, "headline", MoodChip(headline, gender), "day", day.ToString())
                 : UkrainianText.Format("ui.save.slot.empty", gender, "slot", slotLabel);
         }
+
+        /// <summary>Номер слота словами: автослот (-1) — «Автозбереження», решта — номер.</summary>
+        public static string SlotLabel(int slot, Gender gender)
+            => slot == AutosaveSlotSentinel ? UkrainianText.Get("ui.save.slot.auto_label", gender) : slot.ToString();
+
+        /// <summary>Куди збережено — для «Збережено: {slot}.»: «слот 2» або «автозбереження», не «слот -1».</summary>
+        public static string SavedToLabel(int slot, Gender gender)
+            => slot == AutosaveSlotSentinel
+                ? UkrainianText.Get("ui.save.to.auto", gender)
+                : UkrainianText.Format("ui.save.to.slot", gender, "slot", slot.ToString());
 
         // ===================== фідбек результатів команд =====================
 
@@ -499,6 +509,39 @@ namespace Game.Gameplay.UI
             }
         }
 
+        // ---- тексти ВІДМОВ: null для успіху (GameShell.TryRunReported) ----
+        // Екрани раніше кликали команди, що відмовляють кодом, звичайним
+        // TryRun — код губився, і клік на відкаті чи на закритому пості мовчки
+        // нічого не робив. Самі тексти вище були готові, але їх не кликав ніхто.
+
+        public static string AssignFailure(AssignmentResult r, Gender g)
+            => r == AssignmentResult.Success ? null : AssignResultText(r, g);
+
+        public static string BuildFailure(BuildOrderResult r, Gender g)
+            => r == BuildOrderResult.Started ? null : BuildResultText(r, g);
+
+        public static string CouncilFailure(CouncilOrderResult r, Gender g)
+            => r == CouncilOrderResult.Applied || r == CouncilOrderResult.Queued ? null : CouncilResultText(r, g);
+
+        public static string DispatchFailure(DispatchResult r, Gender g)
+            => r == DispatchResult.Success ? null : DispatchResultText(r, g);
+
+        public static string CraftFailure(CraftResult r, Gender g)
+            => r == CraftResult.Success ? null : CraftResultText(r, g);
+
+        /// <summary>
+        /// Чому пост закритий: «Закрито — відкриє будівля «Майстерня»». Будівлю
+        /// шукаємо в тому самому каталозі, що відкриває пост
+        /// (<c>BuildingDefinition.OpensSlotId</c>); якщо такої нема — загальна причина.
+        /// </summary>
+        public static string PostLockedReason(string postId, Gender g)
+        {
+            foreach (var def in DefaultBuildings.All())
+                if (def != null && def.OpensSlotId == postId)
+                    return UkrainianText.Format("ui.posts.locked_by", g, "building", UkrainianText.Get("building." + def.Id, g));
+            return UkrainianText.Get("ui.feedback.assign.slot_locked", g);
+        }
+
         public static string BuildPlanResultText(BuildPlanStatus r, Gender g)
         {
             switch (r)
@@ -543,6 +586,8 @@ namespace Game.Gameplay.UI
             string domain = ContentLabel("domain", Arg(a, "domain"), gender);
             string day = Arg(a, "day") ?? "";
             string slot = Arg(a, "slot") ?? "";
+            int slotNumber;
+            if (int.TryParse(slot, out slotNumber)) slot = SavedToLabel(slotNumber, gender); // "game.saved" автослота — не «слот -1»
             string level = Arg(a, "level") ?? "";
             // Глава арки: назва за ключем, який ядро кладе в подію
             // (chapterTitleKey = ArcChapter.TitleKey). Раніше сюди йшов сирий

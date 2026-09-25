@@ -29,5 +29,13 @@ namespace Game.Gameplay.UI
     public interface IPortraitProvider
     {
         Texture2D GetPortrait(string characterId);
+
+        /// <summary>
+        /// Рід протагоніста для його портрета. Оболонка виставляє його щокадру
+        /// (<c>GameShell.OnGUI</c>): раніше це робив лише контролер бою на
+        /// вході в бій, і в сценах до першого бою героїня отримувала чоловічу
+        /// модель (дебаг 25.09.2026).
+        /// </summary>
+        Game.Core.Characters.Creation.Gender ProtagonistGender { get; set; }
     }
 }

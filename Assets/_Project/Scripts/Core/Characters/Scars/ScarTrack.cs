@@ -57,6 +57,19 @@ namespace Game.Core.Characters.Scars
             return false;
         }
 
+        /// <summary>
+        /// Відновлення зі збереження: трек стає рівно таким, яким був у зліпку.
+        /// <c>internal</c> навмисно — у грі шрам не знімається (див. коментар
+        /// класу), і Game.Gameplay цього методу не бачить; заміна існує лише
+        /// для того, щоб завантаження повертало збережену історію.
+        /// </summary>
+        internal void RestoreFromSave(IEnumerable<ScarDefinition> scars)
+        {
+            _scars.Clear();
+            if (scars == null) return;
+            foreach (var scar in scars) Add(scar);
+        }
+
         /// <summary>Повторне присвоєння того самого шраму нічого не змінює.</summary>
         public bool Add(ScarDefinition scar)
         {

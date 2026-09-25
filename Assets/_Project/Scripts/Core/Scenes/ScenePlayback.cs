@@ -155,7 +155,7 @@ namespace Game.Core.Scenes
         /// </summary>
         public void Choose(int optionIndex)
         {
-            if (!IsAwaitingChoice) throw new InvalidOperationException("Сцена не стоит на выборе.");
+            if (!IsAwaitingChoice) throw new InvalidOperationException("Сцена не стоїть на виборі.");
             var options = _pendingOptions;
             if (options == null || optionIndex < 0 || optionIndex >= options.Count)
                 throw new ArgumentOutOfRangeException(nameof(optionIndex));
