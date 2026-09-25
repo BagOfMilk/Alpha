@@ -598,7 +598,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "tension.band.label.calm", "Спокій");
             AddKey(t, "tension.band.label.murmur", "Ропіт");
             AddKey(t, "tension.band.label.ferment", "Бродіння");
-            AddKey(t, "tension.band.label.heat", "Накал");
+            AddKey(t, "tension.band.label.heat", "Розпал");
             AddKey(t, "tension.band.label.fracture", "Злам");
 
             AddKey(t, "readiness.band.unprepared", "Непідготовлена");
@@ -1250,7 +1250,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "tension.band.Calm", "«Стихає. Нарешті».");
             AddKey(t, "tension.band.Murmur", "«З'явився ропіт — чути по дворах».");
             AddKey(t, "tension.band.Ferment", "«Бродить. Люди сходяться гуртками».");
-            AddKey(t, "tension.band.Heat", "«Накалюється. Це вже не приховати».");
+            AddKey(t, "tension.band.Heat", "«Розпалюється. Це вже не приховати».");
             // Фікс-ревью (Поправка №7, тестовий темп): раніше цей рядок був
             // буквально той самий текст, що й "tension.band.risen" — слабкий
             // навіть для проміжного зсуву, а тут це ВЕРХНЯ полоса, за крок
@@ -1736,7 +1736,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.mood.calm", "Спокій");
             AddKey(t, "ui.mood.murmur", "Ропіт");
             AddKey(t, "ui.mood.ferment", "Бродіння");
-            AddKey(t, "ui.mood.heat", "Накал");
+            AddKey(t, "ui.mood.heat", "Розпал");
             AddKey(t, "ui.mood.fracture", "Розкол");
 
             // SessionView.CrowdBand — рядок GameSession.CrowdBandName(int), буквально
@@ -1747,7 +1747,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.crowd.village", "Село");
             AddKey(t, "ui.crowd.settlement", "Слобода");
             AddKey(t, "ui.crowd.town", "Містечко");
-            AddKey(t, "ui.crowd.city", "Город");
+            AddKey(t, "ui.crowd.city", "Місто");
 
             AddKey(t, "ui.threat.calm", "Спокійно");
             AddKey(t, "ui.threat.tense", "Напружено");
@@ -2158,7 +2158,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.tension_band_change.title", "Настрій міста рухається");
             AddKey(t, "journal.tension_band_change.hint", "Відбувається само: у тестовому темпі перший помітний зсув настрою — близько п'ятнадцятої доби, другий — близько двадцятої. Облава ради, Храм і Укріплення відсувають це далі; кровавий шлях, голод і порожні пости — наближають.");
             AddKey(t, "journal.great_crisis.title", "Великий бунт на площі");
-            AddKey(t, "journal.great_crisis.hint", "Відбувається само: коли настрій міста доходить до Накалу, на площі накопичується власна загроза — три перестороги про натовп, остання за добу-дві до розв'язки, і сам бунт близько двадцять п'ятої доби, якщо нічого не робити. Рада, Храм і Укріплення відсувають його; кров, голод і порожні пости — прискорюють. Не плутай із пожежею доби п'ятої вище — це друга, пізніша криза.");
+            AddKey(t, "journal.great_crisis.hint", "Відбувається само: коли настрій міста доходить до Розпалу, на площі накопичується власна загроза — три перестороги про натовп, остання за добу-дві до розв'язки, і сам бунт близько двадцять п'ятої доби, якщо нічого не робити. Рада, Храм і Укріплення відсувають його; кров, голод і порожні пости — прискорюють. Не плутай із пожежею доби п'ятої вище — це друга, пізніша криза.");
             AddKey(t, "journal.post_reports.title", "Доповіді з постів");
             AddKey(t, "journal.post_reports.hint", "Відбувається само: тримай пости зайнятими (вкладка Пости) — щоранку в стрічці подій приходить доповідь із кожного зайнятого поста.");
             AddKey(t, "journal.signals_no_repeat.title", "Сигнали без повторів");
