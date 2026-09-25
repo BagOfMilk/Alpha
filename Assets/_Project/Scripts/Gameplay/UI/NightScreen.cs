@@ -25,6 +25,18 @@ namespace Game.Gameplay.UI
         private int _questOfferDay = int.MinValue;
         private SessionState _questOfferState = (SessionState)(-1);
 
+        /// <summary>
+        /// Максимова квестова глава арки «Не за кров» (Поправка №7.8, п.4):
+        /// той самий кеш, що вище, для ДРУГОЇ незалежної лінії — без нього
+        /// щойно відкрита GameShell.MaybeRouteOfferedSceneContent глава не
+        /// мала б ЖОДНОГО видимого екрана в Evening/Night (лише в HubScreen.
+        /// DrawQuests на ранковій вкладці «Квести», куди гравець і не
+        /// зазирнув би того самого вечора).
+        /// </summary>
+        private QuestOfferView _maksymQuestOffer;
+        private int _maksymQuestOfferDay = int.MinValue;
+        private SessionState _maksymQuestOfferState = (SessionState)(-1);
+
         public void Draw(GameShell shell)
         {
             var g = shell.ProtagonistGender;
@@ -68,10 +80,27 @@ namespace Game.Gameplay.UI
                 _questOfferDay = view.Day;
                 _questOfferState = state;
             }
+            if (_maksymQuestOffer == null || _maksymQuestOfferDay != view.Day || _maksymQuestOfferState != state)
+            {
+                _maksymQuestOffer = shell.TryRun(() => shell.Session.OfferQuestStage(DefaultQuests.MaksymCh1Id));
+                _maksymQuestOfferDay = view.Day;
+                _maksymQuestOfferState = state;
+            }
 
-            var offer = _questOffer;
-            if (offer == null) return;
+            if (_questOffer != null && DrawOneQuestOffer(shell, g, _questOffer)) _questOffer = null;
+            if (_maksymQuestOffer != null && DrawOneQuestOffer(shell, g, _maksymQuestOffer)) _maksymQuestOffer = null;
+        }
 
+        /// <summary>
+        /// Один рядок пропозиції квесту — узагальнено з єдиної Гафіїної лінії
+        /// (Поправка №7.8, п.4), тим самим малюнком: етап 0 показує офферний
+        /// текст, Choice-етап — кнопки варіантів, Check-етап (без Options) —
+        /// голий "Підтвердити" (саме так Гафіїн етап "grass" і резолвиться
+        /// увечері — у нього немає готового варіанту, лише сама перевірка).
+        /// </summary>
+        private static bool DrawOneQuestOffer(GameShell shell, Gender g, QuestOfferView offer)
+        {
+            bool consumed = false;
             Widgets.Section(UkrainianText.Get("ui.quest.offer.title", g), () =>
             {
                 if (offer.Stage == 0 && UkrainianText.Has(DefaultQuests.OfferKey, g))
@@ -89,8 +118,20 @@ namespace Game.Gameplay.UI
                         {
                             if (Widgets.PrimaryButton(label))
                             {
-                                shell.TryRun(() => shell.Session.ResolveQuestChoice(index));
-                                _questOffer = null; // етап міг змінитись — перезапит наступним кадром
+                                int idx = index;
+                                string questId = offer.QuestId;
+                                // Дві незалежні лінії квесту водночас (Гафія +
+                                // Максим) ділять ОДИН GameSession.
+                                // _currentQuestOffer (той самий фікс, що вже
+                                // в HubScreen.DrawQuestOffer) — перезапит
+                                // цього questId ПРЯМО перед ResolveQuestChoice
+                                // синхронізує вказівник назад на нього.
+                                shell.TryRun(() =>
+                                {
+                                    shell.Session.OfferQuestStage(questId);
+                                    shell.Session.ResolveQuestChoice(idx);
+                                });
+                                consumed = true;
                             }
                         }
                         else
@@ -101,10 +142,16 @@ namespace Game.Gameplay.UI
                 }
                 else if (Widgets.PrimaryButton(UkrainianText.Get("ui.common.confirm", g)))
                 {
-                    shell.TryRun(() => shell.Session.ResolveQuestChoice(0));
-                    _questOffer = null;
+                    string questId = offer.QuestId;
+                    shell.TryRun(() =>
+                    {
+                        shell.Session.OfferQuestStage(questId);
+                        shell.Session.ResolveQuestChoice(0);
+                    });
+                    consumed = true;
                 }
             });
+            return consumed;
         }
 
         private static void DrawPatrol(GameShell shell, Gender g)

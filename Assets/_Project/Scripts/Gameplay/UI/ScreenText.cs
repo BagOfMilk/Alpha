@@ -265,9 +265,29 @@ namespace Game.Gameplay.UI
             return UkrainianText.Get("loyalty.band." + band.Value.ToString().ToLowerInvariant(), gender);
         }
 
+        /// <summary>
+        /// Фікс-ревью (Поправка №7.8, п.1, знайдено тур-автоплеєм на Choice-
+        /// екрані): протагоніст — ІМ'Я ГРАВЦЯ (роСтер, SetProtagonistName),
+        /// не лорова константа. Загальний пошук "char."+id нижче коректний
+        /// для іменного складу (Мирослава/Захар/Тугар — там ім'я справді
+        /// незмінний лорсько-текстовий факт), але "char.protagonist.m"/".f"
+        /// — це лише ЗАГЛУШКИ-ПІДКАЗКИ (той самий текст, що
+        /// "ui.creation.name.default.*" на екрані створення, ДО того, як
+        /// гравець щось увів) — без цього винятку вони підміняли б справжнє
+        /// обране ім'я ("Оксана") генеричним "Провідниця" на КОЖНОМУ
+        /// портреті й підписі мовця сцени, включно з новим Choice-екраном.
+        /// </summary>
         public static string ResolveCompanionName(string companionId, Gender gender, RosterView roster)
         {
             if (string.IsNullOrEmpty(companionId)) return string.Empty;
+
+            if (companionId == GameSession.ProtagonistId)
+            {
+                var protagonist = FindCompanion(roster, companionId);
+                if (protagonist != null && !string.IsNullOrEmpty(protagonist.DisplayName))
+                    return protagonist.DisplayName;
+            }
+
             string charKey = "char." + companionId;
             if (UkrainianText.Has(charKey, gender)) return UkrainianText.Get(charKey, gender);
 
