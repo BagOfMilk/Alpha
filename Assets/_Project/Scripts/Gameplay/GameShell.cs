@@ -30,6 +30,16 @@ namespace Game.Gameplay
         private readonly TitleScreen _title = new TitleScreen();
         private readonly CreationScreen _creation = new CreationScreen();
         private readonly SceneScreen _scene = new SceneScreen();
+
+        /// <summary>
+        /// Тур-автоплей (Поправка №7.8, п.4): цей самий екземпляр малює
+        /// <c>OnGUI</c> — водій просуває сцену/вибір через нього
+        /// (<c>SceneScreen.DriverAdvance/DriverChoose/DriverContinueConsequence</c>),
+        /// а не напряму через <c>Session</c>, інакше в екрана з'явився б
+        /// ДРУГИЙ, розсинхронізований курсор (див. коментар над цими
+        /// методами в SceneScreen.cs).
+        /// </summary>
+        public SceneScreen Scene => _scene;
         private readonly HubScreen _hub = new HubScreen();
         private readonly DecisionScreen _decision = new DecisionScreen();
         private readonly NightScreen _night = new NightScreen();
@@ -128,6 +138,19 @@ namespace Game.Gameplay
         {
             GUI.skin = AlphaSkin.Build();
             if (Session == null) return;
+
+            // Поправка №7.8, п.1 (тест-збірка): у стані Evening сесія НІКОМУ
+            // сама не штовхає сценарний зміст (особисті арки напарників,
+            // «Нічна розмова»/тиха перевірка Мирослави доба 3, рада Захара
+            // доба 5) — GameSession лише ДОЗВОЛЯЄ його викликати
+            // (RequireAnyState), а хто саме й коли викликає — вирішує
+            // сторона, що керує сесією (у headless-прогонах це
+            // BotRunner.MaybeOfferQuest/MaybeAdvanceArcChapterScene/
+            // MaybeOfferScriptedScene). У Unity-збірці керує гравець, тож цю
+            // саму роль тут бере оболонка — інакше жоден із цих сценаріїв
+            // ніколи не показався б людині, хоч ядро повністю готове його
+            // зіграти.
+            RouteOfferedSceneContentIfAvailable();
 
             var state = Session.State;
 
@@ -231,6 +254,69 @@ namespace Game.Gameplay
             }
 
             DrawFullScreen(() => _battleFallback.Draw(this));
+        }
+
+        /// <summary>
+        /// Порядок і гейти — буквально ті самі, що <c>BotRunner.DoTick</c>
+        /// (<c>case SessionState.Evening</c>): особисті арки Мирослави й
+        /// Максима (сцена — глава 1/епілог), квестова глава Максима (реєструє
+        /// й одразу пропонує; далі гравець резолвить її вкладкою «Квести»,
+        /// як і Гафіїн квест), «Нічна розмова»/тиха перевірка Мирослави доба
+        /// 3, рада Захара доба 5. Кожен крок сам собою гейтований (флаг/день/
+        /// <c>IsArcChapterAvailable</c>) — повторний виклик того самого кадру,
+        /// коли попередній крок УЖЕ перевів сесію зі стану Evening (сцена
+        /// почалась), нешкідливий но-оп: наступний крок просто не пробує
+        /// нічого, побачивши чужий стан. Публічний і викликається З ДВОХ
+        /// місць (фікс-ревью, блокер, знайдено QA): звідси — щокадру для
+        /// реального гравця, і <c>AutoplayGameDriver</c> — напряму й
+        /// синхронно, БЕЗ очікування кадру (див. коментар у
+        /// <c>AutoplayGameDriver</c> над викликом). Кадровий каданс OnGUI
+        /// (Layout/Repaint-події) у фоновому (без фокуса вікна) прогоні
+        /// виявився недетермінованим — той самий білд на тих самих вхідних
+        /// даних інколи не встигав дати OnGUI жодного проходу за
+        /// WaitFrames(2), тож «Нічна розмова»/рада Захара/Максимів квест
+        /// мовчки пропускались у частині прогонів і показувались в інших
+        /// (QA: 0/3 незалежних повторних прогони проти 2/2 авторських —
+        /// однаковий сід, той самий build 0a5cfe0). Виклик, гейтований лише
+        /// станом сесії (а не кадром), ідемпотентний для обох викликачів.
+        /// </summary>
+        public void RouteOfferedSceneContentIfAvailable()
+        {
+            if (Session.State != SessionState.Evening) return;
+            TryBeginArcSceneIfAvailable("myroslava");
+
+            if (Session.State != SessionState.Evening) return;
+            TryBeginArcSceneIfAvailable("maksym");
+
+            if (Session.State != SessionState.Evening) return;
+            TryBeginArcQuestIfAvailable("maksym");
+
+            if (Session.State != SessionState.Evening) return;
+            TryRun(() => Session.OfferMyroslavaEveningScene(), null);
+
+            if (Session.State != SessionState.Evening) return;
+            TryRun(() => Session.OfferZakharCouncilScene(), null);
+        }
+
+        /// <summary>Глава арки, чий зміст — сцена з вибором (<see cref="GameSession.BeginArcChapterScene"/>) — лише коли вона щойно доступна.</summary>
+        private void TryBeginArcSceneIfAvailable(string companionId)
+        {
+            if (!Session.IsArcChapterAvailable(companionId) || !Session.IsArcChapterSceneContent(companionId)) return;
+            TryRun(() => Session.BeginArcChapterScene(companionId), null);
+        }
+
+        /// <summary>
+        /// Глава арки, чий зміст — квест (<see cref="GameSession.BeginArcChapterQuest"/>,
+        /// наразі лише Максим ч.1): реєструє визначення в пулі й пропонує
+        /// перший етап — сесія лишається в Evening (на відміну від сценової
+        /// глави, це НЕ SessionState.Scene), тож подальші етапи гравець
+        /// резолвить вкладкою «Квести» (<c>HubScreen.DrawQuests</c>), тим
+        /// самим шляхом, що й Гафіїн квест.
+        /// </summary>
+        private void TryBeginArcQuestIfAvailable(string companionId)
+        {
+            if (!Session.IsArcChapterAvailable(companionId) || !Session.IsArcChapterQuestContent(companionId)) return;
+            TryRun(() => Session.BeginArcChapterQuest(companionId), null);
         }
 
         /// <summary>Хаб-стани (Morning/Day/Decision/Evening/Night/Dungeon/FreePlay) — спільна шапка + стрічка подій навколо власного вмісту екрана.</summary>

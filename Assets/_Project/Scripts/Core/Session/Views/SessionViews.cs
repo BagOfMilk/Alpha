@@ -42,6 +42,9 @@ namespace Game.Core.Session.Views
         public IReadOnlyList<BuildingView> InProgress;
         public bool RaidReady;
         public bool SettlersReady;
+
+        /// <summary>Тест-збірка (Поправка №7.8, п.3): кожна будівля будується рівно 1 добу, а не за <c>BuildingDefinition.Days</c> — картка вкладки «Будівлі» показує саме цей ефективний термін, коли прапорець true.</summary>
+        public bool TestBuildOneDayConstruction;
     }
 
     public sealed class RosterView

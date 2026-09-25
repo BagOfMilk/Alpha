@@ -2159,7 +2159,8 @@ namespace Game.Core.Session
                 Built = built,
                 InProgress = inProgress,
                 RaidReady = _works.RaidReady(_processor.CurrentDay, _cfg),
-                SettlersReady = _works.Has(DefaultBuildingsType.CouncilHall)
+                SettlersReady = _works.Has(DefaultBuildingsType.CouncilHall),
+                TestBuildOneDayConstruction = _works.OneDayConstruction
             };
         }
 

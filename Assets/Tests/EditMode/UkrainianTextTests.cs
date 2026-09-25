@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Game.Core.Characters.Creation;
 using Game.Gameplay.Text;
 using NUnit.Framework;
@@ -92,6 +93,36 @@ namespace Game.Tests.EditMode
                 if (text.Contains("(-")) problems.Add(key + ": " + text);
             }
             CollectionAssert.IsEmpty(problems, "Сира дужкова нотація роду (мало бути розщеплено на .m/.f): " + string.Join("; ", problems));
+        }
+
+        /// <summary>
+        /// Тест-збірка (Поправка №7.8, п.1 DELIVER): підказки журналу механік
+        /// ("як викликати") написані для гравця словами екранів і кнопок, а
+        /// не кодом — жодного викличного синтаксису на кшталт "Assign(" чи
+        /// "AdvanceDay()", і жодної латиниці взагалі (ідентифікатора класу/
+        /// методу серед українського тексту).
+        /// </summary>
+        private static readonly Regex CodeCallPattern = new Regex(@"[A-Za-z_][A-Za-z0-9_]*\s*\(");
+        private static readonly Regex AsciiLetter = new Regex(@"[A-Za-z]");
+
+        [Test]
+        public void JournalHints_NoCodeCallSyntaxOrAsciiIdentifiers()
+        {
+            var problems = new List<string>();
+            foreach (var key in UkrainianText.AllKeys)
+            {
+                if (!key.StartsWith("journal.", System.StringComparison.Ordinal) ||
+                    !key.EndsWith(".hint", System.StringComparison.Ordinal))
+                    continue;
+
+                string text = UkrainianText.Get(key, Gender.Male);
+                if (CodeCallPattern.IsMatch(text))
+                    problems.Add(key + " (виклик-синтаксис): " + text);
+                else if (AsciiLetter.IsMatch(text))
+                    problems.Add(key + " (латиниця): " + text);
+            }
+            CollectionAssert.IsEmpty(problems,
+                "Підказки журналу механік з кодовим синтаксисом або латиницею: " + string.Join("; ", problems));
         }
 
         [Test]

@@ -89,6 +89,16 @@ namespace Game.Core.Base
         /// </summary>
         private readonly bool _oneDayConstruction;
 
+        /// <summary>
+        /// Тест-збірка (Поправка №7.8, п.3): показ ЕФЕКТИВНОГО терміну
+        /// будівництва (1 доба замість <c>BuildingDefinition.Days</c>) на
+        /// вкладці «Будівлі» потребує знати сам прапорець ІЗ інтерфейсу —
+        /// інакше картка мовчки брехала б про термін, показуючи проєктне
+        /// число, яке насправді ніколи не діє в цьому режимі (R17: жодного
+        /// прихованого/невірного числа).
+        /// </summary>
+        public bool OneDayConstruction => _oneDayConstruction;
+
         private bool _raidQueued;
         private int _lastRaidDay = int.MinValue / 2;
         private int _settlersQueued;

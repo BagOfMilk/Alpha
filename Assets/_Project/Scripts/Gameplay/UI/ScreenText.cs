@@ -151,6 +151,30 @@ namespace Game.Gameplay.UI
                 "candidate", candidate, "band", band);
         }
 
+        /// <summary>
+        /// Один рядок варіанту сценового вибору (Поправка №7.8, тест-збірка,
+        /// п.1): сам текст варіанту (TextKey) — завжди; якщо варіант несе
+        /// перевірку (SkillKey не порожній) — дописуємо скіл/поріг/виконавця/
+        /// очікувану полосу заздалегідь (інваріант 8), тим самим шаблоном
+        /// прозорості, що вже <see cref="DecisionOptionLine"/> для рішень.
+        /// </summary>
+        public static string SceneOptionLine(DecisionOptionView option, Gender gender, RosterView roster)
+        {
+            if (option == null) return string.Empty;
+            string text = UkrainianText.Has(option.TextKey, gender) ? UkrainianText.Get(option.TextKey, gender) : option.TextKey;
+            if (string.IsNullOrEmpty(option.SkillKey)) return text;
+
+            string skill = SkillLabel(option.SkillKey, gender);
+            string performer = option.HasCandidate
+                ? ResolveCompanionName(option.BestActorId, gender, roster)
+                : UkrainianText.Get("ui.decision.no_candidate", gender);
+            string band = string.IsNullOrEmpty(option.ExpectedBand) ? "" : BandWordsFor(option.ExpectedBand, gender);
+
+            return UkrainianText.Format("ui.scene.option_check_line", gender,
+                "text", text, "skill", skill, "threshold", option.Threshold.ToString(),
+                "performer", performer, "band", band);
+        }
+
         public static string SkillLabel(string skillKey, Gender gender)
         {
             if (string.IsNullOrEmpty(skillKey)) return string.Empty;
@@ -241,9 +265,29 @@ namespace Game.Gameplay.UI
             return UkrainianText.Get("loyalty.band." + band.Value.ToString().ToLowerInvariant(), gender);
         }
 
+        /// <summary>
+        /// Фікс-ревью (Поправка №7.8, п.1, знайдено тур-автоплеєм на Choice-
+        /// екрані): протагоніст — ІМ'Я ГРАВЦЯ (роСтер, SetProtagonistName),
+        /// не лорова константа. Загальний пошук "char."+id нижче коректний
+        /// для іменного складу (Мирослава/Захар/Тугар — там ім'я справді
+        /// незмінний лорсько-текстовий факт), але "char.protagonist.m"/".f"
+        /// — це лише ЗАГЛУШКИ-ПІДКАЗКИ (той самий текст, що
+        /// "ui.creation.name.default.*" на екрані створення, ДО того, як
+        /// гравець щось увів) — без цього винятку вони підміняли б справжнє
+        /// обране ім'я ("Оксана") генеричним "Провідниця" на КОЖНОМУ
+        /// портреті й підписі мовця сцени, включно з новим Choice-екраном.
+        /// </summary>
         public static string ResolveCompanionName(string companionId, Gender gender, RosterView roster)
         {
             if (string.IsNullOrEmpty(companionId)) return string.Empty;
+
+            if (companionId == GameSession.ProtagonistId)
+            {
+                var protagonist = FindCompanion(roster, companionId);
+                if (protagonist != null && !string.IsNullOrEmpty(protagonist.DisplayName))
+                    return protagonist.DisplayName;
+            }
+
             string charKey = "char." + companionId;
             if (UkrainianText.Has(charKey, gender)) return UkrainianText.Get(charKey, gender);
 
@@ -297,14 +341,22 @@ namespace Game.Gameplay.UI
         /// той самий рядок, що і в OrderBuilding-фідбеку, але ДО кліку, поруч
         /// із назвою будівлі, а не лише постфактум у LastMessage.
         /// </summary>
-        public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g)
+        /// <summary>
+        /// Тест-збірка (Поправка №7.8, п.3): <paramref name="testBuildOneDayConstruction"/>
+        /// (<c>CityView.TestBuildOneDayConstruction</c>) підмінює проєктний
+        /// <c>def.Days</c> ЕФЕКТИВНИМ терміном (1 доба) — картка показує те
+        /// число, яке справді діє в цьому режимі, а не те, яке ніколи не
+        /// спрацює (R17: жодного невірного/прихованого числа).
+        /// </summary>
+        public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g, bool testBuildOneDayConstruction = false)
         {
             if (def == null) return string.Empty;
             string cost = def.MaterialsCost > 0
                 ? UkrainianText.Format("ui.buildings.cost_both", g,
                     "gold", def.GoldCost.ToString(), "materials", def.MaterialsCost.ToString())
                 : UkrainianText.Format("ui.buildings.cost_gold", g, "gold", def.GoldCost.ToString());
-            return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", def.Days.ToString());
+            int days = testBuildOneDayConstruction ? 1 : def.Days;
+            return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", days.ToString());
         }
 
         /// <summary>
@@ -457,6 +509,26 @@ namespace Game.Gameplay.UI
             // префіксний принцип, що й решта).
             string quest = ContentLabel("quest", Arg(a, "questId"), gender);
             string path = PathWords(Arg(a, "path"), gender);
+            // Фікс-ревью (major, знайдено QA): "scene.choice.made" — єдина
+            // подія, чиї sceneId/optionId ішли в стрічку СИРИМИ ("opening.
+            // neighbour: вибір ухвалено — refuse (Базова)." замість "Сусід з
+            // претензією: вибір ухвалено — Відмовити (Базова)."), доки решта
+            // ContentLabel-полів вище (companion/post/item/...) вже
+            // перекладались. Ключі сцен пишуться Core/Scenes/*.cs двома
+            // способами: sceneId уже з префіксом "scene." (CompanionScenes —
+            // "scene.myroslava.confrontation" → сам собою + ".title"/
+            // ".option.<id>") або без нього (OpeningScenes — "opening.
+            // neighbour", де заголовок "scene.opening.neighbour.title", а
+            // варіанти лишились коротким сегментом "scene.neighbour.
+            // option.<id>") — ResolveSceneLabel пробує обидва, тоді останній
+            // сегмент sceneId, той самий "кілька спроб, перший збіг" прийом,
+            // що вже в NightScreen.DrawOneQuestOffer (offerKeyPrefixed/Bare).
+            string sceneIdRaw = Arg(a, "sceneId");
+            string optionIdRaw = Arg(a, "optionId");
+            string sceneName = ResolveSceneLabel(sceneIdRaw, ".title", gender) ?? sceneIdRaw ?? "";
+            string sceneOption = !string.IsNullOrEmpty(optionIdRaw)
+                ? ResolveSceneLabel(sceneIdRaw, ".option." + optionIdRaw, gender) ?? optionIdRaw
+                : "";
 
             // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "companion.died.m"/
             // ".f" (і подібні ключі, що описують КОГОСЬ конкретного, а не
@@ -489,6 +561,7 @@ namespace Game.Gameplay.UI
                 "triggerId", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
                 "incidentId", ContentLabel("incident", Arg(a, "incidentId"), gender),
                 "resource", ContentLabel("resource", Arg(a, "resource"), gender),
+                "sceneId", sceneName, "optionId", sceneOption,
             };
             if (a != null)
                 foreach (var kv in a) { pairs.Add(kv.Key); pairs.Add(kv.Value); }
@@ -548,6 +621,50 @@ namespace Game.Gameplay.UI
             if (string.IsNullOrEmpty(id)) return "";
             string key = prefix + "." + id;
             return UkrainianText.Has(key, gender) ? UkrainianText.Get(key, gender) : id;
+        }
+
+        /// <summary>
+        /// §EventLine (sceneId/optionId). Core/Scenes/*.cs пише sceneId і
+        /// ключ тексту РІЗНИМИ конвенціями (сам факт перевірено по джерелу,
+        /// не вгадано): "scene.myroslava.confrontation" (CompanionScenes) —
+        /// sceneId уже сам є префіксом ключа; "arc.myroslava.ch1"
+        /// (CompanionScenes, глави арки) — перший сегмент sceneId ("arc")
+        /// заміняється на "scene." ("scene.myroslava.ch1.title"/".option.
+        /// trust"); "opening.neighbour" (OpeningScenes) — заголовок
+        /// лишає sceneId ЦІЛИМ під "scene." ("scene.opening.neighbour.
+        /// title"), а варіанти той самий перший сегмент відкидають
+        /// ("scene.neighbour.option.refuse", без "opening"). Спроба 1
+        /// (заміна першого сегмента) покриває і "scene."-, і "arc."-
+        /// sceneId, і option-гілку "opening."; спроба 2 (sceneId цілим під
+        /// "scene.") лишається лише для title-гілки "opening.". Без цього
+        /// порядку "arc.myroslava.ch1"+".title" за сирим sceneId+suffix
+        /// (без спроби 1) хибно збігався б із ЗОВСІМ ІНШИМ, вже зайнятим
+        /// ключем "arc.myroslava.ch1.title" (заголовок глави арки в
+        /// журналі, не заголовок самої сцени) — Core/Companions/DefaultArcs.cs
+        /// заводить його для СВОЄЇ мети, і рядок сирого sceneId+suffix БЕЗ
+        /// префікса "scene." ніколи не є правильним ключем сцени сам собою.
+        /// null, якщо жодна спроба не влучила (виклик сам падає на сирий id).
+        /// </summary>
+        private static string ResolveSceneLabel(string sceneId, string suffix, Gender gender)
+        {
+            if (string.IsNullOrEmpty(sceneId)) return null;
+
+            int firstDot = sceneId.IndexOf('.');
+            string afterFirstSegment = firstDot >= 0 ? sceneId.Substring(firstDot + 1) : sceneId;
+            string stripped = "scene." + afterFirstSegment + suffix;
+            if (UkrainianText.Has(stripped, gender)) return UkrainianText.Get(stripped, gender);
+
+            string prefixed = "scene." + sceneId + suffix;
+            if (UkrainianText.Has(prefixed, gender)) return UkrainianText.Get(prefixed, gender);
+
+            int lastDot = sceneId.LastIndexOf('.');
+            if (lastDot >= 0 && lastDot + 1 < sceneId.Length)
+            {
+                string shortKey = "scene." + sceneId.Substring(lastDot + 1) + suffix;
+                if (UkrainianText.Has(shortKey, gender)) return UkrainianText.Get(shortKey, gender);
+            }
+
+            return null;
         }
 
         private static string Arg(IReadOnlyDictionary<string, string> args, string name)

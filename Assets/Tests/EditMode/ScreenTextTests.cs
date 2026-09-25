@@ -320,6 +320,65 @@ namespace Game.Tests.EditMode
             StringAssert.AreEqualIgnoringCase("Тугар Вовк тут.", line);
         }
 
+        // Фікс-ревью (major, знайдено QA): "scene.choice.made" — єдина подія,
+        // чиї sceneId/optionId ішли СИРИМИ в стрічку ("opening.neighbour:
+        // вибір ухвалено — refuse (Базова)." замість перекладеного заголовка
+        // й тексту варіанту), доки решта аргументів події вже перекладались
+        // через ContentLabel. Три сценарії — три різні конвенції найменування
+        // ключів у Core/Scenes/*.cs (див. коментар над
+        // ScreenText.ResolveSceneLabel).
+        [Test]
+        public void EventLine_SceneChoiceMade_OpeningScene_TranslatesTitleAndOption()
+        {
+            // OpeningScenes: sceneId "opening.neighbour" — заголовок лишає
+            // sceneId цілим ("scene.opening.neighbour.title"), варіант
+            // відкидає перший сегмент ("scene.neighbour.option.refuse").
+            var args = new Dictionary<string, string> { { "sceneId", "opening.neighbour" }, { "optionId", "refuse" }, { "band", "Base" } };
+            var evt = new GameEvent("scene.choice.made", 1, Game.Core.Loop.DayPhase.Day, args);
+
+            string line = ScreenText.EventLine(evt, Gender.Female, null);
+
+            StringAssert.Contains("Сусід з претензією", line);
+            StringAssert.DoesNotContain("opening.neighbour", line);
+            StringAssert.DoesNotContain("refuse", line);
+        }
+
+        [Test]
+        public void EventLine_SceneChoiceMade_ScenePrefixedId_TranslatesTitleAndOption()
+        {
+            // CompanionScenes: sceneId уже сам є префіксом ключа
+            // ("scene.myroslava.confrontation" + ".title"/".option.persuade").
+            var args = new Dictionary<string, string> { { "sceneId", "scene.myroslava.confrontation" }, { "optionId", "persuade" }, { "band", "Good" } };
+            var evt = new GameEvent("scene.choice.made", 1, Game.Core.Loop.DayPhase.Day, args);
+
+            string line = ScreenText.EventLine(evt, Gender.Female, null);
+
+            StringAssert.Contains("Нічна розмова", line);
+            StringAssert.Contains("Переконати", line);
+            StringAssert.DoesNotContain("scene.myroslava.confrontation", line);
+            StringAssert.DoesNotContain("persuade", line);
+        }
+
+        [Test]
+        public void EventLine_SceneChoiceMade_ArcChapterId_TranslatesTitleAndOption_NotArcJournalTitle()
+        {
+            // CompanionScenes: sceneId "arc.myroslava.ch1" — перший сегмент
+            // ("arc") заміняється на "scene." ("scene.myroslava.ch1.title"/
+            // ".option.trust"). "arc.myroslava.ch1.title" ("Довіра, що
+            // росте") — ІНШИЙ ключ (заголовок глави в журналі,
+            // Core/Companions/DefaultArcs.cs) — сама сцена мусить показати
+            // СВІЙ заголовок ("Донька боярина"), не сусідній.
+            var args = new Dictionary<string, string> { { "sceneId", "arc.myroslava.ch1" }, { "optionId", "trust" }, { "band", "Base" } };
+            var evt = new GameEvent("scene.choice.made", 1, Game.Core.Loop.DayPhase.Day, args);
+
+            string line = ScreenText.EventLine(evt, Gender.Female, null);
+
+            StringAssert.Contains("Донька боярина", line);
+            StringAssert.DoesNotContain("Довіра, що росте", line);
+            StringAssert.DoesNotContain("arc.myroslava.ch1", line);
+            StringAssert.DoesNotContain(": trust", line);
+        }
+
         // ---------------- ряба ростера (ціль 5 «Якість стрічки») ----------------
 
         [Test]

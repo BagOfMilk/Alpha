@@ -968,16 +968,50 @@ namespace Game.Gameplay
             return UkrainianText.MissingMarker(unitId);
         }
 
+        /// <summary>
+        /// Фікс-ревью раунд 2 (QA, major): ця "char."+id-заглушка була ТРЕТЬОЮ
+        /// окремою реалізацією імені — раунд 1 (<c>f677f18</c>/<c>6543768</c>)
+        /// уже навчив протагоніста-спецвипадку і <see cref="ResolveDisplayNameInternal"/>
+        /// (черга ходу, підпис на гріді, лог бою), і <c>ScreenText.ResolveCompanionName</c>
+        /// (портрет/сцена/стрічка), але панель результату "Втрати:" (<see
+        /// cref="AppendDeathCasualty"/>/<see cref="AppendScarCasualty"/>) досі
+        /// йшла сюди напряму й показувала заглушку поля вводу "Провідниця"/
+        /// "Провідник" замість обраного гравцем імені в кожному бою. Тепер
+        /// метод сам перевіряє протагоніста тим самим способом, тож нової,
+        /// четвертої розбіжної реалізації тут більше не буде.
+        /// </summary>
         private string ResolveCompanionName(string companionId, bool female)
         {
             if (string.IsNullOrEmpty(companionId)) return UkrainianText.MissingMarker(null);
+            string protagonistName = TryResolveProtagonistDisplayName(companionId);
+            if (protagonistName != null) return protagonistName;
             string key = "char." + companionId;
             return UkrainianText.Has(key, female) ? UkrainianText.Get(key, female) : UkrainianText.MissingMarker(key);
+        }
+
+        /// <summary>Обране гравцем ім'я протагоніста з ростера, якщо <paramref name="bareId"/> — це він; інакше null.</summary>
+        private string TryResolveProtagonistDisplayName(string bareId)
+        {
+            if (!string.Equals(bareId, GameSession.ProtagonistId, StringComparison.Ordinal)) return null;
+            var protagonist = ScreenText.FindCompanion(_session?.GetRosterView(), GameSession.ProtagonistId);
+            return !string.IsNullOrEmpty(protagonist?.DisplayName) ? protagonist.DisplayName : null;
         }
 
         private string ResolveDisplayNameInternal(BattleUnitView unit)
         {
             if (unit == null) return UkrainianText.MissingMarker(null);
+
+            // Фікс-ревью (major, знайдено QA, той самий фікс, що
+            // ScreenText.ResolveCompanionName дістав у f677f18): протагоніста
+            // читаємо з ростера ДО загального пошуку "char."+id — той фікс
+            // торкнувся портрета/підпису мовця сцени/стрічки подій, але не цю,
+            // ПАРАЛЕЛЬНУ реалізацію імен бойового екрана (черга ходу й підпис
+            // на гріді) — вона й далі підміняла ОБРАНЕ гравцем ім'я
+            // ("Оксана") заглушкою-підказкою поля вводу "char.protagonist.m/
+            // .f" ("Провідниця"/"Провідник") у кожному бою.
+            string protagonistName = TryResolveProtagonistDisplayName(BareUnitId(unit.Id));
+            if (protagonistName != null) return protagonistName;
+
             string key = ResolveNameKey(unit);
             bool female = IsFemaleCompanion(unit.Id);
 
@@ -1017,16 +1051,21 @@ namespace Game.Gameplay
             return null;
         }
 
+        /// <summary>Префікс "u_"/"defector_" знятий — той самий "голий" id, яким таблиця й ростер знають персонажа.</summary>
+        private static string BareUnitId(string unitId)
+        {
+            if (string.IsNullOrEmpty(unitId)) return unitId;
+            if (unitId.StartsWith("u_", StringComparison.Ordinal)) return unitId.Substring(2);
+            if (unitId.StartsWith("defector_", StringComparison.Ordinal)) return unitId.Substring(9);
+            return unitId;
+        }
+
         /// <summary>Див. пункт (2) у зведенні розривів у шапці файлу — тепер зважає на справжній рід протагоніста.</summary>
         private bool IsFemaleCompanion(string unitId)
         {
             if (string.IsNullOrEmpty(unitId)) return false;
 
-            string bare = unitId;
-            if (bare.StartsWith("u_", StringComparison.Ordinal)) bare = bare.Substring(2);
-            else if (bare.StartsWith("defector_", StringComparison.Ordinal)) bare = bare.Substring(9);
-
-            if (string.Equals(bare, GameSession.ProtagonistId, StringComparison.Ordinal))
+            if (string.Equals(BareUnitId(unitId), GameSession.ProtagonistId, StringComparison.Ordinal))
                 return _protagonistGender == Gender.Female;
 
             return unitId.IndexOf("myroslava", StringComparison.Ordinal) >= 0;

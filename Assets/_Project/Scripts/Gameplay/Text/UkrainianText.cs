@@ -746,12 +746,23 @@ namespace Game.Gameplay.Text
         }
 
         // Core/Characters/Scars/DefaultScars.cs.
+        //
+        // Фікс-ревью раунд 2 (QA, minor): бракувало ".f"-пари — ResolveVariant
+        // падав на бару ".m"-форму навіть для протагоністки-жінки ("Одноокий"
+        // замість "Одноока"). Той самий .m/.f-приём, що вже стоїть на
+        // "companion.died.m/.f" вище: жодного нейтрального бару-ключа, обидва
+        // роди — явними записами. "broken_hand" — іменникова фраза ("Перебита
+        // рука"), роду персонажа не узгоджує, тож .f = .m буквально.
         private static void AddScarIds(Dictionary<string, string> t)
         {
-            AddKey(t, "scar.one_eyed", "Одноокий");
-            AddKey(t, "scar.limp", "Кульгавий");
-            AddKey(t, "scar.broken_hand", "Перебита рука");
-            AddKey(t, "scar.haunted", "Обпалений страхом");
+            AddKey(t, "scar.one_eyed.m", "Одноокий");
+            AddKey(t, "scar.one_eyed.f", "Одноока");
+            AddKey(t, "scar.limp.m", "Кульгавий");
+            AddKey(t, "scar.limp.f", "Кульгава");
+            AddKey(t, "scar.broken_hand.m", "Перебита рука");
+            AddKey(t, "scar.broken_hand.f", "Перебита рука");
+            AddKey(t, "scar.haunted.m", "Обпалений страхом");
+            AddKey(t, "scar.haunted.f", "Обпалена страхом");
         }
 
         // Core/Companions/DefaultArcs.cs — заголовки арок Мирослави/Максима.
@@ -1377,6 +1388,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.scene.hint", "Пробіл або клік — далі.");
             AddKey(t, "ui.scene.portrait.placeholder", "?");
 
+            // Поправка №7.8 (тест-збірка, п.1): екран сцени показує Choice-
+            // крок кнопками, а не автопрогоном "Далі" — прев'ю перевірки
+            // заздалегідь (інваріант 8), як і в DecisionScreen.
+            AddKey(t, "ui.scene.option_check_line",
+                "{text} — {skill} ≥ {threshold}, виконує: {performer}, очікувана полоса: {band}.");
+            AddKey(t, "ui.scene.consequence.title", "Наслідок:");
+
             AddKey(t, "ui.start_day", "Почати день");
             AddKey(t, "ui.confirm_evening", "До ночі");
             AddKey(t, "ui.summary.continue", "Грати далі");
@@ -1395,6 +1413,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.tab.factions", "Фракції");
             AddKey(t, "ui.tab.readiness", "Готовність");
             AddKey(t, "ui.tab.save", "Збереження");
+            AddKey(t, "ui.tab.journal", "Журнал механік");
 
             AddKey(t, "ui.posts.assign", "Призначити");
             AddKey(t, "ui.posts.unassign", "Звільнити");
@@ -1461,6 +1480,11 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.readiness.title", "Готовність громади");
             AddKey(t, "ui.readiness.milestones", "Віхи: {reached} з {total}");
+
+            // Тест-збірка (Поправка №7.8, п.2): вкладка «Журнал механік».
+            AddKey(t, "ui.journal.progress", "Побачено: {seen} з {total}");
+            AddKey(t, "ui.journal.seen", "✓");
+            AddKey(t, "ui.journal.not_seen", "ще ні");
         }
 
         // ---- Рішення / бій ----
@@ -1998,8 +2022,10 @@ namespace Game.Gameplay.Text
 
             // ---- нічна розмова: конфронтація зради Мирослави (доба 3) ----
             AddKey(t, "scene.myroslava.confrontation.title", "Нічна розмова");
-            AddKey(t, "scene.myroslava.confrontation.open",
+            AddKey(t, "scene.myroslava.confrontation.open.m",
                 "Мирослава: «Ти прийшов не спати. Кажи прямо — ти ще довіряєш мені, чи вже ні?»");
+            AddKey(t, "scene.myroslava.confrontation.open.f",
+                "Мирослава: «Ти прийшла не спати. Кажи прямо — ти ще довіряєш мені, чи вже ні?»");
             AddKey(t, "scene.myroslava.confrontation.option.persuade",
                 "Переконати її лишитися (Переконання).");
             AddKey(t, "scene.myroslava.confrontation.option.accuse",
@@ -2072,91 +2098,91 @@ namespace Game.Gameplay.Text
         private static void AddMechanicsJournalKeys(Dictionary<string, string> t)
         {
             AddKey(t, "journal.day_cycle.title", "Конвеєр дня/ночі");
-            AddKey(t, "journal.day_cycle.hint", "Як викликати: ConfirmMorning() -> AdvanceDay() -> ConfirmEvening() -> AdvanceNight().");
+            AddKey(t, "journal.day_cycle.hint", "Щодня: на будь-якій вкладці хаба тисни «Почати день» унизу; ввечері — «До ночі»; вночі — «До ранку». Далі цикл дня й ночі йде сам, доба за добою.");
             AddKey(t, "journal.assignment.title", "Розстановка на пости");
-            AddKey(t, "journal.assignment.hint", "Як викликати: Assign(companionId, slotId) уранці.");
+            AddKey(t, "journal.assignment.hint", "Доба 1, ранок: вкладка Пости — під порожнім постом натисни «Призначити: <ім'я напарника>».");
             AddKey(t, "journal.presence.title", "Присутність напарників");
-            AddKey(t, "journal.presence.hint", "Похідне: хто у вилазці/помер/зрадив — не кандидат на перевірку.");
+            AddKey(t, "journal.presence.hint", "Відбувається само: хто зараз у вилазці, помер або зрадив, не пропонується виконавцем перевірки — серед кандидатів на постах, вилазці чи в рішеннях таких просто нема.");
             AddKey(t, "journal.decision_point.title", "Точка рішення тихо/кроваво");
-            AddKey(t, "journal.decision_point.hint", "Як викликати: ResolveIncident(path), коли AwaitsDecision.");
+            AddKey(t, "journal.decision_point.hint", "Коли посеред дня на екрані з'явиться «Рішення чекає», обери «Тихо» або «Криваво» під одним із варіантів.");
             AddKey(t, "journal.outcome_bands.title", "Чотири полоси наслідку");
-            AddKey(t, "journal.outcome_bands.hint", "Похідне: band у decision.resolved/finale.resolved/quest.choice.resolved.");
+            AddKey(t, "journal.outcome_bands.hint", "Відбувається само: після будь-якого рішення, фіналу чи вибору в квесті стрічка подій показує полосу наслідку — від найгіршої до найкращої.");
             AddKey(t, "journal.empty_post.title", "Порожній пост = Найгірша");
-            AddKey(t, "journal.empty_post.hint", "Похідне: лишити пост порожнім і дочекатись перевірки на ньому.");
+            AddKey(t, "journal.empty_post.hint", "Відбувається само: вкладка Пости — лиши пост порожнім (нікого не признач) і дочекайся дня, коли на ньому трапиться перевірка — вона піде найгіршим шляхом.");
             AddKey(t, "journal.night_patrol.title", "Ніч: патруль чи сон");
-            AddKey(t, "journal.night_patrol.hint", "Як викликати: SetPatrol(bool) перед AdvanceNight().");
+            AddKey(t, "journal.night_patrol.hint", "Ввечері натисни «Патрулювати» (чуєш більше вночі, менше відпочиваєш) або «Спати» (лікуєшся швидше) — перед кнопкою «До ночі».");
             AddKey(t, "journal.forewarn_ladder.title", "Драбина передвісників");
-            AddKey(t, "journal.forewarn_ladder.hint", "Похідне: патрулюй кілька ночей поспіль — щабель росте 1→2→3.");
+            AddKey(t, "journal.forewarn_ladder.hint", "Відбувається само: патрулюй («Патрулювати») кілька ночей поспіль — попередження про наступну подію ростуть щаблями від слабкого до сильного.");
             AddKey(t, "journal.crisis.title", "Криза з вікном на реакцію");
-            AddKey(t, "journal.crisis.hint", "Як викликати: ReactToCrisis(reaction) у вікні кризи доби 5.");
+            AddKey(t, "journal.crisis.hint", "Доба 5, вночі: якщо відкриється «Вікно реакції на кризу», обери «Витратити золото», «Відрядити людину з поста» або «Не реагувати».");
             AddKey(t, "journal.post_reports.title", "Доповіді з постів");
-            AddKey(t, "journal.post_reports.hint", "Похідне: тримай пости зайнятими — доповідь приходить щоранку.");
+            AddKey(t, "journal.post_reports.hint", "Відбувається само: тримай пости зайнятими (вкладка Пости) — щоранку в стрічці подій приходить доповідь із кожного зайнятого поста.");
             AddKey(t, "journal.signals_no_repeat.title", "Сигнали без повторів");
-            AddKey(t, "journal.signals_no_repeat.hint", "Похідне: той самий сигнал не приходить двічі підряд за добу.");
+            AddKey(t, "journal.signals_no_repeat.hint", "Відбувається само: той самий сигнал у стрічці подій не повторюється двічі підряд за одну добу.");
             AddKey(t, "journal.band_change_signal.title", "Зміна полоси чутна");
-            AddKey(t, "journal.band_change_signal.hint", "Похідне: будь-яка зміна лояльності/фракції дає подію.");
+            AddKey(t, "journal.band_change_signal.hint", "Відбувається само: щойно лояльність напарника чи ставлення фракції зсувається на іншу полосу, стрічка подій одразу про це повідомляє.");
             AddKey(t, "journal.production.title", "Виробництво/голод/лікування");
-            AddKey(t, "journal.production.hint", "Похідне: конвеєр дня рахує це щодоби сам, дивись EconomyView.");
+            AddKey(t, "journal.production.hint", "Відбувається само щодня, коли тиснеш «Почати день»: рахуються їжа й золото, застосовуються голод і лікування — перевір гаманець і стан людей на вкладках Люди й Пости.");
             AddKey(t, "journal.building.title", "Будівництво + рада");
-            AddKey(t, "journal.building.hint", "Як викликати: OrderBuilding(id)/OrderRaid()/OrderSettlers().");
+            AddKey(t, "journal.building.hint", "Вкладка Будівлі: «Замовити» біля потрібної будівлі. Вкладка Рада: «Облава» або «Прийняти переселенців».");
             AddKey(t, "journal.council_actions.title", "Нові дії ради");
-            AddKey(t, "journal.council_actions.hint", "Як викликати: OrderDecree/OrderDiplomacy/OrderInvestment/OrderPrepareThreat/OrderOutfitExpedition(...).");
+            AddKey(t, "journal.council_actions.hint", "Вкладка Рада: «Указ», «Посольство», «Вкласти в будівлю», «Готуватися до загрози» або «Спорядити відряд» — тисни кнопку фракції/будівлі/точки під заголовком дії.");
             AddKey(t, "journal.population_tier.title", "Населення/тір поселення");
-            AddKey(t, "journal.population_tier.hint", "Похідне: населення й тір ростуть від забудови й подій.");
+            AddKey(t, "journal.population_tier.hint", "Відбувається само: будуй будівлі (вкладка Будівлі) і грай далі — населення й тір поселення (хутір → село → слобода → городок) ростуть від забудови й подій, а підвищення тіру завжди чутно сигналом.");
             AddKey(t, "journal.expedition.title", "Вилазка (тихо/силою)");
-            AddKey(t, "journal.expedition.hint", "Як викликати: DepartExpedition(siteId, approach, ids, days).");
+            AddKey(t, "journal.expedition.hint", "Вкладка Вилазка: обери точку, підхід «Тихо» або «Силою», зберни загін у розділі Люди, тисни «Прев'ю», потім «Вирушати».");
             AddKey(t, "journal.dungeon_delve.title", "Вилазка-данж (Delve)");
-            AddKey(t, "journal.dungeon_delve.hint", "Як викликати: DepartExpedition(siteId, Delve, ids, days) -> EnterDungeon().");
+            AddKey(t, "journal.dungeon_delve.hint", "Вкладка Вилазка: обери точку «Покинутий табір авангарду», підхід «Спуститися», зберни загін і тисни «Вирушати» — далі відкриється підземелля.");
             AddKey(t, "journal.loot.title", "Лут");
-            AddKey(t, "journal.loot.hint", "Похідне: полоса вилазки/данжу визначає здобич.");
+            AddKey(t, "journal.loot.hint", "Відбувається само: яка полоса наслідку випаде на вилазці чи в підземеллі, така й здобич — від найгіршої до найкращої.");
             AddKey(t, "journal.equip.title", "Гір/екіпірування");
-            AddKey(t, "journal.equip.hint", "Як викликати: Equip(companionId, itemInstanceId, slot).");
+            AddKey(t, "journal.equip.hint", "Вкладка Спорядження: у Схованці натисни «Одягти: <ім'я>» біля потрібного предмета.");
             AddKey(t, "journal.craft.title", "Крафт");
-            AddKey(t, "journal.craft.hint", "Як викликати: CraftUpgrade(itemInstanceId) при відкритій Майстерні.");
+            AddKey(t, "journal.craft.hint", "Вкладка Спорядження, коли збудована Майстерня: натисни «Покращити» біля предмета в Схованці.");
             AddKey(t, "journal.scars.title", "Шрами");
-            AddKey(t, "journal.scars.hint", "Похідне: серйозна рана в бою/вузлі лишає шрам назавжди.");
+            AddKey(t, "journal.scars.hint", "Відбувається само: серйозна рана в бою чи на вилазці лишає шрам назавжди — дивись картку персонажа на вкладці Люди.");
             AddKey(t, "journal.loyalty.title", "Лояльність напарників");
-            AddKey(t, "journal.loyalty.hint", "Похідне: майже кожне рішення зсуває лояльність причетного напарника.");
+            AddKey(t, "journal.loyalty.hint", "Відбувається само: майже кожне рішення, вибір у сцені чи квесті зсуває лояльність причетного напарника — переглянь на його картці, вкладка Люди.");
             AddKey(t, "journal.roster_drama.title", "Зв'язки/бантер/драма загону");
-            AddKey(t, "journal.roster_drama.hint", "Похідне: смерть чи зрада напарника хвилею зачіпає решту загону.");
+            AddKey(t, "journal.roster_drama.hint", "Відбувається само: смерть чи зрада напарника хвилею зачіпає решту загону — це видно в стрічці подій.");
             AddKey(t, "journal.defection.title", "Зрада/дефекція");
-            AddKey(t, "journal.defection.hint", "Похідне: лояльність ≤ «Ображена» кілька діб поспіль — або нічна розмова доби 3.");
+            AddKey(t, "journal.defection.hint", "Відбувається само: тримай лояльність напарника низькою («Ображена» і нижче) кілька діб поспіль, або дочекайся вечора доби 3 — зрада прийде сценою «Нічна розмова».");
             AddKey(t, "journal.companion_arc.title", "Особиста арка напарника");
-            AddKey(t, "journal.companion_arc.hint", "Як викликати: BeginArcChapterScene(companionId)/BeginArcChapterQuest(companionId), коли глава доступна.");
+            AddKey(t, "journal.companion_arc.hint", "Відбувається само ввечері, щойно стане доступна наступна глава арки напарника — вона з'явиться сценою або новим пунктом на вкладці Квести.");
             AddKey(t, "journal.quests.title", "Квести (ранкова/вечірня пропозиція)");
-            AddKey(t, "journal.quests.hint", "Як викликати: OfferQuestStage(questId) -> ResolveQuestChoice(optionIndex).");
+            AddKey(t, "journal.quests.hint", "Вкладка Квести вранці, або розділ «Пропозиція» ввечері — обери запропонований варіант кнопкою.");
             AddKey(t, "journal.factions.title", "Фракції/репутація");
-            AddKey(t, "journal.factions.hint", "Похідне: OrderDiplomacy/OrderDecree або наслідок вибору зсувають фракцію.");
+            AddKey(t, "journal.factions.hint", "Відбувається само: дії ради («Указ», «Посольство») чи наслідок вибору в сцені або квесті зсувають ставлення фракції — дивись вкладку Фракції.");
             AddKey(t, "journal.readiness_finale.title", "Готовність + фінал");
-            AddKey(t, "journal.readiness_finale.hint", "Як викликати: ResolveFinale(path) уночі доби 5.");
+            AddKey(t, "journal.readiness_finale.hint", "Доба 5, вночі, розділ «Фінал доби 5»: обери «Тихо» або «Криваво».");
             AddKey(t, "journal.tactical_combat.title", "Тактичний бій");
-            AddKey(t, "journal.tactical_combat.hint", "Як викликати: RequestBattle(...) -> CombatMove/Attack/UseAbility/EnterOverwatch/EndTurn.");
+            AddKey(t, "journal.tactical_combat.hint", "Коли обрано кровавий шлях (у рішенні, фіналі чи бойовій кімнаті підземелля), відкривається бій: клацай по клітинках і ворогах, кнопки «Дозор» і «Кінець ходу» — в нижній панелі.");
             AddKey(t, "journal.auto_resolve.title", "Автобій");
-            AddKey(t, "journal.auto_resolve.hint", "Як викликати: CombatAutoResolve() у стані Battle.");
+            AddKey(t, "journal.auto_resolve.hint", "У бою натисни кнопку «Автобій» — гра сама розіграє решту сутички.");
             AddKey(t, "journal.training_battle.title", "Тренувальний бій");
-            AddKey(t, "journal.training_battle.hint", "Як викликати: NewTrainingBattle(options) з Title.");
+            AddKey(t, "journal.training_battle.hint", "Головний екран: кнопка «Тренувальний бій» — оцінка бойової механіки поза кампанією.");
             AddKey(t, "journal.creation.title", "Створення протагоніста");
-            AddKey(t, "journal.creation.hint", "Як викликати: NewGame(options) з SkipCreation=false -> SetProtagonistName/Gender/Background -> ConfirmCreation().");
+            AddKey(t, "journal.creation.hint", "Головний екран: «Нова гра» (не вмикай «Пропустити створення персонажа») — впиши ім'я, обери «Він»/«Вона» й передісторію, тисни «Вирушати».");
             AddKey(t, "journal.progression.title", "XP/рівні/білд-планувальник");
-            AddKey(t, "journal.progression.hint", "Як викликати: PreviewBuildPlan(plan)/CommitBuildPlan(plan), коли є SpendablePoints.");
+            AddKey(t, "journal.progression.hint", "Вкладка Люди, картка протагоніста, розділ «Куди підеш далі»: вклади вільні очки кнопками «+1» і підтверди незворотно.");
             AddKey(t, "journal.portrait_scenes.title", "Портретні сцени");
-            AddKey(t, "journal.portrait_scenes.hint", "Як викликати: AdvanceScene(), доки не IsFinished.");
+            AddKey(t, "journal.portrait_scenes.hint", "У сцені з репліками тисни «Далі» (або Пробіл, або клік) — доки сцена не закінчиться.");
             AddKey(t, "journal.save_load.title", "Збереження/завантаження");
-            AddKey(t, "journal.save_load.hint", "Як викликати: SaveState(slot)/ContinueGame(slot) у стані Morning.");
+            AddKey(t, "journal.save_load.hint", "Вранці, вкладка Збереження: обери слот і тисни «Підтвердити», щоб зберегти. Завантажити збережене — з головного екрана кнопкою «Продовжити».");
             AddKey(t, "journal.summary.title", "Підсумок доби 5");
-            AddKey(t, "journal.summary.hint", "Як викликати: AcknowledgeSummary() після фіналу.");
+            AddKey(t, "journal.summary.hint", "Після фіналу доби 5 сама з'явиться підсумкова панель — прочитай і тисни «Грати далі».");
             AddKey(t, "journal.free_play.title", "Вільна гра");
-            AddKey(t, "journal.free_play.hint", "Похідне: той самий цикл триває після доби 5, без сценарних вузлів.");
+            AddKey(t, "journal.free_play.hint", "Відбувається само: після підсумку доби 5 (кнопка «Грати далі») той самий цикл дня й ночі триває далі, вже без сценарних вузлів.");
 
             // ---- нові механіки Поправки №7.8 ----
             AddKey(t, "journal.dialogue_choice.title", "Вибір у діалозі/сцені");
-            AddKey(t, "journal.dialogue_choice.hint", "Як викликати: ChooseSceneOption(optionIndex), коли SceneStepView.IsChoice.");
+            AddKey(t, "journal.dialogue_choice.hint", "У сцені, де замість «Далі» показано кілька варіантів репліки, натисни потрібний.");
             AddKey(t, "journal.arc_chapter.title", "Глава арки напарника пройдена");
-            AddKey(t, "journal.arc_chapter.hint", "Як викликати: BeginArcChapterScene/BeginArcChapterQuest -> розв'яжи зміст глави до кінця.");
+            AddKey(t, "journal.arc_chapter.hint", "Пройди главу арки напарника до кінця — сценою (кнопки «Далі»/вибір репліки) або квестом на вкладці Квести, залежно від того, чим вона прийшла.");
             AddKey(t, "journal.betrayal_confrontation.title", "Нічна розмова-конфронтація зради");
-            AddKey(t, "journal.betrayal_confrontation.hint", "Як викликати: OfferMyroslavaEveningScene() на добу 3, коли зрада насуває.");
+            AddKey(t, "journal.betrayal_confrontation.hint", "Дійде сама ввечері доби 3, якщо зрада вже насуває: почнеться сцена «Нічна розмова» — проходь її репліками.");
             AddKey(t, "journal.building_one_day.title", "Стройка будівлі за одну добу");
-            AddKey(t, "journal.building_one_day.hint", "Як викликати: OrderBuilding(id) — Поправка №7.7 добудовує за одну добу.");
+            AddKey(t, "journal.building_one_day.hint", "Вкладка Будівлі: «Замовити» будь-яку будівлю — у тест-збірці вона добудовується за одну добу.");
         }
     }
 }
