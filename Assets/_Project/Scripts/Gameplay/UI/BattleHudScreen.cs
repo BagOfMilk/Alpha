@@ -734,6 +734,19 @@ namespace Game.Gameplay.UI
             var nameRect = new Rect(ov.ScreenX - nameWidth * 0.5f, ov.ScreenY, nameWidth, AlphaSkin.OverlayNameFontSize + 6f);
             Widgets.SolidRect(nameRect, new Color32(12, 10, 8, 190));
 
+            // Ворог під курсором, якого ЗАРАЗ можна атакувати, — яскрава рамка
+            // (презентер рахує IsTargetable за прев'ю атаки). Гравець бачить
+            // «клік сюди = удар» ще до кліку, як у референсах.
+            if (ov.IsTargetable)
+            {
+                const float b = 2f;
+                var frame = AlphaSkin.BattleCurrentUnit;
+                Widgets.SolidRect(new Rect(nameRect.x - b, nameRect.y - b, nameRect.width + 2f * b, b), frame);
+                Widgets.SolidRect(new Rect(nameRect.x - b, nameRect.y + nameRect.height, nameRect.width + 2f * b, b), frame);
+                Widgets.SolidRect(new Rect(nameRect.x - b, nameRect.y, b, nameRect.height), frame);
+                Widgets.SolidRect(new Rect(nameRect.x + nameRect.width, nameRect.y, b, nameRect.height), frame);
+            }
+
             var style = new GUIStyle(AlphaSkin.OverlayName);
             var tint = unit.IsDowned ? AlphaSkin.BgRaised : (ov.IsCurrent ? AlphaSkin.BattleCurrentUnit : SideColor(unit.Side));
             style.normal.textColor = tint;
@@ -772,6 +785,9 @@ namespace Game.Gameplay.UI
                 var previous = GUI.color;
                 GUI.color = new Color(1f, 1f, 1f, Clamp01(f.Alpha));
                 var rect = new Rect(f.ScreenX - 60f, f.ScreenY - 24f, 120f, 32f);
+                // Темна тінь під написом — читається і на світлій траві, і на тайлах.
+                var shadow = new GUIStyle(style) { normal = { textColor = new Color(0f, 0f, 0f, 0.85f) } };
+                GUI.Label(new Rect(rect.x + 2f, rect.y + 2f, rect.width, rect.height), f.Text, shadow);
                 GUI.Label(rect, f.Text, style);
                 GUI.color = previous;
             }
