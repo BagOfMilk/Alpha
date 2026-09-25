@@ -2447,6 +2447,7 @@ namespace Game.Gameplay.Text
             // навмисно скорочено, це підпис ПІД фігуркою, не панель дій).
             AddKey(t, "ui.battle.overlay.downed", "Впав · {turns} х.");
             AddKey(t, "ui.battle.overlay.overwatch", "Дозор");
+            AddKey(t, "ui.battle.overlay.trap", "Пастка");
 
             // ---- відмова "InvalidAction" (CombatActionResult) — загальна причина без власного тексту раніше ----
             AddKey(t, "ui.battle.action.rejected.invalidaction", "Дію неможливо виконати зараз.");

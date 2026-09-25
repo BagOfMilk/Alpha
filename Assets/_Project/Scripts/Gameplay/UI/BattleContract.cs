@@ -121,6 +121,9 @@ namespace Game.Gameplay
 
         /// <summary>Точки над головами юнітів (координати GUI) — HUD малює там ім'я, смужку HP, стани.</summary>
         IReadOnlyList<BattleUnitOverlay> Overlays { get; }
+
+        /// <summary>Мітки над своїми пастками (координати GUI) — видно і там, де 3D-капкан закриває укриття.</summary>
+        IReadOnlyList<BattleTrapOverlay> TrapOverlays { get; }
         IReadOnlyList<BattleFloatingText> FloatingTexts { get; }
         BattleTurnBanner Banner { get; }
 

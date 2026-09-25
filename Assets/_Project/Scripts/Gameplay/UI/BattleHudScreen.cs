@@ -903,6 +903,7 @@ namespace Game.Gameplay.UI
 
         private static void DrawOverlays(IBattleHudData c, BattleView view)
         {
+            DrawTrapOverlays(c);
             if (c.Overlays == null) return;
 
             // Раунд 3 (знімки): імена сусідніх бійців налазили одне на одне
@@ -934,6 +935,24 @@ namespace Game.Gameplay.UI
 
             for (int i = 0; i < n; i++)
                 DrawUnitOverlay(c, units[i], visible[i], resolved[i]);
+        }
+
+        /// <summary>
+        /// Бурштинова мітка над своєю пасткою. Малюється ПЕРШОЮ — імена бійців
+        /// лягають поверх неї, а не навпаки.
+        /// </summary>
+        private static void DrawTrapOverlays(IBattleHudData c)
+        {
+            if (c.TrapOverlays == null) return;
+            foreach (var trap in c.TrapOverlays)
+            {
+                if (trap == null || !trap.OnScreen) continue;
+                string text = UkrainianText.Get("ui.battle.overlay.trap", false);
+                float width = OverlayNameWidth(text);
+                var rect = new Rect(trap.ScreenX - width * 0.5f, trap.ScreenY - 10f, width, 18f);
+                Widgets.SolidRect(rect, AlphaSkin.BattleTrap);
+                GUI.Label(rect, text, new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.BgDark } });
+            }
         }
 
         private static float OverlayNameWidth(string name)

@@ -236,6 +236,7 @@ namespace Game.Gameplay
         // ================= Бій v2: оверлеї над юнітами (§6) =================
 
         private readonly List<BattleUnitOverlay> _overlays = new List<BattleUnitOverlay>();
+        private readonly List<BattleTrapOverlay> _trapOverlays = new List<BattleTrapOverlay>();
 
         // ================= Бій v2: приціл дозору / тайли під загрозою (§5) =================
 
@@ -299,6 +300,7 @@ namespace Game.Gameplay
         public MovePathView HoverPath { get { RefreshHoverCaches(); return _hoverPathCache; } }
 
         public IReadOnlyList<BattleUnitOverlay> Overlays => _overlays;
+        public IReadOnlyList<BattleTrapOverlay> TrapOverlays => _trapOverlays;
         public IReadOnlyList<BattleFloatingText> FloatingTexts => _floatingTextsExposed;
         public BattleTurnBanner Banner => _banner;
 
@@ -904,6 +906,11 @@ namespace Game.Gameplay
             var armedAbility = FindArmedAbility();
             int abilityRange = armedAbility != null && IsPlayerTurn && !IsBusy ? armedAbility.Range : -1;
 
+            var trapKeys = new HashSet<string>(StringComparer.Ordinal);
+            if (view.Traps != null)
+                foreach (var trap in view.Traps)
+                    if (trap != null) trapKeys.Add(trap.Pos.X + "_" + trap.Pos.Y);
+
             for (int y = 0; y < _gridHeight; y++)
             for (int x = 0; x < _gridWidth; x++)
             {
@@ -923,7 +930,8 @@ namespace Game.Gameplay
 
                 // Тайл поточного юніта перефарбовується другим проходом нижче.
                 ApplyTileTint(tile, key, cover, walkable, isReachable, false, isHovered,
-                    isHoveredUnreachable, isAbilityRange: isAbilityRange, isOverwatchAim: isOverwatchAim, isOverwatchThreat: isOverwatchThreat);
+                    isHoveredUnreachable, isAbilityRange: isAbilityRange, isOverwatchAim: isOverwatchAim, isOverwatchThreat: isOverwatchThreat,
+                    isOwnTrap: trapKeys.Contains(key));
             }
 
             string currentKey = current != null ? current.Pos.X + "_" + current.Pos.Y : null;
@@ -941,13 +949,14 @@ namespace Game.Gameplay
         }
 
         private void ApplyTileTint(GameObject tile, string key, string cover, bool walkable, bool isReachable,
-            bool isCurrent, bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat)
+            bool isCurrent, bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat,
+            bool isOwnTrap = false)
         {
             var renderers = tile.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) return;
 
             var tint = BattleArenaView.TintForIntent(cover, walkable, isReachable, isCurrent, isHovered,
-                isHoveredUnreachable, isAbilityRange, isOverwatchAim, isOverwatchThreat);
+                isHoveredUnreachable, isAbilityRange, isOverwatchAim, isOverwatchThreat, isOwnTrap);
             if (!_tileBlocks.TryGetValue(key, out var block) || block == null)
             {
                 block = new MaterialPropertyBlock();
@@ -1728,7 +1737,26 @@ namespace Game.Gameplay
         private void RebuildOverlays()
         {
             _overlays.Clear();
+            _trapOverlays.Clear();
             if (_lastView?.Units == null || ArenaCamera == null) return;
+
+            if (_lastView.Traps != null)
+                foreach (var trap in _lastView.Traps)
+                {
+                    if (trap == null) continue;
+                    var tw = BattleArenaView.TileToWorld(trap.Pos.X, trap.Pos.Y);
+                    // Трохи вище за скриню укриття — мітка не ховається за нею.
+                    var tsp = ArenaCamera.WorldToScreenPoint(new Vector3(tw.X, 0.9f, tw.Z));
+                    _trapOverlays.Add(new BattleTrapOverlay
+                    {
+                        TileX = trap.Pos.X,
+                        TileY = trap.Pos.Y,
+                        ScreenX = tsp.x,
+                        ScreenY = Screen.height - tsp.y,
+                        OnScreen = tsp.z > 0f && tsp.x >= 0f && tsp.x <= Screen.width && tsp.y >= 0f && tsp.y <= Screen.height,
+                        TrapDamage = trap.TrapDamage
+                    });
+                }
 
             string hoveredId = HoveredUnitId;
             string currentId = _lastView.CurrentUnitId;

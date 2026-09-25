@@ -327,6 +327,24 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void TintForIntent_OwnTrap_StandsOutEvenInsideReachableZone()
+        {
+            // Власник, 25.09.2026: «Поставлену пастку на арені поки не видно. погано».
+            // Пастку ставлять поруч із собою — тобто в синій зоні руху; там її
+            // підсвітка не має тонути в синьому.
+            var reachable = BattleArenaView.TintForIntent("None", true, true, false, false, false, false, false, false);
+            var reachableTrap = BattleArenaView.TintForIntent("None", true, true, false, false, false, false, false, false, isOwnTrap: true);
+            var plain = BattleArenaView.TintForIntent("None", true, false, false, false, false, false, false, false);
+            var plainTrap = BattleArenaView.TintForIntent("None", true, false, false, false, false, false, false, false, isOwnTrap: true);
+            var halfCoverTrap = BattleArenaView.TintForIntent("Half", true, false, false, false, false, false, false, false, isOwnTrap: true);
+
+            Assert.That(reachableTrap.R, Is.GreaterThan(reachable.R + 0.2f), "бурштин помітний у зоні досяжності");
+            Assert.That(plainTrap.R, Is.GreaterThan(plainTrap.B + 0.3f), "бурштинова клітинка тепла, не синя");
+            Assert.That(plainTrap.R, Is.GreaterThan(plain.R + 0.2f));
+            Assert.That(halfCoverTrap.R, Is.GreaterThan(halfCoverTrap.B + 0.3f), "і на клітинці з укриттям");
+        }
+
+        [Test]
         public void TintForIntent_AbilityRangeOverwatchAimAndThreat_AreMutuallyDistinct()
         {
             var ability = BattleArenaView.TintForIntent("None", true, false, false, false, false, true, false, false);

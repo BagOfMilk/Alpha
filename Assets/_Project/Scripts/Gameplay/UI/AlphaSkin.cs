@@ -80,6 +80,8 @@ namespace Game.Gameplay.UI
         public static readonly Color32 BattleHeal = new Color32(115, 230, 115, 255);
         public static readonly Color32 BattleStatus = new Color32(191, 153, 255, 255);
         public static readonly Color32 BattleOverwatch = new Color32(89, 217, 242, 255);
+        /// <summary>Своя пастка на арені: мітка і підсвітка клітинки одного бурштину.</summary>
+        public static readonly Color32 BattleTrap = new Color32(250, 158, 20, 235);
         /// <summary>Дальність озброєної здібності (§2 «бузковий») — заливка тайла, HUD тут не малює, лишень тримає токен поруч з рештою бойової палітри.</summary>
         public static readonly Color32 BattleAbilityRange = new Color32(166, 128, 242, 255);
 

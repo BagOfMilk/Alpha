@@ -331,6 +331,18 @@ namespace Game.Gameplay
         /// досяжний), нові сенси — нижчі за них, вищі за голе укриття.
         /// </summary>
         public static TileTint TintForIntent(string cover, bool walkable, bool isReachable, bool isCurrentUnit,
+            bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat,
+            bool isOwnTrap = false)
+        {
+            var tint = TintForIntentCore(cover, walkable, isReachable, isCurrentUnit, isHovered, isHoveredUnreachable,
+                isAbilityRange, isOverwatchAim, isOverwatchThreat);
+            // Своя пастка — бурштинова поверх будь-якого наміру: у синій зоні
+            // досяжності вона лежить найчастіше (ставлять поруч із собою), і
+            // перекрита синім вона знову ставала б невидимою.
+            return isOwnTrap ? Blend(tint, 0.98f, 0.62f, 0.08f, 0.60f) : tint;
+        }
+
+        private static TileTint TintForIntentCore(string cover, bool walkable, bool isReachable, bool isCurrentUnit,
             bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat)
         {
             if (!walkable) return TintFor(cover, false, isReachable, isCurrentUnit, isHovered);
