@@ -49,13 +49,18 @@ namespace Game.Gameplay
     /// <c>GameSession.CombatStabilize</c>/<c>CombatRetreat</c> — <c>CombatState</c>
     /// має обидва методи, фасад жоден не обгортає, тому кнопок
     /// «Стабілізувати»/«Відступ» тут немає (сам TEST_BUILD.md позначає
-    /// «Відступ» як «якщо існує» — не існує); (4) <c>BattleView</c> не
-    /// показує, які здібності доступні поточному юніту й за яку ціну AP —
-    /// HUD пропонує фіксований каталог із чотирьох здібностей (ті самі, що
-    /// в <c>DefaultCombatContent.AbilityCatalog</c>) і покладається на
-    /// <c>CombatActionResult</c> ядра, щоб відхилити недоступну; (5) немає
+    /// «Відступ» як «якщо існує» — не існує); (4) немає
     /// напрямку прицілу дозору в <c>BattleUnitView</c> — показаний лише
     /// індикатор «у дозорі», без конуса напрямку.
+    ///
+    /// ЗАКРИТО (25.09.2026, скарга «не можу нормально щось використати в
+    /// бою»): пункт (4) старого списку — <c>BattleView</c> тепер несе
+    /// <c>BattleUnitView.Abilities</c> (реальний набір ЦЬОГО юніта, з ціною
+    /// AP і відкатом), а не фіксований каталог, однаковий для всіх. HUD
+    /// (<see cref="Game.Gameplay.UI.BattleHudScreen.DrawAbilities"/>) сірить
+    /// кнопку з причиною замість мовчазної відмови по кліку;
+    /// <see cref="RunCommand"/> перекладає конкретний <c>CombatActionResult</c>
+    /// (не тільки Success/fail) у журнал бою.
     /// </summary>
     public sealed class BattleArenaController : MonoBehaviour, IBattlePresenter, IBattleHudData
     {
@@ -828,10 +833,10 @@ namespace Game.Gameplay
         {
             if (_session == null) return false;
             int before = _session.DayLog.Count;
-            bool success;
+            CombatActionResult result;
             try
             {
-                success = command() == CombatActionResult.Success;
+                result = command();
             }
             catch (InvalidOperationException)
             {
@@ -843,13 +848,42 @@ namespace Game.Gameplay
                 // встигає натиснути кнопку HUD, що кличе Combat* на вже
                 // порожньому бою. Без catch виняток летів би крізь
                 // Update()/OnGUI() і лишав розбалансованим стек
-                // GUILayout.Begin/End-груп для цього кадру.
-                success = false;
+                // GUILayout.Begin/End-груп для цього кадру. RejectionLogLine
+                // нижче не має свого ключа під цей перегін — падає на
+                // дефолтний "ui.battle.action.rejected", і це чесно: бою вже
+                // немає, конкретики "чому" тут просто не існує.
+                result = CombatActionResult.InvalidAction;
             }
+            bool success = result == CombatActionResult.Success;
             if (!success)
-                _logLines.Add(UkrainianText.Get("ui.battle.action.rejected", Gender.Male));
+                _logLines.Add(RejectionLogLine(result));
             AfterCommand(before);
             return success;
+        }
+
+        /// <summary>
+        /// Фікс (той самий розрив, що <see cref="Game.Gameplay.UI.BattleHudScreen.DrawAbilities"/>,
+        /// протилежний бік — тайл/юніт, не здібність): раніше будь-яка відмова
+        /// показувала ОДИН загальний рядок "Дію неможливо виконати зараз.",
+        /// хоча ядро вже точно знає причину (<c>CombatActionResult</c> — 6
+        /// конкретних значень окрім Success). "Не можу нормально нічого
+        /// використати" — це і є мовчазна відмова без пояснення; ядро тут не
+        /// винне, воно й так рахує причину, просто ніхто її не читав.
+        /// </summary>
+        private static string RejectionLogLine(CombatActionResult result)
+        {
+            string key;
+            switch (result)
+            {
+                case CombatActionResult.NotEnoughAp: key = "ui.battle.action.rejected.notenoughap"; break;
+                case CombatActionResult.OutOfRange: key = "ui.battle.action.rejected.outofrange"; break;
+                case CombatActionResult.NoLineOfSight: key = "ui.battle.action.rejected.nolineofsight"; break;
+                case CombatActionResult.NotReachable: key = "ui.battle.action.rejected.notreachable"; break;
+                case CombatActionResult.InvalidTarget: key = "ui.battle.action.rejected.invalidtarget"; break;
+                case CombatActionResult.OnCooldown: key = "ui.battle.action.rejected.oncooldown"; break;
+                default: key = "ui.battle.action.rejected"; break;
+            }
+            return UkrainianText.Get(key, Gender.Male);
         }
 
         private void AfterCommand(int dayLogCountBefore)

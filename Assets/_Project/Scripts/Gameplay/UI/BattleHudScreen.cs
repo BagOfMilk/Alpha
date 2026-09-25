@@ -110,7 +110,7 @@ namespace Game.Gameplay.UI
             GUILayout.Space(6f);
             DrawHitChancePreview(c, view);
             GUILayout.Space(10f);
-            DrawAbilities(c);
+            DrawAbilities(c, view);
             GUILayout.Space(10f);
             DrawActionButtons(c);
             GUILayout.Space(10f);
@@ -297,9 +297,26 @@ namespace Game.Gameplay.UI
             }
         }
 
-        private static void DrawAbilities(IBattleHudData c)
+        /// <summary>
+        /// Фікс (відомий розрив звіту пакета E2, §BattleArenaView.KnownAbilityIds):
+        /// раніше тут малювався ОДИН фіксований каталог із чотирьох кнопок для
+        /// БУДЬ-ЯКОГО юніта, незалежно від того, чи він узагалі знає здібність
+        /// (напарник знає її лише за порогом скіла — <c>CombatUnit.Abilities</c>,
+        /// AbilityDefinition.RequiredSkillLevel). Клік по здібності, якої юніт
+        /// не знає, чи на яку бракує AP/вона на відкаті, беззвучно «відхилявся»
+        /// ядром (CombatActionResult != Success) — гравець бачив кнопку, тиснув
+        /// і не розумів, чому нічого не відбувається («не можу нормально щось
+        /// використовувати»). Тепер кнопки йдуть з РЕАЛЬНОГО списку поточного
+        /// юніта (<c>BattleUnitView.Abilities</c>), кожна підписана ціною в AP,
+        /// а недоступна зараз (відкат чи нестача AP) — сірою <see
+        /// cref="Widgets.DisabledButton"/> з причиною поруч, а не звичайною
+        /// кнопкою, що мовчки відмовляє по кліку (Поправка №1, «шлях видно»).
+        /// </summary>
+        private static void DrawAbilities(IBattleHudData c, BattleView view)
         {
             if (!c.IsPlayerTurn) return;
+            var current = FindUnit(view, view.CurrentUnitId);
+            if (current?.Abilities == null || current.Abilities.Count == 0) return;
 
             Widgets.Section(UkrainianText.Get("ui.battle.abilities", false), () =>
             {
@@ -308,21 +325,31 @@ namespace Game.Gameplay.UI
                 // ("Наказ пересунутися") з'їдав майже весь ряд, і "Залп"
                 // обрізався по правому краю панелі (жодної рамки/паддінга —
                 // просто впирався в межу BeginArea). Дві кнопки на ряд:
-                // фіксований вибір, а не виміряний flow-layout, бо каталог тут
-                // — короткий сталий масив (BattleArenaView.KnownAbilityIds,
-                // §4.2.1 контракту), не список, що росте під час бою.
+                // фіксований вибір, а не виміряний flow-layout — здібностей
+                // на юніта завжди мало (2–4).
                 const int perRow = 2;
-                for (int row = 0; row * perRow < BattleArenaView.KnownAbilityIds.Length; row++)
+                var abilities = current.Abilities;
+                for (int row = 0; row * perRow < abilities.Count; row++)
                 {
                     GUILayout.BeginHorizontal();
-                    for (int i = row * perRow; i < BattleArenaView.KnownAbilityIds.Length && i < (row + 1) * perRow; i++)
+                    for (int i = row * perRow; i < abilities.Count && i < (row + 1) * perRow; i++)
                     {
-                        string abilityId = BattleArenaView.KnownAbilityIds[i];
-                        bool armed = c.Armed == ArmedAction.Ability && c.ArmedAbilityId == abilityId;
-                        string label = UkrainianText.Get(abilityId, false);
-                        if (armed) label = "» " + label;
+                        var ability = abilities[i];
+                        bool armed = c.Armed == ArmedAction.Ability && c.ArmedAbilityId == ability.Id;
+                        string apSuffix = " (" + ability.ApCost.ToString(System.Globalization.CultureInfo.InvariantCulture) + " AP)";
+                        string label = (armed ? "» " : string.Empty) + UkrainianText.Get(ability.Id, false) + apSuffix;
 
-                        if (Widgets.SecondaryButton(label))
+                        bool onCooldown = ability.CooldownRemaining > 0;
+                        bool notEnoughAp = current.Ap < ability.ApCost;
+                        if (onCooldown || notEnoughAp)
+                        {
+                            string reason = onCooldown
+                                ? UkrainianText.Format("ui.battle.ability.cooldown", false,
+                                    "turns", ability.CooldownRemaining.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                                : UkrainianText.Get("ui.battle.ability.not_enough_ap", false);
+                            Widgets.DisabledButton(label, reason);
+                        }
+                        else if (Widgets.SecondaryButton(label))
                         {
                             // Fix-ревью (major): c.ArmAbility(null) НЕ повертає Armed
                             // у None (контролер ставить _armed=Ability незалежно від
@@ -330,7 +357,7 @@ namespace Game.Gameplay.UI
                             // порожньою здібністю (тултип малював [] — сирий маркер
                             // відсутнього ключа). Той самий патерн, що вже коректно
                             // працює для кнопки Дозору нижче.
-                            if (armed) c.CancelArmed(); else c.ArmAbility(abilityId);
+                            if (armed) c.CancelArmed(); else c.ArmAbility(ability.Id);
                         }
                     }
                     GUILayout.EndHorizontal();

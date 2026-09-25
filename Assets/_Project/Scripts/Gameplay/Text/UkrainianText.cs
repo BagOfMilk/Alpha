@@ -1862,6 +1862,19 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.cancel", "Скасувати (ПКМ)");
             AddKey(t, "ui.battle.action.rejected", "Дію неможливо виконати зараз.");
 
+            // Конкретна причина відмови (CombatActionResult, фікс: гравець бачить
+            // ЧОМУ, а не тільки ЩО не вийшло — Поправка №1, «шлях завжди видно»).
+            AddKey(t, "ui.battle.action.rejected.notenoughap", "Недостатньо очок дій.");
+            AddKey(t, "ui.battle.action.rejected.outofrange", "Занадто далеко.");
+            AddKey(t, "ui.battle.action.rejected.nolineofsight", "Немає прямої видимості.");
+            AddKey(t, "ui.battle.action.rejected.notreachable", "Туди не дістатися.");
+            AddKey(t, "ui.battle.action.rejected.invalidtarget", "Неправильна ціль.");
+            AddKey(t, "ui.battle.action.rejected.oncooldown", "Ще на відкаті.");
+
+            // Причина на сірій кнопці здібності (§BattleHudScreen.DrawAbilities).
+            AddKey(t, "ui.battle.ability.cooldown", "відкат: {turns} х.");
+            AddKey(t, "ui.battle.ability.not_enough_ap", "бракує AP");
+
             // Прев'ю шансу під курсором (R1: ThresholdRule показує поріг, PercentRule — відсоток).
             AddKey(t, "ui.battle.hitchance.percent", "Шанс влучення: {value}%");
             AddKey(t, "ui.battle.hitchance.threshold", "Поріг влучення: {value}");

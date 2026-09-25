@@ -646,7 +646,13 @@ namespace Game.Tests.EditMode
                 // Поріг етапу-перевірки квесту (QuestOfferView.CheckThreshold) —
                 // той самий показаний заздалегідь поріг, що й Threshold вище
                 // (інваріант 8), не прихована шкала.
-                "CheckThreshold"
+                "CheckThreshold",
+                // BattleAbilityView.ApCost/CooldownRemaining (фікс «не можу
+                // нормально щось використати в бою», 25.09.2026): вартість
+                // здібності в AP і скільки ходів лишилось до відкату — гравець
+                // мусить бачити обидва ДО кліку (Поправка №1, «шлях видно»),
+                // той самий рівень прозорості, що й Ap/ApMax вище.
+                "ApCost", "CooldownRemaining"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

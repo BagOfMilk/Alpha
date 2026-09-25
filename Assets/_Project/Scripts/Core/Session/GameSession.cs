@@ -1787,6 +1787,10 @@ namespace Game.Core.Session
             foreach (var u in _battle.Units)
             {
                 bool fromDefector = u.Side == Side.Enemy && !string.IsNullOrEmpty(u.SourceCompanionId);
+                var abilities = new List<BattleAbilityView>();
+                foreach (var a in u.Abilities)
+                    abilities.Add(new BattleAbilityView { Id = a.Id, ApCost = a.ApCost, CooldownRemaining = u.CooldownRemaining(a.Id) });
+
                 units.Add(new BattleUnitView
                 {
                     Id = u.Id,
@@ -1801,7 +1805,8 @@ namespace Game.Core.Session
                     IsOverwatching = u.IsOverwatching,
                     Statuses = MapStatuses(u),
                     IsDowned = u.LifeState == UnitLifeState.Downed,
-                    HitChancePreview = 0
+                    HitChancePreview = 0,
+                    Abilities = abilities
                 });
             }
 
