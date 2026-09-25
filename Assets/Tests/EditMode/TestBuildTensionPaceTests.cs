@@ -138,13 +138,16 @@ namespace Game.Tests.EditMode
 
             // Домен насправді читається українською в готовому тексті, не
             // сирим тегом ("площадь" — внутрішній DomainTag, гравець його
-            // ніколи не бачить напряму).
-            string renderedL2 = UkrainianText.Format("forewarn.level2", Gender.Male, "domain", "площа");
-            string renderedL3 = UkrainianText.Format("forewarn.level3", Gender.Male, "domain", "площа");
-            StringAssert.Contains("площа", renderedL2);
-            StringAssert.Contains("площа", renderedL3);
+            // ніколи не бачить напряму) — та сама підстановка "domain.<tag>",
+            // що вже показує "domain.road"/"domain.craft".
+            string translatedDomain = UkrainianText.Get("domain." + d2, Gender.Male);
+            string renderedL2 = UkrainianText.Format("forewarn.level2", Gender.Male, "domain", translatedDomain);
+            string renderedL3 = UkrainianText.Format("forewarn.level3", Gender.Male, "domain", translatedDomain);
+            StringAssert.Contains("площ", renderedL2, "щабель 2 мусить назвати площу словами, не тегом");
+            StringAssert.Contains("площ", renderedL3, "щабель 3 мусить назвати площу словами, не тегом");
             StringAssert.DoesNotContain("{domain}", renderedL2);
             StringAssert.DoesNotContain("{domain}", renderedL3);
+            StringAssert.DoesNotContain("площадь", renderedL2, "гравцеві — лише українською, не сирим тегом");
         }
 
         /// <summary>
