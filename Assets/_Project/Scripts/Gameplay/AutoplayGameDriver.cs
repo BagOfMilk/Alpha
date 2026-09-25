@@ -362,7 +362,9 @@ namespace Game.Gameplay
 
                     if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
                     {
-                        Run(() => Session.ConfirmMorning());
+                        // Рівно та сама дія, що й кнопка «Почати день» (HubScreen.StartDay),
+                        // а не виклик ядра в обхід екрана.
+                        Run(() => UI.HubScreen.StartDay(Session));
                         _host.Log("Ранок доби " + day + " підтверджено.");
                     }
                     continue;
@@ -371,7 +373,7 @@ namespace Game.Gameplay
                 // ---- день (конвеєр) ----
                 if (state == SessionState.Day)
                 {
-                    Run(() => Session.AdvanceDay());
+                    Run(() => UI.HubScreen.StartDay(Session));
                     continue;
                 }
 
@@ -798,14 +800,14 @@ namespace Game.Gameplay
                     }
 
                     if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
-                        Run(() => Session.ConfirmMorning());
+                        Run(() => UI.HubScreen.StartDay(Session));
                     continue;
                 }
 
                 // ---- день (конвеєр) ----
                 if (state == SessionState.Day)
                 {
-                    Run(() => Session.AdvanceDay());
+                    Run(() => UI.HubScreen.StartDay(Session));
                     continue;
                 }
 

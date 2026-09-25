@@ -5,6 +5,7 @@ using Game.Core.Characters.Creation;
 using Game.Core.Expeditions;
 using Game.Core.Items;
 using Game.Core.Quests;
+using Game.Core.Session;
 using Game.Core.Session.Views;
 using Game.Core.Stats;
 using Game.Gameplay.Text;
@@ -110,7 +111,31 @@ namespace Game.Gameplay.UI
 
             GUILayout.FlexibleSpace();
             if (Widgets.PrimaryButton(UkrainianText.Get("ui.start_day", g)))
-                shell.TryRun(() => shell.Session.ConfirmMorning());
+                StartDay(shell);
+        }
+
+        /// <summary>
+        /// Дія кнопки «Почати день»: підтвердити ранок і прокрутити день до
+        /// першого рішення або до вечора. Раніше кнопка лише підтверджувала
+        /// ранок (стан «День»), а сам день (<see cref="GameSession.AdvanceDay"/>)
+        /// не викликала жодна кнопка — людина застрягала на першому ранку;
+        /// автотур цього не бачив, бо кликав ядро напряму (знайдено аудитом
+        /// журналу 25.09.2026). Тепер і кнопка, і водій автотуру йдуть через
+        /// цей метод. Якщо гра вже стоїть у стані «День», він просто
+        /// продовжує день.
+        /// </summary>
+        public static void StartDay(GameShell shell)
+        {
+            shell.TryRun(() => StartDay(shell.Session));
+        }
+
+        /// <summary>Логіка кнопки без перехоплення винятків — її кличе і водій автотуру (свій облік помилок).</summary>
+        public static void StartDay(GameSession s)
+        {
+            if (s.State == SessionState.Morning || s.State == SessionState.FreePlay)
+                s.ConfirmMorning();
+            if (s.State == SessionState.Day)
+                s.AdvanceDay();
         }
 
         private void DrawTabBar(Gender g)
