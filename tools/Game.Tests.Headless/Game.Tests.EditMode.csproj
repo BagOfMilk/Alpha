@@ -77,6 +77,12 @@
       бере модель з джерела напряму.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Walk/VillageWalk.cs" />
+    <!--
+      Бій v2, раунд 2: клемп підказки біля курсора — чиста математика без
+      UnityEngine, тим самим прийомом: BattleTooltipLayoutTests.cs бере її
+      з джерела напряму.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/BattleTooltipLayout.cs" />
   </ItemGroup>
 
   <ItemGroup>

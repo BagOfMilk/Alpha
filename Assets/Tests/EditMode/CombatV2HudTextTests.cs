@@ -239,7 +239,32 @@ namespace Game.Tests.EditMode
             string line = BattleLogText.Line(Entry(CombatLogKeys.AttackMiss,
                 ("unitId", "a"), ("targetId", "b"), ("chance", "56"), ("damage", "0"), ("ap", "4"), ("cover", "Half")),
                 true, id => id, id => false);
-            Assert.AreEqual("a → b: промах (шанс 56%), укриття цілі: половинне · ціна 4 ОД.", line);
+            // Бій v2, раунд 2: укриття всередині тих самих дужок, що шанс, і
+            // ціна ОД без слова «ціна» («... · 4 ОД», не «· ціна 4 ОД») — той
+            // самий формат, що власник процитував для рядків атаки.
+            Assert.AreEqual("a → b: промах (шанс 56%, укриття цілі: половинне) · 4 ОД.", line);
+        }
+
+        // =====================================================================
+        // Бій v2, раунд 2: слова атаки — «задів»/«влучання»/«крит», без
+        // «N шкоди» (доручення власника: «без "1 шкоди"/"4 шкоди"»)
+        // =====================================================================
+
+        [Test]
+        public void AttackLog_UsesShortVerbs_AndDashDamage_NotDamageWord()
+        {
+            string graze = BattleLogText.Line(Entry(CombatLogKeys.AttackGraze,
+                ("unitId", "a"), ("targetId", "b"), ("chance", "25"), ("damage", "1")), true, id => id, id => false);
+            string hit = BattleLogText.Line(Entry(CombatLogKeys.AttackHit,
+                ("unitId", "a"), ("targetId", "b"), ("chance", "25"), ("damage", "4")), true, id => id, id => false);
+            string crit = BattleLogText.Line(Entry(CombatLogKeys.AttackCrit,
+                ("unitId", "a"), ("targetId", "b"), ("chance", "25"), ("damage", "6")), true, id => id, id => false);
+
+            Assert.AreEqual("a → b: задів, −1 (шанс 25%).", graze);
+            Assert.AreEqual("a → b: влучання, −4 (шанс 25%).", hit);
+            Assert.AreEqual("a → b: крит, −6 (шанс 25%).", crit);
+            foreach (var line in new[] { graze, hit, crit })
+                Assert.IsFalse(line.Contains("шкоди"), "«N шкоди» мало зникнути з рядка атаки: " + line);
         }
     }
 }

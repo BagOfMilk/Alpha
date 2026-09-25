@@ -548,11 +548,11 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.continue", "Продовжити");
             AddKey(t, "ui.title.training", "Тренувальний бій");
             AddKey(t, "ui.title.quit", "Вийти");
-            AddKey(t, "ui.title.hitrule.percent", "Правило попадання: показаний відсоток");
-            AddKey(t, "ui.title.hitrule.threshold", "Правило попадання: показаний поріг");
-            AddKey(t, "ui.title.hitrule.section", "Правило попадання");
+            AddKey(t, "ui.title.hitrule.percent", "Правило влучання: показаний відсоток");
+            AddKey(t, "ui.title.hitrule.threshold", "Правило влучання: показаний поріг");
+            AddKey(t, "ui.title.hitrule.section", "Правило влучання");
             // Поправка №7 (стиснутий темп шкали Напруги, тестова збірка):
-            // перемикач на титулі за тим самим прийомом, що правило попадання
+            // перемикач на титулі за тим самим прийомом, що правило влучання
             // вище — TabButton, не GUILayout.Toggle (фікс-ревью Фази F про
             // нечитний вбудований стиль, коментар біля Widgets.TabButton у
             // TitleScreen.Draw).
@@ -1890,7 +1890,7 @@ namespace Game.Gameplay.Text
         // ui.battle.overwatch.*, ui.battle.autoresolve, ui.battle.victory/defeat)
         // уже є в таблиці (§7.20/§7.21) — тут лише те, чого бракувало для
         // повного HUD: заголовок, чергу ходу, панель здібностей/логу, кінець
-        // ходу, озброєну дію, прев'ю шансу під обидва правила попадання
+        // ходу, озброєну дію, прев'ю шансу під обидва правила влучання
         // (R1 — «поріг/точність» замість «%» для ThresholdRule), і панель
         // результату бою з «Далі» (сама подія завершення й втрати вже мають
         // ключі — combat.autoresolved/companion.died.*/scar.granted, §7 і
@@ -1902,14 +1902,19 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.enemyturn", "Хід ворога…");
             AddKey(t, "ui.battle.initiative", "Черга ходу");
             AddKey(t, "ui.battle.abilities", "Здібності");
-            AddKey(t, "ui.battle.log", "Хід бою");
+            // Бій v2, раунд 2 (аудит знімків п.6): заголовок панелі журналу —
+            // «Журнал бою» (був «Хід бою», плутався зі щоденниковим «Хід:
+            // {name}» картки поточного юніта — ui.battle.current_unit нижче).
+            AddKey(t, "ui.battle.log", "Журнал бою");
             AddKey(t, "ui.battle.endturn", "Кінець ходу");
             AddKey(t, "ui.battle.unit.downed", "Виведений з бою — потребує допомоги");
 
             // Fix-ревью (major): HP ніде не показувався — ні для поточного
             // юніта, ні для наведеної цілі під прев'ю шансу.
             AddKey(t, "ui.battle.hp", "Здоров'я: {current}/{max}");
-            AddKey(t, "ui.battle.hp.target", "Ціль — здоров'я: {current}/{max}");
+            // Бій v2, раунд 2: рядок підказки біля курсора (§3/COMBAT_V2 п.4
+            // «Здоров'я цілі: 8/8») — той самий текст, що власник процитував.
+            AddKey(t, "ui.battle.hp.target", "Здоров'я цілі: {current}/{max}");
             AddKey(t, "ui.battle.weapon", "Зброя: {name}");
             // Бій v2 — спливаючі написи над юнітами (docs/COMBAT_V2.md §6).
             AddKey(t, "ui.battle.float.miss", "Промах");
@@ -1933,6 +1938,14 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.armed.overwatch_aim", "Приціл дозору — клацни напрямок");
             AddKey(t, "ui.battle.armed.ability", "Ціль здібності «{ability}» — клацни по тайлу чи юніту");
             AddKey(t, "ui.battle.cancel", "Скасувати (ПКМ)");
+            // Бій v2, раунд 2 (аудит HUD: підказка керування прилипала до
+            // кута поверх «Раунд 1» і не пояснювала «розумний клік» —
+            // тепер рядок під кнопками ходу гравця, звичайним не курсивним
+            // текстом, §3/COMBAT_V2 п.1).
+            AddKey(t, "ui.battle.hint.controls", "ЛКМ: ворог — атака, клітинка — рух · ПКМ — скасувати");
+            // Заголовок підказки біля курсора над ворогом (§3/COMBAT_V2 п.4).
+            AddKey(t, "ui.battle.hover.attack_title", "Атака: {target}");
+            AddKey(t, "ui.battle.hover.move_title", "Рух");
             AddKey(t, "ui.battle.action.rejected", "Дію неможливо виконати зараз.");
 
             // Конкретна причина відмови (CombatActionResult, фікс: гравець бачить
@@ -2019,7 +2032,7 @@ namespace Game.Gameplay.Text
         //
         // Плейсхолдери: {unit} — підмет рядка, {target} — другий учасник (імена),
         // {ability}/{status}/{damageType} — перекладені токени, {chance} —
-        // "шанс N%" чи "поріг N" за правилом попадання (R1), решта — числа.
+        // "шанс N%" чи "поріг N" за правилом влучання (R1), решта — числа.
         // Теперішній час навмисно: дієслово не має роду, і рядок однаково
         // правильний для Мирослави, Максима й протагоніста будь-якого роду.
         private static void AddCombatLogKeys(Dictionary<string, string> t)
@@ -2040,10 +2053,15 @@ namespace Game.Gameplay.Text
             // {cover_suffix}/{ap_suffix} — Бій v2 (докладно в AddCombatV2HudKeys,
             // combat.log.suffix.*): порожні, доки Core не пише args["cover"]/
             // args["ap"] для рядка атаки, самі проявляються, щойно з'являться.
-            AddKey(t, "combat.log.attack.miss", "{unit} → {target}: промах ({chance}){cover_suffix}{ap_suffix}.");
-            AddKey(t, "combat.log.attack.graze", "{unit} → {target}: зачіпає, {damage} шкоди ({chance}){cover_suffix}{ap_suffix}.");
-            AddKey(t, "combat.log.attack.hit", "{unit} → {target}: влучання, {damage} шкоди ({chance}){cover_suffix}{ap_suffix}.");
-            AddKey(t, "combat.log.attack.crit", "{unit} → {target}: критичне влучання, {damage} шкоди ({chance}){cover_suffix}{ap_suffix}.");
+            // Бій v2, раунд 2 (доручення власника: «без "1 шкоди"/"4 шкоди"»,
+            // укриття й ціна ОД — усередині тих самих дужок, що шанс, а не
+            // окремим хвостом після закритої дужки): «задів, −1 (шанс 25%,
+            // укриття цілі: повне) · 3 ОД» — суфікси лишаються порожніми,
+            // доки Core не пише args["cover"]/args["ap"] (§CombatV2HudTextTests).
+            AddKey(t, "combat.log.attack.miss", "{unit} → {target}: промах ({chance}{cover_suffix}){ap_suffix}.");
+            AddKey(t, "combat.log.attack.graze", "{unit} → {target}: задів, −{damage} ({chance}{cover_suffix}){ap_suffix}.");
+            AddKey(t, "combat.log.attack.hit", "{unit} → {target}: влучання, −{damage} ({chance}{cover_suffix}){ap_suffix}.");
+            AddKey(t, "combat.log.attack.crit", "{unit} → {target}: крит, −{damage} ({chance}{cover_suffix}){ap_suffix}.");
             AddKey(t, "combat.log.chance.percent", "шанс {value}%");
             AddKey(t, "combat.log.chance.threshold", "поріг {value}");
             AddKey(t, "combat.log.stabilize", "{unit} надає допомогу: {target} поза небезпекою й виходить із бою.");
@@ -2427,7 +2445,7 @@ namespace Game.Gameplay.Text
             // це обіцяє, реалізація — частина «ядро»): BattleLogText.Line
             // підставляє тут порожній рядок, і текст лишається без сліду
             // плейсхолдера. Щойно аргументи з'являться — суфікс сам візьметься.
-            AddKey(t, "combat.log.suffix.ap", " · ціна {ap} ОД");
+            AddKey(t, "combat.log.suffix.ap", " · {ap} ОД");
             AddKey(t, "combat.log.suffix.cover", ", укриття цілі: {cover}");
             AddKey(t, "combat.cover.label.none", "немає");
             AddKey(t, "combat.cover.label.half", "половинне");

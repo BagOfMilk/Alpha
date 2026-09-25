@@ -85,8 +85,8 @@ namespace Game.Gameplay.UI
             GUILayout.EndArea();
             blockingRects.Add(rightRect);
 
-            float bottomWidth = Clamp(Screen.width - rightWidth - pad * 3f, 480f, 1180f);
-            float bottomHeight = BottomPanelHeight(scale);
+            float bottomWidth = BottomPanelWidth();
+            float bottomHeight = BottomPanelHeight();
             var bottomRect = new Rect((Screen.width - rightWidth - pad - bottomWidth) * 0.5f,
                 Screen.height - bottomHeight - pad, bottomWidth, bottomHeight);
             GUILayout.BeginArea(bottomRect, GUI.skin.box);
@@ -170,17 +170,30 @@ namespace Game.Gameplay.UI
             GUILayout.Space(16f);
             DrawInitiativeStrip(c, view);
             GUILayout.FlexibleSpace();
+            // Аудит знімків п.5: «Правило влучання вгорі праворуч — не
+            // курсивом, читабельно» — AlphaSkin.Tooltip курсивний і тьмяний,
+            // тут потрібен звичайний світлий HintLine (§AlphaSkin.HintLine).
             string ruleKey = view.IsHitRulePercent ? "ui.title.hitrule.percent" : "ui.title.hitrule.threshold";
-            GUILayout.Label(UkrainianText.Get(ruleKey, false), AlphaSkin.Tooltip, GUILayout.ExpandWidth(false));
+            GUILayout.Label(UkrainianText.Get(ruleKey, false), AlphaSkin.HintLine, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
         }
 
+        /// <summary>Ширина зайва понад <see cref="Widgets.BadgeWidth"/> для рамки поточного юніта (§Widgets.BorderedBadge) — так підрахунок переносу рядка (нижче) не недооцінює ширший бейдж.</summary>
+        private const float InitiativeBorderPad = 8f;
+        /// <summary>Товщина смужки HP під бейджем черги ходу (§3 «під іменем — тонка HP-смужка»).</summary>
+        private const float InitiativeHpBarHeight = 4f;
+
         /// <summary>
-        /// Картки ініціативи: смужка кольору сторони, ім'я з порядковим
-        /// номером (через <see cref="IBattleHudData.ResolveDisplayName"/>),
-        /// тонка смужка HP; поточний — акцентний колір, звалений — сірий.
-        /// Загортає в новий ряд, коли не влазить (фікс-ревью старого HUD,
-        /// той самий клас бага з довгими іменами-дублікатами).
+        /// Картки ініціативи: тло кольору сторони, ім'я з порядковим номером
+        /// (через <see cref="IBattleHudData.ResolveDisplayName"/>), тонка
+        /// смужка HP під іменем; звалений — сірий. Поточний юніт —
+        /// золоте тло з ТЕМНИМ текстом і рамкою (не світлий текст на
+        /// світлому тлі — фікс-ревью, аудит знімків п.2: «жовтий текст на
+        /// жовтому, синій на синьому»), решта — приглушений тон сторони
+        /// (<see cref="AlphaSkin.BattlePlayerSideMuted"/> тощо) з БІЛИМ
+        /// текстом замість насиченого кольору арени. Загортає в новий ряд,
+        /// коли не влазить (фікс-ревью старого HUD, той самий клас бага з
+        /// довгими іменами-дублікатами).
         /// </summary>
         private static void DrawInitiativeStrip(IBattleHudData c, BattleView view)
         {
@@ -194,14 +207,24 @@ namespace Game.Gameplay.UI
                 var unit = FindUnit(view, id);
                 if (unit == null) continue;
                 string name = c.ResolveDisplayName(unit);
-                bool current = string.Equals(id, view.CurrentUnitId, StringComparison.Ordinal);
-                float w = Widgets.BadgeWidth(name);
+                bool current = string.Equals(id, view.CurrentUnitId, StringComparison.Ordinal) && !unit.IsDowned;
+                float w = Widgets.BadgeWidth(name) + (current ? InitiativeBorderPad : 0f);
 
                 if (rowOpen && rowWidth + w > maxWidth) { GUILayout.EndHorizontal(); rowOpen = false; rowWidth = 0f; }
                 if (!rowOpen) { GUILayout.BeginHorizontal(); rowOpen = true; }
 
-                var tint = unit.IsDowned ? AlphaSkin.BgRaised : (current ? AlphaSkin.BattleCurrentUnit : SideColor(unit.Side));
-                Widgets.Badge(name, tint);
+                GUILayout.BeginVertical(GUILayout.Width(w));
+                if (unit.IsDowned)
+                    Widgets.Badge(name, AlphaSkin.BgRaised, AlphaSkin.TextDim);
+                else if (current)
+                    Widgets.BorderedBadge(name, AlphaSkin.BattleCurrentUnit, AlphaSkin.BattleCurrentUnitText, AlphaSkin.AccentActive);
+                else
+                    Widgets.Badge(name, SideColorMuted(unit.Side), AlphaSkin.TextMain);
+
+                var hpTint = unit.IsDowned ? AlphaSkin.TextDim : SideColor(unit.Side);
+                Widgets.FilledBarAt(GUILayoutBarRect(w, InitiativeHpBarHeight), FilledFraction(unit.Hp, unit.HpMax), hpTint);
+                GUILayout.EndVertical();
+
                 rowWidth += w;
             }
 
@@ -210,23 +233,35 @@ namespace Game.Gameplay.UI
 
         // ================= банер ходу (§3) =================
 
+        /// <summary>
+        /// Аудит знімків п.3: «помаранчевий текст на напівпрозорому синьому/
+        /// червоному — не читається (05 на 1080p майже невидимий)». Тепер
+        /// суцільніша підкладка (α≈0.85, було ~0.63) і БІЛИЙ жирний текст із
+        /// темною тінню-зсувом замість акцентного кольору тексту, який на тлі
+        /// того самого тону сторони губився так само, як бейдж черги ходу.
+        /// </summary>
         private static void DrawBanner(IBattleHudData c, Rect topRect)
         {
             var banner = c.Banner;
             if (banner == null || string.IsNullOrEmpty(banner.Text) || banner.Alpha <= 0f) return;
 
             float width = Clamp(Screen.width * 0.4f, 360f, 720f);
-            float height = 40f * Widgets.ScaleForScreen();
+            float height = 44f * Widgets.ScaleForScreen();
             var rect = new Rect((Screen.width - width) * 0.5f, topRect.height + 6f, width, height);
 
             var tint = banner.PlayerSide ? AlphaSkin.BattlePlayerSide : AlphaSkin.BattleEnemySide;
-            var backdrop = new Color32(tint.r, tint.g, tint.b, (byte)(160 * Clamp01(banner.Alpha)));
+            float alpha = Clamp01(banner.Alpha);
+            var backdrop = new Color32(tint.r, tint.g, tint.b, (byte)(217 * alpha)); // α≈0.85
             Widgets.SolidRect(rect, backdrop);
 
-            var style = new GUIStyle(AlphaSkin.SubHeader) { alignment = TextAnchor.MiddleCenter };
+            var style = new GUIStyle(AlphaSkin.SubHeader) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            var shadowStyle = new GUIStyle(style) { normal = { textColor = new Color(0f, 0f, 0f, 1f) } };
+            var mainStyle = new GUIStyle(style) { normal = { textColor = new Color(1f, 1f, 1f, 1f) } };
+
             var previous = GUI.color;
-            GUI.color = new Color(1f, 1f, 1f, Clamp01(banner.Alpha));
-            GUI.Label(rect, banner.Text, style);
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+            GUI.Label(new Rect(rect.x + 2f, rect.y + 3f, rect.width, rect.height), banner.Text, shadowStyle);
+            GUI.Label(rect, banner.Text, mainStyle);
             GUI.color = previous;
         }
 
@@ -243,7 +278,11 @@ namespace Game.Gameplay.UI
 
             GUILayout.BeginHorizontal();
 
-            GUILayout.BeginVertical(GUILayout.Width(BottomPanelWidth() * 0.34f));
+            // Аудит знімків п.1: картка юніта — фіксовані ~360px (те саме
+            // число, що в специфікації), не частка від панелі — панель тепер
+            // сама лічена за вмістом (§BottomPanelWidth), а не за вільним
+            // місцем екрана.
+            GUILayout.BeginVertical(GUILayout.Width(BottomCardWidth));
             DrawUnitCard(c, current);
             GUILayout.EndVertical();
 
@@ -257,6 +296,13 @@ namespace Game.Gameplay.UI
 
             if (!string.IsNullOrEmpty(c.LastRejectionText))
                 GUILayout.Label(c.LastRejectionText, AlphaSkin.DangerText);
+
+            // Аудит знімків п.1: рядок-підказка керування на ході гравця —
+            // лише коли нічого не озброєно (озброєна дія вже пояснює себе
+            // через ui.battle.armed.*/ui.battle.cancel нижче в DrawAbilities/
+            // DrawActionButtons — другий рядок про те саме був би шумом).
+            if (c.IsPlayerTurn && c.Armed == ArmedAction.None)
+                GUILayout.Label(UkrainianText.Get("ui.battle.hint.controls", false), AlphaSkin.HintLine);
         }
 
         /// <summary>
@@ -371,9 +417,11 @@ namespace Game.Gameplay.UI
             if (hoveredDesc != null || c.Armed == ArmedAction.Ability)
                 Widgets.TooltipLine(UkrainianText.Has(descKey, false) ? UkrainianText.Get(descKey, false) : string.Empty);
 
+            // Аудит знімків п.4/п.5: важлива інструкція («по чому саме
+            // клацнути») — не курсивна другорядна підказка, HintLine.
             if (c.Armed == ArmedAction.Ability)
-                Widgets.TooltipLine(UkrainianText.Format("ui.battle.armed.ability", false,
-                    "ability", UkrainianText.Get(c.ArmedAbilityId ?? string.Empty, false)));
+                GUILayout.Label(UkrainianText.Format("ui.battle.armed.ability", false,
+                    "ability", UkrainianText.Get(c.ArmedAbilityId ?? string.Empty, false)), AlphaSkin.HintLine);
         }
 
         private static void DrawActionButtons(IBattleHudData c, BattleView view, BattleUnitView current)
@@ -388,7 +436,7 @@ namespace Game.Gameplay.UI
                 {
                     if (overwatchArmed) c.CancelArmed(); else c.ArmOverwatchAim();
                 }
-                if (overwatchArmed) Widgets.TooltipLine(UkrainianText.Get("ui.battle.armed.overwatch_aim", false));
+                if (overwatchArmed) GUILayout.Label(UkrainianText.Get("ui.battle.armed.overwatch_aim", false), AlphaSkin.HintLine);
 
                 var downedAlly = FindAdjacentDownedAlly(view, current);
                 if (downedAlly != null)
@@ -410,7 +458,7 @@ namespace Game.Gameplay.UI
             GUILayout.EndHorizontal();
 
             if (c.Armed != ArmedAction.None)
-                Widgets.TooltipLine(UkrainianText.Get("ui.battle.cancel", false));
+                GUILayout.Label(UkrainianText.Get("ui.battle.cancel", false), AlphaSkin.HintLine);
         }
 
         /// <summary>Чебишовська відстань 1 від поточного юніта до звааленого союзника — «Стабілізувати» видно лише коли є кого (§3).</summary>
@@ -430,14 +478,17 @@ namespace Game.Gameplay.UI
 
         private static void DrawLogPanel(IBattleHudData c)
         {
+            // Аудит знімків п.6: «Автобій» — невелика другорядна кнопка в
+            // шапці поруч зі згортанням, не на всю ширину панелі (раніше
+            // окремим рядком під заголовком, розтягнута стилем кнопки).
             GUILayout.BeginHorizontal();
             GUILayout.Label(UkrainianText.Get("ui.battle.log", false), AlphaSkin.SubHeader, GUILayout.ExpandWidth(true));
+            if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false), GUILayout.ExpandWidth(false)))
+                _confirmAutoResolve = true;
+            GUILayout.Space(6f);
             if (Widgets.SecondaryButton(_logCollapsed ? "▸" : "▾", GUILayout.ExpandWidth(false)))
                 _logCollapsed = !_logCollapsed;
             GUILayout.EndHorizontal();
-
-            if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false)))
-                _confirmAutoResolve = true;
 
             if (_confirmAutoResolve)
             {
@@ -479,29 +530,108 @@ namespace Game.Gameplay.UI
             Widgets.ScrollListEnd();
         }
 
-        // ================= підказка біля курсора (§3) =================
+        // ================= підказка біля курсора (§3, аудит знімків п.4) =================
 
+        private const float TooltipWidth = 300f;
+
+        /// <summary>
+        /// Аудит знімків п.4: підказка прилипала до лівого верхнього кута
+        /// (мишача позиція) поверх «Раунд 1» — тепер стоїть ПОРУЧ із ціллю:
+        /// біля оверлея наведеного юніта (<see cref="BattleUnitOverlay.
+        /// IsHovered"/>) для атаки, біля екранної точки наведеного тайла
+        /// (<see cref="IBattleHudData.HoveredTileScreenX"/>/<c>Y</c> — новий
+        /// член контракту, раунд 2) для руху. Клемп у вільну область —
+        /// чиста функція <see cref="BattleTooltipLayout"/> (headless-тест),
+        /// тут лише підстановка меж панелей.
+        /// </summary>
         private static void DrawCursorTooltip(IBattleHudData c, BattleView view)
         {
-            var evt = Event.current;
-            if (evt == null) return;
-            float mx = evt.mousePosition.x, my = evt.mousePosition.y;
-
             var attack = c.HoverAttack;
             var path = c.HoverPath;
             if (attack == null && path == null) return;
 
-            float width = 260f;
-            var area = new Rect(Clamp(mx + 18f, 0f, Screen.width - width), Clamp(my + 18f, 0f, Screen.height - 160f), width, 150f);
+            float anchorX, anchorY;
+            if (attack != null && TryFindHoveredOverlay(c, out var ov))
+            {
+                anchorX = ov.ScreenX;
+                anchorY = ov.ScreenY;
+            }
+            else if (c.HasHoveredTile)
+            {
+                anchorX = c.HoveredTileScreenX;
+                anchorY = c.HoveredTileScreenY;
+            }
+            else
+            {
+                var evt = Event.current;
+                anchorX = evt?.mousePosition.x ?? 0f;
+                anchorY = evt?.mousePosition.y ?? 0f;
+            }
 
+            float scale = Widgets.ScaleForScreen();
+            float height = attack != null ? EstimateAttackTooltipHeight(attack) : EstimatePathTooltipHeight(c, view);
+
+            float freeTop = TopBarHeight(scale) + 8f;
+            float freeBottom = Screen.height - BottomPanelHeight() - 8f;
+            float freeRight = Screen.width - RightPanelWidth() - 8f;
+
+            var (x, y) = BattleTooltipLayout.PlaceNearAnchor(anchorX, anchorY, TooltipWidth, height,
+                8f, freeTop, freeRight, freeBottom);
+
+            var area = new Rect(x, y, TooltipWidth, height);
             GUILayout.BeginArea(area, GUI.skin.box);
-            if (attack != null) DrawHoverAttack(attack);
+            if (attack != null) DrawHoverAttack(c, view, attack);
             else DrawHoverPath(c, view, path);
             GUILayout.EndArea();
         }
 
-        private static void DrawHoverAttack(AttackPreviewView p)
+        private static bool TryFindHoveredOverlay(IBattleHudData c, out BattleUnitOverlay overlay)
         {
+            overlay = null;
+            if (c.Overlays == null) return false;
+            foreach (var ov in c.Overlays)
+            {
+                if (!ov.IsHovered) continue;
+                overlay = ov;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Грубий підрахунок висоти підказки атаки з реальних рядків, які вона намалює — трохи із запасом, аби ніколи не обрізати вміст (BeginArea мовчки кадрує зайве, а не скролить).</summary>
+        private static float EstimateAttackTooltipHeight(AttackPreviewView p)
+        {
+            float h = 16f + 30f; // відступ + заголовок
+            if (p.HasAttackRoll)
+            {
+                h += 32f; // велике «Шанс влучення N%»
+                if (p.Terms != null)
+                    foreach (var term in p.Terms)
+                        if (term.ChanceDelta != 0) h += 22f;
+                h += 26f; // шкода
+            }
+            h += 26f; // «Ціна: N ОД»
+            h += 26f; // «Здоров'я цілі: N/M»
+            if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
+                h += 24f;
+            if (p.Result != "Success") h += 26f;
+            return h;
+        }
+
+        private static float EstimatePathTooltipHeight(IBattleHudData c, BattleView view)
+        {
+            float h = 16f + 30f + 26f; // відступ + «Рух» + рядок ціни/відмови
+            if (view.Grid != null && c.HasHoveredTile) h += 24f; // укриття клітинки
+            h += 26f; // «Під ворожим дозором!» — з запасом, навіть коли порожньо
+            return h;
+        }
+
+        private static void DrawHoverAttack(IBattleHudData c, BattleView view, AttackPreviewView p)
+        {
+            var target = FindUnit(view, p.TargetId);
+            string targetName = target != null ? c.ResolveDisplayName(target) : string.Empty;
+            GUILayout.Label(UkrainianText.Format("ui.battle.hover.attack_title", false, "target", targetName), AlphaSkin.Body);
+
             if (p.HasAttackRoll)
             {
                 string chanceKey = p.IsPercent ? "ui.battle.hitchance.percent" : "ui.battle.hitchance.threshold";
@@ -514,7 +644,7 @@ namespace Game.Gameplay.UI
                         string label = UkrainianText.Has("ui.battle.term." + term.Key, false)
                             ? UkrainianText.Get("ui.battle.term." + term.Key, false) : term.Key;
                         string sign = term.ChanceDelta > 0 ? "+" : string.Empty;
-                        GUILayout.Label(label + " " + sign + I(term.ChanceDelta), AlphaSkin.Tooltip);
+                        GUILayout.Label(label + " " + sign + I(term.ChanceDelta), AlphaSkin.HintLine);
                     }
 
                 string damageLine = p.IsDamageDeterministic
@@ -527,8 +657,12 @@ namespace Game.Gameplay.UI
 
             GUILayout.Label(UkrainianText.Format("ui.battle.ap_cost", false, "cost", I(p.ApCost)), AlphaSkin.Body);
 
+            if (target != null)
+                GUILayout.Label(UkrainianText.Format("ui.battle.hp.target", false,
+                    "current", I(target.Hp), "max", I(target.HpMax)), AlphaSkin.Body);
+
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
-                GUILayout.Label(UkrainianText.Get("ui.battle.cover." + p.Cover.ToLowerInvariant(), false), AlphaSkin.Tooltip);
+                GUILayout.Label(UkrainianText.Get("ui.battle.cover." + p.Cover.ToLowerInvariant(), false), AlphaSkin.HintLine);
 
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
@@ -536,6 +670,8 @@ namespace Game.Gameplay.UI
 
         private static void DrawHoverPath(IBattleHudData c, BattleView view, MovePathView path)
         {
+            GUILayout.Label(UkrainianText.Get("ui.battle.hover.move_title", false), AlphaSkin.Body);
+
             if (path.Result == "Success")
                 GUILayout.Label(UkrainianText.Format("ui.battle.move.cost", false, "cost", I(path.ApCost)), AlphaSkin.Body);
             else if (path.Result == "NotReachable")
@@ -550,7 +686,7 @@ namespace Game.Gameplay.UI
                 {
                     string cover = view.Grid.TileCover[idx];
                     if (!string.IsNullOrEmpty(cover) && !string.Equals(cover, "None", StringComparison.OrdinalIgnoreCase))
-                        GUILayout.Label(UkrainianText.Get("ui.battle.cover." + cover.ToLowerInvariant(), false), AlphaSkin.Tooltip);
+                        GUILayout.Label(UkrainianText.Get("ui.battle.cover." + cover.ToLowerInvariant(), false), AlphaSkin.HintLine);
                 }
             }
 
@@ -703,6 +839,17 @@ namespace Game.Gameplay.UI
             }
         }
 
+        /// <summary>Приглушений тон тла бейджа черги ходу (§DrawInitiativeStrip) — не той самий насичений колір, що арена/оверлеї.</summary>
+        private static Color32 SideColorMuted(string side)
+        {
+            switch (side)
+            {
+                case "Player": return AlphaSkin.BattlePlayerSideMuted;
+                case "FromDefector": return AlphaSkin.BattleDefectorSideMuted;
+                default: return AlphaSkin.BattleEnemySideMuted;
+            }
+        }
+
         private static GUIStyle StyleForLogKind(BattleLogKind kind)
         {
             var style = new GUIStyle(AlphaSkin.Body) { fontStyle = FontStyle.Normal };
@@ -713,10 +860,52 @@ namespace Game.Gameplay.UI
 
         // ================= розкладка (§3: 1920×1080/1280×720) =================
 
+        /// <summary>Ширина картки поточного юніта в нижній панелі (§DrawActionPanel) — фіксоване число зі специфікації, не частка від ширини панелі.</summary>
+        private const float BottomCardWidth = 360f;
+        /// <summary>Оцінка ширини колонки здібностей/кнопок (2 кнопки в ряд) — рахує природну ширину нижньої панелі, не вимірюючи вміст наперед (IMGUI однопрохідний).</summary>
+        private const float BottomButtonsColumnEstimate = 420f;
+
         private static float TopBarHeight(float scale) => Clamp(44f * scale, 40f, 56f);
-        private static float BottomPanelHeight(float scale) => Clamp(210f * scale, 200f, 260f);
+
+        /// <summary>
+        /// Аудит знімків п.1: «НИЖНЯ ПАНЕЛЬ ВЕЛИЧЕЗНА І ПОРОЖНЯ (займає нижню
+        /// третину, ховає юнітів)» — була 200–260px незалежно від фактичного
+        /// вмісту (картка + два рядки кнопок). Тепер ≈150–170px на 1080p,
+        /// рахована від ВИСОТИ екрана (панель горизонтальна, її висота має
+        /// стежити за вертикальним масштабом, а не горизонтальним, як робив
+        /// старий Widgets.ScaleForScreen).
+        ///
+        /// Нижня межа 150, НЕ пропорційно менша на 900/720p: шрифти
+        /// <see cref="AlphaSkin"/> — сталі пікселі, не масштабовані під
+        /// роздільність (<c>BodyFontSize</c>/<c>SubHeaderFontSize</c> —
+        /// константи), тож реальний вміст картки юніта (<see cref="DrawUnitCard"/>:
+        /// заголовок + HP + смужка + ОД + піпси + зброя) потребує ~155–160px
+        /// РІВНО СТІЛЬКИ Ж пікселів екрана на 720p, що й на 1080p — менша
+        /// межа обрізала б рядок зброї. Формула лишає пропорційний ВЕРХНІЙ
+        /// клемп (170 на 1080p+) і підіймає нижній рівно до потреби вмісту,
+        /// а не до літери «пропорційно менше», яка конфліктувала б із
+        /// власним же п.7 («1280×720: усе влазить»).
+        /// </summary>
+        private static float BottomPanelHeight() => Clamp(Screen.height * (160f / 1080f), 150f, 170f);
+
         private static float RightPanelWidth() => Screen.width >= 1600f ? 360f : 300f;
-        private static float BottomPanelWidth() => Clamp(Screen.width - RightPanelWidth() - Widgets.ScreenPadding() * 3f, 480f, 1180f);
+
+        /// <summary>
+        /// Аудит знімків п.1: «ширина — за вмістом (картка юніта ~360 px +
+        /// кнопки), без порожнього простору» — панель раніше розтягувалась
+        /// на всю вільну ширину екрана між лівим краєм і журналом, лишаючи
+        /// порожнє поле праворуч від кнопок. Природна ширина — картка +
+        /// оцінка колонки кнопок; клемп зверху лише щоб не виїхати під
+        /// журнал на вузькому екрані (720p), знизу — щоб лишитись читабельною.
+        /// </summary>
+        private static float BottomPanelWidth()
+        {
+            float natural = BottomCardWidth + BottomButtonsColumnEstimate + Widgets.ScreenPadding() * 3f;
+            float available = Screen.width - RightPanelWidth() - Widgets.ScreenPadding() * 3f;
+            float upperBound = available < 560f ? 560f : available;
+            return Clamp(natural, 560f, upperBound);
+        }
+
         private static Rect FullScreenRect() => new Rect(0f, 0f, Screen.width, Screen.height);
 
         /// <summary>Прямокутник під смужку HP картки юніта — той самий трюк, що GUILayoutUtility.GetLastRect() у Widgets, але з фіксованою шириною.</summary>
