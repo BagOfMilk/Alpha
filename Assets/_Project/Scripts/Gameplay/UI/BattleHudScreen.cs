@@ -949,7 +949,7 @@ namespace Game.Gameplay.UI
                 if (trap == null || !trap.OnScreen) continue;
                 string text = UkrainianText.Get("ui.battle.overlay.trap", false);
                 float width = OverlayNameWidth(text);
-                var rect = new Rect(trap.ScreenX - width * 0.5f, trap.ScreenY - 10f, width, 18f);
+                var rect = new Rect(trap.ScreenX - width * 0.5f, trap.ScreenY - 9f, width, 18f);
                 Widgets.SolidRect(rect, AlphaSkin.BattleTrap);
                 GUI.Label(rect, text, new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.BgDark } });
             }

@@ -1745,8 +1745,10 @@ namespace Game.Gameplay
                 {
                     if (trap == null) continue;
                     var tw = BattleArenaView.TileToWorld(trap.Pos.X, trap.Pos.Y);
-                    // Трохи вище за скриню укриття — мітка не ховається за нею.
-                    var tsp = ArenaCamera.WorldToScreenPoint(new Vector3(tw.X, 0.9f, tw.Z));
+                    // Центр самої клітинки, на землі: мітка малюється поверх 3D (скриня
+                    // укриття її не закриває) і лягає нижче імен бійців, а не на них
+                    // (знімок: над клітинкою вона налазила на ім'я сусіда).
+                    var tsp = ArenaCamera.WorldToScreenPoint(new Vector3(tw.X, 0.05f, tw.Z));
                     _trapOverlays.Add(new BattleTrapOverlay
                     {
                         TileX = trap.Pos.X,
