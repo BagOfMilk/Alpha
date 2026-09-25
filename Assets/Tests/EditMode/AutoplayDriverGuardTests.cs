@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -60,6 +61,116 @@ namespace Game.Tests.EditMode
             // коментарі не рахуються: вони можуть згадувати виклики
             string code = Regex.Replace(source, @"//.*", "");
             return new HashSet<string>(call.Matches(code).Cast<Match>().Select(m => m.Groups[1].Value));
+        }
+
+        // =====================================================================
+        // Бій v2 (docs/COMBAT_V2.md §7.4, доручення власника 25.09.2026):
+        // "автотур ходить у бій ЛИШЕ через IBattleInput — ті самі методи, що
+        // клік миші". PlayJournalBattleNaively — ЄДИНИЙ задокументований
+        // виняток (сценарій навмисно грає ОБИДВІ сторони наївно, єдиний
+        // спосіб довести defection/roster_drama/betrayal_confrontation за
+        // один прогін, MechanicsJournalCompletionTests) і сам вимикає ШІ
+        // презентера на свій час. Охоронці нижче звіряють, що виняток
+        // лишається РІВНО там: (а) прямі виклики Session.Combat*/
+        // CombatAiStepOneAction, (б) EnemyAiEnabled=false.
+        // =====================================================================
+
+        private const string NaiveJournalMethodName = "PlayJournalBattleNaively";
+        private const string NaiveJournalSignature = "IEnumerable<int> " + NaiveJournalMethodName + "(";
+
+        [Test]
+        public void AutoplayDriver_CallsCombatCoreOnlyInsideNaiveJournalBattle()
+        {
+            string outside = SourceOutsideNaiveJournalBattle();
+
+            var call = new Regex(@"Session\.(Combat\w*)\(");
+            var offenders = call.Matches(outside).Cast<Match>().Select(m => m.Value).Distinct().OrderBy(s => s).ToList();
+
+            CollectionAssert.IsEmpty(offenders,
+                "Автотур кличе Session.Combat*/CombatAiStepOneAction напряму поза " + NaiveJournalMethodName +
+                " — це рівно той завис ходу ворога, що вже трапився (докладніше — docs/COMBAT_V2.md §0/§7.4): " +
+                string.Join(", ", offenders));
+        }
+
+        [Test]
+        public void AutoplayDriver_SetsEnemyAiEnabledFalseOnlyInsideNaiveJournalBattle()
+        {
+            string stripped = StripLineComments(ReadDriverSource());
+            string outside = RemoveMethodBody(stripped, NaiveJournalSignature);
+            string methodBody = ExtractMethodBody(stripped, NaiveJournalSignature);
+
+            var falseAssign = new Regex(@"EnemyAiEnabled\s*=\s*false");
+            Assert.IsFalse(falseAssign.IsMatch(outside),
+                "EnemyAiEnabled=false поза " + NaiveJournalMethodName +
+                " — вимикати ШІ ворога дозволено лише на час наївного журнального бою.");
+            Assert.IsTrue(falseAssign.IsMatch(methodBody),
+                NaiveJournalMethodName + " мусить вимикати EnemyAiEnabled на час свого циклу (інакше презентер веде той самий хід одночасно з водієм).");
+        }
+
+        /// <summary>
+        /// Пакет "3D-подача" (docs/COMBAT_V2.md §8) зводиться окремою
+        /// гілкою — на момент написання цього водія презентер ще не веде хід
+        /// ворога через CombatAiStepOneAction, тому тест навмисно [Ignore]:
+        /// увімкнути одразу після зведення всіх чотирьох частин Бою v2
+        /// (§7.4 "Автотур ходить у бій ЛИШЕ через IBattleInput" передбачає,
+        /// що презентер сам виконує §5 "Хід ворога (режисер)").
+        /// </summary>
+        [Test]
+        [Ignore("Увімкнути після зведення Бою v2: BattleArenaController/BattleScreen (пакет '3D-подача'/'HUD') ще не ведуть хід ворога через CombatAiStepOneAction на цій гілці (docs/COMBAT_V2.md §5, §8).")]
+        public void BattleScreens_DriveEnemyTurnThroughCombatAiStepOneAction()
+        {
+            string gameplay = GameplayDir();
+            string arena = File.ReadAllText(Path.Combine(gameplay, "BattleArenaController.cs"));
+            string fallback = File.ReadAllText(Path.Combine(gameplay, "UI", "BattleScreen.cs"));
+
+            StringAssert.Contains("CombatAiStepOneAction", arena,
+                "BattleArenaController мусить вести хід ворога через GameSession.CombatAiStepOneAction (docs/COMBAT_V2.md §5).");
+            StringAssert.Contains("CombatAiStepOneAction", fallback,
+                "Фолбек-екран бою (BattleScreen) мусить вести хід ворога так само (docs/COMBAT_V2.md §5).");
+        }
+
+        private static string GameplayDir() =>
+            Path.Combine(Path.GetDirectoryName(Application.dataPath), "Assets", "_Project", "Scripts", "Gameplay");
+
+        private static string ReadDriverSource() =>
+            File.ReadAllText(Path.Combine(GameplayDir(), "AutoplayGameDriver.cs"));
+
+        private static string StripLineComments(string source) => Regex.Replace(source, @"//.*", "");
+
+        private static string SourceOutsideNaiveJournalBattle()
+        {
+            string stripped = StripLineComments(ReadDriverSource());
+            return RemoveMethodBody(stripped, NaiveJournalSignature);
+        }
+
+        /// <summary>Тіло методу, знайденого за унікальним підписом (не просто ім'ям — ім'я трапляється й на місці виклику), з балансом фігурних дужок.</summary>
+        private static string ExtractMethodBody(string strippedSource, string methodSignature)
+        {
+            int sigIdx = strippedSource.IndexOf(methodSignature, StringComparison.Ordinal);
+            Assert.Greater(sigIdx, -1, "Не знайдено підпис \"" + methodSignature + "\" у AutoplayGameDriver.cs.");
+
+            int braceStart = strippedSource.IndexOf('{', sigIdx);
+            Assert.Greater(braceStart, -1, "Не знайдено тіло методу за підписом \"" + methodSignature + "\".");
+
+            int depth = 0;
+            for (int i = braceStart; i < strippedSource.Length; i++)
+            {
+                if (strippedSource[i] == '{') depth++;
+                else if (strippedSource[i] == '}')
+                {
+                    depth--;
+                    if (depth == 0) return strippedSource.Substring(braceStart, i - braceStart + 1);
+                }
+            }
+
+            Assert.Fail("Незбалансовані фігурні дужки в тілі методу за підписом \"" + methodSignature + "\".");
+            return null;
+        }
+
+        private static string RemoveMethodBody(string strippedSource, string methodSignature)
+        {
+            string body = ExtractMethodBody(strippedSource, methodSignature);
+            return strippedSource.Replace(body, string.Empty);
         }
     }
 }

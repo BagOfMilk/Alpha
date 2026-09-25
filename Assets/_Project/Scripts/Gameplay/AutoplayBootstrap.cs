@@ -97,6 +97,19 @@ namespace Game.Gameplay
         public const string JournalFlag = "-autoplay-journal";
 
         /// <summary>
+        /// Бій v2 (docs/COMBAT_V2.md §9, доручення власника 25.09.2026,
+        /// PART=autoplay): окремий дим-тест ЛИШЕ бою — тренувальний бій з
+        /// титулу, далі гравець і ворог грають виключно через
+        /// <see cref="Game.Gameplay.IBattleInput"/> (докладніше —
+        /// <see cref="AutoplayGameDriver.RunBattleOnly"/>). Мовчки означає й
+        /// <see cref="CommandLineFlag"/> — той самий принцип, що вже й у
+        /// <see cref="LongTourFlag"/>/<see cref="JournalFlag"/> вище. Коди
+        /// виходу — ті самі 0/2/3, що й у звичайного тура (немає окремого
+        /// коду для цього режиму: він не рахує журнал механік).
+        /// </summary>
+        public const string BattleFlag = "-autoplay-battle";
+
+        /// <summary>
         /// Виставляється <c>GameSceneBuilder.Build()</c> одразу після
         /// <c>AddComponent</c> — той самий GameObject "Boot", що й
         /// <see cref="GameShell"/> (Editor-only <c>GetComponent</c> там, не
@@ -107,6 +120,7 @@ namespace Game.Gameplay
         private IEnumerator<int> _tour;
         private AutoplayGameDriver _driver;
         private bool _journalMode;
+        private bool _battleOnlyMode;
         private bool _hadException;
         private int _shotIndex = 1;
         private readonly List<string> _summary = new List<string>();
@@ -120,7 +134,7 @@ namespace Game.Gameplay
         /// вже й у <see cref="LongTourFlag"/>: сам вмикає <c>runInBackground</c>
         /// нижче (Start), окремо вказувати <see cref="CommandLineFlag"/> не треба.
         /// </summary>
-        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag) || HasArg(JournalFlag);
+        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag) || HasArg(JournalFlag) || HasArg(BattleFlag);
 
         private static bool HasArg(string flag)
         {
@@ -163,14 +177,17 @@ namespace Game.Gameplay
             bool threshold = HasArg(ThresholdFlag);
             bool longTour = HasArg(LongTourFlag);
             _journalMode = HasArg(JournalFlag);
+            _battleOnlyMode = HasArg(BattleFlag);
             Log("Автопрогон почато: " + DateTime.UtcNow.ToString("u", CultureInfo.InvariantCulture) +
                 (_journalMode
                     ? " (журнальний тур: усі 44 записи журналу механік, правило влучання — поріг)"
-                    : " (правило влучання: " + (threshold ? "поріг" : "відсоток") +
-                      (longTour ? ", довгий тур до великого бунту" : "") + ")"));
+                    : _battleOnlyMode
+                        ? " (лише бій: тренувальний бій з титулу, ЛИШЕ IBattleInput, правило влучання — " + (threshold ? "поріг" : "відсоток") + ")"
+                        : " (правило влучання: " + (threshold ? "поріг" : "відсоток") +
+                          (longTour ? ", довгий тур до великого бунту" : "") + ")"));
 
             _driver = new AutoplayGameDriver(this, Shell, threshold, longTour);
-            _tour = _journalMode ? _driver.RunJournal() : _driver.Run();
+            _tour = _journalMode ? _driver.RunJournal() : (_battleOnlyMode ? _driver.RunBattleOnly() : _driver.Run());
         }
 
         private void Update()

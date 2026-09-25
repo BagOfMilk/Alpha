@@ -13,6 +13,7 @@ using Game.Core.Session;
 using Game.Core.Session.Bots;
 using Game.Core.Session.Views;
 using Game.Gameplay.UI;
+using UnityEngine;
 
 namespace Game.Gameplay
 {
@@ -55,8 +56,24 @@ namespace Game.Gameplay
         /// запобіжник, а не очікуваний результат.
         /// </summary>
         public const int LongTourDayCap = 32;
-        /// <summary>Поріг ручної атаки водія тура (QA раунд 2): нижче — краще завершити хід, ніж бити напевне мимо.</summary>
-        private const int MinManualAttackChance = 20;
+
+        /// <summary>
+        /// Бій v2 (docs/COMBAT_V2.md §5, §7.4): скільки реального часу
+        /// (<c>Time.realtimeSinceStartup</c>, не ігрового — хід ворога йде
+        /// поза контролем цього водія) можна чекати один суцільний хід
+        /// ворога, перш ніж вважати його завислим. Урок, заради якого
+        /// переписаний увесь бойовий шматок водія: раніше він сам тиснув
+        /// "Кінець ходу" за ворога й ніколи не міг застрягнути — тепер хід
+        /// ворога веде виключно презентер (<see cref="IBattleHudData"/>), і
+        /// водій зобов'язаний уміти зафіксувати, якщо той сам зависне.
+        /// </summary>
+        private const float EnemyTurnWatchdogSeconds = 60f;
+
+        /// <summary>Загальний запобіжник на будь-яке очікування <c>IsBusy</c> (такт показу) — коротший за ватчдог ходу ворога вище, бо стосується лише одного такту, не всього ходу.</summary>
+        private const float BusyWatchdogSeconds = 30f;
+
+        /// <summary>Стеля дій ГРАВЦЯ за бій у режимі <c>-autoplay-battle</c> (докладніше — <see cref="RunBattleOnly"/>).</summary>
+        private const int MaxBattleTourPlayerActions = 400;
 
         private static readonly string[] HubTabSlugs =
         {
@@ -79,6 +96,23 @@ namespace Game.Gameplay
         private bool _nightShown;
         private bool _delveDeparted;
         private bool _crisisFinaleAttempted;
+
+        // ===================== -autoplay-battle: лише бій, крізь IBattleInput =====================
+        // (докладніше — RunBattleOnly нижче). Прапорці "раз за бій" і "раз за
+        // тур" одноразових знімків — той самий прийом, що _capturedOnce/
+        // _battleShown вище, окремими полями, бо тут стан прив'язаний до
+        // фаз ОДНОГО бою (хід ворога/здібність/дозор), а не до тура в цілому.
+        private bool _btFirstEnemyTurnDone;
+        private bool _btBannerShotTaken;
+        private bool _btEnemyActionShotTaken;
+        private bool _btHoverEnemyShotTaken;
+        private bool _btHoverTileShotTaken;
+        private bool _btAfterMoveShotTaken;
+        private bool _btAfterAttackShotTaken;
+        private bool _btAbilityShotTaken;
+        private bool _btOverwatchShotTaken;
+        private bool _btAbilityUsedOnce;
+        private bool _btOverwatchUsedOnce;
 
         /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" прийом, що <see cref="_capturedOnce"/> нижче.</summary>
         private int _dayLogScanIndex;
@@ -416,15 +450,40 @@ namespace Game.Gameplay
                     _host.Capture(firstBattle ? "battle-start" : "battle-secondary-start");
                     yield return 0;
 
+                    // Бій v2 (docs/COMBAT_V2.md §7.4): автотур ходить у бій ЛИШЕ
+                    // через IBattleInput — той самий шлях, що клік миші/клавіші.
+                    // Раніше цей блок за ворога сам тиснув CombatEndTurn (і тому
+                    // тур ніколи не бачив завислого ходу ворога, на відміну від
+                    // людини) — WaitOutEnemyTurn нижче натомість ЧЕКАЄ, поки
+                    // презентер сам його проведе, і падає з діагностикою, якщо
+                    // за EnemyTurnWatchdogSeconds нічого не відбулось.
+                    var hud = _shell.BattlePresenter as IBattleHudData;
+                    if (hud == null)
+                        throw new InvalidOperationException(
+                            "Автотур: BattlePresenter відсутній або не реалізує IBattleHudData — 3D-презентер бою не знайдено (docs/COMBAT_V2.md §7.4).");
+
                     if (firstBattle)
                     {
-                        for (int i = 0; i < MaxManualBattleSteps; i++)
+                        int manualSteps = 0;
+                        while (manualSteps < MaxManualBattleSteps && Session.State == SessionState.Battle)
                         {
-                            var view = Session.GetBattleView();
+                            foreach (var f in WaitWhileBusy(hud)) yield return f;
+                            if (Session.State != SessionState.Battle) break;
+
+                            var view = hud.View;
                             if (view == null || view.Outcome != "Ongoing") break;
-                            PlayOneBattleStep(view);
+
+                            if (view.IsAiTurn)
+                            {
+                                // Хід ворога — НЕ рахується у стелю ручних кроків
+                                // гравця: презентер веде його сам.
+                                foreach (var f in WaitOutEnemyTurn(hud, false)) yield return f;
+                                continue;
+                            }
+
+                            manualSteps++;
+                            PlayOneBattleStep(hud, view);
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
-                            if (Session.State != SessionState.Battle) break; // ручний хід сам добив бій
                         }
                         if (Session.State == SessionState.Battle)
                         {
@@ -434,12 +493,13 @@ namespace Game.Gameplay
                     }
 
                     // Ручні ходи могли вже добити бій (Session.State пішов
-                    // далі) — CombatAutoResolve() на порожньому бою кидає
-                    // InvalidOperationException (RequireBattle), TryRun її
-                    // ковтає, але немає сенсу й кликати.
+                    // далі); RequestAutoResolve() — той самий контракт, що
+                    // кнопка «Автобій» (жодного Session.CombatAutoResolve()
+                    // напряму — це й був би той самий обхід ядра, який
+                    // ховав завислий хід ворога).
                     if (Session.State == SessionState.Battle)
                     {
-                        Run(() => Session.CombatAutoResolve());
+                        hud.RequestAutoResolve();
                         foreach (var f in WaitFrames(FramesMedium)) yield return f;
                     }
 
@@ -834,7 +894,16 @@ namespace Game.Gameplay
                     }
                     else if (Session.State == SessionState.Battle)
                     {
-                        Run(() => Session.CombatAutoResolve());
+                        // Секундарні бої журнального туру — тим самим
+                        // контрактом, що звичайний тур: жодного
+                        // Session.CombatAutoResolve() напряму поза
+                        // PlayJournalBattleNaively (охоронець
+                        // AutoplayDriverGuardTests.AutoplayDriver_CallsCombatCoreOnlyInsideNaiveJournalBattle).
+                        var hud = _shell.BattlePresenter as IBattleHudData;
+                        if (hud == null)
+                            throw new InvalidOperationException(
+                                "-autoplay-journal: BattlePresenter відсутній або не реалізує IBattleHudData — 3D-презентер бою не знайдено (docs/COMBAT_V2.md §7.4).");
+                        hud.RequestAutoResolve();
                         foreach (var f in WaitFrames(FramesMedium)) yield return f;
                     }
 
@@ -1005,40 +1074,60 @@ namespace Game.Gameplay
         /// вузол 1 вигравається чисто (Good), і полоса Base/Worst, потрібна
         /// для defection/betrayal_confrontation/roster_drama, не настає
         /// ніколи (емпірично, MechanicsJournalCompletionTests).
+        ///
+        /// ЄДИНИЙ дозволений виняток із контракту "автотур ходить у бій лише
+        /// через IBattleInput" (docs/COMBAT_V2.md §7.4): цей сценарій навмисно
+        /// грає ОБИДВІ сторони наївно (кличе Session.Combat* напряму) і тому
+        /// сам вимикає ШІ презентера (<see cref="IBattleInput.EnemyAiEnabled"/>
+        /// дорівнює false) на час свого циклу — інакше презентер намагався б
+        /// вести той самий ворожий хід одночасно з водієм. Охоронці
+        /// AutoplayDriverGuardTests.AutoplayDriver_CallsCombatCoreOnlyInsideNaiveJournalBattle/
+        /// AutoplayDriver_SetsEnemyAiEnabledFalseOnlyInsideNaiveJournalBattle
+        /// звіряють, що і прямі виклики Session.Combat*, і вимкнення
+        /// EnemyAiEnabled лишаються РІВНО в цьому методі.
         /// </summary>
         private IEnumerable<int> PlayJournalBattleNaively()
         {
-            int guard = 0;
-            while (Session.State == SessionState.Battle && guard++ < 500)
+            var input = _shell.BattlePresenter as IBattleInput;
+            if (input != null) input.EnemyAiEnabled = false;
+            try
             {
-                var view = Session.GetBattleView();
-                var current = BotSupport.FindCurrent(view);
-                var target = current != null ? BotSupport.FindNearestOpposite(view, current) : null;
+                int guard = 0;
+                while (Session.State == SessionState.Battle && guard++ < 500)
+                {
+                    var view = Session.GetBattleView();
+                    var current = BotSupport.FindCurrent(view);
+                    var target = current != null ? BotSupport.FindNearestOpposite(view, current) : null;
 
-                if (target == null)
-                {
-                    Run(() => Session.CombatEndTurn());
-                }
-                else
-                {
-                    string targetId = target.Id;
-                    var attackResult = Run(() => Session.CombatAttack(targetId));
-                    if (attackResult != CombatActionResult.Success)
+                    if (target == null)
                     {
-                        var step = BotSupport.StepToward(view, current, target.Pos);
-                        if (step.HasValue)
+                        Run(() => Session.CombatEndTurn());
+                    }
+                    else
+                    {
+                        string targetId = target.Id;
+                        var attackResult = Run(() => Session.CombatAttack(targetId));
+                        if (attackResult != CombatActionResult.Success)
                         {
-                            var dest = new GridPos(step.Value.X, step.Value.Y);
-                            Run(() => Session.CombatMove(dest));
-                        }
-                        else
-                        {
-                            Run(() => Session.CombatEndTurn());
+                            var step = BotSupport.StepToward(view, current, target.Pos);
+                            if (step.HasValue)
+                            {
+                                var dest = new GridPos(step.Value.X, step.Value.Y);
+                                Run(() => Session.CombatMove(dest));
+                            }
+                            else
+                            {
+                                Run(() => Session.CombatEndTurn());
+                            }
                         }
                     }
-                }
 
-                yield return 0; // один кадр на хід — довгий бій не має блокувати кадр Unity.
+                    yield return 0; // один кадр на хід — довгий бій не має блокувати кадр Unity.
+                }
+            }
+            finally
+            {
+                if (input != null) input.EnemyAiEnabled = true;
             }
         }
 
@@ -1423,52 +1512,307 @@ namespace Game.Gameplay
             Run(() => Session.DepartExpedition("abandoned_camp", ExpeditionApproach.Delve, party, days));
         }
 
-        // ===================== бій: хід гравця =====================
+        // ===================== бій: хід гравця (лише IBattleInput, §7.4) =====================
 
-        private void PlayOneBattleStep(BattleView view)
+        /// <summary>
+        /// Один ручний крок гравця у звичайному турі (<c>-autoplay</c>) —
+        /// ЛИШЕ через <see cref="IBattleInput"/>, як клік миші: наведення на
+        /// найближчого ворога, атака якщо влучення можливе, інакше крок
+        /// назустріч. Хід ворога сюди не потрапляє: головний диспетчер
+        /// викликає цей метод лише тоді, коли <c>view.IsAiTurn</c> вже false
+        /// (див. виклик у <see cref="Run"/>).
+        /// </summary>
+        private void PlayOneBattleStep(IBattleHudData hud, BattleView view)
         {
             var current = BotSupport.FindCurrent(view);
-            if (current == null) { Run(() => Session.CombatEndTurn()); return; }
-
-            if (!string.Equals(current.Side, "Player", StringComparison.Ordinal))
-            {
-                Run(() => Session.CombatEndTurn());
-                return;
-            }
+            if (current == null) { hud.RequestEndTurn(); return; }
 
             var target = BotSupport.FindNearestOpposite(view, current);
-            if (target == null) { Run(() => Session.CombatEndTurn()); return; }
+            if (target == null) { hud.RequestEndTurn(); return; }
 
-            if (BotSupport.Chebyshev(current.Pos, target.Pos) <= 1)
+            hud.SimulateHoverUnit(target.Id);
+            var preview = hud.HoverAttack;
+            bool acted;
+            string what;
+            if (preview != null && preview.Result == "Success")
             {
-                string targetId = target.Id;
-                // Фікс-ревью раунд 2 (QA, major, застереження): цей наївний
-                // водій (на відміну від CombatAi.AutoResolve, що веде решту
-                // ходів після MaxManualBattleSteps) б'є найближчого без
-                // жодної оцінки шансу — QA бачив ручні атаки під ~1%. Хіт-шанс
-                // тут той самий, що показує HUD гравцю (Session.
-                // PreviewHitChance), тож поріг — не новий канал інформації,
-                // просто водій нарешті ним користується: на безнадійному
-                // ударі краще завершити хід (AP лишається на майбутню атаку
-                // цього ж бою), ніж бити напевне мимо.
-                int chance = Session.PreviewHitChance(current.Id, targetId);
-                if (chance >= MinManualAttackChance)
-                    Run(() => Session.CombatAttack(targetId));
-                else
-                    Run(() => Session.CombatEndTurn());
-                return;
-            }
-
-            var step = BotSupport.StepToward(view, current, target.Pos);
-            if (step.HasValue)
-            {
-                var dest = new GridPos(step.Value.X, step.Value.Y);
-                Run(() => Session.CombatMove(dest));
+                acted = hud.ClickUnit(target.Id);
+                what = "атака по " + target.Id;
             }
             else
             {
-                Run(() => Session.CombatEndTurn());
+                var step = BotSupport.StepToward(view, current, target.Pos);
+                if (!step.HasValue)
+                {
+                    hud.ClearSimulatedHover();
+                    hud.RequestEndTurn();
+                    return;
+                }
+                acted = hud.ClickTile(step.Value.X, step.Value.Y);
+                what = "рух на " + step.Value.X + "," + step.Value.Y;
             }
+            hud.ClearSimulatedHover();
+            CheckRejection(acted, hud.LastRejectionText, what);
+        }
+
+        /// <summary>
+        /// Ціль (доручення власника 25.09.2026, PART=autoplay, п.1):
+        /// <c>-autoplay-battle</c> — окремий дим-тест ЛИШЕ бою, без решти
+        /// партії. Тренувальний бій з титулу (та сама команда, що кнопка
+        /// «Тренувальний бій», <c>TitleScreen.cs</c>), далі — виключно
+        /// <see cref="IBattleInput"/>/<see cref="IBattleHudData"/>: хід
+        /// ворога веде презентер сам (docs/COMBAT_V2.md §5), цей метод лише
+        /// чекає й діагностує завис (<see cref="EnemyTurnWatchdogSeconds"/>).
+        /// </summary>
+        public IEnumerator<int> RunBattleOnly()
+        {
+            foreach (var f in WaitFrames(FramesMedium)) yield return f;
+
+            var options = new TrainingBattleOptions { HitRule = _useThresholdRule ? HitRuleKind.Threshold : HitRuleKind.Percent };
+            Run(() => Session.NewTrainingBattle(options));
+            _host.Log("Титул: Тренувальний бій (" + options.HitRule + ") — режим -autoplay-battle.");
+
+            foreach (var f in WaitFrames(FramesBattleEnter)) yield return f;
+
+            if (Session.State != SessionState.Battle)
+                throw new InvalidOperationException(
+                    "-autoplay-battle: Тренувальний бій не перевів сесію у стан Battle (стан " + Session.State + ").");
+
+            var hud = _shell.BattlePresenter as IBattleHudData;
+            if (hud == null)
+                throw new InvalidOperationException(
+                    "-autoplay-battle: BattlePresenter відсутній або не реалізує IBattleHudData — 3D-презентер бою не знайдено (docs/COMBAT_V2.md §7.4).");
+
+            _host.Capture("battle-start");
+            yield return 0;
+
+            int playerActions = 0;
+            while (Session.State == SessionState.Battle)
+            {
+                foreach (var f in WaitWhileBusy(hud)) yield return f;
+                if (Session.State != SessionState.Battle) break;
+
+                var view = hud.View;
+                if (view == null || view.Outcome != "Ongoing") break;
+
+                if (view.IsAiTurn)
+                {
+                    foreach (var f in WaitOutEnemyTurn(hud, true)) yield return f;
+                    continue;
+                }
+
+                if (++playerActions > MaxBattleTourPlayerActions)
+                    throw new InvalidOperationException(
+                        "-autoplay-battle: стеля " + MaxBattleTourPlayerActions + " дій гравця вичерпана — бій не завершується.");
+
+                foreach (var f in PlayOneBattleTourStep(hud, view)) yield return f;
+            }
+
+            if (Session.State == SessionState.Battle)
+                throw new InvalidOperationException(
+                    "-autoplay-battle: цикл вийшов (Outcome != Ongoing), але Session.State усе ще Battle — можлива діра диспетчера.");
+
+            var presenter = _shell.BattlePresenter;
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            if (presenter != null && presenter.ResultPending)
+            {
+                _host.Capture("battle-result");
+                yield return 0;
+            }
+            AcknowledgeBattleIfPending();
+
+            _host.Log("Бій пройдено (-autoplay-battle), дій гравця: " + playerActions + ".");
+        }
+
+        /// <summary>
+        /// Один крок гравця в режимі <c>-autoplay-battle</c>: те саме, що
+        /// <see cref="PlayOneBattleStep"/>, але додатково пробує РІВНО раз за
+        /// бій здібність і дозор (щоб дим-тест торкнувся й цих гілок
+        /// IBattleInput), і знімає кожен вид дії рівно раз (§ завдання п.5).
+        /// </summary>
+        private IEnumerable<int> PlayOneBattleTourStep(IBattleHudData hud, BattleView view)
+        {
+            var current = BotSupport.FindCurrent(view);
+            if (current == null) { hud.RequestEndTurn(); yield break; }
+
+            var target = BotSupport.FindNearestOpposite(view, current);
+            if (target == null) { hud.RequestEndTurn(); yield break; }
+
+            string abilityId;
+            if (!_btAbilityUsedOnce && TryArmAbility(hud, current, out abilityId))
+            {
+                _btAbilityUsedOnce = true;
+                hud.SimulateHoverUnit(target.Id);
+                bool ok = hud.ClickUnit(target.Id);
+                hud.ClearSimulatedHover();
+                CheckRejection(ok, hud.LastRejectionText, "здібність " + abilityId + " по " + target.Id);
+                if (!_btAbilityShotTaken)
+                {
+                    _btAbilityShotTaken = true;
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    _host.Capture("ability");
+                    yield return 0;
+                }
+                yield break;
+            }
+
+            if (!_btOverwatchUsedOnce)
+            {
+                _btOverwatchUsedOnce = true;
+                hud.ArmOverwatchAim();
+                bool ok = hud.ClickTile(target.Pos.X, target.Pos.Y);
+                CheckRejection(ok, hud.LastRejectionText, "дозор на " + target.Pos.X + "," + target.Pos.Y);
+                if (!_btOverwatchShotTaken)
+                {
+                    _btOverwatchShotTaken = true;
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    _host.Capture("overwatch");
+                    yield return 0;
+                }
+                yield break;
+            }
+
+            hud.SimulateHoverUnit(target.Id);
+            if (!_btHoverEnemyShotTaken)
+            {
+                _btHoverEnemyShotTaken = true;
+                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                _host.Capture("hover-enemy");
+                yield return 0;
+            }
+
+            var attackPreview = hud.HoverAttack;
+            if (attackPreview != null && attackPreview.Result == "Success")
+            {
+                bool ok = hud.ClickUnit(target.Id);
+                hud.ClearSimulatedHover();
+                CheckRejection(ok, hud.LastRejectionText, "атака по " + target.Id);
+                if (!_btAfterAttackShotTaken)
+                {
+                    _btAfterAttackShotTaken = true;
+                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    _host.Capture("after-attack");
+                    yield return 0;
+                }
+                yield break;
+            }
+            hud.ClearSimulatedHover();
+
+            var dest = BotSupport.StepToward(view, current, target.Pos);
+            if (!dest.HasValue) { hud.RequestEndTurn(); yield break; }
+
+            hud.SimulateHoverTile(dest.Value.X, dest.Value.Y);
+            if (!_btHoverTileShotTaken)
+            {
+                _btHoverTileShotTaken = true;
+                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                _host.Capture("hover-tile");
+                yield return 0;
+            }
+
+            bool moved = hud.ClickTile(dest.Value.X, dest.Value.Y);
+            hud.ClearSimulatedHover();
+            CheckRejection(moved, hud.LastRejectionText, "рух на " + dest.Value.X + "," + dest.Value.Y);
+            if (!_btAfterMoveShotTaken)
+            {
+                _btAfterMoveShotTaken = true;
+                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                _host.Capture("after-move");
+                yield return 0;
+            }
+        }
+
+        /// <summary>Перша здібність поточного юніта, що не на відкаті (для одноразового покриття гілки "здібність" — § завдання п.1).</summary>
+        private static bool TryArmAbility(IBattleInput input, BattleUnitView current, out string abilityId)
+        {
+            abilityId = null;
+            if (current?.Abilities == null) return false;
+            foreach (var a in current.Abilities)
+            {
+                if (a.CooldownRemaining > 0) continue;
+                abilityId = a.Id;
+                input.ArmAbility(a.Id);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// «Відмова дії без тексту — теж виняток» (§ завдання п.1): ClickTile/
+        /// ClickUnit, що повернули false БЕЗ <see cref="IBattleInput.LastRejectionText"/>,
+        /// означають діру в HUD-поясненні (докладніше — docs/COMBAT_V2.md §1
+        /// "Кожна кнопка... пояснює, чому не працює"), а не легальну відмову.
+        /// </summary>
+        private void CheckRejection(bool actionSucceeded, string rejectionText, string what)
+        {
+            if (actionSucceeded) return;
+            if (string.IsNullOrEmpty(rejectionText))
+                throw new InvalidOperationException(
+                    "Автотур: дію відхилено без причини (LastRejectionText порожній) — " + what + ".");
+            _host.Log("  (відмова: " + what + " — " + rejectionText + ")");
+        }
+
+        /// <summary>Чекає, поки такт показу (<see cref="IBattleInput.IsBusy"/>) не відпустить ввід — із запобіжником <see cref="BusyWatchdogSeconds"/>.</summary>
+        private IEnumerable<int> WaitWhileBusy(IBattleInput input)
+        {
+            float start = Time.realtimeSinceStartup;
+            while (input.IsBusy)
+            {
+                if (Time.realtimeSinceStartup - start > BusyWatchdogSeconds)
+                    throw new InvalidOperationException(
+                        "Автотур: IsBusy не знімається довше " + BusyWatchdogSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " с — презентер завис на такті показу.");
+                yield return 0;
+            }
+        }
+
+        /// <summary>
+        /// Чекає, поки триває хід ворога (<c>view.IsAiTurn</c>) — НІКОЛИ не
+        /// кличе <c>GameSession.Combat*</c>/<c>CombatAiStepOneAction</c> сам:
+        /// це рівно та відповідальність, яку docs/COMBAT_V2.md §5 віддає
+        /// презентеру ("Хід ворога (режисер)"). Перший хід ворога за бій —
+        /// на звичайній швидкості (банер/дія знімаються знімком, коли
+        /// <paramref name="captureArtifacts"/>), далі — <c>FastEnemyTurns=true</c>.
+        /// Падає з діагностикою (поточний юніт/IsAiTurn/IsBusy/EnemyAiEnabled),
+        /// якщо хід не завершився за <see cref="EnemyTurnWatchdogSeconds"/> —
+        /// рівно той завис, що знайшов власник ("зупинилась і воні нічого не
+        /// робили").
+        /// </summary>
+        private IEnumerable<int> WaitOutEnemyTurn(IBattleHudData hud, bool captureArtifacts)
+        {
+            float start = Time.realtimeSinceStartup;
+            hud.FastEnemyTurns = _btFirstEnemyTurnDone;
+
+            while (Session.State == SessionState.Battle && hud.View != null && hud.View.IsAiTurn)
+            {
+                if (captureArtifacts && !_btBannerShotTaken && hud.Banner != null && !hud.Banner.PlayerSide)
+                {
+                    _btBannerShotTaken = true;
+                    _host.Capture("enemy-turn-banner");
+                    yield return 0;
+                }
+
+                if (captureArtifacts && !_btEnemyActionShotTaken && hud.IsBusy)
+                {
+                    _btEnemyActionShotTaken = true;
+                    _host.Capture("enemy-action");
+                    yield return 0;
+                }
+
+                if (Time.realtimeSinceStartup - start > EnemyTurnWatchdogSeconds)
+                {
+                    var current = BotSupport.FindCurrent(hud.View);
+                    throw new InvalidOperationException(
+                        "Автотур: хід ворога не завершився за " +
+                        EnemyTurnWatchdogSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture) +
+                        " с реального часу — той самий завис, що знайшов власник (\"наступив хід опонентів гра тупо зупинилась\"). Діагностика: поточний юніт " +
+                        (current != null ? current.Id : "(немає)") + ", View.IsAiTurn=" + hud.View.IsAiTurn +
+                        ", IsBusy=" + hud.IsBusy + ", EnemyAiEnabled=" + hud.EnemyAiEnabled + ".");
+                }
+
+                yield return 0;
+            }
+
+            _btFirstEnemyTurnDone = true;
         }
 
         private void AcknowledgeBattleIfPending()
