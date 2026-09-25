@@ -169,6 +169,15 @@ namespace Game.Gameplay.UI
             GUILayout.Space(24f);
             GUILayout.EndArea();
 
+            // Фікс (NullReferenceException, DrawPortraits/evt нижче): кнопка
+            // «Далі» усередині Panel вище (Advance/ContinueAfterConsequence)
+            // могла щойно, у ЦЬОМУ Ж проході Draw(), синхронно обнулити
+            // _current — сцена закінчилась. Без цієї перевірки код нижче
+            // (DrawPortraits: current.SecondActorId; evt-обробка: _current.IsChoice)
+            // падає на null, бо обидва читають поле _current напряму, а не
+            // знімок значення, знятий на початку методу.
+            if (_current == null) return;
+
             DrawPortraits(shell, _current, g, dialogueRect);
 
             // Event-based, не сирий Input.GetKeyDown/GetMouseButtonDown
