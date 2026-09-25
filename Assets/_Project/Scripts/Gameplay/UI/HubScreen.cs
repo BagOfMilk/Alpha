@@ -60,6 +60,10 @@ namespace Game.Gameplay.UI
         // кадр обнуляв би прокрутку (Widgets.ScrollListBegin повертає нову
         // позицію, її треба тримати як стан екрана, не як Vector2.zero).
         private Vector2 _postsScroll;
+
+        /// <summary>Прокрутка всієї вкладки: довгі вкладки (Рада) виходили за край, і «Почати день» ховалась під ним.</summary>
+        private Vector2 _tabScroll;
+        private int _scrolledTab = -1;
         private Vector2 _buildingsScroll;
         private Vector2 _peopleListScroll;
         private Vector2 _sheetScroll;
@@ -102,7 +106,17 @@ namespace Game.Gameplay.UI
             // Підкладка під вмістом вкладки: без неї розділи без власної панелі
             // (указ, посольство, вилазка…) лежали прямо на 3D-сцені і не
             // читалися (власник, 25.09.2026).
-            GUILayout.BeginVertical(GUI.skin.box);
+            // Пости, Будівлі, Люди і Журнал прокручуються самі; вкладена
+            // прокрутка в IMGUI стискає внутрішню, тож зовнішню даємо лише решті.
+            bool ownScroll = _tab == 0 || _tab == 1 || _tab == 5 || _tab == 10;
+            if (_scrolledTab != _tab)
+            {
+                _tabScroll = Vector2.zero;
+                _scrolledTab = _tab;
+            }
+            if (!ownScroll) _tabScroll = Widgets.ScrollListBegin(_tabScroll, GUILayout.ExpandHeight(true));
+            if (ownScroll) GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
+            else GUILayout.BeginVertical(GUI.skin.box);
             switch (_tab)
             {
                 case 0: DrawPosts(shell, g); break;
@@ -118,8 +132,8 @@ namespace Game.Gameplay.UI
                 case 10: DrawMechanicsJournal(shell, g); break;
             }
             GUILayout.EndVertical();
+            if (!ownScroll) Widgets.ScrollListEnd();
 
-            GUILayout.FlexibleSpace();
             if (Widgets.PrimaryButton(UkrainianText.Get("ui.start_day", g)))
                 StartDay(shell);
         }
