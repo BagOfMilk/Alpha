@@ -1879,6 +1879,18 @@ namespace Game.Core.Session
                 result: result, apCost: w.ApCost);
         }
 
+        /// <summary>
+        /// Здібності, яким потрібна КЛІТИНКА: ціль-тайл (пастка) або перестановка
+        /// юніта на тайл («Наказ пересунутися» — союзник І клітинка).
+        /// </summary>
+        private static bool AbilityNeedsTile(AbilityDefinition a)
+        {
+            if (a.Targeting == AbilityTarget.Tile) return true;
+            foreach (var e in a.Effects)
+                if (e != null && e.Kind == AbilityEffectKind.RepositionTarget) return true;
+            return false;
+        }
+
         private AttackPreviewView PreviewAbilityAttack(CombatUnit unit, CombatUnit target, string abilityId)
         {
             var ability = unit.FindAbility(abilityId);
@@ -1923,6 +1935,10 @@ namespace Game.Core.Session
             else if (unit.Ap < ability.ApCost) result = CombatActionResult.NotEnoughAp.ToString();
             else if (!selfTarget && distance > ability.Range) result = CombatActionResult.OutOfRange.ToString();
             else if (!selfTarget && ability.RequiresLineOfSight && !hasLos) result = CombatActionResult.NoLineOfSight.ToString();
+            else if (HasEffect(ability, AbilityEffectKind.LungeToTarget) && !_battle.HasLungeLanding(unit, resolvedTarget))
+                // Та сама перевірка, що в CombatState.UseAbility: ворог оточений —
+                // приземлитись нікуди (рев'ю Бою v2: прев'ю казало «можна», факт — ні).
+                result = CombatActionResult.NotReachable.ToString();
             else result = CombatActionResult.Success.ToString();
 
             bool hasAttackRoll = !selfTarget && unit.Weapon != null && ability.WeaponAttackCount() > 0;
@@ -1935,6 +1951,13 @@ namespace Game.Core.Session
 
             return BuildAttackPreview(unit, resolvedTarget, unit.Weapon, ability.PreviewAccuracyBonus(),
                 distance, ability.Range, result, apCost: ability.ApCost);
+        }
+
+        private static bool HasEffect(AbilityDefinition a, AbilityEffectKind kind)
+        {
+            foreach (var e in a.Effects)
+                if (e != null && e.Kind == kind) return true;
+            return false;
         }
 
         /// <summary>Спільний хвіст прев'ю: розклад шансу + прев'ю урону — той самий HitChanceCalculator/DamageResolver, яким котиться факт.</summary>
@@ -2094,7 +2117,11 @@ namespace Game.Core.Session
                 bool fromDefector = u.Side == Side.Enemy && !string.IsNullOrEmpty(u.SourceCompanionId);
                 var abilities = new List<BattleAbilityView>();
                 foreach (var a in u.Abilities)
-                    abilities.Add(new BattleAbilityView { Id = a.Id, ApCost = a.ApCost, CooldownRemaining = u.CooldownRemaining(a.Id) });
+                    abilities.Add(new BattleAbilityView
+                    {
+                        Id = a.Id, ApCost = a.ApCost, CooldownRemaining = u.CooldownRemaining(a.Id),
+                        Range = a.Range, Targeting = a.Targeting.ToString(), NeedsTargetTile = AbilityNeedsTile(a)
+                    });
 
                 int ordinal = 0;
                 if (nameCounts[u.Profile.DisplayName] > 1)
@@ -2250,6 +2277,14 @@ namespace Game.Core.Session
         /// стан ДАЛІ (наприклад, у Scene для розв'язки вузла 1), що є нормальним
         /// продовженням конвеєра, а не порушенням повернення до ReturnState.
         /// </summary>
+        /// <summary>
+        /// Вид бою в мить розв'язки (останній рядок журналу — удар/смерть, що
+        /// вирішили бій). <see cref="GetBattleView"/> після розв'язки повертає null,
+        /// тож презентер бере цей знімок, щоб показати фінальну дію до панелі
+        /// результату. null — ще жодного бою не розв'язано.
+        /// </summary>
+        public BattleView LastResolvedBattleView { get; private set; }
+
         private void OnBattleResolved()
         {
             if (_battle == null || _resume == null || _battle.Outcome == CombatOutcome.Ongoing) return;
@@ -2266,6 +2301,11 @@ namespace Game.Core.Session
             _battleAutoResolvedThisCall = false;
             LogEvent(autoResolved ? "combat.autoresolved" : "combat.battle.resolved",
                 Args("outcome", result.Outcome.ToString(), "rounds", result.Rounds.ToString(CultureInfo.InvariantCulture), "reason", reason.ToString()));
+
+            // Останній вид бою — ДО обнулення: презентер дограє такт фінального
+            // удару (рев'ю Бою v2: раніше GetBattleView() тут уже повертав null,
+            // і удар, що вирішив бій, не показувався зовсім).
+            LastResolvedBattleView = GetBattleView();
 
             _battle = null;
             _resume = null;

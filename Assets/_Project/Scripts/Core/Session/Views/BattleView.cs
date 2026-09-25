@@ -158,6 +158,15 @@ namespace Game.Core.Session.Views
 
         /// <summary>0 — здібність готова просто зараз; N — ще N власних ходів юніта до готовності.</summary>
         public int CooldownRemaining;
+
+        /// <summary>Дальність (Чебишев) — HUD і арена показують зону дії озброєної здібності.</summary>
+        public int Range;
+
+        /// <summary>Тип цілі: "Self" | "Ally" | "AllyOrSelf" | "Enemy" | "Tile".</summary>
+        public string Targeting;
+
+        /// <summary>Потрібна клітинка: пастка на тайл або «Наказ пересунутися» (союзник, потім клітинка).</summary>
+        public bool NeedsTargetTile;
     }
 
     /// <summary>Повний контракт бою (R18/§4.2.1): грид+юніти+хід+лог, жодного типу Game.Core.Combat напряму.</summary>

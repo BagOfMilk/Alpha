@@ -315,6 +315,9 @@ namespace Game.Gameplay
             }
 
             bool wasEnabled = GUI.enabled;
+            // Бій стоїть, поки відкрите меню паузи (презентер сам нічого не знає про Esc).
+            if (BattlePresenter is IBattleInput pauseTarget) pauseTarget.Paused = escapeShown;
+
             GUI.enabled = !escapeShown;
             DrawStateScreen(state);
             GUI.enabled = wasEnabled;

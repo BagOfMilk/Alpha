@@ -155,12 +155,24 @@ namespace Game.Gameplay
 
         private enum TactKind { Move, Attack, Ability, DownedOrDeath, Skip }
 
-        private sealed class PendingTact { public BattleLogLineView Entry; public TactKind Kind; }
+        /// <summary>
+        /// Такт і рядки без власного такту, що належать до нього (шкода, стан,
+        /// лікування одразу після удару) — вони спливають написами в ту саму
+        /// мить удару. Раніше рядок шкоди був «Skip», і число «−N» не
+        /// показувалось узагалі (рев'ю Бою v2).
+        /// </summary>
+        private sealed class PendingTact
+        {
+            public BattleLogLineView Entry;
+            public TactKind Kind;
+            public readonly List<BattleLogLineView> Extras = new List<BattleLogLineView>();
+        }
 
         private sealed class ActiveTact
         {
             public BattleLogLineView Entry;
             public TactKind Kind;
+            public List<BattleLogLineView> Extras;
             public string ActorId;
             public string TargetId;
             public IReadOnlyList<GridPosView> Path;
@@ -200,6 +212,8 @@ namespace Game.Gameplay
 
         /// <summary>Бій v2, раунд 2 (п.6): запас над верхом імені/HP-смужки юніта, щоб напис не стартував їх перекриваючи.</summary>
         private const float FloatingSpawnGapAboveNamePx = 16f;
+        /// <summary>Крок стосу написів одного такту (удар + шкода + стан) — один над одним.</summary>
+        private const float FloatingStackStepPx = 24f;
 
         /// <summary>Бій v2, раунд 2 (п.6): «піднімаються помітно (~40–60 px)» — 42px/с даю ~42px за звичайні 1.0с і ~59px за Big 1.4с.</summary>
         private const float FloatingRiseSpeedPxPerSecond = 42f;
@@ -210,7 +224,12 @@ namespace Game.Gameplay
         /// під час перельоту камери напис «відставав» від цілі на півекрана
         /// (знімки раунду 2: «Промах»/«Влучання» посеред поля).
         /// </summary>
-        private sealed class FloatingRuntime { public BattleFloatingText Data; public Vector3 World; public float Age; public float Duration; }
+        private sealed class FloatingRuntime { public BattleFloatingText Data; public Vector3 World; public float StackOffset; public float Age; public float Duration; }
+
+        // ---- рев'ю Бою v2: пауза, двофазна здібність, розв'язка автобоєм ----
+        private bool _paused;
+        private string _armedTargetUnitId;
+        private bool _resolvedByAutoResolve;
         private readonly List<FloatingRuntime> _floatingRuntime = new List<FloatingRuntime>();
         private readonly List<BattleFloatingText> _floatingTextsExposed = new List<BattleFloatingText>();
 
@@ -365,11 +384,30 @@ namespace Game.Gameplay
 
         public void AcknowledgeResult() => TeardownAndDeactivate();
 
+        public bool Paused { get => _paused; set => _paused = value; }
+
+        public string ArmedTargetUnitId => _armedTargetUnitId;
+
+        /// <summary>Озброєна здібність поточного юніта (з виду), null — нічого не озброєно.</summary>
+        private BattleAbilityView FindArmedAbility()
+        {
+            if (_armed != ArmedAction.Ability || string.IsNullOrEmpty(_armedAbilityId)) return null;
+            var current = CurrentUnit();
+            if (current?.Abilities == null) return null;
+            foreach (var a in current.Abilities)
+                if (a != null && string.Equals(a.Id, _armedAbilityId, StringComparison.Ordinal)) return a;
+            return null;
+        }
+
+        /// <summary>«Наказ пересунутися»: спершу юніт, потім клітинка.</summary>
+        private static bool IsTwoPhase(BattleAbilityView a)
+            => a != null && a.NeedsTargetTile && !string.Equals(a.Targeting, "Tile", StringComparison.Ordinal);
+
         // ================= намір гравця =================
 
-        public void ArmAbility(string abilityId) { if (IsPlayerTurn && !IsBusy) { _armed = ArmedAction.Ability; _armedAbilityId = abilityId; } }
-        public void ArmOverwatchAim() { if (IsPlayerTurn && !IsBusy) { _armed = ArmedAction.OverwatchAim; _armedAbilityId = null; } }
-        public void CancelArmed() { _armed = ArmedAction.None; _armedAbilityId = null; }
+        public void ArmAbility(string abilityId) { if (IsPlayerTurn && !IsBusy) { _armed = ArmedAction.Ability; _armedAbilityId = abilityId; _armedTargetUnitId = null; } }
+        public void ArmOverwatchAim() { if (IsPlayerTurn && !IsBusy) { _armed = ArmedAction.OverwatchAim; _armedAbilityId = null; _armedTargetUnitId = null; } }
+        public void CancelArmed() { _armed = ArmedAction.None; _armedAbilityId = null; _armedTargetUnitId = null; }
 
         public void RequestEndTurn() { if (IsPlayerTurn && !IsBusy) RunCommand(() => _session.CombatEndTurn()); }
 
@@ -443,10 +481,37 @@ namespace Game.Gameplay
                 case ArmedAction.Ability:
                     if (string.IsNullOrEmpty(_armedAbilityId)) return false;
                     string abilityId = _armedAbilityId;
+                    if (IsTwoPhase(FindArmedAbility()))
+                    {
+                        // Перша фаза «Наказу пересунутися»: юніт обрано — тепер клітинка.
+                        // Невалідного юніта відкидаємо одразу, з причиною (те саме прев'ю, що в HUD).
+                        var check = SafePreviewAttack(CurrentUnit()?.Id, unitId, abilityId);
+                        if (check != null && !string.Equals(check.Result, "Success", StringComparison.Ordinal))
+                        {
+                            NoteRejection(RejectionLogLine(ParseResult(check.Result)));
+                            return false;
+                        }
+                        _armedTargetUnitId = unitId;
+                        _lastRejectionText = string.Empty;
+                        return true;
+                    }
                     return RunCommand(() => _session.CombatUseAbility(abilityId, unitId, null));
                 default:
                     return false;
             }
+        }
+
+        private AttackPreviewView SafePreviewAttack(string attackerId, string targetId, string abilityId)
+        {
+            if (_session == null || string.IsNullOrEmpty(attackerId) || string.IsNullOrEmpty(targetId)) return null;
+            try { return _session.PreviewAttack(attackerId, targetId, abilityId); }
+            catch (Exception) { return null; }
+        }
+
+        private static CombatActionResult ParseResult(string result)
+        {
+            CombatActionResult parsed;
+            return Enum.TryParse(result, out parsed) ? parsed : CombatActionResult.InvalidAction;
         }
 
         public bool ClickTile(int x, int y)
@@ -462,6 +527,16 @@ namespace Game.Gameplay
                 case ArmedAction.Ability:
                     if (string.IsNullOrEmpty(_armedAbilityId)) return false;
                     string abilityId = _armedAbilityId;
+                    if (IsTwoPhase(FindArmedAbility()))
+                    {
+                        if (string.IsNullOrEmpty(_armedTargetUnitId))
+                        {
+                            NoteRejection(UkrainianText.Get("ui.battle.armed.reposition.pick_unit", Gender.Male));
+                            return false;
+                        }
+                        string targetUnitId = _armedTargetUnitId;
+                        return RunCommand(() => _session.CombatUseAbility(abilityId, targetUnitId, tile));
+                    }
                     return RunCommand(() => _session.CombatUseAbility(abilityId, null, tile));
                 default:
                     return false;
@@ -473,12 +548,22 @@ namespace Game.Gameplay
         private void Update()
         {
             if (!_active) return;
-            if (_resultPending)
-            {
-                return;
-            }
+            // Меню паузи: бій стоїть повністю — ні миші, ні клавіш, ні ШІ, ні тактів.
+            if (_paused) return;
 
             float dt = Time.deltaTime;
+
+            if (_resultPending)
+            {
+                // Дограти такти фінальної дії (удар/смерть, що вирішили бій);
+                // HUD покаже панель результату, щойно такти скінчаться (!IsBusy).
+                if (_lastView != null) ApplyUnitPositionsAndHighlights(_lastView);
+                UpdateActiveTact(dt);
+                UpdateFloatingTexts(dt);
+                RebuildOverlays();
+                UpdateCamera(dt);
+                return;
+            }
 
             UpdateHover();
             Refresh();
@@ -741,6 +826,10 @@ namespace Game.Gameplay
 
             var current = CurrentUnit();
             bool armedNone = _armed == ArmedAction.None;
+            // Зона дії озброєної здібності — бузкові тайли (рев'ю Бою v2: колір був
+            // заведений, але ніде не вмикався — гравець не бачив, куди дістає здібність).
+            var armedAbility = FindArmedAbility();
+            int abilityRange = armedAbility != null && IsPlayerTurn && !IsBusy ? armedAbility.Range : -1;
 
             for (int y = 0; y < _gridHeight; y++)
             for (int x = 0; x < _gridWidth; x++)
@@ -756,10 +845,12 @@ namespace Game.Gameplay
                 bool isHoveredUnreachable = isHovered && armedNone && !isReachable;
                 bool isOverwatchAim = _overwatchAimTileKeys.Contains(key);
                 bool isOverwatchThreat = _overwatchThreatTileKeys.Contains(key);
+                bool isAbilityRange = abilityRange >= 0 && current != null && walkable &&
+                    Math.Max(Math.Abs(current.Pos.X - x), Math.Abs(current.Pos.Y - y)) <= abilityRange;
 
                 // Тайл поточного юніта перефарбовується другим проходом нижче.
                 ApplyTileTint(tile, key, cover, walkable, isReachable, false, isHovered,
-                    isHoveredUnreachable, isAbilityRange: false, isOverwatchAim: isOverwatchAim, isOverwatchThreat: isOverwatchThreat);
+                    isHoveredUnreachable, isAbilityRange: isAbilityRange, isOverwatchAim: isOverwatchAim, isOverwatchThreat: isOverwatchThreat);
             }
 
             string currentKey = current != null ? current.Pos.X + "_" + current.Pos.Y : null;
@@ -1014,7 +1105,9 @@ namespace Game.Gameplay
             }
 
             _hoverPathCache = null;
-            if (IsPlayerTurn && hasTile)
+            // Лише «розумний клік» (нічого не озброєно) рухає юніта; для озброєної
+            // здібності/дозору прев'ю руху було б неправдою (рев'ю Бою v2).
+            if (IsPlayerTurn && hasTile && _armed == ArmedAction.None)
             {
                 try { _hoverPathCache = _session.PreviewMovePath(new GridPos(HoveredTileX, HoveredTileY)); }
                 catch (NotImplementedException) { _hoverPathCache = null; }
@@ -1067,7 +1160,7 @@ namespace Game.Gameplay
             string unitId = Arg(args, "unitId");
             string targetId = Arg(args, "targetId");
 
-            _activeTact = new ActiveTact { Entry = entry, Kind = pending.Kind, ActorId = unitId, TargetId = targetId };
+            _activeTact = new ActiveTact { Entry = entry, Kind = pending.Kind, Extras = pending.Extras, ActorId = unitId, TargetId = targetId };
             bool fast = IsFastNow();
 
             switch (pending.Kind)
@@ -1139,11 +1232,16 @@ namespace Game.Gameplay
             var tact = _activeTact;
             tact.Elapsed += dt;
 
-            if (tact.Kind == TactKind.Attack && !tact.FloatingSpawned && tact.Elapsed >= tact.Duration * 0.5f)
+            // Напис — для БУДЬ-якого такту з написом (удар, здібність, впав/загинув),
+            // плюс рядки шкоди/стану, що належать до нього, — стосом один над одним.
+            if (!tact.FloatingSpawned && tact.Elapsed >= tact.Duration * 0.5f)
             {
                 tact.FloatingSpawned = true;
-                SpawnFloatingForEntry(tact.Entry);
-                ApplyHitReaction(tact);
+                int stack = SpawnFloatingForEntry(tact.Entry, 0) ? 1 : 0;
+                if (tact.Extras != null)
+                    foreach (var extra in tact.Extras)
+                        if (SpawnFloatingForEntry(extra, stack)) stack++;
+                if (tact.Kind == TactKind.Attack) ApplyHitReaction(tact);
             }
 
             if (tact.Elapsed >= tact.Duration) CompleteTact();
@@ -1197,12 +1295,12 @@ namespace Game.Gameplay
         /// екранним запасом — інакше напис стартує НИЖЧЕ картки (перекриває
         /// її, а не піднімається над нею), як на знімках без цього фіксу.
         /// </summary>
-        private void SpawnFloatingForEntry(BattleLogLineView entry)
+        private bool SpawnFloatingForEntry(BattleLogLineView entry, int stackIndex)
         {
             var spec = BattleLogText.Floating(entry, _lastView, _protagonistGender);
-            if (spec == null || string.IsNullOrEmpty(spec.UnitId)) return;
+            if (spec == null || string.IsNullOrEmpty(spec.UnitId)) return false;
             var unit = FindUnitById(spec.UnitId);
-            if (unit == null || ArenaCamera == null) return;
+            if (unit == null || ArenaCamera == null) return false;
 
             var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
             var nameTopGui = WorldToGui(new Vector3(world.X, BattleArenaView.NameLabelHeight, world.Z));
@@ -1216,13 +1314,17 @@ namespace Game.Gameplay
                 Alpha = 1f,
                 Big = spec.Big
             };
+            float stackOffset = stackIndex * FloatingStackStepPx;
+            text.ScreenY -= stackOffset;
             _floatingRuntime.Add(new FloatingRuntime
             {
                 Data = text,
                 World = new Vector3(world.X, BattleArenaView.NameLabelHeight, world.Z),
+                StackOffset = stackOffset,
                 Age = 0f,
                 Duration = spec.Big ? 1.4f : 1.0f
             });
+            return true;
         }
 
         private void ApplyHitReaction(ActiveTact tact)
@@ -1521,7 +1623,7 @@ namespace Game.Gameplay
                 {
                     var anchor = WorldToGui(r.World);
                     r.Data.ScreenX = anchor.x;
-                    r.Data.ScreenY = anchor.y - FloatingSpawnGapAboveNamePx - FloatingRiseSpeedPxPerSecond * r.Age;
+                    r.Data.ScreenY = anchor.y - FloatingSpawnGapAboveNamePx - r.StackOffset - FloatingRiseSpeedPxPerSecond * r.Age;
                 }
                 else
                 {
@@ -1755,7 +1857,7 @@ namespace Game.Gameplay
             if (!success) NoteRejection(RejectionLogLine(result));
             else _lastRejectionText = string.Empty;
 
-            AfterCommand(before);
+            AfterCommand(before, success);
             return success;
         }
 
@@ -1784,24 +1886,44 @@ namespace Game.Gameplay
             return UkrainianText.Get(key, Gender.Male);
         }
 
-        private void AfterCommand(int dayLogCountBefore)
+        private void AfterCommand(int dayLogCountBefore, bool commandSucceeded = true)
         {
             var log = _session.DayLog;
             for (int i = dayLogCountBefore; i < log.Count; i++)
                 ConsumeEvent(log[i]);
             _lastKnownDayLogCount = log.Count;
 
-            _armed = ArmedAction.None;
-            _armedAbilityId = null;
+            // Озброєна дія знімається лише коли її справді виконано: після
+            // відмови (поза дальністю, бракує ОД…) гравець одразу пробує іншу
+            // ціль, не озброюючи знову (рев'ю Бою v2).
+            if (commandSucceeded)
+            {
+                _armed = ArmedAction.None;
+                _armedAbilityId = null;
+                _armedTargetUnitId = null;
+            }
 
             var freshView = _session.GetBattleView();
+            bool resolvedNow = freshView == null && _resultPending;
+            // Бій щойно розв'язався: GetBattleView() уже null, але фінальний удар
+            // має бути показаний — беремо останній знімок сесії.
+            if (resolvedNow) freshView = _session.LastResolvedBattleView;
             if (freshView != null)
             {
                 _lastView = freshView;
                 RefreshIntentOverlayTiles();
                 ProcessNewBattleLog(freshView);
+                if (resolvedNow)
+                {
+                    // Автобій розв'язує ввесь бій одним викликом — програвати сотні
+                    // тактів не треба; звичайна розв'язка — лише кілька останніх.
+                    if (_resolvedByAutoResolve) { _pendingTacts.Clear(); }
+                    else while (_pendingTacts.Count > MaxFinalTacts) _pendingTacts.Dequeue();
+                }
             }
         }
+
+        private const int MaxFinalTacts = 6;
 
         /// <summary>
         /// Новий рядок <c>BattleView.Log</c> — і легасі-рядок (<see cref="LogLines"/>,
@@ -1813,6 +1935,7 @@ namespace Game.Gameplay
         {
             if (view?.Log == null) return;
             if (_battleLogCursor > view.Log.Count) _battleLogCursor = 0; // інший бій без Enter — почати спочатку
+            PendingTact lastQueued = null;
 
             for (; _battleLogCursor < view.Log.Count; _battleLogCursor++)
             {
@@ -1825,7 +1948,16 @@ namespace Game.Gameplay
                 if (typed != null && !string.IsNullOrEmpty(typed.Text)) _logEntries.Add(typed);
 
                 var kind = ClassifyTact(entry);
-                if (kind != TactKind.Skip) _pendingTacts.Enqueue(new PendingTact { Entry = entry, Kind = kind });
+                if (kind != TactKind.Skip)
+                {
+                    lastQueued = new PendingTact { Entry = entry, Kind = kind };
+                    _pendingTacts.Enqueue(lastQueued);
+                }
+                else if (lastQueued != null && BattleLogText.Floating(entry, view, _protagonistGender) != null)
+                {
+                    // Шкода/стан/лікування одразу після удару — спливають разом з ним.
+                    lastQueued.Extras.Add(entry);
+                }
             }
             TrimLog();
         }
@@ -1837,6 +1969,7 @@ namespace Game.Gameplay
                 case "combat.battle.resolved":
                 case "combat.autoresolved":
                     _resultPending = true;
+                    _resolvedByAutoResolve = string.Equals(evt.Key, "combat.autoresolved", StringComparison.Ordinal);
                     evt.Args.TryGetValue("outcome", out _resultOutcomeKey);
                     evt.Args.TryGetValue("rounds", out _resultRounds);
                     if (string.Equals(evt.Key, "combat.autoresolved", StringComparison.Ordinal))

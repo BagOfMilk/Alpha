@@ -570,6 +570,9 @@ namespace Game.Core.Combat
         }
 
         /// <summary>Вільна клітинка впритул до цілі ривка, найближча до атакуючого (детерміновано).</summary>
+        /// <summary>Чи є куди приземлитись ривком біля цілі — та сама перевірка, що в UseAbility (для прев'ю).</summary>
+        public bool HasLungeLanding(CombatUnit unit, CombatUnit target) => FindLungeLanding(unit, target).HasValue;
+
         private GridPos? FindLungeLanding(CombatUnit unit, CombatUnit target)
         {
             GridPos? best = null;

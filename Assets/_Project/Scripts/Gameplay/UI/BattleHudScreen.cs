@@ -45,7 +45,11 @@ namespace Game.Gameplay.UI
 
             var blockingRects = new List<Rect>();
 
-            if (c.ResultPending)
+            if (c.ResultPending) _confirmAutoResolve = false; // бій скінчився — питання автобою знято
+
+            // Панель результату — лише коли дограно такти фінальної дії: удар, що
+            // вирішив бій, спершу видно на арені (рев'ю Бою v2).
+            if (c.ResultPending && !c.IsBusy)
             {
                 blockingRects.Add(FullScreenRect());
                 c.SetHudRects(blockingRects);
@@ -103,6 +107,28 @@ namespace Game.Gameplay.UI
             DrawOverlays(c, view);
             DrawFloatingTexts(c);
             DrawCursorTooltip(c, view);
+
+            // Підтвердження автобою — на верхньому рівні, не всередині панелі журналу:
+            // там модалка обрізалась межами області й була недоступна (рев'ю Бою v2).
+            if (_confirmAutoResolve) DrawAutoResolveConfirm(c);
+        }
+
+        private static void DrawAutoResolveConfirm(IBattleHudData c)
+        {
+            Widgets.Modal(UkrainianText.Get("ui.battle.autoresolve.confirm.title", false), () =>
+            {
+                GUILayout.Label(UkrainianText.Get("ui.battle.autoresolve.confirm.body", false), AlphaSkin.Body);
+                GUILayout.Space(10f);
+                GUILayout.BeginHorizontal();
+                if (Widgets.PrimaryButton(UkrainianText.Get("ui.common.confirm", false)))
+                {
+                    _confirmAutoResolve = false;
+                    c.RequestAutoResolve();
+                }
+                if (Widgets.SecondaryButton(UkrainianText.Get("ui.common.cancel", false)))
+                    _confirmAutoResolve = false;
+                GUILayout.EndHorizontal();
+            }, () => _confirmAutoResolve = false);
         }
 
         // ================= гарячі клавіші (§3) =================
@@ -117,7 +143,7 @@ namespace Game.Gameplay.UI
         private static void HandleHotkeys(IBattleHudData c, BattleView view)
         {
             var evt = Event.current;
-            if (evt == null || evt.type != EventType.KeyDown || c.IsBusy) return;
+            if (evt == null || evt.type != EventType.KeyDown || c.IsBusy || c.Paused || c.ResultPending) return;
 
             if (c.IsPlayerTurn)
             {
@@ -392,8 +418,9 @@ namespace Game.Gameplay.UI
             bool enemyTurn = !c.IsPlayerTurn;
             bool onCooldown = ability.CooldownRemaining > 0;
             bool notEnoughAp = current.Ap < ability.ApCost;
-            usable = !(enemyTurn || onCooldown || notEnoughAp);
-            if (usable || enemyTurn) return label; // на ході ворога причина одна на всю панель — не дублюємо її в кожній кнопці
+            // Поки йде такт — кнопка сіра (клік однаково нічого б не зробив).
+            usable = !(enemyTurn || onCooldown || notEnoughAp || c.IsBusy);
+            if (usable || enemyTurn || c.IsBusy) return label; // на ході ворога причина одна на всю панель — не дублюємо її в кожній кнопці
 
             // Раунд 3 (знімок 720p): причина збоку малювалась вузьким
             // стовпчиком по літері й виштовхувала решту кнопок з панелі.
@@ -454,8 +481,31 @@ namespace Game.Gameplay.UI
 
             // Важлива інструкція («по чому саме клацнути») — HintLine, не курсив.
             if (c.Armed == ArmedAction.Ability)
-                GUILayout.Label(UkrainianText.Format("ui.battle.armed.ability", false,
-                    "ability", UkrainianText.Get(c.ArmedAbilityId ?? string.Empty, false)), AlphaSkin.HintLine, GUILayout.Width(columnWidth));
+                GUILayout.Label(ArmedAbilityHint(c, view, current), AlphaSkin.HintLine, GUILayout.Width(columnWidth));
+        }
+
+        /// <summary>Що клацнути для озброєної здібності: для «Наказу пересунутися» — дві фази (союзник, потім клітинка).</summary>
+        private static string ArmedAbilityHint(IBattleHudData c, BattleView view, BattleUnitView current)
+        {
+            var ability = FindAbility(current, c.ArmedAbilityId);
+            if (ability != null && ability.NeedsTargetTile && ability.Targeting != "Tile")
+            {
+                if (string.IsNullOrEmpty(c.ArmedTargetUnitId))
+                    return UkrainianText.Get("ui.battle.armed.reposition.pick_unit", false);
+                var target = FindUnit(view, c.ArmedTargetUnitId);
+                return UkrainianText.Format("ui.battle.armed.reposition.pick_tile", false,
+                    "name", target != null ? c.ResolveDisplayName(target) : string.Empty);
+            }
+            return UkrainianText.Format("ui.battle.armed.ability", false,
+                "ability", UkrainianText.Get(c.ArmedAbilityId ?? string.Empty, false));
+        }
+
+        private static BattleAbilityView FindAbility(BattleUnitView unit, string abilityId)
+        {
+            if (unit?.Abilities == null || string.IsNullOrEmpty(abilityId)) return null;
+            foreach (var a in unit.Abilities)
+                if (a != null && a.Id == abilityId) return a;
+            return null;
         }
 
         private static void DrawActionButtons(IBattleHudData c, BattleView view, BattleUnitView current, float columnWidth)
@@ -470,16 +520,28 @@ namespace Game.Gameplay.UI
 
                 bool overwatchArmed = c.Armed == ArmedAction.OverwatchAim;
                 string owLabel = (overwatchArmed ? "» " : string.Empty) + UkrainianText.Get("ui.battle.hotkey.overwatch", false);
-                if (Widgets.SecondaryButton(owLabel, GUILayout.Width(w)))
+                string stabLabel = UkrainianText.Get("ui.battle.stabilize", false);
+                string endLabel = UkrainianText.Get("ui.battle.hotkey.endturn", false);
+                if (c.IsBusy)
                 {
-                    if (overwatchArmed) c.CancelArmed(); else c.ArmOverwatchAim();
+                    // Поки йде такт — ті самі кнопки, але сірі: клік однаково чекав би кінця анімації.
+                    Widgets.DisabledButton(owLabel, null, GUILayout.Width(w));
+                    if (downedAlly != null) Widgets.DisabledButton(stabLabel, null, GUILayout.Width(w));
+                    Widgets.DisabledButton(endLabel, null, GUILayout.Width(w));
                 }
+                else
+                {
+                    if (Widgets.SecondaryButton(owLabel, GUILayout.Width(w)))
+                    {
+                        if (overwatchArmed) c.CancelArmed(); else c.ArmOverwatchAim();
+                    }
 
-                if (downedAlly != null && Widgets.SecondaryButton(UkrainianText.Get("ui.battle.stabilize", false), GUILayout.Width(w)))
-                    c.RequestStabilize(downedAlly.Id);
+                    if (downedAlly != null && Widgets.SecondaryButton(stabLabel, GUILayout.Width(w)))
+                        c.RequestStabilize(downedAlly.Id);
 
-                if (Widgets.PrimaryButton(UkrainianText.Get("ui.battle.hotkey.endturn", false), GUILayout.Width(w)))
-                    c.RequestEndTurn();
+                    if (Widgets.PrimaryButton(endLabel, GUILayout.Width(w)))
+                        c.RequestEndTurn();
+                }
             }
             else
             {
@@ -571,24 +633,6 @@ namespace Game.Gameplay.UI
                 _logCollapsed = !_logCollapsed;
             GUILayout.EndHorizontal();
 
-            if (_confirmAutoResolve)
-            {
-                Widgets.Modal(UkrainianText.Get("ui.battle.autoresolve.confirm.title", false), () =>
-                {
-                    GUILayout.Label(UkrainianText.Get("ui.battle.autoresolve.confirm.body", false), AlphaSkin.Body);
-                    GUILayout.Space(10f);
-                    GUILayout.BeginHorizontal();
-                    if (Widgets.PrimaryButton(UkrainianText.Get("ui.common.confirm", false)))
-                    {
-                        _confirmAutoResolve = false;
-                        c.RequestAutoResolve();
-                    }
-                    if (Widgets.SecondaryButton(UkrainianText.Get("ui.common.cancel", false)))
-                        _confirmAutoResolve = false;
-                    GUILayout.EndHorizontal();
-                });
-            }
-
             if (_logCollapsed) return;
 
             var entries = c.LogEntries;
@@ -630,7 +674,12 @@ namespace Game.Gameplay.UI
         {
             var attack = c.HoverAttack;
             var path = c.HoverPath;
-            if (attack == null && path == null) return;
+            if (attack == null && path == null)
+            {
+                // Озброєна здібність чи дозор над клітинкою — своя підказка, не «Рух» (рев'ю Бою v2).
+                if (c.Armed != ArmedAction.None && c.HasHoveredTile && c.IsPlayerTurn) DrawArmedTileTooltip(c, view);
+                return;
+            }
 
             float anchorX, anchorY;
             if (attack != null && TryFindHoveredOverlay(c, out var ov))
@@ -664,6 +713,47 @@ namespace Game.Gameplay.UI
             GUILayout.BeginArea(area, GUI.skin.box);
             if (attack != null) DrawHoverAttack(c, view, attack);
             else DrawHoverPath(c, view, path);
+            GUILayout.EndArea();
+        }
+
+        private static void DrawArmedTileTooltip(IBattleHudData c, BattleView view)
+        {
+            var current = FindUnit(view, view.CurrentUnitId);
+            if (current == null) return;
+
+            string title;
+            var lines = new List<KeyValuePair<string, GUIStyle>>();
+            if (c.Armed == ArmedAction.OverwatchAim)
+            {
+                title = UkrainianText.Get("ui.battle.armed.overwatch_title", false);
+                lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.armed.overwatch_tooltip", false), AlphaSkin.HintLine));
+            }
+            else
+            {
+                var ability = FindAbility(current, c.ArmedAbilityId);
+                title = UkrainianText.Get(c.ArmedAbilityId ?? string.Empty, false);
+                if (ability != null)
+                {
+                    int dist = Math.Max(Math.Abs(current.Pos.X - c.HoveredTileX), Math.Abs(current.Pos.Y - c.HoveredTileY));
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Format("ui.battle.armed.range", false, "range", I(ability.Range)), AlphaSkin.Body));
+                    lines.Add(dist <= ability.Range
+                        ? new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.armed.in_range", false), AlphaSkin.HintLine)
+                        : new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.armed.out_of_range", false), AlphaSkin.DangerText));
+                }
+                lines.Add(new KeyValuePair<string, GUIStyle>(ArmedAbilityHint(c, view, current), AlphaSkin.HintLine));
+            }
+
+            float scale = Widgets.ScaleForScreen();
+            float height = 24f + 34f + lines.Count * 30f;
+            float freeTop = TopBarHeight(scale) + 8f;
+            float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
+            float freeRight = Screen.width - RightPanelWidth() - 8f;
+            var (x, y) = BattleTooltipLayout.PlaceNearAnchor(c.HoveredTileScreenX, c.HoveredTileScreenY, TooltipWidth, height,
+                8f, freeTop, freeRight, freeBottom);
+
+            GUILayout.BeginArea(new Rect(x, y, TooltipWidth, height), GUI.skin.box);
+            GUILayout.Label(title, AlphaSkin.Body);
+            foreach (var line in lines) GUILayout.Label(line.Key, line.Value);
             GUILayout.EndArea();
         }
 
@@ -731,7 +821,7 @@ namespace Game.Gameplay.UI
                     }
 
                 string damageLine = p.IsDamageDeterministic
-                    ? I(p.DamageExpected)
+                    ? UkrainianText.Format("ui.battle.damage.preview.single", false, "value", I(p.DamageExpected))
                     : (p.DamageCrit > p.DamageMax
                         ? UkrainianText.Format("ui.battle.damage.preview.crit", false, "min", I(p.DamageMin), "max", I(p.DamageMax), "crit", I(p.DamageCrit))
                         : UkrainianText.Format("ui.battle.damage.preview", false, "min", I(p.DamageMin), "max", I(p.DamageMax)));

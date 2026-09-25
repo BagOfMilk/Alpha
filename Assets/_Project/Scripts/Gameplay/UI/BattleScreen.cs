@@ -39,6 +39,13 @@ namespace Game.Gameplay.UI
         /// </summary>
         private bool _awaitingOverwatchAim;
 
+        /// <summary>
+        /// Здібність чекає клік по клітинці (пастка; «Наказ пересунутися» — після
+        /// вибору союзника). Раніше фолбек завжди слав targetTile=null, і ці дві
+        /// здібності не працювали тут ніколи (рев'ю Бою v2).
+        /// </summary>
+        private string _awaitingAbilityTile;
+
         // ---- хід ШІ таймером (§5): CombatAiStepOneAction раз на ~0.5с, try/catch, запобіжник кроків ----
         private const float AiStepIntervalSeconds = 0.5f;
         private const int AiStepGuardLimit = 40; // той самий порядок, що §5 «> 40 кроків» для 3D-презентера
@@ -172,11 +179,18 @@ namespace Game.Gameplay.UI
                 else if (Widgets.SecondaryButton(label, GUILayout.Width(220f)))
                 {
                     string abilityId = ability.Id;
-                    shell.TryRunReported(() => shell.Session.CombatUseAbility(abilityId, _selectedTargetId, null),
-                        r => RejectionText(r, g));
+                    if (ability.NeedsTargetTile)
+                        _awaitingAbilityTile = _awaitingAbilityTile == abilityId ? null : abilityId;
+                    else
+                        shell.TryRunReported(() => shell.Session.CombatUseAbility(abilityId, _selectedTargetId, null),
+                            r => RejectionText(r, g));
                 }
             }
             GUILayout.EndHorizontal();
+
+            if (_awaitingAbilityTile != null)
+                GUILayout.Label(UkrainianText.Format("ui.battle.armed.tile_hint", g,
+                    "ability", UkrainianText.Get(_awaitingAbilityTile, g)), AlphaSkin.HintLine);
         }
 
         /// <summary>BattleView.Outcome — сирий рядок enum'а ("Ongoing"/"Victory"/...), тут переклад за ключем.</summary>
@@ -238,6 +252,29 @@ namespace Game.Gameplay.UI
         private void OnCellClicked(GameShell shell, BattleView view, BattleUnitView current, BattleUnitView occupant,
                                     int x, int y, bool canMoveHere, Gender g)
         {
+            if (_awaitingAbilityTile != null && current != null)
+            {
+                string abilityId = _awaitingAbilityTile;
+                BattleAbilityView ability = null;
+                if (current.Abilities != null)
+                    foreach (var a in current.Abilities)
+                        if (a != null && a.Id == abilityId) ability = a;
+
+                bool tileTargeted = ability == null || ability.Targeting == "Tile";
+                // «Наказ пересунутися»: клік по юніту — обрати, кого переставити; далі — клітинка.
+                if (!tileTargeted && occupant != null)
+                {
+                    _selectedTargetId = occupant.Id;
+                    return;
+                }
+
+                _awaitingAbilityTile = null;
+                string unitTarget = tileTargeted ? null : _selectedTargetId;
+                shell.TryRunReported(() => shell.Session.CombatUseAbility(abilityId, unitTarget, new GridPos(x, y)),
+                    r => RejectionText(r, g));
+                return;
+            }
+
             if (_awaitingOverwatchAim)
             {
                 _awaitingOverwatchAim = false;

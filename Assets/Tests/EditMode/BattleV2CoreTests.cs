@@ -830,5 +830,71 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(city.Built);
             Assert.IsNotNull(s.GetBattleView(), "сам бій при цьому живий");
         }
+
+        // ---------------------------------------------------------------
+        // Рев'ю зведення Бою v2 (25.09.2026)
+        // ---------------------------------------------------------------
+
+        /// <summary>
+        /// Удар, що вирішив бій, має бути показаний: після розв'язки
+        /// GetBattleView() — null, тож сесія зберігає останній вид (з фінальним
+        /// рядком журналу), і презентер доганяє такт перед панеллю результату.
+        /// </summary>
+        [Test]
+        public void BattleResolution_KeepsLastResolvedView_WithTheFinalLog()
+        {
+            var s = new GameSession();
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
+            int logBefore = s.GetBattleView().Log.Count;
+            s.CombatAutoResolve();
+
+            Assert.IsNull(s.GetBattleView(), "після розв'язки активного бою немає");
+            var last = s.LastResolvedBattleView;
+            Assert.IsNotNull(last, "останній вид бою мав зберегтися");
+            Assert.AreNotEqual("Ongoing", last.Outcome);
+            Assert.Greater(last.Log.Count, logBefore, "у знімку — журнал до самого кінця бою");
+        }
+
+        /// <summary>Вид здібності несе дальність, тип цілі і «потрібна клітинка» — HUD і арена показують зону дії й двофазний «Наказ».</summary>
+        [Test]
+        public void AbilityView_CarriesRangeTargetingAndTileNeed()
+        {
+            var s = new GameSession();
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
+            var units = s.GetBattleView().Units;
+            var all = units.SelectMany(u => u.Abilities ?? new List<BattleAbilityView>()).ToList();
+
+            var lunge = all.First(a => a.Id == "ability.lunge");
+            Assert.AreEqual("Enemy", lunge.Targeting);
+            Assert.AreEqual(DefaultCombatContent.Lunge().Range, lunge.Range);
+            Assert.IsFalse(lunge.NeedsTargetTile);
+
+            var trap = all.First(a => a.Id == "ability.set_trap");
+            Assert.AreEqual("Tile", trap.Targeting);
+            Assert.IsTrue(trap.NeedsTargetTile);
+
+            var order = all.First(a => a.Id == "ability.move_order");
+            Assert.AreEqual("Ally", order.Targeting);
+            Assert.IsTrue(order.NeedsTargetTile, "«Наказ пересунутися» — союзник І клітинка");
+        }
+
+        /// <summary>
+        /// Ривок на ворога, біля якого нікуди приземлитись: прев'ю мусить сказати
+        /// NotReachable — рівно те, що поверне факт (раніше прев'ю казало «Success»).
+        /// </summary>
+        [Test]
+        public void PreviewLunge_TargetBoxedIn_SaysNotReachable_LikeTheFact()
+        {
+            var battle = BuildLungeScenario(out var brawler, out var enemy);
+            battle.Map.SetWalkable(new GridPos(4, 0), false); // непрохідно, але не закриває огляд
+            battle.Map.SetWalkable(new GridPos(6, 0), false);
+
+            var session = new GameSession();
+            InjectBattle(session, battle);
+
+            var preview = session.PreviewAttack(brawler.Id, enemy.Id, "ability.lunge");
+            Assert.AreEqual("NotReachable", preview.Result);
+            Assert.AreEqual(CombatActionResult.NotReachable, battle.UseAbility("ability.lunge", enemy.Id));
+        }
     }
 }

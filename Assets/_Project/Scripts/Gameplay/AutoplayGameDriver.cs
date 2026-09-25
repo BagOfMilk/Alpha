@@ -112,6 +112,9 @@ namespace Game.Gameplay
         private bool _btAbilityShotTaken;
         private bool _btOverwatchShotTaken;
         private bool _btAbilityUsedOnce;
+
+        /// <summary>Рев'ю Бою v2: раз за бій — здібність, якій потрібна клітинка («Пастка» чи двофазний «Наказ пересунутися»).</summary>
+        private bool _btTileAbilityUsedOnce;
         private bool _btOverwatchUsedOnce;
 
         /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" прийом, що <see cref="_capturedOnce"/> нижче.</summary>
@@ -1646,6 +1649,9 @@ namespace Game.Gameplay
                 bool ok = hud.ClickUnit(target.Id);
                 hud.ClearSimulatedHover();
                 CheckRejection(ok, hud.LastRejectionText, "здібність " + abilityId + " по " + target.Id);
+                // Після відмови озброєна дія лишається (гравець пробує іншу ціль) —
+                // тур не пробує, тож знімає її, щоб наступний клік був звичайним.
+                if (!ok) hud.CancelArmed();
                 if (!_btAbilityShotTaken)
                 {
                     _btAbilityShotTaken = true;
@@ -1653,6 +1659,16 @@ namespace Game.Gameplay
                     _host.Capture("ability");
                     yield return 0;
                 }
+                yield break;
+            }
+
+            if (!_btTileAbilityUsedOnce && TryUseTileAbility(hud, view, current, out string tileWhat))
+            {
+                _btTileAbilityUsedOnce = true;
+                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                _host.Capture("ability-tile");
+                yield return 0;
+                _host.Log("Здібність з клітинкою: " + tileWhat + ".");
                 yield break;
             }
 
@@ -1720,6 +1736,63 @@ namespace Game.Gameplay
                 _host.Capture("after-move");
                 yield return 0;
             }
+        }
+
+        /// <summary>
+        /// Здібність, якій потрібна клітинка, — тими самими кліками, що людина:
+        /// «Пастка» — один клік по вільній клітинці в межах дальності; «Наказ
+        /// пересунутися» — клік по союзнику, тоді по вільній клітинці поруч із ним.
+        /// Відмова з причиною — нормальна (мало ОД, поза дальністю); відмова без
+        /// причини — виняток (CheckRejection).
+        /// </summary>
+        private bool TryUseTileAbility(IBattleHudData hud, BattleView view, BattleUnitView current, out string what)
+        {
+            what = null;
+            if (current?.Abilities == null || view?.ReachableTiles == null) return false;
+            foreach (var a in current.Abilities)
+            {
+                if (a == null || !a.NeedsTargetTile || a.CooldownRemaining > 0 || current.Ap < a.ApCost) continue;
+
+                BattleUnitView ally = null;
+                if (a.Targeting != "Tile")
+                {
+                    foreach (var u in view.Units)
+                        if (u != null && u.Id != current.Id && u.Side == current.Side && !u.IsDowned) { ally = u; break; }
+                    if (ally == null) continue;
+                }
+
+                var anchor = ally != null ? ally.Pos : current.Pos;
+                GridPosView? tile = null;
+                int best = int.MaxValue;
+                foreach (var p in view.ReachableTiles)
+                {
+                    int toAnchor = Math.Max(Math.Abs(p.X - anchor.X), Math.Abs(p.Y - anchor.Y));
+                    int toMe = Math.Max(Math.Abs(p.X - current.Pos.X), Math.Abs(p.Y - current.Pos.Y));
+                    if (toAnchor == 0 || toMe > a.Range) continue;
+                    if (toAnchor < best) { best = toAnchor; tile = p; }
+                }
+                if (!tile.HasValue) continue;
+
+                hud.ArmAbility(a.Id);
+                if (ally != null)
+                {
+                    bool picked = hud.ClickUnit(ally.Id);
+                    CheckRejection(picked, hud.LastRejectionText, "перша фаза " + a.Id + " (союзник " + ally.Id + ")");
+                    if (!picked) { hud.CancelArmed(); what = a.Id + ": союзника відхилено — " + hud.LastRejectionText; return true; }
+                    if (hud.ArmedTargetUnitId != ally.Id)
+                        throw new InvalidOperationException("Автотур: після кліку по союзнику двофазна здібність " + a.Id + " не запам'ятала ціль.");
+                }
+
+                hud.SimulateHoverTile(tile.Value.X, tile.Value.Y);
+                bool ok = hud.ClickTile(tile.Value.X, tile.Value.Y);
+                hud.ClearSimulatedHover();
+                CheckRejection(ok, hud.LastRejectionText, a.Id + " на " + tile.Value.X + "," + tile.Value.Y);
+                if (!ok) hud.CancelArmed();
+                what = a.Id + (ally != null ? " (союзник " + ally.Id + ")" : string.Empty) + " на " + tile.Value.X + "," + tile.Value.Y
+                    + (ok ? " — виконано" : " — відмова: " + hud.LastRejectionText);
+                return true;
+            }
+            return false;
         }
 
         /// <summary>Перша здібність поточного юніта, що не на відкаті (для одноразового покриття гілки "здібність" — § завдання п.1).</summary>

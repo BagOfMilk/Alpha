@@ -1926,6 +1926,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.float.downed", "Впав");
             AddKey(t, "ui.battle.float.died", "Загинув");
             AddKey(t, "ui.battle.float.ability", "{ability}");
+            // Рев'ю Бою v2: підписи для озброєної дії над клітинкою і двофазної здібності.
+            AddKey(t, "ui.battle.damage.preview.single", "Шкода атаки: {value}");
+            AddKey(t, "ui.battle.armed.reposition.pick_unit", "Спершу клацни союзника, якого переставити.");
+            AddKey(t, "ui.battle.armed.reposition.pick_tile", "Тепер клацни клітинку, куди переставити: {name}.");
+            AddKey(t, "ui.battle.armed.range", "Дальність: {range}");
+            AddKey(t, "ui.battle.armed.in_range", "Клітинка в межах дальності.");
+            AddKey(t, "ui.battle.armed.out_of_range", "Поза дальністю.");
+            AddKey(t, "ui.battle.armed.overwatch_title", "Дозор у цей бік");
+            AddKey(t, "ui.battle.armed.overwatch_tooltip", "Ворог, що рушить у підсвіченому секторі, отримає постріл.");
+            AddKey(t, "ui.battle.armed.tile_hint", "Клацни клітинку для «{ability}».");
             AddKey(t, "ui.battle.float.status", "{status}");
             // Бій v2 — банер ходу сторони (docs/COMBAT_V2.md §3).
             AddKey(t, "ui.battle.banner.player", "ВАШ ХІД · {name}");
