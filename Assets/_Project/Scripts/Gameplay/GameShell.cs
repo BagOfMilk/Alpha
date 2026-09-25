@@ -141,6 +141,9 @@ namespace Game.Gameplay
         /// <summary>Запит «дійти до місця» (автотур): HeroWalker забирає його і будує шлях, як на клік мишею.</summary>
         public string PendingWalkTarget { get; private set; }
 
+        /// <summary>Стан героя одним рядком (позиція, маршрут) — пише HeroWalker; автотур кладе його в лог, коли герой не дійшов.</summary>
+        public string WalkDebug { get; set; } = string.Empty;
+
         /// <summary>Прямокутники інтерфейсу прогулянки (координати GUI): клік по них — не команда «йти».</summary>
         public readonly List<Rect> ExploreUiRects = new List<Rect>();
 

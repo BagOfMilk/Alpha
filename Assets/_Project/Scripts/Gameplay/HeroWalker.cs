@@ -69,8 +69,17 @@ namespace Game.Gameplay
         private GUIStyle _labelStyle;
         private GUIStyle _nearStyle;
 
+        /// <summary>
+        /// Автотур веде героя лише запитами шляху: справжні миша й клавіатура
+        /// вимкнені. Вікно туру з'являється на екрані власника, і випадковий
+        /// клік по ньому скасовував маршрут — тур падав «герой не дійшов».
+        /// </summary>
+        private bool _ignoreRealInput;
+        private string _lastRequest = "-";
+
         private void Start()
         {
+            _ignoreRealInput = AutoplayBootstrap.RequestedFromCommandLine();
             _zoom = exploreZoom;
             if (hubCamera != null)
             {
@@ -102,6 +111,12 @@ namespace Game.Gameplay
                 if (_gridAge > 1.5f) RebuildGrid();
                 if (!_shell.EscapeOpen) gait = MoveHero();
                 _shell.SetNearbyPlace(VillagePlaces.Nearest(_places, Here()));
+                var here = Here();
+                _shell.WalkDebug = "герой (" + here.X.ToString("0.00") + "; " + here.Z.ToString("0.00") + ")"
+                                   + ", вільно: " + (_grid != null && _grid.IsFree(here))
+                                   + ", маршрут " + _pathIndex + "/" + _path.Count
+                                   + ", запит: " + _lastRequest
+                                   + ", поруч: " + (_shell.NearbyPlace != null ? _shell.NearbyPlace.Id : "-");
             }
             else
             {
@@ -126,10 +141,11 @@ namespace Game.Gameplay
                 SetHere(pos);
             }
 
-            bool run = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            float ix = (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
+            bool real = !_ignoreRealInput;
+            bool run = real && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+            float ix = !real ? 0f : (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
                        - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
-            float iz = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1f : 0f)
+            float iz = !real ? 0f : (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1f : 0f)
                        - (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
 
             if ((ix != 0f || iz != 0f) && hubCamera != null && _grid != null)
@@ -146,7 +162,7 @@ namespace Game.Gameplay
                 return run ? 2f : 1f;
             }
 
-            if (Input.GetMouseButtonDown(0) && !PointerOverUi())
+            if (real && Input.GetMouseButtonDown(0) && !PointerOverUi())
             {
                 WalkPoint target;
                 if (GroundUnderMouse(out target)) StartPath(pos, target, run);
@@ -157,6 +173,9 @@ namespace Game.Gameplay
             {
                 var place = VillagePlaces.Find(_places, request);
                 if (place != null) StartPath(pos, new WalkPoint(place.X, place.Z), false);
+                _lastRequest = request + (place == null ? " (місця немає)" : " (шлях " + _path.Count + ")");
+                if (place == null || _path.Count == 0)
+                    Debug.LogWarning("[Прогулянка] запит «" + request + "» не дав шляху: " + _lastRequest);
             }
 
             if (_pathIndex < _path.Count)
@@ -347,7 +366,7 @@ namespace Game.Gameplay
             float targetSize;
             if (exploring)
             {
-                float wheel = Input.mouseScrollDelta.y;
+                float wheel = _ignoreRealInput ? 0f : Input.mouseScrollDelta.y;
                 if (Mathf.Abs(wheel) > 0.01f && !PointerOverUi())
                     _zoom = Mathf.Clamp(_zoom - wheel * 0.8f, minZoom, maxZoom);
                 targetPos = transform.position + _camOffset;

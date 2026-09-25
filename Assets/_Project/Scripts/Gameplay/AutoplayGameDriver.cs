@@ -1256,7 +1256,8 @@ namespace Game.Gameplay
                     yield return 0;
                 }
                 if (_shell.NearbyPlace == null || _shell.NearbyPlace.Id != target)
-                    throw new InvalidOperationException("Прогулянка: герой не дійшов до «" + target + "» за " + ExploreWalkFrameCap + " кадрів.");
+                    throw new InvalidOperationException("Прогулянка: герой не дійшов до «" + target + "» за " + ExploreWalkFrameCap +
+                                                        " кадрів; " + _shell.WalkDebug + ".");
                 foreach (var f in WaitFrames(20)) yield return f;
                 _host.Capture("explore-" + target.Replace(':', '-'));
                 yield return 0;
