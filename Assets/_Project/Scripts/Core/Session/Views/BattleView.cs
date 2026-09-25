@@ -35,6 +35,9 @@ namespace Game.Core.Session.Views
         public IReadOnlyList<string> Statuses;
         public bool IsDowned;
 
+        /// <summary>Ключ UkrainianText екіпірованої зброї (WeaponDefinition.Id, напр. "weapon.horde_bow") — null, якщо юніт безоружний.</summary>
+        public string WeaponId;
+
         /// <summary>0, якщо цей юніт не поточна ціль прев'ю (заповнюється <see cref="GameSession.PreviewHitChance"/>).</summary>
         public int HitChancePreview;
 

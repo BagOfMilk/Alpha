@@ -195,9 +195,18 @@ namespace Game.Gameplay.UI
             }
 
             DrawHpLine(current);
+            DrawWeaponLine(current);
             DrawApBar(current);
             DrawStatuses(current);
             if (current.IsDowned) GUILayout.Label(UkrainianText.Get("ui.battle.unit.downed", false), AlphaSkin.Tooltip);
+        }
+
+        /// <summary>Яка зброя екіпірована (власник, 25.09.2026: «хочу бачити яка зброя экіпірована») — той самий стиль рядка, що HP/AP нижче. Юніт без зброї (безоружний ворог) — рядок просто не малюється.</summary>
+        private static void DrawWeaponLine(BattleUnitView unit)
+        {
+            if (string.IsNullOrEmpty(unit.WeaponId)) return;
+            GUILayout.Label(UkrainianText.Format("ui.battle.weapon", false,
+                "name", UkrainianText.Get(unit.WeaponId, false)), AlphaSkin.Body);
         }
 
         /// <summary>
@@ -282,6 +291,26 @@ namespace Game.Gameplay.UI
             string key = view.IsHitRulePercent ? "ui.battle.hitchance.percent" : "ui.battle.hitchance.threshold";
             GUILayout.Label(UkrainianText.Format(key, false, "value",
                 c.HoveredHitChance.ToString(System.Globalization.CultureInfo.InvariantCulture)), AlphaSkin.Body);
+
+            // Власник, 25.09.2026: «хочу бачити ... скільки урону нанесе
+            // атака». Діапазон, не кидок (§BattleArenaController.
+            // UpdateHitChancePreview — прев'ю рахується щокадру, поки курсор
+            // на цілі, тож рол тут неможливий, лише детермінований min/max).
+            // Крит показуємо лише коли він реально відрізняється від max —
+            // на True-уроні (без резисту) і без криту різниці нема сенсу
+            // повторювати те саме число двічі.
+            if (c.HoveredDamageMax > 0 || c.HoveredDamageMin > 0)
+            {
+                string damageLine = c.HoveredDamageCrit > c.HoveredDamageMax
+                    ? UkrainianText.Format("ui.battle.damage.preview.crit", false,
+                        "min", c.HoveredDamageMin.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "max", c.HoveredDamageMax.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "crit", c.HoveredDamageCrit.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    : UkrainianText.Format("ui.battle.damage.preview", false,
+                        "min", c.HoveredDamageMin.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "max", c.HoveredDamageMax.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                GUILayout.Label(damageLine, AlphaSkin.Body);
+            }
 
             // Fix-ревью (major, той самий пункт, що DrawHpLine): гравець вирішує
             // «атакувати/відступити» саме за HP цілі — прев'ю шансу без HP цілі

@@ -33,6 +33,9 @@ namespace Game.Gameplay
         string ArmedAbilityId { get; }
         string HoveredUnitId { get; }
         int HoveredHitChance { get; }
+        int HoveredDamageMin { get; }
+        int HoveredDamageMax { get; }
+        int HoveredDamageCrit { get; }
         bool IsPlayerTurn { get; }
 
         string ResolveDisplayName(BattleUnitView unit);

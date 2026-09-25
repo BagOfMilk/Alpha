@@ -1788,6 +1788,20 @@ namespace Game.Core.Session
             return _battle.HitChancePreview(a, t);
         }
 
+        /// <summary>Показаний гравцю діапазон урону поточної зброї атакуючого по цілі — той самий принцип, що PreviewHitChance вище (з нулів, якщо бою нема/юніт не знайдено/зброї нема).</summary>
+        public void PreviewDamage(string attackerId, string targetId, out int min, out int max, out int crit)
+        {
+            min = max = crit = 0;
+            if (_battle == null) return;
+            var a = _battle.GetUnit(attackerId);
+            var t = _battle.GetUnit(targetId);
+            if (a == null || t == null) return;
+            var info = _battle.DamagePreview(a, t);
+            min = info.Min;
+            max = info.Max;
+            crit = info.Crit;
+        }
+
         public BattleView GetBattleView()
         {
             if (_battle == null) return null;
@@ -1815,7 +1829,8 @@ namespace Game.Core.Session
                     Statuses = MapStatuses(u),
                     IsDowned = u.LifeState == UnitLifeState.Downed,
                     HitChancePreview = 0,
-                    Abilities = abilities
+                    Abilities = abilities,
+                    WeaponId = u.Weapon?.Id
                 });
             }
 

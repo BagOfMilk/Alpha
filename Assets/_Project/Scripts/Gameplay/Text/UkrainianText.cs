@@ -1859,6 +1859,9 @@ namespace Game.Gameplay.Text
             // юніта, ні для наведеної цілі під прев'ю шансу.
             AddKey(t, "ui.battle.hp", "Здоров'я: {current}/{max}");
             AddKey(t, "ui.battle.hp.target", "Ціль — здоров'я: {current}/{max}");
+            AddKey(t, "ui.battle.weapon", "Зброя: {name}");
+            AddKey(t, "ui.battle.damage.preview", "Шкода атаки: {min}–{max}");
+            AddKey(t, "ui.battle.damage.preview.crit", "Шкода атаки: {min}–{max} (крит {crit})");
 
             // Озброєна дія (гравець обрав намір, чекає кліку по тайлу/юніту арени;
             // рух/атака — завжди клік без озброєння, «розумний клік» ArmedAction.None).

@@ -128,6 +128,7 @@ namespace Game.Gameplay
         private GridPos? _hoveredTile;
         private string _hoveredUnitId;
         private int _hoveredHitChance;
+        private int _hoveredDamageMin, _hoveredDamageMax, _hoveredDamageCrit;
 
         /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters (§SpawnOrUpdateUnit) — той самий множник контр-масштабує підпис імені (§BuildNameLabel), щоб текст не ріс разом із фігурою.</summary>
         private const float UnitVisualScale = 1.35f;
@@ -169,6 +170,9 @@ namespace Game.Gameplay
         public string ArmedAbilityId => _armedAbilityId;
         public string HoveredUnitId => _hoveredUnitId;
         public int HoveredHitChance => _hoveredHitChance;
+        public int HoveredDamageMin => _hoveredDamageMin;
+        public int HoveredDamageMax => _hoveredDamageMax;
+        public int HoveredDamageCrit => _hoveredDamageCrit;
 
         public bool IsPlayerTurn
         {
@@ -697,9 +701,11 @@ namespace Game.Gameplay
         private void UpdateHitChancePreview(BattleUnitView current)
         {
             _hoveredHitChance = 0;
+            _hoveredDamageMin = _hoveredDamageMax = _hoveredDamageCrit = 0;
             if (_session == null || current == null || string.IsNullOrEmpty(_hoveredUnitId)) return;
             if (string.Equals(_hoveredUnitId, current.Id, StringComparison.Ordinal)) return;
             _hoveredHitChance = _session.PreviewHitChance(current.Id, _hoveredUnitId);
+            _session.PreviewDamage(current.Id, _hoveredUnitId, out _hoveredDamageMin, out _hoveredDamageMax, out _hoveredDamageCrit);
         }
 
         private BattleUnitView CurrentUnit()
