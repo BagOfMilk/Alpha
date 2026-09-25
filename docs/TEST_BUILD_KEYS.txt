@@ -44,13 +44,16 @@ finale.resolved
 forewarn.level1
 forewarn.level2
 forewarn.level3
+incident.night_burglary.Worst
 incident.pass_vanguard.Good
+incident.petty_theft.Base
 incident.sick_child.Good
 incident.spoiled_stores.Good
 incident.spoiled_stores.Worst
 loot.dropped
 loyalty.band_changed
 night.ambient.Calm
+night.ambient.Murmur
 post.лазарет.Good
 post.рада.Good
 post.склад.Good
@@ -81,5 +84,8 @@ scene.zakhar_council.begun
 sfx.door.slam
 signal.domain
 tension.ambient.Calm
+tension.ambient.Murmur
+tension.band.Calm
+tension.band.Murmur
 to.node1.pass
 to.settlement.evening
