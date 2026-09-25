@@ -30,8 +30,8 @@ namespace Game.Core.Stats
             switch (a)
             {
                 case AttributeType.Strength: return "Сила";
-                case AttributeType.Agility: return "Ловкость";
-                case AttributeType.Wits: return "Смекалка";
+                case AttributeType.Agility: return "Спритність";
+                case AttributeType.Wits: return "Кмітливість";
                 case AttributeType.Will: return "Воля";
                 default: return "—";
             }
