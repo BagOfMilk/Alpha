@@ -1567,6 +1567,9 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.night.patrol.section", "Патруль чи сон");
 
             AddKey(t, "ui.quest.offer.title", "Пропозиція");
+            AddKey(t, "ui.quest.offer.title_named", "Пропозиція: {quest}");
+            AddKey(t, "ui.quest.check.line", "Перевірка: {skill} — поріг {threshold}.");
+            AddKey(t, "ui.quest.check.attempt", "Спробувати");
             AddKey(t, "quest.offered", "Нова пропозиція: {quest}.");
 
             AddKey(t, "expedition.departed", "Відряд вирушив: {site}.");

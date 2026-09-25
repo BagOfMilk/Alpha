@@ -25,9 +25,12 @@
 > dotnet test tools/Alpha.Headless.sln                 # ядро + линт Gameplay
 > dotnet run --project tools/Alpha.Play -- --auto       # текстовый прогон на GameSession
 > powershell -File tools/build-unity.ps1                # пересборка сцены(-ей) + Windows-билд
-> Build/Windows/Alpha.exe -batchmode -autoplay -logFile Logs/autoplay.log; echo $LASTEXITCODE
-> Build/Windows/Alpha.exe -batchmode -autoplay-long -logFile Logs/autoplay-long.log; echo $LASTEXITCODE
+> Build/Windows/Alpha.exe -autoplay -screen-fullscreen 0 -screen-width 1600 -screen-height 900; echo $?
+> Build/Windows/Alpha.exe -autoplay-long -screen-fullscreen 0 -screen-width 1600 -screen-height 900; echo $?
 > ```
+> Автопрогон — в окне, не `-batchmode`: снимки (`Build/Windows/Screenshots/`)
+> снимаются с настоящего кадра. Итог — `Build/Windows/Logs/autoplay-summary.txt`;
+> каждый прогон перезаписывает обе папки.
 > Раздел 6 — что именно проверяет каждая команда (тест покрытия механик,
 > покрытие ключей текста, замер темпа).
 

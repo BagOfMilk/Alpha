@@ -280,6 +280,34 @@ namespace Game.Tests.EditMode
             }
         }
 
+        // Знайдено довгим автопрогоном 25.09.2026: вечірня панель показувала
+        // на етапі-перевірці «Пропозиція / Етап 1 / Підтвердити» — без назви
+        // квесту і без порога (інваріант 8).
+        [Test]
+        public void QuestOffer_CheckStage_NamesQuestAndShowsSkillAndThreshold()
+        {
+            var s = new GameSession();
+            s.NewGame(new NewGameOptions { SkipCreation = true, HitRule = Game.Core.Combat.HitRuleKind.Threshold });
+            Game.Core.Session.Bots.BotRunner.Drive(s, new Game.Core.Session.Bots.HomebodyPolicy(), 1);
+
+            // Бот за першу добу вже прийняв пропозицію Гафії («Принести траву»),
+            // тож квест стоїть на етапі-перевірці «по траву».
+            QuestOfferView offer = s.OfferQuestStage("hafiya");
+            Assert.NotNull(offer, "квест Гафії має бути доступний у стані " + s.State);
+            Assert.AreEqual(1, offer.Stage, "після прийняття пропозиції — етап «по траву»");
+            Assert.AreEqual(0, offer.Options.Count, "етап-перевірка не має варіантів вибору");
+            Assert.AreEqual(Game.Core.Checks.SkillKeys.Survival.Id, offer.CheckSkillKey, "етап «по траву» — перевірка Виживання");
+            Assert.Greater(offer.CheckThreshold, 0);
+
+            Assert.AreEqual("Гафія", ScreenText.QuestName(offer.QuestId, Gender.Male));
+            string line = ScreenText.QuestCheckLine(offer, Gender.Male);
+            StringAssert.Contains(offer.CheckThreshold.ToString(), line);
+            StringAssert.Contains(ScreenText.SkillLabel(offer.CheckSkillKey, Gender.Male), line);
+            StringAssert.DoesNotContain("{", line);
+            Assert.AreEqual(string.Empty, ScreenText.QuestCheckLine(new QuestOfferView { QuestId = "hafiya" }, Gender.Male),
+                "етап-вибір не показує рядка перевірки");
+        }
+
         [Test]
         public void EventLine_UnknownKey_FallsBackReadably()
         {

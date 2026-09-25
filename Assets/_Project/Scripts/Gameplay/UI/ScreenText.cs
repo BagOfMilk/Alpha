@@ -175,6 +175,27 @@ namespace Game.Gameplay.UI
                 "performer", performer, "band", band);
         }
 
+        /// <summary>
+        /// Назва квесту: "quest.&lt;id&gt;" (Гафія — id без префікса), або сам id,
+        /// якщо він уже ключ (глава арки Максима — "quest.maksym.ch1").
+        /// </summary>
+        public static string QuestName(string questId, Gender gender)
+        {
+            if (string.IsNullOrEmpty(questId)) return string.Empty;
+            string prefixed = "quest." + questId;
+            if (UkrainianText.Has(prefixed, gender)) return UkrainianText.Get(prefixed, gender);
+            if (UkrainianText.Has(questId, gender)) return UkrainianText.Get(questId, gender);
+            return questId;
+        }
+
+        /// <summary>Рядок етапу-перевірки квесту — навичка і поріг заздалегідь (інваріант 8); порожньо для етапу-вибору.</summary>
+        public static string QuestCheckLine(QuestOfferView offer, Gender gender)
+        {
+            if (offer == null || string.IsNullOrEmpty(offer.CheckSkillKey)) return string.Empty;
+            return UkrainianText.Format("ui.quest.check.line", gender,
+                "skill", SkillLabel(offer.CheckSkillKey, gender), "threshold", offer.CheckThreshold.ToString());
+        }
+
         public static string SkillLabel(string skillKey, Gender gender)
         {
             if (string.IsNullOrEmpty(skillKey)) return string.Empty;

@@ -883,7 +883,16 @@ namespace Game.Core.Session
             if (run == null || run.Current == null) return null;
 
             var stage = run.Current;
-            var offer = new QuestOfferView { Kind = "Quest", TopicId = run.Def.Id, QuestId = questId, Stage = run.CurrentIndex };
+            var offer = new QuestOfferView
+            {
+                Kind = "Quest", TopicId = run.Def.Id, QuestId = questId, Stage = run.CurrentIndex,
+                StageTextKey = stage.TextKey
+            };
+            if (stage.Kind == QuestStageKind.Check)
+            {
+                offer.CheckSkillKey = stage.CheckSkill.Id;
+                offer.CheckThreshold = stage.Threshold;
+            }
 
             if (stage.Kind == QuestStageKind.Choice)
             {

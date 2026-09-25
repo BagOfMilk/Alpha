@@ -44,5 +44,17 @@ namespace Game.Core.Session.Views
     {
         public string QuestId;
         public int Stage;
+
+        /// <summary>Ключ тексту поточного етапу (QuestStage.TextKey), якщо він є.</summary>
+        public string StageTextKey;
+
+        /// <summary>
+        /// Етап-перевірка: навичка і поріг, показані ДО спроби (інваріант 8).
+        /// Порожньо для етапу-вибору. Раніше вечірня панель показувала на
+        /// такому етапі лише «Етап 1 / Підтвердити» — без назви квесту і
+        /// без порога (знайдено довгим автопрогоном 25.09.2026).
+        /// </summary>
+        public string CheckSkillKey;
+        public int CheckThreshold;
     }
 }
