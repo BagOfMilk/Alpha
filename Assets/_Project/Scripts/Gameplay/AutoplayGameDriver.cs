@@ -80,6 +80,15 @@ namespace Game.Gameplay
         /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" приём, що <see cref="_capturedOnce"/> нижче.</summary>
         private int _dayLogScanIndex;
 
+        /// <summary>
+        /// Останній перевірений рядок DayLog. GameSession очищає DayLog на межі
+        /// фаз (ClearDayLog), а лічильник версії — internal; тож очищення
+        /// розпізнаємо так: рядок перед індексом уже не той самий об'єкт.
+        /// Без цього після першого ж очищення індекс лишався більшим за новий
+        /// журнал, і тур мовчки пропускав зсуви смуг і передвісники.
+        /// </summary>
+        private GameEvent _lastScannedEvent;
+
         /// <summary>-autoplay-long: розв'язку великого бунту на площі вже показано знімком — можна завершувати тур, не чекаючи стелі доби.</summary>
         private bool _greatCrisisResolved;
 
@@ -692,8 +701,13 @@ namespace Game.Gameplay
         private IEnumerable<int> ScanForGreatCrisisSignals()
         {
             var log = Session.DayLog;
+            if (_dayLogScanIndex > log.Count ||
+                (_dayLogScanIndex > 0 && !ReferenceEquals(log[_dayLogScanIndex - 1], _lastScannedEvent)))
+                _dayLogScanIndex = 0;
+
             for (; _dayLogScanIndex < log.Count; _dayLogScanIndex++)
             {
+                _lastScannedEvent = log[_dayLogScanIndex];
                 string slug = LongTourSlugFor(log[_dayLogScanIndex]);
                 if (slug == null) continue;
                 if (!_capturedOnce.Add(slug)) continue;
