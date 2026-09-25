@@ -1823,28 +1823,229 @@ namespace Game.Core.Session
         // ===================== Бій v2: прев'ю до кліку (docs/COMBAT_V2.md §7.1) =====================
         // Сигнатури заморожені контрактом; реалізацію пише частина «ядро».
 
-        /// <summary>Прев'ю атаки зброєю (abilityId == null) або озброєною здібністю по цілі — шанс із розкладом, шкода, ціна, укриття, причина відмови.</summary>
+        /// <summary>
+        /// Прев'ю атаки зброєю (abilityId == null) або озброєною здібністю по
+        /// цілі — БЕЗ мутацій: Result дзеркалить ту саму валідацію, що
+        /// CombatState.Attack/UseAbility зроблять по факту (ОД, дальність,
+        /// лінія видимості, відкат, валідність цілі, стан бою), а
+        /// Chance/Terms/DamageExpected рахуються ТИМ САМИМ
+        /// HitChanceCalculator.Decompose і DamageResolver, якими котиться
+        /// справжній ролл — показане гравцю число фізично не може розійтись
+        /// із фактом (§7.1 COMBAT_V2.md).
+        /// </summary>
         public AttackPreviewView PreviewAttack(string attackerId, string targetId, string abilityId = null)
         {
-            throw new NotImplementedException("PreviewAttack — частина «ядро» Бою v2.");
+            if (_battle == null) return null;
+            var unit = _battle.GetUnit(attackerId);
+            var target = _battle.GetUnit(targetId);
+
+            bool unitReady = unit != null && _battle.Current == unit && unit.IsActive
+                             && _battle.Outcome == CombatOutcome.Ongoing;
+            if (!unitReady)
+                return new AttackPreviewView
+                {
+                    AttackerId = attackerId, TargetId = targetId, AbilityId = abilityId,
+                    Result = CombatActionResult.InvalidAction.ToString()
+                };
+
+            var view = abilityId == null
+                ? PreviewWeaponAttack(unit, target)
+                : PreviewAbilityAttack(unit, target, abilityId);
+            view.AttackerId = attackerId;
+            view.TargetId = targetId;
+            view.AbilityId = abilityId;
+            return view;
         }
 
-        /// <summary>Прев'ю руху поточного юніта до тайла: шлях, ціна, тайли під ворожим дозором.</summary>
+        private AttackPreviewView PreviewWeaponAttack(CombatUnit unit, CombatUnit target)
+        {
+            var w = unit.Weapon;
+            if (w == null) return new AttackPreviewView { Result = CombatActionResult.InvalidAction.ToString() };
+
+            if (target == null || target.Side == unit.Side || target.LifeState != UnitLifeState.Active)
+                return new AttackPreviewView
+                {
+                    Result = CombatActionResult.InvalidTarget.ToString(), ApCost = w.ApCost, HasAttackRoll = true
+                };
+
+            int distance = GridPos.Chebyshev(unit.Pos, target.Pos);
+            string result;
+            if (unit.Ap < w.ApCost) result = CombatActionResult.NotEnoughAp.ToString();
+            else if (w.IsMelee && distance > w.OptimalRange) result = CombatActionResult.OutOfRange.ToString();
+            else if (!w.IsMelee && !LineOfSight.HasLine(_battle.Map, unit.Pos, target.Pos)) result = CombatActionResult.NoLineOfSight.ToString();
+            else result = CombatActionResult.Success.ToString();
+
+            return BuildAttackPreview(unit, target, w, accuracyBonus: 0, distance: distance, range: w.OptimalRange,
+                result: result, apCost: w.ApCost);
+        }
+
+        private AttackPreviewView PreviewAbilityAttack(CombatUnit unit, CombatUnit target, string abilityId)
+        {
+            var ability = unit.FindAbility(abilityId);
+            if (ability == null) return new AttackPreviewView { Result = CombatActionResult.InvalidAction.ToString() };
+
+            // PreviewAttack не бере targetTile — здібності, що цілять у тайл
+            // (пастка тощо), цим методом не прев'юються (лише ціль-юніт).
+            if (ability.Targeting == AbilityTarget.Tile)
+                return new AttackPreviewView { Result = CombatActionResult.InvalidAction.ToString(), ApCost = ability.ApCost };
+
+            CombatUnit resolvedTarget;
+            switch (ability.Targeting)
+            {
+                case AbilityTarget.Self:
+                    resolvedTarget = unit;
+                    break;
+                case AbilityTarget.Ally:
+                    if (target == null || target == unit || target.Side != unit.Side || !target.IsActive)
+                        return new AttackPreviewView { Result = CombatActionResult.InvalidTarget.ToString(), ApCost = ability.ApCost };
+                    resolvedTarget = target;
+                    break;
+                case AbilityTarget.AllyOrSelf:
+                    resolvedTarget = target ?? unit;
+                    if (resolvedTarget.Side != unit.Side || !resolvedTarget.IsActive)
+                        return new AttackPreviewView { Result = CombatActionResult.InvalidTarget.ToString(), ApCost = ability.ApCost };
+                    break;
+                case AbilityTarget.Enemy:
+                    if (target == null || target.Side == unit.Side || !target.IsActive)
+                        return new AttackPreviewView { Result = CombatActionResult.InvalidTarget.ToString(), ApCost = ability.ApCost };
+                    resolvedTarget = target;
+                    break;
+                default:
+                    return new AttackPreviewView { Result = CombatActionResult.InvalidAction.ToString() };
+            }
+
+            bool selfTarget = resolvedTarget == unit;
+            int distance = selfTarget ? 0 : GridPos.Chebyshev(unit.Pos, resolvedTarget.Pos);
+            bool hasLos = selfTarget || LineOfSight.HasLine(_battle.Map, unit.Pos, resolvedTarget.Pos);
+
+            string result;
+            if (unit.CooldownRemaining(ability.Id) > 0) result = CombatActionResult.OnCooldown.ToString();
+            else if (unit.Ap < ability.ApCost) result = CombatActionResult.NotEnoughAp.ToString();
+            else if (!selfTarget && distance > ability.Range) result = CombatActionResult.OutOfRange.ToString();
+            else if (!selfTarget && ability.RequiresLineOfSight && !hasLos) result = CombatActionResult.NoLineOfSight.ToString();
+            else result = CombatActionResult.Success.ToString();
+
+            bool hasAttackRoll = !selfTarget && unit.Weapon != null && ability.WeaponAttackCount() > 0;
+            if (!hasAttackRoll)
+                return new AttackPreviewView
+                {
+                    Result = result, ApCost = ability.ApCost, Distance = distance, Range = ability.Range,
+                    HasLineOfSight = hasLos, HasAttackRoll = false
+                };
+
+            return BuildAttackPreview(unit, resolvedTarget, unit.Weapon, ability.PreviewAccuracyBonus(),
+                distance, ability.Range, result, apCost: ability.ApCost);
+        }
+
+        /// <summary>Спільний хвіст прев'ю: розклад шансу + прев'ю урону — той самий HitChanceCalculator/DamageResolver, яким котиться факт.</summary>
+        private AttackPreviewView BuildAttackPreview(CombatUnit unit, CombatUnit target, WeaponDefinition w,
+            int accuracyBonus, int distance, int range, string result, int apCost)
+        {
+            bool ignoreCover = w.IsMelee;
+            var cover = ignoreCover ? CoverType.None : _battle.Map.CoverAgainst(target.Pos, unit.Pos);
+            bool hasLos = w.IsMelee || LineOfSight.HasLine(_battle.Map, unit.Pos, target.Pos);
+
+            var terms = HitChanceCalculator.Decompose(unit.Profile.Accuracy, unit.HasStatus(StatusType.Suppressed),
+                target.Profile.Defense, cover, ignoreCover, distance, w.OptimalRange, _battle.Balance,
+                target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown), accuracyBonus);
+
+            int chance = 0;
+            var termViews = new List<ChanceTermView>(terms.Count);
+            foreach (var t in terms)
+            {
+                chance += t.ChanceDelta;
+                termViews.Add(new ChanceTermView { Key = t.Key, ChanceDelta = t.ChanceDelta });
+            }
+
+            var dmg = DamageResolver.PreviewRange(unit, target, w);
+            int expected = DamageResolver.ExpectedHitDamage(unit, target, w);
+
+            return new AttackPreviewView
+            {
+                Result = result,
+                HasAttackRoll = true,
+                Chance = chance,
+                IsPercent = _battle.IsHitRulePercent,
+                Terms = termViews,
+                Cover = cover.ToString(),
+                CoverIgnored = ignoreCover,
+                DamageMin = dmg.Min,
+                DamageMax = dmg.Max,
+                DamageCrit = dmg.Crit,
+                IsDamageDeterministic = !_battle.IsHitRulePercent,
+                DamageExpected = expected,
+                ApCost = apCost,
+                Distance = distance,
+                Range = range,
+                HasLineOfSight = hasLos
+            };
+        }
+
+        /// <summary>
+        /// Прев'ю руху поточного юніта до тайла, БЕЗ мутацій: Result/Tiles/ApCost
+        /// дзеркалять те, що реально зробить CombatMove (той самий
+        /// Pathfinder.Path і той самий словник CombatState.ReachableFor), плюс
+        /// тайли шляху, накриті чужим дозором (CombatState.OverwatchCovers) —
+        /// «під ворожим дозором!» видно ДО кліку, не після.
+        /// </summary>
         public MovePathView PreviewMovePath(GridPos dest)
         {
-            throw new NotImplementedException("PreviewMovePath — частина «ядро» Бою v2.");
+            if (_battle == null) return null;
+            var unit = _battle.Current;
+            if (unit == null || !unit.IsActive || _battle.Outcome != CombatOutcome.Ongoing)
+                return new MovePathView { Result = CombatActionResult.InvalidAction.ToString() };
+
+            var reachable = _battle.ReachableFor(unit);
+            if (!reachable.TryGetValue(dest, out int cost))
+                return new MovePathView { Result = CombatActionResult.NotReachable.ToString() };
+
+            var path = Pathfinder.Path(_battle.Map, unit.Pos, dest);
+            var tiles = new List<GridPosView>(path.Count);
+            foreach (var p in path) tiles.Add(new GridPosView(p.X, p.Y));
+
+            var threat = new List<GridPosView>();
+            foreach (var step in path)
+            {
+                bool covered = false;
+                foreach (var watcher in _battle.Units)
+                {
+                    if (watcher.Side == unit.Side || !watcher.IsOverwatching) continue;
+                    if (_battle.OverwatchCovers(watcher, step)) { covered = true; break; }
+                }
+                if (covered) threat.Add(new GridPosView(step.X, step.Y));
+            }
+
+            return new MovePathView
+            {
+                Result = CombatActionResult.Success.ToString(),
+                Tiles = tiles,
+                ApCost = cost,
+                OverwatchThreatTiles = threat
+            };
         }
 
-        /// <summary>Тайли, які накрив би дозор поточного юніта з прицілом у <paramref name="aim"/>.</summary>
+        /// <summary>
+        /// Тайли, які накрив би дозор поточного юніта з прицілом у
+        /// <paramref name="aim"/> — БЕЗ фактичного входу в дозор (ніяких
+        /// мутацій, AP не чіпається). Та сама геометрія й лінія видимості, що
+        /// в ядрі (<see cref="CombatState.PreviewOverwatchCone"/>).
+        /// </summary>
         public IReadOnlyList<GridPosView> PreviewOverwatchCone(GridPos aim)
         {
-            throw new NotImplementedException("PreviewOverwatchCone — частина «ядро» Бою v2.");
+            var result = new List<GridPosView>();
+            if (_battle?.Current == null) return result;
+            foreach (var t in _battle.PreviewOverwatchCone(_battle.Current, aim))
+                result.Add(new GridPosView(t.X, t.Y));
+            return result;
         }
 
-        /// <summary>Стабілізувати зваленого союзника поруч (фасад <c>CombatState.Stabilize</c>).</summary>
+        /// <summary>Стабілізувати зваленого союзника поруч (фасад <c>CombatState.Stabilize</c>) — той самий патерн логування/AfterCombatAction, що й решта команд Battle.</summary>
         public CombatActionResult CombatStabilize(string targetId)
         {
-            throw new NotImplementedException("CombatStabilize — частина «ядро» Бою v2.");
+            RequireBattle();
+            var r = _battle.Stabilize(targetId);
+            AfterCombatAction();
+            return r;
         }
 
         public int PreviewHitChance(string attackerId, string targetId)
@@ -1874,6 +2075,19 @@ namespace Game.Core.Session
         {
             if (_battle == null) return null;
 
+            // Ordinal (§7.1): 0 для унікального DisplayNameKey, інакше 1..n за
+            // порядком появи в _battle.Units — два порахувати заздалегідь
+            // (перший прохід — скільки юнітів на кожне ім'я), а не помічати
+            // "перший з двох" post-factum, бо порядок Units фіксований при
+            // збірці бою (AddUnit) і не змінюється.
+            var nameCounts = new Dictionary<string, int>();
+            foreach (var u in _battle.Units)
+            {
+                nameCounts.TryGetValue(u.Profile.DisplayName, out var n);
+                nameCounts[u.Profile.DisplayName] = n + 1;
+            }
+            var nameSeen = new Dictionary<string, int>();
+
             var units = new List<BattleUnitView>();
             foreach (var u in _battle.Units)
             {
@@ -1881,6 +2095,18 @@ namespace Game.Core.Session
                 var abilities = new List<BattleAbilityView>();
                 foreach (var a in u.Abilities)
                     abilities.Add(new BattleAbilityView { Id = a.Id, ApCost = a.ApCost, CooldownRemaining = u.CooldownRemaining(a.Id) });
+
+                int ordinal = 0;
+                if (nameCounts[u.Profile.DisplayName] > 1)
+                {
+                    nameSeen.TryGetValue(u.Profile.DisplayName, out var seen);
+                    seen++;
+                    nameSeen[u.Profile.DisplayName] = seen;
+                    ordinal = seen;
+                }
+
+                var w = u.Weapon;
+                bool hasOverwatchAim = u.IsOverwatching && u.Overwatch != null;
 
                 units.Add(new BattleUnitView
                 {
@@ -1892,20 +2118,36 @@ namespace Game.Core.Session
                     HpMax = u.Profile.MaxHp,
                     Ap = u.Ap,
                     ApMax = u.Profile.MaxAp,
-                    ApReserved = u.IsOverwatching && u.Weapon != null ? u.Weapon.ApCost : 0,
+                    ApReserved = u.IsOverwatching && w != null ? w.ApCost : 0,
                     IsOverwatching = u.IsOverwatching,
                     Statuses = MapStatuses(u),
                     IsDowned = u.LifeState == UnitLifeState.Downed,
                     HitChancePreview = 0,
                     Abilities = abilities,
-                    WeaponId = u.Weapon?.Id
+                    WeaponId = w?.Id,
+                    Ordinal = ordinal,
+                    StatusDetails = MapStatusDetails(u),
+                    HasOverwatchAim = hasOverwatchAim,
+                    OverwatchAim = hasOverwatchAim ? new GridPosView(u.Overwatch.Aim.X, u.Overwatch.Aim.Y) : default,
+                    AttackApCost = w?.ApCost ?? 0,
+                    // WeaponDefinition несе ЄДИНЕ поняття дальності (OptimalRange) —
+                    // Range/OptimalRange тут рівні (див. коментар полів у BattleView.cs).
+                    WeaponRange = w?.OptimalRange ?? 0,
+                    WeaponOptimalRange = w?.OptimalRange ?? 0,
+                    WeaponIsMelee = w != null && w.IsMelee,
+                    DownWindowRemaining = u.LifeState == UnitLifeState.Downed ? u.DownWindowRemaining : 0,
+                    IsAiControlled = u.Side != Side.Player
                 });
             }
 
             var reachable = new List<GridPosView>();
+            var reachableCosts = new List<int>();
             if (_battle.Current != null && _battle.Current.IsActive)
                 foreach (var kv in _battle.ReachableFor(_battle.Current))
+                {
                     reachable.Add(new GridPosView(kv.Key.X, kv.Key.Y));
+                    reachableCosts.Add(kv.Value);
+                }
 
             var initiative = new List<string>();
             if (_battle.TurnOrder != null)
@@ -1927,6 +2169,9 @@ namespace Game.Core.Session
                     walkable.Add(_battle.Map.IsWalkable(pos));
                 }
 
+            bool isAiTurn = _battle.Current != null && _battle.Current.IsActive
+                            && _battle.Outcome == CombatOutcome.Ongoing && _battle.Current.Side != Side.Player;
+
             return new BattleView
             {
                 Round = _battle.Round,
@@ -1934,6 +2179,8 @@ namespace Game.Core.Session
                 Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable },
                 Units = units,
                 ReachableTiles = reachable,
+                ReachableTileCosts = reachableCosts,
+                IsAiTurn = isAiTurn,
                 CurrentUnitId = _battle.Current != null && _battle.Current.IsActive ? _battle.Current.Id : null,
                 InitiativeOrder = initiative,
                 Log = MapBattleLog(_battle.Journal),
@@ -1960,6 +2207,15 @@ namespace Game.Core.Session
         {
             var list = new List<string>();
             foreach (var s in u.Statuses) list.Add(s.Type.ToString());
+            return list;
+        }
+
+        /// <summary>Той самий набір, що <see cref="MapStatuses"/>, але з тривалістю і DoT (§7.1 COMBAT_V2.md, аудит-ядро #5).</summary>
+        private static List<BattleStatusView> MapStatusDetails(CombatUnit u)
+        {
+            var list = new List<BattleStatusView>(u.Statuses.Count);
+            foreach (var s in u.Statuses)
+                list.Add(new BattleStatusView { Type = s.Type.ToString(), RemainingTurns = s.RemainingTurns, DotDamagePerTurn = s.DotDamagePerTurn });
             return list;
         }
 

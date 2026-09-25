@@ -107,6 +107,29 @@ namespace Game.Core.Combat
             return new DamagePreviewInfo(min, max, crit);
         }
 
+        /// <summary>
+        /// Бій v2 (§7.1, PreviewAttack.DamageExpected): те саме число, яке
+        /// <see cref="RollAttackDamage"/> реально нарахує на звичайному
+        /// (не крит) влучанні — під ThresholdRule ГАРАНТОВАНО (деякий кидок
+        /// не відбувається), під PercentRule це середнє очікуване (roll≈0.5
+        /// дає ту саму формулу). Показане гравцю "очікуване" число
+        /// зобов'язане збігатися з фактом — той самий принцип, що вже тримає
+        /// <see cref="PreviewRange"/> для діапазону.
+        /// </summary>
+        public static int ExpectedHitDamage(CombatUnit attacker, CombatUnit target, WeaponDefinition w)
+        {
+            if (w == null || target == null) return 0;
+
+            int damage = (int)Math.Round((w.DamageMin + w.DamageMax) / 2.0, MidpointRounding.AwayFromZero);
+            damage += attacker != null ? attacker.Profile.DamageBonus : 0;
+            damage = ApplyTypeMultiplier(damage, w.Damage, target);
+
+            int armor = Math.Max(0, target.EffectiveArmor - w.ArmorPierce);
+            damage -= armor;
+
+            return Math.Max(0, damage);
+        }
+
         private static int PipelineNoRoll(int baseDamage, int bonus, DamageType type, CombatUnit target, int armor)
         {
             int damage = baseDamage + bonus;

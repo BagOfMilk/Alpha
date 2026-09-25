@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using Game.Core.Balance;
 using Game.Core.Randomness;
 
@@ -160,16 +161,20 @@ namespace Game.Core.Combat
             var reachable = ReachableFor(unit);
             if (!reachable.TryGetValue(dest, out int cost)) return CombatActionResult.NotReachable;
 
+            // Шлях рахуємо ДО списання AP і ДО запису рядка журналу: "path"
+            // (§7.3 COMBAT_V2.md) — фактичні клітинки руху, той самий шлях,
+            // яким ітеруємось нижче, а не окремий перерахунок, що міг би розійтись.
+            var path = Pathfinder.Path(Map, unit.Pos, dest);
+
             unit.Ap -= cost;
             Record(CombatLogKeys.Move, $"{unit.Profile.DisplayName} перемещается в {dest} (−{cost} AP)",
-                "unitId", unit.Id, "ap", I(cost), "x", I(dest.X), "y", I(dest.Y));
+                "unitId", unit.Id, "ap", I(cost), "x", I(dest.X), "y", I(dest.Y), "path", PathArg(path));
 
             // Шлях проходиться по клітинках, а не стрибком: дозор противника зобов'язаний
             // бачити сам шлях. Реакція може вкласти того, хто йде — тоді він
             // лишається там, де впав. Пастка — тільки в точці прибуття, тим
             // самим порядком, що у ривка і перестановки (PlaceUnitAt): спочатку
             // постріл із дозору, потім пастка — якщо дійшов на ногах.
-            var path = Pathfinder.Path(Map, unit.Pos, dest);
             for (int i = 0; i < path.Count; i++)
             {
                 StepTo(unit, path[i]);
@@ -261,16 +266,26 @@ namespace Game.Core.Combat
             var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance);
             string attackKey = CombatLogKeys.Attack(outcome);
 
+            // §7.3 COMBAT_V2.md: "ap" — ціна цього конкретного удару (навіть
+            // якщо AP насправді списала здібність цілою сумою — w лишається
+            // зброєю цього пострілу), "cover" — напрямлене укриття цілі, яке
+            // РЕАЛЬНО застосувалось до цього рола (None, якщо зброя його
+            // ігнорує, — інакше журнал брехав би про причину промаху).
+            string apArg = I(w.ApCost);
+            string coverArg = (w.IsMelee ? CoverType.None : Map.CoverAgainst(target.Pos, unit.Pos)).ToString();
+
             switch (outcome)
             {
                 case AttackOutcome.Miss:
                     Record(attackKey, $"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: промах ({shown})",
-                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(0));
+                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(0),
+                        "ap", apArg, "cover", coverArg);
                     break;
 
                 case AttackOutcome.Graze:
                     Record(attackKey, $"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: граза, {dmg.Amount} урона ({shown})",
-                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(dmg.Amount));
+                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(dmg.Amount),
+                        "ap", apArg, "cover", coverArg);
                     ApplyDamage(target, dmg.Amount);
                     break;
 
@@ -279,7 +294,8 @@ namespace Game.Core.Combat
                     if (allowStrikeGain) unit.StrikeMeter += Balance.Combat.StrikePerHit;
                     Record(attackKey, $"{unit.Profile.DisplayName} → {target.Profile.DisplayName}: " +
                            $"{(outcome == AttackOutcome.Crit ? "КРИТ, " : "")}{dmg.Amount} урона ({shown})",
-                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(dmg.Amount));
+                        "unitId", unit.Id, "targetId", target.Id, "chance", I(shown), "damage", I(dmg.Amount),
+                        "ap", apArg, "cover", coverArg);
 
                     if (w.ShredOnHit > 0)
                     {
@@ -490,8 +506,14 @@ namespace Game.Core.Combat
                     case AbilityEffectKind.LungeToTarget:
                         if (lungeDest.HasValue)
                         {
+                            // §7.3: здібності, що рухають юніта, теж несуть
+                            // "path"/"from" — тут стрибок в один тайл (не шлях
+                            // по клітинках, як у Move), тому "path" — один
+                            // сегмент (дест.), а "from" — звідки стрибнули.
+                            var origin = unit.Pos;
                             Record(CombatLogKeys.Lunge, $"  {unit.Profile.DisplayName} совершает рывок к {target.Profile.DisplayName}",
-                                "unitId", unit.Id, "targetId", target.Id);
+                                "unitId", unit.Id, "targetId", target.Id,
+                                "from", XY(origin), "path", PathArg(new List<GridPos> { lungeDest.Value }));
                             PlaceUnitAt(unit, lungeDest.Value);
                         }
                         break;
@@ -499,8 +521,10 @@ namespace Game.Core.Combat
                     case AbilityEffectKind.RepositionTarget:
                         if (target != null && target.IsActive && targetTile.HasValue && Map.IsFree(targetTile.Value))
                         {
+                            var origin = target.Pos;
                             Record(CombatLogKeys.Repositioned, $"  {target.Profile.DisplayName} перемещается в {targetTile.Value}",
-                                "unitId", target.Id, "targetId", unit.Id, "x", I(targetTile.Value.X), "y", I(targetTile.Value.Y));
+                                "unitId", target.Id, "targetId", unit.Id, "x", I(targetTile.Value.X), "y", I(targetTile.Value.Y),
+                                "from", XY(origin), "path", PathArg(new List<GridPos> { targetTile.Value }));
                             PlaceUnitAt(target, targetTile.Value);
                         }
                         break;
@@ -630,6 +654,39 @@ namespace Game.Core.Combat
         /// <summary>Показане число пострілу з дозору по цілі там, де вона стоїть (зі штрафом навмання).</summary>
         public int OverwatchHitChancePreview(CombatUnit watcher, CombatUnit target)
             => HitChanceCalculator.Compute(watcher, target, Map, Balance, -Balance.Combat.OverwatchAccuracyPenalty);
+
+        /// <summary>
+        /// Бій v2 (§7.1, GameSession.PreviewOverwatchCone): тайли, які накрив
+        /// би дозор unit, ЯКБИ він зараз узяв приціл aim — без фактичного
+        /// входу в дозор (ніяких мутацій, AP не чіпається). Та сама геометрія
+        /// (<see cref="OverwatchStance.InCone"/>) і той самий критерій огляду
+        /// (контакт для мілі, LineOfSight для дальньої), що й
+        /// <see cref="OverwatchCovers"/> — намальований конус не може розійтись
+        /// із реальним спрацюванням дозору.
+        /// </summary>
+        public IReadOnlyList<GridPos> PreviewOverwatchCone(CombatUnit unit, GridPos aim)
+        {
+            var result = new List<GridPos>();
+            if (unit?.Weapon == null || !Map.InBounds(aim) || aim == unit.Pos) return result;
+
+            for (int y = 0; y < Map.Height; y++)
+            {
+                for (int x = 0; x < Map.Width; x++)
+                {
+                    var tile = new GridPos(x, y);
+                    if (tile == unit.Pos) continue;
+                    if (!OverwatchStance.InCone(unit.Pos, aim, tile,
+                            Balance.Combat.OverwatchConeSlopeNum, Balance.Combat.OverwatchConeSlopeDen))
+                        continue;
+
+                    bool visible = unit.Weapon.IsMelee
+                        ? GridPos.Chebyshev(unit.Pos, tile) <= unit.Weapon.OptimalRange
+                        : LineOfSight.HasLine(Map, unit.Pos, tile);
+                    if (visible) result.Add(tile);
+                }
+            }
+            return result;
+        }
 
         /// <summary>key — причина для журналу (CombatLogKeys.OverwatchLost*), why — вона ж для трейсу.</summary>
         private void BreakOverwatch(CombatUnit unit, string key, string why)
@@ -963,5 +1020,25 @@ namespace Game.Core.Combat
         }
 
         private static string I(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>"x,y" — той самий формат, що й один сегмент <see cref="PathArg"/>.</summary>
+        private static string XY(GridPos p) => I(p.X) + "," + I(p.Y);
+
+        /// <summary>
+        /// §7.3 COMBAT_V2.md: "x,y;x,y;…" БЕЗ стартового тайла — той самий
+        /// рядок і для багатоклітинного руху (Move), і для одноклітинного
+        /// стрибка здібності (Lunge/Reposition, path з одного сегмента).
+        /// </summary>
+        private static string PathArg(List<GridPos> path)
+        {
+            if (path == null || path.Count == 0) return string.Empty;
+            var sb = new StringBuilder();
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (i > 0) sb.Append(';');
+                sb.Append(XY(path[i]));
+            }
+            return sb.ToString();
+        }
     }
 }
