@@ -1,4 +1,9 @@
 using UnityEngine;
+// BattleLogKind живе в Game.Gameplay (батьківський неймспейс тут НЕ
+// підключається неявно) — потрібен для BattleLogColor нижче, спільної для
+// HUD (BattleHudScreen) і фолбеку (BattleScreen), щоб журнал бою фарбувався
+// однаково на обох екранах (Бій v2, аудит HUD п.«уніфікований стиль журналу»).
+using Game.Gameplay;
 
 namespace Game.Gameplay.UI
 {
@@ -47,15 +52,38 @@ namespace Game.Gameplay.UI
         public static readonly Color32 TextDim = new Color32(176, 158, 138, 255);
         public static readonly Color32 Border = new Color32(16, 12, 10, 255);
 
+        // ================= палітра бою (Бій v2, docs/COMBAT_V2.md §2) =================
+        // Один сталий сенс на весь екран бою: колір ніколи не переозначається
+        // для іншої мети в тому самому кадрі (REFS.Principles). Значення —
+        // точний переклад таблиці §2 (RGB 0..1) у байти.
+        public static readonly Color32 BattlePlayerSide = new Color32(77, 153, 255, 255);
+        public static readonly Color32 BattleEnemySide = new Color32(235, 71, 56, 255);
+        public static readonly Color32 BattleDefectorSide = new Color32(179, 102, 242, 255);
+        public static readonly Color32 BattleCurrentUnit = new Color32(255, 204, 77, 255);
+        public static readonly Color32 BattleMiss = new Color32(179, 179, 179, 255);
+        public static readonly Color32 BattleGraze = new Color32(230, 217, 191, 255);
+        public static readonly Color32 BattleHit = new Color32(255, 255, 255, 255);
+        public static readonly Color32 BattleCrit = new Color32(255, 204, 77, 255);
+        public static readonly Color32 BattleHeal = new Color32(115, 230, 115, 255);
+        public static readonly Color32 BattleStatus = new Color32(191, 153, 255, 255);
+        public static readonly Color32 BattleOverwatch = new Color32(89, 217, 242, 255);
+        /// <summary>Дальність озброєної здібності (§2 «бузковий») — заливка тайла, HUD тут не малює, лишень тримає токен поруч з рештою бойової палітри.</summary>
+        public static readonly Color32 BattleAbilityRange = new Color32(166, 128, 242, 255);
+
         public const int BodyFontSize = 22;
         public const int HeaderFontSize = 34;
         public const int SubHeaderFontSize = 26;
+        /// <summary>Ім'я юніта над головою на арені (§3: «15 px, на темній підкладці»).</summary>
+        public const int OverlayNameFontSize = 15;
 
         private static GUISkin _skin;
         private static GUIStyle _header;
         private static GUIStyle _subHeader;
         private static GUIStyle _body;
         private static GUIStyle _tooltip;
+        private static GUIStyle _dangerText;
+        private static GUIStyle _critText;
+        private static GUIStyle _overlayName;
 
         /// <summary>Побудований скін, з кешем — генерувати текстури щокадру нема сенсу.</summary>
         public static GUISkin Build()
@@ -127,6 +155,74 @@ namespace Game.Gameplay.UI
                     _tooltip.fontStyle = FontStyle.Italic;
                 }
                 return _tooltip;
+            }
+        }
+
+        /// <summary>Червоний текст без фону — відмова дії/причина недоступності (Поправка №1, «шлях завжди видно»), поруч зі звичайним <see cref="Tooltip"/>.</summary>
+        public static GUIStyle DangerText
+        {
+            get
+            {
+                if (_dangerText == null) _dangerText = TextOnlyStyle(BodyFontSize, Danger);
+                return _dangerText;
+            }
+        }
+
+        /// <summary>Крит — жирний і більший (§2: «золотий, жирний, більший»), той самий колір, що <see cref="BattleCrit"/>.</summary>
+        public static GUIStyle CritText
+        {
+            get
+            {
+                if (_critText == null)
+                {
+                    _critText = TextOnlyStyle(BodyFontSize + 6, BattleCrit);
+                    _critText.fontStyle = FontStyle.Bold;
+                    _critText.alignment = TextAnchor.MiddleCenter;
+                }
+                return _critText;
+            }
+        }
+
+        /// <summary>Ім'я юніта над головою на арені (§3): 15px, центровано, колір підставляє викликач (сторона юніта).</summary>
+        public static GUIStyle OverlayName
+        {
+            get
+            {
+                if (_overlayName == null)
+                {
+                    _overlayName = TextOnlyStyle(OverlayNameFontSize, TextMain);
+                    _overlayName.alignment = TextAnchor.MiddleCenter;
+                    _overlayName.wordWrap = false;
+                }
+                return _overlayName;
+            }
+        }
+
+        /// <summary>
+        /// Один колір на весь сенс рядка журналу/спливаючого напису (§2),
+        /// спільний для HUD (<c>BattleHudScreen.DrawLogPanel</c>) і фолбеку
+        /// (<c>BattleScreen.DrawLog</c>) — журнал не має читатись по-різному
+        /// залежно від того, який презентер зараз активний.
+        /// </summary>
+        public static Color32 BattleLogColor(BattleLogKind kind)
+        {
+            switch (kind)
+            {
+                case BattleLogKind.Miss: return BattleMiss;
+                case BattleLogKind.Graze: return BattleGraze;
+                case BattleLogKind.Hit: return BattleHit;
+                case BattleLogKind.Crit: return BattleCrit;
+                case BattleLogKind.Heal: return BattleHeal;
+                case BattleLogKind.Status: return BattleStatus;
+                case BattleLogKind.Overwatch: return BattleOverwatch;
+                case BattleLogKind.Ability: return AccentHover;
+                case BattleLogKind.Downed:
+                case BattleLogKind.Death: return BattleEnemySide;
+                case BattleLogKind.Victory: return BattleHeal;
+                case BattleLogKind.Defeat: return BattleEnemySide;
+                case BattleLogKind.Rejection: return Danger;
+                case BattleLogKind.Round: return TextDim;
+                default: return TextMain;
             }
         }
 

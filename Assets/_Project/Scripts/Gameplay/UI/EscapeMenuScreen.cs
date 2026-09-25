@@ -15,6 +15,13 @@ namespace Game.Gameplay.UI
             {
                 var state = shell.Session.State;
                 bool canSave = state == SessionState.Morning || state == SessionState.FreePlay;
+                // Бій v2 (docs/COMBAT_V2.md §3.5): «EscapeMenuScreen у бою —
+                // без дій, що ламають бій (збереження посеред бою не
+                // пропонувати)» — не просто вимкнена кнопка з причиною (як
+                // для решти станів нижче), а її взагалі немає в бою: сейв
+                // посеред бою — не та дія, яку варто навіть НАЗИВАТИ гравцю
+                // як можливу.
+                bool inBattle = state == SessionState.Battle;
 
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.escape.resume", g)))
                     shell.SetEscapeOpen(false);
@@ -39,7 +46,7 @@ namespace Game.Gameplay.UI
                         shell.SetEscapeOpen(false);
                     }
                 }
-                else
+                else if (!inBattle)
                 {
                     Widgets.DisabledButton(UkrainianText.Get("ui.escape.save", g),
                         UkrainianText.Get("ui.common.none", g) + " (" + StateLabel(state, g) + ")");

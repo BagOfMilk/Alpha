@@ -340,7 +340,18 @@ namespace UnityEngine
         public static float deltaTime { get { return 0f; } }
     }
 
-    public enum KeyCode { None = 0, Tab = 9, Escape = 27, Space = 32, E = 101 }
+    // Бій v2 (docs/COMBAT_V2.md §3): гарячі клавіші HUD — здібності [1..9],
+    // дозор [O]. Числові коди — справжні значення UnityEngine.KeyCode
+    // (Alpha1..Alpha9 ідуть підряд), тому арифметика на кшталт
+    // "(KeyCode)((int)KeyCode.Alpha1 + i)" (BattleHudScreen.HandleHotkeys)
+    // працює однаково тут і в реальному Unity.
+    public enum KeyCode
+    {
+        None = 0, Backspace = 8, Tab = 9, Return = 13, Escape = 27, Space = 32,
+        Alpha1 = 49, Alpha2 = 50, Alpha3 = 51, Alpha4 = 52, Alpha5 = 53,
+        Alpha6 = 54, Alpha7 = 55, Alpha8 = 56, Alpha9 = 57,
+        E = 101, O = 111
+    }
 
     public static class Input
     {
@@ -594,6 +605,14 @@ namespace UnityEngine
         public EventType type;
         public KeyCode keyCode;
         public int button;
+
+        /// <summary>
+        /// Координати GUI (top-left) — Бій v2 (docs/COMBAT_V2.md §3): підказка
+        /// біля курсора (BattleHudScreen.DrawCursorTooltip) і наведення на
+        /// кнопку здібності для тултипа опису. Заглушка завжди (0,0) —
+        /// справжнє значення перевіряє лише Unity (шапка файлу).
+        /// </summary>
+        public Vector2 mousePosition;
 
         public void Use() { type = EventType.Used; }
     }

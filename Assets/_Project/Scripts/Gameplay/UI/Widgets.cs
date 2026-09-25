@@ -248,6 +248,37 @@ namespace Game.Gameplay.UI
             return box != null ? box.padding.left + box.padding.right : 36f;
         }
 
+        // ================= абсолютне позиціонування (Бій v2) =================
+        // На відміну від решти файлу (усе інше — GUILayout, автоматичний
+        // потік), оверлеї над бійцями на арені (BattleHudScreen.DrawOverlays)
+        // і спливаючі написи малюються за готовими екранними координатами
+        // (BattleUnitOverlay/BattleFloatingText, GUI-простір) — їм потрібен
+        // GUI.* напряму, не GUILayout.
+
+        /// <summary>Суцільний прямокутник довільним кольором за готовими координатами — підкладка під ім'я юніта, трек смужки HP.</summary>
+        public static void SolidRect(Rect rect, Color32 tint)
+        {
+            var previous = GUI.color;
+            GUI.color = tint;
+            GUI.DrawTexture(rect, TintableTexture(), ScaleMode.StretchToFill);
+            GUI.color = previous;
+        }
+
+        /// <summary>
+        /// Смужка прогресу (HP/AP) за готовими координатами: темний трек на
+        /// всю ширину + заповнена частка зверху. Той самий принцип, що
+        /// <see cref="ProgressPips"/>/<c>DrawFractionBar</c>, але для оверлеїв
+        /// над бійцями, де GUILayout не підходить (позиція — не потік).
+        /// </summary>
+        public static void FilledBarAt(Rect rect, float fraction, Color32 fillTint)
+        {
+            SolidRect(rect, new Color32(20, 16, 12, 200));
+            float f = Clamp(fraction, 0f, 1f);
+            if (f <= 0f) return;
+            var filled = new Rect(rect.x, rect.y, rect.width * f, rect.height);
+            SolidRect(filled, fillTint);
+        }
+
         // ================= відповідна розкладка =================
 
         /// <summary>Масштаб від контрольної ширини 1280 — на 2560×1440 елементи не тонуть у порожньому полі.</summary>
