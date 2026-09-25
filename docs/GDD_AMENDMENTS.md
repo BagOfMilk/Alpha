@@ -881,7 +881,13 @@ GDD и поправки фиксируют правила; дизайн-док �
 90-суточной кампании) и `Game.Core.Sim.CampaignSimulator`/
 `CampaignPacingTests`/`CityWorksTests`/`FirstHourWorldTests` зовут
 `FirstHourWorld.Build` без флага (или явно с `false`) — их `BalanceConfig` не
-видит изменений вообще. Проверено CSV-трассой байт-в-байт до/после.
+видит изменений вообще (проверено: `summary.csv` из `Alpha.Sim` побайтово
+одинаков до/после, `Off_CampaignProfileUnchanged` проходит). **Уточнение:**
+трасса `trace-*.csv` — не побайтово идентична: коммиты домена в
+предвестниках (b5a9a4a/7d9c260) добавляют `TranslateReport.DomainTagFrom` в
+цикл `Signals` безусловно, для любой сессии, и каждая строка `signal.*`
+получает аддитивное поле `;domain=<тег>` (или `;domain=` без тега) —
+формат лога меняется, числа и решения конвейера — нет.
 
 **Замеры (бот-прогоны `BotRunner`, 30 суток, детерминированный `HitRuleKind.
 Threshold`):**

@@ -283,7 +283,7 @@ namespace Game.Tests.EditMode
                 // Поправка №7 (тестовий темп + великий бунт): {domain} у
                 // драбині передвісників (SETTLEMENT_LAYER §5.1 правило 4),
                 // нові записи журналу механік, перемикач темпу на титулі.
-                "domain.площадь", "domain.улицы", "domain.ночь",
+                "domain.площадь", "domain.улицы", "domain.ночь", "domain.перевал",
                 "journal.tension_band_change.title", "journal.tension_band_change.hint",
                 "journal.great_crisis.title", "journal.great_crisis.hint",
                 "ui.title.tensionpace.section", "ui.title.tensionpace.test",
