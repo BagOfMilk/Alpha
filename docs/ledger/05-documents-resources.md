@@ -1,326 +1,326 @@
-# Документы сессии и внешние ресурсы
+# Документи сесії та зовнішні ресурси
 
-> **Статус: реестр сессии проектирования 30.08–07.09.2026, не источник истины.**
-> Решения вступают в силу через [GDD_AMENDMENTS.md](../GDD_AMENDMENTS.md).
-> Обозначения: ✅ записано (где) · ◐ частично (чего не хватает) · ✳ только здесь.
-> Указатель — [IDEAS_LEDGER.md](../IDEAS_LEDGER.md).
-> **Нумерация:** поправка «Люди с именами» переномерована в **№5** (решение владельца 20.09.2026: «Б — голод №4 по дате»; номер №4 остался за «Прокормом поселения» от 29.08). Ссылки в этом файле обновлены. В дословных цитатах сообщений коммитов сохранён исходный номер №4.x — именно по нему они находятся в `git log`.
+> **Статус: реєстр сесії проєктування 30.08–07.09.2026, не джерело істини.**
+> Рішення набувають чинності через [GDD_AMENDMENTS.md](../GDD_AMENDMENTS.md).
+> Позначення: ✅ записано (де) · ◐ частково (чого бракує) · ✳ лише тут.
+> Покажчик — [IDEAS_LEDGER.md](../IDEAS_LEDGER.md).
+> **Нумерація:** поправка «Люди з іменами» перенумерована в **№5** (рішення власника 20.09.2026: «Б — голод №4 по дате»; номер №4 залишився за «Прогодуванням поселення» від 29.08). Посилання в цьому файлі оновлено. У дослівних цитатах повідомлень комітів збережено початковий номер №4.x — саме за ним вони знаходяться в `git log`.
 
-Что произведено и где живёт.
+Що вироблено і де це живе.
 
-Всего пунктов: **157**.
+Усього пунктів: **157**.
 
-1. Документы сессии — 97
-2. Внешние ресурсы — 60
+1. Документи сесії — 97
+2. Зовнішні ресурси — 60
 
-## Документы сессии
+## Документи сесії
 
-Пунктов: 97
+Пунктів: 97
 
-- **Assets/Tests/EditMode/LoopRepairTests.cs — охранители пяти неисправностей аудита (в репозитории)** *(31.08.2026)* — ✅ Assets/Tests/EditMode/LoopRepairTests.cs (Guard/MakeProcessor/MakeBare/DefaultPressureSources/DefaultIncidents/RepeatTracker — все совпадают) `DOC-01`
-- **docs/interaction-map.html перегенерирован после правок ядра (Этап −1, в репозитории)** *(31.08.2026)* — ✅ docs/interaction-map.html — изменён (1 строка diff, 2 в stat) в том же коммите c25f70b, что и LoopRepairTests.cs / пять исправлений `DOC-02`
-- **SignalMemory.cs — память композитора сигналов (в репозитории)** — ✅ Assets/_Project/Scripts/Core/Signals/SignalMemory.cs (internal int Staleness(topicId, day) → int.MaxValue если не звучал; internal void Remember(shown, day) — совпадает дословно) `DOC-03`
-- **Тест-охранитель CampaignPacingTests: порог известного разрыва 100 → 80** — ✅ Assets/Tests/EditMode/CampaignPacingTests.cs:207-209 (Assert.GreaterOrEqual(m.MaxTopicRepeats, 80, ... «ИЗВЕСТНЫЙ РАЗРЫВ (уменьшен, но не закрыт)») `DOC-04`
-- **Два новых теста в SignalComposerTests.cs: свежий ключ вытесняет вчерашний; тихий день не немой** — ✅ Assets/Tests/EditMode/SignalComposerTests.cs:156 (Composer_FreshTopic_PushesOutTheOneJustHeard, ровно сценарий сутки1/сутки2 с Forewarning("street",1,"улицы")) и :181 (Composer_QuietDay_IsNeverLeftMute) `DOC-05`
-- **Коммит 7714eed «Подавление повторов в слое сигналов» (тесты 138 → 140)** *(03.09.2026)* — ✅ git commit 7714eed «Подавление повторов в слое сигналов» — сообщение и изменённые файлы совпадают с описанием (SignalMemory новый, SignalComposer/DayContext/DayProcessor/SignalStep/SettlementSave/SignalBalance изменены) `DOC-06`
-- **PresenceAndCatalogTests.cs — охранители трёх механик и контент-тест каталога позиций (в репозитории)** — ✅ Assets/Tests/EditMode/PresenceAndCatalogTests.cs (класс и докстринг про три механики Поправки №3.8 совпадают дословно) `DOC-07`
-- **Коммит f152fa0 «Присутствие — манёвр, а не вездесущность» (тесты 140 → 145)** *(03.09.2026)* — ✅ git commit f152fa0 «Присутствие — манёвр, а не вездесущность» — сообщение и суть («if (onPost || a.IsProtagonist)», три ранее мёртвые механики) совпадают `DOC-08`
-- **PendingDecision.cs — enum IncidentPath и класс DecisionOption (в репозитории)** — ◐ Assets/_Project/Scripts/Core/Loop/PendingDecision.cs (enum IncidentPath, класс DecisionOption с Path/Skill/Threshold/Form/BestActorId/HasCandidate/ExpectedBand — совпадает); `DOC-09`
-  Не хватает: В текущем файле enum IncidentPath содержит только Quiet=0 и Bloody=1; значения Ignore=2 («не вмешиваться»), описанного в пункте, в коде нет.
-  Assets/_Project/Scripts/Core/Loop/PendingDecision.cs: enum IncidentPath { Quiet = 0 (медленно, дорого, безопасно — Поправка №1), Bloody = 1 (быстро и очень тяжело), Ignore = 2 (не вмешиваться) }. sealed class DecisionOption: Path, Skill (SkillKey), Threshold, Form (ApproachForm), BestActorId, HasCandidate, ExpectedBand (OutcomeBand). Файл создан, в коммит ещё не попал.
-- **sim-out/summary.csv — использование вывода харнеса в scratchpad (digest-06)** — ✳ только здесь `DOC-10`
-  tools/Alpha.Sim запускается с --days 200 --out <scratchpad>/sim-out; summary.csv читается python-скриптом по колонкам maxTopicRepeats, distinctTopics, longestNoDeltaPhases, signalsPerPhase, firstDeltaDay. Файлы вне репозитория.
-- **Мерж-коммит: fast-forward до карты + слияние Э1, HEAD 4cfde9e (в репозитории)** *(31.08.2026)* — ✅ git log: 7a0cdb7..ccdf97a (ff-only ancestor, diff CLAUDE.md +111 / GDD_AMENDMENTS.md +242 / SETTLEMENT_LAYER.md +464 — точно совпадает) + merge-коммит 4cfde9e (родители ccdf97a и c5681a1) `DOC-11`
-- **Коммит b899243 — пересборка docs/interaction-map.html после слияния (в репозитории)** *(31.08.2026)* — ✅ git commit b899243 «Карта: пересборка после слияния» + docs/interaction-map.html (diff ровно 1 файл, 1+/1- строка — совпадает с «дифф — 1 строка») `DOC-12`
-- **Воркфлоу gameplay-loop-audit запущен в фоне — скрипт вне репозитория** *(31.08.2026)* — ✳ только здесь `DOC-13`
-  Task ID w5dgfikad, Run ID wf_02dd61cb-a2b. Скрипт: C:\Users\кефир\.claude\projects\C--Users-------Alpha--claude-worktrees-main-gameplay-loop-0af80b\1028289e-915a-4eb5-aafa-64e886f7105c\workflows\scripts\gameplay-loop-audit-wf_02dd61cb-a2b.js. Транскрипты: …\subagents\workflows\wf_02dd61cb-a2b. Результат в этой части дайджеста ещё не пришёл.
-- **Полный вывод grep по interaction-map.html сохранён вне репозитория** *(31.08.2026)* — ✳ только здесь `DOC-14`
-  Вывод команды (141.8 KB) сохранён в tool-results\ble4f2jk1.txt в каталоге сессии …\1028289e-915a-4eb5-aafa-64e886f7105c\tool-results\ — временный файл, не в репозитории.
-- **Папка scratchpad/digest — 14 кусков дайджеста + digest-full.txt (вне репозитория)** *(после коммита 9d660db (07.09.2026))* — ✳ только здесь `DOC-15`
-  …/scratchpad/digest/: digest-00.txt (93 709 байт), 01 (84 439), 02 (90 604), 03 (83 603), 04 (90 343), 05 (85 396), 06 (80 958), 07 (84 502), 08 (91 095), 09 (100 837), 10 (104 443), 11 (81 124), 12 (70 616), 13 (27 327); digest-full.txt — 1 168 996 байт. Входные файлы для агентов-экстракторов, в репозитории не входят.
-  _Источник: digest-13, RESULT #2233_
-- **Коммит 9d660db (07.09.2026) — «Поправка №4.4: вылазка занимает сутки, город живёт без лидера»** *(07.09.2026)* — ✅ docs/GDD_AMENDMENTS.md §4.4 (строка 341-349) `DOC-16`
-- **Коммит 4abe8ba (07.09.2026) — «Поправка №4 (черновик): сцены портретные, первая игровая час — сразу в дело»** *(07.09.2026, после USER #1801)* — ✅ docs/GDD_AMENDMENTS.md §4.7-4.9 (строки 393-449) `DOC-17`
-- **Коммит d3c15ab (07.09.2026) — «Поправка №4 (черновик): кампания 90 суток, ~20 часов; заявка на сцены»** *(07.09.2026, после f21c694)* — ✅ docs/GDD_AMENDMENTS.md §4.0, §4.3, §4.7 (строки 257-273, 312-331, 393-406); коммит d3c15ab `DOC-18`
-- **Коммит f21c694 (07.09.2026) — «Поправка №4 (черновик): люди с именами; верстак больше не производит материалы»** *(05.09.2026)* — ✅ Assets/_Project/Scripts/Core/DefaultContent.cs:146-151 (workshop_bench теперь OutputResource=Supplies); Assets/Tests/EditMode/PresenceAndCatalogTests.cs:122-135 (Catalog_NoCitySlot_ProducesMaterials) `DOC-19`
-- **Коммит 6923f2f (07.09.2026) — «Харнес меряет стык двух лупов: партия дома против партии в вылазке»** *(07.09.2026)* — ✅ git log 6923f2f — Assets/_Project/Scripts/Core/Sim/CampaignSimulator.cs, CampaignTrace.cs, tools/Alpha.Sim/Program.cs, Base/SettlementAdapters.cs (список файлов diff совпадает) `DOC-20`
-- **Коммит aa4de0c (05.09.2026) — «Харнес меряет бюджет давления и распределение исходов»** *(05.09.2026)* — ✅ git log aa4de0c — CampaignSimulator.cs, CampaignTrace.cs, tools/Alpha.Sim/Program.cs (список файлов diff совпадает) `DOC-21`
-- **Коммит 992b425 (03.09.2026) — «Этап 0 „Ход игрока“: сутки перестали быть кнопкой»** *(03.09.2026)* — ✅ Assets/_Project/Scripts/Core/Loop/DayStepOrder.cs:32 (PlayerResolution = 850); docs/GDD_AMENDMENTS.md §4.4 строка 350-357 `DOC-22`
-- **Коммит d29ddc7 (03.09.2026) — «Контракт сохранения: детерминизм переживает загрузку» (тесты 133 → 138)** *(03.09.2026)* — ✅ docs/AUDIT-LOOP.md:54 («Контракт сейва тоже сделан: слепок уходит наружу непрозрачной строкой»); Assets/_Project/Scripts/Core/Loop/SettlementSave.cs (существует) `DOC-23`
-- **Коммит ae01a5f (03.09.2026) — «Этап −2 „Инструмент“: симуляционный харнес и тесты темпа»** *(03.09.2026)* — ✅ tools/Alpha.Sim/, Assets/Tests/EditMode/CampaignPacingTests.cs существуют; коммит ae01a5f, файлы diff совпадают `DOC-24`
-- **Коммит c25f70b (03.09.2026) — «Этап −1 „Ремонт“: пять неисправностей главного лупа»** *(03.09.2026 / 31.08.2026 (дата расходится между источниками))* — ✅ git log c25f70b — Balance/PulseBalance.cs, TensionBalance.cs, Loop/DayProcessor.cs, IncidentStep.cs, PulseStep.cs, TensionTickStep.cs, World/DefaultIncidents.cs и др. (список файлов diff совпадает), новый Assets/Tests/EditMode/LoopRepairTests.cs `DOC-25`
-- **Артефакт claude.ai «Аудит головного лупа» — итоговая нейтральность vs полная версия (вне репо)** *(обновлён 03.09.2026, Этап −2)* — ✳ только здесь `DOC-26`
-  https://claude.ai/code/artifact/feb2cd24-05b1-4c5c-8cff-276f49ea88ef — опубликованный аудит главного лупа; исходник — scratchpad/loop-audit.html (116 158 байт); текстовые версии — report.md и report2.md. В репозиторий вошла версия docs/AUDIT-LOOP.md. Это «звіт-сторінка», где сохранена полная версия секции AUDIT-LOOP с упоминаниями системы-источника; в репозитории оставлена только нейтральная редакция (по инварианту 9).
-  _Источник: digest-13, RESULT #2221; RESULT #2220_
-- **scratchpad/sim-90/summary.csv — трасса харнеса Alpha.Sim на 90 суток** *(после f21c694)* — ✳ только здесь `DOC-27`
-  Запуск `dotnet run --project tools/Alpha.Sim -c Release -- --days 90 --out scratchpad/sim-90`: 16 кампаний (4 политики Passive / PatrolEveryNight / AggressiveChoices / Expedition × тиры 1–4). Колонки CSV: firstIncidentDay, firstCrisisDay, incidents, crises, fullLadders, finalBand, distinctTopics, maxTopicRepeats. Файл вне репозитория, в scratchpad. Прогон сделан после коммита f21c694.
-  _Источник: digest-10, TOOL Bash #1777, RESULT #1778_
-- **Внутренняя юридическая заметка вне репозитория (без идентификаторов издателя)** — ✳ только здесь `DOC-28`
-  Полный текст юридического анализа (политика по фан-контенту, §102(b) и Circular 33, идея/выражение, тест абстракций и scènes à faire, практика Appendix N — все названия конкретных изданий/статей уже обезличены до общих терминов) оформлен как внутренняя юридическая заметка и хранится вне репозитория, без идентификаторов издателя системы-источника. Точный путь в дайджесте не приведён. В каталоге квестов (quests.md) оставлен только краткий раздел «Юридична рамка», полный текст — в этой заметке.
+- **Assets/Tests/EditMode/LoopRepairTests.cs — охоронці п'яти несправностей аудиту (у репозиторії)** *(31.08.2026)* — ✅ Assets/Tests/EditMode/LoopRepairTests.cs (Guard/MakeProcessor/MakeBare/DefaultPressureSources/DefaultIncidents/RepeatTracker — усі збігаються) `DOC-01`
+- **docs/interaction-map.html перегенеровано після правок ядра (Етап −1, у репозиторії)** *(31.08.2026)* — ✅ docs/interaction-map.html — змінено (1 рядок diff, 2 у stat) у тому самому коміті c25f70b, що й LoopRepairTests.cs / п'ять виправлень `DOC-02`
+- **SignalMemory.cs — пам'ять композитора сигналів (у репозиторії)** — ✅ Assets/_Project/Scripts/Core/Signals/SignalMemory.cs (internal int Staleness(topicId, day) → int.MaxValue якщо не звучав; internal void Remember(shown, day) — збігається дослівно) `DOC-03`
+- **Тест-охоронець CampaignPacingTests: поріг відомого розриву 100 → 80** — ✅ Assets/Tests/EditMode/CampaignPacingTests.cs:207-209 (Assert.GreaterOrEqual(m.MaxTopicRepeats, 80, ... «ИЗВЕСТНЫЙ РАЗРЫВ (уменьшен, но не закрыт)») `DOC-04`
+- **Два нових тести в SignalComposerTests.cs: свіжий ключ витісняє вчорашній; тихий день не німий** — ✅ Assets/Tests/EditMode/SignalComposerTests.cs:156 (Composer_FreshTopic_PushesOutTheOneJustHeard, рівно сценарій доба1/доба2 з Forewarning("street",1,"улицы")) і :181 (Composer_QuietDay_IsNeverLeftMute) `DOC-05`
+- **Коміт 7714eed «Придушення повторів у шарі сигналів» (тести 138 → 140)** *(03.09.2026)* — ✅ git commit 7714eed «Придушення повторів у шарі сигналів» — повідомлення та змінені файли збігаються з описом (SignalMemory новий, SignalComposer/DayContext/DayProcessor/SignalStep/SettlementSave/SignalBalance змінені) `DOC-06`
+- **PresenceAndCatalogTests.cs — охоронці трьох механік і контент-тест каталогу позицій (у репозиторії)** — ✅ Assets/Tests/EditMode/PresenceAndCatalogTests.cs (клас і докстрінг про три механіки Поправки №3.8 збігаються дослівно) `DOC-07`
+- **Коміт f152fa0 «Присутність — маневр, а не всюдисущість» (тести 140 → 145)** *(03.09.2026)* — ✅ git commit f152fa0 «Присутність — маневр, а не всюдисущість» — повідомлення та суть («if (onPost || a.IsProtagonist)», три раніше мертві механіки) збігаються `DOC-08`
+- **PendingDecision.cs — enum IncidentPath і клас DecisionOption (у репозиторії)** — ◐ Assets/_Project/Scripts/Core/Loop/PendingDecision.cs (enum IncidentPath, клас DecisionOption з Path/Skill/Threshold/Form/BestActorId/HasCandidate/ExpectedBand — збігається); `DOC-09`
+  Бракує: У поточному файлі enum IncidentPath містить лише Quiet=0 і Bloody=1; значення Ignore=2 («не втручатися»), описаного в пункті, у коді немає.
+  Assets/_Project/Scripts/Core/Loop/PendingDecision.cs: enum IncidentPath { Quiet = 0 (повільно, дорого, безпечно — Поправка №1), Bloody = 1 (швидко і дуже важко), Ignore = 2 (не втручатися) }. sealed class DecisionOption: Path, Skill (SkillKey), Threshold, Form (ApproachForm), BestActorId, HasCandidate, ExpectedBand (OutcomeBand). Файл створено, у коміт ще не потрапив.
+- **sim-out/summary.csv — використання виводу харнеса в scratchpad (digest-06)** — ✳ лише тут `DOC-10`
+  tools/Alpha.Sim запускається з --days 200 --out <scratchpad>/sim-out; summary.csv читається python-скриптом за колонками maxTopicRepeats, distinctTopics, longestNoDeltaPhases, signalsPerPhase, firstDeltaDay. Файли поза репозиторієм.
+- **Мердж-коміт: fast-forward до карти + злиття Е1, HEAD 4cfde9e (у репозиторії)** *(31.08.2026)* — ✅ git log: 7a0cdb7..ccdf97a (ff-only ancestor, diff CLAUDE.md +111 / GDD_AMENDMENTS.md +242 / SETTLEMENT_LAYER.md +464 — точно збігається) + merge-коміт 4cfde9e (батьки ccdf97a і c5681a1) `DOC-11`
+- **Коміт b899243 — перезбирання docs/interaction-map.html після злиття (у репозиторії)** *(31.08.2026)* — ✅ git commit b899243 «Карта: перезбирання після злиття» + docs/interaction-map.html (diff рівно 1 файл, 1+/1- рядок — збігається з «diff — 1 рядок») `DOC-12`
+- **Воркфлоу gameplay-loop-audit запущено у фоні — скрипт поза репозиторієм** *(31.08.2026)* — ✳ лише тут `DOC-13`
+  Task ID w5dgfikad, Run ID wf_02dd61cb-a2b. Скрипт: C:\Users\кефир\.claude\projects\C--Users-------Alpha--claude-worktrees-main-gameplay-loop-0af80b\1028289e-915a-4eb5-aafa-64e886f7105c\workflows\scripts\gameplay-loop-audit-wf_02dd61cb-a2b.js. Транскрипти: …\subagents\workflows\wf_02dd61cb-a2b. Результат у цій частині дайджесту ще не надійшов.
+- **Повний вивід grep по interaction-map.html збережено поза репозиторієм** *(31.08.2026)* — ✳ лише тут `DOC-14`
+  Вивід команди (141.8 KB) збережено в tool-results\ble4f2jk1.txt у каталозі сесії …\1028289e-915a-4eb5-aafa-64e886f7105c\tool-results\ — тимчасовий файл, не в репозиторії.
+- **Папка scratchpad/digest — 14 шматків дайджесту + digest-full.txt (поза репозиторієм)** *(після коміту 9d660db (07.09.2026))* — ✳ лише тут `DOC-15`
+  …/scratchpad/digest/: digest-00.txt (93 709 байт), 01 (84 439), 02 (90 604), 03 (83 603), 04 (90 343), 05 (85 396), 06 (80 958), 07 (84 502), 08 (91 095), 09 (100 837), 10 (104 443), 11 (81 124), 12 (70 616), 13 (27 327); digest-full.txt — 1 168 996 байт. Вхідні файли для агентів-екстракторів, до репозиторію не входять.
+  _Джерело: digest-13, RESULT #2233_
+- **Коміт 9d660db (07.09.2026) — «Поправка №4.4: вилазка займає добу, місто живе без лідера»** *(07.09.2026)* — ✅ docs/GDD_AMENDMENTS.md §4.4 (рядок 341-349) `DOC-16`
+- **Коміт 4abe8ba (07.09.2026) — «Поправка №4 (чернетка): сцени портретні, перша ігрова година — одразу до справи»** *(07.09.2026, після USER #1801)* — ✅ docs/GDD_AMENDMENTS.md §4.7-4.9 (рядки 393-449) `DOC-17`
+- **Коміт d3c15ab (07.09.2026) — «Поправка №4 (чернетка): кампанія 90 діб, ~20 годин; заявка на сцени»** *(07.09.2026, після f21c694)* — ✅ docs/GDD_AMENDMENTS.md §4.0, §4.3, §4.7 (рядки 257-273, 312-331, 393-406); коміт d3c15ab `DOC-18`
+- **Коміт f21c694 (07.09.2026) — «Поправка №4 (чернетка): люди з іменами; верстак більше не виробляє матеріали»** *(05.09.2026)* — ✅ Assets/_Project/Scripts/Core/DefaultContent.cs:146-151 (workshop_bench тепер OutputResource=Supplies); Assets/Tests/EditMode/PresenceAndCatalogTests.cs:122-135 (Catalog_NoCitySlot_ProducesMaterials) `DOC-19`
+- **Коміт 6923f2f (07.09.2026) — «Харнес вимірює стик двох лупів: партія вдома проти партії у вилазці»** *(07.09.2026)* — ✅ git log 6923f2f — Assets/_Project/Scripts/Core/Sim/CampaignSimulator.cs, CampaignTrace.cs, tools/Alpha.Sim/Program.cs, Base/SettlementAdapters.cs (список файлів diff збігається) `DOC-20`
+- **Коміт aa4de0c (05.09.2026) — «Харнес вимірює бюджет тиску і розподіл наслідків»** *(05.09.2026)* — ✅ git log aa4de0c — CampaignSimulator.cs, CampaignTrace.cs, tools/Alpha.Sim/Program.cs (список файлів diff збігається) `DOC-21`
+- **Коміт 992b425 (03.09.2026) — «Етап 0 „Хід гравця“: доба перестала бути кнопкою»** *(03.09.2026)* — ✅ Assets/_Project/Scripts/Core/Loop/DayStepOrder.cs:32 (PlayerResolution = 850); docs/GDD_AMENDMENTS.md §4.4 рядок 350-357 `DOC-22`
+- **Коміт d29ddc7 (03.09.2026) — «Контракт збереження: детермінізм переживає завантаження» (тести 133 → 138)** *(03.09.2026)* — ✅ docs/AUDIT-LOOP.md:54 («Контракт сейву теж зроблено: зліпок виходить назовні непрозорим рядком»); Assets/_Project/Scripts/Core/Loop/SettlementSave.cs (існує) `DOC-23`
+- **Коміт ae01a5f (03.09.2026) — «Етап −2 „Інструмент“: симуляційний харнес і тести темпу»** *(03.09.2026)* — ✅ tools/Alpha.Sim/, Assets/Tests/EditMode/CampaignPacingTests.cs існують; коміт ae01a5f, файли diff збігаються `DOC-24`
+- **Коміт c25f70b (03.09.2026) — «Етап −1 „Ремонт“: п'ять несправностей головного лупа»** *(03.09.2026 / 31.08.2026 (дата розходиться між джерелами))* — ✅ git log c25f70b — Balance/PulseBalance.cs, TensionBalance.cs, Loop/DayProcessor.cs, IncidentStep.cs, PulseStep.cs, TensionTickStep.cs, World/DefaultIncidents.cs та ін. (список файлів diff збігається), новий Assets/Tests/EditMode/LoopRepairTests.cs `DOC-25`
+- **Артефакт claude.ai «Аудит головного лупа» — підсумкова нейтральність vs повна версія (поза репо)** *(оновлено 03.09.2026, Етап −2)* — ✳ лише тут `DOC-26`
+  https://claude.ai/code/artifact/feb2cd24-05b1-4c5c-8cff-276f49ea88ef — опублікований аудит головного лупа; джерело — scratchpad/loop-audit.html (116 158 байт); текстові версії — report.md і report2.md. До репозиторію увійшла версія docs/AUDIT-LOOP.md. Це «звіт-сторінка», де збережено повну версію секції AUDIT-LOOP зі згадками системи-джерела; у репозиторії залишено лише нейтральну редакцію (за інваріантом 9).
+  _Джерело: digest-13, RESULT #2221; RESULT #2220_
+- **scratchpad/sim-90/summary.csv — траса харнеса Alpha.Sim на 90 діб** *(після f21c694)* — ✳ лише тут `DOC-27`
+  Запуск `dotnet run --project tools/Alpha.Sim -c Release -- --days 90 --out scratchpad/sim-90`: 16 кампаній (4 політики Passive / PatrolEveryNight / AggressiveChoices / Expedition × тири 1–4). Колонки CSV: firstIncidentDay, firstCrisisDay, incidents, crises, fullLadders, finalBand, distinctTopics, maxTopicRepeats. Файл поза репозиторієм, у scratchpad. Прогін зроблено після коміту f21c694.
+  _Джерело: digest-10, TOOL Bash #1777, RESULT #1778_
+- **Внутрішня юридична нотатка поза репозиторієм (без ідентифікаторів видавця)** — ✳ лише тут `DOC-28`
+  Повний текст юридичного аналізу (політика щодо фан-контенту, §102(b) та Circular 33, ідея/вираження, тест абстракцій і scènes à faire, практика Appendix N — усі назви конкретних видань/статей уже знеособлено до загальних термінів) оформлено як внутрішня юридична нотатка і зберігається поза репозиторієм, без ідентифікаторів видавця системи-джерела. Точний шлях у дайджесті не наведено. У каталозі квестів (quests.md) залишено лише короткий розділ «Юридична рамка», повний текст — у цій нотатці.
   > повний текст — у внутрішній юридичній примітці поза репозиторієм (без ідентифікаторів видавця).
-  _Источник: digest-10, USER #1905 (report_markdown); quests.md, строка 10_
-- **genre.md — отчёт «Чи тримається зв'язка» (тактика + CRPG + управление поселением)** *(07–08.09.2026, до Поправки №5)* — ✅ docs/research/GENRE_COHERENCE.md (157 строк, 37281 байт; заголовок «Чи тримається зв'язка», разделы совпадают дословно) `DOC-29`
-- **Извлечение genre.md из результата воркфлоу (report_markdown, 21 018 символов)** *(2026-09-05)* — ✳ только здесь `DOC-30`
-  Ассистент вытащил поле result.report_markdown из результата воркфлоу исследования связки жанров и записал/прочитал его как …/scratchpad/genre.md, 21 018 символов. В репозиторий не добавлялся; предложено оформить страницей.
-  _Источник: digest-09, TOOL Bash #1668, RESULT #1669, TOOL Read #1675_
-- **mde.html и артефакт claude.ai «Механіки без емоцій»** *(05.09.2026, коммит 992b425)* — ✅ docs/research/MDE.md (169 строк, 24067 байт; заголовок «Механіки без емоцій», разделы Діагноз/Механіки/Динаміки/Емоції/Де рветься ланцюг/Прогалини за пріоритетом совпадают, дата 5 вересня 2026, источник mde.html указан в примечании) `DOC-31`
-- **Assets/Tests/EditMode/PlayerDecisionTests.cs — тесты хода игрока внутри суток** — ✅ Assets/Tests/EditMode/PlayerDecisionTests.cs (существует, добавлен коммитом 992b425) `DOC-32`
-- **Assets/_Project/Scripts/Core/Base/SettlementCycleStep.cs — цикл поселения как шаг дня** — ✅ Assets/_Project/Scripts/Core/Base/SettlementCycleStep.cs (существует) `DOC-33`
-- **Assets/Tests/EditMode/SettlementCycleStepTests.cs — тесты материального результата суток** — ✅ Assets/Tests/EditMode/SettlementCycleStepTests.cs (существует) `DOC-34`
-- **Изменённые файлы ядра для точки решения игрока (Loop/World)** — ✅ git log 992b425 — Loop/PendingDecision.cs, DayStepOrder.cs, DayContext.cs, DayReport.cs, IncidentStep.cs, DayProcessor.cs, World/IncidentDefinition.cs, IncidentResolver.cs — все файлы присутствуют в diff коммита `DOC-35`
-- **Скрипты правок Этапа 0 в scratchpad: decision.py, decision2.py, docs3.py, docs_update.py, m5.txt** — ✳ только здесь `DOC-36`
-  Вне репозитория: decision.py (7290 байт) — 8 замен в ядре (enum, HasBloodyPath, BuildRequest, PlayerResolution, DayContext, DayReport); decision2.py (3702 байта) — 2 замены в IncidentStep (предложение вместо решения); docs3.py (4853 байта) — 3 правки CLAUDE.md и docs/AUDIT-LOOP.md; docs_update.py (5825 байт) — служебный скрипт синхронного обновления docs/ после решений владельца; m5.txt — текст коммита «Этап 0 «Ход игрока»: сутки перестали быть кнопкой».
-  _Источник: digest-07, TOOL Write #1258, #1267, #1336; TOOL Bash #1339; digest-13, RESULT #2220_
-- **CLAUDE.md обновлён: счётчик 156 тестов и абзац «Этап 0 «Ход игрока»»** — ✅ CLAUDE.md:112 («156 тестов-гарантий»), :120-122 (абзац «Этап 0 «Ход игрока»»: слепок, подавление повторов 200->100, присутствие-манёвр, PlayerResolution=850) `DOC-37`
-- **docs/AUDIT-LOOP.md дополнен: контракт сейва сделан + раздел «Шаг 3: ход игрока»** — ✅ docs/AUDIT-LOOP.md:54 (контракт сейва сделан), :59 («## Шаг 3: ход игрока») `DOC-38`
-- **Коммит 992b425 «Этап 0 «Ход игрока»» и серия из шести коммитов** — ✅ git log: 992b425, f152fa0, 7714eed, d29ddc7, ae01a5f, c25f70b — все шесть коммитов присутствуют подряд в истории ветки `DOC-39`
-- **Вывод по трём «НЕ НАЙДЕНО» перенесён в раздел о вольных приключениях** — ◐ docs/narrative/QUEST_CANDIDATES.md:336-341 (раздел «## Не розкладено по слотах — 2», строка 341: «НЕ ЗНАЙДЕНО: готова безкоштовна фанська кампанія...»); `DOC-40`
-  Не хватает: В репозитории найдена только ОДНА запись «НЕ ЗНАЙДЕНО» (grep по всем docs/ — единственное совпадение), а не «три отрицательных поиска»; и раздел называется «Не розкладено по слотах», а не «вольные (свободные) приключения» — заявленное название раздела не подтверждается.
-  Итог трёх отрицательных поисков сжат до одного абзаца и перенесён в раздел каталога квестов о вольных (свободных) приключениях; раздел находится выше по документу, вне видимого фрагмента-хвоста (предположительно в quest-catalog-*.md в scratchpad).
+  _Джерело: digest-10, USER #1905 (report_markdown); quests.md, рядок 10_
+- **genre.md — звіт «Чи тримається зв'язка» (тактика + CRPG + управління поселенням)** *(07–08.09.2026, до Поправки №5)* — ✅ docs/research/GENRE_COHERENCE.md (157 рядків, 37281 байт; заголовок «Чи тримається зв'язка», розділи збігаються дослівно) `DOC-29`
+- **Витяг genre.md з результату воркфлоу (report_markdown, 21 018 символів)** *(2026-09-05)* — ✳ лише тут `DOC-30`
+  Асистент витягнув поле result.report_markdown з результату воркфлоу дослідження зв'язки жанрів і записав/прочитав його як …/scratchpad/genre.md, 21 018 символів. До репозиторію не додавався; запропоновано оформити сторінкою.
+  _Джерело: digest-09, TOOL Bash #1668, RESULT #1669, TOOL Read #1675_
+- **mde.html і артефакт claude.ai «Механіки без емоцій»** *(05.09.2026, коміт 992b425)* — ✅ docs/research/MDE.md (169 рядків, 24067 байт; заголовок «Механіки без емоцій», розділи Діагноз/Механіки/Динаміки/Емоції/Де рветься ланцюг/Прогалини за пріоритетом збігаються, дата 5 вересня 2026, джерело mde.html вказано в примітці) `DOC-31`
+- **Assets/Tests/EditMode/PlayerDecisionTests.cs — тести ходу гравця всередині доби** — ✅ Assets/Tests/EditMode/PlayerDecisionTests.cs (існує, додано комітом 992b425) `DOC-32`
+- **Assets/_Project/Scripts/Core/Base/SettlementCycleStep.cs — цикл поселення як крок доби** — ✅ Assets/_Project/Scripts/Core/Base/SettlementCycleStep.cs (існує) `DOC-33`
+- **Assets/Tests/EditMode/SettlementCycleStepTests.cs — тести матеріального результату доби** — ✅ Assets/Tests/EditMode/SettlementCycleStepTests.cs (існує) `DOC-34`
+- **Змінені файли ядра для точки рішення гравця (Loop/World)** — ✅ git log 992b425 — Loop/PendingDecision.cs, DayStepOrder.cs, DayContext.cs, DayReport.cs, IncidentStep.cs, DayProcessor.cs, World/IncidentDefinition.cs, IncidentResolver.cs — усі файли присутні в diff коміту `DOC-35`
+- **Скрипти правок Етапу 0 в scratchpad: decision.py, decision2.py, docs3.py, docs_update.py, m5.txt** — ✳ лише тут `DOC-36`
+  Поза репозиторієм: decision.py (7290 байт) — 8 замін у ядрі (enum, HasBloodyPath, BuildRequest, PlayerResolution, DayContext, DayReport); decision2.py (3702 байти) — 2 заміни в IncidentStep (пропозиція замість рішення); docs3.py (4853 байти) — 3 правки CLAUDE.md і docs/AUDIT-LOOP.md; docs_update.py (5825 байт) — службовий скрипт синхронного оновлення docs/ після рішень власника; m5.txt — текст коміту «Етап 0 «Хід гравця»: доба перестала бути кнопкою».
+  _Джерело: digest-07, TOOL Write #1258, #1267, #1336; TOOL Bash #1339; digest-13, RESULT #2220_
+- **CLAUDE.md оновлено: лічильник 156 тестів і абзац «Етап 0 «Хід гравця»»** — ✅ CLAUDE.md:112 («156 тестів-гарантій»), :120-122 (абзац «Етап 0 «Хід гравця»»: зліпок, придушення повторів 200->100, присутність-маневр, PlayerResolution=850) `DOC-37`
+- **docs/AUDIT-LOOP.md доповнено: контракт сейву зроблено + розділ «Крок 3: хід гравця»** — ✅ docs/AUDIT-LOOP.md:54 (контракт сейву зроблено), :59 («## Крок 3: хід гравця») `DOC-38`
+- **Коміт 992b425 «Етап 0 «Хід гравця»» і серія із шести комітів** — ✅ git log: 992b425, f152fa0, 7714eed, d29ddc7, ae01a5f, c25f70b — усі шість комітів присутні поспіль в історії гілки `DOC-39`
+- **Висновок за трьома «НЕ ЗНАЙДЕНО» перенесено до розділу про вільні пригоди** — ◐ docs/narrative/QUEST_CANDIDATES.md:336-341 (розділ «## Не розкладено по слотах — 2», рядок 341: «НЕ ЗНАЙДЕНО: готова безкоштовна фанська кампанія...»); `DOC-40`
+  Бракує: У репозиторії знайдено лише ОДИН запис «НЕ ЗНАЙДЕНО» (grep по всіх docs/ — єдиний збіг), а не «три негативні пошуки»; і розділ називається «Не розкладено по слотах», а не «вільні (незалежні) пригоди» — заявлена назва розділу не підтверджується.
+  Підсумок трьох негативних пошуків стиснуто до одного абзацу і перенесено в розділ каталогу квестів про вільні (незалежні) пригоди; розділ знаходиться вище за документом, поза видимим фрагментом-хвостом (ймовірно, у quest-catalog-*.md в scratchpad).
   > висновок перенесено одним абзацом у розділ про вільні пригоди.
-  _Источник: quests.md, строка 8_
-- **quests.md — хвост каталога квестов: отвергнутые источники и сквозные оговорки** *(07.09.2026 14:18 (mtime файла))* — ✳ только здесь `DOC-41`
-  Путь: C:/dev/tmp/claude/C--Users-------Alpha--claude-worktrees-main-gameplay-loop-0af80b/1028289e-915a-4eb5-aafa-64e886f7105c/scratchpad/quests.md, 5121 байт, 12–13 строк, вне репозитория. Файл начинается с середины фразы — хвост более крупного документа: 11 отвергнутых источников (по абзацу на источник, с причинами) и финальный абзац «Наскрізні застереження» перед коммитом карточек. Блоков USER/ASSISTANT в файле нет — решений владельца в нём не зафиксировано. Рядом лежат quest-catalog-clean.md и quest-catalog-full.md — полный каталог, чьим хвостом является этот фрагмент. Связан с коммитом 6285884 («Каталог квестов-кандидатов: 98 структур под наши слоты»).
-  _Источник: quests.md, весь файл; digest-13, RESULT #2220; RESULT #2233; digest-11, TOOL Bash #1913 / RESULT #1920_
-- **scratchpad/amendment4.md — черновик Поправки №5 «Люди с именами» (копия вне репозитория)** *(2026-09-05 (написан); прочитан 2026-09-08)* — ✳ только здесь `DOC-42`
-  Путь: …/scratchpad/amendment4.md, 119 строк, 10 531 байт. Заголовок «Поправка №5 — «Люди с именами» (2026-09-05)», статус ЧЕРНОВИК. Содержит §5.1–4.7 без §5.0 и без §5.8 — более ранняя редакция, чем итоговая в репозитории (после коммитов f21c694, d3c15ab, 4abe8ba, 9d660db в неё добавлены §5.0, §5.8, §5.9 и другие правки). Влит скриптом в конец docs/GDD_AMENDMENTS.md.
-  _Источник: amendment4.md, весь файл; digest-10, TOOL Write #1756, RESULT #1757, TOOL Bash #1769; digest-13, RESULT #2233_
-- **docs/AUDIT-LOOP.md — аудит лупа, источник четырёх вопросов Поправки №5** *(до 2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md:253-254 («Закрывает четыре вопроса, поставленных аудитом лупа (`docs/AUDIT-LOOP.md`)») `DOC-43`
-- **docs/GDD_AMENDMENTS.md — создание черновика Поправки №5 «Люди с именами», коммит f21c694** *(2026-09-05, коммит f21c694)* — ✅ docs/GDD_AMENDMENTS.md:247-256 (заголовок «## Поправка №5 — «Люди с именами» (2026-09-05)», статус ЧЕРНОВИК); коммит f21c694 `DOC-44`
-- **§5.0 черновика: кампания ~90 суток, ~20 часов, ~13 минут на игровые сутки** *(коммит d3c15ab)* — ✅ docs/GDD_AMENDMENTS.md §5.0, строки 257-273 (кампания ~90 суток, ~20 часов, ~13 минут на сутки) `DOC-45`
-- **§5.1 черновика: ростер ~20 именных напарников, 3 в отряде + 4–5 на постах** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.1, строки 275-286 (~20 именных, 3 в отряде + 4-5 на позициях) `DOC-46`
-- **§5.2 черновика: все NPC и противники именные; именной = имеет карточку** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.2, строки 288-306 (безымянных нет; именной = карточка; население 200->1800 остаётся числом-якорем) `DOC-47`
-- **§5.2 черновика: два яруса персонажей по источнику** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.2, строки 296-302 («Два яруса по источнику»: литературный/мифологический и фольклорный/народный, фольклорный никогда не напарник) `DOC-48`
-- **§5.3 черновика: частота боёв, пересчитана под 90 суток** *(2026-09-05; пересчёт — коммит d3c15ab)* — ✅ docs/GDD_AMENDMENTS.md §5.3, строки 312-331 (~9 малых боёв, 1-2 крупных, ~15-25 именных противников, ~10 контактов) `DOC-49`
-- **§5.3 черновика: пощада имеет отсроченную цену** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.3, строки 323-325 («Пощада имеет отсроченную цену») `DOC-50`
-- **§5.4 черновика: пост при выходе в вылазку снимается; один попап при сборах** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.4, строки 333-349 (пост снимается, один попап при сборах) `DOC-51`
-- **§5.5 черновика: материалы только извне; новый внешний узел ресурса** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.5, строки 363-373 (материалы только извне; новый внешний узел ресурса) `DOC-52`
-- **§5.6 черновика: порядок работ в коде (пять шагов)** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.6 (строки 375-391) `DOC-53`
-- **§5.8 черновика (первая версия): кинематографические сцены — заявка, не решение** *(коммит d3c15ab)* — ✳ только здесь `DOC-54`
-  Первоначальная запись (коммит d3c15ab): владелец хочет, чтобы ассистент мог ставить сцены средствами движка. Предложенная форма: сцена — данные (декларативный сценарий: камера, актёр, реплика, пауза, эффект), которые пишутся текстом, а Game.Gameplay воспроизводит интерпретатором. Границы, объём и формат открыты; в репозитории нуль сцен. Затем переписано в коммите 4abe8ba после ответа владельца.
-  _Источник: digest-10, TOOL Write #1779 (amend90.py)_
-- **§5.8 черновика (итог): сцены портретные, с планами и эффектами; сцена — данные** *(коммит 4abe8ba)* — ✅ docs/GDD_AMENDMENTS.md §5.8 (строки 408-426) `DOC-55`
-- **§5.9 черновика: первая игровая час — сразу в дело** *(коммит 4abe8ba)* — ✅ docs/GDD_AMENDMENTS.md §5.9 (строки 428-449); docs/FIRST_HOUR.md §§1-2 `DOC-56`
-- **Воркфлоу quest-mining (wf_d417812b-79b): скрипт, выходы, журнал — вне репозитория** *(после USER #1801)* — ✳ только здесь `DOC-57`
-  Скрипт: …\workflows\scripts\quest-mining-wf_d417812b-79b.js. Фазы: «Наші слоти» → «Пошук» (7 треков) → «Скептик» → «Каталог». Схемы: SLOTS (slot/count/shape/constraints), FIND (title, origin из 6 видов, availability, premise, structure, nonviolent_path, maps_to_slot, what_must_be_rewritten, confidence, sources), VERDICT (keep/reason/legal_flag). Выходы: …\tasks\wipcms7wi.output (1-й прогон) и …\tasks\w76t8p1ng.output (полный каталог, ~200К символов); per-agent результаты в subagents\workflows\wf_d417812b-79b\journal.jsonl. Все пути — в scratchpad/профиле, не в репо.
-  _Источник: digest-10, TOOL Workflow #1811, RESULT #1812, USER #1847, USER #1905; digest-10, TOOL Workflow #1811, RESULT #1812, TOOL Workflow #1896_
-- **Сводка скриптов и сообщений коммитов Поправки №4: amendment4.md, m8/m9/m10.txt, amend90.py, amend_scenes.py** *(05–06.09.2026)* — ✳ только здесь `DOC-58`
-  Все в scratchpad (вне репо): amendment4.md — текст черновика Поправки №4; m8.txt/m9.txt/m10.txt — сообщения коммитов f21c694/d3c15ab/4abe8ba; amend90.py — 4 точечные замены (добавить §4.0, пересчитать §4.3, дополнить §4.7, добавить §4.8-заявку); amend_scenes.py — 2 замены (переписать §4.8, добавить §4.9, обновить §4.7). Каждый прогон сопровождался грепом инварианта 9 по docs/ — чисто.
-  _Источник: digest-10, TOOL Write #1756, #1758, #1779, #1813; RESULT #1793, #1825_
-- **scratchpad/digest.py — скрипт построения читаемого дайджеста транскрипта** *(2026-09-07/08)* — ✳ только здесь `DOC-59`
-  Путь: …/scratchpad/digest.py, вне репозитория. Правила: реплики пользователя и текст ассистента — целиком; Write по .md/.py/.js — до 20 000 символов, прочие Write — 1500; Edit — old 1500 / new 4000; входы Agent/Workflow — 6000; Bash — 2500; прочие инструменты — 600; результаты — усечённо (см. правку #2239). Разбивает вывод на чанки.
-  _Источник: digest-13, TOOL Bash #2226_
-- **Артефакт claude.ai «Карта систем Alpha» (🗺️)** *(2026-08-31)* — ✳ только здесь `DOC-60`
-  Опубликованный артефакт: https://claude.ai/code/artifact/8edeb4f9-c228-4458-8aa9-dafc994aaacd, favicon 🗺️, обновлён 2026-08-31. Соответствует карте взаимодействий (docs/interaction-map.html генерируется из исходников, руками не правится).
-  _Источник: digest-13, RESULT #2221_
-- **report.md, report2.md и loop-audit.html — редакции аудита главного лупа, scratchpad** *(сессия до 2026-09-03)* — ✳ только здесь `DOC-61`
-  …/scratchpad/report.md (95 990 байт) — первая редакция, раздел «Что у нас за луп на самом деле» и таблица «Заявлено | Факт в коде», сверенная грепом, ссылается на 12 шагов конвейера дня в Loop/DayStepOrder.cs; …/scratchpad/report2.md (110 545 байт) — вторая, резче: луп в коде существует, но как конвейер вычислений без точки ввода, сутки = вызов DayProcessor.Advance(DayPhase); …/scratchpad/loop-audit.html (116 158 байт) — HTML-версия, исходник опубликованного артефакта «Аудит головного лупа». Все три вне репозитория; в репо аудит представлен docs/AUDIT-LOOP.md.
-  _Источник: digest-13, RESULT #2220; RESULT #2233_
-- **Конвейер каталога квестов в scratchpad: full/clean/kept.json + build_catalog.js + sanitize.py** *(до 2026-09-07)* — ✳ только здесь `DOC-62`
-  Все вне репозитория. quest-catalog-full.md 672 907 байт (полный каталог); quest-catalog-clean.md 664 260 байт (очищенная версия); quests-kept.json 286 959 байт (машинный отбор оставленных структур); build_catalog.js 6731 байт (сборка каталога структур приключений); sanitize.py 14 358 байт (вычищает материал, в том числе под инвариант 9 — упоминания системы-источника). В репо попал итог коммитом 6285884 «Каталог квестов-кандидатов: 98 структур под наши слоты»; сырьё осталось вне репо.
-  _Источник: digest-13, RESULT #2220_
-- **problems.json и problems2.json — два прогона найденных проблем, scratchpad** *(сессия)* — ✳ только здесь `DOC-63`
-  problems.json 451 175 байт и problems2.json 518 018 байт, вне репозитория. По именам — две волны машинно собранных проблем/находок (вероятно, вход аудита лупа и его повторного прогона); содержимое в этом фрагменте дайджеста не раскрыто.
-  _Источник: digest-13, RESULT #2220_
-- **directions.json — два направления развития лупа (Вариант А, Вариант Б)** *(сессия)* — ✳ только здесь `DOC-64`
-  92 072 байта, JSON-массив из двух объектов с полями pitch, day_loop, stat_model (scale / поле происхождения / anchor / consumer / signal / visible), solves, new_risks, conflicts_with_gdd, keep_from_current. Путь: …/scratchpad/directions.json. Вне репозитория. Содержит поля-метаданные с названиями конкретных модулей [система-источника] — в репозиторий переносить нельзя (Поправка 3.11).
-  _Источник: directions.json, файл целиком; digest-13, RESULT #2220_
-- **Скрипты-генераторы поправок в docs: amend90.py, amend_away.py, amend_formA.py, amend_scenes.py** *(2026-09-05 … 2026-09-07)* — ✳ только здесь `DOC-65`
-  Вне репозитория. Размеры: amend90.py 6 063 байта, amend_away.py 3 686, amend_formA.py 3 063, amend_scenes.py 5 488. Каждый вносил свой кусок Поправки №5 в docs: кампания 90 суток (amend90), вылазка / город без лидера (amend_away), форма «Перевал» (amend_formA), портретные сцены (amend_scenes).
-  _Источник: digest-13, RESULT #2220_
-- **Скрипты Этапа 0 и смежных механик в scratchpad: antirepeat.py, presence.py, save_hooks.py, decision.py, decision2.py, budget.py, expedition.py** *(2026-09-03 … 2026-09-07)* — ✳ только здесь `DOC-66`
-  Вне репозитория. Размеры: antirepeat.py 6 040; presence.py 3 576; save_hooks.py 6 294; decision.py 7 290; decision2.py 3 702; budget.py 4 392; expedition.py 10 179 байт. Соответствуют коммитам сессии: подавление повторов реплик, присутствие-манёвр, контракт сохранения, точка решения внутри суток (две итерации), бюджет давления, вылазка на сутки.
-  _Источник: digest-13, RESULT #2220_
-- **Файлы харнеса и экспериментов в scratchpad (budget.py, expedition.py, exp_*.py, fix_*.py, sim*, каталоги)** *(2026-09-03 … 2026-09-07)* — ✳ только здесь `DOC-67`
-  budget.py 4 392; expedition.py 10 179; experiments.py 3 452; exp_c.py 8 171; exp_d.py 7 989; exp_e.py 8 383; fix_ladder_metric.py 4 755; fix_sim.py 7 283; sim.py 4 016; sim2.py 960; sim.mjs 2 022 байта; каталоги exp-a…exp-e, exp-exped, sim-90, sim-out, probe. Рабочие файлы этапов −2 (харнес), «бюджет давления» (коммит aa4de0c) и «стык двух лупов» (коммит 6923f2f); sim-90 — прогон 90-суточной кампании.
-  _Источник: digest-13, RESULT #2220_
-- **Черновики сообщений m2…m12.txt и msg.txt в scratchpad** *(сессия)* — ✳ только здесь `DOC-68`
-  Одиннадцать файлов m2.txt … m12.txt (1 517–3 775 байт) плюс msg.txt (4 094 байта) — заготовки промптов/сообщений (вероятно, задания исследовательским агентам и нарративной мастерской). Вне репозитория; содержимое в этом фрагменте дайджеста не раскрыто.
-  _Источник: digest-13, RESULT #2220_
-- **scratchpad/expedition.py — скрипт-патч харнеса под политику Expedition** *(2026-09-05, перед коммитом 6923f2f)* — ✳ только здесь `DOC-69`
-  Путь: …\scratchpad\expedition.py, вне репозитория. Делает 12 точечных замен: добавляет SimPolicy.Expedition, флаг PartyAway в строке трассы, столбцы PhasesAway/PhasesHome, OutcomesAway/OutcomesHome, TensionGainAway/TensionGainHome, делегат BeforeDay в CampaignSimulator, PartyForSim в RosterAdapter и политику «партия уходит на 10 суток из каждых 40» в CLI. Изменяет CampaignTrace.cs, CampaignSimulator.cs, tools/Alpha.Sim/Program.cs, SettlementAdapters.cs (плюс печать таблицы «СТЫК ДВУХ ЛУПОВ»).
-  _Источник: digest-09, TOOL Write #1615, TOOL Bash #1626; RESULT #1622_
-- **CSV-трассы 200-суточных прогонов харнеса: scratchpad/sim-out и scratchpad/exp-exped** *(2026-09-05)* — ✳ только здесь `DOC-70`
-  Вне репозитория. `sim-out` — прогон на штатном ростере с политикой Expedition (первый замер, ноль эффекта); `exp-exped` — прогон на компетентном ростере из 7 человек (после прогона ростер откачен, в код не попал).
-  _Источник: digest-09, TOOL Bash #1626, TOOL Bash #1632, RESULT #1639_
-- **tasks/ww5encpbe.output — полный результат воркфлоу исследования связки жанров** *(2026-09-05)* — ✳ только здесь `DOC-71`
-  Путь: …\tasks\ww5encpbe.output, свыше 152 000 символов. Поля result.report_markdown, confirmed_count (55), rejected_count (67). Пер-агентные результаты — journal.jsonl в …\subagents\workflows\wf_8edf5437-578\; скрипт воркфлоу — …\workflows\scripts\genre-coherence-wf_8edf5437-578.js (можно перезапустить с resumeFromRunId). Вне репозитория.
-  _Источник: digest-09, USER #1659 (task-notification, diagnostics)_
-- **Первая попытка записать §5.1/§5.2 Поправки №5 в docs/GDD_AMENDMENTS.md упала (heredoc-ошибка)** *(2026-09-05)* — ✳ только здесь `DOC-72`
-  Блок с заголовком «Поправка №5 — «Люди с именами» (2026-09-05)», статусом ЧЕРНОВИК и разделами 5.1 (ростер) и 5.2 (все именные) готовился к дописыванию в конец docs/GDD_AMENDMENTS.md, но bash-вызов упал с ошибкой оболочки (exit code 2, незакрытая кавычка heredoc). Текст черновика в файле обрывается; запись не удалась.
-  _Источник: digest-09, TOOL Bash #1744, RESULT #1751_
-- **scratchpad/m7.txt — текст коммита 6923f2f «Харнес меряет стык двух лупов»** *(2026-09-05)* — ✳ только здесь `DOC-73`
-  Файл с сообщением коммита 6923f2f, вне репозитория (scratchpad). Описывает политику Expedition, нулевой первый замер, эффект на компетентном ростере и побочную находку про фикстуру.
-  _Источник: digest-09, TOOL Bash #1644_
-- **scratchpad/m8.txt, m9.txt, m10.txt — тексты трёх коммитов** *(2026-09-05 и позже)* — ✳ только здесь `DOC-74`
-  Вне репозитория, в scratchpad. m8 — Поправка №4 + верстак (f21c694); m9 — 90 суток и заявка на сцены (d3c15ab); m10 — портретные сцены и первая игровая час (4abe8ba).
-  _Источник: digest-10, TOOL Write #1758, TOOL Bash #1792, TOOL Bash #1824_
-- **tasks/wipcms7wi.output — полный результат первого прогона quest-mining** *(после 2026-09-05)* — ✳ только здесь `DOC-75`
-  Вне репозитория. Результат обрезан в чате (усечено ~206 КБ), полный текст в файле. Содержит описание квестовых слотов и 111 кандидатов от семи поисковиков.
-  _Источник: digest-10, USER #1847 (task-notification)_
-- **tasks/w76t8p1ng.output — полный результат дозапуска quest-mining с каталогом** *(после 2026-09-05)* — ✳ только здесь `DOC-76`
-  Вне репозитория. Усечено ~194 КБ в чате. Содержит report_markdown каталога, 98 оставленных и 23 отброшенных кандидата, юридическую рамку и сквозные предостережения.
-  _Источник: digest-10, USER #1905 (task-notification)_
-- **journal.jsonl воркфлоу wf_d417812b-79b — по-агентные результаты** *(после 2026-09-05)* — ✳ только здесь `DOC-77`
-  Вне репозитория. По одной строке {"type":"result"} на каждого завершённого агента с полным возвращаемым значением; из него ассистент вытащил фанских кандидатов node-скриптом.
-  _Источник: digest-10, RESULT #1812 (diagnostics), TOOL Bash #1885_
-- **scratchpad: quests-kept.json — структурированные данные каталога** *(05.09.2026)* — ✳ только здесь `DOC-78`
-  JSON-файл (~287 КБ) со всеми 98 оставленными кандидатами квестов: title, origin, confidence, premise, structure, nonviolent_path, maps_to_slot, what_must_be_rewritten, sources, availability. Источник данных для сборки обеих версий каталога. Находится в scratchpad, вне репозитория.
-  _Источник: digest-11, RESULT #1920_
-- **scratchpad: build_catalog.js — генератор каталога** *(05.09.2026)* — ✳ только здесь `DOC-79`
-  Node-скрипт, строящий из quests-kept.json две версии markdown-каталога: полную (с ссылками, для владельца) и чистую (без названий системы-источника, издателя и ссылок на них — для репозитория), раскладывая записи по игровым слотам через regex-теги. Находится в scratchpad.
-  _Источник: digest-11, TOOL Write #1931 / TOOL Edit #1956_
-- **scratchpad: quest-catalog-full.md — полный каталог с ссылками** *(05.09.2026)* — ✳ только здесь `DOC-80`
-  405147 символов, 98 кандидатов, все поля включая URL и названия системы-источника/издателя. Отправлен владельцу через SendUserFile с пометкой держать вне репозитория, так как содержит запрещённые инвариантом 9 названия.
-  _Источник: digest-11, TOOL SendUserFile #1958_
-- **docs/narrative/QUEST_CANDIDATES.md — очищенный каталог квестов в репозитории** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md (664602 байт, «Статус: кандидати, не канон», 98 кандидатів) `DOC-81`
-- **docs/FIRST_HOUR.md — спецификация первой игровой часа** *(05.09.2026 (коммит f15c36e))* — ✅ docs/FIRST_HOUR.md §2 (форма «Перевал», Франко «Захар Беркут» 1883, общественное достояние) `DOC-82`
-- **scratchpad: amend_formA.py — скрипт правки документов под форму А** *(05.09.2026)* — ✳ только здесь `DOC-83`
-  Python-скрипт с точечными строковыми заменами: добавляет в docs/GDD_AMENDMENTS.md текст Поправки №5.9 (форма открытия выбрана, ссылка на FIRST_HOUR.md), заменяет содержимое открытого пункта 4.7 (кто будет командиром орды в финале), обновляет раздел «следующий шаг» в CLAUDE.md.
-  _Источник: digest-11, TOOL Write #2029_
-- **docs/GDD_AMENDMENTS.md — Поправка №5 «Люди с именами» (черновик)** *(07.09.2026)* — ✅ docs/GDD_AMENDMENTS.md «Поправка №5», §§5.0-5.9 (строки 247-449) `DOC-84`
-- **docs/AUDIT-LOOP.md — отчёт аудита лупа (санитизированный, в репозитории)** *(датирован 31.08.2026 в самом файле; до 07.09.2026)* — ✅ docs/AUDIT-LOOP.md (455 строк, раздел «Что уже починено») `DOC-85`
-- **CLAUDE.md — обновлён статус проекта** *(до 07.09.2026)* — ◐ CLAUDE.md §«Текущий статус»; `DOC-86`
-  Не хватает: Число тестов в файле — 156, а не 157; остальное (статусы этапов, Поправка №5, следующий шаг, Эпик 2) присутствует.
-  Обновлены: число тестов (157), статусы этапов −1/−2/0, статус Поправки №5 (черновик), указан следующий шаг — первая игровая час через docs/FIRST_HOUR.md, Эпик 2 «Стороны» — после среза.
-  _Источник: digest-12, USER #2078 (раздел 3)_
-- **scratchpad/amend_away.py — скрипт правки Поправки 4.4/4.6/4.7** *(07.09.2026)* — ✳ только здесь `DOC-87`
-  Временный Python-скрипт вне репозитория (в scratchpad), выполняющий три точечные подстановки в docs/GDD_AMENDMENTS.md: расширение §5.4 (вылазка как полный конвейер дня, предложение о заместителе), правку п.4 §5.6 (слепок сохранения хранит и календарь вылазки), добавление пункта в §5.7. Все 3 подстановки применены успешно, проверка инварианта 9 после правки — 0 файлов с запрещёнными токенами.
-  _Источник: digest-12, TOOL Bash #2166 / RESULT #2167_
-- **tools/Alpha.Sim — CLI симуляционный харнес** *(до 07.09.2026)* — ✅ tools/Alpha.Sim/Program.cs:44; tools/README.md:65-80 `DOC-88`
-- **Тесты этапов −1/−2/0 добавлены/изменены в Assets/Tests/EditMode** *(до 07.09.2026)* — ✅ Assets/Tests/EditMode/ (все перечисленные файлы подтверждены) `DOC-89`
-- **tools/Alpha.Sim/Program.cs — CSV расширен колонками исходов** — ✅ tools/Alpha.Sim/Program.cs:225-246 `DOC-90`
-- **scratchpad: exp_c.py — скрипт эксперимента C (откачен)** — ✳ только здесь `DOC-91`
-  Скретчпад-скрипт: давление от построенного (CrowdBand и незанятые посты, сплющенный тир-тик) + нейтральная медиана (Базовая=0) + корректно укомплектованный город (7 персонажей на 7 постов). Все правки отменены после прогона, не закоммичены.
-  _Источник: digest-08, TOOL Write #1518_
-- **scratchpad: exp_d.py — скрипт эксперимента D (дефицит рук)** — ✳ только здесь `DOC-92`
-  Производный от exp_c.py: та же связка правок, но состав города сокращён до 4 персонажей на 7 постов; откат гарантирован через git checkout.
-  _Источник: digest-08, TOOL Bash #1526_
-- **scratchpad: exp_e.py — скрипт эксперимента E (D + сбалансированные веса)** — ✳ только здесь `DOC-93`
-  Производный от exp_d.py: TensionByBand пересчитан так, что Худшая весит вдвое меньше, а Хороша и Краща — вдвое больше.
-  _Источник: digest-08, TOOL Bash #1537_
-- **Workflow-скрипт genre-coherence (исследование жанровой связки)** — ✳ только здесь `DOC-94`
-  Фоновый воркфлоу (4 фазы: Прецеденты, Наш стик, Скептик, Синтез; 7 агентов — 4 с вебпоиском, 3 по репозиторию) исследует именных противников (Nemesis/Shadow of War, Suikoden, Fire Emblem и др.), оправданность полной тактики как редкого события. Файл: workflows/scripts/genre-coherence-wf_8edf5437-578.js. Run ID wf_8edf5437-578, Task ID ww5encpbe. Запущен, результат в рамках фрагмента не получен.
-  _Источник: digest-08, TOOL Workflow #1575 / RESULT #1582_
-- **scratchpad: report.md — первая версия отчёта аудита главного лупа** *(первая версия аудита, до санитизации)* — ✳ только здесь `DOC-95`
-  Черновой рабочий файл в scratchpad текущей сессии (не в репозитории), содержащий развёрнутый аудит городского лупа: таблицы найденных неисправностей по 10 темам, топ-10 самых скучных мест, список проверенных и опровергнутых претензий, разбор уроков из ~35 других игр, детальный разбор настольных источников (в несанитизированном виде — с реальными названиями книг/статей, авторами и каталожными идентификаторами, что нарушает инвариант 9 проекта в текущем виде файла), два направления развития лупа и рекомендация с тремя шагами и тремя открытыми вопросами владельцу.
-  _Источник: report.md, весь файл_
-- **scratchpad: report2.md — вторая версия отчёта аудита главного лупа** *(вторая версия аудита, до 08.09.2026; дата не установлена в этой сессии)* — ✳ только здесь `DOC-96`
-  Вторая, более поздняя версия того же аудита, послужившая непосредственной основой для санитизированной docs/AUDIT-LOOP.md (по словам постановщика задачи; в момент сравнения с report.md сам файл в этой сессии ещё не читался, сравнение шло напрямую между report.md и docs/AUDIT-LOOP.md). Полное содержание: диагноз, 10 тематических блоков проблем с серьёзностью (К/С/П), топ-10 самых скучных мест, раздел «что проверили и опровергли», уроки из других игр, исследование [система-источник] управления владением, два направления развития лупа (А — эволюция, Б — «поселение как персонаж»), раздел «что это ломает в GDD v6» и рекомендация с тремя шагами ремонта. Лежит в scratchpad, в репозитории проекта не закоммичен.
-  _Источник: постановка задачи оператора; сам файл не открывался; report2.md, увесь файл_
-- **scratchpad/loop-audit.html — HTML-артефакт «Аудит головного лупа»** *(31 серпня 2026 (друга редакція))* — ✳ только здесь `DOC-97`
-  Файл на диску: C:/dev/tmp/claude/.../scratchpad/loop-audit.html. Внутренний отчёт Alpha (не в репозитории, лежит в scratchpad сессии) — итог аудита главного городского лупа методом 40 агентов в 8 фаз, два прогона, ~8.4 млн токенов. Сравнивает заявленное в GDD/поправках с фактическим состоянием кода, даёт 5 неисправностей, 53 тематические проблемы (показано 34), 10 самых скучных мест, 43 опровергнутые претензии, 126 уроков из других игр (показано 26), 11 источников [система-источник]-подобной системы управления владениями и два направления дальнейшего дизайна.
-  _Источник: loop-audit.html, файл цілком_
+  _Джерело: quests.md, рядок 8_
+- **quests.md — хвіст каталогу квестів: відхилені джерела і наскрізні застереження** *(07.09.2026 14:18 (mtime файлу))* — ✳ лише тут `DOC-41`
+  Шлях: C:/dev/tmp/claude/C--Users-------Alpha--claude-worktrees-main-gameplay-loop-0af80b/1028289e-915a-4eb5-aafa-64e886f7105c/scratchpad/quests.md, 5121 байт, 12–13 рядків, поза репозиторієм. Файл починається з середини фрази — хвіст більшого документа: 11 відхилених джерел (по абзацу на джерело, з причинами) і фінальний абзац «Наскрізні застереження» перед комітом карток. Блоків USER/ASSISTANT у файлі немає — рішень власника в ньому не зафіксовано. Поруч лежать quest-catalog-clean.md і quest-catalog-full.md — повний каталог, чиїм хвостом є цей фрагмент. Пов'язано з комітом 6285884 («Каталог квестів-кандидатів: 98 структур під наші слоти»).
+  _Джерело: quests.md, весь файл; digest-13, RESULT #2220; RESULT #2233; digest-11, TOOL Bash #1913 / RESULT #1920_
+- **scratchpad/amendment4.md — чернетка Поправки №5 «Люди з іменами» (копія поза репозиторієм)** *(2026-09-05 (написано); прочитано 2026-09-08)* — ✳ лише тут `DOC-42`
+  Шлях: …/scratchpad/amendment4.md, 119 рядків, 10 531 байт. Заголовок «Поправка №5 — «Люди з іменами» (2026-09-05)», статус ЧЕРНЕТКА. Містить §5.1–4.7 без §5.0 і без §5.8 — більш рання редакція, ніж підсумкова в репозиторії (після комітів f21c694, d3c15ab, 4abe8ba, 9d660db у неї додано §5.0, §5.8, §5.9 та інші правки). Влито скриптом у кінець docs/GDD_AMENDMENTS.md.
+  _Джерело: amendment4.md, весь файл; digest-10, TOOL Write #1756, RESULT #1757, TOOL Bash #1769; digest-13, RESULT #2233_
+- **docs/AUDIT-LOOP.md — аудит лупа, джерело чотирьох питань Поправки №5** *(до 2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md:253-254 («Закриває чотири питання, поставлені аудитом лупа (`docs/AUDIT-LOOP.md`)») `DOC-43`
+- **docs/GDD_AMENDMENTS.md — створення чернетки Поправки №5 «Люди з іменами», коміт f21c694** *(2026-09-05, коміт f21c694)* — ✅ docs/GDD_AMENDMENTS.md:247-256 (заголовок «## Поправка №5 — «Люди з іменами» (2026-09-05)», статус ЧЕРНЕТКА); коміт f21c694 `DOC-44`
+- **§5.0 чернетки: кампанія ~90 діб, ~20 годин, ~13 хвилин на ігрову добу** *(коміт d3c15ab)* — ✅ docs/GDD_AMENDMENTS.md §5.0, рядки 257-273 (кампанія ~90 діб, ~20 годин, ~13 хвилин на добу) `DOC-45`
+- **§5.1 чернетки: ростер ~20 іменних напарників, 3 у загоні + 4–5 на постах** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.1, рядки 275-286 (~20 іменних, 3 у загоні + 4-5 на позиціях) `DOC-46`
+- **§5.2 чернетки: усі NPC і противники іменні; іменний = має картку** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.2, рядки 288-306 (безіменних немає; іменний = картка; населення 200->1800 залишається числом-якорем) `DOC-47`
+- **§5.2 чернетки: два яруси персонажів за джерелом** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.2, рядки 296-302 («Два яруси за джерелом»: літературний/міфологічний і фольклорний/народний, фольклорний ніколи не напарник) `DOC-48`
+- **§5.3 чернетки: частота боїв, перерахована під 90 діб** *(2026-09-05; перерахунок — коміт d3c15ab)* — ✅ docs/GDD_AMENDMENTS.md §5.3, рядки 312-331 (~9 малих боїв, 1-2 великих, ~15-25 іменних противників, ~10 контактів) `DOC-49`
+- **§5.3 чернетки: пощада має відкладену ціну** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.3, рядки 323-325 («Пощада має відкладену ціну») `DOC-50`
+- **§5.4 чернетки: пост при виході у вилазку знімається; один попап при зборах** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.4, рядки 333-349 (пост знімається, один попап при зборах) `DOC-51`
+- **§5.5 чернетки: матеріали лише ззовні; новий зовнішній вузол ресурсу** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.5, рядки 363-373 (матеріали лише ззовні; новий зовнішній вузол ресурсу) `DOC-52`
+- **§5.6 чернетки: порядок робіт у коді (п'ять кроків)** *(2026-09-05)* — ✅ docs/GDD_AMENDMENTS.md §5.6 (рядки 375-391) `DOC-53`
+- **§5.8 чернетки (перша версія): кінематографічні сцени — заявка, не рішення** *(коміт d3c15ab)* — ✳ лише тут `DOC-54`
+  Початковий запис (коміт d3c15ab): власник хоче, щоб асистент міг ставити сцени засобами рушія. Запропонована форма: сцена — дані (декларативний сценарій: камера, актор, репліка, пауза, ефект), які пишуться текстом, а Game.Gameplay відтворює інтерпретатором. Межі, обсяг і формат відкриті; у репозиторії нуль сцен. Потім переписано в коміті 4abe8ba після відповіді власника.
+  _Джерело: digest-10, TOOL Write #1779 (amend90.py)_
+- **§5.8 чернетки (підсумок): сцени портретні, з планами та ефектами; сцена — дані** *(коміт 4abe8ba)* — ✅ docs/GDD_AMENDMENTS.md §5.8 (рядки 408-426) `DOC-55`
+- **§5.9 чернетки: перша ігрова година — одразу до справи** *(коміт 4abe8ba)* — ✅ docs/GDD_AMENDMENTS.md §5.9 (рядки 428-449); docs/FIRST_HOUR.md §§1-2 `DOC-56`
+- **Воркфлоу quest-mining (wf_d417812b-79b): скрипт, виходи, журнал — поза репозиторієм** *(після USER #1801)* — ✳ лише тут `DOC-57`
+  Скрипт: …\workflows\scripts\quest-mining-wf_d417812b-79b.js. Фази: «Наші слоти» → «Пошук» (7 треків) → «Скептик» → «Каталог». Схеми: SLOTS (slot/count/shape/constraints), FIND (title, origin із 6 видів, availability, premise, structure, nonviolent_path, maps_to_slot, what_must_be_rewritten, confidence, sources), VERDICT (keep/reason/legal_flag). Виходи: …\tasks\wipcms7wi.output (1-й прогін) і …\tasks\w76t8p1ng.output (повний каталог, ~200К символів); per-agent результати в subagents\workflows\wf_d417812b-79b\journal.jsonl. Усі шляхи — в scratchpad/профілі, не в репо.
+  _Джерело: digest-10, TOOL Workflow #1811, RESULT #1812, USER #1847, USER #1905; digest-10, TOOL Workflow #1811, RESULT #1812, TOOL Workflow #1896_
+- **Зведення скриптів і повідомлень комітів Поправки №4: amendment4.md, m8/m9/m10.txt, amend90.py, amend_scenes.py** *(05–06.09.2026)* — ✳ лише тут `DOC-58`
+  Усе в scratchpad (поза репо): amendment4.md — текст чернетки Поправки №4; m8.txt/m9.txt/m10.txt — повідомлення комітів f21c694/d3c15ab/4abe8ba; amend90.py — 4 точкові заміни (додати §4.0, перерахувати §4.3, доповнити §4.7, додати §4.8-заявку); amend_scenes.py — 2 заміни (переписати §4.8, додати §4.9, оновити §4.7). Кожен прогін супроводжувався грепом інваріанту 9 по docs/ — чисто.
+  _Джерело: digest-10, TOOL Write #1756, #1758, #1779, #1813; RESULT #1793, #1825_
+- **scratchpad/digest.py — скрипт побудови читабельного дайджесту транскрипту** *(2026-09-07/08)* — ✳ лише тут `DOC-59`
+  Шлях: …/scratchpad/digest.py, поза репозиторієм. Правила: репліки користувача і текст асистента — повністю; Write по .md/.py/.js — до 20 000 символів, інші Write — 1500; Edit — old 1500 / new 4000; входи Agent/Workflow — 6000; Bash — 2500; інші інструменти — 600; результати — скорочено (див. правку #2239). Розбиває вивід на чанки.
+  _Джерело: digest-13, TOOL Bash #2226_
+- **Артефакт claude.ai «Карта систем Alpha» (🗺️)** *(2026-08-31)* — ✳ лише тут `DOC-60`
+  Опублікований артефакт: https://claude.ai/code/artifact/8edeb4f9-c228-4458-8aa9-dafc994aaacd, favicon 🗺️, оновлено 2026-08-31. Відповідає карті взаємодій (docs/interaction-map.html генерується з вихідників, руками не правиться).
+  _Джерело: digest-13, RESULT #2221_
+- **report.md, report2.md і loop-audit.html — редакції аудиту головного лупа, scratchpad** *(сесія до 2026-09-03)* — ✳ лише тут `DOC-61`
+  …/scratchpad/report.md (95 990 байт) — перша редакція, розділ «Що у нас за луп насправді» і таблиця «Заявлено | Факт у коді», звірена грепом, посилається на 12 кроків конвеєра доби в Loop/DayStepOrder.cs; …/scratchpad/report2.md (110 545 байт) — друга, різкіше: луп у коді існує, але як конвеєр обчислень без точки входу, доба = виклик DayProcessor.Advance(DayPhase); …/scratchpad/loop-audit.html (116 158 байт) — HTML-версія, джерело опублікованого артефакту «Аудит головного лупа». Усі три поза репозиторієм; у репо аудит представлено docs/AUDIT-LOOP.md.
+  _Джерело: digest-13, RESULT #2220; RESULT #2233_
+- **Конвеєр каталогу квестів у scratchpad: full/clean/kept.json + build_catalog.js + sanitize.py** *(до 2026-09-07)* — ✳ лише тут `DOC-62`
+  Усе поза репозиторієм. quest-catalog-full.md 672 907 байт (повний каталог); quest-catalog-clean.md 664 260 байт (очищена версія); quests-kept.json 286 959 байт (машинний відбір залишених структур); build_catalog.js 6731 байт (збірка каталогу структур пригод); sanitize.py 14 358 байт (вичищає матеріал, зокрема під інваріант 9 — згадки системи-джерела). До репо потрапив підсумок комітом 6285884 «Каталог квестів-кандидатів: 98 структур під наші слоти»; сировина залишилась поза репо.
+  _Джерело: digest-13, RESULT #2220_
+- **problems.json і problems2.json — два прогони знайдених проблем, scratchpad** *(сесія)* — ✳ лише тут `DOC-63`
+  problems.json 451 175 байт і problems2.json 518 018 байт, поза репозиторієм. За назвами — дві хвилі машинно зібраних проблем/знахідок (ймовірно, вхід аудиту лупа і його повторного прогону); вміст у цьому фрагменті дайджесту не розкрито.
+  _Джерело: digest-13, RESULT #2220_
+- **directions.json — два напрямки розвитку лупа (Варіант А, Варіант Б)** *(сесія)* — ✳ лише тут `DOC-64`
+  92 072 байти, JSON-масив із двох об'єктів із полями pitch, day_loop, stat_model (scale / поле походження / anchor / consumer / signal / visible), solves, new_risks, conflicts_with_gdd, keep_from_current. Шлях: …/scratchpad/directions.json. Поза репозиторієм. Містить поля-метадані з назвами конкретних модулів [системи-джерела] — переносити в репозиторій не можна (Поправка 3.11).
+  _Джерело: directions.json, файл цілком; digest-13, RESULT #2220_
+- **Скрипти-генератори поправок у docs: amend90.py, amend_away.py, amend_formA.py, amend_scenes.py** *(2026-09-05 … 2026-09-07)* — ✳ лише тут `DOC-65`
+  Поза репозиторієм. Розміри: amend90.py 6 063 байти, amend_away.py 3 686, amend_formA.py 3 063, amend_scenes.py 5 488. Кожен вносив свій шматок Поправки №5 у docs: кампанія 90 діб (amend90), вилазка / місто без лідера (amend_away), форма «Перевал» (amend_formA), портретні сцени (amend_scenes).
+  _Джерело: digest-13, RESULT #2220_
+- **Скрипти Етапу 0 і суміжних механік у scratchpad: antirepeat.py, presence.py, save_hooks.py, decision.py, decision2.py, budget.py, expedition.py** *(2026-09-03 … 2026-09-07)* — ✳ лише тут `DOC-66`
+  Поза репозиторієм. Розміри: antirepeat.py 6 040; presence.py 3 576; save_hooks.py 6 294; decision.py 7 290; decision2.py 3 702; budget.py 4 392; expedition.py 10 179 байт. Відповідають комітам сесії: придушення повторів реплік, присутність-маневр, контракт збереження, точка рішення всередині доби (дві ітерації), бюджет тиску, вилазка на добу.
+  _Джерело: digest-13, RESULT #2220_
+- **Файли харнеса й експериментів у scratchpad (budget.py, expedition.py, exp_*.py, fix_*.py, sim*, каталоги)** *(2026-09-03 … 2026-09-07)* — ✳ лише тут `DOC-67`
+  budget.py 4 392; expedition.py 10 179; experiments.py 3 452; exp_c.py 8 171; exp_d.py 7 989; exp_e.py 8 383; fix_ladder_metric.py 4 755; fix_sim.py 7 283; sim.py 4 016; sim2.py 960; sim.mjs 2 022 байти; каталоги exp-a…exp-e, exp-exped, sim-90, sim-out, probe. Робочі файли етапів −2 (харнес), «бюджет тиску» (коміт aa4de0c) і «стик двох лупів» (коміт 6923f2f); sim-90 — прогін 90-добової кампанії.
+  _Джерело: digest-13, RESULT #2220_
+- **Чернетки повідомлень m2…m12.txt і msg.txt у scratchpad** *(сесія)* — ✳ лише тут `DOC-68`
+  Одинадцять файлів m2.txt … m12.txt (1 517–3 775 байт) плюс msg.txt (4 094 байти) — заготовки промптів/повідомлень (ймовірно, завдання дослідницьким агентам і наративній майстерні). Поза репозиторієм; вміст у цьому фрагменті дайджесту не розкрито.
+  _Джерело: digest-13, RESULT #2220_
+- **scratchpad/expedition.py — скрипт-патч харнеса під політику Expedition** *(2026-09-05, перед комітом 6923f2f)* — ✳ лише тут `DOC-69`
+  Шлях: …\scratchpad\expedition.py, поза репозиторієм. Робить 12 точкових замін: додає SimPolicy.Expedition, прапорець PartyAway в рядку траси, стовпці PhasesAway/PhasesHome, OutcomesAway/OutcomesHome, TensionGainAway/TensionGainHome, делегат BeforeDay в CampaignSimulator, PartyForSim в RosterAdapter і політику «партія йде на 10 діб із кожних 40» у CLI. Змінює CampaignTrace.cs, CampaignSimulator.cs, tools/Alpha.Sim/Program.cs, SettlementAdapters.cs (плюс друк таблиці «СТИК ДВОХ ЛУПІВ»).
+  _Джерело: digest-09, TOOL Write #1615, TOOL Bash #1626; RESULT #1622_
+- **CSV-траси 200-добових прогонів харнеса: scratchpad/sim-out і scratchpad/exp-exped** *(2026-09-05)* — ✳ лише тут `DOC-70`
+  Поза репозиторієм. `sim-out` — прогін на штатному ростері з політикою Expedition (перший замір, нульовий ефект); `exp-exped` — прогін на компетентному ростері із 7 осіб (після прогону ростер відкочено, у код не потрапив).
+  _Джерело: digest-09, TOOL Bash #1626, TOOL Bash #1632, RESULT #1639_
+- **tasks/ww5encpbe.output — повний результат воркфлоу дослідження зв'язки жанрів** *(2026-09-05)* — ✳ лише тут `DOC-71`
+  Шлях: …\tasks\ww5encpbe.output, понад 152 000 символів. Поля result.report_markdown, confirmed_count (55), rejected_count (67). По-агентні результати — journal.jsonl в …\subagents\workflows\wf_8edf5437-578\; скрипт воркфлоу — …\workflows\scripts\genre-coherence-wf_8edf5437-578.js (можна перезапустити з resumeFromRunId). Поза репозиторієм.
+  _Джерело: digest-09, USER #1659 (task-notification, diagnostics)_
+- **Перша спроба записати §5.1/§5.2 Поправки №5 в docs/GDD_AMENDMENTS.md провалилася (heredoc-помилка)** *(2026-09-05)* — ✳ лише тут `DOC-72`
+  Блок із заголовком «Поправка №5 — «Люди з іменами» (2026-09-05)», статусом ЧЕРНЕТКА і розділами 5.1 (ростер) та 5.2 (усі іменні) готувався до дописування в кінець docs/GDD_AMENDMENTS.md, але bash-виклик впав з помилкою оболонки (exit code 2, незакрита лапка heredoc). Текст чернетки у файлі обривається; запис не вдався.
+  _Джерело: digest-09, TOOL Bash #1744, RESULT #1751_
+- **scratchpad/m7.txt — текст коміту 6923f2f «Харнес міряє стик двох лупів»** *(2026-09-05)* — ✳ лише тут `DOC-73`
+  Файл із повідомленням коміту 6923f2f, поза репозиторієм (scratchpad). Описує політику Expedition, нульовий перший замір, ефект на компетентному ростері й побічну знахідку про фікстуру.
+  _Джерело: digest-09, TOOL Bash #1644_
+- **scratchpad/m8.txt, m9.txt, m10.txt — тексти трьох комітів** *(2026-09-05 і пізніше)* — ✳ лише тут `DOC-74`
+  Поза репозиторієм, у scratchpad. m8 — Поправка №4 + верстак (f21c694); m9 — 90 діб і заявка на сцени (d3c15ab); m10 — портретні сцени і перша ігрова година (4abe8ba).
+  _Джерело: digest-10, TOOL Write #1758, TOOL Bash #1792, TOOL Bash #1824_
+- **tasks/wipcms7wi.output — повний результат першого прогону quest-mining** *(після 2026-09-05)* — ✳ лише тут `DOC-75`
+  Поза репозиторієм. Результат обрізано в чаті (усічено ~206 КБ), повний текст у файлі. Містить опис квестових слотів і 111 кандидатів від семи пошуковиків.
+  _Джерело: digest-10, USER #1847 (task-notification)_
+- **tasks/w76t8p1ng.output — повний результат дозапуску quest-mining з каталогом** *(після 2026-09-05)* — ✳ лише тут `DOC-76`
+  Поза репозиторієм. Усічено ~194 КБ у чаті. Містить report_markdown каталогу, 98 залишених і 23 відкинутих кандидати, юридичну рамку і наскрізні застереження.
+  _Джерело: digest-10, USER #1905 (task-notification)_
+- **journal.jsonl воркфлоу wf_d417812b-79b — по-агентні результати** *(після 2026-09-05)* — ✳ лише тут `DOC-77`
+  Поза репозиторієм. По одному рядку {"type":"result"} на кожного завершеного агента з повним значенням, що повертається; з нього асистент витягнув фанатських кандидатів node-скриптом.
+  _Джерело: digest-10, RESULT #1812 (diagnostics), TOOL Bash #1885_
+- **scratchpad: quests-kept.json — структуровані дані каталогу** *(05.09.2026)* — ✳ лише тут `DOC-78`
+  JSON-файл (~287 КБ) з усіма 98 залишеними кандидатами квестів: title, origin, confidence, premise, structure, nonviolent_path, maps_to_slot, what_must_be_rewritten, sources, availability. Джерело даних для збірки обох версій каталогу. Перебуває в scratchpad, поза репозиторієм.
+  _Джерело: digest-11, RESULT #1920_
+- **scratchpad: build_catalog.js — генератор каталогу** *(05.09.2026)* — ✳ лише тут `DOC-79`
+  Node-скрипт, що будує з quests-kept.json дві версії markdown-каталогу: повну (з посиланнями, для власника) і чисту (без назв системи-джерела, видавця і посилань на них — для репозиторію), розкладаючи записи за ігровими слотами через regex-теги. Перебуває в scratchpad.
+  _Джерело: digest-11, TOOL Write #1931 / TOOL Edit #1956_
+- **scratchpad: quest-catalog-full.md — повний каталог із посиланнями** *(05.09.2026)* — ✳ лише тут `DOC-80`
+  405147 символів, 98 кандидатів, усі поля, включно з URL і назвами системи-джерела/видавця. Надіслано власнику через SendUserFile з поміткою тримати поза репозиторієм, бо містить назви, заборонені інваріантом 9.
+  _Джерело: digest-11, TOOL SendUserFile #1958_
+- **docs/narrative/QUEST_CANDIDATES.md — очищений каталог квестів у репозиторії** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md (664602 байти, «Статус: кандидати, не канон», 98 кандидатів) `DOC-81`
+- **docs/FIRST_HOUR.md — специфікація першої ігрової години** *(05.09.2026 (коміт f15c36e))* — ✅ docs/FIRST_HOUR.md §2 (форма «Перевал», Франко «Захар Беркут» 1883, суспільне надбання) `DOC-82`
+- **scratchpad: amend_formA.py — скрипт правки документів під форму А** *(05.09.2026)* — ✳ лише тут `DOC-83`
+  Python-скрипт із точковими рядковими замінами: додає в docs/GDD_AMENDMENTS.md текст Поправки №5.9 (форму відкриття обрано, посилання на FIRST_HOUR.md), замінює вміст відкритого пункту 4.7 (хто буде командиром орди у фіналі), оновлює розділ «наступний крок» у CLAUDE.md.
+  _Джерело: digest-11, TOOL Write #2029_
+- **docs/GDD_AMENDMENTS.md — Поправка №5 «Люди з іменами» (чернетка)** *(07.09.2026)* — ✅ docs/GDD_AMENDMENTS.md «Поправка №5», §§5.0-5.9 (рядки 247-449) `DOC-84`
+- **docs/AUDIT-LOOP.md — звіт аудиту лупа (санітизований, у репозиторії)** *(датований 31.08.2026 у самому файлі; до 07.09.2026)* — ✅ docs/AUDIT-LOOP.md (455 рядків, розділ «Що вже виправлено») `DOC-85`
+- **CLAUDE.md — оновлено статус проекту** *(до 07.09.2026)* — ◐ CLAUDE.md §«Поточний статус»; `DOC-86`
+  Бракує: число тестів у файлі — 156, а не 157; решта (статуси етапів, Поправка №5, наступний крок, Епік 2) присутня.
+  Оновлено: число тестів (157), статуси етапів −1/−2/0, статус Поправки №5 (чернетка), вказано наступний крок — перша ігрова година через docs/FIRST_HOUR.md, Епік 2 «Сторони» — після зрізу.
+  _Джерело: digest-12, USER #2078 (розділ 3)_
+- **scratchpad/amend_away.py — скрипт правки Поправки 4.4/4.6/4.7** *(07.09.2026)* — ✳ лише тут `DOC-87`
+  Тимчасовий Python-скрипт поза репозиторієм (у scratchpad), що виконує три точкові підстановки в docs/GDD_AMENDMENTS.md: розширення §5.4 (вилазка як повний конвеєр доби, пропозиція щодо заступника), правку п.4 §5.6 (зліпок збереження зберігає і календар вилазки), додавання пункту в §5.7. Усі 3 підстановки застосовано успішно, перевірка інваріанту 9 після правки — 0 файлів із забороненими токенами.
+  _Джерело: digest-12, TOOL Bash #2166 / RESULT #2167_
+- **tools/Alpha.Sim — CLI симуляційний харнес** *(до 07.09.2026)* — ✅ tools/Alpha.Sim/Program.cs:44; tools/README.md:65-80 `DOC-88`
+- **Тести етапів −1/−2/0 додані/змінені в Assets/Tests/EditMode** *(до 07.09.2026)* — ✅ Assets/Tests/EditMode/ (усі перелічені файли підтверджено) `DOC-89`
+- **tools/Alpha.Sim/Program.cs — CSV розширено колонками наслідків** — ✅ tools/Alpha.Sim/Program.cs:225-246 `DOC-90`
+- **scratchpad: exp_c.py — скрипт експерименту C (відкочено)** — ✳ лише тут `DOC-91`
+  Скретчпад-скрипт: тиск від збудованого (CrowdBand і незайняті пости, сплющений тир-тик) + нейтральна медіана (Базова=0) + коректно укомплектоване місто (7 персонажів на 7 постів). Усі правки скасовано після прогону, не закомічено.
+  _Джерело: digest-08, TOOL Write #1518_
+- **scratchpad: exp_d.py — скрипт експерименту D (дефіцит рук)** — ✳ лише тут `DOC-92`
+  Похідний від exp_c.py: та сама зв'язка правок, але склад міста скорочено до 4 персонажів на 7 постів; відкат гарантовано через git checkout.
+  _Джерело: digest-08, TOOL Bash #1526_
+- **scratchpad: exp_e.py — скрипт експерименту E (D + збалансовані ваги)** — ✳ лише тут `DOC-93`
+  Похідний від exp_d.py: TensionByBand перераховано так, що Найгірша важить удвічі менше, а Хороша і Найкраща — удвічі більше.
+  _Джерело: digest-08, TOOL Bash #1537_
+- **Workflow-скрипт genre-coherence (дослідження жанрової зв'язки)** — ✳ лише тут `DOC-94`
+  Фоновий воркфлоу (4 фази: Прецеденти, Наш стик, Скептик, Синтез; 7 агентів — 4 з вебпошуком, 3 по репозиторію) досліджує іменних супротивників (Nemesis/Shadow of War, Suikoden, Fire Emblem та ін.), виправданість повної тактики як рідкісної події. Файл: workflows/scripts/genre-coherence-wf_8edf5437-578.js. Run ID wf_8edf5437-578, Task ID ww5encpbe. Запущено, результат у рамках фрагмента не отримано.
+  _Джерело: digest-08, TOOL Workflow #1575 / RESULT #1582_
+- **scratchpad: report.md — перша версія звіту аудиту головного лупа** *(перша версія аудиту, до санітизації)* — ✳ лише тут `DOC-95`
+  Чорновий робочий файл у scratchpad поточної сесії (не в репозиторії), що містить розгорнутий аудит міського лупа: таблиці знайдених несправностей за 10 темами, топ-10 найнудніших місць, список перевірених і спростованих претензій, розбір уроків із ~35 інших ігор, детальний розбір настільних джерел (у несанітизованому вигляді — з реальними назвами книг/статей, авторами і каталожними ідентифікаторами, що порушує інваріант 9 проекту в поточному вигляді файлу), два напрями розвитку лупа і рекомендацію з трьома кроками і трьома відкритими питаннями власнику.
+  _Джерело: report.md, увесь файл_
+- **scratchpad: report2.md — друга версія звіту аудиту головного лупа** *(друга версія аудиту, до 08.09.2026; дата не встановлена в цій сесії)* — ✳ лише тут `DOC-96`
+  Друга, пізніша версія того самого аудиту, що прислужилася безпосередньою основою для санітизованої docs/AUDIT-LOOP.md (за словами постановника завдання; на момент порівняння з report.md сам файл у цій сесії ще не читався, порівняння йшло напряму між report.md і docs/AUDIT-LOOP.md). Повний зміст: діагноз, 10 тематичних блоків проблем із серйозністю (К/С/П), топ-10 найнудніших місць, розділ «що перевірили і спростували», уроки з інших ігор, дослідження [система-джерело] управління володінням, два напрями розвитку лупа (А — еволюція, Б — «поселення як персонаж»), розділ «що це ламає в GDD v6» і рекомендацію з трьома кроками ремонту. Лежить у scratchpad, у репозиторії проекту не закомічено.
+  _Джерело: постановка завдання оператора; сам файл не відкривався; report2.md, увесь файл_
+- **scratchpad/loop-audit.html — HTML-артефакт «Аудит головного лупа»** *(31 серпня 2026 (друга редакція))* — ✳ лише тут `DOC-97`
+  Файл на диску: C:/dev/tmp/claude/.../scratchpad/loop-audit.html. Внутрішній звіт Alpha (не в репозиторії, лежить у scratchpad сесії) — підсумок аудиту головного міського лупа методом 40 агентів у 8 фаз, два прогони, ~8.4 млн токенів. Порівнює заявлене в GDD/поправках із фактичним станом коду, дає 5 несправностей, 53 тематичні проблеми (показано 34), 10 найнудніших місць, 43 спростовані претензії, 126 уроків з інших ігор (показано 26), 11 джерел [система-джерело]-подібної системи управління володіннями і два напрями подальшого дизайну.
+  _Джерело: loop-audit.html, файл цілком_
 
-## Внешние ресурсы
+## Зовнішні ресурси
 
-Пунктов: 60
+Пунктів: 60
 
-- **«Grab and Go» (блог Game Geekery) — отвергнута как источник квестов** *(до 07.09.2026 / 2026-09-07)* — ✅ docs/narrative/QUEST_CANDIDATES.md:200 `R-01`
-- **Материалы системы-источника по управлению владением, подтверждённые аудитом** *(31.08.2026)* — ◐ docs/AUDIT-LOOP.md:312-347 (таблица «Настільні системи управління володінням»); `R-02`
-  Не хватает: Источники перечислены с процедурами, но дата «2021» и фраза про совпадение полос исхода с нашими 4 полосами текстуально не найдены
-  Проверены как реальные: справочник управления владением (2021; полосы результата совпадают с нашими 4 полосами); справочник статистики городов (верифицирован слабо); модуль о поддержании контактов (правило «две из трёх», четыре канала порчи доверия); модуль о ранге и услугах; модуль об организациях; модуль массовых боёв; модуль об обучении; две журнальные статьи — о городском управлении и о поместье (формулы последней не видели, нужен текст). Ссылки на сайты системы-источника не приводятся (инвариант 9).
-  _Источник: digest-01, RESULT #196; digest-01, ASSISTANT #264_
-- **Любительская система управления доменом на блоге (2019)** *(31.08.2026)* — ◐ docs/AUDIT-LOOP.md:347 («Фанські порти правил королівства»); `R-03`
-  Не хватает: Тема совпадает (пример бухгалтерии в правилах владения), но конкретика блога/2019/verified:true не упомянуты
-  Аудит нашёл фанатскую систему «обобщённая политика — управление доменом» для системы-источника, опубликованную в блоге в 2019 году (verified: true). Полезна как пример, где правила владения превращаются в бухгалтерию и как этого избегают.
-  _Источник: digest-01, RESULT #196 (поле [система-источник]_books отчёта)_
-- **Видеоигровые референсы, изученные аудитом** *(31.08.2026)* — ◐ docs/AUDIT-LOOP.md:281-308; docs/research/AUDIT_LOOP_ADDENDUM.md:14-47; docs/research/GENRE_COHERENCE.md:28-63; `R-04`
-  Не хватает: Большинство референсов найдены (Kingmaker, POE, war table, Norland, Fire Emblem, Fallout4, Into the Breach, Darkest Dungeon 1/2, Battle Brothers); Crusader Kings 3, Phoenix Point и XCOM-как-база-между-вылазками не найдены
-  Владения в CRPG: Pathfinder: Kingmaker, Pillars of Eternity (Caed Nua), war table; поселения на персонажах: Crusader Kings 3, Norland, Fire Emblem: Three Houses; Fallout 4 (busywork); детерминизм: Into the Breach; база между вылазками: XCOM Enemy Unknown/2, Phoenix Point, Darkest Dungeon 1 и 2, Battle Brothers, Fallout Shelter, State of Decay 2, Wasteland 3, Xenonauts, Massive Chalice; клапаны и цена: Frostpunk, This War of Mine, Factorio; ожидание: Mount & Blade. Всего в отчёте 110 уроков (lessons).
-  _Источник: digest-01, ASSISTANT #173; digest-01, RESULT #288; digest-01, USER #181_
-- **Официальный установщик .NET SDK (dot.net/v1/dotnet-install.ps1 и .sh)** *(31.08.2026)* — ◐ tools/setup-dotnet.sh (bash-вариант dot.net/v1/dotnet-install.sh); `R-05`
-  Не хватает: PowerShell-вариант (.ps1) в репозитории как файл отсутствует
-  https://dot.net/v1/dotnet-install.ps1 — команда: Invoke-WebRequest…; & $env:TEMP\dotnet-install.ps1 -Channel 8.0 -InstallDir "$env:USERPROFILE\.dotnet" -NoPath. Использован для локальной установки SDK 8.0 без прав администратора; bash-вариант применяется в tools/setup-dotnet.sh, PowerShell-вариант — вручную в этой сессии.
-  _Источник: digest-04, TOOL Bash #738; digest-02, RESULT #447; digest-02, TOOL PowerShell #465_
-- **Коллекция бесплатных фанских приключений 1Shot Adventures (JC Connors, 40+ штук)** *(после USER #1864 / после ASSISTANT #1884 / после 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:196,292 `R-06`
-- **«Railgun Road» (1Shot Adventures) → пул именных врагов** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:140,285,293 `R-07`
-- **«Bitter Song of the Black Mangroves» (1Shot, гостевой автор Jason Woollard) → missing_person серийно, sick_child** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:60,96,98 `R-08`
-- **«The Mound in the Yard» (1Shot, слэшер-хоррор в городке, 1981) → night_burglary, укус кризиса** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:113-114,294 `R-09`
-- **«Feast of Odoacer» (1Shot, исторический хоррор, осада Равенны 493 г.) → крупная сцена** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:197,252,287 `R-10`
-- **«The Beast of Black Keep» (1Shot) → крупная сцена, квест напарника** *(после USER #1864 / после ASSISTANT #1884)* — ◐ docs/narrative/QUEST_CANDIDATES.md:192,198,219,221,295; `R-11`
-  Не хватает: Структура и развилка «превращённый брат» записаны; явного «три шага = наши три ступени предвестников» в тексте нет
-  Телеграфия антагониста в три шага (соответствует нашим трём ступеням предвестников); развилка «родственник превращён — пощадить или убить».
-  _Источник: digest-10, ASSISTANT #1901_
-- **«The Siren's Citadel» (1Shot) → квесты фракций** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:249 `R-12`
-- **«The Cold Bounty» (1Shot) → именные враги** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:289 `R-13`
-- **«The Scourge of Triton» (1Shot) → crisis_riot** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:139,290 `R-14`
-- **«Canyon of the Snow Cairns» (1Shot) → квест напарника** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:218 `R-15`
-- **«St. Cecilia's Blasphemous Bordello» (1Shot) → серия городских инцидентов** *(после USER #1864 / после ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:288 `R-16`
-- **Личный архив ~14 конвентных сценариев одного из авторов системы-источника** *(после USER #1864 / после ASSISTANT #1884 / после 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:18,195,199,250,253 `R-17`
-- **Блог The Collaborative Gamer — соло-процедуры и десять типов городских приключений** *(после USER #1864 / после 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:19 `R-18`
-- **Заметка «Apfelbaum Town Hall» в фанатском блоге о системе-источнике — город как фракция** *(после USER #1864 / после 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:255 `R-19`
-- **Отброшено: «Don't Forget Your Boots»** *(дозапуск воркфлоу)* — ✅ docs/narrative/QUEST_CANDIDATES.md:256 `R-20`
-- **Отброшено: фан-блог «Mailanka's Musings», раздел «Domain Management»** *(дозапуск воркфлоу)* — ✅ docs/narrative/QUEST_CANDIDATES.md:340 (таблиця «Не розкладено по слотах») `R-21`
-- **Архив журнала издателя системы-источника — не проверен** *(дозапуск воркфлоу)* — ✳ только здесь `R-22`
-  Найден, содержимое не проверено; помечен как лид на ручную проверку конкретных сценариев (название журнала по инварианту 9 не приводится).
-  _Источник: digest-10, USER #1905 (report_markdown); quests.md, строка 6_
-- **Общественное достояние как источник сюжетов и персонажей: Чехов, Гоголь, Мопассан, Ібсен, Гримм, Афанасьєв** *(после USER #1801 / после 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:7-9 («Юридична рамка») + десятки окремих карток (Чехов, Гоголь, Мопассан, Ібсен, Грімм, Афанасьєв — рядки 20-25, 46-51, 61-66, 78-85, 100-106 та ін.) `R-23`
-- **Портреты персонажей из музейного open access: Met (375 тыс. изображений, CC0) и Rijksmuseum (700 тыс.)** *(2026-09-05)* — ✅ docs/research/GENRE_COHERENCE.md:89 `R-24`
-- **Форумные ветки издателя системы-источника об управлении поселением (5 веток)** — ◐ docs/narrative/QUEST_CANDIDATES.md:341; `R-25`
-  Не хватает: Згадано лише узагальнено — «форумні гілки з домашніми правилами (недоступні для автоматичного читання)»; конкретна цифра (5 гілок) і код помилки HTTP 403 відсутні.
-  Пять веток на форуме издателя системы-источника, посвящённых управлению поселением. Доступ при автоматическом чтении закрыт (HTTP 403). URL по инварианту 9 не приводится; список ссылок должен храниться вне репозитория.
-  _Источник: quests.md, строка 3_
-- **Дополнение системы-источника об управлении владением — правила, не квест** — ✳ только здесь `R-26`
-  Официальный модуль системы-источника о правилах управления владением (название по инварианту 9 не приводится). Рассмотрен как источник структур — отвергнут: это правила, не приключение.
-  _Источник: quests.md, строка 7_
-- **Battle Brothers (видеоигра), пролог — название «Rebuilding a Company» не подтверждено** — ✳ только здесь `R-27`
-  Рассмотрен пролог видеоигры Battle Brothers как образец стартовой сцены. Название сценария «Rebuilding a Company» в источниках не подтверждено; пролог — скриптованный бой без тихого пути.
-  _Источник: quests.md, строка 9; digest-10, USER #1905 (report_markdown)_
-- **Политика издателя системы-источника в отношении фан-контента** — ✳ только здесь `R-28`
-  Найдена и проанализирована политика издателя системы-источника о фан-материалах (идентификаторы издателя по инварианту 9 не приводятся). Выводы встроены в «Юридическую рамку» каталога; полный разбор — во внутренней юридической заметке вне репозитория.
-  _Источник: quests.md, строка 10; digest-10, USER #1905 (report_markdown каталога)_
-- **§102(b) закона об авторском праве США и Circular 33 Бюро авторских прав** — ◐ docs/GDD_AMENDMENTS.md:228-241 (§3.11) + docs/narrative/QUEST_CANDIDATES.md:7-9; `R-29`
-  Не хватает: Сам принцип «ідеї/процедури/системи не охороняються» сформульований, але конкретні цитати §102(b) і Circular 33 Бюро авторських прав США ніде не наведені.
-  Нормативные источники о неохраняемости идей, систем и методов (§102(b)) и разъяснение Circular 33 — основа юридической рамки для заимствования структур приключений без заимствования выражения. Публичные правовые тексты, не связанные с системой-источником, — их можно называть и цитировать в репозитории.
-  _Источник: quests.md, строка 10_
-- **Доктринальные статьи: идея/выражение в настольных RPG, тест абстракций, scènes à faire, практика по видеоиграм** — ◐ docs/GDD_AMENDMENTS.md:228-241 (§3.11) + docs/narrative/QUEST_CANDIDATES.md:7-9; `R-30`
-  Не хватает: Той самий принцип «беремо лише структуру, не вираз» присутній, але доктринальні терміни (тест абстракцій, scènes à faire, судова практика по відеоіграх) не названі й не описані.
-  Найдены статьи о разграничении идеи и выражения применительно к настольным RPG, о тесте абстракций и доктрине scènes à faire, а также судебная практика по видеоиграм. Использованы для «Юридической рамки», в слот квеста не ложатся.
-  _Источник: quests.md, строка 10_
-- **Фан-политики других издателей и практика «Appendix N» / документирования источников в инди-играх** — ◐ docs/narrative/QUEST_CANDIDATES.md:9 (поле «Першоджерело»); `R-31`
-  Не хватает: Саме поле «Першоджерело» впроваджено і використовується в кожній картці квесту, але обґрунтування через практику «Appendix N» та порівняння з фан-політиками інших видавців у документах відсутнє.
-  Сравнительный материал: политики других издателей настольных игр в отношении фан-контента и практика открытого списка вдохновений («Appendix N») с документированием источников в инди-играх. Служит обоснованием поля «Первоисточник» у каждого квеста; как квест не годится, но внешний ориентир для оформления поля.
-  _Источник: quests.md, строка 10 (перечень юридических справок)_
-- **Статья Vanderbilt JETLaw 2025 — не прочитана, отношение к теме слабое** — ✳ только здесь `R-32`
-  Юридическая статья 2025 года из Vanderbilt Journal of Entertainment & Technology Law. Найдена, но не прочитана; по оценке ассистента к теме относится слабо — не использовать.
-  _Источник: quests.md, строка 10_
-- **Модули системы-источника, использованные как аналитическая основа (без названий)** — ✅ docs/AUDIT-LOOP.md:312-347 (таблиця «Настільні системи управління володінням», особливо рядки 342, 344-345) `R-33`
-- **Ібсен, «Ворог народу» (1882) → инцидент spoiled_stores** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:46 (розділ spoiled_stores) `R-34`
-- **Гоголь, «Ревізор» (1836) → инцидент protection_racket** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:78 (розділ protection_racket) `R-35`
-- **Мопассан, «Мотузочка» (1883) → инцидент petty_theft** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:20 (розділ petty_theft) `R-36`
-- **Чехов, «Зловмисник» (1885) → инцидент petty_theft** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:21 (розділ petty_theft) `R-37`
-- **Чехов, «Мужики» (1897) → инцидент night_arson** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:131 (розділ night_arson) `R-38`
-- **Чехов, «Вороги» (1887) → инцидент sick_child** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:61 (розділ sick_child) `R-39`
+- **«Grab and Go» (блог Game Geekery) — відхилена як джерело квестів** *(до 07.09.2026 / 2026-09-07)* — ✅ docs/narrative/QUEST_CANDIDATES.md:200 `R-01`
+- **Матеріали системи-джерела з управління володінням, підтверджені аудитом** *(31.08.2026)* — ◐ docs/AUDIT-LOOP.md:312-347 (таблиця «Настільні системи управління володінням»); `R-02`
+  Не вистачає: Джерела перелічені з процедурами, але дата «2021» і фраза про збіг полос наслідку з нашими 4 смугами текстуально не знайдені
+  Перевірені як реальні: довідник управління володінням (2021; смуги результату збігаються з нашими 4 смугами); довідник статистики міст (верифікований слабко); модуль про підтримання контактів (правило «дві з трьох», чотири канали псування довіри); модуль про ранг і послуги; модуль про організації; модуль масових боїв; модуль про навчання; дві журнальні статті — про міське управління і про маєток (формул останньої не бачили, потрібен текст). Посилання на сайти системи-джерела не наводяться (інваріант 9).
+  _Джерело: digest-01, RESULT #196; digest-01, ASSISTANT #264_
+- **Аматорська система управління доменом у блозі (2019)** *(31.08.2026)* — ◐ docs/AUDIT-LOOP.md:347 («Фанські порти правил королівства»); `R-03`
+  Не вистачає: Тема збігається (приклад бухгалтерії в правилах володіння), але конкретика блогу/2019/verified:true не згадана
+  Аудит знайшов фанатську систему «узагальнена політика — управління доменом» для системи-джерела, опубліковану в блозі 2019 року (verified: true). Корисна як приклад, де правила володіння перетворюються на бухгалтерію, і як цього уникають.
+  _Джерело: digest-01, RESULT #196 (поле [система-джерело]_books звіту)_
+- **Відеоігрові референси, вивчені аудитом** *(31.08.2026)* — ◐ docs/AUDIT-LOOP.md:281-308; docs/research/AUDIT_LOOP_ADDENDUM.md:14-47; docs/research/GENRE_COHERENCE.md:28-63; `R-04`
+  Не вистачає: Більшість референсів знайдені (Kingmaker, POE, war table, Norland, Fire Emblem, Fallout4, Into the Breach, Darkest Dungeon 1/2, Battle Brothers); Crusader Kings 3, Phoenix Point і XCOM-як-база-між-вилазками не знайдені
+  Володіння в CRPG: Pathfinder: Kingmaker, Pillars of Eternity (Caed Nua), war table; поселення на персонажах: Crusader Kings 3, Norland, Fire Emblem: Three Houses; Fallout 4 (busywork); детермінізм: Into the Breach; база між вилазками: XCOM Enemy Unknown/2, Phoenix Point, Darkest Dungeon 1 і 2, Battle Brothers, Fallout Shelter, State of Decay 2, Wasteland 3, Xenonauts, Massive Chalice; клапани і ціна: Frostpunk, This War of Mine, Factorio; очікування: Mount & Blade. Всього у звіті 110 уроків (lessons).
+  _Джерело: digest-01, ASSISTANT #173; digest-01, RESULT #288; digest-01, USER #181_
+- **Офіційний інсталятор .NET SDK (dot.net/v1/dotnet-install.ps1 і .sh)** *(31.08.2026)* — ◐ tools/setup-dotnet.sh (bash-варіант dot.net/v1/dotnet-install.sh); `R-05`
+  Не вистачає: PowerShell-варіант (.ps1) у репозиторії як файл відсутній
+  https://dot.net/v1/dotnet-install.ps1 — команда: Invoke-WebRequest…; & $env:TEMP\dotnet-install.ps1 -Channel 8.0 -InstallDir "$env:USERPROFILE\.dotnet" -NoPath. Використаний для локального встановлення SDK 8.0 без прав адміністратора; bash-варіант застосовується в tools/setup-dotnet.sh, PowerShell-варіант — вручну в цій сесії.
+  _Джерело: digest-04, TOOL Bash #738; digest-02, RESULT #447; digest-02, TOOL PowerShell #465_
+- **Колекція безкоштовних фанатських пригод 1Shot Adventures (JC Connors, 40+ штук)** *(після USER #1864 / після ASSISTANT #1884 / після 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:196,292 `R-06`
+- **«Railgun Road» (1Shot Adventures) → пул іменних ворогів** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:140,285,293 `R-07`
+- **«Bitter Song of the Black Mangroves» (1Shot, гостьовий автор Jason Woollard) → missing_person серійно, sick_child** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:60,96,98 `R-08`
+- **«The Mound in the Yard» (1Shot, слешер-горор у містечку, 1981) → night_burglary, укус кризи** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:113-114,294 `R-09`
+- **«Feast of Odoacer» (1Shot, історичний горор, облога Равенни 493 р.) → велика сцена** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:197,252,287 `R-10`
+- **«The Beast of Black Keep» (1Shot) → велика сцена, квест напарника** *(після USER #1864 / після ASSISTANT #1884)* — ◐ docs/narrative/QUEST_CANDIDATES.md:192,198,219,221,295; `R-11`
+  Не вистачає: Структура і розвилка «перетворений брат» записані; явного «три кроки = наші три ступені передвісників» у тексті немає
+  Телеграфія антагоніста в три кроки (відповідає нашим трьом ступеням передвісників); розвилка «родич перетворений — пощадити чи вбити».
+  _Джерело: digest-10, ASSISTANT #1901_
+- **«The Siren's Citadel» (1Shot) → квести фракцій** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:249 `R-12`
+- **«The Cold Bounty» (1Shot) → іменні вороги** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:289 `R-13`
+- **«The Scourge of Triton» (1Shot) → crisis_riot** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:139,290 `R-14`
+- **«Canyon of the Snow Cairns» (1Shot) → квест напарника** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:218 `R-15`
+- **«St. Cecilia's Blasphemous Bordello» (1Shot) → серія міських інцидентів** *(після USER #1864 / після ASSISTANT #1884)* — ✅ docs/narrative/QUEST_CANDIDATES.md:288 `R-16`
+- **Особистий архів ~14 конвентних сценаріїв одного з авторів системи-джерела** *(після USER #1864 / після ASSISTANT #1884 / після 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:18,195,199,250,253 `R-17`
+- **Блог The Collaborative Gamer — соло-процедури і десять типів міських пригод** *(після USER #1864 / після 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:19 `R-18`
+- **Замітка «Apfelbaum Town Hall» у фанатському блозі про систему-джерело — місто як фракція** *(після USER #1864 / після 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:255 `R-19`
+- **Відкинуто: «Don't Forget Your Boots»** *(додатковий запуск воркфлоу)* — ✅ docs/narrative/QUEST_CANDIDATES.md:256 `R-20`
+- **Відкинуто: фан-блог «Mailanka's Musings», розділ «Domain Management»** *(додатковий запуск воркфлоу)* — ✅ docs/narrative/QUEST_CANDIDATES.md:340 (таблиця «Не розкладено по слотах») `R-21`
+- **Архів журналу видавця системи-джерела — не перевірений** *(додатковий запуск воркфлоу)* — ✳ лише тут `R-22`
+  Знайдений, вміст не перевірений; позначений як лід на ручну перевірку конкретних сценаріїв (назва журналу за інваріантом 9 не наводиться).
+  _Джерело: digest-10, USER #1905 (report_markdown); quests.md, рядок 6_
+- **Суспільне надбання як джерело сюжетів і персонажів: Чехов, Гоголь, Мопассан, Ібсен, Гримм, Афанасьєв** *(після USER #1801 / після 2026-09-05)* — ✅ docs/narrative/QUEST_CANDIDATES.md:7-9 («Юридична рамка») + десятки окремих карток (Чехов, Гоголь, Мопассан, Ібсен, Грімм, Афанасьєв — рядки 20-25, 46-51, 61-66, 78-85, 100-106 та ін.) `R-23`
+- **Портрети персонажів з музейного open access: Met (375 тис. зображень, CC0) і Rijksmuseum (700 тис.)** *(2026-09-05)* — ✅ docs/research/GENRE_COHERENCE.md:89 `R-24`
+- **Форумні гілки видавця системи-джерела про управління поселенням (5 гілок)** — ◐ docs/narrative/QUEST_CANDIDATES.md:341; `R-25`
+  Не вистачає: Згадано лише узагальнено — «форумні гілки з домашніми правилами (недоступні для автоматичного читання)»; конкретна цифра (5 гілок) і код помилки HTTP 403 відсутні.
+  П'ять гілок на форумі видавця системи-джерела, присвячених управлінню поселенням. Доступ під час автоматичного читання закритий (HTTP 403). URL за інваріантом 9 не наводиться; список посилань має зберігатися поза репозиторієм.
+  _Джерело: quests.md, рядок 3_
+- **Доповнення системи-джерела про управління володінням — правила, не квест** — ✳ лише тут `R-26`
+  Офіційний модуль системи-джерела про правила управління володінням (назва за інваріантом 9 не наводиться). Розглянутий як джерело структур — відхилений: це правила, не пригода.
+  _Джерело: quests.md, рядок 7_
+- **Battle Brothers (відеогра), пролог — назва «Rebuilding a Company» не підтверджена** — ✳ лише тут `R-27`
+  Розглянутий пролог відеогри Battle Brothers як зразок стартової сцени. Назва сценарію «Rebuilding a Company» у джерелах не підтверджена; пролог — скриптований бій без тихого шляху.
+  _Джерело: quests.md, рядок 9; digest-10, USER #1905 (report_markdown)_
+- **Політика видавця системи-джерела щодо фан-контенту** — ✳ лише тут `R-28`
+  Знайдена і проаналізована політика видавця системи-джерела щодо фан-матеріалів (ідентифікатори видавця за інваріантом 9 не наводяться). Висновки вбудовані в «Юридичну рамку» каталогу; повний розбір — у внутрішній юридичній замітці поза репозиторієм.
+  _Джерело: quests.md, рядок 10; digest-10, USER #1905 (report_markdown каталогу)_
+- **§102(b) закону про авторське право США і Circular 33 Бюро авторських прав** — ◐ docs/GDD_AMENDMENTS.md:228-241 (§3.11) + docs/narrative/QUEST_CANDIDATES.md:7-9; `R-29`
+  Не вистачає: Сам принцип «ідеї/процедури/системи не охороняються» сформульований, але конкретні цитати §102(b) і Circular 33 Бюро авторських прав США ніде не наведені.
+  Нормативні джерела про неохоронюваність ідей, систем і методів (§102(b)) та роз'яснення Circular 33 — основа юридичної рамки для запозичення структур пригод без запозичення вираження. Публічні правові тексти, не пов'язані із системою-джерелом, — їх можна називати і цитувати в репозиторії.
+  _Джерело: quests.md, рядок 10_
+- **Доктринальні статті: ідея/вираження в настільних RPG, тест абстракцій, scènes à faire, практика по відеоіграх** — ◐ docs/GDD_AMENDMENTS.md:228-241 (§3.11) + docs/narrative/QUEST_CANDIDATES.md:7-9; `R-30`
+  Не вистачає: Той самий принцип «беремо лише структуру, не вираз» присутній, але доктринальні терміни (тест абстракцій, scènes à faire, судова практика по відеоіграх) не названі й не описані.
+  Знайдені статті про розмежування ідеї та вираження стосовно настільних RPG, про тест абстракцій і доктрину scènes à faire, а також судова практика по відеоіграх. Використані для «Юридичної рамки», у слот квесту не лягають.
+  _Джерело: quests.md, рядок 10_
+- **Фан-політики інших видавців і практика «Appendix N» / документування джерел в інді-іграх** — ◐ docs/narrative/QUEST_CANDIDATES.md:9 (поле «Першоджерело»); `R-31`
+  Не вистачає: Саме поле «Першоджерело» впроваджено і використовується в кожній картці квесту, але обґрунтування через практику «Appendix N» та порівняння з фан-політиками інших видавців у документах відсутнє.
+  Порівняльний матеріал: політики інших видавців настільних ігор щодо фан-контенту і практика відкритого списку натхнень («Appendix N») з документуванням джерел в інді-іграх. Слугує обґрунтуванням поля «Першоджерело» для кожного квесту; як квест не годиться, але зовнішній орієнтир для оформлення поля.
+  _Джерело: quests.md, рядок 10 (перелік юридичних довідок)_
+- **Стаття Vanderbilt JETLaw 2025 — не прочитана, ставлення до теми слабке** — ✳ лише тут `R-32`
+  Юридична стаття 2025 року з Vanderbilt Journal of Entertainment & Technology Law. Знайдена, але не прочитана; за оцінкою асистента до теми стосується слабко — не використовувати.
+  _Джерело: quests.md, рядок 10_
+- **Модулі системи-джерела, використані як аналітична основа (без назв)** — ✅ docs/AUDIT-LOOP.md:312-347 (таблиця «Настільні системи управління володінням», особливо рядки 342, 344-345) `R-33`
+- **Ібсен, «Ворог народу» (1882) → інцидент spoiled_stores** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:46 (розділ spoiled_stores) `R-34`
+- **Гоголь, «Ревізор» (1836) → інцидент protection_racket** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:78 (розділ protection_racket) `R-35`
+- **Мопассан, «Мотузочка» (1883) → інцидент petty_theft** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:20 (розділ petty_theft) `R-36`
+- **Чехов, «Зловмисник» (1885) → інцидент petty_theft** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:21 (розділ petty_theft) `R-37`
+- **Чехов, «Мужики» (1897) → інцидент night_arson** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:131 (розділ night_arson) `R-38`
+- **Чехов, «Вороги» (1887) → інцидент sick_child** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:61 (розділ sick_child) `R-39`
 - **Гарді, «Мер Кестербриджа» (1886) → spoiled_stores + crisis_riot** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:48 (spoiled_stores) і :142 (crisis_riot) `R-40`
-- **Брет Гарт, «Вигнанці Покер-Флет» + «Щастя Ревучого табору» (1869/1868) → crisis_riot + ночной инцидент** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:62 (sick_child), :115 (night_burglary), :143 (crisis_riot) `R-41`
-- **фон Кляйст, «Міхаель Кольгаас» (1810) → большая авторская сцена** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:205 (розділ «Великі авторські сцени»); дублюється в :79 і :132 `R-42`
+- **Брет Гарт, «Вигнанці Покер-Флет» + «Щастя Ревучого табору» (1869/1868) → crisis_riot + нічний інцидент** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:62 (sick_child), :115 (night_burglary), :143 (crisis_riot) `R-41`
+- **фон Кляйст, «Міхаель Кольгаас» (1810) → велика авторська сцена** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:205 (розділ «Великі авторські сцени»); дублюється в :79 і :132 `R-42`
 - **Джордж Еліот, «Сайлес Марнер» (1861) → night_burglary + missing_person** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:63 (sick_child), :100 (missing_person), :116 (night_burglary) `R-43`
-- **Блекмор, «Лорна Дун» (1869) → инцидент protection_racket** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:80 (розділ protection_racket) `R-44`
-- **Марк Твен, «Людина, що спокусила Гедліберг» → инцидент petty_theft** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:22 (розділ petty_theft) `R-45`
-- **Сервантес, «Рінконете і Кортадільйо» → protection_racket + фракционные квесты** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:81 (protection_racket) і :265 (розділ «Квести від фракцій») `R-46`
-- **Франко, «Захар Беркут» (1883) — основа формы открытия «Перевал»** *(05.09.2026)* — ✅ docs/FIRST_HOUR.md:20-22,38,41 + docs/narrative/QUEST_CANDIDATES.md:53,67 (ФОРМА А «Перевал») `R-47`
-- **Гауптман, «Ткачі» (1892) → инцидент crisis_riot** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:49 (spoiled_stores) і :145 (crisis_riot) `R-48`
-- **Лагерлеф, «Єрусалим» (1901–1902) → фракционный квест** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:146 (розділ crisis_riot) `R-49`
-- **Марк Твен, «Пригоди Гекльберрі Фінна» (1884, эпизод Шерберн/Боггс) → market_brawl → crisis_riot** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:23 (petty_theft), :36 (market_brawl), :82/:101 (protection_racket/missing_person), :147 (crisis_riot) `R-50`
-- **Діккенс, «Олівер Твіст» (1838, эпизод ночного взлома в Чертси) → ночной инцидент** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:117 (розділ night_burglary) `R-51`
-- **Грімм, «Кум Смерть» (Godfather Death) → инцидент sick_child** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:64 (розділ sick_child) `R-52`
-- **Афанасьєв, сюжет о Кощее → «помилуваний повертається»** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:208 (розділ «Великі авторські сцени») і :310 (розділ «Іменні противники») `R-53`
-- **Народная сказка «Опахування села від Коров'ячої Смерті» → кризис поветрия** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:51 (розділ spoiled_stores) `R-54`
-- **Форумный индекс любительских одностраничных приключений** *(до 07.09.2026)* — ✳ только здесь `R-55`
-  Указан как площадка, откуда владелец планирует скачать приключения, сделанные игроками (не издателем), для последующего извлечения только структуры (узлы, форма решения, тип развязки — без текста, имён NPC и карт).
-  _Источник: digest-12, USER #2078 (раздел 7 «Pending Tasks»)_
-- **Личный архив материалов сообщества системы-источника (автор не называется)** *(до 07.09.2026)* — ✳ только здесь `R-56`
-  Указан как второй источник — личный архив материалов от участника сообщества системы-источника; имя автора опущено, поскольку оно тесно ассоциировано с системой-источником (инвариант 9).
-  _Источник: digest-12, USER #2078 (раздел 7 «Pending Tasks»)_
-- **Табличный разбор источников из настольных систем управления владением — аппарат верификации не попал в репозиторий** *(первая версия аудита; аппарат верификации отсутствует во второй/санитизированной версии)* — ✳ только здесь `R-57`
-  В report.md таблица источников несла отдельную колонку «Верифікація» с градацией повна/часткова/слабка/середня и точными библиографическими метаданными для каждого источника (год, объём, формат, цена, каталожные идентификаторы площадок, ссылки на зеркала). В санитизированной docs/AUDIT-LOOP.md эта колонка и вся библиографическая метадата отсутствуют полностью — остались только обобщённые описания механик, что корректно с точки зрения инварианта 9, но теряет информацию о степени доверия к каждому источнику для будущих читателей.
-  _Источник: report.md, раздел «[система-источник] settlement management: що там насправді є» (название раздела само по себе нарушает инвариант 9 и заменено во второй версии на нейтральное)_
-- **Источник о хозяйстве малого владения был явно помечен автором как непроверенный** *(первая версия аудита)* — ✳ только здесь `R-58`
-  Источник об аграрной экономике малого владения (соотношение дворы/земля/богатство) был помечен в report.md припиской «формул не бачив, не відтворюю» — автор явно не подтвердил формулы и сознательно не стал их пересказывать. В более поздней санитизированной таблице появляется отдельный, полностью верифицированный источник по доиндустриальной экономике с конкретными формулами — похоже, непроверенная ссылка была заменена на лучше подтверждённую.
-  _Источник: report.md, таблица источников, строка про журнальную статью об аграрной экономике маєтку_
-- **Упомянуто стороннее зеркало полного текста коммерческого источника — потенциальный юридический риск** *(первая версия аудита; ссылка отсутствует во второй/санитизированной версии)* — ✳ только здесь `R-59`
-  Для источника о поддержании связей с людьми внутри фракции report.md указывает, что полный текст доступен на стороннем зеркале (сайт не приводится по правилу о ссылках на источники не из общественного достояния). Само наличие такой ссылки в рабочем документе — риск, который корректно был убран из санитизированной версии.
-  _Источник: report.md, таблица источников, строка про модуль підтримання зв'язків_
-- **Источник о городской статистике: правило «две из трёх» признано самой ценной находкой всего разбора** *(первая версия аудита)* — ✅ docs/AUDIT-LOOP.md:341 («Модуль про підтримання звʼязків» — «дві з трьох» назване «Найцінніше в усьому списку») `R-60`
+- **Блекмор, «Лорна Дун» (1869) → інцидент protection_racket** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:80 (розділ protection_racket) `R-44`
+- **Марк Твен, «Людина, що спокусила Гедліберг» → інцидент petty_theft** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:22 (розділ petty_theft) `R-45`
+- **Сервантес, «Рінконете і Кортадільйо» → protection_racket + фракційні квести** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:81 (protection_racket) і :265 (розділ «Квести від фракцій») `R-46`
+- **Франко, «Захар Беркут» (1883) — основа форми відкриття «Перевал»** *(05.09.2026)* — ✅ docs/FIRST_HOUR.md:20-22,38,41 + docs/narrative/QUEST_CANDIDATES.md:53,67 (ФОРМА А «Перевал») `R-47`
+- **Гауптман, «Ткачі» (1892) → інцидент crisis_riot** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:49 (spoiled_stores) і :145 (crisis_riot) `R-48`
+- **Лагерлеф, «Єрусалим» (1901–1902) → фракційний квест** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:146 (розділ crisis_riot) `R-49`
+- **Марк Твен, «Пригоди Гекльберрі Фінна» (1884, епізод Шерберн/Боггс) → market_brawl → crisis_riot** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:23 (petty_theft), :36 (market_brawl), :82/:101 (protection_racket/missing_person), :147 (crisis_riot) `R-50`
+- **Діккенс, «Олівер Твіст» (1838, епізод нічного зламу в Чертсі) → нічний інцидент** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:117 (розділ night_burglary) `R-51`
+- **Грімм, «Кум Смерть» (Godfather Death) → інцидент sick_child** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:64 (розділ sick_child) `R-52`
+- **Афанасьєв, сюжет про Кощія → «помилуваний повертається»** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:208 (розділ «Великі авторські сцени») і :310 (розділ «Іменні противники») `R-53`
+- **Народна казка «Опахування села від Коров'ячої Смерті» → криза пошесті** *(05.09.2026)* — ✅ docs/narrative/QUEST_CANDIDATES.md:51 (розділ spoiled_stores) `R-54`
+- **Форумний індекс аматорських односторінкових пригод** *(до 07.09.2026)* — ✳ лише тут `R-55`
+  Вказаний як майданчик, звідки власник планує завантажити пригоди, зроблені гравцями (не видавцем), для подальшого видобування лише структури (вузли, форма рішення, тип розв'язки — без тексту, імен NPC і карт).
+  _Джерело: digest-12, USER #2078 (розділ 7 «Pending Tasks»)_
+- **Особистий архів матеріалів спільноти системи-джерела (автор не називається)** *(до 07.09.2026)* — ✳ лише тут `R-56`
+  Вказаний як друге джерело — особистий архів матеріалів від учасника спільноти системи-джерела; ім'я автора опущено, оскільки воно тісно асоціюється із системою-джерелом (інваріант 9).
+  _Джерело: digest-12, USER #2078 (розділ 7 «Pending Tasks»)_
+- **Табличний розбір джерел із настільних систем управління володінням — апарат верифікації не потрапив у репозиторій** *(перша версія аудиту; апарат верифікації відсутній у другій/санітизованій версії)* — ✳ лише тут `R-57`
+  У report.md таблиця джерел мала окрему колонку «Верифікація» з градацією повна/часткова/слабка/середня і точними бібліографічними метаданими для кожного джерела (рік, обсяг, формат, ціна, каталожні ідентифікатори майданчиків, посилання на дзеркала). У санітизованому docs/AUDIT-LOOP.md ця колонка і вся бібліографічна метадата відсутні повністю — залишилися лише узагальнені описи механік, що коректно з погляду інваріанту 9, але втрачає інформацію про ступінь довіри до кожного джерела для майбутніх читачів.
+  _Джерело: report.md, розділ «[система-джерело] settlement management: що там насправді є» (назва розділу сама по собі порушує інваріант 9 і замінена в другій версії на нейтральну)_
+- **Джерело про господарство малого володіння було явно позначене автором як неперевірене** *(перша версія аудиту)* — ✳ лише тут `R-58`
+  Джерело про аграрну економіку малого володіння (співвідношення двори/земля/багатство) було позначене в report.md припискою «формул не бачив, не відтворюю» — автор явно не підтвердив формули і свідомо не став їх переказувати. У пізнішій санітизованій таблиці з'являється окреме, повністю верифіковане джерело з доіндустріальної економіки з конкретними формулами — схоже, неперевірене посилання було замінене на краще підтверджене.
+  _Джерело: report.md, таблиця джерел, рядок про журнальну статтю про аграрну економіку маєтку_
+- **Згадано стороннє дзеркало повного тексту комерційного джерела — потенційний юридичний ризик** *(перша версія аудиту; посилання відсутнє в другій/санітизованій версії)* — ✳ лише тут `R-59`
+  Для джерела про підтримання зв'язків з людьми всередині фракції report.md вказує, що повний текст доступний на сторонньому дзеркалі (сайт не наводиться за правилом про посилання на джерела не з суспільного надбання). Саме наявність такого посилання в робочому документі — ризик, який коректно був прибраний із санітизованої версії.
+  _Джерело: report.md, таблиця джерел, рядок про модуль підтримання зв'язків_
+- **Джерело про міську статистику: правило «дві з трьох» визнане найціннішою знахідкою всього розбору** *(перша версія аудиту)* — ✅ docs/AUDIT-LOOP.md:341 («Модуль про підтримання звʼязків» — «дві з трьох» назване «Найцінніше в усьому списку») `R-60`
 
