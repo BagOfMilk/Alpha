@@ -85,12 +85,18 @@ namespace Game.Gameplay
                 // згори) — змішуємо колір ТУТ, у C#, з базовим кольором
                 // укриття: результат непрозорий (альфа завжди 1, як і
                 // рендериться насправді), але видима "прозорість" та сама —
-                // 45% підсвітки поверх 55% справжнього кольору тайла.
+                // підсвітка поверх справжнього кольору тайла.
+                //
+                // Бій v2, раунд 2 (доручення власника, п.3): колір і частка —
+                // ТОЧНО за таблицею §2 COMBAT_V2.md («Досяжний тайл — синій
+                // 0.30, 0.60, 1.00, α 0.35»), а не довільна зелень, що на
+                // знімках читалась як «блідо-зелене» й губилась поруч із
+                // травою під час ходу гравця.
                 var baseTint = CoverTint(cover);
-                const float highlight = 0.45f;
-                float r = Lerp(baseTint.R, 0.46f, highlight);
-                float g = Lerp(baseTint.G, 0.80f, highlight);
-                float b = Lerp(baseTint.B, 0.48f, highlight);
+                const float highlight = 0.35f;
+                float r = Lerp(baseTint.R, 0.30f, highlight);
+                float g = Lerp(baseTint.G, 0.60f, highlight);
+                float b = Lerp(baseTint.B, 1.00f, highlight);
                 return new TileTint(r, g, b, 1f);
             }
 
@@ -378,6 +384,115 @@ namespace Game.Gameplay
         }
 
         private static float ClampF(float v, float min, float max) => v < min ? min : (v > max ? max : v);
+
+        // ================= Бій v2, раунд 2: кадр рахує вільну від HUD область (§4) =================
+
+        /// <summary>
+        /// Прямокутник у GUI-просторі (0,0 — лівий верхній кут, вісь Y вниз,
+        /// як у <c>IBattleHudData.SetHudRects</c>) — своя легка структура
+        /// замість <c>UnityEngine.Rect</c>, щоб цей файл лишався без жодного
+        /// типу рушія (той самий принцип, що <see cref="WorldPos"/>).
+        /// </summary>
+        public readonly struct GuiRect
+        {
+            public readonly float X, Y, Width, Height;
+            public GuiRect(float x, float y, float width, float height) { X = x; Y = y; Width = width; Height = height; }
+        }
+
+        /// <summary>Відступи вільної (не заслоненої HUD) області від країв екрана, GUI-простір.</summary>
+        public readonly struct HudMargins
+        {
+            public readonly float Top, Bottom, Left, Right;
+            public HudMargins(float top, float bottom, float left, float right) { Top = top; Bottom = bottom; Left = left; Right = right; }
+        }
+
+        /// <summary>
+        /// Розумний дефолт полів HUD, поки перший кадр <c>DrawHud</c> ще не
+        /// повідомив справжні прямокутники через <c>SetHudRects</c> (доручення
+        /// власника, Бій v2 раунд 2, п.4: «верх 60px, низ 180px, праворуч
+        /// 380px на 1080p, пропорційно») — контрольна висота 1080, відступ
+        /// масштабується висотою екрана, як і решта розкладки HUD
+        /// (<c>Widgets.ScaleForScreen</c>).
+        /// </summary>
+        public static HudMargins DefaultHudMargins(float screenWidth, float screenHeight)
+        {
+            float scale = screenHeight > 0f ? screenHeight / 1080f : 1f;
+            return new HudMargins(60f * scale, 180f * scale, 0f, 380f * scale);
+        }
+
+        /// <summary>
+        /// Реальні відступи з прямокутників, які HUD щокадру повідомляє
+        /// через <c>SetHudRects</c> (верхня смуга/нижня панель дій/права
+        /// панель журналу — банер, оверлеї й спливаючі написи туди свідомо не
+        /// входять, §3 «не блокує кліки»): бере лише ті прямокутники, що
+        /// впритул до відповідного краю екрана, і повертає, наскільки далеко
+        /// вони від нього сягають. Порожній список (перший кадр бою) —
+        /// <see cref="DefaultHudMargins"/>.
+        ///
+        /// Форма прямокутника визначає, якому краю він служить (ширший за
+        /// висоту — горизонтальна смуга, верх/низ; вищий за ширину —
+        /// вертикальна панель, ліворуч/праворуч): без цього широка верхня
+        /// смуга (X=0 ДО самого правого краю) читалась би одночасно і як
+        /// «впритул до лівого», і як «впритул до правого» країв, роздуваючи
+        /// обидва бокові відступи на всю ширину екрана.
+        /// </summary>
+        public static HudMargins MarginsFromRects(float screenWidth, float screenHeight, IReadOnlyList<GuiRect> rects)
+        {
+            if (rects == null || rects.Count == 0) return DefaultHudMargins(screenWidth, screenHeight);
+
+            const float edge = 64f;
+            float top = 0f, bottom = 0f, left = 0f, right = 0f;
+            for (int i = 0; i < rects.Count; i++)
+            {
+                var r = rects[i];
+                if (r.Width <= 0f || r.Height <= 0f) continue;
+
+                if (r.Width >= r.Height)
+                {
+                    if (r.Y <= edge) top = Math.Max(top, r.Y + r.Height);
+                    else if (r.Y + r.Height >= screenHeight - edge) bottom = Math.Max(bottom, screenHeight - r.Y);
+                }
+                else
+                {
+                    if (r.X <= edge) left = Math.Max(left, r.X + r.Width);
+                    else if (r.X + r.Width >= screenWidth - edge) right = Math.Max(right, screenWidth - r.X);
+                }
+            }
+            return new HudMargins(top, bottom, left, right);
+        }
+
+        /// <summary>Центр вільної (не заслоненої HUD) області екрана, GUI-простір.</summary>
+        public static (float X, float Y) FreeAreaCenter(float screenWidth, float screenHeight, HudMargins margins)
+        {
+            float freeWidth = Math.Max(1f, screenWidth - margins.Left - margins.Right);
+            float freeHeight = Math.Max(1f, screenHeight - margins.Top - margins.Bottom);
+            return (margins.Left + freeWidth * 0.5f, margins.Top + freeHeight * 0.5f);
+        }
+
+        /// <summary>
+        /// Ортографічний розмір, що вписує ПОВНИЙ грід (доручення власника:
+        /// «Початкове кадрування — увесь грід у вільній області») у вільну від
+        /// HUD частину екрана, а не в увесь екран, як голий
+        /// <see cref="FrameGrid"/>: за меншою вільною областю потрібен більший
+        /// розмір, інакше протилежний від HUD край гріда все одно ховається
+        /// під панеллю.
+        /// </summary>
+        public static float OrthographicSizeForFreeArea(int gridWidth, int gridHeight, float screenWidth, float screenHeight,
+            HudMargins margins, float tileSize = TileSize, float padding = 1.5f)
+        {
+            var baseFrame = FrameGrid(gridWidth, gridHeight, tileSize, padding);
+            if (screenHeight <= 0f) return baseFrame.OrthographicSize;
+
+            float freeWidth = Math.Max(1f, screenWidth - margins.Left - margins.Right);
+            float freeHeight = Math.Max(1f, screenHeight - margins.Top - margins.Bottom);
+
+            int w = Math.Max(1, gridWidth), h = Math.Max(1, gridHeight);
+            float halfW = w * tileSize * 0.5f, halfH = h * tileSize * 0.5f;
+
+            float sizeForHeight = (halfH + padding) * screenHeight / freeHeight;
+            float sizeForWidth = (halfW + padding) * screenHeight / freeWidth;
+            return Math.Max(baseFrame.OrthographicSize, Math.Max(sizeForHeight, sizeForWidth));
+        }
     }
 
     // ================= легкі структури-результати (жодного типу движка) =================

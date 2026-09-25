@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Game.Core.Characters.Creation;
 using Game.Core.Combat;
 using Game.Gameplay;
@@ -396,6 +397,119 @@ namespace Game.Tests.EditMode
             var p = BattleArenaView.ClampPanTarget(-50f, 500f, 10, 10, 2f);
             Assert.AreEqual(-2f, p.X, 1e-5f);
             Assert.AreEqual(12f, p.Z, 1e-5f);
+        }
+
+        // ================= Бій v2, раунд 2: кадр рахує вільну від HUD область (§4) =================
+
+        [Test]
+        public void DefaultHudMargins_At1080p_MatchesOwnersNumbers()
+        {
+            var margins = BattleArenaView.DefaultHudMargins(1920f, 1080f);
+            Assert.AreEqual(60f, margins.Top, 1e-4f);
+            Assert.AreEqual(180f, margins.Bottom, 1e-4f);
+            Assert.AreEqual(0f, margins.Left, 1e-4f);
+            Assert.AreEqual(380f, margins.Right, 1e-4f);
+        }
+
+        [Test]
+        public void DefaultHudMargins_ScalesProportionallyWithScreenHeight()
+        {
+            var at1080 = BattleArenaView.DefaultHudMargins(1600f, 1080f);
+            var at540 = BattleArenaView.DefaultHudMargins(800f, 540f);
+            Assert.AreEqual(at1080.Top * 0.5f, at540.Top, 1e-3f);
+            Assert.AreEqual(at1080.Bottom * 0.5f, at540.Bottom, 1e-3f);
+            Assert.AreEqual(at1080.Right * 0.5f, at540.Right, 1e-3f);
+        }
+
+        [Test]
+        public void MarginsFromRects_EmptyList_FallsBackToDefault()
+        {
+            var margins = BattleArenaView.MarginsFromRects(1920f, 1080f, new List<BattleArenaView.GuiRect>());
+            var expected = BattleArenaView.DefaultHudMargins(1920f, 1080f);
+            Assert.AreEqual(expected.Top, margins.Top, 1e-4f);
+            Assert.AreEqual(expected.Right, margins.Right, 1e-4f);
+        }
+
+        /// <summary>Той самий набір прямокутників, що BattleHudScreen.Draw повідомляє щокадру (§3): верхня смуга, права панель журналу, нижня панель дій.</summary>
+        [Test]
+        public void MarginsFromRects_ReadsTopRightBottomPanels()
+        {
+            var rects = new List<BattleArenaView.GuiRect>
+            {
+                new BattleArenaView.GuiRect(0f, 0f, 1920f, 56f),           // верхня смуга
+                new BattleArenaView.GuiRect(1560f, 72f, 360f, 976f),       // журнал праворуч
+                new BattleArenaView.GuiRect(500f, 850f, 900f, 210f),       // панель дій знизу
+            };
+
+            var margins = BattleArenaView.MarginsFromRects(1920f, 1080f, rects);
+
+            Assert.AreEqual(56f, margins.Top, 1e-4f);
+            Assert.AreEqual(1080f - 850f, margins.Bottom, 1e-4f);
+            Assert.AreEqual(1920f - 1560f, margins.Right, 1e-4f);
+            Assert.AreEqual(0f, margins.Left, 1e-4f, "Немає жодного прямокутника впритул до лівого краю — відступ лишається нульовим");
+        }
+
+        [Test]
+        public void MarginsFromRects_IgnoresRectsNotTouchingAnyEdge()
+        {
+            // Банер/оверлеї/спливаючі написи НЕ входять у blockingRects (§3
+            // «не блокує кліки») — але навіть якби потрапили сюди, прямокутник
+            // десь посередині екрана не мав би зсувати жодного поля.
+            var rects = new List<BattleArenaView.GuiRect> { new BattleArenaView.GuiRect(800f, 400f, 200f, 60f) };
+            var margins = BattleArenaView.MarginsFromRects(1920f, 1080f, rects);
+            Assert.AreEqual(0f, margins.Top, 1e-4f);
+            Assert.AreEqual(0f, margins.Bottom, 1e-4f);
+            Assert.AreEqual(0f, margins.Left, 1e-4f);
+            Assert.AreEqual(0f, margins.Right, 1e-4f);
+        }
+
+        [Test]
+        public void FreeAreaCenter_NoMargins_IsScreenCenter()
+        {
+            var center = BattleArenaView.FreeAreaCenter(1920f, 1080f, new BattleArenaView.HudMargins(0f, 0f, 0f, 0f));
+            Assert.AreEqual(960f, center.X, 1e-4f);
+            Assert.AreEqual(540f, center.Y, 1e-4f);
+        }
+
+        [Test]
+        public void FreeAreaCenter_RightMargin_ShiftsCenterLeftOfScreenMiddle()
+        {
+            var center = BattleArenaView.FreeAreaCenter(1920f, 1080f, new BattleArenaView.HudMargins(0f, 0f, 0f, 380f));
+            Assert.Less(center.X, 960f, "Права панель забирає праву частину екрана — вільний центр має бути лівіше геометричного");
+            Assert.AreEqual(540f, center.Y, 1e-4f, "Без верхніх/нижніх полів вертикальний центр не рухається");
+        }
+
+        [Test]
+        public void FreeAreaCenter_TopAndBottomMargins_ShiftsCenterUpWhenBottomIsLarger()
+        {
+            var center = BattleArenaView.FreeAreaCenter(1920f, 1080f, new BattleArenaView.HudMargins(60f, 180f, 0f, 0f));
+            Assert.Less(center.Y, 540f, "Нижня панель ширша за верхню смугу — вільний центр зсувається вгору від геометричної середини");
+        }
+
+        [Test]
+        public void OrthographicSizeForFreeArea_NoMargins_MatchesPlainFrameGrid()
+        {
+            var plain = BattleArenaView.FrameGrid(8, 8);
+            var size = BattleArenaView.OrthographicSizeForFreeArea(8, 8, 1920f, 1080f, new BattleArenaView.HudMargins(0f, 0f, 0f, 0f));
+            Assert.AreEqual(plain.OrthographicSize, size, 1e-4f);
+        }
+
+        [Test]
+        public void OrthographicSizeForFreeArea_SmallerFreeArea_NeedsLargerSize()
+        {
+            var plain = BattleArenaView.FrameGrid(8, 8);
+            var margins = BattleArenaView.DefaultHudMargins(1920f, 1080f);
+            var shrunk = BattleArenaView.OrthographicSizeForFreeArea(8, 8, 1920f, 1080f, margins);
+            Assert.Greater(shrunk, plain.OrthographicSize,
+                "Доручення власника: «Початкове кадрування — увесь грід у вільній області» — менша вільна область вимагає більшого зуму, інакше край гріда ховається під HUD");
+        }
+
+        [Test]
+        public void OrthographicSizeForFreeArea_DegenerateFreeArea_DoesNotThrow_AndStaysPositive()
+        {
+            var margins = new BattleArenaView.HudMargins(2000f, 2000f, 0f, 0f); // поглинає весь екран
+            var size = BattleArenaView.OrthographicSizeForFreeArea(8, 8, 1920f, 1080f, margins);
+            Assert.Greater(size, 0f);
         }
     }
 }

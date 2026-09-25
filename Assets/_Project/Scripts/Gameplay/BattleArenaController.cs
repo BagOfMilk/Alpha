@@ -123,7 +123,7 @@ namespace Game.Gameplay
         private int _hoveredHitChance;
         private int _hoveredDamageMin, _hoveredDamageMax, _hoveredDamageCrit;
 
-        /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters — той самий множник контр-масштабує підпис імені, щоб текст не ріс разом із фігурою.</summary>
+        /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters.</summary>
         private const float UnitVisualScale = 1.35f;
 
         private bool _resultPending;
@@ -198,6 +198,12 @@ namespace Game.Gameplay
 
         // ================= Бій v2: спливаючі написи (§6) =================
 
+        /// <summary>Бій v2, раунд 2 (п.6): запас над верхом імені/HP-смужки юніта, щоб напис не стартував їх перекриваючи.</summary>
+        private const float FloatingSpawnGapAboveNamePx = 16f;
+
+        /// <summary>Бій v2, раунд 2 (п.6): «піднімаються помітно (~40–60 px)» — 42px/с даю ~42px за звичайні 1.0с і ~59px за Big 1.4с.</summary>
+        private const float FloatingRiseSpeedPxPerSecond = 42f;
+
         private sealed class FloatingRuntime { public BattleFloatingText Data; public float Age; public float Duration; }
         private readonly List<FloatingRuntime> _floatingRuntime = new List<FloatingRuntime>();
         private readonly List<BattleFloatingText> _floatingTextsExposed = new List<BattleFloatingText>();
@@ -222,6 +228,16 @@ namespace Game.Gameplay
         private LineRenderer _shotLine;
         private float _shotLineUntil;
 
+        // ================= Бій v2, раунд 2: лінія руху до наведеного тайла (§2) =================
+
+        private const float PathLineWidth = 0.08f;
+        private const float PathLineHeight = 0.08f;
+
+        private LineRenderer _pathLine;
+        private GameObject _pathEndMarker;
+        private Material _emissiveMaterial;
+        private readonly List<Vector3> _pathLinePoints = new List<Vector3>();
+
         // ================= публічний зріз для IBattleHudData =================
 
         public BattleView View => _lastView;
@@ -238,6 +254,16 @@ namespace Game.Gameplay
         public bool HasHoveredTile => _hasSimulatedHover ? _simulatedHoverTile.HasValue : _hoveredTile.HasValue;
         public int HoveredTileX => (_hasSimulatedHover ? _simulatedHoverTile : _hoveredTile)?.X ?? 0;
         public int HoveredTileY => (_hasSimulatedHover ? _simulatedHoverTile : _hoveredTile)?.Y ?? 0;
+
+        /// <summary>
+        /// Бій v2, раунд 2 (§7.4, HoveredTileScreenX/Y): екранна точка центру
+        /// наведеного тайла — та сама проекція (<see cref="WorldToGui"/>), що
+        /// й оверлеї над юнітами, трохи над землею, щоб не тонула в самому
+        /// тайлі. Має сенс лише коли <see cref="HasHoveredTile"/>; інакше —
+        /// (0,0), як і решта Hovered*-полів без наведення.
+        /// </summary>
+        public float HoveredTileScreenX => HasHoveredTile ? HoveredTileScreenPoint().x : 0f;
+        public float HoveredTileScreenY => HasHoveredTile ? HoveredTileScreenPoint().y : 0f;
 
         public int HoveredHitChance => _hoveredHitChance;
         public int HoveredDamageMin => _hoveredDamageMin;
@@ -356,13 +382,21 @@ namespace Game.Gameplay
             return RunCommand(() => _session.CombatStabilize(targetId));
         }
 
+        /// <summary>
+        /// Бій v2, раунд 2 (п.4, доручення власника): переліт до юніта веде
+        /// не в геометричний центр ЕКРАНА, а в центр ВІЛЬНОЇ від HUD області
+        /// (<see cref="FocusPointForFreeArea"/>) — інакше на 1080p (вузька
+        /// нижня панель дій + права панель журналу) діючий боєць опиняється
+        /// під панеллю, як на знімку 06/1080p.
+        /// </summary>
         public void FocusCamera(string unitId)
         {
             var unit = FindUnitById(unitId);
             if (unit == null) return;
             var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+            var target = new Vector3(world.X, 0f, world.Z);
             _cameraFlyStart = _cameraPanFocus;
-            _cameraFlyTarget = new Vector3(world.X, 0f, world.Z);
+            _cameraFlyTarget = FocusPointForFreeArea(target);
             _cameraFlyElapsed = 0f;
         }
 
@@ -449,6 +483,7 @@ namespace Game.Gameplay
             UpdateBannerAndAutoFocus(_lastView);
             UpdateFloatingTexts(dt);
             RebuildOverlays();
+            UpdateHoverPathLine();
             UpdateCamera(dt);
 
             if (_session != null && _session.State != SessionState.Battle)
@@ -603,7 +638,6 @@ namespace Game.Gameplay
                 box.size = new Vector3(0.6f, 1.6f, 0.6f);
 
                 BuildSideRing(go, unit);
-                BuildNameLabel(go, unit);
 
                 _unitObjects[unit.Id] = go;
                 _unitBlocks[unit.Id] = new MaterialPropertyBlock();
@@ -662,29 +696,6 @@ namespace Game.Gameplay
             }
         }
 
-        private void BuildNameLabel(GameObject unitGo, BattleUnitView unit)
-        {
-            var label = new GameObject("label");
-            label.transform.SetParent(unitGo.transform, false);
-            label.transform.localPosition = new Vector3(0f, BattleArenaView.NameLabelHeight, 0f);
-            label.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            label.transform.localScale = Vector3.one / UnitVisualScale;
-
-            string name = ResolveDisplayNameInternal(unit);
-            int len = Mathf.Max(name != null ? name.Length : 0, 9);
-
-            var text = label.AddComponent<TextMesh>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 32;
-            text.characterSize = Mathf.Clamp(0.75f / len, 0.04f, 0.095f);
-            text.anchor = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.text = name;
-
-            var renderer = label.GetComponent<MeshRenderer>();
-            if (renderer != null && text.font != null) renderer.sharedMaterial = text.font.material;
-        }
-
         // ================= щокадрове оновлення виду =================
 
         private void ApplyUnitPositionsAndHighlights(BattleView view)
@@ -713,8 +724,13 @@ namespace Game.Gameplay
                 _unitHitReactions.Remove(id);
             }
 
+            // Бій v2, раунд 2 (п.3, доручення власника): досяжність показуємо
+            // ЛИШЕ на ході гравця, коли презентер вільний (не йдуть такти) —
+            // інакше на ході ворога `view.ReachableTiles` (рахований для
+            // ПОТОЧНОГО, тобто ворожого юніта) підсвічує всю його зону, і
+            // гравець читає це як "оце все — моя досяжність".
             var reachable = new HashSet<string>(StringComparer.Ordinal);
-            if (view.ReachableTiles != null)
+            if (IsPlayerTurn && !IsBusy && view.ReachableTiles != null)
                 foreach (var pos in view.ReachableTiles) reachable.Add(pos.X + "_" + pos.Y);
 
             var current = CurrentUnit();
@@ -830,7 +846,7 @@ namespace Game.Gameplay
             foreach (var r in renderers)
             {
                 string n = r.gameObject.name;
-                if (n == "ring" || n == "overwatch" || n == "label") continue;
+                if (n == "ring" || n == "overwatch") continue;
                 r.SetPropertyBlock(block);
             }
 
@@ -1176,7 +1192,14 @@ namespace Game.Gameplay
             if (dir.sqrMagnitude > 0.0001f) _unitVisualRot[actorId] = Quaternion.LookRotation(dir.normalized, Vector3.up);
         }
 
-        /// <summary>Тексти написів — виключно <see cref="BattleLogText.Floating"/> (не вигадувати самому, §2 доручення).</summary>
+        /// <summary>
+        /// Тексти написів — виключно <see cref="BattleLogText.Floating"/> (не
+        /// вигадувати самому, §2 доручення). Бій v2, раунд 2 (п.6, доручення
+        /// власника): старт — трохи ВИЩЕ за верх імені/HP-смужки юніта (той
+        /// самий якір, що й оверлей, <c>NameLabelHeight</c>), з фіксованим
+        /// екранним запасом — інакше напис стартує НИЖЧЕ картки (перекриває
+        /// її, а не піднімається над нею), як на знімках без цього фіксу.
+        /// </summary>
         private void SpawnFloatingForEntry(BattleLogLineView entry)
         {
             var spec = BattleLogText.Floating(entry, _lastView, _protagonistGender);
@@ -1185,18 +1208,18 @@ namespace Game.Gameplay
             if (unit == null || ArenaCamera == null) return;
 
             var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
-            var gui = WorldToGui(new Vector3(world.X, BattleArenaView.NameLabelHeight * 0.65f, world.Z));
+            var nameTopGui = WorldToGui(new Vector3(world.X, BattleArenaView.NameLabelHeight, world.Z));
 
             var text = new BattleFloatingText
             {
                 Text = spec.Text,
                 Kind = spec.Kind,
-                ScreenX = gui.x,
-                ScreenY = gui.y,
+                ScreenX = nameTopGui.x,
+                ScreenY = nameTopGui.y - FloatingSpawnGapAboveNamePx,
                 Alpha = 1f,
                 Big = spec.Big
             };
-            _floatingRuntime.Add(new FloatingRuntime { Data = text, Age = 0f, Duration = spec.Big ? 1.0f : 0.6f });
+            _floatingRuntime.Add(new FloatingRuntime { Data = text, Age = 0f, Duration = spec.Big ? 1.4f : 1.0f });
         }
 
         private void ApplyHitReaction(ActiveTact tact)
@@ -1248,12 +1271,134 @@ namespace Game.Gameplay
             _shotLine.startWidth = 0.04f;
             _shotLine.endWidth = 0.04f;
             _shotLine.useWorldSpace = true;
+            // Бій v2, раунд 2 (п.2): лінія без тіні — інакше кидає чорну
+            // пунктирну тінь на землю (видно на 04-after-attack).
+            _shotLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _shotLine.receiveShadows = false;
             if (_tileMaterial != null) _shotLine.material = _tileMaterial;
             var block = new MaterialPropertyBlock();
             block.SetColor("_BaseColor", new Color(0.95f, 0.85f, 0.45f));
             _shotLine.SetPropertyBlock(block);
             _shotLine.enabled = false;
             return _shotLine;
+        }
+
+        /// <summary>
+        /// Бій v2, раунд 2 (п.2, доручення власника): лінія руху до
+        /// наведеного ДОСЯЖНОГО тайла (раніше не малювалась узагалі —
+        /// підказка «Рух: −N ОД» була, лінії не було, 07-hover-tile) —
+        /// над землею, яскраво-біла, той самий рецепт емісії, що
+        /// <c>VillageStage.ShowMarks</c> (URP/Lit + <c>_EMISSION</c>), щоб
+        /// точно рендерилась у білді, а не губилась на тлі трави.
+        /// </summary>
+        private LineRenderer EnsurePathLine()
+        {
+            if (_pathLine != null) return _pathLine;
+            if (ArenaRoot == null) return null;
+
+            var go = new GameObject("hover_path_line");
+            go.transform.SetParent(ArenaRoot.transform, false);
+            _pathLine = go.AddComponent<LineRenderer>();
+            _pathLine.positionCount = 0;
+            _pathLine.startWidth = PathLineWidth;
+            _pathLine.endWidth = PathLineWidth;
+            _pathLine.useWorldSpace = true;
+            _pathLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _pathLine.receiveShadows = false;
+            _pathLine.material = EnsureEmissiveMaterial();
+            _pathLine.enabled = false;
+            return _pathLine;
+        }
+
+        /// <summary>Маркер кінцевої клітинки шляху (§2) — тонкий яскравий диск, той самий матеріал, що <see cref="EnsurePathLine"/>.</summary>
+        private GameObject EnsurePathEndMarker()
+        {
+            if (_pathEndMarker != null) return _pathEndMarker;
+            if (ArenaRoot == null) return null;
+
+            var marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            marker.name = "hover_path_marker";
+            Destroy(marker.GetComponent<Collider>());
+            marker.transform.SetParent(ArenaRoot.transform, false);
+            marker.transform.localScale = new Vector3(0.42f, 0.02f, 0.42f);
+
+            var renderer = marker.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = EnsureEmissiveMaterial();
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+
+            marker.SetActive(false);
+            _pathEndMarker = marker;
+            return marker;
+        }
+
+        /// <summary>
+        /// Той самий рецепт, що <c>VillageStage.ShowMarks</c> (URP/Lit,
+        /// непрозорий, з увімкненою емісією — гарантовано рендериться в
+        /// білді, §2): кольори — прямо на матеріалі, а не через
+        /// MaterialPropertyBlock, бо матеріал належить лише лінії шляху й
+        /// маркеру кінця, обом — той самий яскраво-білий колір.
+        /// </summary>
+        private Material EnsureEmissiveMaterial()
+        {
+            if (_emissiveMaterial != null) return _emissiveMaterial;
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) return null;
+
+            _emissiveMaterial = new Material(shader);
+            var white = new Color(1f, 1f, 1f);
+            _emissiveMaterial.SetColor("_BaseColor", white);
+            _emissiveMaterial.EnableKeyword("_EMISSION");
+            _emissiveMaterial.SetColor("_EmissionColor", white * 1.6f);
+            return _emissiveMaterial;
+        }
+
+        /// <summary>
+        /// Показує/ховає лінію руху й маркер кінця шляху за наведенням
+        /// (§2, §6 ходу гравця): лише коли можна рухатися просто зараз —
+        /// хід гравця, презентер вільний, нічого не озброєно (як і
+        /// <see cref="RefreshIntentOverlayTiles"/> для тайлів під загрозою
+        /// дозору), і сам шлях справді досяжний (Result == "Success").
+        /// </summary>
+        private void UpdateHoverPathLine()
+        {
+            var line = EnsurePathLine();
+            var marker = EnsurePathEndMarker();
+            if (line == null || marker == null) return;
+
+            var current = CurrentUnit();
+            var path = (_armed == ArmedAction.None && IsPlayerTurn && !IsBusy) ? HoverPath : null;
+            bool show = current != null && path != null && path.Tiles != null && path.Tiles.Count > 0 &&
+                        string.Equals(path.Result, "Success", StringComparison.Ordinal);
+
+            if (!show)
+            {
+                line.enabled = false;
+                marker.SetActive(false);
+                return;
+            }
+
+            const float height = PathLineHeight;
+            _pathLinePoints.Clear();
+            var start = BattleArenaView.TileToWorld(current.Pos.X, current.Pos.Y);
+            _pathLinePoints.Add(new Vector3(start.X, height, start.Z));
+            foreach (var tile in path.Tiles)
+            {
+                var w = BattleArenaView.TileToWorld(tile.X, tile.Y);
+                _pathLinePoints.Add(new Vector3(w.X, height, w.Z));
+            }
+
+            line.positionCount = _pathLinePoints.Count;
+            line.SetPositions(_pathLinePoints.ToArray());
+            line.enabled = true;
+
+            var last = path.Tiles[path.Tiles.Count - 1];
+            var lastWorld = BattleArenaView.TileToWorld(last.X, last.Y);
+            marker.transform.localPosition = new Vector3(lastWorld.X, height, lastWorld.Z);
+            marker.SetActive(true);
         }
 
         private static string Arg(IReadOnlyDictionary<string, string> args, string name)
@@ -1369,7 +1514,7 @@ namespace Game.Gameplay
             {
                 var r = _floatingRuntime[i];
                 r.Age += dt;
-                r.Data.ScreenY -= 24f * dt;
+                r.Data.ScreenY -= FloatingRiseSpeedPxPerSecond * dt;
                 r.Data.Alpha = Mathf.Clamp01(1f - r.Age / r.Duration);
                 if (r.Age >= r.Duration) _floatingRuntime.RemoveAt(i);
             }
@@ -1421,6 +1566,13 @@ namespace Game.Gameplay
             return new Vector3(world.X, 0f, world.Z);
         }
 
+        /// <summary>Екранна точка центру наведеного тайла (§7.4 HoveredTileScreenX/Y) — трохи над землею, як і маркер кінця шляху (<see cref="EnsurePathEndMarker"/>).</summary>
+        private Vector2 HoveredTileScreenPoint()
+        {
+            var world = BattleArenaView.TileToWorld(HoveredTileX, HoveredTileY);
+            return WorldToGui(new Vector3(world.X, 0.15f, world.Z));
+        }
+
         private Vector2 WorldToGui(Vector3 world)
         {
             if (ArenaCamera == null) return Vector2.zero;
@@ -1430,22 +1582,101 @@ namespace Game.Gameplay
 
         // ================= камера (§4) =================
 
-        /// <summary>Початковий кадр на вхід у бій — миттєво, без пом'якшення (інакше перший кадр «летів би» з початку координат).</summary>
+        /// <summary>
+        /// Початковий кадр на вхід у бій — миттєво, без пом'якшення (інакше
+        /// перший кадр «летів би» з початку координат). Бій v2, раунд 2
+        /// (доручення власника, п.4 «Початкове кадрування — увесь грід у
+        /// вільній області»): зум рахує ПОВНИЙ грід у вільну від HUD частину
+        /// екрана (<see cref="BattleArenaView.OrthographicSizeForFreeArea"/>),
+        /// а центр — після того, як камера вже виставлена під цей зум,
+        /// зсувається так, щоб грід опинився в центрі вільної області, не
+        /// всього екрана (<see cref="FocusPointForFreeArea"/> — той самий
+        /// зсув, що й переліт до діючого юніта, <see cref="FocusCamera"/>).
+        /// </summary>
         private void InitializeCamera(BattleView view)
         {
             if (view?.Grid == null) return;
-            var frame = BattleArenaView.FrameGrid(view.Grid.Width, view.Grid.Height);
+
+            var margins = CurrentHudMargins();
+            float orthoSize = BattleArenaView.OrthographicSizeForFreeArea(view.Grid.Width, view.Grid.Height, Screen.width, Screen.height, margins);
             _cameraYawDegrees = InitialYawDegrees;
-            _cameraZoom = Mathf.Clamp(frame.OrthographicSize, CameraMinZoom, CameraMaxZoom);
-            _cameraPanFocus = new Vector3(frame.CenterX, 0f, frame.CenterZ);
+            _cameraZoom = Mathf.Clamp(orthoSize, CameraMinZoom, CameraMaxZoom);
             _cameraFlyTarget = null;
 
+            var naturalFrame = BattleArenaView.FrameGrid(view.Grid.Width, view.Grid.Height);
+            _cameraPanFocus = new Vector3(naturalFrame.CenterX, 0f, naturalFrame.CenterZ);
+
+            if (ArenaCamera == null) { _cameraInitialized = true; return; }
+
+            // Спершу виставляємо камеру під природний центр гріда з новим
+            // зумом — без цього кроку ScreenPointToRay (у FocusPointForFreeArea)
+            // рахував би промені під СТАРОЮ позою камери (з попереднього бою).
+            ApplyCameraPose(_cameraPanFocus);
+            _cameraPanFocus = FocusPointForFreeArea(_cameraPanFocus);
+            ApplyCameraPose(_cameraPanFocus);
+
+            _cameraInitialized = true;
+        }
+
+        /// <summary>Миттєво (без згладжування) ставить камеру в позу під поточні tilt/yaw/zoom і задану точку фокуса.</summary>
+        private void ApplyCameraPose(Vector3 focus)
+        {
             if (ArenaCamera == null) return;
             var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistance);
-            ArenaCamera.transform.position = _cameraPanFocus + new Vector3(offset.X, offset.Y, offset.Z);
+            ArenaCamera.transform.position = focus + new Vector3(offset.X, offset.Y, offset.Z);
             ArenaCamera.transform.rotation = Quaternion.LookRotation(-new Vector3(offset.X, offset.Y, offset.Z).normalized, Vector3.up);
             if (ArenaCamera.orthographic) ArenaCamera.orthographicSize = _cameraZoom;
-            _cameraInitialized = true;
+        }
+
+        /// <summary>Поточні поля HUD — з останніх прямокутників <see cref="SetHudRects"/>, або розумний дефолт, поки їх ще не було цього бою.</summary>
+        private BattleArenaView.HudMargins CurrentHudMargins()
+        {
+            if (_hudRects == null || _hudRects.Count == 0)
+                return BattleArenaView.DefaultHudMargins(Screen.width, Screen.height);
+
+            var converted = new List<BattleArenaView.GuiRect>(_hudRects.Count);
+            for (int i = 0; i < _hudRects.Count; i++)
+            {
+                var r = _hudRects[i];
+                converted.Add(new BattleArenaView.GuiRect(r.x, r.y, r.width, r.height));
+            }
+            return BattleArenaView.MarginsFromRects(Screen.width, Screen.height, converted);
+        }
+
+        /// <summary>Центр вільної від HUD області, у екранних координатах (Y згори — те, що приймає <c>Camera.ScreenPointToRay</c>/<c>WorldToScreenPoint</c>).</summary>
+        private Vector2 FreeAreaCenterScreen()
+        {
+            var gui = BattleArenaView.FreeAreaCenter(Screen.width, Screen.height, CurrentHudMargins());
+            return new Vector2(gui.X, Screen.height - gui.Y);
+        }
+
+        /// <summary>
+        /// Перетин променя ортографічної камери (промені паралельні — Unity
+        /// сам це гарантує для <c>Camera.orthographic == true</c>) із площиною
+        /// арени (Y=0) для довільної екранної точки — БЕЗ Physics.Raycast
+        /// (арену ще не обов'язково добудовано під час InitializeCamera).
+        /// </summary>
+        private Vector3 GroundPointAtScreen(float screenX, float screenY)
+        {
+            var ray = ArenaCamera.ScreenPointToRay(new Vector3(screenX, screenY, 0f));
+            if (Mathf.Abs(ray.direction.y) < 1e-6f) return ray.origin;
+            float t = -ray.origin.y / ray.direction.y;
+            return ray.origin + ray.direction * t;
+        }
+
+        /// <summary>
+        /// Зсуває фокус камери так, щоб <paramref name="targetGround"/> (Y=0)
+        /// рендерився в центрі вільної від HUD області, а не всього екрана
+        /// (§4, Бій v2 раунд 2). Працює на живій позі <see cref="ArenaCamera"/>
+        /// (tilt/yaw/zoom — байдуже, який саме фокус камера тримає ЗАРАЗ:
+        /// ортографічна панорама лінійна, тож зсув виходить той самий).
+        /// </summary>
+        private Vector3 FocusPointForFreeArea(Vector3 targetGround)
+        {
+            if (ArenaCamera == null) return targetGround;
+            var desiredScreen = FreeAreaCenterScreen();
+            var groundAtDesired = GroundPointAtScreen(desiredScreen.x, desiredScreen.y);
+            return _cameraPanFocus + (targetGround - groundAtDesired);
         }
 
         private void UpdateCamera(float dt)
@@ -1746,6 +1977,8 @@ namespace Game.Gameplay
             _armed = ArmedAction.None;
             _session = null;
             if (_shotLine != null) _shotLine.enabled = false;
+            if (_pathLine != null) _pathLine.enabled = false;
+            if (_pathEndMarker != null) _pathEndMarker.SetActive(false);
 
             RestoreHubCamera();
             if (ArenaRoot != null) ArenaRoot.SetActive(false);
