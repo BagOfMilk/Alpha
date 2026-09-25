@@ -140,9 +140,14 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Арена бою — згори (тактичний бій дивиться на грид зверху, не
-        /// ізометрично): вимкнена, поки бою нема кого показувати. Пакет E2
-        /// (Battle presentation, §5 E1) підлаштує проєкцію під реальний грид.
+        /// Арена бою — тактична камера з нахилом (Бій v2, docs/COMBAT_V2.md
+        /// §4: не строго згори — підпис/оверлеї над юнітом інакше лягають
+        /// прямо на модель, аудит 25.09.2026): вимкнена, поки бою нема кого
+        /// показувати. <see cref="Game.Gameplay.BattleArenaController.InitializeCamera"/>
+        /// одразу перекладає позицію/поворот під реальний грид на вхід у бій —
+        /// значення тут лише «розумний дефолт» (нахил/поворот ті самі
+        /// константи, що керують камерою в бою, щоб не розходитись двома
+        /// джерелами істини).
         /// </summary>
         private static Camera BuildArenaCamera()
         {
@@ -150,7 +155,7 @@ namespace Game.Gameplay.EditorTools
             var cam = go.AddComponent<Camera>();
 
             cam.orthographic = true;
-            cam.orthographicSize = 12f;
+            cam.orthographicSize = 8f;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.10f, 0.10f, 0.12f);
             cam.nearClipPlane = 0.1f;
@@ -159,8 +164,8 @@ namespace Game.Gameplay.EditorTools
             if (go.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>() == null)
                 go.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
 
-            go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            go.transform.position = new Vector3(0f, 30f, 0f);
+            go.transform.rotation = Quaternion.Euler(Game.Gameplay.BattleArenaController.CameraTiltDegrees, Game.Gameplay.BattleArenaController.InitialYawDegrees, 0f);
+            go.transform.position = new Vector3(0f, 20f, -15f);
 
             go.SetActive(false);
             return cam;

@@ -65,6 +65,13 @@
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/BattleArenaView.cs" />
     <!--
+      Бій v2 (3D-подача, docs/COMBAT_V2.md §5-§7): режисер ходу ворога і
+      розбір шляху руху з журналу — обидва чистий C#, тим самим прийомом.
+      BattleTurnDirectorTests.cs/BattleTactParserTests.cs беруть їх з джерела.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/BattleTurnDirector.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/BattleTactParser.cs" />
+    <!--
       Прогулянка селом: WalkGrid/VillagePlaces — чистий C# (сітка, A*, місця
       взаємодії). HeroWalker у сцені лише застосовує — VillageWalkTests.cs
       бере модель з джерела напряму.
