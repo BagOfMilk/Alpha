@@ -60,10 +60,14 @@ namespace Alpha.Sim
                 // (Поправка №7.7, тестова сборка) мовчки підмінило б усі строки
                 // стройки на одну добу — саме тому, що BotRunner.PlayDays веде
                 // сесію через той самий GameSession, що й tools/Alpha.Play.
+                // TestBuildTensionPace = false: тим самим приводом, що й
+                // TestBuildOneDayConstruction вище — цей харнес калібрує шкалу
+                // Напруги КАМПАНІЇ (CampaignPacingTests звіряються з тим самим
+                // темпом), а не стиснутий темп тестової збірки (Поправка №7).
                 var options = new NewGameOptions
                 {
                     SkipCreation = false, HitRule = HitRuleKind.Threshold, Seed = seed, Roller = roller,
-                    TestBuildOneDayConstruction = false
+                    TestBuildOneDayConstruction = false, TestBuildTensionPace = false
                 };
                 var log = new List<GameEvent>();
 

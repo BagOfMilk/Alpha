@@ -43,6 +43,15 @@ namespace Game.Gameplay
         private const int FramesBattleEnter = 6;
         private const int MaxLoopSteps = 6000;
         private const int MaxManualBattleSteps = 3;
+
+        /// <summary>
+        /// Поправка №7, <c>-autoplay-long</c>: стеля доби вільної гри, на якій
+        /// довгий тур зупиняється, навіть якщо великий бунт на площі так і
+        /// не настав (ота ж сама причина, що в <c>TestBuildTensionPaceTests</c>:
+        /// 30-денні бот-прогони). Трохи вище цільової доби 25 бунту —
+        /// запобіжник, а не очікуваний результат.
+        /// </summary>
+        public const int LongTourDayCap = 32;
         /// <summary>Поріг ручної атаки водія тура (QA раунд 2): нижче — краще завершити хід, ніж бити напевне мимо.</summary>
         private const int MinManualAttackChance = 20;
 
@@ -55,8 +64,10 @@ namespace Game.Gameplay
         private readonly IAutoplayHost _host;
         private readonly GameShell _shell;
         private readonly bool _useThresholdRule;
+        private readonly bool _longTour;
 
         private int _freePlayStartDay = -1;
+        private bool _freePlayMilestoneShown;
         private bool _hubToured;
         private bool _battleShown;
         private bool _dungeonShown;
@@ -66,6 +77,21 @@ namespace Game.Gameplay
         private bool _delveDeparted;
         private bool _crisisFinaleAttempted;
 
+        /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" приём, що <see cref="_capturedOnce"/> нижче.</summary>
+        private int _dayLogScanIndex;
+
+        /// <summary>
+        /// Останній перевірений рядок DayLog. GameSession очищає DayLog на межі
+        /// фаз (ClearDayLog), а лічильник версії — internal; тож очищення
+        /// розпізнаємо так: рядок перед індексом уже не той самий об'єкт.
+        /// Без цього після першого ж очищення індекс лишався більшим за новий
+        /// журнал, і тур мовчки пропускав зсуви смуг і передвісники.
+        /// </summary>
+        private GameEvent _lastScannedEvent;
+
+        /// <summary>-autoplay-long: розв'язку великого бунту на площі вже показано знімком — можна завершувати тур, не чекаючи стелі доби.</summary>
+        private bool _greatCrisisResolved;
+
         /// <summary>
         /// Поправка №7.8, п.4: іменовані знімки Choice-кроків/наслідків/
         /// квестових глав — за id, не за лічильником, тож кожен показується
@@ -74,11 +100,12 @@ namespace Game.Gameplay
         /// </summary>
         private readonly HashSet<string> _capturedOnce = new HashSet<string>();
 
-        public AutoplayGameDriver(IAutoplayHost host, GameShell shell, bool useThresholdRule)
+        public AutoplayGameDriver(IAutoplayHost host, GameShell shell, bool useThresholdRule, bool longTour = false)
         {
             _host = host ?? throw new ArgumentNullException(nameof(host));
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
             _useThresholdRule = useThresholdRule;
+            _longTour = longTour;
         }
 
         private GameSession Session => _shell.Session;
@@ -146,6 +173,13 @@ namespace Game.Gameplay
 
                 var state = Session.State;
 
+                // -autoplay-long: знімки зсуву смуги/передвісників кризи/
+                // розв'язки бунту — за НОВИМИ рядками DayLog, незалежно від
+                // того, у якому стані диспетчер саме зараз (band-change/
+                // forewarn можуть прийти конвеєром дня, а не тільки в Decision).
+                if (_longTour)
+                    foreach (var f in ScanForGreatCrisisSignals()) yield return f;
+
                 // ---- портретна сцена (Поправка №7.8, п.1/4) ----
                 if (state == SessionState.Scene)
                 {
@@ -206,8 +240,10 @@ namespace Game.Gameplay
                         {
                             _freePlayStartDay = day;
                         }
-                        else if (day > _freePlayStartDay)
+                        else if (day > _freePlayStartDay && !_freePlayMilestoneShown)
                         {
+                            _freePlayMilestoneShown = true;
+
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _host.Capture("freeplay-day" + day);
                             yield return 0;
@@ -217,13 +253,39 @@ namespace Game.Gameplay
                             // данж/сцени-вибори/раду, тож рахунок "побачено"
                             // тут найповніший за весь прогін (порівняй із
                             // "hub-journal" дня 1, де побачено майже нічого).
+                            // -autoplay-long: журнал наостанок таки ще не
+                            // "наостанок" — тур продовжує до бунту/стелі
+                            // доби, тож знімок тут лише проміжний.
+                            _shell.SetHubTab(10);
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                            _host.Capture(_longTour ? "mechanics-journal-freeplay-start" : "mechanics-journal-final");
+                            yield return 0;
+                            _shell.SetHubTab(0);
+
+                            if (!_longTour)
+                            {
+                                _host.Log("FreePlay доби " + day + " досягнуто (стартувало на добу " + _freePlayStartDay + ") — тур завершено успішно.");
+                                yield break;
+                            }
+
+                            _host.Log("FreePlay доби " + day + " досягнуто — довгий тур (-autoplay-long) веде далі, руки геть, до бунту на площі або доби " + LongTourDayCap + ".");
+                        }
+
+                        // -autoplay-long: завершуємо, щойно розв'язку бунту
+                        // вже показано знімком, або впираємось у стелю доби —
+                        // те саме "не застрягти назавжди", що MaxLoopSteps
+                        // вище, лише для природної кризи, а не диспетчера.
+                        if (_longTour && (_greatCrisisResolved || day >= LongTourDayCap))
+                        {
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _shell.SetHubTab(10);
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _host.Capture("mechanics-journal-final");
                             yield return 0;
                             _shell.SetHubTab(0);
 
-                            _host.Log("FreePlay доби " + day + " досягнуто (стартувало на добу " + _freePlayStartDay + ") — тур завершено успішно.");
+                            _host.Log("Довгий тур завершено на добу " + day +
+                                (_greatCrisisResolved ? " (бунт на площі розв'язано)." : " (досягнуто стелі " + LongTourDayCap + " діб без бунту).") );
                             yield break;
                         }
                     }
@@ -282,6 +344,16 @@ namespace Game.Gameplay
                         _host.Capture("decision-day" + Session.CurrentView.Day);
                         yield return 0;
                         _decisionShown = true;
+                    }
+                    // -autoplay-long: великий бунт на площі — окремий знімок
+                    // РІВНО на своєму рішенні, незалежно від _decisionShown
+                    // вище (яке ловить лише ПЕРШЕ рішення за весь тур).
+                    else if (_longTour && offer != null && offer.IsCrisis &&
+                             _capturedOnce.Add("crisis-riot-decision"))
+                    {
+                        foreach (var f in WaitFrames(FramesShort)) yield return f;
+                        _host.Capture("crisis-riot-decision");
+                        yield return 0;
                     }
 
                     var path = !_battleShown ? BloodyIfPossible(offer) : StewardPath(offer);
@@ -614,6 +686,71 @@ namespace Game.Gameplay
                     if (o.Path == IncidentPathView.Bloody && o.HasCandidate) return IncidentPath.Bloody;
             }
             return IncidentPath.Quiet;
+        }
+
+        // ===================== -autoplay-long: сигнали великого бунту =====================
+
+        /// <summary>
+        /// Поправка №7, <c>-autoplay-long</c>: перечитує НОВІ (ще не бачені)
+        /// рядки <see cref="GameSession.DayLog"/> і знімає рівно по одному
+        /// скріншоту на кожен зсув смуги Напруги, кожен щабель передвісника
+        /// природної кризи (<c>SubjectId=="crisis"</c>) і саму розв'язку
+        /// бунту на площі — той самий "не повторюй" приём, що
+        /// <see cref="_capturedOnce"/> для choice/consequence вище.
+        /// </summary>
+        private IEnumerable<int> ScanForGreatCrisisSignals()
+        {
+            var log = Session.DayLog;
+            if (_dayLogScanIndex > log.Count ||
+                (_dayLogScanIndex > 0 && !ReferenceEquals(log[_dayLogScanIndex - 1], _lastScannedEvent)))
+                _dayLogScanIndex = 0;
+
+            for (; _dayLogScanIndex < log.Count; _dayLogScanIndex++)
+            {
+                _lastScannedEvent = log[_dayLogScanIndex];
+                string slug = LongTourSlugFor(log[_dayLogScanIndex]);
+                if (slug == null) continue;
+                if (!_capturedOnce.Add(slug)) continue;
+
+                foreach (var f in WaitFrames(FramesShort)) yield return f;
+                _host.Capture(slug);
+                yield return 0;
+
+                if (slug == "crisis-riot-outcome") _greatCrisisResolved = true;
+            }
+        }
+
+        /// <summary>
+        /// Ім'я знімка для рядка DayLog, вартого окремого кадру довгого туру,
+        /// або null — решта рядків тур не знімає (не захаращуємо Screenshots/
+        /// повторами доповідей з постів тощо). Три випадки:
+        /// "tension.band.&lt;Band&gt;" (SignalComposer, GameSession.TranslateReport) —
+        /// зсув смуги настрою міста; "forewarn.levelN" з <c>subject=="crisis"</c>
+        /// в Args (GameSession.TranslateReport кладе SubjectId окремим
+        /// аргументом — Key лишається спільним "forewarn.levelN" для всіх
+        /// джерел, тож розрізняти джерело треба саме за Args, не за Key) —
+        /// щабель передвісника природної кризи (площа), не вулиці/ночі/
+        /// Тугара; "incident.crisis_riot.&lt;Band&gt;" (SignalComposer:
+        /// TopicId+"."+Band) — сама розв'язка бунту.
+        /// </summary>
+        private static string LongTourSlugFor(GameEvent evt)
+        {
+            if (evt?.Key == null) return null;
+
+            if (evt.Key.StartsWith("tension.band.", StringComparison.Ordinal) &&
+                !evt.Key.StartsWith("tension.band.label", StringComparison.Ordinal) &&
+                !string.Equals(evt.Key, "tension.band.risen", StringComparison.Ordinal))
+                return "band-" + evt.Key.Substring("tension.band.".Length).ToLowerInvariant();
+
+            if (evt.Key.StartsWith("forewarn.level", StringComparison.Ordinal) &&
+                evt.Args != null && evt.Args.TryGetValue("subject", out var subject) &&
+                string.Equals(subject, "crisis", StringComparison.Ordinal))
+                return "crisis-forewarn-" + evt.Key.Substring("forewarn.".Length);
+
+            if (evt.Key.StartsWith("incident.crisis_riot.", StringComparison.Ordinal))
+                return "crisis-riot-outcome";
+
+            return null;
         }
 
         // ===================== ранок: рада / вилазка =====================

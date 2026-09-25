@@ -904,7 +904,11 @@ namespace Game.Gameplay.UI
             if (hasStageText)
                 GUILayout.Label(UkrainianText.Get(offerBodyKey, g), AlphaSkin.Body);
             else if (offer.Options == null || offer.Options.Count == 0)
+            {
+                string checkLine = ScreenText.QuestCheckLine(offer, g);
+                if (checkLine.Length > 0) GUILayout.Label(checkLine, AlphaSkin.Body);
                 GUILayout.Label(UkrainianText.Get("ui.quests.check_stage_hint", g), AlphaSkin.Tooltip);
+            }
 
             if (offer.Options != null)
                 for (int i = 0; i < offer.Options.Count; i++)

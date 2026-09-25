@@ -114,11 +114,13 @@ namespace Game.Core.Session.Bots
             List<GameEvent> fullLog = null, Action<GameEvent> onEvent = null,
             List<PendingOfferView> offerLog = null, List<string> viewKeyLog = null,
             List<RosterView> offerRosterLog = null, TimingTally tally = null,
-            Action<SceneStepView> onSceneStep = null, Action<ChoiceDiagnostic> onChoiceApplied = null)
+            Action<SceneStepView> onSceneStep = null, Action<ChoiceDiagnostic> onChoiceApplied = null,
+            bool suppressCouncilRoutine = false)
         {
             var session = new GameSession(options?.Roller);
             session.NewGame(options ?? new NewGameOptions());
-            Drive(session, policy, days, fullLog, onEvent, offerLog, viewKeyLog, offerRosterLog, tally, onSceneStep, onChoiceApplied);
+            Drive(session, policy, days, fullLog, onEvent, offerLog, viewKeyLog, offerRosterLog, tally, onSceneStep, onChoiceApplied,
+                suppressCouncilRoutine);
             return session;
         }
 
@@ -136,7 +138,8 @@ namespace Game.Core.Session.Bots
             List<GameEvent> fullLog = null, Action<GameEvent> onEvent = null,
             List<PendingOfferView> offerLog = null, List<string> viewKeyLog = null,
             List<RosterView> offerRosterLog = null, TimingTally tally = null,
-            Action<SceneStepView> onSceneStep = null, Action<ChoiceDiagnostic> onChoiceApplied = null)
+            Action<SceneStepView> onSceneStep = null, Action<ChoiceDiagnostic> onChoiceApplied = null,
+            bool suppressCouncilRoutine = false)
         {
             if (session == null) throw new ArgumentNullException(nameof(session));
             if (policy == null) throw new ArgumentNullException(nameof(policy));
@@ -195,7 +198,14 @@ namespace Game.Core.Session.Bots
                         if (lastMorningDoneForDay != day)
                         {
                             ApplyAssignments(session, policy, tally);
-                            ApplyCouncilRoutine(session, day, tally);
+                            // Поправка №7 (замір темпу Напруги): "безрукий еталон"
+                            // (a) і "шкідник" (c) з §3.a/в docs/TEST_BUILD.md-звіту
+                            // ніколи не замовляють Облаву й не будують Храм/
+                            // Укріплення — саме ЦІ дії штучно тримали Напругу в
+                            // Спокої (FACTS 24.09.2026: Облава на кожній готовності
+                            // з'їдала будь-який набраний ріст). "Дефузер" (b, той
+                            // самий StewardPolicy) лишає рутину увімкненою.
+                            if (!suppressCouncilRoutine) ApplyCouncilRoutine(session, day, tally);
                             MaybeDepartExpedition(session, policy, day, tally);
                             lastMorningDoneForDay = day;
                         }

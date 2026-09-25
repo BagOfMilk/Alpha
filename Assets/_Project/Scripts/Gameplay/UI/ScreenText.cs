@@ -175,6 +175,27 @@ namespace Game.Gameplay.UI
                 "performer", performer, "band", band);
         }
 
+        /// <summary>
+        /// Назва квесту: "quest.&lt;id&gt;" (Гафія — id без префікса), або сам id,
+        /// якщо він уже ключ (глава арки Максима — "quest.maksym.ch1").
+        /// </summary>
+        public static string QuestName(string questId, Gender gender)
+        {
+            if (string.IsNullOrEmpty(questId)) return string.Empty;
+            string prefixed = "quest." + questId;
+            if (UkrainianText.Has(prefixed, gender)) return UkrainianText.Get(prefixed, gender);
+            if (UkrainianText.Has(questId, gender)) return UkrainianText.Get(questId, gender);
+            return questId;
+        }
+
+        /// <summary>Рядок етапу-перевірки квесту — навичка і поріг заздалегідь (інваріант 8); порожньо для етапу-вибору.</summary>
+        public static string QuestCheckLine(QuestOfferView offer, Gender gender)
+        {
+            if (offer == null || string.IsNullOrEmpty(offer.CheckSkillKey)) return string.Empty;
+            return UkrainianText.Format("ui.quest.check.line", gender,
+                "skill", SkillLabel(offer.CheckSkillKey, gender), "threshold", offer.CheckThreshold.ToString());
+        }
+
         public static string SkillLabel(string skillKey, Gender gender)
         {
             if (string.IsNullOrEmpty(skillKey)) return string.Empty;
@@ -499,7 +520,10 @@ namespace Game.Gameplay.UI
             string day = Arg(a, "day") ?? "";
             string slot = Arg(a, "slot") ?? "";
             string level = Arg(a, "level") ?? "";
-            string chapter = Arg(a, "arcId") ?? "";
+            // Глава арки: назва за ключем, який ядро кладе в подію
+            // (chapterTitleKey = ArcChapter.TitleKey). Раніше сюди йшов сирий
+            // arcId, а шаблон "{chapterId}" брав сирий "ch1" з хвоста пар.
+            string chapter = ChapterLabel(Arg(a, "chapterTitleKey"), Arg(a, "chapterId"), gender);
             // Фікс-ревью (major, знайдено тур-автоплеєм): раніше тут був сирий
             // Arg(a, "questId") ?? "" — на відміну від companion/post/item/
             // building/site/faction/scar/domain нижче, questId НЕ проходив
@@ -554,7 +578,7 @@ namespace Game.Gameplay.UI
                 "chapter", chapter, "quest", quest, "char", companion, "path", path,
                 "companionId", companion, "slotId", post, "itemId", item,
                 "buildingId", building, "siteId", site, "factionId", faction,
-                "favored", faction, "scarId", scar, "questId", quest, "arcId", chapter,
+                "favored", faction, "scarId", scar, "questId", quest, "chapterId", chapter,
                 "attackerId", ResolveCompanionName(Arg(a, "attackerId"), gender, roster),
                 "targetId", ResolveCompanionName(Arg(a, "targetId"), gender, roster),
                 "trigger", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
@@ -614,6 +638,17 @@ namespace Game.Gameplay.UI
             // показувала англійське слово напряму (R7 такого не дозволяє).
             if (UkrainianText.Has("dungeon.threat." + lower, gender)) return UkrainianText.Get("dungeon.threat." + lower, gender);
             return rawBand;
+        }
+
+        /// <summary>
+        /// Назва глави арки для стрічки: ключ назви з події, інакше сирий id
+        /// (його ловить автопрогін, а не гравець — ключ є в кожній події арки).
+        /// </summary>
+        private static string ChapterLabel(string titleKey, string chapterId, Gender gender)
+        {
+            if (!string.IsNullOrEmpty(titleKey) && UkrainianText.Has(titleKey, gender))
+                return "«" + UkrainianText.Get(titleKey, gender) + "»";
+            return chapterId ?? "";
         }
 
         private static string ContentLabel(string prefix, string id, Gender gender)

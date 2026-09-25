@@ -642,7 +642,11 @@ namespace Game.Tests.EditMode
                 // у тактичному бою, на який веде цей шлях/ця кімната —
                 // видима механічна деталь рішення (owner: "тактичний бій:
                 // N ворогів"), не прихована шкала.
-                "TacticalBattleEnemyCount", "EnemyCount"
+                "TacticalBattleEnemyCount", "EnemyCount",
+                // Поріг етапу-перевірки квесту (QuestOfferView.CheckThreshold) —
+                // той самий показаний заздалегідь поріг, що й Threshold вище
+                // (інваріант 8), не прихована шкала.
+                "CheckThreshold"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

@@ -199,10 +199,50 @@ namespace Game.Core.Base
             return c == null || c.IsDead || c.Status == CompanionStatus.Antagonist;
         }
 
+        /// <summary>
+        /// Пересобирает бухгалтерию слотов (<see cref="AssignmentSlot.AssignedCompanionId"/>)
+        /// из уже восстановленного ростера (<c>Companion.AssignedSlotId</c>).
+        ///
+        /// Найдено 25.09.2026 (лид, репродуцировано): восстановление сейва в
+        /// СВЕЖИЙ экземпляр <see cref="GameSession"/> расходилось с непрерывной
+        /// игрой — посты давали выработку/XP не тому, а некоторые не давали
+        /// ничего вовсе. Причина: «кто на каком посту» хранится ДВАЖДЫ — на
+        /// стороне напарника (<c>Companion.AssignedSlotId</c>, персистит
+        /// <c>RosterAdapter</c>) и на стороне слота (это поле, персистит лишь
+        /// <see cref="TryAssign"/> во время игры). <see cref="CaptureState"/>/
+        /// <see cref="RestoreState"/> этого класса знают только про кошелёк/
+        /// разблокированные слоты/уровни — сторону слота никто не пишет и не
+        /// читает. На той же сессии (тот же живой объект BaseState) это не
+        /// видно: слоты уже помечены правильно с момента назначения. На
+        /// СВЕЖЕМ BaseState (NewGame() перед ApplySave, ContinueGame,
+        /// RestoreFromBlob) каждый слот начинается пустым — <see cref="AdvanceCycle"/>
+        /// тихо пропускает занятый (по напарнику) пост, считая его свободным
+        /// (аудит: "storehouse_dock" при этом случайно оставался правильным —
+        /// ЕДИНСТВЕННЫЙ пост, чьё назначение захардкожено в
+        /// <c>FirstHourWorld.Build</c>, а не пришло из сейва).
+        ///
+        /// Вызывающий — <c>GameSession.ApplySave</c>, СРАЗУ после
+        /// <c>_processor.RestoreState(corePart)</c> (тот восстанавливает и
+        /// ростер, и экономику): без этого порядка <c>Companion.AssignedSlotId</c>
+        /// ещё не успел обновиться, и пересборка сработала бы на старых данных.
+        /// </summary>
+        internal void RestoreSlotOccupancy()
+        {
+            for (int i = 0; i < _slots.Count; i++)
+                _slots[i].AssignedCompanionId = null;
+
+            foreach (var c in Roster.All)
+            {
+                if (string.IsNullOrEmpty(c.AssignedSlotId)) continue;
+                var slot = GetSlot(c.AssignedSlotId);
+                if (slot != null) slot.AssignedCompanionId = c.Id;
+            }
+        }
+
         // ---- слепок хозяйства (Foundation/A1) ----
         //
         // g:<золото>|m:<материалы>|f:<еда>|u:<открытые слоты через ','>|
-        // x:<companionId:уровень:опыт через ',' >
+        // x:<companionId:уровень:опыт через ',' >|h:<0|1>
         // Без «;» и внутреннего «=» — внешний слепок (SettlementSave) режет по
         // ним на своём уровне. Обычные публичные методы, не реализация
         // IStateBlob — см. комментарий класса; в порт их заворачивает EconomyBlob.
@@ -226,6 +266,13 @@ namespace Game.Core.Base
                        ":" + c.Xp.ToString(CultureInfo.InvariantCulture));
             xp.Sort(StringComparer.Ordinal);
             sb.Append("|x:").Append(string.Join(",", xp.ToArray()));
+
+            // Найдено 25.09.2026 (восстановление в свежую сессию расходилось
+            // с непрерывной игрой): флаг голода прошлого цикла влияет на
+            // выработку/XP СЛЕДУЮЩЕГО цикла (Поправка №4, WasHungryLastCycle
+            // выше) — без него загрузка безнаказанно снимала штраф голода,
+            // наложенный прямо перед сохранением.
+            sb.Append("|h:").Append(WasHungryLastCycle ? 1 : 0);
 
             return sb.ToString();
         }
@@ -265,6 +312,9 @@ namespace Game.Core.Base
                             if (c == null) continue;
                             c.RestoreProgressForSave(ParseInt(f[1]), ParseInt(f[2]));
                         }
+                        break;
+                    case 'h':
+                        WasHungryLastCycle = body == "1";
                         break;
                 }
             }

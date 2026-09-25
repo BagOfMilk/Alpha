@@ -146,6 +146,15 @@ namespace Game.Core.Session
         private IDiceRoller _roller;
         private ulong _seed = 1;
         private HitRuleKind _hitRule = HitRuleKind.Threshold;
+
+        /// <summary>
+        /// Темп Напруги, з яким побудовано світ цієї партії
+        /// (<see cref="NewGameOptions.TestBuildTensionPace"/>). Живе в сейві:
+        /// інакше «Продовжити» будувало світ із типовими опціями, і партія,
+        /// почата з кампанійним темпом (перемикач на титулі), мовчки
+        /// продовжувалась у тестовому. Знайдено 25.09.2026.
+        /// </summary>
+        private bool _tensionPace = true;
         private bool _ironman;
 
         private CombatState _battle;
@@ -193,11 +202,24 @@ namespace Game.Core.Session
         // §2 рядок 11 такого не дозволяє. Один вибір і той самий етап того
         // самого квесту логується рівно раз — ключ скидається, щойно етап
         // справді змінюється (ResolveQuestChoice/NewGame/ApplySave).
-        private string _lastLoggedQuestOfferKey;
+        //
+        // Множина, а не «останній ключ»: ліній квестів дві (Гафія і Максим), і
+        // вечірня панель пропонує обидві щовечора — з одним «останнім ключем»
+        // вони перебивали одна одну, і «Нова пропозиція: Максим / Гафія»
+        // писалась у стрічку щодоби (довгий автопрогін 25.09.2026).
+        private readonly HashSet<string> _loggedQuestOfferKeys = new HashSet<string>(StringComparer.Ordinal);
         private DayReportView _lastDayReport;
         private DayPhase _lastPhase = DayPhase.Day;
         private bool _summaryAcknowledged;
         private bool _freePlay;
+
+        /// <summary>
+        /// Хоч одну ніч партії гравець провів на варті — пункт журналу
+        /// «Ніч: патруль чи сон». Раніше пункт чекав події "night.forewarn",
+        /// якої ядро не пише ніде, і не позначався ніколи (знайдено довгим
+        /// автопрогоном 25.09.2026: 32 доби, половина ночей на варті, «ще ні»).
+        /// </summary>
+        private bool _patrolledANight;
         private bool _finaleResolved;
         private string _finaleOutcomeKey;
 
@@ -276,7 +298,8 @@ namespace Game.Core.Session
 
             _cfg = new BalanceConfig();
             _world = FirstHourWorld.Build(tier: 1, requirePlayerDecision: true, balance: _cfg,
-                testBuildOneDayConstruction: o.TestBuildOneDayConstruction);
+                testBuildOneDayConstruction: o.TestBuildOneDayConstruction,
+                testBuildTensionPace: o.TestBuildTensionPace);
             _state = _world.BaseState;
             _state.ProtagonistId = ProtagonistId;
             _works = _world.CityWorks;
@@ -306,13 +329,14 @@ namespace Game.Core.Session
             _activeArcChapterQuestCompanion.Clear();
             _currentSceneId = null;
             _seenEventKeys.Clear();
+            _patrolledANight = false;
 
             _slots.Clear();
             _dayLog.Clear();
             _dayLogVersion++;
             _currentPending = null;
             _currentQuestOffer = null;
-            _lastLoggedQuestOfferKey = null;
+            _loggedQuestOfferKeys.Clear();
             _lastDayReport = null;
             _dungeon = null;
             _battle = null;
@@ -326,6 +350,7 @@ namespace Game.Core.Session
             _hafiyaGrassBonusApplied = false;
 
             _hitRule = o.HitRule;
+            _tensionPace = o.TestBuildTensionPace;
             _seed = o.Seed;
             _ironman = o.Ironman;
 
@@ -393,7 +418,14 @@ namespace Game.Core.Session
             string blob;
             if (!_slots.TryGetValue(slot, out blob) || string.IsNullOrEmpty(blob)) return false;
 
-            NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Roller = roller });
+            // Темп Напруги визначає, як побудовано світ (пороги смуг, тик,
+            // накопичувач кризи), тож його треба знати ДО NewGame, а не лише
+            // відновити полем, як hitRule. Старий сейв без поля — тестовий темп.
+            NewGame(new NewGameOptions
+            {
+                SkipCreation = true, HitRule = HitRuleKind.Threshold, Roller = roller,
+                TestBuildTensionPace = PeekTensionPace(blob) ?? true
+            });
             _slots[slot] = blob;
             return LoadState(slot);
         }
@@ -865,7 +897,16 @@ namespace Game.Core.Session
             if (run == null || run.Current == null) return null;
 
             var stage = run.Current;
-            var offer = new QuestOfferView { Kind = "Quest", TopicId = run.Def.Id, QuestId = questId, Stage = run.CurrentIndex };
+            var offer = new QuestOfferView
+            {
+                Kind = "Quest", TopicId = run.Def.Id, QuestId = questId, Stage = run.CurrentIndex,
+                StageTextKey = stage.TextKey
+            };
+            if (stage.Kind == QuestStageKind.Check)
+            {
+                offer.CheckSkillKey = stage.CheckSkill.Id;
+                offer.CheckThreshold = stage.Threshold;
+            }
 
             if (stage.Kind == QuestStageKind.Choice)
             {
@@ -885,10 +926,9 @@ namespace Game.Core.Session
             _currentQuestOffer = offer;
 
             string offerKey = questId + "#" + run.CurrentIndex.ToString(CultureInfo.InvariantCulture);
-            if (!string.Equals(_lastLoggedQuestOfferKey, offerKey, StringComparison.Ordinal))
+            if (_loggedQuestOfferKeys.Add(offerKey))
             {
                 LogEvent("quest.offered", Args("questId", questId, "stage", run.CurrentIndex.ToString(CultureInfo.InvariantCulture)));
-                _lastLoggedQuestOfferKey = offerKey;
             }
             return offer;
         }
@@ -1052,6 +1092,12 @@ namespace Game.Core.Session
         /// (R17) — жоден офіційний контракт §4.2 цього не показує навмисно.
         /// </summary>
         internal int DebugTensionValue => _processor?.Tension?.Value ?? 0;
+
+        /// <summary>IVT-гачок: з яким темпом Напруги побудовано світ (прапорець і фактичний поріг накопичувача кризи).</summary>
+        internal bool DebugTensionPace => _tensionPace;
+
+        internal int DebugCrisisThreshold =>
+            _processor?.Pulse != null && _processor.Pulse.Tracks.TryGetValue("crisis", out var track) ? track.Threshold : 0;
         internal bool DebugCommunityIsAfraid => _processor != null && _processor.Fear != null && _processor.Fear.IsAfraid(_processor.CurrentDay);
 
         /// <summary>Той самий гачок для scout_horn "forewarn_boost" (D1b) — заповнення накопичувача Тугара (0..1+), приховане від View.</summary>
@@ -1165,6 +1211,28 @@ namespace Game.Core.Session
                 LogLoyaltyChanges(LoyaltyRules.OnBloodyChoice(_worldRoster, _cfg));
 
             LogEvent("decision.resolved", Args("path", path.ToString(), "band", FindBand(report, incidentId).ToString(), "incidentId", incidentId));
+
+            // Замір темпу Напруги (Поправка №7, 24.09.2026): справжня природна
+            // криза (crisis_riot) розв'язується ЛИШЕ цим шляхом — рядок вище
+            // логує "decision.resolved" сам (з "path", якого TranslateReport не
+            // знає), тож MarkIncidentsAlreadyTranslated нижче ховає щойно
+            // розв'язаний інцидент від циклу TranslateReport. Це навмисно рятує
+            // від дубля ЛОГУ — але той самий цикл TranslateReport є ЄДИНИМ
+            // місцем, що кличе HandleCompanionDeath для CrisisBite.KillCompanion
+            // (companion.died/roster.rippled). Заховавши інцидент, ми ховали і
+            // ПОБІЧНИЙ ЕФЕКТ, не лише лог: жертва кризи гинула у RosterAdapter
+            // (Kill вже відпрацював усередині IncidentResolver), а гір ніколи не
+            // повертався і "companion.died" ніколи не логувався — знайдено
+            // саме через те, що природна криза раніше НІКОЛИ не спрацьовувала
+            // за жодного прогону (замір 24.09.2026: 25 діб — Напруга ~95/1000).
+            // Повторюємо тут той самий виклик, що робить TranslateReport.
+            if (report?.Incidents != null && report.Incidents.Count > 0)
+            {
+                var justResolved = report.Incidents[report.Incidents.Count - 1];
+                if (justResolved.Bite == CrisisBite.KillCompanion && !string.IsNullOrEmpty(justResolved.AffectedActorId))
+                    HandleCompanionDeath(justResolved.AffectedActorId);
+            }
+
             // Щойно розв'язаний інцидент уже залогований рядком вище (з "path",
             // якого TranslateReport не знає) — позначаємо його перекладеним,
             // інакше цикл TranslateReport нижче залогує "decision.resolved" для
@@ -1328,6 +1396,7 @@ namespace Game.Core.Session
 
             ClearDayLog();
             _lastPhase = DayPhase.Night;
+            if (_processor.IsPatrolling) _patrolledANight = true;
 
             // Той самий SettlementCycle, що й у AdvanceDay (див. коментар там):
             // повторний SyncHunger перед ніччю нешкідливий — HungerStep сам
@@ -2029,13 +2098,19 @@ namespace Game.Core.Session
             // Порожній пост = Найгірша (§2 №6) — той самий ключ, що decision_point:
             // args["band"]/["noCandidate"] різнять їх, а ключ у _seenEventKeys — ні.
             new MechanicJournalDef("empty_post", exactKeys: new[] { "decision.resolved" }),
-            new MechanicJournalDef("night_patrol", exactKeys: new[] { "night.forewarn" }),
+            new MechanicJournalDef("night_patrol", extraSeen: s => s._patrolledANight),
             new MechanicJournalDef("forewarn_ladder", keyPrefixes: new[] { "forewarn.level" }),
             new MechanicJournalDef("crisis", exactKeys: new[]
                 { "crisis.test.warn", "crisis.test.window", "crisis.test.mitigated", "crisis.test.unmitigated" }),
             new MechanicJournalDef("post_reports", keyPrefixes: new[] { "post." }),
             // Сигнали без повторів (§2 №11) — похідне, той самий щабель передвісника.
             new MechanicJournalDef("signals_no_repeat", keyPrefixes: new[] { "forewarn.level" }),
+            // Темп тестової збірки (Поправка №7): зсув смуги Напруги і
+            // великий природний бунт на площі — окремі записи журналу, щоб
+            // тестер бачив обидва, не плутаючи їх зі скриптованою пожежею
+            // доби 5 ("crisis" вище).
+            new MechanicJournalDef("tension_band_change", keyPrefixes: new[] { "tension.band." }),
+            new MechanicJournalDef("great_crisis", keyPrefixes: new[] { "incident.crisis_riot." }),
             new MechanicJournalDef("band_change_signal", exactKeys: new[] { "loyalty.band_changed", "faction.standing_changed" }),
             new MechanicJournalDef("production", exactKeys: new[]
                 { "production.resource", "production.leveled_up", "production.food_shortage", "production.recovered" }),
@@ -2449,9 +2524,40 @@ namespace Game.Core.Session
 
             if (report.Signals != null && report.Signals.Requests != null)
                 foreach (var req in report.Signals.Requests)
-                    LogEvent(AdjustPassVanguardTopicIfMaksymDead(req.TopicId),
+                {
+                    string topic = AdjustPassVanguardTopicIfMaksymDead(req.TopicId);
+                    LogEvent(topic,
                         Args("channel", req.Channel.ToString(), "urgency", req.Urgency.ToString(),
-                        "subject", req.SubjectId, "delta", req.IsDelta ? "1" : "0"));
+                        "subject", req.SubjectId, "delta", req.IsDelta ? "1" : "0",
+                        "domain", DomainTagFrom(req.Tags)));
+                }
+        }
+
+        /// <summary>
+        /// SETTLEMENT_LAYER §5.1 правило 4: щабель 2 передвісника зобов'язаний
+        /// назвати домен, щабель 3 — близькість. <see cref="Signals.SignalComposer"/>
+        /// вже кладе домен у теги кандидата ("domain:" + f.DomainTag) — але
+        /// <see cref="TranslateReport"/> раніше цей тег ігнорував, і текст
+        /// "forewarn.level2"/"forewarn.level3" лишався безликим для БУДЬ-ЯКОГО
+        /// джерела (знайдено 24.09.2026 разом зі стисненим темпом Поправки №7:
+        /// щойно природна криза вперше запрацювала, стало видно, що й її
+        /// передвісники безликі). Тут тег дістається й кладеться окремим
+        /// аргументом "domain" — <c>ScreenText.EventLine</c> уже вміє
+        /// підставляти {domain} через <c>ContentLabel("domain", ...)</c> (та
+        /// сама підстановка, що вже використовує "domain.road"/"domain.craft").
+        /// Ключ Key лишається незмінним ("forewarn.levelN") — жодного
+        /// топік-перемикання, тому існуючі фільтри за буквальним ключем
+        /// (<c>TestBuildTensionPaceTests.FirstDayForewarn</c>, реєстр журналу
+        /// механік) не ламаються.
+        /// </summary>
+        private static string DomainTagFrom(string[] tags)
+        {
+            if (tags == null) return null;
+            const string prefix = "domain:";
+            for (int i = 0; i < tags.Length; i++)
+                if (tags[i] != null && tags[i].StartsWith(prefix, StringComparison.Ordinal))
+                    return tags[i].Substring(prefix.Length);
+            return null;
         }
 
         /// <summary>
@@ -2579,7 +2685,8 @@ namespace Game.Core.Session
                 if (companion == null) continue;
                 if (run.Refresh(companion))
                     LogEvent("arc.chapter_opened", Args("companionId", run.Arc.CompanionId, "arcId", run.Arc.Id,
-                        "chapterId", run.CurrentChapter?.Id ?? string.Empty));
+                        "chapterId", run.CurrentChapter?.Id ?? string.Empty,
+                        "chapterTitleKey", run.CurrentChapter?.TitleKey ?? string.Empty));
             }
         }
 
@@ -2634,7 +2741,8 @@ namespace Game.Core.Session
             var scene = chapter != null ? CompanionArcContent.SceneFor(companionId, chapter.Id) : null;
             if (scene == null) throw new InvalidOperationException("Ця глава — квестова (BeginArcChapterQuest), не сценова.");
 
-            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id));
+            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id,
+                "chapterTitleKey", chapter.TitleKey ?? string.Empty));
 
             SessionState returnState = State;
             _activeArcCompanionId = companionId;
@@ -2667,7 +2775,8 @@ namespace Game.Core.Session
             if (_quests.DefinitionOf(chapter.QuestId) == null)
                 _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
 
-            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id));
+            LogEvent("arc.chapter_begun", Args("companionId", companionId, "arcId", run.Arc.Id, "chapterId", chapter.Id,
+                "chapterTitleKey", chapter.TitleKey ?? string.Empty));
             _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
             return OfferQuestStage(chapter.QuestId);
         }
@@ -2678,8 +2787,12 @@ namespace Game.Core.Session
             if (run == null || run.IsFinished) return;
             string arcId = run.Arc.Id;
             string chapterId = run.CurrentChapter != null ? run.CurrentChapter.Id : null;
+            // Ключ назви глави їде в подію поруч із id: стрічка показує назву,
+            // а не службовий "ch1" (id глави унікальний лише всередині арки).
+            string chapterTitleKey = run.CurrentChapter != null ? run.CurrentChapter.TitleKey : null;
             run.CompleteChapter();
-            LogEvent("arc.chapter_completed", Args("companionId", companionId, "arcId", arcId, "chapterId", chapterId ?? string.Empty));
+            LogEvent("arc.chapter_completed", Args("companionId", companionId, "arcId", arcId, "chapterId", chapterId ?? string.Empty,
+                "chapterTitleKey", chapterTitleKey ?? string.Empty));
         }
 
         /// <summary>
@@ -3343,6 +3456,13 @@ namespace Game.Core.Session
             head.Append(";protagonist=").Append(ProtagonistId);
             head.Append(";seed=").Append(_seed.ToString(CultureInfo.InvariantCulture));
             head.Append(";hitRule=").Append((int)_hitRule);
+            head.Append(";tensionPace=").Append(_tensionPace ? 1 : 0);
+            // Які етапи квестів уже прозвучали як «Нова пропозиція» — частина
+            // видимої стрічки: без цього після завантаження кожна ще відкрита
+            // пропозиція з'являлась у стрічці вдруге.
+            var offersLogged = new List<string>(_loggedQuestOfferKeys);
+            offersLogged.Sort(StringComparer.Ordinal);
+            head.Append(";offersLogged=").Append(string.Join(",", offersLogged));
             if (_roller != null) head.Append(";roller=").Append(_roller.CaptureState());
             head.Append(";resume=").Append(_resume == null ? "-" :
                 ((int)_resume.Reason).ToString(CultureInfo.InvariantCulture) + "|" +
@@ -3399,8 +3519,38 @@ namespace Game.Core.Session
             return head.ToString();
         }
 
+        /// <summary>Поле "tensionPace" із заголовка слепка (до ";core="), або null для старого сейву без нього.</summary>
+        private static bool? PeekTensionPace(string blob)
+        {
+            if (string.IsNullOrEmpty(blob)) return null;
+            int coreIdx = blob.IndexOf(";core=", StringComparison.Ordinal);
+            string head = coreIdx >= 0 ? blob.Substring(0, coreIdx) : blob;
+            const string key = ";tensionPace=";
+            int idx = head.IndexOf(key, StringComparison.Ordinal);
+            if (idx < 0) return null;
+            int start = idx + key.Length;
+            return start < head.Length && head[start] == '1';
+        }
+
         private void ApplySave(string blob)
         {
+            // Слот з іншим темпом Напруги, ніж світ цієї партії: світ
+            // перебудовується тим самим шляхом, що й «Продовжити» (NewGame +
+            // застосування слепка), — пороги смуг і накопичувач кризи живуть
+            // у побудові світу, а не в слепку. Слоти переживають перебудову.
+            bool? savedPace = PeekTensionPace(blob);
+            if (savedPace.HasValue && savedPace.Value != _tensionPace)
+            {
+                var keptSlots = new Dictionary<int, string>(_slots);
+                NewGame(new NewGameOptions
+                {
+                    SkipCreation = true, HitRule = _hitRule, Roller = _roller,
+                    TestBuildTensionPace = savedPace.Value,
+                    TestBuildOneDayConstruction = _works == null || _works.OneDayConstruction
+                });
+                foreach (var kv in keptSlots) _slots[kv.Key] = kv.Value;
+            }
+
             int coreIdx = blob.IndexOf(";core=", StringComparison.Ordinal);
             string headPart = coreIdx >= 0 ? blob.Substring(0, coreIdx) : blob;
             string corePart = null;
@@ -3449,9 +3599,10 @@ namespace Game.Core.Session
                 int afterKey = arcIdx + ";arc=".Length;
                 int nextSemi = headPart.IndexOf(';', afterKey);
                 string arcValue = nextSemi >= 0 ? headPart.Substring(afterKey, nextSemi - afterKey) : headPart.Substring(afterKey);
-                ReattachInProgressArcChapterQuests(arcValue);
+                ReattachInProgressArcChapterQuests(arcValue, ExtractHeadField(headPart, ";quests="));
             }
 
+            string offersLoggedValue = null;
             foreach (var part in headPart.Split(';'))
             {
                 int eq = part.IndexOf('=');
@@ -3461,6 +3612,7 @@ namespace Game.Core.Session
 
                 switch (key)
                 {
+                    case "offersLogged": offersLoggedValue = value; break;
                     case "state": State = (SessionState)ParseInt(value); break;
                     case "seed": ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _seed); break;
                     case "hitRule": _hitRule = (HitRuleKind)ParseInt(value); break;
@@ -3485,6 +3637,17 @@ namespace Game.Core.Session
             _inventory.RestoreState(itemsPart);
             if (corePart != null) _processor.RestoreState(corePart);
 
+            // Блокер-фікс (знайдено 25.09.2026, лід): відновлення в СВІЖИЙ
+            // інстанс GameSession розходилось із безперервною грою — пости
+            // виробляли не те й не тим. _processor.RestoreState вище щойно
+            // повернув Companion.AssignedSlotId (бік напарника, RosterAdapter),
+            // але бухгалтерія самого слота (AssignmentSlot.AssignedCompanionId,
+            // яку читає BaseState.AdvanceCycle) в жоден слепок не пише і не
+            // читається — на свіжому BaseState вона лишається порожньою.
+            // RestoreSlotOccupancy пересобирає її з уже відновленого ростера
+            // ОДРАЗУ тут, поки обидві сторони синхронні.
+            _state?.RestoreSlotOccupancy();
+
             // Доважок до "pname=" вище: RosterAdapter.CaptureState() навмисно
             // НЕ пише DisplayName (коментар у RosterAdapter.cs — ім'я/статі/
             // картки приходять із контенту, дублювати їх у сейві означає
@@ -3501,7 +3664,10 @@ namespace Game.Core.Session
 
             _currentPending = null;
             _currentQuestOffer = null;
-            _lastLoggedQuestOfferKey = null;
+            _loggedQuestOfferKeys.Clear();
+            if (!string.IsNullOrEmpty(offersLoggedValue))
+                foreach (var offerKey in offersLoggedValue.Split(','))
+                    if (offerKey.Length > 0) _loggedQuestOfferKeys.Add(offerKey);
             _dungeon = null;
             _battle = null;
             _battleAutoResolvedThisCall = false;
@@ -3582,7 +3748,7 @@ namespace Game.Core.Session
         /// (той самий формат, що <see cref="RestoreArcState"/> парсить, але тут
         /// лише читання — <see cref="_arcRuns"/> ще не змінюємо, тільки
         /// дивимось у ЇХНІ вже готові <see cref="CompanionArc.Chapters"/>, щоб
-        /// дістати companionId/questId ще ДО RestoreArcState). Для кожної
+        /// дістати companionId/questId ще ДО RestoreArcState). Для поточної
         /// глави, що сейв лишив InProgress і зміст якої — квест
         /// (<see cref="CompanionArcContent.IsQuestChapter"/>), реєструє
         /// визначення квесту в пулі (той самий приём, що
@@ -3592,8 +3758,22 @@ namespace Game.Core.Session
         /// квеста на свіжому інстансі (визначення в його пулі ще нема), а
         /// навіть якби не відкидав — термінал квеста ніколи не завершив би
         /// главу арки без лінку.
+        ///
+        /// Блокер-фікс (знайдено 25.09.2026, лід): та сама доля чекала на
+        /// квест УЖЕ ЗАВЕРШЕНОЇ глави — <see cref="CompanionArcRun.CompleteChapter"/>
+        /// одразу зсуває <c>ChapterIndex</c> і збиває <c>State</c> з InProgress,
+        /// тож наступного сейву ця глава для гілки вище вже не InProgress, а
+        /// сам <c>QuestRun</c> (термінальна стадія типу "revenge_done") усе
+        /// одно лежить у "quests=" — на ЖИВІЙ сесії він і далі читається
+        /// (визначення зареєстроване назавжди), а на свіжому інстансі
+        /// <see cref="QuestLog.RestoreState"/> тихо відкидає його (визначення
+        /// нема в пулі), і подальші дні розходяться з безперервною грою.
+        /// Тому нижче реєструємо визначення для КОЖНОЇ квестової глави арки
+        /// (не лише поточної InProgress), чий QuestId реально зустрічається
+        /// серед записів "quests=" — лінк completion-компаньйона це не чіпає:
+        /// його отримує лише поточна InProgress глава, як і раніше.
         /// </summary>
-        private void ReattachInProgressArcChapterQuests(string arcValue)
+        private void ReattachInProgressArcChapterQuests(string arcValue, string questsValue)
         {
             if (string.IsNullOrEmpty(arcValue) || _arcRuns == null) return;
 
@@ -3607,24 +3787,69 @@ namespace Game.Core.Session
                 if (bits.Length < 3) continue;
                 string arcId = bits[0];
                 var state = (ArcState)ParseInt(bits[1]);
-                if (state != ArcState.InProgress) continue;
                 int chapterIndex = ParseInt(bits[2]);
 
                 for (int i = 0; i < _arcRuns.Count; i++)
                 {
                     if (_arcRuns[i].Arc.Id != arcId) continue;
                     var chapters = _arcRuns[i].Arc.Chapters;
-                    var chapter = chapterIndex >= 0 && chapterIndex < chapters.Count ? chapters[chapterIndex] : null;
                     string companionId = _arcRuns[i].Arc.CompanionId;
-                    if (chapter != null && CompanionArcContent.IsQuestChapter(companionId, chapter.Id))
+
+                    if (state == ArcState.InProgress)
                     {
-                        if (_quests.DefinitionOf(chapter.QuestId) == null)
-                            _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
-                        _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
+                        var chapter = chapterIndex >= 0 && chapterIndex < chapters.Count ? chapters[chapterIndex] : null;
+                        if (chapter != null && CompanionArcContent.IsQuestChapter(companionId, chapter.Id))
+                        {
+                            RegisterArcChapterQuestDefinition(chapter.QuestId);
+                            _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
+                        }
+                    }
+
+                    // Минулі глави тієї самої арки: лінк не потрібен (їхній
+                    // квест уже завершив главу за життя джерельної сесії), але
+                    // визначення — потрібне, інакше QuestLog.RestoreState
+                    // відкине сам запис прогресу нижче.
+                    for (int ci = 0; ci < chapters.Count; ci++)
+                    {
+                        var pastChapter = chapters[ci];
+                        if (!CompanionArcContent.IsQuestChapter(companionId, pastChapter.Id)) continue;
+                        if (QuestRunPresentInBlob(questsValue, pastChapter.QuestId))
+                            RegisterArcChapterQuestDefinition(pastChapter.QuestId);
                     }
                     break;
                 }
             }
+        }
+
+        /// <summary>Реєструє визначення квестової глави арки в пулі <see cref="_quests"/>, якщо його там ще нема (ідемпотентно).</summary>
+        private void RegisterArcChapterQuestDefinition(string questId)
+        {
+            if (string.IsNullOrEmpty(questId) || _quests.DefinitionOf(questId) != null) return;
+            if (questId == DefaultQuests.MaksymCh1Id)
+                _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
+        }
+
+        /// <summary>Чи є запис <paramref name="questId"/> серед прогонів у сирому значенні "quests=" (формат QuestLog.CaptureState: "id&gt;етап&gt;стан" через кому).</summary>
+        private static bool QuestRunPresentInBlob(string questsValue, string questId)
+        {
+            if (string.IsNullOrEmpty(questsValue) || string.IsNullOrEmpty(questId)) return false;
+            foreach (var entry in questsValue.Split(','))
+            {
+                int gt = entry.IndexOf('>');
+                string id = gt >= 0 ? entry.Substring(0, gt) : entry;
+                if (string.Equals(id, questId, StringComparison.Ordinal)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Сире значення поля "key" (напр. ";quests=") із заголовка слепка ДО наступного ';' — той самий приём, що вже читає "arc=" вище, узагальнений для повторного використання.</summary>
+        private static string ExtractHeadField(string headPart, string key)
+        {
+            int idx = headPart.IndexOf(key, StringComparison.Ordinal);
+            if (idx < 0) return null;
+            int afterKey = idx + key.Length;
+            int nextSemi = headPart.IndexOf(';', afterKey);
+            return nextSemi >= 0 ? headPart.Substring(afterKey, nextSemi - afterKey) : headPart.Substring(afterKey);
         }
 
         private static SuspendToken ParseResume(string value)

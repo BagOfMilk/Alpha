@@ -1124,7 +1124,8 @@ namespace Game.Tests.EditMode
             bool sawBegun = false;
             foreach (var e in s.DayLog)
                 if (e.Key == "arc.chapter_begun" && e.Args["companionId"] == "maksym" &&
-                    e.Args["arcId"] == "arc_maksym" && e.Args["chapterId"] == "ch1")
+                    e.Args["arcId"] == "arc_maksym" && e.Args["chapterId"] == "ch1" &&
+                    e.Args["chapterTitleKey"] == "arc.maksym.ch1.title")
                     sawBegun = true;
             Assert.IsTrue(sawBegun);
 
@@ -1143,7 +1144,8 @@ namespace Game.Tests.EditMode
             bool sawCompleted = false;
             foreach (var e in s.DayLog)
                 if (e.Key == "arc.chapter_completed" && e.Args["companionId"] == "maksym" &&
-                    e.Args["arcId"] == "arc_maksym" && e.Args["chapterId"] == "ch1")
+                    e.Args["arcId"] == "arc_maksym" && e.Args["chapterId"] == "ch1" &&
+                    e.Args["chapterTitleKey"] == "arc.maksym.ch1.title")
                     sawCompleted = true;
             Assert.IsTrue(sawCompleted,
                 "термінал квестової глави (успіх чи невдача) мав завершити главу арки тим самим шляхом, що й сценова (CompleteArcChapterFor)");

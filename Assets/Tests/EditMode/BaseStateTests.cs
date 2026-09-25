@@ -149,5 +149,79 @@ namespace Game.Tests.EditMode
 
             Assert.Greater(comp.Level, levelBefore, "звичайний напарник так само піднімає рівень постовою XP");
         }
+
+        /// <summary>
+        /// Блокер-фікс (знайдено 25.09.2026, лід): "хто на посту" зберігається
+        /// ДВІЧІ — на боці напарника (<c>Companion.AssignedSlotId</c>, несе
+        /// його <c>RosterAdapter.RestoreState</c>) і на боці слота (це поле,
+        /// його несе лише <see cref="BaseState.TryAssign"/> під час гри).
+        /// <see cref="BaseState.CaptureState"/>/<see cref="BaseState.RestoreState"/>
+        /// не знають про сторону слота взагалі — на СВІЖОМУ інстансі (той
+        /// самий сценарій, що ContinueGame/RestoreFromBlob на новому
+        /// GameSession) слот лишається порожнім, навіть якщо напарник
+        /// "вважає" себе призначеним. <see cref="BaseState.RestoreSlotOccupancy"/>
+        /// пересобирає сторону слота з боку напарника — виклик належить
+        /// <c>GameSession.ApplySave</c>, тест лише перевіряє сам метод.
+        /// </summary>
+        [Test]
+        public void RestoreSlotOccupancy_SyncsSlotFromRosterAssignment_OnFreshInstance()
+        {
+            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
+            comp.AssignedSlotId = "bench"; // імітує RosterAdapter.RestoreState на свіжому інстансі
+
+            Assert.IsFalse(state.GetSlot("bench").IsOccupied,
+                "до синхронізації свіжий слот не знає про призначення напарника — саме тому AdvanceCycle тихо пропускав зайнятий пост");
+
+            state.RestoreSlotOccupancy();
+
+            Assert.AreEqual(comp.Id, state.GetSlot("bench").AssignedCompanionId);
+            var report = state.AdvanceCycle();
+            Assert.AreEqual(15, report.Produced[ResourceType.Materials],
+                "після синхронізації пост знову виробляє — не лишається порожнім, хоч і на свіжому інстансі");
+        }
+
+        /// <summary>Дзеркальний випадок: пересборка мусить ОЧИЩАТИ слот, чиє старе призначення не підтверджене жодним напарником (інакше залишок від попереднього сейву переживав би RestoreSlotOccupancy).</summary>
+        [Test]
+        public void RestoreSlotOccupancy_ClearsSlotsWithoutAMatchingCompanion()
+        {
+            var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
+            Assert.AreEqual(AssignmentResult.Success, state.TryAssign(comp.Id, "bench"));
+            comp.AssignedSlotId = null; // напарник більше не "вважає" себе призначеним
+
+            state.RestoreSlotOccupancy();
+
+            Assert.IsFalse(state.GetSlot("bench").IsOccupied);
+        }
+
+        /// <summary>
+        /// Блокер-фікс (знайдено 25.09.2026, лід): прапор голоду минулого
+        /// циклу (Поправка №4, штраф виробітку/XP НАСТУПНОГО циклу) не
+        /// входив до слепка взагалі — на свіжому інстансі завантаження
+        /// безкарно знімало голод, накладений прямо перед сейвом.
+        /// </summary>
+        [Test]
+        public void CaptureState_RestoreState_PreservesWasHungryLastCycle()
+        {
+            var roster = new Roster();
+            var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 5 };
+            var state = new BaseState(roster, new ResourceLedger(), cfg);
+            roster.Add(new CompanionArchetype("x", "X").CreateInstance("x_1"));
+
+            var report = state.AdvanceCycle(); // порожній кошель -> голодний день
+            Assert.IsTrue(report.FoodShortage);
+            Assert.IsTrue(state.WasHungryLastCycle);
+
+            string blob = state.CaptureState();
+
+            var freshRoster = new Roster();
+            freshRoster.Add(new CompanionArchetype("x", "X").CreateInstance("x_1"));
+            var freshState = new BaseState(freshRoster, new ResourceLedger(), cfg);
+            Assert.IsFalse(freshState.WasHungryLastCycle, "контроль: свіжий інстанс за замовчуванням не голодний");
+
+            freshState.RestoreState(blob);
+            Assert.IsTrue(freshState.WasHungryLastCycle,
+                "прапор голоду минулого циклу мусить дійти крізь CaptureState/RestoreState на свіжий інстанс — " +
+                "інакше штраф виробітку/XP наступного циклу знімається безкарно перезавантаженням");
+        }
     }
 }

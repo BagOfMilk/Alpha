@@ -101,7 +101,15 @@ namespace Game.Gameplay.UI
         private static bool DrawOneQuestOffer(GameShell shell, Gender g, QuestOfferView offer)
         {
             bool consumed = false;
-            Widgets.Section(UkrainianText.Get("ui.quest.offer.title", g), () =>
+            // Назва квесту в заголовку і поріг етапу-перевірки (інваріант 8):
+            // раніше тут стояло голе «Пропозиція / Етап 1 / Підтвердити»
+            // (знайдено довгим автопрогоном 25.09.2026).
+            string questName = ScreenText.QuestName(offer.QuestId, g);
+            string sectionTitle = string.IsNullOrEmpty(questName)
+                ? UkrainianText.Get("ui.quest.offer.title", g)
+                : UkrainianText.Format("ui.quest.offer.title_named", g, "quest", questName);
+            string checkLine = ScreenText.QuestCheckLine(offer, g);
+            Widgets.Section(sectionTitle, () =>
             {
                 // Фікс-ревью (Поправка №7.8, п.4, знайдено тур-автоплеєм):
                 // DefaultQuests.OfferKey — Гафіїна КОНКРЕТНА константа
@@ -117,8 +125,12 @@ namespace Game.Gameplay.UI
                 string offerBodyKey = UkrainianText.Has(offerKeyPrefixed, g) ? offerKeyPrefixed : offerKeyBare;
                 if (offer.Stage == 0 && UkrainianText.Has(offerBodyKey, g))
                     GUILayout.Label(UkrainianText.Get(offerBodyKey, g), AlphaSkin.Body);
-                else
+                else if (!string.IsNullOrEmpty(offer.StageTextKey) && UkrainianText.Has(offer.StageTextKey, g))
+                    GUILayout.Label(UkrainianText.Get(offer.StageTextKey, g), AlphaSkin.Body);
+                else if (checkLine.Length == 0)
                     GUILayout.Label(UkrainianText.Format("ui.quests.stage", g, "stage", offer.Stage.ToString()), AlphaSkin.Body);
+                if (checkLine.Length > 0)
+                    GUILayout.Label(checkLine, AlphaSkin.Body);
 
                 if (offer.Options != null && offer.Options.Count > 0)
                 {
@@ -152,7 +164,7 @@ namespace Game.Gameplay.UI
                         }
                     }
                 }
-                else if (Widgets.PrimaryButton(UkrainianText.Get("ui.common.confirm", g)))
+                else if (Widgets.PrimaryButton(UkrainianText.Get(checkLine.Length > 0 ? "ui.quest.check.attempt" : "ui.common.confirm", g)))
                 {
                     string questId = offer.QuestId;
                     shell.TryRun(() =>

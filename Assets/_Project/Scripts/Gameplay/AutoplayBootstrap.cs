@@ -56,6 +56,19 @@ namespace Game.Gameplay
         public const string ThresholdFlag = "-autoplay-threshold";
 
         /// <summary>
+        /// Поправка №7 (стиснутий темп): після звичайного туру (титул →
+        /// створення → сценарні доби → підсумок доби 5 → FreePlay) НЕ
+        /// зупиняється на першому дні вільної гри, а веде далі, руки геть
+        /// (без облав/Храму/Укріплень — той самий "безрукий еталон", що й
+        /// <c>PacifistPolicy</c>+<c>suppressCouncilRoutine</c> у боті), доки
+        /// не побачить розв'язку великого бунту на площі або не впреться в
+        /// стелю доби (<see cref="AutoplayGameDriver.LongTourDayCap"/>).
+        /// Мовчки означає й <see cref="CommandLineFlag"/> — окремо вказувати
+        /// його не треба.
+        /// </summary>
+        public const string LongTourFlag = "-autoplay-long";
+
+        /// <summary>
         /// Бісекція краш-репорту про виліт після Application.Quit (root-cause
         /// evidence: 20.09.2026 репорт, стійка адреса всіх крашів у
         /// UnityPlayer.dll — детермінований порядок знищення, а не випадкове
@@ -83,7 +96,7 @@ namespace Game.Gameplay
         private int _quitAfterTitleFramesLeft = -1;
 
         /// <summary>Чи просив командний рядок автопрогон — перевіряється один раз при старті.</summary>
-        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag);
+        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag);
 
         private static bool HasArg(string flag)
         {
@@ -124,10 +137,12 @@ namespace Game.Gameplay
 
             UkrainianText.ResetMissingKeyTracking();
             bool threshold = HasArg(ThresholdFlag);
+            bool longTour = HasArg(LongTourFlag);
             Log("Автопрогон почато: " + DateTime.UtcNow.ToString("u", CultureInfo.InvariantCulture) +
-                " (правило влучання: " + (threshold ? "поріг" : "відсоток") + ")");
+                " (правило влучання: " + (threshold ? "поріг" : "відсоток") +
+                (longTour ? ", довгий тур до великого бунту" : "") + ")");
 
-            var driver = new AutoplayGameDriver(this, Shell, threshold);
+            var driver = new AutoplayGameDriver(this, Shell, threshold, longTour);
             _tour = driver.Run();
         }
 
