@@ -652,7 +652,17 @@ namespace Game.Tests.EditMode
                 // здібності в AP і скільки ходів лишилось до відкату — гравець
                 // мусить бачити обидва ДО кліку (Поправка №1, «шлях видно»),
                 // той самий рівень прозорості, що й Ap/ApMax вище.
-                "ApCost", "CooldownRemaining"
+                "ApCost", "CooldownRemaining",
+                // Бій v2 (docs/COMBAT_V2.md, 25.09.2026, власник: «нічо не
+                // зрозуміло було, навіть з батллогом»): бойові числа, які
+                // гравець зобов'язаний бачити ДО кліку — шанс і його розклад,
+                // шкода, дальність, ціна атаки, тривалість станів, вікно на
+                // порятунок, порядковий номер однойменних ворогів. Інваріант 8
+                // (поріг показаний заздалегідь), не прихована шкала міста.
+                "Ordinal", "AttackApCost", "WeaponRange", "WeaponOptimalRange",
+                "DownWindowRemaining", "RemainingTurns", "DotDamagePerTurn", "ChanceDelta",
+                "Chance", "DamageMin", "DamageMax", "DamageCrit", "DamageExpected",
+                "Distance", "Range"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

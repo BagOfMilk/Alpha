@@ -1880,6 +1880,20 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.hp", "Здоров'я: {current}/{max}");
             AddKey(t, "ui.battle.hp.target", "Ціль — здоров'я: {current}/{max}");
             AddKey(t, "ui.battle.weapon", "Зброя: {name}");
+            // Бій v2 — спливаючі написи над юнітами (docs/COMBAT_V2.md §6).
+            AddKey(t, "ui.battle.float.miss", "Промах");
+            AddKey(t, "ui.battle.float.graze", "Задів");
+            AddKey(t, "ui.battle.float.crit", "Крит!");
+            AddKey(t, "ui.battle.float.damage", "−{amount}");
+            AddKey(t, "ui.battle.float.heal", "+{amount}");
+            AddKey(t, "ui.battle.float.overwatch", "Дозор!");
+            AddKey(t, "ui.battle.float.downed", "Впав");
+            AddKey(t, "ui.battle.float.died", "Загинув");
+            AddKey(t, "ui.battle.float.ability", "{ability}");
+            AddKey(t, "ui.battle.float.status", "{status}");
+            // Бій v2 — банер ходу сторони (docs/COMBAT_V2.md §3).
+            AddKey(t, "ui.battle.banner.player", "ВАШ ХІД · {name}");
+            AddKey(t, "ui.battle.banner.enemy", "ХІД ВОРОГА · {name}");
             AddKey(t, "ui.battle.damage.preview", "Шкода атаки: {min}–{max}");
             AddKey(t, "ui.battle.damage.preview.crit", "Шкода атаки: {min}–{max} (крит {crit})");
 

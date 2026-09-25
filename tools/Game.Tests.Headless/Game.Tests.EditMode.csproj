@@ -54,6 +54,8 @@
       з джерела напряму.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/BattleLogText.cs" />
+    <!-- Бій v2: чисті типи контракту (BattleLogKind тощо), на які спирається BattleLogText. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/BattleUiTypes.cs" />
 
     <!--
       E2: BattleArenaView — чистий C# без UnityEngine, розкладкова математика

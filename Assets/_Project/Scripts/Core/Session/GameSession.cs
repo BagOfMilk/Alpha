@@ -1820,6 +1820,33 @@ namespace Game.Core.Session
             AfterCombatAction();
         }
 
+        // ===================== Бій v2: прев'ю до кліку (docs/COMBAT_V2.md §7.1) =====================
+        // Сигнатури заморожені контрактом; реалізацію пише частина «ядро».
+
+        /// <summary>Прев'ю атаки зброєю (abilityId == null) або озброєною здібністю по цілі — шанс із розкладом, шкода, ціна, укриття, причина відмови.</summary>
+        public AttackPreviewView PreviewAttack(string attackerId, string targetId, string abilityId = null)
+        {
+            throw new NotImplementedException("PreviewAttack — частина «ядро» Бою v2.");
+        }
+
+        /// <summary>Прев'ю руху поточного юніта до тайла: шлях, ціна, тайли під ворожим дозором.</summary>
+        public MovePathView PreviewMovePath(GridPos dest)
+        {
+            throw new NotImplementedException("PreviewMovePath — частина «ядро» Бою v2.");
+        }
+
+        /// <summary>Тайли, які накрив би дозор поточного юніта з прицілом у <paramref name="aim"/>.</summary>
+        public IReadOnlyList<GridPosView> PreviewOverwatchCone(GridPos aim)
+        {
+            throw new NotImplementedException("PreviewOverwatchCone — частина «ядро» Бою v2.");
+        }
+
+        /// <summary>Стабілізувати зваленого союзника поруч (фасад <c>CombatState.Stabilize</c>).</summary>
+        public CombatActionResult CombatStabilize(string targetId)
+        {
+            throw new NotImplementedException("CombatStabilize — частина «ядро» Бою v2.");
+        }
+
         public int PreviewHitChance(string attackerId, string targetId)
         {
             if (_battle == null) return 0;

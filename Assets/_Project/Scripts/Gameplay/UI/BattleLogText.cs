@@ -99,6 +99,75 @@ namespace Game.Gameplay.UI
         public static bool UnitIsFemale(string unitId, Gender protagonistGender)
             => ScreenText.SubjectGender(BareId(unitId), protagonistGender) == Gender.Female;
 
+        // ===================== Бій v2 (docs/COMBAT_V2.md §6, §7.4) =====================
+        // Заготовки контракту: презентер (частина «3D») будує з них журнал і
+        // спливаючі написи; частина «HUD» доводить тексти й кольори. Сигнатури
+        // заморожені.
+
+        /// <summary>Сенс рядка логу — для кольору.</summary>
+        public static BattleLogKind KindOf(BattleLogLineView entry)
+        {
+            string key = entry?.Key;
+            if (string.IsNullOrEmpty(key)) return BattleLogKind.Neutral;
+            if (key == "combat.log.round") return BattleLogKind.Round;
+            if (key == "combat.log.move") return BattleLogKind.Move;
+            if (key == "combat.log.attack.miss") return BattleLogKind.Miss;
+            if (key == "combat.log.attack.graze") return BattleLogKind.Graze;
+            if (key == "combat.log.attack.hit") return BattleLogKind.Hit;
+            if (key == "combat.log.attack.crit") return BattleLogKind.Crit;
+            if (key == "combat.log.damage") return BattleLogKind.Damage;
+            if (key == "combat.log.heal") return BattleLogKind.Heal;
+            if (key.StartsWith("combat.log.status.", StringComparison.Ordinal)) return BattleLogKind.Status;
+            if (key.StartsWith("combat.log.overwatch.", StringComparison.Ordinal)) return BattleLogKind.Overwatch;
+            if (key == "combat.log.ability") return BattleLogKind.Ability;
+            if (key == "combat.log.downed" || key == "combat.log.bleeding_out") return BattleLogKind.Downed;
+            if (key == "combat.log.died") return BattleLogKind.Death;
+            if (key == "combat.log.victory") return BattleLogKind.Victory;
+            if (key == "combat.log.defeat") return BattleLogKind.Defeat;
+            return BattleLogKind.Neutral;
+        }
+
+        /// <summary>Готовий рядок журналу з типом.</summary>
+        public static BattleLogEntryUi Entry(BattleLogLineView entry, BattleView view, Gender protagonistGender)
+        {
+            if (entry == null) return null;
+            Func<string, string> name = id => UnitName(view, id, protagonistGender);
+            Func<string, bool> female = id => UnitIsFemale(id, protagonistGender);
+            return new BattleLogEntryUi
+            {
+                Round = entry.Round,
+                Text = Line(entry, view != null && view.IsHitRulePercent, name, female),
+                Kind = KindOf(entry)
+            };
+        }
+
+        /// <summary>Спливаючий напис для рядка логу (над ким і що); null — рядок без напису.</summary>
+        public static BattleFloatingSpec Floating(BattleLogLineView entry, BattleView view, Gender protagonistGender)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.Key)) return null;
+            var a = entry.Args;
+            var kind = KindOf(entry);
+            switch (kind)
+            {
+                case BattleLogKind.Miss:
+                    return new BattleFloatingSpec { UnitId = Arg(a, "targetId"), Text = UkrainianText.Get("ui.battle.float.miss", false), Kind = kind };
+                case BattleLogKind.Graze:
+                    return new BattleFloatingSpec { UnitId = Arg(a, "targetId"), Text = UkrainianText.Get("ui.battle.float.graze", false), Kind = kind };
+                case BattleLogKind.Crit:
+                    return new BattleFloatingSpec { UnitId = Arg(a, "targetId"), Text = UkrainianText.Get("ui.battle.float.crit", false), Kind = kind, Big = true };
+                case BattleLogKind.Damage:
+                    return new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Format("ui.battle.float.damage", false, "amount", Arg(a, "damage")), Kind = kind };
+                case BattleLogKind.Downed:
+                    return entry.Key == "combat.log.downed"
+                        ? new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Get("ui.battle.float.downed", false), Kind = kind, Big = true }
+                        : null;
+                case BattleLogKind.Death:
+                    return new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Get("ui.battle.float.died", false), Kind = kind, Big = true };
+                default:
+                    return null;
+            }
+        }
+
         // ===================== допоміжне =====================
 
         private static string BareId(string unitId)

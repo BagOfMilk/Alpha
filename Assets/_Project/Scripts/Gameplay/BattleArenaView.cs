@@ -4,48 +4,7 @@ using Game.Core.Session.Views;
 
 namespace Game.Gameplay
 {
-    /// <summary>
-    /// Озброєна дія гравця в бою. <see cref="None"/> — «розумний клік»: тайл
-    /// у зоні досяжності = рух, ворог = атака (серед явних кнопок HUD —
-    /// лише Дозор/Кінець ходу/Автобій, §Input TEST_BUILD.md). Тут, а не в
-    /// <c>BattleArenaController.cs</c>, — щоб <see cref="IBattleHudData"/>
-    /// (і лінт <c>BattleHudScreen.cs</c>) бачили тип без лінт-виключеного файлу.
-    /// </summary>
-    public enum ArmedAction { None, Ability, OverwatchAim }
-
-    /// <summary>
-    /// Зріз <see cref="BattleArenaController"/>, потрібний
-    /// <see cref="Game.Gameplay.UI.BattleHudScreen"/> для малювання. Окремий
-    /// інтерфейс, а не прямий тип контролера, — тому що контролер (
-    /// <c>MonoBehaviour</c>, Physics/Renderer) лінт-виключений, а HUD-екран
-    /// (чистий IMGUI) — ні: лінт мусить бачити тип параметра
-    /// <c>BattleHudScreen.Draw</c>, не бачачи самого класу-реалізації.
-    /// </summary>
-    public interface IBattleHudData
-    {
-        BattleView View { get; }
-        bool ResultPending { get; }
-        string ResultOutcomeKey { get; }
-        string ResultRounds { get; }
-        IReadOnlyList<string> ResultCasualtyLines { get; }
-        IReadOnlyList<string> LogLines { get; }
-        ArmedAction Armed { get; }
-        string ArmedAbilityId { get; }
-        string HoveredUnitId { get; }
-        int HoveredHitChance { get; }
-        int HoveredDamageMin { get; }
-        int HoveredDamageMax { get; }
-        int HoveredDamageCrit { get; }
-        bool IsPlayerTurn { get; }
-
-        string ResolveDisplayName(BattleUnitView unit);
-        void ArmAbility(string abilityId);
-        void ArmOverwatchAim();
-        void CancelArmed();
-        void RequestEndTurn();
-        void RequestAutoResolve();
-        void AcknowledgeResult();
-    }
+    // ArmedAction і IBattleHudData переїхали в Gameplay/UI/BattleContract.cs (Бій v2, docs/COMBAT_V2.md §7.4).
 
     /// <summary>
     /// Чиста математика показу бою (пакет E2): тайл→світ, підсвітка тайлів,
