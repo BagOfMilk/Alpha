@@ -93,6 +93,8 @@ namespace Game.Gameplay.EditorTools
             var femalePool = LoadAll(Chars, FemaleModels);
             var coverHalfPool = LoadAll(Nature, CoverHalfModels);
             var coverFullPool = LoadAll(Nature, CoverFullModels);
+            var maleClips = LoadClipSets(Chars, MaleModels);
+            var femaleClips = LoadClipSets(Chars, FemaleModels);
 
             var controller = arenaRoot.GetComponent<BattleArenaController>();
             if (controller == null) controller = arenaRoot.AddComponent<BattleArenaController>();
@@ -102,6 +104,8 @@ namespace Game.Gameplay.EditorTools
             controller.FemaleCharacterPrefabs = femalePool;
             controller.CoverHalfPrefabs = coverHalfPool;
             controller.CoverFullPrefabs = coverFullPool;
+            controller.MaleClipSets = maleClips;
+            controller.FemaleClipSets = femaleClips;
             controller.TileGroundPrefab = Load(GroundTileModel);
 
             var portraits = arenaRoot.GetComponent<PortraitRig>();
@@ -112,7 +116,53 @@ namespace Game.Gameplay.EditorTools
             BuildStaticProps(arenaRoot);
 
             Debug.Log("[BattleArenaBuilder] арену наповнено: " + malePool.Length + " чол./" + femalePool.Length +
-                       " жін. моделей, " + coverHalfPool.Length + " Half/" + coverFullPool.Length + " Full укриттів.");
+                       " жін. моделей, " + coverHalfPool.Length + " Half/" + coverFullPool.Length + " Full укриттів, " +
+                       maleClips.Length + "+" + femaleClips.Length + " наборів бойових кліпів.");
+        }
+
+        /// <summary>
+        /// Бій v2 (docs/COMBAT_V2.md §3): один <see cref="BattleCharacterClips"/>
+        /// на кожну модель набору, той самий порядок і довжина, що
+        /// відповідний пул префабів (<see cref="LoadAll"/>) — контролер бере
+        /// пару "префаб/кліпи" за ОДНИМ і тим самим індексом (детермінований
+        /// хеш id юніта). Кліпи беруться з ТОГО САМОГО FBX, що й модель
+        /// (<c>AssetDatabase.LoadAllAssetsAtPath</c>, той самий прийом, що
+        /// <c>GameSceneBuilder.Clip</c>) — набір Kenney Mini Characters несе
+        /// повний бойовий каталог one-shot тейків у кожному файлі (аудит
+        /// ASSETS, 25.09.2026): idle/walk/sprint/attack-melee-right/
+        /// holding-right-shoot/die/interact-right/crouch.
+        /// </summary>
+        private static BattleCharacterClips[] LoadClipSets(string basePath, string[] fileNames)
+        {
+            var result = new List<BattleCharacterClips>(fileNames.Length);
+            foreach (var name in fileNames)
+            {
+                string path = basePath + name;
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) continue; // модель не знайдено — LoadAll вище вже попередив
+                result.Add(new BattleCharacterClips
+                {
+                    Idle = ClipFrom(path, "idle"),
+                    Walk = ClipFrom(path, "walk"),
+                    Sprint = ClipFrom(path, "sprint"),
+                    AttackMelee = ClipFrom(path, "attack-melee-right"),
+                    HoldingShoot = ClipFrom(path, "holding-right-shoot"),
+                    Die = ClipFrom(path, "die"),
+                    Interact = ClipFrom(path, "interact-right"),
+                    Crouch = ClipFrom(path, "crouch")
+                });
+            }
+            return result.ToArray();
+        }
+
+        /// <summary>Той самий прийом, що <c>GameSceneBuilder.Clip</c> — кліп із FBX за ім'ям дубля; відсутній (не критично — не кожна модель несе кожен такт) віддає <c>null</c> без попередження.</summary>
+        private static AnimationClip ClipFrom(string fbxPath, string clipName)
+        {
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
+            {
+                var clip = asset as AnimationClip;
+                if (clip != null && clip.name == clipName && !clip.name.StartsWith("__preview__")) return clip;
+            }
+            return null;
         }
 
         /// <summary>

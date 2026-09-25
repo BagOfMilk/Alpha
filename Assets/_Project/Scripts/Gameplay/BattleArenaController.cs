@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Game.Core.Characters.Creation;
 using Game.Core.Combat;
 using Game.Core.Session;
@@ -11,89 +12,70 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Пакет E2 — 3D-презентація тактичного бою: <see cref="IBattlePresenter"/>
-    /// над <c>GameSession.GetBattleView()</c>. Будує грид/юнітів з
-    /// <see cref="BattleArenaBuilder"/>-заготовлених префабів Kenney, читає
-    /// мишу через <c>Physics.Raycast</c>, виконує <c>GameSession.Combat*</c>.
+    /// Один набір бойових one-shot кліпів для конкретної моделі Kenney Mini
+    /// Characters (Бій v2, docs/COMBAT_V2.md §3): idle/walk/sprint — той самий
+    /// мікс, що й раніше; решта — одноразові такти. <see cref="Game.Gameplay.EditorTools.BattleArenaBuilder"/>
+    /// будує масив паралельно пулу префабів (той самий індекс — та сама
+    /// модель), контролер бере пару "префаб/кліпи" за одним і тим самим
+    /// детермінованим хешем id юніта.
+    /// </summary>
+    public sealed class BattleCharacterClips
+    {
+        public AnimationClip Idle;
+        public AnimationClip Walk;
+        public AnimationClip Sprint;
+        public AnimationClip AttackMelee;
+        public AnimationClip HoldingShoot;
+        public AnimationClip Die;
+        public AnimationClip Interact;
+        public AnimationClip Crouch;
+    }
+
+    /// <summary>
+    /// Бій v2 — 3D-презентація тактичного бою (docs/COMBAT_V2.md): реалізує
+    /// <see cref="IBattlePresenter"/> і повний контракт <see cref="IBattleHudData"/>/
+    /// <see cref="IBattleInput"/> над <c>GameSession.GetBattleView()</c>.
+    /// Будує грид/юнітів з <see cref="Game.Gameplay.EditorTools.BattleArenaBuilder"/>-заготовлених
+    /// префабів Kenney, читає мишу через <c>Physics.Raycast</c>, виконує
+    /// <c>GameSession.Combat*</c>.
     ///
-    /// ЛІНТ-ВИКЛЮЧЕНО (Physics/Renderer/Camera/Collider — та сама причина, що
-    /// в <c>VillageStage</c>/<c>GameSceneBuilder</c>, §5 TEST_BUILD.md):
-    /// заглушка UnityEngine чесно не покриває цю глибину API, а фальшиве
-    /// «збирається» гірше за відсутність лінту взагалі. Уся раскладкова
-    /// математика — окремо, у <see cref="BattleArenaView"/> (чистий C#, і
-    /// лінтиться, і вкрита тестами).
+    /// ЛІНТ-ВИКЛЮЧЕНО (Physics/Renderer/Camera/Collider/Playable — та сама
+    /// причина, що в <c>VillageStage</c>/<c>GameSceneBuilder</c>, §5
+    /// TEST_BUILD.md): заглушка UnityEngine чесно не покриває цю глибину API.
+    /// Уся розкладкова математика — окремо, у <see cref="BattleArenaView"/> і
+    /// <see cref="BattleTurnDirector"/>/<see cref="BattleTactParser"/> (чистий
+    /// C#, і лінтяться, і вкриті тестами).
     ///
-    /// ВІДОМІ РОЗРИВИ КОНТРАКТУ GameSession (не мого володіння — див. звіт
-    /// пакета E2): (1) <c>BattleUnitView.DisplayNameKey</c> сьогодні несе НЕ
-    /// готовий ключ таблиці, а сирий службовий рядок (<c>Companion.DisplayName</c>
-    /// для гравця, короткий id <c>EnemyDefinition.DisplayName</c> для ворога) —
-    /// <see cref="ResolveNameKey"/> відновлює справжній ключ за Id/стороною
-    /// (<c>BattleUnitView.Side</c>), а для player-side юніта без відомого
-    /// префікса id (Тренувальний бій: "trainee_1"/"trainee_2") віддає
-    /// <c>DisplayNameKey</c> як є замість позначки відсутнього ключа; (2) рід
-    /// протагоніста читається з <c>GameSession.GetProtagonistCreationView().Gender</c>
-    /// (сам виклик без охорони стану — безпечно в будь-який момент, кешується в
-    /// <c>_protagonistGender</c> на <see cref="Enter"/> і передається сусідньому
-    /// <see cref="PortraitRig"/>, бо його <c>IPortraitProvider.GetPortrait</c> не
-    /// приймає сесію). Рід переживає «Продовжити»: зліпок несе <c>pgender=</c>
-    /// (GameSession.ComposeSave/ApplySave, тест
-    /// <c>ContinueGame_PreservesProtagonistGenderNameAndBackground</c>); (3) немає
-    /// <c>GameSession.CombatStabilize</c>/<c>CombatRetreat</c> — <c>CombatState</c>
-    /// має обидва методи, фасад жоден не обгортає, тому кнопок
-    /// «Стабілізувати»/«Відступ» тут немає (сам TEST_BUILD.md позначає
-    /// «Відступ» як «якщо існує» — не існує); (4) немає
-    /// напрямку прицілу дозору в <c>BattleUnitView</c> — показаний лише
-    /// індикатор «у дозорі», без конуса напрямку.
-    ///
-    /// ЗАКРИТО (25.09.2026, скарга «не можу нормально щось використати в
-    /// бою»): пункт (4) старого списку — <c>BattleView</c> тепер несе
-    /// <c>BattleUnitView.Abilities</c> (реальний набір ЦЬОГО юніта, з ціною
-    /// AP і відкатом), а не фіксований каталог, однаковий для всіх. HUD
-    /// (<see cref="Game.Gameplay.UI.BattleHudScreen.DrawAbilities"/>) сірить
-    /// кнопку з причиною замість мовчазної відмови по кліку;
-    /// <see cref="RunCommand"/> перекладає конкретний <c>CombatActionResult</c>
-    /// (не тільки Success/fail) у журнал бою.
+    /// РЕЖИСЕР ХОДУ ВОРОГА (§5, головна скарга власника «гра тупо
+    /// зупинилась»): <see cref="BattleTurnDirector"/> вирішує, коли презентер
+    /// сам кличе <c>GameSession.CombatAiStepOneAction()</c> — раніше цей
+    /// виклик не звучав ЖОДНОГО разу поза автопрогоном.
     /// </summary>
     public sealed class BattleArenaController : MonoBehaviour, IBattlePresenter, IBattleHudData
     {
+        // ================= камера: константи спільні з Editor (докорінно §4) =================
+
+        public const float CameraTiltDegrees = 52f;
+        public const float InitialYawDegrees = 45f;
+
         // ================= призначається BattleArenaBuilder (Editor) =================
 
         public GameObject ArenaRoot;
         public Camera ArenaCamera;
         public string HubCameraName = "HubCamera";
-
-        /// <summary>
-        /// Фікс-ревью (minor, раунд 2, знайдено QA): <c>World/Hub</c> і
-        /// <c>World/BattleArena</c> ділять ту саму систему координат
-        /// (GameSceneBuilder жодного разу не зсуває арену — обидва корені
-        /// починаються з (0,0,0) під <c>World</c>), тому грид бою (світовий
-        /// X/Z 0..~10, <see cref="BattleArenaView.TileToWorld"/>) впритул
-        /// накладається на розкладку хутора (пости/будівлі приблизно в тому
-        /// самому діапазоні). Раніше <see cref="SwapToArenaCamera"/> міняла
-        /// лише КАМЕРИ — хаб (жителі на постах тощо) лишався активним і
-        /// потрапляв у кадр камери бою згори як непідписана фігура без
-        /// кільця сторони. Повний шлях (не голе "Hub" — під <c>UI/</c> є
-        /// однойменний порожній корінь) знаходить саме 3D-хаб.
-        /// </summary>
         public string HubRootName = "World/Hub";
 
         public GameObject[] MaleCharacterPrefabs = new GameObject[0];
         public GameObject[] FemaleCharacterPrefabs = new GameObject[0];
         public GameObject[] CoverHalfPrefabs = new GameObject[0];
         public GameObject[] CoverFullPrefabs = new GameObject[0];
-
-        /// <summary>
-        /// Фікс-ревью (major, знайдено QA): земля тайла — більше не голий
-        /// <c>PrimitiveType.Quad</c> з одним суцільним кольором (§RebuildGrid).
-        /// <c>ground_grass.fbx</c> (Kenney Nature Kit) — виміряно РІВНО 1×0×1 з
-        /// центром у (0,0,0), той самий тайл-модуль, що вже дає
-        /// <c>cliff_block_rock.fbx</c> для Full-укриття: підганяти масштаб не
-        /// треба. <c>null</c> — фолбек на старий Quad (наприклад, якщо
-        /// BattleArenaBuilder не знайшов модель), не порожня арена.
-        /// </summary>
         public GameObject TileGroundPrefab;
 
-        // ================= рантайм-стан =================
+        /// <summary>Бій v2: набори бойових кліпів — той самий індекс, що відповідний елемент <see cref="MaleCharacterPrefabs"/>/<see cref="FemaleCharacterPrefabs"/>.</summary>
+        public BattleCharacterClips[] MaleClipSets = new BattleCharacterClips[0];
+        public BattleCharacterClips[] FemaleClipSets = new BattleCharacterClips[0];
+
+        // ================= рантайм-стан: сцена =================
 
         private GameSession _session;
         private bool _active;
@@ -114,15 +96,34 @@ namespace Game.Gameplay
         private readonly Dictionary<string, GameObject> _unitObjects = new Dictionary<string, GameObject>(StringComparer.Ordinal);
         private readonly Dictionary<string, MaterialPropertyBlock> _unitBlocks = new Dictionary<string, MaterialPropertyBlock>(StringComparer.Ordinal);
         private readonly Dictionary<string, Renderer[]> _unitRenderers = new Dictionary<string, Renderer[]>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FigureAnimation> _unitAnimations = new Dictionary<string, FigureAnimation>(StringComparer.Ordinal);
+        private readonly Dictionary<string, BattleCharacterClips> _unitClipSets = new Dictionary<string, BattleCharacterClips>(StringComparer.Ordinal);
+
+        /// <summary>Видима позиція/поворот юніта — може відставати від логічної (<c>BattleUnitView.Pos</c>) на час такту руху (§6).</summary>
+        private readonly Dictionary<string, Vector3> _unitVisualPos = new Dictionary<string, Vector3>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Quaternion> _unitVisualRot = new Dictionary<string, Quaternion>(StringComparer.Ordinal);
+
+        private sealed class HitReaction { public Color FlashColor; public Vector3 RecoilDir; public float StartTime; public float Duration; }
+        private readonly Dictionary<string, HitReaction> _unitHitReactions = new Dictionary<string, HitReaction>(StringComparer.Ordinal);
 
         private ArmedAction _armed = ArmedAction.None;
         private string _armedAbilityId;
+
+        /// <summary>Справжнє наведення миші (Physics.Raycast) — <see cref="HoveredUnitId"/>/<see cref="HasHoveredTile"/> читають ЦЕ або симульоване, дивись <see cref="_hasSimulatedHover"/>.</summary>
         private GridPos? _hoveredTile;
         private string _hoveredUnitId;
+        private Vector3 _lastMousePosition;
+        private bool _lastMousePositionKnown;
+
+        /// <summary>Бій v2 §7: наведення "як мишею" для автотуру/знімків — справжній рух миші скидає його (<see cref="UpdateHover"/>).</summary>
+        private bool _hasSimulatedHover;
+        private string _simulatedHoverUnitId;
+        private GridPos? _simulatedHoverTile;
+
         private int _hoveredHitChance;
         private int _hoveredDamageMin, _hoveredDamageMax, _hoveredDamageCrit;
 
-        /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters (§SpawnOrUpdateUnit) — той самий множник контр-масштабує підпис імені (§BuildNameLabel), щоб текст не ріс разом із фігурою.</summary>
+        /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters — той самий множник контр-масштабує підпис імені, щоб текст не ріс разом із фігурою.</summary>
         private const float UnitVisualScale = 1.35f;
 
         private bool _resultPending;
@@ -130,27 +131,98 @@ namespace Game.Gameplay
         private string _resultRounds;
         private readonly List<string> _resultCasualtyLines = new List<string>();
         private readonly List<string> _logLines = new List<string>();
+        private readonly List<BattleLogEntryUi> _logEntries = new List<BattleLogEntryUi>();
         private const int MaxLogLines = 40;
 
-        /// <summary>
-        /// Скільки рядків <c>BattleView.Log</c> (журнал бою, ключі combat.log.*)
-        /// уже перекладено в <see cref="_logLines"/>. Журнал лише росте, поки
-        /// живе бій, тож курсор — просто лічильник; новий бій починає з нуля
-        /// (<see cref="Enter"/>).
-        /// </summary>
         private int _battleLogCursor;
-
-        /// <summary>
-        /// Фаза F: скільки записів <c>_session.DayLog</c> уже пройшло крізь
-        /// <see cref="AfterCommand"/>. RunCommand/RequestAutoResolve рахують
-        /// свій власний "before" ЛОКАЛЬНО (бо самі й викликали команду щойно
-        /// перед цим) — це поле держить той самий курсор МІЖ кадрами, щоб
-        /// <see cref="DetectExternalResolution"/> (Update(), не команда)
-        /// знала, з якого місця читати нові записи.
-        /// </summary>
         private int _lastKnownDayLogCount;
+        private string _lastRejectionText = string.Empty;
 
-        // ================= публічний зріз для BattleHudScreen =================
+        // ================= Бій v2: HUD-прямокутники (§7.4 SetHudRects) =================
+
+        private IReadOnlyList<Rect> _hudRects = Array.Empty<Rect>();
+
+        // ================= Бій v2: намір гравця =================
+
+        private bool _fastEnemyTurns;
+        private bool _enemyAiEnabled = true;
+
+        // ================= Бій v2: режисер ходу ворога =================
+
+        private readonly BattleTurnDirector _turnDirector = new BattleTurnDirector();
+
+        // ================= Бій v2: такти (§6) =================
+
+        private enum TactKind { Move, Attack, Ability, DownedOrDeath, Skip }
+
+        private sealed class PendingTact { public BattleLogLineView Entry; public TactKind Kind; }
+
+        private sealed class ActiveTact
+        {
+            public BattleLogLineView Entry;
+            public TactKind Kind;
+            public string ActorId;
+            public string TargetId;
+            public IReadOnlyList<GridPosView> Path;
+            public int PathIndex;
+            public float Duration;
+            public float Elapsed;
+            public bool FloatingSpawned;
+        }
+
+        private readonly Queue<PendingTact> _pendingTacts = new Queue<PendingTact>();
+        private ActiveTact _activeTact;
+
+        // ================= Бій v2: камера (§4) =================
+
+        private const float CameraDistance = 24f;
+        private const float CameraMinZoom = 4f;
+        private const float CameraMaxZoom = 12f;
+        private const float CameraPanSpeed = 5f;
+        private const float CameraFlyDuration = 0.45f;
+        private const float CameraPanMargin = 3f;
+
+        private float _cameraYawDegrees = InitialYawDegrees;
+        private float _cameraZoom = 8f;
+        private Vector3 _cameraPanFocus;
+        private Vector3 _cameraFlyStart;
+        private Vector3? _cameraFlyTarget;
+        private float _cameraFlyElapsed;
+        private bool _cameraInitialized;
+
+        // ================= Бій v2: банер ходу (§3, §6) =================
+
+        private BattleTurnBanner _banner;
+        private float _bannerTimer;
+        private string _lastBannerUnitId = "@none@";
+
+        // ================= Бій v2: спливаючі написи (§6) =================
+
+        private sealed class FloatingRuntime { public BattleFloatingText Data; public float Age; public float Duration; }
+        private readonly List<FloatingRuntime> _floatingRuntime = new List<FloatingRuntime>();
+        private readonly List<BattleFloatingText> _floatingTextsExposed = new List<BattleFloatingText>();
+
+        // ================= Бій v2: оверлеї над юнітами (§6) =================
+
+        private readonly List<BattleUnitOverlay> _overlays = new List<BattleUnitOverlay>();
+
+        // ================= Бій v2: приціл дозору / тайли під загрозою (§5) =================
+
+        private readonly HashSet<string> _overwatchAimTileKeys = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _overwatchThreatTileKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        // ================= Бій v2: прев'ю атаки/шляху (кеш за наміром, §6) =================
+
+        private AttackPreviewView _hoverAttackCache;
+        private MovePathView _hoverPathCache;
+        private (string current, string hovered, ArmedAction armed, string ability, int logCount, string tile)? _hoverKey;
+
+        // ================= Бій v2: лінія пострілу =================
+
+        private LineRenderer _shotLine;
+        private float _shotLineUntil;
+
+        // ================= публічний зріз для IBattleHudData =================
 
         public BattleView View => _lastView;
         public bool ResultPending => _resultPending;
@@ -158,13 +230,32 @@ namespace Game.Gameplay
         public string ResultRounds => _resultRounds;
         public IReadOnlyList<string> ResultCasualtyLines => _resultCasualtyLines;
         public IReadOnlyList<string> LogLines => _logLines;
+        public IReadOnlyList<BattleLogEntryUi> LogEntries => _logEntries;
         public ArmedAction Armed => _armed;
         public string ArmedAbilityId => _armedAbilityId;
-        public string HoveredUnitId => _hoveredUnitId;
+
+        public string HoveredUnitId => _hasSimulatedHover ? _simulatedHoverUnitId : _hoveredUnitId;
+        public bool HasHoveredTile => _hasSimulatedHover ? _simulatedHoverTile.HasValue : _hoveredTile.HasValue;
+        public int HoveredTileX => (_hasSimulatedHover ? _simulatedHoverTile : _hoveredTile)?.X ?? 0;
+        public int HoveredTileY => (_hasSimulatedHover ? _simulatedHoverTile : _hoveredTile)?.Y ?? 0;
+
         public int HoveredHitChance => _hoveredHitChance;
         public int HoveredDamageMin => _hoveredDamageMin;
         public int HoveredDamageMax => _hoveredDamageMax;
         public int HoveredDamageCrit => _hoveredDamageCrit;
+
+        public AttackPreviewView HoverAttack { get { RefreshHoverCaches(); return _hoverAttackCache; } }
+        public MovePathView HoverPath { get { RefreshHoverCaches(); return _hoverPathCache; } }
+
+        public IReadOnlyList<BattleUnitOverlay> Overlays => _overlays;
+        public IReadOnlyList<BattleFloatingText> FloatingTexts => _floatingTextsExposed;
+        public BattleTurnBanner Banner => _banner;
+
+        public bool FastEnemyTurns { get => _fastEnemyTurns; set => _fastEnemyTurns = value; }
+        public bool EnemyAiEnabled { get => _enemyAiEnabled; set => _enemyAiEnabled = value; }
+        public string LastRejectionText => _lastRejectionText;
+
+        public bool IsBusy => _activeTact != null || _pendingTacts.Count > 0;
 
         public bool IsPlayerTurn
         {
@@ -176,6 +267,8 @@ namespace Game.Gameplay
         }
 
         public string ResolveDisplayName(BattleUnitView unit) => ResolveDisplayNameInternal(unit);
+
+        public void SetHudRects(IReadOnlyList<Rect> guiRects) => _hudRects = guiRects ?? Array.Empty<Rect>();
 
         // ================= IBattlePresenter =================
 
@@ -192,13 +285,26 @@ namespace Game.Gameplay
             _resultPending = false;
             _resultCasualtyLines.Clear();
             _logLines.Clear();
+            _logEntries.Clear();
             _battleLogCursor = 0;
+            _lastRejectionText = string.Empty;
+            _pendingTacts.Clear();
+            _activeTact = null;
+            _turnDirector.Reset();
+            _banner = null;
+            _lastBannerUnitId = "@none@";
+            _floatingRuntime.Clear();
+            _floatingTextsExposed.Clear();
+            _unitVisualPos.Clear();
+            _unitVisualRot.Clear();
+            _unitHitReactions.Clear();
+            _hasSimulatedHover = false;
+            _simulatedHoverUnitId = null;
+            _simulatedHoverTile = null;
+            _lastMousePositionKnown = false;
+            _hoverKey = null;
+            _cameraInitialized = false;
 
-            // Рід протагоніста — за GameSession.GetProtagonistCreationView() (без
-            // охорони стану, безпечно в будь-який момент, §GetProtagonistCreationView
-            // реального коду): PortraitRig не бачить GameSession (фіксована сигнатура
-            // IPortraitProvider.GetPortrait не приймає сесію), тож контролер — єдине
-            // місце шва, що його знає, — передає рід сусідньому компоненту напряму.
             _protagonistGender = _session?.GetProtagonistCreationView()?.Gender ?? Gender.Male;
             var portraitRig = ArenaRoot != null ? ArenaRoot.GetComponent<PortraitRig>() : null;
             if (portraitRig != null) portraitRig.ProtagonistGender = _protagonistGender;
@@ -209,20 +315,13 @@ namespace Game.Gameplay
             _lastView = _session?.GetBattleView();
             RebuildGrid(_lastView);
             RebuildUnits(_lastView);
-            FrameCamera(_lastView);
-            AppendNewBattleLog(_lastView);
+            InitializeCamera(_lastView);
+            ProcessNewBattleLog(_lastView);
 
-            // Фаза F: курсор DayLog стартує від ПОТОЧНОГО розміру — не 0, щоб
-            // не перечитувати записи з-ДО цього бою (вони однаково без
-            // combat.*-ключів, ConsumeEvent їх ігнорує, але навіщо зайва
-            // робота щоразу, коли бій розв'язується зовнішньою командою).
             _lastKnownDayLogCount = _session?.DayLog.Count ?? 0;
         }
 
-        public void Exit()
-        {
-            TeardownAndDeactivate();
-        }
+        public void Exit() => TeardownAndDeactivate();
 
         public void DrawHud(GameSession session)
         {
@@ -232,58 +331,126 @@ namespace Game.Gameplay
             BattleHudScreen.Draw(this);
         }
 
-        /// <summary>Гравець підтвердив панель результату («Далі») — тепер справді виходимо з презентера.</summary>
-        public void AcknowledgeResult()
-        {
-            TeardownAndDeactivate();
-        }
+        public void AcknowledgeResult() => TeardownAndDeactivate();
 
         // ================= намір гравця =================
 
-        public void ArmAbility(string abilityId) { if (IsPlayerTurn) { _armed = ArmedAction.Ability; _armedAbilityId = abilityId; } }
-        public void ArmOverwatchAim() { if (IsPlayerTurn) { _armed = ArmedAction.OverwatchAim; _armedAbilityId = null; } }
+        public void ArmAbility(string abilityId) { if (IsPlayerTurn && !IsBusy) { _armed = ArmedAction.Ability; _armedAbilityId = abilityId; } }
+        public void ArmOverwatchAim() { if (IsPlayerTurn && !IsBusy) { _armed = ArmedAction.OverwatchAim; _armedAbilityId = null; } }
         public void CancelArmed() { _armed = ArmedAction.None; _armedAbilityId = null; }
 
-        public void RequestEndTurn() => RunCommand(() => _session.CombatEndTurn());
+        public void RequestEndTurn() { if (IsPlayerTurn && !IsBusy) RunCommand(() => _session.CombatEndTurn()); }
 
         public void RequestAutoResolve()
         {
             if (_session == null) return;
             int before = _session.DayLog.Count;
-            try
-            {
-                _session.CombatAutoResolve();
-            }
-            catch (InvalidOperationException)
-            {
-                // Див. коментар у RunCommand — той самий перегон "бій щойно
-                // розв'язався кліком, що протік крізь HUD" стосується й
-                // кнопки Автобою (фікс-ревью, major).
-                _logLines.Add(UkrainianText.Get("ui.battle.action.rejected", Gender.Male));
-            }
+            try { _session.CombatAutoResolve(); }
+            catch (InvalidOperationException) { NoteRejection(UkrainianText.Get("ui.battle.action.rejected", Gender.Male)); }
             AfterCommand(before);
+        }
+
+        public bool RequestStabilize(string targetId)
+        {
+            if (!IsPlayerTurn || IsBusy || string.IsNullOrEmpty(targetId)) return false;
+            return RunCommand(() => _session.CombatStabilize(targetId));
+        }
+
+        public void FocusCamera(string unitId)
+        {
+            var unit = FindUnitById(unitId);
+            if (unit == null) return;
+            var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+            _cameraFlyStart = _cameraPanFocus;
+            _cameraFlyTarget = new Vector3(world.X, 0f, world.Z);
+            _cameraFlyElapsed = 0f;
+        }
+
+        public void SimulateHoverUnit(string unitId)
+        {
+            _hasSimulatedHover = true;
+            _simulatedHoverUnitId = unitId;
+            _simulatedHoverTile = null;
+        }
+
+        public void SimulateHoverTile(int x, int y)
+        {
+            _hasSimulatedHover = true;
+            _simulatedHoverTile = new GridPos(x, y);
+            _simulatedHoverUnitId = null;
+        }
+
+        public void ClearSimulatedHover()
+        {
+            _hasSimulatedHover = false;
+            _simulatedHoverUnitId = null;
+            _simulatedHoverTile = null;
+        }
+
+        // ================= IBattleInput: команди тайл/юніт (§7: ТІ САМІ шляхи, що ЛКМ) =================
+
+        public bool ClickUnit(string unitId)
+        {
+            if (!IsPlayerTurn || IsBusy || string.IsNullOrEmpty(unitId) || _session == null) return false;
+            switch (_armed)
+            {
+                case ArmedAction.None:
+                    return RunCommand(() => _session.CombatAttack(unitId));
+                case ArmedAction.OverwatchAim:
+                    var aimUnit = FindUnitById(unitId);
+                    if (aimUnit == null) return false;
+                    return RunCommand(() => _session.CombatEnterOverwatch(new GridPos(aimUnit.Pos.X, aimUnit.Pos.Y)));
+                case ArmedAction.Ability:
+                    if (string.IsNullOrEmpty(_armedAbilityId)) return false;
+                    string abilityId = _armedAbilityId;
+                    return RunCommand(() => _session.CombatUseAbility(abilityId, unitId, null));
+                default:
+                    return false;
+            }
+        }
+
+        public bool ClickTile(int x, int y)
+        {
+            if (!IsPlayerTurn || IsBusy || _session == null) return false;
+            var tile = new GridPos(x, y);
+            switch (_armed)
+            {
+                case ArmedAction.None:
+                    return RunCommand(() => _session.CombatMove(tile));
+                case ArmedAction.OverwatchAim:
+                    return RunCommand(() => _session.CombatEnterOverwatch(tile));
+                case ArmedAction.Ability:
+                    if (string.IsNullOrEmpty(_armedAbilityId)) return false;
+                    string abilityId = _armedAbilityId;
+                    return RunCommand(() => _session.CombatUseAbility(abilityId, null, tile));
+                default:
+                    return false;
+            }
         }
 
         // ================= кадровий цикл =================
 
         private void Update()
         {
-            if (!_active || _resultPending) return;
-            UpdateHover();  // спершу курсор — щоб підсвітка й прев'ю нижче бачили цей самий кадр, не попередній
-            Refresh();
-            HandleClicks();
+            if (!_active) return;
+            if (_resultPending)
+            {
+                return;
+            }
 
-            // Фаха F знахідка (тур-автоплей): бій може розв'язатись командою,
-            // що обійшла RunCommand/RequestAutoResolve — напр.
-            // AutoplayGameDriver кличе GameSession.Combat* напряму через
-            // shell.TryRun (як і IMGUI-фолбек BattleScreen.cs). GameSession.
-            // State вже пішов ДАЛІ (OnBattleResolved зсуває його синхронно
-            // всередині самої команди), а презентер про завершення бою не
-            // дізнався б: жоден AfterCommand не викликався, _resultPending
-            // лишався б false НАЗАВЖДИ, GameShell більше не малює DrawBattle()
-            // для стану поза Battle — і TeardownAndDeactivate ніколи не
-            // спрацьовував би. Арена (юніти, підписи, камера) лишалась би
-            // видимою У ФОНІ кожного наступного екрана до кінця гри.
+            float dt = Time.deltaTime;
+
+            UpdateHover();
+            Refresh();
+            HandleMouseClicks();
+            HandleHotkeys();
+            UpdateActiveTact(dt);
+            UpdateEnemyTurnDirector(dt);
+            UpdateBannerAndAutoFocus(_lastView);
+            UpdateFloatingTexts(dt);
+            RebuildOverlays();
+            UpdateCamera(dt);
+
             if (_session != null && _session.State != SessionState.Battle)
                 DetectExternalResolution();
         }
@@ -297,9 +464,9 @@ namespace Game.Gameplay
             if (view != null)
             {
                 _lastView = view;
+                RefreshIntentOverlayTiles();
                 ApplyUnitPositionsAndHighlights(view);
-                // Хід, зроблений повз RunCommand (автопрогон, фолбек), теж потрапляє в журнал.
-                AppendNewBattleLog(view);
+                ProcessNewBattleLog(view);
             }
         }
 
@@ -357,32 +524,14 @@ namespace Game.Gameplay
 
                 string key = x + "_" + y;
                 _tileObjects[key] = tile;
-                ApplyTileTint(tile, key, cover, walkable, isReachable: false, isCurrent: false, isHovered: false);
+                ApplyTileTint(tile, key, cover, walkable, isReachable: false, isCurrent: false, isHovered: false,
+                    isHoveredUnreachable: false, isAbilityRange: false, isOverwatchAim: false, isOverwatchThreat: false);
 
-                // Фікс-ревью (major, знайдено QA): раніше вимагало "walkable
-                // &&" — непрохідні тайли з укриттям (Full-камінь/скеля
-                // ЗАЗВИЧАЙ саме непрохідні) лишались БЕЗ моделі, тільки
-                // тьмяний тінт (§ApplyTileTint, walkable=false завжди темний
-                // незалежно від cover) — гравець бачив однакову темну
-                // пляму замість каменя/скелі. PlaceCoverProp сам знімає
-                // колайдери моделі (декоративне, не ціль променя), тож
-                // непрохідність тайла це не ламає.
                 if (!string.Equals(cover, "None", StringComparison.Ordinal))
                     PlaceCoverProp(x, y, cover, world);
             }
         }
 
-        /// <summary>
-        /// Один тайл ґрунту: реальна модель Kenney (<see cref="TileGroundPrefab"/>,
-        /// 1×0×1 з центром у (0,0,0) — жодного підбору масштабу не треба, §поле
-        /// TileGroundPrefab) або фолбек-Quad, коли модель не призначено (Editor
-        /// не знайшов файл — арена все одно має чим стояти). FBX-префаб не несе
-        /// власного колайдера (на відміну від <c>CreatePrimitive</c>, що додає
-        /// його сам) — тому колайдер тут завжди свій, один, на корені з ім'ям
-        /// "tile:x_y" (задає викликач одразу після повернення): той самий
-        /// контракт, що й <see cref="SpawnOrUpdateUnit"/> для юнітів, потрібен
-        /// <see cref="UpdateHover"/> (читає ім'я об'єкта під променем напряму).
-        /// </summary>
         private GameObject BuildTileGameObject(WorldPos world)
         {
             if (TileGroundPrefab == null)
@@ -391,10 +540,6 @@ namespace Game.Gameplay
                 quad.transform.SetParent(_tileRoot, false);
                 quad.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
                 quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                // Полірування (ціль 3 «Бойові декорації», owner: "a grid
-                // shown as subtle lines"): 0.985 лишає межу тайла тонкою
-                // лінією, не суцільною чорною сіткою (§ стара версія цього
-                // коментаря вище RebuildGrid).
                 quad.transform.localScale = new Vector3(BattleArenaView.TileSize * 0.985f, BattleArenaView.TileSize * 0.985f, 1f);
                 return quad;
             }
@@ -402,7 +547,7 @@ namespace Game.Gameplay
             var tile = Instantiate(TileGroundPrefab, _tileRoot);
             tile.transform.SetParent(_tileRoot, false);
             tile.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
-            tile.transform.localRotation = Quaternion.identity; // модель уже лежить лицем угору — не Quad, 90° по X тут зайві
+            tile.transform.localRotation = Quaternion.identity;
 
             foreach (var stale in tile.GetComponentsInChildren<Collider>()) Destroy(stale);
             var box = tile.AddComponent<BoxCollider>();
@@ -426,8 +571,6 @@ namespace Game.Gameplay
             go.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
             go.transform.localRotation = Quaternion.Euler(0f, BattleArenaView.Hash01("cover_yaw_" + x + "_" + y) * 360f, 0f);
 
-            // Декоративне — не ціль для мишачого променя: прибираємо колайдери
-            // моделі, щоб клік по тайлу під укриттям не губився на камені/тину.
             foreach (var collider in go.GetComponentsInChildren<Collider>()) Destroy(collider);
         }
 
@@ -437,6 +580,8 @@ namespace Game.Gameplay
             _unitObjects.Clear();
             _unitBlocks.Clear();
             _unitRenderers.Clear();
+            _unitAnimations.Clear();
+            _unitClipSets.Clear();
 
             if (view?.Units == null) return;
             foreach (var unit in view.Units) SpawnOrUpdateUnit(unit);
@@ -446,20 +591,12 @@ namespace Game.Gameplay
         {
             if (!_unitObjects.TryGetValue(unit.Id, out var go) || go == null)
             {
-                var prefab = PickCharacterPrefab(unit.Id);
+                PickCharacter(unit.Id, out var prefab, out var clips);
                 go = prefab != null ? Instantiate(prefab, _unitRoot) : GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 go.name = "unit:" + unit.Id;
                 go.transform.SetParent(_unitRoot, false);
-                // Полірування (ціль 3 «Бойові декорації», owner: "units
-                // scaled up to read well"): Kenney Mini Characters дрібні
-                // проти клітини 1×1 — на камері зверху фігура губилась між
-                // підписом і кільцем сторони.
                 go.transform.localScale = Vector3.one * UnitVisualScale;
 
-                // Модель Kenney може нести власні колайдери на дочірніх об'єктах —
-                // прибираємо їх усі й тримаємо РІВНО один, на корені, з відомим
-                // ім'ям "unit:<id>": так HandleInput читає ціль напряму з
-                // hit.collider.gameObject.name, без непевного пошуку по батьках.
                 foreach (var stale in go.GetComponentsInChildren<Collider>()) Destroy(stale);
                 var box = go.AddComponent<BoxCollider>();
                 box.center = new Vector3(0f, 0.8f, 0f);
@@ -470,23 +607,39 @@ namespace Game.Gameplay
 
                 _unitObjects[unit.Id] = go;
                 _unitBlocks[unit.Id] = new MaterialPropertyBlock();
-                // Кешуємо набір рендерів РІВНО раз при спавні: тіло моделі не
-                // змінюється між кадрами (кільце "overwatch" додається/знімається
-                // окремо і в цей масив не входить — ApplyUnitVisual все одно
-                // фільтрує його за ім'ям, тож відсутність у кеші нешкідлива).
                 _unitRenderers[unit.Id] = go.GetComponentsInChildren<Renderer>();
+                _unitClipSets[unit.Id] = clips;
+
+                if (go.GetComponentInChildren<Animator>() != null)
+                {
+                    var anim = go.AddComponent<FigureAnimation>();
+                    anim.idle = clips?.Idle;
+                    anim.walk = clips?.Walk;
+                    anim.sprint = clips?.Sprint;
+                    anim.phase = BattleArenaView.Hash01(unit.Id) * 0.9f;
+                    _unitAnimations[unit.Id] = anim;
+                }
+
+                var world0 = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+                _unitVisualPos[unit.Id] = new Vector3(world0.X, 0f, world0.Z);
+                _unitVisualRot[unit.Id] = Quaternion.identity;
             }
 
             ApplyUnitVisual(go, unit);
         }
 
-        private GameObject PickCharacterPrefab(string unitId)
+        private void PickCharacter(string unitId, out GameObject prefab, out BattleCharacterClips clips)
         {
-            var pool = IsFemaleCompanion(unitId) ? FemaleCharacterPrefabs : MaleCharacterPrefabs;
-            if (pool == null || pool.Length == 0) return null;
+            bool female = IsFemaleCompanion(unitId);
+            var pool = female ? FemaleCharacterPrefabs : MaleCharacterPrefabs;
+            var clipPool = female ? FemaleClipSets : MaleClipSets;
+            prefab = null;
+            clips = null;
+            if (pool == null || pool.Length == 0) return;
             int index = (int)(BattleArenaView.Hash01(unitId ?? "unit") * pool.Length);
             if (index >= pool.Length) index = pool.Length - 1;
-            return pool[index];
+            prefab = pool[index];
+            if (clipPool != null && index < clipPool.Length) clips = clipPool[index];
         }
 
         private void BuildSideRing(GameObject unitGo, BattleUnitView unit)
@@ -509,33 +662,12 @@ namespace Game.Gameplay
             }
         }
 
-        /// <summary>
-        /// Фікс-ревью (ціль А «Бойові декорації», owner: "readable name labels
-        /// that don't cover neighbours" — знайдено тур-автоплеєм): фіксований
-        /// <c>characterSize=0.1</c> давав ширину підпису, що росте прямо
-        /// пропорційно довжині імені, без стелі. На тісному строю (два
-        /// сусідні тайли — 1 світова одиниця) довгі імена на кшталт
-        /// "Розвідник орди"/"Застрільник орди" налягали на сусідній підпис
-        /// суцільним нечитабельним текстом. Обидва фікси тут:
-        /// (1) <see cref="UnitVisualScale"/> тепер масштабує саму фігуру —
-        /// підпис контр-масштабується на той самий множник, щоб не рости
-        /// разом з нею (інакше довгі імена стали б ще ширшими, ніж до
-        /// збільшення юнітів); (2) розмір символу обернено пропорційний
-        /// довжині імені — короткі імена лишаються великими (стеля = старий
-        /// дефолт 0.1), довгі стають дрібнішими, і сумарна ширина підпису
-        /// тримається приблизно в межах одного тайла незалежно від довжини.
-        /// </summary>
         private void BuildNameLabel(GameObject unitGo, BattleUnitView unit)
         {
             var label = new GameObject("label");
             label.transform.SetParent(unitGo.transform, false);
             label.transform.localPosition = new Vector3(0f, BattleArenaView.NameLabelHeight, 0f);
-            // Камера арени дивиться зверху вниз (GameSceneBuilder.BuildArenaCamera,
-            // поворот 90° по X) — підпис лежить лицем угору, а не крутиться до
-            // камери: той самий підхід, що KitBuilder.Plot для ізометрії хаба.
             label.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            // Батько (unitGo) тепер масштабований на UnitVisualScale — без
-            // контр-масштабу тут підпис ріс би разом із фігурою.
             label.transform.localScale = Vector3.one / UnitVisualScale;
 
             string name = ResolveDisplayNameInternal(unit);
@@ -565,7 +697,6 @@ namespace Game.Gameplay
                     SpawnOrUpdateUnit(unit);
                 }
 
-            // Юніт зник зі списку (вибув насовсім) — прибираємо модель.
             var stale = new List<string>();
             foreach (var kv in _unitObjects)
                 if (!alive.Contains(kv.Key)) stale.Add(kv.Key);
@@ -575,11 +706,19 @@ namespace Game.Gameplay
                 _unitObjects.Remove(id);
                 _unitBlocks.Remove(id);
                 _unitRenderers.Remove(id);
+                _unitAnimations.Remove(id);
+                _unitClipSets.Remove(id);
+                _unitVisualPos.Remove(id);
+                _unitVisualRot.Remove(id);
+                _unitHitReactions.Remove(id);
             }
 
             var reachable = new HashSet<string>(StringComparer.Ordinal);
             if (view.ReachableTiles != null)
                 foreach (var pos in view.ReachableTiles) reachable.Add(pos.X + "_" + pos.Y);
+
+            var current = CurrentUnit();
+            bool armedNone = _armed == ArmedAction.None;
 
             for (int y = 0; y < _gridHeight; y++)
             for (int x = 0; x < _gridWidth; x++)
@@ -591,45 +730,38 @@ namespace Game.Gameplay
                 string cover = view.Grid.TileCover != null && index < view.Grid.TileCover.Count ? view.Grid.TileCover[index] : "None";
                 bool walkable = view.Grid.TileWalkable == null || index >= view.Grid.TileWalkable.Count || view.Grid.TileWalkable[index];
                 bool isReachable = reachable.Contains(key);
-                bool isHovered = _hoveredTile.HasValue && _hoveredTile.Value.X == x && _hoveredTile.Value.Y == y;
+                bool isHovered = HasHoveredTile && HoveredTileX == x && HoveredTileY == y;
+                bool isHoveredUnreachable = isHovered && armedNone && !isReachable;
+                bool isOverwatchAim = _overwatchAimTileKeys.Contains(key);
+                bool isOverwatchThreat = _overwatchThreatTileKeys.Contains(key);
 
-                // Тайл поточного юніта перефарбовується другим проходом нижче
-                // (isCurrent тут завжди false) — так координата не рахується двічі.
-                ApplyTileTint(tile, key, cover, walkable, isReachable, false, isHovered);
+                // Тайл поточного юніта перефарбовується другим проходом нижче.
+                ApplyTileTint(tile, key, cover, walkable, isReachable, false, isHovered,
+                    isHoveredUnreachable, isAbilityRange: false, isOverwatchAim: isOverwatchAim, isOverwatchThreat: isOverwatchThreat);
             }
 
-            var current = CurrentUnit();
             string currentKey = current != null ? current.Pos.X + "_" + current.Pos.Y : null;
             if (currentKey != null && _tileObjects.TryGetValue(currentKey, out var currentTile) && currentTile != null)
             {
                 int index = current.Pos.X + current.Pos.Y * _gridWidth;
                 string cover = view.Grid.TileCover != null && index < view.Grid.TileCover.Count ? view.Grid.TileCover[index] : "None";
                 bool walkable = view.Grid.TileWalkable == null || index >= view.Grid.TileWalkable.Count || view.Grid.TileWalkable[index];
-                bool isHovered = _hoveredTile.HasValue && _hoveredTile.Value.X == current.Pos.X && _hoveredTile.Value.Y == current.Pos.Y;
-                ApplyTileTint(currentTile, currentKey, cover, walkable, isReachable: false, isCurrent: true, isHovered: isHovered);
+                bool isHovered = HasHoveredTile && HoveredTileX == current.Pos.X && HoveredTileY == current.Pos.Y;
+                ApplyTileTint(currentTile, currentKey, cover, walkable, false, true, isHovered,
+                    isHoveredUnreachable: false, isAbilityRange: false, isOverwatchAim: false, isOverwatchThreat: false);
             }
 
             UpdateHitChancePreview(current);
         }
 
-        /// <summary>
-        /// Перефарбовує тайл щокадрово (Refresh -&gt; ApplyUnitPositionsAndHighlights
-        /// для всього грида, до 10×10 — §TEST_BUILD.md R9) — тому, як і
-        /// <see cref="ApplyUnitVisual"/> з <c>_unitBlocks</c>, тримаємо ОДИН
-        /// <see cref="MaterialPropertyBlock"/> на тайл у <see cref="_tileBlocks"/>
-        /// замість <c>new MaterialPropertyBlock()</c> щокадру на кожен з ~100 тайлів.
-        /// </summary>
-        private void ApplyTileTint(GameObject tile, string key, string cover, bool walkable, bool isReachable, bool isCurrent, bool isHovered)
+        private void ApplyTileTint(GameObject tile, string key, string cover, bool walkable, bool isReachable,
+            bool isCurrent, bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat)
         {
-            // Фікс-ревью (major, знайдено QA): тайл тепер може бути моделлю
-            // Kenney (§BuildTileGameObject), не гарантовано ОДНИМ рендером,
-            // як був голий Quad — той самий MaterialPropertyBlock іде на всі
-            // рендери під коренем, інакше частина меша лишалась би в
-            // кольорі матеріалу за замовчуванням, поки решта фарбувалась.
             var renderers = tile.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) return;
 
-            var tint = BattleArenaView.TintFor(cover, walkable, isReachable, isCurrent, isHovered);
+            var tint = BattleArenaView.TintForIntent(cover, walkable, isReachable, isCurrent, isHovered,
+                isHoveredUnreachable, isAbilityRange, isOverwatchAim, isOverwatchThreat);
             if (!_tileBlocks.TryGetValue(key, out var block) || block == null)
             {
                 block = new MaterialPropertyBlock();
@@ -640,24 +772,63 @@ namespace Game.Gameplay
             foreach (var renderer in renderers) renderer.SetPropertyBlock(block);
         }
 
+        /// <summary>
+        /// Видима позиція юніта: під час такту руху (§6) веде
+        /// <see cref="_unitVisualPos"/> сам (<see cref="UpdateMoveTact"/>) —
+        /// тут ми лише читаємо її, не підміняючи миттєво логічною позицією
+        /// (інакше рух знову читався б як телепорт). Поза тактом — синхронна
+        /// з <c>BattleUnitView.Pos</c>.
+        /// </summary>
         private void ApplyUnitVisual(GameObject go, BattleUnitView unit)
         {
-            var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+            bool movingThis = _activeTact != null && _activeTact.Kind == TactKind.Move &&
+                               string.Equals(_activeTact.ActorId, unit.Id, StringComparison.Ordinal);
+
             float sink = unit.IsDowned ? BattleArenaView.DownedSink : 0f;
-            go.transform.localPosition = new Vector3(world.X, sink, world.Z);
-            go.transform.localRotation = unit.IsDowned ? Quaternion.Euler(90f, 0f, 0f) : Quaternion.identity;
+            Vector3 basePos;
+            if (movingThis && _unitVisualPos.TryGetValue(unit.Id, out var moving))
+            {
+                basePos = new Vector3(moving.x, sink, moving.z);
+            }
+            else
+            {
+                var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+                basePos = new Vector3(world.X, sink, world.Z);
+                _unitVisualPos[unit.Id] = basePos;
+            }
+
+            var rotation = _unitVisualRot.TryGetValue(unit.Id, out var rot) ? rot : Quaternion.identity;
+
+            var recoil = Vector3.zero;
+            var palette = BattleArenaView.CharacterTint(unit.Id, unit.Side, unit.DisplayNameKey);
+            var tintColor = new Color(palette.R, palette.G, palette.B, unit.IsDowned ? 0.55f : 1f);
+
+            if (_unitHitReactions.TryGetValue(unit.Id, out var reaction))
+            {
+                float age = Time.time - reaction.StartTime;
+                if (age >= 0f && age < reaction.Duration)
+                {
+                    float frac = 1f - age / reaction.Duration;
+                    tintColor = Color.Lerp(tintColor, reaction.FlashColor, frac);
+                    recoil = reaction.RecoilDir * (0.12f * frac);
+                }
+                else
+                {
+                    _unitHitReactions.Remove(unit.Id);
+                }
+            }
+
+            go.transform.localPosition = basePos + recoil;
+            go.transform.localRotation = rotation;
 
             var renderers = _unitRenderers.TryGetValue(unit.Id, out var cachedRenderers) && cachedRenderers != null
                 ? cachedRenderers
                 : go.GetComponentsInChildren<Renderer>();
-            var palette = BattleArenaView.CharacterTint(unit.Id, unit.Side, unit.DisplayNameKey);
             var block = _unitBlocks.TryGetValue(unit.Id, out var b) ? b : new MaterialPropertyBlock();
             block.Clear();
-            block.SetColor("_BaseColor", new Color(palette.R, palette.G, palette.B, unit.IsDowned ? 0.55f : 1f));
+            block.SetColor("_BaseColor", tintColor);
             foreach (var r in renderers)
             {
-                // "ring"/"overwatch" тримають власний колір (сторона/дозор), "label" — текст імені:
-                // жоден із трьох не мав би щокадру перефарбовуватися в колір тіла персонажа.
                 string n = r.gameObject.name;
                 if (n == "ring" || n == "overwatch" || n == "label") continue;
                 r.SetPropertyBlock(block);
@@ -688,16 +859,16 @@ namespace Game.Gameplay
             }
         }
 
-        // ================= прев'ю шансу =================
+        // ================= прев'ю шансу (перехідне — §HoveredHitChance/Damage*) =================
 
         private void UpdateHitChancePreview(BattleUnitView current)
         {
             _hoveredHitChance = 0;
             _hoveredDamageMin = _hoveredDamageMax = _hoveredDamageCrit = 0;
-            if (_session == null || current == null || string.IsNullOrEmpty(_hoveredUnitId)) return;
-            if (string.Equals(_hoveredUnitId, current.Id, StringComparison.Ordinal)) return;
-            _hoveredHitChance = _session.PreviewHitChance(current.Id, _hoveredUnitId);
-            _session.PreviewDamage(current.Id, _hoveredUnitId, out _hoveredDamageMin, out _hoveredDamageMax, out _hoveredDamageCrit);
+            if (_session == null || current == null || string.IsNullOrEmpty(HoveredUnitId)) return;
+            if (string.Equals(HoveredUnitId, current.Id, StringComparison.Ordinal)) return;
+            _hoveredHitChance = _session.PreviewHitChance(current.Id, HoveredUnitId);
+            _session.PreviewDamage(current.Id, HoveredUnitId, out _hoveredDamageMin, out _hoveredDamageMax, out _hoveredDamageCrit);
         }
 
         private BattleUnitView CurrentUnit()
@@ -716,21 +887,26 @@ namespace Game.Gameplay
             return null;
         }
 
+        private GameObject UnitGo(string id) => _unitObjects.TryGetValue(id ?? string.Empty, out var go) ? go : null;
+
         // ================= ввід миші =================
 
-        /// <summary>Лише читає, куди дивиться курсор — жодної команди. Викликається до <see cref="Refresh"/>, щоб підсвітка/прев'ю шансу цього ж кадру бачили свіжий наведений тайл/юніт.</summary>
+        /// <summary>Лише читає, куди дивиться курсор — жодної команди. Справжній рух миші скидає симульоване наведення (§7.4 <see cref="ClearSimulatedHover"/>).</summary>
         private void UpdateHover()
         {
+            var mouse = Input.mousePosition;
+            if (_lastMousePositionKnown && _hasSimulatedHover && (mouse - _lastMousePosition).sqrMagnitude > 0.25f)
+                ClearSimulatedHover();
+            _lastMousePosition = mouse;
+            _lastMousePositionKnown = true;
+
             _hoveredTile = null;
             _hoveredUnitId = null;
             if (ArenaCamera == null || IsPointerOverHud()) return;
 
-            var ray = ArenaCamera.ScreenPointToRay(Input.mousePosition);
+            var ray = ArenaCamera.ScreenPointToRay(mouse);
             if (!Physics.Raycast(ray, out var hit, 500f)) return;
 
-            // Колайдер юніта — рівно один, на корені "unit:<id>" (усі власні
-            // колайдери моделі знято при спавні, див. SpawnOrUpdateUnit), тож
-            // ім'я самого колайдера — вже потрібна відповідь, без ходіння по батьках.
             string n = hit.collider != null ? hit.collider.gameObject.name : null;
             if (n != null && n.StartsWith("unit:", StringComparison.Ordinal))
             {
@@ -744,35 +920,18 @@ namespace Game.Gameplay
             }
         }
 
-        /// <summary>
-        /// Фікс-ревью (блокер): HUD (<see cref="BattleHudScreen"/>) малює IMGUI-
-        /// панель у лівій третині екрана (padding..padding+width), а
-        /// <see cref="FrameCamera"/> кадрує ВВЕСЬ грід під ортографічною
-        /// камерою — тобто арена рендериться і під панеллю теж, і без цієї
-        /// перевірки Physics.Raycast з тієї ж точки екрана однаково влучає в
-        /// реальний тайл/юніт під кнопкою HUD. GUI-простір (початок
-        /// зверху-зліва), тому Y віддзеркалюємо від Unity screen-простору
-        /// <c>Input.mousePosition</c> (початок знизу-зліва) — той самий
-        /// перехід, що GUIUtility.ScreenToGUIPoint без залежності від неї.
-        /// </summary>
-        private static bool IsPointerOverHud()
+        /// <summary>Курсор над будь-якою панеллю HUD (<see cref="SetHudRects"/>) — GUI-простір (початок зверху-зліва).</summary>
+        private bool IsPointerOverHud()
         {
-            var panel = BattleHudScreen.PanelRect;
-            if (panel.width <= 0f || panel.height <= 0f) return false;
+            if (_hudRects == null || _hudRects.Count == 0) return false;
             var guiPos = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
-            return panel.Contains(guiPos);
+            for (int i = 0; i < _hudRects.Count; i++)
+                if (_hudRects[i].width > 0f && _hudRects[i].height > 0f && _hudRects[i].Contains(guiPos)) return true;
+            return false;
         }
 
-        private void HandleClicks()
+        private void HandleMouseClicks()
         {
-            // Фікс-ревью (блокер): курсор над панеллю BattleHudScreen — жодного
-            // 3D-кліку цього кадру взагалі (навіть ПКМ-скасування: ПКМ по
-            // кнопці HUD — не жест скасування прицілу). UpdateHover() того ж
-            // кадру вже не поставив _hoveredTile/_hoveredUnitId у цьому
-            // випадку, тож None/OverwatchAim-гілки нижче й так нічого б не
-            // зробили — але ArmedAction.Ability кличе CombatUseAbility
-            // незалежно від наведення (порожня ціль → ядро відхилить), і клік
-            // по кнопці HUD не мусить витрачати цю спробу.
             if (IsPointerOverHud()) return;
 
             if (Input.GetMouseButtonDown(1))
@@ -781,93 +940,591 @@ namespace Game.Gameplay
                 return;
             }
 
-            if (!Input.GetMouseButtonDown(0) || !IsPlayerTurn) return;
+            if (!Input.GetMouseButtonDown(0) || !IsPlayerTurn || IsBusy) return;
 
-            switch (_armed)
+            if (!string.IsNullOrEmpty(_hoveredUnitId)) ClickUnit(_hoveredUnitId);
+            else if (_hoveredTile.HasValue) ClickTile(_hoveredTile.Value.X, _hoveredTile.Value.Y);
+        }
+
+        /// <summary>Гарячі клавіші (§7): Пробіл, 1..9, O, Q/E — камера окремо в <see cref="UpdateCamera"/>. Esc НЕ обробляється тут (GameShell).</summary>
+        private void HandleHotkeys()
+        {
+            if (Input.GetKeyDown(KeyCode.Space))
             {
-                case ArmedAction.None:
-                    // «Розумний клік»: ворог під курсором — атака, інакше тайл — рух.
-                    // Ядро саме відхилить недосяжний тайл/ціль поза дальністю
-                    // (CombatActionResult != Success) — тут не дублюємо цю перевірку.
-                    if (!string.IsNullOrEmpty(_hoveredUnitId)) RunCommand(() => _session.CombatAttack(_hoveredUnitId));
-                    else if (_hoveredTile.HasValue) RunCommand(() => _session.CombatMove(_hoveredTile.Value));
+                if (IsPlayerTurn && !IsBusy) RequestEndTurn();
+                else if (!IsPlayerTurn) FastEnemyTurns = !FastEnemyTurns;
+            }
+
+            if (IsPlayerTurn && !IsBusy)
+            {
+                var current = CurrentUnit();
+                if (current?.Abilities != null)
+                    for (int i = 0; i < current.Abilities.Count && i < 9; i++)
+                        if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+                            ArmAbility(current.Abilities[i].Id);
+
+                if (Input.GetKeyDown(KeyCode.O)) ArmOverwatchAim();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Q)) _cameraYawDegrees = Wrap360(_cameraYawDegrees - 90f);
+            if (Input.GetKeyDown(KeyCode.E)) _cameraYawDegrees = Wrap360(_cameraYawDegrees + 90f);
+        }
+
+        private static float Wrap360(float deg)
+        {
+            deg %= 360f;
+            if (deg < 0f) deg += 360f;
+            return deg;
+        }
+
+        // ================= прев'ю за наміром (кеш, §6-§7) =================
+
+        private void RefreshHoverCaches()
+        {
+            if (_session == null || _lastView == null) { _hoverAttackCache = null; _hoverPathCache = null; return; }
+
+            string currentId = _lastView.CurrentUnitId;
+            string hoveredId = HoveredUnitId;
+            bool hasTile = HasHoveredTile;
+            string tileKey = hasTile ? HoveredTileX + "_" + HoveredTileY : null;
+            int logCount = _lastView.Log?.Count ?? 0;
+            var key = (currentId, hoveredId, _armed, _armedAbilityId, logCount, tileKey);
+
+            if (_hoverKey.HasValue && _hoverKey.Value.Equals(key)) return;
+            _hoverKey = key;
+
+            _hoverAttackCache = null;
+            if (!string.IsNullOrEmpty(currentId) && !string.IsNullOrEmpty(hoveredId))
+            {
+                try { _hoverAttackCache = _session.PreviewAttack(currentId, hoveredId, _armed == ArmedAction.Ability ? _armedAbilityId : null); }
+                catch (NotImplementedException) { _hoverAttackCache = null; }
+            }
+
+            _hoverPathCache = null;
+            if (IsPlayerTurn && hasTile)
+            {
+                try { _hoverPathCache = _session.PreviewMovePath(new GridPos(HoveredTileX, HoveredTileY)); }
+                catch (NotImplementedException) { _hoverPathCache = null; }
+            }
+        }
+
+        /// <summary>Тайли приціла дозору (озброєна дія) і тайли шляху під ворожим дозором (наведений рух) — §5.</summary>
+        private void RefreshIntentOverlayTiles()
+        {
+            _overwatchAimTileKeys.Clear();
+            _overwatchThreatTileKeys.Clear();
+            if (_session == null || _lastView == null) return;
+
+            if (_armed == ArmedAction.OverwatchAim && HasHoveredTile)
+            {
+                try
+                {
+                    var cone = _session.PreviewOverwatchCone(new GridPos(HoveredTileX, HoveredTileY));
+                    if (cone != null) foreach (var t in cone) _overwatchAimTileKeys.Add(t.X + "_" + t.Y);
+                }
+                catch (NotImplementedException) { /* «ядро» Бою v2 ще не готове — приціл просто без підсвітки тайлів */ }
+            }
+
+            var path = HoverPath;
+            if (_armed == ArmedAction.None && path?.OverwatchThreatTiles != null)
+                foreach (var t in path.OverwatchThreatTiles) _overwatchThreatTileKeys.Add(t.X + "_" + t.Y);
+        }
+
+        // ================= такти: відтворення результату дії (§6) =================
+
+        private bool IsFastNow() => _fastEnemyTurns && _lastView != null && _lastView.IsAiTurn;
+
+        private void UpdateActiveTact(float dt)
+        {
+            if (_activeTact == null)
+            {
+                if (_pendingTacts.Count > 0) StartNextTact();
+                return;
+            }
+
+            if (_activeTact.Kind == TactKind.Move) UpdateMoveTact(dt);
+            else UpdateTimedTact(dt);
+        }
+
+        private void StartNextTact()
+        {
+            var pending = _pendingTacts.Dequeue();
+            var entry = pending.Entry;
+            var args = entry.Args;
+            string unitId = Arg(args, "unitId");
+            string targetId = Arg(args, "targetId");
+
+            _activeTact = new ActiveTact { Entry = entry, Kind = pending.Kind, ActorId = unitId, TargetId = targetId };
+            bool fast = IsFastNow();
+
+            switch (pending.Kind)
+            {
+                case TactKind.Move:
+                    _activeTact.Path = BattleTactParser.ParsePath(Arg(args, "path"));
+                    _activeTact.PathIndex = 0;
+                    if (!_unitVisualPos.ContainsKey(unitId) && UnitGo(unitId) != null)
+                        _unitVisualPos[unitId] = UnitGo(unitId).transform.localPosition;
+                    SetGait(unitId, 1f);
                     break;
-                case ArmedAction.OverwatchAim:
-                    if (_hoveredTile.HasValue)
-                    {
-                        RunCommand(() => _session.CombatEnterOverwatch(_hoveredTile.Value));
-                    }
-                    else if (!string.IsNullOrEmpty(_hoveredUnitId))
-                    {
-                        // Курсор навів на модель юніта (тайл/юніт-колайдери взаємовиключні,
-                        // UpdateHover ставить рівно одне з двох) — CombatState.Overwatch
-                        // приймає зайнятий тайл у межах грида так само, як порожній: клік по
-                        // ворогу мусить прицілити дозор на клітину під ним, а не мовчки
-                        // нічого не робити.
-                        var aimUnit = FindUnitById(_hoveredUnitId);
-                        if (aimUnit != null)
-                            RunCommand(() => _session.CombatEnterOverwatch(new GridPos(aimUnit.Pos.X, aimUnit.Pos.Y)));
-                    }
+
+                case TactKind.Attack:
+                    _activeTact.Duration = fast ? 0.15f : 0.5f;
+                    FaceTowards(unitId, targetId);
+                    PlayAttackClip(unitId, targetId);
                     break;
-                case ArmedAction.Ability:
-                    if (!string.IsNullOrEmpty(_armedAbilityId))
-                    {
-                        // Знімаємо ДО RunCommand: AfterCommand скидає
-                        // _armedAbilityId на null щойно команда відпрацює.
-                        string abilityId = _armedAbilityId;
-                        // Окреме підтвердження "здібність застосовано" більше не
-                        // потрібне: журнал бою сам пише combat.log.ability і наслідки
-                        // (ривок, пастка, перестановка) — AppendNewBattleLog.
-                        RunCommand(() => _session.CombatUseAbility(abilityId, _hoveredUnitId, _hoveredTile));
-                    }
+
+                case TactKind.Ability:
+                    _activeTact.Duration = fast ? 0.12f : 0.4f;
+                    if (!string.IsNullOrEmpty(targetId)) FaceTowards(unitId, targetId);
+                    PlayOneShot(unitId, clips => clips?.Interact, hold: false);
+                    break;
+
+                case TactKind.DownedOrDeath:
+                    _activeTact.Duration = fast ? 0.2f : 0.6f;
+                    PlayOneShot(unitId, clips => clips?.Die, hold: true);
                     break;
             }
         }
 
+        private void UpdateMoveTact(float dt)
+        {
+            var tact = _activeTact;
+            if (tact.Path == null || tact.PathIndex >= tact.Path.Count) { CompleteTact(); return; }
+
+            float tileDuration = IsFastNow() ? 0.09f : 0.18f;
+            float speed = BattleArenaView.TileSize / tileDuration;
+
+            var currentPos = _unitVisualPos.TryGetValue(tact.ActorId, out var p) ? p : Vector3.zero;
+            var targetTile = tact.Path[tact.PathIndex];
+            var targetWorld = BattleArenaView.TileToWorld(targetTile.X, targetTile.Y);
+            var targetPos = new Vector3(targetWorld.X, currentPos.y, targetWorld.Z);
+
+            var dir = targetPos - currentPos;
+            float dist = dir.magnitude;
+            float step = speed * dt;
+
+            if (dist <= step || dist < 0.0001f)
+            {
+                _unitVisualPos[tact.ActorId] = targetPos;
+                tact.PathIndex++;
+                if (tact.PathIndex >= tact.Path.Count)
+                {
+                    SetGait(tact.ActorId, 0f);
+                    CompleteTact();
+                }
+            }
+            else
+            {
+                var facing = new Vector3(dir.x, 0f, dir.z);
+                if (facing.sqrMagnitude > 0.0001f) _unitVisualRot[tact.ActorId] = Quaternion.LookRotation(facing.normalized, Vector3.up);
+                _unitVisualPos[tact.ActorId] = currentPos + dir.normalized * step;
+            }
+        }
+
+        private void UpdateTimedTact(float dt)
+        {
+            var tact = _activeTact;
+            tact.Elapsed += dt;
+
+            if (tact.Kind == TactKind.Attack && !tact.FloatingSpawned && tact.Elapsed >= tact.Duration * 0.5f)
+            {
+                tact.FloatingSpawned = true;
+                SpawnFloatingForEntry(tact.Entry);
+                ApplyHitReaction(tact);
+            }
+
+            if (tact.Elapsed >= tact.Duration) CompleteTact();
+        }
+
+        private void CompleteTact()
+        {
+            if (_activeTact != null && _activeTact.Kind == TactKind.Move) SetGait(_activeTact.ActorId, 0f);
+            _activeTact = null;
+        }
+
+        private void SetGait(string unitId, float gait)
+        {
+            if (_unitAnimations.TryGetValue(unitId ?? string.Empty, out var anim) && anim != null) anim.Gait = gait;
+        }
+
+        private void PlayOneShot(string unitId, Func<BattleCharacterClips, AnimationClip> select, bool hold)
+        {
+            if (string.IsNullOrEmpty(unitId)) return;
+            if (!_unitAnimations.TryGetValue(unitId, out var anim) || anim == null) return;
+            _unitClipSets.TryGetValue(unitId, out var clips);
+            var clip = select(clips);
+            if (clip != null) anim.PlayOnce(clip, hold);
+        }
+
+        /// <summary>Ближній/дальній замах — <c>WeaponIsMelee</c> (BattleUnitView, §7.1); дальній ще й лишає лінію пострілу на короткий час.</summary>
+        private void PlayAttackClip(string attackerId, string targetId)
+        {
+            var attacker = FindUnitById(attackerId);
+            bool melee = attacker != null && attacker.WeaponIsMelee;
+            PlayOneShot(attackerId, clips => melee ? clips?.AttackMelee : clips?.HoldingShoot, hold: false);
+            if (!melee) StartShotLine(attackerId, targetId);
+        }
+
+        private void FaceTowards(string actorId, string targetId)
+        {
+            var actor = FindUnitById(actorId);
+            var target = FindUnitById(targetId);
+            if (actor == null || target == null) return;
+            var from = BattleArenaView.TileToWorld(actor.Pos.X, actor.Pos.Y);
+            var to = BattleArenaView.TileToWorld(target.Pos.X, target.Pos.Y);
+            var dir = new Vector3(to.X - from.X, 0f, to.Z - from.Z);
+            if (dir.sqrMagnitude > 0.0001f) _unitVisualRot[actorId] = Quaternion.LookRotation(dir.normalized, Vector3.up);
+        }
+
+        /// <summary>Тексти написів — виключно <see cref="BattleLogText.Floating"/> (не вигадувати самому, §2 доручення).</summary>
+        private void SpawnFloatingForEntry(BattleLogLineView entry)
+        {
+            var spec = BattleLogText.Floating(entry, _lastView, _protagonistGender);
+            if (spec == null || string.IsNullOrEmpty(spec.UnitId)) return;
+            var unit = FindUnitById(spec.UnitId);
+            if (unit == null || ArenaCamera == null) return;
+
+            var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+            var gui = WorldToGui(new Vector3(world.X, BattleArenaView.NameLabelHeight * 0.65f, world.Z));
+
+            var text = new BattleFloatingText
+            {
+                Text = spec.Text,
+                Kind = spec.Kind,
+                ScreenX = gui.x,
+                ScreenY = gui.y,
+                Alpha = 1f,
+                Big = spec.Big
+            };
+            _floatingRuntime.Add(new FloatingRuntime { Data = text, Age = 0f, Duration = spec.Big ? 1.0f : 0.6f });
+        }
+
+        private void ApplyHitReaction(ActiveTact tact)
+        {
+            var kind = BattleLogText.KindOf(tact.Entry);
+            if (kind == BattleLogKind.Miss || string.IsNullOrEmpty(tact.TargetId)) return;
+
+            var flash = kind == BattleLogKind.Crit ? new Color(1f, 0.80f, 0.30f) : new Color(0.95f, 0.30f, 0.25f);
+            var reaction = new HitReaction { FlashColor = flash, StartTime = Time.time, Duration = 0.18f, RecoilDir = Vector3.zero };
+
+            var attacker = FindUnitById(tact.ActorId);
+            var target = FindUnitById(tact.TargetId);
+            if (attacker != null && target != null)
+            {
+                var from = BattleArenaView.TileToWorld(attacker.Pos.X, attacker.Pos.Y);
+                var to = BattleArenaView.TileToWorld(target.Pos.X, target.Pos.Y);
+                var away = new Vector3(to.X - from.X, 0f, to.Z - from.Z);
+                if (away.sqrMagnitude > 0.0001f) reaction.RecoilDir = away.normalized;
+            }
+            _unitHitReactions[tact.TargetId] = reaction;
+        }
+
+        private void StartShotLine(string attackerId, string targetId)
+        {
+            var attacker = FindUnitById(attackerId);
+            var target = FindUnitById(targetId);
+            if (attacker == null || target == null) return;
+
+            var line = EnsureShotLine();
+            if (line == null) return;
+
+            var from = BattleArenaView.TileToWorld(attacker.Pos.X, attacker.Pos.Y);
+            var to = BattleArenaView.TileToWorld(target.Pos.X, target.Pos.Y);
+            line.SetPosition(0, new Vector3(from.X, 0.9f, from.Z));
+            line.SetPosition(1, new Vector3(to.X, 0.9f, to.Z));
+            line.enabled = true;
+            _shotLineUntil = Time.time + 0.15f;
+        }
+
+        private LineRenderer EnsureShotLine()
+        {
+            if (_shotLine != null) return _shotLine;
+            if (ArenaRoot == null) return null;
+
+            var go = new GameObject("shot_line");
+            go.transform.SetParent(ArenaRoot.transform, false);
+            _shotLine = go.AddComponent<LineRenderer>();
+            _shotLine.positionCount = 2;
+            _shotLine.startWidth = 0.04f;
+            _shotLine.endWidth = 0.04f;
+            _shotLine.useWorldSpace = true;
+            if (_tileMaterial != null) _shotLine.material = _tileMaterial;
+            var block = new MaterialPropertyBlock();
+            block.SetColor("_BaseColor", new Color(0.95f, 0.85f, 0.45f));
+            _shotLine.SetPropertyBlock(block);
+            _shotLine.enabled = false;
+            return _shotLine;
+        }
+
+        private static string Arg(IReadOnlyDictionary<string, string> args, string name)
+        {
+            if (args == null) return null;
+            return args.TryGetValue(name, out var v) ? v : null;
+        }
+
+        private static TactKind ClassifyTact(BattleLogLineView entry)
+        {
+            var kind = BattleLogText.KindOf(entry);
+            switch (kind)
+            {
+                case BattleLogKind.Move: return TactKind.Move;
+                case BattleLogKind.Miss:
+                case BattleLogKind.Graze:
+                case BattleLogKind.Hit:
+                case BattleLogKind.Crit: return TactKind.Attack;
+                case BattleLogKind.Ability: return TactKind.Ability;
+                case BattleLogKind.Downed:
+                case BattleLogKind.Death:
+                    return entry.Key == "combat.log.downed" || entry.Key == "combat.log.died"
+                        ? TactKind.DownedOrDeath
+                        : TactKind.Skip;
+                default: return TactKind.Skip;
+            }
+        }
+
+        // ================= режисер ходу ворога (§5, §7) =================
+
+        private void UpdateEnemyTurnDirector(float dt)
+        {
+            if (_session == null || _lastView == null) return;
+
+            var decision = _turnDirector.Tick(dt, _lastView.IsAiTurn, _enemyAiEnabled, IsBusy, _fastEnemyTurns, _lastView.CurrentUnitId);
+            switch (decision)
+            {
+                case BattleTurnDirectorAction.StepAi:
+                    FocusCamera(_lastView.CurrentUnitId);
+                    TryStepAi();
+                    break;
+                case BattleTurnDirectorAction.ForceEndTurn:
+                    if (_turnDirector.LastWarning != null) Debug.LogWarning(_turnDirector.LastWarning);
+                    RunCommand(() => _session.CombatEndTurn());
+                    break;
+            }
+        }
+
+        private void TryStepAi()
+        {
+            if (_session == null) return;
+            int before = _session.DayLog.Count;
+            try { _session.CombatAiStepOneAction(); }
+            catch (InvalidOperationException) { /* бій щойно завершився цим самим кроком (Core.RequireBattle) */ }
+            AfterCommand(before);
+            _turnDirector.RecordStepOutcome(ComputeStateSignature());
+        }
+
+        private string ComputeStateSignature()
+        {
+            if (_lastView == null) return "none";
+            var current = CurrentUnit();
+            return (_lastView.Log?.Count ?? 0).ToString(CultureInfo.InvariantCulture) + ":" +
+                   (current?.Ap ?? -1).ToString(CultureInfo.InvariantCulture) + ":" +
+                   (current?.Hp ?? -1).ToString(CultureInfo.InvariantCulture) + ":" +
+                   (current != null ? current.Pos.X + "," + current.Pos.Y : "-");
+        }
+
+        // ================= банер ходу + автофокус камери (§3, §4) =================
+
+        private void UpdateBannerAndAutoFocus(BattleView view)
+        {
+            string currentId = view?.CurrentUnitId;
+            if (string.Equals(currentId, _lastBannerUnitId, StringComparison.Ordinal))
+            {
+                UpdateBannerFade(Time.deltaTime);
+                return;
+            }
+            _lastBannerUnitId = currentId;
+
+            var unit = FindUnitById(currentId);
+            if (unit != null)
+            {
+                bool playerSide = string.Equals(unit.Side, "Player", StringComparison.Ordinal);
+                string key = playerSide ? "ui.battle.banner.player" : "ui.battle.banner.enemy";
+                _banner = new BattleTurnBanner
+                {
+                    Text = UkrainianText.Format(key, false, "name", ResolveDisplayNameInternal(unit)),
+                    PlayerSide = playerSide,
+                    Alpha = 1f
+                };
+                _bannerTimer = 0f;
+                FocusCamera(currentId);
+            }
+            UpdateBannerFade(Time.deltaTime);
+        }
+
+        private void UpdateBannerFade(float dt)
+        {
+            if (_banner == null) return;
+            const float total = 0.9f, holdUntil = 0.5f;
+            _bannerTimer += dt;
+            float alpha = _bannerTimer <= holdUntil ? 1f : 1f - Mathf.Clamp01((_bannerTimer - holdUntil) / (total - holdUntil));
+            _banner.Alpha = alpha;
+            if (_bannerTimer >= total) _banner = null;
+        }
+
+        // ================= спливаючі написи: старіння (§6) =================
+
+        private void UpdateFloatingTexts(float dt)
+        {
+            for (int i = _floatingRuntime.Count - 1; i >= 0; i--)
+            {
+                var r = _floatingRuntime[i];
+                r.Age += dt;
+                r.Data.ScreenY -= 24f * dt;
+                r.Data.Alpha = Mathf.Clamp01(1f - r.Age / r.Duration);
+                if (r.Age >= r.Duration) _floatingRuntime.RemoveAt(i);
+            }
+
+            _floatingTextsExposed.Clear();
+            foreach (var r in _floatingRuntime) _floatingTextsExposed.Add(r.Data);
+
+            if (_shotLine != null && _shotLine.enabled && Time.time >= _shotLineUntil) _shotLine.enabled = false;
+        }
+
+        // ================= оверлеї над юнітами (§6) =================
+
+        private void RebuildOverlays()
+        {
+            _overlays.Clear();
+            if (_lastView?.Units == null || ArenaCamera == null) return;
+
+            string hoveredId = HoveredUnitId;
+            string currentId = _lastView.CurrentUnitId;
+            var hoverAttack = HoverAttack;
+
+            foreach (var unit in _lastView.Units)
+            {
+                var pos = _unitVisualPos.TryGetValue(unit.Id, out var p) ? p : DefaultWorldPos(unit);
+                var world = pos + Vector3.up * BattleArenaView.NameLabelHeight;
+                var sp = ArenaCamera.WorldToScreenPoint(world);
+                bool onScreen = sp.z > 0f && sp.x >= 0f && sp.x <= Screen.width && sp.y >= 0f && sp.y <= Screen.height;
+                bool isHovered = string.Equals(unit.Id, hoveredId, StringComparison.Ordinal);
+                bool isTargetable = isHovered && hoverAttack != null &&
+                    string.Equals(hoverAttack.TargetId, unit.Id, StringComparison.Ordinal) &&
+                    string.Equals(hoverAttack.Result, "Success", StringComparison.Ordinal);
+
+                _overlays.Add(new BattleUnitOverlay
+                {
+                    UnitId = unit.Id,
+                    ScreenX = sp.x,
+                    ScreenY = Screen.height - sp.y,
+                    OnScreen = onScreen,
+                    IsCurrent = string.Equals(unit.Id, currentId, StringComparison.Ordinal),
+                    IsHovered = isHovered,
+                    IsTargetable = isTargetable
+                });
+            }
+        }
+
+        private static Vector3 DefaultWorldPos(BattleUnitView unit)
+        {
+            var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+            return new Vector3(world.X, 0f, world.Z);
+        }
+
+        private Vector2 WorldToGui(Vector3 world)
+        {
+            if (ArenaCamera == null) return Vector2.zero;
+            var sp = ArenaCamera.WorldToScreenPoint(world);
+            return new Vector2(sp.x, Screen.height - sp.y);
+        }
+
+        // ================= камера (§4) =================
+
+        /// <summary>Початковий кадр на вхід у бій — миттєво, без пом'якшення (інакше перший кадр «летів би» з початку координат).</summary>
+        private void InitializeCamera(BattleView view)
+        {
+            if (view?.Grid == null) return;
+            var frame = BattleArenaView.FrameGrid(view.Grid.Width, view.Grid.Height);
+            _cameraYawDegrees = InitialYawDegrees;
+            _cameraZoom = Mathf.Clamp(frame.OrthographicSize, CameraMinZoom, CameraMaxZoom);
+            _cameraPanFocus = new Vector3(frame.CenterX, 0f, frame.CenterZ);
+            _cameraFlyTarget = null;
+
+            if (ArenaCamera == null) return;
+            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistance);
+            ArenaCamera.transform.position = _cameraPanFocus + new Vector3(offset.X, offset.Y, offset.Z);
+            ArenaCamera.transform.rotation = Quaternion.LookRotation(-new Vector3(offset.X, offset.Y, offset.Z).normalized, Vector3.up);
+            if (ArenaCamera.orthographic) ArenaCamera.orthographicSize = _cameraZoom;
+            _cameraInitialized = true;
+        }
+
+        private void UpdateCamera(float dt)
+        {
+            if (ArenaCamera == null) return;
+            if (!_cameraInitialized) { InitializeCamera(_lastView); return; }
+
+            bool overHud = IsPointerOverHud();
+
+            float wheel = Input.mouseScrollDelta.y;
+            if (Mathf.Abs(wheel) > 0.01f && !overHud)
+                _cameraZoom = Mathf.Clamp(_cameraZoom - wheel * 0.6f, CameraMinZoom, CameraMaxZoom);
+
+            float ix = (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
+                     - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
+            float iz = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1f : 0f)
+                     - (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
+            if (ix != 0f || iz != 0f)
+            {
+                var right = ArenaCamera.transform.right; right.y = 0f; right.Normalize();
+                var forward = ArenaCamera.transform.forward; forward.y = 0f; forward.Normalize();
+                var dir = right * ix + forward * iz;
+                if (dir.sqrMagnitude > 0.0001f) dir.Normalize();
+                float speed = CameraPanSpeed * (_cameraZoom / 8f);
+                _cameraPanFocus += dir * speed * dt;
+                _cameraFlyTarget = null; // ручна панорама скасовує будь-який політ, що ще триває
+            }
+
+            if (_cameraFlyTarget.HasValue)
+            {
+                _cameraFlyElapsed += dt;
+                float t = Mathf.Clamp01(_cameraFlyElapsed / CameraFlyDuration);
+                float eased = t * t * (3f - 2f * t);
+                _cameraPanFocus = Vector3.Lerp(_cameraFlyStart, _cameraFlyTarget.Value, eased);
+                if (t >= 1f) _cameraFlyTarget = null;
+            }
+
+            var clamped = BattleArenaView.ClampPanTarget(_cameraPanFocus.x, _cameraPanFocus.z, _gridWidth, _gridHeight, CameraPanMargin);
+            _cameraPanFocus = new Vector3(clamped.X, 0f, clamped.Z);
+
+            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistance);
+            var targetPos = _cameraPanFocus + new Vector3(offset.X, offset.Y, offset.Z);
+            var targetRot = Quaternion.LookRotation(-new Vector3(offset.X, offset.Y, offset.Z).normalized, Vector3.up);
+
+            float k = 1f - Mathf.Exp(-8f * dt);
+            ArenaCamera.transform.position = Vector3.Lerp(ArenaCamera.transform.position, targetPos, k);
+            ArenaCamera.transform.rotation = Quaternion.Slerp(ArenaCamera.transform.rotation, targetRot, k);
+            if (ArenaCamera.orthographic)
+                ArenaCamera.orthographicSize = Mathf.Lerp(ArenaCamera.orthographicSize, _cameraZoom, k);
+        }
+
         // ================= виконання команд + переклад стрічки подій =================
 
-        /// <summary>Повертає true, коли команда справді пройшла (Success) — виклики, яким важливо це знати (озброєна здібність, §HandleClicks), дописують власний рядок логу лише в цьому разі.</summary>
         private bool RunCommand(Func<CombatActionResult> command)
         {
             if (_session == null) return false;
             int before = _session.DayLog.Count;
             CombatActionResult result;
-            try
-            {
-                result = command();
-            }
-            catch (InvalidOperationException)
-            {
-                // Фікс-ревью (major): жоден GameSession.Combat*-метод не ловився
-                // тут — усі йдуть крізь RequireBattle(), яка кидає це саме
-                // виключення, щойно State != Battle / _battle вже null. Саме
-                // такий перегон відкриває клік-протік крізь HUD (фікс-ревью,
-                // блокер вище): смарт-клік розв'язує бій, а той самий кадр ще
-                // встигає натиснути кнопку HUD, що кличе Combat* на вже
-                // порожньому бою. Без catch виняток летів би крізь
-                // Update()/OnGUI() і лишав розбалансованим стек
-                // GUILayout.Begin/End-груп для цього кадру. RejectionLogLine
-                // нижче не має свого ключа під цей перегін — падає на
-                // дефолтний "ui.battle.action.rejected", і це чесно: бою вже
-                // немає, конкретики "чому" тут просто не існує.
-                result = CombatActionResult.InvalidAction;
-            }
+            try { result = command(); }
+            catch (InvalidOperationException) { result = CombatActionResult.InvalidAction; }
+            catch (NotImplementedException) { result = CombatActionResult.InvalidAction; }
+
             bool success = result == CombatActionResult.Success;
-            if (!success)
-                _logLines.Add(RejectionLogLine(result));
+            if (!success) NoteRejection(RejectionLogLine(result));
+            else _lastRejectionText = string.Empty;
+
             AfterCommand(before);
             return success;
         }
 
-        /// <summary>
-        /// Фікс (той самий розрив, що <see cref="Game.Gameplay.UI.BattleHudScreen.DrawAbilities"/>,
-        /// протилежний бік — тайл/юніт, не здібність): раніше будь-яка відмова
-        /// показувала ОДИН загальний рядок "Дію неможливо виконати зараз.",
-        /// хоча ядро вже точно знає причину (<c>CombatActionResult</c> — 6
-        /// конкретних значень окрім Success). "Не можу нормально нічого
-        /// використати" — це і є мовчазна відмова без пояснення; ядро тут не
-        /// винне, воно й так рахує причину, просто ніхто її не читав.
-        /// </summary>
+        private void NoteRejection(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            _logLines.Add(text);
+            _logEntries.Add(new BattleLogEntryUi { Round = _lastView?.Round ?? 0, Text = text, Kind = BattleLogKind.Rejection });
+            _lastRejectionText = text;
+            TrimLog();
+        }
+
         private static string RejectionLogLine(CombatActionResult result)
         {
             string key;
@@ -889,14 +1546,8 @@ namespace Game.Gameplay
             var log = _session.DayLog;
             for (int i = dayLogCountBefore; i < log.Count; i++)
                 ConsumeEvent(log[i]);
-            _lastKnownDayLogCount = log.Count; // Фаза F: курсор для DetectExternalResolution/наступного AfterCommand
+            _lastKnownDayLogCount = log.Count;
 
-            // Кожна дія — одноразовий намір: гравець свідомо озброює наступну
-            // (менше випадкових повторних кліків, ніж «здібність лишається
-            // озброєною»). Якщо бій щойно розв'язався, GetBattleView() уже
-            // null (GameSession.OnBattleResolved скидає _battle синхронно в
-            // тому самому виклику команди — §4.1, читано з реального коду) —
-            // ResultPending виставила ConsumeEvent вище, за DayLog.
             _armed = ArmedAction.None;
             _armedAbilityId = null;
 
@@ -904,38 +1555,40 @@ namespace Game.Gameplay
             if (freshView != null)
             {
                 _lastView = freshView;
-                AppendNewBattleLog(freshView);
+                RefreshIntentOverlayTiles();
+                ProcessNewBattleLog(freshView);
             }
         }
 
         /// <summary>
-        /// Журнал бою — з <c>BattleView.Log</c> (ключі combat.log.* з аргументами),
-        /// слова — <see cref="BattleLogText"/>, імена — тим самим
-        /// <see cref="NameForUnitId"/>, що й решта HUD. Раніше лог збирався з
-        /// DayLog і знав лише атаки та постріл дозору: рух, стани, дозор,
-        /// пастки, падіння й смерть гравець не бачив узагалі.
-        ///
-        /// Якщо команда сама завершила бій, <c>GetBattleView()</c> уже null і
-        /// останні рядки сюди не доходять — їх і не видно: одразу відкривається
-        /// панель результату (<see cref="ResultPending"/>).
+        /// Новий рядок <c>BattleView.Log</c> — і легасі-рядок (<see cref="LogLines"/>,
+        /// сумісність зі старим HUD), і типовий (<see cref="LogEntries"/>, §7.4:
+        /// <c>BattleLogText.Entry</c>), і, якщо відповідний сенс має такт (§6) —
+        /// у чергу <see cref="_pendingTacts"/>. Один курсор на все трьох.
         /// </summary>
-        private void AppendNewBattleLog(BattleView view)
+        private void ProcessNewBattleLog(BattleView view)
         {
             if (view?.Log == null) return;
             if (_battleLogCursor > view.Log.Count) _battleLogCursor = 0; // інший бій без Enter — почати спочатку
+
             for (; _battleLogCursor < view.Log.Count; _battleLogCursor++)
             {
-                string line = BattleLogText.Line(view.Log[_battleLogCursor], view.IsHitRulePercent, NameForUnitId, IsFemaleCompanion);
-                if (!string.IsNullOrEmpty(line)) _logLines.Add(line);
+                var entry = view.Log[_battleLogCursor];
+
+                string legacyLine = BattleLogText.Line(entry, view.IsHitRulePercent, NameForUnitId, IsFemaleCompanion);
+                if (!string.IsNullOrEmpty(legacyLine)) _logLines.Add(legacyLine);
+
+                var typed = BattleLogText.Entry(entry, view, _protagonistGender);
+                if (typed != null && !string.IsNullOrEmpty(typed.Text)) _logEntries.Add(typed);
+
+                var kind = ClassifyTact(entry);
+                if (kind != TactKind.Skip) _pendingTacts.Enqueue(new PendingTact { Entry = entry, Kind = kind });
             }
             TrimLog();
         }
 
         private void ConsumeEvent(GameEvent evt)
         {
-            // combat.attack.* / combat.overwatch.triggered тут більше не
-            // перекладаються: ті самі удари вже є в журналі бою
-            // (AppendNewBattleLog), разом із усім, чого DayLog не знає.
             switch (evt.Key)
             {
                 case "combat.battle.resolved":
@@ -961,11 +1614,6 @@ namespace Game.Gameplay
             evt.Args.TryGetValue("companionId", out var companionId);
             bool female = IsFemaleCompanion(companionId);
             string name = ResolveCompanionName(companionId, female);
-            // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): таблиця тримає
-            // плейсхолдер "{companionId}" (той самий рядок аргументу, що йде
-            // з GameEvent.Args — див. UkrainianText.cs "companion.died.*"),
-            // не "{companion}" — панель результату бою показувала гравцю
-            // буквальний рядок "{companionId} загинув на цьому шляху."
             string line = UkrainianText.Format(female ? "companion.died.f" : "companion.died.m", female, "companionId", name);
             _resultCasualtyLines.Add(line);
         }
@@ -977,8 +1625,6 @@ namespace Game.Gameplay
             bool female = IsFemaleCompanion(companionId);
             string name = ResolveCompanionName(companionId, female);
             string scarText = UkrainianText.Get("scar." + scarId, female);
-            // Той самий фікс, що й AppendDeathCasualty вище: таблиця "scar.granted"
-            // тримає "{companionId}"/"{scarId}", не "{companion}"/"{scar}".
             string line = UkrainianText.Format("scar.granted", female, "companionId", name, "scarId", scarText);
             _resultCasualtyLines.Add(line);
         }
@@ -986,6 +1632,7 @@ namespace Game.Gameplay
         private void TrimLog()
         {
             while (_logLines.Count > MaxLogLines) _logLines.RemoveAt(0);
+            while (_logEntries.Count > MaxLogLines) _logEntries.RemoveAt(0);
         }
 
         // ================= імена/рід =================
@@ -1000,18 +1647,6 @@ namespace Game.Gameplay
             return UkrainianText.MissingMarker(unitId);
         }
 
-        /// <summary>
-        /// Фікс-ревью раунд 2 (QA, major): ця "char."+id-заглушка була ТРЕТЬОЮ
-        /// окремою реалізацією імені — раунд 1 (<c>f677f18</c>/<c>6543768</c>)
-        /// уже навчив протагоніста-спецвипадку і <see cref="ResolveDisplayNameInternal"/>
-        /// (черга ходу, підпис на гріді, лог бою), і <c>ScreenText.ResolveCompanionName</c>
-        /// (портрет/сцена/стрічка), але панель результату "Втрати:" (<see
-        /// cref="AppendDeathCasualty"/>/<see cref="AppendScarCasualty"/>) досі
-        /// йшла сюди напряму й показувала заглушку поля вводу "Провідниця"/
-        /// "Провідник" замість обраного гравцем імені в кожному бою. Тепер
-        /// метод сам перевіряє протагоніста тим самим способом, тож нової,
-        /// четвертої розбіжної реалізації тут більше не буде.
-        /// </summary>
         private string ResolveCompanionName(string companionId, bool female)
         {
             if (string.IsNullOrEmpty(companionId)) return UkrainianText.MissingMarker(null);
@@ -1021,64 +1656,43 @@ namespace Game.Gameplay
             return UkrainianText.Has(key, female) ? UkrainianText.Get(key, female) : UkrainianText.MissingMarker(key);
         }
 
-        /// <summary>Обране гравцем ім'я протагоніста з ростера, якщо <paramref name="bareId"/> — це він; інакше null.</summary>
         private string TryResolveProtagonistDisplayName(string bareId)
         {
             if (!string.Equals(bareId, GameSession.ProtagonistId, StringComparison.Ordinal)) return null;
             var protagonist = ScreenText.FindCompanion(_session?.GetRosterView(), GameSession.ProtagonistId);
-            // Заглушка ядра (створення пропущено) — не ім'я: тоді «Провідник»/«Провідниця».
             return !string.IsNullOrEmpty(protagonist?.DisplayName) &&
                    protagonist.DisplayName != Game.Core.Scenes.OpeningScenes.ProtagonistPlaceholderName
                 ? protagonist.DisplayName : null;
         }
 
+        /// <summary>Ім'я з порядковим номером (§7.4 ResolveDisplayName): <c>BattleUnitView.Ordinal</c> &gt; 0 додає «I»/«II»/… через <see cref="BattleArenaView.WithOrdinal"/>.</summary>
         private string ResolveDisplayNameInternal(BattleUnitView unit)
         {
             if (unit == null) return UkrainianText.MissingMarker(null);
 
-            // Фікс-ревью (major, знайдено QA, той самий фікс, що
-            // ScreenText.ResolveCompanionName дістав у f677f18): протагоніста
-            // читаємо з ростера ДО загального пошуку "char."+id — той фікс
-            // торкнувся портрета/підпису мовця сцени/стрічки подій, але не цю,
-            // ПАРАЛЕЛЬНУ реалізацію імен бойового екрана (черга ходу й підпис
-            // на гріді) — вона й далі підміняла ОБРАНЕ гравцем ім'я
-            // ("Оксана") заглушкою-підказкою поля вводу "char.protagonist.m/
-            // .f" ("Провідниця"/"Провідник") у кожному бою.
             string protagonistName = TryResolveProtagonistDisplayName(BareUnitId(unit.Id));
-            if (protagonistName != null) return protagonistName;
+            if (protagonistName != null) return BattleArenaView.WithOrdinal(protagonistName, unit.Ordinal);
 
             string key = ResolveNameKey(unit);
             bool female = IsFemaleCompanion(unit.Id);
 
-            if (key != null && UkrainianText.Has(key, female)) return UkrainianText.Get(key, female);
+            if (key != null && UkrainianText.Has(key, female))
+                return BattleArenaView.WithOrdinal(UkrainianText.Get(key, female), unit.Ordinal);
             if (!string.IsNullOrEmpty(unit.DisplayNameKey) && UkrainianText.Has(unit.DisplayNameKey, female))
-                return UkrainianText.Get(unit.DisplayNameKey, female);
+                return BattleArenaView.WithOrdinal(UkrainianText.Get(unit.DisplayNameKey, female), unit.Ordinal);
 
-            // Player-side юніт без ключа таблиці (Тренувальний бій, §2 рядок 32:
-            // Core.DefaultCombatContent.Training() дає id "trainee_1"/"trainee_2"
-            // без "u_"-префіксу й DisplayNameKey = вже готовий український текст
-            // "Провідник"/"Максим", не ключ) — показуємо це ім'я як є, а не
-            // позначкою [ключ]: гравець ніколи не бачить сирий маркер там, де
-            // текст уже український і готовий до показу.
             if (string.Equals(unit.Side, "Player", StringComparison.Ordinal) && !string.IsNullOrEmpty(unit.DisplayNameKey))
-                return unit.DisplayNameKey;
+                return BattleArenaView.WithOrdinal(unit.DisplayNameKey, unit.Ordinal);
 
             return UkrainianText.MissingMarker(key ?? unit.DisplayNameKey ?? unit.Id);
         }
 
-        /// <summary>Див. пункт (1) у зведенні розривів у шапці файлу.</summary>
         private static string ResolveNameKey(BattleUnitView unit)
         {
             string id = unit.Id ?? string.Empty;
             if (id.StartsWith("u_", StringComparison.Ordinal)) return "char." + id.Substring(2);
             if (id.StartsWith("defector_", StringComparison.Ordinal)) return "char." + id.Substring(9);
 
-            // Сторона, не лише префікс id, вирішує «ворог це чи ні» — інакше
-            // player-side юніт з несподіваним id (Тренувальний бій:
-            // "trainee_1"/"trainee_2", без "u_") хибно йде в "enemy."-ключ,
-            // якого в таблиці нема, і падає на MissingMarker. Тут повертаємо
-            // null — ResolveDisplayNameInternal сам впаде на DisplayNameKey
-            // напряму для Player-сторони.
             if (!string.Equals(unit.Side, "Player", StringComparison.Ordinal) &&
                 !string.IsNullOrEmpty(unit.DisplayNameKey))
                 return "enemy." + unit.DisplayNameKey;
@@ -1086,7 +1700,6 @@ namespace Game.Gameplay
             return null;
         }
 
-        /// <summary>Префікс "u_"/"defector_" знятий — той самий "голий" id, яким таблиця й ростер знають персонажа.</summary>
         private static string BareUnitId(string unitId)
         {
             if (string.IsNullOrEmpty(unitId)) return unitId;
@@ -1095,14 +1708,11 @@ namespace Game.Gameplay
             return unitId;
         }
 
-        /// <summary>Див. пункт (2) у зведенні розривів у шапці файлу — тепер зважає на справжній рід протагоніста.</summary>
         private bool IsFemaleCompanion(string unitId)
         {
             if (string.IsNullOrEmpty(unitId)) return false;
-
             if (string.Equals(BareUnitId(unitId), GameSession.ProtagonistId, StringComparison.Ordinal))
                 return _protagonistGender == Gender.Female;
-
             return unitId.IndexOf("myroslava", StringComparison.Ordinal) >= 0;
         }
 
@@ -1118,9 +1728,6 @@ namespace Game.Gameplay
             if (_hubRoot == null) _hubRoot = GameObject.Find(HubRootName);
 
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(false);
-            // Ховаємо і сам 3D-хаб (див. коментар на HubRootName) — інакше
-            // жителі на постах лишаються в кадрі арени, накладеної на ту
-            // саму систему координат.
             if (_hubRoot != null) _hubRoot.SetActive(false);
             if (ArenaCamera != null) ArenaCamera.gameObject.SetActive(true);
         }
@@ -1132,58 +1739,13 @@ namespace Game.Gameplay
             if (_hubRoot != null) _hubRoot.SetActive(true);
         }
 
-        /// <summary>
-        /// Фікс-ревью (major, знайдено тур-автоплеєм): камера кадрувала ввесь
-        /// грід по центру ВСЬОГО екрана, не рахуючи ліву панель HUD
-        /// (<see cref="BattleHudScreen"/>, ~34% ширини) — перші 1-2 колонки
-        /// грида (і підписи юнітів на них, напр. "Мирослава"/"Максим Беркут")
-        /// опинялись під панеллю, обрізані. Камера — ортографічна згори
-        /// (<c>GameSceneBuilder.BuildArenaCamera</c>, поворот 90° по X): її
-        /// світовий X напряму мапиться на горизонталь екрана, тож зсуваємо
-        /// центр кадру вправо (камеру — вліво) рівно на стільки, щоб лівий
-        /// край грида (світовий X=0) опинявся не під панеллю, а одразу за нею.
-        /// </summary>
-        private void FrameCamera(BattleView view)
-        {
-            if (ArenaCamera == null || view?.Grid == null) return;
-            var frame = BattleArenaView.FrameGrid(view.Grid.Width, view.Grid.Height);
-
-            float shiftX = HudPanelShiftWorldX(frame);
-            ArenaCamera.transform.position = new Vector3(frame.CenterX - shiftX, ArenaCamera.transform.position.y, frame.CenterZ);
-            if (ArenaCamera.orthographic) ArenaCamera.orthographicSize = frame.OrthographicSize;
-        }
-
-        private static float HudPanelShiftWorldX(CameraFrame frame)
-        {
-            if (Screen.width <= 0 || Screen.height <= 0) return 0f;
-
-            float aspect = (float)Screen.width / Screen.height;
-            float halfWorldWidth = frame.OrthographicSize * aspect;
-            float worldPerPixel = (halfWorldWidth * 2f) / Screen.width;
-            if (worldPerPixel <= 0f) return 0f;
-
-            // Де на екрані сьогодні опиняється лівий край грида (світовий X=0),
-            // за формулою кадру ДО зсуву.
-            float gridLeftEdgeScreenX = (halfWorldWidth - frame.CenterX) / worldPerPixel;
-            float targetLeftEdgeScreenX = BattleHudScreen.PanelRightEdgePixels() + 24f; // трохи запасу, щоб колонка не впиралась прямо в рамку
-
-            float shiftWorld = 0f;
-            if (gridLeftEdgeScreenX < targetLeftEdgeScreenX)
-                shiftWorld = (targetLeftEdgeScreenX - gridLeftEdgeScreenX) * worldPerPixel;
-
-            // Не даємо зсуву виштовхнути правий край грида за екран (вузькі
-            // грiди на широких екранах мають достатньо запасу, але захист
-            // лишається явним, а не «зазвичай працює»).
-            float maxShift = halfWorldWidth * 0.7f;
-            return shiftWorld > maxShift ? maxShift : shiftWorld;
-        }
-
         private void TeardownAndDeactivate()
         {
             _active = false;
             _resultPending = false;
             _armed = ArmedAction.None;
             _session = null;
+            if (_shotLine != null) _shotLine.enabled = false;
 
             RestoreHubCamera();
             if (ArenaRoot != null) ArenaRoot.SetActive(false);

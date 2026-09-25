@@ -276,6 +276,108 @@ namespace Game.Gameplay
                 default: return null;
             }
         }
+
+        // ================= Бій v2: порядкові номери дублікатів (§7.4, §6 ResolveDisplayName) =================
+
+        /// <summary>
+        /// Римська цифра порядкового номера (<c>BattleUnitView.Ordinal</c>,
+        /// 1→"I", 2→"II", …) — 0 чи менше (ім'я унікальне в бою) дає порожній
+        /// рядок. Стандартний алгоритм: вистачає з великим запасом на будь-яку
+        /// реалістичну кількість дублікатів одного ворога в одному бою.
+        /// </summary>
+        public static string OrdinalRoman(int ordinal)
+        {
+            if (ordinal <= 0) return string.Empty;
+
+            int n = ordinal;
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < RomanValues.Length && n > 0; i++)
+                while (n >= RomanValues[i])
+                {
+                    sb.Append(RomanSymbols[i]);
+                    n -= RomanValues[i];
+                }
+            return sb.ToString();
+        }
+
+        private static readonly int[] RomanValues = { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
+        private static readonly string[] RomanSymbols = { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
+
+        /// <summary>Ім'я з порядковим номером, якщо він є («Розвідник орди» + 2 → «Розвідник орди II»); ordinal ≤ 0 повертає ім'я як є.</summary>
+        public static string WithOrdinal(string name, int ordinal)
+        {
+            string roman = OrdinalRoman(ordinal);
+            return roman.Length == 0 || string.IsNullOrEmpty(name) ? name : name + " " + roman;
+        }
+
+        // ================= Бій v2: підсвітка тайла з наміром гравця (§2, §5 «Наведення на недосяжний тайл») =================
+
+        /// <summary>
+        /// Розширення <see cref="TintFor"/> під намір гравця: озброєна
+        /// здібність підсвічує свою дальність (бузковий), приціл дозору —
+        /// свій конус (бірюзовий), тайли шляху під ворожим дозором —
+        /// попереджувальний помаранчевий, а наведений тайл поза досяжністю
+        /// (<paramref name="isHoveredUnreachable"/>) — тривожний червоний,
+        /// НЕ той самий колір, що валідний наведений тайл (REFS «Наведення на
+        /// недосяжний тайл підсвічується так само, як на досяжний» — major).
+        /// Пріоритет той самий, що в <see cref="TintFor"/>, для решти
+        /// випадків (непрохідність/поточний юніт/наведений-досяжний/
+        /// досяжний), нові сенси — нижчі за них, вищі за голе укриття.
+        /// </summary>
+        public static TileTint TintForIntent(string cover, bool walkable, bool isReachable, bool isCurrentUnit,
+            bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat)
+        {
+            if (!walkable) return TintFor(cover, false, isReachable, isCurrentUnit, isHovered);
+            if (isCurrentUnit) return TintFor(cover, true, isReachable, true, isHovered);
+
+            if (isHovered && isHoveredUnreachable && !isReachable)
+                return Blend(CoverTint(cover), 0.92f, 0.28f, 0.22f, 0.55f);
+
+            if (isHovered || isReachable) return TintFor(cover, true, isReachable, false, isHovered);
+
+            if (isOverwatchAim) return Blend(CoverTint(cover), 0.35f, 0.85f, 0.95f, 0.40f);
+            if (isAbilityRange) return Blend(CoverTint(cover), 0.65f, 0.50f, 0.95f, 0.35f);
+            if (isOverwatchThreat) return Blend(CoverTint(cover), 0.95f, 0.55f, 0.15f, 0.30f);
+
+            return CoverTint(cover);
+        }
+
+        private static TileTint Blend(TileTint baseTint, float r, float g, float b, float amount)
+            => new TileTint(Lerp(baseTint.R, r, amount), Lerp(baseTint.G, g, amount), Lerp(baseTint.B, b, amount), 1f);
+
+        // ================= Бій v2: камера (§4) — чиста тригонометрія, застосовує контролер =================
+
+        /// <summary>
+        /// Зсув камери від точки фокусу для ортографічної тактичної камери:
+        /// нахил <paramref name="tiltDegrees"/> (0 — вздовж землі, 90 — прямо
+        /// згори) і поворот навколо цілі <paramref name="yawDegrees"/> (0,
+        /// 90, 180, 270 — Q/E повертають на ±90°). Камера сідає у
+        /// <c>focus + результат</c> і дивиться назад на фокус — сам
+        /// <c>Quaternion.LookRotation</c> рахує контролер (тип рушія).
+        /// </summary>
+        public static WorldPos CameraOffsetFromFocus(float tiltDegrees, float yawDegrees, float distance)
+        {
+            double tilt = tiltDegrees * DegToRad;
+            double yaw = yawDegrees * DegToRad;
+
+            float horizontal = (float)(distance * System.Math.Cos(tilt));
+            float height = (float)(distance * System.Math.Sin(tilt));
+            float dx = (float)(horizontal * System.Math.Sin(yaw));
+            float dz = (float)(-horizontal * System.Math.Cos(yaw));
+            return new WorldPos(dx, height, dz);
+        }
+
+        private const double DegToRad = System.Math.PI / 180.0;
+
+        /// <summary>Утримує точку панорамування камери в межах грида з запасом <paramref name="margin"/> світових одиниць з кожного боку.</summary>
+        public static WorldPos ClampPanTarget(float x, float z, int gridWidth, int gridHeight, float margin, float tileSize = TileSize)
+        {
+            float minX = -margin, maxX = gridWidth * tileSize + margin;
+            float minZ = -margin, maxZ = gridHeight * tileSize + margin;
+            return new WorldPos(ClampF(x, minX, maxX), 0f, ClampF(z, minZ, maxZ));
+        }
+
+        private static float ClampF(float v, float min, float max) => v < min ? min : (v > max ? max : v);
     }
 
     // ================= легкі структури-результати (жодного типу движка) =================

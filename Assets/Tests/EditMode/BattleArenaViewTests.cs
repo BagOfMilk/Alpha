@@ -265,5 +265,137 @@ namespace Game.Tests.EditMode
                     $"{status}: додай мапінг у BattleArenaView.StatusLabelKey (і за потреби ключ combat.status.* у UkrainianText)");
             }
         }
+
+        // ================= Бій v2: порядкові номери дублікатів =================
+
+        [TestCase(1, "I")]
+        [TestCase(2, "II")]
+        [TestCase(3, "III")]
+        [TestCase(4, "IV")]
+        [TestCase(5, "V")]
+        [TestCase(9, "IX")]
+        [TestCase(14, "XIV")]
+        [TestCase(40, "XL")]
+        public void OrdinalRoman_MatchesStandardNumerals(int ordinal, string expected)
+        {
+            Assert.AreEqual(expected, BattleArenaView.OrdinalRoman(ordinal));
+        }
+
+        [Test]
+        public void OrdinalRoman_ZeroOrNegative_IsEmpty()
+        {
+            Assert.AreEqual(string.Empty, BattleArenaView.OrdinalRoman(0));
+            Assert.AreEqual(string.Empty, BattleArenaView.OrdinalRoman(-3));
+        }
+
+        [Test]
+        public void WithOrdinal_AppendsRomanNumeral_WhenOrdinalPositive()
+        {
+            Assert.AreEqual("Розвідник орди II", BattleArenaView.WithOrdinal("Розвідник орди", 2));
+        }
+
+        [Test]
+        public void WithOrdinal_LeavesNameUnchanged_WhenOrdinalIsZero()
+        {
+            Assert.AreEqual("Оксана", BattleArenaView.WithOrdinal("Оксана", 0));
+        }
+
+        // ================= Бій v2: підсвітка тайла з наміром гравця =================
+
+        [Test]
+        public void TintForIntent_HoveredUnreachable_DiffersFromHoveredReachable()
+        {
+            var unreachable = BattleArenaView.TintForIntent("None", true, isReachable: false, isCurrentUnit: false,
+                isHovered: true, isHoveredUnreachable: true, isAbilityRange: false, isOverwatchAim: false, isOverwatchThreat: false);
+            var reachable = BattleArenaView.TintForIntent("None", true, isReachable: true, isCurrentUnit: false,
+                isHovered: true, isHoveredUnreachable: false, isAbilityRange: false, isOverwatchAim: false, isOverwatchThreat: false);
+
+            AssertDistinct(new PaletteColor(unreachable.R, unreachable.G, unreachable.B, false),
+                           new PaletteColor(reachable.R, reachable.G, reachable.B, false));
+        }
+
+        [Test]
+        public void TintForIntent_CurrentUnit_BeatsEveryIntentOverlay()
+        {
+            var current = BattleArenaView.TintForIntent("None", true, false, isCurrentUnit: true,
+                isHovered: true, isHoveredUnreachable: true, isAbilityRange: true, isOverwatchAim: true, isOverwatchThreat: true);
+            var plainCurrent = BattleArenaView.TintFor("None", true, false, true, true);
+            Assert.AreEqual(plainCurrent.R, current.R, 1e-5f);
+            Assert.AreEqual(plainCurrent.G, current.G, 1e-5f);
+            Assert.AreEqual(plainCurrent.B, current.B, 1e-5f);
+        }
+
+        [Test]
+        public void TintForIntent_AbilityRangeOverwatchAimAndThreat_AreMutuallyDistinct()
+        {
+            var ability = BattleArenaView.TintForIntent("None", true, false, false, false, false, true, false, false);
+            var overwatch = BattleArenaView.TintForIntent("None", true, false, false, false, false, false, true, false);
+            var threat = BattleArenaView.TintForIntent("None", true, false, false, false, false, false, false, true);
+            var plain = BattleArenaView.TintForIntent("None", true, false, false, false, false, false, false, false);
+
+            AssertDistinct(AsPalette(ability), AsPalette(overwatch));
+            AssertDistinct(AsPalette(ability), AsPalette(threat));
+            AssertDistinct(AsPalette(overwatch), AsPalette(threat));
+            AssertDistinct(AsPalette(ability), AsPalette(plain));
+        }
+
+        [Test]
+        public void TintForIntent_NonWalkable_StillWinsOverEverything()
+        {
+            var tint = BattleArenaView.TintForIntent("None", false, true, true, true, true, true, true, true);
+            var floor = BattleArenaView.TintFor("None", false, false, false, false);
+            Assert.AreEqual(floor.R, tint.R, 1e-5f);
+            Assert.AreEqual(floor.G, tint.G, 1e-5f);
+            Assert.AreEqual(floor.B, tint.B, 1e-5f);
+        }
+
+        private static PaletteColor AsPalette(TileTint tint) => new PaletteColor(tint.R, tint.G, tint.B, false);
+
+        // ================= Бій v2: камера =================
+
+        [Test]
+        public void CameraOffsetFromFocus_StraightDown_HasNoHorizontalOffset()
+        {
+            var offset = BattleArenaView.CameraOffsetFromFocus(90f, 45f, 10f);
+            Assert.AreEqual(0f, offset.X, 1e-4f);
+            Assert.AreEqual(0f, offset.Z, 1e-4f);
+            Assert.AreEqual(10f, offset.Y, 1e-4f);
+        }
+
+        [Test]
+        public void CameraOffsetFromFocus_LevelWithGround_HasNoHeight()
+        {
+            var offset = BattleArenaView.CameraOffsetFromFocus(0f, 0f, 10f);
+            Assert.AreEqual(0f, offset.Y, 1e-4f);
+            Assert.Greater(System.Math.Abs(offset.X) + System.Math.Abs(offset.Z), 0f);
+        }
+
+        [Test]
+        public void CameraOffsetFromFocus_DifferentYaws_GiveDifferentHorizontalDirections()
+        {
+            var a = BattleArenaView.CameraOffsetFromFocus(52f, 0f, 10f);
+            var b = BattleArenaView.CameraOffsetFromFocus(52f, 90f, 10f);
+            // yaw=0 дивиться вздовж -Z (X≈0), yaw=90 — вздовж +X (Z≈0): Q/E
+            // повертають камеру на 90° — ортогональні напрямки, не просто інше число.
+            Assert.AreEqual(0f, a.X, 1e-4f);
+            Assert.AreEqual(0f, b.Z, 1e-4f);
+            Assert.AreNotEqual(a.X, b.X, "Q/E повертають камеру на 90° — інший напрямок має дати інший зсув");
+        }
+
+        [Test]
+        public void ClampPanTarget_KeepsPointsInsideBounds_Unchanged()
+        {
+            var p = BattleArenaView.ClampPanTarget(5f, 5f, 10, 10, 2f);
+            Assert.AreEqual(5f, p.X, 1e-5f);
+            Assert.AreEqual(5f, p.Z, 1e-5f);
+        }
+
+        [Test]
+        public void ClampPanTarget_ClampsOutsideBounds_ToMarginEdge()
+        {
+            var p = BattleArenaView.ClampPanTarget(-50f, 500f, 10, 10, 2f);
+            Assert.AreEqual(-2f, p.X, 1e-5f);
+            Assert.AreEqual(12f, p.Z, 1e-5f);
+        }
     }
 }
