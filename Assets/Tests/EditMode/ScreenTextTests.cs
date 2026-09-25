@@ -308,6 +308,17 @@ namespace Game.Tests.EditMode
                 "етап-вибір не показує рядка перевірки");
         }
 
+        // Одна смуга Напруги — одна назва: панель настрою (ui.mood.*) і решта
+        // гри (tension.band.label.*) раніше розходились («Розкол» проти «Злам»,
+        // а до того — «Накал»).
+        [Test]
+        public void MoodChip_AndBandLabel_NameEveryTensionBandTheSame()
+        {
+            foreach (var band in new[] { "calm", "murmur", "ferment", "heat", "fracture" })
+                Assert.AreEqual(Game.Gameplay.Text.UkrainianText.Get("tension.band.label." + band, Gender.Male),
+                    Game.Gameplay.Text.UkrainianText.Get("ui.mood." + band, Gender.Male), band);
+        }
+
         [Test]
         public void EventLine_UnknownKey_FallsBackReadably()
         {

@@ -1742,7 +1742,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.mood.murmur", "Ропіт");
             AddKey(t, "ui.mood.ferment", "Бродіння");
             AddKey(t, "ui.mood.heat", "Розпал");
-            AddKey(t, "ui.mood.fracture", "Розкол");
+            AddKey(t, "ui.mood.fracture", "Злам");
 
             // SessionView.CrowdBand — рядок GameSession.CrowdBandName(int), буквально
             // "Hamlet"/"Village"/"Settlement"/"Town"/"City" (той самий тір поселення,
