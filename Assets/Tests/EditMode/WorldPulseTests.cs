@@ -109,6 +109,71 @@ namespace Game.Tests.EditMode
             Assert.GreaterOrEqual(fires, 3, "Нужно несколько кругов: вырождение видно со второго");
         }
 
+        /// <summary>
+        /// «Предвестник не врёт» (SETTLEMENT_LAYER §5.1, правило 4). Кризис
+        /// копит и во время отката, и раньше его лестница снова доходила до
+        /// третьей ступени через несколько суток после кризиса — а следующий
+        /// откат пускал лишь через 30: «скоро» висело 25 суток. Теперь каждая
+        /// услышанная третья ступень ведёт к кризису не дольше чем за окно на
+        /// реакцию плюс длину лестницы, а дни кризисов прежние — ровно через
+        /// откат (лестница успевает к его концу).
+        /// </summary>
+        [Test]
+        public void Pulse_CrisisLadder_NeverPromisesACrisisTheCooldownForbids()
+        {
+            var cfg = Cfg();
+            var pulse = new WorldPulse(cfg);
+            pulse.AddSource(new FixedSource
+            {
+                Id = "crisis", Kind = WorldEventKind.Crisis, Rate = 12, Threshold = 120, CooldownDays = 30
+            });
+
+            const int days = 130;
+            var level3Days = new List<int>();
+            var fireDays = new List<int>();
+            for (int day = 1; day <= days; day++)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+                if (tick.FiredSourceIds.Contains("crisis")) fireDays.Add(day);
+                level3Days.AddRange(tick.Forewarnings.Where(f => f.Level == 3).Select(f => day));
+            }
+
+            Assert.GreaterOrEqual(fireDays.Count, 3, "нужно несколько кругов: ложь видна со второго");
+            for (int i = 1; i < fireDays.Count; i++)
+                Assert.AreEqual(30, fireDays[i] - fireDays[i - 1],
+                    "насыщенный кризис бьёт ровно через откат — лестница не должна его задерживать");
+
+            int promise = cfg.CrisisGraceDays + cfg.CrisisLadderLeadDays;
+            foreach (int d3 in level3Days)
+            {
+                if (d3 + promise > days) continue;
+                Assert.IsTrue(fireDays.Exists(f => f > d3 && f <= d3 + promise),
+                    $"третья ступень на сутки {d3} не привела к кризису до суток {d3 + promise} (кризисы: {string.Join(",", fireDays)})");
+            }
+        }
+
+        /// <summary>Удержание касается только кризиса: прочие угрозы с коротким откатом предупреждают, как прежде.</summary>
+        [Test]
+        public void Pulse_NonCrisisSource_ForewarnsDuringCooldown_AsBefore()
+        {
+            var pulse = new WorldPulse(Cfg());
+            pulse.AddSource(new FixedSource { Rate = 60, Threshold = 100, CooldownDays = 10 });
+
+            int fireDay = -1;
+            for (int day = 1; day <= 12 && fireDay < 0; day++)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+                if (tick.FiredSourceIds.Count > 0) fireDay = day;
+            }
+            Assert.Greater(fireDay, 0);
+
+            var next = pulse.Advance(Ctx(fireDay + 1));
+            Assert.IsTrue(next.Forewarnings.Any(f => f.Level == 1),
+                "не-кризисная угроза начинает новую лестницу сразу после удара, как и раньше");
+        }
+
         [Test]
         public void Pulse_ForewarnLevel2_NamesDomain()
         {

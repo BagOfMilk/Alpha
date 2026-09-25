@@ -125,7 +125,8 @@ namespace Game.Core.Session
                 MaxFiresPerNight = src.MaxFiresPerNight,
                 ChargeCapMultiplier = src.ChargeCapMultiplier,
                 MinActiveTracks = src.MinActiveTracks,
-                CrisisGraceDays = CrisisGraceDays
+                CrisisGraceDays = CrisisGraceDays,
+                CrisisLadderLeadDays = src.CrisisLadderLeadDays
             };
         }
 

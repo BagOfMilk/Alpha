@@ -94,7 +94,7 @@ namespace Game.Core.World
                 // третью, и вторая — единственная, обязанная назвать место —
                 // теряется молча. Лестницу нужно проходить, а не перепрыгивать.
                 int level = track.ForewarnLevel(_cfg);
-                if (source.Announces && level > track.DeliveredLevel)
+                if (source.Announces && level > track.DeliveredLevel && !track.HoldsForewarnings(ctx.Day, _cfg))
                     forewarnings.Add(new Forewarning(track.SourceId, track.DeliveredLevel + 1, track.DomainTag));
             }
 

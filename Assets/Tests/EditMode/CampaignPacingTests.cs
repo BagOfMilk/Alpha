@@ -40,23 +40,34 @@ namespace Game.Tests.EditMode
         // Список кампаний строится один раз: 12 прогонов по 400 фаз — это
         // десятки миллисекунд, но незачем платить их в каждом тесте.
         private static List<CampaignMetrics> _cache;
+        private static List<CampaignTrace> _traces;
 
         private static List<CampaignMetrics> All()
         {
             if (_cache != null) return _cache;
 
             var result = new List<CampaignMetrics>();
+            var traces = new List<CampaignTrace>();
             foreach (SimPolicy policy in new[] { SimPolicy.Passive, SimPolicy.PatrolEveryNight, SimPolicy.AggressiveChoices })
                 foreach (int tier in new[] { 1, 2, 3, 4 })
                 {
                     var cfg = new BalanceConfig();
                     var world = Game.Core.Session.FirstHourWorld.Build(tier, requirePlayerDecision: false, balance: cfg);
                     var trace = CampaignSimulator.Run(world.Cycle, policy, Days, cfg);
+                    traces.Add(trace);
                     result.Add(CampaignSimulator.Measure(trace));
                 }
 
             _cache = result;
+            _traces = traces;
             return _cache;
+        }
+
+        /// <summary>Те же 12 кампаний посуточно — для утверждений, которым мало итоговых метрик.</summary>
+        private static List<CampaignTrace> AllTraces()
+        {
+            All();
+            return _traces;
         }
 
         private static string Where(CampaignMetrics m)
@@ -130,6 +141,37 @@ namespace Game.Tests.EditMode
             foreach (var m in All())
                 Assert.Greater(m.CrisisTotal, 0,
                     Where(m) + ": за 200 суток кризис не наступил ни разу — кульминация, которой нет, не кульминация");
+        }
+
+        /// <summary>
+        /// «Предвестник не врёт» на всей кампании (SETTLEMENT_LAYER §5.1,
+        /// правило 4). Замер 25.09.2026 до правки: во всех 12 кампаниях после
+        /// каждого кризиса лестница «площади» снова доходила до третьей ступени
+        /// за 3–5 суток, а следующий кризис откат (30 суток) пускал лишь через
+        /// 25. После правки (PressureTrack.HoldsForewarnings) — 3 суток,
+        /// с патрулём 4; дни кризисов те же.
+        /// </summary>
+        [Test]
+        public void Pacing_CrisisLadder_Level3_AlwaysLeadsToTheCrisis()
+        {
+            var cfg = new PulseBalance();
+            int promise = cfg.CrisisGraceDays + cfg.CrisisLadderLeadDays;
+            int checkedLadders = 0;
+            foreach (var trace in AllTraces())
+            {
+                var crisisDays = trace.Rows.Where(r => r.FiredSources.Split(';').Contains("crisis")).Select(r => r.Day).ToList();
+                foreach (var row in trace.Rows)
+                {
+                    if (!row.Forewarnings.Split(';').Contains("crisis:3")) continue;
+                    if (row.Day + promise > Days) continue;
+                    checkedLadders++;
+                    int d3 = row.Day;
+                    Assert.IsTrue(crisisDays.Exists(c => c > d3 && c <= d3 + promise),
+                        trace.Policy + ", тир " + trace.Tier + ": третья ступень кризиса на сутки " + d3 +
+                        " не привела к кризису до суток " + (d3 + promise) + " (кризисы: " + string.Join(",", crisisDays) + ")");
+                }
+            }
+            Assert.Greater(checkedLadders, 12, "каждая кампания должна пройти несколько лестниц кризиса");
         }
 
         // ================= Известные разрывы, закреплённые намеренно =================

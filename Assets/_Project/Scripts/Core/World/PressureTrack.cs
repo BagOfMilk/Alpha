@@ -89,6 +89,22 @@ namespace Game.Core.World
             }
         }
 
+        /// <summary>
+        /// Лестница кризиса молчит, пока сработавший кризис стоит на откате
+        /// дольше, чем ей нужно дойти до третьей ступени и выждать окно на
+        /// реакцию (<see cref="PulseBalance.CrisisLadderLeadDays"/> +
+        /// <see cref="PulseBalance.CrisisGraceDays"/>). Заряд при этом копится
+        /// как прежде — меняется только то, КОГДА игрок слышит предупреждение,
+        /// а не когда кризис бьёт. Первый кризис (откат ещё не начинался) и
+        /// остальные виды угроз не затронуты.
+        /// </summary>
+        internal bool HoldsForewarnings(int day, PulseBalance cfg)
+        {
+            if (Kind != WorldEventKind.Crisis || !_everFired) return false;
+            int cooldownLeft = CooldownDays - (day - LastFiredDay);
+            return cooldownLeft > cfg.CrisisGraceDays + cfg.CrisisLadderLeadDays;
+        }
+
         internal bool IsReady(int day, PulseBalance cfg)
         {
             if (Charge < Threshold) return false;
