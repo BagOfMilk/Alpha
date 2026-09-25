@@ -2059,6 +2059,12 @@ namespace Game.Core.Session
             new MechanicJournalDef("post_reports", keyPrefixes: new[] { "post." }),
             // Сигнали без повторів (§2 №11) — похідне, той самий щабель передвісника.
             new MechanicJournalDef("signals_no_repeat", keyPrefixes: new[] { "forewarn.level" }),
+            // Темп тестової збірки (Поправка №7): зсув смуги Напруги і
+            // великий природний бунт на площі — окремі записи журналу, щоб
+            // тестер бачив обидва, не плутаючи їх зі скриптованою пожежею
+            // доби 5 ("crisis" вище).
+            new MechanicJournalDef("tension_band_change", keyPrefixes: new[] { "tension.band." }),
+            new MechanicJournalDef("great_crisis", keyPrefixes: new[] { "incident.crisis_riot." }),
             new MechanicJournalDef("band_change_signal", exactKeys: new[] { "loyalty.band_changed", "faction.standing_changed" }),
             new MechanicJournalDef("production", exactKeys: new[]
                 { "production.resource", "production.leveled_up", "production.food_shortage", "production.recovered" }),
@@ -2472,9 +2478,40 @@ namespace Game.Core.Session
 
             if (report.Signals != null && report.Signals.Requests != null)
                 foreach (var req in report.Signals.Requests)
-                    LogEvent(AdjustPassVanguardTopicIfMaksymDead(req.TopicId),
+                {
+                    string topic = AdjustPassVanguardTopicIfMaksymDead(req.TopicId);
+                    LogEvent(topic,
                         Args("channel", req.Channel.ToString(), "urgency", req.Urgency.ToString(),
-                        "subject", req.SubjectId, "delta", req.IsDelta ? "1" : "0"));
+                        "subject", req.SubjectId, "delta", req.IsDelta ? "1" : "0",
+                        "domain", DomainTagFrom(req.Tags)));
+                }
+        }
+
+        /// <summary>
+        /// SETTLEMENT_LAYER §5.1 правило 4: щабель 2 передвісника зобов'язаний
+        /// назвати домен, щабель 3 — близькість. <see cref="Signals.SignalComposer"/>
+        /// вже кладе домен у теги кандидата ("domain:" + f.DomainTag) — але
+        /// <see cref="TranslateReport"/> раніше цей тег ігнорував, і текст
+        /// "forewarn.level2"/"forewarn.level3" лишався безликим для БУДЬ-ЯКОГО
+        /// джерела (знайдено 24.09.2026 разом зі стисненим темпом Поправки №7:
+        /// щойно природна криза вперше запрацювала, стало видно, що й її
+        /// передвісники безликі). Тут тег дістається й кладеться окремим
+        /// аргументом "domain" — <c>ScreenText.EventLine</c> уже вміє
+        /// підставляти {domain} через <c>ContentLabel("domain", ...)</c> (та
+        /// сама підстановка, що вже використовує "domain.road"/"domain.craft").
+        /// Ключ Key лишається незмінним ("forewarn.levelN") — жодного
+        /// топік-перемикання, тому існуючі фільтри за буквальним ключем
+        /// (<c>TestBuildTensionPaceTests.FirstDayForewarn</c>, реєстр журналу
+        /// механік) не ламаються.
+        /// </summary>
+        private static string DomainTagFrom(string[] tags)
+        {
+            if (tags == null) return null;
+            const string prefix = "domain:";
+            for (int i = 0; i < tags.Length; i++)
+                if (tags[i] != null && tags[i].StartsWith(prefix, StringComparison.Ordinal))
+                    return tags[i].Substring(prefix.Length);
+            return null;
         }
 
         /// <summary>

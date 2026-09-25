@@ -16,6 +16,13 @@ namespace Game.Gameplay.UI
         private bool _skipCreation;
         private bool _showSlots;
 
+        /// <summary>
+        /// Поправка №7 (рішення власника 24.09.2026): стиснутий темп шкали
+        /// Напруги тестової збірки (<see cref="NewGameOptions.TestBuildTensionPace"/>) —
+        /// дефолт true, той самий, що й у самого поля.
+        /// </summary>
+        private bool _testBuildTensionPace = true;
+
         public void Draw(GameShell shell)
         {
             var g = shell.ProtagonistGender;
@@ -30,7 +37,8 @@ namespace Game.Gameplay.UI
                         HitRule = _hitRulePercent ? HitRuleKind.Percent : HitRuleKind.Threshold,
                         Seed = 1,
                         Roller = shell.Roller,
-                        SkipCreation = _skipCreation
+                        SkipCreation = _skipCreation,
+                        TestBuildTensionPace = _testBuildTensionPace
                     };
                     shell.TryRun(() => shell.Session.NewGame(options));
                     shell.ProtagonistGender = Gender.Male;
@@ -53,6 +61,16 @@ namespace Game.Gameplay.UI
 
                 if (Widgets.TabButton(UkrainianText.Get("ui.title.skip_creation", g), _skipCreation))
                     _skipCreation = !_skipCreation;
+
+                // Поправка №7: перемикач темпу шкали Напруги — той самий
+                // TabButton-приём, що правило попадання вище.
+                Widgets.Section(UkrainianText.Get("ui.title.tensionpace.section", g), () =>
+                {
+                    if (Widgets.TabButton(UkrainianText.Get("ui.title.tensionpace.test", g), _testBuildTensionPace))
+                        _testBuildTensionPace = true;
+                    if (Widgets.TabButton(UkrainianText.Get("ui.title.tensionpace.campaign", g), !_testBuildTensionPace))
+                        _testBuildTensionPace = false;
+                });
 
                 GUILayout.Space(10f);
 

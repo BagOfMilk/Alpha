@@ -1,8 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
 using Game.Core.Balance;
+using Game.Core.Characters.Creation;
 using Game.Core.Session;
 using Game.Core.Session.Bots;
 using Game.Core.World;
+using Game.Gameplay.Text;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -102,6 +105,74 @@ namespace Game.Tests.EditMode
             Assert.LessOrEqual(l3.Value, riot.Value, "криза не може вдарити німо — третя ступінь має прозвучати ДО неї");
 
             Assert.That(riot.Value, Is.InRange(24, 26), "бунт цілиться в добу 25 (±1)");
+        }
+
+        /// <summary>
+        /// Integrate-фаза (24.09.2026): SETTLEMENT_LAYER §5.1 правило 4 —
+        /// щабель 2 передвісника мусить назвати домен, щабель 3 — той самий
+        /// домен (близькість). Знайдено разом зі стисненим темпом: раніше
+        /// природна криза не доживала до власної драбини, і безликість
+        /// "forewarn.level2/3" ("щось готують. скоро.") лишалась непоміченою
+        /// для БУДЬ-ЯКОГО джерела. Ключ DayLog лишається спільним
+        /// ("forewarn.levelN") — домен несе окремий аргумент "domain"
+        /// (GameSession.TranslateReport/DomainTagFrom), який ScreenText.
+        /// EventLine підставляє через {domain} (перевірено нижче).
+        /// </summary>
+        [Test]
+        public void Reference_ForewarnLevels2And3_CarryCrisisDomainTag_AndTextNamesIt()
+        {
+            var (log, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+
+            var l2 = log.FirstOrDefault(e => e.Key == "forewarn.level2" &&
+                e.Args.TryGetValue("subject", out var s) && s == "crisis");
+            var l3 = log.FirstOrDefault(e => e.Key == "forewarn.level3" &&
+                e.Args.TryGetValue("subject", out var s2) && s2 == "crisis");
+
+            Assert.NotNull(l2, "другий предвестник кризи має прозвучати за 30 діб еталонного прогону");
+            Assert.NotNull(l3, "третій предвестник кризи має прозвучати за 30 діб еталонного прогону");
+
+            Assert.IsTrue(l2.Args.TryGetValue("domain", out var d2) && d2 == "площадь",
+                "щабель 2 мусить нести домен кризи (правило 4)");
+            Assert.IsTrue(l3.Args.TryGetValue("domain", out var d3) && d3 == "площадь",
+                "щабель 3 мусить нести той самий домен");
+
+            // Домен насправді читається українською в готовому тексті, не
+            // сирим тегом ("площадь" — внутрішній DomainTag, гравець його
+            // ніколи не бачить напряму).
+            string renderedL2 = UkrainianText.Format("forewarn.level2", Gender.Male, "domain", "площа");
+            string renderedL3 = UkrainianText.Format("forewarn.level3", Gender.Male, "domain", "площа");
+            StringAssert.Contains("площа", renderedL2);
+            StringAssert.Contains("площа", renderedL3);
+            StringAssert.DoesNotContain("{domain}", renderedL2);
+            StringAssert.DoesNotContain("{domain}", renderedL3);
+        }
+
+        /// <summary>
+        /// Integrate-фаза: журнал механік бачить і зсув смуги, і природний
+        /// бунт на площі окремими записами, які не плутаються зі скриптованою
+        /// пожежею доби 5 (<c>MechanicJournalDef("crisis", ...)</c>).
+        /// </summary>
+        [Test]
+        public void Reference_JournalSeesTensionBandChange_AndGreatCrisis_Separately()
+        {
+            var (_, session) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+            var journal = session.GetMechanicsJournal();
+
+            var bandEntry = journal.FirstOrDefault(e => e.Id == "tension_band_change");
+            var crisisEntry = journal.FirstOrDefault(e => e.Id == "great_crisis");
+            var scriptedFireEntry = journal.FirstOrDefault(e => e.Id == "crisis");
+
+            Assert.NotNull(bandEntry, "запис tension_band_change має існувати в реєстрі журналу");
+            Assert.NotNull(crisisEntry, "запис great_crisis має існувати в реєстрі журналу");
+            Assert.NotNull(scriptedFireEntry, "старий запис про скриптовану пожежу доби 5 не мав зникнути");
+
+            Assert.IsTrue(bandEntry.Seen, "еталонний прогін 30 діб мусить побачити зсув смуги Напруги");
+            Assert.IsTrue(crisisEntry.Seen, "еталонний прогін 30 діб мусить побачити розв'язку великого бунту");
+
+            // Два записи журналу — окремі тексти, і жоден не переплутаний.
+            Assert.AreNotEqual(UkrainianText.Get(crisisEntry.TitleKey, Gender.Male),
+                UkrainianText.Get(scriptedFireEntry.TitleKey, Gender.Male),
+                "великий бунт і скриптована пожежа доби 5 не мають ділити один заголовок");
         }
 
         // ================= (b) "Дефузер" =================

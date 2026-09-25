@@ -280,6 +280,14 @@ namespace Game.Tests.EditMode
                 "char.maksym", "char.myroslava", "char.zakhar", "char.keeper", "char.healer",
                 "char.tuhar", "char.horde_commander", "char.protagonist",
                 "enemy.horde_skirmisher", "enemy.horde_raider",
+                // Поправка №7 (тестовий темп + великий бунт): {domain} у
+                // драбині передвісників (SETTLEMENT_LAYER §5.1 правило 4),
+                // нові записи журналу механік, перемикач темпу на титулі.
+                "domain.площадь", "domain.улицы", "domain.ночь",
+                "journal.tension_band_change.title", "journal.tension_band_change.hint",
+                "journal.great_crisis.title", "journal.great_crisis.hint",
+                "ui.title.tensionpace.section", "ui.title.tensionpace.test",
+                "ui.title.tensionpace.campaign",
             };
         }
     }
