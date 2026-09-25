@@ -64,6 +64,8 @@ production.resource
 progression.level_up
 quest.choice.resolved
 quest.hafiya.stage2.found
+quest.hafiya.stage3.best
+quest.maksym.ch1.revenge_done
 quest.offered
 scar.granted
 scene.choice.made
