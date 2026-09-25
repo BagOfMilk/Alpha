@@ -885,33 +885,8 @@ namespace Game.Gameplay
                     _shell.RouteOfferedSceneContentIfAvailable();
                     if (Session.State != SessionState.Evening) continue;
 
-                    var quest = Run(() => Session.OfferQuestStage(DefaultQuests.HafiyaId));
-                    if (quest?.Options != null && quest.Options.Count > 0)
-                    {
-                        int idx = 0;
-                        for (int i = 0; i < quest.Options.Count; i++)
-                            if (quest.Options[i].HasCandidate) { idx = i; break; }
-                        int chosen = idx;
-                        Run(() =>
-                        {
-                            Session.OfferQuestStage(DefaultQuests.HafiyaId);
-                            Session.ResolveQuestChoice(chosen);
-                        });
-                    }
-
-                    var maksymQuest = Run(() => Session.OfferQuestStage(DefaultQuests.MaksymCh1Id));
-                    if (maksymQuest?.Options != null && maksymQuest.Options.Count > 0)
-                    {
-                        int idx = 0;
-                        for (int i = 0; i < maksymQuest.Options.Count; i++)
-                            if (maksymQuest.Options[i].HasCandidate) { idx = i; break; }
-                        int chosen = idx;
-                        Run(() =>
-                        {
-                            Session.OfferQuestStage(DefaultQuests.MaksymCh1Id);
-                            Session.ResolveQuestChoice(chosen);
-                        });
-                    }
+                    JournalAdvanceQuest(DefaultQuests.HafiyaId);
+                    JournalAdvanceQuest(DefaultQuests.MaksymCh1Id);
 
                     if (Session.State != SessionState.Evening) continue;
 
@@ -1185,14 +1160,50 @@ namespace Game.Gameplay
                         c.Status == Game.Core.Characters.CompanionStatus.OnMission)
                         return; // партія вже в полі — не відправляємо другий відряд.
 
-            string siteId = day % 2 == 0 ? "outskirts" : DefaultDungeon.AbandonedCamp;
-            var approach = day % 2 == 0 ? ExpeditionApproach.Quiet : ExpeditionApproach.Delve;
+            // Чергування «через раз», а не за парністю доби: звичайна вилазка
+            // триває парну кількість діб, і з парністю загін щоразу повертався
+            // в парну добу — до підземелля черга не доходила ніколи (журнальний
+            // тур 25.09.2026: 42/44, без dungeon_delve).
+            bool delve = _jNextDelve;
+            string siteId = delve ? DefaultDungeon.AbandonedCamp : "outskirts";
+            var approach = delve ? ExpeditionApproach.Delve : ExpeditionApproach.Quiet;
             var party = new List<string> { GameSession.ProtagonistId, "zakhar" };
 
             var preview = Run(() => Session.PreviewExpedition(siteId, approach, party));
             if (preview == null) return;
             int days = preview.Days;
             Run(() => Session.DepartExpedition(siteId, approach, party, days));
+            _jNextDelve = !delve;
+        }
+
+        /// <summary>Наступне підземелля в журнальному турі: чергується з вилазкою після кожного виходу.</summary>
+        private bool _jNextDelve = true;
+
+        /// <summary>
+        /// Журнальний тур: крок квесту тією самою дією, що й вечірня панель
+        /// (NightScreen): на етапі-виборі — перший варіант, доступний кандидату;
+        /// на етапі без варіантів (перевірка чи підсумок) — кнопка
+        /// «Спробувати»/«Підтвердити», тобто OfferQuestStage + ResolveQuestChoice(0).
+        /// Без другого квест зупинявся на перевірці назавжди, і глава арки
+        /// Максима не завершувалась (журнальний тур 25.09.2026: без arc_chapter).
+        /// </summary>
+        private void JournalAdvanceQuest(string questId)
+        {
+            var offer = Run(() => Session.OfferQuestStage(questId));
+            if (offer == null) return;
+            int chosen = 0;
+            if (offer.Options != null && offer.Options.Count > 0)
+            {
+                bool any = false;
+                for (int i = 0; i < offer.Options.Count; i++)
+                    if (offer.Options[i].HasCandidate) { chosen = i; any = true; break; }
+                if (!any) return; // жоден варіант недоступний — кнопки неактивні, як і в людини
+            }
+            Run(() =>
+            {
+                Session.OfferQuestStage(questId);
+                Session.ResolveQuestChoice(chosen);
+            });
         }
 
         // ===================== виконання команд =====================
