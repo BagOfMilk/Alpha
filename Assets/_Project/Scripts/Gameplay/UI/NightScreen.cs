@@ -103,8 +103,20 @@ namespace Game.Gameplay.UI
             bool consumed = false;
             Widgets.Section(UkrainianText.Get("ui.quest.offer.title", g), () =>
             {
-                if (offer.Stage == 0 && UkrainianText.Has(DefaultQuests.OfferKey, g))
-                    GUILayout.Label(UkrainianText.Get(DefaultQuests.OfferKey, g), AlphaSkin.Body);
+                // Фікс-ревью (Поправка №7.8, п.4, знайдено тур-автоплеєм):
+                // DefaultQuests.OfferKey — Гафіїна КОНКРЕТНА константа
+                // ("quest.hafiya.offer"); поки лінія була одна, offer.Stage==0
+                // завжди й був Гафіїним етапом, тож хардкод випадково влучав.
+                // З Максимовою лінією той самий хардкод показував би ГАФІЇН
+                // текст пропозиції на Максимовому етапі 0. Гафіїн questId
+                // ("hafiya") не несе префікса "quest.", Максимів
+                // ("quest.maksym.ch1") вже несе — той самий розлад
+                // конвенції, що вже враховано в HubScreen.DrawQuestOffer.
+                string offerKeyPrefixed = "quest." + offer.QuestId + ".offer";
+                string offerKeyBare = offer.QuestId + ".offer";
+                string offerBodyKey = UkrainianText.Has(offerKeyPrefixed, g) ? offerKeyPrefixed : offerKeyBare;
+                if (offer.Stage == 0 && UkrainianText.Has(offerBodyKey, g))
+                    GUILayout.Label(UkrainianText.Get(offerBodyKey, g), AlphaSkin.Body);
                 else
                     GUILayout.Label(UkrainianText.Format("ui.quests.stage", g, "stage", offer.Stage.ToString()), AlphaSkin.Body);
 
