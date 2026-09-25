@@ -750,9 +750,25 @@ namespace Game.Gameplay
         /// <summary>Меню Escape відкрите — герой на прогулянці стоїть.</summary>
         public bool EscapeOpen => _escapeOpen;
 
+        private bool _villageFeedFailureLogged;
+
+        /// <summary>
+        /// Сцена села — декорація: її збій не сміє зірвати команду гравця. Раніше
+        /// виняток мосту (рефлексія → TargetInvocationException) вилітав з TryRun
+        /// назовні — на кнопці «Тренувальний бій» з титулу щоразу (світу ще немає).
+        /// </summary>
         private void FeedVillageStage()
         {
-            FeedVillageStageMethod?.Invoke(null, new object[] { Session });
+            try
+            {
+                FeedVillageStageMethod?.Invoke(null, new object[] { Session });
+            }
+            catch (TargetInvocationException ex)
+            {
+                if (_villageFeedFailureLogged) return;
+                _villageFeedFailureLogged = true;
+                Debug.LogWarning("[Село] сцену не оновлено: " + (ex.InnerException ?? ex));
+            }
         }
 
         /// <summary>

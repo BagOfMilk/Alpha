@@ -2585,6 +2585,13 @@ namespace Game.Core.Session
 
         public CityView GetCityView()
         {
+            // Тренувальний бій з титулу йде без партії (світу немає): вид — порожнє
+            // місто, а не NullReferenceException. Сцену села оболонка оновлює після
+            // КОЖНОЇ команди, тож виняток тут ламав кнопку «Тренувальний бій»
+            // (знайдено турами Бою v2, 25.09.2026).
+            if (_works == null || _processor == null)
+                return new CityView { Built = new List<BuildingView>(), InProgress = new List<BuildingView>(), OpenPosts = new List<string>() };
+
             // Порядок каталогу, а не HashSet: інакше після завантаження той самий
             // набір будівель ішов у вкладку в іншому порядку (аудит сейвів 25.09.2026).
             var built = new List<BuildingView>();
@@ -2609,6 +2616,8 @@ namespace Game.Core.Session
         public RosterView GetRosterView()
         {
             var list = new List<CompanionSummary>();
+            // Без партії (тренувальний бій з титулу) — порожній ростер, не виняток.
+            if (_worldRoster == null) return new RosterView { Companions = list };
             foreach (var c in _worldRoster.All)
             {
                 var equipped = new List<string>();

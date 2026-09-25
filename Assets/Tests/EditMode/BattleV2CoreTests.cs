@@ -800,5 +800,29 @@ namespace Game.Tests.EditMode
             var field = typeof(GameSession).GetField("_battle", BindingFlags.NonPublic | BindingFlags.Instance);
             return (CombatState)field.GetValue(session);
         }
+
+        /// <summary>
+        /// Тренувальний бій з титулу йде без партії. Оболонка після кожної
+        /// команди оновлює сцену села (ростер + місто) — раніше ці види кидали
+        /// NullReferenceException, і кнопка «Тренувальний бій» щоразу валила
+        /// команду (знайдено туром -autoplay-battle, 25.09.2026).
+        /// </summary>
+        [Test]
+        public void TrainingBattleFromTitle_WorldViewsAreEmpty_NotThrowing()
+        {
+            var s = new GameSession();
+            s.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold });
+            Assert.AreEqual(SessionState.Battle, s.State);
+
+            RosterView roster = null;
+            CityView city = null;
+            Assert.DoesNotThrow(() => roster = s.GetRosterView());
+            Assert.DoesNotThrow(() => city = s.GetCityView());
+            Assert.IsNotNull(roster.Companions);
+            Assert.IsEmpty(roster.Companions);
+            Assert.IsNotNull(city.Built);
+            Assert.IsEmpty(city.Built);
+            Assert.IsNotNull(s.GetBattleView(), "сам бій при цьому живий");
+        }
     }
 }
