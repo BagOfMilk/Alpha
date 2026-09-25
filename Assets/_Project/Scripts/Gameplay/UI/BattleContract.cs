@@ -91,6 +91,14 @@ namespace Game.Gameplay
         int HoveredTileX { get; }
         int HoveredTileY { get; }
 
+        /// <summary>
+        /// Екранна точка центру наведеного тайла (координати GUI, y згори) —
+        /// HUD ставить підказку «Рух: −N ОД» поруч із клітинкою, а не в куті.
+        /// Має сенс лише коли <see cref="HasHoveredTile"/>. (Бій v2, раунд 2.)
+        /// </summary>
+        float HoveredTileScreenX { get; }
+        float HoveredTileScreenY { get; }
+
         /// <summary>Прев'ю атаки поточного юніта по наведеній цілі (з урахуванням озброєної здібності); null — не ціль.</summary>
         AttackPreviewView HoverAttack { get; }
 
