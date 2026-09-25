@@ -210,6 +210,24 @@ namespace Game.Tests.EditMode
             public bool ChoosePushDeeper(Game.Core.Session.Views.DungeonView d) => _p.ChoosePushDeeper(d);
         }
 
+        /// <summary>
+        /// Дві лінії квестів (Гафія і Максим) пропонуються щовечора; раніше
+        /// одна пам'ять «останнього записаного» ключа давала «Нова пропозиція:
+        /// Максим / Гафія» у стрічці щодоби (довгий автопрогін 25.09.2026).
+        /// Той самий етап того самого квесту — рівно один рядок за партію.
+        /// </summary>
+        [Test]
+        public void QuestOffered_LoggedOncePerQuestStage_EvenWithTwoParallelLines()
+        {
+            var (log, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true, days: 20);
+
+            var offered = log.Where(e => e.Key == "quest.offered")
+                .Select(e => e.Args["questId"] + "#" + e.Args["stage"]).ToList();
+            Assert.GreaterOrEqual(offered.Distinct().Count(), 2, "у прогоні мали бути пропозиції обох ліній");
+            var repeated = offered.GroupBy(k => k).Where(gr => gr.Count() > 1).Select(gr => gr.Key + "×" + gr.Count()).ToList();
+            CollectionAssert.IsEmpty(repeated, "той самий етап квесту не мусить знову з'являтися як «Нова пропозиція»");
+        }
+
         // ================= (b) "Дефузер" =================
 
         [Test]

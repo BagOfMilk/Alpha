@@ -202,7 +202,12 @@ namespace Game.Core.Session
         // §2 рядок 11 такого не дозволяє. Один вибір і той самий етап того
         // самого квесту логується рівно раз — ключ скидається, щойно етап
         // справді змінюється (ResolveQuestChoice/NewGame/ApplySave).
-        private string _lastLoggedQuestOfferKey;
+        //
+        // Множина, а не «останній ключ»: ліній квестів дві (Гафія і Максим), і
+        // вечірня панель пропонує обидві щовечора — з одним «останнім ключем»
+        // вони перебивали одна одну, і «Нова пропозиція: Максим / Гафія»
+        // писалась у стрічку щодоби (довгий автопрогін 25.09.2026).
+        private readonly HashSet<string> _loggedQuestOfferKeys = new HashSet<string>(StringComparer.Ordinal);
         private DayReportView _lastDayReport;
         private DayPhase _lastPhase = DayPhase.Day;
         private bool _summaryAcknowledged;
@@ -331,7 +336,7 @@ namespace Game.Core.Session
             _dayLogVersion++;
             _currentPending = null;
             _currentQuestOffer = null;
-            _lastLoggedQuestOfferKey = null;
+            _loggedQuestOfferKeys.Clear();
             _lastDayReport = null;
             _dungeon = null;
             _battle = null;
@@ -921,10 +926,9 @@ namespace Game.Core.Session
             _currentQuestOffer = offer;
 
             string offerKey = questId + "#" + run.CurrentIndex.ToString(CultureInfo.InvariantCulture);
-            if (!string.Equals(_lastLoggedQuestOfferKey, offerKey, StringComparison.Ordinal))
+            if (_loggedQuestOfferKeys.Add(offerKey))
             {
                 LogEvent("quest.offered", Args("questId", questId, "stage", run.CurrentIndex.ToString(CultureInfo.InvariantCulture)));
-                _lastLoggedQuestOfferKey = offerKey;
             }
             return offer;
         }
@@ -3453,6 +3457,12 @@ namespace Game.Core.Session
             head.Append(";seed=").Append(_seed.ToString(CultureInfo.InvariantCulture));
             head.Append(";hitRule=").Append((int)_hitRule);
             head.Append(";tensionPace=").Append(_tensionPace ? 1 : 0);
+            // Які етапи квестів уже прозвучали як «Нова пропозиція» — частина
+            // видимої стрічки: без цього після завантаження кожна ще відкрита
+            // пропозиція з'являлась у стрічці вдруге.
+            var offersLogged = new List<string>(_loggedQuestOfferKeys);
+            offersLogged.Sort(StringComparer.Ordinal);
+            head.Append(";offersLogged=").Append(string.Join(",", offersLogged));
             if (_roller != null) head.Append(";roller=").Append(_roller.CaptureState());
             head.Append(";resume=").Append(_resume == null ? "-" :
                 ((int)_resume.Reason).ToString(CultureInfo.InvariantCulture) + "|" +
@@ -3592,6 +3602,7 @@ namespace Game.Core.Session
                 ReattachInProgressArcChapterQuests(arcValue, ExtractHeadField(headPart, ";quests="));
             }
 
+            string offersLoggedValue = null;
             foreach (var part in headPart.Split(';'))
             {
                 int eq = part.IndexOf('=');
@@ -3601,6 +3612,7 @@ namespace Game.Core.Session
 
                 switch (key)
                 {
+                    case "offersLogged": offersLoggedValue = value; break;
                     case "state": State = (SessionState)ParseInt(value); break;
                     case "seed": ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _seed); break;
                     case "hitRule": _hitRule = (HitRuleKind)ParseInt(value); break;
@@ -3652,7 +3664,10 @@ namespace Game.Core.Session
 
             _currentPending = null;
             _currentQuestOffer = null;
-            _lastLoggedQuestOfferKey = null;
+            _loggedQuestOfferKeys.Clear();
+            if (!string.IsNullOrEmpty(offersLoggedValue))
+                foreach (var offerKey in offersLoggedValue.Split(','))
+                    if (offerKey.Length > 0) _loggedQuestOfferKeys.Add(offerKey);
             _dungeon = null;
             _battle = null;
             _battleAutoResolvedThisCall = false;
