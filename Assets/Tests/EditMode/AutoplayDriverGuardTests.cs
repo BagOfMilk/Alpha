@@ -108,15 +108,13 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Пакет "3D-подача" (docs/COMBAT_V2.md §8) зводиться окремою
-        /// гілкою — на момент написання цього водія презентер ще не веде хід
-        /// ворога через CombatAiStepOneAction, тому тест навмисно [Ignore]:
-        /// увімкнути одразу після зведення всіх чотирьох частин Бою v2
-        /// (§7.4 "Автотур ходить у бій ЛИШЕ через IBattleInput" передбачає,
-        /// що презентер сам виконує §5 "Хід ворога (режисер)").
+        /// Скарга власника 25.09.2026 («коли наступив ход опонентів гра тупа
+        /// зупинилась») на рівні вихідників: обидва екрани бою — 3D-презентер
+        /// і IMGUI-фолбек — зобов'язані самі вести хід ворога через
+        /// CombatAiStepOneAction (docs/COMBAT_V2.md §5). Раніше цей виклик був
+        /// лише в автотурі, тому тур проходив, а людина застрягала.
         /// </summary>
         [Test]
-        [Ignore("Увімкнути після зведення Бою v2: BattleArenaController/BattleScreen (пакет '3D-подача'/'HUD') ще не ведуть хід ворога через CombatAiStepOneAction на цій гілці (docs/COMBAT_V2.md §5, §8).")]
         public void BattleScreens_DriveEnemyTurnThroughCombatAiStepOneAction()
         {
             string gameplay = GameplayDir();

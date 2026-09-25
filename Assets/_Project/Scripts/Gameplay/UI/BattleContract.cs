@@ -109,12 +109,5 @@ namespace Game.Gameplay
         void SetHudRects(IReadOnlyList<Rect> guiRects);
 
         void AcknowledgeResult();
-
-        // ---- перехідне (старий HUD): прибирає частина «HUD», реалізує частина «3D» ----
-        IReadOnlyList<string> LogLines { get; }
-        int HoveredHitChance { get; }
-        int HoveredDamageMin { get; }
-        int HoveredDamageMax { get; }
-        int HoveredDamageCrit { get; }
     }
 }
