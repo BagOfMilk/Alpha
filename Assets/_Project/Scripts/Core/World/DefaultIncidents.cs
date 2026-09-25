@@ -141,11 +141,17 @@ namespace Game.Core.World
     /// </summary>
     public static class DefaultPressureSources
     {
-        public static IEnumerable<IPressureSource> All()
+        /// <summary>
+        /// <paramref name="crisis"/> — гачок Поправки №7 (тестова збірка,
+        /// <c>TestBuildTensionPace</c>): підмінити тільки джерело кризи
+        /// стисненим (менший поріг), не чіпаючи інших двох. null — кампанійний
+        /// дефолт, як і раніше.
+        /// </summary>
+        public static IEnumerable<IPressureSource> All(CrisisPressureSource crisis = null)
         {
             yield return new StreetPressureSource();
             yield return new NightPressureSource();
-            yield return new CrisisPressureSource();
+            yield return crisis ?? new CrisisPressureSource();
         }
     }
 
@@ -197,11 +203,34 @@ namespace Game.Core.World
     /// </summary>
     public sealed class CrisisPressureSource : IPressureSource
     {
+        private readonly int _threshold;
+        private readonly int _cooldownDays;
+        private readonly int _insistenceAtHeat;
+        private readonly int _insistenceAtFracture;
+
+        /// <summary>
+        /// Параметри конструктора — кампанійні значення лишаються дефолтом
+        /// (виклик <c>new CrisisPressureSource()</c> без аргументів дає той
+        /// самий об'єкт, що й раніше). Тестова збірка (Поправка №7,
+        /// <c>TestBuildTensionPace</c>) передає лише стиснутий
+        /// <paramref name="threshold"/> — темп самого накопичення (ставки
+        /// нижче) і вікно милосердя (<see cref="Balance.PulseBalance.CrisisGraceDays"/>)
+        /// лишаються окремими важелями.
+        /// </summary>
+        public CrisisPressureSource(int threshold = 120, int cooldownDays = 30,
+            int insistenceAtHeat = 5, int insistenceAtFracture = 12)
+        {
+            _threshold = threshold > 0 ? threshold : 120;
+            _cooldownDays = cooldownDays > 0 ? cooldownDays : 30;
+            _insistenceAtHeat = insistenceAtHeat;
+            _insistenceAtFracture = insistenceAtFracture;
+        }
+
         public string Id => "crisis";
         public WorldEventKind Kind => WorldEventKind.Crisis;
         public string DomainTag => "площадь";
-        public int Threshold => 120;
-        public int CooldownDays => 30;
+        public int Threshold => _threshold;
+        public int CooldownDays => _cooldownDays;
         public bool IsActive(PulseContext ctx) => ctx.TensionBandIndex >= 3;
 
         /// <summary>Угроза, о которой не предупредили, — нечестная.</summary>
@@ -209,7 +238,7 @@ namespace Game.Core.World
 
         public int InsistencePerDay(PulseContext ctx)
         {
-            return ctx.TensionBandIndex >= 4 ? 12 : 5;
+            return ctx.TensionBandIndex >= 4 ? _insistenceAtFracture : _insistenceAtHeat;
         }
     }
 }

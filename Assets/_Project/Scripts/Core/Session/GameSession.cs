@@ -276,7 +276,8 @@ namespace Game.Core.Session
 
             _cfg = new BalanceConfig();
             _world = FirstHourWorld.Build(tier: 1, requirePlayerDecision: true, balance: _cfg,
-                testBuildOneDayConstruction: o.TestBuildOneDayConstruction);
+                testBuildOneDayConstruction: o.TestBuildOneDayConstruction,
+                testBuildTensionPace: o.TestBuildTensionPace);
             _state = _world.BaseState;
             _state.ProtagonistId = ProtagonistId;
             _works = _world.CityWorks;
@@ -1165,6 +1166,28 @@ namespace Game.Core.Session
                 LogLoyaltyChanges(LoyaltyRules.OnBloodyChoice(_worldRoster, _cfg));
 
             LogEvent("decision.resolved", Args("path", path.ToString(), "band", FindBand(report, incidentId).ToString(), "incidentId", incidentId));
+
+            // Замір темпу Напруги (Поправка №7, 24.09.2026): справжня природна
+            // криза (crisis_riot) розв'язується ЛИШЕ цим шляхом — рядок вище
+            // логує "decision.resolved" сам (з "path", якого TranslateReport не
+            // знає), тож MarkIncidentsAlreadyTranslated нижче ховає щойно
+            // розв'язаний інцидент від циклу TranslateReport. Це навмисно рятує
+            // від дубля ЛОГУ — але той самий цикл TranslateReport є ЄДИНИМ
+            // місцем, що кличе HandleCompanionDeath для CrisisBite.KillCompanion
+            // (companion.died/roster.rippled). Заховавши інцидент, ми ховали і
+            // ПОБІЧНИЙ ЕФЕКТ, не лише лог: жертва кризи гинула у RosterAdapter
+            // (Kill вже відпрацював усередині IncidentResolver), а гір ніколи не
+            // повертався і "companion.died" ніколи не логувався — знайдено
+            // саме через те, що природна криза раніше НІКОЛИ не спрацьовувала
+            // за жодного прогону (замір 24.09.2026: 25 діб — Напруга ~95/1000).
+            // Повторюємо тут той самий виклик, що робить TranslateReport.
+            if (report?.Incidents != null && report.Incidents.Count > 0)
+            {
+                var justResolved = report.Incidents[report.Incidents.Count - 1];
+                if (justResolved.Bite == CrisisBite.KillCompanion && !string.IsNullOrEmpty(justResolved.AffectedActorId))
+                    HandleCompanionDeath(justResolved.AffectedActorId);
+            }
+
             // Щойно розв'язаний інцидент уже залогований рядком вище (з "path",
             // якого TranslateReport не знає) — позначаємо його перекладеним,
             // інакше цикл TranslateReport нижче залогує "decision.resolved" для

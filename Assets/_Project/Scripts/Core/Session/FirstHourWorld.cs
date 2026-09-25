@@ -133,11 +133,30 @@ namespace Game.Core.Session
         /// NewGameOptions (там default true) — так тестовая сборка (Unity,
         /// Alpha.Play, боты) получает один день, а кампания и харнес темпа —
         /// нет.
+        ///
+        /// <paramref name="testBuildTensionPace"/> — Поправка №7 (рішення власника
+        /// 24.09.2026, <see cref="TestBuildTensionPace"/>): той самий приём, що й
+        /// <paramref name="testBuildOneDayConstruction"/> вище. Default — false з
+        /// тієї самої причини: прямі виклики Build() (CampaignPacingTests,
+        /// SettlementSaveTests, CityWorksTests, FirstHourWorldTests) міряють темп/
+        /// баланс КАМПАНІЇ і не повинні мовчки отримати стиснуту шкалу Напруги
+        /// від самого лише додавання параметра.
         /// </summary>
         public static FirstHourWorld Build(int tier = 1, bool requirePlayerDecision = false, BalanceConfig balance = null,
-            bool testBuildOneDayConstruction = false)
+            bool testBuildOneDayConstruction = false, bool testBuildTensionPace = false)
         {
             var cfg = balance ?? new BalanceConfig();
+
+            // Тестова збірка (Поправка №7): підмінюємо ЛИШЕ Tension/Pulse ЦЬОГО
+            // щойно узгодженого cfg — GameSession.NewGame завжди передає сюди
+            // свіжий BalanceConfig (див. коментар класу), тож кампанійний дефолт,
+            // яким користуються прямі виклики Build() без прапорця, не бачить
+            // цієї підміни узагалі.
+            if (testBuildTensionPace)
+            {
+                cfg.Tension = TestBuildTensionPace.BuildTensionBalance(cfg.Tension);
+                cfg.Pulse = TestBuildTensionPace.BuildPulseBalance(cfg.Pulse);
+            }
 
             var roster = BuildRoster(cfg);
             var resources = new ResourceLedger();
@@ -175,7 +194,8 @@ namespace Game.Core.Session
 
             var tension = new TensionState(cfg.Tension);
             var pulse = new WorldPulse(cfg.Pulse);
-            foreach (var source in DefaultPressureSources.All()) pulse.AddSource(source);
+            var crisisSource = testBuildTensionPace ? TestBuildTensionPace.BuildCrisisSource() : null;
+            foreach (var source in DefaultPressureSources.All(crisisSource)) pulse.AddSource(source);
             // Именной накопитель «Тугар» — слух о боярине из сцены открытия.
             pulse.AddSource(new OpeningContent.TuharPressureSource());
             // Авторская последовательность открытия: узел / припасы / девочка.
