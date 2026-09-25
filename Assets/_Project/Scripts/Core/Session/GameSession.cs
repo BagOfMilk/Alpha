@@ -148,6 +148,15 @@ namespace Game.Core.Session
         private HitRuleKind _hitRule = HitRuleKind.Threshold;
 
         /// <summary>
+        /// Правило попадання поточної партії (§7.6, ще ВІДКРИТО власником) —
+        /// публічний гачок для UI-точок входу, які мають повторити те саме
+        /// правило, з яким іде кампанія (напр. тренувальний бій усередині
+        /// гри, HubScreen.DrawReadiness): titульний екран задає його один раз
+        /// у NewGame, і жодна команда всередині партії його не міняє.
+        /// </summary>
+        public HitRuleKind HitRule => _hitRule;
+
+        /// <summary>
         /// Темп Напруги, з яким побудовано світ цієї партії
         /// (<see cref="NewGameOptions.TestBuildTensionPace"/>). Живе в сейві:
         /// інакше «Продовжити» будувало світ із типовими опціями, і партія,
@@ -2126,7 +2135,17 @@ namespace Game.Core.Session
             new MechanicJournalDef("craft", exactKeys: new[] { "craft.upgraded" }),
             new MechanicJournalDef("scars", exactKeys: new[] { "scar.granted" }),
             new MechanicJournalDef("loyalty", exactKeys: new[] { "loyalty.band_changed" }),
-            new MechanicJournalDef("roster_drama", exactKeys: new[] { "roster.rippled" }),
+            // Фікс-ревью (журнал механік тестера, MechanicsJournalCompletionTests):
+            // цей запис був НЕДОСЯЖНИЙ фізично — LogRipple (нижче) ніколи не
+            // логує голий ключ "roster.rippled", лише суфіксовані варіанти
+            // "roster.rippled.<тип зв'язку>.<загибель/зрада>" (полірування,
+            // ціль 5 «Якість стрічки», задокументовано коментарем над самим
+            // LogRipple), тож жоден Death/Defection за жоден прогін не міг
+            // позначити цей запис побаченим. AllMechanicsCoverageTests.Row25
+            // і GameSessionTests уже перевіряють подію префіксом
+            // (<c>StartsWith("roster.rippled")</c>) — журнал реєстру мав
+            // робити те саме.
+            new MechanicJournalDef("roster_drama", keyPrefixes: new[] { "roster.rippled" }),
             new MechanicJournalDef("defection", exactKeys: new[] { "companion.defected" }),
             new MechanicJournalDef("companion_arc", exactKeys: new[] { "arc.chapter_opened" }),
             new MechanicJournalDef("quests", exactKeys: new[] { "quest.choice.resolved" }),
@@ -3463,12 +3482,35 @@ namespace Game.Core.Session
             var offersLogged = new List<string>(_loggedQuestOfferKeys);
             offersLogged.Sort(StringComparer.Ordinal);
             head.Append(";offersLogged=").Append(string.Join(",", offersLogged));
+
+            // Фікс-ревью (Поправка №7.8, журнал механік тестера): раніше
+            // _seenEventKeys НІКОЛИ не потрапляв у сейв — ContinueGame() іде
+            // крізь NewGame(SkipCreation:true), яка БЕЗУМОВНО чистить його
+            // (свіжий прогін — порожній журнал), а вже ПОТІМ LoadState читає
+            // цей самий зліпок. Реальний плейтест 25.09.2026 (MechanicsJournal-
+            // CompletionTests) зловив наслідок: гравець, що зберігся й
+            // завантажився з головного екрана (єдиний UI-шлях), бачив
+            // «Журнал механік» порожнім заново — увесь прогрес, накопичений
+            // ДО збереження, тихо губився, хоча сама партія (доба/ростер/
+            // будівлі) відновлювалась коректно. Ключі подій безпечні для
+            // ',' — самі events лише [a-z0-9._] (LogEvent), той самий
+            // принцип, що й offersLogged вище.
+            var journalSeen = new List<string>(_seenEventKeys);
+            journalSeen.Sort(StringComparer.Ordinal);
+            head.Append(";journalSeen=").Append(string.Join(",", journalSeen));
             if (_roller != null) head.Append(";roller=").Append(_roller.CaptureState());
             head.Append(";resume=").Append(_resume == null ? "-" :
                 ((int)_resume.Reason).ToString(CultureInfo.InvariantCulture) + "|" +
                 ((int)_resume.ReturnState).ToString(CultureInfo.InvariantCulture));
             head.Append(";freeplay=").Append(_freePlay ? 1 : 0);
             head.Append(";summary=").Append(_summaryAcknowledged ? 1 : 0);
+            // Фікс-ревью (журнал механік тестера): той самий трап, що
+            // journalSeen= вище, окремим полем — night_patrol читає ЦЕЙ
+            // прапорець напряму (ExtraSeen), не через _seenEventKeys, і
+            // раніше НІКОЛИ не потрапляв у сейв. Гравець, що патрулював ніч
+            // 1, зберігся й завантажив партію з титулу, бачив "Патруль"
+            // знову непобаченим — журнал і партія розходились між собою.
+            head.Append(";patrolled=").Append(_patrolledANight ? 1 : 0);
             head.Append(";finale=").Append(_finaleResolved ? 1 : 0);
             head.Append(";readiness=").Append(_readiness.CaptureState());
             head.Append(";quests=").Append(_quests.CaptureState());
@@ -3603,6 +3645,7 @@ namespace Game.Core.Session
             }
 
             string offersLoggedValue = null;
+            string journalSeenValue = null;
             foreach (var part in headPart.Split(';'))
             {
                 int eq = part.IndexOf('=');
@@ -3613,6 +3656,7 @@ namespace Game.Core.Session
                 switch (key)
                 {
                     case "offersLogged": offersLoggedValue = value; break;
+                    case "journalSeen": journalSeenValue = value; break;
                     case "state": State = (SessionState)ParseInt(value); break;
                     case "seed": ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _seed); break;
                     case "hitRule": _hitRule = (HitRuleKind)ParseInt(value); break;
@@ -3620,6 +3664,7 @@ namespace Game.Core.Session
                     case "resume": _resume = value == "-" ? null : ParseResume(value); break;
                     case "freeplay": _freePlay = value == "1"; break;
                     case "summary": _summaryAcknowledged = value == "1"; break;
+                    case "patrolled": _patrolledANight = value == "1"; break;
                     case "finale": _finaleResolved = value == "1"; break;
                     case "readiness": _readiness.RestoreState(value); break;
                     case "quests": _quests.RestoreState(value); break;
@@ -3668,6 +3713,16 @@ namespace Game.Core.Session
             if (!string.IsNullOrEmpty(offersLoggedValue))
                 foreach (var offerKey in offersLoggedValue.Split(','))
                     if (offerKey.Length > 0) _loggedQuestOfferKeys.Add(offerKey);
+
+            // Журнал механік переживає Save/Load (див. коментар ComposeSave):
+            // Clear() тут ідемпотентний і для свіжого інстансу (RestoreFromBlob
+            // у щойно сконструйований GameSession, D1: набір і так порожній), і
+            // для ContinueGame (NewGame уже почистив його раніше в тому самому
+            // виклику) — так само, як _loggedQuestOfferKeys.Clear() вище.
+            _seenEventKeys.Clear();
+            if (!string.IsNullOrEmpty(journalSeenValue))
+                foreach (var seenKey in journalSeenValue.Split(','))
+                    if (seenKey.Length > 0) _seenEventKeys.Add(seenKey);
             _dungeon = null;
             _battle = null;
             _battleAutoResolvedThisCall = false;

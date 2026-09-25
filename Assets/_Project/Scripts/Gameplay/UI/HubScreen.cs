@@ -960,6 +960,25 @@ namespace Game.Gameplay.UI
             Widgets.LabeledRow(UkrainianText.Get("ui.readiness.title", g), ScreenText.ReadinessLabel(view.Band, g));
             Widgets.LabeledRow(UkrainianText.Format("ui.readiness.milestones", g,
                 "reached", view.MilestonesReached.ToString(), "total", view.MilestonesTotal.ToString()), "");
+
+            GUILayout.Space(10f);
+
+            // Тренувальний бій усередині партії (фікс-ревью — журнал механік
+            // тестера, MechanicsJournalCompletionTests): раніше єдиний вхід у
+            // NewTrainingBattle стояв на TitleScreen, ДО NewGame — гравець, що
+            // спробував його спершу, а тоді почав кампанію, бачив запис
+            // "Тренувальний бій" знову непоміченим (NewGame() безумовно чистить
+            // журнал разом з рештою прогону). NewTrainingBattle сам по собі
+            // держить бій "пісочницею" (SuspendReason.TrainingSkirmish,
+            // OnBattleResolved повертає State=fromState БЕЗ виклику NewGame) —
+            // тож виклик просто ЗВІДСИ, з Morning/FreePlay, лишає всю партію і
+            // журнал незайманими, і той самий запис лишається побаченим.
+            if (Widgets.SecondaryButton(UkrainianText.Get("ui.readiness.training", g)))
+            {
+                var options = new Game.Core.Session.TrainingBattleOptions { HitRule = shell.Session.HitRule };
+                shell.TryRun(() => shell.Session.NewTrainingBattle(options));
+            }
+            Widgets.TooltipLine(UkrainianText.Get("ui.readiness.training.hint", g));
         }
 
         // ===================== Збереження =====================

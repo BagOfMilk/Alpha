@@ -1501,6 +1501,11 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.readiness.title", "Готовність громади");
             AddKey(t, "ui.readiness.milestones", "Віхи: {reached} з {total}");
+            // Фікс-ревью (журнал механік тестера): тренувальний бій усередині
+            // партії, не лише з титульного екрана — GameSession.NewTrainingBattle
+            // сам повертає в Morning/FreePlay після бою, кампанію не займає.
+            AddKey(t, "ui.readiness.training", "Тренувальний бій");
+            AddKey(t, "ui.readiness.training.hint", "Пісочниця поза кампанією — добу/пости/сейв не займає, можна хоч щоранку.");
 
             // Тест-збірка (Поправка №7.8, п.2): вкладка «Журнал механік».
             AddKey(t, "ui.journal.progress", "Побачено: {seen} з {total}");
@@ -2204,7 +2209,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.auto_resolve.title", "Автобій");
             AddKey(t, "journal.auto_resolve.hint", "У бою натисни кнопку «Автобій» — гра сама розіграє решту сутички.");
             AddKey(t, "journal.training_battle.title", "Тренувальний бій");
-            AddKey(t, "journal.training_battle.hint", "Головний екран: кнопка «Тренувальний бій» — оцінка бойової механіки поза кампанією.");
+            // Фікс-ревью (журнал механік тестера, MechanicsJournalCompletionTests):
+            // старий текст називав лише титульний екран — там кнопка стоїть ДО
+            // NewGame, і NewGame() безумовно чистить журнал разом з рештою
+            // прогону, тож запис, побачений так, «губився» одразу після старту
+            // кампанії. Той самий бій, вкладка Готовність, посеред партії, journal
+            // не займає.
+            AddKey(t, "journal.training_battle.hint", "Головний екран ДО «Нової гри» — або будь-коли всередині партії, вкладка Готовність, кнопка «Тренувальний бій».");
             AddKey(t, "journal.creation.title", "Створення протагоніста");
             AddKey(t, "journal.creation.hint", "Головний екран: «Нова гра» (не вмикай «Пропустити створення персонажа») — впиши ім'я, обери «Він»/«Вона» й передісторію, тисни «Вирушати».");
             AddKey(t, "journal.progression.title", "XP/рівні/білд-планувальник");
