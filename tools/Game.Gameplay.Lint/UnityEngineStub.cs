@@ -338,6 +338,15 @@ namespace UnityEngine
     public static class Time
     {
         public static float deltaTime { get { return 0f; } }
+
+        /// <summary>
+        /// Бій v2 (docs/COMBAT_V2.md §7.4, автотур): реальний час з
+        /// запуску процесу — водій міряє ним ватчдоги очікування такту/ходу
+        /// ворога (Gameplay/AutoplayGameDriver.cs), а не ігровим deltaTime,
+        /// бо хід ворога йде поза його контролем. Заглушка лінту завжди
+        /// повертає 0 — вона лише перевіряє сигнатуру виклику, не поведінку.
+        /// </summary>
+        public static float realtimeSinceStartup { get { return 0f; } }
     }
 
     // Бій v2 (docs/COMBAT_V2.md §3): гарячі клавіші HUD — здібності [1..9],
