@@ -28,7 +28,7 @@ namespace Game.Gameplay.UI
         /// <summary>
         /// Максимова квестова глава арки «Не за кров» (Поправка №7.8, п.4):
         /// той самий кеш, що вище, для ДРУГОЇ незалежної лінії — без нього
-        /// щойно відкрита GameShell.MaybeRouteOfferedSceneContent глава не
+        /// щойно відкрита GameShell.RouteOfferedSceneContentIfAvailable глава не
         /// мала б ЖОДНОГО видимого екрана в Evening/Night (лише в HubScreen.
         /// DrawQuests на ранковій вкладці «Квести», куди гравець і не
         /// зазирнув би того самого вечора).

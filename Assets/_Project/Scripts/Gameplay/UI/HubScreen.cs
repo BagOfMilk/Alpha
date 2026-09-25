@@ -79,7 +79,7 @@ namespace Game.Gameplay.UI
         /// <summary>
         /// Максимова квестова глава арки «Не за кров» (Поправка №7.8, п.1):
         /// той самий кеш, що вище, для ДРУГОЇ незалежної лінії квесту —
-        /// GameShell.MaybeRouteOfferedSceneContent реєструє її визначення в
+        /// GameShell.RouteOfferedSceneContentIfAvailable реєструє її визначення в
         /// пулі (BeginArcChapterQuest), коли главу відкрито; до того
         /// OfferQuestStage мовчки повертає null.
         /// </summary>
@@ -849,7 +849,7 @@ namespace Game.Gameplay.UI
 
             // Максимова квестова глава арки (Поправка №7.8, п.1): та сама
             // конструкція, ДРУГА незалежна лінія — до BeginArcChapterQuest
-            // (GameShell.MaybeRouteOfferedSceneContent) questId ще не
+            // (GameShell.RouteOfferedSceneContentIfAvailable) questId ще не
             // зареєстрований, і OfferQuestStage мовчки повертає null.
             if (_maksymQuestOffer == null || _maksymQuestOfferDay != day)
             {

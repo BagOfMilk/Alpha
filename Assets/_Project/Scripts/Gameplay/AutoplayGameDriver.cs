@@ -404,20 +404,21 @@ namespace Game.Gameplay
                 // ---- вечір ----
                 if (state == SessionState.Evening)
                 {
-                    // Поправка №7.8, п.1/4: GameShell.MaybeRouteOfferedSceneContent
-                    // штовхає особисті арки/скриптовані сцени лише з OnGUI, а
-                    // OnGUI біжить МІЖ кроками цього ітератора (на кожному
-                    // yield return), не всередині нього. Раніше на добу 2+
-                    // (коли !_eveningShown уже false) цей блок ішов ПОВНІСТЮ
-                    // синхронно до самого ConfirmEvening() — жоден OnGUI між
-                    // ними не встигав спрацювати, тож «Нічна розмова»/рада
-                    // Захара мовчки пропускались тур-автоплеєм (спіймано на
-                    // РЕАЛЬНОМУ прогоні — жоден headless-тест цього не бачить,
-                    // бо там немає окремого OnGUI-проходу). Один явний yield
-                    // тут — перш ніж ЩОСЬ інше в цьому блоці спробує Evening-
-                    // лише команду — дає маршрутизації шанс підхопити сцену
-                    // ДО того, як ми вважатимемо стан незмінним.
-                    foreach (var f in WaitFrames(FramesShort)) yield return f;
+                    // Фікс-ревью (блокер, знайдено QA): попередня версія
+                    // (39445a8) чекала WaitFrames(2) і сподівалась, що OnGUI
+                    // (де живе GameShell.RouteOfferedSceneContentIfAvailable)
+                    // встигне спрацювати МІЖ цими двома кроками ітератора.
+                    // Кадровий каданс OnGUI виявився НЕ детермінованим у
+                    // фоновому (без фокуса вікна) прогоні тур-автоплею —
+                    // Layout/Repaint-подія інколи не приходить жодного разу
+                    // за N кадрів Update(), тож «Нічна розмова»/рада Захара/
+                    // Максимів квест мовчки пропускались (QA: той самий build
+                    // 0a5cfe0, той самий сід — 0/3 незалежних прогони бачать
+                    // цей контент проти 2/2 авторських). Водій тепер кличе ТУ
+                    // САМУ маршрутизацію напряму й синхронно — жодного
+                    // очікування кадру, результат не залежить від того, чи
+                    // взагалі відбувся хоч один OnGUI-прохід.
+                    _shell.RouteOfferedSceneContentIfAvailable();
                     if (Session.State != SessionState.Evening) continue; // маршрутизація підхопила сценарний зміст — далі йде він
 
                     if (!_eveningShown)
@@ -454,10 +455,11 @@ namespace Game.Gameplay
                     }
 
                     // Максимова квестова глава арки «Не за кров» (Поправка
-                    // №7.8, п.4): GameShell.MaybeRouteOfferedSceneContent уже
-                    // зареєстрував визначення в пулі (BeginArcChapterQuest),
-                    // коли главу відкрито (гейт Steady) — тут лише доганяємо
-                    // тим самим OfferQuestStage, яким і Гафіїн квест вище.
+                    // №7.8, п.4): GameShell.RouteOfferedSceneContentIfAvailable
+                    // вище вже зареєстрував визначення в пулі
+                    // (BeginArcChapterQuest), коли главу відкрито (гейт
+                    // Steady) — тут лише доганяємо тим самим OfferQuestStage,
+                    // яким і Гафіїн квест вище.
                     var maksymQuest = Run(() => Session.OfferQuestStage(DefaultQuests.MaksymCh1Id));
                     if (maksymQuest != null && _capturedOnce.Add("arc-quest-choice"))
                     {
