@@ -44,7 +44,7 @@ namespace Game.Tests.EditMode
             var snap = StatResolver.Resolve(Attrs(str: 4, agi: 9), new SkillSet(), null, cfg);
 
             Assert.AreEqual(10, snap.Derived(DerivedStat.MaxHp), "HpBase 6 + Сила 4 x 1.0");
-            Assert.AreEqual(11, snap.Derived(DerivedStat.MaxAp), "ApBase 8 + Ловкость 9 / 3");
+            Assert.AreEqual(11, snap.Derived(DerivedStat.MaxAp), "ApBase 8 + Спритність 9 / 3");
         }
 
         /// <summary>Перк «+3 HP» зобов'язаний лягати поверх похідної — на цьому тримається US-5.2.</summary>

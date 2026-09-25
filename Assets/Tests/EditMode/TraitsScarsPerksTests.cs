@@ -90,7 +90,7 @@ namespace Game.Tests.EditMode
             var snap = StatResolver.Resolve(new AttributeSet(4, 4, 4, 4), new SkillSet(),
                 new IModifierProvider[] { slots }, new BalanceConfig());
 
-            Assert.AreEqual(4 + 5, snap.Get(StatKey.Accuracy), 1e-9, "Ловкость 4 x 1.0 плюс трейт 5");
+            Assert.AreEqual(4 + 5, snap.Get(StatKey.Accuracy), 1e-9, "Спритність 4 x 1.0 плюс трейт 5");
         }
     }
 
