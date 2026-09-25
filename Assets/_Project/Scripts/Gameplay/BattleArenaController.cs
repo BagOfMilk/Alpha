@@ -994,7 +994,10 @@ namespace Game.Gameplay
         {
             if (!string.Equals(bareId, GameSession.ProtagonistId, StringComparison.Ordinal)) return null;
             var protagonist = ScreenText.FindCompanion(_session?.GetRosterView(), GameSession.ProtagonistId);
-            return !string.IsNullOrEmpty(protagonist?.DisplayName) ? protagonist.DisplayName : null;
+            // Заглушка ядра (створення пропущено) — не ім'я: тоді «Провідник»/«Провідниця».
+            return !string.IsNullOrEmpty(protagonist?.DisplayName) &&
+                   protagonist.DisplayName != Game.Core.Scenes.OpeningScenes.ProtagonistPlaceholderName
+                ? protagonist.DisplayName : null;
         }
 
         private string ResolveDisplayNameInternal(BattleUnitView unit)

@@ -138,7 +138,8 @@ namespace Game.Gameplay.UI
             // "{skill} ≥ {threshold}" тут би збрехав про механіку.
             if (option.TacticalBattleEnemyCount > 0)
                 return UkrainianText.Format("ui.decision.option_line.battle", gender,
-                    "path", path, "count", option.TacticalBattleEnemyCount.ToString());
+                    "path", path, "count", option.TacticalBattleEnemyCount.ToString(),
+                    "enemies", EnemiesCount(option.TacticalBattleEnemyCount));
 
             string skill = SkillLabel(option.SkillKey, gender);
             string candidate = option.HasCandidate
@@ -194,6 +195,16 @@ namespace Game.Gameplay.UI
             if (offer == null || string.IsNullOrEmpty(offer.CheckSkillKey)) return string.Empty;
             return UkrainianText.Format("ui.quest.check.line", gender,
                 "skill", SkillLabel(offer.CheckSkillKey, gender), "threshold", offer.CheckThreshold.ToString());
+        }
+
+        /// <summary>«1 ворог», «2 вороги», «5 ворогів», «21 ворог» — українська форма числа.</summary>
+        public static string EnemiesCount(int n)
+        {
+            int n10 = n % 10, n100 = n % 100;
+            string word = n10 == 1 && n100 != 11 ? "ворог"
+                : n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? "вороги"
+                : "ворогів";
+            return n + " " + word;
         }
 
         public static string SkillLabel(string skillKey, Gender gender)
@@ -304,8 +315,11 @@ namespace Game.Gameplay.UI
 
             if (companionId == GameSession.ProtagonistId)
             {
+                // Власне ім'я гравця — так; заглушка ядра (створення пропущено) —
+                // ні: тоді «Провідник»/«Провідниця» за родом із char.protagonist.
                 var protagonist = FindCompanion(roster, companionId);
-                if (protagonist != null && !string.IsNullOrEmpty(protagonist.DisplayName))
+                if (protagonist != null && !string.IsNullOrEmpty(protagonist.DisplayName) &&
+                    protagonist.DisplayName != Game.Core.Scenes.OpeningScenes.ProtagonistPlaceholderName)
                     return protagonist.DisplayName;
             }
 

@@ -94,11 +94,12 @@ namespace Game.Gameplay.UI
             if (_disabledButton == null)
                 _disabledButton = AlphaSkin.ButtonStyle(AlphaSkin.BgDark, AlphaSkin.BgDark, AlphaSkin.BgDark, AlphaSkin.TextDim);
 
-            bool wasEnabled = GUI.enabled;
+            // Мітка у вигляді кнопки, а не кнопка з GUI.enabled = false: Unity
+            // малює вимкнені елементи напівпрозорими разом із тлом, і на 3D-сцені
+            // їх неможливо було прочитати (власник, 25.09.2026: «а що це
+            // прозорим?»). Мітка не клікається і лишається непрозорою.
             GUILayout.BeginHorizontal();
-            GUI.enabled = false;
-            GUILayout.Button(label, _disabledButton, options);
-            GUI.enabled = wasEnabled;
+            GUILayout.Label(label, _disabledButton, options);
             if (!string.IsNullOrEmpty(reason)) GUILayout.Label(reason, AlphaSkin.Tooltip);
             GUILayout.EndHorizontal();
         }

@@ -89,7 +89,7 @@ namespace Game.Gameplay.UI
                     // бій без перевірки навички (DungeonRun.ResolveRoom:
                     // Bloody одразу EnterAwaitingBattle) — раніше кнопка
                     // казала лише "Битися", без кількості ворогів.
-                    string bloody = UkrainianText.Format("ui.dungeon.bloody_fight", g, "count", room.EnemyCount.ToString());
+                    string bloody = UkrainianText.Format("ui.dungeon.bloody_fight", g, "count", room.EnemyCount.ToString(), "enemies", ScreenText.EnemiesCount(room.EnemyCount));
                     if (Widgets.DangerButton(bloody))
                         Resolve(shell, IncidentPath.Bloody);
                     break;

@@ -293,6 +293,11 @@ namespace Game.Gameplay.UI
         /// </summary>
         private static void DrawPortraits(GameShell shell, SceneStepView current, Game.Core.Characters.Creation.Gender g, Rect dialogueRect)
         {
+            // Кнопка «Далі» всередині панелі могла щойно завершити сцену —
+            // тоді кадру вже немає (NullReferenceException у білді, знайшов
+            // власник 25.09.2026).
+            if (current == null) return;
+
             // Подія Layout — рект ще Rect.zero (GetLastRect до першого Repaint):
             // нічого не малюємо цього проходу, Layout однаково не рендерить пікселі.
             if (dialogueRect.width <= 0f || dialogueRect.height <= 0f) return;
@@ -306,9 +311,21 @@ namespace Game.Gameplay.UI
             // 1600×900 дає рівно ~300×380.
             float portraitWidth = Mathf01Clamp(Screen.width * 0.1875f, 180f, 340f);
             float portraitHeight = Mathf01Clamp(Screen.height * 0.4222f, 220f, 420f);
-            float overlap = portraitHeight * 0.12f;
-            float top = dialogueRect.y - portraitHeight + overlap;
-            if (top < 8f) top = 8f;
+
+            // Портрет стоїть НАД панеллю діалогу і ніколи не заходить на неї:
+            // раніше він навмисно перекривав її верх на 12% висоти, і на
+            // невисокому вікні картка закривала кнопку «Далі» (власник,
+            // 25.09.2026). Якщо місця над панеллю мало — портрет менший, а не
+            // поверх тексту; пропорції зберігаються.
+            const float nameLabel = 26f, margin = 6f;
+            float available = dialogueRect.y - nameLabel - margin * 2f;
+            if (available < 60f) return; // зовсім немає місця — лише текст панелі
+            if (portraitHeight > available)
+            {
+                portraitWidth *= available / portraitHeight;
+                portraitHeight = available;
+            }
+            float top = dialogueRect.y - margin - portraitHeight;
 
             if (hasSecond)
             {

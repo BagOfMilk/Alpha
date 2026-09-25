@@ -1520,7 +1520,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.decision.option_line",
                 "{path}: {skill} ≥ {threshold} — {candidate}, очікувана полоса: {band}.");
             // Полірування (ціль 6 «Рішення»): DecisionOptionView.TacticalBattleEnemyCount>0.
-            AddKey(t, "ui.decision.option_line.battle", "{path}: тактичний бій — {count} ворогів.");
+            AddKey(t, "ui.decision.option_line.battle", "{path}: тактичний бій — {enemies}.");
             AddKey(t, "ui.decision.candidate", "візьметься {name}");
             AddKey(t, "ui.decision.no_candidate", "нікому взятися");
             AddKey(t, "ui.decision.path.quiet", "Тихо");
@@ -1555,7 +1555,7 @@ namespace Game.Gameplay.Text
             // обхід (band у данжі й досі немає — Поправка №1: 0 ризику).
             AddKey(t, "ui.dungeon.party", "Партія");
             AddKey(t, "ui.dungeon.option_line", "{path}: {skill} ≥ {threshold} — {candidate}.");
-            AddKey(t, "ui.dungeon.bloody_fight", "Криваво: тактичний бій — {count} ворогів.");
+            AddKey(t, "ui.dungeon.bloody_fight", "Криваво: тактичний бій — {enemies}.");
             AddKey(t, "dungeon.threat_band_changed", "Загроза підземелля тепер: {band}.");
 
             AddKey(t, "ui.night.crisis.title", "Вікно реакції на кризу");
@@ -1565,7 +1565,7 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "ui.night.finale.title", "Фінал доби 5");
             // Полірування (ціль 6 «Рішення»): GameSession.GetFinaleEnemyCount().
-            AddKey(t, "ui.night.finale.enemy_count", "Тактичний бій: {count} ворогів.");
+            AddKey(t, "ui.night.finale.enemy_count", "Тактичний бій: {enemies}.");
             AddKey(t, "ui.advance_night", "До ранку");
             AddKey(t, "ui.night.evening.title", "Вечір");
             AddKey(t, "ui.night.night.title", "Ніч");
@@ -2091,7 +2091,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "scene.zakhar.council.option.dam",
                 "Готувати загату на річці — тихий шлях фіналу.");
             AddKey(t, "scene.zakhar.council.option.assault",
-                "Готувати оборону перевалу — кровавий шлях фіналу.");
+                "Готувати оборону перевалу — кривавий шлях фіналу.");
 
             // ---- діагностичні підписи переходів (мовчазні, як і to.node1.pass) ----
             AddKey(t, "to.arc.myroslava.ch1.done", "Перехід: глава 1 арки Мирослави завершена.");
@@ -2161,7 +2161,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.crisis.title", "Пожежа: вікно на реакцію (доба 5)");
             AddKey(t, "journal.crisis.hint", "Доба 5, увечері або вночі: якщо відкриється «Вікно реакції на кризу», обери «Витратити золото», «Відрядити людину з поста» або «Не реагувати».");
             AddKey(t, "journal.tension_band_change.title", "Настрій міста рухається");
-            AddKey(t, "journal.tension_band_change.hint", "Відбувається само: у тестовому темпі перший помітний зсув настрою — близько п'ятнадцятої доби, другий — близько двадцятої. Облава ради, Храм і Укріплення відсувають це далі; кровавий шлях, голод і порожні пости — наближають.");
+            AddKey(t, "journal.tension_band_change.hint", "Відбувається само: у тестовому темпі перший помітний зсув настрою — близько п'ятнадцятої доби, другий — близько двадцятої. Облава ради, Храм і Укріплення відсувають це далі; кривавий шлях, голод і порожні пости — наближають.");
             AddKey(t, "journal.great_crisis.title", "Великий бунт на площі");
             AddKey(t, "journal.great_crisis.hint", "Відбувається само: коли настрій міста доходить до Розпалу, на площі накопичується власна загроза — три перестороги про натовп, остання за добу-дві до розв'язки, і сам бунт близько двадцять п'ятої доби, якщо нічого не робити. Рада, Храм і Укріплення відсувають його; кров, голод і порожні пости — прискорюють. Не плутай із пожежею доби п'ятої вище — це друга, пізніша криза.");
             AddKey(t, "journal.post_reports.title", "Доповіді з постів");
@@ -2205,7 +2205,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "journal.readiness_finale.title", "Готовність + фінал");
             AddKey(t, "journal.readiness_finale.hint", "Доба 5, вночі, розділ «Фінал доби 5»: обери «Тихо» або «Криваво».");
             AddKey(t, "journal.tactical_combat.title", "Тактичний бій");
-            AddKey(t, "journal.tactical_combat.hint", "Коли обрано кровавий шлях (у рішенні, фіналі чи бойовій кімнаті підземелля), відкривається бій: клацай по клітинках і ворогах, кнопки «Дозор» і «Кінець ходу» — в нижній панелі.");
+            AddKey(t, "journal.tactical_combat.hint", "Бій починається з кнопки «Криваво»: у рішенні доби (перше — на перевалі в добу 1), у бойовій кімнаті підземелля (вилазка «Підземелля») або у фіналі. Без наслідків для партії — вкладка «Готовність» → «Тренувальний бій». У бою клацай по клітинках і ворогах; «Дозор» і «Кінець ходу» — у нижній панелі.");
             AddKey(t, "journal.auto_resolve.title", "Автобій");
             AddKey(t, "journal.auto_resolve.hint", "У бою натисни кнопку «Автобій» — гра сама розіграє решту сутички.");
             AddKey(t, "journal.training_battle.title", "Тренувальний бій");

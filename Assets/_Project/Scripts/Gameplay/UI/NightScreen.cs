@@ -227,7 +227,7 @@ namespace Game.Gameplay.UI
                 // щоб не смикати FeedVillageStage на кожен OnGUI-кадр).
                 int enemyCount = shell.Session.GetFinaleEnemyCount();
                 if (enemyCount > 0)
-                    GUILayout.Label(UkrainianText.Format("ui.night.finale.enemy_count", g, "count", enemyCount.ToString()), AlphaSkin.Tooltip);
+                    GUILayout.Label(UkrainianText.Format("ui.night.finale.enemy_count", g, "count", enemyCount.ToString(), "enemies", ScreenText.EnemiesCount(enemyCount)), AlphaSkin.Tooltip);
                 if (Widgets.DangerButton(UkrainianText.Get("ui.decision.path.bloody", g)))
                     shell.TryRun(() => shell.Session.ResolveFinale(IncidentPath.Bloody));
             });

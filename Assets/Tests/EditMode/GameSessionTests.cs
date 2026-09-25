@@ -1371,6 +1371,74 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(sawResolved);
         }
 
+        /// <summary>
+        /// Власник, 25.09.2026: «Рішення можна ухвалити багато разів за раз» —
+        /// підсумковий етап завершеного квесту лишався пропозицією з кнопкою
+        /// «Підтвердити», і кожне натискання знову писало «вибір ухвалено».
+        /// Тепер: завершений квест не пропонується, розв'язати його вдруге не
+        /// можна, а текст підсумку потрапляє в стрічку рівно один раз.
+        /// </summary>
+        [Test]
+        public void FinishedQuest_IsNotOfferedAgain_AndItsOutcomeIsLoggedOnce()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+            string id = Game.Core.Quests.DefaultQuests.HafiyaId;
+
+            // Узятися → перевірка трави → підсумок (два кроки, з запасом на чотири).
+            int steps = 0;
+            while (s.OfferQuestStage(id) != null && steps < 4)
+            {
+                s.ResolveQuestChoice(0);
+                steps++;
+            }
+            Assert.AreEqual(2, steps, "квест Гафії: пропозиція і перевірка, далі — підсумок без кнопки");
+            Assert.IsNull(s.OfferQuestStage(id), "завершений квест більше не пропонується");
+            Assert.Throws<System.InvalidOperationException>(() => s.ResolveQuestChoice(0),
+                "без пропозиції розв'язати квест удруге не можна");
+
+            int resolved = 0, outcomes = 0;
+            foreach (var e in s.DayLog)
+            {
+                if (e.Key == "quest.choice.resolved" && e.Args["questId"] == id) resolved++;
+                if (e.Key == Game.Core.Quests.DefaultQuests.Stage3BestKey ||
+                    e.Key == Game.Core.Quests.DefaultQuests.Stage3WorstKey) outcomes++;
+            }
+            Assert.AreEqual(2, resolved, "рішень рівно стільки, скільки кроків квесту");
+            Assert.AreEqual(1, outcomes, "підсумок квесту — один запис у стрічці");
+        }
+
+        /// <summary>
+        /// Екрани перезапитують квест прямо перед «Підтвердити». Якщо цей квест
+        /// уже завершено, пропозиція від ІНШОГО квесту не повинна розв'язатися
+        /// замість нього.
+        /// </summary>
+        [Test]
+        public void FinishedQuest_ConfirmDoesNotResolveAnotherQuestsOffer()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+            PlayFullDayQuiet(s);
+            string hafiya = Game.Core.Quests.DefaultQuests.HafiyaId;
+            string maksym = Game.Core.Quests.DefaultQuests.MaksymCh1Id;
+
+            s.OfferQuestStage(hafiya); s.ResolveQuestChoice(1); // відмова — квест одразу завершено
+            Assert.IsNull(s.OfferQuestStage(hafiya));
+
+            Assert.IsNotNull(s.BeginArcChapterQuest("maksym"), "глава Максима відкрита");
+            Assert.IsNotNull(s.OfferQuestStage(maksym));
+
+            // Той самий порядок, що в NightScreen/HubScreen: перезапит, потім розв'язок.
+            Assert.IsNull(s.OfferQuestStage(hafiya));
+            Assert.Throws<System.InvalidOperationException>(() => s.ResolveQuestChoice(0));
+
+            foreach (var e in s.DayLog)
+                Assert.IsFalse(e.Key == "quest.choice.resolved" && e.Args["questId"] == maksym,
+                    "«Підтвердити» завершеного квесту Гафії розв'язало пропозицію Максима");
+        }
+
         [Test]
         public void BuildPlan_Preview_And_Commit_SpendsBankedPoints()
         {

@@ -192,6 +192,37 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("Свій Напарник", ScreenText.ResolveCompanionName("companion_x", Gender.Male, roster));
         }
 
+        /// <summary>
+        /// Власник, 25.09.2026: у стрічці «Протагонист став сильнішим» —
+        /// заглушка ядра (та ще й російською) замість імені. Коли створення
+        /// пропущено, герой зветься «Провідник»/«Провідниця» за родом; власне
+        /// ім'я гравця, як і раніше, має перевагу.
+        /// </summary>
+        [Test]
+        public void ResolveCompanionName_ProtagonistPlaceholder_UsesGenderedTitle()
+        {
+            string placeholder = Game.Core.Scenes.OpeningScenes.ProtagonistPlaceholderName;
+            var roster = Roster(Companion(GameSession.ProtagonistId, CompanionStatus.Idle, placeholder));
+            Assert.AreEqual("Провідник", ScreenText.ResolveCompanionName(GameSession.ProtagonistId, Gender.Male, roster));
+            Assert.AreEqual("Провідниця", ScreenText.ResolveCompanionName(GameSession.ProtagonistId, Gender.Female, roster));
+
+            var named = Roster(Companion(GameSession.ProtagonistId, CompanionStatus.Idle, "Оксана"));
+            Assert.AreEqual("Оксана", ScreenText.ResolveCompanionName(GameSession.ProtagonistId, Gender.Female, named));
+        }
+
+        [Test]
+        public void EnemiesCount_UsesUkrainianNumberForms()
+        {
+            Assert.AreEqual("1 ворог", ScreenText.EnemiesCount(1));
+            Assert.AreEqual("2 вороги", ScreenText.EnemiesCount(2));
+            Assert.AreEqual("4 вороги", ScreenText.EnemiesCount(4));
+            Assert.AreEqual("5 ворогів", ScreenText.EnemiesCount(5));
+            Assert.AreEqual("11 ворогів", ScreenText.EnemiesCount(11));
+            Assert.AreEqual("12 ворогів", ScreenText.EnemiesCount(12));
+            Assert.AreEqual("21 ворог", ScreenText.EnemiesCount(21));
+            Assert.AreEqual("22 вороги", ScreenText.EnemiesCount(22));
+        }
+
         [Test]
         public void ResolveCompanionName_TotallyUnknown_FallsBackToId()
         {

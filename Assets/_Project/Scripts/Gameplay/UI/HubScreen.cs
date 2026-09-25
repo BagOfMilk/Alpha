@@ -94,6 +94,10 @@ namespace Game.Gameplay.UI
             DrawTabBar(g);
             GUILayout.Space(6f);
 
+            // Підкладка під вмістом вкладки: без неї розділи без власної панелі
+            // (указ, посольство, вилазка…) лежали прямо на 3D-сцені і не
+            // читалися (власник, 25.09.2026).
+            GUILayout.BeginVertical(GUI.skin.box);
             switch (_tab)
             {
                 case 0: DrawPosts(shell, g); break;
@@ -108,6 +112,7 @@ namespace Game.Gameplay.UI
                 case 9: DrawSave(shell, g); break;
                 case 10: DrawMechanicsJournal(shell, g); break;
             }
+            GUILayout.EndVertical();
 
             GUILayout.FlexibleSpace();
             if (Widgets.PrimaryButton(UkrainianText.Get("ui.start_day", g)))

@@ -903,7 +903,18 @@ namespace Game.Core.Session
         {
             RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night);
             var run = _quests.Get(questId) ?? _quests.Start(questId);
-            if (run == null || run.Current == null) return null;
+            // Завершений квест більше не пропонується: раніше його підсумковий
+            // етап лишався «пропозицією» з кнопкою «Підтвердити», і кожне
+            // натискання знову «ухвалювало рішення» (власник, 25.09.2026).
+            // Вказівник на пропозицію теж скидаємо: екрани перезапитують квест
+            // прямо перед ResolveQuestChoice, і без скидання «Підтвердити»
+            // завершеного квесту розв'язало б ЧУЖУ пропозицію, що лишилась від
+            // попереднього запиту.
+            if (run == null || !run.IsActive || run.Current == null)
+            {
+                _currentQuestOffer = null;
+                return null;
+            }
 
             var stage = run.Current;
             var offer = new QuestOfferView
@@ -948,10 +959,23 @@ namespace Game.Core.Session
             if (_currentQuestOffer == null) throw new InvalidOperationException("Немає активної пропозиції квесту.");
             var run = _quests.Get(_currentQuestOffer.QuestId);
             if (run == null) throw new InvalidOperationException("Квест не знайдено.");
+            if (!run.IsActive)
+            {
+                _currentQuestOffer = null;
+                throw new InvalidOperationException("Квест уже завершено.");
+            }
 
             QuestStepReport step = run.Current.Kind == QuestStageKind.Choice
                 ? run.Choose(optionIndex, _flags)
                 : run.ResolveCheck(_rosterView, _repeats, _processor.CurrentDay, _cfg);
+
+            // Недоступний варіант чи чужий тип етапу: квест не рушив — нічого не
+            // застосовуємо й не пишемо в стрічку.
+            if (!step.Accepted)
+            {
+                _currentQuestOffer = null;
+                return _lastDayReport;
+            }
 
             ApplyConsequence(step.Consequence);
 
@@ -969,6 +993,12 @@ namespace Game.Core.Session
             {
                 LogEvent(step.Band >= OutcomeBand.Good ? DefaultQuests.Stage2FoundKey : DefaultQuests.Stage2MissingKey);
             }
+
+            // Підсумок квесту — один раз у стрічку: після завершення квест
+            // більше не показується пропозицією, і текст підсумкового етапу
+            // інакше гравець не побачив би взагалі.
+            if (step.Terminal && run.Current != null && !string.IsNullOrEmpty(run.Current.TextKey))
+                LogEvent(run.Current.TextKey);
 
             // Поправка №7.8: коли цей квест — зміст квестової глави арки
             // (BeginArcChapterQuest зареєстрував companionId у мапі нижче),

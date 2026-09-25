@@ -102,9 +102,16 @@ namespace Game.Core.Scenes
                 .Step(SceneStep.Transition("to.settlement.evening"));
         }
 
+        /// <summary>
+        /// Ім'я-заглушка протагоніста, поки гравець не ввів своє (створення
+        /// пропущено). Інтерфейс показує замість нього «Провідник»/«Провідниця»
+        /// за родом (ScreenText.ResolveCompanionName).
+        /// </summary>
+        public const string ProtagonistPlaceholderName = "Протагоніст";
+
         /// <summary>Картка протагоніста: у учасника сцени зобов'язана бути картка.</summary>
         public static CharacterCard Protagonist() => new CharacterCard(
-            "protagonist", "Протагонист", SourceTier.Original, null,
+            "protagonist", ProtagonistPlaceholderName, SourceTier.Original, null,
             "тот, кого община пустила на порог");
     }
 }
