@@ -291,18 +291,47 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
 bash tools/run-tests.sh                              # ядро, лінт, 1100+ тестів
 powershell -File tools/build-unity.ps1               # сцена Game.unity + Build/Windows/Alpha.exe
 Build/Windows/Alpha.exe -autoplay [-autoplay-threshold] -screen-fullscreen 0 -screen-width 1600 -screen-height 900
+Build/Windows/Alpha.exe -autoplay-journal -screen-fullscreen 0 -screen-width 1600 -screen-height 900
 ```
 Автопрогон веде справжній інтерфейс ботом, знімає кожен екран у
 `Build/Windows/Screenshots*`, код виходу 0 — тур пройдено, 2 — виняток,
 3 — ключ тексту без перекладу. `AllMechanicsCoverageTests` перевіряє, що
 кожна механіка хоч раз проявилася в публічному журналі подій.
 
+**`-autoplay-journal` (ціль 1, доручення власника 25.09.2026 — «Ти протестив
+що гру можна почати, створити персонажа, взяти в команду і тд та пройти першу
+кризу? Усі механіки можна виконати по журналу?»):** окремий режим
+`AutoplayGameDriver.RunJournal` — той самий сценарій, що вже доведений у
+Core (`MechanicsJournalCompletionTests.JournalPlayer_OnePlaythrough_
+SeesAllFortyFourEntries`), тут же — крізь РЕАЛЬНІ екрани (`GameShell`/
+`*Screen.cs`), тими самими командами, якими грає людина. Доби 1–3 вручну
+(кровавий вузол 1 доби 1 наївною тактикою обох сторін до полоси Base/Worst
+без смерті Максима → «Нічна розмова» доби 3 → «Звинуватити», Залякування) —
+жодна з ботівських політик не форсує саме цю гілку, а вона єдина, що
+доводить `defection`/`roster_drama`/`betrayal_confrontation` за один прогін.
+З доби 4 — та сама «добра економіка», що й довгий тур/боти (розстановка,
+рада за пріоритетом, вилазка/данж-делве через парність доби), плюс гір/
+крафт/тренувальний бій (вкладка «Готовність»)/збереження (вкладка
+«Збереження») при першій нагоді. Знімає `journal-<id>.png` рівно раз на
+кожен із 44 записів `GetMechanicsJournal()`, у момент, коли він щойно стає
+Seen, і `journal-final.png` — саму вкладку «Журнал механік» наостанок. Код
+виходу **4**, якщо тур дійшов до кінця (стеля — доба `JournalDayCap`=60), але
+хоч один запис лишився непобаченим (лог перелічує, які саме); 0 — усі 44
+побачено; 2/3 — ті самі, що в решти режимів. **Реального «Продовжити» з
+титулу не перевіряє** (нема в грі кнопки «На титул» — лише вихід і
+перезапуск процесу, а сам тур живе в одному запуску `Alpha.exe`): клік
+«Підтвердити» на вкладці «Збереження» сам логує `game.saved`, а реєстр
+журналу рахує `save_load` побаченим за БУДЬ-ЯКИЙ із `game.saved`/`game.loaded`
+(OR, не пара) — той самий контракт, що вже перевірений у Core-тесті окремим
+шляхом (`ContinueGame` у СВІЖОМУ інстансі). Повний обхід «зберегти → вийти →
+запустити заново → Продовжити» лишається за `FreshSessionRestoreTests`.
+
 **Граблі, що коштували прогонів (не повторювати):**
 1. Вихід із гри: `Application.Quit` падав у нативному teardown Unity 6.4
    (UnityPlayer.dll, за будь-якого графічного API), `Environment.Exit` зависав.
    Працює `Gameplay/HardExit.cs` — `TerminateProcess` через kernel32.
 2. Автопрогон без фокусу вікна стоїть: `runInBackground` вмикається тільки в
-   режимах `-autoplay`/`-autoplay-long`/`-quit-after-title`.
+   режимах `-autoplay`/`-autoplay-long`/`-autoplay-journal`/`-quit-after-title`.
 3. Палітра листя Kenney застосовується тільки при реімпорті — після правки
    `KenneyImportSettings` потрібен реімпорт набору, інакше дерева лишаються
    бірюзовими.

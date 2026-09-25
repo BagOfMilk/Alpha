@@ -48,7 +48,11 @@ namespace Game.Gameplay
     /// Коди виходу (§1 "PHASE F LOOP" завдання): 0 — тур дійшов до кінця без
     /// винятків і без пропущених ключів тексту; 2 — будь-який виняток; 3 —
     /// тур дійшов до кінця, але <see cref="UkrainianText"/> хоч раз повернула
-    /// видиму заглушку "[ключ]" (лічильник — <see cref="UkrainianText.MissingKeyCounts"/>).
+    /// видиму заглушку "[ключ]" (лічильник — <see cref="UkrainianText.MissingKeyCounts"/>);
+    /// 4 — лише <see cref="JournalFlag"/>: тур дійшов до кінця, але
+    /// <c>GameSession.GetMechanicsJournal()</c> лишила хоч один із 44 записів
+    /// непобаченим (<see cref="AutoplayGameDriver.JournalSeenCount"/> &lt;
+    /// <see cref="AutoplayGameDriver.JournalTotalCount"/>).
     /// </summary>
     public sealed class AutoplayBootstrap : MonoBehaviour, IAutoplayHost
     {
@@ -80,6 +84,19 @@ namespace Game.Gameplay
         public const string QuitAfterTitleFlag = "-quit-after-title";
 
         /// <summary>
+        /// Ціль 1 (пряме доручення власника 25.09.2026): один прогін крізь
+        /// РЕАЛЬНІ екрани, що доводить всі 44 записи <c>GetMechanicsJournal()</c>
+        /// до Seen (сценарій, уже перевірений у Core —
+        /// MechanicsJournalCompletionTests.JournalPlayer_OnePlaythrough_
+        /// SeesAllFortyFourEntries). Мовчки означає й <see cref="CommandLineFlag"/>
+        /// — той самий принцип, що вже й у <see cref="LongTourFlag"/> вище.
+        /// Ігнорує <see cref="ThresholdFlag"/>/<see cref="LongTourFlag"/> (тур
+        /// сам форсує детермінований поріг — інваріант 8) — див.
+        /// <see cref="AutoplayGameDriver.RunJournal"/>.
+        /// </summary>
+        public const string JournalFlag = "-autoplay-journal";
+
+        /// <summary>
         /// Виставляється <c>GameSceneBuilder.Build()</c> одразу після
         /// <c>AddComponent</c> — той самий GameObject "Boot", що й
         /// <see cref="GameShell"/> (Editor-only <c>GetComponent</c> там, не
@@ -88,6 +105,8 @@ namespace Game.Gameplay
         public GameShell Shell;
 
         private IEnumerator<int> _tour;
+        private AutoplayGameDriver _driver;
+        private bool _journalMode;
         private bool _hadException;
         private int _shotIndex = 1;
         private readonly List<string> _summary = new List<string>();
@@ -95,8 +114,13 @@ namespace Game.Gameplay
         /// <summary>Скільки кадрів лишилось до виходу в режимі <see cref="QuitAfterTitleFlag"/> (-1 = режим не активний).</summary>
         private int _quitAfterTitleFramesLeft = -1;
 
-        /// <summary>Чи просив командний рядок автопрогон — перевіряється один раз при старті.</summary>
-        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag);
+        /// <summary>
+        /// Чи просив командний рядок автопрогон — перевіряється один раз при
+        /// старті. <see cref="JournalFlag"/> тут само — той самий принцип, що
+        /// вже й у <see cref="LongTourFlag"/>: сам вмикає <c>runInBackground</c>
+        /// нижче (Start), окремо вказувати <see cref="CommandLineFlag"/> не треба.
+        /// </summary>
+        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag) || HasArg(JournalFlag);
 
         private static bool HasArg(string flag)
         {
@@ -138,12 +162,15 @@ namespace Game.Gameplay
             UkrainianText.ResetMissingKeyTracking();
             bool threshold = HasArg(ThresholdFlag);
             bool longTour = HasArg(LongTourFlag);
+            _journalMode = HasArg(JournalFlag);
             Log("Автопрогон почато: " + DateTime.UtcNow.ToString("u", CultureInfo.InvariantCulture) +
-                " (правило влучання: " + (threshold ? "поріг" : "відсоток") +
-                (longTour ? ", довгий тур до великого бунту" : "") + ")");
+                (_journalMode
+                    ? " (журнальний тур: усі 44 записи журналу механік, правило влучання — поріг)"
+                    : " (правило влучання: " + (threshold ? "поріг" : "відсоток") +
+                      (longTour ? ", довгий тур до великого бунту" : "") + ")"));
 
-            var driver = new AutoplayGameDriver(this, Shell, threshold, longTour);
-            _tour = driver.Run();
+            _driver = new AutoplayGameDriver(this, Shell, threshold, longTour);
+            _tour = _journalMode ? _driver.RunJournal() : _driver.Run();
         }
 
         private void Update()
@@ -183,7 +210,21 @@ namespace Game.Gameplay
                     foreach (var kv in UkrainianText.MissingKeyCounts)
                         Log("  " + UkrainianText.MissingMarker(kv.Key) + " x" + kv.Value.ToString(CultureInfo.InvariantCulture));
                 }
-                Finish(_hadException ? 2 : (missing > 0 ? 3 : 0));
+
+                // Ціль 1, код виходу 4: журнальний тур дійшов до кінця (без
+                // винятку), але GetMechanicsJournal() лишила хоч один запис
+                // непобаченим — окремий код від "3 = пропущений ключ тексту",
+                // щоб СI відрізняв "текст не переклали" від "механіку не
+                // показали". Пріоритет: виняток (2) > непобачена механіка (4)
+                // > пропущений ключ (3) > 0.
+                bool journalIncomplete = _journalMode && _driver != null &&
+                    _driver.JournalSeenCount < _driver.JournalTotalCount;
+                if (_journalMode && _driver != null)
+                    Log("Журнал: " + _driver.JournalSeenCount + "/" + _driver.JournalTotalCount +
+                        (journalIncomplete ? " — не всі механіки побачено." : " — усі механіки побачено."));
+
+                int exitCode = _hadException ? 2 : (journalIncomplete ? 4 : (missing > 0 ? 3 : 0));
+                Finish(exitCode);
             }
         }
 
