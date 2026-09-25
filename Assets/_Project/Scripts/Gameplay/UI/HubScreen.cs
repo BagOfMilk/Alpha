@@ -42,6 +42,11 @@ namespace Game.Gameplay.UI
         /// <summary>Фаза F (UI-tour autoplay): дозволяє <c>GameShell.SetHubTab</c> перемкнути вкладку ззовні, щоб дим-тест міг зняти скріншот кожної.</summary>
         public void SetTab(int tab) => _tab = tab < 0 ? 0 : (tab > 10 ? 10 : tab);
 
+        /// <summary>Поточна вкладка — прогулянка і автотур перевіряють, куди привело «E — зайти».</summary>
+        public int Tab => _tab;
+
+
+
         // Expedition
         private string _siteId = SiteIds[0];
         private ExpeditionApproach _approach = ExpeditionApproach.Quiet;
@@ -145,17 +150,26 @@ namespace Game.Gameplay.UI
 
         private void DrawTabBar(Gender g)
         {
-            string[] keys =
-            {
-                "ui.tab.posts", "ui.tab.buildings", "ui.tab.council", "ui.tab.expedition",
-                "ui.tab.gear", "ui.tab.people", "ui.tab.quests", "ui.tab.factions",
-                "ui.tab.readiness", "ui.tab.save", "ui.tab.journal"
-            };
+            var keys = ScreenText.HubTabKeys;
 
+            // Одинадцять вкладок в один рядок не влазять у ліву колонку на
+            // 1600×900 і менше: рядок розпирав колонку, а стрічку подій
+            // стискав до вузької смужки. Тепер вкладки переносяться.
+            float available = Screen.width * 0.7f - 24f;
+            float rowWidth = 0f;
             GUILayout.BeginHorizontal();
             for (int i = 0; i < keys.Length; i++)
             {
-                if (Widgets.TabButton(UkrainianText.Get(keys[i], g), _tab == i))
+                string label = UkrainianText.Get(keys[i], g);
+                float width = Widgets.TabButtonWidth(label);
+                if (rowWidth > 0f && rowWidth + width > available)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                    rowWidth = 0f;
+                }
+                rowWidth += width;
+                if (Widgets.CompactTabButton(label, _tab == i))
                     _tab = i;
             }
             GUILayout.EndHorizontal();

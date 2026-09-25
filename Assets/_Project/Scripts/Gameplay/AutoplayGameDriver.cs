@@ -343,6 +343,8 @@ namespace Game.Gameplay
                         }
                         _shell.SetHubTab(0);
                         _host.Log("Хаб: усі " + HubTabSlugs.Length + " вкладок відвідано й знято.");
+
+                        foreach (var f in ExploreTour()) yield return f;
                     }
 
                     // "issue the bot's morning commands" — та сама розстановка
@@ -1226,6 +1228,54 @@ namespace Game.Gameplay
             if (!string.IsNullOrEmpty(_shell.LastMessage))
                 _host.Log("  (" + _shell.LastMessage + ")");
         }
+
+        /// <summary>
+        /// Прогулянка селом (власник, 25.09.2026: «бігати як у CRPG») — тими
+        /// самими діями, що й людина: «Прогулянка» у шапці, дійти до місця
+        /// (запит шляху — той самий, що клік мишею), «E — зайти». Тур падає
+        /// винятком (код виходу 2), якщо герой не дійшов або «зайти» відкрило
+        /// не ту вкладку.
+        /// </summary>
+        private IEnumerable<int> ExploreTour()
+        {
+            _shell.SetExploring(true);
+            if (!_shell.Exploring)
+                throw new InvalidOperationException("Прогулянка: недоступна в стані " + Session.State + ".");
+            foreach (var f in WaitFrames(45)) yield return f; // камера наздоганяє героя
+            _host.Capture("explore-start");
+            yield return 0;
+
+            string[] targets = { "post:scouting_post", Walk.VillagePlaces.TrainingGroundId, Walk.VillagePlaces.NoticeBoardId };
+            foreach (var target in targets)
+            {
+                _shell.RequestWalkTo(target);
+                int frames = 0;
+                while ((_shell.NearbyPlace == null || _shell.NearbyPlace.Id != target) && frames < ExploreWalkFrameCap)
+                {
+                    frames++;
+                    yield return 0;
+                }
+                if (_shell.NearbyPlace == null || _shell.NearbyPlace.Id != target)
+                    throw new InvalidOperationException("Прогулянка: герой не дійшов до «" + target + "» за " + ExploreWalkFrameCap + " кадрів.");
+                foreach (var f in WaitFrames(20)) yield return f;
+                _host.Capture("explore-" + target.Replace(':', '-'));
+                yield return 0;
+                _host.Log("Прогулянка: дійшов до «" + target + "» за " + frames + " кадрів.");
+            }
+
+            int expectedTab = _shell.NearbyPlace.HubTab;
+            _shell.InteractNearby();
+            if (_shell.Exploring || _shell.HubTab != expectedTab)
+                throw new InvalidOperationException("Прогулянка: «E — зайти» мало відкрити вкладку " + expectedTab +
+                                                    ", а відкрито " + _shell.HubTab + " (прогулянка " + (_shell.Exploring ? "триває" : "закінчилась") + ").");
+            foreach (var f in WaitFrames(30)) yield return f; // камера повертається
+            _host.Capture("explore-entered");
+            yield return 0;
+            _shell.SetHubTab(0);
+            _host.Log("Прогулянка: три місця, «зайти» відкрило вкладку " + expectedTab + ".");
+        }
+
+        private const int ExploreWalkFrameCap = 1800;
 
         private static IEnumerable<int> WaitFrames(int frames)
         {

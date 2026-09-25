@@ -340,7 +340,7 @@ namespace UnityEngine
         public static float deltaTime { get { return 0f; } }
     }
 
-    public enum KeyCode { None = 0, Escape = 27, Space = 32 }
+    public enum KeyCode { None = 0, Tab = 9, Escape = 27, Space = 32, E = 101 }
 
     public static class Input
     {
@@ -489,6 +489,7 @@ namespace UnityEngine
         public static Vector2 BeginScrollView(Vector2 scrollPosition, params GUILayoutOption[] options) { return scrollPosition; }
         public static void EndScrollView() { }
         public static void BeginArea(Rect screenRect) { }
+        public static void BeginArea(Rect screenRect, GUIStyle style) { }
         public static void EndArea() { }
         public static void Space(float pixels) { }
         public static void FlexibleSpace() { }

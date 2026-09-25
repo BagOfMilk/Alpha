@@ -62,6 +62,12 @@
       BattleArenaViewTests.cs бере її джерелом напряму.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/BattleArenaView.cs" />
+    <!--
+      Прогулянка селом: WalkGrid/VillagePlaces — чистий C# (сітка, A*, місця
+      взаємодії). HeroWalker у сцені лише застосовує — VillageWalkTests.cs
+      бере модель з джерела напряму.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Walk/VillageWalk.cs" />
   </ItemGroup>
 
   <ItemGroup>

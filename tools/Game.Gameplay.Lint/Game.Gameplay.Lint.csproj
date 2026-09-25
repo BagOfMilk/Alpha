@@ -75,6 +75,14 @@
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/BattleArenaController.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/PortraitRig.cs" />
+    <!--
+      Прогулянка селом: HeroWalker (Camera/Renderer/Input/Plane, OnGUI поверх
+      сцени) і FigureAnimation (плейбли, аніматор) — глибокий рушій, та сама
+      причина, що й у VillageStage. Уся логіка руху — у Gameplay/Walk/
+      VillageWalk.cs: вона лінтується і покрита тестами (VillageWalkTests).
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/HeroWalker.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/FigureAnimation.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/BattleArenaBuilder.cs" />
   </ItemGroup>
 

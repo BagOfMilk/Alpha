@@ -47,6 +47,7 @@ namespace Game.Gameplay.EditorTools
             // Без цього тепла Library (імпортована до появи/зміни палітри)
             // тримала б бірюзові крони/траву в кожній наступній збірці мовчки.
             KenneyImportSettings.ReimportIfPaletteChanged();
+            EnsureAnimatedCharacters();
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -195,14 +196,18 @@ namespace Game.Gameplay.EditorTools
                 "Assets/Scenes/GameGround.mat");
             ground.transform.SetParent(hub.transform, true);
 
-            House(hub, new Vector3(-6f, 0f, 2f), 3, 3, wood: true, facing: 0f);
-            House(hub, new Vector3(-1.5f, 0f, 2.5f), 3, 2, wood: true, facing: 0f);
-            House(hub, new Vector3(3.5f, 0f, 2f), 2, 3, wood: false, facing: 0f);
-            House(hub, new Vector3(-4f, 0f, -4f), 2, 2, wood: true, facing: 180f);
-            House(hub, new Vector3(2f, 0f, -4.5f), 3, 2, wood: false, facing: 180f);
+            // Перешкоди для прогулянки героя (HeroWalker): стіни хат, млин, ліс,
+            // ділянки (ті лише коли добудовані — неактивна модель не заважає).
+            var obstacles = new List<GameObject>();
+            obstacles.Add(House(hub, new Vector3(-6f, 0f, 2f), 3, 3, wood: true, facing: 0f));
+            obstacles.Add(House(hub, new Vector3(-1.5f, 0f, 2.5f), 3, 2, wood: true, facing: 0f));
+            obstacles.Add(House(hub, new Vector3(3.5f, 0f, 2f), 2, 3, wood: false, facing: 0f));
+            obstacles.Add(House(hub, new Vector3(-4f, 0f, -4f), 2, 2, wood: true, facing: 180f));
+            obstacles.Add(House(hub, new Vector3(2f, 0f, -4.5f), 3, 2, wood: false, facing: 180f));
 
             var mill = KitBuilder.Place(Town + "watermill.fbx", new Vector3(9f, 0f, -1f), 210f, "Мельница");
             if (mill != null) mill.transform.SetParent(hub.transform, true);
+            obstacles.Add(mill);
 
             var palisade = KitBuilder.Palisade(Town, -11f, 12f, -9f, 8f, 0.5f);
             if (palisade != null) palisade.transform.SetParent(hub.transform, true);
@@ -213,6 +218,10 @@ namespace Game.Gameplay.EditorTools
             var posts = Posts(hub);
             var villagers = Villagers(hub, posts);
             var plots = Plots(hub);
+            obstacles.Add(plots);
+            var landmarks = Landmarks(hub);
+            obstacles.Add(landmarks);
+            Hero(hub, hubCamera, posts, plots, landmarks, obstacles, forest);
 
             var stage = hub.AddComponent<Game.Gameplay.VillageStage>();
             stage.sun = sun;
@@ -280,10 +289,133 @@ namespace Game.Gameplay.EditorTools
                 holder.transform.SetParent(group.transform, false);
                 holder.transform.position = post.position + new Vector3(0.6f, 0f, 0.4f);
 
-                KitBuilder.Attach(holder, who[i], Vector3.zero, facing[i]);
+                var figure = KitBuilder.Attach(holder, who[i], Vector3.zero, facing[i]);
+                // Жителі дихають (кліп idle), кожен зі своїм зсувом фази —
+                // детермінованим, як і все в сцені.
+                AddFigureAnimation(figure, who[i], i * 0.37f, walks: false);
             }
 
             return group;
+        }
+
+        // ================= прогулянка героя =================
+
+        /// <summary>
+        /// Орієнтири, до яких можна підійти на прогулянці: дошка оголошень
+        /// (вкладка «Квести») біля площі і тренувальний майданчик (вкладка
+        /// «Готовність», де тренувальний бій) у південно-західному куті, подалі
+        /// від ділянок.
+        /// </summary>
+        private static GameObject Landmarks(GameObject hub)
+        {
+            var group = new GameObject("Орієнтири");
+            group.transform.SetParent(hub.transform, false);
+
+            var board = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.NoticeBoardId);
+            board.transform.SetParent(group.transform, false);
+            board.transform.localPosition = new Vector3(-3.0f, 0f, 0.2f);
+            KitBuilder.Attach(board, Town + "banner-green.fbx", Vector3.zero, 45f);
+
+            var training = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.TrainingGroundId);
+            training.transform.SetParent(group.transform, false);
+            training.transform.localPosition = new Vector3(-7.2f, 0f, -6.8f);
+            KitBuilder.Attach(training, Town + "poles.fbx", new Vector3(-0.8f, 0f, 0f), 0f);
+            KitBuilder.Attach(training, Town + "banner-red.fbx", new Vector3(0.8f, 0f, 0.4f), 45f);
+            KitBuilder.Attach(training, Town + "rock-small.fbx", new Vector3(0f, 0f, -0.9f), 0f);
+
+            return group;
+        }
+
+        /// <summary>
+        /// Герой прогулянки (власник, 25.09.2026: «бігати як у CRPG»): дві
+        /// моделі — за статтю героя, яку обирає гравець, — і HeroWalker.
+        /// Моделі не збігаються з жодним жителем на посту.
+        /// </summary>
+        private static void Hero(GameObject hub, Camera hubCamera, GameObject posts, GameObject plots,
+            GameObject landmarks, List<GameObject> obstacles, GameObject forest)
+        {
+            var hero = new GameObject("Герой");
+            hero.transform.SetParent(hub.transform, false);
+            hero.transform.position = new Vector3(0.6f, 0f, 0.4f);
+
+            string malePath = Chars + "character-male-d.fbx";
+            string femalePath = Chars + "character-female-c.fbx";
+            var male = KitBuilder.Attach(hero, malePath, Vector3.zero, 0f);
+            var female = KitBuilder.Attach(hero, femalePath, Vector3.zero, 0f);
+            AddFigureAnimation(male, malePath, 0f, walks: true);
+            AddFigureAnimation(female, femalePath, 0f, walks: true);
+            if (female != null) female.SetActive(false);
+
+            var walker = hero.AddComponent<Game.Gameplay.HeroWalker>();
+            walker.hubCamera = hubCamera;
+            walker.maleModel = male;
+            walker.femaleModel = female;
+            walker.postsRoot = posts.transform;
+            walker.plotsRoot = plots.transform;
+            walker.landmarksRoot = landmarks.transform;
+
+            var roots = new List<Transform>();
+            foreach (var o in obstacles)
+                if (o != null) roots.Add(o.transform);
+            walker.obstacleRoots = roots.ToArray();
+            if (forest != null) walker.trunkRoots = new[] { forest.transform };
+        }
+
+        /// <summary>
+        /// Фігурки Kenney імпортувалися ще до того, як у маніфесті з'явився
+        /// модуль анімації, — на префабах немає Animator, і жителі стояли в
+        /// T-позі (перший прогін прогулянки, 25.09.2026). Налаштування імпорту
+        /// ті самі, тож Unity сам їх не переімпортує: робимо це тут, лише для
+        /// моделей без аніматора (дешево і один раз).
+        /// </summary>
+        private static void EnsureAnimatedCharacters()
+        {
+            const string folder = "Assets/ThirdParty/Kenney/MiniCharacters/Models";
+            foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { folder }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!Path.GetFileName(path).StartsWith("character-")) continue;
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab == null || prefab.GetComponentInChildren<Animator>() != null) continue;
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                Debug.Log("[Гра] переімпорт фігурки заради аніматора: " + path);
+            }
+        }
+
+        private static void AddFigureAnimation(GameObject figure, string fbxPath, float phase, bool walks)
+        {
+            if (figure == null) return;
+            if (figure.GetComponentInChildren<Animator>() == null)
+            {
+                // Запасний шлях, якщо переімпорт аніматора не додав.
+                var animator = figure.AddComponent<Animator>();
+                foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
+                {
+                    var avatar = asset as Avatar;
+                    if (avatar != null) { animator.avatar = avatar; break; }
+                }
+                Debug.LogWarning("[Гра] Animator доданий вручну: " + fbxPath);
+            }
+            var anim = figure.AddComponent<Game.Gameplay.FigureAnimation>();
+            anim.idle = Clip(fbxPath, "idle");
+            if (walks)
+            {
+                anim.walk = Clip(fbxPath, "walk");
+                anim.sprint = Clip(fbxPath, "sprint");
+            }
+            anim.phase = phase;
+        }
+
+        /// <summary>Кліп із FBX набору за ім'ям дубля (idle/walk/sprint); службові «__preview__» пропускаються.</summary>
+        private static AnimationClip Clip(string fbxPath, string clipName)
+        {
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
+            {
+                var clip = asset as AnimationClip;
+                if (clip != null && clip.name == clipName && !clip.name.StartsWith("__preview__")) return clip;
+            }
+            Debug.LogWarning("[Гра] кліп не знайдено: " + fbxPath + " / " + clipName);
+            return null;
         }
 
         /// <summary>Ділянки під будівництво, ще не готові — той самий каталог зданий ядра, що у вітрині.</summary>

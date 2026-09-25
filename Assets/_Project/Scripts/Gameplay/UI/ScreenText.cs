@@ -197,6 +197,16 @@ namespace Game.Gameplay.UI
                 "skill", SkillLabel(offer.CheckSkillKey, gender), "threshold", offer.CheckThreshold.ToString());
         }
 
+        /// <summary>Підписи вкладок хаба за індексом: кнопки вкладок і підказка «E — зайти» на прогулянці.</summary>
+        public static readonly string[] HubTabKeys =
+        {
+            "ui.tab.posts", "ui.tab.buildings", "ui.tab.council", "ui.tab.expedition",
+            "ui.tab.gear", "ui.tab.people", "ui.tab.quests", "ui.tab.factions",
+            "ui.tab.readiness", "ui.tab.save", "ui.tab.journal"
+        };
+
+        public static string HubTabKey(int tab) => tab >= 0 && tab < HubTabKeys.Length ? HubTabKeys[tab] : HubTabKeys[0];
+
         /// <summary>«1 ворог», «2 вороги», «5 ворогів», «21 ворог» — українська форма числа.</summary>
         public static string EnemiesCount(int n)
         {

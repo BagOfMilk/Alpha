@@ -76,6 +76,18 @@ namespace Game.Gameplay.UI
         public static bool TabButton(string label, bool selected, params GUILayoutOption[] options)
             => selected ? PrimaryButton(label, options) : SecondaryButton(label, options);
 
+        /// <summary>Вкладка своєї ширини, не розтягнута на весь рядок (рядок вкладок переноситься).</summary>
+        public static bool CompactTabButton(string label, bool selected)
+            => TabButton(label, selected, GUILayout.ExpandWidth(false));
+
+        /// <summary>Скільки місця займе кнопка-вкладка з цим підписом (для переносу рядка вкладок).</summary>
+        public static float TabButtonWidth(string label)
+        {
+            if (_secondaryButton == null)
+                _secondaryButton = AlphaSkin.ButtonStyle(AlphaSkin.BgRaised, AlphaSkin.BgHover, AlphaSkin.BgActive, AlphaSkin.TextMain);
+            return _secondaryButton.CalcSize(new GUIContent(label)).x + 8f;
+        }
+
         /// <summary>Незворотна/ризикова дія (кроваво, підтвердження) — темно-червоний тон.</summary>
         public static bool DangerButton(string label, params GUILayoutOption[] options)
         {

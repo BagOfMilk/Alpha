@@ -38,9 +38,14 @@ namespace Game.Gameplay
             if (stage == null) return;
 
             var view = session.CurrentView;
+            // Ранок (і вільна гра) — уже день для гравця, хоча конвеєр ще в
+            // нічній фазі до «Почати день» (та сама причина, що в шапці
+            // GameShell.DrawTopBar). Без цього на прогулянці вранці село
+            // стояло темне, як уночі, і без людей на постах.
+            bool morning = session.State == SessionState.Morning || session.State == SessionState.FreePlay;
             stage.Apply(new VillageStageData
             {
-                Phase = view.Phase == Game.Core.Loop.DayPhase.Night ? StagePhase.Night : StagePhase.Day,
+                Phase = morning || view.Phase != Game.Core.Loop.DayPhase.Night ? StagePhase.Day : StagePhase.Night,
                 Tier = view.Tier,
                 Patrolling = view.IsPatrolling,
                 Posts = BuildPosts(session.GetRosterView()),

@@ -231,7 +231,7 @@ namespace Game.Tests.EditMode
             StringAssert.Contains("Заклали", lines[0]);
             StringAssert.Contains("Храм", lines[0], "Будівля — на ім'я з building.<id>");
             StringAssert.Contains("Лікар", lines[1], "Житель — на ім'я з char.<id>");
-            StringAssert.Contains("Койка лазарету", lines[1], "Пост — на ім'я з post.<id>");
+            StringAssert.Contains("Ліжко в лазареті", lines[1], "Пост — на ім'я з post.<id>");
             StringAssert.Contains("облаву", lines[2]);
             StringAssert.Contains("переселенців", lines[3]);
 

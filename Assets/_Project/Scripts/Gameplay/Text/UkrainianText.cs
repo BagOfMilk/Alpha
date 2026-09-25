@@ -283,7 +283,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "post.council_seat", "Місце в раді");
             AddKey(t, "post.storehouse_dock", "Причал складу");
-            AddKey(t, "post.infirmary_bed", "Койка лазарету");
+            AddKey(t, "post.infirmary_bed", "Ліжко в лазареті");
             AddKey(t, "post.settlement_market", "Ринок поселення");
             AddKey(t, "post.settlement_farms", "Ферми поселення");
             AddKey(t, "post.workshop_bench", "Верстак майстерні");
@@ -1435,6 +1435,23 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.tab.readiness", "Готовність");
             AddKey(t, "ui.tab.save", "Збереження");
             AddKey(t, "ui.tab.journal", "Журнал механік");
+
+            // Прогулянка селом (власник, 25.09.2026: «бігати як у CRPG»).
+            AddKey(t, "ui.explore.enter", "Прогулянка (Tab)");
+            AddKey(t, "ui.explore.leave", "Панель (Tab)");
+            AddKey(t, "ui.explore.hint", "WASD або клік мишею — іти · Shift — бігти · коліщатко — ближче/далі · E — зайти · Tab — панель");
+            AddKey(t, "ui.explore.prompt", "E — {place} → {tab}");
+            AddKey(t, "ui.explore.nothing_near", "Підійди до поста, ділянки чи дошки оголошень — тут з'явиться, куди можна зайти.");
+            AddKey(t, "place.council_seat", "Площа ради");
+            AddKey(t, "place.storehouse_dock", "Склад");
+            AddKey(t, "place.workshop_bench", "Майстерня");
+            AddKey(t, "place.settlement_market", "Ринок");
+            AddKey(t, "place.infirmary_bed", "Лазарет");
+            AddKey(t, "place.settlement_farms", "Поле");
+            AddKey(t, "place.scouting_post", "Застава біля воріт");
+            AddKey(t, "place.notice_board", "Дошка оголошень");
+            AddKey(t, "place.training_ground", "Тренувальний майданчик");
+            AddKey(t, "place.plot", "Ділянка «{building}»");
 
             AddKey(t, "ui.posts.assign", "Призначити");
             AddKey(t, "ui.posts.unassign", "Звільнити");
