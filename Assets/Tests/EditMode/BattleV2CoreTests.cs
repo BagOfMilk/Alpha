@@ -667,10 +667,16 @@ namespace Game.Tests.EditMode
         {
             var session = new GameSession();
             session.NewTrainingBattle(new TrainingBattleOptions());
-            // Жоден трейні не має Медицини (MedicineSkill=0 обом) — фасад мусить
-            // повернути ту саму InvalidAction, що дав би CombatState.Stabilize.
-            var result = session.CombatStabilize("trainee_2");
-            Assert.AreEqual(CombatActionResult.InvalidAction, result);
+
+            // Тренувальні бійці мають Медицину 1 (Бій v2: у тренуванні видно кожну
+            // кнопку) — союзник, що стоїть на ногах, не ціль: InvalidTarget, як у ядрі.
+            Assert.AreEqual(CombatActionResult.InvalidTarget, session.CombatStabilize("trainee_2"));
+
+            // Поріг Медицини: той самий поточний юніт без медицини — InvalidAction.
+            var battle = (CombatState)typeof(GameSession)
+                .GetField("_battle", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(session);
+            battle.Current.Profile.MedicineSkill = 0;
+            Assert.AreEqual(CombatActionResult.InvalidAction, session.CombatStabilize("trainee_2"));
             Assert.AreEqual(SessionState.Battle, session.State, "невдала спроба стабілізації не мала завершити бій");
         }
 

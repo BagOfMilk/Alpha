@@ -182,6 +182,15 @@ namespace Game.Core.Combat
 
             var trainee1 = new CombatUnit("trainee_1", Side.Player, TraineeProfile("Провідник"), HordeSpear());
             var trainee2 = new CombatUnit("trainee_2", Side.Player, TraineeProfile("Максим"), HordeBow());
+            // Бій v2 (власник, 25.09.2026: «всі кнопки працювали»): тренування —
+            // місце, де гравець пробує КОЖНУ кнопку бою без наслідків для партії.
+            // Раніше в тренувальних бійців не було жодної здібності й медицини,
+            // тож кнопки здібностей і «Стабілізувати» тут не з'являлись узагалі.
+            // По дві здібності зі спільного пулу — усі чотири разом.
+            trainee1.Abilities.Add(Lunge());
+            trainee1.Abilities.Add(SetTrap());
+            trainee2.Abilities.Add(Volley());
+            trainee2.Abilities.Add(MoveOrder());
             cs.AddUnit(trainee1, new GridPos(1, 1));
             cs.AddUnit(trainee2, new GridPos(1, 3));
 
@@ -204,7 +213,8 @@ namespace Game.Core.Combat
         {
             DisplayName = name,
             MaxHp = 14, MaxAp = 9, Accuracy = 65, Defense = 2, Initiative = 6, CritChance = 8, Armor = 1,
-            Resolve = 3, DamageBonus = 0, MoveApPerTile = 1, MedicineSkill = 0, CanBeDowned = true
+            // Медицина 1 — мінімум для «Стабілізувати» (CombatState.Stabilize).
+            Resolve = 3, DamageBonus = 0, MoveApPerTile = 1, MedicineSkill = 1, CanBeDowned = true
         };
     }
 }
