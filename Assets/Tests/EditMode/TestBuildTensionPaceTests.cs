@@ -178,6 +178,38 @@ namespace Game.Tests.EditMode
                 "великий бунт і скриптована пожежа доби 5 не мають ділити один заголовок");
         }
 
+        /// <summary>
+        /// Пункт журналу «Ніч: патруль чи сон» чекав події "night.forewarn",
+        /// якої ядро не пише, і не позначався ніколи. Тепер — з першої ночі на
+        /// варті; той, хто завжди спить, його не бачить.
+        /// </summary>
+        [Test]
+        public void Journal_NightPatrol_SeenOnlyAfterAPatrolledNight()
+        {
+            var (_, patrol) = Run(new PatrolAlwaysPolicy(), suppressCouncilRoutine: true, days: 3);
+            Assert.IsTrue(patrol.GetMechanicsJournal().First(e => e.Id == "night_patrol").Seen,
+                "хто вартував уночі — побачив механіку патруля");
+
+            var (_, sleeper) = Run(new NeverPatrol(), suppressCouncilRoutine: true, days: 3);
+            Assert.IsFalse(sleeper.GetMechanicsJournal().First(e => e.Id == "night_patrol").Seen,
+                "хто щоночі спав — патруля ще не пробував");
+        }
+
+        private sealed class NeverPatrol : IBotPolicy
+        {
+            private readonly PacifistPolicy _p = new PacifistPolicy();
+            public string Name => "NeverPatrol";
+            public Game.Core.Loop.IncidentPath ChooseIncidentPath(Game.Core.Session.Views.PendingOfferView o) => _p.ChooseIncidentPath(o);
+            public int ChooseQuestOption(Game.Core.Session.Views.QuestOfferView o) => _p.ChooseQuestOption(o);
+            public int ChooseSceneOption(Game.Core.Session.Views.SceneStepView s) => _p.ChooseSceneOption(s);
+            public bool ChoosePatrol(Game.Core.Session.Views.SessionView v) => false;
+            public IReadOnlyDictionary<string, string> ChooseAssignments(Game.Core.Session.Views.RosterView r, Game.Core.Session.Views.CityView c) => _p.ChooseAssignments(r, c);
+            public ExpeditionChoice? ChooseExpedition(Game.Core.Session.Views.SessionView v) => null;
+            public CombatAction ChooseCombatAction(Game.Core.Session.Views.BattleView b) => _p.ChooseCombatAction(b);
+            public bool ChooseAutoResolve(Game.Core.Session.Views.BattleView b) => _p.ChooseAutoResolve(b);
+            public bool ChoosePushDeeper(Game.Core.Session.Views.DungeonView d) => _p.ChoosePushDeeper(d);
+        }
+
         // ================= (b) "Дефузер" =================
 
         [Test]

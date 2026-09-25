@@ -207,6 +207,14 @@ namespace Game.Core.Session
         private DayPhase _lastPhase = DayPhase.Day;
         private bool _summaryAcknowledged;
         private bool _freePlay;
+
+        /// <summary>
+        /// Хоч одну ніч партії гравець провів на варті — пункт журналу
+        /// «Ніч: патруль чи сон». Раніше пункт чекав події "night.forewarn",
+        /// якої ядро не пише ніде, і не позначався ніколи (знайдено довгим
+        /// автопрогоном 25.09.2026: 32 доби, половина ночей на варті, «ще ні»).
+        /// </summary>
+        private bool _patrolledANight;
         private bool _finaleResolved;
         private string _finaleOutcomeKey;
 
@@ -316,6 +324,7 @@ namespace Game.Core.Session
             _activeArcChapterQuestCompanion.Clear();
             _currentSceneId = null;
             _seenEventKeys.Clear();
+            _patrolledANight = false;
 
             _slots.Clear();
             _dayLog.Clear();
@@ -1383,6 +1392,7 @@ namespace Game.Core.Session
 
             ClearDayLog();
             _lastPhase = DayPhase.Night;
+            if (_processor.IsPatrolling) _patrolledANight = true;
 
             // Той самий SettlementCycle, що й у AdvanceDay (див. коментар там):
             // повторний SyncHunger перед ніччю нешкідливий — HungerStep сам
@@ -2084,7 +2094,7 @@ namespace Game.Core.Session
             // Порожній пост = Найгірша (§2 №6) — той самий ключ, що decision_point:
             // args["band"]/["noCandidate"] різнять їх, а ключ у _seenEventKeys — ні.
             new MechanicJournalDef("empty_post", exactKeys: new[] { "decision.resolved" }),
-            new MechanicJournalDef("night_patrol", exactKeys: new[] { "night.forewarn" }),
+            new MechanicJournalDef("night_patrol", extraSeen: s => s._patrolledANight),
             new MechanicJournalDef("forewarn_ladder", keyPrefixes: new[] { "forewarn.level" }),
             new MechanicJournalDef("crisis", exactKeys: new[]
                 { "crisis.test.warn", "crisis.test.window", "crisis.test.mitigated", "crisis.test.unmitigated" }),
