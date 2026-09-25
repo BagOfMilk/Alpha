@@ -35,8 +35,31 @@ namespace Game.Core.Session.Views
         public IReadOnlyList<string> Statuses;
         public bool IsDowned;
 
+        /// <summary>Ключ UkrainianText екіпірованої зброї (WeaponDefinition.Id, напр. "weapon.horde_bow") — null, якщо юніт безоружний.</summary>
+        public string WeaponId;
+
         /// <summary>0, якщо цей юніт не поточна ціль прев'ю (заповнюється <see cref="GameSession.PreviewHitChance"/>).</summary>
         public int HitChancePreview;
+
+        /// <summary>
+        /// Способності, які САМЕ цей юніт знає (напарник — за порогом скіла,
+        /// ворог — з <c>EnemyDefinition</c>; <c>CombatUnit.Abilities</c>) — не
+        /// фіксований каталог однаковий для всіх. Раніше Gameplay-шар показував
+        /// той самий набір із чотирьох кнопок кожному юніту незалежно від того,
+        /// чи той їх узагалі знає (§BattleArenaView.KnownAbilityIds, відомий
+        /// розрив звіту пакета E2).
+        /// </summary>
+        public IReadOnlyList<BattleAbilityView> Abilities;
+    }
+
+    /// <summary>Одна здібність поточного юніта з ціною і станом відкату — те, що HUD показує на кнопці (§BattleHudScreen.DrawAbilities).</summary>
+    public sealed class BattleAbilityView
+    {
+        public string Id;
+        public int ApCost;
+
+        /// <summary>0 — здібність готова просто зараз; N — ще N власних ходів юніта до готовності.</summary>
+        public int CooldownRemaining;
     }
 
     /// <summary>Повний контракт бою (R18/§4.2.1): грид+юніти+хід+лог, жодного типу Game.Core.Combat напряму.</summary>

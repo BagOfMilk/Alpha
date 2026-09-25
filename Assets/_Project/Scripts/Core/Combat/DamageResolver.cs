@@ -17,6 +17,19 @@ namespace Game.Core.Combat
         }
     }
 
+    /// <summary>Показаний гравцю ДО кліку діапазон урону поточної зброї по цілі (§DamageResolver.PreviewRange).</summary>
+    public readonly struct DamagePreviewInfo
+    {
+        public readonly int Min, Max, Crit;
+
+        public DamagePreviewInfo(int min, int max, int crit)
+        {
+            Min = min;
+            Max = max;
+            Crit = crit;
+        }
+    }
+
     /// <summary>
     /// Конвеєр урону, порядок зафіксований:
     ///   значення за AttackOutcome (крит = max+бонус; детермінований Hit =
@@ -70,6 +83,36 @@ namespace Game.Core.Combat
                 damage = (int)Math.Round(damage * (cfg.Combat.GrazePartialPercent / 100.0));
 
             return new DamageReport(Math.Max(0, damage), crit);
+        }
+
+        /// <summary>
+        /// Прев'ю min/max/crit урону БЕЗ кидка — той самий конвеєр
+        /// (DamageBonus → множник типу → −ефективна броня, не нижче 0), лише
+        /// без кроку "значення за outcome" (там, де кидок PercentRule брав би
+        /// roller.Roll01). Викликається щокадру, поки гравець наводить курсор
+        /// на ціль (§BattleArenaController.UpdateHitChancePreview) — чіпати
+        /// IDiceRoller там не можна: стрім кидка зсунувся б від самого
+        /// наведення, до будь-якого реального кліку.
+        /// </summary>
+        public static DamagePreviewInfo PreviewRange(CombatUnit attacker, CombatUnit target, WeaponDefinition w)
+        {
+            if (w == null || target == null) return default;
+
+            int bonus = attacker != null ? attacker.Profile.DamageBonus : 0;
+            int armor = Math.Max(0, target.EffectiveArmor - w.ArmorPierce);
+
+            int min = PipelineNoRoll(w.DamageMin, bonus, w.Damage, target, armor);
+            int max = PipelineNoRoll(w.DamageMax, bonus, w.Damage, target, armor);
+            int crit = PipelineNoRoll(w.DamageMax + w.CritDamageBonus, bonus, w.Damage, target, armor);
+            return new DamagePreviewInfo(min, max, crit);
+        }
+
+        private static int PipelineNoRoll(int baseDamage, int bonus, DamageType type, CombatUnit target, int armor)
+        {
+            int damage = baseDamage + bonus;
+            damage = ApplyTypeMultiplier(damage, type, target);
+            damage -= armor;
+            return Math.Max(0, damage);
         }
 
         /// <summary>Тик DoT: броню обходить, множник типу застосовується (Кровотеча — True, без множника).</summary>

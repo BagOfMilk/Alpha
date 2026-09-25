@@ -33,6 +33,9 @@ namespace Game.Gameplay
         string ArmedAbilityId { get; }
         string HoveredUnitId { get; }
         int HoveredHitChance { get; }
+        int HoveredDamageMin { get; }
+        int HoveredDamageMax { get; }
+        int HoveredDamageCrit { get; }
         bool IsPlayerTurn { get; }
 
         string ResolveDisplayName(BattleUnitView unit);
@@ -57,19 +60,6 @@ namespace Game.Gameplay
     /// </summary>
     public static class BattleArenaView
     {
-        /// <summary>
-        /// Фіксований каталог здібностей (§Core/Combat/DefaultCombatContent.AbilityCatalog) —
-        /// BattleView не показує, які здібності доступні поточному юніту
-        /// (відомий розрив, див. звіт пакета E2); HUD пропонує всі чотири й
-        /// покладається на CombatActionResult ядра, щоб відхилити недоступну.
-        /// Id — водночас і параметр CombatUseAbility, і ключ UkrainianText
-        /// (AbilityDefinition.Id = "ability.lunge" і т. д., збігається навмисно).
-        /// </summary>
-        public static readonly string[] KnownAbilityIds =
-        {
-            "ability.lunge", "ability.set_trap", "ability.move_order", "ability.volley"
-        };
-
         /// <summary>Розмір однієї клітини гріда в світових одиницях.</summary>
         public const float TileSize = 1f;
 

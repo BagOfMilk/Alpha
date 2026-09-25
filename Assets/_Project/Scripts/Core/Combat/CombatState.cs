@@ -694,6 +694,10 @@ namespace Game.Core.Combat
         public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
             => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus);
 
+        /// <summary>Показаний гравцю діапазон урону поточної зброї атакуючого по цілі (§DamageResolver.PreviewRange) — той самий принцип, що HitChancePreview вище.</summary>
+        public DamagePreviewInfo DamagePreview(CombatUnit attacker, CombatUnit target)
+            => attacker?.Weapon != null ? DamageResolver.PreviewRange(attacker, target, attacker.Weapon) : default;
+
         // ---- Внутрішні правила ----
         private CombatUnit ActiveCurrentOrNull()
         {
