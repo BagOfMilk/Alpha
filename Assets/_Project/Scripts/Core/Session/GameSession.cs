@@ -3589,7 +3589,7 @@ namespace Game.Core.Session
                 int afterKey = arcIdx + ";arc=".Length;
                 int nextSemi = headPart.IndexOf(';', afterKey);
                 string arcValue = nextSemi >= 0 ? headPart.Substring(afterKey, nextSemi - afterKey) : headPart.Substring(afterKey);
-                ReattachInProgressArcChapterQuests(arcValue);
+                ReattachInProgressArcChapterQuests(arcValue, ExtractHeadField(headPart, ";quests="));
             }
 
             foreach (var part in headPart.Split(';'))
@@ -3624,6 +3624,17 @@ namespace Game.Core.Session
 
             _inventory.RestoreState(itemsPart);
             if (corePart != null) _processor.RestoreState(corePart);
+
+            // Блокер-фікс (знайдено 25.09.2026, лід): відновлення в СВІЖИЙ
+            // інстанс GameSession розходилось із безперервною грою — пости
+            // виробляли не те й не тим. _processor.RestoreState вище щойно
+            // повернув Companion.AssignedSlotId (бік напарника, RosterAdapter),
+            // але бухгалтерія самого слота (AssignmentSlot.AssignedCompanionId,
+            // яку читає BaseState.AdvanceCycle) в жоден слепок не пише і не
+            // читається — на свіжому BaseState вона лишається порожньою.
+            // RestoreSlotOccupancy пересобирає її з уже відновленого ростера
+            // ОДРАЗУ тут, поки обидві сторони синхронні.
+            _state?.RestoreSlotOccupancy();
 
             // Доважок до "pname=" вище: RosterAdapter.CaptureState() навмисно
             // НЕ пише DisplayName (коментар у RosterAdapter.cs — ім'я/статі/
@@ -3722,7 +3733,7 @@ namespace Game.Core.Session
         /// (той самий формат, що <see cref="RestoreArcState"/> парсить, але тут
         /// лише читання — <see cref="_arcRuns"/> ще не змінюємо, тільки
         /// дивимось у ЇХНІ вже готові <see cref="CompanionArc.Chapters"/>, щоб
-        /// дістати companionId/questId ще ДО RestoreArcState). Для кожної
+        /// дістати companionId/questId ще ДО RestoreArcState). Для поточної
         /// глави, що сейв лишив InProgress і зміст якої — квест
         /// (<see cref="CompanionArcContent.IsQuestChapter"/>), реєструє
         /// визначення квесту в пулі (той самий приём, що
@@ -3732,8 +3743,22 @@ namespace Game.Core.Session
         /// квеста на свіжому інстансі (визначення в його пулі ще нема), а
         /// навіть якби не відкидав — термінал квеста ніколи не завершив би
         /// главу арки без лінку.
+        ///
+        /// Блокер-фікс (знайдено 25.09.2026, лід): та сама доля чекала на
+        /// квест УЖЕ ЗАВЕРШЕНОЇ глави — <see cref="CompanionArcRun.CompleteChapter"/>
+        /// одразу зсуває <c>ChapterIndex</c> і збиває <c>State</c> з InProgress,
+        /// тож наступного сейву ця глава для гілки вище вже не InProgress, а
+        /// сам <c>QuestRun</c> (термінальна стадія типу "revenge_done") усе
+        /// одно лежить у "quests=" — на ЖИВІЙ сесії він і далі читається
+        /// (визначення зареєстроване назавжди), а на свіжому інстансі
+        /// <see cref="QuestLog.RestoreState"/> тихо відкидає його (визначення
+        /// нема в пулі), і подальші дні розходяться з безперервною грою.
+        /// Тому нижче реєструємо визначення для КОЖНОЇ квестової глави арки
+        /// (не лише поточної InProgress), чий QuestId реально зустрічається
+        /// серед записів "quests=" — лінк completion-компаньйона це не чіпає:
+        /// його отримує лише поточна InProgress глава, як і раніше.
         /// </summary>
-        private void ReattachInProgressArcChapterQuests(string arcValue)
+        private void ReattachInProgressArcChapterQuests(string arcValue, string questsValue)
         {
             if (string.IsNullOrEmpty(arcValue) || _arcRuns == null) return;
 
@@ -3747,24 +3772,69 @@ namespace Game.Core.Session
                 if (bits.Length < 3) continue;
                 string arcId = bits[0];
                 var state = (ArcState)ParseInt(bits[1]);
-                if (state != ArcState.InProgress) continue;
                 int chapterIndex = ParseInt(bits[2]);
 
                 for (int i = 0; i < _arcRuns.Count; i++)
                 {
                     if (_arcRuns[i].Arc.Id != arcId) continue;
                     var chapters = _arcRuns[i].Arc.Chapters;
-                    var chapter = chapterIndex >= 0 && chapterIndex < chapters.Count ? chapters[chapterIndex] : null;
                     string companionId = _arcRuns[i].Arc.CompanionId;
-                    if (chapter != null && CompanionArcContent.IsQuestChapter(companionId, chapter.Id))
+
+                    if (state == ArcState.InProgress)
                     {
-                        if (_quests.DefinitionOf(chapter.QuestId) == null)
-                            _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
-                        _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
+                        var chapter = chapterIndex >= 0 && chapterIndex < chapters.Count ? chapters[chapterIndex] : null;
+                        if (chapter != null && CompanionArcContent.IsQuestChapter(companionId, chapter.Id))
+                        {
+                            RegisterArcChapterQuestDefinition(chapter.QuestId);
+                            _activeArcChapterQuestCompanion[chapter.QuestId] = companionId;
+                        }
+                    }
+
+                    // Минулі глави тієї самої арки: лінк не потрібен (їхній
+                    // квест уже завершив главу за життя джерельної сесії), але
+                    // визначення — потрібне, інакше QuestLog.RestoreState
+                    // відкине сам запис прогресу нижче.
+                    for (int ci = 0; ci < chapters.Count; ci++)
+                    {
+                        var pastChapter = chapters[ci];
+                        if (!CompanionArcContent.IsQuestChapter(companionId, pastChapter.Id)) continue;
+                        if (QuestRunPresentInBlob(questsValue, pastChapter.QuestId))
+                            RegisterArcChapterQuestDefinition(pastChapter.QuestId);
                     }
                     break;
                 }
             }
+        }
+
+        /// <summary>Реєструє визначення квестової глави арки в пулі <see cref="_quests"/>, якщо його там ще нема (ідемпотентно).</summary>
+        private void RegisterArcChapterQuestDefinition(string questId)
+        {
+            if (string.IsNullOrEmpty(questId) || _quests.DefinitionOf(questId) != null) return;
+            if (questId == DefaultQuests.MaksymCh1Id)
+                _quests.RegisterPool(new[] { DefaultQuests.MaksymCh1(_cfg) });
+        }
+
+        /// <summary>Чи є запис <paramref name="questId"/> серед прогонів у сирому значенні "quests=" (формат QuestLog.CaptureState: "id&gt;етап&gt;стан" через кому).</summary>
+        private static bool QuestRunPresentInBlob(string questsValue, string questId)
+        {
+            if (string.IsNullOrEmpty(questsValue) || string.IsNullOrEmpty(questId)) return false;
+            foreach (var entry in questsValue.Split(','))
+            {
+                int gt = entry.IndexOf('>');
+                string id = gt >= 0 ? entry.Substring(0, gt) : entry;
+                if (string.Equals(id, questId, StringComparison.Ordinal)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Сире значення поля "key" (напр. ";quests=") із заголовка слепка ДО наступного ';' — той самий приём, що вже читає "arc=" вище, узагальнений для повторного використання.</summary>
+        private static string ExtractHeadField(string headPart, string key)
+        {
+            int idx = headPart.IndexOf(key, StringComparison.Ordinal);
+            if (idx < 0) return null;
+            int afterKey = idx + key.Length;
+            int nextSemi = headPart.IndexOf(';', afterKey);
+            return nextSemi >= 0 ? headPart.Substring(afterKey, nextSemi - afterKey) : headPart.Substring(afterKey);
         }
 
         private static SuspendToken ParseResume(string value)
