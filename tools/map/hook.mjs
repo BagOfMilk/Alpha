@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * PostToolUse-хук: пересобирает карту взаимодействий, если правили то, из чего она строится.
+ * PostToolUse-хук: пересобирає карту взаємодій, якщо правили те, з чого вона будується.
  *
- * Читает payload хука со stdin, смотрит на путь изменённого файла и, если он попадает
- * под фильтр, запускает tools/map/build.mjs. Молчит, когда всё прошло гладко;
- * жалуется systemMessage-ом, если генератор упал или предупредил о расхождении.
+ * Читає payload хука зі stdin, дивиться на шлях зміненого файлу і, якщо він потрапляє
+ * під фільтр, запускає tools/map/build.mjs. Мовчить, коли все пройшло гладко;
+ * скаржиться systemMessage-ом, якщо генератор упав або попередив про розходження.
  *
- * jq не нужен — весь разбор здесь, чтобы хук работал и на голой Windows.
+ * jq не потрібен — весь розбір тут, щоб хук працював і на голому Windows.
  */
 
 import fs from "node:fs";
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
-/** Что считаем поводом пересобрать карту. */
+/** Що вважаємо приводом пересобрати карту. */
 const WATCHED = /(Assets[\\/].+\.cs|docs[\\/][^\\/]+\.md|tools[\\/]map[\\/].+\.(?:json|html|mjs))$/i;
 
 function readStdin() {
@@ -29,7 +29,7 @@ function readStdin() {
 
 const raw = readStdin();
 let payload = {};
-try { payload = JSON.parse(raw || "{}"); } catch { /* хук вызвали вручную — идём дальше */ }
+try { payload = JSON.parse(raw || "{}"); } catch { /* хук викликали вручну — йдемо далі */ }
 
 const file =
   payload?.tool_input?.file_path ||
@@ -37,7 +37,7 @@ const file =
   payload?.tool_input?.notebook_path ||
   "";
 
-// Пустой путь = ручной запуск: собираем. Непустой, но не наш — выходим молча.
+// Порожній шлях = ручний запуск: збираємо. Непорожній, але не наш — виходимо мовчки.
 if (file && !WATCHED.test(file)) process.exit(0);
 
 const r = spawnSync(process.execPath, [path.join(ROOT, "tools", "map", "build.mjs")], {
@@ -53,7 +53,7 @@ if (r.status !== 0) {
     .find((l) => l && !/^at\s/.test(l) && !/^\^+$/.test(l)) || "неизвестная ошибка";
   say(`Карта взаимодействий не собралась: ${first}`);
 } else if (/^\s*!/m.test(out)) {
-  // Генератор нашёл расхождение между авторским слоем карты и кодом — про это стоит знать.
+  // Генератор знайшов розходження між авторським шаром карти і кодом — про це варто знати.
   const notes = out.split("\n").filter((l) => /^\s*!/.test(l)).map((l) => l.replace(/^\s*!\s*/, ""));
   say(`Карта пересобрана, но с замечаниями: ${notes.join("; ")}`);
 } else if (/~/.test(out)) {

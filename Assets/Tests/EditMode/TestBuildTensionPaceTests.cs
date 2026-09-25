@@ -391,7 +391,7 @@ namespace Game.Tests.EditMode
             // Усі три шляхи в тестову збірку (Unity/Alpha.Play/боти) йдуть крізь
             // GameSession.NewGame без явного значення цього поля — дефолт
             // зобов'язаний лишатись true, інакше тестова збірка мовчки втратить
-            // стиснутий темп (той самий приём, що й TestBuildOneDayConstruction).
+            // стиснутий темп (той самий прийом, що й TestBuildOneDayConstruction).
             Assert.IsTrue(new NewGameOptions().TestBuildTensionPace);
         }
 

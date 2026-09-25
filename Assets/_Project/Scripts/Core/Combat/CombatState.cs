@@ -6,7 +6,7 @@ using Game.Core.Randomness;
 
 namespace Game.Core.Combat
 {
-    /// <summary>Результат боевого действия (паттерн AssignmentResult).</summary>
+    /// <summary>Результат бойової дії (патерн AssignmentResult).</summary>
     public enum CombatActionResult
     {
         Success = 0,
@@ -22,20 +22,20 @@ namespace Game.Core.Combat
     public enum CombatOutcome
     {
         Ongoing = 0,
-        Victory = 1, // все враги выбыли
-        Defeat = 2,  // не осталось действующих юнитов игрока
-        Retreat = 3, // отряд отступил по команде (BattleResult.Outcome)
-        Draw = 4     // достигнут предохранительный предел раундов — гарантия завершаемости
+        Victory = 1, // усі вороги вибули
+        Defeat = 2,  // не лишилось діючих юнітів гравця
+        Retreat = 3, // загін відступив за командою (BattleResult.Outcome)
+        Draw = 4     // досягнуто запобіжний ліміт раундів — гарантія завершуваності
     }
 
     /// <summary>
-    /// Оркестратор боя: грид + юниты + индивидуальная инициатива + действия текущего
-    /// юнита (движение/атака/стабилизация/overwatch/конец хода). Правила: пул AP,
-    /// надёжный %/порог (IHitRule — R1), Strike-метр, статусы (DoT в начале хода,
-    /// длительность в конце, Resolve сокращает), overwatch, даун с окном на спасение
-    /// (стабилизация Медициной), смерть насовсем. Враги симметричны — действуют тем
-    /// же API. Roster не трогает НИКОГДА — итог читается через BattleResult.From,
-    /// раны применяет D1 (RosterAdapter.Wound, Р5).
+    /// Оркестратор бою: грід + юніти + індивідуальна ініціатива + дії поточного
+    /// юніта (рух/атака/стабілізація/overwatch/кінець ходу). Правила: пул AP,
+    /// надійний %/поріг (IHitRule — R1), Strike-метр, статуси (DoT на початку ходу,
+    /// тривалість наприкінці, Resolve скорочує), overwatch, даун з вікном на порятунок
+    /// (стабілізація Медициною), смерть насовсім. Вороги симетричні — діють тим
+    /// самим API. Roster НІКОЛИ не чіпає — підсумок читається через BattleResult.From,
+    /// рани застосовує D1 (RosterAdapter.Wound, Р5).
     /// </summary>
     public sealed class CombatState
     {
@@ -56,38 +56,38 @@ namespace Game.Core.Combat
         public IReadOnlyList<CombatUnit> Units => _units;
 
         /// <summary>
-        /// Внутренний диагностический трейс (свободный текст по-русски, с
-        /// сырыми именами enum) — НЕ то, что видит игрок. <c>internal</c>
-        /// намеренно, как числа дневного отчёта (инвариант 3): Game.Gameplay
-        /// физически не может его прочитать, и показать его игроку нельзя даже
-        /// по ошибке. Игроку идёт <see cref="Journal"/> — те же события
-        /// ключами (R7), строка к строке.
+        /// Внутрішній діагностичний трейс (вільний текст російською, із
+        /// сирими іменами enum) — НЕ те, що бачить гравець. <c>internal</c>
+        /// навмисно, як числа денного звіту (інваріант 3): Game.Gameplay
+        /// фізично не може його прочитати, і показати його гравцю не можна навіть
+        /// помилково. Гравцю йде <see cref="Journal"/> — ті самі події
+        /// ключами (R7), рядок до рядка.
         /// </summary>
         internal IReadOnlyList<string> Log => _log;
 
         /// <summary>
-        /// Журнал боя для игрока: ключ + аргументы на каждую строку трейса
-        /// <see cref="Log"/>, в том же порядке (оба пишет только <see cref="Record"/>).
-        /// Источник BattleView.Log; слова к ключам подставляет Gameplay.
+        /// Журнал бою для гравця: ключ + аргументи на кожен рядок трейсу
+        /// <see cref="Log"/>, у тому самому порядку (обидва пише тільки <see cref="Record"/>).
+        /// Джерело BattleView.Log; слова до ключів підставляє Gameplay.
         /// </summary>
         public IReadOnlyList<CombatLogEntry> Journal => _journal;
 
-        /// <summary>Структурированная история атак — телеметрия честности броска:
-        /// показанное игроку число против фактического исхода. Не сериализуется.</summary>
+        /// <summary>Структурована історія атак — телеметрія чесності кидка:
+        /// показане гравцю число проти фактичного результату. Не серіалізується.</summary>
         public IReadOnlyList<AttackRecord> Attacks => _attacks;
         public CombatOutcome Outcome { get; private set; } = CombatOutcome.Ongoing;
         public CombatUnit Current => _turns?.Current;
         public int Round => _turns?.Round ?? 0;
         public IReadOnlyList<CombatUnit> TurnOrder => _turns?.Order;
 
-        /// <summary>Какое правило попадания в этом бою — тот же флаг, что несёт BattleView.IsHitRulePercent.</summary>
+        /// <summary>Яке правило влучання в цьому бою — той самий прапорець, що несе BattleView.IsHitRulePercent.</summary>
         public bool IsHitRulePercent => _hitRule is PercentRule;
 
         /// <summary>
-        /// roller может быть null: ThresholdRule его не читает вовсе (R1 —
-        /// полностью детерминированный режим не обязан иметь под собой кубик).
-        /// PercentRule сам бросит ArgumentNullException при первом же Resolve,
-        /// если roller не передан — раньше, чем ошибка расползётся по логике боя.
+        /// roller може бути null: ThresholdRule його взагалі не читає (R1 —
+        /// повністю детермінований режим не зобов'язаний мати під собою кубик).
+        /// PercentRule сам кине ArgumentNullException при першому ж Resolve,
+        /// якщо roller не переданий — раніше, ніж помилка розповзеться по логіці бою.
         /// </summary>
         public CombatState(GridMap map, BalanceConfig balance, IHitRule hitRule, IDiceRoller roller)
         {
@@ -99,7 +99,7 @@ namespace Game.Core.Combat
 
         public CombatUnit GetUnit(string id) => id != null && _byId.TryGetValue(id, out var u) ? u : null;
 
-        // ---- Сборка боя ----
+        // ---- Збірка бою ----
         public void AddUnit(CombatUnit unit, GridPos pos)
         {
             if (unit == null || _byId.ContainsKey(unit.Id)) return;
@@ -110,7 +110,7 @@ namespace Game.Core.Combat
             _byId.Add(unit.Id, unit);
         }
 
-        /// <summary>Старт боя: строит очередь инициативы и начинает первый ход.</summary>
+        /// <summary>Старт бою: будує чергу ініціативи і починає перший хід.</summary>
         public void Begin()
         {
             _turns = new TurnSystem(_units);
@@ -120,9 +120,9 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Отступление: отряд разрывает бой по команде (не поражение и не победа).
-        /// Доступно, пока бой идёт — не привязано к чьему-то ходу, это решение
-        /// уровня выше юнитов (BattleResult.Outcome = Retreat).
+        /// Відступ: загін розриває бій за командою (не поразка і не перемога).
+        /// Доступно, поки бій триває — не прив'язано до чийогось ходу, це рішення
+        /// рівня вище юнітів (BattleResult.Outcome = Retreat).
         /// </summary>
         public CombatActionResult Retreat()
         {
@@ -133,25 +133,25 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Безусловный внешний предохранитель (CombatAi.AutoResolve): переводит
-        /// Ongoing в Draw независимо от Round/RoundCap. Нужен, потому что
-        /// гарантия завершаемости автобоя не может зависеть от того, насколько
-        /// щедрый turnBudget передал вызывающий — сам CombatState единственный,
-        /// кто может честно закрыть бой без «наполовину сыгранного» результата.
-        /// На бой, уже завершённый чем угодно другим (Victory/Defeat/Retreat/
-        /// собственный Draw по RoundCap), не действует.
+        /// Безумовний зовнішній запобіжник (CombatAi.AutoResolve): переводить
+        /// Ongoing у Draw незалежно від Round/RoundCap. Потрібен, тому що
+        /// гарантія завершуваності автобою не може залежати від того, наскільки
+        /// щедрий turnBudget передав викликач — сам CombatState єдиний,
+        /// хто може чесно закрити бій без «наполовину зіграного» результату.
+        /// На бій, уже завершений будь-чим іншим (Victory/Defeat/Retreat/
+        /// власний Draw за RoundCap), не діє.
         /// </summary>
         public CombatActionResult ForceDraw(string reason)
         {
             if (Outcome != CombatOutcome.Ongoing) return CombatActionResult.InvalidAction;
             Outcome = CombatOutcome.Draw;
-            // Причина — служебный текст вызывающего (CombatAi), игроку не идёт.
+            // Причина — службовий текст викликача (CombatAi), гравцю не йде.
             Record(CombatLogKeys.DrawForced, $"=== НИЧЬЯ: {reason} ===");
             return CombatActionResult.Success;
         }
 
-        // ---- Действия текущего юнита ----
-        /// <summary>Движение в достижимый тайл; цена за тайл растёт под Подавлением.</summary>
+        // ---- Дії поточного юніта ----
+        /// <summary>Рух у досяжний тайл; ціна за тайл росте під Придушенням.</summary>
         public CombatActionResult Move(GridPos dest)
         {
             var unit = ActiveCurrentOrNull();
@@ -164,11 +164,11 @@ namespace Game.Core.Combat
             Record(CombatLogKeys.Move, $"{unit.Profile.DisplayName} перемещается в {dest} (−{cost} AP)",
                 "unitId", unit.Id, "ap", I(cost), "x", I(dest.X), "y", I(dest.Y));
 
-            // Путь проходится по клеткам, а не прыжком: дозор противника обязан
-            // видеть сам путь. Реакция может уронить идущего — тогда он
-            // остаётся там, где упал. Ловушка — только в точке прибытия, тем
-            // же порядком, что у рывка и перестановки (PlaceUnitAt): сначала
-            // выстрел из дозора, потом ловушка — если дошёл на ногах.
+            // Шлях проходиться по клітинках, а не стрибком: дозор противника зобов'язаний
+            // бачити сам шлях. Реакція може вкласти того, хто йде — тоді він
+            // лишається там, де впав. Пастка — тільки в точці прибуття, тим
+            // самим порядком, що у ривка і перестановки (PlaceUnitAt): спочатку
+            // постріл із дозору, потім пастка — якщо дійшов на ногах.
             var path = Pathfinder.Path(Map, unit.Pos, dest);
             for (int i = 0; i < path.Count; i++)
             {
@@ -181,18 +181,18 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Overwatch: юнит платит цену выстрела оружием заранее и держит
-        /// сектор — конус от своей клетки в сторону aim — до начала своего
-        /// следующего хода. Вход в дозор завершает ход: выстрел оплачен из того
-        /// же пула, что и всё остальное, поэтому «сначала походить, потом
-        /// залечь» можно, а получить выстрел дважды — нет.
+        /// Overwatch: юніт платить ціну пострілу зброєю заздалегідь і тримає
+        /// сектор — конус від своєї клітинки в бік aim — до початку свого
+        /// наступного ходу. Вхід у дозор завершує хід: постріл оплачений із того
+        /// самого пулу, що й усе інше, тому «спочатку походити, потім
+        /// залягти» можна, а отримати постріл двічі — ні.
         ///
-        /// Срабатывает ОДИН раз: на первом перемещении противника в сектор —
-        /// шаг хода, приземление рывка, перестановка по приказу, — в пределах
-        /// обзора (дальнее оружие) или контакта (ближнее). Без двойного
-        /// профита: резерв не возвращается, если никто не пришёл; выстрел не
-        /// копит Strike-метр и не может быть Strike; точность — со штрафом
-        /// навскидку. Проки оружия работают: это свойства самого выстрела.
+        /// Спрацьовує ОДИН раз: на першому переміщенні противника в сектор —
+        /// крок ходу, приземлення ривка, перестановка за наказом, — у межах
+        /// огляду (дальня зброя) або контакту (ближня). Без подвійного
+        /// зиску: резерв не повертається, якщо ніхто не прийшов; постріл не
+        /// накопичує Strike-метр і не може бути Strike; точність — зі штрафом
+        /// навмання. Проки зброї працюють: це властивості самого пострілу.
         /// </summary>
         public CombatActionResult Overwatch(GridPos aim)
         {
@@ -214,9 +214,9 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Атака текущим оружием. useStrike — потратить полный Strike-метр на
-        /// гарантированное попадание. Полное попадание/крит копит метр и
-        /// триггерит проки оружия (Шред/статус); граза — только половинный урон.
+        /// Атака поточною зброєю. useStrike — витратити повний Strike-метр на
+        /// гарантоване влучання. Повне влучання/крит накопичує метр і
+        /// тригерить проки зброї (Шред/статус); граза — лише половинний урон.
         /// </summary>
         public CombatActionResult Attack(string targetId, bool useStrike = false)
         {
@@ -252,7 +252,7 @@ namespace Game.Core.Combat
             return CombatActionResult.Success;
         }
 
-        /// <summary>Один удар оружием: попадание через IHitRule → урон через DamageResolver → проки → Strike.</summary>
+        /// <summary>Один удар зброєю: влучання через IHitRule → урон через DamageResolver → проки → Strike.</summary>
         private void ExecuteAttackRoll(CombatUnit unit, CombatUnit target, WeaponDefinition w,
                                        int accuracyBonus, bool forceHit, bool allowStrikeGain, bool isReaction = false)
         {
@@ -296,7 +296,7 @@ namespace Game.Core.Combat
             _attacks.Add(new AttackRecord(Round, unit.Side, unit.Id, target.Id, shown, outcome, dmg.Amount, forceHit, isReaction));
         }
 
-        /// <summary>Стабилизация дауна союзника рядом (активка Медицины). Детерминирована.</summary>
+        /// <summary>Стабілізація дауну союзника поруч (активка Медицини). Детермінована.</summary>
         public CombatActionResult Stabilize(string targetId)
         {
             var unit = ActiveCurrentOrNull();
@@ -319,11 +319,11 @@ namespace Game.Core.Combat
             return CombatActionResult.Success;
         }
 
-        // ---- Способности ----
+        // ---- Здібності ----
         /// <summary>
-        /// Применение способности: гейт скила решён при сборке юнита; здесь — КД,
-        /// AP, цель/дальность/LOS и преваляция спец-эффектов ДО списания AP.
-        /// targetUnitId — цель-юнит; targetTile — точка (ловушка/перестановка).
+        /// Застосування здібності: гейт скіла вирішений при зборці юніта; тут — КД,
+        /// AP, ціль/дальність/LOS і превалідація спец-ефектів ДО списання AP.
+        /// targetUnitId — ціль-юніт; targetTile — точка (пастка/перестановка).
         /// </summary>
         public CombatActionResult UseAbility(string abilityId, string targetUnitId = null, GridPos? targetTile = null)
         {
@@ -399,8 +399,8 @@ namespace Game.Core.Combat
                 }
             }
 
-            // Мили-оружие бьёт только из контакта (симметрия с Attack); «Рывок»
-            // учитывается — он сперва переставляет юнита вплотную (lungeDest).
+            // Зброя ближнього бою б'є тільки з контакту (симетрія з Attack); «Ривок»
+            // враховується — він спершу переставляє юніта впритул (lungeDest).
             if (unit.Weapon != null && unit.Weapon.IsMelee && target != null && target.Side != unit.Side)
             {
                 bool hasWeaponAttack = false;
@@ -545,7 +545,7 @@ namespace Game.Core.Combat
             return null;
         }
 
-        /// <summary>Свободная клетка вплотную к цели рывка, ближайшая к атакующему (детерминированно).</summary>
+        /// <summary>Вільна клітинка впритул до цілі ривка, найближча до атакуючого (детерміновано).</summary>
         private GridPos? FindLungeLanding(CombatUnit unit, CombatUnit target)
         {
             GridPos? best = null;
@@ -566,10 +566,10 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Перемещение одним прыжком (рывок, перестановка): свой дозор теряется —
-        /// сектор держится с конкретной клетки; чужой дозор видит приземление;
-        /// ловушка срабатывает последней и только под тем, кто остался на ногах.
-        /// Тот же порядок, что у последнего шага обычного хода (Move).
+        /// Переміщення одним стрибком (ривок, перестановка): власний дозор губиться —
+        /// сектор тримається з конкретної клітинки; чужий дозор бачить приземлення;
+        /// пастка спрацьовує останньою і тільки під тим, хто лишився на ногах.
+        /// Той самий порядок, що й в останнього кроку звичайного ходу (Move).
         /// </summary>
         private void PlaceUnitAt(CombatUnit unit, GridPos dest)
         {
@@ -579,7 +579,7 @@ namespace Game.Core.Combat
             if (unit.IsActive && Outcome == CombatOutcome.Ongoing) TriggerTrapAt(unit);
         }
 
-        /// <summary>Один шаг: только клетка и занятость, без ловушек и реакций.</summary>
+        /// <summary>Один крок: тільки клітинка і зайнятість, без пасток і реакцій.</summary>
         private void StepTo(CombatUnit unit, GridPos tile)
         {
             Map.ClearOccupant(unit.Pos);
@@ -589,9 +589,9 @@ namespace Game.Core.Combat
 
         // ---- Overwatch ----
         /// <summary>
-        /// Реакция дозора на шаг mover. Дозорные перебираются в порядке добавления в
-        /// бой — детерминированно; каждый стреляет не больше раза, и выстрел снимает
-        /// его дозор ДО ролла. Если идущего уронили, остальные уже не стреляют.
+        /// Реакція дозору на крок mover. Дозорні перебираються в порядку додавання в
+        /// бій — детерміновано; кожен стріляє не більше разу, і постріл знімає
+        /// його дозор ДО ролу. Якщо того, хто йде, вклали, решта вже не стріляють.
         /// </summary>
         private void ReactToMovement(CombatUnit mover)
         {
@@ -603,7 +603,7 @@ namespace Game.Core.Combat
                 if (watcher == mover || !watcher.IsActive || watcher.Side == mover.Side) continue;
                 if (!OverwatchCovers(watcher, mover.Pos)) continue;
 
-                watcher.Overwatch = null; // одно срабатывание
+                watcher.Overwatch = null; // одне спрацювання
                 Record(CombatLogKeys.OverwatchFired, $"{watcher.Profile.DisplayName} стреляет из дозора по {mover.Profile.DisplayName}!",
                     "unitId", watcher.Id, "targetId", mover.Id);
                 ExecuteAttackRoll(watcher, mover, watcher.Weapon,
@@ -612,8 +612,8 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Накрывает ли дозор watcher клетку tile: сектор + обзор (дальнее оружие) или
-        /// контакт (ближнее — «страж у двери»). Справка для UI и ИИ: подсветить сектор.
+        /// Чи накриває дозор watcher клітинку tile: сектор + огляд (дальня зброя) або
+        /// контакт (ближня — «страж біля дверей»). Довідка для UI та ШІ: підсвітити сектор.
         /// </summary>
         public bool OverwatchCovers(CombatUnit watcher, GridPos tile)
         {
@@ -627,11 +627,11 @@ namespace Game.Core.Combat
                 : LineOfSight.HasLine(Map, watcher.Pos, tile);
         }
 
-        /// <summary>Показанное число выстрела из дозора по цели там, где она стоит (со штрафом навскидку).</summary>
+        /// <summary>Показане число пострілу з дозору по цілі там, де вона стоїть (зі штрафом навмання).</summary>
         public int OverwatchHitChancePreview(CombatUnit watcher, CombatUnit target)
             => HitChanceCalculator.Compute(watcher, target, Map, Balance, -Balance.Combat.OverwatchAccuracyPenalty);
 
-        /// <summary>key — причина для журнала (CombatLogKeys.OverwatchLost*), why — она же для трейса.</summary>
+        /// <summary>key — причина для журналу (CombatLogKeys.OverwatchLost*), why — вона ж для трейсу.</summary>
         private void BreakOverwatch(CombatUnit unit, string key, string why)
         {
             if (unit?.Overwatch == null) return;
@@ -661,7 +661,7 @@ namespace Game.Core.Combat
             }
         }
 
-        /// <summary>Конец хода: тик длительностей статусов, переход к следующему действующему юниту.</summary>
+        /// <summary>Кінець ходу: тик тривалостей статусів, перехід до наступного діючого юніта.</summary>
         public CombatActionResult EndTurn()
         {
             if (Outcome != CombatOutcome.Ongoing || Current == null) return CombatActionResult.InvalidAction;
@@ -670,16 +670,16 @@ namespace Game.Core.Combat
             return CombatActionResult.Success;
         }
 
-        // ---- Справки для UI/AI ----
-        /// <summary>Достижимые тайлы текущего AP юнита (цена шага — своя у юнита, учитывает Подавление).</summary>
+        // ---- Довідки для UI/AI ----
+        /// <summary>Досяжні тайли поточного AP юніта (ціна кроку — своя у юніта, враховує Придушення).</summary>
         public Dictionary<GridPos, int> ReachableFor(CombatUnit unit)
             => Pathfinder.Reachable(Map, unit.Pos, unit.Ap, MoveCostPerTile(unit));
 
         /// <summary>
-        /// Цена шага движения для ЭТОГО юнита — из его собственной производной
-        /// MoveApPerTile (аудит G18), а не из одной глобальной константы баланса,
-        /// как было в архиве: перк/трейт/шрам, меняющий MoveApPerTile, теперь
-        /// реально что-то меняет в бою.
+        /// Ціна кроку руху для ЦЬОГО юніта — з його власної похідної
+        /// MoveApPerTile (аудит G18), а не з єдиної глобальної константи балансу,
+        /// як було в архіві: перк/трейт/шрам, що змінює MoveApPerTile, тепер
+        /// реально щось змінює в бою.
         /// </summary>
         public int MoveCostPerTile(CombatUnit unit)
         {
@@ -689,12 +689,12 @@ namespace Game.Core.Combat
                 : baseCost;
         }
 
-        /// <summary>Показанное игроку число. accuracyBonus — бонус взведённой способности:
-        /// превью обязано совпадать с фактическим роллом.</summary>
+        /// <summary>Показане гравцю число. accuracyBonus — бонус зведеної здібності:
+        /// прев'ю зобов'язане збігатися з фактичним ролом.</summary>
         public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
             => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus);
 
-        // ---- Внутренние правила ----
+        // ---- Внутрішні правила ----
         private CombatUnit ActiveCurrentOrNull()
         {
             if (Outcome != CombatOutcome.Ongoing) return null;
@@ -702,11 +702,11 @@ namespace Game.Core.Combat
             return u != null && u.IsActive ? u : null;
         }
 
-        /// <summary>Наложение статуса: гарантированное; Resolve (StatusDurationReduction) сокращает длительность, мин 1. Повтор — освежает.</summary>
+        /// <summary>Накладання статусу: гарантоване; Resolve (StatusDurationReduction) скорочує тривалість, мін 1. Повтор — освіжає.</summary>
         public void ApplyStatus(CombatUnit target, StatusType type)
         {
-            // «Никакого состояния» наложить нельзя: все внутренние вызовы уже
-            // фильтруют None, а у журнала для него нет токена (CombatLogKeys.StatusId).
+            // «Жодного стану» накласти не можна: усі внутрішні виклики вже
+            // фільтрують None, а в журналу для нього немає токена (CombatLogKeys.StatusId).
             if (type == StatusType.None) return;
 
             int baseDuration;
@@ -785,7 +785,7 @@ namespace Game.Core.Combat
             Record(CombatLogKeys.Died, $"  {unit.Profile.DisplayName} погибает.", "unitId", unit.Id);
         }
 
-        /// <summary>Начало хода юнита. true — юнит готов действовать (AP выданы).</summary>
+        /// <summary>Початок ходу юніта. true — юніт готовий діяти (AP видані).</summary>
         private bool BeginTurn(CombatUnit unit)
         {
             if (unit == null || Outcome != CombatOutcome.Ongoing) return false;
@@ -865,7 +865,7 @@ namespace Game.Core.Combat
             return unit.IsActive;
         }
 
-        /// <summary>Конец хода: длительности −1, истёкшие статусы снимаются.</summary>
+        /// <summary>Кінець ходу: тривалості −1, статуси, що спливли, знімаються.</summary>
         private void TickStatusDurations(CombatUnit unit)
         {
             for (int i = unit.Statuses.Count - 1; i >= 0; i--)
@@ -889,8 +889,8 @@ namespace Game.Core.Combat
                 int roundBefore = Round;
                 var next = _turns.Advance();
 
-                // Гарантия завершаемости (B1): раунд перевалил за предохранитель —
-                // бой принудительно ничья, независимо от того, кто и как тянет время.
+                // Гарантія завершуваності (B1): раунд переваливсь за запобіжник —
+                // бій примусово нічия, незалежно від того, хто і як тягне час.
                 if (Round > Balance.Combat.RoundCap)
                 {
                     Outcome = CombatOutcome.Draw;
@@ -898,8 +898,8 @@ namespace Game.Core.Combat
                     return;
                 }
 
-                // Граница раунда — событие для игрока: без неё журнал на
-                // два-три раунда читается сплошной лентой.
+                // Межа раунду — подія для гравця: без неї журнал на
+                // два-три раунди читається суцільною стрічкою.
                 if (Round != roundBefore)
                     Record(CombatLogKeys.RoundStarted, $"--- раунд {Round} ---", "round", I(Round));
 
@@ -936,11 +936,11 @@ namespace Game.Core.Combat
                 "unitId", target.Id, "amount", I(amount), "armor", I(target.EffectiveArmor));
 
         /// <summary>
-        /// ЕДИНСТВЕННЫЙ способ что-то записать о бое: строка трейса (<see cref="Log"/>,
-        /// internal, для отладки) и запись журнала (<see cref="Journal"/>, ключ R7
-        /// для игрока) рождаются вместе. Отдельного AddLog нет намеренно — строка
-        /// без ключа снова утекла бы к игроку сырым текстом.
-        /// args — пары «имя, значение» подряд.
+        /// ЄДИНИЙ спосіб щось записати про бій: рядок трейсу (<see cref="Log"/>,
+        /// internal, для відладки) і запис журналу (<see cref="Journal"/>, ключ R7
+        /// для гравця) народжуються разом. Окремого AddLog немає навмисно — рядок
+        /// без ключа знову утік би до гравця сирим текстом.
+        /// args — пари «ім'я, значення» поспіль.
         /// </summary>
         private void Record(string key, string trace, params string[] args)
         {

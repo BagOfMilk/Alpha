@@ -14,9 +14,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Сквозная проверка петли: 90 дней жизни поселения целиком.
-    /// Отвечает на вопрос «а оно вообще живёт?» — тот самый чек-пойнт,
-    /// который Поправка №3 сделала первым приоритетом разработки.
+    /// Наскрізна перевірка петлі: 90 днів життя поселення цілком.
+    /// Відповідає на питання «а воно взагалі живе?» — той самий чек-пойнт,
+    /// який Поправка №3 зробила першим пріоритетом розробки.
     /// </summary>
     public class ChronicleSmokeTests
     {
@@ -39,9 +39,9 @@ namespace Game.Tests.EditMode
             baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Fortifications));
             baseState.TryAssign("guard", "watch");
 
-            // Люди стоят на ТЕХ позициях, которые адресуют инциденты. Иначе город
-            // формально населён, а фактически пуст: каждая проверка идёт без
-            // кандидата и даёт Худшую полосу, и «тихий хутор» тихим не будет.
+            // Люди стоять на ТИХ позиціях, які адресують інциденти. Інакше місто
+            // формально населене, а фактично порожнє: кожна перевірка йде без
+            // кандидата і дає Найгіршу полосу, і «тихий хутір» тихим не буде.
             roster.Get("hero").AssignedSlotId = "council_seat";
             roster.Get("guard").AssignedSlotId = "storehouse_dock";
             roster.Get("trader").AssignedSlotId = "settlement_market";
@@ -100,7 +100,7 @@ namespace Game.Tests.EditMode
             var town = BuildTown(cfg, out _);
             town.Tier = 1;
 
-            // Ни одного решения игрока — только течение времени.
+            // Жодного рішення гравця — тільки перебіг часу.
             for (int day = 1; day <= 90; day++)
             {
                 town.Advance(DayPhase.Day);

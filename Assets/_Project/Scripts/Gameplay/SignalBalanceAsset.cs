@@ -4,8 +4,8 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Настройки слоя сигналов в инспекторе.
-    /// Создание: ПКМ в Project → Create → Alpha → Balance → Сигналы.
+    /// Налаштування шару сигналів в інспекторі.
+    /// Створення: ПКМ у Project → Create → Alpha → Balance → Сигналы.
     /// </summary>
     [CreateAssetMenu(fileName = "SignalBalance", menuName = "Alpha/Balance/Сигналы", order = 11)]
     public sealed class SignalBalanceAsset : ScriptableObject

@@ -5,11 +5,11 @@ using Game.Core.Stats;
 namespace Game.Core.Characters.Build
 {
     /// <summary>
-    /// Намерение игрока: куда вложить очки и какие перки взять. Отдельный тип, а
-    /// не прямая правка бойца, потому что план живёт ДО подтверждения — его
-    /// показывают, пересобирают и бросают без последствий (US-2.3).
+    /// Намір гравця: куди вкласти очки і які перки взяти. Окремий тип, а
+    /// не пряма правка бійця, бо план живе ДО підтвердження — його
+    /// показують, перезбирають і кидають без наслідків (US-2.3).
     ///
-    /// Порядок перков значим: перк плана может быть пререквизитом следующего.
+    /// Порядок перків значущий: перк плану може бути передумовою наступного.
     /// </summary>
     public sealed class BuildPlan
     {
@@ -17,15 +17,15 @@ namespace Game.Core.Characters.Build
         private readonly List<SkillType> _order = new List<SkillType>();
         private readonly List<PerkDefinition> _perks = new List<PerkDefinition>();
 
-        /// <summary>Скилы, в которые вложено, в порядке первого обращения.</summary>
+        /// <summary>Скіли, у які вкладено, у порядку першого звернення.</summary>
         public IReadOnlyList<SkillType> Skills => _order;
 
         public IReadOnlyList<PerkDefinition> Perks => _perks;
 
-        /// <summary>Ничего не запланировано (в том числе после подтверждения).</summary>
+        /// <summary>Нічого не заплановано (у тому числі після підтвердження).</summary>
         public bool IsEmpty => _order.Count == 0 && _perks.Count == 0;
 
-        /// <summary>Сколько очков просит план: одно очко — один шаг скила.</summary>
+        /// <summary>Скільки очок просить план: одне очко — один крок скіла.</summary>
         public int PointCost
         {
             get
@@ -40,8 +40,8 @@ namespace Game.Core.Characters.Build
             => _invest.TryGetValue(skill, out var points) ? points : 0;
 
         /// <summary>
-        /// Вложить очки в скил. Повторный вызов по тому же скилу складывается:
-        /// игрок жмёт «плюс» несколько раз, а не пересобирает план заново.
+        /// Вкласти очки в скіл. Повторний виклик за тим самим скілом складається:
+        /// гравець тисне «плюс» кілька разів, а не перезбирає план заново.
         /// </summary>
         public BuildPlan Invest(SkillType skill, int points)
         {
@@ -59,12 +59,12 @@ namespace Game.Core.Characters.Build
         {
             if (perk == null || string.IsNullOrEmpty(perk.Id)) return this;
             for (int i = 0; i < _perks.Count; i++)
-                if (_perks[i].Id == perk.Id) return this; // дважды один перк не берут
+                if (_perks[i].Id == perk.Id) return this; // двічі один перк не беруть
             _perks.Add(perk);
             return this;
         }
 
-        /// <summary>План израсходован (подтверждён) либо отменён игроком.</summary>
+        /// <summary>План витрачено (підтверджено) або скасовано гравцем.</summary>
         public void Clear()
         {
             _invest.Clear();

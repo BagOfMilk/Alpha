@@ -8,11 +8,11 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// CombatUnit.FromCompanion/FromDefector/FromEnemy: аудит G18 требует, чтобы
-    /// все релевантные производные статы наконец читались боем через единый
-    /// агрегатор (StatResolver/StatSnapshot), а не заново считались формулой в
-    /// самом Combat. Тест ловит рассинхрон, если кто-то в будущем забудет
-    /// прочитать один из них.
+    /// CombatUnit.FromCompanion/FromDefector/FromEnemy: аудит G18 вимагає, щоб
+    /// усі релевантні похідні стати нарешті читалися боєм через єдиний
+    /// агрегатор (StatResolver/StatSnapshot), а не рахувалися заново формулою в
+    /// самому Combat. Тест ловить розсинхрон, якщо хтось у майбутньому забуде
+    /// прочитати один із них.
     /// </summary>
     public class CombatUnitFactoryTests
     {
@@ -49,8 +49,8 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(System.Math.Max(1, snap.GetInt(StatKeys.Of(DerivedStat.MoveApPerTile))), unit.Profile.MoveApPerTile);
             Assert.AreEqual(snap.Skill(SkillType.Medicine), unit.Profile.MedicineSkill);
 
-            // Accuracy — единственная производная, куда бой добавляет СВОЁ (бонус
-            // скила оружия), поэтому сверяется отдельно, не «в лоб».
+            // Accuracy — єдина похідна, куди бій додає СВОЄ (бонус
+            // скіла зброї), тому звіряється окремо, не «в лоб».
             int expectedAcc = snap.GetInt(StatKeys.Of(DerivedStat.Accuracy))
                 + snap.Skill(SkillType.Ranged) * cfg.Combat.AccuracyPerWeaponSkill;
             Assert.AreEqual(expectedAcc, unit.Profile.Accuracy);
@@ -110,8 +110,8 @@ namespace Game.Tests.EditMode
             var asCompanion = CombatUnit.FromCompanion(source, Bow(), cfg);
             var asDefector = CombatUnit.FromDefector(source, Bow(), cfg);
 
-            // Тот же боевой профиль — симметрия правил (перебежчик дерётся теми
-            // же формулами, что и напарник, просто по другую сторону поля).
+            // Той самий бойовий профіль — симетрія правил (перебіжчик б'ється тими
+            // ж формулами, що й напарник, просто по інший бік поля).
             Assert.AreEqual(asCompanion.Profile.MaxHp, asDefector.Profile.MaxHp);
             Assert.AreEqual(asCompanion.Profile.Accuracy, asDefector.Profile.Accuracy);
             Assert.AreEqual(asCompanion.Profile.Armor, asDefector.Profile.Armor);
@@ -122,8 +122,8 @@ namespace Game.Tests.EditMode
         {
             var cfg = new BalanceConfig();
             var archetype = Archetype()
-                .SetSkill(SkillType.Tactics, 5)   // ≥4 — знает MoveOrder
-                .SetSkill(SkillType.Survival, 1); // <4 — SetTrap недоступен
+                .SetSkill(SkillType.Tactics, 5)   // ≥4 — знає MoveOrder
+                .SetSkill(SkillType.Survival, 1); // <4 — SetTrap недоступний
             var companion = archetype.CreateInstance("gated", cfg);
 
             var unit = CombatUnit.FromCompanion(companion, Bow(), cfg, abilityCatalog: DefaultCombatContent.AbilityCatalog());

@@ -559,7 +559,7 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Фикс-ревью D1b (блокер): CombatAutoResolve() на СПРАВЖНЬОМУ бою
+        /// Фікс-ревью D1b (блокер): CombatAutoResolve() на СПРАВЖНЬОМУ бою
         /// (кровавий вузол 1, не тренувальна пісочниця) мав жодного разу не
         /// логувати ні "combat.attack.*", ні "combat.overwatch.triggered" — ІІ
         /// грав обидві сторони 3v2 (з реальними жертвами), а стрічка подій несла
@@ -611,7 +611,7 @@ namespace Game.Tests.EditMode
         /// перевіряються лише через IVT-гачок (<see cref="GameSession.DebugTensionValue"/>/
         /// <see cref="GameSession.DebugCommunityIsAfraid"/>), не через жоден View.
         ///
-        /// Фикс-ревью D1b: раніше PlaystyleBlood лягав через QueueExternal
+        /// Фікс-ревью D1b: раніше PlaystyleBlood лягав через QueueExternal
         /// (мостик R6), який TensionTickStep дренує лише на ПЕРШОМУ тіку
         /// НАСТУПНОЇ фази — це давало ціні крові запізнення на цілу фазу
         /// проти Напруги полоси виходу (яка лягає синхронно тим самим
@@ -1451,7 +1451,7 @@ namespace Game.Tests.EditMode
             foreach (var e in s.DayLog) if (e.Key == "dungeon.wiped") wiped = true;
             Assert.AreEqual(wiped ? SessionState.Morning : SessionState.Dungeon, s.State);
 
-            // Фикс-ревью D1b (мажор): "combat.autoresolved"/"combat.battle.resolved"
+            // Фікс-ревью D1b (мажор): "combat.autoresolved"/"combat.battle.resolved"
             // тепер обираються за тим, ЯК саме завершився бій (CombatAutoResolve
             // vs покрокові команди), а не за SuspendReason — цей бій справжній
             // (DungeonCombatRoom), але довершений автобоєм, тож несе саме
@@ -1555,7 +1555,7 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Фикс-ревью D1b (WorldPulse.BoostCharge): одноразовий стрибок
+        /// Фікс-ревью D1b (WorldPulse.BoostCharge): одноразовий стрибок
         /// боста не сміє сам дістати чи перескочити Threshold. У Тугара
         /// (Kind=InternalThreat) PressureTrack.IsReady() вимагає лише
         /// Charge&gt;=Threshold — без прив'язки до почутих попереджень, а
@@ -2062,7 +2062,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(baselineEconomy.Food, reloadedEconomy.Food);
         }
 
-        // ---- Фикс-ревью (наступний прохід D1): команди §4.1 без жодного тесту ----
+        // ---- Фікс-ревью (наступний прохід D1): команди §4.1 без жодного тесту ----
 
         /// <summary>
         /// Блокер-фікс: <c>ContinueGame(slot)</c> раніше НІКОЛИ не міг успішно

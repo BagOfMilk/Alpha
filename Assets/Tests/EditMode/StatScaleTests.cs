@@ -5,9 +5,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Забор от той самой ошибки, из-за которой Командир на разведпосту обгонял
-    /// профильного Разведчика: боевой стат в шкале 0–100 попадал в формулу
-    /// выработки рядом со склонностями 0–7. Теперь шкалы объявлены и проверяются.
+    /// Забір від тієї самої помилки, через яку Командир на розвідпосту обганяв
+    /// профільного Розвідника: бойовий стат у шкалі 0–100 потрапляв у формулу
+    /// виробітку поряд зі схильностями 0–7. Тепер шкали оголошені й перевіряються.
     /// </summary>
     public class StatScaleTests
     {
@@ -26,7 +26,7 @@ namespace Game.Tests.EditMode
         public void AttributeOutsideScale_IsReported()
         {
             var cfg = Cfg();
-            var attrs = new AttributeSet(strength: 45, agility: 4, wits: 4, will: 4); // старая шкала 0–100
+            var attrs = new AttributeSet(strength: 45, agility: 4, wits: 4, will: 4); // стара шкала 0–100
             var problems = StatScales.Violations(attrs, new SkillSet(), cfg, "командир");
 
             Assert.AreEqual(1, problems.Count);
@@ -39,7 +39,7 @@ namespace Game.Tests.EditMode
         {
             var cfg = Cfg();
             var skills = new SkillSet();
-            skills[SkillType.Ranged] = 65; // старая шкала точности
+            skills[SkillType.Ranged] = 65; // стара шкала точності
             var problems = StatScales.Violations(new AttributeSet(4, 4, 4, 4), skills, cfg);
 
             Assert.AreEqual(1, problems.Count);

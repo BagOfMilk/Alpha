@@ -4,13 +4,13 @@ using Game.Core.Characters;
 
 namespace Game.Core.Companions
 {
-    /// <summary>Один отклик ряби: кто и на сколько сдвинул лояльность и почему.</summary>
+    /// <summary>Один відгук ряби: хто і на скільки зсунув лояльність і чому.</summary>
     public sealed class RippleEffect
     {
         public readonly string CompanionId;
         public readonly BondType Bond;
         public readonly string Note;
-        /// <summary>Итоговая полоса — то, что в принципе можно показать игроку.</summary>
+        /// <summary>Підсумкова смуга — те, що в принципі можна показати гравцю.</summary>
         public readonly LoyaltyBand Band;
 
         public RippleEffect(string companionId, BondType bond, string note, LoyaltyBand band)
@@ -30,17 +30,17 @@ namespace Game.Core.Companions
     }
 
     /// <summary>
-    /// Рябь по ростеру от смерти/предательства (US-9.6, порт B4): идёт по
-    /// ценностным связям — соратник павшего проседает по лояльности (скорбит),
-    /// соперник не скорбит. Ограждение от каскада: тяжёлый отклик получают не
-    /// более <c>MaxRippleTargets</c> соратников (по порядку ростера — детермин.
-    /// инвариант 1), остальные — лёгкий, чтобы одна смерть не рушила весь состав.
+    /// Рябь по ростеру від смерті/зради (US-9.6, порт B4): йде за
+    /// ціннісними зв'язками — соратник загиблого просідає за лояльністю (скорбить),
+    /// суперник не скорбить. Огородження від каскаду: важкий відгук отримують не
+    /// більше <c>MaxRippleTargets</c> соратників (за порядком ростера — детермін.
+    /// інваріант 1), решта — легкий, щоб одна смерть не рушила весь склад.
     ///
-    /// Метод — internal (не <see cref="Companion.ApplyLoyaltyDelta"/> напрямую,
-    /// но тот же контур инварианта 3): <see cref="RippleEffect"/> не несёт сырых
-    /// чисел, только полосу, однако сама операция — внутренняя механика Core,
-    /// а не то, что Game.Gameplay дёргает напрямую (она идёт через будущий
-    /// GameSession-факад D1).
+    /// Метод — internal (не <see cref="Companion.ApplyLoyaltyDelta"/> напряму,
+    /// а той самий контур інваріанта 3): <see cref="RippleEffect"/> не несе сирих
+    /// чисел, тільки смугу, однак сама операція — внутрішня механіка Core,
+    /// а не те, що Game.Gameplay смикає напряму (вона йде через майбутній
+    /// GameSession-фасад D1).
     /// </summary>
     public sealed class RosterDrama
     {
@@ -63,8 +63,8 @@ namespace Game.Core.Companions
         {
             var report = new RippleReport { TriggerId = triggerId, Betrayal = betrayal };
             var trigger = roster?.Get(triggerId);
-            // Ушедшие к врагу в ряби не участвуют: их "скорбь" — ложная строка
-            // отчёта и бессмысленный сдвиг лояльности того, кого уже нет в строю.
+            // Ті, хто пішов до ворога, у ряби не беруть участь: їхня "скорбота" — хибний рядок
+            // звіту і безглуздий зсув лояльності того, кого вже немає в строю.
             if (trigger == null) return report;
 
             var social = _cfg.CompanionSocial;

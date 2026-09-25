@@ -3,12 +3,12 @@ using System;
 namespace Game.Core.Checks
 {
     /// <summary>
-    /// Ключ навыка/атрибута для проверки.
+    /// Ключ навички/атрибута для перевірки.
     ///
-    /// Строка, а не enum, намеренно: модель персонажа (4 атрибута + 10 скилов)
-    /// ещё будет переписана, и городской слой не должен от неё зависеть.
-    /// Маппинг ключа на конкретный стат живёт ТОЛЬКО в адаптере — в одном месте.
-    /// Конвенция строкового ключа в проекте уже принята (PassiveBonusId).
+    /// Рядок, а не enum, навмисно: модель персонажа (4 атрибути + 10 скілів)
+    /// ще буде переписана, і міський шар не повинен від неї залежати.
+    /// Мапінг ключа на конкретний стат живе ТІЛЬКИ в адаптері — в одному місці.
+    /// Конвенція рядкового ключа в проєкті вже прийнята (PassiveBonusId).
     /// </summary>
     public readonly struct SkillKey : IEquatable<SkillKey>
     {
@@ -31,18 +31,18 @@ namespace Game.Core.Checks
     }
 
     /// <summary>
-    /// Известные ключи. Единственное место, где имена навыков зашиты в код;
-    /// весь остальной контент берёт их отсюда или из данных.
-    /// Состав соответствует десяти скилам GDD (Эпик 2.2).
+    /// Відомі ключі. Єдине місце, де назви навичок зашиті в код;
+    /// увесь інший контент бере їх звідси або з даних.
+    /// Склад відповідає десяти скілам GDD (Епік 2.2).
     /// </summary>
     public static class SkillKeys
     {
-        // Бой
+        // Бій
         public static readonly SkillKey Ranged = new SkillKey("ranged");
         public static readonly SkillKey Melee = new SkillKey("melee");
         public static readonly SkillKey Tactics = new SkillKey("tactics");
 
-        // Утилита
+        // Утиліта
         public static readonly SkillKey Lockpick = new SkillKey("lockpick");
         public static readonly SkillKey Mechanics = new SkillKey("mechanics");
         public static readonly SkillKey Survival = new SkillKey("survival");

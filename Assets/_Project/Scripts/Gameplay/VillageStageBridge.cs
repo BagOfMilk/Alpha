@@ -20,7 +20,7 @@ namespace Game.Gameplay
     /// </summary>
     public static class VillageStageBridge
     {
-        /// <summary>Вісім слотів бази (Core/DefaultContent.cs AllSlots) — постів у сцені сьогодні сім (без lab_station), зайва запись просто ігнорується VillageStage.Apply.</summary>
+        /// <summary>Вісім слотів бази (Core/DefaultContent.cs AllSlots) — постів у сцені сьогодні сім (без lab_station), зайвий запис просто ігнорується VillageStage.Apply.</summary>
         private static readonly string[] PostIds =
         {
             "council_seat", "storehouse_dock", "infirmary_bed",

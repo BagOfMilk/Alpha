@@ -60,9 +60,9 @@ namespace Game.Core.Session.Views
         public string TransitionKey;
 
         /// <summary>
-        /// Поправка №7.8: сцена стоит на выборе реплики — <see cref="Options"/>
-        /// несёт варианты (реюз <see cref="DecisionOptionView"/> — та же форма,
-        /// что у пропозиції квесту/інциденту: ключ тексту, скіл/поріг/полоса-
+        /// Поправка №7.8: сцена стоїть на виборі репліки — <see cref="Options"/>
+        /// несе варіанти (реюз <see cref="DecisionOptionView"/> — та сама форма,
+        /// що й у пропозиції квесту/інциденту: ключ тексту, скіл/поріг/полоса-
         /// прев'ю, жодного прихованого числа, R17). Команда розв'язку —
         /// <c>GameSession.ChooseSceneOption(int)</c>.
         /// </summary>

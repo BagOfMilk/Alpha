@@ -6,9 +6,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Единый агрегатор модификаторов (US-18.2). Главное, что здесь проверяется —
-    /// что двойной счёт невозможен и что порядок вставки на результат не влияет:
-    /// без этого «один эффект — одна система» остаётся лозунгом.
+    /// Єдиний агрегатор модифікаторів (US-18.2). Головне, що тут перевіряється —
+    /// що подвійний рахунок неможливий і що порядок вставки на результат не впливає:
+    /// без цього «один ефект — одна система» лишається гаслом.
     /// </summary>
     public class StatResolverTests
     {
@@ -47,7 +47,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(11, snap.Derived(DerivedStat.MaxAp), "ApBase 8 + Ловкость 9 / 3");
         }
 
-        /// <summary>Перк «+3 HP» обязан ложиться поверх производной — на этом держится US-5.2.</summary>
+        /// <summary>Перк «+3 HP» зобов'язаний лягати поверх похідної — на цьому тримається US-5.2.</summary>
         [Test]
         public void Derived_AcceptsModifiers()
         {
@@ -71,7 +71,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(3.6, snap.Get(StatKey.Armor), 1e-9);
         }
 
-        /// <summary>Тот же набор в другом порядке обязан дать тот же результат.</summary>
+        /// <summary>Той самий набір в іншому порядку зобов'язаний дати той самий результат.</summary>
         [Test]
         public void Fold_IsOrderIndependent()
         {
@@ -88,8 +88,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Один и тот же ключ от четырёх разных источников складывается один раз.
-        /// Это и есть «нет двойного счёта» в проверяемом виде.
+        /// Один і той самий ключ від чотирьох різних джерел складається один раз.
+        /// Це і є «немає подвійного рахунку» у перевірюваному вигляді.
         /// </summary>
         [Test]
         public void SameKeyFromFourSources_SumsOnce()
@@ -131,8 +131,8 @@ namespace Game.Tests.EditMode
     }
 
     /// <summary>
-    /// Забор от рассинхрона: плоский ключ агрегатора обязан взаимно однозначно
-    /// соответствовать осям модели. Добавил скил и забыл ключ — тест краснеет.
+    /// Забір від розсинхрону: плаский ключ агрегатора зобов'язаний взаємно однозначно
+    /// відповідати осям моделі. Додав скіл і забув ключ — тест червоніє.
     /// </summary>
     public class StatKeyMappingTests
     {
@@ -173,7 +173,7 @@ namespace Game.Tests.EditMode
             }
         }
 
-        /// <summary>Диапазоны не должны пересекаться — на них завязан и тулинг карты.</summary>
+        /// <summary>Діапазони не повинні перетинатися — на них зав'язаний і тулінг карти.</summary>
         [Test]
         public void KeyRanges_DoNotOverlap()
         {
@@ -182,7 +182,7 @@ namespace Game.Tests.EditMode
             foreach (var d in DerivedStatCatalog.All) Assert.IsTrue(StatKeys.IsDerived(StatKeys.Of(d)));
         }
 
-        /// <summary>Скилы модели обязаны совпадать с ключами, которыми их зовёт городской слой.</summary>
+        /// <summary>Скіли моделі зобов'язані збігатися з ключами, якими їх кличе міський шар.</summary>
         [Test]
         public void EverySkill_MapsToSettlementKey()
         {

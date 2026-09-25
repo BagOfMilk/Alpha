@@ -18,11 +18,11 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Хроника поселения: полный цикл Э1 в консоли — день и ночь, предвестники,
-    /// инциденты, доклады с постов и кризис, о котором предупреждали.
+    /// Хроніка поселення: повний цикл Е1 у консолі — день і ніч, передвісники,
+    /// інциденти, доповіді з постів і криза, про яку попереджали.
     ///
-    /// Повесь на пустой объект, нажми Play. Обрати внимание: ни одного числа
-    /// скрытых шкал здесь нет и быть не может — они internal в ядре.
+    /// Повісь на порожній об'єкт, натисни Play. Зверни увагу: жодного числа
+    /// прихованих шкал тут нема і бути не може — вони internal у ядрі.
     /// </summary>
     public sealed class SettlementChronicleDemo : MonoBehaviour
     {
@@ -64,18 +64,18 @@ namespace Game.Gameplay
 
             var roster = BuildRoster();
 
-            // Позиции раздаём через публичный API базы: сеттер AssignedSlotId
-            // намеренно internal, чтобы состояние не правили мимо правил.
+            // Позиції роздаємо через публічний API бази: сеттер AssignedSlotId
+            // навмисно internal, щоб стан не правили в обхід правил.
             var baseState = new BaseState(roster, new ResourceLedger(), balance);
             baseState.AddSlot(new AssignmentSlotDefinition("watch", "Дозор", BaseSectionType.Fortifications));
             baseState.AddSlot(new AssignmentSlotDefinition("market", "Рынок", BaseSectionType.Settlement));
             baseState.TryAssign("guard", "watch");
             baseState.TryAssign("trader", "market");
 
-            // Амбар на весь прогон. Хроника показывает давление города, а не
-            // голод: ферм у этой общины нет, и без запаса мост честно довёл бы
-            // голод до Напряжения с первых суток. Голодный пресет — это пустой
-            // амбар, а не отдельный режим.
+            // Комора на весь прогін. Хроніка показує тиск міста, а не
+            // голод: ферм у цієї громади нема, і без запасу міст чесно довів би
+            // голод до Напруги з перших діб. Голодний пресет — це порожня
+            // комора, а не окремий режим.
             baseState.Resources.Add(ResourceType.Food,
                 balance.FoodUpkeepPerCompanion * roster.Count * (daysToSimulate + 1));
 
@@ -85,8 +85,8 @@ namespace Game.Gameplay
             var pulse = new WorldPulse(balance.Pulse);
             foreach (var source in DefaultPressureSources.All()) pulse.AddSource(source);
 
-            // Цикл поселения идёт штатным шагом дня: у суток обязан быть
-            // материальный итог, иначе хроника показывает давление без хозяйства.
+            // Цикл поселення йде штатним кроком дня: у доби зобов'язаний бути
+            // матеріальний підсумок, інакше хроніка показує тиск без господарства.
             var production = new ProductionStep(baseState);
             var processor = new DayProcessor(tension, balance, SettlementCycle.BuildSteps(production))
             {
@@ -105,14 +105,14 @@ namespace Game.Gameplay
                 }
             };
 
-            // Время идёт только через мост: он же переносит в конвейер флаг
-            // голода. Пока хроника крутила processor.Advance напрямую, шаги
-            // производства в ней стояли, а голод не давил никогда.
+            // Час іде тільки через міст: він же переносить у конвеєр прапорець
+            // голоду. Поки хроніка крутила processor.Advance напряму, кроки
+            // виробництва в ній стояли, а голод не тиснув ніколи.
             var cycle = new SettlementCycle(baseState, processor, production);
 
             var choices = new HashSet<int>(heavyChoiceDays ?? new int[0]);
 
-            // full — весь текст для файла; chunk — текущая декада для консоли.
+            // full — увесь текст для файлу; chunk — поточна декада для консолі.
             var full = new StringBuilder();
             var chunk = new StringBuilder();
 
@@ -141,8 +141,8 @@ namespace Game.Gameplay
                         string text = DescribeIncident(incident, roster);
                         Append(full, chunk, $"[{mark} {day}] {text}");
 
-                        // Кризис и смерть не имеют права утонуть в общей простыне:
-                        // отдельная запись — её видно по цвету и можно отфильтровать.
+                        // Криза і смерть не мають права потонути в загальному полотні:
+                        // окремий запис — його видно за кольором і можна відфільтрувати.
                         if (incident.WasCrisis)
                         {
                             crisisCount++;
@@ -157,11 +157,11 @@ namespace Game.Gameplay
 
                 if (choices.Contains(day))
                 {
-                    // G22: сутки уже закрыты (обе фазы дня отданы выше) —
-                    // прямой TensionDrivers.QuestChoice(tension, …) здесь терял
-                    // мандатный сигнал смены полосы (BeginDay() следующей фазы
-                    // стирал журнал раньше SignalStep). QueueQuestChoice кладёт
-                    // заявку мостиком R6 — тик следующей фазы её услышит.
+                    // G22: доба вже закрита (обидві фази дня віддані вище) —
+                    // прямий TensionDrivers.QuestChoice(tension, …) тут губив
+                    // мандатний сигнал зміни полоси (BeginDay() наступної фази
+                    // стирав журнал раніше SignalStep). QueueQuestChoice кладе
+                    // заявку містком R6 — тік наступної фази її почує.
                     processor.QueueQuestChoice(TensionDrivers.ChoiceWeight.Major);
                     Append(full, chunk, $"[день {day}] тяжёлое решение в квесте");
                 }
@@ -205,8 +205,8 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Полный текст — в файл рядом с проектом: консоль хороша, чтобы заметить,
-        /// а сравнивать два прогона удобнее в текстовом редакторе.
+        /// Повний текст — у файл поруч із проектом: консоль хороша, щоб помітити,
+        /// а порівнювати два прогони зручніше в текстовому редакторі.
         /// </summary>
         private void SaveToFile(string text)
         {
@@ -219,7 +219,7 @@ namespace Game.Gameplay
             }
             catch (Exception e)
             {
-                // Не смогли записать — это не повод ронять прогон.
+                // Не змогли записати — це не привід зривати прогін.
                 Debug.LogWarning($"[{presetName}] не удалось записать файл хроники: {e.Message}");
             }
         }
@@ -246,8 +246,8 @@ namespace Game.Gameplay
         private static Companion Make(string id, string name, int skill)
         {
             var arch = new CompanionArchetype(id, name);
-            // Демка ровняет все скилы под один уровень: её задача — показать
-            // хронику города, а не разницу между людьми.
+            // Демка рівняє всі скіли під один рівень: її завдання — показати
+            // хроніку міста, а не різницю між людьми.
             for (int i = 0; i < Skills.All.Length; i++) arch.SetSkill(Skills.All[i], skill);
 
             return arch.CreateInstance(id);
@@ -317,7 +317,7 @@ namespace Game.Gameplay
             }
         }
 
-        /// <summary>Заглушка таблицы реплик: на Э2 её заменит SO-набор для писателя.</summary>
+        /// <summary>Заглушка таблиці реплік: на Е2 її замінить SO-набір для письменника.</summary>
         private static string Line(SignalRequest r)
         {
             switch (r.TopicId)

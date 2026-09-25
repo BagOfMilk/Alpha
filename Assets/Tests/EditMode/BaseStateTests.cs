@@ -13,7 +13,7 @@ namespace Game.Tests.EditMode
         {
             var roster = new Roster();
             var ledger = new ResourceLedger();
-            var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 0 }; // изолируем от расхода еды
+            var cfg = new BalanceConfig { FoodUpkeepPerCompanion = 0 }; // ізолюємо від витрати їжі
             var state = new BaseState(roster, ledger, cfg);
 
             var arch = new CompanionArchetype("eng", "Инженер");
@@ -39,7 +39,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(AssignmentResult.Success, state.TryAssign(comp.Id, "bench"));
 
             var report = state.AdvanceCycle();
-            // 5 (база) + 10 (механика) * 1.0 = 15
+            // 5 (база) + 10 (механіка) * 1.0 = 15
             Assert.AreEqual(15, state.Resources.Get(ResourceType.Materials));
             Assert.AreEqual(15, report.Produced[ResourceType.Materials]);
         }
@@ -85,10 +85,10 @@ namespace Game.Tests.EditMode
         {
             var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
             state.TryAssign(comp.Id, "bench");
-            comp.InjuryPoints = 100; // тяжело ранен, но всё ещё на посту
+            comp.InjuryPoints = 100; // важко поранений, але все ще на посту
 
             state.AdvanceCycle();
-            // 15 * 0.5 (InjuredProductionMultiplier по умолчанию) = 7.5 -> 8
+            // 15 * 0.5 (InjuredProductionMultiplier за замовчуванням) = 7.5 -> 8
             Assert.AreEqual(8, state.Resources.Get(ResourceType.Materials));
         }
 

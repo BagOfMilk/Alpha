@@ -6,19 +6,19 @@ using Game.Core.Stats;
 namespace Game.Core.Characters.Build
 {
     /// <summary>
-    /// Планировщик билда (US-2.3): считает, что даст план, и применяет его
-    /// только по явному подтверждению.
+    /// Планувальник білда (US-2.3): рахує, що дасть план, і застосовує його
+    /// тільки за явним підтвердженням.
     ///
-    /// Главное свойство — до подтверждения не меняется НИЧЕГО. Поэтому превью
-    /// считает по копии скилов и по временному провайдеру перков, а не по
-    /// бойцу: «посмотреть» не должно стоить очка.
+    /// Головна властивість — до підтвердження не змінюється НІЧОГО. Тому превью
+    /// рахує по копії скілів і по тимчасовому провайдеру перків, а не по
+    /// бійцю: «подивитися» не повинно коштувати очка.
     ///
-    /// Гейты перков не дублируются — их считает CompanionPerks.Evaluate, тот же
-    /// код, что и при обычном взятии. Вторая копия правил разъехалась бы.
+    /// Гейти перків не дублюються — їх рахує CompanionPerks.Evaluate, той самий
+    /// код, що й при звичайному взятті. Друга копія правил розійшлася б.
     /// </summary>
     public static class BuildPlanner
     {
-        /// <summary>Перки плана как источник модификаторов для превью.</summary>
+        /// <summary>Перки плану як джерело модифікаторів для превью.</summary>
         private sealed class PlannedPerks : IModifierProvider
         {
             private readonly List<PerkDefinition> _perks = new List<PerkDefinition>();
@@ -45,9 +45,9 @@ namespace Game.Core.Characters.Build
 
             preview.PointCost = plan.PointCost;
 
-            // Скилы: показываем НАСТОЯЩЕЕ намерение игрока, даже если оно выше
-            // потолка. Молча обрезать — значит соврать: игрок увидел бы «+3» и
-            // получил «+1», не поняв, куда делись очки.
+            // Скіли: показуємо СПРАВЖНІЙ намір гравця, навіть якщо він вищий за
+            // стелю. Мовчки обрізати — означає збрехати: гравець побачив би «+3» і
+            // отримав «+1», не зрозумівши, куди поділися очки.
             var after = companion.Skills.Clone();
             for (int i = 0; i < plan.Skills.Count; i++)
             {
@@ -59,13 +59,13 @@ namespace Game.Core.Characters.Build
                 after[skill] = StatScales.ClampSkill(to, cfg);
             }
 
-            // Очков не хватает — это важнее потолка: игрок узнаёт про цену
-            // раньше, чем про предел шкалы.
+            // Очок не вистачає — це важливіше за стелю: гравець дізнається про ціну
+            // раніше, ніж про межу шкали.
             if (preview.PointCost > pointsAvailable) preview.Status = BuildPlanStatus.NotEnoughPoints;
 
-            // Перки плана: каждый следующий видит предыдущие как взятые, иначе
-            // связка «перк открывает перк» внутри одного плана была бы ложным
-            // отказом.
+            // Перки плану: кожен наступний бачить попередні як взяті, інакше
+            // зв'язка «перк відкриває перк» усередині одного плану була б хибною
+            // відмовою.
             var planned = new PlannedPerks();
             var alsoTaken = new List<string>();
             for (int i = 0; i < plan.Perks.Count; i++)
@@ -84,15 +84,15 @@ namespace Game.Core.Characters.Build
                 }
             }
 
-            // Статы: до и после, по единому агрегатору. Провайдеры те же, что у
-            // бойца, плюс перки плана — иначе эффект перка в превью не виден.
+            // Стати: до і після, за єдиним агрегатором. Провайдери ті самі, що у
+            // бійця, плюс перки плану — інакше ефект перка в превью не видно.
             var before = companion.Resolve(cfg);
             var afterSnapshot = StatResolver.Resolve(companion.Attributes, after,
                 new IModifierProvider[] { companion.Traits, companion.Scars, companion.Perks, planned }, cfg);
             CollectChangedStats(before, afterSnapshot, preview.Stats);
 
-            // «Что откроется» — только то, чего игрок НЕ планировал: планируемое
-            // он и так видит в списке перков.
+            // «Що відкриється» — тільки те, чого гравець НЕ планував: заплановане
+            // він і так бачить у списку перків.
             if (catalog != null)
                 foreach (var perk in catalog)
                 {
@@ -110,9 +110,9 @@ namespace Game.Core.Characters.Build
         }
 
         /// <summary>
-        /// Применяет план. Без подтверждения не делает НИЧЕГО и говорит об этом
-        /// статусом: распределение необратимо, поэтому «случайно нажал» не
-        /// должно быть возможным сценарием.
+        /// Застосовує план. Без підтвердження не робить НІЧОГО і говорить про це
+        /// статусом: розподіл незворотний, тому «випадково натиснув» не
+        /// повинно бути можливим сценарієм.
         /// </summary>
         public static BuildPlanStatus Commit(Companion companion, BuildPlan plan, int pointsAvailable,
             IEnumerable<PerkDefinition> catalog, BalanceConfig cfg, bool confirmedIrreversible)
@@ -130,8 +130,8 @@ namespace Game.Core.Characters.Build
                 companion.Skills[change.Skill] = StatScales.ClampSkill(change.To, cfg);
             }
 
-            // Перки берём в порядке плана: цепочка внутри плана держится на том,
-            // что пререквизит уже лежит у бойца к моменту следующего перка.
+            // Перки беремо в порядку плану: ланцюжок усередині плану тримається на
+            // тому, що пререквізит уже лежить у бійця на момент наступного перка.
             for (int i = 0; i < plan.Perks.Count; i++)
                 companion.Perks.TryTake(plan.Perks[i], companion.Skills);
 
@@ -148,8 +148,8 @@ namespace Game.Core.Characters.Build
 
         private static void CollectChangedStats(StatSnapshot before, StatSnapshot after, List<StatChange> into)
         {
-            // Перебор по перечислению, а не по снимку: снимок ключи наружу не
-            // отдаёт, а список статов фиксирован.
+            // Перебір за переліком, а не за знімком: знімок ключі назовні не
+            // віддає, а список статів фіксований.
             foreach (StatKey key in System.Enum.GetValues(typeof(StatKey)))
             {
                 if (key == StatKey.None) continue;

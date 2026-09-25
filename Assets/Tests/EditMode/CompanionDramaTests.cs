@@ -9,10 +9,10 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Драма ростера (B4, порт US-9.4/9.6 на модель Э2): ценностные связи, рябь
-    /// от смерти/предательства с ограждением от каскада, уход в антагонисты.
-    /// Портировано из архивной линии (commit 20b8dcf) на текущий Companion —
-    /// без Equipment/Combat (B3/B1, недоступны в этом воркчасте).
+    /// Драма ростера (B4, порт US-9.4/9.6 на модель Е2): ціннісні зв'язки, брижі
+    /// від смерті/зради з огородженням від каскаду, перехід в антагоністи.
+    /// Портовано з архівної лінії (commit 20b8dcf) на поточний Companion —
+    /// без Equipment/Combat (B3/B1, недоступні в цьому воркчасті).
     /// </summary>
     public class CompanionDramaTests
     {
@@ -29,7 +29,7 @@ namespace Game.Tests.EditMode
             return c;
         }
 
-        // ---- Ценностные связи ----
+        // ---- Ціннісні зв'язки ----
         [Test]
         public void ValueSystem_Shared_Kinship_Opposed_Friction()
         {
@@ -58,7 +58,7 @@ namespace Game.Tests.EditMode
             CollectionAssert.Contains(bonds.RivalsOf(roster, medic), brawler);
         }
 
-        // ---- Рябь от смерти ----
+        // ---- Брижі від смерті ----
         [Test]
         public void OnDeath_KinMourns_RivalReliefs_NeutralDips()
         {
@@ -87,7 +87,7 @@ namespace Game.Tests.EditMode
 
             var roster = new Roster();
             WithValues(roster, "dead", "mercy").MarkDead();
-            for (int i = 0; i < 5; i++) WithValues(roster, "kin" + i, "mercy"); // 5 соратников
+            for (int i = 0; i < 5; i++) WithValues(roster, "kin" + i, "mercy"); // 5 соратників
 
             var report = new RosterDrama(new RosterBonds(DefaultValues.System()), cfg).OnDeath(roster, "dead");
 
@@ -119,7 +119,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void OnDeath_AntagonistNeverParticipatesInRipple()
         {
-            // Ушедший к врагу не скорбит и не получает рябь — он уже не "свой"
+            // Той, хто пішов до ворога, не сумує і не отримує брижі — він уже не "свій"
             // (B4-аудит §4.5).
             var roster = new Roster();
             WithValues(roster, "dead", "mercy").MarkDead();
@@ -131,7 +131,7 @@ namespace Game.Tests.EditMode
                 "антагонист не участвует в ряби ростера");
         }
 
-        // ---- Предательство → антагонист ----
+        // ---- Зрада → антагоніст ----
         [Test]
         public void ShouldDefect_OnlyLowLoyalty_NonProtagonist()
         {
@@ -140,7 +140,7 @@ namespace Game.Tests.EditMode
             low.ApplyLoyaltyDelta(-30); // 50 -> 20 = Resentful
             var content = WithValues(roster, "content"); // 50 = Steady
             var prot = WithValues(roster, "prot");
-            prot.ApplyLoyaltyDelta(-40); // даже на дне
+            prot.ApplyLoyaltyDelta(-40); // навіть на дні
 
             Assert.IsTrue(Defection.ShouldDefect(low, isProtagonist: false,
                 consecutiveDaysAtOrBelowResentful: 99, defectorSeeded: false, cfg: Cfg));
@@ -206,7 +206,7 @@ namespace Game.Tests.EditMode
             watch.Tick(roster);
             Assert.AreEqual(2, watch.DaysAtOrBelowResentful("c"));
 
-            c.ApplyLoyaltyDelta(30); // назад к 50 = Steady
+            c.ApplyLoyaltyDelta(30); // назад до 50 = Steady
             watch.Tick(roster);
             Assert.AreEqual(0, watch.DaysAtOrBelowResentful("c"), "восстановление сбрасывает счётчик");
         }

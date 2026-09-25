@@ -8,14 +8,14 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Контент открытия «Перевал» (docs/FIRST_HOUR.md §2.2) — шаг 5 порядка
-    /// сборки. Проверяется не механика конвейера, а связность авторского
-    /// материала: он рассыпается тихо, и в прогоне это видно только как
-    /// «почему-то всегда Худшая».
+    /// Контент відкриття «Перевал» (docs/FIRST_HOUR.md §2.2) — крок 5 порядку
+    /// збірки. Перевіряється не механіка конвеєра, а зв'язність авторського
+    /// матеріалу: він розсипається тихо, і в прогоні це видно тільки як
+    /// «чомусь завжди Найгірша».
     /// </summary>
     public class OpeningContentTests
     {
-        /// <summary>Поправка №1: у каждого инцидента есть ненасильственный путь.</summary>
+        /// <summary>Поправка №1: у кожного інциденту є ненасильницький шлях.</summary>
         [Test]
         public void EveryOpeningIncident_HasAQuietPath()
         {
@@ -24,9 +24,9 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Навык инцидента совпадает с доменом его поста. Иначе человек, который
-        /// на посту стоит, помочь не может — и исход Худший при ЛЮБОМ выборе.
-        /// Это не решение, а ловушка; поймано прогоном среза 23.09.2026.
+        /// Навичка інциденту збігається з доменом його поста. Інакше людина, яка
+        /// стоїть на посту, допомогти не може — і наслідок Найгірший при БУДЬ-ЯКОМУ виборі.
+        /// Це не рішення, а пастка; спіймано прогоном зрізу 23.09.2026.
         /// </summary>
         [Test]
         public void IncidentSkill_MatchesTheSkillOfItsPost()
@@ -50,7 +50,7 @@ namespace Game.Tests.EditMode
             }
         }
 
-        /// <summary>Узел первых суток доступен сразу: срез начинается с дела, а не с ожидания.</summary>
+        /// <summary>Вузол перших діб доступний одразу: зріз починається з діла, а не з очікування.</summary>
         [Test]
         public void OpeningNode_IsAvailableFromTheCalmestBand()
         {
@@ -58,7 +58,7 @@ namespace Game.Tests.EditMode
                 "узел первых суток обязан быть доступен в самой тихой полосе");
         }
 
-        /// <summary>Узел даёт ОБА пути: тихий и кровавый — на них построена развилка §2.2.</summary>
+        /// <summary>Вузол дає ОБИДВА шляхи: тихий і кривавий — на них побудована розвилка §2.2.</summary>
         [Test]
         public void OpeningNode_OffersBothPaths()
         {
@@ -70,9 +70,9 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Авторская последовательность: узел на первые сутки, припасы на
-        /// вторые, девочка на третьи. Отдать это случайности значит, что первая
-        /// игровая час каждый раз разная — а её проверяют по чеклисту.
+        /// Авторська послідовність: вузол на перші доби, припаси на
+        /// другі, дівчинка на треті. Віддати це випадковості означає, що перша
+        /// ігрова година щоразу інша — а її перевіряють за чеклистом.
         /// </summary>
         [Test]
         public void ScriptedSources_FireOnTheirAuthoredDayOnly()
@@ -91,7 +91,7 @@ namespace Game.Tests.EditMode
                 Assert.LessOrEqual(active, 1, $"сутки {day}: авторских событий больше одного");
             }
 
-            // И каждое своё утро всё-таки наступает.
+            // І кожен свій ранок все ж таки настає.
             for (int i = 0; i < sources.Count; i++)
             {
                 var day = new PulseContext(i + 1, false, 1, 0, false);
@@ -101,7 +101,7 @@ namespace Game.Tests.EditMode
             }
         }
 
-        /// <summary>Каждый авторский инцидент привязан к своему источнику: предвестник не врёт о домене.</summary>
+        /// <summary>Кожен авторський інцидент прив'язаний до свого джерела: передвісник не бреше про домен.</summary>
         [Test]
         public void EveryOpeningIncident_IsBoundToItsSource()
         {
@@ -116,7 +116,7 @@ namespace Game.Tests.EditMode
             }
         }
 
-        /// <summary>Именной накопитель копит с первых суток: слух обязан дойти к 3–4 суткам (§2.2).</summary>
+        /// <summary>Іменний накопичувач копить з перших діб: чутка зобов'язана дійти до 3–4 діб (§2.2).</summary>
         [Test]
         public void TuharSource_AccumulatesFromTheFirstDay()
         {
@@ -126,7 +126,7 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(tuhar.IsActive(calmDayOne), "боярин договаривается независимо от полосы");
             Assert.Greater(tuhar.InsistencePerDay(calmDayOne), 0);
 
-            // Первая ступень предвестника — на 55% заполнения (PulseBalance).
+            // Перша ступінь передвісника — на 55% заповнення (PulseBalance).
             var cfg = new BalanceConfig();
             int perDay = tuhar.InsistencePerDay(calmDayOne);
             double daysToFirstStep = tuhar.Threshold * cfg.Pulse.Forewarn1At / perDay;

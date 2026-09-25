@@ -4,8 +4,8 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Числа детерминированных проверок.
-    /// Создание: ПКМ в Project → Create → Alpha → Balance → Проверки.
+    /// Числа детермінованих перевірок.
+    /// Створення: ПКМ у Project → Create → Alpha → Balance → Проверки.
     /// </summary>
     [CreateAssetMenu(fileName = "CheckBalance", menuName = "Alpha/Balance/Проверки", order = 13)]
     public sealed class CheckBalanceAsset : ScriptableObject

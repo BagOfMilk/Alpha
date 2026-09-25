@@ -1,30 +1,30 @@
 namespace Game.Core.Randomness
 {
     /// <summary>
-    /// Единственный порт случайности, который Core разрешает себе знать (R1).
+    /// Єдиний порт випадковості, який Core дозволяє собі знати (R1).
     ///
-    /// В самом Core нет ни одной реализации: ArchitectureGuardTests
-    /// (Core_NoTypeImplementsIDiceRoller) держит это рефлексией по сборке.
-    /// Настоящая сидированная реализация (SeededDiceRoller) — чистый C# в
-    /// Game.Gameplay, подключённый к headless-инструментам прямым
-    /// &lt;Compile Include&gt;, как UkrainianText.cs (пакет E3b). В режиме
-    /// ThresholdRule этот интерфейс не вызывается вовсе — бой полностью
-    /// детерминирован без него.
+    /// У самому Core нема жодної реалізації: ArchitectureGuardTests
+    /// (Core_NoTypeImplementsIDiceRoller) тримає це рефлексією по збірці.
+    /// Справжня сидована реалізація (SeededDiceRoller) — чистий C# у
+    /// Game.Gameplay, підключений до headless-інструментів прямим
+    /// &lt;Compile Include&gt;, як UkrainianText.cs (пакет E3b). У режимі
+    /// ThresholdRule цей інтерфейс не викликається взагалі — бій повністю
+    /// детермінований без нього.
     /// </summary>
     public interface IDiceRoller
     {
         /// <summary>
-        /// Равномерное число в [0,1). streamId называет источник ролла
-        /// (например "hit:atk>tgt" или "dmg:atk>tgt") — не для отдельного
-        /// потока состояния (состояние одно, см. CaptureState), а чтобы
-        /// разные ролы одной атаки не совпадали по значению один-в-один.
+        /// Рівномірне число в [0,1). streamId називає джерело ролу
+        /// (наприклад "hit:atk>tgt" або "dmg:atk>tgt") — не для окремого
+        /// потоку стану (стан один, див. CaptureState), а щоб
+        /// різні роли однієї атаки не збігалися за значенням один-в-один.
         /// </summary>
         double Roll01(string streamId);
 
-        /// <summary>Снимок состояния потока — строкой, чтобы легко лечь в сейв-блоб.</summary>
+        /// <summary>Знімок стану потоку — рядком, щоб легко лягти в сейв-блоб.</summary>
         string CaptureState();
 
-        /// <summary>Восстановление потока: загрузка ПРОДОЛЖАЕТ поток случайностей, а не перезапускает его.</summary>
+        /// <summary>Відновлення потоку: завантаження ПРОДОВЖУЄ потік випадковостей, а не перезапускає його.</summary>
         void RestoreState(string blob);
     }
 }

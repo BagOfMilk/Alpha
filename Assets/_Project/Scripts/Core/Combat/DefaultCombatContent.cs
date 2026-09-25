@@ -41,30 +41,30 @@ namespace Game.Core.Combat
             ApCost = 4, OptimalRange = 1, ShredOnHit = 1, StatusOnHit = StatusType.KnockedDown
         };
 
-        // ---- Способности (общий пул: и напарники по гейту скила, и враги напрямую) ----
+        // ---- Здібності (спільний пул: і напарники за гейтом скіла, і вороги напряму) ----
 
-        /// <summary>Рывок в ближний контакт — клинч-юниты вне дистанции.</summary>
+        /// <summary>Ривок у ближній контакт — клінч-юніти поза дистанцією.</summary>
         public static AbilityDefinition Lunge() =>
             new AbilityDefinition("ability.lunge", "lunge", SkillType.Melee, 3)
                 .Costs(ap: 2, cooldown: 3)
                 .Targets(AbilityTarget.Enemy, range: 6, needsLos: true)
                 .WithEffect(new AbilityEffect(AbilityEffectKind.LungeToTarget));
 
-        /// <summary>Ловушка на тайле — активка Выживания.</summary>
+        /// <summary>Пастка на тайлі — активка Виживання.</summary>
         public static AbilityDefinition SetTrap() =>
             new AbilityDefinition("ability.set_trap", "set_trap", SkillType.Survival, 4)
                 .Costs(ap: 2, cooldown: 4)
                 .Targets(AbilityTarget.Tile, range: 3, needsLos: true)
                 .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.PlaceTrap, Amount = 3, Damage = DamageType.True });
 
-        /// <summary>Командный рывок: переставить союзника — активка Тактики.</summary>
+        /// <summary>Командний ривок: переставити союзника — активка Тактики.</summary>
         public static AbilityDefinition MoveOrder() =>
             new AbilityDefinition("ability.move_order", "move_order", SkillType.Tactics, 4)
                 .Costs(ap: 2, cooldown: 3)
                 .Targets(AbilityTarget.Ally, range: 8, needsLos: true)
                 .WithEffect(new AbilityEffect(AbilityEffectKind.RepositionTarget, amount: 4));
 
-        /// <summary>Очередь/два удара подряд текущим оружием — усиленный залп при уверенном шансе.</summary>
+        /// <summary>Черга/два удари поспіль поточною зброєю — посилений залп при впевненому шансі.</summary>
         public static AbilityDefinition Volley() =>
             new AbilityDefinition("ability.volley", "volley", SkillType.Ranged, 5)
                 .Costs(ap: 4, cooldown: 2)
@@ -72,7 +72,7 @@ namespace Game.Core.Combat
                 .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.WeaponAttack, AccuracyBonus = -10 })
                 .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.WeaponAttack, AccuracyBonus = -10 });
 
-        /// <summary>Общий пул способностей, доступных напарникам по гейту скила (передаётся в CombatUnit.FromCompanion).</summary>
+        /// <summary>Спільний пул здібностей, доступних напарникам за гейтом скіла (передається в CombatUnit.FromCompanion).</summary>
         public static List<AbilityDefinition> AbilityCatalog() => new List<AbilityDefinition>
         {
             Lunge(), SetTrap(), MoveOrder(), Volley()
@@ -177,7 +177,7 @@ namespace Game.Core.Combat
             map.SetCover(new GridPos(4, 4), Direction.West, CoverType.Half);
 
             IHitRule rule = hitRule == HitRuleKind.Percent ? new PercentRule(cfg) : (IHitRule)new ThresholdRule(cfg);
-            // ThresholdRule не трогает roller вовсе — CombatState допускает null здесь.
+            // ThresholdRule взагалі не чіпає roller — CombatState допускає null тут.
             var cs = new CombatState(map, cfg, rule, roller);
 
             var trainee1 = new CombatUnit("trainee_1", Side.Player, TraineeProfile("Провідник"), HordeSpear());

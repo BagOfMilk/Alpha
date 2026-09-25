@@ -11,9 +11,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Б1, приёмка пакета: parity ThresholdRule/PercentRule на одном сценарии,
-    /// детерминизм (тот же сид — тот же лог), гарантия завершаемости автобоя
-    /// (предохранитель раундов → Draw), отступление, тренировочный бій,
+    /// Б1, приймання пакета: parity ThresholdRule/PercentRule на одному сценарії,
+    /// детермінізм (той самий сід — той самий лог), гарантія завершуваності автобою
+    /// (запобіжник раундів → Draw), відступ, тренувальний бій,
     /// BattleSetup→CombatState→BattleResult через CombatBattleBuilder.
     /// </summary>
     public class CombatDeterminismTests
@@ -23,7 +23,7 @@ namespace Game.Tests.EditMode
         private static CombatUnit Unit(string id, Side side, int critChance = 0) => new CombatUnit(id, side,
             new UnitProfile { DisplayName = id, MaxHp = 10, MaxAp = 8, Accuracy = 70, CritChance = critChance }, null);
 
-        // ---- Parity: оба правила согласны на краях полосы ----
+        // ---- Parity: обидва правила згодні на краях полоси ----
         [Test]
         public void Parity_ThresholdAndPercent_AgreeOnLowMargin_BothMiss()
         {
@@ -32,7 +32,7 @@ namespace Game.Tests.EditMode
             var a = Unit("a", Side.Player);
             var t = Unit("t", Side.Enemy);
 
-            const int shown = 10; // margin −40 под Threshold; заведомо плохой ролл под Percent
+            const int shown = 10; // margin −40 під Threshold; свідомо поганий кидок під Percent
             Assert.AreEqual(AttackOutcome.Miss, threshold.Resolve(a, t, shown, null));
             Assert.AreEqual(AttackOutcome.Miss, percent.Resolve(a, t, shown, new ScriptedDiceRoller(0.99)));
         }
@@ -42,15 +42,15 @@ namespace Game.Tests.EditMode
         {
             var threshold = new ThresholdRule(Cfg);
             var percent = new PercentRule(Cfg);
-            var a = Unit("a", Side.Player, critChance: 100); // крит гарантирован любым вторым роллом
+            var a = Unit("a", Side.Player, critChance: 100); // крит гарантований будь-яким другим кидком
             var t = Unit("t", Side.Enemy);
 
-            const int shown = 95; // margin 45 ≥ CritBand(35) под Threshold; заведомо удачный ролл под Percent
+            const int shown = 95; // margin 45 ≥ CritBand(35) під Threshold; свідомо вдалий кидок під Percent
             Assert.AreEqual(AttackOutcome.Crit, threshold.Resolve(a, t, shown, null));
             Assert.AreEqual(AttackOutcome.Crit, percent.Resolve(a, t, shown, new ScriptedDiceRoller(0.0, 0.0)));
         }
 
-        // ---- Детерминизм: тот же сид — тот же бой ПОЭЛЕМЕНТНО ----
+        // ---- Детермінізм: той самий сід — той самий бій ПОЕЛЕМЕНТНО ----
         [Test]
         public void Determinism_SameSeed_ProducesIdenticalBattleLog()
         {
@@ -84,13 +84,13 @@ namespace Game.Tests.EditMode
             }
         }
 
-        // ---- Гарантия завершаемости: предохранитель раундов ----
+        // ---- Гарантія завершуваності: запобіжник раундів ----
         [Test]
         public void Autobattle_Terminates_AsDraw_WhenNeitherSideCanDamageTheOther()
         {
-            // Оба безоружны: ИИ никогда не атакует (HitChancePreview=0 без оружия),
-            // только маневрирует — реальный бой без предохранителя раундов
-            // не закончился бы никогда. Balance.Combat.RoundCap обязан прервать его.
+            // Обидва беззбройні: ШІ ніколи не атакує (HitChancePreview=0 без зброї),
+            // тільки маневрує — реальний бій без запобіжника раундів
+            // ніколи б не закінчився. Balance.Combat.RoundCap зобов'язаний перервати його.
             var map = new GridMap(10, 3);
             var cs = new CombatState(map, Cfg, new ThresholdRule(Cfg), null);
             cs.AddUnit(Unit("unarmed_p", Side.Player), new GridPos(0, 1));
@@ -103,16 +103,16 @@ namespace Game.Tests.EditMode
             Assert.Greater(cs.Round, Cfg.Combat.RoundCap, "Draw наступил именно из-за предохранителя раундов");
         }
 
-        // ---- Гарантия завершаемости не деградирует на большом ростере ----
+        // ---- Гарантія завершуваності не деградує на великому ростері ----
         [Test]
         public void AutoResolve_DefaultBudget_TerminatesEvenWithLargeRoster()
         {
-            // Раунд у TurnSystem — один полный проход очереди инициативы, т.е.
-            // ~ЧислоЮнитов вызовов TakeTurn на раунд. Со старой фиксированной
-            // страховкой (400) отряд из 14 безоружных юнитов исчерпывал бы её
-            // ЗАДОЛГО до внутреннего RoundCap (нужно ~14×40=560 «сырых» ходов) —
-            // AutoResolve возвращался бы с Outcome ещё Ongoing, хотя контракт
-            // гарантирует терминацию (BattleResult.From бросает именно на Ongoing).
+            // Раунд у TurnSystem — один повний прохід черги ініціативи, тобто
+            // ~ЧислоЮнітів викликів TakeTurn на раунд. Зі старою фіксованою
+            // страховкою (400) загін із 14 беззбройних юнітів вичерпав би її
+            // ЗАДОВГО до внутрішнього RoundCap (потрібно ~14×40=560 «сирих» ходів) —
+            // AutoResolve повертався б з Outcome ще Ongoing, хоча контракт
+            // гарантує термінацію (BattleResult.From кидає саме на Ongoing).
             var map = new GridMap(20, 20);
             var cs = new CombatState(map, Cfg, new ThresholdRule(Cfg), null);
             for (int i = 0; i < 7; i++)
@@ -122,14 +122,14 @@ namespace Game.Tests.EditMode
             }
             cs.Begin();
 
-            CombatAi.AutoResolve(cs); // бюджет по умолчанию — не передаём
+            CombatAi.AutoResolve(cs); // бюджет за замовчуванням — не передаємо
 
             Assert.AreNotEqual(CombatOutcome.Ongoing, cs.Outcome,
                 "AutoResolve обязан вернуть терминальный исход даже для большого ростера на бюджете по умолчанию");
             Assert.AreEqual(CombatOutcome.Draw, cs.Outcome, "без урона с обеих сторон исход — Draw (по RoundCap или по внешнему ForceDraw)");
         }
 
-        // ---- Отступление ----
+        // ---- Відступ ----
         [Test]
         public void Retreat_EndsCombat_MapsToBattleResultRetreat()
         {
@@ -148,7 +148,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(BattleOutcome.Retreat, result.Outcome);
         }
 
-        // ---- BattleResult не трогает Roster, только читает CombatState ----
+        // ---- BattleResult не чіпає Roster, тільки читає CombatState ----
         [Test]
         public void BattleResult_From_ThrowsWhileOngoing()
         {
@@ -175,9 +175,9 @@ namespace Game.Tests.EditMode
             cs.AddUnit(plainEnemy, new GridPos(5, 0));
             cs.Begin();
 
-            // Внутренние сеттеры (internal) доступны тесту (InternalsVisibleTo) —
-            // имитируем урон обеим сторонам без розыгрыша полного боя, чтобы
-            // проверить именно фильтр Casualties, а не баланс попаданий.
+            // Внутрішні сетери (internal) доступні тесту (InternalsVisibleTo) —
+            // імітуємо шкоду обом сторонам без розіграшу повного бою, щоб
+            // перевірити саме фільтр Casualties, а не баланс влучань.
             companionUnit.Hp = companionUnit.Profile.MaxHp - 4;
             plainEnemy.Hp = plainEnemy.Profile.MaxHp - 4;
             cs.Retreat();
@@ -235,9 +235,9 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(2, cs.Units.Count, "билдер собрал ровно тех юнитов, что перечислены в BattleSetup");
             Assert.AreEqual("u_hero2", cs.GetUnit("u_hero2")?.Id, "id напарника резолвится через переданный делегат, не через Roster");
 
-            // Дожимаем до терминального исхода принудительным отступлением —
-            // тест проверяет ПРОВОДКУ (BattleSetup→CombatState→BattleResult),
-            // а не баланс чисел боя.
+            // Доводимо до термінального результату примусовим відступом —
+            // тест перевіряє ПРОВОДКУ (BattleSetup→CombatState→BattleResult),
+            // а не баланс чисел бою.
             cs.Retreat();
             var result = BattleResult.From(cs);
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace Game.Core.Factions
 {
     /// <summary>
-    /// Три фракции среза (R5). «Ставлення Тугара» — це репутація фракції
+    /// Три фракції зрізу (R5). «Ставлення Тугара» — це репутація фракції
     /// tuhar_boyars, а не окрема прихована шкала: окремої TuharStanding немає.
     /// </summary>
     public static class DefaultFactions
@@ -19,7 +19,7 @@ namespace Game.Core.Factions
             new Faction(Horde, "Орда (Бурунда)")
         };
 
-        /// <summary>Готовый реестр со стартовыми (нейтральными) отношениями.</summary>
+        /// <summary>Готовий реєстр зі стартовими (нейтральними) стосунками.</summary>
         public static FactionRegistry NewRegistry(Balance.FactionBalance cfg)
         {
             var reg = new FactionRegistry(cfg);

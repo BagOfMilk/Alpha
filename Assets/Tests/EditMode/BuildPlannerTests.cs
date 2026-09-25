@@ -9,9 +9,9 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Планировщик билда (US-2.3). Проверяется главное свойство: до
-    /// подтверждения не меняется ничего, а к подтверждению игрок приходит,
-    /// увидев эффект, пороги и то, что откроется.
+    /// Планувальник білда (US-2.3). Перевіряється головна властивість: до
+    /// підтвердження не міняється нічого, а до підтвердження гравець приходить,
+    /// побачивши ефект, пороги і те, що відкриється.
     /// </summary>
     public class BuildPlannerTests
     {
@@ -68,9 +68,9 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Перк за порогом, до которого план как раз дотягивает. Без учёта
-        /// плановых очков планировщик показал бы ложный отказ — и игрок решил
-        /// бы, что вкладывать бессмысленно.
+        /// Перк за порогом, до якого план якраз дотягує. Без урахування
+        /// планових очок планувальник показав би хибну відмову — і гравець
+        /// вирішив би, що вкладати безглуздо.
         /// </summary>
         [Test]
         public void PerkBehindThreshold_BecomesAvailableWithinTheSamePlan()
@@ -85,7 +85,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(BuildPlanStatus.Ok, p.Status);
         }
 
-        /// <summary>Перки одного плана могут быть пререквизитами друг друга.</summary>
+        /// <summary>Перки одного плану можуть бути пререквізитами один одного.</summary>
         [Test]
         public void PerkChain_InsideOnePlan_IsAllowed()
         {
@@ -100,7 +100,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(BuildPlanStatus.Ok, p.Status);
         }
 
-        /// <summary>«Что откроется» — это то, чего игрок не планировал.</summary>
+        /// <summary>«Що відкриється» — це те, чого гравець не планував.</summary>
         [Test]
         public void Unlocks_ListWhatTheInvestmentOpens()
         {
@@ -125,7 +125,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(p.CanCommit);
         }
 
-        /// <summary>Потолок шкалы показывается, а не зажимается молча.</summary>
+        /// <summary>Стеля шкали показується, а не затискається мовчки.</summary>
         [Test]
         public void AboveCeiling_IsShown_NotSilentlyClamped()
         {
@@ -167,7 +167,7 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(plan.IsEmpty, "подтверждённый план израсходован");
         }
 
-        /// <summary>Предупреждение о необратимости существует и непустое.</summary>
+        /// <summary>Попередження про незворотність існує і непорожнє.</summary>
         [Test]
         public void IrreversibleWarning_IsNotEmpty()
         {

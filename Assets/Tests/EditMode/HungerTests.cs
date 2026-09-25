@@ -10,11 +10,11 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Голод как стимул выходить наружу (Поправка №4).
+    /// Голод як стимул виходити назовні (Поправка №4).
     ///
-    /// Давит с двух сторон: поднимает Напряжение (гасится Храмом и Укреплениями,
-    /// а те строятся за компонент из вылазок) и роняет выработку базы. Смысл в
-    /// том, что пересидеть голод дома нельзя.
+    /// Тисне з двох боків: піднімає Напругу (гаситься Храмом і Укріпленнями,
+    /// а ті будуються за компонент із вилазок) і роняє виробіток бази. Сенс у
+    /// тому, що пересидіти голод удома не можна.
     /// </summary>
     public class HungerTests
     {
@@ -62,7 +62,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(15, second.Produced[ResourceType.Materials], "сытый день — полная выработка");
         }
 
-        /// <summary>Просадка приходит следующим циклом: прокорм считается последним шагом дня.</summary>
+        /// <summary>Просідання приходить наступним циклом: прокорм рахується останнім кроком дня.</summary>
         [Test]
         public void HungryDay_HalvesNextCycleOutput()
         {
@@ -84,9 +84,9 @@ namespace Game.Tests.EditMode
             var cfg = Cfg();
             var (state, _) = MakeBase(cfg);
 
-            state.AdvanceCycle();                                  // голодный
+            state.AdvanceCycle();                                  // голодний
             state.Resources.Add(ResourceType.Food, 100);
-            state.AdvanceCycle();                                  // просевший, но накормленный
+            state.AdvanceCycle();                                  // просівший, але нагодований
             Assert.IsFalse(state.WasHungryLastCycle);
 
             var third = state.AdvanceCycle();
@@ -94,10 +94,10 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Темп: первая граница полосы — 200, голодный день даёт 8, значит полоса
-        /// меняется на 25-й день голода. Это и есть заявленная цена: голод давит
-        /// заметно, но не мгновенно, и якорь шкалы (пассивный дрейф ≈ одна полоса
-        /// за кампанию) не ломает — голод пассивным дрейфом не является.
+        /// Темп: перша межа полоси — 200, голодний день дає 8, отже полоса
+        /// змінюється на 25-й день голоду. Це і є заявлена ціна: голод тисне
+        /// помітно, але не миттєво, і якір шкали (пасивний дрейф ≈ одна полоса
+        /// за кампанію) не ламає — голод пасивним дрейфом не є.
         /// </summary>
         [Test]
         public void HungryDays_ShiftBandOnTwentyFifthDay()
@@ -130,14 +130,14 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(TensionBand.Calm, tension.Band, "сытая база сама по себе Напряжение не растит");
         }
 
-        /// <summary>Голод стоит перед тиком Напряжения — иначе инциденты взвесятся по вчерашней полосе.</summary>
+        /// <summary>Голод стоїть перед тіком Напруги — інакше інциденти зважаться за вчорашньою полосою.</summary>
         [Test]
         public void HungerStep_RunsBeforeTensionTick()
         {
             Assert.Less(DayStepOrder.Hunger, DayStepOrder.Tension);
         }
 
-        /// <summary>Поправка №4 расширила закрытый список ровно на одно значение.</summary>
+        /// <summary>Поправка №4 розширила закритий список рівно на одне значення.</summary>
         [Test]
         public void Hunger_IsAllowedToRaiseTension()
         {

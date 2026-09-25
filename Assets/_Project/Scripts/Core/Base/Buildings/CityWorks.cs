@@ -31,24 +31,24 @@ namespace Game.Core.Base
         NotEnoughGold,
         NotEnoughFood,
 
-        // ---- B5: Фракции + указы рады ----
-        /// <summary>Эффект применился сразу (Указ/Дипломатия/Підготовка/Спорядження), а не встал в очередь суток.</summary>
+        // ---- B5: Фракції + укази ради ----
+        /// <summary>Ефект застосувався одразу (Указ/Дипломатія/Підготовка/Спорядження), а не став у чергу доби.</summary>
         Applied,
-        /// <summary>Цель дипломатии/указу не зареєстрована в FactionRegistry.</summary>
+        /// <summary>Ціль дипломатії/указу не зареєстрована в FactionRegistry.</summary>
         UnknownFaction,
-        /// <summary>Инвестиция просит здание, которого нет.</summary>
+        /// <summary>Інвестиція просить будівлю, якої немає.</summary>
         BuildingNotBuilt
     }
 
     /// <summary>
-    /// Городские работы: что построено, что строится, что приказал совет и кто
-    /// пришёл извне (Поправка №6).
+    /// Міські роботи: що побудовано, що будується, що наказала рада і хто
+    /// прийшов ззовні (Поправка №6).
     ///
-    /// Всё, что игрок заказывает, ОПЛАЧИВАЕТСЯ СРАЗУ, а исполняется конвейером
-    /// дня — шагом <see cref="CityWorksStep"/>. Причина: изменение Напряжения
-    /// или населения в промежутке между сутками не попало бы ни в один отчёт, и
-    /// игрок увидел бы сдвиг без причины. Всё, что двигает город, обязано
-    /// случиться внутри суток и прозвучать.
+    /// Усе, що гравець замовляє, ОПЛАЧУЄТЬСЯ ОДРАЗУ, а виконується конвеєром
+    /// дня — кроком <see cref="CityWorksStep"/>. Причина: зміна Напруги
+    /// або населення в проміжку між добами не потрапила б у жоден звіт, і
+    /// гравець побачив би зсув без причини. Усе, що рухає місто, зобов'язане
+    /// статися всередині доби і прозвучати.
     /// </summary>
     public sealed class CityWorks : Loop.IStateBlob
     {
@@ -63,8 +63,8 @@ namespace Game.Core.Base
         private readonly List<Project> _projects = new List<Project>();
 
         /// <summary>
-        /// Поправка №7.7: у тестовій збірці кожне здание будується рівно одні
-        /// сутки замість <see cref="BuildingDefinition.Days"/>. Це параметр
+        /// Поправка №7.7: у тестовій збірці кожна будівля будується рівно одну
+        /// добу замість <see cref="BuildingDefinition.Days"/>. Це параметр
         /// конструктора, не мутне поле — режим гри не міняється всередині
         /// прогону, тому в <see cref="CaptureState"/>/<see cref="RestoreState"/>
         /// його немає.
@@ -105,49 +105,49 @@ namespace Game.Core.Base
         private int _lastSettlersDay = int.MinValue / 2;
         private int _arrivalsQueued;
 
-        // ---- B5: Фракции + указы рады (R5, AUDIT П8/G12/G20) ----
+        // ---- B5: Фракції + укази ради (R5, AUDIT П8/G12/G20) ----
         private int _lastDecreeDay = int.MinValue / 2;
         private int _lastDiplomacyDay = int.MinValue / 2;
         private int _lastPrepareThreatDay = int.MinValue / 2;
         private int _investmentGoldPerDay;
         private int _investmentDaysLeft;
-        /// <summary>Маркеры готовности для B6/D1 — этот пакет ReadinessTrack не заводит (§1.1).</summary>
+        /// <summary>Маркери готовності для B6/D1 — цей пакет ReadinessTrack не заводить (§1.1).</summary>
         private int _readinessMilestonesQueued;
         private ExpeditionOutfitBuff _pendingOutfitBuff;
 
         /// <summary>
-        /// Ревью-фикс (major): Напруга от Указа копится ЗДЕСЬ, а не через
-        /// DayProcessor.QueueExternal. Очередь QueueExternal (_externalTension)
-        /// не входит в SettlementSave.Capture/Restore — а Order* и SaveState
-        /// оба легальны в фазе Morning (docs/TEST_BUILD.md §4.1), поэтому
-        /// «Указ → SaveState → загрузка» тихо съедало бы уплаченный сдвиг
-        /// Напруги, притом что золото, Уклад и фракции из того же вызова уже
-        /// применились и сохранились. CityWorks сам входит в слепок (см.
-        /// CaptureState/RestoreState), поэтому поле переживает сохранение —
-        /// применяет его CityWorksStep.Execute тем же приёмом, каким Облава
-        /// уже кладёт CouncilRaid прямо в ctx.Tension, а не через очередь.
+        /// Ревью-фікс (major): Напруга від Указу накопичується ТУТ, а не через
+        /// DayProcessor.QueueExternal. Черга QueueExternal (_externalTension)
+        /// не входить у SettlementSave.Capture/Restore — а Order* і SaveState
+        /// обидва легальні у фазі Morning (docs/TEST_BUILD.md §4.1), тому
+        /// «Указ → SaveState → завантаження» тихо з'їдало б сплачений зсув
+        /// Напруги, тоді як золото, Уклад і фракції з того самого виклику вже
+        /// застосувалися і збереглися. CityWorks сам входить у зліпок (див.
+        /// CaptureState/RestoreState), тому поле переживає збереження —
+        /// застосовує його CityWorksStep.Execute тим самим прийомом, яким Облава
+        /// вже кладе CouncilRaid прямо в ctx.Tension, а не через чергу.
         /// </summary>
         private int _pendingCouncilEdictTension;
 
         /// <summary>
-        /// Ревью-фикс: Указ/Дипломатия/Подготовка/Снаряжение применяются СРАЗУ
-        /// (CouncilOrderResult.Applied), в отличие от Облавы/Переселенцев/Инвестиции,
-        /// которых исполняет и объявляет CityWorksStep. Без этой очереди «применилось
-        /// сразу» означало «применилось молча» — в лупе не было ни одного
-        /// Game.Core.Signals.CityEvent на эти пять действий (docs/TEST_BUILD.md §2
-        /// строка 15, §7.13). Очередь — тем же приёмом, каким уже собраны
-        /// _pendingOutfitBuff/_readinessMilestonesQueued: копится здесь, забирается
-        /// и звучит в CityWorksStep.Execute в тот же (или ближайший) дневной шаг.
+        /// Ревью-фікс: Указ/Дипломатія/Підготовка/Спорядження застосовуються ОДРАЗУ
+        /// (CouncilOrderResult.Applied), на відміну від Облави/Переселенців/Інвестиції,
+        /// які виконує й оголошує CityWorksStep. Без цієї черги «застосувалося
+        /// одразу» означало б «застосувалося мовчки» — у лупі не було жодного
+        /// Game.Core.Signals.CityEvent на ці п'ять дій (docs/TEST_BUILD.md §2
+        /// рядок 15, §7.13). Черга — тим самим прийомом, яким уже зібрані
+        /// _pendingOutfitBuff/_readinessMilestonesQueued: накопичується тут, забирається
+        /// і звучить у CityWorksStep.Execute в той самий (або найближчий) денний крок.
         /// </summary>
         private readonly List<CityEvent> _pendingCouncilAnnouncements = new List<CityEvent>();
 
-        /// <summary>Рынок поселения — единственная позиция, торговый подход к которой скидывает цену (AUDIT G12).</summary>
+        /// <summary>Ринок поселення — єдина позиція, торговий підхід до якої скидає ціну (AUDIT G12).</summary>
         public const string MarketSlotId = "settlement_market";
 
         /// <summary>
-        /// Разовый бонус следующей вилазке (OrderOutfitExpedition). Данные, а не
-        /// тип B7 — R15 держит саму вилазку у пакета B7 целиком; здесь только
-        /// сид её входа, который D1 когда-нибудь заберёт и применит.
+        /// Разовий бонус наступній вилазці (OrderOutfitExpedition). Дані, а не
+        /// тип B7 — R15 тримає саму вилазку в пакеті B7 цілком; тут лише
+        /// сид її входу, який D1 колись забере і застосує.
         /// </summary>
         public sealed class ExpeditionOutfitBuff
         {
@@ -158,7 +158,7 @@ namespace Game.Core.Base
         /// <summary>
         /// <paramref name="oneDayConstruction"/> — Поправка №7.7, за
         /// замовчуванням false: прямі викликачі (тести, старий код) і надалі
-        /// отримують проєктні строки стройки з <see cref="DefaultBuildings"/>
+        /// отримують проєктні строки будівництва з <see cref="DefaultBuildings"/>
         /// без явної згоди на тестову збірку. <see cref="FirstHourWorld.Build"/>
         /// — єдине місце, де він стає true за замовчуванням.
         /// </summary>
@@ -186,9 +186,9 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Видимая стадия постройки 0..5 (US-7.3): 0 — не начата, 1–4 — леса,
-        /// 5 — готова. Стадия — чистая функция от прошедших суток, отдельного
-        /// геймплея на стадиях нет.
+        /// Видима стадія будівництва 0..5 (US-7.3): 0 — не почата, 1–4 — риштування,
+        /// 5 — готова. Стадія — чиста функція від минулих діб, окремого
+        /// геймплею на стадіях немає.
         /// </summary>
         public int StageOf(string buildingId)
         {
@@ -202,22 +202,22 @@ namespace Game.Core.Base
             return stage > 4 ? 4 : stage;
         }
 
-        // ================= заказы игрока =================
+        // ================= замовлення гравця =================
 
         /// <summary>
-        /// Заложить здание: цена списывается сразу, стройка идёт по суткам.
+        /// Закласти будівлю: ціна списується одразу, будівництво йде добами.
         ///
-        /// <paramref name="today"/>/<paramref name="balance"/> — необязательны
-        /// (по умолчанию цена без скидки, как раньше): без них AUDIT G12 не
-        /// работает, но старые вызовы не ломаются. С ними — золото скидывается,
-        /// если рынок поселения занят и открыт (см. <see cref="TradeDiscount"/>).
+        /// <paramref name="today"/>/<paramref name="balance"/> — необов'язкові
+        /// (за замовчуванням ціна без знижки, як і раніше): без них AUDIT G12 не
+        /// працює, але старі виклики не ламаються. З ними — золото скидається,
+        /// якщо ринок поселення зайнятий і відкритий (див. <see cref="TradeDiscount"/>).
         ///
-        /// Одни сутки на любое здание вместо проектных
-        /// <see cref="BuildingDefinition.Days"/> — не параметр этого вызова, а
-        /// режим самого <see cref="CityWorks"/> (см. <see cref="_oneDayConstruction"/>
-        /// и конструктор): симуляционный харнес и <see cref="Steward"/> зовут
-        /// этот метод на инстансе, собранном без него, и потому строят по
-        /// проектным срокам.
+        /// Одна доба на будь-яку будівлю замість проєктних
+        /// <see cref="BuildingDefinition.Days"/> — не параметр цього виклику, а
+        /// режим самого <see cref="CityWorks"/> (див. <see cref="_oneDayConstruction"/>
+        /// і конструктор): симуляційний харнес і <see cref="Steward"/> звуть
+        /// цей метод на інстансі, зібраному без нього, і тому будують за
+        /// проєктними строками.
         /// </summary>
         public BuildOrderResult Order(string buildingId, BaseState state, int today = 0, BalanceConfig balance = null)
         {
@@ -233,8 +233,8 @@ namespace Game.Core.Base
                 ? DiscountedPrice(def.GoldCost, TradeDiscount(state, balance, today))
                 : def.GoldCost;
 
-            // Сначала проверяем обе цены, потом списываем: иначе при нехватке
-            // материалов золото ушло бы, а стройка не началась.
+            // Спочатку перевіряємо обидві ціни, потім списуємо: інакше за нестачі
+            // матеріалів золото пішло б, а будівництво не почалося б.
             if (!state.Resources.CanAfford(ResourceType.Gold, goldCost))
                 return BuildOrderResult.NotEnoughGold;
             if (!state.Resources.CanAfford(ResourceType.Materials, def.MaterialsCost))
@@ -243,7 +243,7 @@ namespace Game.Core.Base
             state.Resources.TrySpend(ResourceType.Gold, goldCost);
             state.Resources.TrySpend(ResourceType.Materials, def.MaterialsCost);
 
-            // Поправка №7.7: тестова збірка стирає проєктний строк — заказ
+            // Поправка №7.7: тестова збірка стирає проєктний строк — замовлення
             // уранці, готово до наступного ранку, незалежно від того, скільки
             // діб просить BuildingDefinition.Days (Храм/Укріплення/Лабораторія
             // просять аж 8–10 — саме вони й доходили до гравця надто пізно).
@@ -253,15 +253,15 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Облава: разовое снижение Напряжения драйвером CouncilRaid. Требует
-        /// Зал совета, стоит золота, имеет откат.
+        /// Облава: разове зниження Напруги драйвером CouncilRaid. Потребує
+        /// Залу ради, коштує золота, має відкат.
         ///
-        /// <paramref name="factions"/> необязателен (по умолчанию — как до B5,
-        /// без фракций): силовой метод задевает и отношения — бояри Тугара
-        /// довольны порядком, громаде не нравится нагайка на своих (ревью-фикс,
-        /// см. тест Raid_LowersTension_PaysCosts_ShiftsFactions). Сдвиг —
-        /// разовый, сразу; сама облава по-прежнему исполняется и звучит
-        /// CityWorksStep на её собственный день (TakeRaid).
+        /// <paramref name="factions"/> необов'язковий (за замовчуванням — як до B5,
+        /// без фракцій): силовий метод зачіпає і стосунки — бояри Тугара
+        /// задоволені порядком, громаді не подобається нагайка на своїх (ревью-фікс,
+        /// див. тест Raid_LowersTension_PaysCosts_ShiftsFactions). Зсув —
+        /// разовий, одразу; сама облава як і раніше виконується і звучить
+        /// CityWorksStep у свій власний день (TakeRaid).
         /// </summary>
         public CouncilOrderResult OrderRaid(BaseState state, int today, BalanceConfig balance, FactionRegistry factions = null)
         {
@@ -293,8 +293,8 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Приём переселенцев — «рішення в місті» из слов владельца. Платится
-        /// едой: новых ртов надо кормить, и это честная цена роста.
+        /// Приймання переселенців — «рішення в місті» зі слів власника. Платиться
+        /// їжею: нові роти треба годувати, і це чесна ціна зростання.
         /// </summary>
         public CouncilOrderResult OrderSettlers(BaseState state, int today, BalanceConfig balance)
         {
@@ -311,32 +311,32 @@ namespace Game.Core.Base
             return CouncilOrderResult.Queued;
         }
 
-        /// <summary>Люди, найденные вылазкой: придут в город ближайшими сутками.</summary>
+        /// <summary>Люди, знайдені вилазкою: прийдуть у місто найближчими добами.</summary>
         public void QueueArrivals(int people)
         {
             if (people > 0) _arrivalsQueued += people;
         }
 
-        // ================= B5: указы рады + фракции (R5, AUDIT П8/G12/G20) =================
+        // ================= B5: укази ради + фракції (R5, AUDIT П8/G12/G20) =================
         //
-        // Указ/Дипломатия/Підготовка/Спорядження применяются СРАЗУ, а не через
-        // CityWorksStep: DayProcessor.QueueExternal для того и заведён (комментарий
-        // на самом методе) — принять заявку из внешней системы в любой момент
-        // между сутками, не дожидаясь шага конвейера. Инвестиция — исключение:
-        // она платит золото РАСТЯНУТО по суткам, и это как раз работа
-        // CityWorksStep (см. TakeInvestmentPayout).
+        // Указ/Дипломатія/Підготовка/Спорядження застосовуються ОДРАЗУ, а не через
+        // CityWorksStep: DayProcessor.QueueExternal для того й заведений (коментар
+        // на самому методі) — прийняти заявку від зовнішньої системи в будь-який момент
+        // між добами, не чекаючи кроку конвеєра. Інвестиція — виняток:
+        // вона платить золото РОЗТЯГНУТО по добах, і це якраз робота
+        // CityWorksStep (див. TakeInvestmentPayout).
 
         /// <summary>
-        /// Указ: двигает Уклад (DayProcessor.OrderLevel) на шаг и отдаёт одну
-        /// фракцию в выгоду ценой другой (AUDIT П8+G20 — Уклад раньше двигать
-        /// было решительно нечем, а понижающий драйвер CouncilEdict стоял в
-        /// белом списке без единого вызова). costFactionId необязателен: без
-        /// него указ просто поднимает выгодную фракцию, не трогая остальные.
+        /// Указ: рухає Уклад (DayProcessor.OrderLevel) на крок і віддає одну
+        /// фракцію у вигоду ціною іншої (AUDIT П8+G20 — Уклад раніше рухати
+        /// було рішуче нічим, а понижувальний драйвер CouncilEdict стояв у
+        /// білому списку без жодного виклику). costFactionId необов'язковий: без
+        /// нього указ просто піднімає вигідну фракцію, не чіпаючи решту.
         ///
-        /// Ревью-фикс: favoredFactionId ОБЯЗАН быть зарегистрирован в
-        /// factions — иначе указ («поменять одну фракцию на другую») спишет
-        /// золото, толкнёт Уклад и молча не поменяет ни одной фракции.
-        /// Проверка — до всех трат, тем же приёмом, что уже стоит в
+        /// Ревью-фікс: favoredFactionId ЗОБОВ'ЯЗАНИЙ бути зареєстрований у
+        /// factions — інакше указ («поміняти одну фракцію на іншу») спише
+        /// золото, штовхне Уклад і мовчки не поміняє жодної фракції.
+        /// Перевірка — до всіх витрат, тим самим прийомом, що вже стоїть в
         /// OrderDiplomacy.
         /// </summary>
         public CouncilOrderResult OrderDecree(BaseState state, Loop.DayProcessor processor, FactionRegistry factions,
@@ -360,12 +360,12 @@ namespace Game.Core.Base
 
             processor.OrderLevel = ClampOrderLevel(processor.OrderLevel + balance.Faction.DecreeOrderLevelStep);
 
-            // Ревью-фикс: факции двигаются через SocialConsequence — единственную
-            // точку, где список разрешённых драйверов реально проверяется
-            // (allow-list иначе был мёртвым кодом для этого места). Напругу
-            // SocialConsequence.Apply НЕ отдаём processor'у (см. комментарий на
-            // _pendingCouncilEdictTension) — копим её сами и применяем в
-            // CityWorksStep.Execute тем же днём, чтобы она переживала сейв.
+            // Ревью-фікс: фракції рухаються через SocialConsequence — єдину
+            // точку, де список дозволених драйверів реально перевіряється
+            // (allow-list інакше був мертвим кодом для цього місця). Напругу
+            // SocialConsequence.Apply НЕ віддаємо processor'у (див. коментар на
+            // _pendingCouncilEdictTension) — накопичуємо її самі і застосовуємо в
+            // CityWorksStep.Execute того самого дня, щоб вона переживала сейв.
             string costTarget = !string.IsNullOrEmpty(costFactionId) && costFactionId != favoredFactionId
                 ? costFactionId
                 : null;
@@ -382,7 +382,7 @@ namespace Game.Core.Base
             return CouncilOrderResult.Applied;
         }
 
-        /// <summary>Дипломатия: чистое улучшение одной фракции, без Уклада и без Напруги.</summary>
+        /// <summary>Дипломатія: чисте покращення однієї фракції, без Уклада і без Напруги.</summary>
         public CouncilOrderResult OrderDiplomacy(BaseState state, FactionRegistry factions, string factionId,
             int today, BalanceConfig balance)
         {
@@ -407,9 +407,9 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Инвестиция: платит золото сразу, а возвращает больше — растянуто по
-        /// суткам (TakeInvestmentPayout, шаг CityWorksStep). buildingId — не
-        /// декорация: инвестировать можно только в уже готовое здание.
+        /// Інвестиція: платить золото одразу, а повертає більше — розтягнуто по
+        /// добах (TakeInvestmentPayout, крок CityWorksStep). buildingId — не
+        /// декорація: інвестувати можна тільки в уже готову будівлю.
         /// </summary>
         public CouncilOrderResult OrderInvestment(BaseState state, string buildingId, int today, BalanceConfig balance)
         {
@@ -430,9 +430,9 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Подготовка к угрозе: копит МАРКЕРЫ готовности, не саму Готовность —
-        /// ReadinessTrack заводит B6, этот пакет от него не зависит (§1.1). D1
-        /// заберёт накопленное через TakeReadinessMilestones, когда трек появится.
+        /// Підготовка до загрози: накопичує МАРКЕРИ готовності, не саму Готовність —
+        /// ReadinessTrack заводить B6, цей пакет від нього не залежить (§1.1). D1
+        /// забере накопичене через TakeReadinessMilestones, коли трек з'явиться.
         /// </summary>
         public CouncilOrderResult OrderPrepareThreat(BaseState state, int today, BalanceConfig balance)
         {
@@ -455,9 +455,9 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Снаряжение экспедиции: разовый бонус следующей вилазке на площадку
-        /// siteId. Данные, а не тип B7 (R15 держит вилазку целиком) — сид её
-        /// входа, который заберёт D1 через TakeExpeditionOutfitBuff.
+        /// Спорядження експедиції: разовий бонус наступній вилазці на майданчик
+        /// siteId. Дані, а не тип B7 (R15 тримає вилазку цілком) — сид її
+        /// входу, який забере D1 через TakeExpeditionOutfitBuff.
         /// </summary>
         public CouncilOrderResult OrderOutfitExpedition(BaseState state, string siteId, int today, BalanceConfig balance)
         {
@@ -480,12 +480,12 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// AUDIT G12: показанный подходом Торговли множитель цены
-        /// (CheckOutcome.PriceMultiplier) до этого пакета считался и
-        /// выбрасывался (CheckResolver.Resolve его вычисляет, но никто не читал).
-        /// Здесь он наконец решает цену стройки и указов рады — но только когда
-        /// рынок поселения занят и открыт: без профильного человека на посту
-        /// скидки нет (множитель 1.0, тот же путь, что и раньше).
+        /// AUDIT G12: показаний підходом Торгівлі множник ціни
+        /// (CheckOutcome.PriceMultiplier) до цього пакета рахувався і
+        /// викидався (CheckResolver.Resolve його обчислює, але ніхто не читав).
+        /// Тут він нарешті вирішує ціну будівництва і указів ради — але тільки коли
+        /// ринок поселення зайнятий і відкритий: без профільної людини на посту
+        /// знижки немає (множник 1.0, той самий шлях, що й раніше).
         /// </summary>
         public static double TradeDiscount(BaseState state, BalanceConfig balance, int today)
         {
@@ -514,7 +514,7 @@ namespace Game.Core.Base
             return level > 4 ? 4 : level;
         }
 
-        /// <summary>Растянутая выплата Инвестиции — вызывает CityWorksStep каждые сутки.</summary>
+        /// <summary>Розтягнута виплата Інвестиції — викликає CityWorksStep щодоби.</summary>
         internal int TakeInvestmentPayout()
         {
             if (_investmentDaysLeft <= 0) return 0;
@@ -523,9 +523,9 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Забирает и обнуляет накопленную Напругу Указа (ревью-фикс, см.
-        /// _pendingCouncilEdictTension). Вызывается CityWorksStep тем же
-        /// приёмом, каким она уже забирает TakeRaid/TakeSettlers/...
+        /// Забирає і обнуляє накопичену Напругу Указу (ревью-фікс, див.
+        /// _pendingCouncilEdictTension). Викликається CityWorksStep тим самим
+        /// прийомом, яким вона вже забирає TakeRaid/TakeSettlers/...
         /// </summary>
         internal int TakeCouncilEdictTension()
         {
@@ -534,7 +534,7 @@ namespace Game.Core.Base
             return v;
         }
 
-        /// <summary>Забирает и обнуляет накопленные маркеры готовности (для D1/B6).</summary>
+        /// <summary>Забирає і обнуляє накопичені маркери готовності (для D1/B6).</summary>
         internal int TakeReadinessMilestones()
         {
             int n = _readinessMilestonesQueued;
@@ -543,16 +543,16 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Подсматривает разовый бонус снаряжения БЕЗ его снятия (фикс-ревью):
-        /// D1 (DepartExpedition) должен решить, применим ли бонус К ЭТОМУ
-        /// отправлению (siteId совпадает с заказанным), ДО того, как заберёт
-        /// его — иначе TakeExpeditionOutfitBuff() снимал бонус безусловно на
-        /// первом же отправлении, даже на другую площадку, и он терялся
-        /// навсегда без единого шанса быть применённым туда, куда заказан.
+        /// Підглядає разовий бонус спорядження БЕЗ його зняття (фікс-ревью):
+        /// D1 (DepartExpedition) має вирішити, чи застосовний бонус ДО ЦЬОГО
+        /// відправлення (siteId збігається із замовленим), ДО того, як забере
+        /// його — інакше TakeExpeditionOutfitBuff() знімав бонус безумовно на
+        /// першому ж відправленні, навіть на інший майданчик, і він губився
+        /// назавжди без жодного шансу бути застосованим туди, куди замовлений.
         /// </summary>
         internal ExpeditionOutfitBuff PeekExpeditionOutfitBuff() => _pendingOutfitBuff;
 
-        /// <summary>Забирает и обнуляет разовый бонус снаряжения (для D1) — только когда он уже применяется (см. PeekExpeditionOutfitBuff).</summary>
+        /// <summary>Забирає і обнуляє разовий бонус спорядження (для D1) — тільки коли він уже застосовується (див. PeekExpeditionOutfitBuff).</summary>
         internal ExpeditionOutfitBuff TakeExpeditionOutfitBuff()
         {
             var b = _pendingOutfitBuff;
@@ -561,9 +561,9 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Забирает и обнуляет очередь объявлений об Указе/Дипломатии/Підготовці/
-        /// Спорядженні — вызывается CityWorksStep, тем же приёмом, каким она уже
-        /// забирает TakeRaid/TakeSettlers/TakeArrivals/TakeInvestmentPayout.
+        /// Забирає і обнуляє чергу оголошень про Указ/Дипломатію/Підготовку/
+        /// Спорядження — викликається CityWorksStep, тим самим прийомом, яким вона вже
+        /// забирає TakeRaid/TakeSettlers/TakeArrivals/TakeInvestmentPayout.
         /// </summary>
         internal List<CityEvent> TakeCouncilAnnouncements()
         {
@@ -573,7 +573,7 @@ namespace Game.Core.Base
             return events;
         }
 
-        // ================= исполнение внутри суток =================
+        // ================= виконання всередині доби =================
 
         internal List<string> AdvanceConstruction()
         {
@@ -588,8 +588,8 @@ namespace Game.Core.Base
                 done.Add(p.Id);
                 _projects.RemoveAt(i);
             }
-            // Детерминированный порядок сообщений: по идентификатору, а не по
-            // тому, в каком порядке их заложили.
+            // Детермінований порядок повідомлень: за ідентифікатором, а не за
+            // тим, у якому порядку їх заклали.
             done.Sort(StringComparer.Ordinal);
             return done;
         }
@@ -618,8 +618,8 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Замки постов по зданиям: пост без своего здания закрыт, человек на
-        /// него не встанет. Посты без здания (поля, разведпост) не трогаем.
+        /// Замки постів за будівлями: пост без своєї будівлі закритий, людина на
+        /// нього не стане. Пости без будівлі (поля, розвідпост) не чіпаємо.
         /// </summary>
         public void ApplyToSlots(BaseState state)
         {
@@ -640,14 +640,14 @@ namespace Game.Core.Base
             return null;
         }
 
-        // ================= слепок =================
+        // ================= зліпок =================
 
-        // Формат без «;» и «=» — внешний слепок режет по ним.
+        // Формат без «;» і «=» — зовнішній зліпок ріже по них.
         // b:<id>,<id>|p:<id>:<left>:<total>,...|r:<queued>:<lastDay>|s:<n>|a:<n>
-        // B5 (AUDIT П8/G12/G20, аддитивно): |d:<lastDecreeDay>|y:<lastDiplomacyDay>
+        // B5 (AUDIT П8/G12/G20, адитивно): |d:<lastDecreeDay>|y:<lastDiplomacyDay>
         // |t:<lastPrepareThreatDay>|i:<goldPerDay>:<daysLeft>|m:<milestonesQueued>
-        // |o:<siteId>:<bonusValue> (пусто — бонуса нет)
-        // |e:<pendingCouncilEdictTension> (ревью-фикс: Напруга Указа переживает сейв)
+        // |o:<siteId>:<bonusValue> (порожньо — бонуса немає)
+        // |e:<pendingCouncilEdictTension> (ревью-фікс: Напруга Указу переживає сейв)
         public string CaptureState()
         {
             var sb = new StringBuilder();

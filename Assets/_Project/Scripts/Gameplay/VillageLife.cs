@@ -14,20 +14,20 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Село живёт сутками: конвейер дня крутится прямо в сцене, и всё, что он
-    /// выдаёт, видно глазами — свет меняется с днём и ночью, жители расходятся
-    /// по постам и уходят спать, над местом происшествия встаёт метка, а лента
-    /// слева пишет, что случилось и что слышно.
+    /// Село живе добами: конвеєр дня крутиться прямо в сцені, і все, що він
+    /// видає, видно очима — світло змінюється з днем і ніччю, жителі розходяться
+    /// по постах і йдуть спати, над місцем події зводиться мітка, а стрічка
+    /// зліва пише, що сталося і що чутно.
     ///
-    /// ЧТО ЗДЕСЬ НЕЛЬЗЯ. Компонент не знает ни одного числа скрытых шкал:
-    /// Напряжение, заряды накопителей и пороги в ядре internal (инвариант 3).
-    /// Наружу приходят фаза, сутки, сигналы с ключами и тегами, исходы
-    /// инцидентов и мудборд — из них и собирается картинка. Дашборд угрозы
-    /// собрать физически не из чего, и это намеренно.
+    /// ЩО ТУТ НЕ МОЖНА. Компонент не знає жодного числа прихованих шкал:
+    /// Напруга, заряди накопичувачів і пороги в ядрі internal (інваріант 3).
+    /// Назовні приходять фаза, доба, сигнали з ключами й тегами, наслідки
+    /// інцидентів і мудборд — з них і збирається картинка. Дашборд загрози
+    /// зібрати фізично нема з чого, і це навмисно.
     ///
-    /// Разделение труда: ЧТО показать считает <see cref="VillageView"/> (чистый
-    /// C#, под тестами), а этот компонент только применяет — двигает свет,
-    /// прячет жителей, ставит метки.
+    /// Розділення праці: ЩО показати рахує <see cref="VillageView"/> (чистий
+    /// C#, під тестами), а цей компонент лише застосовує — рухає світло,
+    /// ховає жителів, ставить мітки.
     /// </summary>
     public sealed class VillageLife : MonoBehaviour
     {
@@ -72,7 +72,7 @@ namespace Game.Gameplay
         private readonly List<string> _lines = new List<string>();
         private readonly List<GameObject> _marks = new List<GameObject>();
 
-        /// <summary>Посты по идентификатору: якоря в сцене, к ним привязаны жители и метки.</summary>
+        /// <summary>Пости за ідентифікатором: якорі в сцені, до них прив'язані жителі й мітки.</summary>
         private readonly Dictionary<string, Transform> _posts = new Dictionary<string, Transform>();
         private readonly Dictionary<string, Transform> _villagers = new Dictionary<string, Transform>();
         private readonly Dictionary<string, Transform> _plots = new Dictionary<string, Transform>();
@@ -96,8 +96,8 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Собирает поселение. Отдельно от Start, потому что редактор гоняет
-        /// сутки без режима игры — так снимается плёнка суток.
+        /// Збирає поселення. Окремо від Start, тому що редактор ганяє
+        /// доби без режиму гри — так знімається плівка діб.
         /// </summary>
         public void Initialize()
         {
@@ -112,8 +112,8 @@ namespace Game.Gameplay
             foreach (var slot in DefaultContent.AllSlots())
                 _base.AddSlot(slot);
 
-            // Хутор встречает с тем, что у общины уже есть; остальное строится,
-            // и пост без своего здания закрыт (Поправка №6.1).
+            // Хутір зустрічає тим, що в громади вже є; решта будується,
+            // і пост без своєї будівлі закритий (Поправка №6.1).
             _works = new CityWorks(DefaultBuildings.StartingSet);
             _works.ApplyToSlots(_base);
 
@@ -121,8 +121,8 @@ namespace Game.Gameplay
             _base.Resources.Add(Game.Core.Economy.ResourceType.Materials, startMaterials);
             _base.Resources.Add(Game.Core.Economy.ResourceType.Food, startFood);
 
-            // Людей меньше, чем постов — так и задумано (Поправка №5.1):
-            // расстановка становится решением, а не формальностью.
+            // Людей менше, ніж постів — так і задумано (Поправка №5.1):
+            // розстановка стає рішенням, а не формальністю.
             foreach (var pair in PostByVillager)
                 _base.TryAssign(pair.Key, pair.Value);
 
@@ -143,7 +143,7 @@ namespace Game.Gameplay
                 Tier = tier,
                 Roster = adapter,
                 Casualties = adapter,
-                Population = new PopulationState(80),   // хутор: до ста человек (Поправка №5.0)
+                Population = new PopulationState(80),   // хутір: до ста людей (Поправка №5.0)
                 Pulse = pulse,
                 Incidents = DefaultIncidents.BuildTable(),
                 Repeats = new RepeatTracker(),
@@ -166,14 +166,14 @@ namespace Game.Gameplay
             Apply(null, DayPhase.Day);
         }
 
-        /// <summary>Одна фаза: сутки идут, картинка догоняет.</summary>
+        /// <summary>Одна фаза: доба йде, картинка наздоганяє.</summary>
         public DayReport AdvancePhase()
         {
             if (_cycle == null) Initialize();
 
             var phase = _next;
 
-            // Хозяин решает перед днём: ночью стройка и совет не работают.
+            // Хазяїн вирішує перед днем: вночі стройка і рада не працюють.
             if (autoSteward && phase == DayPhase.Day)
                 SayOrders(_steward.Act(_works, _base, _cycle.Processor, _balance));
 
@@ -188,13 +188,13 @@ namespace Game.Gameplay
             return report;
         }
 
-        // ================= применение =================
+        // ================= застосування =================
 
         private void Apply(DayReport report, DayPhase phase)
         {
             var mood = report != null && report.Signals != null
                 ? report.Signals.Moodboard
-                : new Game.Core.Signals.MoodboardState(0, 0, null);   // до первых суток — хутор
+                : new Game.Core.Signals.MoodboardState(0, 0, null);   // до перших діб — хутір
 
             var sunPose = VillageView.SunFor(phase);
             if (sun != null)
@@ -229,8 +229,8 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Ночью село пустеет: жители по домам. Патруль — единственная причина
-        /// остаться на улице, и это видно без всякой подписи.
+        /// Вночі село пустіє: жителі по домівках. Патруль — єдина причина
+        /// лишитися на вулиці, і це видно без жодного підпису.
         /// </summary>
         private void ShowVillagers(DayPhase phase)
         {
@@ -246,8 +246,8 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Фигура стоит на посту, только если там правда кто-то есть: пост
-        /// открыт, занят и занявший жив. Пустой лазарет выглядит пустым.
+        /// Фігура стоїть на посту, лише якщо там справді хтось є: пост
+        /// відкритий, зайнятий і той, хто зайняв, живий. Порожній лазарет виглядає порожнім.
         /// </summary>
         private bool Staffed(string postId)
         {
@@ -261,9 +261,9 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Стройка видна глазами: пять стадий (US-7.3). Леса растут снизу вверх,
-        /// готовое здание встаёт в полный рост и получает подпись. Стадия —
-        /// чистая функция прошедших суток из ядра, отдельного геймплея нет.
+        /// Стройка видна очима: п'ять стадій (US-7.3). Ліси ростуть знизу вгору,
+        /// готова будівля встає в повний зріст і отримує підпис. Стадія —
+        /// чиста функція минулих діб з ядра, окремого геймплею нема.
         /// </summary>
         private void ShowPlots()
         {
@@ -286,7 +286,7 @@ namespace Game.Gameplay
             }
         }
 
-        /// <summary>Метка над местом происшествия: цвет — полоса исхода.</summary>
+        /// <summary>Мітка над місцем події: колір — полоса наслідку.</summary>
         private void ShowMarks(DayReport report)
         {
             for (int i = 0; i < _marks.Count; i++)
@@ -338,8 +338,8 @@ namespace Game.Gameplay
 
         private bool TryFindAnchorByDomain(string domain, out Transform anchor)
         {
-            // Домен приходит словом («склад», «рынок»), пост — идентификатором.
-            // Связь держим здесь: ядру про сцену знать нечего.
+            // Домен приходить словом («склад», «рынок»), пост — ідентифікатором.
+            // Зв'язок тримаємо тут: ядру про сцену знати нема чого.
             string postId;
             switch (domain)
             {
@@ -356,9 +356,9 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Что заказал хозяин — словами, чтобы в ленте было видно, почему город
-        /// меняется. Слова считает <see cref="VillageView.OrderLines"/> по
-        /// ключам таблицы (R7): здесь ни литералов, ни DisplayName из ядра.
+        /// Що замовив хазяїн — словами, щоб у стрічці було видно, чому місто
+        /// змінюється. Слова рахує <see cref="VillageView.OrderLines"/> за
+        /// ключами таблиці (R7): тут ні літералів, ні DisplayName з ядра.
         /// </summary>
         private void SayOrders(string did)
         {
@@ -369,16 +369,16 @@ namespace Game.Gameplay
         {
             if (string.IsNullOrEmpty(line)) return;
 
-            // Повтор подряд не пишем: «Тихо. Тихо. Тихо» — это обои, а не лента.
+            // Повтор поспіль не пишемо: «Тихо. Тихо. Тихо» — це шпалери, а не стрічка.
             if (_lines.Count > 0 && _lines[_lines.Count - 1] == line) return;
 
             _lines.Add(line);
             while (_lines.Count > logLines) _lines.RemoveAt(0);
         }
 
-        // ================= сцена и ростер =================
+        // ================= сцена і ростер =================
 
-        /// <summary>Посты и жители ищутся по именам: сцена собрана сборщиком.</summary>
+        /// <summary>Пости й жителі шукаються за іменами: сцена зібрана збирачем.</summary>
         private void BindScene()
         {
             _posts.Clear();
@@ -402,8 +402,8 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Шесть человек на семь постов. Имена пока служебные: именной ростер
-        /// придёт с карточкой персонажа (Поправка №5.2).
+        /// Шість людей на сім постів. Імена поки службові: іменний ростер
+        /// прийде з карткою персонажа (Поправка №5.2).
         /// </summary>
         private static readonly Dictionary<string, string> PostByVillager = new Dictionary<string, string>
         {

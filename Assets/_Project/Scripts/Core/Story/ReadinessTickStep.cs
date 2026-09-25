@@ -18,7 +18,7 @@ namespace Game.Core.Story
     /// Вилазка (B7) і завершення квесту (R6, поза конвеєром — §1.1) НЕ можуть
     /// пройти через цей крок узагалі: обидві події трапляються поза викликом
     /// <c>DayProcessor.Advance</c>. Для них <see cref="ReadinessTrack.Add"/>
-    /// (internal, той самий приём, що в TensionDrivers) викликає безпосередньо
+    /// (internal, той самий прийом, що в TensionDrivers) викликає безпосередньо
     /// D1 у момент, коли подія стається — задокументований сеам, не недогляд.
     /// </summary>
     public sealed class ReadinessTickStep : IDayStep

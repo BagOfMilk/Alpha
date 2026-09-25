@@ -63,7 +63,7 @@ namespace Game.Gameplay.UI
                     _skipCreation = !_skipCreation;
 
                 // Поправка №7: перемикач темпу шкали Напруги — той самий
-                // TabButton-приём, що правило попадання вище.
+                // TabButton-прийом, що правило попадання вище.
                 Widgets.Section(UkrainianText.Get("ui.title.tensionpace.section", g), () =>
                 {
                     if (Widgets.TabButton(UkrainianText.Get("ui.title.tensionpace.test", g), _testBuildTensionPace))

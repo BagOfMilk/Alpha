@@ -108,11 +108,11 @@ namespace Game.Gameplay
 
         private void Start()
         {
-            // Автопрогон и плейн-выход идут без человека у окна: если окно
-            // стартовало без фокуса, плеер с runInBackground=0 (ProjectSettings)
-            // не крутит кадры, и прогон висит до таймаута (замер 24.09.2026:
-            // один из четырёх запусков подряд завис ещё до титула). Игроку
-            // это не мешает — флаг меняется только в этих режимах.
+            // Автопрогон і плейн-вихід ідуть без людини за вікном: якщо вікно
+            // стартувало без фокуса, плеєр з runInBackground=0 (ProjectSettings)
+            // не крутить кадри, і прогін висить до тайм-ауту (замір 24.09.2026:
+            // один з чотирьох запусків поспіль завис ще до титулу). Гравцю
+            // це не заважає — прапорець змінюється тільки в цих режимах.
             if (HasArg(QuitAfterTitleFlag) || RequestedFromCommandLine())
                 Application.runInBackground = true;
 
@@ -215,7 +215,7 @@ namespace Game.Gameplay
             // самому прогоні): див. той самий фікс у GameShell.HandleWantsToQuit,
             // яка ловить і решту тригерів виходу (кнопка, Alt+F4, закриття
             // вікна) тим самим способом.
-            HardExit.Now(exitCode); // Environment.Exit зависал на выходе — см. HardExit
+            HardExit.Now(exitCode); // Environment.Exit зависав на виході — див. HardExit
         }
 
         private void WriteSummary()

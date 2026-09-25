@@ -1,6 +1,6 @@
 namespace Game.Core.Stats
 {
-    /// <summary>Группа скила. Разнесена по десяткам значений enum, а не отдельным полем.</summary>
+    /// <summary>Група скіла. Розведена по десятках значень enum, а не окремим полем.</summary>
     public enum SkillGroup
     {
         Combat = 0,
@@ -9,36 +9,36 @@ namespace Game.Core.Stats
     }
 
     /// <summary>
-    /// Десять скилов (GDD Э2.2). Растут за очки, классов нет, респека нет.
+    /// Десять скілів (GDD Е2.2). Ростуть за очки, класів немає, респеку немає.
     ///
-    /// Значения разнесены по десяткам: 1–9 бой, 10–19 утилита, 20–29 соц.
-    /// Это не украшение — по диапазону определяется группа, и тулинг карты
-    /// читает её оттуда же. Шкала 0–10.
+    /// Значення розведені по десятках: 1–9 бій, 10–19 утиліта, 20–29 соц.
+    /// Це не прикраса — за діапазоном визначається група, і тулінг карти
+    /// читає її звідти ж. Шкала 0–10.
     /// </summary>
     public enum SkillType
     {
         None = 0,
 
-        // Бой
-        Ranged = 1,       // стрелковое (тяжёлое оружие — его подтип)
-        Melee = 2,        // ближнее
+        // Бій
+        Ranged = 1,       // стрілецьке (важка зброя — його підтип)
+        Melee = 2,        // ближній бій
         Tactics = 3,      // тактика
 
-        // Утилита
-        Lockpick = 10,    // взлом
-        Mechanics = 11,   // механика
-        Survival = 12,    // выживание
+        // Утиліта
+        Lockpick = 10,    // злом
+        Mechanics = 11,   // механіка
+        Survival = 12,    // виживання
         Medicine = 13,    // медицина
 
         // Соц
-        Persuade = 20,    // убеждение
-        Intimidate = 21,  // запугивание
-        Trade = 22        // торговля
+        Persuade = 20,    // переконання
+        Intimidate = 21,  // залякування
+        Trade = 22        // торгівля
     }
 
     public static class Skills
     {
-        /// <summary>Все скилы без None — в порядке объявления.</summary>
+        /// <summary>Усі скіли без None — у порядку оголошення.</summary>
         public static readonly SkillType[] All =
         {
             SkillType.Ranged, SkillType.Melee, SkillType.Tactics,
@@ -46,7 +46,7 @@ namespace Game.Core.Stats
             SkillType.Persuade, SkillType.Intimidate, SkillType.Trade
         };
 
-        /// <summary>Группа читается из диапазона значения — второго источника правды нет.</summary>
+        /// <summary>Група читається з діапазону значення — другого джерела істини нема.</summary>
         public static SkillGroup GroupOf(SkillType s)
         {
             int v = (int)s;
@@ -76,8 +76,8 @@ namespace Game.Core.Stats
         }
 
         /// <summary>
-        /// Строковый ключ, которым скил зовётся в городском слое (SkillKeys).
-        /// Маппинг держится здесь, чтобы не расползтись по адаптерам.
+        /// Строковий ключ, яким скіл зветься в міському шарі (SkillKeys).
+        /// Мапінг тримається тут, щоб не розповзтися по адаптерах.
         /// </summary>
         public static string KeyId(SkillType s)
         {
@@ -97,7 +97,7 @@ namespace Game.Core.Stats
             }
         }
 
-        /// <summary>Обратный разбор строкового ключа. None — если ключ неизвестен.</summary>
+        /// <summary>Зворотний розбір строкового ключа. None — якщо ключ невідомий.</summary>
         public static SkillType FromKeyId(string id)
         {
             if (string.IsNullOrEmpty(id)) return SkillType.None;

@@ -14,16 +14,16 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Ход игрока внутри суток.
+    /// Хід гравця всередині доби.
     ///
-    /// В конвейере было двенадцать шагов вычисления и ноль шагов ввода: событие
-    /// выбиралось, проверка резолвилась и жертва назначалась внутри одного тика,
-    /// а игрок узнавал обо всём из протокола. Здесь конвейер впервые
-    /// ОСТАНАВЛИВАЕТСЯ и спрашивает.
+    /// У конвеєрі було дванадцять кроків обчислення і нуль кроків уводу: подія
+    /// вибиралася, перевірка резолвилася і жертва призначалася всередині одного тіку,
+    /// а гравець дізнавався про все з протоколу. Тут конвеєр вперше
+    /// ЗУПИНЯЄТЬСЯ і питає.
     ///
-    /// Заодно это единственное место, где оживает кровавый путь: он был выписан
-    /// в семи инцидентах и не читался ни одной строкой кода, потому что выбирать
-    /// было негде.
+    /// Заразом це єдине місце, де оживає кривавий шлях: він був виписаний
+    /// у семи інцидентах і не читався жодним рядком коду, бо вибирати
+    /// було нема де.
     /// </summary>
     public class PlayerDecisionTests
     {
@@ -66,7 +66,7 @@ namespace Game.Tests.EditMode
             };
         }
 
-        /// <summary>Крутит сутки, пока конвейер не остановится и не спросит.</summary>
+        /// <summary>Крутить доби, поки конвеєр не зупиниться і не спитає.</summary>
         private static DayReport RunUntilAsked(DayProcessor p, int maxDays = 60)
         {
             for (int day = 1; day <= maxDays; day++)
@@ -115,7 +115,7 @@ namespace Game.Tests.EditMode
             var cfg = new BalanceConfig();
             var p = Build(cfg, askPlayer: true);
 
-            // Ищем событие, у которого выписаны оба пути.
+            // Шукаємо подію, у якої виписані обидва шляхи.
             DayReport report = null;
             for (int i = 0; i < 40 && report == null; i++)
             {
@@ -175,21 +175,21 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Аудит П10: когда в одной фазе срабатывает больше одного инцидента,
-        /// КАЖДЫЙ становится своим решением по очереди — AwaitsDecision не
-        /// отпускает сутки, пока очередь фазы не опустеет. Раньше второе
-        /// срабатывание фазы тихо резолвилось само, и выбор без последствия
-        /// был именно тем дефектом, который правит эта поправка.
+        /// Аудит П10: коли в одній фазі спрацьовує більше одного інциденту,
+        /// КОЖЕН стає своїм рішенням по черзі — AwaitsDecision не
+        /// відпускає добу, поки черга фази не спорожніє. Раніше друге
+        /// спрацювання фази тихо резолвилося саме, і вибір без наслідку
+        /// був саме тим дефектом, який виправляє ця поправка.
         ///
-        /// Два авторских источника, оба выстрелившие ровно на сутки 1 (тот же
-        /// приём, что и у OpeningContent.ScriptedSource) — детерминированно, а
-        /// не «прогони подольше и надейся на совпадение накопителей».
+        /// Два авторських джерела, обидва вистрелили рівно на добу 1 (той самий
+        /// прийом, що й у OpeningContent.ScriptedSource) — детерміновано, а
+        /// не «прожени довше і сподівайся на збіг накопичувачів».
         /// </summary>
         [Test]
         public void Decision_TwoIncidentsInOnePhase_BothBecomeSeparateDecisions()
         {
             var cfg = new BalanceConfig();
-            cfg.Pulse.MaxFiresPerDay = 2; // обе заявки суток 1 обязаны поместиться в один день
+            cfg.Pulse.MaxFiresPerDay = 2; // обидві заявки доби 1 зобов'язані вміститися в один день
 
             var table = new IncidentTable();
             table.Add(new IncidentDefinition
@@ -245,19 +245,19 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Ревью А1 (major): офферы фазы раньше строились ОДНИМ проходом, весь
-        /// сразу, до первого хода игрока (IncidentStep.Execute). Если первый
-        /// инцидент фазы разбирался кровавым путём — страх общины армируется на
-        /// ТЕКУЩИЕ сутки, — а второй инцидент фазы шёл тихим СОЦИАЛЬНЫМ подходом
-        /// (Persuade/Trade), его показанный порог считался по состоянию Fear ДО
-        /// разрешения первого, а применялся — ПОСЛЕ. Показанное и применённое
-        /// расходились: прямое нарушение инварианта 8 («порог, который видит
-        /// игрок, обязан быть тем же, что применится»). Воспроизводимо в обычной
-        /// игре — MaxFiresPerNight/Day=2 по умолчанию.
+        /// Рев'ю А1 (major): оффери фази раніше будувалися ОДНИМ проходом, весь
+        /// одразу, до першого ходу гравця (IncidentStep.Execute). Якщо перший
+        /// інцидент фази розбирався кривавим шляхом — страх громади озброюється на
+        /// ПОТОЧНУ добу, — а другий інцидент фази йшов тихим СОЦІАЛЬНИМ підходом
+        /// (Persuade/Trade), його показаний поріг рахувався за станом Fear ДО
+        /// розв'язання першого, а застосовувався — ПІСЛЯ. Показане і застосоване
+        /// розходилися: пряме порушення інваріанту 8 («поріг, який бачить
+        /// гравець, зобов'язаний бути тим самим, що застосується»). Відтворювано в
+        /// звичайній грі — MaxFiresPerNight/Day=2 за замовчуванням.
         ///
-        /// Чинится тем, что PendingDecision строится ЛЕНИВО, в момент выемки
-        /// следующего элемента очереди (DayProcessor.TryDequeueNextPending), а
-        /// не заранее в IncidentStep.Execute — см. IncidentStep.BuildOffer.
+        /// Лагодиться тим, що PendingDecision будується ЛІНИВО, в момент вилучення
+        /// наступного елемента черги (DayProcessor.TryDequeueNextPending), а
+        /// не заздалегідь в IncidentStep.Execute — див. IncidentStep.BuildOffer.
         /// </summary>
         [Test]
         public void Decision_SecondQueuedIncident_ShownThresholdMatchesWhatResolves_AfterFirstArmsFear()
@@ -273,8 +273,8 @@ namespace Game.Tests.EditMode
                 BloodyPathSkill = SkillKeys.Tactics, BloodyPathThreshold = 4,
                 RelevantPositionId = Positions[0]
             };
-            // Тихий путь — СОЦИАЛЬНЫЙ подход: именно такие пороги растут от
-            // страха общины (IncidentResolver.IsSocial: Persuade/Trade).
+            // Тихий шлях — СОЦІАЛЬНИЙ підхід: саме такі пороги ростуть від
+            // страху громади (IncidentResolver.IsSocial: Persuade/Trade).
             var social = new IncidentDefinition
             {
                 Id = "test_social", TopicId = "test.social", SourceId = "test.social", DomainTag = "тест",
@@ -294,9 +294,9 @@ namespace Game.Tests.EditMode
             var adapter = new RosterAdapter(roster);
 
             var pulse = new WorldPulse(cfg.Pulse);
-            // Порядок отбора при равном заполнении решает Id по возрастанию
-            // (WorldPulse.Advance) — "test.bloody" < "test.social", кровавый
-            // инцидент гарантированно встаёт в очередь первым.
+            // Порядок відбору при рівному заповненні вирішує Id за зростанням
+            // (WorldPulse.Advance) — "test.bloody" < "test.social", кривавий
+            // інцидент гарантовано стає в чергу першим.
             pulse.AddSource(new OpeningContent.ScriptedSource("test.bloody", "тест", 1));
             pulse.AddSource(new OpeningContent.ScriptedSource("test.social", "тест", 1));
 
@@ -327,9 +327,9 @@ namespace Game.Tests.EditMode
 
             var shown = report2.Pending.Options.First(o => o.Path == IncidentPath.Quiet);
 
-            // Пересчитываем НЕЗАВИСИМО, тем же путём, каким резолвер применит
-            // порог при фактическом разборе, — прямо сейчас, пока Fear в том же
-            // состоянии, что увидит ResolvePending(Quiet) следующим вызовом.
+            // Перераховуємо НЕЗАЛЕЖНО, тим самим шляхом, яким резолвер застосує
+            // поріг при фактичному розборі, — прямо зараз, поки Fear в тому самому
+            // стані, що побачить ResolvePending(Quiet) наступним викликом.
             var request = IncidentResolver.BuildRequest(social, IncidentPath.Quiet, p.Fear, report2.Day, cfg);
             var preview = CheckResolver.Preview(request, p.Roster, p.Repeats, report2.Day, cfg);
 

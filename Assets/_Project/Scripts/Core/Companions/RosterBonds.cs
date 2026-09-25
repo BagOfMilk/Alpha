@@ -4,11 +4,11 @@ using Game.Core.Characters;
 namespace Game.Core.Companions
 {
     /// <summary>
-    /// Связи ростера по ценностям (US-9.6, порт B4): вычисляются на лету из
-    /// тегов ценностей трейтов напарников через <see cref="Companion.Traits"/>
-    /// (<c>TraitSlots.Values</c>) — НЕ хранимая NxN-матрица. Даёт affinity
-    /// между двумя и списки соратников/соперников одного напарника (для ряби
-    /// в <see cref="RosterDrama"/> и баентера в <see cref="Banter"/>).
+    /// Зв'язки ростера за цінностями (US-9.6, порт B4): обчислюються на льоту з
+    /// тегів цінностей трейтів напарників через <see cref="Companion.Traits"/>
+    /// (<c>TraitSlots.Values</c>) — НЕ збережена NxN-матриця. Дає affinity
+    /// між двома і списки соратників/суперників одного напарника (для ряби
+    /// в <see cref="RosterDrama"/> і баентера в <see cref="Banter"/>).
     /// </summary>
     public sealed class RosterBonds
     {
@@ -26,8 +26,8 @@ namespace Game.Core.Companions
         }
 
         /// <summary>
-        /// Живые напарники (кроме антагонистов — они больше не "свои", см. B4
-        /// аудит §4.5) с заданным типом связи к <paramref name="c"/> (кроме него).
+        /// Живі напарники (крім антагоністів — вони більше не "свої", див. B4
+        /// аудит §4.5) із заданим типом зв'язку до <paramref name="c"/> (крім нього).
         /// </summary>
         public List<Companion> WithBond(Roster roster, Companion c, BondType bond)
         {

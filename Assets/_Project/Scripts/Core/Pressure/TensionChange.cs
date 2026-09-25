@@ -1,9 +1,9 @@
 namespace Game.Core.Pressure
 {
     /// <summary>
-    /// Запись в дневном журнале: кто, сколько запросил и сколько реально получил.
-    /// Нужна для тестов-гарантий (например «дни лечения не растят угрозу»)
-    /// и для слоя сигналов — по смене полосы он обязан выдать сигнал.
+    /// Запис у денному журналі: хто, скільки запросив і скільки реально отримав.
+    /// Потрібна для тестів-гарантій (наприклад «дні лікування не ростять загрозу»)
+    /// і для шару сигналів — за зміною полоси він зобов'язаний видати сигнал.
     /// </summary>
     public readonly struct TensionChange
     {
@@ -12,7 +12,7 @@ namespace Game.Core.Pressure
         public readonly int Applied;
         public readonly TensionBand From;
         public readonly TensionBand To;
-        /// <summary>Драйвер оказался вне белого списка — изменение не применено.</summary>
+        /// <summary>Драйвер опинився поза білим списком — зміну не застосовано.</summary>
         public readonly bool Rejected;
         public readonly string SourceId;
 

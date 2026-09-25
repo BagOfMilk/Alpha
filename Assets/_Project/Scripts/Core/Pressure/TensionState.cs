@@ -5,40 +5,40 @@ using Game.Core.Balance;
 namespace Game.Core.Pressure
 {
     /// <summary>
-    /// Скрытая шкала «Напряжение».
+    /// Прихована шкала «Напруга».
     ///
-    /// Ключевое архитектурное решение: <see cref="Value"/> объявлен internal.
-    /// Сборка Game.Gameplay физически не может его прочитать, поэтому дашборд
-    /// метрик невозможно собрать даже по ошибке (US-7.1, US-17.2). Наружу уходит
-    /// только <see cref="Band"/> — полоса, которая питает слой сигналов.
+    /// Ключове архітектурне рішення: <see cref="Value"/> оголошений internal.
+    /// Збірка Game.Gameplay фізично не може його прочитати, тому дашборд
+    /// метрик неможливо зібрати навіть помилково (US-7.1, US-17.2). Назовні виходить
+    /// лише <see cref="Band"/> — полоса, яка живить шар сигналів.
     /// </summary>
     public sealed class TensionState
     {
         private readonly TensionBalance _cfg;
         private readonly List<TensionChange> _dayLedger = new List<TensionChange>();
         /// <summary>
-        /// Дробный остаток — СВОЙ у каждого драйвера. Общий остаток смешивал
-        /// вклады: дренаж храма −0.5 тонул в фоновом тике +1.0, суммарное
-        /// Напряжение выходило верным, но журнал записывал снижение тику, а
-        /// храму — ноль. Журнал драйверов — это ответ на вопрос «почему», и он
-        /// обязан отвечать правду.
+        /// Дробовий залишок — СВІЙ у кожного драйвера. Спільний залишок змішував
+        /// внески: дренаж храму −0.5 тонув у фоновому тіку +1.0, сумарна
+        /// Напруга виходила вірною, але журнал записував зниження тіку, а
+        /// храму — нуль. Журнал драйверів — це відповідь на питання «чому», і він
+        /// зобов'язаний відповідати правду.
         /// </summary>
         private readonly Dictionary<TensionDriver, double> _fractions = new Dictionary<TensionDriver, double>();
         private TensionBand _band;
 
-        /// <summary>Сырое значение. НЕ показывать игроку ни при каких условиях.</summary>
+        /// <summary>Сире значення. НЕ показувати гравцю за жодних умов.</summary>
         internal int Value { get; private set; }
 
         public TensionBand Band => _band;
         public int DaysInCurrentBand { get; private set; }
 
-        /// <summary>Смена полосы обязана породить сигнал (Поправка №3.4).</summary>
+        /// <summary>Зміна полоси зобов'язана породити сигнал (Поправка №3.4).</summary>
         public event Action<TensionBand, TensionBand> BandChanged;
 
-        /// <summary>Журнал изменений за текущий день — для тестов и слоя сигналов.</summary>
+        /// <summary>Журнал змін за поточний день — для тестів і шару сигналів.</summary>
         internal IReadOnlyList<TensionChange> DayLedger => _dayLedger;
 
-        /// <summary>Дробный остаток фонового тика — часть состояния, без него сейв теряет доли очка.</summary>
+        /// <summary>Дробовий залишок фонового тіку — частина стану, без нього сейв втрачає частки очка.</summary>
         internal double FractionForSave => FractionOf(TensionDriver.CityTierTick);
 
         internal double FractionOf(TensionDriver driver)
@@ -48,9 +48,9 @@ namespace Game.Core.Pressure
         }
 
         /// <summary>
-        /// Остатки остальных драйверов — строкой «драйвер:остаток,…» по
-        /// возрастанию номера драйвера, чтобы слепок был детерминированным.
-        /// Остаток тика сюда не входит: он хранится отдельным полем.
+        /// Залишки решти драйверів — рядком «драйвер:залишок,…» за
+        /// зростанням номера драйвера, щоб зліпок був детермінованим.
+        /// Залишок тіку сюди не входить: він зберігається окремим полем.
         /// </summary>
         internal string OtherFractionsForSave()
         {
@@ -86,9 +86,9 @@ namespace Game.Core.Pressure
         }
 
         /// <summary>
-        /// Восстановление из слепка. Полоса не хранится, а пересчитывается из
-        /// значения: иначе сейв, сделанный до правки порогов, вернул бы полосу,
-        /// которой это значение больше не соответствует.
+        /// Відновлення зі зліпка. Полоса не зберігається, а перераховується зі
+        /// значення: інакше сейв, зроблений до правки порогів, повернув би полосу,
+        /// якій це значення більше не відповідає.
         /// </summary>
         internal void RestoreForSave(int value, double fraction, int daysInBand)
         {
@@ -107,7 +107,7 @@ namespace Game.Core.Pressure
             _band = _cfg.BandFor(Value);
         }
 
-        /// <summary>Целочисленное изменение от конкретного драйвера.</summary>
+        /// <summary>Цілочисельна зміна від конкретного драйвера.</summary>
         internal TensionChange Apply(TensionDriver driver, int delta, string sourceId)
         {
             var from = _band;
@@ -119,9 +119,9 @@ namespace Game.Core.Pressure
         }
 
         /// <summary>
-        /// Дробное изменение (фоновый тик, пассивный дренаж Храма/Укреплений).
-        /// Остаток копится, поэтому тик 0.85/день за 20 дней даёт ровно 17,
-        /// а не 20 округлений подряд.
+        /// Дробова зміна (фоновий тік, пасивний дренаж Храму/Укріплень).
+        /// Залишок накопичується, тому тік 0.85/день за 20 днів дає рівно 17,
+        /// а не 20 округлень підряд.
         /// </summary>
         internal TensionChange ApplyFractional(TensionDriver driver, double delta, string sourceId)
         {
@@ -137,7 +137,7 @@ namespace Game.Core.Pressure
             return Record(new TensionChange(driver, whole, applied, from, _band, false, sourceId));
         }
 
-        /// <summary>Вызывается процессором дня после всех шагов.</summary>
+        /// <summary>Викликається процесором дня після всіх кроків.</summary>
         internal void OnDayAdvanced()
         {
             DaysInCurrentBand++;

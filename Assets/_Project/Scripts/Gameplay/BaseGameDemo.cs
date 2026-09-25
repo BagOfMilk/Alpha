@@ -11,13 +11,13 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Играбельная демонстрация модуля «База и напарники» без UI: повесь на
-    /// пустой GameObject в сцене, нажми Play — в консоль выведется расстановка
-    /// напарников по слотам и отчёт по каждому циклу (день за днём).
+    /// Грайбельна демонстрація модуля «База і напарники» без UI: повісь на
+    /// порожній GameObject у сцені, натисни Play — у консоль виведеться розстановка
+    /// напарників по слотах і звіт по кожному циклу (день за днем).
     ///
-    /// Это «исполняемая спецификация» механики: видно, как статы напарников
-    /// превращаются в ресурсы, как капает ролевой опыт и идут уровни. Удобно
-    /// сверять баланс на глаз, прежде чем строить интерфейс.
+    /// Це «виконувана специфікація» механіки: видно, як стати напарників
+    /// перетворюються на ресурси, як капає рольовий досвід і йдуть рівні. Зручно
+    /// звіряти баланс на око, перш ніж будувати інтерфейс.
     /// </summary>
     public sealed class BaseGameDemo : MonoBehaviour
     {
@@ -37,12 +37,12 @@ namespace Game.Gameplay
         [ContextMenu("Run Simulation")]
         public void RunSimulation()
         {
-            // Ассет с числами баланса, если он положен в инспектор; иначе дефолты из кода.
+            // Ассет із числами балансу, якщо він покладений в інспектор; інакше дефолти з коду.
             var balance = balanceAsset != null ? balanceAsset.ToConfig() : new BalanceConfig();
             var state = BuildBase(balance, out var assignments);
 
-            // Время двигает только конвейер: позвать производство в обход него
-            // больше нельзя — AdvanceCycle закрыт для этой сборки.
+            // Час рухає тільки конвеєр: покликати виробництво в обхід нього
+            // більше не можна — AdvanceCycle закритий для цієї збірки.
             var production = new ProductionStep(state);
             var processor = new DayProcessor(new TensionState(balance.Tension), balance,
                 SettlementCycle.BuildSteps(production));
@@ -67,16 +67,16 @@ namespace Game.Gameplay
             Debug.Log(FormatWallet(state.Resources));
         }
 
-        /// <summary>Собирает базу из дефолтного контента на дефолтных числах баланса.</summary>
+        /// <summary>Збирає базу з дефолтного контенту на дефолтних числах балансу.</summary>
         public static BaseState BuildBase(out System.Collections.Generic.List<(string, string)> assignments)
         {
             return BuildBase(new BalanceConfig(), out assignments);
         }
 
         /// <summary>
-        /// Собирает базу из дефолтного контента на переданных числах баланса и делает
-        /// разумную расстановку. Числа приходят снаружи, чтобы их можно было крутить
-        /// ассетом <see cref="BalanceConfigAsset"/>, не трогая код.
+        /// Збирає базу з дефолтного контенту на переданих числах балансу і робить
+        /// розумну розстановку. Числа приходять ззовні, щоб їх можна було крутити
+        /// ассетом <see cref="BalanceConfigAsset"/>, не чіпаючи код.
         /// </summary>
         public static BaseState BuildBase(BalanceConfig balance, out System.Collections.Generic.List<(string, string)> assignments)
         {
@@ -88,15 +88,15 @@ namespace Game.Gameplay
             foreach (var slotDef in DefaultContent.AllSlots())
                 state.AddSlot(slotDef);
 
-            // По одному напарнику каждого архетипа.
+            // По одному напарнику кожного архетипу.
             int n = 1;
             foreach (var arch in DefaultContent.AllArchetypes())
                 roster.Add(arch.CreateInstance($"{arch.Id}_{n++}"));
 
-            // Стартовый запас еды, чтобы поселение не голодало с первого дня.
+            // Стартовий запас їжі, щоб поселення не голодувало з першого дня.
             ledger.Add(ResourceType.Food, 20);
 
-            // Расставляем людей по их сильным сторонам.
+            // Розставляємо людей за їхніми сильними сторонами.
             assignments = new System.Collections.Generic.List<(string, string)>
             {
                 ("leader_6", "council_seat"),

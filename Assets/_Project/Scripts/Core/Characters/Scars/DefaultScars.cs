@@ -4,11 +4,11 @@ using Game.Core.Stats;
 namespace Game.Core.Characters.Scars
 {
     /// <summary>
-    /// Контент вечного трека шрамов (R16/G10): раньше <see cref="ScarTrack"/>
-    /// существовал, но ранение до шрама не доходило нигде — трек стоял пустым
-    /// всю кампанию. Здесь же — и сам контент (id/ключи, без украинского
-    /// текста: он в <c>UkrainianText</c>, Core только ключи, R7), и единственная
-    /// точка решения «какой шрам».
+    /// Контент вічного треку шрамів (R16/G10): раніше <see cref="ScarTrack"/>
+    /// існував, але поранення до шраму не доходило ніде — трек стояв порожнім
+    /// усю кампанію. Тут же — і сам контент (id/ключі, без українського
+    /// тексту: він у <c>UkrainianText</c>, Core лише ключі, R7), і єдина
+    /// точка рішення «який шрам».
     /// </summary>
     public static class DefaultScars
     {
@@ -29,8 +29,8 @@ namespace Game.Core.Characters.Scars
                 .WithModifier(StatKeys.Of(DerivedStat.StatusDurationReduction), -0.25);
 
         /// <summary>
-        /// Порядок объявления здесь и есть порядок выбора (см. <see cref="PickNext"/>):
-        /// без него «детерминированный выбор» нечем было бы гарантировать.
+        /// Порядок оголошення тут і є порядком вибору (див. <see cref="PickNext"/>):
+        /// без нього «детермінований вибір» не було б чим гарантувати.
         /// </summary>
         public static IReadOnlyList<ScarDefinition> All() => new List<ScarDefinition>
         {
@@ -38,10 +38,10 @@ namespace Game.Core.Characters.Scars
         };
 
         /// <summary>
-        /// Детерминированный выбор шрама (R16): никакого броска. Берётся первый
-        /// по каталогу шрам, которого у напарника ещё нет и чей минимальный тир
-        /// не выше тира этой раны — очередь шрамов одна на всех и не зависит от
-        /// повода (инцидент, вылазка, позже — бой).
+        /// Детермінований вибір шраму (R16): жодного кидка. Береться перший
+        /// за каталогом шрам, якого в напарника ще немає і чий мінімальний тір
+        /// не вищий за тір цієї рани — черга шрамів одна на всіх і не залежить від
+        /// приводу (інцидент, вилазка, пізніше — бій).
         /// </summary>
         public static ScarDefinition PickNext(Companion companion, WoundTier tier)
         {
@@ -57,10 +57,10 @@ namespace Game.Core.Characters.Scars
         }
 
         /// <summary>
-        /// Единая точка присвоения (R16/G10): и рана с поста (<c>RosterAdapter.Wound</c>),
-        /// и рана с вылазки (<c>ExpeditionRunner.Complete</c>) идут через неё. Бой
-        /// (когда появится) обязан ранить только через <c>RosterAdapter.Wound</c> (R5)
-        /// и таким образом тоже попасть сюда — второй копии этой логики не будет.
+        /// Єдина точка присвоєння (R16/G10): і рана з посту (<c>RosterAdapter.Wound</c>),
+        /// і рана з вилазки (<c>ExpeditionRunner.Complete</c>) ідуть через неї. Бій
+        /// (коли з'явиться) зобов'язаний ранити тільки через <c>RosterAdapter.Wound</c> (R5)
+        /// і таким чином теж потрапити сюди — другої копії цієї логіки не буде.
         /// </summary>
         public static bool TryGrant(Companion companion, WoundTier tier, out ScarDefinition granted)
         {

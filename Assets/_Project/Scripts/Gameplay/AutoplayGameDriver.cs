@@ -77,7 +77,7 @@ namespace Game.Gameplay
         private bool _delveDeparted;
         private bool _crisisFinaleAttempted;
 
-        /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" приём, що <see cref="_capturedOnce"/> нижче.</summary>
+        /// <summary>Скільки подій <see cref="GameSession.DayLog"/> уже перевірено на потребу знімка (-autoplay-long) — той самий "не повторюй" прийом, що <see cref="_capturedOnce"/> нижче.</summary>
         private int _dayLogScanIndex;
 
         /// <summary>
@@ -695,7 +695,7 @@ namespace Game.Gameplay
         /// рядки <see cref="GameSession.DayLog"/> і знімає рівно по одному
         /// скріншоту на кожен зсув смуги Напруги, кожен щабель передвісника
         /// природної кризи (<c>SubjectId=="crisis"</c>) і саму розв'язку
-        /// бунту на площі — той самий "не повторюй" приём, що
+        /// бунту на площі — той самий "не повторюй" прийом, що
         /// <see cref="_capturedOnce"/> для choice/consequence вище.
         /// </summary>
         private IEnumerable<int> ScanForGreatCrisisSignals()

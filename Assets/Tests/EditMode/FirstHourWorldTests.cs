@@ -7,10 +7,10 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Мир первого часа (Foundation/A1): постройка перенесена из
-    /// tools/Shared/SettlementWorld в ядро (аудит G8/G9/G15). Тесты проверяют
-    /// контракт, а не баланс: кто на каком посту, кто зарегистрирован актором,
-    /// что два построения дают тождественный мир.
+    /// Світ першої години (Foundation/A1): побудова перенесена з
+    /// tools/Shared/SettlementWorld у ядро (аудит G8/G9/G15). Тести перевіряють
+    /// контракт, а не баланс: хто на якому посту, хто зареєстрований актором,
+    /// що два побудови дають тотожний світ.
     /// </summary>
     public class FirstHourWorldTests
     {
@@ -49,8 +49,8 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("keeper", world.BaseState.GetSlot("storehouse_dock").AssignedCompanionId);
             Assert.AreEqual("healer", world.BaseState.GetSlot("infirmary_bed").AssignedCompanionId);
 
-            // Четыре из семи постов пустуют на старте (§3.0 FIRST_HOUR) — это
-            // видимая цена, а не забытая расстановка.
+            // Чотири з семи постів порожні на старті (§3.0 FIRST_HOUR) — це
+            // видима ціна, а не забута розстановка.
             foreach (var empty in new[] { "settlement_market", "settlement_farms", "scouting_post", "workshop_bench" })
                 Assert.IsNull(world.BaseState.GetSlot(empty).AssignedCompanionId, empty + " обязан пустовать на старте");
 

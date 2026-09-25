@@ -34,7 +34,7 @@ namespace Game.Core.Session.Bots
         /// CombatAutoResolve). Дає покрокову спостережуваність BattleView між
         /// окремими діями, як AttackNearest/Overwatch, але без наївної
         /// тактики BotRunner.ExecuteCombatAction, яка не вміє зближувати
-        /// мілі-юнітів способністю (Рывок) і програє явно нерівні бої раніше,
+        /// мілі-юнітів здатністю (Ривок) і програє явно нерівні бої раніше,
         /// ніж мілі-боєць встигає дійти до контакту.
         /// </summary>
         SmartAiTurn
@@ -81,7 +81,7 @@ namespace Game.Core.Session.Bots
         /// <summary>Коротке ім'я для звітів/трас (напр. "Steward", "Pacifist").</summary>
         string Name { get; }
 
-        /// <summary>Тихий чи кровавий шлях на будь-якій точці рішення (інцидент/данж-кімната/криза/фінал — BotRunner передає синтетичний офер для тих, що не мають природного PendingOfferView).</summary>
+        /// <summary>Тихий чи кривавий шлях на будь-якій точці рішення (інцидент/данж-кімната/криза/фінал — BotRunner передає синтетичний офер для тих, що не мають природного PendingOfferView).</summary>
         IncidentPath ChooseIncidentPath(PendingOfferView offer);
 
         /// <summary>Індекс варіанту для квесту-вибору АБО події данжу (Type=="Event") — 0, якщо Options порожній.</summary>

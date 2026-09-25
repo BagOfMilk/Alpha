@@ -14,8 +14,8 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Ночь и доклады с постов. Здесь защищается Поправка №3.8 и §3.9:
-    /// пустая позиция — это слепота, а сон — потеря сигналов.
+    /// Ніч і доповіді з постів. Тут захищається Поправка №3.8 і §3.9:
+    /// порожня позиція — це сліпота, а сон — втрата сигналів.
     /// </summary>
     public class NightAndReportTests
     {
@@ -51,14 +51,14 @@ namespace Game.Tests.EditMode
             };
         }
 
-        // ---- Доклад с постов ----
+        // ---- Доповідь з постів ----
 
         [Test]
         public void PostReport_UnmannedPosition_IsSilent()
         {
             var cfg = Cfg();
             var roster = new Roster();
-            roster.Add(Guard("idle", 20)); // сильный, но пост не держит
+            roster.Add(Guard("idle", 20)); // сильний, але пост не тримає
 
             var report = MakeProcessor(cfg, roster).Advance();
 
@@ -99,7 +99,7 @@ namespace Game.Tests.EditMode
                 "Слабый напарник докладывает расплывчато");
         }
 
-        // ---- Ночь ----
+        // ---- Ніч ----
 
         [Test]
         public void Night_HasNoCitizenLines()
@@ -165,9 +165,9 @@ namespace Game.Tests.EditMode
             var p = MakeProcessor(cfg, roster, "hero");
             p.IsPatrolling = true;
 
-            // Старт 500 — это «Брожение». Город за сотню фаз доходит до верхних
-            // полос сам (исходы инцидентов плюс фоновый тик), поэтому кризис
-            // здесь возможен — но только на своих условиях. Проверяем ровно их.
+            // Старт 500 — це «Бродіння». Місто за сотню фаз доходить до верхніх
+            // полос само (наслідки інцидентів плюс фоновий тік), тому криза
+            // тут можлива — але тільки на своїх умовах. Перевіряємо саме їх.
             bool heardLevel3 = false;
             int crises = 0;
 
@@ -184,8 +184,8 @@ namespace Game.Tests.EditMode
                         $"Фаза {day}: кризис невозможен ниже «Накала» — накопитель там не активен");
                 }
 
-                // Отмечаем ПОСЛЕ проверки: предвестник этой же фазы не считается
-                // предупреждением для удара этой же фазы.
+                // Позначаємо ПІСЛЯ перевірки: передвісник цієї ж фази не вважається
+                // попередженням для удару цієї ж фази.
                 if (report.Forewarnings.Any(f => f.SourceId == "crisis" && f.Level >= 3))
                     heardLevel3 = true;
             }
@@ -212,7 +212,7 @@ namespace Game.Tests.EditMode
             {
                 var report = day % 2 == 0 ? p.Advance(DayPhase.Night) : p.Advance(DayPhase.Day);
                 foreach (var r in report.Signals.Requests) seen.Add(r.Channel);
-                seen.Add(SignalChannel.Moodboard); // мудборд уходит отдельным полем дайджеста
+                seen.Add(SignalChannel.Moodboard); // мудборд іде окремим полем дайджесту
             }
 
             foreach (SignalChannel channel in System.Enum.GetValues(typeof(SignalChannel)))

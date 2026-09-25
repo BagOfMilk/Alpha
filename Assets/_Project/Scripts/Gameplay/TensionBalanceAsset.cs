@@ -4,10 +4,10 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// Числа скрытой шкалы «Напряжение» в инспекторе. Правятся в Play-режиме
-    /// без перекомпиляции (US-18.3).
+    /// Числа прихованої шкали «Напруга» в інспекторі. Правляться в Play-режимі
+    /// без перекомпіляції (US-18.3).
     ///
-    /// Создание: ПКМ в Project → Create → Alpha → Balance → Напряжение.
+    /// Створення: ПКМ у Project → Create → Alpha → Balance → Напряжение.
     /// </summary>
     [CreateAssetMenu(fileName = "TensionBalance", menuName = "Alpha/Balance/Напряжение", order = 10)]
     public sealed class TensionBalanceAsset : ScriptableObject
@@ -47,8 +47,8 @@ namespace Game.Gameplay
                 BloodDeltaPerNode = bloodDeltaPerNode,
                 BloodCapPerExpedition = bloodCapPerExpedition
 
-                // Белый список драйверов НАМЕРЕННО не выведен в инспектор:
-                // это дизайн-решение уровня поправки к GDD, а не крутилка баланса.
+                // Білий список драйверів НАВМИСНО не виведений в інспектор:
+                // це дизайн-рішення рівня поправки до GDD, а не крутилка балансу.
             };
         }
     }

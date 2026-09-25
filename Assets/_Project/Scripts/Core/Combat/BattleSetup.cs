@@ -2,21 +2,21 @@ using System.Collections.Generic;
 
 namespace Game.Core.Combat
 {
-    /// <summary>Какое правило попадания использует бой (BattleSetup.HitRule → конкретный IHitRule).</summary>
+    /// <summary>Яке правило влучання використовує бій (BattleSetup.HitRule → конкретний IHitRule).</summary>
     public enum HitRuleKind
     {
         Threshold = 0,
         Percent = 1
     }
 
-    /// <summary>Стена на тайле (непроходима и блокирует обзор) — самый частый вид укрытия арены.</summary>
+    /// <summary>Стіна на тайлі (непрохідна і блокує огляд) — найчастіший вид укриття арени.</summary>
     public readonly struct WallPlacement
     {
         public readonly GridPos Pos;
         public WallPlacement(GridPos pos) { Pos = pos; }
     }
 
-    /// <summary>Направленное укрытие (не стена): полу/полное с конкретной стороны тайла.</summary>
+    /// <summary>Спрямоване укриття (не стіна): напів/повне з конкретної сторони тайла.</summary>
     public readonly struct CoverPlacement
     {
         public readonly GridPos Pos;
@@ -31,7 +31,7 @@ namespace Game.Core.Combat
         }
     }
 
-    /// <summary>Где встаёт один боец отряда игрока — по id напарника (Roster не читаем, только id).</summary>
+    /// <summary>Де стає один боєць загону гравця — за id напарника (Roster не читаємо, тільки id).</summary>
     public readonly struct PlayerSpawn
     {
         public readonly string CompanionId;
@@ -44,7 +44,7 @@ namespace Game.Core.Combat
         }
     }
 
-    /// <summary>Где встаёт один враг — по id из каталога EnemyDefinition (DefaultCombatContent и контент-пакеты).</summary>
+    /// <summary>Де стає один ворог — за id з каталогу EnemyDefinition (DefaultCombatContent і контент-пакети).</summary>
     public readonly struct EnemySpawn
     {
         public readonly string EnemyDefinitionId;
@@ -58,20 +58,20 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Вход городского лупа в тактический бой (§2 таблицы «одна гра»): всё, что
-    /// нужно, чтобы собрать CombatState, не заглядывая в BaseState/Roster.
-    /// Комбат данные о ростере не читает — тот, кто просит бой (PassVanguardOutcome/
-    /// DungeonRun/Finale, все — D1), сам резолвит companion id → Companion и
-    /// передаёт готовые данные через BattleUnitFactory (см. DefaultCombatContent).
+    /// Вхід міського лупу в тактичний бій (§2 таблиці «одна гра»): усе, що
+    /// потрібно, щоб зібрати CombatState, не заглядаючи в BaseState/Roster.
+    /// Комбат дані про ростер не читає — той, хто просить бій (PassVanguardOutcome/
+    /// DungeonRun/Finale, усі — D1), сам резолвить companion id → Companion і
+    /// передає готові дані через BattleUnitFactory (див. DefaultCombatContent).
     ///
-    /// BattleSetup НЕ несёт сид/кубик: для HitRule=Percent сам IDiceRoller —
-    /// отдельный параметр CombatBattleBuilder.Build, и его владелец — вызывающий
-    /// (D1/GameSession), не Core (R1 — Core не реализует IDiceRoller вовсе, см.
-    /// ArchitectureGuardTests.Core_NoTypeImplementsIDiceRoller). Сид игровой сессии
-    /// живёт в NewGameOptions.Seed (§4 TEST_BUILD.md) и превращается в один
-    /// SeededDiceRoller ДО вызова Build — тот же экземпляр должен использоваться
-    /// на весь бой (и, если нужно, на всю сессию), иначе «тот же сид — тот же бой»
-    /// не выполняется.
+    /// BattleSetup НЕ несе сід/кубик: для HitRule=Percent сам IDiceRoller —
+    /// окремий параметр CombatBattleBuilder.Build, і його власник — викликач
+    /// (D1/GameSession), не Core (R1 — Core не реалізує IDiceRoller взагалі, див.
+    /// ArchitectureGuardTests.Core_NoTypeImplementsIDiceRoller). Сід ігрової сесії
+    /// живе в NewGameOptions.Seed (§4 TEST_BUILD.md) і перетворюється на один
+    /// SeededDiceRoller ДО виклику Build — той самий екземпляр має використовуватись
+    /// на весь бій (і, якщо потрібно, на всю сесію), інакше «той самий сід — той самий бій»
+    /// не виконується.
     /// </summary>
     public sealed class BattleSetup
     {
@@ -85,9 +85,9 @@ namespace Game.Core.Combat
         public List<EnemySpawn> EnemyUnits = new List<EnemySpawn>();
 
         /// <summary>
-        /// Id напарника-перебежчика, если он бьётся на стороне врага в этом
-        /// бою (R8: Мирослава как FromDefector в финале, если зрада —
-        /// решение Б4/R2, здесь — только параметр). Null — зрадника в бою нет.
+        /// Id напарника-перебіжчика, якщо він б'ється на боці ворога в цьому
+        /// бою (R8: Мирослава як FromDefector у фіналі, якщо зрада —
+        /// рішення Б4/R2, тут — тільки параметр). Null — зрадника в бою немає.
         /// </summary>
         public string DefectorCompanionId;
         public GridPos DefectorPos;

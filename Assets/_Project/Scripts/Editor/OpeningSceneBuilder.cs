@@ -7,13 +7,13 @@ using UnityEngine.SceneManagement;
 namespace Game.Gameplay.EditorTools
 {
     /// <summary>
-    /// Собирает сцену «Открытие» — портретную сцену первых суток, ту же, что
-    /// печатает текстовая сборка.
+    /// Збирає сцену «Відкриття» — портретну сцену перших діб, ту саму, що
+    /// друкує текстова збірка.
     ///
-    /// Сцена генерируется, а не лежит в репозитории, по той же причине, что и
-    /// «Хроника»: сцена ссылается на скрипт по GUID из .meta, а .meta
-    /// создаются локально и не коммитятся. Готовая сцена из репозитория
-    /// ссылалась бы в пустоту.
+    /// Сцена генерується, а не лежить у репозиторії, з тієї ж причини, що й
+    /// «Хроніка»: сцена посилається на скрипт за GUID із .meta, а .meta
+    /// створюються локально і не комітяться. Готова сцена з репозиторію
+    /// посилалась би у порожнечу.
     /// </summary>
     public static class OpeningSceneBuilder
     {
@@ -29,11 +29,11 @@ namespace Game.Gameplay.EditorTools
             EnsureFolder("Assets/Resources", "Portraits");
             EnsurePortraitReadme();
 
-            // Режим выбирается по тому, есть ли что терять. Аддитивно — чтобы не
-            // закрыть открытую у владельца сцену с несохранёнными правками; но в
-            // batchmode открыта пустая безымянная сцена, и аддитивно к ней Unity
-            // создавать отказывается («untitled scene unsaved»). Поймано первым
-            // же прогоном в batchmode.
+            // Режим обирається за тим, чи є що втрачати. Адитивно — щоб не
+            // закрити відкриту у власника сцену з незбереженими правками; але в
+            // batchmode відкрита порожня безіменна сцена, і адитивно до неї Unity
+            // створювати відмовляється («untitled scene unsaved»). Спіймано першим
+            // же прогоном у batchmode.
             var mode = CurrentSceneIsIdle() ? NewSceneMode.Single : NewSceneMode.Additive;
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, mode);
 
@@ -51,9 +51,9 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Художнику нужно знать, куда класть файлы и как их называть, — иначе
-        /// он спросит программиста, а вся затея с ключами ровно в том, чтобы
-        /// не спрашивал.
+        /// Художнику потрібно знати, куди класти файли і як їх називати, — інакше
+        /// він спитає програміста, а вся затія з ключами якраз у тому, щоб
+        /// не питав.
         /// </summary>
         private static void EnsurePortraitReadme()
         {
@@ -89,7 +89,7 @@ namespace Game.Gameplay.EditorTools
             EditorBuildSettings.scenes = scenes.ToArray();
         }
 
-        /// <summary>Открыта пустая безымянная сцена: терять нечего.</summary>
+        /// <summary>Відкрита порожня безіменна сцена: втрачати нічого.</summary>
         private static bool CurrentSceneIsIdle()
         {
             var active = SceneManager.GetActiveScene();

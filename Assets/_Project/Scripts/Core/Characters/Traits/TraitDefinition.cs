@@ -4,20 +4,20 @@ using Game.Core.Stats;
 
 namespace Game.Core.Characters.Traits
 {
-    /// <summary>Знак трейта. Пороки существуют наравне с добродетелями (GDD Э2.3).</summary>
+    /// <summary>Знак трейта. Вади існують нарівні з чеснотами (GDD Е2.3).</summary>
     public enum TraitPolarity
     {
-        Vice = -1,    // порок
-        Neutral = 0,  // нейтральный
-        Virtue = 1    // добродетель
+        Vice = -1,    // вада
+        Neutral = 0,  // нейтральний
+        Virtue = 1    // чеснота
     }
 
     /// <summary>
-    /// Трейт — тег со знаком, занимающий слот (GDD Э2.3).
+    /// Трейт — тег зі знаком, що займає слот (GDD Е2.3).
     ///
-    /// Один и тот же список модификаторов работает и на базе, и в бою: трейт не
-    /// знает, где его читают, потому что всё уходит в общий агрегатор. Это и есть
-    /// «один эффект — одна система» — трейт не дублируется двумя механиками.
+    /// Один і той самий список модифікаторів працює і на базі, і в бою: трейт не
+    /// знає, де його читають, бо все йде в загальний агрегатор. Це і є
+    /// «один ефект — одна система» — трейт не дублюється двома механіками.
     /// </summary>
     [Serializable]
     public sealed class TraitDefinition
@@ -26,16 +26,16 @@ namespace Game.Core.Characters.Traits
         public string DisplayName;
         public TraitPolarity Polarity = TraitPolarity.Neutral;
 
-        /// <summary>Что трейт меняет в числах. Уходит в StatResolver как есть.</summary>
+        /// <summary>Що трейт змінює в числах. Йде в StatResolver як є.</summary>
         public List<StatModifier> Modifiers = new List<StatModifier>();
 
         /// <summary>
-        /// Ценности персонажа: по ним сходятся и конфликтуют напарники (US-9.6).
-        /// Здесь только теги — сама механика связей живёт в слое ростера.
+        /// Цінності персонажа: за ними сходяться і конфліктують напарники (US-9.6).
+        /// Тут лише теги — сама механіка зв'язків живе в шарі ростера.
         /// </summary>
         public List<string> Values = new List<string>();
 
-        /// <summary>Особые опции проверок, которые трейт открывает (US-2.6).</summary>
+        /// <summary>Особливі опції перевірок, які трейт відкриває (US-2.6).</summary>
         public List<string> UnlocksOptionIds = new List<string>();
 
         public TraitDefinition() { }

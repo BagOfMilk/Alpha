@@ -4,25 +4,25 @@ using System.Collections.Generic;
 namespace Game.Core.Combat
 {
     /// <summary>
-    /// Запись журнала боя для игрока (R7): текстовый ключ + аргументы — id
-    /// юнитов, числа и токены (<c>status</c>, <c>damageType</c>, <c>abilityId</c>),
-    /// но НИ ОДНОГО готового слова. Слова живут в Gameplay (UkrainianText):
-    /// Core не знает, на каком языке его покажут.
+    /// Запис журналу бою для гравця (R7): текстовий ключ + аргументи — id
+    /// юнітів, числа й токени (<c>status</c>, <c>damageType</c>, <c>abilityId</c>),
+    /// але ЖОДНОГО готового слова. Слова живуть у Gameplay (UkrainianText):
+    /// Core не знає, якою мовою його покажуть.
     ///
-    /// Рождается в паре со строкой диагностического трейса
-    /// (<see cref="CombatState.Log"/>, internal) одним вызовом
-    /// <c>CombatState.Record</c> — забыть одну из двух нельзя физически.
+    /// Народжується в парі з рядком діагностичного трейсу
+    /// (<see cref="CombatState.Log"/>, internal) одним викликом
+    /// <c>CombatState.Record</c> — забути один із двох не можна фізично.
     ///
-    /// Имена аргументов одни на весь журнал: <c>unitId</c> — подлежащее строки
-    /// (кто действует или с кем что-то происходит), <c>targetId</c> — второй
-    /// участник, если он есть. Числа — InvariantCulture.
+    /// Імена аргументів одні на весь журнал: <c>unitId</c> — підмет рядка
+    /// (хто діє або з ким щось відбувається), <c>targetId</c> — другий
+    /// учасник, якщо він є. Числа — InvariantCulture.
     /// </summary>
     public sealed class CombatLogEntry
     {
-        /// <summary>Раунд, в котором случилось событие (0 — до начала боя).</summary>
+        /// <summary>Раунд, у якому сталася подія (0 — до початку бою).</summary>
         public readonly int Round;
 
-        /// <summary>Ключ из закрытого списка <see cref="CombatLogKeys.All"/>.</summary>
+        /// <summary>Ключ із закритого списку <see cref="CombatLogKeys.All"/>.</summary>
         public readonly string Key;
 
         public readonly IReadOnlyDictionary<string, string> Args;
@@ -38,14 +38,14 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Закрытый список ключей журнала боя — всё, что <see cref="CombatState"/>
-    /// может записать. Тест сверяет его с текстовой таблицей, поэтому новый
-    /// ключ без текста не доживёт до экрана: сначала константа здесь и строка
-    /// в UkrainianText, потом вызов в CombatState.
+    /// Закритий список ключів журналу бою — усе, що <see cref="CombatState"/>
+    /// може записати. Тест звіряє його з текстовою таблицею, тому новий
+    /// ключ без тексту не доживе до екрана: спершу константа тут і рядок
+    /// в UkrainianText, потім виклик у CombatState.
     /// </summary>
     public static class CombatLogKeys
     {
-        // ---- рамка боя ----
+        // ---- рамка бою ----
         public const string Started = "combat.log.started";
         public const string RoundStarted = "combat.log.round";
         public const string Retreat = "combat.log.retreat";
@@ -54,7 +54,7 @@ namespace Game.Core.Combat
         public const string Victory = "combat.log.victory";
         public const string Defeat = "combat.log.defeat";
 
-        // ---- действия текущего юнита ----
+        // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
         public const string OverwatchSet = "combat.log.overwatch.set";
         public const string Strike = "combat.log.strike";
@@ -64,7 +64,7 @@ namespace Game.Core.Combat
         public const string AttackCrit = "combat.log.attack.crit";
         public const string Stabilize = "combat.log.stabilize";
 
-        // ---- способности и их эффекты ----
+        // ---- здібності та їхні ефекти ----
         public const string Ability = "combat.log.ability";
         public const string Damage = "combat.log.damage";
         public const string Shred = "combat.log.shred";
@@ -76,7 +76,7 @@ namespace Game.Core.Combat
         public const string HackedToPlayer = "combat.log.hacked.to_player";
         public const string HackedToEnemy = "combat.log.hacked.to_enemy";
 
-        // ---- дозор ----
+        // ---- дозор (overwatch) ----
         public const string OverwatchFired = "combat.log.overwatch.fired";
         public const string OverwatchExpired = "combat.log.overwatch.expired";
         public const string OverwatchLostDisplaced = "combat.log.overwatch.lost.displaced";
@@ -85,11 +85,11 @@ namespace Game.Core.Combat
         public const string OverwatchLostKnockedDown = "combat.log.overwatch.lost.knocked_down";
         public const string OverwatchLostOut = "combat.log.overwatch.lost.out";
 
-        // ---- ловушки ----
+        // ---- пастки ----
         public const string TrapTriggered = "combat.log.trap.triggered";
         public const string TrapDamage = "combat.log.trap.damage";
 
-        // ---- состояния ----
+        // ---- стани ----
         public const string StatusApplied = "combat.log.status.applied";
         public const string StatusRemoved = "combat.log.status.removed";
         public const string StatusExpired = "combat.log.status.expired";
@@ -97,7 +97,7 @@ namespace Game.Core.Combat
         public const string StandUp = "combat.log.stand_up";
         public const string StunnedSkip = "combat.log.stunned_skip";
 
-        // ---- даун и смерть ----
+        // ---- даун і смерть ----
         public const string Downed = "combat.log.downed";
         public const string BleedingOut = "combat.log.bleeding_out";
         public const string WindowExpired = "combat.log.window_expired";
@@ -128,10 +128,10 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Токен состояния для аргумента <c>status</c>. Явное сопоставление, а
-        /// не PascalCase→snake_case: новое значение <see cref="StatusType"/> без
-        /// своей строки должно упасть громко (тест прогоняет все значения), а не
-        /// молча дать ключ, которого нет в таблице.
+        /// Токен стану для аргументу <c>status</c>. Явне зіставлення, а
+        /// не PascalCase→snake_case: нове значення <see cref="StatusType"/> без
+        /// свого рядка мусить впасти голосно (тест проганяє всі значення), а не
+        /// мовчки дати ключ, якого немає в таблиці.
         /// </summary>
         public static string StatusId(StatusType type)
         {
@@ -148,7 +148,7 @@ namespace Game.Core.Combat
             }
         }
 
-        /// <summary>Токен типа урона для аргумента <c>damageType</c> — тот же принцип, что у <see cref="StatusId"/>.</summary>
+        /// <summary>Токен типу урону для аргументу <c>damageType</c> — той самий принцип, що й у <see cref="StatusId"/>.</summary>
         public static string DamageTypeId(DamageType type)
         {
             switch (type)

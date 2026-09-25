@@ -295,7 +295,7 @@ namespace Game.Core.Session.Bots
 
                         if (session.CurrentView.Day == 5 && !finaleResolvedDay5)
                         {
-                            // Позначаємо ДО виклику: кровавий шлях підвішує бій і
+                            // Позначаємо ДО виклику: кривавий шлях підвішує бій і
                             // повертається в Night вдруге лише ПІСЛЯ його розв'язку
                             // (GameSession.CompleteFinale) — другий візит має вже
                             // йти в AdvanceNight(), інакше "Фінал уже розв'язано".

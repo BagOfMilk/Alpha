@@ -4,29 +4,29 @@ using Game.Core.Pressure;
 namespace Game.Core.Balance
 {
     /// <summary>
-    /// Числа скрытой шкалы «Напряжение» и её белый список драйверов.
+    /// Числа прихованої шкали «Напруга» і її білий список драйверів.
     ///
-    /// ЯКОРЬ шкалы: хутор без единого действия игрока НЕ доходит до кризиса за всю
-    /// кампанию. При тике 1/день и кампании 150–200 дней пассивный дрейф — около
-    /// одной полосы. Значит кризис — это всегда выборы игрока плюс тир города,
-    /// а не течение времени (гарантия US-1.3).
+    /// ЯКІР шкали: хутір без жодної дії гравця НЕ доходить до кризи за всю
+    /// кампанію. При тику 1/добу і кампанії 150–200 днів пасивний дрейф — близько
+    /// однієї полоси. Отже криза — це завжди вибори гравця плюс тір міста,
+    /// а не плин часу (гарантія US-1.3).
     /// </summary>
     [Serializable]
     public sealed class TensionBalance
     {
         public int Max = 1000;
 
-        /// <summary>Границы полос: ниже первой — Спокойно, выше последней — Излом.</summary>
+        /// <summary>Межі полос: нижче першої — Спокій, вище останньої — Злам.</summary>
         public int[] BandThresholds = { 200, 400, 600, 800 };
 
-        /// <summary>Фоновый тик по тиру города (хутор → городок).</summary>
+        /// <summary>Фоновий тик за тіром міста (хутір → містечко).</summary>
         public double[] TierTickPerDay = { 1.0, 2.0, 4.0, 7.0 };
 
-        /// <summary>Множитель тика по Укладу (Вольница → Затвор). Уклад не новый
-        /// драйвер, а модулятор существующего — см. Поправку №3.5.</summary>
+        /// <summary>Множник тика за Укладом (Вольниця → Затвор). Уклад не новий
+        /// драйвер, а модулятор наявного — див. Поправку №3.5.</summary>
         public double[] OrderTickMultiplier = { 1.25, 1.0, 0.85, 0.7 };
 
-        /// <summary>Кому позволено повышать. Всё остальное отклоняется.</summary>
+        /// <summary>Кому дозволено підвищувати. Усе інше відхиляється.</summary>
         public TensionDriver[] AllowedRaising =
         {
             TensionDriver.CityTierTick,
@@ -36,7 +36,7 @@ namespace Game.Core.Balance
             TensionDriver.Hunger
         };
 
-        /// <summary>Кому позволено понижать.</summary>
+        /// <summary>Кому дозволено знижувати.</summary>
         public TensionDriver[] AllowedLowering =
         {
             TensionDriver.CouncilRaid,
@@ -46,7 +46,7 @@ namespace Game.Core.Balance
             TensionDriver.EventOutcome
         };
 
-        /// <summary>Вес выборов в квестах: мелкий / крупный / чудовищный.</summary>
+        /// <summary>Вага виборів у квестах: дрібний / великий / жахливий.</summary>
         public int ChoiceMinor = 15;
         public int ChoiceMajor = 40;
         public int ChoiceMonstrous = 60;
@@ -58,7 +58,7 @@ namespace Game.Core.Balance
         public int BloodDeltaPerNode = 10;
         public int BloodCapPerExpedition = 50;
 
-        /// <summary>Сколько Напряжения добавляет один голодный день (Поправка №4).</summary>
+        /// <summary>Скільки Напруги додає один голодний день (Поправка №4).</summary>
         public int HungerDeltaPerDay = 8;
 
         public TensionBand BandFor(int value)
@@ -71,8 +71,8 @@ namespace Game.Core.Balance
         }
 
         /// <summary>
-        /// Белый список в действии: положительная дельта разрешена только
-        /// повышающим драйверам, отрицательная — только понижающим.
+        /// Білий список у дії: додатна дельта дозволена лише
+        /// підвищувальним драйверам, від'ємна — лише знижувальним.
         /// </summary>
         public bool IsAllowed(TensionDriver driver, double delta)
         {
@@ -82,7 +82,7 @@ namespace Game.Core.Balance
             return true;
         }
 
-        /// <summary>Фоновый тик за день с учётом тира и Уклада.</summary>
+        /// <summary>Фоновий тик за день з урахуванням тіра і Уклада.</summary>
         public double TierTick(int tier, int orderLevel)
         {
             double baseTick = Pick(TierTickPerDay, tier - 1, 1.0);

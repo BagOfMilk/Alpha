@@ -3,8 +3,8 @@ using System.Collections.Generic;
 namespace Game.Core.Signals
 {
     /// <summary>
-    /// Итог дня для игрока. ЕДИНСТВЕННОЕ, что читает городской UI: чисел
-    /// скрытых шкал здесь нет и быть не может.
+    /// Підсумок дня для гравця. ЄДИНЕ, що читає міський UI: чисел
+    /// прихованих шкал тут нема і бути не може.
     /// </summary>
     public sealed class SignalDigest
     {
@@ -18,7 +18,7 @@ namespace Game.Core.Signals
         }
     }
 
-    /// <summary>Приёмник сигналов; реализуется в Game.Gameplay (UI, звук, сцена).</summary>
+    /// <summary>Приймач сигналів; реалізується в Game.Gameplay (UI, звук, сцена).</summary>
     public interface ISignalSink
     {
         void Publish(SignalDigest digest);

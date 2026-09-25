@@ -39,9 +39,9 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Уровень раздаёт очки СКИЛОВ и только их: атрибуты по US-2.1 поднимает
-        /// один аугмент. Если это правило когда-нибудь потекёт, ломаться начнёт
-        /// здесь, а не в балансе поздней игры.
+        /// Рівень роздає очки СКІЛІВ і лише їх: атрибути за US-2.1 піднімає
+        /// один аугмент. Якщо це правило колись потече, ламатися почне
+        /// тут, а не в балансі пізньої гри.
         /// </summary>
         [Test]
         public void LevelUp_GrowsSkills_ButNeverAttributes()
@@ -60,7 +60,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(6, comp.Attribute(AttributeType.Strength), "атрибут не трогали");
         }
 
-        /// <summary>Потолок шкалы держит: излишек сгорает, а не течёт за границу.</summary>
+        /// <summary>Стеля шкали тримає: надлишок згорає, а не тече за межу.</summary>
         [Test]
         public void LevelUp_StopsAtSkillCeiling()
         {

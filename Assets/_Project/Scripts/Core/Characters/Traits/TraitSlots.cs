@@ -3,21 +3,21 @@ using Game.Core.Stats;
 
 namespace Game.Core.Characters.Traits
 {
-    /// <summary>Исход попытки взять трейт.</summary>
+    /// <summary>Наслідок спроби взяти трейт.</summary>
     public enum TraitAddResult
     {
         Added = 0,
         AlreadyPresent = 1,
-        SlotsFull = 2,   // US-2.4: игрок выбирает — вытеснить существующий или отказаться
+        SlotsFull = 2,   // US-2.4: гравець обирає — витіснити наявний або відмовитися
         Invalid = 3
     }
 
     /// <summary>
-    /// Активные трейты персонажа в фиксированном числе слотов (GDD US-2.4).
+    /// Активні трейти персонажа у фіксованій кількості слотів (GDD US-2.4).
     ///
-    /// Переполнение не бросает исключение и не роняет трейт молча, а возвращает
-    /// SlotsFull — потому что по дизайну это развилка для игрока, а не ошибка.
-    /// Интерфейс превращает её в диалог «вытеснить или отказаться».
+    /// Переповнення не кидає виняток і не втрачає трейт мовчки, а повертає
+    /// SlotsFull — бо за дизайном це розвилка для гравця, а не помилка.
+    /// Інтерфейс перетворює її на діалог «витіснити чи відмовитися».
     /// </summary>
     public sealed class TraitSlots : IModifierProvider
     {
@@ -28,7 +28,7 @@ namespace Game.Core.Characters.Traits
             Capacity = capacity < 0 ? 0 : capacity;
         }
 
-        /// <summary>Ёмкость берётся из баланса — число слотов тюнится без перекомпиляции.</summary>
+        /// <summary>Місткість береться з балансу — кількість слотів тюниться без перекомпіляції.</summary>
         public static TraitSlots FromConfig(Game.Core.Balance.BalanceConfig cfg)
             => new TraitSlots(cfg == null ? 0 : cfg.TraitSlots);
 
@@ -49,8 +49,8 @@ namespace Game.Core.Characters.Traits
         }
 
         /// <summary>
-        /// Вытеснить один трейт другим — вторая половина развилки US-2.4.
-        /// Обмен атомарный: если входящий не годится, исходящий остаётся на месте.
+        /// Витіснити один трейт іншим — друга половина розвилки US-2.4.
+        /// Обмін атомарний: якщо вхідний не годиться, вихідний лишається на місці.
         /// </summary>
         public bool Replace(string outgoingId, TraitDefinition incoming)
         {
@@ -83,7 +83,7 @@ namespace Game.Core.Characters.Traits
             }
         }
 
-        /// <summary>Ценности всех активных трейтов — вход для связей ростера (US-9.6).</summary>
+        /// <summary>Цінності всіх активних трейтів — вхід для зв'язків ростера (US-9.6).</summary>
         public IReadOnlyList<string> Values
         {
             get

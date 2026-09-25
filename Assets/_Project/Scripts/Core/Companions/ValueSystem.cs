@@ -2,27 +2,27 @@ using System.Collections.Generic;
 
 namespace Game.Core.Companions
 {
-    /// <summary>Тип связи двух напарников по ценностям (US-9.6, порт B4).</summary>
+    /// <summary>Тип зв'язку двох напарників за цінностями (US-9.6, порт B4).</summary>
     public enum BondType
     {
-        Friction = -1, // конфликтуют по противоположным ценностям
+        Friction = -1, // конфліктують за протилежними цінностями
         Neutral = 0,
-        Kinship = 1    // сходятся по общим ценностям
+        Kinship = 1    // сходяться за спільними цінностями
     }
 
     /// <summary>
-    /// Лёгкий эмерджентный слой связей по ценностям (US-9.6): НЕ трекаемая
-    /// NxN-матрица, а вычисление по уже готовым данным — тегам ценностей из
-    /// <see cref="Game.Core.Characters.Traits.TraitDefinition.Values"/> (та же
-    /// таблица, что и агрегатор статов читает через <c>TraitSlots.Values</c>).
-    /// Общий тег сближает (+), противоположная пара ссорит (−); итог —
+    /// Легкий емерджентний шар зв'язків за цінностями (US-9.6): НЕ відстежувана
+    /// NxN-матриця, а обчислення за вже готовими даними — тегами цінностей з
+    /// <see cref="Game.Core.Characters.Traits.TraitDefinition.Values"/> (та сама
+    /// таблиця, яку агрегатор статів читає через <c>TraitSlots.Values</c>).
+    /// Спільний тег зближує (+), протилежна пара сварить (−); підсумок —
     /// Kinship/Neutral/Friction.
     /// </summary>
     public sealed class ValueSystem
     {
         private readonly HashSet<string> _opposed = new HashSet<string>();
 
-        /// <summary>Объявляет пару ценностей противоположными (контент).</summary>
+        /// <summary>Оголошує пару цінностей протилежними (контент).</summary>
         public ValueSystem Oppose(string a, string b)
         {
             if (!string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b)) _opposed.Add(Key(a, b));
@@ -31,7 +31,7 @@ namespace Game.Core.Companions
 
         public bool AreOpposed(string a, string b) => _opposed.Contains(Key(a, b));
 
-        /// <summary>Счёт связи: +за каждую общую ценность, −за каждую противоположную пару.</summary>
+        /// <summary>Рахунок зв'язку: +за кожну спільну цінність, −за кожну протилежну пару.</summary>
         public int Score(IEnumerable<string> aValues, IEnumerable<string> bValues)
         {
             var a = ToSet(aValues);
@@ -40,10 +40,10 @@ namespace Game.Core.Companions
 
             int score = 0;
             foreach (var v in a)
-                if (b.Contains(v)) score++; // общая ценность
+                if (b.Contains(v)) score++; // спільна цінність
             foreach (var x in a)
                 foreach (var y in b)
-                    if (AreOpposed(x, y)) score--; // противоположные ценности
+                    if (AreOpposed(x, y)) score--; // протилежні цінності
             return score;
         }
 
@@ -64,15 +64,15 @@ namespace Game.Core.Companions
             => string.CompareOrdinal(a, b) <= 0 ? a + "|" + b : b + "|" + a;
     }
 
-    /// <summary>Канонические ценности среза (ПЛЕЙСХОЛДЕР-флавор) + их противоположности.</summary>
+    /// <summary>Канонічні цінності зрізу (ПЛЕЙСХОЛДЕР-флейвор) + їхні протилежності.</summary>
     public static class DefaultValues
     {
         public const string Order = "order";       // порядок
         public const string Freedom = "freedom";   // свобода
-        public const string Mercy = "mercy";       // милосердие
-        public const string Ruthless = "ruthless"; // жёсткость
-        public const string Duty = "duty";         // долг
-        public const string Profit = "profit";     // выгода
+        public const string Mercy = "mercy";       // милосердя
+        public const string Ruthless = "ruthless"; // жорсткість
+        public const string Duty = "duty";         // обов'язок
+        public const string Profit = "profit";     // вигода
 
         public static ValueSystem System() => new ValueSystem()
             .Oppose(Order, Freedom)

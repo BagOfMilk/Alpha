@@ -3,24 +3,24 @@ using Game.Core.Pressure;
 
 namespace Game.Core.World
 {
-    /// <summary>Чем кризис бьёт. Список закрыт: каждый исход требует своей системы.</summary>
+    /// <summary>Чим криза б'є. Список закритий: кожен наслідок вимагає своєї системи.</summary>
     public enum CrisisBite
     {
-        /// <summary>Ранение напарника, выводящее его из строя надолго.</summary>
+        /// <summary>Поранення напарника, що виводить його з ладу надовго.</summary>
         WoundCompanion = 0,
-        /// <summary>Смерть напарника. Необратима (US-11.1).</summary>
+        /// <summary>Смерть напарника. Незворотна (US-11.1).</summary>
         KillCompanion = 1,
-        /// <summary>Отток населения.</summary>
+        /// <summary>Відтік населення.</summary>
         PopulationOutflow = 2
     }
 
     /// <summary>
-    /// Инцидент как ДАННЫЕ (US-11.3). В Unity станет ScriptableObject; здесь —
-    /// чистый C#, чтобы ядро тестировалось без движка.
+    /// Інцидент як ДАНІ (US-11.3). В Unity стане ScriptableObject; тут —
+    /// чистий C#, щоб ядро тестувалося без рушія.
     ///
-    /// Ключевое поле — <see cref="QuietPathSkill"/>: у каждого инцидента ОБЯЗАН
-    /// быть ненасильственный путь (Поправка №1). Это проверяется тестом по всему
-    /// контенту, а не остаётся на совести автора.
+    /// Ключове поле — <see cref="QuietPathSkill"/>: у кожного інциденту ОБОВ'ЯЗКОВО
+    /// має бути ненасильницький шлях (Поправка №1). Це перевіряється тестом за
+    /// всім контентом, а не лишається на совісті автора.
     /// </summary>
     public sealed class IncidentDefinition
     {
@@ -29,37 +29,37 @@ namespace Game.Core.World
         public string DomainTag;
 
         /// <summary>
-        /// Какой накопитель порождает этот инцидент. Пусто — подходит любому
-        /// (удобно для узких тестов). Без этой связки предвестник называет один
-        /// домен, а приходит событие из совсем другого.
+        /// Який накопичувач породжує цей інцидент. Порожньо — підходить будь-якому
+        /// (зручно для вузьких тестів). Без цього зв'язку передвісник називає один
+        /// домен, а приходить подія із зовсім іншого.
         /// </summary>
         public string SourceId;
 
-        /// <summary>С какой полосы Напряжения инцидент вообще возможен.</summary>
+        /// <summary>З якої полоси Напруги інцидент взагалі можливий.</summary>
         public TensionBand MinBand = TensionBand.Murmur;
-        /// <summary>Выше этой полосы мелочь вытесняется серьёзными вещами.</summary>
+        /// <summary>Вище цієї полоси дрібницю витісняють серйозні речі.</summary>
         public TensionBand MaxBand = TensionBand.Fracture;
 
         public int MinTier = 1;
-        /// <summary>Вес в таблице отбора; больше — чаще (US-11.3).</summary>
+        /// <summary>Вага в таблиці відбору; більше — частіше (US-11.3).</summary>
         public int Weight = 10;
 
-        /// <summary>Только ночной инцидент (US-1.5: ночь — окно угроз).</summary>
+        /// <summary>Лише нічний інцидент (US-1.5: ніч — вікно загроз).</summary>
         public bool NightOnly;
 
-        /// <summary>Тихий путь: навык и порог. ОБЯЗАТЕЛЕН.</summary>
+        /// <summary>Тихий шлях: навичка і поріг. ОБОВ'ЯЗКОВИЙ.</summary>
         public SkillKey QuietPathSkill;
         public int QuietPathThreshold = 5;
         public ApproachForm QuietPathApproach = ApproachForm.Neutral;
 
-        /// <summary>Кровавый путь: быстрее, но дороже по последствиям.</summary>
+        /// <summary>Кривавий шлях: швидше, але дорожче за наслідками.</summary>
         public SkillKey BloodyPathSkill;
         public int BloodyPathThreshold = 4;
 
-        /// <summary>Позиция, чей держатель разбирается с этим (US-8.2).</summary>
+        /// <summary>Посада, чий держатель розбирається з цим (US-8.2).</summary>
         public string RelevantPositionId;
 
-        /// <summary>Дельта Напряжения по полосам исхода: Худшая → Лучшая.</summary>
+        /// <summary>Дельта Напруги за полосами наслідку: Найгірша → Найкраща.</summary>
         public int[] TensionByBand = { 40, 15, -10, -30 };
 
         public bool IsCrisis;
@@ -67,20 +67,20 @@ namespace Game.Core.World
         public int PopulationLoss = 20;
 
         /// <summary>
-        /// Сколько людей приходит в город, если разбор удался на Хорошую или
-        /// Лучшую полосу (Поправка №6.3: «прийти по івенту»). Ноль — событие
-        /// людей не приводит.
+        /// Скільки людей приходить у місто, якщо розбір вдався на Хорошу або
+        /// Найкращу полосу (Поправка №6.3: «прийти по івенту»). Нуль — подія
+        /// людей не приводить.
         /// </summary>
         public int ArrivalsOnGood;
 
-        /// <summary>Есть ли у инцидента прописанный тихий путь.</summary>
+        /// <summary>Чи є в інциденту прописаний тихий шлях.</summary>
         public bool HasQuietPath => !QuietPathSkill.IsNone;
 
-        /// <summary>Есть ли кровавый путь. Обязательным он не является (Поправка №1).</summary>
+        /// <summary>Чи є кривавий шлях. Обов'язковим він не є (Поправка №1).</summary>
         public bool HasBloodyPath => !BloodyPathSkill.IsNone;
     }
 
-    /// <summary>Что случилось по итогу — публично, потому что это уже произошло.</summary>
+    /// <summary>Що сталося за підсумком — публічно, бо це вже відбулося.</summary>
     public readonly struct IncidentOutcome
     {
         public readonly string IncidentId;
@@ -94,14 +94,14 @@ namespace Game.Core.World
         public readonly int PopulationLost;
 
         /// <summary>
-        /// Сколько людей пришло в город по итогам разбора (Поправка №6.3:
-        /// «прийти по івенту»). Ноль у большинства событий.
+        /// Скільки людей прийшло в місто за підсумками розбору (Поправка №6.3:
+        /// «прийти по івенту»). Нуль у більшості подій.
         /// </summary>
         public readonly int PeopleArrived;
 
         /// <summary>
-        /// Разбор напугал общину: кровавый путь или провалившееся запугивание.
-        /// Слой сигналов обязан это озвучить — страх не имеет права прийти молча.
+        /// Розбір налякав громаду: кривавий шлях або провалене залякування.
+        /// Шар сигналів зобов'язаний це озвучити — страх не має права прийти мовчки.
         /// </summary>
         public readonly bool CausedFear;
 

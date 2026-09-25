@@ -3,15 +3,15 @@ using System;
 namespace Game.Core.Base
 {
     /// <summary>
-    /// Заворачивает <see cref="BaseState"/> в порт <c>Game.Core.Loop.IStateBlob</c>
-    /// для <c>DayProcessor.Economy</c> (Foundation/A1, закрывает D10).
+    /// Загортає <see cref="BaseState"/> у порт <c>Game.Core.Loop.IStateBlob</c>
+    /// для <c>DayProcessor.Economy</c> (Foundation/A1, закриває D10).
     ///
-    /// Ровно тот же приём, каким <c>RosterAdapter</c> (SettlementAdapters.cs)
-    /// заворачивает <c>Roster</c>, не заставляя сам Roster реализовывать
-    /// контракты Loop. Здесь — та же схема для BaseState: сам BaseState
-    /// намеренно не реализует ни один Loop-контракт (охранитель
-    /// BaseState_HasNoBackdoorToAdvanceTime), а его CaptureState/RestoreState —
-    /// обычные публичные методы, которые этот адаптер просто делегирует.
+    /// Рівно той самий прийом, яким <c>RosterAdapter</c> (SettlementAdapters.cs)
+    /// загортає <c>Roster</c>, не змушуючи сам Roster реалізовувати
+    /// контракти Loop. Тут — та сама схема для BaseState: сам BaseState
+    /// навмисно не реалізує жодного Loop-контракту (охоронець
+    /// BaseState_HasNoBackdoorToAdvanceTime), а його CaptureState/RestoreState —
+    /// звичайні публічні методи, які цей адаптер просто делегує.
     /// </summary>
     public sealed class EconomyBlob : Loop.IStateBlob
     {

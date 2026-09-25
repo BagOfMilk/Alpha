@@ -3,16 +3,16 @@ using System;
 namespace Game.Core.Balance
 {
     /// <summary>
-    /// Числа тактического боя (Б1, R14): собраны в своей секции, чтобы семь
-    /// параллельных пакетов не редактировали один общий список полей
-    /// одновременно. Подключается одним свойством в BalanceConfig.Combat.
-    /// Все значения — ПЛЕЙСХОЛДЕРЫ (перенесены из архивной боевой линии,
-    /// коммит 20b8dcf, без смены величин).
+    /// Числа тактичного бою (Б1, R14): зібрані у своїй секції, щоб сім
+    /// паралельних пакетів не редагували один спільний список полів
+    /// одночасно. Підключається одною властивістю в BalanceConfig.Combat.
+    /// Усі значення — ПЛЕЙСХОЛДЕРИ (перенесені з архівної бойової лінії,
+    /// коміт 20b8dcf, без зміни величин).
     /// </summary>
     [Serializable]
     public sealed class CombatBalance
     {
-        // ---- Точность (надёжный %/порог) ----
+        // ---- Точність (надійний %/поріг) ----
         //
         // Фікс-ревью раунд 2 (QA, major): AccuracyPerWeaponSkill=2 — це
         // необроблене архівне число (скил там жив в іншому масштабі), а модель
@@ -42,44 +42,44 @@ namespace Game.Core.Balance
         public int HitChanceMin = 1;
         public int HitChanceMax = 99;
 
-        // ---- PercentRule: граза/крит-порог по одному-двум роллам IDiceRoller ----
+        // ---- PercentRule: граза/крит-поріг за одним-двома кидками IDiceRoller ----
         public int GrazeThresholdPercent = 15;
-        public int HighHitNoFullMiss = 85; // шанс ≥ этого — худшее возможное — граза, не промах
+        public int HighHitNoFullMiss = 85; // шанс ≥ цього — найгірше можливе — граза, не промах
 
-        // ---- ThresholdRule: детерминированные полосы по марже (R1) ----
-        // «Показанный порог» интерпретируется как margin-от-точки-равновесия:
-        // margin = shown − ThresholdBaseline. Никакого броска кубика не происходит.
+        // ---- ThresholdRule: детерміновані полоси за маржею (R1) ----
+        // «Показаний поріг» тлумачиться як margin-від-точки-рівноваги:
+        // margin = shown − ThresholdBaseline. Жодного кидка кубика не відбувається.
         public int ThresholdBaseline = 50;
         public int ThresholdGrazeBand = 15;  // 0 ≤ margin < band — Graze
-        public int ThresholdCritBand = 35;   // margin ≥ band — Crit (между — Hit)
+        public int ThresholdCritBand = 35;   // margin ≥ band — Crit (між — Hit)
 
         // ---- Урон ----
-        public double GrazePartialPercent = 50.0; // граза — доля полного урона
+        public double GrazePartialPercent = 50.0; // граза — частка повного урону
 
         // ---- Strike-метр ----
         public int StrikeGuaranteeAt = 3;
         public int StrikePerHit = 1;
 
-        // ---- Даун/стабилизация ----
+        // ---- Даун/стабілізація ----
         public int DownWindowTurns = 2;
         public int StabilizeApCost = 3;
         public int StandUpApCost = 2;
 
-        // ---- Статусы/DoT ----
+        // ---- Статуси/DoT ----
         public int DotDurationTurns = 3;
         public int DotDamagePerTurn = 2;
-        public int ResolvePerStatusTurnReduction = 3; // Воля/StatusDurationReduction сокращает длительность на 1 ход за N очков
+        public int ResolvePerStatusTurnReduction = 3; // Воля/StatusDurationReduction скорочує тривалість на 1 хід за N очок
 
-        // ---- Движение ----
+        // ---- Рух ----
         public double SuppressionMoveCostMultiplier = 1.5;
 
-        // ---- Overwatch (US-3.6, коммит 20b8dcf) ----
-        public int OverwatchAccuracyPenalty = 10; // штраф навскидку
+        // ---- Overwatch (US-3.6, коміт 20b8dcf) ----
+        public int OverwatchAccuracyPenalty = 10; // штраф за постріл без прицілювання
         public int OverwatchConeSlopeNum = 1;     // 1/1 = конус 90°
         public int OverwatchConeSlopeDen = 1;
 
-        // ---- Завершаемость автобоя (гарантия B1) ----
-        /// <summary>Раунд, после которого незавершённый бой принудительно становится Draw.</summary>
+        // ---- Завершуваність автобою (гарантія B1) ----
+        /// <summary>Раунд, після якого незавершений бій примусово стає Draw.</summary>
         public int RoundCap = 40;
     }
 }

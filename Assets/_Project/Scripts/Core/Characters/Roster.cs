@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace Game.Core.Characters
 {
     /// <summary>
-    /// Список всех напарников игрока с быстрым доступом по Id.
+    /// Список усіх напарників гравця зі швидким доступом за Id.
     /// </summary>
     public sealed class Roster
     {

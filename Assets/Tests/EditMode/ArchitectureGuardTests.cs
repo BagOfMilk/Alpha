@@ -10,9 +10,9 @@ using UnityEngine;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Инварианты архитектуры, записанные в CLAUDE.md, проверяются автоматически.
-    /// Дизайн-правило, которое держится только на дисциплине, рано или поздно
-    /// нарушат; правило, которое роняет тесты, — нет.
+    /// Інваріанти архітектури, записані в CLAUDE.md, перевіряються автоматично.
+    /// Дизайн-правило, яке тримається лише на дисципліні, рано чи пізно
+    /// порушать; правило, яке валить тести, — ні.
     /// </summary>
     public class ArchitectureGuardTests
     {
@@ -20,8 +20,8 @@ namespace Game.Tests.EditMode
             Path.Combine(Application.dataPath, "_Project", "Scripts", "Core");
 
         /// <summary>
-        /// Инвариант №1: в ядре нет System.Random. Планировщик событий —
-        /// детерминированный накопитель (Поправка №3.3).
+        /// Інваріант №1: у ядрі немає System.Random. Планувальник подій —
+        /// детермінований накопичувач (Поправка №3.3).
         /// </summary>
         [Test]
         public void Core_ContainsNoRandom()
@@ -41,9 +41,9 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Инвариант: городской слой не завязан на модель персонажа и экономику.
-        /// Он знает только строковый SkillKey и порты — поэтому перестройка
-        /// модели (которая уже случилась) его не касается, и следующая тоже.
+        /// Інваріант: міський шар не зав'язаний на модель персонажа й економіку.
+        /// Він знає лише рядковий SkillKey і порти — тому перебудова
+        /// моделі (яка вже сталася) його не торкається, і наступна теж.
         /// </summary>
         [Test]
         public void SettlementLayer_DoesNotReferenceLegacyTypes()
@@ -71,11 +71,11 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Продвинуть время можно только конвейером.
+        /// Просунути час можна тільки конвеєром.
         ///
-        /// BaseState.AdvanceCycle закрыт от Game.Gameplay модификатором доступа,
-        /// но модификатор можно вернуть одной правкой, и тогда снова появятся
-        /// два дневных цикла. Проверка держит решение как контракт.
+        /// BaseState.AdvanceCycle закритий від Game.Gameplay модифікатором доступу,
+        /// але модифікатор можна повернути однією правкою, і тоді знову з'являться
+        /// два денні цикли. Перевірка тримає рішення як контракт.
         /// </summary>
         [Test]
         public void BaseState_HasNoPublicAdvanceCycle()
@@ -88,12 +88,12 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Закрытый AdvanceCycle не защищает ничего, если рядом есть открытая
-        /// дверь. Так и было: порт конвейера (IDailyCycle) дал базе публичный
-        /// RunDay(), который звал AdvanceCycle, — и Game.Gameplay снова могла
-        /// прокрутить сутки мимо конвейера, без голода и без отчёта. Порт снесён
-        /// 23.09.2026; проверка держит обе двери: база не реализует контрактов
-        /// конвейера, и ни один её открытый метод без аргументов не двигает время.
+        /// Закритий AdvanceCycle не захищає нічого, якщо поруч є відчинені
+        /// двері. Так і було: порт конвеєра (IDailyCycle) дав базі публічний
+        /// RunDay(), який кликав AdvanceCycle, — і Game.Gameplay знову могла
+        /// прокрутити добу повз конвеєр, без голоду і без звіту. Порт знесено
+        /// 23.09.2026; перевірка тримає обидві двері: база не реалізує контрактів
+        /// конвеєра, і жоден її відкритий метод без аргументів не рухає час.
         /// </summary>
         [Test]
         public void BaseState_HasNoBackdoorToAdvanceTime()
@@ -107,11 +107,11 @@ namespace Game.Tests.EditMode
                 "База реализует контракт конвейера — через него сутки идут в обход моста: " +
                 string.Join(", ", loopContracts));
 
-            // Сегодня таких методов нет, и цикл ничего не зовёт — он ждёт новых.
-            // Любой будущий открытый метод базы без аргументов будет вызван здесь
-            // на ПУСТОЙ базе: он обязан это выдерживать. Если метод законно не
-            // может работать без ростера — это повод дать ему аргумент, а не
-            // исключать его из проверки.
+            // Сьогодні таких методів немає, і цикл нічого не кличе — він чекає нових.
+            // Будь-який майбутній відкритий метод бази без аргументів буде викликаний тут
+            // на ПОРОЖНІЙ базі: він зобов'язаний це витримати. Якщо метод законно не
+            // може працювати без ростера — це привід дати йому аргумент, а не
+            // виключати його з перевірки.
             var cfg = new Game.Core.Balance.BalanceConfig();
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
@@ -127,10 +127,10 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Направление зависимости: Base знает про Loop, Loop про Base — никогда.
+        /// Напрямок залежності: Base знає про Loop, Loop про Base — ніколи.
         ///
-        /// Существующий забор ищет конкретные типы Stats и Economy и этого не
-        /// ловит: ссылку на сам модуль базы он бы пропустил.
+        /// Наявний паркан шукає конкретні типи Stats і Economy і цього не
+        /// ловить: посилання на сам модуль бази він би пропустив.
         /// </summary>
         [Test]
         public void Loop_DoesNotReferenceBase()
@@ -150,13 +150,13 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Инвариант №9: названия настольных систем-источников не упоминаются
-        /// нигде в проекте (юридическая гигиена, Поправка №3.11).
+        /// Інваріант №9: назви настільних систем-джерел не згадуються
+        /// ніде в проєкті (юридична гігієна, Поправка №3.11).
         /// </summary>
         [Test]
         public void Project_DoesNotNameSourceSystems()
         {
-            // Слово собирается из частей намеренно: иначе тест поймал бы сам себя.
+            // Слово збирається з частин навмисно: інакше тест спіймав би сам себе.
             string needle = "GU" + "RPS" + "|" + "Steve" + @"\s+" + "Jackson";
             var forbidden = new Regex(needle, RegexOptions.IgnoreCase);
             var offenders = new List<string>();
@@ -169,8 +169,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Порядок шагов дня объявлен один раз и растёт монотонно: скрытые
-        /// зависимости между системами не заводятся.
+        /// Порядок кроків дня оголошений один раз і зростає монотонно: приховані
+        /// залежності між системами не заводяться.
         /// </summary>
         [Test]
         public void DayStepOrder_IsStrictlyIncreasing()
@@ -188,8 +188,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Лечение стоит ПОСЛЕ Напряжения и его не трогает — техническая
-        /// сторона гарантии US-1.3.
+        /// Лікування стоїть ПІСЛЯ Напруги і її не чіпає — технічна
+        /// сторона гарантії US-1.3.
         /// </summary>
         [Test]
         public void Healing_RunsAfterTension()
@@ -197,7 +197,7 @@ namespace Game.Tests.EditMode
             Assert.Greater(DayStepOrder.Healing, DayStepOrder.Tension);
         }
 
-        /// <summary>Сигналы собираются последними — по финальному состоянию дня.</summary>
+        /// <summary>Сигнали збираються останніми — за фінальним станом дня.</summary>
         [Test]
         public void Signals_RunAfterEverythingElse()
         {
@@ -212,16 +212,16 @@ namespace Game.Tests.EditMode
             return Regex.Replace(source, @"//.*?$", string.Empty, RegexOptions.Multiline);
         }
 
-        // ---- Б1 (Combat): R1 — единственный порт случайности в Core ----
+        // ---- Б1 (Combat): R1 — єдиний порт випадковості в Core ----
 
         /// <summary>
-        /// R1: IDiceRoller (Core/Randomness) — единственный порт случайности,
-        /// который Core разрешает себе знать. Ни один ТИП внутри сборки
-        /// Game.Core не имеет права его реализовывать: настоящий бросок —
-        /// SeededDiceRoller — живёт в Game.Gameplay (тестами не ловится
-        /// напрямую, поэтому граница проверяется рефлексией по сборке).
-        /// ThresholdRule/PercentRule в Core.Combat используют интерфейс, но
-        /// не реализуют его.
+        /// R1: IDiceRoller (Core/Randomness) — єдиний порт випадковості,
+        /// який Core дозволяє собі знати. Жоден ТИП усередині збірки
+        /// Game.Core не має права його реалізовувати: справжній кидок —
+        /// SeededDiceRoller — живе в Game.Gameplay (тестами не ловиться
+        /// напряму, тому межа перевіряється рефлексією по збірці).
+        /// ThresholdRule/PercentRule у Core.Combat використовують інтерфейс, але
+        /// не реалізують його.
         /// </summary>
         [Test]
         public void Core_NoTypeImplementsIDiceRoller()
@@ -297,10 +297,10 @@ namespace Game.Tests.EditMode
         // ---- B7: уніфікація вилазки (R15), G16, G26 ----
 
         /// <summary>
-        /// R15: `ExpeditionRunner.Send` был отдельным, никем не вызываемым
-        /// входом — вылазка была косметической. Он удалён, а не оставлен
-        /// мёртвым кодом (риск, что кто-то снова позовёт его напрямую в обход
-        /// <c>Depart</c>). Тест держит это решение: метод не должен вернуться.
+        /// R15: `ExpeditionRunner.Send` був окремим, ніким не викликаним
+        /// входом — вилазка була косметичною. Його прибрано, а не лишено
+        /// мертвим кодом (ризик, що хтось знову покличе його напряму в обхід
+        /// <c>Depart</c>). Тест тримає це рішення: метод не повинен повернутися.
         /// </summary>
         [Test]
         public void ExpeditionRunner_Send_NoLongerExists()
@@ -313,9 +313,9 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// G16: соц-подходы обязаны добирать контекстный атрибут (GDD:98), а
-        /// утилитарные — нет. Тест держит именно распределение по подходам, а
-        /// не конкретные числа баланса.
+        /// G16: соц-підходи зобов'язані добирати контекстний атрибут (GDD:98), а
+        /// утилітарні — ні. Тест тримає саме розподіл за підходами, а
+        /// не конкретні числа балансу.
         /// </summary>
         [Test]
         public void ContextAttribute_OnlyAppliesToSocialApproaches()
@@ -364,9 +364,9 @@ namespace Game.Tests.EditMode
         // ================= B5: Factions + Council extensions (R5) =================
 
         /// <summary>
-        /// Инвариант 3, применённый к отношению фракции так же, как к Напряжению:
-        /// сырое значение (FactionStanding.Value) не должно быть читаемо снаружи
-        /// ядра — наружу уходит только полоса (FactionStandingBand).
+        /// Інваріант 3, застосований до ставлення фракції так само, як до Напруги:
+        /// сире значення (FactionStanding.Value) не повинно бути читаним ззовні
+        /// ядра — назовні йде тільки смуга (FactionStandingBand).
         /// </summary>
         [Test]
         public void FactionStanding_ValueStaysInternal()
@@ -381,10 +381,10 @@ namespace Game.Tests.EditMode
         // ---- B3 (Items/Equipment/Craft) ----
 
         /// <summary>
-        /// Items — пакет B3, собранный параллельно с Combat (B1): типов боя
-        /// (Game.Core.Combat) в его воркчасти ещё не существует физически, и
-        /// охранитель держит это решение как контракт и после слияния — гир
-        /// крутит числа через StatKey, а не хранит WeaponDefinition/DamageType.
+        /// Items — пакет B3, зібраний паралельно з Combat (B1): типів бою
+        /// (Game.Core.Combat) у його воркчасті ще не існує фізично, і
+        /// охоронець тримає це рішення як контракт і після злиття — гір
+        /// крутить числа через StatKey, а не зберігає WeaponDefinition/DamageType.
         /// </summary>
         [Test]
         public void Items_DoesNotReferenceCombatTypes()
@@ -404,8 +404,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Companion.Equipment обязан течь в единый агрегатор (US-6.2/18.2) —
-        /// без реализации IModifierProvider надетый гир молча не считался бы.
+        /// Companion.Equipment зобов'язаний текти в єдиний агрегатор (US-6.2/18.2) —
+        /// без реалізації IModifierProvider надітий гір мовчки не рахувався б.
         /// </summary>
         [Test]
         public void Equipment_IsAModifierProvider()
@@ -416,22 +416,22 @@ namespace Game.Tests.EditMode
         }
 
         // ==================================================================
-        // B4 (Social): аудит CompanionStatus.Antagonist (§4.5) и укрытие
-        // сырой Лояльности (инвариант 3, R2). Добавлено в конец класса.
+        // B4 (Social): аудит CompanionStatus.Antagonist (§4.5) і укриття
+        // сирої Лояльності (інваріант 3, R2). Додано в кінець класу.
         // ==================================================================
 
         /// <summary>
-        /// Аудит §4.5: ни одна из точек допуска, что владеет файлами B4, не
-        /// пускает антагониста — назначение на пост (BaseState.TryAssign),
-        /// автоназначение (Steward.Staff), присутствие (CompanionActorAdapter/
-        /// RosterAdapter). Четвёртая точка §4.5 — «ExpeditionRunner/новий
-        /// GameSession.DepartExpedition» — по §5.1 файл B7-эксклюзивный
+        /// Аудит §4.5: жодна з точок допуску, що володіє файлами B4, не
+        /// пускає антагоніста — призначення на пост (BaseState.TryAssign),
+        /// автопризначення (Steward.Staff), присутність (CompanionActorAdapter/
+        /// RosterAdapter). Четверта точка §4.5 — «ExpeditionRunner/новий
+        /// GameSession.DepartExpedition» — за §5.1 файл B7-ексклюзивний
         /// (`Core/Expeditions/*`), а сам `GameSession.DepartExpedition` (R15)
-        /// ещё не существует в этом воркчасте; тестировать его здесь нечем.
-        /// ПРЕЖНЯЯ версия этого теста точечно правила `ExpeditionParty.Depart`
-        /// (чужой файл вне §5.1-владения B4) — правка отменена ревью, см.
-        /// deviationsFromSpec пакета B4; точка осталась швом для B7/D1 (§4.11:
-        /// валидация, включая Antagonist, происходит ПЕРЕД вызовом Depart).
+        /// ще не існує в цьому воркчасті; тестувати його тут нічим.
+        /// ПОПЕРЕДНЯ версія цього тесту точково правила `ExpeditionParty.Depart`
+        /// (чужий файл поза §5.1-володінням B4) — правку скасовано ревʼю, див.
+        /// deviationsFromSpec пакета B4; точка лишилась швом для B7/D1 (§4.11:
+        /// валідація, включно з Antagonist, відбувається ПЕРЕД викликом Depart).
         /// </summary>
         [Test]
         public void Antagonist_NeverAssignable_NeverDispatchable()
@@ -448,19 +448,19 @@ namespace Game.Tests.EditMode
             Game.Core.Companions.Defection.Defect(antagonist);
             Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, antagonist.Status);
 
-            // 1) BaseState.TryAssign — не встаёт на пост.
+            // 1) BaseState.TryAssign — не стає на пост.
             var assign = state.TryAssign("antagonist", "post");
             Assert.AreEqual(Game.Core.Base.AssignmentResult.CompanionUnavailable, assign,
                 "антагонист не должен быть назначаем на пост");
             Assert.IsNull(state.GetSlot("post").AssignedCompanionId);
 
-            // 2) Steward.Staff — не расставляет антагониста на открытый пост,
-            //    даже когда больше некому.
+            // 2) Steward.Staff — не розставляє антагоніста на відкритий пост,
+            //    навіть коли більше нема кому.
             Game.Core.Base.Steward.Staff(state);
             Assert.IsNull(state.GetSlot("post").AssignedCompanionId,
                 "автоназначение хозяина не должно ставить антагониста на пост");
 
-            // 3) Присутствие — адаптеры исключают антагониста.
+            // 3) Присутність — адаптери виключають антагоніста.
             var actorAdapter = new Game.Core.Base.CompanionActorAdapter(antagonist);
             Assert.IsFalse(actorAdapter.IsPresentInSettlement,
                 "антагонист не присутствует в поселении");
@@ -471,14 +471,14 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Блокер ревью пакета B4: дневной кризис (`IncidentResolver.ResolveCrisis`
-        /// через `Core/Loop/IncidentStep.cs`) выбирает жертву из
-        /// `RosterAdapter.KillableActorIds` и бьёт по ней `Kill`/`Wound` — это
-        /// тоже точка допуска по `CompanionStatus`, которую пропустил
-        /// исходный аудит §4.5 (он назвал только TryAssign/Staff/Presence/
-        /// Depart). Без исключения обычный кризис молча стирал необратимый
-        /// статус антагониста обратно в Dead/Injured ДО того, как финал успевал
-        /// использовать дефектора как босса (R8, FromDefector).
+        /// Блокер ревʼю пакета B4: денна криза (`IncidentResolver.ResolveCrisis`
+        /// через `Core/Loop/IncidentStep.cs`) обирає жертву з
+        /// `RosterAdapter.KillableActorIds` і б'є по ній `Kill`/`Wound` — це
+        /// теж точка допуску за `CompanionStatus`, яку пропустив
+        /// вихідний аудит §4.5 (він назвав лише TryAssign/Staff/Presence/
+        /// Depart). Без винятку звичайна криза мовчки стирала незворотний
+        /// статус антагоніста назад у Dead/Injured ДО того, як фінал встигав
+        /// використати дефектора як боса (R8, FromDefector).
         /// </summary>
         [Test]
         public void Antagonist_NeverKillableByOrdinaryIncident()
@@ -507,8 +507,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// R2/инвариант 3: сырая Лояльность — internal, как и Напряжение.
-        /// Game.Gameplay не может прочитать число, только LoyaltyBand.
+        /// R2/інваріант 3: сира Лояльність — internal, як і Напруга.
+        /// Game.Gameplay не може прочитати число, тільки LoyaltyBand.
         /// </summary>
         [Test]
         public void Companion_LoyaltyRaw_IsInternal_NotReadableFromGameplay()
@@ -528,18 +528,18 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Блокер фикс-ревью пакета B4: <c>Defection.Defect(c)</c> без явного
-        /// <c>BaseState</c> (сигнатура и §7-таблица спецификации не требуют
-        /// его передавать) чистит только <c>Companion.AssignedSlotId</c> —
-        /// бухгалтерия слота (<c>AssignmentSlot.AssignedCompanionId</c>) не
-        /// узнаёт об уходе и раньше оставалась занятой навсегда: пост нельзя
-        /// было отдать живому, а дефектор молча продолжал бы производить и
-        /// получать опыт с поста каждый цикл (тот же класс дыры, что и G17
-        /// для погибших). Фикс — <c>BaseState.IsFallen</c> считает Antagonist
-        /// «упавшим» наравне с IsDead, так что и опережающая сверка
-        /// (<c>ReleaseFallen</c>, тикает первым шагом AdvanceCycle и перед
-        /// Steward.Staff), и сам TryAssign освобождают пост без чьей-либо
-        /// подсказки о статусе.
+        /// Блокер фікс-ревʼю пакета B4: <c>Defection.Defect(c)</c> без явного
+        /// <c>BaseState</c> (сигнатура і §7-таблиця специфікації не вимагають
+        /// його передавати) чистить лише <c>Companion.AssignedSlotId</c> —
+        /// бухгалтерія слота (<c>AssignmentSlot.AssignedCompanionId</c>) не
+        /// дізнається про відхід і раніше лишалася зайнятою назавжди: пост не можна
+        /// було віддати живому, а дефектор мовчки продовжував би виробляти й
+        /// отримувати досвід з поста щоцикл (той самий клас дірки, що й G17
+        /// для загиблих). Фікс — <c>BaseState.IsFallen</c> вважає Antagonist
+        /// «впалим» нарівні з IsDead, тож і випереджувальна звірка
+        /// (<c>ReleaseFallen</c>, цокає першим кроком AdvanceCycle і перед
+        /// Steward.Staff), і сам TryAssign звільняють пост без чиєїсь
+        /// підказки про статус.
         /// </summary>
         [Test]
         public void Defect_WithoutBaseState_PostIsFreedByReleaseFallenAndStopsProducing()
@@ -563,13 +563,13 @@ namespace Game.Tests.EditMode
             });
             Assert.AreEqual(Game.Core.Base.AssignmentResult.Success, state.TryAssign("defector_1", "bench"));
 
-            // Дефекция БЕЗ baseState — ровно тот вызов, что не покрывал старый
-            // аудит §4.5 и не покрывает контрактная таблица §7 спецификации.
+            // Дефекція БЕЗ baseState — рівно той виклик, що не покривав старий
+            // аудит §4.5 і не покриває контрактна таблиця §7 специфікації.
             Game.Core.Companions.Defection.Defect(companion);
             Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, companion.Status);
             Assert.IsNull(companion.AssignedSlotId, "напарник сам себя снял с поста при уходе");
 
-            // Бухгалтерия слота ДО фикса осталась бы занятой навсегда.
+            // Бухгалтерія слота ДО фіксу лишилась би зайнятою назавжди.
             Assert.AreEqual("defector_1", state.GetSlot("bench").AssignedCompanionId,
                 "сразу после Defect слот ещё занят — сверка происходит на следующем шаге, не внутри Defect");
 
@@ -577,16 +577,16 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, freed, "ReleaseFallen должен опознать антагониста как упавшего и освободить пост");
             Assert.IsNull(state.GetSlot("bench").AssignedCompanionId, "пост свободен для живого");
 
-            // Пост можно отдать другому живому.
+            // Пост можна віддати іншому живому.
             var other = new Game.Core.Characters.CompanionArchetype("other", "Другой").CreateInstance("other_1");
             roster.Add(other);
             Assert.AreEqual(Game.Core.Base.AssignmentResult.Success, state.TryAssign("other_1", "bench"),
                 "после освобождения пост должен принять нового человека");
             state.Unassign("bench");
 
-            // Второй антагонист на том же посту — AdvanceCycle не должен ничего
-            // ему производить/начислять, даже если бы бухгалтерия слота как-то
-            // осталась занятой (защита в глубину, не только через ReleaseFallen).
+            // Другий антагоніст на тому самому посту — AdvanceCycle не повинен нічого
+            // йому виробляти/нараховувати, навіть якби бухгалтерія слота якось
+            // лишилась зайнятою (захист углиб, не тільки через ReleaseFallen).
             var second = new Game.Core.Characters.CompanionArchetype("defector2", "Дефектор2");
             second.SetSkill(Game.Core.Stats.SkillType.Mechanics, 10);
             var companion2 = second.CreateInstance("defector2_1");

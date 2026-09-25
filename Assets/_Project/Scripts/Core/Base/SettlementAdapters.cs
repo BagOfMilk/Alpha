@@ -9,14 +9,14 @@ using Game.Core.World;
 namespace Game.Core.Base
 {
     /// <summary>
-    /// Мост между городским слоем и моделью персонажа.
+    /// Міст між міським шаром і моделлю персонажа.
     ///
-    /// Живёт ЗДЕСЬ, а не в Game.Core.Checks — сознательно: городской слой знает
-    /// только строковый SkillKey, а про атрибуты, скилы и трейты не знает
-    /// ничего. Перестройка модели меняет этот файл и больше ничей.
+    /// Живе САМЕ ТУТ, а не в Game.Core.Checks — свідомо: міський шар знає
+    /// лише рядковий SkillKey, а про атрибути, скіли й трейти не знає
+    /// нічого. Перебудова моделі змінює цей файл і більше нічий.
     ///
-    /// Сопоставления «ключ городского слоя → скил» здесь больше нет: оно живёт
-    /// в Skills.KeyId рядом с самим enum. Две таблицы разъезжаются, одна — нет.
+    /// Відповідності «ключ міського шару → скіл» тут більше немає: вона живе
+    /// в Skills.KeyId поруч із самим enum. Дві таблиці можуть розійтися, одна — ні.
     /// </summary>
     public sealed class CompanionActorAdapter : ISettlementActor
     {
@@ -33,8 +33,8 @@ namespace Game.Core.Base
         public string Id => _companion.Id;
         public bool IsProtagonist { get; }
 
-        // B4-аудит §4.5: Antagonist явно исключён из присутствия (не «!= Dead») —
-        // ушедший в антагонисты не кандидат ни на проверку, ни на пост.
+        // B4-аудит §4.5: Antagonist свідомо виключений із присутності (не «!= Dead») —
+        // той, хто пішов в антагоністи, не кандидат ні на перевірку, ні на пост.
         public bool IsPresentInSettlement =>
             _companion.Status != CompanionStatus.OnMission &&
             _companion.Status != CompanionStatus.Dead &&
@@ -43,12 +43,12 @@ namespace Game.Core.Base
         public string HeldPositionId => _companion.AssignedSlotId;
 
         /// <summary>
-        /// G16 (GDD:98): соц-проверки добирают контекстный атрибут подхода
-        /// поверх голого скила — «Запугать → Воля» (тот же атрибут, что и
-        /// сопротивление состояниям, см. AttributeType.Will), «Убедить →
-        /// Смекалка», «Торговля → Смекалка». Утилитарные (Neutral) проверки
-        /// атрибут не добирают — вылазка и доклады с постов от этого не
-        /// сдвигаются.
+        /// G16 (GDD:98): соц-перевірки додають контекстний атрибут підходу
+        /// поверх голого скіла — «Залякати → Воля» (той самий атрибут, що й
+        /// опір станам, див. AttributeType.Will), «Переконати →
+        /// Кмітливість», «Торгівля → Кмітливість». Утилітарні (Neutral) перевірки
+        /// атрибут не додають — вилазка і доповіді з постів від цього не
+        /// зсуваються.
         /// </summary>
         public int GetCheckValue(SkillKey skill, ApproachForm approach = ApproachForm.Neutral)
         {
@@ -73,13 +73,13 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Всё, что ложится поверх голого скила: трейты, шрамы, перки.
+        /// Усе, що лягає поверх голого скіла: трейти, шрами, перки.
         ///
-        /// Считается как «резолвнутое минус база», а не суммированием нужных
-        /// модификаторов вручную. Это ровно то разбиение, при котором
-        /// CheckResolver складывает GetCheckValue + GetTraitModifier и получает
-        /// резолвнутое значение без двойного счёта — по построению, а не по
-        /// договорённости.
+        /// Рахується як «резолвнуте мінус база», а не сумуванням потрібних
+        /// модифікаторів вручну. Це рівно той поділ, при якому
+        /// CheckResolver складає GetCheckValue + GetTraitModifier і отримує
+        /// резолвнуте значення без подвійного рахунку — за побудовою, а не за
+        /// домовленістю.
         /// </summary>
         public int GetTraitModifier(SkillKey skill)
         {
@@ -94,7 +94,7 @@ namespace Game.Core.Base
         internal Companion Companion => _companion;
     }
 
-    /// <summary>Взгляд городского слоя на ростер.</summary>
+    /// <summary>Погляд міського шару на ростер.</summary>
     public sealed class RosterAdapter : IRosterView, ICasualtySink, Game.Core.Loop.IStateBlob
     {
         private readonly Roster _roster;
@@ -103,18 +103,18 @@ namespace Game.Core.Base
         private readonly List<ISettlementActor> _buffer = new List<ISettlementActor>();
 
         /// <summary>
-        /// Кто уходит в вылазку. Только для симуляционного харнеса: у самой
-        /// игры партию будет задавать экран сборов, которого пока нет.
+        /// Хто йде у вилазку. Тільки для симуляційного харнеса: у самій
+        /// грі партію задаватиме екран зборів, якого поки немає.
         /// </summary>
         internal List<Companion> PartyForSim { get; set; }
 
         /// <summary>
-        /// Ростер в слепок (Поправка №5.6 п. 4): кто жив, в каком состоянии и на
-        /// каком посту. Без этого загрузка возвращала людей «как при старте», и
-        /// обещание «продолжение неотличимо от непрерывного» не выполнялось.
+        /// Ростер у зліпок (Поправка №5.6 п. 4): хто живий, у якому стані і на
+        /// якому посту. Без цього завантаження повертало людей «як на старті», і
+        /// обіцянка «продовження невідрізнене від безперервного» не виконувалась.
         ///
-        /// Пишутся только изменяемые поля. Имена, статы и карточки приходят из
-        /// контента: дублировать их в сейве значит однажды разъехаться с ним.
+        /// Пишуться лише змінювані поля. Імена, стати й картки приходять із
+        /// контенту: дублювати їх у сейві означає одного разу розійтися з ним.
         /// </summary>
         public string CaptureState()
         {
@@ -126,9 +126,9 @@ namespace Game.Core.Base
                   .Append((int)c.Status).Append('>')
                   .Append(c.AssignedSlotId ?? "").Append('>')
                   .Append(c.InjuryPoints.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
-                  // B4/R2: Лояльность — пятое поле, добавлено аддитивно в конец
-                  // записи (§4.8 R13), чтобы старые слепки без него читались же
-                  // (RestoreState ниже толерантна к длине < 5).
+                  // B4/R2: Лояльність — п'яте поле, додане адитивно в кінець
+                  // запису (§4.8 R13), щоб старі зліпки без нього так само читались
+                  // (RestoreState нижче толерантна до довжини < 5).
                   .Append('>').Append(c.Loyalty.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             return sb.ToString();
@@ -153,8 +153,8 @@ namespace Game.Core.Base
                         System.Globalization.CultureInfo.InvariantCulture, out injury))
                     c.InjuryPoints = injury;
 
-                // B4/R2: пятое поле — не у всех старых слепков есть, поэтому
-                // не в общем "f.Length < 4 continue" выше, а отдельной толерантной проверкой.
+                // B4/R2: п'яте поле — не в усіх старих зліпків є, тому
+                // не в загальній "f.Length < 4 continue" вище, а окремою толерантною перевіркою.
                 if (f.Length >= 5)
                 {
                     int loyalty;
@@ -197,9 +197,9 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Кого кризис вообще может тронуть. Протагонист исключён (US-4.4),
-        /// мёртвые исключены. Список отсортирован — выбор жертвы обязан быть
-        /// воспроизводимым.
+        /// Кого криза взагалі може торкнутися. Протагоніст виключений (US-4.4),
+        /// мертві виключені. Список відсортований — вибір жертви зобов'язаний бути
+        /// відтворюваним.
         /// </summary>
         public IReadOnlyList<string> KillableActorIds
         {
@@ -212,9 +212,9 @@ namespace Game.Core.Base
                     var c = all[i];
                     if (c.IsDead || IsProtagonist(c.Id)) continue;
                     if (c.Status == CompanionStatus.OnMission) continue;
-                    // B4-аудит §4.5: антагонист (необратимо ушедший, см. enum)
-                    // не жертва обычного кризиса — иначе Kill/Wound ниже
-                    // молча затирают его статус ещё до финала (R8).
+                    // B4-аудит §4.5: антагоніст (незворотно пішов, див. enum)
+                    // не жертва звичайної кризи — інакше Kill/Wound нижче
+                    // мовчки затирають його статус ще до фіналу (R8).
                     if (c.Status == CompanionStatus.Antagonist) continue;
                     ids.Add(c.Id);
                 }
@@ -237,19 +237,19 @@ namespace Game.Core.Base
         public void Kill(string actorId)
         {
             var c = _roster.Get(actorId);
-            // B4-аудит §4.5: антагонист необратим — обычный Kill его не трогает.
+            // B4-аудит §4.5: антагоніст незворотний — звичайний Kill його не чіпає.
             if (c == null || IsProtagonist(actorId) || c.Status == CompanionStatus.Antagonist) return;
             c.MarkDead();
         }
 
         /// <summary>
-        /// Единая точка ранения (R16/R5, закрывает G10): инциденты сегодня не
-        /// знают тира раны и зовут её без третьего аргумента (Light по
-        /// умолчанию — шрам не положен, ровно то же поведение, что было до
-        /// этого пакета). Вылазка ранит через <c>ExpeditionRunner.Complete</c> —
-        /// вторая, отдельная точка входа с тем же именем правила внутри
-        /// (<c>DefaultScars.TryGrant</c>), а не дублирующая копия. Бой (когда
-        /// появится) обязан ранить ТОЛЬКО отсюда, уже передавая настоящий тир.
+        /// Єдина точка поранення (R16/R5, закриває G10): інциденти сьогодні не
+        /// знають тіра рани і кличуть її без третього аргументу (Light за
+        /// замовчуванням — шрам не належиться, рівно та сама поведінка, що була до
+        /// цього пакета). Вилазка ранить через <c>ExpeditionRunner.Complete</c> —
+        /// друга, окрема точка входу з тим самим ім'ям правила всередині
+        /// (<c>DefaultScars.TryGrant</c>), а не дублювальна копія. Бій (коли
+        /// з'явиться) зобов'язаний ранити ТІЛЬКИ звідси, вже передаючи справжній тір.
         /// </summary>
         public void Wound(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light)
         {
@@ -269,7 +269,7 @@ namespace Game.Core.Base
         public Characters.Scars.ScarDefinition WoundReporting(string actorId, double injuryPoints, WoundTier tier = WoundTier.Light)
         {
             var c = _roster.Get(actorId);
-            // B4-аудит §4.5: антагонист необратим — рана не затирает его статус.
+            // B4-аудит §4.5: антагоніст незворотний — рана не затирає його статус.
             if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist) return null;
             c.InjuryPoints += injuryPoints;
             if (c.Status != CompanionStatus.OnMission)
@@ -285,16 +285,16 @@ namespace Game.Core.Base
     }
 
     /// <summary>
-    /// Учёт повторных обращений по темам. Третий подход к одной теме за неделю
-    /// дороже первого — защита от спама без единой случайности.
+    /// Облік повторних звернень за темами. Третій підхід до однієї теми за тиждень
+    /// дорожчий за перший — захист від спаму без жодної випадковості.
     /// </summary>
     public sealed class RepeatTracker : IRepeatTracker, Game.Core.Loop.IStateBlob
     {
         private readonly Dictionary<string, List<int>> _byTopic = new Dictionary<string, List<int>>();
 
         /// <summary>
-        /// Без этого штраф за повторы обнулялся бы каждой загрузкой, и сейв
-        /// становился бы способом снять наказание.
+        /// Без цього штраф за повтори обнулявся б кожним завантаженням, і сейв
+        /// ставав би способом зняти покарання.
         /// </summary>
         public string CaptureState()
         {

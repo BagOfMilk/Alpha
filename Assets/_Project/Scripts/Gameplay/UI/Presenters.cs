@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Game.Gameplay.UI
 {
-    /// <summary>Шов между оболочкой экранов (E1b) и 3D-боем (E2): оболочка находит реализацию во время выполнения.</summary>
+    /// <summary>Шов між оболонкою екранів (E1b) і 3D-боєм (E2): оболонка знаходить реалізацію під час виконання.</summary>
     public interface IBattlePresenter
     {
         void Enter(GameSession session);
@@ -25,7 +25,7 @@ namespace Game.Gameplay.UI
         void AcknowledgeResult();
     }
 
-    /// <summary>Шов для портретов: живой рендер модели персонажа (E2) или именная заглушка.</summary>
+    /// <summary>Шов для портретів: живий рендер моделі персонажа (E2) або іменна заглушка.</summary>
     public interface IPortraitProvider
     {
         Texture2D GetPortrait(string characterId);

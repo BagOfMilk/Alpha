@@ -4,11 +4,11 @@ using UnityEngine;
 namespace Game.Gameplay
 {
     /// <summary>
-    /// ScriptableObject-обёртка над <see cref="BalanceConfig"/>. Позволяет
-    /// геймдизайнеру крутить весь баланс прямо в инспекторе Unity и иметь
-    /// несколько пресетов (например, Easy/Normal/Hard) как отдельные ассеты.
+    /// ScriptableObject-обгортка над <see cref="BalanceConfig"/>. Дозволяє
+    /// геймдизайнеру крутити весь баланс прямо в інспекторі Unity і мати
+    /// декілька пресетів (наприклад, Easy/Normal/Hard) як окремі ассети.
     ///
-    /// Создание: ПКМ в Project → Create → Alpha → Balance Config.
+    /// Створення: ПКМ у Project → Create → Alpha → Balance Config.
     /// </summary>
     [CreateAssetMenu(fileName = "BalanceConfig", menuName = "Alpha/Balance Config", order = 0)]
     public sealed class BalanceConfigAsset : ScriptableObject
@@ -42,7 +42,7 @@ namespace Game.Gameplay
         public PulseBalanceAsset pulse;
         public CheckBalanceAsset checks;
 
-        /// <summary>Преобразует ассет в чистый конфиг для игровой логики.</summary>
+        /// <summary>Перетворює ассет у чистий конфіг для ігрової логіки.</summary>
         public BalanceConfig ToConfig()
         {
             return new BalanceConfig

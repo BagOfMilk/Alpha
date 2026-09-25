@@ -2,7 +2,7 @@ using System;
 
 namespace Game.Core.Combat
 {
-    /// <summary>Позиция на боевой сетке. Лёгкая value-структура с метриками дистанций.</summary>
+    /// <summary>Позиція на бойовій сітці. Легка value-структура з метриками дистанцій.</summary>
     [Serializable]
     public readonly struct GridPos : IEquatable<GridPos>
     {
@@ -15,11 +15,11 @@ namespace Game.Core.Combat
             Y = y;
         }
 
-        /// <summary>Дистанция Чебышёва (король) — используется для дальности оружия и смежности.</summary>
+        /// <summary>Дистанція Чебишова (король) — використовується для дальності зброї і суміжності.</summary>
         public static int Chebyshev(GridPos a, GridPos b)
             => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
-        /// <summary>Манхэттен — длина ортогонального пути без препятствий.</summary>
+        /// <summary>Манхеттен — довжина ортогонального шляху без перешкод.</summary>
         public static int Manhattan(GridPos a, GridPos b)
             => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 

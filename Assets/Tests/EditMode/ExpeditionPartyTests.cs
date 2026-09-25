@@ -11,10 +11,10 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Выход и возвращение партии (Поправка №5.6 п. 4, чеклист §3 стр. 15 и 18).
+    /// Вихід і повернення партії (Поправка №5.6 п. 4, чеклист §3 стр. 15 і 18).
     ///
-    /// Проверяется цена: пока выход не снимал посты, вылазка была бесплатной —
-    /// люди уходили и одновременно работали дома.
+    /// Перевіряється ціна: поки вихід не знімав пости, вилазка була безкоштовною —
+    /// люди йшли і водночас працювали вдома.
     /// </summary>
     public class ExpeditionPartyTests
     {
@@ -55,7 +55,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CompanionStatus.OnMission, state.Roster.Get("guard").Status);
         }
 
-        /// <summary>Возвращение НЕ расставляет никого: расстановка — решение игрока.</summary>
+        /// <summary>Повернення НЕ розставляє нікого: розстановка — рішення гравця.</summary>
         [Test]
         public void Return_DoesNotReassignAnyone()
         {
@@ -99,8 +99,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Продолжение неотличимо от непрерывного (чеклист §3 стр. 18): после
-        /// загрузки люди стоят там же, ушедшие всё ещё в поле, календарь тот же.
+        /// Продовження невідрізниме від безперервного (чеклист §3 стр. 18): після
+        /// завантаження люди стоять там же, ті, хто пішов, все ще в полі, календар той самий.
         /// </summary>
         [Test]
         public void SaveAndLoad_KeepsRosterAndPartyInTheField()
@@ -114,7 +114,7 @@ namespace Game.Tests.EditMode
             string rosterBlob = ((IStateBlob)adapter).CaptureState();
             string partyBlob = party.CaptureState();
 
-            // Другая сессия: тот же контент, состояние только из слепка.
+            // Інша сесія: той самий контент, стан лише зі зліпка.
             var reloaded = Build();
             var reloadedAdapter = new RosterAdapter(reloaded.Roster);
             ((IStateBlob)reloadedAdapter).RestoreState(rosterBlob);

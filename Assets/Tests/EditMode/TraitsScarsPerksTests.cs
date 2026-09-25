@@ -10,8 +10,8 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Трейты в слотах (US-2.4). Главное здесь — что переполнение не теряет
-    /// трейт молча и не бросает исключение: по дизайну это развилка для игрока.
+    /// Трейти в слотах (US-2.4). Головне тут — що переповнення не губить
+    /// трейт мовчки і не кидає виняток: за задумом це розвилка для гравця.
     /// </summary>
     public class TraitSlotsTests
     {
@@ -40,7 +40,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(slots.Has("greedy"));
         }
 
-        /// <summary>Число слотов приходит из баланса, а не зашито в код.</summary>
+        /// <summary>Число слотів приходить із балансу, а не зашите в код.</summary>
         [Test]
         public void Capacity_ComesFromBalance()
         {
@@ -80,7 +80,7 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(slots.Has("brave"), "обмен атомарный: исходящий не пропал");
         }
 
-        /// <summary>Трейт меняет числа через общий агрегатор, а не своей веткой в формуле.</summary>
+        /// <summary>Трейт змінює числа через спільний агрегатор, а не своєю гілкою у формулі.</summary>
         [Test]
         public void TraitModifiers_ReachTheSnapshot()
         {
@@ -94,7 +94,7 @@ namespace Game.Tests.EditMode
         }
     }
 
-    /// <summary>Вечный трек шрамов (US-2.5, US-4.2).</summary>
+    /// <summary>Вічний трек шрамів (US-2.5, US-4.2).</summary>
     public class ScarTrackTests
     {
         private static ScarDefinition OneEyed()
@@ -121,7 +121,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, track.Count);
         }
 
-        /// <summary>Лёгкая рана следов не оставляет — прямое правило US-4.2.</summary>
+        /// <summary>Легка рана слідів не лишає — пряме правило US-4.2.</summary>
         [Test]
         public void LightWound_EarnsNoScar()
         {
@@ -139,8 +139,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Снять шрам нечем — у трека нет метода удаления. Тест фиксирует это
-        /// как контракт: если кто-то добавит Remove, правило US-2.5 сломается молча.
+        /// Зняти шрам нічим — у трека немає методу видалення. Тест фіксує це
+        /// як контракт: якщо хтось додасть Remove, правило US-2.5 зламається мовчки.
         /// </summary>
         [Test]
         public void ScarTrack_HasNoRemovalApi()
@@ -152,7 +152,7 @@ namespace Game.Tests.EditMode
         }
     }
 
-    /// <summary>Перки: гейт по уровню скила и пререквизиты (US-2.2, US-3.10).</summary>
+    /// <summary>Перки: гейт за рівнем скіла і пререквізити (US-2.2, US-3.10).</summary>
     public class PerkGatingTests
     {
         private static SkillSet Skills(SkillType s, int level)
@@ -203,7 +203,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(PerkAvailability.AlreadyTaken, perks.TryTake(Steady(), skills));
         }
 
-        /// <summary>Предпросмотр не должен ничего менять — на нём стоит планировщик билда.</summary>
+        /// <summary>Передперегляд не повинен нічого змінювати — на ньому стоїть планувальник білда.</summary>
         [Test]
         public void Evaluate_HasNoSideEffects()
         {
@@ -215,7 +215,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, perks.Count);
         }
 
-        /// <summary>Перк поднимает живучесть поверх производной — это требование US-5.2.</summary>
+        /// <summary>Перк підіймає живучість поверх похідної — це вимога US-5.2.</summary>
         [Test]
         public void Perk_RaisesMaxHpOnTopOfDerived()
         {
@@ -239,7 +239,7 @@ namespace Game.Tests.EditMode
         }
     }
 
-    /// <summary>Три провайдера на одном персонаже складываются без двойного счёта.</summary>
+    /// <summary>Три провайдери на одному персонажі складаються без подвійного рахунку.</summary>
     public class ProviderStackTests
     {
         [Test]
@@ -260,7 +260,7 @@ namespace Game.Tests.EditMode
             var snap = StatResolver.Resolve(new AttributeSet(4, 4, 4, 4), set,
                 new IModifierProvider[] { traits, scars, perks }, new BalanceConfig());
 
-            // Ловкость 4 + трейт 5 − шрам 10 + перк 2
+            // Спритність 4 + трейт 5 − шрам 10 + перк 2
             Assert.AreEqual(1, snap.Get(StatKey.Accuracy), 1e-9);
             Assert.AreEqual(3, snap.SourcesOf(StatKey.Accuracy).Count, "каждый источник виден отдельно");
         }

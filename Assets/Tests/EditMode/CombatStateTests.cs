@@ -6,19 +6,19 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// CombatState: действия (движение/атака/стабилизация), даун с окном на
-    /// спасение, Strike-метр, проки оружия, исход боя. Перенесено из архивной
-    /// боевой линии (коммит 20b8dcf), адаптировано на IHitRule/IDiceRoller (R1):
-    /// вместо d100-роллов через IRng сценарии собираются через ThresholdRule —
-    /// «показанное число» (Accuracy минус Defense — остальные слагаемые формулы
-    /// в этих тестах нулевые) кладётся прямо в нужную полосу исхода по марже
-    /// от CombatBalance.ThresholdBaseline/GrazeBand/CritBand.
+    /// CombatState: дії (рух/атака/стабілізація), даун із вікном на
+    /// порятунок, Strike-метр, проки зброї, результат бою. Перенесено з архівної
+    /// бойової лінії (коміт 20b8dcf), адаптовано під IHitRule/IDiceRoller (R1):
+    /// замість d100-кидків через IRng сценарії збираються через ThresholdRule —
+    /// «показане число» (Accuracy мінус Defense — решта доданків формули
+    /// в цих тестах нульові) кладеться прямо в потрібну полосу результату за маржею
+    /// від CombatBalance.ThresholdBaseline/GrazeBand/CritBand.
     /// </summary>
     public class CombatStateTests
     {
         private static readonly BalanceConfig Cfg = new BalanceConfig();
 
-        // Полосы по умолчанию: Baseline=50, GrazeBand=15, CritBand=35.
+        // Полоси за замовчуванням: Baseline=50, GrazeBand=15, CritBand=35.
         private const int MissAcc = 40;  // margin −10 → Miss
         private const int HitAcc = 70;   // margin 20  → Hit (не Crit)
         private const int CritAcc = 90;  // margin 40  → Crit
@@ -36,7 +36,7 @@ namespace Game.Tests.EditMode
             return new CombatUnit(id, side, p, w);
         }
 
-        /// <summary>Оружие с фикс уроном (min = max) для детерминизма — тот же приём, что в архиве.</summary>
+        /// <summary>Зброя з фікс. шкодою (min = max) для детермінізму — той самий прийом, що в архіві.</summary>
         private static WeaponDefinition W(int damage, int apCost = 3, bool melee = false, int range = 6)
             => new WeaponDefinition("w", "W", melee ? SkillType.Melee : SkillType.Ranged)
             {
@@ -47,7 +47,7 @@ namespace Game.Tests.EditMode
         private static CombatState NewCombat(GridMap map)
             => new CombatState(map, Cfg, new ThresholdRule(Cfg), null);
 
-        // ---- Движение ----
+        // ---- Рух ----
         [Test]
         public void Move_SpendsAp_AndUpdatesOccupancy()
         {
@@ -66,7 +66,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CombatActionResult.NotReachable, cs.Move(new GridPos(9, 0))); // 6 > 5 AP
         }
 
-        // ---- Валидации атаки ----
+        // ---- Валідації атаки ----
         [Test]
         public void Attack_Validations()
         {
@@ -80,7 +80,7 @@ namespace Game.Tests.EditMode
             cs.AddUnit(lowAp, new GridPos(0, 0));
             cs.AddUnit(brawler, new GridPos(1, 0));
             cs.AddUnit(walled, new GridPos(4, 0));
-            cs.AddUnit(enemy, new GridPos(9, 0)); // за стеной (6,0)
+            cs.AddUnit(enemy, new GridPos(9, 0)); // за стіною (6,0)
             cs.Begin();
 
             Assert.AreEqual(CombatActionResult.NotEnoughAp, cs.Attack("enemy"));      // 2 AP < 3
@@ -88,14 +88,14 @@ namespace Game.Tests.EditMode
             cs.EndTurn();
 
             Assert.AreSame(brawler, cs.Current);
-            Assert.AreEqual(CombatActionResult.OutOfRange, cs.Attack("enemy"));       // мили издалека
+            Assert.AreEqual(CombatActionResult.OutOfRange, cs.Attack("enemy"));       // мілі здалеку
             cs.EndTurn();
 
             Assert.AreSame(walled, cs.Current);
-            Assert.AreEqual(CombatActionResult.NoLineOfSight, cs.Attack("enemy"));    // стена рвёт LOS
+            Assert.AreEqual(CombatActionResult.NoLineOfSight, cs.Attack("enemy"));    // стіна рве LOS
         }
 
-        // ---- Даун, окно, стабилизация ----
+        // ---- Даун, вікно, стабілізація ----
         private static (CombatState cs, CombatUnit victim, CombatUnit medic) DownScenario()
         {
             var map = new GridMap(12, 1);
@@ -105,8 +105,8 @@ namespace Game.Tests.EditMode
             var medic = U("medic", Side.Player, 1, medicine: 3);
             cs.AddUnit(enemy, new GridPos(0, 0));
             cs.AddUnit(victim, new GridPos(5, 0));
-            cs.AddUnit(medic, new GridPos(6, 0)); // вплотную к victim
-            cs.Begin(); // ход врага
+            cs.AddUnit(medic, new GridPos(6, 0)); // впритул до victim
+            cs.Begin(); // хід ворога
 
             Assert.AreEqual(CombatActionResult.Success, cs.Attack("victim"));
             return (cs, victim, medic);
@@ -125,7 +125,7 @@ namespace Game.Tests.EditMode
         public void Downed_Stabilized_ByAdjacentMedic()
         {
             var (cs, victim, medic) = DownScenario();
-            cs.EndTurn(); // враг → victim пропускает (окно 2→1) → ход медика
+            cs.EndTurn(); // ворог → victim пропускає (вікно 2→1) → хід медика
             Assert.AreSame(medic, cs.Current);
 
             Assert.AreEqual(CombatActionResult.Success, cs.Stabilize("victim"));
@@ -138,11 +138,11 @@ namespace Game.Tests.EditMode
         public void Downed_Dies_WhenWindowExpires()
         {
             var (cs, victim, _) = DownScenario();
-            cs.EndTurn(); // victim: окно 2→1, ход медика
-            cs.EndTurn(); // медик ничего не делает; раунд 2: ход врага
-            cs.EndTurn(); // враг пас; victim: окно 1→0 → смерть
+            cs.EndTurn(); // victim: вікно 2→1, хід медика
+            cs.EndTurn(); // медик нічого не робить; раунд 2: хід ворога
+            cs.EndTurn(); // ворог пас; victim: вікно 1→0 → смерть
             Assert.AreEqual(UnitLifeState.Dead, victim.LifeState);
-            Assert.AreEqual(CombatOutcome.Ongoing, cs.Outcome); // медик ещё стоит
+            Assert.AreEqual(CombatOutcome.Ongoing, cs.Outcome); // медик ще стоїть
         }
 
         [Test]
@@ -163,7 +163,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CombatActionResult.InvalidAction, cs.Stabilize("downed"));
         }
 
-        // ---- Смерть врага и исход ----
+        // ---- Смерть ворога і результат ----
         [Test]
         public void Enemy_DiesImmediately_VictoryEndsCombat()
         {
@@ -199,8 +199,8 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(3, hero.StrikeMeter);
             Assert.AreEqual(47, bag.Hp);
 
-            cs.EndTurn(); // ход мешка
-            cs.EndTurn(); // обратно к герою (AP восстановлены)
+            cs.EndTurn(); // хід мішка
+            cs.EndTurn(); // назад до героя (AP відновлені)
 
             Assert.AreEqual(CombatActionResult.Success, cs.Attack("bag", useStrike: true));
             Assert.AreEqual(0, hero.StrikeMeter);
@@ -221,7 +221,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(8, hero.Ap, "AP не списывается за невалидную strike-атаку");
         }
 
-        // ---- Проки оружия ----
+        // ---- Проки зброї ----
         [Test]
         public void WeaponProcs_ShredAndStatus_OnFullHit()
         {
@@ -249,7 +249,7 @@ namespace Game.Tests.EditMode
             var cs = NewCombat(map);
             var w = W(2, apCost: 3, range: 8);
             w.StatusOnHit = StatusType.Bleeding;
-            var hero = U("hero", Side.Player, 10, acc: 50, w: w); // margin 0 → Graze (в полосе [0,15))
+            var hero = U("hero", Side.Player, 10, acc: 50, w: w); // margin 0 → Graze (у полосі [0,15))
             var target = U("target", Side.Enemy, 5, hp: 30);
             cs.AddUnit(hero, new GridPos(0, 0));
             cs.AddUnit(target, new GridPos(5, 0));
@@ -260,7 +260,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(target.HasStatus(StatusType.Bleeding), "граза не триггерит проки оружия");
         }
 
-        // ---- Телеметрия атак ----
+        // ---- Телеметрія атак ----
         [Test]
         public void AttackHistory_RecordsChanceOutcomeAndDamage()
         {

@@ -1,11 +1,11 @@
 #!/bin/bash
-# SessionStart-хук: готовит облачную сессию к работе с проектом.
+# SessionStart-хук: готує хмарну сесію до роботи з проєктом.
 #
-# Ставит .NET SDK и восстанавливает пакеты, чтобы ассистент мог сразу
-# компилировать ядро и гонять тесты, а не просить владельца открыть Unity.
+# Ставить .NET SDK і відновлює пакети, щоб асистент міг одразу
+# компілювати ядро й ганяти тести, а не просити власника відкрити Unity.
 set -euo pipefail
 
-# На машине владельца проекта не вмешиваемся — там всё уже настроено.
+# На машині власника проєкту не втручаємося — там усе вже налаштовано.
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
     exit 0
 fi
@@ -23,10 +23,10 @@ fi
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
 
-# Прогреваем NuGet-кэш, чтобы первый dotnet test не ждал восстановления.
+# Прогріваємо кеш NuGet, щоб перший dotnet test не чекав відновлення.
 dotnet restore "$PROJECT_DIR/tools/Game.Tests.Headless/Game.Tests.EditMode.csproj" >/dev/null 2>&1 || true
 
-# Переменные переживают хук и достаются всей сессии.
+# Змінні переживають хук і дістаються всій сесії.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     {
         echo "export PATH=\"$DOTNET_DIR:\$PATH\""
@@ -36,4 +36,4 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     } >> "$CLAUDE_ENV_FILE"
 fi
 
-echo "Окружение готово: $(dotnet --version 2>/dev/null || "$DOTNET_DIR/dotnet" --version)"
+echo "Оточення готове:$(dotnet --version 2>/dev/null || "$DOTNET_DIR/dotnet" --version)"

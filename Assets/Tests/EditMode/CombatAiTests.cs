@@ -7,12 +7,12 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Боевой ИИ: читаемые ролевые биасы, скоринг цели, стабилизация медиком,
-    /// завершаемость AI-vs-AI. Перенесено из архивной боевой линии, адаптировано
-    /// на IHitRule (R1): большинство сценариев играются через ThresholdRule,
-    /// чтобы поведение ИИ проверялось само по себе, а не пряталось за удачей
-    /// броска; настоящая случайность (PercentRule + SeededDiceRoller) нужна
-    /// только тесту на воспроизводимость по сиду.
+    /// Бойовий ШІ: читабельні рольові біаси, скоринг цілі, стабілізація медиком,
+    /// завершуваність AI-vs-AI. Перенесено з архівної бойової лінії, адаптовано
+    /// під IHitRule (R1): більшість сценаріїв грається через ThresholdRule,
+    /// щоб поведінка ШІ перевірялася сама по собі, а не ховалася за удачею
+    /// кидка; справжня випадковість (PercentRule + SeededDiceRoller) потрібна
+    /// тільки тесту на відтворюваність за сідом.
     /// </summary>
     public class CombatAiTests
     {
@@ -38,7 +38,7 @@ namespace Game.Tests.EditMode
         private static readonly BalanceConfig Cfg = new BalanceConfig();
         private static CombatState Deterministic(GridMap map) => new CombatState(map, Cfg, new ThresholdRule(Cfg), null);
 
-        // ---- Ролевые биасы позиции ----
+        // ---- Рольові біаси позиції ----
         [Test]
         public void MeleeRole_ClosesDistance()
         {
@@ -48,7 +48,7 @@ namespace Game.Tests.EditMode
             var marks = U("marks", Side.Player, 1, w: Rifle());
             cs.AddUnit(brute, new GridPos(0, 0));
             cs.AddUnit(marks, new GridPos(11, 0));
-            cs.Begin(); // ходит brute
+            cs.Begin(); // ходить brute
 
             CombatAi.TakeTurn(cs);
             Assert.Less(GridPos.Chebyshev(brute.Pos, marks.Pos), 11, "клинч-роль сближается");
@@ -60,7 +60,7 @@ namespace Game.Tests.EditMode
             var map = new GridMap(12, 3);
             map.SetCover(new GridPos(6, 1), Direction.East, CoverType.Full);
             var cs = Deterministic(map);
-            var gunner = U("gunner", Side.Enemy, 10, acc: 1, w: Rifle()); // мизерный шанс — сперва позиция
+            var gunner = U("gunner", Side.Enemy, 10, acc: 1, w: Rifle()); // мізерний шанс — спершу позиція
             var target = U("target", Side.Player, 1, w: Rifle());
             cs.AddUnit(gunner, new GridPos(5, 0));
             cs.AddUnit(target, new GridPos(11, 1));
@@ -71,7 +71,7 @@ namespace Game.Tests.EditMode
                 "стрелок с плохим шансом идёт в укрытие на оптимале, а не стоит столбом");
         }
 
-        // ---- Скоринг цели ----
+        // ---- Скоринг цілі ----
         [Test]
         public void Target_FinishesAlmostDeadOverCloser()
         {
@@ -83,7 +83,7 @@ namespace Game.Tests.EditMode
             cs.AddUnit(shooter, new GridPos(0, 1));
             cs.AddUnit(healthy, new GridPos(3, 1));
             cs.AddUnit(dying, new GridPos(5, 1));
-            dying.Hp = 2; // добивание ценнее близости
+            dying.Hp = 2; // добивання цінніше за близькість
             cs.Begin();
 
             CombatAi.TakeTurn(cs);
@@ -104,13 +104,13 @@ namespace Game.Tests.EditMode
             cs.AddUnit(enemy, new GridPos(5, 0));
             fallen.LifeState = UnitLifeState.Downed;
             fallen.DownWindowRemaining = 2;
-            cs.Begin(); // ходит медик
+            cs.Begin(); // ходить медик
 
             CombatAi.TakeTurn(cs);
             Assert.AreEqual(UnitLifeState.Stabilized, fallen.LifeState, "медик спасает, а не стреляет");
         }
 
-        // ---- Статусы (контролёр давит статусом, не ждёт удачного ролла) ----
+        // ---- Статуси (контролер тисне статусом, не чекає вдалого кидка) ----
         [Test]
         public void Controller_AppliesFreshStatus_NotDuplicate()
         {
@@ -130,13 +130,13 @@ namespace Game.Tests.EditMode
             var hero = U("hero", Side.Player, 1, w: Rifle());
             cs.AddUnit(drone, new GridPos(0, 0));
             cs.AddUnit(hero, new GridPos(4, 0));
-            cs.Begin(); // дрон (иниц. 7 по умолчанию EnemyDefinition) ходит первым
+            cs.Begin(); // дрон (ініц. 7 за замовчуванням EnemyDefinition) ходить першим
 
             CombatAi.TakeTurn(cs);
             Assert.IsTrue(hero.HasStatus(StatusType.Suppressed), "контролёр давит статусом, а не ждёт ролла");
         }
 
-        // ---- Завершаемость и симметрия ----
+        // ---- Завершуваність і симетрія ----
         [Test]
         public void AiVsAi_SkirmishConcludes()
         {

@@ -4,41 +4,41 @@ using Game.Core.Stats;
 
 namespace Game.Core.Combat
 {
-    /// <summary>Кого/что таргетит способность.</summary>
+    /// <summary>Кого/що таргетить здібність.</summary>
     public enum AbilityTarget
     {
         Self = 0,
         Ally = 1,       // союзник (не сам)
         Enemy = 2,
-        Tile = 3,       // точка на карте (ловушка и т.п.)
+        Tile = 3,       // точка на карті (пастка тощо)
         AllyOrSelf = 4
     }
 
     /// <summary>
-    /// Примитив эффекта — способности собираются композицией примитивов (обычный
-    /// контент без нового кода). Половина набора — про состояния, половина —
-    /// про позицию и AP.
+    /// Примітив ефекту — здібності збираються композицією примітивів (звичайний
+    /// контент без нового коду). Половина набору — про стани, половина —
+    /// про позицію і AP.
     /// </summary>
     public enum AbilityEffectKind
     {
-        WeaponAttack = 0,     // удар текущим оружием (полный конвейер; Amount не используется)
-        FlatDamage = 1,       // фикс урон типом Damage (множитель типа + броня)
-        ApplyStatus = 2,      // наложить Status (гарантированно)
-        RemoveStatus = 3,     // снять Status, если есть
-        Shred = 4,            // −броня цели на Amount (копится)
-        Heal = 5,             // +HP до максимума
-        GrantAp = 6,          // +AP цели (размен экономии действий)
-        LungeToTarget = 7,    // рывок: встать вплотную к цели-врагу (свободная клетка)
-        RepositionTarget = 8, // переставить цель-союзника в targetTile (≤ Amount клеток от него)
-        PlaceTrap = 9,        // ловушка в targetTile: Amount урона типом Damage + Status
-        HackRobot = 10        // переманить вражеского робота на свою сторону
+        WeaponAttack = 0,     // удар поточною зброєю (повний конвеєр; Amount не використовується)
+        FlatDamage = 1,       // фікс-урон типом Damage (множник типу + броня)
+        ApplyStatus = 2,      // накласти Status (гарантовано)
+        RemoveStatus = 3,     // зняти Status, якщо є
+        Shred = 4,            // −броня цілі на Amount (накопичується)
+        Heal = 5,             // +HP до максимуму
+        GrantAp = 6,          // +AP цілі (розмін економії дій)
+        LungeToTarget = 7,    // ривок: стати впритул до цілі-ворога (вільна клітина)
+        RepositionTarget = 8, // переставити ціль-союзника в targetTile (≤ Amount клітин від нього)
+        PlaceTrap = 9,        // пастка в targetTile: Amount урону типом Damage + Status
+        HackRobot = 10        // переманити ворожого робота на свій бік
     }
 
     [Serializable]
     public sealed class AbilityEffect
     {
         public AbilityEffectKind Kind;
-        public int Amount;                          // урон/хил/AP/шред/дальность перестановки
+        public int Amount;                          // урон/хіл/AP/шред/дальність перестановки
         public DamageType Damage = DamageType.True; // для FlatDamage/PlaceTrap
         public StatusType Status = StatusType.None; // для Apply/RemoveStatus/PlaceTrap
         public int AccuracyBonus;                   // для WeaponAttack
@@ -53,10 +53,10 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Активная способность: немного, но каждая отчётлива. Гейтится уровнем
-    /// скила, стоит AP, имеет КД в своих ходах. Чистые данные — в Unity
-    /// обернётся ScriptableObject; враги берут способности из того же общего
-    /// пула (симметрия).
+    /// Активна здібність: небагато, але кожна відчутна. Гейтиться рівнем
+    /// скіла, коштує AP, має КД у своїх ходах. Чисті дані — в Unity
+    /// обернеться ScriptableObject; вороги беруть здібності з того самого
+    /// спільного пулу (симетрія).
     /// </summary>
     [Serializable]
     public sealed class AbilityDefinition
@@ -64,13 +64,13 @@ namespace Game.Core.Combat
         public string Id;
         public string DisplayName;
 
-        /// <summary>Скил-гейт: напарник знает способность при уровне скила ≥ порога.</summary>
+        /// <summary>Скіл-гейт: напарник знає здібність при рівні скіла ≥ порога.</summary>
         public SkillType Skill = SkillType.None;
         public int RequiredSkillLevel = 1;
 
         public int ApCost = 3;
-        public int CooldownTurns = 2;   // снова доступна через N своих ходов
-        public int Range = 1;           // дальность до цели/тайла (Чебышёв); 0 = только на себя
+        public int CooldownTurns = 2;   // знову доступна через N своїх ходів
+        public int Range = 1;           // дальність до цілі/тайла (Чебишов); 0 = тільки на себе
         public AbilityTarget Targeting = AbilityTarget.Enemy;
         public bool RequiresLineOfSight = true;
 
@@ -86,7 +86,7 @@ namespace Game.Core.Combat
             RequiredSkillLevel = requiredLevel;
         }
 
-        // ---- Флюент-хелперы для авторинга контента ----
+        // ---- Флюент-хелпери для авторингу контенту ----
         public AbilityDefinition Costs(int ap, int cooldown)
         {
             ApCost = ap;
@@ -108,7 +108,7 @@ namespace Game.Core.Combat
             return this;
         }
 
-        /// <summary>Сколько ОТДЕЛЬНЫХ роллов атаки делает способность (например, «Черга» — два выстрела).</summary>
+        /// <summary>Скільки ОКРЕМИХ роллів атаки робить здібність (наприклад, «Черга» — два постріли).</summary>
         public int WeaponAttackCount()
         {
             int n = 0;
@@ -118,10 +118,10 @@ namespace Game.Core.Combat
         }
 
         /// <summary>
-        /// Бонус точности ОДНОГО ролла — для честного превью. Именно так его
-        /// берёт CombatState.UseAbility: каждый эффект WeaponAttack катится со
-        /// СВОИМ бонусом, поэтому суммировать бонусы залпа нельзя — показанный
-        /// процент разошёлся бы с роллом.
+        /// Бонус точності ОДНОГО ролла — для чесного превʼю. Саме так його
+        /// бере CombatState.UseAbility: кожен ефект WeaponAttack котиться зі
+        /// СВОЇМ бонусом, тому підсумовувати бонуси залпу не можна — показаний
+        /// відсоток розійшовся б із роллом.
         /// </summary>
         public int PreviewAccuracyBonus()
         {

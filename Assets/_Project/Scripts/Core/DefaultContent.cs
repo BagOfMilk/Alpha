@@ -7,17 +7,17 @@ using Game.Core.Stats;
 namespace Game.Core
 {
     /// <summary>
-    /// Дефолтный контент в коде: архетипы напарников и слоты базы. Это «затравка»
-    /// для прототипа — позже её заменят/дополнят ScriptableObject-ассеты, но
-    /// благодаря этому проект играбелен сразу, без ручной настройки в редакторе.
+    /// Дефолтний контент у коді: архетипи напарників і слоти бази. Це «затравка»
+    /// для прототипу — пізніше її замінять/доповнять ScriptableObject-асети, але
+    /// завдяки цьому проєкт грайбельний одразу, без ручного налаштування в редакторі.
     ///
-    /// Бюджеты стартовых архетипов одинаковы: 18 очков атрибутов и 12 очков
-    /// скилов на каждого. Одинаковый бюджет — единственный способ сравнивать
-    /// архетипы между собой, не пересчитывая их каждый раз вручную.
+    /// Бюджети стартових архетипів однакові: 18 очок атрибутів і 12 очок
+    /// скілів на кожного. Однаковий бюджет — єдиний спосіб порівнювати
+    /// архетипи між собою, не перераховуючи їх щоразу вручну.
     /// </summary>
     public static class DefaultContent
     {
-        // ---- Архетипы напарников ----
+        // ---- Архетипи напарників ----
 
         public static CompanionArchetype Soldier()
         {
@@ -105,9 +105,9 @@ namespace Game.Core
             return a;
         }
 
-        // Торговля у Командира не для красоты: рынок и погрузочный док стоят на
-        // ней, и без неё в стартовом ростере на этих позициях профиля нет вовсе —
-        // лучшим торговцем оказывался тот, у кого просто выше Смекалка.
+        // Торгівля в Командира не для краси: ринок і погрузочний док стоять на
+        // ній, і без неї в стартовому ростері на цих позиціях профілю нема взагалі —
+        // найкращим торговцем виявлявся той, у кого просто вища Кмітливість.
         public static CompanionArchetype Leader()
         {
             var a = new CompanionArchetype("leader", "Командир");
@@ -133,17 +133,17 @@ namespace Game.Core
             };
         }
 
-        // ---- Слоты базы ----
+        // ---- Слоти бази ----
         //
-        // Первичное — скил, вторичное — атрибут: ремесло и природная сторона
-        // одной и той же работы. Коэффициенты прежние, поменялись только оси,
-        // поэтому выработка сопоставима с числами итерации 1.
+        // Первинне — скіл, вторинне — атрибут: ремесло і природна сторона
+        // однієї й тієї самої роботи. Коефіцієнти незмінні, змінилися лише осі,
+        // тому виробіток можна порівнювати з числами ітерації 1.
 
         public static List<AssignmentSlotDefinition> AllSlots()
         {
             var slots = new List<AssignmentSlotDefinition>();
 
-            // Совет — пассивный бонус морали: кто умеет говорить с людьми.
+            // Рада — пасивний бонус моралі: хто вміє говорити з людьми.
             slots.Add(new AssignmentSlotDefinition("council_seat", "Место в совете", BaseSectionType.Council)
             {
                 OutputKind = SlotOutputKind.Passive,
@@ -153,7 +153,7 @@ namespace Game.Core
                 BaseOutput = 2, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.5
             });
 
-            // Фермы — еда. Землю кормят те, кто умеет её читать.
+            // Ферми — їжа. Землю годують ті, хто вміє її читати.
             slots.Add(new AssignmentSlotDefinition("settlement_farms", "Фермы поселения", BaseSectionType.Settlement)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Food,
@@ -167,11 +167,11 @@ namespace Game.Core
                 BaseOutput = 4, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.5
             });
 
-            // Мастерская — крафт. Материалов НЕ производит: по Э6.2 городского
-            // производства материалов нет вовсе, источник только вылазки. Пока
-            // крафт не написан, позиция даёт ролевой опыт и ничего больше —
-            // это честнее, чем печатать компонент, которого город печатать не
-            // вправе.
+            // Майстерня — крафт. Матеріалів НЕ виробляє: за Е6.2 міського
+            // виробництва матеріалів нема взагалі, джерело лише вилазки. Поки
+            // крафт не написано, позиція дає рольовий досвід і нічого більше —
+            // це чесніше, ніж друкувати компонент, який місто друкувати не
+            // вправі.
             slots.Add(new AssignmentSlotDefinition("workshop_bench", "Верстак мастерской", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.None,
@@ -179,11 +179,11 @@ namespace Game.Core
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.2, OutputPerSecondaryPoint = 0.4
             });
 
-            // Лаборатория — крафт аугмента (US-6.4, помечен [ПОЗЖЕ]). Очков
-            // исследований в GDD нет ни одного упоминания, поэтому выход снят.
-            // Ремесло здесь механика: скила «наука» в GDD тоже нет, и выдумывать
-            // его под один слот дороже, чем признать лабораторию мастерской
-            // потоньше.
+            // Лабораторія — крафт аугмента (US-6.4, позначений [ПІЗНІШЕ]). Очок
+            // досліджень у GDD нема жодної згадки, тому вихід знято.
+            // Ремесло тут механіка: скіла «наука» у GDD теж нема, і вигадувати
+            // його під один слот дорожче, ніж визнати лабораторію дещо тоншою
+            // майстернею.
             slots.Add(new AssignmentSlotDefinition("lab_station", "Исследовательский стол", BaseSectionType.Laboratory)
             {
                 OutputKind = SlotOutputKind.None,
@@ -191,7 +191,7 @@ namespace Game.Core
                 BaseOutput = 2, OutputPerPrimaryPoint = 1.3, OutputPerSecondaryPoint = 0.3
             });
 
-            // Лазарет — лечение (Healing).
+            // Лазарет — лікування (Healing).
             slots.Add(new AssignmentSlotDefinition("infirmary_bed", "Койка лазарета", BaseSectionType.Infirmary)
             {
                 OutputKind = SlotOutputKind.Healing,
@@ -199,17 +199,17 @@ namespace Game.Core
                 BaseOutput = 4, OutputPerPrimaryPoint = 2.0, OutputPerSecondaryPoint = 0.5
             });
 
-            // Склад — припасы (изначально закрыт, открывается за ресурсы).
+            // Склад — припаси (спочатку закритий, відкривається за ресурси).
             slots.Add(new AssignmentSlotDefinition("storehouse_dock", "Погрузочный док", BaseSectionType.Storehouse)
             {
                 OutputKind = SlotOutputKind.Resource, OutputResource = ResourceType.Gold,
                 PrimarySkill = SkillType.Trade, SecondaryAttribute = AttributeType.Strength,
                 BaseOutput = 3, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0.4,
                 UnlockedByDefault = false,
-                // Цена постройки. Док — не само здание Склада, а его апгрейд,
-                // поэтому по US-7.2 он гейтится строительным компонентом, а не
-                // одним золотом, как ядро-здания. Пока это единственный слив
-                // материалов — до появления стройки и крафта (Э6, Э7).
+                // Ціна побудови. Док — не саме будівля Складу, а її апгрейд,
+                // тому за US-7.2 він гейтиться будівельним компонентом, а не
+                // самим золотом, як ядра-будівлі. Поки це єдиний злив
+                // матеріалів — до появи будівництва і крафту (Е6, Е7).
                 UnlockCost = new Dictionary<ResourceType, int>
                 {
                     { ResourceType.Gold, 40 },
@@ -217,10 +217,10 @@ namespace Game.Core
                 }
             });
 
-            // Разведпост. Интела как ресурса в GDD нет, выход снят. Сам слот
-            // НЕ удаляется: его id — RelevantPositionId двух инцидентов, и по
-            // нему детерминированно выбирается жертва (IncidentResolver). Убрать
-            // слот значит тихо откатить выбор жертвы на «первый по алфавиту».
+            // Розвідпост. Інтела як ресурсу в GDD нема, вихід знято. Сам слот
+            // НЕ видаляється: його id — RelevantPositionId двох інцидентів, і за
+            // ним детерміновано вибирається жертва (IncidentResolver). Прибрати
+            // слот означає мовчки відкотити вибір жертви на «перший за алфавітом».
             slots.Add(new AssignmentSlotDefinition("scouting_post", "Разведпост", BaseSectionType.ScoutingPost)
             {
                 OutputKind = SlotOutputKind.None,

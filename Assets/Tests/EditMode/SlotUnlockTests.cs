@@ -8,12 +8,12 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Разблокировка закрытого слота за ресурсы.
+    /// Розблокування закритого слота за ресурси.
     ///
-    /// До появления этого механизма закрытый слот («Погрузочный док») оставался
-    /// закрытым навсегда: свойство Unlocked было публичным, но переключать его
-    /// в игровом коде было некому. Заодно это первый настоящий слив ресурсов
-    /// кроме прокорма — до него всё, кроме еды, только копилось.
+    /// До появи цього механізму закритий слот («Погрузочный док») лишався
+    /// закритим назавжди: властивість Unlocked була публічною, але перемикати її
+    /// в ігровому коді не було кому. Заодно це перший справжній злив ресурсів
+    /// крім прокорму — до нього все, крім їжі, тільки накопичувалося.
     /// </summary>
     public class SlotUnlockTests
     {
@@ -53,13 +53,13 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(5, ledger.Get(ResourceType.Materials));
         }
 
-        /// <summary>Списание атомарное: не хватило одного ресурса — не тратится ничего.</summary>
+        /// <summary>Списання атомарне: не вистачило одного ресурсу — не витрачається нічого.</summary>
         [Test]
         public void Unlock_WhenOneResourceIsShort_SpendsNothing()
         {
             var (state, ledger) = MakeBaseWithLockedSlot();
             ledger.Add(ResourceType.Gold, 100);
-            ledger.Add(ResourceType.Materials, 24); // на единицу меньше цены
+            ledger.Add(ResourceType.Materials, 24); // на одиницю менше ціни
 
             Assert.AreEqual(UnlockResult.CannotAfford, state.TryUnlockSlot(SlotId));
             Assert.IsFalse(state.GetSlot(SlotId).Unlocked);
@@ -86,7 +86,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(UnlockResult.SlotNotFound, state.TryUnlockSlot("нет такого"));
         }
 
-        /// <summary>Закрытый слот без цены открыть нельзя — это заглушка под стройку.</summary>
+        /// <summary>Закритий слот без ціни відкрити не можна — це заглушка під будівництво.</summary>
         [Test]
         public void Unlock_SlotWithoutPrice_Fails()
         {
@@ -100,7 +100,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(UnlockResult.NoPriceDefined, state.TryUnlockSlot("noprice"));
         }
 
-        /// <summary>Открытый слот сразу принимает напарника — раньше это было недостижимо.</summary>
+        /// <summary>Відкритий слот одразу приймає напарника — раніше це було недосяжним.</summary>
         [Test]
         public void Unlock_ThenAssign_Works()
         {

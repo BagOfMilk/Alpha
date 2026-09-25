@@ -11,7 +11,7 @@ namespace Game.Gameplay
     /// + 'is IBattlePresenter'". <see cref="Object.FindObjectsByType{T}"/> —
     /// Unity 6-API, якого немає в заглушці <c>Game.Gameplay.Lint</c>
     /// (навмисно вузька поверхня стаба, див. коментар у ньому) — тому цей
-    /// файл виключений із лінту (той самий приём, що вже виключив
+    /// файл виключений із лінту (той самий прийом, що вже виключив
     /// VillageStage.cs/VillageStageBridge.cs), а <see cref="GameShell"/>
     /// (лінтується) кличе його через рефлексію.
     /// </summary>

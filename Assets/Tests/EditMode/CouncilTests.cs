@@ -16,11 +16,11 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Пакет B5: новые указы рады (R5, AUDIT П8/G12/G20) поверх существующего
-    /// CityWorks/CityWorksStep. Архивный Council/CouncilAction (отдельный класс
-    /// с Influence/ThreatSystem, Эпик 10) на текущую модель не переносится —
-    /// R14 отдаёт новые действия прямо CityWorks, тем же приёмом, каким уже
-    /// сделаны Order/OrderRaid/OrderSettlers.
+    /// Пакет B5: нові укази ради (R5, AUDIT П8/G12/G20) поверх наявного
+    /// CityWorks/CityWorksStep. Архівний Council/CouncilAction (окремий клас
+    /// з Influence/ThreatSystem, Епік 10) на поточну модель не переноситься —
+    /// R14 віддає нові дії прямо CityWorks, тим самим прийомом, яким уже
+    /// зроблені Order/OrderRaid/OrderSettlers.
     /// </summary>
     public class CouncilTests
     {
@@ -100,14 +100,14 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(50 - cfg.Faction.DecreeFactionDelta, c.Factions.Get(DefaultFactions.Community).Value,
                 "Фракция, которой указ стоит, теряет ровно столько же — это и есть 'trade'");
 
-            // AUDIT G20: CouncilEdict обязан реально примениться следующим тиком.
+            // AUDIT G20: CouncilEdict зобов'язаний реально застосуватися наступним тіком.
             var report = c.Processor.Advance();
             var edict = report.TensionChanges.Where(x => x.Driver == TensionDriver.CouncilEdict).ToList();
             Assert.IsNotEmpty(edict, "CouncilEdict стоял в белом списке без единого вызова — теперь указ его вызывает");
             Assert.Less(edict[0].Applied, 0, "Указ снижает Напругу (понижающий драйвер)");
 
-            // Ревью-фикс: указ применился СРАЗУ (Applied), но обязан и прозвучать —
-            // иначе город меняется молча (docs/TEST_BUILD.md §2 стр. 15, §7.13).
+            // Ревью-фікс: указ застосувався ОДРАЗУ (Applied), але зобов'язаний і прозвучати —
+            // інакше місто змінюється мовчки (docs/TEST_BUILD.md §2 стор. 15, §7.13).
             Assert.IsTrue(Heard(new[] { report }).Any(r => r.TopicId == "council.decree.ordered"),
                 "Указ обязан объявить о себе тем же днём, когда заказан");
 
@@ -130,10 +130,10 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Ревью-фикс: без этой проверки указ на незарегистрированную фракцию
-        /// списывал золото, двигал Уклад и молча не трогал ни одной фракции —
-        /// вызывающий не мог отличить это от успеха (обе ветки возвращали
-        /// Applied). CouncilOrderResult.UnknownFaction для того и заведён.
+        /// Ревью-фікс: без цієї перевірки указ на незареєстровану фракцію
+        /// списував золото, рухав Уклад і мовчки не чіпав жодної фракції —
+        /// той, хто викликає, не міг відрізнити це від успіху (обидві гілки повертали
+        /// Applied). CouncilOrderResult.UnknownFaction саме для цього і заведений.
         /// </summary>
         [Test]
         public void Decree_UnknownFavoredFaction_DoesNothing_ReturnsUnknownFaction()
@@ -193,13 +193,13 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Ревью-фикс (major): раньше Указ клал Напругу в DayProcessor.QueueExternal
-        /// (_externalTension) — эта очередь не входит в SettlementSave. Order* и
-        /// SaveState оба легальны в фазе Morning (docs/TEST_BUILD.md §4.1), значит
-        /// "Указ -> SaveState -> перезагрузка -> Advance" — легальная последовательность,
-        /// и раньше она тихо теряла уплаченный CouncilEdict, хотя золото/Уклад/фракции
-        /// из того же вызова уже сохранились. Теперь Напруга Указа копится в самом
-        /// CityWorks (входит в его CaptureState) и применяется CityWorksStep напрямую.
+        /// Ревью-фікс (major): раніше Указ клав Напругу в DayProcessor.QueueExternal
+        /// (_externalTension) — ця черга не входить у SettlementSave. Order* і
+        /// SaveState обидва легальні у фазі Morning (docs/TEST_BUILD.md §4.1), отже
+        /// "Указ -> SaveState -> перезавантаження -> Advance" — легальна послідовність,
+        /// і раніше вона мовчки губила сплачений CouncilEdict, хоча золото/Уклад/фракції
+        /// з того самого виклику вже зберігалися. Тепер Напруга Указа накопичується в самому
+        /// CityWorks (входить у його CaptureState) і застосовується CityWorksStep напряму.
         /// </summary>
         [Test]
         public void Decree_TensionSurvivesSaveAndLoad_BeforeNextAdvance()
@@ -224,7 +224,7 @@ namespace Game.Tests.EditMode
             Assert.Less(edict[0].Applied, 0, "Указ остаётся понижающим драйвером и после перезагрузки");
         }
 
-        // ================= Дипломатия =================
+        // ================= Дипломатія =================
 
         [Test]
         public void Diplomacy_RaisesTargetFactionStanding_CostsGold_HasCooldown()
@@ -251,7 +251,7 @@ namespace Game.Tests.EditMode
                 c.Works.OrderDiplomacy(c.State, c.Factions, DefaultFactions.Horde, 1, cfg));
         }
 
-        // ================= Инвестиция =================
+        // ================= Інвестиція =================
 
         [Test]
         public void Investment_PaysGoldOverTime_ThenStops()
@@ -290,7 +290,7 @@ namespace Game.Tests.EditMode
                 "После истечения срока Инвестиция обязана остановиться, а не платить вечно");
         }
 
-        // ================= Подготовка к угрозе =================
+        // ================= Підготовка до загрози =================
 
         [Test]
         public void PrepareThreat_QueuesReadinessMilestone_CostsGold_HasCooldown()
@@ -318,7 +318,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, c.Works.TakeReadinessMilestones(), "Забор обнуляет счётчик");
         }
 
-        // ================= Снаряжение экспедиции =================
+        // ================= Спорядження експедиції =================
 
         [Test]
         public void OutfitExpedition_StoresOneShotBonus_ConsumedOnce()
@@ -348,7 +348,7 @@ namespace Game.Tests.EditMode
             Assert.IsNull(c.Works.TakeExpeditionOutfitBuff(), "Второй забор — пусто: бонус разовый");
         }
 
-        // ================= AUDIT G12: скидка занятого рынка =================
+        // ================= AUDIT G12: знижка зайнятого ринку =================
 
         [Test]
         public void PriceMultiplier_Is1_WhenMarketNotStaffed()
@@ -373,7 +373,7 @@ namespace Game.Tests.EditMode
             Assert.GreaterOrEqual(discount, 1.0 - cfg.Checks.TradeBandDiscount * 3 - 1e-9,
                 "Скидка не может быть больше, чем даёт лучшая полоса");
 
-            // ---- стройка ----
+            // ---- будівництво ----
             var staffed = Build(cfg, built: new[] { DefaultBuildings.CouncilHall, DefaultBuildings.Market });
             Hire(staffed.State, "trader", SkillType.Trade, 10);
             staffed.State.TryAssign("trader", CityWorks.MarketSlotId);
@@ -395,7 +395,7 @@ namespace Game.Tests.EditMode
             Assert.Less(spentStaffed, spentBare, "Занятый рынок обязан скидывать цену стройки (AUDIT G12)");
             Assert.AreEqual(infirmary.GoldCost, spentBare, "Без рынка — прежняя, недисконтированная цена");
 
-            // ---- указ рады ----
+            // ---- указ ради ----
             int goldBeforeDecreeStaffed = staffed.State.Resources.Get(ResourceType.Gold);
             int goldBeforeDecreeBare = bare.State.Resources.Get(ResourceType.Gold);
 
@@ -409,7 +409,7 @@ namespace Game.Tests.EditMode
 
             Assert.Less(decreeSpentStaffed, decreeSpentBare, "Скидка обязана работать и для указов рады, не только стройки");
 
-            // ---- дипломатия ----
+            // ---- дипломатія ----
             int goldBeforeDiplomacyStaffed = staffed.State.Resources.Get(ResourceType.Gold);
             int goldBeforeDiplomacyBare = bare.State.Resources.Get(ResourceType.Gold);
 
@@ -445,8 +445,8 @@ namespace Game.Tests.EditMode
 
             Assert.Less(outfitSpentStaffed, outfitSpentBare, "Скидка обязана работать и для Спорядження експедиції");
 
-            // ---- інвестиція (buildingId: null — минуємо перевірку «здание уже
-            //      построено», тут перевіряємо тільки знижку) ----
+            // ---- інвестиція (buildingId: null — минуємо перевірку «будівля вже
+            //      збудована», тут перевіряємо тільки знижку) ----
             int goldBeforeInvestStaffed = staffed.State.Resources.Get(ResourceType.Gold);
             int goldBeforeInvestBare = bare.State.Resources.Get(ResourceType.Gold);
 
@@ -459,13 +459,13 @@ namespace Game.Tests.EditMode
             Assert.Less(investSpentStaffed, investSpentBare, "Скидка обязана работать и для Инвестиции");
         }
 
-        // ================= регрессия: старые заказы совета не сломаны =================
+        // ================= регресія: старі замовлення ради не зламані =================
 
         /// <summary>
-        /// docs/TEST_BUILD.md §5 (акцептанс B5) называет этот тест по имени:
-        /// облава — силовой метод, и теперь, когда реестр фракций существует,
-        /// она обязана двигать не только Напругу, но и отношения (бояри Тугара
-        /// довольны порядком, громаде не нравится нагайка на своих).
+        /// docs/TEST_BUILD.md §5 (акцептанс B5) називає цей тест на ім'я:
+        /// облава — силовий метод, і тепер, коли реєстр фракцій існує,
+        /// вона зобов'язана рухати не тільки Напругу, а й стосунки (бояри Тугара
+        /// задоволені порядком, громаді не подобається нагайка на своїх).
         /// </summary>
         [Test]
         public void Raid_LowersTension_PaysCosts_ShiftsFactions()

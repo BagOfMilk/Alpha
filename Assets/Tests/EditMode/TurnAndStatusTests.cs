@@ -5,11 +5,11 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Очередь ходов и жизненный цикл состояний: DoT в начале хода носителя,
-    /// длительность тикает в конце его хода, Resolve (производная
-    /// StatusDurationReduction) сокращает при наложении (мин 1). Перенесено из
-    /// архивной боевой линии; не завязано на конкретное правило попадания —
-    /// используется ThresholdRule как самый простой конструктор.
+    /// Черга ходів і життєвий цикл станів: DoT на початку ходу носія,
+    /// тривалість тікає в кінці його ходу, Resolve (похідна
+    /// StatusDurationReduction) скорочує при накладенні (мін 1). Перенесено з
+    /// архівної бойової лінії; не прив'язано до конкретного правила влучання —
+    /// використовується ThresholdRule як найпростіший конструктор.
     /// </summary>
     public class TurnAndStatusTests
     {
@@ -30,7 +30,7 @@ namespace Game.Tests.EditMode
         {
             var a = U("a", Side.Player, 8);
             var b = U("b", Side.Enemy, 5);
-            var c = U("c", Side.Player, 5); // та же инициатива, добавлен после b
+            var c = U("c", Side.Player, 5); // та сама ініціатива, доданий після b
             var d = U("d", Side.Enemy, 3);
             var turns = new TurnSystem(new[] { a, b, c, d });
 
@@ -44,7 +44,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, turns.Round);
             turns.Advance();
             Assert.AreEqual(1, turns.Round);
-            turns.Advance(); // оборот очереди
+            turns.Advance(); // оберт черги
             Assert.AreEqual(2, turns.Round);
         }
 
@@ -56,11 +56,11 @@ namespace Game.Tests.EditMode
             var cs = NewCombat(map);
             var actor = U("actor", Side.Player, 10);
             var other = U("other", Side.Player, 5);
-            var dummy = U("dummy", Side.Enemy, 0, hp: 50); // бой «идёт», тестам не мешает
+            var dummy = U("dummy", Side.Enemy, 0, hp: 50); // бій «триває», тестам не заважає
             cs.AddUnit(actor, new GridPos(0, 0));
             cs.AddUnit(other, new GridPos(2, 0));
             cs.AddUnit(dummy, new GridPos(11, 0));
-            cs.Begin(); // ход actor
+            cs.Begin(); // хід actor
             return (cs, actor, other);
         }
 
@@ -71,12 +71,12 @@ namespace Game.Tests.EditMode
             cs.ApplyStatus(other, StatusType.Suppressed);
             Assert.IsTrue(other.HasStatus(StatusType.Suppressed));
 
-            cs.EndTurn(); // ход переходит к other
+            cs.EndTurn(); // хід переходить до other
             Assert.AreSame(other, cs.Current);
             Assert.IsTrue(other.HasStatus(StatusType.Suppressed), "действует во время собственного хода");
             Assert.AreEqual(2, cs.MoveCostPerTile(other)); // ceil(1 × 1.5)
 
-            cs.EndTurn(); // конец хода other — состояние спадает
+            cs.EndTurn(); // кінець ходу other — стан спадає
             Assert.IsFalse(other.HasStatus(StatusType.Suppressed));
             Assert.AreEqual(1, cs.MoveCostPerTile(other));
         }
@@ -85,14 +85,14 @@ namespace Game.Tests.EditMode
         public void Bleeding_TicksAtStartOfOwnTurn_DurationAtEnd()
         {
             var (cs, _, other) = TwoPlusDummy();
-            cs.ApplyStatus(other, StatusType.Bleeding); // длительность 3, DoT 2 (True)
+            cs.ApplyStatus(other, StatusType.Bleeding); // тривалість 3, DoT 2 (True)
             Assert.AreEqual(3, other.GetStatus(StatusType.Bleeding).RemainingTurns);
 
-            cs.EndTurn(); // начало хода other → тик DoT
+            cs.EndTurn(); // початок ходу other → тік DoT
             Assert.AreEqual(8, other.Hp);
             Assert.AreEqual(3, other.GetStatus(StatusType.Bleeding).RemainingTurns, "длительность тикает в конце хода");
 
-            cs.EndTurn(); // конец хода other
+            cs.EndTurn(); // кінець ходу other
             Assert.AreEqual(2, other.GetStatus(StatusType.Bleeding).RemainingTurns);
         }
 
@@ -101,13 +101,13 @@ namespace Game.Tests.EditMode
         {
             var map = new GridMap(5, 1);
             var cs = NewCombat(map);
-            var tough = U("tough", Side.Player, 10, resolve: 9); // 9 / 3 = −3 хода (ResolvePerStatusTurnReduction=3)
+            var tough = U("tough", Side.Player, 10, resolve: 9); // 9 / 3 = −3 ходи (ResolvePerStatusTurnReduction=3)
             var dummy = U("dummy", Side.Enemy, 0);
             cs.AddUnit(tough, new GridPos(0, 0));
             cs.AddUnit(dummy, new GridPos(4, 0));
             cs.Begin();
 
-            cs.ApplyStatus(tough, StatusType.Bleeding); // база 3 − 3 → мин 1
+            cs.ApplyStatus(tough, StatusType.Bleeding); // база 3 − 3 → мін 1
             Assert.AreEqual(1, tough.GetStatus(StatusType.Bleeding).RemainingTurns);
         }
 
@@ -116,10 +116,10 @@ namespace Game.Tests.EditMode
         {
             var (cs, _, other) = TwoPlusDummy();
             cs.ApplyStatus(other, StatusType.Bleeding);
-            cs.EndTurn(); // тик DoT (−2 HP)
-            cs.EndTurn(); // длительность → 2
+            cs.EndTurn(); // тік DoT (−2 HP)
+            cs.EndTurn(); // тривалість → 2
 
-            cs.ApplyStatus(other, StatusType.Bleeding); // освежение до 3, второй экземпляр не вешается
+            cs.ApplyStatus(other, StatusType.Bleeding); // освіження до 3, другий екземпляр не вішається
             Assert.AreEqual(3, other.GetStatus(StatusType.Bleeding).RemainingTurns);
             int count = 0;
             foreach (var s in other.Statuses) if (s.Type == StatusType.Bleeding) count++;
@@ -133,14 +133,14 @@ namespace Game.Tests.EditMode
             cs.ApplyStatus(other, StatusType.Stunned);
             Assert.IsTrue(other.HasStatus(StatusType.Stunned));
 
-            cs.EndTurn(); // начало хода other: Оглушение съедает AP
+            cs.EndTurn(); // початок ходу other: Оглушення з'їдає AP
             Assert.AreSame(other, cs.Current);
             Assert.AreEqual(0, other.Ap, "оглушённый пропускает ход");
             Assert.IsFalse(other.HasStatus(StatusType.Stunned), "статус расходуется");
 
             cs.EndTurn(); // dummy
             cs.EndTurn(); // actor
-            cs.EndTurn(); // снова other
+            cs.EndTurn(); // знову other
             Assert.AreSame(other, cs.Current);
             Assert.AreEqual(8, other.Ap, "следующий ход — полные AP");
         }
@@ -152,13 +152,13 @@ namespace Game.Tests.EditMode
             var cs = NewCombat(map);
             var torch = U("torch", Side.Player, 10);
             var mutant = U("mutant", Side.Enemy, 5, hp: 20);
-            mutant.Profile.Resists = new ResistProfile().With(DamageType.Fire, 1.5); // уязвим к огню
+            mutant.Profile.Resists = new ResistProfile().With(DamageType.Fire, 1.5); // вразливий до вогню
             cs.AddUnit(torch, new GridPos(0, 0));
             cs.AddUnit(mutant, new GridPos(4, 0));
             cs.Begin();
 
-            cs.ApplyStatus(mutant, StatusType.Burning); // Поджог: DoT огнём
-            cs.EndTurn(); // начало хода мутанта: тик 2 × 1.5 = 3
+            cs.ApplyStatus(mutant, StatusType.Burning); // Підпал: DoT вогнем
+            cs.EndTurn(); // початок ходу мутанта: тік 2 × 1.5 = 3
             Assert.AreEqual(17, mutant.Hp, "Поджог тикает типизированным огнём с множителем уязвимости");
         }
     }

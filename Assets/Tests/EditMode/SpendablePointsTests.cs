@@ -29,7 +29,7 @@ namespace Game.Tests.EditMode
             var bank = new SpendablePoints();
 
             int before = protagonist.Skill(SkillType.Persuade);
-            var levelUp = protagonist.GainXpNoAutoSpend(1000, cfg); // заведомо хватит на уровень
+            var levelUp = protagonist.GainXpNoAutoSpend(1000, cfg); // свідомо вистачить на рівень
             Assert.IsTrue(levelUp.LeveledUp, "предпосылка теста: должен вырасти хоть один уровень");
 
             bank.Grant(protagonist.Id, levelUp.LevelsGained * cfg.SkillPointsPerLevel);
@@ -43,8 +43,8 @@ namespace Game.Tests.EditMode
         public void Companion_KeepsAutoSpend_UnlikeProtagonist()
         {
             var cfg = Cfg();
-            // Ростовому профилю нужен хоть один вес — иначе AllocatePoints
-            // честно раздаёт ноль всем, и тест ничего бы не проверил.
+            // Ростовому профілю потрібна хоч одна вага — інакше AllocatePoints
+            // чесно роздає нуль усім, і тест нічого б не перевірив.
             var arch = new CompanionArchetype("maksym", "maksym").SetGrowth(SkillType.Melee, 1.0);
             var companion = arch.CreateInstance("maksym_1", cfg);
             int totalBefore = companion.Skills.TotalPoints;

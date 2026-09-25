@@ -10,11 +10,11 @@ using Game.Core.World;
 namespace Game.Core.Loop
 {
     /// <summary>
-    /// Продвигает время. Заменяет бесконечный хвост из пост-шагов упорядоченным
-    /// конвейером: порядок задаётся <see cref="DayStepOrder"/> и сортируется один
-    /// раз при создании, поэтому шаги не могут молча поменяться местами.
+    /// Просуває час. Заміняє нескінченний хвіст із пост-кроків впорядкованим
+    /// конвеєром: порядок задається <see cref="DayStepOrder"/> і сортується один
+    /// раз при створенні, тому кроки не можуть тихо помінятися місцями.
     ///
-    /// Полностью детерминирован: одинаковые входы дают одинаковый ход кампании
+    /// Повністю детермінований: однакові входи дають однаковий хід кампанії
     /// (Поправка №3.3).
     /// </summary>
     public sealed class DayProcessor
@@ -25,25 +25,25 @@ namespace Game.Core.Loop
 
         public int CurrentDay { get; private set; }
 
-        /// <summary>Тир поселения: хутор 1 → городок 4.</summary>
+        /// <summary>Тір поселення: хутір 1 → містечко 4.</summary>
         public int Tier { get; set; } = 1;
 
-        /// <summary>Уклад как индекс; полноценный тип появится на Э3.</summary>
+        /// <summary>Уклад як індекс; повноцінний тип з'явиться на Е3.</summary>
         public int OrderLevel { get; set; } = 1;
 
         public TensionState Tension => _tension;
 
-        /// <summary>Память слоя сигналов. Живёт вместе с кампанией и попадает в слепок.</summary>
+        /// <summary>Пам'ять шару сигналів. Живе разом з кампанією і потрапляє в зліпок.</summary>
         internal Signals.SignalMemory SignalMemory { get; } = new Signals.SignalMemory();
 
-        // ---- Порты городского слоя. Необязательны: без них конвейер
-        //      работает как на Э0, что удобно для узких тестов. ----
+        // ---- Порти міського шару. Необов'язкові: без них конвеєр
+        //      працює як на Е0, що зручно для вузьких тестів. ----
         public IRosterView Roster { get; set; }
         public PopulationState Population { get; set; }
 
         /// <summary>
-        /// Память общины о крови. Живёт с кампанией и попадает в слепок: иначе
-        /// загрузка была бы бесплатным способом снять цену кровавого пути.
+        /// Пам'ять громади про кров. Живе з кампанією і потрапляє в зліпок: інакше
+        /// завантаження було б безкоштовним способом зняти ціну кривавого шляху.
         /// </summary>
         public FearState Fear { get; set; } = new FearState();
         public WorldPulse Pulse { get; set; }
@@ -51,46 +51,46 @@ namespace Game.Core.Loop
         public IRepeatTracker Repeats { get; set; }
 
         /// <summary>
-        /// Городские работы (стройка, совет, пришлые) для слепка. Порт, а не
-        /// ссылка: процессор не знает, что за ним модуль базы и экономика.
+        /// Міські роботи (будівництво, рада, прибульці) для зліпка. Порт, а не
+        /// посилання: процесор не знає, що за ним модуль бази й економіка.
         /// </summary>
         public IStateBlob CityState { get; set; }
         public ICasualtySink Casualties { get; set; }
         public IReadOnlyList<PostDomain> PostDomains { get; set; }
 
         /// <summary>
-        /// Партия в поле (Поправка №5.6 п. 4). Необязателен: без него город
-        /// живёт как раньше, просто никто никуда не уходит.
+        /// Партія в полі (Поправка №5.6 п. 4). Необов'язковий: без нього місто
+        /// живе як раніше, просто ніхто нікуди не йде.
         /// </summary>
         public Expeditions.ExpeditionParty Party { get; set; }
 
         /// <summary>
-        /// Кошелёк, база и ролевой опыт (Foundation/A1, закрывает D10): без этого
-        /// свойства слепок хранил календарь и Напряжение, а хозяйство игрока —
-        /// нет, и загрузка возвращала игру без гроша в кармане.
+        /// Гаманець, база і рольовий досвід (Foundation/A1, закриває D10): без цієї
+        /// властивості зліпок зберігав календар і Напругу, а господарство гравця —
+        /// ні, і завантаження повертало гру без копійки в кишені.
         ///
-        /// ПОРТ, а не тип базы: конвейер дня не должен знать про Game.Core.Base
-        /// (охранитель Loop_DoesNotReferenceBase — направление зависимости
-        /// «Base знает про Loop, Loop про Base — никогда»). В игре сюда попадает
-        /// сам BaseState — он реализует IStateBlob точно так же, как CityWorks
-        /// уже делает это для CityState ниже.
+        /// ПОРТ, а не тип бази: конвеєр дня не повинен знати про Game.Core.Base
+        /// (охоронець Loop_DoesNotReferenceBase — напрямок залежності
+        /// «Base знає про Loop, Loop про Base — ніколи»). У грі сюди потрапляє
+        /// сам BaseState — він реалізує IStateBlob точнісінько так само, як CityWorks
+        /// уже робить це для CityState нижче.
         /// </summary>
         public IStateBlob Economy { get; set; }
 
-        /// <summary>Истощение точек вылазки (R15) — теперь тоже часть слепка.</summary>
+        /// <summary>Виснаження точок вилазки (R15) — тепер теж частина зліпка.</summary>
         public Expeditions.SiteLedger Sites { get; set; }
 
-        /// <summary>Сюжетные флаги (R3): чистый контейнер, событий сам не эмитит.</summary>
+        /// <summary>Сюжетні прапорці (R3): чистий контейнер, подій сам не емітить.</summary>
         public StoryFlags Flags { get; set; }
 
         private readonly List<ExternalTensionEntry> _externalTension = new List<ExternalTensionEntry>();
 
         /// <summary>
-        /// Единственный узаконенный мостик R6: внешние системы (квесты, указы
-        /// совета — придут в следующих пакетах) не трогают Напряжение прямо, а
-        /// кладут заявку сюда. Она применяется через СУЩЕСТВУЮЩИЙ драйвер на
-        /// тике следующей фазы (TensionTickStep) — список драйверов остаётся
-        /// закрытым (инвариант 5), новый узел это не добавляет.
+        /// Єдиний узаконений місток R6: зовнішні системи (квести, укази
+        /// ради — прийдуть у наступних пакетах) не чіпають Напругу напряму, а
+        /// кладуть заявку сюди. Вона застосовується через НАЯВНИЙ драйвер на
+        /// тику наступної фази (TensionTickStep) — список драйверів лишається
+        /// закритим (інваріант 5), новий вузол цього не додає.
         /// </summary>
         public void QueueExternal(TensionDriver driver, int amount)
         {
@@ -99,63 +99,63 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
-        /// Квест поднял Напряжение, а сутки уже закрыты (между Advance() —
-        /// день дописан, следующий ещё не начат). Это ЕДИНСТВЕННЫЙ безопасный
-        /// вход в этом окне (G22): заявка идёт мостиком R6 и ложится на тик
-        /// СЛЕДУЮЩЕЙ фазы (TensionTickStep, ДО SignalStep), поэтому смену
-        /// полосы услышат в том же отчёте, где она случилась (инвариант 4).
+        /// Квест підняв Напругу, а доба вже закрита (між Advance() —
+        /// день дописано, наступний ще не почато). Це ЄДИНИЙ безпечний
+        /// вхід у цьому вікні (G22): заявка йде містком R6 і лягає на тик
+        /// НАСТУПНОЇ фази (TensionTickStep, ДО SignalStep), тому зміну
+        /// полоси почують у тому самому звіті, де вона сталася (інваріант 4).
         ///
-        /// Прямой <see cref="TensionDrivers.QuestChoice"/> на <see cref="Tension"/>
-        /// в этом же окне опасен: следующий Advance() начинается с
-        /// <c>TensionState.BeginDay()</c>, который стирает дневной журнал ДО
-        /// того, как SignalStep успевает его прочитать, — полоса меняется
-        /// по-настоящему, а мандатный сигнал G21 не строится вовсе, потому что
-        /// строить его не из чего. Раньше так делал CampaignSimulator
-        /// (AggressiveChoices) — 200-суточная кампания теряла ровно два перехода
-        /// полосы (сутки 20 и 40), и <c>CampaignPacingTests.Pacing_
-        /// BandChangeIsNeverMute</c> это ловил.
+        /// Прямий <see cref="TensionDrivers.QuestChoice"/> на <see cref="Tension"/>
+        /// у цьому ж вікні небезпечний: наступний Advance() починається з
+        /// <c>TensionState.BeginDay()</c>, який стирає денний журнал ДО
+        /// того, як SignalStep встигає його прочитати, — полоса змінюється
+        /// насправді, а мандатний сигнал G21 не будується взагалі, бо
+        /// будувати його нема з чого. Раніше так робив CampaignSimulator
+        /// (AggressiveChoices) — 200-добова кампанія втрачала рівно два переходи
+        /// полоси (доби 20 і 40), і <c>CampaignPacingTests.Pacing_
+        /// BandChangeIsNeverMute</c> це ловив.
         /// </summary>
         public void QueueQuestChoice(TensionDrivers.ChoiceWeight weight)
         {
             QueueExternal(TensionDriver.QuestChoice, TensionDrivers.Weight(weight, _balance.Tension));
         }
 
-        /// <summary>Тот же мостик для исхода, разряжающего обстановку — см. <see cref="QueueQuestChoice"/>.</summary>
+        /// <summary>Той самий місток для наслідку, що розряджає обстановку — див. <see cref="QueueQuestChoice"/>.</summary>
         public void QueueEventOutcome(TensionDrivers.ChoiceWeight weight)
         {
             QueueExternal(TensionDriver.EventOutcome, -TensionDrivers.Weight(weight, _balance.Tension));
         }
 
         /// <summary>
-        /// Копия ещё не осушенной очереди QueueExternal — только для слепка
-        /// (D1a, шов, задокументированный прямо в SaveState() ниже). Заявка,
-        /// положенная сюда МЕЖДУ фазами (наприклад, наслідком квесту, вжитим
-        /// в Morning до AdvanceDay), раньше терялась при save/load: SaveState
-        /// не сохранял <see cref="_externalTension"/> вовсе.
+        /// Копія ще не осушеної черги QueueExternal — лише для зліпка
+        /// (D1a, шов, задокументований прямо в SaveState() нижче). Заявка,
+        /// покладена сюди МІЖ фазами (наприклад, наслідком квесту, вжитим
+        /// у Morning до AdvanceDay), раніше губилася при save/load: SaveState
+        /// не зберігав <see cref="_externalTension"/> взагалі.
         /// </summary>
         internal IReadOnlyList<ExternalTensionEntry> PeekExternalTensionForSave() => _externalTension;
 
-        /// <summary>Восстановить очередь QueueExternal из слепка (см. PeekExternalTensionForSave).</summary>
+        /// <summary>Відновити чергу QueueExternal зі зліпка (див. PeekExternalTensionForSave).</summary>
         internal void RestoreExternalTensionForSave(List<ExternalTensionEntry> entries)
         {
             _externalTension.Clear();
             if (entries != null) _externalTension.AddRange(entries);
         }
 
-        /// <summary>Ночью: патрулировать вместо сна (Поправка №3.9).</summary>
+        /// <summary>Вночі: патрулювати замість сну (Поправка №3.9).</summary>
         public bool IsPatrolling { get; set; }
 
-        /// <summary>Поселению не хватило еды в прошлом цикле (Поправка №4).</summary>
+        /// <summary>Поселенню не вистачило їжі в минулому циклі (Поправка №4).</summary>
         public bool IsHungry { get; set; }
 
         /// <summary>
-        /// Спрашивать ли игрока, как разбираться с событием.
+        /// Чи запитувати гравця, як розбиратися з подією.
         ///
-        /// Выключено по умолчанию НАМЕРЕННО: включение меняет контракт вызова
-        /// (Advance может вернуть неполные сутки), а интерфейса, который показал
-        /// бы предложение, ещё нет. Архитектура заложена сейчас — пока на
-        /// Advance() не завязались следующие этапы, — а момент переключения
-        /// остаётся решением владельца.
+        /// Вимкнено за замовчуванням НАВМИСНЕ: увімкнення змінює контракт виклику
+        /// (Advance може повернути неповну добу), а інтерфейсу, який показав
+        /// би пропозицію, ще немає. Архітектура закладена зараз — поки на
+        /// Advance() не зав'язалися наступні етапи, — а момент перемикання
+        /// лишається рішенням власника.
         /// </summary>
         public bool RequirePlayerDecision { get; set; }
 
@@ -171,22 +171,22 @@ namespace Game.Core.Loop
                 foreach (var s in steps)
                     if (s != null) _steps.Add(s);
 
-            // Стабильная сортировка: при равном Order порядок добавления сохраняется.
+            // Стабільне сортування: при рівному Order порядок додавання зберігається.
             _steps.Sort((a, b) => a.Order.CompareTo(b.Order));
         }
 
-        /// <summary>Шаги в порядке исполнения — для тестов и отладки.</summary>
+        /// <summary>Кроки в порядку виконання — для тестів і налагодження.</summary>
         public IReadOnlyList<IDayStep> Steps => _steps;
 
         /// <summary>
-        /// Стандартный набор шагов дня — без производства.
+        /// Стандартний набір кроків дня — без виробництва.
         ///
-        /// Материальный итог суток (произвели, поели, подлечились) подключается
-        /// ровно одним путём: <c>SettlementCycle.BuildSteps</c> в модуле базы.
-        /// Второй мост — порт в этом слое — снесён 23.09.2026: он делал цикл
-        /// базы публичным и позволял прокрутить сутки в обход конвейера. Без
-        /// производства конвейер работает как на Э0 — это нужно узким тестам,
-        /// которым база не нужна.
+        /// Матеріальний підсумок доби (виробили, поїли, підлікувалися) підключається
+        /// рівно одним шляхом: <c>SettlementCycle.BuildSteps</c> у модулі бази.
+        /// Другий міст — порт у цьому шарі — знесений 23.09.2026: він робив цикл
+        /// бази публічним і дозволяв прокрутити добу в обхід конвеєра. Без
+        /// виробництва конвеєр працює як на Е0 — це потрібно вузьким тестам,
+        /// яким база не потрібна.
         /// </summary>
         public static IEnumerable<IDayStep> DefaultSteps()
         {
@@ -203,18 +203,18 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
-        /// Слепок городского слоя одной строкой. Отдаётся наружу непрозрачным:
-        /// сборка Game.Gameplay кладёт его в систему сохранений, но прочитать
-        /// оттуда скрытые числа случайно не может (см. SettlementSave).
+        /// Зліпок міського шару одним рядком. Віддається назовні непрозорим:
+        /// збірка Game.Gameplay кладе його в систему збережень, але прочитати
+        /// звідти приховані числа випадково не може (див. SettlementSave).
         ///
-        /// Слепок НЕ несёт очередь решений фазы (<see cref="AwaitsDecision"/>):
-        /// сохранение посреди открытого решения молча потеряло бы все ещё не
-        /// разобранные инциденты этой фазы при восстановлении (найдено ревью А1).
-        /// Очередь QueueExternal (D1a) в блоб ПОПАДАЕТ — см. "extq=" в
-        /// SettlementSave.Capture/Restore: раньше эта заявка терялась молча
-        /// при save/load посреди Morning (до AdvanceDay её ещё не дренирует
-        /// никто), теперь блоб несёт копию, а не дренирует её сам (дренирует
-        /// её только Advance()).
+        /// Зліпок НЕ несе чергу рішень фази (<see cref="AwaitsDecision"/>):
+        /// збереження посеред відкритого рішення мовчки загубило б усі ще не
+        /// розібрані інциденти цієї фази при відновленні (знайдено ревью А1).
+        /// Черга QueueExternal (D1a) у блоб ПОТРАПЛЯЄ — див. "extq=" у
+        /// SettlementSave.Capture/Restore: раніше ця заявка губилася мовчки
+        /// при save/load посеред Morning (до AdvanceDay її ще не дренує
+        /// ніхто), тепер блоб несе копію, а не дренує її сам (дренує
+        /// її лише Advance()).
         /// </summary>
         public string SaveState()
         {
@@ -225,7 +225,7 @@ namespace Game.Core.Loop
             return SettlementSave.Capture(this);
         }
 
-        /// <summary>Восстановить состояние из слепка, сделанного SaveState.</summary>
+        /// <summary>Відновити стан зі зліпка, зробленого SaveState.</summary>
         public void RestoreState(string blob)
         {
             SettlementSave.Restore(this, blob);
@@ -236,7 +236,7 @@ namespace Game.Core.Loop
             CurrentDay = day < 0 ? 0 : day;
         }
 
-        /// <summary>Ждёт ли конвейер хода игрока прямо сейчас.</summary>
+        /// <summary>Чи чекає конвеєр ходу гравця прямо зараз.</summary>
         public bool AwaitsDecision
         {
             get { return _awaiting != null; }
@@ -248,9 +248,9 @@ namespace Game.Core.Loop
                 throw new InvalidOperationException(
                     "Сутки не закончены: конвейер ждёт решения. Сначала ResolvePending.");
 
-            // Календарные сутки начинаются с дневной фазы; ночь принадлежит тем
-            // же суткам. Иначе счётчик считает ФАЗЫ, и каждое окно «в днях»
-            // (кулдауны, окно повторов, grace кризиса) вдвое короче заявленного.
+            // Календарна доба починається з денної фази; ніч належить тій
+            // самій добі. Інакше лічильник рахує ФАЗИ, і кожне вікно «в днях»
+            // (кулдауни, вікно повторів, grace кризи) удвічі коротше заявленого.
             if (phase == DayPhase.Day) CurrentDay++;
             _tension.BeginDay();
 
@@ -265,13 +265,13 @@ namespace Game.Core.Loop
                 ExternalTensionQueue = DrainExternalTension()
             };
 
-            // Первая половина конвейера — до хода игрока.
+            // Перша половина конвеєра — до ходу гравця.
             RunSteps(ctx, 0, DayStepOrder.PlayerResolution);
 
             if (TryDequeueNextPending(ctx))
             {
-                // Сутки остановлены. Сигналы намеренно НЕ собираются: они
-                // описывают финальное состояние дня, а день ещё не случился.
+                // Доба зупинена. Сигнали навмисно НЕ збираються: вони
+                // описують фінальний стан дня, а день ще не стався.
                 _awaiting = ctx;
                 return BuildReport(ctx);
             }
@@ -280,10 +280,10 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
-        /// Ход игрока: выбранный путь разбирается. Если очередь решений фазы
-        /// (аудит П10) ещё не пуста — следующий инцидент фазы становится новым
-        /// Pending, и AwaitsDecision остаётся true; сутки доигрываются до конца
-        /// только когда очередь опустела.
+        /// Хід гравця: обраний шлях розбирається. Якщо черга рішень фази
+        /// (аудит П10) ще не порожня — наступний інцидент фази стає новим
+        /// Pending, і AwaitsDecision лишається true; доба дограється до кінця
+        /// лише коли черга спорожніла.
         /// </summary>
         public DayReport ResolvePending(IncidentPath path)
         {
@@ -362,12 +362,12 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
-        /// Следующее решение очереди фазы — в Pending. false, если очередь пуста.
+        /// Наступне рішення черги фази — в Pending. false, якщо черга порожня.
         ///
-        /// Предложение строится ЗДЕСЬ, а не заранее в IncidentStep: только так
-        /// оно читает Fear/Repeats в том состоянии, в каком они окажутся к
-        /// моменту показа — включая эффект уже разрешённых решений этой же
-        /// фазы (регрессия из ревью А1, см. комментарий в IncidentStep.Execute).
+        /// Пропозиція будується САМЕ ТУТ, а не заздалегідь в IncidentStep: тільки так
+        /// вона читає Fear/Repeats у тому стані, у якому вони опиняться до
+        /// моменту показу — включно з ефектом уже розв'язаних рішень цієї ж
+        /// фази (регресія з ревью А1, див. коментар в IncidentStep.Execute).
         /// </summary>
         private static bool TryDequeueNextPending(DayContext ctx)
         {
@@ -390,9 +390,9 @@ namespace Game.Core.Loop
         {
             RunSteps(ctx, DayStepOrder.PlayerResolution, int.MaxValue);
 
-            // Город дорос до нового тира (Поправка №6.4). Меняется после фазы:
-            // внутри суток тир — константа, иначе тик Напряжения и таблица
-            // событий считались бы по разным тирам в одной фазе.
+            // Місто доросло до нового тіру (Поправка №6.4). Змінюється після фази:
+            // усередині доби тір — константа, інакше тик Напруги і таблиця
+            // подій рахувалися б за різними тірами в одній фазі.
             if (ctx.RaiseTierTo > Tier) Tier = ctx.RaiseTierTo;
 
             if (ctx.Phase == DayPhase.Day) _tension.OnDayAdvanced();
@@ -411,7 +411,7 @@ namespace Game.Core.Loop
 
         private DayReport BuildReport(DayContext ctx)
         {
-            // Копии: отчёт не должен меняться, когда начнётся следующий день.
+            // Копії: звіт не повинен змінюватися, коли почнеться наступний день.
             var ledger = new List<TensionChange>(_tension.DayLedger);
             var incidents = new List<IncidentOutcome>(ctx.IncidentOutcomes);
             var forewarnings = new List<Forewarning>(ctx.Forewarnings);
@@ -419,7 +419,7 @@ namespace Game.Core.Loop
                 forewarnings, ctx.Pending);
         }
 
-        /// <summary>Прокрутить N дней подряд (кнопка «ждать», US-1.3).</summary>
+        /// <summary>Прокрутити N днів поспіль (кнопка «чекати», US-1.3).</summary>
         public List<DayReport> Advance(int days, DayPhase phase = DayPhase.Day)
         {
             var reports = new List<DayReport>();
@@ -429,8 +429,8 @@ namespace Game.Core.Loop
         }
 
         /// <summary>
-        /// Полные сутки: день, затем ночь. Ночь — окно угроз, поэтому её нельзя
-        /// пропустить: можно только спать (и потерять сигналы) или патрулировать.
+        /// Повна доба: день, потім ніч. Ніч — вікно загроз, тому її не можна
+        /// пропустити: можна лише спати (і втратити сигнали) або патрулювати.
         /// </summary>
         public List<DayReport> AdvanceFullDay()
         {

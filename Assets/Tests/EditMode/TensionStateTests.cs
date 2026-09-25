@@ -6,8 +6,8 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Тесты-гарантии ограничений GDD. Их ценность не в проверке арифметики,
-    /// а в том, что они делают нарушение дизайн-правил невозможным незаметно.
+    /// Тести-гарантії обмежень GDD. Їхня цінність не в перевірці арифметики,
+    /// а в тому, що вони роблять порушення дизайн-правил неможливим непомітно.
     /// </summary>
     public class TensionStateTests
     {
@@ -23,7 +23,7 @@ namespace Game.Tests.EditMode
             };
         }
 
-        // ---- Гарантия US-1.3: ожидание и лечение не растят угрозу ----
+        // ---- Гарантія US-1.3: очікування і лікування не піднімають загрозу ----
 
         [Test]
         public void Tension_WaitThirtyDays_OnlyTierTickEntries()
@@ -43,7 +43,7 @@ namespace Game.Tests.EditMode
         public void Tension_TenIdleDays_AddExactlyTenTicks()
         {
             var cfg = Cfg();
-            var p = MakeProcessor(cfg); // тир 1 = 1.0/день, Присмотр = ×1.0
+            var p = MakeProcessor(cfg); // тір 1 = 1.0/день, Присмотр = ×1.0
 
             p.Advance(10);
 
@@ -53,7 +53,7 @@ namespace Game.Tests.EditMode
                 "И полоса при этом не должна смениться");
         }
 
-        // ---- Гарантия: кризис — это выборы игрока, а не течение времени ----
+        // ---- Гарантія: криза — це вибори гравця, а не плин часу ----
 
         [Test]
         public void Tension_PassiveCampaign_NeverReachesFracture()
@@ -63,7 +63,7 @@ namespace Game.Tests.EditMode
                 var cfg = Cfg();
                 var p = MakeProcessor(cfg, tier);
 
-                // Полные сутки, а не дневные фазы: иначе тест меряет полкампании.
+                // Повні доби, а не денні фази: інакше тест міряє півкампанії.
                 for (int day = 0; day < 200; day++) p.AdvanceFullDay();
 
                 Assert.LessOrEqual((int)p.Tension.Band, (int)TensionBand.Ferment,
@@ -74,12 +74,12 @@ namespace Game.Tests.EditMode
         [Test]
         public void Tension_PassiveCampaign_HighTiers_DoReachFracture_KnownGap()
         {
-            // ИЗВЕСТНЫЙ РАЗРЫВ. Якорь §3.1 обещает, что кризис — это выборы, а не
-            // течение времени; на тирах 3 и 4 фоновый тик (4.0 и 7.0 за сутки)
-            // доводит город до «Излома» сам, без единого действия игрока.
-            // Прежний тест перебирал только тиры 1-2 и этого не видел.
-            // Тест фиксирует факт, а не одобряет его: числа тика — плейсхолдеры,
-            // и когда их перебалансируют, он упадёт и потребует решения.
+            // ВІДОМИЙ РОЗРИВ. Якір §3.1 обіцяє, що криза — це вибори, а не
+            // плин часу; на тірах 3 і 4 фоновий тик (4.0 і 7.0 за добу)
+            // доводить місто до «Зламу» сам, без жодної дії гравця.
+            // Попередній тест перебирав тільки тіри 1-2 і цього не бачив.
+            // Тест фіксує факт, а не схвалює його: числа тика — плейсхолдери,
+            // і коли їх перебалансують, він впаде і вимагатиме рішення.
             foreach (int tier in new[] { 3, 4 })
             {
                 var cfg = Cfg();
@@ -92,7 +92,7 @@ namespace Game.Tests.EditMode
             }
         }
 
-        // ---- Гарантия Поправки №3.5: список драйверов закрыт ----
+        // ---- Гарантія Поправки №3.5: список драйверів закритий ----
 
         [Test]
         public void Tension_Apply_RejectsDriverOutsideWhitelist()
@@ -100,7 +100,7 @@ namespace Game.Tests.EditMode
             var cfg = Cfg();
             var state = new TensionState(cfg.Tension);
 
-            // CouncilRaid умеет только понижать — попытка поднять им должна быть отклонена.
+            // CouncilRaid уміє тільки знижувати — спроба підняти ним має бути відхилена.
             var change = state.Apply(TensionDriver.CouncilRaid, +50, "test");
 
             Assert.IsTrue(change.Rejected, "Драйвер вне белого списка обязан быть отклонён");
@@ -137,14 +137,14 @@ namespace Game.Tests.EditMode
             }
         }
 
-        // ---- Поведение шкалы ----
+        // ---- Поведінка шкали ----
 
         [Test]
         public void Tension_FractionalTick_AccumulatesWithoutRoundingLoss()
         {
             var cfg = Cfg();
-            // Вольница даёт ×1.25: за 20 дней ровно 25, без потерь на округлении
-            // каждого дня (множитель выбран точно представимым в double).
+            // Вольниця дає ×1.25: за 20 днів рівно 25, без втрат на округленні
+            // кожного дня (множник обраний точно представимим у double).
             var p = MakeProcessor(cfg, tier: 1, order: 0);
 
             p.Advance(20);
@@ -162,7 +162,7 @@ namespace Game.Tests.EditMode
             TensionBand? from = null, to = null;
             state.BandChanged += (a, b) => { from = a; to = b; };
 
-            // 5 крупных выборов = 200 очков = ровно порог «Ропота»
+            // 5 великих виборів = 200 очок = рівно поріг «Ропоту»
             for (int i = 0; i < 5; i++)
                 TensionDrivers.QuestChoice(state, TensionDrivers.ChoiceWeight.Major, "q" + i, cfg);
 
@@ -204,14 +204,14 @@ namespace Game.Tests.EditMode
         public void Tension_DaysInCurrentBand_ResetsOnTransition()
         {
             var cfg = Cfg();
-            var p = MakeProcessor(cfg, tier: 4); // 7/день — быстро дойдём до перехода
+            var p = MakeProcessor(cfg, tier: 4); // 7/день — швидко дійдемо до переходу
 
-            p.Advance(20); // 140 очков — ещё «Спокойно»
+            p.Advance(20); // 140 очок — ще «Спокій»
             Assert.AreEqual(TensionBand.Calm, p.Tension.Band);
             int before = p.Tension.DaysInCurrentBand;
             Assert.Greater(before, 0);
 
-            p.Advance(20); // 280 — переход в «Ропот»
+            p.Advance(20); // 280 — перехід у «Ропіт»
             Assert.AreEqual(TensionBand.Murmur, p.Tension.Band);
             Assert.Less(p.Tension.DaysInCurrentBand, before + 20,
                 "Счётчик дней в полосе обязан обнуляться при переходе");

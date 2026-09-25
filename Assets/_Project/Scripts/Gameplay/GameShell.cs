@@ -86,7 +86,7 @@ namespace Game.Gameplay
         /// </summary>
         private bool HandleWantsToQuit()
         {
-            HardExit.Now(0); // TerminateProcess: Environment.Exit зависал, Application.Quit падал (см. HardExit)
+            HardExit.Now(0); // TerminateProcess: Environment.Exit зависав, Application.Quit падав (див. HardExit)
             return false; // формальність — рядком вище процес уже завершено
         }
 
@@ -515,7 +515,7 @@ namespace Game.Gameplay
         /// Рефлексія на клас у ЦІЙ ЖЕ збірці (Game.Gameplay), виключений з
         /// Game.Gameplay.Lint через глибокі виклики рушія (Object.
         /// FindObjectsByType/Light/Camera тощо) — GameShell.cs лінтується й не
-        /// може посилатись на такий тип напряму (той самий приём, що вже
+        /// може посилатись на такий тип напряму (той самий прийом, що вже
         /// з'єднує Editor/GameSceneBuilder.cs із Game.Gameplay.Editor.
         /// BattleArenaBuilder, §5 TEST_BUILD.md).
         /// </summary>

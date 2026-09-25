@@ -4,7 +4,7 @@ using Game.Core.Randomness;
 
 namespace Game.Core.Combat
 {
-    /// <summary>Результат расчёта урона одной атаки.</summary>
+    /// <summary>Результат розрахунку урону однієї атаки.</summary>
     public readonly struct DamageReport
     {
         public readonly int Amount;
@@ -18,24 +18,24 @@ namespace Game.Core.Combat
     }
 
     /// <summary>
-    /// Конвейер урона, порядок зафиксирован:
-    ///   значение по AttackOutcome (крит = max+бонус; детерминированный Hit =
-    ///   середина диапазона; PercentRule Hit = ролл через IDiceRoller)
-    ///   → + DamageBonus атакующего (производная статов, аудит G18)
-    ///   → × множитель типа (резист/уязвимость цели)
-    ///   → − плоская броня (эффективная с Шредом, минус пробитие) → граза ×доля → не ниже 0.
+    /// Конвеєр урону, порядок зафіксований:
+    ///   значення за AttackOutcome (крит = max+бонус; детермінований Hit =
+    ///   середина діапазону; PercentRule Hit = рол через IDiceRoller)
+    ///   → + DamageBonus атакуючого (похідна статів, аудит G18)
+    ///   → × множник типу (резист/вразливість цілі)
+    ///   → − плоска броня (ефективна з Шредом, мінус пробиття) → граза ×частка → не нижче 0.
     ///
-    /// R1: диапазон урона тоже идёт через пару правило/кидальник — в
-    /// детерминированном режиме (ThresholdRule) IDiceRoller не вызывается
-    /// вовсе, damage берётся фиксированным по полосе исхода.
+    /// R1: діапазон урону теж іде через пару правило/кидальник — у
+    /// детермінованому режимі (ThresholdRule) IDiceRoller не викликається
+    /// зовсім, damage береться фіксованим за полосою наслідку.
     /// </summary>
     public static class DamageResolver
     {
         /// <summary>
-        /// Урон атаки по цели. outcome уже решён IHitRule (Miss/Graze/Hit/Crit) —
-        /// этот метод больше не решает, попал ли атакующий, только СКОЛЬКО урона.
-        /// deterministic=true (ThresholdRule) — фиксированное значение по полосе,
-        /// без единого обращения к roller; false (PercentRule) — ролл диапазона.
+        /// Урон атаки по цілі. outcome вже вирішений IHitRule (Miss/Graze/Hit/Crit) —
+        /// цей метод більше не вирішує, чи влучив атакуючий, тільки СКІЛЬКИ урону.
+        /// deterministic=true (ThresholdRule) — фіксоване значення за полосою,
+        /// без жодного звернення до roller; false (PercentRule) — рол діапазону.
         /// </summary>
         public static DamageReport RollAttackDamage(CombatUnit attacker, CombatUnit target,
                                                     WeaponDefinition w, AttackOutcome outcome,
@@ -51,7 +51,7 @@ namespace Game.Core.Combat
             }
             else if (deterministic || roller == null)
             {
-                // Threshold-режим: полоса исхода задаёт фикс-значение, без броска (R1).
+                // Threshold-режим: полоса наслідку задає фікс-значення, без кидка (R1).
                 damage = (int)Math.Round((w.DamageMin + w.DamageMax) / 2.0, MidpointRounding.AwayFromZero);
             }
             else
@@ -72,11 +72,11 @@ namespace Game.Core.Combat
             return new DamageReport(Math.Max(0, damage), crit);
         }
 
-        /// <summary>Тик DoT: броню обходит, множитель типа применяется (Кровотечение — True, без множителя).</summary>
+        /// <summary>Тик DoT: броню обходить, множник типу застосовується (Кровотеча — True, без множника).</summary>
         public static int DotTick(int baseDamage, DamageType type, CombatUnit target)
             => Math.Max(0, ApplyTypeMultiplier(baseDamage, type, target));
 
-        /// <summary>Фикс урон способности/ловушки: множитель типа + эффективная броня (без крита/гразы/ролла).</summary>
+        /// <summary>Фікс урон здібності/пастки: множник типу + ефективна броня (без криту/грази/ролу).</summary>
         public static int FlatDamage(int baseDamage, DamageType type, CombatUnit target)
             => Math.Max(0, ApplyTypeMultiplier(baseDamage, type, target) - target.EffectiveArmor);
 

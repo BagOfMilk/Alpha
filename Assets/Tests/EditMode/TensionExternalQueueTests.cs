@@ -7,15 +7,15 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Контракт R6: <see cref="DayProcessor.QueueExternal"/> — единственный
-    /// узаконенный мостик, которым внешние системы (указы совета B5, выборы в
-    /// квестах B6) будут двигать Напряжение вне собственного конвейера дня.
-    /// Список драйверов остаётся закрытым (инвариант 5) — заявка лишь
-    /// применяется через СУЩЕСТВУЮЩИЙ драйвер на тике следующей фазы.
+    /// Контракт R6: <see cref="DayProcessor.QueueExternal"/> — єдиний
+    /// узаконений місток, яким зовнішні системи (укази ради B5, вибори в
+    /// квестах B6) рухатимуть Напругу поза власним конвеєром дня.
+    /// Список драйверів лишається закритим (інваріант 5) — заявка лише
+    /// застосовується через ІСНУЮЧИЙ драйвер на тику наступної фази.
     ///
-    /// Ревью А1 нашло: сам метод работал корректно, но ни разу не был проверен
-    /// тестом, хотя это единственный контракт, на который опираются два будущих
-    /// пакета. Эти тесты закрывают разрыв.
+    /// Ревʼю А1 знайшло: сам метод працював коректно, але жодного разу не був перевірений
+    /// тестом, хоча це єдиний контракт, на який спираються два майбутні
+    /// пакети. Ці тести закривають розрив.
     /// </summary>
     public class TensionExternalQueueTests
     {
@@ -25,7 +25,7 @@ namespace Game.Tests.EditMode
             return new DayProcessor(tension, cfg, DayProcessor.DefaultSteps())
             {
                 Tier = 1,
-                OrderLevel = 1 // Присмотр: множитель тика ×1.0 — считать проще.
+                OrderLevel = 1 // Присмотр: множник тика ×1.0 — рахувати простіше.
             };
         }
 
@@ -45,8 +45,8 @@ namespace Game.Tests.EditMode
                 "И примениться ровно на столько же — CouncilEdict в белом списке понижающих");
             Assert.IsFalse(entry.Rejected);
 
-            // Тир 1 / Уклад «Присмотр» даёт ровно +1 фонового тика — единственная
-            // другая запись журнала за эти сутки. Итог обязан быть суммой обеих.
+            // Тір 1 / Уклад «Присмотр» дає рівно +1 фонового тика — єдиний
+            // інший запис журналу за цю добу. Підсумок зобов'язаний бути сумою обох.
             var tick = report.TensionChanges.Single(c => c.Driver == TensionDriver.CityTierTick);
             Assert.AreEqual(1, tick.Applied, "Фоновый тик тира 1 за день — ровно единица");
             Assert.AreEqual(before - 37 + 1, p.Tension.Value,
@@ -73,7 +73,7 @@ namespace Game.Tests.EditMode
             var p = MakeProcessor(cfg);
 
             p.QueueExternal(TensionDriver.CouncilEdict, -37);
-            p.Advance(DayPhase.Day); // сливает заявку на этом тике
+            p.Advance(DayPhase.Day); // зливає заявку на цьому тику
 
             var next = p.Advance(DayPhase.Night);
 
@@ -84,8 +84,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void QueueExternal_QueuedBeforeAnyAdvance_AppliesOnTheVeryNextPhase()
         {
-            // R6 буквально: «применяется тиком СЛЕДУЮЩЕЙ фазы», а не обязательно
-            // следующих суток — заявка, поданная вечером, не обязана ждать утра.
+            // R6 буквально: «застосовується тиком НАСТУПНОЇ фази», а не обов'язково
+            // наступної доби — заявка, подана ввечері, не зобов'язана чекати ранку.
             var cfg = new BalanceConfig();
             var p = MakeProcessor(cfg);
 
@@ -96,30 +96,30 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(-50, entry.Applied, "Ближайшая фаза — неважно, день или ночь — обязана слить заявку");
         }
 
-        // ================= G22: квест между закрытыми сутками =================
+        // ================= G22: квест між закритими добами =================
         //
-        // CampaignPacingTests.Pacing_BandChangeIsNeverMute (инвариант 4) нашёл
-        // BandChangesWithoutSignal == 2 после G21: политика AggressiveChoices
-        // на сутки 20 (тир 1) и 40 (тир 2) меняла полосу без единого сигнала.
-        // Причина — не бюджет (его G21 уже закрыл, мандатные кандидаты идут
-        // сверх него), а то, что кандидат вообще не строился: CampaignSimulator
-        // звал TensionDrivers.QuestChoice(processor.Tension, …) НАПРЯМУЮ, между
-        // Advance() — сутки на этой точке цикла уже закрыты (прошлая фаза
-        // отдала отчёт, следующая ещё не начата). Apply() честно меняет Band и
-        // пишет запись в дневной журнал, но следующий Advance() начинается с
-        // TensionState.BeginDay(), который безусловно чистит журнал ДО того,
-        // как SignalStep успевает его прочитать. Полоса меняется по-настоящему,
-        // а сигнал о ней не строится никогда — ни в этом отчёте (SignalStep ещё
-        // не звали), ни в следующем (журнал уже пуст).
+        // CampaignPacingTests.Pacing_BandChangeIsNeverMute (інваріант 4) знайшов
+        // BandChangesWithoutSignal == 2 після G21: політика AggressiveChoices
+        // на добу 20 (тір 1) і 40 (тір 2) міняла полосу без жодного сигналу.
+        // Причина — не бюджет (його G21 вже закрив, мандатні кандидати йдуть
+        // понад нього), а те, що кандидат узагалі не будувався: CampaignSimulator
+        // кликав TensionDrivers.QuestChoice(processor.Tension, …) НАПРЯМУ, між
+        // Advance() — доба в цій точці циклу вже закрита (минула фаза
+        // віддала звіт, наступна ще не почалась). Apply() чесно міняє Band і
+        // пише запис у денний журнал, але наступний Advance() починається з
+        // TensionState.BeginDay(), який безумовно чистить журнал ДО того,
+        // як SignalStep встигає його прочитати. Полоса міняється по-справжньому,
+        // а сигнал про неї не будується ніколи — ні в цьому звіті (SignalStep ще
+        // не кликали), ні в наступному (журнал вже порожній).
 
         [Test]
         public void DirectQuestChoiceBetweenClosedPhases_LosesTheBandSignal_DocumentedTrap()
         {
             var cfg = new BalanceConfig();
             var p = MakeProcessor(cfg, startValue: 0);
-            p.Advance(DayPhase.Day); // сутки закрыты — окно между Advance() открыто
+            p.Advance(DayPhase.Day); // доба закрита — вікно між Advance() відкрите
 
-            // 5 крупных выборов = 200 очков = ровно порог «Ропота» (см. также
+            // 5 великих виборів = 200 очок = рівно поріг «Ропоту» (див. також
             // TensionStateTests.Tension_QuestChoice_MovesBandAndFiresEvent).
             for (int i = 0; i < 5; i++)
                 TensionDrivers.QuestChoice(p.Tension, TensionDrivers.ChoiceWeight.Major, "q" + i, cfg);
@@ -140,7 +140,7 @@ namespace Game.Tests.EditMode
         {
             var cfg = new BalanceConfig();
             var p = MakeProcessor(cfg, startValue: 0);
-            p.Advance(DayPhase.Day); // тот же межсуточный момент, что и в ловушке выше
+            p.Advance(DayPhase.Day); // той самий міждобовий момент, що і в пастці вище
 
             for (int i = 0; i < 5; i++)
                 p.QueueQuestChoice(TensionDrivers.ChoiceWeight.Major);
