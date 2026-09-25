@@ -1008,8 +1008,10 @@ AggressiveChoices × тиры 1–4, 200 суток, все доходят до 
 Pacing_CrisisLadder_Level3_AlwaysLeadsToTheCrisis`, `WorldPulseTests.
 Pulse_CrisisLadder_NeverPromisesACrisisTheCooldownForbids` (удар ровно через
 откат, каждая третья ступень ведёт к удару не позже 5 суток),
-`Pulse_NonCrisisSource_ForewarnsDuringCooldown_AsBefore`; обе мутации
-(снять удержание / распространить на все угрозы) пойманы.
+`Pulse_NonCrisisSource_ForewarnsDuringCooldown_AsBefore`,
+`Pulse_FirstCrisis_IsNotHeldBack_ByAnUnstartedCooldown`; три мутации
+(снять удержание / распространить на все угрозы / удерживать и первый
+кризис) пойманы.
 
 Тестовая сборка (§7.9): при её откате 5 суток, окне 1 и лестнице 2 удержание
 снимается на вторые сутки после бунта (раньше лестница начиналась на

@@ -153,6 +153,37 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// Первый кризис не удерживается: отката ещё не было, и лестница
+        /// звучит по заполнению, как всегда. Найдено ревью 25.09.2026: без
+        /// этой проверки снятие исключения «ещё не срабатывал» сдвигало первый
+        /// кризис с 13-х суток на 30-е, а кампанийные тесты молчали — в них
+        /// накопитель начинает копить (с «Накала») уже после 30-х суток.
+        /// </summary>
+        [Test]
+        public void Pulse_FirstCrisis_IsNotHeldBack_ByAnUnstartedCooldown()
+        {
+            var cfg = Cfg();
+            var pulse = new WorldPulse(cfg);
+            pulse.AddSource(new FixedSource
+            {
+                Id = "crisis", Kind = WorldEventKind.Crisis, Rate = 12, Threshold = 120, CooldownDays = 30
+            });
+
+            int firstLevel1 = -1, firstFire = -1;
+            for (int day = 1; day <= 40 && firstFire < 0; day++)
+            {
+                var tick = pulse.Advance(Ctx(day));
+                pulse.MarkDelivered(tick.Forewarnings, day);
+                if (firstLevel1 < 0 && tick.Forewarnings.Any(f => f.Level == 1)) firstLevel1 = day;
+                if (tick.FiredSourceIds.Contains("crisis")) firstFire = day;
+            }
+
+            Assert.AreEqual(6, firstLevel1, "ставка 12, порог 120: первая ступень — на 6-е сутки (55%), без удержания");
+            Assert.AreEqual(10 + cfg.CrisisGraceDays, firstFire,
+                "третья ступень на 10-е сутки + окно на реакцию — первый кризис не ждёт отката, которого не было");
+        }
+
         /// <summary>Удержание касается только кризиса: прочие угрозы с коротким откатом предупреждают, как прежде.</summary>
         [Test]
         public void Pulse_NonCrisisSource_ForewarnsDuringCooldown_AsBefore()
