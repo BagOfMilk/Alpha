@@ -968,26 +968,17 @@ namespace Game.Gameplay
             else if (_hoveredTile.HasValue) ClickTile(_hoveredTile.Value.X, _hoveredTile.Value.Y);
         }
 
-        /// <summary>Гарячі клавіші (§7): Пробіл, 1..9, O, Q/E — камера окремо в <see cref="UpdateCamera"/>. Esc НЕ обробляється тут (GameShell).</summary>
+        /// <summary>
+        /// Лише камера: Q/E — поворот. Пробіл, 1..9 і O обробляє ОДИН шар —
+        /// HUD (BattleHudScreen.HandleHotkeys, подія KeyDown, рівно раз на
+        /// натискання). Раніше їх ловили обидва шари, і одне натискання
+        /// спрацьовувало двічі: «1» озброювало здібність і тут же знімало,
+        /// «O» — так само, а Пробіл завершував хід і в тому ж кадрі вмикав
+        /// «Прискорити» (знайдено рев'ю зведення Бою v2, 25.09.2026; охоронець —
+        /// BattleHotkeyOwnershipTests). Esc — GameShell.
+        /// </summary>
         private void HandleHotkeys()
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                if (IsPlayerTurn && !IsBusy) RequestEndTurn();
-                else if (!IsPlayerTurn) FastEnemyTurns = !FastEnemyTurns;
-            }
-
-            if (IsPlayerTurn && !IsBusy)
-            {
-                var current = CurrentUnit();
-                if (current?.Abilities != null)
-                    for (int i = 0; i < current.Abilities.Count && i < 9; i++)
-                        if (Input.GetKeyDown(KeyCode.Alpha1 + i))
-                            ArmAbility(current.Abilities[i].Id);
-
-                if (Input.GetKeyDown(KeyCode.O)) ArmOverwatchAim();
-            }
-
             if (Input.GetKeyDown(KeyCode.Q)) _cameraYawDegrees = Wrap360(_cameraYawDegrees - 90f);
             if (Input.GetKeyDown(KeyCode.E)) _cameraYawDegrees = Wrap360(_cameraYawDegrees + 90f);
         }

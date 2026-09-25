@@ -127,6 +127,27 @@ namespace Game.Tests.EditMode
                 "Фолбек-екран бою (BattleScreen) мусить вести хід ворога так само (docs/COMBAT_V2.md §5).");
         }
 
+        /// <summary>
+        /// Гарячі клавіші бою (Пробіл, 1..9, O) має обробляти ОДИН шар — HUD.
+        /// Коли їх ловили і контролер (Input.GetKeyDown в Update), і HUD (подія
+        /// KeyDown), одне натискання спрацьовувало двічі: «1»/«O» озброювали дію
+        /// й тут же знімали, Пробіл завершував хід і вмикав «Прискорити»
+        /// (рев'ю зведення Бою v2, 25.09.2026). Автотур клавіш не тисне, тож
+        /// ловить це лише цей охоронець.
+        /// </summary>
+        [Test]
+        public void BattleHotkeys_HandledOnlyByHud_NotByArenaController()
+        {
+            string arena = StripLineComments(File.ReadAllText(Path.Combine(GameplayDir(), "BattleArenaController.cs")));
+            foreach (var key in new[] { "KeyCode.Space", "KeyCode.Alpha1", "KeyCode.O)" })
+                StringAssert.DoesNotContain(key, arena,
+                    "BattleArenaController не обробляє " + key + " — це робить BattleHudScreen.HandleHotkeys (інакше подвійне спрацювання).");
+
+            string hud = File.ReadAllText(Path.Combine(GameplayDir(), "UI", "BattleHudScreen.cs"));
+            StringAssert.Contains("KeyCode.Space", hud, "HUD лишається власником Пробілу (кінець ходу / прискорити).");
+            StringAssert.Contains("KeyCode.Alpha1", hud, "HUD лишається власником 1..9 (здібності).");
+        }
+
         private static string GameplayDir() =>
             Path.Combine(Path.GetDirectoryName(Application.dataPath), "Assets", "_Project", "Scripts", "Gameplay");
 
