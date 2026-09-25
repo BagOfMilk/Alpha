@@ -181,6 +181,13 @@ namespace Game.Gameplay.UI
         {
             if (entry == null || string.IsNullOrEmpty(entry.Key)) return null;
             var a = entry.Args;
+
+            // Пастка: великий напис над тим, хто вступив, і її шкода — окремим рядком.
+            if (entry.Key == "combat.log.trap.triggered")
+                return new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Get("ui.battle.float.trap", false), Kind = BattleLogKind.Damage, Big = true };
+            if (entry.Key == "combat.log.trap.damage")
+                return new BattleFloatingSpec { UnitId = Arg(a, "unitId"), Text = UkrainianText.Format("ui.battle.float.damage", false, "amount", Arg(a, "damage")), Kind = BattleLogKind.Damage };
+
             var kind = KindOf(entry);
             bool female = false;
             switch (kind)

@@ -2176,6 +2176,18 @@ namespace Game.Core.Session
                     reachableCosts.Add(kv.Value);
                 }
 
+            // Пастки гравця — видно на арені; ворожі — ні (поки не спрацюють).
+            var traps = new List<BattleTrapView>();
+            foreach (var trap in _battle.Traps)
+                if (trap.OwnerSide == Side.Player)
+                    traps.Add(new BattleTrapView
+                    {
+                        Pos = new GridPosView(trap.Pos.X, trap.Pos.Y),
+                        AbilityId = trap.AbilityId,
+                        TrapDamage = trap.Damage,
+                        StatusOnTrigger = trap.StatusOnTrigger == StatusType.None ? null : trap.StatusOnTrigger.ToString()
+                    });
+
             var initiative = new List<string>();
             if (_battle.TurnOrder != null)
                 foreach (var u in _battle.TurnOrder) initiative.Add(u.Id);
@@ -2206,6 +2218,7 @@ namespace Game.Core.Session
                 Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable },
                 Units = units,
                 ReachableTiles = reachable,
+                Traps = traps,
                 ReachableTileCosts = reachableCosts,
                 IsAiTurn = isAiTurn,
                 CurrentUnitId = _battle.Current != null && _battle.Current.IsActive ? _battle.Current.Id : null,

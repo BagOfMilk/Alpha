@@ -791,10 +791,19 @@ namespace Game.Gameplay.UI
             return h;
         }
 
+        private static BattleTrapView TrapAt(BattleView view, int x, int y)
+        {
+            if (view?.Traps == null) return null;
+            foreach (var t in view.Traps)
+                if (t != null && t.Pos.X == x && t.Pos.Y == y) return t;
+            return null;
+        }
+
         private static float EstimatePathTooltipHeight(IBattleHudData c, BattleView view)
         {
             float h = 24f + 34f + 30f; // відступи + заголовок + рядок ціни/відмови
             if (view.Grid != null && c.HasHoveredTile) h += 28f; // укриття клітинки
+            if (c.HasHoveredTile && TrapAt(view, c.HoveredTileX, c.HoveredTileY) != null) h += 28f; // своя пастка
             h += 30f; // «Під ворожим дозором!» — з запасом, навіть коли порожньо
             return h;
         }
@@ -862,6 +871,10 @@ namespace Game.Gameplay.UI
                         GUILayout.Label(UkrainianText.Get("ui.battle.cover." + cover.ToLowerInvariant(), false), AlphaSkin.HintLine);
                 }
             }
+
+            var trapHere = TrapAt(view, c.HoveredTileX, c.HoveredTileY);
+            if (trapHere != null && c.HasHoveredTile)
+                GUILayout.Label(UkrainianText.Format("ui.battle.trap.here", false, "damage", I(trapHere.TrapDamage)), AlphaSkin.HintLine);
 
             if (path.OverwatchThreatTiles != null && c.HasHoveredTile)
                 foreach (var t in path.OverwatchThreatTiles)

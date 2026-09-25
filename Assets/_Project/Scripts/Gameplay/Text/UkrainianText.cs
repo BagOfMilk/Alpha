@@ -1926,6 +1926,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.float.downed", "Впав");
             AddKey(t, "ui.battle.float.died", "Загинув");
             AddKey(t, "ui.battle.float.ability", "{ability}");
+            AddKey(t, "ui.battle.float.trap", "Пастка!");
+            AddKey(t, "ui.battle.trap.here", "Тут ваша пастка: {damage} шкоди.");
             // Рев'ю Бою v2: підписи для озброєної дії над клітинкою і двофазної здібності.
             AddKey(t, "ui.battle.damage.preview.single", "Шкода атаки: {value}");
             AddKey(t, "ui.battle.armed.reposition.pick_unit", "Спершу клацни союзника, якого переставити.");
@@ -2463,7 +2465,7 @@ namespace Game.Gameplay.Text
 
             // ---- описи здібностей (аудит HUD п.10: жодного опису ефекту не було ні в даних, ні на екрані) ----
             AddKey(t, "ability.lunge.desc", "Ривок у ближній контакт із ціллю поза дистанцією удару.");
-            AddKey(t, "ability.set_trap.desc", "Ставить приховану пастку на клітинці — шкода й стан тому, хто в неї ступить.");
+            AddKey(t, "ability.set_trap.desc", "Ставить пастку на клітинці — шкода й стан ворогу, що в неї ступить. Свої пастки ви бачите на арені, ворог — ні.");
             AddKey(t, "ability.move_order.desc", "Командний ривок: переставляє союзника на кілька клітин.");
             AddKey(t, "ability.volley.desc", "Черга: два постріли поспіль поточною зброєю з невеликим штрафом до точності кожного.");
         }

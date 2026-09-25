@@ -789,8 +789,81 @@ namespace Game.Gameplay
 
         // ================= щокадрове оновлення виду =================
 
+        // ================= пастки гравця на арені =================
+
+        private readonly Dictionary<string, GameObject> _trapMarkers = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Свої пастки — видимий капкан на клітинці (власник, 25.09.2026: «Поставлену
+        /// пастку на арені поки не видно. погано»). Спрацювала — маркер зникає.
+        /// </summary>
+        private void SyncTrapMarkers(BattleView view)
+        {
+            var present = new HashSet<string>(StringComparer.Ordinal);
+            if (view?.Traps != null)
+                foreach (var trap in view.Traps)
+                {
+                    if (trap == null) continue;
+                    string key = trap.Pos.X + "_" + trap.Pos.Y;
+                    present.Add(key);
+                    // null — маркер знищено разом із гридом (новий бій): збудувати заново.
+                    if (!_trapMarkers.TryGetValue(key, out var marker) || marker == null)
+                        _trapMarkers[key] = BuildTrapMarker(trap.Pos.X, trap.Pos.Y);
+                }
+
+            var gone = new List<string>();
+            foreach (var kv in _trapMarkers)
+                if (!present.Contains(kv.Key)) gone.Add(kv.Key);
+            foreach (var key in gone)
+            {
+                if (_trapMarkers[key] != null) Destroy(_trapMarkers[key]);
+                _trapMarkers.Remove(key);
+            }
+        }
+
+        private GameObject BuildTrapMarker(int x, int y)
+        {
+            var world = BattleArenaView.TileToWorld(x, y);
+            var root = new GameObject("trap:" + x + "_" + y);
+            root.transform.SetParent(_tileRoot != null ? _tileRoot : transform, false);
+            root.transform.localPosition = new Vector3(world.X, 0.03f, world.Z);
+
+            // Залізна основа капкана і зуби по колу — читається згори й під кутом.
+            AddTrapPart(root, PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.62f, 0.015f, 0.62f), new Color(0.20f, 0.17f, 0.14f), Quaternion.identity);
+            AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.02f, 0f), new Vector3(0.22f, 0.02f, 0.22f), new Color(0.62f, 0.30f, 0.12f), Quaternion.identity);
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = i * Mathf.PI * 2f / 8f;
+                var pos = new Vector3(Mathf.Cos(angle) * 0.26f, 0.07f, Mathf.Sin(angle) * 0.26f);
+                AddTrapPart(root, PrimitiveType.Cube, pos, new Vector3(0.06f, 0.12f, 0.06f), new Color(0.78f, 0.74f, 0.66f),
+                    Quaternion.Euler(0f, -angle * Mathf.Rad2Deg, 18f));
+            }
+            return root;
+        }
+
+        private void AddTrapPart(GameObject root, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color, Quaternion rotation)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            Destroy(part.GetComponent<Collider>()); // не перехоплює наведення миші на клітинку
+            part.transform.SetParent(root.transform, false);
+            part.transform.localPosition = localPos;
+            part.transform.localRotation = rotation;
+            part.transform.localScale = scale;
+            var renderer = part.GetComponent<Renderer>();
+            if (renderer != null && _tileMaterial != null)
+            {
+                renderer.sharedMaterial = _tileMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var block = new MaterialPropertyBlock();
+                block.SetColor("_BaseColor", color);
+                renderer.SetPropertyBlock(block);
+            }
+        }
+
         private void ApplyUnitPositionsAndHighlights(BattleView view)
         {
+            SyncTrapMarkers(view);
+
             var alive = new HashSet<string>(StringComparer.Ordinal);
             if (view.Units != null)
                 foreach (var unit in view.Units)
@@ -1249,7 +1322,18 @@ namespace Game.Gameplay
 
         private void CompleteTact()
         {
-            if (_activeTact != null && _activeTact.Kind == TactKind.Move) SetGait(_activeTact.ActorId, 0f);
+            if (_activeTact != null && _activeTact.Kind == TactKind.Move)
+            {
+                SetGait(_activeTact.ActorId, 0f);
+                // Пастка (і її шкода) спрацьовує в точці прибуття — написи в мить приходу.
+                if (!_activeTact.FloatingSpawned && _activeTact.Extras != null && _activeTact.Extras.Count > 0)
+                {
+                    _activeTact.FloatingSpawned = true;
+                    int stack = 0;
+                    foreach (var extra in _activeTact.Extras)
+                        if (SpawnFloatingForEntry(extra, stack)) stack++;
+                }
+            }
             _activeTact = null;
         }
 
@@ -2124,6 +2208,11 @@ namespace Game.Gameplay
             if (_shotLine != null) _shotLine.enabled = false;
             if (_pathLine != null) _pathLine.enabled = false;
             if (_pathEndMarker != null) _pathEndMarker.SetActive(false);
+
+            // Пастки належать бою, що скінчився, — у наступному їх бути не може.
+            foreach (var marker in _trapMarkers.Values)
+                if (marker != null) Destroy(marker);
+            _trapMarkers.Clear();
 
             RestoreHubCamera();
             if (ArenaRoot != null) ArenaRoot.SetActive(false);

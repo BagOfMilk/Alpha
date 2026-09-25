@@ -662,7 +662,10 @@ namespace Game.Tests.EditMode
                 "Ordinal", "AttackApCost", "WeaponRange", "WeaponOptimalRange",
                 "DownWindowRemaining", "RemainingTurns", "DotDamagePerTurn", "ChanceDelta",
                 "Chance", "DamageMin", "DamageMax", "DamageCrit", "DamageExpected",
-                "Distance", "Range"
+                "Distance", "Range",
+                // Шкода власної пастки гравця — показана в підказці клітинки (власник:
+                // «Поставлену пастку на арені поки не видно. погано»), не прихована шкала.
+                "TrapDamage"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 
