@@ -525,7 +525,7 @@ namespace Game.Gameplay.UI
             h += 6f + 44f; // ряд Дозор/Стабілізувати/Кінець ходу або Прискорити
             if (c.Armed == ArmedAction.OverwatchAim) h += 26f;
             if (c.Armed != ArmedAction.None) h += 26f;
-            h += 28f; // відмова або підказка керування
+            h += 34f; // відмова або підказка керування (з запасом — на 720p/1080p обрізалась знизу)
             return h;
         }
 
@@ -536,7 +536,7 @@ namespace Game.Gameplay.UI
             var current = FindUnit(view, view.CurrentUnitId);
             float h = current == null
                 ? 80f
-                : Math.Max(EstimateCardHeight(current), EstimateColumnHeight(c, current, ButtonsColumnWidth())) + 24f;
+                : Math.Max(EstimateCardHeight(current), EstimateColumnHeight(c, current, ButtonsColumnWidth())) + 30f;
             _lastBottomPanelHeight = Clamp(h, 90f, Screen.height * 0.4f);
             return _lastBottomPanelHeight;
         }
@@ -562,7 +562,8 @@ namespace Game.Gameplay.UI
             // шапці поруч зі згортанням, не на всю ширину панелі (раніше
             // окремим рядком під заголовком, розтягнута стилем кнопки).
             GUILayout.BeginHorizontal();
-            GUILayout.Label(UkrainianText.Get("ui.battle.log", false), AlphaSkin.SubHeader, GUILayout.ExpandWidth(true));
+            // Без перенесення слів: на 720p заголовок ламався на «Журна / л» поруч з «Автобоєм».
+            GUILayout.Label(UkrainianText.Get("ui.battle.log", false), new GUIStyle(AlphaSkin.SubHeader) { wordWrap = false }, GUILayout.ExpandWidth(true));
             if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false), GUILayout.ExpandWidth(false)))
                 _confirmAutoResolve = true;
             GUILayout.Space(6f);
