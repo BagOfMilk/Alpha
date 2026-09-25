@@ -43,6 +43,8 @@ namespace Game.Gameplay
         private const int FramesBattleEnter = 6;
         private const int MaxLoopSteps = 6000;
         private const int MaxManualBattleSteps = 3;
+        /// <summary>Поріг ручної атаки водія тура (QA раунд 2): нижче — краще завершити хід, ніж бити напевне мимо.</summary>
+        private const int MinManualAttackChance = 20;
 
         private static readonly string[] HubTabSlugs =
         {
@@ -669,7 +671,20 @@ namespace Game.Gameplay
             if (BotSupport.Chebyshev(current.Pos, target.Pos) <= 1)
             {
                 string targetId = target.Id;
-                Run(() => Session.CombatAttack(targetId));
+                // Фікс-ревью раунд 2 (QA, major, застереження): цей наївний
+                // водій (на відміну від CombatAi.AutoResolve, що веде решту
+                // ходів після MaxManualBattleSteps) б'є найближчого без
+                // жодної оцінки шансу — QA бачив ручні атаки під ~1%. Хіт-шанс
+                // тут той самий, що показує HUD гравцю (Session.
+                // PreviewHitChance), тож поріг — не новий канал інформації,
+                // просто водій нарешті ним користується: на безнадійному
+                // ударі краще завершити хід (AP лишається на майбутню атаку
+                // цього ж бою), ніж бити напевне мимо.
+                int chance = Session.PreviewHitChance(current.Id, targetId);
+                if (chance >= MinManualAttackChance)
+                    Run(() => Session.CombatAttack(targetId));
+                else
+                    Run(() => Session.CombatEndTurn());
                 return;
             }
 

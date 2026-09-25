@@ -746,12 +746,23 @@ namespace Game.Gameplay.Text
         }
 
         // Core/Characters/Scars/DefaultScars.cs.
+        //
+        // Фікс-ревью раунд 2 (QA, minor): бракувало ".f"-пари — ResolveVariant
+        // падав на бару ".m"-форму навіть для протагоністки-жінки ("Одноокий"
+        // замість "Одноока"). Той самий .m/.f-приём, що вже стоїть на
+        // "companion.died.m/.f" вище: жодного нейтрального бару-ключа, обидва
+        // роди — явними записами. "broken_hand" — іменникова фраза ("Перебита
+        // рука"), роду персонажа не узгоджує, тож .f = .m буквально.
         private static void AddScarIds(Dictionary<string, string> t)
         {
-            AddKey(t, "scar.one_eyed", "Одноокий");
-            AddKey(t, "scar.limp", "Кульгавий");
-            AddKey(t, "scar.broken_hand", "Перебита рука");
-            AddKey(t, "scar.haunted", "Обпалений страхом");
+            AddKey(t, "scar.one_eyed.m", "Одноокий");
+            AddKey(t, "scar.one_eyed.f", "Одноока");
+            AddKey(t, "scar.limp.m", "Кульгавий");
+            AddKey(t, "scar.limp.f", "Кульгава");
+            AddKey(t, "scar.broken_hand.m", "Перебита рука");
+            AddKey(t, "scar.broken_hand.f", "Перебита рука");
+            AddKey(t, "scar.haunted.m", "Обпалений страхом");
+            AddKey(t, "scar.haunted.f", "Обпалена страхом");
         }
 
         // Core/Companions/DefaultArcs.cs — заголовки арок Мирослави/Максима.

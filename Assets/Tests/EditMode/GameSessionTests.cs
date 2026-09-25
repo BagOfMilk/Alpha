@@ -108,6 +108,40 @@ namespace Game.Tests.EditMode
             return false;
         }
 
+        /// <summary>
+        /// Фікс-ревью раунд 2 (QA, майже-блокер балансу бою — CombatBalance.
+        /// AccuracyPerWeaponSkill 2->8): вузол 1 (2 горд-розвідники) раніше був
+        /// назавжди невигравним (Accuracy 17 навіть у Максима, скила Мілі 6, —
+        /// нижче порога Graze), тож CombatAutoResolve() на ньому детерміновано
+        /// давав полосу Worst (Defeat, склад повністю виведений) — саме на це
+        /// спирались тести дефекції Мирослави нижче (порогу Resentful, -35,
+        /// потрібна саме Worst — не просто Base). Тепер той самий бій
+        /// виграється (полоса Good/Best), тож тести, яким явно потрібен
+        /// ПОГАНИЙ вихід бою (а не перевірка балансу), змушують його навмисно:
+        /// команда лише завершує ходи (жодної атаки), а ворог б'є на повну
+        /// (CombatAiStepOneAction — той самий ІІ, що й CombatAutoResolve), доки
+        /// весь склад не вибуде (Defeat) або не спрацює запобіжник guard.
+        /// Це РОБАСТНІШЕ за стару залежність від конкретних чисел балансу: бій
+        /// справді програний (команда навмисно не захищається), а не випадково
+        /// зламаний.
+        /// </summary>
+        private static void LoseBattleOnPurpose(GameSession s)
+        {
+            int guard = 0;
+            while (s.State == SessionState.Battle && guard++ < 2000)
+            {
+                var view = s.GetBattleView();
+                string currentSide = null;
+                if (view?.Units != null)
+                    foreach (var u in view.Units)
+                        if (u.Id == view.CurrentUnitId) { currentSide = u.Side; break; }
+
+                if (currentSide == "Player") s.CombatEndTurn();
+                else s.CombatAiStepOneAction();
+            }
+            Assert.AreEqual(SessionState.Scene, s.State, "бій мав завершитись Defeat (склад вибув) до ліміту guard");
+        }
+
         // ---- Title / створення / відкриття ----
 
         [Test]
@@ -581,11 +615,18 @@ namespace Game.Tests.EditMode
         /// (мостик R6), який TensionTickStep дренує лише на ПЕРШОМУ тіку
         /// НАСТУПНОЇ фази — це давало ціні крові запізнення на цілу фазу
         /// проти Напруги полоси виходу (яка лягає синхронно тим самим
-        /// викликом). Тепер обидва застосовуються атомарно: перевіряємо це
-        /// ОДРАЗУ після CombatAutoResolve (яке синхронно кличе
-        /// OnBattleResolved → ResolvePendingWithBand), без жодного наступного
-        /// AdvanceNight — якби цінa крові й досі йшла через відкладену черг,
-        /// це порівняння впало б ще ДО AdvanceNight.
+        /// викликом). Тепер обидва застосовуються атомарно.
+        ///
+        /// Фікс-ревью раунд 2 (QA): порівняння тепер бере знімок ОДРАЗУ після
+        /// ResolveIncident(Bloody) — ДО CombatAutoResolve, а не після. Причина:
+        /// САМ бій (OnBattleResolved -> ResolvePendingWithBand) окремо рухає
+        /// Напругу драйвером incident.TensionByBand[полоса] — і для Good/Best
+        /// (чистої перемоги, тепер звичного виходу цього бою після фіксу
+        /// CombatBalance.AccuracyPerWeaponSkill) ця дельта ВІД'ЄМНА (чиста
+        /// перемога заслужено заспокоює, не тривожить) і може повністю
+        /// перекрити синхронний ріст від самого PlaystyleBlood. Це НЕ спростовує
+        /// PlaystyleBlood — той факт перевіряється тут ДО того, як бій встигає
+        /// додати свою окрему (і легітимно різну за знаком) дельту.
         /// </summary>
         [Test]
         public void Day1_BloodyPath_AppliesPlaystyleBloodTension_AndCausedFear_LikeAnyBloodyIncident()
@@ -603,17 +644,16 @@ namespace Game.Tests.EditMode
 
             var duringBattle = s.ResolveIncident(IncidentPath.Bloody);
             Assert.IsNull(duringBattle);
-            s.CombatAutoResolve();
 
-            // Синхронно, одразу після автобою — БЕЗ переходу в Scene/Evening/
-            // Night: PlaystyleBlood і CausedFear мають лягти в тому самому
-            // виклику, що й Напруга полоси виходу бою (ResolvePendingWithBand
-            // усередині OnBattleResolved), а не фазою пізніше.
-            Assert.AreEqual(SessionState.Scene, s.State);
+            // Синхронно, у ТОМУ САМОМУ виклику ResolveIncident(Bloody) — ще до
+            // того, як бій сам щось порахує (§ коментар класу вище).
             Assert.Greater(s.DebugTensionValue, tensionBeforeBlood,
                 "PlaystyleBlood мав піднятi Напругу СИНХРОННО, так само, як IncidentResolver.ApplyBloodCost для звичайного кровавого шляху");
             Assert.IsTrue(s.DebugCommunityIsAfraid,
                 "кроваве рішення вузла 1 через бій мало налякати громаду так само, як CausedFear звичайного кровавого шляху");
+
+            s.CombatAutoResolve();
+            Assert.AreEqual(SessionState.Scene, s.State);
 
             SceneStepView step;
             step = RunSceneToFinish(s);
@@ -771,7 +811,10 @@ namespace Game.Tests.EditMode
             Assert.IsNull(duringBattle);
             Assert.AreEqual(SessionState.Battle, s.State);
 
-            s.CombatAutoResolve();
+            // Цьому тесту потрібна саме полоса Worst (-35 лояльності, поріг
+            // Resentful нижче) — навмисно програний бій (LoseBattleOnPurpose),
+            // а не CombatAutoResolve() (з полагодженим балансом дає Good/Best).
+            LoseBattleOnPurpose(s);
             Assert.AreEqual(SessionState.Scene, s.State);
 
             bool sawLeft = false, sawResentful = false;
@@ -892,7 +935,8 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(report.AwaitsDecision);
             Assert.IsNull(s.ResolveIncident(IncidentPath.Bloody));
             Assert.AreEqual(SessionState.Battle, s.State);
-            s.CombatAutoResolve();
+            // Base/Worst потрібна навмисно — див. LoseBattleOnPurpose.
+            LoseBattleOnPurpose(s);
             Assert.AreEqual(SessionState.Scene, s.State);
             RunSceneToFinish(s);
             s.ConfirmEvening();
