@@ -903,56 +903,66 @@ namespace Game.Gameplay.UI
 
         private static void DrawOverlays(IBattleHudData c, BattleView view)
         {
-            DrawTrapOverlays(c);
-            if (c.Overlays == null) return;
-
             // Раунд 3 (знімки): імена сусідніх бійців налазили одне на одне
             // («ПровідниЗастрільник орди»). Спершу розсуваємо блоки по
-            // вертикалі (чиста функція з тестом), тоді малюємо.
+            // вертикалі (чиста функція з тестом), тоді малюємо. Мітки своїх
+            // пасток — у тому ж розсуванні: інакше значок «Дозор» сусіда їх ховав.
             var visible = new List<BattleUnitOverlay>();
             var units = new List<BattleUnitView>();
-            foreach (var ov in c.Overlays)
-            {
-                if (!ov.OnScreen) continue;
-                var unit = FindUnit(view, ov.UnitId);
-                if (unit == null) continue;
-                visible.Add(ov);
-                units.Add(unit);
-            }
+            if (c.Overlays != null)
+                foreach (var ov in c.Overlays)
+                {
+                    if (!ov.OnScreen) continue;
+                    var unit = FindUnit(view, ov.UnitId);
+                    if (unit == null) continue;
+                    visible.Add(ov);
+                    units.Add(unit);
+                }
+
+            var traps = new List<BattleTrapOverlay>();
+            if (c.TrapOverlays != null)
+                foreach (var trap in c.TrapOverlays)
+                    if (trap != null && trap.OnScreen) traps.Add(trap);
 
             int n = visible.Count;
-            var centerX = new float[n];
-            var top = new float[n];
-            var width = new float[n];
+            int total = n + traps.Count;
+            var centerX = new float[total];
+            var top = new float[total];
+            var width = new float[total];
+            var heights = new float[total];
+            float blockHeight = AlphaSkin.OverlayNameFontSize + 6f + 6f + 18f; // ім'я + HP + один значок
             for (int i = 0; i < n; i++)
             {
                 centerX[i] = visible[i].ScreenX;
                 top[i] = visible[i].ScreenY;
                 width[i] = OverlayNameWidth(c.ResolveDisplayName(units[i]));
+                heights[i] = blockHeight;
             }
-            float blockHeight = AlphaSkin.OverlayNameFontSize + 6f + 6f + 18f; // ім'я + HP + один значок
-            var resolved = BattleTooltipLayout.ResolveVerticalOverlaps(centerX, top, width, blockHeight, 2f);
+            string trapText = UkrainianText.Get("ui.battle.overlay.trap", false);
+            for (int k = 0; k < traps.Count; k++)
+            {
+                centerX[n + k] = traps[k].ScreenX;
+                top[n + k] = traps[k].ScreenY - TrapLabelHeight * 0.5f;
+                width[n + k] = OverlayNameWidth(trapText);
+                heights[n + k] = TrapLabelHeight;
+            }
+            var resolved = BattleTooltipLayout.ResolveVerticalOverlaps(centerX, top, width, heights, 2f);
 
+            // Пастки — першими: вони на землі, імена бійців над головами.
+            for (int k = 0; k < traps.Count; k++)
+                DrawTrapLabel(trapText, traps[k].ScreenX, resolved[n + k], width[n + k]);
             for (int i = 0; i < n; i++)
                 DrawUnitOverlay(c, units[i], visible[i], resolved[i]);
         }
 
-        /// <summary>
-        /// Бурштинова мітка над своєю пасткою. Малюється ПЕРШОЮ — імена бійців
-        /// лягають поверх неї, а не навпаки.
-        /// </summary>
-        private static void DrawTrapOverlays(IBattleHudData c)
+        private const float TrapLabelHeight = 18f;
+
+        /// <summary>Бурштинова мітка своєї пастки — на клітинці, після розсування з підписами бійців.</summary>
+        private static void DrawTrapLabel(string text, float centerX, float topY, float width)
         {
-            if (c.TrapOverlays == null) return;
-            foreach (var trap in c.TrapOverlays)
-            {
-                if (trap == null || !trap.OnScreen) continue;
-                string text = UkrainianText.Get("ui.battle.overlay.trap", false);
-                float width = OverlayNameWidth(text);
-                var rect = new Rect(trap.ScreenX - width * 0.5f, trap.ScreenY - 9f, width, 18f);
-                Widgets.SolidRect(rect, AlphaSkin.BattleTrap);
-                GUI.Label(rect, text, new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.BgDark } });
-            }
+            var rect = new Rect(centerX - width * 0.5f, topY, width, TrapLabelHeight);
+            Widgets.SolidRect(rect, AlphaSkin.BattleTrap);
+            GUI.Label(rect, text, new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.BgDark } });
         }
 
         private static float OverlayNameWidth(string name)

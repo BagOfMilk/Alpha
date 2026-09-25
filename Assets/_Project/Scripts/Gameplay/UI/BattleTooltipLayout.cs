@@ -47,6 +47,18 @@ namespace Game.Gameplay.UI
         /// </summary>
         public static float[] ResolveVerticalOverlaps(float[] centerX, float[] top, float[] width, float height, float gap)
         {
+            var heights = new float[top.Length];
+            for (int i = 0; i < heights.Length; i++) heights[i] = height;
+            return ResolveVerticalOverlaps(centerX, top, width, heights, gap);
+        }
+
+        /// <summary>
+        /// Те саме, але блоки різної висоти: мітка пастки (один рядок) і підпис
+        /// бійця (ім'я + HP + значок) розсуваються разом — знімок 25.09.2026:
+        /// «Пастка» ховалась під значком «Дозор» сусіда.
+        /// </summary>
+        public static float[] ResolveVerticalOverlaps(float[] centerX, float[] top, float[] width, float[] heights, float gap)
+        {
             int n = top.Length;
             var result = (float[])top.Clone();
             var order = new int[n];
@@ -66,10 +78,10 @@ namespace Game.Gameplay.UI
                     foreach (int j in placed)
                     {
                         bool overlapX = System.Math.Abs(centerX[i] - centerX[j]) < (width[i] + width[j]) * 0.5f + gap;
-                        bool overlapY = System.Math.Abs(result[i] - result[j]) < height + gap;
+                        bool overlapY = result[i] < result[j] + heights[j] + gap && result[j] < result[i] + heights[i] + gap;
                         if (overlapX && overlapY)
                         {
-                            result[i] = result[j] - height - gap;
+                            result[i] = result[j] - heights[i] - gap;
                             moved = true;
                         }
                     }
