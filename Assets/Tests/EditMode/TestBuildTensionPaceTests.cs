@@ -444,20 +444,13 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(TestBuildTensionPace.CrisisThreshold, target.DebugCrisisThreshold);
             Assert.AreEqual(source.DebugTensionValue, target.DebugTensionValue);
 
-            // Контроль — той самий слот, відновлений у свіжу сесію того самого
-            // темпу (без перебудови). Порівнюємо з ним, а не з джерелом:
-            // відновлення у свіжу сесію розходиться з безперервною грою
-            // незалежно від темпу (виробництво першої доби після завантаження,
-            // знайдено 25.09.2026, окрема правка) — тут перевіряється лише, що
-            // перебудова світу дає те саме, що й звичайне «Продовжити».
-            var control = new GameSession(testOptions.Roller);
-            control.NewGame(new NewGameOptions());
-            control.RestoreFromBlob(blob);
-
-            BotRunner.Drive(control, new HomebodyPolicy(), 14, suppressCouncilRoutine: true);
+            // Після правки відновлення у свіжу сесію (зайнятість постів, голод,
+            // завершені глави арок — FreshSessionRestoreTests) перебудований
+            // світ мусить іти рівно тією траєкторією, що й джерело слота.
+            BotRunner.Drive(source, new HomebodyPolicy(), 14, suppressCouncilRoutine: true);
             BotRunner.Drive(target, new HomebodyPolicy(), 14, suppressCouncilRoutine: true);
-            Assert.AreEqual(control.DebugTensionValue, target.DebugTensionValue,
-                "після перебудови світ мусить іти тією самою траєкторією, що й звичайне відновлення слота");
+            Assert.AreEqual(source.DebugTensionValue, target.DebugTensionValue,
+                "після перебудови світ мусить іти тією самою траєкторією, що й джерело слота");
             Assert.IsTrue(target.LoadState(2), "слоти партії переживають перебудову світу");
         }
 
