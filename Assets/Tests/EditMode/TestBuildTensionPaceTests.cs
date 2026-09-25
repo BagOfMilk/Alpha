@@ -17,13 +17,13 @@ namespace Game.Tests.EditMode
     ///
     /// Так само, як <see cref="CampaignPacingTests"/> — це тести ТЕМПА, не
     /// арифметики: замір "коли гравець уперше побачить зміну смуги/кризу", а
-    /// не перевірка конкретної формули. Три боти зі своїм "норовом":
-    /// "безрукий еталон" (ніколи не замовляє Облаву, не будує Храм/Укріплення,
-    /// тихий шлях), "дефузер" (той самий рутинний бот, що й
-    /// AllMechanicsCoverageTests/tools/Alpha.Sim — Облава + Храм/Укріплення
-    /// увімкнені), "шкідник" (кроваво, порожні пости, без патруля, без Облави
-    /// й Храму) — детермінізм (інваріант 1) означає, що те саме дерево рішень
-    /// завжди дає той самий прогін.
+    /// не перевірка конкретної формули. Боти зі своїм "норовом":
+    /// еталон — ситий домосід (<see cref="HomebodyPolicy"/>: мирно, без
+    /// вилазок, без Облави/Храму/Укріплень); "дефузер" — той самий домосід із
+    /// рутиною ради; голодний — <see cref="PacifistPolicy"/> з вилазками;
+    /// "шкідник" (кроваво, порожні пости, без патруля, без Облави й Храму).
+    /// Детермінізм (інваріант 1) означає, що те саме дерево рішень завжди
+    /// дає той самий прогін.
     /// </summary>
     public class TestBuildTensionPaceTests
     {
@@ -67,7 +67,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Reference_HitsMurmurFermentHeat_InTargetWindows()
         {
-            var (log, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+            var (log, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
 
             int? murmur = FirstDay(log, "tension.band.Murmur");
             int? ferment = FirstDay(log, "tension.band.Ferment");
@@ -86,7 +86,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Reference_CrisisRiotOffered_AfterFullForewarnLadder_NearDay25()
         {
-            var (log, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+            var (log, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
 
             int? l1 = FirstDayForewarn(log, 1, "crisis");
             int? l2 = FirstDayForewarn(log, 2, "crisis");
@@ -121,7 +121,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Reference_ForewarnLevels2And3_CarryCrisisDomainTag_AndTextNamesIt()
         {
-            var (log, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+            var (log, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
 
             var l2 = log.FirstOrDefault(e => e.Key == "forewarn.level2" &&
                 e.Args.TryGetValue("subject", out var s) && s == "crisis");
@@ -158,7 +158,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void Reference_JournalSeesTensionBandChange_AndGreatCrisis_Separately()
         {
-            var (_, session) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+            var (_, session) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
             var journal = session.GetMechanicsJournal();
 
             var bandEntry = journal.FirstOrDefault(e => e.Id == "tension_band_change");
@@ -183,8 +183,11 @@ namespace Game.Tests.EditMode
         [Test]
         public void Defuser_RiotIsLaterThanReference_OrNeverWithin30Days()
         {
-            var (referenceLog, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
-            var (defuserLog, _) = Run(new StewardPolicy(), suppressCouncilRoutine: false);
+            var (referenceLog, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
+            // Той самий ситий домосід, але з рутиною ради (Облава на кожній
+            // готовності, Храм/Укріплення в черзі стройки) — різниця лише в
+            // тому, чи гравець гасить Напругу.
+            var (defuserLog, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: false);
 
             int? referenceRiot = FirstDayCrisisResolved(referenceLog);
             int? defuserRiot = FirstDayCrisisResolved(defuserLog);
@@ -199,12 +202,34 @@ namespace Game.Tests.EditMode
                     "дефузер (Облава + Храм/Укріплення) має відкласти бунт пізніше еталону");
         }
 
+        /// <summary>
+        /// Голод прискорює, а не задає темп: бот, що безперервно шле трьох
+        /// людей у вилазки (пости пустіють, ферми стоять — голод з восьмої
+        /// доби), доходить до бунту РАНІШЕ ситого еталона. До 25.09.2026 темп
+        /// тримався саме на голоді, і ситий тестер кризи не бачив зовсім.
+        /// </summary>
+        [Test]
+        public void Hunger_BringsRiotSooner_ThanFedReference()
+        {
+            var (referenceLog, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
+            var (hungryLog, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+
+            Assert.IsNull(FirstDay(referenceLog, "production.food_shortage"), "еталон має бути ситим — інакше він міряє голод, а не темп");
+            Assert.NotNull(FirstDay(hungryLog, "production.food_shortage"), "бот із вилазками мав голодувати");
+
+            int? referenceRiot = FirstDayCrisisResolved(referenceLog);
+            int? hungryRiot = FirstDayCrisisResolved(hungryLog);
+            Assert.NotNull(referenceRiot);
+            Assert.NotNull(hungryRiot, "голодна громада мусить дійти до бунту за 30 діб");
+            Assert.Less(hungryRiot.Value, referenceRiot.Value, "голод мусить наближати бунт");
+        }
+
         // ================= (c) "Шкідник" =================
 
         [Test]
         public void Neglect_RiotIsClearlyEarlierThanReference()
         {
-            var (referenceLog, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+            var (referenceLog, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
             var (neglectLog, _) = Run(new NeglectPolicy(), suppressCouncilRoutine: true);
 
             int? referenceRiot = FirstDayCrisisResolved(referenceLog);
@@ -236,7 +261,7 @@ namespace Game.Tests.EditMode
         {
             var (log, _) = who == "neglect"
                 ? Run(new NeglectPolicy(), suppressCouncilRoutine: true)
-                : Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+                : Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
 
             var riots = new List<int>();
             foreach (var e in log)
@@ -325,14 +350,86 @@ namespace Game.Tests.EditMode
         [Test]
         public void SaveLoad_MidFreePlay_PreservesTrajectory()
         {
-            var baseline = TrajectorySnapshot(new StewardPolicy(), saveLoadAtDay: null);
-            var withSaveLoad = TrajectorySnapshot(new StewardPolicy(), saveLoadAtDay: 18);
+            // Порівнюємо з ТИМ САМИМ розбиттям прогону без збереження: другий
+            // Drive заново збирає ще не очищений DayLog межової доби, тож
+            // розбитий прогін відрізняється від суцільного на ці рядки сам по
+            // собі (перевірено 25.09.2026) — різниця має бути лише від
+            // SaveState/LoadState, а не від розбиття.
+            var baseline = TrajectorySnapshot(new StewardPolicy(), splitAtDay: 18, saveLoad: false);
+            var withSaveLoad = TrajectorySnapshot(new StewardPolicy(), splitAtDay: 18, saveLoad: true);
 
+            Assert.IsTrue(baseline.Exists(s => s.StartsWith("2") && s.Contains("tension.band.")),
+                "після точки збереження (доба 18) прогін мусить мати зсув смуги — інакше тест нічого не доводить");
             Assert.AreEqual(baseline, withSaveLoad,
                 "той самий детермінований прогін до і після SaveState/LoadState посеред вільної гри мусить дати ту саму траєкторію смуг");
         }
 
-        private static List<string> TrajectorySnapshot(IBotPolicy policy, int? saveLoadAtDay)
+        /// <summary>
+        /// Знайдено 25.09.2026: прапорець темпу не жив у сейві — «Продовжити»
+        /// будувало світ із типовими опціями, і партія з кампанійним темпом
+        /// (перемикач на титулі) мовчки продовжувалась у тестовому.
+        /// </summary>
+        [Test]
+        public void ContinueGame_KeepsCampaignPace_ChosenOnTitle()
+        {
+            var options = new NewGameOptions { TestBuildTensionPace = false };
+            var s = new GameSession(options.Roller);
+            s.NewGame(options);
+            BotRunner.Drive(s, new HomebodyPolicy(), 7, suppressCouncilRoutine: true);
+            string blob = s.SaveState(0);
+
+            var resumed = new GameSession();
+            resumed.PreloadSlot(0, blob);
+            Assert.IsTrue(resumed.ContinueGame(0));
+
+            Assert.IsFalse(resumed.DebugTensionPace, "продовжена партія мусить лишитись у кампанійному темпі");
+            Assert.AreEqual(120, resumed.DebugCrisisThreshold, "накопичувач кризи — кампанійний, не тестовий");
+            Assert.AreEqual(s.DebugTensionValue, resumed.DebugTensionValue);
+        }
+
+        /// <summary>
+        /// Слот з іншим темпом, завантажений у вже запущену партію: світ
+        /// перебудовується під темп слота, і далі партія йде так само, як
+        /// та, з якої слот знято.
+        /// </summary>
+        [Test]
+        public void LoadingSlotWithOtherPace_RebuildsWorld_AndContinuesIdentically()
+        {
+            var testOptions = new NewGameOptions();
+            var source = new GameSession(testOptions.Roller);
+            source.NewGame(testOptions);
+            BotRunner.Drive(source, new HomebodyPolicy(), 12, suppressCouncilRoutine: true);
+            string blob = source.SaveState(0);
+
+            var campaignOptions = new NewGameOptions { TestBuildTensionPace = false };
+            var target = new GameSession(campaignOptions.Roller);
+            target.NewGame(campaignOptions);
+            BotRunner.Drive(target, new HomebodyPolicy(), 7, suppressCouncilRoutine: true);
+            target.SaveState(2);
+            target.RestoreFromBlob(blob);
+
+            Assert.IsTrue(target.DebugTensionPace);
+            Assert.AreEqual(TestBuildTensionPace.CrisisThreshold, target.DebugCrisisThreshold);
+            Assert.AreEqual(source.DebugTensionValue, target.DebugTensionValue);
+
+            // Контроль — той самий слот, відновлений у свіжу сесію того самого
+            // темпу (без перебудови). Порівнюємо з ним, а не з джерелом:
+            // відновлення у свіжу сесію розходиться з безперервною грою
+            // незалежно від темпу (виробництво першої доби після завантаження,
+            // знайдено 25.09.2026, окрема правка) — тут перевіряється лише, що
+            // перебудова світу дає те саме, що й звичайне «Продовжити».
+            var control = new GameSession(testOptions.Roller);
+            control.NewGame(new NewGameOptions());
+            control.RestoreFromBlob(blob);
+
+            BotRunner.Drive(control, new HomebodyPolicy(), 14, suppressCouncilRoutine: true);
+            BotRunner.Drive(target, new HomebodyPolicy(), 14, suppressCouncilRoutine: true);
+            Assert.AreEqual(control.DebugTensionValue, target.DebugTensionValue,
+                "після перебудови світ мусить іти тією самою траєкторією, що й звичайне відновлення слота");
+            Assert.IsTrue(target.LoadState(2), "слоти партії переживають перебудову світу");
+        }
+
+        private static List<string> TrajectorySnapshot(IBotPolicy policy, int splitAtDay, bool saveLoad)
         {
             var options = new NewGameOptions();
             var session = new GameSession(options.Roller);
@@ -340,24 +437,20 @@ namespace Game.Tests.EditMode
 
             var trajectory = new List<string>();
 
-            if (saveLoadAtDay.HasValue)
             {
                 var log1 = new List<GameEvent>();
-                BotRunner.Drive(session, policy, saveLoadAtDay.Value, fullLog: log1, suppressCouncilRoutine: false);
+                BotRunner.Drive(session, policy, splitAtDay, fullLog: log1, suppressCouncilRoutine: false);
                 CollectBandAndForewarn(log1, trajectory);
 
-                string blob = session.SaveState(0);
-                session.LoadState(0);
+                if (saveLoad)
+                {
+                    session.SaveState(0);
+                    session.LoadState(0);
+                }
 
                 var log2 = new List<GameEvent>();
-                BotRunner.Drive(session, policy, Days - saveLoadAtDay.Value, fullLog: log2, suppressCouncilRoutine: false);
+                BotRunner.Drive(session, policy, Days - splitAtDay, fullLog: log2, suppressCouncilRoutine: false);
                 CollectBandAndForewarn(log2, trajectory);
-            }
-            else
-            {
-                var log = new List<GameEvent>();
-                BotRunner.Drive(session, policy, Days, fullLog: log, suppressCouncilRoutine: false);
-                CollectBandAndForewarn(log, trajectory);
             }
 
             return trajectory;

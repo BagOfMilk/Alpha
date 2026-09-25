@@ -146,6 +146,15 @@ namespace Game.Core.Session
         private IDiceRoller _roller;
         private ulong _seed = 1;
         private HitRuleKind _hitRule = HitRuleKind.Threshold;
+
+        /// <summary>
+        /// Темп Напруги, з яким побудовано світ цієї партії
+        /// (<see cref="NewGameOptions.TestBuildTensionPace"/>). Живе в сейві:
+        /// інакше «Продовжити» будувало світ із типовими опціями, і партія,
+        /// почата з кампанійним темпом (перемикач на титулі), мовчки
+        /// продовжувалась у тестовому. Знайдено 25.09.2026.
+        /// </summary>
+        private bool _tensionPace = true;
         private bool _ironman;
 
         private CombatState _battle;
@@ -327,6 +336,7 @@ namespace Game.Core.Session
             _hafiyaGrassBonusApplied = false;
 
             _hitRule = o.HitRule;
+            _tensionPace = o.TestBuildTensionPace;
             _seed = o.Seed;
             _ironman = o.Ironman;
 
@@ -394,7 +404,14 @@ namespace Game.Core.Session
             string blob;
             if (!_slots.TryGetValue(slot, out blob) || string.IsNullOrEmpty(blob)) return false;
 
-            NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Roller = roller });
+            // Темп Напруги визначає, як побудовано світ (пороги смуг, тик,
+            // накопичувач кризи), тож його треба знати ДО NewGame, а не лише
+            // відновити полем, як hitRule. Старий сейв без поля — тестовий темп.
+            NewGame(new NewGameOptions
+            {
+                SkipCreation = true, HitRule = HitRuleKind.Threshold, Roller = roller,
+                TestBuildTensionPace = PeekTensionPace(blob) ?? true
+            });
             _slots[slot] = blob;
             return LoadState(slot);
         }
@@ -1053,6 +1070,12 @@ namespace Game.Core.Session
         /// (R17) — жоден офіційний контракт §4.2 цього не показує навмисно.
         /// </summary>
         internal int DebugTensionValue => _processor?.Tension?.Value ?? 0;
+
+        /// <summary>IVT-гачок: з яким темпом Напруги побудовано світ (прапорець і фактичний поріг накопичувача кризи).</summary>
+        internal bool DebugTensionPace => _tensionPace;
+
+        internal int DebugCrisisThreshold =>
+            _processor?.Pulse != null && _processor.Pulse.Tracks.TryGetValue("crisis", out var track) ? track.Threshold : 0;
         internal bool DebugCommunityIsAfraid => _processor != null && _processor.Fear != null && _processor.Fear.IsAfraid(_processor.CurrentDay);
 
         /// <summary>Той самий гачок для scout_horn "forewarn_boost" (D1b) — заповнення накопичувача Тугара (0..1+), приховане від View.</summary>
@@ -3410,6 +3433,7 @@ namespace Game.Core.Session
             head.Append(";protagonist=").Append(ProtagonistId);
             head.Append(";seed=").Append(_seed.ToString(CultureInfo.InvariantCulture));
             head.Append(";hitRule=").Append((int)_hitRule);
+            head.Append(";tensionPace=").Append(_tensionPace ? 1 : 0);
             if (_roller != null) head.Append(";roller=").Append(_roller.CaptureState());
             head.Append(";resume=").Append(_resume == null ? "-" :
                 ((int)_resume.Reason).ToString(CultureInfo.InvariantCulture) + "|" +
@@ -3466,8 +3490,38 @@ namespace Game.Core.Session
             return head.ToString();
         }
 
+        /// <summary>Поле "tensionPace" із заголовка слепка (до ";core="), або null для старого сейву без нього.</summary>
+        private static bool? PeekTensionPace(string blob)
+        {
+            if (string.IsNullOrEmpty(blob)) return null;
+            int coreIdx = blob.IndexOf(";core=", StringComparison.Ordinal);
+            string head = coreIdx >= 0 ? blob.Substring(0, coreIdx) : blob;
+            const string key = ";tensionPace=";
+            int idx = head.IndexOf(key, StringComparison.Ordinal);
+            if (idx < 0) return null;
+            int start = idx + key.Length;
+            return start < head.Length && head[start] == '1';
+        }
+
         private void ApplySave(string blob)
         {
+            // Слот з іншим темпом Напруги, ніж світ цієї партії: світ
+            // перебудовується тим самим шляхом, що й «Продовжити» (NewGame +
+            // застосування слепка), — пороги смуг і накопичувач кризи живуть
+            // у побудові світу, а не в слепку. Слоти переживають перебудову.
+            bool? savedPace = PeekTensionPace(blob);
+            if (savedPace.HasValue && savedPace.Value != _tensionPace)
+            {
+                var keptSlots = new Dictionary<int, string>(_slots);
+                NewGame(new NewGameOptions
+                {
+                    SkipCreation = true, HitRule = _hitRule, Roller = _roller,
+                    TestBuildTensionPace = savedPace.Value,
+                    TestBuildOneDayConstruction = _works == null || _works.OneDayConstruction
+                });
+                foreach (var kv in keptSlots) _slots[kv.Key] = kv.Value;
+            }
+
             int coreIdx = blob.IndexOf(";core=", StringComparison.Ordinal);
             string headPart = coreIdx >= 0 ? blob.Substring(0, coreIdx) : blob;
             string corePart = null;

@@ -26,18 +26,41 @@ namespace Game.Core.Session
     /// <see cref="FirstHourWorld.Build"/> без прапорця (або з ним false),
     /// свого <c>BalanceConfig</c> не бачать зміненим узагалі.
     ///
-    /// Підібрано бот-прогонами <c>BotRunner.PlayDays</c> (Steward/Pacifist як
-    /// «дефузер», Pacifist+suppressCouncilRoutine як «безрукий еталон»,
-    /// Neglect як «шкідник») — числа лишаються ПЛЕЙСХОЛДЕРОМ тестової збірки,
-    /// не кампанії.
+    /// Підібрано бот-прогонами (25.09.2026, перепідбір): еталон — СИТИЙ
+    /// домосід (<see cref="Bots.HomebodyPolicy"/> + suppressCouncilRoutine) —
+    /// Ропіт д15, Брожіння д21, Накал д21-23, бунт д25 і д30; той самий
+    /// домосід із рутиною ради (Облава/Храм/Укріплення) — жодного бунту за 30
+    /// діб; голодні боти з вилазками — бунт д21-23; кривавий — д24; шкідник
+    /// (<see cref="Bots.NeglectPolicy"/>) — д19. Перший підбір (24.09) спирався
+    /// на Pacifist, який голодує з восьмої доби: темп тримався на голоді, і
+    /// ситий водій Unity-туру побачив лише Ропіт близько тридцятої доби.
+    /// Числа лишаються ПЛЕЙСХОЛДЕРОМ тестової збірки, не кампанії.
     /// </summary>
     public static class TestBuildTensionPace
     {
-        /// <summary>У скільки разів швидший фоновий тик по тиру (TierTickPerDay) — єдине джерело пасивного тиску (US-1.3). Дренаж Храму/Укріплень масштабується ТИМ САМИМ множником, щоб придушення лишалось відчутним у стисненому темпі.</summary>
-        public const double TierTickCompressionFactor = 3.0;
+        /// <summary>
+        /// Множник дренажу Храму/Укріплень: хутір (тир 1) тікає в 10 разів
+        /// швидше за кампанійний (1.0 → 10.0), тож і придушення стиснуте тим
+        /// самим множником — інакше воно б нічого не важило.
+        /// </summary>
+        public const double TierTickCompressionFactor = 10.0;
 
-        /// <summary>Пороги смуг тестової збірки: Ропіт / Брожіння / Накал / Злам. Нерівномірні навмисно — відстань Ропіт→Брожіння (5 діб) інша, ніж Брожіння→Накал (2-3 доби).</summary>
-        public static readonly int[] BandThresholds = { 115, 250, 300, 450 };
+        /// <summary>
+        /// Фоновий тик за тиром — єдине джерело пасивного тиску (US-1.3).
+        /// Задано явно, а не множником кампанійних {1,2,4,7}: з множником село
+        /// (тир 2, у ботів з радою — вже на восьму-дев'яту добу) тікало б
+        /// удвічі швидше за хутір, і жодна Облава не встигала б. У тестовій
+        /// збірці ріст тиру лише трохи прискорює, темп задає час.
+        /// </summary>
+        public static readonly double[] TierTickPerDay = { 10.0, 12.0, 14.0, 16.0 };
+
+        /// <summary>
+        /// Пороги смуг тестової збірки: Ропіт / Брожіння / Накал / Злам.
+        /// Нерівномірні навмисно: після Ропоту частішають інциденти вулиці й
+        /// ночі (їхня ставка росте з полосою), тож Брожіння→Накал проходиться
+        /// швидше, ніж Спокій→Ропіт.
+        /// </summary>
+        public static readonly int[] BandThresholds = { 145, 265, 305, 380 };
 
         /// <summary>Стиснутий поріг накопичувача кризи (кампанійний — 120, Threshold конструктора CrisisPressureSource). Ставки накопичення (5/12 за тик) лишаються кампанійними — тиснути на них не треба, стискає сам поріг.</summary>
         public const int CrisisThreshold = 9;
@@ -71,7 +94,7 @@ namespace Game.Core.Session
             {
                 Max = src.Max,
                 BandThresholds = BandThresholds,
-                TierTickPerDay = Scale(src.TierTickPerDay, TierTickCompressionFactor),
+                TierTickPerDay = (double[])TierTickPerDay.Clone(),
                 OrderTickMultiplier = src.OrderTickMultiplier,
                 AllowedRaising = src.AllowedRaising,
                 AllowedLowering = src.AllowedLowering,
@@ -110,14 +133,6 @@ namespace Game.Core.Session
         public static CrisisPressureSource BuildCrisisSource()
         {
             return new CrisisPressureSource(threshold: CrisisThreshold, cooldownDays: CrisisCooldownDays);
-        }
-
-        private static double[] Scale(double[] src, double factor)
-        {
-            if (src == null) return null;
-            var result = new double[src.Length];
-            for (int i = 0; i < src.Length; i++) result[i] = src[i] * factor;
-            return result;
         }
     }
 }
