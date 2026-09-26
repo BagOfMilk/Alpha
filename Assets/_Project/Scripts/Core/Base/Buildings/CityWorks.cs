@@ -660,6 +660,26 @@ namespace Game.Core.Base
             }
         }
 
+        /// <summary>
+        /// Щойно добудована будівля відкриває СВІЙ пост — і лише його. Раніше
+        /// крок міських робіт кликав тут повну <see cref="ApplyToSlots"/>, і
+        /// кожна добудова заново закривала пости, відкриті без будівлі:
+        /// лазарет зрізу (Гафія на ньому з першої доби, FirstHourWorld)
+        /// закривався першою ж майстернею, а закритий пост не виробляє —
+        /// лазарет мовчки переставав працювати (дебаг 25.09.2026, знайдено на
+        /// знімку туру). Повна синхронізація лишається для побудови світу.
+        /// </summary>
+        public void OpenPostOf(string buildingId, BaseState state)
+        {
+            if (state == null || string.IsNullOrEmpty(buildingId)) return;
+            foreach (var def in DefaultBuildings.All())
+            {
+                if (def.Id != buildingId || string.IsNullOrEmpty(def.OpensSlotId)) continue;
+                var slot = state.GetSlot(def.OpensSlotId);
+                if (slot != null) slot.Unlocked = true;
+            }
+        }
+
         private Project FindProject(string id)
         {
             for (int i = 0; i < _projects.Count; i++)

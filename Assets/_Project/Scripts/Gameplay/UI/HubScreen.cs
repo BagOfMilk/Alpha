@@ -214,24 +214,24 @@ namespace Game.Gameplay.UI
                 }
                 GUILayout.EndHorizontal();
 
-                // Закритий пост (його будівля ще не стоїть) людей не приймає:
-                // раніше тут стояли ті самі кнопки «Призначити», і клік мовчки
-                // нічого не робив.
+                // «Призначити» — лише на відкритий порожній пост. Раніше кнопки
+                // стояли й під зайнятими, і під закритими постами (будівля ще не
+                // стоїть), а клік мовчки нічого не робив.
                 bool open = openPosts == null || Contains(openPosts, postId);
-                if (!open)
+                if (occupant == null && !open)
                 {
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(24f);
                     GUILayout.Label(ScreenText.PostLockedReason(postId, g), AlphaSkin.Tooltip);
                     GUILayout.EndHorizontal();
                 }
-                else if (roster?.Companions != null)
+                else if (occupant == null && roster?.Companions != null)
                 {
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(24f);
                     foreach (var c in roster.Companions)
                     {
-                        if (c.Id == occupant || !string.IsNullOrEmpty(c.AssignedSlotId)) continue;
+                        if (!string.IsNullOrEmpty(c.AssignedSlotId)) continue;
                         var legality = ScreenText.AssignCandidateLegality(c);
                         if (!legality.Enabled) continue;
                         string slot = postId;
