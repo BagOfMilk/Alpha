@@ -318,5 +318,90 @@ namespace Game.Tests.EditMode
             Assert.IsNull(restoredLog.Get(DefaultQuests.HafiyaId),
                 "квест із сейву, якого нема в пулі, тихо відкидається (як і в колишньому рушії)");
         }
+
+        // ---- «Кам'яна юшка» і «Ринковий побір»: happy-path кінець-в-кінець (Робочий пакет 3) ----
+
+        [Test]
+        public void StoneSoup_JoinHighSkill_ReachesGenerousAndRaisesCommunity()
+        {
+            var cfg = Cfg();
+            var roster = RosterOf(new FakeActor { Id = "trader", Value = 15 }); // поріг 5, запас 10 -> Best (BestMargin=7, Trade не чіпає драбину)
+            var log = new QuestLog(DefaultQuests.All(cfg));
+
+            var run = log.Start(DefaultQuests.StoneSoupId);
+            Assert.IsNotNull(run);
+
+            run.Choose(0); // домовитись
+            var check = run.ResolveCheck(roster, null, 3, cfg);
+
+            Assert.AreEqual(OutcomeBand.Best, check.Band);
+            Assert.IsTrue(check.Terminal);
+            Assert.AreEqual(QuestState.Succeeded, run.State);
+            Assert.AreEqual(DefaultQuests.StoneSoupGenerousKey, run.Current.TextKey);
+            Assert.AreEqual(10, check.Consequence.FactionDeltas["community"]);
+        }
+
+        [Test]
+        public void StoneSoup_SeizeLowSkill_Resisted_LowersCommunityAndRaisesTension()
+        {
+            var cfg = Cfg();
+            var roster = RosterOf(new FakeActor { Id = "bully", Value = 1 }); // явно нижче порогу
+            var log = new QuestLog(DefaultQuests.All(cfg));
+
+            var run = log.Start(DefaultQuests.StoneSoupId);
+            run.Choose(1); // забрати силою
+            var check = run.ResolveCheck(roster, null, 3, cfg);
+
+            Assert.AreEqual(QuestState.Failed, run.State);
+            Assert.AreEqual(DefaultQuests.StoneSoupSeizeResistedKey, run.Current.TextKey);
+            Assert.Less(check.Consequence.FactionDeltas["community"], 0);
+            Assert.Greater(check.Consequence.TensionDelta, 0);
+        }
+
+        /// <summary>
+        /// Persuade сам знижує Best до Good (CheckResolver.BandFor, «підіймає
+        /// підлогу, опускає стелю») — той самий контракт, що вже в
+        /// MaksymCh1.justice_check. Найкращий реально досяжний тут результат —
+        /// Good, не Best.
+        /// </summary>
+        [Test]
+        public void MarketToll_NegotiateHighSkill_ReachesGoodAndRaisesTuharBoyars()
+        {
+            var cfg = Cfg();
+            var roster = RosterOf(new FakeActor { Id = "diplomat", Value = 15 }); // поріг 5, запас 10 -> Best знижений до Good
+            var log = new QuestLog(DefaultQuests.All(cfg));
+
+            var run = log.Start(DefaultQuests.MarketTollId);
+            run.Choose(0); // виторгувати
+            var check = run.ResolveCheck(roster, null, 3, cfg);
+
+            Assert.AreEqual(OutcomeBand.Good, check.Band);
+            Assert.AreEqual(QuestState.Succeeded, run.State);
+            Assert.AreEqual(DefaultQuests.MarketTollNegotiateGoodKey, run.Current.TextKey);
+            Assert.AreEqual(5, check.Consequence.FactionDeltas["tuhar_boyars"]);
+        }
+
+        /// <summary>
+        /// Демонструє зв'язок з Робочим пакетом 1: кривавий шлях цього квесту
+        /// здатний опустити Бояр Тугара достатньо низько, щоб щойно
+        /// полагоджений гейт (<c>CityWorks.OrderDiplomacy</c>) перестав
+        /// пропускати просту дипломатію з ними.
+        /// </summary>
+        [Test]
+        public void MarketToll_ConfrontLowSkill_Failed_LowersTuharBoyarsAndRaisesTension()
+        {
+            var cfg = Cfg();
+            var roster = RosterOf(new FakeActor { Id = "brute", Value = 1 });
+            var log = new QuestLog(DefaultQuests.All(cfg));
+
+            var run = log.Start(DefaultQuests.MarketTollId);
+            run.Choose(1); // прогнати силою
+            var check = run.ResolveCheck(roster, null, 3, cfg);
+
+            Assert.AreEqual(QuestState.Failed, run.State);
+            Assert.AreEqual(DefaultQuests.MarketTollConfrontFailedKey, run.Current.TextKey);
+            Assert.Less(check.Consequence.FactionDeltas["tuhar_boyars"], 0);
+            Assert.Greater(check.Consequence.TensionDelta, 0);
+        }
     }
 }

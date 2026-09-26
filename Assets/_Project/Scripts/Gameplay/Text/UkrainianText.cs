@@ -394,6 +394,29 @@ namespace Game.Gameplay.Text
             AddKey(t, "quest.hafiya.stage2.missing", "Трави нема. «Обійдемося тим, що є.»");
             AddKey(t, "quest.hafiya.stage3.best", "Дитина одужує. Гафія лишає обряд собі — а подяку віддає тобі при всіх.");
             AddKey(t, "quest.hafiya.stage3.worst", "Дитина одужує повільніше, ніж могла б. Гафія цього не забуде.");
+
+            AddKey(t, "quest.stone_soup.offer", "Прибулець без нічого ставить порожній казан біля складу й починає варити з нього юшку — не просить прямо нічого, просто чекає, хто зацікавиться.");
+            AddKey(t, "quest.stone_soup.offer.option.join", "Домовитись по-хорошому — хай кожен докладе по дрібниці");
+            AddKey(t, "quest.stone_soup.offer.option.seize", "Забрати запаси силою — швидше, але страшніше");
+            AddKey(t, "quest.stone_soup.offer.option.ignore", "Пройти повз");
+            AddKey(t, "quest.stone_soup.trade.generous", "Казан виявився повнішим за суму внесків. Люди довше пам'ятають спільну вечерю, ніж окрему дрібницю.");
+            AddKey(t, "quest.stone_soup.trade.modest", "Юшка вийшла — скромна, але справжня. Прибулець іде далі, лишивши по собі теплий спогад.");
+            AddKey(t, "quest.stone_soup.trade.failed", "Ніхто не повірив у казан із каменя. Прибулець іде голодним і невдоволеним.");
+            AddKey(t, "quest.stone_soup.seize.done", "Запаси забрано без опору. Швидко — і люди це запам'ятають надовго.");
+            AddKey(t, "quest.stone_soup.seize.resisted", "Люди стали в двері складу. Довелось відступити — з порожніми руками й гіршою славою.");
+            AddKey(t, "quest.stone_soup.declined", "Прибулець забрав казан і пішов шукати іншу вдачу.");
+
+            AddKey(t, "quest.market_toll.offer", "Хлопчисько попався на дрібній крадіжці на ринку — але замість покарання виявляється, що він діє від імені людей Тугара: «побір» тут звичайна справа.");
+            AddKey(t, "quest.market_toll.offer.option.negotiate", "Виторгувати менший побір");
+            AddKey(t, "quest.market_toll.offer.option.confront", "Прогнати збирача силою");
+            AddKey(t, "quest.market_toll.offer.option.ignore", "Заплатити мовчки й забути");
+            AddKey(t, "quest.market_toll.negotiate.best", "Збирач іде з половиною запрошеного — і з повагою: «Ти вмієш рахувати. Бояри це цінують.»");
+            AddKey(t, "quest.market_toll.negotiate.good", "Побір трохи менший, ніж хотіли. Збирач кривиться, але погоджується.");
+            AddKey(t, "quest.market_toll.negotiate.base", "Побір лишається тим самим — розмова не дала переваги, але й не зашкодила.");
+            AddKey(t, "quest.market_toll.negotiate.worst", "Торг лише роздратував збирача. Він іде, пообіцявши «запам'ятати цю розмову».");
+            AddKey(t, "quest.market_toll.confront.won", "Збирача проганяють з ринку. Хлопчисько зникає — люди Тугара цього так не лишать.");
+            AddKey(t, "quest.market_toll.confront.failed", "Погроза не спрацювала — збирач лише посміхнувся і пішов, забравши своє.");
+            AddKey(t, "quest.market_toll.declined", "Побір заплачено мовчки. Собі дорожче зчиняти бучу через дрібницю.");
         }
 
         // ---- §7.8 Інцидент sick_child (доба 3) ----
@@ -871,6 +894,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.council.result.not_enough_gold", "Золота не досить.");
             AddKey(t, "ui.council.result.not_enough_food", "Їжі не досить.");
             AddKey(t, "ui.council.result.unknown_faction", "Ця фракція раді не відома.");
+            AddKey(t, "ui.council.result.standing_too_low", "Ворожість занадто сильна для простої дипломатії — довіру треба спершу підняти чимось іншим.");
             AddKey(t, "ui.council.result.building_not_built", "Такої будівлі ще нема — вкладати нема куди.");
         }
 

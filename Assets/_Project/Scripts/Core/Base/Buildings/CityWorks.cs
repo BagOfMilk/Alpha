@@ -37,7 +37,16 @@ namespace Game.Core.Base
         /// <summary>Ціль дипломатії/указу не зареєстрована в FactionRegistry.</summary>
         UnknownFaction,
         /// <summary>Інвестиція просить будівлю, якої немає.</summary>
-        BuildingNotBuilt
+        BuildingNotBuilt,
+        /// <summary>
+        /// Щабель довіри до цілі занадто низький для цієї дії (сьогодні —
+        /// Дипломатія з Hostile-фракцією): простою дипломатією не купиш
+        /// прощення в того, хто активно ворожий, довіру треба спершу
+        /// підняти чимось іншим (Указ, квест, подія). Перший реальний
+        /// споживач FactionStandingBand у грі — раніше щабель довіри
+        /// ніде не читався (25.09.2026).
+        /// </summary>
+        StandingTooLow
     }
 
     /// <summary>
@@ -404,6 +413,11 @@ namespace Game.Core.Base
 
             if (!Has(DefaultBuildings.CouncilHall)) return CouncilOrderResult.NoCouncilHall;
             if (factions == null || factions.Get(factionId) == null) return CouncilOrderResult.UnknownFaction;
+            // Перший реальний споживач щабля довіри (Q-37/Q-38, GDD_AMENDMENTS
+            // §8.x): Hostile не купується простою дипломатією — довіру треба
+            // спершу підняти чимось іншим (Указ, квест, подія). Без цієї
+            // перевірки Band ніде в грі не читався взагалі.
+            if (factions.BandOf(factionId) == FactionStandingBand.Hostile) return CouncilOrderResult.StandingTooLow;
             if (today - _lastDiplomacyDay < balance.Faction.DiplomacyCooldownDays) return CouncilOrderResult.OnCooldown;
 
             int price = DiscountedPrice(balance.Faction.DiplomacyGoldCost, TradeDiscount(state, balance, today));

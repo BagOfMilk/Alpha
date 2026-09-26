@@ -771,8 +771,12 @@ namespace Game.Core.Session
         public CouncilOrderResult OrderRaid()
         {
             RequireMorningOrFreePlay();
+            var beforeTuhar = _factions.BandOf(DefaultFactions.TuharBoyars);
+            var beforeCommunity = _factions.BandOf(DefaultFactions.Community);
             var r = _works.OrderRaid(_state, _processor.CurrentDay, _cfg, _factions);
             if (r == CouncilOrderResult.Queued) LogEvent("council.raid.ordered");
+            LogFactionBandChange(DefaultFactions.TuharBoyars, beforeTuhar);
+            LogFactionBandChange(DefaultFactions.Community, beforeCommunity);
             return r;
         }
 
@@ -787,18 +791,40 @@ namespace Game.Core.Session
         public CouncilOrderResult OrderDecree(string favoredFactionId, string costFactionId = null)
         {
             RequireMorningOrFreePlay();
+            var beforeFavored = _factions.BandOf(favoredFactionId);
+            var beforeCost = _factions.BandOf(costFactionId);
             var r = _works.OrderDecree(_state, _processor, _factions, favoredFactionId, costFactionId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied)
                 LogEvent("council.decree", Args("favored", favoredFactionId, "cost", costFactionId ?? string.Empty));
+            LogFactionBandChange(favoredFactionId, beforeFavored);
+            LogFactionBandChange(costFactionId, beforeCost);
             return r;
         }
 
         public CouncilOrderResult OrderDiplomacy(string factionId)
         {
             RequireMorningOrFreePlay();
+            var before = _factions.BandOf(factionId);
             var r = _works.OrderDiplomacy(_state, _factions, factionId, _processor.CurrentDay, _cfg);
             if (r == CouncilOrderResult.Applied) LogEvent("council.diplomacy", Args("factionId", factionId));
+            LogFactionBandChange(factionId, before);
             return r;
+        }
+
+        /// <summary>
+        /// Інваріант 4 для ради: раніше зміна щабля довіри логувалась лише з
+        /// боку наслідків квестів/данжу (<see cref="ApplyFactionDelta"/>) —
+        /// дії ради (Указ/Дипломатія/Облава) міняли ставлення НАПРЯМУ через
+        /// CityWorks, і зміна полоси йшла німо. Той самий приём — звірка
+        /// до/після — але тут виклик не сам рухає ставлення (це робить
+        /// CityWorks усередині), тому знімок беремо ЗОВНІ, до виклику.
+        /// </summary>
+        private void LogFactionBandChange(string factionId, FactionStandingBand before)
+        {
+            if (string.IsNullOrEmpty(factionId)) return;
+            var after = _factions.BandOf(factionId);
+            if (after != before)
+                LogEvent("faction.standing_changed", Args("factionId", factionId, "band", after.ToString()));
         }
 
         public CouncilOrderResult OrderInvestment(string buildingId)
@@ -3624,11 +3650,29 @@ namespace Game.Core.Session
             }
         }
 
+        /// <summary>
+        /// Фікс (25.09.2026, той самий клас бага, що <see cref="LogFactionBandChange"/>
+        /// лагодить у фракцій): раніше визнавався ЛИШЕ жорстко зашитий id
+        /// "scout_horn" — будь-який інший іменний предмет (напр. готовий
+        /// <c>AegisPlate</c>, ніде не викликаний поза тестами) мовчки не
+        /// потрапляв у інвентар. Тепер визначення шукається генерично через
+        /// <see cref="DefaultItems.AllDefinitions"/> (той самий каталог, що
+        /// вже використовує <c>Inventory.RestoreState</c> для відновлення
+        /// сейву) — видається БУДЬ-ЯКИЙ знайдений предмет. Бонус
+        /// forewarn_boost лишається окремою гілкою ПІСЛЯ загального видавання:
+        /// це унікальний для scout_horn код, який Items package свідомо не
+        /// вміє застосувати сам (<see cref="ItemWorldEffect"/>), і додавати
+        /// generic-обробку world-ефектів тут поза обсягом цього фіксу.
+        /// </summary>
         private void GrantNamedItemById(string itemId)
         {
-            if (!string.Equals(itemId, "scout_horn", StringComparison.Ordinal)) return;
+            var definition = DefaultItems.AllDefinitions()
+                .Find(d => string.Equals(d.Id, itemId, StringComparison.Ordinal));
+            if (definition == null) return;
 
-            _inventory.Add(ItemInstance.NamedFrom(DefaultItems.ScoutHorn(_cfg.Items)));
+            _inventory.Add(ItemInstance.NamedFrom(definition));
+
+            if (!string.Equals(itemId, "scout_horn", StringComparison.Ordinal)) return;
 
             // seamsForD1 B3 (ефект «forewarn_boost», D1b): "наступні 2
             // передвісники — раніше/легше" застосовується через адитивний шов
