@@ -292,7 +292,15 @@ bash tools/run-tests.sh                              # ядро, лінт, 1100+
 powershell -File tools/build-unity.ps1               # сцена Game.unity + Build/Windows/Alpha.exe
 Build/Windows/Alpha.exe -autoplay [-autoplay-threshold] -screen-fullscreen 0 -screen-width 1600 -screen-height 900
 Build/Windows/Alpha.exe -autoplay-journal -screen-fullscreen 0 -screen-width 1600 -screen-height 900
+powershell -File tools/run-offscreen.ps1 -GameArgs "-autoplay -autoplay-journal"   # те саме, вікно за краєм екрана
 ```
+**Тури — через `tools/run-offscreen.ps1`** (власник, 25.09.2026: «можем ли мы
+не открывать юнити так что бы перекрывать мне экран?»): скрипт ховає вікно
+гри за правий край усіх моніторів, щойно воно з'являється (~15 мс видно), і
+тримає там до кінця; гра не згорнута, тож малює і знімає як завжди — знімки
+збігаються з видимим прогоном. Аргументи гри — одним рядком у лапках (у
+режимі `-File` «a,b» не стає масивом, і гра стояла на титулі до тайм-ауту).
+Редактор Unity вікна не відкриває взагалі: `build-unity.ps1` іде в `-batchmode`.
 Автопрогон веде справжній інтерфейс ботом, знімає кожен екран у
 `Build/Windows/Screenshots*`, код виходу 0 — тур пройдено, 2 — виняток,
 3 — ключ тексту без перекладу. `AllMechanicsCoverageTests` перевіряє, що

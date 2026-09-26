@@ -80,7 +80,7 @@ namespace Game.Core.Base
             // ---- будівництво ----
             foreach (var id in _works.AdvanceConstruction())
             {
-                _works.ApplyToSlots(_state);
+                _works.OpenPostOf(id, _state);
                 ctx.CityEvents.Add(new CityEvent("city.built." + id, SignalUrgency.Notable, "building:" + id));
             }
 
