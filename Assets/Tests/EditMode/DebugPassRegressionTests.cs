@@ -165,6 +165,29 @@ namespace Game.Tests.EditMode
                 "на закритий пост не призначають — і екран тепер знає це заздалегідь");
         }
 
+        /// <summary>
+        /// Лазарет зрізу відкритий від старту без будівлі (Гафія на пості з
+        /// першої доби). CityWorks.ApplyToSlots на кожну добудову заново
+        /// виставляв «відкрито = будівля стоїть» і закривав його першою ж
+        /// добудованою майстернею — закритий пост не виробляє, і лазарет
+        /// мовчки переставав працювати. Знайдено на знімку туру 25.09.2026.
+        /// </summary>
+        [Test]
+        public void Infirmary_StaysOpen_AfterAnyBuildingCompletes()
+        {
+            var s = new GameSession();
+            s.NewGame(Quick());
+            PlayOpening(s);
+            Assert.IsTrue(s.GetCityView().OpenPosts.Contains("infirmary_bed"), "лазарет відкритий від старту");
+
+            Assert.AreEqual(BuildOrderResult.Started, s.OrderBuilding("workshop"));
+            BotRunner.Drive(s, new StewardPolicy(), 3);
+            Assert.IsTrue(s.GetCityView().Built.Any(b => b.Id == "workshop"), "майстерня мала добудуватись");
+
+            Assert.IsTrue(s.GetCityView().OpenPosts.Contains("infirmary_bed"),
+                "добудова майстерні закрила лазарет — пост Гафії перестав виробляти");
+        }
+
         // ============ автосейв доходить до оболонки ============
 
         [Test]

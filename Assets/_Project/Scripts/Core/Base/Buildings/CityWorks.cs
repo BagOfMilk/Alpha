@@ -37,7 +37,16 @@ namespace Game.Core.Base
         /// <summary>Ціль дипломатії/указу не зареєстрована в FactionRegistry.</summary>
         UnknownFaction,
         /// <summary>Інвестиція просить будівлю, якої немає.</summary>
-        BuildingNotBuilt
+        BuildingNotBuilt,
+        /// <summary>
+        /// Щабель довіри до цілі занадто низький для цієї дії (сьогодні —
+        /// Дипломатія з Hostile-фракцією): простою дипломатією не купиш
+        /// прощення в того, хто активно ворожий, довіру треба спершу
+        /// підняти чимось іншим (Указ, квест, подія). Перший реальний
+        /// споживач FactionStandingBand у грі — раніше щабель довіри
+        /// ніде не читався (25.09.2026).
+        /// </summary>
+        StandingTooLow
     }
 
     /// <summary>
@@ -404,6 +413,11 @@ namespace Game.Core.Base
 
             if (!Has(DefaultBuildings.CouncilHall)) return CouncilOrderResult.NoCouncilHall;
             if (factions == null || factions.Get(factionId) == null) return CouncilOrderResult.UnknownFaction;
+            // Перший реальний споживач щабля довіри (Q-37/Q-38, GDD_AMENDMENTS
+            // §8.x): Hostile не купується простою дипломатією — довіру треба
+            // спершу підняти чимось іншим (Указ, квест, подія). Без цієї
+            // перевірки Band ніде в грі не читався взагалі.
+            if (factions.BandOf(factionId) == FactionStandingBand.Hostile) return CouncilOrderResult.StandingTooLow;
             if (today - _lastDiplomacyDay < balance.Faction.DiplomacyCooldownDays) return CouncilOrderResult.OnCooldown;
 
             int price = DiscountedPrice(balance.Faction.DiplomacyGoldCost, TradeDiscount(state, balance, today));
@@ -643,6 +657,26 @@ namespace Game.Core.Base
                 if (string.IsNullOrEmpty(def.OpensSlotId)) continue;
                 var slot = state.GetSlot(def.OpensSlotId);
                 if (slot != null) slot.Unlocked = Has(def.Id);
+            }
+        }
+
+        /// <summary>
+        /// Щойно добудована будівля відкриває СВІЙ пост — і лише його. Раніше
+        /// крок міських робіт кликав тут повну <see cref="ApplyToSlots"/>, і
+        /// кожна добудова заново закривала пости, відкриті без будівлі:
+        /// лазарет зрізу (Гафія на ньому з першої доби, FirstHourWorld)
+        /// закривався першою ж майстернею, а закритий пост не виробляє —
+        /// лазарет мовчки переставав працювати (дебаг 25.09.2026, знайдено на
+        /// знімку туру). Повна синхронізація лишається для побудови світу.
+        /// </summary>
+        public void OpenPostOf(string buildingId, BaseState state)
+        {
+            if (state == null || string.IsNullOrEmpty(buildingId)) return;
+            foreach (var def in DefaultBuildings.All())
+            {
+                if (def.Id != buildingId || string.IsNullOrEmpty(def.OpensSlotId)) continue;
+                var slot = state.GetSlot(def.OpensSlotId);
+                if (slot != null) slot.Unlocked = true;
             }
         }
 

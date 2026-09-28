@@ -251,6 +251,27 @@ namespace Game.Tests.EditMode
                 c.Works.OrderDiplomacy(c.State, c.Factions, DefaultFactions.Horde, 1, cfg));
         }
 
+        /// <summary>
+        /// Перший реальний споживач FactionStandingBand (Робочий пакет 1,
+        /// 25.09.2026): раніше щабель довіри ніде в грі не читався. Hostile
+        /// не купується простою дипломатією — грошей теж не списує.
+        /// </summary>
+        [Test]
+        public void Diplomacy_WithHostileFaction_IsRejected_NoGoldSpent()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg);
+            Give(c.State, 100);
+            c.Factions.ApplySocialConsequence(DefaultFactions.Horde, -999); // -> Hostile (поріг 20)
+            Assert.AreEqual(FactionStandingBand.Hostile, c.Factions.BandOf(DefaultFactions.Horde));
+
+            int goldBefore = c.State.Resources.Get(ResourceType.Gold);
+            var result = c.Works.OrderDiplomacy(c.State, c.Factions, DefaultFactions.Horde, 1, cfg);
+
+            Assert.AreEqual(CouncilOrderResult.StandingTooLow, result);
+            Assert.AreEqual(goldBefore, c.State.Resources.Get(ResourceType.Gold));
+        }
+
         // ================= Інвестиція =================
 
         [Test]

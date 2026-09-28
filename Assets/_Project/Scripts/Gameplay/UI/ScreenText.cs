@@ -477,6 +477,7 @@ namespace Game.Gameplay.UI
                 case CouncilOrderResult.NotEnoughGold: return UkrainianText.Get("ui.council.result.not_enough_gold", g);
                 case CouncilOrderResult.NotEnoughFood: return UkrainianText.Get("ui.council.result.not_enough_food", g);
                 case CouncilOrderResult.UnknownFaction: return UkrainianText.Get("ui.council.result.unknown_faction", g);
+                case CouncilOrderResult.StandingTooLow: return UkrainianText.Get("ui.council.result.standing_too_low", g);
                 default: return UkrainianText.Get("ui.council.result.building_not_built", g);
             }
         }

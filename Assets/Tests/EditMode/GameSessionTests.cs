@@ -1260,6 +1260,67 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
+        /// Інваріант 4 для ради (Робочий пакет 1, 25.09.2026): раніше зміна
+        /// щабля довіри від дій ради йшла НІМО — сигнал (LogEvent) писав лише
+        /// шлях наслідків квестів/данжу (<c>ApplyFactionDelta</c>), раду він
+        /// не бачив. Стартове ставлення Community — 50 (Neutral, поріг
+        /// 40-59), DiplomacyFactionDelta = 10 -> 60 перетинає в Awaiting —
+        /// та сама Дипломатія, що вже в <c>OrderBuilding_And_CouncilOrders_ReachCityWorks</c>.
+        /// </summary>
+        [Test]
+        public void OrderDiplomacy_CrossingBand_LogsFactionStandingChanged()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            var result = s.OrderDiplomacy(Game.Core.Factions.DefaultFactions.Community);
+            Assert.AreEqual(CouncilOrderResult.Applied, result);
+
+            bool sawBandChanged = false;
+            foreach (var e in s.DayLog)
+                if (e.Key == "faction.standing_changed" && e.Args["factionId"] == Game.Core.Factions.DefaultFactions.Community)
+                    sawBandChanged = true;
+            Assert.IsTrue(sawBandChanged, "Дипломатія перетнула поріг 60 (Neutral->Awaiting), але сигнал не прозвучав");
+        }
+
+        /// <summary>
+        /// Робочий пакет 2 (25.09.2026, той самий клас бага, що фракції):
+        /// раніше <c>GrantNamedItemById</c> визнавав ЛИШЕ жорстко зашитий
+        /// "scout_horn" — <c>AegisPlate</c>, готовий і покритий тестами,
+        /// ніде в грі не видавався (мертвий контент). Метод приватний —
+        /// той самий прийом рефлексії, що вже <c>LoyaltyRulesTests.
+        /// InvokeAdvanceCycle</c> для internal/private члена ядра.
+        /// </summary>
+        [Test]
+        public void GrantNamedItemById_UnknownScoutHorn_NowReachesInventory()
+        {
+            var s = new GameSession();
+            s.NewGame(SkipCreationOptions());
+            FastForwardOpeningToMorning(s);
+
+            Assert.IsFalse(HasItem(s, "aegis_plate"), "до фіксу предмета в інвентарі бути не повинно");
+
+            InvokeGrantNamedItemById(s, "aegis_plate");
+
+            Assert.IsTrue(HasItem(s, "aegis_plate"), "aegis_plate — готове визначення (DefaultItems.AegisPlate), тепер має видаватись генерично");
+        }
+
+        private static bool HasItem(GameSession s, string itemId)
+        {
+            foreach (var item in s.GetStash())
+                if (item.Definition.Id == itemId) return true;
+            return false;
+        }
+
+        private static void InvokeGrantNamedItemById(GameSession s, string itemId)
+        {
+            var method = typeof(GameSession).GetMethod("GrantNamedItemById",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            method.Invoke(s, new object[] { itemId });
+        }
+
+        /// <summary>
         /// Фікс-ревью (блокер, знайдено тур-автоплеєм §"тактичні бої"):
         /// PreviewExpedition(Delve) кличе BuildDungeonRoomView(rooms[0]) ДО
         /// DepartExpedition, коли _dungeon ще null — QuietBestActorId

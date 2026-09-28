@@ -214,24 +214,24 @@ namespace Game.Gameplay.UI
                 }
                 GUILayout.EndHorizontal();
 
-                // Закритий пост (його будівля ще не стоїть) людей не приймає:
-                // раніше тут стояли ті самі кнопки «Призначити», і клік мовчки
-                // нічого не робив.
+                // «Призначити» — лише на відкритий порожній пост. Раніше кнопки
+                // стояли й під зайнятими, і під закритими постами (будівля ще не
+                // стоїть), а клік мовчки нічого не робив.
                 bool open = openPosts == null || Contains(openPosts, postId);
-                if (!open)
+                if (occupant == null && !open)
                 {
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(24f);
                     GUILayout.Label(ScreenText.PostLockedReason(postId, g), AlphaSkin.Tooltip);
                     GUILayout.EndHorizontal();
                 }
-                else if (roster?.Companions != null)
+                else if (occupant == null && roster?.Companions != null)
                 {
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(24f);
                     foreach (var c in roster.Companions)
                     {
-                        if (c.Id == occupant || !string.IsNullOrEmpty(c.AssignedSlotId)) continue;
+                        if (!string.IsNullOrEmpty(c.AssignedSlotId)) continue;
                         var legality = ScreenText.AssignCandidateLegality(c);
                         if (!legality.Enabled) continue;
                         string slot = postId;
@@ -390,7 +390,7 @@ namespace Game.Gameplay.UI
                 DrawCouncilCostEffect("ui.council.diplomacy", g, "gold", CouncilFaction.DiplomacyGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var factionId in FactionIds)
-                    DrawCouncilFactionButton(shell, g, factionId, economy, CouncilFaction.DiplomacyGoldCost, fid => shell.Session.OrderDiplomacy(fid));
+                    DrawCouncilFactionButton(shell, g, factionId, economy, CouncilFaction.DiplomacyGoldCost, fid => shell.Session.OrderDiplomacy(fid), requiresGoodStanding: true);
                 GUILayout.EndHorizontal();
             });
 
@@ -454,15 +454,37 @@ namespace Game.Gameplay.UI
             GUILayout.Label(cost + " — " + effect, AlphaSkin.Tooltip);
         }
 
-        private static void DrawCouncilFactionButton(GameShell shell, Gender g, string factionId, EconomyView economy, int goldCost, System.Func<string, CouncilOrderResult> order)
+        private static void DrawCouncilFactionButton(GameShell shell, Gender g, string factionId, EconomyView economy, int goldCost, System.Func<string, CouncilOrderResult> order, bool requiresGoodStanding = false)
         {
+            string label = UkrainianText.Get("faction." + factionId, g);
+
+            // Гейт щабля довіри (25.09.2026, перший реальний споживач
+            // FactionStandingBand — раніше він ніде не читався): Дипломатія
+            // з Hostile-фракцією сіріє з причиною ДО кліку, а не мовчки
+            // відхиляється всередині CityWorks.OrderDiplomacy.
+            if (requiresGoodStanding && IsHostile(shell, factionId))
+            {
+                Widgets.DisabledButton(label, UkrainianText.Get("ui.council.result.standing_too_low", g));
+                return;
+            }
+
             bool canAfford = economy == null || economy.Gold >= goldCost;
             if (canAfford)
             {
-                if (Widgets.SecondaryButton(UkrainianText.Get("faction." + factionId, g)))
+                if (Widgets.SecondaryButton(label))
                     shell.TryRunReported(() => order(factionId), r => ScreenText.CouncilFailure(r, g));
             }
-            else Widgets.DisabledButton(UkrainianText.Get("faction." + factionId, g), UkrainianText.Get("ui.council.result.not_enough_gold", g));
+            else Widgets.DisabledButton(label, UkrainianText.Get("ui.council.result.not_enough_gold", g));
+        }
+
+        private static bool IsHostile(GameShell shell, string factionId)
+        {
+            var view = shell.Session.GetFactionsView();
+            if (view?.Factions == null) return false;
+            foreach (var f in view.Factions)
+                if (string.Equals(f.Id, factionId, System.StringComparison.Ordinal))
+                    return string.Equals(f.Band, "Hostile", System.StringComparison.Ordinal);
+            return false;
         }
 
         // ===================== Вилазка =====================
