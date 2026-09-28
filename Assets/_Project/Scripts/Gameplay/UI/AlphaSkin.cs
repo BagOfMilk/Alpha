@@ -54,7 +54,7 @@ namespace Game.Gameplay.UI
 
         // ================= палітра бою (Бій v2, docs/COMBAT_V2.md §2) =================
         // Один сталий сенс на весь екран бою: колір ніколи не переозначається
-        // для іншої мети в тому самому кадрі (REFS.Principles). Значення —
+        // для іншої мети в тому самому кадрі (Статут UI-01). Значення —
         // точний переклад таблиці §2 (RGB 0..1) у байти.
         public static readonly Color32 BattlePlayerSide = new Color32(77, 153, 255, 255);
         public static readonly Color32 BattleEnemySide = new Color32(235, 71, 56, 255);

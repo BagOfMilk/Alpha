@@ -2441,7 +2441,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.cover.half", "Укриття: половинне");
             AddKey(t, "ui.battle.cover.full", "Укриття: повне");
 
-            // ---- ціна дії, показана ДО кліку (аудит HUD пп.4-5, REFS «ціна дії видно в точці рішення») ----
+            // ---- ціна дії, показана ДО кліку (аудит HUD пп.4-5, Статут UI-02) ----
             AddKey(t, "ui.battle.ap_cost", "Ціна: {cost} ОД");
             // Картка юніта (§3): «Спис · удар 4 ОД · дальність 1» — буквально за прикладом специфікації.
             AddKey(t, "ui.battle.weapon.detail", "{name} · удар {cost} ОД · дальність {range}");
