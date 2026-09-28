@@ -648,6 +648,7 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "enemy.horde_skirmisher", "Застрільник орди");
             AddKey(t, "enemy.horde_raider", "Наскочник орди");
+            AddKey(t, "enemy.horde_vanguard", "Сокирник орди");
         }
 
         /// <summary>
@@ -788,6 +789,9 @@ namespace Game.Gameplay.Text
             AddKey(t, "weapon.horde_spear", "Спис");
             AddKey(t, "weapon.boyar_saber", "Шабля боярина");
             AddKey(t, "weapon.burunda_mace", "Булава Бурунди");
+            // Поправка №11: вороги й зброя бойових кімнат данжів.
+            AddKey(t, "weapon.horde_axe", "Сокира");
+            AddKey(t, "weapon.bandit_cleaver", "Тесак");
 
             AddKey(t, "ability.lunge", "Ривок");
             AddKey(t, "ability.set_trap", "Пастка");

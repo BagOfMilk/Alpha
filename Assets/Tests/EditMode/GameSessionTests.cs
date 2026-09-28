@@ -1554,7 +1554,7 @@ namespace Game.Tests.EditMode
 
             var room = view.CurrentRoom;
             Assert.IsNotNull(room);
-            Assert.AreEqual(2, room.EnemyCount, "room1 (scouts_left_behind) несе двох horde_skirmisher — owner: 'тактичний бій: N ворогів'");
+            Assert.AreEqual(2, room.EnemyCount, "room1 (scouts_left_behind) несе двох ворогів (horde_vanguard + horde_scout, Поправка №11) — owner: 'тактичний бій: N ворогів'");
             Assert.IsTrue(room.HasQuietBypass);
             Assert.IsTrue(room.QuietHasCandidate, "owner: 'the quiet candidate'");
             Assert.AreEqual("maksym", room.QuietBestActorId, "Максим — Survival 5, найкращий у party на перший QuietCheck (Survival≥5)");

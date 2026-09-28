@@ -203,7 +203,8 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(run.AwaitingBattle);
             Assert.IsNotNull(run.PendingBattle);
             Assert.AreEqual("arena_camp_yard_8x8", run.PendingBattle.ArenaKey);
-            CollectionAssert.AreEqual(new[] { "horde_skirmisher", "horde_skirmisher" }, run.PendingBattle.EnemyIds);
+            // Поправка №11: кімната перебудована під «коротко, але тяжко».
+            CollectionAssert.AreEqual(new[] { "horde_vanguard", "horde_scout" }, run.PendingBattle.EnemyIds);
             CollectionAssert.AreEqual(new[] { "protagonist", "maksym", "myroslava" }, run.PendingBattle.PartyIds);
         }
 

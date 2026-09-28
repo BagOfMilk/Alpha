@@ -53,8 +53,18 @@ namespace Game.Core.Dungeons
                 topicId: "dungeon.abandoned_camp.room1"));
             room1.QuietChecks.Add(new CheckRequest(SkillKeys.Persuade, 5, ApproachForm.Persuade,
                 topicId: "dungeon.abandoned_camp.room1"));
-            room1.EnemyIds.Add("horde_skirmisher");
-            room1.EnemyIds.Add("horde_skirmisher");
+            // Поправка №11 (25.09.2026, дослівно власника: «обрізання на 5-му
+            // раунді - обрізання не треба, це дизайнерсьеке рішення, щоб данжі
+            // були побудовані так що саме бої в ниж були короткими але тяжкими»):
+            // раніше тут стояли два горд-розвідники (Skirmisher, лук 2-4) —
+            // під грамотним автобоєм 2v3 вирішувалось за 1-2 раунди без
+            // жодного ризику (перемога 20/20, ніхто не падав), під наївним —
+            // теж рідко довше 5 раундів, але й рідко тяжко. Менше ворогів,
+            // небезпечніший (HordeVanguard: Ривок з контакту, вища точність,
+            // урон без броні) + один розвідник на дистанції — рішення з
+          // першого ходу, а не розмінна відсидка. SkirmishPacingTests тримає ціль.
+            room1.EnemyIds.Add("horde_vanguard");
+            room1.EnemyIds.Add("horde_scout");
 
             var room2 = new DungeonRoomDefinition("hidden_cache", "dungeon.room2.title", DungeonRoomKind.Cache)
             {
@@ -90,6 +100,13 @@ namespace Game.Core.Dungeons
             };
             room1.QuietChecks.Add(new CheckRequest(SkillKeys.Survival, 4, ApproachForm.Neutral,
                 topicId: "dungeon.old_hermitage.room1"));
+            // Поправка №11 (розвідка SkirmishPacingTests, 25.09.2026): цей рядок
+            // до сьогодні не резолвився в жоден EnemyDefinition —
+            // GameSession.ResolveEnemyById повертав null, CombatBattleBuilder
+            // мовчки пропускав спавн (жоден каталог не знав "forest_bandit"/
+            // "enemy.forest_bandit"), і кровавий шлях цієї кімнати розв'язувався
+            // проти НУЛЯ ворогів: перемога за один раунд без жодного ризику.
+            // DefaultCombatContent.ForestBandit() тепер заповнює цей id.
             room1.EnemyIds.Add("forest_bandit");
 
             var room2 = new DungeonRoomDefinition("hermitage_cellar", "dungeon.hermitage.room2.title",

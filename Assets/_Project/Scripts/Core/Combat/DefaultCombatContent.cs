@@ -41,6 +41,20 @@ namespace Game.Core.Combat
             ApCost = 4, OptimalRange = 1, ShredOnHit = 1, StatusOnHit = StatusType.KnockedDown
         };
 
+        /// <summary>Сокира сокирника орди (Поправка №11) — б'є боляче й без броні, щоб короткий бій кімнати данжу лишався тяжким без роздування HP.</summary>
+        public static WeaponDefinition HordeAxe() => new WeaponDefinition("weapon.horde_axe", "horde_axe", SkillType.Melee)
+        {
+            Damage = DamageType.Ballistic, DamageMin = 6, DamageMax = 9, CritDamageBonus = 3,
+            ApCost = 3, OptimalRange = 1, ShredOnHit = 1
+        };
+
+        /// <summary>Тесак лісового розбійника (Поправка №11) — одинак старого скиту б'є за двох.</summary>
+        public static WeaponDefinition BanditCleaver() => new WeaponDefinition("weapon.bandit_cleaver", "bandit_cleaver", SkillType.Melee)
+        {
+            Damage = DamageType.Ballistic, DamageMin = 6, DamageMax = 9, CritDamageBonus = 3,
+            ApCost = 4, OptimalRange = 1
+        };
+
         // ---- Здібності (спільний пул: і напарники за гейтом скіла, і вороги напряму) ----
 
         /// <summary>Ривок у ближній контакт — клінч-юніти поза дистанцією.</summary>
@@ -135,6 +149,53 @@ namespace Game.Core.Combat
                 Abilities = { Lunge() }
             };
 
+        /// <summary>
+        /// Сокирник орди — прорив покинутого табору (Поправка №11, 25.09.2026 —
+        /// дослівно: «обрізання на 5-му раунді - обрізання не треба, це
+        /// дизайнерсьеке рішення, щоб данжі були побудовані так що саме бої в
+        /// ниж були короткими але тяжкими»): бойова кімната данжу мала бути КОРОТКОЮ ТА
+        /// ТЯЖКОЮ, а не роздутою по HP — тому це не «ще один розвідник», а
+        /// одна небезпечна ціль з високим уроном і без броні (легко влучити,
+        /// боляче отримати), з Ривком (спільний пул здібностей) — зустрічає
+        /// відряд ударом ще в перший хід, а не тільки після зближення пішки.
+        /// SkirmishPacingTests тримає це число.
+        /// </summary>
+        public static EnemyDefinition HordeVanguard() =>
+            new EnemyDefinition("enemy.horde_vanguard", "horde_vanguard", EnemyRole.Breacher, EnemyFamily.Human)
+            {
+                MaxHp = 15, MaxAp = 8, Accuracy = 80, Defense = 0, Initiative = 7, CritChance = 8, Armor = 0,
+                Weapon = HordeAxe(),
+                Abilities = { Lunge() }
+            };
+
+        /// <summary>
+        /// Одинак старого скиту (Поправка №11): раніше <c>forest_bandit</c>
+        /// не мав жодного EnemyDefinition — GameSession.ResolveEnemyById
+        /// мовчки повертав null, CombatBattleBuilder мовчки пропускав спавн
+        /// (<c>if (def == null) continue;</c>), і кімната «Дозор скиту»
+        /// розв'язувалась кровавим шляхом проти НУЛЯ ворогів — перемога за
+        /// один раунд без жодного ризику. Один ворог на всю кімнату (за
+        /// задумом сайту — «менший данж») тепер несе загрозу пари звичайних
+        /// розвідників сам: живучий настільки, щоб пережити перший залп загону
+        /// (інакше бій вирішувала ініціатива — ворог гинув, не вдаривши), а
+        /// тесак за 4 ОД дає два удари за хід, а не три (інакше одинак сам
+        /// вибивав загін). Той самий Ривок з контакту. Числа підібрані
+        /// SkirmishPacingTests: 2–3 раунди, перемога, у типовому бою падає боєць.
+        ///
+        /// Родовий ворог (не іменний персонаж) — Поправка №2 («Першоджерело»)
+        /// на нього не поширюється так само, як і на horde_scout/
+        /// horde_skirmisher/tuhar_boyar/horde_vanguard: тут ім'я — роль
+        /// («лісовий розбійник»), а не переосмислена історична особа з
+        /// суспільного надбання.
+        /// </summary>
+        public static EnemyDefinition ForestBandit() =>
+            new EnemyDefinition("enemy.forest_bandit", "forest_bandit", EnemyRole.Breacher, EnemyFamily.Human)
+            {
+                MaxHp = 26, MaxAp = 9, Accuracy = 82, Defense = 1, Initiative = 6, CritChance = 10, Armor = 0,
+                Weapon = BanditCleaver(),
+                Abilities = { Lunge() }
+            };
+
         /// <summary>Каталог врагів за id (EnemySpawn.EnemyDefinitionId → EnemyDefinition) — вхід у CombatBattleBuilder.</summary>
         public static Dictionary<string, EnemyDefinition> EnemyCatalog()
         {
@@ -142,12 +203,16 @@ namespace Game.Core.Combat
             var skirmisher = HordeSkirmisher();
             var boyar = TuharBoyar();
             var burunda = Burunda();
+            var vanguard = HordeVanguard();
+            var bandit = ForestBandit();
             return new Dictionary<string, EnemyDefinition>
             {
                 [scout.Id] = scout,
                 [skirmisher.Id] = skirmisher,
                 [boyar.Id] = boyar,
-                [burunda.Id] = burunda
+                [burunda.Id] = burunda,
+                [vanguard.Id] = vanguard,
+                [bandit.Id] = bandit
             };
         }
 
