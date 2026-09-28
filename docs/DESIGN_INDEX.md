@@ -5,6 +5,10 @@
 > *що куди вливати в GDD v7*. Якщо покажчик розходиться з поправкою чи GDD —
 > правий документ, а покажчик виправляється.
 >
+> **GDD v7 від 28.09.2026:** поправки №1–№11 влито в тіло `GDD.md`; пункти чернеток
+> позначені там «[ЧЕРНЕТКА №N]», відкриті питання — «[ВІДКРИТЕ ПИТАННЯ — DESIGN_INDEX §3]»,
+> розбіжності з кодом — «[РОЗБІЖНІСТЬ З КОДОМ — DESIGN_INDEX §4.1]».
+>
 > **Старшинство:** поправки (`GDD_AMENDMENTS.md`) > GDD (`GDD.md`) >
 > дизайн-доки (`DESIGN_CHARTER.md`, `SETTLEMENT_LAYER.md`, `FIRST_HOUR.md`,
 > `TEST_BUILD.md`, `COMBAT_V2.md`, `HUD_DESIGN.md`) > код. Поправка зі статусом
@@ -23,9 +27,10 @@
 > філософією якою ти притрумуватися, а якщо є питання то спершу йшов дивився
 > рефенеси. Але так, ми все ще робимо та тестуємо механіки.»
 
-Власник обрав **GDD v7 — влити поправки в тіло**. Тіло `GDD.md` не
-оновлювалося з v6 (серпень 2026); до виходу v7 чинна картина = GDD v6 +
-поправки + дизайн-доки. Мапа §4 — робочий інструмент редакторів v7.
+Власник обрав **GDD v7 — влити поправки в тіло**. v7 вийшов 28.09.2026: тіло
+`GDD.md` відповідає затвердженим поправкам і коду, чернетки позначені в тексті,
+`GDD_AMENDMENTS.md` лишається історією рішень. Мапа §4 — журнал того, що куди
+влито; номери рядків у ній — на HEAD `fbdfc0a` (GDD v6).
 
 ---
 
@@ -34,23 +39,24 @@
 Колонка «Статус» — рівно те, що написано в шапці поправки. №1–№4.1 шапки
 статусу не мають: це «Рішення власника проєкту» від початку, записані до
 того, як з'явилися чернетки. «Влито в GDD» — чи перенесено текст у тіло
-`GDD.md` (для всіх поки «ні»: v7 у роботі).
+`GDD.md` (v7, 28.09.2026): «так» — затверджене влито; «так, як ЧЕРНЕТКА» —
+влито з позначкою «[ЧЕРНЕТКА №N]», старшинства не набуває.
 
 <!-- registry:start -->
 | № | Назва | Дата | Статус | Влито в GDD | Де в коді (ключове) | Охоронці |
 |---|---|---|---|---|---|---|
-| №1 | Стовп «Ненасильство понад усе» | 2026-08-12 | ЗАТВЕРДЖЕНО — рішення власника з початку | ні | `Core/World/IncidentDefinition.cs` (`HasQuietPath`), `Core/Pressure/TensionDrivers.cs` (`PlaystyleBlood`), `Core/Settlement/FearState.cs` | `IncidentTests`, `OpeningContentTests` (`HasQuietPath`), `BloodyPathCostTests.Blood_IsNotStrictlyBetterThanQuiet`, `Blood_RaisesTension_ByItsOwnDriver` |
-| №2 | «Персонажі з суспільного надбання» | 2026-08-12 | ЗАТВЕРДЖЕНО — рішення власника з початку | ні | `Core/Characters/CharacterCard.cs` (`SourceTier`, першоджерело), `Core/Characters/OpeningCast.cs` | `CharacterCardTests`, `PresenceAndCatalogTests` |
-| №3 | «Живий шар поселення» | 2026-08-12 | ЗАТВЕРДЖЕНО — рішення власника з початку | ні | `Core/Pressure/`, `Core/World/` (`WorldPulse`, `PressureTrack`), `Core/Signals/`, `Core/Checks/CheckResolver.cs`, `Core/Loop/DayStepOrder.cs` | `ArchitectureGuardTests.Core_ContainsNoRandom`, `CampaignPacingTests.Pacing_BandChangeIsNeverMute`, `CheckResolverTests`, `NightAndReportTests`, `WorldPulseTests`, `LoopRepairTests`, `SignalComposerTests` |
-| №4 | «Прокорм поселення» | 2026-08-29 | ЗАТВЕРДЖЕНО — рішення власника з початку | ні | `Core/Pressure/TensionDrivers.cs` (`Hunger`), `Core/Base/SettlementCycle.cs`, `Core/Base/BaseState.cs` | `HungerTests`, `SettlementCycleTests.Hunger_ReachesTension_ThroughTheBridge`, `EconomyClosureTests` |
-| №4.1 | «Золото — валюта, а не ресурс» | 2026-09-20 | ЗАТВЕРДЖЕНО — рішення власника з початку | ні | `Core/Economy/ResourceType.cs`, `Core/Base/ProductionCalculator.cs` | `EconomyClosureTests` |
-| №5 | «Люди з іменами» | 2026-09-05 | ЗАТВЕРДЖЕНО власником 23.09.2026 («го») | ні | `Core/Characters/CharacterCard.cs`, `Core/Expeditions/`, `Core/Base/ExpeditionRunner.cs`, `Core/Scenes/`, `Core/World/OpeningContent.cs`, `Gameplay/Text/UkrainianText.cs` | `CharacterCardTests`, `PresenceAndCatalogTests`, `ExpeditionPartyTests`, `ExpeditionRunnerDepartureTests`, `SceneTests`, `OpeningContentTests`, `UkrainianTextCoverageTests` |
-| №6 | «Місто відповідає» | 2026-09-23 | ЗАТВЕРДЖЕНО власником 23.09.2026 («го») | ні | `Core/Base/Buildings/` (`CityWorks`, `CityWorksStep`, `PopulationStep`, `Steward`, `DefaultBuildings`), `Core/Settlement/PopulationState.cs` | `CityWorksTests.Valve_GoodPlay_MakesADifference`, `CityWorksTests.Steward_StaffsAnOpenedPost_WithTheBestFreeHand`, `CouncilTests` |
-| №7 | «Тестова збірка: усі механіки одразу» | 2026-09-23 | ЧЕРНЕТКА (рішення власника 23–24.09; §7.9 — окрема чернетка) | ні | `Core/Session/GameSession.cs`, `FirstHourWorld.cs`, `TestBuildTensionPace.cs`, `NewGameOptions.cs`; `Core/Combat`, `Core/Dungeons`, `Core/Companions`, `Core/Quests`, `Core/Story` | `AllMechanicsCoverageTests`, `MechanicsJournalCompletionTests`, `FreshSessionRestoreTests`, `TestBuildTensionPaceTests`, `CompanionDramaTests` |
-| №8 | «Відповіді по §5.7 і §6.6» | 2026-09-24 | ЧЕРНЕТКА (відповіді власника з опитування) | ні | переважно **не реалізовано**: №8.3 немає; №8.4 «старт без будівель» суперечить `FirstHourWorld.cs:166-176`; №8.2 Сумангуру відсутній (`OpeningCast.cs:64` — «Командир орди») | немає |
-| №9 | «Драбина кризи не обіцяє того, що забороняє відкат» | 2026-09-25 | ЧЕРНЕТКА — пропозиція асистента, не рішення власника | ні | `Core/World/PressureTrack.cs` (`HoldsForewarnings`), `Core/World/WorldPulse.cs` | `CampaignPacingTests.Pacing_CrisisLadder_Level3_AlwaysLeadsToTheCrisis`, `WorldPulseTests.Pulse_CrisisLadder_NeverPromisesACrisisTheCooldownForbids` |
-| №10 | «Фракції отримують споживача, без повного стат-блоку» | 2026-09-25 | ЧЕРНЕТКА (без цитати власника) | ні | `Core/Base/Buildings/CityWorks.cs` (`OrderDiplomacy`, `StandingTooLow`), `Core/Session/GameSession.cs` (`faction.standing_changed`), `Core/Quests/DefaultQuests.cs` | `CouncilTests.Diplomacy_WithHostileFaction_IsRejected_NoGoldSpent`, `GameSessionTests.OrderDiplomacy_CrossingBand_LogsFactionStandingChanged` |
-| №11 | «Малий бій — короткий, але тяжкий» | 2026-09-25 | ЧЕРНЕТКА — рішення власника дослівно, числа асистента | ні | `Core/Dungeons/DefaultDungeon.cs`, `Core/Balance/CombatBalance.cs` (`RoundCap` — запобіжник) | `SkirmishPacingTests`, `CombatContentIntegrityTests` |
+| №1 | Стовп «Ненасильство понад усе» | 2026-08-12 | ЗАТВЕРДЖЕНО — рішення власника з початку | так (v7: Е0 §0.1, US-9.2, US-10.2, US-11.1, US-13.2, Е6.2, Е15, US-16.3, Дод. Б, В) | `Core/World/IncidentDefinition.cs` (`HasQuietPath`), `Core/Pressure/TensionDrivers.cs` (`PlaystyleBlood`), `Core/Settlement/FearState.cs` | `IncidentTests`, `OpeningContentTests` (`HasQuietPath`), `BloodyPathCostTests.Blood_IsNotStrictlyBetterThanQuiet`, `Blood_RaisesTension_ByItsOwnDriver` |
+| №2 | «Персонажі з суспільного надбання» | 2026-08-12 | ЗАТВЕРДЖЕНО — рішення власника з початку | так (v7: Е0 §0.3, Е9, US-3.14, US-14.3; сеттинг — відкрите, §3 п. 6) | `Core/Characters/CharacterCard.cs` (`SourceTier`, першоджерело), `Core/Characters/OpeningCast.cs` | `CharacterCardTests`, `PresenceAndCatalogTests` |
+| №3 | «Живий шар поселення» | 2026-08-12 | ЗАТВЕРДЖЕНО — рішення власника з початку | так (v7: Е0, Е1, US-1.5, US-2.6, Е7, US-7.6, US-8.1, US-8.2, Е11, Е12, US-17.2, US-18.5, US-18.6, Дод. А–В) | `Core/Pressure/`, `Core/World/` (`WorldPulse`, `PressureTrack`), `Core/Signals/`, `Core/Checks/CheckResolver.cs`, `Core/Loop/DayStepOrder.cs` | `ArchitectureGuardTests.Core_ContainsNoRandom`, `CampaignPacingTests.Pacing_BandChangeIsNeverMute`, `CheckResolverTests`, `NightAndReportTests`, `WorldPulseTests`, `LoopRepairTests`, `SignalComposerTests` |
+| №4 | «Прокорм поселення» | 2026-08-29 | ЗАТВЕРДЖЕНО — рішення власника з початку | так (v7: US-1.3, Е6.2, Е7, Е8, US-11.1, Е15, US-16.2) | `Core/Pressure/TensionDrivers.cs` (`Hunger`), `Core/Base/SettlementCycle.cs`, `Core/Base/BaseState.cs` | `HungerTests`, `SettlementCycleTests.Hunger_ReachesTension_ThroughTheBridge`, `EconomyClosureTests` |
+| №4.1 | «Золото — валюта, а не ресурс» | 2026-09-20 | ЗАТВЕРДЖЕНО — рішення власника з початку | так (v7: Е6, Е6.2, Е7, Е15, Дод. В R14) | `Core/Economy/ResourceType.cs`, `Core/Base/ProductionCalculator.cs` | `EconomyClosureTests` |
+| №5 | «Люди з іменами» | 2026-09-05 | ЗАТВЕРДЖЕНО власником 23.09.2026 («го») | так (v7: Е0 §0.2–0.3, US-1.2, Е3 §3.0, US-3.5, US-7.5, US-8.3, Е9, US-11.1, US-14.4, US-17.1, US-17.5, §17.1, Дод. А–В) | `Core/Characters/CharacterCard.cs`, `Core/Expeditions/`, `Core/Base/ExpeditionRunner.cs`, `Core/Scenes/`, `Core/World/OpeningContent.cs`, `Gameplay/Text/UkrainianText.cs` | `CharacterCardTests`, `PresenceAndCatalogTests`, `ExpeditionPartyTests`, `ExpeditionRunnerDepartureTests`, `SceneTests`, `OpeningContentTests`, `UkrainianTextCoverageTests` |
+| №6 | «Місто відповідає» | 2026-09-23 | ЗАТВЕРДЖЕНО власником 23.09.2026 («го») | так (v7: US-7.1, US-7.3, US-7.5, US-7.6, US-8.4, Дод. В) | `Core/Base/Buildings/` (`CityWorks`, `CityWorksStep`, `PopulationStep`, `Steward`, `DefaultBuildings`), `Core/Settlement/PopulationState.cs` | `CityWorksTests.Valve_GoodPlay_MakesADifference`, `CityWorksTests.Steward_StaffsAnOpenedPost_WithTheBestFreeHand`, `CouncilTests` |
+| №7 | «Тестова збірка: усі механіки одразу» | 2026-09-23 | ЧЕРНЕТКА (рішення власника 23–24.09; §7.9 — окрема чернетка) | так, як ЧЕРНЕТКА (Е0 §0.4, US-3.6, US-9.4, US-9.5, US-10.3, US-11.4, US-14.2, US-14.4, US-17.4, §17.1, Дод. Б, Дод. Г) | `Core/Session/GameSession.cs`, `FirstHourWorld.cs`, `TestBuildTensionPace.cs`, `NewGameOptions.cs`; `Core/Combat`, `Core/Dungeons`, `Core/Companions`, `Core/Quests`, `Core/Story` | `AllMechanicsCoverageTests`, `MechanicsJournalCompletionTests`, `FreshSessionRestoreTests`, `TestBuildTensionPaceTests`, `CompanionDramaTests` |
+| №8 | «Відповіді по §5.7 і §6.6» | 2026-09-24 | ЧЕРНЕТКА (відповіді власника з опитування) | так, як ЧЕРНЕТКА (Е3, US-3.3, US-7.1, US-7.6, Е8, US-8.3, Е9, US-11.1, US-12.2, US-14.2, US-16.3, §17.1, US-18.5) | переважно **не реалізовано**: №8.3 немає; №8.4 «старт без будівель» суперечить `FirstHourWorld.cs:166-176`; №8.2 Сумангуру відсутній (`OpeningCast.cs:64` — «Командир орди») | немає |
+| №9 | «Драбина кризи не обіцяє того, що забороняє відкат» | 2026-09-25 | ЧЕРНЕТКА — пропозиція асистента, не рішення власника | так, як ЧЕРНЕТКА (US-11.2; варіант А/Б — відкрите, §3 п. 3) | `Core/World/PressureTrack.cs` (`HoldsForewarnings`), `Core/World/WorldPulse.cs` | `CampaignPacingTests.Pacing_CrisisLadder_Level3_AlwaysLeadsToTheCrisis`, `WorldPulseTests.Pulse_CrisisLadder_NeverPromisesACrisisTheCooldownForbids` |
+| №10 | «Фракції отримують споживача, без повного стат-блоку» | 2026-09-25 | ЧЕРНЕТКА (без цитати власника) | так, як ЧЕРНЕТКА (US-6.1, US-8.4, US-10.1, US-10.5, Дод. В) | `Core/Base/Buildings/CityWorks.cs` (`OrderDiplomacy`, `StandingTooLow`), `Core/Session/GameSession.cs` (`faction.standing_changed`), `Core/Quests/DefaultQuests.cs` | `CouncilTests.Diplomacy_WithHostileFaction_IsRejected_NoGoldSpent`, `GameSessionTests.OrderDiplomacy_CrossingBand_LogsFactionStandingChanged` |
+| №11 | «Малий бій — короткий, але тяжкий» | 2026-09-25 | ЧЕРНЕТКА — рішення власника дослівно, числа асистента | так, як ЧЕРНЕТКА (Е3 §3.0, US-3.15, US-11.4, US-12.3, §17.1, Дод. Б, В) | `Core/Dungeons/DefaultDungeon.cs`, `Core/Balance/CombatBalance.cs` (`RoundCap` — запобіжник) | `SkirmishPacingTests`, `CombatContentIntegrityTests` |
 <!-- registry:end -->
 
 **Нумерація.** №4 і №5 переставлені за датою рішенням власника 20.09.2026
@@ -260,3 +266,8 @@ v7: `Q-08` (гра на перегравання чи ні), `Q-39` (айрон�
 | 477 | US-18.4 UI Toolkit | увесь UI — IMGUI | рішення (§3, п. 5) |
 | 479 | Odin, Easy Save, DOTween, A* … | не використовуються | оновити «Середовище і асети» |
 | 126 | overwatch [ПІЗНІШЕ] | реалізований | зняти мітку (№7.2) |
+| 166 (US-3.14) | `EnemyDefinition : ScriptableObject` | вороги описані в C# (`Core/Combat/DefaultCombatContent.cs`) | разом із рядком US-18.1 (знайдено при зведенні v7) |
+| 194 (US-5.1) | XP з боїв і квестів/подій | бій XP не дає; XP — робота на посту (`BaseState`) і наслідки квестів (`GameSession.GrantXp`) | рішення або задача (знайдено при зведенні v7) |
+| 365 (US-11.4) | Готовність росте від ради, Укріплень і сили ростера | віхи `ReadinessTrack`: будівля, указ «Готуватись», доба без страху, вилазка, квест; «сили ростера» немає | оновити US або код (знайдено при зведенні v7) |
+| 375 (US-12.1) | процедурний данж із префаб-кімнат | авторські фіксовані списки кімнат (`Core/Dungeons/DefaultDungeon.cs`), генератора немає | лишити ціллю [ПІЗНІШЕ] або переписати US (знайдено при зведенні v7) |
+| 426 (US-16.1) | гібридні сейви: вільно в базі, айронмен у вилазці | слоти в будь-який момент; `Ironman` означає лише «протагоніст може загинути» | рішення (`Q-39`; знайдено при зведенні v7) |
