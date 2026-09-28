@@ -461,7 +461,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "site.abandoned_camp", "Покинутий табір авангарду");
             AddKey(t, "dungeon.depart", "Троє йдуть повернути забране. Пости лишаються порожні на дві доби.");
-            AddKey(t, "dungeon.room1.title", "Кілька розвідників орди не встигли втекти з табору.");
+            AddKey(t, "dungeon.room1.title", "Сокирник і розвідник орди не встигли втекти з табору.");
             AddKey(t, "dungeon.room1.quiet", "Тихо: обійти (Виживання ≥ 5) або переконати здатися (Переконання ≥ 5).");
             AddKey(t, "dungeon.room1.bloody", "Криваво: короткий бій (Ближній бій/Тактика ≥ 6).");
             AddKey(t, "dungeon.room2.title", "У схованці під возом — те, що орда не встигла забрати.");
