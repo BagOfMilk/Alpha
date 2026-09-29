@@ -99,7 +99,7 @@ namespace Game.Gameplay.EditorTools
 
         private static EditorWindow FindGameView()
         {
-            var gameViewType = typeof(Editor).Assembly.GetType("UnityEditor.GameView");
+            var gameViewType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GameView");
             if (gameViewType == null) return null;
             var open = Resources.FindObjectsOfTypeAll(gameViewType);
             return open.Length > 0 ? (EditorWindow)open[0] : null;
@@ -118,7 +118,7 @@ namespace Game.Gameplay.EditorTools
         {
             try
             {
-                var editorAssembly = typeof(Editor).Assembly;
+                var editorAssembly = typeof(UnityEditor.Editor).Assembly;
                 var sizesType = editorAssembly.GetType("UnityEditor.GameViewSizes");
                 var sizeType = editorAssembly.GetType("UnityEditor.GameViewSize");
                 var sizeKindType = editorAssembly.GetType("UnityEditor.GameViewSizeType");
