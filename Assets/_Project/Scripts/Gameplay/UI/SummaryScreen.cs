@@ -49,7 +49,8 @@ namespace Game.Gameplay.UI
                     if (summary?.Wallet != null)
                     {
                         Widgets.LabeledRow(UkrainianText.Get("resource.gold", g), summary.Wallet.Gold.ToString());
-                        Widgets.LabeledRow(UkrainianText.Get("resource.materials", g), summary.Wallet.Materials.ToString());
+                        Widgets.LabeledRow(UkrainianText.Get("resource.build_component", g), summary.Wallet.BuildComponent.ToString());
+                        Widgets.LabeledRow(UkrainianText.Get("resource.craft_component", g), summary.Wallet.CraftComponent.ToString());
                         Widgets.LabeledRow(UkrainianText.Get("resource.food", g), summary.Wallet.Food.ToString());
                     }
                 });

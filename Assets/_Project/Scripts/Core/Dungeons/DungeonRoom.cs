@@ -47,7 +47,9 @@ namespace Game.Core.Dungeons
         public string ArenaKey;
 
         // ---- Спільне для Combat (нагорода за зачистку) і Cache (гарантоване) ----
-        public int GuaranteedMaterials;
+        public int GuaranteedBuildComponent;
+        /// <summary>Крафтовий компонент (Поправка №12.5) — данжі його головний кран.</summary>
+        public int GuaranteedCraftComponent;
         public int GuaranteedGold;
 
         /// <summary>Тільки Cache: іменний предмет, який видається завжди. Null — немає.</summary>
@@ -75,20 +77,22 @@ namespace Game.Core.Dungeons
     {
         public readonly string Id;          // "greedy" | "cautious" — ключ, не текст
         public readonly string LabelKey;
-        public readonly int MaterialsGain;
+        public readonly int BuildComponentGain;
+        public readonly int CraftComponentGain;
         public readonly int GoldGain;
         public readonly int ThreatDelta;
         public readonly bool CausesFear;
         public readonly IReadOnlyDictionary<string, int> FactionDeltas;
         public readonly IReadOnlyList<string> FlagsToSet;
 
-        public DungeonEventOption(string id, string labelKey, int materialsGain, int goldGain, int threatDelta,
+        public DungeonEventOption(string id, string labelKey, int buildGain, int goldGain, int threatDelta,
             bool causesFear = false, IReadOnlyDictionary<string, int> factionDeltas = null,
-            IReadOnlyList<string> flagsToSet = null)
+            IReadOnlyList<string> flagsToSet = null, int craftGain = 0)
         {
             Id = id;
             LabelKey = labelKey;
-            MaterialsGain = materialsGain;
+            BuildComponentGain = buildGain;
+            CraftComponentGain = craftGain;
             GoldGain = goldGain;
             ThreatDelta = threatDelta;
             CausesFear = causesFear;

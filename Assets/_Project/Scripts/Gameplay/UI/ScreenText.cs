@@ -406,9 +406,9 @@ namespace Game.Gameplay.UI
         public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g, bool testBuildOneDayConstruction = false)
         {
             if (def == null) return string.Empty;
-            string cost = def.MaterialsCost > 0
+            string cost = def.BuildComponentCost > 0
                 ? UkrainianText.Format("ui.buildings.cost_both", g,
-                    "gold", def.GoldCost.ToString(), "materials", def.MaterialsCost.ToString())
+                    "gold", def.GoldCost.ToString(), "build", def.BuildComponentCost.ToString())
                 : UkrainianText.Format("ui.buildings.cost_gold", g, "gold", def.GoldCost.ToString());
             int days = testBuildOneDayConstruction ? 1 : def.Days;
             return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", days.ToString());
@@ -461,7 +461,7 @@ namespace Game.Gameplay.UI
                 case BuildOrderResult.AlreadyInProgress: return UkrainianText.Get("ui.feedback.build.already_in_progress", g);
                 case BuildOrderResult.QuestOnly: return UkrainianText.Get("ui.feedback.build.quest_only", g);
                 case BuildOrderResult.NotEnoughGold: return UkrainianText.Get("ui.feedback.build.not_enough_gold", g);
-                default: return UkrainianText.Get("ui.feedback.build.not_enough_materials", g);
+                default: return UkrainianText.Get("ui.feedback.build.not_enough_build_component", g);
             }
         }
 

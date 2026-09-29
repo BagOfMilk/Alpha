@@ -1377,13 +1377,13 @@ namespace Game.Tests.EditMode
         /// "Ближні розвалини" мають Threshold=3 (DefaultSites.Outskirts); Максим
         /// (Melee 6) веде відряд — детермінований запас над порогом (без
         /// жодного кубика, R1), тож preview.ExpectedBand не може бути Worst, а
-        /// ExpectedMaterials/ExpectedGold — додатні (BaseMaterials=2/BaseGold=8,
+        /// ExpectedBuildComponent/ExpectedGold — додатні (BaseBuildComponent=2/BaseGold=8,
         /// bandMult>0 для будь-якої не-Worst полоси). Порівнюємо не сирі суми
         /// гаманця (їх забруднює звичайне виробництво циклу за ті самі доби), а
         /// сам факт полоси повернення — той самий доказ, що прев'ю обіцяло.
         /// </summary>
         [Test]
-        public void PreviewExpedition_And_DepartExpedition_Forceful_ReturnsNonWorstBand_WithPositiveExpectedMaterials()
+        public void PreviewExpedition_And_DepartExpedition_Forceful_ReturnsNonWorstBand_WithPositiveExpectedBuildComponent()
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
@@ -1394,7 +1394,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("outskirts", preview.SiteId);
             Assert.IsFalse(preview.IsDelve);
             Assert.AreNotEqual("Worst", preview.ExpectedBand, "Максим (Melee 6) мав з запасом здолати Threshold=3 outskirts силою");
-            Assert.Greater(preview.ExpectedMaterials, 0, "детермінований прев'ю (R1) мав пообіцяти матеріали за не-Worst полосою");
+            Assert.Greater(preview.ExpectedBuildComponent, 0, "детермінований прев'ю (R1) мав пообіцяти матеріали за не-Worst полосою");
             Assert.Greater(preview.ExpectedGold, 0);
 
             var dispatch = s.DepartExpedition("outskirts", Game.Core.Expeditions.ExpeditionApproach.Forceful,
@@ -2187,7 +2187,8 @@ namespace Game.Tests.EditMode
 
             var reloadedEconomy = reloaded.GetEconomyView();
             Assert.AreEqual(baselineEconomy.Gold, reloadedEconomy.Gold, "гаманець після Save/Load-посередині-вилазки мав дійти до того самого числа, що безперервний прогін");
-            Assert.AreEqual(baselineEconomy.Materials, reloadedEconomy.Materials);
+            Assert.AreEqual(baselineEconomy.BuildComponent, reloadedEconomy.BuildComponent);
+            Assert.AreEqual(baselineEconomy.CraftComponent, reloadedEconomy.CraftComponent);
             Assert.AreEqual(baselineEconomy.Food, reloadedEconomy.Food);
         }
 
@@ -2372,7 +2373,7 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(workshopBuilt, "майстерня (Days=4) мала добудуватись за відведені доби циклу");
 
             var economy = s.GetEconomyView();
-            var expected = economy.Gold >= 5 && economy.Materials >= 3
+            var expected = economy.Gold >= 5 && economy.CraftComponent >= 3 // Поправка №12.5: крафт платить крафтовим компонентом
                 ? Game.Core.Items.CraftResult.Success
                 : Game.Core.Items.CraftResult.CannotAfford;
             Assert.AreEqual(expected, s.CraftUpgrade(item.InstanceId),
@@ -2435,7 +2436,7 @@ namespace Game.Tests.EditMode
             var item = stash[0];
 
             var economy = s.GetEconomyView();
-            var expected = economy.Gold >= 5 && economy.Materials >= 3
+            var expected = economy.Gold >= 5 && economy.CraftComponent >= 3 // Поправка №12.5: крафт платить крафтовим компонентом
                 ? Game.Core.Items.CraftResult.Success
                 : Game.Core.Items.CraftResult.CannotAfford;
             Assert.AreEqual(expected, s.CraftUpgrade(item.InstanceId),

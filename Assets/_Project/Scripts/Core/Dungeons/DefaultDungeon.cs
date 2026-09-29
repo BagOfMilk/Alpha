@@ -13,6 +13,11 @@ namespace Game.Core.Dungeons
     /// обходом, гарантована схованка з іменним предметом, подія-вибір
     /// «жадібно/обережно». <c>old_hermitage</c> — другий, менший данж на іншій
     /// точці — для вільної гри після доби 5 (Поправка №7.5, §3.6).
+    ///
+    /// Поправка №12.5 (два компоненти): данжі — головний кран КРАФТОВОГО
+    /// компонента (схованки зброї й припасів, льох скиту), бойові кімнати
+    /// дають будівельний (розібрані укріплення табору). Подія «жадібно»
+    /// дає обидва і більше, «обережно» — трохи обох. Числа — ПЛЕЙСХОЛДЕР.
     /// </summary>
     public static class DefaultDungeon
     {
@@ -45,7 +50,7 @@ namespace Game.Core.Dungeons
             var room1 = new DungeonRoomDefinition("scouts_left_behind", "dungeon.room1.title", DungeonRoomKind.Combat)
             {
                 ArenaKey = "arena_camp_yard_8x8",
-                GuaranteedMaterials = 2,
+                GuaranteedBuildComponent = 2,
                 GuaranteedGold = 4
             };
             // Тихо: обійти (Виживання ≥5) АБО переконати здатися (Переконання ≥5) — §3.4.
@@ -68,7 +73,8 @@ namespace Game.Core.Dungeons
 
             var room2 = new DungeonRoomDefinition("hidden_cache", "dungeon.room2.title", DungeonRoomKind.Cache)
             {
-                GuaranteedMaterials = 3,
+                GuaranteedBuildComponent = 0,
+                GuaranteedCraftComponent = 3,
                 GuaranteedGold = 0,
                 NamedItemId = "scout_horn" // item.scout_horn.found / .effect (§7.11)
             };
@@ -76,13 +82,14 @@ namespace Game.Core.Dungeons
             var room3 = new DungeonRoomDefinition("hidden_ashes", "dungeon.room3.title", DungeonRoomKind.Event);
             room3.EventOptions.Add(new DungeonEventOption(
                 id: "greedy", labelKey: "dungeon.room3.greedy",
-                materialsGain: 5, goldGain: 0, threatDelta: 2,
+                buildGain: 3, goldGain: 0, threatDelta: 2,
                 causesFear: true,
                 factionDeltas: new Dictionary<string, int> { ["tuhar_boyars"] = -5 },
-                flagsToSet: new[] { "abandoned_camp_grain_taken" }));
+                flagsToSet: new[] { "abandoned_camp_grain_taken" },
+                craftGain: 2));
             room3.EventOptions.Add(new DungeonEventOption(
                 id: "cautious", labelKey: "dungeon.room3.cautious",
-                materialsGain: 2, goldGain: 0, threatDelta: 0));
+                buildGain: 1, goldGain: 0, threatDelta: 0, craftGain: 1));
 
             return new List<DungeonRoomDefinition> { room1, room2, room3 };
         }
@@ -95,7 +102,8 @@ namespace Game.Core.Dungeons
                 DungeonRoomKind.Combat)
             {
                 ArenaKey = "arena_hermitage_yard_8x8",
-                GuaranteedMaterials = 2,
+                GuaranteedBuildComponent = 1,
+                GuaranteedCraftComponent = 1,
                 GuaranteedGold = 2
             };
             room1.QuietChecks.Add(new CheckRequest(SkillKeys.Survival, 4, ApproachForm.Neutral,
@@ -112,7 +120,8 @@ namespace Game.Core.Dungeons
             var room2 = new DungeonRoomDefinition("hermitage_cellar", "dungeon.hermitage.room2.title",
                 DungeonRoomKind.Cache)
             {
-                GuaranteedMaterials = 3,
+                GuaranteedBuildComponent = 0,
+                GuaranteedCraftComponent = 3,
                 GuaranteedGold = 2
             };
 

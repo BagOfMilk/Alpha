@@ -877,7 +877,8 @@ namespace Game.Core.Session
                 PartyValue = preview.PartyValue,
                 Days = preview.Days,
                 ExpectedBand = preview.Band.ToString(),
-                ExpectedMaterials = preview.Materials,
+                ExpectedBuildComponent = preview.BuildComponent,
+                ExpectedCraftComponent = preview.CraftComponent,
                 ExpectedGold = preview.Gold,
                 ExpectedWounded = preview.ExpectedWounded,
                 IsDelve = false
@@ -1577,7 +1578,8 @@ namespace Game.Core.Session
             RequireState(SessionState.Dungeon);
             var rep = _dungeon.Extract(_state);
             if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
-            LogEvent("dungeon.extract", Args("materials", rep.Materials.ToString(CultureInfo.InvariantCulture),
+            LogEvent("dungeon.extract", Args("build", rep.BuildComponent.ToString(CultureInfo.InvariantCulture),
+                "craft", rep.CraftComponent.ToString(CultureInfo.InvariantCulture),
                 "gold", rep.Gold.ToString(CultureInfo.InvariantCulture)));
 
             ExpeditionResult discarded;
@@ -1643,7 +1645,8 @@ namespace Game.Core.Session
                 ThreatBand = _dungeon.ThreatBand.ToString(),
                 RoomsCleared = _dungeon.RoomsCleared,
                 UnbankedGold = _dungeon.UnbankedGold,
-                UnbankedMaterials = _dungeon.UnbankedMaterials,
+                UnbankedBuildComponent = _dungeon.UnbankedBuildComponent,
+                UnbankedCraftComponent = _dungeon.UnbankedCraftComponent,
                 CurrentRoom = _dungeon.CurrentCleared ? null : BuildDungeonRoomView(_dungeon.CurrentRoom),
                 Outcome = _dungeon.Outcome.ToString(),
                 AwaitingBattle = _dungeon.AwaitingBattle,
@@ -2657,7 +2660,8 @@ namespace Game.Core.Session
             return new EconomyView
             {
                 Gold = _state.Resources.Get(ResourceType.Gold),
-                Materials = _state.Resources.Get(ResourceType.Materials),
+                BuildComponent = _state.Resources.Get(ResourceType.BuildComponent),
+                CraftComponent = _state.Resources.Get(ResourceType.CraftComponent),
                 Food = _state.Resources.Get(ResourceType.Food)
             };
         }
@@ -3383,7 +3387,13 @@ namespace Game.Core.Session
             ExpeditionResult result;
             var returned = _party.Return(_state, out result);
             ExpeditionRunner.Complete(_state, result, _works);
-            LogEvent("expedition.returned", Args("siteId", result?.SiteId, "band", result?.Band.ToString()));
+            // Поправка №12.5 (MECH-03, сигнал ресурсу): гравець бачить, ЩО
+            // принесла саме ця точка — інакше різниця між руїнами (будівельний)
+            // і майстернею (крафтовий) лишалась би невидимою.
+            LogEvent("expedition.returned", Args("siteId", result?.SiteId, "band", result?.Band.ToString(),
+                "gold", (result?.Gold ?? 0).ToString(CultureInfo.InvariantCulture),
+                "build", (result?.BuildComponent ?? 0).ToString(CultureInfo.InvariantCulture),
+                "craft", (result?.CraftComponent ?? 0).ToString(CultureInfo.InvariantCulture)));
 
             // R8 (seamsForD1): вилазка — віха Готовності, що трапляється ПОЗА
             // конвеєром дня (ReadinessTickStep її не бачить), тож зараховує

@@ -26,7 +26,10 @@ namespace Game.Core.Session.Views
     public sealed class EconomyView
     {
         public int Gold;
-        public int Materials;
+        /// <summary>Будівельний компонент (Поправка №12.5) — відкритий ресурс гаманця.</summary>
+        public int BuildComponent;
+        /// <summary>Крафтовий компонент (Поправка №12.5) — відкритий ресурс гаманця.</summary>
+        public int CraftComponent;
         public int Food;
     }
 

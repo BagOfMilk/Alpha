@@ -453,7 +453,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "building.workshop.ordered", "Рада замовляє Майстерню. Ліс уже звозять.");
             AddKey(t, "building.workshop.stage", "Риштування росте — стадія {stage} з 5.");
-            AddKey(t, "building.workshop.ready", "Майстерня готова. Верстак чекає на руки і на матеріал.");
+            AddKey(t, "building.workshop.ready", "Майстерня готова. Верстак чекає на руки і на сировину.");
         }
 
         // ---- §7.11 Данж «Покинутий табір авангарду» (доба 4) (+ phase-B drafts) ----
@@ -468,9 +468,9 @@ namespace Game.Gameplay.Text
             AddKey(t, "item.scout_horn.found", "Ріг розвідника. Той самий, яким орда подавала сигнали — тепер він подаватиме їх нам.");
             AddKey(t, "item.scout_horn.effect", "Ефект: наступні два передвісники чуються чіткіше й раніше.");
             AddKey(t, "dungeon.room3.title", "Прихований попіл — і під ним ще щось ціле.");
-            AddKey(t, "dungeon.room3.greedy", "Забрати все зерно (більше здобичі, вищий ризик).");
-            AddKey(t, "dungeon.room3.cautious", "Забрати менше, спалити слід (менше здобичі, спокійніше).");
-            AddKey(t, "dungeon.extract", "Здобич збережено: {materials} матеріалів, {gold} золота.");
+            AddKey(t, "dungeon.room3.greedy", "Забрати все зерно і начиння (будматеріал 3, сировина 2; вищий ризик).");
+            AddKey(t, "dungeon.room3.cautious", "Забрати менше, спалити слід (будматеріал 1, сировина 1; спокійніше).");
+            AddKey(t, "dungeon.extract", "Здобич збережено: будматеріал {build}, сировина {craft}, золото {gold}.");
             AddKey(t, "dungeon.wiped", "Бій пішов не так. Усе незбережене втрачено — троє повертаються з порожніми руками, але живі.");
             AddKey(t, "dungeon.room.bypassed", "Кімнату пройдено без бою.");
         }
@@ -478,7 +478,7 @@ namespace Game.Gameplay.Text
         // ---- §7.12 Крафт ----
         private static void AddCraft(Dictionary<string, string> t)
         {
-            AddKey(t, "craft.confirm", "Підняти якість Рогу розвідника коштуватиме матеріалів майстерні. Назад не буде.");
+            AddKey(t, "craft.confirm", "Підняти якість Рогу розвідника коштуватиме сировини майстерні. Назад не буде.");
             AddKey(t, "craft.done", "Ріг розвідника тепер чутніший, ніж будь-коли.");
         }
 
@@ -630,7 +630,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "attr.will", "Воля");
 
             AddKey(t, "resource.gold", "Золото");
-            AddKey(t, "resource.materials", "Матеріали");
+            // Поправка №12.5: два компоненти замість спільних «Матеріалів».
+            // Коротко, щоб лягало в шапку на 1280 px (≤ 12 знаків):
+            // «Будматеріал» — будівельний (колоди, камінь, цвяхи), «Сировина» —
+            // крафтовий (залізо, шкіра, інструмент). Обидва — звичайна
+            // українська без техно-лексики (сеттинг фентезі, Поправка №12.4).
+            AddKey(t, "resource.build_component", "Будматеріал");
+            AddKey(t, "resource.craft_component", "Сировина");
             AddKey(t, "resource.food", "Їжа");
 
             AddKey(t, "band.best", "Найкраща");
@@ -1526,7 +1532,7 @@ namespace Game.Gameplay.Text
             // Полірування (ціль 2 «Прозорість дій»): ціна/термін видно ДО
             // кліку (ScreenText.BuildingCostLine), а не лише постфактум.
             AddKey(t, "ui.buildings.cost_gold", "{gold} золота");
-            AddKey(t, "ui.buildings.cost_both", "{gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.buildings.cost_both", "{gold} золота, будматеріал {build}");
             AddKey(t, "ui.buildings.days", "{days} діб");
 
             AddKey(t, "ui.council.raid", "Облава");
@@ -1627,7 +1633,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.dungeon.abandon", "Відступити (усе незбережене втрачено)");
             AddKey(t, "ui.dungeon.quiet", "Тихо");
             AddKey(t, "ui.dungeon.bloody", "Криваво");
-            AddKey(t, "ui.dungeon.unbanked", "Незбережено: {materials} матеріалів, {gold} золота");
+            AddKey(t, "ui.dungeon.unbanked", "Незбережено: будматеріал {build}, сировина {craft}, золото {gold}");
             // Полірування (ціль 6 «Рішення», owner: "shows the party ... the
             // quiet candidate ... тактичний бій: N ворогів"): party — хто
             // пішов у цей данж; {candidate} — найкращий з ПАРТІЇ на тихий
@@ -1657,7 +1663,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "quest.offered", "Нова пропозиція: {quest}.");
 
             AddKey(t, "expedition.departed", "Відряд вирушив: {site}.");
-            AddKey(t, "expedition.returned", "Відряд повернувся: {site} — {band}.");
+            AddKey(t, "expedition.returned", "Відряд повернувся: {site} — {band}. Здобич: золото {gold}, будматеріал {build}, сировина {craft}.");
             AddKey(t, "scene.finished", "Сцена завершена.");
             AddKey(t, "production.resource", "Виробництво дало плоди.");
             // Фікс-ревью (major, раунд «фіксер 1», знайдено QA): той самий клас
@@ -1728,7 +1734,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "rarity.rare", "рідкісний");
             AddKey(t, "rarity.epic", "епічний");
             AddKey(t, "ui.gear.improves", "Покращує: {stats}");
-            AddKey(t, "ui.gear.craft_cost", "Ціна: {gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.gear.craft_cost", "Ціна: {gold} золота, сировина {craft}");
             AddKey(t, "ui.gear.craft_preview", "{stat} {before}→{after}");
 
             AddKey(t, "ui.stat.maxhp", "Живучість");
@@ -1777,7 +1783,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.feedback.build.already_in_progress", "Уже будується.");
             AddKey(t, "ui.feedback.build.quest_only", "Ця будівля відкривається лише сюжетом.");
             AddKey(t, "ui.feedback.build.not_enough_gold", "Золота не досить.");
-            AddKey(t, "ui.feedback.build.not_enough_materials", "Матеріалів не досить.");
+            AddKey(t, "ui.feedback.build.not_enough_build_component", "Будматеріалу не досить — його приносять вилазки й данжі.");
 
             AddKey(t, "ui.feedback.dispatch.success", "Відряд вирушив.");
             AddKey(t, "ui.feedback.dispatch.no_such_site", "Такої точки немає.");
@@ -1793,7 +1799,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.feedback.craft.named_not_upgradable", "Іменний предмет уже досконалий — далі нікуди.");
             AddKey(t, "ui.feedback.craft.already_max_rarity", "Вища якість уже неможлива.");
             AddKey(t, "ui.feedback.craft.workshop_closed", "Майстерня ще не збудована.");
-            AddKey(t, "ui.feedback.craft.cannot_afford", "Не вистачає матеріалів або золота.");
+            AddKey(t, "ui.feedback.craft.cannot_afford", "Не вистачає сировини або золота.");
 
             AddKey(t, "ui.feedback.buildplan.ok", "Готово до підтвердження.");
             AddKey(t, "ui.feedback.buildplan.not_enough_points", "Вільних очок не досить.");

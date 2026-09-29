@@ -118,7 +118,7 @@ namespace Game.Gameplay
             _works.ApplyToSlots(_base);
 
             _base.Resources.Add(Game.Core.Economy.ResourceType.Gold, startGold);
-            _base.Resources.Add(Game.Core.Economy.ResourceType.Materials, startMaterials);
+            _base.Resources.Add(Game.Core.Economy.ResourceType.BuildComponent, startMaterials);
             _base.Resources.Add(Game.Core.Economy.ResourceType.Food, startFood);
 
             // Людей менше, ніж постів — так і задумано (Поправка №5.1):

@@ -67,37 +67,37 @@ namespace Game.Core.Base
             yield return new BuildingDefinition
             {
                 Id = Market, DisplayName = "Ринок",
-                GoldCost = 40, MaterialsCost = 4, Days = 6,
+                GoldCost = 40, BuildComponentCost = 4, Days = 6,
                 Effect = BuildingEffect.OpensPost, OpensSlotId = "settlement_market"
             };
             yield return new BuildingDefinition
             {
                 Id = Tavern, DisplayName = "Таверна",
-                GoldCost = 35, MaterialsCost = 3, Days = 5,
+                GoldCost = 35, BuildComponentCost = 3, Days = 5,
                 Effect = BuildingEffect.TavernArrivals
             };
             yield return new BuildingDefinition
             {
                 Id = Temple, DisplayName = "Храм",
-                GoldCost = 50, MaterialsCost = 6, Days = 8,
+                GoldCost = 50, BuildComponentCost = 6, Days = 8,
                 Effect = BuildingEffect.TempleAura
             };
             yield return new BuildingDefinition
             {
                 Id = Fortifications, DisplayName = "Укріплення",
-                GoldCost = 45, MaterialsCost = 8, Days = 8,
+                GoldCost = 45, BuildComponentCost = 8, Days = 8,
                 Effect = BuildingEffect.Fortifications
             };
             yield return new BuildingDefinition
             {
                 Id = Armory, DisplayName = "Збройня",
-                GoldCost = 60, MaterialsCost = 6, Days = 8,
+                GoldCost = 60, BuildComponentCost = 6, Days = 8,
                 Effect = BuildingEffect.Awaiting, AwaitingNote = "ждёт снаряжения (Э4)"
             };
             yield return new BuildingDefinition
             {
                 Id = Laboratory, DisplayName = "Лабораторія",
-                GoldCost = 80, MaterialsCost = 10, Days = 10, QuestOnly = true,
+                GoldCost = 80, BuildComponentCost = 10, Days = 10, QuestOnly = true,
                 Effect = BuildingEffect.Awaiting, AwaitingNote = "приходит по квесту, ждёт аугментов (Э6)"
             };
         }

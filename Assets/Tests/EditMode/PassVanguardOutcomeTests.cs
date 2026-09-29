@@ -29,7 +29,7 @@ namespace Game.Tests.EditMode
             roster.Add(maksym);
             roster.Add(myroslava);
 
-            ledger.Add(ResourceType.Materials, 20);
+            ledger.Add(ResourceType.BuildComponent, 20);
             ledger.Add(ResourceType.Food, 20);
 
             return (state, maksym, myroslava);
@@ -45,7 +45,7 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(0.0, maksym.InjuryPoints, "Найкраща — склад цілий, ніхто не ранений");
             Assert.AreEqual(CompanionStatus.Idle, myroslava.Status, "Мирослава лишається");
-            Assert.AreEqual(20, state.Resources.Get(ResourceType.Materials), "склад цілий на Найкращій");
+            Assert.AreEqual(20, state.Resources.Get(ResourceType.BuildComponent), "склад цілий на Найкращій");
             Assert.IsFalse(flags.Get(PassVanguardOutcome.DefectorSeededFlag));
             Assert.IsTrue(flags.Get("pass_vanguard_resolved"));
         }
@@ -61,7 +61,7 @@ namespace Game.Tests.EditMode
             Assert.Greater(maksym.InjuryPoints, 0.0, "Хороша на кровавому шляху — Максим ранений");
             Assert.AreEqual(CompanionStatus.Injured, maksym.Status);
             Assert.AreEqual(CompanionStatus.Idle, myroslava.Status, "Мирослава лишається на Хорошій");
-            Assert.AreEqual(20, state.Resources.Get(ResourceType.Materials), "склад цілий, коли вона лишається");
+            Assert.AreEqual(20, state.Resources.Get(ResourceType.BuildComponent), "склад цілий, коли вона лишається");
         }
 
         [Test]
@@ -86,7 +86,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0.0, maksym.InjuryPoints, "Базова не ранить Максима");
             Assert.AreEqual(CompanionStatus.Idle, myroslava.Status, "«Йде» — статус Idle за §3.1");
             Assert.IsNull(myroslava.AssignedSlotId);
-            Assert.Less(state.Resources.Get(ResourceType.Materials), 20, "склад розграбований на Базовій/Найгіршій");
+            Assert.Less(state.Resources.Get(ResourceType.BuildComponent), 20, "склад розграбований на Базовій/Найгіршій");
             Assert.IsTrue(flags.Get(PassVanguardOutcome.DefectorSeededFlag), "зерно зради посіяно (§3.1) — ще НЕ дефекція");
         }
 

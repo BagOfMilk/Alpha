@@ -107,7 +107,8 @@ namespace Game.Core.Base
         /// <summary>
         /// Повернення загону: здобич у гаманець, рани на людей, статуси назад.
         ///
-        /// Матеріали потрапляють у гру ТІЛЬКИ звідси — це і є кран, якого
+        /// Обидва компоненти (будівельний і крафтовий, Поправка №12.5)
+        /// потрапляють у гру з вилазки звідси — це і є кран, якого
         /// вимагає Е6.2 і Додаток А. Другого входу немає, і його відсутність
         /// перевіряється тестом.
         /// </summary>
@@ -116,7 +117,8 @@ namespace Game.Core.Base
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (result == null) return;
 
-            if (result.Materials > 0) state.Resources.Add(ResourceType.Materials, result.Materials);
+            if (result.BuildComponent > 0) state.Resources.Add(ResourceType.BuildComponent, result.BuildComponent);
+            if (result.CraftComponent > 0) state.Resources.Add(ResourceType.CraftComponent, result.CraftComponent);
             if (result.Gold > 0) state.Resources.Add(ResourceType.Gold, result.Gold);
 
             // Знайдені люди входять у місто найближчою добою, а не зараз:

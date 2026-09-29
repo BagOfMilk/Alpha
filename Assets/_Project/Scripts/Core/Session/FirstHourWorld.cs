@@ -182,7 +182,11 @@ namespace Game.Core.Session
             // ніхто не тримає всі п'ять діб відкриття (§3.0-3.5), і голод —
             // чесна, а не зрежисована ціна цієї прогалини.
             resources.Add(ResourceType.Gold, 40);
-            resources.Add(ResourceType.Materials, 10);
+            resources.Add(ResourceType.BuildComponent, 10);
+            // Поправка №12.5: крафтовий компонент — на ОДИН апгрейд у майстерні
+            // (ItemBalance.CraftComponentCost); далі — лише ззовні (майстерня-
+            // руїна, данжі). ПЛЕЙСХОЛДЕР, як і решта гаманця.
+            resources.Add(ResourceType.CraftComponent, 3);
             resources.Add(ResourceType.Food, 20);
 
             Assign(baseState, "zakhar", "council_seat");

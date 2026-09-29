@@ -56,7 +56,7 @@ namespace Game.Tests.EditMode
         private static void Give(BaseState state, int gold, int materials = 0, int food = 0)
         {
             if (gold > 0) state.Resources.Add(ResourceType.Gold, gold);
-            if (materials > 0) state.Resources.Add(ResourceType.Materials, materials);
+            if (materials > 0) state.Resources.Add(ResourceType.BuildComponent, materials);
             if (food > 0) state.Resources.Add(ResourceType.Food, food);
         }
 

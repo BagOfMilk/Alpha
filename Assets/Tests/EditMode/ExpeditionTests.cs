@@ -42,7 +42,7 @@ namespace Game.Tests.EditMode
             {
                 QuietDays = 6, ForcefulDays = 3,
                 QuietSkill = SkillKeys.Survival, ForcefulSkill = SkillKeys.Survival,
-                Threshold = threshold, BaseMaterials = 4, BaseGold = 10
+                Threshold = threshold, BaseBuildComponent = 4, BaseGold = 10
             };
         }
 
@@ -106,7 +106,7 @@ namespace Game.Tests.EditMode
             var party = Party(cfg, Scout("a", 1, cfg));
             var result = ExpeditionResolver.Resolve(Site(threshold: 9), ExpeditionApproach.Quiet, party, new SiteLedger(), cfg);
 
-            Assert.AreEqual(0, result.Materials);
+            Assert.AreEqual(0, result.BuildComponent);
             Assert.AreEqual(0, result.Gold);
             Assert.AreEqual(6, result.Days, "дни всё равно потрачены");
         }
@@ -149,12 +149,12 @@ namespace Game.Tests.EditMode
             var first = ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet, party, ledger, cfg);
             var second = ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet, party, ledger, cfg);
 
-            Assert.Greater(first.Materials, second.Materials, "вторая ходка беднее первой");
+            Assert.Greater(first.BuildComponent, second.BuildComponent, "вторая ходка беднее первой");
 
             for (int i = 0; i < 20; i++) ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet, party, ledger, cfg);
             var late = ExpeditionResolver.Preview(site, ExpeditionApproach.Quiet, party, ledger, cfg);
             Assert.AreEqual(cfg.ExpeditionDepletionFloor, late.YieldMultiplier, 1e-9, "есть пол");
-            Assert.Greater(late.Materials, 0, "истощённая точка всё ещё что-то даёт");
+            Assert.Greater(late.BuildComponent, 0, "истощённая точка всё ещё что-то даёт");
         }
 
         /// <summary>
@@ -174,7 +174,7 @@ namespace Game.Tests.EditMode
             for (int i = 0; i < 30; i++) ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet, party, ledger, cfg);
 
             var late = ExpeditionResolver.Preview(site, ExpeditionApproach.Quiet, party, ledger, cfg);
-            Assert.GreaterOrEqual(late.Materials, 1, $"база {site.BaseMaterials} на множителе {late.YieldMultiplier} ушла в ноль");
+            Assert.GreaterOrEqual(late.BuildComponent, 1, $"база {site.BaseBuildComponent} на множителе {late.YieldMultiplier} ушла в ноль");
         }
 
         /// <summary>Передперегляд обіцяє рівно те, що видасть резолв (US-17.3).</summary>
@@ -188,7 +188,7 @@ namespace Game.Tests.EditMode
             var preview = ExpeditionResolver.Preview(site, ExpeditionApproach.Quiet, party, new SiteLedger(), cfg);
             var result = ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet, party, new SiteLedger(), cfg);
 
-            Assert.AreEqual(preview.Materials, result.Materials);
+            Assert.AreEqual(preview.BuildComponent, result.BuildComponent);
             Assert.AreEqual(preview.Gold, result.Gold);
             Assert.AreEqual(preview.Band, result.Band);
             Assert.AreEqual(preview.Days, result.Days);
@@ -206,7 +206,7 @@ namespace Game.Tests.EditMode
                 Party(cfg, Scout("a", 4, cfg), Scout("b", 2, cfg)), new SiteLedger(), cfg);
 
             Assert.AreEqual(a.Band, b.Band);
-            Assert.AreEqual(a.Materials, b.Materials);
+            Assert.AreEqual(a.BuildComponent, b.BuildComponent);
             Assert.AreEqual(a.Wounded.Count, b.Wounded.Count);
             Assert.AreEqual(a.Wounded[0].ActorId, b.Wounded[0].ActorId);
         }

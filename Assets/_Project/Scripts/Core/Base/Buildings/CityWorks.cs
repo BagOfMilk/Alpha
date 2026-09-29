@@ -19,7 +19,7 @@ namespace Game.Core.Base
         AlreadyInProgress,
         QuestOnly,
         NotEnoughGold,
-        NotEnoughMaterials
+        NotEnoughBuildComponent
     }
 
     public enum CouncilOrderResult
@@ -246,11 +246,11 @@ namespace Game.Core.Base
             // матеріалів золото пішло б, а будівництво не почалося б.
             if (!state.Resources.CanAfford(ResourceType.Gold, goldCost))
                 return BuildOrderResult.NotEnoughGold;
-            if (!state.Resources.CanAfford(ResourceType.Materials, def.MaterialsCost))
-                return BuildOrderResult.NotEnoughMaterials;
+            if (!state.Resources.CanAfford(ResourceType.BuildComponent, def.BuildComponentCost))
+                return BuildOrderResult.NotEnoughBuildComponent;
 
             state.Resources.TrySpend(ResourceType.Gold, goldCost);
-            state.Resources.TrySpend(ResourceType.Materials, def.MaterialsCost);
+            state.Resources.TrySpend(ResourceType.BuildComponent, def.BuildComponentCost);
 
             // Поправка №7.7: тестова збірка стирає проєктний строк — замовлення
             // уранці, готово до наступного ранку, незалежно від того, скільки

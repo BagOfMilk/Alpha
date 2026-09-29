@@ -639,7 +639,9 @@ namespace Game.Gameplay
 
             GUILayout.FlexibleSpace();
             GUILayout.Label(UkrainianText.Get("resource.gold", g) + ": " + economy.Gold, AlphaSkin.Body, GUILayout.ExpandWidth(false));
-            GUILayout.Label(UkrainianText.Get("resource.materials", g) + ": " + economy.Materials, AlphaSkin.Body, GUILayout.ExpandWidth(false));
+            // Поправка №12.5: два компоненти — окремими числами (назви ≤ 12 знаків, шапка 1280 px).
+            GUILayout.Label(UkrainianText.Get("resource.build_component", g) + ": " + economy.BuildComponent, AlphaSkin.Body, GUILayout.ExpandWidth(false));
+            GUILayout.Label(UkrainianText.Get("resource.craft_component", g) + ": " + economy.CraftComponent, AlphaSkin.Body, GUILayout.ExpandWidth(false));
             GUILayout.Label(UkrainianText.Get("resource.food", g) + ": " + economy.Food, AlphaSkin.Body, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
 

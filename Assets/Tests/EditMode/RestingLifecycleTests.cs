@@ -74,7 +74,7 @@ namespace Game.Tests.EditMode
             var slot = new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.Resource,
-                OutputResource = Game.Core.Economy.ResourceType.Materials,
+                OutputResource = Game.Core.Economy.ResourceType.BuildComponent,
                 PrimarySkill = SkillType.Mechanics
             };
             state.AddSlot(slot);
@@ -111,7 +111,7 @@ namespace Game.Tests.EditMode
             state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.Resource,
-                OutputResource = Game.Core.Economy.ResourceType.Materials,
+                OutputResource = Game.Core.Economy.ResourceType.BuildComponent,
                 PrimarySkill = SkillType.Mechanics
             });
 
@@ -139,7 +139,7 @@ namespace Game.Tests.EditMode
             state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.Resource,
-                OutputResource = Game.Core.Economy.ResourceType.Materials,
+                OutputResource = Game.Core.Economy.ResourceType.BuildComponent,
                 PrimarySkill = SkillType.Mechanics
             });
 

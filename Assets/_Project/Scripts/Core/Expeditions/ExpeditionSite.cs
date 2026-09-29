@@ -28,8 +28,10 @@ namespace Game.Core.Expeditions
     /// Точка вилазки — заглушка данжа з Додатка А: «один тип, без повного
     /// push-your-luck, але як джерело матеріалів».
     ///
-    /// Матеріали за Е6.2 видобуваються лише тут. Місто їх не виробляє
-    /// зовсім — тому ця заглушка не прикраса, а єдиний кран.
+    /// Обидва компоненти (будівельний і крафтовий, Поправка №12.5) за Е6.2
+    /// видобуваються лише ззовні. Місто їх не виробляє зовсім — тому ця
+    /// заглушка не прикраса, а кран. Точки дають РІЗНЕ співвідношення
+    /// компонентів: куди йти — рішення гравця, а не «здобич падає, і все».
     /// </summary>
     [Serializable]
     public sealed class ExpeditionSite
@@ -50,7 +52,8 @@ namespace Game.Core.Expeditions
         public int Threshold = 5;
 
         /// <summary>Базовий видобуток на Базовій полосі, до виснаження точки.</summary>
-        public int BaseMaterials = 2;
+        public int BaseBuildComponent = 2;
+        public int BaseCraftComponent;
         public int BaseGold = 10;
 
         /// <summary>
