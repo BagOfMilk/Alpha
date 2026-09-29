@@ -1237,14 +1237,19 @@ namespace Game.Gameplay
         // ================= ввід миші =================
 
         /// <summary>Лише читає, куди дивиться курсор — жодної команди. Справжній рух миші скидає симульоване наведення (§7.4 <see cref="ClearSimulatedHover"/>).</summary>
+        /// <summary>Гру запущено автотуром (<see cref="AutoplayBootstrap.RequestedFromCommandLine"/>) — один раз на запуск.</summary>
+        private static readonly bool TourRun = AutoplayBootstrap.RequestedFromCommandLine();
+
         private void UpdateHover()
         {
             var mouse = Input.mousePosition;
-            // Справжній рух миші скидає наведення туру лише у вікні з фокусом (гравець).
-            // Тур іде у вікні за краєм екрана (tools/run-offscreen.ps1) без фокусу: коли власник
-            // рухав мишею на своєму столі, позиція курсора відносно вікна гри мінялась і наведення
-            // туру зникало — знімок hover-enemy виходив без підказки (перевірка «Щ», 29.09.2026).
-            if (Application.isFocused && _lastMousePositionKnown && _hasSimulatedHover
+            // В автотурі справжня миша наведення туру не скидає. Тур іде у вікні за краєм
+            // екрана (tools/run-offscreen.ps1): коли власник рухав мишею на своєму столі,
+            // позиція курсора відносно вікна гри мінялась, і наведення туру зникало —
+            // знімок hover-enemy виходив без підказки (перевірка «Щ», 29.09.2026; перевірка
+            // фокусу вікна не допомогла — вікно туру буває у фокусі). Гравець імітованим
+            // наведенням не користується, тож для нього нічого не змінилось.
+            if (!TourRun && _lastMousePositionKnown && _hasSimulatedHover
                 && (mouse - _lastMousePosition).sqrMagnitude > 0.25f)
                 ClearSimulatedHover();
             _lastMousePosition = mouse;
