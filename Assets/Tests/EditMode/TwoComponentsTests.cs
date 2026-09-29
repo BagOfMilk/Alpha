@@ -87,7 +87,8 @@ namespace Game.Tests.EditMode
             foreach (var def in DefaultBuildings.All())
             {
                 bool core = def.Id == DefaultBuildings.Infirmary || def.Id == DefaultBuildings.Workshop ||
-                            def.Id == DefaultBuildings.Storehouse || def.Id == DefaultBuildings.CouncilHall;
+                            def.Id == DefaultBuildings.Storehouse || def.Id == DefaultBuildings.CouncilHall ||
+                            def.Id == DefaultBuildings.Watch;
                 if (core) Assert.AreEqual(0, def.BuildComponentCost, def.Id + ": ядро — лише золото (GDD US-7.2)");
                 else Assert.Greater(def.BuildComponentCost, 0, def.Id + ": спеціальна — золото + будівельний компонент");
             }

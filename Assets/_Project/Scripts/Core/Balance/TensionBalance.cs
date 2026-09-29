@@ -55,6 +55,15 @@ namespace Game.Core.Balance
         public int RaidCooldownDays = 10;
         public double TempleDrainPerDay = -0.5;
         public double FortificationDrainPerDay = -0.3;
+
+        /// <summary>
+        /// Сторожа (Поправка №12.9): той самий драйвер Fortifications, слабшою
+        /// ставкою — інваріант 5 забороняє новий драйвер. Якщо стоять і
+        /// Сторожа, і Укріплення, застосовується ЛИШЕ повна ставка
+        /// (CityWorksStep) — складати їх не можна: дві будівлі за один
+        /// ефект зробили б Укріплення непотрібними одразу після Сторожі.
+        /// </summary>
+        public double WatchDrainPerDay = -0.05;
         public int BloodDeltaPerNode = 10;
         public int BloodCapPerExpedition = 50;
 

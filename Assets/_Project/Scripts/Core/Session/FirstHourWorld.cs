@@ -175,6 +175,19 @@ namespace Game.Core.Session
             var works = new CityWorksType(DefaultBuildings.StartingSet, testBuildOneDayConstruction);
             works.ApplyToSlots(baseState);
 
+            // Поправка №12.9 (рішення власника 29.09.2026: «рада — віче просто
+            // неба від старту, Зала ради — пізніше як розширення»): пост ради
+            // відкритий і зайнятий Захаром з першого ранку, незалежно від
+            // того, яку першу будівлю обере гравець після прологу — на
+            // відміну від Складу/Лазарету, які чекають вибору. Зала ради
+            // лишається звичайною будівлею (вмикає Указ/Дипломатію/
+            // Інвестицію/Спорядження), тому OpensSlotId у неї більше немає
+            // (DefaultBuildings) — інакше ApplyToSlots вище закрив би щойно
+            // відкритий пост.
+            var councilSeat = baseState.GetSlot("council_seat");
+            if (councilSeat != null) councilSeat.Unlocked = true;
+            baseState.TryAssign("zakhar", "council_seat");
+
             // Стартовий гаманець — ПЛЕЙСХОЛДЕР (числа балансу виправить власник):
             // вистачає на перші доби без паніки, не вистачає назавжди — ферми
             // ніхто не тримає всі п'ять діб відкриття (§3.0-3.5), і голод —

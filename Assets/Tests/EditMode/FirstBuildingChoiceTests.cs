@@ -13,12 +13,15 @@ using NUnit.Framework;
 namespace Game.Tests.EditMode
 {
     /// <summary>
-    /// Поправка №12.7 (рішення власника 29.09.2026: «Так придовити, перша
-    /// будівля зьявляється як вибор після прологу»): гра стартує без будівель,
-    /// а одразу після прологу гравець обирає першу. Охоронці: вибір існує в
-    /// обох гілках розмови з Тугаром, кожен варіант має видимий наслідок
-    /// (Статут MECH-05), відсутні будівлі читаються (UI-04 — у ядрі це
-    /// причина відмови), вибір живе в зліпку, боти обирають детерміновано.
+    /// Поправка №12.7, переглянута Поправкою №12.9 (рішення власника
+    /// 29.09.2026: «рада — віче просто неба від старту, Зала ради — пізніше
+    /// як розширення»; «давай подумаємо які 3 по логіці мають бути першими в
+    /// місті» → варіанти першої будівлі — ремесла присутніх фахівців
+    /// (Сторожа/Склад/Лазарет), рада більше не серед них). Охоронці: віче
+    /// працює без Зали (Облава/переселенці/підготовка), Указ/Дипломатія/
+    /// Інвестиція/Спорядження досі за нею, вибір першої будівлі існує в обох
+    /// гілках розмови з Тугаром, кожен варіант має видимий наслідок (Статут
+    /// MECH-05), вибір живе в зліпку, боти обирають детерміновано.
     /// </summary>
     public class FirstBuildingChoiceTests
     {
@@ -46,13 +49,18 @@ namespace Game.Tests.EditMode
         private static bool Built(GameSession s, string id) => s.GetCityView().Built.Any(b => b.Id == id);
 
         [Test]
-        public void NewGame_BeforeTheChoice_HasNoBuildings()
+        public void NewGame_BeforeTheChoice_HasOnlyTheCouncilSquare()
         {
             var s = new GameSession();
             s.NewGame(Quick());
             Assert.AreEqual(SessionState.Scene, s.State);
             CollectionAssert.IsEmpty(s.GetCityView().Built, "до вибору не стоїть жодна будівля");
-            CollectionAssert.DoesNotContain(s.GetCityView().OpenPosts, "council_seat");
+
+            // Поправка №12.9: рада-віче просто неба — Захар на посту з першого
+            // ранку, незалежно від вибору першої будівлі (він і не будівля).
+            CollectionAssert.Contains(s.GetCityView().OpenPosts, "council_seat", "віче зібралося ще до вибору");
+            Assert.AreEqual("council_seat", s.GetRosterView().Companions.First(c => c.Id == "zakhar").AssignedSlotId);
+
             CollectionAssert.DoesNotContain(s.GetCityView().OpenPosts, "storehouse_dock");
             CollectionAssert.DoesNotContain(s.GetCityView().OpenPosts, "infirmary_bed");
         }
@@ -64,7 +72,7 @@ namespace Game.Tests.EditMode
             {
                 var s = new GameSession();
                 s.NewGame(Quick());
-                var step = PlayOpening(s, DefaultBuildings.CouncilHall, tugar);
+                var step = PlayOpening(s, DefaultBuildings.Watch, tugar);
                 Assert.IsNotNull(step, "гілка " + tugar + ": вибір першої будівлі мав з'явитися");
                 Assert.AreEqual(DefaultBuildings.FirstBuildingChoices.Length, step.Options.Count);
                 for (int i = 0; i < step.Options.Count; i++)
@@ -75,7 +83,7 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void EachChoice_BuildsOnlyThatBuilding_ForFree_OpensAndStaffsItsPost()
+        public void EachChoice_BuildsOnlyThatBuilding_ForFree()
         {
             foreach (var buildingId in DefaultBuildings.FirstBuildingChoices)
             {
@@ -88,38 +96,65 @@ namespace Game.Tests.EditMode
                 Assert.AreEqual(1, s.GetCityView().Built.Count, buildingId + ": решта — за звичайними правилами (№6)");
                 Assert.AreEqual(goldBefore, s.GetEconomyView().Gold, buildingId + ": перше спільне зусилля — без ціни");
 
+                foreach (var other in DefaultBuildings.FirstBuildingChoices.Where(o => o != buildingId))
+                    Assert.IsFalse(Built(s, other));
+
+                Assert.IsTrue(s.DayLog.Any(e => e.Key == "city.granted" && e.Args["buildingId"] == buildingId), "зміна міста звучить (MECH-13)");
+                Assert.IsTrue(s.DayLog.Any(e => e.Key == "scene.choice.made" && e.Args["optionId"] == buildingId));
+            }
+        }
+
+        /// <summary>Склад і Лазарет відкривають і заселяють свій пост; Сторожа поста не має — Захар і так на віче з ранку 1.</summary>
+        [Test]
+        public void StorehouseAndInfirmary_OpenAndStaffTheirPost()
+        {
+            foreach (var buildingId in new[] { DefaultBuildings.Storehouse, DefaultBuildings.Infirmary })
+            {
+                var s = new GameSession();
+                s.NewGame(Quick());
+                PlayOpening(s, buildingId);
+
                 string slot = DefaultBuildings.Get(buildingId).OpensSlotId;
                 string keeper = OpeningScenes.FirstBuildingKeeperOf(buildingId);
                 CollectionAssert.Contains(s.GetCityView().OpenPosts, slot);
                 Assert.AreEqual(slot, s.GetRosterView().Companions.First(c => c.Id == keeper).AssignedSlotId,
                     buildingId + ": на пост стає свій іменний — наслідок видно одразу (MECH-05)");
-
-                foreach (var other in DefaultBuildings.FirstBuildingChoices.Where(o => o != buildingId))
-                {
-                    Assert.IsFalse(Built(s, other));
-                    CollectionAssert.DoesNotContain(s.GetCityView().OpenPosts, DefaultBuildings.Get(other).OpensSlotId,
-                        other + ": пост без будівлі закритий");
-                }
-
-                Assert.IsTrue(s.DayLog.Any(e => e.Key == "city.granted" && e.Args["buildingId"] == buildingId), "зміна міста звучить (MECH-13)");
                 Assert.IsTrue(s.DayLog.Any(e => e.Key == "city.granted.staffed" && e.Args["companionId"] == keeper));
-                Assert.IsTrue(s.DayLog.Any(e => e.Key == "scene.choice.made" && e.Args["optionId"] == buildingId));
             }
         }
 
         [Test]
-        public void WithoutCouncilHall_CouncilSaysWhy_AndTheHallCanBeBuiltNormally()
+        public void Watch_HasNoSlot_AndDoesNotMoveZakhar()
+        {
+            var s = new GameSession();
+            s.NewGame(Quick());
+            PlayOpening(s, DefaultBuildings.Watch);
+
+            Assert.IsNull(DefaultBuildings.Get(DefaultBuildings.Watch).OpensSlotId, "Сторожа поста не відкриває");
+            Assert.AreEqual("council_seat", s.GetRosterView().Companions.First(c => c.Id == "zakhar").AssignedSlotId,
+                "Захар лишається на віче — вибір Сторожі його нікуди не переставляє");
+            Assert.IsFalse(s.DayLog.Any(e => e.Key == "city.granted.staffed"), "Сторожа нікого не заселяє");
+        }
+
+        /// <summary>Поправка №12.9: рада-віче діє з першого ранку незалежно від вибору першої будівлі — Облава/переселенці/підготовка до загрози не питають Залу.</summary>
+        [Test]
+        public void CouncilSquare_WorksFromDayOne_RegardlessOfFirstBuildingChoice_ButDecreeAndFriendsNeedTheHall()
         {
             var s = new GameSession();
             s.NewGame(Quick());
             PlayOpening(s, DefaultBuildings.Storehouse);
 
-            Assert.AreEqual(CouncilOrderResult.NoCouncilHall, s.OrderRaid(), "без зали — зрозуміла відмова, а не тиша");
-            Assert.AreEqual(CouncilOrderResult.NoCouncilHall, s.OrderSettlers());
-            Assert.AreEqual(AssignmentResult.SlotLocked, s.Assign("zakhar", "council_seat"), "пост ради закритий, доки нема зали");
+            Assert.AreNotEqual(CouncilOrderResult.NoCouncilHall, s.OrderRaid(), "Облава — рішення віче, Зали не питає");
+            Assert.AreNotEqual(CouncilOrderResult.NoCouncilHall, s.OrderSettlers(), "переселенці — так само");
+            Assert.AreNotEqual(CouncilOrderResult.NoCouncilHall, s.OrderPrepareThreat(), "підготовка до загрози — так само");
+
+            Assert.AreEqual(CouncilOrderResult.NoCouncilHall, s.OrderDecree(Game.Core.Factions.DefaultFactions.TuharBoyars),
+                "Указ і далі чекає на Залу ради");
+            Assert.AreEqual(CouncilOrderResult.NoCouncilHall, s.OrderDiplomacy(Game.Core.Factions.DefaultFactions.TuharBoyars));
+            Assert.AreEqual(CouncilOrderResult.NoCouncilHall, s.OrderOutfitExpedition("outskirts"));
 
             Assert.AreEqual(BuildOrderResult.Started, s.OrderBuilding(DefaultBuildings.CouncilHall),
-                "решта будівель — звичайним наказом за ціну");
+                "Зала ради — звичайна будівля за ціною (40 золота, 5 діб)");
         }
 
         [Test]
@@ -138,6 +173,11 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(Built(fresh, DefaultBuildings.CouncilHall));
             CollectionAssert.Contains(fresh.GetCityView().OpenPosts, "infirmary_bed");
             Assert.AreEqual("infirmary_bed", fresh.GetRosterView().Companions.First(c => c.Id == "healer").AssignedSlotId);
+            // Регресія на старий сейв, де першою була обрана Зала ради (до
+            // Поправки №12.9): council_seat переживає завантаження й лишається
+            // за Захаром незалежно від того, яка будівля прийшла зі зліпку.
+            CollectionAssert.Contains(fresh.GetCityView().OpenPosts, "council_seat");
+            Assert.AreEqual("council_seat", fresh.GetRosterView().Companions.First(c => c.Id == "zakhar").AssignedSlotId);
         }
 
         [Test]
@@ -178,6 +218,24 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(c.IsEmpty, "будівля — видимий наслідок, не порожній вибір");
             var merged = QuestConsequence.Merge(c, new QuestConsequence().Building(DefaultBuildings.Infirmary));
             CollectionAssert.AreEqual(new[] { DefaultBuildings.Storehouse, DefaultBuildings.Infirmary }, merged.BuildingIds);
+        }
+
+        // ---- Поправка №12.9: варіанти вибору — ремесла присутніх (хук на чистій функції) ----
+
+        [Test]
+        public void AvailableFirstBuildingChoices_WithNoFilter_ReturnsTheWholeCatalogInOrder()
+        {
+            CollectionAssert.AreEqual(DefaultBuildings.FirstBuildingChoices,
+                OpeningScenes.AvailableFirstBuildingChoices());
+        }
+
+        [Test]
+        public void AvailableFirstBuildingChoices_ExcludesTheChoiceWhoseKeeperIsAbsent()
+        {
+            var result = OpeningScenes.AvailableFirstBuildingChoices(companionId => companionId != "keeper");
+            CollectionAssert.DoesNotContain(result, DefaultBuildings.Storehouse, "Дід Овсій відсутній — Склад не серед варіантів");
+            CollectionAssert.Contains(result, DefaultBuildings.Watch);
+            CollectionAssert.Contains(result, DefaultBuildings.Infirmary);
         }
 
         // ---- стрибок сцени (SceneStep.Goto) ----

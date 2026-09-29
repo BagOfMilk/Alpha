@@ -3616,6 +3616,10 @@ namespace Game.Core.Session
         /// той вільний і вдома: інакше вибір лишився б без видимого наслідку
         /// до першого ручного призначення (Статут MECH-05). Обидві зміни звучать
         /// у стрічці окремими подіями — жодної тихої зміни міста (MECH-13).
+        /// Поправка №12.9: Сторожа (<see cref="DefaultBuildingsType.Watch"/>)
+        /// OpensSlotId не має — метод просто зупиняється після
+        /// "city.granted", нікого не переставляючи (Захар уже на
+        /// council_seat з FirstHourWorld.Build).
         /// </summary>
         private void GrantBuildingFromConsequence(string buildingId)
         {

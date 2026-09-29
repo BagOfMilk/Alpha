@@ -141,16 +141,23 @@ namespace Game.Core.Session.Bots
         /// <summary>
         /// Черга будівель журнального гравця — одна для Unity-туру
         /// <c>-autoplay-journal</c> і <c>MechanicsJournalCompletionTests</c>
-        /// (Статут UI-14). Таверна — одразу за Залою ради і Складом: журнальний
+        /// (Статут UI-14). Таверна — одразу за Складом і Залою ради: журнальний
         /// гравець морить ферми (<see cref="JournalAssignments"/>), люди щодня
         /// йдуть, а тір 2 (Таверна І людність не менше порога) досяжний, лише
         /// поки людей ще досить. 29.09.2026 Таверна стояла за Майстернею: ядро
         /// встигало рівно на порозі (150 людей на 27-у добу), Unity-тур — ніколи
         /// (43 з 44, без population_tier).
+        ///
+        /// Поправка №12.9: перша будівля журнального гравця — Лазарет (див.
+        /// <c>ChooseJournalSceneOptionIndex</c>), Зала ради серед вибору
+        /// прологу вже нема — і черга будівництва відкриває раду ЩОЙНО є на
+        /// що будувати. Склад — перший (щоденне золото), Зала — другою (Указ/
+        /// Дипломатія/Інвестиція/Спорядження журналу все ще потребують саме
+        /// її), далі Таверна/Майстерня як і раніше.
         /// </summary>
         public static readonly string[] JournalBuildPriority =
         {
-            Base.DefaultBuildings.CouncilHall, Base.DefaultBuildings.Storehouse,
+            Base.DefaultBuildings.Storehouse, Base.DefaultBuildings.CouncilHall,
             Base.DefaultBuildings.Tavern, Base.DefaultBuildings.Workshop,
             Base.DefaultBuildings.Infirmary, Base.DefaultBuildings.Temple,
             Base.DefaultBuildings.Market, Base.DefaultBuildings.Fortifications
@@ -232,16 +239,25 @@ namespace Game.Core.Session.Bots
         }
 
         /// <summary>
-        /// Пост, для якого іменний фахівець стартового касту «свій» — той самий,
-        /// на який його ставить вибір першої будівлі (<see cref="Scenes.OpeningScenes.FirstBuildingKeeperOf"/>).
-        /// Null — у напарника свого поста немає.
+        /// Пост, для якого іменний фахівець стартового касту «свій».
+        /// Поправка №12.9: НЕ виводиться з <c>FirstBuildingKeeperOf</c> +
+        /// <c>OpensSlotId</c> — Захарове ремесло (Сторожа) поста не
+        /// відкриває взагалі (він на council_seat, віче, з першого ранку,
+        /// незалежно від вибору першої будівлі), тож той вивід дав би
+        /// null і для Захара, і сплутав би «ремесло, яке озвучує вибір» із
+        /// «пост, який фахівець тримає». Окрема мапа, як і просив власник.
+        /// Null — у напарника свого поста немає (Максим/Мирослава/
+        /// протагоніст — у полі, §3.0).
         /// </summary>
         private static string OwnPostOf(string companionId)
         {
-            foreach (var buildingId in Base.DefaultBuildings.FirstBuildingChoices)
-                if (Scenes.OpeningScenes.FirstBuildingKeeperOf(buildingId) == companionId)
-                    return Base.DefaultBuildings.Get(buildingId)?.OpensSlotId;
-            return null;
+            switch (companionId)
+            {
+                case "zakhar": return "council_seat";
+                case "keeper": return "storehouse_dock";
+                case "healer": return "infirmary_bed";
+                default: return null;
+            }
         }
 
         /// <summary>Сентинел-QuestId синтетичного офера події данжу (§3.4, кімната 3 "Прихований попіл") — щоб ChooseQuestOption міг відрізнити його від справжнього квесту.</summary>

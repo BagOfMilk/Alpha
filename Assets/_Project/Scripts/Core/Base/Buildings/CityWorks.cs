@@ -262,8 +262,13 @@ namespace Game.Core.Base
         }
 
         /// <summary>
-        /// Облава: разове зниження Напруги драйвером CouncilRaid. Потребує
-        /// Залу ради, коштує золота, має відкат.
+        /// Облава: разове зниження Напруги драйвером CouncilRaid. Коштує
+        /// золота, має відкат. Поправка №12.9 (рішення власника 29.09.2026:
+        /// «рада — віче просто неба від старту, Зала ради — пізніше як
+        /// розширення»): Зали ради більше НЕ вимагає — віче скликається без
+        /// даху. Указ/Дипломатія/Інвестиція/Спорядження (нижче) лишаються за
+        /// Залою — вони обмінюють вигоду фракцій чи розтягнутий дохід, а не
+        /// разову дію громади.
         ///
         /// <paramref name="factions"/> необов'язковий (за замовчуванням — як до B5,
         /// без фракцій): силовий метод зачіпає і стосунки — бояри Тугара
@@ -277,7 +282,6 @@ namespace Game.Core.Base
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
-            if (!Has(DefaultBuildings.CouncilHall)) return CouncilOrderResult.NoCouncilHall;
             if (_raidQueued) return CouncilOrderResult.AlreadyQueued;
             if (!RaidReady(today, balance)) return CouncilOrderResult.OnCooldown;
 
@@ -309,21 +313,20 @@ namespace Game.Core.Base
         /// </summary>
         public bool SettlersReady(int today, BalanceConfig balance)
         {
-            return Has(DefaultBuildings.CouncilHall)
-                && _settlersQueued == 0
+            return _settlersQueued == 0
                 && today - _lastSettlersDay >= balance.City.SettlersCooldownDays;
         }
 
         /// <summary>
         /// Приймання переселенців — «рішення в місті» зі слів власника. Платиться
-        /// їжею: нові роти треба годувати, і це чесна ціна зростання.
+        /// їжею: нові роти треба годувати, і це чесна ціна зростання. Поправка
+        /// №12.9: Зали ради не вимагає (віче, як і Облава вище).
         /// </summary>
         public CouncilOrderResult OrderSettlers(BaseState state, int today, BalanceConfig balance)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
-            if (!Has(DefaultBuildings.CouncilHall)) return CouncilOrderResult.NoCouncilHall;
             if (_settlersQueued > 0) return CouncilOrderResult.AlreadyQueued;
             if (today - _lastSettlersDay < balance.City.SettlersCooldownDays) return CouncilOrderResult.OnCooldown;
             if (!state.Resources.TrySpend(ResourceType.Food, balance.City.SettlersFoodCost))
@@ -460,13 +463,13 @@ namespace Game.Core.Base
         /// Підготовка до загрози: накопичує МАРКЕРИ готовності, не саму Готовність —
         /// ReadinessTrack заводить B6, цей пакет від нього не залежить (§1.1). D1
         /// забере накопичене через TakeReadinessMilestones, коли трек з'явиться.
+        /// Поправка №12.9: Зали ради не вимагає (віче, як Облава і переселенці).
         /// </summary>
         public CouncilOrderResult OrderPrepareThreat(BaseState state, int today, BalanceConfig balance)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
-            if (!Has(DefaultBuildings.CouncilHall)) return CouncilOrderResult.NoCouncilHall;
             if (today - _lastPrepareThreatDay < balance.Faction.PrepareThreatCooldownDays) return CouncilOrderResult.OnCooldown;
 
             int price = DiscountedPrice(balance.Faction.PrepareThreatGoldCost, TradeDiscount(state, balance, today));
