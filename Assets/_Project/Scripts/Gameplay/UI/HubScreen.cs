@@ -820,6 +820,8 @@ namespace Game.Gameplay.UI
             GUILayout.Label(UkrainianText.Format("ui.sheet.xp", g, "xp", sheet.Xp.ToString(), "next", sheet.XpToNextLevel.ToString()), AlphaSkin.Body);
             GUILayout.Label(UkrainianText.Format("ui.people.status", g, "status", ScreenText.CompanionStatusLabel(sheet.CompanionId, sheet.Status, g)), AlphaSkin.Body);
             GUILayout.Label(UkrainianText.Format("ui.people.loyalty", g, "loyalty", ScreenText.LoyaltyLabel(sheet.Loyalty, g)), AlphaSkin.Body);
+            // Поправка №15.2: клас-архетип на картці — рядок біля імені, мінімальна правка IMGUI.
+            GUILayout.Label(UkrainianText.Format("ui.people.class", g, "class", ScreenText.ClassLabel(sheet.Class, g)), AlphaSkin.Body);
 
             Widgets.Section(UkrainianText.Get("ui.sheet.section.attributes", g), () =>
             {

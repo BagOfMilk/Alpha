@@ -47,6 +47,12 @@ namespace Game.Core.Characters.Creation
 
             if (!string.IsNullOrEmpty(customName))
                 protagonist.DisplayName = customName;
+
+            // Поправка №15.2 (власник: "warrior -> Рубака, trader -> Майстер,
+            // healer -> Знахар"): клас іде за тим самим preset'ом, що й скіли
+            // — картка не прихована шкала, гравець бачить її одразу.
+            if (protagonist.Card != null)
+                protagonist.Card.Class = CompanionClasses.ForBackground(preset.Id);
         }
     }
 }

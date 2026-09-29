@@ -1743,6 +1743,17 @@ namespace Game.Gameplay.Text
             // значення — один рядок Format() поруч, як "Рівень {level}" нижче.
             AddKey(t, "ui.people.loyalty", "Довіра: {loyalty}");
             AddKey(t, "ui.people.status", "Стан: {status}");
+            // Поправка №15.2 (клас-архетип: стартові скіли й роль у бою; характер і
+            // прийом епохи лишаються за культурою й першоджерелом персонажа).
+            AddKey(t, "ui.people.class", "Клас: {class}");
+            AddKey(t, "class.brawler", "Рубака");
+            AddKey(t, "class.brawler.desc", "Б'ється в ближньому бою, не боїться залякати ворога.");
+            AddKey(t, "class.shooter", "Стрілець");
+            AddKey(t, "class.shooter.desc", "Б'є на відстані, найкраще виживає поза домом.");
+            AddKey(t, "class.healer", "Знахар");
+            AddKey(t, "class.healer.desc", "Лікує і переконує — тримає громаду і загін словом.");
+            AddKey(t, "class.crafter", "Майстер");
+            AddKey(t, "class.crafter.desc", "Лагодить, зламує і торгується — руки замість слова чи меча.");
             AddKey(t, "ui.people.equipped", "Спорядження: {items}");
             AddKey(t, "ui.people.equipped.none", "нічого");
             // Фікс-ревью (minor, раунд 2, знайдено QA): текст цього ключа

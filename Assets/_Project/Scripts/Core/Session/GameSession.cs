@@ -2803,6 +2803,7 @@ namespace Game.Core.Session
                     Status = c.Status,
                     AssignedSlotId = c.AssignedSlotId,
                     Level = c.Level,
+                    Class = c.Card?.Class ?? CompanionClass.Brawler,
                     Loyalty = c.Card != null && c.Card.CanBeCompanion ? (LoyaltyBand?)c.LoyaltyBand : null,
                     Equipped = equipped,
                     ScarCount = c.Scars.Count
@@ -2864,6 +2865,7 @@ namespace Game.Core.Session
                 Xp = c.Xp,
                 XpToNextLevel = Balance.ProgressionMath.XpToNext(c.Level, _cfg),
                 Status = c.Status,
+                Class = c.Card?.Class ?? CompanionClass.Brawler,
                 Loyalty = c.Card != null && c.Card.CanBeCompanion ? (LoyaltyBand?)c.LoyaltyBand : null,
                 Attributes = attributes,
                 Skills = skills,

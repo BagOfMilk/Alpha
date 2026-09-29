@@ -70,6 +70,9 @@ namespace Game.Core.Session.Views
         public string AssignedSlotId;
         public int Level;
 
+        /// <summary>Клас-архетип (Поправка №15.2) — не прихована шкала, видно завжди.</summary>
+        public CompanionClass Class;
+
         /// <summary>null — не напарник (напр. фольклорний NPC без Loyalty на карті).</summary>
         public LoyaltyBand? Loyalty;
 
