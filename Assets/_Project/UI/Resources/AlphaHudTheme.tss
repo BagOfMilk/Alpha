@@ -1,0 +1,7 @@
+/* Тема панелі шапки і стрічки (спайк H4, docs/HUD_DESIGN.md §8).
+   Лише стандартна тема Unity: з нею ScrollView має смугу прокрутки.
+   Кольори і шрифт задає код (Gameplay/UI/Toolkit/HudToolkitTheme.cs),
+   щоб палітра жила в одному місці — AlphaSkin. */
+@import url("unity-theme://default");
+
+VisualElement {}

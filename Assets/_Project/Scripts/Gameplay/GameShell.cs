@@ -8,6 +8,7 @@ using Game.Core.Session.Views;
 using Game.Gameplay.Combat;
 using Game.Gameplay.Text;
 using Game.Gameplay.UI;
+using Game.Gameplay.UI.Toolkit;
 using Game.Gameplay.Walk;
 using UnityEngine;
 
@@ -52,6 +53,63 @@ namespace Game.Gameplay
 
         private bool _escapeOpen;
         private SeededDiceRoller _roller;
+
+        // ===================== HUD: UI Toolkit або IMGUI (спайк H4) =====================
+        //
+        // Рішення власника 29.09.2026 («3. спробуємо»): шапка і стрічка міста —
+        // на UI Toolkit (Gameplay/UI/Toolkit/HudToolkitView), бій лишається на
+        // IMGUI. Прапорець командного рядка -imgui-hud повертає старі
+        // DrawTopBar/DrawEventFeed без змін — для порівняння за п'ятьма
+        // критеріями docs/HUD_DESIGN.md §8 (зокрема час кадру, критерій 4).
+
+        /// <summary>Прапорець командного рядка: лишити шапку і стрічку на IMGUI.</summary>
+        public const string ImguiHudFlag = "-imgui-hud";
+
+        private HudToolkitView _toolkitHud;
+
+        /// <summary>Вид шапки і стрічки на UI Toolkit; null — IMGUI (прапорець або UI Toolkit не піднявся).</summary>
+        public HudToolkitView ToolkitHud => _toolkitHud;
+
+        /// <summary>Шапку і стрічку малює UI Toolkit — IMGUI їх не малює.</summary>
+        public bool ToolkitHudActive => _toolkitHud != null && _toolkitHud.IsReady;
+
+        /// <summary>Підпис режиму для логу автотуру.</summary>
+        public string HudModeLabel => ToolkitHudActive ? "UI Toolkit" : "IMGUI";
+
+        /// <summary>
+        /// Екран міста з шапкою і стрічкою зараз на екрані — ті самі стани, що
+        /// <see cref="DrawStateScreen"/> веде в <see cref="DrawHubLike"/>
+        /// (і не панель результату бою, яка тримає екран бою довше за State).
+        /// </summary>
+        public bool CityHudVisible
+        {
+            get
+            {
+                if (Session == null) return false;
+                if (BattlePresenter != null && BattlePresenter.IsActive && BattlePresenter.ResultPending) return false;
+                switch (Session.State)
+                {
+                    case SessionState.Morning:
+                    case SessionState.Day:
+                    case SessionState.Decision:
+                    case SessionState.Evening:
+                    case SessionState.Night:
+                    case SessionState.Dungeon:
+                    case SessionState.FreePlay:
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        }
+
+        private static bool HasCommandLineArg(string flag)
+        {
+            var args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length; i++)
+                if (args[i] == flag) return true;
+            return false;
+        }
 
         /// <summary>
         /// Безпечна точка виходу: <see cref="TitleScreen"/>/<see cref="EscapeMenuScreen"/>
@@ -103,12 +161,23 @@ namespace Game.Gameplay
 
             DiscoverPresenters();
 
+            if (!HasCommandLineArg(ImguiHudFlag))
+                _toolkitHud = HudToolkitView.TryCreate(this); // null → лишаємось на IMGUI
+
             Application.wantsToQuit += HandleWantsToQuit; // §HandleWantsToQuit
         }
 
         private void OnDestroy()
         {
             Application.wantsToQuit -= HandleWantsToQuit;
+            if (_toolkitHud != null) _toolkitHud.Dispose();
+            _toolkitHud = null;
+        }
+
+        /// <summary>Після Update усіх компонентів (зокрема автотуру): шапка бачить стан цього кадру.</summary>
+        private void LateUpdate()
+        {
+            if (_toolkitHud != null) _toolkitHud.Tick();
         }
 
         /// <summary>
@@ -471,6 +540,26 @@ namespace Game.Gameplay
                 return;
             }
 
+            if (ToolkitHudActive)
+            {
+                // Шапку і стрічку малює UI Toolkit; IMGUI отримує лише тіло —
+                // прямокутник, що не перетинається з ними (HudLayout, критерій 5).
+                var body = HudLayout.For(Screen.width, Screen.height).Body;
+                GUILayout.BeginArea(new Rect(body.X, body.Y, body.Width, body.Height));
+                GUILayout.BeginVertical();
+                // LastMessage не йде в шапку (HUD_DESIGN §4.2): відмова лишається
+                // рядком над вмістом екрана, як і досі, — лише вже не в шапці.
+                if (!string.IsNullOrEmpty(LastMessage))
+                    GUILayout.Label(LastMessage, AlphaSkin.Tooltip);
+                DrawHubBody(state);
+                GUILayout.EndVertical();
+                GUILayout.EndArea();
+
+                if (state == SessionState.Decision)
+                    Widgets.Modal(UkrainianText.Get("ui.decision.title", ProtagonistGender), () => _decision.DrawBody(this));
+                return;
+            }
+
             var area = new Rect(0f, 0f, Screen.width, Screen.height);
             GUILayout.BeginArea(area);
             GUILayout.BeginVertical();
@@ -536,25 +625,36 @@ namespace Game.Gameplay
             float w = Screen.width, h = Screen.height;
             ExploreUiRects.Clear();
 
-            var top = new Rect(0f, 0f, w, 72f);
-            GUILayout.BeginArea(top);
-            DrawTopBar();
-            GUILayout.EndArea();
-            ExploreUiRects.Add(top);
-
-            float feedW = Math.Min(460f, w * 0.34f);
-            var feed = new Rect(w - feedW - 16f, 84f, feedW, Math.Min(250f, h * 0.3f));
-            GUILayout.BeginArea(feed, GUI.skin.box);
-            GUILayout.Label(UkrainianText.Get("ui.feed.title", g), AlphaSkin.SubHeader);
-            var log = Session.DayLog;
-            if (log != null && log.Count > 0)
+            if (ToolkitHudActive)
             {
-                var lines = ScreenText.BuildFeedLines(log, g, Session.GetRosterView());
-                for (int i = Math.Max(0, lines.Count - 5); i < lines.Count; i++)
-                    GUILayout.Label(lines[i].Text, AlphaSkin.Tooltip);
+                // Шапку і коротку стрічку малює UI Toolkit; їхні прямокутники —
+                // та сама розкладка, що в HudToolkitView, — не команда «йти».
+                var frame = HudLayout.For(w, h, exploring: true);
+                ExploreUiRects.Add(new Rect(frame.Header.X, frame.Header.Y, frame.Header.Width, frame.Header.Height));
+                ExploreUiRects.Add(new Rect(frame.Feed.X, frame.Feed.Y, frame.Feed.Width, frame.Feed.Height));
             }
-            GUILayout.EndArea();
-            ExploreUiRects.Add(feed);
+            else
+            {
+                var top = new Rect(0f, 0f, w, 72f);
+                GUILayout.BeginArea(top);
+                DrawTopBar();
+                GUILayout.EndArea();
+                ExploreUiRects.Add(top);
+
+                float feedW = Math.Min(460f, w * 0.34f);
+                var feed = new Rect(w - feedW - 16f, 84f, feedW, Math.Min(250f, h * 0.3f));
+                GUILayout.BeginArea(feed, GUI.skin.box);
+                GUILayout.Label(UkrainianText.Get("ui.feed.title", g), AlphaSkin.SubHeader);
+                var log = Session.DayLog;
+                if (log != null && log.Count > 0)
+                {
+                    var lines = ScreenText.BuildFeedLines(log, g, Session.GetRosterView());
+                    for (int i = Math.Max(0, lines.Count - 5); i < lines.Count; i++)
+                        GUILayout.Label(lines[i].Text, AlphaSkin.Tooltip);
+                }
+                GUILayout.EndArea();
+                ExploreUiRects.Add(feed);
+            }
 
             float barW = Math.Min(w - 32f, 1100f), barH = 150f;
             var bar = new Rect((w - barW) * 0.5f, h - barH - 16f, barW, barH);
