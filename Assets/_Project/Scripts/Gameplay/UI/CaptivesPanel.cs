@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Game.Core.Characters.Creation;
 using Game.Core.Session.Views;
 using Game.Gameplay.Text;

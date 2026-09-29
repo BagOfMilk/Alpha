@@ -579,8 +579,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.quit", "Вийти");
             // Титри асетів (Поправка №12.2): CC BY 3.0 значків вимагає атрибуції.
             AddKey(t, "ui.title.credits", "Значки: Lorc і Delapouite, game-icons.net (CC BY 3.0) · Шрифти: Fixel, Noto Serif (SIL OFL 1.1) · Моделі: Kenney (CC0)");
-            AddKey(t, "ui.title.hitrule.percent", "Правило влучання: показаний відсоток");
-            AddKey(t, "ui.title.hitrule.threshold", "Правило влучання: показаний поріг");
+            AddKey(t, "ui.title.hitrule.percent", "З кубиком: показаний відсоток — шанс кидка");
+            AddKey(t, "ui.title.hitrule.threshold", "Без кубика: показаний відсоток справджується рівно");
             AddKey(t, "ui.title.hitrule.section", "Правило влучання");
             // Поправка №7 (стиснутий темп шкали Напруги, тестова збірка):
             // перемикач на титулі за тим самим прийомом, що правило влучання
@@ -2043,7 +2043,11 @@ namespace Game.Gameplay.Text
 
             // Прев'ю шансу під курсором (R1: ThresholdRule показує поріг, PercentRule — відсоток).
             AddKey(t, "ui.battle.hitchance.percent", "Шанс влучення: {value}%");
-            AddKey(t, "ui.battle.hitchance.threshold", "Поріг влучення: {value}");
+            AddKey(t, "ui.battle.hitchance.threshold", "Шанс влучення: {value}% (без кубика)");
+            AddKey(t, "ui.battle.predict.hit", "Цей удар влучить.");
+            AddKey(t, "ui.battle.predict.miss", "Цей удар — мимо, зате наступний ближчий до влучання.");
+            AddKey(t, "ui.battle.predict.multi", "Влучить {hits} з {shots}.");
+            AddKey(t, "ui.escape.hitrule.next_battle", "Нове правило влучання діятиме з наступного бою.");
 
             // Наслідки бою, яких немає серед band'ів (band.*): Нічия/Відступ.
             AddKey(t, "ui.battle.outcome.draw", "Нічия");
@@ -2138,7 +2142,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "combat.log.attack.hit", "{unit} → {target}: влучання, −{damage} ({chance}{cover_suffix}){ap_suffix}.");
             AddKey(t, "combat.log.attack.crit", "{unit} → {target}: крит, −{damage} ({chance}{cover_suffix}){ap_suffix}.");
             AddKey(t, "combat.log.chance.percent", "шанс {value}%");
-            AddKey(t, "combat.log.chance.threshold", "поріг {value}");
+            AddKey(t, "combat.log.chance.threshold", "шанс {value}%, без кубика");
             AddKey(t, "combat.log.stabilize", "{unit} надає допомогу: {target} поза небезпекою й виходить із бою.");
 
             // здібності та їхні наслідки

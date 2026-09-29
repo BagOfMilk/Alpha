@@ -1,4 +1,5 @@
 using Game.Core.Characters.Creation;
+using Game.Core.Combat;
 using Game.Core.Session;
 using Game.Gameplay.Text;
 using UnityEngine;
@@ -51,6 +52,20 @@ namespace Game.Gameplay.UI
                     Widgets.DisabledButton(UkrainianText.Get("ui.escape.save", g),
                         UkrainianText.Get("ui.common.none", g) + " (" + StateLabel(state, g) + ")");
                 }
+
+                GUILayout.Space(8f);
+
+                // Налаштування: правило влучання (власник, 29.09.2026: «в настройках його
+                // можна змінить»). Діє з наступного бою.
+                bool percent = shell.Session.HitRule == HitRuleKind.Percent;
+                GUILayout.Label(UkrainianText.Get("ui.title.hitrule.section", g), AlphaSkin.Body);
+                GUILayout.BeginHorizontal();
+                if (Widgets.TabButton(UkrainianText.Get("ui.title.hitrule.threshold", g), !percent) && percent)
+                    shell.TryRun(() => shell.Session.SetHitRule(HitRuleKind.Threshold));
+                if (Widgets.TabButton(UkrainianText.Get("ui.title.hitrule.percent", g), percent) && !percent)
+                    shell.TryRun(() => shell.Session.SetHitRule(HitRuleKind.Percent));
+                GUILayout.EndHorizontal();
+                if (inBattle) Widgets.TooltipLine(UkrainianText.Get("ui.escape.hitrule.next_battle", g));
 
                 GUILayout.Space(8f);
 

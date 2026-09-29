@@ -46,12 +46,14 @@ namespace Game.Core.Balance
         public int GrazeThresholdPercent = 15;
         public int HighHitNoFullMiss = 85; // шанс ≥ цього — найгірше можливе — граза, не промах
 
-        // ---- ThresholdRule: детерміновані полоси за маржею (R1) ----
-        // «Показаний поріг» тлумачиться як margin-від-точки-рівноваги:
-        // margin = shown − ThresholdBaseline. Жодного кидка кубика не відбувається.
+        // ---- ThresholdRule: без кубика, відсоток справджується рівно (R1; власник,
+        // 29.09.2026: «Усі відсотки мають працювати у тому режимі») ----
+        // Накопичувач бійця: кожен удар додає показаний шанс, на 100 — влучання.
+        /// <summary>З чого починає лічильник бійця: 50 — удар на ≥50 % влучає першим же разом.</summary>
+        public int ThresholdCarryStart = 50;
+        // Крит — для впевнених ударів: шанс ≥ Baseline + CritBand (85).
         public int ThresholdBaseline = 50;
-        public int ThresholdGrazeBand = 15;  // 0 ≤ margin < band — Graze
-        public int ThresholdCritBand = 35;   // margin ≥ band — Crit (між — Hit)
+        public int ThresholdCritBand = 35;
 
         // ---- Урон ----
         public double GrazePartialPercent = 50.0; // граза — частка повного урону

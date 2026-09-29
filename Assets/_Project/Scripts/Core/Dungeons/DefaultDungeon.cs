@@ -108,10 +108,10 @@ namespace Game.Core.Dungeons
             };
             room1.QuietChecks.Add(new CheckRequest(SkillKeys.Survival, 4, ApproachForm.Neutral,
                 topicId: "dungeon.old_hermitage.room1"));
-            // Поправка №14.4: підкріплення тут пробували (розвідник на 3-му раунді) —
-            // під правилом порогу бій ішов у глухий кут до запобіжника: стрілець зі
-            // шансом < 50 не влучає ніколи. Рушій підкріплення вміє (BattleSetup.Reinforcements,
-            // тести C3), контент — після рішення власника про правило влучання (№7.6).
+            // Поправка №14.4: підкріплення з відліком — розвідник скиту на 3-му раунді.
+            // Під старим правилом порогу бій ішов у глухий кут (шанс < 50 не влучав
+            // ніколи), тому його було знято; з правилом без кубика, де кожен відсоток
+            // справджується (власник, 29.09.2026), підкріплення повернуто.
             // Поправка №11 (розвідка SkirmishPacingTests, 25.09.2026): цей рядок
             // до сьогодні не резолвився в жоден EnemyDefinition —
             // GameSession.ResolveEnemyById повертав null, CombatBattleBuilder
@@ -120,6 +120,7 @@ namespace Game.Core.Dungeons
             // проти НУЛЯ ворогів: перемога за один раунд без жодного ризику.
             // DefaultCombatContent.ForestBandit() тепер заповнює цей id.
             room1.EnemyIds.Add("forest_bandit");
+            room1.Reinforcements.Add(new RoomReinforcement(3, "horde_scout"));
 
             var room2 = new DungeonRoomDefinition("hermitage_cellar", "dungeon.hermitage.room2.title",
                 DungeonRoomKind.Cache)

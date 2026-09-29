@@ -999,6 +999,7 @@ namespace Game.Gameplay.UI
             if (p.IsFlanked) h += 28f;
             h += 28f; // рядок здачі (№14.2) — з запасом
             if (!string.IsNullOrEmpty(p.CheckKind)) h += 28f; // рядок перевірки здібності (C5)
+            if (p.PredictedShots > 0) h += 28f; // «цей удар влучить / мимо» (правило без кубика)
             h += 28f * DossierLines(target).Count; // досьє (№14.6)
             if (p.Result != "Success") h += 30f;
             return h;
@@ -1120,6 +1121,11 @@ namespace Game.Gameplay.UI
                 string chanceKey = p.IsPercent ? "ui.battle.hitchance.percent" : "ui.battle.hitchance.threshold";
                 GUILayout.Label(UkrainianText.Format(chanceKey, false, "value", I(p.Chance)), AlphaSkin.SubHeader);
 
+                // Правило без кубика: чим скінчиться саме цей удар — видно наперед.
+                string predict = PredictLine(p);
+                if (predict != null)
+                    GUILayout.Label(predict, p.PredictedHits > 0 ? AlphaSkin.Body : AlphaSkin.DangerText);
+
                 if (p.Terms != null)
                     foreach (var term in p.Terms)
                     {
@@ -1167,6 +1173,15 @@ namespace Game.Gameplay.UI
 
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
+        }
+
+        /// <summary>«Цей удар влучить» / «мимо» / «Влучить 1 з 2» — правило без кубика; null — правило з кубиком.</summary>
+        private static string PredictLine(AttackPreviewView p)
+        {
+            if (p == null || p.PredictedShots <= 0) return null;
+            if (p.PredictedShots > 1)
+                return UkrainianText.Format("ui.battle.predict.multi", false, "hits", I(p.PredictedHits), "shots", I(p.PredictedShots));
+            return UkrainianText.Get(p.PredictedHits > 0 ? "ui.battle.predict.hit" : "ui.battle.predict.miss", false);
         }
 
         /// <summary>Рядок перевірки здібності: «Залякування 3 проти Волі 2 — вийде», «Імунітет», «Броня ще ціла»; null — перевірки немає.</summary>

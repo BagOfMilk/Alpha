@@ -62,6 +62,14 @@ namespace Game.Core.Combat
         /// <summary>Порядок падіння бійців загону гравця (id юнітів, перший — упав першим).</summary>
         public IReadOnlyList<string> FallOrder => _fallOrder;
 
+        /// <summary>
+        /// Правило без кубика: скільки з <paramref name="shots"/> ударів поспіль із шансом
+        /// <paramref name="shownChance"/> влучать — прев'ю бачить результат наперед.
+        /// −1 — правило з кубиком, наперед не відомо.
+        /// </summary>
+        public int PredictHits(CombatUnit attacker, int shownChance, int shots)
+            => _hitRule is ThresholdRule rule ? rule.PredictHits(attacker, shownChance, shots) : -1;
+
         /// <summary>Кого вже підбадьорили в цьому бою («Підбадьорити» — раз за бій на союзника).</summary>
         private readonly HashSet<string> _rallied = new HashSet<string>(StringComparer.Ordinal);
 

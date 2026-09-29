@@ -192,6 +192,12 @@ namespace Game.Core.Session.Views
         /// <summary>Опори й броня цілі ще невідомі (досьє, №14.6) — HUD ставить до шкоди «?».</summary>
         public bool DamageUncertain;
 
+        /// <summary>
+        /// Правило без кубика: скільки ударів у дії і скільки з них влучать — відомо
+        /// наперед (накопичувач бійця). 0/0 — правило з кубиком.
+        /// </summary>
+        public int PredictedShots, PredictedHits;
+
         /// <summary>Скільки ОД коштує саме ця дія.</summary>
         public int ApCost;
         /// <summary>Відстань до цілі (клітинки, Чебишев) і максимальна дальність дії.</summary>

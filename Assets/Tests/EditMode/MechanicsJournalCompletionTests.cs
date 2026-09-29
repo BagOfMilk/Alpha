@@ -173,6 +173,15 @@ namespace Game.Tests.EditMode
             {
                 int before = s.DayLog.Count;
                 var view = s.GetBattleView();
+                // Правило без кубика (29.09.2026: «Усі відсотки мають працювати»): наївний
+                // загін тепер влучає частіше і вузол 1 виграє. Навмисно програний бій —
+                // це відступ (полоса Worst, №14.7) після першого обміну: у раунді 2
+                // щойно хід загону — «Відступити». Та сама дія, що в Unity-турі.
+                if (view.Round >= 2 && !view.IsAiTurn)
+                {
+                    Assert.AreEqual(CombatActionResult.Success, s.CombatRetreat(), "відступ у свій хід");
+                    continue;
+                }
                 var current = BotSupport.FindCurrent(view);
                 var target = current != null ? BotSupport.FindNearestOpposite(view, current) : null;
                 if (target == null || s.CombatAttack(target.Id) != CombatActionResult.Success)
@@ -267,7 +276,7 @@ namespace Game.Tests.EditMode
             Cmd("Decision(вузол 1): «Криваво»");
 
             var combatKeysDay1 = FightBattleNaivelyCollectingCombatKeys(s);
-            Cmd("Battle(вузол 1, покроково): «Атакувати»/«Рух» наївною тактикою обох сторін — до Base/Worst без смерті Максима");
+            Cmd("Battle(вузол 1, покроково): «Атакувати»/«Рух» наївною тактикою обох сторін, у раунді 2 — «Відступити» (Worst, без смерті Максима)");
             Assert.Greater(combatKeysDay1.Count, 0, "покроковий бій вузла 1 мав дати хоч один combat.attack.* — доказ, що це НЕ автобій");
 
             bool sawLeft = s.DayLog.Any(e => e.Key == "companion.left_settlement" && e.Args != null && e.Args.TryGetValue("companionId", out var cid) && cid == "myroslava");

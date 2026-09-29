@@ -1111,6 +1111,15 @@ namespace Game.Gameplay
                 while (Session.State == SessionState.Battle && guard++ < 500)
                 {
                     var view = Session.GetBattleView();
+                    // Правило без кубика (29.09.2026): наївний загін тепер виграє вузол 1.
+                    // Навмисно програний бій — відступ у раунді 2, щойно хід загону (полоса
+                    // Worst, №14.7) — та сама дія, що в MechanicsJournalCompletionTests.
+                    if (view.Round >= 2 && !view.IsAiTurn)
+                    {
+                        Run(() => Session.CombatRetreat());
+                        yield return 0;
+                        continue;
+                    }
                     var current = BotSupport.FindCurrent(view);
                     var target = current != null ? BotSupport.FindNearestOpposite(view, current) : null;
 

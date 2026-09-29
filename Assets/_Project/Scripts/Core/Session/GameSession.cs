@@ -170,6 +170,23 @@ namespace Game.Core.Session
         public HitRuleKind HitRule => _hitRule;
 
         /// <summary>
+        /// Змінити правило влучання посеред партії (меню паузи; власник, 29.09.2026: «в
+        /// настройках його можна змінить»). Діє з наступного бою — бій, що йде, лишається
+        /// на своєму правилі. Правило з кубиком потребує впровадженого IDiceRoller (R1).
+        /// </summary>
+        public void SetHitRule(HitRuleKind rule)
+        {
+            if (rule == _hitRule) return;
+            if (rule == HitRuleKind.Percent)
+            {
+                if (_roller == null)
+                    throw new InvalidOperationException("Правило з кубиком потребує IDiceRoller, впровадженого в GameSession (R1).");
+                _roller.RestoreState(_seed.ToString(CultureInfo.InvariantCulture));
+            }
+            _hitRule = rule;
+        }
+
+        /// <summary>
         /// Темп Напруги, з яким побудовано світ цієї партії
         /// (<see cref="NewGameOptions.TestBuildTensionPace"/>). Живе в сейві:
         /// інакше «Продовжити» будувало світ із типовими опціями, і партія,
@@ -2013,7 +2030,7 @@ namespace Game.Core.Session
             bool hasAttackRoll = !selfTarget && unit.Weapon != null && ability.WeaponAttackCount() > 0;
             var preview = hasAttackRoll
                 ? BuildAttackPreview(unit, resolvedTarget, unit.Weapon, ability.PreviewAccuracyBonus(),
-                    distance, ability.Range, result, apCost: ability.ApCost)
+                    distance, ability.Range, result, apCost: ability.ApCost, shots: ability.WeaponAttackCount())
                 : new AttackPreviewView
                 {
                     Result = result, ApCost = ability.ApCost, Distance = distance, Range = ability.Range,
@@ -2041,7 +2058,7 @@ namespace Game.Core.Session
 
         /// <summary>Спільний хвіст прев'ю: розклад шансу + прев'ю урону — той самий HitChanceCalculator/DamageResolver, яким котиться факт.</summary>
         private AttackPreviewView BuildAttackPreview(CombatUnit unit, CombatUnit target, WeaponDefinition w,
-            int accuracyBonus, int distance, int range, string result, int apCost)
+            int accuracyBonus, int distance, int range, string result, int apCost, int shots = 1)
         {
             bool ignoreCover = w.IsMelee;
             var cover = ignoreCover ? CoverType.None : _battle.Map.CoverAgainst(target.Pos, unit.Pos);
@@ -2081,6 +2098,9 @@ namespace Game.Core.Session
                 IsDamageDeterministic = !_battle.IsHitRulePercent,
                 DamageExpected = expected,
                 DamageUncertain = damageUncertain,
+                // Правило без кубика: результат саме цих ударів відомий наперед (інваріант 8).
+                PredictedShots = _battle.IsHitRulePercent ? 0 : shots,
+                PredictedHits = _battle.IsHitRulePercent ? 0 : Math.Max(0, _battle.PredictHits(unit, chance, shots)),
                 ApCost = apCost,
                 Distance = distance,
                 Range = range,

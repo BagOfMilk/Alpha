@@ -102,6 +102,13 @@ namespace Game.Core.Combat
         public UnitLifeState LifeState { get; internal set; } = UnitLifeState.Active;
         public int DownWindowRemaining { get; internal set; }
 
+        /// <summary>
+        /// Лічильник правила без кубика (<see cref="ThresholdRule"/>): кожен удар додає свій
+        /// шанс, на 100 — влучання. <see cref="UnsetCarry"/> — ще не бив (береться старт).
+        /// </summary>
+        internal int HitCarry = UnsetCarry;
+        internal const int UnsetCarry = int.MinValue;
+
         /// <summary>«Підбадьорити»: додаткові ОД на наступний власний хід (docs/ABILITIES.md).</summary>
         public int BonusApNextTurn { get; internal set; }
 
