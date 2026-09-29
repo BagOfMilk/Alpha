@@ -11,7 +11,8 @@ namespace Game.Core.Session.Views
         public int PartyValue;
         public int Days;
         public string ExpectedBand;
-        public int ExpectedMaterials;
+        public int ExpectedBuildComponent;
+        public int ExpectedCraftComponent;
         public int ExpectedGold;
         public int ExpectedWounded;
         public bool IsDelve;
@@ -26,7 +27,8 @@ namespace Game.Core.Session.Views
         public string ThreatBand;
         public int RoomsCleared;
         public int UnbankedGold;
-        public int UnbankedMaterials;
+        public int UnbankedBuildComponent;
+        public int UnbankedCraftComponent;
         public DungeonRoomView CurrentRoom;
 
         /// <summary>Прогін завершено (Extracted/Wiped/Abandoned) — назва полоси Outcome.</summary>

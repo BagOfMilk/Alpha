@@ -37,12 +37,12 @@ namespace Game.Tests.EditMode
             var site = DefaultSites.Outskirts();
             var party = new List<ISettlementActor> { new CompanionActorAdapter(scout, false, cfg) };
 
-            Assert.AreEqual(0, state.Resources.Get(ResourceType.Materials), "до вылазки материалов нет");
+            Assert.AreEqual(0, state.Resources.Get(ResourceType.BuildComponent), "до вылазки материалов нет");
 
             var result = ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet, party, new SiteLedger(), cfg);
             ExpeditionRunner.Complete(state, result);
 
-            Assert.Greater(state.Resources.Get(ResourceType.Materials), 0, "вылазка — кран материалов");
+            Assert.Greater(state.Resources.Get(ResourceType.BuildComponent), 0, "вылазка — кран материалов");
         }
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace Game.Tests.EditMode
             var costs = DefaultContent.AllSlots()
                 .Where(s => s.UnlockCost != null)
                 .SelectMany(s => s.UnlockCost.Keys);
-            CollectionAssert.Contains(costs.ToList(), ResourceType.Materials);
+            CollectionAssert.Contains(costs.ToList(), ResourceType.BuildComponent);
         }
 
         /// <summary>
@@ -83,17 +83,48 @@ namespace Game.Tests.EditMode
 
             // Вилазка — кран матеріалів. Беремо не зі списку, а зі справжнього
             // резолву: якщо вона перестане їх приносити, тест це побачить.
+            // Поправка №12.5: компонентів два — обидва мусять мати кран
+            // ззовні. Ганяємо КОЖНУ точку вилазки справжнім резолвом (фахівець
+            // з усіма трьома навичками підходу) і кожну кімнату данжу за її
+            // даними: якщо жодна точка не дасть крафтового, тест це побачить.
             var arch = new CompanionArchetype("scout", "Разведчик");
             arch.SetSkill(SkillType.Survival, 8);
+            arch.SetSkill(SkillType.Mechanics, 8);
+            arch.SetSkill(SkillType.Trade, 8);
             var scout = arch.CreateInstance("scout_1", cfg);
-            var loot = ExpeditionResolver.Resolve(DefaultSites.Outskirts(), ExpeditionApproach.Quiet,
-                new List<ISettlementActor> { new CompanionActorAdapter(scout, false, cfg) }, new SiteLedger(), cfg);
-            if (loot.Materials > 0) faucets.Add(ResourceType.Materials);
-            if (loot.Gold > 0) faucets.Add(ResourceType.Gold);
+            foreach (var site in DefaultSites.All())
+            {
+                var loot = ExpeditionResolver.Resolve(site, ExpeditionApproach.Quiet,
+                    new List<ISettlementActor> { new CompanionActorAdapter(scout, false, cfg) }, new SiteLedger(), cfg);
+                if (loot.BuildComponent > 0) faucets.Add(ResourceType.BuildComponent);
+                if (loot.CraftComponent > 0) faucets.Add(ResourceType.CraftComponent);
+                if (loot.Gold > 0) faucets.Add(ResourceType.Gold);
+            }
+            foreach (var siteId in Game.Core.Dungeons.DefaultDungeon.KnownSiteIds)
+                foreach (var room in Game.Core.Dungeons.DefaultDungeon.Rooms(siteId))
+                {
+                    if (room.GuaranteedBuildComponent > 0) faucets.Add(ResourceType.BuildComponent);
+                    if (room.GuaranteedCraftComponent > 0) faucets.Add(ResourceType.CraftComponent);
+                }
 
             var sinks = new HashSet<ResourceType>(slots
                 .Where(s => s.UnlockCost != null)
                 .SelectMany(s => s.UnlockCost.Keys));
+
+            // Будівлі — злив будівельного компонента (US-7.2): із каталогу, а
+            // не зі списку в тесті.
+            if (DefaultBuildings.All().Any(b => b.BuildComponentCost > 0 && !b.QuestOnly))
+                sinks.Add(ResourceType.BuildComponent);
+
+            // Крафт — злив крафтового компонента. Перевіряється ділом: апгрейд
+            // із цінами балансу мусить зменшити саме крафтовий компонент.
+            var craftLedger = new ResourceLedger();
+            craftLedger.Add(ResourceType.CraftComponent, 100);
+            craftLedger.Add(ResourceType.Gold, 100);
+            Game.Core.Items.CraftSystem.TryUpgrade(
+                new Game.Core.Items.ItemInstance(Game.Core.Items.DefaultItems.WornVest(), Game.Core.Items.Rarity.Common),
+                craftLedger, true, cfg.Items);
+            if (craftLedger.Get(ResourceType.CraftComponent) < 100) sinks.Add(ResourceType.CraftComponent);
 
             // Прокорм — злив їжі. Теж перевіряється ділом: ганяємо цикл і дивимось,
             // чи поменшало в гаманці.

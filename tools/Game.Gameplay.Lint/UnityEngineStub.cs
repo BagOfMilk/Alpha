@@ -17,6 +17,12 @@ namespace UnityEngine
     public class Object
     {
         public string name;
+
+        /// <summary>Спайк H4: HudToolkitView прибирає свій хост і PanelSettings.</summary>
+        public static void Destroy(Object obj) { }
+
+        /// <summary>Спайк H4: копія асета PanelSettings, щоб Play Mode не бруднив асет.</summary>
+        public static T Instantiate<T>(T original) where T : Object { return original; }
     }
 
     public class ScriptableObject : Object
@@ -341,6 +347,9 @@ namespace UnityEngine
     {
         public static float deltaTime { get { return 0f; } }
 
+        /// <summary>Спайк H4, критерій 4: автотур міряє час кадру без впливу timeScale.</summary>
+        public static float unscaledDeltaTime { get { return 0f; } }
+
         /// <summary>
         /// Бій v2 (docs/COMBAT_V2.md §7.4, автотур): реальний час з
         /// запуску процесу — водій міряє ним ватчдоги очікування такту/ходу
@@ -520,6 +529,7 @@ namespace UnityEngine
         public static GUILayoutOption Width(float width) { return new GUILayoutOption(); }
         public static GUILayoutOption Height(float height) { return new GUILayoutOption(); }
         public static GUILayoutOption ExpandWidth(bool expand) { return new GUILayoutOption(); }
+        public static GUILayoutOption MinWidth(float minWidth) { return new GUILayoutOption(); }
         public static GUILayoutOption ExpandHeight(bool expand) { return new GUILayoutOption(); }
     }
 

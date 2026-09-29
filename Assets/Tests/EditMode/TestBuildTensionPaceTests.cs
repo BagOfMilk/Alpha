@@ -253,19 +253,25 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Голод прискорює, а не задає темп: бот, що безперервно шле трьох
-        /// людей у вилазки (пости пустіють, ферми стоять — голод з восьмої
-        /// доби), доходить до бунту РАНІШЕ ситого еталона. До 25.09.2026 темп
-        /// тримався саме на голоді, і ситий тестер кризи не бачив зовсім.
+        /// Голод прискорює, а не задає темп: громада з порожніми фермами
+        /// доходить до бунту РАНІШЕ ситого еталона. До 25.09.2026 темп тримався
+        /// саме на голоді, і ситий тестер кризи не бачив зовсім.
+        ///
+        /// Поправка №12.7: раніше «голодним» був Pacifist — бот ставив
+        /// Максима на ферми (склад/лазарет/рада вже були зайняті), а вилазки
+        /// забирали його з поста. Зі стартом без будівель вільний Дід Овсій
+        /// стає на ферми і нікуди не ходить — Pacifist ситий. Голод тепер
+        /// ізольовано прямо: той самий домосід, тільки ферми порожні
+        /// (<see cref="EmptyFarmsHomebody"/>) — різниця з еталоном рівно одна.
         /// </summary>
         [Test]
         public void Hunger_BringsRiotSooner_ThanFedReference()
         {
             var (referenceLog, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
-            var (hungryLog, _) = Run(new PacifistPolicy(), suppressCouncilRoutine: true);
+            var (hungryLog, _) = Run(new EmptyFarmsHomebody(), suppressCouncilRoutine: true);
 
             Assert.IsNull(FirstDay(referenceLog, "production.food_shortage"), "еталон має бути ситим — інакше він міряє голод, а не темп");
-            Assert.NotNull(FirstDay(hungryLog, "production.food_shortage"), "бот із вилазками мав голодувати");
+            Assert.NotNull(FirstDay(hungryLog, "production.food_shortage"), "громада з порожніми фермами мала голодувати");
 
             int? referenceRiot = FirstDayCrisisResolved(referenceLog);
             int? hungryRiot = FirstDayCrisisResolved(hungryLog);
@@ -504,6 +510,29 @@ namespace Game.Tests.EditMode
             foreach (var e in log)
                 if (e.Key.StartsWith("tension.band.") || e.Key.StartsWith("forewarn.level"))
                     outTrajectory.Add(e.Day + ":" + e.Key);
+        }
+            /// <summary>Домосід, який не ставить нікого на ферми, — щоб голод був ЄДИНОЮ відмінністю від еталона.</summary>
+        private sealed class EmptyFarmsHomebody : IBotPolicy
+        {
+            private readonly HomebodyPolicy _inner = new HomebodyPolicy();
+            public string Name => "EmptyFarmsHomebody";
+            public Game.Core.Loop.IncidentPath ChooseIncidentPath(Game.Core.Session.Views.PendingOfferView offer) => _inner.ChooseIncidentPath(offer);
+            public int ChooseQuestOption(Game.Core.Session.Views.QuestOfferView offer) => _inner.ChooseQuestOption(offer);
+            public int ChooseSceneOption(Game.Core.Session.Views.SceneStepView step) => _inner.ChooseSceneOption(step);
+            public bool ChoosePatrol(Game.Core.Session.Views.SessionView view) => _inner.ChoosePatrol(view);
+            public IReadOnlyDictionary<string, string> ChooseAssignments(Game.Core.Session.Views.RosterView roster, Game.Core.Session.Views.CityView city)
+            {
+                var plan = _inner.ChooseAssignments(roster, city);
+                var result = new Dictionary<string, string>();
+                if (plan != null)
+                    foreach (var kv in plan)
+                        if (kv.Value != "settlement_farms") result[kv.Key] = kv.Value;
+                return result;
+            }
+            public ExpeditionChoice? ChooseExpedition(Game.Core.Session.Views.SessionView view) => _inner.ChooseExpedition(view);
+            public CombatAction ChooseCombatAction(Game.Core.Session.Views.BattleView battle) => _inner.ChooseCombatAction(battle);
+            public bool ChooseAutoResolve(Game.Core.Session.Views.BattleView battle) => _inner.ChooseAutoResolve(battle);
+            public bool ChoosePushDeeper(Game.Core.Session.Views.DungeonView view) => _inner.ChoosePushDeeper(view);
         }
     }
 }

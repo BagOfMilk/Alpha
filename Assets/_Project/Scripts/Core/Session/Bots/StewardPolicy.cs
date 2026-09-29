@@ -42,7 +42,7 @@ namespace Game.Core.Session.Bots
         public bool ChoosePatrol(SessionView view) => view != null && view.Day % 2 == 0;
 
         public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city)
-            => BotSupport.DefaultAssignments(roster);
+            => BotSupport.DefaultAssignments(roster, city);
 
         public ExpeditionChoice? ChooseExpedition(SessionView view)
         {

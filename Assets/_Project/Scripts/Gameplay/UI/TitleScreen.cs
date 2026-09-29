@@ -93,6 +93,12 @@ namespace Game.Gameplay.UI
                     shell.RequestQuit(); // §GameShell._quitRequested — не кликати Application.Quit просто з OnGUI
             }, GUILayout.Width(680f));
             GUILayout.EndArea();
+
+            // Титри асетів унизу титулу (Поправка №12.2): значки game-icons.net
+            // під CC BY 3.0 вимагають атрибуції там, де гравець її бачить.
+            var creditsStyle = new GUIStyle(AlphaSkin.HintLine) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            GUI.Label(new Rect(16f, Screen.height - 40f, Screen.width - 32f, 32f),
+                UkrainianText.Get("ui.title.credits", g), creditsStyle);
         }
 
         private static void DrawSlots(GameShell shell, Gender g)

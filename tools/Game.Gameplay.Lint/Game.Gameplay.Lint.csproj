@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <Compile Include="UnityEngineStub.cs" />
+    <!-- Спайк H4 (docs/HUD_DESIGN.md §8, критерій 3): заглушка UnityEngine.UIElements для шапки і стрічки на UI Toolkit. -->
+    <Compile Include="UIElementsStub.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/**/*.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Editor/**/*.cs" />
 
@@ -34,6 +36,8 @@
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/VillageLife.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/VillageShowcase.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/KenneyImportSettings.cs" />
+    <!-- Поправка №12.2: правила імпорту шрифтів і значків — та сама причина. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/ThirdPartyUiImportSettings.cs" />
     <!-- B8: общие примитивы VillageShowcase (PrefabUtility/ModelImporter-соседи,
          TextMesh, AssetDatabase.CreateAsset…) — та же причина исключения. -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/KitBuilder.cs" />

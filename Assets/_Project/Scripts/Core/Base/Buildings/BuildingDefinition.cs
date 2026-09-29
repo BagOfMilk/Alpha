@@ -38,7 +38,7 @@ namespace Game.Core.Base
         /// тільки вилазка: тому просунуті будівлі замикають петлю
         /// «вилазка → матеріали → будівництво».
         /// </summary>
-        public int MaterialsCost;
+        public int BuildComponentCost;
 
         /// <summary>Термін будівництва в добах. Видимих стадій завжди п'ять (US-7.3).</summary>
         public int Days;

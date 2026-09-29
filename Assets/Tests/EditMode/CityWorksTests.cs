@@ -38,6 +38,15 @@ namespace Game.Tests.EditMode
             public BaseState State;
         }
 
+        /// <summary>
+        /// Фікстура механік ради/міських робіт: Зала ради і Склад уже стоять.
+        /// До Поправки №12.7 це був <c>DefaultBuildings.StartingSet</c>; тепер
+        /// гра стартує без будівель (першу обирає гравець після прологу), а ці
+        /// тести перевіряють саму раду й будівництво, не старт — тож набір
+        /// названо явно, а не взято з «того, з чим стартує гра».
+        /// </summary>
+        private static readonly string[] HallAndStorehouse = { DefaultBuildings.CouncilHall, DefaultBuildings.Storehouse };
+
         private static City Build(BalanceConfig cfg, int population = 80, int tension = 300,
             IEnumerable<string> built = null)
         {
@@ -45,7 +54,7 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
 
-            var works = new CityWorks(built ?? DefaultBuildings.StartingSet);
+            var works = new CityWorks(built ?? HallAndStorehouse);
             works.ApplyToSlots(state);
 
             var steps = new List<IDayStep>(DayProcessor.DefaultSteps())
@@ -82,7 +91,7 @@ namespace Game.Tests.EditMode
         private static void Give(BaseState state, int gold, int materials = 0, int food = 0)
         {
             if (gold > 0) state.Resources.Add(ResourceType.Gold, gold);
-            if (materials > 0) state.Resources.Add(ResourceType.Materials, materials);
+            if (materials > 0) state.Resources.Add(ResourceType.BuildComponent, materials);
             if (food > 0) state.Resources.Add(ResourceType.Food, food);
         }
 
@@ -98,17 +107,17 @@ namespace Game.Tests.EditMode
             Give(c.State, temple.GoldCost - 1);
             Assert.AreEqual(BuildOrderResult.NotEnoughGold, c.Works.Order(DefaultBuildings.Temple, c.State));
 
-            Give(c.State, 100, temple.MaterialsCost - 1);
+            Give(c.State, 100, temple.BuildComponentCost - 1);
             int goldBefore = c.State.Resources.Get(ResourceType.Gold);
-            Assert.AreEqual(BuildOrderResult.NotEnoughMaterials, c.Works.Order(DefaultBuildings.Temple, c.State));
+            Assert.AreEqual(BuildOrderResult.NotEnoughBuildComponent, c.Works.Order(DefaultBuildings.Temple, c.State));
             Assert.AreEqual(goldBefore, c.State.Resources.Get(ResourceType.Gold),
                 "Нехватка материалов не имеет права съесть золото: либо стройка, либо ничего");
 
             Give(c.State, 0, 10);
-            int matBefore = c.State.Resources.Get(ResourceType.Materials);
+            int matBefore = c.State.Resources.Get(ResourceType.BuildComponent);
             Assert.AreEqual(BuildOrderResult.Started, c.Works.Order(DefaultBuildings.Temple, c.State));
             Assert.AreEqual(goldBefore - temple.GoldCost, c.State.Resources.Get(ResourceType.Gold));
-            Assert.AreEqual(matBefore - temple.MaterialsCost, c.State.Resources.Get(ResourceType.Materials));
+            Assert.AreEqual(matBefore - temple.BuildComponentCost, c.State.Resources.Get(ResourceType.BuildComponent));
 
             Assert.AreEqual(BuildOrderResult.AlreadyInProgress, c.Works.Order(DefaultBuildings.Temple, c.State),
                 "Дважды одно здание не заложить");
@@ -120,7 +129,7 @@ namespace Game.Tests.EditMode
             // Рішення власника: «усі мають шось коштувати». Безкоштовна будівля —
             // це не рішення гравця, а подарунок, і воно ламає ціну всіх інших.
             foreach (var b in DefaultBuildings.All())
-                Assert.Greater(b.GoldCost + b.MaterialsCost, 0, "Бесплатное здание: " + b.Id);
+                Assert.Greater(b.GoldCost + b.BuildComponentCost, 0, "Бесплатное здание: " + b.Id);
         }
 
         [Test]
@@ -130,7 +139,7 @@ namespace Game.Tests.EditMode
             // якого місто не виробляє. Це і замикає петлю «вилазка → будівництво».
             foreach (var id in new[] { DefaultBuildings.Market, DefaultBuildings.Tavern,
                                        DefaultBuildings.Temple, DefaultBuildings.Fortifications })
-                Assert.Greater(DefaultBuildings.Get(id).MaterialsCost, 0, id + " обязан стоить материалов");
+                Assert.Greater(DefaultBuildings.Get(id).BuildComponentCost, 0, id + " обязан стоить материалов");
         }
 
         [Test]
@@ -192,9 +201,9 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
 
-            var works = new CityWorks(DefaultBuildings.StartingSet, oneDayConstruction: true);
+            var works = new CityWorks(HallAndStorehouse, oneDayConstruction: true);
             var temple = DefaultBuildings.Get(DefaultBuildings.Temple);
-            Give(state, temple.GoldCost, temple.MaterialsCost);
+            Give(state, temple.GoldCost, temple.BuildComponentCost);
 
             Assert.AreEqual(BuildOrderResult.Started, works.Order(DefaultBuildings.Temple, state));
             Assert.IsFalse(works.Has(DefaultBuildings.Temple), "до першого AdvanceConstruction — ще не готово");
@@ -221,9 +230,9 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
 
-            var works = new CityWorks(DefaultBuildings.StartingSet); // oneDayConstruction: false (дефолт)
+            var works = new CityWorks(HallAndStorehouse); // oneDayConstruction: false (дефолт)
             var temple = DefaultBuildings.Get(DefaultBuildings.Temple);
-            Give(state, temple.GoldCost, temple.MaterialsCost);
+            Give(state, temple.GoldCost, temple.BuildComponentCost);
 
             Assert.AreEqual(BuildOrderResult.Started, works.Order(DefaultBuildings.Temple, state));
 
@@ -564,7 +573,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(c.State.GetSlot("infirmary_bed").IsOccupied);
 
             // Лазарет добудований.
-            new CityWorks(DefaultBuildings.StartingSet.Concat(new[] { DefaultBuildings.Infirmary }))
+            new CityWorks(HallAndStorehouse.Concat(new[] { DefaultBuildings.Infirmary }))
                 .ApplyToSlots(c.State);
 
             Assert.AreEqual("staff:medic@infirmary_bed", Steward.Staff(c.State),
@@ -629,7 +638,12 @@ namespace Game.Tests.EditMode
 
         private static City FullWorld(BalanceConfig cfg)
         {
-            var c = Build(cfg, population: 80, tension: 0);
+            // Поправка №12.7: гра стартує без будівель, першу обирає гравець.
+            // Обидва світи клапана (без господаря і з ним) стартують з тим самим
+            // першим вибором — Залою ради (перший варіант сцени, його бере
+            // «обережна» політика), склад будує вже господар. Порівнюється
+            // гра, а не старт.
+            var c = Build(cfg, population: 80, tension: 0, built: new[] { DefaultBuildings.CouncilHall });
 
             var roster = c.State.Roster;
             foreach (var pair in new Dictionary<string, SkillType>

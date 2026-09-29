@@ -91,7 +91,7 @@ namespace Game.Tests.EditMode
         public void NoCitySlot_ProducesMaterials()
         {
             foreach (var slot in DefaultContent.AllSlots())
-                Assert.AreNotEqual(ResourceType.Materials, slot.OutputResource,
+                Assert.AreNotEqual(ResourceType.BuildComponent, slot.OutputResource,
                     $"«{slot.DisplayName}» печатает материалы в городе, а Э6.2 это запрещает");
         }
 

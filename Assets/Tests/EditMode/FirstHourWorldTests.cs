@@ -45,14 +45,26 @@ namespace Game.Tests.EditMode
         {
             var world = FirstHourWorld.Build();
 
-            Assert.AreEqual("zakhar", world.BaseState.GetSlot("council_seat").AssignedCompanionId);
-            Assert.AreEqual("keeper", world.BaseState.GetSlot("storehouse_dock").AssignedCompanionId);
-            Assert.AreEqual("healer", world.BaseState.GetSlot("infirmary_bed").AssignedCompanionId);
+            // Поправка №12.7 (старт без будівель): пости ради, складу й
+            // лазарету закриті, доки не стане будівля, — тож і Захар, Дід Овсій
+            // та Гафія на старті вільні. Раніше тест фіксував стару реальність
+            // (усі троє на постах, рада й склад уже стоять, лазарет відкритий
+            // руками); на пост першої будівлі тепер ставить вибір після прологу.
+            foreach (var closed in new[] { "council_seat", "storehouse_dock", "infirmary_bed", "workshop_bench", "settlement_market" })
+            {
+                Assert.IsFalse(world.BaseState.GetSlot(closed).Unlocked, closed + ": пост будівлі закритий до її появи");
+                Assert.IsNull(world.BaseState.GetSlot(closed).AssignedCompanionId, closed + " обязан пустовать на старте");
+            }
+            foreach (var free in new[] { "zakhar", "keeper", "healer" })
+                Assert.IsFalse(world.Roster.Get(free).IsAssigned, free + ": пост ще не збудований — вільний");
 
-            // Чотири з семи постів порожні на старті (§3.0 FIRST_HOUR) — це
-            // видима ціна, а не забута розстановка.
-            foreach (var empty in new[] { "settlement_market", "settlement_farms", "scouting_post", "workshop_bench" })
+            // Ферми й розвідпост будівлі не потребують — відкриті, але порожні
+            // (§3.0 FIRST_HOUR): видима ціна, а не забута розстановка.
+            foreach (var empty in new[] { "settlement_farms", "scouting_post" })
+            {
+                Assert.IsTrue(world.BaseState.GetSlot(empty).Unlocked, empty + ": відкритий без будівлі");
                 Assert.IsNull(world.BaseState.GetSlot(empty).AssignedCompanionId, empty + " обязан пустовать на старте");
+            }
 
             Assert.IsFalse(world.Roster.Get("protagonist").IsAssigned, "Протагонист — в полі, не на посту");
             Assert.IsFalse(world.Roster.Get("maksym").IsAssigned, "Максим — в полі, не на посту");
@@ -60,13 +72,16 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Build_StartingSet_IsAlreadyBuilt()
+        public void Build_StartsWithoutAnyBuilding()
         {
+            // Поправка №8.4, уточнена №12.7 (рішення власника 29.09.2026):
+            // «Так придовити, перша будівля зьявляється як вибор після прологу».
             var world = FirstHourWorld.Build();
 
-            Assert.IsTrue(world.CityWorks.Has("council_hall"), "Зал совета уже стоит (Поправка №6.1)");
-            Assert.IsTrue(world.CityWorks.Has("storehouse"), "Склад уже стоит (Поправка №6.1)");
-            Assert.IsFalse(world.CityWorks.Has("infirmary"), "Лазарет НЕ достроен — пост открыт вручную под §3.0, не зданием");
+            CollectionAssert.IsEmpty(DefaultBuildings.StartingSet);
+            CollectionAssert.IsEmpty(world.CityWorks.Built.ToList(), "гра стартує без жодної будівлі");
+            foreach (var def in DefaultBuildings.All())
+                Assert.IsFalse(world.CityWorks.IsBuilding(def.Id), def.Id + ": і без жодної будови в процесі");
         }
 
         [Test]

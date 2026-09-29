@@ -235,12 +235,35 @@ namespace Game.Gameplay.UI
             return UkrainianText.Has(key, gender) ? UkrainianText.Get(key, gender) : rawTensionBand;
         }
 
-        /// <summary>SessionView.CrowdBand ("Hamlet".."City") — той самий тір, що й Tier, словом.</summary>
+        /// <summary>
+        /// SessionView.CrowdBand ("Hamlet".."City") — смуга ЛЮДНОСТІ словом. Це не
+        /// тір: людей може бути як у слободі, а тір ще хутірський (тір росте від
+        /// людей І ключової будівлі, Поправка №6.4). Назву тіра дає <see cref="TierName"/>.
+        /// </summary>
         public static string CrowdChip(string rawCrowdBand, Gender gender)
         {
             if (string.IsNullOrEmpty(rawCrowdBand)) return "";
             string key = "ui.crowd." + rawCrowdBand.ToLowerInvariant();
             return UkrainianText.Has(key, gender) ? UkrainianText.Get(key, gender) : rawCrowdBand;
+        }
+
+        /// <summary>
+        /// Назва тіра поселення (SessionView.Tier 1..5) — ті самі слова, що й
+        /// шкала людності: Хутір, Село, Слобода, Містечко, Місто.
+        /// </summary>
+        public static string TierName(int tier, Gender gender)
+        {
+            string band;
+            switch (tier)
+            {
+                case 1: band = "hamlet"; break;
+                case 2: band = "village"; break;
+                case 3: band = "settlement"; break;
+                case 4: band = "town"; break;
+                case 5: band = "city"; break;
+                default: return "";
+            }
+            return UkrainianText.Get("ui.crowd." + band, gender);
         }
 
         /// <summary>FactionSummary.Band ("Hostile".."Allied") — GameSession віддає сирий <c>ToString()</c> enum, R7 вимагає перекладу за ключем, не сирого <c>DisplayName</c>.</summary>
@@ -406,9 +429,9 @@ namespace Game.Gameplay.UI
         public static string BuildingCostLine(Game.Core.Base.BuildingDefinition def, Gender g, bool testBuildOneDayConstruction = false)
         {
             if (def == null) return string.Empty;
-            string cost = def.MaterialsCost > 0
+            string cost = def.BuildComponentCost > 0
                 ? UkrainianText.Format("ui.buildings.cost_both", g,
-                    "gold", def.GoldCost.ToString(), "materials", def.MaterialsCost.ToString())
+                    "gold", def.GoldCost.ToString(), "build", def.BuildComponentCost.ToString())
                 : UkrainianText.Format("ui.buildings.cost_gold", g, "gold", def.GoldCost.ToString());
             int days = testBuildOneDayConstruction ? 1 : def.Days;
             return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", days.ToString());
@@ -461,7 +484,7 @@ namespace Game.Gameplay.UI
                 case BuildOrderResult.AlreadyInProgress: return UkrainianText.Get("ui.feedback.build.already_in_progress", g);
                 case BuildOrderResult.QuestOnly: return UkrainianText.Get("ui.feedback.build.quest_only", g);
                 case BuildOrderResult.NotEnoughGold: return UkrainianText.Get("ui.feedback.build.not_enough_gold", g);
-                default: return UkrainianText.Get("ui.feedback.build.not_enough_materials", g);
+                default: return UkrainianText.Get("ui.feedback.build.not_enough_build_component", g);
             }
         }
 

@@ -51,10 +51,18 @@ namespace Game.Core.Quests
         /// <summary>Досвід протагоністу/учасникам — хто саме отримує, вирішує D1.</summary>
         public int Xp;
 
+        /// <summary>
+        /// Id будівель, які стають ОДРАЗУ і без ціни (Поправка №12.7: перша
+        /// будівля — вибір після прологу, «спільне зусилля громади»; той самий
+        /// шов годиться для будівлі-нагороди квесту). Застосовує D1 через
+        /// <c>CityWorks.GrantBuilt</c> — Quests про CityWorks не знає.
+        /// </summary>
+        public readonly List<string> BuildingIds = new List<string>();
+
         public bool IsEmpty =>
             TensionDelta == 0 && Xp == 0 &&
             FactionDeltas.Count == 0 && LoyaltyDeltas.Count == 0 &&
-            Flags.Count == 0 && ItemIds.Count == 0;
+            Flags.Count == 0 && ItemIds.Count == 0 && BuildingIds.Count == 0;
 
         // ---- fluent-будівельники для контенту (DefaultQuests) ----
 
@@ -80,6 +88,11 @@ namespace Game.Core.Quests
             return this;
         }
         public QuestConsequence WithXp(int amount) { Xp = amount; return this; }
+        public QuestConsequence Building(string buildingId)
+        {
+            if (!string.IsNullOrEmpty(buildingId)) BuildingIds.Add(buildingId);
+            return this;
+        }
 
         /// <summary>Об'єднати два наслідки (перехід + фінальна нагорода термінала).</summary>
         public static QuestConsequence Merge(QuestConsequence a, QuestConsequence b)
@@ -102,6 +115,8 @@ namespace Game.Core.Quests
             result.Flags.AddRange(b.Flags);
             result.ItemIds.AddRange(a.ItemIds);
             result.ItemIds.AddRange(b.ItemIds);
+            result.BuildingIds.AddRange(a.BuildingIds);
+            result.BuildingIds.AddRange(b.BuildingIds);
             return result;
         }
     }

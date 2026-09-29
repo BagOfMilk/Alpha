@@ -140,7 +140,7 @@ namespace Alpha.Sim
             public int TotalEvents;
             public int Decisions, BloodyDecisions, Battles, Crises;
             public string FinalTensionBand, FinalCrowdBand, FinaleOutcomeKey;
-            public int FinalGold, FinalMaterials, FinalFood, FinalTier;
+            public int FinalGold, FinalBuild, FinalCraft, FinalFood, FinalTier;
         }
 
         private static PolicySummary Summarize(string policyName, GameSession session, List<GameEvent> log, int days)
@@ -164,7 +164,8 @@ namespace Alpha.Sim
 
             var econ = session.GetEconomyView();
             s.FinalGold = econ.Gold;
-            s.FinalMaterials = econ.Materials;
+            s.FinalBuild = econ.BuildComponent;
+            s.FinalCraft = econ.CraftComponent;
             s.FinalFood = econ.Food;
 
             var summary = session.GetSummaryView();
@@ -176,13 +177,13 @@ namespace Alpha.Sim
         private static void WriteSummary(string path, List<PolicySummary> all)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("policy,days,totalEvents,decisions,bloodyDecisions,battles,crises,finalTensionBand,finalCrowdBand,finalTier,finalGold,finalMaterials,finalFood,finaleOutcomeKey");
+            sb.AppendLine("policy,days,totalEvents,decisions,bloodyDecisions,battles,crises,finalTensionBand,finalCrowdBand,finalTier,finalGold,finalBuild,finalCraft,finalFood,finaleOutcomeKey");
             foreach (var m in all)
             {
                 sb.Append(m.Policy).Append(',').Append(m.Days).Append(',').Append(m.TotalEvents).Append(',')
                   .Append(m.Decisions).Append(',').Append(m.BloodyDecisions).Append(',').Append(m.Battles).Append(',')
                   .Append(m.Crises).Append(',').Append(m.FinalTensionBand).Append(',').Append(m.FinalCrowdBand).Append(',')
-                  .Append(m.FinalTier).Append(',').Append(m.FinalGold).Append(',').Append(m.FinalMaterials).Append(',')
+                  .Append(m.FinalTier).Append(',').Append(m.FinalGold).Append(',').Append(m.FinalBuild).Append(',').Append(m.FinalCraft).Append(',')
                   .Append(m.FinalFood).Append(',').Append(m.FinaleOutcomeKey)
                   .AppendLine();
             }

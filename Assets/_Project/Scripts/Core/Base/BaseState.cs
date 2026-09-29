@@ -241,7 +241,8 @@ namespace Game.Core.Base
 
         // ---- зліпок господарства (Foundation/A1) ----
         //
-        // g:<золото>|m:<матеріали>|f:<їжа>|u:<відкриті слоти через ','>|
+        // g:<золото>|m:<будівельний компонент>|c:<крафтовий компонент>|f:<їжа>|
+        // u:<відкриті слоти через ','>|
         // x:<companionId:рівень:досвід через ',' >|h:<0|1>
         // Без «;» і внутрішнього «=» — зовнішній зліпок (SettlementSave) ріже за
         // ними на своєму рівні. Звичайні публічні методи, не реалізація
@@ -251,7 +252,8 @@ namespace Game.Core.Base
         {
             var sb = new StringBuilder();
             sb.Append("g:").Append(Resources.Get(ResourceType.Gold).ToString(CultureInfo.InvariantCulture));
-            sb.Append("|m:").Append(Resources.Get(ResourceType.Materials).ToString(CultureInfo.InvariantCulture));
+            sb.Append("|m:").Append(Resources.Get(ResourceType.BuildComponent).ToString(CultureInfo.InvariantCulture));
+            sb.Append("|c:").Append(Resources.Get(ResourceType.CraftComponent).ToString(CultureInfo.InvariantCulture));
             sb.Append("|f:").Append(Resources.Get(ResourceType.Food).ToString(CultureInfo.InvariantCulture));
 
             var unlocked = new List<string>();
@@ -281,6 +283,14 @@ namespace Game.Core.Base
         {
             if (string.IsNullOrEmpty(blob)) return;
 
+            // Поправка №12.5: зліпок до розділу компонентів має лише «m:»
+            // (спільні матеріали) і не має «c:». Спільні матеріали
+            // відновлюються в будівельний компонент, крафтового в такому
+            // зліпку не було — він стає нулем, а не стартовим значенням
+            // свіжого світу (інакше завантаження старого сейву дарувало б
+            // компонент, якого гравець ніколи не видобував).
+            bool sawCraft = false;
+
             foreach (var part in blob.Split('|'))
             {
                 if (part.Length < 2 || part[1] != ':') continue;
@@ -292,7 +302,11 @@ namespace Game.Core.Base
                         Resources.Add(ResourceType.Gold, ParseInt(body) - Resources.Get(ResourceType.Gold));
                         break;
                     case 'm':
-                        Resources.Add(ResourceType.Materials, ParseInt(body) - Resources.Get(ResourceType.Materials));
+                        Resources.Add(ResourceType.BuildComponent, ParseInt(body) - Resources.Get(ResourceType.BuildComponent));
+                        break;
+                    case 'c':
+                        sawCraft = true;
+                        Resources.Add(ResourceType.CraftComponent, ParseInt(body) - Resources.Get(ResourceType.CraftComponent));
                         break;
                     case 'f':
                         Resources.Add(ResourceType.Food, ParseInt(body) - Resources.Get(ResourceType.Food));
@@ -318,6 +332,9 @@ namespace Game.Core.Base
                         break;
                 }
             }
+
+            if (!sawCraft)
+                Resources.Add(ResourceType.CraftComponent, -Resources.Get(ResourceType.CraftComponent));
         }
 
         private static int ParseInt(string s)

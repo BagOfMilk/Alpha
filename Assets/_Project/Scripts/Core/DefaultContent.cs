@@ -213,7 +213,7 @@ namespace Game.Core
                 UnlockCost = new Dictionary<ResourceType, int>
                 {
                     { ResourceType.Gold, 40 },
-                    { ResourceType.Materials, 25 }
+                    { ResourceType.BuildComponent, 25 }
                 }
             });
 

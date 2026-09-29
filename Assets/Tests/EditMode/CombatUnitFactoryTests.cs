@@ -146,10 +146,13 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void EnemyCatalog_HasFourDistinctEntries_KeyedById()
+        public void EnemyCatalog_HasDistinctEntries_KeyedById()
         {
             var catalog = DefaultCombatContent.EnemyCatalog();
-            Assert.AreEqual(4, catalog.Count);
+            Assert.AreEqual(6, catalog.Count);
+            // Поправка №11: вороги бойових кімнат данжів.
+            Assert.IsTrue(catalog.ContainsKey("enemy.horde_vanguard"));
+            Assert.IsTrue(catalog.ContainsKey("enemy.forest_bandit"));
             Assert.IsTrue(catalog.ContainsKey("enemy.horde_scout"));
             Assert.IsTrue(catalog.ContainsKey("enemy.horde_skirmisher"));
             Assert.IsTrue(catalog.ContainsKey("enemy.tuhar_boyar"));

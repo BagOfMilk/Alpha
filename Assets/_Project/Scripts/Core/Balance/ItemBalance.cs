@@ -12,8 +12,8 @@ namespace Game.Core.Balance
     [Serializable]
     public sealed class ItemBalance
     {
-        /// <summary>Крафт-апгрейд рідкості: скільки Матеріалів (лише з вилазок, Поправка №4.1).</summary>
-        public int CraftMaterialsCost = 3;
+        /// <summary>Крафт-апгрейд рідкості: скільки крафтового компонента (лише ззовні, Поправка №12.5).</summary>
+        public int CraftComponentCost = 3;
 
         /// <summary>Крафт-апгрейд рідкості: скільки Золота (валюта відряду, Поправка №4.1).</summary>
         public int CraftGoldCost = 5;

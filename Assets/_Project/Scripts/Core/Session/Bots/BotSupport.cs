@@ -41,11 +41,17 @@ namespace Game.Core.Session.Bots
         /// відправляє (seamsForD1: "unassign+away+vacated+save"), тож конфлікту
         /// з <see cref="MaybeDepartExpedition"/> немає. Без цього рядок §6.1 №2
         /// ("assign.made") ніколи не спрацював би: троє "польових" — єдині
-        /// Idle-напарники без поста на добу 1 (Захар/Овсій/Гафія вже на трьох
-        /// постах зі старту, і жоден генератор населення не заводить НОВИХ
-        /// іменних Companion — R1/Поправка №5, каст фіксований).
+        /// Idle-напарники без поста на добу 1 (на пост першої будівлі, обраної
+        /// після прологу, стає її іменний — Захар, Овсій або Гафія, Поправка
+        /// №12.7; жоден генератор населення не заводить НОВИХ іменних
+        /// Companion — R1/Поправка №5, каст фіксований).
+        ///
+        /// Поправка №12.7 (старт без будівель): з <paramref name="city"/>
+        /// закриті пости (їхня будівля ще не стоїть) пропускаються — інакше
+        /// бот «ставив» вільних на склад/ринок без будівлі, наказ відмовляв
+        /// (SlotLocked), і ці люди не діставались відкритим постам (фермам).
         /// </summary>
-        public static IReadOnlyDictionary<string, string> DefaultAssignments(RosterView roster)
+        public static IReadOnlyDictionary<string, string> DefaultAssignments(RosterView roster, CityView city = null)
         {
             var result = new Dictionary<string, string>();
             if (roster?.Companions == null) return result;
@@ -54,15 +60,25 @@ namespace Game.Core.Session.Bots
             foreach (var c in roster.Companions)
                 if (!string.IsNullOrEmpty(c.AssignedSlotId)) occupied.Add(c.AssignedSlotId);
 
+            var open = city?.OpenPosts != null ? new HashSet<string>(city.OpenPosts) : null;
+
             foreach (var slotId in FirstHourWorld.Positions)
             {
                 if (occupied.Contains(slotId)) continue;
+                if (open != null && !open.Contains(slotId)) continue;
 
                 foreach (var c in roster.Companions)
                 {
                     if (c.Status != CompanionStatus.Idle) continue;
                     if (!string.IsNullOrEmpty(c.AssignedSlotId)) continue;
                     if (result.ContainsKey(c.Id)) continue;
+                    // Поправка №12.7: Захар, Дід Овсій і Гафія чекають СВОГО
+                    // поста (раду/склад/лазарет) — він відкриється будівлею, а
+                    // не займають чужий. Інакше старт без будівель розкидав би
+                    // фахівців по фермах, і збудований склад отримував би
+                    // випадкового, а не комірника.
+                    string ownPost = OwnPostOf(c.Id);
+                    if (ownPost != null && ownPost != slotId) continue;
 
                     result[c.Id] = slotId;
                     occupied.Add(slotId);
@@ -71,6 +87,68 @@ namespace Game.Core.Session.Bots
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Розстановка журнального гравця (<c>MechanicsJournalCompletionTests</c>
+        /// і Unity-тур <c>-autoplay-journal</c> — ОДНА функція, щоб обидва
+        /// ходили тими самими командами, Статут UI-14). Це навмисно недбалий
+        /// господар: ферми лишає порожніми (голод штовхає Напругу до зміни
+        /// смуги й природного бунту — інакше «добра економіка» з облавами
+        /// тримає Спокій усі 40 діб), а протагоніста, коли він удома, ставить
+        /// на розвідпост (постовий досвід — підвищення рівня).
+        ///
+        /// До Поправки №12.7 так виходило саме собою: склад, лазарет і рада
+        /// стояли від старту зайнятими, і за замовчуванням протагоніст
+        /// потрапляв на розвідпост, а ферми — нікому. Зі стартом без будівель
+        /// розстановка за замовчуванням нагодувала громаду — і три записи
+        /// журналу стали недосяжні. Поведінку названо явно.
+        ///
+        /// <paramref name="starveFarms"/> — ферми порожні, доки журнал не
+        /// побачив зміну смуги Напруги і природний бунт; потім господар
+        /// годує громаду, і вона може вирости до нового тіра (запис
+        /// population_tier). Рішення, коли перестати морити, приймає водій
+        /// журнального туру з <c>GetMechanicsJournal</c>.
+        /// </summary>
+        public static IReadOnlyDictionary<string, string> JournalAssignments(RosterView roster, CityView city, bool starveFarms = true)
+        {
+            var result = new Dictionary<string, string>();
+            if (roster?.Companions == null) return result;
+
+            bool scoutingFree = true;
+            foreach (var c in roster.Companions)
+                if (c.AssignedSlotId == "scouting_post") scoutingFree = false;
+            bool scoutingOpen = city?.OpenPosts == null || System.Linq.Enumerable.Contains(city.OpenPosts, "scouting_post");
+
+            string protagonistPost = null;
+            foreach (var c in roster.Companions)
+                if (c.Id == GameSession.ProtagonistId && c.Status == CompanionStatus.Idle &&
+                    string.IsNullOrEmpty(c.AssignedSlotId) && scoutingFree && scoutingOpen)
+                {
+                    result[c.Id] = "scouting_post";
+                    protagonistPost = "scouting_post";
+                }
+
+            foreach (var kv in DefaultAssignments(roster, city))
+            {
+                if (starveFarms && kv.Value == "settlement_farms") continue;
+                if (kv.Value == protagonistPost || result.ContainsKey(kv.Key)) continue;
+                result[kv.Key] = kv.Value;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Пост, для якого іменний фахівець стартового касту «свій» — той самий,
+        /// на який його ставить вибір першої будівлі (<see cref="Scenes.OpeningScenes.FirstBuildingKeeperOf"/>).
+        /// Null — у напарника свого поста немає.
+        /// </summary>
+        private static string OwnPostOf(string companionId)
+        {
+            foreach (var buildingId in Base.DefaultBuildings.FirstBuildingChoices)
+                if (Scenes.OpeningScenes.FirstBuildingKeeperOf(buildingId) == companionId)
+                    return Base.DefaultBuildings.Get(buildingId)?.OpensSlotId;
+            return null;
         }
 
         /// <summary>Сентинел-QuestId синтетичного офера події данжу (§3.4, кімната 3 "Прихований попіл") — щоб ChooseQuestOption міг відрізнити його від справжнього квесту.</summary>

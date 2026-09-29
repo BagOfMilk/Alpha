@@ -28,7 +28,10 @@ namespace Game.Core.Expeditions
         public OutcomeBand Band;
 
         public int Days;
-        public int Materials;
+        /// <summary>Будівельний компонент (Поправка №12.5).</summary>
+        public int BuildComponent;
+        /// <summary>Крафтовий компонент (Поправка №12.5).</summary>
+        public int CraftComponent;
         public int Gold;
 
         /// <summary>Скільки разів точку вже відпрацьовували і в скільки це обійшлося здобичі.</summary>
@@ -49,7 +52,10 @@ namespace Game.Core.Expeditions
         public OutcomeBand Band;
 
         public int Days;
-        public int Materials;
+        /// <summary>Будівельний компонент (Поправка №12.5).</summary>
+        public int BuildComponent;
+        /// <summary>Крафтовий компонент (Поправка №12.5).</summary>
+        public int CraftComponent;
         public int Gold;
 
         /// <summary>Люди, знайдені на точці. Приходять у місто через міські роботи.</summary>
@@ -76,7 +82,7 @@ namespace Game.Core.Expeditions
               .Append((int)Approach).Append('|')
               .Append((int)Band).Append('|')
               .Append(Days.ToString(CultureInfo.InvariantCulture)).Append('|')
-              .Append(Materials.ToString(CultureInfo.InvariantCulture)).Append('|')
+              .Append(BuildComponent.ToString(CultureInfo.InvariantCulture)).Append('|')
               .Append(Gold.ToString(CultureInfo.InvariantCulture)).Append('|')
               .Append(People.ToString(CultureInfo.InvariantCulture)).Append('|');
 
@@ -92,6 +98,11 @@ namespace Game.Core.Expeditions
                 if (i > 0) sb.Append('~');
                 sb.Append(PartyIds[i]);
             }
+
+            // Поправка №12.5: крафтовий компонент — ОСТАННІМ полем, щоб
+            // зліпок до розділу (9 полів) читався як є: поле 4 у ньому —
+            // спільні матеріали, вони йдуть у будівельний, крафтового — нуль.
+            sb.Append('|').Append(CraftComponent.ToString(CultureInfo.InvariantCulture));
 
             return sb.ToString();
         }
@@ -109,7 +120,7 @@ namespace Game.Core.Expeditions
                 Approach = (ExpeditionApproach)ParseInt(f[1]),
                 Band = (OutcomeBand)ParseInt(f[2]),
                 Days = ParseInt(f[3]),
-                Materials = ParseInt(f[4]),
+                BuildComponent = ParseInt(f[4]),
                 Gold = ParseInt(f[5]),
                 People = ParseInt(f[6]),
             };
@@ -125,6 +136,9 @@ namespace Game.Core.Expeditions
             if (f.Length > 8 && !string.IsNullOrEmpty(f[8]))
                 foreach (var id in f[8].Split('~'))
                     result.PartyIds.Add(id);
+
+            if (f.Length > 9)
+                result.CraftComponent = ParseInt(f[9]);
 
             return result;
         }

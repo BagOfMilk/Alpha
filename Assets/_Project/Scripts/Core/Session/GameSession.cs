@@ -877,7 +877,8 @@ namespace Game.Core.Session
                 PartyValue = preview.PartyValue,
                 Days = preview.Days,
                 ExpectedBand = preview.Band.ToString(),
-                ExpectedMaterials = preview.Materials,
+                ExpectedBuildComponent = preview.BuildComponent,
+                ExpectedCraftComponent = preview.CraftComponent,
                 ExpectedGold = preview.Gold,
                 ExpectedWounded = preview.ExpectedWounded,
                 IsDelve = false
@@ -1577,7 +1578,8 @@ namespace Game.Core.Session
             RequireState(SessionState.Dungeon);
             var rep = _dungeon.Extract(_state);
             if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
-            LogEvent("dungeon.extract", Args("materials", rep.Materials.ToString(CultureInfo.InvariantCulture),
+            LogEvent("dungeon.extract", Args("build", rep.BuildComponent.ToString(CultureInfo.InvariantCulture),
+                "craft", rep.CraftComponent.ToString(CultureInfo.InvariantCulture),
                 "gold", rep.Gold.ToString(CultureInfo.InvariantCulture)));
 
             ExpeditionResult discarded;
@@ -1643,7 +1645,8 @@ namespace Game.Core.Session
                 ThreatBand = _dungeon.ThreatBand.ToString(),
                 RoomsCleared = _dungeon.RoomsCleared,
                 UnbankedGold = _dungeon.UnbankedGold,
-                UnbankedMaterials = _dungeon.UnbankedMaterials,
+                UnbankedBuildComponent = _dungeon.UnbankedBuildComponent,
+                UnbankedCraftComponent = _dungeon.UnbankedCraftComponent,
                 CurrentRoom = _dungeon.CurrentCleared ? null : BuildDungeonRoomView(_dungeon.CurrentRoom),
                 Outcome = _dungeon.Outcome.ToString(),
                 AwaitingBattle = _dungeon.AwaitingBattle,
@@ -2202,6 +2205,18 @@ namespace Game.Core.Session
                     reachableCosts.Add(kv.Value);
                 }
 
+            // Пастки гравця — видно на арені; ворожі — ні (поки не спрацюють).
+            var traps = new List<BattleTrapView>();
+            foreach (var trap in _battle.Traps)
+                if (trap.OwnerSide == Side.Player)
+                    traps.Add(new BattleTrapView
+                    {
+                        Pos = new GridPosView(trap.Pos.X, trap.Pos.Y),
+                        AbilityId = trap.AbilityId,
+                        TrapDamage = trap.Damage,
+                        StatusOnTrigger = trap.StatusOnTrigger == StatusType.None ? null : trap.StatusOnTrigger.ToString()
+                    });
+
             var initiative = new List<string>();
             if (_battle.TurnOrder != null)
                 foreach (var u in _battle.TurnOrder) initiative.Add(u.Id);
@@ -2232,6 +2247,7 @@ namespace Game.Core.Session
                 Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable },
                 Units = units,
                 ReachableTiles = reachable,
+                Traps = traps,
                 ReachableTileCosts = reachableCosts,
                 IsAiTurn = isAiTurn,
                 CurrentUnitId = _battle.Current != null && _battle.Current.IsActive ? _battle.Current.Id : null,
@@ -2644,7 +2660,8 @@ namespace Game.Core.Session
             return new EconomyView
             {
                 Gold = _state.Resources.Get(ResourceType.Gold),
-                Materials = _state.Resources.Get(ResourceType.Materials),
+                BuildComponent = _state.Resources.Get(ResourceType.BuildComponent),
+                CraftComponent = _state.Resources.Get(ResourceType.CraftComponent),
                 Food = _state.Resources.Get(ResourceType.Food)
             };
         }
@@ -3370,7 +3387,13 @@ namespace Game.Core.Session
             ExpeditionResult result;
             var returned = _party.Return(_state, out result);
             ExpeditionRunner.Complete(_state, result, _works);
-            LogEvent("expedition.returned", Args("siteId", result?.SiteId, "band", result?.Band.ToString()));
+            // Поправка №12.5 (MECH-03, сигнал ресурсу): гравець бачить, ЩО
+            // принесла саме ця точка — інакше різниця між руїнами (будівельний)
+            // і майстернею (крафтовий) лишалась би невидимою.
+            LogEvent("expedition.returned", Args("siteId", result?.SiteId, "band", result?.Band.ToString(),
+                "gold", (result?.Gold ?? 0).ToString(CultureInfo.InvariantCulture),
+                "build", (result?.BuildComponent ?? 0).ToString(CultureInfo.InvariantCulture),
+                "craft", (result?.CraftComponent ?? 0).ToString(CultureInfo.InvariantCulture)));
 
             // R8 (seamsForD1): вилазка — віха Готовності, що трапляється ПОЗА
             // конвеєром дня (ReadinessTickStep її не бачить), тож зараховує
@@ -3498,10 +3521,37 @@ namespace Game.Core.Session
             foreach (var kv in c.LoyaltyDeltas) LogLoyaltyChange(ApplyLoyaltyDelta(kv.Key, kv.Value, sourceId));
             foreach (var flag in c.Flags) _flags.Set(flag);
             foreach (var itemId in c.ItemIds) { GrantNamedItemById(itemId); LogEvent("loot.dropped", Args("itemId", itemId, "named", "1")); }
+            foreach (var buildingId in c.BuildingIds) GrantBuildingFromConsequence(buildingId);
             if (c.Xp != 0) GrantXp(ProtagonistId, c.Xp);
 
             ApplyHafiyaGrassBonusToSickChildIfNeeded();
             ApplyBargainedTimeBonusIfNeeded();
+        }
+
+        /// <summary>
+        /// Поправка №12.7: будівля з наслідку рішення (перша будівля після
+        /// прологу, або будівля-нагорода) стає ОДРАЗУ і без ціни — «перше
+        /// спільне зусилля громади». Її пост відкривається, і на нього стає
+        /// свій іменний (<see cref="OpeningScenes.FirstBuildingKeeperOf"/>), якщо
+        /// той вільний і вдома: інакше вибір лишився б без видимого наслідку
+        /// до першого ручного призначення (Статут MECH-05). Обидві зміни звучать
+        /// у стрічці окремими подіями — жодної тихої зміни міста (MECH-13).
+        /// </summary>
+        private void GrantBuildingFromConsequence(string buildingId)
+        {
+            if (_works == null || _state == null) return;
+            if (!_works.GrantBuilt(buildingId, _state)) return;
+            LogEvent("city.granted", Args("buildingId", buildingId));
+
+            var def = DefaultBuildingsType.Get(buildingId);
+            string slotId = def?.OpensSlotId;
+            string keeperId = OpeningScenes.FirstBuildingKeeperOf(buildingId);
+            if (string.IsNullOrEmpty(slotId) || string.IsNullOrEmpty(keeperId)) return;
+
+            var keeper = _worldRoster?.Get(keeperId);
+            if (keeper == null || !string.IsNullOrEmpty(keeper.AssignedSlotId)) return;
+            if (_state.TryAssign(keeperId, slotId) == AssignmentResult.Success)
+                LogEvent("city.granted.staffed", Args("companionId", keeperId, "slotId", slotId));
         }
 
         /// <summary>ПЛЕЙСХОЛДЕР: наскільки торг за час (сцена «Сусід з претензією», варіант «bargain») полегшує тихий шлях вузла 1.</summary>

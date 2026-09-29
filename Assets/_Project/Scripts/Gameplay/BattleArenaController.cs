@@ -236,6 +236,7 @@ namespace Game.Gameplay
         // ================= Бій v2: оверлеї над юнітами (§6) =================
 
         private readonly List<BattleUnitOverlay> _overlays = new List<BattleUnitOverlay>();
+        private readonly List<BattleTrapOverlay> _trapOverlays = new List<BattleTrapOverlay>();
 
         // ================= Бій v2: приціл дозору / тайли під загрозою (§5) =================
 
@@ -299,6 +300,7 @@ namespace Game.Gameplay
         public MovePathView HoverPath { get { RefreshHoverCaches(); return _hoverPathCache; } }
 
         public IReadOnlyList<BattleUnitOverlay> Overlays => _overlays;
+        public IReadOnlyList<BattleTrapOverlay> TrapOverlays => _trapOverlays;
         public IReadOnlyList<BattleFloatingText> FloatingTexts => _floatingTextsExposed;
         public BattleTurnBanner Banner => _banner;
 
@@ -789,8 +791,81 @@ namespace Game.Gameplay
 
         // ================= щокадрове оновлення виду =================
 
+        // ================= пастки гравця на арені =================
+
+        private readonly Dictionary<string, GameObject> _trapMarkers = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Свої пастки — видимий капкан на клітинці (власник, 25.09.2026: «Поставлену
+        /// пастку на арені поки не видно. погано»). Спрацювала — маркер зникає.
+        /// </summary>
+        private void SyncTrapMarkers(BattleView view)
+        {
+            var present = new HashSet<string>(StringComparer.Ordinal);
+            if (view?.Traps != null)
+                foreach (var trap in view.Traps)
+                {
+                    if (trap == null) continue;
+                    string key = trap.Pos.X + "_" + trap.Pos.Y;
+                    present.Add(key);
+                    // null — маркер знищено разом із гридом (новий бій): збудувати заново.
+                    if (!_trapMarkers.TryGetValue(key, out var marker) || marker == null)
+                        _trapMarkers[key] = BuildTrapMarker(trap.Pos.X, trap.Pos.Y);
+                }
+
+            var gone = new List<string>();
+            foreach (var kv in _trapMarkers)
+                if (!present.Contains(kv.Key)) gone.Add(kv.Key);
+            foreach (var key in gone)
+            {
+                if (_trapMarkers[key] != null) Destroy(_trapMarkers[key]);
+                _trapMarkers.Remove(key);
+            }
+        }
+
+        private GameObject BuildTrapMarker(int x, int y)
+        {
+            var world = BattleArenaView.TileToWorld(x, y);
+            var root = new GameObject("trap:" + x + "_" + y);
+            root.transform.SetParent(_tileRoot != null ? _tileRoot : transform, false);
+            root.transform.localPosition = new Vector3(world.X, 0.03f, world.Z);
+
+            // Залізна основа капкана і зуби по колу — читається згори й під кутом.
+            AddTrapPart(root, PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.62f, 0.015f, 0.62f), new Color(0.20f, 0.17f, 0.14f), Quaternion.identity);
+            AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.02f, 0f), new Vector3(0.22f, 0.02f, 0.22f), new Color(0.62f, 0.30f, 0.12f), Quaternion.identity);
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = i * Mathf.PI * 2f / 8f;
+                var pos = new Vector3(Mathf.Cos(angle) * 0.26f, 0.07f, Mathf.Sin(angle) * 0.26f);
+                AddTrapPart(root, PrimitiveType.Cube, pos, new Vector3(0.06f, 0.12f, 0.06f), new Color(0.78f, 0.74f, 0.66f),
+                    Quaternion.Euler(0f, -angle * Mathf.Rad2Deg, 18f));
+            }
+            return root;
+        }
+
+        private void AddTrapPart(GameObject root, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color, Quaternion rotation)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            Destroy(part.GetComponent<Collider>()); // не перехоплює наведення миші на клітинку
+            part.transform.SetParent(root.transform, false);
+            part.transform.localPosition = localPos;
+            part.transform.localRotation = rotation;
+            part.transform.localScale = scale;
+            var renderer = part.GetComponent<Renderer>();
+            if (renderer != null && _tileMaterial != null)
+            {
+                renderer.sharedMaterial = _tileMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var block = new MaterialPropertyBlock();
+                block.SetColor("_BaseColor", color);
+                renderer.SetPropertyBlock(block);
+            }
+        }
+
         private void ApplyUnitPositionsAndHighlights(BattleView view)
         {
+            SyncTrapMarkers(view);
+
             var alive = new HashSet<string>(StringComparer.Ordinal);
             if (view.Units != null)
                 foreach (var unit in view.Units)
@@ -831,6 +906,11 @@ namespace Game.Gameplay
             var armedAbility = FindArmedAbility();
             int abilityRange = armedAbility != null && IsPlayerTurn && !IsBusy ? armedAbility.Range : -1;
 
+            var trapKeys = new HashSet<string>(StringComparer.Ordinal);
+            if (view.Traps != null)
+                foreach (var trap in view.Traps)
+                    if (trap != null) trapKeys.Add(trap.Pos.X + "_" + trap.Pos.Y);
+
             for (int y = 0; y < _gridHeight; y++)
             for (int x = 0; x < _gridWidth; x++)
             {
@@ -850,7 +930,8 @@ namespace Game.Gameplay
 
                 // Тайл поточного юніта перефарбовується другим проходом нижче.
                 ApplyTileTint(tile, key, cover, walkable, isReachable, false, isHovered,
-                    isHoveredUnreachable, isAbilityRange: isAbilityRange, isOverwatchAim: isOverwatchAim, isOverwatchThreat: isOverwatchThreat);
+                    isHoveredUnreachable, isAbilityRange: isAbilityRange, isOverwatchAim: isOverwatchAim, isOverwatchThreat: isOverwatchThreat,
+                    isOwnTrap: trapKeys.Contains(key));
             }
 
             string currentKey = current != null ? current.Pos.X + "_" + current.Pos.Y : null;
@@ -868,13 +949,14 @@ namespace Game.Gameplay
         }
 
         private void ApplyTileTint(GameObject tile, string key, string cover, bool walkable, bool isReachable,
-            bool isCurrent, bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat)
+            bool isCurrent, bool isHovered, bool isHoveredUnreachable, bool isAbilityRange, bool isOverwatchAim, bool isOverwatchThreat,
+            bool isOwnTrap = false)
         {
             var renderers = tile.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) return;
 
             var tint = BattleArenaView.TintForIntent(cover, walkable, isReachable, isCurrent, isHovered,
-                isHoveredUnreachable, isAbilityRange, isOverwatchAim, isOverwatchThreat);
+                isHoveredUnreachable, isAbilityRange, isOverwatchAim, isOverwatchThreat, isOwnTrap);
             if (!_tileBlocks.TryGetValue(key, out var block) || block == null)
             {
                 block = new MaterialPropertyBlock();
@@ -1249,7 +1331,18 @@ namespace Game.Gameplay
 
         private void CompleteTact()
         {
-            if (_activeTact != null && _activeTact.Kind == TactKind.Move) SetGait(_activeTact.ActorId, 0f);
+            if (_activeTact != null && _activeTact.Kind == TactKind.Move)
+            {
+                SetGait(_activeTact.ActorId, 0f);
+                // Пастка (і її шкода) спрацьовує в точці прибуття — написи в мить приходу.
+                if (!_activeTact.FloatingSpawned && _activeTact.Extras != null && _activeTact.Extras.Count > 0)
+                {
+                    _activeTact.FloatingSpawned = true;
+                    int stack = 0;
+                    foreach (var extra in _activeTact.Extras)
+                        if (SpawnFloatingForEntry(extra, stack)) stack++;
+                }
+            }
             _activeTact = null;
         }
 
@@ -1644,7 +1737,28 @@ namespace Game.Gameplay
         private void RebuildOverlays()
         {
             _overlays.Clear();
+            _trapOverlays.Clear();
             if (_lastView?.Units == null || ArenaCamera == null) return;
+
+            if (_lastView.Traps != null)
+                foreach (var trap in _lastView.Traps)
+                {
+                    if (trap == null) continue;
+                    var tw = BattleArenaView.TileToWorld(trap.Pos.X, trap.Pos.Y);
+                    // Центр самої клітинки, на землі: мітка малюється поверх 3D (скриня
+                    // укриття її не закриває) і лягає нижче імен бійців, а не на них
+                    // (знімок: над клітинкою вона налазила на ім'я сусіда).
+                    var tsp = ArenaCamera.WorldToScreenPoint(new Vector3(tw.X, 0.05f, tw.Z));
+                    _trapOverlays.Add(new BattleTrapOverlay
+                    {
+                        TileX = trap.Pos.X,
+                        TileY = trap.Pos.Y,
+                        ScreenX = tsp.x,
+                        ScreenY = Screen.height - tsp.y,
+                        OnScreen = tsp.z > 0f && tsp.x >= 0f && tsp.x <= Screen.width && tsp.y >= 0f && tsp.y <= Screen.height,
+                        TrapDamage = trap.TrapDamage
+                    });
+                }
 
             string hoveredId = HoveredUnitId;
             string currentId = _lastView.CurrentUnitId;
@@ -2124,6 +2238,11 @@ namespace Game.Gameplay
             if (_shotLine != null) _shotLine.enabled = false;
             if (_pathLine != null) _pathLine.enabled = false;
             if (_pathEndMarker != null) _pathEndMarker.SetActive(false);
+
+            // Пастки належать бою, що скінчився, — у наступному їх бути не може.
+            foreach (var marker in _trapMarkers.Values)
+                if (marker != null) Destroy(marker);
+            _trapMarkers.Clear();
 
             RestoreHubCamera();
             if (ArenaRoot != null) ArenaRoot.SetActive(false);

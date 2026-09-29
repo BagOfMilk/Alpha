@@ -896,5 +896,39 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("NotReachable", preview.Result);
             Assert.AreEqual(CombatActionResult.NotReachable, battle.UseAbility("ability.lunge", enemy.Id));
         }
+
+        /// <summary>
+        /// Власник, 25.09.2026: «Поставлену пастку на арені поки не видно. погано».
+        /// Своя пастка — у виді бою (її малює арена й підказка клітинки); після
+        /// спрацювання зникає. Ворожа — прихована.
+        /// </summary>
+        [Test]
+        public void Traps_OwnAreVisibleInView_EnemyTrapsHidden()
+        {
+            var map = new GridMap(8, 1);
+            var cs = NewCombat(map);
+            var weapon = new WeaponDefinition("w", "W", SkillType.Melee) { DamageMin = 1, DamageMax = 1, ApCost = 3, OptimalRange = 1 };
+            var hero = U("hero", Side.Player, "Hero", init: 10, w: weapon);
+            hero.Abilities.Add(DefaultCombatContent.SetTrap());
+            var foe = U("foe", Side.Enemy, "Foe", init: 5, w: weapon);
+            foe.Abilities.Add(DefaultCombatContent.SetTrap());
+            cs.AddUnit(hero, new GridPos(0, 0));
+            cs.AddUnit(foe, new GridPos(7, 0));
+            cs.Begin();
+
+            var session = new GameSession();
+            InjectBattle(session, cs);
+
+            Assert.AreEqual(CombatActionResult.Success, cs.UseAbility("ability.set_trap", null, new GridPos(2, 0)));
+            var traps = session.GetBattleView().Traps;
+            Assert.AreEqual(1, traps.Count, "своя пастка видна");
+            Assert.AreEqual(2, traps[0].Pos.X);
+            Assert.Greater(traps[0].TrapDamage, 0);
+
+            cs.EndTurn(); // хід ворога
+            Assert.AreEqual(CombatActionResult.Success, cs.UseAbility("ability.set_trap", null, new GridPos(5, 0)));
+            Assert.AreEqual(1, session.GetBattleView().Traps.Count, "ворожу пастку гравець не бачить");
+            Assert.AreEqual(2, cs.Traps.Count, "але в ядрі їх дві");
+        }
     }
 }

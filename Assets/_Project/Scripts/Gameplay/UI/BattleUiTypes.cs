@@ -42,6 +42,19 @@ namespace Game.Gameplay
         public bool IsTargetable;
     }
 
+    /// <summary>
+    /// Точка над СВОЄЮ пасткою в координатах GUI — HUD малює там мітку «Пастка».
+    /// Екранна, а не 3D: капкан на клітинці з укриттям ховається за скринею чи
+    /// мішками (знімок 25.09.2026 — тур поставив пастку саме туди).
+    /// </summary>
+    public sealed class BattleTrapOverlay
+    {
+        public int TileX, TileY;
+        public float ScreenX, ScreenY;
+        public bool OnScreen;
+        public int TrapDamage;
+    }
+
     /// <summary>Спливаючий напис над юнітом (у координатах GUI).</summary>
     public sealed class BattleFloatingText
     {

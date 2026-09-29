@@ -293,17 +293,17 @@ namespace Game.Gameplay.Text
             AddKey(t, "battle.pass_vanguard.intro", "Розвідники орди вже на стежці. Максим і Мирослава — поруч.");
 
             AddKey(t, "node1.outcome.best.m",
-                "Максим і Мирослава — обидва з тобою. Склад цілий. Громада бачила, як ти стояв на перевалі.");
+                "Максим і Мирослава — обидва з тобою. Припаси цілі. Громада бачила, як ти стояв на перевалі.");
             AddKey(t, "node1.outcome.best.f",
-                "Максим і Мирослава — обидва з тобою. Склад цілий. Громада бачила, як ти стояла на перевалі.");
+                "Максим і Мирослава — обидва з тобою. Припаси цілі. Громада бачила, як ти стояла на перевалі.");
             AddKey(t, "node1.outcome.good.m",
-                "Максим ранений, лежить у лазареті кілька днів. Мирослава з тобою. Склад цілий.");
+                "Максим ранений, відлежуватиметься кілька днів. Мирослава з тобою. Припаси цілі.");
             AddKey(t, "node1.outcome.good.f",
-                "Максим ранений, лежить у лазареті кілька днів. Мирослава з тобою. Склад цілий.");
+                "Максим ранений, відлежуватиметься кілька днів. Мирослава з тобою. Припаси цілі.");
             AddKey(t, "node1.outcome.base",
-                "Ти з Максимом стоїш. Мирослава йде за батьком — назад до орди. Склад розграбований.");
+                "Ти з Максимом стоїш. Мирослава йде за батьком — назад до орди. Припаси розграбовано.");
             AddKey(t, "node1.outcome.worst",
-                "Максим ранений. Мирослава йде. Склад розграбований, і громада тепер боїться голосно говорити.");
+                "Максим ранений. Мирослава йде. Припаси розграбовано, і громада тепер боїться голосно говорити.");
             AddKey(t, "signal.node1.myroslava_left",
                 "Мирослава пішла за батьком ще до заходу сонця. Ніхто не наздогнав.");
         }
@@ -422,7 +422,7 @@ namespace Game.Gameplay.Text
         // ---- §7.8 Інцидент sick_child (доба 3) ----
         private static void AddIncidentSickChild(Dictionary<string, string> t)
         {
-            AddKey(t, "incident.sick_child.title", "Дівчинку, ранену в набігу, принесли до лазарету.");
+            AddKey(t, "incident.sick_child.title", "Дівчинку, ранену в набігу, принесли до знахарки.");
             AddKey(t, "incident.sick_child.option.quiet", "Лікувати (Медицина).");
             AddKey(t, "incident.sick_child.outcome.best", "Гафія впоралася без зайвого дня.");
             AddKey(t, "incident.sick_child.outcome.good", "Дитина одужає за кілька днів.");
@@ -453,7 +453,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "building.workshop.ordered", "Рада замовляє Майстерню. Ліс уже звозять.");
             AddKey(t, "building.workshop.stage", "Риштування росте — стадія {stage} з 5.");
-            AddKey(t, "building.workshop.ready", "Майстерня готова. Верстак чекає на руки і на матеріал.");
+            AddKey(t, "building.workshop.ready", "Майстерня готова. Верстак чекає на руки і на сировину.");
         }
 
         // ---- §7.11 Данж «Покинутий табір авангарду» (доба 4) (+ phase-B drafts) ----
@@ -461,16 +461,16 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "site.abandoned_camp", "Покинутий табір авангарду");
             AddKey(t, "dungeon.depart", "Троє йдуть повернути забране. Пости лишаються порожні на дві доби.");
-            AddKey(t, "dungeon.room1.title", "Кілька розвідників орди не встигли втекти з табору.");
+            AddKey(t, "dungeon.room1.title", "Сокирник і розвідник орди не встигли втекти з табору.");
             AddKey(t, "dungeon.room1.quiet", "Тихо: обійти (Виживання ≥ 5) або переконати здатися (Переконання ≥ 5).");
             AddKey(t, "dungeon.room1.bloody", "Криваво: короткий бій (Ближній бій/Тактика ≥ 6).");
             AddKey(t, "dungeon.room2.title", "У схованці під возом — те, що орда не встигла забрати.");
             AddKey(t, "item.scout_horn.found", "Ріг розвідника. Той самий, яким орда подавала сигнали — тепер він подаватиме їх нам.");
             AddKey(t, "item.scout_horn.effect", "Ефект: наступні два передвісники чуються чіткіше й раніше.");
             AddKey(t, "dungeon.room3.title", "Прихований попіл — і під ним ще щось ціле.");
-            AddKey(t, "dungeon.room3.greedy", "Забрати все зерно (більше здобичі, вищий ризик).");
-            AddKey(t, "dungeon.room3.cautious", "Забрати менше, спалити слід (менше здобичі, спокійніше).");
-            AddKey(t, "dungeon.extract", "Здобич збережено: {materials} матеріалів, {gold} золота.");
+            AddKey(t, "dungeon.room3.greedy", "Забрати все зерно і начиння (будматеріал 3, сировина 2; вищий ризик).");
+            AddKey(t, "dungeon.room3.cautious", "Забрати менше, спалити слід (будматеріал 1, сировина 1; спокійніше).");
+            AddKey(t, "dungeon.extract", "Здобич збережено: будматеріал {build}, сировина {craft}, золото {gold}.");
             AddKey(t, "dungeon.wiped", "Бій пішов не так. Усе незбережене втрачено — троє повертаються з порожніми руками, але живі.");
             AddKey(t, "dungeon.room.bypassed", "Кімнату пройдено без бою.");
         }
@@ -478,7 +478,7 @@ namespace Game.Gameplay.Text
         // ---- §7.12 Крафт ----
         private static void AddCraft(Dictionary<string, string> t)
         {
-            AddKey(t, "craft.confirm", "Підняти якість Рогу розвідника коштуватиме матеріалів майстерні. Назад не буде.");
+            AddKey(t, "craft.confirm", "Підняти якість Рогу розвідника коштуватиме сировини майстерні. Назад не буде.");
             AddKey(t, "craft.done", "Ріг розвідника тепер чутніший, ніж будь-коли.");
         }
 
@@ -571,6 +571,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.continue", "Продовжити");
             AddKey(t, "ui.title.training", "Тренувальний бій");
             AddKey(t, "ui.title.quit", "Вийти");
+            // Титри асетів (Поправка №12.2): CC BY 3.0 значків вимагає атрибуції.
+            AddKey(t, "ui.title.credits", "Значки: Lorc і Delapouite, game-icons.net (CC BY 3.0) · Шрифти: Fixel, Noto Serif (SIL OFL 1.1) · Моделі: Kenney (CC0)");
             AddKey(t, "ui.title.hitrule.percent", "Правило влучання: показаний відсоток");
             AddKey(t, "ui.title.hitrule.threshold", "Правило влучання: показаний поріг");
             AddKey(t, "ui.title.hitrule.section", "Правило влучання");
@@ -630,7 +632,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "attr.will", "Воля");
 
             AddKey(t, "resource.gold", "Золото");
-            AddKey(t, "resource.materials", "Матеріали");
+            // Поправка №12.5: два компоненти замість спільних «Матеріалів».
+            // Коротко, щоб лягало в шапку на 1280 px (≤ 12 знаків):
+            // «Будматеріал» — будівельний (колоди, камінь, цвяхи), «Сировина» —
+            // крафтовий (залізо, шкіра, інструмент). Обидва — звичайна
+            // українська без техно-лексики (сеттинг фентезі, Поправка №12.4).
+            AddKey(t, "resource.build_component", "Будматеріал");
+            AddKey(t, "resource.craft_component", "Сировина");
             AddKey(t, "resource.food", "Їжа");
 
             AddKey(t, "band.best", "Найкраща");
@@ -671,6 +679,7 @@ namespace Game.Gameplay.Text
 
             AddKey(t, "enemy.horde_skirmisher", "Застрільник орди");
             AddKey(t, "enemy.horde_raider", "Наскочник орди");
+            AddKey(t, "enemy.horde_vanguard", "Сокирник орди");
         }
 
         /// <summary>
@@ -811,6 +820,9 @@ namespace Game.Gameplay.Text
             AddKey(t, "weapon.horde_spear", "Спис");
             AddKey(t, "weapon.boyar_saber", "Шабля боярина");
             AddKey(t, "weapon.burunda_mace", "Булава Бурунди");
+            // Поправка №11: вороги й зброя бойових кімнат данжів.
+            AddKey(t, "weapon.horde_axe", "Сокира");
+            AddKey(t, "weapon.bandit_cleaver", "Тесак");
 
             AddKey(t, "ability.lunge", "Ривок");
             AddKey(t, "ability.set_trap", "Пастка");
@@ -1106,7 +1118,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "sfx.door.slam", "грюкнули двері");
 
             AddKey(t, "scene.pass.title", "Після перевалу");
-            AddKey(t, "scene.pass.best", "«Склад цілий. І всі повернулися».");
+            AddKey(t, "scene.pass.best", "«Припаси цілі. І всі повернулися».");
             AddKey(t, "scene.pass.good", "«Максим не встане пару днів. Але склад цілий».");
             AddKey(t, "scene.pass.base", "«Вона пішла за батьком. А склад вичистили до дощок».");
             AddKey(t, "scene.pass.worst", "«Максим поранений, її нема, складу нема. Громада дивиться й мовчить».");
@@ -1211,20 +1223,20 @@ namespace Game.Gameplay.Text
             // "decision.resolved"/incidentId="pass_vanguard" і від сцени
             // розв'язки). Best/Good — короткий нейтральний виклад без роду
             // (сигнальна репліка — не пряма мова протагоніста).
-            AddKey(t, "incident.pass_vanguard.Best", "Максим і Мирослава — обидва з тобою. Склад цілий.");
-            AddKey(t, "incident.pass_vanguard.Good", "Максим ранений, лежить у лазареті. Мирослава з тобою. Склад цілий.");
+            AddKey(t, "incident.pass_vanguard.Best", "Максим і Мирослава — обидва з тобою. Припаси цілі.");
+            AddKey(t, "incident.pass_vanguard.Good", "Максим ранений, відлежується. Мирослава з тобою. Припаси цілі.");
             AddKey(t, "incident.pass_vanguard.Base",
-                "Ти з Максимом стоїш. Мирослава йде за батьком — назад до орди. Склад розграбований.");
+                "Ти з Максимом стоїш. Мирослава йде за батьком — назад до орди. Припаси розграбовано.");
             AddKey(t, "incident.pass_vanguard.Worst",
-                "Максим ранений. Мирослава йде. Склад розграбований, і громада тепер боїться голосно говорити.");
+                "Максим ранений. Мирослава йде. Припаси розграбовано, і громада тепер боїться голосно говорити.");
             // Фікс-ревью (major, раунд 2, знайдено QA): той самий case, що
             // scene.pass.good_dead/worst_dead вище — справжній тактичний бій
             // міг уже вбити Максима до того, як цей сигнал потрапить у
             // стрічку подій (GameSession.AdjustPassVanguardTopicIfMaksymDead
             // перемикає топік на ці ключі, коли Roster.Get("maksym").IsDead).
-            AddKey(t, "incident.pass_vanguard.Good_dead", "Максима не вберегли. Мирослава з тобою. Склад цілий.");
+            AddKey(t, "incident.pass_vanguard.Good_dead", "Максима не вберегли. Мирослава з тобою. Припаси цілі.");
             AddKey(t, "incident.pass_vanguard.Worst_dead",
-                "Максима не вберегли. Мирослава йде. Склад розграбований, і громада тепер боїться голосно говорити.");
+                "Максима не вберегли. Мирослава йде. Припаси розграбовано, і громада тепер боїться голосно говорити.");
         }
 
         private static void AddIncidentBand(Dictionary<string, string> t, string incidentId,
@@ -1449,6 +1461,20 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.topbar.freeplay", "Вільна гра");
             AddKey(t, "ui.topbar.patrolling", "На варті");
 
+            // Спайк H4 (docs/HUD_DESIGN.md §4.2, §4.3; рішення власника
+            // 29.09.2026 «1. B»): шапка і стрічка на UI Toolkit. Драбина полос —
+            // лише слова сусідів, без чисел, стрілок і відстані до межі (інв. 3).
+            AddKey(t, "ui.hud.away", "Поза містом: {count}");
+            AddKey(t, "ui.hud.ladder.title", "Настрій громади");
+            AddKey(t, "ui.hud.ladder.above", "Вище — {band}");
+            AddKey(t, "ui.hud.ladder.current", "Зараз — {band}");
+            AddKey(t, "ui.hud.ladder.below", "Нижче — {band}");
+            AddKey(t, "ui.hud.feed.pending", "Потребує рішення");
+            AddKey(t, "ui.hud.feed.important", "Важливе за добу");
+            AddKey(t, "ui.hud.feed.news", "Новини");
+            AddKey(t, "ui.hud.feed.more", "…і ще {count} старіших");
+            AddKey(t, "ui.hud.pending.generic", "Рішення чекає");
+
             AddKey(t, "ui.escape.title", "Пауза");
             AddKey(t, "ui.escape.resume", "Повернутися до гри");
             AddKey(t, "ui.escape.save", "Зберегти гру");
@@ -1522,7 +1548,7 @@ namespace Game.Gameplay.Text
             // Полірування (ціль 2 «Прозорість дій»): ціна/термін видно ДО
             // кліку (ScreenText.BuildingCostLine), а не лише постфактум.
             AddKey(t, "ui.buildings.cost_gold", "{gold} золота");
-            AddKey(t, "ui.buildings.cost_both", "{gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.buildings.cost_both", "{gold} золота, будматеріал {build}");
             AddKey(t, "ui.buildings.days", "{days} діб");
 
             AddKey(t, "ui.council.raid", "Облава");
@@ -1623,7 +1649,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.dungeon.abandon", "Відступити (усе незбережене втрачено)");
             AddKey(t, "ui.dungeon.quiet", "Тихо");
             AddKey(t, "ui.dungeon.bloody", "Криваво");
-            AddKey(t, "ui.dungeon.unbanked", "Незбережено: {materials} матеріалів, {gold} золота");
+            AddKey(t, "ui.dungeon.unbanked", "Незбережено: будматеріал {build}, сировина {craft}, золото {gold}");
             // Полірування (ціль 6 «Рішення», owner: "shows the party ... the
             // quiet candidate ... тактичний бій: N ворогів"): party — хто
             // пішов у цей данж; {candidate} — найкращий з ПАРТІЇ на тихий
@@ -1653,7 +1679,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "quest.offered", "Нова пропозиція: {quest}.");
 
             AddKey(t, "expedition.departed", "Відряд вирушив: {site}.");
-            AddKey(t, "expedition.returned", "Відряд повернувся: {site} — {band}.");
+            AddKey(t, "expedition.returned", "Відряд повернувся: {site} — {band}. Здобич: золото {gold}, будматеріал {build}, сировина {craft}.");
             AddKey(t, "scene.finished", "Сцена завершена.");
             AddKey(t, "production.resource", "Виробництво дало плоди.");
             // Фікс-ревью (major, раунд «фіксер 1», знайдено QA): той самий клас
@@ -1724,7 +1750,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "rarity.rare", "рідкісний");
             AddKey(t, "rarity.epic", "епічний");
             AddKey(t, "ui.gear.improves", "Покращує: {stats}");
-            AddKey(t, "ui.gear.craft_cost", "Ціна: {gold} золота, {materials} матеріалів");
+            AddKey(t, "ui.gear.craft_cost", "Ціна: {gold} золота, сировина {craft}");
             AddKey(t, "ui.gear.craft_preview", "{stat} {before}→{after}");
 
             AddKey(t, "ui.stat.maxhp", "Живучість");
@@ -1773,7 +1799,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.feedback.build.already_in_progress", "Уже будується.");
             AddKey(t, "ui.feedback.build.quest_only", "Ця будівля відкривається лише сюжетом.");
             AddKey(t, "ui.feedback.build.not_enough_gold", "Золота не досить.");
-            AddKey(t, "ui.feedback.build.not_enough_materials", "Матеріалів не досить.");
+            AddKey(t, "ui.feedback.build.not_enough_build_component", "Будматеріалу не досить — його приносять вилазки й данжі.");
 
             AddKey(t, "ui.feedback.dispatch.success", "Відряд вирушив.");
             AddKey(t, "ui.feedback.dispatch.no_such_site", "Такої точки немає.");
@@ -1789,7 +1815,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.feedback.craft.named_not_upgradable", "Іменний предмет уже досконалий — далі нікуди.");
             AddKey(t, "ui.feedback.craft.already_max_rarity", "Вища якість уже неможлива.");
             AddKey(t, "ui.feedback.craft.workshop_closed", "Майстерня ще не збудована.");
-            AddKey(t, "ui.feedback.craft.cannot_afford", "Не вистачає матеріалів або золота.");
+            AddKey(t, "ui.feedback.craft.cannot_afford", "Не вистачає сировини або золота.");
 
             AddKey(t, "ui.feedback.buildplan.ok", "Готово до підтвердження.");
             AddKey(t, "ui.feedback.buildplan.not_enough_points", "Вільних очок не досить.");
@@ -1950,6 +1976,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.float.downed", "Впав");
             AddKey(t, "ui.battle.float.died", "Загинув");
             AddKey(t, "ui.battle.float.ability", "{ability}");
+            AddKey(t, "ui.battle.float.trap", "Пастка!");
+            AddKey(t, "ui.battle.trap.here", "Тут ваша пастка: {damage} шкоди.");
             // Рев'ю Бою v2: підписи для озброєної дії над клітинкою і двофазної здібності.
             AddKey(t, "ui.battle.damage.preview.single", "Шкода атаки: {value}");
             AddKey(t, "ui.battle.armed.reposition.pick_unit", "Спершу клацни союзника, якого переставити.");
@@ -2173,6 +2201,28 @@ namespace Game.Gameplay.Text
                 "Тихо спитати Мирославу, чого не договорює батько.");
             AddKey(t, "scene.neighbour.myroslava_reveals",
                 "Мирослава (тихо, тобі): «Батько торгується не за себе. Слухай не слова — паузи між ними.»");
+
+            // ---- Поправка №12.7: перша будівля — вибір одразу після прологу ----
+            // Текст варіанта сам каже, що відкриває і чого бракуватиме
+            // (Статут MECH-05, UI-02): ціна вибору видна до кліку.
+            AddKey(t, "scene.neighbour.first_building.prompt",
+                "«Тугар пішов, а в нас ні ради під дахом, ні комори, ні ліжка для поранених. До ночі рук стане на одне. Що зводимо першим?»");
+            AddKey(t, "scene.neighbour.option.council_hall",
+                "Залу ради: Захар сяде радити — облава, переселенці, укази. Комори й лазарету поки не буде.");
+            AddKey(t, "scene.neighbour.option.storehouse",
+                "Склад: Дід Овсій щодня даватиме золото на інші будови. Рада мовчатиме, лікувати нікому.");
+            AddKey(t, "scene.neighbour.option.infirmary",
+                "Лазарет: Гафія лікуватиме поранених, рани гоїтимуться швидше. Ні ради, ні доходу.");
+            AddKey(t, "scene.neighbour.first_building.council_hall",
+                "«Під дахом і слово важче. Скликаю раду — кажи, що вирішуємо.»");
+            AddKey(t, "scene.neighbour.first_building.storehouse",
+                "«Комора є — буде й копійка. Облік на мені.»");
+            AddKey(t, "scene.neighbour.first_building.infirmary",
+                "«Лави застелю до вечора. Несіть поранених — у мене не помруть.»");
+            AddKey(t, "city.granted", "Громада спільним зусиллям звела першу будову: {building}. Без ціни.");
+            AddKey(t, "city.granted.staffed", "{companion} стає на пост: {post}.");
+            AddKey(t, "ui.council.no_hall",
+                "Раду ніде скликати: спершу зведіть Залу ради (вкладка «Будівлі»). Облава, переселенці, укази й решта дій ради — лише з нею.");
 
             // ---- арка Мирослави, глава 1 (доба 2, вечір): «Донька боярина» ----
             AddKey(t, "scene.myroslava.ch1.title", "Донька боярина");
@@ -2435,7 +2485,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.cover.half", "Укриття: половинне");
             AddKey(t, "ui.battle.cover.full", "Укриття: повне");
 
-            // ---- ціна дії, показана ДО кліку (аудит HUD пп.4-5, REFS «ціна дії видно в точці рішення») ----
+            // ---- ціна дії, показана ДО кліку (аудит HUD пп.4-5, Статут UI-02) ----
             AddKey(t, "ui.battle.ap_cost", "Ціна: {cost} ОД");
             // Картка юніта (§3): «Спис · удар 4 ОД · дальність 1» — буквально за прикладом специфікації.
             AddKey(t, "ui.battle.weapon.detail", "{name} · удар {cost} ОД · дальність {range}");
@@ -2469,6 +2519,7 @@ namespace Game.Gameplay.Text
             // навмисно скорочено, це підпис ПІД фігуркою, не панель дій).
             AddKey(t, "ui.battle.overlay.downed", "Впав · {turns} х.");
             AddKey(t, "ui.battle.overlay.overwatch", "Дозор");
+            AddKey(t, "ui.battle.overlay.trap", "Пастка");
 
             // ---- відмова "InvalidAction" (CombatActionResult) — загальна причина без власного тексту раніше ----
             AddKey(t, "ui.battle.action.rejected.invalidaction", "Дію неможливо виконати зараз.");
@@ -2487,7 +2538,7 @@ namespace Game.Gameplay.Text
 
             // ---- описи здібностей (аудит HUD п.10: жодного опису ефекту не було ні в даних, ні на екрані) ----
             AddKey(t, "ability.lunge.desc", "Ривок у ближній контакт із ціллю поза дистанцією удару.");
-            AddKey(t, "ability.set_trap.desc", "Ставить приховану пастку на клітинці — шкода й стан тому, хто в неї ступить.");
+            AddKey(t, "ability.set_trap.desc", "Ставить пастку на клітинці — шкода й стан ворогу, що в неї ступить. Свої пастки ви бачите на арені, ворог — ні.");
             AddKey(t, "ability.move_order.desc", "Командний ривок: переставляє союзника на кілька клітин.");
             AddKey(t, "ability.volley.desc", "Черга: два постріли поспіль поточною зброєю з невеликим штрафом до точності кожного.");
         }

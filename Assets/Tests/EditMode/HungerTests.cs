@@ -38,7 +38,7 @@ namespace Game.Tests.EditMode
             state.AddSlot(new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
             {
                 OutputKind = SlotOutputKind.Resource,
-                OutputResource = ResourceType.Materials,
+                OutputResource = ResourceType.BuildComponent,
                 PrimarySkill = SkillType.Mechanics,
                 BaseOutput = 5,
                 OutputPerPrimaryPoint = 1.0,
@@ -59,7 +59,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(state.WasHungryLastCycle);
 
             var second = state.AdvanceCycle();
-            Assert.AreEqual(15, second.Produced[ResourceType.Materials], "сытый день — полная выработка");
+            Assert.AreEqual(15, second.Produced[ResourceType.BuildComponent], "сытый день — полная выработка");
         }
 
         /// <summary>Просідання приходить наступним циклом: прокорм рахується останнім кроком дня.</summary>
@@ -71,11 +71,11 @@ namespace Game.Tests.EditMode
 
             var first = state.AdvanceCycle();
             Assert.IsTrue(first.FoodShortage, "еды не было — день голодный");
-            Assert.AreEqual(15, first.Produced[ResourceType.Materials], "в сам голодный день выработка ещё полная");
+            Assert.AreEqual(15, first.Produced[ResourceType.BuildComponent], "в сам голодный день выработка ещё полная");
             Assert.IsTrue(state.WasHungryLastCycle);
 
             var second = state.AdvanceCycle();
-            Assert.AreEqual(8, second.Produced[ResourceType.Materials], "15 * 0.5 = 7.5 -> 8");
+            Assert.AreEqual(8, second.Produced[ResourceType.BuildComponent], "15 * 0.5 = 7.5 -> 8");
         }
 
         [Test]
@@ -90,7 +90,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(state.WasHungryLastCycle);
 
             var third = state.AdvanceCycle();
-            Assert.AreEqual(15, third.Produced[ResourceType.Materials], "просадка держится ровно один цикл");
+            Assert.AreEqual(15, third.Produced[ResourceType.BuildComponent], "просадка держится ровно один цикл");
         }
 
         /// <summary>

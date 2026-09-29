@@ -280,7 +280,7 @@ namespace Alpha.Play
             Write("");
             Write("=== Підсумок ===");
             Write("  фінал: " + TranslateArg("band", summary.FinaleOutcomeKey ?? "—"));
-            Write("  гаманець: золото " + summary.Wallet.Gold + ", матеріали " + summary.Wallet.Materials + ", їжа " + summary.Wallet.Food);
+            Write("  гаманець: золото " + summary.Wallet.Gold + ", будматеріал " + summary.Wallet.BuildComponent + ", сировина " + summary.Wallet.CraftComponent + ", їжа " + summary.Wallet.Food);
             Write("  збудовано: " + string.Join(", ", TranslateEach("buildingId", summary.BuiltBuildings)));
             foreach (var c in summary.FinalRoster)
                 Write("  " + WhoById(c.Id) + " (" + c.Id + "): " + StatusWord(c.Status) +

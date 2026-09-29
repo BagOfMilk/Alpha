@@ -166,9 +166,15 @@ namespace Game.Gameplay
         /// <summary>Id журнальних записів, уже знятих скріншотом "journal-&lt;id&gt;" — рівно один раз за тур, у момент, коли вони вперше стають Seen.</summary>
         private readonly HashSet<string> _jSeenIds = new HashSet<string>();
 
+        /// <summary>
+        /// Поправка №12.7: старт без будівель — Зала ради і Склад більше не
+        /// «вже стоять», тож вони в черзі (та сама, що <c>BotRunner.BuildPriority</c>).
+        /// Обрану сценою першу будівлю черга пропускає.
+        /// </summary>
         private static readonly string[] JournalBuildPriority =
         {
-            DefaultBuildings.Infirmary, DefaultBuildings.Workshop, DefaultBuildings.Tavern,
+            DefaultBuildings.CouncilHall, DefaultBuildings.Storehouse, DefaultBuildings.Infirmary,
+            DefaultBuildings.Workshop, DefaultBuildings.Tavern,
             DefaultBuildings.Temple, DefaultBuildings.Market, DefaultBuildings.Fortifications
         };
 
@@ -381,14 +387,17 @@ namespace Game.Gameplay
                         _shell.SetHubTab(0);
                         _host.Log("Хаб: усі " + HubTabSlugs.Length + " вкладок відвідано й знято.");
 
+                        foreach (var f in HudTour()) yield return f;
                         foreach (var f in ExploreTour()) yield return f;
                     }
+
+                    foreach (var f in MaybeCaptureImportantFeed()) yield return f;
 
                     // "issue the bot's morning commands" — та сама розстановка
                     // за замовчуванням, що й BotSupport.DefaultAssignments
                     // (Steward), через shell.TryRun, щоб 3D-хаб оновив постаті.
                     var roster = Session.GetRosterView();
-                    var assignments = BotSupport.DefaultAssignments(roster);
+                    var assignments = BotSupport.DefaultAssignments(roster, Session.GetCityView());
                     foreach (var kv in assignments)
                     {
                         string companionId = kv.Key;
@@ -843,9 +852,15 @@ namespace Game.Gameplay
                     if (_jLastMorningDay != day)
                     {
                         _jLastMorningDay = day;
+                        LogJournalMorning(day);
 
                         var roster = Session.GetRosterView();
-                        var assignments = BotSupport.DefaultAssignments(roster);
+                        // Поправка №12.7: та сама розстановка журнального гравця,
+                        // що й у MechanicsJournalCompletionTests (BotSupport.
+                        // JournalAssignments): ферми порожні, доки журнал не
+                        // побачить зміну смуги і бунт, протагоніст — на розвідпост.
+                        bool starve = !(JournalSeen("tension_band_change") && JournalSeen("great_crisis"));
+                        var assignments = BotSupport.JournalAssignments(roster, Session.GetCityView(), starve);
                         foreach (var kv in assignments)
                         {
                             string companionId = kv.Key;
@@ -1063,6 +1078,15 @@ namespace Game.Gameplay
             int count = step?.Options != null ? step.Options.Count : 0;
             if (count == 0) return 0;
 
+            // Поправка №12.7: журнальний гравець іде в кривавий вузол 1, тож
+            // першою будівлею після прологу зводить Лазарет — той самий вибір,
+            // що й MechanicsJournalCompletionTests.
+            if (step.ChoiceId == OpeningScenes.FirstBuildingChoiceId)
+            {
+                int infirmary = System.Array.IndexOf(DefaultBuildings.FirstBuildingChoices, DefaultBuildings.Infirmary);
+                if (infirmary >= 0 && infirmary < count) return infirmary;
+            }
+
             if (step.ChoiceId == CompanionScenes.MyroslavaConfrontationChoiceId)
                 for (int i = 0; i < step.Options.Count; i++)
                     if (step.Options[i].SkillKey == SkillKeys.Intimidate.Id) return i;
@@ -1270,6 +1294,33 @@ namespace Game.Gameplay
             _jNextDelve = !delve;
         }
 
+        /// <summary>
+        /// Діагностика журнального туру (29.09.2026: тур упирався в стелю доби 60
+        /// без population_tier, і з лога не було видно чому): щоранку — тір, людність,
+        /// смуга, гаманець і будівлі, лише відкриті вигляди (інваріант 3).
+        /// </summary>
+        private void LogJournalMorning(int day)
+        {
+            var view = Session.CurrentView;
+            var economy = Session.GetEconomyView();
+            var city = Session.GetCityView();
+            var ids = new List<string>();
+            if (city?.Built != null) foreach (var b in city.Built) ids.Add(b.Id);
+            if (city?.InProgress != null) foreach (var b in city.InProgress) ids.Add(b.Id + "(буд.)");
+            _host.Log("Журнал д" + day + ": тір " + view.Tier + ", людність " + view.CrowdBand + ", смуга " + view.TensionBand +
+                      ", золото " + (economy?.Gold ?? 0) + ", будмат " + (economy?.BuildComponent ?? 0) +
+                      ", сировина " + (economy?.CraftComponent ?? 0) + ", їжа " + (economy?.Food ?? 0) +
+                      ", будівлі: " + string.Join(",", ids));
+        }
+
+        /// <summary>Чи запис журналу механік уже побачено (для розстановки журнального гравця).</summary>
+        private bool JournalSeen(string id)
+        {
+            foreach (var entry in Session.GetMechanicsJournal())
+                if (entry.Id == id) return entry.Seen;
+            return false;
+        }
+
         /// <summary>Наступне підземелля в журнальному турі: чергується з вилазкою після кожного виходу.</summary>
         private bool _jNextDelve = true;
 
@@ -1369,6 +1420,79 @@ namespace Game.Gameplay
         }
 
         private const int ExploreWalkFrameCap = 1800;
+
+        /// <summary>Скільки кадрів тиші на ранку доби 1 міряє <see cref="HudTour"/> (критерій 4 §8).</summary>
+        private const int HudIdleFrames = 120;
+
+        /// <summary>
+        /// Спайк H4 (docs/HUD_DESIGN.md §8): знімок шапки і стрічки, знімок
+        /// драбини полос «при наведенні» (рішення власника 29.09.2026, «1. B»),
+        /// перевірка, що IMGUI-тіло не перетинає панель UI Toolkit (критерій 5),
+        /// і час кадру екрана міста в тиші (критерій 4) — у тому самому місці
+        /// туру для обох режимів, щоб порівняти з <c>-imgui-hud</c>. Драбину
+        /// відкриває прапорець виду, а не симуляція миші: це лише показ, стану
+        /// гри він не змінює і команд не кличе (UI-14 не порушено).
+        /// </summary>
+        private IEnumerable<int> HudTour()
+        {
+            _host.Log("HUD: шапка і стрічка — " + _shell.HudModeLabel + ".");
+
+            float idleSeconds = 0f, idleMax = 0f;
+            for (int i = 0; i < HudIdleFrames; i++)
+            {
+                yield return 0;
+                float dt = Time.unscaledDeltaTime;
+                idleSeconds += dt;
+                if (dt > idleMax) idleMax = dt;
+            }
+            _host.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "HUD: час кадру ранку доби 1 ({0}) — середнє {1:0.00} мс, найдовший {2:0.00} мс за {3} кадрів.",
+                _shell.HudModeLabel, idleSeconds * 1000f / HudIdleFrames, idleMax * 1000f, HudIdleFrames));
+
+            _host.Capture("hud-header");
+            yield return 0;
+
+            var frame = HudLayout.For(Screen.width, Screen.height);
+            if (frame.Body.Overlaps(frame.Header) || frame.Body.Overlaps(frame.Feed))
+                throw new InvalidOperationException("HUD: тіло IMGUI перетинає шапку чи стрічку на " + Screen.width + "×" + Screen.height + ".");
+            _host.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "HUD: {0}×{1}, масштаб {2:0.00}, шапка {3:0} px, стрічка {4:0} px.",
+                Screen.width, Screen.height, frame.Scale, frame.Header.Height, frame.Feed.Width));
+
+            var hud = _shell.ToolkitHud;
+            if (hud == null || !hud.IsReady)
+            {
+                _host.Log("HUD: драбину не знято — шапка на IMGUI (" + GameShell.ImguiHudFlag + " або UI Toolkit не піднявся).");
+                yield break;
+            }
+            var header = hud.LastHeader;
+            if (header == null)
+                throw new InvalidOperationException("HUD: шапка UI Toolkit не побудувалась на ранку доби 1.");
+            _host.Log("HUD: «" + header.DayLine + "» · «" + header.BandLine + "» · драбина: " + string.Join(" / ", header.LadderLines));
+
+            hud.ForceLadderOpen = true;
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            if (!hud.LadderShown)
+                throw new InvalidOperationException("HUD: драбина полос не відкрилась.");
+            _host.Capture("hud-ladder");
+            yield return 0;
+            hud.ForceLadderOpen = false;
+        }
+
+        /// <summary>Знімок стрічки з непорожньою зоною «Важливе за добу» — рівно раз за тур.</summary>
+        private bool _hudImportantCaptured;
+
+        private IEnumerable<int> MaybeCaptureImportantFeed()
+        {
+            if (_hudImportantCaptured) yield break;
+            var feed = _shell.ToolkitHud != null ? _shell.ToolkitHud.LastFeed : null;
+            if (feed == null || feed.Important.Count == 0) yield break;
+            _hudImportantCaptured = true;
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("hud-important");
+            yield return 0;
+            _host.Log("HUD: «Важливе за добу» — " + feed.Important[0].Key + ".");
+        }
 
         private static IEnumerable<int> WaitFrames(int frames)
         {

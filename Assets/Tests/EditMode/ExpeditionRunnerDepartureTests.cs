@@ -41,7 +41,7 @@ namespace Game.Tests.EditMode
         {
             QuietDays = 2, ForcefulDays = 1,
             QuietSkill = SkillKeys.Survival, ForcefulSkill = SkillKeys.Melee,
-            Threshold = 3, BaseMaterials = 4, BaseGold = 8
+            Threshold = 3, BaseBuildComponent = 4, BaseGold = 8
         };
 
         [Test]
@@ -66,8 +66,8 @@ namespace Game.Tests.EditMode
 
             ExpeditionRunner.Complete(state, result);
 
-            Assert.Greater(result.Materials + result.Gold, 0, "непорожній результат: хоч матеріали, хоч золото");
-            Assert.Greater(state.Resources.Get(ResourceType.Materials) + state.Resources.Get(ResourceType.Gold), 0);
+            Assert.Greater(result.BuildComponent + result.Gold, 0, "непорожній результат: хоч матеріали, хоч золото");
+            Assert.Greater(state.Resources.Get(ResourceType.BuildComponent) + state.Resources.Get(ResourceType.Gold), 0);
         }
 
         [Test]
@@ -96,7 +96,7 @@ namespace Game.Tests.EditMode
 
             Assert.IsNotNull(direct);
             Assert.IsNotNull(afterReload);
-            Assert.AreEqual(direct.Materials, afterReload.Materials, "результат не пересчитался заново");
+            Assert.AreEqual(direct.BuildComponent, afterReload.BuildComponent, "результат не пересчитался заново");
             Assert.AreEqual(direct.Gold, afterReload.Gold);
             Assert.AreEqual(direct.Band, afterReload.Band);
             Assert.AreEqual(direct.Wounded.Count, afterReload.Wounded.Count);
@@ -151,7 +151,7 @@ namespace Game.Tests.EditMode
                 "замороженный результат обязан переживать сейв через DayProcessor.SaveState/RestoreState " +
                 "(не только через ExpeditionParty напрямую) — иначе на возврате Complete получает null и " +
                 "добыча вылазки бесшумно пропадает");
-            Assert.AreEqual(party.PendingResult.Materials, reloadedParty.PendingResult.Materials);
+            Assert.AreEqual(party.PendingResult.BuildComponent, reloadedParty.PendingResult.BuildComponent);
             Assert.AreEqual(party.PendingResult.Gold, reloadedParty.PendingResult.Gold);
             Assert.AreEqual(party.PendingResult.Band, reloadedParty.PendingResult.Band);
             Assert.AreEqual(party.PendingResult.Wounded.Count, reloadedParty.PendingResult.Wounded.Count);

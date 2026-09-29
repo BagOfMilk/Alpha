@@ -138,6 +138,21 @@ namespace Game.Core.Session.Views
         public bool HasLineOfSight;
     }
 
+    /// <summary>
+    /// Пастка, яку бачить гравець: лише СВОЇ (ворожі лишаються прихованими, поки
+    /// не спрацюють). Власник, 25.09.2026: «Поставлену пастку на арені поки не
+    /// видно. погано».
+    /// </summary>
+    public sealed class BattleTrapView
+    {
+        public GridPosView Pos;
+        /// <summary>Здібність, що поставила пастку (назва для підказки).</summary>
+        public string AbilityId;
+        public int TrapDamage;
+        /// <summary>Стан при спрацюванні ("KnockedDown" тощо), null — лише шкода.</summary>
+        public string StatusOnTrigger;
+    }
+
     /// <summary>Прев'ю руху поточного юніта до тайла (docs/COMBAT_V2.md §3).</summary>
     public sealed class MovePathView
     {
@@ -188,6 +203,9 @@ namespace Game.Core.Session.Views
 
         /// <summary>Поточний юніт під керуванням ШІ — презентер зобов'язаний сам вести його хід (<see cref="GameSession.CombatAiStepOneAction"/>).</summary>
         public bool IsAiTurn;
+
+        /// <summary>Пастки гравця на арені (ворожі приховані).</summary>
+        public IReadOnlyList<BattleTrapView> Traps;
 
         /// <summary>
         /// Фікс-ревью пакета D2 (блокер): Id юніта, чий зараз хід, null поза боєм

@@ -54,7 +54,7 @@ namespace Game.Gameplay.UI
 
         // ================= палітра бою (Бій v2, docs/COMBAT_V2.md §2) =================
         // Один сталий сенс на весь екран бою: колір ніколи не переозначається
-        // для іншої мети в тому самому кадрі (REFS.Principles). Значення —
+        // для іншої мети в тому самому кадрі (Статут UI-01). Значення —
         // точний переклад таблиці §2 (RGB 0..1) у байти.
         public static readonly Color32 BattlePlayerSide = new Color32(77, 153, 255, 255);
         public static readonly Color32 BattleEnemySide = new Color32(235, 71, 56, 255);
@@ -80,6 +80,8 @@ namespace Game.Gameplay.UI
         public static readonly Color32 BattleHeal = new Color32(115, 230, 115, 255);
         public static readonly Color32 BattleStatus = new Color32(191, 153, 255, 255);
         public static readonly Color32 BattleOverwatch = new Color32(89, 217, 242, 255);
+        /// <summary>Своя пастка на арені: мітка і підсвітка клітинки одного бурштину.</summary>
+        public static readonly Color32 BattleTrap = new Color32(250, 158, 20, 235);
         /// <summary>Дальність озброєної здібності (§2 «бузковий») — заливка тайла, HUD тут не малює, лишень тримає токен поруч з рештою бойової палітри.</summary>
         public static readonly Color32 BattleAbilityRange = new Color32(166, 128, 242, 255);
 
@@ -105,7 +107,13 @@ namespace Game.Gameplay.UI
             if (_skin != null) return _skin;
 
             var skin = ScriptableObject.CreateInstance<GUISkin>();
-            skin.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // Поправка №12.2: Fixel Text для всього інтерфейсу; без асета HudArt —
+            // вбудований шрифт. Знаків, яких немає у Fixel (▸ ▾ ✓), динамічний
+            // шрифт бере з системних (Editor/ThirdPartyUiImportSettings).
+            var art = HudArt.Current;
+            skin.font = art != null && art.UiRegular != null
+                ? art.UiRegular
+                : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             skin.label = Body;
             skin.box = PanelStyle();
             skin.button = ButtonStyle(BgRaised, BgHover, BgActive, TextMain);

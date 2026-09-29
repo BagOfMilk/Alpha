@@ -22,6 +22,30 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void ResolveVerticalOverlaps_MixedHeights_TrapLabelNotHiddenUnderUnitBlock()
+        {
+            // Знімок 25.09.2026: мітка пастки (18 px, на землі) лежала під значком
+            // «Дозор» сусіда (блок 50 px над головою). Нижча — мітка — лишається,
+            // блок бійця піднімається рівно над нею.
+            float[] cx = { 480f, 500f };
+            float[] top = { 330f, 360f };      // 0 — блок бійця, 1 — мітка пастки
+            float[] w = { 140f, 90f };
+            float[] h = { 50f, 18f };
+            var r = BattleTooltipLayout.ResolveVerticalOverlaps(cx, top, w, h, 2f);
+            Assert.AreEqual(360f, r[1], 0.01f, "мітка пастки на місці");
+            Assert.AreEqual(360f - 50f - 2f, r[0], 0.01f, "блок бійця закінчується над міткою");
+        }
+
+        [Test]
+        public void ResolveVerticalOverlaps_MixedHeights_ShortLabelAboveTallBlock_Untouched()
+        {
+            // Короткий блок цілком вище за високий — перетину нема, ніхто не рухається.
+            var r = BattleTooltipLayout.ResolveVerticalOverlaps(
+                new[] { 500f, 500f }, new[] { 400f, 370f }, new[] { 120f, 120f }, new[] { 50f, 18f }, 2f);
+            CollectionAssert.AreEqual(new[] { 400f, 370f }, r);
+        }
+
+        [Test]
         public void ResolveVerticalOverlaps_FarApart_Untouched()
         {
             var top = BattleTooltipLayout.ResolveVerticalOverlaps(

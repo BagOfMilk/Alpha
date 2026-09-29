@@ -36,8 +36,8 @@ namespace Game.Core.Items
     }
 
     /// <summary>
-    /// Крафт (Епік 6.2, US-6.3): піднімає тір предмета за Матеріали + Золото
-    /// (Поправка №4.1: золото — валюта відряду; матеріали — лише з вилазок) на
+    /// Крафт (Епік 6.2, US-6.3): піднімає тір предмета за крафтовий компонент + Золото
+    /// (Поправка №4.1: золото — валюта відряду; Поправка №12.5: крафтовий компонент — лише ззовні) на
     /// відкритій Майстерні. НІКОЛИ не знижує стат (ItemInstance.UpgradeTo —
     /// масштабування, не пере-роздача). Умисно НЕ звертається до CityWorks:
     /// «відкрито майстерню чи ні» приходить готовим прапорцем від викликача,
@@ -46,7 +46,7 @@ namespace Game.Core.Items
     public static class CraftSystem
     {
         public static CraftResult TryUpgrade(ItemInstance item, ResourceLedger ledger,
-            bool workshopOpen, int materialsCost, int goldCost)
+            bool workshopOpen, int craftCost, int goldCost)
         {
             if (item == null) return CraftResult.InvalidItem;
             if (item.Definition.IsNamed) return CraftResult.NamedNotUpgradable;
@@ -55,11 +55,11 @@ namespace Game.Core.Items
 
             if (ledger != null)
             {
-                if (!ledger.CanAfford(ResourceType.Materials, materialsCost) ||
+                if (!ledger.CanAfford(ResourceType.CraftComponent, craftCost) ||
                     !ledger.CanAfford(ResourceType.Gold, goldCost))
                     return CraftResult.CannotAfford;
 
-                ledger.TrySpend(ResourceType.Materials, materialsCost);
+                ledger.TrySpend(ResourceType.CraftComponent, craftCost);
                 ledger.TrySpend(ResourceType.Gold, goldCost);
             }
 
@@ -71,7 +71,7 @@ namespace Game.Core.Items
         public static CraftResult TryUpgrade(ItemInstance item, ResourceLedger ledger, bool workshopOpen, ItemBalance cfg)
         {
             cfg = cfg ?? new ItemBalance();
-            return TryUpgrade(item, ledger, workshopOpen, cfg.CraftMaterialsCost, cfg.CraftGoldCost);
+            return TryUpgrade(item, ledger, workshopOpen, cfg.CraftComponentCost, cfg.CraftGoldCost);
         }
 
         /// <summary>

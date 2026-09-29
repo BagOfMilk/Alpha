@@ -161,8 +161,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void Format_SubstitutesNamedPlaceholders()
         {
-            string result = UkrainianText.Format("dungeon.extract", Gender.Male, "materials", "5", "gold", "10");
-            Assert.AreEqual("Здобич збережено: 5 матеріалів, 10 золота.", result);
+            string result = UkrainianText.Format("dungeon.extract", Gender.Male, "build", "5", "craft", "2", "gold", "10");
+            Assert.AreEqual("Здобич збережено: будматеріал 5, сировина 2, золото 10.", result);
         }
 
         [Test]
@@ -271,7 +271,7 @@ namespace Game.Tests.EditMode
                 "skill.ranged", "skill.melee", "skill.tactics", "skill.lockpick", "skill.mechanics",
                 "skill.survival", "skill.medicine", "skill.persuade", "skill.intimidate", "skill.trade",
                 "attr.strength", "attr.agility", "attr.wits", "attr.will",
-                "resource.gold", "resource.materials", "resource.food",
+                "resource.gold", "resource.build_component", "resource.craft_component", "resource.food",
                 "band.best", "band.good", "band.base", "band.worst",
                 "loyalty.band.broken", "loyalty.band.resentful", "loyalty.band.wary",
                 "loyalty.band.steady", "loyalty.band.devoted",
