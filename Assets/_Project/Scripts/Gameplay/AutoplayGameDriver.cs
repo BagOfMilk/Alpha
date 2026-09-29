@@ -166,18 +166,6 @@ namespace Game.Gameplay
         /// <summary>Id журнальних записів, уже знятих скріншотом "journal-&lt;id&gt;" — рівно один раз за тур, у момент, коли вони вперше стають Seen.</summary>
         private readonly HashSet<string> _jSeenIds = new HashSet<string>();
 
-        /// <summary>
-        /// Поправка №12.7: старт без будівель — Зала ради і Склад більше не
-        /// «вже стоять», тож вони в черзі (та сама, що <c>BotRunner.BuildPriority</c>).
-        /// Обрану сценою першу будівлю черга пропускає.
-        /// </summary>
-        private static readonly string[] JournalBuildPriority =
-        {
-            DefaultBuildings.CouncilHall, DefaultBuildings.Storehouse, DefaultBuildings.Infirmary,
-            DefaultBuildings.Workshop, DefaultBuildings.Tavern,
-            DefaultBuildings.Temple, DefaultBuildings.Market, DefaultBuildings.Fortifications
-        };
-
         /// <summary>Скільки з 44 записів <c>GetMechanicsJournal()</c> побачено на кінець туру — <see cref="AutoplayBootstrap"/> читає це для коду виходу 4.</summary>
         public int JournalSeenCount { get; private set; }
 
@@ -1160,37 +1148,29 @@ namespace Game.Gameplay
 
         // ---- ранок журнального туру: рада / гір / крафт / тренування / збереження ----
 
+        /// <summary>
+        /// Ранкова рада — план <see cref="BotSupport.JournalCouncilPlan"/>, той самий,
+        /// що в <c>MechanicsJournalCompletionTests</c>: одна стройка за ранок (Таверна —
+        /// одразу за Залою ради і Складом), облава і переселенці, щойно готові,
+        /// календарні дії ради — лише коли не відкладаємо на Таверну чи Майстерню.
+        /// Команди — ті самі, що кнопки вкладки «Рада».
+        /// </summary>
         private void JournalCouncilRoutine(int day)
         {
-            var city = Session.GetCityView();
-
-            foreach (var id in JournalBuildPriority)
+            foreach (var order in BotSupport.JournalCouncilPlan(Session.GetCityView(), Session.GetEconomyView(), day))
             {
-                if (IsBuiltOrBuilding(city, id)) continue;
-                string buildingId = id;
-                Run(() => Session.OrderBuilding(buildingId));
-                break; // одна стройка за ранок, як і в бот-водіях (BotRunner.ApplyCouncilRoutine).
+                string arg = order.Arg;
+                switch (order.Kind)
+                {
+                    case JournalCouncilOrderKind.Build: Run(() => Session.OrderBuilding(arg)); break;
+                    case JournalCouncilOrderKind.Raid: Run(() => Session.OrderRaid()); break;
+                    case JournalCouncilOrderKind.Settlers: Run(() => Session.OrderSettlers()); break;
+                    case JournalCouncilOrderKind.PrepareThreat: Run(() => Session.OrderPrepareThreat()); break;
+                    case JournalCouncilOrderKind.OutfitExpedition: Run(() => Session.OrderOutfitExpedition(arg)); break;
+                    case JournalCouncilOrderKind.Decree: Run(() => Session.OrderDecree(arg)); break;
+                    case JournalCouncilOrderKind.Diplomacy: Run(() => Session.OrderDiplomacy(arg)); break;
+                }
             }
-
-            if (city != null && city.RaidReady) Run(() => Session.OrderRaid());
-            if (city != null && city.SettlersReady) Run(() => Session.OrderSettlers());
-
-            if (day % 3 == 0)
-            {
-                Run(() => Session.OrderPrepareThreat());
-                Run(() => Session.OrderOutfitExpedition("outskirts"));
-            }
-            if (day % 4 == 0) Run(() => Session.OrderDecree("tuhar_boyars"));
-            if (day % 5 == 0) Run(() => Session.OrderDiplomacy("tuhar_boyars"));
-        }
-
-        private static bool IsBuiltOrBuilding(CityView city, string id)
-        {
-            if (city?.Built != null)
-                foreach (var b in city.Built) if (b.Id == id) return true;
-            if (city?.InProgress != null)
-                foreach (var b in city.InProgress) if (b.Id == id) return true;
-            return false;
         }
 
         /// <summary>Гір/крафт при першій нагоді (equip/craft журналу), тренувальний бій і збереження — рівно один раз кожне за тур, тими самими командами, що кнопки вкладок «Спорядження»/«Готовність»/«Збереження».</summary>

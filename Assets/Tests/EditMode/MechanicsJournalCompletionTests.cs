@@ -190,6 +190,13 @@ namespace Game.Tests.EditMode
             return keys;
         }
 
+        /// <summary>Ранкова рада журнального гравця — той самий план, що й у Unity-туру (<see cref="BotSupport.JournalCouncilPlan"/>).</summary>
+        private static void CouncilMorning(GameSession s)
+        {
+            foreach (var order in BotSupport.JournalCouncilPlan(s.GetCityView(), s.GetEconomyView(), s.CurrentView.Day))
+                BotSupport.ExecuteJournalCouncilOrder(s, order);
+        }
+
         private static IReadOnlyDictionary<string, string> AssignAll(GameSession s)
         {
             var plan = BotSupport.JournalAssignments(s.GetRosterView(), s.GetCityView());
@@ -284,6 +291,7 @@ namespace Game.Tests.EditMode
             // ---- Доба 2: тихо, спимо (контраст парності для night_patrol/forewarn) ----
             Assert.IsTrue(s.State == SessionState.Morning || s.State == SessionState.FreePlay);
             AssignAll(s);
+            CouncilMorning(s);
             s.ConfirmMorning();
             var d2 = s.AdvanceDay();
             ResolveAllQuiet(s, d2);
@@ -299,6 +307,7 @@ namespace Game.Tests.EditMode
 
             // ---- Доба 3, увечері: конфронтація Мирослави («Нічна розмова») -----
             AssignAll(s);
+            CouncilMorning(s);
             s.ConfirmMorning();
             var d3 = s.AdvanceDay();
             ResolveAllQuiet(s, d3);
@@ -334,7 +343,6 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(Game.Core.Characters.CompanionStatus.Antagonist, FindCompanion(s.GetRosterView(), "myroslava")?.Status);
 
-            AssignAll(s);
             s.SetPatrol(true);
             s.ConfirmEvening();
             Cmd("Evening d3: Патруль = так, «Підтвердити вечір»");
@@ -364,7 +372,9 @@ namespace Game.Tests.EditMode
                 var journalNow = s.GetMechanicsJournal();
                 policy.StarveFarms = !(FindJournalEntry(journalNow, "tension_band_change").Seen &&
                                        FindJournalEntry(journalNow, "great_crisis").Seen);
-                BotRunner.Drive(s, policy, 1, fullLog);
+                // Рада — спільний план журнального гравця, а не BotRunner.ApplyCouncilRoutine.
+                if (s.State == SessionState.Morning || s.State == SessionState.FreePlay) CouncilMorning(s);
+                BotRunner.Drive(s, policy, 1, fullLog, suppressCouncilRoutine: true);
                 daysDriven++;
                 Cmd("BotRunner d" + s.CurrentView.Day + ": розстановка/рада/вилазка/данж/ніч/рішення — JournalPolicy");
 
