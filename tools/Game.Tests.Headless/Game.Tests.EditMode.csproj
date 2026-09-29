@@ -83,6 +83,13 @@
       з джерела напряму.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/BattleTooltipLayout.cs" />
+    <!--
+      Спайк H4 (docs/HUD_DESIGN.md §8): моделі шапки і стрічки та розкладка —
+      чистий C# без UnityEngine, тим самим прийомом: HudHeaderModelTests.cs і
+      FeedModelTests.cs беруть їх з джерела напряму. Вид (UI Toolkit) лише
+      застосовує — він лінтується в Game.Gameplay.Lint.
+    -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/Models/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
