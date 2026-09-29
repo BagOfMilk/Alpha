@@ -571,6 +571,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.continue", "Продовжити");
             AddKey(t, "ui.title.training", "Тренувальний бій");
             AddKey(t, "ui.title.quit", "Вийти");
+            // Титри асетів (Поправка №12.2): CC BY 3.0 значків вимагає атрибуції.
+            AddKey(t, "ui.title.credits", "Значки: Lorc і Delapouite, game-icons.net (CC BY 3.0) · Шрифти: Fixel, Noto Serif (SIL OFL 1.1) · Моделі: Kenney (CC0)");
             AddKey(t, "ui.title.hitrule.percent", "Правило влучання: показаний відсоток");
             AddKey(t, "ui.title.hitrule.threshold", "Правило влучання: показаний поріг");
             AddKey(t, "ui.title.hitrule.section", "Правило влучання");
