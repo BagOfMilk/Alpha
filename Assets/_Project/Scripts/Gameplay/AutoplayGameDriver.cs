@@ -381,8 +381,11 @@ namespace Game.Gameplay
                         _shell.SetHubTab(0);
                         _host.Log("Хаб: усі " + HubTabSlugs.Length + " вкладок відвідано й знято.");
 
+                        foreach (var f in HudTour()) yield return f;
                         foreach (var f in ExploreTour()) yield return f;
                     }
+
+                    foreach (var f in MaybeCaptureImportantFeed()) yield return f;
 
                     // "issue the bot's morning commands" — та сама розстановка
                     // за замовчуванням, що й BotSupport.DefaultAssignments
@@ -1369,6 +1372,79 @@ namespace Game.Gameplay
         }
 
         private const int ExploreWalkFrameCap = 1800;
+
+        /// <summary>Скільки кадрів тиші на ранку доби 1 міряє <see cref="HudTour"/> (критерій 4 §8).</summary>
+        private const int HudIdleFrames = 120;
+
+        /// <summary>
+        /// Спайк H4 (docs/HUD_DESIGN.md §8): знімок шапки і стрічки, знімок
+        /// драбини полос «при наведенні» (рішення власника 29.09.2026, «1. B»),
+        /// перевірка, що IMGUI-тіло не перетинає панель UI Toolkit (критерій 5),
+        /// і час кадру екрана міста в тиші (критерій 4) — у тому самому місці
+        /// туру для обох режимів, щоб порівняти з <c>-imgui-hud</c>. Драбину
+        /// відкриває прапорець виду, а не симуляція миші: це лише показ, стану
+        /// гри він не змінює і команд не кличе (UI-14 не порушено).
+        /// </summary>
+        private IEnumerable<int> HudTour()
+        {
+            _host.Log("HUD: шапка і стрічка — " + _shell.HudModeLabel + ".");
+
+            float idleSeconds = 0f, idleMax = 0f;
+            for (int i = 0; i < HudIdleFrames; i++)
+            {
+                yield return 0;
+                float dt = Time.unscaledDeltaTime;
+                idleSeconds += dt;
+                if (dt > idleMax) idleMax = dt;
+            }
+            _host.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "HUD: час кадру ранку доби 1 ({0}) — середнє {1:0.00} мс, найдовший {2:0.00} мс за {3} кадрів.",
+                _shell.HudModeLabel, idleSeconds * 1000f / HudIdleFrames, idleMax * 1000f, HudIdleFrames));
+
+            _host.Capture("hud-header");
+            yield return 0;
+
+            var frame = HudLayout.For(Screen.width, Screen.height);
+            if (frame.Body.Overlaps(frame.Header) || frame.Body.Overlaps(frame.Feed))
+                throw new InvalidOperationException("HUD: тіло IMGUI перетинає шапку чи стрічку на " + Screen.width + "×" + Screen.height + ".");
+            _host.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "HUD: {0}×{1}, масштаб {2:0.00}, шапка {3:0} px, стрічка {4:0} px.",
+                Screen.width, Screen.height, frame.Scale, frame.Header.Height, frame.Feed.Width));
+
+            var hud = _shell.ToolkitHud;
+            if (hud == null || !hud.IsReady)
+            {
+                _host.Log("HUD: драбину не знято — шапка на IMGUI (" + GameShell.ImguiHudFlag + " або UI Toolkit не піднявся).");
+                yield break;
+            }
+            var header = hud.LastHeader;
+            if (header == null)
+                throw new InvalidOperationException("HUD: шапка UI Toolkit не побудувалась на ранку доби 1.");
+            _host.Log("HUD: «" + header.DayLine + "» · «" + header.BandLine + "» · драбина: " + string.Join(" / ", header.LadderLines));
+
+            hud.ForceLadderOpen = true;
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            if (!hud.LadderShown)
+                throw new InvalidOperationException("HUD: драбина полос не відкрилась.");
+            _host.Capture("hud-ladder");
+            yield return 0;
+            hud.ForceLadderOpen = false;
+        }
+
+        /// <summary>Знімок стрічки з непорожньою зоною «Важливе за добу» — рівно раз за тур.</summary>
+        private bool _hudImportantCaptured;
+
+        private IEnumerable<int> MaybeCaptureImportantFeed()
+        {
+            if (_hudImportantCaptured) yield break;
+            var feed = _shell.ToolkitHud != null ? _shell.ToolkitHud.LastFeed : null;
+            if (feed == null || feed.Important.Count == 0) yield break;
+            _hudImportantCaptured = true;
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("hud-important");
+            yield return 0;
+            _host.Log("HUD: «Важливе за добу» — " + feed.Important[0].Key + ".");
+        }
 
         private static IEnumerable<int> WaitFrames(int frames)
         {
