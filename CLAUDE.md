@@ -34,6 +34,10 @@ Base-builder RPG на **Unity 6.4 (6000.4.10f1)**. **Головний луп —
 - **`docs/ROADMAP.md`** — що не доробленo (віхи M1–M4) і трек HUD.
 - **`docs/HUD_DESIGN.md`** (v0) + `docs/research/HUD_REFERENCES.md` —
   специфікація HUD небойових екранів; бій — `docs/COMBAT_V2.md`.
+- **`docs/UX_DESIGN.md`** (чернетка v0, Поправка №13) +
+  `docs/research/UX_REFERENCES.md` — UX усього поза HUD: будівлі, в які
+  заходять, інтер'єри, що ростуть, панелі замість вкладок, меню, словник
+  компонентів; сірий каркас зараз, візуальний прохід — після BETA 1 (= M1).
 
 > `docs/DESIGN.md` і `docs/BALANCE.md` — **історичні**, джерелом істини
 > не є (там скасовані рішення: XCOM-фази, шість ресурсів тощо).
@@ -280,7 +284,8 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
 | Шматок | Гілка | Статус |
 |---|---|---|
 | Документи (GDD v7, статут, покажчик, дорожня карта, HUD-план); спайк HUD на UI Toolkit (H4, пройдено) і реалізація Поправки №12 (12.1, 12.2, 12.3, 12.5, 12.7 — зроблено; 12.4 — робота) | `claude/first-hour-build` (worktree `gifted-northcutt-615bf1`) | сесія «Game design document review», 29.09.2026 |
-| Постійно відкритий редактор Unity, автотур у Play Mode, Unity CLI | `tb/editor-live` (worktree `live`) | сесія «Щ», 28.09.2026 — worktree `live` не чіпати (замок проєкту) |
+| Постійно відкритий редактор Unity, автотур у Play Mode, Unity CLI | злито в trunk (`3832edd`); worktree `live` | сесія «Щ», 28.09.2026 — worktree `live` не чіпати (замок проєкту) |
+| UX поза HUD (Поправка №13): будівлі й інтер'єри, панелі замість вкладок, меню, `docs/UX_DESIGN.md` | `tb/ux-*` (worktree `stoic-blackwell-4b3412`) | сесія «Щ», 29.09.2026 — межу з HUD погоджено; спільне малими правками після злиття trunk: `GameShell.cs` (partial `GameShell.Ux.cs`), `UkrainianText.cs` (partial-блок), `GameSceneBuilder.cs`, `VillageWalk.cs`, `HeroWalker.cs`, `AutoplayGameDriver.cs` (крім `Journal*`) |
 | Фракції, квести, автотури за краєм екрана | злито в trunk (`c49fc0d`) | сесія «System 1 AI model capabilities» |
 
 **Перша ігрова година зібрана (23.09.2026): кроки 1–7 порядку `FIRST_HOUR` §4
