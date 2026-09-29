@@ -76,6 +76,12 @@ namespace Game.Core.Combat
         /// <summary>Правило кастингу №12.9: персонажа з російського першоджерела переманити не можна — лише обмін, викуп, відпустити.</summary>
         public bool NeverRecruitable;
 
+        /// <summary>
+        /// Жадібність («Відкуп», docs/ABILITIES.md §4.6): Торгівля ≥ цього — ватага бере
+        /// гроші й іде. 0 — не продається (орда, фанатики, бос).
+        /// </summary>
+        public int Greed;
+
         public EnemyDefinition() { }
 
         public EnemyDefinition(string id, string displayName, EnemyRole role, EnemyFamily family)

@@ -77,7 +77,11 @@ namespace Game.Core.Dungeons
         /// <summary>Тихий обхід зірвався — першими ходять вороги.</summary>
         Spotted = 2,
         /// <summary>Тихий обхід зірвався, коли данж уже небезпечний (полоса загрози на вході ≥ Dangerous), — загін стартує пораненим.</summary>
-        UnderFire = 3
+        UnderFire = 3,
+        /// <summary>Розмова перед боєм не вдалась («Слово миру», «Відкуп») або вдалась частково — звичайна ініціатива.</summary>
+        Encounter = 4,
+        /// <summary>Ультиматум «Скласти зброю!» відкинуто — ворог розлючений, у раунді 1 б'є влучніше.</summary>
+        Provoked = 5
     }
 
     /// <summary>
@@ -331,6 +335,33 @@ namespace Game.Core.Dungeons
 
             res.Bypassed = true; // 0 ризику (Поправка №1 для данжу) — жодної нагороди, жодного бою
             MarkCleared(res);
+            FinalizeResolution(res);
+            return res;
+        }
+
+        /// <summary>
+        /// Розмова перед боєм (docs/ABILITIES.md §4.6: «Слово миру», «Скласти зброю!»,
+        /// «Відкуп») — одна спроба на кімнату. Хто з ворогів піде, здасться чи візьме
+        /// гроші, вирішує викликач (йому видно бойові картки ворогів); тут — лише
+        /// наслідок для прогону: ворогів не лишилось — кімната пройдена без луту (як
+        /// тихий обхід), інакше — очікування бою з заданим стартом.
+        /// </summary>
+        public RoomResolution ResolveParley(bool noOneLeft, DungeonBattleStart start)
+        {
+            RequireInProgress();
+            var room = CurrentRoom;
+            if (room == null || CurrentCleared || room.Kind != DungeonRoomKind.Combat)
+                throw new InvalidOperationException("Розмова перед боєм — лише в бойовій кімнаті, що ще не пройдена");
+            if (AwaitingBattle)
+                throw new InvalidOperationException("Кімната вже чекає бою — розв'язує ReportCombat");
+
+            var res = new RoomResolution { RoomId = room.Id, Kind = room.Kind };
+            if (noOneLeft)
+            {
+                res.Bypassed = true;
+                MarkCleared(res);
+            }
+            else EnterAwaitingBattle(room, res, start);
             FinalizeResolution(res);
             return res;
         }

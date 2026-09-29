@@ -2766,6 +2766,38 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.object.high.effect", "Повне укриття тому, хто за нею; закриває огляд. Вибух розбиває до низької.");
             AddKey(t, "ui.battle.object.low.effect", "Половинне укриття тому, хто за нею. Вибух розносить.");
 
+            // C5, друга партія (docs/ABILITIES.md §4.6, §5; власник: «ок»).
+            AddKey(t, "ui.dungeon.parley.title", "Перед боєм — одна спроба:");
+            AddKey(t, "ui.dungeon.parley.peace", "Слово миру");
+            AddKey(t, "ui.dungeon.parley.surrender", "Скласти зброю!");
+            AddKey(t, "ui.dungeon.parley.bribe", "Відкуп");
+            AddKey(t, "ui.dungeon.parley.line", "{form}: {skill} {value} / {threshold} — {verdict}");
+            AddKey(t, "ui.dungeon.parley.pass", "вийде");
+            AddKey(t, "ui.dungeon.parley.fail.peace", "не вийде, бій без засідки");
+            AddKey(t, "ui.dungeon.parley.fail.surrender", "не вийде, розлючений ворог перший раунд влучніший");
+            AddKey(t, "ui.dungeon.parley.fail.bribe", "не вийде, гроші при вас, наступного разу дорожче");
+            AddKey(t, "ui.dungeon.parley.gold", "{gold} золота");
+            AddKey(t, "ui.dungeon.parley.effect.peace", "підуть: {leaving}, битися з: {remaining}");
+            AddKey(t, "ui.dungeon.parley.effect.surrender", "здадуться в полон: {leaving}, битися з: {remaining}");
+            AddKey(t, "ui.dungeon.parley.effect.bribe", "візьмуть гроші й підуть: {leaving}, битися з: {remaining}");
+            AddKey(t, "ui.dungeon.parley.block.immune", "Імунітет — тут ніхто не здається.");
+            AddKey(t, "ui.dungeon.parley.block.not_for_sale", "Не продаються — лише розбійники й найманці беруть гроші.");
+            AddKey(t, "ui.dungeon.parley.block.poor", "Бракує золота в казні.");
+            AddKey(t, "ui.dungeon.parley.block.no_room", "Зараз не до розмов.");
+            AddKey(t, "dungeon.parley.peace.success", "Слово миру почули — частина ватаги відходить.");
+            AddKey(t, "dungeon.parley.peace.fail", "Слова миру не почули — бій.");
+            AddKey(t, "dungeon.parley.surrender.success", "Ультиматум прийнято — хто міг, склав зброю.");
+            AddKey(t, "dungeon.parley.surrender.fail", "Ультиматум відкинуто — ворог розлючений.");
+            AddKey(t, "dungeon.parley.bribe.success", "Відкуп узяли — ватага йде геть.");
+            AddKey(t, "dungeon.parley.bribe.fail", "Відкуп відкинули — наступного разу запросять більше.");
+            AddKey(t, "enemy.spared", "Звалений ворог живий — його ведуть до громади полоненим.");
+            AddKey(t, "combat.log.spared", "{unit} щадить зваленого — {target} тепер полонений.");
+            AddKey(t, "combat.log.opening.provoked", "Ультиматум відкинуто: розлючений ворог перший раунд б'є влучніше.");
+            AddKey(t, "ui.battle.opening.Provoked", "Ультиматум відкинуто");
+            AddKey(t, "ability.mercy", "Милосердя на полі");
+            AddKey(t, "ability.mercy.desc", "Впритул до зваленого ворога, що може здатися: перев'язати й узяти живим — одразу полонений, долю вирішить віче.");
+            AddKey(t, "ui.battle.check.block.cannot_surrender", "Цей не здається — пощадити не вийде.");
+
             // C8 — зв'язки в бою (№14.8).
             AddKey(t, "combat.log.bond.cover", "{unit} прикриває побратима — б'є у відповідь: {target}.");
             AddKey(t, "ui.battle.bond.near", "Побратим {name} поруч — раз за раунд прикриє.");

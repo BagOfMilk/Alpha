@@ -113,5 +113,18 @@ namespace Game.Core.Balance
         /// <summary>Розвідка перед боєм відкриває картку ворога: Виживання ≥ N або Кмітливість ≥ M у когось із загону.</summary>
         public int DossierScoutSurvival = 3;
         public int DossierScoutWits = 6;
+
+        // ---- Друга партія здібностей (docs/ABILITIES.md §4.6) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>Ультиматум відкинуто: розлючений ворог у раунді 1 влучніший на стільки.</summary>
+        public int ProvokedAccuracyBonus = 10;
+        /// <summary>«Слово миру»: Переконання ≥ Воля ватажка + це.</summary>
+        public int PeaceOverResolve = 2;
+        /// <summary>«Скласти зброю!»: Залякування ≥ Воля ватажка + це; мінус одиниця, якщо загін чисельніший.</summary>
+        public int UltimatumOverResolve = 3;
+        /// <summary>«Відкуп»: золото за голову за рангом (рядовий, міні-бос); кожна відмова дорожчає на половину.</summary>
+        public int[] BribeGoldPerRank = { 10, 25 };
+        /// <summary>«Відкуп»: Торгівля ≥ жадібність ватаги + це.</summary>
+        public int BribeOverGreed = 0;
+        public int BribeRefusalMarkupPercent = 50;
     }
 }

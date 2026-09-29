@@ -166,6 +166,12 @@ namespace Game.Core.Combat
                         bool used = _rallied.Contains(target.Id);
                         return new AbilityCheck { Kind = AbilityCheckKind.Condition, Passes = !used, BlockKey = used ? "rallied" : null };
                     }
+                    case AbilityEffectKind.SpareEnemy:
+                    {
+                        if (target == null) return null;
+                        bool can = target.Profile.CanSurrender;
+                        return new AbilityCheck { Kind = AbilityCheckKind.Condition, Passes = can, BlockKey = can ? null : "cannot_surrender" };
+                    }
                     case AbilityEffectKind.PierceIfShredded:
                     {
                         if (target == null) return null;
@@ -572,6 +578,10 @@ namespace Game.Core.Combat
                     if (u.Side == Side.Enemy && u.IsActive)
                         ApplyStatus(u, StatusType.Marked, Math.Max(1, Balance.Combat.AmbushMarkedTurns));
             }
+            else if (opening == BattleOpening.Provoked)
+            {
+                // Бонус влучності — у ProvokedBonus (раунд 1, вороги); тут лише запис у журнал.
+            }
             else if (opening == BattleOpening.UnderFire)
             {
                 int wounded = 0;
@@ -735,6 +745,7 @@ namespace Game.Core.Combat
                                        int accuracyBonus, bool forceHit, bool allowStrikeGain, bool isReaction = false,
                                        bool ignoreArmor = false)
         {
+            accuracyBonus += ProvokedBonus(unit);
             int shown = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
             var outcome = forceHit ? AttackOutcome.Hit : _hitRule.Resolve(unit, target, shown, _roller);
             var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance, ignoreArmor);
@@ -850,6 +861,11 @@ namespace Game.Core.Combat
                     break;
                 case AbilityTarget.Tile:
                     if (!targetTile.HasValue || !Map.InBounds(targetTile.Value))
+                        return CombatActionResult.InvalidTarget;
+                    break;
+                case AbilityTarget.DownedEnemy:
+                    target = GetUnit(targetUnitId);
+                    if (target == null || target.Side == unit.Side || target.LifeState != UnitLifeState.Downed)
                         return CombatActionResult.InvalidTarget;
                     break;
             }
@@ -1024,6 +1040,19 @@ namespace Game.Core.Combat
                             Record(CombatLogKeys.TrapPlaced, $"  Ловушка установлена в {targetTile.Value}",
                                 "unitId", unit.Id, "abilityId", ability.Id,
                                 "x", I(targetTile.Value.X), "y", I(targetTile.Value.Y));
+                        }
+                        break;
+
+                    case AbilityEffectKind.SpareEnemy:
+                        // Дзеркало «Стабілізувати»: звалений ворог, що може здатися, — живий полонений.
+                        if (target != null && target.LifeState == UnitLifeState.Downed && target.Profile.CanSurrender)
+                        {
+                            target.LifeState = UnitLifeState.Surrendered;
+                            target.Spared = true;
+                            Map.ClearOccupant(target.Pos);
+                            Record(CombatLogKeys.Spared, $"  {unit.Profile.DisplayName} щадит {target.Profile.DisplayName}",
+                                "unitId", unit.Id, "targetId", target.Id);
+                            CheckOutcome();
                         }
                         break;
 
@@ -1311,7 +1340,12 @@ namespace Game.Core.Combat
         /// <summary>Показане гравцю число. accuracyBonus — бонус зведеної здібності:
         /// прев'ю зобов'язане збігатися з фактичним ролом.</summary>
         public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
-            => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus);
+            => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus + ProvokedBonus(attacker));
+
+        /// <summary>Ультиматум відкинуто (старт <see cref="BattleOpening.Provoked"/>): ворог у раунді 1 влучніший.</summary>
+        private int ProvokedBonus(CombatUnit attacker) =>
+            Opening == BattleOpening.Provoked && Round == 1 && attacker != null && attacker.Side == Side.Enemy
+                ? Balance.Combat.ProvokedAccuracyBonus : 0;
 
         /// <summary>Показаний гравцю діапазон урону поточної зброї атакуючого по цілі (§DamageResolver.PreviewRange) — той самий принцип, що HitChancePreview вище.</summary>
         public DamagePreviewInfo DamagePreview(CombatUnit attacker, CombatUnit target)

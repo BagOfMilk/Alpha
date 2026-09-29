@@ -125,11 +125,18 @@ namespace Game.Core.Combat
                 .Targets(AbilityTarget.Enemy, range: 1, needsLos: true)
                 .WithEffect(new AbilityEffect(AbilityEffectKind.PierceIfShredded, amount: 3));
 
+        /// <summary>«Милосердя на полі» (Медицина ≥ 1, дзеркало «Стабілізувати»): звалений ворог, що може здатися, — полонений.</summary>
+        public static AbilityDefinition Mercy() =>
+            new AbilityDefinition("ability.mercy", "mercy", SkillType.Medicine, 1)
+                .Costs(ap: 2, cooldown: 0)
+                .Targets(AbilityTarget.DownedEnemy, range: 1, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.SpareEnemy));
+
         /// <summary>Спільний пул здібностей, доступних напарникам за гейтом скіла (передається в CombatUnit.FromCompanion).</summary>
         public static List<AbilityDefinition> AbilityCatalog() => new List<AbilityDefinition>
         {
             Lunge(), SetTrap(), MoveOrder(), Volley(),
-            Rally(), Enrage(), Intimidate(), Net(), Pierce()
+            Rally(), Enrage(), Intimidate(), Net(), Pierce(), Mercy()
         };
 
         // ---- Враги (§3.1: авангард орди доби 1, бояри Тугара, фінальний бос) ----
@@ -238,6 +245,7 @@ namespace Game.Core.Combat
             {
                 MaxHp = 26, MaxAp = 9, Accuracy = 82, Defense = 1, Initiative = 6, CritChance = 10, Armor = 0,
                 Rank = EnemyRank.MiniBoss, CanSurrender = true, SurrenderAtHpPercent = 10, // №14.2: ватажок скиту — міні-бос; поріг низький — бій лишається тяжким (№11)
+                Greed = 3, // «Відкуп» (docs/ABILITIES.md §4.6): розбійник продається; орда — ні
                 Weapon = BanditCleaver(),
                 Abilities = { Lunge() }
             };

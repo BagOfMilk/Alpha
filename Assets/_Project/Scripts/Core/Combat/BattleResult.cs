@@ -58,6 +58,9 @@ namespace Game.Core.Combat
         public string DisplayName;
         public EnemyRank Rank;
         public bool NeverRecruitable;
+
+        /// <summary>Пощаджений звалений («Милосердя на полі») — одразу полонений, долю не питають.</summary>
+        public bool Spared;
     }
 
     public sealed class BattleResult
@@ -101,16 +104,20 @@ namespace Game.Core.Combat
                 if (u.LifeState == UnitLifeState.Active) survivors.Add(u.SourceCompanionId);
             }
 
+            // Хто здався, і — після перемоги — хто впав, але міг здатися («Милосердя на полі»):
+            // бій скінчився, звалений у твоїх руках, його долю вирішуєш на панелі результату.
             var surrendered = new List<SurrenderedEnemy>();
             foreach (var u in cs.Units)
-                if (u.Side == Side.Enemy && u.LifeState == UnitLifeState.Surrendered)
+                if (u.Side == Side.Enemy && (u.LifeState == UnitLifeState.Surrendered
+                    || (cs.Outcome == CombatOutcome.Victory && u.LifeState == UnitLifeState.Downed && u.Profile.CanSurrender)))
                     surrendered.Add(new SurrenderedEnemy
                     {
                         UnitId = u.Id,
                         EnemyDefinitionId = u.EnemyDefinitionId,
                         DisplayName = u.Profile.DisplayName,
                         Rank = u.Profile.Rank,
-                        NeverRecruitable = u.Profile.NeverRecruitable
+                        NeverRecruitable = u.Profile.NeverRecruitable,
+                        Spared = u.Spared
                     });
 
             var fallOrder = new List<string>();

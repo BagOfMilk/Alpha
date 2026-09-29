@@ -109,6 +109,8 @@ namespace Game.Core.Session
         private string _raidGroupId;
         // ---- Досьє ворога (Поправка №14.6): що громада знає про кожен тип ворога ----
         private EnemyDossierBook _dossier = new EnemyDossierBook();
+        /// <summary>«Відкуп»: скільки разів ватага цього типу вже відмовилась — ціна повтору зростає.</summary>
+        private readonly Dictionary<string, int> _bribeRefusals = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<SurrenderedEnemy> _pendingSurrenders = new List<SurrenderedEnemy>();
         /// <summary>Переманені полонені: щоб відтворити їх у ростері при завантаженні (ростер відновлює лише наявних).</summary>
         private readonly List<string> _recruits = new List<string>();
@@ -362,6 +364,7 @@ namespace Game.Core.Session
             _captives = new CaptivityLedger();
             _raidGroupId = null;
             _dossier = new EnemyDossierBook();
+            _bribeRefusals.Clear();
             _pendingSurrenders.Clear();
             _recruits.Clear();
 
@@ -1779,6 +1782,8 @@ namespace Game.Core.Session
                 view.BloodyOpening = ToBattleOpening(_dungeon.PreviewBloodyStart(ResolveActors(_dungeon.PartyIds))).ToString();
                 if (room.QuietChecks.Count > 0)
                     view.QuietFailOpening = ToBattleOpening(_dungeon.PreviewQuietFailStart()).ToString();
+                // Розмова перед боєм (docs/ABILITIES.md §4.6): пороги й ціна — до кліку.
+                view.Parley = new List<ParleyView> { ParleyViewOf("peace"), ParleyViewOf("surrender"), ParleyViewOf("bribe") };
             }
 
             if (room.Kind == DungeonRoomKind.Event)
@@ -2576,6 +2581,198 @@ namespace Game.Core.Session
         }
 
         // =====================================================================
+        // Розмова перед боєм (docs/ABILITIES.md §4.6, друга партія; власник: «ок»,
+        // 29.09.2026). «Слово миру» (Переконання), «Скласти зброю!» (Залякування),
+        // «Відкуп» (Торгівля) — одна спроба на бойову кімнату, до першого пострілу.
+        // Діють лише на тих, хто за рангом №14.2 може здатися; решта — «Імунітет».
+        // Поріг — сира навичка найкращого в загоні проти Волі ватажка (як дії C5).
+        // Страх громади піднімає пороги Переконання й Торгівлі (FearState);
+        // Залякування страхом не дешевшає — так у FearState, інакше кривавий шлях
+        // окупав би сам себе (Поправка №1).
+        // =====================================================================
+
+        /// <summary>Що дасть одна форма розмови: поріг, хто відгукнеться, хто лишиться, скільки золота.</summary>
+        internal sealed class ParleyPlan
+        {
+            public string Form, SkillKey, BlockKey;
+            public int Value, Threshold, GoldCost;
+            public bool Passes;
+            public readonly List<EnemyDefinition> Leaving = new List<EnemyDefinition>();
+            public readonly List<string> Remaining = new List<string>();
+            public readonly List<string> AllEnemies = new List<string>();
+        }
+
+        private ParleyPlan BuildParley(string form)
+        {
+            var room = _dungeon?.CurrentRoom;
+            if (room == null || room.Kind != DungeonRoomKind.Combat || _dungeon.CurrentCleared || _dungeon.AwaitingBattle)
+                return new ParleyPlan { Form = form, BlockKey = "no_room" };
+
+            Func<SkillType, int> best = skill =>
+            {
+                int v = 0;
+                foreach (var id in _dungeon.PartyIds)
+                {
+                    var comp = _worldRoster?.Get(id);
+                    if (comp != null && !comp.IsDead) v = Math.Max(v, comp.Skill(skill));
+                }
+                return v;
+            };
+            int fear = _processor.Fear?.PenaltyOn(_processor.CurrentDay, _cfg.Checks) ?? 0;
+            return PlanParley(form, room.EnemyIds, _dungeon.PartyIds?.Count ?? 0, best, fear,
+                _state.Resources.Get(ResourceType.Gold), _bribeRefusals, _cfg.Combat);
+        }
+
+        /// <summary>
+        /// Чиста арифметика форми розмови (детерміновано, інваріант 8): ватажок — найстарший
+        /// за рангом; відгукуються ті, хто може здатися (для відкупу — ще й жадібні);
+        /// поріг — Воля ватажка + надбавка (відкуп — жадібність + надбавка); страх громади
+        /// дорожчить Переконання й Торгівлю; ультиматум дешевшає, якщо загін чисельніший.
+        /// </summary>
+        internal static ParleyPlan PlanParley(string form, IReadOnlyList<string> enemyIds, int partySize,
+            Func<SkillType, int> bestSkill, int fearPenalty, int gold, IReadOnlyDictionary<string, int> bribeRefusals,
+            CombatBalance c)
+        {
+            var plan = new ParleyPlan { Form = form };
+            EnemyDefinition leader = null;
+            int known = 0;
+            foreach (var id in enemyIds)
+            {
+                plan.AllEnemies.Add(id);
+                var def = ResolveEnemyById(id);
+                if (def == null) continue;
+                known++;
+                if (leader == null || def.Rank > leader.Rank) leader = def;
+            }
+            int resolve = leader != null ? Math.Max(0, leader.Resolve) : 0;
+
+            SkillType skill;
+            switch (form)
+            {
+                case "peace":
+                    skill = SkillType.Persuade;
+                    plan.Threshold = resolve + c.PeaceOverResolve + fearPenalty;
+                    break;
+                case "surrender":
+                    skill = SkillType.Intimidate;
+                    plan.Threshold = resolve + c.UltimatumOverResolve - (partySize > known ? 1 : 0);
+                    break;
+                case "bribe":
+                    skill = SkillType.Trade;
+                    break;
+                default:
+                    plan.BlockKey = "no_room";
+                    return plan;
+            }
+            plan.SkillKey = skill.ToString().ToLowerInvariant();
+
+            int greed = 0;
+            foreach (var id in enemyIds)
+            {
+                var def = ResolveEnemyById(id);
+                bool yields = def != null && def.CanSurrender && def.Rank != EnemyRank.Boss;
+                if (form == "bribe") yields = yields && def.Greed > 0;
+                if (!yields) { plan.Remaining.Add(id); continue; }
+
+                plan.Leaving.Add(def);
+                if (form != "bribe") continue;
+                greed = Math.Max(greed, def.Greed);
+                int rank = Math.Min((int)def.Rank, c.BribeGoldPerRank.Length - 1);
+                int refused = bribeRefusals != null && bribeRefusals.TryGetValue(def.Id, out int r) ? r : 0;
+                plan.GoldCost += c.BribeGoldPerRank[rank] * (100 + refused * c.BribeRefusalMarkupPercent) / 100;
+            }
+            if (form == "bribe") plan.Threshold = greed + c.BribeOverGreed + fearPenalty;
+
+            plan.Value = bestSkill != null ? bestSkill(skill) : 0;
+            plan.Passes = plan.Value >= plan.Threshold;
+
+            if (plan.Leaving.Count == 0) plan.BlockKey = form == "bribe" ? "not_for_sale" : "immune";
+            else if (form == "bribe" && gold < plan.GoldCost) plan.BlockKey = "poor";
+            return plan;
+        }
+
+        private ParleyView ParleyViewOf(string form)
+        {
+            var p = BuildParley(form);
+            return new ParleyView
+            {
+                Form = form, SkillKey = p.SkillKey, ParleyValue = p.Value, ParleyThreshold = p.Threshold,
+                Passes = p.Passes, BlockKey = p.BlockKey, GoldCost = p.GoldCost,
+                LeavingCount = p.Leaving.Count, RemainingCount = p.Remaining.Count
+            };
+        }
+
+        /// <summary>
+        /// Розмова перед боєм у поточній бойовій кімнаті: "peace" | "surrender" | "bribe".
+        /// Вдалось — ті, хто може здатися, відходять / здаються в полон / беруть гроші; з
+        /// рештою — бій (або кімната пройдена без луту, якщо нікого не лишилось).
+        /// Не вдалось — бій з усіма: без засідки; після відкинутого ультиматуму ворог
+        /// у раунді 1 влучніший; після відмови від відкупу ціна повтору зростає.
+        /// Повертає вид данжу; null — почався бій.
+        /// </summary>
+        public DungeonView ResolveDungeonParley(string form)
+        {
+            RequireState(SessionState.Dungeon);
+            var plan = BuildParley(form);
+            if (plan.BlockKey != null) return BuildDungeonView();
+
+            var room = _dungeon.CurrentRoom;
+            LogEvent("dungeon.parley." + form + (plan.Passes ? ".success" : ".fail"),
+                Args("threshold", plan.Threshold.ToString(CultureInfo.InvariantCulture), "value", plan.Value.ToString(CultureInfo.InvariantCulture)));
+
+            List<string> fighters = plan.AllEnemies;
+            var start = DungeonBattleStart.Encounter;
+            if (plan.Passes)
+            {
+                fighters = plan.Remaining;
+                if (form == "surrender")
+                    foreach (var def in plan.Leaving)
+                    {
+                        _prisoners.Take(def.Id, def.DisplayName, (int)def.Rank, def.NeverRecruitable, _processor.CurrentDay);
+                        LogEvent("enemy.captured", Args("enemyId", def.Id));
+                    }
+                else if (form == "bribe")
+                    _state.Resources.TrySpend(ResourceType.Gold, plan.GoldCost);
+            }
+            else if (form == "surrender") start = DungeonBattleStart.Provoked;
+            else if (form == "bribe")
+                foreach (var def in plan.Leaving)
+                {
+                    _bribeRefusals.TryGetValue(def.Id, out int refused);
+                    _bribeRefusals[def.Id] = refused + 1;
+                }
+
+            var res = _dungeon.ResolveParley(fighters.Count == 0, start);
+            ApplyDungeonResolution(res);
+            if (!res.NeedsBattle) return BuildDungeonView();
+
+            var setup = BuildRoomBattleSetup(room, _dungeon.PartyIds, ToBattleOpening(start), fighters);
+            RequestBattle(setup, SuspendReason.DungeonCombatRoom, SessionState.Dungeon);
+            return null;
+        }
+
+        private string CaptureBribeRefusals()
+        {
+            var keys = new List<string>(_bribeRefusals.Keys);
+            keys.Sort(StringComparer.Ordinal);
+            var parts = new List<string>();
+            foreach (var k in keys) parts.Add(k + ":" + _bribeRefusals[k].ToString(CultureInfo.InvariantCulture));
+            return string.Join(",", parts);
+        }
+
+        private void RestoreBribeRefusals(string blob)
+        {
+            _bribeRefusals.Clear();
+            if (string.IsNullOrEmpty(blob)) return;
+            foreach (var entry in blob.Split(','))
+            {
+                int colon = entry.LastIndexOf(':');
+                if (colon > 0 && int.TryParse(entry.Substring(colon + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n))
+                    _bribeRefusals[entry.Substring(0, colon)] = n;
+            }
+        }
+
+        // =====================================================================
         // Досьє ворога (Поправка №14.6; власник: «го»): контакт відкриває роль і
         // здоров'я; розвідка перед боєм (Виживання чи Кмітливість) або сам бій —
         // решту. Тренувальний бій — пісочниця: там усе видно й нічого не пишеться.
@@ -3116,6 +3313,13 @@ namespace Game.Core.Session
             if (reason != SuspendReason.TrainingSkirmish && result.SurrenderedEnemies != null)
                 foreach (var e in result.SurrenderedEnemies)
                 {
+                    if (e.Spared)
+                    {
+                        // «Милосердя на полі»: пощаджений — одразу полонений, долю вирішує віче.
+                        _prisoners.Take(e.EnemyDefinitionId, e.DisplayName, (int)e.Rank, e.NeverRecruitable, _processor.CurrentDay);
+                        LogEvent("enemy.spared", Args("enemyId", e.EnemyDefinitionId, "rank", e.Rank.ToString()));
+                        continue;
+                    }
                     _pendingSurrenders.Add(e);
                     LogEvent("enemy.surrendered", Args("enemyId", e.EnemyDefinitionId, "rank", e.Rank.ToString()));
                 }
@@ -4757,15 +4961,18 @@ namespace Game.Core.Session
         /// перепони, бочки, сіно, місця загону й ворогів, підкріплення), або
         /// генератор, якщо шаблону немає.
         /// </summary>
-        private BattleSetup BuildRoomBattleSetup(DungeonRoomDefinition room, IReadOnlyList<string> partyIds, BattleOpening opening)
+        private BattleSetup BuildRoomBattleSetup(DungeonRoomDefinition room, IReadOnlyList<string> partyIds, BattleOpening opening,
+                                                 IReadOnlyList<string> enemyIdsOverride = null)
         {
+            // enemyIdsOverride — хто лишився після розмови перед боєм (docs/ABILITIES.md §4.6).
+            var enemyIds = enemyIdsOverride ?? room.EnemyIds;
             if (ArenaTemplates.TryGet(room.ArenaKey, out var rows))
             {
                 var reinforcements = new List<(int, string)>();
                 foreach (var r in room.Reinforcements) reinforcements.Add((r.Round, r.EnemyId));
-                return ArenaTemplates.Build(rows, partyIds, room.EnemyIds, _hitRule, opening, reinforcements);
+                return ArenaTemplates.Build(rows, partyIds, enemyIds, _hitRule, opening, reinforcements);
             }
-            return BuildBattleSetup(partyIds, room.EnemyIds, 8, 8, opening: opening);
+            return BuildBattleSetup(partyIds, enemyIds, 8, 8, opening: opening);
         }
 
         /// <summary>Старт бою мовою данжу → варіант бою (Поправка №14.1).</summary>
@@ -4776,6 +4983,8 @@ namespace Game.Core.Session
                 case DungeonBattleStart.Ambush: return BattleOpening.Ambush;
                 case DungeonBattleStart.Spotted: return BattleOpening.Spotted;
                 case DungeonBattleStart.UnderFire: return BattleOpening.UnderFire;
+                case DungeonBattleStart.Encounter: return BattleOpening.Encounter;
+                case DungeonBattleStart.Provoked: return BattleOpening.Provoked;
                 default: return BattleOpening.FirstStrike;
             }
         }
@@ -5024,6 +5233,7 @@ namespace Game.Core.Session
             head.Append(";raid=").Append(_raidGroupId ?? "-");
             // Поправка №14.6: досьє ворогів.
             head.Append(";dossier=").Append(_dossier.CaptureState());
+            head.Append(";bribe=").Append(CaptureBribeRefusals());
             head.Append(";crisis=").Append(_crisis.CaptureState());
 
             string coreBlob = _processor.SaveState();
@@ -5195,6 +5405,7 @@ namespace Game.Core.Session
                     case "captives": _captives.RestoreState(value); break;
                     case "raid": _raidGroupId = value == "-" || value.Length == 0 ? null : value; break;
                     case "dossier": _dossier.RestoreState(value); break;
+                    case "bribe": RestoreBribeRefusals(value); break;
                     case "crisis": _crisis.RestoreState(value); break;
                     case "arc": RestoreArcState(value); break;
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;

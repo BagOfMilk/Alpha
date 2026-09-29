@@ -60,6 +60,7 @@ namespace Game.Core.Combat
         public const string OpeningSpotted = "combat.log.opening.spotted";
         public const string OpeningUnderFire = "combat.log.opening.under_fire";
         public const string OpeningSurrounded = "combat.log.opening.surrounded";
+        public const string OpeningProvoked = "combat.log.opening.provoked";
 
         // ---- поле бою: об'єкти й підкріплення (Поправка №14.4) ----
         public const string ObjectHit = "combat.log.object.hit";
@@ -85,6 +86,9 @@ namespace Game.Core.Combat
 
         // ---- зв'язки в бою (Поправка №14.8) ----
         public const string BondCover = "combat.log.bond.cover";
+
+        // ---- друга партія здібностей: «Милосердя на полі» ----
+        public const string Spared = "combat.log.spared";
 
         // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
@@ -142,7 +146,7 @@ namespace Game.Core.Combat
             OpeningFirstStrike, OpeningAmbush, OpeningSpotted, OpeningUnderFire, OpeningSurrounded,
             ObjectHit, KegExploded, HaystackIgnited, CoverDegraded, CoverDestroyed, FireBurns, FireOut, ReinforcementsArrived,
             Surrendered, Rallied, Enraged, EnrageFailed, Intimidated, IntimidateFailed, Fled, OverwatchLostNet,
-            BondCover,
+            BondCover, Spared, OpeningProvoked,
             Move, OverwatchSet, Strike, AttackMiss, AttackGraze, AttackHit, AttackCrit, Stabilize,
             Ability, Damage, Shred, Heal, ApGranted, Lunge, Repositioned, TrapPlaced, HackedToPlayer, HackedToEnemy,
             OverwatchFired, OverwatchExpired, OverwatchLostDisplaced, OverwatchLostHacked, OverwatchLostStunned,
@@ -162,6 +166,7 @@ namespace Game.Core.Combat
                 case BattleOpening.Spotted: return OpeningSpotted;
                 case BattleOpening.UnderFire: return OpeningUnderFire;
                 case BattleOpening.Surrounded: return OpeningSurrounded;
+                case BattleOpening.Provoked: return OpeningProvoked;
                 default: return null;
             }
         }

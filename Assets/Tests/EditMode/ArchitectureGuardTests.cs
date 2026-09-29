@@ -687,6 +687,8 @@ namespace Game.Tests.EditMode
                 "BestPersuade", "TalkThreshold", "RaidPartyMax",
                 // Правило без кубика: скільки ударів влучить — видно до кліку (інваріант 8).
                 "PredictedShots", "PredictedHits",
+                // Розмова перед боєм (docs/ABILITIES.md §4.6): поріг, ціна й хто відгукнеться — до кліку.
+                "ParleyValue", "ParleyThreshold", "GoldCost", "LeavingCount", "RemainingCount",
                 // Досьє (Поправка №14.6): поріг розвідки видно до бою (інваріант 8).
                 "DossierScoutSurvival", "DossierScoutWits"
             };

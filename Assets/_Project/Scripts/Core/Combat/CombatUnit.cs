@@ -109,6 +109,9 @@ namespace Game.Core.Combat
         internal int HitCarry = UnsetCarry;
         internal const int UnsetCarry = int.MinValue;
 
+        /// <summary>Пощаджений («Милосердя на полі»): вибув живим — одразу полонений, без рішення після бою.</summary>
+        public bool Spared { get; internal set; }
+
         /// <summary>«Підбадьорити»: додаткові ОД на наступний власний хід (docs/ABILITIES.md).</summary>
         public int BonusApNextTurn { get; internal set; }
 
@@ -285,7 +288,10 @@ namespace Game.Core.Combat
                 Armor = def.Armor,
                 Resolve = def.Resolve,
                 MedicineSkill = 0,
-                CanBeDowned = false,
+                // «Милосердя на полі» (docs/ABILITIES.md): той, хто може здатися, від
+                // смертельного удару падає (і стікає кров'ю за вікно), а не гине одразу —
+                // його можна пощадити. Бос і ті, хто не здається, гинуть, як і раніше.
+                CanBeDowned = def.CanSurrender && def.Rank != EnemyRank.Boss,
                 Resists = def.Resists ?? new ResistProfile(),
                 Family = def.Family,
                 Role = def.Role,

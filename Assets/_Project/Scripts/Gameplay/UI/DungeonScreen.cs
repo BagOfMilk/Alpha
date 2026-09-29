@@ -1,3 +1,4 @@
+using Game.Core.Characters.Creation;
 using Game.Core.Loop;
 using Game.Core.Session.Views;
 using Game.Gameplay.Text;
@@ -104,6 +105,15 @@ namespace Game.Gameplay.UI
                             "bloody", UkrainianText.Get("ui.battle.opening." + room.BloodyOpening, g),
                             "quiet", quietFail), AlphaSkin.HintLine);
                     }
+
+                    // Розмова перед боєм (docs/ABILITIES.md §4.6; власник: «ок»): поріг, ціна
+                    // і хто відгукнеться — до кліку (інваріант 8, UI-02). UX_DESIGN §5.8 —
+                    // перенести в картки варіантів разом із рядком прогнозу вище.
+                    if (room.Parley != null && room.Parley.Count > 0)
+                    {
+                        GUILayout.Label(UkrainianText.Get("ui.dungeon.parley.title", g), AlphaSkin.Body);
+                        foreach (var p in room.Parley) DrawParley(shell, g, p);
+                    }
                     break;
 
                 case "Treasure":
@@ -126,6 +136,30 @@ namespace Game.Gameplay.UI
 
         private static void Resolve(GameShell shell, IncidentPath path)
             => shell.TryRun(() => shell.Session.ResolveDungeonRoom(path));
+
+        /// <summary>Одна форма розмови: «Слово миру: Переконання 3 / 2 — вийде · підуть 1, битися з 1».</summary>
+        private static void DrawParley(GameShell shell, Gender g, Game.Core.Session.Views.ParleyView p)
+        {
+            string verdict = UkrainianText.Get(p.Passes ? "ui.dungeon.parley.pass" : "ui.dungeon.parley.fail." + p.Form, g);
+            string label = UkrainianText.Format("ui.dungeon.parley.line", g,
+                "form", UkrainianText.Get("ui.dungeon.parley." + p.Form, g),
+                "skill", ScreenText.SkillLabel(p.SkillKey, g),
+                "value", p.ParleyValue.ToString(), "threshold", p.ParleyThreshold.ToString(),
+                "verdict", verdict);
+            if (p.Form == "bribe" && p.GoldCost > 0)
+                label += " · " + UkrainianText.Format("ui.dungeon.parley.gold", g, "gold", p.GoldCost.ToString());
+            if (p.LeavingCount > 0)
+                label += " · " + UkrainianText.Format("ui.dungeon.parley.effect." + p.Form, g,
+                    "leaving", p.LeavingCount.ToString(), "remaining", p.RemainingCount.ToString());
+
+            if (p.BlockKey != null)
+                Widgets.DisabledButton(label, UkrainianText.Get("ui.dungeon.parley.block." + p.BlockKey, g));
+            else if (Widgets.SecondaryButton(label))
+            {
+                string form = p.Form;
+                shell.TryRun(() => shell.Session.ResolveDungeonParley(form));
+            }
+        }
 
         private static void DrawFinished(GameShell shell, DungeonView view, Game.Core.Characters.Creation.Gender g)
         {
