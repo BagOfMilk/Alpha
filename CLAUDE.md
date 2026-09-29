@@ -285,7 +285,7 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
 |---|---|---|
 | Документи (GDD v7, статут, покажчик, дорожня карта, HUD-план); спайк HUD на UI Toolkit (H4, пройдено) і реалізація Поправки №12 (12.1, 12.2, 12.3, 12.5, 12.7 — зроблено; 12.4 — робота) | `claude/first-hour-build` (worktree `gifted-northcutt-615bf1`) | сесія «Game design document review», 29.09.2026 |
 | Постійно відкритий редактор Unity, автотур у Play Mode, Unity CLI | злито в trunk (`3832edd`); worktree `live` | сесія «Щ», 28.09.2026 — worktree `live` не чіпати (замок проєкту) |
-| UX поза HUD (Поправка №13): будівлі й інтер'єри, панелі замість вкладок, меню, `docs/UX_DESIGN.md` | `tb/ux-*` (worktree `stoic-blackwell-4b3412`) | сесія «Щ», 29.09.2026 — межу з HUD погоджено; спільне малими правками після злиття trunk: `GameShell.cs` (partial `GameShell.Ux.cs`), `UkrainianText.cs` (partial-блок), `GameSceneBuilder.cs`, `VillageWalk.cs`, `HeroWalker.cs`, `AutoplayGameDriver.cs` (крім `Journal*`) |
+| UX поза HUD (Поправка №13): будівлі й інтер'єри, панелі замість вкладок, меню, `docs/UX_DESIGN.md` | `tb/ux-*` (worktree `stoic-blackwell-4b3412`) | сесія «Щ», 29.09.2026 — межу з HUD погоджено; спільне малими правками після злиття trunk: `GameShell.cs` (partial `GameShell.Ux.cs`), `UkrainianText.cs` (блок `AddUxKeys`, R7), `GameSceneBuilder.cs`, `VillageWalk.cs`, `HeroWalker.cs`, `AutoplayGameDriver.cs` (крім `Journal*`) |
 | Фракції, квести, автотури за краєм екрана | злито в trunk (`c49fc0d`) | сесія «System 1 AI model capabilities» |
 
 **Перша ігрова година зібрана (23.09.2026): кроки 1–7 порядку `FIRST_HOUR` §4
