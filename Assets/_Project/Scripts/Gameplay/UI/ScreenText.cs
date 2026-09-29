@@ -360,6 +360,9 @@ namespace Game.Gameplay.UI
             if (UkrainianText.Has(charKey, gender)) return UkrainianText.Get(charKey, gender);
 
             var summary = FindCompanion(roster, companionId);
+            // Переманений полонений (Поправка №14.2): ім'я — з ключа ворога, яким він був.
+            if (summary != null && !string.IsNullOrEmpty(summary.DisplayName) && UkrainianText.Has("enemy." + summary.DisplayName, gender))
+                return UkrainianText.Get("enemy." + summary.DisplayName, gender);
             if (summary != null && !string.IsNullOrEmpty(summary.DisplayName)) return summary.DisplayName;
             return companionId;
         }

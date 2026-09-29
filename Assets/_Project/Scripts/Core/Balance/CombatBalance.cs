@@ -97,5 +97,9 @@ namespace Game.Core.Balance
         /// <summary>Копиця сіна: радіус і тривалість зони вогню (раунди); хто в ній на початку ходу — горить.</summary>
         public int FireZoneRadius = 1;
         public int FireZoneRounds = 2;
+
+        // ---- Здача (Поправка №14.2) — ПЛЕЙСХОЛДЕР ----
+        /// <summary>Придушений (зокрема «Залякати») здається раніше: поріг здачі +N відсоткових пунктів.</summary>
+        public int SuppressedSurrenderBonusPercent = 15;
     }
 }

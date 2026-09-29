@@ -673,7 +673,12 @@ namespace Game.Tests.EditMode
                 // раунди вогню), скільки ще горить, коли й скільки прийде підкріплення —
                 // гравець бачить до кліку (UI-02), не прихована шкала.
                 "EffectRadius", "EffectDamage", "EffectRounds", "Radius", "RoundsLeft",
-                "ReinforcementRound", "ReinforcementCount"
+                "ReinforcementRound", "ReinforcementCount",
+                // Полонені (Поправка №14.2): ціна викупу видна до кліку (UI-02), день
+                // взяття — факт, а не шкала. Прихильність і неспокій — лише полосами.
+                "RansomGold", "DayTaken",
+                // Поріг здачі ворога (Поправка №14.2) — показаний заздалегідь (інваріант 8).
+                "SurrenderAtHpPercent"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

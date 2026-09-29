@@ -321,6 +321,16 @@ namespace Game.Gameplay
 
         public string ResolveDisplayName(BattleUnitView unit) => ResolveDisplayNameInternal(unit);
 
+        // ---- Здача (Поправка №14.2) ----
+        public IReadOnlyList<SurrenderView> PendingSurrenders
+            => _session != null ? _session.GetPendingSurrenders() : (IReadOnlyList<SurrenderView>)Array.Empty<SurrenderView>();
+
+        public void DecideSurrender(string unitId, SurrenderFate fate)
+        {
+            if (_session == null || string.IsNullOrEmpty(unitId)) return;
+            _session.DecideSurrender(unitId, fate);
+        }
+
         public void SetHudRects(IReadOnlyList<Rect> guiRects) => _hudRects = guiRects ?? Array.Empty<Rect>();
 
         // ================= IBattlePresenter =================
@@ -2319,6 +2329,9 @@ namespace Game.Gameplay
         private static string ResolveNameKey(BattleUnitView unit)
         {
             string id = unit.Id ?? string.Empty;
+            // Переманений полонений (Поправка №14.2) зветься так, як звався ворогом.
+            if (id.StartsWith("u_recruit_", StringComparison.Ordinal) && !string.IsNullOrEmpty(unit.DisplayNameKey))
+                return "enemy." + unit.DisplayNameKey;
             if (id.StartsWith("u_", StringComparison.Ordinal)) return "char." + id.Substring(2);
             if (id.StartsWith("defector_", StringComparison.Ordinal)) return "char." + id.Substring(9);
 

@@ -109,6 +109,15 @@ namespace Game.Gameplay
         IReadOnlyList<BattleLogEntryUi> LogEntries { get; }
 
         string HoveredUnitId { get; }
+
+        /// <summary>
+        /// Вороги, що здалися і чекають рішення (Поправка №14.2) — панель результату
+        /// показує їх з трьома кнопками. Додано 29.09.2026 узгоджено з треком H.
+        /// </summary>
+        IReadOnlyList<SurrenderView> PendingSurrenders { get; }
+
+        /// <summary>Доля того, хто здався: відпустити, у полон, добити.</summary>
+        void DecideSurrender(string unitId, Game.Core.Combat.SurrenderFate fate);
         bool HasHoveredTile { get; }
         int HoveredTileX { get; }
         int HoveredTileY { get; }

@@ -71,6 +71,9 @@ namespace Game.Core.Combat
         public const string FireOut = "combat.log.object.fire_out";
         public const string ReinforcementsArrived = "combat.log.reinforcements";
 
+        // ---- здача (Поправка №14.2) ----
+        public const string Surrendered = "combat.log.surrendered";
+
         // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
         public const string OverwatchSet = "combat.log.overwatch.set";
@@ -126,6 +129,7 @@ namespace Game.Core.Combat
             Started, RoundStarted, Retreat, DrawForced, DrawRoundCap, Victory, Defeat,
             OpeningFirstStrike, OpeningAmbush, OpeningSpotted, OpeningUnderFire, OpeningSurrounded,
             ObjectHit, KegExploded, HaystackIgnited, CoverDegraded, CoverDestroyed, FireBurns, FireOut, ReinforcementsArrived,
+            Surrendered,
             Move, OverwatchSet, Strike, AttackMiss, AttackGraze, AttackHit, AttackCrit, Stabilize,
             Ability, Damage, Shred, Heal, ApGranted, Lunge, Repositioned, TrapPlaced, HackedToPlayer, HackedToEnemy,
             OverwatchFired, OverwatchExpired, OverwatchLostDisplaced, OverwatchLostHacked, OverwatchLostStunned,

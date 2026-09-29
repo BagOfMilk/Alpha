@@ -986,6 +986,7 @@ namespace Game.Gameplay.UI
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
                 h += 28f;
             if (p.IsFlanked) h += 28f;
+            h += 28f; // рядок здачі (№14.2) — з запасом
             if (p.Result != "Success") h += 30f;
             return h;
         }
@@ -1136,6 +1137,10 @@ namespace Game.Gameplay.UI
             // Фланг (Поправка №14.4): у цілі є укриття, але з цього боку воно не діє.
             if (p.IsFlanked)
                 GUILayout.Label(UkrainianText.Get("ui.battle.flanked", false), AlphaSkin.HintLine);
+
+            // Здача (Поправка №14.2): поріг видно до удару; бос — ніколи.
+            string surrender = SurrenderLine(target);
+            if (surrender != null) GUILayout.Label(surrender, AlphaSkin.HintLine);
 
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
@@ -1312,6 +1317,15 @@ namespace Game.Gameplay.UI
                 badgeY += 18f;
             }
 
+            if (unit.IsSurrendered)
+            {
+                var badge = new Rect(nameRect.x, badgeY, nameRect.width, 16f);
+                Widgets.SolidRect(badge, AlphaSkin.BgRaised);
+                GUI.Label(badge, UkrainianText.Get("ui.battle.overlay.surrendered", false),
+                    new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.TextMain } });
+                badgeY += 18f;
+            }
+
             if (unit.IsDowned)
             {
                 var badge = new Rect(nameRect.x, badgeY, nameRect.width, 16f);
@@ -1372,10 +1386,51 @@ namespace Game.Gameplay.UI
                 else
                     foreach (var line in c.ResultCasualtyLines) GUILayout.Label(line, AlphaSkin.DangerText);
 
+                DrawSurrenderDecisions(c);
+
                 GUILayout.Space(14f);
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.battle.result.next", false)))
                     c.AcknowledgeResult();
             });
+        }
+
+        /// <summary>
+        /// Хто здався (Поправка №14.2): для кожного — відпустити, у полон, добити.
+        /// Наслідок кожної кнопки підписано до кліку (Статут UI-02); кого не вирішили —
+        /// відпустять (сказано прямо, щоб «Далі» не ховало вибору).
+        /// </summary>
+        private static void DrawSurrenderDecisions(IBattleHudData c)
+        {
+            var pending = c.PendingSurrenders;
+            if (pending == null || pending.Count == 0) return;
+
+            GUILayout.Space(8f);
+            GUILayout.Label(UkrainianText.Get("ui.battle.surrender.title", false), AlphaSkin.SubHeader);
+            GUILayout.Label(UkrainianText.Get("ui.battle.surrender.hint", false), AlphaSkin.HintLine);
+            foreach (var s in pending)
+            {
+                string name = UkrainianText.Has("enemy." + s.DisplayNameKey, false)
+                    ? UkrainianText.Get("enemy." + s.DisplayNameKey, false) : s.DisplayNameKey;
+                string unitId = s.UnitId;
+                GUILayout.BeginHorizontal(GUI.skin.box);
+                GUILayout.Label(name, AlphaSkin.Body, GUILayout.ExpandWidth(true));
+                if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.surrender.release", false)))
+                    c.DecideSurrender(unitId, Game.Core.Combat.SurrenderFate.Release);
+                if (Widgets.PrimaryButton(UkrainianText.Get(s.CanRecruitLater ? "ui.battle.surrender.capture" : "ui.battle.surrender.capture_no_recruit", false)))
+                    c.DecideSurrender(unitId, Game.Core.Combat.SurrenderFate.Capture);
+                if (Widgets.DangerButton(UkrainianText.Get("ui.battle.surrender.execute", false)))
+                    c.DecideSurrender(unitId, Game.Core.Combat.SurrenderFate.Execute);
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        /// <summary>«Здасться при ≤30% здоров'я» / «Не здається» / «Бос — не здається ніколи» для ворога; null для своїх.</summary>
+        private static string SurrenderLine(BattleUnitView target)
+        {
+            if (target == null || string.IsNullOrEmpty(target.Rank)) return null;
+            if (target.CanSurrender)
+                return UkrainianText.Format("ui.battle.surrender.at", false, "percent", I(target.SurrenderAtHpPercent));
+            return UkrainianText.Get(target.Rank == "Boss" ? "ui.battle.surrender.boss" : "ui.battle.surrender.never", false);
         }
 
         private static string OutcomeTitleKey(string outcome)

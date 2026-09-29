@@ -107,6 +107,16 @@ namespace Game.Core.Session.Views
 
         /// <summary>Вибув із бою: загинув або врятований і винесений (Поправка №14.5 — колесо черги його не показує).</summary>
         public bool IsOutOfBattle;
+
+        // ---- Здача (Поправка №14.2) — лише для ворогів ----
+        /// <summary>"Grunt" | "MiniBoss" | "Boss".</summary>
+        public string Rank;
+        /// <summary>Може здатися (позначений рядовий чи міні-бос).</summary>
+        public bool CanSurrender;
+        /// <summary>Здасться при здоров'ї ≤ цієї частки (%) — з урахуванням залякування; видно заздалегідь.</summary>
+        public int SurrenderAtHpPercent;
+        /// <summary>Уже здався — вибув із бою живим.</summary>
+        public bool IsSurrendered;
     }
 
     /// <summary>Один стан юніта з тривалістю (docs/COMBAT_V2.md §7.1).</summary>

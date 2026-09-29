@@ -21,6 +21,7 @@ using Game.Core.Quests;
 using Game.Core.Randomness;
 using Game.Core.Scenes;
 using Game.Core.Session.Views;
+using Game.Core.Prisoners;
 using Game.Core.Stats;
 using Game.Core.Story;
 using Game.Core.World;
@@ -99,6 +100,12 @@ namespace Game.Core.Session
         /// звуться рівно раз на календарну добу — <see cref="TickDefectionWatch"/>.
         /// </summary>
         private DefectionWatch _defectionWatch;
+
+        // ---- Здача і полон (Поправка №14.2) ----
+        private PrisonerLedger _prisoners = new PrisonerLedger();
+        private readonly List<SurrenderedEnemy> _pendingSurrenders = new List<SurrenderedEnemy>();
+        /// <summary>Переманені полонені: щоб відтворити їх у ростері при завантаженні (ростер відновлює лише наявних).</summary>
+        private readonly List<string> _recruits = new List<string>();
 
         /// <summary>
         /// Major-фікс ревью (§2 №27, seamsForD1 пакета B4): особисті арки
@@ -328,6 +335,9 @@ namespace Game.Core.Session
             _repeats = _processor.Repeats;
             _crisis = new ForcedCrisisSource(5, 1);
             _defectionWatch = new DefectionWatch();
+            _prisoners = new PrisonerLedger();
+            _pendingSurrenders.Clear();
+            _recruits.Clear();
 
             _arcFlags.Clear();
             _arcRuns = new List<CompanionArcRun>();
@@ -1210,6 +1220,9 @@ namespace Game.Core.Session
             ClearDayLog();
             _lastPhase = DayPhase.Day;
 
+            // Нерозв'язані після бою — відпущені (Поправка №14.2; панель результату попереджає).
+            ReleasePendingSurrenders();
+
             TickExpeditionReturnIfAny();
 
             // Час рухає ЛИШЕ SettlementCycle (CLAUDE.md §«Час іде тільки
@@ -1223,6 +1236,7 @@ namespace Game.Core.Session
             ApplyCycleReport(_world.Cycle.Production.LastReport);
             _lastDayReport = BuildDayReportView(report);
             SettleAfterDayReport(report);
+            TickPrisoners(report.Day);
 
             if (_processor.CurrentDay == 5 && _crisis.Phase == CrisisPhase.Idle)
             {
@@ -2207,6 +2221,11 @@ namespace Game.Core.Session
                     DownWindowRemaining = u.LifeState == UnitLifeState.Downed ? u.DownWindowRemaining : 0,
                     IsAiControlled = u.Side != Side.Player,
                     IsOutOfBattle = u.LifeState == UnitLifeState.Dead || u.LifeState == UnitLifeState.Stabilized
+                                    || u.LifeState == UnitLifeState.Surrendered,
+                    Rank = u.Side == Side.Enemy && string.IsNullOrEmpty(u.SourceCompanionId) ? u.Profile.Rank.ToString() : null,
+                    CanSurrender = u.Profile.CanSurrender,
+                    SurrenderAtHpPercent = _battle.SurrenderThresholdPercent(u),
+                    IsSurrendered = u.LifeState == UnitLifeState.Surrendered
                 });
             }
 
@@ -2296,6 +2315,221 @@ namespace Game.Core.Session
                 Log = MapBattleLog(_battle.Journal),
                 IsHitRulePercent = _battle.IsHitRulePercent
             };
+        }
+
+        // =====================================================================
+        // Здача і полон (Поправка №14.2)
+        // =====================================================================
+
+        /// <summary>Вороги, що здалися в останніх боях і чекають рішення.</summary>
+        public IReadOnlyList<SurrenderView> GetPendingSurrenders()
+        {
+            var list = new List<SurrenderView>();
+            foreach (var e in _pendingSurrenders)
+                list.Add(new SurrenderView
+                {
+                    UnitId = e.UnitId,
+                    EnemyDefinitionId = e.EnemyDefinitionId,
+                    DisplayNameKey = e.DisplayName,
+                    Rank = e.Rank.ToString(),
+                    CanRecruitLater = !e.NeverRecruitable
+                });
+            return list;
+        }
+
+        /// <summary>
+        /// Доля того, хто здався (Поправка №14.2): відпустити (повернеться — №5.3,
+        /// MECH-12), взяти в полон (громада годує, віче вирішує) чи добити
+        /// (кров: драйвер PlaystyleBlood, страх громади, реакція напарників за
+        /// цінностями). false — такого немає серед тих, хто чекає рішення.
+        /// </summary>
+        public bool DecideSurrender(string unitId, SurrenderFate fate)
+        {
+            SurrenderedEnemy e = null;
+            foreach (var s in _pendingSurrenders)
+                if (s.UnitId == unitId) { e = s; break; }
+            if (e == null) return false;
+            _pendingSurrenders.Remove(e);
+
+            switch (fate)
+            {
+                case SurrenderFate.Release:
+                    LogEvent("enemy.released", Args("enemyId", e.EnemyDefinitionId));
+                    break;
+                case SurrenderFate.Capture:
+                {
+                    var p = _prisoners.Take(e.EnemyDefinitionId, e.DisplayName, (int)e.Rank, e.NeverRecruitable, _processor.CurrentDay);
+                    LogEvent("enemy.captured", Args("enemyId", e.EnemyDefinitionId, "prisonerId", p.Id));
+                    break;
+                }
+                case SurrenderFate.Execute:
+                    // Кров — тим самим закритим драйвером, що й кривавий шлях (інваріант 5), через
+                    // чергу доби: між фазами прямий виклик драйвера робив зміну полоси німою.
+                    _processor.QueueExternal(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode);
+                    _processor.Fear?.Remember(_processor.CurrentDay, _cfg.Checks);
+                    ReactToExecution();
+                    LogEvent("enemy.executed", Args("enemyId", e.EnemyDefinitionId));
+                    break;
+            }
+            return true;
+        }
+
+        /// <summary>Напарники реагують на страту полоненого за своїми цінностями: милосердні — гірше, жорсткі — краще.</summary>
+        private void ReactToExecution()
+        {
+            if (_worldRoster == null) return;
+            foreach (var c in _worldRoster.All)
+            {
+                if (c.IsDead || c.Status == CompanionStatus.Antagonist) continue;
+                var values = c.Traits.Values;
+                bool mercy = false, ruthless = false;
+                for (int i = 0; i < values.Count; i++)
+                {
+                    if (values[i] == DefaultValues.Mercy) mercy = true;
+                    if (values[i] == DefaultValues.Ruthless) ruthless = true;
+                }
+                if (mercy) LogLoyaltyChange(ApplyLoyaltyDelta(c.Id, -ExecutionLoyaltyCost, "execution"));
+                else if (ruthless) LogLoyaltyChange(ApplyLoyaltyDelta(c.Id, ExecutionLoyaltyGain, "execution"));
+            }
+        }
+
+        /// <summary>Скільки лояльності втрачає милосердний напарник за страту і отримує жорсткий — ПЛЕЙСХОЛДЕРИ.</summary>
+        private const int ExecutionLoyaltyCost = 4;
+        private const int ExecutionLoyaltyGain = 2;
+
+        private void ReleasePendingSurrenders()
+        {
+            foreach (var e in _pendingSurrenders)
+                LogEvent("enemy.released", Args("enemyId", e.EnemyDefinitionId));
+            _pendingSurrenders.Clear();
+        }
+
+        /// <summary>Полонені громади — полоси, ціна викупу, чи можна переманити просто зараз.</summary>
+        public IReadOnlyList<PrisonerView> GetPrisonersView()
+        {
+            bool guarded = _works != null && _works.Has(DefaultBuildingsType.Watch);
+            var list = new List<PrisonerView>();
+            foreach (var p in _prisoners.All)
+                list.Add(new PrisonerView
+                {
+                    Id = p.Id,
+                    EnemyDefinitionId = p.EnemyDefinitionId,
+                    DisplayNameKey = p.DisplayName,
+                    Rank = ((EnemyRank)p.Rank).ToString(),
+                    Disposition = p.DispositionBand.ToString(),
+                    Restlessness = p.RestlessnessBand.ToString(),
+                    CanRecruitNow = !p.NeverRecruitable && p.DispositionBand == PrisonerDisposition.Ready,
+                    NeverRecruitable = p.NeverRecruitable,
+                    RansomGold = _prisoners.RansomFor(p),
+                    Guarded = guarded,
+                    DayTaken = p.DayTaken
+                });
+            return list;
+        }
+
+        /// <summary>Віче: відпустити полоненого (повернеться — №5.3).</summary>
+        public bool ReleasePrisoner(string prisonerId)
+        {
+            var p = _prisoners.Get(prisonerId);
+            if (p == null) return false;
+            _prisoners.Remove(prisonerId);
+            LogEvent("prisoner.freed", Args("prisonerId", p.Id, "enemyId", p.EnemyDefinitionId));
+            return true;
+        }
+
+        /// <summary>Віче: обміняти на викуп — золото в казну, полонений іде.</summary>
+        public bool RansomPrisoner(string prisonerId)
+        {
+            var p = _prisoners.Get(prisonerId);
+            if (p == null) return false;
+            int gold = _prisoners.RansomFor(p);
+            _prisoners.Remove(prisonerId);
+            _state.Resources.Add(ResourceType.Gold, gold);
+            LogEvent("prisoner.ransomed", Args("prisonerId", p.Id, "enemyId", p.EnemyDefinitionId, "gold", gold.ToString(CultureInfo.InvariantCulture)));
+            return true;
+        }
+
+        /// <summary>
+        /// Віче: переманити (власник: «полон добре бо можна собі потім його переманити»).
+        /// Лише з полоси «готовий» і не для персонажів із російських першоджерел (№12.9).
+        /// Полонений стає напарником у ростері.
+        /// </summary>
+        public bool RecruitPrisoner(string prisonerId)
+        {
+            var p = _prisoners.Get(prisonerId);
+            if (p == null || p.NeverRecruitable || p.DispositionBand != PrisonerDisposition.Ready) return false;
+            var companion = BuildRecruit(p.EnemyDefinitionId, p.DisplayName, _recruits.Count);
+            if (companion == null) return false;
+            _prisoners.Remove(prisonerId);
+            _worldRoster.Add(companion);
+            _recruits.Add(p.EnemyDefinitionId + "," + System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(p.DisplayName ?? "")).Replace('=', '~'));
+            LogEvent("prisoner.recruited", Args("prisonerId", p.Id, "companionId", companion.Id, "enemyId", p.EnemyDefinitionId));
+            return true;
+        }
+
+        /// <summary>
+        /// Напарник із переманеного полоненого: атрибути й навички — від його ролі в
+        /// бою (грубо, ПЛЕЙСХОЛДЕР до авторських карток US-3.14). Картка — «Першоджерело»
+        /// оригінальне: полонений, переманений на віче.
+        /// </summary>
+        private Companion BuildRecruit(string enemyDefinitionId, string displayName, int seq)
+        {
+            var def = ResolveEnemyById(enemyDefinitionId);
+            string id = "recruit_" + (enemyDefinitionId ?? "x").Replace("enemy.", "") + "_" + seq.ToString(CultureInfo.InvariantCulture);
+            var arch = new CompanionArchetype(id, displayName);
+            var role = def != null ? def.Role : EnemyRole.Skirmisher;
+            if (role == EnemyRole.Skirmisher)
+                arch.SetAttribute(AttributeType.Agility, 5).SetAttribute(AttributeType.Wits, 4)
+                    .SetAttribute(AttributeType.Strength, 3).SetAttribute(AttributeType.Will, 3)
+                    .SetSkill(SkillType.Ranged, 4).SetSkill(SkillType.Survival, 3);
+            else
+                arch.SetAttribute(AttributeType.Strength, 5).SetAttribute(AttributeType.Agility, 4)
+                    .SetAttribute(AttributeType.Wits, 3).SetAttribute(AttributeType.Will, 4)
+                    .SetSkill(SkillType.Melee, 4).SetSkill(SkillType.Intimidate, 2);
+            var companion = arch.CreateInstance(id, _cfg);
+            companion.Card = new CharacterCard(id, displayName, SourceTier.Original, "полонений, переманений на віче (Поправка №14.2)");
+            return companion;
+        }
+
+        /// <summary>
+        /// Доба полону: їжа (по одній на полоненого), вмовляння найкращим Переконанням
+        /// серед присутніх, варта Сторожі. Зміни полос і втечі — у стрічку (інваріант 4).
+        /// </summary>
+        private void TickPrisoners(int day)
+        {
+            if (_prisoners.All.Count == 0) return;
+            int need = _prisoners.All.Count;
+            bool fed = _state.Resources.Get(ResourceType.Food) >= need;
+            if (fed) _state.Resources.TrySpend(ResourceType.Food, need);
+
+            int bestPersuade = 0;
+            if (_worldRoster != null)
+                foreach (var c in _worldRoster.All)
+                {
+                    if (c.IsDead || c.Status == CompanionStatus.Antagonist || c.Status == CompanionStatus.OnMission) continue;
+                    bestPersuade = Math.Max(bestPersuade, c.Skill(SkillType.Persuade));
+                }
+
+            bool guarded = _works != null && _works.Has(DefaultBuildingsType.Watch);
+            foreach (var ev in _prisoners.Tick(new PrisonerDayInputs(day, bestPersuade, guarded, fed)))
+            {
+                var p = ev.Prisoner;
+                switch (ev.Kind)
+                {
+                    case "disposition":
+                        LogEvent("prisoner.disposition." + p.DispositionBand.ToString().ToLowerInvariant(), Args("prisonerId", p.Id));
+                        break;
+                    case "restless":
+                        LogEvent("prisoner.restless." + p.RestlessnessBand.ToString().ToLowerInvariant(), Args("prisonerId", p.Id));
+                        break;
+                    case "escaped":
+                        LogEvent("prisoner.escaped", Args("prisonerId", p.Id, "enemyId", p.EnemyDefinitionId));
+                        break;
+                    case "hungry":
+                        LogEvent("prisoner.hungry", Args("prisonerId", p.Id));
+                        break;
+                }
+            }
         }
 
         /// <summary>Чи є в тайла хоч з одного боку укриття — для позначки «фланг» (№14.4).</summary>
@@ -2446,6 +2680,15 @@ namespace Game.Core.Session
             if (reason != SuspendReason.TrainingSkirmish)
                 ApplyBattleCasualties(result);
 
+            // Здача (Поправка №14.2): долю тих, хто здався, гравець вирішує на панелі
+            // результату; тренування — пісочниця, полонених не дає.
+            if (reason != SuspendReason.TrainingSkirmish && result.SurrenderedEnemies != null)
+                foreach (var e in result.SurrenderedEnemies)
+                {
+                    _pendingSurrenders.Add(e);
+                    LogEvent("enemy.surrendered", Args("enemyId", e.EnemyDefinitionId, "rank", e.Rank.ToString()));
+                }
+
             bool autoResolved = _battleAutoResolvedThisCall;
             _battleAutoResolvedThisCall = false;
             LogEvent(autoResolved ? "combat.autoresolved" : "combat.battle.resolved",
@@ -2489,7 +2732,7 @@ namespace Game.Core.Session
         {
             var rep = _dungeon.RetreatFromBattle();
             if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
-            LogEvent("dungeon.depart", Args("depth", rep.DepthReached.ToString(CultureInfo.InvariantCulture)));
+            LogEvent("dungeon.retreat", Args("depth", rep.DepthReached.ToString(CultureInfo.InvariantCulture)));
 
             ExpeditionResult discarded;
             _party.Return(_state, out discarded);
@@ -4255,11 +4498,60 @@ namespace Game.Core.Session
             head.Append(";items=").Append(itemsBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(itemsBlob);
 
             head.Append(";defect=").Append(_defectionWatch.CaptureState());
+            // Поправка №14.2: полонені, ті, хто чекає рішення після бою, і переманені.
+            head.Append(";prisoners=").Append(_prisoners.CaptureState());
+            head.Append(";recruits=").Append(string.Join("/", _recruits));
+            head.Append(";surr=").Append(CapturePendingSurrenders());
             head.Append(";crisis=").Append(_crisis.CaptureState());
 
             string coreBlob = _processor.SaveState();
             head.Append(";core=").Append(coreBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(coreBlob);
             return head.ToString();
+        }
+
+        private string CapturePendingSurrenders()
+        {
+            var parts = new List<string>();
+            foreach (var e in _pendingSurrenders)
+                parts.Add(e.UnitId.Replace('#', '!') + "," + e.EnemyDefinitionId + ","
+                    + System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(e.DisplayName ?? "")).Replace('=', '~') + ","
+                    + ((int)e.Rank).ToString(CultureInfo.InvariantCulture) + "," + (e.NeverRecruitable ? "1" : "0"));
+            return string.Join("/", parts);
+        }
+
+        private void RestorePendingSurrenders(string value)
+        {
+            _pendingSurrenders.Clear();
+            if (string.IsNullOrEmpty(value)) return;
+            foreach (var entry in value.Split('/'))
+            {
+                var f = entry.Split(',');
+                if (f.Length < 5) continue;
+                _pendingSurrenders.Add(new SurrenderedEnemy
+                {
+                    UnitId = f[0].Replace('!', '#'),
+                    EnemyDefinitionId = f[1],
+                    DisplayName = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(f[2].Replace('~', '='))),
+                    Rank = (EnemyRank)ParseInt(f[3]),
+                    NeverRecruitable = f[4] == "1"
+                });
+            }
+        }
+
+        /// <summary>Переманені — назад у ростер ДО відновлення ядра: ростер відновлює стан лише наявних напарників.</summary>
+        private void RestoreRecruits(string value)
+        {
+            _recruits.Clear();
+            if (string.IsNullOrEmpty(value)) return;
+            foreach (var entry in value.Split('/'))
+            {
+                var f = entry.Split(',');
+                if (f.Length < 2) continue;
+                string name = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(f[1].Replace('~', '=')));
+                var companion = BuildRecruit(f[0], name, _recruits.Count);
+                if (companion != null && _worldRoster.Get(companion.Id) == null) _worldRoster.Add(companion);
+                _recruits.Add(entry);
+            }
         }
 
         /// <summary>Поле "tensionPace" із заголовка зліпка (до ";core="), або null для старого сейву без нього.</summary>
@@ -4374,6 +4666,9 @@ namespace Game.Core.Session
                     case "factions": _factions.RestoreState(value); break;
                     case "points": _points.RestoreState(value); break;
                     case "defect": _defectionWatch.RestoreState(value); break;
+                    case "prisoners": _prisoners.RestoreState(value); break;
+                    case "recruits": RestoreRecruits(value); break;
+                    case "surr": RestorePendingSurrenders(value); break;
                     case "crisis": _crisis.RestoreState(value); break;
                     case "arc": RestoreArcState(value); break;
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;

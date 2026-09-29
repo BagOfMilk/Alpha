@@ -55,6 +55,12 @@ namespace Game.Core.Combat
         private readonly List<FireZone> _fires = new List<FireZone>();
         private readonly List<(int round, CombatUnit unit, GridPos pos)> _pendingReinforcements = new List<(int, CombatUnit, GridPos)>();
         private int _objectSeq;
+
+        /// <summary>Порядок, у якому падали бійці загону (id юнітів) — хто впав останнім, той рятується (Поправка №14.7).</summary>
+        private readonly List<string> _fallOrder = new List<string>();
+
+        /// <summary>Порядок падіння бійців загону гравця (id юнітів, перший — упав першим).</summary>
+        public IReadOnlyList<string> FallOrder => _fallOrder;
         private TurnSystem _turns;
 
         public IReadOnlyList<Trap> Traps => _traps;
@@ -1173,9 +1179,14 @@ namespace Game.Core.Combat
         {
             if (amount <= 0 || !target.IsActive) return;
             target.Hp -= amount;
-            if (target.Hp > 0) return;
+            if (target.Hp > 0)
+            {
+                TrySurrender(target);
+                return;
+            }
 
             target.Hp = 0;
+            if (target.Side == Side.Player && !_fallOrder.Contains(target.Id)) _fallOrder.Add(target.Id);
             BreakOverwatch(target, CombatLogKeys.OverwatchLostOut, "выбыл");
             if (target.Profile.CanBeDowned)
             {
@@ -1188,6 +1199,32 @@ namespace Game.Core.Combat
             {
                 Die(target);
             }
+            CheckOutcome();
+        }
+
+        /// <summary>Поріг здачі в % здоров'я з урахуванням залякування (придушений здається раніше).</summary>
+        public int SurrenderThresholdPercent(CombatUnit u)
+        {
+            if (u == null || !u.Profile.CanSurrender) return 0;
+            int t = u.Profile.SurrenderAtHpPercent;
+            if (u.HasStatus(StatusType.Suppressed)) t += Balance.Combat.SuppressedSurrenderBonusPercent;
+            return Math.Min(100, t);
+        }
+
+        /// <summary>
+        /// Здача (Поправка №14.2): позначений рядовий чи міні-бос, чиє здоров'я впало
+        /// до показаного порогу, кидає зброю — вибуває з бою живим. Бос — ніколи.
+        /// Детерміновано: поріг видно в HUD заздалегідь.
+        /// </summary>
+        private void TrySurrender(CombatUnit target)
+        {
+            if (target.Side != Side.Enemy || !target.IsActive || !target.Profile.CanSurrender) return;
+            if (target.Hp * 100 > target.Profile.MaxHp * SurrenderThresholdPercent(target)) return;
+
+            target.LifeState = UnitLifeState.Surrendered;
+            Map.ClearOccupant(target.Pos);
+            BreakOverwatch(target, CombatLogKeys.OverwatchLostOut, "сдался");
+            Record(CombatLogKeys.Surrendered, $"  {target.Profile.DisplayName} бросает оружие и сдаётся.", "unitId", target.Id);
             CheckOutcome();
         }
 
@@ -1214,6 +1251,7 @@ namespace Game.Core.Combat
             {
                 case UnitLifeState.Dead:
                 case UnitLifeState.Stabilized:
+                case UnitLifeState.Surrendered:
                     return false;
 
                 case UnitLifeState.Downed:

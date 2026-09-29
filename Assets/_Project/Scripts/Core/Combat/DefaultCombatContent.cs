@@ -98,6 +98,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.horde_scout", "horde_scout", EnemyRole.Skirmisher, EnemyFamily.Human)
             {
                 MaxHp = 8, MaxAp = 8, Accuracy = 55, Defense = 0, Initiative = 6, CritChance = 5, Armor = 0,
+                Rank = EnemyRank.Grunt, CanSurrender = true, // №14.2: рядовий розвідник може здатися
                 Weapon = HordeBow()
             };
 
@@ -105,6 +106,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.horde_skirmisher", "horde_skirmisher", EnemyRole.Skirmisher, EnemyFamily.Human)
             {
                 MaxHp = 10, MaxAp = 8, Accuracy = 60, Defense = 0, Initiative = 5, CritChance = 5, Armor = 0,
+                Rank = EnemyRank.Grunt, CanSurrender = true,
                 Weapon = HordeBow()
             };
 
@@ -112,6 +114,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.tuhar_boyar", "tuhar_boyar", EnemyRole.Breacher, EnemyFamily.Human)
             {
                 MaxHp = 14, MaxAp = 8, Accuracy = 62, Defense = 2, Initiative = 6, CritChance = 8, Armor = 1,
+                Rank = EnemyRank.MiniBoss, CanSurrender = true, // №14.2: міні-боса можна взяти в полон і потім переманити
                 Weapon = BoyarSaber(),
                 Abilities = { Lunge() }
             };
@@ -144,6 +147,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.burunda", "burunda", EnemyRole.Tank, EnemyFamily.Human)
             {
                 MaxHp = 30, MaxAp = 10, Accuracy = 80, Defense = 4, Initiative = 7, CritChance = 12, Armor = 2,
+                Rank = EnemyRank.Boss, // №14.2: бос не здається ніколи
                 Resolve = 3,
                 Weapon = BurundaMace(),
                 Abilities = { Lunge() }
@@ -164,6 +168,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.horde_vanguard", "horde_vanguard", EnemyRole.Breacher, EnemyFamily.Human)
             {
                 MaxHp = 15, MaxAp = 8, Accuracy = 80, Defense = 0, Initiative = 7, CritChance = 8, Armor = 0,
+                Rank = EnemyRank.Grunt, // №14.2: сокирник орди не здається («далеко не всі вороги»)
                 Weapon = HordeAxe(),
                 Abilities = { Lunge() }
             };
@@ -192,6 +197,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.forest_bandit", "forest_bandit", EnemyRole.Breacher, EnemyFamily.Human)
             {
                 MaxHp = 26, MaxAp = 9, Accuracy = 82, Defense = 1, Initiative = 6, CritChance = 10, Armor = 0,
+                Rank = EnemyRank.MiniBoss, CanSurrender = true, SurrenderAtHpPercent = 10, // №14.2: ватажок скиту — міні-бос; поріг низький — бій лишається тяжким (№11)
                 Weapon = BanditCleaver(),
                 Abilities = { Lunge() }
             };

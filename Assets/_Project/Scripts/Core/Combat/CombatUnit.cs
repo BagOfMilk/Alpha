@@ -18,7 +18,8 @@ namespace Game.Core.Combat
         Active = 0,
         Downed = 1,     // 0 HP, тікає вікно на стабілізацію (тільки юніти з CanBeDowned)
         Stabilized = 2, // врятований, вибув із бою живим (поранення застосується на базі — RosterAdapter.Wound, Р5)
-        Dead = 3        // смерть насовсім
+        Dead = 3,       // смерть насовсім
+        Surrendered = 4 // здався (Поправка №14.2): вибув із бою живим, долю вирішують після бою
     }
 
     /// <summary>
@@ -60,6 +61,12 @@ namespace Game.Core.Combat
 
         /// <summary>Роль — біас поведінки ШІ: танк лізе в клінч, застрільщик тримає оптимал.</summary>
         public EnemyRole Role = EnemyRole.Skirmisher;
+
+        // ---- Здача (Поправка №14.2) — лише для ворогів ----
+        public EnemyRank Rank = EnemyRank.Grunt;
+        public bool CanSurrender;
+        public int SurrenderAtHpPercent;
+        public bool NeverRecruitable;
     }
 
     /// <summary>
@@ -79,6 +86,9 @@ namespace Game.Core.Combat
 
         /// <summary>Id напарника-джерела (null для рядових ворогів) — для наслідків на базі (D1/RosterAdapter).</summary>
         public string SourceCompanionId { get; }
+
+        /// <summary>Id визначення ворога (null для напарників) — хто саме здався чи потрапив у полон (Поправка №14.2).</summary>
+        public string EnemyDefinitionId { get; internal set; }
 
         public GridPos Pos { get; internal set; }
         public int Hp { get; internal set; }
@@ -260,9 +270,13 @@ namespace Game.Core.Combat
                 CanBeDowned = false,
                 Resists = def.Resists ?? new ResistProfile(),
                 Family = def.Family,
-                Role = def.Role
+                Role = def.Role,
+                Rank = def.Rank,
+                CanSurrender = def.CanSurrender && def.Rank != EnemyRank.Boss,
+                SurrenderAtHpPercent = def.SurrenderAtHpPercent,
+                NeverRecruitable = def.NeverRecruitable
             };
-            var unit = new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon);
+            var unit = new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon) { EnemyDefinitionId = def.Id };
             if (def.Abilities != null)
                 foreach (var ability in def.Abilities)
                     if (ability != null) unit.Abilities.Add(ability);
