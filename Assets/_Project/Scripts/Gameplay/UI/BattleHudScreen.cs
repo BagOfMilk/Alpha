@@ -816,23 +816,31 @@ namespace Game.Gameplay.UI
             GUILayout.BeginHorizontal();
             // Без перенесення слів: на 720p заголовок ламався на «Журна / л» поруч з «Автобоєм».
             GUILayout.Label(UkrainianText.Get("ui.battle.log", false), new GUIStyle(AlphaSkin.SubHeader) { wordWrap = false }, GUILayout.ExpandWidth(true));
-            if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false), GUILayout.ExpandWidth(false)))
-                _confirmAutoResolve = true;
-            GUILayout.Space(6f);
-            // Відступ (Поправка №14.7, ROADMAP B13) — поруч з автобоєм: обидва про
-            // бій цілком, а не про хід бійця. Не свій хід — кнопка пояснює чому (UI-04).
-            string retreatLabel = UkrainianText.Get("ui.battle.retreat", false);
-            if (c.IsPlayerTurn && !c.IsBusy)
-            {
-                if (Widgets.SecondaryButton(retreatLabel, GUILayout.ExpandWidth(false)))
-                    _confirmRetreat = true;
-            }
-            else
-                Widgets.DisabledButton(retreatLabel, UkrainianText.Get("ui.battle.retreat.only_own_turn", false), GUILayout.ExpandWidth(false));
-            GUILayout.Space(6f);
             if (Widgets.SecondaryButton(_logCollapsed ? "▸" : "▾", GUILayout.ExpandWidth(false)))
                 _logCollapsed = !_logCollapsed;
             GUILayout.EndHorizontal();
+
+            // «Автобій» і «Відступити» (Поправка №14.7, ROADMAP B13) — окремим рядком навпіл:
+            // обидві про бій цілком, а не про хід бійця. В одному рядку з «Журналом»
+            // «Відступити» обрізалось на всіх роздільностях (знімки «Щ», 29.09.2026:
+            // 1280 — «Від», 1920 — «Відступи»). Не свій хід — причина рядком нижче (UI-04),
+            // а не праворуч від кнопки, де вона виштовхувала кнопку за край панелі.
+            GUILayout.BeginHorizontal();
+            if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false), GUILayout.ExpandWidth(true)))
+                _confirmAutoResolve = true;
+            GUILayout.Space(6f);
+            string retreatLabel = UkrainianText.Get("ui.battle.retreat", false);
+            bool canRetreat = c.IsPlayerTurn && !c.IsBusy;
+            if (canRetreat)
+            {
+                if (Widgets.SecondaryButton(retreatLabel, GUILayout.ExpandWidth(true)))
+                    _confirmRetreat = true;
+            }
+            else
+                Widgets.DisabledButton(retreatLabel, null, GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+            if (!canRetreat)
+                GUILayout.Label(UkrainianText.Get("ui.battle.retreat.only_own_turn", false), AlphaSkin.HintLine);
 
             if (_logCollapsed) return;
 
