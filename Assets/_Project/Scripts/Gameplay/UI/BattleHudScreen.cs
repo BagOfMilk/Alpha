@@ -83,11 +83,13 @@ namespace Game.Gameplay.UI
             blockingRects.Add(topRect);
 
             // Колесо черги ходів у лівому верхньому куті (Поправка №14.5) —
-            // замість стрічки у верхній смузі.
-            var wheel = TurnWheelModel.Build(view);
-            var wheelRect = TurnWheelRect(topRect, scale, pad);
-            DrawTurnWheel(c, view, wheel, wheelRect, scale);
-            blockingRects.Add(wheelRect);
+            // замість стрічки у верхній смузі. Клік блокують лише бейджі й
+            // центр: між ними арена клікається (рецензія C1 — інакше колесо
+            // з'їдало 9–15% поля на 720p).
+            bool compactWheel = Screen.height <= 760;
+            var wheel = TurnWheelModel.Build(view, compactWheel ? WheelCompactSlots : TurnWheelModel.DefaultMaxSlots);
+            var wheelRect = TurnWheelRect(topRect, WheelScale(scale, compactWheel), pad);
+            DrawTurnWheel(c, view, wheel, wheelRect, WheelScale(scale, compactWheel), blockingRects);
 
             float rightWidth = RightPanelWidth();
             var rightRect = new Rect(Screen.width - rightWidth - pad, topRect.height + pad,
@@ -198,9 +200,8 @@ namespace Game.Gameplay.UI
 
         private static void DrawTopBar(IBattleHudData c, BattleView view)
         {
+            // «Раунд N» — у центрі колеса черги (Поправка №14.5), тут не дублюється.
             GUILayout.BeginHorizontal();
-            GUILayout.Label(UkrainianText.Format("ui.battle.round", false, "round", view.Round.ToString(CultureInfo.InvariantCulture)),
-                AlphaSkin.SubHeader, GUILayout.ExpandWidth(false));
             GUILayout.FlexibleSpace();
             // Аудит знімків п.5: «Правило влучання вгорі праворуч — не
             // курсивом, читабельно» — AlphaSkin.Tooltip курсивний і тьмяний,
@@ -220,19 +221,48 @@ namespace Game.Gameplay.UI
         /// <summary>Скільки триває поворот колеса на крок після зміни ходу (сек).</summary>
         private const float WheelTurnSeconds = 0.3f;
 
-        private static float WheelBadgeWidth(float scale) => Clamp(112f * scale, 100f, 150f);
-        private static float WheelBadgeHeight(float scale) => Clamp(24f * scale, 22f, 30f);
-        private static float WheelRadiusX(float scale) => Clamp(122f * scale, 110f, 160f);
+        /// <summary>На екранах до 760 px заввишки (720p) колесо менше і тримає 6 ходів, а не 8 (рецензія C1).</summary>
+        private const int WheelCompactSlots = 6;
+        private static float WheelScale(float scale, bool compact) => compact ? scale * 0.85f : scale;
+
+        private static float WheelBadgeWidth(float scale) => Clamp(112f * scale, 92f, 150f);
+        private static float WheelBadgeHeight(float scale) => Clamp(24f * scale, 20f, 30f);
+        private static float WheelRadiusX(float scale) => Clamp(122f * scale, 96f, 160f);
         // Вертикальна піввісь ≥ висота бейджа / (1 − cos 45°): сусіди вгорі й унизу не налазять одне на одного при 8 слотах.
-        private static float WheelRadiusY(float scale) => Clamp(100f * scale, 90f, 130f);
-        private static float WheelTitleHeight(float scale) => Clamp(22f * scale, 20f, 28f);
+        private static float WheelRadiusY(float scale) => Clamp(100f * scale, 80f, 130f);
+        private static float WheelTitleHeight(float scale) => Clamp(22f * scale, 18f, 28f);
+        private const float WheelHpBarHeight = 3f;
         private const float WheelSkipLabelHeight = 16f;
+
+        /// <summary>Спільний стиль тексту колеса: один екземпляр на весь HUD, колір підставляється перед кожним підписом (рецензія C1 — без нового GUIStyle щокадру).</summary>
+        private static GUIStyle _wheelText;
+        private static GUIStyle _wheelTextSource;
+
+        private static GUIStyle WheelText(Color32 color)
+        {
+            var source = AlphaSkin.OverlayName;
+            if (_wheelText == null || !ReferenceEquals(_wheelTextSource, source))
+            {
+                _wheelText = new GUIStyle(source);
+                _wheelTextSource = source;
+            }
+            _wheelText.normal.textColor = color;
+            return _wheelText;
+        }
 
         private static Rect TurnWheelRect(Rect topRect, float scale, float pad)
         {
             float w = WheelRadiusX(scale) * 2f + WheelBadgeWidth(scale) + pad * 2f;
-            float h = WheelTitleHeight(scale) + WheelRadiusY(scale) * 2f + WheelBadgeHeight(scale) + WheelSkipLabelHeight + pad * 2f;
+            float h = WheelTitleHeight(scale) + WheelRadiusY(scale) * 2f + WheelBadgeHeight(scale)
+                + WheelHpBarHeight + WheelSkipLabelHeight + pad * 2f;
             return new Rect(pad, topRect.height + pad, w, h);
+        }
+
+        /// <summary>Підпис поверх арени без суцільного тла: темна тінь-зсув робить його читабельним і на траві, і на тайлах.</summary>
+        private static void ShadowedLabel(Rect rect, string text, Color32 color)
+        {
+            GUI.Label(new Rect(rect.x + 1f, rect.y + 1f, rect.width, rect.height), text, WheelText(AlphaSkin.BgDark));
+            GUI.Label(rect, text, WheelText(color));
         }
 
         /// <summary>
@@ -247,16 +277,16 @@ namespace Game.Gameplay.UI
         /// <item>наведення на бейдж підсвічує мітку бійця на арені, наведення на бійця — бейдж; клік — камера до бійця;</item>
         /// <item>після зміни ходу колесо обертається на крок (<see cref="WheelTurnSeconds"/>).</item>
         /// </list>
-        /// Кольори — лише з <see cref="AlphaSkin"/>.
+        /// Кольори — лише з <see cref="AlphaSkin"/>. Суцільного тла немає: арена
+        /// під колесом видна, а клік блокують лише бейджі й центр — їхні
+        /// прямокутники йдуть у <paramref name="blocking"/> (рецензія C1).
         /// </summary>
-        private static void DrawTurnWheel(IBattleHudData c, BattleView view, TurnWheelModel wheel, Rect area, float scale)
+        private static void DrawTurnWheel(IBattleHudData c, BattleView view, TurnWheelModel wheel, Rect area, float scale, List<Rect> blocking)
         {
             _wheelHoverUnitId = null;
-            Widgets.SolidRect(area, AlphaSkin.BgPanel);
 
             float titleH = WheelTitleHeight(scale);
-            GUI.Label(new Rect(area.x + 8f, area.y + 2f, area.width - 16f, titleH),
-                UkrainianText.Get("ui.battle.wheel.title", false), AlphaSkin.HintLine);
+            ShadowedLabel(new Rect(area.x, area.y, area.width, titleH), UkrainianText.Get("ui.battle.wheel.title", false), AlphaSkin.TextDim);
 
             int count = wheel.Slots.Count;
             if (count == 0) return;
@@ -264,7 +294,7 @@ namespace Game.Gameplay.UI
             float bw = WheelBadgeWidth(scale), bh = WheelBadgeHeight(scale);
             float rx = WheelRadiusX(scale), ry = WheelRadiusY(scale);
             float cx = area.x + area.width * 0.5f;
-            float cy = area.y + titleH + (area.height - titleH - WheelSkipLabelHeight) * 0.5f;
+            float cy = area.y + titleH + (area.height - titleH - WheelHpBarHeight - WheelSkipLabelHeight) * 0.5f;
 
             // Поворот на крок: новий поточний приїжджає з позиції «наступний».
             string currentId = count > 0 ? wheel.Slots[0].UnitId : null;
@@ -283,8 +313,9 @@ namespace Game.Gameplay.UI
                 Widgets.SolidRect(new Rect(cx + rx * (float)Math.Cos(a) - 1.5f, cy + ry * (float)Math.Sin(a) - 1.5f, 3f, 3f), AlphaSkin.BgRaised);
             }
 
-            GUI.Label(new Rect(cx - 60f, cy - 12f, 120f, 24f),
-                UkrainianText.Format("ui.battle.round", false, "round", I(wheel.CurrentRound)), AlphaSkin.OverlayName);
+            var centerRect = new Rect(cx - 60f, cy - 12f, 120f, 24f);
+            ShadowedLabel(centerRect, UkrainianText.Format("ui.battle.round", false, "round", I(wheel.CurrentRound)), AlphaSkin.TextMain);
+            blocking.Add(centerRect);
 
             if (wheel.NextRoundStartsAt > 0)
                 DrawWheelRoundMark(cx, cy, rx, ry,
@@ -315,12 +346,14 @@ namespace Game.Gameplay.UI
 
                 DrawWheelBadge(rect, TruncateName(c.ResolveDisplayName(unit), bw), slot, hoveredOnMap || hoveredHere);
 
+                // Тонка смужка HP під бейджем — хто ледь живий, видно й з черги (рецензія C1).
+                var hpRect = new Rect(rect.x, rect.y + rect.height + 1f, rect.width, WheelHpBarHeight);
+                Widgets.FilledBarAt(hpRect, FilledFraction(unit.Hp, unit.HpMax), slot.IsDowned ? AlphaSkin.TextDim : SideColor(slot.Side));
+                blocking.Add(new Rect(rect.x, rect.y, rect.width, rect.height + 1f + WheelHpBarHeight));
+
                 if (slot.SkipsTurn)
-                {
-                    var skipStyle = new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.BattleStatus } };
-                    GUI.Label(new Rect(rect.x, rect.y + rect.height, rect.width, WheelSkipLabelHeight),
-                        UkrainianText.Get("ui.battle.wheel.skips", false), skipStyle);
-                }
+                    ShadowedLabel(new Rect(rect.x, hpRect.y + hpRect.height, rect.width, WheelSkipLabelHeight),
+                        UkrainianText.Get("ui.battle.wheel.skips", false), AlphaSkin.BattleStatus);
             }
         }
 
@@ -344,8 +377,7 @@ namespace Game.Gameplay.UI
                 Widgets.SolidRect(new Rect(rect.x + rect.width - b, rect.y, b, rect.height), frame);
             }
 
-            var style = new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = fg } };
-            GUI.Label(rect, name, style);
+            GUI.Label(rect, name, WheelText(fg));
 
             if (slot.IsDowned)
                 Widgets.SolidRect(new Rect(rect.x + 4f, rect.y + rect.height * 0.5f - 1f, rect.width - 8f, 2f), AlphaSkin.TextDim);
@@ -359,9 +391,8 @@ namespace Game.Gameplay.UI
             for (float k = 0.45f; k <= 1.12f; k += 0.04f)
                 Widgets.SolidRect(new Rect(cx + rx * k * cos - 1.5f, cy + ry * k * sin - 1.5f, 3f, 3f), AlphaSkin.Accent);
 
-            var style = new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.Accent } };
-            GUI.Label(new Rect(cx + rx * 0.62f * cos - 22f, cy + ry * 0.62f * sin - 10f, 44f, 20f),
-                UkrainianText.Format("ui.battle.wheel.round_mark", false, "round", I(round)), style);
+            ShadowedLabel(new Rect(cx + rx * 0.62f * cos - 22f, cy + ry * 0.62f * sin - 10f, 44f, 20f),
+                UkrainianText.Format("ui.battle.wheel.round_mark", false, "round", I(round)), AlphaSkin.Accent);
         }
 
         /// <summary>Ім'я, що не влазить у бейдж, обрізається з «…» (повне — у мітці над бійцем).</summary>
