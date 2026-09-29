@@ -106,5 +106,10 @@ namespace Game.Core.Balance
         /// <summary>«Розлютити»: розлючений б'є сильніше (%) і захищається гірше (очки шансу по ньому).</summary>
         public int EnragedDamagePercent = 20;
         public int EnragedDefensePenalty = 10;
+
+        // ---- Досьє ворога (Поправка №14.6) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>Розвідка перед боєм відкриває картку ворога: Виживання ≥ N або Кмітливість ≥ M у когось із загону.</summary>
+        public int DossierScoutSurvival = 3;
+        public int DossierScoutWits = 6;
     }
 }

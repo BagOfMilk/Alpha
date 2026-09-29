@@ -898,7 +898,7 @@ namespace Game.Gameplay.UI
             }
 
             float scale = Widgets.ScaleForScreen();
-            float height = attack != null ? EstimateAttackTooltipHeight(attack) : EstimatePathTooltipHeight(c, view);
+            float height = attack != null ? EstimateAttackTooltipHeight(attack, FindUnit(view, attack.TargetId)) : EstimatePathTooltipHeight(c, view);
 
             float freeTop = TopBarHeight(scale) + 8f;
             float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
@@ -969,7 +969,7 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>Грубий підрахунок висоти підказки атаки з реальних рядків, які вона намалює — трохи із запасом, аби ніколи не обрізати вміст (BeginArea мовчки кадрує зайве, а не скролить).</summary>
-        private static float EstimateAttackTooltipHeight(AttackPreviewView p)
+        private static float EstimateAttackTooltipHeight(AttackPreviewView p, BattleUnitView target)
         {
             // Раунд 3: оцінка була впритул, і «Ціна: N ОД» обрізалась знизу.
             float h = 24f + 34f; // відступи + заголовок
@@ -987,6 +987,8 @@ namespace Game.Gameplay.UI
                 h += 28f;
             if (p.IsFlanked) h += 28f;
             h += 28f; // рядок здачі (№14.2) — з запасом
+            if (!string.IsNullOrEmpty(p.CheckKind)) h += 28f; // рядок перевірки здібності (C5)
+            h += 28f * DossierLines(target).Count; // досьє (№14.6)
             if (p.Result != "Success") h += 30f;
             return h;
         }
@@ -1122,6 +1124,8 @@ namespace Game.Gameplay.UI
                     : (p.DamageCrit > p.DamageMax
                         ? UkrainianText.Format("ui.battle.damage.preview.crit", false, "min", I(p.DamageMin), "max", I(p.DamageMax), "crit", I(p.DamageCrit))
                         : UkrainianText.Format("ui.battle.damage.preview", false, "min", I(p.DamageMin), "max", I(p.DamageMax)));
+                // Досьє (№14.6): опори невивченого ворога невідомі — число з «?».
+                if (p.DamageUncertain) damageLine += " " + UkrainianText.Get("ui.battle.damage.uncertain", false);
                 GUILayout.Label(damageLine, AlphaSkin.Body);
             }
 
@@ -1146,6 +1150,9 @@ namespace Game.Gameplay.UI
             // Здача (Поправка №14.2): поріг видно до удару; бос — ніколи.
             string surrender = SurrenderLine(target);
             if (surrender != null) GUILayout.Label(surrender, AlphaSkin.HintLine);
+
+            // Досьє (Поправка №14.6): роль — з контакту; решта — після розвідки чи бою.
+            foreach (var line in DossierLines(target, view)) GUILayout.Label(line, AlphaSkin.HintLine);
 
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
@@ -1442,10 +1449,55 @@ namespace Game.Gameplay.UI
             }
         }
 
+        /// <summary>
+        /// Рядки досьє ворога (Поправка №14.6): роль; для невивченого — що відкриє розвідка
+        /// (пороги видно заздалегідь); для вивченого — опори і прийоми. Порожньо для своїх.
+        /// </summary>
+        private static List<string> DossierLines(BattleUnitView target, BattleView view = null)
+        {
+            var lines = new List<string>();
+            if (target == null || string.IsNullOrEmpty(target.Dossier)) return lines;
+
+            if (!string.IsNullOrEmpty(target.Role))
+                lines.Add(UkrainianText.Format("ui.battle.dossier.role", false,
+                    "role", UkrainianText.Get("ui.battle.role." + target.Role, false)));
+
+            if (target.Dossier != "Studied")
+            {
+                lines.Add(UkrainianText.Format("ui.battle.dossier.partial", false,
+                    "survival", I(view?.DossierScoutSurvival ?? 0), "wits", I(view?.DossierScoutWits ?? 0)));
+                return lines;
+            }
+
+            if (target.ResistNotes != null && target.ResistNotes.Count > 0)
+            {
+                var parts = new List<string>();
+                foreach (var note in target.ResistNotes)
+                {
+                    int colon = note.IndexOf(':');
+                    if (colon <= 0) continue;
+                    parts.Add(UkrainianText.Format("ui.battle.dossier.resist." + note.Substring(colon + 1), false,
+                        "type", UkrainianText.Get("combat.damage_type." + note.Substring(0, colon).ToLowerInvariant(), false)));
+                }
+                lines.Add(UkrainianText.Format("ui.battle.dossier.resists", false, "list", string.Join(", ", parts)));
+            }
+
+            if (target.Abilities != null && target.Abilities.Count > 0)
+            {
+                var names = new List<string>();
+                foreach (var a in target.Abilities) names.Add(UkrainianText.Get(a.Id, false));
+                lines.Add(UkrainianText.Format("ui.battle.dossier.abilities", false, "list", string.Join(", ", names)));
+            }
+            return lines;
+        }
+
         /// <summary>«Здасться при ≤30% здоров'я» / «Не здається» / «Бос — не здається ніколи» для ворога; null для своїх.</summary>
         private static string SurrenderLine(BattleUnitView target)
         {
             if (target == null || string.IsNullOrEmpty(target.Rank)) return null;
+            // Досьє (№14.6): умову здачі відкриває розвідка чи бій.
+            if (!string.IsNullOrEmpty(target.Dossier) && target.Dossier != "Studied")
+                return UkrainianText.Get("ui.battle.surrender.unknown", false);
             if (target.CanSurrender)
                 return UkrainianText.Format("ui.battle.surrender.at", false, "percent", I(target.SurrenderAtHpPercent));
             return UkrainianText.Get(target.Rank == "Boss" ? "ui.battle.surrender.boss" : "ui.battle.surrender.never", false);

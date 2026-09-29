@@ -2703,6 +2703,21 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.object.high.effect", "Повне укриття тому, хто за нею; закриває огляд. Вибух розбиває до низької.");
             AddKey(t, "ui.battle.object.low.effect", "Половинне укриття тому, хто за нею. Вибух розносить.");
 
+            // C7 — досьє ворога (№14.6).
+            AddKey(t, "dossier.studied", "Досьє поповнено: {enemy} — тепер знаємо прийоми, опори й умову здачі.");
+            AddKey(t, "ui.battle.dossier.role", "Роль: {role}.");
+            AddKey(t, "ui.battle.dossier.partial", "Досьє неповне: прийоми, опори й здачу відкриє розвідка (Виживання ≥ {survival} або Кмітливість ≥ {wits}) чи бій.");
+            AddKey(t, "ui.battle.dossier.resists", "Опори: {list}.");
+            AddKey(t, "ui.battle.dossier.resist.weak", "{type} — вразливий");
+            AddKey(t, "ui.battle.dossier.resist.strong", "{type} — стійкий");
+            AddKey(t, "ui.battle.dossier.abilities", "Прийоми: {list}.");
+            AddKey(t, "ui.battle.surrender.unknown", "Здача: ?");
+            AddKey(t, "ui.battle.damage.uncertain", "(?) — опори невідомі");
+            AddKey(t, "ui.battle.role.Tank", "громила — тримає удар, б'є впритул");
+            AddKey(t, "ui.battle.role.Skirmisher", "застрільник — б'є здалеку з укриття");
+            AddKey(t, "ui.battle.role.Controller", "контролер — накладає стани");
+            AddKey(t, "ui.battle.role.Breacher", "прорив — кидається впритул, ламає стрій");
+
             // C6 — поразка → полон (№14.7): події стрічки і панель віча.
             AddKey(t, "companion.captured.m", "{companionId} у полоні — ворог забрав його з поля бою.");
             AddKey(t, "companion.captured.f", "{companionId} у полоні — ворог забрав її з поля бою.");

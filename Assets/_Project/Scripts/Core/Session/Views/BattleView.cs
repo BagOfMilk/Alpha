@@ -120,6 +120,14 @@ namespace Game.Core.Session.Views
 
         /// <summary>Утік із поля («Залякати» на звіра, docs/ABILITIES.md) — арена прибирає фігуру.</summary>
         public bool IsFled;
+
+        // ---- Досьє (Поправка №14.6) — лише для ворогів ----
+        /// <summary>"Contact" — знаємо роль і здоров'я; "Studied" — ще й прийоми, опори, умову здачі; null — свій чи перебіжчик.</summary>
+        public string Dossier;
+        /// <summary>"Tank" | "Skirmisher" | "Controller" | "Breacher" — видно з першого контакту.</summary>
+        public string Role;
+        /// <summary>Опори вивченого ворога: "Fire:weak", "Ballistic:strong"; null — ще не вивчений.</summary>
+        public IReadOnlyList<string> ResistNotes;
     }
 
     /// <summary>Один стан юніта з тривалістю (docs/COMBAT_V2.md §7.1).</summary>
@@ -178,6 +186,8 @@ namespace Game.Core.Session.Views
         /// <summary>Правило «поріг»: звичайне влучання дає рівно <see cref="DamageExpected"/>, діапазон не показувати.</summary>
         public bool IsDamageDeterministic;
         public int DamageExpected;
+        /// <summary>Опори й броня цілі ще невідомі (досьє, №14.6) — HUD ставить до шкоди «?».</summary>
+        public bool DamageUncertain;
 
         /// <summary>Скільки ОД коштує саме ця дія.</summary>
         public int ApCost;
@@ -287,6 +297,9 @@ namespace Game.Core.Session.Views
 
         /// <summary>Як почався бій: "Encounter"|"FirstStrike"|"Ambush"|"Spotted"|"UnderFire"|"Surrounded" (Поправка №14.1).</summary>
         public string Opening;
+
+        /// <summary>Досьє (Поправка №14.6): розвідка відкриває картку ворога — Виживання ≥ N або Кмітливість ≥ M; видно до бою.</summary>
+        public int DossierScoutSurvival, DossierScoutWits;
 
         /// <summary>
         /// Ключ тексту «що буде, якщо відступити» для підтвердження відступу

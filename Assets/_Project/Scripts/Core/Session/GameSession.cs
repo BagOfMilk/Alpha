@@ -107,6 +107,8 @@ namespace Game.Core.Session
         private CaptivityLedger _captives = new CaptivityLedger();
         /// <summary>Загін тримача, на який зараз іде рейд (null — рейду немає).</summary>
         private string _raidGroupId;
+        // ---- Досьє ворога (Поправка №14.6): що громада знає про кожен тип ворога ----
+        private EnemyDossierBook _dossier = new EnemyDossierBook();
         private readonly List<SurrenderedEnemy> _pendingSurrenders = new List<SurrenderedEnemy>();
         /// <summary>Переманені полонені: щоб відтворити їх у ростері при завантаженні (ростер відновлює лише наявних).</summary>
         private readonly List<string> _recruits = new List<string>();
@@ -342,6 +344,7 @@ namespace Game.Core.Session
             _prisoners = new PrisonerLedger();
             _captives = new CaptivityLedger();
             _raidGroupId = null;
+            _dossier = new EnemyDossierBook();
             _pendingSurrenders.Clear();
             _recruits.Clear();
 
@@ -2059,6 +2062,8 @@ namespace Game.Core.Session
 
             var dmg = DamageResolver.PreviewRange(unit, target, w);
             int expected = DamageResolver.ExpectedHitDamage(unit, target, w);
+            // Досьє (№14.6): опори й броню невивченого ворога ще не знаємо — число з «?».
+            bool damageUncertain = IsDossierSubject(target) && DossierOf(target) != DossierLevel.Studied;
 
             return new AttackPreviewView
             {
@@ -2075,6 +2080,7 @@ namespace Game.Core.Session
                 DamageCrit = dmg.Crit,
                 IsDamageDeterministic = !_battle.IsHitRulePercent,
                 DamageExpected = expected,
+                DamageUncertain = damageUncertain,
                 ApCost = apCost,
                 Distance = distance,
                 Range = range,
@@ -2228,7 +2234,8 @@ namespace Game.Core.Session
                     Statuses = MapStatuses(u),
                     IsDowned = u.LifeState == UnitLifeState.Downed,
                     HitChancePreview = 0,
-                    Abilities = abilities,
+                    // Досьє (№14.6): прийоми ворога відкриває розвідка чи бій.
+                    Abilities = IsDossierSubject(u) && DossierOf(u) != DossierLevel.Studied ? new List<BattleAbilityView>() : abilities,
                     WeaponId = w?.Id,
                     Ordinal = ordinal,
                     StatusDetails = MapStatusDetails(u),
@@ -2246,8 +2253,12 @@ namespace Game.Core.Session
                                     || u.LifeState == UnitLifeState.Surrendered || u.LifeState == UnitLifeState.Fled,
                     IsFled = u.LifeState == UnitLifeState.Fled,
                     Rank = u.Side == Side.Enemy && string.IsNullOrEmpty(u.SourceCompanionId) ? u.Profile.Rank.ToString() : null,
-                    CanSurrender = u.Profile.CanSurrender,
-                    SurrenderAtHpPercent = _battle.SurrenderThresholdPercent(u),
+                    // Досьє (№14.6): поки ворог не вивчений, умова здачі невідома — поле порожнє, HUD пише «?».
+                    CanSurrender = u.Profile.CanSurrender && DossierOf(u) == DossierLevel.Studied,
+                    SurrenderAtHpPercent = DossierOf(u) == DossierLevel.Studied ? _battle.SurrenderThresholdPercent(u) : 0,
+                    Dossier = IsDossierSubject(u) ? DossierOf(u).ToString() : null,
+                    Role = IsDossierSubject(u) ? u.Profile.Role.ToString() : null,
+                    ResistNotes = IsDossierSubject(u) && DossierOf(u) == DossierLevel.Studied ? ResistNotes(u) : null,
                     IsSurrendered = u.LifeState == UnitLifeState.Surrendered
                 });
             }
@@ -2334,6 +2345,8 @@ namespace Game.Core.Session
                 InitiativeOrder = initiative,
                 NextRoundOrder = UnitIds(_battle.NextRoundTurnOrder),
                 Opening = _battle.Opening.ToString(),
+                DossierScoutSurvival = _cfg.Combat.DossierScoutSurvival,
+                DossierScoutWits = _cfg.Combat.DossierScoutWits,
                 RetreatConsequenceKey = RetreatConsequenceKey(_resume?.Reason),
                 Log = MapBattleLog(_battle.Journal),
                 IsHitRulePercent = _battle.IsHitRulePercent
@@ -2512,6 +2525,68 @@ namespace Game.Core.Session
             var companion = arch.CreateInstance(id, _cfg);
             companion.Card = new CharacterCard(id, displayName, SourceTier.Original, "полонений, переманений на віче (Поправка №14.2)");
             return companion;
+        }
+
+        // =====================================================================
+        // Досьє ворога (Поправка №14.6; власник: «го»): контакт відкриває роль і
+        // здоров'я; розвідка перед боєм (Виживання чи Кмітливість) або сам бій —
+        // решту. Тренувальний бій — пісочниця: там усе видно й нічого не пишеться.
+        // =====================================================================
+
+        /// <summary>Ворог зі звичайного визначення (не перебіжчик — того знаємо як свого).</summary>
+        private static bool IsDossierSubject(CombatUnit u) =>
+            u != null && u.Side == Side.Enemy && !string.IsNullOrEmpty(u.EnemyDefinitionId) && string.IsNullOrEmpty(u.SourceCompanionId);
+
+        private DossierLevel DossierOf(CombatUnit u)
+        {
+            if (!IsDossierSubject(u)) return DossierLevel.Studied;
+            if (_resume?.Reason == SuspendReason.TrainingSkirmish) return DossierLevel.Studied;
+            return _dossier.LevelOf(u.EnemyDefinitionId);
+        }
+
+        /// <summary>Старт бою: кожного ворога побачили (контакт); розвідник у загоні — вивчив одразу.</summary>
+        private void MeetEnemies()
+        {
+            foreach (var u in _battle.Units)
+                if (IsDossierSubject(u)) _dossier.Raise(u.EnemyDefinitionId, DossierLevel.Contact);
+            if (PartyScouts()) StudyEnemies(_battle, "scout");
+        }
+
+        private bool PartyScouts()
+        {
+            foreach (var u in _battle.Units)
+            {
+                if (u.Side != Side.Player || string.IsNullOrEmpty(u.SourceCompanionId)) continue;
+                var c = _worldRoster?.Get(u.SourceCompanionId);
+                if (c == null) continue;
+                if (c.Skill(SkillType.Survival) >= _cfg.Combat.DossierScoutSurvival) return true;
+                if (c.Attribute(AttributeType.Wits) >= _cfg.Combat.DossierScoutWits) return true;
+            }
+            return false;
+        }
+
+        private void StudyEnemies(CombatState battle, string how)
+        {
+            if (battle == null) return;
+            foreach (var u in battle.Units)
+                if (IsDossierSubject(u) && _dossier.Raise(u.EnemyDefinitionId, DossierLevel.Studied))
+                    LogEvent("dossier.studied", Args("enemyId", u.EnemyDefinitionId, "how", how));
+        }
+
+        /// <summary>Опори вивченого ворога: "Fire:weak", "Ballistic:strong" — лише ті, що відрізняються від звичайного.</summary>
+        private static List<string> ResistNotes(CombatUnit u)
+        {
+            var notes = new List<string>();
+            var resists = u.Profile.Resists;
+            if (resists == null) return notes;
+            foreach (DamageType type in Enum.GetValues(typeof(DamageType)))
+            {
+                if (type == DamageType.True) continue;
+                double m = resists.Multiplier(type);
+                if (m > 1.0) notes.Add(type + ":weak");
+                else if (m < 1.0) notes.Add(type + ":strong");
+            }
+            return notes;
         }
 
         // =====================================================================
@@ -2922,6 +2997,7 @@ namespace Game.Core.Session
             _battle = CombatBattleBuilder.Build(setup, _cfg, ResolvePlayerUnit, ResolveEnemyById, roller, DefaultCombatContent.AbilityCatalog());
             State = SessionState.Battle;
             LogEvent("combat.battle.started", Args("reason", reason.ToString()));
+            if (reason != SuspendReason.TrainingSkirmish) MeetEnemies();
             OnBattleResolved();
         }
 
@@ -2966,6 +3042,9 @@ namespace Game.Core.Session
             // Лише малі бої — кімнати данжу і рейд; вузол 1 і фінал — великі сценарні
             // битви з власними драбинами наслідків (фінал №14.7 не змінює).
             var captivity = ComputeCaptivity(result, reason);
+
+            // Досьє (Поправка №14.6): хто з ворогом бився — той його знає.
+            if (reason != SuspendReason.TrainingSkirmish) StudyEnemies(_battle, "battle");
 
             // Здача (Поправка №14.2): долю тих, хто здався, гравець вирішує на панелі
             // результату; тренування — пісочниця, полонених не дає.
@@ -4800,6 +4879,8 @@ namespace Game.Core.Session
             // Поправка №14.7: наші бранці і загін, на який іде рейд.
             head.Append(";captives=").Append(_captives.CaptureState());
             head.Append(";raid=").Append(_raidGroupId ?? "-");
+            // Поправка №14.6: досьє ворогів.
+            head.Append(";dossier=").Append(_dossier.CaptureState());
             head.Append(";crisis=").Append(_crisis.CaptureState());
 
             string coreBlob = _processor.SaveState();
@@ -4969,6 +5050,7 @@ namespace Game.Core.Session
                     case "surr": RestorePendingSurrenders(value); break;
                     case "captives": _captives.RestoreState(value); break;
                     case "raid": _raidGroupId = value == "-" || value.Length == 0 ? null : value; break;
+                    case "dossier": _dossier.RestoreState(value); break;
                     case "crisis": _crisis.RestoreState(value); break;
                     case "arc": RestoreArcState(value); break;
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;
