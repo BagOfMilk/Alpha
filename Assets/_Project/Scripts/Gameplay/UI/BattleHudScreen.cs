@@ -1187,11 +1187,18 @@ namespace Game.Gameplay.UI
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
         }
 
-        /// <summary>Висота рядка з переносом за шириною підказки (0 — рядка немає) плюс проміжок між рядками.</summary>
+        /// <summary>
+        /// Висота рядка з переносом (0 — рядка немає). Ширина — та, що реально дістається
+        /// мітці: ширина підказки мінус поля рамки (GUI.skin.box) і бічні відступи стилю;
+        /// до висоти — вертикальні відступи стилю. Перша версія міряла ширше, ніж є, і
+        /// останній перенос («…з / укриття.») обрізався (перезнімок «Щ» на 8266b49).
+        /// </summary>
         private static float WrappedHeight(string text, GUIStyle style)
         {
             if (string.IsNullOrEmpty(text)) return 0f;
-            return style.CalcHeight(new GUIContent(text), TooltipWidth - 24f) + 6f;
+            var box = GUI.skin.box;
+            float width = TooltipWidth - box.padding.left - box.padding.right - style.margin.left - style.margin.right;
+            return style.CalcHeight(new GUIContent(text), Math.Max(40f, width)) + style.margin.top + style.margin.bottom + 2f;
         }
 
         private static GUIStyle _predictMissStyle, _checkFailStyle;
