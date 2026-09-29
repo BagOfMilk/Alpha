@@ -45,18 +45,24 @@ namespace Game.Tests.EditMode
         {
             var world = FirstHourWorld.Build();
 
-            // Поправка №12.7 (старт без будівель): пости ради, складу й
-            // лазарету закриті, доки не стане будівля, — тож і Захар, Дід Овсій
-            // та Гафія на старті вільні. Раніше тест фіксував стару реальність
-            // (усі троє на постах, рада й склад уже стоять, лазарет відкритий
-            // руками); на пост першої будівлі тепер ставить вибір після прологу.
-            foreach (var closed in new[] { "council_seat", "storehouse_dock", "infirmary_bed", "workshop_bench", "settlement_market" })
+            // Поправка №12.7 (старт без будівель), переглянута №12.9 (рада —
+            // віче просто неба від старту): пости складу й лазарету закриті,
+            // доки не стане будівля — тож Дід Овсій і Гафія на старті вільні.
+            // council_seat — виняток: він відкритий і зайнятий Захаром з
+            // першого ранку незалежно від того, яку першу будівлю обере
+            // гравець (він і не будівля — «зала ради» лише додає даху).
+            foreach (var closed in new[] { "storehouse_dock", "infirmary_bed", "workshop_bench", "settlement_market" })
             {
                 Assert.IsFalse(world.BaseState.GetSlot(closed).Unlocked, closed + ": пост будівлі закритий до її появи");
                 Assert.IsNull(world.BaseState.GetSlot(closed).AssignedCompanionId, closed + " обязан пустовать на старте");
             }
-            foreach (var free in new[] { "zakhar", "keeper", "healer" })
+            foreach (var free in new[] { "keeper", "healer" })
                 Assert.IsFalse(world.Roster.Get(free).IsAssigned, free + ": пост ще не збудований — вільний");
+
+            Assert.IsTrue(world.BaseState.GetSlot("council_seat").Unlocked, "віче зібралося ще до вибору першої будівлі");
+            Assert.AreEqual("zakhar", world.BaseState.GetSlot("council_seat").AssignedCompanionId,
+                "Захар на віче з першого ранку");
+            Assert.IsTrue(world.Roster.Get("zakhar").IsAssigned, "Захар — на посту з першого ранку (Поправка №12.9)");
 
             // Ферми й розвідпост будівлі не потребують — відкриті, але порожні
             // (§3.0 FIRST_HOUR): видима ціна, а не забута розстановка.

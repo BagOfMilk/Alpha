@@ -351,19 +351,18 @@ namespace Game.Gameplay.UI
             var city = shell.Session.GetCityView();
             var economy = shell.Session.GetEconomyView();
 
-            // Поправка №12.7 (старт без будівель): без Зали ради жодна дія ради
-            // не пройде (CouncilOrderResult.NoCouncilHall). Замість ряду кнопок,
-            // що мовчки відмовляють, — одне пояснення, чого бракує і де це
-            // звести (Статут UI-03, UI-04).
+            // Поправка №12.9 (рішення власника 29.09.2026: «рада — віче просто
+            // неба від старту, Зала ради — пізніше як розширення»): Облава,
+            // переселенці й підготовка до загрози працюють без Зали. Указ,
+            // Дипломатія, Інвестиція й Спорядження вилазки — досі за нею
+            // (обмінюють вигоду фракцій чи розтягнутий дохід): без Зали їхні
+            // кнопки сірі з поясненням (Статут UI-03, UI-04), а не ховаються.
             bool hasHall = false;
             if (city?.Built != null)
                 foreach (var b in city.Built)
                     if (b.Id == DefaultBuildings.CouncilHall) { hasHall = true; break; }
             if (city != null && !hasHall)
-            {
-                GUILayout.Label(UkrainianText.Get("ui.council.no_hall", g), AlphaSkin.Body);
-                return;
-            }
+                GUILayout.Label(UkrainianText.Get("ui.council.no_hall", g), AlphaSkin.Tooltip);
 
             DrawCouncilCostEffect("ui.council.raid", g, "gold", CouncilCity.RaidGoldCost.ToString());
             GUILayout.BeginHorizontal(GUI.skin.box);
@@ -392,6 +391,7 @@ namespace Game.Gameplay.UI
             // 180px і читалась як "ромада Тухольщин" з обох країв.
             Widgets.Section(UkrainianText.Get("ui.council.decree", g), () =>
             {
+                if (!hasHall) { GUILayout.Label(UkrainianText.Get("ui.council.result.no_council_hall", g), AlphaSkin.Tooltip); return; }
                 DrawCouncilCostEffect("ui.council.decree", g, "gold", CouncilFaction.DecreeGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var factionId in FactionIds)
@@ -401,6 +401,7 @@ namespace Game.Gameplay.UI
 
             Widgets.Section(UkrainianText.Get("ui.council.diplomacy", g), () =>
             {
+                if (!hasHall) { GUILayout.Label(UkrainianText.Get("ui.council.result.no_council_hall", g), AlphaSkin.Tooltip); return; }
                 DrawCouncilCostEffect("ui.council.diplomacy", g, "gold", CouncilFaction.DiplomacyGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var factionId in FactionIds)
@@ -410,6 +411,7 @@ namespace Game.Gameplay.UI
 
             Widgets.Section(UkrainianText.Get("ui.council.investment", g), () =>
             {
+                if (!hasHall) { GUILayout.Label(UkrainianText.Get("ui.council.result.no_council_hall", g), AlphaSkin.Tooltip); return; }
                 DrawCouncilCostEffect("ui.council.investment", g, "gold", CouncilFaction.InvestmentGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var id in BuildingIds)
@@ -437,6 +439,7 @@ namespace Game.Gameplay.UI
 
             Widgets.Section(UkrainianText.Get("ui.council.outfit_expedition", g), () =>
             {
+                if (!hasHall) { GUILayout.Label(UkrainianText.Get("ui.council.result.no_council_hall", g), AlphaSkin.Tooltip); return; }
                 DrawCouncilCostEffect("ui.council.outfit_expedition", g, "gold", CouncilFaction.OutfitExpeditionGoldCost.ToString());
                 GUILayout.BeginHorizontal();
                 foreach (var site in SiteIds)

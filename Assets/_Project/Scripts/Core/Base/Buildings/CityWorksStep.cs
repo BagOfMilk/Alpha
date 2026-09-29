@@ -87,8 +87,18 @@ namespace Game.Core.Base
             // ---- дія побудованого: щодоби, тихо, за своїм драйвером ----
             if (_works.Has(DefaultBuildings.Temple))
                 ctx.Tension.ApplyFractional(TensionDriver.TempleAura, tension.TempleDrainPerDay, "temple");
-            if (_works.Has(DefaultBuildings.Fortifications))
+
+            // Поправка №12.9: Сторожа модулює той самий драйвер Fortifications
+            // слабшою ставкою (інваріант 5 — новий драйвер заводити не можна).
+            // Якщо стоять обидві, рахуємо ОДИН раз повною ставкою Укріплень —
+            // складання зробило б Сторожу чистим підсилювачем замість
+            // тимчасової заміни, якою вона задумана.
+            bool hasFortifications = _works.Has(DefaultBuildings.Fortifications);
+            bool hasWatch = _works.Has(DefaultBuildings.Watch);
+            if (hasFortifications)
                 ctx.Tension.ApplyFractional(TensionDriver.Fortifications, tension.FortificationDrainPerDay, "fortifications");
+            else if (hasWatch)
+                ctx.Tension.ApplyFractional(TensionDriver.Fortifications, tension.WatchDrainPerDay, "watch");
         }
 
         private static void Arrive(DayContext ctx, int people, string reason)

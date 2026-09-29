@@ -29,16 +29,47 @@ namespace Game.Core.Scenes
         /// <summary>Префікс прапора обраної першої будівлі: «first_building.&lt;buildingId&gt;» (у зліпку разом зі StoryFlags).</summary>
         public const string FirstBuildingFlagPrefix = "first_building.";
 
-        /// <summary>Хто з іменного касту стає на пост першої будівлі (картка — Поправка №5.2).</summary>
+        /// <summary>
+        /// «Ремесло фахівця» (Поправка №12.9): хто з іменного касту voices
+        /// вибір і (де є пост — Склад/Лазарет) стає на нього. Захар говорить
+        /// про Сторожу, але сам він ВЖЕ на віче (council_seat) з першого
+        /// ранку, незалежно від вибору — <see cref="Base.DefaultBuildings.Watch"/>
+        /// поста не відкриває (GameSession.GrantBuildingFromConsequence не
+        /// знаходить OpensSlotId і нікого не переставляє, «свій пост» кожного
+        /// фахівця — окрема мапа в BotSupport.OwnPostOf, навмисно не виведена
+        /// звідси).
+        /// </summary>
         public static string FirstBuildingKeeperOf(string buildingId)
         {
             switch (buildingId)
             {
-                case Base.DefaultBuildings.CouncilHall: return "zakhar";
+                case Base.DefaultBuildings.Watch: return "zakhar";
                 case Base.DefaultBuildings.Storehouse: return "keeper";
                 case Base.DefaultBuildings.Infirmary: return "healer";
                 default: return null;
             }
+        }
+
+        /// <summary>
+        /// Поправка №12.9 (рішення власника 29.09.2026): варіанти вибору першої
+        /// будівлі — це ремесла фахівців, ПРИСУТНІХ у пролозі, а не жорстко
+        /// зашитий список. <paramref name="isPresent"/> — хук під майбутній
+        /// пул прибульців (хто прибився до ГГ визначають вибори гравця в
+        /// передісторії й пролозі; сам пул тут НЕ реалізований, тому
+        /// <c>null</c> — усі троє завжди присутні, той самий список, що й
+        /// раніше). Порядок каталогу (<see cref="Base.DefaultBuildings.FirstBuildingChoices"/>)
+        /// зберігається.
+        /// </summary>
+        public static IReadOnlyList<string> AvailableFirstBuildingChoices(System.Func<string, bool> isPresent = null)
+        {
+            var result = new List<string>();
+            foreach (var buildingId in Base.DefaultBuildings.FirstBuildingChoices)
+            {
+                string keeper = FirstBuildingKeeperOf(buildingId);
+                if (isPresent != null && keeper != null && !isPresent(keeper)) continue;
+                result.Add(buildingId);
+            }
+            return result;
         }
 
         /// <summary>
@@ -107,28 +138,32 @@ namespace Game.Core.Scenes
         }
 
         /// <summary>
-        /// Поправка №12.7 (рішення власника 29.09.2026: «Так придовити, перша
-        /// будівля зьявляється як вибор після прологу»): гра стартує без
-        /// будівель, і одразу після розмови з Тугаром громада зводить першу —
-        /// ту, яку обере гравець. Три варіанти (<see cref="Base.DefaultBuildings.FirstBuildingChoices"/>),
-        /// кожен каже в самому тексті, що відкриває і чого бракуватиме
+        /// Поправка №12.7, переглянута Поправкою №12.9 (рішення власника
+        /// 29.09.2026): гра стартує без будівель, рада вже гуде на майдані
+        /// просто неба (віче, FirstHourWorld.Build), і одразу після розмови з
+        /// Тугаром громада зводить першу будову — ту, яку обере гравець, за
+        /// ремеслом присутніх фахівців (<see cref="AvailableFirstBuildingChoices"/>).
+        /// Кожен варіант каже в самому тексті, що відкриває і чого бракуватиме
         /// (Статут MECH-05, UI-02); будівля стає одразу і без ціни, на її пост
-        /// стає свій іменний (Захар/Дід Овсій/Гафія). Обидві гілки розмови
-        /// сходяться сюди стрибком (<see cref="SceneStep.Goto"/>).
+        /// (де він є — Склад/Лазарет; Сторожа поста не відкриває, Захар і так
+        /// на віче) стає свій іменний. Обидві гілки розмови сходяться сюди
+        /// стрибком (<see cref="SceneStep.Goto"/>).
         /// </summary>
         private static IEnumerable<SceneStep> FirstBuildingSteps()
         {
             yield return SceneStep.Shot("zakhar", ShotFraming.Two, "protagonist").WithLabel("first_building");
             yield return SceneStep.Line("zakhar", "scene.neighbour.first_building.prompt");
 
+            var choices = AvailableFirstBuildingChoices();
+
             var options = new List<SceneChoiceOption>();
-            foreach (var buildingId in Base.DefaultBuildings.FirstBuildingChoices)
+            foreach (var buildingId in choices)
                 options.Add(SceneChoiceOption.Simple(buildingId, "scene.neighbour.option." + buildingId,
                     new QuestConsequence().Building(buildingId).Flag(FirstBuildingFlagPrefix + buildingId),
                     nextLabel: "first_building." + buildingId));
             yield return SceneStep.Choice(FirstBuildingChoiceId, options);
 
-            foreach (var buildingId in Base.DefaultBuildings.FirstBuildingChoices)
+            foreach (var buildingId in choices)
             {
                 string keeper = FirstBuildingKeeperOf(buildingId);
                 yield return SceneStep.Shot(keeper, ShotFraming.Close).WithLabel("first_building." + buildingId);

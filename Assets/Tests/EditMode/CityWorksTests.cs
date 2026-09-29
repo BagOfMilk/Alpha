@@ -278,17 +278,60 @@ namespace Game.Tests.EditMode
             Assert.Less(walls.Sum(x => x.Applied), 0);
         }
 
+        /// <summary>
+        /// Поправка №12.9 (Сторожа): модулює той самий драйвер Fortifications
+        /// слабшою ставкою — інваріант 5 не дозволяє завести окремий.
+        /// </summary>
+        [Test]
+        public void Watch_CalmsTheCityEveryDay_WeakerThanFortifications_ByTheSameDriver()
+        {
+            var cfg = new BalanceConfig();
+            var c = Build(cfg, built: new[] { DefaultBuildings.CouncilHall, DefaultBuildings.Watch });
+
+            const int days = 30; // WatchDrainPerDay — дрібний дробовий тик, накопичувач ApplyFractional вимагає більше днів, ніж Укріпленням
+            var reports = new List<DayReport>();
+            for (int d = 0; d < days; d++) reports.AddRange(c.Processor.AdvanceFullDay());
+
+            var watch = Ledger(reports).Where(x => x.Driver == TensionDriver.Fortifications).ToList();
+            Assert.IsNotEmpty(watch, "Сторожа обов'язана діяти драйвером Fortifications (той самий, слабший)");
+            Assert.Less(watch.Sum(x => x.Applied), 0, "Сторожа знижує Напругу, а не піднімає");
+            Assert.Greater(watch.Sum(x => x.Applied), cfg.Tension.FortificationDrainPerDay * days - 1e-9,
+                "Сторожа обов'язана бути СЛАБШОЮ за повні Укріплення за ту саму кількість діб");
+        }
+
+        /// <summary>Обидві стоять — рахуємо ОДИН раз повною ставкою Укріплень: складання зробило б Сторожу чистим підсилювачем.</summary>
+        [Test]
+        public void WatchAndFortifications_Together_DoNotStack()
+        {
+            var cfg = new BalanceConfig();
+            var withBoth = Build(cfg, built: new[] { DefaultBuildings.CouncilHall, DefaultBuildings.Watch, DefaultBuildings.Fortifications });
+            var withFortificationsOnly = Build(cfg, built: new[] { DefaultBuildings.CouncilHall, DefaultBuildings.Fortifications });
+
+            const int days = 40; // досить довго, щоб дрібний дренаж Сторожі (-0.05/добу) не збігся округленням з базовим
+            var reportsBoth = new List<DayReport>();
+            for (int d = 0; d < days; d++) reportsBoth.AddRange(withBoth.Processor.AdvanceFullDay());
+            var reportsFortOnly = new List<DayReport>();
+            for (int d = 0; d < days; d++) reportsFortOnly.AddRange(withFortificationsOnly.Processor.AdvanceFullDay());
+
+            double bothApplied = Ledger(reportsBoth).Where(x => x.Driver == TensionDriver.Fortifications).Sum(x => x.Applied);
+            double fortOnlyApplied = Ledger(reportsFortOnly).Where(x => x.Driver == TensionDriver.Fortifications).Sum(x => x.Applied);
+            Assert.AreEqual(fortOnlyApplied, bothApplied,
+                "Сторожа + Укріплення разом = рівно стільки ж, скільки самі Укріплення — не сума двох ставок");
+        }
+
         // ================= рада =================
 
         [Test]
-        public void Raid_NeedsHall_CostsGold_HasCooldown_AndIsHeard()
+        public void Raid_WorksWithoutHall_CostsGold_HasCooldown_AndIsHeard()
         {
             var cfg = new BalanceConfig();
 
+            // Поправка №12.9 (рішення власника 29.09.2026: «рада — віче просто
+            // неба від старту»): Облава не потребує Зали ради взагалі.
             var bare = Build(cfg, built: new string[0]);
             Give(bare.State, 100);
-            Assert.AreEqual(CouncilOrderResult.NoCouncilHall,
-                bare.Works.OrderRaid(bare.State, 1, cfg), "Без Зала совета облаву звать некому");
+            Assert.AreEqual(CouncilOrderResult.Queued,
+                bare.Works.OrderRaid(bare.State, 1, cfg), "Віче скликає облаву й без Зали ради");
 
             var c = Build(cfg);
             Assert.AreEqual(CouncilOrderResult.NotEnoughGold, c.Works.OrderRaid(c.State, 1, cfg));
