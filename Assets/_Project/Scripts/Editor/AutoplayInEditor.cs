@@ -52,8 +52,9 @@ namespace Game.Gameplay.EditorTools
         private static void MenuBattle() => Debug.Log(Run("-autoplay-battle"));
 
         /// <summary>
-        /// Запускає тур. Повертає «started» або причину, чому не запустив:
-        /// CLI бачить відповідь як результат <c>eval</c>.
+        /// Запускає тур. Повертає «started» або причину, чому не запустив
+        /// (busy / no-scene / no-gameview / dirty-scene): CLI бачить відповідь
+        /// як результат <c>eval</c>.
         /// </summary>
         public static string Run(string flags)
         {
@@ -61,26 +62,47 @@ namespace Game.Gameplay.EditorTools
             if (EditorApplication.isCompiling) return "busy: компіляція";
             if (!File.Exists(ScenePath)) return "no-scene: спершу Alpha/Собрать сцену «Игра» (GameSceneBuilder.Build)";
 
-            var active = EditorSceneManager.GetActiveScene();
-            if (active.path != ScenePath)
+            // Нове вікно Game view не відкриваємо (власник не хоче нових вікон),
+            // а без нього IMGUI-екрани не малюються і тур стояв би до тайм-ауту.
+            var gameView = FindGameView();
+            if (gameView == null) return "no-gameview: відкрий вкладку Game (Window → General → Game) у редакторі";
+
+            if (EditorSceneManager.GetActiveScene().path != ScenePath)
             {
-                // Не відкривати поверх незбереженого — інакше редактор спитає
-                // модальним вікном, і тур завис би на ньому.
-                if (active.isDirty) return "dirty-scene: відкрита сцена має незбережені зміни (" + active.path + ")";
+                // OpenSceneMode.Single закриває ВСІ відкриті сцени — незбережене
+                // в будь-якій із них пропало б мовчки.
+                for (int i = 0; i < EditorSceneManager.sceneCount; i++)
+                {
+                    var scene = EditorSceneManager.GetSceneAt(i);
+                    if (scene.isDirty) return "dirty-scene: відкрита сцена має незбережені зміни (" + scene.path + ")";
+                }
                 EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             }
 
             string root = AutoplayArgs.Root();
             string output = Path.Combine(root, "Logs", "Autoplay");
-            if (Directory.Exists(output)) Directory.Delete(output, true);
+            try
+            {
+                if (Directory.Exists(output)) Directory.Delete(output, true);
+            }
+            catch (Exception ex)
+            {
+                return "busy: не вдалося очистити " + output + " (" + ex.GetType().Name + ")";
+            }
 
-            string argsPath = Path.Combine(root, AutoplayArgs.EditorArgsFile);
-            Directory.CreateDirectory(Path.GetDirectoryName(argsPath));
-            File.WriteAllText(argsPath, flags ?? string.Empty);
+            AutoplayArgs.WriteEditorArgs(flags);
 
-            string sizeNote = TrySetGameViewSize(ShotWidth, ShotHeight);
+            string sizeNote = TrySetGameViewSize(gameView, ShotWidth, ShotHeight);
             EditorApplication.isPlaying = true;
             return "started" + sizeNote;
+        }
+
+        private static EditorWindow FindGameView()
+        {
+            var gameViewType = typeof(Editor).Assembly.GetType("UnityEditor.GameView");
+            if (gameViewType == null) return null;
+            var open = Resources.FindObjectsOfTypeAll(gameViewType);
+            return open.Length > 0 ? (EditorWindow)open[0] : null;
         }
 
         // ================= Game view 1600×900 =================
@@ -92,7 +114,7 @@ namespace Game.Gameplay.EditorTools
         /// цій версії Unity щось перейменовано, тур іде в поточному розмірі
         /// Game view, а відповідь каже чому.
         /// </summary>
-        private static string TrySetGameViewSize(int width, int height)
+        private static string TrySetGameViewSize(EditorWindow gameView, int width, int height)
         {
             try
             {
@@ -100,8 +122,8 @@ namespace Game.Gameplay.EditorTools
                 var sizesType = editorAssembly.GetType("UnityEditor.GameViewSizes");
                 var sizeType = editorAssembly.GetType("UnityEditor.GameViewSize");
                 var sizeKindType = editorAssembly.GetType("UnityEditor.GameViewSizeType");
-                var gameViewType = editorAssembly.GetType("UnityEditor.GameView");
-                if (sizesType == null || sizeType == null || sizeKindType == null || gameViewType == null)
+                var gameViewType = gameView.GetType();
+                if (sizesType == null || sizeType == null || sizeKindType == null)
                     return " (Game view: внутрішні типи не знайдено — розмір як є)";
 
                 var singleton = typeof(ScriptableSingleton<>).MakeGenericType(sizesType);
@@ -119,7 +141,6 @@ namespace Game.Gameplay.EditorTools
                 }
                 if (index < 0) return " (Game view: не вдалося додати " + width + "x" + height + ")";
 
-                var gameView = EditorWindow.GetWindow(gameViewType);
                 var select = gameViewType.GetMethod("SizeSelectionCallback", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 if (select != null) select.Invoke(gameView, new object[] { index, null });
                 else

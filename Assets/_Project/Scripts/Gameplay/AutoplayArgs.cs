@@ -9,8 +9,9 @@ namespace Game.Gameplay
     ///
     /// У зібраній грі — з командного рядка, як і раніше. У редакторі командного
     /// рядка гри немає, тому прапорці лежать у файлі <see cref="EditorArgsFile"/>:
-    /// його пише <c>Editor/AutoplayInEditor.Run</c> перед входом у Play Mode, а
-    /// файл переживає перезавантаження домену, яке стирає всі статичні поля.
+    /// його пише <c>Editor/AutoplayInEditor.Run</c> (через <c>WriteEditorArgs</c>)
+    /// перед входом у Play Mode, а файл переживає перезавантаження домену,
+    /// яке стирає всі статичні поля.
     /// Власник, 28.09.2026: «мені не подобається, що ти відчиняєш та зачиняєш
     /// вікно. Проєкт нехай буде запущенним при тестуванні» — тури йдуть у
     /// відкритому редакторі, без окремого Alpha.exe.
@@ -43,6 +44,19 @@ namespace Game.Gameplay
         public static bool FromEditor => EditorArgs().Length > 0;
 
         /// <summary>
+        /// Записати прапорці туру для наступного входу в Play Mode. Файл
+        /// позначений процесом редактора: після краху чи вбитого редактора
+        /// <c>Temp/</c> може лишитися, і без позначки перший звичайний Play
+        /// нового сеансу мовчки став би туром.
+        /// </summary>
+        public static void WriteEditorArgs(string flags)
+        {
+            string path = Path.Combine(Root(), EditorArgsFile);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllText(path, PidToken() + " " + (flags ?? string.Empty));
+        }
+
+        /// <summary>
         /// Стерти файл прапорців: інакше наступний звичайний Play у редакторі
         /// знову запустив би тур. Кличуть кінець туру і вихід із Play Mode.
         /// </summary>
@@ -56,8 +70,12 @@ namespace Game.Gameplay
         {
             string path = Path.Combine(Root(), EditorArgsFile);
             if (!File.Exists(path)) return new string[0];
-            return File.ReadAllText(path).Split(new[] { ' ', ',', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var tokens = File.ReadAllText(path).Split(new[] { ' ', ',', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            // Чужий (попередній) сеанс редактора — не наш тур.
+            return tokens.Length > 0 && tokens[0] == PidToken() ? tokens : new string[0];
         }
+
+        private static string PidToken() => "pid=" + System.Diagnostics.Process.GetCurrentProcess().Id;
 #endif
     }
 }

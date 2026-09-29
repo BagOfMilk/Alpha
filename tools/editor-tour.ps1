@@ -49,7 +49,11 @@ if (-not (Test-Path $unity)) { Write-Host "Unity CLI не знайдено: $uni
 function Invoke-Eval([string]$Code, [int]$Timeout = 60) {
     # stderr CLI в PowerShell 5.1 з 2>&1 стає ErrorRecord, а під 'Stop' — винятком.
     $ErrorActionPreference = 'Continue'
-    $out = & $unity command eval $Code --project-path $ProjectPath --timeout $Timeout --caller plugin --skill unity-cli 2>&1 | Out-String
+    # PowerShell до 7.3 передає аргумент у зовнішню програму, не екрануючи
+    # лапки всередині: Run("-autoplay") дійшов би до CLI як Run(-autoplay).
+    if ($PSVersionTable.PSVersion -lt [version]'7.3') { $Code = $Code.Replace('"', '\"') }
+    # --result-only: лише результат eval, без конверта з командою і параметрами.
+    $out = & $unity command eval $Code --result-only --project-path $ProjectPath --timeout $Timeout --caller plugin --skill unity-cli 2>&1 | Out-String
     return [pscustomobject]@{ Ok = ($LASTEXITCODE -eq 0); Text = $out.Trim() }
 }
 
@@ -70,7 +74,12 @@ if (Test-True $probe.Text) {
 
 # 2) Підхопити зміни з диска і дочекатися компіляції. Під час перезавантаження
 #    домену eval не відповідає — це нормально, чекаємо далі.
-$null = Invoke-Eval 'UnityEditor.AssetDatabase.Refresh(); return "refresh";' 120
+$refresh = Invoke-Eval 'UnityEditor.AssetDatabase.Refresh(); return 1;' 120
+if (-not $refresh.Ok) {
+    # Перезавантаження домену посеред Refresh може обірвати відповідь — це не
+    # помилка; справжні проблеми покаже очікування нижче і scriptCompilationFailed.
+    Write-Host "Refresh без відповіді (ймовірно, перезавантаження домену): $($refresh.Text)"
+}
 $deadline = (Get-Date).AddMinutes(10)
 $idleInRow = 0
 while ($idleInRow -lt 2) {
@@ -87,11 +96,13 @@ if ($failed.Ok -and (Test-True $failed.Text)) {
 
 # 3) Старт туру. Сцени Game.unity немає в репозиторії — збирається кодом.
 $summary = Join-Path $ProjectPath 'Logs\Autoplay\Logs\autoplay-summary.txt'
+# Екранування для рядка C#; для командного рядка лапки екранує Invoke-Eval.
 $escaped = $Flags.Replace('\', '\\').Replace('"', '\"')
 $run = Invoke-Eval ('return Game.Gameplay.EditorTools.AutoplayInEditor.Run("' + $escaped + '");')
 if ($run.Text -match 'no-scene') {
     Write-Host "Сцени Game.unity немає — збираю (GameSceneBuilder.Build)."
-    $null = Invoke-Eval 'Game.Gameplay.EditorTools.GameSceneBuilder.Build(); return "built";' 300
+    $build = Invoke-Eval 'Game.Gameplay.EditorTools.GameSceneBuilder.Build(); return 1;' 300
+    if (-not $build.Ok) { Write-Host "Сцену не зібрано:"; Write-Host $build.Text; exit 7 }
     $run = Invoke-Eval ('return Game.Gameplay.EditorTools.AutoplayInEditor.Run("' + $escaped + '");')
 }
 if (-not ($run.Ok -and $run.Text -match 'started')) {
