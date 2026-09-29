@@ -889,6 +889,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "status.dead.m", "Загинув");
             AddKey(t, "status.dead.f", "Загинула");
             AddKey(t, "status.antagonist", "Проти нас");
+            AddKey(t, "status.captive", "У полоні");
 
             AddKey(t, "wound.light", "Легка рана");
             AddKey(t, "wound.serious", "Серйозна рана");
@@ -1792,6 +1793,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.reason.on_mission.f", "У полі — недоступна.");
             AddKey(t, "ui.reason.antagonist.m", "Проти нас — недоступний.");
             AddKey(t, "ui.reason.antagonist.f", "Проти нас — недоступна.");
+            AddKey(t, "ui.reason.captive.m", "У полоні — спершу визволити.");
+            AddKey(t, "ui.reason.captive.f", "У полоні — спершу визволити.");
             AddKey(t, "ui.reason.unknown_companion", "Такого напарника немає.");
             AddKey(t, "ui.reason.empty_party", "Оберіть хоч когось у відряд.");
             AddKey(t, "ui.reason.duplicate_companion", "Один і той самий двічі в списку.");
@@ -2700,6 +2703,36 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.object.high.effect", "Повне укриття тому, хто за нею; закриває огляд. Вибух розбиває до низької.");
             AddKey(t, "ui.battle.object.low.effect", "Половинне укриття тому, хто за нею. Вибух розносить.");
 
+            // C6 — поразка → полон (№14.7): події стрічки і панель віча.
+            AddKey(t, "companion.captured.m", "{companionId} у полоні — ворог забрав його з поля бою.");
+            AddKey(t, "companion.captured.f", "{companionId} у полоні — ворог забрав її з поля бою.");
+            AddKey(t, "companion.escaped.m", "{companionId} упав, але вибрався з поля — тяжко поранений.");
+            AddKey(t, "companion.escaped.f", "{companionId} упала, але вибралася з поля — тяжко поранена.");
+            AddKey(t, "companion.rescued.ransom.m", "{companionId} викуплений з полону — повертається додому.");
+            AddKey(t, "companion.rescued.ransom.f", "{companionId} викуплена з полону — повертається додому.");
+            AddKey(t, "companion.rescued.talk.m", "Домовилися: {companionId} відпущений з полону.");
+            AddKey(t, "companion.rescued.talk.f", "Домовилися: {companionId} відпущена з полону.");
+            AddKey(t, "companion.rescued.raid.m", "Рейд удався: {companionId} вільний.");
+            AddKey(t, "companion.rescued.raid.f", "Рейд удався: {companionId} вільна.");
+            AddKey(t, "captivity.band.holding", "{companionId} у полоні тримається.");
+            AddKey(t, "captivity.band.worn", "{companionId} виснажується в полоні — віри в нас меншає.");
+            AddKey(t, "captivity.band.breaking.m", "{companionId} ламається в полоні — ще трохи, і він перейде на їхній бік.");
+            AddKey(t, "captivity.band.breaking.f", "{companionId} ламається в полоні — ще трохи, і вона перейде на їхній бік.");
+            AddKey(t, "captivity.raid.started", "Загін вирушає в рейд по своїх.");
+            AddKey(t, "captivity.raid.failed", "Рейд не вдався — наші лишаються в полоні.");
+            AddKey(t, "ui.captives.title", "Наші в полоні");
+            AddKey(t, "ui.captives.held_by", "{name} — у полоні: {captor}.");
+            AddKey(t, "ui.captives.band.Holding", "Тримається");
+            AddKey(t, "ui.captives.band.Worn", "Виснажується — лояльність тане");
+            AddKey(t, "ui.captives.band.Breaking", "Ламається — близько до зради");
+            AddKey(t, "ui.captives.ransom", "Викуп: {gold} золота");
+            AddKey(t, "ui.captives.ransom.poor", "Бракує золота на викуп.");
+            AddKey(t, "ui.captives.talk", "Перемовини (Переконання {value} / {threshold})");
+            AddKey(t, "ui.captives.talk.weak", "Переконання вдома {value} — треба {threshold}.");
+            AddKey(t, "ui.captives.raid", "Рейд — бій");
+            AddKey(t, "ui.captives.raid.party", "У рейд підуть: {party}. Проти: {enemies}. Загін ходить першим; кров — громаді на пам'ять.");
+            AddKey(t, "ui.captives.raid.none", "Нікому йти в рейд — усі в полі, в полоні чи поранені.");
+
             // C5 — перша партія здібностей (docs/ABILITIES.md; власник: «ок», «Тенета норм»).
             AddKey(t, "ability.rally", "Підбадьорити");
             AddKey(t, "ability.enrage", "Розлютити");
@@ -2734,7 +2767,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.retreat", "Відступити");
             AddKey(t, "ui.battle.retreat.confirm.title", "Відступити з бою?");
             AddKey(t, "ui.battle.retreat.confirm.body", "Загін розриває бій. Упалі лишаються на полі — їхні рани підуть у лазарет.");
-            AddKey(t, "ui.battle.retreat.consequence.dungeon", "Вилазка закінчиться: незабране з данжу пропаде.");
+            AddKey(t, "ui.battle.retreat.consequence.dungeon", "Вилазка закінчиться: незабране з данжу пропаде. Хто на ногах, винесе по одному впалому; кого не винесуть — візьмуть у полон.");
+            AddKey(t, "ui.battle.retreat.consequence.raid", "Рейд зірветься: бранці лишаться в полоні, а впалих, кого не винесуть, візьмуть теж.");
             AddKey(t, "ui.battle.retreat.consequence.lost", "Поле лишиться за ворогом — як поразка, але загін живий.");
             AddKey(t, "ui.battle.retreat.consequence.training", "Тренування закінчиться без наслідків.");
             AddKey(t, "ui.battle.retreat.only_own_turn", "Відступити можна лише у свій хід.");

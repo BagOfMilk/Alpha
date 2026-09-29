@@ -79,6 +79,7 @@ namespace Game.Gameplay.UI
                 case CompanionStatus.Dead: return new Legality(false, "ui.reason.dead", companion.Id);
                 case CompanionStatus.OnMission: return new Legality(false, "ui.reason.on_mission", companion.Id);
                 case CompanionStatus.Antagonist: return new Legality(false, "ui.reason.antagonist", companion.Id);
+                case CompanionStatus.Captive: return new Legality(false, "ui.reason.captive", companion.Id);
                 default: return Legality.Ok;
             }
         }
@@ -320,6 +321,7 @@ namespace Game.Gameplay.UI
                 case CompanionStatus.Resting: return UkrainianText.Get("status.resting", gender);
                 case CompanionStatus.Dead: return UkrainianText.Get("status.dead", gender);
                 case CompanionStatus.Antagonist: return UkrainianText.Get("status.antagonist", gender);
+                case CompanionStatus.Captive: return UkrainianText.Get("status.captive", gender);
                 default: return status.ToString();
             }
         }

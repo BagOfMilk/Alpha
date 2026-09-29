@@ -51,4 +51,36 @@ namespace Game.Core.Session.Views
 
         public int DayTaken;
     }
+
+    /// <summary>
+    /// Наша людина в полоні (Поправка №14.7): у кого, полоса годинника (інваріант 3 —
+    /// без числа діб до зради), три шляхи порятунку і що кожен коштує — до кліку (UI-02).
+    /// </summary>
+    public sealed class CaptiveView
+    {
+        public string CompanionId;
+        public string CaptorEnemyId;
+        /// <summary>Ключ імені тримача (як <see cref="PrisonerView.DisplayNameKey"/>).</summary>
+        public string CaptorNameKey;
+        /// <summary>"Grunt" | "MiniBoss" | "Boss".</summary>
+        public string CaptorRank;
+
+        /// <summary>"Holding" | "Worn" | "Breaking" — що довше в полоні, то ближче до зради.</summary>
+        public string Band;
+        public int DayTaken;
+
+        /// <summary>Викуп: ціна з урахуванням найкращої Торгівлі; чи вистачає золота.</summary>
+        public int RansomGold;
+        public bool CanAffordRansom;
+
+        /// <summary>Перемовини: найкраще Переконання вдома проти порога тримача.</summary>
+        public int BestPersuade;
+        public int TalkThreshold;
+        public bool CanTalk;
+
+        /// <summary>Рейд: хто піде і проти кого — видно до кліку.</summary>
+        public System.Collections.Generic.IReadOnlyList<string> RaidPartyIds;
+        public System.Collections.Generic.IReadOnlyList<string> RaidEnemyIds;
+        public bool CanRaid;
+    }
 }

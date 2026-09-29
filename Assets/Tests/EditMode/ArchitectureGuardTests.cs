@@ -681,7 +681,10 @@ namespace Game.Tests.EditMode
                 "SurrenderAtHpPercent",
                 // Перевірка здібності (docs/ABILITIES.md): «Залякування 3 ≥ Воля 2»,
                 // «стерто броні 3 з 3» — видно до кліку (інваріант 8), не прихована шкала.
-                "CheckValue", "CheckThreshold"
+                "CheckValue", "CheckThreshold",
+                // Полон наших (Поправка №14.7): поріг перемовин і найкраще Переконання
+                // вдома — видно до кліку (інваріант 8); годинник — лише полосою.
+                "BestPersuade", "TalkThreshold"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

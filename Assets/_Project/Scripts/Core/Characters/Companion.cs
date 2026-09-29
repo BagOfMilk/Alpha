@@ -21,7 +21,14 @@ namespace Game.Core.Characters
         // Пішов в антагоністи (дефекція, R2/§2 №25). НЕЗВОРОТНО, як і Dead:
         // не допускається ні на пост, ні у відряд, ні в присутні —
         // див. ArchitectureGuardTests.Antagonist_NeverAssignable_NeverDispatchable.
-        Antagonist = 6
+        Antagonist = 6,
+
+        // ---- Поправка №14.7: поразка → полон ----
+        // У полоні іменного ворога. НЕ незворотно (на відміну від Dead/Antagonist):
+        // викуп, перемовини чи рейд повертають. Поки в полоні — ні на пост, ні у
+        // відряд, ні в присутні; годинник полону (Core/Prisoners/CaptivityLedger)
+        // щодня знімає лояльність — аж до зради.
+        Captive = 7
     }
 
     /// <summary>
@@ -186,6 +193,9 @@ namespace Game.Core.Characters
 
         /// <summary>Загинув. З цього стану немає шляху назад.</summary>
         public bool IsDead => Status == CompanionStatus.Dead;
+
+        /// <summary>У полоні ворога (Поправка №14.7) — живий, але недоступний.</summary>
+        public bool IsCaptive => Status == CompanionStatus.Captive;
 
         /// <summary>
         /// Убити напарника. Перехід незворотний — це усвідомлена жорсткість GDD:

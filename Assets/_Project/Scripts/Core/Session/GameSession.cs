@@ -103,6 +103,10 @@ namespace Game.Core.Session
 
         // ---- Здача і полон (Поправка №14.2) ----
         private PrisonerLedger _prisoners = new PrisonerLedger();
+        // ---- Поразка → полон (Поправка №14.7): наші люди в чужих руках ----
+        private CaptivityLedger _captives = new CaptivityLedger();
+        /// <summary>Загін тримача, на який зараз іде рейд (null — рейду немає).</summary>
+        private string _raidGroupId;
         private readonly List<SurrenderedEnemy> _pendingSurrenders = new List<SurrenderedEnemy>();
         /// <summary>Переманені полонені: щоб відтворити їх у ростері при завантаженні (ростер відновлює лише наявних).</summary>
         private readonly List<string> _recruits = new List<string>();
@@ -336,6 +340,8 @@ namespace Game.Core.Session
             _crisis = new ForcedCrisisSource(5, 1);
             _defectionWatch = new DefectionWatch();
             _prisoners = new PrisonerLedger();
+            _captives = new CaptivityLedger();
+            _raidGroupId = null;
             _pendingSurrenders.Clear();
             _recruits.Clear();
 
@@ -1237,6 +1243,7 @@ namespace Game.Core.Session
             _lastDayReport = BuildDayReportView(report);
             SettleAfterDayReport(report);
             TickPrisoners(report.Day);
+            TickCaptives(report.Day);
 
             if (_processor.CurrentDay == 5 && _crisis.Phase == CrisisPhase.Idle)
             {
@@ -2507,6 +2514,270 @@ namespace Game.Core.Session
             return companion;
         }
 
+        // =====================================================================
+        // Поразка → полон (Поправка №14.7; власник, 29.09.2026: «Але десь половина
+        // має втекти»; протагоніст у полон — «ні не може»).
+        // =====================================================================
+
+        /// <summary>Хто втік і хто в полоні після бою + у кого — порахувати ДО обнулення бою.</summary>
+        private sealed class CaptivityOutcome
+        {
+            public EscapeSplit Split;
+            public HashSet<string> Standing;
+            public string CaptorEnemyId;
+            public int CaptorRank;
+            public List<string> EnemyGroup;
+            public string GroupId;
+        }
+
+        private CaptivityOutcome ComputeCaptivity(BattleResult result, SuspendReason reason)
+        {
+            if (_battle == null) return null;
+            if (reason != SuspendReason.DungeonCombatRoom && reason != SuspendReason.CaptiveRaid) return null;
+            bool retreat = result.Outcome == BattleOutcome.Retreat;
+            if (result.Outcome != BattleOutcome.Defeat && !retreat) return null;
+
+            var living = new List<string>();
+            var standing = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var u in _battle.Units)
+            {
+                if (u.Side != Side.Player || string.IsNullOrEmpty(u.SourceCompanionId)) continue;
+                if (u.LifeState == UnitLifeState.Dead) continue;
+                living.Add(u.SourceCompanionId);
+                if (u.LifeState == UnitLifeState.Active) standing.Add(u.SourceCompanionId);
+            }
+
+            var outcome = new CaptivityOutcome
+            {
+                Split = CaptivityRules.Split(living, standing, result.FallOrderCompanionIds, ProtagonistId, retreat),
+                Standing = standing
+            };
+
+            // Рейд, що не вдався: нові бранці йдуть до того самого загону.
+            var raided = reason == SuspendReason.CaptiveRaid && _raidGroupId != null ? _captives.Group(_raidGroupId) : null;
+            if (raided != null && raided.Count > 0)
+            {
+                outcome.CaptorEnemyId = raided[0].CaptorEnemyId;
+                outcome.CaptorRank = raided[0].CaptorRank;
+                outcome.EnemyGroup = new List<string>(raided[0].EnemyGroup);
+                outcome.GroupId = _raidGroupId;
+                return outcome;
+            }
+
+            // Тримач — найстарший за рангом ворог, що лишився на полі; загін — ті, хто стоїть.
+            var alive = new List<CombatUnit>();
+            var all = new List<CombatUnit>();
+            foreach (var u in _battle.Units)
+            {
+                if (u.Side != Side.Enemy || string.IsNullOrEmpty(u.EnemyDefinitionId) || !string.IsNullOrEmpty(u.SourceCompanionId)) continue;
+                all.Add(u);
+                if (u.LifeState != UnitLifeState.Dead && u.LifeState != UnitLifeState.Surrendered && u.LifeState != UnitLifeState.Fled)
+                    alive.Add(u);
+            }
+            var group = alive.Count > 0 ? alive : all;
+            CombatUnit captor = null;
+            foreach (var u in group)
+                if (captor == null || u.Profile.Rank > captor.Profile.Rank) captor = u;
+
+            outcome.CaptorEnemyId = captor?.EnemyDefinitionId;
+            outcome.CaptorRank = captor != null ? (int)captor.Profile.Rank : 0;
+            outcome.EnemyGroup = new List<string>();
+            foreach (var u in group) outcome.EnemyGroup.Add(u.EnemyDefinitionId);
+            return outcome;
+        }
+
+        private void ApplyCaptivity(CaptivityOutcome outcome)
+        {
+            if (outcome?.Split == null) return;
+
+            foreach (var id in outcome.Split.Escaped)
+                if (!outcome.Standing.Contains(id))
+                    LogEvent("companion.escaped", Args("companionId", id)); // упав, але його винесли / виповз
+
+            if (outcome.Split.Captured.Count == 0) return;
+            string groupId = outcome.GroupId ?? _captives.NewGroupId(_processor.CurrentDay);
+            foreach (var id in outcome.Split.Captured)
+                TakeCaptive(id, outcome.CaptorEnemyId, outcome.CaptorRank, groupId, outcome.EnemyGroup);
+        }
+
+        /// <summary>
+        /// Єдина точка взяття нашої людини в полон: зняти з поста, статус «у полоні»,
+        /// запис у реєстр, подія в стрічку. Протагоніста не бере ніколи («ні не може»).
+        /// </summary>
+        internal bool TakeCaptive(string companionId, string captorEnemyId, int captorRank, string groupId,
+                                  IReadOnlyList<string> enemyGroup)
+        {
+            if (string.Equals(companionId, ProtagonistId, StringComparison.Ordinal)) return false;
+            var c = _worldRoster?.Get(companionId);
+            if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist || c.IsCaptive) return false;
+            if (c.IsAssigned) _state.Unassign(c.AssignedSlotId);
+            c.Status = CompanionStatus.Captive;
+            _captives.Take(companionId, captorEnemyId, captorRank, groupId ?? _captives.NewGroupId(_processor.CurrentDay),
+                enemyGroup, _processor.CurrentDay);
+            LogEvent("companion.captured", Args("companionId", companionId, "enemyId", captorEnemyId ?? ""));
+            return true;
+        }
+
+        /// <summary>
+        /// Доба полону: годинник іде, лояльність тане (що довше — то швидше), зміна
+        /// полоси — у стрічку (інваріант 4). Хто вже зрадив чи загинув — зі списку геть.
+        /// </summary>
+        private void TickCaptives(int day)
+        {
+            foreach (var c in new List<Captive>(_captives.All))
+            {
+                var comp = _worldRoster?.Get(c.CompanionId);
+                if (comp == null || !comp.IsCaptive) _captives.Remove(c.CompanionId);
+            }
+            if (_captives.All.Count == 0) return;
+
+            foreach (var ev in _captives.Tick(day))
+                LogEvent("captivity.band." + _captives.BandOf(ev.Captive).ToString().ToLowerInvariant(),
+                    Args("companionId", ev.Captive.CompanionId, "enemyId", ev.Captive.CaptorEnemyId ?? ""));
+
+            foreach (var c in _captives.All)
+                LogLoyaltyChange(ApplyLoyaltyDelta(c.CompanionId, _captives.LoyaltyDeltaFor(c), "captivity"));
+        }
+
+        /// <summary>Найкраща навичка серед присутніх у громаді (не в полі, не в полоні, не проти нас).</summary>
+        private int BestPresentSkill(SkillType skill)
+        {
+            int best = 0;
+            if (_worldRoster == null) return best;
+            foreach (var c in _worldRoster.All)
+            {
+                if (c.IsDead || c.Status == CompanionStatus.Antagonist || c.Status == CompanionStatus.OnMission || c.IsCaptive) continue;
+                best = Math.Max(best, c.Skill(skill));
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Хто піде в рейд: протагоніст і двоє найкращих бійців серед присутніх і
+        /// здорових (ПЛЕЙСХОЛДЕР — вибір складу гравцем прийде з екраном рейду).
+        /// Склад видно до кліку (Статут UI-02).
+        /// </summary>
+        private List<string> RaidPartyIds()
+        {
+            var party = new List<string>();
+            if (IsCompanionBattleReady(ProtagonistId)) party.Add(ProtagonistId);
+            var rest = new List<Companion>();
+            if (_worldRoster != null)
+                foreach (var c in _worldRoster.All)
+                {
+                    if (string.Equals(c.Id, ProtagonistId, StringComparison.Ordinal) || c.IsInjured) continue;
+                    if (!IsCompanionBattleReady(c.Id)) continue;
+                    rest.Add(c);
+                }
+            rest.Sort((a, b) =>
+            {
+                int sa = Math.Max(a.Skill(SkillType.Melee), a.Skill(SkillType.Ranged));
+                int sb = Math.Max(b.Skill(SkillType.Melee), b.Skill(SkillType.Ranged));
+                return sa != sb ? sb.CompareTo(sa) : string.CompareOrdinal(a.Id, b.Id);
+            });
+            for (int i = 0; i < rest.Count && party.Count < 3; i++) party.Add(rest[i].Id);
+            return party;
+        }
+
+        /// <summary>Наші в полоні — у кого, полоса годинника, ціна викупу, поріг перемовин, склад рейду.</summary>
+        public IReadOnlyList<CaptiveView> GetCaptivesView()
+        {
+            var list = new List<CaptiveView>();
+            if (_captives.All.Count == 0) return list;
+            int gold = _state.Resources.Get(ResourceType.Gold);
+            int trade = BestPresentSkill(SkillType.Trade);
+            int persuade = BestPresentSkill(SkillType.Persuade);
+            bool hub = State == SessionState.Morning || State == SessionState.FreePlay;
+            var raidParty = RaidPartyIds();
+            foreach (var c in _captives.All)
+            {
+                var def = ResolveEnemyById(c.CaptorEnemyId);
+                int ransom = _captives.RansomFor(c, trade);
+                int threshold = _captives.TalkThreshold(c);
+                list.Add(new CaptiveView
+                {
+                    CompanionId = c.CompanionId,
+                    CaptorEnemyId = c.CaptorEnemyId,
+                    CaptorNameKey = def != null ? def.DisplayName : c.CaptorEnemyId,
+                    CaptorRank = ((EnemyRank)c.CaptorRank).ToString(),
+                    Band = _captives.BandOf(c).ToString(),
+                    DayTaken = c.DayTaken,
+                    RansomGold = ransom,
+                    CanAffordRansom = hub && gold >= ransom,
+                    BestPersuade = persuade,
+                    TalkThreshold = threshold,
+                    CanTalk = hub && persuade >= threshold,
+                    RaidPartyIds = raidParty,
+                    RaidEnemyIds = new List<string>(c.EnemyGroup),
+                    CanRaid = hub && raidParty.Count > 0 && c.EnemyGroup.Count > 0
+                });
+            }
+            return list;
+        }
+
+        /// <summary>Тихий порятунок №1: викуп золотом (Торгівля знижує ціну; ціна видна до кліку).</summary>
+        public bool RansomCaptive(string companionId)
+        {
+            RequireMorningOrFreePlay();
+            var c = _captives.Get(companionId);
+            if (c == null) return false;
+            int cost = _captives.RansomFor(c, BestPresentSkill(SkillType.Trade));
+            if (!_state.Resources.TrySpend(ResourceType.Gold, cost)) return false;
+            FreeCaptive(c, "ransom");
+            return true;
+        }
+
+        /// <summary>Тихий порятунок №2: перемовини — Переконання ≥ порога за рангом тримача (інваріант 8).</summary>
+        public bool NegotiateCaptive(string companionId)
+        {
+            RequireMorningOrFreePlay();
+            var c = _captives.Get(companionId);
+            if (c == null || BestPresentSkill(SkillType.Persuade) < _captives.TalkThreshold(c)) return false;
+            FreeCaptive(c, "talk");
+            return true;
+        }
+
+        /// <summary>
+        /// Кривавий порятунок: рейд на загін тримача — тактичний бій, загін ходить першим
+        /// (свідомо обраний кривавий шлях, №14.1). Перемога визволяє всіх бранців загону;
+        /// поразка чи відступ — той самий механізм полону для загону рейду.
+        /// </summary>
+        public bool RaidCaptors(string companionId)
+        {
+            RequireMorningOrFreePlay();
+            var c = _captives.Get(companionId);
+            if (c == null || c.EnemyGroup.Count == 0) return false;
+            var party = RaidPartyIds();
+            if (party.Count == 0) return false;
+
+            _raidGroupId = c.GroupId;
+            _processor.QueueExternal(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode);
+            LogEvent("captivity.raid.started", Args("companionId", c.CompanionId, "enemyId", c.CaptorEnemyId ?? ""));
+            var setup = BuildBattleSetup(party, c.EnemyGroup, 8, 8, opening: BattleOpening.FirstStrike);
+            RequestBattle(setup, SuspendReason.CaptiveRaid, State);
+            return true;
+        }
+
+        private void FinishCaptiveRaid(BattleResult result)
+        {
+            string groupId = _raidGroupId;
+            if (result.Outcome == BattleOutcome.Victory && groupId != null)
+                foreach (var c in _captives.Group(groupId)) FreeCaptive(c, "raid");
+            else
+                LogEvent("captivity.raid.failed", Args("outcome", result.Outcome.ToString()));
+            // Поразка: ComputeCaptivity уже взяв групу; ApplyCaptivity додасть нових бранців до неї.
+        }
+
+        private void FreeCaptive(Captive c, string way)
+        {
+            _captives.Remove(c.CompanionId);
+            var comp = _worldRoster?.Get(c.CompanionId);
+            if (comp != null && comp.IsCaptive)
+                comp.Status = comp.InjuryPoints > 0 ? CompanionStatus.Injured : CompanionStatus.Idle;
+            LogEvent("companion.rescued." + way, Args("companionId", c.CompanionId, "enemyId", c.CaptorEnemyId ?? ""));
+            LogLoyaltyChange(ApplyLoyaltyDelta(c.CompanionId, _captives.Balance.RescueLoyaltyBonus, "rescued"));
+        }
+
         /// <summary>
         /// Доба полону: їжа (по одній на полоненого), вмовляння найкращим Переконанням
         /// серед присутніх, варта Сторожі. Зміни полос і втечі — у стрічку (інваріант 4).
@@ -2518,13 +2789,7 @@ namespace Game.Core.Session
             bool fed = _state.Resources.Get(ResourceType.Food) >= need;
             if (fed) _state.Resources.TrySpend(ResourceType.Food, need);
 
-            int bestPersuade = 0;
-            if (_worldRoster != null)
-                foreach (var c in _worldRoster.All)
-                {
-                    if (c.IsDead || c.Status == CompanionStatus.Antagonist || c.Status == CompanionStatus.OnMission) continue;
-                    bestPersuade = Math.Max(bestPersuade, c.Skill(SkillType.Persuade));
-                }
+            int bestPersuade = BestPresentSkill(SkillType.Persuade);
 
             bool guarded = _works != null && _works.Has(DefaultBuildingsType.Watch);
             foreach (var ev in _prisoners.Tick(new PrisonerDayInputs(day, bestPersuade, guarded, fed)))
@@ -2583,6 +2848,7 @@ namespace Game.Core.Session
             {
                 case SuspendReason.DungeonCombatRoom: return "ui.battle.retreat.consequence.dungeon";
                 case SuspendReason.TrainingSkirmish: return "ui.battle.retreat.consequence.training";
+                case SuspendReason.CaptiveRaid: return "ui.battle.retreat.consequence.raid";
                 default: return "ui.battle.retreat.consequence.lost";
             }
         }
@@ -2696,6 +2962,11 @@ namespace Game.Core.Session
             if (reason != SuspendReason.TrainingSkirmish)
                 ApplyBattleCasualties(result);
 
+            // Поразка → полон (Поправка №14.7): хто втікає, хто лишається в чужих руках.
+            // Лише малі бої — кімнати данжу і рейд; вузол 1 і фінал — великі сценарні
+            // битви з власними драбинами наслідків (фінал №14.7 не змінює).
+            var captivity = ComputeCaptivity(result, reason);
+
             // Здача (Поправка №14.2): долю тих, хто здався, гравець вирішує на панелі
             // результату; тренування — пісочниця, полонених не дає.
             if (reason != SuspendReason.TrainingSkirmish && result.SurrenderedEnemies != null)
@@ -2736,7 +3007,15 @@ namespace Game.Core.Session
                     break;
                 case SuspendReason.TrainingSkirmish:
                     break; // пісочниця: State вже Title/ReturnState, кампанію не чіпаємо
+                case SuspendReason.CaptiveRaid:
+                    FinishCaptiveRaid(result);
+                    break;
             }
+
+            // Після розв'язки за причиною: вайп чи відступ уже повернули загін додому,
+            // і бранці йдуть у полон з громади, а не посеред данжу.
+            ApplyCaptivity(captivity);
+            if (reason == SuspendReason.CaptiveRaid) _raidGroupId = null;
         }
 
         /// <summary>
@@ -4518,6 +4797,9 @@ namespace Game.Core.Session
             head.Append(";prisoners=").Append(_prisoners.CaptureState());
             head.Append(";recruits=").Append(string.Join("/", _recruits));
             head.Append(";surr=").Append(CapturePendingSurrenders());
+            // Поправка №14.7: наші бранці і загін, на який іде рейд.
+            head.Append(";captives=").Append(_captives.CaptureState());
+            head.Append(";raid=").Append(_raidGroupId ?? "-");
             head.Append(";crisis=").Append(_crisis.CaptureState());
 
             string coreBlob = _processor.SaveState();
@@ -4685,6 +4967,8 @@ namespace Game.Core.Session
                     case "prisoners": _prisoners.RestoreState(value); break;
                     case "recruits": RestoreRecruits(value); break;
                     case "surr": RestorePendingSurrenders(value); break;
+                    case "captives": _captives.RestoreState(value); break;
+                    case "raid": _raidGroupId = value == "-" || value.Length == 0 ? null : value; break;
                     case "crisis": _crisis.RestoreState(value); break;
                     case "arc": RestoreArcState(value); break;
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;
