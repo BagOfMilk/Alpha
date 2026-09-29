@@ -764,6 +764,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "building.fortifications", "Укріплення");
             AddKey(t, "building.armory", "Збройня");
             AddKey(t, "building.laboratory", "Лабораторія");
+            AddKey(t, "building.watch", "Сторожа");
 
             // Полірування (ціль 2 «Прозорість дій»): один рядок «що це
             // змінює» словами (owner: "a one-line effect in words") поруч із
@@ -778,6 +779,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "building.fortifications.effect", "щодня знижує Напругу, готує до нападу");
             AddKey(t, "building.armory.effect", "чекає на систему спорядження — поки без ефекту");
             AddKey(t, "building.laboratory.effect", "лише за квестом; чекає на аугменти — поки без ефекту");
+            AddKey(t, "building.watch.effect", "щодня трохи знижує Напругу — слабша Укріплень, поста не відкриває");
         }
 
         // Core/DefaultContent.cs (AllSlots) — усі слоти бази, включно з lab_station,
@@ -903,7 +905,7 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "ui.council.result.queued", "Замовлено. Виконається за свій термін.");
             AddKey(t, "ui.council.result.applied", "Зроблено одразу.");
-            AddKey(t, "ui.council.result.no_council_hall", "Без Зали ради рішення нікому ухвалювати.");
+            AddKey(t, "ui.council.result.no_council_hall", "Потрібна Зала ради.");
             AddKey(t, "ui.council.result.already_queued", "Уже в черзі — вдруге не піде.");
             AddKey(t, "ui.council.result.on_cooldown", "Зарано. Рада ще не готова до цього знову.");
             AddKey(t, "ui.council.result.not_enough_gold", "Золота не досить.");
@@ -1010,6 +1012,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "city.built.fortifications", "Збудовано: Укріплення.");
             AddKey(t, "city.built.armory", "Збудовано: Збройня.");
             AddKey(t, "city.built.laboratory", "Збудовано: Лабораторія.");
+            AddKey(t, "city.built.watch", "Збудовано: Сторожа.");
 
             AddKey(t, "city.tier.2", "Хутір став селом.");
             AddKey(t, "city.tier.3", "Село розрослося в слободу.");
@@ -2205,19 +2208,22 @@ namespace Game.Gameplay.Text
             AddKey(t, "scene.neighbour.myroslava_reveals",
                 "Мирослава (тихо, тобі): «Батько торгується не за себе. Слухай не слова — паузи між ними.»");
 
-            // ---- Поправка №12.7: перша будівля — вибір одразу після прологу ----
+            // ---- Поправка №12.7, переглянута №12.9: перша будівля — вибір
+            // одразу після прологу, ЗА РЕМЕСЛОМ фахівців. Рада вже гуде на
+            // майдані просто неба (Зала ради — окрема, пізніша будова) —
+            // варіанти більше не згадують раду як те, чого «поки не буде».
             // Текст варіанта сам каже, що відкриває і чого бракуватиме
             // (Статут MECH-05, UI-02): ціна вибору видна до кліку.
             AddKey(t, "scene.neighbour.first_building.prompt",
-                "«Тугар пішов, а в нас ні ради під дахом, ні комори, ні ліжка для поранених. До ночі рук стане на одне. Що зводимо першим?»");
-            AddKey(t, "scene.neighbour.option.council_hall",
-                "Залу ради: Захар сяде радити — облава, переселенці, укази. Комори й лазарету поки не буде.");
+                "«Тугар пішов, а рада вже гуде на майдані просто неба. Тільки нема ні варти на валу, ні комори, ні ліжка для поранених. До ночі рук стане на одне. Що зводимо першим?»");
+            AddKey(t, "scene.neighbour.option.watch",
+                "Сторожу: Захар стане на валу — перевал під наглядом, Напруга трохи спадає щодня. Комори й лазарету поки не буде.");
             AddKey(t, "scene.neighbour.option.storehouse",
-                "Склад: Дід Овсій щодня даватиме золото на інші будови. Рада мовчатиме, лікувати нікому.");
+                "Склад: Дід Овсій щодня даватиме золото на інші будови. Варти на валу й лазарету нема.");
             AddKey(t, "scene.neighbour.option.infirmary",
-                "Лазарет: Гафія лікуватиме поранених, рани гоїтимуться швидше. Ні ради, ні доходу.");
-            AddKey(t, "scene.neighbour.first_building.council_hall",
-                "«Під дахом і слово важче. Скликаю раду — кажи, що вирішуємо.»");
+                "Лазарет: Гафія лікуватиме поранених, рани гоїтимуться швидше. Ні варти, ні доходу.");
+            AddKey(t, "scene.neighbour.first_building.watch",
+                "«На вал стану сам. Перевал під наглядом — спати спокійніше.»");
             AddKey(t, "scene.neighbour.first_building.storehouse",
                 "«Комора є — буде й копійка. Облік на мені.»");
             AddKey(t, "scene.neighbour.first_building.infirmary",
@@ -2225,7 +2231,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "city.granted", "Громада спільним зусиллям звела першу будову: {building}. Без ціни.");
             AddKey(t, "city.granted.staffed", "{companion} стає на пост: {post}.");
             AddKey(t, "ui.council.no_hall",
-                "Раду ніде скликати: спершу зведіть Залу ради (вкладка «Будівлі»). Облава, переселенці, укази й решта дій ради — лише з нею.");
+                "Рада збирається на майдані просто неба — Зала ради лише додасть даху над головою (вкладка «Будівлі»); Указ, Дипломатія, Інвестиція й Спорядження вилазки чекають саме її.");
 
             // ---- арка Мирослави, глава 1 (доба 2, вечір): «Донька боярина» ----
             AddKey(t, "scene.myroslava.ch1.title", "Донька боярина");

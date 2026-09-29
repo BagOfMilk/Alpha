@@ -1238,14 +1238,13 @@ namespace Game.Tests.EditMode
             s.NewGame(SkipCreationOptions());
             FastForwardOpeningToMorning(s);
 
-            // Council Hall вже в StartingSet (§3.0), тож OrderDiplomacy не
-            // впирається у NoCouncilHall — далі це вже питання гаманця
-            // (плейсхолдер-старт 40 золота, Дипломатія коштує 25 — легальний
-            // NotEnoughGold теж підтверджує, що команда дійшла до CityWorks).
-            var diplomacy = s.OrderDiplomacy(Game.Core.Factions.DefaultFactions.Community);
-            Assert.AreNotEqual(CouncilOrderResult.NoCouncilHall, diplomacy,
-                "Зал совета вже стоїть у StartingSet — команда не повинна впиратись у його відсутність");
-            Assert.AreEqual(CouncilOrderResult.Applied, diplomacy, "40 стартового золота вистачає на 25 Дипломатії");
+            // Поправка №12.9 (рада — віче просто неба від старту): Облава не
+            // потребує Зали ради взагалі — легальний NotEnoughGold/Queued
+            // (не NoCouncilHall) підтверджує, що команда дійшла до CityWorks
+            // без жодної збудованої будівлі.
+            var raid = s.OrderRaid();
+            Assert.AreNotEqual(CouncilOrderResult.NoCouncilHall, raid,
+                "віче скликає облаву й без Зали ради — команда не повинна впиратись у її відсутність");
 
             // Стройку перевіряємо окремою, ще не витраченою частиною гаманця
             // (Дипломатія + Майстерня разом перевищили б стартовий плейсхолдер-
@@ -1276,7 +1275,25 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
-            FastForwardOpeningToMorning(s);
+
+            // Не FastForwardOpeningToMorning: той хелпер завжди бере варіант 0
+            // ("відмовити", Community +10 -> 60, тобто ВЖЕ Awaiting) — тут
+            // потрібне ЧИСТЕ стартове ставлення (50, Neutral), тож на виборі
+            // Тугара беремо "спитати Мирославу" (жодних дельт фракцій), а на
+            // виборі першої будівлі — байдуже, який (Сторожа/Склад/Лазарет
+            // фракцій теж не чіпають).
+            var step = s.AdvanceScene();
+            while (!step.IsFinished)
+                step = step.IsChoice ? s.ChooseSceneOption(step.ChoiceId == Game.Core.Scenes.OpeningScenes.TugarOfferChoiceId ? 2 : 0)
+                                      : s.AdvanceScene();
+            Assert.AreEqual(SessionState.Morning, s.State);
+
+            // Поправка №12.9: Дипломатія й далі за Залою ради — вона більше не
+            // серед вибору першої будівлі, тож тут її будуємо явно (один день
+            // будівництва — TestBuildOneDayConstruction за замовчуванням).
+            Assert.AreEqual(BuildOrderResult.Started, s.OrderBuilding(Game.Core.Base.DefaultBuildings.CouncilHall));
+            PlayFullDayQuiet(s);
+            Assert.AreEqual(SessionState.Morning, s.State, "доба 2 ранок — Зала ради вже стоїть (один день будівництва)");
 
             var result = s.OrderDiplomacy(Game.Core.Factions.DefaultFactions.Community);
             Assert.AreEqual(CouncilOrderResult.Applied, result);
