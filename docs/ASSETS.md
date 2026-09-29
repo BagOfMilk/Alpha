@@ -6,6 +6,25 @@
 > надбання»**: частина джерел вимагає атрибуції, частина забороняє
 > комерційне використання взагалі.
 
+## Уже в репозиторії: шрифти і значки (29.09.2026, Поправка №12.2)
+
+Завантажено з дозволу власника («2. Go»); Kenney UI Pack / RPG Expansion /
+Cursor Pack у цей дозвіл не входять — стиль панелей після сеттингу (№12.4).
+
+| Що | Де | Ліцензія | Де записано |
+|---|---|---|---|
+| **Fixel** Text (Regular, Medium, SemiBold, Bold) + Display SemiBold — статичні TTF | `Assets/ThirdParty/Fonts/Fixel/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md` |
+| **Noto Serif** (Regular, Italic, Bold) — статичні TTF, unhinted | `Assets/ThirdParty/Fonts/NotoSerif/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md` |
+| **game-icons.net** — 20 значків PNG 512×512 (ресурси, фази, стани, пости) | `Assets/ThirdParty/GameIcons/` | CC BY 3.0 — атрибуція обов'язкова | `Assets/ThirdParty/GameIcons/ATTRIBUTION.md` (автор і посилання на кожен значок) + рядок у титрах внизу титулу |
+
+Пастку variable-шрифту Fixel (нижче) обійдено: взяті статичні накреслення.
+Правила імпорту — `Assets/_Project/Scripts/Editor/ThirdPartyUiImportSettings.cs`
+(значки 128 px з mip; шрифтам резерв Segoe UI Symbol / Segoe UI / Arial для
+знаків ▸ ▾ ✓, яких у Fixel немає). **UI Toolkit системного резерву не бере** —
+у шапці і стрічці лише знаки, що є у Fixel. Fixel — шрифт усього IMGUI
+(`Gameplay/UI/AlphaSkin.cs`); значки для шапки збирає `HudArt`
+(`Assets/_Project/UI/Resources/AlphaHudArt.asset`, збирає `Editor/HudPanelAssets.cs`).
+
 ## Куди класти файли (23.09.2026)
 
 Слот під картинку вже готовий — завантаженого поки що нічого немає, і це свідомо:
@@ -296,9 +315,9 @@
 | Портрети Максима, Мирослави, Тугара, Захара | **Met Open Access** і **Wikimedia Commons** (живопис у PD) | CC0 / PD, статус перевіряється в кожного файлу |
 | Вибух і дим у сцені бою | Kenney **Particle Pack** + **Smoke Particles** | CC0 |
 | Панелі, кнопки, курсор | Kenney **UI Pack** + **RPG Expansion** + **Cursor Pack** | CC0 |
-| Іконки навичок і порогів | **game-icons.net** | CC BY 3.0 — **потрібна атрибуція** |
-| Шрифт реплік та інтерфейсу | **Fixel** (український, OFL) | OFL 1.1 |
-| Шрифт «паперових» екранів (доповіді, журнал) | **Noto Serif** | OFL 1.1 |
+| Іконки навичок і порогів | **game-icons.net** (✅ 20 значків у репо, 29.09.2026) | CC BY 3.0 — **потрібна атрибуція** |
+| Шрифт реплік та інтерфейсу | **Fixel** (український, OFL; ✅ у репо) | OFL 1.1 |
+| Шрифт «паперових» екранів (доповіді, журнал) | **Noto Serif** (✅ у репо) | OFL 1.1 |
 | Кроки, дерево, метал, інтерфейс | Kenney **audio-паки** | CC0 |
 | Точкові звуки (скрип, багаття, натовп) | **Freesound** із фільтром CC0 | CC0 |
 | Музика сцени | **Incompetech** або **CreatorChords** | CC BY — **потрібна атрибуція** |
