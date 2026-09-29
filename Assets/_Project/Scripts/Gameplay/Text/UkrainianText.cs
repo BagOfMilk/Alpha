@@ -2677,6 +2677,33 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.error.generic", "Зараз цього зробити не можна.");
             AddKey(t, "ux.error.finale_first", "Спершу обери, як зустріти фінал: цю ніч не пропустити мовчки.");
             AddKey(t, "ux.error.save_incompatible", "Це збереження зроблене іншою версією гри — продовжити його не вийде.");
+
+            // Панель «Люди» (C, UX_DESIGN §5.11).
+            AddKey(t, "ux.people.empty", "Поки що з тобою нікого. Люди прибиваються після прологу.");
+            AddKey(t, "ux.people.level", "рівень {n}");
+            AddKey(t, "ux.people.scars", "шрами: {n}");
+
+            // Панель «Журнал» (J, UX_DESIGN §5.12).
+            AddKey(t, "ux.journal.section.quests", "Квести");
+            AddKey(t, "ux.journal.section.world", "Світ");
+            AddKey(t, "ux.journal.section.threat", "Загроза");
+            AddKey(t, "ux.journal.section.expeditions", "Вилазки");
+            AddKey(t, "ux.journal.quests.none", "Доручень поки немає");
+            AddKey(t, "ux.journal.quests.where", "Прохання приносять люди — зазирни до дошки оголошень і до тих, у кого є що сказати.");
+            AddKey(t, "ux.journal.threat.title", "Готовність громади");
+            AddKey(t, "ux.journal.expeditions.title", "Зібрати загін");
+            AddKey(t, "ux.journal.expeditions.where", "Місця вилазок і збори — на Заставі біля воріт.");
+
+            // Панель «Збереження» (Esc, UX_DESIGN §5.14): підтвердження лише для незворотного (UX-12).
+            AddKey(t, "ux.save.empty", "Слотів збереження не знайдено.");
+            AddKey(t, "ux.save.action.save", "Зберегти");
+            AddKey(t, "ux.save.action.load", "Завантажити");
+            AddKey(t, "ux.save.confirm.overwrite", "Перезаписати слот {slot}?");
+            AddKey(t, "ux.save.confirm.overwrite.verb", "Перезаписати");
+            AddKey(t, "ux.save.confirm.overwrite.loss", "Попередній запис у цьому слоті зникне.");
+            AddKey(t, "ux.save.confirm.load", "Завантажити запис: {slot}?");
+            AddKey(t, "ux.save.confirm.load.verb", "Завантажити");
+            AddKey(t, "ux.save.confirm.load.loss", "Незбережене в поточній грі пропаде.");
         }
     }
 }

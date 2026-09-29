@@ -92,8 +92,15 @@ namespace Game.Gameplay.UI
     /// <summary>Картка: заголовок, підзаголовок, чипи, рядки, позначки стадій, дії. Таблиці як примітиву немає (UX_DESIGN §6).</summary>
     public sealed class UxCard
     {
+        /// <summary>Підвкладка панелі (не більше чотирьох на панель, UX_DESIGN §3.3); null — без поділу.</summary>
+        public string Section;
         public string Title;
         public string Subtitle;
+        /// <summary>
+        /// Місце в селі, куди веде картка («Показати в селі», UX-04): дія живе
+        /// там, панель лише веде. null — картка без посилання.
+        /// </summary>
+        public string LinkPlaceId;
         public readonly List<UxChip> Chips = new List<UxChip>();
         public readonly List<string> Lines = new List<string>();
         /// <summary>Позначки стадій (будівництво): заповнено / усього; 0 з 0 — немає.</summary>
