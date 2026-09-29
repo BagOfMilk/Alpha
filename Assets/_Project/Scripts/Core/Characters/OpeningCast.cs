@@ -23,12 +23,14 @@ namespace Game.Core.Characters
         /// <summary>Син старійшини: б'ється за громаду, проти крові заради помсти.</summary>
         public static CharacterCard Maksym() => new CharacterCard(
             "maksym", "Максим Беркут", SourceTier.Literary, Work,
-            "сын старейшины; бьётся за общину, а не за месть");
+            "сын старейшины; бьётся за общину, а не за месть")
+        { Class = CompanionClass.Brawler };
 
         /// <summary>Донька боярина, переходить до громади за цінностями.</summary>
         public static CharacterCard Myroslava() => new CharacterCard(
             "myroslava", "Мирослава", SourceTier.Literary, Work,
-            "честь выше рода: уходит от отца к общине");
+            "честь выше рода: уходит от отца к общине")
+        { Class = CompanionClass.Shooter };
 
         /// <summary>
         /// Іменний антагоніст. З'являється тричі: сценою до бою, сигналом на
@@ -42,17 +44,22 @@ namespace Game.Core.Characters
         /// <summary>Голос громади на раді. У повісті помирає в епілозі — тут доживає до фіналу.</summary>
         public static CharacterCard Zakhar() => new CharacterCard(
             "zakhar", "Захар Беркут", SourceTier.Literary, Work,
-            "голос общины: решает сходом, а не приказом");
+            "голос общины: решает сходом, а не приказом")
+        // Поправка №15.2 (порадник громади: переконання — Знахарів головний скіл Persuade).
+        { Class = CompanionClass.Healer };
 
         /// <summary>Комірник із фольклорного ярусу — з однією нав'язливою рисою (Поправка №5.2).</summary>
         public static CharacterCard Keeper() => new CharacterCard(
             "keeper", "Дід Овсій", SourceTier.Folklore, "украинская народная традиция (общественное достояние)",
-            "считает каждый мешок вслух и не верит ничьим цифрам");
+            "считает каждый мешок вслух и не верит ничьим цифрам")
+        // Поправка №15.2 (старий мисливець-пастковик, Виживання 8 — головний скіл Стрільця).
+        { Class = CompanionClass.Shooter };
 
         /// <summary>Лікарка фольклорного ярусу.</summary>
         public static CharacterCard Healer() => new CharacterCard(
             "healer", "Знахарка Гафія", SourceTier.Folklore, "украинская народная традиция (общественное достояние)",
-            "лечит всех, но каждому говорит правду в лицо");
+            "лечит всех, но каждому говорит правду в лицо")
+        { Class = CompanionClass.Healer };
 
         /// <summary>
         /// Пул прибульців (Поправка №12.10, рішення власника 29.09.2026):
@@ -64,7 +71,8 @@ namespace Game.Core.Characters
             "goban", "Гобан-Сайр", SourceTier.Folklore,
             "ірландський фольклор: перекази про Гобана Саора, записані в XIX ст. " +
             "(Patrick Kennedy, «Legendary Fictions of the Irish Celts», 1866) — суспільне надбання",
-            "хитрий і гордий тесля: перехитрює кожного, хто хоче обдурити його самого");
+            "хитрий і гордий тесля: перехитрює кожного, хто хоче обдурити його самого")
+        { Class = CompanionClass.Crafter };
 
         /// <summary>
         /// Пул прибульців (Поправка №12.10): купець-мореплавець із «Тисячі й
@@ -75,7 +83,8 @@ namespace Game.Core.Characters
             "sindbad", "Синдбад", SourceTier.Literary,
             "«Тисяча й одна ніч», цикл про Синдбада-мореплавця (фр. переклад А. Галлана, 1704–1717; " +
             "англ. переклад Р. Бертона, 1885) — суспільне надбання",
-            "купець і оповідач: сім разів загинав, сім разів багатів, вірить у вигоду більше, ніж у безпеку");
+            "купець і оповідач: сім разів загинав, сім разів багатів, вірить у вигоду більше, ніж у безпеку")
+        { Class = CompanionClass.Crafter };
 
         /// <summary>
         /// Командир орди — бос фіналу. Першоджерело ВІДКРИТЕ (§5.7): у зрізі він

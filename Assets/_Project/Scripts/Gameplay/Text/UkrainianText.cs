@@ -1748,6 +1748,17 @@ namespace Game.Gameplay.Text
             // значення — один рядок Format() поруч, як "Рівень {level}" нижче.
             AddKey(t, "ui.people.loyalty", "Довіра: {loyalty}");
             AddKey(t, "ui.people.status", "Стан: {status}");
+            // Поправка №15.2 (клас-архетип: стартові скіли й роль у бою; характер і
+            // прийом епохи лишаються за культурою й першоджерелом персонажа).
+            AddKey(t, "ui.people.class", "Клас: {class}");
+            AddKey(t, "class.brawler", "Рубака");
+            AddKey(t, "class.brawler.desc", "Б'ється в ближньому бою, не боїться залякати ворога.");
+            AddKey(t, "class.shooter", "Стрілець");
+            AddKey(t, "class.shooter.desc", "Б'є на відстані, найкраще виживає поза домом.");
+            AddKey(t, "class.healer", "Знахар");
+            AddKey(t, "class.healer.desc", "Лікує і переконує — тримає громаду і загін словом.");
+            AddKey(t, "class.crafter", "Майстер");
+            AddKey(t, "class.crafter.desc", "Лагодить, зламує і торгується — руки замість слова чи меча.");
             AddKey(t, "ui.people.equipped", "Спорядження: {items}");
             AddKey(t, "ui.people.equipped.none", "нічого");
             // Фікс-ревью (minor, раунд 2, знайдено QA): текст цього ключа
@@ -2253,20 +2264,20 @@ namespace Game.Gameplay.Text
             AddKey(t, "scene.neighbour.first_building.prompt",
                 "«Тугар пішов, а рада вже гуде на майдані просто неба. Тільки нема ні варти на валу, ні комори, ні ліжка для поранених. До ночі рук стане на одне. Що зводимо першим?»");
             AddKey(t, "scene.neighbour.option.watch",
-                "Сторожу: Захар стане на валу — перевал під наглядом, Напруга трохи спадає щодня. Комори й лазарету поки не буде.");
+                "Сторожу: Захар розставить варту на валу, а сам лишиться на віче — перевал під наглядом, Напруга трохи спадає щодня. Комори й лазарету поки не буде.");
             AddKey(t, "scene.neighbour.option.storehouse",
                 "Склад: Дід Овсій щодня даватиме золото на інші будови. Варти на валу й лазарету нема.");
             AddKey(t, "scene.neighbour.option.infirmary",
                 "Лазарет: Гафія лікуватиме поранених, рани гоїтимуться швидше. Ні варти, ні доходу.");
             // Поправка №12.10 (пул прибульців): Майстерня й Ринок — ремесла
-            // Гобана-Сайра й Синдбада, тих самих двох, хто може прибити з
+            // Гобана-Сайра й Синдбада, тих самих двох, хто може прибитися з
             // передісторії протагоніста.
             AddKey(t, "scene.neighbour.option.workshop",
-                "Майстерню: Гобан-Сайр направить інструмент, апгрейди в майстерні дешевші. Ні варти, ні доходу, ні лазарету.");
+                "Майстерню: Гобан-Сайр поставить верстат — можна буде покращувати спорядження. Ні варти, ні доходу, ні лазарету.");
             AddKey(t, "scene.neighbour.option.market",
                 "Ринок: Синдбад торгуватиме з чужинцями, щоденне золото зростає. Ні варти, ні лазарету.");
             AddKey(t, "scene.neighbour.first_building.watch",
-                "«На вал стану сам. Перевал під наглядом — спати спокійніше.»");
+                "«Варту на валу розставлю, а сам — на віче. Перевал під наглядом — спати спокійніше.»");
             AddKey(t, "scene.neighbour.first_building.storehouse",
                 "«Комора є — буде й копійка. Облік на мені.»");
             AddKey(t, "scene.neighbour.first_building.infirmary",
@@ -2299,6 +2310,18 @@ namespace Game.Gameplay.Text
             // {fromBackground}/{fromTugar} — перекладені імена (ScreenText.
             // EventLine.ResolveCompanionName), не сирі id.
             AddKey(t, "arrivals.resolved", "До гурту прибилися: {fromBackground} і {fromTugar}.");
+
+            // ---- Поправка №15.1: пізніше приєднання (хто не прибився на старті) ----
+            AddKey(t, "arrivals.tavern.announced",
+                "У таверні кажуть: за {days} діб сюди завітає {companion}.");
+            AddKey(t, "arrivals.tavern.m", "{companion} прибився до гурту — саме той день, про який казали в таверні.");
+            AddKey(t, "arrivals.tavern.f", "{companion} прибилася до гурту — саме той день, про який казали в таверні.");
+            AddKey(t, "arrivals.settlers.m", "Разом з переселенцями до гурту прибився {companion}.");
+            AddKey(t, "arrivals.settlers.f", "Разом з переселенцями до гурту прибилася {companion}.");
+            AddKey(t, "arrivals.expedition.m", "{companion} прибився до гурту — саме там, де його бачив відряд.");
+            AddKey(t, "arrivals.expedition.f", "{companion} прибилася до гурту — саме там, де її бачив відряд.");
+            AddKey(t, "ui.expedition.waiting_specialist", "Тут бачили");
+
             AddKey(t, "city.granted.staffed", "{companion} стає на пост: {post}.");
             AddKey(t, "ui.council.no_hall",
                 "Рада збирається на майдані просто неба — Зала ради лише додасть даху над головою (вкладка «Будівлі»); Указ, Дипломатія, Інвестиція й Спорядження вилазки чекають саме її.");
@@ -2665,6 +2688,33 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.error.generic", "Зараз цього зробити не можна.");
             AddKey(t, "ux.error.finale_first", "Спершу обери, як зустріти фінал: цю ніч не пропустити мовчки.");
             AddKey(t, "ux.error.save_incompatible", "Це збереження зроблене іншою версією гри — продовжити його не вийде.");
+
+            // Панель «Люди» (C, UX_DESIGN §5.11).
+            AddKey(t, "ux.people.empty", "Поки що з тобою нікого. Люди прибиваються після прологу.");
+            AddKey(t, "ux.people.level", "рівень {n}");
+            AddKey(t, "ux.people.scars", "шрами: {n}");
+
+            // Панель «Журнал» (J, UX_DESIGN §5.12).
+            AddKey(t, "ux.journal.section.quests", "Квести");
+            AddKey(t, "ux.journal.section.world", "Світ");
+            AddKey(t, "ux.journal.section.threat", "Загроза");
+            AddKey(t, "ux.journal.section.expeditions", "Вилазки");
+            AddKey(t, "ux.journal.quests.none", "Доручень поки немає");
+            AddKey(t, "ux.journal.quests.where", "Прохання приносять люди — зазирни до дошки оголошень і до тих, у кого є що сказати.");
+            AddKey(t, "ux.journal.threat.title", "Готовність громади");
+            AddKey(t, "ux.journal.expeditions.title", "Зібрати загін");
+            AddKey(t, "ux.journal.expeditions.where", "Місця вилазок і збори — на Заставі біля воріт.");
+
+            // Панель «Збереження» (Esc, UX_DESIGN §5.14): підтвердження лише для незворотного (UX-12).
+            AddKey(t, "ux.save.empty", "Слотів збереження не знайдено.");
+            AddKey(t, "ux.save.action.save", "Зберегти");
+            AddKey(t, "ux.save.action.load", "Завантажити");
+            AddKey(t, "ux.save.confirm.overwrite", "Перезаписати слот {slot}?");
+            AddKey(t, "ux.save.confirm.overwrite.verb", "Перезаписати");
+            AddKey(t, "ux.save.confirm.overwrite.loss", "Попередній запис у цьому слоті зникне.");
+            AddKey(t, "ux.save.confirm.load", "Завантажити запис: {slot}?");
+            AddKey(t, "ux.save.confirm.load.verb", "Завантажити");
+            AddKey(t, "ux.save.confirm.load.loss", "Незбережене в поточній грі пропаде.");
         }
 
         /// <summary>

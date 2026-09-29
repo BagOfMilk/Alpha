@@ -140,8 +140,80 @@ namespace Game.Core.Base
                   // потрапляв у зліпок зовсім: після «Продовжити» шрами зникали
                   // разом зі своїми модифікаторами статів (дебаг 25.09.2026).
                   .Append('>').Append(ScarIds(c));
+
+                // Сьоме/восьме поле — ЛИШЕ для протагоніста (знайдено при
+                // ревізії Поправки №15.1): «Імена, стати й картки приходять із
+                // контенту» вище правдиве для іменного касту (фіксований
+                // архетип), але НЕ для протагоніста — його скіли й атрибути
+                // вибір гравця (ConfirmCreation, R12), застосований ОДИН РАЗ
+                // поверх збірного старт-плейсхолдера FirstHourWorld.Build
+                // (Сила/Спритність/Кмітливість/Воля=4, чотири скіли по 4).
+                // RestoreFromBlob у СВІЖУ сесію НЕ повторює ConfirmCreation
+                // (навмисно — інакше стер би прогрес білд-планувальника,
+                // US-2.3/R11, коментар нижче в GameSession.ApplySave), тож без
+                // цих двох полів протагоніст після «Продовжити» тихо
+                // відкочувався на плейсхолдер: значення, що вибрав гравець
+                // (передісторія), забувалися, а виробіток/перевірки з
+                // протагоністом розходились між безперервною грою і свіжою
+                // сесією. НПС не пишуть ці поля — їхні скіли й далі надійно
+                // приходять з архетипу заново на кожному NewGame.
+                if (string.Equals(c.Id, _protagonistId, StringComparison.Ordinal))
+                {
+                    sb.Append('>').Append(PackSkills(c.Skills)).Append('>').Append(PackAttributes(c.Attributes));
+                    // Дев'яте поле — клас протагоніста (Поправка №15.2): той
+                    // самий вибір гравця (ConfirmCreation), що й скіли/атрибути
+                    // вище, тою самою "лише для протагоніста" логікою — іменний
+                    // каст і далі отримує клас з OpeningCast заново на кожному
+                    // Build() (фіксований архетип, RestoreState його не чіпає).
+                    sb.Append('>').Append((c.Card != null ? (int)c.Card.Class : 0)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
             }
             return sb.ToString();
+        }
+
+        private static string PackSkills(SkillSet skills)
+        {
+            var parts = new string[Skills.All.Length];
+            for (int i = 0; i < Skills.All.Length; i++)
+                parts[i] = skills[Skills.All[i]].ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return string.Join("+", parts);
+        }
+
+        private static string PackAttributes(AttributeSet attributes)
+        {
+            var all = Attributes.All;
+            var parts = new string[all.Length];
+            for (int i = 0; i < all.Length; i++)
+                parts[i] = attributes[all[i]].ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return string.Join("+", parts);
+        }
+
+        private static void RestoreSkills(SkillSet skills, string packed)
+        {
+            if (skills == null || string.IsNullOrEmpty(packed)) return;
+            var parts = packed.Split('+');
+            for (int i = 0; i < Skills.All.Length && i < parts.Length; i++)
+            {
+                int v;
+                if (int.TryParse(parts[i], System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out v))
+                    skills[Skills.All[i]] = v;
+            }
+        }
+
+        private static void RestoreAttributes(AttributeSet attributes, string packed)
+        {
+            if (attributes == null || string.IsNullOrEmpty(packed)) return;
+            var parts = packed.Split('+');
+            var all = Attributes.All;
+            for (int i = 0; i < all.Length && i < parts.Length; i++)
+            {
+                int v;
+                if (int.TryParse(parts[i], System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out v))
+                    attributes[all[i]] = v;
+            }
         }
 
         public void RestoreState(string blob)
@@ -176,6 +248,27 @@ namespace Game.Core.Base
                 // Шрами — шосте поле; старі зліпки без нього лишають трек як є.
                 if (f.Length >= 6)
                     c.Scars.RestoreFromSave(ScarsFromIds(f[5]));
+
+                // Сьоме/восьме поле — скіли/атрибути ПРОТАГОНІСТА (див.
+                // CaptureState вище). Старі зліпки без них (і будь-який НПС)
+                // лишають скіли такими, якими їх щойно дав FirstHourWorld.Build —
+                // саме так, як завжди і мало бути для іменного касту.
+                if (f.Length >= 8 && string.Equals(f[0], _protagonistId, StringComparison.Ordinal))
+                {
+                    RestoreSkills(c.Skills, f[6]);
+                    RestoreAttributes(c.Attributes, f[7]);
+
+                    // Дев'яте поле — клас протагоніста (Поправка №15.2); старі
+                    // зліпки без нього (до №15.2) лишають дефолт CharacterCard
+                    // (Brawler) — той самий відкат, що й "warrior" передісторії.
+                    if (f.Length >= 9 && c.Card != null)
+                    {
+                        int cls;
+                        if (int.TryParse(f[8], System.Globalization.NumberStyles.Integer,
+                                System.Globalization.CultureInfo.InvariantCulture, out cls))
+                            c.Card.Class = (CompanionClass)cls;
+                    }
+                }
             }
         }
 

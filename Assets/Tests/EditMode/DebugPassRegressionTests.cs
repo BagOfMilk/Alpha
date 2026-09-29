@@ -145,14 +145,29 @@ namespace Game.Tests.EditMode
         [Test]
         public void PhaseAndScars_SurviveSaveIntoFreshSession()
         {
-            // DelveGreedy за 10 діб уже має шрами в загоні (аудит сейвів).
+            // Раніше тут стояла DelveGreedy: за 10 діб шрам приходив не з
+            // данжу (room1 там і завжди, і зі старим, і з новим кодом,
+            // проходить тихо — maksym'ове Виживання=5 = порогу кімнати),
+            // а з кривавого розв'язку форсованої кризи доби 5 ("сцена
+            // Захаревого віче" → Hostage). Поправка №15.1 (пізніше
+            // приєднання) робить САМЕ ЦЕЙ шрам ненадійним: коли рада приймає
+            // переселенців до доби 5 (загальна "добра економіка" бота,
+            // BotRunner.ApplyCouncilRoutine, тут не придушена) і встигає
+            // привезти відсутнього фахівця пула, криза доби 5 тепер частіше
+            // розв'язується краще (band=Good замість Base) — ширший гурт
+            // РЕАЛЬНО допомагає, не побічний ефект, а сенс поправки — і
+            // "Hostage"-шрам просто не трапляється. Гарантія тесту («шрами —
+            // вічний трек, переживають сейв») від цього НЕ слабшає: Bloody
+            // (силовий підхід на кожному рішенні, форсований Forceful на
+            // вилазці) ранить гарантовано, незалежно від того, хто вже
+            // прибився до гурту.
             var s = new GameSession();
             s.NewGame(Quick());
-            BotRunner.Drive(s, new DelveGreedyPolicy(), 10);
+            BotRunner.Drive(s, new BloodyPolicy(), 10);
             Assert.IsTrue(s.State == SessionState.Morning || s.State == SessionState.FreePlay, "зберігати можна лише вранці");
 
             var before = s.GetRosterView().Companions.ToDictionary(c => c.Id, c => c.ScarCount);
-            Assert.IsTrue(before.Values.Any(n => n > 0), "за 10 діб DelveGreedy хтось мав отримати шрам — сценарій зламано");
+            Assert.IsTrue(before.Values.Any(n => n > 0), "за 10 діб Bloody хтось мав отримати шрам — сценарій зламано");
             var phase = s.CurrentView.Phase;
 
             var restored = Continue(s.SaveState(1));

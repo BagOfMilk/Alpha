@@ -19,6 +19,14 @@ namespace Game.Core.Session.Views
 
         /// <summary>Лише коли <see cref="IsDelve"/> — прев'ю першої кімнати данжу.</summary>
         public DungeonRoomView FirstRoom;
+
+        /// <summary>
+        /// Поправка №15.1: відсутній фахівець (<see cref="Session.
+        /// ArrivalsPool.ExpeditionSiteOf"/>), якого «бачили» саме на цій
+        /// точці — id, або null, коли на точці ніхто не чекає (звичайна
+        /// точка без прив'язки) чи фахівець уже прибув.
+        /// </summary>
+        public string WaitingSpecialistId;
     }
 
     public sealed class DungeonView
