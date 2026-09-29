@@ -326,7 +326,7 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
 | Постійно відкритий редактор Unity, автотур у Play Mode, Unity CLI | злито в trunk (`3832edd`); worktree `live` | сесія «Щ», 28.09.2026 — worktree `live` не чіпати (замок проєкту) |
 | UX поза HUD (Поправка №13): будівлі й інтер'єри, панелі замість вкладок, меню, `docs/UX_DESIGN.md` | `tb/ux-*` (worktree `stoic-blackwell-4b3412`) | сесія «Щ», 29.09.2026 — межу з HUD погоджено; спільне малими правками після злиття trunk: `GameShell.cs` (partial `GameShell.Ux.cs`), `UkrainianText.cs` (блок `AddUxKeys`, R7), `GameSceneBuilder.cs`, `VillageWalk.cs`, `HeroWalker.cs`, `AutoplayGameDriver.cs` (крім `Journal*`) |
 | Фракції, квести, автотури за краєм екрана | злито в trunk (`c49fc0d`) | сесія «System 1 AI model capabilities» |
-| Трек C, бій (Поправка №14): `Core/Combat`, `Core/Dungeons`, бойовий HUD — колесо і відступ (узгоджено з треком H), `docs/research/COMBAT_REFERENCES.md` | `claude/trgp-tactical-combat-4073ed` | сесія «Боевка в TRGP-Tactical», 29.09.2026 — C1–C7 зроблено (C5 — перша партія здібностей, C6 — поразка → полон, C7 — досьє); злиття в trunk — після знімків battle, 720 і 1080 |
+| Трек C, бій (Поправка №14): `Core/Combat`, `Core/Dungeons`, бойовий HUD — колесо і відступ (узгоджено з треком H), `docs/research/COMBAT_REFERENCES.md` | `claude/trgp-tactical-combat-4073ed` | сесія «Боевка в TRGP-Tactical», 29.09.2026 — C1–C8 зроблено (C5 — перша партія здібностей, C6 — поразка → полон, C7 — досьє, C8 — зв'язки); лишились форми розмови до бою (чекають карток); злиття в trunk — після знімків battle, 720 і 1080 |
 
 **Перша ігрова година зібрана (23.09.2026): кроки 1–7 порядку `FIRST_HOUR` §4
 пройдені.** Зріз грається: `dotnet run --project tools/Alpha.Play -- --auto`.

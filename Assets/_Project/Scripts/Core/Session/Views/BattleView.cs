@@ -128,6 +128,9 @@ namespace Game.Core.Session.Views
         public string Role;
         /// <summary>Опори вивченого ворога: "Fire:weak", "Ballistic:strong"; null — ще не вивчений.</summary>
         public IReadOnlyList<string> ResistNotes;
+
+        /// <summary>Побратими в цьому бою (id юнітів, Поправка №14.8): поруч раз за раунд прикривають.</summary>
+        public IReadOnlyList<string> BondUnitIds;
     }
 
     /// <summary>Один стан юніта з тривалістю (docs/COMBAT_V2.md §7.1).</summary>

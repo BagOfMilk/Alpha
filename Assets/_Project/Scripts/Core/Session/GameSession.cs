@@ -2257,6 +2257,7 @@ namespace Game.Core.Session
                     CanSurrender = u.Profile.CanSurrender && DossierOf(u) == DossierLevel.Studied,
                     SurrenderAtHpPercent = DossierOf(u) == DossierLevel.Studied ? _battle.SurrenderThresholdPercent(u) : 0,
                     Dossier = IsDossierSubject(u) ? DossierOf(u).ToString() : null,
+                    BondUnitIds = _battle.BondedWith(u.Id),
                     Role = IsDossierSubject(u) ? u.Profile.Role.ToString() : null,
                     ResistNotes = IsDossierSubject(u) && DossierOf(u) == DossierLevel.Studied ? ResistNotes(u) : null,
                     IsSurrendered = u.LifeState == UnitLifeState.Surrendered
@@ -2532,6 +2533,28 @@ namespace Game.Core.Session
         // здоров'я; розвідка перед боєм (Виживання чи Кмітливість) або сам бій —
         // решту. Тренувальний бій — пісочниця: там усе видно й нічого не пишеться.
         // =====================================================================
+
+        /// <summary>
+        /// Зв'язки в бою (Поправка №14.8; власник — «Лишити, низький пріоритет»): кожна пара
+        /// бійців загону з наявним зв'язком Kinship (<see cref="RosterBonds"/>) стає парою
+        /// побратимів — поруч раз за раунд прикривають одне одного.
+        /// </summary>
+        private void RegisterBonds()
+        {
+            if (_worldRoster == null) return;
+            var bonds = new RosterBonds(null);
+            var squad = new List<CombatUnit>();
+            foreach (var u in _battle.Units)
+                if (u.Side == Side.Player && !string.IsNullOrEmpty(u.SourceCompanionId)) squad.Add(u);
+            for (int i = 0; i < squad.Count; i++)
+                for (int j = i + 1; j < squad.Count; j++)
+                {
+                    var a = _worldRoster.Get(squad[i].SourceCompanionId);
+                    var b = _worldRoster.Get(squad[j].SourceCompanionId);
+                    if (a != null && b != null && bonds.Between(a, b) == BondType.Kinship)
+                        _battle.AddBond(squad[i].Id, squad[j].Id);
+                }
+        }
 
         /// <summary>Ворог зі звичайного визначення (не перебіжчик — того знаємо як свого).</summary>
         private static bool IsDossierSubject(CombatUnit u) =>
@@ -2997,7 +3020,11 @@ namespace Game.Core.Session
             _battle = CombatBattleBuilder.Build(setup, _cfg, ResolvePlayerUnit, ResolveEnemyById, roller, DefaultCombatContent.AbilityCatalog());
             State = SessionState.Battle;
             LogEvent("combat.battle.started", Args("reason", reason.ToString()));
-            if (reason != SuspendReason.TrainingSkirmish) MeetEnemies();
+            if (reason != SuspendReason.TrainingSkirmish)
+            {
+                MeetEnemies();
+                RegisterBonds();
+            }
             OnBattleResolved();
         }
 

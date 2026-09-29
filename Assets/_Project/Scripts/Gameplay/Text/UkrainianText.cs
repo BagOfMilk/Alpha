@@ -2703,6 +2703,11 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.object.high.effect", "Повне укриття тому, хто за нею; закриває огляд. Вибух розбиває до низької.");
             AddKey(t, "ui.battle.object.low.effect", "Половинне укриття тому, хто за нею. Вибух розносить.");
 
+            // C8 — зв'язки в бою (№14.8).
+            AddKey(t, "combat.log.bond.cover", "{unit} прикриває побратима — б'є у відповідь: {target}.");
+            AddKey(t, "ui.battle.bond.near", "Побратим {name} поруч — раз за раунд прикриє.");
+            AddKey(t, "ui.battle.bond.far", "Побратим {name} далеко — стань поруч, щоб прикривали одне одного.");
+
             // C7 — досьє ворога (№14.6).
             AddKey(t, "dossier.studied", "Досьє поповнено: {enemy} — тепер знаємо прийоми, опори й умову здачі.");
             AddKey(t, "ui.battle.dossier.role", "Роль: {role}.");

@@ -582,6 +582,17 @@ namespace Game.Gameplay.UI
             if (unit.IsOverwatching)
                 Widgets.Badge(UkrainianText.Get("ui.battle.overwatch.indicator", false), AlphaSkin.BattleOverwatch);
 
+            // Зв'язки в бою (№14.8): хто з побратимів поруч прикриє — видно заздалегідь.
+            if (unit.BondUnitIds != null)
+                foreach (var partnerId in unit.BondUnitIds)
+                {
+                    var partner = FindUnit(c.View, partnerId);
+                    if (partner == null || partner.IsOutOfBattle) continue;
+                    bool near = Math.Max(Math.Abs(partner.Pos.X - unit.Pos.X), Math.Abs(partner.Pos.Y - unit.Pos.Y)) <= 1;
+                    GUILayout.Label(UkrainianText.Format(near ? "ui.battle.bond.near" : "ui.battle.bond.far", false,
+                        "name", c.ResolveDisplayName(partner)), AlphaSkin.HintLine);
+                }
+
             if (unit.IsDowned)
                 GUILayout.Label(UkrainianText.Format("ui.battle.downed.window", false, "turns", UkrainianText.DeclineTurns(unit.DownWindowRemaining)),
                     AlphaSkin.DangerText);

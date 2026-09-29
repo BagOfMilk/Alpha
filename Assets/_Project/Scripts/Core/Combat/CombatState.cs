@@ -65,6 +65,63 @@ namespace Game.Core.Combat
         /// <summary>Кого вже підбадьорили в цьому бою («Підбадьорити» — раз за бій на союзника).</summary>
         private readonly HashSet<string> _rallied = new HashSet<string>(StringComparer.Ordinal);
 
+        // ---- Зв'язки в бою (Поправка №14.8): побратими прикривають одне одного ----
+        private readonly HashSet<string> _bonds = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _coveredThisRound = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Пара побратимів (наявний зв'язок ростеру Kinship, <c>Companions/RosterBonds</c>):
+        /// коли ворог влучає в одного, другий поруч раз за раунд б'є нападника у відповідь.
+        /// </summary>
+        public void AddBond(string unitIdA, string unitIdB)
+        {
+            if (string.IsNullOrEmpty(unitIdA) || string.IsNullOrEmpty(unitIdB) || unitIdA == unitIdB) return;
+            _bonds.Add(BondKey(unitIdA, unitIdB));
+        }
+
+        public bool AreBonded(string unitIdA, string unitIdB) =>
+            unitIdA != null && unitIdB != null && _bonds.Contains(BondKey(unitIdA, unitIdB));
+
+        /// <summary>Побратими юніта в цьому бою (id юнітів) — для підказки «прикриє».</summary>
+        public List<string> BondedWith(string unitId)
+        {
+            var list = new List<string>();
+            foreach (var u in _units)
+                if (u.Id != unitId && AreBonded(unitId, u.Id)) list.Add(u.Id);
+            return list;
+        }
+
+        private static string BondKey(string a, string b) =>
+            string.CompareOrdinal(a, b) < 0 ? a + "|" + b : b + "|" + a;
+
+        /// <summary>
+        /// Ворог щойно влучив у <paramref name="partner"/>: кожен його побратим, що стоїть
+        /// поруч (клітинка), ще не прикривав у цьому раунді і дістає нападника (впритул —
+        /// зброєю ближнього бою, здалеку — по лінії вогню), б'є у відповідь. Удар-реакція
+        /// сам нових реакцій не породжує. Референс — пари солдатів у тактичних іграх загону.
+        /// </summary>
+        private void TryBondCover(CombatUnit partner, CombatUnit attacker)
+        {
+            if (_bonds.Count == 0 || partner == null || attacker == null) return;
+            foreach (var friend in new List<CombatUnit>(_units))
+            {
+                if (!attacker.IsActive || Outcome != CombatOutcome.Ongoing) return;
+                if (friend == partner || friend.Side != partner.Side || !friend.IsActive || friend.Weapon == null) continue;
+                if (!AreBonded(friend.Id, partner.Id) || _coveredThisRound.Contains(friend.Id)) continue;
+                if (GridPos.Chebyshev(friend.Pos, partner.Pos) > 1) continue;
+                int distance = GridPos.Chebyshev(friend.Pos, attacker.Pos);
+                bool reaches = friend.Weapon.IsMelee
+                    ? distance <= friend.Weapon.OptimalRange
+                    : LineOfSight.HasLine(Map, friend.Pos, attacker.Pos);
+                if (!reaches) continue;
+
+                _coveredThisRound.Add(friend.Id);
+                Record(CombatLogKeys.BondCover, $"  {friend.Profile.DisplayName} прикрывает {partner.Profile.DisplayName}",
+                    "unitId", friend.Id, "targetId", attacker.Id);
+                ExecuteAttackRoll(friend, attacker, friend.Weapon, 0, forceHit: false, allowStrikeGain: false, isReaction: true);
+            }
+        }
+
         /// <summary>
         /// Перевірка здібності ДО кліку (інваріант 8, docs/ABILITIES.md): «Розлютити» —
         /// Залякування ≥ Воля цілі, «Залякати» — ≥ Воля + 1, «Підбадьорити» — раз за бій,
@@ -418,6 +475,7 @@ namespace Game.Core.Combat
         /// <summary>Початок нового раунду: вогонь згасає, підкріплення приходить.</summary>
         private void OnRoundStarted()
         {
+            _coveredThisRound.Clear(); // «прикриває» — раз за раунд
             for (int i = _fires.Count - 1; i >= 0; i--)
             {
                 _fires[i].RoundsLeft--;
@@ -718,6 +776,10 @@ namespace Game.Core.Combat
             }
 
             _attacks.Add(new AttackRecord(Round, unit.Side, unit.Id, target.Id, shown, outcome, dmg.Amount, forceHit, isReaction));
+
+            // Зв'язки в бою (№14.8): влучили в побратима — друг поруч прикриває.
+            if (!isReaction && outcome != AttackOutcome.Miss && dmg.Amount > 0 && target.Side != unit.Side)
+                TryBondCover(target, unit);
         }
 
         /// <summary>Стабілізація дауну союзника поруч (активка Медицини). Детермінована.</summary>

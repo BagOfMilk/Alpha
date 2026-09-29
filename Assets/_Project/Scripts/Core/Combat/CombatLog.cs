@@ -83,6 +83,9 @@ namespace Game.Core.Combat
         public const string Fled = "combat.log.fled";
         public const string OverwatchLostNet = "combat.log.overwatch.lost.net";
 
+        // ---- зв'язки в бою (Поправка №14.8) ----
+        public const string BondCover = "combat.log.bond.cover";
+
         // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
         public const string OverwatchSet = "combat.log.overwatch.set";
@@ -139,6 +142,7 @@ namespace Game.Core.Combat
             OpeningFirstStrike, OpeningAmbush, OpeningSpotted, OpeningUnderFire, OpeningSurrounded,
             ObjectHit, KegExploded, HaystackIgnited, CoverDegraded, CoverDestroyed, FireBurns, FireOut, ReinforcementsArrived,
             Surrendered, Rallied, Enraged, EnrageFailed, Intimidated, IntimidateFailed, Fled, OverwatchLostNet,
+            BondCover,
             Move, OverwatchSet, Strike, AttackMiss, AttackGraze, AttackHit, AttackCrit, Stabilize,
             Ability, Damage, Shred, Heal, ApGranted, Lunge, Repositioned, TrapPlaced, HackedToPlayer, HackedToEnemy,
             OverwatchFired, OverwatchExpired, OverwatchLostDisplaced, OverwatchLostHacked, OverwatchLostStunned,
