@@ -92,7 +92,7 @@ namespace Game.Core.Combat
                 cs.AddUnit(unit, spawn.Pos);
             }
 
-            cs.Begin();
+            cs.Begin(setup.Opening);
             return cs;
         }
     }

@@ -2606,6 +2606,29 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.wheel.round_mark", "Р{round}");
             AddKey(t, "ui.battle.wheel.skips", "пропускає");
             AddKey(t, "ui.battle.wheel.hint", "Клік — показати на мапі");
+
+            // C2 — старт бою від підходу (№14.1): рядок журналу і назва варіанта.
+            AddKey(t, "combat.log.opening.first_strike", "Перший удар: загін ходить першим.");
+            AddKey(t, "combat.log.opening.ambush", "Засідка: загін ходить першим, вороги застигли під прицілом.");
+            AddKey(t, "combat.log.opening.spotted", "Вас помітили: вороги ходять першими.");
+            AddKey(t, "combat.log.opening.under_fire", "Під обстрілом: вороги ходять першими, загін уже поранений.");
+            AddKey(t, "combat.log.opening.surrounded", "Оточені: вороги ходять першими, загін розкидано.");
+            AddKey(t, "ui.battle.opening.Encounter", "Зустрічний бій");
+            AddKey(t, "ui.battle.opening.FirstStrike", "Перший удар");
+            AddKey(t, "ui.battle.opening.Ambush", "Засідка");
+            AddKey(t, "ui.battle.opening.Spotted", "Вас помітили");
+            AddKey(t, "ui.battle.opening.UnderFire", "Під обстрілом");
+            AddKey(t, "ui.battle.opening.Surrounded", "Оточені");
+            AddKey(t, "ui.dungeon.opening.preview", "Кривавий шлях: {bloody}. Якщо тихо не вийде: {quiet}.");
+
+            // C2 — відступ (B13, №14.7).
+            AddKey(t, "ui.battle.retreat", "Відступити");
+            AddKey(t, "ui.battle.retreat.confirm.title", "Відступити з бою?");
+            AddKey(t, "ui.battle.retreat.confirm.body", "Загін розриває бій. Упалі лишаються на полі — їхні рани підуть у лазарет.");
+            AddKey(t, "ui.battle.retreat.consequence.dungeon", "Вилазка закінчиться: незабране з данжу пропаде.");
+            AddKey(t, "ui.battle.retreat.consequence.lost", "Поле лишиться за ворогом — як поразка, але загін живий.");
+            AddKey(t, "ui.battle.retreat.consequence.training", "Тренування закінчиться без наслідків.");
+            AddKey(t, "ui.battle.retreat.only_own_turn", "Відступити можна лише у свій хід.");
         }
     }
 }

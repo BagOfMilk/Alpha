@@ -1557,7 +1557,9 @@ namespace Game.Core.Session
 
             if (res.NeedsBattle)
             {
-                var setup = BuildBattleSetup(_dungeon.PartyIds, room.EnemyIds, 8, 8);
+                // Старт бою — від того, як загін дійшов до бою (Поправка №14.1).
+                var opening = ToBattleOpening(_dungeon.PendingBattle?.Start ?? DungeonBattleStart.FirstStrike);
+                var setup = BuildBattleSetup(_dungeon.PartyIds, room.EnemyIds, 8, 8, opening: opening);
                 RequestBattle(setup, SuspendReason.DungeonCombatRoom, SessionState.Dungeon);
                 return null;
             }
@@ -1699,6 +1701,16 @@ namespace Game.Core.Session
                 }
                 view.QuietBestActorId = bestId;
                 view.QuietHasCandidate = bestId != null;
+            }
+
+            // Прогноз старту бою (Поправка №14.1) — лише для поточної кімнати живого
+            // прогону: той самий розрахунок, що застосує DungeonRun.ResolveRoom.
+            if (room.Kind == DungeonRoomKind.Combat && _dungeon != null && partyIdsOverride == null
+                && ReferenceEquals(room, _dungeon.CurrentRoom))
+            {
+                view.BloodyOpening = ToBattleOpening(_dungeon.PreviewBloodyStart(ResolveActors(_dungeon.PartyIds))).ToString();
+                if (room.QuietChecks.Count > 0)
+                    view.QuietFailOpening = ToBattleOpening(_dungeon.PreviewQuietFailStart()).ToString();
             }
 
             if (room.Kind == DungeonRoomKind.Event)
@@ -2253,9 +2265,51 @@ namespace Game.Core.Session
                 IsAiTurn = isAiTurn,
                 CurrentUnitId = _battle.Current != null && _battle.Current.IsActive ? _battle.Current.Id : null,
                 InitiativeOrder = initiative,
+                NextRoundOrder = UnitIds(_battle.NextRoundTurnOrder),
+                Opening = _battle.Opening.ToString(),
+                RetreatConsequenceKey = RetreatConsequenceKey(_resume?.Reason),
                 Log = MapBattleLog(_battle.Journal),
                 IsHitRulePercent = _battle.IsHitRulePercent
             };
+        }
+
+        private static List<string> UnitIds(IReadOnlyList<CombatUnit> units)
+        {
+            var ids = new List<string>();
+            if (units != null)
+                foreach (var u in units) ids.Add(u.Id);
+            return ids;
+        }
+
+        /// <summary>Що буде, якщо відступити (Поправка №14.7) — ключ тексту для підтвердження, за тим, хто просив бій.</summary>
+        private static string RetreatConsequenceKey(SuspendReason? reason)
+        {
+            switch (reason)
+            {
+                case SuspendReason.DungeonCombatRoom: return "ui.battle.retreat.consequence.dungeon";
+                case SuspendReason.TrainingSkirmish: return "ui.battle.retreat.consequence.training";
+                default: return "ui.battle.retreat.consequence.lost";
+            }
+        }
+
+        /// <summary>
+        /// Відступ з бою (Поправка №14.7; ROADMAP B13 — раніше <c>CombatState.Retreat</c>
+        /// ніхто не кликав, і з бою не було виходу, статут ANTI-10). Лише у свій
+        /// хід. Наслідок — за тим, хто просив бій (<see cref="OnBattleResolved"/>):
+        /// данж — вихід з данжу без незабанкованого; вузол і фінал — поле за
+        /// ворогом (полоса Worst); тренування — без наслідків. Упалі лишаються на
+        /// полі й отримують рани тим самим шляхом, що після будь-якого бою;
+        /// полон упалих — крок C6.
+        /// </summary>
+        public CombatActionResult CombatRetreat()
+        {
+            RequireBattle();
+            var current = _battle.Current;
+            if (current == null || current.Side != Side.Player || !current.IsActive)
+                return CombatActionResult.InvalidAction;
+            var r = _battle.Retreat();
+            AfterCombatAction();
+            return r;
         }
 
         /// <summary>
@@ -2337,6 +2391,13 @@ namespace Game.Core.Session
             var reason = _resume.Reason;
             var returnState = _resume.ReturnState;
 
+            // Відступ (Поправка №14.7): поле лишається за ворогом. Раніше MapBattleBand
+            // давав відступу полосу Base — «важка перемога»; поки відступ ніхто не
+            // кликав, діри не було видно, а з кнопкою відступ на першому ході
+            // коштував би дешевше за бій (у данжі — «кімнату пройдено» з лутом).
+            bool retreated = result.Outcome == BattleOutcome.Retreat;
+            if (retreated) band = OutcomeBand.Worst;
+
             if (reason != SuspendReason.TrainingSkirmish)
                 ApplyBattleCasualties(result);
 
@@ -2363,7 +2424,8 @@ namespace Game.Core.Session
                     break;
                 }
                 case SuspendReason.DungeonCombatRoom:
-                    FinishDungeonCombat(band, result);
+                    if (retreated) RetreatFromDungeonBattle();
+                    else FinishDungeonCombat(band, result);
                     break;
                 case SuspendReason.FinaleAssault:
                     CompleteFinale(band, wasBloody: true);
@@ -2371,6 +2433,23 @@ namespace Game.Core.Session
                 case SuspendReason.TrainingSkirmish:
                     break; // пісочниця: State вже Title/ReturnState, кампанію не чіпаємо
             }
+        }
+
+        /// <summary>
+        /// Відступ із бою бойової кімнати (Поправка №14.7): загін іде з данжу —
+        /// не вайп, а обережний вихід (<see cref="DungeonRun.RetreatFromBattle"/>):
+        /// незабанковане пропадає, рани вже прийшли з бою.
+        /// </summary>
+        private void RetreatFromDungeonBattle()
+        {
+            var rep = _dungeon.RetreatFromBattle();
+            if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
+            LogEvent("dungeon.depart", Args("depth", rep.DepthReached.ToString(CultureInfo.InvariantCulture)));
+
+            ExpeditionResult discarded;
+            _party.Return(_state, out discarded);
+            _dungeon = null;
+            State = SessionState.Morning;
         }
 
         private void FinishDungeonCombat(OutcomeBand band, BattleResult result)
@@ -3874,8 +3953,20 @@ namespace Game.Core.Session
             return c != null && new Game.Core.Base.CompanionActorAdapter(c).IsPresentInSettlement;
         }
 
+        /// <summary>Старт бою мовою данжу → варіант бою (Поправка №14.1).</summary>
+        internal static BattleOpening ToBattleOpening(DungeonBattleStart start)
+        {
+            switch (start)
+            {
+                case DungeonBattleStart.Ambush: return BattleOpening.Ambush;
+                case DungeonBattleStart.Spotted: return BattleOpening.Spotted;
+                case DungeonBattleStart.UnderFire: return BattleOpening.UnderFire;
+                default: return BattleOpening.FirstStrike;
+            }
+        }
+
         private BattleSetup BuildBattleSetup(IReadOnlyList<string> partyIds, IReadOnlyList<string> enemyIds,
-            int width, int height, string defectorCompanionId = null)
+            int width, int height, string defectorCompanionId = null, BattleOpening opening = BattleOpening.Encounter)
         {
             // Захист від переповнення сітки: розстановка нижче кладе кожного
             // юніта на свій рядок (py/ey += 2, старт з 1) — фіксований height
@@ -3889,16 +3980,15 @@ namespace Game.Core.Session
             int neededRows = System.Math.Max(neededPartyRows, neededEnemyRows);
             height = System.Math.Max(height, neededRows * 2 + 1);
 
-            var setup = new BattleSetup { Width = width, Height = height, HitRule = _hitRule };
+            var setup = new BattleSetup { Width = width, Height = height, HitRule = _hitRule, Opening = opening };
             if (width > 3 && height > 2)
                 setup.Cover.Add(new CoverPlacement(new GridPos(width / 2, height / 2), Direction.West, CoverType.Half));
 
             int py = 1;
             if (partyIds != null)
-                foreach (var id in partyIds)
+                for (int i = 0; i < partyIds.Count; i++)
                 {
-                    setup.PlayerUnits.Add(new PlayerSpawn(id, new GridPos(1, py)));
-                    py += 2;
+                    setup.PlayerUnits.Add(new PlayerSpawn(partyIds[i], PartySpawnPos(i, ref py, width, height, opening)));
                 }
 
             int nextEnemyRow = PlaceEnemyFormation(setup, enemyIds, width);
@@ -3916,6 +4006,28 @@ namespace Game.Core.Session
             }
 
             return setup;
+        }
+
+        /// <summary>
+        /// Де стає i-й боєць загону. Звичайно — стовпцем біля лівого краю. «Оточені»
+        /// (Поправка №14.1) — врозкид: лівий край, верхній і нижній край середини
+        /// поля, щоб вороги мали фланги. Детерміновано і лівіше ворожих стовпців
+        /// (<see cref="PlaceEnemyFormation"/> ставить їх на width−2 і width−4).
+        /// </summary>
+        private static GridPos PartySpawnPos(int index, ref int py, int width, int height, BattleOpening opening)
+        {
+            if (opening == BattleOpening.Surrounded && width >= 6 && height >= 4)
+            {
+                int midX = System.Math.Max(2, width / 2 - 1);
+                switch (index % 3)
+                {
+                    case 1: return new GridPos(midX, 0);
+                    case 2: return new GridPos(midX, height - 1);
+                }
+            }
+            var pos = new GridPos(1, py);
+            py += 2;
+            return pos;
         }
 
         /// <summary>
@@ -3970,6 +4082,7 @@ namespace Game.Core.Session
         /// фінал) — рішення інтегратора, застосоване однаково для всіх трьох:
         /// Victory без втрат → Best; Victory з даун/смертю → Base; Victory без
         /// даун/смерті, але з ранами → Good; Defeat → Worst; Retreat/Draw → Base.
+        /// Відступ перекриває <see cref="OnBattleResolved"/>: поле за ворогом, Worst (Поправка №14.7).
         /// </summary>
         private static OutcomeBand MapBattleBand(BattleResult r)
         {

@@ -81,6 +81,9 @@ namespace Game.Core.Combat
         public int Round => _turns?.Round ?? 0;
         public IReadOnlyList<CombatUnit> TurnOrder => _turns?.Order;
 
+        /// <summary>Черга наступних раундів — звичайна впереміш (у раунді 1 поточна може бути переставлена стартом бою, №14.1).</summary>
+        public IReadOnlyList<CombatUnit> NextRoundTurnOrder => _turns?.NextRoundOrder;
+
         /// <summary>Яке правило влучання в цьому бою — той самий прапорець, що несе BattleView.IsHitRulePercent.</summary>
         public bool IsHitRulePercent => _hitRule is PercentRule;
 
@@ -111,13 +114,78 @@ namespace Game.Core.Combat
             _byId.Add(unit.Id, unit);
         }
 
+        /// <summary>Як почався бій (Поправка №14.1).</summary>
+        public BattleOpening Opening { get; private set; } = BattleOpening.Encounter;
+
         /// <summary>Старт бою: будує чергу ініціативи і починає перший хід.</summary>
-        public void Begin()
+        public void Begin() => Begin(BattleOpening.Encounter);
+
+        /// <summary>
+        /// Старт бою з варіантом від підходу (Поправка №14.1): хто ходить
+        /// першим у раунді 1 і з чим загін виходить на поле. Детерміновано.
+        /// </summary>
+        public void Begin(BattleOpening opening)
         {
-            _turns = new TurnSystem(_units);
+            Opening = opening;
+            _turns = new TurnSystem(_units, FirstRoundSide(opening));
             Record(CombatLogKeys.Started, "=== БОЙ НАЧАЛСЯ (раунд 1) ===");
+            ApplyOpening(opening);
             if (!BeginTurn(_turns.Current))
                 AdvanceUntilActorReady();
+        }
+
+        private static Side? FirstRoundSide(BattleOpening opening)
+        {
+            switch (opening)
+            {
+                case BattleOpening.FirstStrike:
+                case BattleOpening.Ambush:
+                    return Side.Player;
+                case BattleOpening.Spotted:
+                case BattleOpening.UnderFire:
+                case BattleOpening.Surrounded:
+                    return Side.Enemy;
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Наслідки старту, що лягають на юнітів до першого ходу. «Засідка» —
+        /// вороги позначені на перший раунд (наявний стан Marked, «один ефект —
+        /// одна система»); «Під обстрілом» — перші бійці загону втрачають
+        /// частку HP і кровоточать (перший залп ворога вже пролунав).
+        /// </summary>
+        private void ApplyOpening(BattleOpening opening)
+        {
+            if (opening == BattleOpening.Encounter) return;
+            Record(CombatLogKeys.Opening(opening), $"=== старт: {opening} ===");
+
+            if (opening == BattleOpening.Ambush)
+            {
+                foreach (var u in _units)
+                    if (u.Side == Side.Enemy && u.IsActive)
+                        ApplyStatus(u, StatusType.Marked, Math.Max(1, Balance.Combat.AmbushMarkedTurns));
+            }
+            else if (opening == BattleOpening.UnderFire)
+            {
+                int wounded = 0;
+                foreach (var u in _units)
+                {
+                    if (wounded >= Balance.Combat.UnderFireWoundedUnits) break;
+                    if (u.Side != Side.Player || !u.IsActive) continue;
+                    int loss = Math.Max(1, u.Profile.MaxHp * Balance.Combat.UnderFireHpLossPercent / 100);
+                    loss = Math.Min(loss, u.Hp - 1); // перший залп не валить: старт пораненим, а не впалим
+                    if (loss > 0)
+                    {
+                        u.Hp -= loss;
+                        Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{loss} HP (обстрел)",
+                            "unitId", u.Id, "damage", I(loss), "damageType", CombatLogKeys.DamageTypeId(DamageType.Ballistic));
+                    }
+                    ApplyStatus(u, StatusType.Bleeding);
+                    wounded++;
+                }
+            }
         }
 
         /// <summary>
@@ -767,7 +835,10 @@ namespace Game.Core.Combat
         }
 
         /// <summary>Накладання статусу: гарантоване; Resolve (StatusDurationReduction) скорочує тривалість, мін 1. Повтор — освіжає.</summary>
-        public void ApplyStatus(CombatUnit target, StatusType type)
+        public void ApplyStatus(CombatUnit target, StatusType type) => ApplyStatus(target, type, 0);
+
+        /// <param name="fixedDuration">&gt; 0 — точна тривалість без скорочення Волею (старт бою, №14.1); 0 — звичайна.</param>
+        private void ApplyStatus(CombatUnit target, StatusType type, int fixedDuration)
         {
             // «Жодного стану» накласти не можна: усі внутрішні виклики вже
             // фільтрують None, а в журналу для нього немає токена (CombatLogKeys.StatusId).
@@ -806,7 +877,7 @@ namespace Game.Core.Combat
             int reduction = Balance.Combat.ResolvePerStatusTurnReduction > 0
                 ? target.Profile.Resolve / Balance.Combat.ResolvePerStatusTurnReduction
                 : 0;
-            int duration = Math.Max(1, baseDuration - reduction);
+            int duration = fixedDuration > 0 ? fixedDuration : Math.Max(1, baseDuration - reduction);
 
             var existing = target.GetStatus(type);
             if (existing != null)

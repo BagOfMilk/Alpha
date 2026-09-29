@@ -70,22 +70,27 @@ namespace Game.Gameplay.UI
             for (int i = 0; i < n; i++)
                 if (string.Equals(order[i], view.CurrentUnitId, StringComparison.Ordinal)) { start = i; break; }
 
+            // Наступний раунд іде звичайною чергою: у раунді 1 поточна може бути
+            // переставлена стартом бою (Поправка №14.1), далі — ні.
+            var next = view.NextRoundOrder != null && view.NextRoundOrder.Count > 0 ? view.NextRoundOrder : order;
+
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var slots = new List<TurnWheelSlot>();
 
             // Поточний раунд до кінця і весь наступний — не далі.
-            int horizon = (n - start) + n;
+            int horizon = (n - start) + next.Count;
             for (int k = 0; k < horizon && slots.Count < maxSlots; k++)
             {
-                int idx = (start + k) % n;
-                if (!units.TryGetValue(order[idx], out var unit) || unit.IsOutOfBattle) continue;
+                bool inCurrentRound = start + k < n;
+                string id = inCurrentRound ? order[start + k] : next[start + k - n];
+                if (!units.TryGetValue(id, out var unit) || unit.IsOutOfBattle) continue;
 
                 // Поточний хід уже почався: якщо юніт був оглушений, стан знято
                 // на початку ходу, і пропуск видно по нулю ОД, а не на колесі.
                 bool firstUpcoming = seen.Add(unit.Id) && k > 0;
                 bool skips = firstUpcoming && !unit.IsDowned && IsStunned(unit);
 
-                int round = view.Round + (start + k) / n;
+                int round = inCurrentRound ? view.Round : view.Round + 1;
                 if (round > view.Round && model.NextRoundStartsAt < 0) model.NextRoundStartsAt = slots.Count;
 
                 slots.Add(new TurnWheelSlot

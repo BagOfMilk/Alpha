@@ -54,6 +54,13 @@ namespace Game.Core.Combat
         public const string Victory = "combat.log.victory";
         public const string Defeat = "combat.log.defeat";
 
+        // ---- старт бою (Поправка №14.1) ----
+        public const string OpeningFirstStrike = "combat.log.opening.first_strike";
+        public const string OpeningAmbush = "combat.log.opening.ambush";
+        public const string OpeningSpotted = "combat.log.opening.spotted";
+        public const string OpeningUnderFire = "combat.log.opening.under_fire";
+        public const string OpeningSurrounded = "combat.log.opening.surrounded";
+
         // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
         public const string OverwatchSet = "combat.log.overwatch.set";
@@ -107,6 +114,7 @@ namespace Game.Core.Combat
         public static readonly IReadOnlyList<string> All = new[]
         {
             Started, RoundStarted, Retreat, DrawForced, DrawRoundCap, Victory, Defeat,
+            OpeningFirstStrike, OpeningAmbush, OpeningSpotted, OpeningUnderFire, OpeningSurrounded,
             Move, OverwatchSet, Strike, AttackMiss, AttackGraze, AttackHit, AttackCrit, Stabilize,
             Ability, Damage, Shred, Heal, ApGranted, Lunge, Repositioned, TrapPlaced, HackedToPlayer, HackedToEnemy,
             OverwatchFired, OverwatchExpired, OverwatchLostDisplaced, OverwatchLostHacked, OverwatchLostStunned,
@@ -115,6 +123,20 @@ namespace Game.Core.Combat
             StatusApplied, StatusRemoved, StatusExpired, StatusDot, StandUp, StunnedSkip,
             Downed, BleedingOut, WindowExpired, Survived, Died
         };
+
+        /// <summary>Рядок журналу для старту бою (Поправка №14.1); для зустрічного — null (рядка немає).</summary>
+        public static string Opening(BattleOpening opening)
+        {
+            switch (opening)
+            {
+                case BattleOpening.FirstStrike: return OpeningFirstStrike;
+                case BattleOpening.Ambush: return OpeningAmbush;
+                case BattleOpening.Spotted: return OpeningSpotted;
+                case BattleOpening.UnderFire: return OpeningUnderFire;
+                case BattleOpening.Surrounded: return OpeningSurrounded;
+                default: return null;
+            }
+        }
 
         public static string Attack(AttackOutcome outcome)
         {

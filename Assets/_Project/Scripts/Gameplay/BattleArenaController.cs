@@ -413,6 +413,9 @@ namespace Game.Gameplay
 
         public void RequestEndTurn() { if (IsPlayerTurn && !IsBusy) RunCommand(() => _session.CombatEndTurn()); }
 
+        /// <summary>Відступ із бою (Поправка №14.7, ROADMAP B13) — лише у свій хід, як і решта команд гравця.</summary>
+        public void RequestRetreat() { if (IsPlayerTurn && !IsBusy) RunCommand(() => _session.CombatRetreat()); }
+
         public void RequestAutoResolve()
         {
             if (_session == null) return;

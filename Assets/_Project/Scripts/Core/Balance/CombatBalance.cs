@@ -81,5 +81,13 @@ namespace Game.Core.Balance
         // ---- Завершуваність автобою (гарантія B1) ----
         /// <summary>Раунд, після якого незавершений бій примусово стає Draw.</summary>
         public int RoundCap = 40;
+
+        // ---- Старт бою (Поправка №14.1) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>«Засідка»: скільки ходів вороги позначені (Marked) — лише перший раунд.</summary>
+        public int AmbushMarkedTurns = 1;
+        /// <summary>«Під обстрілом»: скільки бійців загону стартують пораненими (перші за складом загону).</summary>
+        public int UnderFireWoundedUnits = 2;
+        /// <summary>«Під обстрілом»: частка максимального HP, яку поранені втрачають до першого ходу (не нижче 1 HP).</summary>
+        public int UnderFireHpLossPercent = 20;
     }
 }

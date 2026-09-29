@@ -75,6 +75,14 @@ namespace Game.Gameplay
         void RequestEndTurn();
         void RequestAutoResolve();
 
+        /// <summary>
+        /// Відступити з бою (Поправка №14.7; ROADMAP B13 — раніше з бою не було
+        /// виходу, статут ANTI-10). Лише у свій хід. Наслідок залежить від того,
+        /// хто просив бій (<see cref="Game.Core.Session.Views.BattleView.RetreatConsequenceKey"/>).
+        /// Додано 29.09.2026 узгоджено з треком H (заморожений контракт, §7.4).
+        /// </summary>
+        void RequestRetreat();
+
         /// <summary>Перелетіти камерою до юніта.</summary>
         void FocusCamera(string unitId);
 

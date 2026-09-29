@@ -37,6 +37,7 @@ namespace Game.Gameplay.UI
         private static Vector2 _logScroll;
         private static bool _logCollapsed;
         private static bool _confirmAutoResolve;
+        private static bool _confirmRetreat;
         private static int _lastLogCount = -1;
 
         public static void Draw(IBattleHudData c)
@@ -46,7 +47,7 @@ namespace Game.Gameplay.UI
 
             var blockingRects = new List<Rect>();
 
-            if (c.ResultPending) _confirmAutoResolve = false; // бій скінчився — питання автобою знято
+            if (c.ResultPending) { _confirmAutoResolve = false; _confirmRetreat = false; } // бій скінчився — питання знято
 
             // Панель результату — лише коли дограно такти фінальної дії: удар, що
             // вирішив бій, спершу видно на арені (рев'ю Бою v2).
@@ -121,6 +122,31 @@ namespace Game.Gameplay.UI
             // Підтвердження автобою — на верхньому рівні, не всередині панелі журналу:
             // там модалка обрізалась межами області й була недоступна (рев'ю Бою v2).
             if (_confirmAutoResolve) DrawAutoResolveConfirm(c);
+            if (_confirmRetreat) DrawRetreatConfirm(c, view);
+        }
+
+        /// <summary>
+        /// Підтвердження відступу (Поправка №14.7): що саме буде — до кліку
+        /// (Статут UI-02), текст наслідку — за тим, хто просив бій.
+        /// </summary>
+        private static void DrawRetreatConfirm(IBattleHudData c, BattleView view)
+        {
+            Widgets.Modal(UkrainianText.Get("ui.battle.retreat.confirm.title", false), () =>
+            {
+                GUILayout.Label(UkrainianText.Get("ui.battle.retreat.confirm.body", false), AlphaSkin.Body);
+                if (!string.IsNullOrEmpty(view.RetreatConsequenceKey))
+                    GUILayout.Label(UkrainianText.Get(view.RetreatConsequenceKey, false), AlphaSkin.DangerText);
+                GUILayout.Space(10f);
+                GUILayout.BeginHorizontal();
+                if (Widgets.DangerButton(UkrainianText.Get("ui.battle.retreat", false)))
+                {
+                    _confirmRetreat = false;
+                    c.RequestRetreat();
+                }
+                if (Widgets.SecondaryButton(UkrainianText.Get("ui.common.cancel", false)))
+                    _confirmRetreat = false;
+                GUILayout.EndHorizontal();
+            }, () => _confirmRetreat = false);
         }
 
         private static void DrawAutoResolveConfirm(IBattleHudData c)
@@ -774,6 +800,17 @@ namespace Game.Gameplay.UI
             GUILayout.Label(UkrainianText.Get("ui.battle.log", false), new GUIStyle(AlphaSkin.SubHeader) { wordWrap = false }, GUILayout.ExpandWidth(true));
             if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false), GUILayout.ExpandWidth(false)))
                 _confirmAutoResolve = true;
+            GUILayout.Space(6f);
+            // Відступ (Поправка №14.7, ROADMAP B13) — поруч з автобоєм: обидва про
+            // бій цілком, а не про хід бійця. Не свій хід — кнопка пояснює чому (UI-04).
+            string retreatLabel = UkrainianText.Get("ui.battle.retreat", false);
+            if (c.IsPlayerTurn && !c.IsBusy)
+            {
+                if (Widgets.SecondaryButton(retreatLabel, GUILayout.ExpandWidth(false)))
+                    _confirmRetreat = true;
+            }
+            else
+                Widgets.DisabledButton(retreatLabel, UkrainianText.Get("ui.battle.retreat.only_own_turn", false), GUILayout.ExpandWidth(false));
             GUILayout.Space(6f);
             if (Widgets.SecondaryButton(_logCollapsed ? "▸" : "▾", GUILayout.ExpandWidth(false)))
                 _logCollapsed = !_logCollapsed;

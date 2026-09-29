@@ -93,6 +93,17 @@ namespace Game.Gameplay.UI
                     string bloody = UkrainianText.Format("ui.dungeon.bloody_fight", g, "count", room.EnemyCount.ToString(), "enemies", ScreenText.EnemiesCount(room.EnemyCount));
                     if (Widgets.DangerButton(bloody))
                         Resolve(shell, IncidentPath.Bloody);
+
+                    // UX_DESIGN §5.8: прогноз старту бою до вибору шляху (UI-02) — перенести в картку варіанта
+                    if (!string.IsNullOrEmpty(room.BloodyOpening))
+                    {
+                        string quietFail = string.IsNullOrEmpty(room.QuietFailOpening)
+                            ? UkrainianText.Get("ui.common.none", g)
+                            : UkrainianText.Get("ui.battle.opening." + room.QuietFailOpening, g);
+                        GUILayout.Label(UkrainianText.Format("ui.dungeon.opening.preview", g,
+                            "bloody", UkrainianText.Get("ui.battle.opening." + room.BloodyOpening, g),
+                            "quiet", quietFail), AlphaSkin.HintLine);
+                    }
                     break;
 
                 case "Treasure":

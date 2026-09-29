@@ -221,7 +221,21 @@ namespace Game.Core.Session.Views
         /// </summary>
         public string CurrentUnitId;
 
+        /// <summary>Черга поточного раунду (у раунді 1 може бути переставлена стартом бою, Поправка №14.1).</summary>
         public IReadOnlyList<string> InitiativeOrder;
+
+        /// <summary>Черга наступних раундів — звичайна впереміш; колесо черги показує її після межі раунду.</summary>
+        public IReadOnlyList<string> NextRoundOrder;
+
+        /// <summary>Як почався бій: "Encounter"|"FirstStrike"|"Ambush"|"Spotted"|"UnderFire"|"Surrounded" (Поправка №14.1).</summary>
+        public string Opening;
+
+        /// <summary>
+        /// Ключ тексту «що буде, якщо відступити» для підтвердження відступу
+        /// (Поправка №14.7, ROADMAP B13) — залежить від того, хто просив бій
+        /// (данж, вузол чи фінал, тренування).
+        /// </summary>
+        public string RetreatConsequenceKey;
 
         /// <summary>
         /// Журнал бою для гравця (R7): ключі таблиці з аргументами, НЕ готові

@@ -70,5 +70,14 @@ namespace Game.Core.Session.Views
         /// 0 для не-бойових кімнат.
         /// </summary>
         public int EnemyCount;
+
+        /// <summary>
+        /// Поправка №14.1 (видно ДО вибору, Статут UI-02): як почнеться бій,
+        /// якщо обрати кривавий шлях ("FirstStrike"|"Ambush"), і якщо тихий
+        /// обхід зірветься ("Spotted"|"UnderFire"). Словом, без чисел; null —
+        /// не бойова кімната або прогону ще немає (прев'ю вилазки).
+        /// </summary>
+        public string BloodyOpening;
+        public string QuietFailOpening;
     }
 }
