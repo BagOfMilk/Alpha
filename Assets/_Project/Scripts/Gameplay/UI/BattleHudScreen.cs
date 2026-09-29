@@ -917,7 +917,7 @@ namespace Game.Gameplay.UI
             }
 
             float scale = Widgets.ScaleForScreen();
-            float height = attack != null ? EstimateAttackTooltipHeight(attack, FindUnit(view, attack.TargetId)) : EstimatePathTooltipHeight(c, view);
+            float height = attack != null ? EstimateAttackTooltipHeight(attack, FindUnit(view, attack.TargetId), view) : EstimatePathTooltipHeight(c, view);
 
             float freeTop = TopBarHeight(scale) + 8f;
             float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
@@ -988,7 +988,7 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>Грубий підрахунок висоти підказки атаки з реальних рядків, які вона намалює — трохи із запасом, аби ніколи не обрізати вміст (BeginArea мовчки кадрує зайве, а не скролить).</summary>
-        private static float EstimateAttackTooltipHeight(AttackPreviewView p, BattleUnitView target)
+        private static float EstimateAttackTooltipHeight(AttackPreviewView p, BattleUnitView target, BattleView view)
         {
             // Раунд 3: оцінка була впритул, і «Ціна: N ОД» обрізалась знизу.
             float h = 24f + 34f; // відступи + заголовок
@@ -1005,10 +1005,14 @@ namespace Game.Gameplay.UI
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
                 h += 28f;
             if (p.IsFlanked) h += 28f;
-            h += 28f; // рядок здачі (№14.2) — з запасом
-            if (!string.IsNullOrEmpty(p.CheckKind)) h += 28f; // рядок перевірки здібності (C5)
-            if (p.PredictedShots > 0) h += 28f; // «цей удар влучить / мимо» (правило без кубика)
-            h += 28f * DossierLines(target).Count; // досьє (№14.6)
+            // Рядки треку бою (здача, перевірка здібності, прогноз, досьє) бувають довгими й
+            // переносяться: міряємо їх за шириною підказки, а не сталою висотою — інакше
+            // BeginArea мовчки обрізала низ (знімок «Щ» без кубика на 1600: «Здасться…» і
+            // «Роль…» зникли під краєм підказки).
+            h += WrappedHeight(SurrenderLine(target), AlphaSkin.HintLine);
+            h += WrappedHeight(CheckLine(p), AlphaSkin.HintLine);
+            h += WrappedHeight(PredictLine(p), AlphaSkin.Body);
+            foreach (var line in DossierLines(target, view)) h += WrappedHeight(line, AlphaSkin.HintLine);
             if (p.Result != "Success") h += 30f;
             return h;
         }
@@ -1132,7 +1136,7 @@ namespace Game.Gameplay.UI
                 // Правило без кубика: чим скінчиться саме цей удар — видно наперед.
                 string predict = PredictLine(p);
                 if (predict != null)
-                    GUILayout.Label(predict, p.PredictedHits > 0 ? AlphaSkin.Body : AlphaSkin.DangerText);
+                    GUILayout.Label(predict, p.PredictedHits > 0 ? AlphaSkin.Body : PredictMissStyle);
 
                 if (p.Terms != null)
                     foreach (var term in p.Terms)
@@ -1159,7 +1163,7 @@ namespace Game.Gameplay.UI
             // Перевірка здібності (docs/ABILITIES.md): що з чим порівнюється — до кліку (інваріант 8).
             string checkLine = CheckLine(p);
             if (checkLine != null)
-                GUILayout.Label(checkLine, p.CheckPasses ? AlphaSkin.HintLine : AlphaSkin.DangerText);
+                GUILayout.Label(checkLine, p.CheckPasses ? AlphaSkin.HintLine : CheckFailStyle);
 
             if (target != null)
                 GUILayout.Label(UkrainianText.Format("ui.battle.hp.target", false,
@@ -1182,6 +1186,27 @@ namespace Game.Gameplay.UI
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
         }
+
+        /// <summary>Висота рядка з переносом за шириною підказки (0 — рядка немає) плюс проміжок між рядками.</summary>
+        private static float WrappedHeight(string text, GUIStyle style)
+        {
+            if (string.IsNullOrEmpty(text)) return 0f;
+            return style.CalcHeight(new GUIContent(text), TooltipWidth - 24f) + 6f;
+        }
+
+        private static GUIStyle _predictMissStyle, _checkFailStyle;
+
+        /// <summary>
+        /// «Мимо» в прогнозі — не помилка, а прогноз: колір промаху з палітри бою
+        /// (<see cref="AlphaSkin.BattleMiss"/>). Темно-червоний DangerText на темному тлі
+        /// читався погано (знімок «Щ», 29.09.2026).
+        /// </summary>
+        private static GUIStyle PredictMissStyle =>
+            _predictMissStyle ?? (_predictMissStyle = new GUIStyle(AlphaSkin.Body) { normal = { textColor = AlphaSkin.BattleMiss } });
+
+        /// <summary>Перевірка здібності не вийде (ОД згорять) — яскраво-червоний з палітри бою, читається на темному тлі.</summary>
+        private static GUIStyle CheckFailStyle =>
+            _checkFailStyle ?? (_checkFailStyle = new GUIStyle(AlphaSkin.HintLine) { normal = { textColor = AlphaSkin.BattleEnemySide } });
 
         /// <summary>«Цей удар влучить» / «мимо» / «Влучить 1 з 2» — правило без кубика; null — правило з кубиком.</summary>
         private static string PredictLine(AttackPreviewView p)
