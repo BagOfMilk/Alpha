@@ -684,7 +684,7 @@ namespace Game.Tests.EditMode
                 "CheckValue", "CheckThreshold",
                 // Полон наших (Поправка №14.7): поріг перемовин і найкраще Переконання
                 // вдома — видно до кліку (інваріант 8); годинник — лише полосою.
-                "BestPersuade", "TalkThreshold",
+                "BestPersuade", "TalkThreshold", "RaidPartyMax",
                 // Досьє (Поправка №14.6): поріг розвідки видно до бою (інваріант 8).
                 "DossierScoutSurvival", "DossierScoutWits"
             };

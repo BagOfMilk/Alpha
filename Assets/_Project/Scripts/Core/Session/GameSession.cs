@@ -2751,30 +2751,17 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// Хто піде в рейд: протагоніст і двоє найкращих бійців серед присутніх і
-        /// здорових (ПЛЕЙСХОЛДЕР — вибір складу гравцем прийде з екраном рейду).
-        /// Склад видно до кліку (Статут UI-02).
+        /// Хто може піти в рейд: присутні й здорові (ті самі умови, що для вилазки).
+        /// Склад обирає гравець — як і загін вилазки (власник: «ну перед вилазкою,
+        /// це ж вже є»; «ЗВІСНО ГРАВЦЕМ»), до <see cref="BalanceConfig.ExpeditionPartyMax"/>.
         /// </summary>
-        private List<string> RaidPartyIds()
+        private List<string> RaidCandidateIds()
         {
-            var party = new List<string>();
-            if (IsCompanionBattleReady(ProtagonistId)) party.Add(ProtagonistId);
-            var rest = new List<Companion>();
-            if (_worldRoster != null)
-                foreach (var c in _worldRoster.All)
-                {
-                    if (string.Equals(c.Id, ProtagonistId, StringComparison.Ordinal) || c.IsInjured) continue;
-                    if (!IsCompanionBattleReady(c.Id)) continue;
-                    rest.Add(c);
-                }
-            rest.Sort((a, b) =>
-            {
-                int sa = Math.Max(a.Skill(SkillType.Melee), a.Skill(SkillType.Ranged));
-                int sb = Math.Max(b.Skill(SkillType.Melee), b.Skill(SkillType.Ranged));
-                return sa != sb ? sb.CompareTo(sa) : string.CompareOrdinal(a.Id, b.Id);
-            });
-            for (int i = 0; i < rest.Count && party.Count < 3; i++) party.Add(rest[i].Id);
-            return party;
+            var ids = new List<string>();
+            if (_worldRoster == null) return ids;
+            foreach (var c in _worldRoster.All)
+                if (!c.IsInjured && IsCompanionBattleReady(c.Id)) ids.Add(c.Id);
+            return ids;
         }
 
         /// <summary>Наші в полоні — у кого, полоса годинника, ціна викупу, поріг перемовин, склад рейду.</summary>
@@ -2786,7 +2773,7 @@ namespace Game.Core.Session
             int trade = BestPresentSkill(SkillType.Trade);
             int persuade = BestPresentSkill(SkillType.Persuade);
             bool hub = State == SessionState.Morning || State == SessionState.FreePlay;
-            var raidParty = RaidPartyIds();
+            var candidates = RaidCandidateIds();
             foreach (var c in _captives.All)
             {
                 var def = ResolveEnemyById(c.CaptorEnemyId);
@@ -2805,9 +2792,10 @@ namespace Game.Core.Session
                     BestPersuade = persuade,
                     TalkThreshold = threshold,
                     CanTalk = hub && persuade >= threshold,
-                    RaidPartyIds = raidParty,
+                    RaidCandidateIds = candidates,
+                    RaidPartyMax = _cfg.ExpeditionPartyMax,
                     RaidEnemyIds = new List<string>(c.EnemyGroup),
-                    CanRaid = hub && raidParty.Count > 0 && c.EnemyGroup.Count > 0
+                    CanRaid = hub && candidates.Count > 0 && c.EnemyGroup.Count > 0
                 });
             }
             return list;
@@ -2840,13 +2828,16 @@ namespace Game.Core.Session
         /// (свідомо обраний кривавий шлях, №14.1). Перемога визволяє всіх бранців загону;
         /// поразка чи відступ — той самий механізм полону для загону рейду.
         /// </summary>
-        public bool RaidCaptors(string companionId)
+        public bool RaidCaptors(string companionId, IReadOnlyList<string> partyIds)
         {
             RequireMorningOrFreePlay();
             var c = _captives.Get(companionId);
-            if (c == null || c.EnemyGroup.Count == 0) return false;
-            var party = RaidPartyIds();
-            if (party.Count == 0) return false;
+            if (c == null || c.EnemyGroup.Count == 0 || partyIds == null) return false;
+            var candidates = RaidCandidateIds();
+            var party = new List<string>();
+            foreach (var id in partyIds)
+                if (candidates.Contains(id) && !party.Contains(id)) party.Add(id);
+            if (party.Count == 0 || party.Count != partyIds.Count || party.Count > _cfg.ExpeditionPartyMax) return false;
 
             _raidGroupId = c.GroupId;
             _processor.QueueExternal(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode);

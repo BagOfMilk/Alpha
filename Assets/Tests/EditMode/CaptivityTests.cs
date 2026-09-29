@@ -191,10 +191,19 @@ namespace Game.Tests.EditMode
             s.TakeCaptive(who.Id, "enemy.horde_scout", 0, null, new[] { "enemy.horde_scout" });
             var view = s.GetCaptivesView().Single();
             Assert.IsTrue(view.CanRaid);
-            CollectionAssert.Contains(view.RaidPartyIds, GameSession.ProtagonistId);
-            CollectionAssert.DoesNotContain(view.RaidPartyIds, who.Id, "бранець у рейд не йде");
+            CollectionAssert.Contains(view.RaidCandidateIds, GameSession.ProtagonistId);
+            CollectionAssert.DoesNotContain(view.RaidCandidateIds, who.Id, "бранець у рейд не йде");
 
-            Assert.IsTrue(s.RaidCaptors(who.Id));
+            // Склад обирає гравець (власник: «ЗВІСНО ГРАВЦЕМ»): чужий, бранець, завеликий загін — відмова.
+            Assert.IsFalse(s.RaidCaptors(who.Id, new[] { who.Id }));
+            Assert.IsFalse(s.RaidCaptors(who.Id, new string[0]));
+            Assert.IsFalse(s.RaidCaptors(who.Id, view.RaidCandidateIds.Concat(new[] { "nobody" }).ToList()));
+            Assert.AreEqual(SessionState.Morning, s.State);
+
+            var chosen = view.RaidCandidateIds.Take(3).ToList();
+            Assert.IsTrue(s.RaidCaptors(who.Id, chosen));
+            CollectionAssert.AreEquivalent(chosen.Select(id => "u_" + id),
+                s.GetBattleView().Units.Where(u => u.Side == "Player").Select(u => u.Id), "у бій іде рівно обраний склад");
             Assert.AreEqual(SessionState.Battle, s.State);
             Assert.AreEqual("FirstStrike", s.GetBattleView().Opening, "свідомо обраний кривавий шлях — загін першим (№14.1)");
             s.CombatAutoResolve();
@@ -211,9 +220,10 @@ namespace Game.Tests.EditMode
             var who = SomeCompanion(s);
             var heavy = new[] { "enemy.burunda", "enemy.horde_vanguard", "enemy.horde_vanguard", "enemy.forest_bandit" };
             s.TakeCaptive(who.Id, "enemy.burunda", 2, null, heavy);
-            int partySize = s.GetCaptivesView().Single().RaidPartyIds.Count;
+            var party = s.GetCaptivesView().Single().RaidCandidateIds.Take(3).ToList();
+            int partySize = party.Count;
 
-            s.RaidCaptors(who.Id);
+            s.RaidCaptors(who.Id, party);
             s.CombatAutoResolve();
 
             var captives = s.GetCaptivesView();

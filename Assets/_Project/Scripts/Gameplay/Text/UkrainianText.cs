@@ -2750,7 +2750,10 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.captives.talk", "Перемовини (Переконання {value} / {threshold})");
             AddKey(t, "ui.captives.talk.weak", "Переконання вдома {value} — треба {threshold}.");
             AddKey(t, "ui.captives.raid", "Рейд — бій");
-            AddKey(t, "ui.captives.raid.party", "У рейд підуть: {party}. Проти: {enemies}. Загін ходить першим; кров — громаді на пам'ять.");
+            AddKey(t, "ui.captives.raid.pick", "Хто піде в рейд (до {max}):");
+            AddKey(t, "ui.captives.raid.enemies", "Проти: {enemies}. Загін ходить першим; кров — громаді на пам'ять.");
+            AddKey(t, "ui.captives.raid.pick_first", "Спершу оберіть, хто піде.");
+            AddKey(t, "ui.captives.raid.too_many", "Забагато — у рейд ідуть не більше {max}.");
             AddKey(t, "ui.captives.raid.none", "Нікому йти в рейд — усі в полі, в полоні чи поранені.");
 
             // C5 — перша партія здібностей (docs/ABILITIES.md; власник: «ок», «Тенета норм»).

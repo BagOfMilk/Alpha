@@ -92,7 +92,7 @@ namespace Game.Tests.EditMode
 
             var who = s.GetRosterView().Companions.First(c => c.Id != GameSession.ProtagonistId && c.Status != CompanionStatus.Dead);
             s.TakeCaptive(who.Id, "enemy.horde_scout", 0, null, new[] { "enemy.horde_scout" });
-            s.RaidCaptors(who.Id);
+            s.RaidCaptors(who.Id, s.GetCaptivesView().Single().RaidCandidateIds.Take(4).ToList());
 
             // Єдина рефлексія у файлі: ростер — щоб порахувати очікувані пари тим самим RosterBonds.
             var roster = (Roster)typeof(GameSession).GetField("_worldRoster", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(s);

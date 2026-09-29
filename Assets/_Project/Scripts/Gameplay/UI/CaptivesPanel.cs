@@ -10,12 +10,15 @@ namespace Game.Gameplay.UI
     /// Наші в полоні на віче (Поправка №14.7; власник, 29.09.2026: «Але десь половина
     /// має втекти»). Хто в полоні й у кого, як тримається (полосою, без чисел —
     /// інваріант 3), і три шляхи порятунку: викуп (ціна до кліку), перемовини (поріг
-    /// Переконання до кліку — інваріант 8), рейд (склад і вороги до кліку — Статут
-    /// UI-02). Недоступне — сіре з поясненням (UI-04). Окремий файл — у вкладці віча
-    /// лише один рядок виклику, як і в <see cref="PrisonersPanel"/>.
+    /// Переконання до кліку — інваріант 8), рейд (вороги до кліку — Статут UI-02; склад
+    /// обирає гравець, як загін вилазки). Недоступне — сіре з поясненням (UI-04).
+    /// Окремий файл — у вкладці віча лише один рядок виклику, як і в <see cref="PrisonersPanel"/>.
     /// </summary>
     public static class CaptivesPanel
     {
+        /// <summary>Обраний гравцем склад рейду — на кожного бранця свій (ключ — id бранця).</summary>
+        private static readonly Dictionary<string, List<string>> RaidParty = new Dictionary<string, List<string>>();
+
         public static void Draw(GameShell shell, Gender g)
         {
             var captives = shell?.Session?.GetCaptivesView();
@@ -55,18 +58,41 @@ namespace Game.Gameplay.UI
             else Widgets.DisabledButton(talk, UkrainianText.Format("ui.captives.talk.weak", g,
                 "value", c.BestPersuade.ToString(), "threshold", c.TalkThreshold.ToString()));
 
+            if (!RaidParty.TryGetValue(id, out var party)) RaidParty[id] = party = new List<string>();
+            party.RemoveAll(p => c.RaidCandidateIds == null || !c.RaidCandidateIds.Contains(p));
+
             string raid = UkrainianText.Get("ui.captives.raid", g);
-            if (c.CanRaid)
+            if (!c.CanRaid)
+                Widgets.DisabledButton(raid, UkrainianText.Get("ui.captives.raid.none", g));
+            else if (party.Count == 0)
+                Widgets.DisabledButton(raid, UkrainianText.Get("ui.captives.raid.pick_first", g));
+            else if (party.Count > c.RaidPartyMax)
+                Widgets.DisabledButton(raid, UkrainianText.Format("ui.captives.raid.too_many", g, "max", c.RaidPartyMax.ToString()));
+            else if (Widgets.PrimaryButton(raid))
             {
-                if (Widgets.PrimaryButton(raid)) shell.TryRun(() => shell.Session.RaidCaptors(id));
+                var chosen = new List<string>(party);
+                shell.TryRun(() => shell.Session.RaidCaptors(id, chosen));
+                party.Clear();
             }
-            else Widgets.DisabledButton(raid, UkrainianText.Get("ui.captives.raid.none", g));
             GUILayout.EndHorizontal();
 
             if (c.CanRaid)
-                GUILayout.Label(UkrainianText.Format("ui.captives.raid.party", g,
-                    "party", Names(c.RaidPartyIds, id2 => ScreenText.ResolveCompanionName(id2, g, roster)),
+            {
+                // Склад рейду — гравець, як загін вилазки (той самий вигляд перемикачів).
+                GUILayout.Label(UkrainianText.Format("ui.captives.raid.pick", g, "max", c.RaidPartyMax.ToString()), AlphaSkin.HintLine);
+                GUILayout.BeginHorizontal();
+                foreach (var candidate in c.RaidCandidateIds)
+                {
+                    bool chosen = party.Contains(candidate);
+                    if (Widgets.TabButton(ScreenText.ResolveCompanionName(candidate, g, roster), chosen))
+                    {
+                        if (chosen) party.Remove(candidate); else party.Add(candidate);
+                    }
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.Label(UkrainianText.Format("ui.captives.raid.enemies", g,
                     "enemies", Names(c.RaidEnemyIds, e => EnemyName(e, g))), AlphaSkin.HintLine);
+            }
             GUILayout.EndVertical();
         }
 

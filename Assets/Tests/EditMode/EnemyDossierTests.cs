@@ -54,7 +54,7 @@ namespace Game.Tests.EditMode
                 .Where(c => c.Id != GameSession.ProtagonistId && c.Status != CompanionStatus.Dead && c.Status != CompanionStatus.Captive)
                 .Skip(skip).First();
             Assert.IsTrue(s.TakeCaptive(who.Id, "enemy.tuhar_boyar", 1, null, new[] { "enemy.tuhar_boyar" }));
-            Assert.IsTrue(s.RaidCaptors(who.Id));
+            Assert.IsTrue(s.RaidCaptors(who.Id, s.GetCaptivesView().Single(c => c.CompanionId == who.Id).RaidCandidateIds.Take(3).ToList()));
             Assert.AreEqual(SessionState.Battle, s.State);
         }
 

@@ -78,8 +78,9 @@ namespace Game.Core.Session.Views
         public int TalkThreshold;
         public bool CanTalk;
 
-        /// <summary>Рейд: хто піде і проти кого — видно до кліку.</summary>
-        public System.Collections.Generic.IReadOnlyList<string> RaidPartyIds;
+        /// <summary>Рейд: з кого гравець обирає загін (присутні й здорові), скільки максимум, проти кого — видно до кліку.</summary>
+        public System.Collections.Generic.IReadOnlyList<string> RaidCandidateIds;
+        public int RaidPartyMax;
         public System.Collections.Generic.IReadOnlyList<string> RaidEnemyIds;
         public bool CanRaid;
     }
