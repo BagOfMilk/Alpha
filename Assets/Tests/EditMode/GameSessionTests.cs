@@ -380,7 +380,7 @@ namespace Game.Tests.EditMode
             while (!tail.IsFinished)
             {
                 if (tail.LineKey == "scene.neighbour.elder_refuses") sawElderRefuses = true;
-                tail = s.AdvanceScene();
+                tail = tail.IsChoice ? s.ChooseSceneOption(0) : s.AdvanceScene(); // Поправка №12.7: далі — вибір першої будівлі
             }
             Assert.IsTrue(sawElderRefuses);
             Assert.AreEqual("to.node1.pass", tail.TransitionKey);
@@ -431,7 +431,7 @@ namespace Game.Tests.EditMode
             {
                 if (tail.LineKey == "scene.neighbour.myroslava_reveals") sawReveal = true;
                 if (tail.LineKey == "scene.neighbour.elder_refuses") sawElderRefuses = true;
-                tail = s.AdvanceScene();
+                tail = tail.IsChoice ? s.ChooseSceneOption(0) : s.AdvanceScene(); // Поправка №12.7: далі — вибір першої будівлі
             }
 
             Assert.IsTrue(sawChoiceMade);
@@ -510,6 +510,10 @@ namespace Game.Tests.EditMode
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
             FastForwardOpeningToMorning(s);
+            // Поправка №12.7: склад більше не стоїть від старту (перша будівля
+            // тут — Зала ради, а пост ради ресурсу не дає), тож ресурс дає
+            // ферма — вона відкрита без будівлі. Дід Овсій на старті вільний.
+            Assert.AreEqual(Game.Core.Base.AssignmentResult.Success, s.Assign("keeper", "settlement_farms"));
 
             s.ConfirmMorning();
             s.AdvanceDay();

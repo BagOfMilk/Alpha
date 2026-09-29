@@ -5,6 +5,7 @@ using Game.Core.Base;
 using Game.Core.Characters;
 using Game.Core.Characters.Creation;
 using Game.Core.Combat;
+using Game.Core.Scenes;
 using Game.Core.Session;
 using Game.Core.Session.Bots;
 using Game.Core.Session.Views;
@@ -29,8 +30,12 @@ namespace Game.Tests.EditMode
         private static NewGameOptions Quick(bool ironman = false) =>
             new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Ironman = ironman };
 
-        /// <summary>Сцена відкриття до кінця; на першому виборі — <paramref name="firstChoice"/>, на решті — 0.</summary>
-        private static void PlayOpening(GameSession s, int firstChoice = 0)
+        /// <summary>
+        /// Сцена відкриття до кінця; на першому виборі — <paramref name="firstChoice"/>,
+        /// на виборі першої будівлі (Поправка №12.7) — <paramref name="firstBuildingChoice"/>,
+        /// на решті — 0.
+        /// </summary>
+        private static void PlayOpening(GameSession s, int firstChoice = 0, int firstBuildingChoice = 0)
         {
             SceneStepView step = s.AdvanceScene();
             bool chosen = false;
@@ -38,7 +43,9 @@ namespace Game.Tests.EditMode
             {
                 if (step.IsChoice)
                 {
-                    step = s.ChooseSceneOption(chosen ? 0 : firstChoice);
+                    int idx = step.ChoiceId == OpeningScenes.FirstBuildingChoiceId ? firstBuildingChoice
+                        : chosen ? 0 : firstChoice;
+                    step = s.ChooseSceneOption(idx);
                     chosen = true;
                 }
                 else step = s.AdvanceScene();
@@ -166,19 +173,23 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Лазарет зрізу відкритий від старту без будівлі (Гафія на пості з
-        /// першої доби). CityWorks.ApplyToSlots на кожну добудову заново
-        /// виставляв «відкрито = будівля стоїть» і закривав його першою ж
+        /// Лазарет, що став НЕ наказом будівництва, має пережити будь-яку
+        /// добудову. CityWorks.ApplyToSlots на кожну добудову заново
+        /// виставляв «відкрито = будівля стоїть» і закривав пост першою ж
         /// добудованою майстернею — закритий пост не виробляє, і лазарет
         /// мовчки переставав працювати. Знайдено на знімку туру 25.09.2026.
+        /// Поправка №12.7: тоді лазарет відкривався руками без будівлі; тепер
+        /// він стає першою будівлею з вибору після прологу — охоронець той
+        /// самий: добудова не закриває пост, відкритий іншим шляхом.
         /// </summary>
         [Test]
         public void Infirmary_StaysOpen_AfterAnyBuildingCompletes()
         {
             var s = new GameSession();
             s.NewGame(Quick());
-            PlayOpening(s);
-            Assert.IsTrue(s.GetCityView().OpenPosts.Contains("infirmary_bed"), "лазарет відкритий від старту");
+            int infirmaryIdx = System.Array.IndexOf(DefaultBuildings.FirstBuildingChoices, DefaultBuildings.Infirmary);
+            PlayOpening(s, firstBuildingChoice: infirmaryIdx);
+            Assert.IsTrue(s.GetCityView().OpenPosts.Contains("infirmary_bed"), "лазарет — перша будівля з вибору");
 
             Assert.AreEqual(BuildOrderResult.Started, s.OrderBuilding("workshop"));
             BotRunner.Drive(s, new StewardPolicy(), 3);

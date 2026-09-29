@@ -3521,10 +3521,37 @@ namespace Game.Core.Session
             foreach (var kv in c.LoyaltyDeltas) LogLoyaltyChange(ApplyLoyaltyDelta(kv.Key, kv.Value, sourceId));
             foreach (var flag in c.Flags) _flags.Set(flag);
             foreach (var itemId in c.ItemIds) { GrantNamedItemById(itemId); LogEvent("loot.dropped", Args("itemId", itemId, "named", "1")); }
+            foreach (var buildingId in c.BuildingIds) GrantBuildingFromConsequence(buildingId);
             if (c.Xp != 0) GrantXp(ProtagonistId, c.Xp);
 
             ApplyHafiyaGrassBonusToSickChildIfNeeded();
             ApplyBargainedTimeBonusIfNeeded();
+        }
+
+        /// <summary>
+        /// Поправка №12.7: будівля з наслідку рішення (перша будівля після
+        /// прологу, або будівля-нагорода) стає ОДРАЗУ і без ціни — «перше
+        /// спільне зусилля громади». Її пост відкривається, і на нього стає
+        /// свій іменний (<see cref="OpeningScenes.FirstBuildingKeeperOf"/>), якщо
+        /// той вільний і вдома: інакше вибір лишився б без видимого наслідку
+        /// до першого ручного призначення (Статут MECH-05). Обидві зміни звучать
+        /// у стрічці окремими подіями — жодної тихої зміни міста (MECH-13).
+        /// </summary>
+        private void GrantBuildingFromConsequence(string buildingId)
+        {
+            if (_works == null || _state == null) return;
+            if (!_works.GrantBuilt(buildingId, _state)) return;
+            LogEvent("city.granted", Args("buildingId", buildingId));
+
+            var def = DefaultBuildingsType.Get(buildingId);
+            string slotId = def?.OpensSlotId;
+            string keeperId = OpeningScenes.FirstBuildingKeeperOf(buildingId);
+            if (string.IsNullOrEmpty(slotId) || string.IsNullOrEmpty(keeperId)) return;
+
+            var keeper = _worldRoster?.Get(keeperId);
+            if (keeper == null || !string.IsNullOrEmpty(keeper.AssignedSlotId)) return;
+            if (_state.TryAssign(keeperId, slotId) == AssignmentResult.Success)
+                LogEvent("city.granted.staffed", Args("companionId", keeperId, "slotId", slotId));
         }
 
         /// <summary>ПЛЕЙСХОЛДЕР: наскільки торг за час (сцена «Сусід з претензією», варіант «bargain») полегшує тихий шлях вузла 1.</summary>

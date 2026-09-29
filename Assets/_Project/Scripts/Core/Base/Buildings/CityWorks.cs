@@ -680,6 +680,27 @@ namespace Game.Core.Base
             }
         }
 
+        /// <summary>
+        /// Звести будівлю ОДРАЗУ і без ціни — не наказом, а наслідком рішення
+        /// (Поправка №12.7: перша будівля після прологу — «перше спільне
+        /// зусилля громади»; той самий шлях годиться для будівлі-нагороди
+        /// квесту, зокрема QuestOnly). Відкриває свій пост. Будівля, якої
+        /// нема в каталозі, або вже збудована — false, нічого не змінюється. Незавершений проєкт тієї самої будівлі знімається:
+        /// двічі одна будівля не стоїть.
+        /// </summary>
+        public bool GrantBuilt(string buildingId, BaseState state)
+        {
+            var def = DefaultBuildings.Get(buildingId);
+            if (def == null || Has(def.Id)) return false;
+
+            var project = FindProject(def.Id);
+            if (project != null) _projects.Remove(project);
+
+            _built.Add(def.Id);
+            OpenPostOf(def.Id, state);
+            return true;
+        }
+
         private Project FindProject(string id)
         {
             for (int i = 0; i < _projects.Count; i++)

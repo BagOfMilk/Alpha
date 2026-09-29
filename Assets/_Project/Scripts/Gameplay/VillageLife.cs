@@ -112,9 +112,11 @@ namespace Game.Gameplay
             foreach (var slot in DefaultContent.AllSlots())
                 _base.AddSlot(slot);
 
-            // Хутір зустрічає тим, що в громади вже є; решта будується,
-            // і пост без своєї будівлі закритий (Поправка №6.1).
-            _works = new CityWorks(DefaultBuildings.StartingSet);
+            // Поправка №12.7: гра стартує без будівель, першу обирає гравець
+            // після прологу. Показова сцена грає за того, хто обрав першою
+            // Залу ради (перший варіант вибору); решту зводить господар, і пост
+            // без своєї будівлі закритий (Поправка №6.1).
+            _works = new CityWorks(new[] { DefaultBuildings.FirstBuildingChoices[0] });
             _works.ApplyToSlots(_base);
 
             _base.Resources.Add(Game.Core.Economy.ResourceType.Gold, startGold);

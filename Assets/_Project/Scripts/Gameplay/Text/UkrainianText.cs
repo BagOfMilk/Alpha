@@ -2186,6 +2186,28 @@ namespace Game.Gameplay.Text
             AddKey(t, "scene.neighbour.myroslava_reveals",
                 "Мирослава (тихо, тобі): «Батько торгується не за себе. Слухай не слова — паузи між ними.»");
 
+            // ---- Поправка №12.7: перша будівля — вибір одразу після прологу ----
+            // Текст варіанта сам каже, що відкриває і чого бракуватиме
+            // (Статут MECH-05, UI-02): ціна вибору видна до кліку.
+            AddKey(t, "scene.neighbour.first_building.prompt",
+                "«Тугар пішов, а в нас ні ради під дахом, ні комори, ні ліжка для поранених. До ночі рук стане на одне. Що зводимо першим?»");
+            AddKey(t, "scene.neighbour.option.council_hall",
+                "Залу ради: Захар сяде радити — облава, переселенці, укази. Комори й лазарету поки не буде.");
+            AddKey(t, "scene.neighbour.option.storehouse",
+                "Склад: Дід Овсій щодня даватиме золото на інші будови. Рада мовчатиме, лікувати нікому.");
+            AddKey(t, "scene.neighbour.option.infirmary",
+                "Лазарет: Гафія лікуватиме поранених, рани гоїтимуться швидше. Ні ради, ні доходу.");
+            AddKey(t, "scene.neighbour.first_building.council_hall",
+                "«Під дахом і слово важче. Скликаю раду — кажи, що вирішуємо.»");
+            AddKey(t, "scene.neighbour.first_building.storehouse",
+                "«Комора є — буде й копійка. Облік на мені.»");
+            AddKey(t, "scene.neighbour.first_building.infirmary",
+                "«Лави застелю до вечора. Несіть поранених — у мене не помруть.»");
+            AddKey(t, "city.granted", "Громада спільним зусиллям звела першу будову: {building}. Без ціни.");
+            AddKey(t, "city.granted.staffed", "{companion} стає на пост: {post}.");
+            AddKey(t, "ui.council.no_hall",
+                "Раду ніде скликати: спершу зведіть Залу ради (вкладка «Будівлі»). Облава, переселенці, укази й решта дій ради — лише з нею.");
+
             // ---- арка Мирослави, глава 1 (доба 2, вечір): «Донька боярина» ----
             AddKey(t, "scene.myroslava.ch1.title", "Донька боярина");
             AddKey(t, "scene.myroslava.ch1.open",

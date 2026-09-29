@@ -140,6 +140,14 @@ namespace Game.Core.Scenes
                         TransitionKey = step.Key;
                         IsFinished = true;
                         return false;
+                    case SceneStepKind.Goto:
+                        // Кадру не малює: одразу переходимо на мітку (цикл
+                        // збільшить індекс до самої цілі). Мітки нема — сцена
+                        // зламана, валідатор це ловить; тут просто лінійно далі.
+                        int target;
+                        if (!string.IsNullOrEmpty(step.Key) && _labels.TryGetValue(step.Key, out target) && target != _index)
+                            _index = target - 1;
+                        continue;
                 }
             }
         }

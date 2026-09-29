@@ -98,12 +98,24 @@ namespace Game.Core.Session.Bots
         /// Кампанійний порядок (<c>Steward.BuildPriority</c>, 90-денний замір
         /// клапана Поправки №6) цей файл НЕ чіпає — то баланс кампанії, а не
         /// тестової збірки.
+        ///
+        /// Поправка №12.7: гра стартує без будівель, першу обирає сцена
+        /// відкриття — тож Зала ради і Склад більше не «вже стоять». Зала —
+        /// першою (без неї жодна дія ради не проходить), Склад — другим
+        /// (щоденне золото: без нього решта черги стоїть без грошей), далі
+        /// Майстерня (крафт) і Таверна (люди — ріст тіра за 15 діб), Лазарет —
+        /// після них: без нього рани гояться довше, але 15-денні тури
+        /// (AllMechanicsCoverageTests Row16/Row22) інакше не встигали ні до
+        /// тіра, ні до крафту. Уже обрану першою будівлю черга просто
+        /// пропускає (IsBuiltOrBuilding).
         /// </summary>
         private static readonly string[] BuildPriority =
         {
-            Game.Core.Base.DefaultBuildings.Infirmary,
+            Game.Core.Base.DefaultBuildings.CouncilHall,
+            Game.Core.Base.DefaultBuildings.Storehouse,
             Game.Core.Base.DefaultBuildings.Workshop,
             Game.Core.Base.DefaultBuildings.Tavern,
+            Game.Core.Base.DefaultBuildings.Infirmary,
             Game.Core.Base.DefaultBuildings.Temple,
             Game.Core.Base.DefaultBuildings.Market,
             Game.Core.Base.DefaultBuildings.Fortifications

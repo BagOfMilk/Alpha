@@ -38,6 +38,15 @@ namespace Game.Tests.EditMode
             public BaseState State;
         }
 
+        /// <summary>
+        /// Фікстура механік ради/міських робіт: Зала ради і Склад уже стоять.
+        /// До Поправки №12.7 це був <c>DefaultBuildings.StartingSet</c>; тепер
+        /// гра стартує без будівель (першу обирає гравець після прологу), а ці
+        /// тести перевіряють саму раду й будівництво, не старт — тож набір
+        /// названо явно, а не взято з «того, з чим стартує гра».
+        /// </summary>
+        private static readonly string[] HallAndStorehouse = { DefaultBuildings.CouncilHall, DefaultBuildings.Storehouse };
+
         private static City Build(BalanceConfig cfg, int population = 80, int tension = 300,
             IEnumerable<string> built = null)
         {
@@ -45,7 +54,7 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
 
-            var works = new CityWorks(built ?? DefaultBuildings.StartingSet);
+            var works = new CityWorks(built ?? HallAndStorehouse);
             works.ApplyToSlots(state);
 
             var steps = new List<IDayStep>(DayProcessor.DefaultSteps())
@@ -192,7 +201,7 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
 
-            var works = new CityWorks(DefaultBuildings.StartingSet, oneDayConstruction: true);
+            var works = new CityWorks(HallAndStorehouse, oneDayConstruction: true);
             var temple = DefaultBuildings.Get(DefaultBuildings.Temple);
             Give(state, temple.GoldCost, temple.BuildComponentCost);
 
@@ -221,7 +230,7 @@ namespace Game.Tests.EditMode
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
 
-            var works = new CityWorks(DefaultBuildings.StartingSet); // oneDayConstruction: false (дефолт)
+            var works = new CityWorks(HallAndStorehouse); // oneDayConstruction: false (дефолт)
             var temple = DefaultBuildings.Get(DefaultBuildings.Temple);
             Give(state, temple.GoldCost, temple.BuildComponentCost);
 
@@ -564,7 +573,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(c.State.GetSlot("infirmary_bed").IsOccupied);
 
             // Лазарет добудований.
-            new CityWorks(DefaultBuildings.StartingSet.Concat(new[] { DefaultBuildings.Infirmary }))
+            new CityWorks(HallAndStorehouse.Concat(new[] { DefaultBuildings.Infirmary }))
                 .ApplyToSlots(c.State);
 
             Assert.AreEqual("staff:medic@infirmary_bed", Steward.Staff(c.State),
@@ -629,7 +638,12 @@ namespace Game.Tests.EditMode
 
         private static City FullWorld(BalanceConfig cfg)
         {
-            var c = Build(cfg, population: 80, tension: 0);
+            // Поправка №12.7: гра стартує без будівель, першу обирає гравець.
+            // Обидва світи клапана (без господаря і з ним) стартують з тим самим
+            // першим вибором — Залою ради (перший варіант сцени, його бере
+            // «обережна» політика), склад будує вже господар. Порівнюється
+            // гра, а не старт.
+            var c = Build(cfg, population: 80, tension: 0, built: new[] { DefaultBuildings.CouncilHall });
 
             var roster = c.State.Roster;
             foreach (var pair in new Dictionary<string, SkillType>

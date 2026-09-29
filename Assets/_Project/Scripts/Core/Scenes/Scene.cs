@@ -28,7 +28,14 @@ namespace Game.Core.Scenes
         /// Сцена чекає на цьому кроці, поки <c>GameSession.ChooseSceneOption</c>
         /// не вирішить його — див. <see cref="ScenePlayback.IsAwaitingChoice"/>.
         /// </summary>
-        Choice = 5
+        Choice = 5,
+        /// <summary>
+        /// Стрибок на мітку (Поправка №12.7): дві гілки сцени сходяться в
+        /// одну — напр. обидві відповіді Тугарові ведуть до вибору першої
+        /// будівлі. Ціль — <see cref="SceneStep.Key"/>; кадру не малює,
+        /// <see cref="ScenePlayback.Next"/> проходить його мовчки.
+        /// </summary>
+        Goto = 6
     }
 
     /// <summary>
@@ -158,6 +165,10 @@ namespace Game.Core.Scenes
         public static SceneStep Transition(string key)
             => new SceneStep { Kind = SceneStepKind.Transition, Key = key };
 
+        /// <summary>Стрибок на мітку (Поправка №12.7): гілки сцени сходяться. Мітку перевіряє <see cref="SceneValidator"/>.</summary>
+        public static SceneStep Goto(string label)
+            => new SceneStep { Kind = SceneStepKind.Goto, Key = label };
+
         /// <summary>Вибір репліки (Поправка №7.8): 2-4 варіанти — <see cref="SceneValidator"/> перевіряє межі.</summary>
         public static SceneStep Choice(string id, List<SceneChoiceOption> options)
             => new SceneStep { Kind = SceneStepKind.Choice, ActorId = id, Options = options ?? new List<SceneChoiceOption>() };
@@ -197,6 +208,14 @@ namespace Game.Core.Scenes
         public Scene Step(SceneStep step)
         {
             if (step != null) Steps.Add(step);
+            return this;
+        }
+
+        /// <summary>Кілька кроків підряд (напр. спільний хвіст двох гілок, Поправка №12.7).</summary>
+        public Scene StepAll(IEnumerable<SceneStep> steps)
+        {
+            if (steps != null)
+                foreach (var s in steps) Step(s);
             return this;
         }
 

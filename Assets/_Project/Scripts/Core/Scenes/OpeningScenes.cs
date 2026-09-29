@@ -23,6 +23,24 @@ namespace Game.Core.Scenes
         /// <summary>Прапор: гравець виграв боярину час торгом — полегшує тихий шлях вузла 1 (GameSession.ApplyBargainedTimeBonusIfNeeded).</summary>
         public const string TugarBargainedTimeFlag = "tugar_bargained_time";
 
+        /// <summary>Id вибору першої будівлі (Поправка №12.7) — спільний з ботами, автотуром і журналом.</summary>
+        public const string FirstBuildingChoiceId = "first_building_choice";
+
+        /// <summary>Префікс прапора обраної першої будівлі: «first_building.&lt;buildingId&gt;» (у зліпку разом зі StoryFlags).</summary>
+        public const string FirstBuildingFlagPrefix = "first_building.";
+
+        /// <summary>Хто з іменного касту стає на пост першої будівлі (картка — Поправка №5.2).</summary>
+        public static string FirstBuildingKeeperOf(string buildingId)
+        {
+            switch (buildingId)
+            {
+                case Base.DefaultBuildings.CouncilHall: return "zakhar";
+                case Base.DefaultBuildings.Storehouse: return "keeper";
+                case Base.DefaultBuildings.Infirmary: return "healer";
+                default: return null;
+            }
+        }
+
         /// <summary>
         /// Доба 1, ранок — «Сусід з претензією».
         ///
@@ -81,10 +99,42 @@ namespace Game.Core.Scenes
                 .Step(SceneStep.Shot("zakhar", ShotFraming.Close).WithLabel("zakhar_refuses"))
                 .Step(SceneStep.Line("zakhar", "scene.neighbour.elder_refuses"))
                 .Step(SceneStep.Effect("sfx.door.slam"))
-                .Step(SceneStep.Transition("to.node1.pass"))
+                .Step(SceneStep.Goto("first_building"))
                 .Step(SceneStep.Shot("myroslava", ShotFraming.Two, "protagonist").WithLabel("myroslava_reveals"))
                 .Step(SceneStep.Line("myroslava", "scene.neighbour.myroslava_reveals"))
-                .Step(SceneStep.Transition("to.node1.pass"));
+                .Step(SceneStep.Goto("first_building"))
+                .StepAll(FirstBuildingSteps());
+        }
+
+        /// <summary>
+        /// Поправка №12.7 (рішення власника 29.09.2026: «Так придовити, перша
+        /// будівля зьявляється як вибор після прологу»): гра стартує без
+        /// будівель, і одразу після розмови з Тугаром громада зводить першу —
+        /// ту, яку обере гравець. Три варіанти (<see cref="Base.DefaultBuildings.FirstBuildingChoices"/>),
+        /// кожен каже в самому тексті, що відкриває і чого бракуватиме
+        /// (Статут MECH-05, UI-02); будівля стає одразу і без ціни, на її пост
+        /// стає свій іменний (Захар/Дід Овсій/Гафія). Обидві гілки розмови
+        /// сходяться сюди стрибком (<see cref="SceneStep.Goto"/>).
+        /// </summary>
+        private static IEnumerable<SceneStep> FirstBuildingSteps()
+        {
+            yield return SceneStep.Shot("zakhar", ShotFraming.Two, "protagonist").WithLabel("first_building");
+            yield return SceneStep.Line("zakhar", "scene.neighbour.first_building.prompt");
+
+            var options = new List<SceneChoiceOption>();
+            foreach (var buildingId in Base.DefaultBuildings.FirstBuildingChoices)
+                options.Add(SceneChoiceOption.Simple(buildingId, "scene.neighbour.option." + buildingId,
+                    new QuestConsequence().Building(buildingId).Flag(FirstBuildingFlagPrefix + buildingId),
+                    nextLabel: "first_building." + buildingId));
+            yield return SceneStep.Choice(FirstBuildingChoiceId, options);
+
+            foreach (var buildingId in Base.DefaultBuildings.FirstBuildingChoices)
+            {
+                string keeper = FirstBuildingKeeperOf(buildingId);
+                yield return SceneStep.Shot(keeper, ShotFraming.Close).WithLabel("first_building." + buildingId);
+                yield return SceneStep.Line(keeper, "scene.neighbour.first_building." + buildingId);
+                yield return SceneStep.Transition("to.node1.pass");
+            }
         }
 
         /// <summary>

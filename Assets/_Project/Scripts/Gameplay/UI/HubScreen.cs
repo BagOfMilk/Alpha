@@ -351,6 +351,20 @@ namespace Game.Gameplay.UI
             var city = shell.Session.GetCityView();
             var economy = shell.Session.GetEconomyView();
 
+            // Поправка №12.7 (старт без будівель): без Зали ради жодна дія ради
+            // не пройде (CouncilOrderResult.NoCouncilHall). Замість ряду кнопок,
+            // що мовчки відмовляють, — одне пояснення, чого бракує і де це
+            // звести (Статут UI-03, UI-04).
+            bool hasHall = false;
+            if (city?.Built != null)
+                foreach (var b in city.Built)
+                    if (b.Id == DefaultBuildings.CouncilHall) { hasHall = true; break; }
+            if (city != null && !hasHall)
+            {
+                GUILayout.Label(UkrainianText.Get("ui.council.no_hall", g), AlphaSkin.Body);
+                return;
+            }
+
             DrawCouncilCostEffect("ui.council.raid", g, "gold", CouncilCity.RaidGoldCost.ToString());
             GUILayout.BeginHorizontal(GUI.skin.box);
             GUILayout.Label(UkrainianText.Get("ui.council.raid", g), AlphaSkin.Body, GUILayout.ExpandWidth(true));
