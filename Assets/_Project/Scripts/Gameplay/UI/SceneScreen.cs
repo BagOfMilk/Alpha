@@ -215,7 +215,7 @@ namespace Game.Gameplay.UI
             {
                 int index = i;
                 string label = ScreenText.SceneOptionLine(_current.Options[i], g, roster);
-                if (Widgets.PrimaryButton(label))
+                if (Widgets.PrimaryWrapButton(label))
                     ChooseOption(shell, index);
             }
         }

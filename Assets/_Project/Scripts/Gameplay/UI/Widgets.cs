@@ -58,6 +58,22 @@ namespace Game.Gameplay.UI
             return GUILayout.Button(label, _primaryButton, options);
         }
 
+        private static GUIStyle _primaryWrapButton;
+
+        /// <summary>
+        /// Головна дія з довгим підписом (варіант репліки): текст переноситься
+        /// на новий рядок, а не розпирає панель за край екрана — на 1280×720
+        /// перший варіант вибору першої будівлі обрізався (тур 29.09.2026).
+        /// </summary>
+        public static bool PrimaryWrapButton(string label, params GUILayoutOption[] options)
+        {
+            if (_primaryButton == null)
+                _primaryButton = AlphaSkin.ButtonStyle(AlphaSkin.Accent, AlphaSkin.AccentHover, AlphaSkin.AccentActive, AlphaSkin.BgDark);
+            if (_primaryWrapButton == null)
+                _primaryWrapButton = new GUIStyle(_primaryButton) { wordWrap = true };
+            return GUILayout.Button(label, _primaryWrapButton, options);
+        }
+
         /// <summary>Другорядна дія — той самий тон, що й базова кнопка скіну.</summary>
         public static bool SecondaryButton(string label, params GUILayoutOption[] options)
         {
