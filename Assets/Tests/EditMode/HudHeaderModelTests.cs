@@ -48,7 +48,7 @@ namespace Game.Tests.EditMode
 
         private static HudHeader Build(SessionView view, RosterView roster = null)
         {
-            var economy = new EconomyView { Gold = 120, Materials = 14, Food = 38 };
+            var economy = new EconomyView { Gold = 120, BuildComponent = 14, CraftComponent = 3, Food = 38 };
             return HudHeaderModel.Build(view, SessionState.Morning, HudHeaderModel.ResourcesFrom(economy, G), roster ?? Roster(), G);
         }
 
@@ -179,9 +179,9 @@ namespace Game.Tests.EditMode
         public void Resources_AreAGenericListFromTheWallet_InTableOrder()
         {
             var h = Build(View());
-            CollectionAssert.AreEqual(new[] { "gold", "materials", "food" }, h.Resources.Select(r => r.Key).ToArray());
-            CollectionAssert.AreEqual(new[] { 120, 14, 38 }, h.Resources.Select(r => r.Value).ToArray());
-            CollectionAssert.AreEqual(new[] { "Золото", "Матеріали", "Їжа" }, h.Resources.Select(r => r.Label).ToArray());
+            CollectionAssert.AreEqual(new[] { "gold", "build_component", "craft_component", "food" }, h.Resources.Select(r => r.Key).ToArray());
+            CollectionAssert.AreEqual(new[] { 120, 14, 3, 38 }, h.Resources.Select(r => r.Value).ToArray());
+            CollectionAssert.AreEqual(new[] { "Золото", "Будматеріал", "Сировина", "Їжа" }, h.Resources.Select(r => r.Label).ToArray());
         }
 
         [Test]

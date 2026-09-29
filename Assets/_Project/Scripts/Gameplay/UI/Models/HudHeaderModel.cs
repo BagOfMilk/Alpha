@@ -106,16 +106,17 @@ namespace Game.Gameplay.UI
 
         /// <summary>
         /// Відкриті ресурси шапки — ОДНА таблиця рядків у порядку показу.
-        /// Паралельна гілка ділить «матеріали» на два компоненти: після злиття
-        /// сюди додається по рядку на нове поле <see cref="EconomyView"/> (і
-        /// ключ «resource.{key}» у UkrainianText) — більше нічого в шапці не
-        /// міняється. Охоронець <c>HudHeaderModelTests.ResourceTable_CoversEveryEconomyField</c>
+        /// Новий відкритий ресурс — рядок тут на нове поле <see cref="EconomyView"/>
+        /// (і ключ «resource.{key}» у UkrainianText, значок — той самий ключ у
+        /// Editor/HudPanelAssets) — більше нічого в шапці не міняється. Охоронець <c>HudHeaderModelTests.ResourceTable_CoversEveryEconomyField</c>
         /// падає, якщо поле з'явилось, а рядка немає.
         /// </summary>
         private static readonly ResourceRow[] ResourceRows =
         {
             new ResourceRow("gold", "Gold", e => e.Gold),
-            new ResourceRow("materials", "Materials", e => e.Materials),
+            // Два компоненти замість спільних матеріалів (Поправка №12.5).
+            new ResourceRow("build_component", "BuildComponent", e => e.BuildComponent),
+            new ResourceRow("craft_component", "CraftComponent", e => e.CraftComponent),
             new ResourceRow("food", "Food", e => e.Food),
         };
 

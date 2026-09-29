@@ -30,19 +30,19 @@ namespace Game.Gameplay.EditorTools
         /// <summary>
         /// Ключ значка → файл з <c>Assets/ThirdParty/GameIcons</c> (Поправка №12.2,
         /// атрибуція — там же, <c>ATTRIBUTION.md</c>). Ключі ресурсів — ті самі, що
-        /// <c>HudHeaderModel.ResourceRows</c>; «building»/«crafting» — для двох
-        /// компонентів (Поправка №12.5).
+        /// <c>HudHeaderModel.ResourceRows</c>: два компоненти — «build_component»
+        /// і «craft_component» (Поправка №12.5).
         /// </summary>
         private static readonly string[] IconKeys =
         {
-            "gold", "food", "materials", "building", "crafting",
+            "gold", "food", "build_component", "craft_component",
             "phase.morning", "phase.day", "phase.evening", "phase.night",
             "away", "wounded", "post.empty", "post.closed", "fear", "council",
             "build", "signal", "decision", "patrol", "population", "tier",
         };
         private static readonly string[] IconFiles =
         {
-            "two-coins", "bread", "wood-pile", "wood-pile", "gears",
+            "two-coins", "bread", "wood-pile", "gears",
             "sunrise", "sun", "sunset", "moon",
             "hiking", "bleeding-wound", "wooden-chair", "padlock", "terror", "round-table",
             "hammer-nails", "ringing-bell", "choice", "watchtower", "meeple-group", "village",
