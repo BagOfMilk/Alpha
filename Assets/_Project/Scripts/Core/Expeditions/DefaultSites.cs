@@ -9,6 +9,13 @@ namespace Game.Core.Expeditions
     /// Три точки з різними порогами і різною ціною підходу: це мінімум, за
     /// якого виснаження має сенс. З однією точкою гравцю нема куди переходити,
     /// і механіка вироджується в «здобич падає, і все».
+    ///
+    /// Поправка №12.5 (два компоненти): точки різняться й тим, ЩО дають.
+    /// Ближні руїни — будівельний (колоди, камінь, цвяхи з розібраних хат);
+    /// покинута майстерня — переважно крафтовий (інструмент, залізо, шкіра);
+    /// дальній тракт — золото обозів і трохи обох. Хочеш будуватись — ходиш
+    /// у руїни, хочеш кувати — у майстерню, і виснаження точки штовхає
+    /// міняти маршрут. Числа — ПЛЕЙСХОЛДЕР.
     /// </summary>
     public static class DefaultSites
     {
@@ -21,11 +28,11 @@ namespace Game.Core.Expeditions
                 QuietDays = 4, ForcefulDays = 2,
                 QuietSkill = SkillKeys.Survival, ForcefulSkill = SkillKeys.Melee,
                 Threshold = 3,
-                BaseMaterials = 2, BaseGold = 8
+                BaseBuildComponent = 3, BaseCraftComponent = 0, BaseGold = 8
             };
         }
 
-        /// <summary>Покинута майстерня: матеріалів більше, але потрібен механік.</summary>
+        /// <summary>Покинута майстерня: головний кран крафтового компонента, але потрібен механік.</summary>
         public static ExpeditionSite Workshop()
         {
             return new ExpeditionSite("old_workshop", "Заброшенная мастерская")
@@ -34,7 +41,7 @@ namespace Game.Core.Expeditions
                 QuietDays = 6, ForcefulDays = 3,
                 QuietSkill = SkillKeys.Mechanics, ForcefulSkill = SkillKeys.Ranged,
                 Threshold = 5,
-                BaseMaterials = 4, BaseGold = 6,
+                BaseBuildComponent = 1, BaseCraftComponent = 4, BaseGold = 6,
                 // На цій точці живуть ті, хто вцілів: на хорошій полосі відряд приводить їх додому.
                 PeopleOnGood = 4
             };
@@ -49,7 +56,7 @@ namespace Game.Core.Expeditions
                 QuietDays = 8, ForcefulDays = 4,
                 QuietSkill = SkillKeys.Trade, ForcefulSkill = SkillKeys.Ranged,
                 Threshold = 7,
-                BaseMaterials = 3, BaseGold = 20
+                BaseBuildComponent = 2, BaseCraftComponent = 1, BaseGold = 20
             };
         }
 

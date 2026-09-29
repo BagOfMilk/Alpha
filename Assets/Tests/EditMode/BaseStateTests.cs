@@ -24,7 +24,7 @@ namespace Game.Tests.EditMode
             var def = new AssignmentSlotDefinition("bench", "Верстак", BaseSectionType.Workshop)
             {
                 OutputKind = kind,
-                OutputResource = ResourceType.Materials,
+                OutputResource = ResourceType.BuildComponent,
                 PrimarySkill = SkillType.Mechanics,
                 BaseOutput = 5, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0
             };
@@ -40,8 +40,8 @@ namespace Game.Tests.EditMode
 
             var report = state.AdvanceCycle();
             // 5 (база) + 10 (механіка) * 1.0 = 15
-            Assert.AreEqual(15, state.Resources.Get(ResourceType.Materials));
-            Assert.AreEqual(15, report.Produced[ResourceType.Materials]);
+            Assert.AreEqual(15, state.Resources.Get(ResourceType.BuildComponent));
+            Assert.AreEqual(15, report.Produced[ResourceType.BuildComponent]);
         }
 
         [Test]
@@ -69,7 +69,7 @@ namespace Game.Tests.EditMode
             var (state, comp) = MakeBaseWithOneSlot(SlotOutputKind.Resource);
             var def2 = new AssignmentSlotDefinition("bench2", "Верстак2", BaseSectionType.Workshop)
             {
-                OutputResource = ResourceType.Materials, PrimarySkill = SkillType.Mechanics
+                OutputResource = ResourceType.BuildComponent, PrimarySkill = SkillType.Mechanics
             };
             state.AddSlot(def2);
 
@@ -89,7 +89,7 @@ namespace Game.Tests.EditMode
 
             state.AdvanceCycle();
             // 15 * 0.5 (InjuredProductionMultiplier за замовчуванням) = 7.5 -> 8
-            Assert.AreEqual(8, state.Resources.Get(ResourceType.Materials));
+            Assert.AreEqual(8, state.Resources.Get(ResourceType.BuildComponent));
         }
 
         [Test]
@@ -176,7 +176,7 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(comp.Id, state.GetSlot("bench").AssignedCompanionId);
             var report = state.AdvanceCycle();
-            Assert.AreEqual(15, report.Produced[ResourceType.Materials],
+            Assert.AreEqual(15, report.Produced[ResourceType.BuildComponent],
                 "після синхронізації пост знову виробляє — не лишається порожнім, хоч і на свіжому інстансі");
         }
 

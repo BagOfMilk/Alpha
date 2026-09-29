@@ -44,7 +44,7 @@ namespace Game.Core.Story
         public const double MaksymWoundInjuryPoints = 30.0;
 
         /// <summary>ПЛЕЙСХОЛДЕРИ: що забирає розграбований склад.</summary>
-        public const int PlunderedMaterials = 5;
+        public const int PlunderedBuildComponent = 5;
         public const int PlunderedFood = 8;
 
         /// <summary>"best"|"good"|"base"|"worst" — той самий формат, що <c>Finale.ResolveKey</c>.</summary>
@@ -162,7 +162,7 @@ namespace Game.Core.Story
         /// <summary>Склад розграбований (§3.1) — Базова/Найгірша полоса.</summary>
         private static void PlunderStorehouse(BaseState state)
         {
-            state.Resources.Add(ResourceType.Materials, -PlunderedMaterials);
+            state.Resources.Add(ResourceType.BuildComponent, -PlunderedBuildComponent);
             state.Resources.Add(ResourceType.Food, -PlunderedFood);
         }
     }

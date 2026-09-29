@@ -32,13 +32,22 @@ namespace Game.Tests.EditMode
             public FactionRegistry Factions;
         }
 
+        /// <summary>
+        /// Фікстура механік ради/міських робіт: Зала ради і Склад уже стоять.
+        /// До Поправки №12.7 це був <c>DefaultBuildings.StartingSet</c>; тепер
+        /// гра стартує без будівель (першу обирає гравець після прологу), а ці
+        /// тести перевіряють саму раду й будівництво, не старт — тож набір
+        /// названо явно, а не взято з «того, з чим стартує гра».
+        /// </summary>
+        private static readonly string[] HallAndStorehouse = { DefaultBuildings.CouncilHall, DefaultBuildings.Storehouse };
+
         private static City Build(BalanceConfig cfg, IEnumerable<string> built = null)
         {
             var roster = new Roster();
             var state = new BaseState(roster, new ResourceLedger(), cfg);
             foreach (var slot in DefaultContent.AllSlots()) state.AddSlot(slot);
 
-            var works = new CityWorks(built ?? DefaultBuildings.StartingSet);
+            var works = new CityWorks(built ?? HallAndStorehouse);
             works.ApplyToSlots(state);
 
             var steps = new List<IDayStep>(DayProcessor.DefaultSteps()) { new CityWorksStep(works, state) };
@@ -56,7 +65,7 @@ namespace Game.Tests.EditMode
         private static void Give(BaseState state, int gold, int materials = 0, int food = 0)
         {
             if (gold > 0) state.Resources.Add(ResourceType.Gold, gold);
-            if (materials > 0) state.Resources.Add(ResourceType.Materials, materials);
+            if (materials > 0) state.Resources.Add(ResourceType.BuildComponent, materials);
             if (food > 0) state.Resources.Add(ResourceType.Food, food);
         }
 

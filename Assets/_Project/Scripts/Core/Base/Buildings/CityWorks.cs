@@ -19,7 +19,7 @@ namespace Game.Core.Base
         AlreadyInProgress,
         QuestOnly,
         NotEnoughGold,
-        NotEnoughMaterials
+        NotEnoughBuildComponent
     }
 
     public enum CouncilOrderResult
@@ -246,11 +246,11 @@ namespace Game.Core.Base
             // матеріалів золото пішло б, а будівництво не почалося б.
             if (!state.Resources.CanAfford(ResourceType.Gold, goldCost))
                 return BuildOrderResult.NotEnoughGold;
-            if (!state.Resources.CanAfford(ResourceType.Materials, def.MaterialsCost))
-                return BuildOrderResult.NotEnoughMaterials;
+            if (!state.Resources.CanAfford(ResourceType.BuildComponent, def.BuildComponentCost))
+                return BuildOrderResult.NotEnoughBuildComponent;
 
             state.Resources.TrySpend(ResourceType.Gold, goldCost);
-            state.Resources.TrySpend(ResourceType.Materials, def.MaterialsCost);
+            state.Resources.TrySpend(ResourceType.BuildComponent, def.BuildComponentCost);
 
             // Поправка №7.7: тестова збірка стирає проєктний строк — замовлення
             // уранці, готово до наступного ранку, незалежно від того, скільки
@@ -678,6 +678,27 @@ namespace Game.Core.Base
                 var slot = state.GetSlot(def.OpensSlotId);
                 if (slot != null) slot.Unlocked = true;
             }
+        }
+
+        /// <summary>
+        /// Звести будівлю ОДРАЗУ і без ціни — не наказом, а наслідком рішення
+        /// (Поправка №12.7: перша будівля після прологу — «перше спільне
+        /// зусилля громади»; той самий шлях годиться для будівлі-нагороди
+        /// квесту, зокрема QuestOnly). Відкриває свій пост. Будівля, якої
+        /// нема в каталозі, або вже збудована — false, нічого не змінюється. Незавершений проєкт тієї самої будівлі знімається:
+        /// двічі одна будівля не стоїть.
+        /// </summary>
+        public bool GrantBuilt(string buildingId, BaseState state)
+        {
+            var def = DefaultBuildings.Get(buildingId);
+            if (def == null || Has(def.Id)) return false;
+
+            var project = FindProject(def.Id);
+            if (project != null) _projects.Remove(project);
+
+            _built.Add(def.Id);
+            OpenPostOf(def.Id, state);
+            return true;
         }
 
         private Project FindProject(string id)

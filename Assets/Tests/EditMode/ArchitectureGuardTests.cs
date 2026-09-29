@@ -557,7 +557,7 @@ namespace Game.Tests.EditMode
                 Game.Core.Base.BaseSectionType.Workshop)
             {
                 OutputKind = Game.Core.Base.SlotOutputKind.Resource,
-                OutputResource = Game.Core.Economy.ResourceType.Materials,
+                OutputResource = Game.Core.Economy.ResourceType.BuildComponent,
                 PrimarySkill = Game.Core.Stats.SkillType.Mechanics,
                 BaseOutput = 5, OutputPerPrimaryPoint = 1.0, OutputPerSecondaryPoint = 0
             });
@@ -594,9 +594,9 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(Game.Core.Base.AssignmentResult.Success, state.TryAssign("defector2_1", "bench"));
             Game.Core.Companions.Defection.Defect(companion2);
 
-            var before = state.Resources.Get(Game.Core.Economy.ResourceType.Materials);
+            var before = state.Resources.Get(Game.Core.Economy.ResourceType.BuildComponent);
             state.AdvanceCycle();
-            Assert.AreEqual(before, state.Resources.Get(Game.Core.Economy.ResourceType.Materials),
+            Assert.AreEqual(before, state.Resources.Get(Game.Core.Economy.ResourceType.BuildComponent),
                 "антагонист не должен производить ресурсы с поста, на котором технически остался");
             Assert.IsNull(state.GetSlot("bench").AssignedCompanionId,
                 "AdvanceCycle сверяется через тот же ReleaseFallen первым шагом — пост освобождён");
@@ -621,12 +621,15 @@ namespace Game.Tests.EditMode
         {
             var allowed = new HashSet<string>
             {
-                "Gold", "Materials", "Food", "Xp", "Level", "Day", "DaysInBand", "Tier",
+                "Gold", "BuildComponent", "CraftComponent", "Food", "Xp", "Level", "Day", "DaysInBand", "Tier",
                 "Stage", "StageOf", "Hp", "HpMax", "Ap", "ApMax", "ApReserved", "Round",
                 "Threshold", "QuietThreshold", "BloodyThreshold", "PartyValue", "Days",
-                "ExpectedMaterials", "ExpectedGold",
+                "ExpectedBuildComponent", "ExpectedCraftComponent", "ExpectedGold",
                 "ExpectedWounded", "Depth", "RoomsCleared", "UnbankedGold",
-                "UnbankedMaterials", "PointsAvailable", "MilestonesReached",
+                "UnbankedBuildComponent", "UnbankedCraftComponent", "PointsAvailable", "MilestonesReached",
+                // Поправка №12.5: два компоненти (будівельний/крафтовий) замість
+                // спільних Materials — відкритий ресурс гаманця, як Gold/Food,
+                // а не прихована шкала: гравець бачить їх у шапці числом.
                 "MilestonesTotal", "Slot", "ScarCount", "HitChancePreview", "X", "Y", "Width", "Height",
                 // Розширення D1 понад літеральний список §4.9: SkillChangeView.From/To —
                 // рівень скила (0..10, звичайне видиме число персонажа US-2.6),

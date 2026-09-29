@@ -101,7 +101,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(res.NeedsBattle);
             Assert.IsFalse(run.AwaitingBattle, "тихий обхід не веде до бою взагалі");
             Assert.IsNull(run.PendingBattle);
-            Assert.AreEqual(0, res.GainedMaterials, "0 ризику — 0 нагороди за обхід");
+            Assert.AreEqual(0, res.GainedBuildComponent, "0 ризику — 0 нагороди за обхід");
             Assert.AreEqual(OutcomeBand.Best, res.QuietBand);
         }
 
@@ -241,7 +241,7 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(res.Cleared);
             Assert.IsFalse(res.Wiped);
             Assert.IsFalse(run.AwaitingBattle);
-            Assert.Greater(run.UnbankedMaterials, 0, "перемога у бою за кімнату 1 теж дає видобуток");
+            Assert.Greater(run.UnbankedBuildComponent, 0, "перемога у бою за кімнату 1 теж дає видобуток");
         }
 
         [Test]
@@ -255,7 +255,7 @@ namespace Game.Tests.EditMode
 
             Assert.IsTrue(res.Wiped);
             Assert.AreEqual(DungeonOutcome.Wiped, run.Outcome);
-            Assert.AreEqual(0, run.UnbankedMaterials, "незабанковане втрачено");
+            Assert.AreEqual(0, run.UnbankedBuildComponent, "незабанковане втрачено");
             Assert.AreEqual(0, run.UnbankedGold);
             Assert.IsFalse(run.Active);
 
@@ -274,14 +274,14 @@ namespace Game.Tests.EditMode
             // підтверджує вже нульовий стан (R4 Push/Extract/Abandon/Wipe).
             var cache = new DungeonRoomDefinition("loot_room", "k1", DungeonRoomKind.Cache)
             {
-                GuaranteedMaterials = 7,
+                GuaranteedBuildComponent = 7,
                 GuaranteedGold = 3,
                 NamedItemId = "prewipe_relic"
             };
             var combat = new DungeonRoomDefinition("fight_room", "k2", DungeonRoomKind.Combat)
             {
                 ArenaKey = "arena_synthetic_8x8",
-                GuaranteedMaterials = 5,
+                GuaranteedBuildComponent = 5,
                 GuaranteedGold = 5
             };
             combat.EnemyIds.Add("test_bandit");
@@ -289,7 +289,7 @@ namespace Game.Tests.EditMode
 
             var run = new DungeonRun("synthetic_wipe_site", rooms, new[] { "protagonist" }, Cfg());
             run.ResolveRoom(IncidentPath.Quiet, Squad(9)); // Cache — гарантований лут, шлях байдужий
-            Assert.AreEqual(7, run.UnbankedMaterials, "передумова: є що втрачати");
+            Assert.AreEqual(7, run.UnbankedBuildComponent, "передумова: є що втрачати");
             CollectionAssert.Contains(run.UnbankedItemIds, "prewipe_relic");
 
             run.Push();
@@ -297,7 +297,7 @@ namespace Game.Tests.EditMode
             var res = run.ReportCombat(OutcomeBand.Worst, new[] { "protagonist" });
 
             Assert.IsTrue(res.Wiped);
-            Assert.AreEqual(0, run.UnbankedMaterials, "лут, накопичений ДО вайпу, теж знищено");
+            Assert.AreEqual(0, run.UnbankedBuildComponent, "лут, накопичений ДО вайпу, теж знищено");
             Assert.AreEqual(0, run.UnbankedGold);
             Assert.AreEqual(0, run.UnbankedItemIds.Count, "іменний предмет з Cache теж пропадає");
         }
@@ -313,7 +313,7 @@ namespace Game.Tests.EditMode
         // ---- Cache: гарантований лут + іменний предмет ----
 
         [Test]
-        public void Cache_GrantsGuaranteedMaterialsAndNamedItem_NoCheckInvolved()
+        public void Cache_GrantsGuaranteedCraftComponentAndNamedItem_NoCheckInvolved()
         {
             var run = NewCampRun();
             run.ResolveRoom(IncidentPath.Quiet, Squad(9)); // проходимо кімнату 1 без бою
@@ -322,7 +322,10 @@ namespace Game.Tests.EditMode
             var res = run.ResolveRoom(IncidentPath.Quiet, Squad(0)); // Cache — шлях байдужий, гарантовано
 
             Assert.IsTrue(res.Cleared);
-            Assert.AreEqual(3, res.GainedMaterials);
+            // Поправка №12.5: схованка авангарду — кран КРАФТОВОГО компонента
+            // (зброя й припаси), будівельного вона не дає.
+            Assert.AreEqual(3, res.GainedCraftComponent);
+            Assert.AreEqual(0, res.GainedBuildComponent);
             CollectionAssert.Contains(res.GrantedItemIds, "scout_horn");
             CollectionAssert.Contains(run.UnbankedItemIds, "scout_horn");
         }
@@ -385,10 +388,10 @@ namespace Game.Tests.EditMode
 
             var rooms = new List<DungeonRoomDefinition>
             {
-                new DungeonRoomDefinition("r1", "k1", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 },
-                new DungeonRoomDefinition("r2", "k2", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 },
-                new DungeonRoomDefinition("r3", "k3", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 },
-                new DungeonRoomDefinition("r4", "k4", DungeonRoomKind.Cache) { GuaranteedMaterials = 1 }
+                new DungeonRoomDefinition("r1", "k1", DungeonRoomKind.Cache) { GuaranteedBuildComponent = 1 },
+                new DungeonRoomDefinition("r2", "k2", DungeonRoomKind.Cache) { GuaranteedBuildComponent = 1 },
+                new DungeonRoomDefinition("r3", "k3", DungeonRoomKind.Cache) { GuaranteedBuildComponent = 1 },
+                new DungeonRoomDefinition("r4", "k4", DungeonRoomKind.Cache) { GuaranteedBuildComponent = 1 }
             };
             var run = new DungeonRun("synthetic_site", rooms, new[] { "protagonist" }, cfg);
 
@@ -425,7 +428,7 @@ namespace Game.Tests.EditMode
         // ---- Event: жадібно проти обережно ----
 
         [Test]
-        public void ResolveEvent_Greedy_TradesThreatForMaterials_AndCausesFear()
+        public void ResolveEvent_Greedy_TradesThreatForComponents_AndCausesFear()
         {
             var run = RunAtRoom3();
             int threatBefore = run.Threat;
@@ -433,7 +436,10 @@ namespace Game.Tests.EditMode
             var res = run.ResolveEvent(0); // "greedy"
 
             Assert.AreEqual("greedy", res.EventOptionId);
-            Assert.AreEqual(5, res.GainedMaterials);
+            // Поправка №12.5: жадібний варіант дає обидва компоненти, разом
+            // стільки ж, скільки раніше давав спільними матеріалами (5).
+            Assert.AreEqual(3, res.GainedBuildComponent);
+            Assert.AreEqual(2, res.GainedCraftComponent);
             Assert.Greater(run.Threat, threatBefore);
             // Поріг Deadly (6) вже перетнуто входом у кімнату 3 (Push) і ще не
             // здано жодним розв'язком — ResolveEvent зобов'язаний піднести цю
@@ -456,7 +462,9 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("cautious", res.EventOptionId);
             Assert.AreEqual(threatBefore, run.Threat, "обережний варіант Threat не піднімає");
             Assert.IsFalse(res.Consequence.CausedFear);
-            Assert.AreEqual(2, res.GainedMaterials);
+            // Поправка №12.5: обережно — трохи обох (разом 2, як і раніше).
+            Assert.AreEqual(1, res.GainedBuildComponent);
+            Assert.AreEqual(1, res.GainedCraftComponent);
         }
 
         [Test]
@@ -481,20 +489,25 @@ namespace Game.Tests.EditMode
             var run = NewCampRun();
             run.ResolveRoom(IncidentPath.Quiet, Squad(9));
             run.Push();
-            run.ResolveRoom(IncidentPath.Quiet, Squad(0)); // Cache: +3 матеріали, +horn
+            run.ResolveRoom(IncidentPath.Quiet, Squad(0)); // Cache: +3 крафтового компонента, +horn
 
             var baseState = new BaseState(new Roster(), new ResourceLedger(), new BalanceConfig());
-            int expectMaterials = run.UnbankedMaterials;
+            int expectMaterials = run.UnbankedBuildComponent;
+            int expectCraft = run.UnbankedCraftComponent;
             int expectGold = run.UnbankedGold;
+            Assert.Greater(expectCraft, 0, "схованка дала крафтовий компонент — є що банкувати");
 
             var rep = run.Extract(baseState);
 
             Assert.AreEqual(DungeonOutcome.Extracted, run.Outcome);
-            Assert.AreEqual(expectMaterials, baseState.Resources.Get(ResourceType.Materials));
+            Assert.AreEqual(expectMaterials, baseState.Resources.Get(ResourceType.BuildComponent));
             Assert.AreEqual(expectGold, baseState.Resources.Get(ResourceType.Gold));
-            Assert.AreEqual(expectMaterials, rep.Materials);
+            Assert.AreEqual(expectMaterials, rep.BuildComponent);
+            Assert.AreEqual(expectCraft, baseState.Resources.Get(ResourceType.CraftComponent), "крафтовий банкується у свій гаманець");
+            Assert.AreEqual(expectCraft, rep.CraftComponent);
+            Assert.AreEqual(0, run.UnbankedCraftComponent);
             CollectionAssert.Contains(rep.ItemIds, "scout_horn");
-            Assert.AreEqual(0, run.UnbankedMaterials, "незабанковане очищено");
+            Assert.AreEqual(0, run.UnbankedBuildComponent, "незабанковане очищено");
             Assert.IsFalse(run.Active);
         }
 
@@ -505,13 +518,14 @@ namespace Game.Tests.EditMode
             run.ResolveRoom(IncidentPath.Quiet, Squad(9));
             run.Push();
             run.ResolveRoom(IncidentPath.Quiet, Squad(0));
-            Assert.Greater(run.UnbankedMaterials, 0);
+            Assert.Greater(run.UnbankedCraftComponent, 0);
 
             run.Abandon();
 
             Assert.AreEqual(DungeonOutcome.Abandoned, run.Outcome);
             Assert.AreNotEqual(DungeonOutcome.Wiped, run.Outcome, "обережний вихід — не вайп");
-            Assert.AreEqual(0, run.UnbankedMaterials);
+            Assert.AreEqual(0, run.UnbankedBuildComponent);
+            Assert.AreEqual(0, run.UnbankedCraftComponent);
         }
 
         // ---- Фікс мажора ревʼю B2: Extract/Abandon так само завершують прогін
@@ -573,13 +587,13 @@ namespace Game.Tests.EditMode
             runA.Push(); runB.Push();
             var r2A = runA.ResolveRoom(IncidentPath.Quiet, Squad(0));
             var r2B = runB.ResolveRoom(IncidentPath.Quiet, Squad(0));
-            Assert.AreEqual(r2A.GainedMaterials, r2B.GainedMaterials);
+            Assert.AreEqual(r2A.GainedBuildComponent, r2B.GainedBuildComponent);
             CollectionAssert.AreEqual(r2A.GrantedItemIds, r2B.GrantedItemIds);
 
             runA.Push(); runB.Push();
             var r3A = runA.ResolveEvent(0);
             var r3B = runB.ResolveEvent(0);
-            Assert.AreEqual(r3A.GainedMaterials, r3B.GainedMaterials);
+            Assert.AreEqual(r3A.GainedBuildComponent, r3B.GainedBuildComponent);
             Assert.AreEqual(runA.Threat, runB.Threat, "той самий шлях -- той самий Threat, без жодного кубика");
         }
 
@@ -604,7 +618,9 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(run.CurrentCleared, restored.CurrentCleared);
             Assert.AreEqual(run.AwaitingBattle, restored.AwaitingBattle);
             Assert.AreEqual(run.Threat, restored.Threat);
-            Assert.AreEqual(run.UnbankedMaterials, restored.UnbankedMaterials);
+            Assert.AreEqual(run.UnbankedBuildComponent, restored.UnbankedBuildComponent);
+            Assert.Greater(run.UnbankedCraftComponent, 0, "схованка дала крафтовий — зліпку є що нести");
+            Assert.AreEqual(run.UnbankedCraftComponent, restored.UnbankedCraftComponent);
             Assert.AreEqual(run.UnbankedGold, restored.UnbankedGold);
             CollectionAssert.AreEqual(run.UnbankedItemIds, restored.UnbankedItemIds);
         }

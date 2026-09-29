@@ -166,9 +166,15 @@ namespace Game.Gameplay
         /// <summary>Id журнальних записів, уже знятих скріншотом "journal-&lt;id&gt;" — рівно один раз за тур, у момент, коли вони вперше стають Seen.</summary>
         private readonly HashSet<string> _jSeenIds = new HashSet<string>();
 
+        /// <summary>
+        /// Поправка №12.7: старт без будівель — Зала ради і Склад більше не
+        /// «вже стоять», тож вони в черзі (та сама, що <c>BotRunner.BuildPriority</c>).
+        /// Обрану сценою першу будівлю черга пропускає.
+        /// </summary>
         private static readonly string[] JournalBuildPriority =
         {
-            DefaultBuildings.Infirmary, DefaultBuildings.Workshop, DefaultBuildings.Tavern,
+            DefaultBuildings.CouncilHall, DefaultBuildings.Storehouse, DefaultBuildings.Infirmary,
+            DefaultBuildings.Workshop, DefaultBuildings.Tavern,
             DefaultBuildings.Temple, DefaultBuildings.Market, DefaultBuildings.Fortifications
         };
 
@@ -391,7 +397,7 @@ namespace Game.Gameplay
                     // за замовчуванням, що й BotSupport.DefaultAssignments
                     // (Steward), через shell.TryRun, щоб 3D-хаб оновив постаті.
                     var roster = Session.GetRosterView();
-                    var assignments = BotSupport.DefaultAssignments(roster);
+                    var assignments = BotSupport.DefaultAssignments(roster, Session.GetCityView());
                     foreach (var kv in assignments)
                     {
                         string companionId = kv.Key;
@@ -848,7 +854,12 @@ namespace Game.Gameplay
                         _jLastMorningDay = day;
 
                         var roster = Session.GetRosterView();
-                        var assignments = BotSupport.DefaultAssignments(roster);
+                        // Поправка №12.7: та сама розстановка журнального гравця,
+                        // що й у MechanicsJournalCompletionTests (BotSupport.
+                        // JournalAssignments): ферми порожні, доки журнал не
+                        // побачить зміну смуги і бунт, протагоніст — на розвідпост.
+                        bool starve = !(JournalSeen("tension_band_change") && JournalSeen("great_crisis"));
+                        var assignments = BotSupport.JournalAssignments(roster, Session.GetCityView(), starve);
                         foreach (var kv in assignments)
                         {
                             string companionId = kv.Key;
@@ -1066,6 +1077,15 @@ namespace Game.Gameplay
             int count = step?.Options != null ? step.Options.Count : 0;
             if (count == 0) return 0;
 
+            // Поправка №12.7: журнальний гравець іде в кривавий вузол 1, тож
+            // першою будівлею після прологу зводить Лазарет — той самий вибір,
+            // що й MechanicsJournalCompletionTests.
+            if (step.ChoiceId == OpeningScenes.FirstBuildingChoiceId)
+            {
+                int infirmary = System.Array.IndexOf(DefaultBuildings.FirstBuildingChoices, DefaultBuildings.Infirmary);
+                if (infirmary >= 0 && infirmary < count) return infirmary;
+            }
+
             if (step.ChoiceId == CompanionScenes.MyroslavaConfrontationChoiceId)
                 for (int i = 0; i < step.Options.Count; i++)
                     if (step.Options[i].SkillKey == SkillKeys.Intimidate.Id) return i;
@@ -1271,6 +1291,14 @@ namespace Game.Gameplay
             int days = preview.Days;
             Run(() => Session.DepartExpedition(siteId, approach, party, days));
             _jNextDelve = !delve;
+        }
+
+        /// <summary>Чи запис журналу механік уже побачено (для розстановки журнального гравця).</summary>
+        private bool JournalSeen(string id)
+        {
+            foreach (var entry in Session.GetMechanicsJournal())
+                if (entry.Id == id) return entry.Seen;
+            return false;
         }
 
         /// <summary>Наступне підземелля в журнальному турі: чергується з вилазкою після кожного виходу.</summary>

@@ -108,7 +108,8 @@ namespace Game.Core.Dungeons
         public bool NeedsBattle;   // кроваво на бойовій кімнаті — чекаємо ReportCombat
         public bool Wiped;         // бій пішов не так — прогін завершено
         public OutcomeBand? QuietBand;
-        public int GainedMaterials;
+        public int GainedBuildComponent;
+        public int GainedCraftComponent;
         public int GainedGold;
         public IReadOnlyList<string> GrantedItemIds = Array.Empty<string>();
         public string EventOptionId; // лише для Kind == Event
@@ -119,7 +120,8 @@ namespace Game.Core.Dungeons
     /// <summary>Що винесли при екстракті — банкується в той самий BaseState.Resources.</summary>
     public sealed class DungeonExtractReport
     {
-        public int Materials;
+        public int BuildComponent;
+        public int CraftComponent;
         public int Gold;
         public int DepthReached;
         public IReadOnlyList<string> ItemIds = Array.Empty<string>();
@@ -200,7 +202,8 @@ namespace Game.Core.Dungeons
         public bool AwaitingBattle { get; private set; }
         public BattleRequest PendingBattle { get; private set; }
 
-        public int UnbankedMaterials { get; private set; }
+        public int UnbankedBuildComponent { get; private set; }
+        public int UnbankedCraftComponent { get; private set; }
         public int UnbankedGold { get; private set; }
         public IReadOnlyList<string> UnbankedItemIds => _unbankedItemIds;
         public IReadOnlyList<string> PartyIds => _partyIds;
@@ -274,7 +277,7 @@ namespace Game.Core.Dungeons
 
             if (room.Kind == DungeonRoomKind.Cache)
             {
-                AddLoot(room.GuaranteedMaterials, room.GuaranteedGold, res);
+                AddLoot(room.GuaranteedBuildComponent, room.GuaranteedCraftComponent, room.GuaranteedGold, res);
                 GrantNamedItem(room, res);
                 MarkCleared(res);
                 FinalizeResolution(res);
@@ -328,7 +331,7 @@ namespace Game.Core.Dungeons
                 return res;
             }
 
-            AddLoot(room.GuaranteedMaterials, room.GuaranteedGold, res);
+            AddLoot(room.GuaranteedBuildComponent, room.GuaranteedCraftComponent, room.GuaranteedGold, res);
             MarkCleared(res);
             FinalizeResolution(res);
             return res;
@@ -349,7 +352,7 @@ namespace Game.Core.Dungeons
             var opt = room.EventOptions[optionIndex];
             var res = new RoomResolution { RoomId = room.Id, Kind = room.Kind, EventOptionId = opt.Id };
 
-            AddLoot(opt.MaterialsGain, opt.GoldGain, res);
+            AddLoot(opt.BuildComponentGain, opt.CraftComponentGain, opt.GoldGain, res);
 
             if (opt.ThreatDelta != 0)
                 Threat += opt.ThreatDelta;
@@ -367,7 +370,8 @@ namespace Game.Core.Dungeons
 
             var rep = new DungeonExtractReport
             {
-                Materials = UnbankedMaterials,
+                BuildComponent = UnbankedBuildComponent,
+                CraftComponent = UnbankedCraftComponent,
                 Gold = UnbankedGold,
                 DepthReached = Depth,
                 ItemIds = new List<string>(_unbankedItemIds),
@@ -380,7 +384,8 @@ namespace Game.Core.Dungeons
 
             if (baseState != null)
             {
-                baseState.Resources.Add(ResourceType.Materials, UnbankedMaterials);
+                baseState.Resources.Add(ResourceType.BuildComponent, UnbankedBuildComponent);
+                baseState.Resources.Add(ResourceType.CraftComponent, UnbankedCraftComponent);
                 baseState.Resources.Add(ResourceType.Gold, UnbankedGold);
             }
 
@@ -422,7 +427,8 @@ namespace Game.Core.Dungeons
             sb.Append("|a:").Append(AwaitingBattle ? '1' : '0');
             sb.Append("|t:").Append(Threat.ToString(CultureInfo.InvariantCulture));
             sb.Append("|rc:").Append(RoomsCleared.ToString(CultureInfo.InvariantCulture));
-            sb.Append("|um:").Append(UnbankedMaterials.ToString(CultureInfo.InvariantCulture));
+            sb.Append("|um:").Append(UnbankedBuildComponent.ToString(CultureInfo.InvariantCulture));
+            sb.Append("|uc:").Append(UnbankedCraftComponent.ToString(CultureInfo.InvariantCulture));
             sb.Append("|ug:").Append(UnbankedGold.ToString(CultureInfo.InvariantCulture));
             sb.Append("|it:").Append(string.Join(",", _unbankedItemIds));
             sb.Append("|lb:").Append(((int)_lastReportedBand).ToString(CultureInfo.InvariantCulture));
@@ -458,7 +464,8 @@ namespace Game.Core.Dungeons
                         break;
                     case "t": Threat = ParseInt(body); break;
                     case "rc": RoomsCleared = ParseInt(body); break;
-                    case "um": UnbankedMaterials = ParseInt(body); break;
+                    case "um": UnbankedBuildComponent = ParseInt(body); break;
+                    case "uc": UnbankedCraftComponent = ParseInt(body); break;
                     case "ug": UnbankedGold = ParseInt(body); break;
                     case "it":
                         _unbankedItemIds.Clear();
@@ -521,17 +528,20 @@ namespace Game.Core.Dungeons
             RoomsCleared++;
         }
 
-        private void AddLoot(int materials, int gold, RoomResolution res)
+        private void AddLoot(int build, int craft, int gold, RoomResolution res)
         {
-            UnbankedMaterials += materials;
+            UnbankedBuildComponent += build;
+            UnbankedCraftComponent += craft;
             UnbankedGold += gold;
-            res.GainedMaterials += materials;
+            res.GainedBuildComponent += build;
+            res.GainedCraftComponent += craft;
             res.GainedGold += gold;
         }
 
         private void ClearUnbanked()
         {
-            UnbankedMaterials = 0;
+            UnbankedBuildComponent = 0;
+            UnbankedCraftComponent = 0;
             UnbankedGold = 0;
             _unbankedItemIds.Clear();
         }

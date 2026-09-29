@@ -142,30 +142,53 @@ namespace Game.Tests.EditMode
 
         // ---- Крафт ----
         [Test]
-        public void Craft_Upgrade_SpendsMaterialsAndGold_RaisesRarity()
+        public void Craft_Upgrade_SpendsCraftComponentAndGold_RaisesRarity()
         {
             var ledger = new ResourceLedger();
-            ledger.Add(ResourceType.Materials, 5);
+            ledger.Add(ResourceType.CraftComponent, 5);
             ledger.Add(ResourceType.Gold, 10);
             var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Common); // Armor=1
 
-            var res = CraftSystem.TryUpgrade(item, ledger, workshopOpen: true, materialsCost: 3, goldCost: 5);
+            var res = CraftSystem.TryUpgrade(item, ledger, workshopOpen: true, craftCost: 3, goldCost: 5);
             Assert.AreEqual(CraftResult.Success, res);
             Assert.AreEqual(Rarity.Uncommon, item.Rarity);
-            Assert.AreEqual(2, ledger.Get(ResourceType.Materials)); // 5 − 3
+            Assert.AreEqual(2, ledger.Get(ResourceType.CraftComponent)); // 5 − 3
             Assert.AreEqual(5, ledger.Get(ResourceType.Gold));      // 10 − 5
+        }
+
+        /// <summary>
+        /// Поправка №12.5: крафт платить КРАФТОВИМ компонентом, будівельний
+        /// йому не годиться — інакше два компоненти знову злились би в один
+        /// гаманець і вибір точки вилазки перестав би щось значити.
+        /// </summary>
+        [Test]
+        public void Craft_PaysWithCraftComponent_NotBuildComponent()
+        {
+            var ledger = new ResourceLedger();
+            ledger.Add(ResourceType.BuildComponent, 100);
+            ledger.Add(ResourceType.Gold, 100);
+            var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
+
+            Assert.AreEqual(CraftResult.CannotAfford, CraftSystem.TryUpgrade(item, ledger, true, Cfg.Items),
+                "будівельний компонент не оплачує крафт");
+            Assert.AreEqual(100, ledger.Get(ResourceType.BuildComponent), "невдалий крафт нічого не списує");
+
+            ledger.Add(ResourceType.CraftComponent, Cfg.Items.CraftComponentCost);
+            Assert.AreEqual(CraftResult.Success, CraftSystem.TryUpgrade(item, ledger, true, Cfg.Items));
+            Assert.AreEqual(0, ledger.Get(ResourceType.CraftComponent));
+            Assert.AreEqual(100, ledger.Get(ResourceType.BuildComponent), "будівельний компонент крафт не чіпає");
         }
 
         [Test]
         public void Craft_RequiresOpenWorkshop_NotCityWorksInternals()
         {
             var ledger = new ResourceLedger();
-            ledger.Add(ResourceType.Materials, 100);
+            ledger.Add(ResourceType.CraftComponent, 100);
             ledger.Add(ResourceType.Gold, 100);
             var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
 
             Assert.AreEqual(CraftResult.WorkshopClosed,
-                CraftSystem.TryUpgrade(item, ledger, workshopOpen: false, materialsCost: 1, goldCost: 1));
+                CraftSystem.TryUpgrade(item, ledger, workshopOpen: false, craftCost: 1, goldCost: 1));
             Assert.AreEqual(Rarity.Common, item.Rarity, "закрита майстерня не змінює предмет");
         }
 
@@ -173,32 +196,32 @@ namespace Game.Tests.EditMode
         public void Craft_CannotAfford_OrNamed_OrMaxed()
         {
             var poor = new ResourceLedger();
-            poor.Add(ResourceType.Materials, 1);
+            poor.Add(ResourceType.CraftComponent, 1);
             poor.Add(ResourceType.Gold, 1);
             var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
             Assert.AreEqual(CraftResult.CannotAfford,
-                CraftSystem.TryUpgrade(item, poor, true, materialsCost: 3, goldCost: 5));
+                CraftSystem.TryUpgrade(item, poor, true, craftCost: 3, goldCost: 5));
 
             var named = ItemInstance.NamedFrom(DefaultItems.AegisPlate());
             Assert.AreEqual(CraftResult.NamedNotUpgradable,
-                CraftSystem.TryUpgrade(named, poor, true, materialsCost: 0, goldCost: 0));
+                CraftSystem.TryUpgrade(named, poor, true, craftCost: 0, goldCost: 0));
 
             var epic = new ItemInstance(DefaultItems.WornVest(), Rarity.Epic);
             Assert.AreEqual(CraftResult.AlreadyMaxRarity,
-                CraftSystem.TryUpgrade(epic, poor, true, materialsCost: 0, goldCost: 0));
+                CraftSystem.TryUpgrade(epic, poor, true, craftCost: 0, goldCost: 0));
         }
 
         [Test]
         public void Craft_UsesItemBalanceOverload_ForDefaultCosts()
         {
             var ledger = new ResourceLedger();
-            ledger.Add(ResourceType.Materials, 3);
+            ledger.Add(ResourceType.CraftComponent, 3);
             ledger.Add(ResourceType.Gold, 5);
             var item = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
 
             var res = CraftSystem.TryUpgrade(item, ledger, true, Cfg.Items);
             Assert.AreEqual(CraftResult.Success, res);
-            Assert.AreEqual(0, ledger.Get(ResourceType.Materials));
+            Assert.AreEqual(0, ledger.Get(ResourceType.CraftComponent));
             Assert.AreEqual(0, ledger.Get(ResourceType.Gold));
         }
 
@@ -220,7 +243,7 @@ namespace Game.Tests.EditMode
 
             // Реальний апгрейд дає ТІ САМІ числа, що прев'ю обіцяло.
             var ledger = new ResourceLedger();
-            ledger.Add(ResourceType.Materials, 3);
+            ledger.Add(ResourceType.CraftComponent, 3);
             ledger.Add(ResourceType.Gold, 5);
             CraftSystem.TryUpgrade(item, ledger, true, 3, 5);
 
@@ -248,7 +271,7 @@ namespace Game.Tests.EditMode
         public void Craft_Upgrade_NeverLowersStats()
         {
             var ledger = new ResourceLedger();
-            ledger.Add(ResourceType.Materials, 100);
+            ledger.Add(ResourceType.CraftComponent, 100);
             ledger.Add(ResourceType.Gold, 100);
 
             var item = new ItemInstance(DefaultItems.HuntersBow(), Rarity.Common);
@@ -275,7 +298,7 @@ namespace Game.Tests.EditMode
         public void Craft_Upgrade_IsFullyDeterministic()
         {
             var ledger = new ResourceLedger();
-            ledger.Add(ResourceType.Materials, 100);
+            ledger.Add(ResourceType.CraftComponent, 100);
             ledger.Add(ResourceType.Gold, 100);
             var a = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
             var b = new ItemInstance(DefaultItems.WornVest(), Rarity.Common);
@@ -363,7 +386,7 @@ namespace Game.Tests.EditMode
             // живим — бо UpgradeTo масштабує ВІД поточного, а не з нуля.
             var item = new ItemInstance(DefaultItems.HuntersBow(), Rarity.Common);
             var ledger = new ResourceLedger();
-            ledger.Add(ResourceType.Materials, 100);
+            ledger.Add(ResourceType.CraftComponent, 100);
             ledger.Add(ResourceType.Gold, 100);
             CraftSystem.TryUpgrade(item, ledger, true, 1, 1);
             CraftSystem.TryUpgrade(item, ledger, true, 1, 1);

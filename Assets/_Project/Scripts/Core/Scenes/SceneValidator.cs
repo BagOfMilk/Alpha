@@ -111,6 +111,15 @@ namespace Game.Core.Scenes
                     case SceneStepKind.Choice:
                         ValidateChoice(step, where, labels, problems);
                         break;
+
+                    case SceneStepKind.Goto:
+                        // Поправка №12.7: стрибок сходить гілки — ціль мусить
+                        // існувати, а кроки після нього без мітки мертві, як і
+                        // після переходу.
+                        if (string.IsNullOrEmpty(step.Key)) problems.Add($"{where}: стрибок без мітки");
+                        else if (!labels.Contains(step.Key)) problems.Add($"{where}: мітка стрибка «{step.Key}» не знайдена в сцені");
+                        deadZone = true;
+                        break;
                 }
             }
 

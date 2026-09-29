@@ -127,7 +127,7 @@ namespace Game.Tests.EditMode
             // ітерації, поки ніхто не перевіряв.
             var offenders = DefaultContent.AllSlots()
                 .Where(s => s.OutputKind == SlotOutputKind.Resource
-                         && s.OutputResource == Game.Core.Economy.ResourceType.Materials)
+                         && s.OutputResource == Game.Core.Economy.ResourceType.BuildComponent)
                 .Select(s => s.Id)
                 .ToList();
 

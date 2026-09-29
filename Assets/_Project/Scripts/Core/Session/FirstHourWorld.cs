@@ -43,9 +43,9 @@ namespace Game.Core.Session
     /// протагоніст — Companion з id "protagonist", зареєстрований у
     /// RosterAdapter як актор.
     ///
-    /// Міський цикл підключений ПОВНІСТЮ: виробництво, будівництво (рада вже
-    /// стоїть, склад вже стоїть — <see cref="DefaultBuildings.StartingSet"/>),
-    /// населення. Раніше зріз і харнес темпу збирались через
+    /// Міський цикл підключений ПОВНІСТЮ: виробництво, будівництво (старт без
+    /// будівель — <see cref="DefaultBuildings.StartingSet"/> порожній, першу
+    /// обирає гравець після прологу, Поправка №12.7), населення. Раніше зріз і харнес темпу збирались через
     /// DayProcessor.DefaultSteps() — без жодного зерна виробітку і без голоду
     /// (див. CLAUDE.md «Міст виробництва»). Поправка №7.1 підключає їх тут.
     ///
@@ -164,30 +164,38 @@ namespace Game.Core.Session
 
             foreach (var slot in Game.Core.DefaultContent.AllSlots()) baseState.AddSlot(slot);
 
-            // Рада і склад уже стоять — хутір зустрічає гравця працюючою
-            // громадою, а не будмайданчиком (Поправка №6.1, §3.0 FIRST_HOUR).
+            // Поправка №8.4, уточнена №12.7 (рішення власника 29.09.2026): гра
+            // стартує БЕЗ будівель — усі пости, які відкриває будівля (рада,
+            // склад, лазарет, майстерня, ринок), закриті. Першу будівлю гравець
+            // обирає одразу після прологу (OpeningScenes, вибір
+            // first_building_choice) — вона стає без ціни, і на її пост стає свій
+            // іменний. Раніше тут стояли Зала ради і Склад, а лазарет
+            // відкривався руками без будівлі — пропозиція асистента, яку
+            // власник скасував.
             var works = new CityWorksType(DefaultBuildings.StartingSet, testBuildOneDayConstruction);
             works.ApplyToSlots(baseState);
-
-            // Лазарет відкривається будівлею, якої в StartingSet немає — але
-            // Знахарка Гафія стоїть на посту з вечора перших діб (§3.0), а не
-            // чекає будівництва. Пост зрізу вважається вже облаштованим: зріз
-            // починається з працюючою громадою, а не з будмайданчиком
-            // (той самий прийом раніше тримав відкритим storehouse_dock).
-            var infirmary = baseState.GetSlot("infirmary_bed");
-            if (infirmary != null) infirmary.Unlocked = true;
 
             // Стартовий гаманець — ПЛЕЙСХОЛДЕР (числа балансу виправить власник):
             // вистачає на перші доби без паніки, не вистачає назавжди — ферми
             // ніхто не тримає всі п'ять діб відкриття (§3.0-3.5), і голод —
             // чесна, а не зрежисована ціна цієї прогалини.
-            resources.Add(ResourceType.Gold, 40);
-            resources.Add(ResourceType.Materials, 10);
+            // Поправка №12.7: було 40 золота ПЛЮС збудовані Зала ради (40) і
+            // Склад (25). Тепер одна будівля — з вибору, без ціни, тож гаманець
+            // піднято на 30, щоб друга будова була по кишені вже першого
+            // ранку (боти туру інакше не встигали до таверни/майстерні за 15
+            // діб — AllMechanicsCoverageTests Row16/Row22).
+            resources.Add(ResourceType.Gold, 70);
+            resources.Add(ResourceType.BuildComponent, 10);
+            // Поправка №12.5: крафтовий компонент — на ОДИН апгрейд у майстерні
+            // (ItemBalance.CraftComponentCost); далі — лише ззовні (майстерня-
+            // руїна, данжі). ПЛЕЙСХОЛДЕР, як і решта гаманця.
+            resources.Add(ResourceType.CraftComponent, 3);
             resources.Add(ResourceType.Food, 20);
 
-            Assign(baseState, "zakhar", "council_seat");
-            Assign(baseState, "keeper", "storehouse_dock");
-            Assign(baseState, "healer", "infirmary_bed");
+            // Поправка №12.7: Захар, Дід Овсій і Гафія на старті вільні — їхні
+            // пости закриті, доки не стане будівля. На пост першої будівлі
+            // іменного ставить сам вибір (GameSession.GrantBuildingFromConsequence);
+            // решту гравець розставляє сам (напр. на ферми — вони відкриті).
             // maksym/myroslava/протагоніст — в полі (§3.0): на пости НЕ ставляться.
 
             var adapter = new RosterAdapter(roster, ProtagonistId, cfg);
@@ -261,15 +269,6 @@ namespace Game.Core.Session
 
             return new FirstHourWorld(baseState, works, processor, cycle, roster, party, sites, flags,
                 quests, factions, points, readiness, inventory);
-        }
-
-        private static void Assign(BaseState baseState, string companionId, string positionId)
-        {
-            var result = baseState.TryAssign(companionId, positionId);
-            if (result != Game.Core.Base.AssignmentResult.Success)
-                throw new System.InvalidOperationException(
-                    "Стартовая расстановка сорвалась: " + companionId + " -> " + positionId +
-                    " (" + result + "). Тихая неудача здесь означает пост без человека на весь прогон.");
         }
 
         /// <summary>

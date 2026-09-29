@@ -8,6 +8,7 @@ using Game.Core.Combat;
 using Game.Core.Expeditions;
 using Game.Core.Items;
 using Game.Core.Loop;
+using Game.Core.Scenes;
 using Game.Core.Session;
 using Game.Core.Session.Bots;
 using Game.Core.Session.Views;
@@ -56,6 +57,9 @@ namespace Game.Tests.EditMode
         /// </summary>
         private sealed class JournalPolicy : IBotPolicy
         {
+            /// <summary>Ферми порожні, доки журнал не побачив зміну смуги і бунт (BotSupport.JournalAssignments).</summary>
+            public bool StarveFarms = true;
+
             public string Name => "JournalPlayer";
 
             public IncidentPath ChooseIncidentPath(PendingOfferView offer)
@@ -77,7 +81,7 @@ namespace Game.Tests.EditMode
             public bool ChoosePatrol(SessionView view) => view.Day % 2 == 0;
 
             public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city)
-                => BotSupport.DefaultAssignments(roster);
+                => BotSupport.JournalAssignments(roster, city, StarveFarms);
 
             public ExpeditionChoice? ChooseExpedition(SessionView view)
             {
@@ -99,7 +103,12 @@ namespace Game.Tests.EditMode
                 // який CraftSystem.TryUpgrade відмовляє одразу (IsNamed).
                 // Без парного дня зі звичайною вилазкою "craft" фізично
                 // недосяжний для політики, що завжди штовхає лише данж.
-                return view.Day % 2 == 0
+                // Поправка №12.7: парність доби (Day % 2) тут не годиться —
+                // перша вільна від ран доба тепер парна (10), вилазка
+                // «туди-назад» триває добу, і данж на непарних добах завжди
+                // натрапляв на загін у дорозі: виходили самі звичайні вилазки.
+                // Пари діб (Day / 2) чергують обидва типи за будь-якого старту.
+                return (view.Day / 2) % 2 == 0
                     ? new ExpeditionChoice("outskirts", ExpeditionApproach.Quiet, new[] { GameSession.ProtagonistId, "zakhar" }, 2)
                     : new ExpeditionChoice(Game.Core.Dungeons.DefaultDungeon.AbandonedCamp,
                         ExpeditionApproach.Delve, new[] { GameSession.ProtagonistId, "zakhar" }, 2);
@@ -183,7 +192,7 @@ namespace Game.Tests.EditMode
 
         private static IReadOnlyDictionary<string, string> AssignAll(GameSession s)
         {
-            var plan = BotSupport.DefaultAssignments(s.GetRosterView());
+            var plan = BotSupport.JournalAssignments(s.GetRosterView(), s.GetCityView());
             foreach (var kv in plan) s.Assign(kv.Key, kv.Value);
             return plan;
         }
@@ -216,9 +225,23 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(FindJournalEntry(s.GetMechanicsJournal(), "creation").Seen, "creation мав стати Seen одразу після ConfirmCreation");
 
             // ---- Відкриваюча портретна сцена -----------------------------------
+            // Поправка №12.7: наприкінці прологу — вибір першої будівлі. Цей
+            // гравець свідомо йде в кривавий вузол 1, тож першою зводить
+            // Лазарет (Гафія лікує поранених; Залу ради бот-водій зведе сам).
             Assert.AreEqual(SessionState.Scene, s.State);
-            RunSceneToFinish(s);
-            Cmd("Scene(opening): «Далі»/вибір до кінця");
+            {
+                SceneStepView step = s.AdvanceScene();
+                while (!step.IsFinished)
+                {
+                    if (!step.IsChoice) { step = s.AdvanceScene(); continue; }
+                    int idx = step.ChoiceId == OpeningScenes.FirstBuildingChoiceId
+                        ? System.Array.IndexOf(Game.Core.Base.DefaultBuildings.FirstBuildingChoices, Game.Core.Base.DefaultBuildings.Infirmary)
+                        : 0;
+                    step = s.ChooseSceneOption(idx);
+                }
+            }
+            Cmd("Scene(opening): «Далі»/вибір до кінця; перша будівля — Лазарет");
+            Assert.IsTrue(s.GetCityView().Built.Any(b => b.Id == Game.Core.Base.DefaultBuildings.Infirmary), "обрана перша будівля стоїть одразу");
             Assert.AreEqual(SessionState.Morning, s.State);
             Assert.IsTrue(FindJournalEntry(s.GetMechanicsJournal(), "portrait_scenes").Seen, "portrait_scenes (scene.finished) мав прийти з відкриваючою сценою");
 
@@ -338,6 +361,9 @@ namespace Game.Tests.EditMode
 
             while (daysDriven < MaxDriveDays)
             {
+                var journalNow = s.GetMechanicsJournal();
+                policy.StarveFarms = !(FindJournalEntry(journalNow, "tension_band_change").Seen &&
+                                       FindJournalEntry(journalNow, "great_crisis").Seen);
                 BotRunner.Drive(s, policy, 1, fullLog);
                 daysDriven++;
                 Cmd("BotRunner d" + s.CurrentView.Day + ": розстановка/рада/вилазка/данж/ніч/рішення — JournalPolicy");

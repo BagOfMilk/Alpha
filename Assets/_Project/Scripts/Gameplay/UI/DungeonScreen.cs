@@ -36,12 +36,13 @@ namespace Game.Gameplay.UI
                 // Фікс-ревью (Фаза F, знайдено тур-автоплеєм): "ui.dungeon.unbanked" —
                 // ШАБЛОН із плейсхолдерами (Format-ключ), а не готовий підпис;
                 // LabeledRow.label раніше кликав Get() на тому самому ключі —
-                // гравець бачив буквальний рядок "Незбережено: {materials}
-                // матеріалів, {gold} золота" у лівій колонці. Value-колонка
+                // гравець бачив буквальний рядок "Незбережено: {build} ..."
+                // у лівій колонці. Value-колонка
                 // (Format) уже рахувала правильно — просто дублювала
                 // непотрібний підпис.
                 GUILayout.Label(UkrainianText.Format("ui.dungeon.unbanked", g,
-                    "materials", view.UnbankedMaterials.ToString(), "gold", view.UnbankedGold.ToString()), AlphaSkin.Body);
+                    "build", view.UnbankedBuildComponent.ToString(), "craft", view.UnbankedCraftComponent.ToString(),
+                    "gold", view.UnbankedGold.ToString()), AlphaSkin.Body);
 
                 GUILayout.Space(10f);
 

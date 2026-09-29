@@ -300,17 +300,17 @@ namespace Game.Gameplay.UI
                 {
                     string buildingId = id;
                     bool enoughGold = economy == null || economy.Gold >= def.GoldCost;
-                    bool enoughMaterials = economy == null || economy.Materials >= def.MaterialsCost;
+                    bool enoughBuild = economy == null || economy.BuildComponent >= def.BuildComponentCost;
                     if (def.QuestOnly)
                         Widgets.DisabledButton(UkrainianText.Get("ui.buildings.order", g), UkrainianText.Get("ui.feedback.build.quest_only", g), GUILayout.Width(160f));
-                    else if (enoughGold && enoughMaterials)
+                    else if (enoughGold && enoughBuild)
                     {
                         if (Widgets.PrimaryButton(UkrainianText.Get("ui.buildings.order", g), GUILayout.Width(160f)))
                             shell.TryRunReported(() => shell.Session.OrderBuilding(buildingId), r => ScreenText.BuildFailure(r, g));
                     }
                     else
                     {
-                        string reasonKey = !enoughGold ? "ui.feedback.build.not_enough_gold" : "ui.feedback.build.not_enough_materials";
+                        string reasonKey = !enoughGold ? "ui.feedback.build.not_enough_gold" : "ui.feedback.build.not_enough_build_component";
                         Widgets.DisabledButton(UkrainianText.Get("ui.buildings.order", g), UkrainianText.Get(reasonKey, g), GUILayout.Width(160f));
                     }
                 }
@@ -350,6 +350,20 @@ namespace Game.Gameplay.UI
         {
             var city = shell.Session.GetCityView();
             var economy = shell.Session.GetEconomyView();
+
+            // Поправка №12.7 (старт без будівель): без Зали ради жодна дія ради
+            // не пройде (CouncilOrderResult.NoCouncilHall). Замість ряду кнопок,
+            // що мовчки відмовляють, — одне пояснення, чого бракує і де це
+            // звести (Статут UI-03, UI-04).
+            bool hasHall = false;
+            if (city?.Built != null)
+                foreach (var b in city.Built)
+                    if (b.Id == DefaultBuildings.CouncilHall) { hasHall = true; break; }
+            if (city != null && !hasHall)
+            {
+                GUILayout.Label(UkrainianText.Get("ui.council.no_hall", g), AlphaSkin.Body);
+                return;
+            }
 
             DrawCouncilCostEffect("ui.council.raid", g, "gold", CouncilCity.RaidGoldCost.ToString());
             GUILayout.BeginHorizontal(GUI.skin.box);
@@ -589,7 +603,8 @@ namespace Game.Gameplay.UI
                 Widgets.LabeledRow(UkrainianText.Get("ui.expedition.party_value", g), _preview.PartyValue.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("ui.expedition.days", g), _preview.Days.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("ui.expedition.expected", g), ScreenText.BandLabelFromRaw(_preview.ExpectedBand, g));
-                Widgets.LabeledRow(UkrainianText.Get("resource.materials", g), _preview.ExpectedMaterials.ToString());
+                Widgets.LabeledRow(UkrainianText.Get("resource.build_component", g), _preview.ExpectedBuildComponent.ToString());
+                Widgets.LabeledRow(UkrainianText.Get("resource.craft_component", g), _preview.ExpectedCraftComponent.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("resource.gold", g), _preview.ExpectedGold.ToString());
             }
         }
@@ -716,7 +731,7 @@ namespace Game.Gameplay.UI
             var itemBalance = new Game.Core.Balance.ItemBalance();
             var preview = Game.Core.Items.CraftSystem.PreviewUpgrade(item);
             string previewText = ScreenText.CraftPreviewText(preview, g);
-            string costLine = UkrainianText.Format("ui.gear.craft_cost", g, "gold", itemBalance.CraftGoldCost.ToString(), "materials", itemBalance.CraftMaterialsCost.ToString());
+            string costLine = UkrainianText.Format("ui.gear.craft_cost", g, "gold", itemBalance.CraftGoldCost.ToString(), "craft", itemBalance.CraftComponentCost.ToString());
             GUILayout.Label(costLine + (string.IsNullOrEmpty(previewText) ? "" : " · " + previewText), AlphaSkin.Tooltip);
 
             if (!workshopOpen)
@@ -724,7 +739,7 @@ namespace Game.Gameplay.UI
                 Widgets.DisabledButton(UkrainianText.Get("ui.gear.craft", g), UkrainianText.Get("ui.feedback.craft.workshop_closed", g), GUILayout.Width(220f));
                 return;
             }
-            if (economy != null && (economy.Gold < itemBalance.CraftGoldCost || economy.Materials < itemBalance.CraftMaterialsCost))
+            if (economy != null && (economy.Gold < itemBalance.CraftGoldCost || economy.CraftComponent < itemBalance.CraftComponentCost))
             {
                 Widgets.DisabledButton(UkrainianText.Get("ui.gear.craft", g), UkrainianText.Get("ui.feedback.craft.cannot_afford", g), GUILayout.Width(220f));
                 return;

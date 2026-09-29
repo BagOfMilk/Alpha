@@ -34,7 +34,7 @@ namespace Game.Tests.EditMode
                 UnlockCost = new Dictionary<ResourceType, int>
                 {
                     { ResourceType.Gold, 40 },
-                    { ResourceType.Materials, 25 }
+                    { ResourceType.BuildComponent, 25 }
                 }
             });
             return (state, ledger);
@@ -45,12 +45,12 @@ namespace Game.Tests.EditMode
         {
             var (state, ledger) = MakeBaseWithLockedSlot();
             ledger.Add(ResourceType.Gold, 100);
-            ledger.Add(ResourceType.Materials, 30);
+            ledger.Add(ResourceType.BuildComponent, 30);
 
             Assert.AreEqual(UnlockResult.Success, state.TryUnlockSlot(SlotId));
             Assert.IsTrue(state.GetSlot(SlotId).Unlocked);
             Assert.AreEqual(60, ledger.Get(ResourceType.Gold));
-            Assert.AreEqual(5, ledger.Get(ResourceType.Materials));
+            Assert.AreEqual(5, ledger.Get(ResourceType.BuildComponent));
         }
 
         /// <summary>Списання атомарне: не вистачило одного ресурсу — не витрачається нічого.</summary>
@@ -59,12 +59,12 @@ namespace Game.Tests.EditMode
         {
             var (state, ledger) = MakeBaseWithLockedSlot();
             ledger.Add(ResourceType.Gold, 100);
-            ledger.Add(ResourceType.Materials, 24); // на одиницю менше ціни
+            ledger.Add(ResourceType.BuildComponent, 24); // на одиницю менше ціни
 
             Assert.AreEqual(UnlockResult.CannotAfford, state.TryUnlockSlot(SlotId));
             Assert.IsFalse(state.GetSlot(SlotId).Unlocked);
             Assert.AreEqual(100, ledger.Get(ResourceType.Gold));
-            Assert.AreEqual(24, ledger.Get(ResourceType.Materials));
+            Assert.AreEqual(24, ledger.Get(ResourceType.BuildComponent));
         }
 
         [Test]
@@ -72,7 +72,7 @@ namespace Game.Tests.EditMode
         {
             var (state, ledger) = MakeBaseWithLockedSlot();
             ledger.Add(ResourceType.Gold, 100);
-            ledger.Add(ResourceType.Materials, 30);
+            ledger.Add(ResourceType.BuildComponent, 30);
             state.TryUnlockSlot(SlotId);
 
             Assert.AreEqual(UnlockResult.AlreadyUnlocked, state.TryUnlockSlot(SlotId));
@@ -106,7 +106,7 @@ namespace Game.Tests.EditMode
         {
             var (state, ledger) = MakeBaseWithLockedSlot();
             ledger.Add(ResourceType.Gold, 40);
-            ledger.Add(ResourceType.Materials, 25);
+            ledger.Add(ResourceType.BuildComponent, 25);
 
             var arch = new CompanionArchetype("hauler", "Грузчик");
             arch.SetSkill(Game.Core.Stats.SkillType.Trade, 6);
