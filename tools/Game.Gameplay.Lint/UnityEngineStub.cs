@@ -527,6 +527,7 @@ namespace UnityEngine
         public static GUILayoutOption Width(float width) { return new GUILayoutOption(); }
         public static GUILayoutOption Height(float height) { return new GUILayoutOption(); }
         public static GUILayoutOption ExpandWidth(bool expand) { return new GUILayoutOption(); }
+        public static GUILayoutOption MinWidth(float minWidth) { return new GUILayoutOption(); }
         public static GUILayoutOption ExpandHeight(bool expand) { return new GUILayoutOption(); }
     }
 

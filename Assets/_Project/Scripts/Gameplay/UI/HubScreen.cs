@@ -236,7 +236,7 @@ namespace Game.Gameplay.UI
                         if (!legality.Enabled) continue;
                         string slot = postId;
                         string companionId = c.Id;
-                        if (Widgets.SecondaryButton(UkrainianText.Get("ui.posts.assign", g) + ": " + ScreenText.ResolveCompanionName(companionId, g, roster), GUILayout.Width(280f)))
+                        if (Widgets.SecondaryButton(UkrainianText.Get("ui.posts.assign", g) + ": " + ScreenText.ResolveCompanionName(companionId, g, roster), GUILayout.MinWidth(280f), GUILayout.ExpandWidth(false)))
                             shell.TryRunReported(() => shell.Session.Assign(companionId, slot), r => ScreenText.AssignFailure(r, g));
                     }
                     GUILayout.EndHorizontal();
@@ -671,7 +671,7 @@ namespace Game.Gameplay.UI
                         {
                             if (c.Loyalty == null && c.Id != Game.Core.Session.GameSession.ProtagonistId) continue;
                             string companionId = c.Id;
-                            if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.equip", g) + ": " + ScreenText.ResolveCompanionName(companionId, g, roster), GUILayout.Width(260f)))
+                            if (Widgets.SecondaryButton(UkrainianText.Get("ui.gear.equip", g) + ": " + ScreenText.ResolveCompanionName(companionId, g, roster), GUILayout.MinWidth(260f), GUILayout.ExpandWidth(false)))
                                 shell.TryRun(() => shell.Session.Equip(companionId, instanceId, slot));
                         }
                     GUILayout.EndHorizontal();
