@@ -15,11 +15,11 @@ namespace Game.Core.Session
     /// <item>відповідь Тугарові в сцені відкриття (сама обрана репліка, а не
     /// результат перевірки — <c>OpeningScenes.TugarOfferChoiceId</c>): refuse
     /// → Дід Овсій, bargain → Синдбад, ask_myroslava → Гафія; якщо цей уже
-    /// прибив за передісторією — Дід Овсій.</item>
+    /// прибився за передісторією — Дід Овсій.</item>
     /// </list>
     /// Прибиваються рівно двоє різних — увесь простір 3×3 передісторій і
     /// відповідей Тугарові дає різних (див. ArrivalsPoolTests, 9 комбінацій).
-    /// Хто НЕ прибив — лишається в ростері карткою, але ніде не з'являється
+    /// Хто НЕ прибився — лишається в ростері карткою, але ніде не з'являється
     /// (<see cref="Characters.CompanionStatus.NotArrived"/>).
     /// </summary>
     public static class ArrivalsPool
@@ -29,7 +29,7 @@ namespace Game.Core.Session
         public const string GobanId = "goban";
         public const string SindbadId = "sindbad";
 
-        /// <summary>Чотири специфічні id, вичерпний пул — інших "хто прибив" не буває.</summary>
+        /// <summary>Чотири специфічні id, вичерпний пул — інших "хто прибився" не буває.</summary>
         public static readonly string[] AllSpecialistIds = { KeeperId, HealerId, GobanId, SindbadId };
 
         /// <summary>Результат: двоє прибульців — рівно двоє РІЗНИХ id з <see cref="AllSpecialistIds"/>.</summary>
@@ -47,7 +47,7 @@ namespace Game.Core.Session
                 FromTugar = fromTugar;
             }
 
-            /// <summary>Чи прибив специфічний фахівець (byId — один із <see cref="AllSpecialistIds"/>).</summary>
+            /// <summary>Чи прибився специфічний фахівець (byId — один із <see cref="AllSpecialistIds"/>).</summary>
             public bool Contains(string specialistId) =>
                 !string.IsNullOrEmpty(specialistId) &&
                 (specialistId == FromBackground || specialistId == FromTugar);

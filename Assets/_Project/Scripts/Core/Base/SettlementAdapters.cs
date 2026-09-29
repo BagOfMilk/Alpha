@@ -37,7 +37,7 @@ namespace Game.Core.Base
         // B4-аудит §4.5: Antagonist свідомо виключений із присутності (не «!= Dead») —
         // той, хто пішов в антагоністи, не кандидат ні на перевірку, ні на пост.
         // Поправка №12.10: NotArrived виключений так само, як Antagonist —
-        // фахівець, який не прибив до гурту, не кандидат ні на перевірку, ні
+        // фахівець, який не прибився до гурту, не кандидат ні на перевірку, ні
         // на пост, ні на «найкращого присутнього».
         public bool IsPresentInSettlement =>
             _companion.Status != CompanionStatus.OnMission &&
@@ -248,7 +248,7 @@ namespace Game.Core.Base
                     // не жертва звичайної кризи — інакше Kill/Wound нижче
                     // мовчки затирають його статус ще до фіналу (R8).
                     if (c.Status == CompanionStatus.Antagonist) continue;
-                    // Поправка №12.10: хто не прибив до гурту — не жертва
+                    // Поправка №12.10: хто не прибився до гурту — не жертва
                     // кризи (він і так «не в поселенні»); без цього WoundReporting
                     // тихо повертав його зі статусу NotArrived у видимі
                     // (Injured) — той самий клас дірки, що й Antagonist вище.
@@ -310,7 +310,7 @@ namespace Game.Core.Base
             var c = _roster.Get(actorId);
             // B4-аудит §4.5: антагоніст незворотний — рана не затирає його статус.
             // Поправка №12.10: NotArrived — той самий випадок (§4.5) — не
-            // прибив до гурму, тож рана не повертає його з небуття.
+            // прибився до гурту, тож рана не повертає його з небуття.
             if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist ||
                 c.Status == CompanionStatus.NotArrived) return null;
             c.InjuryPoints += injuryPoints;

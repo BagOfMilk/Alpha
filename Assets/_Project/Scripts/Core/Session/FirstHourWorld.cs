@@ -329,9 +329,9 @@ namespace Game.Core.Session
 
             // Поправка №12.10 (пул прибульців): усі четверо фахівців — Дід
             // Овсій, Гафія, Гобан-Сайр, Синдбад — існують у ростері з самого
-            // Build() (хто саме ПРИБИВ — вирішується пізніше, GameSession.
+            // Build() (хто саме ПРИБИВСЯ — вирішується пізніше, GameSession.
             // ApplyArrivalsPool, коли відомі і передісторія, і відповідь
-            // Тугарові); той, хто не прибив, отримує CompanionStatus.
+            // Тугарові); той, хто не прибився, отримує CompanionStatus.
             // NotArrived і ніде більше не з'являється.
             roster.Add(Named(ArrivalsPool.GobanId, OpeningCast.Goban(), cfg, arch => arch
                 .SetAttribute(AttributeType.Strength, 5).SetAttribute(AttributeType.Wits, 4)

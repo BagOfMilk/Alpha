@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Game.Core.Base;
 using Game.Core.Characters;
@@ -214,6 +215,105 @@ namespace Game.Tests.EditMode
             CollectionAssert.Contains(rosterIds, "keeper");
             CollectionAssert.DoesNotContain(rosterIds, "healer", "склад гурту — у зліпку: відсутність Гафії теж переживає завантаження");
             CollectionAssert.DoesNotContain(rosterIds, "sindbad");
+        }
+
+        // ================= сейв: СТАРИЙ зліпок (до пулу) =================
+
+        /// <summary>
+        /// Зліпок, написаний ДО Поправки №12.10 (Гобан-Сайр і Синдбад не
+        /// існували взагалі — жодного "ros="-запису для них, маркера
+        /// "arrivals=1" теж нема). Відновлення у СВІЖУ сесію (той самий
+        /// стиль, що <c>FreshSessionRestoreTests</c>) мусить дати гурт
+        /// перших збірок: Дід Овсій і Гафія присутні, Гобан-Сайр і Синдбад —
+        /// <see cref="Characters.CompanionStatus.NotArrived"/> (не "тихо
+        /// присутні" через дефолтний Idle свіжого ростера).
+        /// </summary>
+        [Test]
+        public void OldFormatBlob_WithoutArrivalsPool_RestoresGobanAndSindbadAsNotArrived()
+        {
+            var s = new GameSession();
+            s.NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold });
+            // refuse (idx 0) + перший варіант першої будівлі: цим шляхом
+            // пул приводить Гобана-Сайра (передісторія-дефолт) і Діда Овсія
+            // (refuse) — Гафія лишається NotArrived. Допульна гра такого
+            // поняття не мала: Дід Овсій і Гафія існували в ростері ЗАВЖДИ,
+            // тож нижче (StatusOverrides) ми симулюємо старий зліпок, де
+            // Гафія теж записана як звичайний Idle-напарник, а не NotArrived —
+            // саме таку відмінність (старе "завжди присутня" vs нове
+            // "прибула чи ні") і мусить пережити компат.
+            var step = s.AdvanceScene();
+            while (!step.IsFinished)
+                step = step.IsChoice ? s.ChooseSceneOption(0) : s.AdvanceScene();
+            Assert.AreEqual(SessionState.Morning, s.State);
+
+            string newBlob = s.SaveState(0);
+            string oldBlob = ToOldFormatBlob(newBlob, dropIds: new[] { "goban", "sindbad" },
+                statusOverrides: new (string id, int status)[] { ("healer", (int)CompanionStatus.Idle) });
+            StringAssert.DoesNotContain(";arrivals=1", oldBlob, "тест сам зламався: маркер мав зникнути");
+
+            var fresh = new GameSession();
+            fresh.NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold });
+            fresh.RestoreFromBlob(oldBlob);
+
+            var rosterIds = fresh.GetRosterView().Companions.Select(c => c.Id).ToList();
+            CollectionAssert.DoesNotContain(rosterIds, "goban", "старий зліпок не знав Гобана-Сайра — має лишитись NotArrived, не тихо Idle");
+            CollectionAssert.DoesNotContain(rosterIds, "sindbad", "старий зліпок не знав Синдбада — має лишитись NotArrived, не тихо Idle");
+            CollectionAssert.Contains(rosterIds, "keeper", "Дід Овсій — гурт перших збірок, старий зліпок його ніс завжди");
+            CollectionAssert.Contains(rosterIds, "healer", "Гафія — гурт перших збірок, старий зліпок її ніс завжди");
+        }
+
+        /// <summary>
+        /// Прибирає з новоспеченого зліпка все, чого не міг знати допульний
+        /// код: маркер поля "arrivals=1" (Поправка №12.10) і записи вказаних
+        /// id у "ros=" (той самий блок, у якому <c>RosterAdapter.
+        /// CaptureState</c> пише статус кожного напарника) — з коректним
+        /// перерахунком довжина-префіксованого "core=" (той самий формат,
+        /// що й "items=" у GameSession.ComposeSave).
+        /// </summary>
+        private static string ToOldFormatBlob(string blob, string[] dropIds, (string id, int status)[] statusOverrides = null)
+        {
+            string noMarker = blob.Replace(";arrivals=1", "");
+
+            const string coreKey = ";core=";
+            int coreKeyIdx = noMarker.IndexOf(coreKey, StringComparison.Ordinal);
+            Assert.GreaterOrEqual(coreKeyIdx, 0, "тест сам зламався: у зліпку нема \"core=\"");
+            int afterKey = coreKeyIdx + coreKey.Length;
+            int caret = noMarker.IndexOf('^', afterKey);
+            int len = int.Parse(noMarker.Substring(afterKey, caret - afterKey));
+            string corePart = noMarker.Substring(caret + 1, len);
+            string headBeforeCore = noMarker.Substring(0, coreKeyIdx);
+            string afterCorePart = noMarker.Substring(caret + 1 + len);
+
+            string strippedCore = RewriteRosterEntries(corePart, dropIds, statusOverrides ?? System.Array.Empty<(string, int)>());
+
+            return headBeforeCore + coreKey + strippedCore.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "^" + strippedCore + afterCorePart;
+        }
+
+        private static string RewriteRosterEntries(string corePart, string[] dropIds, (string id, int status)[] statusOverrides)
+        {
+            var fields = corePart.Split(';');
+            for (int i = 0; i < fields.Length; i++)
+            {
+                if (!fields[i].StartsWith("ros=", StringComparison.Ordinal)) continue;
+                string rosValue = fields[i].Substring("ros=".Length);
+                var kept = rosValue.Split(',')
+                    .Where(entry =>
+                    {
+                        int gt = entry.IndexOf('>');
+                        string id = gt >= 0 ? entry.Substring(0, gt) : entry;
+                        return Array.IndexOf(dropIds, id) < 0;
+                    })
+                    .Select(entry =>
+                    {
+                        var f = entry.Split('>');
+                        foreach (var ov in statusOverrides)
+                            if (f[0] == ov.id) f[1] = ov.status.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        return string.Join(">", f);
+                    });
+                fields[i] = "ros=" + string.Join(",", kept);
+            }
+            return string.Join(";", fields);
         }
     }
 }

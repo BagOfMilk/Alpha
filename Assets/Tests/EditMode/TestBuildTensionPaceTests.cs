@@ -1,9 +1,14 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Game.Core.Balance;
 using Game.Core.Characters.Creation;
+using Game.Core.Expeditions;
+using Game.Core.Loop;
+using Game.Core.Scenes;
 using Game.Core.Session;
 using Game.Core.Session.Bots;
+using Game.Core.Session.Views;
 using Game.Core.World;
 using Game.Gameplay.Text;
 using NUnit.Framework;
@@ -39,6 +44,84 @@ namespace Game.Tests.EditMode
             return (log, session);
         }
 
+        /// <summary>
+        /// Поправка №12.10 (пул прибульців): "безрукий" еталон темпу мусить
+        /// іти ДЕФОЛТНИМ шляхом створення — передісторія-дефолт
+        /// (<c>GameSession._pendingBackgroundId</c> == "warrior", той самий,
+        /// що й у BotRunner.Drive, який ніколи сам не кличе
+        /// SetProtagonistBackground) і ПЕРШИЙ варіант відповіді Тугарові
+        /// ("refuse", перший рядок сцени). HomebodyPolicy/PacifistPolicy сама
+        /// відповідає Тугарові через <see cref="BotSupport.ChooseScenePersuasive"/>
+        /// (шукає перевірку Переконання — "ask_myroslava"), що для ЦІЄЇ
+        /// конкретної сцени НЕ є дефолтом гравця, який просто тисне «далі»/
+        /// перший варіант. Ця обгортка лишає HomebodyPolicy незмінним для
+        /// всіх інших користувачів (Defuser/Hunger/Neglect/SaveLoad тощо) і
+        /// підмінює РІВНО один вибір — <see cref="OpeningScenes.TugarOfferChoiceId"/>.
+        /// </summary>
+        private sealed class DefaultArrivalHomebodyPolicy : IBotPolicy
+        {
+            private static readonly string[] TugarChoiceOrder = { "refuse", "bargain", "ask_myroslava" };
+
+            private readonly HomebodyPolicy _inner = new HomebodyPolicy();
+            private readonly string _tugarChoiceId;
+
+            public DefaultArrivalHomebodyPolicy(string tugarChoiceId = "refuse")
+            {
+                _tugarChoiceId = tugarChoiceId;
+            }
+
+            public string Name => "DefaultArrivalHomebody";
+
+            public IncidentPath ChooseIncidentPath(PendingOfferView offer) => _inner.ChooseIncidentPath(offer);
+
+            public int ChooseQuestOption(QuestOfferView offer) => _inner.ChooseQuestOption(offer);
+
+            public int ChooseSceneOption(SceneStepView step)
+            {
+                if (step != null && step.ChoiceId == OpeningScenes.TugarOfferChoiceId)
+                {
+                    int idx = Array.IndexOf(TugarChoiceOrder, _tugarChoiceId);
+                    return idx >= 0 ? idx : 0;
+                }
+                return _inner.ChooseSceneOption(step);
+            }
+
+            public bool ChoosePatrol(SessionView view) => _inner.ChoosePatrol(view);
+
+            public IReadOnlyDictionary<string, string> ChooseAssignments(RosterView roster, CityView city)
+                => _inner.ChooseAssignments(roster, city);
+
+            public ExpeditionChoice? ChooseExpedition(SessionView view) => _inner.ChooseExpedition(view);
+
+            public CombatAction ChooseCombatAction(BattleView battle) => _inner.ChooseCombatAction(battle);
+
+            public bool ChooseAutoResolve(BattleView battle) => _inner.ChooseAutoResolve(battle);
+
+            public bool ChoosePushDeeper(DungeonView view) => _inner.ChoosePushDeeper(view);
+        }
+
+        /// <summary>
+        /// Той самий "безрукий" еталон, але явно задає передісторію ПЕРЕД
+        /// Creation (BotRunner.Drive сам ніколи не кличе
+        /// SetProtagonistBackground, лишає дефолт "warrior") — потрібно для
+        /// 9-комбінаційного охоронця <see cref="Pace_IsRobustToArrivalsPoolComposition"/>.
+        /// </summary>
+        private static (List<GameEvent> log, GameSession session) RunWithArrivals(
+            string backgroundId, string tugarChoiceId, bool suppressCouncilRoutine = true, int days = Days)
+        {
+            var options = new NewGameOptions();
+            var session = new GameSession(options.Roller);
+            session.NewGame(options);
+            session.SetProtagonistBackground(backgroundId);
+            session.SetProtagonistName(BotRunner.DefaultProtagonistName);
+            session.ConfirmCreation();
+
+            var policy = new DefaultArrivalHomebodyPolicy(tugarChoiceId);
+            var log = new List<GameEvent>();
+            BotRunner.Drive(session, policy, days, fullLog: log, suppressCouncilRoutine: suppressCouncilRoutine);
+            return (log, session);
+        }
+
         private static int? FirstDay(List<GameEvent> log, string key)
         {
             foreach (var e in log)
@@ -67,38 +150,36 @@ namespace Game.Tests.EditMode
         [Test]
         public void Reference_HitsMurmurFermentHeat_InTargetWindows()
         {
-            var (log, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
+            // Поправка №12.10 (пул прибульців, 29.09.2026): "безрукий" еталон —
+            // ДЕФОЛТНИЙ шлях створення (передісторія "warrior" — Backgrounds.
+            // All()[0], перший варіант відповіді Тугарові — "refuse"), а не
+            // те, що вважає "мирним" HomebodyPolicy/PacifistPolicy сама (вона
+            // відповідає Тугарові Persuade-варіантом "ask_myroslava" — не
+            // дефолт гравця, який просто тисне перший рядок). Дефолтний шлях
+            // приводить Гобана-Сайра (передісторія) і Діда Овсія (Тугар,
+            // "refuse" → KeeperId) — той самий гурт, що й до пулу прибульців,
+            // тож вікна темпу лишаються старими (Поправка №7.9).
+            var (log, _) = RunWithArrivals("warrior", "refuse");
 
             int? murmur = FirstDay(log, "tension.band.Murmur");
             int? ferment = FirstDay(log, "tension.band.Ferment");
             int? heat = FirstDay(log, "tension.band.Heat");
 
-            // Поправка №12.10 (пул прибульців, 29.09.2026): БЕЗРУКИЙ ситий еталон
-            // (HomebodyPolicy, без явної передісторії/відповіді Тугарові) тепер
-            // прибиває Гобана-Сайра (передісторія-дефолт "warrior") і Гафію
-            // (PacifistPolicy.ChooseSceneOption бере Persuade-варіант
-            // "ask_myroslava") — а не Діда Овсія й Гафію, як до пулу. Дід
-            // Овсій (Survival 8, Trade 7) не прибиває цим еталоном; Гобан-Сайр
-            // (Survival 4, Trade 5) — слабший у ЦИХ навичках, обидва весь час
-            // ідуть без свого поста (Сторожа — єдина безкоштовна перша
-            // будівля обох сценаріїв, Watch нікого не заселяє), тож economy
-            // "сити" еталона рахує трохи гірше — вікна темпу зсунулись
-            // РІВНО на 2 доби раніше й підтверджені прогоном (не мовчки
-            // послаблені — див. коментар класу і CLAUDE.md «Темп Напруги»).
             Assert.NotNull(murmur, "еталон повинен побачити Ропіт за 30 діб");
-            Assert.That(murmur.Value, Is.InRange(12, 14), "Ропіт цілиться в добу 13 (±1, Поправка №12.10)");
+            Assert.That(murmur.Value, Is.InRange(14, 16), "Ропіт цілиться в добу 15 (±1, Поправка №7.9)");
 
             Assert.NotNull(ferment, "еталон повинен побачити Брожіння за 30 діб");
-            Assert.That(ferment.Value, Is.InRange(17, 20), "Брожіння цілиться в добу 18 (±1-2, Поправка №12.10)");
+            Assert.That(ferment.Value, Is.InRange(19, 22), "Брожіння цілиться в добу 20 (±1-2, Поправка №7.9)");
 
             Assert.NotNull(heat, "еталон повинен побачити Накал за 30 діб");
-            Assert.That(heat.Value, Is.InRange(19, 22), "Накал цілиться в добу 20-21 (Поправка №12.10)");
+            Assert.That(heat.Value, Is.InRange(21, 24), "Накал цілиться в добу 22-23 (Поправка №7.9)");
         }
 
         [Test]
         public void Reference_CrisisRiotOffered_AfterFullForewarnLadder_NearDay25()
         {
-            var (log, _) = Run(new HomebodyPolicy(), suppressCouncilRoutine: true);
+            // Той самий дефолтний шлях створення, що й вище.
+            var (log, _) = RunWithArrivals("warrior", "refuse");
 
             int? l1 = FirstDayForewarn(log, 1, "crisis");
             int? l2 = FirstDayForewarn(log, 2, "crisis");
@@ -116,8 +197,40 @@ namespace Game.Tests.EditMode
             Assert.LessOrEqual(l2.Value, l3.Value);
             Assert.LessOrEqual(l3.Value, riot.Value, "криза не може вдарити німо — третя ступінь має прозвучати ДО неї");
 
-            // Поправка №12.10: той самий зсув на 2 доби раніше, що й вище.
-            Assert.That(riot.Value, Is.InRange(22, 24), "бунт цілиться в добу 23 (±1, Поправка №12.10)");
+            Assert.That(riot.Value, Is.InRange(24, 26), "бунт цілиться в добу 25 (±1, Поправка №7.9)");
+        }
+
+        /// <summary>
+        /// Поправка №12.10: темп стійкий до складу гурту прибульців — для
+        /// всіх 9 комбінацій (передісторія × відповідь Тугарові) "безрукий"
+        /// ситий еталон бачить Ропіт і бунт у ширшому вікні, ніж один
+        /// дефолтний шлях (сильніші/слабші фахівці відсувають/наближають
+        /// неспокій — задум, не баг). Числа виміряні прогоном — див. звіт
+        /// сесії, що додала цей тест.
+        /// </summary>
+        [TestCase("warrior", "refuse")]
+        [TestCase("warrior", "bargain")]
+        [TestCase("warrior", "ask_myroslava")]
+        [TestCase("trader", "refuse")]
+        [TestCase("trader", "bargain")]
+        [TestCase("trader", "ask_myroslava")]
+        [TestCase("healer", "refuse")]
+        [TestCase("healer", "bargain")]
+        [TestCase("healer", "ask_myroslava")]
+        public void Pace_IsRobustToArrivalsPoolComposition(string backgroundId, string tugarChoiceId)
+        {
+            var (log, _) = RunWithArrivals(backgroundId, tugarChoiceId);
+
+            int? murmur = FirstDay(log, "tension.band.Murmur");
+            int? riot = FirstDayCrisisResolved(log);
+
+            Assert.NotNull(murmur, backgroundId + "/" + tugarChoiceId + ": еталон повинен побачити Ропіт за 30 діб");
+            Assert.That(murmur.Value, Is.InRange(12, 18),
+                backgroundId + "/" + tugarChoiceId + ": Ропіт вийшов за вікно [12,18] — добу " + murmur.Value);
+
+            Assert.NotNull(riot, backgroundId + "/" + tugarChoiceId + ": еталон повинен дійти до бунту за 30 діб");
+            Assert.That(riot.Value, Is.InRange(22, 28),
+                backgroundId + "/" + tugarChoiceId + ": бунт вийшов за вікно [22,28] — добу " + riot.Value);
         }
 
         /// <summary>

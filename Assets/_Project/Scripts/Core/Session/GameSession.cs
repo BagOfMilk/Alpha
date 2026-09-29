@@ -374,7 +374,7 @@ namespace Game.Core.Session
             }
 
             // Поправка №12.10: _pendingBackgroundId тепер керує ще й тим,
-            // хто прибив до гурту (ArrivalsPool читає його з BeginOpeningScene
+            // хто прибився до гурту (ArrivalsPool читає його з BeginOpeningScene
             // нижче) — скидаємо його тут БЕЗУМОВНО, а не лише в гілці
             // Creation. Інакше повторний NewGame(SkipCreation:true) на тому
             // самому екземплярі GameSession (боти/тести/журнальний тур)
@@ -2730,7 +2730,7 @@ namespace Game.Core.Session
             if (_worldRoster == null) return new RosterView { Companions = list };
             foreach (var c in _worldRoster.All)
             {
-                // Поправка №12.10: хто не прибив до гурту — ніде не
+                // Поправка №12.10: хто не прибився до гурту — ніде не
                 // з'являється, ростер (вкладка «Люди») не виняток.
                 if (c.Status == CompanionStatus.NotArrived) continue;
 
@@ -3586,7 +3586,7 @@ namespace Game.Core.Session
             var keeper = _worldRoster?.Get(keeperId);
             // Поправка №12.10: будівля, зведена через ЗВИЧАЙНЕ будівництво
             // (не вибір першої будівлі) — напр. Склад пізніше за золото —
-            // не мусить силоміць заселяти фахівця, який не прибив до гурту.
+            // не мусить силоміць заселяти фахівця, який не прибився до гурту.
             if (keeper == null || keeper.Status == CompanionStatus.NotArrived ||
                 !string.IsNullOrEmpty(keeper.AssignedSlotId)) return;
             if (_state.TryAssign(keeperId, slotId) == AssignmentResult.Success)
@@ -3595,7 +3595,7 @@ namespace Game.Core.Session
 
         /// <summary>
         /// Поправка №12.10 (пул прибульців): відповідь Тугарові — останній із
-        /// двох виборів, які визначають, хто прибив до гурту (другий —
+        /// двох виборів, які визначають, хто прибився до гурту (другий —
         /// передісторія, вже застосована на момент цього виклику —
         /// <see cref="BeginOpeningScene"/> читає її з <c>_pendingBackgroundId</c>
         /// ДО побудови сцени). Двоє прибульців лишаються
@@ -3619,7 +3619,29 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// Чи прибив фахівець із пулу (<see cref="ArrivalsPool"/>) цього
+        /// Сумісність зі старими зліпками (до Поправки №12.10, маркер
+        /// "arrivals=1" у ComposeSave відсутній): у допульній грі Гобан-Сайр
+        /// і Синдбад не існували взагалі, тож RosterAdapter.RestoreState не
+        /// знаходить для них "ros="-запису і лишає обох на дефолтному Idle
+        /// щойно збудованого ростера — виглядало б так, наче вони "прибилися"
+        /// до гурту, хоча відповіді Тугарові в тій партії не було ніколи.
+        /// Чесний відновлений стан старого зліпка: Дід Овсій і Гафія
+        /// присутні (як завжди були, і "ros=" зберіг їхній справжній статус
+        /// вище), Гобан-Сайр і Синдбад — <see cref="CompanionStatus.NotArrived"/>.
+        /// </summary>
+        private void CompatApplyArrivalsPoolForOldSave()
+        {
+            foreach (var specialistId in new[] { ArrivalsPool.GobanId, ArrivalsPool.SindbadId })
+            {
+                var c = _worldRoster?.Get(specialistId);
+                if (c == null) continue;
+                if (c.Status == CompanionStatus.Dead || c.Status == CompanionStatus.Antagonist) continue;
+                c.Status = CompanionStatus.NotArrived;
+            }
+        }
+
+        /// <summary>
+        /// Чи прибився фахівець із пулу (<see cref="ArrivalsPool"/>) цього
         /// прогону. До того, як вирішено (`ChooseSceneOption` на
         /// <see cref="OpeningScenes.TugarOfferChoiceId"/>) — ростер ще не
         /// поставив нікого в NotArrived, тож <c>true</c> за замовчуванням
@@ -4144,6 +4166,16 @@ namespace Game.Core.Session
             head.Append(";pgender=").Append((int)_pendingGender);
             head.Append(";pbg=").Append(_pendingBackgroundId ?? "");
 
+            // Поправка №12.10 (пул прибульців): маркер "цей зліпок написаний
+            // кодом, що вже знає про Гобана-Сайра/Синдбада". Старі зліпки
+            // (до цього поля) не мають "ros="-запису для жодного з двох —
+            // RosterAdapter.RestoreState просто не знаходить їх у рядку і
+            // лишає обох на дефолтному Idle свіжозбудованого ростера, тобто
+            // "присутні", хоча в допульній грі вони взагалі не існували.
+            // ApplySave читає маркер і за його відсутності відкочує обох на
+            // NotArrived — див. CompatApplyArrivalsPoolForOldSave.
+            head.Append(";arrivals=1");
+
             // Довжина-префікс (як і "core=" нижче): Inventory.CaptureState() сам
             // з'єднує предмети через ';' (Inventory.cs), тож наївний
             // headPart.Split(';') у ApplySave інакше сплутав би роздільник
@@ -4245,6 +4277,7 @@ namespace Game.Core.Session
 
             string offersLoggedValue = null;
             string journalSeenValue = null;
+            bool arrivalsPoolMarkerPresent = false;
             foreach (var part in headPart.Split(';'))
             {
                 int eq = part.IndexOf('=');
@@ -4277,6 +4310,7 @@ namespace Game.Core.Session
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;
                     case "pgender": _pendingGender = (Gender)ParseInt(value); _protagonistGender = _pendingGender; break;
                     case "pbg": if (!string.IsNullOrEmpty(value)) _pendingBackgroundId = value; break;
+                    case "arrivals": arrivalsPoolMarkerPresent = value == "1"; break;
                 }
             }
 
@@ -4293,6 +4327,8 @@ namespace Game.Core.Session
             // RestoreSlotOccupancy пересобирає її з уже відновленого ростера
             // ОДРАЗУ тут, поки обидві сторони синхронні.
             _state?.RestoreSlotOccupancy();
+
+            if (!arrivalsPoolMarkerPresent) CompatApplyArrivalsPoolForOldSave();
 
             // Доважок до "pname=" вище: RosterAdapter.CaptureState() навмисно
             // НЕ пише DisplayName (коментар у RosterAdapter.cs — ім'я/статі/

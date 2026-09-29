@@ -311,6 +311,32 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// Поправка №12.10: "arrivals.resolved" потрапляє в DayLog так само,
+        /// як решта подій — <c>ScreenText.BuildFeedLines</c>/<c>FeedModel</c>
+        /// не фільтрують за ключем, тож вона РЕАЛЬНО може дійти до
+        /// стрічки/хроніки, якщо гравець гортає її назад. Раніше
+        /// "{fromBackground}"/"{fromTugar}" підставлялись сирими id
+        /// ("goban"/"keeper") — той самий клас дірки, що вже був у
+        /// "arc.chapter_opened" вище.
+        /// </summary>
+        [Test]
+        public void EventLine_ArrivalsResolved_NamesCompanions_NotRawIds()
+        {
+            var args = new Dictionary<string, string> { { "fromBackground", "goban" }, { "fromTugar", "keeper" } };
+            var evt = new GameEvent("arrivals.resolved", 1, Game.Core.Loop.DayPhase.Day, args);
+
+            string line = ScreenText.EventLine(evt, Gender.Male, null);
+
+            StringAssert.Contains("Гобан-Сайр", line);
+            StringAssert.Contains("Дід Овсій", line);
+            StringAssert.DoesNotContain("goban", line);
+            StringAssert.DoesNotContain("keeper", line);
+            // "прибив"/"прибили" — про биття, не про приєднання (Поправка №12.10 звіт).
+            StringAssert.DoesNotContain("прибив", line);
+            StringAssert.Contains("прибилися", line);
+        }
+
         // Знайдено довгим автопрогоном 25.09.2026: вечірня панель показувала
         // на етапі-перевірці «Пропозиція / Етап 1 / Підтвердити» — без назви
         // квесту і без порога (інваріант 8).
