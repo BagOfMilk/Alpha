@@ -1240,7 +1240,12 @@ namespace Game.Gameplay
         private void UpdateHover()
         {
             var mouse = Input.mousePosition;
-            if (_lastMousePositionKnown && _hasSimulatedHover && (mouse - _lastMousePosition).sqrMagnitude > 0.25f)
+            // Справжній рух миші скидає наведення туру лише у вікні з фокусом (гравець).
+            // Тур іде у вікні за краєм екрана (tools/run-offscreen.ps1) без фокусу: коли власник
+            // рухав мишею на своєму столі, позиція курсора відносно вікна гри мінялась і наведення
+            // туру зникало — знімок hover-enemy виходив без підказки (перевірка «Щ», 29.09.2026).
+            if (Application.isFocused && _lastMousePositionKnown && _hasSimulatedHover
+                && (mouse - _lastMousePosition).sqrMagnitude > 0.25f)
                 ClearSimulatedHover();
             _lastMousePosition = mouse;
             _lastMousePositionKnown = true;
