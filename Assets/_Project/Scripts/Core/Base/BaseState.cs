@@ -115,8 +115,11 @@ namespace Game.Core.Base
 
             // B4-аудит §4.5: Antagonist явно виключений (не «!= Dead») — той, хто пішов в
             // антагоністи, не стає назад на пост, навіть якщо формально живий.
+            // Поправка №12.10: NotArrived — той самий випадок, той, хто не
+            // прибив до гурту, на пост не стає взагалі.
             if (companion.IsDead || companion.Status == CompanionStatus.OnMission ||
-                companion.Status == CompanionStatus.Antagonist)
+                companion.Status == CompanionStatus.Antagonist ||
+                companion.Status == CompanionStatus.NotArrived)
                 return AssignmentResult.CompanionUnavailable;
 
             // Пост загиблого вільний, навіть якщо звірка ще не пройшла.

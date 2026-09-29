@@ -55,6 +55,29 @@ namespace Game.Core.Characters
             "лечит всех, но каждому говорит правду в лицо");
 
         /// <summary>
+        /// Пул прибульців (Поправка №12.10, рішення власника 29.09.2026):
+        /// майстер-тесля з ірландського фольклору, що перехитрює королів,
+        /// які хочуть його обдурити. Фольклорний ярус — традиція, а не
+        /// конкретний твір, як і Дід Овсій/Гафія.
+        /// </summary>
+        public static CharacterCard Goban() => new CharacterCard(
+            "goban", "Гобан-Сайр", SourceTier.Folklore,
+            "ірландський фольклор: перекази про Гобана Саора, записані в XIX ст. " +
+            "(Patrick Kennedy, «Legendary Fictions of the Irish Celts», 1866) — суспільне надбання",
+            "хитрий і гордий тесля: перехитрює кожного, хто хоче обдурити його самого");
+
+        /// <summary>
+        /// Пул прибульців (Поправка №12.10): купець-мореплавець із «Тисячі й
+        /// однієї ночі» — літературний ярус, конкретний переклад
+        /// суспільного надбання.
+        /// </summary>
+        public static CharacterCard Sindbad() => new CharacterCard(
+            "sindbad", "Синдбад", SourceTier.Literary,
+            "«Тисяча й одна ніч», цикл про Синдбада-мореплавця (фр. переклад А. Галлана, 1704–1717; " +
+            "англ. переклад Р. Бертона, 1885) — суспільне надбання",
+            "купець і оповідач: сім разів загинав, сім разів багатів, вірить у вигоду більше, ніж у безпеку");
+
+        /// <summary>
         /// Командир орди — бос фіналу. Першоджерело ВІДКРИТЕ (§5.7): у зрізі він
         /// з'являється тільки ім'ям у сигналі боярина, обличчям — у фіналі, до
         /// якого зріз не доходить. Картка-заглушка чесніша за порожнечу: видно,
@@ -67,15 +90,20 @@ namespace Game.Core.Characters
         /// <summary>Весь кастинг відкриття.</summary>
         public static List<CharacterCard> All() => new List<CharacterCard>
         {
-            Maksym(), Myroslava(), TuharVovk(), Zakhar(), Keeper(), Healer(), HordeCommander()
+            Maksym(), Myroslava(), TuharVovk(), Zakhar(), Keeper(), Healer(), Goban(), Sindbad(), HordeCommander()
         };
 
-        /// <summary>Хто може бути напарником: фольклорні — не можуть (немає арки).</summary>
+        /// <summary>
+        /// Хто може бути напарником: фольклорні — не можуть (немає арки).
+        /// Синдбад — Literary (CanBeCompanion=true за ярусом), але
+        /// функціонально пост-фахівець із пулу прибульців (Поправка №12.10),
+        /// не польовий напарник — виключений явно, як horde_commander.
+        /// </summary>
         public static List<CharacterCard> CompanionCandidates()
         {
             var result = new List<CharacterCard>();
             foreach (var card in All())
-                if (card.CanBeCompanion && card.Id != "horde_commander") result.Add(card);
+                if (card.CanBeCompanion && card.Id != "horde_commander" && card.Id != "sindbad") result.Add(card);
             return result;
         }
     }

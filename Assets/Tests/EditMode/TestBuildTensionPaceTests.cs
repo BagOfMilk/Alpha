@@ -73,14 +73,26 @@ namespace Game.Tests.EditMode
             int? ferment = FirstDay(log, "tension.band.Ferment");
             int? heat = FirstDay(log, "tension.band.Heat");
 
+            // Поправка №12.10 (пул прибульців, 29.09.2026): БЕЗРУКИЙ ситий еталон
+            // (HomebodyPolicy, без явної передісторії/відповіді Тугарові) тепер
+            // прибиває Гобана-Сайра (передісторія-дефолт "warrior") і Гафію
+            // (PacifistPolicy.ChooseSceneOption бере Persuade-варіант
+            // "ask_myroslava") — а не Діда Овсія й Гафію, як до пулу. Дід
+            // Овсій (Survival 8, Trade 7) не прибиває цим еталоном; Гобан-Сайр
+            // (Survival 4, Trade 5) — слабший у ЦИХ навичках, обидва весь час
+            // ідуть без свого поста (Сторожа — єдина безкоштовна перша
+            // будівля обох сценаріїв, Watch нікого не заселяє), тож economy
+            // "сити" еталона рахує трохи гірше — вікна темпу зсунулись
+            // РІВНО на 2 доби раніше й підтверджені прогоном (не мовчки
+            // послаблені — див. коментар класу і CLAUDE.md «Темп Напруги»).
             Assert.NotNull(murmur, "еталон повинен побачити Ропіт за 30 діб");
-            Assert.That(murmur.Value, Is.InRange(14, 16), "Ропіт цілиться в добу 15 (±1)");
+            Assert.That(murmur.Value, Is.InRange(12, 14), "Ропіт цілиться в добу 13 (±1, Поправка №12.10)");
 
             Assert.NotNull(ferment, "еталон повинен побачити Брожіння за 30 діб");
-            Assert.That(ferment.Value, Is.InRange(19, 22), "Брожіння цілиться в добу 20 (±1-2)");
+            Assert.That(ferment.Value, Is.InRange(17, 20), "Брожіння цілиться в добу 18 (±1-2, Поправка №12.10)");
 
             Assert.NotNull(heat, "еталон повинен побачити Накал за 30 діб");
-            Assert.That(heat.Value, Is.InRange(21, 24), "Накал цілиться в добу 22-23");
+            Assert.That(heat.Value, Is.InRange(19, 22), "Накал цілиться в добу 20-21 (Поправка №12.10)");
         }
 
         [Test]
@@ -104,7 +116,8 @@ namespace Game.Tests.EditMode
             Assert.LessOrEqual(l2.Value, l3.Value);
             Assert.LessOrEqual(l3.Value, riot.Value, "криза не може вдарити німо — третя ступінь має прозвучати ДО неї");
 
-            Assert.That(riot.Value, Is.InRange(24, 26), "бунт цілиться в добу 25 (±1)");
+            // Поправка №12.10: той самий зсув на 2 доби раніше, що й вище.
+            Assert.That(riot.Value, Is.InRange(22, 24), "бунт цілиться в добу 23 (±1, Поправка №12.10)");
         }
 
         /// <summary>

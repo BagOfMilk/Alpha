@@ -241,8 +241,14 @@ namespace Game.Tests.EditMode
                 while (!step.IsFinished)
                 {
                     if (!step.IsChoice) { step = s.AdvanceScene(); continue; }
+                    // Поправка №12.10: варіанти першої будівлі — підмножина
+                    // каталогу (пул прибульців), не завжди весь каталог —
+                    // Лазарет, коли присутній (передісторія healer тут
+                    // завжди приводить Гафію), лишається останнім у
+                    // ВІДФІЛЬТРОВАНОМУ списку (каталог тримає його останнім,
+                    // фільтрація порядок зберігає).
                     int idx = step.ChoiceId == OpeningScenes.FirstBuildingChoiceId
-                        ? System.Array.IndexOf(Game.Core.Base.DefaultBuildings.FirstBuildingChoices, Game.Core.Base.DefaultBuildings.Infirmary)
+                        ? step.Options.Count - 1
                         : 0;
                     step = s.ChooseSceneOption(idx);
                 }
