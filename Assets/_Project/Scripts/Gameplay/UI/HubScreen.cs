@@ -609,6 +609,12 @@ namespace Game.Gameplay.UI
                 Widgets.LabeledRow(UkrainianText.Get("resource.build_component", g), _preview.ExpectedBuildComponent.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("resource.craft_component", g), _preview.ExpectedCraftComponent.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("resource.gold", g), _preview.ExpectedGold.ToString());
+
+                // Поправка №15.1: «тут бачили: {ім'я}» — відсутній фахівець,
+                // прив'язаний саме до цієї точки, ще не прибув.
+                if (!string.IsNullOrEmpty(_preview.WaitingSpecialistId))
+                    Widgets.LabeledRow(UkrainianText.Get("ui.expedition.waiting_specialist", g),
+                        ScreenText.ResolveCompanionName(_preview.WaitingSpecialistId, g, roster));
             }
         }
 

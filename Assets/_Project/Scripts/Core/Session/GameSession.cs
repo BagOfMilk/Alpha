@@ -197,6 +197,12 @@ namespace Game.Core.Session
         private string _pendingBackgroundId = "warrior";
         private Gender _protagonistGender = Gender.Male;
 
+        // ---- Поправка №15.1: пізніше приєднання, шлях «Таверна» ----
+        /// <summary>Хто заплановано наступним, кого приведе Таверна — id, або null, поки нікого не заплановано.</summary>
+        private string _pendingTavernSpecialistId;
+        /// <summary>Доба, на яку заплановано прихід <see cref="_pendingTavernSpecialistId"/>.</summary>
+        private int _pendingTavernDueDay;
+
         // ---- рішення/квест/фінал/підсумок ----
         private PendingDecision _currentPending;
         private QuestOfferView _currentQuestOffer;
@@ -382,6 +388,8 @@ namespace Game.Core.Session
             _pendingName = null;
             _pendingGender = Gender.Male;
             _pendingBackgroundId = Backgrounds.All()[0].Id;
+            _pendingTavernSpecialistId = null;
+            _pendingTavernDueDay = 0;
 
             if (o.SkipCreation)
             {
@@ -876,7 +884,11 @@ namespace Game.Core.Session
                 // існує до реального DepartExpedition — companionIds
                 // параметра (та сама майбутня партія) і є "партія" на цей момент.
                 var firstRoom = rooms != null && rooms.Count > 0 ? BuildDungeonRoomView(rooms[0], companionIds) : null;
-                return new ExpeditionPreviewView { SiteId = siteId, Approach = approach, IsDelve = true, FirstRoom = firstRoom, Days = 2 };
+                return new ExpeditionPreviewView
+                {
+                    SiteId = siteId, Approach = approach, IsDelve = true, FirstRoom = firstRoom, Days = 2,
+                    WaitingSpecialistId = WaitingSpecialistAt(siteId)
+                };
             }
 
             var site = FindSite(siteId);
@@ -896,8 +908,28 @@ namespace Game.Core.Session
                 ExpectedCraftComponent = preview.CraftComponent,
                 ExpectedGold = preview.Gold,
                 ExpectedWounded = preview.ExpectedWounded,
-                IsDelve = false
+                IsDelve = false,
+                WaitingSpecialistId = WaitingSpecialistAt(siteId)
             };
+        }
+
+        /// <summary>
+        /// Поправка №15.1: відсутній фахівець, прив'язаний до
+        /// <paramref name="siteId"/> (<see cref="ArrivalsPool.ExpeditionSiteOf"/>),
+        /// якщо він ще НЕ прибув — для «тут бачили: {ім'я}» у прев'ю
+        /// вилазки. Null, коли на точці ніхто не прив'язаний, або фахівець
+        /// уже в гурті.
+        /// </summary>
+        private string WaitingSpecialistAt(string siteId)
+        {
+            if (string.IsNullOrEmpty(siteId) || _worldRoster == null) return null;
+            foreach (var id in ArrivalsPool.AllSpecialistIds)
+            {
+                if (!string.Equals(ArrivalsPool.ExpeditionSiteOf(id), siteId, StringComparison.Ordinal)) continue;
+                var c = _worldRoster.Get(id);
+                return c != null && c.Status == CompanionStatus.NotArrived ? id : null;
+            }
+            return null;
         }
 
         public DispatchResult DepartExpedition(string siteId, ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days)
@@ -1187,6 +1219,9 @@ namespace Game.Core.Session
         /// </summary>
         internal int DebugTensionValue => _processor?.Tension?.Value ?? 0;
 
+        /// <summary>Гачок налагодження (той самий прийом, що <see cref="DebugTensionValue"/>): розклад Таверни, Поправка №15.1.</summary>
+        internal (string SpecialistId, int DueDay) DebugTavernSchedule => (_pendingTavernSpecialistId, _pendingTavernDueDay);
+
         /// <summary>Поріг тихого шляху інциденту в поточному світі — щоб тест бачив, чи дійшов числовий наслідок вибору (торг, трава Гафії) до самого порогу.</summary>
         internal int DebugQuietThreshold(string incidentId, string sourceId)
         {
@@ -1248,6 +1283,15 @@ namespace Game.Core.Session
             LogEvent("day.advanced", Args("day", report.Day.ToString(CultureInfo.InvariantCulture), "phase", report.Phase.ToString()));
             TranslateReport(report);
             ApplyCycleReport(_world.Cycle.Production.LastReport);
+
+            // Поправка №15.1: два з трьох шляхів пізнього приєднання —
+            // переселенці ради й Таверна — прив'язані до КАЛЕНДАРНОЇ доби, не
+            // до події вилазки, тож звіряються тут же, одразу після того, як
+            // SettlementCycle.AdvanceDay довів добу до кінця денного
+            // конвеєра (CityWorksStep уже відпрацював — і TakeSettlers,
+            // і AdvanceConstruction Таверни, якщо сьогодні їхній день).
+            ProcessSettlersArrivalIfAny();
+            ProcessTavernArrivalSchedule();
             _lastDayReport = BuildDayReportView(report);
             SettleAfterDayReport(report);
 
@@ -1609,6 +1653,10 @@ namespace Game.Core.Session
                 "craft", rep.CraftComponent.ToString(CultureInfo.InvariantCulture),
                 "gold", rep.Gold.ToString(CultureInfo.InvariantCulture)));
 
+            // Поправка №15.1: вилазка "відбулась" — загін дійсно повернувся
+            // з цієї точки, до того, як _dungeon обнулиться нижче.
+            TryBringSpecialistFromExpedition(_dungeon.SiteId);
+
             ExpeditionResult discarded;
             _party.Return(_state, out discarded);
             _dungeon = null;
@@ -1622,6 +1670,10 @@ namespace Game.Core.Session
             var rep = _dungeon.Abandon();
             if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
             LogEvent("dungeon.depart", Args("depth", rep.DepthReached.ToString(CultureInfo.InvariantCulture)));
+
+            // Поправка №15.1: покинутий данж — загін теж повернувся ЗВІДТИ,
+            // вилазка відбулась (не лише успішна екстракція).
+            TryBringSpecialistFromExpedition(_dungeon.SiteId);
 
             ExpeditionResult discarded;
             _party.Return(_state, out discarded);
@@ -2411,6 +2463,9 @@ namespace Game.Core.Session
             if (res.Wiped)
             {
                 LogEvent("dungeon.wiped", Args("room", res.RoomId));
+                // Поправка №15.1: розгром теж повертає загін звідти, звідки
+                // виходив — вилазка відбулась, навіть провалена.
+                TryBringSpecialistFromExpedition(_dungeon.SiteId);
                 ExpeditionResult discarded;
                 _party.Return(_state, out discarded);
                 _dungeon = null;
@@ -3426,6 +3481,9 @@ namespace Game.Core.Session
                 "build", (result?.BuildComponent ?? 0).ToString(CultureInfo.InvariantCulture),
                 "craft", (result?.CraftComponent ?? 0).ToString(CultureInfo.InvariantCulture)));
 
+            // Поправка №15.1: тихий/силовий резолв — теж "вилазка відбулась".
+            TryBringSpecialistFromExpedition(result?.SiteId);
+
             // R8 (seamsForD1): вилазка — віха Готовності, що трапляється ПОЗА
             // конвеєром дня (ReadinessTickStep її не бачить), тож зараховує
             // безпосередньо D1 — лише за Хорошою/Найкращою полосою виходу
@@ -3651,6 +3709,136 @@ namespace Game.Core.Session
         {
             var c = _worldRoster?.Get(specialistId);
             return c == null || c.Status != CompanionStatus.NotArrived;
+        }
+
+        // ================= Поправка №15.1: пізніше приєднання =================
+        //
+        // Хто НЕ прибився на старті (ApplyArrivalsPool) не пропав назавжди —
+        // приходить пізніше ТРЬОМА шляхами, кожен детермінований:
+        // Таверна (ProcessTavernArrivalSchedule, день відомий заздалегідь),
+        // зустріч на вилазці (TryBringSpecialistFromExpedition, за точкою
+        // ArrivalsPool.ExpeditionSiteOf), рада: прийом переселенців
+        // (ProcessSettlersArrivalIfAny). Усі три сходяться в один перехід —
+        // BringSpecialistIn — і його ж власний захист "уже прибув" не дає
+        // одному фахівцю прийти двічі різними шляхами.
+
+        /// <summary>
+        /// Наступний відсутній фахівець за порядком пула
+        /// (<see cref="ArrivalsPool.AllSpecialistIds"/> — keeper, healer,
+        /// goban, sindbad), або null, якщо відсутніх більше немає. Порядок
+        /// пула — те саме, чим Таверна і переселенці ради вирішують, ХТО
+        /// саме прийде наступним (на відміну від вилазки — там фахівець
+        /// прив'язаний до СВОЄЇ точки, а не до черги).
+        /// </summary>
+        private string NextAbsentSpecialistId()
+        {
+            if (_worldRoster == null) return null;
+            foreach (var id in ArrivalsPool.AllSpecialistIds)
+            {
+                var c = _worldRoster.Get(id);
+                if (c != null && c.Status == CompanionStatus.NotArrived) return id;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Приводить фахівця з <see cref="CompanionStatus.NotArrived"/> у
+        /// <see cref="CompanionStatus.Idle"/> (той самий перехід, що вже
+        /// робить <see cref="ApplyArrivalsPool"/> на старті) і оголошує подію
+        /// з іменем (<c>eventKey</c> — один із "arrivals.tavern"/
+        /// "arrivals.settlers"/"arrivals.expedition", текст —
+        /// UkrainianText.cs, {companion} через ScreenText.ResolveCompanionName,
+        /// як і "arrivals.resolved"). No-op (без події, false), якщо він уже
+        /// прибув іншим шляхом раніше цього самого прогону — "один фахівець —
+        /// один раз" тримається саме тут, в ОДНІЙ точці переходу, а не в
+        /// кожному з трьох викликачів окремо.
+        /// </summary>
+        private bool BringSpecialistIn(string specialistId, string eventKey)
+        {
+            var c = _worldRoster?.Get(specialistId);
+            if (c == null || c.Status != CompanionStatus.NotArrived) return false;
+            c.Status = CompanionStatus.Idle;
+            LogEvent(eventKey, Args("companionId", specialistId));
+            return true;
+        }
+
+        /// <summary>
+        /// Шлях «зустріч на вилазці»: відповідний фахівець, прив'язаний до
+        /// <paramref name="siteId"/> (<see cref="ArrivalsPool.ExpeditionSiteOf"/>),
+        /// приєднується до гурту, коли загін повертається САМЕ звідти —
+        /// будь-яким підходом (тихий/силовий резолв ЧИ данж: усі чотири
+        /// місця, де партія повертається — TickExpeditionReturnIfAny,
+        /// ExtractDungeon, AbandonDungeon, FinishDungeonCombat-wipe — звуть
+        /// цей метод). siteId — <c>ExpeditionResult.SiteId</c> для тихого/
+        /// силового підходу або <c>DungeonRun.SiteId</c> для делву.
+        /// </summary>
+        private void TryBringSpecialistFromExpedition(string siteId)
+        {
+            if (string.IsNullOrEmpty(siteId) || _worldRoster == null) return;
+            foreach (var id in ArrivalsPool.AllSpecialistIds)
+            {
+                if (string.Equals(ArrivalsPool.ExpeditionSiteOf(id), siteId, StringComparison.Ordinal))
+                {
+                    BringSpecialistIn(id, "arrivals.expedition");
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Шлях «рада: прийом переселенців» — коли <c>CityWorks.OrderSettlers</c>
+        /// справді дає прихід людей у місто (<see cref="Base.CityWorks.
+        /// LastSettlersArrivalDay"/> дорівнює поточній добі, а не лише
+        /// замовлений — сама черга/відкат лишаються CityWorks-турботою),
+        /// разом із ними приходить наступний відсутній фахівець пула, якщо є.
+        /// Викликається рівно раз на добу, з <see cref="AdvanceDay"/>, одразу
+        /// після <see cref="Game.Core.Base.SettlementCycle.AdvanceDay"/>
+        /// (єдиного способу рухати час — CLAUDE.md).
+        /// </summary>
+        private void ProcessSettlersArrivalIfAny()
+        {
+            if (_works == null || _processor == null) return;
+            if (_works.LastSettlersArrivalDay != _processor.CurrentDay) return;
+
+            string next = NextAbsentSpecialistId();
+            if (next != null) BringSpecialistIn(next, "arrivals.settlers");
+        }
+
+        /// <summary>
+        /// Шлях «Таверна»: доба приходу оголошується ЗАЗДАЛЕГІДЬ, у день
+        /// добудови Таверни (<see cref="Base.DefaultBuildings.Tavern"/>) і
+        /// знов після кожного такого приходу, поки хтось іще відсутній.
+        /// Викликається рівно раз на добу, з <see cref="AdvanceDay"/>: (1)
+        /// якщо сьогодні — саме той день, приводить запланованого (сам
+        /// перехід у <see cref="BringSpecialistIn"/> мовчки не подвоює
+        /// прихід, якщо того самого фахівця вже привів інший шлях раніше);
+        /// (2) якщо зараз нікого не заплановано, Таверна стоїть і хтось іще
+        /// відсутній — планує НАСТУПНОГО (порядок пула) на
+        /// <see cref="Balance.CityBalance.TavernSpecialistArrivalDays"/> діб
+        /// наперед (ПЛЕЙСХОЛДЕР) і оголошує це подією — гравець знає ім'я і
+        /// день ДО приходу («у таверні кажуть»).
+        /// </summary>
+        private void ProcessTavernArrivalSchedule()
+        {
+            if (_works == null || _processor == null) return;
+
+            if (_pendingTavernSpecialistId != null && _pendingTavernDueDay == _processor.CurrentDay)
+            {
+                BringSpecialistIn(_pendingTavernSpecialistId, "arrivals.tavern");
+                _pendingTavernSpecialistId = null;
+            }
+
+            if (_pendingTavernSpecialistId == null && _works.Has(DefaultBuildingsType.Tavern))
+            {
+                string next = NextAbsentSpecialistId();
+                if (next != null)
+                {
+                    _pendingTavernSpecialistId = next;
+                    _pendingTavernDueDay = _processor.CurrentDay + _cfg.City.TavernSpecialistArrivalDays;
+                    LogEvent("arrivals.tavern.announced", Args("companionId", next,
+                        "days", _cfg.City.TavernSpecialistArrivalDays.ToString(CultureInfo.InvariantCulture)));
+                }
+            }
         }
 
         /// <summary>ПЛЕЙСХОЛДЕР: наскільки торг за час (сцена «Сусід з претензією», варіант «bargain») полегшує тихий шлях вузла 1.</summary>
@@ -4176,6 +4364,16 @@ namespace Game.Core.Session
             // NotArrived — див. CompatApplyArrivalsPoolForOldSave.
             head.Append(";arrivals=1");
 
+            // Поправка №15.1 (пізніше приєднання, шлях «Таверна»): чи
+            // заплановано прихід, і на яку добу — переживає збереження тим
+            // самим "-"-сентинелом, що "resume=" вище. Старий зліпок без
+            // цього поля читається як "нікого не заплановано" (ApplySave
+            // лишає значення, які щойно поставив NewGame) — наступний
+            // AdvanceDay сам перепланує, якщо Таверна стоїть і хтось іще
+            // відсутній.
+            head.Append(";tavernNext=").Append(_pendingTavernSpecialistId == null ? "-" :
+                _pendingTavernSpecialistId + ":" + _pendingTavernDueDay.ToString(CultureInfo.InvariantCulture));
+
             // Довжина-префікс (як і "core=" нижче): Inventory.CaptureState() сам
             // з'єднує предмети через ';' (Inventory.cs), тож наївний
             // headPart.Split(';') у ApplySave інакше сплутав би роздільник
@@ -4311,6 +4509,19 @@ namespace Game.Core.Session
                     case "pgender": _pendingGender = (Gender)ParseInt(value); _protagonistGender = _pendingGender; break;
                     case "pbg": if (!string.IsNullOrEmpty(value)) _pendingBackgroundId = value; break;
                     case "arrivals": arrivalsPoolMarkerPresent = value == "1"; break;
+                    case "tavernNext":
+                        if (string.IsNullOrEmpty(value) || value == "-")
+                        {
+                            _pendingTavernSpecialistId = null;
+                            _pendingTavernDueDay = 0;
+                        }
+                        else
+                        {
+                            int colon = value.IndexOf(':');
+                            _pendingTavernSpecialistId = colon >= 0 ? value.Substring(0, colon) : value;
+                            _pendingTavernDueDay = colon >= 0 ? ParseInt(value.Substring(colon + 1)) : 0;
+                        }
+                        break;
                 }
             }
 

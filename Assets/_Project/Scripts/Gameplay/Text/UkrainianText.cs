@@ -2288,6 +2288,18 @@ namespace Game.Gameplay.Text
             // {fromBackground}/{fromTugar} — перекладені імена (ScreenText.
             // EventLine.ResolveCompanionName), не сирі id.
             AddKey(t, "arrivals.resolved", "До гурту прибилися: {fromBackground} і {fromTugar}.");
+
+            // ---- Поправка №15.1: пізніше приєднання (хто не прибився на старті) ----
+            AddKey(t, "arrivals.tavern.announced",
+                "У таверні кажуть: за {days} діб сюди завітає {companion}.");
+            AddKey(t, "arrivals.tavern.m", "{companion} прибився до гурту — саме той день, про який казали в таверні.");
+            AddKey(t, "arrivals.tavern.f", "{companion} прибилася до гурту — саме той день, про який казали в таверні.");
+            AddKey(t, "arrivals.settlers.m", "Разом з переселенцями до гурту прибився {companion}.");
+            AddKey(t, "arrivals.settlers.f", "Разом з переселенцями до гурту прибилася {companion}.");
+            AddKey(t, "arrivals.expedition.m", "{companion} прибився до гурту — саме там, де його бачив відряд.");
+            AddKey(t, "arrivals.expedition.f", "{companion} прибилася до гурту — саме там, де її бачив відряд.");
+            AddKey(t, "ui.expedition.waiting_specialist", "Тут бачили");
+
             AddKey(t, "city.granted.staffed", "{companion} стає на пост: {post}.");
             AddKey(t, "ui.council.no_hall",
                 "Рада збирається на майдані просто неба — Зала ради лише додасть даху над головою (вкладка «Будівлі»); Указ, Дипломатія, Інвестиція й Спорядження вилазки чекають саме її.");
