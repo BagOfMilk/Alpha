@@ -74,6 +74,15 @@ namespace Game.Core.Combat
         // ---- здача (Поправка №14.2) ----
         public const string Surrendered = "combat.log.surrendered";
 
+        // ---- перша партія здібностей (docs/ABILITIES.md) ----
+        public const string Rallied = "combat.log.rally";
+        public const string Enraged = "combat.log.enrage";
+        public const string EnrageFailed = "combat.log.enrage_failed";
+        public const string Intimidated = "combat.log.intimidate";
+        public const string IntimidateFailed = "combat.log.intimidate_failed";
+        public const string Fled = "combat.log.fled";
+        public const string OverwatchLostNet = "combat.log.overwatch.lost.net";
+
         // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
         public const string OverwatchSet = "combat.log.overwatch.set";
@@ -129,7 +138,7 @@ namespace Game.Core.Combat
             Started, RoundStarted, Retreat, DrawForced, DrawRoundCap, Victory, Defeat,
             OpeningFirstStrike, OpeningAmbush, OpeningSpotted, OpeningUnderFire, OpeningSurrounded,
             ObjectHit, KegExploded, HaystackIgnited, CoverDegraded, CoverDestroyed, FireBurns, FireOut, ReinforcementsArrived,
-            Surrendered,
+            Surrendered, Rallied, Enraged, EnrageFailed, Intimidated, IntimidateFailed, Fled, OverwatchLostNet,
             Move, OverwatchSet, Strike, AttackMiss, AttackGraze, AttackHit, AttackCrit, Stabilize,
             Ability, Damage, Shred, Heal, ApGranted, Lunge, Repositioned, TrapPlaced, HackedToPlayer, HackedToEnemy,
             OverwatchFired, OverwatchExpired, OverwatchLostDisplaced, OverwatchLostHacked, OverwatchLostStunned,
@@ -181,6 +190,7 @@ namespace Game.Core.Combat
                 case StatusType.Marked: return "marked";
                 case StatusType.Burning: return "burning";
                 case StatusType.Poisoned: return "poisoned";
+                case StatusType.Enraged: return "enraged";
                 default: throw new ArgumentOutOfRangeException(nameof(type), type, "Стан без токена журналу бою");
             }
         }

@@ -901,6 +901,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "combat.status.marked", "Позначений");
             AddKey(t, "combat.status.burning", "Горіння");
             AddKey(t, "combat.status.poisoned", "Отруєний");
+            AddKey(t, "combat.status.enraged", "Розлючений");
         }
 
         // CouncilOrderResult — коротка причина відмови ради (UI-фідбек команд Order*).
@@ -2698,6 +2699,33 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.object.hay.effect", "Займеться від вогню чи вибуху: вогонь на відстані {radius} ще {rounds} р.");
             AddKey(t, "ui.battle.object.high.effect", "Повне укриття тому, хто за нею; закриває огляд. Вибух розбиває до низької.");
             AddKey(t, "ui.battle.object.low.effect", "Половинне укриття тому, хто за нею. Вибух розносить.");
+
+            // C5 — перша партія здібностей (docs/ABILITIES.md; власник: «ок», «Тенета норм»).
+            AddKey(t, "ability.rally", "Підбадьорити");
+            AddKey(t, "ability.enrage", "Розлютити");
+            AddKey(t, "ability.intimidate", "Залякати");
+            AddKey(t, "ability.net", "Тенета");
+            AddKey(t, "ability.pierce", "Пробити");
+            AddKey(t, "ability.rally.desc", "Гукнути до свого в межах голосу: знімає придушення і збиття з ніг, а якщо нічого немає — +1 ОД на його наступний хід. Раз за бій на кожного.");
+            AddKey(t, "ability.enrage.desc", "Кпини: якщо твоє Залякування не менше за Волю цілі, наступного ходу вона б'є лише тебе — сильніше, але відкрито. Бос не піддається.");
+            AddKey(t, "ability.intimidate.desc", "Погроза: якщо твоє Залякування більше за Волю цілі, вона придушена й здасться раніше. Звір утікає з поля.");
+            AddKey(t, "ability.net.desc", "Сітка без шкоди: хто ступить — придушений. Ворожий дозор на дві клітинки довкола збито одразу.");
+            AddKey(t, "ability.pierce.desc", "Добивний удар впритул: коли з цілі вже стерто щонайменше 3 броні, б'є напевно й крізь броню.");
+            AddKey(t, "combat.log.rally", "{unit} підбадьорює {target}.");
+            AddKey(t, "combat.log.enrage", "{unit} скаженіє й кидається на {target}.");
+            AddKey(t, "combat.log.enrage_failed", "{unit} не піддається на кпини.");
+            AddKey(t, "combat.log.intimidate", "{unit} злякався — руки тремтять.");
+            AddKey(t, "combat.log.intimidate_failed", "{unit} не злякався погрози.");
+            AddKey(t, "combat.log.fled", "{unit} тікає з поля бою.");
+            AddKey(t, "combat.log.overwatch.lost.net", "{unit}: сітка збила приціл — дозор знято.");
+            AddKey(t, "ui.battle.term.enraged", "Ціль розлючена — не захищається");
+            AddKey(t, "ui.battle.check.contest", "Залякування {value} проти Волі {threshold} — {verdict}.");
+            AddKey(t, "ui.battle.check.shred", "Стерто броні: {value} з {threshold} — {verdict}.");
+            AddKey(t, "ui.battle.check.pass", "вийде");
+            AddKey(t, "ui.battle.check.fail", "не вийде, ОД згорять");
+            AddKey(t, "ui.battle.check.block.immune", "Імунітет — на цю ціль не діє.");
+            AddKey(t, "ui.battle.check.block.rallied", "Уже підбадьорений у цьому бою.");
+            AddKey(t, "ui.battle.check.block.armor_intact", "Броня ще ціла: стерто {value} з {threshold} — спершу стерти.");
             AddKey(t, "ui.battle.object.hit_cost", "Клік — вдарити по ньому: {cost} ОД, влучання певне.");
             AddKey(t, "ui.battle.object.hit_own_turn", "Вдарити можна у свій хід.");
             AddKey(t, "ui.battle.reinforcements.countdown", "Підкріплення ворога: раунд {round} ({count})");

@@ -678,7 +678,10 @@ namespace Game.Tests.EditMode
                 // взяття — факт, а не шкала. Прихильність і неспокій — лише полосами.
                 "RansomGold", "DayTaken",
                 // Поріг здачі ворога (Поправка №14.2) — показаний заздалегідь (інваріант 8).
-                "SurrenderAtHpPercent"
+                "SurrenderAtHpPercent",
+                // Перевірка здібності (docs/ABILITIES.md): «Залякування 3 ≥ Воля 2»,
+                // «стерто броні 3 з 3» — видно до кліку (інваріант 8), не прихована шкала.
+                "CheckValue", "CheckThreshold"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

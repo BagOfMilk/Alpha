@@ -19,7 +19,8 @@ namespace Game.Core.Combat
         Downed = 1,     // 0 HP, тікає вікно на стабілізацію (тільки юніти з CanBeDowned)
         Stabilized = 2, // врятований, вибув із бою живим (поранення застосується на базі — RosterAdapter.Wound, Р5)
         Dead = 3,       // смерть насовсім
-        Surrendered = 4 // здався (Поправка №14.2): вибув із бою живим, долю вирішують після бою
+        Surrendered = 4, // здався (Поправка №14.2): вибув із бою живим, долю вирішують після бою
+        Fled = 5        // утік («Залякати» на звіра, docs/ABILITIES.md): вибув із бою, ні полону, ні крові
     }
 
     /// <summary>
@@ -67,6 +68,9 @@ namespace Game.Core.Combat
         public bool CanSurrender;
         public int SurrenderAtHpPercent;
         public bool NeverRecruitable;
+
+        /// <summary>Залякування — для «Розлютити»/«Залякати» (Залякування ≥ Воля цілі); у ворогів 0.</summary>
+        public int IntimidateSkill;
     }
 
     /// <summary>
@@ -97,6 +101,12 @@ namespace Game.Core.Combat
         public int ArmorShred { get; internal set; }
         public UnitLifeState LifeState { get; internal set; } = UnitLifeState.Active;
         public int DownWindowRemaining { get; internal set; }
+
+        /// <summary>«Підбадьорити»: додаткові ОД на наступний власний хід (docs/ABILITIES.md).</summary>
+        public int BonusApNextTurn { get; internal set; }
+
+        /// <summary>Хто розлютив цього юніта («Розлютити») — його він і б'є, поки розлючений.</summary>
+        public string ProvokedById { get; internal set; }
 
         /// <summary>
         /// Зведений overwatch; null — юніт не в дозорі. Ставить і знімає
@@ -195,6 +205,7 @@ namespace Game.Core.Combat
                 DamageBonus = snap.GetInt(StatKeys.Of(DerivedStat.DamageBonus)),
                 MoveApPerTile = Math.Max(1, snap.GetInt(StatKeys.Of(DerivedStat.MoveApPerTile))),
                 MedicineSkill = snap.Skill(SkillType.Medicine),
+                IntimidateSkill = snap.Skill(SkillType.Intimidate),
             };
         }
 

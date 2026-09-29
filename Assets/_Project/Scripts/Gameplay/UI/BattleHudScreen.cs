@@ -1127,6 +1127,11 @@ namespace Game.Gameplay.UI
 
             GUILayout.Label(UkrainianText.Format("ui.battle.ap_cost", false, "cost", I(p.ApCost)), AlphaSkin.Body);
 
+            // Перевірка здібності (docs/ABILITIES.md): що з чим порівнюється — до кліку (інваріант 8).
+            string checkLine = CheckLine(p);
+            if (checkLine != null)
+                GUILayout.Label(checkLine, p.CheckPasses ? AlphaSkin.HintLine : AlphaSkin.DangerText);
+
             if (target != null)
                 GUILayout.Label(UkrainianText.Format("ui.battle.hp.target", false,
                     "current", I(target.Hp), "max", I(target.HpMax)), AlphaSkin.Body);
@@ -1144,6 +1149,19 @@ namespace Game.Gameplay.UI
 
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
+        }
+
+        /// <summary>Рядок перевірки здібності: «Залякування 3 проти Волі 2 — вийде», «Імунітет», «Броня ще ціла»; null — перевірки немає.</summary>
+        private static string CheckLine(AttackPreviewView p)
+        {
+            if (p == null || string.IsNullOrEmpty(p.CheckKind)) return null;
+            string vals = p.CheckSkill == "shred" ? "ui.battle.check.shred" : "ui.battle.check.contest";
+            if (!string.IsNullOrEmpty(p.CheckBlockKey))
+                return UkrainianText.Format("ui.battle.check.block." + p.CheckBlockKey, false,
+                    "value", I(p.CheckValue), "threshold", I(p.CheckThreshold));
+            if (string.IsNullOrEmpty(p.CheckSkill)) return null;
+            string verdict = UkrainianText.Get(p.CheckPasses ? "ui.battle.check.pass" : "ui.battle.check.fail", false);
+            return UkrainianText.Format(vals, false, "value", I(p.CheckValue), "threshold", I(p.CheckThreshold), "verdict", verdict);
         }
 
         private static void DrawHoverPath(IBattleHudData c, BattleView view, MovePathView path)

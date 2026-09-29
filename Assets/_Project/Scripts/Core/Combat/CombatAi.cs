@@ -77,8 +77,12 @@ namespace Game.Core.Combat
         /// </summary>
         public static bool TryAct(CombatState cs, CombatUnit unit)
         {
+            // «Розлютити» (docs/ABILITIES.md): розлючений не рятує своїх і не шукає бочок —
+            // лише б'є провокатора або йде до нього.
+            bool enraged = Provoker(cs, unit) != null;
+
             // 1. Медик рятує даун-союзника: поруч — стабілізація, далеко — йдемо до нього.
-            if (unit.Profile.MedicineSkill >= 1)
+            if (!enraged && unit.Profile.MedicineSkill >= 1)
             {
                 var downed = Nearest(cs, unit, sameSide: true, state: UnitLifeState.Downed);
                 if (downed != null)
@@ -92,7 +96,7 @@ namespace Game.Core.Combat
             }
 
             // 2. Підлатати тяжко пораненого союзника поруч (Перев'язка тощо).
-            var heal = FirstUsableOfKind(unit, AbilityEffectKind.Heal);
+            var heal = enraged ? null : FirstUsableOfKind(unit, AbilityEffectKind.Heal);
             if (heal != null)
             {
                 var wounded = MostWoundedAllyInRange(cs, unit, heal.Range);
@@ -133,7 +137,7 @@ namespace Game.Core.Combat
 
             // 6½. Бочка з порохом (Поправка №14.4): вибух зачепить чужих і жодного свого,
             //     а виграш не менший, ніж від звичайного пострілу по цілі.
-            if (TryShootKeg(cs, unit, target, chance)) return true;
+            if (!enraged && TryShootKeg(cs, unit, target, chance)) return true;
 
             // 7. Звичайна атака, якщо шанс прийнятний (або ми вже в клінчі).
             if (unit.Weapon != null && (inMelee || (!unit.Weapon.IsMelee && chance >= MinHitToShoot)))
@@ -144,6 +148,8 @@ namespace Game.Core.Combat
             }
 
             // 8. Позицію можна покращити? (зближення/оптимал/укриття за роллю)
+            //    Розлючений не ховається — іде просто на провокатора.
+            if (enraged) return TryStepToward(cs, unit, target.Pos);
             if (TryImprovePosition(cs, unit, target)) return true;
 
             // 9. Стріляти немає по кому, а на постріл AP вистачає — дозор у бік
@@ -160,6 +166,10 @@ namespace Game.Core.Combat
         // ---- Скоринг цілі: очікуваний урон × шанс + добивання + Мітка. ----
         private static CombatUnit PickTarget(CombatState cs, CombatUnit unit)
         {
+            // «Розлютити» (docs/ABILITIES.md): розлючений б'є лише провокатора, поки той на ногах.
+            var provoker = Provoker(cs, unit);
+            if (provoker != null) return provoker;
+
             CombatUnit best = null;
             double bestScore = double.MinValue;
             foreach (var t in cs.Units)
@@ -184,6 +194,14 @@ namespace Game.Core.Combat
                 if (score > bestScore) { bestScore = score; best = t; }
             }
             return best;
+        }
+
+        /// <summary>Провокатор розлюченого юніта, якщо лють ще діє і провокатор на ногах; інакше null.</summary>
+        private static CombatUnit Provoker(CombatState cs, CombatUnit unit)
+        {
+            if (!unit.HasStatus(StatusType.Enraged) || string.IsNullOrEmpty(unit.ProvokedById)) return null;
+            var provoker = cs.GetUnit(unit.ProvokedById);
+            return provoker != null && provoker.IsActive && provoker.Side != unit.Side ? provoker : null;
         }
 
         // ---- Позиція: роль задає, чого юніт хоче від тайла. ----

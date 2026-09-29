@@ -86,10 +86,50 @@ namespace Game.Core.Combat
                 .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.WeaponAttack, AccuracyBonus = -10 })
                 .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.WeaponAttack, AccuracyBonus = -10 });
 
+        // ---- Перша партія docs/ABILITIES.md (власник, 29.09.2026: «ок»; «Тенета норм») ----
+        // Числа — ПЛЕЙСХОЛДЕРИ з карток; поріг видно до кліку (інваріант 8).
+
+        /// <summary>«Підбадьорити» (Переконання ≥ 3): зняти придушення/збиття зі свого, інакше +1 ОД; раз за бій на союзника.</summary>
+        public static AbilityDefinition Rally() =>
+            new AbilityDefinition("ability.rally", "rally", SkillType.Persuade, 3)
+                .Costs(ap: 2, cooldown: 0)
+                .Targets(AbilityTarget.Ally, range: 4, needsLos: false) // голос чути з-за укриття
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Rally, amount: 1));
+
+        /// <summary>«Розлютити» (Залякування ≥ Воля цілі): ціль наступного ходу б'є лише провокатора.</summary>
+        public static AbilityDefinition Enrage() =>
+            new AbilityDefinition("ability.enrage", "enrage", SkillType.Intimidate, 1)
+                .Costs(ap: 2, cooldown: 2)
+                .Targets(AbilityTarget.Enemy, range: 6, needsLos: true)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Enrage));
+
+        /// <summary>«Залякати» (Залякування ≥ Воля цілі + 1): придушення, здасться раніше; звір тікає.</summary>
+        public static AbilityDefinition Intimidate() =>
+            new AbilityDefinition("ability.intimidate", "intimidate", SkillType.Intimidate, 1)
+                .Costs(ap: 2, cooldown: 1)
+                .Targets(AbilityTarget.Enemy, range: 6, needsLos: true)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Intimidate));
+
+        /// <summary>Тенета (Виживання ≥ 2): сітка без шкоди — хто ступить, той придушений; дозор у радіусі 2 збито.</summary>
+        public static AbilityDefinition Net() =>
+            new AbilityDefinition("ability.net", "net", SkillType.Survival, 2)
+                .Costs(ap: 2, cooldown: 3)
+                .Targets(AbilityTarget.Tile, range: 3, needsLos: true)
+                .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.PlaceTrap, Amount = 0, Status = StatusType.Suppressed })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.BreakOverwatchAround, amount: 2));
+
+        /// <summary>«Пробити» (Ближній бій ≥ 4): стерто броні ≥ 3 — гарантований удар без броні.</summary>
+        public static AbilityDefinition Pierce() =>
+            new AbilityDefinition("ability.pierce", "pierce", SkillType.Melee, 4)
+                .Costs(ap: 3, cooldown: 2)
+                .Targets(AbilityTarget.Enemy, range: 1, needsLos: true)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.PierceIfShredded, amount: 3));
+
         /// <summary>Спільний пул здібностей, доступних напарникам за гейтом скіла (передається в CombatUnit.FromCompanion).</summary>
         public static List<AbilityDefinition> AbilityCatalog() => new List<AbilityDefinition>
         {
-            Lunge(), SetTrap(), MoveOrder(), Volley()
+            Lunge(), SetTrap(), MoveOrder(), Volley(),
+            Rally(), Enrage(), Intimidate(), Net(), Pierce()
         };
 
         // ---- Враги (§3.1: авангард орди доби 1, бояри Тугара, фінальний бос) ----

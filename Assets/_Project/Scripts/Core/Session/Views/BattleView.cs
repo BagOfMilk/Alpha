@@ -117,6 +117,9 @@ namespace Game.Core.Session.Views
         public int SurrenderAtHpPercent;
         /// <summary>Уже здався — вибув із бою живим.</summary>
         public bool IsSurrendered;
+
+        /// <summary>Утік із поля («Залякати» на звіра, docs/ABILITIES.md) — арена прибирає фігуру.</summary>
+        public bool IsFled;
     }
 
     /// <summary>Один стан юніта з тривалістю (docs/COMBAT_V2.md §7.1).</summary>
@@ -181,6 +184,19 @@ namespace Game.Core.Session.Views
         /// <summary>Відстань до цілі (клітинки, Чебишев) і максимальна дальність дії.</summary>
         public int Distance, Range;
         public bool HasLineOfSight;
+
+        // ---- Перевірка здібності (перша партія docs/ABILITIES.md; інваріант 8 — видно до кліку) ----
+        /// <summary>"Contest" — навичка проти Волі цілі; "Condition" — умова на полі; null — перевірки немає.</summary>
+        public string CheckKind;
+        /// <summary>"intimidate" | "shred" | null.</summary>
+        public string CheckSkill;
+        /// <summary>Що в тебе (навичка / стерто броні) і скільки треба.</summary>
+        public int CheckValue, CheckThreshold;
+        /// <summary>Ціль не піддається зовсім («Імунітет»: бос, оглушений).</summary>
+        public bool CheckImmune;
+        public bool CheckPasses;
+        /// <summary>Чому дію не почати: "immune" | "rallied" | "armor_intact"; null — можна.</summary>
+        public string CheckBlockKey;
     }
 
     /// <summary>

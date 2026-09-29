@@ -61,6 +61,61 @@ namespace Game.Core.Combat
 
         /// <summary>Порядок падіння бійців загону гравця (id юнітів, перший — упав першим).</summary>
         public IReadOnlyList<string> FallOrder => _fallOrder;
+
+        /// <summary>Кого вже підбадьорили в цьому бою («Підбадьорити» — раз за бій на союзника).</summary>
+        private readonly HashSet<string> _rallied = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Перевірка здібності ДО кліку (інваріант 8, docs/ABILITIES.md): «Розлютити» —
+        /// Залякування ≥ Воля цілі, «Залякати» — ≥ Воля + 1, «Підбадьорити» — раз за бій,
+        /// «Пробити» — стерто броні ≥ порога. Та сама відповідь для прев'ю й для дії;
+        /// null — у здібності перевірки немає.
+        /// </summary>
+        public AbilityCheck DescribeCheck(CombatUnit caster, CombatUnit target, AbilityDefinition ability)
+        {
+            if (caster == null || ability == null) return null;
+            foreach (var fx in ability.Effects)
+            {
+                switch (fx.Kind)
+                {
+                    case AbilityEffectKind.Enrage:
+                    case AbilityEffectKind.Intimidate:
+                    {
+                        if (target == null) return null;
+                        bool enrage = fx.Kind == AbilityEffectKind.Enrage;
+                        bool immune = !target.IsActive || target.HasStatus(StatusType.Stunned)
+                                      || (enrage && target.Profile.Rank == EnemyRank.Boss);
+                        int threshold = Math.Max(0, target.Profile.Resolve) + (enrage ? 0 : 1);
+                        int value = caster.Profile.IntimidateSkill;
+                        return new AbilityCheck
+                        {
+                            Kind = AbilityCheckKind.Contest, SkillKey = "intimidate",
+                            Value = value, Threshold = threshold, Immune = immune,
+                            Passes = !immune && value >= threshold,
+                            BlockKey = immune ? "immune" : null
+                        };
+                    }
+                    case AbilityEffectKind.Rally:
+                    {
+                        if (target == null) return null;
+                        bool used = _rallied.Contains(target.Id);
+                        return new AbilityCheck { Kind = AbilityCheckKind.Condition, Passes = !used, BlockKey = used ? "rallied" : null };
+                    }
+                    case AbilityEffectKind.PierceIfShredded:
+                    {
+                        if (target == null) return null;
+                        bool ok = target.ArmorShred >= fx.Amount;
+                        return new AbilityCheck
+                        {
+                            Kind = AbilityCheckKind.Condition, SkillKey = "shred",
+                            Value = target.ArmorShred, Threshold = fx.Amount,
+                            Passes = ok, BlockKey = ok ? null : "armor_intact"
+                        };
+                    }
+                }
+            }
+            return null;
+        }
         private TurnSystem _turns;
 
         public IReadOnlyList<Trap> Traps => _traps;
@@ -611,11 +666,12 @@ namespace Game.Core.Combat
 
         /// <summary>Один удар зброєю: влучання через IHitRule → урон через DamageResolver → проки → Strike.</summary>
         private void ExecuteAttackRoll(CombatUnit unit, CombatUnit target, WeaponDefinition w,
-                                       int accuracyBonus, bool forceHit, bool allowStrikeGain, bool isReaction = false)
+                                       int accuracyBonus, bool forceHit, bool allowStrikeGain, bool isReaction = false,
+                                       bool ignoreArmor = false)
         {
             int shown = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
             var outcome = forceHit ? AttackOutcome.Hit : _hitRule.Resolve(unit, target, shown, _roller);
-            var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance);
+            var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance, ignoreArmor);
             string attackKey = CombatLogKeys.Attack(outcome);
 
             // §7.3 COMBAT_V2.md: "ap" — ціна цього конкретного удару (навіть
@@ -730,6 +786,11 @@ namespace Game.Core.Combat
 
             if (unit.CooldownRemaining(abilityId) > 0) return CombatActionResult.OnCooldown;
             if (unit.Ap < ability.ApCost) return CombatActionResult.NotEnoughAp;
+
+            // Перша партія (docs/ABILITIES.md): «Імунітет», «уже підбадьорений», «броня ще ціла» —
+            // відмова ДО списання ОД; провал змагання навички — ОД витрачено (так у картці).
+            var check = DescribeCheck(unit, target, ability);
+            if (check != null && check.BlockKey != null) return CombatActionResult.InvalidTarget;
 
             bool selfTarget = ability.Targeting != AbilityTarget.Tile && target == unit;
             if (!selfTarget)
@@ -894,6 +955,82 @@ namespace Game.Core.Combat
                                 "unitId", unit.Id, "abilityId", ability.Id,
                                 "x", I(targetTile.Value.X), "y", I(targetTile.Value.Y));
                         }
+                        break;
+
+                    case AbilityEffectKind.Rally:
+                        if (target != null && target.IsActive && _rallied.Add(target.Id))
+                        {
+                            // Знімає те, що на ньому є (придушення і/або збиття); нічого немає — +ОД.
+                            bool cleared = false;
+                            foreach (var type in new[] { StatusType.Suppressed, StatusType.KnockedDown })
+                            {
+                                var down = target.GetStatus(type);
+                                if (down == null) continue;
+                                target.Statuses.Remove(down);
+                                cleared = true;
+                                Record(CombatLogKeys.StatusRemoved, $"  {target.Profile.DisplayName}: снято состояние {down.Type}",
+                                    "unitId", target.Id, "status", CombatLogKeys.StatusId(down.Type));
+                            }
+                            if (!cleared) target.BonusApNextTurn += Math.Max(1, fx.Amount);
+                            Record(CombatLogKeys.Rallied, $"  {unit.Profile.DisplayName} подбадривает {target.Profile.DisplayName}",
+                                "unitId", unit.Id, "targetId", target.Id);
+                        }
+                        break;
+
+                    case AbilityEffectKind.Enrage:
+                        if (target != null && target.IsActive)
+                        {
+                            if (check != null && check.Passes)
+                            {
+                                target.ProvokedById = unit.Id;
+                                ApplyStatus(target, StatusType.Enraged, 1);
+                                Record(CombatLogKeys.Enraged, $"  {target.Profile.DisplayName} в ярости и бросается на {unit.Profile.DisplayName}",
+                                    "unitId", target.Id, "targetId", unit.Id);
+                            }
+                            else Record(CombatLogKeys.EnrageFailed, $"  {target.Profile.DisplayName} не поддаётся",
+                                "unitId", target.Id, "targetId", unit.Id);
+                        }
+                        break;
+
+                    case AbilityEffectKind.Intimidate:
+                        if (target != null && target.IsActive)
+                        {
+                            if (check != null && check.Passes)
+                            {
+                                if (target.Profile.Family == EnemyFamily.Beast)
+                                {
+                                    // Звір не здається — тікає (docs/ABILITIES.md; власник: «так»).
+                                    target.LifeState = UnitLifeState.Fled;
+                                    Map.ClearOccupant(target.Pos);
+                                    BreakOverwatch(target, CombatLogKeys.OverwatchLostOut, "бежит");
+                                    Record(CombatLogKeys.Fled, $"  {target.Profile.DisplayName} убегает", "unitId", target.Id);
+                                    CheckOutcome();
+                                }
+                                else
+                                {
+                                    Record(CombatLogKeys.Intimidated, $"  {target.Profile.DisplayName} запуган",
+                                        "unitId", target.Id, "targetId", unit.Id);
+                                    ApplyStatus(target, StatusType.Suppressed);
+                                    TrySurrender(target); // поріг здачі щойно виріс (№14.2 × «Залякати»)
+                                }
+                            }
+                            else Record(CombatLogKeys.IntimidateFailed, $"  {target.Profile.DisplayName} не боится",
+                                "unitId", target.Id, "targetId", unit.Id);
+                        }
+                        break;
+
+                    case AbilityEffectKind.BreakOverwatchAround:
+                        if (targetTile.HasValue)
+                            foreach (var u in _units)
+                                if (u.Side != unit.Side && u.IsActive && u.IsOverwatching
+                                    && GridPos.Chebyshev(u.Pos, targetTile.Value) <= Math.Max(1, fx.Amount))
+                                    BreakOverwatch(u, CombatLogKeys.OverwatchLostNet, "сеть");
+                        break;
+
+                    case AbilityEffectKind.PierceIfShredded:
+                        if (unit.Weapon != null && target != null && target.Side != unit.Side && target.IsActive
+                            && target.ArmorShred >= fx.Amount)
+                            ExecuteAttackRoll(unit, target, unit.Weapon, 0, forceHit: true, allowStrikeGain: false, ignoreArmor: true);
                         break;
 
                     case AbilityEffectKind.HackRobot:
@@ -1252,6 +1389,7 @@ namespace Game.Core.Combat
                 case UnitLifeState.Dead:
                 case UnitLifeState.Stabilized:
                 case UnitLifeState.Surrendered:
+                case UnitLifeState.Fled:
                     return false;
 
                 case UnitLifeState.Downed:
@@ -1281,7 +1419,8 @@ namespace Game.Core.Combat
                     return false;
             }
 
-            unit.Ap = unit.Profile.MaxAp;
+            unit.Ap = unit.Profile.MaxAp + unit.BonusApNextTurn; // «Підбадьорити»: +ОД саме на цей хід
+            unit.BonusApNextTurn = 0;
             unit.TickCooldowns();
 
             var knocked = unit.GetStatus(StatusType.KnockedDown);

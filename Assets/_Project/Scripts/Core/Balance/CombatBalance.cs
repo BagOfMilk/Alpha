@@ -101,5 +101,10 @@ namespace Game.Core.Balance
         // ---- Здача (Поправка №14.2) — ПЛЕЙСХОЛДЕР ----
         /// <summary>Придушений (зокрема «Залякати») здається раніше: поріг здачі +N відсоткових пунктів.</summary>
         public int SuppressedSurrenderBonusPercent = 15;
+
+        // ---- Перша партія здібностей (docs/ABILITIES.md) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>«Розлютити»: розлючений б'є сильніше (%) і захищається гірше (очки шансу по ньому).</summary>
+        public int EnragedDamagePercent = 20;
+        public int EnragedDefensePenalty = 10;
     }
 }

@@ -1985,9 +1985,13 @@ namespace Game.Core.Session
             int distance = selfTarget ? 0 : GridPos.Chebyshev(unit.Pos, resolvedTarget.Pos);
             bool hasLos = selfTarget || LineOfSight.HasLine(_battle.Map, unit.Pos, resolvedTarget.Pos);
 
+            // Перша партія (docs/ABILITIES.md): та сама перевірка, що в CombatState.UseAbility.
+            var check = _battle.DescribeCheck(unit, resolvedTarget, ability);
+
             string result;
             if (unit.CooldownRemaining(ability.Id) > 0) result = CombatActionResult.OnCooldown.ToString();
             else if (unit.Ap < ability.ApCost) result = CombatActionResult.NotEnoughAp.ToString();
+            else if (check != null && check.BlockKey != null) result = CombatActionResult.InvalidTarget.ToString();
             else if (!selfTarget && distance > ability.Range) result = CombatActionResult.OutOfRange.ToString();
             else if (!selfTarget && ability.RequiresLineOfSight && !hasLos) result = CombatActionResult.NoLineOfSight.ToString();
             else if (HasEffect(ability, AbilityEffectKind.LungeToTarget) && !_battle.HasLungeLanding(unit, resolvedTarget))
@@ -1997,15 +2001,25 @@ namespace Game.Core.Session
             else result = CombatActionResult.Success.ToString();
 
             bool hasAttackRoll = !selfTarget && unit.Weapon != null && ability.WeaponAttackCount() > 0;
-            if (!hasAttackRoll)
-                return new AttackPreviewView
+            var preview = hasAttackRoll
+                ? BuildAttackPreview(unit, resolvedTarget, unit.Weapon, ability.PreviewAccuracyBonus(),
+                    distance, ability.Range, result, apCost: ability.ApCost)
+                : new AttackPreviewView
                 {
                     Result = result, ApCost = ability.ApCost, Distance = distance, Range = ability.Range,
                     HasLineOfSight = hasLos, HasAttackRoll = false
                 };
-
-            return BuildAttackPreview(unit, resolvedTarget, unit.Weapon, ability.PreviewAccuracyBonus(),
-                distance, ability.Range, result, apCost: ability.ApCost);
+            if (check != null)
+            {
+                preview.CheckKind = check.Kind.ToString();
+                preview.CheckSkill = check.SkillKey;
+                preview.CheckValue = check.Value;
+                preview.CheckThreshold = check.Threshold;
+                preview.CheckImmune = check.Immune;
+                preview.CheckPasses = check.Passes;
+                preview.CheckBlockKey = check.BlockKey;
+            }
+            return preview;
         }
 
         private static bool HasEffect(AbilityDefinition a, AbilityEffectKind kind)
@@ -2025,7 +2039,8 @@ namespace Game.Core.Session
 
             var terms = HitChanceCalculator.Decompose(unit.Profile.Accuracy, unit.HasStatus(StatusType.Suppressed),
                 target.Profile.Defense, cover, ignoreCover, distance, w.OptimalRange, _battle.Balance,
-                target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown), accuracyBonus);
+                target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown), accuracyBonus,
+                target.HasStatus(StatusType.Enraged));
 
             int chance = 0;
             var termViews = new List<ChanceTermView>(terms.Count);
@@ -2221,7 +2236,8 @@ namespace Game.Core.Session
                     DownWindowRemaining = u.LifeState == UnitLifeState.Downed ? u.DownWindowRemaining : 0,
                     IsAiControlled = u.Side != Side.Player,
                     IsOutOfBattle = u.LifeState == UnitLifeState.Dead || u.LifeState == UnitLifeState.Stabilized
-                                    || u.LifeState == UnitLifeState.Surrendered,
+                                    || u.LifeState == UnitLifeState.Surrendered || u.LifeState == UnitLifeState.Fled,
+                    IsFled = u.LifeState == UnitLifeState.Fled,
                     Rank = u.Side == Side.Enemy && string.IsNullOrEmpty(u.SourceCompanionId) ? u.Profile.Rank.ToString() : null,
                     CanSurrender = u.Profile.CanSurrender,
                     SurrenderAtHpPercent = _battle.SurrenderThresholdPercent(u),

@@ -1019,6 +1019,7 @@ namespace Game.Gameplay
             if (view.Units != null)
                 foreach (var unit in view.Units)
                 {
+                    if (unit.IsFled) continue; // утік із поля — фігуру прибираємо як вибулу
                     alive.Add(unit.Id);
                     SpawnOrUpdateUnit(unit);
                 }
@@ -1915,6 +1916,7 @@ namespace Game.Gameplay
 
             foreach (var unit in _lastView.Units)
             {
+                if (unit.IsFled) continue;
                 var pos = _unitVisualPos.TryGetValue(unit.Id, out var p) ? p : DefaultWorldPos(unit);
                 var world = pos + Vector3.up * BattleArenaView.NameLabelHeight;
                 var sp = ArenaCamera.WorldToScreenPoint(world);

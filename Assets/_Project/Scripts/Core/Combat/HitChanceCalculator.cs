@@ -53,6 +53,7 @@ namespace Game.Core.Combat
             public const string CoverFull = "cover_full";
             public const string Distance = "distance";
             public const string Suppressed = "suppressed";
+            public const string Enraged = "enraged";
             public const string Clamp = "clamp";
         }
 
@@ -65,9 +66,12 @@ namespace Game.Core.Combat
                                   int targetDefense, CoverType cover, bool ignoreCover,
                                   int distance, int optimalRange, BalanceConfig cfg,
                                   bool targetMarked = false, bool targetKnockedDown = false,
-                                  int accuracyBonus = 0)
+                                  int accuracyBonus = 0, bool targetEnraged = false)
         {
             var c = cfg.Combat;
+
+            // «Розлютити»: розлючений забуває про захист — окремий доданок, щоб причину було видно.
+            int enragedDelta = targetEnraged ? c.EnragedDefensePenalty : 0;
 
             // Збитий з ніг — легка ціль: захист просідає (не нижче нуля).
             // "defense" несе ПОВНИЙ (немодифікований) захист, "knocked_down" —
@@ -86,7 +90,7 @@ namespace Game.Core.Combat
             int suppressedDelta = attackerSuppressed ? -c.SuppressionAccuracyPenalty : 0;
 
             int raw = attackerAccuracy + accuracyBonus - targetDefense + knockdownDelta
-                      + markedDelta + coverHalfDelta + coverFullDelta + distanceDelta + suppressedDelta;
+                      + markedDelta + coverHalfDelta + coverFullDelta + distanceDelta + suppressedDelta + enragedDelta;
 
             int clamped = raw;
             if (clamped < c.HitChanceMin) clamped = c.HitChanceMin;
@@ -103,6 +107,7 @@ namespace Game.Core.Combat
                 new ChanceTerm(TermKeys.CoverFull, coverFullDelta),
                 new ChanceTerm(TermKeys.Distance, distanceDelta),
                 new ChanceTerm(TermKeys.Suppressed, suppressedDelta),
+                new ChanceTerm(TermKeys.Enraged, enragedDelta),
                 new ChanceTerm(TermKeys.Clamp, clamped - raw),
             };
         }
@@ -112,10 +117,10 @@ namespace Game.Core.Combat
                                   int targetDefense, CoverType cover, bool ignoreCover,
                                   int distance, int optimalRange, BalanceConfig cfg,
                                   bool targetMarked = false, bool targetKnockedDown = false,
-                                  int accuracyBonus = 0)
+                                  int accuracyBonus = 0, bool targetEnraged = false)
         {
             var terms = Decompose(attackerAccuracy, attackerSuppressed, targetDefense, cover, ignoreCover,
-                distance, optimalRange, cfg, targetMarked, targetKnockedDown, accuracyBonus);
+                distance, optimalRange, cfg, targetMarked, targetKnockedDown, accuracyBonus, targetEnraged);
             int sum = 0;
             for (int i = 0; i < terms.Count; i++) sum += terms[i].ChanceDelta;
             return sum;
@@ -133,7 +138,7 @@ namespace Game.Core.Combat
                            target.Profile.Defense, cover, w.IsMelee,
                            distance, w.OptimalRange, cfg,
                            target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown),
-                           accuracyBonus);
+                           accuracyBonus, target.HasStatus(StatusType.Enraged));
         }
     }
 }
