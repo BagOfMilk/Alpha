@@ -2192,7 +2192,8 @@ namespace Game.Core.Session
                     WeaponOptimalRange = w?.OptimalRange ?? 0,
                     WeaponIsMelee = w != null && w.IsMelee,
                     DownWindowRemaining = u.LifeState == UnitLifeState.Downed ? u.DownWindowRemaining : 0,
-                    IsAiControlled = u.Side != Side.Player
+                    IsAiControlled = u.Side != Side.Player,
+                    IsOutOfBattle = u.LifeState == UnitLifeState.Dead || u.LifeState == UnitLifeState.Stabilized
                 });
             }
 

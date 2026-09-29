@@ -75,6 +75,9 @@ namespace Game.Core.Session.Views
 
         /// <summary>true — юнітом керує ШІ (вороги, перебіжчики); гравець ним не ходить.</summary>
         public bool IsAiControlled;
+
+        /// <summary>Вибув із бою: загинув або врятований і винесений (Поправка №14.5 — колесо черги його не показує).</summary>
+        public bool IsOutOfBattle;
     }
 
     /// <summary>Один стан юніта з тривалістю (docs/COMBAT_V2.md §7.1).</summary>

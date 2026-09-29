@@ -262,6 +262,9 @@ namespace Game.Gameplay.Text
             // ==== UX поза HUD (docs/UX_DESIGN.md, Поправка №13): панелі, людські відмови — блок унизу файлу. ====
             AddUxKeys(t);
 
+            // ==== Трек C, бій (Поправка №14): колесо черги, відступ, старт бою — блок унизу файлу. ====
+            AddCombatTrackKeys(t);
+
             return t;
         }
 
@@ -2589,6 +2592,20 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.error.generic", "Зараз цього зробити не можна.");
             AddKey(t, "ux.error.finale_first", "Спершу обери, як зустріти фінал: цю ніч не пропустити мовчки.");
             AddKey(t, "ux.error.save_incompatible", "Це збереження зроблене іншою версією гри — продовжити його не вийде.");
+        }
+
+        /// <summary>
+        /// Трек C, бій (Поправка №14; docs/ROADMAP.md, кроки C1–C8). Окремий
+        /// блок, щоб не конфліктувати з блоками інших треків. Чорновий текст
+        /// асистента (№7.3).
+        /// </summary>
+        private static void AddCombatTrackKeys(Dictionary<string, string> t)
+        {
+            // C1 — колесо черги ходів (№14.5).
+            AddKey(t, "ui.battle.wheel.title", "Черга ходів");
+            AddKey(t, "ui.battle.wheel.round_mark", "Р{round}");
+            AddKey(t, "ui.battle.wheel.skips", "пропускає");
+            AddKey(t, "ui.battle.wheel.hint", "Клік — показати на мапі");
         }
     }
 }
