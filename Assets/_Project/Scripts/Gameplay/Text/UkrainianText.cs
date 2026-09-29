@@ -259,6 +259,9 @@ namespace Game.Gameplay.Text
             // ==== Бій v2 (docs/COMBAT_V2.md): новий HUD, фолбек, журнал — див. блок унизу файлу. ====
             AddCombatV2HudKeys(t);
 
+            // ==== UX поза HUD (docs/UX_DESIGN.md, Поправка №13): панелі, людські відмови — блок унизу файлу. ====
+            AddUxKeys(t);
+
             return t;
         }
 
@@ -2541,6 +2544,51 @@ namespace Game.Gameplay.Text
             AddKey(t, "ability.set_trap.desc", "Ставить пастку на клітинці — шкода й стан ворогу, що в неї ступить. Свої пастки ви бачите на арені, ворог — ні.");
             AddKey(t, "ability.move_order.desc", "Командний ривок: переставляє союзника на кілька клітин.");
             AddKey(t, "ability.volley.desc", "Черга: два постріли поспіль поточною зброєю з невеликим штрафом до точності кожного.");
+        }
+
+        // ---- UX поза HUD (docs/UX_DESIGN.md §3.2, §5.15; Поправка №13) ----
+        // Один суцільний блок (R7: текст — один файл): назви панелей каталогу
+        // UxPanelCatalog і людські відмови UxErrorText замість сирих винятків.
+        private static void AddUxKeys(Dictionary<string, string> t)
+        {
+            // Панелі (UxPanelCatalog, ключ ux.panel.<slug>).
+            AddKey(t, "ux.panel.duty_board", "Дошка наряду");
+            AddKey(t, "ux.panel.blueprints", "Креслення");
+            AddKey(t, "ux.panel.council_table", "Стіл ради");
+            AddKey(t, "ux.panel.muster", "Збори");
+            AddKey(t, "ux.panel.stash", "Схованка");
+            AddKey(t, "ux.panel.people", "Люди");
+            AddKey(t, "ux.panel.notice_board", "Дошка оголошень");
+            AddKey(t, "ux.panel.journal", "Журнал");
+            AddKey(t, "ux.panel.training_ground", "Тренувальний майданчик");
+            AddKey(t, "ux.panel.save", "Збереження");
+            AddKey(t, "ux.panel.mechanics_journal", "Журнал механік");
+            AddKey(t, "ux.panel.chronicle", "Хроніка");
+            AddKey(t, "ux.panel.workbench", "Верстак");
+            AddKey(t, "ux.panel.building_card", "Будівля");
+            AddKey(t, "ux.panel.plot_card", "Ділянка");
+            AddKey(t, "ux.panel.settings", "Налаштування");
+
+            // Коли щось можна зробити — обставина часу для «Це можна зробити лише {when}.»
+            AddKey(t, "ux.state.title", "на титулі");
+            AddKey(t, "ux.state.creation", "під час створення героя");
+            AddKey(t, "ux.state.opening", "у пролозі");
+            AddKey(t, "ux.state.morning", "вранці");
+            AddKey(t, "ux.state.day", "вдень");
+            AddKey(t, "ux.state.decision", "під час рішення");
+            AddKey(t, "ux.state.evening", "увечері");
+            AddKey(t, "ux.state.night", "уночі");
+            AddKey(t, "ux.state.scene", "у сцені");
+            AddKey(t, "ux.state.dungeon", "у підземеллі");
+            AddKey(t, "ux.state.battle", "у бою");
+            AddKey(t, "ux.state.summary", "на підсумку");
+            AddKey(t, "ux.state.freeplay", "у вільній грі");
+            AddKey(t, "ux.word.or", "або");
+
+            AddKey(t, "ux.error.only_in", "Це можна зробити лише {when}.");
+            AddKey(t, "ux.error.generic", "Зараз цього зробити не можна.");
+            AddKey(t, "ux.error.finale_first", "Спершу обери, як зустріти фінал: цю ніч не пропустити мовчки.");
+            AddKey(t, "ux.error.save_incompatible", "Це збереження зроблене іншою версією гри — продовжити його не вийде.");
         }
     }
 }
