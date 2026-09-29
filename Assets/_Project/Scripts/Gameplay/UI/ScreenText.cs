@@ -679,6 +679,13 @@ namespace Game.Gameplay.UI
                 "incidentId", ContentLabel("incident", Arg(a, "incidentId"), gender),
                 "resource", ContentLabel("resource", Arg(a, "resource"), gender),
                 "sceneId", sceneName, "optionId", sceneOption,
+                // Поправка №12.10 ("arrivals.resolved"): без цих двох пар
+                // сирі id пула прибульців ("goban"/"keeper") пройшли б у
+                // текст ЯК Є — той самий фолбек-у-кінець-пар цикл нижче
+                // підставляє raw Args, коли для ключа нема перекладеного
+                // збігу вище (коментар класу "Format бере перший збіг").
+                "fromBackground", ResolveCompanionName(Arg(a, "fromBackground"), gender, roster),
+                "fromTugar", ResolveCompanionName(Arg(a, "fromTugar"), gender, roster),
             };
             if (a != null)
                 foreach (var kv in a) { pairs.Add(kv.Key); pairs.Add(kv.Value); }

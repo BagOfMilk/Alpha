@@ -27,7 +27,20 @@ namespace Game.Tests.EditMode
     {
         private static NewGameOptions Quick() => new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold };
 
-        /// <summary>Проходить пролог: на виборі Тугара — <paramref name="tugarOption"/>, на виборі будівлі — <paramref name="buildingId"/>. Повертає крок вибору будівлі.</summary>
+        /// <summary>
+        /// Проходить пролог: на виборі Тугара — <paramref name="tugarOption"/>,
+        /// на виборі будівлі — <paramref name="buildingId"/>. Повертає крок
+        /// вибору будівлі.
+        ///
+        /// Поправка №12.10: варіанти першої будівлі — підмножина каталогу
+        /// (Сторожа + ремесла ДВОХ прибульців із пулу), не завжди весь
+        /// каталог — індекс варіанта шукаємо за TextKey серед фактично
+        /// показаних <c>step.Options</c>, а не статичним IndexOf у повному
+        /// каталозі. За замовчуванням (SkipCreation, без явної передісторії)
+        /// прибиває Гобан-Сайр — тож, разом із Сторожею, доступні варіанти
+        /// завжди включають Майстерню; третій залежить від <paramref name="tugarOption"/>
+        /// (0=refuse→Склад, 1=bargain→Ринок, 2=ask_myroslava→Лазарет).
+        /// </summary>
         private static SceneStepView PlayOpening(GameSession s, string buildingId, int tugarOption = 0)
         {
             SceneStepView buildingStep = null;
@@ -38,7 +51,11 @@ namespace Game.Tests.EditMode
                 if (step.ChoiceId == OpeningScenes.FirstBuildingChoiceId)
                 {
                     buildingStep = step;
-                    step = s.ChooseSceneOption(System.Array.IndexOf(DefaultBuildings.FirstBuildingChoices, buildingId));
+                    int idx = -1;
+                    for (int i = 0; i < step.Options.Count; i++)
+                        if (step.Options[i].TextKey == "scene.neighbour.option." + buildingId) { idx = i; break; }
+                    Assert.GreaterOrEqual(idx, 0, buildingId + ": варіант мав бути серед доступних для tugarOption=" + tugarOption);
+                    step = s.ChooseSceneOption(idx);
                 }
                 else step = s.ChooseSceneOption(tugarOption);
             }
@@ -65,6 +82,15 @@ namespace Game.Tests.EditMode
             CollectionAssert.DoesNotContain(s.GetCityView().OpenPosts, "infirmary_bed");
         }
 
+        /// <summary>
+        /// Поправка №12.10: за замовчуванням (SkipCreation, без явної
+        /// передісторії) прибиває Гобан-Сайр (Майстерня); другий прибулець —
+        /// за відповіддю Тугарові (0=refuse→Дід Овсій/Склад,
+        /// 1=bargain→Синдбад/Ринок, 2=ask_myroslava→Гафія/Лазарет).
+        /// </summary>
+        private static readonly string[] TugarBranchBuilding =
+            { DefaultBuildings.Storehouse, DefaultBuildings.Market, DefaultBuildings.Infirmary };
+
         [Test]
         public void EveryTugarBranch_LeadsToTheFirstBuildingChoice_ThenToNode1()
         {
@@ -72,11 +98,14 @@ namespace Game.Tests.EditMode
             {
                 var s = new GameSession();
                 s.NewGame(Quick());
-                var step = PlayOpening(s, DefaultBuildings.Watch, tugar);
+                var expected = new[] { DefaultBuildings.Watch, DefaultBuildings.Workshop, TugarBranchBuilding[tugar] }
+                    .OrderBy(id => System.Array.IndexOf(DefaultBuildings.FirstBuildingChoices, id)).ToArray();
+                var step = PlayOpening(s, expected[0], tugar);
                 Assert.IsNotNull(step, "гілка " + tugar + ": вибір першої будівлі мав з'явитися");
-                Assert.AreEqual(DefaultBuildings.FirstBuildingChoices.Length, step.Options.Count);
+                Assert.AreEqual(3, step.Options.Count, "гілка " + tugar + ": Сторожа + ремесла двох прибульців");
                 for (int i = 0; i < step.Options.Count; i++)
-                    Assert.AreEqual("scene.neighbour.option." + DefaultBuildings.FirstBuildingChoices[i], step.Options[i].TextKey);
+                    Assert.AreEqual("scene.neighbour.option." + expected[i], step.Options[i].TextKey,
+                        "гілка " + tugar + ": порядок каталогу зберігається");
                 Assert.IsTrue(s.DayLog.Any(e => e.Key == "scene.finished" && e.Args["transition"] == "to.node1.pass"),
                     "усі гілки сходяться в тому самому вузлі 1");
             }
@@ -85,12 +114,21 @@ namespace Game.Tests.EditMode
         [Test]
         public void EachChoice_BuildsOnlyThatBuilding_ForFree()
         {
-            foreach (var buildingId in DefaultBuildings.FirstBuildingChoices)
+            // Поправка №12.10: кожна з 5 будівель каталогу досяжна в якійсь
+            // гілці — Сторожа й Майстерня в усіх трьох (Watch завжди, Goban —
+            // дефолтна передісторія), Склад/Ринок/Лазарет — по одній гілці.
+            var cases = new (string buildingId, int tugar)[]
+            {
+                (DefaultBuildings.Watch, 0), (DefaultBuildings.Workshop, 0),
+                (DefaultBuildings.Storehouse, 0), (DefaultBuildings.Market, 1), (DefaultBuildings.Infirmary, 2)
+            };
+
+            foreach (var (buildingId, tugar) in cases)
             {
                 var s = new GameSession();
                 s.NewGame(Quick());
                 int goldBefore = s.GetEconomyView().Gold;
-                PlayOpening(s, buildingId);
+                PlayOpening(s, buildingId, tugar);
 
                 Assert.IsTrue(Built(s, buildingId), buildingId + ": обрана будівля стоїть одразу");
                 Assert.AreEqual(1, s.GetCityView().Built.Count, buildingId + ": решта — за звичайними правилами (№6)");
@@ -108,11 +146,12 @@ namespace Game.Tests.EditMode
         [Test]
         public void StorehouseAndInfirmary_OpenAndStaffTheirPost()
         {
-            foreach (var buildingId in new[] { DefaultBuildings.Storehouse, DefaultBuildings.Infirmary })
+            // Поправка №12.10: Склад — гілка refuse (Дід Овсій прибиває), Лазарет — ask_myroslava (Гафія).
+            foreach (var (buildingId, tugar) in new[] { (DefaultBuildings.Storehouse, 0), (DefaultBuildings.Infirmary, 2) })
             {
                 var s = new GameSession();
                 s.NewGame(Quick());
-                PlayOpening(s, buildingId);
+                PlayOpening(s, buildingId, tugar);
 
                 string slot = DefaultBuildings.Get(buildingId).OpensSlotId;
                 string keeper = OpeningScenes.FirstBuildingKeeperOf(buildingId);
@@ -162,7 +201,8 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(Quick());
-            PlayOpening(s, DefaultBuildings.Infirmary);
+            // Поправка №12.10: ask_myroslava (2) приводить Гафію.
+            PlayOpening(s, DefaultBuildings.Infirmary, tugarOption: 2);
             string blob = s.SaveState(0);
 
             var fresh = new GameSession();

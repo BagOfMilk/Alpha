@@ -265,8 +265,17 @@ namespace Game.Core.Session
                 Flags = flags,
                 Party = party,
                 RequirePlayerDecision = requirePlayerDecision,
-                // Три пости, які реально тримають люди на старті (§3.0) — доповідь
-                // з пустого поста мовчить сама по собі (правило §2 табл. рядок 6).
+                // Поправка №12.10: Майстерня й Ринок тепер теж можуть стати
+                // ПЕРШОЮ будівлею (ремесло Гобана-Сайра/Синдбада), але СВІДОМО
+                // без власного PostDomain тут — три профільних пости
+                // (рада/склад/лазарет) лишаються еталоном темпу
+                // (TestBuildTensionPaceTests калібрується проти них), а
+                // додавання двох нових доменів вимірювано зсуває темп (Ропіт
+                // 15→13, бунт 25→23 на сухому HomebodyPolicy-прогоні) — заміна
+                // одного присутнього фахівця на іншого з іншим набором скілів,
+                // а не сама наявність PostDomain. Верстак/Ринок доповідають
+                // мовчанням, як і решта непрофільних постів (§7.5, AUDIT-GAPS
+                // G13/G14) — відкрите питання власнику, чи розширювати трійку.
                 PostDomains = new[]
                 {
                     new PostDomain("council_seat", "рада", SkillKeys.Persuade, 5),
@@ -317,6 +326,26 @@ namespace Game.Core.Session
                 .SetSkill(SkillType.Medicine, 8).SetSkill(SkillType.Survival, 4)
                 .SetSkill(SkillType.Persuade, 3)
                 .AddStartingTrait(DefaultTraits.Blunt())));
+
+            // Поправка №12.10 (пул прибульців): усі четверо фахівців — Дід
+            // Овсій, Гафія, Гобан-Сайр, Синдбад — існують у ростері з самого
+            // Build() (хто саме ПРИБИВСЯ — вирішується пізніше, GameSession.
+            // ApplyArrivalsPool, коли відомі і передісторія, і відповідь
+            // Тугарові); той, хто не прибився, отримує CompanionStatus.
+            // NotArrived і ніде більше не з'являється.
+            roster.Add(Named(ArrivalsPool.GobanId, OpeningCast.Goban(), cfg, arch => arch
+                .SetAttribute(AttributeType.Strength, 5).SetAttribute(AttributeType.Wits, 4)
+                .SetAttribute(AttributeType.Will, 4).SetAttribute(AttributeType.Agility, 4)
+                .SetSkill(SkillType.Mechanics, 8).SetSkill(SkillType.Trade, 5)
+                .SetSkill(SkillType.Survival, 4)
+                .AddStartingTrait(DefaultTraits.Meticulous())));
+
+            roster.Add(Named(ArrivalsPool.SindbadId, OpeningCast.Sindbad(), cfg, arch => arch
+                .SetAttribute(AttributeType.Wits, 5).SetAttribute(AttributeType.Will, 4)
+                .SetAttribute(AttributeType.Agility, 4).SetAttribute(AttributeType.Strength, 4)
+                .SetSkill(SkillType.Trade, 8).SetSkill(SkillType.Persuade, 5)
+                .SetSkill(SkillType.Survival, 4)
+                .AddStartingTrait(DefaultTraits.Wary())));
 
             // Максим Беркут — Persuade 4 / Tactics 4, Melee 6 / Survival 5 (§3.0).
             roster.Add(Named("maksym", OpeningCast.Maksym(), cfg, arch => arch
