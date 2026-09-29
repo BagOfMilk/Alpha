@@ -111,7 +111,11 @@ namespace Game.Tests.EditMode
                 words.AddRange(h.LadderLines);
                 words.AddRange(h.Ladder.Select(r => r.Word));
                 foreach (var w in words.Where(x => x != null))
+                {
                     Assert.IsFalse(w.Any(char.IsDigit), band + ": у слові полоси чи драбині є цифра — «" + w + "»");
+                    // Рішення власника 29.09.2026 «1. B»: без стрілок (напрям руху шкали — теж слід числа).
+                    Assert.IsFalse(w.IndexOfAny("↑↓→←⇧⇩▲▼△▽↗↘%".ToCharArray()) >= 0, band + ": у драбині стрілка чи відсоток — «" + w + "»");
+                }
                 Assert.IsFalse(string.IsNullOrEmpty(h.BandWord), band + ": слово полоси порожнє");
             }
         }

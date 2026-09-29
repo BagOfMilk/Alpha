@@ -66,8 +66,10 @@ namespace Game.Gameplay.UI
     /// <summary>
     /// Модель шапки без рушія (HUD_DESIGN §8 «модель окремо від малювання»,
     /// HP-4): рахує, ЩО показати, з публічних виглядів <c>GameSession</c>.
-    /// Малюють її два види однаково — UI Toolkit (<c>Toolkit/HudToolkitView</c>)
-    /// і IMGUI-фолбек (<c>GameShell.DrawTopBar</c>, прапорець <c>-imgui-hud</c>).
+    /// Малює її поки лише UI Toolkit (<c>Toolkit/HudToolkitView</c>). IMGUI-фолбек
+    /// (<c>GameShell.DrawTopBar</c>, прапорець <c>-imgui-hud</c>) навмисно лишився
+    /// старим — це база порівняння за критеріями §8; драбини при наведенні і
+    /// назви тіра без «Тір N» у ньому НЕМАЄ, рішення «1. B» він не виконує.
     /// Перевіряється headless (<c>HudHeaderModelTests</c>).
     /// </summary>
     public static class HudHeaderModel

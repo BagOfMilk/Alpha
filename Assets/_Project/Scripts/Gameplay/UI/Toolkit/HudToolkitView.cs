@@ -389,14 +389,18 @@ namespace Game.Gameplay.UI.Toolkit
                .Append(HudHeaderModel.CountAway(roster)).Append('|')
                .Append(pending?.TopicId).Append('|').Append(exploreVisible).Append(_shell.EscapeOpen).Append('|')
                .Append(g).Append('|').Append(_shell.Exploring).Append('|');
-            if (economy != null) sig.Append(economy.Gold).Append(',').Append(economy.Materials).Append(',').Append(economy.Food);
+            // Ресурси — тим самим узагальненим списком, що йде в шапку: новий
+            // рядок таблиці HudHeaderModel (два види матеріалів після злиття)
+            // одразу потрапляє і в підпис, інакше шапка показувала б застаре значення.
+            var resources = HudHeaderModel.ResourcesFrom(economy, g);
+            foreach (var r in resources) sig.Append(r.Key).Append('=').Append(r.Value).Append(',');
             sig.Append('|').Append(log?.Count ?? 0);
             if (log != null && log.Count > 0) sig.Append(log[log.Count - 1].Key).Append(log[log.Count - 1].Day);
             string signature = sig.ToString();
             if (signature == _signature) return;
             _signature = signature;
 
-            var header = HudHeaderModel.Build(view, session.State, HudHeaderModel.ResourcesFrom(economy, g), roster, g);
+            var header = HudHeaderModel.Build(view, session.State, resources, roster, g);
             LastHeader = header;
             ApplyHeader(header, exploreVisible);
 
