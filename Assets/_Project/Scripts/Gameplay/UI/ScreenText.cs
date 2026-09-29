@@ -450,7 +450,7 @@ namespace Game.Gameplay.UI
                     "gold", def.GoldCost.ToString(), "build", def.BuildComponentCost.ToString())
                 : UkrainianText.Format("ui.buildings.cost_gold", g, "gold", def.GoldCost.ToString());
             int days = testBuildOneDayConstruction ? 1 : def.Days;
-            return cost + ", " + UkrainianText.Format("ui.buildings.days", g, "days", days.ToString());
+            return cost + ", " + UkrainianText.DayCount(days);
         }
 
         /// <summary>
@@ -704,11 +704,19 @@ namespace Game.Gameplay.UI
                 // збігу вище (коментар класу "Format бере перший збіг").
                 "fromBackground", ResolveCompanionName(Arg(a, "fromBackground"), gender, roster),
                 "fromTugar", ResolveCompanionName(Arg(a, "fromTugar"), gender, roster),
+                // «за {days}» (№15.1, таверна): число з відмінюванням — «за 3 доби», не «за 3 діб».
+                "days", DaysArg(Arg(a, "days")),
             };
             if (a != null)
                 foreach (var kv in a) { pairs.Add(kv.Key); pairs.Add(kv.Value); }
 
             return UkrainianText.Format(evt.Key, subjectGender, pairs.ToArray());
+        }
+
+        private static string DaysArg(string raw)
+        {
+            int n;
+            return int.TryParse(raw, out n) ? UkrainianText.DayCount(n, accusative: true) : raw ?? "";
         }
 
         /// <summary>

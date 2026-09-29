@@ -119,6 +119,20 @@ namespace Game.Gameplay.Text
             Format(key, isFemale ? Gender.Female : Gender.Male, args);
 
         /// <summary>
+        /// Кількість діб з відмінюванням: «1 доба, 2 доби, 5 діб, 21 доба»;
+        /// <paramref name="accusative"/> — для «за 1 добу». Раніше шаблони
+        /// писали «{days} діб», і гравець бачив «1 діб», «за 3 діб».
+        /// </summary>
+        public static string DayCount(int n, bool accusative = false)
+        {
+            int m10 = Math.Abs(n) % 10, m100 = Math.Abs(n) % 100;
+            string key = m10 == 1 && m100 != 11 ? (accusative ? "ux.days.one_acc" : "ux.days.one")
+                : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? "ux.days.few"
+                : "ux.days.many";
+            return Format(key, Gender.Male, "n", n.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>
         /// Бій v2 (docs/COMBAT_V2.md, аудит HUD: «х.» непослідовне поруч із
         /// виписаними повністю «Здоров'я»/«Очки дій»): українське відмінювання
         /// лічильника ходів — «ще 1 хід» / «ще 2 ходи» / «ще 5 ходів» (і так
@@ -1585,7 +1599,6 @@ namespace Game.Gameplay.Text
             // кліку (ScreenText.BuildingCostLine), а не лише постфактум.
             AddKey(t, "ui.buildings.cost_gold", "{gold} золота");
             AddKey(t, "ui.buildings.cost_both", "{gold} золота, будматеріал {build}");
-            AddKey(t, "ui.buildings.days", "{days} діб");
 
             AddKey(t, "ui.council.raid", "Облава");
             AddKey(t, "ui.council.settlers", "Прийняти переселенців");
@@ -2313,7 +2326,7 @@ namespace Game.Gameplay.Text
 
             // ---- Поправка №15.1: пізніше приєднання (хто не прибився на старті) ----
             AddKey(t, "arrivals.tavern.announced",
-                "У таверні кажуть: за {days} діб сюди завітає {companion}.");
+                "У таверні кажуть: за {days} сюди завітає {companion}.");
             AddKey(t, "arrivals.tavern.m", "{companion} прибився до гурту — саме той день, про який казали в таверні.");
             AddKey(t, "arrivals.tavern.f", "{companion} прибилася до гурту — саме той день, про який казали в таверні.");
             AddKey(t, "arrivals.settlers.m", "Разом з переселенцями до гурту прибився {companion}.");
@@ -2687,7 +2700,11 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.error.only_in", "Це можна зробити лише {when}.");
             AddKey(t, "ux.error.generic", "Зараз цього зробити не можна.");
             AddKey(t, "ux.error.finale_first", "Спершу обери, як зустріти фінал: цю ніч не пропустити мовчки.");
-            AddKey(t, "ux.error.save_incompatible", "Це збереження зроблене іншою версією гри — продовжити його не вийде.");
+            AddKey(t, "ux.days.one", "{n} доба");
+            AddKey(t, "ux.days.one_acc", "{n} добу");
+            AddKey(t, "ux.days.few", "{n} доби");
+            AddKey(t, "ux.days.many", "{n} діб");
+            AddKey(t, "ux.error.save_incompatible","Це збереження зроблене іншою версією гри — продовжити його не вийде.");
 
             // Панель «Люди» (C, UX_DESIGN §5.11).
             AddKey(t, "ux.people.empty", "Поки що з тобою нікого. Люди прибиваються після прологу.");

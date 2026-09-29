@@ -517,11 +517,23 @@ namespace Game.Gameplay.UI
 
             Widgets.Section(UkrainianText.Get("ui.tab.expedition", g), () =>
             {
+                // Точки переносяться, як і рядок вкладок (DrawTabBar): на
+                // 1280×720 четверта точка вилазила за край панелі (тур 29.09.2026).
+                float available = Screen.width * 0.7f - 48f;
+                float rowWidth = 0f;
                 GUILayout.BeginHorizontal();
                 foreach (var site in SiteIds)
                 {
-                    // Той самий фікс ширини, що DrawCouncil вище.
-                    if (Widgets.TabButton(UkrainianText.Get("site." + site, g), _siteId == site))
+                    string label = UkrainianText.Get("site." + site, g);
+                    float width = Widgets.TabButtonWidth(label);
+                    if (rowWidth > 0f && rowWidth + width > available)
+                    {
+                        GUILayout.EndHorizontal();
+                        GUILayout.BeginHorizontal();
+                        rowWidth = 0f;
+                    }
+                    rowWidth += width;
+                    if (Widgets.CompactTabButton(label, _siteId == site))
                     {
                         _siteId = site;
                         _preview = null;
