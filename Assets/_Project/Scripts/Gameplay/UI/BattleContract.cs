@@ -75,6 +75,14 @@ namespace Game.Gameplay
         void RequestEndTurn();
         void RequestAutoResolve();
 
+        /// <summary>
+        /// Відступити з бою (Поправка №14.7; ROADMAP B13 — раніше з бою не було
+        /// виходу, статут ANTI-10). Лише у свій хід. Наслідок залежить від того,
+        /// хто просив бій (<see cref="Game.Core.Session.Views.BattleView.RetreatConsequenceKey"/>).
+        /// Додано 29.09.2026 узгоджено з треком H (заморожений контракт, §7.4).
+        /// </summary>
+        void RequestRetreat();
+
         /// <summary>Перелетіти камерою до юніта.</summary>
         void FocusCamera(string unitId);
 
@@ -101,6 +109,15 @@ namespace Game.Gameplay
         IReadOnlyList<BattleLogEntryUi> LogEntries { get; }
 
         string HoveredUnitId { get; }
+
+        /// <summary>
+        /// Вороги, що здалися і чекають рішення (Поправка №14.2) — панель результату
+        /// показує їх з трьома кнопками. Додано 29.09.2026 узгоджено з треком H.
+        /// </summary>
+        IReadOnlyList<SurrenderView> PendingSurrenders { get; }
+
+        /// <summary>Доля того, хто здався: відпустити, у полон, добити.</summary>
+        void DecideSurrender(string unitId, Game.Core.Combat.SurrenderFate fate);
         bool HasHoveredTile { get; }
         int HoveredTileX { get; }
         int HoveredTileY { get; }

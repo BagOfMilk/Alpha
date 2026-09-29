@@ -70,7 +70,7 @@ namespace Game.Core.Base
                 // викликача, тому відмова явна.
                 if (!seen.Add(c.Id)) return DispatchResult.DuplicateCompanion;
 
-                if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission || IsAntagonist(c.Status))
+                if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission || IsAntagonist(c.Status) || c.IsCaptive)
                     return DispatchResult.CompanionUnavailable;
                 chosen.Add(c);
             }

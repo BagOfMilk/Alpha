@@ -18,6 +18,13 @@ namespace Game.Core.Combat
         private readonly bool[,] _walkable;
         private readonly bool[,] _blocksSight;
         private readonly CoverType[,,] _cover; // [x, y, direction]
+
+        /// <summary>
+        /// Укриття від об'єктів поля (Поправка №14.4) — окремий шар поверх
+        /// статичного: об'єкт руйнується — шар перераховується, а ручне укриття
+        /// карти лишається. <see cref="GetCover"/> бере найкраще з двох.
+        /// </summary>
+        private readonly CoverType[,,] _objectCover; // [x, y, direction]
         private readonly Dictionary<GridPos, string> _occupants = new Dictionary<GridPos, string>();
 
         public GridMap(int width, int height)
@@ -28,6 +35,7 @@ namespace Game.Core.Combat
             _walkable = new bool[width, height];
             _blocksSight = new bool[width, height];
             _cover = new CoverType[width, height, 4];
+            _objectCover = new CoverType[width, height, 4];
             for (int x = 0; x < width; x++)
                 for (int y = 0; y < height; y++)
                     _walkable[x, y] = true;
@@ -51,11 +59,26 @@ namespace Game.Core.Combat
 
         // ---- Укриття ----
         public CoverType GetCover(GridPos p, Direction side)
-            => InBounds(p) ? _cover[p.X, p.Y, (int)side] : CoverType.None;
+        {
+            if (!InBounds(p)) return CoverType.None;
+            var a = _cover[p.X, p.Y, (int)side];
+            var b = _objectCover[p.X, p.Y, (int)side];
+            return a > b ? a : b;
+        }
 
         public void SetCover(GridPos p, Direction side, CoverType cover)
         {
             if (InBounds(p)) _cover[p.X, p.Y, (int)side] = cover;
+        }
+
+        /// <summary>Шар укриття від об'єктів: скинути перед перерахунком (CombatState.RecomputeObjectCover).</summary>
+        public void ClearObjectCover() => Array.Clear(_objectCover, 0, _objectCover.Length);
+
+        /// <summary>Об'єкт дає укриття тайлу <paramref name="p"/> з боку <paramref name="side"/>; бере найкраще з уже записаного.</summary>
+        public void AddObjectCover(GridPos p, Direction side, CoverType cover)
+        {
+            if (!InBounds(p)) return;
+            if (cover > _objectCover[p.X, p.Y, (int)side]) _objectCover[p.X, p.Y, (int)side] = cover;
         }
 
         /// <summary>

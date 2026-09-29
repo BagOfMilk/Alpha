@@ -18,7 +18,9 @@ namespace Game.Core.Combat
         Active = 0,
         Downed = 1,     // 0 HP, тікає вікно на стабілізацію (тільки юніти з CanBeDowned)
         Stabilized = 2, // врятований, вибув із бою живим (поранення застосується на базі — RosterAdapter.Wound, Р5)
-        Dead = 3        // смерть насовсім
+        Dead = 3,       // смерть насовсім
+        Surrendered = 4, // здався (Поправка №14.2): вибув із бою живим, долю вирішують після бою
+        Fled = 5        // утік («Залякати» на звіра, docs/ABILITIES.md): вибув із бою, ні полону, ні крові
     }
 
     /// <summary>
@@ -60,6 +62,15 @@ namespace Game.Core.Combat
 
         /// <summary>Роль — біас поведінки ШІ: танк лізе в клінч, застрільщик тримає оптимал.</summary>
         public EnemyRole Role = EnemyRole.Skirmisher;
+
+        // ---- Здача (Поправка №14.2) — лише для ворогів ----
+        public EnemyRank Rank = EnemyRank.Grunt;
+        public bool CanSurrender;
+        public int SurrenderAtHpPercent;
+        public bool NeverRecruitable;
+
+        /// <summary>Залякування — для «Розлютити»/«Залякати» (Залякування ≥ Воля цілі); у ворогів 0.</summary>
+        public int IntimidateSkill;
     }
 
     /// <summary>
@@ -80,6 +91,9 @@ namespace Game.Core.Combat
         /// <summary>Id напарника-джерела (null для рядових ворогів) — для наслідків на базі (D1/RosterAdapter).</summary>
         public string SourceCompanionId { get; }
 
+        /// <summary>Id визначення ворога (null для напарників) — хто саме здався чи потрапив у полон (Поправка №14.2).</summary>
+        public string EnemyDefinitionId { get; internal set; }
+
         public GridPos Pos { get; internal set; }
         public int Hp { get; internal set; }
         public int Ap { get; internal set; }
@@ -87,6 +101,22 @@ namespace Game.Core.Combat
         public int ArmorShred { get; internal set; }
         public UnitLifeState LifeState { get; internal set; } = UnitLifeState.Active;
         public int DownWindowRemaining { get; internal set; }
+
+        /// <summary>
+        /// Лічильник правила без кубика (<see cref="ThresholdRule"/>): кожен удар додає свій
+        /// шанс, на 100 — влучання. <see cref="UnsetCarry"/> — ще не бив (береться старт).
+        /// </summary>
+        internal int HitCarry = UnsetCarry;
+        internal const int UnsetCarry = int.MinValue;
+
+        /// <summary>Пощаджений («Милосердя на полі»): вибув живим — одразу полонений, без рішення після бою.</summary>
+        public bool Spared { get; internal set; }
+
+        /// <summary>«Підбадьорити»: додаткові ОД на наступний власний хід (docs/ABILITIES.md).</summary>
+        public int BonusApNextTurn { get; internal set; }
+
+        /// <summary>Хто розлютив цього юніта («Розлютити») — його він і б'є, поки розлючений.</summary>
+        public string ProvokedById { get; internal set; }
 
         /// <summary>
         /// Зведений overwatch; null — юніт не в дозорі. Ставить і знімає
@@ -185,6 +215,7 @@ namespace Game.Core.Combat
                 DamageBonus = snap.GetInt(StatKeys.Of(DerivedStat.DamageBonus)),
                 MoveApPerTile = Math.Max(1, snap.GetInt(StatKeys.Of(DerivedStat.MoveApPerTile))),
                 MedicineSkill = snap.Skill(SkillType.Medicine),
+                IntimidateSkill = snap.Skill(SkillType.Intimidate),
             };
         }
 
@@ -257,12 +288,19 @@ namespace Game.Core.Combat
                 Armor = def.Armor,
                 Resolve = def.Resolve,
                 MedicineSkill = 0,
-                CanBeDowned = false,
+                // «Милосердя на полі» (docs/ABILITIES.md): той, хто може здатися, від
+                // смертельного удару падає (і стікає кров'ю за вікно), а не гине одразу —
+                // його можна пощадити. Бос і ті, хто не здається, гинуть, як і раніше.
+                CanBeDowned = def.CanSurrender && def.Rank != EnemyRank.Boss,
                 Resists = def.Resists ?? new ResistProfile(),
                 Family = def.Family,
-                Role = def.Role
+                Role = def.Role,
+                Rank = def.Rank,
+                CanSurrender = def.CanSurrender && def.Rank != EnemyRank.Boss,
+                SurrenderAtHpPercent = def.SurrenderAtHpPercent,
+                NeverRecruitable = def.NeverRecruitable
             };
-            var unit = new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon);
+            var unit = new CombatUnit(instanceId, Side.Enemy, profile, def.Weapon) { EnemyDefinitionId = def.Id };
             if (def.Abilities != null)
                 foreach (var ability in def.Abilities)
                     if (ability != null) unit.Abilities.Add(ability);

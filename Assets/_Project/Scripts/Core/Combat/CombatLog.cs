@@ -54,6 +54,42 @@ namespace Game.Core.Combat
         public const string Victory = "combat.log.victory";
         public const string Defeat = "combat.log.defeat";
 
+        // ---- старт бою (Поправка №14.1) ----
+        public const string OpeningFirstStrike = "combat.log.opening.first_strike";
+        public const string OpeningAmbush = "combat.log.opening.ambush";
+        public const string OpeningSpotted = "combat.log.opening.spotted";
+        public const string OpeningUnderFire = "combat.log.opening.under_fire";
+        public const string OpeningSurrounded = "combat.log.opening.surrounded";
+        public const string OpeningProvoked = "combat.log.opening.provoked";
+
+        // ---- поле бою: об'єкти й підкріплення (Поправка №14.4) ----
+        public const string ObjectHit = "combat.log.object.hit";
+        public const string KegExploded = "combat.log.object.keg_exploded";
+        public const string HaystackIgnited = "combat.log.object.haystack_ignited";
+        public const string CoverDegraded = "combat.log.object.cover_degraded";
+        public const string CoverDestroyed = "combat.log.object.cover_destroyed";
+        public const string FireBurns = "combat.log.object.fire_burns";
+        public const string FireOut = "combat.log.object.fire_out";
+        public const string ReinforcementsArrived = "combat.log.reinforcements";
+
+        // ---- здача (Поправка №14.2) ----
+        public const string Surrendered = "combat.log.surrendered";
+
+        // ---- перша партія здібностей (docs/ABILITIES.md) ----
+        public const string Rallied = "combat.log.rally";
+        public const string Enraged = "combat.log.enrage";
+        public const string EnrageFailed = "combat.log.enrage_failed";
+        public const string Intimidated = "combat.log.intimidate";
+        public const string IntimidateFailed = "combat.log.intimidate_failed";
+        public const string Fled = "combat.log.fled";
+        public const string OverwatchLostNet = "combat.log.overwatch.lost.net";
+
+        // ---- зв'язки в бою (Поправка №14.8) ----
+        public const string BondCover = "combat.log.bond.cover";
+
+        // ---- друга партія здібностей: «Милосердя на полі» ----
+        public const string Spared = "combat.log.spared";
+
         // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
         public const string OverwatchSet = "combat.log.overwatch.set";
@@ -107,6 +143,10 @@ namespace Game.Core.Combat
         public static readonly IReadOnlyList<string> All = new[]
         {
             Started, RoundStarted, Retreat, DrawForced, DrawRoundCap, Victory, Defeat,
+            OpeningFirstStrike, OpeningAmbush, OpeningSpotted, OpeningUnderFire, OpeningSurrounded,
+            ObjectHit, KegExploded, HaystackIgnited, CoverDegraded, CoverDestroyed, FireBurns, FireOut, ReinforcementsArrived,
+            Surrendered, Rallied, Enraged, EnrageFailed, Intimidated, IntimidateFailed, Fled, OverwatchLostNet,
+            BondCover, Spared, OpeningProvoked,
             Move, OverwatchSet, Strike, AttackMiss, AttackGraze, AttackHit, AttackCrit, Stabilize,
             Ability, Damage, Shred, Heal, ApGranted, Lunge, Repositioned, TrapPlaced, HackedToPlayer, HackedToEnemy,
             OverwatchFired, OverwatchExpired, OverwatchLostDisplaced, OverwatchLostHacked, OverwatchLostStunned,
@@ -115,6 +155,21 @@ namespace Game.Core.Combat
             StatusApplied, StatusRemoved, StatusExpired, StatusDot, StandUp, StunnedSkip,
             Downed, BleedingOut, WindowExpired, Survived, Died
         };
+
+        /// <summary>Рядок журналу для старту бою (Поправка №14.1); для зустрічного — null (рядка немає).</summary>
+        public static string Opening(BattleOpening opening)
+        {
+            switch (opening)
+            {
+                case BattleOpening.FirstStrike: return OpeningFirstStrike;
+                case BattleOpening.Ambush: return OpeningAmbush;
+                case BattleOpening.Spotted: return OpeningSpotted;
+                case BattleOpening.UnderFire: return OpeningUnderFire;
+                case BattleOpening.Surrounded: return OpeningSurrounded;
+                case BattleOpening.Provoked: return OpeningProvoked;
+                default: return null;
+            }
+        }
 
         public static string Attack(AttackOutcome outcome)
         {
@@ -144,6 +199,7 @@ namespace Game.Core.Combat
                 case StatusType.Marked: return "marked";
                 case StatusType.Burning: return "burning";
                 case StatusType.Poisoned: return "poisoned";
+                case StatusType.Enraged: return "enraged";
                 default: throw new ArgumentOutOfRangeException(nameof(type), type, "Стан без токена журналу бою");
             }
         }

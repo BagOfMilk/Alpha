@@ -49,12 +49,39 @@ namespace Game.Core.Dungeons
         public readonly IReadOnlyList<string> EnemyIds;
         public readonly IReadOnlyList<string> PartyIds;
 
-        public BattleRequest(string arenaKey, IReadOnlyList<string> enemyIds, IReadOnlyList<string> partyIds)
+        /// <summary>Як почнеться бій — від того, як загін до нього дійшов (Поправка №14.1).</summary>
+        public readonly DungeonBattleStart Start;
+
+        public BattleRequest(string arenaKey, IReadOnlyList<string> enemyIds, IReadOnlyList<string> partyIds,
+            DungeonBattleStart start = DungeonBattleStart.FirstStrike)
         {
             ArenaKey = arenaKey;
             EnemyIds = enemyIds;
             PartyIds = partyIds;
+            Start = start;
         }
+    }
+
+    /// <summary>
+    /// Старт бою в бойовій кімнаті (Поправка №14.1) — мовою данжу, без типів
+    /// Game.Core.Combat: викликач (GameSession) перекладає його в
+    /// <c>BattleOpening</c>. Детерміновано: шлях + навичка загону + полоса
+    /// загрози на вході в кімнату.
+    /// </summary>
+    public enum DungeonBattleStart
+    {
+        /// <summary>Свідомо обрано кривавий шлях — загін ходить першим.</summary>
+        FirstStrike = 0,
+        /// <summary>Кривавий шлях загоном, що міг би й прокрастися (Виживання ≥ поріг тихого обходу), — засідка.</summary>
+        Ambush = 1,
+        /// <summary>Тихий обхід зірвався — першими ходять вороги.</summary>
+        Spotted = 2,
+        /// <summary>Тихий обхід зірвався, коли данж уже небезпечний (полоса загрози на вході ≥ Dangerous), — загін стартує пораненим.</summary>
+        UnderFire = 3,
+        /// <summary>Розмова перед боєм не вдалась («Слово миру», «Відкуп») або вдалась частково — звичайна ініціатива.</summary>
+        Encounter = 4,
+        /// <summary>Ультиматум «Скласти зброю!» відкинуто — ворог розлючений, у раунді 1 б'є влучніше.</summary>
+        Provoked = 5
     }
 
     /// <summary>
@@ -182,6 +209,9 @@ namespace Game.Core.Dungeons
         /// </summary>
         private DungeonThreatBand _roomEntryThreatBand = DungeonThreatBand.Calm;
 
+        /// <summary>Як почнеться бій, на який зараз чекає кімната (Поправка №14.1) — у зліпку, щоб відновлений прогін не забув.</summary>
+        private DungeonBattleStart _pendingStart = DungeonBattleStart.FirstStrike;
+
         public string SiteId { get; }
 
         /// <summary>Номер поточної кімнати, 1-base. 0 — ще не увійшли (не буває назовні).</summary>
@@ -287,7 +317,7 @@ namespace Game.Core.Dungeons
             // room.Kind == Combat
             if (path == IncidentPath.Bloody)
             {
-                EnterAwaitingBattle(room, res);
+                EnterAwaitingBattle(room, res, PreviewBloodyStart(party));
                 FinalizeResolution(res);
                 return res;
             }
@@ -298,7 +328,7 @@ namespace Game.Core.Dungeons
             if (band == OutcomeBand.Worst)
             {
                 // Не вдалося прослизнути тихо чи вмовити — відряд помічений, бій неминучий.
-                EnterAwaitingBattle(room, res);
+                EnterAwaitingBattle(room, res, PreviewQuietFailStart());
                 FinalizeResolution(res);
                 return res;
             }
@@ -307,6 +337,77 @@ namespace Game.Core.Dungeons
             MarkCleared(res);
             FinalizeResolution(res);
             return res;
+        }
+
+        /// <summary>
+        /// Розмова перед боєм (docs/ABILITIES.md §4.6: «Слово миру», «Скласти зброю!»,
+        /// «Відкуп») — одна спроба на кімнату. Хто з ворогів піде, здасться чи візьме
+        /// гроші, вирішує викликач (йому видно бойові картки ворогів); тут — лише
+        /// наслідок для прогону: ворогів не лишилось — кімната пройдена без луту (як
+        /// тихий обхід), інакше — очікування бою з заданим стартом.
+        /// </summary>
+        public RoomResolution ResolveParley(bool noOneLeft, DungeonBattleStart start)
+        {
+            RequireInProgress();
+            var room = CurrentRoom;
+            if (room == null || CurrentCleared || room.Kind != DungeonRoomKind.Combat)
+                throw new InvalidOperationException("Розмова перед боєм — лише в бойовій кімнаті, що ще не пройдена");
+            if (AwaitingBattle)
+                throw new InvalidOperationException("Кімната вже чекає бою — розв'язує ReportCombat");
+
+            var res = new RoomResolution { RoomId = room.Id, Kind = room.Kind };
+            if (noOneLeft)
+            {
+                res.Bypassed = true;
+                MarkCleared(res);
+            }
+            else EnterAwaitingBattle(room, res, start);
+            FinalizeResolution(res);
+            return res;
+        }
+
+        /// <summary>
+        /// Як почнеться бій, якщо гравець обере кривавий шлях у поточній
+        /// бойовій кімнаті (Поправка №14.1, видно ДО вибору — Статут UI-02).
+        /// Загін, що міг би прокрастися (найкраще Виживання ≥ ефективний поріг
+        /// тихої перевірки Виживання цієї кімнати), нападає із засідки; інакше —
+        /// перший удар.
+        /// </summary>
+        public DungeonBattleStart PreviewBloodyStart(IReadOnlyList<ISettlementActor> party)
+        {
+            var room = CurrentRoom;
+            if (room != null)
+                for (int i = 0; i < room.QuietChecks.Count; i++)
+                {
+                    var req = room.QuietChecks[i];
+                    if (req.Skill != SkillKeys.Survival) continue;
+                    if (PartyValue(party, req.Skill) >= EffectiveThreshold(req.Threshold))
+                        return DungeonBattleStart.Ambush;
+                }
+            return DungeonBattleStart.FirstStrike;
+        }
+
+        /// <summary>
+        /// Як почнеться бій, якщо тихий обхід зірветься (Поправка №14.1): у
+        /// небезпечному данжі (полоса загрози на вході в кімнату ≥ Dangerous) —
+        /// під обстрілом, інакше — «вас помітили».
+        /// </summary>
+        public DungeonBattleStart PreviewQuietFailStart()
+            => _roomEntryThreatBand >= DungeonThreatBand.Dangerous ? DungeonBattleStart.UnderFire : DungeonBattleStart.Spotted;
+
+        /// <summary>
+        /// Відступ із бою бойової кімнати (Поправка №14.7, ROADMAP B13): бій
+        /// розірвано, загін іде з данжу. Не вайп — незабановане пропадає, як при
+        /// обережному виході (<see cref="Abandon"/>); поранення вже прийшли з бою.
+        /// </summary>
+        public DungeonExtractReport RetreatFromBattle()
+        {
+            RequireInProgress();
+            if (!AwaitingBattle)
+                throw new InvalidOperationException("Немає бою, з якого відступати");
+            AwaitingBattle = false;
+            PendingBattle = null;
+            return Abandon();
         }
 
         /// <summary>Результат бою з бойової кімнати. Casualties — лише id, жодних мутацій тут.</summary>
@@ -437,6 +538,7 @@ namespace Game.Core.Dungeons
             // власного Push) замість зафіксованої "на вході" -- сейв/рестор
             // тихо зсунув би застосований порог.
             sb.Append("|eb:").Append(((int)_roomEntryThreatBand).ToString(CultureInfo.InvariantCulture));
+            sb.Append("|bs:").Append(((int)_pendingStart).ToString(CultureInfo.InvariantCulture));
             return sb.ToString();
         }
 
@@ -473,16 +575,23 @@ namespace Game.Core.Dungeons
                         break;
                     case "lb": _lastReportedBand = (DungeonThreatBand)ParseInt(body); break;
                     case "eb": _roomEntryThreatBand = (DungeonThreatBand)ParseInt(body); break;
+                    case "bs": _pendingStart = (DungeonBattleStart)ParseInt(body); break;
                 }
             }
+
+            // Запит на бій — після всіх полів: старт («bs») іде в рядку пізніше за «a».
+            PendingBattle = AwaitingBattle && CurrentRoom != null
+                ? new BattleRequest(CurrentRoom.ArenaKey, CurrentRoom.EnemyIds, _partyIds, _pendingStart)
+                : null;
         }
 
         // ---- внутрішнє ----
 
-        private void EnterAwaitingBattle(DungeonRoomDefinition room, RoomResolution res)
+        private void EnterAwaitingBattle(DungeonRoomDefinition room, RoomResolution res, DungeonBattleStart start)
         {
             AwaitingBattle = true;
-            PendingBattle = new BattleRequest(room.ArenaKey, room.EnemyIds, _partyIds);
+            _pendingStart = start;
+            PendingBattle = new BattleRequest(room.ArenaKey, room.EnemyIds, _partyIds, start);
             res.NeedsBattle = true;
         }
 

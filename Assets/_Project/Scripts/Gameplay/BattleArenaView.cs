@@ -279,6 +279,7 @@ namespace Game.Gameplay
                 case "Marked": return "combat.status.marked";
                 case "Burning": return "combat.status.burning";
                 case "Poisoned": return "combat.status.poisoned";
+                case "Enraged": return "combat.status.enraged"; // «Розлютити», docs/ABILITIES.md
                 default: return null;
             }
         }

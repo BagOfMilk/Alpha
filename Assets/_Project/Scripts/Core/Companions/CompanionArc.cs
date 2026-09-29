@@ -107,6 +107,7 @@ namespace Game.Core.Companions
                 State = ArcState.Aborted; // обрив арки (US-9.5)
                 return false;
             }
+            if (companion.IsCaptive) return false; // у полоні арка чекає — не обривається (№14.7)
             if (State == ArcState.InProgress) return false;
 
             var ch = CurrentChapter;

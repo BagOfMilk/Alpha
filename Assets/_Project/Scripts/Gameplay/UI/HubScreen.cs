@@ -461,6 +461,11 @@ namespace Game.Gameplay.UI
                 }
                 GUILayout.EndHorizontal();
             });
+
+            // Полонені (Поправка №14.2, трек C4) — долю вирішує віче.
+            PrisonersPanel.Draw(shell, g);
+            // Наші в полоні (Поправка №14.7, трек C6) — викуп, перемовини, рейд.
+            CaptivesPanel.Draw(shell, g);
         }
 
         /// <summary>«Ціна: N золота — рухає уклад, −Напруга» — один рядок над кожною групою кнопок ради.</summary>

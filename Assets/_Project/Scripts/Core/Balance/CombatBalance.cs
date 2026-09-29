@@ -46,12 +46,14 @@ namespace Game.Core.Balance
         public int GrazeThresholdPercent = 15;
         public int HighHitNoFullMiss = 85; // шанс ≥ цього — найгірше можливе — граза, не промах
 
-        // ---- ThresholdRule: детерміновані полоси за маржею (R1) ----
-        // «Показаний поріг» тлумачиться як margin-від-точки-рівноваги:
-        // margin = shown − ThresholdBaseline. Жодного кидка кубика не відбувається.
+        // ---- ThresholdRule: без кубика, відсоток справджується рівно (R1; власник,
+        // 29.09.2026: «Усі відсотки мають працювати у тому режимі») ----
+        // Накопичувач бійця: кожен удар додає показаний шанс, на 100 — влучання.
+        /// <summary>З чого починає лічильник бійця: 50 — удар на ≥50 % влучає першим же разом.</summary>
+        public int ThresholdCarryStart = 50;
+        // Крит — для впевнених ударів: шанс ≥ Baseline + CritBand (85).
         public int ThresholdBaseline = 50;
-        public int ThresholdGrazeBand = 15;  // 0 ≤ margin < band — Graze
-        public int ThresholdCritBand = 35;   // margin ≥ band — Crit (між — Hit)
+        public int ThresholdCritBand = 35;
 
         // ---- Урон ----
         public double GrazePartialPercent = 50.0; // граза — частка повного урону
@@ -81,5 +83,48 @@ namespace Game.Core.Balance
         // ---- Завершуваність автобою (гарантія B1) ----
         /// <summary>Раунд, після якого незавершений бій примусово стає Draw.</summary>
         public int RoundCap = 40;
+
+        // ---- Старт бою (Поправка №14.1) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>«Засідка»: скільки ходів вороги позначені (Marked) — лише перший раунд.</summary>
+        public int AmbushMarkedTurns = 1;
+        /// <summary>«Під обстрілом»: скільки бійців загону стартують пораненими (перші за складом загону).</summary>
+        public int UnderFireWoundedUnits = 2;
+        /// <summary>«Під обстрілом»: частка максимального HP, яку поранені втрачають до першого ходу (не нижче 1 HP).</summary>
+        public int UnderFireHpLossPercent = 20;
+
+        // ---- Поле бою: об'єкти (Поправка №14.4) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>Бочка з порохом: радіус вибуху (Чебишев) і шкода кожному в ньому (тип — вогонь, опори діють).</summary>
+        public int ExplosionRadius = 1;
+        public int ExplosionDamage = 6;
+        /// <summary>Копиця сіна: радіус і тривалість зони вогню (раунди); хто в ній на початку ходу — горить.</summary>
+        public int FireZoneRadius = 1;
+        public int FireZoneRounds = 2;
+
+        // ---- Здача (Поправка №14.2) — ПЛЕЙСХОЛДЕР ----
+        /// <summary>Придушений (зокрема «Залякати») здається раніше: поріг здачі +N відсоткових пунктів.</summary>
+        public int SuppressedSurrenderBonusPercent = 15;
+
+        // ---- Перша партія здібностей (docs/ABILITIES.md) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>«Розлютити»: розлючений б'є сильніше (%) і захищається гірше (очки шансу по ньому).</summary>
+        public int EnragedDamagePercent = 20;
+        public int EnragedDefensePenalty = 10;
+
+        // ---- Досьє ворога (Поправка №14.6) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>Розвідка перед боєм відкриває картку ворога: Виживання ≥ N або Кмітливість ≥ M у когось із загону.</summary>
+        public int DossierScoutSurvival = 3;
+        public int DossierScoutWits = 6;
+
+        // ---- Друга партія здібностей (docs/ABILITIES.md §4.6) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>Ультиматум відкинуто: розлючений ворог у раунді 1 влучніший на стільки.</summary>
+        public int ProvokedAccuracyBonus = 10;
+        /// <summary>«Слово миру»: Переконання ≥ Воля ватажка + це.</summary>
+        public int PeaceOverResolve = 2;
+        /// <summary>«Скласти зброю!»: Залякування ≥ Воля ватажка + це; мінус одиниця, якщо загін чисельніший.</summary>
+        public int UltimatumOverResolve = 3;
+        /// <summary>«Відкуп»: золото за голову за рангом (рядовий, міні-бос); кожна відмова дорожчає на половину.</summary>
+        public int[] BribeGoldPerRank = { 10, 25 };
+        /// <summary>«Відкуп»: Торгівля ≥ жадібність ватаги + це.</summary>
+        public int BribeOverGreed = 0;
+        public int BribeRefusalMarkupPercent = 50;
     }
 }

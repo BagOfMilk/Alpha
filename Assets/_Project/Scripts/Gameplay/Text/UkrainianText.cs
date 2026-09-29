@@ -262,6 +262,9 @@ namespace Game.Gameplay.Text
             // ==== UX поза HUD (docs/UX_DESIGN.md, Поправка №13): панелі, людські відмови — блок унизу файлу. ====
             AddUxKeys(t);
 
+            // ==== Трек C, бій (Поправка №14): колесо черги, відступ, старт бою — блок унизу файлу. ====
+            AddCombatTrackKeys(t);
+
             return t;
         }
 
@@ -576,8 +579,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.title.quit", "Вийти");
             // Титри асетів (Поправка №12.2): CC BY 3.0 значків вимагає атрибуції.
             AddKey(t, "ui.title.credits", "Значки: Lorc і Delapouite, game-icons.net (CC BY 3.0) · Шрифти: Fixel, Noto Serif (SIL OFL 1.1) · Моделі: Kenney (CC0)");
-            AddKey(t, "ui.title.hitrule.percent", "Правило влучання: показаний відсоток");
-            AddKey(t, "ui.title.hitrule.threshold", "Правило влучання: показаний поріг");
+            AddKey(t, "ui.title.hitrule.percent", "З кубиком: показаний відсоток — шанс кидка");
+            AddKey(t, "ui.title.hitrule.threshold", "Без кубика: показаний відсоток справджується рівно");
             AddKey(t, "ui.title.hitrule.section", "Правило влучання");
             // Поправка №7 (стиснутий темп шкали Напруги, тестова збірка):
             // перемикач на титулі за тим самим прийомом, що правило влучання
@@ -892,6 +895,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "status.dead.m", "Загинув");
             AddKey(t, "status.dead.f", "Загинула");
             AddKey(t, "status.antagonist", "Проти нас");
+            AddKey(t, "status.captive", "У полоні");
 
             AddKey(t, "wound.light", "Легка рана");
             AddKey(t, "wound.serious", "Серйозна рана");
@@ -904,6 +908,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "combat.status.marked", "Позначений");
             AddKey(t, "combat.status.burning", "Горіння");
             AddKey(t, "combat.status.poisoned", "Отруєний");
+            AddKey(t, "combat.status.enraged", "Розлючений");
         }
 
         // CouncilOrderResult — коротка причина відмови ради (UI-фідбек команд Order*).
@@ -1824,6 +1829,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.reason.on_mission.f", "У полі — недоступна.");
             AddKey(t, "ui.reason.antagonist.m", "Проти нас — недоступний.");
             AddKey(t, "ui.reason.antagonist.f", "Проти нас — недоступна.");
+            AddKey(t, "ui.reason.captive.m", "У полоні — спершу визволити.");
+            AddKey(t, "ui.reason.captive.f", "У полоні — спершу визволити.");
             AddKey(t, "ui.reason.unknown_companion", "Такого напарника немає.");
             AddKey(t, "ui.reason.empty_party", "Оберіть хоч когось у відряд.");
             AddKey(t, "ui.reason.duplicate_companion", "Один і той самий двічі в списку.");
@@ -2072,7 +2079,11 @@ namespace Game.Gameplay.Text
 
             // Прев'ю шансу під курсором (R1: ThresholdRule показує поріг, PercentRule — відсоток).
             AddKey(t, "ui.battle.hitchance.percent", "Шанс влучення: {value}%");
-            AddKey(t, "ui.battle.hitchance.threshold", "Поріг влучення: {value}");
+            AddKey(t, "ui.battle.hitchance.threshold", "Шанс влучення: {value}% (без кубика)");
+            AddKey(t, "ui.battle.predict.hit", "Цей удар влучить.");
+            AddKey(t, "ui.battle.predict.miss", "Цей удар — мимо, зате наступний ближчий до влучання.");
+            AddKey(t, "ui.battle.predict.multi", "Влучить {hits} з {shots}.");
+            AddKey(t, "ui.escape.hitrule.next_battle", "Нове правило влучання діятиме з наступного бою.");
 
             // Наслідки бою, яких немає серед band'ів (band.*): Нічия/Відступ.
             AddKey(t, "ui.battle.outcome.draw", "Нічия");
@@ -2167,7 +2178,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "combat.log.attack.hit", "{unit} → {target}: влучання, −{damage} ({chance}{cover_suffix}){ap_suffix}.");
             AddKey(t, "combat.log.attack.crit", "{unit} → {target}: крит, −{damage} ({chance}{cover_suffix}){ap_suffix}.");
             AddKey(t, "combat.log.chance.percent", "шанс {value}%");
-            AddKey(t, "combat.log.chance.threshold", "поріг {value}");
+            AddKey(t, "combat.log.chance.threshold", "шанс {value}%, без кубика");
             AddKey(t, "combat.log.stabilize", "{unit} надає допомогу: {target} поза небезпекою й виходить із бою.");
 
             // здібності та їхні наслідки
@@ -2704,6 +2715,231 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.save.confirm.load", "Завантажити запис: {slot}?");
             AddKey(t, "ux.save.confirm.load.verb", "Завантажити");
             AddKey(t, "ux.save.confirm.load.loss", "Незбережене в поточній грі пропаде.");
+        }
+
+        /// <summary>
+        /// Трек C, бій (Поправка №14; docs/ROADMAP.md, кроки C1–C8). Окремий
+        /// блок, щоб не конфліктувати з блоками інших треків. Чорновий текст
+        /// асистента (№7.3).
+        /// </summary>
+        private static void AddCombatTrackKeys(Dictionary<string, string> t)
+        {
+            // C1 — колесо черги ходів (№14.5).
+            AddKey(t, "ui.battle.wheel.title", "Черга ходів");
+            AddKey(t, "ui.battle.wheel.round_mark", "Р{round}");
+            AddKey(t, "ui.battle.wheel.skips", "пропускає");
+            AddKey(t, "ui.battle.wheel.hint", "Клік — показати на мапі");
+
+            // C2 — старт бою від підходу (№14.1): рядок журналу і назва варіанта.
+            AddKey(t, "combat.log.opening.first_strike", "Перший удар: загін ходить першим.");
+            AddKey(t, "combat.log.opening.ambush", "Засідка: загін ходить першим, вороги застигли під прицілом.");
+            AddKey(t, "combat.log.opening.spotted", "Вас помітили: вороги ходять першими.");
+            AddKey(t, "combat.log.opening.under_fire", "Під обстрілом: вороги ходять першими, загін уже поранений.");
+            AddKey(t, "combat.log.opening.surrounded", "Оточені: вороги ходять першими, загін розкидано.");
+            AddKey(t, "ui.battle.opening.Encounter", "Зустрічний бій");
+            AddKey(t, "ui.battle.opening.FirstStrike", "Перший удар");
+            AddKey(t, "ui.battle.opening.Ambush", "Засідка");
+            AddKey(t, "ui.battle.opening.Spotted", "Вас помітили");
+            AddKey(t, "ui.battle.opening.UnderFire", "Під обстрілом");
+            AddKey(t, "ui.battle.opening.Surrounded", "Оточені");
+            AddKey(t, "ui.dungeon.opening.preview", "Кривавий шлях: {bloody}. Якщо тихо не вийде: {quiet}.");
+
+            // C3 — поле бою (№14.4): об'єкти, вогонь, підкріплення.
+            AddKey(t, "combat.log.object.hit", "{unit} б'є по об'єкту: {object}.");
+            AddKey(t, "combat.log.object.keg_exploded", "Вибухає бочка з порохом — дістає всіх довкола.");
+            AddKey(t, "combat.log.object.haystack_ignited", "Спалахує сіно — довкола вогонь ще {turns} раунди.");
+            AddKey(t, "combat.log.object.cover_degraded", "Вибух розбиває високе укриття до низького.");
+            AddKey(t, "combat.log.object.cover_destroyed", "Вибух розносить укриття на тріски.");
+            AddKey(t, "combat.log.object.fire_burns", "{unit} стоїть у вогні.");
+            AddKey(t, "combat.log.object.fire_out", "Вогонь згасає.");
+            AddKey(t, "combat.log.reinforcements", "До ворога прийшло підкріплення.");
+            AddKey(t, "combat.log.surrendered", "{unit} кидає зброю й здається.");
+
+            // C4 — здача і полон (№14.2): події стрічки.
+            AddKey(t, "enemy.surrendered", "Ворог здався — його долю вирішуєш ти.");
+            AddKey(t, "enemy.released", "Того, хто здався, відпустили — він пам'ятатиме.");
+            AddKey(t, "enemy.captured", "Полоненого ведуть до громади. Його треба годувати й стерегти.");
+            AddKey(t, "enemy.executed", "Того, хто здався, добили. Громада про це дізнається.");
+            AddKey(t, "prisoner.freed", "Віче відпустило полоненого.");
+            AddKey(t, "prisoner.ransomed", "Полоненого віддали за викуп — золото в казні.");
+            AddKey(t, "prisoner.recruited", "Колишній полонений переходить до громади.");
+            AddKey(t, "prisoner.escaped", "Полонений утік з-під варти.");
+            AddKey(t, "prisoner.hungry", "Полоненому не вистачило їжі — він озлоблюється.");
+            AddKey(t, "prisoner.disposition.hostile", "Полонений знову дивиться вовком.");
+            AddKey(t, "prisoner.disposition.wavering", "Полонений вагається — слухає, що кажуть.");
+            AddKey(t, "prisoner.disposition.ready", "Полонений готовий перейти до громади — віче може його переманити.");
+            AddKey(t, "prisoner.restless.calm", "Полонений заспокоївся.");
+            AddKey(t, "prisoner.restless.restless", "Полонений неспокійний — шукає нагоди втекти.");
+            AddKey(t, "dungeon.retreat", "Загін відступив із бою і повертається з данжу ні з чим.");
+            AddKey(t, "ui.battle.overlay.surrendered", "здався");
+            AddKey(t, "ui.battle.surrender.at", "Здасться при здоров'ї ≤ {percent}%.");
+            AddKey(t, "ui.battle.surrender.never", "Не здається.");
+            AddKey(t, "ui.battle.surrender.boss", "Бос — не здається ніколи.");
+            AddKey(t, "ui.battle.surrender.title", "Здалися");
+            AddKey(t, "ui.battle.surrender.hint", "Кого не вирішиш зараз — відпустять. Відпущений пам'ятатиме; полоненого громада годує; страта — кров і страх.");
+            AddKey(t, "ui.battle.surrender.release", "Відпустити");
+            AddKey(t, "ui.battle.surrender.capture", "У полон (можна переманити)");
+            AddKey(t, "ui.battle.surrender.capture_no_recruit", "У полон (не переманиш)");
+            AddKey(t, "ui.battle.surrender.execute", "Добити");
+            AddKey(t, "ui.prisoners.title", "Полонені");
+            AddKey(t, "ui.prisoners.unguarded", "Без Сторожі полонені тікають швидше.");
+            AddKey(t, "ui.prisoners.disposition.Hostile", "Ворожий");
+            AddKey(t, "ui.prisoners.disposition.Wavering", "Вагається");
+            AddKey(t, "ui.prisoners.disposition.Ready", "Готовий перейти");
+            AddKey(t, "ui.prisoners.restless.Calm", "спокійний");
+            AddKey(t, "ui.prisoners.restless.Restless", "неспокійний — може втекти");
+            AddKey(t, "ui.prisoners.recruit", "Переманити");
+            AddKey(t, "ui.prisoners.not_ready", "Ще не готовий — його вмовляє той, у кого найкраще Переконання.");
+            AddKey(t, "ui.prisoners.never", "Цього не переманиш — лише викуп чи відпустити.");
+            AddKey(t, "ui.prisoners.ransom", "Викуп: +{gold} золота");
+            AddKey(t, "ui.prisoners.release", "Відпустити");
+            AddKey(t, "combat.object.low_cover", "низька перепона");
+            AddKey(t, "combat.object.high_cover", "висока перепона");
+            AddKey(t, "combat.object.powder_keg", "бочка з порохом");
+            AddKey(t, "combat.object.haystack", "копиця сіна");
+            AddKey(t, "ui.battle.flanked", "Фланг — укриття цілі звідси не діє.");
+            AddKey(t, "ui.battle.cover.sides", "Укриття тут: {sides}.");
+            AddKey(t, "ui.battle.cover.side", "{side} — {level}");
+            AddKey(t, "ui.battle.cover.level.half", "половинне");
+            AddKey(t, "ui.battle.cover.level.full", "повне");
+            AddKey(t, "ui.battle.dir.north", "з півночі");
+            AddKey(t, "ui.battle.dir.east", "зі сходу");
+            AddKey(t, "ui.battle.dir.south", "з півдня");
+            AddKey(t, "ui.battle.dir.west", "із заходу");
+            AddKey(t, "ui.battle.fire.here", "Тут горить — ще {rounds} р. Хто стоїть тут на початку ходу, загориться.");
+            AddKey(t, "ui.battle.object.title.PowderKeg", "Бочка з порохом");
+            AddKey(t, "ui.battle.object.title.Haystack", "Копиця сіна");
+            AddKey(t, "ui.battle.object.title.HighCover", "Висока перепона");
+            AddKey(t, "ui.battle.object.title.LowCover", "Низька перепона");
+            AddKey(t, "ui.battle.object.keg.effect", "Вибух: {damage} шкоди всім на відстані {radius}; руйнує укриття, підриває сусідні бочки.");
+            AddKey(t, "ui.battle.object.hay.effect", "Займеться від вогню чи вибуху: вогонь на відстані {radius} ще {rounds} р.");
+            AddKey(t, "ui.battle.object.high.effect", "Повне укриття тому, хто за нею; закриває огляд. Вибух розбиває до низької.");
+            AddKey(t, "ui.battle.object.low.effect", "Половинне укриття тому, хто за нею. Вибух розносить.");
+
+            // C5, друга партія (docs/ABILITIES.md §4.6, §5; власник: «ок»).
+            AddKey(t, "ui.dungeon.parley.title", "Перед боєм — одна спроба:");
+            AddKey(t, "ui.dungeon.parley.peace", "Слово миру");
+            AddKey(t, "ui.dungeon.parley.surrender", "Скласти зброю!");
+            AddKey(t, "ui.dungeon.parley.bribe", "Відкуп");
+            AddKey(t, "ui.dungeon.parley.line", "{form}: {skill} {value} / {threshold} — {verdict}");
+            AddKey(t, "ui.dungeon.parley.pass", "вийде");
+            AddKey(t, "ui.dungeon.parley.fail.peace", "не вийде, бій без засідки");
+            AddKey(t, "ui.dungeon.parley.fail.surrender", "не вийде, розлючений ворог перший раунд влучніший");
+            AddKey(t, "ui.dungeon.parley.fail.bribe", "не вийде, гроші при вас, наступного разу дорожче");
+            AddKey(t, "ui.dungeon.parley.gold", "{gold} золота");
+            AddKey(t, "ui.dungeon.parley.effect.peace", "підуть: {leaving}, битися з: {remaining}");
+            AddKey(t, "ui.dungeon.parley.effect.surrender", "здадуться в полон: {leaving}, битися з: {remaining}");
+            AddKey(t, "ui.dungeon.parley.effect.bribe", "візьмуть гроші й підуть: {leaving}, битися з: {remaining}");
+            AddKey(t, "ui.dungeon.parley.block.immune", "Імунітет — тут ніхто не здається.");
+            AddKey(t, "ui.dungeon.parley.block.not_for_sale", "Не продаються — лише розбійники й найманці беруть гроші.");
+            AddKey(t, "ui.dungeon.parley.block.poor", "Бракує золота в казні.");
+            AddKey(t, "ui.dungeon.parley.block.no_room", "Зараз не до розмов.");
+            AddKey(t, "dungeon.parley.peace.success", "Слово миру почули — частина ватаги відходить.");
+            AddKey(t, "dungeon.parley.peace.fail", "Слова миру не почули — бій.");
+            AddKey(t, "dungeon.parley.surrender.success", "Ультиматум прийнято — хто міг, склав зброю.");
+            AddKey(t, "dungeon.parley.surrender.fail", "Ультиматум відкинуто — ворог розлючений.");
+            AddKey(t, "dungeon.parley.bribe.success", "Відкуп узяли — ватага йде геть.");
+            AddKey(t, "dungeon.parley.bribe.fail", "Відкуп відкинули — наступного разу запросять більше.");
+            AddKey(t, "enemy.spared", "Звалений ворог живий — його ведуть до громади полоненим.");
+            AddKey(t, "combat.log.spared", "{unit} щадить зваленого — {target} тепер полонений.");
+            AddKey(t, "combat.log.opening.provoked", "Ультиматум відкинуто: розлючений ворог перший раунд б'є влучніше.");
+            AddKey(t, "ui.battle.opening.Provoked", "Ультиматум відкинуто");
+            AddKey(t, "ability.mercy", "Милосердя на полі");
+            AddKey(t, "ability.mercy.desc", "Впритул до зваленого ворога, що може здатися: перев'язати й узяти живим — одразу полонений, долю вирішить віче.");
+            AddKey(t, "ui.battle.check.block.cannot_surrender", "Цей не здається — пощадити не вийде.");
+
+            // C8 — зв'язки в бою (№14.8).
+            AddKey(t, "combat.log.bond.cover", "{unit} прикриває побратима — б'є у відповідь: {target}.");
+            AddKey(t, "ui.battle.bond.near", "Побратим {name} поруч — раз за раунд прикриє.");
+            AddKey(t, "ui.battle.bond.far", "Побратим {name} далеко — стань поруч, щоб прикривали одне одного.");
+
+            // C7 — досьє ворога (№14.6).
+            AddKey(t, "dossier.studied", "Досьє поповнено: {enemy} — тепер знаємо прийоми, опори й умову здачі.");
+            AddKey(t, "ui.battle.dossier.role", "Роль: {role}.");
+            AddKey(t, "ui.battle.dossier.partial", "Досьє неповне: прийоми, опори й здачу відкриє розвідка (Виживання ≥ {survival} або Кмітливість ≥ {wits}) чи бій.");
+            AddKey(t, "ui.battle.dossier.resists", "Опори: {list}.");
+            AddKey(t, "ui.battle.dossier.resist.weak", "{type} — вразливий");
+            AddKey(t, "ui.battle.dossier.resist.strong", "{type} — стійкий");
+            AddKey(t, "ui.battle.dossier.abilities", "Прийоми: {list}.");
+            AddKey(t, "ui.battle.surrender.unknown", "Здача: ?");
+            AddKey(t, "ui.battle.damage.uncertain", "(?) — опори невідомі");
+            AddKey(t, "ui.battle.role.Tank", "громила — тримає удар, б'є впритул");
+            AddKey(t, "ui.battle.role.Skirmisher", "застрільник — б'є здалеку з укриття");
+            AddKey(t, "ui.battle.role.Controller", "контролер — накладає стани");
+            AddKey(t, "ui.battle.role.Breacher", "прорив — кидається впритул, ламає стрій");
+
+            // C6 — поразка → полон (№14.7): події стрічки і панель віча.
+            AddKey(t, "companion.captured.m", "{companionId} у полоні — ворог забрав його з поля бою.");
+            AddKey(t, "companion.captured.f", "{companionId} у полоні — ворог забрав її з поля бою.");
+            AddKey(t, "companion.escaped.m", "{companionId} упав, але вибрався з поля — тяжко поранений.");
+            AddKey(t, "companion.escaped.f", "{companionId} упала, але вибралася з поля — тяжко поранена.");
+            AddKey(t, "companion.rescued.ransom.m", "{companionId} викуплений з полону — повертається додому.");
+            AddKey(t, "companion.rescued.ransom.f", "{companionId} викуплена з полону — повертається додому.");
+            AddKey(t, "companion.rescued.talk.m", "Домовилися: {companionId} відпущений з полону.");
+            AddKey(t, "companion.rescued.talk.f", "Домовилися: {companionId} відпущена з полону.");
+            AddKey(t, "companion.rescued.raid.m", "Рейд удався: {companionId} вільний.");
+            AddKey(t, "companion.rescued.raid.f", "Рейд удався: {companionId} вільна.");
+            AddKey(t, "captivity.band.holding", "{companionId} у полоні тримається.");
+            AddKey(t, "captivity.band.worn", "{companionId} виснажується в полоні — віри в нас меншає.");
+            AddKey(t, "captivity.band.breaking.m", "{companionId} ламається в полоні — ще трохи, і він перейде на їхній бік.");
+            AddKey(t, "captivity.band.breaking.f", "{companionId} ламається в полоні — ще трохи, і вона перейде на їхній бік.");
+            AddKey(t, "captivity.raid.started", "Загін вирушає в рейд по своїх.");
+            AddKey(t, "captivity.raid.failed", "Рейд не вдався — наші лишаються в полоні.");
+            AddKey(t, "ui.captives.title", "Наші в полоні");
+            AddKey(t, "ui.captives.held_by", "{name} — у полоні: {captor}.");
+            AddKey(t, "ui.captives.band.Holding", "Тримається");
+            AddKey(t, "ui.captives.band.Worn", "Виснажується — лояльність тане");
+            AddKey(t, "ui.captives.band.Breaking", "Ламається — близько до зради");
+            AddKey(t, "ui.captives.ransom", "Викуп: {gold} золота");
+            AddKey(t, "ui.captives.ransom.poor", "Бракує золота на викуп.");
+            AddKey(t, "ui.captives.talk", "Перемовини (Переконання {value} / {threshold})");
+            AddKey(t, "ui.captives.talk.weak", "Переконання вдома {value} — треба {threshold}.");
+            AddKey(t, "ui.captives.raid", "Рейд — бій");
+            AddKey(t, "ui.captives.raid.pick", "Хто піде в рейд (до {max}):");
+            AddKey(t, "ui.captives.raid.enemies", "Проти: {enemies}. Загін ходить першим; кров — громаді на пам'ять.");
+            AddKey(t, "ui.captives.raid.pick_first", "Спершу оберіть, хто піде.");
+            AddKey(t, "ui.captives.raid.too_many", "Забагато — у рейд ідуть не більше {max}.");
+            AddKey(t, "ui.captives.raid.none", "Нікому йти в рейд — усі в полі, в полоні чи поранені.");
+
+            // C5 — перша партія здібностей (docs/ABILITIES.md; власник: «ок», «Тенета норм»).
+            AddKey(t, "ability.rally", "Підбадьорити");
+            AddKey(t, "ability.enrage", "Розлютити");
+            AddKey(t, "ability.intimidate", "Залякати");
+            AddKey(t, "ability.net", "Тенета");
+            AddKey(t, "ability.pierce", "Пробити");
+            AddKey(t, "ability.rally.desc", "Гукнути до свого в межах голосу: знімає придушення і збиття з ніг, а якщо нічого немає — +1 ОД на його наступний хід. Раз за бій на кожного.");
+            AddKey(t, "ability.enrage.desc", "Кпини: якщо твоє Залякування не менше за Волю цілі, наступного ходу вона б'є лише тебе — сильніше, але відкрито. Бос не піддається.");
+            AddKey(t, "ability.intimidate.desc", "Погроза: якщо твоє Залякування більше за Волю цілі, вона придушена й здасться раніше. Звір утікає з поля.");
+            AddKey(t, "ability.net.desc", "Сітка без шкоди: хто ступить — придушений. Ворожий дозор на дві клітинки довкола збито одразу.");
+            AddKey(t, "ability.pierce.desc", "Добивний удар впритул: коли з цілі вже стерто щонайменше 3 броні, б'є напевно й крізь броню.");
+            AddKey(t, "combat.log.rally", "{unit} підбадьорює {target}.");
+            AddKey(t, "combat.log.enrage", "{unit} скаженіє й кидається на {target}.");
+            AddKey(t, "combat.log.enrage_failed", "{unit} не піддається на кпини.");
+            AddKey(t, "combat.log.intimidate", "{unit} злякався — руки тремтять.");
+            AddKey(t, "combat.log.intimidate_failed", "{unit} не злякався погрози.");
+            AddKey(t, "combat.log.fled", "{unit} тікає з поля бою.");
+            AddKey(t, "combat.log.overwatch.lost.net", "{unit}: сітка збила приціл — дозор знято.");
+            AddKey(t, "ui.battle.term.enraged", "Ціль розлючена — не захищається");
+            AddKey(t, "ui.battle.check.contest", "Залякування {value} проти Волі {threshold} — {verdict}.");
+            AddKey(t, "ui.battle.check.shred", "Стерто броні: {value} з {threshold} — {verdict}.");
+            AddKey(t, "ui.battle.check.pass", "вийде");
+            AddKey(t, "ui.battle.check.fail", "не вийде, ОД згорять");
+            AddKey(t, "ui.battle.check.block.immune", "Імунітет — на цю ціль не діє.");
+            AddKey(t, "ui.battle.check.block.rallied", "Уже підбадьорений у цьому бою.");
+            AddKey(t, "ui.battle.check.block.armor_intact", "Броня ще ціла: стерто {value} з {threshold} — спершу стерти.");
+            AddKey(t, "ui.battle.object.hit_cost", "Клік — вдарити по ньому: {cost} ОД, влучання певне.");
+            AddKey(t, "ui.battle.object.hit_own_turn", "Вдарити можна у свій хід.");
+            AddKey(t, "ui.battle.reinforcements.countdown", "Підкріплення ворога: раунд {round} ({count})");
+
+            // C2 — відступ (B13, №14.7).
+            AddKey(t, "ui.battle.retreat", "Відступити");
+            AddKey(t, "ui.battle.retreat.confirm.title", "Відступити з бою?");
+            AddKey(t, "ui.battle.retreat.confirm.body", "Загін розриває бій. Упалі лишаються на полі — їхні рани підуть у лазарет.");
+            AddKey(t, "ui.battle.retreat.consequence.dungeon", "Вилазка закінчиться: незабране з данжу пропаде. Хто на ногах, винесе по одному впалому; кого не винесуть — візьмуть у полон.");
+            AddKey(t, "ui.battle.retreat.consequence.raid", "Рейд зірветься: бранці лишаться в полоні, а впалих, кого не винесуть, візьмуть теж.");
+            AddKey(t, "ui.battle.retreat.consequence.lost", "Поле лишиться за ворогом — як поразка, але загін живий.");
+            AddKey(t, "ui.battle.retreat.consequence.training", "Тренування закінчиться без наслідків.");
+            AddKey(t, "ui.battle.retreat.only_own_turn", "Відступити можна лише у свій хід.");
         }
     }
 }

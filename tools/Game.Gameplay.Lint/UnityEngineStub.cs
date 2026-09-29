@@ -457,6 +457,14 @@ namespace UnityEngine
             int len = content?.text?.Length ?? 0;
             return new Vector2(len * fontSize * 0.6f, fontSize + 4f);
         }
+
+        /// <summary>Висота тексту при заданій ширині з переносом (та сама сигнатура, що в Unity); заглушка — грубо за довжиною.</summary>
+        public float CalcHeight(GUIContent content, float width)
+        {
+            float line = fontSize + 4f;
+            float textWidth = CalcSize(content).x;
+            return width > 0f ? line * System.Math.Max(1, (int)System.Math.Ceiling(textWidth / width)) : line;
+        }
     }
 
     /// <summary>

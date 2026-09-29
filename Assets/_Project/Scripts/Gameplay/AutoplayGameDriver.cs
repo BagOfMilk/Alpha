@@ -1116,6 +1116,15 @@ namespace Game.Gameplay
                 while (Session.State == SessionState.Battle && guard++ < 500)
                 {
                     var view = Session.GetBattleView();
+                    // Правило без кубика (29.09.2026): наївний загін тепер виграє вузол 1.
+                    // Навмисно програний бій — відступ у раунді 2, щойно хід загону (полоса
+                    // Worst, №14.7) — та сама дія, що в MechanicsJournalCompletionTests.
+                    if (view.Round >= 2 && !view.IsAiTurn)
+                    {
+                        Run(() => Session.CombatRetreat());
+                        yield return 0;
+                        continue;
+                    }
                     var current = BotSupport.FindCurrent(view);
                     var target = current != null ? BotSupport.FindNearestOpposite(view, current) : null;
 
@@ -1734,6 +1743,53 @@ namespace Game.Gameplay
             AcknowledgeBattleIfPending();
 
             _host.Log("Бій пройдено (-autoplay-battle), дій гравця: " + playerActions + ".");
+
+            foreach (var f in RunBattleRetreatCheck(options)) yield return f;
+        }
+
+        /// <summary>
+        /// Відступ (Поправка №14.7, ROADMAP B13): другий тренувальний бій — у
+        /// свій хід гравець відступає тією самою командою, що кнопка
+        /// «Відступити» (<see cref="IBattleInput.RequestRetreat"/>). Знімки
+        /// «battle-retreat-start» (кнопка активна) і «battle-retreat-result»
+        /// (панель «Відступ»). Код виходу 2, якщо відступ не закінчив бій.
+        /// </summary>
+        private IEnumerable<int> RunBattleRetreatCheck(TrainingBattleOptions options)
+        {
+            foreach (var f in WaitFrames(FramesMedium)) yield return f;
+            Run(() => Session.NewTrainingBattle(options));
+            foreach (var f in WaitFrames(FramesBattleEnter)) yield return f;
+
+            var hud = _shell.BattlePresenter as IBattleHudData;
+            if (Session.State != SessionState.Battle || hud == null)
+                throw new InvalidOperationException("-autoplay-battle: другий тренувальний бій (відступ) не відкрився.");
+
+            // Дочекатися свого ходу: відступ — лише у свій хід, як кнопка.
+            for (int guard = 0; guard < 20 && Session.State == SessionState.Battle; guard++)
+            {
+                foreach (var f in WaitWhileBusy(hud)) yield return f;
+                var view = hud.View;
+                if (view == null || !view.IsAiTurn) break;
+                foreach (var f in WaitOutEnemyTurn(hud, false)) yield return f;
+            }
+
+            _host.Capture("battle-retreat-start");
+            yield return 0;
+
+            hud.RequestRetreat();
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+
+            if (Session.State == SessionState.Battle)
+                throw new InvalidOperationException("-autoplay-battle: «Відступити» у свій хід не закінчило бій — " + hud.LastRejectionText);
+
+            var presenter = _shell.BattlePresenter;
+            if (presenter != null && presenter.ResultPending)
+            {
+                _host.Capture("battle-retreat-result");
+                yield return 0;
+            }
+            AcknowledgeBattleIfPending();
+            _host.Log("Відступ перевірено (-autoplay-battle): бій закінчився, результат — «Відступ».");
         }
 
         /// <summary>

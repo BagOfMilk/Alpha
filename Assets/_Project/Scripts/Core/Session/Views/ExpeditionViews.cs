@@ -78,5 +78,39 @@ namespace Game.Core.Session.Views
         /// 0 для не-бойових кімнат.
         /// </summary>
         public int EnemyCount;
+
+        /// <summary>
+        /// Поправка №14.1 (видно ДО вибору, Статут UI-02): як почнеться бій,
+        /// якщо обрати кривавий шлях ("FirstStrike"|"Ambush"), і якщо тихий
+        /// обхід зірветься ("Spotted"|"UnderFire"). Словом, без чисел; null —
+        /// не бойова кімната або прогону ще немає (прев'ю вилазки).
+        /// </summary>
+        public string BloodyOpening;
+        public string QuietFailOpening;
+
+        /// <summary>
+        /// Розмова перед боєм (docs/ABILITIES.md §4.6) — «Слово миру», «Скласти зброю!»,
+        /// «Відкуп»: поріг, ціна і хто відгукнеться — до кліку (інваріант 8, UI-02).
+        /// null — не бойова кімната або прев'ю вилазки.
+        /// </summary>
+        public IReadOnlyList<ParleyView> Parley;
+    }
+
+    /// <summary>Одна форма розмови перед боєм — що з чим порівнюється і що буде.</summary>
+    public sealed class ParleyView
+    {
+        /// <summary>"peace" | "surrender" | "bribe".</summary>
+        public string Form;
+        /// <summary>"persuade" | "intimidate" | "trade".</summary>
+        public string SkillKey;
+        /// <summary>Найкраща навичка в загоні і скільки треба (Воля ватажка + надбавка; страх громади — дорожче).</summary>
+        public int ParleyValue, ParleyThreshold;
+        public bool Passes;
+        /// <summary>Чому не можна: "immune" (ніхто не здається) | "not_for_sale" | "poor" | "no_room"; null — можна.</summary>
+        public string BlockKey;
+        /// <summary>«Відкуп»: скільки золота з казни.</summary>
+        public int GoldCost;
+        /// <summary>Скільки ворогів відгукнеться (піде, здасться, візьме гроші) і скільки лишиться битися.</summary>
+        public int LeavingCount, RemainingCount;
     }
 }

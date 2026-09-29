@@ -51,9 +51,174 @@ namespace Game.Core.Combat
         private readonly List<CombatLogEntry> _journal = new List<CombatLogEntry>();
         private readonly List<Trap> _traps = new List<Trap>();
         private readonly List<AttackRecord> _attacks = new List<AttackRecord>();
+        private readonly List<MapObject> _objects = new List<MapObject>();
+        private readonly List<FireZone> _fires = new List<FireZone>();
+        private readonly List<(int round, CombatUnit unit, GridPos pos)> _pendingReinforcements = new List<(int, CombatUnit, GridPos)>();
+        private int _objectSeq;
+
+        /// <summary>Порядок, у якому падали бійці загону (id юнітів) — хто впав останнім, той рятується (Поправка №14.7).</summary>
+        private readonly List<string> _fallOrder = new List<string>();
+
+        /// <summary>Порядок падіння бійців загону гравця (id юнітів, перший — упав першим).</summary>
+        public IReadOnlyList<string> FallOrder => _fallOrder;
+
+        /// <summary>
+        /// Правило без кубика: скільки з <paramref name="shots"/> ударів поспіль із шансом
+        /// <paramref name="shownChance"/> влучать — прев'ю бачить результат наперед.
+        /// −1 — правило з кубиком, наперед не відомо.
+        /// </summary>
+        public int PredictHits(CombatUnit attacker, int shownChance, int shots)
+            => _hitRule is ThresholdRule rule ? rule.PredictHits(attacker, shownChance, shots) : -1;
+
+        /// <summary>Кого вже підбадьорили в цьому бою («Підбадьорити» — раз за бій на союзника).</summary>
+        private readonly HashSet<string> _rallied = new HashSet<string>(StringComparer.Ordinal);
+
+        // ---- Зв'язки в бою (Поправка №14.8): побратими прикривають одне одного ----
+        private readonly HashSet<string> _bonds = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _coveredThisRound = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Пара побратимів (наявний зв'язок ростеру Kinship, <c>Companions/RosterBonds</c>):
+        /// коли ворог влучає в одного, другий поруч раз за раунд б'є нападника у відповідь.
+        /// </summary>
+        public void AddBond(string unitIdA, string unitIdB)
+        {
+            if (string.IsNullOrEmpty(unitIdA) || string.IsNullOrEmpty(unitIdB) || unitIdA == unitIdB) return;
+            _bonds.Add(BondKey(unitIdA, unitIdB));
+        }
+
+        public bool AreBonded(string unitIdA, string unitIdB) =>
+            unitIdA != null && unitIdB != null && _bonds.Contains(BondKey(unitIdA, unitIdB));
+
+        /// <summary>Побратими юніта в цьому бою (id юнітів) — для підказки «прикриє».</summary>
+        public List<string> BondedWith(string unitId)
+        {
+            var list = new List<string>();
+            foreach (var u in _units)
+                if (u.Id != unitId && AreBonded(unitId, u.Id)) list.Add(u.Id);
+            return list;
+        }
+
+        private static string BondKey(string a, string b) =>
+            string.CompareOrdinal(a, b) < 0 ? a + "|" + b : b + "|" + a;
+
+        /// <summary>
+        /// Ворог щойно влучив у <paramref name="partner"/>: кожен його побратим, що стоїть
+        /// поруч (клітинка), ще не прикривав у цьому раунді і дістає нападника (впритул —
+        /// зброєю ближнього бою, здалеку — по лінії вогню), б'є у відповідь. Удар-реакція
+        /// сам нових реакцій не породжує. Референс — пари солдатів у тактичних іграх загону.
+        /// </summary>
+        private void TryBondCover(CombatUnit partner, CombatUnit attacker)
+        {
+            if (_bonds.Count == 0 || partner == null || attacker == null) return;
+            foreach (var friend in new List<CombatUnit>(_units))
+            {
+                if (!attacker.IsActive || Outcome != CombatOutcome.Ongoing) return;
+                if (friend == partner || friend.Side != partner.Side || !friend.IsActive || friend.Weapon == null) continue;
+                if (!AreBonded(friend.Id, partner.Id) || _coveredThisRound.Contains(friend.Id)) continue;
+                if (GridPos.Chebyshev(friend.Pos, partner.Pos) > 1) continue;
+                int distance = GridPos.Chebyshev(friend.Pos, attacker.Pos);
+                bool reaches = friend.Weapon.IsMelee
+                    ? distance <= friend.Weapon.OptimalRange
+                    : LineOfSight.HasLine(Map, friend.Pos, attacker.Pos);
+                if (!reaches) continue;
+
+                _coveredThisRound.Add(friend.Id);
+                Record(CombatLogKeys.BondCover, $"  {friend.Profile.DisplayName} прикрывает {partner.Profile.DisplayName}",
+                    "unitId", friend.Id, "targetId", attacker.Id);
+                ExecuteAttackRoll(friend, attacker, friend.Weapon, 0, forceHit: false, allowStrikeGain: false, isReaction: true);
+            }
+        }
+
+        /// <summary>
+        /// Перевірка здібності ДО кліку (інваріант 8, docs/ABILITIES.md): «Розлютити» —
+        /// Залякування ≥ Воля цілі, «Залякати» — ≥ Воля + 1, «Підбадьорити» — раз за бій,
+        /// «Пробити» — стерто броні ≥ порога. Та сама відповідь для прев'ю й для дії;
+        /// null — у здібності перевірки немає.
+        /// </summary>
+        public AbilityCheck DescribeCheck(CombatUnit caster, CombatUnit target, AbilityDefinition ability)
+        {
+            if (caster == null || ability == null) return null;
+            foreach (var fx in ability.Effects)
+            {
+                switch (fx.Kind)
+                {
+                    case AbilityEffectKind.Enrage:
+                    case AbilityEffectKind.Intimidate:
+                    {
+                        if (target == null) return null;
+                        bool enrage = fx.Kind == AbilityEffectKind.Enrage;
+                        bool immune = !target.IsActive || target.HasStatus(StatusType.Stunned)
+                                      || (enrage && target.Profile.Rank == EnemyRank.Boss);
+                        int threshold = Math.Max(0, target.Profile.Resolve) + (enrage ? 0 : 1);
+                        int value = caster.Profile.IntimidateSkill;
+                        return new AbilityCheck
+                        {
+                            Kind = AbilityCheckKind.Contest, SkillKey = "intimidate",
+                            Value = value, Threshold = threshold, Immune = immune,
+                            Passes = !immune && value >= threshold,
+                            BlockKey = immune ? "immune" : null
+                        };
+                    }
+                    case AbilityEffectKind.Rally:
+                    {
+                        if (target == null) return null;
+                        bool used = _rallied.Contains(target.Id);
+                        return new AbilityCheck { Kind = AbilityCheckKind.Condition, Passes = !used, BlockKey = used ? "rallied" : null };
+                    }
+                    case AbilityEffectKind.SpareEnemy:
+                    {
+                        if (target == null) return null;
+                        bool can = target.Profile.CanSurrender;
+                        return new AbilityCheck { Kind = AbilityCheckKind.Condition, Passes = can, BlockKey = can ? null : "cannot_surrender" };
+                    }
+                    case AbilityEffectKind.PierceIfShredded:
+                    {
+                        if (target == null) return null;
+                        bool ok = target.ArmorShred >= fx.Amount;
+                        return new AbilityCheck
+                        {
+                            Kind = AbilityCheckKind.Condition, SkillKey = "shred",
+                            Value = target.ArmorShred, Threshold = fx.Amount,
+                            Passes = ok, BlockKey = ok ? null : "armor_intact"
+                        };
+                    }
+                }
+            }
+            return null;
+        }
         private TurnSystem _turns;
 
         public IReadOnlyList<Trap> Traps => _traps;
+
+        /// <summary>Об'єкти поля (Поправка №14.4): перепони, бочки з порохом, сіно.</summary>
+        public IReadOnlyList<MapObject> Objects => _objects;
+
+        /// <summary>Зони вогню від спалених копиць.</summary>
+        public IReadOnlyList<FireZone> Fires => _fires;
+
+        /// <summary>Раунд найближчого підкріплення ворога; 0 — не чекається (HUD показує відлік, №14.4).</summary>
+        public int NextReinforcementRound
+        {
+            get
+            {
+                int best = 0;
+                foreach (var r in _pendingReinforcements)
+                    if (best == 0 || r.round < best) best = r.round;
+                return best;
+            }
+        }
+
+        /// <summary>Скільки ворогів прийде в раунді <see cref="NextReinforcementRound"/>.</summary>
+        public int NextReinforcementCount
+        {
+            get
+            {
+                int round = NextReinforcementRound, n = 0;
+                foreach (var r in _pendingReinforcements) if (r.round == round) n++;
+                return n;
+            }
+        }
         public IReadOnlyList<CombatUnit> Units => _units;
 
         /// <summary>
@@ -80,6 +245,9 @@ namespace Game.Core.Combat
         public CombatUnit Current => _turns?.Current;
         public int Round => _turns?.Round ?? 0;
         public IReadOnlyList<CombatUnit> TurnOrder => _turns?.Order;
+
+        /// <summary>Черга наступних раундів — звичайна впереміш (у раунді 1 поточна може бути переставлена стартом бою, №14.1).</summary>
+        public IReadOnlyList<CombatUnit> NextRoundTurnOrder => _turns?.NextRoundOrder;
 
         /// <summary>Яке правило влучання в цьому бою — той самий прапорець, що несе BattleView.IsHitRulePercent.</summary>
         public bool IsHitRulePercent => _hitRule is PercentRule;
@@ -111,13 +279,328 @@ namespace Game.Core.Combat
             _byId.Add(unit.Id, unit);
         }
 
-        /// <summary>Старт бою: будує чергу ініціативи і починає перший хід.</summary>
-        public void Begin()
+        /// <summary>Як почався бій (Поправка №14.1).</summary>
+        public BattleOpening Opening { get; private set; } = BattleOpening.Encounter;
+
+        // ---- Поле бою: об'єкти, вогонь, підкріплення (Поправка №14.4) ----
+
+        /// <summary>Поставити об'єкт до початку бою: клітинка стає непрохідною, сусіди отримують укриття з її боку.</summary>
+        public void AddObject(MapObjectKind kind, GridPos pos)
         {
-            _turns = new TurnSystem(_units);
+            if (!Map.IsFree(pos)) throw new InvalidOperationException($"Клітинка {pos} зайнята або непрохідна");
+            var obj = new MapObject { Id = "obj#" + _objectSeq++, Kind = kind, Pos = pos };
+            _objects.Add(obj);
+            Map.SetWalkable(pos, false);
+            Map.SetBlocksSight(pos, obj.BlocksSight);
+            RecomputeObjectCover();
+        }
+
+        /// <summary>Ворог, що прийде на початку раунду <paramref name="round"/> (підкріплення з відліком, №14.4).</summary>
+        public void AddReinforcement(int round, CombatUnit unit, GridPos pos)
+        {
+            if (unit == null || round < 2) return;
+            _pendingReinforcements.Add((round, unit, pos));
+        }
+
+        public MapObject ObjectAt(GridPos pos)
+        {
+            for (int i = 0; i < _objects.Count; i++)
+                if (_objects[i].Pos == pos) return _objects[i];
+            return null;
+        }
+
+        /// <summary>
+        /// Вдарити по об'єкту поля (бочка вибухне, сіно займеться) поточною
+        /// зброєю: ціна — ОД зброї, влучання гарантоване (об'єкт не ухиляється;
+        /// ризик — у тому, кого зачепить). Дальня зброя — по лінії вогню,
+        /// ближня — впритул.
+        /// </summary>
+        public CombatActionResult AttackObject(GridPos pos)
+        {
+            var unit = ActiveCurrentOrNull();
+            if (unit == null || unit.Weapon == null) return CombatActionResult.InvalidAction;
+            var obj = ObjectAt(pos);
+            if (obj == null || !obj.IsTargetable) return CombatActionResult.InvalidTarget;
+
+            var w = unit.Weapon;
+            if (unit.Ap < w.ApCost) return CombatActionResult.NotEnoughAp;
+            int distance = GridPos.Chebyshev(unit.Pos, pos);
+            if (w.IsMelee && distance > w.OptimalRange) return CombatActionResult.OutOfRange;
+            if (!w.IsMelee && !LineOfSight.HasLine(Map, unit.Pos, pos)) return CombatActionResult.NoLineOfSight;
+
+            unit.Ap -= w.ApCost;
+            Record(CombatLogKeys.ObjectHit, $"{unit.Profile.DisplayName} бьёт по {obj.Kind} в {pos}",
+                "unitId", unit.Id, "object", ObjectToken(obj.Kind), "x", I(pos.X), "y", I(pos.Y), "ap", I(w.ApCost));
+            TriggerObject(obj);
+            CheckOutcome();
+            return CombatActionResult.Success;
+        }
+
+        /// <summary>Токен виду об'єкта для журналу (як StatusId): тексти підставляє Gameplay.</summary>
+        public static string ObjectToken(MapObjectKind kind)
+        {
+            switch (kind)
+            {
+                case MapObjectKind.LowCover: return "low_cover";
+                case MapObjectKind.HighCover: return "high_cover";
+                case MapObjectKind.PowderKeg: return "powder_keg";
+                default: return "haystack";
+            }
+        }
+
+        private void TriggerObject(MapObject obj)
+        {
+            if (obj.Kind == MapObjectKind.PowderKeg) ExplodeChain(obj);
+            else if (obj.Kind == MapObjectKind.Haystack) Ignite(obj);
+        }
+
+        /// <summary>
+        /// Вибух бочки і ланцюг: шкода кожному в радіусі (вогонь, опори діють),
+        /// сусідні бочки вибухають далі, сіно займається, перепони руйнуються на
+        /// ОДИН щабель (висока → низька → нічого). Порядок детермінований:
+        /// відстань, потім рядок, потім стовпець.
+        /// </summary>
+        private void ExplodeChain(MapObject start)
+        {
+            var queue = new List<MapObject> { start };
+            var done = new HashSet<string>(StringComparer.Ordinal);
+            int radius = Balance.Combat.ExplosionRadius;
+
+            while (queue.Count > 0)
+            {
+                var keg = queue[0];
+                queue.RemoveAt(0);
+                if (!done.Add(keg.Id) || !_objects.Contains(keg)) continue;
+
+                RemoveObject(keg);
+                Record(CombatLogKeys.KegExploded, $"=== взрыв бочки в {keg.Pos} ===",
+                    "x", I(keg.Pos.X), "y", I(keg.Pos.Y), "radius", I(radius));
+
+                foreach (var u in new List<CombatUnit>(_units))
+                {
+                    if (!u.IsActive || GridPos.Chebyshev(u.Pos, keg.Pos) > radius) continue;
+                    int dmg = DamageResolver.FlatDamage(Balance.Combat.ExplosionDamage, DamageType.Fire, u);
+                    Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{dmg} HP (взрыв)",
+                        "unitId", u.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(DamageType.Fire));
+                    ApplyDamage(u, dmg);
+                }
+
+                foreach (var o in ObjectsWithin(keg.Pos, radius))
+                {
+                    switch (o.Kind)
+                    {
+                        case MapObjectKind.PowderKeg: queue.Add(o); break;
+                        case MapObjectKind.Haystack: Ignite(o); break;
+                        default: DegradeCover(o); break;
+                    }
+                }
+                RecomputeObjectCover();
+            }
+        }
+
+        /// <summary>Сіно займається: об'єкт згорає, довкола — зона вогню; бочки в ній вибухають.</summary>
+        private void Ignite(MapObject hay)
+        {
+            if (!_objects.Contains(hay)) return;
+            RemoveObject(hay);
+            var zone = new FireZone
+            {
+                Center = hay.Pos,
+                Radius = Balance.Combat.FireZoneRadius,
+                RoundsLeft = Math.Max(1, Balance.Combat.FireZoneRounds)
+            };
+            _fires.Add(zone);
+            Record(CombatLogKeys.HaystackIgnited, $"=== сено вспыхивает в {hay.Pos} ===",
+                "x", I(hay.Pos.X), "y", I(hay.Pos.Y), "turns", I(zone.RoundsLeft));
+
+            foreach (var u in new List<CombatUnit>(_units))
+                if (u.IsActive && zone.Covers(u.Pos)) ApplyStatus(u, StatusType.Burning);
+
+            foreach (var o in ObjectsWithin(hay.Pos, zone.Radius))
+                if (o.Kind == MapObjectKind.PowderKeg) ExplodeChain(o);
+            RecomputeObjectCover();
+        }
+
+        /// <summary>Один щабель руйнування: висока перепона стає низькою, низька зникає. Ніколи — повністю за раз.</summary>
+        private void DegradeCover(MapObject o)
+        {
+            if (o.Kind == MapObjectKind.HighCover)
+            {
+                o.Kind = MapObjectKind.LowCover;
+                Map.SetBlocksSight(o.Pos, false);
+                Record(CombatLogKeys.CoverDegraded, $"  укрытие в {o.Pos} разбито до низкого",
+                    "x", I(o.Pos.X), "y", I(o.Pos.Y));
+            }
+            else
+            {
+                RemoveObject(o);
+                Record(CombatLogKeys.CoverDestroyed, $"  укрытие в {o.Pos} разрушено",
+                    "x", I(o.Pos.X), "y", I(o.Pos.Y));
+            }
+        }
+
+        private void RemoveObject(MapObject o)
+        {
+            _objects.Remove(o);
+            Map.SetWalkable(o.Pos, true);
+            Map.SetBlocksSight(o.Pos, false);
+        }
+
+        private List<MapObject> ObjectsWithin(GridPos center, int radius)
+        {
+            var list = new List<MapObject>();
+            foreach (var o in _objects)
+                if (GridPos.Chebyshev(o.Pos, center) <= radius) list.Add(o);
+            list.Sort((a, b) =>
+            {
+                int da = GridPos.Chebyshev(a.Pos, center), db = GridPos.Chebyshev(b.Pos, center);
+                if (da != db) return da.CompareTo(db);
+                return a.Pos.Y != b.Pos.Y ? a.Pos.Y.CompareTo(b.Pos.Y) : a.Pos.X.CompareTo(b.Pos.X);
+            });
+            return list;
+        }
+
+        /// <summary>Шар укриття від об'єктів: кожен об'єкт дає укриття чотирьом сусідам з того боку, де стоїть.</summary>
+        private void RecomputeObjectCover()
+        {
+            Map.ClearObjectCover();
+            foreach (var o in _objects)
+            {
+                var cover = o.CoverForNeighbours;
+                Map.AddObjectCover(new GridPos(o.Pos.X, o.Pos.Y + 1), Direction.South, cover);
+                Map.AddObjectCover(new GridPos(o.Pos.X, o.Pos.Y - 1), Direction.North, cover);
+                Map.AddObjectCover(new GridPos(o.Pos.X + 1, o.Pos.Y), Direction.West, cover);
+                Map.AddObjectCover(new GridPos(o.Pos.X - 1, o.Pos.Y), Direction.East, cover);
+            }
+        }
+
+        /// <summary>Хто на початку свого ходу стоїть у зоні вогню — горить.</summary>
+        private void BurnIfInFire(CombatUnit unit)
+        {
+            foreach (var f in _fires)
+            {
+                if (!f.Covers(unit.Pos)) continue;
+                Record(CombatLogKeys.FireBurns, $"{unit.Profile.DisplayName} стоит в огне", "unitId", unit.Id);
+                ApplyStatus(unit, StatusType.Burning);
+                return;
+            }
+        }
+
+        /// <summary>Початок нового раунду: вогонь згасає, підкріплення приходить.</summary>
+        private void OnRoundStarted()
+        {
+            _coveredThisRound.Clear(); // «прикриває» — раз за раунд
+            for (int i = _fires.Count - 1; i >= 0; i--)
+            {
+                _fires[i].RoundsLeft--;
+                if (_fires[i].RoundsLeft > 0) continue;
+                Record(CombatLogKeys.FireOut, $"  огонь в {_fires[i].Center} гаснет",
+                    "x", I(_fires[i].Center.X), "y", I(_fires[i].Center.Y));
+                _fires.RemoveAt(i);
+            }
+
+            int arrived = 0;
+            for (int i = 0; i < _pendingReinforcements.Count; i++)
+            {
+                var r = _pendingReinforcements[i];
+                if (r.round != Round) continue;
+                _pendingReinforcements.RemoveAt(i--);
+                var tile = NearestFreeTile(r.pos);
+                if (!tile.HasValue) continue;
+                AddUnit(r.unit, tile.Value);
+                _turns.AddLate(r.unit);
+                arrived++;
+            }
+            if (arrived > 0)
+                Record(CombatLogKeys.ReinforcementsArrived, $"=== подкрепление врага: {arrived} ===", "count", I(arrived));
+        }
+
+        private GridPos? NearestFreeTile(GridPos from)
+        {
+            int max = Math.Max(Map.Width, Map.Height);
+            for (int r = 0; r <= max; r++)
+                for (int y = from.Y - r; y <= from.Y + r; y++)
+                    for (int x = from.X - r; x <= from.X + r; x++)
+                    {
+                        var p = new GridPos(x, y);
+                        if (GridPos.Chebyshev(p, from) == r && Map.IsFree(p)) return p;
+                    }
+            return null;
+        }
+
+        /// <summary>Старт бою: будує чергу ініціативи і починає перший хід.</summary>
+        public void Begin() => Begin(BattleOpening.Encounter);
+
+        /// <summary>
+        /// Старт бою з варіантом від підходу (Поправка №14.1): хто ходить
+        /// першим у раунді 1 і з чим загін виходить на поле. Детерміновано.
+        /// </summary>
+        public void Begin(BattleOpening opening)
+        {
+            Opening = opening;
+            _turns = new TurnSystem(_units, FirstRoundSide(opening));
             Record(CombatLogKeys.Started, "=== БОЙ НАЧАЛСЯ (раунд 1) ===");
+            ApplyOpening(opening);
             if (!BeginTurn(_turns.Current))
                 AdvanceUntilActorReady();
+        }
+
+        private static Side? FirstRoundSide(BattleOpening opening)
+        {
+            switch (opening)
+            {
+                case BattleOpening.FirstStrike:
+                case BattleOpening.Ambush:
+                    return Side.Player;
+                case BattleOpening.Spotted:
+                case BattleOpening.UnderFire:
+                case BattleOpening.Surrounded:
+                    return Side.Enemy;
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Наслідки старту, що лягають на юнітів до першого ходу. «Засідка» —
+        /// вороги позначені на перший раунд (наявний стан Marked, «один ефект —
+        /// одна система»); «Під обстрілом» — перші бійці загону втрачають
+        /// частку HP і кровоточать (перший залп ворога вже пролунав).
+        /// </summary>
+        private void ApplyOpening(BattleOpening opening)
+        {
+            if (opening == BattleOpening.Encounter) return;
+            Record(CombatLogKeys.Opening(opening), $"=== старт: {opening} ===");
+
+            if (opening == BattleOpening.Ambush)
+            {
+                foreach (var u in _units)
+                    if (u.Side == Side.Enemy && u.IsActive)
+                        ApplyStatus(u, StatusType.Marked, Math.Max(1, Balance.Combat.AmbushMarkedTurns));
+            }
+            else if (opening == BattleOpening.Provoked)
+            {
+                // Бонус влучності — у ProvokedBonus (раунд 1, вороги); тут лише запис у журнал.
+            }
+            else if (opening == BattleOpening.UnderFire)
+            {
+                int wounded = 0;
+                foreach (var u in _units)
+                {
+                    if (wounded >= Balance.Combat.UnderFireWoundedUnits) break;
+                    if (u.Side != Side.Player || !u.IsActive) continue;
+                    int loss = Math.Max(1, u.Profile.MaxHp * Balance.Combat.UnderFireHpLossPercent / 100);
+                    loss = Math.Min(loss, u.Hp - 1); // перший залп не валить: старт пораненим, а не впалим
+                    if (loss > 0)
+                    {
+                        u.Hp -= loss;
+                        Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{loss} HP (обстрел)",
+                            "unitId", u.Id, "damage", I(loss), "damageType", CombatLogKeys.DamageTypeId(DamageType.Ballistic));
+                    }
+                    ApplyStatus(u, StatusType.Bleeding);
+                    wounded++;
+                }
+            }
         }
 
         /// <summary>
@@ -259,11 +742,13 @@ namespace Game.Core.Combat
 
         /// <summary>Один удар зброєю: влучання через IHitRule → урон через DamageResolver → проки → Strike.</summary>
         private void ExecuteAttackRoll(CombatUnit unit, CombatUnit target, WeaponDefinition w,
-                                       int accuracyBonus, bool forceHit, bool allowStrikeGain, bool isReaction = false)
+                                       int accuracyBonus, bool forceHit, bool allowStrikeGain, bool isReaction = false,
+                                       bool ignoreArmor = false)
         {
+            accuracyBonus += ProvokedBonus(unit);
             int shown = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
             var outcome = forceHit ? AttackOutcome.Hit : _hitRule.Resolve(unit, target, shown, _roller);
-            var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance);
+            var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance, ignoreArmor);
             string attackKey = CombatLogKeys.Attack(outcome);
 
             // §7.3 COMBAT_V2.md: "ap" — ціна цього конкретного удару (навіть
@@ -310,6 +795,10 @@ namespace Game.Core.Combat
             }
 
             _attacks.Add(new AttackRecord(Round, unit.Side, unit.Id, target.Id, shown, outcome, dmg.Amount, forceHit, isReaction));
+
+            // Зв'язки в бою (№14.8): влучили в побратима — друг поруч прикриває.
+            if (!isReaction && outcome != AttackOutcome.Miss && dmg.Amount > 0 && target.Side != unit.Side)
+                TryBondCover(target, unit);
         }
 
         /// <summary>Стабілізація дауну союзника поруч (активка Медицини). Детермінована.</summary>
@@ -374,10 +863,20 @@ namespace Game.Core.Combat
                     if (!targetTile.HasValue || !Map.InBounds(targetTile.Value))
                         return CombatActionResult.InvalidTarget;
                     break;
+                case AbilityTarget.DownedEnemy:
+                    target = GetUnit(targetUnitId);
+                    if (target == null || target.Side == unit.Side || target.LifeState != UnitLifeState.Downed)
+                        return CombatActionResult.InvalidTarget;
+                    break;
             }
 
             if (unit.CooldownRemaining(abilityId) > 0) return CombatActionResult.OnCooldown;
             if (unit.Ap < ability.ApCost) return CombatActionResult.NotEnoughAp;
+
+            // Перша партія (docs/ABILITIES.md): «Імунітет», «уже підбадьорений», «броня ще ціла» —
+            // відмова ДО списання ОД; провал змагання навички — ОД витрачено (так у картці).
+            var check = DescribeCheck(unit, target, ability);
+            if (check != null && check.BlockKey != null) return CombatActionResult.InvalidTarget;
 
             bool selfTarget = ability.Targeting != AbilityTarget.Tile && target == unit;
             if (!selfTarget)
@@ -542,6 +1041,95 @@ namespace Game.Core.Combat
                                 "unitId", unit.Id, "abilityId", ability.Id,
                                 "x", I(targetTile.Value.X), "y", I(targetTile.Value.Y));
                         }
+                        break;
+
+                    case AbilityEffectKind.SpareEnemy:
+                        // Дзеркало «Стабілізувати»: звалений ворог, що може здатися, — живий полонений.
+                        if (target != null && target.LifeState == UnitLifeState.Downed && target.Profile.CanSurrender)
+                        {
+                            target.LifeState = UnitLifeState.Surrendered;
+                            target.Spared = true;
+                            Map.ClearOccupant(target.Pos);
+                            Record(CombatLogKeys.Spared, $"  {unit.Profile.DisplayName} щадит {target.Profile.DisplayName}",
+                                "unitId", unit.Id, "targetId", target.Id);
+                            CheckOutcome();
+                        }
+                        break;
+
+                    case AbilityEffectKind.Rally:
+                        if (target != null && target.IsActive && _rallied.Add(target.Id))
+                        {
+                            // Знімає те, що на ньому є (придушення і/або збиття); нічого немає — +ОД.
+                            bool cleared = false;
+                            foreach (var type in new[] { StatusType.Suppressed, StatusType.KnockedDown })
+                            {
+                                var down = target.GetStatus(type);
+                                if (down == null) continue;
+                                target.Statuses.Remove(down);
+                                cleared = true;
+                                Record(CombatLogKeys.StatusRemoved, $"  {target.Profile.DisplayName}: снято состояние {down.Type}",
+                                    "unitId", target.Id, "status", CombatLogKeys.StatusId(down.Type));
+                            }
+                            if (!cleared) target.BonusApNextTurn += Math.Max(1, fx.Amount);
+                            Record(CombatLogKeys.Rallied, $"  {unit.Profile.DisplayName} подбадривает {target.Profile.DisplayName}",
+                                "unitId", unit.Id, "targetId", target.Id);
+                        }
+                        break;
+
+                    case AbilityEffectKind.Enrage:
+                        if (target != null && target.IsActive)
+                        {
+                            if (check != null && check.Passes)
+                            {
+                                target.ProvokedById = unit.Id;
+                                ApplyStatus(target, StatusType.Enraged, 1);
+                                Record(CombatLogKeys.Enraged, $"  {target.Profile.DisplayName} в ярости и бросается на {unit.Profile.DisplayName}",
+                                    "unitId", target.Id, "targetId", unit.Id);
+                            }
+                            else Record(CombatLogKeys.EnrageFailed, $"  {target.Profile.DisplayName} не поддаётся",
+                                "unitId", target.Id, "targetId", unit.Id);
+                        }
+                        break;
+
+                    case AbilityEffectKind.Intimidate:
+                        if (target != null && target.IsActive)
+                        {
+                            if (check != null && check.Passes)
+                            {
+                                if (target.Profile.Family == EnemyFamily.Beast)
+                                {
+                                    // Звір не здається — тікає (docs/ABILITIES.md; власник: «так»).
+                                    target.LifeState = UnitLifeState.Fled;
+                                    Map.ClearOccupant(target.Pos);
+                                    BreakOverwatch(target, CombatLogKeys.OverwatchLostOut, "бежит");
+                                    Record(CombatLogKeys.Fled, $"  {target.Profile.DisplayName} убегает", "unitId", target.Id);
+                                    CheckOutcome();
+                                }
+                                else
+                                {
+                                    Record(CombatLogKeys.Intimidated, $"  {target.Profile.DisplayName} запуган",
+                                        "unitId", target.Id, "targetId", unit.Id);
+                                    ApplyStatus(target, StatusType.Suppressed);
+                                    TrySurrender(target); // поріг здачі щойно виріс (№14.2 × «Залякати»)
+                                }
+                            }
+                            else Record(CombatLogKeys.IntimidateFailed, $"  {target.Profile.DisplayName} не боится",
+                                "unitId", target.Id, "targetId", unit.Id);
+                        }
+                        break;
+
+                    case AbilityEffectKind.BreakOverwatchAround:
+                        if (targetTile.HasValue)
+                            foreach (var u in _units)
+                                if (u.Side != unit.Side && u.IsActive && u.IsOverwatching
+                                    && GridPos.Chebyshev(u.Pos, targetTile.Value) <= Math.Max(1, fx.Amount))
+                                    BreakOverwatch(u, CombatLogKeys.OverwatchLostNet, "сеть");
+                        break;
+
+                    case AbilityEffectKind.PierceIfShredded:
+                        if (unit.Weapon != null && target != null && target.Side != unit.Side && target.IsActive
+                            && target.ArmorShred >= fx.Amount)
+                            ExecuteAttackRoll(unit, target, unit.Weapon, 0, forceHit: true, allowStrikeGain: false, ignoreArmor: true);
                         break;
 
                     case AbilityEffectKind.HackRobot:
@@ -752,7 +1340,12 @@ namespace Game.Core.Combat
         /// <summary>Показане гравцю число. accuracyBonus — бонус зведеної здібності:
         /// прев'ю зобов'язане збігатися з фактичним ролом.</summary>
         public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
-            => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus);
+            => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus + ProvokedBonus(attacker));
+
+        /// <summary>Ультиматум відкинуто (старт <see cref="BattleOpening.Provoked"/>): ворог у раунді 1 влучніший.</summary>
+        private int ProvokedBonus(CombatUnit attacker) =>
+            Opening == BattleOpening.Provoked && Round == 1 && attacker != null && attacker.Side == Side.Enemy
+                ? Balance.Combat.ProvokedAccuracyBonus : 0;
 
         /// <summary>Показаний гравцю діапазон урону поточної зброї атакуючого по цілі (§DamageResolver.PreviewRange) — той самий принцип, що HitChancePreview вище.</summary>
         public DamagePreviewInfo DamagePreview(CombatUnit attacker, CombatUnit target)
@@ -767,7 +1360,10 @@ namespace Game.Core.Combat
         }
 
         /// <summary>Накладання статусу: гарантоване; Resolve (StatusDurationReduction) скорочує тривалість, мін 1. Повтор — освіжає.</summary>
-        public void ApplyStatus(CombatUnit target, StatusType type)
+        public void ApplyStatus(CombatUnit target, StatusType type) => ApplyStatus(target, type, 0);
+
+        /// <param name="fixedDuration">&gt; 0 — точна тривалість без скорочення Волею (старт бою, №14.1); 0 — звичайна.</param>
+        private void ApplyStatus(CombatUnit target, StatusType type, int fixedDuration)
         {
             // «Жодного стану» накласти не можна: усі внутрішні виклики вже
             // фільтрують None, а в журналу для нього немає токена (CombatLogKeys.StatusId).
@@ -806,7 +1402,7 @@ namespace Game.Core.Combat
             int reduction = Balance.Combat.ResolvePerStatusTurnReduction > 0
                 ? target.Profile.Resolve / Balance.Combat.ResolvePerStatusTurnReduction
                 : 0;
-            int duration = Math.Max(1, baseDuration - reduction);
+            int duration = fixedDuration > 0 ? fixedDuration : Math.Max(1, baseDuration - reduction);
 
             var existing = target.GetStatus(type);
             if (existing != null)
@@ -824,9 +1420,14 @@ namespace Game.Core.Combat
         {
             if (amount <= 0 || !target.IsActive) return;
             target.Hp -= amount;
-            if (target.Hp > 0) return;
+            if (target.Hp > 0)
+            {
+                TrySurrender(target);
+                return;
+            }
 
             target.Hp = 0;
+            if (target.Side == Side.Player && !_fallOrder.Contains(target.Id)) _fallOrder.Add(target.Id);
             BreakOverwatch(target, CombatLogKeys.OverwatchLostOut, "выбыл");
             if (target.Profile.CanBeDowned)
             {
@@ -839,6 +1440,32 @@ namespace Game.Core.Combat
             {
                 Die(target);
             }
+            CheckOutcome();
+        }
+
+        /// <summary>Поріг здачі в % здоров'я з урахуванням залякування (придушений здається раніше).</summary>
+        public int SurrenderThresholdPercent(CombatUnit u)
+        {
+            if (u == null || !u.Profile.CanSurrender) return 0;
+            int t = u.Profile.SurrenderAtHpPercent;
+            if (u.HasStatus(StatusType.Suppressed)) t += Balance.Combat.SuppressedSurrenderBonusPercent;
+            return Math.Min(100, t);
+        }
+
+        /// <summary>
+        /// Здача (Поправка №14.2): позначений рядовий чи міні-бос, чиє здоров'я впало
+        /// до показаного порогу, кидає зброю — вибуває з бою живим. Бос — ніколи.
+        /// Детерміновано: поріг видно в HUD заздалегідь.
+        /// </summary>
+        private void TrySurrender(CombatUnit target)
+        {
+            if (target.Side != Side.Enemy || !target.IsActive || !target.Profile.CanSurrender) return;
+            if (target.Hp * 100 > target.Profile.MaxHp * SurrenderThresholdPercent(target)) return;
+
+            target.LifeState = UnitLifeState.Surrendered;
+            Map.ClearOccupant(target.Pos);
+            BreakOverwatch(target, CombatLogKeys.OverwatchLostOut, "сдался");
+            Record(CombatLogKeys.Surrendered, $"  {target.Profile.DisplayName} бросает оружие и сдаётся.", "unitId", target.Id);
             CheckOutcome();
         }
 
@@ -865,6 +1492,8 @@ namespace Game.Core.Combat
             {
                 case UnitLifeState.Dead:
                 case UnitLifeState.Stabilized:
+                case UnitLifeState.Surrendered:
+                case UnitLifeState.Fled:
                     return false;
 
                 case UnitLifeState.Downed:
@@ -894,7 +1523,8 @@ namespace Game.Core.Combat
                     return false;
             }
 
-            unit.Ap = unit.Profile.MaxAp;
+            unit.Ap = unit.Profile.MaxAp + unit.BonusApNextTurn; // «Підбадьорити»: +ОД саме на цей хід
+            unit.BonusApNextTurn = 0;
             unit.TickCooldowns();
 
             var knocked = unit.GetStatus(StatusType.KnockedDown);
@@ -926,6 +1556,7 @@ namespace Game.Core.Combat
                     ApplyDamage(unit, dmg);
                 }
             }
+            if (unit.IsActive) BurnIfInFire(unit);
             return unit.IsActive;
         }
 
@@ -965,7 +1596,10 @@ namespace Game.Core.Combat
                 // Межа раунду — подія для гравця: без неї журнал на
                 // два-три раунди читається суцільною стрічкою.
                 if (Round != roundBefore)
+                {
                     Record(CombatLogKeys.RoundStarted, $"--- раунд {Round} ---", "round", I(Round));
+                    OnRoundStarted();
+                }
 
                 if (BeginTurn(next)) return;
             }

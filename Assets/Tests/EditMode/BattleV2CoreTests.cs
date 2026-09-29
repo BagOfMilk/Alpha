@@ -139,7 +139,9 @@ namespace Game.Tests.EditMode
             CollectionAssert.AreEqual(new[]
             {
                 "accuracy", "ability", "defense", "knocked_down", "marked",
-                "cover_half", "cover_full", "distance", "suppressed", "clamp"
+                // "enraged" — перша партія здібностей (docs/ABILITIES.md, «Розлютити»):
+                // захист розлюченої цілі падає — окремим рядком, щоб причину було видно.
+                "cover_half", "cover_full", "distance", "suppressed", "enraged", "clamp"
             }, keys);
         }
 

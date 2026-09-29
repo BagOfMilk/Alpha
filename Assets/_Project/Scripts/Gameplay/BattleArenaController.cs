@@ -321,6 +321,16 @@ namespace Game.Gameplay
 
         public string ResolveDisplayName(BattleUnitView unit) => ResolveDisplayNameInternal(unit);
 
+        // ---- Здача (Поправка №14.2) ----
+        public IReadOnlyList<SurrenderView> PendingSurrenders
+            => _session != null ? _session.GetPendingSurrenders() : (IReadOnlyList<SurrenderView>)Array.Empty<SurrenderView>();
+
+        public void DecideSurrender(string unitId, SurrenderFate fate)
+        {
+            if (_session == null || string.IsNullOrEmpty(unitId)) return;
+            _session.DecideSurrender(unitId, fate);
+        }
+
         public void SetHudRects(IReadOnlyList<Rect> guiRects) => _hudRects = guiRects ?? Array.Empty<Rect>();
 
         // ================= IBattlePresenter =================
@@ -412,6 +422,9 @@ namespace Game.Gameplay
         public void CancelArmed() { _armed = ArmedAction.None; _armedAbilityId = null; _armedTargetUnitId = null; }
 
         public void RequestEndTurn() { if (IsPlayerTurn && !IsBusy) RunCommand(() => _session.CombatEndTurn()); }
+
+        /// <summary>Відступ із бою (Поправка №14.7, ROADMAP B13) — лише у свій хід, як і решта команд гравця.</summary>
+        public void RequestRetreat() { if (IsPlayerTurn && !IsBusy) RunCommand(() => _session.CombatRetreat()); }
 
         public void RequestAutoResolve()
         {
@@ -523,6 +536,9 @@ namespace Game.Gameplay
             switch (_armed)
             {
                 case ArmedAction.None:
+                    // Бочка чи сіно під курсором (Поправка №14.4): клік — вдарити по об'єкту.
+                    if (IsTargetableObject(_lastView, x, y))
+                        return RunCommand(() => _session.CombatAttackObject(tile));
                     return RunCommand(() => _session.CombatMove(tile));
                 case ArmedAction.OverwatchAim:
                     return RunCommand(() => _session.CombatEnterOverwatch(tile));
@@ -655,7 +671,10 @@ namespace Game.Gameplay
                 ApplyTileTint(tile, key, cover, walkable, isReachable: false, isCurrent: false, isHovered: false,
                     isHoveredUnreachable: false, isAbilityRange: false, isOverwatchAim: false, isOverwatchThreat: false);
 
-                if (!string.Equals(cover, "None", StringComparison.Ordinal))
+                // Шаблонна арена (Поправка №14.4) ставить укриття об'єктами — їх малює
+                // SyncObjectMarkers на клітинці об'єкта; декор-укриття генератора — лише без них.
+                bool templated = view.Objects != null && view.Objects.Count > 0;
+                if (!templated && !string.Equals(cover, "None", StringComparison.Ordinal))
                     PlaceCoverProp(x, y, cover, world);
             }
         }
@@ -843,6 +862,134 @@ namespace Game.Gameplay
             return root;
         }
 
+        // ================= поле бою: об'єкти й вогонь (Поправка №14.4) =================
+
+        private readonly Dictionary<string, GameObject> _objectMarkers = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameObject> _fireMarkers = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+
+        private static bool IsTargetableObject(BattleView view, int x, int y)
+        {
+            if (view?.Objects == null) return false;
+            foreach (var o in view.Objects)
+                if (o != null && o.IsTargetable && o.Pos.X == x && o.Pos.Y == y) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Об'єкти поля на арені: ключ — вид і клітинка, тож розбита висока перепона
+        /// (стала низькою) перебудовується, а зруйнована чи вибухла — зникає.
+        /// </summary>
+        private void SyncObjectMarkers(BattleView view)
+        {
+            var present = new HashSet<string>(StringComparer.Ordinal);
+            if (view?.Objects != null)
+                foreach (var o in view.Objects)
+                {
+                    if (o == null) continue;
+                    string key = o.Kind + "@" + o.Pos.X + "_" + o.Pos.Y;
+                    present.Add(key);
+                    if (!_objectMarkers.TryGetValue(key, out var marker) || marker == null)
+                        _objectMarkers[key] = BuildObjectMarker(o);
+                }
+
+            var gone = new List<string>();
+            foreach (var kv in _objectMarkers)
+                if (!present.Contains(kv.Key)) gone.Add(kv.Key);
+            foreach (var key in gone)
+            {
+                if (_objectMarkers[key] != null) Destroy(_objectMarkers[key]);
+                _objectMarkers.Remove(key);
+            }
+        }
+
+        private GameObject BuildObjectMarker(BattleObjectView o)
+        {
+            var world = BattleArenaView.TileToWorld(o.Pos.X, o.Pos.Y);
+            var root = new GameObject("object:" + o.Kind + "_" + o.Pos.X + "_" + o.Pos.Y);
+            root.transform.SetParent(_propRoot != null ? _propRoot : transform, false);
+            root.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
+
+            switch (o.Kind)
+            {
+                case "HighCover":
+                case "LowCover":
+                {
+                    // Та сама пула моделей, що й декор-укриття: брили — повне, тин і колоди — половинне.
+                    var pool = o.Kind == "HighCover" ? CoverFullPrefabs : CoverHalfPrefabs;
+                    GameObject prefab = null;
+                    if (pool != null && pool.Length > 0)
+                    {
+                        int index = (int)(BattleArenaView.Hash01("object_" + o.Pos.X + "_" + o.Pos.Y) * pool.Length);
+                        prefab = pool[Math.Min(index, pool.Length - 1)];
+                    }
+                    if (prefab != null)
+                    {
+                        var go = Instantiate(prefab, root.transform);
+                        go.transform.localPosition = Vector3.zero;
+                        go.transform.localRotation = Quaternion.Euler(0f, BattleArenaView.Hash01("object_yaw_" + o.Pos.X + "_" + o.Pos.Y) * 360f, 0f);
+                        foreach (var collider in go.GetComponentsInChildren<Collider>()) Destroy(collider);
+                    }
+                    else
+                    {
+                        float h = o.Kind == "HighCover" ? 1.1f : 0.5f;
+                        AddTrapPart(root, PrimitiveType.Cube, new Vector3(0f, h * 0.5f, 0f), new Vector3(0.8f, h, 0.8f), new Color(0.45f, 0.40f, 0.35f), Quaternion.identity);
+                    }
+                    break;
+                }
+                case "PowderKeg":
+                    // Бочка: темне дерево, два обручі і червона мітка пороху зверху — видно, що вибухне.
+                    AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.35f, 0f), new Vector3(0.5f, 0.35f, 0.5f), new Color(0.36f, 0.22f, 0.12f), Quaternion.identity);
+                    AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f), new Vector3(0.53f, 0.03f, 0.53f), new Color(0.15f, 0.14f, 0.13f), Quaternion.identity);
+                    AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.52f, 0f), new Vector3(0.53f, 0.03f, 0.53f), new Color(0.15f, 0.14f, 0.13f), Quaternion.identity);
+                    AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.71f, 0f), new Vector3(0.22f, 0.02f, 0.22f), new Color(0.80f, 0.12f, 0.08f), Quaternion.identity);
+                    break;
+                case "Haystack":
+                    // Копиця: жовтий «горбик» із двох шарів.
+                    AddTrapPart(root, PrimitiveType.Sphere, new Vector3(0f, 0.28f, 0f), new Vector3(0.85f, 0.56f, 0.85f), new Color(0.86f, 0.72f, 0.32f), Quaternion.identity);
+                    AddTrapPart(root, PrimitiveType.Sphere, new Vector3(0f, 0.62f, 0f), new Vector3(0.5f, 0.4f, 0.5f), new Color(0.80f, 0.66f, 0.28f), Quaternion.identity);
+                    break;
+            }
+            return root;
+        }
+
+        /// <summary>Вогонь від спаленого сіна: помаранчеві плями на кожній клітинці зони, поки горить.</summary>
+        private void SyncFireMarkers(BattleView view)
+        {
+            var present = new HashSet<string>(StringComparer.Ordinal);
+            if (view?.Fires != null)
+                foreach (var f in view.Fires)
+                {
+                    if (f == null) continue;
+                    for (int dy = -f.Radius; dy <= f.Radius; dy++)
+                        for (int dx = -f.Radius; dx <= f.Radius; dx++)
+                        {
+                            int x = f.Center.X + dx, y = f.Center.Y + dy;
+                            if (x < 0 || y < 0 || x >= _gridWidth || y >= _gridHeight) continue;
+                            string key = x + "_" + y;
+                            if (!present.Add(key)) continue;
+                            if (!_fireMarkers.TryGetValue(key, out var marker) || marker == null)
+                            {
+                                var world = BattleArenaView.TileToWorld(x, y);
+                                var root = new GameObject("fire:" + key);
+                                root.transform.SetParent(_tileRoot != null ? _tileRoot : transform, false);
+                                root.transform.localPosition = new Vector3(world.X, 0.04f, world.Z);
+                                AddTrapPart(root, PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.9f, 0.01f, 0.9f), new Color(0.95f, 0.42f, 0.08f), Quaternion.identity);
+                                AddTrapPart(root, PrimitiveType.Cube, new Vector3(0f, 0.18f, 0f), new Vector3(0.12f, 0.36f, 0.12f), new Color(1f, 0.62f, 0.12f), Quaternion.Euler(0f, 45f, 0f));
+                                _fireMarkers[key] = root;
+                            }
+                        }
+                }
+
+            var gone = new List<string>();
+            foreach (var kv in _fireMarkers)
+                if (!present.Contains(kv.Key)) gone.Add(kv.Key);
+            foreach (var key in gone)
+            {
+                if (_fireMarkers[key] != null) Destroy(_fireMarkers[key]);
+                _fireMarkers.Remove(key);
+            }
+        }
+
         private void AddTrapPart(GameObject root, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color, Quaternion rotation)
         {
             var part = GameObject.CreatePrimitive(type);
@@ -865,11 +1012,14 @@ namespace Game.Gameplay
         private void ApplyUnitPositionsAndHighlights(BattleView view)
         {
             SyncTrapMarkers(view);
+            SyncObjectMarkers(view);
+            SyncFireMarkers(view);
 
             var alive = new HashSet<string>(StringComparer.Ordinal);
             if (view.Units != null)
                 foreach (var unit in view.Units)
                 {
+                    if (unit.IsFled) continue; // утік із поля — фігуру прибираємо як вибулу
                     alive.Add(unit.Id);
                     SpawnOrUpdateUnit(unit);
                 }
@@ -1087,10 +1237,20 @@ namespace Game.Gameplay
         // ================= ввід миші =================
 
         /// <summary>Лише читає, куди дивиться курсор — жодної команди. Справжній рух миші скидає симульоване наведення (§7.4 <see cref="ClearSimulatedHover"/>).</summary>
+        /// <summary>Гру запущено автотуром (<see cref="AutoplayBootstrap.RequestedFromCommandLine"/>) — один раз на запуск.</summary>
+        private static readonly bool TourRun = AutoplayBootstrap.RequestedFromCommandLine();
+
         private void UpdateHover()
         {
             var mouse = Input.mousePosition;
-            if (_lastMousePositionKnown && _hasSimulatedHover && (mouse - _lastMousePosition).sqrMagnitude > 0.25f)
+            // В автотурі справжня миша наведення туру не скидає. Тур іде у вікні за краєм
+            // екрана (tools/run-offscreen.ps1): коли власник рухав мишею на своєму столі,
+            // позиція курсора відносно вікна гри мінялась, і наведення туру зникало —
+            // знімок hover-enemy виходив без підказки (перевірка «Щ», 29.09.2026; перевірка
+            // фокусу вікна не допомогла — вікно туру буває у фокусі). Гравець імітованим
+            // наведенням не користується, тож для нього нічого не змінилось.
+            if (!TourRun && _lastMousePositionKnown && _hasSimulatedHover
+                && (mouse - _lastMousePosition).sqrMagnitude > 0.25f)
                 ClearSimulatedHover();
             _lastMousePosition = mouse;
             _lastMousePositionKnown = true;
@@ -1766,6 +1926,7 @@ namespace Game.Gameplay
 
             foreach (var unit in _lastView.Units)
             {
+                if (unit.IsFled) continue;
                 var pos = _unitVisualPos.TryGetValue(unit.Id, out var p) ? p : DefaultWorldPos(unit);
                 var world = pos + Vector3.up * BattleArenaView.NameLabelHeight;
                 var sp = ArenaCamera.WorldToScreenPoint(world);
@@ -2180,6 +2341,9 @@ namespace Game.Gameplay
         private static string ResolveNameKey(BattleUnitView unit)
         {
             string id = unit.Id ?? string.Empty;
+            // Переманений полонений (Поправка №14.2) зветься так, як звався ворогом.
+            if (id.StartsWith("u_recruit_", StringComparison.Ordinal) && !string.IsNullOrEmpty(unit.DisplayNameKey))
+                return "enemy." + unit.DisplayNameKey;
             if (id.StartsWith("u_", StringComparison.Ordinal)) return "char." + id.Substring(2);
             if (id.StartsWith("defector_", StringComparison.Ordinal)) return "char." + id.Substring(9);
 
@@ -2243,6 +2407,12 @@ namespace Game.Gameplay
             foreach (var marker in _trapMarkers.Values)
                 if (marker != null) Destroy(marker);
             _trapMarkers.Clear();
+            foreach (var marker in _objectMarkers.Values)
+                if (marker != null) Destroy(marker);
+            _objectMarkers.Clear();
+            foreach (var marker in _fireMarkers.Values)
+                if (marker != null) Destroy(marker);
+            _fireMarkers.Clear();
 
             RestoreHubCamera();
             if (ArenaRoot != null) ArenaRoot.SetActive(false);

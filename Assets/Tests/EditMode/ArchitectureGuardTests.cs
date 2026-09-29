@@ -668,7 +668,29 @@ namespace Game.Tests.EditMode
                 "Distance", "Range",
                 // Шкода власної пастки гравця — показана в підказці клітинки (власник:
                 // «Поставлену пастку на арені поки не видно. погано»), не прихована шкала.
-                "TrapDamage"
+                "TrapDamage",
+                // Поле бою (Поправка №14.4): що зробить бочка чи сіно (радіус, шкода,
+                // раунди вогню), скільки ще горить, коли й скільки прийде підкріплення —
+                // гравець бачить до кліку (UI-02), не прихована шкала.
+                "EffectRadius", "EffectDamage", "EffectRounds", "Radius", "RoundsLeft",
+                "ReinforcementRound", "ReinforcementCount",
+                // Полонені (Поправка №14.2): ціна викупу видна до кліку (UI-02), день
+                // взяття — факт, а не шкала. Прихильність і неспокій — лише полосами.
+                "RansomGold", "DayTaken",
+                // Поріг здачі ворога (Поправка №14.2) — показаний заздалегідь (інваріант 8).
+                "SurrenderAtHpPercent",
+                // Перевірка здібності (docs/ABILITIES.md): «Залякування 3 ≥ Воля 2»,
+                // «стерто броні 3 з 3» — видно до кліку (інваріант 8), не прихована шкала.
+                "CheckValue", "CheckThreshold",
+                // Полон наших (Поправка №14.7): поріг перемовин і найкраще Переконання
+                // вдома — видно до кліку (інваріант 8); годинник — лише полосою.
+                "BestPersuade", "TalkThreshold", "RaidPartyMax",
+                // Правило без кубика: скільки ударів влучить — видно до кліку (інваріант 8).
+                "PredictedShots", "PredictedHits",
+                // Розмова перед боєм (docs/ABILITIES.md §4.6): поріг, ціна й хто відгукнеться — до кліку.
+                "ParleyValue", "ParleyThreshold", "GoldCost", "LeavingCount", "RemainingCount",
+                // Досьє (Поправка №14.6): поріг розвідки видно до бою (інваріант 8).
+                "DossierScoutSurvival", "DossierScoutWits"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 
