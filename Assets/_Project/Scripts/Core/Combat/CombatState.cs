@@ -51,9 +51,42 @@ namespace Game.Core.Combat
         private readonly List<CombatLogEntry> _journal = new List<CombatLogEntry>();
         private readonly List<Trap> _traps = new List<Trap>();
         private readonly List<AttackRecord> _attacks = new List<AttackRecord>();
+        private readonly List<MapObject> _objects = new List<MapObject>();
+        private readonly List<FireZone> _fires = new List<FireZone>();
+        private readonly List<(int round, CombatUnit unit, GridPos pos)> _pendingReinforcements = new List<(int, CombatUnit, GridPos)>();
+        private int _objectSeq;
         private TurnSystem _turns;
 
         public IReadOnlyList<Trap> Traps => _traps;
+
+        /// <summary>Об'єкти поля (Поправка №14.4): перепони, бочки з порохом, сіно.</summary>
+        public IReadOnlyList<MapObject> Objects => _objects;
+
+        /// <summary>Зони вогню від спалених копиць.</summary>
+        public IReadOnlyList<FireZone> Fires => _fires;
+
+        /// <summary>Раунд найближчого підкріплення ворога; 0 — не чекається (HUD показує відлік, №14.4).</summary>
+        public int NextReinforcementRound
+        {
+            get
+            {
+                int best = 0;
+                foreach (var r in _pendingReinforcements)
+                    if (best == 0 || r.round < best) best = r.round;
+                return best;
+            }
+        }
+
+        /// <summary>Скільки ворогів прийде в раунді <see cref="NextReinforcementRound"/>.</summary>
+        public int NextReinforcementCount
+        {
+            get
+            {
+                int round = NextReinforcementRound, n = 0;
+                foreach (var r in _pendingReinforcements) if (r.round == round) n++;
+                return n;
+            }
+        }
         public IReadOnlyList<CombatUnit> Units => _units;
 
         /// <summary>
@@ -116,6 +149,251 @@ namespace Game.Core.Combat
 
         /// <summary>Як почався бій (Поправка №14.1).</summary>
         public BattleOpening Opening { get; private set; } = BattleOpening.Encounter;
+
+        // ---- Поле бою: об'єкти, вогонь, підкріплення (Поправка №14.4) ----
+
+        /// <summary>Поставити об'єкт до початку бою: клітинка стає непрохідною, сусіди отримують укриття з її боку.</summary>
+        public void AddObject(MapObjectKind kind, GridPos pos)
+        {
+            if (!Map.IsFree(pos)) throw new InvalidOperationException($"Клітинка {pos} зайнята або непрохідна");
+            var obj = new MapObject { Id = "obj#" + _objectSeq++, Kind = kind, Pos = pos };
+            _objects.Add(obj);
+            Map.SetWalkable(pos, false);
+            Map.SetBlocksSight(pos, obj.BlocksSight);
+            RecomputeObjectCover();
+        }
+
+        /// <summary>Ворог, що прийде на початку раунду <paramref name="round"/> (підкріплення з відліком, №14.4).</summary>
+        public void AddReinforcement(int round, CombatUnit unit, GridPos pos)
+        {
+            if (unit == null || round < 2) return;
+            _pendingReinforcements.Add((round, unit, pos));
+        }
+
+        public MapObject ObjectAt(GridPos pos)
+        {
+            for (int i = 0; i < _objects.Count; i++)
+                if (_objects[i].Pos == pos) return _objects[i];
+            return null;
+        }
+
+        /// <summary>
+        /// Вдарити по об'єкту поля (бочка вибухне, сіно займеться) поточною
+        /// зброєю: ціна — ОД зброї, влучання гарантоване (об'єкт не ухиляється;
+        /// ризик — у тому, кого зачепить). Дальня зброя — по лінії вогню,
+        /// ближня — впритул.
+        /// </summary>
+        public CombatActionResult AttackObject(GridPos pos)
+        {
+            var unit = ActiveCurrentOrNull();
+            if (unit == null || unit.Weapon == null) return CombatActionResult.InvalidAction;
+            var obj = ObjectAt(pos);
+            if (obj == null || !obj.IsTargetable) return CombatActionResult.InvalidTarget;
+
+            var w = unit.Weapon;
+            if (unit.Ap < w.ApCost) return CombatActionResult.NotEnoughAp;
+            int distance = GridPos.Chebyshev(unit.Pos, pos);
+            if (w.IsMelee && distance > w.OptimalRange) return CombatActionResult.OutOfRange;
+            if (!w.IsMelee && !LineOfSight.HasLine(Map, unit.Pos, pos)) return CombatActionResult.NoLineOfSight;
+
+            unit.Ap -= w.ApCost;
+            Record(CombatLogKeys.ObjectHit, $"{unit.Profile.DisplayName} бьёт по {obj.Kind} в {pos}",
+                "unitId", unit.Id, "object", ObjectToken(obj.Kind), "x", I(pos.X), "y", I(pos.Y), "ap", I(w.ApCost));
+            TriggerObject(obj);
+            CheckOutcome();
+            return CombatActionResult.Success;
+        }
+
+        /// <summary>Токен виду об'єкта для журналу (як StatusId): тексти підставляє Gameplay.</summary>
+        public static string ObjectToken(MapObjectKind kind)
+        {
+            switch (kind)
+            {
+                case MapObjectKind.LowCover: return "low_cover";
+                case MapObjectKind.HighCover: return "high_cover";
+                case MapObjectKind.PowderKeg: return "powder_keg";
+                default: return "haystack";
+            }
+        }
+
+        private void TriggerObject(MapObject obj)
+        {
+            if (obj.Kind == MapObjectKind.PowderKeg) ExplodeChain(obj);
+            else if (obj.Kind == MapObjectKind.Haystack) Ignite(obj);
+        }
+
+        /// <summary>
+        /// Вибух бочки і ланцюг: шкода кожному в радіусі (вогонь, опори діють),
+        /// сусідні бочки вибухають далі, сіно займається, перепони руйнуються на
+        /// ОДИН щабель (висока → низька → нічого). Порядок детермінований:
+        /// відстань, потім рядок, потім стовпець.
+        /// </summary>
+        private void ExplodeChain(MapObject start)
+        {
+            var queue = new List<MapObject> { start };
+            var done = new HashSet<string>(StringComparer.Ordinal);
+            int radius = Balance.Combat.ExplosionRadius;
+
+            while (queue.Count > 0)
+            {
+                var keg = queue[0];
+                queue.RemoveAt(0);
+                if (!done.Add(keg.Id) || !_objects.Contains(keg)) continue;
+
+                RemoveObject(keg);
+                Record(CombatLogKeys.KegExploded, $"=== взрыв бочки в {keg.Pos} ===",
+                    "x", I(keg.Pos.X), "y", I(keg.Pos.Y), "radius", I(radius));
+
+                foreach (var u in new List<CombatUnit>(_units))
+                {
+                    if (!u.IsActive || GridPos.Chebyshev(u.Pos, keg.Pos) > radius) continue;
+                    int dmg = DamageResolver.FlatDamage(Balance.Combat.ExplosionDamage, DamageType.Fire, u);
+                    Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{dmg} HP (взрыв)",
+                        "unitId", u.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(DamageType.Fire));
+                    ApplyDamage(u, dmg);
+                }
+
+                foreach (var o in ObjectsWithin(keg.Pos, radius))
+                {
+                    switch (o.Kind)
+                    {
+                        case MapObjectKind.PowderKeg: queue.Add(o); break;
+                        case MapObjectKind.Haystack: Ignite(o); break;
+                        default: DegradeCover(o); break;
+                    }
+                }
+                RecomputeObjectCover();
+            }
+        }
+
+        /// <summary>Сіно займається: об'єкт згорає, довкола — зона вогню; бочки в ній вибухають.</summary>
+        private void Ignite(MapObject hay)
+        {
+            if (!_objects.Contains(hay)) return;
+            RemoveObject(hay);
+            var zone = new FireZone
+            {
+                Center = hay.Pos,
+                Radius = Balance.Combat.FireZoneRadius,
+                RoundsLeft = Math.Max(1, Balance.Combat.FireZoneRounds)
+            };
+            _fires.Add(zone);
+            Record(CombatLogKeys.HaystackIgnited, $"=== сено вспыхивает в {hay.Pos} ===",
+                "x", I(hay.Pos.X), "y", I(hay.Pos.Y), "turns", I(zone.RoundsLeft));
+
+            foreach (var u in new List<CombatUnit>(_units))
+                if (u.IsActive && zone.Covers(u.Pos)) ApplyStatus(u, StatusType.Burning);
+
+            foreach (var o in ObjectsWithin(hay.Pos, zone.Radius))
+                if (o.Kind == MapObjectKind.PowderKeg) ExplodeChain(o);
+            RecomputeObjectCover();
+        }
+
+        /// <summary>Один щабель руйнування: висока перепона стає низькою, низька зникає. Ніколи — повністю за раз.</summary>
+        private void DegradeCover(MapObject o)
+        {
+            if (o.Kind == MapObjectKind.HighCover)
+            {
+                o.Kind = MapObjectKind.LowCover;
+                Map.SetBlocksSight(o.Pos, false);
+                Record(CombatLogKeys.CoverDegraded, $"  укрытие в {o.Pos} разбито до низкого",
+                    "x", I(o.Pos.X), "y", I(o.Pos.Y));
+            }
+            else
+            {
+                RemoveObject(o);
+                Record(CombatLogKeys.CoverDestroyed, $"  укрытие в {o.Pos} разрушено",
+                    "x", I(o.Pos.X), "y", I(o.Pos.Y));
+            }
+        }
+
+        private void RemoveObject(MapObject o)
+        {
+            _objects.Remove(o);
+            Map.SetWalkable(o.Pos, true);
+            Map.SetBlocksSight(o.Pos, false);
+        }
+
+        private List<MapObject> ObjectsWithin(GridPos center, int radius)
+        {
+            var list = new List<MapObject>();
+            foreach (var o in _objects)
+                if (GridPos.Chebyshev(o.Pos, center) <= radius) list.Add(o);
+            list.Sort((a, b) =>
+            {
+                int da = GridPos.Chebyshev(a.Pos, center), db = GridPos.Chebyshev(b.Pos, center);
+                if (da != db) return da.CompareTo(db);
+                return a.Pos.Y != b.Pos.Y ? a.Pos.Y.CompareTo(b.Pos.Y) : a.Pos.X.CompareTo(b.Pos.X);
+            });
+            return list;
+        }
+
+        /// <summary>Шар укриття від об'єктів: кожен об'єкт дає укриття чотирьом сусідам з того боку, де стоїть.</summary>
+        private void RecomputeObjectCover()
+        {
+            Map.ClearObjectCover();
+            foreach (var o in _objects)
+            {
+                var cover = o.CoverForNeighbours;
+                Map.AddObjectCover(new GridPos(o.Pos.X, o.Pos.Y + 1), Direction.South, cover);
+                Map.AddObjectCover(new GridPos(o.Pos.X, o.Pos.Y - 1), Direction.North, cover);
+                Map.AddObjectCover(new GridPos(o.Pos.X + 1, o.Pos.Y), Direction.West, cover);
+                Map.AddObjectCover(new GridPos(o.Pos.X - 1, o.Pos.Y), Direction.East, cover);
+            }
+        }
+
+        /// <summary>Хто на початку свого ходу стоїть у зоні вогню — горить.</summary>
+        private void BurnIfInFire(CombatUnit unit)
+        {
+            foreach (var f in _fires)
+            {
+                if (!f.Covers(unit.Pos)) continue;
+                Record(CombatLogKeys.FireBurns, $"{unit.Profile.DisplayName} стоит в огне", "unitId", unit.Id);
+                ApplyStatus(unit, StatusType.Burning);
+                return;
+            }
+        }
+
+        /// <summary>Початок нового раунду: вогонь згасає, підкріплення приходить.</summary>
+        private void OnRoundStarted()
+        {
+            for (int i = _fires.Count - 1; i >= 0; i--)
+            {
+                _fires[i].RoundsLeft--;
+                if (_fires[i].RoundsLeft > 0) continue;
+                Record(CombatLogKeys.FireOut, $"  огонь в {_fires[i].Center} гаснет",
+                    "x", I(_fires[i].Center.X), "y", I(_fires[i].Center.Y));
+                _fires.RemoveAt(i);
+            }
+
+            int arrived = 0;
+            for (int i = 0; i < _pendingReinforcements.Count; i++)
+            {
+                var r = _pendingReinforcements[i];
+                if (r.round != Round) continue;
+                _pendingReinforcements.RemoveAt(i--);
+                var tile = NearestFreeTile(r.pos);
+                if (!tile.HasValue) continue;
+                AddUnit(r.unit, tile.Value);
+                _turns.AddLate(r.unit);
+                arrived++;
+            }
+            if (arrived > 0)
+                Record(CombatLogKeys.ReinforcementsArrived, $"=== подкрепление врага: {arrived} ===", "count", I(arrived));
+        }
+
+        private GridPos? NearestFreeTile(GridPos from)
+        {
+            int max = Math.Max(Map.Width, Map.Height);
+            for (int r = 0; r <= max; r++)
+                for (int y = from.Y - r; y <= from.Y + r; y++)
+                    for (int x = from.X - r; x <= from.X + r; x++)
+                    {
+                        var p = new GridPos(x, y);
+                        if (GridPos.Chebyshev(p, from) == r && Map.IsFree(p)) return p;
+                    }
+            return null;
+        }
 
         /// <summary>Старт бою: будує чергу ініціативи і починає перший хід.</summary>
         public void Begin() => Begin(BattleOpening.Encounter);
@@ -997,6 +1275,7 @@ namespace Game.Core.Combat
                     ApplyDamage(unit, dmg);
                 }
             }
+            if (unit.IsActive) BurnIfInFire(unit);
             return unit.IsActive;
         }
 
@@ -1036,7 +1315,10 @@ namespace Game.Core.Combat
                 // Межа раунду — подія для гравця: без неї журнал на
                 // два-три раунди читається суцільною стрічкою.
                 if (Round != roundBefore)
+                {
                     Record(CombatLogKeys.RoundStarted, $"--- раунд {Round} ---", "round", I(Round));
+                    OnRoundStarted();
+                }
 
                 if (BeginTurn(next)) return;
             }

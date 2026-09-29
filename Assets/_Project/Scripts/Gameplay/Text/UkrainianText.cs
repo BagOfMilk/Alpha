@@ -2627,6 +2627,41 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.opening.Surrounded", "Оточені");
             AddKey(t, "ui.dungeon.opening.preview", "Кривавий шлях: {bloody}. Якщо тихо не вийде: {quiet}.");
 
+            // C3 — поле бою (№14.4): об'єкти, вогонь, підкріплення.
+            AddKey(t, "combat.log.object.hit", "{unit} б'є по об'єкту: {object}.");
+            AddKey(t, "combat.log.object.keg_exploded", "Вибухає бочка з порохом — дістає всіх довкола.");
+            AddKey(t, "combat.log.object.haystack_ignited", "Спалахує сіно — довкола вогонь ще {turns} раунди.");
+            AddKey(t, "combat.log.object.cover_degraded", "Вибух розбиває високе укриття до низького.");
+            AddKey(t, "combat.log.object.cover_destroyed", "Вибух розносить укриття на тріски.");
+            AddKey(t, "combat.log.object.fire_burns", "{unit} стоїть у вогні.");
+            AddKey(t, "combat.log.object.fire_out", "Вогонь згасає.");
+            AddKey(t, "combat.log.reinforcements", "До ворога прийшло підкріплення.");
+            AddKey(t, "combat.object.low_cover", "низька перепона");
+            AddKey(t, "combat.object.high_cover", "висока перепона");
+            AddKey(t, "combat.object.powder_keg", "бочка з порохом");
+            AddKey(t, "combat.object.haystack", "копиця сіна");
+            AddKey(t, "ui.battle.flanked", "Фланг — укриття цілі звідси не діє.");
+            AddKey(t, "ui.battle.cover.sides", "Укриття тут: {sides}.");
+            AddKey(t, "ui.battle.cover.side", "{side} — {level}");
+            AddKey(t, "ui.battle.cover.level.half", "половинне");
+            AddKey(t, "ui.battle.cover.level.full", "повне");
+            AddKey(t, "ui.battle.dir.north", "з півночі");
+            AddKey(t, "ui.battle.dir.east", "зі сходу");
+            AddKey(t, "ui.battle.dir.south", "з півдня");
+            AddKey(t, "ui.battle.dir.west", "із заходу");
+            AddKey(t, "ui.battle.fire.here", "Тут горить — ще {rounds} р. Хто стоїть тут на початку ходу, загориться.");
+            AddKey(t, "ui.battle.object.title.PowderKeg", "Бочка з порохом");
+            AddKey(t, "ui.battle.object.title.Haystack", "Копиця сіна");
+            AddKey(t, "ui.battle.object.title.HighCover", "Висока перепона");
+            AddKey(t, "ui.battle.object.title.LowCover", "Низька перепона");
+            AddKey(t, "ui.battle.object.keg.effect", "Вибух: {damage} шкоди всім на відстані {radius}; руйнує укриття, підриває сусідні бочки.");
+            AddKey(t, "ui.battle.object.hay.effect", "Займеться від вогню чи вибуху: вогонь на відстані {radius} ще {rounds} р.");
+            AddKey(t, "ui.battle.object.high.effect", "Повне укриття тому, хто за нею; закриває огляд. Вибух розбиває до низької.");
+            AddKey(t, "ui.battle.object.low.effect", "Половинне укриття тому, хто за нею. Вибух розносить.");
+            AddKey(t, "ui.battle.object.hit_cost", "Клік — вдарити по ньому: {cost} ОД, влучання певне.");
+            AddKey(t, "ui.battle.object.hit_own_turn", "Вдарити можна у свій хід.");
+            AddKey(t, "ui.battle.reinforcements.countdown", "Підкріплення ворога: раунд {round} ({count})");
+
             // C2 — відступ (B13, №14.7).
             AddKey(t, "ui.battle.retreat", "Відступити");
             AddKey(t, "ui.battle.retreat.confirm.title", "Відступити з бою?");

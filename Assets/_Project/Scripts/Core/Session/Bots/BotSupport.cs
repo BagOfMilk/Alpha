@@ -394,7 +394,9 @@ namespace Game.Core.Session.Bots
             int bestDist = int.MaxValue;
             foreach (var u in battle.Units)
             {
-                if (u == from || u.IsDowned) continue;
+                // Вибулі (загиблі, винесені) лишаються у BattleView.Units — ціллю вони не є
+                // (Поправка №14.5, IsOutOfBattle; раніше наївний водій міг застрягти на трупі).
+                if (u == from || u.IsDowned || u.IsOutOfBattle) continue;
                 bool uIsPlayer = string.Equals(u.Side, "Player", StringComparison.Ordinal);
                 if (uIsPlayer == fromIsPlayer) continue; // своя сторона
 

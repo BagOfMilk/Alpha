@@ -108,6 +108,10 @@ namespace Game.Core.Dungeons
             };
             room1.QuietChecks.Add(new CheckRequest(SkillKeys.Survival, 4, ApproachForm.Neutral,
                 topicId: "dungeon.old_hermitage.room1"));
+            // Поправка №14.4: підкріплення тут пробували (розвідник на 3-му раунді) —
+            // під правилом порогу бій ішов у глухий кут до запобіжника: стрілець зі
+            // шансом < 50 не влучає ніколи. Рушій підкріплення вміє (BattleSetup.Reinforcements,
+            // тести C3), контент — після рішення власника про правило влучання (№7.6).
             // Поправка №11 (розвідка SkirmishPacingTests, 25.09.2026): цей рядок
             // до сьогодні не резолвився в жоден EnemyDefinition —
             // GameSession.ResolveEnemyById повертав null, CombatBattleBuilder

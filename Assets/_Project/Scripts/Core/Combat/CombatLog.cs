@@ -61,6 +61,16 @@ namespace Game.Core.Combat
         public const string OpeningUnderFire = "combat.log.opening.under_fire";
         public const string OpeningSurrounded = "combat.log.opening.surrounded";
 
+        // ---- поле бою: об'єкти й підкріплення (Поправка №14.4) ----
+        public const string ObjectHit = "combat.log.object.hit";
+        public const string KegExploded = "combat.log.object.keg_exploded";
+        public const string HaystackIgnited = "combat.log.object.haystack_ignited";
+        public const string CoverDegraded = "combat.log.object.cover_degraded";
+        public const string CoverDestroyed = "combat.log.object.cover_destroyed";
+        public const string FireBurns = "combat.log.object.fire_burns";
+        public const string FireOut = "combat.log.object.fire_out";
+        public const string ReinforcementsArrived = "combat.log.reinforcements";
+
         // ---- дії поточного юніта ----
         public const string Move = "combat.log.move";
         public const string OverwatchSet = "combat.log.overwatch.set";
@@ -115,6 +125,7 @@ namespace Game.Core.Combat
         {
             Started, RoundStarted, Retreat, DrawForced, DrawRoundCap, Victory, Defeat,
             OpeningFirstStrike, OpeningAmbush, OpeningSpotted, OpeningUnderFire, OpeningSurrounded,
+            ObjectHit, KegExploded, HaystackIgnited, CoverDegraded, CoverDestroyed, FireBurns, FireOut, ReinforcementsArrived,
             Move, OverwatchSet, Strike, AttackMiss, AttackGraze, AttackHit, AttackCrit, Stabilize,
             Ability, Damage, Shred, Heal, ApGranted, Lunge, Repositioned, TrapPlaced, HackedToPlayer, HackedToEnemy,
             OverwatchFired, OverwatchExpired, OverwatchLostDisplaced, OverwatchLostHacked, OverwatchLostStunned,

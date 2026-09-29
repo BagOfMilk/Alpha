@@ -89,5 +89,13 @@ namespace Game.Core.Balance
         public int UnderFireWoundedUnits = 2;
         /// <summary>«Під обстрілом»: частка максимального HP, яку поранені втрачають до першого ходу (не нижче 1 HP).</summary>
         public int UnderFireHpLossPercent = 20;
+
+        // ---- Поле бою: об'єкти (Поправка №14.4) — ПЛЕЙСХОЛДЕРИ ----
+        /// <summary>Бочка з порохом: радіус вибуху (Чебишев) і шкода кожному в ньому (тип — вогонь, опори діють).</summary>
+        public int ExplosionRadius = 1;
+        public int ExplosionDamage = 6;
+        /// <summary>Копиця сіна: радіус і тривалість зони вогню (раунди); хто в ній на початку ходу — горить.</summary>
+        public int FireZoneRadius = 1;
+        public int FireZoneRounds = 2;
     }
 }

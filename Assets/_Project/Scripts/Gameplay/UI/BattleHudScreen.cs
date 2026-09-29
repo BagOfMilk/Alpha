@@ -229,6 +229,13 @@ namespace Game.Gameplay.UI
             // «Раунд N» — у центрі колеса черги (Поправка №14.5), тут не дублюється.
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
+            // Підкріплення ворога з відліком (Поправка №14.4): видно заздалегідь, а не з'являється раптом.
+            if (view.ReinforcementRound > 0)
+            {
+                GUILayout.Label(UkrainianText.Format("ui.battle.reinforcements.countdown", false,
+                    "round", I(view.ReinforcementRound), "count", I(view.ReinforcementCount)), AlphaSkin.DangerText, GUILayout.ExpandWidth(false));
+                GUILayout.Space(16f);
+            }
             // Аудит знімків п.5: «Правило влучання вгорі праворуч — не
             // курсивом, читабельно» — AlphaSkin.Tooltip курсивний і тьмяний,
             // тут потрібен звичайний світлий HintLine (§AlphaSkin.HintLine).
@@ -857,6 +864,14 @@ namespace Game.Gameplay.UI
         {
             var attack = c.HoverAttack;
             var path = c.HoverPath;
+
+            // Об'єкт поля під курсором (Поправка №14.4): що це, що зробить і скільки коштує вдарити.
+            if (attack == null && c.HasHoveredTile && c.Armed == ArmedAction.None)
+            {
+                var obj = ObjectAt(view, c.HoveredTileX, c.HoveredTileY);
+                if (obj != null) { DrawObjectTooltip(c, view, obj); return; }
+            }
+
             if (attack == null && path == null)
             {
                 // Озброєна здібність чи дозор над клітинкою — своя підказка, не «Рух» (рев'ю Бою v2).
@@ -970,6 +985,7 @@ namespace Game.Gameplay.UI
             h += 30f; // «Здоров'я цілі: N/M»
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
                 h += 28f;
+            if (p.IsFlanked) h += 28f;
             if (p.Result != "Success") h += 30f;
             return h;
         }
@@ -982,11 +998,99 @@ namespace Game.Gameplay.UI
             return null;
         }
 
+        // ================= поле бою: об'єкти, вогонь, укриття по боках (Поправка №14.4) =================
+
+        private static BattleObjectView ObjectAt(BattleView view, int x, int y)
+        {
+            if (view?.Objects == null) return null;
+            foreach (var o in view.Objects)
+                if (o != null && o.Pos.X == x && o.Pos.Y == y) return o;
+            return null;
+        }
+
+        private static BattleFireView FireAt(BattleView view, int x, int y)
+        {
+            if (view?.Fires == null) return null;
+            foreach (var f in view.Fires)
+                if (f != null && Math.Max(Math.Abs(f.Center.X - x), Math.Abs(f.Center.Y - y)) <= f.Radius) return f;
+            return null;
+        }
+
+        private static readonly string[] SideKeys = { "north", "east", "south", "west" };
+
+        /// <summary>«з півночі — повне, зі сходу — ½» для клітинки; null — укриття немає з жодного боку.</summary>
+        private static string CoverSidesText(BattleView view, int x, int y)
+        {
+            var grid = view?.Grid;
+            if (grid?.TileCoverSides == null) return null;
+            int idx = x + y * grid.Width;
+            if (idx < 0 || idx >= grid.TileCoverSides.Count) return null;
+            var parts = grid.TileCoverSides[idx]?.Split('|');
+            if (parts == null || parts.Length != 4) return null;
+
+            var list = new List<string>();
+            for (int i = 0; i < 4; i++)
+            {
+                if (parts[i] == "None" || string.IsNullOrEmpty(parts[i])) continue;
+                list.Add(UkrainianText.Format("ui.battle.cover.side", false,
+                    "side", UkrainianText.Get("ui.battle.dir." + SideKeys[i], false),
+                    "level", UkrainianText.Get("ui.battle.cover.level." + parts[i].ToLowerInvariant(), false)));
+            }
+            return list.Count == 0 ? null : string.Join(", ", list);
+        }
+
+        /// <summary>Підказка над об'єктом поля: назва, що зробить, і ціна удару для поточного бійця (UI-02).</summary>
+        private static void DrawObjectTooltip(IBattleHudData c, BattleView view, BattleObjectView obj)
+        {
+            var lines = new List<KeyValuePair<string, GUIStyle>>();
+            switch (obj.Kind)
+            {
+                case "PowderKeg":
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Format("ui.battle.object.keg.effect", false,
+                        "damage", I(obj.EffectDamage), "radius", I(obj.EffectRadius)), AlphaSkin.Body));
+                    break;
+                case "Haystack":
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Format("ui.battle.object.hay.effect", false,
+                        "rounds", I(obj.EffectRounds), "radius", I(obj.EffectRadius)), AlphaSkin.Body));
+                    break;
+                case "HighCover":
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.object.high.effect", false), AlphaSkin.Body));
+                    break;
+                default:
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.object.low.effect", false), AlphaSkin.Body));
+                    break;
+            }
+
+            var current = FindUnit(view, view.CurrentUnitId);
+            if (obj.IsTargetable)
+            {
+                if (c.IsPlayerTurn && current != null && current.AttackApCost > 0)
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Format("ui.battle.object.hit_cost", false,
+                        "cost", I(current.AttackApCost)), AlphaSkin.HintLine));
+                else
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.object.hit_own_turn", false), AlphaSkin.HintLine));
+            }
+
+            float scale = Widgets.ScaleForScreen();
+            float height = 24f + 34f + lines.Count * 30f;
+            float freeTop = TopBarHeight(scale) + 8f;
+            float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
+            float freeRight = Screen.width - RightPanelWidth() - 8f;
+            var (x, y) = BattleTooltipLayout.PlaceNearAnchor(c.HoveredTileScreenX, c.HoveredTileScreenY, TooltipWidth, height,
+                8f, freeTop, freeRight, freeBottom);
+
+            GUILayout.BeginArea(new Rect(x, y, TooltipWidth, height), GUI.skin.box);
+            GUILayout.Label(UkrainianText.Get("ui.battle.object.title." + obj.Kind, false), AlphaSkin.Body);
+            foreach (var line in lines) GUILayout.Label(line.Key, line.Value);
+            GUILayout.EndArea();
+        }
+
         private static float EstimatePathTooltipHeight(IBattleHudData c, BattleView view)
         {
             float h = 24f + 34f + 30f; // відступи + заголовок + рядок ціни/відмови
             if (view.Grid != null && c.HasHoveredTile) h += 28f; // укриття клітинки
             if (c.HasHoveredTile && TrapAt(view, c.HoveredTileX, c.HoveredTileY) != null) h += 28f; // своя пастка
+            if (c.HasHoveredTile && FireAt(view, c.HoveredTileX, c.HoveredTileY) != null) h += 28f; // вогонь (№14.4)
             h += 30f; // «Під ворожим дозором!» — з запасом, навіть коли порожньо
             return h;
         }
@@ -1029,6 +1133,10 @@ namespace Game.Gameplay.UI
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
                 GUILayout.Label(UkrainianText.Get("ui.battle.cover." + p.Cover.ToLowerInvariant(), false), AlphaSkin.HintLine);
 
+            // Фланг (Поправка №14.4): у цілі є укриття, але з цього боку воно не діє.
+            if (p.IsFlanked)
+                GUILayout.Label(UkrainianText.Get("ui.battle.flanked", false), AlphaSkin.HintLine);
+
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
         }
@@ -1046,13 +1154,14 @@ namespace Game.Gameplay.UI
 
             if (view.Grid != null && c.HasHoveredTile)
             {
-                int idx = c.HoveredTileX + c.HoveredTileY * view.Grid.Width;
-                if (view.Grid.TileCover != null && idx >= 0 && idx < view.Grid.TileCover.Count)
-                {
-                    string cover = view.Grid.TileCover[idx];
-                    if (!string.IsNullOrEmpty(cover) && !string.Equals(cover, "None", StringComparison.OrdinalIgnoreCase))
-                        GUILayout.Label(UkrainianText.Get("ui.battle.cover." + cover.ToLowerInvariant(), false), AlphaSkin.HintLine);
-                }
+                // Укриття видно по боках (Поправка №14.4): з якого боку тут захищає і як.
+                string sides = CoverSidesText(view, c.HoveredTileX, c.HoveredTileY);
+                if (sides != null)
+                    GUILayout.Label(UkrainianText.Format("ui.battle.cover.sides", false, "sides", sides), AlphaSkin.HintLine);
+
+                var fire = FireAt(view, c.HoveredTileX, c.HoveredTileY);
+                if (fire != null)
+                    GUILayout.Label(UkrainianText.Format("ui.battle.fire.here", false, "rounds", I(fire.RoundsLeft)), AlphaSkin.DangerText);
             }
 
             var trapHere = TrapAt(view, c.HoveredTileX, c.HoveredTileY);

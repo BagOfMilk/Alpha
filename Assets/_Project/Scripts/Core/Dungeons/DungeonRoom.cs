@@ -26,6 +26,19 @@ namespace Game.Core.Dungeons
     /// (R4 — данж не залежить від бою; охоронний тест —
     /// ArchitectureGuardTests.Dungeons_DoNotReferenceCombatOrItems).
     /// </summary>
+    /// <summary>Одне підкріплення кімнати: раунд прибуття і id ворога (рядок, не тип бою).</summary>
+    public readonly struct RoomReinforcement
+    {
+        public readonly int Round;
+        public readonly string EnemyId;
+
+        public RoomReinforcement(int round, string enemyId)
+        {
+            Round = round;
+            EnemyId = enemyId;
+        }
+    }
+
     public sealed class DungeonRoomDefinition
     {
         public readonly string Id;
@@ -45,6 +58,12 @@ namespace Game.Core.Dungeons
 
         /// <summary>Ключ арени (розмір/викладку знає вже бойовий шар).</summary>
         public string ArenaKey;
+
+        /// <summary>
+        /// Підкріплення ворога з відліком (Поправка №14.4): на якому раунді хто
+        /// прийде. Правило контенту (статут ANTI-13), рушій лише виконує.
+        /// </summary>
+        public readonly List<RoomReinforcement> Reinforcements = new List<RoomReinforcement>();
 
         // ---- Спільне для Combat (нагорода за зачистку) і Cache (гарантоване) ----
         public int GuaranteedBuildComponent;

@@ -1559,7 +1559,7 @@ namespace Game.Core.Session
             {
                 // Старт бою — від того, як загін дійшов до бою (Поправка №14.1).
                 var opening = ToBattleOpening(_dungeon.PendingBattle?.Start ?? DungeonBattleStart.FirstStrike);
-                var setup = BuildBattleSetup(_dungeon.PartyIds, room.EnemyIds, 8, 8, opening: opening);
+                var setup = BuildRoomBattleSetup(room, _dungeon.PartyIds, opening);
                 RequestBattle(setup, SuspendReason.DungeonCombatRoom, SessionState.Dungeon);
                 return null;
             }
@@ -2033,6 +2033,7 @@ namespace Game.Core.Session
                 Terms = termViews,
                 Cover = cover.ToString(),
                 CoverIgnored = ignoreCover,
+                IsFlanked = !ignoreCover && cover == CoverType.None && HasAnyCover(target.Pos),
                 DamageMin = dmg.Min,
                 DamageMax = dmg.Max,
                 DamageCrit = dmg.Crit,
@@ -2235,6 +2236,7 @@ namespace Game.Core.Session
                 foreach (var u in _battle.TurnOrder) initiative.Add(u.Id);
 
             var cover = new List<string>();
+            var coverSides = new List<string>();
             var walkable = new List<bool>();
             for (int y = 0; y < _battle.Map.Height; y++)
                 for (int x = 0; x < _battle.Map.Width; x++)
@@ -2247,8 +2249,27 @@ namespace Game.Core.Session
                         if (c > best) best = c;
                     }
                     cover.Add(best.ToString());
+                    coverSides.Add(_battle.Map.GetCover(pos, Direction.North) + "|" + _battle.Map.GetCover(pos, Direction.East) + "|"
+                        + _battle.Map.GetCover(pos, Direction.South) + "|" + _battle.Map.GetCover(pos, Direction.West));
                     walkable.Add(_battle.Map.IsWalkable(pos));
                 }
+
+            // Поле бою (Поправка №14.4): об'єкти, вогонь — видно гравцю так само, як ШІ.
+            var objects = new List<BattleObjectView>();
+            foreach (var o in _battle.Objects)
+                objects.Add(new BattleObjectView
+                {
+                    Pos = new GridPosView(o.Pos.X, o.Pos.Y),
+                    Kind = o.Kind.ToString(),
+                    IsTargetable = o.IsTargetable,
+                    EffectRadius = o.Kind == MapObjectKind.PowderKeg ? _battle.Balance.Combat.ExplosionRadius
+                        : o.Kind == MapObjectKind.Haystack ? _battle.Balance.Combat.FireZoneRadius : 0,
+                    EffectDamage = o.Kind == MapObjectKind.PowderKeg ? _battle.Balance.Combat.ExplosionDamage : 0,
+                    EffectRounds = o.Kind == MapObjectKind.Haystack ? _battle.Balance.Combat.FireZoneRounds : 0
+                });
+            var fires = new List<BattleFireView>();
+            foreach (var f in _battle.Fires)
+                fires.Add(new BattleFireView { Center = new GridPosView(f.Center.X, f.Center.Y), Radius = f.Radius, RoundsLeft = f.RoundsLeft });
 
             bool isAiTurn = _battle.Current != null && _battle.Current.IsActive
                             && _battle.Outcome == CombatOutcome.Ongoing && _battle.Current.Side != Side.Player;
@@ -2257,7 +2278,11 @@ namespace Game.Core.Session
             {
                 Round = _battle.Round,
                 Outcome = _battle.Outcome.ToString(),
-                Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable },
+                Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable, TileCoverSides = coverSides },
+                Objects = objects,
+                Fires = fires,
+                ReinforcementRound = _battle.NextReinforcementRound,
+                ReinforcementCount = _battle.NextReinforcementCount,
                 Units = units,
                 ReachableTiles = reachable,
                 Traps = traps,
@@ -2271,6 +2296,26 @@ namespace Game.Core.Session
                 Log = MapBattleLog(_battle.Journal),
                 IsHitRulePercent = _battle.IsHitRulePercent
             };
+        }
+
+        /// <summary>Чи є в тайла хоч з одного боку укриття — для позначки «фланг» (№14.4).</summary>
+        private bool HasAnyCover(GridPos pos)
+        {
+            foreach (Direction dir in Enum.GetValues(typeof(Direction)))
+                if (_battle.Map.GetCover(pos, dir) != CoverType.None) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Вдарити поточним бійцем по об'єкту поля (Поправка №14.4): бочка вибухне,
+        /// сіно займеться. Ціна — ОД зброї, влучання гарантоване; видно в HUD до кліку.
+        /// </summary>
+        public CombatActionResult CombatAttackObject(GridPos pos)
+        {
+            RequireBattle();
+            var r = _battle.AttackObject(pos);
+            AfterCombatAction();
+            return r;
         }
 
         private static List<string> UnitIds(IReadOnlyList<CombatUnit> units)
@@ -3955,6 +4000,22 @@ namespace Game.Core.Session
         {
             var c = _worldRoster?.Get(companionId);
             return c != null && new Game.Core.Base.CompanionActorAdapter(c).IsPresentInSettlement;
+        }
+
+        /// <summary>
+        /// Поле бою кімнати: шаблон арени за <c>ArenaKey</c> (Поправка №14.4 — стіни,
+        /// перепони, бочки, сіно, місця загону й ворогів, підкріплення), або
+        /// генератор, якщо шаблону немає.
+        /// </summary>
+        private BattleSetup BuildRoomBattleSetup(DungeonRoomDefinition room, IReadOnlyList<string> partyIds, BattleOpening opening)
+        {
+            if (ArenaTemplates.TryGet(room.ArenaKey, out var rows))
+            {
+                var reinforcements = new List<(int, string)>();
+                foreach (var r in room.Reinforcements) reinforcements.Add((r.Round, r.EnemyId));
+                return ArenaTemplates.Build(rows, partyIds, room.EnemyIds, _hitRule, opening, reinforcements);
+            }
+            return BuildBattleSetup(partyIds, room.EnemyIds, 8, 8, opening: opening);
         }
 
         /// <summary>Старт бою мовою данжу → варіант бою (Поправка №14.1).</summary>

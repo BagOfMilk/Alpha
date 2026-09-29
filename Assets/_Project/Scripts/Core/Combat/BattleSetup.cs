@@ -119,5 +119,11 @@ namespace Game.Core.Combat
 
         /// <summary>Як почався бій (Поправка №14.1). За замовчуванням — зустрічний.</summary>
         public BattleOpening Opening = BattleOpening.Encounter;
+
+        /// <summary>Об'єкти поля (Поправка №14.4): перепони, бочки з порохом, сіно.</summary>
+        public List<MapObjectPlacement> Objects = new List<MapObjectPlacement>();
+
+        /// <summary>Підкріплення ворога з відліком (Поправка №14.4; правило контенту, не рушія).</summary>
+        public List<ReinforcementSpawn> Reinforcements = new List<ReinforcementSpawn>();
     }
 }

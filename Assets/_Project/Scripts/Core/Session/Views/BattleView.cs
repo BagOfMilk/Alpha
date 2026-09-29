@@ -20,6 +20,35 @@ namespace Game.Core.Session.Views
         /// <summary>За індексом x+y*Width: "None"|"Half"|"Full".</summary>
         public IReadOnlyList<string> TileCover;
         public IReadOnlyList<bool> TileWalkable;
+
+        /// <summary>
+        /// Укриття тайла по боках (Поправка №14.4 — «укриття видно»): за індексом
+        /// x+y*Width рядок "Північ|Схід|Південь|Захід", кожне значення
+        /// "None"|"Half"|"Full". HUD показує, з якого боку тут захищає.
+        /// </summary>
+        public IReadOnlyList<string> TileCoverSides;
+    }
+
+    /// <summary>Об'єкт поля (Поправка №14.4): перепона, бочка з порохом, сіно.</summary>
+    public sealed class BattleObjectView
+    {
+        public GridPosView Pos;
+
+        /// <summary>"LowCover"|"HighCover"|"PowderKeg"|"Haystack".</summary>
+        public string Kind;
+
+        /// <summary>По ньому можна вдарити (бочка, сіно).</summary>
+        public bool IsTargetable;
+
+        /// <summary>Бочка: радіус і шкода вибуху; сіно: радіус і тривалість вогню (раунди). 0 — не діє.</summary>
+        public int EffectRadius, EffectDamage, EffectRounds;
+    }
+
+    /// <summary>Зона вогню від спаленого сіна.</summary>
+    public sealed class BattleFireView
+    {
+        public GridPosView Center;
+        public int Radius, RoundsLeft;
     }
 
     public sealed class BattleUnitView
@@ -128,6 +157,9 @@ namespace Game.Core.Session.Views
         public string Cover;
         /// <summary>Укриття не діє (ближній бій, здібність ігнорує укриття).</summary>
         public bool CoverIgnored;
+
+        /// <summary>Фланг (Поправка №14.4): у цілі є укриття, але з боку атакуючого — ні.</summary>
+        public bool IsFlanked;
 
         public int DamageMin, DamageMax, DamageCrit;
         /// <summary>Правило «поріг»: звичайне влучання дає рівно <see cref="DamageExpected"/>, діапазон не показувати.</summary>
@@ -246,6 +278,15 @@ namespace Game.Core.Session.Views
         public IReadOnlyList<BattleLogLineView> Log;
 
         public bool IsHitRulePercent;
+
+        /// <summary>Об'єкти поля (Поправка №14.4).</summary>
+        public IReadOnlyList<BattleObjectView> Objects;
+
+        /// <summary>Зони вогню.</summary>
+        public IReadOnlyList<BattleFireView> Fires;
+
+        /// <summary>Раунд найближчого підкріплення ворога (0 — не чекається) і скільки прийде — відлік у HUD.</summary>
+        public int ReinforcementRound, ReinforcementCount;
     }
 
     /// <summary>

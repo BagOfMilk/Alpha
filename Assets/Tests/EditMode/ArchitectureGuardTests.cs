@@ -668,7 +668,12 @@ namespace Game.Tests.EditMode
                 "Distance", "Range",
                 // Шкода власної пастки гравця — показана в підказці клітинки (власник:
                 // «Поставлену пастку на арені поки не видно. погано»), не прихована шкала.
-                "TrapDamage"
+                "TrapDamage",
+                // Поле бою (Поправка №14.4): що зробить бочка чи сіно (радіус, шкода,
+                // раунди вогню), скільки ще горить, коли й скільки прийде підкріплення —
+                // гравець бачить до кліку (UI-02), не прихована шкала.
+                "EffectRadius", "EffectDamage", "EffectRounds", "Radius", "RoundsLeft",
+                "ReinforcementRound", "ReinforcementCount"
             };
             var numericTypes = new HashSet<System.Type> { typeof(int), typeof(double), typeof(float) };
 

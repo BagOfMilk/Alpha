@@ -60,6 +60,25 @@ namespace Game.Core.Combat
             }
         }
 
+        /// <summary>
+        /// Юніт, що з'явився посеред бою (підкріплення, Поправка №14.4): стає в
+        /// звичайну чергу за ініціативою (при рівній — після наявних), а в
+        /// поточному раунді ходить не раніше, ніж після того, хто ходить зараз.
+        /// </summary>
+        public void AddLate(CombatUnit unit)
+        {
+            if (unit == null || _baseOrder.Contains(unit)) return;
+            _baseOrder.Insert(SortedIndex(_baseOrder, unit, 0), unit);
+            _order.Insert(SortedIndex(_order, unit, _index + 1), unit);
+        }
+
+        private static int SortedIndex(List<CombatUnit> list, CombatUnit unit, int minIndex)
+        {
+            int i = Math.Min(Math.Max(0, minIndex), list.Count);
+            while (i < list.Count && list[i].Profile.Initiative >= unit.Profile.Initiative) i++;
+            return i;
+        }
+
         /// <summary>Переходить до наступного юніта; на обороті черги починається новий раунд.</summary>
         public CombatUnit Advance()
         {

@@ -21,6 +21,8 @@ namespace Game.Core.Combat
         private const double CoverFullValue = 3.0;
         private const double NoLosPenalty = 4.0;     // ховатись ВІД бою ШІ не повинен
         private const double MoveApValue = 0.25;     // ціна витраченого на рух AP
+        private const double KegProximityPenalty = 1.5; // стояти в радіусі вибуху бочки (№14.4)
+        private const double FirePenalty = 3.0;          // стояти у вогні (№14.4)
 
         /// <summary>Веде хід ПОТОЧНОГО юніта цілком (до EndTurn). Клич, коли ходить ШІ.</summary>
         public static void TakeTurn(CombatState cs)
@@ -129,6 +131,10 @@ namespace Game.Core.Combat
                     return true;
             }
 
+            // 6½. Бочка з порохом (Поправка №14.4): вибух зачепить чужих і жодного свого,
+            //     а виграш не менший, ніж від звичайного пострілу по цілі.
+            if (TryShootKeg(cs, unit, target, chance)) return true;
+
             // 7. Звичайна атака, якщо шанс прийнятний (або ми вже в клінчі).
             if (unit.Weapon != null && (inMelee || (!unit.Weapon.IsMelee && chance >= MinHitToShoot)))
             {
@@ -203,8 +209,9 @@ namespace Game.Core.Combat
                                || unit.Profile.Role == EnemyRole.Tank
                                || unit.Profile.Role == EnemyRole.Breacher;
 
+            double hazard = HazardPenalty(cs, pos);
             if (closeCombat)
-                return -dist * 2.0; // клінч-ролі зближуються, укриття їм байдужі
+                return -dist * 2.0 - hazard; // клінч-ролі зближуються, укриття їм байдужі
 
             int optimal = unit.Weapon != null ? unit.Weapon.OptimalRange : 5;
             double score = -Math.Abs(dist - optimal);
@@ -215,7 +222,58 @@ namespace Game.Core.Combat
             else if (cover == CoverType.Half) score += CoverHalfValue * coverWeight;
 
             if (!LineOfSight.HasLine(cs.Map, pos, target.Pos)) score -= NoLosPenalty;
-            return score;
+            return score - hazard;
+        }
+
+        // ---- Поле бою (Поправка №14.4): бочки й вогонь ----
+
+        /// <summary>Не ставати в радіус вибуху бочки і не заходити у вогонь — ШІ бачить те саме, що гравець.</summary>
+        private static double HazardPenalty(CombatState cs, GridPos pos)
+        {
+            double penalty = 0;
+            foreach (var o in cs.Objects)
+                if (o.Kind == MapObjectKind.PowderKeg && GridPos.Chebyshev(o.Pos, pos) <= cs.Balance.Combat.ExplosionRadius)
+                    penalty += KegProximityPenalty;
+            foreach (var f in cs.Fires)
+                if (f.Covers(pos)) penalty += FirePenalty;
+            return penalty;
+        }
+
+        /// <summary>
+        /// Постріл по бочці замість цілі: цінність вибуху — сума очікуваної шкоди
+        /// чужим у радіусі (+ бонус за зняття), без жодного свого в радіусі. Якщо
+        /// вона не менша за звичайний постріл по цілі — стріляємо по бочці.
+        /// </summary>
+        private static bool TryShootKeg(CombatState cs, CombatUnit unit, CombatUnit target, int chanceOnTarget)
+        {
+            if (unit.Weapon == null || unit.Ap < unit.Weapon.ApCost) return false;
+            int radius = cs.Balance.Combat.ExplosionRadius;
+            int dmg = cs.Balance.Combat.ExplosionDamage;
+
+            double plain = AvgDamage(unit.Weapon) * chanceOnTarget / 100.0;
+            if (target.Hp <= plain) plain += 5.0;
+
+            MapObject bestKeg = null;
+            double bestValue = Math.Max(plain, 0.1);
+            foreach (var keg in cs.Objects)
+            {
+                if (keg.Kind != MapObjectKind.PowderKeg) continue;
+                int dist = GridPos.Chebyshev(unit.Pos, keg.Pos);
+                if (unit.Weapon.IsMelee ? dist > unit.Weapon.OptimalRange : !LineOfSight.HasLine(cs.Map, unit.Pos, keg.Pos))
+                    continue;
+
+                double value = 0;
+                bool hitsOwn = false;
+                foreach (var u in cs.Units)
+                {
+                    if (!u.IsActive || GridPos.Chebyshev(u.Pos, keg.Pos) > radius) continue;
+                    if (u.Side == unit.Side) { hitsOwn = true; break; }
+                    value += Math.Min(dmg, u.Hp) + (u.Hp <= dmg ? 5.0 : 0.0);
+                }
+                if (hitsOwn || value <= 0) continue;
+                if (value >= bestValue) { bestValue = value; bestKeg = keg; }
+            }
+            return bestKeg != null && cs.AttackObject(bestKeg.Pos) == CombatActionResult.Success;
         }
 
         // ---- Здібності ----
