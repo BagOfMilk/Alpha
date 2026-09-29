@@ -843,7 +843,7 @@ namespace Game.Gameplay
             }
             catch (InvalidOperationException ex)
             {
-                LastMessage = ex.Message;
+                LastMessage = HumanRefusal(ex);
             }
         }
 
@@ -868,9 +868,20 @@ namespace Game.Gameplay
             }
             catch (InvalidOperationException ex)
             {
-                LastMessage = ex.Message;
+                LastMessage = HumanRefusal(ex);
                 return fallback;
             }
+        }
+
+        /// <summary>
+        /// Відмова ядра людською мовою замість сирого винятку («Команда
+        /// недоступна у стані Evening…» → «Це можна зробити лише вранці або у
+        /// вільній грі.»); сирий текст — лише в лог (docs/UX_DESIGN.md UX-11).
+        /// </summary>
+        private string HumanRefusal(Exception ex)
+        {
+            Debug.LogWarning("[команда] " + ex.Message);
+            return UxErrorText.Humanize(ex.Message, ProtagonistGender == Gender.Female);
         }
 
         /// <summary>Підтвердження дії, у якої немає власного рядка в стрічці (напр. збереження на диск).</summary>
@@ -888,7 +899,7 @@ namespace Game.Gameplay
             }
             catch (InvalidOperationException ex)
             {
-                LastMessage = ex.Message;
+                LastMessage = HumanRefusal(ex);
                 return fallback;
             }
         }
