@@ -609,6 +609,12 @@ namespace Game.Gameplay.UI
                 Widgets.LabeledRow(UkrainianText.Get("resource.build_component", g), _preview.ExpectedBuildComponent.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("resource.craft_component", g), _preview.ExpectedCraftComponent.ToString());
                 Widgets.LabeledRow(UkrainianText.Get("resource.gold", g), _preview.ExpectedGold.ToString());
+
+                // Поправка №15.1: «тут бачили: {ім'я}» — відсутній фахівець,
+                // прив'язаний саме до цієї точки, ще не прибув.
+                if (!string.IsNullOrEmpty(_preview.WaitingSpecialistId))
+                    Widgets.LabeledRow(UkrainianText.Get("ui.expedition.waiting_specialist", g),
+                        ScreenText.ResolveCompanionName(_preview.WaitingSpecialistId, g, roster));
             }
         }
 
@@ -814,6 +820,8 @@ namespace Game.Gameplay.UI
             GUILayout.Label(UkrainianText.Format("ui.sheet.xp", g, "xp", sheet.Xp.ToString(), "next", sheet.XpToNextLevel.ToString()), AlphaSkin.Body);
             GUILayout.Label(UkrainianText.Format("ui.people.status", g, "status", ScreenText.CompanionStatusLabel(sheet.CompanionId, sheet.Status, g)), AlphaSkin.Body);
             GUILayout.Label(UkrainianText.Format("ui.people.loyalty", g, "loyalty", ScreenText.LoyaltyLabel(sheet.Loyalty, g)), AlphaSkin.Body);
+            // Поправка №15.2: клас-архетип на картці — рядок біля імені, мінімальна правка IMGUI.
+            GUILayout.Label(UkrainianText.Format("ui.people.class", g, "class", ScreenText.ClassLabel(sheet.Class, g)), AlphaSkin.Body);
 
             Widgets.Section(UkrainianText.Get("ui.sheet.section.attributes", g), () =>
             {

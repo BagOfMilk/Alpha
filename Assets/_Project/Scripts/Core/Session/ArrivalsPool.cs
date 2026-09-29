@@ -99,5 +99,43 @@ namespace Game.Core.Session
                 default: return KeeperId; // дефолт — перший варіант сцени
             }
         }
+
+        /// <summary>
+        /// Поправка №15.1 (пізніше приєднання, шлях «зустріч на вилазці»):
+        /// точка вилазки, де «чекає» відсутній фахівець (<see
+        /// cref="Characters.CompanionStatus.NotArrived"/>) — коли загін
+        /// повертається САМЕ звідси (будь-який підхід — резолв тихого/
+        /// силового підходу чи данж), фахівець приєднується до гурту.
+        /// Прив'язка — за ремеслом/лором, той самий принцип, що
+        /// <see cref="Base.DefaultBuildings.FirstBuildingChoices"/>:
+        /// <list type="bullet">
+        /// <item>Дід Овсій (комірник) — «outskirts» (Ближні руїни): найближча
+        /// точка, обоз не заходить далі.</item>
+        /// <item>Гобан-Сайр (тесля) — «old_workshop» (Покинута майстерня):
+        /// ремесло майстра тягне його саме туди.</item>
+        /// <item>Синдбад (купець) — «far_highway» (Дальній тракт): купець
+        /// іде за обозами, а тракт — це і є дорога обозів.</item>
+        /// <item>Гафія (знахарка) — «old_hermitage» (Старий скит, данж
+        /// вільної гри Core/Dungeons): скит — оселя лікарки й пустельниці, не
+        /// точка резолву звичайної вилазки. Точок резолву («outskirts»/
+        /// «old_workshop»/«far_highway», <see cref="Expeditions.DefaultSites"/>)
+        /// лише три на чотирьох фахівців — Гафію прив'язано до другого данжу
+        /// замість четвертої точки резолву, якої в каталозі немає.</item>
+        /// </list>
+        /// «Покинутий табір авангарду» (<see cref="Dungeons.DefaultDungeon.AbandonedCamp"/>,
+        /// вузол 1 доби 4) свідомо БЕЗ прив'язки — це сюжетна точка, а не
+        /// вільний контент, і плутати її з «зустріччю» не варто.
+        /// </summary>
+        public static string ExpeditionSiteOf(string specialistId)
+        {
+            switch (specialistId)
+            {
+                case KeeperId: return "outskirts";
+                case GobanId: return "old_workshop";
+                case SindbadId: return "far_highway";
+                case HealerId: return Game.Core.Dungeons.DefaultDungeon.OldHermitage;
+                default: return null;
+            }
+        }
     }
 }

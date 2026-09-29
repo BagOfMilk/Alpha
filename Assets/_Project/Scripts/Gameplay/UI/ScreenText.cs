@@ -330,6 +330,10 @@ namespace Game.Gameplay.UI
             return UkrainianText.Get("loyalty.band." + band.Value.ToString().ToLowerInvariant(), gender);
         }
 
+        /// <summary>Клас-архетип (Поправка №15.2) — ключ "class.&lt;lower&gt;", як status.*/loyalty.band.*.</summary>
+        public static string ClassLabel(CompanionClass cls, Gender gender)
+            => UkrainianText.Get("class." + cls.ToString().ToLowerInvariant(), gender);
+
         /// <summary>
         /// Фікс-ревью (Поправка №7.8, п.1, знайдено тур-автоплеєм на Choice-
         /// екрані): протагоніст — ІМ'Я ГРАВЦЯ (роСтер, SetProtagonistName),

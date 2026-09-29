@@ -26,6 +26,9 @@ namespace Game.Core.Session.Views
         public int XpToNextLevel;
         public CompanionStatus Status;
 
+        /// <summary>Клас-архетип (Поправка №15.2) — стартові скіли/роль, показуваний завжди.</summary>
+        public CompanionClass Class;
+
         /// <summary>null — не напарник (протагоніст або фольклорний NPC без арки), як у CompanionSummary.</summary>
         public LoyaltyBand? Loyalty;
 

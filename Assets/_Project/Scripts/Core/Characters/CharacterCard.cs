@@ -59,6 +59,17 @@ namespace Game.Core.Characters
         public string Core;
 
         /// <summary>
+        /// Клас-архетип (Поправка №15.2): стартові скіли, роль у бою і
+        /// «рідний набір» прийомів — <see cref="CompanionClasses"/>. Не
+        /// прихована шкала (інваріант 3), гравець бачить клас на картці.
+        /// Дефолт <see cref="CompanionClass.Brawler"/> — той самий відкат,
+        /// що й передісторія "warrior" (<see cref="CompanionClasses.ForBackground"/>);
+        /// для карток без свого класу (антагоніст, заглушка боса) поле не
+        /// читається ніде.
+        /// </summary>
+        public CompanionClass Class = CompanionClass.Brawler;
+
+        /// <summary>
         /// Що персонаж пам'ятає про те, що відбувалося. Ключі подій, не текст:
         /// репліки підбираються за ключем, як і сигнали, — письменнику не
         /// потрібен програміст.

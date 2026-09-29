@@ -1743,6 +1743,17 @@ namespace Game.Gameplay.Text
             // значення — один рядок Format() поруч, як "Рівень {level}" нижче.
             AddKey(t, "ui.people.loyalty", "Довіра: {loyalty}");
             AddKey(t, "ui.people.status", "Стан: {status}");
+            // Поправка №15.2 (клас-архетип: стартові скіли й роль у бою; характер і
+            // прийом епохи лишаються за культурою й першоджерелом персонажа).
+            AddKey(t, "ui.people.class", "Клас: {class}");
+            AddKey(t, "class.brawler", "Рубака");
+            AddKey(t, "class.brawler.desc", "Б'ється в ближньому бою, не боїться залякати ворога.");
+            AddKey(t, "class.shooter", "Стрілець");
+            AddKey(t, "class.shooter.desc", "Б'є на відстані, найкраще виживає поза домом.");
+            AddKey(t, "class.healer", "Знахар");
+            AddKey(t, "class.healer.desc", "Лікує і переконує — тримає громаду і загін словом.");
+            AddKey(t, "class.crafter", "Майстер");
+            AddKey(t, "class.crafter.desc", "Лагодить, зламує і торгується — руки замість слова чи меча.");
             AddKey(t, "ui.people.equipped", "Спорядження: {items}");
             AddKey(t, "ui.people.equipped.none", "нічого");
             // Фікс-ревью (minor, раунд 2, знайдено QA): текст цього ключа
@@ -2288,6 +2299,18 @@ namespace Game.Gameplay.Text
             // {fromBackground}/{fromTugar} — перекладені імена (ScreenText.
             // EventLine.ResolveCompanionName), не сирі id.
             AddKey(t, "arrivals.resolved", "До гурту прибилися: {fromBackground} і {fromTugar}.");
+
+            // ---- Поправка №15.1: пізніше приєднання (хто не прибився на старті) ----
+            AddKey(t, "arrivals.tavern.announced",
+                "У таверні кажуть: за {days} діб сюди завітає {companion}.");
+            AddKey(t, "arrivals.tavern.m", "{companion} прибився до гурту — саме той день, про який казали в таверні.");
+            AddKey(t, "arrivals.tavern.f", "{companion} прибилася до гурту — саме той день, про який казали в таверні.");
+            AddKey(t, "arrivals.settlers.m", "Разом з переселенцями до гурту прибився {companion}.");
+            AddKey(t, "arrivals.settlers.f", "Разом з переселенцями до гурту прибилася {companion}.");
+            AddKey(t, "arrivals.expedition.m", "{companion} прибився до гурту — саме там, де його бачив відряд.");
+            AddKey(t, "arrivals.expedition.f", "{companion} прибилася до гурту — саме там, де її бачив відряд.");
+            AddKey(t, "ui.expedition.waiting_specialist", "Тут бачили");
+
             AddKey(t, "city.granted.staffed", "{companion} стає на пост: {post}.");
             AddKey(t, "ui.council.no_hall",
                 "Рада збирається на майдані просто неба — Зала ради лише додасть даху над головою (вкладка «Будівлі»); Указ, Дипломатія, Інвестиція й Спорядження вилазки чекають саме її.");

@@ -21,6 +21,14 @@ namespace Game.Core.Balance
         /// <summary>Таверна: стільки людей за добу понад природний приріст.</summary>
         public int TavernArrivalsPerDay = 1;
 
+        /// <summary>
+        /// Поправка №15.1 (пізніше приєднання, шлях «Таверна»): за скільки
+        /// діб від оголошення в таверні приходить наступний відсутній
+        /// фахівець пула (<see cref="Session.ArrivalsPool"/>). ПЛЕЙСХОЛДЕР —
+        /// число не калібрувалось.
+        /// </summary>
+        public int TavernSpecialistArrivalDays = 3;
+
         /// <summary>Прийом переселенців рішенням ради: скільки приходить.</summary>
         public int SettlersPerOrder = 10;
 
