@@ -20,8 +20,12 @@ namespace Game.Tests.EditMode
             var world = FirstHourWorld.Build();
 
             var ids = world.Roster.All.Select(c => c.Id).OrderBy(id => id).ToArray();
+            // Поправка №12.10 (пул прибульців): Гобан-Сайр і Синдбад — у
+            // ростері з самого Build() поряд із Дідом Овсієм і Гафією; хто
+            // саме ПРИБИВ (рівно двоє з чотирьох) вирішується пізніше,
+            // GameSession.ApplyArrivalsPool.
             CollectionAssert.AreEquivalent(
-                new[] { "zakhar", "keeper", "healer", "maksym", "myroslava", FirstHourWorld.ProtagonistId },
+                new[] { "zakhar", "keeper", "healer", "goban", "sindbad", "maksym", "myroslava", FirstHourWorld.ProtagonistId },
                 ids, "Ростер обязан быть именным кастом открытия, а не generic-архетипами (аудит G8)");
 
             foreach (var c in world.Roster.All)
@@ -56,7 +60,7 @@ namespace Game.Tests.EditMode
                 Assert.IsFalse(world.BaseState.GetSlot(closed).Unlocked, closed + ": пост будівлі закритий до її появи");
                 Assert.IsNull(world.BaseState.GetSlot(closed).AssignedCompanionId, closed + " обязан пустовать на старте");
             }
-            foreach (var free in new[] { "keeper", "healer" })
+            foreach (var free in new[] { "keeper", "healer", "goban", "sindbad" })
                 Assert.IsFalse(world.Roster.Get(free).IsAssigned, free + ": пост ще не збудований — вільний");
 
             Assert.IsTrue(world.BaseState.GetSlot("council_seat").Unlocked, "віче зібралося ще до вибору першої будівлі");

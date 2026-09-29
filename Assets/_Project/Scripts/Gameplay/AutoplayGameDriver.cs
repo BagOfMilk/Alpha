@@ -1068,12 +1068,17 @@ namespace Game.Gameplay
 
             // Поправка №12.7: журнальний гравець іде в кривавий вузол 1, тож
             // першою будівлею після прологу зводить Лазарет — той самий вибір,
-            // що й MechanicsJournalCompletionTests.
+            // що й MechanicsJournalCompletionTests. Поправка №12.10: варіанти
+            // тепер залежать від пулу прибульців (здебільшого — фільтрований
+            // підмножина каталогу), а не завжди весь каталог — статичний
+            // System.Array.IndexOf у ПОВНОМУ каталозі більше не збігається з
+            // індексом у ФІЛЬТРОВАНИХ step.Options. Журнальний гравець завжди
+            // бере передісторію healer (RunJournal нижче) — Гафія завжди
+            // прибиває, а Лазарет, коли присутній, каталог тримає ОСТАННІМ
+            // (DefaultBuildings.FirstBuildingChoices), і фільтрація порядок
+            // зберігає — тож просто останній варіант.
             if (step.ChoiceId == OpeningScenes.FirstBuildingChoiceId)
-            {
-                int infirmary = System.Array.IndexOf(DefaultBuildings.FirstBuildingChoices, DefaultBuildings.Infirmary);
-                if (infirmary >= 0 && infirmary < count) return infirmary;
-            }
+                return count - 1;
 
             if (step.ChoiceId == CompanionScenes.MyroslavaConfrontationChoiceId)
                 for (int i = 0; i < step.Options.Count; i++)

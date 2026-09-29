@@ -28,26 +28,41 @@ namespace Game.Tests.EditMode
             => new NewGameOptions
                 { SkipCreation = true, HitRule = HitRuleKind.Threshold, TestBuildOneDayConstruction = testBuildOneDayConstruction };
 
-        /// <summary>Доганяє сесію крізь відкриваючу сцену до Morning доби 1 (State доступний одразу після NewGame(SkipCreation=true)).</summary>
-        private static void FastForwardOpeningToMorning(GameSession s)
+        /// <summary>
+        /// Доганяє сесію крізь відкриваючу сцену до Morning доби 1 (State
+        /// доступний одразу після NewGame(SkipCreation=true)).
+        ///
+        /// Поправка №12.10: варіант 0 (refuse) для TugarOfferChoiceId
+        /// приводить Діда Овсія, НЕ Гафію (за замовчуванням прибиває Гобан-
+        /// Сайр з передісторії) — тести, яким потрібна присутня Гафія
+        /// (квест "hafiya"), передають <paramref name="tugarChoiceIndex"/>=2
+        /// (ask_myroslava).
+        /// </summary>
+        private static void FastForwardOpeningToMorning(GameSession s, int tugarChoiceIndex = 0)
         {
             Assert.AreEqual(SessionState.Scene, s.State);
-            RunSceneToFinish(s);
+            RunSceneToFinish(s, tugarChoiceIndex);
             Assert.AreEqual(SessionState.Morning, s.State);
         }
 
         /// <summary>
         /// Доганяє поточну сцену до кінця (Поправка №7.8): на кожному
-        /// Choice-кроці бере варіант 0 — цей файл перевіряє РЕШТУ конвеєра
-        /// (розв'язку вузла, збереження, конвеєр дня), а не саму розмову;
-        /// зміст вибору сцен покритий окремими тестами (SceneChoiceTests/
+        /// Choice-кроці бере варіант 0, КРІМ TugarOfferChoiceId — там
+        /// <paramref name="tugarChoiceIndex"/> (Поправка №12.10, впливає на
+        /// пул прибульців) — цей файл перевіряє РЕШТУ конвеєра (розв'язку
+        /// вузла, збереження, конвеєр дня), а не саму розмову; зміст вибору
+        /// сцен покритий окремими тестами (SceneChoiceTests/
         /// BetrayalConfrontationTests).
         /// </summary>
-        private static SceneStepView RunSceneToFinish(GameSession s)
+        private static SceneStepView RunSceneToFinish(GameSession s, int tugarChoiceIndex = 0)
         {
             SceneStepView step = s.AdvanceScene();
             while (!step.IsFinished)
-                step = step.IsChoice ? s.ChooseSceneOption(0) : s.AdvanceScene();
+            {
+                if (!step.IsChoice) { step = s.AdvanceScene(); continue; }
+                int idx = step.ChoiceId == Game.Core.Scenes.OpeningScenes.TugarOfferChoiceId ? tugarChoiceIndex : 0;
+                step = s.ChooseSceneOption(idx);
+            }
             return step;
         }
 
@@ -1439,7 +1454,7 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
-            FastForwardOpeningToMorning(s);
+            FastForwardOpeningToMorning(s, tugarChoiceIndex: 2); // Поправка №12.10: ask_myroslava приводить Гафію
 
             var offer = s.OfferQuestStage(Game.Core.Quests.DefaultQuests.HafiyaId);
             Assert.IsNotNull(offer);
@@ -1465,7 +1480,7 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
-            FastForwardOpeningToMorning(s);
+            FastForwardOpeningToMorning(s, tugarChoiceIndex: 2); // Поправка №12.10: ask_myroslava приводить Гафію
             string id = Game.Core.Quests.DefaultQuests.HafiyaId;
 
             // Узятися → перевірка трави → підсумок (два кроки, з запасом на чотири).
@@ -1501,7 +1516,7 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
-            FastForwardOpeningToMorning(s);
+            FastForwardOpeningToMorning(s, tugarChoiceIndex: 2); // Поправка №12.10: ask_myroslava приводить Гафію
             PlayFullDayQuiet(s);
             string hafiya = Game.Core.Quests.DefaultQuests.HafiyaId;
             string maksym = Game.Core.Quests.DefaultQuests.MaksymCh1Id;
@@ -1526,7 +1541,7 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
-            FastForwardOpeningToMorning(s);
+            FastForwardOpeningToMorning(s, tugarChoiceIndex: 2); // Поправка №12.10: ask_myroslava приводить Гафію
 
             // Протагоніст банкує очки (R11) лише через XP — надаємо їх напряму
             // тим самим шляхом, яким це робить квест/бій (GrantXp, internal-приватний
@@ -2017,7 +2032,7 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(SkipCreationOptions());
-            FastForwardOpeningToMorning(s);
+            FastForwardOpeningToMorning(s, tugarChoiceIndex: 2); // Поправка №12.10: ask_myroslava приводить Гафію
 
             PlayFullDayQuiet(s); // доба 1 -> Morning доби 2
 

@@ -256,6 +256,10 @@ namespace Game.Core.Session.Bots
                 case "zakhar": return "council_seat";
                 case "keeper": return "storehouse_dock";
                 case "healer": return "infirmary_bed";
+                // Поправка №12.10 (пул прибульців): ті самі правила —
+                // фахівець чекає СВОГО поста, не займає чужий.
+                case "goban": return "workshop_bench";
+                case "sindbad": return "settlement_market";
                 default: return null;
             }
         }

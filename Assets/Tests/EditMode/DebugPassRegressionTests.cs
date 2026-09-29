@@ -35,6 +35,12 @@ namespace Game.Tests.EditMode
         /// на виборі першої будівлі (Поправка №12.7) — <paramref name="firstBuildingChoice"/>,
         /// на решті — 0.
         /// </summary>
+        /// <summary>
+        /// Поправка №12.10: варіанти першої будівлі — підмножина каталогу
+        /// (пул прибульців), не завжди весь каталог. <paramref name="firstBuildingChoice"/>
+        /// від'ємне (-1) — «останній серед доступних» (Лазарет, коли
+        /// присутній, каталог тримає останнім, фільтрація порядок зберігає).
+        /// </summary>
         private static void PlayOpening(GameSession s, int firstChoice = 0, int firstBuildingChoice = 0)
         {
             SceneStepView step = s.AdvanceScene();
@@ -43,8 +49,11 @@ namespace Game.Tests.EditMode
             {
                 if (step.IsChoice)
                 {
-                    int idx = step.ChoiceId == OpeningScenes.FirstBuildingChoiceId ? firstBuildingChoice
-                        : chosen ? 0 : firstChoice;
+                    int idx;
+                    if (step.ChoiceId == OpeningScenes.FirstBuildingChoiceId)
+                        idx = firstBuildingChoice < 0 ? step.Options.Count - 1 : firstBuildingChoice;
+                    else
+                        idx = chosen ? 0 : firstChoice;
                     step = s.ChooseSceneOption(idx);
                     chosen = true;
                 }
@@ -187,8 +196,10 @@ namespace Game.Tests.EditMode
         {
             var s = new GameSession();
             s.NewGame(Quick());
-            int infirmaryIdx = System.Array.IndexOf(DefaultBuildings.FirstBuildingChoices, DefaultBuildings.Infirmary);
-            PlayOpening(s, firstBuildingChoice: infirmaryIdx);
+            // Поправка №12.10: за замовчуванням (без явної передісторії) прибиває
+            // Гобан-Сайр; щоб серед варіантів була Лазарет, відповідь Тугарові —
+            // ask_myroslava (2), яка приводить Гафію.
+            PlayOpening(s, firstChoice: 2, firstBuildingChoice: -1);
             Assert.IsTrue(s.GetCityView().OpenPosts.Contains("infirmary_bed"), "лазарет — перша будівля з вибору");
 
             Assert.AreEqual(BuildOrderResult.Started, s.OrderBuilding("workshop"));

@@ -409,6 +409,16 @@ namespace Game.Core.Session
                 _roller.RestoreState(_seed.ToString(CultureInfo.InvariantCulture));
             }
 
+            // Поправка №12.10: _pendingBackgroundId тепер керує ще й тим,
+            // хто прибився до гурту (ArrivalsPool читає його з BeginOpeningScene
+            // нижче) — скидаємо його тут БЕЗУМОВНО, а не лише в гілці
+            // Creation. Інакше повторний NewGame(SkipCreation:true) на тому
+            // самому екземплярі GameSession (боти/тести/журнальний тур)
+            // успадковував би передісторію МИНУЛОЇ гри цього ж інстансу.
+            _pendingName = null;
+            _pendingGender = Gender.Male;
+            _pendingBackgroundId = Backgrounds.All()[0].Id;
+
             if (o.SkipCreation)
             {
                 BeginOpeningScene();
@@ -416,9 +426,6 @@ namespace Game.Core.Session
             else
             {
                 State = SessionState.Creation;
-                _pendingName = null;
-                _pendingGender = Gender.Male;
-                _pendingBackgroundId = Backgrounds.All()[0].Id;
             }
         }
 
@@ -545,7 +552,12 @@ namespace Game.Core.Session
 
         private void BeginOpeningScene()
         {
-            BeginScene(OpeningScenes.NeighbourWithADemand(), SessionState.Morning);
+            // Поправка №12.10: передісторія вже відома на цей момент
+            // (ConfirmCreation застосовує preset і кличе BeginOpeningScene
+            // ПІСЛЯ; SkipCreation лишає дефолт "warrior") — сцена рахує три
+            // гілки вибору першої будівлі наперед, по одній на кожну
+            // відповідь Тугарові (OpeningScenes.NeighbourWithADemand).
+            BeginScene(OpeningScenes.NeighbourWithADemand(_pendingBackgroundId), SessionState.Morning);
         }
 
         private void BeginScene(Scene scene, SessionState afterState)
@@ -610,6 +622,9 @@ namespace Game.Core.Session
             ApplyConsequence(consequence, "scene:" + (_currentSceneId ?? "scene"));
             LogEvent("scene.choice.made", Args("sceneId", _currentSceneId ?? string.Empty,
                 "optionId", option.Id ?? optionIndex.ToString(CultureInfo.InvariantCulture), "band", band.ToString()));
+
+            if (string.Equals(choiceId, OpeningScenes.TugarOfferChoiceId, StringComparison.Ordinal))
+                ApplyArrivalsPool(option.Id);
 
             ApplyBetrayalConfrontationSideEffectsIfNeeded();
             ApplyZakharCouncilSideEffectsIfNeeded();
@@ -966,6 +981,18 @@ namespace Game.Core.Session
         public QuestOfferView OfferQuestStage(string questId)
         {
             RequireAnyState(SessionState.Morning, SessionState.Evening, SessionState.Night);
+
+            // Поправка №12.10: квест Гафії — про Гафію; якщо вона не
+            // прибила до гурту цього прогону, пропозиція не з'являється
+            // взагалі (не просто мовчить — ЕКРАН і не викликав би
+            // ResolveQuestChoice, бо офера немає).
+            if (string.Equals(questId, DefaultQuests.HafiyaId, StringComparison.Ordinal) &&
+                !IsSpecialistArrived(ArrivalsPool.HealerId))
+            {
+                _currentQuestOffer = null;
+                return null;
+            }
+
             var run = _quests.Get(questId) ?? _quests.Start(questId);
             // Завершений квест більше не пропонується: раніше його підсумковий
             // етап лишався «пропозицією» з кнопкою «Підтвердити», і кожне
@@ -3483,6 +3510,10 @@ namespace Game.Core.Session
             if (_worldRoster == null) return new RosterView { Companions = list };
             foreach (var c in _worldRoster.All)
             {
+                // Поправка №12.10: хто не прибився до гурту — ніде не
+                // з'являється, ростер (вкладка «Люди») не виняток.
+                if (c.Status == CompanionStatus.NotArrived) continue;
+
                 var equipped = new List<string>();
                 foreach (EquipSlot slot in Enum.GetValues(typeof(EquipSlot)))
                 {
@@ -4333,9 +4364,73 @@ namespace Game.Core.Session
             if (string.IsNullOrEmpty(slotId) || string.IsNullOrEmpty(keeperId)) return;
 
             var keeper = _worldRoster?.Get(keeperId);
-            if (keeper == null || !string.IsNullOrEmpty(keeper.AssignedSlotId)) return;
+            // Поправка №12.10: будівля, зведена через ЗВИЧАЙНЕ будівництво
+            // (не вибір першої будівлі) — напр. Склад пізніше за золото —
+            // не мусить силоміць заселяти фахівця, який не прибився до гурту.
+            if (keeper == null || keeper.Status == CompanionStatus.NotArrived ||
+                !string.IsNullOrEmpty(keeper.AssignedSlotId)) return;
             if (_state.TryAssign(keeperId, slotId) == AssignmentResult.Success)
                 LogEvent("city.granted.staffed", Args("companionId", keeperId, "slotId", slotId));
+        }
+
+        /// <summary>
+        /// Поправка №12.10 (пул прибульців): відповідь Тугарові — останній із
+        /// двох виборів, які визначають, хто прибився до гурту (другий —
+        /// передісторія, вже застосована на момент цього виклику —
+        /// <see cref="BeginOpeningScene"/> читає її з <c>_pendingBackgroundId</c>
+        /// ДО побудови сцени). Двоє прибульців лишаються
+        /// <see cref="CompanionStatus.Idle"/> (як і раніше — чекають своєї
+        /// будівлі), двоє інших фахівців із пулу стають
+        /// <see cref="CompanionStatus.NotArrived"/> — назавжди для цього
+        /// прогону: ніде не з'являються (пости, перевірки, ростер).
+        /// Ідемпотентно неявно: <c>ChooseSceneOption(tugar_offer_choice)</c>
+        /// у сцені трапляється рівно раз.
+        /// </summary>
+        private void ApplyArrivalsPool(string tugarChoiceOptionId)
+        {
+            var arrivals = ArrivalsPool.Determine(_pendingBackgroundId, tugarChoiceOptionId);
+            foreach (var specialistId in ArrivalsPool.AllSpecialistIds)
+            {
+                var c = _worldRoster?.Get(specialistId);
+                if (c == null) continue;
+                c.Status = arrivals.Contains(specialistId) ? CompanionStatus.Idle : CompanionStatus.NotArrived;
+            }
+            LogEvent("arrivals.resolved", Args("fromBackground", arrivals.FromBackground, "fromTugar", arrivals.FromTugar));
+        }
+
+        /// <summary>
+        /// Сумісність зі старими зліпками (до Поправки №12.10, маркер
+        /// "arrivals=1" у ComposeSave відсутній): у допульній грі Гобан-Сайр
+        /// і Синдбад не існували взагалі, тож RosterAdapter.RestoreState не
+        /// знаходить для них "ros="-запису і лишає обох на дефолтному Idle
+        /// щойно збудованого ростера — виглядало б так, наче вони "прибилися"
+        /// до гурту, хоча відповіді Тугарові в тій партії не було ніколи.
+        /// Чесний відновлений стан старого зліпка: Дід Овсій і Гафія
+        /// присутні (як завжди були, і "ros=" зберіг їхній справжній статус
+        /// вище), Гобан-Сайр і Синдбад — <see cref="CompanionStatus.NotArrived"/>.
+        /// </summary>
+        private void CompatApplyArrivalsPoolForOldSave()
+        {
+            foreach (var specialistId in new[] { ArrivalsPool.GobanId, ArrivalsPool.SindbadId })
+            {
+                var c = _worldRoster?.Get(specialistId);
+                if (c == null) continue;
+                if (c.Status == CompanionStatus.Dead || c.Status == CompanionStatus.Antagonist) continue;
+                c.Status = CompanionStatus.NotArrived;
+            }
+        }
+
+        /// <summary>
+        /// Чи прибився фахівець із пулу (<see cref="ArrivalsPool"/>) цього
+        /// прогону. До того, як вирішено (`ChooseSceneOption` на
+        /// <see cref="OpeningScenes.TugarOfferChoiceId"/>) — ростер ще не
+        /// поставив нікого в NotArrived, тож <c>true</c> за замовчуванням
+        /// (усі четверо існують у ростері з дефолтним Idle до розв'язки).
+        /// </summary>
+        private bool IsSpecialistArrived(string specialistId)
+        {
+            var c = _worldRoster?.Get(specialistId);
+            return c == null || c.Status != CompanionStatus.NotArrived;
         }
 
         /// <summary>ПЛЕЙСХОЛДЕР: наскільки торг за час (сцена «Сусід з претензією», варіант «bargain») полегшує тихий шлях вузла 1.</summary>
@@ -4901,6 +4996,16 @@ namespace Game.Core.Session
             head.Append(";pgender=").Append((int)_pendingGender);
             head.Append(";pbg=").Append(_pendingBackgroundId ?? "");
 
+            // Поправка №12.10 (пул прибульців): маркер "цей зліпок написаний
+            // кодом, що вже знає про Гобана-Сайра/Синдбада". Старі зліпки
+            // (до цього поля) не мають "ros="-запису для жодного з двох —
+            // RosterAdapter.RestoreState просто не знаходить їх у рядку і
+            // лишає обох на дефолтному Idle свіжозбудованого ростера, тобто
+            // "присутні", хоча в допульній грі вони взагалі не існували.
+            // ApplySave читає маркер і за його відсутності відкочує обох на
+            // NotArrived — див. CompatApplyArrivalsPoolForOldSave.
+            head.Append(";arrivals=1");
+
             // Довжина-префікс (як і "core=" нижче): Inventory.CaptureState() сам
             // з'єднує предмети через ';' (Inventory.cs), тож наївний
             // headPart.Split(';') у ApplySave інакше сплутав би роздільник
@@ -5056,6 +5161,7 @@ namespace Game.Core.Session
 
             string offersLoggedValue = null;
             string journalSeenValue = null;
+            bool arrivalsPoolMarkerPresent = false;
             foreach (var part in headPart.Split(';'))
             {
                 int eq = part.IndexOf('=');
@@ -5094,6 +5200,7 @@ namespace Game.Core.Session
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;
                     case "pgender": _pendingGender = (Gender)ParseInt(value); _protagonistGender = _pendingGender; break;
                     case "pbg": if (!string.IsNullOrEmpty(value)) _pendingBackgroundId = value; break;
+                    case "arrivals": arrivalsPoolMarkerPresent = value == "1"; break;
                 }
             }
 
@@ -5110,6 +5217,8 @@ namespace Game.Core.Session
             // RestoreSlotOccupancy пересобирає її з уже відновленого ростера
             // ОДРАЗУ тут, поки обидві сторони синхронні.
             _state?.RestoreSlotOccupancy();
+
+            if (!arrivalsPoolMarkerPresent) CompatApplyArrivalsPoolForOldSave();
 
             // Доважок до "pname=" вище: RosterAdapter.CaptureState() навмисно
             // НЕ пише DisplayName (коментар у RosterAdapter.cs — ім'я/статі/
