@@ -76,7 +76,7 @@
       взаємодії). HeroWalker у сцені лише застосовує — VillageWalkTests.cs
       бере модель з джерела напряму.
     -->
-    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Walk/VillageWalk.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Walk/*.cs" />
     <!--
       Бій v2, раунд 2: клемп підказки біля курсора — чиста математика без
       UnityEngine, тим самим прийомом: BattleTooltipLayoutTests.cs бере її
