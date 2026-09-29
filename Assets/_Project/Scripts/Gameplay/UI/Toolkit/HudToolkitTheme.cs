@@ -24,11 +24,29 @@ namespace Game.Gameplay.UI.Toolkit
         public const string PanelResourcePath = "AlphaHudPanel";
 
         /// <summary>
-        /// ЄДИНА точка заміни шрифту. Fixel/Noto ще не завантажені (HUD_DESIGN
-        /// §12 (б)); коли з'являться — підміна одним рядком тут, наприклад
-        /// <c>Resources.Load&lt;Font&gt;("Fonts/FixelText-Regular")</c>.
+        /// ЄДИНА точка заміни шрифту: Fixel Text з асета <see cref="HudArt"/>
+        /// (Поправка №12.2); без асета — вбудований шрифт.
         /// </summary>
-        public static Font LoadFont() => Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        public static Font LoadFont()
+        {
+            var art = HudArt.Current;
+            if (art != null && art.UiRegular != null) return art.UiRegular;
+            return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        /// <summary>Накреслення для виділеного (Fixel Text SemiBold); null — тоді синтетичний жирний.</summary>
+        public static Font LoadBoldFont()
+        {
+            var art = HudArt.Current;
+            return art != null ? art.UiSemiBold : null;
+        }
+
+        /// <summary>Значок за ключем (ресурс, фаза, стан); null — значка немає, лишається текст.</summary>
+        public static Texture2D Icon(string key)
+        {
+            var art = HudArt.Current;
+            return art != null ? art.Icon(key) : null;
+        }
 
         // Розміри — в одиницях еталона 1280×720 (панель множить на масштаб
         // HudLayout.ScaleFor): 18 на 1280 = 22.5 на 1600, як тіло IMGUI (22).
@@ -61,14 +79,18 @@ namespace Game.Gameplay.UI.Toolkit
             }
         }
 
-        /// <summary>Форма поруч із кольором — для дальтоніків (§6.1). Символи з WGL4: є у вбудованому шрифті.</summary>
+        /// <summary>
+        /// Форма поруч із кольором — для дальтоніків (§6.1). Лише знаки, що є у
+        /// Fixel Text (у нього немає ▲ ◆ ◊): UI Toolkit не бере системних
+        /// резервних шрифтів, і відсутній знак став би порожнім квадратом.
+        /// </summary>
         public static string SeverityMark(FeedSeverity severity)
         {
             switch (severity)
             {
-                case FeedSeverity.Danger: return "▲";
-                case FeedSeverity.Warning: return "◊";
-                case FeedSeverity.Mandatory: return "◊";
+                case FeedSeverity.Danger: return "!";
+                case FeedSeverity.Warning: return "•";
+                case FeedSeverity.Mandatory: return "•";
                 default: return "·";
             }
         }
@@ -102,7 +124,17 @@ namespace Game.Gameplay.UI.Toolkit
             var label = new Label(text);
             label.style.fontSize = size;
             label.style.color = color;
-            label.style.unityFontStyleAndWeight = bold ? FontStyle.Bold : FontStyle.Normal;
+            var boldFont = bold ? LoadBoldFont() : null;
+            if (boldFont != null)
+            {
+                // Справжнє накреслення SemiBold замість синтетичного жирного.
+                label.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(boldFont));
+                label.style.unityFontStyleAndWeight = FontStyle.Normal;
+            }
+            else
+            {
+                label.style.unityFontStyleAndWeight = bold ? FontStyle.Bold : FontStyle.Normal;
+            }
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.marginLeft = 0f;
             label.style.marginRight = 0f;

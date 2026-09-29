@@ -107,7 +107,13 @@ namespace Game.Gameplay.UI
             if (_skin != null) return _skin;
 
             var skin = ScriptableObject.CreateInstance<GUISkin>();
-            skin.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // Поправка №12.2: Fixel Text для всього інтерфейсу; без асета HudArt —
+            // вбудований шрифт. Знаків, яких немає у Fixel (▸ ▾ ✓), динамічний
+            // шрифт бере з системних (Editor/ThirdPartyUiImportSettings).
+            var art = HudArt.Current;
+            skin.font = art != null && art.UiRegular != null
+                ? art.UiRegular
+                : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             skin.label = Body;
             skin.box = PanelStyle();
             skin.button = ButtonStyle(BgRaised, BgHover, BgActive, TextMain);

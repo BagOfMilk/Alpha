@@ -74,6 +74,60 @@ namespace Game.Gameplay.UI.Toolkit
         /// <summary>Драбина зараз видима (наведення або <see cref="ForceLadderOpen"/>).</summary>
         public bool LadderShown => IsReady && _visible && (_hovered || ForceLadderOpen);
 
+        // ---- підказка при наведенні (драбина полос, назва ресурсу) ----
+        // Малює її GameShell в IMGUI, у кінці OnGUI: IMGUI малюється ПОВЕРХ
+        // UI Toolkit, і підказка, що звисає з шапки на хаб, ховалась під його
+        // панеллю (знімок Unity 29.09.2026). Поки хаб на IMGUI — підказка теж там;
+        // коли хаб переїде на UI Toolkit, _ladderTip повертається в дерево.
+        private VisualElement _tipAnchor;
+        private readonly List<string> _tipLines = new List<string>();
+        private int _tipCurrent = -1;
+
+        /// <summary>Рядки підказки при наведенні; порожньо — підказки немає.</summary>
+        public IReadOnlyList<string> HoverTipLines
+        {
+            get
+            {
+                if (LadderShown && LastHeader != null)
+                {
+                    var lines = new List<string>();
+                    lines.Add(UkrainianText.Get("ui.hud.ladder.title", _shell.ProtagonistGender));
+                    if (LastHeader.LadderLines != null) lines.AddRange(LastHeader.LadderLines);
+                    return lines;
+                }
+                return _tipAnchor != null ? _tipLines : (IReadOnlyList<string>)new string[0];
+            }
+        }
+
+        /// <summary>Індекс виділеного рядка підказки (поточна полоса драбини), -1 — без виділення.</summary>
+        public int HoverTipCurrentIndex
+        {
+            get
+            {
+                if (LadderShown && LastHeader != null && LastHeader.LadderLines != null)
+                {
+                    string current = UkrainianText.Format("ui.hud.ladder.current", _shell.ProtagonistGender, "band", LastHeader.BandWord ?? string.Empty);
+                    for (int i = 0; i < LastHeader.LadderLines.Count; i++)
+                        if (LastHeader.LadderLines[i] == current) return i + 1; // +1 — рядок заголовка
+                    return -1;
+                }
+                return _tipCurrent;
+            }
+        }
+
+        /// <summary>Прямокутник елемента, до якого прив'язана підказка, у пікселях екрана (GUI, y згори).</summary>
+        public Rect HoverTipGuiRect
+        {
+            get
+            {
+                var anchor = LadderShown ? _bandChip : _tipAnchor;
+                if (anchor == null) return new Rect(0f, 0f, 0f, 0f);
+                var wb = anchor.worldBound;
+                float s = HudLayout.ScaleFor(Screen.width, Screen.height);
+                return new Rect(wb.x * s, wb.y * s, wb.width * s, wb.height * s);
+            }
+        }
+
         /// <summary>Остання побудована шапка — автотур кладе її в лог разом зі знімком.</summary>
         public HudHeader LastHeader { get; private set; }
 
@@ -448,10 +502,37 @@ namespace Game.Gameplay.UI.Toolkit
             _resourceRow.Clear();
             foreach (var r in header.Resources)
             {
-                var label = HudToolkitTheme.Text(r.Label + " " + r.Value, HudToolkitTheme.BodySize, HudToolkitTheme.TextColor);
+                // Значок + число; назва ресурсу — у підказці при наведенні
+                // (HUD_DESIGN §6.3: кожен значок має текстову підказку). Без
+                // значка — назва словом, як було.
+                var item = new VisualElement();
+                item.pickingMode = PickingMode.Position;
+                item.style.flexDirection = FlexDirection.Row;
+                item.style.alignItems = Align.Center;
+                item.style.marginLeft = 16f;
+
+                var icon = HudToolkitTheme.Icon(r.Key);
+                if (icon != null)
+                {
+                    var image = new VisualElement();
+                    image.pickingMode = PickingMode.Ignore;
+                    image.style.width = 22f;
+                    image.style.height = 22f;
+                    image.style.marginRight = 6f;
+                    image.style.backgroundImage = new StyleBackground(icon);
+                    image.style.unityBackgroundImageTintColor = HudToolkitTheme.AccentColor;
+                    item.Add(image);
+                }
+
+                var label = HudToolkitTheme.Text(icon != null ? r.Value.ToString() : r.Label + " " + r.Value,
+                    HudToolkitTheme.BodySize, HudToolkitTheme.TextColor);
                 label.style.whiteSpace = WhiteSpace.NoWrap;
-                label.style.marginLeft = 14f;
-                _resourceRow.Add(label);
+                item.Add(label);
+
+                string tip = r.Label;
+                item.RegisterCallback<PointerEnterEvent>(evt => ShowTip(item, tip));
+                item.RegisterCallback<PointerLeaveEvent>(evt => HideTip(item));
+                _resourceRow.Add(item);
             }
         }
 
@@ -480,7 +561,24 @@ namespace Game.Gameplay.UI.Toolkit
 
         private void ApplyLadderVisibility()
         {
-            _ladderTip.style.display = LadderShown ? DisplayStyle.Flex : DisplayStyle.None;
+            // Драбину малює GameShell в IMGUI (див. HoverTipLines): дерево UI Toolkit
+            // тримає її прихованою, інакше вона двоїлася б під панеллю хаба.
+            _ladderTip.style.display = DisplayStyle.None;
+        }
+
+        private void ShowTip(VisualElement anchor, string line)
+        {
+            _tipAnchor = anchor;
+            _tipLines.Clear();
+            _tipLines.Add(line);
+            _tipCurrent = -1;
+        }
+
+        private void HideTip(VisualElement anchor)
+        {
+            if (_tipAnchor != anchor) return;
+            _tipAnchor = null;
+            _tipLines.Clear();
         }
 
         /// <summary>Прибрати панель і документ (GameShell.OnDestroy).</summary>

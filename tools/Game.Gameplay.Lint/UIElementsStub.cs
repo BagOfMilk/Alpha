@@ -120,6 +120,20 @@ namespace UnityEngine.UIElements
         StyleColor borderBottomColor { get; set; }
         StyleColor borderLeftColor { get; set; }
         StyleColor borderRightColor { get; set; }
+        StyleBackground backgroundImage { get; set; }
+        StyleColor unityBackgroundImageTintColor { get; set; }
+    }
+
+    /// <summary>Фонове зображення елемента (значки шапки, Поправка №12.2).</summary>
+    public struct Background
+    {
+        public static Background FromTexture2D(UnityEngine.Texture2D t) { return default(Background); }
+    }
+
+    public struct StyleBackground
+    {
+        public StyleBackground(UnityEngine.Texture2D v) { }
+        public StyleBackground(Background v) { }
     }
 
     internal sealed class InlineStyleStub : IStyle
@@ -159,6 +173,8 @@ namespace UnityEngine.UIElements
         public StyleColor borderBottomColor { get; set; }
         public StyleColor borderLeftColor { get; set; }
         public StyleColor borderRightColor { get; set; }
+        public StyleBackground backgroundImage { get; set; }
+        public StyleColor unityBackgroundImageTintColor { get; set; }
     }
 
     // ---------------- події ----------------
@@ -193,6 +209,8 @@ namespace UnityEngine.UIElements
         public string name { get; set; }
         public PickingMode pickingMode { get; set; }
         public IStyle style { get { return _style; } }
+        /// <summary>Прямокутник у координатах панелі (одиниці панелі, y згори).</summary>
+        public UnityEngine.Rect worldBound { get { return default(UnityEngine.Rect); } }
 
         public void Add(VisualElement child) { }
         public void Clear() { }
