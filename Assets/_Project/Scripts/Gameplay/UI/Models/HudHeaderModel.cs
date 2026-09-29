@@ -223,7 +223,10 @@ namespace Game.Gameplay.UI
                 UkrainianText.Format("ui.topbar.day", gender, "day", view.Day.ToString()),
                 UkrainianText.Get(phaseKey, gender)
             };
-            string tier = ScreenText.CrowdChip(view.CrowdBand, gender);
+            // Саме тір (статус поселення, що змінює правила), а не смуга людності:
+            // «Люди: Слобода · Тір 1» раніше означало хутір — знімок журнального
+            // туру 29.09.2026 показав «Село» при тірі 1.
+            string tier = ScreenText.TierName(view.Tier, gender);
             if (!string.IsNullOrEmpty(tier)) parts.Add(tier);
             return string.Join(" · ", parts);
         }

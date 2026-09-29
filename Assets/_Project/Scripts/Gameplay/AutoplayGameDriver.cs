@@ -852,6 +852,7 @@ namespace Game.Gameplay
                     if (_jLastMorningDay != day)
                     {
                         _jLastMorningDay = day;
+                        LogJournalMorning(day);
 
                         var roster = Session.GetRosterView();
                         // Поправка №12.7: та сама розстановка журнального гравця,
@@ -1291,6 +1292,25 @@ namespace Game.Gameplay
             int days = preview.Days;
             Run(() => Session.DepartExpedition(siteId, approach, party, days));
             _jNextDelve = !delve;
+        }
+
+        /// <summary>
+        /// Діагностика журнального туру (29.09.2026: тур упирався в стелю доби 60
+        /// без population_tier, і з лога не було видно чому): щоранку — тір, людність,
+        /// смуга, гаманець і будівлі, лише відкриті вигляди (інваріант 3).
+        /// </summary>
+        private void LogJournalMorning(int day)
+        {
+            var view = Session.CurrentView;
+            var economy = Session.GetEconomyView();
+            var city = Session.GetCityView();
+            var ids = new List<string>();
+            if (city?.Built != null) foreach (var b in city.Built) ids.Add(b.Id);
+            if (city?.InProgress != null) foreach (var b in city.InProgress) ids.Add(b.Id + "(буд.)");
+            _host.Log("Журнал д" + day + ": тір " + view.Tier + ", людність " + view.CrowdBand + ", смуга " + view.TensionBand +
+                      ", золото " + (economy?.Gold ?? 0) + ", будмат " + (economy?.BuildComponent ?? 0) +
+                      ", сировина " + (economy?.CraftComponent ?? 0) + ", їжа " + (economy?.Food ?? 0) +
+                      ", будівлі: " + string.Join(",", ids));
         }
 
         /// <summary>Чи запис журналу механік уже побачено (для розстановки журнального гравця).</summary>

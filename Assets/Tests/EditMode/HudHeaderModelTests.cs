@@ -176,6 +176,17 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void DayLine_ShowsTheTier_NotTheCrowdBand()
+        {
+            // Людей як у селі, а тір ще хутірський (тір росте від людей І Таверни).
+            var view = View(day: 12, crowd: "Village");
+            view.Tier = 1;
+            var h = Build(view);
+            StringAssert.EndsWith("· Хутір", h.DayLine);
+            StringAssert.DoesNotContain("Село", h.DayLine);
+        }
+
+        [Test]
         public void Resources_AreAGenericListFromTheWallet_InTableOrder()
         {
             var h = Build(View());
