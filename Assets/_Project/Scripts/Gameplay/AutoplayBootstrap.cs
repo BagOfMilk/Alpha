@@ -109,6 +109,9 @@ namespace Game.Gameplay
         /// </summary>
         public const string BattleFlag = "-autoplay-battle";
 
+        /// <summary>Стеля кадрів туру в редакторі — див. <c>Start</c>.</summary>
+        private const int EditorTourFrameRate = 60;
+
         /// <summary>
         /// Виставляється <c>GameSceneBuilder.Build()</c> одразу після
         /// <c>AddComponent</c> — той самий GameObject "Boot", що й
@@ -136,13 +139,8 @@ namespace Game.Gameplay
         /// </summary>
         public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag) || HasArg(JournalFlag) || HasArg(BattleFlag);
 
-        private static bool HasArg(string flag)
-        {
-            var args = Environment.GetCommandLineArgs();
-            for (int i = 0; i < args.Length; i++)
-                if (args[i] == flag) return true;
-            return false;
-        }
+        /// <summary>Командний рядок гри або, в редакторі, файл прапорців — див. <see cref="AutoplayArgs"/>.</summary>
+        private static bool HasArg(string flag) => AutoplayArgs.Has(flag);
 
         private void Start()
         {
@@ -153,6 +151,16 @@ namespace Game.Gameplay
             // це не заважає — прапорець змінюється тільки в цих режимах.
             if (HasArg(QuitAfterTitleFlag) || RequestedFromCommandLine())
                 Application.runInBackground = true;
+
+#if UNITY_EDITOR
+            // Game view редактора малює без VSync, тобто без стелі кадрів, і тур
+            // тримав би процесор і відеокарту на 100% (власник, 29.09.2026:
+            // «Треба знайти спосіб як зменшити ресурси компьюера»). У зібраній
+            // грі якість Ultra з VSync — ті ж ~60 кадрів, тож темп туру (крок
+            // на кадр) у редакторі такий самий, як у .exe.
+            if (RequestedFromCommandLine())
+                Application.targetFrameRate = EditorTourFrameRate;
+#endif
 
             if (HasArg(QuitAfterTitleFlag))
             {
@@ -273,7 +281,17 @@ namespace Game.Gameplay
             // самому прогоні): див. той самий фікс у GameShell.HandleWantsToQuit,
             // яка ловить і решту тригерів виходу (кнопка, Alt+F4, закриття
             // вікна) тим самим способом.
+#if UNITY_EDITOR
+            // У редакторі тур закінчується виходом із Play Mode, а не процесу:
+            // HardExit тут кличе Application.Quit, який редактор ігнорує, і
+            // Play Mode висів би далі. Файл прапорців стираємо, щоб наступний
+            // звичайний Play не запустив тур знову.
+            AutoplayArgs.ClearEditorArgs();
+            Application.targetFrameRate = -1; // звичайний Play після туру — без стелі, як і раніше
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
             HardExit.Now(exitCode); // Environment.Exit зависав на виході — див. HardExit
+#endif
         }
 
         private void WriteSummary()
@@ -284,15 +302,19 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Каталог білда: у зібраному .exe <see cref="Application.dataPath"/> —
-        /// це «…\Alpha_Data», а Screenshots/ і Logs/ лежать одним рівнем
-        /// вище, поруч із самим .exe (той самий каталог, який готує
-        /// build-unity.ps1).
+        /// Куди тур пише Screenshots/ і Logs/. У зібраному .exe — поруч із ним
+        /// (той самий каталог, який готує build-unity.ps1). У редакторі — у
+        /// <c>Logs/Autoplay/</c> проєкту: <c>Logs</c> ігнорується git і, на
+        /// відміну від <c>Temp</c>, не зникає при закритті редактора, а
+        /// <c>Screenshots/</c> у корені проєкту git не ігнорує.
         /// </summary>
         private static string BuildRoot()
         {
-            var parent = Directory.GetParent(Application.dataPath);
-            return parent != null ? parent.FullName : Application.dataPath;
+#if UNITY_EDITOR
+            return Path.Combine(AutoplayArgs.Root(), "Logs", "Autoplay");
+#else
+            return AutoplayArgs.Root();
+#endif
         }
     }
 }

@@ -35,10 +35,11 @@ namespace Game.Gameplay.EditorTools
         private static void AutoCreateOnce()
         {
             if (EditorPrefs.GetBool(AutoCreatedKey, false)) return;
-            EditorPrefs.SetBool(AutoCreatedKey, true);
 
-            if (AssetDatabase.LoadAssetAtPath<Object>(ScenePath) != null) return;
-            Build();
+            // Позначку ставимо лише коли сцена є: якщо зараз збудувати не
+            // вийшло (відкрита безіменна сцена з правками), спробуємо наступного разу.
+            if (AssetDatabase.LoadAssetAtPath<Object>(ScenePath) != null || Build())
+                EditorPrefs.SetBool(AutoCreatedKey, true);
         }
 
         [MenuItem("Alpha/Пересоздать сцену «Хроника»")]
@@ -47,18 +48,33 @@ namespace Game.Gameplay.EditorTools
             Build();
         }
 
-        private static void Build()
+        /// <returns>false — сцену не створено: відкрита безіменна сцена з правками.</returns>
+        private static bool Build()
         {
-            // Вирішуємо ДО створення адитивної сцени: після неї активна сцена
-            // може змінитися, і перевірка перестане означати те, що потрібно.
-            bool nothingToLose = CurrentSceneIsIdle();
+            // Вирішуємо ДО створення нової сцени: після неї набір відкритих
+            // сцен зміниться, і перевірки перестануть означати те, що потрібно.
+            bool untitled = HasUntitledScene();
+            bool dirty = HasDirtyScene();
+
+            // Поки відкрита сцена без файлу, Unity не дає створити сцену адитивно
+            // («Cannot create a new scene additively with an untitled scene
+            // unsaved» — так падало при першому відкритті свіжої копії проєкту,
+            // 28.09.2026). З правками її не можна ні закрити, ні лишити.
+            if (untitled && dirty)
+            {
+                Debug.Log("Сцену «Хроніка» не створено: відкрита сцена без імені має незбережені правки. " +
+                          "Збережи або закрий її, тоді — меню Alpha/Пересоздать сцену «Хроника».");
+                return false;
+            }
 
             var config = EnsureBalanceAssets();
             EnsureFolder("Assets", "Scenes");
 
-            // Адитивно, а не Single: NewSceneMode.Single закрив би сцену,
-            // відкриту у власника, разом із незбереженими правками.
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            // Безіменну сцену без правок (свіжий проєкт) просто замінюємо —
+            // втрачати нічого. Інакше адитивно, а не Single: NewSceneMode.Single
+            // закрив би сцену, відкриту у власника.
+            var mode = untitled ? NewSceneMode.Single : NewSceneMode.Additive;
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, mode);
 
             AddPreset(scene, config, "1. Тихий хутор", "Тихий хутор",
                 tier: 1, days: 90, patrol: true, choiceEvery: 0, active: true);
@@ -68,15 +84,14 @@ namespace Game.Gameplay.EditorTools
                 tier: 3, days: 120, patrol: false, choiceEvery: 6, active: false);
 
             EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorSceneManager.CloseScene(scene, true);
+            if (mode == NewSceneMode.Additive) EditorSceneManager.CloseScene(scene, true);
 
             RegisterInBuildSettings();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            if (nothingToLose)
+            if (mode == NewSceneMode.Single)
             {
-                EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
                 Debug.Log("Сцена «Хроника» создана и открыта: " + ScenePath +
                           ". Нажми Play — в консоль пойдёт хроника поселения.");
             }
@@ -85,6 +100,7 @@ namespace Game.Gameplay.EditorTools
                 Debug.Log("Сцена «Хроника» создана: " + ScenePath +
                           ". Открой её и нажми Play. Текущую сцену не трогал.");
             }
+            return true;
         }
 
         /// <summary>
@@ -165,14 +181,18 @@ namespace Game.Gameplay.EditorTools
             EditorBuildSettings.scenes = scenes.ToArray();
         }
 
-        /// <summary>
-        /// Чи можна відкрити нову сцену, нічого не втративши: активна сцена
-        /// без файлу, без правок і без об'єктів.
-        /// </summary>
-        private static bool CurrentSceneIsIdle()
+        private static bool HasUntitledScene()
         {
-            var active = SceneManager.GetActiveScene();
-            return string.IsNullOrEmpty(active.path) && !active.isDirty && active.rootCount == 0;
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+                if (string.IsNullOrEmpty(SceneManager.GetSceneAt(i).path)) return true;
+            return false;
+        }
+
+        private static bool HasDirtyScene()
+        {
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+                if (SceneManager.GetSceneAt(i).isDirty) return true;
+            return false;
         }
     }
 }

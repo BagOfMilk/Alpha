@@ -84,6 +84,13 @@
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/HeroWalker.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/FigureAnimation.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/BattleArenaBuilder.cs" />
+    <!--
+      Автотур у відкритому редакторі (28.09.2026): EditorSceneManager, події
+      Play Mode і рефлексія внутрішніх GameViewSizes/GameView — та сама глибина
+      редактора, що й у GameSceneBuilder. Компіляцію перевіряє сам редактор
+      (тека live, unity command recompile).
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/AutoplayInEditor.cs" />
   </ItemGroup>
 
   <ItemGroup>

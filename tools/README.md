@@ -137,6 +137,25 @@ powershell -File tools/run-offscreen.ps1 -GameArgs "-autoplay -autoplay-journal"
 Аргументи гри — ОДНИМ рядком: у режимі `-File` PowerShell не робить із «a,b»
 масив.
 
+### Автотур у відкритому редакторі (без Alpha.exe)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/editor-tour.ps1 -Flags "-autoplay-journal"
+```
+
+Власник, 28.09.2026: «мені не подобається, що ти відчиняєш та зачиняєш вікно.
+Проєкт нехай буде запущенним при тестуванні». Редактор на теці
+`.claude/worktrees/live` основної копії відкриває власник (Unity Hub), і він
+лишається відкритим; скрипт керує ним через Unity CLI (пакет
+`com.unity.pipeline` у маніфесті): `AssetDatabase.Refresh` і очікування
+компіляції → `AutoplayInEditor.Run(прапорці)` (Game view 1600×900, Play Mode)
+→ тур сам виходить із Play Mode → код виходу туру (0/2/3/4, як у `Alpha.exe`).
+Знімки й підсумок — у `live/Logs/Autoplay/`. Коди скрипта: 5 — редактор не на
+зв'язку, 6 — помилки компіляції, 7 — тур не стартував, 8 — перервано або
+тайм-аут. Ті самі тури є в меню **Alpha → Автотур**. У редакторі тур іде зі
+стелею 60 кадрів (як `.exe` з VSync), щоб не тримати процесор і відеокарту
+на 100%.
+
 ## Консольна збірка першої години
 
 ```bash

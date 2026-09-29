@@ -113,6 +113,8 @@ namespace UnityEngine.SceneManagement
     public static class SceneManager
     {
         public static Scene GetActiveScene() { return default(Scene); }
+        public static int sceneCount { get { return 0; } }
+        public static Scene GetSceneAt(int index) { return default(Scene); }
         public static void MoveGameObjectToScene(GameObject go, Scene scene) { }
     }
 }
