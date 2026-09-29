@@ -81,6 +81,10 @@ namespace Game.Gameplay.EditorTools
             // дим-тест знайшов GameShell на своєму ж об'єкті.
             autoplay.Shell = shell;
 
+            // Спайк H4: асет PanelSettings шапки на UI Toolkit (шейдери і тема в
+            // білді через Resources). Саму панель GameShell піднімає в рантаймі.
+            HudPanelAssets.Ensure();
+
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddToBuildSettings();

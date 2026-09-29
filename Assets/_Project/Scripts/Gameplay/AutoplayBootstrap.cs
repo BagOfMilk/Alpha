@@ -123,6 +123,12 @@ namespace Game.Gameplay
         private bool _battleOnlyMode;
         private bool _hadException;
         private int _shotIndex = 1;
+
+        // Спайк H4, критерій 4 (docs/HUD_DESIGN.md §8): час кадру на екранах
+        // міста (шапка і стрічка на екрані) за весь тур — порівняти з -imgui-hud.
+        private int _cityFrames;
+        private double _citySeconds;
+        private float _cityMaxFrame;
         private readonly List<string> _summary = new List<string>();
 
         /// <summary>Скільки кадрів лишилось до виходу в режимі <see cref="QuitAfterTitleFlag"/> (-1 = режим не активний).</summary>
@@ -201,6 +207,14 @@ namespace Game.Gameplay
 
             if (_tour == null) return;
 
+            if (Shell != null && Shell.CityHudVisible)
+            {
+                float dt = Time.unscaledDeltaTime;
+                _cityFrames++;
+                _citySeconds += dt;
+                if (dt > _cityMaxFrame) _cityMaxFrame = dt;
+            }
+
             bool more;
             try
             {
@@ -258,6 +272,10 @@ namespace Game.Gameplay
 
         private void Finish(int exitCode)
         {
+            if (_cityFrames > 0)
+                Log(string.Format(CultureInfo.InvariantCulture,
+                    "Кадр на екранах міста (HUD: {0}): середнє {1:0.00} мс, найдовший {2:0.00} мс за {3} кадрів (з роботою туру і знімками).",
+                    Shell != null ? Shell.HudModeLabel : "?", _citySeconds * 1000.0 / _cityFrames, _cityMaxFrame * 1000f, _cityFrames));
             Log("Автопрогон завершено, код виходу " + exitCode.ToString(CultureInfo.InvariantCulture) + ".");
             WriteSummary();
 

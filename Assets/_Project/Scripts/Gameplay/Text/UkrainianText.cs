@@ -1455,6 +1455,20 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.topbar.freeplay", "Вільна гра");
             AddKey(t, "ui.topbar.patrolling", "На варті");
 
+            // Спайк H4 (docs/HUD_DESIGN.md §4.2, §4.3; рішення власника
+            // 29.09.2026 «1. B»): шапка і стрічка на UI Toolkit. Драбина полос —
+            // лише слова сусідів, без чисел, стрілок і відстані до межі (інв. 3).
+            AddKey(t, "ui.hud.away", "Поза містом: {count}");
+            AddKey(t, "ui.hud.ladder.title", "Настрій громади");
+            AddKey(t, "ui.hud.ladder.above", "Вище — {band}");
+            AddKey(t, "ui.hud.ladder.current", "Зараз — {band}");
+            AddKey(t, "ui.hud.ladder.below", "Нижче — {band}");
+            AddKey(t, "ui.hud.feed.pending", "Потребує рішення");
+            AddKey(t, "ui.hud.feed.important", "Важливе за добу");
+            AddKey(t, "ui.hud.feed.news", "Новини");
+            AddKey(t, "ui.hud.feed.more", "…і ще {count} старіших");
+            AddKey(t, "ui.hud.pending.generic", "Рішення чекає");
+
             AddKey(t, "ui.escape.title", "Пауза");
             AddKey(t, "ui.escape.resume", "Повернутися до гри");
             AddKey(t, "ui.escape.save", "Зберегти гру");
