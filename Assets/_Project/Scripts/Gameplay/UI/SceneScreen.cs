@@ -71,6 +71,21 @@ namespace Game.Gameplay.UI
         /// <summary>Поточний кадр, який зараз показаний на екрані — те, що тур-автоплей знімає скріншотом.</summary>
         public SceneStepView Current => _current;
 
+        /// <summary>
+        /// Сцену почато поза екраном (розмова в селі: <c>BeginArcChapterScene</c>
+        /// сам крокує до першого кадру і повертає його). Без цього екран кликав
+        /// би <c>AdvanceScene</c> ще раз і губив перший кадр.
+        /// </summary>
+        public void Begin(SceneStepView first)
+        {
+            _lastSpeakerId = null;
+            _lastLineKey = null;
+            _showingConsequence = false;
+            _pendingAfterChoice = null;
+            _consequenceEvents = null;
+            SetCurrent(first);
+        }
+
         /// <summary>Панель наслідку вибору зараз на екрані замість кнопок/«Далі».</summary>
         public bool IsShowingConsequence => _showingConsequence;
 

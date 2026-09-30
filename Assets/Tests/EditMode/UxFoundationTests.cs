@@ -51,7 +51,7 @@ namespace Game.Tests.EditMode
         public void PanelCatalog_EveryHotkey_IsOwnedByGameShell()
         {
             foreach (var e in UxPanelCatalog.All.Where(e => e.Hotkey != null))
-                Assert.IsTrue(UxKeyMap.IsOwner(e.Hotkey, "GameShell.cs"),
+                Assert.IsTrue(UxKeyMap.IsOwner(e.Hotkey, "GameShell.Ux.cs"),
                     "клавіша панелі " + e.Slug + " (" + e.Hotkey + ") не записана за GameShell у реєстрі клавіш");
         }
 

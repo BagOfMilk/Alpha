@@ -2732,6 +2732,164 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.save.confirm.load", "Завантажити запис: {slot}?");
             AddKey(t, "ux.save.confirm.load.verb", "Завантажити");
             AddKey(t, "ux.save.confirm.load.loss", "Незбережене в поточній грі пропаде.");
+            // Місця, будівлі, станції (власник, 30.09.2026: «зайти до будівлі і поговорити з персонажем»; UX_DESIGN §4).
+            AddKey(t, "ux.panel.veche", "Віче");
+            AddKey(t, "ux.panel.talk", "Розмова");
+            AddKey(t, "ux.panel.station", "Станція");
+            AddKey(t, "ux.panel.soon", "Тут поки нічого немає.");
+            AddKey(t, "ux.place.plot", "Ділянка: {building}");
+            AddKey(t, "ux.place.exit", "Двері");
+            AddKey(t, "ux.world.exit", "Вийти в село");
+            AddKey(t, "ux.place.building_stage", "будується, {stage} з 5");
+            AddKey(t, "ux.place.post_empty", "пост порожній");
+            AddKey(t, "ux.station.unknown", "Цієї станції немає в каталозі.");
+            AddKey(t, "ux.station.veche", "Віче");
+            AddKey(t, "ux.station.farms", "Поле");
+            AddKey(t, "ux.station.farms.what", "Поле годує громаду: хто на ньому, той і збирає їжу.");
+            AddKey(t, "ux.station.muster", "Застава · збори");
+            AddKey(t, "ux.station.watch_wall", "Вал і дозорна");
+            AddKey(t, "ux.station.watch_wall.what", "Варта на валу стежить за перевалом — у громаді спокійніше щодня.");
+            AddKey(t, "ux.station.storehouse_dock", "Вантажний док");
+            AddKey(t, "ux.station.storehouse_dock.what", "Облік і вантажі: склад щодня приносить золото на будови.");
+            AddKey(t, "ux.station.stash", "Схованка");
+            AddKey(t, "ux.station.pantry", "Комора");
+            AddKey(t, "ux.station.pantry.what", "Усе, що громада має, — відкритими числами.");
+            AddKey(t, "ux.station.infirmary_bed", "Стіл знахарки");
+            AddKey(t, "ux.station.infirmary_bed.what", "Тут лікують: поранені одужують швидше.");
+            AddKey(t, "ux.station.infirmary_beds", "Ліжка");
+            AddKey(t, "ux.station.workshop_bench", "Верстак майстра");
+            AddKey(t, "ux.station.workshop_bench.what", "Майстер лагодить і покращує спорядження.");
+            AddKey(t, "ux.station.workbench", "Замовлення");
+            AddKey(t, "ux.station.settlement_market", "Прилавок");
+            AddKey(t, "ux.station.settlement_market.what", "Торгівля з чужинцями — щоденне золото.");
+            AddKey(t, "ux.station.market_traders", "Торговці");
+            AddKey(t, "ux.station.tavern_tables", "Столи");
+            AddKey(t, "ux.station.temple_memorial", "Меморіал");
+            AddKey(t, "ux.station.council_table", "Стіл ради");
+            AddKey(t, "ux.building.no_entry", "Сюди не заходять — усе видно ззовні.");
+            AddKey(t, "ux.readiness.word", "Готовність: {band}");
+            AddKey(t, "ux.watch.open_threat", "Журнал: загроза");
+            AddKey(t, "ux.infirmary.empty", "Ліжка порожні — усі на ногах.");
+            AddKey(t, "ux.tavern.quiet", "За столами тихо — нікому зараз нема що сказати.");
+            AddKey(t, "ux.memorial.empty", "Меморіал порожній. Хай так і лишиться.");
+
+            // Пост і ділянка — картки (UX-04: та сама картка на станції і на Дошці наряду).
+            AddKey(t, "ux.post.closed", "закрито");
+            AddKey(t, "ux.post.empty", "порожньо");
+            AddKey(t, "ux.post.take", "Поставити: {name}");
+            AddKey(t, "ux.post.none_free", "Вільних людей немає — усі при ділі або поза селом.");
+            AddKey(t, "ux.plot.stage", "Будується: {stage} з 5");
+            AddKey(t, "ux.blueprints.section.plots", "Ділянки");
+            AddKey(t, "ux.blueprints.section.built", "Зведено");
+
+            // Віче і Стіл ради (Поправка №12.9).
+            AddKey(t, "ux.veche.seat", "Радник збирає віче біля вогнища — просто неба, без будівлі.");
+            AddKey(t, "ux.veche.blueprints", "Усі ділянки громади — ціна, строк, що дадуть.");
+            AddKey(t, "ux.veche.open_blueprints", "Відкрити креслення");
+            AddKey(t, "ux.council.nothing_built", "Вкладати поки нема в що — жодної будівлі.");
+
+            // Збори на Заставі (UX_DESIGN §4.7; вміст — HUD §5.4).
+            AddKey(t, "ux.muster.section.where", "Куди");
+            AddKey(t, "ux.muster.section.party", "Загін");
+            AddKey(t, "ux.muster.section.go", "Вирушати");
+            AddKey(t, "ux.muster.pick", "Обрати");
+            AddKey(t, "ux.muster.picked", "Обрано");
+            AddKey(t, "ux.muster.approach", "Як підходити");
+            AddKey(t, "ux.muster.add", "Узяти в загін");
+            AddKey(t, "ux.muster.in_party", "У загоні");
+            AddKey(t, "ux.muster.check", "Перевірка: загін {value} проти порога {threshold}");
+            AddKey(t, "ux.muster.forecast", "Дорога: {days} · очікувано: {band}");
+            AddKey(t, "ux.muster.loot", "Здобич: будматеріал {build}, сировина {craft}, золото {gold}");
+            AddKey(t, "ux.muster.waiting", "Там бачили: {name}");
+
+            // Схованка і верстак.
+            AddKey(t, "ux.stash.section.people", "Люди");
+            AddKey(t, "ux.stash.section.items", "Речі");
+            AddKey(t, "ux.stash.where_from", "Речі приносять вилазки й нагороди — збори на Заставі біля воріт.");
+            AddKey(t, "ux.stash.equip", "Спорядити: {name}");
+            AddKey(t, "ux.stash.unequip", "Зняти: {item}");
+            AddKey(t, "ux.stash.cannot_equip", "Цю річ зараз не вдягнути.");
+            AddKey(t, "ux.workbench.empty", "Покращувати нічого — схованка порожня.");
+
+            // Дошка оголошень, майданчик, квести.
+            AddKey(t, "ux.notice_board.not_now", "Нові оголошення з'являються вранці, увечері й уночі.");
+            AddKey(t, "ux.training.start", "Почати тренувальний бій");
+            AddKey(t, "ux.quest.no_candidate", "немає кому взятися");
+            // Назви міських квестів (у стрічці раніше стояли сирі id: «Нова пропозиція: stone_soup»).
+            AddKey(t, "quest.stone_soup", "Юшка з каменю");
+            AddKey(t, "quest.market_toll", "Мито на ринку");
+
+            // Розмова (UX-15: у кого є що сказати — позначка «!»).
+            AddKey(t, "ux.talk.not_here", "Цієї людини зараз немає в селі.");
+            AddKey(t, "ux.talk.has_news", "Хоче поговорити.");
+            AddKey(t, "ux.talk.open", "Поговорити");
+            AddKey(t, "ux.talk.arc_scene", "Поговорити по душах");
+            AddKey(t, "ux.talk.arc_quest", "Вислухати прохання");
+            AddKey(t, "ux.talk.sheet", "Картка (C)");
+            AddKey(t, "ux.talk.duty", "Наряд (N)");
+            AddKey(t, "talk.greet.generic", "Добрий день. Чим можу стати в пригоді?");
+            AddKey(t, "talk.greet.zakhar", "Громада тримається, доки люди тримаються одне одного. З чим ти до мене?");
+            AddKey(t, "talk.greet.keeper", "Усе, що громада має, — у мене на обліку. І того, чого бракує, теж.");
+            AddKey(t, "talk.greet.healer", "Ран без догляду легких не буває. Кого привести до мене?");
+            AddKey(t, "talk.greet.goban", "Дай мені добре дерево й трохи часу — поставлю таке, що переживе нас обох.");
+            AddKey(t, "talk.greet.sindbad", "Я бачив сім морів і жодного чесного митника. Чим торгуємо сьогодні?");
+            AddKey(t, "talk.greet.maksym", "Батько каже чекати. Я кажу — діяти. А ти що скажеш?");
+            AddKey(t, "talk.greet.myroslava", "Між моїм батьком і вашою громадою — гора. Я ще шукаю стежку через неї.");
+
+            // Картка людини (C → людина).
+            AddKey(t, "ux.people.open", "Картка");
+            AddKey(t, "ux.person.section.overview", "Огляд");
+            AddKey(t, "ux.person.section.skills", "Навички");
+            AddKey(t, "ux.person.section.gear", "Спорядження");
+            AddKey(t, "ux.person.section.growth", "Розвиток");
+            AddKey(t, "ux.person.back", "До всіх людей");
+            AddKey(t, "ux.person.to_stash", "До схованки");
+            AddKey(t, "ux.person.invest", "+1: {skill} ({n})");
+            AddKey(t, "ux.person.commit.question", "Затвердити розвиток?");
+            AddKey(t, "ux.person.commit.verb", "Затвердити");
+            AddKey(t, "ux.person.commit.loss", "Вкладені очки не повернути — вибір назавжди.");
+
+            // Село: нижня смуга, клавіші, підтвердження, тости.
+            AddKey(t, "ux.common.close", "Закрити (Esc)");
+            AddKey(t, "ux.common.cancel", "Скасувати");
+            AddKey(t, "ux.common.show_in_village", "Показати в селі");
+            AddKey(t, "ux.common.reason_line", "«{action}»: {reason}");
+            AddKey(t, "ux.world.prompt", "E — {place} · {verb}");
+            AddKey(t, "ux.verb.enter", "зайти");
+            AddKey(t, "ux.verb.look", "роздивитись");
+            AddKey(t, "ux.verb.build", "будівництво");
+            AddKey(t, "ux.verb.talk", "поговорити");
+            AddKey(t, "ux.verb.exit", "вийти в село");
+            AddKey(t, "ux.verb.open", "відкрити");
+            AddKey(t, "ux.world.nothing_near", "Підійди до будівлі, людини чи станції — або клацни по ній.");
+            AddKey(t, "ux.world.inside_hint", "Підійди до станції — або клацни по ній. Двері — вихід у село.");
+            AddKey(t, "ux.world.people", "Люди (C)");
+            AddKey(t, "ux.world.journal", "Журнал (J)");
+            AddKey(t, "ux.world.duty", "Наряд (N)");
+            AddKey(t, "ux.world.keys", "WASD чи клік — іти · Shift — бігти · E — взаємодія · Tab — огляд · F1 — клавіші");
+            AddKey(t, "ux.keys.title", "Клавіші");
+            AddKey(t, "ux.keys.move", "WASD або стрілки — іти, Shift — бігти, коліщатко — ближче чи далі.");
+            AddKey(t, "ux.keys.click", "Клік по землі — іти туди; по будівлі, людині чи станції — підійти й взаємодіяти.");
+            AddKey(t, "ux.keys.e", "E — взаємодія з тим, що поруч: зайти, поговорити, відкрити.");
+            AddKey(t, "ux.keys.tab", "Tab — огляд міста: підписи всіх місць.");
+            AddKey(t, "ux.keys.panels", "C — люди, J — журнал, N — наряд.");
+            AddKey(t, "ux.keys.esc", "Esc — закрити панель; ще раз — пауза. З будівлі виводять лише двері.");
+            AddKey(t, "ux.keys.f10", "F10 — журнал механік (тестова збірка).");
+            AddKey(t, "ux.preflight.question", "Почати день?");
+            AddKey(t, "ux.preflight.verb", "Почати все одно");
+            AddKey(t, "ux.preflight.empty_posts", "Порожні пости, а вільні люди є: {posts}.");
+            AddKey(t, "ux.preflight.points", "Невитрачені очки розвитку: {n}.");
+            AddKey(t, "ux.save.loaded", "Завантажено: {slot}.");
+            AddKey(t, "ux.escape.saves", "Збереження і завантаження");
+            AddKey(t, "ux.escape.save_when", "Зберегти можна вранці або у вільній грі (зараз — {state}); завантажити — будь-коли.");
+            AddKey(t, "ux.escape.quit.question", "Вийти з гри? Незбережене пропаде.");
+            AddKey(t, "ux.escape.quit.verb", "Вийти");
+            AddKey(t, "ux.finale.bloody.question", "Штурмувати силою?");
+            AddKey(t, "ux.finale.bloody.verb", "Штурмувати");
+            AddKey(t, "ux.finale.bloody.loss", "Вибір фіналу — назавжди; у тяжкому бою можуть загинути люди.");
+            AddKey(t, "ux.dungeon.abandon.question", "Кинути данж?");
+            AddKey(t, "ux.dungeon.abandon.verb", "Кинути");
+            AddKey(t, "ux.dungeon.abandon.loss", "Незабрана здобич лишиться в данжі.");
         }
 
         /// <summary>

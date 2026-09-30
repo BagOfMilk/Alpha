@@ -15,7 +15,13 @@ namespace Game.Gameplay.UI
     /// </summary>
     public static class UxPeoplePanel
     {
-        public static UxPanelModel Build(RosterView roster, Gender g)
+        public static UxPanelModel Build(RosterView roster, Gender g) => Build(roster, g, null);
+
+        /// <summary>
+        /// Те саме, з дією «Картка» на кожній людині: <paramref name="openPerson"/>
+        /// відкриває картку людини (огляд, навички, спорядження, розвиток).
+        /// </summary>
+        public static UxPanelModel Build(RosterView roster, Gender g, Action<string> openPerson)
         {
             var panel = new UxPanelModel
             {
@@ -42,6 +48,15 @@ namespace Game.Gameplay.UI
                 card.Chips.Add(new UxChip(UkrainianText.Format("ux.people.level", g, "n", c.Level.ToString())));
                 if (c.ScarCount > 0)
                     card.Chips.Add(new UxChip(UkrainianText.Format("ux.people.scars", g, "n", c.ScarCount.ToString()), UxTone.Bad));
+                if (openPerson != null)
+                {
+                    string id = c.Id;
+                    card.Actions.Add(new UxAction
+                    {
+                        Id = "person:" + id, Label = UkrainianText.Get("ux.people.open", g), Intent = UxIntent.Secondary,
+                        Execute = () => { openPerson(id); return UxOutcome.Success(); }
+                    });
+                }
                 panel.Cards.Add(card);
             }
             return panel;

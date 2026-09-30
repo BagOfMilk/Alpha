@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Game.Core.Characters.Creation;
+using Game.Core.Session.Views;
 using Game.Gameplay.Text;
+using Game.Gameplay.UI;
 
 namespace Game.Gameplay.Walk
 {
@@ -20,21 +22,45 @@ namespace Game.Gameplay.Walk
         }
     }
 
+    /// <summary>Вид місця в селі чи в кімнаті (docs/UX_DESIGN.md §4.1).</summary>
+    public enum PlaceKind
+    {
+        /// <summary>Зведена будівля: місце — біля дверей; E — зайти (або картка, якщо не вхідна).</summary>
+        Building = 0,
+        /// <summary>Ділянка під будівлю, ще не зведену або в роботі: картка будівництва.</summary>
+        Plot,
+        /// <summary>Станція — у кімнаті чи просто неба (Віче, Поле, Застава).</summary>
+        Station,
+        /// <summary>Орієнтир: Дошка оголошень, Тренувальний майданчик.</summary>
+        Landmark,
+        /// <summary>Людина на своєму місці — розмова.</summary>
+        Person,
+        /// <summary>Двері кімнати зсередини — вийти в село.</summary>
+        Exit
+    }
+
     /// <summary>
-    /// Місце, куди можна підійти й «зайти» (E): пост, ділянка будівництва чи
-    /// орієнтир. Заходження відкриває вкладку хаба <see cref="HubTab"/> — та
-    /// сама вкладка, що й у панелі, жодної окремої логіки.
+    /// Місце, до якого можна підійти й взаємодіяти (E чи клік): будівля,
+    /// ділянка, станція, орієнтир, людина, вихід. Що станеться — каже
+    /// <see cref="Kind"/> і <see cref="Panel"/>; жодної логіки гри тут немає.
     /// </summary>
     public sealed class WalkPlace
     {
         public string Id;
+        public PlaceKind Kind;
         public string LabelKey;
-        /// <summary>Для ділянки — id будівлі: підпис «Ділянка «{будівля}»».</summary>
+        /// <summary>Будівля, до якої належить місце (ділянка, двері, станція в кімнаті), або null.</summary>
         public string BuildingId;
-        public int HubTab;
+        /// <summary>Контекст панелі: id станції, людини чи будівлі.</summary>
+        public string TargetId;
+        /// <summary>Панель, яку відкриває місце; <see cref="UxPanelId.None"/> — будівля, в яку заходять.</summary>
+        public UxPanelId Panel;
         public float X;
         public float Z;
         public float Radius;
+        /// <summary>Де висить підпис (центр будівлі); за замовчуванням — саме місце.</summary>
+        public float LabelX;
+        public float LabelZ;
     }
 
     /// <summary>
@@ -305,70 +331,192 @@ namespace Game.Gameplay.Walk
         }
     }
 
+    /// <summary>Ділянка будівлі в сцені: центр, половина розміру, двері (точка зовні перед ними).</summary>
+    public sealed class PlotAnchor
+    {
+        public string BuildingId;
+        public float CenterX;
+        public float CenterZ;
+        public float Half;
+        public float DoorX;
+        public float DoorZ;
+    }
+
     /// <summary>
-    /// Що є в селі, куди можна зайти, і яку вкладку хаба відкриває кожне
-    /// місце. Індекси вкладок — ті самі, що в <c>HubScreen.DrawTabBar</c>.
+    /// Місця села і кімнати (docs/UX_DESIGN.md §4): одне місце на будівлю —
+    /// ділянка, поки будівля не зведена, і двері, коли зведена (раніше пост і
+    /// ділянка однієї будівлі були двома місцями з двома підписами). Станції
+    /// просто неба, орієнтири, люди. Чистий C#: що відкриває місце і як воно
+    /// підписане — твердження тестів.
     /// </summary>
     public static class VillagePlaces
     {
-        public const int TabPosts = 0, TabBuildings = 1, TabCouncil = 2, TabExpedition = 3, TabGear = 4,
-            TabPeople = 5, TabQuests = 6, TabFactions = 7, TabReadiness = 8, TabSave = 9, TabJournal = 10;
-
         public const string NoticeBoardId = "notice_board";
         public const string TrainingGroundId = "training_ground";
+        public const string PersonPrefix = "person:";
+        public const string StationPrefix = "station:";
+        public const string BuildingPrefix = "building:";
+        public const string PlotPrefix = "plot:";
 
-        /// <summary>Вкладка для поста за його id; -1 — пост без свого місця в селі.</summary>
-        public static int TabForPost(string postId)
-        {
-            switch (postId)
-            {
-                case "council_seat": return TabCouncil;        // рада збирається на площі
-                case "storehouse_dock": return TabGear;        // склад — речі й спорядження
-                case "workshop_bench": return TabGear;         // майстерня — крафт
-                case "settlement_market": return TabFactions;  // ринок — чужі люди, торгівля, фракції
-                case "infirmary_bed": return TabPeople;        // лазарет — стан людей
-                case "settlement_farms": return TabPosts;      // поле — хто на якому посту
-                case "scouting_post": return TabExpedition;    // застава біля воріт — вилазка
-                default: return -1;
-            }
-        }
+        /// <summary>Радіус дверей: підійшов до порога — можна зайти.</summary>
+        public const float DoorRadius = 1.3f;
 
-        public static WalkPlace Post(string postId, float x, float z)
+        /// <summary>
+        /// Одне місце на будівлю за стадією: 5 — зведена (вхідна — двері,
+        /// не вхідна — картка), 0..4 — ділянка з карткою будівництва.
+        /// </summary>
+        public static WalkPlace ForBuilding(PlotAnchor plot, int stage)
         {
-            int tab = TabForPost(postId);
-            if (tab < 0) return null;
-            return new WalkPlace { Id = "post:" + postId, LabelKey = "place." + postId, HubTab = tab, X = x, Z = z, Radius = 1.6f };
-        }
-
-        /// <summary>Ділянка будівництва (готова чи ні) — вкладка «Будівлі».</summary>
-        public static WalkPlace Plot(string buildingId, float centerX, float centerZ, float halfSize)
-        {
+            if (plot == null) return null;
+            var def = BuildingCatalog.Get(plot.BuildingId);
+            if (stage >= 5 && def != null && def.Enterable)
+                return new WalkPlace
+                {
+                    Id = BuildingPrefix + plot.BuildingId, Kind = PlaceKind.Building, BuildingId = plot.BuildingId,
+                    TargetId = plot.BuildingId, LabelKey = "building." + plot.BuildingId, Panel = UxPanelId.None,
+                    X = plot.DoorX, Z = plot.DoorZ, Radius = DoorRadius, LabelX = plot.CenterX, LabelZ = plot.CenterZ
+                };
+            if (stage >= 5)
+                return new WalkPlace
+                {
+                    Id = BuildingPrefix + plot.BuildingId, Kind = PlaceKind.Building, BuildingId = plot.BuildingId,
+                    TargetId = plot.BuildingId, LabelKey = "building." + plot.BuildingId, Panel = UxPanelId.BuildingCard,
+                    X = plot.CenterX, Z = plot.CenterZ, Radius = plot.Half + 1.1f, LabelX = plot.CenterX, LabelZ = plot.CenterZ
+                };
             return new WalkPlace
             {
-                Id = "plot:" + buildingId, LabelKey = "place.plot", BuildingId = buildingId, HubTab = TabBuildings,
-                X = centerX, Z = centerZ, Radius = halfSize + 1.1f
+                Id = PlotPrefix + plot.BuildingId, Kind = PlaceKind.Plot, BuildingId = plot.BuildingId,
+                TargetId = plot.BuildingId, LabelKey = "ux.place.plot", Panel = UxPanelId.PlotCard,
+                X = plot.CenterX, Z = plot.CenterZ, Radius = plot.Half + 1.1f, LabelX = plot.CenterX, LabelZ = plot.CenterZ
+            };
+        }
+
+        /// <summary>Станція: у кімнаті (менший радіус) чи просто неба.</summary>
+        public static WalkPlace Station(StationDef station, float x, float z, bool inside)
+        {
+            if (station == null) return null;
+            var building = BuildingCatalog.BuildingOfStation(station.Id);
+            return new WalkPlace
+            {
+                Id = StationPrefix + station.Id, Kind = PlaceKind.Station, BuildingId = building?.BuildingId,
+                TargetId = station.Id, LabelKey = station.LabelKey, Panel = station.Panel,
+                X = x, Z = z, Radius = inside ? 1.5f : 1.6f, LabelX = x, LabelZ = z
             };
         }
 
         public static WalkPlace NoticeBoard(float x, float z)
         {
-            return new WalkPlace { Id = NoticeBoardId, LabelKey = "place.notice_board", HubTab = TabQuests, X = x, Z = z, Radius = 1.5f };
+            return new WalkPlace
+            {
+                Id = NoticeBoardId, Kind = PlaceKind.Landmark, LabelKey = "place.notice_board", TargetId = NoticeBoardId,
+                Panel = UxPanelId.NoticeBoard, X = x, Z = z, Radius = 1.5f, LabelX = x, LabelZ = z
+            };
         }
 
-        /// <summary>Тренувальний майданчик — вкладка «Готовність», де тренувальний бій.</summary>
+        /// <summary>Тренувальний майданчик — бій-пісочниця і готовність громади словом.</summary>
         public static WalkPlace TrainingGround(float x, float z)
         {
-            return new WalkPlace { Id = TrainingGroundId, LabelKey = "place.training_ground", HubTab = TabReadiness, X = x, Z = z, Radius = 1.8f };
+            return new WalkPlace
+            {
+                Id = TrainingGroundId, Kind = PlaceKind.Landmark, LabelKey = "place.training_ground", TargetId = TrainingGroundId,
+                Panel = UxPanelId.TrainingGround, X = x, Z = z, Radius = 1.8f, LabelX = x, LabelZ = z
+            };
         }
 
-        /// <summary>Підпис місця українською — над ним у світі й у підказці «E — зайти».</summary>
+        /// <summary>Людина на своєму місці — розмова (власник, 30.09.2026).</summary>
+        public static WalkPlace Person(string companionId, float x, float z)
+        {
+            return new WalkPlace
+            {
+                Id = PersonPrefix + companionId, Kind = PlaceKind.Person, LabelKey = "char." + companionId,
+                TargetId = companionId, Panel = UxPanelId.Talk, X = x, Z = z, Radius = 0.9f, LabelX = x, LabelZ = z
+            };
+        }
+
+        /// <summary>Двері кімнати зсередини.</summary>
+        public static WalkPlace Exit(string buildingId, float x, float z)
+        {
+            return new WalkPlace
+            {
+                Id = Interiors.ExitPlaceId, Kind = PlaceKind.Exit, BuildingId = buildingId, TargetId = buildingId,
+                LabelKey = "ux.place.exit", Panel = UxPanelId.None, X = x, Z = z, Radius = 1.1f, LabelX = x, LabelZ = z
+            };
+        }
+
+        /// <summary>
+        /// Усі місця села: будівлі за стадією, станції просто неба, орієнтири.
+        /// <paramref name="stageOf"/> — стадія будівлі 0..5 (5 — зведена).
+        /// </summary>
+        public static List<WalkPlace> BuildVillage(IReadOnlyList<PlotAnchor> plots,
+            IReadOnlyDictionary<string, WalkPoint> openAirStations, WalkPoint? noticeBoard, WalkPoint? trainingGround,
+            Func<string, int> stageOf)
+        {
+            var places = new List<WalkPlace>();
+            if (plots != null)
+                foreach (var plot in plots)
+                {
+                    var place = ForBuilding(plot, stageOf != null ? stageOf(plot.BuildingId) : 0);
+                    if (place != null) places.Add(place);
+                }
+            if (openAirStations != null)
+                foreach (var station in BuildingCatalog.OpenAirStations)
+                {
+                    WalkPoint at;
+                    if (openAirStations.TryGetValue(station.Id, out at))
+                        places.Add(Station(station, at.X, at.Z, inside: false));
+                }
+            if (noticeBoard.HasValue) places.Add(NoticeBoard(noticeBoard.Value.X, noticeBoard.Value.Z));
+            if (trainingGround.HasValue) places.Add(TrainingGround(trainingGround.Value.X, trainingGround.Value.Z));
+            return places;
+        }
+
+        /// <summary>Назва місця українською — без стану (стан додає <see cref="Describe"/>).</summary>
         public static string LabelFor(WalkPlace place, Gender gender)
         {
             if (place == null) return string.Empty;
-            if (!string.IsNullOrEmpty(place.BuildingId))
+            if (place.Kind == PlaceKind.Plot)
                 return UkrainianText.Format(place.LabelKey, gender,
                     "building", UkrainianText.Get("building." + place.BuildingId, gender));
+            if (place.Kind == PlaceKind.Person)
+                return ScreenText.ResolveCompanionName(place.TargetId, gender, null);
             return UkrainianText.Get(place.LabelKey, gender);
+        }
+
+        /// <summary>
+        /// Підпис місця зі станом — один на місце (UX_DESIGN §4.8): «Лазарет ·
+        /// Гафія», «Ділянка: Таверна · будується, 3 з 5», «Склад · пост
+        /// порожній». Стадія — рахунок будівництва, відкрите число (R17).
+        /// </summary>
+        public static string Describe(WalkPlace place, Gender gender, int stage, RosterView roster)
+        {
+            string name = LabelFor(place, gender);
+            if (place == null) return name;
+            switch (place.Kind)
+            {
+                case PlaceKind.Plot:
+                    return stage > 0
+                        ? name + " · " + UkrainianText.Format("ux.place.building_stage", gender, "stage", stage.ToString())
+                        : name;
+                case PlaceKind.Building:
+                {
+                    var def = BuildingCatalog.Get(place.BuildingId);
+                    if (def == null || string.IsNullOrEmpty(def.PostId)) return name;
+                    string occupant = OccupantOf(roster, def.PostId);
+                    return occupant != null
+                        ? name + " · " + ScreenText.ResolveCompanionName(occupant, gender, roster)
+                        : name + " · " + UkrainianText.Get("ux.place.post_empty", gender);
+                }
+                default:
+                    return name;
+            }
+        }
+
+        public static string OccupantOf(RosterView roster, string postId)
+        {
+            if (roster?.Companions == null || string.IsNullOrEmpty(postId)) return null;
+            foreach (var c in roster.Companions)
+                if (c != null && c.AssignedSlotId == postId) return c.Id;
+            return null;
         }
 
         /// <summary>Найближче місце, в радіус якого герой уже зайшов; null — поруч нічого.</summary>

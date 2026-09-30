@@ -75,10 +75,16 @@ namespace Game.Gameplay
         /// <summary>Стеля дій ГРАВЦЯ за бій у режимі <c>-autoplay-battle</c> (докладніше — <see cref="RunBattleOnly"/>).</summary>
         private const int MaxBattleTourPlayerActions = 400;
 
-        private static readonly string[] HubTabSlugs =
+        /// <summary>
+        /// Панелі, які тур знімає на ранку доби 1 — замість одинадцяти вкладок
+        /// старого хаба (власник, 30.09.2026: «прибери найбільшу частину
+        /// табличок»). Кожна функція вкладки має тут свою домівку.
+        /// </summary>
+        private static readonly UI.UxPanelId[] PanelTour =
         {
-            "hub-posts", "hub-buildings", "hub-council", "hub-expedition", "hub-gear",
-            "hub-people", "hub-quests", "hub-factions", "hub-readiness", "hub-save", "hub-journal"
+            UI.UxPanelId.Veche, UI.UxPanelId.Blueprints, UI.UxPanelId.DutyBoard, UI.UxPanelId.Muster,
+            UI.UxPanelId.Stash, UI.UxPanelId.Workbench, UI.UxPanelId.People, UI.UxPanelId.NoticeBoard,
+            UI.UxPanelId.Journal, UI.UxPanelId.TrainingGround, UI.UxPanelId.Save, UI.UxPanelId.MechanicsJournal
         };
 
         private readonly IAutoplayHost _host;
@@ -328,11 +334,11 @@ namespace Game.Gameplay
                             // -autoplay-long: журнал наостанок таки ще не
                             // "наостанок" — тур продовжує до бунту/стелі
                             // доби, тож знімок тут лише проміжний.
-                            _shell.SetHubTab(10);
+                            _shell.OpenPanel(UI.UxPanelId.MechanicsJournal, null);
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _host.Capture(_longTour ? "mechanics-journal-freeplay-start" : "mechanics-journal-final");
                             yield return 0;
-                            _shell.SetHubTab(0);
+                            _shell.ClosePanel();
 
                             if (!_longTour)
                             {
@@ -350,11 +356,11 @@ namespace Game.Gameplay
                         if (_longTour && (_greatCrisisResolved || day >= LongTourDayCap))
                         {
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
-                            _shell.SetHubTab(10);
+                            _shell.OpenPanel(UI.UxPanelId.MechanicsJournal, null);
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
                             _host.Capture("mechanics-journal-final");
                             yield return 0;
-                            _shell.SetHubTab(0);
+                            _shell.ClosePanel();
 
                             _host.Log("Довгий тур завершено на добу " + day +
                                 (_greatCrisisResolved ? " (бунт на площі розв'язано)." : " (досягнуто стелі " + LongTourDayCap + " діб без бунту).") );
@@ -365,15 +371,15 @@ namespace Game.Gameplay
                     if (!_hubToured && day == 1 && state == SessionState.Morning)
                     {
                         _hubToured = true;
-                        for (int tab = 0; tab < HubTabSlugs.Length; tab++)
+                        foreach (var panel in PanelTour)
                         {
-                            _shell.SetHubTab(tab);
+                            _shell.OpenPanel(panel, null);
                             foreach (var f in WaitFrames(FramesShort)) yield return f;
-                            _host.Capture(HubTabSlugs[tab]);
+                            _host.Capture("panel-" + UI.UxPanelCatalog.Get(panel).Slug.Replace('_', '-'));
                             yield return 0;
                         }
-                        _shell.SetHubTab(0);
-                        _host.Log("Хаб: усі " + HubTabSlugs.Length + " вкладок відвідано й знято.");
+                        _shell.ClosePanel();
+                        _host.Log("Панелі: усі " + PanelTour.Length + " відкрито й знято.");
 
                         foreach (var f in HudTour()) yield return f;
                         foreach (var f in ExploreTour()) yield return f;
@@ -398,9 +404,9 @@ namespace Game.Gameplay
 
                     if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
                     {
-                        // Рівно та сама дія, що й кнопка «Почати день» (HubScreen.StartDay),
+                        // Рівно та сама дія, що й кнопка «Почати день» (GameShell.StartDay),
                         // а не виклик ядра в обхід екрана.
-                        Run(() => UI.HubScreen.StartDay(Session));
+                        Run(() => GameShell.StartDay(Session));
                         _host.Log("Ранок доби " + day + " підтверджено.");
                     }
                     continue;
@@ -409,7 +415,7 @@ namespace Game.Gameplay
                 // ---- день (конвеєр) ----
                 if (state == SessionState.Day)
                 {
-                    Run(() => UI.HubScreen.StartDay(Session));
+                    Run(() => GameShell.StartDay(Session));
                     continue;
                 }
 
@@ -868,14 +874,14 @@ namespace Game.Gameplay
                     }
 
                     if (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay)
-                        Run(() => UI.HubScreen.StartDay(Session));
+                        Run(() => GameShell.StartDay(Session));
                     continue;
                 }
 
                 // ---- день (конвеєр) ----
                 if (state == SessionState.Day)
                 {
-                    Run(() => UI.HubScreen.StartDay(Session));
+                    Run(() => GameShell.StartDay(Session));
                     continue;
                 }
 
@@ -1002,11 +1008,11 @@ namespace Game.Gameplay
             }
 
             // ---- журнал наостанок: вкладка «Журнал механік» + підсумок у лог ----
-            _shell.SetHubTab(10);
+            _shell.OpenPanel(UI.UxPanelId.MechanicsJournal, null);
             foreach (var f in WaitFrames(FramesShort)) yield return f;
             _host.Capture("journal-final");
             yield return 0;
-            _shell.SetHubTab(0);
+            _shell.ClosePanel();
 
             var finalJournal = Session.GetMechanicsJournal();
             JournalTotalCount = finalJournal != null ? finalJournal.Count : 0;
@@ -1367,50 +1373,115 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Прогулянка селом (власник, 25.09.2026: «бігати як у CRPG») — тими
-        /// самими діями, що й людина: «Прогулянка» у шапці, дійти до місця
-        /// (запит шляху — той самий, що клік мишею), «E — зайти». Тур падає
-        /// винятком (код виходу 2), якщо герой не дійшов або «зайти» відкрило
-        /// не ту вкладку.
+        /// Село без вкладок (власник, 25.09.2026: «бігати як у CRPG»; 30.09.2026:
+        /// «досі неможна зайти до будівлі і поговорити з персонажем») — тими
+        /// самими діями, що й людина: дійти до місця (запит шляху — той самий,
+        /// що клік мишею), «E», увійти в будівлю, станція, вийти, розмова.
+        /// Тур падає винятком (код виходу 2), якщо герой не дійшов, «E»
+        /// відкрило не ту панель або вхід чи вихід не відбувся.
         /// </summary>
         private IEnumerable<int> ExploreTour()
         {
             _shell.SetExploring(true);
             if (!_shell.Exploring)
-                throw new InvalidOperationException("Прогулянка: недоступна в стані " + Session.State + ".");
+                throw new InvalidOperationException("Село: недоступне в стані " + Session.State + ".");
             foreach (var f in WaitFrames(45)) yield return f; // камера наздоганяє героя
             _host.Capture("explore-start");
             yield return 0;
 
-            string[] targets = { "post:scouting_post", Walk.VillagePlaces.TrainingGroundId, Walk.VillagePlaces.NoticeBoardId };
+            string[] targets = { Walk.VillagePlaces.StationPrefix + Walk.BuildingCatalog.MusterStation,
+                Walk.VillagePlaces.TrainingGroundId, Walk.VillagePlaces.NoticeBoardId };
             foreach (var target in targets)
             {
-                _shell.RequestWalkTo(target);
-                int frames = 0;
-                while ((_shell.NearbyPlace == null || _shell.NearbyPlace.Id != target) && frames < ExploreWalkFrameCap)
-                {
-                    frames++;
-                    yield return 0;
-                }
-                if (_shell.NearbyPlace == null || _shell.NearbyPlace.Id != target)
-                    throw new InvalidOperationException("Прогулянка: герой не дійшов до «" + target + "» за " + ExploreWalkFrameCap +
-                                                        " кадрів; " + _shell.WalkDebug + ".");
+                foreach (var f in WalkTo(target)) yield return f;
                 foreach (var f in WaitFrames(20)) yield return f;
                 _host.Capture("explore-" + target.Replace(':', '-'));
                 yield return 0;
-                _host.Log("Прогулянка: дійшов до «" + target + "» за " + frames + " кадрів.");
+            }
+            foreach (var f in InteractExpecting(Walk.VillagePlaces.NoticeBoardId, UI.UxPanelId.NoticeBoard, "explore-entered")) yield return f;
+
+            // Увійти в зведену будівлю (перша будівля, обрана після прологу).
+            var building = FirstPlace(p => p.Kind == Walk.PlaceKind.Building && p.Panel == UI.UxPanelId.None);
+            if (building == null)
+                _host.Log("Село: жодної зведеної будівлі з входом — вхід не перевірено.");
+            else
+            {
+                string buildingId = building.BuildingId;
+                foreach (var f in WalkTo(building.Id)) yield return f;
+                _shell.InteractNearby();
+                int frames = 0;
+                while (_shell.InteriorBuildingId != buildingId && frames < ExploreWalkFrameCap) { frames++; yield return 0; }
+                if (_shell.InteriorBuildingId != buildingId)
+                    throw new InvalidOperationException("Село: «E» біля дверей «" + buildingId + "» не завело в будівлю; " + _shell.WalkDebug + ".");
+                foreach (var f in WaitFrames(40)) yield return f;
+                _host.Capture("interior-" + buildingId);
+                yield return 0;
+
+                var station = FirstPlace(p => p.Kind == Walk.PlaceKind.Station);
+                if (station != null)
+                {
+                    foreach (var f in WalkTo(station.Id)) yield return f;
+                    foreach (var f in InteractExpecting(station.Id, station.Panel, "station-" + station.TargetId)) yield return f;
+                }
+
+                _shell.RequestExit();
+                frames = 0;
+                while (_shell.InteriorBuildingId != null && frames < ExploreWalkFrameCap) { frames++; yield return 0; }
+                if (_shell.InteriorBuildingId != null)
+                    throw new InvalidOperationException("Село: «Вийти» не вивело з будівлі «" + buildingId + "».");
+                foreach (var f in WaitFrames(30)) yield return f;
+                _host.Log("Село: увійшов у «" + buildingId + "», станція " + (station != null ? station.TargetId : "—") + ", вийшов.");
             }
 
-            int expectedTab = _shell.NearbyPlace.HubTab;
+            // Поговорити з людиною: спершу з тим, кому є що сказати.
+            var person = FirstPlace(p => p.Kind == Walk.PlaceKind.Person && UI.UxTalkPanel.HasSomethingToSay(_shell, p.TargetId))
+                         ?? FirstPlace(p => p.Kind == Walk.PlaceKind.Person);
+            if (person == null)
+                _host.Log("Село: нікого з людей поруч — розмову не перевірено.");
+            else
+            {
+                foreach (var f in WalkTo(person.Id)) yield return f;
+                foreach (var f in InteractExpecting(person.Id, UI.UxPanelId.Talk, "talk-" + person.TargetId)) yield return f;
+                _host.Log("Село: розмова з «" + person.TargetId + "».");
+            }
+        }
+
+        /// <summary>Дійти до місця запитом шляху (той самий, що клік мишею); виняток, якщо не дійшов.</summary>
+        private IEnumerable<int> WalkTo(string placeId)
+        {
+            _shell.RequestWalkTo(placeId);
+            int frames = 0;
+            while ((_shell.NearbyPlace == null || _shell.NearbyPlace.Id != placeId) && frames < ExploreWalkFrameCap)
+            {
+                frames++;
+                yield return 0;
+            }
+            if (_shell.NearbyPlace == null || _shell.NearbyPlace.Id != placeId)
+                throw new InvalidOperationException("Село: герой не дійшов до «" + placeId + "» за " + ExploreWalkFrameCap +
+                                                    " кадрів; " + _shell.WalkDebug + ".");
+            _host.Log("Село: дійшов до «" + placeId + "» за " + frames + " кадрів.");
+        }
+
+        /// <summary>«E» біля місця — має відкритися саме ця панель; знімок і закрити.</summary>
+        private IEnumerable<int> InteractExpecting(string placeId, UI.UxPanelId expected, string shot)
+        {
             _shell.InteractNearby();
-            if (_shell.Exploring || _shell.HubTab != expectedTab)
-                throw new InvalidOperationException("Прогулянка: «E — зайти» мало відкрити вкладку " + expectedTab +
-                                                    ", а відкрито " + _shell.HubTab + " (прогулянка " + (_shell.Exploring ? "триває" : "закінчилась") + ").");
-            foreach (var f in WaitFrames(30)) yield return f; // камера повертається
-            _host.Capture("explore-entered");
+            if (_shell.OpenPanelId != expected)
+                throw new InvalidOperationException("Село: «E» біля «" + placeId + "» мало відкрити панель " + expected +
+                                                    ", а відкрито " + _shell.OpenPanelId + ".");
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture(shot);
             yield return 0;
-            _shell.SetHubTab(0);
-            _host.Log("Прогулянка: три місця, «зайти» відкрило вкладку " + expectedTab + ".");
+            _shell.ClosePanel();
+        }
+
+        private Walk.WalkPlace FirstPlace(Func<Walk.WalkPlace, bool> match)
+        {
+            var places = _shell.Places;
+            if (places == null) return null;
+            foreach (var p in places)
+                if (p != null && match(p)) return p;
+            return null;
         }
 
         private const int ExploreWalkFrameCap = 1800;

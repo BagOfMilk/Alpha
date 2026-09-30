@@ -168,8 +168,11 @@ namespace Game.Gameplay.UI
                 shell.TryRun(() => shell.Session.PushDeeper());
             if (Widgets.SecondaryButton(UkrainianText.Get("ui.dungeon.extract", g)))
                 shell.TryRun(() => shell.Session.ExtractDungeon());
+            // Незворотне — лише з підтвердженням (UX-12, UX_DESIGN §5.15).
             if (Widgets.DangerButton(UkrainianText.Get("ui.dungeon.abandon", g)))
-                shell.TryRun(() => shell.Session.AbandonDungeon());
+                shell.AskConfirm(new UxConfirm(UkrainianText.Get("ux.dungeon.abandon.question", g), UkrainianText.Get("ux.dungeon.abandon.verb", g),
+                        new[] { UkrainianText.Get("ux.dungeon.abandon.loss", g) }),
+                    () => shell.TryRun(() => shell.Session.AbandonDungeon()));
             GUILayout.EndHorizontal();
         }
     }
