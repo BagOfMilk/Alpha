@@ -275,6 +275,30 @@ namespace Game.Tests.EditMode
             Assert.AreEqual("т2", q.Current, "найстаріші з надлишку відкинуто");
         }
 
+        // ---------------- відмінювання діб ----------------
+
+        [Test]
+        public void DayCount_DeclinesLikeUkrainian_NoOneDib()
+        {
+            // Мутація: повернути шаблон «{days} діб» — тест падає (тур 29.09.2026: «1 діб», «за 3 діб»).
+            Assert.AreEqual("1 доба", UkrainianText.DayCount(1));
+            Assert.AreEqual("3 доби", UkrainianText.DayCount(3));
+            Assert.AreEqual("5 діб", UkrainianText.DayCount(5));
+            Assert.AreEqual("11 діб", UkrainianText.DayCount(11));
+            Assert.AreEqual("14 діб", UkrainianText.DayCount(14));
+            Assert.AreEqual("21 доба", UkrainianText.DayCount(21));
+            Assert.AreEqual("22 доби", UkrainianText.DayCount(22));
+            Assert.AreEqual("1 добу", UkrainianText.DayCount(1, accusative: true));
+
+            var def = new Game.Core.Base.BuildingDefinition { Id = "infirmary", GoldCost = 30, Days = 4 };
+            StringAssert.EndsWith(", 1 доба", ScreenText.BuildingCostLine(def, Game.Core.Characters.Creation.Gender.Male, true));
+            StringAssert.EndsWith(", 4 доби", ScreenText.BuildingCostLine(def, Game.Core.Characters.Creation.Gender.Male));
+
+            var evt = new GameEvent("arrivals.tavern.announced", 3, Game.Core.Loop.DayPhase.Day,
+                new Dictionary<string, string> { { "companionId", "goban" }, { "days", "3" } });
+            StringAssert.Contains("за 3 доби", ScreenText.EventLine(evt, Game.Core.Characters.Creation.Gender.Male, null));
+        }
+
         // ---------------- допоміжне ----------------
 
         private static string CatchMessage(Action a)
