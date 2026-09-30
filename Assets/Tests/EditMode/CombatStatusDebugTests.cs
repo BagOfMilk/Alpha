@@ -62,22 +62,36 @@ namespace Game.Tests.EditMode
         /// ExecuteAttackRoll). Це карта, а не судження про баланс.
         /// </summary>
         [Test]
-        public void ThresholdRule_StatusProcs_OnlyFromShownAtOrAboveHitBand()
+        public void ThresholdRule_EveryPercentWorks_HitsExactlyTheShownShare()
+        {
+            // Власник, 29.09.2026: «Усі відсотки мають працювати у тому режимі». Раніше
+            // шанс нижче 50 не влучав ніколи; тепер накопичувач бійця дає рівно shown%.
+            foreach (int shown in new[] { 5, 10, 30, 45, 60, 90, 99 })
+            {
+                var rule = new ThresholdRule(Cfg);
+                var attacker = CombatUnit.FromEnemy(DefaultCombatContent.Burunda(), "a" + shown);
+                int hits = 0;
+                for (int i = 0; i < 100; i++)
+                {
+                    var outcome = rule.Resolve(attacker, null, shown, null);
+                    Assert.AreNotEqual(AttackOutcome.Graze, outcome, "зачепу в правилі без кубика немає");
+                    if (outcome != AttackOutcome.Miss) hits++;
+                }
+                Assert.AreEqual(shown, hits, "shown=" + shown + ": за 100 ударів влучає рівно показаний відсоток");
+            }
+        }
+
+        [Test]
+        public void ThresholdRule_Predict_TellsTheNextBlow_WithoutSpendingIt()
         {
             var rule = new ThresholdRule(Cfg);
-            int firstShownThatProcs = -1;
-
-            for (int shown = 0; shown <= 100; shown += 5)
+            var attacker = CombatUnit.FromEnemy(DefaultCombatContent.Burunda(), "a");
+            for (int i = 0; i < 20; i++)
             {
-                var outcome = rule.Resolve(null, null, shown, null);
-                bool procs = outcome == AttackOutcome.Hit || outcome == AttackOutcome.Crit;
-                if (procs && firstShownThatProcs < 0) firstShownThatProcs = shown;
+                var predicted = rule.Predict(attacker, 35);
+                Assert.AreEqual(predicted, rule.Predict(attacker, 35), "прогноз нічого не витрачає");
+                Assert.AreEqual(predicted, rule.Resolve(attacker, null, 35, null), "прогноз = факт");
             }
-
-            // Документуємо факт: смуга Graze [Baseline, Baseline+GrazeBand) — не
-            // нульова ширина, і будь-яке shown у ній НЕ пускає StatusOnHit далі.
-            Assert.AreEqual(Cfg.Combat.ThresholdBaseline + Cfg.Combat.ThresholdGrazeBand, firstShownThatProcs,
-                "Перше 'shown', на якому Hit/Crit (і відповідно StatusOnHit) настає під Threshold");
         }
 
         /// <summary>
@@ -138,9 +152,9 @@ namespace Game.Tests.EditMode
             cs.Begin();
 
             int shown = cs.HitChancePreview(burunda, target);
-            int margin = shown - Cfg.Combat.ThresholdBaseline;
-            Assert.GreaterOrEqual(margin, Cfg.Combat.ThresholdGrazeBand,
-                $"Defense={targetDefense}: shown={shown}, margin={margin} мав бути ≥ смуги Graze після Accuracy 65->80");
+            // Правило без кубика: лічильник стартує з 50, тож перший удар від 50 % влучає.
+            Assert.GreaterOrEqual(shown, 100 - Cfg.Combat.ThresholdCarryStart,
+                $"Defense={targetDefense}: shown={shown} — перший удар Бурунди мав влучити");
 
             Assert.AreEqual(CombatActionResult.Success, cs.Attack(target.Id));
             var outcome = cs.Attacks.Last().Outcome;

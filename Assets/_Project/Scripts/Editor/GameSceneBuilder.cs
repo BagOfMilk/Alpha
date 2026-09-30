@@ -208,8 +208,9 @@ namespace Game.Gameplay.EditorTools
             // Перешкоди для прогулянки героя (HeroWalker): стіни хат, млин, ліс,
             // ділянки (ті лише коли добудовані — неактивна модель не заважає).
             var obstacles = new List<GameObject>();
-            obstacles.Add(House(hub, new Vector3(-6f, 0f, 2f), 3, 3, wood: true, facing: 0f));
-            obstacles.Add(House(hub, new Vector3(-1.5f, 0f, 2.5f), 3, 2, wood: true, facing: 0f));
+            // Житло мешканців — не інтерактивне (UX_DESIGN §4.1). Дві колишні
+            // безіменні хати на площі стали ділянками Складу й Зали ради: старт —
+            // без будівель (№12.7), тож на їхньому місці спершу порожньо.
             obstacles.Add(House(hub, new Vector3(3.5f, 0f, 2f), 2, 3, wood: false, facing: 0f));
             obstacles.Add(House(hub, new Vector3(-4f, 0f, -4f), 2, 2, wood: true, facing: 180f));
             obstacles.Add(House(hub, new Vector3(2f, 0f, -4.5f), 3, 2, wood: false, facing: 180f));
@@ -224,13 +225,14 @@ namespace Game.Gameplay.EditorTools
             var forest = KitBuilder.Forest(Nature);
             if (forest != null) forest.transform.SetParent(hub.transform, true);
 
-            var posts = Posts(hub);
-            var villagers = Villagers(hub, posts);
             var plots = Plots(hub);
             obstacles.Add(plots);
+            var posts = Posts(hub, plots);
+            var villagers = Villagers(hub, posts);
             var landmarks = Landmarks(hub);
             obstacles.Add(landmarks);
-            Hero(hub, hubCamera, posts, plots, landmarks, obstacles, forest);
+            var interior = Interior(hub);
+            Hero(hub, hubCamera, posts, plots, landmarks, villagers, interior, obstacles, forest);
 
             var stage = hub.AddComponent<Game.Gameplay.VillageStage>();
             stage.sun = sun;
@@ -247,28 +249,42 @@ namespace Game.Gameplay.EditorTools
             return house;
         }
 
-        /// <summary>Пости — ті самі сім якорів, що в касті TEST_BUILD.md §3.0 (усі сім, на відміну від вітрини).</summary>
-        private static GameObject Posts(GameObject hub)
+        /// <summary>
+        /// Пости — ті самі сім якорів, що в касті TEST_BUILD.md §3.0. Пост
+        /// будівлі стоїть біля її дверей (UX_DESIGN §4.8: пост = станція
+        /// працівника у своїй будівлі) — раніше лазарет стояв на одному кінці
+        /// села, а його пост — на іншому. Просто неба — Віче (крісло радника
+        /// біля вогнища), Поле, Застава біля воріт.
+        /// </summary>
+        private static GameObject Posts(GameObject hub, GameObject plots)
         {
             var group = new GameObject("Посты");
             group.transform.SetParent(hub.transform, false);
 
-            KitBuilder.Anchor(group, "council_seat", new Vector3(-1.0f, 0f, 1.2f));
-            KitBuilder.Anchor(group, "storehouse_dock", new Vector3(-5.4f, 0f, 0.6f));
-            KitBuilder.Anchor(group, "settlement_market", new Vector3(2.2f, 0f, 0.2f));
-            KitBuilder.Anchor(group, "infirmary_bed", new Vector3(4.2f, 0f, 0.8f));
+            KitBuilder.Anchor(group, "council_seat", new Vector3(0.2f, 0f, 0.5f));
             KitBuilder.Anchor(group, "settlement_farms", new Vector3(-3.4f, 0f, -5.0f));
             KitBuilder.Anchor(group, "scouting_post", new Vector3(0.5f, 0f, -8.0f));
-            KitBuilder.Anchor(group, "workshop_bench", new Vector3(8.2f, 0f, -1.6f));
+            BesideDoor(group, plots, "storehouse_dock", Game.Core.Base.DefaultBuildings.Storehouse);
+            BesideDoor(group, plots, "settlement_market", Game.Core.Base.DefaultBuildings.Market);
+            BesideDoor(group, plots, "infirmary_bed", Game.Core.Base.DefaultBuildings.Infirmary);
+            BesideDoor(group, plots, "workshop_bench", Game.Core.Base.DefaultBuildings.Workshop);
 
             return group;
         }
 
+        /// <summary>Якір поста — поруч із дверима будівлі, трохи вбік: працівник стоїть біля входу, не в дверях.</summary>
+        private static void BesideDoor(GameObject group, GameObject plots, string postId, string buildingId)
+        {
+            var door = plots.transform.Find("plot:" + buildingId + "/door");
+            var at = door != null ? door.position + new Vector3(0.9f, 0f, -0.2f) : Vector3.zero;
+            KitBuilder.Anchor(group, postId, at);
+        }
+
         /// <summary>
-        /// Постать на кожному з семи постів (вітрина мала фігуру лише на
-        /// шести — тут потрібні всі сім, бо workshop_bench — робочий пост
-        /// касту, а не декоративний). Той самий набір моделей Kenney Mini
-        /// Characters (a..f), сьомий пост бере ще одну вже наявну модель.
+        /// Постать на кожному з семи постів і чотири місця біля вогнища Віча —
+        /// для тих, хто без поста (з ними теж говорять). У кожної — дві моделі,
+        /// «m» і «f»: VillageStage показує ту, що відповідає людині, а не посту
+        /// (раніше Дід Овсій стояв жіночою фігуркою).
         /// </summary>
         private static GameObject Villagers(GameObject hub, GameObject posts)
         {
@@ -280,31 +296,48 @@ namespace Game.Gameplay.EditorTools
                 "council_seat", "storehouse_dock", "settlement_market",
                 "infirmary_bed", "settlement_farms", "scouting_post", "workshop_bench"
             };
-            string[] who =
-            {
-                Chars + "character-male-a.fbx", Chars + "character-female-b.fbx",
-                Chars + "character-male-c.fbx", Chars + "character-female-d.fbx",
-                Chars + "character-male-e.fbx", Chars + "character-female-f.fbx",
-                Chars + "character-male-b.fbx"
-            };
-            float[] facing = { 250f, 90f, 200f, 300f, 20f, 160f, 140f };
+            string[] males = { "a", "c", "e", "b", "e", "a", "b" };
+            string[] females = { "b", "d", "f", "d", "b", "f", "a" };
+            float[] facing = { 250f, 180f, 200f, 200f, 20f, 160f, 200f };
 
             for (int i = 0; i < postIds.Length; i++)
             {
                 var post = posts.transform.Find("post:" + postIds[i]);
                 if (post == null) continue;
-
                 var holder = new GameObject("villager:" + postIds[i]);
                 holder.transform.SetParent(group.transform, false);
                 holder.transform.position = post.position + new Vector3(0.6f, 0f, 0.4f);
+                Pair(holder, males[i], females[i], facing[i], i * 0.37f);
+            }
 
-                var figure = KitBuilder.Attach(holder, who[i], Vector3.zero, facing[i]);
-                // Жителі дихають (кліп idle), кожен зі своїм зсувом фази —
-                // детермінованим, як і все в сцені.
-                AddFigureAnimation(figure, who[i], i * 0.37f, walks: false);
+            // Біля вогнища Віча (саме вогнище — в Landmarks): місця idle:0..3.
+            Vector3[] idle =
+            {
+                new Vector3(2.8f, 0f, 0.2f), new Vector3(2.8f, 0f, 1.4f),
+                new Vector3(1.9f, 0f, 1.9f), new Vector3(1.1f, 0f, -0.1f)
+            };
+            float[] idleFacing = { 270f, 230f, 180f, 45f };
+            for (int i = 0; i < idle.Length; i++)
+            {
+                var holder = new GameObject("idle:" + i);
+                holder.transform.SetParent(group.transform, false);
+                holder.transform.position = idle[i];
+                Pair(holder, i % 2 == 0 ? "c" : "e", i % 2 == 0 ? "d" : "f", idleFacing[i], 0.2f + i * 0.31f);
+                holder.SetActive(false);
             }
 
             return group;
+        }
+
+        /// <summary>Дві моделі на одному місці — «m» і «f»; видно одну.</summary>
+        private static void Pair(GameObject holder, string male, string female, float facing, float phase)
+        {
+            string malePath = Chars + "character-male-" + male + ".fbx";
+            string femalePath = Chars + "character-female-" + female + ".fbx";
+            var m = KitBuilder.Attach(holder, malePath, Vector3.zero, facing);
+            var f = KitBuilder.Attach(holder, femalePath, Vector3.zero, facing);
+            if (m != null) { m.name = "m"; AddFigureAnimation(m, malePath, phase, walks: false); }
+            if (f != null) { f.name = "f"; AddFigureAnimation(f, femalePath, phase + 0.13f, walks: false); f.SetActive(false); }
         }
 
         // ================= прогулянка героя =================
@@ -319,6 +352,14 @@ namespace Game.Gameplay.EditorTools
         {
             var group = new GameObject("Орієнтири");
             group.transform.SetParent(hub.transform, false);
+
+            // Віче просто неба (Поправка №12.9): вогнище і колоди-лави біля крісла радника.
+            var veche = new GameObject("veche");
+            veche.transform.SetParent(group.transform, false);
+            veche.transform.localPosition = new Vector3(1.9f, 0f, 0.7f);
+            KitBuilder.Attach(veche, Nature + "campfire_stones.fbx", Vector3.zero, 0f);
+            KitBuilder.Attach(veche, Nature + "log.fbx", new Vector3(0f, 0f, -1.35f), 90f);
+            KitBuilder.Attach(veche, Nature + "log.fbx", new Vector3(-1.35f, 0f, 0.1f), 0f);
 
             var board = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.NoticeBoardId);
             board.transform.SetParent(group.transform, false);
@@ -336,16 +377,83 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>
-        /// Герой прогулянки (власник, 25.09.2026: «бігати як у CRPG»): дві
-        /// моделі — за статтю героя, яку обирає гравець, — і HeroWalker.
-        /// Моделі не збігаються з жодним жителем на посту.
+        /// Сіра кімната (docs/UX_DESIGN.md §4.10, варіант Б; §7.3): одна на всі
+        /// будівлі, осторонь села (<see cref="Game.Gameplay.Walk.Interiors"/>).
+        /// Підлога, три стіни й передня з прорізом дверей, п'ять п'єдесталів
+        /// станцій «slot:0..4» — HeroWalker вмикає стільки, скільки станцій у
+        /// будівлі. Під <c>World/Hub</c>: бій ховає її разом із селом.
+        /// </summary>
+        private static GameObject Interior(GameObject hub)
+        {
+            float ox = Game.Gameplay.Walk.Interiors.OriginX, oz = Game.Gameplay.Walk.Interiors.OriginZ;
+            float hw = Game.Gameplay.Walk.Interiors.HalfWidth, hd = Game.Gameplay.Walk.Interiors.HalfDepth;
+
+            var root = new GameObject("Інтер'єр");
+            root.transform.SetParent(hub.transform, false);
+            root.transform.position = new Vector3(ox, 0f, oz);
+
+            var floor = SolidMaterial(new Color(0.42f, 0.40f, 0.37f), "Assets/Scenes/InteriorFloor.mat");
+            var wall = SolidMaterial(new Color(0.30f, 0.28f, 0.26f), "Assets/Scenes/InteriorWall.mat");
+            var station = SolidMaterial(new Color(0.62f, 0.55f, 0.44f), "Assets/Scenes/InteriorStation.mat");
+
+            Box(root, "floor", new Vector3(0f, -0.05f, 0f), new Vector3(hw * 2f, 0.1f, hd * 2f), floor);
+            const float h = 1.2f, t = 0.2f;
+            Box(root, "wall-back", new Vector3(0f, h * 0.5f, hd), new Vector3(hw * 2f, h, t), wall);
+            Box(root, "wall-left", new Vector3(-hw, h * 0.5f, 0f), new Vector3(t, h, hd * 2f), wall);
+            Box(root, "wall-right", new Vector3(hw, h * 0.5f, 0f), new Vector3(t, h, hd * 2f), wall);
+            // Передня стіна низька (камера дивиться крізь неї) і з прорізом дверей посередині.
+            float gap = 1.2f, seg = hw - gap * 0.5f;
+            Box(root, "wall-front-l", new Vector3(-(gap * 0.5f + seg * 0.5f), 0.15f, -hd), new Vector3(seg, 0.3f, t), wall);
+            Box(root, "wall-front-r", new Vector3(gap * 0.5f + seg * 0.5f, 0.15f, -hd), new Vector3(seg, 0.3f, t), wall);
+
+            float size = Game.Gameplay.Walk.Interiors.StationSize;
+            for (int i = 0; i < Game.Gameplay.Walk.Interiors.SlotCount; i++)
+            {
+                var at = Game.Gameplay.Walk.Interiors.Slot(i);
+                var slot = Box(root, "slot:" + i, new Vector3(at.X - ox, 0.45f, at.Z - oz), new Vector3(size, 0.9f, size), station);
+                slot.SetActive(false);
+            }
+            root.SetActive(false);
+            return root;
+        }
+
+        private static GameObject Box(GameObject parent, string name, Vector3 local, Vector3 scale, Material material)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            go.transform.SetParent(parent.transform, false);
+            go.transform.localPosition = local;
+            go.transform.localScale = scale;
+            var collider = go.GetComponent<Collider>();
+            if (collider != null) Object.DestroyImmediate(collider);
+            if (material != null) go.GetComponent<Renderer>().sharedMaterial = material;
+            return go;
+        }
+
+        /// <summary>Матеріал URP одним кольором — збережений асетом, бо матеріал лише в пам'яті сцена не зберігає.</summary>
+        private static Material SolidMaterial(Color color, string path)
+        {
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null) return null;
+            var mat = new Material(lit);
+            mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0f);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            AssetDatabase.CreateAsset(mat, path);
+            return mat;
+        }
+
+        /// <summary>
+        /// Герой (власник, 25.09.2026: «бігати як у CRPG»): дві моделі — за
+        /// статтю героя, яку обирає гравець, — і HeroWalker. Моделі не
+        /// збігаються з жодним жителем на посту.
         /// </summary>
         private static void Hero(GameObject hub, Camera hubCamera, GameObject posts, GameObject plots,
-            GameObject landmarks, List<GameObject> obstacles, GameObject forest)
+            GameObject landmarks, GameObject villagers, GameObject interior, List<GameObject> obstacles, GameObject forest)
         {
             var hero = new GameObject("Герой");
             hero.transform.SetParent(hub.transform, false);
-            hero.transform.position = new Vector3(0.6f, 0f, 0.4f);
+            hero.transform.position = new Vector3(-0.8f, 0f, 0.0f);
 
             string malePath = Chars + "character-male-d.fbx";
             string femalePath = Chars + "character-female-c.fbx";
@@ -362,6 +470,8 @@ namespace Game.Gameplay.EditorTools
             walker.postsRoot = posts.transform;
             walker.plotsRoot = plots.transform;
             walker.landmarksRoot = landmarks.transform;
+            walker.villagersRoot = villagers.transform;
+            walker.interiorRoot = interior.transform;
 
             var roots = new List<Transform>();
             foreach (var o in obstacles)
@@ -433,6 +543,10 @@ namespace Game.Gameplay.EditorTools
             var group = new GameObject("Стройка");
             group.transform.SetParent(hub.transform, false);
 
+            // Ремесла прибульців (№12.9) — Сторожа біля воріт, Склад і Зала ради на площі.
+            Plot(group, Game.Core.Base.DefaultBuildings.Watch, new Vector3(4.2f, 0f, -7.2f), 2, 2, false);
+            Plot(group, Game.Core.Base.DefaultBuildings.Storehouse, new Vector3(-6.0f, 0f, 2.0f), 3, 3, true);
+            Plot(group, Game.Core.Base.DefaultBuildings.CouncilHall, new Vector3(-1.5f, 0f, 2.5f), 3, 2, true);
             Plot(group, Game.Core.Base.DefaultBuildings.Infirmary, new Vector3(6.0f, 0f, 4.2f), 2, 2, true);
             Plot(group, Game.Core.Base.DefaultBuildings.Workshop, new Vector3(7.0f, 0f, -6.0f), 2, 2, true);
             Plot(group, Game.Core.Base.DefaultBuildings.Market, new Vector3(-1.0f, 0f, -2.2f), 3, 2, true);

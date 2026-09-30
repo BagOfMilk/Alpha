@@ -44,6 +44,7 @@ namespace Game.Gameplay.UI
                 "ability", Content(null, Arg(a, "abilityId"), female),
                 "status", Content("combat.status.", Arg(a, "status"), female),
                 "damageType", Content("combat.damage_type.", Arg(a, "damageType"), female),
+                "object", Content("combat.object.", Arg(a, "object"), female), // Поправка №14.4
                 "chance", Chance(Arg(a, "chance"), hitRulePercent, female),
                 // Бій v2 (docs/COMBAT_V2.md §7.3): причина атаки — ціна в ОД і
                 // напрямлене укриття цілі — суфіксом до рядка attack.*.

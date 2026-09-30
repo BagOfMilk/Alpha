@@ -76,6 +76,8 @@ namespace Game.Gameplay.UI
         public UxConfirm Confirm;
         /// <summary>Назва клавіші-підказки (як у <c>KeyCode</c>) або null.</summary>
         public string Hotkey;
+        /// <summary>Перемикач у стані «обрано» (точка вилазки, підхід, людина в загоні) — рендер підсвічує.</summary>
+        public bool Selected;
         /// <summary>Виконання: повертає наслідок (успіх, відмова, помилка).</summary>
         public Func<UxOutcome> Execute;
 

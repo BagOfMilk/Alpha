@@ -42,6 +42,27 @@ namespace Game.Core.Combat
     /// роз'яснень. BattleResult сам ростер не чіпає і не видає шрамів: це
     /// прямо заборонено пакету Б1, Р5 віддано RosterAdapter.Wound.
     /// </summary>
+    /// <summary>Доля того, хто здався (Поправка №14.2).</summary>
+    public enum SurrenderFate
+    {
+        Release = 0,
+        Capture = 1,
+        Execute = 2
+    }
+
+    /// <summary>Ворог, що здався в бою (Поправка №14.2): кого, якого рангу, чи можна переманити.</summary>
+    public sealed class SurrenderedEnemy
+    {
+        public string UnitId;
+        public string EnemyDefinitionId;
+        public string DisplayName;
+        public EnemyRank Rank;
+        public bool NeverRecruitable;
+
+        /// <summary>Пощаджений звалений («Милосердя на полі») — одразу полонений, долю не питають.</summary>
+        public bool Spared;
+    }
+
     public sealed class BattleResult
     {
         public BattleOutcome Outcome;
@@ -50,6 +71,12 @@ namespace Game.Core.Combat
 
         /// <summary>Id бойових юнітів гравця, які дожили і лишилися на ногах (Active) — для збірки партії назад.</summary>
         public IReadOnlyList<string> SurvivingCompanionIds;
+
+        /// <summary>Вороги, що здалися (Поправка №14.2) — їхню долю вирішують після бою.</summary>
+        public IReadOnlyList<SurrenderedEnemy> SurrenderedEnemies = Array.Empty<SurrenderedEnemy>();
+
+        /// <summary>Порядок падіння бійців загону — id напарників (Поправка №14.7: хто впав останнім, той рятується).</summary>
+        public IReadOnlyList<string> FallOrderCompanionIds = Array.Empty<string>();
 
         /// <summary>
         /// Будує BattleResult із завершеного CombatState. Кидає, якщо бій
@@ -77,12 +104,37 @@ namespace Game.Core.Combat
                 if (u.LifeState == UnitLifeState.Active) survivors.Add(u.SourceCompanionId);
             }
 
+            // Хто здався, і — після перемоги — хто впав, але міг здатися («Милосердя на полі»):
+            // бій скінчився, звалений у твоїх руках, його долю вирішуєш на панелі результату.
+            var surrendered = new List<SurrenderedEnemy>();
+            foreach (var u in cs.Units)
+                if (u.Side == Side.Enemy && (u.LifeState == UnitLifeState.Surrendered
+                    || (cs.Outcome == CombatOutcome.Victory && u.LifeState == UnitLifeState.Downed && u.Profile.CanSurrender)))
+                    surrendered.Add(new SurrenderedEnemy
+                    {
+                        UnitId = u.Id,
+                        EnemyDefinitionId = u.EnemyDefinitionId,
+                        DisplayName = u.Profile.DisplayName,
+                        Rank = u.Profile.Rank,
+                        NeverRecruitable = u.Profile.NeverRecruitable,
+                        Spared = u.Spared
+                    });
+
+            var fallOrder = new List<string>();
+            foreach (var unitId in cs.FallOrder)
+            {
+                var u = cs.GetUnit(unitId);
+                if (u != null && !string.IsNullOrEmpty(u.SourceCompanionId)) fallOrder.Add(u.SourceCompanionId);
+            }
+
             return new BattleResult
             {
                 Outcome = MapOutcome(cs.Outcome),
                 Rounds = cs.Round,
                 Casualties = casualties,
-                SurvivingCompanionIds = survivors
+                SurvivingCompanionIds = survivors,
+                SurrenderedEnemies = surrendered,
+                FallOrderCompanionIds = fallOrder
             };
         }
 

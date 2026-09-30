@@ -1,4 +1,5 @@
 using Game.Core.Characters.Creation;
+using Game.Core.Combat;
 using Game.Core.Session;
 using Game.Gameplay.Text;
 using UnityEngine;
@@ -8,6 +9,8 @@ namespace Game.Gameplay.UI
     /// <summary>Меню паузи (Esc): зберегти/завантажити/вийти. Save доступний лише коли GameSession сам дозволяє (Morning/FreePlay) — інакше кнопка вимкнена з причиною.</summary>
     public sealed class EscapeMenuScreen
     {
+        private bool _confirmQuit;
+
         public void Draw(GameShell shell)
         {
             var g = shell.ProtagonistGender;
@@ -28,34 +31,48 @@ namespace Game.Gameplay.UI
 
                 GUILayout.Space(8f);
 
-                if (canSave)
+                // Збереження й завантаження — картки слотів (UX_DESIGN §5.14):
+                // у будь-який слот, а не лише в автослот, як раніше; перезапис і
+                // завантаження поверх гри — з підтвердженням. Зберегти можна
+                // вранці й у вільній грі — причина видна на самій картці.
+                if (!inBattle && Widgets.SecondaryButton(UkrainianText.Get("ux.escape.saves", g)))
                 {
-                    if (Widgets.SecondaryButton(UkrainianText.Get("ui.escape.save", g)))
-                    {
-                        // SaveState лише кладе зліпок у пам'ять сесії — файл пише
-                        // оболонка. Раніше ця кнопка файл не писала взагалі, і після
-                        // виходу з гри «збережене» зникало (дебаг 25.09.2026).
-                        int slot = Game.Gameplay.SaveFileStore.AutosaveSlot;
-                        string blob = shell.TryRun(() => shell.Session.SaveState(slot));
-                        if (blob != null)
-                        {
-                            var view = shell.Session.CurrentView;
-                            Game.Gameplay.SaveFileStore.Write(slot, blob, view.TensionBand, view.Day);
-                            shell.Notify(UkrainianText.Format("game.saved", g, "slot", ScreenText.SavedToLabel(slot, g)));
-                        }
-                        shell.SetEscapeOpen(false);
-                    }
+                    shell.SetEscapeOpen(false);
+                    shell.OpenPanel(UxPanelId.Save, null);
                 }
-                else if (!inBattle)
-                {
-                    Widgets.DisabledButton(UkrainianText.Get("ui.escape.save", g),
-                        UkrainianText.Get("ui.common.none", g) + " (" + StateLabel(state, g) + ")");
-                }
+                if (!canSave && !inBattle)
+                    Widgets.TooltipLine(UkrainianText.Format("ux.escape.save_when", g, "state", StateLabel(state, g)));
 
                 GUILayout.Space(8f);
 
-                if (Widgets.DangerButton(UkrainianText.Get("ui.escape.quit", g)))
-                    shell.RequestQuit(); // §GameShell._quitRequested — не кликати Application.Quit просто з OnGUI
+                // Налаштування: правило влучання (власник, 29.09.2026: «в настройках його
+                // можна змінить»). Діє з наступного бою.
+                bool percent = shell.Session.HitRule == HitRuleKind.Percent;
+                GUILayout.Label(UkrainianText.Get("ui.title.hitrule.section", g), AlphaSkin.Body);
+                GUILayout.BeginHorizontal();
+                if (Widgets.TabButton(UkrainianText.Get("ui.title.hitrule.threshold", g), !percent) && percent)
+                    shell.TryRun(() => shell.Session.SetHitRule(HitRuleKind.Threshold));
+                if (Widgets.TabButton(UkrainianText.Get("ui.title.hitrule.percent", g), percent) && !percent)
+                    shell.TryRun(() => shell.Session.SetHitRule(HitRuleKind.Percent));
+                GUILayout.EndHorizontal();
+                if (inBattle) Widgets.TooltipLine(UkrainianText.Get("ui.escape.hitrule.next_battle", g));
+
+                GUILayout.Space(8f);
+
+                // Вихід — лише з підтвердженням (UX-12): незбережене пропаде.
+                if (!_confirmQuit)
+                {
+                    if (Widgets.DangerButton(UkrainianText.Get("ui.escape.quit", g))) _confirmQuit = true;
+                }
+                else
+                {
+                    GUILayout.Label(UkrainianText.Get("ux.escape.quit.question", g), AlphaSkin.Body);
+                    GUILayout.BeginHorizontal();
+                    if (Widgets.PrimaryButton(UkrainianText.Get("ux.common.cancel", g))) _confirmQuit = false;
+                    if (Widgets.DangerButton(UkrainianText.Get("ux.escape.quit.verb", g)))
+                        shell.RequestQuit(); // §GameShell._quitRequested — не кликати Application.Quit просто з OnGUI
+                    GUILayout.EndHorizontal();
+                }
 
                 GUILayout.Space(8f);
                 Widgets.TooltipLine(UkrainianText.Get("ui.escape.hint", g));

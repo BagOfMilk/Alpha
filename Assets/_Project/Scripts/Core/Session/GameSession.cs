@@ -21,6 +21,7 @@ using Game.Core.Quests;
 using Game.Core.Randomness;
 using Game.Core.Scenes;
 using Game.Core.Session.Views;
+using Game.Core.Prisoners;
 using Game.Core.Stats;
 using Game.Core.Story;
 using Game.Core.World;
@@ -100,6 +101,20 @@ namespace Game.Core.Session
         /// </summary>
         private DefectionWatch _defectionWatch;
 
+        // ---- Здача і полон (Поправка №14.2) ----
+        private PrisonerLedger _prisoners = new PrisonerLedger();
+        // ---- Поразка → полон (Поправка №14.7): наші люди в чужих руках ----
+        private CaptivityLedger _captives = new CaptivityLedger();
+        /// <summary>Загін тримача, на який зараз іде рейд (null — рейду немає).</summary>
+        private string _raidGroupId;
+        // ---- Досьє ворога (Поправка №14.6): що громада знає про кожен тип ворога ----
+        private EnemyDossierBook _dossier = new EnemyDossierBook();
+        /// <summary>«Відкуп»: скільки разів ватага цього типу вже відмовилась — ціна повтору зростає.</summary>
+        private readonly Dictionary<string, int> _bribeRefusals = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly List<SurrenderedEnemy> _pendingSurrenders = new List<SurrenderedEnemy>();
+        /// <summary>Переманені полонені: щоб відтворити їх у ростері при завантаженні (ростер відновлює лише наявних).</summary>
+        private readonly List<string> _recruits = new List<string>();
+
         /// <summary>
         /// Major-фікс ревью (§2 №27, seamsForD1 пакета B4): особисті арки
         /// напарників (<see cref="CompanionArc"/>/<see cref="CompanionArcRun"/>)
@@ -155,6 +170,23 @@ namespace Game.Core.Session
         /// у NewGame, і жодна команда всередині партії його не міняє.
         /// </summary>
         public HitRuleKind HitRule => _hitRule;
+
+        /// <summary>
+        /// Змінити правило влучання посеред партії (меню паузи; власник, 29.09.2026: «в
+        /// настройках його можна змінить»). Діє з наступного бою — бій, що йде, лишається
+        /// на своєму правилі. Правило з кубиком потребує впровадженого IDiceRoller (R1).
+        /// </summary>
+        public void SetHitRule(HitRuleKind rule)
+        {
+            if (rule == _hitRule) return;
+            if (rule == HitRuleKind.Percent)
+            {
+                if (_roller == null)
+                    throw new InvalidOperationException("Правило з кубиком потребує IDiceRoller, впровадженого в GameSession (R1).");
+                _roller.RestoreState(_seed.ToString(CultureInfo.InvariantCulture));
+            }
+            _hitRule = rule;
+        }
 
         /// <summary>
         /// Темп Напруги, з яким побудовано світ цієї партії
@@ -334,6 +366,13 @@ namespace Game.Core.Session
             _repeats = _processor.Repeats;
             _crisis = new ForcedCrisisSource(5, 1);
             _defectionWatch = new DefectionWatch();
+            _prisoners = new PrisonerLedger();
+            _captives = new CaptivityLedger();
+            _raidGroupId = null;
+            _dossier = new EnemyDossierBook();
+            _bribeRefusals.Clear();
+            _pendingSurrenders.Clear();
+            _recruits.Clear();
 
             _arcFlags.Clear();
             _arcRuns = new List<CompanionArcRun>();
@@ -1272,6 +1311,9 @@ namespace Game.Core.Session
             ClearDayLog();
             _lastPhase = DayPhase.Day;
 
+            // Нерозв'язані після бою — відпущені (Поправка №14.2; панель результату попереджає).
+            ReleasePendingSurrenders();
+
             TickExpeditionReturnIfAny();
 
             // Час рухає ЛИШЕ SettlementCycle (CLAUDE.md §«Час іде тільки
@@ -1294,6 +1336,8 @@ namespace Game.Core.Session
             ProcessTavernArrivalSchedule();
             _lastDayReport = BuildDayReportView(report);
             SettleAfterDayReport(report);
+            TickPrisoners(report.Day);
+            TickCaptives(report.Day);
 
             if (_processor.CurrentDay == 5 && _crisis.Phase == CrisisPhase.Idle)
             {
@@ -1628,7 +1672,9 @@ namespace Game.Core.Session
 
             if (res.NeedsBattle)
             {
-                var setup = BuildBattleSetup(_dungeon.PartyIds, room.EnemyIds, 8, 8);
+                // Старт бою — від того, як загін дійшов до бою (Поправка №14.1).
+                var opening = ToBattleOpening(_dungeon.PendingBattle?.Start ?? DungeonBattleStart.FirstStrike);
+                var setup = BuildRoomBattleSetup(room, _dungeon.PartyIds, opening);
                 RequestBattle(setup, SuspendReason.DungeonCombatRoom, SessionState.Dungeon);
                 return null;
             }
@@ -1778,6 +1824,18 @@ namespace Game.Core.Session
                 }
                 view.QuietBestActorId = bestId;
                 view.QuietHasCandidate = bestId != null;
+            }
+
+            // Прогноз старту бою (Поправка №14.1) — лише для поточної кімнати живого
+            // прогону: той самий розрахунок, що застосує DungeonRun.ResolveRoom.
+            if (room.Kind == DungeonRoomKind.Combat && _dungeon != null && partyIdsOverride == null
+                && ReferenceEquals(room, _dungeon.CurrentRoom))
+            {
+                view.BloodyOpening = ToBattleOpening(_dungeon.PreviewBloodyStart(ResolveActors(_dungeon.PartyIds))).ToString();
+                if (room.QuietChecks.Count > 0)
+                    view.QuietFailOpening = ToBattleOpening(_dungeon.PreviewQuietFailStart()).ToString();
+                // Розмова перед боєм (docs/ABILITIES.md §4.6): пороги й ціна — до кліку.
+                view.Parley = new List<ParleyView> { ParleyViewOf("peace"), ParleyViewOf("surrender"), ParleyViewOf("bribe") };
             }
 
             if (room.Kind == DungeonRoomKind.Event)
@@ -2038,9 +2096,13 @@ namespace Game.Core.Session
             int distance = selfTarget ? 0 : GridPos.Chebyshev(unit.Pos, resolvedTarget.Pos);
             bool hasLos = selfTarget || LineOfSight.HasLine(_battle.Map, unit.Pos, resolvedTarget.Pos);
 
+            // Перша партія (docs/ABILITIES.md): та сама перевірка, що в CombatState.UseAbility.
+            var check = _battle.DescribeCheck(unit, resolvedTarget, ability);
+
             string result;
             if (unit.CooldownRemaining(ability.Id) > 0) result = CombatActionResult.OnCooldown.ToString();
             else if (unit.Ap < ability.ApCost) result = CombatActionResult.NotEnoughAp.ToString();
+            else if (check != null && check.BlockKey != null) result = CombatActionResult.InvalidTarget.ToString();
             else if (!selfTarget && distance > ability.Range) result = CombatActionResult.OutOfRange.ToString();
             else if (!selfTarget && ability.RequiresLineOfSight && !hasLos) result = CombatActionResult.NoLineOfSight.ToString();
             else if (HasEffect(ability, AbilityEffectKind.LungeToTarget) && !_battle.HasLungeLanding(unit, resolvedTarget))
@@ -2050,15 +2112,25 @@ namespace Game.Core.Session
             else result = CombatActionResult.Success.ToString();
 
             bool hasAttackRoll = !selfTarget && unit.Weapon != null && ability.WeaponAttackCount() > 0;
-            if (!hasAttackRoll)
-                return new AttackPreviewView
+            var preview = hasAttackRoll
+                ? BuildAttackPreview(unit, resolvedTarget, unit.Weapon, ability.PreviewAccuracyBonus(),
+                    distance, ability.Range, result, apCost: ability.ApCost, shots: ability.WeaponAttackCount())
+                : new AttackPreviewView
                 {
                     Result = result, ApCost = ability.ApCost, Distance = distance, Range = ability.Range,
                     HasLineOfSight = hasLos, HasAttackRoll = false
                 };
-
-            return BuildAttackPreview(unit, resolvedTarget, unit.Weapon, ability.PreviewAccuracyBonus(),
-                distance, ability.Range, result, apCost: ability.ApCost);
+            if (check != null)
+            {
+                preview.CheckKind = check.Kind.ToString();
+                preview.CheckSkill = check.SkillKey;
+                preview.CheckValue = check.Value;
+                preview.CheckThreshold = check.Threshold;
+                preview.CheckImmune = check.Immune;
+                preview.CheckPasses = check.Passes;
+                preview.CheckBlockKey = check.BlockKey;
+            }
+            return preview;
         }
 
         private static bool HasEffect(AbilityDefinition a, AbilityEffectKind kind)
@@ -2070,7 +2142,7 @@ namespace Game.Core.Session
 
         /// <summary>Спільний хвіст прев'ю: розклад шансу + прев'ю урону — той самий HitChanceCalculator/DamageResolver, яким котиться факт.</summary>
         private AttackPreviewView BuildAttackPreview(CombatUnit unit, CombatUnit target, WeaponDefinition w,
-            int accuracyBonus, int distance, int range, string result, int apCost)
+            int accuracyBonus, int distance, int range, string result, int apCost, int shots = 1)
         {
             bool ignoreCover = w.IsMelee;
             var cover = ignoreCover ? CoverType.None : _battle.Map.CoverAgainst(target.Pos, unit.Pos);
@@ -2078,7 +2150,8 @@ namespace Game.Core.Session
 
             var terms = HitChanceCalculator.Decompose(unit.Profile.Accuracy, unit.HasStatus(StatusType.Suppressed),
                 target.Profile.Defense, cover, ignoreCover, distance, w.OptimalRange, _battle.Balance,
-                target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown), accuracyBonus);
+                target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown), accuracyBonus,
+                target.HasStatus(StatusType.Enraged));
 
             int chance = 0;
             var termViews = new List<ChanceTermView>(terms.Count);
@@ -2090,6 +2163,8 @@ namespace Game.Core.Session
 
             var dmg = DamageResolver.PreviewRange(unit, target, w);
             int expected = DamageResolver.ExpectedHitDamage(unit, target, w);
+            // Досьє (№14.6): опори й броню невивченого ворога ще не знаємо — число з «?».
+            bool damageUncertain = IsDossierSubject(target) && DossierOf(target) != DossierLevel.Studied;
 
             return new AttackPreviewView
             {
@@ -2100,11 +2175,16 @@ namespace Game.Core.Session
                 Terms = termViews,
                 Cover = cover.ToString(),
                 CoverIgnored = ignoreCover,
+                IsFlanked = !ignoreCover && cover == CoverType.None && HasAnyCover(target.Pos),
                 DamageMin = dmg.Min,
                 DamageMax = dmg.Max,
                 DamageCrit = dmg.Crit,
                 IsDamageDeterministic = !_battle.IsHitRulePercent,
                 DamageExpected = expected,
+                DamageUncertain = damageUncertain,
+                // Правило без кубика: результат саме цих ударів відомий наперед (інваріант 8).
+                PredictedShots = _battle.IsHitRulePercent ? 0 : shots,
+                PredictedHits = _battle.IsHitRulePercent ? 0 : Math.Max(0, _battle.PredictHits(unit, chance, shots)),
                 ApCost = apCost,
                 Distance = distance,
                 Range = range,
@@ -2258,7 +2338,8 @@ namespace Game.Core.Session
                     Statuses = MapStatuses(u),
                     IsDowned = u.LifeState == UnitLifeState.Downed,
                     HitChancePreview = 0,
-                    Abilities = abilities,
+                    // Досьє (№14.6): прийоми ворога відкриває розвідка чи бій.
+                    Abilities = IsDossierSubject(u) && DossierOf(u) != DossierLevel.Studied ? new List<BattleAbilityView>() : abilities,
                     WeaponId = w?.Id,
                     Ordinal = ordinal,
                     StatusDetails = MapStatusDetails(u),
@@ -2271,7 +2352,19 @@ namespace Game.Core.Session
                     WeaponOptimalRange = w?.OptimalRange ?? 0,
                     WeaponIsMelee = w != null && w.IsMelee,
                     DownWindowRemaining = u.LifeState == UnitLifeState.Downed ? u.DownWindowRemaining : 0,
-                    IsAiControlled = u.Side != Side.Player
+                    IsAiControlled = u.Side != Side.Player,
+                    IsOutOfBattle = u.LifeState == UnitLifeState.Dead || u.LifeState == UnitLifeState.Stabilized
+                                    || u.LifeState == UnitLifeState.Surrendered || u.LifeState == UnitLifeState.Fled,
+                    IsFled = u.LifeState == UnitLifeState.Fled,
+                    Rank = u.Side == Side.Enemy && string.IsNullOrEmpty(u.SourceCompanionId) ? u.Profile.Rank.ToString() : null,
+                    // Досьє (№14.6): поки ворог не вивчений, умова здачі невідома — поле порожнє, HUD пише «?».
+                    CanSurrender = u.Profile.CanSurrender && DossierOf(u) == DossierLevel.Studied,
+                    SurrenderAtHpPercent = DossierOf(u) == DossierLevel.Studied ? _battle.SurrenderThresholdPercent(u) : 0,
+                    Dossier = IsDossierSubject(u) ? DossierOf(u).ToString() : null,
+                    BondUnitIds = _battle.BondedWith(u.Id),
+                    Role = IsDossierSubject(u) ? u.Profile.Role.ToString() : null,
+                    ResistNotes = IsDossierSubject(u) && DossierOf(u) == DossierLevel.Studied ? ResistNotes(u) : null,
+                    IsSurrendered = u.LifeState == UnitLifeState.Surrendered
                 });
             }
 
@@ -2301,6 +2394,7 @@ namespace Game.Core.Session
                 foreach (var u in _battle.TurnOrder) initiative.Add(u.Id);
 
             var cover = new List<string>();
+            var coverSides = new List<string>();
             var walkable = new List<bool>();
             for (int y = 0; y < _battle.Map.Height; y++)
                 for (int x = 0; x < _battle.Map.Width; x++)
@@ -2313,8 +2407,27 @@ namespace Game.Core.Session
                         if (c > best) best = c;
                     }
                     cover.Add(best.ToString());
+                    coverSides.Add(_battle.Map.GetCover(pos, Direction.North) + "|" + _battle.Map.GetCover(pos, Direction.East) + "|"
+                        + _battle.Map.GetCover(pos, Direction.South) + "|" + _battle.Map.GetCover(pos, Direction.West));
                     walkable.Add(_battle.Map.IsWalkable(pos));
                 }
+
+            // Поле бою (Поправка №14.4): об'єкти, вогонь — видно гравцю так само, як ШІ.
+            var objects = new List<BattleObjectView>();
+            foreach (var o in _battle.Objects)
+                objects.Add(new BattleObjectView
+                {
+                    Pos = new GridPosView(o.Pos.X, o.Pos.Y),
+                    Kind = o.Kind.ToString(),
+                    IsTargetable = o.IsTargetable,
+                    EffectRadius = o.Kind == MapObjectKind.PowderKeg ? _battle.Balance.Combat.ExplosionRadius
+                        : o.Kind == MapObjectKind.Haystack ? _battle.Balance.Combat.FireZoneRadius : 0,
+                    EffectDamage = o.Kind == MapObjectKind.PowderKeg ? _battle.Balance.Combat.ExplosionDamage : 0,
+                    EffectRounds = o.Kind == MapObjectKind.Haystack ? _battle.Balance.Combat.FireZoneRounds : 0
+                });
+            var fires = new List<BattleFireView>();
+            foreach (var f in _battle.Fires)
+                fires.Add(new BattleFireView { Center = new GridPosView(f.Center.X, f.Center.Y), Radius = f.Radius, RoundsLeft = f.RoundsLeft });
 
             bool isAiTurn = _battle.Current != null && _battle.Current.IsActive
                             && _battle.Outcome == CombatOutcome.Ongoing && _battle.Current.Side != Side.Player;
@@ -2323,7 +2436,11 @@ namespace Game.Core.Session
             {
                 Round = _battle.Round,
                 Outcome = _battle.Outcome.ToString(),
-                Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable },
+                Grid = new BattleGridView { Width = _battle.Map.Width, Height = _battle.Map.Height, TileCover = cover, TileWalkable = walkable, TileCoverSides = coverSides },
+                Objects = objects,
+                Fires = fires,
+                ReinforcementRound = _battle.NextReinforcementRound,
+                ReinforcementCount = _battle.NextReinforcementCount,
                 Units = units,
                 ReachableTiles = reachable,
                 Traps = traps,
@@ -2331,9 +2448,814 @@ namespace Game.Core.Session
                 IsAiTurn = isAiTurn,
                 CurrentUnitId = _battle.Current != null && _battle.Current.IsActive ? _battle.Current.Id : null,
                 InitiativeOrder = initiative,
+                NextRoundOrder = UnitIds(_battle.NextRoundTurnOrder),
+                Opening = _battle.Opening.ToString(),
+                DossierScoutSurvival = _cfg.Combat.DossierScoutSurvival,
+                DossierScoutWits = _cfg.Combat.DossierScoutWits,
+                RetreatConsequenceKey = RetreatConsequenceKey(_resume?.Reason),
                 Log = MapBattleLog(_battle.Journal),
                 IsHitRulePercent = _battle.IsHitRulePercent
             };
+        }
+
+        // =====================================================================
+        // Здача і полон (Поправка №14.2)
+        // =====================================================================
+
+        /// <summary>Вороги, що здалися в останніх боях і чекають рішення.</summary>
+        public IReadOnlyList<SurrenderView> GetPendingSurrenders()
+        {
+            var list = new List<SurrenderView>();
+            foreach (var e in _pendingSurrenders)
+                list.Add(new SurrenderView
+                {
+                    UnitId = e.UnitId,
+                    EnemyDefinitionId = e.EnemyDefinitionId,
+                    DisplayNameKey = e.DisplayName,
+                    Rank = e.Rank.ToString(),
+                    CanRecruitLater = !e.NeverRecruitable
+                });
+            return list;
+        }
+
+        /// <summary>
+        /// Доля того, хто здався (Поправка №14.2): відпустити (повернеться — №5.3,
+        /// MECH-12), взяти в полон (громада годує, віче вирішує) чи добити
+        /// (кров: драйвер PlaystyleBlood, страх громади, реакція напарників за
+        /// цінностями). false — такого немає серед тих, хто чекає рішення.
+        /// </summary>
+        public bool DecideSurrender(string unitId, SurrenderFate fate)
+        {
+            SurrenderedEnemy e = null;
+            foreach (var s in _pendingSurrenders)
+                if (s.UnitId == unitId) { e = s; break; }
+            if (e == null) return false;
+            _pendingSurrenders.Remove(e);
+
+            switch (fate)
+            {
+                case SurrenderFate.Release:
+                    LogEvent("enemy.released", Args("enemyId", e.EnemyDefinitionId));
+                    break;
+                case SurrenderFate.Capture:
+                {
+                    var p = _prisoners.Take(e.EnemyDefinitionId, e.DisplayName, (int)e.Rank, e.NeverRecruitable, _processor.CurrentDay);
+                    LogEvent("enemy.captured", Args("enemyId", e.EnemyDefinitionId, "prisonerId", p.Id));
+                    break;
+                }
+                case SurrenderFate.Execute:
+                    // Кров — тим самим закритим драйвером, що й кривавий шлях (інваріант 5), через
+                    // чергу доби: між фазами прямий виклик драйвера робив зміну полоси німою.
+                    _processor.QueueExternal(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode);
+                    _processor.Fear?.Remember(_processor.CurrentDay, _cfg.Checks);
+                    ReactToExecution();
+                    LogEvent("enemy.executed", Args("enemyId", e.EnemyDefinitionId));
+                    break;
+            }
+            return true;
+        }
+
+        /// <summary>Напарники реагують на страту полоненого за своїми цінностями: милосердні — гірше, жорсткі — краще.</summary>
+        private void ReactToExecution()
+        {
+            if (_worldRoster == null) return;
+            foreach (var c in _worldRoster.All)
+            {
+                if (c.IsDead || c.Status == CompanionStatus.Antagonist) continue;
+                var values = c.Traits.Values;
+                bool mercy = false, ruthless = false;
+                for (int i = 0; i < values.Count; i++)
+                {
+                    if (values[i] == DefaultValues.Mercy) mercy = true;
+                    if (values[i] == DefaultValues.Ruthless) ruthless = true;
+                }
+                if (mercy) LogLoyaltyChange(ApplyLoyaltyDelta(c.Id, -ExecutionLoyaltyCost, "execution"));
+                else if (ruthless) LogLoyaltyChange(ApplyLoyaltyDelta(c.Id, ExecutionLoyaltyGain, "execution"));
+            }
+        }
+
+        /// <summary>Скільки лояльності втрачає милосердний напарник за страту і отримує жорсткий — ПЛЕЙСХОЛДЕРИ.</summary>
+        private const int ExecutionLoyaltyCost = 4;
+        private const int ExecutionLoyaltyGain = 2;
+
+        private void ReleasePendingSurrenders()
+        {
+            foreach (var e in _pendingSurrenders)
+                LogEvent("enemy.released", Args("enemyId", e.EnemyDefinitionId));
+            _pendingSurrenders.Clear();
+        }
+
+        /// <summary>Полонені громади — полоси, ціна викупу, чи можна переманити просто зараз.</summary>
+        public IReadOnlyList<PrisonerView> GetPrisonersView()
+        {
+            bool guarded = _works != null && _works.Has(DefaultBuildingsType.Watch);
+            var list = new List<PrisonerView>();
+            foreach (var p in _prisoners.All)
+                list.Add(new PrisonerView
+                {
+                    Id = p.Id,
+                    EnemyDefinitionId = p.EnemyDefinitionId,
+                    DisplayNameKey = p.DisplayName,
+                    Rank = ((EnemyRank)p.Rank).ToString(),
+                    Disposition = p.DispositionBand.ToString(),
+                    Restlessness = p.RestlessnessBand.ToString(),
+                    CanRecruitNow = !p.NeverRecruitable && p.DispositionBand == PrisonerDisposition.Ready,
+                    NeverRecruitable = p.NeverRecruitable,
+                    RansomGold = _prisoners.RansomFor(p),
+                    Guarded = guarded,
+                    DayTaken = p.DayTaken
+                });
+            return list;
+        }
+
+        /// <summary>Віче: відпустити полоненого (повернеться — №5.3).</summary>
+        public bool ReleasePrisoner(string prisonerId)
+        {
+            var p = _prisoners.Get(prisonerId);
+            if (p == null) return false;
+            _prisoners.Remove(prisonerId);
+            LogEvent("prisoner.freed", Args("prisonerId", p.Id, "enemyId", p.EnemyDefinitionId));
+            return true;
+        }
+
+        /// <summary>Віче: обміняти на викуп — золото в казну, полонений іде.</summary>
+        public bool RansomPrisoner(string prisonerId)
+        {
+            var p = _prisoners.Get(prisonerId);
+            if (p == null) return false;
+            int gold = _prisoners.RansomFor(p);
+            _prisoners.Remove(prisonerId);
+            _state.Resources.Add(ResourceType.Gold, gold);
+            LogEvent("prisoner.ransomed", Args("prisonerId", p.Id, "enemyId", p.EnemyDefinitionId, "gold", gold.ToString(CultureInfo.InvariantCulture)));
+            return true;
+        }
+
+        /// <summary>
+        /// Віче: переманити (власник: «полон добре бо можна собі потім його переманити»).
+        /// Лише з полоси «готовий» і не для персонажів із російських першоджерел (№12.9).
+        /// Полонений стає напарником у ростері.
+        /// </summary>
+        public bool RecruitPrisoner(string prisonerId)
+        {
+            var p = _prisoners.Get(prisonerId);
+            if (p == null || p.NeverRecruitable || p.DispositionBand != PrisonerDisposition.Ready) return false;
+            var companion = BuildRecruit(p.EnemyDefinitionId, p.DisplayName, _recruits.Count);
+            if (companion == null) return false;
+            _prisoners.Remove(prisonerId);
+            _worldRoster.Add(companion);
+            _recruits.Add(p.EnemyDefinitionId + "," + System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(p.DisplayName ?? "")).Replace('=', '~'));
+            LogEvent("prisoner.recruited", Args("prisonerId", p.Id, "companionId", companion.Id, "enemyId", p.EnemyDefinitionId));
+            return true;
+        }
+
+        /// <summary>
+        /// Напарник із переманеного полоненого: атрибути й навички — від його ролі в
+        /// бою (грубо, ПЛЕЙСХОЛДЕР до авторських карток US-3.14). Картка — «Першоджерело»
+        /// оригінальне: полонений, переманений на віче.
+        /// </summary>
+        private Companion BuildRecruit(string enemyDefinitionId, string displayName, int seq)
+        {
+            var def = ResolveEnemyById(enemyDefinitionId);
+            string id = "recruit_" + (enemyDefinitionId ?? "x").Replace("enemy.", "") + "_" + seq.ToString(CultureInfo.InvariantCulture);
+            var arch = new CompanionArchetype(id, displayName);
+            var role = def != null ? def.Role : EnemyRole.Skirmisher;
+            if (role == EnemyRole.Skirmisher)
+                arch.SetAttribute(AttributeType.Agility, 5).SetAttribute(AttributeType.Wits, 4)
+                    .SetAttribute(AttributeType.Strength, 3).SetAttribute(AttributeType.Will, 3)
+                    .SetSkill(SkillType.Ranged, 4).SetSkill(SkillType.Survival, 3);
+            else
+                arch.SetAttribute(AttributeType.Strength, 5).SetAttribute(AttributeType.Agility, 4)
+                    .SetAttribute(AttributeType.Wits, 3).SetAttribute(AttributeType.Will, 4)
+                    .SetSkill(SkillType.Melee, 4).SetSkill(SkillType.Intimidate, 2);
+            var companion = arch.CreateInstance(id, _cfg);
+            companion.Card = new CharacterCard(id, displayName, SourceTier.Original, "полонений, переманений на віче (Поправка №14.2)");
+            return companion;
+        }
+
+        // =====================================================================
+        // Розмова перед боєм (docs/ABILITIES.md §4.6, друга партія; власник: «ок»,
+        // 29.09.2026). «Слово миру» (Переконання), «Скласти зброю!» (Залякування),
+        // «Відкуп» (Торгівля) — одна спроба на бойову кімнату, до першого пострілу.
+        // Діють лише на тих, хто за рангом №14.2 може здатися; решта — «Імунітет».
+        // Поріг — сира навичка найкращого в загоні проти Волі ватажка (як дії C5).
+        // Страх громади піднімає пороги Переконання й Торгівлі (FearState);
+        // Залякування страхом не дешевшає — так у FearState, інакше кривавий шлях
+        // окупав би сам себе (Поправка №1).
+        // =====================================================================
+
+        /// <summary>Що дасть одна форма розмови: поріг, хто відгукнеться, хто лишиться, скільки золота.</summary>
+        internal sealed class ParleyPlan
+        {
+            public string Form, SkillKey, BlockKey;
+            public int Value, Threshold, GoldCost;
+            public bool Passes;
+            public readonly List<EnemyDefinition> Leaving = new List<EnemyDefinition>();
+            public readonly List<string> Remaining = new List<string>();
+            public readonly List<string> AllEnemies = new List<string>();
+        }
+
+        private ParleyPlan BuildParley(string form)
+        {
+            var room = _dungeon?.CurrentRoom;
+            if (room == null || room.Kind != DungeonRoomKind.Combat || _dungeon.CurrentCleared || _dungeon.AwaitingBattle)
+                return new ParleyPlan { Form = form, BlockKey = "no_room" };
+
+            Func<SkillType, int> best = skill =>
+            {
+                int v = 0;
+                foreach (var id in _dungeon.PartyIds)
+                {
+                    var comp = _worldRoster?.Get(id);
+                    if (comp != null && !comp.IsDead) v = Math.Max(v, comp.Skill(skill));
+                }
+                return v;
+            };
+            int fear = _processor.Fear?.PenaltyOn(_processor.CurrentDay, _cfg.Checks) ?? 0;
+            return PlanParley(form, room.EnemyIds, _dungeon.PartyIds?.Count ?? 0, best, fear,
+                _state.Resources.Get(ResourceType.Gold), _bribeRefusals, _cfg.Combat);
+        }
+
+        /// <summary>
+        /// Чиста арифметика форми розмови (детерміновано, інваріант 8): ватажок — найстарший
+        /// за рангом; відгукуються ті, хто може здатися (для відкупу — ще й жадібні);
+        /// поріг — Воля ватажка + надбавка (відкуп — жадібність + надбавка); страх громади
+        /// дорожчить Переконання й Торгівлю; ультиматум дешевшає, якщо загін чисельніший.
+        /// </summary>
+        internal static ParleyPlan PlanParley(string form, IReadOnlyList<string> enemyIds, int partySize,
+            Func<SkillType, int> bestSkill, int fearPenalty, int gold, IReadOnlyDictionary<string, int> bribeRefusals,
+            CombatBalance c)
+        {
+            var plan = new ParleyPlan { Form = form };
+            EnemyDefinition leader = null;
+            int known = 0;
+            foreach (var id in enemyIds)
+            {
+                plan.AllEnemies.Add(id);
+                var def = ResolveEnemyById(id);
+                if (def == null) continue;
+                known++;
+                if (leader == null || def.Rank > leader.Rank) leader = def;
+            }
+            int resolve = leader != null ? Math.Max(0, leader.Resolve) : 0;
+
+            SkillType skill;
+            switch (form)
+            {
+                case "peace":
+                    skill = SkillType.Persuade;
+                    plan.Threshold = resolve + c.PeaceOverResolve + fearPenalty;
+                    break;
+                case "surrender":
+                    skill = SkillType.Intimidate;
+                    plan.Threshold = resolve + c.UltimatumOverResolve - (partySize > known ? 1 : 0);
+                    break;
+                case "bribe":
+                    skill = SkillType.Trade;
+                    break;
+                default:
+                    plan.BlockKey = "no_room";
+                    return plan;
+            }
+            plan.SkillKey = skill.ToString().ToLowerInvariant();
+
+            int greed = 0;
+            foreach (var id in enemyIds)
+            {
+                var def = ResolveEnemyById(id);
+                bool yields = def != null && def.CanSurrender && def.Rank != EnemyRank.Boss;
+                if (form == "bribe") yields = yields && def.Greed > 0;
+                if (!yields) { plan.Remaining.Add(id); continue; }
+
+                plan.Leaving.Add(def);
+                if (form != "bribe") continue;
+                greed = Math.Max(greed, def.Greed);
+                int rank = Math.Min((int)def.Rank, c.BribeGoldPerRank.Length - 1);
+                int refused = bribeRefusals != null && bribeRefusals.TryGetValue(def.Id, out int r) ? r : 0;
+                plan.GoldCost += c.BribeGoldPerRank[rank] * (100 + refused * c.BribeRefusalMarkupPercent) / 100;
+            }
+            if (form == "bribe") plan.Threshold = greed + c.BribeOverGreed + fearPenalty;
+
+            plan.Value = bestSkill != null ? bestSkill(skill) : 0;
+            plan.Passes = plan.Value >= plan.Threshold;
+
+            if (plan.Leaving.Count == 0) plan.BlockKey = form == "bribe" ? "not_for_sale" : "immune";
+            else if (form == "bribe" && gold < plan.GoldCost) plan.BlockKey = "poor";
+            return plan;
+        }
+
+        private ParleyView ParleyViewOf(string form)
+        {
+            var p = BuildParley(form);
+            return new ParleyView
+            {
+                Form = form, SkillKey = p.SkillKey, ParleyValue = p.Value, ParleyThreshold = p.Threshold,
+                Passes = p.Passes, BlockKey = p.BlockKey, GoldCost = p.GoldCost,
+                LeavingCount = p.Leaving.Count, RemainingCount = p.Remaining.Count
+            };
+        }
+
+        /// <summary>
+        /// Розмова перед боєм у поточній бойовій кімнаті: "peace" | "surrender" | "bribe".
+        /// Вдалось — ті, хто може здатися, відходять / здаються в полон / беруть гроші; з
+        /// рештою — бій (або кімната пройдена без луту, якщо нікого не лишилось).
+        /// Не вдалось — бій з усіма: без засідки; після відкинутого ультиматуму ворог
+        /// у раунді 1 влучніший; після відмови від відкупу ціна повтору зростає.
+        /// Повертає вид данжу; null — почався бій.
+        /// </summary>
+        public DungeonView ResolveDungeonParley(string form)
+        {
+            RequireState(SessionState.Dungeon);
+            var plan = BuildParley(form);
+            if (plan.BlockKey != null) return BuildDungeonView();
+
+            var room = _dungeon.CurrentRoom;
+            LogEvent("dungeon.parley." + form + (plan.Passes ? ".success" : ".fail"),
+                Args("threshold", plan.Threshold.ToString(CultureInfo.InvariantCulture), "value", plan.Value.ToString(CultureInfo.InvariantCulture)));
+
+            List<string> fighters = plan.AllEnemies;
+            var start = DungeonBattleStart.Encounter;
+            if (plan.Passes)
+            {
+                fighters = plan.Remaining;
+                if (form == "surrender")
+                    foreach (var def in plan.Leaving)
+                    {
+                        _prisoners.Take(def.Id, def.DisplayName, (int)def.Rank, def.NeverRecruitable, _processor.CurrentDay);
+                        LogEvent("enemy.captured", Args("enemyId", def.Id));
+                    }
+                else if (form == "bribe")
+                    _state.Resources.TrySpend(ResourceType.Gold, plan.GoldCost);
+            }
+            else if (form == "surrender") start = DungeonBattleStart.Provoked;
+            else if (form == "bribe")
+                foreach (var def in plan.Leaving)
+                {
+                    _bribeRefusals.TryGetValue(def.Id, out int refused);
+                    _bribeRefusals[def.Id] = refused + 1;
+                }
+
+            var res = _dungeon.ResolveParley(fighters.Count == 0, start);
+            ApplyDungeonResolution(res);
+            if (!res.NeedsBattle) return BuildDungeonView();
+
+            var setup = BuildRoomBattleSetup(room, _dungeon.PartyIds, ToBattleOpening(start), fighters);
+            RequestBattle(setup, SuspendReason.DungeonCombatRoom, SessionState.Dungeon);
+            return null;
+        }
+
+        private string CaptureBribeRefusals()
+        {
+            var keys = new List<string>(_bribeRefusals.Keys);
+            keys.Sort(StringComparer.Ordinal);
+            var parts = new List<string>();
+            foreach (var k in keys) parts.Add(k + ":" + _bribeRefusals[k].ToString(CultureInfo.InvariantCulture));
+            return string.Join(",", parts);
+        }
+
+        private void RestoreBribeRefusals(string blob)
+        {
+            _bribeRefusals.Clear();
+            if (string.IsNullOrEmpty(blob)) return;
+            foreach (var entry in blob.Split(','))
+            {
+                int colon = entry.LastIndexOf(':');
+                if (colon > 0 && int.TryParse(entry.Substring(colon + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n))
+                    _bribeRefusals[entry.Substring(0, colon)] = n;
+            }
+        }
+
+        // =====================================================================
+        // Досьє ворога (Поправка №14.6; власник: «го»): контакт відкриває роль і
+        // здоров'я; розвідка перед боєм (Виживання чи Кмітливість) або сам бій —
+        // решту. Тренувальний бій — пісочниця: там усе видно й нічого не пишеться.
+        // =====================================================================
+
+        /// <summary>
+        /// Зв'язки в бою (Поправка №14.8; власник — «Лишити, низький пріоритет»): кожна пара
+        /// бійців загону з наявним зв'язком Kinship (<see cref="RosterBonds"/>) стає парою
+        /// побратимів — поруч раз за раунд прикривають одне одного.
+        /// </summary>
+        private void RegisterBonds()
+        {
+            if (_worldRoster == null) return;
+            var bonds = new RosterBonds(null);
+            var squad = new List<CombatUnit>();
+            foreach (var u in _battle.Units)
+                if (u.Side == Side.Player && !string.IsNullOrEmpty(u.SourceCompanionId)) squad.Add(u);
+            for (int i = 0; i < squad.Count; i++)
+                for (int j = i + 1; j < squad.Count; j++)
+                {
+                    var a = _worldRoster.Get(squad[i].SourceCompanionId);
+                    var b = _worldRoster.Get(squad[j].SourceCompanionId);
+                    if (a != null && b != null && bonds.Between(a, b) == BondType.Kinship)
+                        _battle.AddBond(squad[i].Id, squad[j].Id);
+                }
+        }
+
+        /// <summary>Ворог зі звичайного визначення (не перебіжчик — того знаємо як свого).</summary>
+        private static bool IsDossierSubject(CombatUnit u) =>
+            u != null && u.Side == Side.Enemy && !string.IsNullOrEmpty(u.EnemyDefinitionId) && string.IsNullOrEmpty(u.SourceCompanionId);
+
+        private DossierLevel DossierOf(CombatUnit u)
+        {
+            if (!IsDossierSubject(u)) return DossierLevel.Studied;
+            if (_resume?.Reason == SuspendReason.TrainingSkirmish) return DossierLevel.Studied;
+            return _dossier.LevelOf(u.EnemyDefinitionId);
+        }
+
+        /// <summary>Старт бою: кожного ворога побачили (контакт); розвідник у загоні — вивчив одразу.</summary>
+        private void MeetEnemies()
+        {
+            foreach (var u in _battle.Units)
+                if (IsDossierSubject(u)) _dossier.Raise(u.EnemyDefinitionId, DossierLevel.Contact);
+            if (PartyScouts()) StudyEnemies(_battle, "scout");
+        }
+
+        private bool PartyScouts()
+        {
+            foreach (var u in _battle.Units)
+            {
+                if (u.Side != Side.Player || string.IsNullOrEmpty(u.SourceCompanionId)) continue;
+                var c = _worldRoster?.Get(u.SourceCompanionId);
+                if (c == null) continue;
+                if (c.Skill(SkillType.Survival) >= _cfg.Combat.DossierScoutSurvival) return true;
+                if (c.Attribute(AttributeType.Wits) >= _cfg.Combat.DossierScoutWits) return true;
+            }
+            return false;
+        }
+
+        private void StudyEnemies(CombatState battle, string how)
+        {
+            if (battle == null) return;
+            foreach (var u in battle.Units)
+                if (IsDossierSubject(u) && _dossier.Raise(u.EnemyDefinitionId, DossierLevel.Studied))
+                    LogEvent("dossier.studied", Args("enemyId", u.EnemyDefinitionId, "how", how));
+        }
+
+        /// <summary>Опори вивченого ворога: "Fire:weak", "Ballistic:strong" — лише ті, що відрізняються від звичайного.</summary>
+        private static List<string> ResistNotes(CombatUnit u)
+        {
+            var notes = new List<string>();
+            var resists = u.Profile.Resists;
+            if (resists == null) return notes;
+            foreach (DamageType type in Enum.GetValues(typeof(DamageType)))
+            {
+                if (type == DamageType.True) continue;
+                double m = resists.Multiplier(type);
+                if (m > 1.0) notes.Add(type + ":weak");
+                else if (m < 1.0) notes.Add(type + ":strong");
+            }
+            return notes;
+        }
+
+        // =====================================================================
+        // Поразка → полон (Поправка №14.7; власник, 29.09.2026: «Але десь половина
+        // має втекти»; протагоніст у полон — «ні не може»).
+        // =====================================================================
+
+        /// <summary>Хто втік і хто в полоні після бою + у кого — порахувати ДО обнулення бою.</summary>
+        private sealed class CaptivityOutcome
+        {
+            public EscapeSplit Split;
+            public HashSet<string> Standing;
+            public string CaptorEnemyId;
+            public int CaptorRank;
+            public List<string> EnemyGroup;
+            public string GroupId;
+        }
+
+        private CaptivityOutcome ComputeCaptivity(BattleResult result, SuspendReason reason)
+        {
+            if (_battle == null) return null;
+            if (reason != SuspendReason.DungeonCombatRoom && reason != SuspendReason.CaptiveRaid) return null;
+            bool retreat = result.Outcome == BattleOutcome.Retreat;
+            if (result.Outcome != BattleOutcome.Defeat && !retreat) return null;
+
+            var living = new List<string>();
+            var standing = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var u in _battle.Units)
+            {
+                if (u.Side != Side.Player || string.IsNullOrEmpty(u.SourceCompanionId)) continue;
+                if (u.LifeState == UnitLifeState.Dead) continue;
+                living.Add(u.SourceCompanionId);
+                if (u.LifeState == UnitLifeState.Active) standing.Add(u.SourceCompanionId);
+            }
+
+            var outcome = new CaptivityOutcome
+            {
+                Split = CaptivityRules.Split(living, standing, result.FallOrderCompanionIds, ProtagonistId, retreat),
+                Standing = standing
+            };
+
+            // Рейд, що не вдався: нові бранці йдуть до того самого загону.
+            var raided = reason == SuspendReason.CaptiveRaid && _raidGroupId != null ? _captives.Group(_raidGroupId) : null;
+            if (raided != null && raided.Count > 0)
+            {
+                outcome.CaptorEnemyId = raided[0].CaptorEnemyId;
+                outcome.CaptorRank = raided[0].CaptorRank;
+                outcome.EnemyGroup = new List<string>(raided[0].EnemyGroup);
+                outcome.GroupId = _raidGroupId;
+                return outcome;
+            }
+
+            // Тримач — найстарший за рангом ворог, що лишився на полі; загін — ті, хто стоїть.
+            var alive = new List<CombatUnit>();
+            var all = new List<CombatUnit>();
+            foreach (var u in _battle.Units)
+            {
+                if (u.Side != Side.Enemy || string.IsNullOrEmpty(u.EnemyDefinitionId) || !string.IsNullOrEmpty(u.SourceCompanionId)) continue;
+                all.Add(u);
+                if (u.LifeState != UnitLifeState.Dead && u.LifeState != UnitLifeState.Surrendered && u.LifeState != UnitLifeState.Fled)
+                    alive.Add(u);
+            }
+            var group = alive.Count > 0 ? alive : all;
+            CombatUnit captor = null;
+            foreach (var u in group)
+                if (captor == null || u.Profile.Rank > captor.Profile.Rank) captor = u;
+
+            outcome.CaptorEnemyId = captor?.EnemyDefinitionId;
+            outcome.CaptorRank = captor != null ? (int)captor.Profile.Rank : 0;
+            outcome.EnemyGroup = new List<string>();
+            foreach (var u in group) outcome.EnemyGroup.Add(u.EnemyDefinitionId);
+            return outcome;
+        }
+
+        private void ApplyCaptivity(CaptivityOutcome outcome)
+        {
+            if (outcome?.Split == null) return;
+
+            foreach (var id in outcome.Split.Escaped)
+                if (!outcome.Standing.Contains(id))
+                    LogEvent("companion.escaped", Args("companionId", id)); // упав, але його винесли / виповз
+
+            if (outcome.Split.Captured.Count == 0) return;
+            string groupId = outcome.GroupId ?? _captives.NewGroupId(_processor.CurrentDay);
+            foreach (var id in outcome.Split.Captured)
+                TakeCaptive(id, outcome.CaptorEnemyId, outcome.CaptorRank, groupId, outcome.EnemyGroup);
+        }
+
+        /// <summary>
+        /// Єдина точка взяття нашої людини в полон: зняти з поста, статус «у полоні»,
+        /// запис у реєстр, подія в стрічку. Протагоніста не бере ніколи («ні не може»).
+        /// </summary>
+        internal bool TakeCaptive(string companionId, string captorEnemyId, int captorRank, string groupId,
+                                  IReadOnlyList<string> enemyGroup)
+        {
+            if (string.Equals(companionId, ProtagonistId, StringComparison.Ordinal)) return false;
+            var c = _worldRoster?.Get(companionId);
+            if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist || c.IsCaptive) return false;
+            if (c.IsAssigned) _state.Unassign(c.AssignedSlotId);
+            c.Status = CompanionStatus.Captive;
+            _captives.Take(companionId, captorEnemyId, captorRank, groupId ?? _captives.NewGroupId(_processor.CurrentDay),
+                enemyGroup, _processor.CurrentDay);
+            LogEvent("companion.captured", Args("companionId", companionId, "enemyId", captorEnemyId ?? ""));
+            return true;
+        }
+
+        /// <summary>
+        /// Доба полону: годинник іде, лояльність тане (що довше — то швидше), зміна
+        /// полоси — у стрічку (інваріант 4). Хто вже зрадив чи загинув — зі списку геть.
+        /// </summary>
+        private void TickCaptives(int day)
+        {
+            foreach (var c in new List<Captive>(_captives.All))
+            {
+                var comp = _worldRoster?.Get(c.CompanionId);
+                if (comp == null || !comp.IsCaptive) _captives.Remove(c.CompanionId);
+            }
+            if (_captives.All.Count == 0) return;
+
+            foreach (var ev in _captives.Tick(day))
+                LogEvent("captivity.band." + _captives.BandOf(ev.Captive).ToString().ToLowerInvariant(),
+                    Args("companionId", ev.Captive.CompanionId, "enemyId", ev.Captive.CaptorEnemyId ?? ""));
+
+            foreach (var c in _captives.All)
+                LogLoyaltyChange(ApplyLoyaltyDelta(c.CompanionId, _captives.LoyaltyDeltaFor(c), "captivity"));
+        }
+
+        /// <summary>Найкраща навичка серед присутніх у громаді (не в полі, не в полоні, не проти нас).</summary>
+        private int BestPresentSkill(SkillType skill)
+        {
+            int best = 0;
+            if (_worldRoster == null) return best;
+            foreach (var c in _worldRoster.All)
+            {
+                if (c.IsDead || c.Status == CompanionStatus.Antagonist || c.Status == CompanionStatus.OnMission || c.IsCaptive) continue;
+                best = Math.Max(best, c.Skill(skill));
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Хто може піти в рейд: присутні й здорові (ті самі умови, що для вилазки).
+        /// Склад обирає гравець — як і загін вилазки (власник: «ну перед вилазкою,
+        /// це ж вже є»; «ЗВІСНО ГРАВЦЕМ»), до <see cref="BalanceConfig.ExpeditionPartyMax"/>.
+        /// </summary>
+        private List<string> RaidCandidateIds()
+        {
+            var ids = new List<string>();
+            if (_worldRoster == null) return ids;
+            foreach (var c in _worldRoster.All)
+                if (!c.IsInjured && IsCompanionBattleReady(c.Id)) ids.Add(c.Id);
+            return ids;
+        }
+
+        /// <summary>Наші в полоні — у кого, полоса годинника, ціна викупу, поріг перемовин, склад рейду.</summary>
+        public IReadOnlyList<CaptiveView> GetCaptivesView()
+        {
+            var list = new List<CaptiveView>();
+            if (_captives.All.Count == 0) return list;
+            int gold = _state.Resources.Get(ResourceType.Gold);
+            int trade = BestPresentSkill(SkillType.Trade);
+            int persuade = BestPresentSkill(SkillType.Persuade);
+            bool hub = State == SessionState.Morning || State == SessionState.FreePlay;
+            var candidates = RaidCandidateIds();
+            foreach (var c in _captives.All)
+            {
+                var def = ResolveEnemyById(c.CaptorEnemyId);
+                int ransom = _captives.RansomFor(c, trade);
+                int threshold = _captives.TalkThreshold(c);
+                list.Add(new CaptiveView
+                {
+                    CompanionId = c.CompanionId,
+                    CaptorEnemyId = c.CaptorEnemyId,
+                    CaptorNameKey = def != null ? def.DisplayName : c.CaptorEnemyId,
+                    CaptorRank = ((EnemyRank)c.CaptorRank).ToString(),
+                    Band = _captives.BandOf(c).ToString(),
+                    DayTaken = c.DayTaken,
+                    RansomGold = ransom,
+                    CanAffordRansom = hub && gold >= ransom,
+                    BestPersuade = persuade,
+                    TalkThreshold = threshold,
+                    CanTalk = hub && persuade >= threshold,
+                    RaidCandidateIds = candidates,
+                    RaidPartyMax = _cfg.ExpeditionPartyMax,
+                    RaidEnemyIds = new List<string>(c.EnemyGroup),
+                    CanRaid = hub && candidates.Count > 0 && c.EnemyGroup.Count > 0
+                });
+            }
+            return list;
+        }
+
+        /// <summary>Тихий порятунок №1: викуп золотом (Торгівля знижує ціну; ціна видна до кліку).</summary>
+        public bool RansomCaptive(string companionId)
+        {
+            RequireMorningOrFreePlay();
+            var c = _captives.Get(companionId);
+            if (c == null) return false;
+            int cost = _captives.RansomFor(c, BestPresentSkill(SkillType.Trade));
+            if (!_state.Resources.TrySpend(ResourceType.Gold, cost)) return false;
+            FreeCaptive(c, "ransom");
+            return true;
+        }
+
+        /// <summary>Тихий порятунок №2: перемовини — Переконання ≥ порога за рангом тримача (інваріант 8).</summary>
+        public bool NegotiateCaptive(string companionId)
+        {
+            RequireMorningOrFreePlay();
+            var c = _captives.Get(companionId);
+            if (c == null || BestPresentSkill(SkillType.Persuade) < _captives.TalkThreshold(c)) return false;
+            FreeCaptive(c, "talk");
+            return true;
+        }
+
+        /// <summary>
+        /// Кривавий порятунок: рейд на загін тримача — тактичний бій, загін ходить першим
+        /// (свідомо обраний кривавий шлях, №14.1). Перемога визволяє всіх бранців загону;
+        /// поразка чи відступ — той самий механізм полону для загону рейду.
+        /// </summary>
+        public bool RaidCaptors(string companionId, IReadOnlyList<string> partyIds)
+        {
+            RequireMorningOrFreePlay();
+            var c = _captives.Get(companionId);
+            if (c == null || c.EnemyGroup.Count == 0 || partyIds == null) return false;
+            var candidates = RaidCandidateIds();
+            var party = new List<string>();
+            foreach (var id in partyIds)
+                if (candidates.Contains(id) && !party.Contains(id)) party.Add(id);
+            if (party.Count == 0 || party.Count != partyIds.Count || party.Count > _cfg.ExpeditionPartyMax) return false;
+
+            _raidGroupId = c.GroupId;
+            _processor.QueueExternal(TensionDriver.PlaystyleBlood, _cfg.Tension.BloodDeltaPerNode);
+            LogEvent("captivity.raid.started", Args("companionId", c.CompanionId, "enemyId", c.CaptorEnemyId ?? ""));
+            var setup = BuildBattleSetup(party, c.EnemyGroup, 8, 8, opening: BattleOpening.FirstStrike);
+            RequestBattle(setup, SuspendReason.CaptiveRaid, State);
+            return true;
+        }
+
+        private void FinishCaptiveRaid(BattleResult result)
+        {
+            string groupId = _raidGroupId;
+            if (result.Outcome == BattleOutcome.Victory && groupId != null)
+                foreach (var c in _captives.Group(groupId)) FreeCaptive(c, "raid");
+            else
+                LogEvent("captivity.raid.failed", Args("outcome", result.Outcome.ToString()));
+            // Поразка: ComputeCaptivity уже взяв групу; ApplyCaptivity додасть нових бранців до неї.
+        }
+
+        private void FreeCaptive(Captive c, string way)
+        {
+            _captives.Remove(c.CompanionId);
+            var comp = _worldRoster?.Get(c.CompanionId);
+            if (comp != null && comp.IsCaptive)
+                comp.Status = comp.InjuryPoints > 0 ? CompanionStatus.Injured : CompanionStatus.Idle;
+            LogEvent("companion.rescued." + way, Args("companionId", c.CompanionId, "enemyId", c.CaptorEnemyId ?? ""));
+            LogLoyaltyChange(ApplyLoyaltyDelta(c.CompanionId, _captives.Balance.RescueLoyaltyBonus, "rescued"));
+        }
+
+        /// <summary>
+        /// Доба полону: їжа (по одній на полоненого), вмовляння найкращим Переконанням
+        /// серед присутніх, варта Сторожі. Зміни полос і втечі — у стрічку (інваріант 4).
+        /// </summary>
+        private void TickPrisoners(int day)
+        {
+            if (_prisoners.All.Count == 0) return;
+            int need = _prisoners.All.Count;
+            bool fed = _state.Resources.Get(ResourceType.Food) >= need;
+            if (fed) _state.Resources.TrySpend(ResourceType.Food, need);
+
+            int bestPersuade = BestPresentSkill(SkillType.Persuade);
+
+            bool guarded = _works != null && _works.Has(DefaultBuildingsType.Watch);
+            foreach (var ev in _prisoners.Tick(new PrisonerDayInputs(day, bestPersuade, guarded, fed)))
+            {
+                var p = ev.Prisoner;
+                switch (ev.Kind)
+                {
+                    case "disposition":
+                        LogEvent("prisoner.disposition." + p.DispositionBand.ToString().ToLowerInvariant(), Args("prisonerId", p.Id));
+                        break;
+                    case "restless":
+                        LogEvent("prisoner.restless." + p.RestlessnessBand.ToString().ToLowerInvariant(), Args("prisonerId", p.Id));
+                        break;
+                    case "escaped":
+                        LogEvent("prisoner.escaped", Args("prisonerId", p.Id, "enemyId", p.EnemyDefinitionId));
+                        break;
+                    case "hungry":
+                        LogEvent("prisoner.hungry", Args("prisonerId", p.Id));
+                        break;
+                }
+            }
+        }
+
+        /// <summary>Чи є в тайла хоч з одного боку укриття — для позначки «фланг» (№14.4).</summary>
+        private bool HasAnyCover(GridPos pos)
+        {
+            foreach (Direction dir in Enum.GetValues(typeof(Direction)))
+                if (_battle.Map.GetCover(pos, dir) != CoverType.None) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Вдарити поточним бійцем по об'єкту поля (Поправка №14.4): бочка вибухне,
+        /// сіно займеться. Ціна — ОД зброї, влучання гарантоване; видно в HUD до кліку.
+        /// </summary>
+        public CombatActionResult CombatAttackObject(GridPos pos)
+        {
+            RequireBattle();
+            var r = _battle.AttackObject(pos);
+            AfterCombatAction();
+            return r;
+        }
+
+        private static List<string> UnitIds(IReadOnlyList<CombatUnit> units)
+        {
+            var ids = new List<string>();
+            if (units != null)
+                foreach (var u in units) ids.Add(u.Id);
+            return ids;
+        }
+
+        /// <summary>Що буде, якщо відступити (Поправка №14.7) — ключ тексту для підтвердження, за тим, хто просив бій.</summary>
+        private static string RetreatConsequenceKey(SuspendReason? reason)
+        {
+            switch (reason)
+            {
+                case SuspendReason.DungeonCombatRoom: return "ui.battle.retreat.consequence.dungeon";
+                case SuspendReason.TrainingSkirmish: return "ui.battle.retreat.consequence.training";
+                case SuspendReason.CaptiveRaid: return "ui.battle.retreat.consequence.raid";
+                default: return "ui.battle.retreat.consequence.lost";
+            }
+        }
+
+        /// <summary>
+        /// Відступ з бою (Поправка №14.7; ROADMAP B13 — раніше <c>CombatState.Retreat</c>
+        /// ніхто не кликав, і з бою не було виходу, статут ANTI-10). Лише у свій
+        /// хід. Наслідок — за тим, хто просив бій (<see cref="OnBattleResolved"/>):
+        /// данж — вихід з данжу без незабанкованого; вузол і фінал — поле за
+        /// ворогом (полоса Worst); тренування — без наслідків. Упалі лишаються на
+        /// полі й отримують рани тим самим шляхом, що після будь-якого бою;
+        /// полон упалих — крок C6.
+        /// </summary>
+        public CombatActionResult CombatRetreat()
+        {
+            RequireBattle();
+            var current = _battle.Current;
+            if (current == null || current.Side != Side.Player || !current.IsActive)
+                return CombatActionResult.InvalidAction;
+            var r = _battle.Retreat();
+            AfterCombatAction();
+            return r;
         }
 
         /// <summary>
@@ -2385,6 +3307,11 @@ namespace Game.Core.Session
             _battle = CombatBattleBuilder.Build(setup, _cfg, ResolvePlayerUnit, ResolveEnemyById, roller, DefaultCombatContent.AbilityCatalog());
             State = SessionState.Battle;
             LogEvent("combat.battle.started", Args("reason", reason.ToString()));
+            if (reason != SuspendReason.TrainingSkirmish)
+            {
+                MeetEnemies();
+                RegisterBonds();
+            }
             OnBattleResolved();
         }
 
@@ -2415,8 +3342,39 @@ namespace Game.Core.Session
             var reason = _resume.Reason;
             var returnState = _resume.ReturnState;
 
+            // Відступ (Поправка №14.7): поле лишається за ворогом. Раніше MapBattleBand
+            // давав відступу полосу Base — «важка перемога»; поки відступ ніхто не
+            // кликав, діри не було видно, а з кнопкою відступ на першому ході
+            // коштував би дешевше за бій (у данжі — «кімнату пройдено» з лутом).
+            bool retreated = result.Outcome == BattleOutcome.Retreat;
+            if (retreated) band = OutcomeBand.Worst;
+
             if (reason != SuspendReason.TrainingSkirmish)
                 ApplyBattleCasualties(result);
+
+            // Поразка → полон (Поправка №14.7): хто втікає, хто лишається в чужих руках.
+            // Лише малі бої — кімнати данжу і рейд; вузол 1 і фінал — великі сценарні
+            // битви з власними драбинами наслідків (фінал №14.7 не змінює).
+            var captivity = ComputeCaptivity(result, reason);
+
+            // Досьє (Поправка №14.6): хто з ворогом бився — той його знає.
+            if (reason != SuspendReason.TrainingSkirmish) StudyEnemies(_battle, "battle");
+
+            // Здача (Поправка №14.2): долю тих, хто здався, гравець вирішує на панелі
+            // результату; тренування — пісочниця, полонених не дає.
+            if (reason != SuspendReason.TrainingSkirmish && result.SurrenderedEnemies != null)
+                foreach (var e in result.SurrenderedEnemies)
+                {
+                    if (e.Spared)
+                    {
+                        // «Милосердя на полі»: пощаджений — одразу полонений, долю вирішує віче.
+                        _prisoners.Take(e.EnemyDefinitionId, e.DisplayName, (int)e.Rank, e.NeverRecruitable, _processor.CurrentDay);
+                        LogEvent("enemy.spared", Args("enemyId", e.EnemyDefinitionId, "rank", e.Rank.ToString()));
+                        continue;
+                    }
+                    _pendingSurrenders.Add(e);
+                    LogEvent("enemy.surrendered", Args("enemyId", e.EnemyDefinitionId, "rank", e.Rank.ToString()));
+                }
 
             bool autoResolved = _battleAutoResolvedThisCall;
             _battleAutoResolvedThisCall = false;
@@ -2441,14 +3399,40 @@ namespace Game.Core.Session
                     break;
                 }
                 case SuspendReason.DungeonCombatRoom:
-                    FinishDungeonCombat(band, result);
+                    if (retreated) RetreatFromDungeonBattle();
+                    else FinishDungeonCombat(band, result);
                     break;
                 case SuspendReason.FinaleAssault:
                     CompleteFinale(band, wasBloody: true);
                     break;
                 case SuspendReason.TrainingSkirmish:
                     break; // пісочниця: State вже Title/ReturnState, кампанію не чіпаємо
+                case SuspendReason.CaptiveRaid:
+                    FinishCaptiveRaid(result);
+                    break;
             }
+
+            // Після розв'язки за причиною: вайп чи відступ уже повернули загін додому,
+            // і бранці йдуть у полон з громади, а не посеред данжу.
+            ApplyCaptivity(captivity);
+            if (reason == SuspendReason.CaptiveRaid) _raidGroupId = null;
+        }
+
+        /// <summary>
+        /// Відступ із бою бойової кімнати (Поправка №14.7): загін іде з данжу —
+        /// не вайп, а обережний вихід (<see cref="DungeonRun.RetreatFromBattle"/>):
+        /// незабанковане пропадає, рани вже прийшли з бою.
+        /// </summary>
+        private void RetreatFromDungeonBattle()
+        {
+            var rep = _dungeon.RetreatFromBattle();
+            if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
+            LogEvent("dungeon.retreat", Args("depth", rep.DepthReached.ToString(CultureInfo.InvariantCulture)));
+
+            ExpeditionResult discarded;
+            _party.Return(_state, out discarded);
+            _dungeon = null;
+            State = SessionState.Morning;
         }
 
         private void FinishDungeonCombat(OutcomeBand band, BattleResult result)
@@ -4162,8 +5146,41 @@ namespace Game.Core.Session
             return c != null && new Game.Core.Base.CompanionActorAdapter(c).IsPresentInSettlement;
         }
 
+        /// <summary>
+        /// Поле бою кімнати: шаблон арени за <c>ArenaKey</c> (Поправка №14.4 — стіни,
+        /// перепони, бочки, сіно, місця загону й ворогів, підкріплення), або
+        /// генератор, якщо шаблону немає.
+        /// </summary>
+        private BattleSetup BuildRoomBattleSetup(DungeonRoomDefinition room, IReadOnlyList<string> partyIds, BattleOpening opening,
+                                                 IReadOnlyList<string> enemyIdsOverride = null)
+        {
+            // enemyIdsOverride — хто лишився після розмови перед боєм (docs/ABILITIES.md §4.6).
+            var enemyIds = enemyIdsOverride ?? room.EnemyIds;
+            if (ArenaTemplates.TryGet(room.ArenaKey, out var rows))
+            {
+                var reinforcements = new List<(int, string)>();
+                foreach (var r in room.Reinforcements) reinforcements.Add((r.Round, r.EnemyId));
+                return ArenaTemplates.Build(rows, partyIds, enemyIds, _hitRule, opening, reinforcements);
+            }
+            return BuildBattleSetup(partyIds, enemyIds, 8, 8, opening: opening);
+        }
+
+        /// <summary>Старт бою мовою данжу → варіант бою (Поправка №14.1).</summary>
+        internal static BattleOpening ToBattleOpening(DungeonBattleStart start)
+        {
+            switch (start)
+            {
+                case DungeonBattleStart.Ambush: return BattleOpening.Ambush;
+                case DungeonBattleStart.Spotted: return BattleOpening.Spotted;
+                case DungeonBattleStart.UnderFire: return BattleOpening.UnderFire;
+                case DungeonBattleStart.Encounter: return BattleOpening.Encounter;
+                case DungeonBattleStart.Provoked: return BattleOpening.Provoked;
+                default: return BattleOpening.FirstStrike;
+            }
+        }
+
         private BattleSetup BuildBattleSetup(IReadOnlyList<string> partyIds, IReadOnlyList<string> enemyIds,
-            int width, int height, string defectorCompanionId = null)
+            int width, int height, string defectorCompanionId = null, BattleOpening opening = BattleOpening.Encounter)
         {
             // Захист від переповнення сітки: розстановка нижче кладе кожного
             // юніта на свій рядок (py/ey += 2, старт з 1) — фіксований height
@@ -4177,16 +5194,15 @@ namespace Game.Core.Session
             int neededRows = System.Math.Max(neededPartyRows, neededEnemyRows);
             height = System.Math.Max(height, neededRows * 2 + 1);
 
-            var setup = new BattleSetup { Width = width, Height = height, HitRule = _hitRule };
+            var setup = new BattleSetup { Width = width, Height = height, HitRule = _hitRule, Opening = opening };
             if (width > 3 && height > 2)
                 setup.Cover.Add(new CoverPlacement(new GridPos(width / 2, height / 2), Direction.West, CoverType.Half));
 
             int py = 1;
             if (partyIds != null)
-                foreach (var id in partyIds)
+                for (int i = 0; i < partyIds.Count; i++)
                 {
-                    setup.PlayerUnits.Add(new PlayerSpawn(id, new GridPos(1, py)));
-                    py += 2;
+                    setup.PlayerUnits.Add(new PlayerSpawn(partyIds[i], PartySpawnPos(i, ref py, width, height, opening)));
                 }
 
             int nextEnemyRow = PlaceEnemyFormation(setup, enemyIds, width);
@@ -4204,6 +5220,28 @@ namespace Game.Core.Session
             }
 
             return setup;
+        }
+
+        /// <summary>
+        /// Де стає i-й боєць загону. Звичайно — стовпцем біля лівого краю. «Оточені»
+        /// (Поправка №14.1) — врозкид: лівий край, верхній і нижній край середини
+        /// поля, щоб вороги мали фланги. Детерміновано і лівіше ворожих стовпців
+        /// (<see cref="PlaceEnemyFormation"/> ставить їх на width−2 і width−4).
+        /// </summary>
+        private static GridPos PartySpawnPos(int index, ref int py, int width, int height, BattleOpening opening)
+        {
+            if (opening == BattleOpening.Surrounded && width >= 6 && height >= 4)
+            {
+                int midX = System.Math.Max(2, width / 2 - 1);
+                switch (index % 3)
+                {
+                    case 1: return new GridPos(midX, 0);
+                    case 2: return new GridPos(midX, height - 1);
+                }
+            }
+            var pos = new GridPos(1, py);
+            py += 2;
+            return pos;
         }
 
         /// <summary>
@@ -4258,6 +5296,7 @@ namespace Game.Core.Session
         /// фінал) — рішення інтегратора, застосоване однаково для всіх трьох:
         /// Victory без втрат → Best; Victory з даун/смертю → Base; Victory без
         /// даун/смерті, але з ранами → Good; Defeat → Worst; Retreat/Draw → Base.
+        /// Відступ перекриває <see cref="OnBattleResolved"/>: поле за ворогом, Worst (Поправка №14.7).
         /// </summary>
         private static OutcomeBand MapBattleBand(BattleResult r)
         {
@@ -4385,11 +5424,66 @@ namespace Game.Core.Session
             head.Append(";items=").Append(itemsBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(itemsBlob);
 
             head.Append(";defect=").Append(_defectionWatch.CaptureState());
+            // Поправка №14.2: полонені, ті, хто чекає рішення після бою, і переманені.
+            head.Append(";prisoners=").Append(_prisoners.CaptureState());
+            head.Append(";recruits=").Append(string.Join("/", _recruits));
+            head.Append(";surr=").Append(CapturePendingSurrenders());
+            // Поправка №14.7: наші бранці і загін, на який іде рейд.
+            head.Append(";captives=").Append(_captives.CaptureState());
+            head.Append(";raid=").Append(_raidGroupId ?? "-");
+            // Поправка №14.6: досьє ворогів.
+            head.Append(";dossier=").Append(_dossier.CaptureState());
+            head.Append(";bribe=").Append(CaptureBribeRefusals());
             head.Append(";crisis=").Append(_crisis.CaptureState());
 
             string coreBlob = _processor.SaveState();
             head.Append(";core=").Append(coreBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(coreBlob);
             return head.ToString();
+        }
+
+        private string CapturePendingSurrenders()
+        {
+            var parts = new List<string>();
+            foreach (var e in _pendingSurrenders)
+                parts.Add(e.UnitId.Replace('#', '!') + "," + e.EnemyDefinitionId + ","
+                    + System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(e.DisplayName ?? "")).Replace('=', '~') + ","
+                    + ((int)e.Rank).ToString(CultureInfo.InvariantCulture) + "," + (e.NeverRecruitable ? "1" : "0"));
+            return string.Join("/", parts);
+        }
+
+        private void RestorePendingSurrenders(string value)
+        {
+            _pendingSurrenders.Clear();
+            if (string.IsNullOrEmpty(value)) return;
+            foreach (var entry in value.Split('/'))
+            {
+                var f = entry.Split(',');
+                if (f.Length < 5) continue;
+                _pendingSurrenders.Add(new SurrenderedEnemy
+                {
+                    UnitId = f[0].Replace('!', '#'),
+                    EnemyDefinitionId = f[1],
+                    DisplayName = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(f[2].Replace('~', '='))),
+                    Rank = (EnemyRank)ParseInt(f[3]),
+                    NeverRecruitable = f[4] == "1"
+                });
+            }
+        }
+
+        /// <summary>Переманені — назад у ростер ДО відновлення ядра: ростер відновлює стан лише наявних напарників.</summary>
+        private void RestoreRecruits(string value)
+        {
+            _recruits.Clear();
+            if (string.IsNullOrEmpty(value)) return;
+            foreach (var entry in value.Split('/'))
+            {
+                var f = entry.Split(',');
+                if (f.Length < 2) continue;
+                string name = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(f[1].Replace('~', '=')));
+                var companion = BuildRecruit(f[0], name, _recruits.Count);
+                if (companion != null && _worldRoster.Get(companion.Id) == null) _worldRoster.Add(companion);
+                _recruits.Add(entry);
+            }
         }
 
         /// <summary>Поле "tensionPace" із заголовка зліпка (до ";core="), або null для старого сейву без нього.</summary>
@@ -4505,6 +5599,13 @@ namespace Game.Core.Session
                     case "factions": _factions.RestoreState(value); break;
                     case "points": _points.RestoreState(value); break;
                     case "defect": _defectionWatch.RestoreState(value); break;
+                    case "prisoners": _prisoners.RestoreState(value); break;
+                    case "recruits": RestoreRecruits(value); break;
+                    case "surr": RestorePendingSurrenders(value); break;
+                    case "captives": _captives.RestoreState(value); break;
+                    case "raid": _raidGroupId = value == "-" || value.Length == 0 ? null : value; break;
+                    case "dossier": _dossier.RestoreState(value); break;
+                    case "bribe": RestoreBribeRefusals(value); break;
                     case "crisis": _crisis.RestoreState(value); break;
                     case "arc": RestoreArcState(value); break;
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;

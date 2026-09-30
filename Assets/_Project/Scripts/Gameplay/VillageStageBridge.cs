@@ -49,6 +49,7 @@ namespace Game.Gameplay
                 Tier = view.Tier,
                 Patrolling = view.IsPatrolling,
                 Posts = BuildPosts(session.GetRosterView()),
+                Idle = BuildIdle(session.GetRosterView()),
                 Plots = BuildPlots(session.GetCityView()),
                 Incidents = BuildIncidents(session.LastDayReport)
             });
@@ -66,7 +67,8 @@ namespace Game.Gameplay
             var occupants = new Dictionary<string, string>();
             if (roster?.Companions != null)
                 foreach (var c in roster.Companions)
-                    if (c != null && !string.IsNullOrEmpty(c.AssignedSlotId) && !occupants.ContainsKey(c.AssignedSlotId))
+                    if (c != null && !string.IsNullOrEmpty(c.AssignedSlotId) && !occupants.ContainsKey(c.AssignedSlotId)
+                        && Game.Gameplay.Walk.VillagePeople.IsInVillage(c))
                         occupants[c.AssignedSlotId] = c.Id;
 
             var posts = new List<StagePost>(PostIds.Length);
@@ -74,10 +76,33 @@ namespace Game.Gameplay
             {
                 string occupant;
                 occupants.TryGetValue(id, out occupant);
-                posts.Add(new StagePost { PostId = id, OccupantId = occupant });
+                posts.Add(new StagePost { PostId = id, OccupantId = occupant, OccupantFemale = IsFemale(occupant) });
             }
             return posts;
         }
+
+        /// <summary>
+        /// Хто стоїть біля вогнища Віча — та сама розстановка, що й місця
+        /// розмови (<see cref="Game.Gameplay.Walk.VillagePeople.Arrange"/>): фігура і місце збігаються.
+        /// </summary>
+        private static List<StageIdlePerson> BuildIdle(RosterView roster)
+        {
+            var figures = new Dictionary<string, Game.Gameplay.Walk.WalkPoint>();
+            foreach (var id in PostIds)
+                if (id != "lab_station") figures[id] = default(Game.Gameplay.Walk.WalkPoint);
+            var spots = new List<Game.Gameplay.Walk.WalkPoint>();
+            for (int i = 0; i < Game.Gameplay.Walk.VillagePeople.IdleSpotCount; i++) spots.Add(default(Game.Gameplay.Walk.WalkPoint));
+            var idle = new List<StageIdlePerson>();
+            foreach (var spot in Game.Gameplay.Walk.VillagePeople.Arrange(roster, figures, spots))
+                if (!spot.AtPost)
+                    idle.Add(new StageIdlePerson { Index = spot.IdleIndex, CompanionId = spot.CompanionId, Female = IsFemale(spot.CompanionId) });
+            return idle;
+        }
+
+        private static bool IsFemale(string companionId) =>
+            !string.IsNullOrEmpty(companionId) &&
+            Game.Gameplay.UI.ScreenText.SubjectGender(companionId, Game.Core.Characters.Creation.Gender.Male)
+                == Game.Core.Characters.Creation.Gender.Female;
 
         private static List<StagePlot> BuildPlots(CityView city)
         {

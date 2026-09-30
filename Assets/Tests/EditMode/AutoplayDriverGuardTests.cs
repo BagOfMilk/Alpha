@@ -32,13 +32,17 @@ namespace Game.Tests.EditMode
             string gameplay = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Assets", "_Project", "Scripts", "Gameplay");
             string driver = File.ReadAllText(Path.Combine(gameplay, "AutoplayGameDriver.cs"));
 
-            // «Екрани» — лише те, чим грає людина: Gameplay/UI/*, оболонка і бойова
+            // «Екрани» — лише те, чим грає людина: Gameplay/UI/** (разом із
+            // моделями панелей, UI/Models — картки станцій і місць, що замінили
+            // вкладки хаба, 30.09.2026), оболонка (усі її partial-файли) і бойова
             // арена. Демо-сцени (BaseGameDemo, хроніка, VillageLife) не рахуються:
             // там є однойменні виклики інших класів (SettlementCycle.AdvanceDay).
             var screens = new List<string>();
-            foreach (var f in Directory.GetFiles(Path.Combine(gameplay, "UI"), "*.cs"))
+            foreach (var f in Directory.GetFiles(Path.Combine(gameplay, "UI"), "*.cs", SearchOption.AllDirectories))
                 screens.Add(File.ReadAllText(f));
-            foreach (var name in new[] { "GameShell.cs", "BattleArenaController.cs", "BattleArenaView.cs", "PortraitRig.cs", "VillageStageBridge.cs" })
+            foreach (var f in Directory.GetFiles(gameplay, "GameShell*.cs"))
+                screens.Add(File.ReadAllText(f));
+            foreach (var name in new[] { "BattleArenaController.cs", "BattleArenaView.cs", "PortraitRig.cs", "VillageStageBridge.cs" })
                 screens.Add(File.ReadAllText(Path.Combine(gameplay, name)));
 
             // Команди — публічні методи GameSession; виклик шукаємо з будь-яким
@@ -53,7 +57,7 @@ namespace Game.Tests.EditMode
             var driverOnly = driverCommands.Where(c => !screenCommands.Contains(c) && !QueriesAllowed.Contains(c)).OrderBy(c => c).ToList();
             CollectionAssert.IsEmpty(driverOnly,
                 "Автотур кличе команди, яких не кличе жоден екран гри — людина до них не дотягнеться: " + string.Join(", ", driverOnly));
-            CollectionAssert.Contains(screenCommands, "AdvanceDay", "«Почати день» мусить проводити день (HubScreen.StartDay)");
+            CollectionAssert.Contains(screenCommands, "AdvanceDay", "«Почати день» мусить проводити день (GameShell.StartDay)");
         }
 
         private static HashSet<string> Commands(Regex call, string source)

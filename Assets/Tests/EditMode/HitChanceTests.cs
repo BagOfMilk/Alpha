@@ -1,3 +1,4 @@
+using System.Linq;
 using Game.Core.Balance;
 using Game.Core.Combat;
 using NUnit.Framework;
@@ -99,20 +100,25 @@ namespace Game.Tests.EditMode
         // ---- ThresholdRule: повністю детерміновано, roller не чіпає ----
 
         [Test]
-        public void ThresholdRule_BandsByMarginFromBaseline_NoRollerCalls()
+        public void ThresholdRule_CarryPerFighter_NoRollerCalls()
         {
-            var cfg = new BalanceConfig(); // Baseline=50, GrazeBand=15, CritBand=35
+            // Без кубика (29.09.2026, «Усі відсотки мають працювати»): лічильник бійця
+            // стартує з 50, удар додає шанс, на 100 — влучання; від 85 — крит.
+            var cfg = new BalanceConfig();
             var rule = new ThresholdRule(cfg);
-            var roller = new ScriptedDiceRoller(); // порожня черга — якщо торкнуться, поверне 0.5, але ми перевіримо, що не торкнуться
+            var roller = new ScriptedDiceRoller(); // порожня черга — перевіримо, що її не торкнуться
+            CombatUnit Fresh() => new CombatUnit("u", Side.Player, new UnitProfile { MaxHp = 1, MaxAp = 1 }, null);
 
-            Assert.AreEqual(AttackOutcome.Miss, rule.Resolve(null, null, 49, roller));
-            Assert.AreEqual(AttackOutcome.Graze, rule.Resolve(null, null, 50, roller));
-            Assert.AreEqual(AttackOutcome.Graze, rule.Resolve(null, null, 64, roller));
-            Assert.AreEqual(AttackOutcome.Hit, rule.Resolve(null, null, 65, roller));
-            Assert.AreEqual(AttackOutcome.Hit, rule.Resolve(null, null, 84, roller));
-            Assert.AreEqual(AttackOutcome.Crit, rule.Resolve(null, null, 85, roller));
+            Assert.AreEqual(AttackOutcome.Miss, rule.Resolve(Fresh(), null, 49, roller), "50+49 < 100");
+            Assert.AreEqual(AttackOutcome.Hit, rule.Resolve(Fresh(), null, 50, roller), "перший удар від 50 % влучає");
+            Assert.AreEqual(AttackOutcome.Crit, rule.Resolve(Fresh(), null, 85, roller));
 
-            Assert.AreEqual(0, roller.Streams.Count, "ThresholdRule не обязан звать IDiceRoller ни разу (R1)");
+            var archer = Fresh();
+            var thirty = Enumerable.Range(0, 10).Select(_ => rule.Resolve(archer, null, 30, roller)).ToList();
+            Assert.AreEqual(3, thirty.Count(o => o != AttackOutcome.Miss), "30 % — рівно 3 влучання з 10");
+            CollectionAssert.DoesNotContain(thirty, AttackOutcome.Graze);
+
+            Assert.AreEqual(0, roller.Streams.Count, "ThresholdRule не зобов'язаний кликати IDiceRoller жодного разу (R1)");
         }
 
         [Test]

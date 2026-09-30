@@ -119,7 +119,7 @@ namespace Game.Core.Base
             // прибився до гурту, на пост не стає взагалі.
             if (companion.IsDead || companion.Status == CompanionStatus.OnMission ||
                 companion.Status == CompanionStatus.Antagonist ||
-                companion.Status == CompanionStatus.NotArrived)
+                companion.Status == CompanionStatus.NotArrived || companion.IsCaptive)
                 return AssignmentResult.CompanionUnavailable;
 
             // Пост загиблого вільний, навіть якщо звірка ще не пройшла.
@@ -199,7 +199,7 @@ namespace Game.Core.Base
         private bool IsFallen(string companionId)
         {
             var c = Roster.Get(companionId);
-            return c == null || c.IsDead || c.Status == CompanionStatus.Antagonist;
+            return c == null || c.IsDead || c.Status == CompanionStatus.Antagonist || c.IsCaptive;
         }
 
         /// <summary>
@@ -376,7 +376,7 @@ namespace Game.Core.Base
                 // і не потрапить (IsOccupied вже false); явна перевірка — той самий
                 // стиль захисту, що і в TryAssign/Steward.Staff (§4.5).
                 if (companion == null || companion.IsDead || companion.Status == CompanionStatus.OnMission ||
-                    companion.Status == CompanionStatus.Antagonist) continue;
+                    companion.Status == CompanionStatus.Antagonist || companion.IsCaptive) continue;
 
                 var def = slot.Definition;
                 int output = ProductionCalculator.OutputPerCycle(companion, def, Balance);

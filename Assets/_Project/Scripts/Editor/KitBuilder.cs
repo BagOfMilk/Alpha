@@ -200,22 +200,22 @@ namespace Game.Gameplay.EditorTools
                 model.SetActive(false);
             }
 
-            // Підпис над будівлею дивиться в камеру: ізометрія не обертається.
+            // Центр ділянки (над ним — підпис місця). 3D-текст тут більше не
+            // малюється: підпис один, IMGUI-шний, зі станом (docs/UX_DESIGN.md §4.8)
+            // — раніше над зведеною будівлею висіли два написи.
             var label = new GameObject("label");
             label.transform.SetParent(plot.transform, false);
             label.transform.localPosition = new Vector3(width * 0.5f, 3.2f, depth * 0.5f);
-            label.transform.rotation = Quaternion.Euler(30f, 45f, 0f);
-
-            var text = label.AddComponent<TextMesh>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 48;
-            text.characterSize = 0.08f;
-            text.anchor = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.text = labelText;
-            var renderer = label.GetComponent<MeshRenderer>();
-            if (renderer != null && text.font != null) renderer.sharedMaterial = text.font.material;
             label.SetActive(false);
+
+            // Двері: точка перед фасадом (двері хати — посередині фасаду, що
+            // дивиться в −Z). Сюди герой підходить, щоб увійти.
+            float step = 1f;
+            var wall = Load(kitPath + (wood ? "wall-wood" : "wall") + ".fbx");
+            if (wall != null) step = Mathf.Max(MeasureSize(wall).x, 0.1f);
+            var door = new GameObject("door");
+            door.transform.SetParent(plot.transform, false);
+            door.transform.localPosition = new Vector3((width / 2) * step, 0f, -0.75f);
 
             return plot;
         }

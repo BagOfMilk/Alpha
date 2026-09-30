@@ -52,7 +52,8 @@ namespace Game.Core.Combat
         /// </summary>
         public static DamageReport RollAttackDamage(CombatUnit attacker, CombatUnit target,
                                                     WeaponDefinition w, AttackOutcome outcome,
-                                                    IDiceRoller roller, bool deterministic, BalanceConfig cfg)
+                                                    IDiceRoller roller, bool deterministic, BalanceConfig cfg,
+                                                    bool ignoreArmor = false)
         {
             if (outcome == AttackOutcome.Miss) return new DamageReport(0, false);
 
@@ -76,11 +77,16 @@ namespace Game.Core.Combat
             damage += attacker != null ? attacker.Profile.DamageBonus : 0;
             damage = ApplyTypeMultiplier(damage, w.Damage, target);
 
-            int armor = Math.Max(0, target.EffectiveArmor - w.ArmorPierce);
+            // «Пробити» (docs/ABILITIES.md): удар крізь уже зношену броню — без броні.
+            int armor = ignoreArmor ? 0 : Math.Max(0, target.EffectiveArmor - w.ArmorPierce);
             damage -= armor;
 
             if (outcome == AttackOutcome.Graze)
                 damage = (int)Math.Round(damage * (cfg.Combat.GrazePartialPercent / 100.0));
+
+            // «Розлютити»: розлючений б'є сильніше (ПЛЕЙСХОЛДЕР +EnragedDamagePercent).
+            if (attacker != null && attacker.HasStatus(StatusType.Enraged))
+                damage = damage * (100 + cfg.Combat.EnragedDamagePercent) / 100;
 
             return new DamageReport(Math.Max(0, damage), crit);
         }

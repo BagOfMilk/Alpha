@@ -43,7 +43,8 @@ namespace Game.Core.Base
             _companion.Status != CompanionStatus.OnMission &&
             _companion.Status != CompanionStatus.Dead &&
             _companion.Status != CompanionStatus.Antagonist &&
-            _companion.Status != CompanionStatus.NotArrived;
+            _companion.Status != CompanionStatus.NotArrived &&
+            _companion.Status != CompanionStatus.Captive; // Поправка №14.7: бранець не вдома
 
         public string HeldPositionId => _companion.AssignedSlotId;
 
@@ -346,6 +347,7 @@ namespace Game.Core.Base
                     // тихо повертав його зі статусу NotArrived у видимі
                     // (Injured) — той самий клас дірки, що й Antagonist вище.
                     if (c.Status == CompanionStatus.NotArrived) continue;
+                    if (c.IsCaptive) continue; // бранця криза вдома не дістане (№14.7)
                     ids.Add(c.Id);
                 }
                 ids.Sort(StringComparer.Ordinal);
@@ -407,7 +409,7 @@ namespace Game.Core.Base
             if (c == null || c.IsDead || c.Status == CompanionStatus.Antagonist ||
                 c.Status == CompanionStatus.NotArrived) return null;
             c.InjuryPoints += injuryPoints;
-            if (c.Status != CompanionStatus.OnMission)
+            if (c.Status != CompanionStatus.OnMission && !c.IsCaptive) // рана не звільняє з полону (№14.7)
                 c.Status = CompanionStatus.Injured;
             Characters.Scars.ScarDefinition granted;
             Characters.Scars.DefaultScars.TryGrant(c, tier, out granted);

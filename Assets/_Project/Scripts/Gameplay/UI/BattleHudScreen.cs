@@ -19,8 +19,9 @@ namespace Game.Gameplay.UI
     /// <c>BattleArenaController</c>) сам вирішує, який <c>Combat*</c>-виклик
     /// означає клік/гарячу клавішу.
     ///
-    /// Розкладка (§3): верхня смуга (раунд + стрічка ініціативи + індикатор
-    /// правила влучання) → банер ходу сторони під нею → нижня панель дій по
+    /// Розкладка (§3): верхня смуга (раунд + індикатор правила влучання) →
+    /// колесо черги ходів у лівому верхньому куті (Поправка №14.5) → банер
+    /// ходу сторони під смугою → нижня панель дій по
     /// центру (картка юніта, здібності, кнопки) → журнал праворуч
     /// (згортається) → підказка біля курсора → оверлеї/спливаючі написи над
     /// юнітами на арені. <see cref="IBattleHudData.SetHudRects"/> кличеться
@@ -36,6 +37,7 @@ namespace Game.Gameplay.UI
         private static Vector2 _logScroll;
         private static bool _logCollapsed;
         private static bool _confirmAutoResolve;
+        private static bool _confirmRetreat;
         private static int _lastLogCount = -1;
 
         public static void Draw(IBattleHudData c)
@@ -45,7 +47,7 @@ namespace Game.Gameplay.UI
 
             var blockingRects = new List<Rect>();
 
-            if (c.ResultPending) _confirmAutoResolve = false; // бій скінчився — питання автобою знято
+            if (c.ResultPending) { _confirmAutoResolve = false; _confirmRetreat = false; } // бій скінчився — питання знято
 
             // Панель результату — лише коли дограно такти фінальної дії: удар, що
             // вирішив бій, спершу видно на арені (рев'ю Бою v2).
@@ -81,6 +83,15 @@ namespace Game.Gameplay.UI
             GUILayout.EndArea();
             blockingRects.Add(topRect);
 
+            // Колесо черги ходів у лівому верхньому куті (Поправка №14.5) —
+            // замість стрічки у верхній смузі. Клік блокують лише бейджі й
+            // центр: між ними арена клікається (рецензія C1 — інакше колесо
+            // з'їдало 9–15% поля на 720p).
+            bool compactWheel = Screen.height <= 760;
+            var wheel = TurnWheelModel.Build(view, compactWheel ? WheelCompactSlots : TurnWheelModel.DefaultMaxSlots);
+            var wheelRect = TurnWheelRect(topRect, WheelScale(scale, compactWheel), pad);
+            DrawTurnWheel(c, view, wheel, wheelRect, WheelScale(scale, compactWheel), blockingRects);
+
             float rightWidth = RightPanelWidth();
             var rightRect = new Rect(Screen.width - rightWidth - pad, topRect.height + pad,
                 rightWidth, Screen.height - topRect.height - pad * 2f);
@@ -111,6 +122,31 @@ namespace Game.Gameplay.UI
             // Підтвердження автобою — на верхньому рівні, не всередині панелі журналу:
             // там модалка обрізалась межами області й була недоступна (рев'ю Бою v2).
             if (_confirmAutoResolve) DrawAutoResolveConfirm(c);
+            if (_confirmRetreat) DrawRetreatConfirm(c, view);
+        }
+
+        /// <summary>
+        /// Підтвердження відступу (Поправка №14.7): що саме буде — до кліку
+        /// (Статут UI-02), текст наслідку — за тим, хто просив бій.
+        /// </summary>
+        private static void DrawRetreatConfirm(IBattleHudData c, BattleView view)
+        {
+            Widgets.Modal(UkrainianText.Get("ui.battle.retreat.confirm.title", false), () =>
+            {
+                GUILayout.Label(UkrainianText.Get("ui.battle.retreat.confirm.body", false), AlphaSkin.Body);
+                if (!string.IsNullOrEmpty(view.RetreatConsequenceKey))
+                    GUILayout.Label(UkrainianText.Get(view.RetreatConsequenceKey, false), AlphaSkin.DangerText);
+                GUILayout.Space(10f);
+                GUILayout.BeginHorizontal();
+                if (Widgets.DangerButton(UkrainianText.Get("ui.battle.retreat", false)))
+                {
+                    _confirmRetreat = false;
+                    c.RequestRetreat();
+                }
+                if (Widgets.SecondaryButton(UkrainianText.Get("ui.common.cancel", false)))
+                    _confirmRetreat = false;
+                GUILayout.EndHorizontal();
+            }, () => _confirmRetreat = false);
         }
 
         private static void DrawAutoResolveConfirm(IBattleHudData c)
@@ -190,12 +226,16 @@ namespace Game.Gameplay.UI
 
         private static void DrawTopBar(IBattleHudData c, BattleView view)
         {
+            // «Раунд N» — у центрі колеса черги (Поправка №14.5), тут не дублюється.
             GUILayout.BeginHorizontal();
-            GUILayout.Label(UkrainianText.Format("ui.battle.round", false, "round", view.Round.ToString(CultureInfo.InvariantCulture)),
-                AlphaSkin.SubHeader, GUILayout.ExpandWidth(false));
-            GUILayout.Space(16f);
-            DrawInitiativeStrip(c, view);
             GUILayout.FlexibleSpace();
+            // Підкріплення ворога з відліком (Поправка №14.4): видно заздалегідь, а не з'являється раптом.
+            if (view.ReinforcementRound > 0)
+            {
+                GUILayout.Label(UkrainianText.Format("ui.battle.reinforcements.countdown", false,
+                    "round", I(view.ReinforcementRound), "count", I(view.ReinforcementCount)), AlphaSkin.DangerText, GUILayout.ExpandWidth(false));
+                GUILayout.Space(16f);
+            }
             // Аудит знімків п.5: «Правило влучання вгорі праворуч — не
             // курсивом, читабельно» — AlphaSkin.Tooltip курсивний і тьмяний,
             // тут потрібен звичайний світлий HintLine (§AlphaSkin.HintLine).
@@ -204,57 +244,196 @@ namespace Game.Gameplay.UI
             GUILayout.EndHorizontal();
         }
 
-        /// <summary>Ширина зайва понад <see cref="Widgets.BadgeWidth"/> для рамки поточного юніта (§Widgets.BorderedBadge) — так підрахунок переносу рядка (нижче) не недооцінює ширший бейдж.</summary>
-        private const float InitiativeBorderPad = 8f;
-        /// <summary>Товщина смужки HP під бейджем черги ходу (§3 «під іменем — тонка HP-смужка»).</summary>
-        private const float InitiativeHpBarHeight = 4f;
+        // ================= колесо черги ходів (Поправка №14.5) =================
+
+        /// <summary>Бієць, на чий бейдж на колесі наведена миша, — його мітка над головою підсвічується (зв'язок колесо → мапа).</summary>
+        private static string _wheelHoverUnitId;
+        private static string _wheelLastCurrentId;
+        private static float _wheelTurnStartedAt = -10f;
+
+        /// <summary>Скільки триває поворот колеса на крок після зміни ходу (сек).</summary>
+        private const float WheelTurnSeconds = 0.3f;
+
+        /// <summary>На екранах до 760 px заввишки (720p) колесо менше і тримає 6 ходів, а не 8 (рецензія C1).</summary>
+        private const int WheelCompactSlots = 6;
+        private static float WheelScale(float scale, bool compact) => compact ? scale * 0.85f : scale;
+
+        private static float WheelBadgeWidth(float scale) => Clamp(112f * scale, 92f, 150f);
+        private static float WheelBadgeHeight(float scale) => Clamp(24f * scale, 20f, 30f);
+        private static float WheelRadiusX(float scale) => Clamp(122f * scale, 96f, 160f);
+        // Вертикальна піввісь ≥ висота бейджа / (1 − cos 45°): сусіди вгорі й унизу не налазять одне на одного при 8 слотах.
+        private static float WheelRadiusY(float scale) => Clamp(100f * scale, 80f, 130f);
+        private static float WheelTitleHeight(float scale) => Clamp(22f * scale, 18f, 28f);
+        private const float WheelHpBarHeight = 3f;
+        private const float WheelSkipLabelHeight = 16f;
+
+        /// <summary>Спільний стиль тексту колеса: один екземпляр на весь HUD, колір підставляється перед кожним підписом (рецензія C1 — без нового GUIStyle щокадру).</summary>
+        private static GUIStyle _wheelText;
+        private static GUIStyle _wheelTextSource;
+
+        private static GUIStyle WheelText(Color32 color)
+        {
+            var source = AlphaSkin.OverlayName;
+            if (_wheelText == null || !ReferenceEquals(_wheelTextSource, source))
+            {
+                _wheelText = new GUIStyle(source);
+                _wheelTextSource = source;
+            }
+            _wheelText.normal.textColor = color;
+            return _wheelText;
+        }
+
+        private static Rect TurnWheelRect(Rect topRect, float scale, float pad)
+        {
+            float w = WheelRadiusX(scale) * 2f + WheelBadgeWidth(scale) + pad * 2f;
+            float h = WheelTitleHeight(scale) + WheelRadiusY(scale) * 2f + WheelBadgeHeight(scale)
+                + WheelHpBarHeight + WheelSkipLabelHeight + pad * 2f;
+            return new Rect(pad, topRect.height + pad, w, h);
+        }
+
+        /// <summary>Підпис поверх арени без суцільного тла: темна тінь-зсув робить його читабельним і на траві, і на тайлах.</summary>
+        private static void ShadowedLabel(Rect rect, string text, Color32 color)
+        {
+            GUI.Label(new Rect(rect.x + 1f, rect.y + 1f, rect.width, rect.height), text, WheelText(AlphaSkin.BgDark));
+            GUI.Label(rect, text, WheelText(color));
+        }
 
         /// <summary>
-        /// Картки ініціативи: тло кольору сторони, ім'я з порядковим номером
-        /// (через <see cref="IBattleHudData.ResolveDisplayName"/>), тонка
-        /// смужка HP під іменем; звалений — сірий. Поточний юніт —
-        /// золоте тло з ТЕМНИМ текстом і рамкою (не світлий текст на
-        /// світлому тлі — фікс-ревью, аудит знімків п.2: «жовтий текст на
-        /// жовтому, синій на синьому»), решта — приглушений тон сторони
-        /// (<see cref="AlphaSkin.BattlePlayerSideMuted"/> тощо) з БІЛИМ
-        /// текстом замість насиченого кольору арени. Загортає в новий ряд,
-        /// коли не влазить (фікс-ревью старого HUD, той самий клас бага з
-        /// довгими іменами-дублікатами).
+        /// Колесо черги ходів (власник, 29.09.2026: «колесо чи щось таке»,
+        /// обрано «Колесо в кутку»). ЩО показувати рахує
+        /// <see cref="TurnWheelModel"/>; тут лише малювання:
+        /// <list type="bullet">
+        /// <item>поточний бієць угорі — золоте тло, темний текст, рамка;</item>
+        /// <item>далі за годинниковою стрілкою; межа раунду — риска з «Р{n}»;</item>
+        /// <item>свої — повна рамка, чужі — лише верхня і нижня (форма, а не лише колір, Статут UI-01);</item>
+        /// <item>упалий — сірий і перекреслений; оглушений — «пропускає» під бейджем;</item>
+        /// <item>наведення на бейдж підсвічує мітку бійця на арені, наведення на бійця — бейдж; клік — камера до бійця;</item>
+        /// <item>після зміни ходу колесо обертається на крок (<see cref="WheelTurnSeconds"/>).</item>
+        /// </list>
+        /// Кольори — лише з <see cref="AlphaSkin"/>. Суцільного тла немає: арена
+        /// під колесом видна, а клік блокують лише бейджі й центр — їхні
+        /// прямокутники йдуть у <paramref name="blocking"/> (рецензія C1).
         /// </summary>
-        private static void DrawInitiativeStrip(IBattleHudData c, BattleView view)
+        private static void DrawTurnWheel(IBattleHudData c, BattleView view, TurnWheelModel wheel, Rect area, float scale, List<Rect> blocking)
         {
-            if (view.InitiativeOrder == null) return;
-            float maxWidth = Screen.width * 0.55f;
-            float rowWidth = 0f;
-            bool rowOpen = false;
+            _wheelHoverUnitId = null;
 
-            foreach (var id in view.InitiativeOrder)
+            float titleH = WheelTitleHeight(scale);
+            ShadowedLabel(new Rect(area.x, area.y, area.width, titleH), UkrainianText.Get("ui.battle.wheel.title", false), AlphaSkin.TextDim);
+
+            int count = wheel.Slots.Count;
+            if (count == 0) return;
+
+            float bw = WheelBadgeWidth(scale), bh = WheelBadgeHeight(scale);
+            float rx = WheelRadiusX(scale), ry = WheelRadiusY(scale);
+            float cx = area.x + area.width * 0.5f;
+            float cy = area.y + titleH + (area.height - titleH - WheelHpBarHeight - WheelSkipLabelHeight) * 0.5f;
+
+            // Поворот на крок: новий поточний приїжджає з позиції «наступний».
+            string currentId = count > 0 ? wheel.Slots[0].UnitId : null;
+            if (!string.Equals(currentId, _wheelLastCurrentId, StringComparison.Ordinal))
             {
-                var unit = FindUnit(view, id);
-                if (unit == null) continue;
-                string name = c.ResolveDisplayName(unit);
-                bool current = string.Equals(id, view.CurrentUnitId, StringComparison.Ordinal) && !unit.IsDowned;
-                float w = Widgets.BadgeWidth(name) + (current ? InitiativeBorderPad : 0f);
+                if (_wheelLastCurrentId != null) _wheelTurnStartedAt = Time.realtimeSinceStartup;
+                _wheelLastCurrentId = currentId;
+            }
+            float t = (Time.realtimeSinceStartup - _wheelTurnStartedAt) / WheelTurnSeconds;
+            float offset = t < 1f ? (360f / count) * (1f - Clamp01(t)) : 0f;
 
-                if (rowOpen && rowWidth + w > maxWidth) { GUILayout.EndHorizontal(); rowOpen = false; rowWidth = 0f; }
-                if (!rowOpen) { GUILayout.BeginHorizontal(); rowOpen = true; }
-
-                GUILayout.BeginVertical(GUILayout.Width(w));
-                if (unit.IsDowned)
-                    Widgets.Badge(name, AlphaSkin.BgRaised, AlphaSkin.TextDim);
-                else if (current)
-                    Widgets.BorderedBadge(name, AlphaSkin.BattleCurrentUnit, AlphaSkin.BattleCurrentUnitText, AlphaSkin.AccentActive);
-                else
-                    Widgets.Badge(name, SideColorMuted(unit.Side), AlphaSkin.TextMain);
-
-                var hpTint = unit.IsDowned ? AlphaSkin.TextDim : SideColor(unit.Side);
-                Widgets.FilledBarAt(GUILayoutBarRect(w, InitiativeHpBarHeight), FilledFraction(unit.Hp, unit.HpMax), hpTint);
-                GUILayout.EndVertical();
-
-                rowWidth += w;
+            // Обід колеса — пунктир, щоб бейджі читались як одне коло.
+            for (int d = 0; d < 48; d++)
+            {
+                double a = d * Math.PI * 2.0 / 48.0;
+                Widgets.SolidRect(new Rect(cx + rx * (float)Math.Cos(a) - 1.5f, cy + ry * (float)Math.Sin(a) - 1.5f, 3f, 3f), AlphaSkin.BgRaised);
             }
 
-            if (rowOpen) GUILayout.EndHorizontal();
+            var centerRect = new Rect(cx - 60f, cy - 12f, 120f, 24f);
+            ShadowedLabel(centerRect, UkrainianText.Format("ui.battle.round", false, "round", I(wheel.CurrentRound)), AlphaSkin.TextMain);
+            blocking.Add(centerRect);
+
+            if (wheel.NextRoundStartsAt > 0)
+                DrawWheelRoundMark(cx, cy, rx, ry,
+                    TurnWheelModel.SlotAngleDegrees(wheel.NextRoundStartsAt, count) - 180f / count + offset,
+                    wheel.Slots[wheel.NextRoundStartsAt].Round);
+
+            for (int i = 0; i < count; i++)
+            {
+                var slot = wheel.Slots[i];
+                var unit = FindUnit(view, slot.UnitId);
+                if (unit == null) continue;
+
+                double angle = (TurnWheelModel.SlotAngleDegrees(i, count) + offset) * Math.PI / 180.0;
+                var rect = new Rect(cx + rx * (float)Math.Cos(angle) - bw * 0.5f, cy + ry * (float)Math.Sin(angle) - bh * 0.5f, bw, bh);
+
+                bool hoveredOnMap = string.Equals(c.HoveredUnitId, slot.UnitId, StringComparison.Ordinal);
+                bool hoveredHere = RectContainsMouse(rect);
+                if (hoveredHere)
+                {
+                    _wheelHoverUnitId = slot.UnitId;
+                    var evt = Event.current;
+                    if (evt != null && evt.type == EventType.MouseDown && evt.button == 0)
+                    {
+                        c.FocusCamera(slot.UnitId);
+                        evt.Use();
+                    }
+                }
+
+                DrawWheelBadge(rect, TruncateName(c.ResolveDisplayName(unit), bw), slot, hoveredOnMap || hoveredHere);
+
+                // Тонка смужка HP під бейджем — хто ледь живий, видно й з черги (рецензія C1).
+                var hpRect = new Rect(rect.x, rect.y + rect.height + 1f, rect.width, WheelHpBarHeight);
+                Widgets.FilledBarAt(hpRect, FilledFraction(unit.Hp, unit.HpMax), slot.IsDowned ? AlphaSkin.TextDim : SideColor(slot.Side));
+                blocking.Add(new Rect(rect.x, rect.y, rect.width, rect.height + 1f + WheelHpBarHeight));
+
+                if (slot.SkipsTurn)
+                    ShadowedLabel(new Rect(rect.x, hpRect.y + hpRect.height, rect.width, WheelSkipLabelHeight),
+                        UkrainianText.Get("ui.battle.wheel.skips", false), AlphaSkin.BattleStatus);
+            }
+        }
+
+        private static void DrawWheelBadge(Rect rect, string name, TurnWheelSlot slot, bool highlighted)
+        {
+            Color32 bg, fg, frame;
+            if (slot.IsDowned) { bg = AlphaSkin.BgRaised; fg = AlphaSkin.TextDim; frame = AlphaSkin.TextDim; }
+            else if (slot.IsCurrent) { bg = AlphaSkin.BattleCurrentUnit; fg = AlphaSkin.BattleCurrentUnitText; frame = AlphaSkin.AccentActive; }
+            else { bg = SideColorMuted(slot.Side); fg = AlphaSkin.TextMain; frame = SideColor(slot.Side); }
+            if (highlighted && !slot.IsCurrent) frame = AlphaSkin.AccentHover;
+
+            Widgets.SolidRect(rect, bg);
+
+            float b = highlighted || slot.IsCurrent ? 3f : 2f;
+            // Верх і низ — у всіх; боки — лише у своїх: форма рамки розрізняє сторони і без кольору.
+            Widgets.SolidRect(new Rect(rect.x, rect.y, rect.width, b), frame);
+            Widgets.SolidRect(new Rect(rect.x, rect.y + rect.height - b, rect.width, b), frame);
+            if (slot.Side == "Player")
+            {
+                Widgets.SolidRect(new Rect(rect.x, rect.y, b, rect.height), frame);
+                Widgets.SolidRect(new Rect(rect.x + rect.width - b, rect.y, b, rect.height), frame);
+            }
+
+            GUI.Label(rect, name, WheelText(fg));
+
+            if (slot.IsDowned)
+                Widgets.SolidRect(new Rect(rect.x + 4f, rect.y + rect.height * 0.5f - 1f, rect.width - 8f, 2f), AlphaSkin.TextDim);
+        }
+
+        /// <summary>Межа раунду на ободі: риска від центру назовні і «Р{n}» — з якого місця починається наступний раунд.</summary>
+        private static void DrawWheelRoundMark(float cx, float cy, float rx, float ry, float angleDegrees, int round)
+        {
+            double a = angleDegrees * Math.PI / 180.0;
+            float cos = (float)Math.Cos(a), sin = (float)Math.Sin(a);
+            for (float k = 0.45f; k <= 1.12f; k += 0.04f)
+                Widgets.SolidRect(new Rect(cx + rx * k * cos - 1.5f, cy + ry * k * sin - 1.5f, 3f, 3f), AlphaSkin.Accent);
+
+            ShadowedLabel(new Rect(cx + rx * 0.62f * cos - 22f, cy + ry * 0.62f * sin - 10f, 44f, 20f),
+                UkrainianText.Format("ui.battle.wheel.round_mark", false, "round", I(round)), AlphaSkin.Accent);
+        }
+
+        /// <summary>Ім'я, що не влазить у бейдж, обрізається з «…» (повне — у мітці над бійцем).</summary>
+        private static string TruncateName(string name, float badgeWidth)
+        {
+            if (string.IsNullOrEmpty(name)) return string.Empty;
+            int maxChars = Math.Max(4, (int)((badgeWidth - 10f) / (AlphaSkin.OverlayNameFontSize * 0.58f)));
+            return name.Length <= maxChars ? name : name.Substring(0, maxChars - 1) + "…";
         }
 
         // ================= банер ходу (§3) =================
@@ -402,6 +581,17 @@ namespace Game.Gameplay.UI
 
             if (unit.IsOverwatching)
                 Widgets.Badge(UkrainianText.Get("ui.battle.overwatch.indicator", false), AlphaSkin.BattleOverwatch);
+
+            // Зв'язки в бою (№14.8): хто з побратимів поруч прикриє — видно заздалегідь.
+            if (unit.BondUnitIds != null)
+                foreach (var partnerId in unit.BondUnitIds)
+                {
+                    var partner = FindUnit(c.View, partnerId);
+                    if (partner == null || partner.IsOutOfBattle) continue;
+                    bool near = Math.Max(Math.Abs(partner.Pos.X - unit.Pos.X), Math.Abs(partner.Pos.Y - unit.Pos.Y)) <= 1;
+                    GUILayout.Label(UkrainianText.Format(near ? "ui.battle.bond.near" : "ui.battle.bond.far", false,
+                        "name", c.ResolveDisplayName(partner)), AlphaSkin.HintLine);
+                }
 
             if (unit.IsDowned)
                 GUILayout.Label(UkrainianText.Format("ui.battle.downed.window", false, "turns", UkrainianText.DeclineTurns(unit.DownWindowRemaining)),
@@ -626,12 +816,31 @@ namespace Game.Gameplay.UI
             GUILayout.BeginHorizontal();
             // Без перенесення слів: на 720p заголовок ламався на «Журна / л» поруч з «Автобоєм».
             GUILayout.Label(UkrainianText.Get("ui.battle.log", false), new GUIStyle(AlphaSkin.SubHeader) { wordWrap = false }, GUILayout.ExpandWidth(true));
-            if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false), GUILayout.ExpandWidth(false)))
-                _confirmAutoResolve = true;
-            GUILayout.Space(6f);
             if (Widgets.SecondaryButton(_logCollapsed ? "▸" : "▾", GUILayout.ExpandWidth(false)))
                 _logCollapsed = !_logCollapsed;
             GUILayout.EndHorizontal();
+
+            // «Автобій» і «Відступити» (Поправка №14.7, ROADMAP B13) — окремим рядком навпіл:
+            // обидві про бій цілком, а не про хід бійця. В одному рядку з «Журналом»
+            // «Відступити» обрізалось на всіх роздільностях (знімки «Щ», 29.09.2026:
+            // 1280 — «Від», 1920 — «Відступи»). Не свій хід — причина рядком нижче (UI-04),
+            // а не праворуч від кнопки, де вона виштовхувала кнопку за край панелі.
+            GUILayout.BeginHorizontal();
+            if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.autoresolve", false), GUILayout.ExpandWidth(true)))
+                _confirmAutoResolve = true;
+            GUILayout.Space(6f);
+            string retreatLabel = UkrainianText.Get("ui.battle.retreat", false);
+            bool canRetreat = c.IsPlayerTurn && !c.IsBusy;
+            if (canRetreat)
+            {
+                if (Widgets.SecondaryButton(retreatLabel, GUILayout.ExpandWidth(true)))
+                    _confirmRetreat = true;
+            }
+            else
+                Widgets.DisabledButton(retreatLabel, null, GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+            if (!canRetreat)
+                GUILayout.Label(UkrainianText.Get("ui.battle.retreat.only_own_turn", false), AlphaSkin.HintLine);
 
             if (_logCollapsed) return;
 
@@ -674,6 +883,14 @@ namespace Game.Gameplay.UI
         {
             var attack = c.HoverAttack;
             var path = c.HoverPath;
+
+            // Об'єкт поля під курсором (Поправка №14.4): що це, що зробить і скільки коштує вдарити.
+            if (attack == null && c.HasHoveredTile && c.Armed == ArmedAction.None)
+            {
+                var obj = ObjectAt(view, c.HoveredTileX, c.HoveredTileY);
+                if (obj != null) { DrawObjectTooltip(c, view, obj); return; }
+            }
+
             if (attack == null && path == null)
             {
                 // Озброєна здібність чи дозор над клітинкою — своя підказка, не «Рух» (рев'ю Бою v2).
@@ -700,7 +917,7 @@ namespace Game.Gameplay.UI
             }
 
             float scale = Widgets.ScaleForScreen();
-            float height = attack != null ? EstimateAttackTooltipHeight(attack) : EstimatePathTooltipHeight(c, view);
+            float height = attack != null ? EstimateAttackTooltipHeight(attack, FindUnit(view, attack.TargetId), view) : EstimatePathTooltipHeight(c, view);
 
             float freeTop = TopBarHeight(scale) + 8f;
             float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
@@ -771,7 +988,7 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>Грубий підрахунок висоти підказки атаки з реальних рядків, які вона намалює — трохи із запасом, аби ніколи не обрізати вміст (BeginArea мовчки кадрує зайве, а не скролить).</summary>
-        private static float EstimateAttackTooltipHeight(AttackPreviewView p)
+        private static float EstimateAttackTooltipHeight(AttackPreviewView p, BattleUnitView target, BattleView view)
         {
             // Раунд 3: оцінка була впритул, і «Ціна: N ОД» обрізалась знизу.
             float h = 24f + 34f; // відступи + заголовок
@@ -787,6 +1004,15 @@ namespace Game.Gameplay.UI
             h += 30f; // «Здоров'я цілі: N/M»
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
                 h += 28f;
+            if (p.IsFlanked) h += 28f;
+            // Рядки треку бою (здача, перевірка здібності, прогноз, досьє) бувають довгими й
+            // переносяться: міряємо їх за шириною підказки, а не сталою висотою — інакше
+            // BeginArea мовчки обрізала низ (знімок «Щ» без кубика на 1600: «Здасться…» і
+            // «Роль…» зникли під краєм підказки).
+            h += WrappedHeight(SurrenderLine(target), AlphaSkin.HintLine);
+            h += WrappedHeight(CheckLine(p), AlphaSkin.HintLine);
+            h += WrappedHeight(PredictLine(p), AlphaSkin.Body);
+            foreach (var line in DossierLines(target, view)) h += WrappedHeight(line, AlphaSkin.HintLine);
             if (p.Result != "Success") h += 30f;
             return h;
         }
@@ -799,11 +1025,99 @@ namespace Game.Gameplay.UI
             return null;
         }
 
+        // ================= поле бою: об'єкти, вогонь, укриття по боках (Поправка №14.4) =================
+
+        private static BattleObjectView ObjectAt(BattleView view, int x, int y)
+        {
+            if (view?.Objects == null) return null;
+            foreach (var o in view.Objects)
+                if (o != null && o.Pos.X == x && o.Pos.Y == y) return o;
+            return null;
+        }
+
+        private static BattleFireView FireAt(BattleView view, int x, int y)
+        {
+            if (view?.Fires == null) return null;
+            foreach (var f in view.Fires)
+                if (f != null && Math.Max(Math.Abs(f.Center.X - x), Math.Abs(f.Center.Y - y)) <= f.Radius) return f;
+            return null;
+        }
+
+        private static readonly string[] SideKeys = { "north", "east", "south", "west" };
+
+        /// <summary>«з півночі — повне, зі сходу — ½» для клітинки; null — укриття немає з жодного боку.</summary>
+        private static string CoverSidesText(BattleView view, int x, int y)
+        {
+            var grid = view?.Grid;
+            if (grid?.TileCoverSides == null) return null;
+            int idx = x + y * grid.Width;
+            if (idx < 0 || idx >= grid.TileCoverSides.Count) return null;
+            var parts = grid.TileCoverSides[idx]?.Split('|');
+            if (parts == null || parts.Length != 4) return null;
+
+            var list = new List<string>();
+            for (int i = 0; i < 4; i++)
+            {
+                if (parts[i] == "None" || string.IsNullOrEmpty(parts[i])) continue;
+                list.Add(UkrainianText.Format("ui.battle.cover.side", false,
+                    "side", UkrainianText.Get("ui.battle.dir." + SideKeys[i], false),
+                    "level", UkrainianText.Get("ui.battle.cover.level." + parts[i].ToLowerInvariant(), false)));
+            }
+            return list.Count == 0 ? null : string.Join(", ", list);
+        }
+
+        /// <summary>Підказка над об'єктом поля: назва, що зробить, і ціна удару для поточного бійця (UI-02).</summary>
+        private static void DrawObjectTooltip(IBattleHudData c, BattleView view, BattleObjectView obj)
+        {
+            var lines = new List<KeyValuePair<string, GUIStyle>>();
+            switch (obj.Kind)
+            {
+                case "PowderKeg":
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Format("ui.battle.object.keg.effect", false,
+                        "damage", I(obj.EffectDamage), "radius", I(obj.EffectRadius)), AlphaSkin.Body));
+                    break;
+                case "Haystack":
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Format("ui.battle.object.hay.effect", false,
+                        "rounds", I(obj.EffectRounds), "radius", I(obj.EffectRadius)), AlphaSkin.Body));
+                    break;
+                case "HighCover":
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.object.high.effect", false), AlphaSkin.Body));
+                    break;
+                default:
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.object.low.effect", false), AlphaSkin.Body));
+                    break;
+            }
+
+            var current = FindUnit(view, view.CurrentUnitId);
+            if (obj.IsTargetable)
+            {
+                if (c.IsPlayerTurn && current != null && current.AttackApCost > 0)
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Format("ui.battle.object.hit_cost", false,
+                        "cost", I(current.AttackApCost)), AlphaSkin.HintLine));
+                else
+                    lines.Add(new KeyValuePair<string, GUIStyle>(UkrainianText.Get("ui.battle.object.hit_own_turn", false), AlphaSkin.HintLine));
+            }
+
+            float scale = Widgets.ScaleForScreen();
+            float height = 24f + 34f + lines.Count * 30f;
+            float freeTop = TopBarHeight(scale) + 8f;
+            float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
+            float freeRight = Screen.width - RightPanelWidth() - 8f;
+            var (x, y) = BattleTooltipLayout.PlaceNearAnchor(c.HoveredTileScreenX, c.HoveredTileScreenY, TooltipWidth, height,
+                8f, freeTop, freeRight, freeBottom);
+
+            GUILayout.BeginArea(new Rect(x, y, TooltipWidth, height), GUI.skin.box);
+            GUILayout.Label(UkrainianText.Get("ui.battle.object.title." + obj.Kind, false), AlphaSkin.Body);
+            foreach (var line in lines) GUILayout.Label(line.Key, line.Value);
+            GUILayout.EndArea();
+        }
+
         private static float EstimatePathTooltipHeight(IBattleHudData c, BattleView view)
         {
             float h = 24f + 34f + 30f; // відступи + заголовок + рядок ціни/відмови
             if (view.Grid != null && c.HasHoveredTile) h += 28f; // укриття клітинки
             if (c.HasHoveredTile && TrapAt(view, c.HoveredTileX, c.HoveredTileY) != null) h += 28f; // своя пастка
+            if (c.HasHoveredTile && FireAt(view, c.HoveredTileX, c.HoveredTileY) != null) h += 28f; // вогонь (№14.4)
             h += 30f; // «Під ворожим дозором!» — з запасом, навіть коли порожньо
             return h;
         }
@@ -818,6 +1132,11 @@ namespace Game.Gameplay.UI
             {
                 string chanceKey = p.IsPercent ? "ui.battle.hitchance.percent" : "ui.battle.hitchance.threshold";
                 GUILayout.Label(UkrainianText.Format(chanceKey, false, "value", I(p.Chance)), AlphaSkin.SubHeader);
+
+                // Правило без кубика: чим скінчиться саме цей удар — видно наперед.
+                string predict = PredictLine(p);
+                if (predict != null)
+                    GUILayout.Label(predict, p.PredictedHits > 0 ? AlphaSkin.Body : PredictMissStyle);
 
                 if (p.Terms != null)
                     foreach (var term in p.Terms)
@@ -834,10 +1153,17 @@ namespace Game.Gameplay.UI
                     : (p.DamageCrit > p.DamageMax
                         ? UkrainianText.Format("ui.battle.damage.preview.crit", false, "min", I(p.DamageMin), "max", I(p.DamageMax), "crit", I(p.DamageCrit))
                         : UkrainianText.Format("ui.battle.damage.preview", false, "min", I(p.DamageMin), "max", I(p.DamageMax)));
+                // Досьє (№14.6): опори невивченого ворога невідомі — число з «?».
+                if (p.DamageUncertain) damageLine += " " + UkrainianText.Get("ui.battle.damage.uncertain", false);
                 GUILayout.Label(damageLine, AlphaSkin.Body);
             }
 
             GUILayout.Label(UkrainianText.Format("ui.battle.ap_cost", false, "cost", I(p.ApCost)), AlphaSkin.Body);
+
+            // Перевірка здібності (docs/ABILITIES.md): що з чим порівнюється — до кліку (інваріант 8).
+            string checkLine = CheckLine(p);
+            if (checkLine != null)
+                GUILayout.Label(checkLine, p.CheckPasses ? AlphaSkin.HintLine : CheckFailStyle);
 
             if (target != null)
                 GUILayout.Label(UkrainianText.Format("ui.battle.hp.target", false,
@@ -846,8 +1172,69 @@ namespace Game.Gameplay.UI
             if (!p.CoverIgnored && !string.Equals(p.Cover, "None", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.Cover))
                 GUILayout.Label(UkrainianText.Get("ui.battle.cover." + p.Cover.ToLowerInvariant(), false), AlphaSkin.HintLine);
 
+            // Фланг (Поправка №14.4): у цілі є укриття, але з цього боку воно не діє.
+            if (p.IsFlanked)
+                GUILayout.Label(UkrainianText.Get("ui.battle.flanked", false), AlphaSkin.HintLine);
+
+            // Здача (Поправка №14.2): поріг видно до удару; бос — ніколи.
+            string surrender = SurrenderLine(target);
+            if (surrender != null) GUILayout.Label(surrender, AlphaSkin.HintLine);
+
+            // Досьє (Поправка №14.6): роль — з контакту; решта — після розвідки чи бою.
+            foreach (var line in DossierLines(target, view)) GUILayout.Label(line, AlphaSkin.HintLine);
+
             if (p.Result != "Success")
                 GUILayout.Label(UkrainianText.Get(RejectionKey(p.Result), false), AlphaSkin.DangerText);
+        }
+
+        /// <summary>
+        /// Висота рядка з переносом (0 — рядка немає). Ширина — та, що реально дістається
+        /// мітці: ширина підказки мінус поля рамки (GUI.skin.box) і бічні відступи стилю;
+        /// до висоти — вертикальні відступи стилю. Перша версія міряла ширше, ніж є, і
+        /// останній перенос («…з / укриття.») обрізався (перезнімок «Щ» на 8266b49).
+        /// </summary>
+        private static float WrappedHeight(string text, GUIStyle style)
+        {
+            if (string.IsNullOrEmpty(text)) return 0f;
+            var box = GUI.skin.box;
+            float width = TooltipWidth - box.padding.left - box.padding.right - style.margin.left - style.margin.right;
+            return style.CalcHeight(new GUIContent(text), Math.Max(40f, width)) + style.margin.top + style.margin.bottom + 2f;
+        }
+
+        private static GUIStyle _predictMissStyle, _checkFailStyle;
+
+        /// <summary>
+        /// «Мимо» в прогнозі — не помилка, а прогноз: колір промаху з палітри бою
+        /// (<see cref="AlphaSkin.BattleMiss"/>). Темно-червоний DangerText на темному тлі
+        /// читався погано (знімок «Щ», 29.09.2026).
+        /// </summary>
+        private static GUIStyle PredictMissStyle =>
+            _predictMissStyle ?? (_predictMissStyle = new GUIStyle(AlphaSkin.Body) { normal = { textColor = AlphaSkin.BattleMiss } });
+
+        /// <summary>Перевірка здібності не вийде (ОД згорять) — яскраво-червоний з палітри бою, читається на темному тлі.</summary>
+        private static GUIStyle CheckFailStyle =>
+            _checkFailStyle ?? (_checkFailStyle = new GUIStyle(AlphaSkin.HintLine) { normal = { textColor = AlphaSkin.BattleEnemySide } });
+
+        /// <summary>«Цей удар влучить» / «мимо» / «Влучить 1 з 2» — правило без кубика; null — правило з кубиком.</summary>
+        private static string PredictLine(AttackPreviewView p)
+        {
+            if (p == null || p.PredictedShots <= 0) return null;
+            if (p.PredictedShots > 1)
+                return UkrainianText.Format("ui.battle.predict.multi", false, "hits", I(p.PredictedHits), "shots", I(p.PredictedShots));
+            return UkrainianText.Get(p.PredictedHits > 0 ? "ui.battle.predict.hit" : "ui.battle.predict.miss", false);
+        }
+
+        /// <summary>Рядок перевірки здібності: «Залякування 3 проти Волі 2 — вийде», «Імунітет», «Броня ще ціла»; null — перевірки немає.</summary>
+        private static string CheckLine(AttackPreviewView p)
+        {
+            if (p == null || string.IsNullOrEmpty(p.CheckKind)) return null;
+            string vals = p.CheckSkill == "shred" ? "ui.battle.check.shred" : "ui.battle.check.contest";
+            if (!string.IsNullOrEmpty(p.CheckBlockKey))
+                return UkrainianText.Format("ui.battle.check.block." + p.CheckBlockKey, false,
+                    "value", I(p.CheckValue), "threshold", I(p.CheckThreshold));
+            if (string.IsNullOrEmpty(p.CheckSkill)) return null;
+            string verdict = UkrainianText.Get(p.CheckPasses ? "ui.battle.check.pass" : "ui.battle.check.fail", false);
+            return UkrainianText.Format(vals, false, "value", I(p.CheckValue), "threshold", I(p.CheckThreshold), "verdict", verdict);
         }
 
         private static void DrawHoverPath(IBattleHudData c, BattleView view, MovePathView path)
@@ -863,13 +1250,14 @@ namespace Game.Gameplay.UI
 
             if (view.Grid != null && c.HasHoveredTile)
             {
-                int idx = c.HoveredTileX + c.HoveredTileY * view.Grid.Width;
-                if (view.Grid.TileCover != null && idx >= 0 && idx < view.Grid.TileCover.Count)
-                {
-                    string cover = view.Grid.TileCover[idx];
-                    if (!string.IsNullOrEmpty(cover) && !string.Equals(cover, "None", StringComparison.OrdinalIgnoreCase))
-                        GUILayout.Label(UkrainianText.Get("ui.battle.cover." + cover.ToLowerInvariant(), false), AlphaSkin.HintLine);
-                }
+                // Укриття видно по боках (Поправка №14.4): з якого боку тут захищає і як.
+                string sides = CoverSidesText(view, c.HoveredTileX, c.HoveredTileY);
+                if (sides != null)
+                    GUILayout.Label(UkrainianText.Format("ui.battle.cover.sides", false, "sides", sides), AlphaSkin.HintLine);
+
+                var fire = FireAt(view, c.HoveredTileX, c.HoveredTileY);
+                if (fire != null)
+                    GUILayout.Label(UkrainianText.Format("ui.battle.fire.here", false, "rounds", I(fire.RoundsLeft)), AlphaSkin.DangerText);
             }
 
             var trapHere = TrapAt(view, c.HoveredTileX, c.HoveredTileY);
@@ -978,6 +1366,20 @@ namespace Game.Gameplay.UI
             // Ворог під курсором, якого ЗАРАЗ можна атакувати, — яскрава рамка
             // (презентер рахує IsTargetable за прев'ю атаки). Гравець бачить
             // «клік сюди = удар» ще до кліку, як у референсах.
+            // Наведення на бейдж у колесі черги — світла рамка на мітці цього
+            // бійця (зв'язок колесо → мапа, Поправка №14.5). Інший колір, ніж
+            // «можна вдарити»: одна барва — один сенс (Статут UI-01).
+            bool wheelHovered = string.Equals(_wheelHoverUnitId, unit.Id, StringComparison.Ordinal);
+            if (wheelHovered && !ov.IsTargetable)
+            {
+                const float b = 2f;
+                var frame = AlphaSkin.AccentHover;
+                Widgets.SolidRect(new Rect(nameRect.x - b, nameRect.y - b, nameRect.width + 2f * b, b), frame);
+                Widgets.SolidRect(new Rect(nameRect.x - b, nameRect.y + nameRect.height, nameRect.width + 2f * b, b), frame);
+                Widgets.SolidRect(new Rect(nameRect.x - b, nameRect.y, b, nameRect.height), frame);
+                Widgets.SolidRect(new Rect(nameRect.x + nameRect.width, nameRect.y, b, nameRect.height), frame);
+            }
+
             if (ov.IsTargetable)
             {
                 const float b = 2f;
@@ -1003,6 +1405,15 @@ namespace Game.Gameplay.UI
                 var badge = new Rect(nameRect.x, badgeY, nameRect.width, 16f);
                 Widgets.SolidRect(badge, AlphaSkin.BattleOverwatch);
                 GUI.Label(badge, UkrainianText.Get("ui.battle.overlay.overwatch", false), new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.BgDark } });
+                badgeY += 18f;
+            }
+
+            if (unit.IsSurrendered)
+            {
+                var badge = new Rect(nameRect.x, badgeY, nameRect.width, 16f);
+                Widgets.SolidRect(badge, AlphaSkin.BgRaised);
+                GUI.Label(badge, UkrainianText.Get("ui.battle.overlay.surrendered", false),
+                    new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.TextMain } });
                 badgeY += 18f;
             }
 
@@ -1066,10 +1477,96 @@ namespace Game.Gameplay.UI
                 else
                     foreach (var line in c.ResultCasualtyLines) GUILayout.Label(line, AlphaSkin.DangerText);
 
+                DrawSurrenderDecisions(c);
+
                 GUILayout.Space(14f);
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.battle.result.next", false)))
                     c.AcknowledgeResult();
             });
+        }
+
+        /// <summary>
+        /// Хто здався (Поправка №14.2): для кожного — відпустити, у полон, добити.
+        /// Наслідок кожної кнопки підписано до кліку (Статут UI-02); кого не вирішили —
+        /// відпустять (сказано прямо, щоб «Далі» не ховало вибору).
+        /// </summary>
+        private static void DrawSurrenderDecisions(IBattleHudData c)
+        {
+            var pending = c.PendingSurrenders;
+            if (pending == null || pending.Count == 0) return;
+
+            GUILayout.Space(8f);
+            GUILayout.Label(UkrainianText.Get("ui.battle.surrender.title", false), AlphaSkin.SubHeader);
+            GUILayout.Label(UkrainianText.Get("ui.battle.surrender.hint", false), AlphaSkin.HintLine);
+            foreach (var s in pending)
+            {
+                string name = UkrainianText.Has("enemy." + s.DisplayNameKey, false)
+                    ? UkrainianText.Get("enemy." + s.DisplayNameKey, false) : s.DisplayNameKey;
+                string unitId = s.UnitId;
+                GUILayout.BeginHorizontal(GUI.skin.box);
+                GUILayout.Label(name, AlphaSkin.Body, GUILayout.ExpandWidth(true));
+                if (Widgets.SecondaryButton(UkrainianText.Get("ui.battle.surrender.release", false)))
+                    c.DecideSurrender(unitId, Game.Core.Combat.SurrenderFate.Release);
+                if (Widgets.PrimaryButton(UkrainianText.Get(s.CanRecruitLater ? "ui.battle.surrender.capture" : "ui.battle.surrender.capture_no_recruit", false)))
+                    c.DecideSurrender(unitId, Game.Core.Combat.SurrenderFate.Capture);
+                if (Widgets.DangerButton(UkrainianText.Get("ui.battle.surrender.execute", false)))
+                    c.DecideSurrender(unitId, Game.Core.Combat.SurrenderFate.Execute);
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        /// <summary>
+        /// Рядки досьє ворога (Поправка №14.6): роль; для невивченого — що відкриє розвідка
+        /// (пороги видно заздалегідь); для вивченого — опори і прийоми. Порожньо для своїх.
+        /// </summary>
+        private static List<string> DossierLines(BattleUnitView target, BattleView view = null)
+        {
+            var lines = new List<string>();
+            if (target == null || string.IsNullOrEmpty(target.Dossier)) return lines;
+
+            if (!string.IsNullOrEmpty(target.Role))
+                lines.Add(UkrainianText.Format("ui.battle.dossier.role", false,
+                    "role", UkrainianText.Get("ui.battle.role." + target.Role, false)));
+
+            if (target.Dossier != "Studied")
+            {
+                lines.Add(UkrainianText.Format("ui.battle.dossier.partial", false,
+                    "survival", I(view?.DossierScoutSurvival ?? 0), "wits", I(view?.DossierScoutWits ?? 0)));
+                return lines;
+            }
+
+            if (target.ResistNotes != null && target.ResistNotes.Count > 0)
+            {
+                var parts = new List<string>();
+                foreach (var note in target.ResistNotes)
+                {
+                    int colon = note.IndexOf(':');
+                    if (colon <= 0) continue;
+                    parts.Add(UkrainianText.Format("ui.battle.dossier.resist." + note.Substring(colon + 1), false,
+                        "type", UkrainianText.Get("combat.damage_type." + note.Substring(0, colon).ToLowerInvariant(), false)));
+                }
+                lines.Add(UkrainianText.Format("ui.battle.dossier.resists", false, "list", string.Join(", ", parts)));
+            }
+
+            if (target.Abilities != null && target.Abilities.Count > 0)
+            {
+                var names = new List<string>();
+                foreach (var a in target.Abilities) names.Add(UkrainianText.Get(a.Id, false));
+                lines.Add(UkrainianText.Format("ui.battle.dossier.abilities", false, "list", string.Join(", ", names)));
+            }
+            return lines;
+        }
+
+        /// <summary>«Здасться при ≤30% здоров'я» / «Не здається» / «Бос — не здається ніколи» для ворога; null для своїх.</summary>
+        private static string SurrenderLine(BattleUnitView target)
+        {
+            if (target == null || string.IsNullOrEmpty(target.Rank)) return null;
+            // Досьє (№14.6): умову здачі відкриває розвідка чи бій.
+            if (!string.IsNullOrEmpty(target.Dossier) && target.Dossier != "Studied")
+                return UkrainianText.Get("ui.battle.surrender.unknown", false);
+            if (target.CanSurrender)
+                return UkrainianText.Format("ui.battle.surrender.at", false, "percent", I(target.SurrenderAtHpPercent));
+            return UkrainianText.Get(target.Rank == "Boss" ? "ui.battle.surrender.boss" : "ui.battle.surrender.never", false);
         }
 
         private static string OutcomeTitleKey(string outcome)
@@ -1096,7 +1593,7 @@ namespace Game.Gameplay.UI
             }
         }
 
-        /// <summary>Приглушений тон тла бейджа черги ходу (§DrawInitiativeStrip) — не той самий насичений колір, що арена/оверлеї.</summary>
+        /// <summary>Приглушений тон тла бейджа на колесі черги ходів (§DrawTurnWheel) — не той самий насичений колір, що арена/оверлеї.</summary>
         private static Color32 SideColorMuted(string side)
         {
             switch (side)

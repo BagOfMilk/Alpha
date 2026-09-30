@@ -64,6 +64,10 @@ namespace Game.Core.Combat
                 : new ThresholdRule(cfg);
             var cs = new CombatState(map, cfg, rule, roller);
 
+            // Об'єкти поля (Поправка №14.4) — до юнітів: клітинка об'єкта непрохідна,
+            // і шаблон, що поставив когось на об'єкт, падає тут, а не мовчки.
+            foreach (var o in setup.Objects) cs.AddObject(o.Kind, o.Pos);
+
             foreach (var spawn in setup.PlayerUnits)
             {
                 var source = resolvePlayerUnit(spawn.CompanionId);
@@ -92,7 +96,15 @@ namespace Game.Core.Combat
                 cs.AddUnit(unit, spawn.Pos);
             }
 
-            cs.Begin();
+            // Підкріплення з відліком (№14.4): юніти готові заздалегідь, на поле — у свій раунд.
+            foreach (var r in setup.Reinforcements)
+            {
+                var def = resolveEnemyDefinition(r.EnemyDefinitionId);
+                if (def == null) continue;
+                cs.AddReinforcement(r.Round, CombatUnit.FromEnemy(def, def.Id + "#" + enemySeq++), r.Pos);
+            }
+
+            cs.Begin(setup.Opening);
             return cs;
         }
     }

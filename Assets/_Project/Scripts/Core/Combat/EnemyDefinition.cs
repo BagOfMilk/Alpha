@@ -17,7 +17,21 @@ namespace Game.Core.Combat
     {
         Human = 0,
         Mutant = 1,
-        Robot = 2
+        Robot = 2,
+        /// <summary>Звір (docs/ABILITIES.md, власник: «так» — звірі лишаються ворогами): розмова перед боєм на нього не діє, «Залякати» — тікає.</summary>
+        Beast = 3
+    }
+
+    /// <summary>
+    /// Ранг ворога (Поправка №14.2; власник, 29.09.2026: «далеко не всі вороги, або
+    /// міні боси можуть здатися»). Здатися можуть лише позначені рядові й міні-боси;
+    /// бос не здається ніколи.
+    /// </summary>
+    public enum EnemyRank
+    {
+        Grunt = 0,
+        MiniBoss = 1,
+        Boss = 2
     }
 
     /// <summary>
@@ -49,6 +63,24 @@ namespace Game.Core.Combat
 
         /// <summary>Здібності із загального з гравцем пулу (симетрія, гейтів скіла у ворогів немає).</summary>
         public List<AbilityDefinition> Abilities = new List<AbilityDefinition>();
+
+        // ---- Здача і полон (Поправка №14.2) ----
+        public EnemyRank Rank = EnemyRank.Grunt;
+
+        /// <summary>Чи може здатися взагалі (бос — ніколи, хоч би що тут стояло).</summary>
+        public bool CanSurrender;
+
+        /// <summary>Здається, коли здоров'я ≤ цієї частки максимуму (%); видно в HUD заздалегідь. ПЛЕЙСХОЛДЕР.</summary>
+        public int SurrenderAtHpPercent = 30;
+
+        /// <summary>Правило кастингу №12.9: персонажа з російського першоджерела переманити не можна — лише обмін, викуп, відпустити.</summary>
+        public bool NeverRecruitable;
+
+        /// <summary>
+        /// Жадібність («Відкуп», docs/ABILITIES.md §4.6): Торгівля ≥ цього — ватага бере
+        /// гроші й іде. 0 — не продається (орда, фанатики, бос).
+        /// </summary>
+        public int Greed;
 
         public EnemyDefinition() { }
 

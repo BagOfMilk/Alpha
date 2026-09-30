@@ -183,10 +183,13 @@ namespace Game.Gameplay.UI
             Widgets.Section(UkrainianText.Get("ui.night.patrol.section", g), () =>
             {
                 GUILayout.Label(UkrainianText.Get("ui.night.title", g), AlphaSkin.Body);
+                // Обране видно (QoL, 30.09.2026): раніше обидві кнопки виглядали
+                // однаково, і не було ясно, чи варта вже виставлена.
+                bool patrolling = shell.Session.CurrentView.IsPatrolling;
                 GUILayout.BeginHorizontal();
-                if (Widgets.PrimaryButton(UkrainianText.Get("ui.night.patrol", g)))
+                if (Widgets.TabButton(UkrainianText.Get("ui.night.patrol", g), patrolling, GUILayout.ExpandWidth(false)) && !patrolling)
                     shell.TryRun(() => shell.Session.SetPatrol(true));
-                if (Widgets.SecondaryButton(UkrainianText.Get("ui.night.sleep", g)))
+                if (Widgets.TabButton(UkrainianText.Get("ui.night.sleep", g), !patrolling, GUILayout.ExpandWidth(false)) && patrolling)
                     shell.TryRun(() => shell.Session.SetPatrol(false));
                 GUILayout.EndHorizontal();
             });
@@ -228,8 +231,11 @@ namespace Game.Gameplay.UI
                 int enemyCount = shell.Session.GetFinaleEnemyCount();
                 if (enemyCount > 0)
                     GUILayout.Label(UkrainianText.Format("ui.night.finale.enemy_count", g, "count", enemyCount.ToString(), "enemies", ScreenText.EnemiesCount(enemyCount)), AlphaSkin.Tooltip);
+                // Незворотне — лише з підтвердженням (UX-12, UX_DESIGN §5.15).
                 if (Widgets.DangerButton(UkrainianText.Get("ui.decision.path.bloody", g)))
-                    shell.TryRun(() => shell.Session.ResolveFinale(IncidentPath.Bloody));
+                    shell.AskConfirm(new UxConfirm(UkrainianText.Get("ux.finale.bloody.question", g), UkrainianText.Get("ux.finale.bloody.verb", g),
+                            new[] { UkrainianText.Get("ux.finale.bloody.loss", g) }),
+                        () => shell.TryRun(() => shell.Session.ResolveFinale(IncidentPath.Bloody)));
             });
         }
     }

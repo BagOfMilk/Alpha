@@ -187,7 +187,8 @@ namespace Game.Tests.EditMode
         {
             var map = new GridMap(8, 1);
             var cs = NewCombat(map);
-            var hero = U("hero", Side.Player, 10, acc: HitAcc, w: W(1, apCost: 2, range: 8));
+            // Шанс 84 без кубика: лічильник 50 → 134 → 118 → 102 — три влучання поспіль, без криту.
+            var hero = U("hero", Side.Player, 10, acc: 84, w: W(1, apCost: 2, range: 8));
             var bag = U("bag", Side.Enemy, 5, hp: 50);
             cs.AddUnit(hero, new GridPos(0, 0));
             cs.AddUnit(bag, new GridPos(5, 0));
@@ -245,11 +246,14 @@ namespace Game.Tests.EditMode
         [Test]
         public void Graze_DealsNoProcs_HalfDamage()
         {
+            // Зачеп лишився лише в правилі з кубиком: без кубика відсоток справджується
+            // рівно (влучання або промах), 29.09.2026. Кидок 0.55 проти шансу 50 — перелет
+            // на 5, у смузі зачепу.
             var map = new GridMap(8, 1);
-            var cs = NewCombat(map);
+            var cs = new CombatState(map, Cfg, new PercentRule(Cfg), new ScriptedDiceRoller(0.55));
             var w = W(2, apCost: 3, range: 8);
             w.StatusOnHit = StatusType.Bleeding;
-            var hero = U("hero", Side.Player, 10, acc: 50, w: w); // margin 0 → Graze (у полосі [0,15))
+            var hero = U("hero", Side.Player, 10, acc: 50, w: w);
             var target = U("target", Side.Enemy, 5, hp: 30);
             cs.AddUnit(hero, new GridPos(0, 0));
             cs.AddUnit(target, new GridPos(5, 0));

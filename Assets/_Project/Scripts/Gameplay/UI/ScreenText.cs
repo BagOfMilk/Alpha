@@ -79,6 +79,7 @@ namespace Game.Gameplay.UI
                 case CompanionStatus.Dead: return new Legality(false, "ui.reason.dead", companion.Id);
                 case CompanionStatus.OnMission: return new Legality(false, "ui.reason.on_mission", companion.Id);
                 case CompanionStatus.Antagonist: return new Legality(false, "ui.reason.antagonist", companion.Id);
+                case CompanionStatus.Captive: return new Legality(false, "ui.reason.captive", companion.Id);
                 default: return Legality.Ok;
             }
         }
@@ -197,16 +198,6 @@ namespace Game.Gameplay.UI
                 "skill", SkillLabel(offer.CheckSkillKey, gender), "threshold", offer.CheckThreshold.ToString());
         }
 
-        /// <summary>Підписи вкладок хаба за індексом: кнопки вкладок і підказка «E — зайти» на прогулянці.</summary>
-        public static readonly string[] HubTabKeys =
-        {
-            "ui.tab.posts", "ui.tab.buildings", "ui.tab.council", "ui.tab.expedition",
-            "ui.tab.gear", "ui.tab.people", "ui.tab.quests", "ui.tab.factions",
-            "ui.tab.readiness", "ui.tab.save", "ui.tab.journal"
-        };
-
-        public static string HubTabKey(int tab) => tab >= 0 && tab < HubTabKeys.Length ? HubTabKeys[tab] : HubTabKeys[0];
-
         /// <summary>«1 ворог», «2 вороги», «5 ворогів», «21 ворог» — українська форма числа.</summary>
         public static string EnemiesCount(int n)
         {
@@ -320,6 +311,7 @@ namespace Game.Gameplay.UI
                 case CompanionStatus.Resting: return UkrainianText.Get("status.resting", gender);
                 case CompanionStatus.Dead: return UkrainianText.Get("status.dead", gender);
                 case CompanionStatus.Antagonist: return UkrainianText.Get("status.antagonist", gender);
+                case CompanionStatus.Captive: return UkrainianText.Get("status.captive", gender);
                 default: return status.ToString();
             }
         }
@@ -346,6 +338,13 @@ namespace Game.Gameplay.UI
         /// обране ім'я ("Оксана") генеричним "Провідниця" на КОЖНОМУ
         /// портреті й підписі мовця сцени, включно з новим Choice-екраном.
         /// </summary>
+        /// <summary>Ім'я ворога за id визначення ("enemy.horde_scout" — водночас ключ тексту); порожньо, якщо id немає.</summary>
+        private static string EnemyLabel(string enemyId, Gender gender)
+        {
+            if (string.IsNullOrEmpty(enemyId)) return string.Empty;
+            return UkrainianText.Has(enemyId, gender) ? UkrainianText.Get(enemyId, gender) : enemyId;
+        }
+
         public static string ResolveCompanionName(string companionId, Gender gender, RosterView roster)
         {
             if (string.IsNullOrEmpty(companionId)) return string.Empty;
@@ -364,6 +363,9 @@ namespace Game.Gameplay.UI
             if (UkrainianText.Has(charKey, gender)) return UkrainianText.Get(charKey, gender);
 
             var summary = FindCompanion(roster, companionId);
+            // Переманений полонений (Поправка №14.2): ім'я — з ключа ворога, яким він був.
+            if (summary != null && !string.IsNullOrEmpty(summary.DisplayName) && UkrainianText.Has("enemy." + summary.DisplayName, gender))
+                return UkrainianText.Get("enemy." + summary.DisplayName, gender);
             if (summary != null && !string.IsNullOrEmpty(summary.DisplayName)) return summary.DisplayName;
             return companionId;
         }
@@ -681,6 +683,8 @@ namespace Game.Gameplay.UI
                 "trigger", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
                 "triggerId", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
                 "incidentId", ContentLabel("incident", Arg(a, "incidentId"), gender),
+                // Трек C (№14.2, №14.6, №14.7): ворог за id визначення — "enemy.horde_scout" і є ключем імені.
+                "enemy", EnemyLabel(Arg(a, "enemyId"), gender),
                 "resource", ContentLabel("resource", Arg(a, "resource"), gender),
                 "sceneId", sceneName, "optionId", sceneOption,
                 // Поправка №12.10 ("arrivals.resolved"): без цих двох пар

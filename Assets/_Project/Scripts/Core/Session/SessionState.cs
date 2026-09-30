@@ -32,7 +32,9 @@ namespace Game.Core.Session
         /// <summary>Фінал, ніч доби 5: кровавий шлях "тримати перевал" (§3.5).</summary>
         FinaleAssault,
         /// <summary>"Тренувальний бій" з титульного меню — пісочниця, нічого не пише в сейв.</summary>
-        TrainingSkirmish
+        TrainingSkirmish,
+        /// <summary>Рейд на загін, що тримає наших у полоні (Поправка №14.7) — кривавий шлях порятунку.</summary>
+        CaptiveRaid
     }
 
     /// <summary>

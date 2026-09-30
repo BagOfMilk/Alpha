@@ -13,6 +13,16 @@ namespace Game.Gameplay
     {
         public string PostId;
         public string OccupantId;
+        /// <summary>Фігура жіноча (дочірня «f») чи чоловіча («m») — за людиною, а не за постом.</summary>
+        public bool OccupantFemale;
+    }
+
+    /// <summary>Людина без поста біля вогнища Віча: місце idle:&lt;Index&gt; (docs/UX_DESIGN.md, UX-15).</summary>
+    public sealed class StageIdlePerson
+    {
+        public int Index;
+        public string CompanionId;
+        public bool Female;
     }
 
     /// <summary>Стадія стройки одного здання, 0..5 (US-7.3): 0 — ще не почато, 5 — готово.</summary>
@@ -44,6 +54,7 @@ namespace Game.Gameplay
         public int Tier;
         public bool Patrolling;
         public IReadOnlyList<StagePost> Posts;
+        public IReadOnlyList<StageIdlePerson> Idle;
         public IReadOnlyList<StagePlot> Plots;
         public IReadOnlyList<StageIncidentMark> Incidents;
     }
@@ -76,6 +87,7 @@ namespace Game.Gameplay
 
         private readonly Dictionary<string, Transform> _posts = new Dictionary<string, Transform>();
         private readonly Dictionary<string, Transform> _villagers = new Dictionary<string, Transform>();
+        private readonly Dictionary<int, Transform> _idle = new Dictionary<int, Transform>();
         private readonly Dictionary<string, Transform> _plots = new Dictionary<string, Transform>();
         private readonly List<GameObject> _marks = new List<GameObject>();
 
@@ -96,10 +108,18 @@ namespace Game.Gameplay
                         _posts[child.name.Substring(5)] = child;
 
             _villagers.Clear();
+            _idle.Clear();
             if (villagersRoot != null)
                 foreach (Transform child in villagersRoot)
+                {
                     if (child.name.StartsWith("villager:"))
                         _villagers[child.name.Substring(9)] = child;
+                    else if (child.name.StartsWith("idle:"))
+                    {
+                        int index;
+                        if (int.TryParse(child.name.Substring(5), out index)) _idle[index] = child;
+                    }
+                }
 
             _plots.Clear();
             if (plotsRoot != null)
@@ -163,19 +183,46 @@ namespace Game.Gameplay
         {
             bool outside = phase == Game.Core.Loop.DayPhase.Day || data.Patrolling;
 
-            var occupied = new HashSet<string>();
+            var occupied = new Dictionary<string, StagePost>();
             if (data.Posts != null)
                 for (int i = 0; i < data.Posts.Count; i++)
                 {
                     var post = data.Posts[i];
-                    if (post != null && !string.IsNullOrEmpty(post.OccupantId)) occupied.Add(post.PostId);
+                    if (post != null && !string.IsNullOrEmpty(post.OccupantId)) occupied[post.PostId] = post;
                 }
 
             foreach (var pair in _villagers)
             {
                 if (pair.Value == null) continue;
-                pair.Value.gameObject.SetActive(outside && occupied.Contains(pair.Key));
+                StagePost post;
+                bool show = outside && occupied.TryGetValue(pair.Key, out post);
+                pair.Value.gameObject.SetActive(show);
+                if (show) ShowGender(pair.Value, occupied[pair.Key].OccupantFemale);
             }
+
+            // Біля вогнища Віча — ті, хто без поста (з ними теж можна говорити).
+            var idle = new Dictionary<int, StageIdlePerson>();
+            if (data.Idle != null)
+                foreach (var person in data.Idle)
+                    if (person != null) idle[person.Index] = person;
+            foreach (var pair in _idle)
+            {
+                if (pair.Value == null) continue;
+                StageIdlePerson person;
+                bool show = outside && idle.TryGetValue(pair.Key, out person);
+                pair.Value.gameObject.SetActive(show);
+                if (show) ShowGender(pair.Value, idle[pair.Key].Female);
+            }
+        }
+
+        /// <summary>Фігура за статтю людини: діти «m» і «f»; без них — як було (одна модель).</summary>
+        private static void ShowGender(Transform holder, bool female)
+        {
+            var m = holder.Find("m");
+            var f = holder.Find("f");
+            if (m == null || f == null) return;
+            m.gameObject.SetActive(!female);
+            f.gameObject.SetActive(female);
         }
 
         /// <summary>Ліси ростуть знизу вгору (US-7.3): та сама формула висоти, що в <see cref="VillageLife.ShowPlots"/>.</summary>
@@ -183,9 +230,21 @@ namespace Game.Gameplay
         {
             if (plots == null) return;
 
+            // Ділянки, яких немає в даних, — нульова стадія: після нової гри чи
+            // завантаження будівля, зведена в попередній партії, не лишається стояти.
+            var stages = new Dictionary<string, int>();
             for (int i = 0; i < plots.Count; i++)
+                if (plots[i] != null) stages[plots[i].PlotId] = plots[i].Stage;
+            var all = new List<StagePlot>();
+            foreach (var pair in _plots)
             {
-                var plot = plots[i];
+                int stage;
+                all.Add(new StagePlot { PlotId = pair.Key, Stage = stages.TryGetValue(pair.Key, out stage) ? stage : 0 });
+            }
+
+            for (int i = 0; i < all.Count; i++)
+            {
+                var plot = all[i];
                 Transform anchor;
                 if (plot == null || !_plots.TryGetValue(plot.PlotId, out anchor) || anchor == null) continue;
 

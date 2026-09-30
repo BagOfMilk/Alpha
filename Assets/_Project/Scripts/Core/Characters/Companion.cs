@@ -34,7 +34,14 @@ namespace Game.Core.Characters
         // IsPresentInSettlement), не перелічений у GameSession.GetRosterView.
         // Незворотно для цього прогону, як Dead/Antagonist — пізніше прибуття
         // не реалізовано (відкрите питання).
-        NotArrived = 7
+        NotArrived = 7,
+
+        // ---- Поправка №14.7: поразка → полон ----
+        // У полоні іменного ворога. НЕ незворотно (на відміну від Dead/Antagonist):
+        // викуп, перемовини чи рейд повертають. Поки в полоні — ні на пост, ні у
+        // відряд, ні в присутні; годинник полону (Core/Prisoners/CaptivityLedger)
+        // щодня знімає лояльність — аж до зради.
+        Captive = 8
     }
 
     /// <summary>
@@ -199,6 +206,9 @@ namespace Game.Core.Characters
 
         /// <summary>Загинув. З цього стану немає шляху назад.</summary>
         public bool IsDead => Status == CompanionStatus.Dead;
+
+        /// <summary>У полоні ворога (Поправка №14.7) — живий, але недоступний.</summary>
+        public bool IsCaptive => Status == CompanionStatus.Captive;
 
         /// <summary>
         /// Убити напарника. Перехід незворотний — це усвідомлена жорсткість GDD:

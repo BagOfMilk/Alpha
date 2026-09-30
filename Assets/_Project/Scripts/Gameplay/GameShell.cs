@@ -21,7 +21,7 @@ namespace Game.Gameplay
     /// логіки гри тут немає, лише виклики команд <c>GameSession</c> і читання
     /// View-шару (інваріант "Gameplay читає лише GameSession", CLAUDE.md).
     /// </summary>
-    public sealed class GameShell : MonoBehaviour
+    public sealed partial class GameShell : MonoBehaviour
     {
         public GameSession Session { get; private set; }
         public Gender ProtagonistGender { get; set; } = Gender.Male;
@@ -43,7 +43,6 @@ namespace Game.Gameplay
         /// методами в SceneScreen.cs).
         /// </summary>
         public SceneScreen Scene => _scene;
-        private readonly HubScreen _hub = new HubScreen();
         private readonly DecisionScreen _decision = new DecisionScreen();
         private readonly NightScreen _night = new NightScreen();
         private readonly DungeonScreen _dungeon = new DungeonScreen();
@@ -52,6 +51,7 @@ namespace Game.Gameplay
         private readonly EscapeMenuScreen _escape = new EscapeMenuScreen();
 
         private bool _escapeOpen;
+        private SessionState _lastUxState;
         private SeededDiceRoller _roller;
 
         // ===================== HUD: UI Toolkit або IMGUI (спайк H4) =====================
@@ -180,32 +180,25 @@ namespace Game.Gameplay
             if (_toolkitHud != null) _toolkitHud.Tick();
         }
 
-        /// <summary>
-        /// Фаза F (UI-tour autoplay): гачок для <c>AutoplayGameDriver</c>, щоб
-        /// той міг перемкнути вкладку РЕАЛЬНОГО <see cref="HubScreen"/> (поле
-        /// приватне — екран сам вирішує, яку вкладку малювати) і зняти
-        /// скріншот кожної, не тримаючи власної копії стану екрана.
-        /// </summary>
-        public void SetHubTab(int tab) => _hub.SetTab(tab);
-
-        /// <summary>Поточна вкладка хаба (автотур перевіряє, куди привело «E — зайти»).</summary>
-        public int HubTab => _hub.Tab;
-
-        // ===================== прогулянка (CRPG) =====================
+        // ===================== село (CRPG) =====================
         //
-        // Власник, 25.09.2026: «Я хотів шоб я міг бігати як у CRPG». Уранці
-        // (і у вільній грі) панель хаба можна сховати (Tab) і пройтися селом
-        // героєм: WASD або клік мишею, Shift — біг. Біля поста, ділянки чи
-        // орієнтира з'являється «E — зайти», і заходження відкриває ту саму
-        // вкладку хаба, що й кнопка в панелі: жодної окремої логіки гри, лише
-        // інший шлях до тих самих команд. Сам рух — компонент сцени HeroWalker
-        // (читає Exploring, пише NearbyPlace); оболонка про нього не знає.
+        // Власник, 25.09.2026: «Я хотів шоб я міг бігати як у CRPG»; 30.09.2026:
+        // «прибери найбільшу частину табличок… досі неможна зайти до будівлі і
+        // поговорити з персонажем». Уранці й у вільній грі село — вигляд за
+        // замовчуванням (вкладок хаба більше немає): WASD або клік мишею,
+        // Shift — біг; біля будівлі, станції чи людини — «E». Сам рух —
+        // компонент сцени HeroWalker (читає Exploring, пише NearbyPlace).
 
-        /// <summary>Панель сховано, герой ходить селом.</summary>
+        /// <summary>Герой ходить селом (завжди, коли <see cref="CanExplore"/>).</summary>
         public bool Exploring { get; private set; }
 
         /// <summary>Місце, біля якого стоїть герой (пише HeroWalker щокадру); null — поруч нічого.</summary>
         public WalkPlace NearbyPlace { get; private set; }
+
+        /// <summary>Усі місця, до яких зараз можна підійти (село чи кімната) — пише HeroWalker; автотур шукає тут будівлю й людину.</summary>
+        public IReadOnlyList<WalkPlace> Places { get; private set; }
+
+        public void SetPlaces(IReadOnlyList<WalkPlace> places) => Places = places;
 
         /// <summary>Запит «дійти до місця» (автотур): HeroWalker забирає його і будує шлях, як на клік мишею.</summary>
         public string PendingWalkTarget { get; private set; }
@@ -242,15 +235,6 @@ namespace Game.Gameplay
             var target = PendingWalkTarget;
             PendingWalkTarget = null;
             return target;
-        }
-
-        /// <summary>«E — зайти»: відкрити вкладку місця і повернути панель.</summary>
-        public void InteractNearby()
-        {
-            var place = NearbyPlace;
-            if (place == null) return;
-            _hub.SetTab(place.HubTab);
-            SetExploring(false);
         }
 
         /// <summary>
@@ -330,6 +314,11 @@ namespace Game.Gameplay
             // (див. коментар в EscapeMenuScreen.Draw).
             var escEvt = Event.current;
             bool escapePressed = escEvt != null && escEvt.type == EventType.KeyDown && escEvt.keyCode == KeyCode.Escape;
+            if (escapeEligible && escapePressed && !_escapeOpen && state != SessionState.Battle && EscapeClosesLayer())
+            {
+                escEvt.Use();
+                escapePressed = false;
+            }
             if (escapeEligible && escapePressed)
             {
                 // Бій v2 (docs/COMBAT_V2.md §3, доручення власника 25.09.2026 —
@@ -364,24 +353,18 @@ namespace Game.Gameplay
 
             bool escapeShown = _escapeOpen && escapeEligible;
 
-            // Прогулянка: Tab — сховати/показати панель, E — зайти туди, де
-            // стоїш. Та сама подієва обробка, що й Escape вище (рівно раз на
-            // натискання, не Input.GetKeyDown).
+            // Село: уранці й у вільній грі — завжди (вкладок хаба немає). Коли
+            // стан іде з ранку, панель закривається. Клавіші шару місць — та
+            // сама подієва обробка, що й Escape вище (рівно раз на натискання).
             if (Exploring && !CanExplore) SetExploring(false);
-            var keyEvt = Event.current;
-            if (!escapeShown && keyEvt != null && keyEvt.type == EventType.KeyDown)
+            if (!Exploring && CanExplore) SetExploring(true);
+            if (state != _lastUxState)
             {
-                if (keyEvt.keyCode == KeyCode.Tab && CanExplore)
-                {
-                    SetExploring(!Exploring);
-                    keyEvt.Use();
-                }
-                else if (keyEvt.keyCode == KeyCode.E && Exploring && NearbyPlace != null)
-                {
-                    InteractNearby();
-                    keyEvt.Use();
-                }
+                if (_layers.OpenPanel != UxPanelId.None && !CanExplore) ClosePanel();
+                _lastUxState = state;
             }
+            var keyEvt = Event.current;
+            if (!escapeShown && HandleWorldKeys(keyEvt)) keyEvt.Use();
 
             bool wasEnabled = GUI.enabled;
             // Бій стоїть, поки відкрите меню паузи (презентер сам нічого не знає про Esc).
@@ -541,7 +524,7 @@ namespace Game.Gameplay
         /// наразі лише Максим ч.1): реєструє визначення в пулі й пропонує
         /// перший етап — сесія лишається в Evening (на відміну від сценової
         /// глави, це НЕ SessionState.Scene), тож подальші етапи гравець
-        /// резолвить вкладкою «Квести» (<c>HubScreen.DrawQuests</c>), тим
+        /// резолвить на Дошці оголошень чи в розмові з Максимом (<c>UxQuestCards</c>), тим
         /// самим шляхом, що й Гафіїн квест.
         /// </summary>
         private void TryBeginArcQuestIfAvailable(string companionId)
@@ -555,7 +538,7 @@ namespace Game.Gameplay
         {
             if (Exploring && (state == SessionState.Morning || state == SessionState.FreePlay))
             {
-                DrawExplore();
+                DrawWorld();
                 return;
             }
 
@@ -576,6 +559,7 @@ namespace Game.Gameplay
 
                 if (state == SessionState.Decision)
                     Widgets.Modal(UkrainianText.Get("ui.decision.title", ProtagonistGender), () => _decision.DrawBody(this));
+                DrawOverlays();
                 return;
             }
 
@@ -600,6 +584,7 @@ namespace Game.Gameplay
 
             if (state == SessionState.Decision)
                 Widgets.Modal(UkrainianText.Get("ui.decision.title", ProtagonistGender), () => _decision.DrawBody(this));
+            DrawOverlays();
         }
 
         private void DrawHubBody(SessionState state)
@@ -608,21 +593,10 @@ namespace Game.Gameplay
             {
                 case SessionState.Morning:
                 case SessionState.FreePlay:
-                    _hub.Draw(this);
-                    break;
                 case SessionState.Day:
                 case SessionState.Decision:
-                {
-                    // Під час Decision конвеєр дня зупинений — за модалкою (нижче)
-                    // видно той самий хаб, що й перед AdvanceDay, але вимкнений:
-                    // IMGUI-модалка сама не блокує клік крізь фон (немає стека
-                    // фокусу), тому фон вимикається явно на час показу.
-                    bool wasEnabled = GUI.enabled;
-                    GUI.enabled = state != SessionState.Decision;
-                    _hub.Draw(this);
-                    GUI.enabled = wasEnabled;
+                    // Вкладок хаба немає: за модалкою рішення видно саме село.
                     break;
-                }
                 case SessionState.Evening:
                 case SessionState.Night:
                     _night.Draw(this);
@@ -631,76 +605,6 @@ namespace Game.Gameplay
                     _dungeon.Draw(this);
                     break;
             }
-        }
-
-        /// <summary>
-        /// Екран прогулянки: шапка, коротка стрічка справа і нижня панель з
-        /// підказкою «E — зайти», клавішами і «Почати день». Решта екрана —
-        /// село, по якому ходить герой.
-        /// </summary>
-        private void DrawExplore()
-        {
-            var g = ProtagonistGender;
-            float w = Screen.width, h = Screen.height;
-            ExploreUiRects.Clear();
-
-            if (ToolkitHudActive)
-            {
-                // Шапку і коротку стрічку малює UI Toolkit; їхні прямокутники —
-                // та сама розкладка, що в HudToolkitView, — не команда «йти».
-                var frame = HudLayout.For(w, h, exploring: true);
-                ExploreUiRects.Add(new Rect(frame.Header.X, frame.Header.Y, frame.Header.Width, frame.Header.Height));
-                ExploreUiRects.Add(new Rect(frame.Feed.X, frame.Feed.Y, frame.Feed.Width, frame.Feed.Height));
-            }
-            else
-            {
-                var top = new Rect(0f, 0f, w, 72f);
-                GUILayout.BeginArea(top);
-                DrawTopBar();
-                GUILayout.EndArea();
-                ExploreUiRects.Add(top);
-
-                float feedW = Math.Min(460f, w * 0.34f);
-                var feed = new Rect(w - feedW - 16f, 84f, feedW, Math.Min(250f, h * 0.3f));
-                GUILayout.BeginArea(feed, GUI.skin.box);
-                GUILayout.Label(UkrainianText.Get("ui.feed.title", g), AlphaSkin.SubHeader);
-                var log = Session.DayLog;
-                if (log != null && log.Count > 0)
-                {
-                    var lines = ScreenText.BuildFeedLines(log, g, Session.GetRosterView());
-                    for (int i = Math.Max(0, lines.Count - 5); i < lines.Count; i++)
-                        GUILayout.Label(lines[i].Text, AlphaSkin.Tooltip);
-                }
-                GUILayout.EndArea();
-                ExploreUiRects.Add(feed);
-            }
-
-            float barW = Math.Min(w - 32f, 1100f), barH = 150f;
-            var bar = new Rect((w - barW) * 0.5f, h - barH - 16f, barW, barH);
-            GUILayout.BeginArea(bar, GUI.skin.box);
-            var place = NearbyPlace;
-            if (place != null)
-            {
-                string label = UkrainianText.Format("ui.explore.prompt", g,
-                    "place", VillagePlaces.LabelFor(place, g),
-                    "tab", UkrainianText.Get(ScreenText.HubTabKey(place.HubTab), g));
-                if (Widgets.PrimaryButton(label)) InteractNearby();
-            }
-            else
-            {
-                GUILayout.Label(UkrainianText.Get("ui.explore.nothing_near", g), AlphaSkin.Body);
-            }
-            GUILayout.Label(UkrainianText.Get("ui.explore.hint", g), AlphaSkin.Tooltip);
-            GUILayout.BeginHorizontal();
-            if (Widgets.SecondaryButton(UkrainianText.Get("ui.explore.leave", g))) SetExploring(false);
-            if (Widgets.PrimaryButton(UkrainianText.Get("ui.start_day", g)))
-            {
-                SetExploring(false);
-                HubScreen.StartDay(this);
-            }
-            GUILayout.EndHorizontal();
-            GUILayout.EndArea();
-            ExploreUiRects.Add(bar);
         }
 
         private void DrawFullScreen(Action body)
@@ -748,13 +652,6 @@ namespace Game.Gameplay
                 Widgets.Badge(UkrainianText.Get("ui.topbar.patrolling", g), AlphaSkin.Accent);
             if (view.IsFreePlay)
                 Widgets.Badge(UkrainianText.Get("ui.topbar.freeplay", g), AlphaSkin.BgRaised);
-
-            if (CanExplore && !Exploring)
-            {
-                GUILayout.Space(12f);
-                if (Widgets.SecondaryButton(UkrainianText.Get("ui.explore.enter", g), GUILayout.ExpandWidth(false)))
-                    SetExploring(true);
-            }
 
             GUILayout.FlexibleSpace();
             GUILayout.Label(UkrainianText.Get("resource.gold", g) + ": " + economy.Gold, AlphaSkin.Body, GUILayout.ExpandWidth(false));
@@ -857,7 +754,10 @@ namespace Game.Gameplay
         private string HumanRefusal(Exception ex)
         {
             Debug.LogWarning("[команда] " + ex.Message);
-            return UxErrorText.Humanize(ex.Message, ProtagonistGender == Gender.Female);
+            string text = UxErrorText.Humanize(ex.Message, ProtagonistGender == Gender.Female);
+            // У селі рядка під екраном немає — відмова приходить тостом (UX_DESIGN §5.15).
+            if (Exploring) Toast(text);
+            return text;
         }
 
         /// <summary>Підтвердження дії, у якої немає власного рядка в стрічці (напр. збереження на диск).</summary>

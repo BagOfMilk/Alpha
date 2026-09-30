@@ -86,10 +86,57 @@ namespace Game.Core.Combat
                 .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.WeaponAttack, AccuracyBonus = -10 })
                 .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.WeaponAttack, AccuracyBonus = -10 });
 
+        // ---- Перша партія docs/ABILITIES.md (власник, 29.09.2026: «ок»; «Тенета норм») ----
+        // Числа — ПЛЕЙСХОЛДЕРИ з карток; поріг видно до кліку (інваріант 8).
+
+        /// <summary>«Підбадьорити» (Переконання ≥ 3): зняти придушення/збиття зі свого, інакше +1 ОД; раз за бій на союзника.</summary>
+        public static AbilityDefinition Rally() =>
+            new AbilityDefinition("ability.rally", "rally", SkillType.Persuade, 3)
+                .Costs(ap: 2, cooldown: 0)
+                .Targets(AbilityTarget.Ally, range: 4, needsLos: false) // голос чути з-за укриття
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Rally, amount: 1));
+
+        /// <summary>«Розлютити» (Залякування ≥ Воля цілі): ціль наступного ходу б'є лише провокатора.</summary>
+        public static AbilityDefinition Enrage() =>
+            new AbilityDefinition("ability.enrage", "enrage", SkillType.Intimidate, 1)
+                .Costs(ap: 2, cooldown: 2)
+                .Targets(AbilityTarget.Enemy, range: 6, needsLos: true)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Enrage));
+
+        /// <summary>«Залякати» (Залякування ≥ Воля цілі + 1): придушення, здасться раніше; звір тікає.</summary>
+        public static AbilityDefinition Intimidate() =>
+            new AbilityDefinition("ability.intimidate", "intimidate", SkillType.Intimidate, 1)
+                .Costs(ap: 2, cooldown: 1)
+                .Targets(AbilityTarget.Enemy, range: 6, needsLos: true)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.Intimidate));
+
+        /// <summary>Тенета (Виживання ≥ 2): сітка без шкоди — хто ступить, той придушений; дозор у радіусі 2 збито.</summary>
+        public static AbilityDefinition Net() =>
+            new AbilityDefinition("ability.net", "net", SkillType.Survival, 2)
+                .Costs(ap: 2, cooldown: 3)
+                .Targets(AbilityTarget.Tile, range: 3, needsLos: true)
+                .WithEffect(new AbilityEffect { Kind = AbilityEffectKind.PlaceTrap, Amount = 0, Status = StatusType.Suppressed })
+                .WithEffect(new AbilityEffect(AbilityEffectKind.BreakOverwatchAround, amount: 2));
+
+        /// <summary>«Пробити» (Ближній бій ≥ 4): стерто броні ≥ 3 — гарантований удар без броні.</summary>
+        public static AbilityDefinition Pierce() =>
+            new AbilityDefinition("ability.pierce", "pierce", SkillType.Melee, 4)
+                .Costs(ap: 3, cooldown: 2)
+                .Targets(AbilityTarget.Enemy, range: 1, needsLos: true)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.PierceIfShredded, amount: 3));
+
+        /// <summary>«Милосердя на полі» (Медицина ≥ 1, дзеркало «Стабілізувати»): звалений ворог, що може здатися, — полонений.</summary>
+        public static AbilityDefinition Mercy() =>
+            new AbilityDefinition("ability.mercy", "mercy", SkillType.Medicine, 1)
+                .Costs(ap: 2, cooldown: 0)
+                .Targets(AbilityTarget.DownedEnemy, range: 1, needsLos: false)
+                .WithEffect(new AbilityEffect(AbilityEffectKind.SpareEnemy));
+
         /// <summary>Спільний пул здібностей, доступних напарникам за гейтом скіла (передається в CombatUnit.FromCompanion).</summary>
         public static List<AbilityDefinition> AbilityCatalog() => new List<AbilityDefinition>
         {
-            Lunge(), SetTrap(), MoveOrder(), Volley()
+            Lunge(), SetTrap(), MoveOrder(), Volley(),
+            Rally(), Enrage(), Intimidate(), Net(), Pierce(), Mercy()
         };
 
         // ---- Враги (§3.1: авангард орди доби 1, бояри Тугара, фінальний бос) ----
@@ -98,6 +145,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.horde_scout", "horde_scout", EnemyRole.Skirmisher, EnemyFamily.Human)
             {
                 MaxHp = 8, MaxAp = 8, Accuracy = 55, Defense = 0, Initiative = 6, CritChance = 5, Armor = 0,
+                Rank = EnemyRank.Grunt, CanSurrender = true, // №14.2: рядовий розвідник може здатися
                 Weapon = HordeBow()
             };
 
@@ -105,6 +153,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.horde_skirmisher", "horde_skirmisher", EnemyRole.Skirmisher, EnemyFamily.Human)
             {
                 MaxHp = 10, MaxAp = 8, Accuracy = 60, Defense = 0, Initiative = 5, CritChance = 5, Armor = 0,
+                Rank = EnemyRank.Grunt, CanSurrender = true,
                 Weapon = HordeBow()
             };
 
@@ -112,6 +161,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.tuhar_boyar", "tuhar_boyar", EnemyRole.Breacher, EnemyFamily.Human)
             {
                 MaxHp = 14, MaxAp = 8, Accuracy = 62, Defense = 2, Initiative = 6, CritChance = 8, Armor = 1,
+                Rank = EnemyRank.MiniBoss, CanSurrender = true, // №14.2: міні-боса можна взяти в полон і потім переманити
                 Weapon = BoyarSaber(),
                 Abilities = { Lunge() }
             };
@@ -144,6 +194,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.burunda", "burunda", EnemyRole.Tank, EnemyFamily.Human)
             {
                 MaxHp = 30, MaxAp = 10, Accuracy = 80, Defense = 4, Initiative = 7, CritChance = 12, Armor = 2,
+                Rank = EnemyRank.Boss, // №14.2: бос не здається ніколи
                 Resolve = 3,
                 Weapon = BurundaMace(),
                 Abilities = { Lunge() }
@@ -164,6 +215,7 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.horde_vanguard", "horde_vanguard", EnemyRole.Breacher, EnemyFamily.Human)
             {
                 MaxHp = 15, MaxAp = 8, Accuracy = 80, Defense = 0, Initiative = 7, CritChance = 8, Armor = 0,
+                Rank = EnemyRank.Grunt, // №14.2: сокирник орди не здається («далеко не всі вороги»)
                 Weapon = HordeAxe(),
                 Abilities = { Lunge() }
             };
@@ -192,6 +244,8 @@ namespace Game.Core.Combat
             new EnemyDefinition("enemy.forest_bandit", "forest_bandit", EnemyRole.Breacher, EnemyFamily.Human)
             {
                 MaxHp = 26, MaxAp = 9, Accuracy = 82, Defense = 1, Initiative = 6, CritChance = 10, Armor = 0,
+                Rank = EnemyRank.MiniBoss, CanSurrender = true, SurrenderAtHpPercent = 10, // №14.2: ватажок скиту — міні-бос; поріг низький — бій лишається тяжким (№11)
+                Greed = 3, // «Відкуп» (docs/ABILITIES.md §4.6): розбійник продається; орда — ні
                 Weapon = BanditCleaver(),
                 Abilities = { Lunge() }
             };

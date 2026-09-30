@@ -9,6 +9,34 @@ namespace Game.Core.Combat
         Percent = 1
     }
 
+    /// <summary>
+    /// Як почався бій — від того, як загін до нього дійшов (Поправка №14.1;
+    /// власник, 29.09.2026: «Супер, але додай більше варіантів, може навіть
+    /// поранення…» → старт пораненими). Детерміновано: варіант вибирає той,
+    /// хто просить бій (данж, подія), за шляхом і полосою, а не кубиком.
+    /// Бонус за перевагу знімає штраф, а не дає зайвих ходів.
+    /// </summary>
+    public enum BattleOpening
+    {
+        /// <summary>Зустрічний бій — звичайна ініціатива впереміш.</summary>
+        Encounter = 0,
+        /// <summary>Перший удар — свідомо обрано кривавий шлях: у раунді 1 загін гравця ходить першим.</summary>
+        FirstStrike = 1,
+        /// <summary>Засідка — кривавий шлях після розвідки: як «Перший удар», і вороги в раунді 1 позначені (наявний стан Marked).</summary>
+        Ambush = 2,
+        /// <summary>Вас помітили — тихий шлях зірвався: у раунді 1 першими ходять вороги.</summary>
+        Spotted = 3,
+        /// <summary>Під обстрілом — помітили глибоко в небезпеці: вороги першими, а загін стартує пораненим (мінус HP і Кровотеча).</summary>
+        UnderFire = 4,
+        /// <summary>Оточені — вороги першими, загін розставлено врозкид (розстановку робить той, хто будує бій).</summary>
+        Surrounded = 5,
+        /// <summary>
+        /// Ультиматум відкинуто («Скласти зброю!», docs/ABILITIES.md §4.6): звичайна
+        /// ініціатива, але розлючений ворог у раунді 1 б'є влучніше.
+        /// </summary>
+        Provoked = 6
+    }
+
     /// <summary>Стіна на тайлі (непрохідна і блокує огляд) — найчастіший вид укриття арени.</summary>
     public readonly struct WallPlacement
     {
@@ -93,5 +121,14 @@ namespace Game.Core.Combat
         public GridPos DefectorPos;
 
         public HitRuleKind HitRule = HitRuleKind.Threshold;
+
+        /// <summary>Як почався бій (Поправка №14.1). За замовчуванням — зустрічний.</summary>
+        public BattleOpening Opening = BattleOpening.Encounter;
+
+        /// <summary>Об'єкти поля (Поправка №14.4): перепони, бочки з порохом, сіно.</summary>
+        public List<MapObjectPlacement> Objects = new List<MapObjectPlacement>();
+
+        /// <summary>Підкріплення ворога з відліком (Поправка №14.4; правило контенту, не рушія).</summary>
+        public List<ReinforcementSpawn> Reinforcements = new List<ReinforcementSpawn>();
     }
 }

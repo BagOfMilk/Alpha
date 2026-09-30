@@ -108,7 +108,7 @@ namespace Game.Tests.EditMode
             string threshold = BattleLogText.Line(Entry(CombatLogKeys.AttackMiss, args), false, id => id == "a" ? "Бурунда" : "Провідник", id => false);
 
             Assert.AreEqual("Бурунда → Провідник: промах (шанс 56%).", percent);
-            Assert.AreEqual("Бурунда → Провідник: промах (поріг 56).", threshold);
+            Assert.AreEqual("Бурунда → Провідник: промах (шанс 56%, без кубика).", threshold);
         }
 
         [Test]

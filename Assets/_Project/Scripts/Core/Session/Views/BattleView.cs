@@ -20,6 +20,35 @@ namespace Game.Core.Session.Views
         /// <summary>За індексом x+y*Width: "None"|"Half"|"Full".</summary>
         public IReadOnlyList<string> TileCover;
         public IReadOnlyList<bool> TileWalkable;
+
+        /// <summary>
+        /// Укриття тайла по боках (Поправка №14.4 — «укриття видно»): за індексом
+        /// x+y*Width рядок "Північ|Схід|Південь|Захід", кожне значення
+        /// "None"|"Half"|"Full". HUD показує, з якого боку тут захищає.
+        /// </summary>
+        public IReadOnlyList<string> TileCoverSides;
+    }
+
+    /// <summary>Об'єкт поля (Поправка №14.4): перепона, бочка з порохом, сіно.</summary>
+    public sealed class BattleObjectView
+    {
+        public GridPosView Pos;
+
+        /// <summary>"LowCover"|"HighCover"|"PowderKeg"|"Haystack".</summary>
+        public string Kind;
+
+        /// <summary>По ньому можна вдарити (бочка, сіно).</summary>
+        public bool IsTargetable;
+
+        /// <summary>Бочка: радіус і шкода вибуху; сіно: радіус і тривалість вогню (раунди). 0 — не діє.</summary>
+        public int EffectRadius, EffectDamage, EffectRounds;
+    }
+
+    /// <summary>Зона вогню від спаленого сіна.</summary>
+    public sealed class BattleFireView
+    {
+        public GridPosView Center;
+        public int Radius, RoundsLeft;
     }
 
     public sealed class BattleUnitView
@@ -75,6 +104,33 @@ namespace Game.Core.Session.Views
 
         /// <summary>true — юнітом керує ШІ (вороги, перебіжчики); гравець ним не ходить.</summary>
         public bool IsAiControlled;
+
+        /// <summary>Вибув із бою: загинув або врятований і винесений (Поправка №14.5 — колесо черги його не показує).</summary>
+        public bool IsOutOfBattle;
+
+        // ---- Здача (Поправка №14.2) — лише для ворогів ----
+        /// <summary>"Grunt" | "MiniBoss" | "Boss".</summary>
+        public string Rank;
+        /// <summary>Може здатися (позначений рядовий чи міні-бос).</summary>
+        public bool CanSurrender;
+        /// <summary>Здасться при здоров'ї ≤ цієї частки (%) — з урахуванням залякування; видно заздалегідь.</summary>
+        public int SurrenderAtHpPercent;
+        /// <summary>Уже здався — вибув із бою живим.</summary>
+        public bool IsSurrendered;
+
+        /// <summary>Утік із поля («Залякати» на звіра, docs/ABILITIES.md) — арена прибирає фігуру.</summary>
+        public bool IsFled;
+
+        // ---- Досьє (Поправка №14.6) — лише для ворогів ----
+        /// <summary>"Contact" — знаємо роль і здоров'я; "Studied" — ще й прийоми, опори, умову здачі; null — свій чи перебіжчик.</summary>
+        public string Dossier;
+        /// <summary>"Tank" | "Skirmisher" | "Controller" | "Breacher" — видно з першого контакту.</summary>
+        public string Role;
+        /// <summary>Опори вивченого ворога: "Fire:weak", "Ballistic:strong"; null — ще не вивчений.</summary>
+        public IReadOnlyList<string> ResistNotes;
+
+        /// <summary>Побратими в цьому бою (id юнітів, Поправка №14.8): поруч раз за раунд прикривають.</summary>
+        public IReadOnlyList<string> BondUnitIds;
     }
 
     /// <summary>Один стан юніта з тривалістю (docs/COMBAT_V2.md §7.1).</summary>
@@ -126,16 +182,40 @@ namespace Game.Core.Session.Views
         /// <summary>Укриття не діє (ближній бій, здібність ігнорує укриття).</summary>
         public bool CoverIgnored;
 
+        /// <summary>Фланг (Поправка №14.4): у цілі є укриття, але з боку атакуючого — ні.</summary>
+        public bool IsFlanked;
+
         public int DamageMin, DamageMax, DamageCrit;
         /// <summary>Правило «поріг»: звичайне влучання дає рівно <see cref="DamageExpected"/>, діапазон не показувати.</summary>
         public bool IsDamageDeterministic;
         public int DamageExpected;
+        /// <summary>Опори й броня цілі ще невідомі (досьє, №14.6) — HUD ставить до шкоди «?».</summary>
+        public bool DamageUncertain;
+
+        /// <summary>
+        /// Правило без кубика: скільки ударів у дії і скільки з них влучать — відомо
+        /// наперед (накопичувач бійця). 0/0 — правило з кубиком.
+        /// </summary>
+        public int PredictedShots, PredictedHits;
 
         /// <summary>Скільки ОД коштує саме ця дія.</summary>
         public int ApCost;
         /// <summary>Відстань до цілі (клітинки, Чебишев) і максимальна дальність дії.</summary>
         public int Distance, Range;
         public bool HasLineOfSight;
+
+        // ---- Перевірка здібності (перша партія docs/ABILITIES.md; інваріант 8 — видно до кліку) ----
+        /// <summary>"Contest" — навичка проти Волі цілі; "Condition" — умова на полі; null — перевірки немає.</summary>
+        public string CheckKind;
+        /// <summary>"intimidate" | "shred" | null.</summary>
+        public string CheckSkill;
+        /// <summary>Що в тебе (навичка / стерто броні) і скільки треба.</summary>
+        public int CheckValue, CheckThreshold;
+        /// <summary>Ціль не піддається зовсім («Імунітет»: бос, оглушений).</summary>
+        public bool CheckImmune;
+        public bool CheckPasses;
+        /// <summary>Чому дію не почати: "immune" | "rallied" | "armor_intact"; null — можна.</summary>
+        public string CheckBlockKey;
     }
 
     /// <summary>
@@ -218,7 +298,24 @@ namespace Game.Core.Session.Views
         /// </summary>
         public string CurrentUnitId;
 
+        /// <summary>Черга поточного раунду (у раунді 1 може бути переставлена стартом бою, Поправка №14.1).</summary>
         public IReadOnlyList<string> InitiativeOrder;
+
+        /// <summary>Черга наступних раундів — звичайна впереміш; колесо черги показує її після межі раунду.</summary>
+        public IReadOnlyList<string> NextRoundOrder;
+
+        /// <summary>Як почався бій: "Encounter"|"FirstStrike"|"Ambush"|"Spotted"|"UnderFire"|"Surrounded" (Поправка №14.1).</summary>
+        public string Opening;
+
+        /// <summary>Досьє (Поправка №14.6): розвідка відкриває картку ворога — Виживання ≥ N або Кмітливість ≥ M; видно до бою.</summary>
+        public int DossierScoutSurvival, DossierScoutWits;
+
+        /// <summary>
+        /// Ключ тексту «що буде, якщо відступити» для підтвердження відступу
+        /// (Поправка №14.7, ROADMAP B13) — залежить від того, хто просив бій
+        /// (данж, вузол чи фінал, тренування).
+        /// </summary>
+        public string RetreatConsequenceKey;
 
         /// <summary>
         /// Журнал бою для гравця (R7): ключі таблиці з аргументами, НЕ готові
@@ -229,6 +326,15 @@ namespace Game.Core.Session.Views
         public IReadOnlyList<BattleLogLineView> Log;
 
         public bool IsHitRulePercent;
+
+        /// <summary>Об'єкти поля (Поправка №14.4).</summary>
+        public IReadOnlyList<BattleObjectView> Objects;
+
+        /// <summary>Зони вогню.</summary>
+        public IReadOnlyList<BattleFireView> Fires;
+
+        /// <summary>Раунд найближчого підкріплення ворога (0 — не чекається) і скільки прийде — відлік у HUD.</summary>
+        public int ReinforcementRound, ReinforcementCount;
     }
 
     /// <summary>
