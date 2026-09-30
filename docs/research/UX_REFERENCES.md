@@ -97,6 +97,20 @@
 - **Уникаємо:** відірваність колоніального менеджменту від фізичного простору й брак сповіщень про завершені проєкти — той самий клас бага, що інваріант 4 Alpha вже одного разу ловив («німий перехід»); завершення будівництва/проєкту завжди має бути сигналом, а не тихим станом меню.
 - **Джерела:** [Colony Management — Fextralife](https://roguetrader.wiki.fextralife.com/Colony_Management) · [Voidship Bridge — ludo.guide](https://www.ludo.guide/guide/warhammer-40000-rogue-trader/chapter-1-looking-for-trouble) · [Owlcat Alpha Guide](https://roguetrader.owlcat.games/news/en/16) · [Update 1.5 — GameWatcher](https://www.gamewatcher.com/news/warhammer-40000-rogue-trader-update-1-5-rebalanced-colony-management-reworked-origins) · [RPG Site Update 1.5 notes](https://www.rpgsite.net/news/18770-warhammer-40000-rogue-trader-update-1-5-full-patch-notes-gameplay-trailer) · [Colonies — GameFAQs](https://gamefaqs.gamespot.com/ps5/369358-warhammer-40000-rogue-trader/faqs/82192/colonies)
 
+### Warhammer 40,000: Rogue Trader — словник і минулі вибори (Поправка №16)
+- **Словник:** терміни в тексті виділені жирним; наведення — коротке пояснення; ПКМ перетворює підказку
+  на вікно; з підказки — перехід до енциклопедії (`L`). Автозникнення підказки (~7 с) гравці лають.
+- **Минулі вибори:** використані варіанти діалогу сірі; лог розмови — прокрутка вгору в діалозі й
+  кнопка поза ним (малопомітна). Теги переконань стоять біля варіантів; гравці скаржаться, що не
+  видно, який варіант завершує розмову.
+- **Беремо:** живі терміни з підказкою і закріпленням; сторінка словника з підказки; «обрано раніше»
+  на варіанті; журнал рішень. **Уникаємо:** автозникнення підказок, розрізнення лише кольором,
+  малопомітного логу; додаємо маркер «завершує розмову».
+- **Джерела:** [огляд — Roundtable Co-op](https://roundtablecoop.com/reviews/warhammer-40000-rogue-trader-final-pc-review/) ·
+  [підказки — Steam](https://steamcommunity.com/app/2186680/discussions/0/4038104984931180019/) ·
+  [патч: підказки й енциклопедія](https://roguetrader.owlcat.games/news/en/38) · [Controls — Fextralife](https://roguetrader.wiki.fextralife.com/Controls) ·
+  [сірі варіанти — Steam](https://steamcommunity.com/app/2186680/discussions/0/600768722043429741/)
+
 ### Shadowrun Returns / Dragonfall / Hong Kong — сейфхаус
 - **Простір:** Kreuzbasar (Dragonfall) — досліджувана 2D/ізометрична локація-хаб, тим самим рушієм, що й будь-яка місія-карта (не окреме меню); для трилогії загалом хаб — точка на карті-хаб, ближче до «локації-ноди», ніж до суцільного ходибельного села *(не відкрито повністю для трилогії — лише вторинні огляди)*.
 - **Вхід і навігація:** клік по точці на карті хаба → завантаження інтер'єру; всередині — звичайна ізометрична ходьба з діалогами.
