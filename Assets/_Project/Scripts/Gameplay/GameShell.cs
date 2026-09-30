@@ -409,33 +409,9 @@ namespace Game.Gameplay
             var lines = _toolkitHud.HoverTipLines;
             if (lines == null || lines.Count == 0) return;
 
-            var anchor = _toolkitHud.HoverTipGuiRect;
-            int current = _toolkitHud.HoverTipCurrentIndex;
-            float font = AlphaSkin.BodyFontSize;
-            float lineHeight = font + 10f;
-            float width = 0f;
-            foreach (var line in lines) width = Math.Max(width, line.Length * font * 0.56f);
-            width = Math.Min(560f, Math.Max(160f, width + 32f));
-            float height = lines.Count * lineHeight + 18f;
-            float x = Math.Min(Math.Max(anchor.x, 8f), Math.Max(8f, Screen.width - width - 8f));
-            var box = new Rect(x, anchor.y + anchor.height + 6f, width, height);
-
-            Widgets.SolidRect(box, AlphaSkin.BgPanel);
-            const float b = 1f;
-            Widgets.SolidRect(new Rect(box.x, box.y, box.width, b), AlphaSkin.Accent);
-            Widgets.SolidRect(new Rect(box.x, box.y + box.height - b, box.width, b), AlphaSkin.Accent);
-            Widgets.SolidRect(new Rect(box.x, box.y, b, box.height), AlphaSkin.Accent);
-            Widgets.SolidRect(new Rect(box.x + box.width - b, box.y, b, box.height), AlphaSkin.Accent);
-
-            for (int i = 0; i < lines.Count; i++)
-            {
-                bool title = lines.Count > 1 && i == 0;
-                bool isCurrent = i == current;
-                var style = new GUIStyle(AlphaSkin.Body) { wordWrap = false };
-                style.normal.textColor = title ? AlphaSkin.Accent : (isCurrent || lines.Count == 1 ? AlphaSkin.TextMain : AlphaSkin.TextDim);
-                if (isCurrent || title) style.fontStyle = FontStyle.Bold;
-                GUI.Label(new Rect(box.x + 14f, box.y + 9f + i * lineHeight, box.width - 28f, lineHeight), lines[i], style);
-            }
+            // UI v2: панель-підказка шкурки (рамка BG3) замість заливки з
+            // чотирма лініями; ширина — справжнім виміром шрифту, а не оцінкою.
+            Widgets.HoverTip(_toolkitHud.HoverTipGuiRect, lines, _toolkitHud.HoverTipCurrentIndex);
         }
 
         private void DrawStateScreen(SessionState state)

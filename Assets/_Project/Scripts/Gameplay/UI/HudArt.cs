@@ -22,6 +22,11 @@ namespace Game.Gameplay.UI
         public Font Display;
         /// <summary>Noto Serif Regular — «паперові» екрани (хроніка, звіти; наступні кроки міграції).</summary>
         public Font Paper;
+        /// <summary>
+        /// Noto Serif Bold — заголовки вікон і секцій (UI v2, орієнтир BG3,
+        /// власник 30.09.2026). Справжній жирний файл замість синтетичного.
+        /// </summary>
+        public Font HeadingSerif;
 
         /// <summary>Ключ значка (ресурс «gold», «phase.night», «away»…) → текстура; однакова довжина масивів.</summary>
         public string[] IconKeys = new string[0];
