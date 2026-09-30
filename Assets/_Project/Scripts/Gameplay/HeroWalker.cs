@@ -752,13 +752,22 @@ namespace Game.Gameplay
         {
             if (_labelStyle != null) return;
             GUI.skin = AlphaSkin.Build();
-            _labelStyle = new GUIStyle(GUI.skin.box) { fontSize = 15, alignment = TextAnchor.MiddleCenter, wordWrap = false };
-            _nearStyle = new GUIStyle(_labelStyle) { fontStyle = FontStyle.Bold };
-            _nearStyle.normal.textColor = new Color(1f, 0.75f, 0.35f);
-            _markStyle = new GUIStyle(GUI.skin.box) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            _markStyle.normal.textColor = new Color(1f, 0.82f, 0.3f);
-            _titleStyle = new GUIStyle(GUI.skin.box) { fontSize = 26, alignment = TextAnchor.MiddleCenter, wordWrap = false };
-            _titleStyle.normal.textColor = new Color(0.93f, 0.88f, 0.8f);
+            // UI v2 (шкурка BG3): мітка місця — компактна панель-підказка, а не
+            // велика панель вікна з кутовими шпильками; найближче — світла бронза.
+            _labelStyle = new GUIStyle(AlphaSkin.TooltipPanel)
+            {
+                fontSize = 16, alignment = TextAnchor.MiddleCenter, wordWrap = false,
+                padding = new RectOffset(10, 10, 4, 4)
+            };
+            _nearStyle = new GUIStyle(_labelStyle) { font = AlphaSkin.StrongFont };
+            _nearStyle.normal.textColor = AlphaSkin.BronzeHi;
+            _markStyle = new GUIStyle(AlphaSkin.TooltipPanel) { fontSize = 20, alignment = TextAnchor.MiddleCenter, font = AlphaSkin.StrongFont };
+            _markStyle.normal.textColor = AlphaSkin.BronzeHi;
+            _titleStyle = new GUIStyle(AlphaSkin.TooltipPanel)
+            {
+                fontSize = 26, alignment = TextAnchor.MiddleCenter, wordWrap = false,
+                padding = new RectOffset(16, 16, 6, 6), font = AlphaSkin.StrongFont
+            };
             _black = new Texture2D(1, 1);
             _black.SetPixel(0, 0, Color.white);
             _black.Apply();

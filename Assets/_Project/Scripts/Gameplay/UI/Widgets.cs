@@ -30,13 +30,44 @@ namespace Game.Gameplay.UI
 
         // ================= панелі та секції =================
 
-        /// <summary>Панель зі шкіряним фоном і великим заголовком над вмістом.</summary>
+        /// <summary>
+        /// Панель-вікно (UI v2, орієнтир BG3): рамка з кутовими шпильками, назва
+        /// антиквою по центру і роздільник-ромб під нею, далі вміст.
+        /// </summary>
         public static void Panel(string title, Action drawBody, params GUILayoutOption[] options)
         {
             GUILayout.BeginVertical(GUI.skin.box, options);
-            if (!string.IsNullOrEmpty(title)) GUILayout.Label(title, AlphaSkin.Header);
+            if (!string.IsNullOrEmpty(title))
+            {
+                GUILayout.Label(title, AlphaSkin.WindowTitle);
+                Divider();
+            }
             if (drawBody != null) drawBody();
             GUILayout.EndVertical();
+        }
+
+        /// <summary>
+        /// Роздільник: бронзова лінія, що згасає до країв, з ромбом-«ружею»
+        /// посередині. Займає рядок потоку GUILayout; малюється лише в Repaint.
+        /// </summary>
+        public static void Divider()
+        {
+            const float height = 16f;
+            var rect = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+            var evt = Event.current;
+            if (evt == null || evt.type != EventType.Repaint) return;
+            DividerAt(rect);
+        }
+
+        /// <summary>Той самий роздільник за готовими координатами (абсолютні екрани, підказки).</summary>
+        public static void DividerAt(Rect rect)
+        {
+            float cy = rect.y + rect.height * 0.5f;
+            var line = new Rect(rect.x + 8f, cy, rect.width - 16f, 1f);
+            GUI.DrawTexture(line, AlphaSkin.DividerLine, ScaleMode.StretchToFill);
+            const float d = 13f;
+            GUI.DrawTexture(new Rect(rect.x + rect.width * 0.5f - d * 0.5f, cy - d * 0.5f, d, d),
+                AlphaSkin.DividerDiamond, ScaleMode.StretchToFill);
         }
 
         /// <summary>Секція всередині панелі — підзаголовок, без власного фону й рамки.</summary>
@@ -83,14 +114,15 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>
-        /// Кнопка-вкладка/перемикач (E1b): акцентна, коли обрана, інакше
-        /// звичайна — те саме, що дав би <c>GUILayout.Toggle(bool,string,
+        /// Кнопка-вкладка/перемикач (E1b): те саме, що дав би <c>GUILayout.Toggle(bool,string,
         /// GUIStyle,...)</c>, але без перевантаження, якого немає в стабі
         /// лінту (<c>tools/Game.Gameplay.Lint/UnityEngineStub.cs</c> навмисно
         /// вузький). Клік завжди повертає true — викликач сам присвоює вибір.
+        /// UI v2: обрана — світліша, зі світлою бронзовою рамкою і сяйвом;
+        /// необрана — темніша, тьмяна рамка, другорядний текст.
         /// </summary>
         public static bool TabButton(string label, bool selected, params GUILayoutOption[] options)
-            => selected ? PrimaryButton(label, options) : SecondaryButton(label, options);
+            => GUILayout.Button(label, AlphaSkin.TabStyle(selected), options);
 
         /// <summary>Вкладка своєї ширини, не розтягнута на весь рядок (рядок вкладок переноситься).</summary>
         public static bool CompactTabButton(string label, bool selected)
@@ -99,9 +131,7 @@ namespace Game.Gameplay.UI
         /// <summary>Скільки місця займе кнопка-вкладка з цим підписом (для переносу рядка вкладок).</summary>
         public static float TabButtonWidth(string label)
         {
-            if (_secondaryButton == null)
-                _secondaryButton = AlphaSkin.ButtonStyle(AlphaSkin.BgRaised, AlphaSkin.BgHover, AlphaSkin.BgActive, AlphaSkin.TextMain);
-            return _secondaryButton.CalcSize(new GUIContent(label)).x + 8f;
+            return AlphaSkin.TabStyle(false).CalcSize(new GUIContent(label)).x + 8f;
         }
 
         /// <summary>Незворотна/ризикова дія (кроваво, підтвердження) — темно-червоний тон.</summary>
@@ -165,7 +195,7 @@ namespace Game.Gameplay.UI
         {
             var backdrop = new Rect(0f, 0f, Screen.width, Screen.height);
             var previousColor = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.72f);
+            GUI.color = AlphaSkin.ModalDim;
             GUI.DrawTexture(backdrop, TintableTexture(), ScaleMode.StretchToFill);
             GUI.color = previousColor;
 
@@ -192,6 +222,74 @@ namespace Game.Gameplay.UI
                     onClose();
                 }
             }
+        }
+
+        private static GUIStyle _tipTitle;
+        private static GUIStyle _tipCurrent;
+        private static GUIStyle _tipOther;
+
+        /// <summary>
+        /// Підказка під якорем (UI v2): панель-підказка шкурки. Якщо рядків
+        /// більше одного, перший — назва антиквою з роздільником під нею;
+        /// рядок <paramref name="currentIndex"/> — напівжирний пергамент
+        /// (поточна полоса драбини), решта — другорядним кольором.
+        /// Притискається до країв екрана.
+        /// </summary>
+        public static void HoverTip(Rect anchor, System.Collections.Generic.IReadOnlyList<string> lines, int currentIndex)
+        {
+            if (lines == null || lines.Count == 0) return;
+            EnsureTipStyles();
+
+            bool hasTitle = lines.Count > 1;
+            const float lineHeight = AlphaSkin.BodyFontSize + 10f;
+            const float dividerHeight = 14f;
+            var pad = AlphaSkin.TooltipPanel.padding;
+
+            float width = 160f;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                float w = TipStyle(i, hasTitle, currentIndex, lines.Count).CalcSize(new GUIContent(lines[i] ?? string.Empty)).x;
+                if (w > width) width = w;
+            }
+            width = Clamp(width + pad.left + pad.right + 4f, 180f, 560f);
+            float height = lines.Count * lineHeight + (hasTitle ? dividerHeight : 0f) + pad.top + pad.bottom;
+
+            float x = Clamp(anchor.x, 8f, Math.Max(8f, Screen.width - width - 8f));
+            float y = anchor.y + anchor.height + 6f;
+            if (y + height > Screen.height - 8f) y = Math.Max(8f, anchor.y - height - 6f);
+            var box = new Rect(x, y, width, height);
+
+            GUI.Box(box, GUIContent.none, AlphaSkin.TooltipPanel);
+
+            float cy = box.y + pad.top;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var row = new Rect(box.x + pad.left, cy, box.width - pad.left - pad.right, lineHeight);
+                GUI.Label(row, lines[i] ?? string.Empty, TipStyle(i, hasTitle, currentIndex, lines.Count));
+                cy += lineHeight;
+                if (hasTitle && i == 0)
+                {
+                    DividerAt(new Rect(box.x + pad.left, cy - 2f, box.width - pad.left - pad.right, dividerHeight));
+                    cy += dividerHeight;
+                }
+            }
+        }
+
+        private static GUIStyle TipStyle(int index, bool hasTitle, int currentIndex, int count)
+        {
+            if (hasTitle && index == 0) return _tipTitle;
+            return index == currentIndex || count == 1 ? _tipCurrent : _tipOther;
+        }
+
+        private static void EnsureTipStyles()
+        {
+            if (_tipTitle != null) return;
+
+            _tipTitle = new GUIStyle(AlphaSkin.SubHeader) { wordWrap = false, fontSize = AlphaSkin.BodyFontSize + 1 };
+            _tipCurrent = new GUIStyle(AlphaSkin.Body) { wordWrap = false, font = AlphaSkin.StrongFont };
+            _tipCurrent.normal.textColor = AlphaSkin.TextMain;
+            _tipOther = new GUIStyle(AlphaSkin.Body) { wordWrap = false };
+            _tipOther.normal.textColor = AlphaSkin.TextDim;
         }
 
         /// <summary>Дрібний притишений рядок-підказка — під полем, під кнопкою, де завгодно.</summary>
@@ -316,7 +414,7 @@ namespace Game.Gameplay.UI
         /// </summary>
         public static void FilledBarAt(Rect rect, float fraction, Color32 fillTint)
         {
-            SolidRect(rect, new Color32(20, 16, 12, 200));
+            SolidRect(rect, new Color32(AlphaSkin.BgDark.r, AlphaSkin.BgDark.g, AlphaSkin.BgDark.b, 210));
             float f = Clamp(fraction, 0f, 1f);
             if (f <= 0f) return;
             var filled = new Rect(rect.x, rect.y, rect.width * f, rect.height);
@@ -384,7 +482,23 @@ namespace Game.Gameplay.UI
                     padding = new RectOffset(10, 10, 4, 4),
                     margin = new RectOffset(2, 2, 2, 2)
                 };
-                _tintable.normal.background = TintableTexture();
+                // UI v2: чіп у рамці — світла сіра рамка й білий градієнт,
+                // помножені на тон, дають темніший обрис і живу заливку того
+                // самого кольору (один колір — один сенс, рамка лише форма).
+                var chip = new SkinTextures.Frame
+                {
+                    Size = 16,
+                    Chamfer = 2,
+                    Outer = new Color32(40, 40, 40, 255),
+                    Line = new Color32(165, 165, 165, 255),
+                    LineWidth = 1,
+                    Inner = new Color32(235, 235, 235, 255),
+                    FillTop = new Color32(255, 255, 255, 255),
+                    FillBottom = new Color32(222, 222, 222, 255)
+                };
+                int b = SkinTextures.SliceBorder(chip);
+                _tintable.border = new RectOffset(b, b, b, b);
+                _tintable.normal.background = SkinTextures.Build(chip);
                 _tintable.normal.textColor = AlphaSkin.TextMain;
             }
             return _tintable;

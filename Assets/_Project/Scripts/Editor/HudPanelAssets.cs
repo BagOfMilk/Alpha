@@ -86,6 +86,7 @@ namespace Game.Gameplay.EditorTools
             art.UiSemiBold = AssetDatabase.LoadAssetAtPath<Font>(Fonts + "/Fixel/FixelText-SemiBold.ttf");
             art.Display = AssetDatabase.LoadAssetAtPath<Font>(Fonts + "/Fixel/FixelDisplay-SemiBold.ttf");
             art.Paper = AssetDatabase.LoadAssetAtPath<Font>(Fonts + "/NotoSerif/NotoSerif-Regular.ttf");
+            art.HeadingSerif = AssetDatabase.LoadAssetAtPath<Font>(Fonts + "/NotoSerif/NotoSerif-Bold.ttf");
 
             var icons = new Texture2D[IconFiles.Length];
             int missing = 0;

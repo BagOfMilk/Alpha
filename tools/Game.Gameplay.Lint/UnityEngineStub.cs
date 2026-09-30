@@ -18,6 +18,9 @@ namespace UnityEngine
     {
         public string name;
 
+        /// <summary>UI v2 (BG3-шкурка): процедурні текстури шкурки живуть поза сценою й не зберігаються.</summary>
+        public HideFlags hideFlags { get; set; }
+
         /// <summary>Спайк H4: HudToolkitView прибирає свій хост і PanelSettings.</summary>
         public static void Destroy(Object obj) { }
 
@@ -314,6 +317,11 @@ namespace UnityEngine
     }
 
     public enum FilterMode { Point = 0, Bilinear = 1, Trilinear = 2 }
+
+    [System.Flags]
+    public enum HideFlags { None = 0, HideInHierarchy = 1, HideInInspector = 2, DontSaveInEditor = 4, NotEditable = 8, DontSaveInBuild = 16, DontUnloadUnusedAsset = 32, DontSave = 52, HideAndDontSave = 61 }
+
+    public enum TextureFormat { RGBA32 = 4 }
     public enum TextureWrapMode { Repeat = 0, Clamp = 1, Mirror = 2, MirrorOnce = 3 }
 
     /// <summary>
@@ -328,6 +336,9 @@ namespace UnityEngine
         public TextureWrapMode wrapMode { get; set; }
 
         public Texture2D(int width, int height) { }
+
+        /// <summary>UI v2: текстури шкурки без міп-рівнів (9-slice малюється 1:1, міпи лише розмивають рамку).</summary>
+        public Texture2D(int width, int height, TextureFormat textureFormat, bool mipChain) { }
 
         public void SetPixels(Color[] colors) { }
         public void SetPixel(int x, int y, Color color) { }
@@ -395,7 +406,12 @@ namespace UnityEngine
         public static void CaptureScreenshot(string filename, int superSize) { }
     }
 
-    public enum TextAnchor { UpperLeft = 0, MiddleCenter = 4 }
+    public enum TextAnchor
+    {
+        UpperLeft = 0, UpperCenter = 1, UpperRight = 2,
+        MiddleLeft = 3, MiddleCenter = 4, MiddleRight = 5,
+        LowerLeft = 6, LowerCenter = 7, LowerRight = 8
+    }
 
     public enum ScaleMode { StretchToFill = 0, ScaleAndCrop = 1, ScaleToFit = 2 }
 
@@ -442,8 +458,29 @@ namespace UnityEngine
         public GUIStyleState normal { get; set; } = new GUIStyleState();
         public GUIStyleState hover { get; set; } = new GUIStyleState();
         public GUIStyleState active { get; set; } = new GUIStyleState();
+        public GUIStyleState focused { get; set; } = new GUIStyleState();
+        public GUIStyleState onNormal { get; set; } = new GUIStyleState();
+        public GUIStyleState onHover { get; set; } = new GUIStyleState();
+        public GUIStyleState onActive { get; set; } = new GUIStyleState();
         public RectOffset padding { get; set; } = new RectOffset();
         public RectOffset margin { get; set; } = new RectOffset();
+
+        /// <summary>UI v2: 9-slice — скільки пікселів з кожного краю фону не розтягується (рамка і кути).</summary>
+        public RectOffset border { get; set; } = new RectOffset();
+        public RectOffset overflow { get; set; } = new RectOffset();
+
+        /// <summary>UI v2: власний шрифт стилю (заголовки серифом); null — шрифт скіну.</summary>
+        public Font font { get; set; }
+        public Vector2 contentOffset { get; set; }
+
+        public float CalcHeight(GUIContent content, float width)
+        {
+            float line = fontSize + 4f;
+            int len = content?.text?.Length ?? 0;
+            float perLine = width > 0f ? width / (fontSize * 0.6f + 0.01f) : len;
+            int lines = perLine > 0f ? (int)(len / perLine) + 1 : 1;
+            return lines * line;
+        }
         public float fixedWidth { get; set; }
         public float fixedHeight { get; set; }
 
@@ -459,13 +496,6 @@ namespace UnityEngine
             return new Vector2(len * fontSize * 0.6f, fontSize + 4f);
         }
 
-        /// <summary>Висота тексту при заданій ширині з переносом (та сама сигнатура, що в Unity); заглушка — грубо за довжиною.</summary>
-        public float CalcHeight(GUIContent content, float width)
-        {
-            float line = fontSize + 4f;
-            float textWidth = CalcSize(content).x;
-            return width > 0f ? line * System.Math.Max(1, (int)System.Math.Ceiling(textWidth / width)) : line;
-        }
     }
 
     /// <summary>
@@ -485,6 +515,8 @@ namespace UnityEngine
         public GUIStyle horizontalScrollbarThumb = new GUIStyle();
         public GUIStyle verticalScrollbar = new GUIStyle();
         public GUIStyle verticalScrollbarThumb = new GUIStyle();
+        public GUIStyle scrollView = new GUIStyle();
+        public GUIStyle textArea = new GUIStyle();
     }
 
     public static class GUI
@@ -492,12 +524,18 @@ namespace UnityEngine
         public static GUISkin skin = new GUISkin();
         public static Color color = new Color(1f, 1f, 1f, 1f);
         public static Color backgroundColor = new Color(1f, 1f, 1f, 1f);
+        public static Color contentColor = new Color(1f, 1f, 1f, 1f);
         public static bool enabled = true;
+        public static int depth;
 
         public static void Box(Rect position, GUIContent content) { }
         public static void Box(Rect position, string text) { }
         public static void Label(Rect position, string text) { }
         public static void Label(Rect position, string text, GUIStyle style) { }
+        public static void Label(Rect position, GUIContent content, GUIStyle style) { }
+        public static void Box(Rect position, string text, GUIStyle style) { }
+        public static void Box(Rect position, GUIContent content, GUIStyle style) { }
+        public static bool Button(Rect position, string text, GUIStyle style) { return false; }
         public static void DrawTexture(Rect position, Texture2D image, ScaleMode scaleMode) { }
     }
 
@@ -552,6 +590,9 @@ namespace UnityEngine
     public static class GUILayoutUtility
     {
         public static Rect GetLastRect() { return new Rect(0f, 0f, 0f, 0f); }
+
+        /// <summary>UI v2: місце під роздільник/рядок у потоці GUILayout (Layout — нуль, Repaint — реальний рект).</summary>
+        public static Rect GetRect(float width, float height, params GUILayoutOption[] options) { return new Rect(0f, 0f, width, height); }
     }
 }
 
