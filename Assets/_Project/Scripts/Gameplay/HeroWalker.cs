@@ -393,9 +393,15 @@ namespace Game.Gameplay
             if (_labelStyle == null)
             {
                 GUI.skin = AlphaSkin.Build();
-                _labelStyle = new GUIStyle(GUI.skin.box) { fontSize = 15, alignment = TextAnchor.MiddleCenter, wordWrap = false };
-                _nearStyle = new GUIStyle(_labelStyle) { fontStyle = FontStyle.Bold };
-                _nearStyle.normal.textColor = new Color(1f, 0.75f, 0.35f);
+                // UI v2: мітка місця — компактна панель-підказка (рамка BG3), а не
+                // велика панель вікна з кутовими шпильками; найближче — світла бронза.
+                _labelStyle = new GUIStyle(AlphaSkin.TooltipPanel)
+                {
+                    fontSize = 16, alignment = TextAnchor.MiddleCenter, wordWrap = false,
+                    padding = new RectOffset(10, 10, 4, 4)
+                };
+                _nearStyle = new GUIStyle(_labelStyle) { font = AlphaSkin.StrongFont };
+                _nearStyle.normal.textColor = AlphaSkin.BronzeHi;
             }
 
             var g = _shell.ProtagonistGender;
