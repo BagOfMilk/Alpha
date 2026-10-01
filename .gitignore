@@ -52,3 +52,9 @@ sysinfo.txt
 
 # Трассы симуляционного харнеса (tools/Alpha.Sim)
 sim-out/
+
+# Знімки сцени — відтворюються меню Alpha/Снять… (Editor/VillageShowcase.cs), у git не зберігаємо
+Screenshots/
+
+# Батч-лог Unity
+compile.log
