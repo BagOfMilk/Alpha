@@ -15,6 +15,46 @@ namespace Game.Core.Session.Views
         public IReadOnlyList<FactionSummary> Factions;
     }
 
+    /// <summary>Чому напарника не можна обрати в загін фіналу (Поправка №17.2).</summary>
+    public enum FinaleBlock
+    {
+        /// <summary>Нічого не заважає — можна обрати.</summary>
+        None = 0,
+        /// <summary>Стоїть на посту в місті — «на ролі призначений» (правило власника: таких обирати не можна).</summary>
+        OnPost = 1,
+        /// <summary>Поранений.</summary>
+        Injured = 2,
+        /// <summary>У вилазці (данж) — не вдома.</summary>
+        Away = 3,
+        /// <summary>У полоні ворога.</summary>
+        Captive = 4
+    }
+
+    public sealed class FinaleCandidateView
+    {
+        public string CompanionId;
+        /// <summary>Можна обрати в загін (<c>Block == None</c>).</summary>
+        public bool Selectable;
+        public FinaleBlock Block;
+        /// <summary>Пост, на якому стоїть (лише для <c>Block == OnPost</c>), інакше null.</summary>
+        public string PostSlotId;
+    }
+
+    /// <summary>
+    /// Склад кривавого фіналу (Поправка №17.2): протагоніст іде завжди, решту
+    /// обирає гравець з кандидатів — але не тих, хто на посту в місті.
+    /// </summary>
+    public sealed class FinaleView
+    {
+        public string ProtagonistId;
+        /// <summary>Усі напарники, яких гравець бачить (живі, прибулі, не на боці ворога); обрати можна лише <c>Selectable</c>.</summary>
+        public IReadOnlyList<FinaleCandidateView> Candidates;
+        /// <summary>Склад разом із протагоністом.</summary>
+        public int PartyMax;
+        /// <summary>Скільки ворогів вийде на поле — той самий план, що й у реальному бою.</summary>
+        public int EnemyCount;
+    }
+
     public sealed class ReadinessView
     {
         public string Band;

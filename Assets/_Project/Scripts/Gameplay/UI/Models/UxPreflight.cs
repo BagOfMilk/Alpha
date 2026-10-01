@@ -36,6 +36,20 @@ namespace Game.Gameplay.UI
                     warnings.Add(UkrainianText.Format("ux.preflight.empty_posts", g, "posts", string.Join(", ", empty)));
             }
 
+            // Поправка №17.2: у загін фіналу не можна взяти тих, хто на посту, а вночі пости змінити
+            // вже не вийде — тож попереджаємо вранці доби, у яку настає фінал (доба 5). Вранці
+            // лічильник ще на попередній добі (CurrentView.Day — це доба, що закінчилась).
+            if (session.State == SessionState.Morning && session.CurrentView != null &&
+                !session.CurrentView.IsFreePlay && session.CurrentView.Day == 4 && roster?.Companions != null)
+            {
+                bool someoneOnPost = false;
+                foreach (var c in roster.Companions)
+                    if (c.Id != GameSession.ProtagonistId && !string.IsNullOrEmpty(c.AssignedSlotId) && Walk.VillagePeople.IsInVillage(c))
+                    { someoneOnPost = true; break; }
+                if (someoneOnPost)
+                    warnings.Add(UkrainianText.Get("ux.preflight.finale_squad", g));
+            }
+
             try
             {
                 var preview = session.PreviewBuildPlan(GameSession.ProtagonistId, new BuildPlan());

@@ -26,6 +26,13 @@ namespace Game.Gameplay.UI
         private SessionState _questOfferState = (SessionState)(-1);
 
         /// <summary>
+        /// Обраний гравцем склад кривавого фіналу (Поправка №17.2); скидається, коли
+        /// з'являється нова партія. Протагоніст іде завжди й тут не зберігається.
+        /// </summary>
+        private readonly System.Collections.Generic.List<string> _finaleAllies = new System.Collections.Generic.List<string>();
+        private GameSession _finaleSession;
+
+        /// <summary>
         /// Максимова квестова глава арки «Не за кров» (Поправка №7.8, п.4):
         /// той самий кеш, що вище, для ДРУГОЇ незалежної лінії — без нього
         /// щойно відкрита GameShell.RouteOfferedSceneContentIfAvailable глава не
@@ -210,7 +217,7 @@ namespace Game.Gameplay.UI
             });
         }
 
-        private static void DrawFinale(GameShell shell, Gender g)
+        private void DrawFinale(GameShell shell, Gender g)
         {
             Widgets.Section(UkrainianText.Get("ui.night.finale.title", g), () =>
             {
@@ -231,12 +238,82 @@ namespace Game.Gameplay.UI
                 int enemyCount = shell.Session.GetFinaleEnemyCount();
                 if (enemyCount > 0)
                     GUILayout.Label(UkrainianText.Format("ui.night.finale.enemy_count", g, "count", enemyCount.ToString(), "enemies", ScreenText.EnemiesCount(enemyCount)), AlphaSkin.Tooltip);
+
+                var squad = DrawSquad(shell, g);
+
                 // Незворотне — лише з підтвердженням (UX-12, UX_DESIGN §5.15).
                 if (Widgets.DangerButton(UkrainianText.Get("ui.decision.path.bloody", g)))
                     shell.AskConfirm(new UxConfirm(UkrainianText.Get("ux.finale.bloody.question", g), UkrainianText.Get("ux.finale.bloody.verb", g),
                             new[] { UkrainianText.Get("ux.finale.bloody.loss", g) }),
-                        () => shell.TryRun(() => shell.Session.ResolveFinale(IncidentPath.Bloody)));
+                        () => shell.TryRun(() => shell.Session.ResolveFinale(IncidentPath.Bloody, squad)));
             });
+        }
+
+        /// <summary>
+        /// Склад кривавого фіналу (Поправка №17.2): протагоніст іде завжди, решту обирає гравець
+        /// з вільних (перемикачі, як у загоні вилазки й рейду); хто стоїть на посту в місті,
+        /// поранений, у вилазці чи в полоні — сірі з причиною (UI-04). Повертає копію вибору.
+        /// </summary>
+        private System.Collections.Generic.List<string> DrawSquad(GameShell shell, Gender g)
+        {
+            var session = shell.Session;
+            if (!ReferenceEquals(_finaleSession, session))
+            {
+                _finaleSession = session;
+                _finaleAllies.Clear();
+            }
+
+            var finale = session.GetFinaleView();
+            var roster = session.GetRosterView();
+            int allyMax = finale.PartyMax - 1;
+            _finaleAllies.RemoveAll(id =>
+            {
+                foreach (var c in finale.Candidates)
+                    if (c.CompanionId == id) return !c.Selectable;
+                return true;
+            });
+
+            GUILayout.Space(4f);
+            GUILayout.Label(UkrainianText.Get("ui.finale.squad.title", g), AlphaSkin.Body);
+            GUILayout.Label(UkrainianText.Format("ui.finale.squad.hint", g, "max", finale.PartyMax.ToString()), AlphaSkin.HintLine);
+            GUILayout.BeginHorizontal();
+            foreach (var c in finale.Candidates)
+            {
+                string name = ScreenText.ResolveCompanionName(c.CompanionId, g, roster);
+                if (!c.Selectable)
+                {
+                    Widgets.DisabledButton(name, BlockReason(c, g), GUILayout.ExpandWidth(false));
+                    continue;
+                }
+                bool chosen = _finaleAllies.Contains(c.CompanionId);
+                if (Widgets.TabButton(name, chosen, GUILayout.ExpandWidth(false)))
+                {
+                    if (chosen) _finaleAllies.Remove(c.CompanionId);
+                    else if (_finaleAllies.Count < allyMax) _finaleAllies.Add(c.CompanionId);
+                }
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Label(UkrainianText.Format("ui.finale.squad.count", g,
+                "count", (_finaleAllies.Count + 1).ToString(), "max", finale.PartyMax.ToString()), AlphaSkin.HintLine);
+            if (_finaleAllies.Count == 0)
+                GUILayout.Label(UkrainianText.Get("ui.finale.squad.alone", g), AlphaSkin.DangerText);
+            return new System.Collections.Generic.List<string>(_finaleAllies);
+        }
+
+        private static string BlockReason(FinaleCandidateView c, Gender g)
+        {
+            switch (c.Block)
+            {
+                case FinaleBlock.OnPost:
+                    string post = !string.IsNullOrEmpty(c.PostSlotId) && UkrainianText.Has("post." + c.PostSlotId, g)
+                        ? UkrainianText.Get("post." + c.PostSlotId, g)
+                        : (c.PostSlotId ?? string.Empty);
+                    return UkrainianText.Format("ui.finale.block.onpost", g, "post", post);
+                case FinaleBlock.Injured: return UkrainianText.Get("ui.finale.block.injured", g);
+                case FinaleBlock.Away: return UkrainianText.Get("ui.finale.block.away", g);
+                case FinaleBlock.Captive: return UkrainianText.Get("ui.finale.block.captive", g);
+                default: return string.Empty;
+            }
         }
     }
 }

@@ -92,6 +92,19 @@ namespace Game.Core.Balance
         /// <summary>Розмір загону. Більше чотирьох на точку не ходить (US-8.3).</summary>
         public int ExpeditionPartyMax = 4;
 
+        /// <summary>
+        /// Склад фіналу РАЗОМ із протагоністом (Поправка №17.2: гравець обирає
+        /// отряд). ПЛЕЙСХОЛДЕР — тюнінг штурму (ворогів {6, 5, 4, 3} + Бурунда)
+        /// під цей склад робить харнес, не цей рядок.
+        /// </summary>
+        public int FinalePartyMax = 4;
+
+        /// <summary>
+        /// Ціна пом'якшення кризи золотом (реакція <c>SpendGold</c>, §3.5). Раніше
+        /// була захардкоджена в <c>GameSession.ReactToCrisis</c>; ПЛЕЙСХОЛДЕР.
+        /// </summary>
+        public int CrisisMitigationGold = 15;
+
         /// <summary>Кожна полоса наслідку над Базовою додає стільки часток бази.</summary>
         public double ExpeditionYieldPerBand = 0.5;
 

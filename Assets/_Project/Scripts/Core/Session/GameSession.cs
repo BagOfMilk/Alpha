@@ -1474,7 +1474,13 @@ namespace Game.Core.Session
             switch (action)
             {
                 case CrisisReaction.SpendGold:
-                    _state.Resources.TrySpend(ResourceType.Gold, 15); // ПЛЕЙСХОЛДЕР-ціна (§9, як і решта чисел зрізу)
+                    // B3 (M1.11): пом'якшення КУПУЄТЬСЯ — без золота (ціна в BalanceConfig,
+                    // ПЛЕЙСХОЛДЕР) воно не спрацьовує; раніше результат TrySpend ігнорувався.
+                    if (!_state.Resources.TrySpend(ResourceType.Gold, _cfg.CrisisMitigationGold))
+                    {
+                        LogEvent("crisis.test.no_gold");
+                        return _lastDayReport;
+                    }
                     break;
                 case CrisisReaction.SendDefender:
                     // Символічна дія: відрядити людину з поста на ніч. Числового
@@ -1494,19 +1500,119 @@ namespace Game.Core.Session
 
         /// <summary>
         /// Полірування (ціль 6 «Рішення», owner: "тактичний бій: N ворогів"):
-        /// прев'ю кількості ворогів кривавого шляху фіналу ДО кліку — та
-        /// сама чиста функція (<see cref="Finale.BuildAssault"/>), що
-        /// <see cref="ResolveFinale"/> викликає для реального бою; викликати
-        /// її двічі безпечно (жодної мутації стану, лише читає Готовність).
+        /// прев'ю кількості ворогів кривавого шляху фіналу ДО кліку — той самий
+        /// план (<see cref="BuildFinalePlan"/>), що й реальний бій; викликати
+        /// двічі безпечно (жодної мутації стану).
         /// </summary>
-        public int GetFinaleEnemyCount()
+        public int GetFinaleEnemyCount() => BuildFinalePlan().EnemyDefinitionIds.Count;
+
+        /// <summary>
+        /// План кривавого штурму — ЄДИНЕ джерело для прев'ю
+        /// (<see cref="GetFinaleEnemyCount"/>, <see cref="GetFinaleView"/>) і для
+        /// реального бою (<see cref="ResolveFinale(IncidentPath, IReadOnlyList{string})"/>).
+        /// Раніше прев'ю рахувало спрощений план — без стану зради, «відпустити» й
+        /// ради Захара, — і число ворогів могло не збігтися з боєм (B5). Чисте читання.
+        /// </summary>
+        private AssaultPlan BuildFinalePlan()
         {
-            bool myroslavaDefected = _flags.Get(PassVanguardOutcome.DefectorSeededFlag);
+            // Поправка №7.8: реальний стан зради — статус Antagonist
+            // (конфронтація/TickDefectionWatch уже виконали
+            // Defection.Defect) АБО, якщо конфронтація ще не встигла
+            // (напр. гравець прискорив фінал вільною грою до доби 3), той
+            // самий сюжетний прапор, що й раніше — але НЕ якщо
+            // конфронтація вже розв'язалась «довірою» (тоді прапор лишився
+            // висіти з вузла 1, а зради не сталося).
+            bool myroslavaConfirmedAntagonist = _worldRoster?.Get("myroslava")?.Status == CompanionStatus.Antagonist;
+            bool myroslavaTrusted = _flags.Get(CompanionScenes.MyroslavaConfrontedTrustFlag);
+            bool myroslavaDefected = myroslavaConfirmedAntagonist ||
+                (_flags.Get(PassVanguardOutcome.DefectorSeededFlag) && !myroslavaTrusted);
+
             var plan = Finale.BuildAssault(_readiness.Band, myroslavaDefected ? "myroslava" : null, _cfg.Readiness);
-            return plan.EnemyDefinitionIds.Count;
+
+            // Поправка №7.8: «відпустити» на нічній розмові (замість
+            // звинувачення) пом'якшує кривавий фінал — на одного
+            // рядового ворога менше, той самий прийом, що м'якший фінал
+            // взагалі не буває "чистим" (§7.15), лише тут менша ціна за
+            // менш жорстоке рішення гравця, а не за полосу Готовності.
+            if (_flags.Get(CompanionScenes.MyroslavaConfrontedReleaseFlag) &&
+                plan.EnemyDefinitionIds.Count > 1)
+                plan.EnemyDefinitionIds.RemoveAt(plan.EnemyDefinitionIds.Count - 2); // не боса (він останній)
+
+            // B2 (M1.4): рада Захара «тримати перевал» (доба 5, увечері) лишає прапор саме
+            // для цього читача — ще один рядовий ворог менше. Прапор ставився, але його
+            // не читав ніхто, тож вибір у раді не мав наслідку.
+            if (_flags.Get(CompanionScenes.ZakharPreparedAssaultFlag) &&
+                plan.EnemyDefinitionIds.Count > 1)
+                plan.EnemyDefinitionIds.RemoveAt(plan.EnemyDefinitionIds.Count - 2); // не боса
+
+            return plan;
         }
 
-        public DayReportView ResolveFinale(IncidentPath path)
+        /// <summary>
+        /// Чому цього напарника не можна обрати в загін фіналу (Поправка №17.2:
+        /// «Гравець обирає отряд, але не може обрати тех хто на ролі назначений в
+        /// місті»). Порядок причин — від найвагомішої для гравця: пост у місті
+        /// називаємо раніше за поранення.
+        /// </summary>
+        private static FinaleBlock FinaleBlockOf(Companion c)
+        {
+            if (c.IsCaptive) return FinaleBlock.Captive;
+            if (c.Status == CompanionStatus.OnMission) return FinaleBlock.Away;
+            if (c.IsAssigned) return FinaleBlock.OnPost;
+            if (c.IsInjured) return FinaleBlock.Injured;
+            return FinaleBlock.None;
+        }
+
+        /// <summary>
+        /// Склад кривавого фіналу: протагоніст іде завжди, решту гравець обирає з
+        /// кандидатів (<see cref="FinaleView.Candidates"/>) до <see cref="BalanceConfig.FinalePartyMax"/>.
+        /// Чисте читання.
+        /// </summary>
+        public FinaleView GetFinaleView()
+        {
+            var candidates = new List<FinaleCandidateView>();
+            if (_worldRoster != null)
+            {
+                foreach (var c in _worldRoster.All)
+                {
+                    if (string.Equals(c.Id, ProtagonistId, StringComparison.Ordinal)) continue;
+                    // Мертвих, не прибулих і тих, що вже на боці ворога, гравець не бачить зовсім.
+                    if (c.IsDead || c.Status == CompanionStatus.Antagonist || c.Status == CompanionStatus.NotArrived) continue;
+                    var block = FinaleBlockOf(c);
+                    candidates.Add(new FinaleCandidateView
+                    {
+                        CompanionId = c.Id,
+                        Selectable = block == FinaleBlock.None,
+                        Block = block,
+                        PostSlotId = block == FinaleBlock.OnPost ? c.AssignedSlotId : null
+                    });
+                }
+            }
+            return new FinaleView
+            {
+                ProtagonistId = ProtagonistId,
+                Candidates = candidates,
+                PartyMax = _cfg.FinalePartyMax,
+                EnemyCount = BuildFinalePlan().EnemyDefinitionIds.Count
+            };
+        }
+
+        /// <summary>
+        /// Фінал зі складом «за замовчуванням» (боти, тести): протагоніст і всі, кого
+        /// можна обрати, до ліміту. Людина через екран викликає
+        /// <see cref="ResolveFinale(IncidentPath, IReadOnlyList{string})"/> зі своїм складом.
+        /// </summary>
+        public DayReportView ResolveFinale(IncidentPath path) => ResolveFinale(path, null);
+
+        /// <summary>
+        /// Розв'язати фінал доби 5. <paramref name="allyIds"/> — напарники, яких гравець
+        /// обрав у загін кривавого шляху (протагоніст іде завжди й тут не вказується);
+        /// <c>null</c> — склад за замовчуванням (усі, кого можна обрати, у порядку ростера
+        /// до ліміту). Порожній список — протагоніст іде сам. Обрати того, хто на посту,
+        /// пораненого, у вилазці чи в полоні, не можна. Тихий шлях складу не потребує:
+        /// перевірка йде за найкращими присутніми.
+        /// </summary>
+        public DayReportView ResolveFinale(IncidentPath path, IReadOnlyList<string> allyIds)
         {
             RequireState(SessionState.Night);
             if (_processor.CurrentDay != 5)
@@ -1516,38 +1622,37 @@ namespace Game.Core.Session
 
             if (path == IncidentPath.Bloody)
             {
-                // Поправка №7.8: реальний стан зради — статус Antagonist
-                // (конфронтація/TickDefectionWatch уже виконали
-                // Defection.Defect) АБО, якщо конфронтація ще не встигла
-                // (напр. гравець прискорив фінал вільною грою до доби 3), той
-                // самий сюжетний прапор, що й раніше — але НЕ якщо
-                // конфронтація вже розв'язалась «довірою» (тоді прапор лишився
-                // висіти з вузла 1, а зради не сталося).
-                bool myroslavaConfirmedAntagonist = _worldRoster?.Get("myroslava")?.Status == CompanionStatus.Antagonist;
-                bool myroslavaTrusted = _flags.Get(CompanionScenes.MyroslavaConfrontedTrustFlag);
-                bool myroslavaDefected = myroslavaConfirmedAntagonist ||
-                    (_flags.Get(PassVanguardOutcome.DefectorSeededFlag) && !myroslavaTrusted);
+                // Склад перевіряємо ДО будь-якої мутації стану.
+                var view = GetFinaleView();
+                var allies = new List<string>();
+                if (allyIds == null)
+                {
+                    foreach (var candidate in view.Candidates)
+                        if (candidate.Selectable && allies.Count < view.PartyMax - 1) allies.Add(candidate.CompanionId);
+                }
+                else
+                {
+                    if (allyIds.Count > view.PartyMax - 1)
+                        throw new InvalidOperationException(
+                            "Склад фіналу завеликий: разом із протагоністом не більше " + view.PartyMax + ".");
+                    foreach (var id in allyIds)
+                    {
+                        FinaleCandidateView found = null;
+                        foreach (var candidate in view.Candidates)
+                            if (string.Equals(candidate.CompanionId, id, StringComparison.Ordinal)) { found = candidate; break; }
+                        if (found == null)
+                            throw new InvalidOperationException("Склад фіналу: «" + id + "» не може йти (невідомий або протагоніст).");
+                        if (!found.Selectable)
+                            throw new InvalidOperationException("Склад фіналу: «" + id + "» не може йти (" + found.Block + ").");
+                        if (allies.Contains(id))
+                            throw new InvalidOperationException("Склад фіналу: «" + id + "» вказано двічі.");
+                        allies.Add(id);
+                    }
+                }
 
-                var plan = Finale.BuildAssault(_readiness.Band, myroslavaDefected ? "myroslava" : null, _cfg.Readiness);
-
-                // Поправка №7.8: «відпустити» на нічній розмові (замість
-                // звинувачення) пом'якшує кривавий фінал — на одного
-                // рядового ворога менше, той самий прийом, що м'якший фінал
-                // взагалі не буває "чистим" (§7.15), лише тут менша ціна за
-                // менш жорстоке рішення гравця, а не за полосу Готовності.
-                if (_flags.Get(CompanionScenes.MyroslavaConfrontedReleaseFlag) &&
-                    plan.EnemyDefinitionIds.Count > 1)
-                    plan.EnemyDefinitionIds.RemoveAt(plan.EnemyDefinitionIds.Count - 2); // не боса (він останній)
-
-                // Фікс-ревью (блокер, знайдено тур-автоплеєм): партія тут була
-                // жорстко "{ProtagonistId, "maksym"}" незалежно від того, чи
-                // Максим ще живий на добу 5 — вузол 1 (доба 1) може поранити
-                // або вбити його ще на самому початку, а фінал однаково
-                // виставляв його на грід. Той самий allow-list присутності, що
-                // вже фільтрує пости й вилазку (RosterAdapter.IsPresentInSettlement),
-                // тепер фільтрує й фінальну партію.
+                var plan = BuildFinalePlan();
                 var partyIds = new List<string> { ProtagonistId };
-                if (IsCompanionBattleReady("maksym")) partyIds.Add("maksym");
+                partyIds.AddRange(allies);
 
                 var setup = BuildBattleSetup(partyIds, plan.EnemyDefinitionIds, 10, 10,
                     plan.DefectorCompanionId);

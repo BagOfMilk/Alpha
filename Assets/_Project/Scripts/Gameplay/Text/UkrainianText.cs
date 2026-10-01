@@ -529,6 +529,16 @@ namespace Game.Gameplay.Text
             AddKey(t, "crisis.test.window", "Є час діяти — до ночі.");
             AddKey(t, "crisis.test.mitigated", "Вогонь погашено вчасно. Дехто не спав усю ніч заради цього.");
             AddKey(t, "crisis.test.unmitigated", "Вогонь дійшов до крайньої хати. Хтось постраждав — і громада це бачила.");
+            AddKey(t, "crisis.test.no_gold", "Золота на те, щоб погасити вогонь, не вистачає — він піде на повну.");
+            // Склад фіналу (Поправка №17.2): гравець обирає загін, але не тих, хто на посту в місті.
+            AddKey(t, "ui.finale.squad.title", "Загін для штурму");
+            AddKey(t, "ui.finale.squad.hint", "Ви йдете першим. Склад — до {max} разом з вами. Тих, хто стоїть на посту в місті, обрати не можна.");
+            AddKey(t, "ui.finale.squad.count", "Обрано {count} з {max} (разом з вами).");
+            AddKey(t, "ui.finale.squad.alone", "Ви підете самі — подумайте ще раз.");
+            AddKey(t, "ui.finale.block.onpost", "на посту: {post}");
+            AddKey(t, "ui.finale.block.injured", "поранення");
+            AddKey(t, "ui.finale.block.away", "у вилазці");
+            AddKey(t, "ui.finale.block.captive", "у полоні");
         }
 
         // ---- §7.15 Фінал (доба 5, ніч) — реальний, обидва шляхи ----
@@ -2879,6 +2889,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.preflight.verb", "Почати все одно");
             AddKey(t, "ux.preflight.empty_posts", "Порожні пости, а вільні люди є: {posts}.");
             AddKey(t, "ux.preflight.points", "Невитрачені очки розвитку: {n}.");
+            AddKey(t, "ux.preflight.finale_squad", "Сьогодні ніч фіналу: у загін підуть лише ті, хто не стоїть на посту. Хочете взяти когось із постів — зніміть його звідти зараз, уночі вже не вийде.");
             AddKey(t, "ux.save.loaded", "Завантажено: {slot}.");
             AddKey(t, "ux.escape.saves", "Збереження і завантаження");
             AddKey(t, "ux.escape.save_when", "Зберегти можна вранці або у вільній грі (зараз — {state}); завантажити — будь-коли.");
