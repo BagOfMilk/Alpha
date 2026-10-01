@@ -25,6 +25,25 @@ namespace Game.Core.Characters
     }
 
     /// <summary>
+    /// З якої культури першоджерело персонажа (Поправка №17.3, уточнює №12.9). Потрібно для
+    /// двох правил, які інакше нічим не охороняються: частка українських ≈20 % від УСІХ
+    /// іменних і «російські першоджерела — лише вороги».
+    /// </summary>
+    public enum SourceCulture
+    {
+        /// <summary>Не вказано: для запозиченої картки це порушення (див. <see cref="CastingRules"/>).</summary>
+        Unspecified = 0,
+
+        Ukrainian = 1,
+
+        /// <summary>Російське першоджерело — такий персонаж може бути лише ворогом і не переманюється.</summary>
+        Russian = 2,
+
+        /// <summary>Будь-яка інша культура; уточнення — у <see cref="CharacterCard.CultureNote"/>.</summary>
+        Other = 3
+    }
+
+    /// <summary>
     /// Картка персонажа (Поправка №5.6 п. 1): ім'я, звідки він узятий, яке
     /// ядро характеру переноситься і що він пам'ятає.
     ///
@@ -46,6 +65,18 @@ namespace Game.Core.Characters
         public string DisplayName;
 
         public SourceTier Tier = SourceTier.Original;
+
+        /// <summary>Культура першоджерела (Поправка №17.3).</summary>
+        public SourceCulture Culture = SourceCulture.Unspecified;
+
+        /// <summary>Уточнення до <see cref="Culture"/> для обліку квоти («ірландська», «арабська»); не показується гравцеві.</summary>
+        public string CultureNote;
+
+        /// <summary>
+        /// Ворог чи антагоніст: не напарник і не переманюється. Російські першоджерела
+        /// (Поправка №12.9) дозволені лише тут.
+        /// </summary>
+        public bool IsEnemy;
 
         /// <summary>
         /// Першоджерело: твір і автор. Для фольклорного — традиція.
@@ -91,7 +122,7 @@ namespace Game.Core.Characters
         public bool IsBorrowed => Tier == SourceTier.Literary || Tier == SourceTier.Folklore;
 
         /// <summary>Чи годиться в напарники: у фольклорного немає арки (Поправка №5.2).</summary>
-        public bool CanBeCompanion => Tier != SourceTier.Folklore && Tier != SourceTier.None;
+        public bool CanBeCompanion => Tier != SourceTier.Folklore && Tier != SourceTier.None && !IsEnemy;
 
         /// <summary>Запам'ятати подію. Повтор не дублюється: пам'ять — множина, а не стрічка.</summary>
         public void Remember(string eventKey)
