@@ -38,7 +38,8 @@ namespace Game.Core.Story
         /// приймає її id як зрадника параметром, коли D1 вирішить, що зрада
         /// відбулась).
         /// </summary>
-        public const string DefectorSeededFlag = "defector_seeded";
+        // Одне джерело правди — Defection.DefectorSeededFlag (раніше id дублювався літералом, і дрейф між копіями був би невидимий).
+        public const string DefectorSeededFlag = Game.Core.Companions.Defection.DefectorSeededFlag;
 
         /// <summary>ПЛЕЙСХОЛДЕР: рана Максима (той самий порядок величини, що BloodyPathInjury — CheckBalance).</summary>
         public const double MaksymWoundInjuryPoints = 30.0;

@@ -476,7 +476,7 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
 
 **Як зібрати і перевірити.**
 ```
-bash tools/run-tests.sh                              # ядро, лінт, ~1600 тестів (01.10.2026: 1627 пройдено, 3 пропущено)
+bash tools/run-tests.sh                              # ядро, лінт, ~1600 тестів (01.10.2026: 1643 пройдено, 3 пропущено)
 powershell -File tools/build-unity.ps1               # сцена Game.unity + Build/Windows/Alpha.exe
 Build/Windows/Alpha.exe -autoplay [-autoplay-threshold] -screen-fullscreen 0 -screen-width 1600 -screen-height 900
 Build/Windows/Alpha.exe -autoplay-journal -screen-fullscreen 0 -screen-width 1600 -screen-height 900
