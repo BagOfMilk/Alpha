@@ -193,7 +193,7 @@ namespace Game.Core.Combat
         public static EnemyDefinition Burunda() =>
             new EnemyDefinition("enemy.burunda", "burunda", EnemyRole.Tank, EnemyFamily.Human)
             {
-                MaxHp = 30, MaxAp = 10, Accuracy = 80, Defense = 4, Initiative = 7, CritChance = 12, Armor = 2,
+                MaxHp = 20, MaxAp = 10, Accuracy = 80, Defense = 4, Initiative = 7, CritChance = 12, Armor = 1, // HP/броня знижені 01.10.2026 (ПЛЕЙСХОЛДЕР, M1.3): див. FinalePacingTests
                 Rank = EnemyRank.Boss, // №14.2: бос не здається ніколи
                 Resolve = 3,
                 Weapon = BurundaMace(),

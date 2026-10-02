@@ -58,7 +58,7 @@ namespace Game.Core.Balance
         public int[] TacticsThresholdByBand = { 7, 5, 3, 2 };
 
         /// <summary>Скільки рядових ворогів у фінальному штурмі за полосою (Бурунда — завжди понад це).</summary>
-        public int[] AssaultEnemyCountByBand = { 6, 5, 4, 3 };
+        public int[] AssaultEnemyCountByBand = { 4, 3, 2, 1 }; // було {6,5,4,3} — фінал був непрохідним за будь-якої готовності (ПЛЕЙСХОЛДЕР, M1.3; FinalePacingTests)
 
         public ReadinessBand BandFor(int value)
         {

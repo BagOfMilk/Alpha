@@ -183,8 +183,10 @@ Base-builder RPG на **Unity 6.4 (6000.4.10f1)**. **Головний луп —
     Ліміт складу (4 разом з протагоністом), поведінка протагоніста —
     ПЛЕЙСХОЛДЕР/пропозиція. **Зроблено 01.10.2026:** `GameSession.GetFinaleView` /
     `ResolveFinale(path, allyIds)` / `BuildFinalePlan`, склад на екрані ночі,
-    попередження вранці доби 5, охоронці `FinaleSquadTests` (разом з B2, B3, B5);
-    B4 (`SendDefender`) відкритий.
+    попередження вранці доби 5, охоронці `FinaleSquadTests` (разом з B2, B3, B5).
+    **Вимірювання виявило, що фінал був непрохідним за будь-якої готовності й складу
+    (0/20); виправлено (ПЛЕЙСХОЛДЕРИ: рядових {4,3,2,1}, Бурунда HP 20/броня 1) і
+    закріплено `FinalePacingTests` (M1.5).** B4 (`SendDefender`) відкритий.
   - **Квота ~20 % українських — від УСІХ іменних** («УСІХ»); протагоніст —
     виняток; станом на 01.10.2026 українських 6 з 9 карток (за першоджерелом).
     **Зроблено 01.10.2026:** `CharacterCard.Culture`/`IsEnemy`, `CastingRules`,
@@ -475,7 +477,7 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
 
 **Як зібрати і перевірити.**
 ```
-bash tools/run-tests.sh                              # ядро, лінт, ~1600 тестів (01.10.2026: 1620 пройдено, 3 пропущено)
+bash tools/run-tests.sh                              # ядро, лінт, ~1600 тестів (01.10.2026: 1627 пройдено, 3 пропущено)
 powershell -File tools/build-unity.ps1               # сцена Game.unity + Build/Windows/Alpha.exe
 Build/Windows/Alpha.exe -autoplay [-autoplay-threshold] -screen-fullscreen 0 -screen-width 1600 -screen-height 900
 Build/Windows/Alpha.exe -autoplay-journal -screen-fullscreen 0 -screen-width 1600 -screen-height 900
