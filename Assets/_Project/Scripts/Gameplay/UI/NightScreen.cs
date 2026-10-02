@@ -257,15 +257,28 @@ namespace Game.Gameplay.UI
         private System.Collections.Generic.List<string> DrawSquad(GameShell shell, Gender g)
         {
             var session = shell.Session;
+            var finale = session.GetFinaleView();
+            var roster = session.GetRosterView();
+            int allyMax = finale.PartyMax - 1;
+
             if (!ReferenceEquals(_finaleSession, session))
             {
                 _finaleSession = session;
                 _finaleAllies.Clear();
+                // Огляд у Unity 02.10.2026: порожній склад за замовчуванням — пастка: хто тисне «Криваво», нічого не
+                // вибравши, іде сам, а сам протагоніст не виграє ніколи. Тому одразу заповнюємо найсильнішими з доступних
+                // (за класом: Рубака, Стрілець, Знахар, Майстер); гравець знімає й додає як хоче.
+                var byClass = new System.Collections.Generic.List<CompanionSummary>();
+                foreach (var c in finale.Candidates)
+                {
+                    if (!c.Selectable) continue;
+                    foreach (var summary in roster.Companions)
+                        if (summary.Id == c.CompanionId) { byClass.Add(summary); break; }
+                }
+                byClass.Sort((a, b) => ((int)a.Class).CompareTo((int)b.Class));
+                foreach (var summary in byClass)
+                    if (_finaleAllies.Count < allyMax) _finaleAllies.Add(summary.Id);
             }
-
-            var finale = session.GetFinaleView();
-            var roster = session.GetRosterView();
-            int allyMax = finale.PartyMax - 1;
             _finaleAllies.RemoveAll(id =>
             {
                 foreach (var c in finale.Candidates)
