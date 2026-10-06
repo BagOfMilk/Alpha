@@ -152,6 +152,35 @@ namespace Game.Tests.EditMode
             StringAssert.Contains("KeyCode.Alpha1", hud, "HUD лишається власником 1..9 (здібності).");
         }
 
+        /// <summary>
+        /// Поправка №18 (борг змагального огляду 06.10.2026): дії, що мають дім у світі
+        /// (станція, місце — <c>UxWorldHomes</c>), автотур виконує тим самим входом, що
+        /// людина (<c>IUxInput</c>: панель місця → дія за id), а не кличе ядро напряму —
+        /// інакше тур проходив би там, де людина застрягла б. Дозволено: читання пропозиції
+        /// квесту (водій лише обирає варіант) і тренувальний бій з титулу (сервіс,
+        /// <c>-autoplay-battle</c>). Мутація: повернути <c>Session.Assign</c> у водій — тест падає.
+        /// </summary>
+        [Test]
+        public void AutoplayDriver_DoesWorldActionsThroughThePlaces()
+        {
+            var worldCommands = Game.Gameplay.UI.UxWorldHomes.All.Where(h => h.InWorld).Select(h => h.Command).Distinct().ToList();
+            var lines = ReadDriverSource().Replace("\r\n", "\n").Split('\n');
+            var direct = new List<string>();
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = Regex.Replace(lines[i], @"//.*", "");
+                foreach (var cmd in worldCommands)
+                {
+                    if (!Regex.IsMatch(line, @"\." + cmd + @"\(")) continue;
+                    if (cmd == "OfferQuestStage") continue; // читання: водій обирає варіант, дію виконує картка Дошки
+                    if (cmd == "NewTrainingBattle" && line.Contains("NewTrainingBattle(options)")) continue; // титул (сервіс)
+                    direct.Add((i + 1) + ": " + cmd + " — " + line.Trim());
+                }
+            }
+            CollectionAssert.IsEmpty(direct, "автотур кличе ядро повз місце у світі:\n" + string.Join("\n", direct));
+            StringAssert.Contains("_shell.UxInput", ReadDriverSource(), "дії місць — через той самий вхід, що людина");
+        }
+
         private static string GameplayDir() =>
             Path.Combine(Path.GetDirectoryName(Application.dataPath), "Assets", "_Project", "Scripts", "Gameplay");
 
