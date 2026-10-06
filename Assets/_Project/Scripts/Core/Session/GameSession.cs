@@ -4650,6 +4650,9 @@ namespace Game.Core.Session
                 Kind = pd.IsCrisis ? "Crisis" : "Incident",
                 TopicId = pd.TopicId,
                 IsCrisis = pd.IsCrisis,
+                IncidentId = pd.IncidentId,
+                DomainTag = pd.DomainTag,
+                RelevantPositionId = pd.RelevantPositionId,
                 Options = options
             };
         }

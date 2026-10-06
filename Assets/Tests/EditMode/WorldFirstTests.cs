@@ -509,6 +509,45 @@ namespace Game.Tests.EditMode
             Assert.GreaterOrEqual(VillagePeople.IdleSpotCount, 6, "біля вогнища вміщається щонайменше шестеро без поста");
         }
 
+        // ---------------- рішення дня прив'язане до місця (U9) ----------------
+
+        /// <summary>
+        /// Кожен інцидент ядра має місце в селі (Поправка №18.3): двері, ділянка чи
+        /// станція просто неба, що справді існує зараз. Авангард з перевалу — на Заставі.
+        /// Мутація: зламати мапу «пост → місце» — тест падає.
+        /// </summary>
+        [Test]
+        public void EveryIncident_HasAPlaceInTheVillage()
+        {
+            var h = Morning();
+            var city = h.Session.GetCityView();
+            var places = UxWorldReach.VillagePlaceIds(h.Session);
+            var incidents = Game.Core.World.DefaultIncidents.All().Concat(Game.Core.World.OpeningContent.All()).ToList();
+            Assert.IsNotEmpty(incidents);
+            foreach (var inc in incidents)
+            {
+                string place = UxDecisionPlace.Of(new PendingOfferView { IncidentId = inc.Id, RelevantPositionId = inc.RelevantPositionId }, city);
+                CollectionAssert.Contains(places, place, inc.Id + " (" + inc.RelevantPositionId + ") → " + place);
+            }
+            Assert.AreEqual(VillagePlaces.StationPrefix + BuildingCatalog.MusterStation,
+                UxDecisionPlace.Of(new PendingOfferView { IncidentId = "pass_vanguard", RelevantPositionId = "council_seat" }, city),
+                "авангард з перевалу — біля воріт");
+        }
+
+        /// <summary>Вид рішення, що справді чекає гравця, несе місце події (ядро віддає id і пост).</summary>
+        [Test]
+        public void PendingDecision_CarriesItsPlace()
+        {
+            var h = Morning();
+            UxPhaseButton.StartDay(h.Session);
+            Assume.That(h.Session.State, Is.EqualTo(SessionState.Decision), "перший день дає рішення");
+            var offer = h.Session.GetPendingOffer();
+            Assert.IsNotNull(offer);
+            Assert.IsNotEmpty(offer.IncidentId, "вид рішення називає інцидент");
+            Assert.IsNotEmpty(offer.RelevantPositionId, "вид рішення називає пост");
+            CollectionAssert.Contains(UxWorldReach.VillagePlaceIds(h.Session), UxDecisionPlace.Of(offer, h.Session.GetCityView()));
+        }
+
         // ---------------- камера як у Wasteland 3 (W1) ----------------
 
         /// <summary>
