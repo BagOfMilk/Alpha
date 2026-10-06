@@ -41,7 +41,10 @@ CC BY для нових асетів — теж ні. Бюджети й вимо
 
 | Файл / пак | Де | Джерело (URL) | Ліцензія | Дата | Примітка |
 |---|---|---|---|---|---|
-| — (ще нічого не завантажено) | | | | | |
+| Текстури: reed_roof_04, roof_planks, white_stucco, weathered_planks, dark_wooden_planks, stone_wall_04, fabric_pattern_05, rust_coarse_01, leafy_grass, stony_dirt_path (1K–2K; карти diffuse/rough/normal) | `Assets/Art/Textures/` | https://polyhaven.com/textures (сторінка `/a/<id>`) | CC0 1.0 | 06.10.2026 | автори — на сторінках Poly Haven (Rob Tuytel, Amal Kumar, Dimitrios Savva та ін.) |
+| Моделі: boulder_01, mountainside — спрощені до 1,3–6 тис. полігонів (rock_boulder, rock_boulder_big, cliff_mountainside, cover_full_rock); текстури boulder_01_*, mountainside_* | `Assets/Art/Models/`, `Assets/Art/Textures/` | https://polyhaven.com/a/boulder_01, https://polyhaven.com/a/mountainside | CC0 1.0 | 06.10.2026 | Rico Cilliers, Dario Barresi |
+| Текстури кори й хвої з моделі fir_tree_01 (fir_bark_*, fir_twig_rgba — diffuse+alpha, fir_twig_nor_gl); самі дерева — власні картки | `Assets/Art/Textures/` | https://polyhaven.com/a/fir_tree_01 | CC0 1.0 | 06.10.2026 | Rico Cilliers, Rob Tuytel |
+| Власні моделі: 10 будівель гри (по 5 стадій), млин, частокіл, 3 хати, 12 предметів реквізиту, тин-укриття, 4 хвойні дерева, 2 плити землі — згенеровано кодом | `Assets/Art/Models/*.fbx` | `tools/blender/alpha_kit.py` (Blender 4.5) | власні (проєкт) | 06.10.2026 | геометрія асистента; матеріали — текстури Poly Haven вище |
 
 Застереження, з'ясовані при плануванні (06.10.2026): у Quaternius безкоштовна
 лише частина паків (повні — платні, не беремо); у MPFB2 CC0 — лише вихід і
