@@ -228,7 +228,9 @@ namespace Game.Tests.EditMode
 
         /// <summary>
         /// Позначка дії не бреше: поруч із <c>Calls(nameof(GameSession.X))</c> кличеться
-        /// саме <c>Session.X(</c>, і кожен виклик світової команди в моделях позначений.
+        /// саме <c>Session.X(</c>, і кожен виклик будь-якої команди ядра в моделях —
+        /// будь-яким шляхом, не лише через «Session.» — позначений (огляд 06.10.2026:
+        /// непозначена дія в панелі огляду інакше проходила повз охоронців).
         /// Мутація: позначити облаву як прибульців — тест падає.
         /// </summary>
         [Test]
@@ -236,7 +238,10 @@ namespace Game.Tests.EditMode
         {
             var tag = new Regex(@"Calls\(nameof\(GameSession\.(\w+)\)\)");
             var init = new Regex(@"Command = nameof\(GameSession\.(\w+)\)");
-            var call = new Regex(@"Session\.(\w+)\(");
+            var call = new Regex(@"\.(\w+)\(");
+            var commands = new HashSet<string>(UxWorldHomes.All.Select(x => x.Command));
+            // Розрахунок, щойно відкрито картку (не дія): пропозиція квесту, прогноз розвитку.
+            var computed = new HashSet<string> { nameof(GameSession.OfferQuestStage), nameof(GameSession.PreviewBuildPlan) };
             var delegated = new Dictionary<string, string> { { "SaveState", "save(index)" }, { "ContinueGame", "load(index)" } };
             var problems = new List<string>();
             foreach (var file in Directory.GetFiles(Path.Combine(Gameplay, "UI", "Models"), "*.cs"))
@@ -258,7 +263,10 @@ namespace Game.Tests.EditMode
                     foreach (Match m in call.Matches(lines[i]))
                     {
                         string cmd = m.Groups[1].Value;
-                        if (!UxWorldHomes.InWorld(cmd) || cmd == nameof(GameSession.OfferQuestStage) || cmd == nameof(GameSession.PreviewBuildPlan)) continue;
+                        if (!commands.Contains(cmd) || computed.Contains(cmd) || lines[i].TrimStart().StartsWith("//") || lines[i].TrimStart().StartsWith("///")) continue;
+                        if (lines[i].Contains("nameof(GameSession." + cmd + ")")) continue;
+                        // Головна кнопка фази (HP-2) — сама собі дім, не дія картки: лише в UxPhaseButton.
+                        if (name == "UxPhaseButton.cs" && UxWorldHomes.Of(cmd).Any(x => x.Kind == UxHomeKind.Hud)) continue;
                         bool ok = Window(lines, i, i + 12).Contains("Calls(nameof(GameSession." + cmd + "))") ||
                                   Window(lines, i - 12, i).Contains("Command = nameof(GameSession." + cmd + ")");
                         if (!ok) problems.Add(name + ":" + (i + 1) + " виклик " + cmd + " без позначки дії");
@@ -278,28 +286,23 @@ namespace Game.Tests.EditMode
         // ---------------- панелі огляду без власних дій (UX-04) ----------------
 
         /// <summary>
-        /// C, J, N, F10 — огляд: кожна їхня дія з командою має дім у світі
-        /// (UX-04) або стоїть у храповику дірок (розвиток героя — поки лише в C,
-        /// U8 дає йому Намет). Мутація: дати Журналу власну облаву — тест падає.
+        /// Панелі огляду (усі з клавішею в каталозі — C, J, N, F10 — і картки людей):
+        /// кожна їхня дія з командою має дім у світі (UX-04). Пільги для дірок немає
+        /// (огляд 06.10.2026). Мутація: дати Журналу власну дію — тест падає.
         /// </summary>
         [Test]
         public void OverviewPanels_HaveNoVerbsOfTheirOwn()
         {
             var h = Morning();
-            var gaps = UxWorldHomes.GapCommands();
-            var overview = new List<UxPanelModel>
-            {
-                UxPanelFactory.Build(h, UxPanelId.DutyBoard, null),
-                UxPanelFactory.Build(h, UxPanelId.People, null),
-                UxPanelFactory.Build(h, UxPanelId.Journal, null),
-                UxPanelFactory.Build(h, UxPanelId.MechanicsJournal, null),
-            };
+            var overview = UxPanelCatalog.All.Where(p => p.Hotkey != null)
+                .Select(p => UxPanelFactory.Build(h, p.Id, null)).ToList();
+            Assert.GreaterOrEqual(overview.Count, 4, "C, J, N, F10");
             foreach (var c in h.Session.GetRosterView().Companions)
                 overview.Add(UxPanelFactory.Build(h, UxPanelId.People, c.Id));
 
-            var own = overview.SelectMany(Actions).Where(a => a.Command != null && !UxWorldHomes.InWorld(a.Command) && !gaps.Contains(a.Command))
+            var own = overview.SelectMany(Actions).Where(a => a.Command != null && !UxWorldHomes.InWorld(a.Command))
                 .Select(a => a.Command).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
-            CollectionAssert.IsEmpty(own, "дії панелей огляду, яких немає у світі й немає в храповику дірок: " + string.Join(", ", own));
+            CollectionAssert.IsEmpty(own, "дії панелей огляду, яких немає у світі: " + string.Join(", ", own));
         }
 
         // ---------------- станції (UX-10) ----------------
@@ -388,9 +391,10 @@ namespace Game.Tests.EditMode
             foreach (var b in UxKeyMap.All)
             {
                 Assert.IsTrue(files.ContainsKey(b.OwnerFile), b.Key + ": файлу-власника «" + b.OwnerFile + "» немає");
-                string src = File.ReadAllText(files[b.OwnerFile]);
-                string needle = Regex.IsMatch(b.Key, @"^Alpha\d$") ? "KeyCode.Alpha1" : "KeyCode." + b.Key;
-                if (!src.Contains(needle)) unhandled.Add(b.Key + "@" + b.OwnerFile);
+                // Без коментарів і цілим словом: «KeyCode.F1» не рахується за «KeyCode.F10», «E» — за «Escape» (огляд 06.10.2026).
+                string src = Regex.Replace(File.ReadAllText(files[b.OwnerFile]), @"//[^\n]*", string.Empty);
+                string key = Regex.IsMatch(b.Key, @"^Alpha\d$") ? "Alpha1" : b.Key;
+                if (!Regex.IsMatch(src, @"KeyCode\." + key + @"\b")) unhandled.Add(b.Key + "@" + b.OwnerFile);
             }
             CollectionAssert.AreEqual(ExpectedUnhandledKeys, unhandled.ToList(), "клавіші без обробника");
         }

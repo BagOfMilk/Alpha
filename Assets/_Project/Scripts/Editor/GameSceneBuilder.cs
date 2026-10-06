@@ -369,8 +369,10 @@ namespace Game.Gameplay.EditorTools
             // Намет героя біля Віча (Поправка №18): розвиток героя — місце у світі, а не лише панель C.
             var tent = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.HeroTentId);
             tent.transform.SetParent(group.transform, false);
-            tent.transform.localPosition = new Vector3(4.6f, 0f, -1.4f); // вільна земля між хатою (3.5; 2) і млином
-            KitBuilder.Attach(tent, Nature + "tent_detailedOpen.fbx", Vector3.zero, -110f);
+            // Точка місця — вільна земля перед наметом (сюди герой підходить); модель — позаду неї,
+            // подалі від людей біля вогнища (тур 06.10.2026: інакше «найближчим» лишався сусід).
+            tent.transform.localPosition = new Vector3(4.4f, 0f, -1.2f);
+            KitBuilder.Attach(tent, Nature + "tent_detailedOpen.fbx", new Vector3(1.3f, 0f, -0.8f), -110f);
 
             var training = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.TrainingGroundId);
             training.transform.SetParent(group.transform, false);

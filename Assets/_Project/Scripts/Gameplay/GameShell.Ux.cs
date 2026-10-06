@@ -76,6 +76,10 @@ namespace Game.Gameplay
         /// <summary>Увійти: швидко (затемнення одразу) або пішки до дверей і увійти, як клік по будівлі.</summary>
         public void RequestEnter(string buildingId, bool quick)
         {
+            // Як клік по дверях: лише зведена вхідна будівля і лише з села (огляд 06.10.2026 —
+            // швидкий вхід інакше заводив у кімнату незведеної будівлі чи з однієї кімнати в іншу).
+            var building = BuildingCatalog.Get(buildingId);
+            if (building == null || !building.Enterable || InInterior || !UxBricks.IsBuilt(Session.GetCityView(), buildingId)) return;
             if (quick) RequestEnter(buildingId);
             else RequestWalkTo(VillagePlaces.BuildingPrefix + buildingId, interactOnArrival: true);
         }

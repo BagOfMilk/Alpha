@@ -177,6 +177,7 @@ namespace Game.Gameplay
                 _path.Clear();
                 _pathIndex = 0;
                 _pendingInteract = null;
+                _shell.HoveredPlaceId = null;
             }
 
             var anim = ActiveAnimation();
@@ -197,6 +198,8 @@ namespace Game.Gameplay
             }
 
             bool real = !_ignoreRealInput;
+            // Наведення — лише поки курсор справді над місцем (IWorldInput.HoveredPlaceId); рух клавішами нижче виходить раніше.
+            _shell.HoveredPlaceId = null;
             bool run = real && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
             float ix = !real ? 0f : (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
                        - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
