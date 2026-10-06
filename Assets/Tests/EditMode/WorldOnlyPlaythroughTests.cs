@@ -28,6 +28,18 @@ namespace Game.Tests.EditMode
             public readonly WorldFirstTests.Host Host;
             public readonly SortedSet<string> Directs = new SortedSet<string>(StringComparer.Ordinal);
             public readonly List<string> WorldActions = new List<string>();
+            public readonly SortedSet<string> WorldCommands = new SortedSet<string>(StringComparer.Ordinal);
+
+            /// <summary>Зібрати загін на Заставі (перемикачі «до загону» — дії без команди ядра) і вийти тим самим входом.</summary>
+            public void Muster()
+            {
+                Host.Core.Open(UxPanelId.Muster, Game.Gameplay.Walk.BuildingCatalog.MusterStation);
+                var pick = Host.Core.CurrentModel().Cards.SelectMany(c => c.Actions)
+                    .FirstOrDefault(a => a.Id.StartsWith("party:") && a.ReasonIn(S.State, false) == null && !a.Selected);
+                if (pick != null) Host.Core.Invoke(pick.Id);
+                Host.Core.ClosePanel();
+                if (TryWorld(nameof(GameSession.PreviewExpedition))) TryWorld(nameof(GameSession.DepartExpedition));
+            }
 
             public Run(WorldFirstTests.Host host) { Host = host; }
 
@@ -60,6 +72,7 @@ namespace Game.Tests.EditMode
                     Host.Core.ClosePanel();
                     if (!outcome.Ok) continue;
                     WorldActions.Add(entry.PlaceId + " → " + action.Id);
+                    WorldCommands.Add(command);
                     return true;
                 }
                 Host.Core.ClosePanel();
@@ -98,8 +111,11 @@ namespace Game.Tests.EditMode
                             lastMorning = day;
                             // Розставити вільних на відкриті порожні пости — на станціях у світі.
                             for (int i = 0; i < 8 && run.TryWorld(nameof(GameSession.Assign)); i++) { }
-                            // Першого ранку — замовити будівлю з ділянки, якщо вистачає.
+                            // Першого ранку — замовити будівлю з ділянки; другого — облава на Вічі;
+                            // третього — збори й вилазка із Застави. Усе тим самим входом, що й людина.
                             if (day == 1) run.TryWorld(nameof(GameSession.OrderBuilding));
+                            if (day == 2) run.TryWorld(nameof(GameSession.OrderRaid));
+                            if (day == 3) run.Muster();
                         }
                         Assert.IsTrue(UxWorldHomes.Of(nameof(GameSession.ConfirmMorning)).Any(h => h.Kind == UxHomeKind.Hud));
                         UxPhaseButton.StartDay(s);
@@ -139,6 +155,8 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(SessionState.Summary, s.State, "бот не дійшов до підсумку за " + StepLimit + " кроків");
             Assert.IsNotEmpty(run.WorldActions, "ранки мали пройти діями місць у світі");
+            Assert.GreaterOrEqual(run.WorldCommands.Count, 3,
+                "через світ виконано щонайменше три різні команди: " + string.Join(", ", run.WorldCommands));
             TestContext.WriteLine("Дії у світі: " + string.Join("; ", run.WorldActions));
             TestContext.WriteLine("Прямо в ядро (події й дірки): " + string.Join(", ", run.Directs));
 

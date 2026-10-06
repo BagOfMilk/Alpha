@@ -30,6 +30,25 @@ namespace Game.Gameplay.UI
         };
 
         public static readonly string[] SiteIds = { "outskirts", "old_workshop", "far_highway", "abandoned_camp" };
+
+        /// <summary>
+        /// Точки зборів на Заставі — з ядра: звичайні точки вилазок (<c>DefaultSites</c>) і данжі
+        /// (<c>DefaultDungeon.KnownSiteIds</c>). Раніше список був прописаний руками й «Старого скиту»
+        /// (другий данж, зустріч Гафії, №15.1) у грі не було (огляд 06.10.2026).
+        /// </summary>
+        public static List<string> MusterSiteIds()
+        {
+            var ids = new List<string>();
+            foreach (var site in Game.Core.Expeditions.DefaultSites.All()) ids.Add(site.Id);
+            foreach (var id in Game.Core.Dungeons.DefaultDungeon.KnownSiteIds) if (!ids.Contains(id)) ids.Add(id);
+            return ids;
+        }
+
+        public static bool IsDungeonSite(string siteId)
+        {
+            foreach (var id in Game.Core.Dungeons.DefaultDungeon.KnownSiteIds) if (id == siteId) return true;
+            return false;
+        }
         public static readonly string[] FactionIds = { "community", "tuhar_boyars", "horde" };
 
         public static bool Female(IUxHost h) => h.Gender == Gender.Female;

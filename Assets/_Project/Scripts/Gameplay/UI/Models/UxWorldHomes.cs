@@ -77,6 +77,7 @@ namespace Game.Gameplay.UI
             St(nameof(GameSession.OrderPrepareThreat), BuildingCatalog.VecheStation),
             new UxHome(nameof(GameSession.OrderBuilding), UxHomeKind.Station, BuildingCatalog.VecheStation, UxHomeCheck.DayOne, UxPanelId.Blueprints),
             // Полонені й «наші в полоні» — блок під картками Віча (GameShell.DrawExtras, трек бою №14).
+            // Борг (огляд 06.10.2026): це IMGUI-кнопки, а не дії карток — через IUxInput їх не викликати; U13 переводить на картки.
             St(nameof(GameSession.RecruitPrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Source),
             St(nameof(GameSession.RansomPrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Source),
             St(nameof(GameSession.ReleasePrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Source),
@@ -153,6 +154,9 @@ namespace Game.Gameplay.UI
             // Не дії гравця
             Of(nameof(GameSession.OfferMyroslavaEveningScene), UxHomeKind.Auto, "evening"),
             Of(nameof(GameSession.OfferZakharCouncilScene), UxHomeKind.Auto, "evening"),
+            // Увечері глави арок оболонка пускає сама, якщо вранці до людини не підійшли (UX-15).
+            Of(nameof(GameSession.BeginArcChapterScene), UxHomeKind.Auto, "evening"),
+            Of(nameof(GameSession.BeginArcChapterQuest), UxHomeKind.Auto, "evening"),
             Of(nameof(GameSession.CombatAiStepOneAction), UxHomeKind.Auto, "battle"),
 
             // Ще не у світі — кроки плану (`docs/ROADMAP.md`, трек U)

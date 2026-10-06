@@ -310,13 +310,14 @@ namespace Game.Gameplay.EditorTools
                 Pair(holder, males[i], females[i], facing[i], i * 0.37f);
             }
 
-            // Біля вогнища Віча (саме вогнище — в Landmarks): місця idle:0..3.
+            // Біля вогнища Віча (саме вогнище — в Landmarks): місця idle:0..5 (VillagePeople.IdleSpotCount).
             Vector3[] idle =
             {
                 new Vector3(2.8f, 0f, 0.2f), new Vector3(2.8f, 0f, 1.4f),
-                new Vector3(1.9f, 0f, 1.9f), new Vector3(1.1f, 0f, -0.1f)
+                new Vector3(1.9f, 0f, 1.9f), new Vector3(1.1f, 0f, -0.1f),
+                new Vector3(1.9f, 0f, -1.4f), new Vector3(0.4f, 0f, 2.3f)
             };
-            float[] idleFacing = { 270f, 230f, 180f, 45f };
+            float[] idleFacing = { 270f, 230f, 180f, 45f, 0f, 137f };
             for (int i = 0; i < idle.Length; i++)
             {
                 var holder = new GameObject("idle:" + i);

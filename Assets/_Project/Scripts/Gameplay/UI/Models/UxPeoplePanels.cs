@@ -191,6 +191,13 @@ namespace Game.Gameplay.UI
 
             card.Chips.Add(new UxChip(UkrainianText.Format("ui.buildplanner.points", g, "points", preview.PointsAvailable.ToString()),
                 preview.PointsAvailable > 0 ? UxTone.Own : UxTone.Neutral));
+            // Порожній стан навчає (UX-13): без очок і без плану — не десять сірих «+1» з однаковою
+            // причиною (знімок туру 06.10.2026), а одне речення, звідки беруться очки.
+            if (preview.PointsAvailable == 0 && st.Plan.IsEmpty)
+            {
+                card.Lines.Add(UxBricks.T(h, "ux.growth.no_points"));
+                return card;
+            }
             if (preview.PointsAvailable == 0) card.Lines.Add(UxBricks.T(h, "ui.buildplanner.no_points"));
             card.Lines.Add(ScreenText.BuildPlanResultText(preview.Status, g));
 

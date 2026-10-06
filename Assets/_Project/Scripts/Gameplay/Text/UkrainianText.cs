@@ -2882,6 +2882,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "place.hero_tent", "Твій намет");
             AddKey(t, "ux.panel.hero_tent", "Твій намет");
             AddKey(t, "ux.hero_tent.sheet", "Картка героя");
+            AddKey(t, "ux.growth.no_points", "Вільних очок розвитку немає — вони приходять із новим рівнем: за бої, вилазки й завершені справи.");
             AddKey(t, "ux.escape.to_title", "У головне меню");
             AddKey(t, "ux.escape.to_title.question", "Вийти в головне меню? Незбережене пропаде.");
             AddKey(t, "ux.escape.to_title.verb", "У головне меню");

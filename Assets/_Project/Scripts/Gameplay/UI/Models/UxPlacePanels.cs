@@ -30,7 +30,31 @@ namespace Game.Gameplay.UI
             {
                 string check = ScreenText.QuestCheckLine(offer, g);
                 if (check.Length > 0) card.Lines.Add(check);
-                card.Lines.Add(UkrainianText.Get("ui.quests.check_stage_hint", g));
+                // Етап-перевірка: «Спробувати» (з порогом) чи «Підтвердити» — у світі, а не лише в NightScreen
+                // (огляд 06.10.2026: вранці квест було не довести до кінця на Дошці чи в людини).
+                string questId = offer.QuestId;
+                var attempt = new UxAction
+                {
+                    Id = "quest:" + questId + ":check",
+                    Label = UkrainianText.Get(check.Length > 0 ? "ui.quest.check.attempt" : "ui.common.confirm", g),
+                    Intent = UxIntent.Primary,
+                    Command = nameof(GameSession.ResolveQuestChoice),
+                    Execute = () =>
+                    {
+                        var outcome = UxBricks.Run(h, () =>
+                        {
+                            h.Session.OfferQuestStage(questId);
+                            h.Session.ResolveQuestChoice(0);
+                        });
+                        h.PanelState.Quests.Invalidate(questId);
+                        return outcome;
+                    }
+                };
+                attempt.AllowedStates.Add(SessionState.Morning);
+                attempt.AllowedStates.Add(SessionState.Evening);
+                attempt.AllowedStates.Add(SessionState.Night);
+                card.Actions.Add(attempt);
+                return card;
             }
             if (offer.Options == null) return card;
             for (int i = 0; i < offer.Options.Count; i++)
@@ -207,7 +231,7 @@ namespace Game.Gameplay.UI
             scout.Section = where;
             panel.Cards.Add(scout);
 
-            foreach (var site in UxBricks.SiteIds)
+            foreach (var site in UxBricks.MusterSiteIds())
             {
                 string siteId = site;
                 var card = new UxCard { Section = where, Title = UxBricks.T(h, "site." + site) };
@@ -215,8 +239,9 @@ namespace Game.Gameplay.UI
                 {
                     st.MusterSite = siteId;
                     st.MusterPreview = null;
-                    if (st.MusterApproach == ExpeditionApproach.Delve && siteId != "abandoned_camp")
-                        st.MusterApproach = ExpeditionApproach.Quiet;
+                    // Данж — лише вглиб; звичайна точка — тихо чи силою (у ядрі данжу немає серед точок вилазок).
+                    if (UxBricks.IsDungeonSite(siteId)) st.MusterApproach = ExpeditionApproach.Delve;
+                    else if (st.MusterApproach == ExpeditionApproach.Delve) st.MusterApproach = ExpeditionApproach.Quiet;
                 });
                 pick.Selected = st.MusterSite == site;
                 card.Actions.Add(pick);
@@ -224,10 +249,13 @@ namespace Game.Gameplay.UI
             }
 
             var approach = new UxCard { Section = where, Title = UxBricks.T(h, "ux.muster.approach") };
-            approach.Actions.Add(Approach(h, ExpeditionApproach.Quiet, "ui.expedition.approach.quiet"));
-            approach.Actions.Add(Approach(h, ExpeditionApproach.Forceful, "ui.expedition.approach.forceful"));
-            if (st.MusterSite == "abandoned_camp")
+            if (UxBricks.IsDungeonSite(st.MusterSite))
                 approach.Actions.Add(Approach(h, ExpeditionApproach.Delve, "ui.expedition.approach.delve"));
+            else
+            {
+                approach.Actions.Add(Approach(h, ExpeditionApproach.Quiet, "ui.expedition.approach.quiet"));
+                approach.Actions.Add(Approach(h, ExpeditionApproach.Forceful, "ui.expedition.approach.forceful"));
+            }
             panel.Cards.Add(approach);
 
             if (roster?.Companions != null)

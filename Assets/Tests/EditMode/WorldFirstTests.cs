@@ -412,13 +412,101 @@ namespace Game.Tests.EditMode
             var h = Morning();
             var tent = UxPanelFactory.Build(h, UxPanelId.HeroTent, VillagePlaces.HeroTentId);
             var sheet = UxPanelFactory.Build(h, UxPanelId.People, GameSession.ProtagonistId);
+            string growthTitle = Game.Gameplay.Text.UkrainianText.Get("ui.buildplanner.title", Gender.Male);
+            Assert.IsTrue(sheet.Cards.Any(c => c.Title == growthTitle), "у картці героя є розвиток");
+            Assert.IsTrue(tent.Cards.Any(c => c.Title == growthTitle), "Намет показує ту саму картку розвитку");
             var growthIds = Actions(sheet).Where(a => a.Id.StartsWith("plan:")).Select(a => a.Id).ToList();
-            Assert.IsNotEmpty(growthIds, "у картці героя є розвиток");
-            CollectionAssert.IsSubsetOf(growthIds, Actions(tent).Select(a => a.Id).ToList(), "Намет показує ту саму картку розвитку");
+            CollectionAssert.IsSubsetOf(growthIds, Actions(tent).Select(a => a.Id).ToList(), "ті самі дії розвитку");
             var entry = UxWorldReach.Now(h.Session).SingleOrDefault(e => e.PlaceId == VillagePlaces.HeroTentId);
             Assert.IsNotNull(entry, "Намет — місце в селі");
             Assert.AreEqual(1, entry.Depth);
             Assert.IsTrue(UxWorldHomes.InWorld(nameof(GameSession.CommitBuildPlan)), "затвердження розвитку має дім у світі");
+        }
+
+        /// <summary>
+        /// Без очок і без плану картка розвитку — одне речення, а не десять сірих «+1» з
+        /// однаковою причиною (UX-13; знімок туру 06.10.2026). На старті очок немає.
+        /// </summary>
+        [Test]
+        public void Growth_WithoutPoints_TeachesInsteadOfTenGreyButtons()
+        {
+            var h = Morning();
+            var tent = UxPanelFactory.Build(h, UxPanelId.HeroTent, VillagePlaces.HeroTentId);
+            Assume.That(Actions(tent).Any(a => a.Id.StartsWith("plan:") && a.DisabledReason == null), Is.False, "на старті очок немає");
+            Assert.IsFalse(Actions(tent).Any(a => a.Id.StartsWith("plan:")), "сірих «+1» без очок немає");
+            Assert.IsTrue(tent.Cards.SelectMany(c => c.Lines).Any(l => l == Game.Gameplay.Text.UkrainianText.Get("ux.growth.no_points", Gender.Male)));
+        }
+
+        // ---------------- правдивість світу (огляд 06.10.2026) ----------------
+
+        /// <summary>
+        /// Застава пропонує кожну точку ядра: звичайні — тихо чи силою, данжі — лише вглиб.
+        /// Раніше «Старого скиту» (другий данж, зустріч Гафії №15.1) у грі не було, а
+        /// «Покинутий табір» пропонував підхід, якого ядро для данжу не знає.
+        /// Мутація: прибрати данжі з переліку Застави — тест падає.
+        /// </summary>
+        [Test]
+        public void Muster_OffersEveryCoreSite_DungeonsOnlyByDelve()
+        {
+            var h = Morning();
+            var core = Game.Core.Expeditions.DefaultSites.All().Select(x => x.Id)
+                .Concat(Game.Core.Dungeons.DefaultDungeon.KnownSiteIds).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
+            var muster = UxPanelFactory.Build(h, UxPanelId.Muster, null);
+            var offered = Actions(muster).Where(a => a.Id.StartsWith("site:")).Select(a => a.Id.Substring(5)).OrderBy(x => x, StringComparer.Ordinal).ToList();
+            CollectionAssert.AreEqual(core, offered, "Застава пропонує всі точки ядра");
+
+            foreach (var site in core)
+            {
+                h.Core.Open(UxPanelId.Muster, BuildingCatalog.MusterStation);
+                Assert.IsTrue(h.Core.Invoke("site:" + site).Ok);
+                var approaches = Actions(h.Core.CurrentModel()).Where(a => a.Id.StartsWith("approach:")).Select(a => a.Id).ToList();
+                if (Game.Core.Dungeons.DefaultDungeon.KnownSiteIds.Contains(site))
+                    CollectionAssert.AreEqual(new[] { "approach:" + Game.Core.Expeditions.ExpeditionApproach.Delve }, approaches, site + ": данж — лише вглиб");
+                else
+                    CollectionAssert.DoesNotContain(approaches, "approach:" + Game.Core.Expeditions.ExpeditionApproach.Delve, site);
+            }
+        }
+
+        /// <summary>
+        /// Етап-перевірку квесту можна пройти у світі (Дошка, людина, ринок) — кнопка
+        /// була лише в NightScreen. Мутація: прибрати дію перевірки — тест падає.
+        /// </summary>
+        [Test]
+        public void QuestCheckStage_CanBeFinishedInTheWorld()
+        {
+            var h = Morning();
+            h.Core.Open(UxPanelId.NoticeBoard, VillagePlaces.NoticeBoardId);
+            var first = Actions(h.Core.CurrentModel()).FirstOrDefault(a => a.Id.StartsWith("quest:") && a.ReasonIn(SessionState.Morning, false) == null);
+            Assume.That(first, Is.Not.Null, "вранці на Дошці є квест із вибором");
+            string questId = first.Id.Split(':')[1];
+            Assert.IsTrue(h.Core.Invoke(first.Id).Ok);
+
+            h.Core.Open(UxPanelId.NoticeBoard, VillagePlaces.NoticeBoardId);
+            var check = Actions(h.Core.CurrentModel()).FirstOrDefault(a => a.Id == "quest:" + questId + ":check");
+            Assume.That(h.Session.OfferQuestStage(questId)?.Options?.Count ?? -1, Is.EqualTo(0), "наступний етап — перевірка");
+            h.PanelState.Quests.Invalidate(questId);
+            h.Core.Open(UxPanelId.NoticeBoard, VillagePlaces.NoticeBoardId);
+            check = Actions(h.Core.CurrentModel()).FirstOrDefault(a => a.Id == "quest:" + questId + ":check");
+            Assert.IsNotNull(check, "етап-перевірка має дію у світі");
+            Assert.AreEqual(nameof(GameSession.ResolveQuestChoice), check.Command);
+            Assert.IsNull(check.ReasonIn(SessionState.Morning, false), "вранці перевірку можна спробувати");
+            Assert.IsTrue(h.Core.Invoke(check.Id).Ok, "перевірка пройшла через той самий вхід, що й людина");
+        }
+
+        /// <summary>
+        /// «Що досяжне зі світу» ставить людей так само, як сцена: фігура на пості й
+        /// <see cref="VillagePeople.IdleSpotCount"/> місць біля вогнища — не всіх мешканців поспіль.
+        /// </summary>
+        [Test]
+        public void WorldReach_PeopleAreThoseTheSceneActuallyPlaces()
+        {
+            var h = Morning();
+            var reach = UxWorldReach.Now(h.Session).Where(e => e.Panel == UxPanelId.Talk).Select(e => e.Context).ToList();
+            var roster = h.Session.GetRosterView();
+            int idleInVillage = roster.Companions.Count(c => VillagePeople.IsInVillage(c) && string.IsNullOrEmpty(c.AssignedSlotId));
+            int onPosts = roster.Companions.Count(c => VillagePeople.IsInVillage(c) && !string.IsNullOrEmpty(c.AssignedSlotId));
+            Assert.AreEqual(onPosts + Math.Min(idleInVillage, VillagePeople.IdleSpotCount), reach.Count);
+            Assert.GreaterOrEqual(VillagePeople.IdleSpotCount, 6, "біля вогнища вміщається щонайменше шестеро без поста");
         }
 
         // ---------------- камера як у Wasteland 3 (W1) ----------------

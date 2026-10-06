@@ -58,11 +58,8 @@ namespace Game.Gameplay.UI
             result.Add(new UxWorldEntry { PlaceId = VillagePlaces.TrainingGroundId, Panel = UxPanelId.TrainingGround, Context = VillagePlaces.TrainingGroundId, Depth = 1 });
             result.Add(new UxWorldEntry { PlaceId = VillagePlaces.HeroTentId, Panel = UxPanelId.HeroTent, Context = VillagePlaces.HeroTentId, Depth = 1 });
 
-            var roster = s.GetRosterView();
-            if (roster?.Companions != null)
-                foreach (var c in roster.Companions)
-                    if (VillagePeople.IsInVillage(c))
-                        result.Add(new UxWorldEntry { PlaceId = VillagePlaces.PersonPrefix + c.Id, Panel = UxPanelId.Talk, Context = c.Id, Depth = 1 });
+            foreach (var id in PeopleInTheScene(s))
+                result.Add(new UxWorldEntry { PlaceId = VillagePlaces.PersonPrefix + id, Panel = UxPanelId.Talk, Context = id, Depth = 1 });
             return result;
         }
 
@@ -83,11 +80,24 @@ namespace Game.Gameplay.UI
             ids.Add(VillagePlaces.NoticeBoardId);
             ids.Add(VillagePlaces.TrainingGroundId);
             ids.Add(VillagePlaces.HeroTentId);
-            var roster = s.GetRosterView();
-            if (roster?.Companions != null)
-                foreach (var c in roster.Companions)
-                    if (VillagePeople.IsInVillage(c)) ids.Add(VillagePlaces.PersonPrefix + c.Id);
+            foreach (var id in PeopleInTheScene(s)) ids.Add(VillagePlaces.PersonPrefix + id);
             return ids;
+        }
+
+        /// <summary>
+        /// Хто справді стоїть у селі: та сама розстановка, що в сцені (<see cref="VillagePeople.Arrange"/>) —
+        /// фігура на кожному пості й <see cref="VillagePeople.IdleSpotCount"/> місць біля вогнища. Хто не вмістився,
+        /// того у світі немає — і охоронці це бачать (огляд 06.10.2026).
+        /// </summary>
+        public static List<string> PeopleInTheScene(GameSession s)
+        {
+            var posts = new Dictionary<string, WalkPoint>();
+            foreach (var post in UxBricks.PostIds) posts[post] = default(WalkPoint);
+            var idle = new List<WalkPoint>();
+            for (int i = 0; i < VillagePeople.IdleSpotCount; i++) idle.Add(default(WalkPoint));
+            var people = new List<string>();
+            foreach (var spot in VillagePeople.Arrange(s.GetRosterView(), posts, idle)) people.Add(spot.CompanionId);
+            return people;
         }
     }
 }
