@@ -223,6 +223,8 @@ namespace Game.Gameplay.UI
             var built = new List<UxCard>();
             foreach (var id in UxBricks.BuildingIds)
             {
+                // Без ділянки в селі (Лабораторія) — ні креслення, ні мертвого «Показати в селі» (UX-10).
+                if (!Walk.BuildingCatalog.HasPlot(id)) continue;
                 var card = UxCityCards.Plot(h, id, city, economy, true);
                 if (UxBricks.IsBuilt(city, id)) { card.Section = done; built.Add(card); }
                 else { card.Section = buildable; panel.Cards.Add(card); }

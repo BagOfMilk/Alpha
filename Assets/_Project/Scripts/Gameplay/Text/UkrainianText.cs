@@ -2876,7 +2876,15 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.world.people", "Люди (C)");
             AddKey(t, "ux.world.journal", "Журнал (J)");
             AddKey(t, "ux.world.duty", "Наряд (N)");
-            AddKey(t, "ux.world.keys", "WASD чи клік — іти · Shift — бігти · E — взаємодія · Tab — огляд · F1 — клавіші");
+            AddKey(t, "ux.world.keys", "WASD чи клік — іти · Shift — бігти · E — взаємодія · Enter — почати день · Tab — огляд · F1 — клавіші");
+            AddKey(t, "ux.world.start_day", "Почати день · Enter");
+            AddKey(t, "ux.keys.enter", "Enter — почати день (та сама кнопка внизу праворуч).");
+            AddKey(t, "place.hero_tent", "Твій намет");
+            AddKey(t, "ux.panel.hero_tent", "Твій намет");
+            AddKey(t, "ux.hero_tent.sheet", "Картка героя");
+            AddKey(t, "ux.escape.to_title", "У головне меню");
+            AddKey(t, "ux.escape.to_title.question", "Вийти в головне меню? Незбережене пропаде.");
+            AddKey(t, "ux.escape.to_title.verb", "У головне меню");
             AddKey(t, "ux.keys.title", "Клавіші");
             AddKey(t, "ux.keys.move", "WASD або стрілки — іти, Shift — бігти, коліщатко — ближче чи далі.");
             AddKey(t, "ux.keys.click", "Клік по землі — іти туди; по будівлі, людині чи станції — підійти й взаємодіяти.");
@@ -2888,7 +2896,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.preflight.question", "Почати день?");
             AddKey(t, "ux.preflight.verb", "Почати все одно");
             AddKey(t, "ux.preflight.empty_posts", "Порожні пости, а вільні люди є: {posts}.");
-            AddKey(t, "ux.preflight.points", "Невитрачені очки розвитку: {n}.");
+            AddKey(t, "ux.preflight.points", "Невитрачені очки розвитку: {n} — розподілити можна у твоєму наметі біля Віча.");
             AddKey(t, "ux.preflight.finale_squad", "Сьогодні ніч фіналу: у загін підуть лише ті, хто не стоїть на посту. Хочете взяти когось із постів — зніміть його звідти зараз, уночі вже не вийде.");
             AddKey(t, "ux.save.loaded", "Завантажено: {slot}.");
             AddKey(t, "ux.escape.saves", "Збереження і завантаження");

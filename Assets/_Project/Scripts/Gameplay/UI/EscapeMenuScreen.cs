@@ -10,6 +10,7 @@ namespace Game.Gameplay.UI
     public sealed class EscapeMenuScreen
     {
         private bool _confirmQuit;
+        private bool _confirmTitle;
 
         public void Draw(GameShell shell)
         {
@@ -58,6 +59,29 @@ namespace Game.Gameplay.UI
                 if (inBattle) Widgets.TooltipLine(UkrainianText.Get("ui.escape.hitrule.next_battle", g));
 
                 GUILayout.Space(8f);
+
+                // «У головне меню» — лише з підтвердженням (UX-12): незбережене пропаде.
+                // У бою — немає (як і збереження: посеред бою ця дія ламає бій).
+                if (!inBattle)
+                {
+                    if (!_confirmTitle)
+                    {
+                        if (Widgets.SecondaryButton(UkrainianText.Get("ux.escape.to_title", g))) _confirmTitle = true;
+                    }
+                    else
+                    {
+                        GUILayout.Label(UkrainianText.Get("ux.escape.to_title.question", g), AlphaSkin.Body);
+                        GUILayout.BeginHorizontal();
+                        if (Widgets.PrimaryButton(UkrainianText.Get("ux.common.cancel", g))) _confirmTitle = false;
+                        if (Widgets.DangerButton(UkrainianText.Get("ux.escape.to_title.verb", g)))
+                        {
+                            _confirmTitle = false;
+                            shell.ReturnToTitle();
+                        }
+                        GUILayout.EndHorizontal();
+                    }
+                    GUILayout.Space(8f);
+                }
 
                 // Вихід — лише з підтвердженням (UX-12): незбережене пропаде.
                 if (!_confirmQuit)

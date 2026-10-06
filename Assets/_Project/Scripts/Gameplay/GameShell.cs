@@ -312,8 +312,9 @@ namespace Game.Gameplay
 
             var state = Session.State;
 
-            bool escapeEligible = state != SessionState.Title && state != SessionState.Creation &&
-                                   state != SessionState.Scene;
+            // Esc працює скрізь, крім титулу (у титулу своє меню): у створенні героя,
+            // сценах і на підсумку — пауза з «У головне меню» (Поправка №18.1).
+            bool escapeEligible = state != SessionState.Title;
 
             // Event-based, не сирий Input.GetKeyDown (фікс-ревью, блокер):
             // OnGUI викликається кілька разів за кадр (Layout, сама подія
@@ -435,16 +436,20 @@ namespace Game.Gameplay
                     break;
                 case SessionState.Creation:
                     _creation.Draw(this);
+                    DrawOverlays();
                     break;
                 case SessionState.Scene:
                 case SessionState.Opening:
                     _scene.Draw(this);
+                    DrawOverlays();
                     break;
                 case SessionState.Battle:
                     DrawBattle();
                     break;
                 case SessionState.Summary:
                     DrawFullScreen(() => _summary.Draw(this));
+                    // Esc → «Збереження» відкриває панель — без шарів вона не малювалась.
+                    DrawOverlays();
                     break;
                 default:
                     DrawHubLike(state);

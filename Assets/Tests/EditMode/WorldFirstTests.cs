@@ -33,19 +33,20 @@ namespace Game.Tests.EditMode
         /// <summary>Команди, що ще живуть поза світом; крок плану, що їх закриє, — у <see cref="UxHome.Where"/>.</summary>
         private static readonly string[] ExpectedGaps =
         {
-            "AbandonDungeon", "AdvanceNight", "CommitBuildPlan", "ConfirmEvening", "ExtractDungeon", "PreviewBuildPlan",
+            // U8 (06.10.2026): CommitBuildPlan і PreviewBuildPlan — у Наметі героя.
+            "AbandonDungeon", "AdvanceNight", "ConfirmEvening", "ExtractDungeon",
             "PushDeeper", "ReactToCrisis", "ResolveDungeonEvent", "ResolveDungeonParley", "ResolveDungeonRoom",
             "ResolveFinale", "ResolveIncident", "SetPatrol",
         };
 
-        /// <summary>Станції без дієслова й без справжнього стану (UX-10) — U8 зливає чи ховає.</summary>
-        private static readonly string[] ExpectedDeadStations = { "tavern_tables", "watch_wall" };
+        /// <summary>Станції без дієслова й без справжнього стану (UX-10). U8: порожньо.</summary>
+        private static readonly string[] ExpectedDeadStations = { };
 
-        /// <summary>Мертві «Показати в селі» — U8 виправляє.</summary>
-        private static readonly string[] ExpectedDeadLinks = { "plot:" + DefaultBuildings.Laboratory, "post:scouting_post" };
+        /// <summary>Мертві «Показати в селі». U8: порожньо (Журнал веде на Заставу, Лабораторії без ділянки немає в кресленнях).</summary>
+        private static readonly string[] ExpectedDeadLinks = { };
 
-        /// <summary>Клавіші в реєстрі без обробника у файлі-власнику — U8 ховає.</summary>
-        private static readonly string[] ExpectedUnhandledKeys = { "L@GameShell.Ux.cs" };
+        /// <summary>Клавіші в реєстрі без обробника у файлі-власнику. U8: порожньо (L прибрано, доки Хроніка порожня).</summary>
+        private static readonly string[] ExpectedUnhandledKeys = { };
 
         // ---------------- сесія і оболонка без рушія ----------------
 
@@ -122,7 +123,7 @@ namespace Game.Tests.EditMode
         public void EveryHome_NamesARealCommand_AndARealPlace()
         {
             var commands = SessionCommands();
-            var landmarks = new[] { UxWorldHomes.AnyPlot, UxWorldHomes.AnyPerson, VillagePlaces.NoticeBoardId, VillagePlaces.TrainingGroundId };
+            var landmarks = new[] { UxWorldHomes.AnyPlot, UxWorldHomes.AnyPerson, VillagePlaces.NoticeBoardId, VillagePlaces.TrainingGroundId, VillagePlaces.HeroTentId };
             foreach (var h in UxWorldHomes.All)
             {
                 Assert.IsTrue(commands.Contains(h.Command), h.Command + ": такої команди в GameSession немає");
@@ -219,7 +220,8 @@ namespace Game.Tests.EditMode
                 string cmd = home.Command;
                 bool tagged = models.Contains("Calls(nameof(GameSession." + cmd + "))") || models.Contains("Command = nameof(GameSession." + cmd + ")");
                 if (VecheExtras.Contains(cmd)) tagged = extras.Contains("." + cmd + "(");
-                if (cmd == nameof(GameSession.OfferQuestStage)) tagged = models.Contains(".OfferQuestStage(");
+                // Пропозиція квесту і прогноз розвитку — не дії, а розрахунок, щойно відкрито картку місця.
+                if (cmd == nameof(GameSession.OfferQuestStage) || cmd == nameof(GameSession.PreviewBuildPlan)) tagged = models.Contains("." + cmd + "(");
                 Assert.IsTrue(tagged, cmd + " («" + home.Where + "»): дія не позначена в коді моделей");
             }
         }
@@ -256,7 +258,7 @@ namespace Game.Tests.EditMode
                     foreach (Match m in call.Matches(lines[i]))
                     {
                         string cmd = m.Groups[1].Value;
-                        if (!UxWorldHomes.InWorld(cmd) || cmd == nameof(GameSession.OfferQuestStage)) continue;
+                        if (!UxWorldHomes.InWorld(cmd) || cmd == nameof(GameSession.OfferQuestStage) || cmd == nameof(GameSession.PreviewBuildPlan)) continue;
                         bool ok = Window(lines, i, i + 12).Contains("Calls(nameof(GameSession." + cmd + "))") ||
                                   Window(lines, i - 12, i).Contains("Command = nameof(GameSession." + cmd + ")");
                         if (!ok) problems.Add(name + ":" + (i + 1) + " виклик " + cmd + " без позначки дії");
@@ -391,6 +393,28 @@ namespace Game.Tests.EditMode
                 if (!src.Contains(needle)) unhandled.Add(b.Key + "@" + b.OwnerFile);
             }
             CollectionAssert.AreEqual(ExpectedUnhandledKeys, unhandled.ToList(), "клавіші без обробника");
+        }
+
+        // ---------------- Намет героя (U8) ----------------
+
+        /// <summary>
+        /// Розвиток героя — у світі: Намет біля Віча показує ту саму картку, що
+        /// «Люди → Ти» (UX-04: одна дія — одна картка), і досяжний з села одним кроком.
+        /// Мутація: прибрати картку розвитку з Намету — тест падає.
+        /// </summary>
+        [Test]
+        public void HeroTent_ShowsTheSameGrowthCardAsTheSheet()
+        {
+            var h = Morning();
+            var tent = UxPanelFactory.Build(h, UxPanelId.HeroTent, VillagePlaces.HeroTentId);
+            var sheet = UxPanelFactory.Build(h, UxPanelId.People, GameSession.ProtagonistId);
+            var growthIds = Actions(sheet).Where(a => a.Id.StartsWith("plan:")).Select(a => a.Id).ToList();
+            Assert.IsNotEmpty(growthIds, "у картці героя є розвиток");
+            CollectionAssert.IsSubsetOf(growthIds, Actions(tent).Select(a => a.Id).ToList(), "Намет показує ту саму картку розвитку");
+            var entry = UxWorldReach.Now(h.Session).SingleOrDefault(e => e.PlaceId == VillagePlaces.HeroTentId);
+            Assert.IsNotNull(entry, "Намет — місце в селі");
+            Assert.AreEqual(1, entry.Depth);
+            Assert.IsTrue(UxWorldHomes.InWorld(nameof(GameSession.CommitBuildPlan)), "затвердження розвитку має дім у світі");
         }
 
         // ---------------- спільний вхід (UI-14) ----------------

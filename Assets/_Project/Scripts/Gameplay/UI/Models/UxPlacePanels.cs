@@ -437,6 +437,20 @@ namespace Game.Gameplay.UI
             return panel;
         }
 
+        /// <summary>
+        /// Твій намет біля Віча (Поправка №18): розвиток героя — у світі, а не лише
+        /// в панелі C. Та сама картка, що в «Люди → Ти» (UX-04: одна дія — одна картка).
+        /// </summary>
+        public static UxPanelModel HeroTent(IUxHost h)
+        {
+            var panel = UxCityPanels.New(h, UxPanelId.HeroTent);
+            var growth = UxPersonPanel.Growth(h, null);
+            growth.Actions.Add(UxBricks.Go("tent:sheet", UxBricks.T(h, "ux.hero_tent.sheet"),
+                () => h.OpenPanel(UxPanelId.People, GameSession.ProtagonistId)));
+            panel.Cards.Add(growth);
+            return panel;
+        }
+
         /// <summary>Журнал механік (F10, тестова збірка): що вже побачено цим прогоном.</summary>
         public static UxPanelModel MechanicsJournal(IUxHost h)
         {

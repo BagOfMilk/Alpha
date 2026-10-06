@@ -174,6 +174,24 @@ namespace Game.Gameplay
 
         public void Link(string placeId) => WalkTo(placeId);
 
+        /// <summary>
+        /// «У головне меню» (UX_DESIGN §5.10, §5.14): оболонка відкидає поточну
+        /// сесію і створює свіжу в стані «Титул» — як на старті гри. Ядро не
+        /// змінюється. Незбережене — лише після підтвердження в меню паузи.
+        /// </summary>
+        public void ReturnToTitle()
+        {
+            SetEscapeOpen(false);
+            Ux.ClosePanel();
+            Ux.Layers.ExitInterior();
+            _panelState.Reset();
+            _scene.Begin(null);
+            Session = new GameSession(_roller);
+            _persistedAutosaveVersion = Session.AutosaveVersion;
+            LastMessage = string.Empty;
+            FeedVillageStage();
+        }
+
         public void ClosePanel() => Ux.ClosePanel();
 
         public void DrawExtras(UxPanelId panel)
@@ -315,6 +333,12 @@ namespace Game.Gameplay
                 case KeyCode.J: TogglePanel(UxPanelId.Journal); return true;
                 case KeyCode.F10: TogglePanel(UxPanelId.MechanicsJournal); return true;
                 case KeyCode.F1: KeysHelpOpen = !KeysHelpOpen; return true;
+                case KeyCode.Return:
+                case KeyCode.KeypadEnter:
+                    // Головна кнопка фази (HP-2, Поправка №18): лише коли зверху світ — з панелі Enter не стартує день.
+                    if (Ux.OpenPanel != UxPanelId.None) return false;
+                    RequestStartDay();
+                    return true;
                 default: return false;
             }
         }
@@ -420,7 +444,7 @@ namespace Game.Gameplay
             if (Widgets.SecondaryButton(UkrainianText.Get("ux.world.journal", g), GUILayout.ExpandWidth(false))) TogglePanel(UxPanelId.Journal);
             if (Widgets.SecondaryButton(UkrainianText.Get("ux.world.duty", g), GUILayout.ExpandWidth(false))) TogglePanel(UxPanelId.DutyBoard);
             GUILayout.FlexibleSpace();
-            if (Widgets.PrimaryButton(UkrainianText.Get("ui.start_day", g), GUILayout.ExpandWidth(false)))
+            if (Widgets.PrimaryButton(UkrainianText.Get("ux.world.start_day", g), GUILayout.ExpandWidth(false)))
                 RequestStartDay();
             GUILayout.EndHorizontal();
             GUILayout.Label(UkrainianText.Get("ux.world.keys", g), AlphaSkin.HintLine);
@@ -466,7 +490,7 @@ namespace Game.Gameplay
         {
             Widgets.Modal(UkrainianText.Get("ux.keys.title", g), () =>
             {
-                foreach (var key in new[] { "ux.keys.move", "ux.keys.click", "ux.keys.e", "ux.keys.tab", "ux.keys.panels", "ux.keys.esc", "ux.keys.f10" })
+                foreach (var key in new[] { "ux.keys.move", "ux.keys.click", "ux.keys.e", "ux.keys.enter", "ux.keys.tab", "ux.keys.panels", "ux.keys.esc", "ux.keys.f10" })
                     GUILayout.Label(UkrainianText.Get(key, g), AlphaSkin.Body);
                 GUILayout.Space(8f);
                 if (Widgets.PrimaryButton(UkrainianText.Get("ux.common.close", g))) KeysHelpOpen = false;

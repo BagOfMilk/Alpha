@@ -366,6 +366,12 @@ namespace Game.Gameplay.EditorTools
             board.transform.localPosition = new Vector3(-3.0f, 0f, 0.2f);
             KitBuilder.Attach(board, Town + "banner-green.fbx", Vector3.zero, 45f);
 
+            // Намет героя біля Віча (Поправка №18): розвиток героя — місце у світі, а не лише панель C.
+            var tent = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.HeroTentId);
+            tent.transform.SetParent(group.transform, false);
+            tent.transform.localPosition = new Vector3(4.6f, 0f, 1.6f);
+            KitBuilder.Attach(tent, Nature + "tent_detailedOpen.fbx", Vector3.zero, -110f);
+
             var training = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.TrainingGroundId);
             training.transform.SetParent(group.transform, false);
             training.transform.localPosition = new Vector3(-7.2f, 0f, -6.8f);

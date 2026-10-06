@@ -56,6 +56,7 @@ namespace Game.Gameplay.UI
 
             result.Add(new UxWorldEntry { PlaceId = VillagePlaces.NoticeBoardId, Panel = UxPanelId.NoticeBoard, Context = VillagePlaces.NoticeBoardId, Depth = 1 });
             result.Add(new UxWorldEntry { PlaceId = VillagePlaces.TrainingGroundId, Panel = UxPanelId.TrainingGround, Context = VillagePlaces.TrainingGroundId, Depth = 1 });
+            result.Add(new UxWorldEntry { PlaceId = VillagePlaces.HeroTentId, Panel = UxPanelId.HeroTent, Context = VillagePlaces.HeroTentId, Depth = 1 });
 
             var roster = s.GetRosterView();
             if (roster?.Companions != null)
@@ -81,6 +82,7 @@ namespace Game.Gameplay.UI
             foreach (var st in BuildingCatalog.OpenAirStations) ids.Add(VillagePlaces.StationPrefix + st.Id);
             ids.Add(VillagePlaces.NoticeBoardId);
             ids.Add(VillagePlaces.TrainingGroundId);
+            ids.Add(VillagePlaces.HeroTentId);
             var roster = s.GetRosterView();
             if (roster?.Companions != null)
                 foreach (var c in roster.Companions)

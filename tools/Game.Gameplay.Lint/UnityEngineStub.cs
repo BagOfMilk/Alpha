@@ -382,7 +382,7 @@ namespace UnityEngine
         Alpha1 = 49, Alpha2 = 50, Alpha3 = 51, Alpha4 = 52, Alpha5 = 53,
         Alpha6 = 54, Alpha7 = 55, Alpha8 = 56, Alpha9 = 57,
         C = 99, E = 101, J = 106, L = 108, N = 110, O = 111,
-        F1 = 282, F10 = 291
+        KeypadEnter = 271, F1 = 282, F10 = 291
     }
 
     public static class Input

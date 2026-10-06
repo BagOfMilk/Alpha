@@ -180,7 +180,7 @@ namespace Game.Gameplay.UI
         /// Затвердження незворотне — лише з підтвердженням (UX-12); раніше
         /// кнопка одразу передавала ядру «підтверджено».
         /// </summary>
-        private static UxCard Growth(IUxHost h, string section)
+        internal static UxCard Growth(IUxHost h, string section)
         {
             var g = h.Gender;
             var st = h.PanelState;
@@ -247,6 +247,7 @@ namespace Game.Gameplay.UI
                 case UxPanelId.TrainingGround: return UxPlacePanels.TrainingGround(h);
                 case UxPanelId.MechanicsJournal: return UxPlacePanels.MechanicsJournal(h);
                 case UxPanelId.Station: return UxPlacePanels.Station(h, context);
+                case UxPanelId.HeroTent: return UxPlacePanels.HeroTent(h);
                 case UxPanelId.Talk: return UxTalkPanel.Build(h, context);
                 case UxPanelId.People:
                     return string.IsNullOrEmpty(context)

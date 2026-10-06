@@ -71,7 +71,8 @@ namespace Game.Gameplay.UI
     /// </summary>
     public static class UxJournalPanel
     {
-        public const string ScoutingPostPlace = "post:scouting_post";
+        /// <summary>Застава біля воріт — станція «Збори» (було «post:scouting_post», якого в селі немає).</summary>
+        public const string ScoutingPostPlace = Walk.VillagePlaces.StationPrefix + Walk.BuildingCatalog.MusterStation;
 
         public static UxPanelModel Build(QuestOfferView currentOffer, FactionsView factions, ReadinessView readiness, Gender g)
         {

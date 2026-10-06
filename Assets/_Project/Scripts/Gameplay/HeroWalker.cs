@@ -394,16 +394,17 @@ namespace Game.Gameplay
                 WalkPoint at;
                 if (station.PostId != null && postAnchors.TryGetValue(station.PostId, out at)) openAir[station.Id] = at;
             }
-            WalkPoint? board = null, training = null;
+            WalkPoint? board = null, training = null, tent = null;
             if (landmarksRoot != null)
                 foreach (Transform child in landmarksRoot)
                 {
                     if (child.name == "place:" + VillagePlaces.NoticeBoardId) board = new WalkPoint(child.position.x, child.position.z);
                     else if (child.name == "place:" + VillagePlaces.TrainingGroundId) training = new WalkPoint(child.position.x, child.position.z);
+                    else if (child.name == "place:" + VillagePlaces.HeroTentId) tent = new WalkPoint(child.position.x, child.position.z);
                 }
 
             _places.AddRange(VillagePlaces.BuildVillage(plots, openAir, board, training,
-                id => { bool built; return UxBricks.Stage(city, id, out built); }));
+                id => { bool built; return UxBricks.Stage(city, id, out built); }, tent));
 
             foreach (var spot in VillagePeople.Arrange(roster, PostFigures(), IdleSpots()))
                 _places.Add(VillagePlaces.Person(spot.CompanionId, spot.X, spot.Z));

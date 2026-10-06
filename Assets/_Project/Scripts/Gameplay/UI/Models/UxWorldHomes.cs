@@ -110,6 +110,9 @@ namespace Game.Gameplay.UI
             Pl(nameof(GameSession.BeginArcChapterQuest), AnyPerson, UxHomeCheck.Source),
             Pl(nameof(GameSession.OfferQuestStage), AnyPerson, UxHomeCheck.Source),
             Pl(nameof(GameSession.ResolveQuestChoice), AnyPerson, UxHomeCheck.Source),
+            // Намет героя (U8): розвиток героя. План рахується, щойно відкрита картка; затвердити — коли є очки.
+            Pl(nameof(GameSession.PreviewBuildPlan), VillagePlaces.HeroTentId, UxHomeCheck.Source),
+            Pl(nameof(GameSession.CommitBuildPlan), VillagePlaces.HeroTentId, UxHomeCheck.Source),
 
             // Головна кнопка фази (HP-2)
             Of(nameof(GameSession.ConfirmMorning), UxHomeKind.Hud, PhaseButton),
@@ -153,8 +156,6 @@ namespace Game.Gameplay.UI
             Of(nameof(GameSession.CombatAiStepOneAction), UxHomeKind.Auto, "battle"),
 
             // Ще не у світі — кроки плану (`docs/ROADMAP.md`, трек U)
-            Of(nameof(GameSession.PreviewBuildPlan), UxHomeKind.Gap, "U8"),
-            Of(nameof(GameSession.CommitBuildPlan), UxHomeKind.Gap, "U8"),
             Of(nameof(GameSession.ResolveIncident), UxHomeKind.Gap, "U9"),
             Of(nameof(GameSession.ConfirmEvening), UxHomeKind.Gap, "U10"),
             Of(nameof(GameSession.SetPatrol), UxHomeKind.Gap, "U10"),
@@ -179,6 +180,8 @@ namespace Game.Gameplay.UI
             { "pantry", "відкриті числа запасів (R17)" },
             { "infirmary_beds", "хто поранений чи відпочиває (статуси ростера)" },
             { "temple_memorial", "загиблі й ті, хто пішов (статуси ростера)" },
+            { "watch_wall", "готовність громади словом (публічний вид готовності)" },
+            { "tavern_tables", "хто хоче поговорити (відкриті глави арок)" },
         };
 
         private static List<UxHome> _all;
