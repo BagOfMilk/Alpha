@@ -43,6 +43,7 @@ namespace Game.Gameplay.UI
                 {
                     Id = "quest:" + questId + ":" + i, Label = label,
                     Intent = option.Path == IncidentPathView.Bloody ? UxIntent.Danger : UxIntent.Secondary,
+                    Command = nameof(GameSession.ResolveQuestChoice),
                     // Дві лінії квесту ділять один вказівник пропозиції в ядрі:
                     // перезапит саме цього квесту прямо перед вибором (як у старому хабі).
                     Execute = () =>
@@ -262,7 +263,7 @@ namespace Game.Gameplay.UI
                 var outcome = UxCommandRunner.Run(() => h.Session.PreviewExpedition(st.MusterSite, st.MusterApproach, party), null, UxBricks.Female(h), out view);
                 if (outcome.Ok) st.MusterPreview = view;
                 return outcome;
-            });
+            }).Calls(nameof(GameSession.PreviewExpedition));
             if (!partyLegality.Enabled) preview.DisabledReason = ScreenText.ReasonText(partyLegality, g);
             summary.Actions.Add(preview);
 
@@ -283,7 +284,7 @@ namespace Game.Gameplay.UI
                         r => ScreenText.DispatchFailure(r, g));
                     if (outcome.Ok) { st.MusterParty.Clear(); st.MusterPreview = null; }
                     return outcome;
-                }));
+                }).Calls(nameof(GameSession.DepartExpedition)));
             }
             panel.Cards.Add(summary);
             return panel;
@@ -340,7 +341,7 @@ namespace Game.Gameplay.UI
                             card.Actions.Add(UxBricks.Act("equip:" + instanceId + ":" + companionId,
                                 UxBricks.F(h, "ux.stash.equip", "name", UxBricks.Name(h, companionId, roster)), UxIntent.Secondary,
                                 () => UxBricks.Reported(h, () => h.Session.Equip(companionId, instanceId, slot),
-                                    ok => ok ? null : UkrainianText.Get("ux.stash.cannot_equip", g))));
+                                    ok => ok ? null : UkrainianText.Get("ux.stash.cannot_equip", g))).Calls(nameof(GameSession.Equip)));
                         }
                     panel.Cards.Add(card);
                 }
@@ -357,7 +358,7 @@ namespace Game.Gameplay.UI
             card.Chips.Add(new UxChip(UxBricks.T(h, slotKey) + ": " + label, string.IsNullOrEmpty(itemId) ? UxTone.Neutral : UxTone.Own));
             if (string.IsNullOrEmpty(itemId)) return;
             card.Actions.Add(UxBricks.Act("unequip:" + companionId + ":" + slot, UxBricks.F(h, "ux.stash.unequip", "item", label),
-                UxIntent.Secondary, () => UxBricks.Run(h, () => h.Session.Unequip(companionId, slot))));
+                UxIntent.Secondary, () => UxBricks.Run(h, () => h.Session.Unequip(companionId, slot))).Calls(nameof(GameSession.Unequip)));
         }
 
         private static string ItemName(IUxHost h, string itemId) =>
@@ -387,7 +388,7 @@ namespace Game.Gameplay.UI
                 var card = ItemCard(h, item, null);
                 string instanceId = item.InstanceId;
                 var craft = UxBricks.Act("craft:" + instanceId, UxBricks.T(h, "ui.gear.craft"), UxIntent.Primary,
-                    () => UxBricks.Reported(h, () => h.Session.CraftUpgrade(instanceId), r => ScreenText.CraftFailure(r, g)));
+                    () => UxBricks.Reported(h, () => h.Session.CraftUpgrade(instanceId), r => ScreenText.CraftFailure(r, g))).Calls(nameof(GameSession.CraftUpgrade));
                 craft.Chips.Add(new UxChip(UkrainianText.Format("ui.gear.craft_cost", g, "gold", balance.CraftGoldCost.ToString(),
                     "craft", balance.CraftComponentCost.ToString())));
                 if (item.Definition.IsNamed) craft.DisabledReason = UxBricks.T(h, "ui.feedback.craft.named_not_upgradable");
@@ -431,7 +432,7 @@ namespace Game.Gameplay.UI
             if (readiness != null && !string.IsNullOrEmpty(readiness.Band))
                 card.Chips.Add(new UxChip(UxBricks.F(h, "ux.readiness.word", "band", ScreenText.ReadinessLabel(readiness.Band, h.Gender))));
             card.Actions.Add(UxBricks.Act("training", UxBricks.T(h, "ux.training.start"), UxIntent.Primary, () =>
-                UxBricks.Run(h, () => h.Session.NewTrainingBattle(new TrainingBattleOptions { HitRule = h.Session.HitRule }))));
+                UxBricks.Run(h, () => h.Session.NewTrainingBattle(new TrainingBattleOptions { HitRule = h.Session.HitRule }))).Calls(nameof(GameSession.NewTrainingBattle)));
             panel.Cards.Add(card);
             return panel;
         }

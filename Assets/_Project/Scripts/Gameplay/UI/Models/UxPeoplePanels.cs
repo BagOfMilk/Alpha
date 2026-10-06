@@ -71,7 +71,7 @@ namespace Game.Gameplay.UI
                         var outcome = UxCommandRunner.Run(() => h.Session.BeginArcChapterScene(companionId), null, UxBricks.Female(h), out first);
                         if (outcome.Ok && first != null) h.BeginScene(first);
                         return outcome;
-                    }));
+                    }).Calls(nameof(GameSession.BeginArcChapterScene)));
                 else if (h.Session.IsArcChapterQuestContent(companionId))
                     card.Actions.Add(Talk(h, "talk:arcquest:" + companionId, UxBricks.T(h, "ux.talk.arc_quest"), UxIntent.Primary, () =>
                     {
@@ -79,7 +79,7 @@ namespace Game.Gameplay.UI
                         string quest = QuestOf(companionId);
                         if (quest != null) h.PanelState.Quests.Invalidate(quest);
                         return outcome;
-                    }));
+                    }).Calls(nameof(GameSession.BeginArcChapterQuest)));
             }
 
             card.Actions.Add(UxBricks.Go("talk:sheet:" + companionId, UxBricks.T(h, "ux.talk.sheet"), () => h.OpenPanel(UxPanelId.People, companionId)));
@@ -214,7 +214,7 @@ namespace Game.Gameplay.UI
                         r => r == BuildPlanStatus.Ok ? null : ScreenText.BuildPlanResultText(r, g), UxBricks.Female(h), out status);
                     if (outcome.Ok) st.Plan = new BuildPlan();
                     return outcome;
-                });
+                }).Calls(nameof(GameSession.CommitBuildPlan));
                 commit.Confirm = new UxConfirm(UxBricks.T(h, "ux.person.commit.question"), UxBricks.T(h, "ux.person.commit.verb"),
                     new[] { UxBricks.T(h, "ux.person.commit.loss") });
                 card.Actions.Add(commit);

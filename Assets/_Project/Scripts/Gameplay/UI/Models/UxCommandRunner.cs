@@ -18,15 +18,19 @@ namespace Game.Gameplay.UI
         public readonly string Refusal;
         /// <summary>Сирий текст винятку — лише для логу, ніколи на екран.</summary>
         public readonly string RawError;
+        /// <summary>Дія незворотна й чекає підтвердження (UX-12): виконається лише після <c>IUxInput.Confirm</c>.</summary>
+        public readonly bool AwaitingConfirm;
 
-        private UxOutcome(bool ok, string refusal, string rawError)
+        private UxOutcome(bool ok, string refusal, string rawError, bool awaitingConfirm = false)
         {
             Ok = ok;
             Refusal = refusal;
             RawError = rawError;
+            AwaitingConfirm = awaitingConfirm;
         }
 
         public static UxOutcome Success() => new UxOutcome(true, null, null);
+        public static UxOutcome Pending() => new UxOutcome(false, null, null, true);
         public static UxOutcome Refused(string refusal) => new UxOutcome(false, refusal ?? string.Empty, null);
         public static UxOutcome Failed(string humanText, string rawError) => new UxOutcome(false, humanText ?? string.Empty, rawError);
     }

@@ -106,7 +106,7 @@ namespace Game.Gameplay.UI
             {
                 card.Chips.Add(new UxChip(UxBricks.Name(h, occupant, roster), UxTone.Own));
                 card.Actions.Add(UxBricks.Act("unassign:" + postId, UxBricks.T(h, "ui.posts.unassign"), UxIntent.Secondary,
-                    () => UxBricks.Run(h, () => h.Session.Unassign(postId))));
+                    () => UxBricks.Run(h, () => h.Session.Unassign(postId))).Calls(nameof(GameSession.Unassign)));
                 return card;
             }
             if (!open)
@@ -126,7 +126,7 @@ namespace Game.Gameplay.UI
                     candidates++;
                     card.Actions.Add(UxBricks.Act("assign:" + postId + ":" + companionId,
                         UxBricks.F(h, "ux.post.take", "name", UxBricks.Name(h, companionId, roster)), UxIntent.Secondary,
-                        () => UxBricks.Reported(h, () => h.Session.Assign(companionId, postId), r => ScreenText.AssignFailure(r, h.Gender))));
+                        () => UxBricks.Reported(h, () => h.Session.Assign(companionId, postId), r => ScreenText.AssignFailure(r, h.Gender))).Calls(nameof(GameSession.Assign)));
                 }
             if (candidates == 0) card.Lines.Add(UxBricks.T(h, "ux.post.none_free"));
             return card;
@@ -164,7 +164,7 @@ namespace Game.Gameplay.UI
             if (!built && stage == 0 && def != null)
             {
                 var order = UxBricks.Act("order:" + buildingId, UxBricks.T(h, "ui.buildings.order"), UxIntent.Primary,
-                    () => UxBricks.Reported(h, () => h.Session.OrderBuilding(buildingId), r => ScreenText.BuildFailure(r, g)));
+                    () => UxBricks.Reported(h, () => h.Session.OrderBuilding(buildingId), r => ScreenText.BuildFailure(r, g))).Calls(nameof(GameSession.OrderBuilding));
                 bool enoughGold = economy == null || economy.Gold >= def.GoldCost;
                 bool enoughBuild = economy == null || economy.BuildComponent >= def.BuildComponentCost;
                 if (def.QuestOnly) order.DisabledReason = UxBricks.T(h, "ui.feedback.build.quest_only");
@@ -282,21 +282,21 @@ namespace Game.Gameplay.UI
 
             var raid = CostCard(h, "ui.council.raid", "gold", City.RaidGoldCost.ToString());
             var raidAct = UxBricks.Act("raid", UxBricks.T(h, "ui.council.raid"), UxIntent.Primary,
-                () => UxBricks.Reported(h, () => h.Session.OrderRaid(), r => ScreenText.CouncilFailure(r, g)));
+                () => UxBricks.Reported(h, () => h.Session.OrderRaid(), r => ScreenText.CouncilFailure(r, g))).Calls(nameof(GameSession.OrderRaid));
             if (city != null && !city.RaidReady) raidAct.DisabledReason = UxBricks.T(h, "ui.council.result.on_cooldown");
             raid.Actions.Add(raidAct);
             panel.Cards.Add(raid);
 
             var settlers = CostCard(h, "ui.council.settlers", "food", City.SettlersFoodCost.ToString());
             var settlersAct = UxBricks.Act("settlers", UxBricks.T(h, "ui.council.settlers"), UxIntent.Secondary,
-                () => UxBricks.Reported(h, () => h.Session.OrderSettlers(), r => ScreenText.CouncilFailure(r, g)));
+                () => UxBricks.Reported(h, () => h.Session.OrderSettlers(), r => ScreenText.CouncilFailure(r, g))).Calls(nameof(GameSession.OrderSettlers));
             if (city != null && !city.SettlersReady) settlersAct.DisabledReason = UxBricks.T(h, "ui.council.result.on_cooldown");
             settlers.Actions.Add(settlersAct);
             panel.Cards.Add(settlers);
 
             var prepare = CostCard(h, "ui.council.prepare_threat", "gold", Faction.PrepareThreatGoldCost.ToString());
             var prepareAct = UxBricks.Act("prepare_threat", UxBricks.T(h, "ui.council.prepare_threat"), UxIntent.Secondary,
-                () => UxBricks.Reported(h, () => h.Session.OrderPrepareThreat(), r => ScreenText.CouncilFailure(r, g)));
+                () => UxBricks.Reported(h, () => h.Session.OrderPrepareThreat(), r => ScreenText.CouncilFailure(r, g))).Calls(nameof(GameSession.OrderPrepareThreat));
             if (economy != null && economy.Gold < Faction.PrepareThreatGoldCost)
                 prepareAct.DisabledReason = UxBricks.T(h, "ui.council.result.not_enough_gold");
             prepare.Actions.Add(prepareAct);
@@ -336,7 +336,7 @@ namespace Game.Gameplay.UI
             {
                 string factionId = fid;
                 var a = UxBricks.Act("decree:" + fid, UxBricks.T(h, "faction." + fid), UxIntent.Secondary,
-                    () => UxBricks.Reported(h, () => h.Session.OrderDecree(factionId), r => ScreenText.CouncilFailure(r, g)));
+                    () => UxBricks.Reported(h, () => h.Session.OrderDecree(factionId), r => ScreenText.CouncilFailure(r, g))).Calls(nameof(GameSession.OrderDecree));
                 if (gold < Faction.DecreeGoldCost) a.DisabledReason = UxBricks.T(h, "ui.council.result.not_enough_gold");
                 decreeCard.Actions.Add(a);
             }
@@ -348,7 +348,7 @@ namespace Game.Gameplay.UI
             {
                 string factionId = fid;
                 var a = UxBricks.Act("diplomacy:" + fid, UxBricks.T(h, "faction." + fid), UxIntent.Secondary,
-                    () => UxBricks.Reported(h, () => h.Session.OrderDiplomacy(factionId), r => ScreenText.CouncilFailure(r, g)));
+                    () => UxBricks.Reported(h, () => h.Session.OrderDiplomacy(factionId), r => ScreenText.CouncilFailure(r, g))).Calls(nameof(GameSession.OrderDiplomacy));
                 if (IsHostile(factions, fid)) a.DisabledReason = UxBricks.T(h, "ui.council.result.standing_too_low");
                 else if (gold < Faction.DiplomacyGoldCost) a.DisabledReason = UxBricks.T(h, "ui.council.result.not_enough_gold");
                 diplomacyCard.Actions.Add(a);
@@ -363,7 +363,7 @@ namespace Game.Gameplay.UI
                 if (UxBricks.Stage(city, id, out built) == 0 && !built) continue;
                 string buildingId = id;
                 var a = UxBricks.Act("invest:" + id, UxBricks.T(h, "building." + id), UxIntent.Secondary,
-                    () => UxBricks.Reported(h, () => h.Session.OrderInvestment(buildingId), r => ScreenText.CouncilFailure(r, g)));
+                    () => UxBricks.Reported(h, () => h.Session.OrderInvestment(buildingId), r => ScreenText.CouncilFailure(r, g))).Calls(nameof(GameSession.OrderInvestment));
                 if (gold < Faction.InvestmentGoldCost) a.DisabledReason = UxBricks.T(h, "ui.council.result.not_enough_gold");
                 investCard.Actions.Add(a);
             }
@@ -376,7 +376,7 @@ namespace Game.Gameplay.UI
             {
                 string siteId = site;
                 var a = UxBricks.Act("outfit:" + site, UxBricks.T(h, "site." + site), UxIntent.Secondary,
-                    () => UxBricks.Reported(h, () => h.Session.OrderOutfitExpedition(siteId), r => ScreenText.CouncilFailure(r, g)));
+                    () => UxBricks.Reported(h, () => h.Session.OrderOutfitExpedition(siteId), r => ScreenText.CouncilFailure(r, g))).Calls(nameof(GameSession.OrderOutfitExpedition));
                 if (gold < Faction.OutfitExpeditionGoldCost) a.DisabledReason = UxBricks.T(h, "ui.council.result.not_enough_gold");
                 outfitCard.Actions.Add(a);
             }

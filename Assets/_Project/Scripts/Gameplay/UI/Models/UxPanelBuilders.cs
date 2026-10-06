@@ -174,6 +174,7 @@ namespace Game.Gameplay.UI
                         Id = "save:" + index,
                         Label = UkrainianText.Get("ux.save.action.save", g),
                         Intent = UxIntent.Primary,
+                        Command = nameof(GameSession.SaveState),
                         Execute = save != null ? () => save(index) : (Func<UxOutcome>)null
                     };
                     saveAction.AllowedStates.Add(SessionState.Morning);
@@ -193,6 +194,7 @@ namespace Game.Gameplay.UI
                         Id = "load:" + index,
                         Label = UkrainianText.Get("ux.save.action.load", g),
                         Intent = UxIntent.Secondary,
+                        Command = nameof(GameSession.ContinueGame),
                         Execute = load != null ? () => load(index) : (Func<UxOutcome>)null,
                         Confirm = new UxConfirm(
                             UkrainianText.Format("ux.save.confirm.load", g, "slot", label),

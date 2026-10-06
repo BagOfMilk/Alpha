@@ -206,6 +206,7 @@ namespace Game.Gameplay
             }
 
             _hovered = real && !PointerOverUi() ? PickUnderMouse() : null;
+            _shell.HoveredPlaceId = _hovered != null ? _hovered.Id : null;
             if (real && Input.GetMouseButtonDown(0) && !PointerOverUi())
             {
                 if (_hovered != null)
@@ -222,11 +223,17 @@ namespace Game.Gameplay
                 }
             }
 
-            string request = _shell.ConsumeWalkRequest();
+            bool interactOnArrival;
+            string request = _shell.ConsumeWalkRequest(out interactOnArrival);
             if (request != null)
             {
                 var place = VillagePlaces.Find(_places, request);
-                if (place != null) StartPath(pos, new WalkPoint(place.X, place.Z), false);
+                if (place != null)
+                {
+                    StartPath(pos, new WalkPoint(place.X, place.Z), false);
+                    // IWorldInput.RequestEnter(…, quick: false): дійти до дверей і зайти, як клік по будівлі.
+                    _pendingInteract = interactOnArrival ? place.Id : null;
+                }
                 _lastRequest = request + (place == null ? " (місця немає)" : " (шлях " + _path.Count + ")");
                 if (place == null || _path.Count == 0)
                     Debug.LogWarning("[Село] запит «" + request + "» не дав шляху: " + _lastRequest);
