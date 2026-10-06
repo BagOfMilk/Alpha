@@ -1,2 +1,25 @@
 # Нормалізація переводів рядків: у репозиторії LF, локально — за платформою.
 * text=auto
+
+# Git LFS — лише для нових бінарних асетів треку V (Поправка №18.3).
+# Наявні Kenney, шрифти й значки лишаються звичайними файлами — правила їх не чіпають.
+# Assets/ThirdParty/CC0 — завантажене з CC0-джерел; Assets/Art — власне (генерація, експорт з Blender).
+Assets/ThirdParty/CC0/**/*.fbx filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.glb filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.png filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.tga filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.exr filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.hdr filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.wav filter=lfs diff=lfs merge=lfs -text
+Assets/ThirdParty/CC0/**/*.ogg filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.fbx filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.glb filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.png filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.tga filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.exr filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.wav filter=lfs diff=lfs merge=lfs -text
+Assets/Art/**/*.ogg filter=lfs diff=lfs merge=lfs -text
+# Сирці Blender у репозиторій не кладуться (лише експорт і скрипти в tools/blender/).
+*.blend binary

@@ -58,3 +58,7 @@ Screenshots/
 
 # Батч-лог Unity
 compile.log
+
+# Сирці Blender — поза репозиторієм (Поправка №18.3): лише експорт і скрипти збірки
+*.blend
+*.blend1
