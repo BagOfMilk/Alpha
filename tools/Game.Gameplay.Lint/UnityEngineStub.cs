@@ -381,7 +381,7 @@ namespace UnityEngine
         None = 0, Backspace = 8, Tab = 9, Return = 13, Escape = 27, Space = 32,
         Alpha1 = 49, Alpha2 = 50, Alpha3 = 51, Alpha4 = 52, Alpha5 = 53,
         Alpha6 = 54, Alpha7 = 55, Alpha8 = 56, Alpha9 = 57,
-        C = 99, E = 101, J = 106, L = 108, N = 110, O = 111,
+        C = 99, E = 101, F = 102, J = 106, L = 108, N = 110, O = 111, Q = 113,
         KeypadEnter = 271, F1 = 282, F10 = 291
     }
 

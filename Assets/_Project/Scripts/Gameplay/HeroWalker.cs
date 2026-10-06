@@ -88,6 +88,10 @@ namespace Game.Gameplay
         private float _camHomeSize;
         private Vector3 _camOffset;
         private float _zoom;
+        /// <summary>Поворот камери селом (Q/E, як у бою й у Wasteland 3 — Поправка №18.5): поточний і цільовий кут.</summary>
+        private Quaternion _camRotBase;
+        private float _yaw;
+        private float _yawTarget;
 
         private GUIStyle _labelStyle;
         private GUIStyle _nearStyle;
@@ -111,6 +115,7 @@ namespace Game.Gameplay
             {
                 _camHomePos = hubCamera.transform.position;
                 _camHomeSize = hubCamera.orthographicSize;
+                _camRotBase = hubCamera.transform.rotation;
                 // Точка землі в центрі кадру за замовчуванням: камера тримає той
                 // самий зсув від героя, що й від неї, — ракурс не міняється.
                 var forward = hubCamera.transform.forward;
@@ -144,6 +149,14 @@ namespace Game.Gameplay
                     else if (_shell.PendingExit && _inside != null) BeginExit();
                 }
                 if (!_shell.EscapeOpen && _transition == Transition.None) gait = MoveHero();
+                // Q/E — повернути камеру на 90° (той самий жест, що в бою; UX-17). У кімнаті не обертаємо: три стіни сірого каркаса.
+                if (!_ignoreRealInput && !_shell.EscapeOpen && _inside == null)
+                {
+                    if (Input.GetKeyDown(KeyCode.Q)) _yawTarget = CameraOrbit.Turn(_yawTarget, -1);
+                    else if (Input.GetKeyDown(KeyCode.E)) _yawTarget = CameraOrbit.Turn(_yawTarget, +1);
+                }
+                int turn = _shell.ConsumeCameraTurn();
+                if (turn != 0 && _inside == null) _yawTarget = CameraOrbit.Turn(_yawTarget, turn);
                 var near = VillagePlaces.Nearest(_places, Here());
                 _shell.SetNearbyPlace(near);
                 if (_pendingInteract != null && near != null && near.Id == _pendingInteract && _pathIndex >= _path.Count)
@@ -631,6 +644,11 @@ namespace Game.Gameplay
         {
             if (!_camReady || hubCamera == null || !hubCamera.isActiveAndEnabled) return;
 
+            float k = 1f - Mathf.Exp(-6f * Time.deltaTime);
+            _yaw = CameraOrbit.Approach(_yaw, exploring && _inside == null ? _yawTarget : 0f, k);
+            var orbit = Quaternion.Euler(0f, _yaw, 0f);
+            hubCamera.transform.rotation = orbit * _camRotBase;
+
             Vector3 targetPos;
             float targetSize;
             if (exploring)
@@ -638,7 +656,7 @@ namespace Game.Gameplay
                 float wheel = _ignoreRealInput ? 0f : Input.mouseScrollDelta.y;
                 if (Mathf.Abs(wheel) > 0.01f && !PointerOverUi() && _inside == null)
                     _zoom = Mathf.Clamp(_zoom - wheel * 0.8f, minZoom, maxZoom);
-                targetPos = transform.position + _camOffset;
+                targetPos = transform.position + orbit * _camOffset;
                 targetSize = _inside != null ? interiorZoom : _zoom;
             }
             else
@@ -647,7 +665,6 @@ namespace Game.Gameplay
                 targetSize = _camHomeSize;
             }
 
-            float k = 1f - Mathf.Exp(-6f * Time.deltaTime);
             hubCamera.transform.position = Vector3.Lerp(hubCamera.transform.position, targetPos, k);
             hubCamera.orthographicSize = Mathf.Lerp(hubCamera.orthographicSize, targetSize, k);
         }
@@ -656,7 +673,10 @@ namespace Game.Gameplay
         private void SnapCamera()
         {
             if (!_camReady || hubCamera == null) return;
-            hubCamera.transform.position = transform.position + _camOffset;
+            if (_inside != null) _yaw = 0f;
+            var orbit = Quaternion.Euler(0f, _yaw, 0f);
+            hubCamera.transform.rotation = orbit * _camRotBase;
+            hubCamera.transform.position = transform.position + orbit * _camOffset;
             hubCamera.orthographicSize = _inside != null ? interiorZoom : _zoom;
         }
 

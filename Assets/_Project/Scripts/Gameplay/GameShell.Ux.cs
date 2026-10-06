@@ -314,14 +314,17 @@ namespace Game.Gameplay
 
         // ===================== клавіші =====================
 
-        /// <summary>Клавіші шару місць (UX_DESIGN §3.6): E, Tab, N, C, J, F10, F1. Кожна — одного власника (UxKeyMap).</summary>
+        /// <summary>
+        /// Клавіші шару місць (UX_DESIGN §3.6): F, Tab, N, C, J, F10, F1, Enter. Кожна — одного власника (UxKeyMap).
+        /// Взаємодія — F (Поправка №18.5): Q/E обертають камеру, як у бою й у Wasteland 3 (UX-17).
+        /// </summary>
         private bool HandleWorldKeys(Event evt)
         {
             if (evt == null || evt.type != EventType.KeyDown || !CanExplore) return false;
             if (Ux.ConfirmPending) return false;
             switch (evt.keyCode)
             {
-                case KeyCode.E:
+                case KeyCode.F:
                     if (NearbyPlace == null) return false;
                     InteractNearby();
                     return true;

@@ -239,6 +239,18 @@ namespace Game.Gameplay
 
         private bool _walkInteract;
 
+        /// <summary>Запит повороту камери (−1 — Q, +1 — E) для HeroWalker: автотур обертає камеру тим самим шляхом, що клавіші.</summary>
+        private int _cameraTurn;
+
+        public void RequestCameraTurn(int direction) => _cameraTurn = Math.Sign(direction);
+
+        public int ConsumeCameraTurn()
+        {
+            int turn = _cameraTurn;
+            _cameraTurn = 0;
+            return turn;
+        }
+
         public string ConsumeWalkRequest(out bool interactOnArrival)
         {
             var target = PendingWalkTarget;

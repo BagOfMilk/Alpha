@@ -1400,6 +1400,18 @@ namespace Game.Gameplay
             }
             foreach (var f in InteractExpecting(Walk.VillagePlaces.NoticeBoardId, UI.UxPanelId.NoticeBoard, "explore-entered")) yield return f;
 
+            // Намет героя (Поправка №18, U8): розвиток героя — місце у світі.
+            foreach (var f in WalkTo(Walk.VillagePlaces.HeroTentId)) yield return f;
+            foreach (var f in InteractExpecting(Walk.VillagePlaces.HeroTentId, UI.UxPanelId.HeroTent, "explore-hero_tent")) yield return f;
+
+            // Камера як у Wasteland 3 (№18.5, W1): поворот на 90° і назад — той самий запит, що Q/E.
+            _shell.RequestCameraTurn(+1);
+            foreach (var f in WaitFrames(60)) yield return f;
+            _host.Capture("explore-camera-turned");
+            yield return 0;
+            _shell.RequestCameraTurn(-1);
+            foreach (var f in WaitFrames(60)) yield return f;
+
             // Увійти в зведену будівлю (перша будівля, обрана після прологу).
             var building = FirstPlace(p => p.Kind == Walk.PlaceKind.Building && p.Panel == UI.UxPanelId.None);
             if (building == null)
@@ -1462,7 +1474,7 @@ namespace Game.Gameplay
             _host.Log("Село: дійшов до «" + placeId + "» за " + frames + " кадрів.");
         }
 
-        /// <summary>«E» біля місця — має відкритися саме ця панель; знімок і закрити.</summary>
+        /// <summary>«F» (взаємодія) біля місця — має відкритися саме ця панель; знімок і закрити.</summary>
         private IEnumerable<int> InteractExpecting(string placeId, UI.UxPanelId expected, string shot)
         {
             _shell.InteractNearby();

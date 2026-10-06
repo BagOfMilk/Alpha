@@ -417,6 +417,36 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(UxWorldHomes.InWorld(nameof(GameSession.CommitBuildPlan)), "затвердження розвитку має дім у світі");
         }
 
+        // ---------------- камера як у Wasteland 3 (W1) ----------------
+
+        /// <summary>
+        /// Q/E обертають камеру селом кроками по 90° (той самий жест, що в бою;
+        /// Поправка №18.5): кут завжди 0/90/180/270, чотири кроки — повне коло,
+        /// плавний поворот іде найкоротшою дугою, відстань до героя не змінюється.
+        /// </summary>
+        [Test]
+        public void CameraOrbit_TurnsByQuarters_ShortestArc_KeepsDistance()
+        {
+            Assert.AreEqual(90f, CameraOrbit.Turn(0f, +1));
+            Assert.AreEqual(270f, CameraOrbit.Turn(0f, -1));
+            float yaw = 0f;
+            for (int i = 0; i < 4; i++) yaw = CameraOrbit.Turn(yaw, +1);
+            Assert.AreEqual(0f, yaw, "чотири кроки — повне коло");
+            Assert.AreEqual(180f, CameraOrbit.Turn(91.7f, +1), "крок від найближчої чверті, похибка не накопичується");
+
+            Assert.AreEqual(355f, CameraOrbit.Approach(350f, 0f, 0.5f), 0.001f, "найкоротша дуга: 350 → 0 через 355, а не через 175");
+            Assert.AreEqual(90f, CameraOrbit.Approach(89.995f, 90f, 0.1f), "біля цілі — рівно ціль");
+
+            CameraOrbit.Rotate(1f, 0f, 90f, out float x, out float z);
+            Assert.AreEqual(0f, x, 1e-5f);
+            Assert.AreEqual(-1f, z, 1e-5f, "той самий знак, що Quaternion.Euler(0, 90, 0) у Unity");
+            foreach (var a in new[] { 0f, 37f, 90f, 180f, 271f })
+            {
+                CameraOrbit.Rotate(3f, -5f, a, out x, out z);
+                Assert.AreEqual(Math.Sqrt(34.0), Math.Sqrt(x * x + z * z), 1e-4, "відстань від героя не змінюється");
+            }
+        }
+
         // ---------------- спільний вхід (UI-14) ----------------
 
         /// <summary>

@@ -1583,7 +1583,7 @@ namespace Game.Gameplay.Text
             // Прогулянка селом (власник, 25.09.2026: «бігати як у CRPG»).
             AddKey(t, "ui.explore.enter", "Прогулянка (Tab)");
             AddKey(t, "ui.explore.leave", "Панель (Tab)");
-            AddKey(t, "ui.explore.hint", "WASD або клік мишею — іти · Shift — бігти · коліщатко — ближче/далі · E — зайти · Tab — панель");
+            AddKey(t, "ui.explore.hint", "WASD або клік мишею — іти · Shift — бігти · коліщатко — ближче/далі · Q/E — камера · F — зайти · Tab — панель");
             AddKey(t, "ui.explore.prompt", "E — {place} → {tab}");
             AddKey(t, "ui.explore.nothing_near", "Підійди до поста, ділянки чи дошки оголошень — тут з'явиться, куди можна зайти.");
             AddKey(t, "place.council_seat", "Площа ради");
@@ -2864,7 +2864,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.common.cancel", "Скасувати");
             AddKey(t, "ux.common.show_in_village", "Показати в селі");
             AddKey(t, "ux.common.reason_line", "«{action}»: {reason}");
-            AddKey(t, "ux.world.prompt", "E — {place} · {verb}");
+            AddKey(t, "ux.world.prompt", "F — {place} · {verb}");
             AddKey(t, "ux.verb.enter", "зайти");
             AddKey(t, "ux.verb.look", "роздивитись");
             AddKey(t, "ux.verb.build", "будівництво");
@@ -2876,7 +2876,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.world.people", "Люди (C)");
             AddKey(t, "ux.world.journal", "Журнал (J)");
             AddKey(t, "ux.world.duty", "Наряд (N)");
-            AddKey(t, "ux.world.keys", "WASD чи клік — іти · Shift — бігти · E — взаємодія · Enter — почати день · Tab — огляд · F1 — клавіші");
+            AddKey(t, "ux.world.keys", "WASD чи клік — іти · Shift — бігти · F — взаємодія · Q/E — камера · Enter — почати день · Tab — огляд · F1 — клавіші");
             AddKey(t, "ux.world.start_day", "Почати день · Enter");
             AddKey(t, "ux.keys.enter", "Enter — почати день (та сама кнопка внизу праворуч).");
             AddKey(t, "place.hero_tent", "Твій намет");
@@ -2888,7 +2888,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.keys.title", "Клавіші");
             AddKey(t, "ux.keys.move", "WASD або стрілки — іти, Shift — бігти, коліщатко — ближче чи далі.");
             AddKey(t, "ux.keys.click", "Клік по землі — іти туди; по будівлі, людині чи станції — підійти й взаємодіяти.");
-            AddKey(t, "ux.keys.e", "E — взаємодія з тим, що поруч: зайти, поговорити, відкрити.");
+            AddKey(t, "ux.keys.e", "F — взаємодія з тим, що поруч: зайти, поговорити, відкрити. Q / E — повернути камеру.");
             AddKey(t, "ux.keys.tab", "Tab — огляд міста: підписи всіх місць.");
             AddKey(t, "ux.keys.panels", "C — люди, J — журнал, N — наряд.");
             AddKey(t, "ux.keys.esc", "Esc — закрити панель; ще раз — пауза. З будівлі виводять лише двері.");
