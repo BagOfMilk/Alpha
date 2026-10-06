@@ -333,6 +333,8 @@ namespace Game.Gameplay.UI
                 var hall = new UxCard { Title = UxBricks.T(h, "building.council_hall"), Subtitle = UxBricks.T(h, "ui.council.no_hall") };
                 panel.Cards.Add(hall);
             }
+            // Полонені й «наші в полоні» (№14.2, №14.7) — картки Віча, а не IMGUI-блок під панеллю.
+            UxCaptivityCards.AddTo(h, panel);
             return panel;
         }
 

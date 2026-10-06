@@ -198,14 +198,6 @@ namespace Game.Gameplay
 
         public void ClosePanel() => Ux.ClosePanel();
 
-        public void DrawExtras(UxPanelId panel)
-        {
-            if (panel != UxPanelId.Veche) return;
-            // Полонені (№14.2) і «наші в полоні» (№14.7) — долю вирішує віче.
-            PrisonersPanel.Draw(this, ProtagonistGender);
-            CaptivesPanel.Draw(this, ProtagonistGender);
-        }
-
         private void Report(string actionId, UxOutcome outcome)
         {
             _refusals.Record(actionId, outcome);

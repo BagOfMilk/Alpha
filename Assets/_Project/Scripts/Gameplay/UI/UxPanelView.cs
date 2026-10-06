@@ -16,7 +16,6 @@ namespace Game.Gameplay.UI
         void Link(string placeId);
         void ClosePanel();
         /// <summary>Особливе під картками панелі (полонені на Вічі — панелі треку бою).</summary>
-        void DrawExtras(UxPanelId panel);
     }
 
     /// <summary>
@@ -87,8 +86,6 @@ namespace Game.Gameplay.UI
             }
             if (shown == 0 && !string.IsNullOrEmpty(model.EmptyText))
                 GUILayout.Label(model.EmptyText, _wrapHint);
-            if (current == null || (sections.Count > 0 && current == sections[0]))
-                host.DrawExtras(model.Id);
             Widgets.ScrollListEnd();
 
             GUILayout.EndVertical();

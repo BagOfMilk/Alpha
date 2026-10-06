@@ -28,8 +28,13 @@ namespace Game.Gameplay.UI
     {
         /// <summary>Панель місця вже ранку доби 1 має дію з цією командою (будуємо й дивимось).</summary>
         DayOne = 0,
-        /// <summary>Дія з'являється лише в певному стані (річ у схованці, прогноз зборів, глава арки) — перевірка за кодом.</summary>
-        Source
+        /// <summary>
+        /// Дія з'являється лише в певному стані (полонений, наш у полоні, річ у схованці,
+        /// очки розвитку, прогноз зборів, глава арки): охоронець збирає цей стан
+        /// справжніми командами ядра і будує панель саме цього місця. До 06.10.2026 тут
+        /// була перевірка за текстом коду — борг змагального огляду.
+        /// </summary>
+        Prepared
     }
 
     /// <summary>Один дім команди: вид, місце (id станції, місця, екрана або крок плану), панель-посередник, спосіб перевірки.</summary>
@@ -76,14 +81,13 @@ namespace Game.Gameplay.UI
             St(nameof(GameSession.OrderSettlers), BuildingCatalog.VecheStation),
             St(nameof(GameSession.OrderPrepareThreat), BuildingCatalog.VecheStation),
             new UxHome(nameof(GameSession.OrderBuilding), UxHomeKind.Station, BuildingCatalog.VecheStation, UxHomeCheck.DayOne, UxPanelId.Blueprints),
-            // Полонені й «наші в полоні» — блок під картками Віча (GameShell.DrawExtras, трек бою №14).
-            // Борг (огляд 06.10.2026): це IMGUI-кнопки, а не дії карток — через IUxInput їх не викликати; U13 переводить на картки.
-            St(nameof(GameSession.RecruitPrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Source),
-            St(nameof(GameSession.RansomPrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Source),
-            St(nameof(GameSession.ReleasePrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Source),
-            St(nameof(GameSession.RansomCaptive), BuildingCatalog.VecheStation, UxHomeCheck.Source),
-            St(nameof(GameSession.NegotiateCaptive), BuildingCatalog.VecheStation, UxHomeCheck.Source),
-            St(nameof(GameSession.RaidCaptors), BuildingCatalog.VecheStation, UxHomeCheck.Source),
+            // Полонені й «наші в полоні» — картки Віча (UxCaptivityCards, трек бою №14); до 06.10.2026 — IMGUI-блок.
+            St(nameof(GameSession.RecruitPrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Prepared),
+            St(nameof(GameSession.RansomPrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Prepared),
+            St(nameof(GameSession.ReleasePrisoner), BuildingCatalog.VecheStation, UxHomeCheck.Prepared),
+            St(nameof(GameSession.RansomCaptive), BuildingCatalog.VecheStation, UxHomeCheck.Prepared),
+            St(nameof(GameSession.NegotiateCaptive), BuildingCatalog.VecheStation, UxHomeCheck.Prepared),
+            St(nameof(GameSession.RaidCaptors), BuildingCatalog.VecheStation, UxHomeCheck.Prepared),
 
             // Стіл ради в Залі
             St(nameof(GameSession.OrderDecree), "council_table"),
@@ -92,28 +96,28 @@ namespace Game.Gameplay.UI
             St(nameof(GameSession.OrderOutfitExpedition), "council_table"),
 
             // Склад, Майстерня, Ринок
-            St(nameof(GameSession.Equip), "stash", UxHomeCheck.Source),
-            St(nameof(GameSession.Unequip), "stash", UxHomeCheck.Source),
-            St(nameof(GameSession.CraftUpgrade), "workbench", UxHomeCheck.Source),
-            St(nameof(GameSession.OfferQuestStage), "market_traders", UxHomeCheck.Source),
-            St(nameof(GameSession.ResolveQuestChoice), "market_traders", UxHomeCheck.Source),
+            St(nameof(GameSession.Equip), "stash", UxHomeCheck.Prepared),
+            St(nameof(GameSession.Unequip), "stash", UxHomeCheck.Prepared),
+            St(nameof(GameSession.CraftUpgrade), "workbench", UxHomeCheck.Prepared),
+            St(nameof(GameSession.OfferQuestStage), "market_traders", UxHomeCheck.Prepared),
+            St(nameof(GameSession.ResolveQuestChoice), "market_traders", UxHomeCheck.Prepared),
 
             // Застава: збори на вилазку
             St(nameof(GameSession.PreviewExpedition), BuildingCatalog.MusterStation),
-            St(nameof(GameSession.DepartExpedition), BuildingCatalog.MusterStation, UxHomeCheck.Source),
+            St(nameof(GameSession.DepartExpedition), BuildingCatalog.MusterStation, UxHomeCheck.Prepared),
 
             // Місця без станції
             Pl(nameof(GameSession.OrderBuilding), AnyPlot),
-            Pl(nameof(GameSession.OfferQuestStage), VillagePlaces.NoticeBoardId, UxHomeCheck.Source),
-            Pl(nameof(GameSession.ResolveQuestChoice), VillagePlaces.NoticeBoardId, UxHomeCheck.Source),
+            Pl(nameof(GameSession.OfferQuestStage), VillagePlaces.NoticeBoardId, UxHomeCheck.Prepared),
+            Pl(nameof(GameSession.ResolveQuestChoice), VillagePlaces.NoticeBoardId, UxHomeCheck.Prepared),
             Pl(nameof(GameSession.NewTrainingBattle), VillagePlaces.TrainingGroundId),
-            Pl(nameof(GameSession.BeginArcChapterScene), AnyPerson, UxHomeCheck.Source),
-            Pl(nameof(GameSession.BeginArcChapterQuest), AnyPerson, UxHomeCheck.Source),
-            Pl(nameof(GameSession.OfferQuestStage), AnyPerson, UxHomeCheck.Source),
-            Pl(nameof(GameSession.ResolveQuestChoice), AnyPerson, UxHomeCheck.Source),
+            Pl(nameof(GameSession.BeginArcChapterScene), AnyPerson, UxHomeCheck.Prepared),
+            Pl(nameof(GameSession.BeginArcChapterQuest), AnyPerson, UxHomeCheck.Prepared),
+            Pl(nameof(GameSession.OfferQuestStage), AnyPerson, UxHomeCheck.Prepared),
+            Pl(nameof(GameSession.ResolveQuestChoice), AnyPerson, UxHomeCheck.Prepared),
             // Намет героя (U8): розвиток героя. План рахується, щойно відкрита картка; затвердити — коли є очки.
-            Pl(nameof(GameSession.PreviewBuildPlan), VillagePlaces.HeroTentId, UxHomeCheck.Source),
-            Pl(nameof(GameSession.CommitBuildPlan), VillagePlaces.HeroTentId, UxHomeCheck.Source),
+            Pl(nameof(GameSession.PreviewBuildPlan), VillagePlaces.HeroTentId, UxHomeCheck.Prepared),
+            Pl(nameof(GameSession.CommitBuildPlan), VillagePlaces.HeroTentId, UxHomeCheck.Prepared),
 
             // Головна кнопка фази (HP-2)
             Of(nameof(GameSession.ConfirmMorning), UxHomeKind.Hud, PhaseButton),
@@ -203,8 +207,8 @@ namespace Game.Gameplay.UI
                 foreach (var st in posts)
                 {
                     if (string.IsNullOrEmpty(st.PostId)) continue;
-                    all.Add(St(nameof(GameSession.Assign), st.Id, UxHomeCheck.Source));
-                    all.Add(St(nameof(GameSession.Unassign), st.Id, UxHomeCheck.Source));
+                    all.Add(St(nameof(GameSession.Assign), st.Id, UxHomeCheck.Prepared));
+                    all.Add(St(nameof(GameSession.Unassign), st.Id, UxHomeCheck.Prepared));
                 }
                 _all = all;
                 return _all;
@@ -253,6 +257,6 @@ namespace Game.Gameplay.UI
             new UxHome(command, UxHomeKind.Place, placeId, check);
 
         private static UxHome Of(string command, UxHomeKind kind, string where) =>
-            new UxHome(command, kind, where, UxHomeCheck.Source);
+            new UxHome(command, kind, where, UxHomeCheck.Prepared);
     }
 }

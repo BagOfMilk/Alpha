@@ -196,34 +196,207 @@ namespace Game.Tests.EditMode
             }
         }
 
-        private static readonly string[] VecheExtras =
-        {
-            "RecruitPrisoner", "RansomPrisoner", "ReleasePrisoner", "RansomCaptive", "NegotiateCaptive", "RaidCaptors"
-        };
+        // ---------------- станові домівки — у підготовленому стані ----------------
 
         /// <summary>
-        /// Дім, що з'являється лише в певному стані: дія позначена в коді
-        /// моделей; полонені — у блоці під Вічем (IMGUI, трек бою №14).
+        /// Стан, у якому видно станові дії: полонений (здача → «у полон»), наш у полоні,
+        /// річ у схованці, очки розвитку героя. Збирається справжніми командами ядра;
+        /// рефлексія — лише щоб покласти здачу, річ і досвід (як у <c>SurrenderAndPrisonerTests</c>).
+        /// </summary>
+        internal static Host Rich()
+        {
+            var h = Morning();
+            var s = h.Session;
+            const BindingFlags Hidden = BindingFlags.NonPublic | BindingFlags.Instance;
+            var surrenders = (List<SurrenderedEnemy>)typeof(GameSession).GetField("_pendingSurrenders", Hidden).GetValue(s);
+            surrenders.Add(new SurrenderedEnemy
+            {
+                UnitId = "enemy.horde_scout#1", EnemyDefinitionId = "enemy.horde_scout", DisplayName = "horde_scout", Rank = EnemyRank.Grunt
+            });
+            Assert.IsTrue(s.DecideSurrender("enemy.horde_scout#1", SurrenderFate.Capture), "полонений");
+            var inVillage = s.GetRosterView().Companions.Where(VillagePeople.IsInVillage).ToList();
+            // У полон — того, хто не дає квестів і не має глави арки: інакше з села зникає квестодавець.
+            var bystanders = inVillage.Where(c => UxTalkPanel.QuestOf(c.Id) == null && !UxTalkPanel.HasSomethingToSay(h, c.Id)).ToList();
+            var captive = bystanders.FirstOrDefault(c => string.IsNullOrEmpty(c.AssignedSlotId)) ?? bystanders.First();
+            Assert.IsTrue(s.TakeCaptive(captive.Id, "enemy.horde_scout", 0, null, new[] { "enemy.horde_scout" }), "наш у полоні");
+            var inventory = (Game.Core.Items.Inventory)typeof(GameSession).GetField("_inventory", Hidden).GetValue(s);
+            inventory.Add(new Game.Core.Items.ItemInstance(Game.Core.Items.DefaultItems.ScavengedKnife(), Game.Core.Items.Rarity.Common));
+            typeof(GameSession).GetMethod("GrantXp", Hidden).Invoke(s, new object[] { GameSession.ProtagonistId, 5000 });
+            return h;
+        }
+
+        /// <summary>
+        /// Станова дія справді там, де записано її дім: охоронець збирає стан справжніми
+        /// командами (<see cref="Rich"/>), відкриває панель саме цього місця тим самим входом,
+        /// що людина (<see cref="IUxInput"/>), робить кроки людини перед дією (загін і прогноз,
+        /// вдягнути, вкласти очко) і шукає дію з командою. Замість перевірки за текстом коду
+        /// (борг змагального огляду 06.10.2026). Мутація: перенести «Вдягнути» зі Схованки — тест падає.
         /// </summary>
         [Test]
-        public void SourceHomes_AreTaggedInTheModelCode()
+        public void PreparedHomes_HaveTheTaggedActionInTheirPlace()
         {
-            string models = string.Join("\n", Directory.GetFiles(Path.Combine(Gameplay, "UI", "Models"), "*.cs").Select(File.ReadAllText));
-            string extras = File.ReadAllText(Path.Combine(Gameplay, "UI", "PrisonersPanel.cs")) +
-                            File.ReadAllText(Path.Combine(Gameplay, "UI", "CaptivesPanel.cs"));
-            string shell = File.ReadAllText(Path.Combine(Gameplay, "GameShell.Ux.cs"));
-            StringAssert.Contains("PrisonersPanel.Draw", shell, "блок полонених малюється під Вічем");
-            StringAssert.Contains("CaptivesPanel.Draw", shell);
-
-            foreach (var home in UxWorldHomes.All.Where(x => x.InWorld && x.Check == UxHomeCheck.Source))
+            var problems = new List<string>();
+            foreach (var home in UxWorldHomes.All.Where(x => x.InWorld && x.Check == UxHomeCheck.Prepared))
             {
-                string cmd = home.Command;
-                bool tagged = models.Contains("Calls(nameof(GameSession." + cmd + "))") || models.Contains("Command = nameof(GameSession." + cmd + ")");
-                if (VecheExtras.Contains(cmd)) tagged = extras.Contains("." + cmd + "(");
-                // Пропозиція квесту і прогноз розвитку — не дії, а розрахунок, щойно відкрито картку місця.
-                if (cmd == nameof(GameSession.OfferQuestStage) || cmd == nameof(GameSession.PreviewBuildPlan)) tagged = models.Contains("." + cmd + "(");
-                Assert.IsTrue(tagged, cmd + " («" + home.Where + "»): дія не позначена в коді моделей");
+                if (home.Where == UxWorldHomes.AnyPerson) continue; // люди — PersonHomes_AreReachedByTalking (потрібні доби)
+                string why = Observe(Rich(), home);
+                if (why != null) problems.Add(home.Command + " @ " + home.Where + ": " + why);
             }
+            CollectionAssert.IsEmpty(problems, string.Join("\n", problems));
+        }
+
+        /// <summary>null — дію з командою видно в панелі місця; інакше — що не так.</summary>
+        private static string Observe(Host h, UxHome home)
+        {
+            var models = new List<UxPanelModel>();
+            if (home.Kind == UxHomeKind.Station)
+            {
+                var st = BuildingCatalog.FindStation(home.Where);
+                if (home.Command == nameof(GameSession.Assign) || home.Command == nameof(GameSession.Unassign))
+                {
+                    // Пост — одна спільна картка (UxCityCards.Post) на кожній станції з постом;
+                    // що вона дає «Поставити/Зняти», доводить PostCard_GivesAssignAndUnassign.
+                    var m = UxPanelFactory.Build(h, st.Panel, st.Id);
+                    string title = Game.Gameplay.Text.UkrainianText.Get("post." + st.PostId, h.Gender);
+                    return m.Cards.Any(c => c.Title == title) ? null : "на станції немає картки поста";
+                }
+                h.Core.Open(st.Panel, st.Id);
+                Prepare(h, home);
+                models.Add(h.Core.CurrentModel());
+            }
+            else if (home.Where == VillagePlaces.HeroTentId)
+            {
+                h.Core.Open(UxPanelId.HeroTent, VillagePlaces.HeroTentId);
+                Prepare(h, home);
+                models.Add(h.Core.CurrentModel());
+            }
+            else if (home.Where == VillagePlaces.NoticeBoardId) models.Add(UxPanelFactory.Build(h, UxPanelId.NoticeBoard, null));
+            else return "для місця «" + home.Where + "» немає способу перевірки";
+
+            var actions = models.Where(m => m != null).SelectMany(Actions).ToList();
+            // Розрахунок, щойно відкрито картку: пропозиція квесту дає варіанти, прогноз розвитку — картку розвитку.
+            if (home.Command == nameof(GameSession.OfferQuestStage))
+                return actions.Any(a => a.Command == nameof(GameSession.ResolveQuestChoice)) ? null : "немає пропозиції квесту з варіантами";
+            if (home.Command == nameof(GameSession.PreviewBuildPlan))
+            {
+                string growth = Game.Gameplay.Text.UkrainianText.Get("ui.buildplanner.title", h.Gender);
+                return models.Any(m => m.Cards.Any(c => c.Title == growth)) ? null : "немає картки розвитку";
+            }
+            return actions.Any(a => a.Command == home.Command) ? null : "дії з цією командою в панелі місця немає";
+        }
+
+        /// <summary>Кроки людини перед станом, у якому дія з'являється: загін і прогноз — перед виходом, вдягнути — перед зняти, вкласти очко — перед затвердити.</summary>
+        private static void Prepare(Host h, UxHome home)
+        {
+            var actions = Actions(h.Core.CurrentModel()).ToList();
+            switch (home.Command)
+            {
+                case nameof(GameSession.DepartExpedition):
+                {
+                    var pick = actions.FirstOrDefault(a => a.Id.StartsWith("party:") && a.ReasonIn(h.Session.State, false) == null);
+                    if (pick != null) h.Core.Invoke(pick.Id);
+                    h.Core.Invoke("muster:preview");
+                    break;
+                }
+                case nameof(GameSession.Unequip):
+                {
+                    if (actions.Any(a => a.Command == nameof(GameSession.Unequip))) break;
+                    var equip = actions.FirstOrDefault(a => a.Command == nameof(GameSession.Equip) && a.ReasonIn(h.Session.State, false) == null);
+                    if (equip != null) h.Core.Invoke(equip.Id);
+                    break;
+                }
+                case nameof(GameSession.CommitBuildPlan):
+                {
+                    var invest = actions.FirstOrDefault(a => a.Id.StartsWith("plan:") && a.Id != "plan:reset" && a.Id != "plan:commit" &&
+                                                             a.ReasonIn(h.Session.State, false) == null);
+                    if (invest != null) h.Core.Invoke(invest.Id);
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Спільна картка поста дає «Зняти» (зайнятий) і «Поставити» (порожній, вільні є) —
+        /// на Вічі з першого ранку, тим самим входом, що людина. Мутація: прибрати «Поставити» з картки поста — тест падає.
+        /// </summary>
+        [Test]
+        public void PostCard_GivesAssignAndUnassign()
+        {
+            var h = Morning();
+            h.Core.Open(UxPanelId.Veche, BuildingCatalog.VecheStation);
+            var unassign = Actions(h.Core.CurrentModel()).FirstOrDefault(a => a.Command == nameof(GameSession.Unassign));
+            Assert.IsNotNull(unassign, "Захар на вічі з першого ранку — «Зняти»");
+            Assert.IsTrue(h.Core.Invoke(unassign.Id).Ok);
+            Assert.IsTrue(Actions(h.Core.CurrentModel()).Any(a => a.Command == nameof(GameSession.Assign)), "порожнє місце радника — «Поставити: …»");
+        }
+
+        /// <summary>
+        /// Дім «людина» (<see cref="UxWorldHomes.AnyPerson"/>) справжній: за доби 1–5 розмова з
+        /// людьми в селі (тим самим входом, що в людини) дає главу-сцену, главу-квест і квест
+        /// квестодавця з варіантами — глава-квест Максима реєструє його квест у тій самій розмові.
+        /// Мутація: прибрати дію глави чи квест із розмови — тест падає.
+        /// </summary>
+        [Test]
+        public void PersonHomes_AreReachedByTalking()
+        {
+            var h = Morning();
+            var seen = new HashSet<string>();
+            var expected = UxWorldHomes.All.Where(x => x.Where == UxWorldHomes.AnyPerson).Select(x => x.Command).Distinct().ToList();
+            for (int day = 0; day < 5; day++)
+            {
+                if (h.Session.State == SessionState.Morning || h.Session.State == SessionState.FreePlay)
+                    foreach (var c in h.Session.GetRosterView().Companions.Where(VillagePeople.IsInVillage).ToList())
+                    {
+                        h.Core.Open(UxPanelId.Talk, c.Id);
+                        var actions = Actions(h.Core.CurrentModel()).ToList();
+                        foreach (var a in actions) if (a.Command != null) seen.Add(a.Command);
+                        var beginQuest = actions.FirstOrDefault(a => a.Command == nameof(GameSession.BeginArcChapterQuest));
+                        if (beginQuest != null && h.Core.Invoke(beginQuest.Id).Ok)
+                        {
+                            h.Core.Open(UxPanelId.Talk, c.Id);
+                            foreach (var a in Actions(h.Core.CurrentModel())) if (a.Command != null) seen.Add(a.Command);
+                        }
+                        h.Core.ClosePanel();
+                    }
+                // Пропозицію квесту видно, коли розмова дає її варіанти (розрахунок, не окрема дія).
+                if (seen.Contains(nameof(GameSession.ResolveQuestChoice))) seen.Add(nameof(GameSession.OfferQuestStage));
+                if (expected.All(seen.Contains) || !AdvanceToNextMorning(h.Session)) break;
+            }
+            var missing = expected.Where(c => !seen.Contains(c)).ToList();
+            CollectionAssert.IsEmpty(missing, "за доби 1–5 розмова з людьми не дала: " + string.Join(", ", missing));
+        }
+
+        /// <summary>Прокрутити добу до наступного ранку: тихо на рішеннях, вечір, ніч (на добі 5 — тихий фінал), сцени — перший варіант.</summary>
+        private static bool AdvanceToNextMorning(GameSession s)
+        {
+            UxPhaseButton.StartDay(s);
+            for (int i = 0; i < 80; i++)
+            {
+                switch (s.State)
+                {
+                    case SessionState.Morning:
+                    case SessionState.FreePlay:
+                        return true;
+                    case SessionState.Decision: s.ResolveIncident(Game.Core.Loop.IncidentPath.Quiet); break;
+                    case SessionState.Evening: s.ConfirmEvening(); break;
+                    case SessionState.Night:
+                        if (s.CurrentView.Day == 5)
+                            try { s.ResolveFinale(Game.Core.Loop.IncidentPath.Quiet); }
+                            catch (InvalidOperationException) { s.AdvanceNight(); }
+                        else s.AdvanceNight();
+                        break;
+                    case SessionState.Scene:
+                    case SessionState.Opening:
+                    {
+                        var step = s.AdvanceScene();
+                        if (step != null && step.IsChoice) s.ChooseSceneOption(0);
+                        break;
+                    }
+                    case SessionState.Battle: s.CombatAutoResolve(); break;
+                    default: return false;
+                }
+            }
+            return false;
         }
 
         /// <summary>
