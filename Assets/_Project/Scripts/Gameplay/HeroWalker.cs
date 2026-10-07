@@ -40,8 +40,10 @@ namespace Game.Gameplay
         public Transform[] trunkRoots;
 
         [Header("Рух")]
-        public float walkSpeed = 2.2f;
-        public float runSpeed = 4.4f;
+        // Під кліпи постаті набору (масштаб сцени 0,4): звичайно — підтюпцем ~3,2 м/с, з Shift — біг ~5,8 м/с.
+        // Було 2,2 / 4,4 од./с — 5,5 і 11 м/с кліпами ходи й бігу: ноги ковзали (власник 07.10.2026).
+        public float walkSpeed = 1.3f;
+        public float runSpeed = 2.3f;
         public float heroRadius = 0.3f;
         public Vector2 areaMin = new Vector2(-10.4f, -8.4f);
         public Vector2 areaMax = new Vector2(11.4f, 7.4f);

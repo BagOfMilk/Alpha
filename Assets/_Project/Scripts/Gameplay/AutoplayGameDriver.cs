@@ -1548,14 +1548,18 @@ namespace Game.Gameplay
             _shell.WalkFacingErrorMax = 0f;
             _shell.RequestWalkTo(placeId);
             int frames = 0;
-            while ((_shell.NearbyPlace == null || _shell.NearbyPlace.Id != placeId) && frames < ExploreWalkFrameCap)
+            float started = UnityEngine.Time.realtimeSinceStartup;
+            // Межа — час, а не кадри: за високого FPS 1800 кадрів — кілька секунд, а герой тепер ходить у
+            // темпі кліпів (1,3 од./с), і далекий кінець села — ~20 с.
+            while ((_shell.NearbyPlace == null || _shell.NearbyPlace.Id != placeId) &&
+                   (frames < ExploreWalkFrameCap || UnityEngine.Time.realtimeSinceStartup - started < ExploreWalkSecondsCap))
             {
                 frames++;
                 yield return 0;
             }
             if (_shell.NearbyPlace == null || _shell.NearbyPlace.Id != placeId)
-                throw new InvalidOperationException("Село: герой не дійшов до «" + placeId + "» за " + ExploreWalkFrameCap +
-                                                    " кадрів; " + _shell.WalkDebug + ".");
+                throw new InvalidOperationException("Село: герой не дійшов до «" + placeId + "» за " + frames + " кадрів (" +
+                                                    (UnityEngine.Time.realtimeSinceStartup - started).ToString("0") + " с); " + _shell.WalkDebug + ".");
             // Охоронець напрямку ходи: постать дивиться туди, куди йде (а не задом наперед чи боком).
             if (_shell.WalkFacingErrorMax > 60f)
                 throw new InvalidOperationException("Село: герой ішов до «" + placeId + "» не обличчям уперед — розбіжність тіла й руху до " +
@@ -1587,6 +1591,7 @@ namespace Game.Gameplay
         }
 
         private const int ExploreWalkFrameCap = 1800;
+        private const float ExploreWalkSecondsCap = 45f;
 
         /// <summary>Скільки кадрів тиші на ранку доби 1 міряє <see cref="HudTour"/> (критерій 4 §8).</summary>
         private const int HudIdleFrames = 120;

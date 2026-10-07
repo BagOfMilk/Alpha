@@ -212,9 +212,12 @@ namespace Game.Gameplay.UI
             }
         }
 
-        public const float WalkNatural = 0.97f;
-        public const float JogNatural = 0f;
-        public const float SprintNatural = 0f;
+        // Хода — обидва заміри збігаються (1,03 м/с чоловік, 0,92 — жінка). У бігу є фаза польоту: за довжиною
+        // кроку виходить 2,4 / 3,3 м/с (менше справжнього), за ногою на опорі — 4,7 для підтюпцем; беремо
+        // середину. Похибку гасить темп 0,6–1,6× у FigureAnimation.
+        public const float WalkNatural = 1.0f;
+        public const float JogNatural = 3.4f;
+        public const float SprintNatural = 5.8f;
 
         /// <summary>Ім'я кліпу без префікса дубля FBX («Rig|Rig|Idle_Loop» → «Idle_Loop»).</summary>
         public static string NormalizeClipName(string raw)
