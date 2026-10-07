@@ -2,11 +2,11 @@
 # запускає гру з репортером нотаток (F8) і в режимі низького навантаження, після гри
 # переносить сесію в <репо>\Playtest\ і показує зведення.
 #
-#   powershell -File tools/playtest.ps1            # зібрати, якщо треба, і грати
-#   powershell -File tools/playtest.ps1 -NoBuild   # грати наявним білдом
-#   powershell -File tools/playtest.ps1 -Rebuild   # зібрати наново примусово
-#   powershell -File tools/playtest.ps1 -Full      # без обмеження кадрів (перевірити вигляд «на повну»)
-#   powershell -File tools/playtest.ps1 -Digest    # лише показати останню сесію (нотатки й помилки)
+#   powershell -ExecutionPolicy Bypass -File tools/playtest.ps1            # зібрати, якщо треба, і грати
+#   powershell -ExecutionPolicy Bypass -File tools/playtest.ps1 -NoBuild   # грати наявним білдом
+#   powershell -ExecutionPolicy Bypass -File tools/playtest.ps1 -Rebuild   # зібрати наново примусово
+#   powershell -ExecutionPolicy Bypass -File tools/playtest.ps1 -Full      # без обмеження кадрів (перевірити вигляд «на повну»)
+#   powershell -ExecutionPolicy Bypass -File tools/playtest.ps1 -Digest    # лише показати останню сесію (нотатки й помилки)
 param(
     [switch]$NoBuild,
     [switch]$Rebuild,
@@ -49,7 +49,7 @@ if ($NoBuild -and -not (Test-Path $exe)) { Write-Host "Білда немає —
 
 if ($needBuild -and -not $NoBuild) {
     Write-Host "Збираю білд ($want; було: $(if ($have) { $have } else { 'нічого' })) — Unity у фоні, низький пріоритет..." -ForegroundColor Cyan
-    & powershell -NoProfile -File (Join-Path $PSScriptRoot "build-unity.ps1") -LowPriority
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-unity.ps1") -LowPriority
     if ($LASTEXITCODE -ne 0) { Write-Host "Збирання впало — лог у Logs\. Скажи Клоду «розбери збірку»." -ForegroundColor Red; exit 1 }
     Set-Content -Path $stamp -Value $want -Encoding UTF8
 } else {
