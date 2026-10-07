@@ -684,9 +684,9 @@ COVERS = {
 # (власник 07.10.2026: «одяг рваний і ніби прозорий»). Поєднання не важливе: річ стоїть над будь-якою
 # нижчою, тож без нижньої вона лише на кілька мм далі від тіла.
 LAYERS = [
-    {"boots", "shoes"},                                   # халяви — під штанами (шаровари їх накривають)
-    {"trousers", "sharovary"},
-    {"shirt"},                                            # сорочка — навипуск поверх штанів
+    {"trousers"},                                         # прямі штани — заправлені в чоботи (як у самого MakeHuman)
+    {"boots", "shoes"},
+    {"sharovary", "shirt"},                               # шаровари — поверх халяв; сорочка — навипуск
     {"embroidery_red_black", "embroidery_red_black_cuffs", "embroidery_gold", "tunic", "skirt_long",
      "gambeson", "bracers"},
     {"kaftan", "robe", "mail", "greaves"},
