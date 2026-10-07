@@ -33,6 +33,16 @@ namespace Game.Gameplay
         /// <summary>Зсув фази в секундах, щоб жителі не дихали в унісон (детермінований, задає збирач сцени).</summary>
         public float phase;
 
+        /// <summary>
+        /// Природна швидкість кліпів «іде» / «біжить» (м/с при масштабі 1, <c>AnimStateTable.NaturalSpeed</c>).
+        /// Задано — кліп крутиться під справжню швидкість постаті (0,6–1,6×), і ноги не ковзають; 0 — як є.
+        /// </summary>
+        public float walkNatural;
+        public float sprintNatural;
+
+        private Vector3 _lastPos;
+        private float _speed;
+
         /// <summary>0 — стоїть, 1 — іде, 2 — біжить; проміжні значення змішують сусідні кліпи. Ігнорується, поки грає одноразовий кліп (<see cref="IsPlayingOneShot"/>).</summary>
         public float Gait { get; set; }
 
@@ -152,6 +162,12 @@ namespace Game.Gameplay
             _gaitMixer.SetInputWeight(0, _gaitWeights[0]);
         }
 
+        private void SyncRate(int slot, float natural)
+        {
+            float rate = natural > 1e-4f && _speed > natural * 0.2f ? Mathf.Clamp(_speed / natural, 0.6f, 1.6f) : 1f;
+            _gaitClips[slot].SetSpeed(rate);
+        }
+
         /// <summary>Перервати одноразовий кліп і негайно повернути керування ходьбі/бігу (наприклад, такт скасовано зовні).</summary>
         public void CancelOneShot()
         {
@@ -189,6 +205,18 @@ namespace Game.Gameplay
             _topMixer.SetInputWeight(1, _oneShotActive ? 1f : 0f);
             _topMixer.SetInputWeight(0, _oneShotActive ? 0f : 1f);
             if (_oneShotActive) return; // База заморожена під замахом/смертю — не змінювати ваги під непоказуваним шаром.
+
+            // Справжня швидкість постаті (зсув за кадр, згладжено) — під неї темп кліпів руху.
+            var pos = transform.position;
+            if (Time.deltaTime > 1e-4f)
+            {
+                var d = pos - _lastPos; d.y = 0f;
+                _speed = Mathf.Lerp(_speed, d.magnitude / Time.deltaTime, 1f - Mathf.Exp(-10f * Time.deltaTime));
+            }
+            _lastPos = pos;
+            float scale = Mathf.Max(1e-3f, transform.lossyScale.y);
+            SyncRate(1, walkNatural * scale);
+            SyncRate(2, sprintNatural * scale);
 
             float gait = Mathf.Clamp(Gait, 0f, 2f);
             float wIdle = Mathf.Clamp01(1f - gait);

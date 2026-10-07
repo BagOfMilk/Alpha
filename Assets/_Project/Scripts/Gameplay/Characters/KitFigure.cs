@@ -37,12 +37,19 @@ namespace Game.Gameplay.Characters
         /// <paramref name="extraScale"/> — множник поверх масштабу сцени (бій тримає фігурки трохи більшими).
         /// </summary>
         public bool Show(Appearance look, IEnumerable<string> equipped, CharacterAnimState idleState, float extraScale, float phase, int layer)
+            => Show(look, equipped, idleState, extraScale, phase, layer, false);
+
+        /// <summary>
+        /// <paramref name="brisk"/> — герой: звичайний рух підтюпцем (як у CRPG), з Shift — біг; жителі — хода й
+        /// підтюпцем.
+        /// </summary>
+        public bool Show(Appearance look, IEnumerable<string> equipped, CharacterAnimState idleState, float extraScale, float phase, int layer, bool brisk)
         {
             CharacterKitLibrary kit;
             CharacterAnimLibrary anims;
             if (look == null || !TryFindLibraries(out kit, out anims)) return false;
             var plan = CharacterKitPlan.From(look, equipped);
-            string sig = plan.Signature() + "|" + idleState + "|" + extraScale;
+            string sig = plan.Signature() + "|" + idleState + "|" + extraScale + "|" + brisk;
             if (sig == _signature && _model != null) return true;
             if (_model != null) Destroy(_model);
             _model = CharacterAssembler.Build(kit, plan, transform, layer);
@@ -64,8 +71,10 @@ namespace Game.Gameplay.Characters
                 var style = AnimStateTable.StyleOf(WeaponOf(plan));
                 var anim = _model.AddComponent<FigureAnimation>();
                 anim.idle = anims.For(idleState, style) ?? anims.For(CharacterAnimState.Idle, style);
-                anim.walk = anims.For(CharacterAnimState.Walk, style);
-                anim.sprint = anims.For(CharacterAnimState.Run, style);
+                anim.walk = anims.For(brisk ? CharacterAnimState.Run : CharacterAnimState.Walk, style);
+                anim.sprint = anims.For(brisk ? CharacterAnimState.Sprint : CharacterAnimState.Run, style);
+                anim.walkNatural = anim.walk != null ? AnimStateTable.NaturalSpeed(anim.walk.name) : 0f;
+                anim.sprintNatural = anim.sprint != null ? AnimStateTable.NaturalSpeed(anim.sprint.name) : 0f;
                 anim.phase = phase;
                 // OnEnable уже відпрацював без кліпів — перезапустити граф з ними.
                 anim.enabled = false;

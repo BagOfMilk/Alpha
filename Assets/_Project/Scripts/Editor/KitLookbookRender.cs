@@ -126,8 +126,12 @@ namespace Game.Gameplay.EditorTools
                         {
                             var clip = anims.For(st, style);
                             if (clip != null)
-                                report.AppendLine("   природна швидкість «" + clip.name + "»: " +
-                                                  MeasureStride(modelGo, clip, facing).ToString("0.00") + " м/с (нога на землі)");
+                            {
+                                float sep;
+                                float foot = MeasureStride(modelGo, clip, facing, out sep);
+                                report.AppendLine("   природна швидкість «" + clip.name + "»: " + sep.ToString("0.00") +
+                                                  " м/с за довжиною кроку (нога на землі: " + foot.ToString("0.00") + ")");
+                            }
                         }
                     }
                     if (graph.IsValid()) graph.Destroy();
@@ -343,8 +347,9 @@ namespace Game.Gameplay.EditorTools
         /// Швидкість, з якою кліп «іде» (м/с при масштабі 1): кліпи на місці, тож нога, що стоїть на землі,
         /// їде назад рівно з цією швидкістю. Медіана за кадрами — грі, щоб крутити кліп під справжній рух.
         /// </summary>
-        private static float MeasureStride(GameObject model, AnimationClip clip, Vector3 facing)
+        private static float MeasureStride(GameObject model, AnimationClip clip, Vector3 facing, out float bySeparation)
         {
+            bySeparation = 0f;
             Transform fl = null, fr = null;
             foreach (var t in model.GetComponentsInChildren<Transform>(true))
             {
@@ -356,10 +361,12 @@ namespace Game.Gameplay.EditorTools
             float dt = clip.length / n;
             var speeds = new List<float>();
             Vector3 pl = Vector3.zero, pr = Vector3.zero;
+            float sep = 0f;
             for (int i = 0; i <= n; i++)
             {
                 var g = Pose(model, clip, i * dt);
                 var l = fl.position; var r = fr.position;
+                sep = Mathf.Max(sep, Mathf.Abs(Vector3.Dot(l - r, facing)));
                 if (i > 0)
                 {
                     bool leftDown = l.y < r.y;
@@ -370,6 +377,8 @@ namespace Game.Gameplay.EditorTools
                 if (g.IsValid()) g.Destroy();
             }
             speeds.Sort();
+            // Два кроки за цикл, крок ≈ найбільше розведення ступень уздовж руху — працює і для бігу з фазою польоту.
+            bySeparation = 2f * sep / clip.length;
             return speeds.Count > 0 ? speeds[speeds.Count / 2] : 0f;
         }
 

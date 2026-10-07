@@ -196,6 +196,26 @@ namespace Game.Gameplay.UI
             foreach (CharacterAnimState s in Enum.GetValues(typeof(CharacterAnimState))) yield return s;
         }
 
+        /// <summary>
+        /// З якою швидкістю (м/с, постать 1,8 м) «іде» кліп руху — заміряно лукбуком редактора за довжиною кроку
+        /// (KitLookbookRender, 07.10.2026). Анімація крутить кліп під справжню швидкість постаті, щоб ноги не
+        /// ковзали: герой ішов 5,5 м/с кліпом ходи на ~1 м/с (власник: «анімація фігня»). 0 — невідомо.
+        /// </summary>
+        public static float NaturalSpeed(string clip)
+        {
+            switch (NormalizeClipName(clip))
+            {
+                case "Walk_Loop": return WalkNatural;
+                case "Jog_Fwd_Loop": return JogNatural;
+                case "Sprint_Loop": return SprintNatural;
+                default: return 0f;
+            }
+        }
+
+        public const float WalkNatural = 0.97f;
+        public const float JogNatural = 0f;
+        public const float SprintNatural = 0f;
+
         /// <summary>Ім'я кліпу без префікса дубля FBX («Rig|Rig|Idle_Loop» → «Idle_Loop»).</summary>
         public static string NormalizeClipName(string raw)
         {

@@ -691,7 +691,7 @@ namespace Game.Gameplay
                 _kitLogCount = session.DayLog.Count;
             }
             return _kit.Show(session.GetAppearance(GameSession.ProtagonistId), _kitEquip,
-                Game.Gameplay.UI.CharacterAnimState.Idle, 1f, 0f, gameObject.layer);
+                Game.Gameplay.UI.CharacterAnimState.Idle, 1f, 0f, gameObject.layer, true);
         }
 
         private void SyncModel()
