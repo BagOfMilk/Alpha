@@ -684,9 +684,9 @@ COVERS = {
 # (власник 07.10.2026: «одяг рваний і ніби прозорий»). Поєднання не важливе: річ стоїть над будь-якою
 # нижчою, тож без нижньої вона лише на кілька мм далі від тіла.
 LAYERS = [
-    {"trousers"},                                         # прямі штани — заправлені в чоботи (як у самого MakeHuman)
-    {"boots", "shoes"},
-    {"sharovary", "shirt"},                               # шаровари — поверх халяв; сорочка — навипуск
+    {"boots", "shoes"},                                   # халяви притиснуті до ноги (tighten_boots) — штани поверх
+    {"trousers", "sharovary"},
+    {"shirt"},                                            # сорочка — навипуск поверх штанів
     {"embroidery_red_black", "embroidery_red_black_cuffs", "embroidery_gold", "tunic", "skirt_long",
      "gambeson", "bracers"},
     {"kaftan", "robe", "mail", "greaves"},
@@ -706,6 +706,32 @@ def _outward_sign(o, body_tree):
             continue
         votes += 1 if (n3 @ f.normal).dot(c - loc) >= 0.0 else -1
     return 1.0 if votes >= 0 else -1.0
+
+def tighten_boots(rig, snug=0.008):
+    """Халява вище щиколотки — не далі snug від тіла. Бібліотечні чоботи мають товсту халяву з відворотом, і
+    вона проступала крізь штани плямами на колінах; виштовхувати штани над нею — складки й шипи (лукбук
+    07.10.2026). Облягаюча халява ховається під будь-якими штанами, а без них читається як чобіт для верхової їзди."""
+    from mathutils.bvhtree import BVHTree
+    body = next((o for o in rig.children if o.name.endswith(".body") and o.type == 'MESH'), None)
+    boots = next((o for o in rig.children if o.get("kit_part") == "boots" and o.type == 'MESH'), None)
+    if body is None or boots is None:
+        return 0
+    bmw = body.matrix_world
+    tree = BVHTree.FromPolygons([bmw @ v.co for v in body.data.vertices], [list(f.vertices) for f in body.data.polygons])
+    ankle = _z_of(rig, "foot_l") + 0.04
+    mw = boots.matrix_world; inv = mw.inverted()
+    moved = 0
+    for v in boots.data.vertices:
+        p = mw @ v.co
+        if p.z < ankle:
+            continue
+        loc, _n, _i, dist = tree.find_nearest(p)
+        if loc is None or dist <= snug:
+            continue
+        v.co = inv @ (loc + (p - loc).normalized() * snug)
+        moved += 1
+    boots.data.update()
+    return moved
 
 def layer_clothes(rig, gap=0.004, reach=0.15):
     """Повертає {частина: скільки вершин зсунуто}. Вершина речі, що опинилась усередині нижчої речі (за
