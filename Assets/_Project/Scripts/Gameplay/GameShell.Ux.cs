@@ -412,27 +412,35 @@ namespace Game.Gameplay
                 rightReserve = 24f;
             }
 
-            float barH = 146f;
-            float barW = Math.Min(w - 32f, 1100f);
+            // Візуальний прохід UI (власник 07.10.2026: «UX ui поганий»): нижня смуга — один ряд кнопок і
+            // рядок клавіш, підказка дії — компактна «пігулка» над нею; панель — за розміром вмісту.
+            float barH = 88f;
+            float barW = Math.Min(w - 32f, 980f);
             var bar = new Rect((w - barW) * 0.5f, h - barH - 6f, barW, barH);
 
             if (Ux.OpenPanel != UxPanelId.None)
             {
-                float panelW = Math.Min(w * 0.55f, w - rightReserve - 32f);
-                var panelRect = new Rect(16f, top, Math.Max(360f, panelW), Math.Max(200f, bar.y - top - 8f));
-                _panelView.Draw(panelRect, Ux.CurrentModel(), Ux.Context, this, g);
+                var model = Ux.CurrentModel();
+                float panelW = Math.Max(420f, Math.Min(Math.Min(w * 0.42f, 640f), w - rightReserve - 32f));
+                float maxH = Math.Max(200f, bar.y - top - 8f);
+                float wanted = model != null ? _panelView.DesiredHeight(model.Id) : maxH;
+                if (wanted <= 0f) wanted = maxH;
+                var panelRect = new Rect(16f, top, panelW, Math.Min(maxH, Math.Max(160f, wanted)));
+                _panelView.Draw(panelRect, model, Ux.Context, this, g);
                 ExploreUiRects.Add(panelRect);
             }
 
             DrawWorldBar(bar, g);
             ExploreUiRects.Add(bar);
+            var pill = DrawPromptPill(bar, w, g);
+            if (pill.width > 0f) ExploreUiRects.Add(pill);
 
             string toast = _toasts != null ? _toasts.Current : null;
             if (!string.IsNullOrEmpty(toast))
             {
                 var style = ToastStyle;
                 float tw = Math.Min(barW, 760f);
-                var toastRect = new Rect((w - tw) * 0.5f, bar.y - 64f, tw, 54f);
+                var toastRect = new Rect((w - tw) * 0.5f, bar.y - 116f, tw, 54f);
                 Widgets.SolidRect(toastRect, AlphaSkin.BgDark);
                 GUI.Label(toastRect, toast, style);
             }
@@ -444,20 +452,6 @@ namespace Game.Gameplay
         private void DrawWorldBar(Rect bar, Gender g)
         {
             GUILayout.BeginArea(bar, GUI.skin.box);
-            var place = NearbyPlace;
-            if (place != null)
-            {
-                int stage = PlaceStage(place);
-                string label = UkrainianText.Format("ux.world.prompt", g,
-                    "place", VillagePlaces.Describe(place, g, stage, Session.GetRosterView()),
-                    "verb", UkrainianText.Get(VerbKey(place), g));
-                if (Widgets.PrimaryWrapButton(label)) InteractNearby();
-            }
-            else
-            {
-                GUILayout.Label(UkrainianText.Get(Ux.Layers.InInterior ? "ux.world.inside_hint" : "ux.world.nothing_near", g), AlphaSkin.Tooltip);
-            }
-
             GUILayout.BeginHorizontal();
             if (Ux.Layers.InInterior && Widgets.SecondaryButton(UkrainianText.Get("ux.world.exit", g), GUILayout.ExpandWidth(false)))
                 RequestExit();
@@ -470,6 +464,37 @@ namespace Game.Gameplay
             GUILayout.EndHorizontal();
             GUILayout.Label(UkrainianText.Get("ux.world.keys", g), AlphaSkin.HintLine);
             GUILayout.EndArea();
+        }
+
+        private GUIStyle _pillStyle;
+
+        /// <summary>
+        /// Підказка дії біля місця — компактна «пігулка» за шириною тексту над нижньою смугою (раніше —
+        /// золота плита на всю ширину смуги). Повертає її прямокутник (нульовий — підказки немає).
+        /// </summary>
+        private Rect DrawPromptPill(Rect bar, float screenW, Gender g)
+        {
+            var place = NearbyPlace;
+            if (place == null) return new Rect();
+            int stage = PlaceStage(place);
+            string label = UkrainianText.Format("ux.world.prompt", g,
+                "place", VillagePlaces.Describe(place, g, stage, Session.GetRosterView()),
+                "verb", UkrainianText.Get(VerbKey(place), g));
+            if (_pillStyle == null)
+            {
+                _pillStyle = new GUIStyle(AlphaSkin.ButtonStyle(AlphaSkin.Accent, AlphaSkin.AccentHover, AlphaSkin.AccentActive, AlphaSkin.BgDark));
+                _pillStyle.wordWrap = false;
+                _pillStyle.padding = new RectOffset(18, 18, 8, 8);
+            }
+            var size = _pillStyle.CalcSize(new GUIContent(label));
+            float pw = Math.Min(size.x, screenW - 64f);
+            var rect = new Rect((screenW - pw) * 0.5f, bar.y - size.y - 10f, pw, size.y);
+            if (GUI.Button(rect, label, _pillStyle))
+            {
+                SoundSettings.Request(SoundCue.UiConfirm);
+                InteractNearby();
+            }
+            return rect;
         }
 
         /// <summary>Стадія будівлі місця (для підпису «будується, k з 5»).</summary>

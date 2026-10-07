@@ -40,6 +40,7 @@ namespace Game.Gameplay.Playtest
         private readonly Dictionary<string, int> _errors = new Dictionary<string, int>();
         private readonly Dictionary<string, string> _errorStacks = new Dictionary<string, string>();
         private bool _errorsDirty;
+        private StreamWriter _log;
         private float _errorsFlushAt;
 
         // Вікно нотатки.
@@ -83,6 +84,10 @@ namespace Game.Gameplay.Playtest
                             + "; RAM " + SystemInfo.systemMemorySize + " МБ";
             File.WriteAllText(Path.Combine(_dir, "notes.md"),
                 PlaytestLog.SessionHeader(ReadCommit(), started, system, Screen.width + "×" + Screen.height));
+            // Повний журнал без буфера: Player.log губить усе після ~4 КБ, бо гра виходить через
+            // TerminateProcess (HardExit) і буфер Unity не встигає на диск.
+            try { _log = new StreamWriter(Path.Combine(_dir, "log.txt"), false, new System.Text.UTF8Encoding(false)) { AutoFlush = true }; }
+            catch (Exception) { _log = null; }
             Application.logMessageReceived += OnLog;
 
             _lowCpu = HasArg(LowCpuFlag);
@@ -110,6 +115,7 @@ namespace Game.Gameplay.Playtest
         {
             Application.logMessageReceived -= OnLog;
             FlushErrors();
+            if (_log != null) { _log.Dispose(); _log = null; }
             if (_host != null) Destroy(_host);
             if (_panel != null) Destroy(_panel);
         }
@@ -260,6 +266,15 @@ namespace Game.Gameplay.Playtest
 
         private void OnLog(string condition, string stackTrace, LogType type)
         {
+            if (_log != null)
+            {
+                try
+                {
+                    _log.WriteLine("[" + type + " " + Time.frameCount + "] " + condition);
+                    if (type == LogType.Exception || type == LogType.Error) _log.WriteLine("    " + PlaytestLog.ErrorKey(stackTrace));
+                }
+                catch (Exception) { }
+            }
             if (type != LogType.Error && type != LogType.Exception && type != LogType.Assert) return;
             string key = PlaytestLog.ErrorKey(condition);
             int n;

@@ -29,6 +29,18 @@ namespace Game.Gameplay.UI
     public sealed class UxPanelView
     {
         private Vector2 _scroll;
+        private readonly Dictionary<UxPanelId, float> _contentHeight = new Dictionary<UxPanelId, float>();
+        private float _headBottom;
+
+        /// <summary>
+        /// Висота, якої панелі досить для вмісту (заголовок, вкладки, картки) — за минулим кадром; до першого
+        /// кадру — 0 (оболонка тоді дає повну висоту). Панель більше не тягнеться на весь екран заради однієї картки.
+        /// </summary>
+        public float DesiredHeight(UxPanelId id)
+        {
+            float h;
+            return _contentHeight.TryGetValue(id, out h) ? h : 0f;
+        }
         private UxPanelId _lastPanel;
         private string _lastContext;
         private readonly Dictionary<UxPanelId, string> _section = new Dictionary<UxPanelId, string>();
@@ -75,27 +87,33 @@ namespace Game.Gameplay.UI
                 });
             }
 
+            if (Event.current.type == EventType.Repaint) { var hr = GUILayoutUtility.GetLastRect(); _headBottom = hr.y + hr.height; }
             _scroll = Widgets.ScrollListBegin(_scroll, GUILayout.ExpandHeight(true));
+            GUILayout.BeginVertical();
             int shown = 0;
             float cardWidth = area.width - 90f;
             foreach (var card in model.Cards)
             {
                 if (current != null && card.Section != current) continue;
-                DrawCard(card, cardWidth, host, g);
+                DrawCard(card, cardWidth, host, g, model.Title);
                 shown++;
             }
             if (shown == 0 && !string.IsNullOrEmpty(model.EmptyText))
                 GUILayout.Label(model.EmptyText, _wrapHint);
+            GUILayout.EndVertical();
+            if (Event.current.type == EventType.Repaint)
+                _contentHeight[model.Id] = _headBottom + GUILayoutUtility.GetLastRect().height + 40f;
             Widgets.ScrollListEnd();
 
             GUILayout.EndVertical();
             GUILayout.EndArea();
         }
 
-        private void DrawCard(UxCard card, float width, IUxRenderHost host, Game.Core.Characters.Creation.Gender g)
+        private void DrawCard(UxCard card, float width, IUxRenderHost host, Game.Core.Characters.Creation.Gender g, string panelTitle)
         {
             GUILayout.BeginVertical(GUI.skin.box);
-            if (!string.IsNullOrEmpty(card.Title)) GUILayout.Label(card.Title, AlphaSkin.SubHeader);
+            // Заголовок картки, що повторює заголовок панелі (розмова з Максимом — «Максим Беркут» двічі), не малюємо.
+            if (!string.IsNullOrEmpty(card.Title) && card.Title != panelTitle) GUILayout.Label(card.Title, AlphaSkin.SubHeader);
             if (!string.IsNullOrEmpty(card.Subtitle)) GUILayout.Label(card.Subtitle, _wrapHint);
 
             if (card.Chips.Count > 0)

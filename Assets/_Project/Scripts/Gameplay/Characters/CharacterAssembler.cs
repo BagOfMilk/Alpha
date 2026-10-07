@@ -54,7 +54,7 @@ namespace Game.Gameplay.Characters
                 smr.updateWhenOffscreen = true;
                 if (tint != null) Tint(smr, tint);
             }
-            Object.Destroy(kit);
+            if (Application.isPlaying) Object.Destroy(kit); else Object.DestroyImmediate(kit); // лукбук редактора — поза Play
             SetLayer(root.transform, layer);
             return root;
         }
