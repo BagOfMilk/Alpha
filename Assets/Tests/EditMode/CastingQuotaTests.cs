@@ -7,7 +7,8 @@ namespace Game.Tests.EditMode
 {
     /// <summary>
     /// Квота кастингу (Поправка №17.3): ≈20 % українських від УСІХ іменних («УСІХ», власник
-    /// 01.10.2026) і «російські першоджерела — лише вороги» (№12.9). Правила — чисті функції
+    /// 01.10.2026) і жодних російських першоджерел (№20: «НІЯКИХ РОСІЯН», скасовує «лише вороги»
+    /// з №12.9). Іменних — 100 (№20: каст відкриття + світ попаданців). Правила — чисті функції
     /// <see cref="CastingRules"/>, тому кожен охоронець перевіряється і на справжньому каталозі,
     /// і на навмисно зіпсованих копіях (мутація без правки коду).
     /// </summary>
@@ -21,25 +22,32 @@ namespace Game.Tests.EditMode
         [Test]
         public void RealCast_HasNoViolations()
         {
-            var problems = CastingRules.Violations(OpeningCast.All());
+            var problems = CastingRules.Violations(CastingRules.AllNamed());
             Assert.IsEmpty(problems, string.Join("\n", problems));
         }
 
         [Test]
         public void RealCast_UkrainianShare_NeverGrows_Ratchet()
         {
-            // «Храповик»: станом на 01.10.2026 українських 6 з 9 (67 %) — далеко над ≈20 %, тому
-            // нову українську картку додавати не можна, доки частка не впаде (кожна нова
-            // неукраїнська її знижує). Вилка 15–25 % вмикається при ≥ 20 іменних (CastingRules).
-            var cast = OpeningCast.All();
+            // «Храповик»: з 07.10.2026 (№20) українських 20 зі 100 — рівно ≈20 %. Нову українську
+            // картку можна додати лише разом із чотирма неукраїнськими.
+            var cast = CastingRules.AllNamed();
             double share = CastingRules.UkrainianShare(cast);
-            Assert.LessOrEqual(share, 6.0 / 9.0 + 1e-9,
+            Assert.LessOrEqual(share, 0.20 + 1e-9,
                 "частка українських зросла (" + share.ToString("P0") + "): додайте неукраїнських іменних або приберіть українську картку");
         }
 
         [Test]
         public void RealCast_Counts_AreWhatTheAmendmentSays()
         {
+            var all = CastingRules.AllNamed();
+            Assert.AreEqual(100, all.Count, "Поправка №20: «Щоб усього було 100 персонажів»");
+            Assert.AreEqual(20, all.Count(c => c.Culture == SourceCulture.Ukrainian), "«20 з них українці з різних епох»");
+            Assert.AreEqual(0, all.Count(c => c.Culture == SourceCulture.Russian), "«НІЯКИХ РОСІЯН»");
+            Assert.AreEqual(all.Count, all.Select(c => c.Id).Distinct().Count(), "id іменних унікальні");
+            foreach (var c in all.Where(c => c.Tier != SourceTier.Original))
+                Assert.IsFalse(string.IsNullOrWhiteSpace(c.Source), c.Id + ": запозичений без першоджерела");
+
             var cast = OpeningCast.All();
             Assert.AreEqual(9, cast.Count);
             Assert.AreEqual(6, cast.Count(c => c.Culture == SourceCulture.Ukrainian), "Максим, Мирослава, Тугар, Захар, Дід Овсій, Гафія");
@@ -68,12 +76,12 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Rule_RussianNonEnemy_IsAViolation_RussianEnemyIsFine()
+        public void Rule_Russian_IsAViolation_EvenAsEnemy()
         {
             Assert.IsNotEmpty(CastingRules.Violations(new List<CharacterCard> { Card("ru", SourceCulture.Russian, enemy: false) }),
                 "російське першоджерело напарником чи жителем бути не може");
-            Assert.IsEmpty(CastingRules.Violations(new List<CharacterCard> { Card("ru", SourceCulture.Russian, enemy: true) }),
-                "російське першоджерело дозволене лише ворогу — і ворогу можна");
+            Assert.IsNotEmpty(CastingRules.Violations(new List<CharacterCard> { Card("ru", SourceCulture.Russian, enemy: true) }),
+                "Поправка №20: «НІЯКИХ РОСІЯН» — і ворогом теж");
         }
 
         [Test]

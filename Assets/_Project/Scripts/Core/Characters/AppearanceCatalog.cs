@@ -103,7 +103,8 @@ namespace Game.Core.Characters
                         .With("robe", Indigo).With("sharovary", Soot).With("boots", Soot)
                         .Accent("iron_armrings", "gris_gris_amulets");
                 default:
-                    return null;
+                    // Світ попаданців (Поправка №20): образ живе поруч із карткою.
+                    return WorldCast.Find(id)?.Look.Clone();
             }
         }
 

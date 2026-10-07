@@ -175,7 +175,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void EveryNamedCharacter_HasAValidLookFromTheSource()
         {
-            foreach (var card in OpeningCast.All())
+            foreach (var card in CastingRules.AllNamed())
             {
                 var a = AppearanceCatalog.Named(card.Id);
                 Assert.IsNotNull(a, "немає образу для " + card.Id);
@@ -190,13 +190,22 @@ namespace Game.Tests.EditMode
         public void NamedCharacters_DoNotLookAlike()
         {
             var seen = new Dictionary<string, string>();
-            foreach (var card in OpeningCast.All())
+            foreach (var card in CastingRules.AllNamed())
             {
                 var a = AppearanceCatalog.Named(card.Id);
-                string key = a.Hair + "|" + string.Join(",", a.Outfit.Select(o => o.Part + o.Color));
+                string key = a.Culture + "|" + a.Hair + "|" + a.FacialHair + "|" + string.Join(",", a.Outfit.Select(o => o.Part + o.Color));
                 Assert.IsFalse(seen.ContainsKey(key), card.Id + " виглядає як " + (seen.ContainsKey(key) ? seen[key] : ""));
                 seen[key] = card.Id;
             }
+        }
+
+        [Test]
+        public void NamedWorld_CoversEveryCultureBody_AndBothGenders()
+        {
+            var looks = CastingRules.AllNamed().Select(c => AppearanceCatalog.Named(c.Id)).ToList();
+            foreach (var culture in KitParts.Cultures)
+                Assert.IsTrue(looks.Any(a => a.Culture == culture), "серед іменних немає тіла культури " + culture);
+            Assert.GreaterOrEqual(looks.Count(a => a.Gender == Gender.Female), 25, "жінок серед 100 іменних має бути помітно");
         }
 
         [Test]
