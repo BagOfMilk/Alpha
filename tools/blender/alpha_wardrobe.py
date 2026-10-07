@@ -343,7 +343,8 @@ LIBRARY_CLOTHES = {
     "sharovary":  {"m": "toigo_harem_pants", "f": "toigo_harem_pants"},
     "skirt_long": {"f": "toigo_long_full_skirt"},
     "vest":       {"f": "toigo_bodice-style_top"},
-    "boots":      {"m": "culturalibre_hero_boots_1", "f": "culturalibre_heroine_boots_1"},   # male_boots — 30 тис. трикутників, після спрощення шипи
+    # male_boots — 30 тис. трикутників, після спрощення шипи; heroine_boots — вище коліна, під ними рвався пояс штанів.
+    "boots":      {"m": "culturalibre_hero_boots_1", "f": "toigo_ankle_boots_female"},
     "shoes":      {"m": "toigo_mj_cloth_shoes", "f": "toigo_mj_cloth_shoes"},
 }
 LIBRARY_FABRIC = {"shirt": "linen", "tunic": "wool", "robe": "linen", "kaftan": "wool", "trousers": "wool",
