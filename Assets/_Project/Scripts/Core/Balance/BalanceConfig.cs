@@ -163,5 +163,8 @@ namespace Game.Core.Balance
 
         /// <summary>Лояльність напарників, брижі ростера, дефекція (B4/R2).</summary>
         public CompanionSocialBalance CompanionSocial = new CompanionSocialBalance();
+
+        /// <summary>Погода доби: календар і множники до наявних систем (Поправка №21.2).</summary>
+        public WeatherBalance Weather = new WeatherBalance();
     }
 }

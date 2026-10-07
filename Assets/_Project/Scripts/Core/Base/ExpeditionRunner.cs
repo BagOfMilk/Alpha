@@ -6,6 +6,7 @@ using Game.Core.Characters.Scars;
 using Game.Core.Checks;
 using Game.Core.Economy;
 using Game.Core.Expeditions;
+using Game.Core.World;
 
 namespace Game.Core.Base
 {
@@ -92,7 +93,7 @@ namespace Game.Core.Base
         /// </summary>
         public static DispatchResult Depart(BaseState state, ExpeditionParty party, ExpeditionSite site,
             ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days,
-            SiteLedger ledger, BalanceConfig cfg = null)
+            SiteLedger ledger, BalanceConfig cfg = null, WeatherKind weather = WeatherKind.Clear)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (party == null) throw new ArgumentNullException(nameof(party));
@@ -113,7 +114,7 @@ namespace Game.Core.Base
                 for (int i = 0; i < chosen.Count; i++)
                     actors.Add(new CompanionActorAdapter(chosen[i], false, cfg ?? state.Balance));
 
-                var result = ExpeditionResolver.Resolve(site, approach, actors, ledger, cfg ?? state.Balance);
+                var result = ExpeditionResolver.Resolve(site, approach, actors, ledger, cfg ?? state.Balance, weather);
                 party.FreezeResult(result);
             }
 

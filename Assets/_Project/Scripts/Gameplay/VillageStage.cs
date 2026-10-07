@@ -62,6 +62,9 @@ namespace Game.Gameplay
         public IReadOnlyList<StageIdlePerson> Idle;
         public IReadOnlyList<StagePlot> Plots;
         public IReadOnlyList<StageIncidentMark> Incidents;
+
+        /// <summary>Погода надворі (Поправка №21.2).</summary>
+        public Game.Core.World.WeatherKind Weather;
     }
 
     /// <summary>
@@ -89,6 +92,10 @@ namespace Game.Gameplay
         public Transform postsRoot;
         public Transform villagersRoot;
         public Transform plotsRoot;
+
+        [Header("Погода (Поправка №21.2)")]
+        [Tooltip("Дочірні «Rain» і «Storm» з частинками під камерою; на низькій графіці вимкнені.")]
+        public Transform weatherRoot;
 
         private readonly Dictionary<string, Transform> _posts = new Dictionary<string, Transform>();
         private readonly Dictionary<string, Transform> _villagers = new Dictionary<string, Transform>();
@@ -147,16 +154,17 @@ namespace Game.Gameplay
             // вигадувати число.
             var mood = new MoodboardState(Mathf01(data.Tier - 1), 0, null);
 
-            ApplyLight(phase);
-            ApplyAmbient(phase, mood);
+            ApplyLight(phase, data.Weather);
+            ApplyAmbient(phase, mood, data.Weather);
+            ApplyWeather(phase, mood, data.Weather);
             ShowVillagers(phase, data);
             ShowPlots(data.Plots);
             ShowMarks(data.Incidents);
         }
 
-        private void ApplyLight(Game.Core.Loop.DayPhase phase)
+        private void ApplyLight(Game.Core.Loop.DayPhase phase, Game.Core.World.WeatherKind weather)
         {
-            var pose = VillageView.SunFor(phase);
+            var pose = VillageView.SunFor(phase, weather);
             if (sun == null) return;
 
             sun.transform.rotation = Quaternion.Euler(pose.Pitch, pose.Yaw, 0f);
@@ -164,9 +172,9 @@ namespace Game.Gameplay
             sun.color = new Color(pose.R, pose.G, pose.B);
         }
 
-        private void ApplyAmbient(Game.Core.Loop.DayPhase phase, MoodboardState mood)
+        private void ApplyAmbient(Game.Core.Loop.DayPhase phase, MoodboardState mood, Game.Core.World.WeatherKind weather)
         {
-            var ambient = VillageView.AmbientFor(phase, mood);
+            var ambient = VillageView.AmbientFor(phase, mood, weather);
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(ambient.SkyR, ambient.SkyG, ambient.SkyB);
@@ -177,6 +185,38 @@ namespace Game.Gameplay
             RenderSettings.ambientGroundColor = new Color(ambient.GroundR, ambient.GroundG, ambient.GroundB);
 
             if (view != null) view.backgroundColor = new Color(ambient.BackR, ambient.BackG, ambient.BackB);
+        }
+
+        /// <summary>
+        /// Туман і опади (Поправка №21.2, Статут PERF-01). Раз на команду, не щокадру:
+        /// туман — вбудований лінійний URP, опади — заздалегідь зібрані частинки під
+        /// камерою, які тут лише вмикаються. На низькій графіці частинок немає зовсім —
+        /// погоду тоді видно світлом, туманом і словом у шапці.
+        /// </summary>
+        private void ApplyWeather(Game.Core.Loop.DayPhase phase, MoodboardState mood, Game.Core.World.WeatherKind weather)
+        {
+            var fog = VillageView.FogFor(phase, mood, weather);
+            RenderSettings.fog = fog.On;
+            if (fog.On)
+            {
+                RenderSettings.fogMode = FogMode.Linear;
+                RenderSettings.fogStartDistance = fog.Start;
+                RenderSettings.fogEndDistance = fog.End;
+                RenderSettings.fogColor = new Color(fog.R, fog.G, fog.B);
+            }
+
+            if (weatherRoot == null) return;
+            bool particles = !GraphicsTier.IsLow;
+            bool storm = weather == Game.Core.World.WeatherKind.Storm;
+            bool rain = weather == Game.Core.World.WeatherKind.Rain;
+            SetChild("Rain", particles && rain);
+            SetChild("Storm", particles && storm);
+        }
+
+        private void SetChild(string name, bool on)
+        {
+            var child = weatherRoot.Find(name);
+            if (child != null && child.gameObject.activeSelf != on) child.gameObject.SetActive(on);
         }
 
         /// <summary>

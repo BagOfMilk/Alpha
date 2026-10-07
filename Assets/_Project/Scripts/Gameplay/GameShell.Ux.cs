@@ -22,6 +22,11 @@ namespace Game.Gameplay
     /// </summary>
     public sealed partial class GameShell : IUxHost, IUxRenderHost
     {
+        // Стиль тосту кешується: OnGUI кличеться кілька разів на кадр, а new GUIStyle
+        // щоразу — зайве сміття для збирача (Статут PERF-01).
+        private GUIStyle _toastStyle;
+        private GUIStyle ToastStyle => _toastStyle ?? (_toastStyle = new GUIStyle(AlphaSkin.Body) { wordWrap = true, alignment = TextAnchor.MiddleCenter });
+
         private readonly UxLayerState _layers = new UxLayerState();
         private readonly UxPanelState _panelState = new UxPanelState();
         private readonly UxInlineRefusals _refusals = new UxInlineRefusals();
@@ -245,7 +250,7 @@ namespace Game.Gameplay
             string toast = _toasts != null ? _toasts.Current : null;
             if (!string.IsNullOrEmpty(toast))
             {
-                var style = new GUIStyle(AlphaSkin.Body) { wordWrap = true, alignment = TextAnchor.MiddleCenter };
+                var style = ToastStyle;
                 float tw = Math.Min(w - 32f, 760f);
                 var toastRect = new Rect((w - tw) * 0.5f, h - 90f, tw, 54f);
                 Widgets.SolidRect(toastRect, AlphaSkin.BgDark);
@@ -418,7 +423,7 @@ namespace Game.Gameplay
             string toast = _toasts != null ? _toasts.Current : null;
             if (!string.IsNullOrEmpty(toast))
             {
-                var style = new GUIStyle(AlphaSkin.Body) { wordWrap = true, alignment = TextAnchor.MiddleCenter };
+                var style = ToastStyle;
                 float tw = Math.Min(barW, 760f);
                 var toastRect = new Rect((w - tw) * 0.5f, bar.y - 64f, tw, 54f);
                 Widgets.SolidRect(toastRect, AlphaSkin.BgDark);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Game.Core.Balance;
+using Game.Core.World;
 using Game.Core.Characters;
 using Game.Core.Checks;
 
@@ -50,7 +51,8 @@ namespace Game.Core.Expeditions
 
         /// <summary>Поріг і очікуваний результат до відправки. Ті самі числа, що застосує Resolve.</summary>
         public static ExpeditionPreview Preview(ExpeditionSite site, ExpeditionApproach approach,
-            IReadOnlyList<ISettlementActor> party, SiteLedger ledger, BalanceConfig cfg)
+            IReadOnlyList<ISettlementActor> party, SiteLedger ledger, BalanceConfig cfg,
+            WeatherKind weather = WeatherKind.Clear)
         {
             if (site == null) throw new ArgumentNullException(nameof(site));
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
@@ -61,6 +63,9 @@ namespace Game.Core.Expeditions
             var band = BandFor(margin, cfg.Checks);
 
             double depletion = ledger == null ? 1.0 : ledger.YieldMultiplier(site.Id, cfg);
+            // Погода доби відходу (Поправка №21.2): у негоду несуть менше. Той самий
+            // множник у прев'ю і в резолві — результат заморожується при відході.
+            double weatherMult = cfg.Weather.ExpeditionYield(weather);
 
             // Нижче порога — порожні руки, а не «менше». Перевірка
             // детермінована: «скіл ≥ порога = успіх», і половина здобичі за
@@ -78,12 +83,13 @@ namespace Game.Core.Expeditions
                 Margin = margin,
                 Band = band,
                 Days = site.DaysFor(approach),
-                BuildComponent = Scale(site.BaseBuildComponent, bandMult * depletion),
-                CraftComponent = Scale(site.BaseCraftComponent, bandMult * depletion),
-                Gold = Scale(site.BaseGold, bandMult * depletion),
+                BuildComponent = Scale(site.BaseBuildComponent, bandMult * depletion * weatherMult),
+                CraftComponent = Scale(site.BaseCraftComponent, bandMult * depletion * weatherMult),
+                Gold = Scale(site.BaseGold, bandMult * depletion * weatherMult),
                 TimesWorked = ledger == null ? 0 : ledger.TimesWorked(site.Id),
                 YieldMultiplier = depletion,
                 ExpectedWounded = WoundCount(approach, band, cfg),
+                Weather = weather,
             };
         }
 
@@ -92,9 +98,10 @@ namespace Game.Core.Expeditions
         /// раз, на відміну від Preview.
         /// </summary>
         public static ExpeditionResult Resolve(ExpeditionSite site, ExpeditionApproach approach,
-            IReadOnlyList<ISettlementActor> party, SiteLedger ledger, BalanceConfig cfg)
+            IReadOnlyList<ISettlementActor> party, SiteLedger ledger, BalanceConfig cfg,
+            WeatherKind weather = WeatherKind.Clear)
         {
-            var preview = Preview(site, approach, party, ledger, cfg);
+            var preview = Preview(site, approach, party, ledger, cfg, weather);
             if (ledger != null) ledger.Register(site.Id);
 
             var result = new ExpeditionResult

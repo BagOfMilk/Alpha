@@ -159,7 +159,7 @@ namespace Game.Gameplay.UI
         // ---------------- шапка ----------------
 
         public static HudHeader Build(SessionView view, SessionState state, IReadOnlyList<HudResource> resources,
-            RosterView roster, Gender gender)
+            RosterView roster, Gender gender, WeatherView weather = null)
         {
             var header = new HudHeader
             {
@@ -196,12 +196,29 @@ namespace Game.Gameplay.UI
                 : null;
 
             var badges = new List<HudBadge>();
+            string weatherLine = WeatherLine(weather, gender);
+            if (weatherLine != null)
+                badges.Add(new HudBadge { Key = "weather", Label = weatherLine });
             if (view.IsPatrolling)
                 badges.Add(new HudBadge { Key = "patrolling", Label = UkrainianText.Get("ui.topbar.patrolling", gender) });
             if (view.IsFreePlay)
                 badges.Add(new HudBadge { Key = "freeplay", Label = UkrainianText.Get("ui.topbar.freeplay", gender) });
             header.Badges = badges;
             return header;
+        }
+
+        /// <summary>
+        /// «Дощ · завтра: Туман» (Поправка №21.2): погода надворі і чесний прогноз —
+        /// календар детермінований, тож завтрашнє слово справдиться.
+        /// </summary>
+        public static string WeatherLine(WeatherView weather, Gender gender)
+        {
+            if (weather == null || string.IsNullOrEmpty(weather.Today)) return null;
+            string today = UkrainianText.Get("weather.name." + weather.Today, gender);
+            string tomorrow = string.IsNullOrEmpty(weather.Tomorrow)
+                ? today
+                : UkrainianText.Get("weather.name." + weather.Tomorrow, gender);
+            return UkrainianText.Format("ui.hud.weather", gender, "today", today, "tomorrow", tomorrow);
         }
 
         /// <summary>

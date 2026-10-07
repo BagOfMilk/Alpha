@@ -53,11 +53,19 @@ namespace Game.Core.Signals
             bool isNight,
             SignalMemory memory = null,
             int day = 0,
-            IReadOnlyList<CityEvent> cityEvents = null)
+            IReadOnlyList<CityEvent> cityEvents = null,
+            string weatherTopic = null)
         {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
 
             var candidates = new List<SignalRequest>();
+
+            // Погода змінилась (Поправка №21.2) — фонова репліка без адресата. Тиха:
+            // поступиться всьому, що важливіше, і не повториться, доки небо те саме.
+            if (!string.IsNullOrEmpty(weatherTopic))
+                candidates.Add(new SignalRequest(
+                    SignalChannel.Ambient, weatherTopic, SignalUrgency.Ambient,
+                    isDelta: true, tags: new[] { "weather" }));
 
             // Що зробило місто: будівництво, люди, тір (Поправка №6). Городяни
             // говорять про це самі — це їхні вулиці і їхні сусіди.

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Game.Core.Checks;
 using Game.Core.Pressure;
@@ -231,6 +232,8 @@ namespace Game.Core.World
             int rate = FreedomRate - order * PerOrderStep;
             // Патруль — небойова контргра: тисне нічну злочинність (US-1.5).
             if (ctx.IsPatrolling) rate /= 3;
+            if (ctx.NightWeatherBonusPercent != 0)
+                rate = (int)Math.Round(rate * (100 + ctx.NightWeatherBonusPercent) / 100.0, MidpointRounding.ToEven);
             return rate;
         }
     }

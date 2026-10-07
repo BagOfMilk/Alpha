@@ -162,6 +162,8 @@ namespace Game.Gameplay
 
         private void Awake()
         {
+            // Поправка №21.1: рівень графіки — збережений вибір або автопідбір під цю машину.
+            GraphicsTier.InitOnce();
             _roller = new SeededDiceRoller(1);
             Session = new GameSession(_roller);
 
@@ -223,7 +225,10 @@ namespace Game.Gameplay
         public string PendingWalkTarget { get; private set; }
 
         /// <summary>Стан героя одним рядком (позиція, маршрут) — пише HeroWalker; автотур кладе його в лог, коли герой не дійшов.</summary>
-        public string WalkDebug { get; set; } = string.Empty;
+        public string WalkDebug => WalkDebugSource != null ? WalkDebugSource() : string.Empty;
+
+        /// <summary>Хто вміє описати стан героя (HeroWalker); рядок будується лише на читання.</summary>
+        public Func<string> WalkDebugSource { get; set; }
 
         /// <summary>Прямокутники інтерфейсу прогулянки (координати GUI): клік по них — не команда «йти».</summary>
         public readonly List<Rect> ExploreUiRects = new List<Rect>();
@@ -813,6 +818,14 @@ namespace Game.Gameplay
         /// виняток мосту (рефлексія → TargetInvocationException) вилітав з TryRun
         /// назовні — на кнопці «Тренувальний бій» з титулу щоразу (світу ще немає).
         /// </summary>
+        /// <summary>Вибір рівня графіки з меню (Поправка №21.1): діє одразу, село перемальовується.</summary>
+        public void SetGraphics(GraphicsLevel level)
+        {
+            if (GraphicsTier.Current == level) return;
+            GraphicsTier.Set(level);
+            FeedVillageStage();
+        }
+
         private void FeedVillageStage()
         {
             try

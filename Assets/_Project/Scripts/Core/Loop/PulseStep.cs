@@ -1,3 +1,4 @@
+using System;
 using Game.Core.World;
 
 namespace Game.Core.Loop
@@ -25,7 +26,9 @@ namespace Game.Core.Loop
                 // населення (вузькі тести) читається як стартове село.
                 ctx.IsHungry,
                 ctx.Population != null ? ctx.Population.CrowdBand : 2,
-                ctx.OrderLevel);
+                ctx.OrderLevel,
+                // Погода лише модулює нічну ставку, свого накопичувача не має (№21.2).
+                (int)Math.Round((ctx.Balance.Weather.NightRate(ctx.Weather) - 1.0) * 100.0));
 
             // Розряджається тільки джерело, якому є чим спрацювати: вирішує
             // той самий відбір, що слідом застосує крок інцидентів. Без цього

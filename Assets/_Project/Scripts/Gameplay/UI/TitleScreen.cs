@@ -66,6 +66,9 @@ namespace Game.Gameplay.UI
                         _hitRulePercent = true;
                 });
 
+                // Поправка №21.1: рівень графіки — до старту, щоб слабка машина не чекала першого меню паузи.
+                Widgets.Section(UkrainianText.Get("ui.gfx.title", g), () => EscapeMenuScreen.DrawGraphicsLevels(shell, g));
+
                 if (Widgets.TabButton(UkrainianText.Get("ui.title.skip_creation", g), _skipCreation))
                     _skipCreation = !_skipCreation;
 

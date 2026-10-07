@@ -104,6 +104,7 @@ namespace Game.Core.Combat
                 cs.AddReinforcement(r.Round, CombatUnit.FromEnemy(def, def.Id + "#" + enemySeq++), r.Pos);
             }
 
+            cs.WeatherRangedDelta = cfg.Weather.RangedAccuracy(setup.Weather);
             cs.Begin(setup.Opening);
             return cs;
         }

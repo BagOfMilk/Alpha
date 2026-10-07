@@ -42,6 +42,7 @@ namespace Game.Core.Base
             // було б тільки по гаманцю.
             if (ctx.IsNight) return;
 
+            _state.FoodWeatherMultiplier = ctx.Balance.Weather.Food(ctx.Weather);
             LastReport = _state.AdvanceCycle();
         }
     }

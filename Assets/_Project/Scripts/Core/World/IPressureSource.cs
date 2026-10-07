@@ -84,9 +84,17 @@ namespace Game.Core.World
         /// <summary>Уклад: 0 Вольниця → 3 Затвор; 1 — стартовий.</summary>
         public readonly int OrderLevel;
 
+        /// <summary>
+        /// Надбавка погоди до нічної ставки у відсотках (Поправка №21.2): туман і буря
+        /// ховають злодіїв. Нуль — як у ясну ніч; так само поводиться і default-структура.
+        /// Погода не має свого накопичувача — вона лише модулює нічний (інваріант 5).
+        /// </summary>
+        public readonly int NightWeatherBonusPercent;
+
         public PulseContext(int day, bool isNight, int tier, int tensionBandIndex, bool isPatrolling,
-            bool isHungry = false, int crowdBand = 2, int orderLevel = 1)
+            bool isHungry = false, int crowdBand = 2, int orderLevel = 1, int nightWeatherBonusPercent = 0)
         {
+            NightWeatherBonusPercent = nightWeatherBonusPercent;
             Day = day;
             IsNight = isNight;
             Tier = tier;

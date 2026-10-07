@@ -237,6 +237,7 @@ namespace Game.Gameplay.Text
             AddIncidentBandKeys(t);         // SignalComposer: TopicId + "." + Band (Best/Good/Base/Worst), не "outcome.<band>"
             AddPostReportBandKeys(t);       // SignalComposer: "post." + кириличний DomainTag + "." + Accuracy
             AddAmbientAndThreatBandKeys(t); // SignalComposer/DungeonRun: Band.ToString() з великої літери
+            AddWeatherAndGraphicsKeys(t); // Поправка №21: погода і рівень графіки
             AddVillageViewKeys(t);          // Gameplay/VillageView.cs — ключі власного ткача стрічки/мудборду
             AddConsoleLabels(t);            // tools/Alpha.Play/Program.cs — дрібні підписи консолі
             AddScenePlayerKeys(t);          // Gameplay/ScenePlayer.cs — підписи IMGUI портретної сцени
@@ -1398,6 +1399,36 @@ namespace Game.Gameplay.Text
         // DungeonView.ThreatBand — сирий рядок view-поля), але знадобляться
         // будь-якому UI, що покаже загрозу підземелля словом.
         // ==================================================================
+        // ---- Поправка №21: погода (21.2) і рівень графіки (21.1) ----
+        private static void AddWeatherAndGraphicsKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "weather.name.Clear", "Ясно");
+            AddKey(t, "weather.name.Overcast", "Хмарно");
+            AddKey(t, "weather.name.Rain", "Дощ");
+            AddKey(t, "weather.name.Fog", "Туман");
+            AddKey(t, "weather.name.Storm", "Буря");
+            AddKey(t, "ui.hud.weather", "{today} · завтра: {tomorrow}");
+
+            AddKey(t, "weather.ambient.Clear", "Розвиднілось. Білизну винесли сушитись.");
+            AddKey(t, "weather.ambient.Overcast", "Небо низьке, сіре. Старі кажуть — ще не дощ.");
+            AddKey(t, "weather.ambient.Rain", "Дощ барабанить по стріхах. На полі радіють, на дорозі лаються.");
+            AddKey(t, "weather.ambient.Fog", "Туман з перевалу — сусіда за три кроки не видно.");
+            AddKey(t, "weather.ambient.Storm", "Гримить над перевалом. Худобу заганяють, вікна зачиняють.");
+
+            AddKey(t, "weather.expedition.Rain", "Дощ: розмиті стежки — здобичі буде менше.");
+            AddKey(t, "weather.expedition.Fog", "Туман: стежки сховались — здобичі буде менше.");
+            AddKey(t, "weather.expedition.Storm", "Буря: половину не донесуть — здобичі буде менше.");
+            AddKey(t, "weather.expedition.Overcast", "Хмарно: сиро в дорозі — здобичі буде менше.");
+
+            AddKey(t, "ui.battle.term.weather", "Погода");
+
+            AddKey(t, "ui.gfx.title", "Графіка");
+            AddKey(t, "ui.gfx.low", "Низька");
+            AddKey(t, "ui.gfx.medium", "Середня");
+            AddKey(t, "ui.gfx.high", "Висока");
+            AddKey(t, "ui.gfx.hint", "Низька — для вбудованої відеокарти й ноутбуків. Діє одразу.");
+        }
+
         private static void AddAmbientAndThreatBandKeys(Dictionary<string, string> t)
         {
             AddKey(t, "tension.ambient.Calm", "«Добре, що ви тут.» Діти у дворах.");

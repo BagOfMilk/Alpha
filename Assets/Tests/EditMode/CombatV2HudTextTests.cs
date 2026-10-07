@@ -64,7 +64,7 @@ namespace Game.Tests.EditMode
         private static readonly string[] ChanceTermKeys =
         {
             "accuracy", "ability", "defense", "knocked_down", "marked",
-            "cover_half", "cover_full", "distance", "suppressed", "clamp"
+            "cover_half", "cover_full", "distance", "suppressed", "weather", "clamp"
         };
 
         [Test]

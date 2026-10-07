@@ -396,8 +396,38 @@ namespace Game.Gameplay.UI.Toolkit
             if (!show) return;
 
             ApplyLayoutIfChanged();
-            RefreshIfChanged();
+            if (ShouldRefresh()) RefreshIfChanged();
             ApplyLadderVisibility();
+        }
+
+        // Статут PERF-01: повний підпис шапки збирає кілька видів сесії й рядків — не щокадру.
+        // Дешеві ознаки (стан, довжина журналу, прогулянка, пауза) перевіряються щокадру і
+        // оновлюють шапку одразу; решта змін (гаманець, рід) — не пізніше ніж за чверть секунди.
+        private const float RefreshInterval = 0.25f;
+        private float _sinceRefresh = RefreshInterval;
+        private int _gateLogCount = -1;
+        private SessionState _gateState;
+        private bool _gateExploring, _gateEscape, _gateCanExplore;
+
+        private bool ShouldRefresh()
+        {
+            var session = _shell.Session;
+            int logCount = session?.DayLog?.Count ?? -1;
+            var state = session != null ? session.State : default(SessionState);
+            bool exploring = _shell.Exploring, escape = _shell.EscapeOpen, canExplore = _shell.CanExplore;
+
+            _sinceRefresh += Time.unscaledDeltaTime;
+            bool cheapChanged = logCount != _gateLogCount || state != _gateState || exploring != _gateExploring
+                                || escape != _gateEscape || canExplore != _gateCanExplore;
+            if (!cheapChanged && _sinceRefresh < RefreshInterval) return false;
+
+            _sinceRefresh = 0f;
+            _gateLogCount = logCount;
+            _gateState = state;
+            _gateExploring = exploring;
+            _gateEscape = escape;
+            _gateCanExplore = canExplore;
+            return true;
         }
 
         private void ApplyLayoutIfChanged()
@@ -448,13 +478,15 @@ namespace Game.Gameplay.UI.Toolkit
             // одразу потрапляє і в підпис, інакше шапка показувала б застаре значення.
             var resources = HudHeaderModel.ResourcesFrom(economy, g);
             foreach (var r in resources) sig.Append(r.Key).Append('=').Append(r.Value).Append(',');
+            var weather = session.GetWeatherView();
+            sig.Append('|').Append(weather?.Today).Append('>').Append(weather?.Tomorrow);
             sig.Append('|').Append(log?.Count ?? 0);
             if (log != null && log.Count > 0) sig.Append(log[log.Count - 1].Key).Append(log[log.Count - 1].Day);
             string signature = sig.ToString();
             if (signature == _signature) return;
             _signature = signature;
 
-            var header = HudHeaderModel.Build(view, session.State, resources, roster, g);
+            var header = HudHeaderModel.Build(view, session.State, resources, roster, g, weather);
             LastHeader = header;
             ApplyHeader(header, exploreVisible);
 

@@ -141,7 +141,9 @@ namespace Game.Tests.EditMode
                 "accuracy", "ability", "defense", "knocked_down", "marked",
                 // "enraged" — перша партія здібностей (docs/ABILITIES.md, «Розлютити»):
                 // захист розлюченої цілі падає — окремим рядком, щоб причину було видно.
-                "cover_half", "cover_full", "distance", "suppressed", "enraged", "clamp"
+                "cover_half", "cover_full", "distance", "suppressed", "enraged",
+                // "weather" — Поправка №21.2: туман і дощ заважають дальнім пострілам.
+                "weather", "clamp"
             }, keys);
         }
 
@@ -156,6 +158,7 @@ namespace Game.Tests.EditMode
             int[] distances = { 0, 1, 6, 10 };
             int[] optimalRanges = { 1, 6 };
             int[] accuracyBonuses = { 0, -10, 15 };
+            int[] weatherDeltas = { 0, -15 }; // Поправка №21.2
 
             int checkedCombos = 0;
             foreach (var acc in accuracies)
@@ -168,12 +171,15 @@ namespace Game.Tests.EditMode
             foreach (var marked in bools)
             foreach (var knocked in bools)
             foreach (var bonus in accuracyBonuses)
+            foreach (var weather in weatherDeltas)
             {
-                var terms = HitChanceCalculator.Decompose(acc, suppressed, def, cover, ignoreCover, dist, optimal, Cfg, marked, knocked, bonus);
+                var terms = HitChanceCalculator.Decompose(acc, suppressed, def, cover, ignoreCover, dist, optimal, Cfg, marked, knocked, bonus,
+                    weatherDelta: weather);
                 int sum = terms.Sum(t => t.ChanceDelta);
-                int expected = HitChanceCalculator.Compute(acc, suppressed, def, cover, ignoreCover, dist, optimal, Cfg, marked, knocked, bonus);
+                int expected = HitChanceCalculator.Compute(acc, suppressed, def, cover, ignoreCover, dist, optimal, Cfg, marked, knocked, bonus,
+                    weatherDelta: weather);
                 Assert.AreEqual(expected, sum,
-                    $"acc={acc} suppr={suppressed} def={def} cover={cover} ignore={ignoreCover} dist={dist} opt={optimal} marked={marked} knocked={knocked} bonus={bonus}");
+                    $"acc={acc} suppr={suppressed} def={def} cover={cover} ignore={ignoreCover} dist={dist} opt={optimal} marked={marked} knocked={knocked} bonus={bonus} weather={weather}");
                 checkedCombos++;
             }
             Assert.Greater(checkedCombos, 10000, "перебір мав бути справді широким, не жменькою прикладів");

@@ -152,13 +152,9 @@ namespace Game.Gameplay
                     _pendingInteract = null;
                     _shell.Interact(near);
                 }
-                var here = Here();
-                _shell.WalkDebug = "герой (" + here.X.ToString("0.00") + "; " + here.Z.ToString("0.00") + ")"
-                                   + (_inside != null ? " у «" + _inside + "»" : "")
-                                   + ", вільно: " + (_grid != null && _grid.IsFree(here))
-                                   + ", маршрут " + _pathIndex + "/" + _path.Count
-                                   + ", запит: " + _lastRequest
-                                   + ", поруч: " + (_shell.NearbyPlace != null ? _shell.NearbyPlace.Id : "-");
+                // Рядок налагодження будується лише тоді, коли його читають (автотур при збої),
+                // а не щокадру — Статут PERF-01: жодних алокацій на кадр без потреби.
+                if (_shell.WalkDebugSource == null) _shell.WalkDebugSource = DescribeWalk;
             }
             else
             {
@@ -669,6 +665,18 @@ namespace Game.Gameplay
         }
 
         // ===================== камера =====================
+
+        /// <summary>Стан героя одним рядком для логу автотуру: позиція, кімната, маршрут, найближче місце.</summary>
+        private string DescribeWalk()
+        {
+            var here = Here();
+            return "герой (" + here.X.ToString("0.00") + "; " + here.Z.ToString("0.00") + ")"
+                   + (_inside != null ? " у «" + _inside + "»" : "")
+                   + ", вільно: " + (_grid != null && _grid.IsFree(here))
+                   + ", маршрут " + _pathIndex + "/" + _path.Count
+                   + ", запит: " + _lastRequest
+                   + ", поруч: " + (_shell != null && _shell.NearbyPlace != null ? _shell.NearbyPlace.Id : "-");
+        }
 
         private void UpdateCamera(bool exploring)
         {

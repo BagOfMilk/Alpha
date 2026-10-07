@@ -40,6 +40,20 @@ namespace Game.Gameplay
         }
     }
 
+    /// <summary>Лінійний туман сцени (Поправка №21.2): вбудований туман URP — майже безкоштовний.</summary>
+    public readonly struct FogPose
+    {
+        public readonly bool On;
+        public readonly float Start, End;
+        public readonly float R, G, B;
+
+        public FogPose(bool on, float start, float end, float r, float g, float b)
+        {
+            On = on; Start = start; End = end;
+            R = r; G = g; B = b;
+        }
+    }
+
     /// <summary>
     /// Що сцена показує про минулу фазу.
     ///
@@ -61,6 +75,90 @@ namespace Game.Gameplay
             return phase == DayPhase.Night
                 ? new SunPose(8f, 205f, 0.22f, 0.55f, 0.62f, 0.85f)
                 : new SunPose(38f, 145f, 1.25f, 1f, 0.96f, 0.86f);
+        }
+
+        /// <summary>
+        /// Сонце під погодою доби (Поправка №21.2): хмари гасять і знебарвлюють світло.
+        /// Поворот не міняється — тіні лишаються там, де були.
+        /// </summary>
+        public static SunPose SunFor(DayPhase phase, WeatherKind weather)
+        {
+            var pose = SunFor(phase);
+            float dim = WeatherDim(weather);
+            float grey = WeatherGrey(weather);
+            float mid = (pose.R + pose.G + pose.B) / 3f;
+            return new SunPose(pose.Pitch, pose.Yaw, pose.Intensity * dim,
+                Mix(pose.R, mid, grey), Mix(pose.G, mid, grey), Mix(pose.B, mid, grey));
+        }
+
+        /// <summary>Заливне світло з поправкою на погоду: небо сіріє і темніє разом із сонцем.</summary>
+        public static AmbientPose AmbientFor(DayPhase phase, MoodboardState mood, WeatherKind weather)
+        {
+            var a = AmbientFor(phase, mood);
+            if (weather == WeatherKind.Clear) return a;
+
+            float grey = WeatherGrey(weather);
+            float dim = 0.5f + 0.5f * WeatherDim(weather); // заливне падає вдвічі м'якше за сонце
+            float sky = (a.SkyR + a.SkyG + a.SkyB) / 3f;
+            float back = (a.BackR + a.BackG + a.BackB) / 3f;
+            return new AmbientPose(
+                Mix(a.SkyR, sky, grey) * dim, Mix(a.SkyG, sky, grey) * dim, Mix(a.SkyB, sky, grey) * dim,
+                a.GroundR * dim, a.GroundG * dim, a.GroundB * dim,
+                Mix(a.BackR, back, grey) * dim, Mix(a.BackG, back, grey) * dim, Mix(a.BackB, back, grey) * dim);
+        }
+
+        /// <summary>
+        /// Туман: лише в туман, дощ і бурю. Відстані — від ізометричної камери, що стоїть
+        /// за ~45 м від героя: туман ховає дальній край кадру, а не самого героя.
+        /// Колір — колір фону цієї ж фази, щоб край туману не різав небо.
+        /// </summary>
+        public static FogPose FogFor(DayPhase phase, MoodboardState mood, WeatherKind weather)
+        {
+            float start, end;
+            switch (weather)
+            {
+                case WeatherKind.Fog: start = 28f; end = 70f; break;
+                case WeatherKind.Storm: start = 38f; end = 95f; break;
+                case WeatherKind.Rain: start = 45f; end = 120f; break;
+                default: return new FogPose(false, 0f, 0f, 0f, 0f, 0f);
+            }
+            var a = AmbientFor(phase, mood, weather);
+            return new FogPose(true, start, end, a.BackR, a.BackG, a.BackB);
+        }
+
+        /// <summary>Скільки сонця лишає погода (1 — ясно).</summary>
+        public static float WeatherDim(WeatherKind weather)
+        {
+            switch (weather)
+            {
+                case WeatherKind.Overcast: return 0.75f;
+                case WeatherKind.Rain: return 0.6f;
+                case WeatherKind.Fog: return 0.7f;
+                case WeatherKind.Storm: return 0.45f;
+                default: return 1f;
+            }
+        }
+
+        /// <summary>Наскільки погода знебарвлює світло (0 — ясно).</summary>
+        private static float WeatherGrey(WeatherKind weather)
+        {
+            switch (weather)
+            {
+                case WeatherKind.Overcast: return 0.45f;
+                case WeatherKind.Rain: return 0.55f;
+                case WeatherKind.Fog: return 0.7f;
+                case WeatherKind.Storm: return 0.6f;
+                default: return 0f;
+            }
+        }
+
+        /// <summary>Назва стану з виду сесії («Rain») → стан; невідоме — ясно.</summary>
+        public static WeatherKind ParseWeather(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return WeatherKind.Clear;
+            foreach (WeatherKind kind in System.Enum.GetValues(typeof(WeatherKind)))
+                if (kind.ToString() == name) return kind;
+            return WeatherKind.Clear;
         }
 
         /// <summary>

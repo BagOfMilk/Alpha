@@ -132,6 +132,12 @@ namespace Game.Core.Loop
         }
 
         public bool IsNight => Phase == DayPhase.Night;
+
+        /// <summary>
+        /// Погода доби (Поправка №21.2) — чиста функція від номера доби, тож окремого
+        /// кроку конвеєра і поля в сейві не потребує.
+        /// </summary>
+        public WeatherKind Weather => WeatherCalendar.KindFor(Day, Balance.Weather);
     }
 
     /// <summary>

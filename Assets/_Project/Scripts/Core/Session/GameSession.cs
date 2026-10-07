@@ -992,7 +992,7 @@ namespace Game.Core.Session
             if (site == null) return new ExpeditionPreviewView { SiteId = siteId, Approach = approach };
 
             var actors = ResolveActors(companionIds);
-            var preview = ExpeditionResolver.Preview(site, approach, actors, _sites, _cfg);
+            var preview = ExpeditionResolver.Preview(site, approach, actors, _sites, _cfg, TodayWeather);
             return new ExpeditionPreviewView
             {
                 SiteId = siteId,
@@ -1005,6 +1005,8 @@ namespace Game.Core.Session
                 ExpectedCraftComponent = preview.CraftComponent,
                 ExpectedGold = preview.Gold,
                 ExpectedWounded = preview.ExpectedWounded,
+                WeatherKey = preview.Weather != WeatherKind.Clear && _cfg.Weather.ExpeditionYield(preview.Weather) != 1.0
+                    ? "weather.expedition." + preview.Weather : null,
                 IsDelve = false,
                 WaitingSpecialistId = WaitingSpecialistAt(siteId)
             };
@@ -1064,7 +1066,7 @@ namespace Game.Core.Session
             if (substituteCheck != DispatchResult.Success) return substituteCheck;
 
             if (approach == ExpeditionApproach.Delve) days = DefaultDungeon.Days;
-            var result = ExpeditionRunner.Depart(_state, _party, site, approach, companionIds, days, _sites, _cfg);
+            var result = ExpeditionRunner.Depart(_state, _party, site, approach, companionIds, days, _sites, _cfg, TodayWeather);
             if (result != DispatchResult.Success) return result;
 
             ApplySubstitutes(muster, substitutes);
@@ -2662,7 +2664,7 @@ namespace Game.Core.Session
             var terms = HitChanceCalculator.Decompose(unit.Profile.Accuracy, unit.HasStatus(StatusType.Suppressed),
                 target.Profile.Defense, cover, ignoreCover, distance, w.OptimalRange, _battle.Balance,
                 target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown), accuracyBonus,
-                target.HasStatus(StatusType.Enraged));
+                target.HasStatus(StatusType.Enraged), w.IsMelee ? 0 : _battle.WeatherRangedDelta);
 
             int chance = 0;
             var termViews = new List<ChanceTermView>(terms.Count);
@@ -3815,6 +3817,8 @@ namespace Game.Core.Session
 
             _resume = new SuspendToken(reason, returnState);
             var roller = setup.HitRule == HitRuleKind.Percent ? _roller : null;
+            // Бій іде під небом цієї доби (Поправка №21.2), якщо сценарій не задав свого.
+            if (setup.Weather == WeatherKind.Clear) setup.Weather = TodayWeather;
             _battle = CombatBattleBuilder.Build(setup, _cfg, ResolvePlayerUnit, ResolveEnemyById, roller, DefaultCombatContent.AbilityCatalog());
             State = SessionState.Battle;
             LogEvent("combat.battle.started", Args("reason", reason.ToString()));
@@ -4224,6 +4228,29 @@ namespace Game.Core.Session
                     IsPatrolling = _processor?.IsPatrolling ?? false
                 };
             }
+        }
+
+        /// <summary>
+        /// Доба, чия погода зараз надворі (Поправка №21.2). Уранці денна фаза ще не
+        /// прокручена — лічильник конвеєра стоїть на вчорашній добі, а вилазка й
+        /// ферми працюватимуть уже під небом наступної.
+        /// </summary>
+        private int WeatherDay
+        {
+            get
+            {
+                int day = _processor?.CurrentDay ?? 0;
+                return _lastPhase == DayPhase.Night || day == 0 ? day + 1 : day;
+            }
+        }
+
+        private WeatherKind TodayWeather => WeatherCalendar.KindFor(WeatherDay, _cfg.Weather);
+
+        /// <summary>Погода надворі й завтра — для шапки і світла села.</summary>
+        public WeatherView GetWeatherView()
+        {
+            var forecast = WeatherCalendar.Forecast(WeatherDay, _cfg.Weather);
+            return new WeatherView { Today = forecast.today.ToString(), Tomorrow = forecast.tomorrow.ToString() };
         }
 
         public EconomyView GetEconomyView()

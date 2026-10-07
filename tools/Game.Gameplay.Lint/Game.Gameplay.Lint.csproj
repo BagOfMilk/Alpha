@@ -110,6 +110,8 @@
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Audio/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AudioLibraryBuilder.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/LightingSetup.cs" />
+    <!-- Поправка №21.1: рівні графіки — асети URP і SerializedObject, як LightingSetup. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/GraphicsTiersSetup.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtSubstitutes.cs" />
   </ItemGroup>
 

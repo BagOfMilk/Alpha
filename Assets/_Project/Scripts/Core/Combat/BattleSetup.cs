@@ -130,5 +130,8 @@ namespace Game.Core.Combat
 
         /// <summary>Підкріплення ворога з відліком (Поправка №14.4; правило контенту, не рушія).</summary>
         public List<ReinforcementSpawn> Reinforcements = new List<ReinforcementSpawn>();
+
+        /// <summary>Погода доби бою (Поправка №21.2): туман і дощ заважають дальнім пострілам.</summary>
+        public Game.Core.World.WeatherKind Weather = Game.Core.World.WeatherKind.Clear;
     }
 }

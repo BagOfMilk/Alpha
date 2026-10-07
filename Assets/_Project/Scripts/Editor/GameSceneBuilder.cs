@@ -53,6 +53,9 @@ namespace Game.Gameplay.EditorTools
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             var sun = BuildSun();
+            // Головне світло — явно сонце села: інакше URP бере найяскравіше спрямоване,
+            // а портретне ключове (1,7) яскравіше за денне сонце (1,25).
+            RenderSettings.sun = sun;
             var hubCamera = BuildHubCamera();
             var arenaCamera = BuildArenaCamera();
 
@@ -92,6 +95,8 @@ namespace Game.Gameplay.EditorTools
             AudioLibraryBuilder.Build();
             // Трек V2: постобробка, SSAO, каскади тіней (ідемпотентно, як UrpSetup).
             LightingSetup.Apply(hubCamera, arenaCamera);
+            // Поправка №21.1: три рівні графіки зі своїми асетами URP (після світла — Висока бере його).
+            GraphicsTiersSetup.Apply();
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -248,6 +253,97 @@ namespace Game.Gameplay.EditorTools
             stage.postsRoot = posts.transform;
             stage.villagersRoot = villagers.transform;
             stage.plotsRoot = plots.transform;
+            stage.weatherRoot = BuildWeather(hubCamera).transform;
+        }
+
+        // ================= погода (Поправка №21.2) =================
+
+        /// <summary>
+        /// Опади під камерою хаба: одна система частинок на стан, вимкнена, доки погода
+        /// її не попросить (<see cref="Game.Gameplay.VillageStage"/>). Дешево за Статутом PERF-01:
+        /// падають лише в квадраті навколо кадру, не по всьому світу, без тіней і без колізій;
+        /// на низькій графіці не вмикаються зовсім.
+        /// </summary>
+        private static GameObject BuildWeather(Camera hubCamera)
+        {
+            var root = new GameObject("Weather");
+            root.transform.SetParent(hubCamera.transform, false);
+            // Точка фокуса ізометрії (~45 м уздовж погляду), а осі — світові: камера лише
+            // переїжджає, не обертається, тож «вниз» лишається вниз.
+            root.transform.localPosition = new Vector3(0f, 0f, 45f);
+            root.transform.rotation = Quaternion.identity;
+
+            var mat = PrecipitationMaterial("Assets/Scenes/WeatherRain.mat", new Color(0.78f, 0.84f, 0.92f, 0.55f));
+            Precipitation(root, "Rain", mat, rate: 260f, maxParticles: 400, fallSpeed: 18f, size: 0.035f);
+            Precipitation(root, "Storm", mat, rate: 480f, maxParticles: 600, fallSpeed: 26f, size: 0.045f);
+            return root;
+        }
+
+        private static void Precipitation(GameObject root, string name, Material mat,
+            float rate, int maxParticles, float fallSpeed, float size)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, false);
+            var ps = go.AddComponent<ParticleSystem>();
+
+            var main = ps.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.playOnAwake = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startSpeed = 0f;
+            main.startSize = size;
+            main.startLifetime = 16f / fallSpeed;
+            main.maxParticles = maxParticles;
+            main.gravityModifier = 0f;
+
+            var emission = ps.emission;
+            emission.rateOverTime = rate;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.position = new Vector3(0f, 14f, 0f);
+            shape.scale = new Vector3(42f, 0.5f, 42f);
+
+            var velocity = ps.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.space = ParticleSystemSimulationSpace.World;
+            velocity.x = new ParticleSystem.MinMaxCurve(-1.5f);
+            velocity.y = new ParticleSystem.MinMaxCurve(-fallSpeed);
+            velocity.z = new ParticleSystem.MinMaxCurve(0f);
+
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Stretch;
+            renderer.velocityScale = 0.04f;
+            renderer.lengthScale = 1f;
+            renderer.sharedMaterial = mat;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            go.SetActive(false);
+        }
+
+        /// <summary>Прозорий неосвітлений матеріал частинок URP — найдешевший шейдер для крапель.</summary>
+        private static Material PrecipitationMaterial(string path, Color color)
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                mat = new Material(shader != null ? shader : Shader.Find("Sprites/Default"));
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            mat.SetColor("_BaseColor", color);
+            mat.SetFloat("_Surface", 1f); // прозорий
+            mat.SetFloat("_Blend", 0f);   // альфа
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            EditorUtility.SetDirty(mat);
+            return mat;
         }
 
         /// <summary>Власна модель (трек V), якщо є, інакше — Kenney; та сама позиція й поворот.</summary>

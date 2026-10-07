@@ -7,7 +7,7 @@ namespace Game.Core.Combat
     /// <summary>
     /// Один доданок розкладу шансу влучання (§7.2 COMBAT_V2.md): ключ +
     /// скільки він додав/відняв. Сума всіх доданків (разом із <c>clamp</c>)
-    /// ДОРІВНЮЄ <see cref="HitChanceCalculator.Compute(int,bool,int,CoverType,bool,int,int,BalanceConfig,bool,bool,int)"/> —
+    /// ДОРІВНЮЄ <see cref="HitChanceCalculator.Compute(int,bool,int,CoverType,bool,int,int,BalanceConfig,bool,bool,int,bool,int)"/> —
     /// охоронець <c>HitChanceCalculatorTests.Decompose_SumsToCompute_OnAllCombinations</c>.
     /// </summary>
     public readonly struct ChanceTerm
@@ -33,7 +33,7 @@ namespace Game.Core.Combat
     /// ThresholdRule.Resolve). Сам цей клас киданням кубика не займається —
     /// це справа IHitRule/IDiceRoller.
     ///
-    /// Бій v2 (§7.2): <see cref="Compute(int,bool,int,CoverType,bool,int,int,BalanceConfig,bool,bool,int)"/>
+    /// Бій v2 (§7.2): <see cref="Compute(int,bool,int,CoverType,bool,int,int,BalanceConfig,bool,bool,int,bool,int)"/>
     /// сам більше не рахує суму — він лише підсумовує доданки
     /// <see cref="Decompose"/>, тому розклад і підсумок фізично не можуть
     /// розійтись («промах (43)» без пояснення «чому 43» — закритий розрив
@@ -54,6 +54,8 @@ namespace Game.Core.Combat
             public const string Distance = "distance";
             public const string Suppressed = "suppressed";
             public const string Enraged = "enraged";
+            /// <summary>Погода доби — лише для дальніх атак (Поправка №21.2).</summary>
+            public const string Weather = "weather";
             public const string Clamp = "clamp";
         }
 
@@ -66,7 +68,7 @@ namespace Game.Core.Combat
                                   int targetDefense, CoverType cover, bool ignoreCover,
                                   int distance, int optimalRange, BalanceConfig cfg,
                                   bool targetMarked = false, bool targetKnockedDown = false,
-                                  int accuracyBonus = 0, bool targetEnraged = false)
+                                  int accuracyBonus = 0, bool targetEnraged = false, int weatherDelta = 0)
         {
             var c = cfg.Combat;
 
@@ -90,7 +92,8 @@ namespace Game.Core.Combat
             int suppressedDelta = attackerSuppressed ? -c.SuppressionAccuracyPenalty : 0;
 
             int raw = attackerAccuracy + accuracyBonus - targetDefense + knockdownDelta
-                      + markedDelta + coverHalfDelta + coverFullDelta + distanceDelta + suppressedDelta + enragedDelta;
+                      + markedDelta + coverHalfDelta + coverFullDelta + distanceDelta + suppressedDelta + enragedDelta
+                      + weatherDelta;
 
             int clamped = raw;
             if (clamped < c.HitChanceMin) clamped = c.HitChanceMin;
@@ -108,6 +111,7 @@ namespace Game.Core.Combat
                 new ChanceTerm(TermKeys.Distance, distanceDelta),
                 new ChanceTerm(TermKeys.Suppressed, suppressedDelta),
                 new ChanceTerm(TermKeys.Enraged, enragedDelta),
+                new ChanceTerm(TermKeys.Weather, weatherDelta),
                 new ChanceTerm(TermKeys.Clamp, clamped - raw),
             };
         }
@@ -117,10 +121,10 @@ namespace Game.Core.Combat
                                   int targetDefense, CoverType cover, bool ignoreCover,
                                   int distance, int optimalRange, BalanceConfig cfg,
                                   bool targetMarked = false, bool targetKnockedDown = false,
-                                  int accuracyBonus = 0, bool targetEnraged = false)
+                                  int accuracyBonus = 0, bool targetEnraged = false, int weatherDelta = 0)
         {
             var terms = Decompose(attackerAccuracy, attackerSuppressed, targetDefense, cover, ignoreCover,
-                distance, optimalRange, cfg, targetMarked, targetKnockedDown, accuracyBonus, targetEnraged);
+                distance, optimalRange, cfg, targetMarked, targetKnockedDown, accuracyBonus, targetEnraged, weatherDelta);
             int sum = 0;
             for (int i = 0; i < terms.Count; i++) sum += terms[i].ChanceDelta;
             return sum;
@@ -128,7 +132,7 @@ namespace Game.Core.Combat
 
         /// <summary>Число юніта по юніту на карті поточною зброєю (+бонус точності від здібності).</summary>
         public static int Compute(CombatUnit attacker, CombatUnit target, GridMap map,
-                                  BalanceConfig cfg, int accuracyBonus = 0)
+                                  BalanceConfig cfg, int accuracyBonus = 0, int rangedWeatherDelta = 0)
         {
             var w = attacker.Weapon;
             if (w == null) return 0;
@@ -138,7 +142,8 @@ namespace Game.Core.Combat
                            target.Profile.Defense, cover, w.IsMelee,
                            distance, w.OptimalRange, cfg,
                            target.HasStatus(StatusType.Marked), target.HasStatus(StatusType.KnockedDown),
-                           accuracyBonus, target.HasStatus(StatusType.Enraged));
+                           accuracyBonus, target.HasStatus(StatusType.Enraged),
+                           w.IsMelee ? 0 : rangedWeatherDelta);
         }
     }
 }

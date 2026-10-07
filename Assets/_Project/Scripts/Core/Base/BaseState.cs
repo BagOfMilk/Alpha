@@ -358,6 +358,13 @@ namespace Game.Core.Base
         /// демка бази крутила його напряму, і в проєкті існувало два денних
         /// цикли, які не знали один про одного.
         /// </summary>
+        /// <summary>
+        /// Множник їжі з ферм від погоди доби (Поправка №21.2). Порт, як і прапорець
+        /// голоду: ProductionStep виставляє його перед кожним циклом із погоди
+        /// конвеєра, тож у сейві йому не місце.
+        /// </summary>
+        internal double FoodWeatherMultiplier { get; set; } = 1.0;
+
         internal CycleReport AdvanceCycle()
         {
             CurrentCycle++;
@@ -385,6 +392,8 @@ namespace Game.Core.Base
                 switch (def.OutputKind)
                 {
                     case SlotOutputKind.Resource:
+                        if (def.OutputResource == ResourceType.Food && FoodWeatherMultiplier != 1.0)
+                            output = (int)Math.Round(output * FoodWeatherMultiplier, MidpointRounding.ToEven);
                         Resources.Add(def.OutputResource, output);
                         report.AddProduced(def.OutputResource, output);
                         break;

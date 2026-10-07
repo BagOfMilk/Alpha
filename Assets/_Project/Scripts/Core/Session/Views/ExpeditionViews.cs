@@ -27,6 +27,12 @@ namespace Game.Core.Session.Views
         /// точка без прив'язки) чи фахівець уже прибув.
         /// </summary>
         public string WaitingSpecialistId;
+
+        /// <summary>
+        /// Поправка №21.2: ключ тексту «негода зменшить здобич», коли погода доби
+        /// відходу вже врахована в очікуваній здобичі; null — небо не заважає.
+        /// </summary>
+        public string WeatherKey;
     }
 
     /// <summary>

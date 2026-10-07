@@ -307,7 +307,12 @@ namespace Game.Gameplay.EditorTools
             for (int i = 0; i < 40; i++)
             {
                 var pos = new Vector3(-10f + Hash(i, 9) * 21f, 0f, -8f + Hash(i, 10) * 16f);
-                Attach(group, naturePath + "grass.fbx", pos, Hash(i, 11) * 360f);
+                var tuft = Attach(group, naturePath + "grass.fbx", pos, Hash(i, 11) * 360f);
+                // Статут PERF-01: тінь від пучка трави на ізометрії не видно, а в карту тіней
+                // він потрапляв сорок разів.
+                if (tuft != null)
+                    foreach (var r in tuft.GetComponentsInChildren<Renderer>())
+                        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
 
             return group;

@@ -59,6 +59,13 @@ namespace Game.Gameplay.UI
 
                 GUILayout.Space(8f);
 
+                // Графіка (Поправка №21.1): три рівні, діє одразу, зберігається між запусками.
+                GUILayout.Label(UkrainianText.Get("ui.gfx.title", g), AlphaSkin.Body);
+                DrawGraphicsLevels(shell, g);
+                Widgets.TooltipLine(UkrainianText.Get("ui.gfx.hint", g));
+
+                GUILayout.Space(8f);
+
                 // Гучність (віха M1.19): п'ять шарів, крок 10 %; зберігається між запусками.
                 GUILayout.Label(UkrainianText.Get("ui.sound.section", g), AlphaSkin.Body);
                 foreach (SoundBus bus in System.Enum.GetValues(typeof(SoundBus)))
@@ -104,6 +111,20 @@ namespace Game.Gameplay.UI
         {
             string key = "ui.state." + state.ToString().ToLowerInvariant();
             return UkrainianText.Has(key, g) ? UkrainianText.Get(key, g) : state.ToString();
+        }
+
+        /// <summary>Три кнопки рівня графіки — спільні для меню паузи й титулу.</summary>
+        internal static void DrawGraphicsLevels(GameShell shell, Gender g)
+        {
+            var current = GraphicsTier.Current;
+            GUILayout.BeginHorizontal();
+            if (Widgets.TabButton(UkrainianText.Get("ui.gfx.low", g), current == GraphicsLevel.Low))
+                shell.SetGraphics(GraphicsLevel.Low);
+            if (Widgets.TabButton(UkrainianText.Get("ui.gfx.medium", g), current == GraphicsLevel.Medium))
+                shell.SetGraphics(GraphicsLevel.Medium);
+            if (Widgets.TabButton(UkrainianText.Get("ui.gfx.high", g), current == GraphicsLevel.High))
+                shell.SetGraphics(GraphicsLevel.High);
+            GUILayout.EndHorizontal();
         }
     }
 }

@@ -281,6 +281,9 @@ namespace Game.Gameplay.UI
                     "band", ScreenText.BandLabelFromRaw(p.ExpectedBand, g)));
                 summary.Lines.Add(UxBricks.F(h, "ux.muster.loot", "build", p.ExpectedBuildComponent.ToString(),
                     "craft", p.ExpectedCraftComponent.ToString(), "gold", p.ExpectedGold.ToString()));
+                // Поправка №21.2: негода вже врахована в здобичі вище — тут лише причина.
+                if (!string.IsNullOrEmpty(p.WeatherKey))
+                    summary.Lines.Add(UxBricks.T(h, p.WeatherKey));
                 if (!string.IsNullOrEmpty(p.WaitingSpecialistId))
                     summary.Lines.Add(UxBricks.F(h, "ux.muster.waiting", "name", UxBricks.Name(h, p.WaitingSpecialistId, roster)));
                 int days = p.Days;

@@ -696,3 +696,24 @@ namespace UnityEditor
         public static UnityEngine.ColorSpace colorSpace { get; set; }
     }
 }
+
+// Поправка №21.1: рівень графіки (Gameplay/Visual/GraphicsTier.cs).
+namespace UnityEngine
+{
+    public static class SystemInfo
+    {
+        public static string graphicsDeviceName { get { return string.Empty; } }
+        public static int graphicsMemorySize { get { return 0; } }
+        public static int systemMemorySize { get { return 0; } }
+        public static int processorCount { get { return 0; } }
+    }
+
+    public static class PlayerPrefs
+    {
+        public static bool HasKey(string key) { return false; }
+        public static int GetInt(string key) { return 0; }
+        public static int GetInt(string key, int defaultValue) { return defaultValue; }
+        public static void SetInt(string key, int value) { }
+        public static void Save() { }
+    }
+}

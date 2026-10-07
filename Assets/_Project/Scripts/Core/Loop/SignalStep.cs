@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Game.Core.Checks;
 using Game.Core.Signals;
+using Game.Core.World;
 
 namespace Game.Core.Loop
 {
@@ -27,7 +28,20 @@ namespace Game.Core.Loop
                 ctx.IsNight,
                 ctx.SignalMemory,
                 ctx.Day,
-                ctx.CityEvents);
+                ctx.CityEvents,
+                WeatherTopic(ctx));
+        }
+
+        /// <summary>
+        /// Репліка про погоду — лише вдень і лише коли небо змінилось проти вчора
+        /// (Поправка №21.2): про незмінну погоду не говорять.
+        /// </summary>
+        private static string WeatherTopic(DayContext ctx)
+        {
+            if (ctx.IsNight || !ctx.Balance.Weather.Enabled) return null;
+            var today = ctx.Weather;
+            var yesterday = WeatherCalendar.KindFor(ctx.Day - 1, ctx.Balance.Weather);
+            return today == yesterday ? null : "weather.ambient." + today;
         }
 
         /// <summary>

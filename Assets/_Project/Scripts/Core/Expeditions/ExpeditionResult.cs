@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using Game.Core.Characters;
 using Game.Core.Checks;
+using Game.Core.World;
 
 namespace Game.Core.Expeditions
 {
@@ -40,6 +41,9 @@ namespace Game.Core.Expeditions
 
         /// <summary>Скільки людей повернеться пораненими. Показується заздалегідь — це і є ціна.</summary>
         public int ExpectedWounded;
+
+        /// <summary>Погода доби відходу — вона вже врахована в здобичі (Поправка №21.2).</summary>
+        public WeatherKind Weather;
 
         public bool HasParty => PartyValue > 0 || Threshold <= 0;
     }

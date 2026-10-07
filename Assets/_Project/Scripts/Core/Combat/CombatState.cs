@@ -282,6 +282,13 @@ namespace Game.Core.Combat
         /// <summary>Як почався бій (Поправка №14.1).</summary>
         public BattleOpening Opening { get; private set; } = BattleOpening.Encounter;
 
+        /// <summary>
+        /// Поправка погоди до дальніх атак у цьому бою (Поправка №21.2) — ставить
+        /// <see cref="CombatBattleBuilder"/> із <see cref="BattleSetup.Weather"/>. Одна
+        /// й та сама в прев'ю і в ролі (інваріант 8).
+        /// </summary>
+        public int WeatherRangedDelta { get; internal set; }
+
         // ---- Поле бою: об'єкти, вогонь, підкріплення (Поправка №14.4) ----
 
         /// <summary>Поставити об'єкт до початку бою: клітинка стає непрохідною, сусіди отримують укриття з її боку.</summary>
@@ -746,7 +753,7 @@ namespace Game.Core.Combat
                                        bool ignoreArmor = false)
         {
             accuracyBonus += ProvokedBonus(unit);
-            int shown = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus);
+            int shown = HitChanceCalculator.Compute(unit, target, Map, Balance, accuracyBonus, WeatherRangedDelta);
             var outcome = forceHit ? AttackOutcome.Hit : _hitRule.Resolve(unit, target, shown, _roller);
             var dmg = DamageResolver.RollAttackDamage(unit, target, w, outcome, _roller, !IsHitRulePercent, Balance, ignoreArmor);
             string attackKey = CombatLogKeys.Attack(outcome);
@@ -1244,7 +1251,7 @@ namespace Game.Core.Combat
 
         /// <summary>Показане число пострілу з дозору по цілі там, де вона стоїть (зі штрафом навмання).</summary>
         public int OverwatchHitChancePreview(CombatUnit watcher, CombatUnit target)
-            => HitChanceCalculator.Compute(watcher, target, Map, Balance, -Balance.Combat.OverwatchAccuracyPenalty);
+            => HitChanceCalculator.Compute(watcher, target, Map, Balance, -Balance.Combat.OverwatchAccuracyPenalty, WeatherRangedDelta);
 
         /// <summary>
         /// Бій v2 (§7.1, GameSession.PreviewOverwatchCone): тайли, які накрив
@@ -1340,7 +1347,7 @@ namespace Game.Core.Combat
         /// <summary>Показане гравцю число. accuracyBonus — бонус зведеної здібності:
         /// прев'ю зобов'язане збігатися з фактичним ролом.</summary>
         public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
-            => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus + ProvokedBonus(attacker));
+            => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus + ProvokedBonus(attacker), WeatherRangedDelta);
 
         /// <summary>Ультиматум відкинуто (старт <see cref="BattleOpening.Provoked"/>): ворог у раунді 1 влучніший.</summary>
         private int ProvokedBonus(CombatUnit attacker) =>

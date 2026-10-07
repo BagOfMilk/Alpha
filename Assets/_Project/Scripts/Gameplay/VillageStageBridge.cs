@@ -51,7 +51,8 @@ namespace Game.Gameplay
                 Posts = WithLooks(session, BuildPosts(session.GetRosterView())),
                 Idle = WithLooks(session, BuildIdle(session.GetRosterView())),
                 Plots = BuildPlots(session.GetCityView()),
-                Incidents = BuildIncidents(session.LastDayReport)
+                Incidents = BuildIncidents(session.LastDayReport),
+                Weather = VillageView.ParseWeather(session.GetWeatherView()?.Today)
             });
         }
 
