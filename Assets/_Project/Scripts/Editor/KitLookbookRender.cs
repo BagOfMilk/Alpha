@@ -357,24 +357,29 @@ namespace Game.Gameplay.EditorTools
                 else if (t.name == "foot_r") fr = t;
             }
             if (fl == null || fr == null) return 0f;
-            const int n = 60;
+            const int n = 90;
             float dt = clip.length / n;
-            var speeds = new List<float>();
-            Vector3 pl = Vector3.zero, pr = Vector3.zero;
-            float sep = 0f;
+            var ls = new Vector3[n + 1];
+            var rs = new Vector3[n + 1];
+            float sep = 0f, ymin = float.MaxValue;
             for (int i = 0; i <= n; i++)
             {
                 var g = Pose(model, clip, i * dt);
-                var l = fl.position; var r = fr.position;
-                sep = Mathf.Max(sep, Mathf.Abs(Vector3.Dot(l - r, facing)));
-                if (i > 0)
-                {
-                    bool leftDown = l.y < r.y;
-                    var d = leftDown ? l - pl : r - pr;
-                    speeds.Add(-Vector3.Dot(d, facing) / dt);
-                }
-                pl = l; pr = r;
+                ls[i] = fl.position; rs[i] = fr.position;
+                sep = Mathf.Max(sep, Mathf.Abs(Vector3.Dot(ls[i] - rs[i], facing)));
+                ymin = Mathf.Min(ymin, Mathf.Min(ls[i].y, rs[i].y));
                 if (g.IsValid()) g.Destroy();
+            }
+            // Лише кадри опори: нога на висоті ≤ 3 см над найнижчою точкою (у бігу є фаза польоту, коли
+            // «нижча» нога летить уперед — без цього біг виходив повільнішим за ходу).
+            var speeds = new List<float>();
+            for (int i = 1; i <= n; i++)
+            {
+                foreach (var pair in new[] { new[] { ls[i - 1], ls[i] }, new[] { rs[i - 1], rs[i] } })
+                {
+                    if (Mathf.Max(pair[0].y, pair[1].y) > ymin + 0.03f) continue;
+                    speeds.Add(-Vector3.Dot(pair[1] - pair[0], facing) / dt);
+                }
             }
             speeds.Sort();
             // Два кроки за цикл, крок ≈ найбільше розведення ступень уздовж руху — працює і для бігу з фазою польоту.
