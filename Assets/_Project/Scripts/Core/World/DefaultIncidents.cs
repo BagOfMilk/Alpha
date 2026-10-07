@@ -115,8 +115,8 @@ namespace Game.Core.World
             yield return new IncidentDefinition
             {
                 Id = "crisis_riot", TopicId = "incident.crisis_riot", SourceId = "crisis", DomainTag = "площадь",
-                // Джерело кризи накопичує з «Розпалу» (IsActive: TensionBandIndex >= 3),
-                // отже й розв'язуватися криза зобов'язана з «Розпалу». Інакше визріла на
+                // Джерело кризи озброєне з «Розпалу» (нижче — тліє, IsSmoldering:
+                // TensionBandIndex < 3), отже й розв'язуватися криза зобов'язана з «Розпалу». Інакше визріла на
                 // Розпалі криза не знаходить собі інциденту: Eligible ріже за полосою,
                 // Pick повертає null, а заряд УЖЕ згорів у Fire — і джерело йде
                 // на 30 днів кулдауну даремно.
@@ -155,9 +155,23 @@ namespace Game.Core.World
         }
     }
 
-    /// <summary>Вулиця: накопичує швидше, коли місто напружене.</summary>
+    /// <summary>
+    /// Вулиця: накопичує швидше, коли в місті тісно і голодно. Власна змінна —
+    /// людність і голод (<see cref="PulseContext.CrowdBand"/>,
+    /// <see cref="PulseContext.IsHungry"/>); полоси Напруги вона НЕ читає
+    /// (інваріант 2: три накопичувачі — три різні змінні, AUDIT G11). Гравець
+    /// рухає її тим, що кличе людей і годує їх (приріст, рада, ферми, склад).
+    /// Ставки — ПЛЕЙСХОЛДЕРИ (калібруються темпом, <c>CampaignPacingTests</c>, <c>TestBuildTensionPaceTests</c>).
+    /// </summary>
     public sealed class StreetPressureSource : IPressureSource
     {
+        /// <summary>База ставки; ПЛЕЙСХОЛДЕР.</summary>
+        public const int BaseRate = 4;
+        /// <summary>Надбавка за кожну полосу людності; ПЛЕЙСХОЛДЕР.</summary>
+        public const int PerCrowdBand = 1;
+        /// <summary>Надбавка, коли учора не вистачило їжі; ПЛЕЙСХОЛДЕР.</summary>
+        public const int HungerSurcharge = 6;
+
         public string Id => "street";
         public WorldEventKind Kind => WorldEventKind.InternalThreat;
         public string DomainTag => "улицы";
@@ -170,27 +184,51 @@ namespace Game.Core.World
 
         public int InsistencePerDay(PulseContext ctx)
         {
-            // База 6 плюс по 4 за кожну полосу Напруги: тихе місто майже мовчить.
-            return 6 + ctx.TensionBandIndex * 4;
+            // Порожнє й сите місто майже мовчить; людно і голодно — гуде.
+            int crowd = ctx.CrowdBand < 0 ? 0 : (ctx.CrowdBand > 4 ? 4 : ctx.CrowdBand);
+            return BaseRate + crowd * PerCrowdBand + (ctx.IsHungry ? HungerSurcharge : 0);
         }
     }
 
-    /// <summary>Ніч: активна лише в темну фазу; патруль збиває темп.</summary>
-    public sealed class NightPressureSource : IPressureSource
+    /// <summary>
+    /// Ніч: у темну фазу накопичує на повну, вдень лише «розвідує» (тліє — див.
+    /// <see cref="ISmolderingSource"/>: тікає, але не сповіщає і не спрацьовує).
+    /// Власна змінна — Уклад і патруль (<see cref="PulseContext.OrderLevel"/>,
+    /// <see cref="PulseContext.IsPatrolling"/>): Затвор і патруль збивають темп,
+    /// Вольниця його розганяє. Гравець рухає її указом ради та самим патрулем;
+    /// полоси Напруги вона НЕ читає (інваріант 2). Ставки — ПЛЕЙСХОЛДЕРИ.
+    /// </summary>
+    public sealed class NightPressureSource : ISmolderingSource
     {
+        /// <summary>Ставка ночі при Вольниці (Уклад 0); ПЛЕЙСХОЛДЕР.</summary>
+        public const int FreedomRate = 14;
+        /// <summary>На скільки спадає ставка за кожен щабель Укладу; ПЛЕЙСХОЛДЕР.</summary>
+        public const int PerOrderStep = 4;
+        /// <summary>Денна розвідка — ставка тління; ПЛЕЙСХОЛДЕР.</summary>
+        public const int ScoutingRate = 3;
+
         public string Id => "night";
         public WorldEventKind Kind => WorldEventKind.NightCrime;
         public string DomainTag => "ночь";
         public int Threshold => 80;
         public int CooldownDays => 3;
-        public bool IsActive(PulseContext ctx) => ctx.IsNight;
+        public bool IsActive(PulseContext ctx) => true;
+
+        /// <summary>Вдень ніч дрімає: розвідує, але ударити не може.</summary>
+        public bool IsSmoldering(PulseContext ctx) => !ctx.IsNight;
+
+        /// <summary>Денна розвідка не доходить до першого ступеня передвісника (0,55).</summary>
+        public double SmolderCeiling => 0.30;
 
         /// <summary>Загроза, про яку не попередили, — нечесна.</summary>
         public bool Announces => true;
 
         public int InsistencePerDay(PulseContext ctx)
         {
-            int rate = 10 + ctx.TensionBandIndex * 5;
+            if (!ctx.IsNight) return ScoutingRate;
+
+            int order = ctx.OrderLevel < 0 ? 0 : (ctx.OrderLevel > 3 ? 3 : ctx.OrderLevel);
+            int rate = FreedomRate - order * PerOrderStep;
             // Патруль — небойова контргра: тисне нічну злочинність (US-1.5).
             if (ctx.IsPatrolling) rate /= 3;
             return rate;
@@ -198,11 +236,18 @@ namespace Game.Core.World
     }
 
     /// <summary>
-    /// Криза: накопичує лише на верхніх полосах і повільно — щоб у гравця було
-    /// час побачити три ступені передвісників і встигнути втрутитися.
+    /// Криза: на верхніх полосах накопичує повільно — щоб у гравця було
+    /// час побачити три ступені передвісників і встигнути втрутитися; нижче
+    /// «Розпалу» тліє (<see cref="ISmolderingSource"/>: тікає під стелею, але не
+    /// сповіщає і не б'є). Власна змінна — полоса Напруги
+    /// (<see cref="PulseContext.TensionBandIndex"/>): криза є кінцем шкали, тож
+    /// читати її — її природа; вулиця й ніч цієї змінної не читають (інваріант 2).
     /// </summary>
-    public sealed class CrisisPressureSource : IPressureSource
+    public sealed class CrisisPressureSource : ISmolderingSource
     {
+        /// <summary>Ставка тління в спокійному місті; ПЛЕЙСХОЛДЕР.</summary>
+        public const int SmolderRate = 1;
+
         private readonly int _threshold;
         private readonly int _cooldownDays;
         private readonly int _insistenceAtHeat;
@@ -231,13 +276,20 @@ namespace Game.Core.World
         public string DomainTag => "площадь";
         public int Threshold => _threshold;
         public int CooldownDays => _cooldownDays;
-        public bool IsActive(PulseContext ctx) => ctx.TensionBandIndex >= 3;
+        public bool IsActive(PulseContext ctx) => true;
+
+        /// <summary>Нижче «Розпалу» криза тліє: заряд є, голосу нема.</summary>
+        public bool IsSmoldering(PulseContext ctx) => ctx.TensionBandIndex < 3;
+
+        /// <summary>Тління не доходить до першого ступеня передвісника (0,55).</summary>
+        public double SmolderCeiling => 0.25;
 
         /// <summary>Загроза, про яку не попередили, — нечесна.</summary>
         public bool Announces => true;
 
         public int InsistencePerDay(PulseContext ctx)
         {
+            if (ctx.TensionBandIndex < 3) return SmolderRate;
             return ctx.TensionBandIndex >= 4 ? _insistenceAtFracture : _insistenceAtHeat;
         }
     }

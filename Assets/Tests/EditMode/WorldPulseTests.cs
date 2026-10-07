@@ -248,14 +248,13 @@ namespace Game.Tests.EditMode
                     total++;
                 }
 
-            // ВІДОМИЙ РОЗРИВ, зафіксований навмисно: MinActiveTracks = 3
-            // виконується у 2 станах з 10, тому що всі три ставки —
-            // функції однієї полоси. Тест тримає реальну картину на видноті; коли
-            // накопичувачі перестануть бути трьома обгортками однієї змінної, він
-            // впаде — і це буде приводом оновити очікування, а не підігнати його.
-            Assert.AreEqual(1, min, "Худший случай: работает один накопитель");
-            Assert.AreEqual(3, max, "Лучший случай: работают все три");
-            Assert.AreEqual(2, meetingInvariant,
+            // Інваріант 2 виконано (M1.7, 07.10.2026; був ВІДОМИЙ РОЗРИВ G11:
+            // «три — лише у 2 станах з 10», бо всі ставки були функціями однієї
+            // полоси). Повний перебір усіх входів накопичувачів і незалежність
+            // їхніх змінних — PressureInvariantTests.
+            Assert.GreaterOrEqual(min, cfg.MinActiveTracks, "Худший случай: всё равно работают все три");
+            Assert.AreEqual(3, max);
+            Assert.AreEqual(total, meetingInvariant,
                 $"Инвариант «не меньше трёх» держится в {meetingInvariant} состояниях из {total}");
         }
 
@@ -346,11 +345,34 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Pulse_RateGrowsWithTension()
+        public void Pulse_StreetRate_GrowsWithCrowdAndHunger()
         {
+            // Інваріант 2: вулиця читає людність і голод, а не полосу Напруги.
             var street = new StreetPressureSource();
-            Assert.Less(street.InsistencePerDay(Ctx(1, band: 0)), street.InsistencePerDay(Ctx(1, band: 4)),
-                "Напряжённый город порождает события чаще");
+            var calm = new PulseContext(1, false, 1, 1, false, isHungry: false, crowdBand: 1);
+            var crowded = new PulseContext(1, false, 1, 1, false, isHungry: false, crowdBand: 4);
+            var hungry = new PulseContext(1, false, 1, 1, false, isHungry: true, crowdBand: 1);
+
+            Assert.Less(street.InsistencePerDay(calm), street.InsistencePerDay(crowded),
+                "Людно — тісно: подій більше");
+            Assert.Less(street.InsistencePerDay(calm), street.InsistencePerDay(hungry),
+                "Голодний город порождает события чаще");
+            Assert.AreEqual(street.InsistencePerDay(Ctx(1, band: 0)), street.InsistencePerDay(Ctx(1, band: 4)),
+                "Полосу Напруги вулиця не читає — це змінна кризи");
+        }
+
+        [Test]
+        public void Pulse_NightRate_FallsWithOrder()
+        {
+            var night = new NightPressureSource();
+            var freedom = new PulseContext(1, true, 1, 1, false, orderLevel: 0);
+            var lockdown = new PulseContext(1, true, 1, 1, false, orderLevel: 3);
+
+            Assert.Greater(night.InsistencePerDay(freedom), night.InsistencePerDay(lockdown),
+                "Затвор збиває нічну злочинність, Вольниця її розганяє");
+            Assert.AreEqual(night.InsistencePerDay(Ctx(1, night: true, band: 0)),
+                night.InsistencePerDay(Ctx(1, night: true, band: 4)),
+                "Полосу Напруги ніч не читає — це змінна кризи");
         }
 
         [Test]

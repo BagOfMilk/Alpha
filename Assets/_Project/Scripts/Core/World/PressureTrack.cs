@@ -77,6 +77,20 @@ namespace Game.Core.World
             if (Charge > cap) Charge = cap;
         }
 
+        /// <summary>
+        /// Тління: те саме накопичення, але заряд не росте вище стелі —
+        /// частки порогу (<see cref="ISmolderingSource.SmolderCeiling"/>). Те,
+        /// що вже накопичено вище стелі (джерело раніше горіло), не знижується:
+        /// тління лише не додає.
+        /// </summary>
+        internal void Accumulate(int amount, PulseBalance cfg, double ceilingFraction)
+        {
+            if (amount <= 0) return;
+            int ceiling = (int)(Threshold * ceilingFraction);
+            if (Charge >= ceiling) return;
+            Accumulate(amount > ceiling - Charge ? ceiling - Charge : amount, cfg);
+        }
+
         /// <summary>Гравець почув передвісник цієї ступені.</summary>
         internal void MarkDelivered(int level, int day)
         {
