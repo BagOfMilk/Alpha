@@ -156,9 +156,10 @@ namespace Game.Gameplay
                 // Q/E — камера обертається, ПОКИ клавішу тримають (як у Wasteland 3), і плавно доїжджає після
                 // відпускання. Кроки по 90° за натискання були різкі — власник 07.10.2026: «E + Q Дуже різкі».
                 // У кімнаті не обертаємо: три стіни сірого каркаса.
-                if (!_ignoreRealInput && !_shell.EscapeOpen && _inside == null && !PlaytestLog.NoteOpen)
+                if (!_shell.EscapeOpen && _inside == null && !PlaytestLog.NoteOpen)
                 {
-                    float spin = (Input.GetKey(KeyCode.E) ? 1f : 0f) - (Input.GetKey(KeyCode.Q) ? 1f : 0f);
+                    float spin = _ignoreRealInput ? 0f : (Input.GetKey(KeyCode.E) ? 1f : 0f) - (Input.GetKey(KeyCode.Q) ? 1f : 0f);
+                    spin = Mathf.Clamp(spin + _shell.CameraHold, -1f, 1f); // автотур тримає «клавішу» так само
                     if (spin != 0f) _yawTarget = CameraOrbit.Wrap(_yawTarget + spin * cameraSpinSpeed * Time.deltaTime);
                 }
                 int turn = _shell.ConsumeCameraTurn();
@@ -734,7 +735,13 @@ namespace Game.Gameplay
             float k = 1f - Mathf.Exp(-6f * Time.deltaTime);
             // Поворот — окремим, м'якшим згасанням: камера наздоганяє ціль без ривка.
             float kYaw = 1f - Mathf.Exp(-8f * Time.deltaTime);
+            float before = _yaw;
             _yaw = CameraOrbit.Approach(_yaw, exploring && _inside == null ? _yawTarget : 0f, kYaw);
+            if (Time.deltaTime > 1e-4f)
+            {
+                float speed = Mathf.Abs(Mathf.DeltaAngle(before, _yaw)) / Time.deltaTime;
+                if (speed > _shell.CameraYawSpeedMax) _shell.CameraYawSpeedMax = speed;
+            }
             var orbit = Quaternion.Euler(0f, _yaw, 0f);
             hubCamera.transform.rotation = orbit * _camRotBase;
 

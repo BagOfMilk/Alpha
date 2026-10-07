@@ -29,6 +29,8 @@ PH_MATERIALS = {
     "glass":      ("M_Window",           1.0),
     "bark":       ("M_FirBark",          1.5),   # кора з fir_tree_01 (Poly Haven)
     "needles":    ("M_FirTwig",          1.0),   # картки хвої: UV 0..1 на картку, альфа-зріз
+    "canvas":     ("kit_linen",          1.2),   # нейтральний льон набору (Textures/Kit), колір — у матеріалі
+    "bedroll":    ("kit_wool",           0.8),
 }
 
 # Частини, у яких UV задає сам генератор (картки), а не трипланарна проєкція.
@@ -55,6 +57,9 @@ def _material(name):
     if m is None:
         m = bpy.data.materials.new(name)
         m.use_nodes = True
+        # Свіжа сцена без текстур Poly Haven: колір — білий множник, текстуру за назвою матеріалу дає Unity.
+        b0 = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        b0.inputs["Base Color"].default_value = (1, 1, 1, 1)
         if name == "M_Window":
             b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
             b.inputs["Base Color"].default_value = (0.02, 0.025, 0.03, 1)
@@ -170,7 +175,7 @@ def finish(ob):
         return
     part = ob.get("part", "timber")
     mat_name, tex = PH_MATERIALS.get(part, ("M_" + part, 1.0))
-    mat = bpy.data.materials.get(mat_name) or _material("M_" + part if part != "glass" else "M_Window")
+    mat = bpy.data.materials.get(mat_name) or _material(mat_name)
     ob.data.materials.clear(); ob.data.materials.append(mat)
     if part in CARD_PARTS:
         return
@@ -546,6 +551,66 @@ def palisade(name="palisade", origin=(0, 0), length=12.0, gate=True):
 
 # ---------------------------------------------------------------- реквізит
 
+def tent(col=None, out=None):
+    """Намет героя: полотняна «двосхилка» з провислими схилами, задня стінка, передні поли підв'язані
+    навстіж, жердини, розтяжки з кілками й скатка всередині. Замість рожевого намету Kenney
+    (власник 07.10.2026). Вхід — у −Y, як двері будинків."""
+    col = col or collection("Alpha_Props")
+    name = "prop_tent"
+    _remove_tree(name)
+    root = _empty(name, col=col)
+    L, W, H, z0 = 2.6, 2.3, 1.75, 0.04
+    cv = Mesh()
+    nu, nv = 4, 6
+    for side in (-1, 1):
+        grid = []
+        for i in range(nu + 1):
+            u = i / nu                                     # 0 — гребінь, 1 — земля
+            row = []
+            for j in range(nv + 1):
+                v = j / nv
+                y = -L / 2 - 0.12 + (L + 0.24) * v
+                sag = 0.07 * math.sin(math.pi * u) * math.sin(math.pi * v)
+                x = side * (W / 2 * u - sag * 0.6)
+                z = H + (z0 - H) * u - sag
+                row.append(cv.bm.verts.new((x, y, z)))
+            grid.append(row)
+        for i in range(nu):
+            for j in range(nv):
+                q = (grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1])
+                cv.bm.faces.new(q if side > 0 else q[::-1])
+    cv.poly([(-W / 2, L / 2, z0), (W / 2, L / 2, z0), (0, L / 2, H)])          # задня стінка
+    for side in (-1, 1):                                                       # поли входу, відкинуті вбік
+        cv.poly([(side * 0.05, -L / 2 - 0.12, H - 0.05), (side * W / 2, -L / 2 - 0.12, z0),
+                 (side * (W / 2 + 0.35), -L / 2 - 0.45, 0.25)][::side])
+    canvas = cv.to_object(f"{name}.canvas", root, "canvas", col)
+    finish(canvas)
+    _solidify(canvas, 0.015, offset=0.0)
+    m = canvas.data.materials[0]
+    b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    b.inputs["Base Color"].default_value = (0.78, 0.71, 0.56, 1)               # небілене полотно
+    tm = Mesh()
+    for y in (-L / 2, L / 2):
+        tm.cyl((0, y, 0), (0, y, H + 0.14), 0.035, segs=8)                   # стояки
+    tm.cyl((0, -L / 2 - 0.15, H + 0.03), (0, L / 2 + 0.15, H + 0.03), 0.03, segs=8)   # гребінь
+    for (x, y) in ((0, -L / 2 - 1.0), (0, L / 2 + 1.0), (-W / 2 - 0.5, -L / 2 + 0.2), (W / 2 + 0.5, -L / 2 + 0.2),
+                   (-W / 2 - 0.5, L / 2 - 0.2), (W / 2 + 0.5, L / 2 - 0.2)):
+        tm.cyl((x, y, -0.1), (x, y, 0.22), 0.025, 0.012, segs=6)              # кілки
+    for (a, b2) in (((0, -L / 2, H + 0.1), (0, -L / 2 - 1.0, 0.18)), ((0, L / 2, H + 0.1), (0, L / 2 + 1.0, 0.18)),
+                    ((-W / 2 + 0.05, -L / 2 + 0.2, z0 + 0.1), (-W / 2 - 0.5, -L / 2 + 0.2, 0.18)),
+                    ((W / 2 - 0.05, -L / 2 + 0.2, z0 + 0.1), (W / 2 + 0.5, -L / 2 + 0.2, 0.18)),
+                    ((-W / 2 + 0.05, L / 2 - 0.2, z0 + 0.1), (-W / 2 - 0.5, L / 2 - 0.2, 0.18)),
+                    ((W / 2 - 0.05, L / 2 - 0.2, z0 + 0.1), (W / 2 + 0.5, L / 2 - 0.2, 0.18))):
+        tm.cyl(a, b2, 0.008, segs=4)                                          # розтяжки
+    finish(tm.to_object(f"{name}.poles", root, "timber", col))
+    bd = Mesh()
+    bd.cyl((-0.35, -0.2, 0.14), (-0.35, 0.9, 0.14), 0.14, segs=12)           # скатка
+    bd.box((0.25, 0.3, 0.03), (0.9, 1.7, 0.05))                               # підстилка
+    finish(bd.to_object(f"{name}.bedroll", root, "bedroll", col))
+    if out is not None:
+        out[name] = root
+    return root
+
 def props(origin=(0, 0)):
     """Реквізит села й укриття бою: бочки, ящики, віз, колодязь, ковадло, дрова, вогнище, лава,
     мішки, сіно, стяг; укриття — тин (половинне) і кам'яна брила (повне). По одному примірнику."""
@@ -620,6 +685,7 @@ def props(origin=(0, 0)):
     fg.cyl((0, 0, 0), (0, 0, 3.2), 0.05, segs=8); fg.cyl((0, -0.05, 3.0), (0, 0.9, 3.0), 0.03, segs=6)
     fc.poly([(0, 0.0, 3.0), (0, 0.9, 3.0), (0, 0.9, 1.9), (0, 0.0, 1.9)])
     mk("prop_banner", None, {"timber": fg, "cloth": fc})
+    tent(col, out)
     # мішки й сіно
     sk = Mesh()
     for k in range(3):
@@ -799,10 +865,13 @@ def export_all(art_dir):
             for o in [root] + list(root.children_recursive):
                 o.hide_set(False); o.select_set(True)
             path = os.path.join(art_dir, sub, root.name + ".fbx")
+            # Без bake_space_transform: на ланцюжку «корінь → стадія → сітка» він повертав сітки двічі, і в
+            # Unity будівлі лежали на боці — «брили й напівбудови» (власник 07.10.2026). Осі конвертує
+            # Unity при імпорті (ArtImportSettings: bakeAxisConversion).
             bpy.ops.export_scene.fbx(filepath=path, use_selection=True, apply_unit_scale=True,
                                      apply_scale_options='FBX_SCALE_UNITS', axis_forward='-Z', axis_up='Y',
                                      object_types={'EMPTY', 'MESH'}, use_mesh_modifiers=True, mesh_smooth_type='FACE',
-                                     path_mode='RELATIVE', embed_textures=False, bake_space_transform=True)
+                                     path_mode='RELATIVE', embed_textures=False, bake_space_transform=False)
             root.location = loc
             res.append(path)
     return res

@@ -96,9 +96,11 @@ namespace Game.Gameplay.EditorTools
             }
             else
             {
-                // Будівлі, реквізит, земля — статичні.
+                // Будівлі, реквізит, земля — статичні. Осі Blender (Z вгору) конвертує Unity і запікає в
+                // вузли: експорт із bake_space_transform клав будівлі на бік (вкладені вузли стадій).
                 importer.animationType = ModelImporterAnimationType.None;
                 importer.importAnimation = false;
+                importer.bakeAxisConversion = true;
             }
         }
 

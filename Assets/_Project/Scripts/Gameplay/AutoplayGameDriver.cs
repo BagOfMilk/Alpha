@@ -1473,12 +1473,27 @@ namespace Game.Gameplay
             foreach (var f in WalkTo(Walk.VillagePlaces.HeroTentId)) yield return f;
             foreach (var f in InteractExpecting(Walk.VillagePlaces.HeroTentId, UI.UxPanelId.HeroTent, "explore-hero_tent")) yield return f;
 
-            // Камера як у Wasteland 3 (№22.5, W1): поворот на 90° і назад — той самий запит, що Q/E.
-            _shell.RequestCameraTurn(+1);
+            // Камера як у Wasteland 3 (№22.5, W1): E тримають секунду — три кадри посеред повороту і один
+            // після; ворота G4 — кутова швидкість не вища за швидкість Q/E з запасом (ривок дає сотні °/с).
+            _shell.CameraYawSpeedMax = 0f;
+            _shell.CameraHold = 1f;
+            for (int i = 1; i <= 3; i++)
+            {
+                foreach (var f in WaitFrames(20)) yield return f;
+                _host.Capture("explore-camera-spin-" + i);
+                yield return 0;
+            }
+            _shell.CameraHold = 0f;
             foreach (var f in WaitFrames(60)) yield return f;
             _host.Capture("explore-camera-turned");
             yield return 0;
-            _shell.RequestCameraTurn(-1);
+            if (_shell.CameraYawSpeedMax > 150f)
+                throw new InvalidOperationException("Камера: поворот ривком — до " + _shell.CameraYawSpeedMax.ToString("0") +
+                                                    "°/с (межа 150°/с, Q/E — 90°/с).");
+            _host.Log("Камера: найбільша кутова швидкість " + _shell.CameraYawSpeedMax.ToString("0") + "°/с (межа 150).");
+            _shell.CameraHold = -1f;
+            foreach (var f in WaitFrames(60)) yield return f;
+            _shell.CameraHold = 0f;
             foreach (var f in WaitFrames(60)) yield return f;
 
             // Увійти в зведену будівлю (перша будівля, обрана після прологу).

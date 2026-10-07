@@ -233,6 +233,15 @@ namespace Game.Gameplay
         /// </summary>
         public float WalkFacingErrorMax { get; set; }
 
+        /// <summary>Утримання Q/E автотуром: −1 — Q, +1 — E, 0 — відпущено (та сама дія, що клавіші).</summary>
+        public float CameraHold { get; set; }
+
+        /// <summary>
+        /// Найбільша кутова швидкість повороту камери (°/с) з останнього скидання — пише HeroWalker, читає
+        /// автотур (ворота G4). Ривок на 90° за кадр дає сотні °/с; плавний поворот — не більше швидкості Q/E.
+        /// </summary>
+        public float CameraYawSpeedMax { get; set; }
+
         /// <summary>Хто вміє описати стан героя (HeroWalker); рядок будується лише на читання.</summary>
         public Func<string> WalkDebugSource { get; set; }
 

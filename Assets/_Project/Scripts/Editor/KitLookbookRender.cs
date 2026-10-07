@@ -117,7 +117,16 @@ namespace Game.Gameplay.EditorTools
                     string gkey = look.Key.Substring(0, 1);
                     var walk = anims != null ? anims.For(CharacterAnimState.Walk, style) : null;
                     if (walk != null && motionDone.Add(gkey))
+                    {
                         ShootMotion(cam, modelGo, walk, facing, OutDir + "/motion-" + look.Key + ".png", report);
+                        foreach (var st in new[] { CharacterAnimState.Walk, CharacterAnimState.Run, CharacterAnimState.Sprint })
+                        {
+                            var clip = anims.For(st, style);
+                            if (clip != null)
+                                report.AppendLine("   природна швидкість «" + clip.name + "»: " +
+                                                  MeasureStride(modelGo, clip, facing).ToString("0.00") + " м/с (нога на землі)");
+                        }
+                    }
                     if (graph.IsValid()) graph.Destroy();
                     Object.DestroyImmediate(root);
                 }
@@ -252,6 +261,40 @@ namespace Game.Gameplay.EditorTools
             rt.Release();
             Object.DestroyImmediate(rt);
             Object.DestroyImmediate(sheet);
+        }
+
+        /// <summary>
+        /// Швидкість, з якою кліп «іде» (м/с при масштабі 1): кліпи на місці, тож нога, що стоїть на землі,
+        /// їде назад рівно з цією швидкістю. Медіана за кадрами — грі, щоб крутити кліп під справжній рух.
+        /// </summary>
+        private static float MeasureStride(GameObject model, AnimationClip clip, Vector3 facing)
+        {
+            Transform fl = null, fr = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "foot_l") fl = t;
+                else if (t.name == "foot_r") fr = t;
+            }
+            if (fl == null || fr == null) return 0f;
+            const int n = 60;
+            float dt = clip.length / n;
+            var speeds = new List<float>();
+            Vector3 pl = Vector3.zero, pr = Vector3.zero;
+            for (int i = 0; i <= n; i++)
+            {
+                var g = Pose(model, clip, i * dt);
+                var l = fl.position; var r = fr.position;
+                if (i > 0)
+                {
+                    bool leftDown = l.y < r.y;
+                    var d = leftDown ? l - pl : r - pr;
+                    speeds.Add(-Vector3.Dot(d, facing) / dt);
+                }
+                pl = l; pr = r;
+                if (g.IsValid()) g.Destroy();
+            }
+            speeds.Sort();
+            return speeds.Count > 0 ? speeds[speeds.Count / 2] : 0f;
         }
 
         private static void Render(Camera cam, RenderTexture rt)
