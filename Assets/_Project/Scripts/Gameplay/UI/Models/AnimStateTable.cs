@@ -129,9 +129,11 @@ namespace Game.Gameplay.UI
                     switch (style)
                     {
                         case WeaponStyle.Ranged: return Once("Pistol_Shoot");
-                        case WeaponStyle.Blade: return Once("Sword_Regular_A");
-                        case WeaponStyle.Heavy: return Once("Sword_Regular_B");
-                        case WeaponStyle.Polearm: return Once("Sword_Regular_C");
+                        // Удари на місці. Sword_Regular_A/B/C — комбо з кроками: тіло відлітало від клітинки на 0,6–1,7 м
+                        // і крутилось до 160° (аудит кліпів лукбука, 07.10.2026).
+                        case WeaponStyle.Blade: return Once("Sword_Attack");
+                        case WeaponStyle.Heavy: return Once("Melee_Hook");
+                        case WeaponStyle.Polearm: return Once("Sword_Attack");
                         default: return Once("Punch_Cross");
                     }
                 case CharacterAnimState.Ability: return Once("Spell_Simple_Shoot");
