@@ -43,7 +43,7 @@ namespace Game.Core.Characters
                     // Донька боярина Тугара, вправна лучниця; іде від батька до громади. Боярське походження —
                     // золота вишивка й червоні сап'янці; мисливський зелений одяг (художнє); коса з
                     // червоною стрічкою — дівоча (художнє).
-                    return new Appearance { Culture = "ukrainian", Gender = Gender.Female, Hair = "hair_elvs_double_mh_braid",
+                    return new Appearance { Culture = "ukrainian", Gender = Gender.Female, Hair = "hair_braid01",
                             HairColor = HairDarkBrown, SignatureWeapon = "wpn_bow" }
                         .With("shirt", Linen).With("tunic", ForestGreen).With("skirt_long", Charcoal).With("boots", RedLeather)
                         .Accent("embroidery_gold", "braid_ribbon_red", "quiver");
@@ -73,7 +73,7 @@ namespace Game.Core.Characters
                 case "healer":
                     // Знахарка Гафія: лікує всіх, кажучи правду в очі. Темна хустка заміжньої, трави за
                     // поясом (художнє).
-                    return new Appearance { Culture = "ukrainian", Gender = Gender.Female, Hair = "hair_rehmanpolanski_hair_bun_brown",
+                    return new Appearance { Culture = "ukrainian", Gender = Gender.Female, Hair = "hair_ponytail01",
                             HairColor = HairGrey }
                         .With("shirt", Linen).With("skirt_long", Charcoal).With("vest", Walnut).With("shoes", BootLeather)
                         .Accent("headscarf", "herb_pouch", "embroidery_red_black");
@@ -113,7 +113,7 @@ namespace Game.Core.Characters
         private static readonly string[] Fabrics = { Linen, LinenWarm, Undyed, Madder, Ochre, Indigo, Woad, ForestGreen, Moss, Walnut, Saffron };
         private static readonly string[] HairColors = { HairBlack, HairDarkBrown, HairBrown, HairAuburn, HairBlond, HairGrey };
         private static readonly string[] MaleHair = { "hair_short01", "hair_short02", "hair_short03", "hair_short04", "hair_cortu_short_messy_hair", "hair_long01", "hair_ponytail01", "" };
-        private static readonly string[] FemaleHair = { "hair_braid01", "hair_elvs_french_braid_variation", "hair_elvs_reverse_french_braid_bun", "hair_rehmanpolanski_hair_bun_brown", "hair_long01", "hair_ponytail01", "hair_afro01", "hair_elvs_unkempt_french_braid" };
+        private static readonly string[] FemaleHair = { "hair_braid01", "hair_braid01", "hair_braid01", "hair_ponytail01", "hair_long01", "hair_ponytail01", "hair_afro01", "hair_braid01" };
         private static readonly string[] Tops = { "shirt", "tunic", "kaftan", "robe" };
 
         /// <summary>
@@ -158,13 +158,13 @@ namespace Game.Core.Characters
         private static readonly string[] MaleHairOptions =
         {
             "", "hair_short01", "hair_short02", "hair_short03", "hair_short04", "hair_cortu_short_messy_hair",
-            "hair_long01", "hair_o4saken_long01", "hair_ponytail01", "hair_afro01", "hair_culturalibre_hair_01", "hair_culturalibre_hair_02"
+            "hair_long01", "hair_long01", "hair_ponytail01", "hair_afro01", "hair_cortu_short_messy_hair", "hair_short02"
         };
 
         private static readonly string[] FemaleHairOptions =
         {
-            "hair_braid01", "hair_elvs_double_mh_braid", "hair_elvs_french_braid_variation", "hair_elvs_reverse_french_braid_bun",
-            "hair_elvs_unkempt_french_braid", "hair_rehmanpolanski_hair_bun_brown", "hair_long01", "hair_o4saken_long01",
+            "hair_braid01", "hair_braid01", "hair_braid01", "hair_braid01",
+            "hair_braid01", "hair_ponytail01", "hair_long01", "hair_long01",
             "hair_ponytail01", "hair_afro01", "hair_bob01", "hair_faydaen_hair_1", "hair_culturalibre_hair_05", "hair_culturalibre_hair_06"
         };
 

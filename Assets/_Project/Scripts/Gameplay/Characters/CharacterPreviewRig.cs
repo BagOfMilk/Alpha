@@ -25,6 +25,7 @@ namespace Game.Gameplay.Characters
         private GameObject _model;
         private string _signature;
         private Vector3 _baseFacing = Vector3.forward;
+        private int _measureIn; // кадрів до заміру напрямку тіла в анімованій позі
         // Світло станка: у URP без шарів світла (m_SupportsLightLayers: 0) cullingMask не гарантований,
         // тож направлене світло вмикається лише поки прев'ю видно — інакше підсвітило б село.
         private readonly System.Collections.Generic.List<GameObject> _lights = new System.Collections.Generic.List<GameObject>();
@@ -60,9 +61,9 @@ namespace Game.Gameplay.Characters
             if (_model == null) return;
             _model.transform.localPosition = Vector3.zero;
             _model.transform.localRotation = Quaternion.identity;
-            // Анімована (Idle) постать дивиться вздовж +Z кореня; бінд-поза — за стегнами.
-            var animLib = GetComponent<CharacterAnimLibrary>();
-            _baseFacing = animLib != null && animLib.IsComplete ? Vector3.forward : CharacterAssembler.Facing(_model);
+            // Напрям тіла в бінд-позі — за стегнами; з кліпом Idle його переміряємо за першою анімованою позою.
+            _baseFacing = CharacterAssembler.Facing(_model);
+            _measureIn = 0;
             Frame();
 
             // Не бінд-поза, а жива стійка: кліп Idle з бібліотеки набору (якщо є).
@@ -74,14 +75,20 @@ namespace Game.Gameplay.Characters
                 anim.idle = idle;
                 anim.enabled = false;
                 anim.enabled = true;
+                _measureIn = 2;
             }
         }
 
         private void LateUpdate()
         {
             if (_model == null) return;
+            // Кадр — за ПОТОЧНОЮ позою: перший кадр після збирання ще в бінд-позі, де тіло зсунуте від кореня,
+            // тож кадрований наперед персонаж «виїжджав» з кадру (порожнє прев'ю жінки, тур 07.10.2026).
+            if (_camera != null && _camera.enabled) Frame();
+            if (_measureIn > 0 && --_measureIn == 0)
+                _baseFacing = Quaternion.Inverse(_model.transform.localRotation) * CharacterAssembler.BodyFacing(_model);
             // Обличчям до камери: камера стоїть на +Z і дивиться в −Z станка, тож постать — у +Z; плюс поворот мишею.
-            float face = Quaternion.FromToRotation(_baseFacing, Vector3.forward).eulerAngles.y;
+            float face = Vector3.SignedAngle(new Vector3(_baseFacing.x, 0f, _baseFacing.z), Vector3.forward, Vector3.up);
             float yaw = LookbookControl.Yaw ?? Yaw; // лукбук-тур задає кут сам
             _model.transform.localRotation = Quaternion.Euler(0f, face + yaw, 0f);
         }

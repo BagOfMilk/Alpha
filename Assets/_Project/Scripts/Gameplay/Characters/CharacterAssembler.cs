@@ -35,9 +35,12 @@ namespace Game.Gameplay.Characters
             foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 string part = PartOf(smr.name);
+                // Межі скінованих частин рахуються з бінд-пози, а тіло у FBX зсунуте від кореня (~2,6 м);
+                // анімація ставить його в центр, і Unity відсікав голову як «поза кадром» (обличчя зникало).
+                smr.updateWhenOffscreen = true;
                 if (part.StartsWith("body_"))
                     smr.gameObject.SetActive(plan.ShowsBodyZone(part.Substring(5)));
-                else if (part != "low-poly")
+                else if (!IsFacePart(part))
                     smr.gameObject.SetActive(false); // повне тіло-проксі й базова сітка — не в грі
             }
 
@@ -45,7 +48,7 @@ namespace Game.Gameplay.Characters
             foreach (var smr in kit.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 string part = PartOf(smr.name);
-                if (part.StartsWith("body_") || part == "low-poly" || part == "body" || part == "basemesh") continue;
+                if (part.StartsWith("body_") || IsFacePart(part) || part == "body" || part == "basemesh") continue;
                 string tint;
                 if (!plan.Wants(part, out tint)) continue;
                 if (!Rebind(smr, bones)) continue;
@@ -57,6 +60,16 @@ namespace Game.Gameplay.Characters
             if (Application.isPlaying) Object.Destroy(kit); else Object.DestroyImmediate(kit); // лукбук редактора — поза Play
             SetLayer(root.transform, layer);
             return root;
+        }
+
+        /// <summary>
+        /// Частини обличчя з тіла MPFB, що завжди лишаються: очі («low-poly»), брови, вії. Без брів і вій
+        /// обличчя читалось манекеном (власник 07.10.2026).
+        /// </summary>
+        public static bool IsFacePart(string part)
+        {
+            string p = part.ToLowerInvariant();
+            return p == "low-poly" || p.Contains("eyebrow") || p.Contains("eyelash");
         }
 
         /// <summary>«kit_m.shirt» → «shirt»; «body_m_latin.body_torso» → «body_torso».</summary>
@@ -134,6 +147,44 @@ namespace Game.Gameplay.Characters
             across.y = 0f;
             if (across.sqrMagnitude < 1e-6f) return model.transform.forward;
             return Vector3.Cross(across.normalized, Vector3.up).normalized;
+        }
+
+        /// <summary>
+        /// Напрям тіла в анімованій позі: для гуманоїда — орієнтація центру мас, яку рахує сам Unity
+        /// (<see cref="Animator.bodyRotation"/>; стійка з виставленою ногою не повертає її, як стегна); інакше —
+        /// <see cref="Facing"/>. Лише після того, як аніматор хоч раз обчислив позу.
+        /// </summary>
+        public static Vector3 BodyFacing(GameObject model)
+        {
+            var animator = model.GetComponentInChildren<Animator>();
+            if (animator != null && animator.isHuman)
+            {
+                var f = animator.bodyRotation * Vector3.forward;
+                f.y = 0f;
+                if (f.sqrMagnitude > 1e-4f) return f.normalized;
+            }
+            return Facing(model);
+        }
+
+        /// <summary>
+        /// Поворот навколо вертикалі, що переводить напрям <paramref name="from"/> у <paramref name="to"/>.
+        /// <see cref="Quaternion.FromToRotation"/> для протилежних векторів бере довільну вісь і може
+        /// перекинути модель догори ногами.
+        /// </summary>
+        public static Quaternion YawTo(Vector3 from, Vector3 to)
+        {
+            from.y = 0f; to.y = 0f;
+            return Quaternion.Euler(0f, Vector3.SignedAngle(from, to, Vector3.up), 0f);
+        }
+
+        /// <summary>Доповернути модель навколо вертикалі так, щоб тіло дивилось у <paramref name="forward"/>; кут доповороту.</summary>
+        public static float AlignBody(GameObject model, Vector3 forward)
+        {
+            var body = BodyFacing(model);
+            forward.y = 0f;
+            float yaw = Vector3.SignedAngle(body, forward, Vector3.up);
+            if (Mathf.Abs(yaw) > 0.5f) model.transform.Rotate(0f, yaw, 0f, Space.World);
+            return yaw;
         }
     }
 }

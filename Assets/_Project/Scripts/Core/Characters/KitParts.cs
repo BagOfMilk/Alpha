@@ -41,16 +41,16 @@ namespace Game.Core.Characters
         /// <summary>Бороди й вуса — лише чоловічий набір.</summary>
         public static readonly string[] FacialHair = { "beard_full", "beard_short", "moustache" };
 
-        /// <summary>CC0-зачіски MakeHuman у наборі (ключ = "hair_" + назва ассета).</summary>
+        /// <summary>
+        /// CC0-зачіски MakeHuman у наборі (ключ = "hair_" + назва ассета). Лише CC0: 07.10.2026 прибрано 11
+        /// зачісок з ліцензіями AGPL3 і CC BY, що потрапили в набір разом з CC0 (репозиторій публічний, Поправка №18).
+        /// </summary>
         public static readonly string[] Hair =
         {
-            "hair_afro01", "hair_bob01", "hair_bob02", "hair_braid01", "hair_cortu_short_messy_hair", "hair_cortu_straight_bangs",
-            "hair_culturalibre_hair_01", "hair_culturalibre_hair_02", "hair_culturalibre_hair_05", "hair_culturalibre_hair_06",
-            "hair_elvs_double_mh_braid", "hair_elvs_french_braid_variation", "hair_elvs_reverse_french_braid_bun",
-            "hair_elvs_unkempt_french_braid", "hair_faydaen_hair_1", "hair_littleright_bobcut_hair", "hair_long01",
-            "hair_o4saken_long01", "hair_ponytail01", "hair_rehmanpolanski_hair_bun_brown", "hair_short01", "hair_short02",
-            "hair_short03", "hair_short04", "hair_sonntag78_blond_with_headband", "hair_sonntag78_junglebook_hair",
-            "hair_toigo_blunt_bob", "hair_toigo_blunt_bob_with_bangs", "hair_toigo_curled_under_bob",
+            "hair_afro01", "hair_bob01", "hair_bob02", "hair_braid01", "hair_cortu_short_messy_hair",
+            "hair_cortu_straight_bangs", "hair_culturalibre_hair_05", "hair_culturalibre_hair_06",
+            "hair_faydaen_hair_1", "hair_long01", "hair_ponytail01", "hair_short01", "hair_short02", "hair_short03",
+            "hair_short04", "hair_toigo_blunt_bob", "hair_toigo_blunt_bob_with_bangs", "hair_toigo_curled_under_bob",
             "hair_toigo_curled_under_bob_with_bangs", "hair_toigo_inverted_bob", "hair_toigo_inverted_bob_with_bangs"
         };
 

@@ -10,7 +10,7 @@
 # мапить його сам), анімації — окремо (Quaternius UAL, CC0) і ретаргетяться в Unity через Humanoid.
 # Детерміновано: жодного random — фенотип кожного персонажа заданий числами нижче.
 
-import bpy, os, importlib
+import bpy, re, os, importlib
 
 MPFB_DATA = os.path.join(bpy.utils.user_resource('EXTENSIONS'), ".user", "user_default", "mpfb", "data")
 COL = "Alpha_Characters"
@@ -18,8 +18,25 @@ COL = "Alpha_Characters"
 def _svc(mod, cls):
     return getattr(importlib.import_module("bl_ext.user_default.mpfb." + mod), cls)
 
+def asset_license(kind, name):
+    """Ліцензія асета бібліотеки MakeHuman за заголовками його .mhclo/.mhmat/.proxy: 'CC0' або рядок як є.
+    Бібліотека змішана: поруч із CC0 лежать AGPL3 і CC BY, а репозиторій публічний (Поправка №18 — лише CC0)."""
+    folder = os.path.join(MPFB_DATA, kind, name)
+    heads = []
+    for f in sorted(os.listdir(folder)):
+        if f.endswith((".mhclo", ".mhmat", ".proxy")):
+            with open(os.path.join(folder, f), encoding="utf-8", errors="ignore") as fh:
+                heads += [l.strip() for _, l in zip(range(40), fh) if re.search(r"licen|CC0|CC-0|AGPL|CC.?BY", l, re.I)]
+    text = " | ".join(heads)
+    if re.search(r"AGPL|CC[ _-]?BY", text, re.I):
+        return text
+    return "CC0" if re.search(r"CC-?0", text) else (text or "невідома")
+
 def _asset(kind, name, ext):
     folder = os.path.join(MPFB_DATA, kind, name)
+    lic = asset_license(kind, name)
+    if lic != "CC0":
+        raise PermissionError(f"{kind}/{name}: не CC0 ({lic})")
     for f in os.listdir(folder):
         if f.endswith(ext):
             return os.path.join(folder, f)

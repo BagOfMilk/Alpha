@@ -96,7 +96,7 @@ namespace Game.Core.Characters
                 UA("olha_kyivska", "Княгиня Ольга", Lit,
                     "«Повість минулих літ» (XII ст.)",
                     "мудра й безжальна володарка: помста — тоді, коли її найменше чекають", He,
-                    L("ukrainian", F, "hair_elvs_reverse_french_braid_bun", DBrown).With("robe", Crimson).With("shoes", RedBoot)
+                    L("ukrainian", F, "hair_braid01", DBrown).With("robe", Crimson).With("shoes", RedBoot)
                         .Accent("headscarf", "embroidery_gold", "gold_earring")),
                 // Народна казка й легенда
                 UA("kotyhoroshko", "Котигорошко", Folk,
@@ -149,7 +149,7 @@ namespace Game.Core.Characters
                 UA("natalka_poltavka", "Наталка Полтавка", Lit,
                     "Іван Котляревський, «Наталка Полтавка» (1819)",
                     "вірна й уперта: чекатиме свого, хоч би хто сватав", Cr,
-                    L("ukrainian", F, "hair_elvs_double_mh_braid", Blond).With("shirt", Linen).With("skirt_long", Woad).With("vest", Crimson).With("boots", RedBoot)
+                    L("ukrainian", F, "hair_braid01", Blond).With("shirt", Linen).With("skirt_long", Woad).With("vest", Crimson).With("boots", RedBoot)
                         .Accent("embroidery_red_black", "braid_ribbon_red", "kerchief")),
                 UA("mykola_dzheria", "Микола Джеря", Lit,
                     "Іван Нечуй-Левицький, «Микола Джеря» (1878)",
@@ -160,7 +160,7 @@ namespace Game.Core.Characters
                 UA("mavka", "Мавка", Lit,
                     "Леся Українка, «Лісова пісня» (1911)",
                     "лісова душа, що вибрала людське серце — і не шкодує", He,
-                    L("ukrainian", F, "hair_o4saken_long01", Moss_Hair).With("robe", Forest).With("shoes", Walnut)
+                    L("ukrainian", F, "hair_long01", Moss_Hair).With("robe", Forest).With("shoes", Walnut)
                         .Accent("herb_pouch", "braid_ribbon_red")),
 
                 // =================== Британські острови й Північ ===================
@@ -182,7 +182,7 @@ namespace Game.Core.Characters
                         .Accent("staff", "herb_pouch")),
                 W("morgan_le_fay", "Моргана", Lit, "британська", "Томас Мелорі, «Смерть Артура» (1485)",
                     "чаклунка й сестра короля: її ворожнеча — родинна, а тому найлютіша", He,
-                    L("nordic", F, "hair_o4saken_long01", Black).With("robe", Purple).With("shoes", Soot)
+                    L("nordic", F, "hair_long01", Black).With("robe", Purple).With("shoes", Soot)
                         .Accent("gris_gris_amulets", "gold_earring"), enemy: true),
                 W("mordred", "Мордред", Lit, "британська", "Томас Мелорі, «Смерть Артура» (1485)",
                     "син-зрадник, що чекав, поки король відвернеться", Br,
@@ -202,11 +202,11 @@ namespace Game.Core.Characters
                         .Accent("gold_signet", "wolf_fur_collar")),
                 W("sigurd", "Сігурд", Lit, "скандинавська", "«Сага про Вольсунгів» (XIII ст.)",
                     "змієборець, що зрозумів мову птахів — і почув у ній свою загибель", Br,
-                    L("nordic", M, "hair_culturalibre_hair_01", Blond, "beard_short", "wpn_sword").With("tunic", Rust).With("trousers", Char).With("cloak", Undyed).With("boots", Boot)
+                    L("nordic", M, "hair_cortu_short_messy_hair", Blond, "beard_short", "wpn_sword").With("tunic", Rust).With("trousers", Char).With("cloak", Undyed).With("boots", Boot)
                         .Accent("gold_earring")),
                 W("brynhild", "Брюнгільда", Lit, "скандинавська", "«Сага про Вольсунгів» (XIII ст.); «Старша Едда»",
                     "діва-воїтелька, що не прощає обману навіть коханому", Br,
-                    L("nordic", F, "hair_elvs_french_braid_variation", Blond, "", "wpn_spear").With("tunic", Sky).With("skirt_long", Char).With("boots", Boot)
+                    L("nordic", F, "hair_braid01", Blond, "", "wpn_spear").With("tunic", Sky).With("skirt_long", Char).With("boots", Boot)
                         .Accent("cloak_brooch_knot", "iron_armrings")),
                 W("vainamoinen", "Вяйнямьойнен", Lit, "фінська", "Еліас Ленрот, «Калевала» (1835/1849)",
                     "старий співець, чия пісня сильніша за меч і будує човни з нічого", He,
@@ -214,7 +214,7 @@ namespace Game.Core.Characters
                         .Accent("staff", "tally_cord")),
                 W("louhi", "Лоухі", Lit, "фінська", "Еліас Ленрот, «Калевала» (1835/1849)",
                     "господиня темної Похйоли: торгується, чаклує і ховає сонце", He,
-                    L("nordic", F, "hair_elvs_unkempt_french_braid", Grey).With("robe", Soot).With("cloak", Char).With("shoes", Soot)
+                    L("nordic", F, "hair_braid01", Grey).With("robe", Soot).With("cloak", Char).With("shoes", Soot)
                         .Accent("wolf_fur_collar", "gris_gris_amulets"), enemy: true),
                 W("lacplesis", "Лачплесіс", Lit, "латиська", "Андрейс Пумпурс, «Лачплесіс» (1888)",
                     "ведмежий син, що захищає свою землю від чужих лицарів", Br,
@@ -268,7 +268,7 @@ namespace Game.Core.Characters
                         .Accent("gold_signet")),
                 W("penelope", "Пенелопа", Lit, "давньогрецька", "Гомер, «Одіссея»",
                     "тче вдень і розпускає вночі: її терпіння — теж зброя", Cr,
-                    L("mediterranean", F, "hair_elvs_reverse_french_braid_bun", Black).With("robe", Plum).With("shoes", Boot)
+                    L("mediterranean", F, "hair_braid01", Black).With("robe", Plum).With("shoes", Boot)
                         .Accent("gold_earring", "tally_cord")),
                 W("atalanta", "Аталанта", Lit, "давньогрецька", "Аполлодор, «Бібліотека»; Овідій, «Метаморфози»",
                     "мисливиця, яку не наздогнати і не перестріляти", Sh,
@@ -302,7 +302,7 @@ namespace Game.Core.Characters
                         .Accent("wolf_fur_collar", "boyar_belt")),
                 W("nestan_darejan", "Нестан-Дареджан", Lit, "грузинська", "Шота Руставелі, «Витязь у тигровій шкурі» (XII ст.)",
                     "царівна в полоні, що й з полону веде свою гру", He,
-                    L("middle_eastern", F, "hair_o4saken_long01", Black).With("robe", Rose).With("shoes", RedBoot)
+                    L("middle_eastern", F, "hair_long01", Black).With("robe", Rose).With("shoes", RedBoot)
                         .Accent("embroidery_gold", "gold_earring")),
                 W("rostam", "Рустам", Lit, "перська", "Фірдоусі, «Шахнаме» (1010)",
                     "найсильніший з героїв Ірану, якому доля судила вбити власного сина", Br,
@@ -310,7 +310,7 @@ namespace Game.Core.Characters
                         .Accent("wolf_fur_collar", "gold_signet")),
                 W("gordafarid", "Гордафарід", Lit, "перська", "Фірдоусі, «Шахнаме» (1010)",
                     "діва-воїн, що сама вийшла проти Сухраба і перехитрила його", Sh,
-                    L("middle_eastern", F, "hair_elvs_french_braid_variation", Black, "", "wpn_bow").With("tunic", Woad).With("trousers", Char).With("boots", Boot)
+                    L("middle_eastern", F, "hair_braid01", Black, "", "wpn_bow").With("tunic", Woad).With("trousers", Char).With("boots", Boot)
                         .Accent("quiver", "iron_armrings")),
                 W("zahhak", "Заххак", Lit, "перська", "Фірдоусі, «Шахнаме» (1010)",
                     "цар-тиран зі зміями на плечах, що годує їх своїми підданими", Br,
@@ -318,7 +318,7 @@ namespace Game.Core.Characters
                         .Accent("gris_gris_amulets", "gold_signet"), enemy: true),
                 W("scheherazade", "Шахерезада", Lit, "арабська/перська", "«Тисяча й одна ніч» (фр. переклад А. Галлана, 1704–1717)",
                     "оповідачка, що тисячу ночей рятує життя історіями", He,
-                    L("middle_eastern", F, "hair_o4saken_long01", Black).With("robe", Plum).With("sharovary", Gold).With("shoes", RedBoot)
+                    L("middle_eastern", F, "hair_long01", Black).With("robe", Plum).With("sharovary", Gold).With("shoes", RedBoot)
                         .Accent("gold_earring", "embroidery_gold")),
                 W("ali_baba", "Алі-Баба", Lit, "арабська", "«Тисяча й одна ніч» (А. Галлан, 1704–1717)",
                     "бідний дроворуб, що підслухав два слова — і став багатим і обережним", Cr,
@@ -364,7 +364,7 @@ namespace Game.Core.Characters
                         .Accent("iron_armrings", "gold_earring")),
                 W("draupadi", "Драупаді", Lit, "індійська", "«Махабхарата»",
                     "цариця, що не пробачила образи — і змусила світ це пам'ятати", He,
-                    L("south_asian", F, "hair_o4saken_long01", Black).With("robe", Crimson).With("shoes", RedBoot)
+                    L("south_asian", F, "hair_long01", Black).With("robe", Crimson).With("shoes", RedBoot)
                         .Accent("embroidery_gold", "gold_earring")),
                 W("duryodhana", "Дурйодгана", Lit, "індійська", "«Махабхарата»",
                     "заздрісний царевич, що поставив царство на гру в кості", Br,
@@ -378,7 +378,7 @@ namespace Game.Core.Characters
                 // =================== Східна й Південно-Східна Азія ===================
                 W("hua_mulan", "Хуа Мулань", Lit, "китайська", "«Балада про Мулань» (V–VI ст.)",
                     "пішла на війну замість батька й дванадцять років лишалась нерозпізнаною", Br,
-                    L("east_asian", F, "hair_rehmanpolanski_hair_bun_brown", Black, "", "wpn_sword").With("kaftan", Crimson).With("trousers", Char).With("boots", Soot)
+                    L("east_asian", F, "hair_ponytail01", Black, "", "wpn_sword").With("kaftan", Crimson).With("trousers", Char).With("boots", Soot)
                         .Accent("iron_armrings")),
                 W("sun_wukong", "Сунь Укун", Lit, "китайська", "У Чен'ень, «Подорож на Захід» (1592)",
                     "цар мавп: непокірний, кмітливий і з посохом, що росте за бажанням", Br,
@@ -398,7 +398,7 @@ namespace Game.Core.Characters
                         .Accent("gold_signet"), enemy: true),
                 W("tomoe_gozen", "Томое Ґодзен", Lit, "японська", "«Повість про дім Тайра» (XIV ст.)",
                     "лучниця й вершниця, вартна тисячі воїнів", Sh,
-                    L("east_asian", F, "hair_o4saken_long01", Black, "", "wpn_bow").With("kaftan", Indigo).With("trousers", Char).With("boots", Soot)
+                    L("east_asian", F, "hair_long01", Black, "", "wpn_bow").With("kaftan", Indigo).With("trousers", Char).With("boots", Soot)
                         .Accent("quiver")),
                 W("benkei", "Бенкей", Lit, "японська", "«Ґікейкі» (XIV–XV ст.)",
                     "чернець-велетень, що стояв на мосту до останнього подиху", Br,
@@ -418,7 +418,7 @@ namespace Game.Core.Characters
                         .Accent("sash")),
                 W("trung_trac", "Чинг Чак", Lit, "в'єтнамська", "в'єтнамські хроніки й храмові перекази (сестри Чинг, I ст.)",
                     "сестра-повстанниця на бойовому слоні, що вигнала намісника", Br,
-                    L("east_asian", F, "hair_elvs_reverse_french_braid_bun", Black, "", "wpn_sword").With("robe", Gold).With("shoes", Soot)
+                    L("east_asian", F, "hair_braid01", Black, "", "wpn_sword").With("robe", Gold).With("shoes", Soot)
                         .Accent("iron_armrings", "embroidery_gold")),
                 W("hang_tuah", "Ханг Туах", Lit, "малайська", "«Хікаят Ханг Туах» (XVII–XVIII ст.)",
                     "адмірал, вірний султанові навіть тоді, коли той несправедливий", Br,
@@ -478,11 +478,11 @@ namespace Game.Core.Characters
                         .Accent("gris_gris_amulets", "gold_earring")),
                 W("juana_azurduy", "Хуана Асурдуй", Lit, "болівійська", "сучасні їй військові звіти й мемуари (1810-ті)",
                     "командирка партизан, що вела бій навіть вагітною", Br,
-                    L("latin", F, "hair_elvs_french_braid_variation", Black, "", "wpn_sabre").With("tunic", Woad).With("trousers", Char).With("boots", Boot)
+                    L("latin", F, "hair_braid01", Black, "", "wpn_sabre").With("tunic", Woad).With("trousers", Char).With("boots", Boot)
                         .Accent("sash")),
                 W("maui", "Мауї", Folk, "полінезійська", "полінезійські міфи (записи XIX ст.)",
                     "хитрун, що виловив острови з моря і сповільнив сонце", Cr,
-                    L("latin", M, "hair_culturalibre_hair_02", Black, "", "wpn_club").With("tunic", Ochre).With("shoes", Walnut)
+                    L("latin", M, "hair_short02", Black, "", "wpn_club").With("tunic", Ochre).With("shoes", Walnut)
                         .Accent("gris_gris_amulets", "tally_cord")),
             };
             return list;

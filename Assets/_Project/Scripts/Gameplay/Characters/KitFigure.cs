@@ -16,6 +16,10 @@ namespace Game.Gameplay.Characters
     {
         private string _signature;
         private GameObject _model;
+        private int _alignIn; // кадрів до вирівнювання тіла за першою анімованою позою
+
+        /// <summary>Доповорот тіла після першої анімованої пози, градуси (охоронець ходи, лукбук).</summary>
+        public float AlignedYaw { get; private set; }
 
         public GameObject Model => _model;
         public FigureAnimation Animation => _model != null ? _model.GetComponent<FigureAnimation>() : null;
@@ -45,11 +49,14 @@ namespace Game.Gameplay.Characters
             _signature = sig;
             if (_model == null) return false;
             _model.transform.localPosition = Vector3.zero;
-            // Гуманоїдна анімація ставить тіло вздовж +Z кореня — анімованій постаті доповорот не потрібен
-            // (він і розвертав героя задом наперед). Без кліпів — вирівнюємо бінд-позу за стегнами.
+            // Напрям тіла не вгадуємо з бінд-пози (через вгадування герой ходив задом наперед — власник,
+            // 07.10.2026): без кліпів вирівнюємо бінд-позу за стегнами одразу, з кліпами — за першою
+            // анімованою позою (LateUpdate, коли аніматор уже обчислив її).
             bool animated = anims != null && anims.IsComplete;
             if (!animated)
-                _model.transform.rotation = Quaternion.FromToRotation(CharacterAssembler.Facing(_model), transform.forward) * _model.transform.rotation;
+                _model.transform.rotation = CharacterAssembler.YawTo(CharacterAssembler.Facing(_model), transform.forward) * _model.transform.rotation;
+            _alignIn = animated ? 2 : 0;
+            AlignedYaw = 0f;
             _model.transform.localScale = Vector3.one * (ArtScale.World * extraScale);
 
             if (anims != null && anims.IsComplete)
@@ -65,6 +72,13 @@ namespace Game.Gameplay.Characters
                 anim.enabled = true;
             }
             return true;
+        }
+
+        private void LateUpdate()
+        {
+            if (_alignIn <= 0 || _model == null) return;
+            if (--_alignIn > 0) return;
+            AlignedYaw = CharacterAssembler.AlignBody(_model, transform.forward);
         }
 
         /// <summary>Ключ зброї, яку видно на моделі (надіта чи впізнавана); null — без зброї.</summary>

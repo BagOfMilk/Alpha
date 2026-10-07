@@ -205,7 +205,7 @@ namespace Game.Gameplay
             model.transform.localPosition = Vector3.zero;
             // Обличчям до камери (вона дивиться вздовж +Z станка) і на чверть обороту вбік — як на парадному портреті.
             var facing = Game.Gameplay.Characters.CharacterAssembler.Facing(model);
-            model.transform.rotation = Quaternion.Euler(0f, 20f, 0f) * Quaternion.FromToRotation(facing, Vector3.back) * model.transform.rotation;
+            model.transform.rotation = Quaternion.Euler(0f, 20f, 0f) * Game.Gameplay.Characters.CharacterAssembler.YawTo(facing, Vector3.back) * model.transform.rotation;
             return model;
         }
 

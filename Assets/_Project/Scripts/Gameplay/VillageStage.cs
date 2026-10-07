@@ -335,7 +335,8 @@ namespace Game.Gameplay
             }
         }
 
-        private static bool ShowStageNodes(Transform model, int stage)
+        /// <summary>Показати рівно вузол «будівля.stageN» поточної стадії; false — вузлів стадій у моделі немає.</summary>
+        public static bool ShowStageNodes(Transform model, int stage)
         {
             bool any = false;
             foreach (var t in model.GetComponentsInChildren<Transform>(true))

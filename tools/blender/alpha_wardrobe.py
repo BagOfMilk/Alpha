@@ -149,6 +149,12 @@ def _make_body(cid, spec):
     _activate(base); bpy.ops.mpfb.load_library_skin(filepath=_asset("skins", spec["skin"], ".mhmat"))
     _activate(base); bpy.ops.mpfb.load_library_proxy(filepath=_asset("proxymeshes", spec["proxy"], ".proxy"), object_type="Proxymeshes")
     _activate(base); bpy.ops.mpfb.load_library_clothes(filepath=_asset("eyes", "low-poly", ".mhclo"), object_type="Eyes", material_type="MAKESKIN")
+    # Брови й вії (CC0 MakeHuman): без них обличчя читалось манекеном (власник 07.10.2026: «чому все так погано?»).
+    for kind, name, otype in (("eyebrows", spec.get("brows", "eyebrow001"), "Eyebrows"), ("eyelashes", "eyelashes01", "Eyelashes")):
+        try:
+            _activate(base); bpy.ops.mpfb.load_library_clothes(filepath=_asset(kind, name, ".mhclo"), object_type=otype, material_type="MAKESKIN")
+        except Exception as e:
+            print("brows fail", kind, name, e)
     rig.name = cid
     body = None
     for o in list(rig.children):
@@ -263,6 +269,55 @@ def wardrobe(rig, body):
     out["cuirass"] = shell(rig, body, "cuirass", "steel", TORSO, 0.05, cut=lambda co: co.z > zw - 0.02)
     out["bracers"] = shell(rig, body, "bracers", "leather", LOWER_ARMS, 0.016, cut=lambda co: True)
     out["greaves"] = shell(rig, body, "greaves", "steel", CALVES, 0.022, cut=lambda co: co.y < _front_y(rig) + 0.06 and co.z > za + 0.08)
+    return out
+
+# Ключ набору -> річ бібліотеки MPFB (CC0, справжній крій і розгортка) для статі m/f. Ключі ті самі, що в
+# ядрі (KitParts.Clothing) — гра й сейви не змінюються. Чого в бібліотеці немає (жилет у чоловіків, плащ,
+# броня), лишається оболонкою. Власник 07.10.2026: оболонки «рвані й просвічують» — «роби краще».
+LIBRARY_CLOTHES = {
+    "shirt":      {"m": "toigo_fisherman_sweater", "f": "toigo_fisherman_sweater"},
+    "tunic":      {"m": "toigo_shift_dress", "f": "toigo_shift_dress"},
+    "robe":       {"m": "mindfront_kimono", "f": "mindfront_kimono"},
+    "kaftan":     {"m": "mindfront_kimono", "f": "mindfront_kimono"},
+    "trousers":   {"m": "toigo_wool_pants", "f": "toigo_wool_pants"},
+    "sharovary":  {"m": "toigo_harem_pants", "f": "toigo_harem_pants"},
+    "skirt_long": {"f": "toigo_long_full_skirt"},
+    "vest":       {"f": "toigo_bodice-style_top"},
+    "boots":      {"m": "culturalibre_male_boots", "f": "culturalibre_heroine_boots_1"},
+    "shoes":      {"m": "toigo_mj_cloth_shoes", "f": "toigo_mj_cloth_shoes"},
+}
+LIBRARY_FABRIC = {"shirt": "linen", "tunic": "wool", "robe": "linen", "kaftan": "wool", "trousers": "wool",
+                  "sharovary": "linen", "skirt_long": "linen", "vest": "fleece", "boots": "leather", "shoes": "leather"}
+
+def library_wardrobe(rig, gender, items):
+    """Замінює оболонки на речі з бібліотеки MPFB, де є відповідник. Тканина — наш нейтральний матеріал
+    (колір задає гра множником), розгортка — рідна бібліотечна. Повертає {ключ: обʼєкт}."""
+    base = bpy.data.objects[rig.name + ".basemesh"]
+    out = {}
+    for key, by_gender in LIBRARY_CLOTHES.items():
+        asset = by_gender.get(gender)
+        if not asset:
+            continue
+        before = set(bpy.data.objects)
+        _activate(base)
+        try:
+            bpy.ops.mpfb.load_library_clothes(filepath=_asset("clothes", asset, ".mhclo"), object_type="Clothes", material_type="MAKESKIN")
+        except Exception as e:
+            print("library fail", key, asset, e); continue
+        new = [o for o in set(bpy.data.objects) - before if o.type == 'MESH']
+        if not new:
+            print("library empty", key, asset); continue
+        old = items.get(key) or bpy.data.objects.get(f"{rig.name}.{key}")
+        if old is not None:
+            bpy.data.objects.remove(old, do_unlink=True)
+        o = new[0]
+        for m in [m for m in o.modifiers if m.type == 'SUBSURF']:
+            o.modifiers.remove(m)
+        o.name = f"{rig.name}.{key}"; o["kit_part"] = key; o["kit_kind"] = LIBRARY_FABRIC[key]; o["alpha_char"] = rig.name
+        o.data.materials.clear(); o.data.materials.append(_fabric_material(LIBRARY_FABRIC[key]))
+        _budget(o, 4000)
+        out[key] = o
+    items.update(out)
     return out
 
 def _back_y(rig):
@@ -636,7 +691,22 @@ def prepare_textures(art_dir):
     """Нейтральні тканини (колір задає гра множенням), кольчуга, стьобка, волосся-карти — у Textures/Kit."""
     import numpy as np
     out = os.path.join(art_dir, "Textures", "Kit"); os.makedirs(out, exist_ok=True)
+    def from_disk(mat_name, kit_name, rough, metal=0.0):
+        # Чистий запуск (build_kit_all.py): вихідних матеріалів Poly Haven у сцені немає, але
+        # нейтралізовані текстури вже лежать у Textures/Kit — беремо їх.
+        p = os.path.join(out, f"kit_{kit_name}.png")
+        if not os.path.exists(p):
+            raise KeyError(f"немає ні матеріалу, ні {p}")
+        base = bpy.data.images.load(p, check_existing=True); base.name = f"kit_{kit_name}"
+        pn = os.path.join(out, f"kit_{kit_name}_nor.png")
+        nor = bpy.data.images.load(pn, check_existing=True) if os.path.exists(pn) else None
+        if nor is not None:
+            nor.name = f"kit_{kit_name}_nor"
+            nor.colorspace_settings.name = 'Non-Color'
+        return _pbr_material(mat_name, base, nor, rough, metal)
     def neutral(src_mat, name, target=0.78, rough=0.85, metal=0.0):
+        if src_mat not in bpy.data.materials:
+            return from_disk(FABRICS[name][0], name, rough, metal)
         mat = bpy.data.materials[src_mat]
         imgs = {n.image.name: n.image for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image}
         if any(k.startswith("kit_") for k in imgs):      # уже нейтралізовано (повторний запуск)
@@ -655,8 +725,10 @@ def prepare_textures(art_dir):
     neutral("rough_linen", "linen")
     neutral("poly_wool_herringbone", "wool", target=0.7)
     neutral("caban", "fleece", target=0.72)
-    leather = bpy.data.materials["brown_leather"]
-    if any(n.type == 'TEX_IMAGE' and n.image and n.image.name.startswith("kit_") for n in leather.node_tree.nodes):
+    leather = bpy.data.materials.get("brown_leather")
+    if leather is None:
+        from_disk("brown_leather", "leather", 0.7)
+    elif any(n.type == 'TEX_IMAGE' and n.image and n.image.name.startswith("kit_") for n in leather.node_tree.nodes):
         leather = None
     neutral("metal_plate_02", "steel", target=0.6, rough=0.45, metal=0.9)
     # шкіра лишається своєю (коричнева), лише копіюється в набір
@@ -664,8 +736,10 @@ def prepare_textures(art_dir):
         imgs = {n.image.name: n.image for n in leather.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image}
         d = next(i for k, i in imgs.items() if "Diffuse" in k); nr = next(i for k, i in imgs.items() if "nor" in k.lower())
         _pbr_material("brown_leather", _save_rgba("kit_leather", _image_array(d), out), _save_rgba("kit_leather_nor", _image_array(nr), out, False), 0.7)
-    wood = bpy.data.materials["weathered_planks"]
-    if not any(n.type == 'TEX_IMAGE' and n.image and n.image.name.startswith("kit_") for n in wood.node_tree.nodes):
+    wood = bpy.data.materials.get("weathered_planks")
+    if wood is None:
+        from_disk("weathered_planks", "wood", 0.75)
+    elif not any(n.type == 'TEX_IMAGE' and n.image and n.image.name.startswith("kit_") for n in wood.node_tree.nodes):
         imgs = {n.image.name: n.image for n in wood.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image}
         d = next(i for k, i in imgs.items() if "Diffuse" in k); nr = next(i for k, i in imgs.items() if "nor" in k.lower())
         _pbr_material("weathered_planks", _save_rgba("kit_wood", _image_array(d), out), _save_rgba("kit_wood_nor", _image_array(nr), out, False), 0.75)
@@ -739,7 +813,8 @@ def culture_body(gender, culture, tex_dir):
     return rig, zones
 
 def kit_hair(rig, gender):
-    """Усі CC0-зачіски MakeHuman, припасовані до тіла набору; текстури нейтралізовані (колір — у грі)."""
+    """CC0-зачіски MakeHuman (інші ліцензії відкидає _asset), припасовані до тіла набору; текстури
+    нейтралізовані (колір — у грі). До 07.10.2026 бралися всі підряд — серед них були AGPL3 і CC BY."""
     import numpy as np
     base = bpy.data.objects[rig.name + ".basemesh"]
     out = {}
@@ -749,7 +824,11 @@ def kit_hair(rig, gender):
         before = set(bpy.data.objects)
         _activate(base)
         try:
-            bpy.ops.mpfb.load_library_clothes(filepath=_asset("hair", name, ".mhclo"), object_type="Hair", material_type="MAKESKIN")
+            path = _asset("hair", name, ".mhclo")
+        except PermissionError as e:
+            print("hair skip", e); continue
+        try:
+            bpy.ops.mpfb.load_library_clothes(filepath=path, object_type="Hair", material_type="MAKESKIN")
         except Exception as e:
             print("hair fail", name, e); continue
         for o in set(bpy.data.objects) - before:
@@ -812,17 +891,17 @@ def export_kit(rig, art_dir, extra_rigs=()):
 # ---------------------------------------------------------------- огляд (лише для знімків у Blender)
 
 LOOKS_F = {
-    "ukrainian":      dict(hair="hair_elvs_double_mh_braid", parts=["shirt", "skirt_long", "boots", "vest"],
+    "ukrainian":      dict(hair="hair_braid01", parts=["shirt", "skirt_long", "boots", "vest"],
                            colors={"shirt": (0.95, 0.93, 0.88), "skirt_long": (0.12, 0.12, 0.14), "vest": (0.5, 0.1, 0.08)}, hc=(0.3, 0.2, 0.1)),
     "west_african":   dict(hair="hair_afro01", parts=["robe", "shoes"], colors={"robe": (0.85, 0.55, 0.12)}, hc=(0.05, 0.04, 0.03)),
-    "east_asian":     dict(hair="hair_rehmanpolanski_hair_bun_brown", parts=["kaftan", "skirt_long", "shoes", "wpn_katana"],
+    "east_asian":     dict(hair="hair_ponytail01", parts=["kaftan", "skirt_long", "shoes", "wpn_katana"],
                            colors={"kaftan": (0.55, 0.12, 0.2), "skirt_long": (0.15, 0.15, 0.25)}, hc=(0.04, 0.035, 0.03)),
     "south_asian":    dict(hair="hair_braid01", parts=["robe", "shoes", "bracers"], colors={"robe": (0.75, 0.15, 0.35)}, hc=(0.04, 0.03, 0.03)),
     "middle_eastern": dict(hair="hair_long01", parts=["robe", "shoes", "turban", "wpn_dagger"],
                            colors={"robe": (0.2, 0.35, 0.4), "turban": (0.85, 0.8, 0.7)}, hc=(0.05, 0.04, 0.03)),
     "latin":          dict(hair="hair_ponytail01", parts=["tunic", "trousers", "boots", "cloak", "wpn_bow"],
                            colors={"tunic": (0.75, 0.45, 0.2), "trousers": (0.3, 0.25, 0.2), "cloak": (0.2, 0.4, 0.3)}, hc=(0.08, 0.05, 0.03)),
-    "nordic":         dict(hair="hair_elvs_french_braid_variation", parts=["tunic", "trousers", "boots", "mail", "shield_round", "wpn_spear"],
+    "nordic":         dict(hair="hair_braid01", parts=["tunic", "trousers", "boots", "mail", "shield_round", "wpn_spear"],
                            colors={"tunic": (0.25, 0.3, 0.45), "trousers": (0.35, 0.3, 0.25)}, hc=(0.7, 0.55, 0.3)),
     "mediterranean":  dict(hair="hair_long01", parts=["tunic", "skirt_long", "shoes", "gambeson", "wpn_sword"],
                            colors={"tunic": (0.9, 0.85, 0.75), "skirt_long": (0.45, 0.15, 0.1)}, hc=(0.12, 0.07, 0.04)),

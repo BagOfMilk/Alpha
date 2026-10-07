@@ -45,6 +45,7 @@ CC BY для нових асетів — теж ні. Бюджети й вимо
 | Моделі: boulder_01, mountainside — спрощені до 1,3–6 тис. полігонів (rock_boulder, rock_boulder_big, cliff_mountainside, cover_full_rock); текстури boulder_01_*, mountainside_* | `Assets/Art/Models/`, `Assets/Art/Textures/` | https://polyhaven.com/a/boulder_01, https://polyhaven.com/a/mountainside | CC0 1.0 | 06.10.2026 | Rico Cilliers, Dario Barresi |
 | Текстури кори й хвої з моделі fir_tree_01 (fir_bark_*, fir_twig_rgba — diffuse+alpha, fir_twig_nor_gl); самі дерева — власні картки | `Assets/Art/Textures/` | https://polyhaven.com/a/fir_tree_01 | CC0 1.0 | 06.10.2026 | Rico Cilliers, Rob Tuytel |
 | Тіла, шкіри, очі, зачіски (CC0-паки MakeHuman: makehuman_system_assets, hair01; інші паки встановлено, у гру не йдуть) через MPFB 2.0.17 | `Assets/Art/Characters/Kit`, `Assets/Art/Textures/Kit` | https://static.makehumancommunity.org/assets/assetpacks.html; MPFB — https://extensions.blender.org/add-ons/mpfb/ (програма GPL, у репозиторій не входить) | CC0 1.0 (асети й вихід MPFB) | 07.10.2026 | MakeHuman Community; зачіски нейтралізовано під фарбування в грі |
+| Брови, вії й одяг з бібліотеки MakeHuman (светр, сукня-«шифт» як туніка, кімоно як халат і каптан, вовняні штани, шаровари, довга спідниця, ліф, чоботи, черевики) — замість обрізаних оболонок тіла | `Assets/Art/Characters/Kit`, `Assets/Art/Textures/Kit` (рядок кожної текстури — `SOURCES.txt`) | бібліотека MakeHuman у MPFB (автори MRT/toigo, Mindfront, culturalibre, Data Collection AB) | CC0 1.0 (заголовок кожного `.mhclo`) | 07.10.2026 | збирач `tools/blender/build_kit_all.py` перевіряє ліцензію і падає на не-CC0; охоронець `KitLicenseTests` |
 | Тканини для одягу й броні: rough_linen, poly_wool_herringbone, caban, brown_leather, metal_plate_02, weathered_planks (нейтралізовано до сірого) | `Assets/Art/Textures/Kit/kit_*` | https://polyhaven.com/a/<id> | CC0 1.0 | 07.10.2026 | Rico Cilliers, colormass, Rob Tuytel, Dario Barresi, Dimitrios Savva |
 | Власні: модульний одяг епох, броня, шоломи, щити, зброя, бороди; процедурні карти кольчуги, стьобки й волосся — згенеровано кодом | `Assets/Art/Characters/Kit/kit_m.fbx`, `kit_f.fbx`, `Textures/Kit/kit_mail*`, `kit_quilt*`, `kit_hair*` | `tools/blender/alpha_wardrobe.py` | власні (проєкт) | 07.10.2026 | крій — оболонки тіла MPFB (CC0) |
 | Анімації: Universal Animation Library 1 і 2 [Standard] (46 + 43 кліпи, гуманоїдний риг) | `Assets/Art/Animations/UAL1_Standard.fbx`, `UAL2_Standard.fbx`, `UAL_License.txt` | https://opengameart.org/content/universal-animation-library, https://opengameart.org/content/universal-animation-library-2 | CC0 1.0 | 07.10.2026 | Quaternius |
@@ -58,6 +59,16 @@ CC BY для нових асетів — теж ні. Бюджети й вимо
 генераторів 3D різняться (CC BY, водяний знак, заборона комерції) — звіряти
 до коміту. Розділи нижче, що радять Mixamo, Megascans або паки Asset Store,
 для треку V не діють.
+
+**Виправлення 07.10.2026 (ліцензії набору персонажів).** Збирач зачісок брав з бібліотеки MakeHuman
+усі зачіски підряд, а бібліотека змішана: поруч із CC0 там лежать AGPL3 і CC BY. У набір потрапили
+11 зачісок не CC0 (culturalibre_hair_01/02, elvs_* — чотири коси, littleright_bobcut_hair,
+o4saken_long01, rehmanpolanski_hair_bun_brown, sonntag78_* — дві) і текстура мікенської туніки (AGPL3).
+Їх прибрано з набору, ядра (`KitParts.Hair`, образи `AppearanceCatalog`/`WorldCast` — на найближчі CC0)
+і з `Textures/Kit`; на GitHub вони не потрапляли (жодна віддалена гілка не містить коміту `ac98f58`),
+але лишаються в локальній історії — перед першим пушем цієї лінії вирішити, чи переписувати історію.
+Тепер ліцензію читає сам збирач (`asset_license` у `tools/blender/alpha_people.py`): не CC0 — не
+вантажить.
 
 ## Куди класти файли (23.09.2026)
 
