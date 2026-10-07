@@ -335,7 +335,8 @@ def wardrobe(rig, body):
 # ядрі (KitParts.Clothing) — гра й сейви не змінюються. Чого в бібліотеці немає (жилет у чоловіків, плащ,
 # броня), лишається оболонкою. Власник 07.10.2026: оболонки «рвані й просвічують» — «роби краще».
 LIBRARY_CLOTHES = {
-    "shirt":      {"m": "toigo_fisherman_sweater", "f": "toigo_fisherman_sweater"},
+    # Жіноча сорочка — оболонка з форми тіла: тісний ліф не вміщав товстий светр, і той проступав латками.
+    "shirt":      {"m": "toigo_fisherman_sweater"},
     "tunic":      {"m": "toigo_shift_dress", "f": "toigo_shift_dress"},
     "robe":       {"m": "mindfront_kimono", "f": "mindfront_kimono"},
     "kaftan":     {"m": "mindfront_kimono", "f": "mindfront_kimono"},
