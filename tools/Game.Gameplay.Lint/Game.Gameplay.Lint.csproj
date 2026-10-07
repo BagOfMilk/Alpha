@@ -109,6 +109,7 @@
     <!-- Звук (віха M1.19): AudioSource, PlayerPrefs, AudioImporter — поза заглушками; таблиця тактів лінтується. -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Audio/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AudioLibraryBuilder.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/LightingSetup.cs" />
   </ItemGroup>
 
   <ItemGroup>

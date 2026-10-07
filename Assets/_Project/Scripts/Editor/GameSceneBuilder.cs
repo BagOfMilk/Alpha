@@ -89,6 +89,8 @@ namespace Game.Gameplay.EditorTools
             CharacterKitBuilder.Build();
             // Поправка №18.4: звук — бібліотека кліпів CC0 і режисер (музика, атмосфера, такти подій).
             AudioLibraryBuilder.Build();
+            // Трек V2: постобробка, SSAO, каскади тіней (ідемпотентно, як UrpSetup).
+            LightingSetup.Apply(hubCamera, arenaCamera);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
