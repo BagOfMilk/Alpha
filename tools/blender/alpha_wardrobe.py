@@ -707,6 +707,31 @@ def _outward_sign(o, body_tree):
         votes += 1 if (n3 @ f.normal).dot(c - loc) >= 0.0 else -1
     return 1.0 if votes >= 0 else -1.0
 
+def tighten_waist(rig, snug=0.012):
+    """Штани вище стегон — не далі snug від тіла: широкий пояс жіночих бібліотечних штанів проступав грудками крізь
+    светр і туніку (лукбук 07.10.2026). Верх накриває облягаючий пояс за будь-якого поєднання."""
+    from mathutils.bvhtree import BVHTree
+    body = next((o for o in rig.children if o.name.endswith(".body") and o.type == 'MESH'), None)
+    pants = next((o for o in rig.children if o.get("kit_part") == "trousers" and o.type == 'MESH'), None)
+    if body is None or pants is None:
+        return 0
+    bmw = body.matrix_world
+    tree = BVHTree.FromPolygons([bmw @ v.co for v in body.data.vertices], [list(f.vertices) for f in body.data.polygons])
+    hip = _z_of(rig, "pelvis") - 0.08
+    mw = pants.matrix_world; inv = mw.inverted()
+    moved = 0
+    for v in pants.data.vertices:
+        p = mw @ v.co
+        if p.z < hip:
+            continue
+        loc, _n, _i, dist = tree.find_nearest(p)
+        if loc is None or dist <= snug:
+            continue
+        v.co = inv @ (loc + (p - loc).normalized() * snug)
+        moved += 1
+    pants.data.update()
+    return moved
+
 def tighten_boots(rig, snug=0.008):
     """Халява вище щиколотки — не далі snug від тіла. Бібліотечні чоботи мають товсту халяву з відворотом, і
     вона проступала крізь штани плямами на колінах; виштовхувати штани над нею — складки й шипи (лукбук

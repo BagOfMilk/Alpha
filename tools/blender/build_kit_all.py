@@ -38,6 +38,7 @@ try:
                                  (1, 1, 1), f"{g}_default", TEX)
             accents(rig, body)
             tighten_boots(rig)
+            tighten_waist(rig)
             moved = layer_clothes(rig)
         rigs[g] = rig
         step(f"шари {g}: " + ", ".join(f"{k} {n}" for k, n in sorted(moved.items()) if n))
