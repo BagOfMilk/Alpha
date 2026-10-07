@@ -17,6 +17,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Вивід git — UTF-8: шлях профілю має кирилицю, і в кодовій сторінці консолі він псувався — скрипт,
+# запущений не з консолі PowerShell, не знаходив головну копію і збирав у робочій (07.10.2026).
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $proj = Split-Path $PSScriptRoot -Parent
 # Білд, кеш Unity (Library) і сесії живуть у ГОЛОВНІЙ копії репозиторію. Скрипт, запущений з іншої
 # робочої копії (worktree сесії), працює з головною — інакше «Білда немає» (07.10.2026).
