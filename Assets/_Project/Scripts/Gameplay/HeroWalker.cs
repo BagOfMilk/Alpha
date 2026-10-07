@@ -193,7 +193,7 @@ namespace Game.Gameplay
                 SetHere(pos);
             }
 
-            bool real = !_ignoreRealInput;
+            bool real = !_ignoreRealInput && !PlaytestLog.NoteOpen; // тестер пише нотатку — WASD не веде героя
             bool run = real && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
             float ix = !real ? 0f : (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
                        - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);

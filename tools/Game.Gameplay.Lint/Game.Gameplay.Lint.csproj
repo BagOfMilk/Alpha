@@ -108,6 +108,8 @@
     <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtImportSettings.cs" />
     <!-- Звук (віха M1.19): AudioSource, PlayerPrefs, AudioImporter — поза заглушками; таблиця тактів лінтується. -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Audio/*.cs" />
+    <!-- Плейтест (docs/PLAYTEST.md): ScreenCapture, OnDemandRendering, logMessageReceived; формат — PlaytestLog, лінтується. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Playtest/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AudioLibraryBuilder.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/LightingSetup.cs" />
     <!-- Поправка №21.1: рівні графіки — асети URP і SerializedObject, як LightingSetup. -->

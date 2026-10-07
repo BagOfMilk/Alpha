@@ -10,7 +10,9 @@
 # Використання:  powershell -File tools/build-unity.ps1
 param(
     [string]$UnityPath = "C:\Program Files\Unity\Hub\Editor\6000.4.10f1\Editor\Unity.exe",
-    [switch]$SkipScene
+    [switch]$SkipScene,
+    # Плейтест (docs/PLAYTEST.md): Unity на низькому пріоритеті — ПК лишається чуйним під час збирання.
+    [switch]$LowPriority
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,6 +34,7 @@ function Invoke-Unity([string]$method, [string]$logName) {
     $p = Start-Process -FilePath $UnityPath -PassThru -ArgumentList @(
         '-quit', '-batchmode', '-projectPath', "`"$proj`"",
         '-executeMethod', $method, '-logFile', "`"$log`"")
+    if ($LowPriority) { try { $p.PriorityClass = 'BelowNormal' } catch { } }
     $p.WaitForExit()
     return $log
 }

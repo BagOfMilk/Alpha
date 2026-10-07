@@ -525,6 +525,8 @@ Build/Windows/Alpha.exe -autoplay [-autoplay-threshold] -screen-fullscreen 0 -sc
 Build/Windows/Alpha.exe -autoplay-journal -screen-fullscreen 0 -screen-width 1600 -screen-height 900
 powershell -File tools/run-offscreen.ps1 -GameArgs "-autoplay -autoplay-journal"   # те саме, вікно за краєм екрана
 ```
+**Плейтест власника — `tools/playtest.ps1` за рутиною `docs/PLAYTEST.md`** (07.10.2026: «щоб записати усі фікси разом а не по одному лікувати»): збірка лише за змін, гра з `-playtest -lowcpu`, нотатки F8 зі скриншотом, контекстом і зліпком у `Playtest/<дата>/`; розбір і фікси — пачкою на прохання «розбери плейтест».
+
 **Тури — через `tools/run-offscreen.ps1`** (власник, 25.09.2026: «можем ли мы
 не открывать юнити так что бы перекрывать мне экран?»): скрипт ховає вікно
 гри за правий край усіх моніторів, щойно воно з'являється (~15 мс видно), і

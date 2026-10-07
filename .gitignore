@@ -66,3 +66,4 @@ compile.log
 # Трек V3: префаби-обгортки, які пише збирач сцени (ArtSubstitutes) — генеруються, не комітяться.
 Assets/Art/Prefabs/
 Assets/Art/Prefabs.meta
+/[Pp]laytest/

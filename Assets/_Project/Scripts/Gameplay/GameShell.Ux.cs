@@ -324,7 +324,7 @@ namespace Game.Gameplay
         /// <summary>Клавіші шару місць (UX_DESIGN §3.6): E, Tab, N, C, J, F10, F1. Кожна — одного власника (UxKeyMap).</summary>
         private bool HandleWorldKeys(Event evt)
         {
-            if (evt == null || evt.type != EventType.KeyDown || !CanExplore) return false;
+            if (evt == null || evt.type != EventType.KeyDown || !CanExplore || PlaytestLog.NoteOpen) return false;
             if (_layers.ConfirmPending) return false;
             switch (evt.keyCode)
             {

@@ -337,7 +337,8 @@ namespace Game.Gameplay
             // EscapeMenuScreen/Widgets.Modal більше не чіпають Escape самі
             // (див. коментар в EscapeMenuScreen.Draw).
             var escEvt = Event.current;
-            bool escapePressed = escEvt != null && escEvt.type == EventType.KeyDown && escEvt.keyCode == KeyCode.Escape;
+            bool escapePressed = escEvt != null && escEvt.type == EventType.KeyDown && escEvt.keyCode == KeyCode.Escape
+                                 && !PlaytestLog.NoteOpen; // Esc у вікні нотатки плейтесту — її, не пауза
             if (escapeEligible && escapePressed && !_escapeOpen && state != SessionState.Battle && EscapeClosesLayer())
             {
                 escEvt.Use();

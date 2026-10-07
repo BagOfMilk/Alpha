@@ -16,7 +16,9 @@ namespace Game.Gameplay.UI
         /// <summary>Вітрина сцени (<c>ScenePlayer</c>, поза партією).</summary>
         Showcase,
         /// <summary>Тактичний бій.</summary>
-        Battle
+        Battle,
+        /// <summary>Вікно нотатки плейтесту (<c>-playtest</c>, docs/PLAYTEST.md).</summary>
+        Playtest
     }
 
     /// <summary>Рядок реєстру: клавіша, область, файл-власник, дія.</summary>
@@ -50,6 +52,10 @@ namespace Game.Gameplay.UI
         {
             new UxKeyBinding("Escape",     UxKeyScope.Global,   "GameShell.cs",               "пауза; стек шарів (UX-05)"),
             new UxKeyBinding("Escape",     UxKeyScope.Modal,    "Widgets.cs",                 "закрити модалку"),
+            new UxKeyBinding("F8",         UxKeyScope.Global,   "PlaytestReporter.cs",        "нотатка плейтесту (лише з -playtest)"),
+            new UxKeyBinding("Escape",     UxKeyScope.Playtest, "PlaytestReporter.cs",        "скасувати нотатку"),
+            new UxKeyBinding("Return",     UxKeyScope.Playtest, "PlaytestReporter.cs",        "записати нотатку"),
+            new UxKeyBinding("KeypadEnter", UxKeyScope.Playtest, "PlaytestReporter.cs",       "записати нотатку"),
             new UxKeyBinding("Tab",        UxKeyScope.World,    "GameShell.Ux.cs",            "Огляд міста"),
             new UxKeyBinding("E",          UxKeyScope.World,    "GameShell.Ux.cs",            "взаємодія з найближчим місцем"),
             new UxKeyBinding("W",          UxKeyScope.World,    "HeroWalker.cs",              "рух"),

@@ -1460,6 +1460,17 @@ namespace Game.Core.Session
         /// </summary>
         public int ResolveSaveSlot(int requested) => _ironman ? AutosaveSlot : requested;
 
+        /// <summary>
+        /// Плейтест (<c>docs/PLAYTEST.md</c>): зліпок до нотатки тестера, щоб відтворити баг у headless-тесті.
+        /// Без запису в слот і без події журналу — гра від нотатки не змінюється. Непрозорий рядок, як і сейв
+        /// (інваріант 3). null — у цьому стані зліпок не складається.
+        /// </summary>
+        public string CaptureForBugReport()
+        {
+            try { return ComposeSave(); }
+            catch (Exception) { return null; }
+        }
+
         public string SaveState(int slot)
         {
             // Morning і FreePlay — той самий хаб (ConfirmMorning уже трактує їх

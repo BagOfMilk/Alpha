@@ -179,7 +179,7 @@ namespace Game.Gameplay.UI
         private static void HandleHotkeys(IBattleHudData c, BattleView view)
         {
             var evt = Event.current;
-            if (evt == null || evt.type != EventType.KeyDown || c.IsBusy || c.Paused || c.ResultPending) return;
+            if (evt == null || evt.type != EventType.KeyDown || c.IsBusy || c.Paused || c.ResultPending || PlaytestLog.NoteOpen) return;
 
             if (c.IsPlayerTurn)
             {
