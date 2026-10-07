@@ -169,7 +169,20 @@ namespace Game.Gameplay
 
             var anim = ActiveAnimation();
             if (anim != null) anim.Gait = gait;
+            Footsteps(gait);
             UpdateCamera(exploring);
+        }
+
+        // Кроки (віха M1.19): такт на кожен крок — частіше, коли біжить; у будівлі — по дошках.
+        private float _stepTimer;
+
+        private void Footsteps(float gait)
+        {
+            if (gait < 0.3f) { _stepTimer = 0f; return; }
+            _stepTimer -= Time.deltaTime;
+            if (_stepTimer > 0f) return;
+            _stepTimer = gait > 1.5f ? 0.3f : 0.45f;
+            SoundSettings.Request(_inside != null ? SoundCue.FootstepWood : SoundCue.FootstepGrass);
         }
 
         // ===================== рух =====================
@@ -527,6 +540,7 @@ namespace Game.Gameplay
 
         private void BeginEnter(string buildingId)
         {
+            SoundSettings.Request(SoundCue.DoorOpen);
             var building = BuildingCatalog.Get(buildingId);
             if (building == null || !building.Enterable) { _shell.MarkVillage(); return; }
             _transition = Transition.FadeOutToEnter;
@@ -538,6 +552,7 @@ namespace Game.Gameplay
 
         private void BeginExit()
         {
+            SoundSettings.Request(SoundCue.DoorClose);
             _transition = Transition.FadeOutToExit;
             _path.Clear();
             _pathIndex = 0;
