@@ -61,6 +61,25 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void BattleStance_FollowsUnitState_InPriorityOrder()
+        {
+            Assert.AreEqual(CharacterAnimState.Down, AnimStateTable.BattleIdleFor(true, true, new[] { "stunned" }, true));
+            Assert.AreEqual(CharacterAnimState.Surrender, AnimStateTable.BattleIdleFor(false, true, new[] { "stunned" }, true));
+            Assert.AreEqual(CharacterAnimState.Stunned, AnimStateTable.BattleIdleFor(false, false, new[] { "bleeding", "stunned" }, true));
+            Assert.AreEqual(CharacterAnimState.Overwatch, AnimStateTable.BattleIdleFor(false, false, null, true));
+            Assert.AreEqual(CharacterAnimState.CombatIdle, AnimStateTable.BattleIdleFor(false, false, new[] { "bleeding" }, false));
+        }
+
+        [Test]
+        public void HitReactions_GrowWithTheBlow_MissHasNone()
+        {
+            Assert.AreEqual(CharacterAnimState.Idle, AnimStateTable.ReactionFor("combat.log.attack.miss"));
+            Assert.AreEqual(CharacterAnimState.Block, AnimStateTable.ReactionFor("combat.log.attack.graze"));
+            Assert.AreEqual(CharacterAnimState.Hit, AnimStateTable.ReactionFor("combat.log.attack.hit"));
+            Assert.AreEqual(CharacterAnimState.HitHeavy, AnimStateTable.ReactionFor("combat.log.attack.crit"));
+        }
+
+        [Test]
         public void ClipNames_LoseTheTakePrefix()
         {
             Assert.AreEqual("Idle_Loop", AnimStateTable.NormalizeClipName("Rig|Rig|Idle_Loop"));

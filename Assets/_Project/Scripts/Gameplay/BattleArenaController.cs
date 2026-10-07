@@ -98,6 +98,9 @@ namespace Game.Gameplay
         private readonly Dictionary<string, Renderer[]> _unitRenderers = new Dictionary<string, Renderer[]>(StringComparer.Ordinal);
         private readonly Dictionary<string, FigureAnimation> _unitAnimations = new Dictionary<string, FigureAnimation>(StringComparer.Ordinal);
         private readonly Dictionary<string, BattleCharacterClips> _unitClipSets = new Dictionary<string, BattleCharacterClips>(StringComparer.Ordinal);
+        // Постаті набору (Поправка №19): стиль зброї для кліпів станів і бібліотека кліпів UAL.
+        private readonly Dictionary<string, WeaponStyle> _unitStyles = new Dictionary<string, WeaponStyle>(StringComparer.Ordinal);
+        private Game.Gameplay.Characters.CharacterAnimLibrary _kitAnims;
 
         /// <summary>Видима позиція/поворот юніта — може відставати від логічної (<c>BattleUnitView.Pos</c>) на час такту руху (§6).</summary>
         private readonly Dictionary<string, Vector3> _unitVisualPos = new Dictionary<string, Vector3>(StringComparer.Ordinal);
@@ -729,6 +732,7 @@ namespace Game.Gameplay
             _unitRenderers.Clear();
             _unitAnimations.Clear();
             _unitClipSets.Clear();
+            _unitStyles.Clear();
 
             if (view?.Units == null) return;
             foreach (var unit in view.Units) SpawnOrUpdateUnit(unit);
@@ -809,6 +813,8 @@ namespace Game.Gameplay
             }
             var style = AnimStateTable.StyleOf(Game.Gameplay.Characters.KitFigure.WeaponOf(CharacterKitPlan.From(look, equip)));
             clips = anims != null && anims.IsComplete ? anims.BattleClips(style) : null;
+            _unitStyles[unit.Id] = style;
+            _kitAnims = anims;
             return true;
         }
 
@@ -1210,12 +1216,17 @@ namespace Game.Gameplay
             var block = _unitBlocks.TryGetValue(unit.Id, out var b) ? b : new MaterialPropertyBlock();
             block.Clear();
             block.SetColor("_BaseColor", tintColor);
-            foreach (var r in renderers)
-            {
-                string n = r.gameObject.name;
-                if (n == "ring" || n == "overwatch") continue;
-                r.SetPropertyBlock(block);
-            }
+            bool kitUnit = _unitStyles.ContainsKey(unit.Id);
+            if (kitUnit) UpdateKitStance(unit);
+            // Постать набору тримає власні кольори тканин (блок кожної частини) — тон юніта й спалах
+            // удару не перефарбовують її; удар видно реакцією (кліп Hit), а не кольором.
+            if (!kitUnit)
+                foreach (var r in renderers)
+                {
+                    string n = r.gameObject.name;
+                    if (n == "ring" || n == "overwatch") continue;
+                    r.SetPropertyBlock(block);
+                }
 
             var overwatchMarker = go.transform.Find("overwatch");
             bool wantOverwatch = unit.IsOverwatching;
@@ -1457,6 +1468,7 @@ namespace Game.Gameplay
                     _activeTact.Duration = fast ? 0.15f : 0.5f;
                     FaceTowards(unitId, targetId);
                     PlayAttackClip(unitId, targetId);
+                    PlayKitState(targetId, AnimStateTable.ReactionFor(entry.Key));
                     break;
 
                 case TactKind.Ability:
@@ -1542,6 +1554,31 @@ namespace Game.Gameplay
                 }
             }
             _activeTact = null;
+        }
+
+        /// <summary>Стійка постаті набору за станом юніта (віха M1.18): дозор, оглушений, здача; «впав» тримає кліп смерті.</summary>
+        private void UpdateKitStance(BattleUnitView unit)
+        {
+            if (_kitAnims == null || !_unitAnimations.TryGetValue(unit.Id, out var anim) || anim == null) return;
+            bool surrendering = false;
+            if (_session != null)
+                foreach (var s in _session.GetPendingSurrenders())
+                    if (s != null && s.UnitId == unit.Id) { surrendering = true; break; }
+            var state = AnimStateTable.BattleIdleFor(unit.IsDowned, surrendering, unit.Statuses, unit.IsOverwatching);
+            if (state == CharacterAnimState.Down) return; // кліп падіння вже тримає останній кадр
+            _unitStyles.TryGetValue(unit.Id, out var style);
+            anim.SetIdleClip(_kitAnims.For(state, style));
+        }
+
+        /// <summary>Одноразовий кліп стану для постаті набору (реакція на удар тощо); Idle — нічого.</summary>
+        private void PlayKitState(string unitId, CharacterAnimState state)
+        {
+            if (state == CharacterAnimState.Idle || _kitAnims == null || string.IsNullOrEmpty(unitId)) return;
+            if (!_unitStyles.TryGetValue(unitId, out var style)) return;
+            if (!_unitAnimations.TryGetValue(unitId, out var anim) || anim == null || anim.IsPlayingOneShot) return;
+            var choice = AnimStateTable.For(state, style);
+            var clip = _kitAnims.Clip(choice.Clip);
+            if (clip != null) anim.PlayOnce(clip, choice.HoldLastFrame);
         }
 
         private void SetGait(string unitId, float gait)

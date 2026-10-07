@@ -135,6 +135,23 @@ namespace Game.Gameplay
             _oneShotCallback = onComplete;
         }
 
+        /// <summary>
+        /// Замінити кліп «стоїть» на льоту (стан бою: дозор, оглушений, здача, впав). Той самий кліп —
+        /// нічого не робить. Без готового графа — лише запам'ятовує (OnEnable візьме його).
+        /// </summary>
+        public void SetIdleClip(AnimationClip clip)
+        {
+            if (clip == null || clip == idle) return;
+            idle = clip;
+            if (!_ready) return;
+            _graph.Disconnect(_gaitMixer, 0);
+            if (_gaitClips[0].IsValid()) _gaitClips[0].Destroy();
+            _gaitClips[0] = AnimationClipPlayable.Create(_graph, clip);
+            _gaitClips[0].SetTime(phase);
+            _graph.Connect(_gaitClips[0], 0, _gaitMixer, 0);
+            _gaitMixer.SetInputWeight(0, _gaitWeights[0]);
+        }
+
         /// <summary>Перервати одноразовий кліп і негайно повернути керування ходьбі/бігу (наприклад, такт скасовано зовні).</summary>
         public void CancelOneShot()
         {

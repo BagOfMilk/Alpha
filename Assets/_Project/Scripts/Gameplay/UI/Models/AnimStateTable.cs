@@ -163,6 +163,33 @@ namespace Game.Gameplay.UI
             return pool[(int)(h % (uint)pool.Length)];
         }
 
+        /// <summary>
+        /// Стійка юніта в бою за його станом (BattleUnitView): впав → лежить; здається → навколішки;
+        /// оглушений → хитається; у дозорі → цілиться; інакше — бойова стійка зі своєю зброєю.
+        /// </summary>
+        public static CharacterAnimState BattleIdleFor(bool downed, bool surrendering, IEnumerable<string> statuses, bool overwatching)
+        {
+            if (downed) return CharacterAnimState.Down;
+            if (surrendering) return CharacterAnimState.Surrender;
+            if (statuses != null)
+                foreach (var s in statuses)
+                    if (s == "stunned") return CharacterAnimState.Stunned;
+            if (overwatching) return CharacterAnimState.Overwatch;
+            return CharacterAnimState.CombatIdle;
+        }
+
+        /// <summary>Реакція цілі на рядок журналу бою (ключ <c>combat.log.*</c>); Idle — без реакції.</summary>
+        public static CharacterAnimState ReactionFor(string logKey)
+        {
+            switch (logKey)
+            {
+                case "combat.log.attack.graze": return CharacterAnimState.Block;
+                case "combat.log.attack.hit": return CharacterAnimState.Hit;
+                case "combat.log.attack.crit": return CharacterAnimState.HitHeavy;
+                default: return CharacterAnimState.Idle;
+            }
+        }
+
         /// <summary>Усі стани — для охоронця покриття.</summary>
         public static IEnumerable<CharacterAnimState> AllStates()
         {
