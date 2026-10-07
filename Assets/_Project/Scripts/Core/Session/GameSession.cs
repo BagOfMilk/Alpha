@@ -406,6 +406,7 @@ namespace Game.Core.Session
             _translatedIncidentCount = 0;
             _hafiyaGrassBonusApplied = false;
             _bargainedTimeBonusApplied = false;
+            _myroslavaHintBonusApplied = false;
 
             _hitRule = o.HitRule;
             _tensionPace = o.TestBuildTensionPace;
@@ -730,7 +731,6 @@ namespace Game.Core.Session
 
             if (_scenePlayback.IsFinished)
             {
-                if (view.TransitionKey == "to.node1.pass") _flags.Set("tugar_offer_seen");
                 State = _sceneReturn;
                 _scenePlayback = null;
                 LogEvent("scene.finished", Args("transition", view.TransitionKey));
@@ -1389,6 +1389,30 @@ namespace Game.Core.Session
         internal void DebugMarkBuilt(string buildingId) => _works.DebugMarkBuilt(buildingId);
         internal void DebugAddResource(ResourceType resource, int amount) => _state.Resources.Add(resource, amount);
 
+        /// <summary>Лише для тестів: виставити сюжетний прапор (і одразу застосувати числові читачі, що чекають на нього).</summary>
+        internal void DebugSetFlag(string flag)
+        {
+            _flags.Set(flag);
+            ApplyHafiyaGrassBonusToSickChildIfNeeded();
+            ApplyBargainedTimeBonusIfNeeded();
+            ApplyMyroslavaHintBonusIfNeeded();
+        }
+
+        /// <summary>Лише для тестів: чи виставлено сюжетний прапор.</summary>
+        internal bool DebugHasFlag(string flag) => _flags.Get(flag);
+
+        /// <summary>Лише для тестів: чи завершено арку напарника (<see cref="IsArcCompleted"/>).</summary>
+        internal bool DebugIsArcCompleted(string companionId) => IsArcCompleted(companionId);
+
+        /// <summary>Лише для тестів: примусово завершити арку напарника — гейти лояльності обходяться, стан той самий, що після обох глав.</summary>
+        internal void DebugCompleteArc(string companionId)
+        {
+            var run = FindArcRun(companionId);
+            if (run == null) return;
+            int guard = 0;
+            while (!run.IsFinished && guard++ < 10) run.CompleteChapter();
+        }
+
         private string CaptureGear()
         {
             var parts = new List<string>();
@@ -1704,7 +1728,8 @@ namespace Game.Core.Session
             // конфронтація вже розв'язалась «довірою» (тоді прапор лишився
             // висіти з вузла 1, а зради не сталося).
             bool myroslavaConfirmedAntagonist = _worldRoster?.Get("myroslava")?.Status == CompanionStatus.Antagonist;
-            bool myroslavaTrusted = _flags.Get(CompanionScenes.MyroslavaConfrontedTrustFlag);
+            // M1.2: довіра — або виграна нічна розмова, або завершена арка Мирослави (вона вже не зрадить).
+            bool myroslavaTrusted = _flags.Get(CompanionScenes.MyroslavaConfrontedTrustFlag) || IsArcCompleted("myroslava");
             bool myroslavaDefected = myroslavaConfirmedAntagonist ||
                 (_flags.Get(PassVanguardOutcome.DefectorSeededFlag) && !myroslavaTrusted);
 
@@ -3834,7 +3859,8 @@ namespace Game.Core.Session
                 BuiltBuildings = new List<string>(_works.Built),
                 Wallet = GetEconomyView(),
                 Factions = GetFactionsView().Factions,
-                FinaleOutcomeKey = _finaleOutcomeKey
+                FinaleOutcomeKey = _finaleOutcomeKey,
+                Echoes = StoryEchoes.Collect(_flags, IsArcCompleted)
             };
         }
 
@@ -4483,6 +4509,9 @@ namespace Game.Core.Session
                     !_flags.Get(CompanionScenes.MyroslavaConfrontationResolvedFlag))
                     continue;
 
+                // M1.2: хто завершив особисту арку, свій конфлікт розв'язав — не зраджує (стан арки, не прапор).
+                if (IsArcCompleted(c.Id)) continue;
+
                 int days = _defectionWatch.DaysAtOrBelowResentful(c.Id);
                 if (!Defection.ShouldDefect(c, isProtagonist: false, days, seeded, _cfg)) continue;
 
@@ -4517,6 +4546,13 @@ namespace Game.Core.Session
         // Поправка №7.8: глави арок ПРОГРАЮТЬСЯ (Begin → сцена/квест →
         // CompleteChapter), а не лише сигналізують "arc.chapter_opened".
         // =====================================================================
+
+        /// <summary>
+        /// Чи завершив напарник особисту арку (обидві глави пройдено). M1.2: читач замість прапорів
+        /// <c>arc_*_done</c> — стан самого проходження (<see cref="ArcState.Completed"/>), що й так живе в зліпку.
+        /// Тримає захист від зради (<see cref="TickDefectionWatch"/>, <see cref="BuildFinalePlan"/>) і рядки підсумку.
+        /// </summary>
+        private bool IsArcCompleted(string companionId) => FindArcRun(companionId)?.State == ArcState.Completed;
 
         private CompanionArcRun FindArcRun(string companionId)
         {
@@ -4648,7 +4684,13 @@ namespace Game.Core.Session
             bool imminent = _flags.Get(Defection.DefectorSeededFlag)
                 && !myroslava.IsDead && myroslava.Status != CompanionStatus.Antagonist;
 
-            var scene = imminent ? CompanionScenes.MyroslavaConfrontation() : CompanionScenes.MyroslavaTrustCheckup();
+            // M1.2: вибір у главі 1 арки (доба 2) зсуває пороги нічної розмови (CompanionScenes.ConfrontationThresholds).
+            var scene = imminent
+                ? CompanionScenes.MyroslavaConfrontation(
+                    trustedInCh1: _flags.Get(CompanionScenes.MyroslavaTrustedFlag),
+                    watchedInCh1: _flags.Get(CompanionScenes.MyroslavaWatchedFlag),
+                    sentAwayInCh1: _flags.Get(CompanionScenes.MyroslavaSentAwayFlag))
+                : CompanionScenes.MyroslavaTrustCheckup();
             LogEvent(imminent ? "scene.betrayal_confrontation.begun" : "scene.trust_checkup.begun",
                 Args("companionId", "myroslava"));
 
@@ -4893,6 +4935,7 @@ namespace Game.Core.Session
 
             ApplyHafiyaGrassBonusToSickChildIfNeeded();
             ApplyBargainedTimeBonusIfNeeded();
+            ApplyMyroslavaHintBonusIfNeeded();
         }
 
         /// <summary>
@@ -5150,6 +5193,36 @@ namespace Game.Core.Session
                 }
             }
             _bargainedTimeBonusApplied = true;
+        }
+
+        /// <summary>ПЛЕЙСХОЛДЕР (M1.2): наскільки підказка Мирослави про батька полегшує тихий шлях вузла 1 — слабше за торг.</summary>
+        private const int MyroslavaHintQuietThresholdRelief = 1;
+
+        /// <summary>Ідемпотентно, як і <see cref="_bargainedTimeBonusApplied"/>: рівно раз за прогін, скидається в NewGame.</summary>
+        private bool _myroslavaHintBonusApplied;
+
+        /// <summary>
+        /// M1.2: читач прапора <see cref="OpeningScenes.MyroslavaHintFlag"/>. Якщо на розмові з Мирославою
+        /// (відкриття, «спитати Мирославу», Good/Best) вона розкрила, чого не договорює батько, тихий шлях
+        /// вузла 1 легший на <see cref="MyroslavaHintQuietThresholdRelief"/> — той самий прийом, що й торг
+        /// (<see cref="ApplyBargainedTimeBonusIfNeeded"/>); поріг видно в прев'ю рішення заздалегідь (інваріант 8).
+        /// </summary>
+        private void ApplyMyroslavaHintBonusIfNeeded()
+        {
+            if (_myroslavaHintBonusApplied) return;
+            if (_flags == null || !_flags.Get(OpeningScenes.MyroslavaHintFlag)) return;
+            if (_processor?.Incidents == null) return;
+
+            foreach (var def in _processor.Incidents.All)
+            {
+                if (string.Equals(def.Id, "pass_vanguard", StringComparison.Ordinal) &&
+                    string.Equals(def.SourceId, "opening.pass", StringComparison.Ordinal))
+                {
+                    def.QuietPathThreshold = Math.Max(1, def.QuietPathThreshold - MyroslavaHintQuietThresholdRelief);
+                    break;
+                }
+            }
+            _myroslavaHintBonusApplied = true;
         }
 
         /// <summary>
@@ -5996,6 +6069,8 @@ namespace Game.Core.Session
             // Той самий випадок для торгу з Тугаром: прапор у зліпку є, а поріг
             // тихого шляху вузла 1 — ні (дебаг 25.09.2026).
             ApplyBargainedTimeBonusIfNeeded();
+            // M1.2: підказка Мирослави — теж лише прапор у зліпку, поріг вузла 1 до зліпка не входить.
+            ApplyMyroslavaHintBonusIfNeeded();
         }
 
         /// <summary>

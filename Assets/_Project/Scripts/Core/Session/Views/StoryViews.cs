@@ -94,6 +94,12 @@ namespace Game.Core.Session.Views
         public EconomyView Wallet;
         public IReadOnlyList<FactionSummary> Factions;
         public string FinaleOutcomeKey;
+
+        /// <summary>
+        /// Відлуння рішень (M1.2): ключі тексту рядків «що громада запам'ятала» — з сюжетних прапорів виборів
+        /// (<c>StoryEchoes</c>). Порожній список, якщо гравець нічого такого не вирішував. Лише ключі, жодних чисел.
+        /// </summary>
+        public IReadOnlyList<string> Echoes = System.Array.Empty<string>();
     }
 
     public sealed class SceneStepView

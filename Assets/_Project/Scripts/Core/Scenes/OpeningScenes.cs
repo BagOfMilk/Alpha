@@ -23,11 +23,22 @@ namespace Game.Core.Scenes
         /// <summary>Прапор: гравець виграв боярину час торгом — полегшує тихий шлях вузла 1 (GameSession.ApplyBargainedTimeBonusIfNeeded).</summary>
         public const string TugarBargainedTimeFlag = "tugar_bargained_time";
 
+        /// <summary>
+        /// Прапори розмови з Мирославою про батька (варіант «спитати Мирославу», перевірка Переконання):
+        /// <c>asked</c> — гравець питав (усі смуги), <c>hint</c> — вона розкрила, чого не договорює Тугар
+        /// (Good/Best). <c>hint</c> полегшує тихий шлях вузла 1 (GameSession.ApplyMyroslavaHintBonusIfNeeded);
+        /// обидва лишають рядок у підсумку (StoryEchoes).
+        /// </summary>
+        public const string MyroslavaAskedFlag = "myroslava_asked";
+
+        /// <inheritdoc cref="MyroslavaAskedFlag"/>
+        public const string MyroslavaHintFlag = "myroslava_hint";
+
         /// <summary>Id вибору першої будівлі (Поправка №12.7) — спільний з ботами, автотуром і журналом.</summary>
         public const string FirstBuildingChoiceId = "first_building_choice";
 
-        /// <summary>Префікс прапора обраної першої будівлі: «first_building.&lt;buildingId&gt;» (у зліпку разом зі StoryFlags).</summary>
-        public const string FirstBuildingFlagPrefix = "first_building.";
+        // M1.2 (07.10.2026): прапор обраної першої будівлі («first_building.<id>») знято — службова позначка
+        // без читача: сама будівля вже в `CityWorks.Built` і видна в місті, підсумку й журналі.
 
         /// <summary>
         /// «Ремесло фахівця» (Поправка №12.9, розширена №12.10 пулом
@@ -109,7 +120,7 @@ namespace Game.Core.Scenes
             var askMyroslavaArrivals = Session.ArrivalsPool.Determine(backgroundId, "ask_myroslava");
 
             var refuseConsequence = new QuestConsequence()
-                .Faction(CommunityFactionId, 10).Faction(TuharBoyarsFactionId, -10).Flag("tugar_offer_refused");
+                .Faction(CommunityFactionId, 10).Faction(TuharBoyarsFactionId, -10); // M1.2: прапор «tugar_offer_refused» знято — наслідок уже в фракціях
 
             var bargainBands = new[]
             {
@@ -121,10 +132,10 @@ namespace Game.Core.Scenes
 
             var askMyroslavaBands = new[]
             {
-                new QuestConsequence().Loyalty("myroslava", -5).Flag("myroslava_asked"),
-                new QuestConsequence().Flag("myroslava_asked"),
-                new QuestConsequence().Loyalty("myroslava", 5).Flag("myroslava_asked").Flag("myroslava_hint"),
-                new QuestConsequence().Loyalty("myroslava", 10).Flag("myroslava_asked").Flag("myroslava_hint")
+                new QuestConsequence().Loyalty("myroslava", -5).Flag(MyroslavaAskedFlag),
+                new QuestConsequence().Flag(MyroslavaAskedFlag),
+                new QuestConsequence().Loyalty("myroslava", 5).Flag(MyroslavaAskedFlag).Flag(MyroslavaHintFlag),
+                new QuestConsequence().Loyalty("myroslava", 10).Flag(MyroslavaAskedFlag).Flag(MyroslavaHintFlag)
             };
 
             return new Scene("opening.neighbour", "scene.opening.neighbour.title")
@@ -211,7 +222,7 @@ namespace Game.Core.Scenes
             var options = new List<SceneChoiceOption>();
             foreach (var buildingId in choices)
                 options.Add(SceneChoiceOption.Simple(buildingId, "scene.neighbour.option." + buildingId,
-                    new QuestConsequence().Building(buildingId).Flag(FirstBuildingFlagPrefix + buildingId),
+                    new QuestConsequence().Building(buildingId),
                     nextLabel: entryLabel + "_" + buildingId));
             yield return SceneStep.Choice(FirstBuildingChoiceId, options);
 

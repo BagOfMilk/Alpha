@@ -277,6 +277,12 @@ namespace Game.Core.Quests
         public const string MaksymCh1Id = "quest.maksym.ch1";
 
         public const string MaksymCh1OfferKey = "quest.maksym.ch1.offer";
+        /// <summary>
+        /// Найкраща смуга «помсти» Максима (Intimidate): розправа без крові громади. Прапор читає
+        /// <c>StoryEchoes</c> (рядок підсумку) — M1.2.
+        /// </summary>
+        public const string MaksymCh1RevengeCleanFlag = "maksym_ch1_revenge_clean";
+
         public const string MaksymCh1RevengeKey = "quest.maksym.ch1.offer.option.revenge";
         public const string MaksymCh1JusticeKey = "quest.maksym.ch1.offer.option.justice";
         public const string MaksymCh1RevengeDoneKey = "quest.maksym.ch1.revenge_done";
@@ -307,7 +313,7 @@ namespace Game.Core.Quests
                     new QuestConsequence().Loyalty(MaksymId, -15).Tension(20).Faction("community", -10),
                     new QuestConsequence().Loyalty(MaksymId, -10).Tension(10),
                     new QuestConsequence().Loyalty(MaksymId, -5).Tension(5),
-                    new QuestConsequence().Loyalty(MaksymId, 0).Tension(0).Flag("maksym_ch1_revenge_clean")
+                    new QuestConsequence().Loyalty(MaksymId, 0).Tension(0).Flag(MaksymCh1RevengeCleanFlag)
                 }));
 
             def.Stage(QuestStage.Check(

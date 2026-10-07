@@ -8,6 +8,11 @@ namespace Game.Core.Companions
     /// сам квест (B6/Core.Quests) і текст (E3) не входять до цього пакета,
     /// декаплінг рядком (<see cref="ArcChapter.QuestId"/>/<see cref="ArcChapter.TitleKey"/>).
     /// Обидві арки — дві глави, гейтяться Steady -> Devoted, як і архівний зразок.
+    ///
+    /// M1.2 (07.10.2026): прапорів «арку завершено» (<c>arc_*_done</c>) більше немає — вони
+    /// дублювали <see cref="ArcState.Completed"/> самого проходження, а читача не мали. Хто
+    /// завершив особисту арку, видно зі стану <see cref="CompanionArcRun"/>: на ньому тримаються
+    /// захист від зради (<c>GameSession.IsArcCompleted</c>) і рядок підсумку (<c>StoryEchoes</c>).
     /// </summary>
     public static class DefaultArcs
     {
@@ -21,7 +26,7 @@ namespace Game.Core.Companions
                 .Chapter(new ArcChapter("ch1", "quest.myroslava.ch1", "arc.myroslava.ch1.title")
                     .Loyalty(LoyaltyBand.Steady).SetsFlag("arc_myroslava_ch1"))
                 .Chapter(new ArcChapter("ch2", "quest.myroslava.ch2", "arc.myroslava.ch2.title")
-                    .Loyalty(LoyaltyBand.Devoted).NeedsFlag("arc_myroslava_ch1").SetsFlag("arc_myroslava_done"));
+                    .Loyalty(LoyaltyBand.Devoted).NeedsFlag("arc_myroslava_ch1"));
         }
 
         /// <summary>Арка Максима: вірність громаді понад помсту (docs/TEST_BUILD.md §3.0).</summary>
@@ -31,7 +36,7 @@ namespace Game.Core.Companions
                 .Chapter(new ArcChapter("ch1", "quest.maksym.ch1", "arc.maksym.ch1.title")
                     .Loyalty(LoyaltyBand.Steady).SetsFlag("arc_maksym_ch1"))
                 .Chapter(new ArcChapter("ch2", "quest.maksym.ch2", "arc.maksym.ch2.title")
-                    .Loyalty(LoyaltyBand.Devoted).NeedsFlag("arc_maksym_ch1").SetsFlag("arc_maksym_done"));
+                    .Loyalty(LoyaltyBand.Devoted).NeedsFlag("arc_maksym_ch1"));
         }
 
         public static System.Collections.Generic.IEnumerable<CompanionArc> All()

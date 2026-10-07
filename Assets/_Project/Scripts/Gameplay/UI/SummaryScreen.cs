@@ -30,6 +30,14 @@ namespace Game.Gameplay.UI
                 if (summary != null && !string.IsNullOrEmpty(summary.FinaleOutcomeKey))
                     GUILayout.Label(UkrainianText.Get("finale.outcome." + summary.FinaleOutcomeKey, g), AlphaSkin.Body);
 
+                // M1.2: що громада запам'ятала з виборів гравця (сюжетні прапори → рядки підсумку).
+                if (summary?.Echoes != null && summary.Echoes.Count > 0)
+                    Widgets.Section(UkrainianText.Get("summary.echoes", g), () =>
+                    {
+                        foreach (var key in summary.Echoes)
+                            GUILayout.Label("• " + UkrainianText.Get(key, g), AlphaSkin.Body);
+                    });
+
                 Widgets.Section(UkrainianText.Get("summary.roster", g), () =>
                 {
                     var list = summary?.FinalRoster ?? roster?.Companions;

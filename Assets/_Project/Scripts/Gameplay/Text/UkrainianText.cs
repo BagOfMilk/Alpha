@@ -279,6 +279,9 @@ namespace Game.Gameplay.Text
             // ==== Трек C, бій (Поправка №14): колесо черги, відступ, старт бою — блок унизу файлу. ====
             AddCombatTrackKeys(t);
 
+            // ==== M1.2 (07.10.2026): рядки підсумку з сюжетних прапорів виборів — блок унизу файлу. ====
+            AddStoryEchoKeys(t);
+
             return t;
         }
 
@@ -3185,6 +3188,40 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.retreat.consequence.lost", "Поле лишиться за ворогом — як поразка, але загін живий.");
             AddKey(t, "ui.battle.retreat.consequence.training", "Тренування закінчиться без наслідків.");
             AddKey(t, "ui.battle.retreat.only_own_turn", "Відступити можна лише у свій хід.");
+        }
+
+        // ---- M1.2: «Відлуння рішень» — рядки підсумку доби 5 з сюжетних прапорів (Core/Session/StoryEchoes.cs) ----
+        // Ключі — StoryEchoes.TextKeyPrefix + id. Чорновий текст асистента (R7); безособові форми, щоб не залежати від роду героя.
+        private static void AddStoryEchoKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "summary.echoes", "Що громада запам'ятала");
+
+            AddKey(t, "summary.echo.myroslava_hint",
+                "Мирослава підказала, чого не договорює її батько, — і тихий шлях на перевалі став легшим.");
+            AddKey(t, "summary.echo.myroslava_asked",
+                "На питання про батька Мирослава відмовчалась — і ця мовчанка лишилась між вами.");
+            AddKey(t, "summary.echo.myroslava_trusted",
+                "Мирослава пам'ятає, що їй повірили без застережень, — і вислухає тебе, коли дійде до розмови.");
+            AddKey(t, "summary.echo.myroslava_watched",
+                "Мирослава знає, що за нею стежили. Вона не ображається, але й не забуває.");
+            AddKey(t, "summary.echo.myroslava_sent_away",
+                "Мирослава не забула, як її відіслали від ради й постів, — переконати її після цього важче.");
+            AddKey(t, "summary.echo.myroslava_checkup_reassure",
+                "Мирослава пам'ятає, що її запевнили: довіра ще стоїть.");
+            AddKey(t, "summary.echo.myroslava_checkup_space",
+                "Мирослава оцінила, що її не тиснули, а дали час.");
+            AddKey(t, "summary.echo.myroslava_ch2_remember",
+                "Мирослава лишилась, бо ви разом пригадали перевал і все, що було після нього.");
+            AddKey(t, "summary.echo.myroslava_ch2_silence",
+                "Мирослава лишилась поруч без зайвих слів — і для неї цього досить.");
+            AddKey(t, "summary.echo.maksym_revenge_clean",
+                "Максим помстився без крові громади — і про це ніхто не шепоче.");
+            AddKey(t, "summary.echo.maksym_ch2_forgive",
+                "Максим почув пробачення вголос — і став до громади ближче, ніж до своєї помсти.");
+            AddKey(t, "summary.echo.maksym_ch2_guard",
+                "Максим мовчки став у стрій поруч, і ця мовчанка вартує слів.");
+            AddKey(t, "summary.echo.abandoned_camp_grain_taken",
+                "Із покинутого табору авангарду забрали зерно — Тугар цього не пробачив.");
         }
     }
 }
