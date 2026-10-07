@@ -41,7 +41,7 @@ Push-Location $proj
 $head = (git rev-parse --short HEAD).Trim()
 # Лише вихідний код і асети гри: Unity сам переписує налаштування URP і матеріали Kenney під час
 # збирання — через них білд перезбирався б щоразу.
-$dirty = (git status --porcelain -- Assets/_Project Assets/Art Assets/Tests Assets/ThirdParty/CC0 Packages/manifest.json) -ne $null
+$dirty = (git status --porcelain --untracked-files=no -- Assets/_Project/Scripts Assets/Art Assets/Tests Assets/ThirdParty/CC0 Packages/manifest.json) -ne $null
 Pop-Location
 $want = if ($dirty) { "$head+зміни" } else { $head }
 $have = if (Test-Path $stamp) { (Get-Content $stamp -Raw).Trim() } else { "" }
