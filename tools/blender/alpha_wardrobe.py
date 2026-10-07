@@ -680,7 +680,7 @@ COVERS = {
 }
 
 # Шари одягу від тіла назовні. Річ шару k виштовхується назовні від усіх речей нижчих шарів там, де вони
-# перетинаються (у межах reach — 10 см: кімоно відходить від тіла далеко): ліф проступав крізь светр, вишивка — з-під сорочки, спідниця плямилась
+# перетинаються (у межах reach — 15 см: кімоно відходить від тіла далеко): ліф проступав крізь светр, вишивка — з-під сорочки, спідниця плямилась
 # (власник 07.10.2026: «одяг рваний і ніби прозорий»). Поєднання не важливе: річ стоїть над будь-якою
 # нижчою, тож без нижньої вона лише на кілька мм далі від тіла.
 LAYERS = [
@@ -694,7 +694,7 @@ LAYERS = [
     {"sash", "boyar_belt", "carpenter_apron", "kerchief", "wolf_fur_collar", "cloak"},
 ]
 
-def layer_clothes(rig, gap=0.004, reach=0.10):
+def layer_clothes(rig, gap=0.004, reach=0.15):
     """Повертає {частина: скільки вершин зсунуто}."""
     from mathutils.bvhtree import BVHTree
     parts = {o.get("kit_part"): o for o in rig.children if o.get("kit_part") and o.type == 'MESH'}
@@ -718,7 +718,10 @@ def layer_clothes(rig, gap=0.004, reach=0.10):
                     loc, nrm, _i, _d = tree.find_nearest(p, reach)
                     if loc is None:
                         continue
-                    side = (p - loc).dot(nrm)
+                    # Бік — за нормаллю САМОЇ зовнішньої речі (вона назовні від тіла): у частини бібліотечних речей
+                    # (чоботи) нормалі вивернуті, і тест за нормаллю нижньої пропускав халяви крізь штани.
+                    nw = (n3 @ v.normal).normalized()
+                    side = (p - loc).dot(nw)
                     if side < gap:
                         need[v.index] = gap - side
                 adj = [[] for _ in me.vertices]

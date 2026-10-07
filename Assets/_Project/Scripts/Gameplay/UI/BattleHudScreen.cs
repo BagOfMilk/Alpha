@@ -314,9 +314,18 @@ namespace Game.Gameplay.UI
         /// під колесом видна, а клік блокують лише бейджі й центр — їхні
         /// прямокутники йдуть у <paramref name="blocking"/> (рецензія C1).
         /// </summary>
+        private static Texture2D _wheelBacking;
+
         private static void DrawTurnWheel(IBattleHudData c, BattleView view, TurnWheelModel wheel, Rect area, float scale, List<Rect> blocking)
         {
             _wheelHoverUnitId = null;
+
+            // Напівпрозора підкладка: без неї бейджі колеса змішувались із підписами бійців на арені — «Оксана» й
+            // «Максим» стояли поруч двічі (тур 07.10.2026, чеклист G5). Арену під колесом видно, кліки й далі
+            // блокують лише бейджі (рецензія C1).
+            if (_wheelBacking == null)
+                _wheelBacking = AlphaSkin.SolidTexture(new Color32(AlphaSkin.BgDark.r, AlphaSkin.BgDark.g, AlphaSkin.BgDark.b, 150));
+            GUI.DrawTexture(area, _wheelBacking, ScaleMode.StretchToFill);
 
             float titleH = WheelTitleHeight(scale);
             ShadowedLabel(new Rect(area.x, area.y, area.width, titleH), UkrainianText.Get("ui.battle.wheel.title", false), AlphaSkin.TextDim);
