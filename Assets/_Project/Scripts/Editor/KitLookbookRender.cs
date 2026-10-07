@@ -33,6 +33,7 @@ namespace Game.Gameplay.EditorTools
         [MenuItem("Alpha/Лукбук набору персонажів")]
         public static void Run()
         {
+            ArtImportSettings.EnsureAnimationImport();
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             Directory.CreateDirectory(OutDir);
             var report = new StringBuilder();
@@ -110,9 +111,11 @@ namespace Game.Gameplay.EditorTools
                                               " | smooth=" + (m.HasProperty("_Smoothness") ? m.GetFloat("_Smoothness").ToString("0.00") : "?"));
                         }
                     }
-                    var b = Bounds(modelGo);
-                    report.AppendLine("   межі: " + b.center.ToString("0.00") + " розмір " + b.size.ToString("0.00"));
+                    var b = BoneBounds(modelGo);
+                    report.AppendLine("   межі (кістки): " + b.center.ToString("0.00") + " розмір " + b.size.ToString("0.00"));
+                    var snap = Snapshot(modelGo);
                     Shoot(cam, b, facing, OutDir + "/" + look.Key + ".png");
+                    Unsnap(modelGo, snap);
 
                     string gkey = look.Key.Substring(0, 1);
                     var walk = anims != null ? anims.For(CharacterAnimState.Walk, style) : null;
@@ -210,6 +213,52 @@ namespace Game.Gameplay.EditorTools
             return graph;
         }
 
+        /// <summary>
+        /// Запекти поточну позу в статичні сітки й сховати скінені: поза Play Mode рендер показував бінд-позу,
+        /// хоч кістки вже стояли в позі кліпу (лукбук 07.10.2026). Повертає корінь знімка — знищити після кадру.
+        /// </summary>
+        private static GameObject Snapshot(GameObject model)
+        {
+            var snap = new GameObject("snapshot");
+            foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+            {
+                if (!smr.enabled || !smr.gameObject.activeInHierarchy || smr.sharedMesh == null) continue;
+                var mesh = new Mesh();
+                smr.BakeMesh(mesh, true);
+                var go = new GameObject(smr.name);
+                go.transform.SetParent(snap.transform, false);
+                go.transform.SetPositionAndRotation(smr.transform.position, smr.transform.rotation);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                go.AddComponent<MeshRenderer>().sharedMaterials = smr.sharedMaterials;
+                smr.enabled = false;
+            }
+            return snap;
+        }
+
+        private static void Unsnap(GameObject model, GameObject snap)
+        {
+            foreach (var mf in snap.GetComponentsInChildren<MeshFilter>()) Object.DestroyImmediate(mf.sharedMesh);
+            Object.DestroyImmediate(snap);
+            foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false)) smr.enabled = true;
+        }
+
+        /// <summary>Рамка за кістками (голова, ступні): межі скінених рендерерів поза Play Mode застарілі.</summary>
+        private static Bounds BoneBounds(GameObject model)
+        {
+            Transform head = null, fl = null, fr = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "head") head = t;
+                else if (t.name == "foot_l") fl = t;
+                else if (t.name == "foot_r") fr = t;
+            }
+            if (head == null || fl == null || fr == null) return Bounds(model);
+            float feet = Mathf.Min(fl.position.y, fr.position.y) - 0.1f;
+            float top = head.position.y + 0.3f;
+            var c = (fl.position + fr.position) * 0.5f;
+            return new Bounds(new Vector3(c.x, (top + feet) * 0.5f, c.z), new Vector3(1f, top - feet, 1f));
+        }
+
         private static float Yaw(Vector3 v) => Vector3.SignedAngle(Vector3.forward, new Vector3(v.x, 0f, v.z), Vector3.up);
 
         /// <summary>
@@ -226,9 +275,22 @@ namespace Game.Gameplay.EditorTools
             Vector3[] prev = null;
             float moved = 0f;
             var side = Vector3.Cross(Vector3.up, facing).normalized;
+            Transform pelvis = null;
+            foreach (var t in bones) if (t.name == "pelvis") pelvis = t;
+            var yaws = new StringBuilder();
+            Vector3 hip0 = Vector3.zero;
+            float drift = 0f;
+            Bounds frame = default(Bounds);
             for (int i = 0; i < frames; i++)
             {
                 var graph = Pose(model, walk, walk.length * i / frames);
+                yaws.Append(Yaw(CharacterAssembler.Facing(model)).ToString("0")).Append("° ");
+                if (pelvis != null)
+                {
+                    if (i == 0) hip0 = pelvis.position;
+                    var d = pelvis.position - hip0; d.y = 0f;
+                    drift = Mathf.Max(drift, d.magnitude);
+                }
                 var now = new Vector3[bones.Length];
                 for (int k = 0; k < bones.Length; k++) now[k] = bones[k].position;
                 if (prev != null)
@@ -238,7 +300,9 @@ namespace Game.Gameplay.EditorTools
                     moved += sum / bones.Length;
                 }
                 prev = now;
-                var b = Bounds(model);
+                if (i == 0) frame = BoneBounds(model); // одна рамка на всю серію: дрейф тіла видно на кадрах
+                var b = frame;
+                var snap = Snapshot(model);
                 cam.targetTexture = rt;
                 float dist = Mathf.Max(b.size.y, 1f) * 0.55f / Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
                 for (int row = 0; row < 2; row++)
@@ -252,12 +316,15 @@ namespace Game.Gameplay.EditorTools
                     sheet.ReadPixels(new Rect(0, 0, cw, Cell), i * cw, (1 - row) * Cell);
                     RenderTexture.active = prevRt;
                 }
+                Unsnap(model, snap);
                 if (graph.IsValid()) graph.Destroy();
             }
             sheet.Apply();
             File.WriteAllBytes(path, sheet.EncodeToPNG());
             report.AppendLine("   хода «" + walk.name + "» (" + walk.length.ToString("0.00") + " с): середній зсув кісток між кадрами " +
                               (moved / (frames - 1)).ToString("0.000") + " (0 — анімація не грає) → " + Path.GetFileName(path));
+            report.AppendLine("   напрям тіла (стегна) по кадрах ходи: " + yaws + "· найбільший дрейф таза від кадру 0: " +
+                              drift.ToString("0.00") + " м (кліп на місці — кілька см)");
             cam.targetTexture = null;
             rt.Release();
             Object.DestroyImmediate(rt);

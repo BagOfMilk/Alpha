@@ -16,7 +16,7 @@ FABRICS.update({
     "acc_fur":       ("M_AccFur", 0.25),      # сіро-буре вовче хутро
     "acc_sheepskin": ("M_AccSheep", 0.25),    # кучерява овчина
     "acc_feather":   ("M_AccFeather", 1.0),
-    "acc_emb_rb":    ("M_EmbRedBlack", 0.12), # вишивка: червоне й чорне по білому
+    "acc_emb_rb":    ("M_EmbRedBlack", 0.32), # вишивка: червоне й чорне по білому (мотив ~4 см — 0,12 читалось крапками)
     "acc_emb_gold":  ("M_EmbGold", 0.12),     # золоте шиття по червоному
     "acc_scar":      ("M_AccScar", 0.1),
     "acc_dleather":  ("M_AccDarkLeather", 0.4),

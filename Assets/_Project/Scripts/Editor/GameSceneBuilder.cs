@@ -41,6 +41,7 @@ namespace Game.Gameplay.EditorTools
         [MenuItem("Alpha/Собрать сцену «Игра»")]
         public static void Build()
         {
+            ArtImportSettings.EnsureAnimationImport(); // кліпи, імпортовані за старими правилами, — переімпорт
             _hutIndex = 0; // хати по черзі — та сама розстановка за кожної перезбірки
             // Фаза F (FOLIAGE): крок ПЕРЕД усім іншим — дешева перевірка
             // позначки палітри Kenney (Library/KenneyPaletteVersion.txt);

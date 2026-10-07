@@ -331,6 +331,9 @@ def library_wardrobe(rig, gender, items):
         o.name = f"{rig.name}.{key}"; o["kit_part"] = key; o["kit_kind"] = LIBRARY_FABRIC[key]; o["alpha_char"] = rig.name
         o.data.materials.clear(); o.data.materials.append(_fabric_material(LIBRARY_FABRIC[key]))
         _budget(o, 4000)
+        # Рідна розгортка бібліотеки — під її власну текстуру: наша тканина лягала на річ однією плиткою, і
+        # плями льону розтягувались на пів рукава з різкими краями на швах (лукбук 07.10.2026).
+        _uv_triplanar(o, FABRICS[LIBRARY_FABRIC[key]][1])
         out[key] = o
     items.update(out)
     return out
@@ -757,6 +760,22 @@ def _pbr_material(name, base_img, nor_img=None, rough=0.8, metal=0.0):
     b.inputs["Roughness"].default_value = rough; b.inputs["Metallic"].default_value = metal
     return m
 
+def highpass_fabric(a, radius=40, keep=0.25):
+    """Прибрати з тканини великі плями (низькі частоти яскравості), лишити переплетення: на одязі вони
+    читались брудними плямами. a — RGBA float [h, w, 4]; keep — скільки низьких частот лишити."""
+    import numpy as np
+    lum = a[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    k = 2 * radius + 1
+    pad = np.pad(lum, radius, mode="wrap")                  # тканина тайлиться — розмиття теж по колу
+    c = np.cumsum(np.cumsum(pad, 0), 1)
+    c = np.pad(c, ((1, 0), (1, 0)))
+    blur = (c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]) / (k * k)
+    flat = lum - (1.0 - keep) * (blur - lum.mean())
+    ratio = np.where(lum > 1e-4, flat / np.maximum(lum, 1e-4), 1.0)
+    out = a.copy()
+    out[..., :3] = np.clip(a[..., :3] * ratio[..., None], 0, 1)
+    return out
+
 def prepare_textures(art_dir):
     """Нейтральні тканини (колір задає гра множенням), кольчуга, стьобка, волосся-карти — у Textures/Kit."""
     import numpy as np
@@ -787,6 +806,8 @@ def prepare_textures(art_dir):
         lum = a[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
         lum = lum / max(lum.mean(), 1e-3) * target
         a[..., :3] = np.clip(np.dstack([lum] * 3) * np.array([1.0, 0.97, 0.92], dtype=np.float32), 0, 1)
+        if name in ("linen", "wool", "fleece"):
+            a = highpass_fabric(a)
         base = _save_rgba(f"kit_{name}", a, out)
         n_img = None
         if nor is not None:

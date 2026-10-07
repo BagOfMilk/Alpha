@@ -127,11 +127,37 @@ namespace Game.Gameplay.EditorTools
                 c.lockRootRotation = true;
                 c.lockRootHeightY = true;
                 c.lockRootPositionXZ = true;
-                c.keepOriginalOrientation = true;
+                // Орієнтація — за тілом, а не з кореня файлу: корінь ригу UAL повернутий, і з «Original» тіло в
+                // ході дивилось назад — герой ішов задом наперед (власник 07.10.2026; тур — 179° між рухом і тілом).
+                c.keepOriginalOrientation = false;
                 c.keepOriginalPositionY = true;
                 c.keepOriginalPositionXZ = true;
             }
             importer.clipAnimations = clips;
+        }
+
+        /// <summary>
+        /// Кліпи, імпортовані за старими правилами (орієнтація з кореня файлу), — переімпортувати. Версію
+        /// правил не піднімаємо: вона переімпортувала б усі моделі проєкту (~25 хв), а змінились лише кліпи.
+        /// Кличуть збирач сцени гри й лукбук набору.
+        /// </summary>
+        public static void EnsureAnimationImport()
+        {
+            if (!System.IO.Directory.Exists(Animations)) return;
+            foreach (var file in System.IO.Directory.GetFiles(Animations, "*.fbx"))
+            {
+                string path = file.Replace('\\', '/');
+                bool stale = false;
+                foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+                {
+                    var clip = asset as AnimationClip;
+                    if (clip == null || clip.name.StartsWith("__preview__")) continue;
+                    if (AnimationUtility.GetAnimationClipSettings(clip).keepOriginalOrientation) { stale = true; break; }
+                }
+                if (!stale) continue;
+                Debug.Log("[Імпорт] Кліпи " + path + " — за старими правилами, переімпорт.");
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            }
         }
 
         private void OnPreprocessTexture()
@@ -180,7 +206,15 @@ namespace Game.Gameplay.EditorTools
             bool metal = material.HasProperty("_Metallic") && material.GetFloat("_Metallic") >= 0.5f;
             if (!metal && material.HasProperty("_Smoothness"))
                 material.SetFloat("_Smoothness", Mathf.Min(material.GetFloat("_Smoothness"), 0.25f));
-            if (material.HasProperty("_BumpMap") && material.GetTexture("_BumpMap") == null)
+            // Тканини набору персонажів — без карти нормалей: розгортка речей з островами різної орієнтації, і
+            // переплетення світило кожен острів по-своєму — рукави в рваних світлих латках (лукбук 07.10.2026),
+            // а з відстані гри саме переплетення не видно. Метал (кольчуга, сталь) карту лишає.
+            if (assetPath.StartsWith(Characters) && !metal && material.HasProperty("_BumpMap"))
+            {
+                material.SetTexture("_BumpMap", null);
+                material.DisableKeyword("_NORMALMAP");
+            }
+            else if (material.HasProperty("_BumpMap") && material.GetTexture("_BumpMap") == null)
             {
                 var nor = FindByMaterialName(description.materialName, NormalSuffixes);
                 if (nor != null)
