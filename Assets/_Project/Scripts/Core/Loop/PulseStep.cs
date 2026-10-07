@@ -19,7 +19,13 @@ namespace Game.Core.Loop
                 ctx.IsNight,
                 ctx.Tier,
                 (int)ctx.Tension.Band,
-                ctx.IsPatrolling);
+                ctx.IsPatrolling,
+                // Вхідні змінні трьох накопичувачів (інваріант 2): вулиця — людність
+                // і голод, ніч — Уклад і патруль, криза — полоса. Порт без
+                // населення (вузькі тести) читається як стартове село.
+                ctx.IsHungry,
+                ctx.Population != null ? ctx.Population.CrowdBand : 2,
+                ctx.OrderLevel);
 
             // Розряджається тільки джерело, якому є чим спрацювати: вирішує
             // той самий відбір, що слідом застосує крок інцидентів. Без цього

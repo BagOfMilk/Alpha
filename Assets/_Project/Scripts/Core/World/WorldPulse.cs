@@ -54,6 +54,16 @@ namespace Game.Core.World
             return n;
         }
 
+        /// <summary>
+        /// Чи тліє джерело зараз: тікає, але не озброєне (не сповіщає, не
+        /// спрацьовує). Звичайні джерела не тліють ніколи.
+        /// </summary>
+        private static bool IsSmoldering(IPressureSource source, PulseContext ctx)
+        {
+            var smoldering = source as ISmolderingSource;
+            return smoldering != null && smoldering.IsSmoldering(ctx);
+        }
+
         public PulseTick Advance(PulseContext ctx) => Advance(ctx, null);
 
         /// <summary>
@@ -84,6 +94,15 @@ namespace Game.Core.World
                 if (!source.IsActive(ctx))
                     continue;
 
+                // Тліюче джерело тікає (інваріант 2), але під стелею нижче першого
+                // ступеня: ні передвісника, ні спрацювання (ISmolderingSource).
+                if (IsSmoldering(source, ctx))
+                {
+                    track.Accumulate(source.InsistencePerDay(ctx), _cfg,
+                        ((ISmolderingSource)source).SmolderCeiling);
+                    continue;
+                }
+
                 track.Accumulate(source.InsistencePerDay(ctx), _cfg);
 
                 // Кандидат у передвісники. Ступінь НЕ зараховується тут:
@@ -103,7 +122,7 @@ namespace Game.Core.World
             foreach (var source in _sources)
             {
                 var track = _tracks[source.Id];
-                if (!source.IsActive(ctx) || !track.IsReady(ctx.Day, _cfg))
+                if (!source.IsActive(ctx) || IsSmoldering(source, ctx) || !track.IsReady(ctx.Day, _cfg))
                     continue;
 
                 // Готове, але розбирати нічого — тримаємо заряд, а не палимо намарно.
