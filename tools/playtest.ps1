@@ -18,6 +18,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $proj = Split-Path $PSScriptRoot -Parent
+# Білд, кеш Unity (Library) і сесії живуть у ГОЛОВНІЙ копії репозиторію. Скрипт, запущений з іншої
+# робочої копії (worktree сесії), працює з головною — інакше «Білда немає» (07.10.2026).
+try {
+    $common = (git -C $proj rev-parse --path-format=absolute --git-common-dir 2>$null)
+    if ($common) {
+        $main = Split-Path ($common.Trim()) -Parent
+        if ((Test-Path (Join-Path $main "tools/build-unity.ps1")) -and ($main -ne $proj)) {
+            Write-Host "Головна копія репозиторію: $main" -ForegroundColor DarkGray
+            $proj = $main
+        }
+    }
+} catch { }
 $out = Join-Path $proj "Build\Windows"
 $exe = Join-Path $out "Alpha.exe"
 $stamp = Join-Path $out "build_commit.txt"
@@ -45,13 +57,21 @@ $dirty = (git status --porcelain --untracked-files=no -- Assets/_Project/Scripts
 Pop-Location
 $want = if ($dirty) { "$head+зміни" } else { $head }
 $have = if (Test-Path $stamp) { (Get-Content $stamp -Raw).Trim() } else { "" }
-$needBuild = $Rebuild -or -not (Test-Path $exe) -or ($have -ne $want) -or $dirty
+# Білд застарів, лише якщо від його коміту змінився код чи асети гри (документи й скрипти — ні).
+$stale = $true
+if ($have -and -not $have.Contains("+")) {
+    Push-Location $proj
+    $changed = git diff --name-only $have HEAD -- Assets/_Project/Scripts Assets/Art Assets/ThirdParty/CC0 Packages/manifest.json 2>$null
+    $stale = ($LASTEXITCODE -ne 0) -or ($changed -ne $null -and @($changed).Count -gt 0)
+    Pop-Location
+}
+$needBuild = $Rebuild -or -not (Test-Path $exe) -or $stale -or $dirty
 
 if ($NoBuild -and -not (Test-Path $exe)) { Write-Host "Білда немає — запусти без -NoBuild." -ForegroundColor Red; exit 1 }
 
 if ($needBuild -and -not $NoBuild) {
     Write-Host "Збираю білд ($want; було: $(if ($have) { $have } else { 'нічого' })) — Unity у фоні, низький пріоритет..." -ForegroundColor Cyan
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-unity.ps1") -LowPriority
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $proj "tools/build-unity.ps1") -LowPriority
     if ($LASTEXITCODE -ne 0) { Write-Host "Збирання впало — лог у Logs\. Скажи Клоду «розбери збірку»." -ForegroundColor Red; exit 1 }
     Set-Content -Path $stamp -Value $want -Encoding UTF8
 } else {
