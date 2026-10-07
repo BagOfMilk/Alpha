@@ -112,6 +112,32 @@ namespace Game.Gameplay.UI
             return Clicked(GUILayout.Button(label, _primaryWrapButton, options), SoundCue.UiConfirm);
         }
 
+        private static GUIStyle _secondaryWrapButton;
+        private static GUIStyle _dangerWrapButton;
+
+        /// <summary>
+        /// Другорядна дія з довгим підписом — текст переноситься: на дошці оголошень довгі варіанти розпирали
+        /// картку за край панелі, і текст обрізався (тур 07.10.2026).
+        /// </summary>
+        public static bool SecondaryWrapButton(string label, params GUILayoutOption[] options)
+        {
+            if (_secondaryButton == null)
+                _secondaryButton = AlphaSkin.ButtonStyle(AlphaSkin.BgRaised, AlphaSkin.BgHover, AlphaSkin.BgActive, AlphaSkin.TextMain);
+            if (_secondaryWrapButton == null)
+                _secondaryWrapButton = new GUIStyle(_secondaryButton) { wordWrap = true };
+            return Clicked(GUILayout.Button(label, _secondaryWrapButton, options), SoundCue.UiClick);
+        }
+
+        /// <summary>Ризикова дія з довгим підписом — текст переноситься.</summary>
+        public static bool DangerWrapButton(string label, params GUILayoutOption[] options)
+        {
+            if (_dangerButton == null)
+                _dangerButton = AlphaSkin.ButtonStyle(AlphaSkin.Danger, AlphaSkin.DangerHover, AlphaSkin.DangerActive, AlphaSkin.TextMain);
+            if (_dangerWrapButton == null)
+                _dangerWrapButton = new GUIStyle(_dangerButton) { wordWrap = true };
+            return GUILayout.Button(label, _dangerWrapButton, options);
+        }
+
         /// <summary>Другорядна дія — той самий тон, що й базова кнопка скіну.</summary>
         public static bool SecondaryButton(string label, params GUILayoutOption[] options)
         {

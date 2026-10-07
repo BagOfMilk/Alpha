@@ -111,7 +111,8 @@ namespace Game.Gameplay.UI
 
         private void DrawCard(UxCard card, float width, IUxRenderHost host, Game.Core.Characters.Creation.Gender g, string panelTitle)
         {
-            GUILayout.BeginVertical(GUI.skin.box);
+            // Ширина картки — ширина панелі: інакше довга кнопка розпирала колонку, і текст обрізався праворуч.
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(width));
             // Заголовок картки, що повторює заголовок панелі (розмова з Максимом — «Максим Беркут» двічі), не малюємо.
             if (!string.IsNullOrEmpty(card.Title) && card.Title != panelTitle) GUILayout.Label(card.Title, AlphaSkin.SubHeader);
             if (!string.IsNullOrEmpty(card.Subtitle)) GUILayout.Label(card.Subtitle, _wrapHint);
@@ -134,22 +135,26 @@ namespace Game.Gameplay.UI
             if (card.Actions.Count > 0)
             {
                 var reasons = new List<string>();
-                Flow(card.Actions, width, a => Widgets.TabButtonWidth(Label(a)), a =>
+                float inner = width - 16f;
+                Flow(card.Actions, width, a => System.Math.Min(Widgets.TabButtonWidth(Label(a)), inner), a =>
                 {
                     string label = Label(a);
+                    // Довгий підпис — кнопка на всю ширину картки з переносом, а не за край панелі.
+                    bool wide = Widgets.TabButtonWidth(label) > inner;
+                    var size = wide ? GUILayout.Width(inner) : GUILayout.ExpandWidth(false);
                     string reason = a.ReasonIn(host.State, host.Female);
                     if (reason != null)
                     {
-                        Widgets.DisabledButton(label, null, GUILayout.ExpandWidth(false));
+                        Widgets.DisabledButton(label, null, size);
                         string line = UkrainianText.Format("ux.common.reason_line", g, "action", a.Label, "reason", reason);
                         if (!reasons.Contains(line)) reasons.Add(line);
                         return;
                     }
                     bool clicked;
-                    if (a.Selected) clicked = Widgets.TabButton(label, true, GUILayout.ExpandWidth(false));
-                    else if (a.Intent == UxIntent.Primary) clicked = Widgets.PrimaryButton(label, GUILayout.ExpandWidth(false));
-                    else if (a.Intent == UxIntent.Danger) clicked = Widgets.DangerButton(label, GUILayout.ExpandWidth(false));
-                    else clicked = Widgets.SecondaryButton(label, GUILayout.ExpandWidth(false));
+                    if (a.Selected) clicked = Widgets.TabButton(label, true, size);
+                    else if (a.Intent == UxIntent.Primary) clicked = wide ? Widgets.PrimaryWrapButton(label, size) : Widgets.PrimaryButton(label, size);
+                    else if (a.Intent == UxIntent.Danger) clicked = wide ? Widgets.DangerWrapButton(label, size) : Widgets.DangerButton(label, size);
+                    else clicked = wide ? Widgets.SecondaryWrapButton(label, size) : Widgets.SecondaryButton(label, size);
                     if (clicked) host.RunAction(a);
                 });
                 foreach (var r in reasons) GUILayout.Label(r, _wrapHint);
