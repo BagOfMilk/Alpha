@@ -106,6 +106,9 @@
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/UI/Toolkit/InventoryToolkitView.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/CharacterKitBuilder.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtImportSettings.cs" />
+    <!-- Звук (віха M1.19): AudioSource, PlayerPrefs, AudioImporter — поза заглушками; таблиця тактів лінтується. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Audio/*.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/AudioLibraryBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>

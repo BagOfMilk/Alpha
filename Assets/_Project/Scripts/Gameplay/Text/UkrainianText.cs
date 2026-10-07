@@ -1852,6 +1852,13 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.inventory.close", "Закрити (I)");
             AddKey(t, "ui.inventory.hint", "Клік по слоту — показати речі для нього. Модель обертається мишею.");
             AddKey(t, "ui.inventory.only_morning", "Перевдягатися можна вранці чи у вільній грі.");
+            // Віха M1.19: гучність у меню паузи.
+            AddKey(t, "ui.sound.section", "Звук");
+            AddKey(t, "ui.sound.master", "Загальна гучність");
+            AddKey(t, "ui.sound.music", "Музика");
+            AddKey(t, "ui.sound.sfx", "Звуки світу й бою");
+            AddKey(t, "ui.sound.ui", "Інтерфейс");
+            AddKey(t, "ui.sound.ambience", "Атмосфера");
             // Поправка №19.1: культури набору (створення героя, картка людини).
             // Поправка №19.3: зовнішність на екрані створення героя.
             AddKey(t, "ui.creation.look", "Зовнішність");

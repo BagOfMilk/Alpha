@@ -426,7 +426,7 @@ namespace Game.Gameplay.UI.Toolkit
 
             public static Button MakeButton(string text, Action onClick, bool primary = false)
             {
-                var b = new Button(onClick) { text = text };
+                var b = new Button(() => { SoundSettings.Request(SoundCue.UiClick); onClick(); }) { text = text };
                 b.focusable = false;
                 b.style.fontSize = HudToolkitTheme.BodySize;
                 b.style.color = primary ? HudToolkitTheme.AccentColor : HudToolkitTheme.TextColor;

@@ -87,6 +87,8 @@ namespace Game.Gameplay.EditorTools
 
             // Поправка №19: модульний набір персонажів і живе прев'ю екрана створення героя.
             CharacterKitBuilder.Build();
+            // Поправка №18.4: звук — бібліотека кліпів CC0 і режисер (музика, атмосфера, такти подій).
+            AudioLibraryBuilder.Build();
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);

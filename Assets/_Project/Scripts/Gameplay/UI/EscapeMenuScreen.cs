@@ -59,6 +59,20 @@ namespace Game.Gameplay.UI
 
                 GUILayout.Space(8f);
 
+                // Гучність (віха M1.19): п'ять шарів, крок 10 %; зберігається між запусками.
+                GUILayout.Label(UkrainianText.Get("ui.sound.section", g), AlphaSkin.Body);
+                foreach (SoundBus bus in System.Enum.GetValues(typeof(SoundBus)))
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label(UkrainianText.Get(SoundSettings.TextKey(bus), g), AlphaSkin.Body, GUILayout.Width(220f));
+                    if (Widgets.SecondaryButton("−", GUILayout.Width(44f))) SoundSettings.Nudge(bus, -1);
+                    GUILayout.Label(SoundSettings.Percent(bus) + " %", AlphaSkin.Body, GUILayout.Width(70f));
+                    if (Widgets.SecondaryButton("+", GUILayout.Width(44f))) SoundSettings.Nudge(bus, 1);
+                    GUILayout.EndHorizontal();
+                }
+
+                GUILayout.Space(8f);
+
                 // Вихід — лише з підтвердженням (UX-12): незбережене пропаде.
                 if (!_confirmQuit)
                 {

@@ -81,12 +81,19 @@ namespace Game.Gameplay.UI
 
         // ================= кнопки =================
 
+        /// <summary>Звук натискання (віха M1.19): кнопка кладе такт у чергу, режисер звуку грає.</summary>
+        private static bool Clicked(bool pressed, SoundCue cue)
+        {
+            if (pressed) SoundSettings.Request(cue);
+            return pressed;
+        }
+
         /// <summary>Головна дія екрана — акцентний теплий колір.</summary>
         public static bool PrimaryButton(string label, params GUILayoutOption[] options)
         {
             if (_primaryButton == null)
                 _primaryButton = AlphaSkin.ButtonStyle(AlphaSkin.Accent, AlphaSkin.AccentHover, AlphaSkin.AccentActive, AlphaSkin.BgDark);
-            return GUILayout.Button(label, _primaryButton, options);
+            return Clicked(GUILayout.Button(label, _primaryButton, options), SoundCue.UiConfirm);
         }
 
         private static GUIStyle _primaryWrapButton;
@@ -102,7 +109,7 @@ namespace Game.Gameplay.UI
                 _primaryButton = AlphaSkin.ButtonStyle(AlphaSkin.Accent, AlphaSkin.AccentHover, AlphaSkin.AccentActive, AlphaSkin.BgDark);
             if (_primaryWrapButton == null)
                 _primaryWrapButton = new GUIStyle(_primaryButton) { wordWrap = true };
-            return GUILayout.Button(label, _primaryWrapButton, options);
+            return Clicked(GUILayout.Button(label, _primaryWrapButton, options), SoundCue.UiConfirm);
         }
 
         /// <summary>Другорядна дія — той самий тон, що й базова кнопка скіну.</summary>
@@ -110,7 +117,7 @@ namespace Game.Gameplay.UI
         {
             if (_secondaryButton == null)
                 _secondaryButton = AlphaSkin.ButtonStyle(AlphaSkin.BgRaised, AlphaSkin.BgHover, AlphaSkin.BgActive, AlphaSkin.TextMain);
-            return GUILayout.Button(label, _secondaryButton, options);
+            return Clicked(GUILayout.Button(label, _secondaryButton, options), SoundCue.UiClick);
         }
 
         /// <summary>
@@ -122,7 +129,7 @@ namespace Game.Gameplay.UI
         /// необрана — темніша, тьмяна рамка, другорядний текст.
         /// </summary>
         public static bool TabButton(string label, bool selected, params GUILayoutOption[] options)
-            => GUILayout.Button(label, AlphaSkin.TabStyle(selected), options);
+            => Clicked(GUILayout.Button(label, AlphaSkin.TabStyle(selected), options), SoundCue.UiToggle);
 
         /// <summary>Вкладка своєї ширини, не розтягнута на весь рядок (рядок вкладок переноситься).</summary>
         public static bool CompactTabButton(string label, bool selected)
