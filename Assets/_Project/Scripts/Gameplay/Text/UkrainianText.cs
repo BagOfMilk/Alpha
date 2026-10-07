@@ -282,6 +282,9 @@ namespace Game.Gameplay.Text
             // ==== M1.6 (Поправка №8.3): заступники при зборах, данж на добу-дві — блок унизу файлу. ====
             AddMusterDeputyKeys(t);
 
+            // ==== M1.10 (US-16.1): айронмен на титулі й в Esc → Зберегти — блок унизу файлу. ====
+            AddIronmanKeys(t);
+
             // ==== M1.2 (07.10.2026): рядки підсумку з сюжетних прапорів виборів — блок унизу файлу. ====
             AddStoryEchoKeys(t);
 
@@ -3206,6 +3209,19 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.retreat.consequence.lost", "Поле лишиться за ворогом — як поразка, але загін живий.");
             AddKey(t, "ui.battle.retreat.consequence.training", "Тренування закінчиться без наслідків.");
             AddKey(t, "ui.battle.retreat.only_own_turn", "Відступити можна лише у свій хід.");
+        }
+
+        // ---- M1.10 (US-16.1, UX Q5): айронмен — одне місце збереження ----
+        // Чорновий текст асистента (R7).
+        private static void AddIronmanKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.title.ironman.section", "Режим збереження");
+            AddKey(t, "ui.title.ironman.off", "Звичайний: слоти й автозбереження");
+            AddKey(t, "ui.title.ironman.on", "Айронмен: одне збереження, герой може загинути");
+            AddKey(t, "ux.save.ironman.title", "Айронмен: єдине збереження");
+            AddKey(t, "ux.save.ironman.note",
+                "Гра сама зберігається щоранку й щоразу перезаписує те саме місце. Завантажити раніше збережене не можна: «Продовжити» з титулу веде на останній ранок.");
+            AddKey(t, "ux.save.ironman.action", "Зберегти зараз");
         }
 
         // ---- M1.6 (Поправка №8.3): заступник на пост того, хто йде; данж триває добами ----

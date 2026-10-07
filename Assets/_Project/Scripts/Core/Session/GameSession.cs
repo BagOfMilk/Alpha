@@ -1436,6 +1436,28 @@ namespace Game.Core.Session
             return result;
         }
 
+        /// <summary>
+        /// Слот ранкового автосейву (у файловому сховищі оболонки —
+        /// <c>SaveFileStore.AutosaveSlot</c>). У айронмені — єдине місце збереження.
+        /// </summary>
+        public const int AutosaveSlot = -1;
+
+        /// <summary>
+        /// Айронмен (Поправка №8, M1.10, US-16.1): протагоніст може загинути насправді;
+        /// одне місце збереження (<see cref="AutosaveSlot"/>), автозбереження щоранку,
+        /// старіших зліпків немає, у поточній грі завантажувати нічого. Режим
+        /// вирішується на титулі і лежить у сейві (<c>ironman=</c>).
+        /// </summary>
+        public bool IsIronman => _ironman;
+
+        /// <summary>
+        /// Куди насправді піде збереження, яке просять у слот <paramref name="requested"/>:
+        /// у звичайній грі — туди ж, в айронмені — завжди в єдине місце
+        /// (<see cref="AutosaveSlot"/>), перезаписуючи його. Оболонка пише файл
+        /// саме в цей слот.
+        /// </summary>
+        public int ResolveSaveSlot(int requested) => _ironman ? AutosaveSlot : requested;
+
         public string SaveState(int slot)
         {
             // Morning і FreePlay — той самий хаб (ConfirmMorning уже трактує їх
@@ -1445,6 +1467,7 @@ namespace Game.Core.Session
             // й у FreePlay).
             if (State != SessionState.Morning && State != SessionState.FreePlay)
                 throw new InvalidOperationException("Збереження лише в Morning/FreePlay (R13).");
+            slot = ResolveSaveSlot(slot); // айронмен: одне місце, перезапис
             string blob = ComposeSave();
             _slots[slot] = blob;
             LogEvent("game.saved", Args("slot", slot.ToString(CultureInfo.InvariantCulture)));
@@ -1453,6 +1476,9 @@ namespace Game.Core.Session
 
         public bool LoadState(int slot)
         {
+            // Айронмен: у живій грі завантажувати старіше не можна (сейв-скам); «Продовжити»
+            // з титулу йде через ContinueGame у СВІЖУ сесію, де режим ще не відомий (читається з зліпка).
+            if (_ironman) return false;
             string blob;
             if (!_slots.TryGetValue(slot, out blob) || string.IsNullOrEmpty(blob)) return false;
             ApplySave(blob);
@@ -1471,6 +1497,7 @@ namespace Game.Core.Session
         public void RestoreFromBlob(string blob)
         {
             if (string.IsNullOrEmpty(blob)) throw new ArgumentException("Порожній зліпок збереження", nameof(blob));
+            if (_ironman) throw new InvalidOperationException("Айронмен: у поточній грі завантажувати не можна — лише «Продовжити» з титулу.");
             ApplySave(blob);
             LogEvent("game.loaded", Args("slot", "external"));
         }
@@ -4889,7 +4916,7 @@ namespace Game.Core.Session
         {
             try
             {
-                _slots[-1] = ComposeSave();
+                _slots[AutosaveSlot] = ComposeSave();
                 AutosaveVersion++;
             }
             catch { /* автосейв best-effort — провал не повинен рвати денний конвеєр */ }
@@ -4905,7 +4932,7 @@ namespace Game.Core.Session
         public int AutosaveVersion { get; private set; }
 
         /// <summary>Останній ранковий автосейв цієї сесії або null, якщо його ще не було.</summary>
-        public string AutosaveBlob => _slots.TryGetValue(-1, out var blob) ? blob : null;
+        public string AutosaveBlob => _slots.TryGetValue(AutosaveSlot, out var blob) ? blob : null;
 
         /// <summary>Пости, які вже відкриті (будівля, що їх відкриває, стоїть) — тільки на них можна призначити людину.</summary>
         private List<string> OpenPostIds()

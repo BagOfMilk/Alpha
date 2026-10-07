@@ -17,6 +17,12 @@ namespace Game.Gameplay.UI
         private bool _showSlots;
 
         /// <summary>
+        /// Айронмен (M1.10, US-16.1): одне місце збереження, автосейв щоранку,
+        /// протагоніст може загинути. Дефолт — звичайна гра.
+        /// </summary>
+        private bool _ironman;
+
+        /// <summary>
         /// Поправка №7 (рішення власника 24.09.2026): стиснутий темп шкали
         /// Напруги тестової збірки (<see cref="NewGameOptions.TestBuildTensionPace"/>) —
         /// дефолт true, той самий, що й у самого поля.
@@ -38,7 +44,8 @@ namespace Game.Gameplay.UI
                         Seed = 1,
                         Roller = shell.Roller,
                         SkipCreation = _skipCreation,
-                        TestBuildTensionPace = _testBuildTensionPace
+                        TestBuildTensionPace = _testBuildTensionPace,
+                        Ironman = _ironman
                     };
                     shell.TryRun(() => shell.Session.NewGame(options));
                     shell.ProtagonistGender = Gender.Male;
@@ -70,6 +77,15 @@ namespace Game.Gameplay.UI
                         _testBuildTensionPace = true;
                     if (Widgets.TabButton(UkrainianText.Get("ui.title.tensionpace.campaign", g), !_testBuildTensionPace))
                         _testBuildTensionPace = false;
+                });
+
+                // M1.10: режим збереження — той самий TabButton-прийом.
+                Widgets.Section(UkrainianText.Get("ui.title.ironman.section", g), () =>
+                {
+                    if (Widgets.TabButton(UkrainianText.Get("ui.title.ironman.off", g), !_ironman))
+                        _ironman = false;
+                    if (Widgets.TabButton(UkrainianText.Get("ui.title.ironman.on", g), _ironman))
+                        _ironman = true;
                 });
 
                 GUILayout.Space(10f);

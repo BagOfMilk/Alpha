@@ -365,6 +365,28 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void SavePanel_Ironman_HasOneSaveAndNoLoad_NormalKeepsSlotsAndLoad()
+        {
+            // M1.10. Мутація: у UxPeoplePanels прибрати гілку IsIronman — перша частина падає.
+            var s = new GameSession();
+            s.NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Ironman = true });
+            var step = s.AdvanceScene();
+            while (step != null && !step.IsFinished) step = step.IsChoice ? s.ChooseSceneOption(0) : s.AdvanceScene();
+            var iron = new FakeHost { Session = s };
+
+            var panel = UxPanelFactory.Build(iron, UxPanelId.Save, null);
+            var actions = panel.Cards.SelectMany(c => c.Actions).ToList();
+            Assert.AreEqual(1, actions.Count, "єдине місце — одна дія");
+            Assert.AreEqual("save:" + GameSession.AutosaveSlot, actions[0].Id);
+            Assert.IsNull(actions[0].Confirm, "перезапис єдиного місця — без запитань: інакше воно не змогло б бути автоматичним");
+            Assert.IsFalse(actions.Any(a => a.Id.StartsWith("load:")), "завантажити старіше не можна");
+            Assert.IsFalse(AllText(panel).Any(t => t != null && RawKey.IsMatch(t)), "жодного сирого ключа");
+
+            var normal = UxPanelFactory.Build(Morning(), UxPanelId.Save, null);
+            Assert.IsTrue(normal.Cards.SelectMany(c => c.Actions).Any(a => a.Id == "save:0"), "звичайна гра — слоти як було");
+        }
+
+        [Test]
         public void Growth_CommitIsIrreversible_AskedToConfirm()
         {
             // Мутація: прибрати Confirm із «Затвердити» — тест падає (UX-12).

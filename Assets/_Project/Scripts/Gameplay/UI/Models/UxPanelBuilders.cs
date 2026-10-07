@@ -144,6 +144,40 @@ namespace Game.Gameplay.UI
     /// </summary>
     public static class UxSavePanel
     {
+        /// <summary>
+        /// Айронмен (M1.10): ОДНЕ місце — автозбереження (<c>GameSession.AutosaveSlot</c>); «Зберегти зараз»
+        /// перезаписує його без підтвердження, завантажити старіше не можна взагалі
+        /// (кнопки «Завантажити» немає), слотів 0–2 не показуємо.
+        /// </summary>
+        public static UxPanelModel BuildIronman(IReadOnlyList<SaveSlotView> slots, Gender g, Func<int, UxOutcome> save)
+        {
+            var panel = new UxPanelModel
+            {
+                Id = UxPanelId.Save,
+                Title = UkrainianText.Get(UxPanelCatalog.Get(UxPanelId.Save).TitleKey, g)
+            };
+            SaveSlotView only = null;
+            if (slots != null)
+                foreach (var s in slots) if (s.Slot == GameSession.AutosaveSlot) only = s;
+
+            var card = new UxCard { Title = UkrainianText.Get("ux.save.ironman.title", g) };
+            if (only != null)
+                card.Subtitle = ScreenText.SaveSlotLine(only.Slot, only.Occupied, only.Headline, only.Day, g);
+            card.Lines.Add(UkrainianText.Get("ux.save.ironman.note", g));
+            var saveAction = new UxAction
+            {
+                Id = "save:" + GameSession.AutosaveSlot,
+                Label = UkrainianText.Get("ux.save.ironman.action", g),
+                Intent = UxIntent.Primary,
+                Execute = save != null ? () => save(GameSession.AutosaveSlot) : (Func<UxOutcome>)null
+            };
+            saveAction.AllowedStates.Add(SessionState.Morning);
+            saveAction.AllowedStates.Add(SessionState.FreePlay);
+            card.Actions.Add(saveAction);
+            panel.Cards.Add(card);
+            return panel;
+        }
+
         public static UxPanelModel Build(IReadOnlyList<SaveSlotView> slots, Gender g,
             Func<int, UxOutcome> save, Func<int, UxOutcome> load, bool allowLoad)
         {
