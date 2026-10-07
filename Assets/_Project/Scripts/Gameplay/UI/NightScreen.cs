@@ -214,6 +214,19 @@ namespace Game.Gameplay.UI
                 if (Widgets.SecondaryButton(UkrainianText.Get("ui.night.crisis.ignore", g)))
                     shell.TryRun(() => shell.Session.ReactToCrisis(CrisisReaction.Ignore));
                 GUILayout.EndHorizontal();
+                // B4: ціна відрядження видна до кліку (Статут UI-02) — хто піде і який пост порожніє.
+                var who = shell.Session.GetCrisisDefenderCandidates();
+                if (who.Count > 0)
+                {
+                    var roster = shell.Session.GetRosterView();
+                    string slot = null;
+                    if (roster?.Companions != null)
+                        foreach (var c in roster.Companions) if (c.Id == who[0]) { slot = c.AssignedSlotId; break; }
+                    string postKey = "post." + slot;
+                    Widgets.TooltipLine(UkrainianText.Format("ui.night.crisis.send_defender.who", g,
+                        "name", ScreenText.ResolveCompanionName(who[0], g, roster),
+                        "post", UkrainianText.Has(postKey, g) ? UkrainianText.Get(postKey, g) : slot));
+                }
             });
         }
 

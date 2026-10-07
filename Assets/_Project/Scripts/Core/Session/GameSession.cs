@@ -1813,7 +1813,27 @@ namespace Game.Core.Session
             _processor.IsPatrolling = patrol;
         }
 
-        public DayReportView ReactToCrisis(CrisisReaction action)
+        public DayReportView ReactToCrisis(CrisisReaction action) => ReactToCrisis(action, null);
+
+        /// <summary>
+        /// Хто може піти гасити кризу замість золота (B4, вирішено асистентом за PROC-01 07.10.2026):
+        /// живі люди на постах, у порядку id поста. Перший — той, кого відрядить <c>ReactToCrisis</c> без вибору.
+        /// </summary>
+        public IReadOnlyList<string> GetCrisisDefenderCandidates()
+        {
+            var list = new List<KeyValuePair<string, string>>();
+            foreach (var c in _worldRoster.All)
+                if (c != null && !c.IsDead && !c.IsCaptive && c.Status != CompanionStatus.Antagonist && c.IsAssigned)
+                    list.Add(new KeyValuePair<string, string>(c.AssignedSlotId, c.Id));
+            list.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
+            var ids = new List<string>(list.Count);
+            foreach (var kv in list) ids.Add(kv.Value);
+            return ids;
+        }
+
+        /// <param name="defenderId">Кого відрядити (для <see cref="CrisisReaction.SendDefender"/>); null — перший з
+        /// <see cref="GetCrisisDefenderCandidates"/>.</param>
+        public DayReportView ReactToCrisis(CrisisReaction action, string defenderId)
         {
             // _crisis з'являється лише в NewGame — команда до нього (як і решта
             // команд файлу) повинна впасти чистим InvalidOperationException, а
@@ -1839,10 +1859,24 @@ namespace Game.Core.Session
                     }
                     break;
                 case CrisisReaction.SendDefender:
-                    // Символічна дія: відрядити людину з поста на ніч. Числового
-                    // ефекту, відмінного від SpendGold, у тестовій збірці не
-                    // заведено — обидва шляхи однаково пом'якшують укус нижче.
+                {
+                    // B4 (вирішено асистентом за PROC-01, 07.10.2026; Поправка №1 — «час проти ризику»):
+                    // ціна відрядження — не гроші, а пост. Людина знімається з поста до ранку: вночі пост
+                    // порожній (без доповіді й захисту), і поки гравець не поверне її вранці — без роботи.
+                    // Жодних нових чисел: діють наявні наслідки порожнього поста.
+                    var candidates = GetCrisisDefenderCandidates();
+                    string id = defenderId ?? (candidates.Count > 0 ? candidates[0] : null);
+                    var defender = id != null && ((List<string>)candidates).Contains(id) ? _worldRoster.Get(id) : null;
+                    if (defender == null)
+                    {
+                        LogEvent("crisis.test.no_defender");
+                        return _lastDayReport;
+                    }
+                    string slot = defender.AssignedSlotId;
+                    _state.Unassign(slot);
+                    LogEvent("crisis.test.defender_sent", Args("companionId", defender.Id, "slotId", slot));
                     break;
+                }
             }
 
             if (action != CrisisReaction.Ignore)

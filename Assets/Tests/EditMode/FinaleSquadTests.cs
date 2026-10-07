@@ -357,5 +357,43 @@ namespace Game.Tests.EditMode
             // Вікно лишилось відкритим: можна передумати й вибрати інше.
             Assert.DoesNotThrow(() => s.ReactToCrisis(CrisisReaction.Ignore));
         }
+
+        // ---------- B4: відрядити людину з поста — ціна в пості, не в золоті ----------
+
+        [Test]
+        public void SendDefender_VacatesTheirPost_KeepsGold_AndMitigates()
+        {
+            var s = ToDay5Morning();
+            ToCrisisWindow(s);
+            var who = s.GetCrisisDefenderCandidates();
+            Assume.That(who.Count > 0, "передумова: на добу 5 хтось стоїть на посту");
+            string id = who[0];
+            int gold = Gold(s);
+
+            s.ReactToCrisis(CrisisReaction.SendDefender);
+
+            var c = s.GetRosterView().Companions.First(x => x.Id == id);
+            Assert.IsTrue(string.IsNullOrEmpty(c.AssignedSlotId), "відряджений покинув пост — ось ціна");
+            Assert.AreEqual(gold, Gold(s), "золото не витрачено: різниця з SpendGold справжня");
+            Assert.IsTrue(s.DayLog.Any(e => e.Key == "crisis.test.defender_sent"));
+            Assert.IsTrue(s.DayLog.Any(e => e.Key == "crisis.test.mitigated"));
+        }
+
+        [Test]
+        public void SendDefender_ChosenPerson_IsTheOneWhoGoes_UnknownIsRefused()
+        {
+            var s = ToDay5Morning();
+            ToCrisisWindow(s);
+            var who = s.GetCrisisDefenderCandidates();
+            Assume.That(who.Count > 0);
+            string last = who[who.Count - 1];
+
+            s.ReactToCrisis(CrisisReaction.SendDefender, "nobody_such");
+            Assert.IsTrue(s.DayLog.Any(e => e.Key == "crisis.test.no_defender"), "невідомий — відмова з причиною");
+            Assert.IsFalse(s.DayLog.Any(e => e.Key == "crisis.test.mitigated"));
+
+            s.ReactToCrisis(CrisisReaction.SendDefender, last);
+            Assert.IsTrue(string.IsNullOrEmpty(s.GetRosterView().Companions.First(x => x.Id == last).AssignedSlotId));
+        }
     }
 }
