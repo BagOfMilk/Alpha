@@ -773,7 +773,9 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
                 mw = o.matrix_world; inv = mw.inverted(); n3 = mw.to_3x3().inverted().transposed()
                 sg = sign.get(o.name, 1.0)
                 # Безрукавка й плащ лягають поверх халата чи каптана — кімоно відходить від тіла до 25 см.
-                r = 0.25 if o.get("kit_part") in ("vest", "cloak") else reach
+                part = o.get("kit_part")
+                # Пояси й фартух — лише по талії: на розкльошеній туніці вони здувались грудками на 15 см.
+                r = 0.25 if part in ("vest", "cloak") else 0.05 if part in ("sash", "boyar_belt", "carpenter_apron") else reach
                 need = [0.0] * len(me.vertices)
                 for v in me.vertices:
                     p = mw @ v.co
