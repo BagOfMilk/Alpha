@@ -42,6 +42,7 @@ namespace Game.Gameplay.EditorTools
         public static void Build()
         {
             ArtImportSettings.EnsureAnimationImport(); // кліпи, імпортовані за старими правилами, — переімпорт
+            ArtImportSettings.EnsureModelImport();     // моделі з повернутим коренем (хати лежали на боці) — переімпорт
             _hutIndex = 0; // хати по черзі — та сама розстановка за кожної перезбірки
             // Фаза F (FOLIAGE): крок ПЕРЕД усім іншим — дешева перевірка
             // позначки палітри Kenney (Library/KenneyPaletteVersion.txt);

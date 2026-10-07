@@ -34,6 +34,7 @@ namespace Game.Gameplay.EditorTools
         public static void Run()
         {
             ArtImportSettings.EnsureAnimationImport();
+            ArtImportSettings.EnsureModelImport();
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             Directory.CreateDirectory(OutDir);
             var report = new StringBuilder();

@@ -25,6 +25,7 @@ namespace Game.Gameplay.EditorTools
         private const string Root = "Assets/Art/";
         private const string Characters = Root + "Characters/";
         private const string Animations = Root + "Animations/";
+        private const string Models = Root + "Models/";
 
         private bool IsArt => assetPath != null && assetPath.StartsWith(Root);
 
@@ -134,6 +135,41 @@ namespace Game.Gameplay.EditorTools
                 c.keepOriginalPositionXZ = true;
             }
             importer.clipAnimations = clips;
+        }
+
+        /// <summary>
+        /// Будівлі й реквізит: поворот кореня FBX (конвертація осей Blender → Unity) — у дочірні вузли, корінь —
+        /// нульовий. Збирач сцени ставить корінь як (0, кут, 0) і затирав цей поворот: хати й вежа в селі лежали
+        /// на боці, хоч лукбук (бере FBX як є) показував їх стоячими (огляд сцени 07.10.2026).
+        /// </summary>
+        private void OnPostprocessModel(GameObject root)
+        {
+            if (assetPath == null || !assetPath.StartsWith(Models)) return;
+            var q = root.transform.localRotation;
+            if (Quaternion.Angle(q, Quaternion.identity) < 0.01f) return;
+            foreach (Transform c in root.transform)
+            {
+                c.localPosition = q * c.localPosition;
+                c.localRotation = q * c.localRotation;
+            }
+            root.transform.localRotation = Quaternion.identity;
+        }
+
+        /// <summary>
+        /// Моделі, імпортовані до правила «корінь нульовий» (<see cref="OnPostprocessModel"/>), — переімпортувати
+        /// лише їх (версію правил не піднімаємо: вона переімпортувала б усі моделі проєкту, ~25 хв).
+        /// </summary>
+        public static void EnsureModelImport()
+        {
+            if (!System.IO.Directory.Exists(Models)) return;
+            foreach (var file in System.IO.Directory.GetFiles(Models, "*.fbx"))
+            {
+                string path = file.Replace('\\', '/');
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (model == null || Quaternion.Angle(model.transform.localRotation, Quaternion.identity) < 0.01f) continue;
+                Debug.Log("[Імпорт] " + path + " — корінь повернутий, переімпорт.");
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            }
         }
 
         /// <summary>
