@@ -33,6 +33,10 @@ namespace Game.Gameplay.EditorTools
             GameObject cached;
             if (Cache.TryGetValue(path, out cached)) return cached;
 
+            // Трек V3: власна модель замість Kenney, якщо є (ArtSubstitutes).
+            var art = ArtSubstitutes.Resolve(path, battle: false);
+            if (art != null) { Cache[path] = art; return art; }
+
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) Debug.LogWarning("Модель не найдена: " + path);
             Cache[path] = prefab;

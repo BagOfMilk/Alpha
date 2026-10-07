@@ -299,6 +299,9 @@ namespace Game.Gameplay.EditorTools
 
         private static GameObject Load(string path)
         {
+            // Трек V3: укриття, каміння й дерева арени — власні моделі в масштабі бою (ArtSubstitutes).
+            var art = ArtSubstitutes.Resolve(path, battle: true);
+            if (art != null) return art;
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) Debug.LogWarning("[BattleArenaBuilder] модель не знайдено: " + path);
             return prefab;

@@ -41,6 +41,7 @@ namespace Game.Gameplay.EditorTools
         [MenuItem("Alpha/Собрать сцену «Игра»")]
         public static void Build()
         {
+            _hutIndex = 0; // хати по черзі — та сама розстановка за кожної перезбірки
             // Фаза F (FOLIAGE): крок ПЕРЕД усім іншим — дешева перевірка
             // позначки палітри Kenney (Library/KenneyPaletteVersion.txt);
             // реальний переімпорт лише якщо вона розійшлась із поточною.
@@ -265,8 +266,20 @@ namespace Game.Gameplay.EditorTools
             return go;
         }
 
+        private static int _hutIndex;
+
         private static GameObject House(GameObject hub, Vector3 origin, int width, int depth, bool wood, float facing)
         {
+            // Трек V4: житлова хата треку V (hut_a/b/c по черзі) на місці хатки Kenney — центр тієї ж
+            // ділянки, фасад туди ж (у Kenney фасад −Z, у наших моделях +Z → +180°).
+            string hutId = "hut_" + (char)('a' + (_hutIndex++ % 3));
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(ArtModels + hutId + ".fbx") != null)
+            {
+                var center = origin + Quaternion.Euler(0f, facing, 0f) * new Vector3(width * 0.5f, 0f, depth * 0.5f);
+                var hut = ArtOrKenney(hutId, null, center, facing + 180f, "Хата " + hutId);
+                if (hut != null) hut.transform.SetParent(hub.transform, true);
+                return hut;
+            }
             var house = KitBuilder.House(Town, origin, width, depth, wood, facing);
             if (house != null) house.transform.SetParent(hub.transform, true);
             return house;

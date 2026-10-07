@@ -110,6 +110,7 @@
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Audio/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AudioLibraryBuilder.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/LightingSetup.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtSubstitutes.cs" />
   </ItemGroup>
 
   <ItemGroup>

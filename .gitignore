@@ -62,3 +62,7 @@ compile.log
 # Сирці Blender — поза репозиторієм (Поправка №18.3): лише експорт і скрипти збірки
 *.blend
 *.blend1
+
+# Трек V3: префаби-обгортки, які пише збирач сцени (ArtSubstitutes) — генеруються, не комітяться.
+Assets/Art/Prefabs/
+Assets/Art/Prefabs.meta
