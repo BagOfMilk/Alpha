@@ -85,6 +85,9 @@ namespace Game.Gameplay.EditorTools
             // білді через Resources). Саму панель GameShell піднімає в рантаймі.
             HudPanelAssets.Ensure();
 
+            // Поправка №19: модульний набір персонажів і живе прев'ю екрана створення героя.
+            CharacterKitBuilder.Build();
+
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddToBuildSettings();

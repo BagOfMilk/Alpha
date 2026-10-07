@@ -1,0 +1,121 @@
+using UnityEditor;
+using UnityEditor.AssetImporters;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace Game.Gameplay.EditorTools
+{
+    /// <summary>
+    /// Правила імпорту власних асетів треку V (Поправка №18/№19) — усе під <c>Assets/Art</c>,
+    /// згенероване в Blender (<c>tools/blender/*.py</c>). Скриптом, а не в інспекторі, з тієї ж
+    /// причини, що <see cref="KenneyImportSettings"/>: файлів сотні, і правило має повторюватись на
+    /// будь-якій машині.
+    ///
+    /// Головне:
+    /// 1. Матеріали — <c>ImportViaMaterialDescription</c> (граблі Kenney: підмінений шейдер губить колір).
+    /// 2. Персонажі — Generic без анімації і БЕЗ оптимізації ієрархії: збирач
+    ///    (<c>CharacterAssembler</c>) переносить речі на скелет тіла за іменами кісток, тож кістки
+    ///    мусять лишатися об'єктами.
+    /// 3. Волосся, бороди, пір'я — альфа-зріз і дві сторони (картки волосся тонкі, прозорість
+    ///    сортувалася б абияк). Розпізнається за іменем: <c>hairN_*</c>, <c>*_hair</c>, beard, moustache, feather.
+    /// 4. Текстури: <c>*_nor*</c>/<c>*NORMAL</c> — карти нормалей, шорсткість і блиск — лінійні; не більше 2048.
+    /// </summary>
+    public sealed class ArtImportSettings : AssetPostprocessor
+    {
+        private const string Root = "Assets/Art/";
+        private const string Characters = Root + "Characters/";
+        private const string Animations = Root + "Animations/";
+
+        private bool IsArt => assetPath != null && assetPath.StartsWith(Root);
+
+        /// <summary>Після вбудованого препроцесора URP — щоб наші правки матеріалу були останніми.</summary>
+        public override int GetPostprocessOrder() => 100;
+
+        private void OnPreprocessModel()
+        {
+            if (!IsArt) return;
+            var importer = (ModelImporter)assetImporter;
+            importer.importCameras = false;
+            importer.importLights = false;
+            importer.materialImportMode = ModelImporterMaterialImportMode.ImportViaMaterialDescription;
+            importer.materialLocation = ModelImporterMaterialLocation.InPrefab;
+            importer.importBlendShapes = false;
+
+            if (assetPath.StartsWith(Characters))
+            {
+                importer.animationType = ModelImporterAnimationType.Generic;
+                importer.importAnimation = false;
+                importer.optimizeGameObjects = false;
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            }
+            else if (assetPath.StartsWith(Animations))
+            {
+                importer.animationType = ModelImporterAnimationType.Generic;
+                importer.importAnimation = true;
+                importer.optimizeGameObjects = false;
+            }
+            else
+            {
+                // Будівлі, реквізит, земля — статичні.
+                importer.animationType = ModelImporterAnimationType.None;
+                importer.importAnimation = false;
+            }
+        }
+
+        private void OnPreprocessTexture()
+        {
+            if (!IsArt) return;
+            var importer = (TextureImporter)assetImporter;
+            string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+            string lower = file.ToLowerInvariant();
+            importer.maxTextureSize = 2048;
+            importer.mipmapEnabled = true;
+
+            bool hairDiffuse = lower.StartsWith("hairn_"); // нейтральна текстура волосся, не нормаль
+            if (!hairDiffuse && (lower.Contains("_nor") || lower.EndsWith("normal")))
+            {
+                importer.textureType = TextureImporterType.NormalMap;
+                return;
+            }
+            importer.textureType = TextureImporterType.Default;
+            if (lower.Contains("_rough") || lower.Contains("_spec") || lower.Contains("_metal") || lower.Contains("_ao"))
+                importer.sRGBTexture = false;
+            importer.alphaIsTransparency = hairDiffuse || lower.EndsWith("_hair") || lower.Contains("feather");
+        }
+
+        private void OnPreprocessMaterialDescription(MaterialDescription description, Material material, AnimationClip[] clips)
+        {
+            if (!IsArt || material == null) return;
+
+            // Колір дає текстура, а відтінок тканини — гра (_BaseColor через MaterialPropertyBlock).
+            // Blender пише в FBX множник 0.8 — без цього все було б на п'яту частину темнішим.
+            TexturePropertyDescription diffuse;
+            if (description.TryGetProperty("DiffuseColor", out diffuse) && material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", Color.white);
+
+            if (!NeedsCutout(description, diffuse)) return;
+            if (material.HasProperty("_Surface")) material.SetFloat("_Surface", 0f);
+            if (material.HasProperty("_AlphaClip")) material.SetFloat("_AlphaClip", 1f);
+            if (material.HasProperty("_Cutoff")) material.SetFloat("_Cutoff", 0.4f);
+            if (material.HasProperty("_Cull")) material.SetFloat("_Cull", (float)CullMode.Off);
+            if (material.HasProperty("_ZWrite")) material.SetFloat("_ZWrite", 1f);
+            if (material.HasProperty("_SrcBlend")) material.SetFloat("_SrcBlend", (float)BlendMode.One);
+            if (material.HasProperty("_DstBlend")) material.SetFloat("_DstBlend", (float)BlendMode.Zero);
+            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.EnableKeyword("_ALPHATEST_ON");
+            material.SetOverrideTag("RenderType", "TransparentCutout");
+            material.renderQueue = (int)RenderQueue.AlphaTest;
+            material.doubleSidedGI = true;
+        }
+
+        private static bool NeedsCutout(MaterialDescription description, TexturePropertyDescription diffuse)
+        {
+            string name = (description.materialName ?? string.Empty).ToLowerInvariant();
+            string tex = diffuse.path != null ? System.IO.Path.GetFileNameWithoutExtension(diffuse.path).ToLowerInvariant() : string.Empty;
+            foreach (var s in new[] { name, tex })
+                if (s.StartsWith("hairn_") || s.EndsWith("_hair") || s.Contains("beard") || s.Contains("moustache") || s.Contains("feather"))
+                    return true;
+            return false;
+        }
+    }
+}

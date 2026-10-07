@@ -153,6 +153,9 @@ namespace Game.Gameplay
         private static readonly MethodInfo FeedVillageStageMethod = ResolveBridgeMethod("VillageStageBridge", "Feed");
         private static readonly MethodInfo FindBattlePresenterMethod = ResolveBridgeMethod("PresenterDiscoveryBridge", "FindBattlePresenter");
         private static readonly MethodInfo FindPortraitProviderMethod = ResolveBridgeMethod("PresenterDiscoveryBridge", "FindPortraitProvider");
+        // Поправка №19.3: створення героя на UI Toolkit з 3D-прев'ю (UI.Toolkit.CreationToolkitView, поза лінтом).
+        private static readonly MethodInfo CreateCreationOverlayMethod = ResolveBridgeMethod("UI.Toolkit.CreationToolkitView", "TryCreate");
+        private IShellOverlay _creationOverlay;
 
         private void Awake()
         {
@@ -162,7 +165,11 @@ namespace Game.Gameplay
             DiscoverPresenters();
 
             if (!HasCommandLineArg(ImguiHudFlag))
+            {
                 _toolkitHud = HudToolkitView.TryCreate(this); // null → лишаємось на IMGUI
+                if (CreateCreationOverlayMethod != null)
+                    _creationOverlay = CreateCreationOverlayMethod.Invoke(null, new object[] { this }) as IShellOverlay;
+            }
 
             Application.wantsToQuit += HandleWantsToQuit; // §HandleWantsToQuit
         }
@@ -172,12 +179,15 @@ namespace Game.Gameplay
             Application.wantsToQuit -= HandleWantsToQuit;
             if (_toolkitHud != null) _toolkitHud.Dispose();
             _toolkitHud = null;
+            if (_creationOverlay != null) _creationOverlay.Dispose();
+            _creationOverlay = null;
         }
 
         /// <summary>Після Update усіх компонентів (зокрема автотуру): шапка бачить стан цього кадру.</summary>
         private void LateUpdate()
         {
             if (_toolkitHud != null) _toolkitHud.Tick();
+            if (_creationOverlay != null) _creationOverlay.Tick();
         }
 
         // ===================== село (CRPG) =====================
@@ -423,7 +433,9 @@ namespace Game.Gameplay
                     _title.Draw(this);
                     break;
                 case SessionState.Creation:
-                    _creation.Draw(this);
+                    // UI Toolkit з 3D-прев'ю, якщо є; IMGUI-екран — фолбек (-imgui-hud або немає набору).
+                    if (_creationOverlay == null || !_creationOverlay.Handles(state))
+                        _creation.Draw(this);
                     break;
                 case SessionState.Scene:
                 case SessionState.Opening:

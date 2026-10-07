@@ -95,6 +95,16 @@
       (тека live, unity command recompile).
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AutoplayInEditor.cs" />
+    <!--
+      Модульні персонажі й екран створення (Поправка №19, 07.10.2026): SkinnedMeshRenderer,
+      bindposes, RenderTexture, MaterialPropertyBlock, Image/TextField/події вказівника UI Toolkit —
+      глибше за заглушки. Компілюються проти справжніх DLL Unity 6000.4 окремим прогоном; чисті
+      правила (CharacterKitPlan, CreationLookModel) лінтуються і тестуються.
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Characters/*.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/UI/Toolkit/CreationToolkitView.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/CharacterKitBuilder.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtImportSettings.cs" />
   </ItemGroup>
 
   <ItemGroup>

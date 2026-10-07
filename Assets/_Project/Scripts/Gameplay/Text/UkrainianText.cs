@@ -1835,6 +1835,22 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.gear.forge.cannot_afford", "Бракує золота чи сировини.");
             AddKey(t, "ui.gear.forge.made", "Викувано: {item}.");
             // Поправка №19.1: культури набору (створення героя, картка людини).
+            // Поправка №19.3: зовнішність на екрані створення героя.
+            AddKey(t, "ui.creation.look", "Зовнішність");
+            AddKey(t, "ui.creation.culture", "Культура");
+            AddKey(t, "ui.creation.hair", "Зачіска");
+            AddKey(t, "ui.creation.hair.none", "Поголена голова");
+            AddKey(t, "ui.creation.hair_color", "Колір волосся");
+            AddKey(t, "ui.creation.facial", "Борода й вуса");
+            AddKey(t, "ui.creation.facial.none", "Без бороди");
+            AddKey(t, "ui.creation.facial.beard_full", "Повна борода");
+            AddKey(t, "ui.creation.facial.beard_short", "Коротка борода");
+            AddKey(t, "ui.creation.facial.moustache", "Вуса");
+            AddKey(t, "ui.creation.outfit", "Вбрання");
+            AddKey(t, "ui.creation.outfit_color", "Колір вбрання");
+            AddKey(t, "ui.creation.outfit_color.default", "Як у вбранні");
+            AddKey(t, "ui.creation.option", "Варіант {n} з {total}");
+            AddKey(t, "ui.creation.rotate_hint", "Тягніть мишею, щоб повернути");
             AddKey(t, "culture.ukrainian", "Україна");
             AddKey(t, "culture.west_african", "Західна Африка");
             AddKey(t, "culture.east_asian", "Східна Азія");
