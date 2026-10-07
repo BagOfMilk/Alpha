@@ -150,21 +150,11 @@ namespace Game.Gameplay.Characters
         }
 
         /// <summary>
-        /// Напрям тіла в анімованій позі: для гуманоїда — орієнтація центру мас, яку рахує сам Unity
-        /// (<see cref="Animator.bodyRotation"/>; стійка з виставленою ногою не повертає її, як стегна); інакше —
-        /// <see cref="Facing"/>. Лише після того, як аніматор хоч раз обчислив позу.
+        /// Напрям тіла в анімованій позі — за стегнами (<see cref="Facing"/>). Не через Animator.bodyRotation: його
+        /// можна читати лише в OnAnimatorIK, деінде Unity попереджає й віддає ненадійне значення (тур 07.10.2026).
+        /// Лукбук редактора звіряв обидва: у стійці — 0°, у ході стегна гойдаються в межах 4–9°.
         /// </summary>
-        public static Vector3 BodyFacing(GameObject model)
-        {
-            var animator = model.GetComponentInChildren<Animator>();
-            if (animator != null && animator.isHuman)
-            {
-                var f = animator.bodyRotation * Vector3.forward;
-                f.y = 0f;
-                if (f.sqrMagnitude > 1e-4f) return f.normalized;
-            }
-            return Facing(model);
-        }
+        public static Vector3 BodyFacing(GameObject model) => Facing(model);
 
         /// <summary>
         /// Поворот навколо вертикалі, що переводить напрям <paramref name="from"/> у <paramref name="to"/>.

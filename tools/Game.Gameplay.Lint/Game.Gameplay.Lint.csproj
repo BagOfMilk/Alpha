@@ -116,6 +116,7 @@
     <Compile Remove="../../Assets/_Project/Scripts/Editor/GraphicsTiersSetup.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtSubstitutes.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/KitLookbookRender.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/VillageSceneAudit.cs" />
   </ItemGroup>
 
   <ItemGroup>

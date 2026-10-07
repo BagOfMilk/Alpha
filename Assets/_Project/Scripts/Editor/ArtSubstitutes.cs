@@ -68,6 +68,9 @@ namespace Game.Gameplay.EditorTools
             { "tree_default_dark", P("tree_fir_medium", 0.3f) },
         };
 
+        /// <summary>Обгортки, створені в цьому сеансі редактора (решта — перестворюються).</summary>
+        private static readonly HashSet<string> Fresh = new HashSet<string>();
+
         private static KeyValuePair<string, float> P(string art, float factor) => new KeyValuePair<string, float>(art, factor);
 
         /// <summary>Префаб-обгортка власної моделі замість Kenney за шляхом; null — підміни немає.</summary>
@@ -88,7 +91,12 @@ namespace Game.Gameplay.EditorTools
             var sub = new KeyValuePair<string, float>(artId, factor);
             string path = PrefabDir + sub.Key + (battle ? "_battle_" : "_village_") + Mathf.RoundToInt(scale * 1000f) + ".prefab";
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (existing != null) return existing;
+            if (existing != null && Fresh.Contains(path)) return existing;
+            // Обгортка з минулої збірки — перестворити: вона пам'ятає поворот кореня моделі на той час, і після
+            // зміни експорту FBX (осі конвертує Unity) хати й укриття лежали на боці, хоч сама модель стояла
+            // (тур 07.10.2026: «брили» в селі, а лукбук, що бере FBX напряму, — чистий).
+            if (existing != null) AssetDatabase.DeleteAsset(path);
+            Fresh.Add(path);
 
             Directory.CreateDirectory(PrefabDir);
             var root = new GameObject(sub.Key);
