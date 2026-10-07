@@ -69,9 +69,16 @@ namespace Game.Gameplay.EditorTools
             string name = Path.GetFileNameWithoutExtension(kenneyPath ?? string.Empty);
             KeyValuePair<string, float> sub;
             if (!(battle ? Battle : Village).TryGetValue(name, out sub)) return null;
-            var model = AssetDatabase.LoadAssetAtPath<GameObject>(Models + sub.Key + ".fbx");
+            return ResolveArt(sub.Key, battle, sub.Value);
+        }
+
+        /// <summary>Префаб-обгортка власної моделі за її іменем (<c>Assets/Art/Models/&lt;id&gt;.fbx</c>); null — моделі немає.</summary>
+        public static GameObject ResolveArt(string artId, bool battle, float factor = 1f)
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(Models + artId + ".fbx");
             if (model == null) return null;
-            float scale = (battle ? BattleScale : Visual.ArtScale.World) * sub.Value;
+            float scale = (battle ? BattleScale : Visual.ArtScale.World) * factor;
+            var sub = new KeyValuePair<string, float>(artId, factor);
             string path = PrefabDir + sub.Key + (battle ? "_battle_" : "_village_") + Mathf.RoundToInt(scale * 1000f) + ".prefab";
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (existing != null) return existing;

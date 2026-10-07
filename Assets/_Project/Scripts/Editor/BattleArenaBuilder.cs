@@ -104,6 +104,9 @@ namespace Game.Gameplay.EditorTools
             controller.FemaleCharacterPrefabs = femalePool;
             controller.CoverHalfPrefabs = coverHalfPool;
             controller.CoverFullPrefabs = coverFullPool;
+            // Трек V3: бочка пороху й копиця на арені — власні моделі (без них — примітиви).
+            controller.PowderKegPrefab = ArtSubstitutes.ResolveArt("prop_barrel", battle: true);
+            controller.HaystackPrefab = ArtSubstitutes.ResolveArt("prop_hay", battle: true);
             controller.MaleClipSets = maleClips;
             controller.FemaleClipSets = femaleClips;
             controller.TileGroundPrefab = Load(GroundTileModel);

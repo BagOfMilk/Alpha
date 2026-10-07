@@ -69,6 +69,9 @@ namespace Game.Gameplay
         public GameObject[] FemaleCharacterPrefabs = new GameObject[0];
         public GameObject[] CoverHalfPrefabs = new GameObject[0];
         public GameObject[] CoverFullPrefabs = new GameObject[0];
+        /// <summary>Трек V3: бочка пороху й копиця — власні моделі (масштаб бою); null — примітиви, як було.</summary>
+        public GameObject PowderKegPrefab;
+        public GameObject HaystackPrefab;
         public GameObject TileGroundPrefab;
 
         /// <summary>Бій v2: набори бойових кліпів — той самий індекс, що відповідний елемент <see cref="MaleCharacterPrefabs"/>/<see cref="FemaleCharacterPrefabs"/>.</summary>
@@ -980,6 +983,14 @@ namespace Game.Gameplay
                     }
                     break;
                 }
+                case "PowderKeg" when PowderKegPrefab != null:
+                    AddPropModel(root, PowderKegPrefab);
+                    // Червона мітка пороху зверху лишається — видно, що вибухне.
+                    AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.62f, 0f), new Vector3(0.22f, 0.02f, 0.22f), new Color(0.80f, 0.12f, 0.08f), Quaternion.identity);
+                    break;
+                case "Haystack" when HaystackPrefab != null:
+                    AddPropModel(root, HaystackPrefab);
+                    break;
                 case "PowderKeg":
                     // Бочка: темне дерево, два обручі і червона мітка пороху зверху — видно, що вибухне.
                     AddTrapPart(root, PrimitiveType.Cylinder, new Vector3(0f, 0.35f, 0f), new Vector3(0.5f, 0.35f, 0.5f), new Color(0.36f, 0.22f, 0.12f), Quaternion.identity);
@@ -1032,6 +1043,13 @@ namespace Game.Gameplay
                 if (_fireMarkers[key] != null) Destroy(_fireMarkers[key]);
                 _fireMarkers.Remove(key);
             }
+        }
+
+        private static void AddPropModel(GameObject root, GameObject prefab)
+        {
+            var go = Instantiate(prefab, root.transform);
+            go.transform.localPosition = Vector3.zero;
+            foreach (var c in go.GetComponentsInChildren<Collider>()) Destroy(c); // не перехоплює наведення на клітинку
         }
 
         private void AddTrapPart(GameObject root, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color, Quaternion rotation)
