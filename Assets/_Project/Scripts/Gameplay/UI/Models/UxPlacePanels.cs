@@ -242,6 +242,7 @@ namespace Game.Gameplay.UI
                     {
                         if (st.MusterParty.Contains(id)) st.MusterParty.Remove(id); else st.MusterParty.Add(id);
                         st.MusterPreview = null;
+                        st.MusterDeputies.Clear(); // склад змінився — інші пости, інші кандидати
                     });
                     toggle.Selected = inParty;
                     var legality = ScreenText.AssignCandidateLegality(c);
@@ -249,6 +250,12 @@ namespace Game.Gameplay.UI
                     card.Actions.Add(toggle);
                     panel.Cards.Add(card);
                 }
+
+            // Заступники на пости (Поправка №8.3, M1.6): гравець обирає сам, автоматики нема.
+            string posts = UxBricks.T(h, "ux.muster.section.posts");
+            bool deputiesUndecided = false;
+            if (st.MusterParty.Count > 0 && (h.Session.State == SessionState.Morning || h.Session.State == SessionState.FreePlay))
+                deputiesUndecided = DeputyCards(h, panel, posts, new List<string>(st.MusterParty), roster);
 
             var summary = new UxCard { Section = go, Title = UxBricks.T(h, "site." + st.MusterSite) };
             summary.Chips.Add(new UxChip(UxBricks.T(h, ApproachKey(st.MusterApproach)), UxTone.Own));
@@ -277,16 +284,98 @@ namespace Game.Gameplay.UI
                 if (!string.IsNullOrEmpty(p.WaitingSpecialistId))
                     summary.Lines.Add(UxBricks.F(h, "ux.muster.waiting", "name", UxBricks.Name(h, p.WaitingSpecialistId, roster)));
                 int days = p.Days;
-                summary.Actions.Add(UxBricks.Act("muster:depart", UxBricks.T(h, "ui.expedition.depart"), UxIntent.Primary, () =>
+                var depart = UxBricks.Act("muster:depart", UxBricks.T(h, "ui.expedition.depart"), UxIntent.Primary, () =>
                 {
-                    var outcome = UxBricks.Reported(h, () => h.Session.DepartExpedition(st.MusterSite, st.MusterApproach, party, days),
+                    var deputies = new Dictionary<string, string>(st.MusterDeputies);
+                    var outcome = UxBricks.Reported(h, () => h.Session.DepartExpedition(st.MusterSite, st.MusterApproach, party, days, deputies),
                         r => ScreenText.DispatchFailure(r, g));
-                    if (outcome.Ok) { st.MusterParty.Clear(); st.MusterPreview = null; }
+                    if (outcome.Ok) { st.MusterParty.Clear(); st.MusterDeputies.Clear(); st.MusterPreview = null; }
                     return outcome;
-                }));
+                });
+                if (deputiesUndecided) depart.DisabledReason = UxBricks.T(h, "ux.muster.deputy.depart_blocked");
+                summary.Actions.Add(depart);
             }
             panel.Cards.Add(summary);
             return panel;
+        }
+
+        /// <summary>
+        /// Картки «Хто стане на пости»: на кожен пост, що його звільняє загін, —
+        /// вибір заступника з вільних або явне «лишити порожнім». Повертає true,
+        /// якщо вибір ще обов'язковий (є пост без рішення й лишились вільні).
+        /// Стан вибору — <see cref="UxPanelState.MusterDeputies"/>; ядро
+        /// перевірить те саме (<c>DispatchResult.SubstituteNotChosen</c>).
+        /// </summary>
+        private static bool DeputyCards(IUxHost h, UxPanelModel panel, string section, List<string> party, RosterView roster)
+        {
+            var st = h.PanelState;
+            var muster = h.Session.GetMusterView(party);
+            if (muster?.Vacancies == null || muster.Vacancies.Count == 0)
+            {
+                st.MusterDeputies.Clear();
+                return false;
+            }
+
+            // Застарілі вибори (інша людина вже не вільна, пост не з цього загону) — прибрати.
+            foreach (var slot in new List<string>(st.MusterDeputies.Keys))
+            {
+                bool stillVacant = false;
+                foreach (var v in muster.Vacancies) if (v.SlotId == slot) stillVacant = true;
+                string who = st.MusterDeputies[slot];
+                if (!stillVacant || (!string.IsNullOrEmpty(who) && !ContainsId(muster.FreeIds, who))) st.MusterDeputies.Remove(slot);
+            }
+
+            int chosen = 0;
+            foreach (var v in st.MusterDeputies.Values) if (!string.IsNullOrEmpty(v)) chosen++;
+            bool anyUndecided = false;
+
+            foreach (var vacancy in muster.Vacancies)
+            {
+                string slotId = vacancy.SlotId;
+                var card = new UxCard
+                {
+                    Section = section,
+                    Title = UxBricks.F(h, "ux.muster.deputy.title", "post", UxBricks.T(h, "post." + slotId),
+                        "holder", UxBricks.Name(h, vacancy.HolderId, roster))
+                };
+
+                string current;
+                bool decided = st.MusterDeputies.TryGetValue(slotId, out current);
+                if (!decided)
+                {
+                    if (muster.FreeIds.Count - chosen > 0) { card.Chips.Add(new UxChip(UxBricks.T(h, "ux.muster.deputy.undecided"), UxTone.Bad)); anyUndecided = true; }
+                    else card.Lines.Add(UxBricks.T(h, "ux.muster.deputy.nobody"));
+                }
+                else if (string.IsNullOrEmpty(current))
+                    card.Chips.Add(new UxChip(UxBricks.T(h, "ux.muster.deputy.empty_chosen"), UxTone.Neutral));
+                else
+                    card.Chips.Add(new UxChip(UxBricks.F(h, "ux.muster.deputy.picked", "name", UxBricks.Name(h, current, roster)), UxTone.Own));
+
+                foreach (var candidateId in vacancy.CandidateIds)
+                {
+                    string cid = candidateId;
+                    bool takenElsewhere = false;
+                    foreach (var kv in st.MusterDeputies) if (kv.Value == cid && kv.Key != slotId) takenElsewhere = true;
+                    var pick = UxBricks.Go("deputy:" + slotId + ":" + cid,
+                        UxBricks.F(h, "ux.post.take", "name", UxBricks.Name(h, cid, roster)),
+                        () => { st.MusterDeputies[slotId] = cid; });
+                    pick.Selected = decided && current == cid;
+                    if (takenElsewhere) pick.DisabledReason = UxBricks.T(h, "ux.muster.deputy.taken");
+                    card.Actions.Add(pick);
+                }
+                var none = UxBricks.Go("deputy:" + slotId + ":none", UxBricks.T(h, "ux.muster.deputy.none"),
+                    () => { st.MusterDeputies[slotId] = string.Empty; });
+                none.Selected = decided && string.IsNullOrEmpty(current);
+                card.Actions.Add(none);
+                panel.Cards.Add(card);
+            }
+            return anyUndecided;
+        }
+
+        private static bool ContainsId(IReadOnlyList<string> list, string id)
+        {
+            if (list != null) foreach (var x in list) if (x == id) return true;
+            return false;
         }
 
         private static UxAction Approach(IUxHost h, ExpeditionApproach approach, string key)

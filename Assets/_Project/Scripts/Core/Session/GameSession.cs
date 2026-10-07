@@ -983,7 +983,7 @@ namespace Game.Core.Session
                 var firstRoom = rooms != null && rooms.Count > 0 ? BuildDungeonRoomView(rooms[0], companionIds) : null;
                 return new ExpeditionPreviewView
                 {
-                    SiteId = siteId, Approach = approach, IsDelve = true, FirstRoom = firstRoom, Days = 2,
+                    SiteId = siteId, Approach = approach, IsDelve = true, FirstRoom = firstRoom, Days = DefaultDungeon.Days,
                     WaitingSpecialistId = WaitingSpecialistAt(siteId)
                 };
             }
@@ -1029,14 +1029,45 @@ namespace Game.Core.Session
             return null;
         }
 
+        /// <summary>
+        /// Збір без обраних заступників: працює, лише коли нікого з відкритих
+        /// постів міняти не треба, або коли нема кому заступити
+        /// (<see cref="DispatchResult.SubstituteNotChosen"/> — інакше).
+        /// </summary>
         public DispatchResult DepartExpedition(string siteId, ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days)
+            => DepartExpedition(siteId, approach, companionIds, days, null);
+
+        /// <summary>
+        /// Збір на вилазку із заступниками (Поправка №8.3, M1.6; власник:
+        /// «Гравець призначає заступника вручну при зборах»). <paramref name="substitutes"/> —
+        /// «id поста, який звільняється → id заступника»; порожній id означає
+        /// ЯВНЕ рішення гравця лишити пост порожнім. Автопризначення немає:
+        /// якщо пост звільняється, є кому його заступити, а рішення нема —
+        /// <see cref="DispatchResult.SubstituteNotChosen"/>. Чи нема рішення і
+        /// кого можна обрати — <see cref="GetMusterView"/>. Усе перевіряється ДО
+        /// будь-якої зміни стану: збір або йде цілком, або не йде зовсім.
+        /// Данж (<see cref="ExpeditionApproach.Delve"/>) тримає загін
+        /// <see cref="DefaultDungeon.Days"/> діб, <paramref name="days"/> для нього ігнорується.
+        /// </summary>
+        public DispatchResult DepartExpedition(string siteId, ExpeditionApproach approach, IReadOnlyList<string> companionIds, int days,
+            IReadOnlyDictionary<string, string> substitutes)
         {
             RequireMorningOrFreePlay();
             var site = approach == ExpeditionApproach.Delve ? new ExpeditionSite(siteId, siteId) : FindSite(siteId);
             if (site == null) return DispatchResult.NoSuchSite;
 
+            var legality = ExpeditionRunner.CheckParty(_state, _party, companionIds);
+            if (legality != DispatchResult.Success) return legality;
+
+            var muster = BuildMuster(companionIds);
+            var substituteCheck = ValidateSubstitutes(muster, substitutes);
+            if (substituteCheck != DispatchResult.Success) return substituteCheck;
+
+            if (approach == ExpeditionApproach.Delve) days = DefaultDungeon.Days;
             var result = ExpeditionRunner.Depart(_state, _party, site, approach, companionIds, days, _sites, _cfg);
             if (result != DispatchResult.Success) return result;
+
+            ApplySubstitutes(muster, substitutes);
 
             // B5: разовий бонус наступній вилазці (OrderOutfitExpedition) — сид
             // застосовується тут же, поштучним доданням до вже замороженого
@@ -1069,6 +1100,96 @@ namespace Game.Core.Session
             }
 
             return DispatchResult.Success;
+        }
+
+        // ---- Поправка №8.3 (M1.6): заступники при зборах ----
+
+        /// <summary>Хто звільняє пост і хто вільний його заступити — один розрахунок для виду й для команди.</summary>
+        private sealed class MusterPlan
+        {
+            public readonly List<KeyValuePair<string, string>> Vacancies = new List<KeyValuePair<string, string>>(); // slotId -> holderId
+            public readonly List<string> Free = new List<string>();
+        }
+
+        private MusterPlan BuildMuster(IReadOnlyList<string> companionIds)
+        {
+            var plan = new MusterPlan();
+            var inParty = new HashSet<string>(StringComparer.Ordinal);
+            if (companionIds != null)
+                foreach (var id in companionIds)
+                {
+                    if (string.IsNullOrEmpty(id) || !inParty.Add(id)) continue;
+                    var c = _state.Roster.Get(id);
+                    if (c != null && !c.IsDead && !string.IsNullOrEmpty(c.AssignedSlotId))
+                        plan.Vacancies.Add(new KeyValuePair<string, string>(c.AssignedSlotId, id));
+                }
+
+            foreach (var c in _state.Roster.All)
+            {
+                if (inParty.Contains(c.Id)) continue;
+                // Заступник — вільна здорова людина без поста: «зняти з іншого
+                // поста» лише переклало б діру, а не закрило її.
+                if (c.IsDead || c.IsInjured || c.IsCaptive || c.IsAssigned) continue;
+                if (c.Status != CompanionStatus.Idle) continue;
+                plan.Free.Add(c.Id);
+            }
+            plan.Free.Sort(StringComparer.Ordinal);
+            return plan;
+        }
+
+        private static DispatchResult ValidateSubstitutes(MusterPlan plan, IReadOnlyDictionary<string, string> substitutes)
+        {
+            var decided = new HashSet<string>(StringComparer.Ordinal);
+            var used = new HashSet<string>(StringComparer.Ordinal);
+            if (substitutes != null)
+                foreach (var kv in substitutes)
+                {
+                    bool known = false;
+                    foreach (var v in plan.Vacancies)
+                        if (string.Equals(v.Key, kv.Key, StringComparison.Ordinal)) { known = true; break; }
+                    if (!known) return DispatchResult.SubstituteInvalid;
+                    decided.Add(kv.Key);
+
+                    if (string.IsNullOrEmpty(kv.Value)) continue; // явне «лишити пост порожнім»
+                    if (!plan.Free.Contains(kv.Value) || !used.Add(kv.Value)) return DispatchResult.SubstituteInvalid;
+                }
+
+            int remaining = plan.Free.Count - used.Count;
+            foreach (var v in plan.Vacancies)
+                if (!decided.Contains(v.Key) && remaining > 0) return DispatchResult.SubstituteNotChosen;
+            return DispatchResult.Success;
+        }
+
+        private void ApplySubstitutes(MusterPlan plan, IReadOnlyDictionary<string, string> substitutes)
+        {
+            foreach (var v in plan.Vacancies)
+            {
+                string deputy = null;
+                if (substitutes != null) substitutes.TryGetValue(v.Key, out deputy);
+                if (string.IsNullOrEmpty(deputy))
+                {
+                    LogEvent("expedition.post_left_empty", Args("slotId", v.Key, "holderId", v.Value));
+                    continue;
+                }
+                if (_state.TryAssign(deputy, v.Key) == AssignmentResult.Success)
+                    LogEvent("expedition.deputy_assigned", Args("slotId", v.Key, "holderId", v.Value, "deputyId", deputy));
+            }
+        }
+
+        /// <summary>
+        /// Збори (Поправка №8.3): які пости звільнить цей загін і хто вільний
+        /// їх заступити. Чисте читання — та сама відповідь, яку застосує
+        /// <see cref="DepartExpedition(string, ExpeditionApproach, IReadOnlyList{string}, int, IReadOnlyDictionary{string, string})"/>.
+        /// Інтерфейс показує за нею вибір заступника замість автопризначення.
+        /// </summary>
+        public MusterView GetMusterView(IReadOnlyList<string> companionIds)
+        {
+            RequireMorningOrFreePlay();
+            var plan = BuildMuster(companionIds);
+            var vacancies = new List<MusterVacancyView>();
+            foreach (var v in plan.Vacancies)
+                vacancies.Add(new MusterVacancyView { SlotId = v.Key, HolderId = v.Value, CandidateIds = plan.Free });
+            return new MusterView { Vacancies = vacancies, FreeIds = plan.Free };
         }
 
         public QuestOfferView OfferQuestStage(string questId)
@@ -1315,6 +1436,28 @@ namespace Game.Core.Session
             return result;
         }
 
+        /// <summary>
+        /// Слот ранкового автосейву (у файловому сховищі оболонки —
+        /// <c>SaveFileStore.AutosaveSlot</c>). У айронмені — єдине місце збереження.
+        /// </summary>
+        public const int AutosaveSlot = -1;
+
+        /// <summary>
+        /// Айронмен (Поправка №8, M1.10, US-16.1): протагоніст може загинути насправді;
+        /// одне місце збереження (<see cref="AutosaveSlot"/>), автозбереження щоранку,
+        /// старіших зліпків немає, у поточній грі завантажувати нічого. Режим
+        /// вирішується на титулі і лежить у сейві (<c>ironman=</c>).
+        /// </summary>
+        public bool IsIronman => _ironman;
+
+        /// <summary>
+        /// Куди насправді піде збереження, яке просять у слот <paramref name="requested"/>:
+        /// у звичайній грі — туди ж, в айронмені — завжди в єдине місце
+        /// (<see cref="AutosaveSlot"/>), перезаписуючи його. Оболонка пише файл
+        /// саме в цей слот.
+        /// </summary>
+        public int ResolveSaveSlot(int requested) => _ironman ? AutosaveSlot : requested;
+
         public string SaveState(int slot)
         {
             // Morning і FreePlay — той самий хаб (ConfirmMorning уже трактує їх
@@ -1324,6 +1467,7 @@ namespace Game.Core.Session
             // й у FreePlay).
             if (State != SessionState.Morning && State != SessionState.FreePlay)
                 throw new InvalidOperationException("Збереження лише в Morning/FreePlay (R13).");
+            slot = ResolveSaveSlot(slot); // айронмен: одне місце, перезапис
             string blob = ComposeSave();
             _slots[slot] = blob;
             LogEvent("game.saved", Args("slot", slot.ToString(CultureInfo.InvariantCulture)));
@@ -1332,6 +1476,9 @@ namespace Game.Core.Session
 
         public bool LoadState(int slot)
         {
+            // Айронмен: у живій грі завантажувати старіше не можна (сейв-скам); «Продовжити»
+            // з титулу йде через ContinueGame у СВІЖУ сесію, де режим ще не відомий (читається з зліпка).
+            if (_ironman) return false;
             string blob;
             if (!_slots.TryGetValue(slot, out blob) || string.IsNullOrEmpty(blob)) return false;
             ApplySave(blob);
@@ -1350,6 +1497,7 @@ namespace Game.Core.Session
         public void RestoreFromBlob(string blob)
         {
             if (string.IsNullOrEmpty(blob)) throw new ArgumentException("Порожній зліпок збереження", nameof(blob));
+            if (_ironman) throw new InvalidOperationException("Айронмен: у поточній грі завантажувати не можна — лише «Продовжити» з титулу.");
             ApplySave(blob);
             LogEvent("game.loaded", Args("slot", "external"));
         }
@@ -1478,6 +1626,9 @@ namespace Game.Core.Session
         /// <summary>IVT-гачок: з яким темпом Напруги побудовано світ (прапорець і фактичний поріг накопичувача кризи).</summary>
         internal bool DebugTensionPace => _tensionPace;
         internal bool DebugIronman => _ironman;
+
+        /// <summary>Скільки очок поранення має людина (M1.6: тест «кризу дістало відсутнього» бачить рану, хоч статус лишається OnMission).</summary>
+        internal double DebugInjuryPoints(string companionId) => _worldRoster?.Get(companionId)?.InjuryPoints ?? 0.0;
 
         internal int DebugCrisisThreshold =>
             _processor?.Pulse != null && _processor.Pulse.Tracks.TryGetValue("crisis", out var track) ? track.Threshold : 0;
@@ -2004,20 +2155,15 @@ namespace Game.Core.Session
         public DungeonView ExtractDungeon()
         {
             RequireState(SessionState.Dungeon);
-            var rep = _dungeon.Extract(_state);
+            var rep = _dungeon.Extract(null); // не банкуємо: здобич лягає на поверненні загону
             if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
             LogEvent("dungeon.extract", Args("build", rep.BuildComponent.ToString(CultureInfo.InvariantCulture),
                 "craft", rep.CraftComponent.ToString(CultureInfo.InvariantCulture),
                 "gold", rep.Gold.ToString(CultureInfo.InvariantCulture)));
 
-            // Поправка №15.1: вилазка "відбулась" — загін дійсно повернувся
-            // з цієї точки, до того, як _dungeon обнулиться нижче.
-            TryBringSpecialistFromExpedition(_dungeon.SiteId);
-
-            ExpeditionResult discarded;
-            _party.Return(_state, out discarded);
-            _dungeon = null;
-            State = SessionState.Morning;
+            // M1.6: здобич лягає в гаманець лише коли загін повернеться (через
+            // DefaultDungeon.Days діб), як і з тихої/силової вилазки.
+            EndDungeonRun(rep);
             return null;
         }
 
@@ -2028,15 +2174,35 @@ namespace Game.Core.Session
             if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
             LogEvent("dungeon.depart", Args("depth", rep.DepthReached.ToString(CultureInfo.InvariantCulture)));
 
-            // Поправка №15.1: покинутий данж — загін теж повернувся ЗВІДТИ,
-            // вилазка відбулась (не лише успішна екстракція).
-            TryBringSpecialistFromExpedition(_dungeon.SiteId);
+            EndDungeonRun(rep);
+            return null;
+        }
 
-            ExpeditionResult discarded;
-            _party.Return(_state, out discarded);
+        /// <summary>
+        /// Кінець прогону данжу (M1.6, Поправка №8.3: данж триває добами). Загін
+        /// НЕ повертається миттєво: він лишається поза постами ще
+        /// <see cref="ExpeditionParty.DaysRemaining"/> діб, а забране лежить у
+        /// замороженому результаті партії (переживає сейв) і лягає в гаманець на
+        /// поверненні (<see cref="TickExpeditionReturnIfAny"/>). Поправка №15.1
+        /// (зустріч фахівця на точці) теж відбувається на поверненні — «вилазка
+        /// відбулась» і для провалу, і для обережного виходу.
+        /// </summary>
+        private void EndDungeonRun(DungeonExtractReport rep)
+        {
+            var result = new ExpeditionResult
+            {
+                SiteId = _dungeon.SiteId,
+                Approach = ExpeditionApproach.Delve,
+                Band = OutcomeBand.Base,
+                Days = _party.DaysRemaining,
+                BuildComponent = rep?.BuildComponent ?? 0,
+                CraftComponent = rep?.CraftComponent ?? 0,
+                Gold = rep?.Gold ?? 0
+            };
+            if (_dungeon.PartyIds != null) result.PartyIds.AddRange(_dungeon.PartyIds);
+            _party.FreezeResult(result);
             _dungeon = null;
             State = SessionState.Morning;
-            return null;
         }
 
         private void ApplyDungeonResolution(RoomResolution res)
@@ -3740,10 +3906,7 @@ namespace Game.Core.Session
             if (rep.ThreatBandChanged) LogEvent("dungeon.threat_band_changed", Args("band", _dungeon.ThreatBand.ToString()));
             LogEvent("dungeon.retreat", Args("depth", rep.DepthReached.ToString(CultureInfo.InvariantCulture)));
 
-            ExpeditionResult discarded;
-            _party.Return(_state, out discarded);
-            _dungeon = null;
-            State = SessionState.Morning;
+            EndDungeonRun(rep);
         }
 
         private void FinishDungeonCombat(OutcomeBand band, BattleResult result)
@@ -3758,13 +3921,9 @@ namespace Game.Core.Session
             if (res.Wiped)
             {
                 LogEvent("dungeon.wiped", Args("room", res.RoomId));
-                // Поправка №15.1: розгром теж повертає загін звідти, звідки
-                // виходив — вилазка відбулась, навіть провалена.
-                TryBringSpecialistFromExpedition(_dungeon.SiteId);
-                ExpeditionResult discarded;
-                _party.Return(_state, out discarded);
-                _dungeon = null;
-                State = SessionState.Morning;
+                // Розгром теж іде додому добами (M1.6); незабановане вже
+                // пропало в DungeonRun, тож результат порожній.
+                EndDungeonRun(null);
                 return;
             }
 
@@ -4757,7 +4916,7 @@ namespace Game.Core.Session
         {
             try
             {
-                _slots[-1] = ComposeSave();
+                _slots[AutosaveSlot] = ComposeSave();
                 AutosaveVersion++;
             }
             catch { /* автосейв best-effort — провал не повинен рвати денний конвеєр */ }
@@ -4773,7 +4932,7 @@ namespace Game.Core.Session
         public int AutosaveVersion { get; private set; }
 
         /// <summary>Останній ранковий автосейв цієї сесії або null, якщо його ще не було.</summary>
-        public string AutosaveBlob => _slots.TryGetValue(-1, out var blob) ? blob : null;
+        public string AutosaveBlob => _slots.TryGetValue(AutosaveSlot, out var blob) ? blob : null;
 
         /// <summary>Пости, які вже відкриті (будівля, що їх відкриває, стоїть) — тільки на них можна призначити людину.</summary>
         private List<string> OpenPostIds()
@@ -4793,6 +4952,19 @@ namespace Game.Core.Session
             ExpeditionResult result;
             var returned = _party.Return(_state, out result);
             ExpeditionRunner.Complete(_state, result, _works);
+            // M1.6: данж повертається тим самим шляхом, але без полоси —
+            // вихід із нього вже відбувся кімнатами (лут, готовність і
+            // полосу тут не рахуємо вдруге).
+            if (result != null && result.Approach == ExpeditionApproach.Delve)
+            {
+                LogEvent("dungeon.returned", Args("siteId", result.SiteId,
+                    "gold", result.Gold.ToString(CultureInfo.InvariantCulture),
+                    "build", result.BuildComponent.ToString(CultureInfo.InvariantCulture),
+                    "craft", result.CraftComponent.ToString(CultureInfo.InvariantCulture)));
+                TryBringSpecialistFromExpedition(result.SiteId);
+                return;
+            }
+
             // Поправка №12.5 (MECH-03, сигнал ресурсу): гравець бачить, ЩО
             // принесла саме ця точка — інакше різниця між руїнами (будівельний)
             // і майстернею (крафтовий) лишалась би невидимою.

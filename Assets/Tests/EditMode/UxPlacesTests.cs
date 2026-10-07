@@ -333,6 +333,60 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Muster_DeputyForAVacatedPost_MustBeChosenByThePlayer_BeforeDepart()
+        {
+            // Поправка №8.3 (M1.6): заступника обирає гравець. Мутація: прибрати DisabledReason
+            // у «Вирушати» — друга перевірка нижче падає; прибрати передачу заступників у команду —
+            // остання падає.
+            var h = Morning();
+            Assume.That(h.Session.GetRosterView().Companions.Any(c => c.Id == "zakhar" && c.AssignedSlotId == "council_seat"));
+            UxCommandRunner.Invoke(UxPanelFactory.Build(h, UxPanelId.Muster, null).Cards.SelectMany(c => c.Actions).Single(a => a.Id == "party:zakhar"),
+                SessionState.Morning, false);
+
+            var muster = UxPanelFactory.Build(h, UxPanelId.Muster, null);
+            var picks = muster.Cards.SelectMany(c => c.Actions).Where(a => a.Id.StartsWith("deputy:council_seat:")).ToList();
+            Assert.IsTrue(picks.Any(a => a.Id == "deputy:council_seat:keeper"), "на звільнений пост можна обрати вільного");
+            Assert.IsTrue(picks.Any(a => a.Id == "deputy:council_seat:none"), "і явно лишити пост порожнім");
+            Assert.IsFalse(picks.Any(a => a.Id == "deputy:council_seat:zakhar"), "той, хто йде, не заступає сам себе");
+
+            UxCommandRunner.Invoke(muster.Cards.SelectMany(c => c.Actions).Single(a => a.Id == "muster:preview"), h.Session.State, false);
+            var depart = UxPanelFactory.Build(h, UxPanelId.Muster, null).Cards.SelectMany(c => c.Actions).Single(a => a.Id == "muster:depart");
+            Assert.IsNotNull(depart.DisabledReason, "поки заступника не обрано — «Вирушати» каже чому не можна");
+
+            UxCommandRunner.Invoke(picks.Single(a => a.Id == "deputy:council_seat:keeper"), SessionState.Morning, false);
+            depart = UxPanelFactory.Build(h, UxPanelId.Muster, null).Cards.SelectMany(c => c.Actions).Single(a => a.Id == "muster:depart");
+            Assert.IsNull(depart.DisabledReason);
+            Assert.IsTrue(UxCommandRunner.Invoke(depart, SessionState.Morning, false).Ok);
+
+            var roster = h.Session.GetRosterView().Companions;
+            Assert.AreEqual(CompanionStatus.OnMission, roster.Single(c => c.Id == "zakhar").Status);
+            Assert.AreEqual("council_seat", roster.Single(c => c.Id == "keeper").AssignedSlotId, "команда понесла вибір гравця");
+            Assert.IsEmpty(h.PanelState.MusterDeputies, "після виходу вибір скинуто");
+        }
+
+        [Test]
+        public void SavePanel_Ironman_HasOneSaveAndNoLoad_NormalKeepsSlotsAndLoad()
+        {
+            // M1.10. Мутація: у UxPeoplePanels прибрати гілку IsIronman — перша частина падає.
+            var s = new GameSession();
+            s.NewGame(new NewGameOptions { SkipCreation = true, HitRule = HitRuleKind.Threshold, Ironman = true });
+            var step = s.AdvanceScene();
+            while (step != null && !step.IsFinished) step = step.IsChoice ? s.ChooseSceneOption(0) : s.AdvanceScene();
+            var iron = new FakeHost { Session = s };
+
+            var panel = UxPanelFactory.Build(iron, UxPanelId.Save, null);
+            var actions = panel.Cards.SelectMany(c => c.Actions).ToList();
+            Assert.AreEqual(1, actions.Count, "єдине місце — одна дія");
+            Assert.AreEqual("save:" + GameSession.AutosaveSlot, actions[0].Id);
+            Assert.IsNull(actions[0].Confirm, "перезапис єдиного місця — без запитань: інакше воно не змогло б бути автоматичним");
+            Assert.IsFalse(actions.Any(a => a.Id.StartsWith("load:")), "завантажити старіше не можна");
+            Assert.IsFalse(AllText(panel).Any(t => t != null && RawKey.IsMatch(t)), "жодного сирого ключа");
+
+            var normal = UxPanelFactory.Build(Morning(), UxPanelId.Save, null);
+            Assert.IsTrue(normal.Cards.SelectMany(c => c.Actions).Any(a => a.Id == "save:0"), "звичайна гра — слоти як було");
+        }
+
+        [Test]
         public void Growth_CommitIsIrreversible_AskedToConfirm()
         {
             // Мутація: прибрати Confirm із «Затвердити» — тест падає (UX-12).

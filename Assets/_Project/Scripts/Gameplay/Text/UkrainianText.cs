@@ -279,6 +279,12 @@ namespace Game.Gameplay.Text
             // ==== Трек C, бій (Поправка №14): колесо черги, відступ, старт бою — блок унизу файлу. ====
             AddCombatTrackKeys(t);
 
+            // ==== M1.6 (Поправка №8.3): заступники при зборах, данж на добу-дві — блок унизу файлу. ====
+            AddMusterDeputyKeys(t);
+
+            // ==== M1.10 (US-16.1): айронмен на титулі й в Esc → Зберегти — блок унизу файлу. ====
+            AddIronmanKeys(t);
+
             // ==== M1.2 (07.10.2026): рядки підсумку з сюжетних прапорів виборів — блок унизу файлу. ====
             AddStoryEchoKeys(t);
 
@@ -493,7 +499,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "dungeon.room3.title", "Прихований попіл — і під ним ще щось ціле.");
             AddKey(t, "dungeon.room3.greedy", "Забрати все зерно і начиння (будматеріал 3, сировина 2; вищий ризик).");
             AddKey(t, "dungeon.room3.cautious", "Забрати менше, спалити слід (будматеріал 1, сировина 1; спокійніше).");
-            AddKey(t, "dungeon.extract", "Здобич збережено: будматеріал {build}, сировина {craft}, золото {gold}.");
+            AddKey(t, "dungeon.extract", "Здобич винесено: будматеріал {build}, сировина {craft}, золото {gold}. Відряд іде додому — у скарбницю вона ляже, коли повернеться.");
             AddKey(t, "dungeon.wiped", "Бій пішов не так. Усе незбережене втрачено — троє повертаються з порожніми руками, але живі.");
             AddKey(t, "dungeon.room.bypassed", "Кімнату пройдено без бою.");
         }
@@ -3210,6 +3216,42 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.retreat.consequence.lost", "Поле лишиться за ворогом — як поразка, але загін живий.");
             AddKey(t, "ui.battle.retreat.consequence.training", "Тренування закінчиться без наслідків.");
             AddKey(t, "ui.battle.retreat.only_own_turn", "Відступити можна лише у свій хід.");
+        }
+
+        // ---- M1.10 (US-16.1, UX Q5): айронмен — одне місце збереження ----
+        // Чорновий текст асистента (R7).
+        private static void AddIronmanKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.title.ironman.section", "Режим збереження");
+            AddKey(t, "ui.title.ironman.off", "Звичайний: слоти й автозбереження");
+            AddKey(t, "ui.title.ironman.on", "Айронмен: одне збереження, герой може загинути");
+            AddKey(t, "ux.save.ironman.title", "Айронмен: єдине збереження");
+            AddKey(t, "ux.save.ironman.note",
+                "Гра сама зберігається щоранку й щоразу перезаписує те саме місце. Завантажити раніше збережене не можна: «Продовжити» з титулу веде на останній ранок.");
+            AddKey(t, "ux.save.ironman.action", "Зберегти зараз");
+        }
+
+        // ---- M1.6 (Поправка №8.3): заступник на пост того, хто йде; данж триває добами ----
+        // Чорновий текст асистента (R7). Безособові форми.
+        private static void AddMusterDeputyKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.feedback.dispatch.substitute_not_chosen",
+                "Пост залишається без людини, хоча є кому його заступити: оберіть заступника або явно залиште пост порожнім.");
+            AddKey(t, "ui.feedback.dispatch.substitute_invalid",
+                "Цей заступник не годиться: він зайнятий, поранений, іде в загоні або вказаний двічі.");
+            AddKey(t, "ux.muster.section.posts", "Хто стане на пости");
+            AddKey(t, "ux.muster.deputy.title", "Пост «{post}»: {holder} іде");
+            AddKey(t, "ux.muster.deputy.taken", "Уже обрано на інший пост");
+            AddKey(t, "ux.muster.deputy.none", "Лишити пост порожнім");
+            AddKey(t, "ux.muster.deputy.picked", "Заступить: {name}");
+            AddKey(t, "ux.muster.deputy.pick", "Поставити");
+            AddKey(t, "ux.muster.deputy.undecided", "Потрібне рішення: оберіть заступника");
+            AddKey(t, "ux.muster.deputy.empty_chosen", "Пост лишиться порожнім");
+            AddKey(t, "ux.muster.deputy.nobody", "Заступити нікому — пост лишиться порожнім");
+            AddKey(t, "ux.muster.deputy.depart_blocked", "Спершу оберіть, хто стане на звільнені пости.");
+            AddKey(t, "expedition.deputy_assigned", "{deputy} стає на пост «{post}» замість {holder}, що пішов у вилазку.");
+            AddKey(t, "expedition.post_left_empty", "Пост «{post}» лишився порожнім: {holder} пішов у вилазку, заступника не призначено.");
+            AddKey(t, "dungeon.returned", "Відряд повернувся з «{site}». Здобич лягла в скарбницю: золото {gold}, будматеріал {build}, сировина {craft}.");
         }
 
         // ---- M1.2: «Відлуння рішень» — рядки підсумку доби 5 з сюжетних прапорів (Core/Session/StoryEchoes.cs) ----

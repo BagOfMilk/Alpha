@@ -39,7 +39,9 @@ namespace Game.Tests.EditMode
             party.AddRange(s.GetRosterView().Companions
                 .Where(c => c.Id != GameSession.ProtagonistId && (c.Status == CompanionStatus.Idle || c.Status == CompanionStatus.Assigned))
                 .Select(c => c.Id).Take(2));
-            s.DepartExpedition(siteId, ExpeditionApproach.Delve, party, 2);
+            // Поправка №8.3 (M1.6): заступників на звільнені пости обирає той, хто збирає загін, — тут тест, як і гравець.
+            s.DepartExpedition(siteId, ExpeditionApproach.Delve, party, 2,
+                Game.Core.Session.Bots.BotSupport.ChooseDeputies(s.GetMusterView(party)));
             Assert.AreEqual(SessionState.Dungeon, s.State);
             return s;
         }

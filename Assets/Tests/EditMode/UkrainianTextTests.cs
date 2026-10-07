@@ -162,7 +162,7 @@ namespace Game.Tests.EditMode
         public void Format_SubstitutesNamedPlaceholders()
         {
             string result = UkrainianText.Format("dungeon.extract", Gender.Male, "build", "5", "craft", "2", "gold", "10");
-            Assert.AreEqual("Здобич збережено: будматеріал 5, сировина 2, золото 10.", result);
+            StringAssert.StartsWith("Здобич винесено: будматеріал 5, сировина 2, золото 10.", result);
         }
 
         [Test]

@@ -30,6 +30,14 @@ namespace Game.Core.Dungeons
         /// </summary>
         public const string AbandonedCampGrainTakenFlag = "abandoned_camp_grain_taken";
 
+        /// <summary>
+        /// Скільки діб триває данж (Поправка №8.3, M1.6): стільки загін поза
+        /// постами від виходу до повернення, і лише тоді здобич лягає в
+        /// гаманець. ПЛЕЙСХОЛДЕР (текст «Пости лишаються порожні на дві доби»
+        /// вже казав «дві»); кімнати грають одразу, ціна — час у дорозі.
+        /// </summary>
+        public const int Days = 2;
+
         public static IReadOnlyList<string> KnownSiteIds { get; } = new[] { AbandonedCamp, OldHermitage };
 
         public static IReadOnlyList<DungeonRoomDefinition> Rooms(string siteId)

@@ -522,6 +522,8 @@ namespace Game.Gameplay.UI
                 case DispatchResult.UnknownCompanion: return UkrainianText.Get("ui.feedback.dispatch.unknown_companion", g);
                 case DispatchResult.CompanionUnavailable: return UkrainianText.Get("ui.feedback.dispatch.companion_unavailable", g);
                 case DispatchResult.DuplicateCompanion: return UkrainianText.Get("ui.feedback.dispatch.duplicate_companion", g);
+                case DispatchResult.SubstituteNotChosen: return UkrainianText.Get("ui.feedback.dispatch.substitute_not_chosen", g);
+                case DispatchResult.SubstituteInvalid: return UkrainianText.Get("ui.feedback.dispatch.substitute_invalid", g);
                 default: return UkrainianText.Get("ui.feedback.dispatch.party_already_away", g);
             }
         }
@@ -680,6 +682,11 @@ namespace Game.Gameplay.UI
                 "favored", faction, "scarId", scar, "questId", quest, "chapterId", chapter,
                 "attackerId", ResolveCompanionName(Arg(a, "attackerId"), gender, roster),
                 "targetId", ResolveCompanionName(Arg(a, "targetId"), gender, roster),
+                // M1.6: заступник на пості того, хто йде у вилазку (expedition.deputy_assigned).
+                "holder", ResolveCompanionName(Arg(a, "holderId"), gender, roster),
+                "holderId", ResolveCompanionName(Arg(a, "holderId"), gender, roster),
+                "deputy", ResolveCompanionName(Arg(a, "deputyId"), gender, roster),
+                "deputyId", ResolveCompanionName(Arg(a, "deputyId"), gender, roster),
                 "trigger", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
                 "triggerId", ResolveCompanionName(Arg(a, "triggerId"), gender, roster),
                 "incidentId", ContentLabel("incident", Arg(a, "incidentId"), gender),

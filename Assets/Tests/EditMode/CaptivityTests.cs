@@ -246,7 +246,8 @@ namespace Game.Tests.EditMode
                 .Where(c => c.Id != GameSession.ProtagonistId && (c.Status == CompanionStatus.Idle || c.Status == CompanionStatus.Assigned))
                 .Select(c => c.Id).Take(2));
             Assume.That(party.Count, Is.EqualTo(3), "потрібен загін із трьох");
-            s.DepartExpedition(Game.Core.Dungeons.DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve, party, 2);
+            s.DepartExpedition(Game.Core.Dungeons.DefaultDungeon.AbandonedCamp, Game.Core.Expeditions.ExpeditionApproach.Delve, party, 2,
+                Game.Core.Session.Bots.BotSupport.ChooseDeputies(s.GetMusterView(party)));
             s.ResolveDungeonRoom(Game.Core.Loop.IncidentPath.Bloody);
             Assert.AreEqual(SessionState.Battle, s.State);
 

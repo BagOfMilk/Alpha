@@ -255,7 +255,9 @@ namespace Game.Gameplay.UI
                 case UxPanelId.Journal:
                     return UxJournalPanel.Build(h.Session.GetQuestOffer(), h.Session.GetFactionsView(), h.Session.GetReadinessView(), h.Gender);
                 case UxPanelId.Save:
-                    return UxSavePanel.Build(h.SaveSlots(), h.Gender, h.SaveToSlot, h.LoadSlot, true);
+                    return h.Session.IsIronman
+                        ? UxSavePanel.BuildIronman(h.SaveSlots(), h.Gender, h.SaveToSlot)
+                        : UxSavePanel.Build(h.SaveSlots(), h.Gender, h.SaveToSlot, h.LoadSlot, true);
                 default:
                     return new UxPanelModel { Id = id, Title = string.Empty, EmptyText = UxBricks.T(h, "ux.panel.soon") };
             }

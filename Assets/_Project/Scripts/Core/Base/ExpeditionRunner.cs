@@ -19,7 +19,19 @@ namespace Game.Core.Base
         UnknownCompanion = 4,
         CompanionUnavailable = 5,  // мертвий, поранений, уже у вилазці або ворожий (Antagonist)
         DuplicateCompanion = 6,    // та сама людина двічі у списку
-        PartyAlreadyAway = 7       // минулий загін ще не повернувся (R15: партія одна)
+        PartyAlreadyAway = 7,      // минулий загін ще не повернувся (R15: партія одна)
+
+        // ---- Поправка №8.3 (M1.6): заступник на пост того, хто йде ----
+        /// <summary>
+        /// У збори входить людина з відкритого поста, є кому її замінити, а
+        /// гравець не обрав ні заступника, ні «лишити пост порожнім» — без
+        /// мовчазного автопризначення (Поправка №8.3, власник: «Гравець
+        /// призначає заступника вручну при зборах»).
+        /// </summary>
+        SubstituteNotChosen = 8,
+
+        /// <summary>Заступник не годиться: не вільний, у загоні, вказаний двічі, або пост не звільняється цим загоном.</summary>
+        SubstituteInvalid = 9
     }
 
     /// <summary>
@@ -32,6 +44,41 @@ namespace Game.Core.Base
     /// </summary>
     public static class ExpeditionRunner
     {
+        /// <summary>
+        /// Чи може цей склад піти зараз — ТІ САМІ відмови, що й у
+        /// <see cref="Depart"/>, але без жодної зміни стану (M1.6: збори
+        /// перевіряють заступників лише для законного загону, тож порядок
+        /// відмов не залежить від того, хто питає).
+        /// </summary>
+        public static DispatchResult CheckParty(BaseState state, ExpeditionParty party, IReadOnlyList<string> companionIds)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (party == null) throw new ArgumentNullException(nameof(party));
+            if (companionIds == null || companionIds.Count == 0) return DispatchResult.EmptyParty;
+            if (companionIds.Count > state.Balance.ExpeditionPartyMax) return DispatchResult.PartyTooLarge;
+            if (party.IsAway) return DispatchResult.PartyAlreadyAway;
+
+            // Спочатку перевіряємо всіх, потім міняємо хоч когось: загін іде
+            // цілком або не йде зовсім, інакше половина ростера лишилась би
+            // знятою з постів через одного мертвого у списку.
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < companionIds.Count; i++)
+            {
+                var c = state.Roster.Get(companionIds[i]);
+                if (c == null) return DispatchResult.UnknownCompanion;
+
+                // Одна людина двічі у списку — не безневинна одруківка: вона
+                // додала б половину себе до сили загону і отримала б подвійну
+                // рану на поверненні. Дедуплікація мовчки приховала б помилку
+                // викликача, тому відмова явна.
+                if (!seen.Add(c.Id)) return DispatchResult.DuplicateCompanion;
+
+                if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission || IsAntagonist(c.Status) || c.IsCaptive)
+                    return DispatchResult.CompanionUnavailable;
+            }
+            return DispatchResult.Success;
+        }
+
         /// <summary>
         /// Єдина точка входу вилазки (R15, закриває D10): валідує склад →
         /// <see cref="ExpeditionParty.Depart"/> → якщо підхід не Delve, тут же
@@ -50,30 +97,11 @@ namespace Game.Core.Base
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (party == null) throw new ArgumentNullException(nameof(party));
             if (site == null) return DispatchResult.NoSuchSite;
-            if (companionIds == null || companionIds.Count == 0) return DispatchResult.EmptyParty;
-            if (companionIds.Count > state.Balance.ExpeditionPartyMax) return DispatchResult.PartyTooLarge;
-            if (party.IsAway) return DispatchResult.PartyAlreadyAway;
+            var legality = CheckParty(state, party, companionIds);
+            if (legality != DispatchResult.Success) return legality;
 
-            // Спочатку перевіряємо всіх, потім міняємо хоч когось: загін іде
-            // цілком або не йде зовсім, інакше половина ростера лишилась би
-            // знятою з постів через одного мертвого у списку.
             var chosen = new List<Companion>(companionIds.Count);
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            for (int i = 0; i < companionIds.Count; i++)
-            {
-                var c = state.Roster.Get(companionIds[i]);
-                if (c == null) return DispatchResult.UnknownCompanion;
-
-                // Одна людина двічі у списку — не безневинна одруківка: вона
-                // додала б половину себе до сили загону і отримала б подвійну
-                // рану на поверненні. Дедуплікація мовчки приховала б помилку
-                // викликача, тому відмова явна.
-                if (!seen.Add(c.Id)) return DispatchResult.DuplicateCompanion;
-
-                if (c.IsDead || c.IsInjured || c.Status == CompanionStatus.OnMission || IsAntagonist(c.Status) || c.IsCaptive)
-                    return DispatchResult.CompanionUnavailable;
-                chosen.Add(c);
-            }
+            for (int i = 0; i < companionIds.Count; i++) chosen.Add(state.Roster.Get(companionIds[i]));
 
             if (!party.Depart(state, companionIds, days))
                 return DispatchResult.CompanionUnavailable;
@@ -148,7 +176,11 @@ namespace Game.Core.Base
                 if (wounded.Contains(result.PartyIds[i])) continue;
                 var c = state.Roster.Get(result.PartyIds[i]);
                 if (c == null || c.IsDead) continue;
-                c.Status = CompanionStatus.Idle;
+                // M1.6: хто поранений дорогою (криза в місті, бій у данжі) —
+                // лишається пораненим, а не «видужує» самим поверненням; полон
+                // і зрада, що сталися в данжі, повернення не скасовує (№14.7).
+                if (c.IsCaptive || c.Status == CompanionStatus.Captive || c.Status == CompanionStatus.Antagonist) continue;
+                c.Status = c.IsInjured ? CompanionStatus.Injured : CompanionStatus.Idle;
             }
         }
 

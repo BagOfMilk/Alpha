@@ -49,6 +49,13 @@ namespace Game.Gameplay.UI
         public readonly List<string> MusterParty = new List<string>();
         public ExpeditionPreviewView MusterPreview;
 
+        /// <summary>
+        /// Заступники на пости, що звільняє загін (Поправка №8.3, M1.6): id поста →
+        /// id заступника; порожній рядок — гравець явно залишив пост порожнім.
+        /// Автопризначення немає — тут лише вибір гравця до «Вирушати».
+        /// </summary>
+        public readonly Dictionary<string, string> MusterDeputies = new Dictionary<string, string>();
+
         // Розвиток протагоніста
         public BuildPlan Plan = new BuildPlan();
 
@@ -60,6 +67,7 @@ namespace Game.Gameplay.UI
             MusterSite = "outskirts";
             MusterApproach = ExpeditionApproach.Quiet;
             MusterParty.Clear();
+            MusterDeputies.Clear();
             MusterPreview = null;
             Plan = new BuildPlan();
             Quests.Clear();

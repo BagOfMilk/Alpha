@@ -97,6 +97,8 @@ namespace Game.Gameplay
             string blob;
             var outcome = UxCommandRunner.Run(() => Session.SaveState(slot), null, ProtagonistGender == Gender.Female, out blob);
             if (!outcome.Ok || blob == null) return outcome;
+            // Айронмен (M1.10): ядро саме знає, що місце одне, — файл лягає туди, куди воно записало.
+            slot = Session.ResolveSaveSlot(slot);
             try
             {
                 var view = Session.CurrentView;

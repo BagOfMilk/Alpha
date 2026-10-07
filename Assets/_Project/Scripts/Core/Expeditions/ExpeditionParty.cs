@@ -104,8 +104,10 @@ namespace Game.Core.Expeditions
                 {
                     var companion = baseState.Roster.Get(id);
                     if (companion == null || companion.IsDead) continue;
+                    // M1.6: рана, отримана поки загін був у полі (криза дістає і
+                    // відсутніх, бій у данжі), не губиться по дорозі додому.
                     if (companion.Status == CompanionStatus.OnMission)
-                        companion.Status = CompanionStatus.Idle;
+                        companion.Status = companion.IsInjured ? CompanionStatus.Injured : CompanionStatus.Idle;
                 }
 
             result = PendingResult;

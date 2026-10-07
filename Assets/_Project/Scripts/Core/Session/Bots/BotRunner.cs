@@ -637,7 +637,10 @@ namespace Game.Core.Session.Bots
             if (!choice.HasValue) return;
 
             var c = choice.Value;
-            session.DepartExpedition(c.SiteId, c.Approach, c.CompanionIds, c.Days);
+            // Поправка №8.3 (M1.6): заступників на звільнені пости призначає
+            // сторона, що збирає відряд, — тут бот, не ядро.
+            var deputies = BotSupport.ChooseDeputies(session.GetMusterView(c.CompanionIds));
+            session.DepartExpedition(c.SiteId, c.Approach, c.CompanionIds, c.Days, deputies);
             if (tally != null) tally.Decisions++; // куди/як/кого — рішення, не проста команда
         }
 
