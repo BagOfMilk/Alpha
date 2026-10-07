@@ -29,6 +29,32 @@ namespace Game.Core.Session.Views
         public string WaitingSpecialistId;
     }
 
+    /// <summary>
+    /// Збори (Поправка №8.3, M1.6): які пости звільнить загін і хто вільний
+    /// їх заступити. Заступника обирає гравець (<c>GameSession.DepartExpedition</c>
+    /// із заступниками), автопризначення немає.
+    /// </summary>
+    public sealed class MusterView
+    {
+        /// <summary>Пости, що спорожніють, у порядку загону.</summary>
+        public IReadOnlyList<MusterVacancyView> Vacancies;
+
+        /// <summary>Хто вільний заступити будь-який із постів (без поста, не поранений, не в загоні), за id.</summary>
+        public IReadOnlyList<string> FreeIds;
+
+        /// <summary>Є хоч один пост і є кому його заступити — тоді рішення обов'язкове.</summary>
+        public bool NeedsChoice => Vacancies != null && Vacancies.Count > 0 && FreeIds != null && FreeIds.Count > 0;
+    }
+
+    public sealed class MusterVacancyView
+    {
+        public string SlotId;
+        /// <summary>Хто стоїть на посту і йде.</summary>
+        public string HolderId;
+        /// <summary>Кого можна поставити замість нього (спільний список для всіх постів загону).</summary>
+        public IReadOnlyList<string> CandidateIds;
+    }
+
     public sealed class DungeonView
     {
         public int Depth;

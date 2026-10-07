@@ -209,10 +209,22 @@ namespace Game.Tests.EditMode
 
             s.ExtractDungeon();
             Assert.AreEqual(SessionState.Morning, s.State);
+            Assert.IsFalse(IsArrived(s, ArrivalsPool.HealerId), "M1.6: загін ще в дорозі додому — фахівець приєднається на поверненні");
 
-            Assert.IsTrue(s.DayLog.Any(e => e.Key == "arrivals.expedition" && e.Args["companionId"] == ArrivalsPool.HealerId),
+            var log = PlayUntilDungeonReturn(s);
+            Assert.IsTrue(log.Any(e => e.Key == "arrivals.expedition" && e.Args["companionId"] == ArrivalsPool.HealerId),
                 "видобуток данжу «Старий скит» повертає загін звідти, звідки він вийшов — Гафія приєднується");
             Assert.IsTrue(IsArrived(s, ArrivalsPool.HealerId));
+        }
+
+        /// <summary>M1.6: данж триває добами — грає тихі доби, поки не прозвучить «dungeon.returned» (не довше DefaultDungeon.Days + 1 діб).</summary>
+        private static List<GameEvent> PlayUntilDungeonReturn(GameSession s)
+        {
+            var log = new List<GameEvent>();
+            for (int day = 0; day < DefaultDungeon.Days + 1 && !Saw(log, "dungeon.returned"); day++)
+                PlayFullDayQuiet(s, log);
+            Assert.IsTrue(Saw(log, "dungeon.returned"), "загін мусив повернутися з данжу за відведені доби");
+            return log;
         }
 
         [Test]
@@ -225,7 +237,8 @@ namespace Game.Tests.EditMode
 
             s.AbandonDungeon();
 
-            Assert.IsTrue(s.DayLog.Any(e => e.Key == "arrivals.expedition" && e.Args["companionId"] == ArrivalsPool.HealerId),
+            var log = PlayUntilDungeonReturn(s);
+            Assert.IsTrue(log.Any(e => e.Key == "arrivals.expedition" && e.Args["companionId"] == ArrivalsPool.HealerId),
                 "«вилазка відбулась» навіть коли загін пішов, не довівши данж до кінця");
             Assert.IsTrue(IsArrived(s, ArrivalsPool.HealerId));
         }
@@ -308,13 +321,12 @@ namespace Game.Tests.EditMode
                 s.DepartExpedition(DefaultDungeon.OldHermitage, ExpeditionApproach.Delve, partyIds, 2));
             log.Clear();
             s.ExtractDungeon();
-            Assert.IsTrue(s.DayLog.Any(e => e.Key == "arrivals.expedition" && e.Args["companionId"] == ArrivalsPool.HealerId));
+            PlayFullDayQuiet(s, log); // доба 2: загін у дорозі (M1.6)
+            PlayFullDayQuiet(s, log); // доба 3: загін повернувся — Гафія приєднується
+            Assert.IsTrue(log.Any(e => e.Key == "arrivals.expedition" && e.Args["companionId"] == ArrivalsPool.HealerId));
             Assert.IsTrue(IsArrived(s, ArrivalsPool.HealerId));
 
             // Доба 4 (запланована Таверною) настає — жодного дубля приходу.
-            log.Clear();
-            PlayFullDayQuiet(s, log); // доба 2
-            PlayFullDayQuiet(s, log); // доба 3
             log.Clear();
             PlayFullDayQuiet(s, log); // доба 4
             Assert.IsFalse(log.Any(e => e.Key == "arrivals.tavern" && e.Args["companionId"] == ArrivalsPool.HealerId),

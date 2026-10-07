@@ -18,6 +18,30 @@ namespace Game.Core.Session.Bots
     /// </summary>
     public static class BotSupport
     {
+        /// <summary>
+        /// Заступники на пости, що їх звільняє загін (Поправка №8.3, M1.6): бот
+        /// ставить на кожен звільнений пост першого вільного за id (за списком
+        /// кандидатів із <see cref="MusterView"/>), без повторів. Це РІШЕННЯ бота,
+        /// а не автоматика ядра: ядро без нього відмовляє
+        /// (<c>DispatchResult.SubstituteNotChosen</c>). Хто не знайшовся —
+        /// пост лишається порожнім явно.
+        /// </summary>
+        public static IReadOnlyDictionary<string, string> ChooseDeputies(MusterView muster)
+        {
+            var result = new Dictionary<string, string>();
+            if (muster?.Vacancies == null) return result;
+            var used = new HashSet<string>();
+            foreach (var vacancy in muster.Vacancies)
+            {
+                string pick = string.Empty;
+                if (vacancy.CandidateIds != null)
+                    foreach (var id in vacancy.CandidateIds)
+                        if (used.Add(id)) { pick = id; break; }
+                result[vacancy.SlotId] = pick;
+            }
+            return result;
+        }
+
         /// <summary>Троє, кого жодна політика не саджає на пост — лишаються "в полі" для вилазки/данжу (§3.0 FIRST_HOUR).</summary>
         public static bool IsReservedForField(string companionId)
         {

@@ -1290,7 +1290,9 @@ namespace Game.Gameplay
             var preview = Run(() => Session.PreviewExpedition(siteId, approach, party));
             if (preview == null) return;
             int days = preview.Days;
-            Run(() => Session.DepartExpedition(siteId, approach, party, days));
+            // M1.6 (Поправка №8.3): заступників на звільнені пости обирає водій, як гравець у зборах.
+            var deputies = Game.Core.Session.Bots.BotSupport.ChooseDeputies(Session.GetMusterView(party));
+            Run(() => Session.DepartExpedition(siteId, approach, party, days, deputies));
             _jNextDelve = !delve;
         }
 
@@ -1701,7 +1703,9 @@ namespace Game.Gameplay
             var preview = Run(() => Session.PreviewExpedition("abandoned_camp", ExpeditionApproach.Delve, party));
             if (preview == null) return;
             int days = preview.Days;
-            Run(() => Session.DepartExpedition("abandoned_camp", ExpeditionApproach.Delve, party, days));
+            // M1.6 (Поправка №8.3): заступників на звільнені пости обирає водій, як гравець у зборах.
+            var deputies = Game.Core.Session.Bots.BotSupport.ChooseDeputies(Session.GetMusterView(party));
+            Run(() => Session.DepartExpedition("abandoned_camp", ExpeditionApproach.Delve, party, days, deputies));
         }
 
         // ===================== бій: хід гравця (лише IBattleInput, §7.4) =====================

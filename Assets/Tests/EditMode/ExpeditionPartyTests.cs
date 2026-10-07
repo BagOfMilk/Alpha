@@ -73,6 +73,41 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(party.IsAway);
         }
 
+        /// <summary>M1.6: рана, отримана поки людина була в полі (криза дістає і відсутніх), повернення не знімає.</summary>
+        [Test]
+        public void Return_KeepsAWoundTakenInTheField()
+        {
+            var state = Build();
+            var party = new ExpeditionParty();
+            party.Depart(state, new[] { "guard", "medic" }, days: 2);
+            new RosterAdapter(state.Roster).Wound("guard", 20);
+            Assert.AreEqual(CompanionStatus.OnMission, state.Roster.Get("guard").Status, "рана не повертає з вилазки");
+
+            party.Return(state);
+
+            Assert.AreEqual(CompanionStatus.Injured, state.Roster.Get("guard").Status, "поранений у полі — вдома пораненим");
+            Assert.AreEqual(CompanionStatus.Idle, state.Roster.Get("medic").Status, "здоровий — вільний");
+        }
+
+        /// <summary>M1.6: данж триває добами — полон, що стався в данжі, повернення загону не скасовує (Поправка №14.7).</summary>
+        [Test]
+        public void Complete_DoesNotFreeSomeoneTakenCaptiveInTheField()
+        {
+            var state = Build();
+            var party = new ExpeditionParty();
+            party.Depart(state, new[] { "guard", "medic" }, days: 2);
+            state.Roster.Get("guard").Status = CompanionStatus.Captive;
+
+            ExpeditionResult result;
+            party.Return(state, out result);
+            var done = new ExpeditionResult();
+            done.PartyIds.AddRange(new[] { "guard", "medic" });
+            ExpeditionRunner.Complete(state, done);
+
+            Assert.AreEqual(CompanionStatus.Captive, state.Roster.Get("guard").Status, "бранця повернення не звільняє");
+            Assert.AreEqual(CompanionStatus.Idle, state.Roster.Get("medic").Status);
+        }
+
         [Test]
         public void Calendar_CountsDownAndReportsArrival()
         {
