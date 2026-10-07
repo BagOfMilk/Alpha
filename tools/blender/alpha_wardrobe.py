@@ -708,14 +708,15 @@ def _outward_sign(o, body_tree):
     return 1.0 if votes >= 0 else -1.0
 
 def layer_clothes(rig, gap=0.004, reach=0.15):
-    """Повертає {частина: скільки вершин зсунуто}. Вершина речі виходить назовні за найдальшу стінку нижчих
-    речей, яку перетинає промінь уздовж її нормалі (у межах reach): найближча точка не годиться — у речей з
-    товщиною (халяви чобіт) вона на внутрішній стінці, і халяви проступали крізь штани (лукбук 07.10.2026).
-    Враховуються лише стінки, з яких промінь ВИХОДИТЬ (нормаль за променем): рукав поруч із тулубом не
-    виштовхує безрукавку крізь руку."""
+    """Повертає {частина: скільки вершин зсунуто}. Вершина речі, що опинилась усередині нижчої речі (за
+    нормаллю самої вершини), виходить назовні від найближчої ЗОВНІШНЬОЇ стінки нижчих речей. Лише зовнішні
+    стінки (грань дивиться від тіла): у речей з товщиною (халяви) найближчою була внутрішня стінка, і халяви
+    проступали крізь штани (лукбук 07.10.2026). Нормалі кожної речі орієнтовано відносно тіла — у частини
+    бібліотечних речей вони вивернуті. (Промінь назовні пробували — одяг ставав грудкуватим.)"""
     from mathutils.bvhtree import BVHTree
     parts = {o.get("kit_part"): o for o in rig.children if o.get("kit_part") and o.type == 'MESH'}
     body = next((o for o in rig.children if o.name.endswith(".body") and o.type == 'MESH'), None)
+    body_tree = None
     sign = {}
     if body is not None:
         bmw = body.matrix_world
@@ -728,11 +729,18 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
         if lower:
             verts, polys = [], []
             for o in lower:
-                mw = o.matrix_world
+                mw = o.matrix_world; n3 = mw.to_3x3().inverted().transposed()
+                sg = sign.get(o.name, 1.0)
                 base = len(verts)
                 verts += [mw @ v.co for v in o.data.vertices]
-                flip = sign.get(o.name, 1.0) < 0           # вивернуті — розвертаємо обхід, щоб нормалі дивились назовні
-                polys += [[base + i for i in (reversed(p.vertices) if flip else p.vertices)] for p in o.data.polygons]
+                for f in o.data.polygons:
+                    if body_tree is not None:
+                        c = mw @ f.center
+                        loc, _n, _i, _d = body_tree.find_nearest(c)
+                        if loc is not None and (n3 @ f.normal).dot(c - loc) * sg < 0.0:
+                            continue                         # внутрішня стінка (дивиться до тіла)
+                    idx = [base + i for i in f.vertices]
+                    polys.append(idx if sg > 0 else idx[::-1])
             tree = BVHTree.FromPolygons(verts, polys)
             for o in objs:
                 me = o.data
@@ -741,32 +749,19 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
                 need = [0.0] * len(me.vertices)
                 for v in me.vertices:
                     p = mw @ v.co
-                    d = (n3 @ v.normal).normalized() * sg
-                    far, travelled, origin = None, 0.0, p.copy()
-                    for _ in range(8):
-                        loc, nrm, _i, dist = tree.ray_cast(origin, d, reach - travelled)
-                        if loc is None:
-                            break
-                        travelled += dist
-                        if nrm.dot(d) > 0.0:                # виходимо з нижньої речі — ми всередині неї
-                            far = travelled
-                        origin = loc + d * 1e-4; travelled += 1e-4
-                        if travelled >= reach:
-                            break
-                    if far is not None:
-                        need[v.index] = far + gap
-                    else:
-                        loc, nrm, _i, _d = tree.find_nearest(p, gap)
-                        if loc is not None:                  # майже торкається — відсунути на зазор
-                            side = (p - loc).dot(d)
-                            if side < gap:
-                                need[v.index] = gap - side
+                    loc, nrm, _i, _d = tree.find_nearest(p, reach)
+                    if loc is None:
+                        continue
+                    nw = (n3 @ v.normal).normalized() * sg
+                    side = (p - loc).dot(nw)
+                    if side < gap:
+                        need[v.index] = gap - side
                 adj = [[] for _ in me.vertices]
                 for e in me.edges:
                     a, b = e.vertices
                     adj[a].append(b); adj[b].append(a)
-                for _ in range(6):                      # без складок і розривів між зсунутими й сусідніми вершинами
-                    need = [max(need[i], 0.85 * max((need[j] for j in adj[i]), default=0.0)) for i in range(len(need))]
+                for _ in range(3):                      # без сходинок між зсунутими й сусідніми вершинами
+                    need = [max(need[i], 0.6 * max((need[j] for j in adj[i]), default=0.0)) for i in range(len(need))]
                 for v in me.vertices:
                     if need[v.index] > 0.0:
                         nw = (n3 @ v.normal).normalized() * sg
