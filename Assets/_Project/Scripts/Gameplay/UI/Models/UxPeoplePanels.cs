@@ -71,7 +71,7 @@ namespace Game.Gameplay.UI
                         var outcome = UxCommandRunner.Run(() => h.Session.BeginArcChapterScene(companionId), null, UxBricks.Female(h), out first);
                         if (outcome.Ok && first != null) h.BeginScene(first);
                         return outcome;
-                    }));
+                    }).Calls(nameof(GameSession.BeginArcChapterScene)));
                 else if (h.Session.IsArcChapterQuestContent(companionId))
                     card.Actions.Add(Talk(h, "talk:arcquest:" + companionId, UxBricks.T(h, "ux.talk.arc_quest"), UxIntent.Primary, () =>
                     {
@@ -79,7 +79,7 @@ namespace Game.Gameplay.UI
                         string quest = QuestOf(companionId);
                         if (quest != null) h.PanelState.Quests.Invalidate(quest);
                         return outcome;
-                    }));
+                    }).Calls(nameof(GameSession.BeginArcChapterQuest)));
             }
 
             card.Actions.Add(UxBricks.Go("talk:sheet:" + companionId, UxBricks.T(h, "ux.talk.sheet"), () => h.OpenPanel(UxPanelId.People, companionId)));
@@ -180,7 +180,7 @@ namespace Game.Gameplay.UI
         /// Затвердження незворотне — лише з підтвердженням (UX-12); раніше
         /// кнопка одразу передавала ядру «підтверджено».
         /// </summary>
-        private static UxCard Growth(IUxHost h, string section)
+        internal static UxCard Growth(IUxHost h, string section)
         {
             var g = h.Gender;
             var st = h.PanelState;
@@ -191,6 +191,13 @@ namespace Game.Gameplay.UI
 
             card.Chips.Add(new UxChip(UkrainianText.Format("ui.buildplanner.points", g, "points", preview.PointsAvailable.ToString()),
                 preview.PointsAvailable > 0 ? UxTone.Own : UxTone.Neutral));
+            // Порожній стан навчає (UX-13): без очок і без плану — не десять сірих «+1» з однаковою
+            // причиною (знімок туру 06.10.2026), а одне речення, звідки беруться очки.
+            if (preview.PointsAvailable == 0 && st.Plan.IsEmpty)
+            {
+                card.Lines.Add(UxBricks.T(h, "ux.growth.no_points"));
+                return card;
+            }
             if (preview.PointsAvailable == 0) card.Lines.Add(UxBricks.T(h, "ui.buildplanner.no_points"));
             card.Lines.Add(ScreenText.BuildPlanResultText(preview.Status, g));
 
@@ -214,7 +221,7 @@ namespace Game.Gameplay.UI
                         r => r == BuildPlanStatus.Ok ? null : ScreenText.BuildPlanResultText(r, g), UxBricks.Female(h), out status);
                     if (outcome.Ok) st.Plan = new BuildPlan();
                     return outcome;
-                });
+                }).Calls(nameof(GameSession.CommitBuildPlan));
                 commit.Confirm = new UxConfirm(UxBricks.T(h, "ux.person.commit.question"), UxBricks.T(h, "ux.person.commit.verb"),
                     new[] { UxBricks.T(h, "ux.person.commit.loss") });
                 card.Actions.Add(commit);
@@ -247,6 +254,7 @@ namespace Game.Gameplay.UI
                 case UxPanelId.TrainingGround: return UxPlacePanels.TrainingGround(h);
                 case UxPanelId.MechanicsJournal: return UxPlacePanels.MechanicsJournal(h);
                 case UxPanelId.Station: return UxPlacePanels.Station(h, context);
+                case UxPanelId.HeroTent: return UxPlacePanels.HeroTent(h);
                 case UxPanelId.Talk: return UxTalkPanel.Build(h, context);
                 case UxPanelId.People:
                     return string.IsNullOrEmpty(context)

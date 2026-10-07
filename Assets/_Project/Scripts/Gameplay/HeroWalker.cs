@@ -89,6 +89,10 @@ namespace Game.Gameplay
         private float _camHomeSize;
         private Vector3 _camOffset;
         private float _zoom;
+        /// <summary>Поворот камери селом (Q/E, як у бою й у Wasteland 3 — Поправка №22.5): поточний і цільовий кут.</summary>
+        private Quaternion _camRotBase;
+        private float _yaw;
+        private float _yawTarget;
 
         private GUIStyle _labelStyle;
         private GUIStyle _nearStyle;
@@ -112,6 +116,7 @@ namespace Game.Gameplay
             {
                 _camHomePos = hubCamera.transform.position;
                 _camHomeSize = hubCamera.orthographicSize;
+                _camRotBase = hubCamera.transform.rotation;
                 // Точка землі в центрі кадру за замовчуванням: камера тримає той
                 // самий зсув від героя, що й від неї, — ракурс не міняється.
                 var forward = hubCamera.transform.forward;
@@ -145,6 +150,14 @@ namespace Game.Gameplay
                     else if (_shell.PendingExit && _inside != null) BeginExit();
                 }
                 if (!_shell.EscapeOpen && _transition == Transition.None) gait = MoveHero();
+                // Q/E — повернути камеру на 90° (той самий жест, що в бою; UX-17). У кімнаті не обертаємо: три стіни сірого каркаса.
+                if (!_ignoreRealInput && !_shell.EscapeOpen && _inside == null)
+                {
+                    if (Input.GetKeyDown(KeyCode.Q)) _yawTarget = CameraOrbit.Turn(_yawTarget, -1);
+                    else if (Input.GetKeyDown(KeyCode.E)) _yawTarget = CameraOrbit.Turn(_yawTarget, +1);
+                }
+                int turn = _shell.ConsumeCameraTurn();
+                if (turn != 0 && _inside == null) _yawTarget = CameraOrbit.Turn(_yawTarget, turn);
                 var near = VillagePlaces.Nearest(_places, Here());
                 _shell.SetNearbyPlace(near);
                 if (_pendingInteract != null && near != null && near.Id == _pendingInteract && _pathIndex >= _path.Count)
@@ -161,6 +174,7 @@ namespace Game.Gameplay
                 _path.Clear();
                 _pathIndex = 0;
                 _pendingInteract = null;
+                _shell.HoveredPlaceId = null;
             }
 
             var anim = ActiveAnimation();
@@ -194,6 +208,8 @@ namespace Game.Gameplay
             }
 
             bool real = !_ignoreRealInput && !PlaytestLog.NoteOpen; // тестер пише нотатку — WASD не веде героя
+            // Наведення — лише поки курсор справді над місцем (IWorldInput.HoveredPlaceId); рух клавішами нижче виходить раніше.
+            _shell.HoveredPlaceId = null;
             bool run = real && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
             float ix = !real ? 0f : (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
                        - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
@@ -216,6 +232,7 @@ namespace Game.Gameplay
             }
 
             _hovered = real && !PointerOverUi() ? PickUnderMouse() : null;
+            _shell.HoveredPlaceId = _hovered != null ? _hovered.Id : null;
             if (real && Input.GetMouseButtonDown(0) && !PointerOverUi())
             {
                 if (_hovered != null)
@@ -232,11 +249,17 @@ namespace Game.Gameplay
                 }
             }
 
-            string request = _shell.ConsumeWalkRequest();
+            bool interactOnArrival;
+            string request = _shell.ConsumeWalkRequest(out interactOnArrival);
             if (request != null)
             {
                 var place = VillagePlaces.Find(_places, request);
-                if (place != null) StartPath(pos, new WalkPoint(place.X, place.Z), false);
+                if (place != null)
+                {
+                    StartPath(pos, new WalkPoint(place.X, place.Z), false);
+                    // IWorldInput.RequestEnter(…, quick: false): дійти до дверей і зайти, як клік по будівлі.
+                    _pendingInteract = interactOnArrival ? place.Id : null;
+                }
                 _lastRequest = request + (place == null ? " (місця немає)" : " (шлях " + _path.Count + ")");
                 if (place == null || _path.Count == 0)
                     Debug.LogWarning("[Село] запит «" + request + "» не дав шляху: " + _lastRequest);
@@ -397,16 +420,17 @@ namespace Game.Gameplay
                 WalkPoint at;
                 if (station.PostId != null && postAnchors.TryGetValue(station.PostId, out at)) openAir[station.Id] = at;
             }
-            WalkPoint? board = null, training = null;
+            WalkPoint? board = null, training = null, tent = null;
             if (landmarksRoot != null)
                 foreach (Transform child in landmarksRoot)
                 {
                     if (child.name == "place:" + VillagePlaces.NoticeBoardId) board = new WalkPoint(child.position.x, child.position.z);
                     else if (child.name == "place:" + VillagePlaces.TrainingGroundId) training = new WalkPoint(child.position.x, child.position.z);
+                    else if (child.name == "place:" + VillagePlaces.HeroTentId) tent = new WalkPoint(child.position.x, child.position.z);
                 }
 
             _places.AddRange(VillagePlaces.BuildVillage(plots, openAir, board, training,
-                id => { bool built; return UxBricks.Stage(city, id, out built); }));
+                id => { bool built; return UxBricks.Stage(city, id, out built); }, tent));
 
             foreach (var spot in VillagePeople.Arrange(roster, PostFigures(), IdleSpots()))
                 _places.Add(VillagePlaces.Person(spot.CompanionId, spot.X, spot.Z));
@@ -682,6 +706,11 @@ namespace Game.Gameplay
         {
             if (!_camReady || hubCamera == null || !hubCamera.isActiveAndEnabled) return;
 
+            float k = 1f - Mathf.Exp(-6f * Time.deltaTime);
+            _yaw = CameraOrbit.Approach(_yaw, exploring && _inside == null ? _yawTarget : 0f, k);
+            var orbit = Quaternion.Euler(0f, _yaw, 0f);
+            hubCamera.transform.rotation = orbit * _camRotBase;
+
             Vector3 targetPos;
             float targetSize;
             if (exploring)
@@ -689,7 +718,7 @@ namespace Game.Gameplay
                 float wheel = _ignoreRealInput ? 0f : Input.mouseScrollDelta.y;
                 if (Mathf.Abs(wheel) > 0.01f && !PointerOverUi() && _inside == null)
                     _zoom = Mathf.Clamp(_zoom - wheel * 0.8f, minZoom, maxZoom);
-                targetPos = transform.position + _camOffset;
+                targetPos = transform.position + orbit * _camOffset;
                 targetSize = _inside != null ? interiorZoom : _zoom;
             }
             else
@@ -698,7 +727,6 @@ namespace Game.Gameplay
                 targetSize = _camHomeSize;
             }
 
-            float k = 1f - Mathf.Exp(-6f * Time.deltaTime);
             hubCamera.transform.position = Vector3.Lerp(hubCamera.transform.position, targetPos, k);
             hubCamera.orthographicSize = Mathf.Lerp(hubCamera.orthographicSize, targetSize, k);
         }
@@ -707,7 +735,10 @@ namespace Game.Gameplay
         private void SnapCamera()
         {
             if (!_camReady || hubCamera == null) return;
-            hubCamera.transform.position = transform.position + _camOffset;
+            if (_inside != null) _yaw = 0f;
+            var orbit = Quaternion.Euler(0f, _yaw, 0f);
+            hubCamera.transform.rotation = orbit * _camRotBase;
+            hubCamera.transform.position = transform.position + orbit * _camOffset;
             hubCamera.orthographicSize = _inside != null ? interiorZoom : _zoom;
         }
 

@@ -32,7 +32,9 @@ namespace Game.Gameplay.UI
         /// <summary>Розмова з людиною на її місці (власник, 30.09.2026: «поговорити з персонажем»).</summary>
         Talk,
         /// <summary>Станція в будівлі або просто неба; контекст — id станції (<c>BuildingCatalog</c>).</summary>
-        Station
+        Station,
+        /// <summary>Намет героя біля Віча (Поправка №22): розвиток героя — місце у світі.</summary>
+        HeroTent
     }
 
     /// <summary>Опис панелі: заголовок (ключ тексту), клавіша, стара вкладка хаба, слаг знімка автотуру.</summary>
@@ -79,7 +81,8 @@ namespace Game.Gameplay.UI
             new UxPanelInfo(UxPanelId.TrainingGround,   "training_ground",   null,  8),
             new UxPanelInfo(UxPanelId.Save,             "save",              null,  9),
             new UxPanelInfo(UxPanelId.MechanicsJournal, "mechanics_journal", "F10", 10),
-            new UxPanelInfo(UxPanelId.Chronicle,        "chronicle",         "L",   -1),
+            // Хроніка (L) — за треком HUD; клавіші немає, доки панель порожня (UX-10).
+            new UxPanelInfo(UxPanelId.Chronicle,        "chronicle",         null,  -1),
             new UxPanelInfo(UxPanelId.Workbench,        "workbench",         null,  -1),
             new UxPanelInfo(UxPanelId.BuildingCard,     "building_card",     null,  -1),
             new UxPanelInfo(UxPanelId.PlotCard,         "plot_card",         null,  -1),
@@ -87,6 +90,7 @@ namespace Game.Gameplay.UI
             new UxPanelInfo(UxPanelId.CouncilTable,     "council_table",     null,  -1),
             new UxPanelInfo(UxPanelId.Talk,             "talk",              null,  -1),
             new UxPanelInfo(UxPanelId.Station,          "station",           null,  -1),
+            new UxPanelInfo(UxPanelId.HeroTent,         "hero_tent",         null,  -1),
         };
 
         public static IReadOnlyList<UxPanelInfo> All => Entries;

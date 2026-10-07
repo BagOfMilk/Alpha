@@ -20,23 +20,37 @@ namespace Game.Gameplay
     /// немає. Моделі панелей — чисті (<c>UI/Models/Ux*</c>), тут лише
     /// керування шарами, введення і виклик рендера.
     /// </summary>
-    public sealed partial class GameShell : IUxHost, IUxRenderHost
+    public sealed partial class GameShell : IUxHost, IUxRenderHost, IWorldInput
     {
         // Стиль тосту кешується: OnGUI кличеться кілька разів на кадр, а new GUIStyle
         // щоразу — зайве сміття для збирача (Статут PERF-01).
         private GUIStyle _toastStyle;
         private GUIStyle ToastStyle => _toastStyle ?? (_toastStyle = new GUIStyle(AlphaSkin.Body) { wordWrap = true, alignment = TextAnchor.MiddleCenter });
 
-        private readonly UxLayerState _layers = new UxLayerState();
         private readonly UxPanelState _panelState = new UxPanelState();
         private readonly UxInlineRefusals _refusals = new UxInlineRefusals();
         private readonly UxPanelView _panelView = new UxPanelView();
         private UxToastQueue _toasts;
-        private string _panelContext;
+        private UxInputCore _ux;
 
-        private UxConfirm _pendingConfirm;
-        private Func<UxOutcome> _pendingConfirmRun;
-        private string _pendingConfirmActionId;
+        /// <summary>
+        /// Шари, панель і підтвердження — у спільній чистій моделі (<see cref="UxInputCore"/>):
+        /// людина, автотур і headless-бот кличуть ті самі методи (Поправка №22, паритет входу).
+        /// </summary>
+        public UxInputCore Ux
+        {
+            get
+            {
+                if (_ux != null) return _ux;
+                _ux = new UxInputCore(this);
+                _ux.Reported += Report;
+                _ux.Opened += _refusals.Clear;
+                return _ux;
+            }
+        }
+
+        /// <summary>Вхід у панелі для автотуру (UI-14) — той самий, що клік.</summary>
+        public IUxInput UxInput => Ux;
 
         /// <summary>Огляд міста (Tab): підписи всіх місць зі станом (UX_DESIGN §3.6).</summary>
         public bool Overview { get; private set; }
@@ -47,20 +61,35 @@ namespace Game.Gameplay
         /// <summary>«Лялька» спорядження й кузня (клавіша I, Поправка №19.3) — екран на UI Toolkit.</summary>
         public bool InventoryOpen { get; set; }
 
-        public UxPanelId OpenPanelId => _layers.OpenPanel;
-        public string OpenPanelContext => _panelContext;
+        public UxPanelId OpenPanelId => Ux.OpenPanel;
+        public string OpenPanelContext => Ux.Context;
 
         /// <summary>Герой у кімнаті будівлі: id будівлі або null (село).</summary>
-        public string InteriorBuildingId => _layers.InteriorId;
+        public string InteriorBuildingId => Ux.Layers.InteriorId;
 
         /// <summary>Запит «увійти» / «вийти» для HeroWalker (той веде героя і перемикає розташування).</summary>
         public string PendingEnter { get; private set; }
         public bool PendingExit { get; private set; }
 
         /// <summary>Модель відкритої панелі (для автотуру: знайти дію за id).</summary>
-        public UxPanelModel CurrentPanelModel()
+        public UxPanelModel CurrentPanelModel() => Ux.CurrentModel();
+
+        // ===================== IWorldInput =====================
+
+        /// <summary>Місце під курсором — пише HeroWalker.</summary>
+        public string HoveredPlaceId { get; set; }
+        public bool InInterior => Ux.Layers.InInterior;
+        string IWorldInput.InteriorId => InteriorBuildingId;
+
+        /// <summary>Увійти: швидко (затемнення одразу) або пішки до дверей і увійти, як клік по будівлі.</summary>
+        public void RequestEnter(string buildingId, bool quick)
         {
-            return _layers.OpenPanel == UxPanelId.None ? null : UxPanelFactory.Build(this, _layers.OpenPanel, _panelContext);
+            // Як клік по дверях: лише зведена вхідна будівля і лише з села (огляд 06.10.2026 —
+            // швидкий вхід інакше заводив у кімнату незведеної будівлі чи з однієї кімнати в іншу).
+            var building = BuildingCatalog.Get(buildingId);
+            if (building == null || !building.Enterable || InInterior || !UxBricks.IsBuilt(Session.GetCityView(), buildingId)) return;
+            if (quick) RequestEnter(buildingId);
+            else RequestWalkTo(VillagePlaces.BuildingPrefix + buildingId, interactOnArrival: true);
         }
 
         // ===================== IUxHost =====================
@@ -68,14 +97,7 @@ namespace Game.Gameplay
         Gender IUxHost.Gender => ProtagonistGender;
         public UxPanelState PanelState => _panelState;
 
-        public void OpenPanel(UxPanelId panel, string context)
-        {
-            if (panel == UxPanelId.None) { ClosePanel(); return; }
-            _layers.OpenPanelOf(panel);
-            _panelContext = context;
-            _refusals.Clear();
-            ClearPendingConfirm();
-        }
+        public void OpenPanel(UxPanelId panel, string context) => Ux.Open(panel, context);
 
         public void WalkTo(string placeId)
         {
@@ -134,7 +156,8 @@ namespace Game.Gameplay
             Session = fresh;
             ProtagonistGender = Session.GetProtagonistCreationView()?.Gender ?? ProtagonistGender;
             _panelState.Reset();
-            _layers.ExitInterior();
+            Ux.ClosePanel();
+            Ux.Layers.ExitInterior();
             _persistedAutosaveVersion = Session.AutosaveVersion;
             SetEscapeOpen(false);
             FeedVillageStage();
@@ -148,55 +171,42 @@ namespace Game.Gameplay
         bool IUxRenderHost.Female => ProtagonistGender == Gender.Female;
         UxInlineRefusals IUxRenderHost.Refusals => _refusals;
 
-        public void RunAction(UxAction action)
-        {
-            if (action == null) return;
-            if (action.Confirm != null)
-            {
-                _pendingConfirm = action.Confirm;
-                _pendingConfirmActionId = action.Id;
-                var captured = action;
-                _pendingConfirmRun = () => UxCommandRunner.Invoke(captured, Session.State, ProtagonistGender == Gender.Female);
-                _layers.AskConfirm();
-                return;
-            }
-            Report(action.Id, UxCommandRunner.Invoke(action, Session.State, ProtagonistGender == Gender.Female));
-        }
+        public void RunAction(UxAction action) => Ux.Run(action);
 
-        /// <summary>Дія автотуру за id у відкритій панелі — той самий шлях, що клік (UI-14).</summary>
+        /// <summary>
+        /// Дія автотуру за id у відкритій панелі — той самий шлях, що клік (UI-14).
+        /// Незворотну дію автотур підтверджує явно (<paramref name="confirm"/>) —
+        /// той самий крок, що кнопка діалогу.
+        /// </summary>
         public UxOutcome InvokePanelAction(string actionId, bool confirm = true)
         {
-            var model = CurrentPanelModel();
-            if (model == null) return UxOutcome.Refused(null);
-            foreach (var card in model.Cards)
-                foreach (var a in card.Actions)
-                    if (a.Id == actionId)
-                    {
-                        // Підтвердження автотур дає явно (confirm) — той самий крок, що кнопка діалогу.
-                        if (a.Confirm != null && !confirm) return UxOutcome.Refused(null);
-                        var outcome = UxCommandRunner.Invoke(a, Session.State, ProtagonistGender == Gender.Female);
-                        Report(a.Id, outcome);
-                        return outcome;
-                    }
-            return UxOutcome.Refused(null);
+            var outcome = Ux.Invoke(actionId);
+            if (!outcome.AwaitingConfirm) return outcome;
+            if (!confirm) { Ux.CancelConfirm(); return UxOutcome.Refused(null); }
+            return Ux.Confirm();
         }
 
         public void Link(string placeId) => WalkTo(placeId);
 
-        public void ClosePanel()
+        /// <summary>
+        /// «У головне меню» (UX_DESIGN §5.10, §5.14): оболонка відкидає поточну
+        /// сесію і створює свіжу в стані «Титул» — як на старті гри. Ядро не
+        /// змінюється. Незбережене — лише після підтвердження в меню паузи.
+        /// </summary>
+        public void ReturnToTitle()
         {
-            _layers.ClosePanel();
-            _panelContext = null;
-            ClearPendingConfirm();
+            SetEscapeOpen(false);
+            Ux.ClosePanel();
+            Ux.Layers.ExitInterior();
+            _panelState.Reset();
+            _scene.Begin(null);
+            Session = new GameSession(_roller);
+            _persistedAutosaveVersion = Session.AutosaveVersion;
+            LastMessage = string.Empty;
+            FeedVillageStage();
         }
 
-        public void DrawExtras(UxPanelId panel)
-        {
-            if (panel != UxPanelId.Veche) return;
-            // Полонені (№14.2) і «наші в полоні» (№14.7) — долю вирішує віче.
-            PrisonersPanel.Draw(this, ProtagonistGender);
-            CaptivesPanel.Draw(this, ProtagonistGender);
-        }
+        public void ClosePanel() => Ux.ClosePanel();
 
         private void Report(string actionId, UxOutcome outcome)
         {
@@ -226,10 +236,7 @@ namespace Game.Gameplay
         public void AskConfirm(UxConfirm confirm, Action run)
         {
             if (confirm == null || run == null) return;
-            _pendingConfirm = confirm;
-            _pendingConfirmActionId = "confirm";
-            _pendingConfirmRun = () => { run(); return UxOutcome.Success(); };
-            _layers.AskConfirm();
+            Ux.Ask(confirm, "confirm", () => { run(); return UxOutcome.Success(); });
         }
 
         /// <summary>
@@ -240,12 +247,12 @@ namespace Game.Gameplay
         {
             var g = ProtagonistGender;
             float w = Screen.width, h = Screen.height;
-            if (_layers.OpenPanel != UxPanelId.None)
+            if (Ux.OpenPanel != UxPanelId.None)
             {
                 var frame = HudLayout.For(w, h);
                 float top = ToolkitHudActive ? frame.Header.Y + frame.Header.Height + 8f : 80f;
                 var panelRect = new Rect(16f, top, Math.Max(360f, Math.Min(w * 0.55f, w - 48f)), Math.Max(200f, h - top - 24f));
-                _panelView.Draw(panelRect, UxPanelFactory.Build(this, _layers.OpenPanel, _panelContext), _panelContext, this, g);
+                _panelView.Draw(panelRect, Ux.CurrentModel(), Ux.Context, this, g);
             }
             string toast = _toasts != null ? _toasts.Current : null;
             if (!string.IsNullOrEmpty(toast))
@@ -256,15 +263,7 @@ namespace Game.Gameplay
                 Widgets.SolidRect(toastRect, AlphaSkin.BgDark);
                 GUI.Label(toastRect, toast, style);
             }
-            if (_layers.ConfirmPending && _pendingConfirm != null) DrawConfirm(g);
-        }
-
-        private void ClearPendingConfirm()
-        {
-            _pendingConfirm = null;
-            _pendingConfirmRun = null;
-            _pendingConfirmActionId = null;
-            _layers.ResolveConfirm();
+            if (Ux.ConfirmPending) DrawConfirm(g);
         }
 
         // ===================== світ: місця, вхід, вихід =====================
@@ -300,7 +299,7 @@ namespace Game.Gameplay
 
         public void RequestExit()
         {
-            if (!_layers.InInterior) return;
+            if (!Ux.Layers.InInterior) return;
             ClosePanel();
             PendingExit = true;
         }
@@ -309,26 +308,29 @@ namespace Game.Gameplay
         public void MarkInterior(string buildingId)
         {
             PendingEnter = null;
-            _layers.EnterInterior(buildingId);
+            Ux.Layers.EnterInterior(buildingId);
         }
 
         public void MarkVillage()
         {
             PendingExit = false;
             PendingEnter = null;
-            _layers.ExitInterior();
+            Ux.Layers.ExitInterior();
         }
 
         // ===================== клавіші =====================
 
-        /// <summary>Клавіші шару місць (UX_DESIGN §3.6): E, Tab, N, C, J, F10, F1. Кожна — одного власника (UxKeyMap).</summary>
+        /// <summary>
+        /// Клавіші шару місць (UX_DESIGN §3.6): F, Tab, N, C, J, F10, F1, Enter. Кожна — одного власника (UxKeyMap).
+        /// Взаємодія — F (Поправка №22.5): Q/E обертають камеру, як у бою й у Wasteland 3 (UX-17).
+        /// </summary>
         private bool HandleWorldKeys(Event evt)
         {
             if (evt == null || evt.type != EventType.KeyDown || !CanExplore || PlaytestLog.NoteOpen) return false;
-            if (_layers.ConfirmPending) return false;
+            if (Ux.ConfirmPending) return false;
             switch (evt.keyCode)
             {
-                case KeyCode.E:
+                case KeyCode.F:
                     if (NearbyPlace == null) return false;
                     InteractNearby();
                     return true;
@@ -344,22 +346,28 @@ namespace Game.Gameplay
                     return true;
                 case KeyCode.F10: TogglePanel(UxPanelId.MechanicsJournal); return true;
                 case KeyCode.F1: KeysHelpOpen = !KeysHelpOpen; return true;
+                case KeyCode.Return:
+                case KeyCode.KeypadEnter:
+                    // Головна кнопка фази (HP-2, Поправка №22): лише коли зверху світ — з панелі Enter не стартує день.
+                    if (Ux.OpenPanel != UxPanelId.None) return false;
+                    RequestStartDay();
+                    return true;
                 default: return false;
             }
         }
 
         private void TogglePanel(UxPanelId panel)
         {
-            if (_layers.OpenPanel == panel) ClosePanel();
+            if (Ux.OpenPanel == panel) ClosePanel();
             else OpenPanel(panel, null);
         }
 
         /// <summary>Esc спершу знімає підтвердження, потім панель, довідку; і лише тоді — пауза. З будівлі Esc не виводить.</summary>
         private bool EscapeClosesLayer()
         {
-            if (_layers.ConfirmPending) { ClearPendingConfirm(); return true; }
+            if (Ux.ConfirmPending) { Ux.CancelConfirm(); return true; }
             if (InventoryOpen) { InventoryOpen = false; return true; }
-            if (_layers.OpenPanel != UxPanelId.None) { ClosePanel(); return true; }
+            if (Ux.OpenPanel != UxPanelId.None) { ClosePanel(); return true; }
             if (KeysHelpOpen) { KeysHelpOpen = false; return true; }
             return false;
         }
@@ -408,12 +416,11 @@ namespace Game.Gameplay
             float barW = Math.Min(w - 32f, 1100f);
             var bar = new Rect((w - barW) * 0.5f, h - barH - 6f, barW, barH);
 
-            if (_layers.OpenPanel != UxPanelId.None)
+            if (Ux.OpenPanel != UxPanelId.None)
             {
                 float panelW = Math.Min(w * 0.55f, w - rightReserve - 32f);
                 var panelRect = new Rect(16f, top, Math.Max(360f, panelW), Math.Max(200f, bar.y - top - 8f));
-                var model = UxPanelFactory.Build(this, _layers.OpenPanel, _panelContext);
-                _panelView.Draw(panelRect, model, _panelContext, this, g);
+                _panelView.Draw(panelRect, Ux.CurrentModel(), Ux.Context, this, g);
                 ExploreUiRects.Add(panelRect);
             }
 
@@ -431,7 +438,7 @@ namespace Game.Gameplay
             }
 
             if (KeysHelpOpen) DrawKeysHelp(g);
-            if (_layers.ConfirmPending && _pendingConfirm != null) DrawConfirm(g);
+            if (Ux.ConfirmPending) DrawConfirm(g);
         }
 
         private void DrawWorldBar(Rect bar, Gender g)
@@ -448,17 +455,17 @@ namespace Game.Gameplay
             }
             else
             {
-                GUILayout.Label(UkrainianText.Get(_layers.InInterior ? "ux.world.inside_hint" : "ux.world.nothing_near", g), AlphaSkin.Tooltip);
+                GUILayout.Label(UkrainianText.Get(Ux.Layers.InInterior ? "ux.world.inside_hint" : "ux.world.nothing_near", g), AlphaSkin.Tooltip);
             }
 
             GUILayout.BeginHorizontal();
-            if (_layers.InInterior && Widgets.SecondaryButton(UkrainianText.Get("ux.world.exit", g), GUILayout.ExpandWidth(false)))
+            if (Ux.Layers.InInterior && Widgets.SecondaryButton(UkrainianText.Get("ux.world.exit", g), GUILayout.ExpandWidth(false)))
                 RequestExit();
             if (Widgets.SecondaryButton(UkrainianText.Get("ux.world.people", g), GUILayout.ExpandWidth(false))) TogglePanel(UxPanelId.People);
             if (Widgets.SecondaryButton(UkrainianText.Get("ux.world.journal", g), GUILayout.ExpandWidth(false))) TogglePanel(UxPanelId.Journal);
             if (Widgets.SecondaryButton(UkrainianText.Get("ux.world.duty", g), GUILayout.ExpandWidth(false))) TogglePanel(UxPanelId.DutyBoard);
             GUILayout.FlexibleSpace();
-            if (Widgets.PrimaryButton(UkrainianText.Get("ui.start_day", g), GUILayout.ExpandWidth(false)))
+            if (Widgets.PrimaryButton(UkrainianText.Get("ux.world.start_day", g), GUILayout.ExpandWidth(false)))
                 RequestStartDay();
             GUILayout.EndHorizontal();
             GUILayout.Label(UkrainianText.Get("ux.world.keys", g), AlphaSkin.HintLine);
@@ -487,21 +494,15 @@ namespace Game.Gameplay
 
         private void DrawConfirm(Gender g)
         {
-            var confirm = _pendingConfirm;
+            var confirm = Ux.PendingConfirm;
             Widgets.Modal(confirm.Question, () =>
             {
                 foreach (var loss in confirm.Losses)
                     GUILayout.Label("— " + loss, AlphaSkin.Body);
                 GUILayout.Space(12f);
                 GUILayout.BeginHorizontal();
-                if (Widgets.PrimaryButton(UkrainianText.Get("ux.common.cancel", g))) ClearPendingConfirm();
-                if (Widgets.DangerButton(confirm.ConfirmVerb))
-                {
-                    var run = _pendingConfirmRun;
-                    string id = _pendingConfirmActionId;
-                    ClearPendingConfirm();
-                    if (run != null) Report(id, run());
-                }
+                if (Widgets.PrimaryButton(UkrainianText.Get("ux.common.cancel", g))) Ux.CancelConfirm();
+                if (Widgets.DangerButton(confirm.ConfirmVerb)) Ux.Confirm();
                 GUILayout.EndHorizontal();
             });
         }
@@ -510,7 +511,7 @@ namespace Game.Gameplay
         {
             Widgets.Modal(UkrainianText.Get("ux.keys.title", g), () =>
             {
-                foreach (var key in new[] { "ux.keys.move", "ux.keys.click", "ux.keys.e", "ux.keys.tab", "ux.keys.panels", "ux.keys.esc", "ux.keys.f10" })
+                foreach (var key in new[] { "ux.keys.move", "ux.keys.click", "ux.keys.e", "ux.keys.enter", "ux.keys.tab", "ux.keys.panels", "ux.keys.esc", "ux.keys.f10" })
                     GUILayout.Label(UkrainianText.Get(key, g), AlphaSkin.Body);
                 GUILayout.Space(8f);
                 if (Widgets.PrimaryButton(UkrainianText.Get("ux.common.close", g))) KeysHelpOpen = false;
@@ -528,17 +529,15 @@ namespace Game.Gameplay
         {
             var warnings = UxPreflight.Check(Session, ProtagonistGender);
             if (warnings.Count == 0) { StartDayNow(); return; }
-            _pendingConfirm = new UxConfirm(UkrainianText.Get("ux.preflight.question", ProtagonistGender),
-                UkrainianText.Get("ux.preflight.verb", ProtagonistGender), warnings);
-            _pendingConfirmActionId = "start_day";
-            _pendingConfirmRun = () => { StartDayNow(); return UxOutcome.Success(); };
-            _layers.AskConfirm();
+            Ux.Ask(new UxConfirm(UkrainianText.Get("ux.preflight.question", ProtagonistGender),
+                UkrainianText.Get("ux.preflight.verb", ProtagonistGender), warnings),
+                "start_day", () => { StartDayNow(); return UxOutcome.Success(); });
         }
 
         private void StartDayNow()
         {
             ClosePanel();
-            if (_layers.InInterior) RequestExit();
+            if (Ux.Layers.InInterior) RequestExit();
             TryRun(() => StartDay(Session));
         }
 
@@ -549,12 +548,6 @@ namespace Game.Gameplay
         /// людина застрягала на першому ранку (аудит журналу 25.09.2026). І
         /// кнопка, і водій автотуру йдуть через цей метод.
         /// </summary>
-        public static void StartDay(GameSession s)
-        {
-            if (s.State == SessionState.Morning || s.State == SessionState.FreePlay)
-                s.ConfirmMorning();
-            if (s.State == SessionState.Day)
-                s.AdvanceDay();
-        }
+        public static void StartDay(GameSession s) => UxPhaseButton.StartDay(s);
     }
 }

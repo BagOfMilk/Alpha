@@ -396,7 +396,7 @@ namespace Game.Gameplay
                     {
                         string companionId = kv.Key;
                         string slotId = kv.Value;
-                        Run(() => Session.Assign(companionId, slotId));
+                        WorldAssign(companionId, slotId);
                     }
 
                     MaybeOrderBuilding(day);
@@ -632,11 +632,7 @@ namespace Game.Gameplay
                         // у HubScreen.DrawQuestOffer) — перезапит ЦІЄЇ лінії
                         // просто ПЕРЕД ResolveQuestChoice синхронізує вказівник
                         // назад на неї, бо нижче ми так само запитуємо Максимову.
-                        Run(() =>
-                        {
-                            Session.OfferQuestStage(DefaultQuests.HafiyaId);
-                            Session.ResolveQuestChoice(chosen);
-                        });
+                        WorldQuestChoice(DefaultQuests.HafiyaId, chosen, checkStage: false);
                     }
 
                     // Максимова квестова глава арки «Не за кров» (Поправка
@@ -658,11 +654,7 @@ namespace Game.Gameplay
                         for (int i = 0; i < maksymQuest.Options.Count; i++)
                             if (maksymQuest.Options[i].HasCandidate) { idx = i; break; }
                         int chosen = idx;
-                        Run(() =>
-                        {
-                            Session.OfferQuestStage(DefaultQuests.MaksymCh1Id);
-                            Session.ResolveQuestChoice(chosen);
-                        });
+                        WorldQuestChoice(DefaultQuests.MaksymCh1Id, chosen, checkStage: false);
                     }
 
                     // Той самий захист, що на вході блоку: якщо котрийсь із
@@ -859,7 +851,7 @@ namespace Game.Gameplay
                         {
                             string companionId = kv.Key;
                             string slotId = kv.Value;
-                            Run(() => Session.Assign(companionId, slotId));
+                            WorldAssign(companionId, slotId);
                         }
 
                         // §CLAUDE.md "Приймання клапана": стройка/рада/крафт
@@ -1182,13 +1174,15 @@ namespace Game.Gameplay
                 string arg = order.Arg;
                 switch (order.Kind)
                 {
-                    case JournalCouncilOrderKind.Build: Run(() => Session.OrderBuilding(arg)); break;
-                    case JournalCouncilOrderKind.Raid: Run(() => Session.OrderRaid()); break;
-                    case JournalCouncilOrderKind.Settlers: Run(() => Session.OrderSettlers()); break;
-                    case JournalCouncilOrderKind.PrepareThreat: Run(() => Session.OrderPrepareThreat()); break;
-                    case JournalCouncilOrderKind.OutfitExpedition: Run(() => Session.OrderOutfitExpedition(arg)); break;
-                    case JournalCouncilOrderKind.Decree: Run(() => Session.OrderDecree(arg)); break;
-                    case JournalCouncilOrderKind.Diplomacy: Run(() => Session.OrderDiplomacy(arg)); break;
+                    // Ті самі дії, що в людини: ділянка — «Замовити», Віче — облава, прибульці, підготовка;
+                    // Стіл ради в Залі — спорядження, указ, посольство (Поправка №22).
+                    case JournalCouncilOrderKind.Build: World(UxPanelId.PlotCard, arg, "order:" + arg); break;
+                    case JournalCouncilOrderKind.Raid: World(UxPanelId.Veche, Walk.BuildingCatalog.VecheStation, "raid"); break;
+                    case JournalCouncilOrderKind.Settlers: World(UxPanelId.Veche, Walk.BuildingCatalog.VecheStation, "settlers"); break;
+                    case JournalCouncilOrderKind.PrepareThreat: World(UxPanelId.Veche, Walk.BuildingCatalog.VecheStation, "prepare_threat"); break;
+                    case JournalCouncilOrderKind.OutfitExpedition: World(UxPanelId.CouncilTable, "council_table", "outfit:" + arg); break;
+                    case JournalCouncilOrderKind.Decree: World(UxPanelId.CouncilTable, "council_table", "decree:" + arg); break;
+                    case JournalCouncilOrderKind.Diplomacy: World(UxPanelId.CouncilTable, "council_table", "diplomacy:" + arg); break;
                 }
             }
         }
@@ -1213,7 +1207,7 @@ namespace Game.Gameplay
                                 foreach (var c in roster.Companions)
                                 {
                                     string companionId = c.Id;
-                                    bool ok = Run(() => Session.Equip(companionId, instanceId, slot));
+                                    bool ok = World(UxPanelId.Stash, "stash", "equip:" + instanceId + ":" + companionId);
                                     if (ok) { done = true; break; }
                                 }
                             if (done) { _jEquipped = true; break; }
@@ -1225,8 +1219,7 @@ namespace Game.Gameplay
                         foreach (var item in Session.GetStash())
                         {
                             string instanceId = item.InstanceId;
-                            var result = Run(() => Session.CraftUpgrade(instanceId));
-                            if (result == Game.Core.Items.CraftResult.Success) { _jCrafted = true; break; }
+                            if (World(UxPanelId.Workbench, "workbench", "craft:" + instanceId)) { _jCrafted = true; break; }
                         }
                     }
                 }
@@ -1235,7 +1228,8 @@ namespace Game.Gameplay
             if (!_jTrained)
             {
                 _jTrained = true; // ставимо ДО виклику: NewTrainingBattle сама лишає партію в тій самій фазі (SuspendReason.TrainingSkirmish), повторний виклик того самого ранку — без потреби.
-                Run(() => Session.NewTrainingBattle(new TrainingBattleOptions { HitRule = HitRuleKind.Threshold }));
+                // Тренувальний майданчик у селі — та сама дія, що в людини (правило влучання — партії, як на майданчику).
+                World(UxPanelId.TrainingGround, Walk.VillagePlaces.TrainingGroundId, "training");
             }
 
             if (!_jSaved)
@@ -1287,12 +1281,7 @@ namespace Game.Gameplay
             var approach = delve ? ExpeditionApproach.Delve : ExpeditionApproach.Quiet;
             var party = new List<string> { GameSession.ProtagonistId, "zakhar" };
 
-            var preview = Run(() => Session.PreviewExpedition(siteId, approach, party));
-            if (preview == null) return;
-            int days = preview.Days;
-            // M1.6 (Поправка №8.3): заступників на звільнені пости обирає водій, як гравець у зборах.
-            var deputies = Game.Core.Session.Bots.BotSupport.ChooseDeputies(Session.GetMusterView(party));
-            Run(() => Session.DepartExpedition(siteId, approach, party, days, deputies));
+            if (!WorldDepart(siteId, approach, party)) return;
             _jNextDelve = !delve;
         }
 
@@ -1346,11 +1335,89 @@ namespace Game.Gameplay
                     if (offer.Options[i].HasCandidate) { chosen = i; any = true; break; }
                 if (!any) return; // жоден варіант недоступний — кнопки неактивні, як і в людини
             }
-            Run(() =>
-            {
-                Session.OfferQuestStage(questId);
-                Session.ResolveQuestChoice(chosen);
-            });
+            WorldQuestChoice(questId, chosen, checkStage: offer.Options == null || offer.Options.Count == 0);
+        }
+
+        // ===================== світ: дії місць через IUxInput (Поправка №22) =====================
+
+        /// <summary>
+        /// Дія місця у світі тим самим входом, що й людина (<see cref="IUxInput"/>): відкрити панель
+        /// місця, виконати дію за id, незворотну — підтвердити. Борг змагального огляду 06.10.2026:
+        /// раніше водій кликав ядро напряму й не помічав, якщо місце у світі дію втратило, — тур
+        /// проходив там, де людина застрягла б. Відмова — у лог туру.
+        /// </summary>
+        private bool World(UxPanelId panel, string context, string actionId)
+        {
+            var input = _shell.UxInput;
+            input.TryOpen(panel, context);
+            var outcome = input.Invoke(actionId);
+            if (outcome.AwaitingConfirm) outcome = input.Confirm();
+            input.ClosePanel();
+            if (!outcome.Ok)
+                _host.Log("  світ: «" + actionId + "» (" + panel + ") — " +
+                          (string.IsNullOrEmpty(outcome.Refusal) ? "такої дії в панелі місця немає" : outcome.Refusal));
+            return outcome.Ok;
+        }
+
+        /// <summary>Поставити людину на пост — на станції цього поста (картка поста), як людина.</summary>
+        private bool WorldAssign(string companionId, string slotId)
+        {
+            var station = Walk.BuildingCatalog.StationOfPost(slotId);
+            if (station == null) { _host.Log("  світ: пост «" + slotId + "» без станції"); return false; }
+            return World(station.Panel, station.Id, "assign:" + slotId + ":" + companionId);
+        }
+
+        /// <summary>
+        /// Крок квесту дією картки Дошки оголошень (вибір <paramref name="chosen"/> або «Спробувати/Підтвердити»
+        /// на етапі-перевірці). Пропозицію ядра водій лише читає, щоб обрати, — дію виконує картка.
+        /// </summary>
+        private bool WorldQuestChoice(string questId, int chosen, bool checkStage)
+        {
+            _shell.PanelState.Quests.Invalidate(questId); // свіжа пропозиція етапу перед кліком, як у людини після вибору
+            return World(UxPanelId.NoticeBoard, Walk.VillagePlaces.NoticeBoardId,
+                "quest:" + questId + ":" + (checkStage ? "check" : chosen.ToString()));
+        }
+
+        /// <summary>
+        /// Збори на Заставі, як людина: точка, підхід, рівно цей загін (стан панелі живе між
+        /// відкриттями — зайвих знімаємо), прогноз, «Вирушати».
+        /// </summary>
+        private bool WorldDepart(string siteId, ExpeditionApproach approach, IList<string> party)
+        {
+            var input = _shell.UxInput;
+            input.TryOpen(UxPanelId.Muster, Walk.BuildingCatalog.MusterStation);
+            input.Invoke("site:" + siteId);
+            if (HasAction("approach:" + approach)) input.Invoke("approach:" + approach);
+            var toggles = new List<UxAction>();
+            foreach (var card in _shell.CurrentPanelModel().Cards)
+                foreach (var a in card.Actions)
+                    if (a.Id.StartsWith("party:", StringComparison.Ordinal)) toggles.Add(a);
+            foreach (var a in toggles)
+                if (a.Selected != party.Contains(a.Id.Substring(6))) input.Invoke(a.Id);
+            var outcome = input.Invoke("muster:preview");
+            // M1.6 (Поправка №8.3): заступників на звільнені пости обирає гравець у зборах — водій тисне ті
+            // самі картки «Хто стане на пости», що й людина (вибір — як у ботів, BotSupport.ChooseDeputies).
+            if (outcome.Ok)
+                foreach (var kv in Game.Core.Session.Bots.BotSupport.ChooseDeputies(Session.GetMusterView(new List<string>(party))))
+                {
+                    string id = "deputy:" + kv.Key + ":" + (string.IsNullOrEmpty(kv.Value) ? "none" : kv.Value);
+                    if (HasAction(id)) input.Invoke(id);
+                }
+            if (outcome.Ok) outcome = input.Invoke("muster:depart");
+            input.ClosePanel();
+            if (!outcome.Ok)
+                _host.Log("  світ: збори «" + siteId + "» — " + (string.IsNullOrEmpty(outcome.Refusal) ? "немає «Вирушати»" : outcome.Refusal));
+            return outcome.Ok;
+        }
+
+        private bool HasAction(string actionId)
+        {
+            var model = _shell.CurrentPanelModel();
+            if (model == null) return false;
+            foreach (var card in model.Cards)
+                foreach (var a in card.Actions)
+                    if (a.Id == actionId) return true;
+            return false;
         }
 
         // ===================== виконання команд =====================
@@ -1401,6 +1468,18 @@ namespace Game.Gameplay
                 yield return 0;
             }
             foreach (var f in InteractExpecting(Walk.VillagePlaces.NoticeBoardId, UI.UxPanelId.NoticeBoard, "explore-entered")) yield return f;
+
+            // Намет героя (Поправка №22, U8): розвиток героя — місце у світі.
+            foreach (var f in WalkTo(Walk.VillagePlaces.HeroTentId)) yield return f;
+            foreach (var f in InteractExpecting(Walk.VillagePlaces.HeroTentId, UI.UxPanelId.HeroTent, "explore-hero_tent")) yield return f;
+
+            // Камера як у Wasteland 3 (№22.5, W1): поворот на 90° і назад — той самий запит, що Q/E.
+            _shell.RequestCameraTurn(+1);
+            foreach (var f in WaitFrames(60)) yield return f;
+            _host.Capture("explore-camera-turned");
+            yield return 0;
+            _shell.RequestCameraTurn(-1);
+            foreach (var f in WaitFrames(60)) yield return f;
 
             // Увійти в зведену будівлю (перша будівля, обрана після прологу).
             var building = FirstPlace(p => p.Kind == Walk.PlaceKind.Building && p.Panel == UI.UxPanelId.None);
@@ -1464,7 +1543,7 @@ namespace Game.Gameplay
             _host.Log("Село: дійшов до «" + placeId + "» за " + frames + " кадрів.");
         }
 
-        /// <summary>«E» біля місця — має відкритися саме ця панель; знімок і закрити.</summary>
+        /// <summary>«F» (взаємодія) біля місця — має відкритися саме ця панель; знімок і закрити.</summary>
         private IEnumerable<int> InteractExpecting(string placeId, UI.UxPanelId expected, string shot)
         {
             _shell.InteractNearby();
@@ -1675,7 +1754,7 @@ namespace Game.Gameplay
         private void MaybeOrderBuilding(int day)
         {
             if (day != 2) return; // §3.2 TEST_BUILD.md: рада замовляє Майстерню на добу 2
-            Run(() => Session.OrderBuilding(DefaultBuildings.Workshop));
+            World(UxPanelId.PlotCard, DefaultBuildings.Workshop, "order:" + DefaultBuildings.Workshop);
         }
 
         /// <summary>
@@ -1700,12 +1779,7 @@ namespace Game.Gameplay
             }
             if (party.Count == 0) return;
 
-            var preview = Run(() => Session.PreviewExpedition("abandoned_camp", ExpeditionApproach.Delve, party));
-            if (preview == null) return;
-            int days = preview.Days;
-            // M1.6 (Поправка №8.3): заступників на звільнені пости обирає водій, як гравець у зборах.
-            var deputies = Game.Core.Session.Bots.BotSupport.ChooseDeputies(Session.GetMusterView(party));
-            Run(() => Session.DepartExpedition("abandoned_camp", ExpeditionApproach.Delve, party, days, deputies));
+            WorldDepart(DefaultDungeon.AbandonedCamp, ExpeditionApproach.Delve, party);
         }
 
         // ===================== бій: хід гравця (лише IBattleInput, §7.4) =====================

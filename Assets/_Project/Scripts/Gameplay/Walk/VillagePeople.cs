@@ -27,8 +27,11 @@ namespace Game.Gameplay.Walk
     /// </summary>
     public static class VillagePeople
     {
-        /// <summary>Скільки людей уміщається біля вогнища Віча.</summary>
-        public const int IdleSpotCount = 4;
+        /// <summary>
+        /// Скільки людей уміщається біля вогнища Віча. Було 4 — і п'ятий-шостий без поста
+        /// зникали з села разом зі своїм «!» (огляд 06.10.2026, Поправка №22).
+        /// </summary>
+        public const int IdleSpotCount = 6;
 
         /// <summary>Людина зараз у селі (і з нею можна говорити).</summary>
         public static bool IsInVillage(CompanionSummary c)

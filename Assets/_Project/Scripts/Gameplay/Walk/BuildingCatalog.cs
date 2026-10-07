@@ -97,6 +97,14 @@ namespace Game.Gameplay.Walk
 
         public static IReadOnlyList<BuildingPlace> All => Entries;
 
+        /// <summary>
+        /// Чи має будівля ділянку в селі (<c>GameSceneBuilder.Plots</c>). Лабораторії
+        /// ділянки немає: її механіки ще немає (UX-10), тож і місця в селі немає.
+        /// Охоронець звіряє з кодом сцени (<c>WorldFirstTests</c>).
+        /// </summary>
+        public static bool HasPlot(string buildingId) =>
+            Get(buildingId) != null && buildingId != DefaultBuildings.Laboratory;
+
         public static IReadOnlyList<StationDef> OpenAirStations => OpenAir;
 
         /// <summary>Будівля за id; null — такої в каталозі немає.</summary>

@@ -61,6 +61,9 @@ namespace Game.Gameplay.UI
 
         public readonly QuestOfferCache Quests = new QuestOfferCache();
 
+        /// <summary>Склад рейду на кожного нашого в полоні (ключ — id бранця), як загін вилазки.</summary>
+        public readonly Dictionary<string, List<string>> CaptiveRaidParty = new Dictionary<string, List<string>>();
+
         /// <summary>Скидає все, що належить партії (нова гра чи завантаження).</summary>
         public void Reset()
         {
@@ -71,6 +74,7 @@ namespace Game.Gameplay.UI
             MusterPreview = null;
             Plan = new BuildPlan();
             Quests.Clear();
+            CaptiveRaidParty.Clear();
         }
     }
 

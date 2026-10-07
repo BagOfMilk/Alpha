@@ -80,6 +80,19 @@ namespace Game.Gameplay.UI
         public bool Selected;
         /// <summary>Виконання: повертає наслідок (успіх, відмова, помилка).</summary>
         public Func<UxOutcome> Execute;
+        /// <summary>
+        /// Команда ядра, яку кличе дія (<c>nameof(GameSession.OrderRaid)</c>); null —
+        /// дія без команди (перехід, перемикач стану панелі). За нею охоронці
+        /// Поправки №22 знаходять дім кожної команди у світі (<see cref="UxWorldHomes"/>).
+        /// </summary>
+        public string Command;
+
+        /// <summary>Позначити команду ядра, яку кличе дія (див. <see cref="Command"/>).</summary>
+        public UxAction Calls(string command)
+        {
+            Command = command;
+            return this;
+        }
 
         public bool AllowedIn(SessionState state) => AllowedStates.Count == 0 || AllowedStates.Contains(state);
 

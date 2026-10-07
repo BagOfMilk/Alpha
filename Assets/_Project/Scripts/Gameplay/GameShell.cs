@@ -252,12 +252,35 @@ namespace Game.Gameplay
 
         public void SetNearbyPlace(WalkPlace place) => NearbyPlace = Exploring ? place : null;
 
-        public void RequestWalkTo(string placeId) => PendingWalkTarget = Exploring ? placeId : null;
+        public void RequestWalkTo(string placeId) => RequestWalkTo(placeId, interactOnArrival: false);
 
-        public string ConsumeWalkRequest()
+        /// <summary>Повести героя до місця; <paramref name="interactOnArrival"/> — по прибутті взаємодіяти, як клік по місцю.</summary>
+        public void RequestWalkTo(string placeId, bool interactOnArrival)
+        {
+            PendingWalkTarget = Exploring ? placeId : null;
+            _walkInteract = PendingWalkTarget != null && interactOnArrival;
+        }
+
+        private bool _walkInteract;
+
+        /// <summary>Запит повороту камери (−1 — Q, +1 — E) для HeroWalker: автотур обертає камеру тим самим шляхом, що клавіші.</summary>
+        private int _cameraTurn;
+
+        public void RequestCameraTurn(int direction) => _cameraTurn = Math.Sign(direction);
+
+        public int ConsumeCameraTurn()
+        {
+            int turn = _cameraTurn;
+            _cameraTurn = 0;
+            return turn;
+        }
+
+        public string ConsumeWalkRequest(out bool interactOnArrival)
         {
             var target = PendingWalkTarget;
+            interactOnArrival = _walkInteract;
             PendingWalkTarget = null;
+            _walkInteract = false;
             return target;
         }
 
@@ -325,8 +348,9 @@ namespace Game.Gameplay
 
             var state = Session.State;
 
-            bool escapeEligible = state != SessionState.Title && state != SessionState.Creation &&
-                                   state != SessionState.Scene;
+            // Esc працює скрізь, крім титулу (у титулу своє меню): у створенні героя,
+            // сценах і на підсумку — пауза з «У головне меню» (Поправка №22.1).
+            bool escapeEligible = state != SessionState.Title;
 
             // Event-based, не сирий Input.GetKeyDown (фікс-ревью, блокер):
             // OnGUI викликається кілька разів за кадр (Layout, сама подія
@@ -385,7 +409,7 @@ namespace Game.Gameplay
             if (!Exploring && CanExplore) SetExploring(true);
             if (state != _lastUxState)
             {
-                if (_layers.OpenPanel != UxPanelId.None && !CanExplore) ClosePanel();
+                if (Ux.OpenPanel != UxPanelId.None && !CanExplore) ClosePanel();
                 _lastUxState = state;
             }
             var keyEvt = Event.current;
@@ -451,16 +475,20 @@ namespace Game.Gameplay
                     // UI Toolkit з 3D-прев'ю, якщо є; IMGUI-екран — фолбек (-imgui-hud або немає набору).
                     if (_creationOverlay == null || !_creationOverlay.Handles(state))
                         _creation.Draw(this);
+                    DrawOverlays();
                     break;
                 case SessionState.Scene:
                 case SessionState.Opening:
                     _scene.Draw(this);
+                    DrawOverlays();
                     break;
                 case SessionState.Battle:
                     DrawBattle();
                     break;
                 case SessionState.Summary:
                     DrawFullScreen(() => _summary.Draw(this));
+                    // Esc → «Збереження» відкриває панель — без шарів вона не малювалась.
+                    DrawOverlays();
                     break;
                 default:
                     DrawHubLike(state);

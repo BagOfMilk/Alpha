@@ -94,7 +94,8 @@ namespace Game.Tests.EditMode
             Assert.That(panel.Cards.Select(c => c.Section).Distinct().Count(), Is.LessThanOrEqualTo(4), "підвкладок не більше чотирьох (§3.3)");
             string trips = UkrainianText.Get("ux.journal.section.expeditions", Gender.Male);
             var trip = panel.Cards.Single(c => c.Section == trips);
-            Assert.AreEqual(UxJournalPanel.ScoutingPostPlace, trip.LinkPlaceId, "збори — на Заставі, панель лише веде (UX-04)");
+            Assert.AreEqual(Game.Gameplay.Walk.VillagePlaces.StationPrefix + Game.Gameplay.Walk.BuildingCatalog.MusterStation, trip.LinkPlaceId,
+                "збори — на Заставі (станція «Збори»), панель лише веде (UX-04); раніше посилання було на неіснуюче «post:scouting_post»");
             Assert.IsEmpty(panel.Cards.SelectMany(c => c.Actions), "журнал не дублює дій місць (UX-04, P-UX-01)");
 
             string world = UkrainianText.Get("ux.journal.section.world", Gender.Male);

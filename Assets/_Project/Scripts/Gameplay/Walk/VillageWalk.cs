@@ -353,6 +353,8 @@ namespace Game.Gameplay.Walk
     {
         public const string NoticeBoardId = "notice_board";
         public const string TrainingGroundId = "training_ground";
+        /// <summary>Намет героя біля Віча (Поправка №22): розвиток героя вранці, згодом — патруль чи сон увечері.</summary>
+        public const string HeroTentId = "hero_tent";
         public const string PersonPrefix = "person:";
         public const string StationPrefix = "station:";
         public const string BuildingPrefix = "building:";
@@ -423,6 +425,16 @@ namespace Game.Gameplay.Walk
             };
         }
 
+        /// <summary>Намет героя — його власне місце в селі (Поправка №22; протагоніст не стоїть на посту).</summary>
+        public static WalkPlace HeroTent(float x, float z)
+        {
+            return new WalkPlace
+            {
+                Id = HeroTentId, Kind = PlaceKind.Landmark, LabelKey = "place.hero_tent", TargetId = HeroTentId,
+                Panel = UxPanelId.HeroTent, X = x, Z = z, Radius = 1.6f, LabelX = x, LabelZ = z
+            };
+        }
+
         /// <summary>Людина на своєму місці — розмова (власник, 30.09.2026).</summary>
         public static WalkPlace Person(string companionId, float x, float z)
         {
@@ -449,7 +461,7 @@ namespace Game.Gameplay.Walk
         /// </summary>
         public static List<WalkPlace> BuildVillage(IReadOnlyList<PlotAnchor> plots,
             IReadOnlyDictionary<string, WalkPoint> openAirStations, WalkPoint? noticeBoard, WalkPoint? trainingGround,
-            Func<string, int> stageOf)
+            Func<string, int> stageOf, WalkPoint? heroTent = null)
         {
             var places = new List<WalkPlace>();
             if (plots != null)
@@ -467,6 +479,7 @@ namespace Game.Gameplay.Walk
                 }
             if (noticeBoard.HasValue) places.Add(NoticeBoard(noticeBoard.Value.X, noticeBoard.Value.Z));
             if (trainingGround.HasValue) places.Add(TrainingGround(trainingGround.Value.X, trainingGround.Value.Z));
+            if (heroTent.HasValue) places.Add(HeroTent(heroTent.Value.X, heroTent.Value.Z));
             return places;
         }
 

@@ -442,13 +442,14 @@ namespace Game.Gameplay.EditorTools
                 Pair(holder, males[i], females[i], facing[i], i * 0.37f);
             }
 
-            // Біля вогнища Віча (саме вогнище — в Landmarks): місця idle:0..3.
+            // Біля вогнища Віча (саме вогнище — в Landmarks): місця idle:0..5 (VillagePeople.IdleSpotCount).
             Vector3[] idle =
             {
                 new Vector3(2.8f, 0f, 0.2f), new Vector3(2.8f, 0f, 1.4f),
-                new Vector3(1.9f, 0f, 1.9f), new Vector3(1.1f, 0f, -0.1f)
+                new Vector3(1.9f, 0f, 1.9f), new Vector3(1.1f, 0f, -0.1f),
+                new Vector3(1.9f, 0f, -1.4f), new Vector3(0.4f, 0f, 2.3f)
             };
-            float[] idleFacing = { 270f, 230f, 180f, 45f };
+            float[] idleFacing = { 270f, 230f, 180f, 45f, 0f, 137f };
             for (int i = 0; i < idle.Length; i++)
             {
                 var holder = new GameObject("idle:" + i);
@@ -497,6 +498,14 @@ namespace Game.Gameplay.EditorTools
             board.transform.SetParent(group.transform, false);
             board.transform.localPosition = new Vector3(-3.0f, 0f, 0.2f);
             KitBuilder.Attach(board, Town + "banner-green.fbx", Vector3.zero, 45f);
+
+            // Намет героя біля Віча (Поправка №22): розвиток героя — місце у світі, а не лише панель C.
+            var tent = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.HeroTentId);
+            tent.transform.SetParent(group.transform, false);
+            // Точка місця — вільна земля перед наметом (сюди герой підходить); модель — позаду неї,
+            // подалі від людей біля вогнища (тур 06.10.2026: інакше «найближчим» лишався сусід).
+            tent.transform.localPosition = new Vector3(4.4f, 0f, -1.2f);
+            KitBuilder.Attach(tent, Nature + "tent_detailedOpen.fbx", new Vector3(1.3f, 0f, -0.8f), -110f);
 
             var training = new GameObject("place:" + Game.Gameplay.Walk.VillagePlaces.TrainingGroundId);
             training.transform.SetParent(group.transform, false);
@@ -713,29 +722,31 @@ namespace Game.Gameplay.EditorTools
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ArtModels + buildingId + ".fbx");
             if (prefab == null) return;
             var old = plot.transform.Find("model");
-            Vector3 center = Vector3.zero;
-            if (old != null)
-            {
-                var b = KitBuilder.WorldBounds(old.gameObject);
-                center = new Vector3(b.center.x, 0f, b.center.z) - plot.transform.position;
-                Object.DestroyImmediate(old.gameObject);
-            }
+            if (old != null) Object.DestroyImmediate(old.gameObject);
             var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             model.name = "model";
             model.transform.SetParent(plot.transform, false);
-            model.transform.localPosition = center;
+            model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             model.transform.localScale = Vector3.one * Game.Gameplay.Visual.ArtScale.World;
             foreach (var c in model.GetComponentsInChildren<Camera>(true)) Object.DestroyImmediate(c.gameObject);
-            var size = KitBuilder.WorldBounds(model).size;
+
+            // Як хатка Kenney: кутом (мінімум X і Z) у початок ділянки. Тоді мітка в центрі має локальні
+            // координати = половини габариту — HeroWalker читає з неї і центр, і «половину» ділянки
+            // (радіус «дійшов» = половина + 1,1). Перша версія ставила мітку в центр старої моделі —
+            // половина виходила 0,1, і герой не «доходив» до Сторожі (тур 07.10.2026).
+            var b = KitBuilder.WorldBounds(model);
+            var origin = plot.transform.position;
+            model.transform.position += new Vector3(origin.x - b.min.x, 0f, origin.z - b.min.z);
+            var size = b.size;
             model.SetActive(false);
 
+            var half = new Vector3(size.x * 0.5f, 0f, size.z * 0.5f);
             var door = plot.transform.Find("door");
-            // Відступ від фасаду — як у хаток Kenney (0,75) з запасом: перешкода будівлі розширена на радіус
-            // героя, і двері ближче 0,5 опинялись усередині неї — герой не міг дійти (тур 07.10.2026).
-            if (door != null) door.localPosition = center + new Vector3(0f, 0f, -size.z * 0.5f - 0.85f);
+            // Двері посередині фасаду (−Z) з відступом 0,85: перешкода будівлі розширена на радіус героя.
+            if (door != null) door.localPosition = new Vector3(half.x, 0f, -0.85f);
             var label = plot.transform.Find("label");
-            if (label != null) label.localPosition = center + new Vector3(0f, size.y + 0.6f, 0f);
+            if (label != null) label.localPosition = new Vector3(half.x, size.y + 0.6f, half.z);
         }
     }
 }

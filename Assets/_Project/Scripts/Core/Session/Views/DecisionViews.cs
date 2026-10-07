@@ -37,6 +37,14 @@ namespace Game.Core.Session.Views
         public string Kind; // "Incident" | "Quest" | "Crisis" | "Finale"
         public string TopicId;
         public bool IsCrisis;
+        /// <summary>
+        /// Де це сталося (Поправка №22.3: рішення прив'язане до місця в селі): id інциденту,
+        /// службовий тег домену і пост, якого стосується подія. Рядки, не числа прихованих
+        /// шкал (інваріант 3); на екран не йдуть — лише щоб знайти місце. Для квестів — null.
+        /// </summary>
+        public string IncidentId;
+        public string DomainTag;
+        public string RelevantPositionId;
         public IReadOnlyList<DecisionOptionView> Options;
     }
 
