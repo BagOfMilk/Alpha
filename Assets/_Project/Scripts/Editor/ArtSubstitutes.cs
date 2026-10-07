@@ -61,8 +61,9 @@ namespace Game.Gameplay.EditorTools
             { "rock_largeC", P("cover_full_rock", 1f) },
             { "rock_largeE", P("cover_full_rock", 1f) },
             { "cliff_half_rock", P("cover_full_rock", 1f) },
-            { "tree_default", P("tree_fir_large", 0.35f) },
-            { "tree_default_dark", P("tree_fir_medium", 0.45f) },
+            // Ялиці арени — тло: менші, щоб постаті (~1,2 од.) читались поруч (тур 07.10.2026).
+            { "tree_default", P("tree_fir_large", 0.22f) },
+            { "tree_default_dark", P("tree_fir_medium", 0.3f) },
         };
 
         private static KeyValuePair<string, float> P(string art, float factor) => new KeyValuePair<string, float>(art, factor);

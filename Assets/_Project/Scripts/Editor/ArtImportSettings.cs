@@ -33,9 +33,9 @@ namespace Game.Gameplay.EditorTools
 
         /// <summary>
         /// Версія правил: зміна змушує Unity переімпортувати всі асети, яких вони стосуються.
-        /// 2 — текстура за назвою матеріалу; 3 — матовість і очі (07.10.2026).
+        /// 2 — текстура за назвою матеріалу; 3 — матовість; 4 — очі MPFB (07.10.2026).
         /// </summary>
-        public override uint GetVersion() => 3;
+        public override uint GetVersion() => 4;
 
         private static readonly string[] TextureFolders = { "Assets/Art/Textures/", "Assets/Art/Textures/Kit/" };
         private static readonly string[] DiffuseSuffixes = { "", "_Diffuse", "_diff", "_col_01", "_COL", "_albedo" };
@@ -157,6 +157,9 @@ namespace Game.Gameplay.EditorTools
             if (!hasDiffuse && material.HasProperty("_BaseMap"))
             {
                 var tex = FindByMaterialName(description.materialName, DiffuseSuffixes);
+                // Очі MPFB: матеріал «Human.low-poly.NNN», текстура йде через вузли — беремо карі очі набору.
+                if (tex == null && (description.materialName ?? "").ToLowerInvariant().Contains("low-poly"))
+                    tex = FindByMaterialName("brown_eye", DiffuseSuffixes);
                 if (tex != null) { material.SetTexture("_BaseMap", tex); hasDiffuse = true; }
             }
             if (hasDiffuse && material.HasProperty("_BaseColor"))
