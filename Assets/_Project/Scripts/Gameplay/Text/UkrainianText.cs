@@ -1834,6 +1834,21 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.gear.forge.closed", "Кувати можна лише у Збройні.");
             AddKey(t, "ui.gear.forge.cannot_afford", "Бракує золота чи сировини.");
             AddKey(t, "ui.gear.forge.made", "Викувано: {item}.");
+            // Поправка №19.3: «лялька» інвентаря (клавіша I).
+            AddKey(t, "ui.gear.forge.unknown", "Такого кузня не кує.");
+            AddKey(t, "ui.inventory.title", "Спорядження");
+            AddKey(t, "ui.inventory.doll", "Надіте");
+            AddKey(t, "ui.inventory.stash", "Сховок");
+            AddKey(t, "ui.inventory.stash.all", "Усі речі");
+            AddKey(t, "ui.inventory.stash.empty", "Для цього слота в сховку нічого немає.");
+            AddKey(t, "ui.inventory.equip", "Надіти");
+            AddKey(t, "ui.inventory.unequip", "Зняти");
+            AddKey(t, "ui.inventory.empty_slot", "порожньо");
+            AddKey(t, "ui.inventory.blocked", "зайнято дворучною зброєю");
+            AddKey(t, "ui.inventory.two_handed", "дворучна");
+            AddKey(t, "ui.inventory.close", "Закрити (I)");
+            AddKey(t, "ui.inventory.hint", "Клік по слоту — показати речі для нього. Модель обертається мишею.");
+            AddKey(t, "ui.inventory.only_morning", "Перевдягатися можна вранці чи у вільній грі.");
             // Поправка №19.1: культури набору (створення героя, картка людини).
             // Поправка №19.3: зовнішність на екрані створення героя.
             AddKey(t, "ui.creation.look", "Зовнішність");
@@ -2941,7 +2956,7 @@ namespace Game.Gameplay.Text
             AddKey(t, "ux.keys.click", "Клік по землі — іти туди; по будівлі, людині чи станції — підійти й взаємодіяти.");
             AddKey(t, "ux.keys.e", "E — взаємодія з тим, що поруч: зайти, поговорити, відкрити.");
             AddKey(t, "ux.keys.tab", "Tab — огляд міста: підписи всіх місць.");
-            AddKey(t, "ux.keys.panels", "C — люди, J — журнал, N — наряд.");
+            AddKey(t, "ux.keys.panels", "C — люди, J — журнал, N — наряд, I — спорядження.");
             AddKey(t, "ux.keys.esc", "Esc — закрити панель; ще раз — пауза. З будівлі виводять лише двері.");
             AddKey(t, "ux.keys.f10", "F10 — журнал механік (тестова збірка).");
             AddKey(t, "ux.preflight.question", "Почати день?");

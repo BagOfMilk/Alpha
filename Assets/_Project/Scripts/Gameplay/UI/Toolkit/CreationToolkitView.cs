@@ -30,6 +30,7 @@ namespace Game.Gameplay.UI.Toolkit
         private CharacterPreviewRig _preview;
         private CreationLookModel _look;
         private string _pushedLook;
+        private bool _wasVisible;
 
         private Label _title, _nameCaption, _genderCaption, _backgroundCaption, _lookCaption, _hint, _message;
         private TextField _name;
@@ -272,7 +273,8 @@ namespace Game.Gameplay.UI.Toolkit
             var session = _shell.Session;
             bool visible = session != null && session.State == SessionState.Creation;
             _screen.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-            _preview.SetActive(visible);
+            // Прев'ю спільне з «лялькою» — перемикаємо лише на переході, щоб не гасити чужий показ.
+            if (visible != _wasVisible) { _preview.SetActive(visible); _wasVisible = visible; }
             if (!visible) { _look = null; return; }
 
             var view = session.GetProtagonistCreationView();

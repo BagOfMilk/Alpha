@@ -65,6 +65,7 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("N",          UxKeyScope.World,    "GameShell.Ux.cs",            "Дошка наряду (U5)"),
             new UxKeyBinding("C",          UxKeyScope.World,    "GameShell.Ux.cs",            "Люди (U5)"),
             new UxKeyBinding("J",          UxKeyScope.World,    "GameShell.Ux.cs",            "Журнал (U5)"),
+            new UxKeyBinding("I",          UxKeyScope.World,    "GameShell.Ux.cs",            "Спорядження — «лялька» і кузня (№19.3)"),
             new UxKeyBinding("L",          UxKeyScope.World,    "GameShell.Ux.cs",            "Хроніка (U5)"),
             new UxKeyBinding("F1",         UxKeyScope.Global,   "GameShell.Ux.cs",            "довідка клавіш (U5)"),
             new UxKeyBinding("F10",        UxKeyScope.Global,   "GameShell.Ux.cs",            "журнал механік, тестова збірка (U5)"),

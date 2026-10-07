@@ -39,6 +39,9 @@ namespace Game.Gameplay
         /// <summary>Довідка клавіш (F1).</summary>
         public bool KeysHelpOpen { get; private set; }
 
+        /// <summary>«Лялька» спорядження й кузня (клавіша I, Поправка №19.3) — екран на UI Toolkit.</summary>
+        public bool InventoryOpen { get; set; }
+
         public UxPanelId OpenPanelId => _layers.OpenPanel;
         public string OpenPanelContext => _panelContext;
 
@@ -328,6 +331,10 @@ namespace Game.Gameplay
                 case KeyCode.N: TogglePanel(UxPanelId.DutyBoard); return true;
                 case KeyCode.C: TogglePanel(UxPanelId.People); return true;
                 case KeyCode.J: TogglePanel(UxPanelId.Journal); return true;
+                case KeyCode.I:
+                    InventoryOpen = !InventoryOpen;
+                    if (InventoryOpen) ClosePanel();
+                    return true;
                 case KeyCode.F10: TogglePanel(UxPanelId.MechanicsJournal); return true;
                 case KeyCode.F1: KeysHelpOpen = !KeysHelpOpen; return true;
                 default: return false;
@@ -344,6 +351,7 @@ namespace Game.Gameplay
         private bool EscapeClosesLayer()
         {
             if (_layers.ConfirmPending) { ClearPendingConfirm(); return true; }
+            if (InventoryOpen) { InventoryOpen = false; return true; }
             if (_layers.OpenPanel != UxPanelId.None) { ClosePanel(); return true; }
             if (KeysHelpOpen) { KeysHelpOpen = false; return true; }
             return false;
@@ -360,6 +368,13 @@ namespace Game.Gameplay
             var g = ProtagonistGender;
             float w = Screen.width, h = Screen.height;
             ExploreUiRects.Clear();
+            if (InventoryOpen)
+            {
+                // «Лялька» (UI Toolkit) на весь екран: IMGUI малюється поверх неї, тож тут — нічого,
+                // і клік крізь екран не веде героя.
+                ExploreUiRects.Add(new Rect(0f, 0f, w, h));
+                return;
+            }
 
             float top;
             float rightReserve;

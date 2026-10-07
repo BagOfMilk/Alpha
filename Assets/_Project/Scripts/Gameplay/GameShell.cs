@@ -156,6 +156,9 @@ namespace Game.Gameplay
         // Поправка №19.3: створення героя на UI Toolkit з 3D-прев'ю (UI.Toolkit.CreationToolkitView, поза лінтом).
         private static readonly MethodInfo CreateCreationOverlayMethod = ResolveBridgeMethod("UI.Toolkit.CreationToolkitView", "TryCreate");
         private IShellOverlay _creationOverlay;
+        // Поправка №19.3: «лялька» спорядження й кузня (UI.Toolkit.InventoryToolkitView, клавіша I).
+        private static readonly MethodInfo CreateInventoryOverlayMethod = ResolveBridgeMethod("UI.Toolkit.InventoryToolkitView", "TryCreate");
+        private IShellOverlay _inventoryOverlay;
 
         private void Awake()
         {
@@ -169,6 +172,8 @@ namespace Game.Gameplay
                 _toolkitHud = HudToolkitView.TryCreate(this); // null → лишаємось на IMGUI
                 if (CreateCreationOverlayMethod != null)
                     _creationOverlay = CreateCreationOverlayMethod.Invoke(null, new object[] { this }) as IShellOverlay;
+                if (CreateInventoryOverlayMethod != null)
+                    _inventoryOverlay = CreateInventoryOverlayMethod.Invoke(null, new object[] { this }) as IShellOverlay;
             }
 
             Application.wantsToQuit += HandleWantsToQuit; // §HandleWantsToQuit
@@ -181,6 +186,8 @@ namespace Game.Gameplay
             _toolkitHud = null;
             if (_creationOverlay != null) _creationOverlay.Dispose();
             _creationOverlay = null;
+            if (_inventoryOverlay != null) _inventoryOverlay.Dispose();
+            _inventoryOverlay = null;
         }
 
         /// <summary>Після Update усіх компонентів (зокрема автотуру): шапка бачить стан цього кадру.</summary>
@@ -188,6 +195,8 @@ namespace Game.Gameplay
         {
             if (_toolkitHud != null) _toolkitHud.Tick();
             if (_creationOverlay != null) _creationOverlay.Tick();
+            if (_inventoryOverlay != null) _inventoryOverlay.Tick();
+            else if (InventoryOpen) InventoryOpen = false; // без UI Toolkit «ляльки» немає — лишається Склад
         }
 
         // ===================== село (CRPG) =====================

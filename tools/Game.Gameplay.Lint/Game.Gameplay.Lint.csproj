@@ -103,6 +103,7 @@
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Characters/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/UI/Toolkit/CreationToolkitView.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/UI/Toolkit/InventoryToolkitView.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/CharacterKitBuilder.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtImportSettings.cs" />
   </ItemGroup>
