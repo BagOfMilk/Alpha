@@ -56,8 +56,10 @@ namespace Game.Core.Characters
 
         /// <summary>
         /// Акценти — символи й квірки з першоджерел (пір'їна беркута, вовче хутро, сережка, сліди
-        /// кайданів, оберіг…). ЗАПЛАНОВАНІ: генеруються наступним проходом набору; поки сітки
-        /// немає, гра їх пропускає (образ від цього не ламається).
+        /// кайданів, обереги…; <c>tools/blender/alpha_accents.py</c>). Складений акцент має допоміжні
+        /// частини з суфіксом (<c>sash</c> + <c>sash_tails</c>, <c>herb_pouch</c> + <c>herb_pouch_herbs</c>):
+        /// гра вмикає всі частини, ключ яких дорівнює акценту або починається з «акцент_».
+        /// Колір акценту запечений у матеріал (символ — і є колір), образ його не фарбує.
         /// </summary>
         public static readonly string[] Accents =
         {
@@ -69,13 +71,13 @@ namespace Game.Core.Characters
 
         private static HashSet<string> _built;
 
-        /// <summary>Частини, які вже є в наборі (усе, крім запланованих акцентів).</summary>
+        /// <summary>Частини, які є в наборі (з 07.10.2026 — разом з акцентами).</summary>
         public static bool IsBuilt(string part)
         {
             if (_built == null)
             {
                 var s = new HashSet<string>();
-                foreach (var list in new[] { Clothing, Armor, Weapons, FacialHair, Hair })
+                foreach (var list in new[] { Clothing, Armor, Weapons, FacialHair, Hair, Accents })
                     foreach (var p in list) s.Add(p);
                 _built = s;
             }

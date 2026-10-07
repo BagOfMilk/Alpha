@@ -158,7 +158,7 @@ namespace Game.Tests.EditMode
         public void KitParts_ThatAreBuilt_AllExistInTheKitManifest()
         {
             var m = Manifest("m"); var f = Manifest("f");
-            foreach (var list in new[] { KitParts.Clothing, KitParts.Armor, KitParts.Weapons, KitParts.Hair })
+            foreach (var list in new[] { KitParts.Clothing, KitParts.Armor, KitParts.Weapons, KitParts.Hair, KitParts.Accents })
                 foreach (var p in list)
                 {
                     Assert.IsTrue(m.Contains(p), "m: немає частини " + p);
