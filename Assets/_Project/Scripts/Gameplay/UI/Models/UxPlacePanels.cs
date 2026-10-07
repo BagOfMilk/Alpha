@@ -274,7 +274,7 @@ namespace Game.Gameplay.UI
                         st.MusterDeputies.Clear(); // склад змінився — інші пости, інші кандидати
                     });
                     toggle.Selected = inParty;
-                    var legality = ScreenText.AssignCandidateLegality(c);
+                    var legality = ScreenText.PartyCandidateLegality(c);
                     if (!legality.Enabled && !inParty) toggle.DisabledReason = ScreenText.ReasonText(legality, g);
                     card.Actions.Add(toggle);
                     panel.Cards.Add(card);

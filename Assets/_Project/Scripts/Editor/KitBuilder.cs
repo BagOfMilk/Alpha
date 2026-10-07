@@ -124,6 +124,17 @@ namespace Game.Gameplay.EditorTools
                 var mat = new Material(lit);
                 mat.SetColor("_BaseColor", baseColor);
                 if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0f);
+                // Трек V3: трава Poly Haven (CC0) замість однотонної площини; колір — легкий відтінок поверх.
+                var grass = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/leafy_grass_Diffuse.jpg");
+                if (grass != null)
+                {
+                    mat.SetTexture("_BaseMap", grass);
+                    mat.SetColor("_BaseColor", Color.Lerp(Color.white, baseColor, 0.25f));
+                    // Площина Unity — 10 од. на одиницю масштабу; плитка ~2 од. (≈5 м трави в масштабі сцени 0,4).
+                    mat.SetTextureScale("_BaseMap", new Vector2(scale.x * 5f, scale.z * 5f));
+                    var nor = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/leafy_grass_nor_gl.jpg");
+                    if (nor != null) { mat.SetTexture("_BumpMap", nor); mat.EnableKeyword("_NORMALMAP"); }
+                }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(materialSavePath));
                 AssetDatabase.CreateAsset(mat, materialSavePath);
@@ -243,9 +254,16 @@ namespace Game.Gameplay.EditorTools
             float step = Mathf.Max(MeasureSize(fence).x, 0.5f);
             var group = new GameObject("Частокол");
 
+            // Тин треку V не має воріт — на місці воріт лишається прохід.
+            bool artFence = ArtSubstitutes.Resolve(kitPath + "fence.fbx", battle: false) != null;
             for (float x = left; x <= right; x += step)
             {
                 bool gate = Mathf.Abs(x - gateX) < step;
+                if (gate && artFence)
+                {
+                    Attach(group, kitPath + "fence.fbx", new Vector3(x, 0f, far), 180f);
+                    continue;
+                }
                 Attach(group, gate ? kitPath + "fence-gate.fbx" : kitPath + "fence.fbx",
                     new Vector3(x, 0f, near), 0f);
                 Attach(group, kitPath + "fence.fbx", new Vector3(x, 0f, far), 180f);

@@ -67,6 +67,8 @@ namespace Game.Core.Session.Views
         public string Id;
         public string DisplayName;
         public CompanionStatus Status;
+        /// <summary>Поранений (є очки поранення) — статус може бути й «на посту»; на вилазку не пускають.</summary>
+        public bool IsInjured;
         public string AssignedSlotId;
         public int Level;
 

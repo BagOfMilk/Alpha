@@ -65,6 +65,17 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void PartyCandidate_Injured_IsBlockedWithReason_ButMayStillTakeAPost()
+        {
+            var hurt = new CompanionSummary { Id = "maksym", DisplayName = "maksym", Status = CompanionStatus.Assigned, IsInjured = true };
+            Assert.IsTrue(ScreenText.AssignCandidateLegality(hurt).Enabled, "пост — як і раніше");
+            var party = ScreenText.PartyCandidateLegality(hurt);
+            Assert.IsFalse(party.Enabled, "на вилазку поранених не пускає ядро — панель каже це заздалегідь");
+            Assert.AreEqual("ui.reason.injured", party.ReasonKey);
+            Assert.IsFalse(ScreenText.ExpeditionPartyLegality(new List<string> { "maksym" }, Roster(hurt)).Enabled);
+        }
+
+        [Test]
         public void ExpeditionPartyLegality_Empty_IsBlocked()
         {
             var legality = ScreenText.ExpeditionPartyLegality(new List<string>(), Roster());

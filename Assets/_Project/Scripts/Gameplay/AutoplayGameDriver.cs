@@ -1775,7 +1775,7 @@ namespace Game.Gameplay
             foreach (var id in candidateIds)
             {
                 var c = ScreenText.FindCompanion(roster, id);
-                if (ScreenText.AssignCandidateLegality(c).Enabled) party.Add(id);
+                if (ScreenText.PartyCandidateLegality(c).Enabled) party.Add(id);
             }
             if (party.Count == 0) return;
 

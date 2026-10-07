@@ -33,9 +33,9 @@ namespace Game.Gameplay.EditorTools
 
         /// <summary>
         /// Версія правил: зміна змушує Unity переімпортувати всі асети, яких вони стосуються.
-        /// 2 — текстура за назвою матеріалу (07.10.2026).
+        /// 2 — текстура за назвою матеріалу; 3 — матовість і очі (07.10.2026).
         /// </summary>
-        public override uint GetVersion() => 2;
+        public override uint GetVersion() => 3;
 
         private static readonly string[] TextureFolders = { "Assets/Art/Textures/", "Assets/Art/Textures/Kit/" };
         private static readonly string[] DiffuseSuffixes = { "", "_Diffuse", "_diff", "_col_01", "_COL", "_albedo" };
@@ -161,6 +161,13 @@ namespace Game.Gameplay.EditorTools
             }
             if (hasDiffuse && material.HasProperty("_BaseColor"))
                 material.SetColor("_BaseColor", Color.white);
+
+            // Матовість: Blender пише в FBX блиск ~0,5, а в селі без зонда відбиттів гладка поверхня
+            // віддзеркалює темне небо — постаті й тканини виходили темними (тур 07.10.2026). Неметалам —
+            // не більше 0,25; метал (кольчуга, зброя, обручі) лишається блискучим.
+            bool metal = material.HasProperty("_Metallic") && material.GetFloat("_Metallic") >= 0.5f;
+            if (!metal && material.HasProperty("_Smoothness"))
+                material.SetFloat("_Smoothness", Mathf.Min(material.GetFloat("_Smoothness"), 0.25f));
             if (material.HasProperty("_BumpMap") && material.GetTexture("_BumpMap") == null)
             {
                 var nor = FindByMaterialName(description.materialName, NormalSuffixes);

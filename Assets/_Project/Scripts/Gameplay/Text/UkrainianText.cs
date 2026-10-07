@@ -1979,6 +1979,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.reason.antagonist.f", "Проти нас — недоступна.");
             AddKey(t, "ui.reason.captive.m", "У полоні — спершу визволити.");
             AddKey(t, "ui.reason.captive.f", "У полоні — спершу визволити.");
+            AddKey(t, "ui.reason.injured.m", "Поранений — спершу вилікувати.");
+            AddKey(t, "ui.reason.injured.f", "Поранена — спершу вилікувати.");
             AddKey(t, "ui.reason.unknown_companion", "Такого напарника немає.");
             AddKey(t, "ui.reason.empty_party", "Оберіть хоч когось у відряд.");
             AddKey(t, "ui.reason.duplicate_companion", "Один і той самий двічі в списку.");

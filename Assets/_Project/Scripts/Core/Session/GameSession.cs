@@ -4329,6 +4329,7 @@ namespace Game.Core.Session
                     DisplayName = c.DisplayName,
                     Status = c.Status,
                     AssignedSlotId = c.AssignedSlotId,
+                    IsInjured = c.IsInjured,
                     Level = c.Level,
                     Class = c.Card?.Class ?? CompanionClass.Brawler,
                     Loyalty = c.Card != null && c.Card.CanBeCompanion ? (LoyaltyBand?)c.LoyaltyBand : null,

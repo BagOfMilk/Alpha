@@ -85,6 +85,19 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>
+        /// Хто може йти на вилазку: те саме, що на пост, і ще не поранений — ядро не пускає поранених
+        /// (<c>ExpeditionRunner.CheckParty</c>), а панель зборів дозволяла їх обрати і лише потім відмовляла
+        /// «Хтось у списку зараз недоступний» (тур 07.10.2026).
+        /// </summary>
+        public static Legality PartyCandidateLegality(CompanionSummary companion)
+        {
+            var basic = AssignCandidateLegality(companion);
+            if (!basic.Enabled) return basic;
+            if (companion.IsInjured || companion.Status == CompanionStatus.Injured) return new Legality(false, "ui.reason.injured", companion.Id);
+            return Legality.Ok;
+        }
+
+        /// <summary>
         /// Видима частина DispatchResult-перевірки (порожньо/дублі/недоступний)
         /// ДО спроби DepartExpedition — найдешевші відмови ловляться тут, решта
         /// (NoSuchSite/PartyTooLarge/PartyAlreadyAway) видно лише зі спроби.
@@ -103,7 +116,7 @@ namespace Game.Gameplay.UI
 
             for (int i = 0; i < companionIds.Count; i++)
             {
-                var legality = AssignCandidateLegality(FindCompanion(roster, companionIds[i]));
+                var legality = PartyCandidateLegality(FindCompanion(roster, companionIds[i]));
                 if (!legality.Enabled) return legality;
             }
 

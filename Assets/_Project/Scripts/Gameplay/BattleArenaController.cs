@@ -131,6 +131,7 @@ namespace Game.Gameplay
 
         /// <summary>Масштаб моделі юніта відносно вихідного розміру Kenney Mini Characters.</summary>
         private const float UnitVisualScale = 1.35f;
+        private const float KitBattleScale = 1.3f;
 
         private bool _resultPending;
         private string _resultOutcomeKey;
@@ -808,7 +809,9 @@ namespace Game.Gameplay
             go.transform.SetParent(_unitRoot, false);
             var figure = go.AddComponent<Game.Gameplay.Characters.KitFigure>();
             float phase = BattleArenaView.Hash01(unit.Id) * 0.9f;
-            if (!figure.Show(look, equip, CharacterAnimState.CombatIdle, 1f, phase, _unitRoot.gameObject.layer))
+            // 1,3: реалістичні пропорції читаються дрібніше за «чібі» Kenney того ж зросту — на клітинці
+            // 1 од. постать мала ~0,95 од. і губилась поруч з ялицями (тур 07.10.2026); тепер ~1,2 од.
+            if (!figure.Show(look, equip, CharacterAnimState.CombatIdle, KitBattleScale, phase, _unitRoot.gameObject.layer))
             {
                 Destroy(go);
                 go = null;

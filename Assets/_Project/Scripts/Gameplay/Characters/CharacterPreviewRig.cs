@@ -85,6 +85,26 @@ namespace Game.Gameplay.Characters
 
         private void Frame()
         {
+            // За кістками, а не за межами рендерерів: межі скінованих частин рахуються з бінд-пози й запасу
+            // і давали кадр удвічі вищий за постать — модель займала ~40 % вікна (тур 07.10.2026).
+            Transform head = null, footL = null, footR = null;
+            foreach (var t in _model.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "head") head = t;
+                else if (t.name == "foot_l") footL = t;
+                else if (t.name == "foot_r") footR = t;
+            }
+            if (head != null && footL != null)
+            {
+                float feet = Mathf.Min(footL.position.y, footR != null ? footR.position.y : footL.position.y) - 0.1f;
+                float top = head.position.y + 0.25f; // маківка й зачіска над кісткою голови
+                float h = Mathf.Max(0.8f, top - feet);
+                var c = new Vector3(_model.transform.position.x, (top + feet) * 0.5f, _model.transform.position.z);
+                float d = h * 0.5f / Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad) * 1.08f;
+                _camera.transform.position = new Vector3(c.x, c.y, c.z + d);
+                _camera.transform.rotation = Quaternion.LookRotation(Vector3.back);
+                return;
+            }
             var bounds = new Bounds(_model.transform.position, Vector3.zero);
             bool any = false;
             foreach (var r in _model.GetComponentsInChildren<Renderer>())

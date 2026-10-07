@@ -44,6 +44,10 @@ namespace Game.Gameplay.EditorTools
             { "log_stack", P("prop_woodpile", 1f) },
             { "banner-green", P("prop_banner", 1f) },
             { "banner-red", P("prop_banner", 1f) },
+            // Частокіл села — тин (плетений пліт, як у селах Перевалу) замість білого паркану Kenney.
+            // Множник 2,5 дає масштаб 1,0: ширина в сцені = довжині меша, тож крок частоколу (рахується з
+            // меша) збігається з поставленим тином без щілин.
+            { "fence", P("cover_half_wattle", 2.5f) },
         };
 
         private static readonly Dictionary<string, KeyValuePair<string, float>> Battle = new Dictionary<string, KeyValuePair<string, float>>
