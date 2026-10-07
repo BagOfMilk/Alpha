@@ -39,7 +39,9 @@ if ($Digest) { Show-Latest; exit 0 }
 # --- 1. Чи треба збирати: коміт білда проти поточного + незакомічені зміни в Assets ---
 Push-Location $proj
 $head = (git rev-parse --short HEAD).Trim()
-$dirty = (git status --porcelain -- Assets Packages ProjectSettings) -ne $null
+# Лише вихідний код і асети гри: Unity сам переписує налаштування URP і матеріали Kenney під час
+# збирання — через них білд перезбирався б щоразу.
+$dirty = (git status --porcelain -- Assets/_Project Assets/Art Assets/Tests Assets/ThirdParty/CC0 Packages/manifest.json) -ne $null
 Pop-Location
 $want = if ($dirty) { "$head+зміни" } else { $head }
 $have = if (Test-Path $stamp) { (Get-Content $stamp -Raw).Trim() } else { "" }
