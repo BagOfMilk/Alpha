@@ -45,8 +45,9 @@ namespace Game.Core.Characters
                     // червоною стрічкою — дівоча (художнє).
                     return new Appearance { Culture = "ukrainian", Gender = Gender.Female, Hair = "hair_braid01",
                             HairColor = HairDarkBrown, SignatureWeapon = "wpn_bow" }
-                        .With("shirt", Linen).With("tunic", ForestGreen).With("skirt_long", Charcoal).With("boots", RedLeather)
+                        .With("shirt", Linen).With("skirt_long", ForestGreen).With("boots", RedLeather)
                         .Accent("embroidery_gold", "braid_ribbon_red", "quiver");
+                    // Туніку поверх сорочки прибрано (07.10.2026): светр проступав крізь неї латками; зелений — у спідниці.
                 case "zakhar":
                     // Старійшина Тухлі, голос громади, знахар; довга біла сорочка, сива борода й волосся,
                     // патериця старійшини (художнє — атрибут влади громади), беркутове перо роду.
@@ -77,8 +78,9 @@ namespace Game.Core.Characters
                     // поясом (художнє).
                     return new Appearance { Culture = "ukrainian", Gender = Gender.Female, Hair = "hair_ponytail01",
                             HairColor = HairGrey }
-                        .With("shirt", Linen).With("skirt_long", Charcoal).With("vest", Walnut).With("shoes", BootLeather)
+                        .With("shirt", Linen).With("skirt_long", Charcoal).With("shoes", BootLeather)
                         .Accent("headscarf", "herb_pouch", "embroidery_red_black");
+                    // Без ліфа поверх сорочки (07.10.2026): светр проступав крізь нього латками.
                 // Пул прибульців (№12.10).
                 case "goban":
                     // Гобан Саор (ірландський фольклор, записи XIX ст.) — майстер-будівничий, що перехитрює
@@ -181,7 +183,8 @@ namespace Game.Core.Characters
             switch (culture)
             {
                 case "ukrainian":
-                    list.Add(Outfit(g).With("shirt", Linen).With(f ? "skirt_long" : "sharovary", f ? Charcoal : Madder).With("vest", Sheepskin).With("boots", BootLeather).Accent("sash", "embroidery_red_black"));
+                    // Жіночим — без ліфа поверх сорочки: светр проступав крізь нього латками (лукбук 07.10.2026).
+                    list.Add(WithVestIfMale(Outfit(g).With("shirt", Linen).With(f ? "skirt_long" : "sharovary", f ? Charcoal : Madder), f, Sheepskin).With("boots", BootLeather).Accent("sash", "embroidery_red_black"));
                     list.Add(Outfit(g).With("kaftan", Woad).With("trousers", Walnut).With("boots", BootLeather).Accent("sash"));
                     list.Add(Outfit(g).With("shirt", LinenWarm).With("trousers", Undyed).With("cloak", Walnut).With("shoes", BootLeather));
                     break;
@@ -213,7 +216,7 @@ namespace Game.Core.Characters
                 case "nordic":
                     list.Add(Outfit(g).With("tunic", Woad).With("trousers", Walnut).With("cloak", Undyed).With("boots", BootLeather).Accent("cloak_brooch_knot"));
                     list.Add(Outfit(g).With("tunic", Madder).With(f ? "skirt_long" : "trousers", Undyed).With("boots", BootLeather));
-                    list.Add(Outfit(g).With("shirt", LinenWarm).With("vest", Sheepskin).With("trousers", Charcoal).With("boots", BootLeather));
+                    list.Add(WithVestIfMale(Outfit(g).With("shirt", LinenWarm), f, Sheepskin).With("trousers", Charcoal).With("boots", BootLeather));
                     break;
                 default: // mediterranean
                     list.Add(Outfit(g).With("tunic", Madder).With("trousers", Walnut).With("shoes", BootLeather));
@@ -226,6 +229,9 @@ namespace Game.Core.Characters
         }
 
         private static Appearance Outfit(Gender g) => new Appearance { Gender = g, Hair = "", HairColor = HairBrown };
+
+        /// <summary>Безрукавка лише чоловічим вбранням: жіночий ліф поверх светра проступав латками (лукбук 07.10.2026).</summary>
+        private static Appearance WithVestIfMale(Appearance a, bool female, string color) => female ? a : a.With("vest", color);
 
         /// <summary>Образ героя за замовчуванням (до вибору гравця): перше вбрання першої культури.</summary>
         public static Appearance DefaultProtagonist(Gender g)

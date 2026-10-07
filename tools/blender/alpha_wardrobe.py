@@ -322,7 +322,7 @@ def wardrobe(rig, body):
     # --- плащ (спина від плечей, довгий)
     out["cloak"] = shell(rig, body, "cloak", "wool", TORSO | UPPER_ARMS, 0.05,
                          cut=lambda co: co.y > _back_y(rig) and co.z > zw + 0.08,
-                         hem=(zw - zk + 0.35, zw + 0.2), flare=1.2, rings=4)
+                         hem=(zw - zk + 0.35, zw + 0.2), flare=1.0, rings=4)   # без розширення: поли здувались грудками на стегнах
     # --- броня
     out["gambeson"] = shell(rig, body, "gambeson", "quilt", top | UPPER_ARMS, 0.026, cut=hips, hem=(0.24, hz), flare=1.12)
     out["mail"] = shell(rig, body, "mail", "mail", top | UPPER_ARMS | LOWER_ARMS, 0.032, cut=hips, hem=(0.3, hz), flare=1.15)
