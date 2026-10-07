@@ -30,21 +30,11 @@ namespace Game.Tests.EditMode
     {
         // ---------- відомі прогалини (M1.2) ----------
 
-        /// <summary>«простір:id» (для динамічних родин — «простір:префікс*»). ПЛЕЙСХОЛДЕР-борг, а не норма.</summary>
+        /// <summary>«простір:id» (для динамічних родин — «простір:префікс*»). Порожній з M1.2 (07.10.2026): ратчет лишено, щоб борг не повернувся мовчки.</summary>
         private static readonly HashSet<string> KnownUnread = new HashSet<string>(StringComparer.Ordinal)
         {
-            // --- вибори сцен без наслідку (M1.2: споживач — репліки напарників/епілог/підсумок — або зняти) ---
-            "story:myroslava_trusted", "story:myroslava_watched", "story:myroslava_sent_away",   // вибір «лишитися» (CompanionScenes)
-            "story:myroslava_asked", "story:myroslava_hint",                                      // розмова з Мирославою у відкритті (OpeningScenes)
-            "story:myroslava_ch2_remember", "story:myroslava_ch2_silence",                        // глава 2 Мирослави
-            "story:myroslava_checkup_reassure", "story:myroslava_checkup_space",                  // перевірка стану
-            "story:maksym_ch1_revenge_clean",                                                     // Максим, глава 1 (DefaultQuests)
-            "story:maksym_ch2_forgive", "story:maksym_ch2_guard",                                 // Максим, глава 2
-            "story:tugar_offer_refused",                                                          // відмова Тугарові (фракції вже зсунуто напряму)
-            "story:abandoned_camp_grain_taken",                                                   // данж «Покинутий табір»
-            "arc:arc_myroslava_done", "arc:arc_maksym_done",                                      // завершення особистих арок
-            // --- службові позначки (прогрес/пам'ять; читач не потрібен, але тоді їх варто зняти) ---
-            "story:pass_vanguard_resolved", "story:tugar_offer_seen", "story:first_building.*",
+            // M1.2 (07.10.2026): усі 19 прапорів закрито — споживач або знято (docs/STORY_FLAGS.md,
+            // тести — StoryFlagConsumersTests). Новий прапор без читача сюди НЕ вносимо: або читач, або не ставити.
         };
 
         /// <summary>
@@ -141,7 +131,7 @@ namespace Game.Tests.EditMode
             var scan = FlagScan.Run(ProductionSources());
             Assert.GreaterOrEqual(scan.Writes.Count(w => w.Ns == "story"), 15, "записів story-прапорів мало — сканер зламався?");
             Assert.GreaterOrEqual(scan.Reads.Count(r => r.Ns == "story"), 10, "читань story-прапорів мало — сканер зламався?");
-            Assert.GreaterOrEqual(scan.Writes.Count(w => w.Ns == "arc"), 4, "записів arc-прапорів мало");
+            Assert.GreaterOrEqual(scan.Writes.Count(w => w.Ns == "arc"), 2, "записів arc-прапорів мало");
             Assert.GreaterOrEqual(scan.Reads.Count(r => r.Ns == "arc"), 2, "читань arc-прапорів мало");
             Assert.IsTrue(scan.Writes.Any(w => w.Value == "zakhar_prepared_assault"));
             Assert.IsTrue(scan.Reads.Any(r => r.Value == "zakhar_prepared_assault"),

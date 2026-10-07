@@ -30,6 +30,14 @@ namespace Game.Core.Scenes
         public const string MyroslavaWatchedFlag = "myroslava_watched";
         public const string MyroslavaSentAwayFlag = "myroslava_sent_away";
 
+        // M1.2: вибори епілогів глав 2 і перевірки стану — читає StoryEchoes (рядки підсумку).
+        public const string MyroslavaCh2RememberFlag = "myroslava_ch2_remember";
+        public const string MyroslavaCh2SilenceFlag = "myroslava_ch2_silence";
+        public const string MyroslavaCheckupReassureFlag = "myroslava_checkup_reassure";
+        public const string MyroslavaCheckupSpaceFlag = "myroslava_checkup_space";
+        public const string MaksymCh2ForgiveFlag = "maksym_ch2_forgive";
+        public const string MaksymCh2GuardFlag = "maksym_ch2_guard";
+
         public const string MyroslavaConfrontedTrustFlag = "myroslava_confronted_trust";
         public const string MyroslavaConfrontedFailedFlag = "myroslava_confronted_failed";
         public const string MyroslavaConfrontedProvokedFlag = "myroslava_confronted_provoked";
@@ -72,10 +80,10 @@ namespace Game.Core.Scenes
                 .Step(SceneStep.Choice(MyroslavaEpilogueChoiceId, new List<SceneChoiceOption>
                 {
                     SceneChoiceOption.Simple("remember", "scene.myroslava.ch2.option.remember",
-                        new QuestConsequence().WithXp(15).Flag("myroslava_ch2_remember"),
+                        new QuestConsequence().WithXp(15).Flag(MyroslavaCh2RememberFlag),
                         transitionKey: "to.arc.myroslava.ch2.done"),
                     SceneChoiceOption.Simple("silence", "scene.myroslava.ch2.option.silence",
-                        new QuestConsequence().Loyalty("myroslava", 5).Flag("myroslava_ch2_silence"),
+                        new QuestConsequence().Loyalty("myroslava", 5).Flag(MyroslavaCh2SilenceFlag),
                         transitionKey: "to.arc.myroslava.ch2.done")
                 }));
         }
@@ -89,10 +97,10 @@ namespace Game.Core.Scenes
                 .Step(SceneStep.Choice(MaksymEpilogueChoiceId, new List<SceneChoiceOption>
                 {
                     SceneChoiceOption.Simple("forgive", "scene.maksym.ch2.option.forgive",
-                        new QuestConsequence().WithXp(15).Flag("maksym_ch2_forgive"),
+                        new QuestConsequence().WithXp(15).Flag(MaksymCh2ForgiveFlag),
                         transitionKey: "to.arc.maksym.ch2.done"),
                     SceneChoiceOption.Simple("guard", "scene.maksym.ch2.option.guard",
-                        new QuestConsequence().Loyalty("maksym", 5).Flag("maksym_ch2_guard"),
+                        new QuestConsequence().Loyalty("maksym", 5).Flag(MaksymCh2GuardFlag),
                         transitionKey: "to.arc.maksym.ch2.done")
                 }));
         }
@@ -103,9 +111,14 @@ namespace Game.Core.Scenes
         /// довіри вже на дні). Персуейд рятує (довіра відновлена),
         /// звинувачення/погроза провокує негайну зраду, «відпустити» —
         /// теж зрада, але з м'якшим прапором для фіналу.
+        ///
+        /// M1.2: вибір у главі 1 арки (доба 2) лишає слід у порогах цієї розмови —
+        /// прапори <c>myroslava_trusted/watched/sent_away</c> читає
+        /// <see cref="ConfrontationThresholds"/>; пороги видно в прев'ю варіанта заздалегідь.
         /// </summary>
-        public static Scene MyroslavaConfrontation()
+        public static Scene MyroslavaConfrontation(bool trustedInCh1 = false, bool watchedInCh1 = false, bool sentAwayInCh1 = false)
         {
+            var thresholds = ConfrontationThresholds(trustedInCh1, watchedInCh1, sentAwayInCh1);
             var persuadeBands = new[]
             {
                 new QuestConsequence().Loyalty("myroslava", -5).Flag(MyroslavaConfrontedFailedFlag),
@@ -129,15 +142,35 @@ namespace Game.Core.Scenes
                 .Step(SceneStep.Choice(MyroslavaConfrontationChoiceId, new List<SceneChoiceOption>
                 {
                     SceneChoiceOption.WithCheck("persuade", "scene.myroslava.confrontation.option.persuade",
-                        SkillKeys.Persuade, 4, ApproachForm.Persuade, persuadeBands,
+                        SkillKeys.Persuade, thresholds.Persuade, ApproachForm.Persuade, persuadeBands,
                         transitionKey: "to.confrontation.resolved"),
                     SceneChoiceOption.WithCheck("accuse", "scene.myroslava.confrontation.option.accuse",
-                        SkillKeys.Intimidate, 5, ApproachForm.Intimidate, accuseBands,
+                        SkillKeys.Intimidate, thresholds.Accuse, ApproachForm.Intimidate, accuseBands,
                         transitionKey: "to.confrontation.resolved"),
                     SceneChoiceOption.Simple("release", "scene.myroslava.confrontation.option.release",
                         new QuestConsequence().Loyalty("myroslava", -10).Flag(MyroslavaConfrontedReleaseFlag),
                         transitionKey: "to.confrontation.resolved")
                 }));
+        }
+
+        /// <summary>Базовий поріг «переконати» на нічній розмові (ПЛЕЙСХОЛДЕР — як і решта чисел збірки).</summary>
+        public const int ConfrontationPersuadeBaseThreshold = 4;
+
+        /// <summary>Базовий поріг «звинуватити» (Залякування) на нічній розмові (ПЛЕЙСХОЛДЕР).</summary>
+        public const int ConfrontationAccuseBaseThreshold = 5;
+
+        /// <summary>
+        /// Пороги нічної розмови після вибору в главі 1 арки Мирослави (M1.2, «вибір → наслідок»):
+        /// довіра (<c>myroslava_trusted</c>) — вона вислухає, «переконати» легше на 1;
+        /// пильнування (<c>myroslava_watched</c>) — ти знаєш, що саме закинути, «звинуватити» легше на 1;
+        /// відіслана (<c>myroslava_sent_away</c>) — пам'ятає образу, «переконати» важче на 1.
+        /// Детерміновано, без нових шкал; поріг не падає нижче 1.
+        /// </summary>
+        public static (int Persuade, int Accuse) ConfrontationThresholds(bool trusted, bool watched, bool sentAway)
+        {
+            int persuade = ConfrontationPersuadeBaseThreshold - (trusted ? 1 : 0) + (sentAway ? 1 : 0);
+            int accuse = ConfrontationAccuseBaseThreshold - (watched ? 1 : 0);
+            return (System.Math.Max(1, persuade), System.Math.Max(1, accuse));
         }
 
         /// <summary>Запасна сцена того самого вузла (доба 3), коли зрада НЕ насувається — звичайна перевірка стосунків, без ставок.</summary>
@@ -149,10 +182,10 @@ namespace Game.Core.Scenes
                 .Step(SceneStep.Choice(MyroslavaCheckupChoiceId, new List<SceneChoiceOption>
                 {
                     SceneChoiceOption.Simple("reassure", "scene.myroslava.checkup.option.reassure",
-                        new QuestConsequence().Loyalty("myroslava", 5).Flag("myroslava_checkup_reassure"),
+                        new QuestConsequence().Loyalty("myroslava", 5).Flag(MyroslavaCheckupReassureFlag),
                         transitionKey: "to.checkup.resolved"),
                     SceneChoiceOption.Simple("space", "scene.myroslava.checkup.option.space",
-                        new QuestConsequence().Flag("myroslava_checkup_space"),
+                        new QuestConsequence().Flag(MyroslavaCheckupSpaceFlag),
                         transitionKey: "to.checkup.resolved")
                 }));
         }

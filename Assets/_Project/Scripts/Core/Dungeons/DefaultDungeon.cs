@@ -24,6 +24,12 @@ namespace Game.Core.Dungeons
         public const string AbandonedCamp = "abandoned_camp";
         public const string OldHermitage = "old_hermitage";
 
+        /// <summary>
+        /// Подія «жадібно» в «Покинутому таборі»: забране зерно авангарду. Крім прямої ціни (страх, Тугар),
+        /// лишає рядок у підсумку (<c>StoryEchoes</c>) — M1.2.
+        /// </summary>
+        public const string AbandonedCampGrainTakenFlag = "abandoned_camp_grain_taken";
+
         public static IReadOnlyList<string> KnownSiteIds { get; } = new[] { AbandonedCamp, OldHermitage };
 
         public static IReadOnlyList<DungeonRoomDefinition> Rooms(string siteId)
@@ -85,7 +91,7 @@ namespace Game.Core.Dungeons
                 buildGain: 3, goldGain: 0, threatDelta: 2,
                 causesFear: true,
                 factionDeltas: new Dictionary<string, int> { ["tuhar_boyars"] = -5 },
-                flagsToSet: new[] { "abandoned_camp_grain_taken" },
+                flagsToSet: new[] { AbandonedCampGrainTakenFlag },
                 craftGain: 2));
             room3.EventOptions.Add(new DungeonEventOption(
                 id: "cautious", labelKey: "dungeon.room3.cautious",

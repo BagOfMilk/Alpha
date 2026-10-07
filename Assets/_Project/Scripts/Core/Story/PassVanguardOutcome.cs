@@ -32,6 +32,13 @@ namespace Game.Core.Story
         public const string MyroslavaId = "myroslava";
 
         /// <summary>
+        /// «Вузол 1 уже розв'язано» (M1.2): <see cref="Apply"/> читає його сам — другий виклик ні
+        /// ранить, ні грабує вдруге (раніше прапор лише ставився, а обіцяну в коментарі
+        /// ідемпотентність нікому було тримати).
+        /// </summary>
+        public const string ResolvedFlag = "pass_vanguard_resolved";
+
+        /// <summary>
         /// Прапор «зерно зради посіяно» (§3.1): Мирослава ЩЕ не дефекція (те
         /// стане можливим лише коли B4 заведе <c>Defection</c>/`Antagonist`) —
         /// лише позначка на майбутнє й на фінал (<c>Finale.BuildAssault</c>
@@ -104,11 +111,14 @@ namespace Game.Core.Story
         /// РАЗ на резолв вузла (тихий чи кровавий) — повторний виклик тим самим
         /// band ще раз забере зі складу і ще раз ранить, тому викликач
         /// (D1) зобов'язаний зберегти, що вузол уже розв'язаний
-        /// (для цього і є прапор <c>pass_vanguard_resolved</c> нижче).
+        /// (для цього і є прапор <see cref="ResolvedFlag"/>, який <see cref="Apply"/> читає сам).
         /// </summary>
         public static void Apply(BaseState state, OutcomeBand band, bool wasBloody, StoryFlags flags)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
+
+            // Вузол розв'язують рівно один раз: повторний виклик не мутує ні ростер, ні склад (M1.2).
+            if (flags != null && flags.Get(ResolvedFlag)) return;
 
             bool myroslavaLeaves = band == OutcomeBand.Base || band == OutcomeBand.Worst;
 
@@ -126,7 +136,7 @@ namespace Game.Core.Story
 
             if (flags != null)
             {
-                flags.Set("pass_vanguard_resolved");
+                flags.Set(ResolvedFlag);
                 if (myroslavaLeaves) flags.Set(DefectorSeededFlag);
             }
         }
