@@ -51,6 +51,10 @@ namespace Game.Gameplay.EditorTools
         {
             if (string.IsNullOrEmpty(materialName)) return null;
             string name = materialName;
+            // Брови й вії MPFB: матеріал «Human.eyebrow001.010», текстура — «eyebrow001». Без цього брови й вії
+            // були білими смужками без текстури («світяться очі», лукбук 07.10.2026).
+            var face = System.Text.RegularExpressions.Regex.Match(name, @"(eyebrow\d+|eyelashes\d+)");
+            if (face.Success) name = face.Value;
             int dot = name.IndexOf('.');
             if (dot > 0) name = name.Substring(0, dot); // «stone_wall_04.001» → «stone_wall_04»
             // Зачіски набору: матеріал «hairN_hair_short02», а текстура — «hairN_short02» (alpha_wardrobe.py

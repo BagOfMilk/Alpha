@@ -37,7 +37,9 @@ try:
             _tint_skin_materials([o for o in rig.children if o.get("kit_kind") == "skin" or o.name.endswith("low-poly")],
                                  (1, 1, 1), f"{g}_default", TEX)
             accents(rig, body)
+            moved = layer_clothes(rig)
         rigs[g] = rig
+        step(f"шари {g}: " + ", ".join(f"{k} {n}" for k, n in sorted(moved.items()) if n))
         step(f"набір {g}: {len([o for o in rig.children if o.get('kit_part')])} частин")
 
     bodies = []

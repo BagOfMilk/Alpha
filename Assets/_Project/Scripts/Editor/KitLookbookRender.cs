@@ -199,6 +199,7 @@ namespace Game.Gameplay.EditorTools
             var animator = model.GetComponentInChildren<Animator>();
             if (clip == null || animator == null) return default(PlayableGraph);
             animator.applyRootMotion = false;
+            animator.Rebind(); // поза Play Mode аніматор не ініціалізований — граф інакше лишав бінд-позу
             var graph = PlayableGraph.Create("lookbook");
             graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
             var output = AnimationPlayableOutput.Create(graph, "look", animator);

@@ -195,6 +195,7 @@ def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, 
     keep = {v.index for v in bm.verts if sel(v)}
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if not all(v.index in keep for v in f.verts)], context='FACES')
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    _smooth_boundary(bm)
     bm.normal_update()
     for v in bm.verts:
         v.co += v.normal * offset
@@ -219,6 +220,20 @@ def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, 
     ob = _new_skinned(f"{rig.name}.{part}", bm, src, rig, kind)
     _budget(ob, budget)
     return ob
+
+def _smooth_boundary(bm, iters=6):
+    """Край оболонки — зигзаг по ребрах тіла: вирівнюємо вершини межі вздовж самої межі (Лапласіан по
+    петлі), решта сітки не рухається."""
+    for _ in range(iters):
+        new = {}
+        for v in bm.verts:
+            if not v.is_boundary:
+                continue
+            nb = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
+            if len(nb) == 2:
+                new[v] = v.co * 0.5 + (nb[0].co + nb[1].co) * 0.25
+        for v, c in new.items():
+            v.co = c
 
 def _budget(ob, limit):
     tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
@@ -587,6 +602,61 @@ COVERS = {
     "boots": ["feet"], "shoes": ["feet"], "cloak": [], "gambeson": ["torso", "upperarms"],
     "mail": ["torso", "upperarms", "lowerarms"], "cuirass": [], "bracers": [], "greaves": [],
 }
+
+# Шари одягу від тіла назовні. Річ шару k виштовхується назовні від усіх речей нижчих шарів там, де вони
+# перетинаються (у межах REACH): ліф проступав крізь светр, вишивка — з-під сорочки, спідниця плямилась
+# (власник 07.10.2026: «одяг рваний і ніби прозорий»). Поєднання не важливе: річ стоїть над будь-якою
+# нижчою, тож без нижньої вона лише на кілька мм далі від тіла.
+LAYERS = [
+    {"shirt", "trousers", "sharovary"},
+    {"embroidery_red_black", "embroidery_red_black_cuffs", "embroidery_gold", "tunic", "skirt_long", "boots", "shoes",
+     "gambeson", "bracers"},
+    {"kaftan", "robe", "mail", "greaves"},
+    {"vest", "cuirass", "iron_armrings"},
+    {"sash", "boyar_belt", "carpenter_apron", "kerchief", "wolf_fur_collar", "cloak"},
+]
+
+def layer_clothes(rig, gap=0.004, reach=0.04):
+    """Повертає {частина: скільки вершин зсунуто}."""
+    from mathutils.bvhtree import BVHTree
+    parts = {o.get("kit_part"): o for o in rig.children if o.get("kit_part") and o.type == 'MESH'}
+    lower, moved = [], {}
+    for layer in LAYERS:
+        objs = [parts[k] for k in sorted(layer) if k in parts]
+        if lower:
+            verts, polys = [], []
+            for o in lower:
+                mw = o.matrix_world
+                base = len(verts)
+                verts += [mw @ v.co for v in o.data.vertices]
+                polys += [[base + i for i in p.vertices] for p in o.data.polygons]
+            tree = BVHTree.FromPolygons(verts, polys)
+            for o in objs:
+                me = o.data
+                mw = o.matrix_world; inv = mw.inverted(); n3 = mw.to_3x3().inverted().transposed()
+                need = [0.0] * len(me.vertices)
+                for v in me.vertices:
+                    p = mw @ v.co
+                    loc, nrm, _i, _d = tree.find_nearest(p, reach)
+                    if loc is None:
+                        continue
+                    side = (p - loc).dot(nrm)
+                    if side < gap:
+                        need[v.index] = gap - side
+                adj = [[] for _ in me.vertices]
+                for e in me.edges:
+                    a, b = e.vertices
+                    adj[a].append(b); adj[b].append(a)
+                for _ in range(3):                      # без сходинок між зсунутими й сусідніми вершинами
+                    need = [max(need[i], 0.6 * max((need[j] for j in adj[i]), default=0.0)) for i in range(len(need))]
+                for v in me.vertices:
+                    if need[v.index] > 0.0:
+                        nw = (n3 @ v.normal).normalized()
+                        v.co = inv @ (mw @ v.co + nw * need[v.index])
+                me.update()
+                moved[o.get("kit_part")] = sum(1 for x in need if x > 0.0)
+        lower += objs
+    return moved
 
 def split_body(rig, body):
     """Тіло-проксі -> окремі сітки зон (kit_m.body_torso тощо); оригінал ховається."""
