@@ -180,19 +180,25 @@ def _source(rig):
     return bpy.data.objects[rig.name + ".basemesh"]
 
 def _shaped_coords(src):
-    """Вершини базової сітки З формами тіла (shape keys MPFB: стать, раса, м'язи, вага). Сира сітка —
-    нейтральне тіло з грудьми; оболонки з неї відходили від справжнього тіла в середньому на 6 см
-    (до 12) і не сідали на постать — «одяг рваний і ніби прозорий» (власник 07.10.2026)."""
-    sk = src.data.shape_keys
-    co = [v.co.copy() for v in src.data.vertices]
-    if sk is None:
-        return co
-    for k in sk.key_blocks[1:]:
-        if k.mute or abs(k.value) < 1e-6:
-            continue
-        rel = k.relative_key.data
-        for i, d in enumerate(k.data):
-            co[i] += (d.co - rel[i].co) * k.value
+    """Вершини базової сітки З формами тіла (shape keys MPFB: стать, раса, м'язи, вага) — як їх обчислює
+    сам Blender (модифікатори на мить вимкнено, щоб топологія збіглась). Сира сітка — нейтральне тіло;
+    оболонки з неї відходили від справжнього тіла в середньому на 6 см (до 12) — «одяг рваний і ніби
+    прозорий» (власник 07.10.2026). Ручна сума ключів дала хибну мітку рота (вуса на переніссі)."""
+    saved = [(m, m.show_viewport) for m in src.modifiers]
+    for m, _ in saved:
+        m.show_viewport = False
+    try:
+        dg = bpy.context.evaluated_depsgraph_get()
+        dg.update()
+        ev = src.evaluated_get(dg)
+        me = ev.to_mesh()
+        co = [v.co.copy() for v in me.vertices]
+        ev.to_mesh_clear()
+    finally:
+        for m, vis in saved:
+            m.show_viewport = vis
+    if len(co) != len(src.data.vertices):
+        raise RuntimeError(f"{src.name}: форма {len(co)} вершин, сітка {len(src.data.vertices)}")
     return co
 
 def _body_verts(src):
@@ -337,7 +343,7 @@ LIBRARY_CLOTHES = {
     "sharovary":  {"m": "toigo_harem_pants", "f": "toigo_harem_pants"},
     "skirt_long": {"f": "toigo_long_full_skirt"},
     "vest":       {"f": "toigo_bodice-style_top"},
-    "boots":      {"m": "culturalibre_male_boots", "f": "culturalibre_heroine_boots_1"},
+    "boots":      {"m": "culturalibre_hero_boots_1", "f": "culturalibre_heroine_boots_1"},   # male_boots — 30 тис. трикутників, після спрощення шипи
     "shoes":      {"m": "toigo_mj_cloth_shoes", "f": "toigo_mj_cloth_shoes"},
 }
 LIBRARY_FABRIC = {"shirt": "linen", "tunic": "wool", "robe": "linen", "kaftan": "wool", "trousers": "wool",
@@ -604,17 +610,43 @@ def _musket(rig, body):
 
 # ---------------------------------------------------------------- волосся обличчя
 
+def _mouth(rig):
+    """Лінія губ і точка під носом за профілем обличчя (форма з shape keys). Мітка MPFB «joint-mouth» —
+    суглоб у глибині голови, вище губ: вуса за нею лягали на перенісся (лукбук 07.10.2026)."""
+    src = _source(rig)
+    dom = _dominant(src, set(rig.data.bones.keys()))
+    shaped, body_only = _shaped_coords(src), _body_verts(src)
+    prof = [shaped[i] for i in body_only if dom[i] == "head" and abs(shaped[i].x) < 0.008]
+    eye = _landmark(rig, "joint-l-eye") if "joint-l-eye" in src.vertex_groups else None
+    band = [p for p in prof if eye is None or eye.z - 0.09 < p.z < eye.z]
+    nose = min(band, key=lambda p: p.y)                     # кінчик носа — найдальше вперед (−Y)
+    bins = {}
+    for p in prof:
+        if nose.z - 0.075 < p.z < nose.z:
+            k = round((nose.z - p.z) / 0.002)
+            bins[k] = min(bins.get(k, 1e9), p.y)            # профіль: найпередніша точка на висоті
+    ks = sorted(bins)
+    def deepest(lo, hi):                                     # найглибша (найбільша y) точка профілю в смузі
+        cand = [k for k in ks if lo <= k * 0.002 <= hi]
+        return max(cand, key=lambda k: bins[k]) if cand else None
+    sub = deepest(0.006, 0.03)                               # під носом
+    sto = deepest((sub or 10) * 0.002 + 0.008, (sub or 10) * 0.002 + 0.03)   # між губами
+    z_sub = nose.z - (sub if sub is not None else 12) * 0.002
+    z_sto = nose.z - (sto if sto is not None else 25) * 0.002
+    y_lip = min((p.y for p in prof if z_sto < p.z < z_sub), default=nose.y + 0.02)
+    return Vector((0.0, y_lip, z_sto)), z_sub
+
 def facial_hair(rig, body):
     """Бороди й вуса — оболонка нижньої частини обличчя (кістка head, нижче носа, спереду)."""
-    mouth = _landmark(rig, "joint-mouth"); jaw = _landmark(rig, "joint-jaw")
+    mouth, z_sub = _mouth(rig); jaw = _landmark(rig, "joint-jaw")
     fy = mouth.y
     out = {}
-    # Орієнтири MPFB: центр рота і суглоб щелепи. Борода — від щелепи вниз і щоки нижче рота
-    # (центр рота лишається відкритим), вуса — смуга над верхньою губою.
+    # Лінія губ і точка під носом — з профілю обличчя; суглоб щелепи MPFB — задня межа бороди. Борода —
+    # від щелепи вниз і щоки нижче рота (центр рота лишається відкритим), вуса — над верхньою губою.
     mz = mouth.z
     for part, zlo, zmax, depth, off in (("beard_full", mz - 0.11, mz + 0.03, 0.06, 0.012),
                                         ("beard_short", mz - 0.09, mz + 0.02, 0.015, 0.006),
-                                        ("moustache", mz + 0.006, mz + 0.022, 0.0, 0.005)):
+                                        ("moustache", z_sub - 0.013, z_sub + 0.002, 0.0, 0.004)):   # шкіра над губою, не сама губа
         if part == "moustache":
             cut = lambda co, zlo=zlo, zmax=zmax: zlo < co.z < zmax and co.y < fy + 0.01 and abs(co.x) < 0.032
         else:
