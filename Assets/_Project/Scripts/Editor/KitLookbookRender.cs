@@ -230,7 +230,14 @@ namespace Game.Gameplay.EditorTools
                 go.transform.SetParent(snap.transform, false);
                 go.transform.SetPositionAndRotation(smr.transform.position, smr.transform.rotation);
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
-                go.AddComponent<MeshRenderer>().sharedMaterials = smr.sharedMaterials;
+                var mr = go.AddComponent<MeshRenderer>();
+                mr.sharedMaterials = smr.sharedMaterials;
+                if (smr.HasPropertyBlock())
+                {
+                    var block = new MaterialPropertyBlock();
+                    smr.GetPropertyBlock(block);
+                    mr.SetPropertyBlock(block); // відтінок тканини й волосся — гра дає його блоком властивостей
+                }
                 smr.enabled = false;
             }
             return snap;

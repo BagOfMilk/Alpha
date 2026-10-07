@@ -139,7 +139,8 @@ def _rod(m, a, b, rad, segs=6):
 def _head_landmarks(rig):
     src = _source(rig)
     dom = _dominant(src, set(rig.data.bones.keys()))
-    hv = [v.co for v in src.data.vertices if dom[v.index] == "head"]
+    shaped, body_only = _shaped_coords(src), _body_verts(src)
+    hv = [shaped[v.index] for v in src.data.vertices if dom[v.index] == "head" and v.index in body_only]
     mouth = _landmark(rig, "joint-mouth")
 
     def eye(side):

@@ -179,16 +179,55 @@ def _source(rig):
     """Джерело крою — повна базова сітка MPFB (18 тис. граней): точний відбір і рівні поли."""
     return bpy.data.objects[rig.name + ".basemesh"]
 
+def _shaped_coords(src):
+    """Вершини базової сітки З формами тіла (shape keys MPFB: стать, раса, м'язи, вага). Сира сітка —
+    нейтральне тіло з грудьми; оболонки з неї відходили від справжнього тіла в середньому на 6 см
+    (до 12) і не сідали на постать — «одяг рваний і ніби прозорий» (власник 07.10.2026)."""
+    sk = src.data.shape_keys
+    co = [v.co.copy() for v in src.data.vertices]
+    if sk is None:
+        return co
+    for k in sk.key_blocks[1:]:
+        if k.mute or abs(k.value) < 1e-6:
+            continue
+        rel = k.relative_key.data
+        for i, d in enumerate(k.data):
+            co[i] += (d.co - rel[i].co) * k.value
+    return co
+
+def _body_verts(src):
+    """Індекси вершин самого тіла: допоміжні сітки MPFB (колготи, спідниця, шапка волосся — ховає маска
+    «Hide helpers») у крій потрапляти не мають — інакше подвоєні поверхні просвічують."""
+    keep = set(range(len(src.data.vertices)))
+    for m in src.modifiers:
+        # лише маска допоміжних сіток: «Hide base mesh» ховає саме тіло (у кадрі — проксі)
+        if m.type != 'MASK' or "helper" not in m.name.lower() or not m.vertex_group:
+            continue
+        g = src.vertex_groups.get(m.vertex_group)
+        if g is None:
+            continue
+        member = set()
+        for v in src.data.vertices:
+            for e in v.groups:
+                if e.group == g.index and e.weight > 0.0:
+                    member.add(v.index); break
+        keep &= (set(range(len(src.data.vertices))) - member) if m.invert_vertex_group else member
+    return keep
+
 def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, rings=3, budget=2000):
     """Річ-оболонка: грані тіла, усі вершини яких належать кісткам `bones` (і проходять `cut`),
     зсунуті на `offset` назовні; hem=(довжина, z_max) — подовжити нижній край (поли)."""
     src = _source(rig)
     dom = _dominant(src, set(rig.data.bones.keys()))
+    shaped = _shaped_coords(src)
+    body_only = _body_verts(src)
     bm = bmesh.new(); bm.from_mesh(src.data)
     bm.verts.ensure_lookup_table()
+    for v in bm.verts:
+        v.co = shaped[v.index]
     def sel(v):
         d = dom[v.index]
-        if d is None:
+        if d is None or v.index not in body_only:
             return False
         ok = d in bones or (any(d.startswith(p) for p in HANDS_PREFIX) and "hands" in bones)
         return ok and (cut is None or cut(v.co))
@@ -402,7 +441,8 @@ def _skull(rig):
     """Верх черепа і центр голови за базовою сіткою (точніше, ніж кінець кістки head)."""
     src = _source(rig)
     dom = _dominant(src, set(rig.data.bones.keys()))
-    pts = [v.co for v in src.data.vertices if dom[v.index] == "head"]
+    shaped, body_only = _shaped_coords(src), _body_verts(src)
+    pts = [shaped[v.index] for v in src.data.vertices if dom[v.index] == "head" and v.index in body_only]
     top = max(p.z for p in pts)
     crown = [p for p in pts if p.z > top - 0.06]
     cx = sum(p.x for p in crown) / len(crown); cy = sum(p.y for p in crown) / len(crown)
@@ -588,7 +628,8 @@ def facial_hair(rig, body):
 def _landmark(rig, group):
     src = _source(rig)
     gi = src.vertex_groups[group].index
-    pts = [v.co for v in src.data.vertices if any(g.group == gi and g.weight > 0.5 for g in v.groups)]
+    shaped = _shaped_coords(src)                 # мітки суглобів — допоміжні вершини, але форма тіла — справжня
+    pts = [shaped[v.index] for v in src.data.vertices if any(g.group == gi and g.weight > 0.5 for g in v.groups)]
     return sum(pts, Vector()) / max(1, len(pts))
 
 
@@ -611,8 +652,10 @@ COVERS = {
 # (власник 07.10.2026: «одяг рваний і ніби прозорий»). Поєднання не важливе: річ стоїть над будь-якою
 # нижчою, тож без нижньої вона лише на кілька мм далі від тіла.
 LAYERS = [
-    {"shirt", "trousers", "sharovary"},
-    {"embroidery_red_black", "embroidery_red_black_cuffs", "embroidery_gold", "tunic", "skirt_long", "boots", "shoes",
+    {"boots", "shoes"},                                   # халяви — під штанами (шаровари їх накривають)
+    {"trousers", "sharovary"},
+    {"shirt"},                                            # сорочка — навипуск поверх штанів
+    {"embroidery_red_black", "embroidery_red_black_cuffs", "embroidery_gold", "tunic", "skirt_long",
      "gambeson", "bracers"},
     {"kaftan", "robe", "mail", "greaves"},
     {"vest", "cuirass", "iron_armrings"},
