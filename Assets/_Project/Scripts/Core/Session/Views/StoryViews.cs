@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Game.Core.Characters;
 using Game.Core.Characters.Creation;
 
 namespace Game.Core.Session.Views
@@ -82,6 +83,8 @@ namespace Game.Core.Session.Views
         public Gender Gender;
         public string BackgroundId;
         public IReadOnlyList<string> AvailableBackgrounds;
+        /// <summary>Поточна зовнішність героя (Поправка №19.3) — копія; змінювати через SetProtagonistAppearance.</summary>
+        public Appearance Appearance;
     }
 
     public sealed class SummaryView

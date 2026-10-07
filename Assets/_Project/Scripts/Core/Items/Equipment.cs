@@ -32,13 +32,62 @@ namespace Game.Core.Items
             return null;
         }
 
-        /// <summary>Надіває предмет у його слот; повертає раніше надіте в цьому слоті (або null).</summary>
+        /// <summary>Надіває предмет у його слот; повертає раніше надіте в цьому слоті (або null).
+        /// Предмети, витіснені дворучністю (щит), — лише через <see cref="EquipDisplacing"/>.</summary>
         public ItemInstance Equip(ItemInstance item)
         {
-            if (item == null) return null;
+            var displaced = EquipDisplacing(item);
+            return displaced.Count > 0 ? displaced[0] : null;
+        }
+
+        /// <summary>
+        /// Надіває предмет і повертає ВСЕ, що довелося зняти (№19.2): попереднє в тому ж слоті;
+        /// для дворучної зброї — ще й щит; для щита — дворучну зброю. Нічого не губиться: викликач
+        /// кладе витіснене в сташ.
+        /// </summary>
+        public List<ItemInstance> EquipDisplacing(ItemInstance item)
+        {
+            var displaced = new List<ItemInstance>();
+            if (item == null) return displaced;
             var prev = Get(item.Slot);
+            if (prev != null) displaced.Add(prev);
+            if (item.Slot == EquipSlot.Weapon && item.Definition.TwoHanded)
+            {
+                var shield = Unequip(EquipSlot.Offhand);
+                if (shield != null) displaced.Add(shield);
+            }
+            else if (item.Slot == EquipSlot.Offhand)
+            {
+                var weapon = Get(EquipSlot.Weapon);
+                if (weapon != null && weapon.Definition.TwoHanded)
+                {
+                    Unequip(EquipSlot.Weapon);
+                    displaced.Add(weapon);
+                }
+            }
             _slots[item.Slot] = item;
-            return prev;
+            return displaced;
+        }
+
+        /// <summary>Усе надіте в порядку слотів (для сейву, «ляльки» і моделі).</summary>
+        public IEnumerable<ItemInstance> All()
+        {
+            foreach (EquipSlot slot in System.Enum.GetValues(typeof(EquipSlot)))
+            {
+                var item = Get(slot);
+                if (item != null) yield return item;
+            }
+        }
+
+        /// <summary>Надіте — тим самим форматом, що й сташ (<see cref="ItemCodec"/>); слот береться з визначення.</summary>
+        public string CaptureState() => ItemCodec.Encode(All());
+
+        /// <summary>Відновлення надітого зі слепка; чужі/невідомі визначення пропускаються.</summary>
+        public void RestoreState(string blob)
+        {
+            _slots.Clear();
+            foreach (var item in ItemCodec.Decode(blob))
+                _slots[item.Slot] = item;
         }
 
         /// <summary>Знімає предмет зі слоту; повертає зняте (або null).</summary>

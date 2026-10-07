@@ -226,6 +226,9 @@ namespace Game.Core.Session
         // ---- створення протагоніста (R12) ----
         private string _pendingName;
         private Gender _pendingGender = Gender.Male;
+        // Поправка №19.3: зовнішність героя (лише вигляд, без чисел балансу); null — образ за
+        // замовчуванням для обраної статі (AppearanceCatalog.DefaultProtagonist).
+        private Appearance _pendingAppearance;
         private string _pendingBackgroundId = "warrior";
         private Gender _protagonistGender = Gender.Male;
 
@@ -426,6 +429,7 @@ namespace Game.Core.Session
             // успадковував би передісторію МИНУЛОЇ гри цього ж інстансу.
             _pendingName = null;
             _pendingGender = Gender.Male;
+            _pendingAppearance = null;
             _pendingBackgroundId = Backgrounds.All()[0].Id;
             _pendingTavernSpecialistId = null;
             _pendingTavernDueDay = 0;
@@ -523,6 +527,59 @@ namespace Game.Core.Session
         {
             RequireState(SessionState.Creation);
             _pendingGender = gender;
+            // інша стать — інший набір (зачіски, крій): образ скидається на дефолтний цієї статі
+            if (_pendingAppearance != null && _pendingAppearance.Gender != gender) _pendingAppearance = null;
+        }
+
+        /// <summary>
+        /// Зовнішність героя на екрані створення (Поправка №19.3). Приймається лише образ із відомих
+        /// частин набору (<see cref="KitParts"/>) і кольорів #RRGGBB; стать образу стає статтю героя.
+        /// Повертає false і нічого не змінює, якщо образ некоректний.
+        /// </summary>
+        public bool SetProtagonistAppearance(Appearance appearance)
+        {
+            RequireState(SessionState.Creation);
+            if (!IsValidAppearance(appearance)) return false;
+            _pendingAppearance = appearance.Clone();
+            _pendingGender = appearance.Gender;
+            return true;
+        }
+
+        internal static bool IsValidAppearance(Appearance a)
+        {
+            if (a == null || !KitParts.IsKnownCulture(a.Culture) || !Appearance.IsColor(a.HairColor)) return false;
+            if (a.Hair.Length > 0 && !KitParts.IsBuilt(a.Hair)) return false;
+            if (a.FacialHair.Length > 0 && (a.Gender == Gender.Female || !KitParts.IsBuilt(a.FacialHair))) return false;
+            if (a.SignatureWeapon.Length > 0 && !KitParts.IsBuilt(a.SignatureWeapon)) return false;
+            foreach (var p in a.Outfit)
+                if (!KitParts.IsBuilt(p.Part) || !Appearance.IsColor(p.Color)) return false;
+            foreach (var acc in a.Accents)
+                if (!KitParts.IsKnown(acc)) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Зовнішність будь-кого з загону (Поправка №19.1): герой — обране гравцем; іменні — образ із
+        /// першоджерела (<see cref="AppearanceCatalog.Named"/>); решта — стабільний образ від id.
+        /// Повертає копію: зміна результату не змінює гри. Надіте спорядження гра накладає зверху.
+        /// </summary>
+        public Appearance GetAppearance(string companionId)
+        {
+            if (string.Equals(companionId, ProtagonistId, StringComparison.Ordinal))
+                return (_pendingAppearance ?? AppearanceCatalog.DefaultProtagonist(_pendingGender)).Clone();
+            var named = AppearanceCatalog.Named(companionId);
+            if (named != null) return named;
+            var c = _worldRoster?.Get(companionId);
+            string cardId = c?.Card?.Id;
+            if (cardId != null && (named = AppearanceCatalog.Named(cardId)) != null) return named;
+            return AppearanceCatalog.ForUnnamed(companionId, StableGender(companionId));
+        }
+
+        private static Gender StableGender(string id)
+        {
+            uint h = 2166136261u;
+            foreach (char ch in id ?? "") { h ^= ch; h *= 16777619u; }
+            return (h & 1u) == 0u ? Gender.Male : Gender.Female;
         }
 
         public void SetProtagonistBackground(string presetId)
@@ -553,7 +610,8 @@ namespace Game.Core.Session
                 Name = _pendingName,
                 Gender = _pendingGender,
                 BackgroundId = _pendingBackgroundId,
-                AvailableBackgrounds = ids
+                AvailableBackgrounds = ids,
+                Appearance = (_pendingAppearance ?? AppearanceCatalog.DefaultProtagonist(_pendingGender)).Clone()
             };
         }
 
@@ -1174,12 +1232,63 @@ namespace Game.Core.Session
             var item = _inventory.FindAnywhere(_worldRoster.All, itemInstanceId);
             if (item == null || item.Slot != slot) return false;
 
-            _inventory.Remove(item);
-            var previous = c.Equipment.Equip(item);
-            if (previous != null) _inventory.Add(previous);
+            // Предмет міг бути надітий на когось іншого — знімаємо з нього (перенадіти).
+            if (!_inventory.Remove(item))
+                foreach (var other in _worldRoster.All)
+                    if (other.Equipment.Find(item.InstanceId) == item) { other.Equipment.Unequip(item.Slot); break; }
+            // Поправка №19.2: дворучна зброя знімає щит, щит — дворучну зброю; усе витіснене — у сташ.
+            foreach (var displaced in c.Equipment.EquipDisplacing(item))
+                _inventory.Add(displaced);
 
             LogEvent("equip.changed", Args("companionId", companionId, "itemId", item.Definition.Id, "slot", slot.ToString()));
             return true;
+        }
+
+        /// <summary>
+        /// Кузня Збройні (Поправка №19.2): кує базовий (Common) предмет з <see cref="DefaultItems.ForgeCatalog"/>
+        /// у сташ за золото й сировину (<see cref="Balance.ItemBalance.ForgeCost"/>, ПЛЕЙСХОЛДЕР). Лише вранці
+        /// чи у вільній грі й лише з відкритою Збройнею. Детерміновано: та сама команда — той самий предмет.
+        /// </summary>
+        public ForgeResult ForgeItem(string itemDefinitionId)
+        {
+            RequireMorningOrFreePlay();
+            ItemDefinition def = null;
+            foreach (var d in DefaultItems.ForgeCatalog())
+                if (string.Equals(d.Id, itemDefinitionId, StringComparison.Ordinal)) { def = d; break; }
+            if (def == null) return ForgeResult.UnknownItem;
+            if (!_works.Has(DefaultBuildingsType.Armory)) return ForgeResult.ArmoryClosed;
+            int gold, craft;
+            _cfg.Items.ForgeCost(def.Slot, out gold, out craft);
+            var ledger = _state.Resources;
+            if (!ledger.CanAfford(ResourceType.Gold, gold) || !ledger.CanAfford(ResourceType.CraftComponent, craft))
+                return ForgeResult.CannotAfford;
+            ledger.TrySpend(ResourceType.Gold, gold);
+            ledger.TrySpend(ResourceType.CraftComponent, craft);
+            var item = new ItemInstance(def, Rarity.Common);
+            _inventory.Add(item);
+            LogEvent("forge.made", Args("itemId", def.Id, "instanceId", item.InstanceId,
+                "gold", gold.ToString(CultureInfo.InvariantCulture), "craft", craft.ToString(CultureInfo.InvariantCulture)));
+            return ForgeResult.Success;
+        }
+
+        /// <summary>Каталог кузні для екрана Збройні: що можна викувати і за скільки.</summary>
+        public IReadOnlyList<ForgeOfferView> GetForgeOffers()
+        {
+            var list = new List<ForgeOfferView>();
+            bool open = _works.Has(DefaultBuildingsType.Armory);
+            foreach (var d in DefaultItems.ForgeCatalog())
+            {
+                int gold, craft;
+                _cfg.Items.ForgeCost(d.Slot, out gold, out craft);
+                list.Add(new ForgeOfferView
+                {
+                    ItemId = d.Id, Slot = d.Slot, VisualKey = d.VisualKey, TwoHanded = d.TwoHanded,
+                    GoldCost = gold, CraftCost = craft, ArmoryOpen = open,
+                    Affordable = open && _state.Resources.CanAfford(ResourceType.Gold, gold)
+                                      && _state.Resources.CanAfford(ResourceType.CraftComponent, craft)
+                });
+            }
+            return list;
         }
 
         public bool Unequip(string companionId, EquipSlot slot)
@@ -1243,6 +1352,78 @@ namespace Game.Core.Session
             if (string.IsNullOrEmpty(blob)) throw new ArgumentException("Порожній зліпок збереження", nameof(blob));
             ApplySave(blob);
             LogEvent("game.loaded", Args("slot", "external"));
+        }
+
+        private static List<EquipSlotView> BuildSlotViews(Equipment eq)
+        {
+            var list = new List<EquipSlotView>();
+            var weapon = eq.Get(EquipSlot.Weapon);
+            bool twoHanded = weapon != null && weapon.Definition.TwoHanded;
+            foreach (EquipSlot slot in Enum.GetValues(typeof(EquipSlot)))
+            {
+                var item = eq.Get(slot);
+                list.Add(new EquipSlotView
+                {
+                    Slot = slot, ItemId = item?.Definition.Id, InstanceId = item?.InstanceId,
+                    VisualKey = item?.Definition.VisualKey,
+                    BlockedByTwoHanded = slot == EquipSlot.Offhand && twoHanded
+                });
+            }
+            return list;
+        }
+
+        /// <summary>Лише для тестів: Common-екземпляр предмета в сташ (обхід лута й кузні).</summary>
+        internal ItemInstance DebugGrantItem(string definitionId)
+        {
+            foreach (var d in DefaultItems.AllDefinitions())
+                if (d.Id == definitionId)
+                {
+                    var item = d.IsNamed ? ItemInstance.NamedFrom(d) : new ItemInstance(d, Rarity.Common);
+                    _inventory.Add(item);
+                    return item;
+                }
+            return null;
+        }
+
+        /// <summary>Лише для тестів: будівля готова, ресурси в гаманець.</summary>
+        internal void DebugMarkBuilt(string buildingId) => _works.DebugMarkBuilt(buildingId);
+        internal void DebugAddResource(ResourceType resource, int amount) => _state.Resources.Add(resource, amount);
+
+        private string CaptureGear()
+        {
+            var parts = new List<string>();
+            foreach (var c in _worldRoster.All)
+            {
+                string items = c.Equipment.CaptureState();
+                if (items.Length > 0) parts.Add(c.Id + ">" + items);
+            }
+            return string.Join("|", parts.ToArray());
+        }
+
+        /// <summary>Старий сейв без "gear=" — надітого немає (як і було в тих збірках).</summary>
+        private void RestoreGear(string blob)
+        {
+            if (string.IsNullOrEmpty(blob)) return;
+            foreach (var entry in blob.Split('|'))
+            {
+                int gt = entry.IndexOf('>');
+                if (gt <= 0) continue;
+                var c = _worldRoster.Get(entry.Substring(0, gt));
+                if (c != null) c.Equipment.RestoreState(entry.Substring(gt + 1));
+            }
+        }
+
+        /// <summary>Вирізає з заголовка поле з довжина-префіксом ("key=N^значення"); null — поля немає.</summary>
+        private static string CutLengthPrefixed(ref string headPart, string key)
+        {
+            int idx = headPart.IndexOf(key, StringComparison.Ordinal);
+            if (idx < 0) return null;
+            int afterKey = idx + key.Length;
+            int caret = headPart.IndexOf('^', afterKey);
+            int len = ParseInt(headPart.Substring(afterKey, caret - afterKey));
+            string value = headPart.Substring(caret + 1, len);
+            headPart = headPart.Substring(0, idx) + headPart.Substring(caret + 1 + len);
+            return value;
         }
 
         /// <summary>Сташ поселення для UI/тестів (§4.1 Equip/CraftUpgrade адресують предмети звідси за InstanceId).</summary>
@@ -3976,7 +4157,13 @@ namespace Game.Core.Session
                 {
                     WeaponId = c.Equipment.Get(EquipSlot.Weapon)?.Definition.Id,
                     ArmorId = c.Equipment.Get(EquipSlot.Armor)?.Definition.Id,
-                    AccessoryId = c.Equipment.Get(EquipSlot.Accessory)?.Definition.Id
+                    AccessoryId = c.Equipment.Get(EquipSlot.Accessory)?.Definition.Id,
+                    HeadId = c.Equipment.Get(EquipSlot.Head)?.Definition.Id,
+                    HandsId = c.Equipment.Get(EquipSlot.Hands)?.Definition.Id,
+                    LegsId = c.Equipment.Get(EquipSlot.Legs)?.Definition.Id,
+                    FeetId = c.Equipment.Get(EquipSlot.Feet)?.Definition.Id,
+                    OffhandId = c.Equipment.Get(EquipSlot.Offhand)?.Definition.Id,
+                    Slots = BuildSlotViews(c.Equipment)
                 }
             };
         }
@@ -5211,15 +5398,17 @@ namespace Game.Core.Session
         }
 
         /// <summary>
-        /// ПЛЕЙСХОЛДЕР (як і решта чисел зрізу, §9): Combat не читає
-        /// Companion.Equipment (Items — окрема система статів, не бойової зброї
-        /// з дальністю/дамагом), тож бойову зброю обирає евристика за скілом,
-        /// доки контент не заведе окрему прив'язку "надітий предмет → зброя бою".
-        /// Відкрите питання лишене явно, як і в seamsForD1 пакета B1.
+        /// Поправка №19.2: надіта зброя = зброя в бою (<c>ItemDefinition.CombatWeaponId</c>).
+        /// Без надітої (або в предмета немає бойового відповідника) — як і раніше, евристика за
+        /// скілом (ПЛЕЙСХОЛДЕР зрізу, §9).
         /// </summary>
         private static Combat.WeaponDefinition ResolveWeaponFor(Companion c)
         {
             if (c == null) return DefaultCombatContent.HordeSpear();
+            string equippedWeapon = c.Equipment.Get(EquipSlot.Weapon)?.Definition.CombatWeaponId;
+            Combat.WeaponDefinition fromGear;
+            if (!string.IsNullOrEmpty(equippedWeapon) && DefaultCombatContent.PlayerWeaponCatalog().TryGetValue(equippedWeapon, out fromGear))
+                return fromGear;
             int melee = c.Skill(Stats.SkillType.Melee);
             int ranged = c.Skill(Stats.SkillType.Ranged);
             return ranged > melee ? DefaultCombatContent.HordeBow() : DefaultCombatContent.HordeSpear();
@@ -5499,6 +5688,9 @@ namespace Game.Core.Session
             head.Append(";pname=").Append(_pendingName == null ? "-" : System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(_pendingName)));
             head.Append(";pgender=").Append((int)_pendingGender);
             head.Append(";pbg=").Append(_pendingBackgroundId ?? "");
+            // Поправка №19.3: зовнішність героя; Base64, бо всередині запису є ';' і '='. "-" — дефолтна.
+            head.Append(";papp=").Append(_pendingAppearance == null ? "-" :
+                System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(_pendingAppearance.Encode())));
 
             // Поправка №12.10 (пул прибульців): маркер "цей зліпок написаний
             // кодом, що вже знає про Гобана-Сайра/Синдбада". Старі зліпки
@@ -5527,6 +5719,12 @@ namespace Game.Core.Session
             // крім першого (аудит: сташ 2+ предметів після Save/Load).
             string itemsBlob = _inventory.CaptureState();
             head.Append(";items=").Append(itemsBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(itemsBlob);
+
+            // Поправка №19.3 (знахідка 07.10.2026): надіте спорядження раніше НІКОЛИ не потрапляло в
+            // сейв — після Save/Load речі зникали з людей. Формат: "<id>><предмети ItemCodec>|...",
+            // довжина-префікс — бо всередині ';' (той самий прийом, що й items=).
+            string gearBlob = CaptureGear();
+            head.Append(";gear=").Append(gearBlob.Length.ToString(CultureInfo.InvariantCulture)).Append('^').Append(gearBlob);
 
             head.Append(";defect=").Append(_defectionWatch.CaptureState());
             // Поправка №14.2: полонені, ті, хто чекає рішення після бою, і переманені.
@@ -5640,6 +5838,8 @@ namespace Game.Core.Session
             // ';' усередині Inventory.CaptureState() (роздільник предметів)
             // сплутався б із роздільником полів заголовка (той самий фікс, що
             // й для "core=").
+            string gearPart = CutLengthPrefixed(ref headPart, ";gear=");
+
             string itemsPart = null;
             int itemsIdx = headPart.IndexOf(";items=", StringComparison.Ordinal);
             if (itemsIdx >= 0)
@@ -5715,6 +5915,10 @@ namespace Game.Core.Session
                     case "arc": RestoreArcState(value); break;
                     case "pname": _pendingName = value == "-" ? null : System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)); break;
                     case "pgender": _pendingGender = (Gender)ParseInt(value); _protagonistGender = _pendingGender; break;
+                    case "papp":
+                        _pendingAppearance = value == "-" ? null :
+                            Appearance.Decode(System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(value)));
+                        break;
                     case "pbg": if (!string.IsNullOrEmpty(value)) _pendingBackgroundId = value; break;
                     case "arrivals": arrivalsPoolMarkerPresent = value == "1"; break;
                     case "tavernNext":
@@ -5735,6 +5939,7 @@ namespace Game.Core.Session
 
             _inventory.RestoreState(itemsPart);
             if (corePart != null) _processor.RestoreState(corePart);
+            RestoreGear(gearPart);
 
             // Блокер-фікс (знайдено 25.09.2026, лід): відновлення в СВІЖИЙ
             // інстанс GameSession розходилось із безперервною грою — пости

@@ -37,5 +37,39 @@ namespace Game.Core.Balance
         /// раніше", а не на миттєвий стрибок на 2 ступені одразу.
         /// </summary>
         public int ScoutHornForewarnBoostPerCharge = 15;
+
+        // ---- Кузня Збройні (Поправка №19.2): ціна базового гіра. ПЛЕЙСХОЛДЕРИ. ----
+        // ЯКІР: зброя й броня тулуба — головні речі, дорожчі; дрібна броня — дешевша.
+        // Споживач — GameSession.ForgeItem; сигнал — запис журналу «forge.made».
+
+        /// <summary>Золото за зброю (одно- чи дворучну).</summary>
+        public int ForgeGoldWeapon = 8;
+        /// <summary>Сировина за зброю.</summary>
+        public int ForgeCraftWeapon = 2;
+        /// <summary>Золото за броню тулуба.</summary>
+        public int ForgeGoldArmor = 10;
+        /// <summary>Сировина за броню тулуба.</summary>
+        public int ForgeCraftArmor = 3;
+        /// <summary>Золото за шолом або щит.</summary>
+        public int ForgeGoldHeadOrShield = 6;
+        /// <summary>Сировина за шолом або щит.</summary>
+        public int ForgeCraftHeadOrShield = 2;
+        /// <summary>Золото за наручі, поножі, чоботи.</summary>
+        public int ForgeGoldSmall = 4;
+        /// <summary>Сировина за наручі, поножі, чоботи.</summary>
+        public int ForgeCraftSmall = 1;
+
+        /// <summary>Ціна кування предмета слоту: (золото, сировина).</summary>
+        public void ForgeCost(Items.EquipSlot slot, out int gold, out int craft)
+        {
+            switch (slot)
+            {
+                case Items.EquipSlot.Weapon: gold = ForgeGoldWeapon; craft = ForgeCraftWeapon; break;
+                case Items.EquipSlot.Armor: gold = ForgeGoldArmor; craft = ForgeCraftArmor; break;
+                case Items.EquipSlot.Head:
+                case Items.EquipSlot.Offhand: gold = ForgeGoldHeadOrShield; craft = ForgeCraftHeadOrShield; break;
+                default: gold = ForgeGoldSmall; craft = ForgeCraftSmall; break;
+            }
+        }
     }
 }

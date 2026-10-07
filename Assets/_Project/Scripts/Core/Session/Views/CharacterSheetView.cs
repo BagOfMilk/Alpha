@@ -109,5 +109,13 @@ namespace Game.Core.Session.Views
         public string WeaponId;
         public string ArmorId;
         public string AccessoryId;
+        // Поправка №19.2–19.3: слоти «ляльки» понад перші три.
+        public string HeadId;
+        public string HandsId;
+        public string LegsId;
+        public string FeetId;
+        public string OffhandId;
+        /// <summary>Усі слоти по порядку — для екрана інвентаря й збирання моделі.</summary>
+        public IReadOnlyList<EquipSlotView> Slots;
     }
 }

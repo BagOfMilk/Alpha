@@ -840,6 +840,28 @@ namespace Game.Gameplay.Text
             AddKey(t, "item.scouting_gear", "Розвідницьке спорядження");
             AddKey(t, "item.aegis_plate", "Егіда");
             AddKey(t, "item.scout_horn", "Ріг розвідника");
+            // Поправка №19.2: гір кузні Збройні (броня й зброя видимі на моделі).
+            AddKey(t, "item.arming_sword", "Меч");
+            AddKey(t, "item.sabre", "Шабля");
+            AddKey(t, "item.curved_blade", "Довгий вигнутий клинок");
+            AddKey(t, "item.war_axe", "Бойова сокира");
+            AddKey(t, "item.mace", "Булава");
+            AddKey(t, "item.spear", "Спис");
+            AddKey(t, "item.club", "Кийок");
+            AddKey(t, "item.musket", "Крем'яна рушниця");
+            AddKey(t, "item.gambeson", "Стьобаний гамбезон");
+            AddKey(t, "item.mail_hauberk", "Кольчуга");
+            AddKey(t, "item.cuirass", "Кіраса");
+            AddKey(t, "item.spangen_helm", "Шолом із бармицею");
+            AddKey(t, "item.conical_helm", "Шпичастий шолом");
+            AddKey(t, "item.kettle_hat", "Капелюх-шолом");
+            AddKey(t, "item.lamellar_helm", "Шолом зі ступінчастим назатильником");
+            AddKey(t, "item.leather_bracers", "Шкіряні наручі");
+            AddKey(t, "item.greaves", "Поножі");
+            AddKey(t, "item.marching_boots", "Похідні чоботи");
+            AddKey(t, "item.round_shield", "Круглий щит");
+            AddKey(t, "item.kite_shield", "Мигдалеподібний щит");
+            AddKey(t, "item.buckler", "Баклер");
         }
 
         // Core/Combat/DefaultCombatContent.cs — вороги/зброя/здібності доби 1 і фіналу.
@@ -1800,6 +1822,27 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.gear.slot.weapon", "Зброя");
             AddKey(t, "ui.gear.slot.armor", "Броня");
             AddKey(t, "ui.gear.slot.accessory", "Аксесуар");
+            AddKey(t, "ui.gear.slot.head", "Голова");
+            AddKey(t, "ui.gear.slot.hands", "Руки");
+            AddKey(t, "ui.gear.slot.legs", "Ноги");
+            AddKey(t, "ui.gear.slot.feet", "Взуття");
+            AddKey(t, "ui.gear.slot.offhand", "Щит");
+            AddKey(t, "ui.gear.two_handed", "Дворучна: щит не взяти");
+            AddKey(t, "ui.gear.forge", "Викувати");
+            AddKey(t, "ui.gear.forge.title", "Кузня Збройні");
+            AddKey(t, "ui.gear.forge.cost", "Ціна: {gold} золота, сировина {craft}");
+            AddKey(t, "ui.gear.forge.closed", "Кувати можна лише у Збройні.");
+            AddKey(t, "ui.gear.forge.cannot_afford", "Бракує золота чи сировини.");
+            AddKey(t, "ui.gear.forge.made", "Викувано: {item}.");
+            // Поправка №19.1: культури набору (створення героя, картка людини).
+            AddKey(t, "culture.ukrainian", "Україна");
+            AddKey(t, "culture.west_african", "Західна Африка");
+            AddKey(t, "culture.east_asian", "Східна Азія");
+            AddKey(t, "culture.south_asian", "Південна Азія");
+            AddKey(t, "culture.middle_eastern", "Близький Схід");
+            AddKey(t, "culture.latin", "Латинська Америка");
+            AddKey(t, "culture.nordic", "Північна Європа");
+            AddKey(t, "culture.mediterranean", "Середземномор'я");
             AddKey(t, "ui.gear.equip", "Одягти");
             AddKey(t, "ui.gear.unequip", "Зняти");
             AddKey(t, "ui.gear.stash.empty", "Схованка порожня.");

@@ -55,6 +55,43 @@ namespace Game.Core.Combat
             ApCost = 4, OptimalRange = 1
         };
 
+        // ---- Зброя загону, яку можна надіти (Поправка №19.2: надіта зброя = зброя в бою) ----
+        // Числа — ПЛЕЙСХОЛДЕР у межах уже наявної зброї (спис 3–5 за 3 AP): вибір зброї — це
+        // характер бою (швидко/дешево проти важко/пробиває), а не просте «більше шкоди».
+
+        public static WeaponDefinition Dagger() => new WeaponDefinition("weapon.dagger", "dagger", SkillType.Melee)
+        { Damage = DamageType.Ballistic, DamageMin = 2, DamageMax = 4, CritDamageBonus = 3, ApCost = 2, OptimalRange = 1 };
+
+        public static WeaponDefinition Sword() => new WeaponDefinition("weapon.sword", "sword", SkillType.Melee)
+        { Damage = DamageType.Ballistic, DamageMin = 3, DamageMax = 5, CritDamageBonus = 2, ApCost = 3, OptimalRange = 1 };
+
+        public static WeaponDefinition Sabre() => new WeaponDefinition("weapon.sabre", "sabre", SkillType.Melee)
+        { Damage = DamageType.Ballistic, DamageMin = 3, DamageMax = 5, CritDamageBonus = 3, ApCost = 3, OptimalRange = 1 };
+
+        public static WeaponDefinition CurvedBlade() => new WeaponDefinition("weapon.curved_blade", "curved_blade", SkillType.Melee)
+        { Damage = DamageType.Ballistic, DamageMin = 4, DamageMax = 6, CritDamageBonus = 3, ApCost = 3, OptimalRange = 1 };
+
+        public static WeaponDefinition Axe() => new WeaponDefinition("weapon.axe", "axe", SkillType.Melee)
+        { Damage = DamageType.Ballistic, DamageMin = 4, DamageMax = 6, CritDamageBonus = 2, ApCost = 3, OptimalRange = 1, ShredOnHit = 1 };
+
+        public static WeaponDefinition Mace() => new WeaponDefinition("weapon.mace", "mace", SkillType.Melee)
+        { Damage = DamageType.Ballistic, DamageMin = 3, DamageMax = 6, CritDamageBonus = 2, ApCost = 3, OptimalRange = 1, ArmorPierce = 1 };
+
+        public static WeaponDefinition Club() => new WeaponDefinition("weapon.club", "club", SkillType.Melee)
+        { Damage = DamageType.Ballistic, DamageMin = 2, DamageMax = 5, CritDamageBonus = 2, ApCost = 3, OptimalRange = 1 };
+
+        public static WeaponDefinition Musket() => new WeaponDefinition("weapon.musket", "musket", SkillType.Ranged)
+        { Damage = DamageType.Ballistic, DamageMin = 5, DamageMax = 8, CritDamageBonus = 3, ApCost = 4, OptimalRange = 5, ArmorPierce = 2 };
+
+        /// <summary>Бойова зброя за id предмета (<c>ItemDefinition.CombatWeaponId</c>).</summary>
+        public static Dictionary<string, WeaponDefinition> PlayerWeaponCatalog()
+        {
+            var all = new[] { HordeBow(), HordeSpear(), Dagger(), Sword(), Sabre(), CurvedBlade(), Axe(), Mace(), Club(), Musket() };
+            var map = new Dictionary<string, WeaponDefinition>();
+            foreach (var w in all) map[w.Id] = w;
+            return map;
+        }
+
         // ---- Здібності (спільний пул: і напарники за гейтом скіла, і вороги напряму) ----
 
         /// <summary>Ривок у ближній контакт — клінч-юніти поза дистанцією.</summary>

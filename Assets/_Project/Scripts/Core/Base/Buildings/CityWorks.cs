@@ -184,6 +184,12 @@ namespace Game.Core.Base
             return buildingId != null && _built.Contains(buildingId);
         }
 
+        /// <summary>Лише для тестів (InternalsVisibleTo): будівля вважається готовою без будівництва.</summary>
+        internal void DebugMarkBuilt(string buildingId)
+        {
+            if (!string.IsNullOrEmpty(buildingId)) _built.Add(buildingId);
+        }
+
         public bool IsBuilding(string buildingId)
         {
             return FindProject(buildingId) != null;

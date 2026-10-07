@@ -56,6 +56,23 @@ namespace Game.Core.Items
         /// </summary>
         public ItemWorldEffect WorldEffect;
 
+        /// <summary>
+        /// Ключ частини модульного набору (Поправка №19.2: броня і зброя видимі на моделі) —
+        /// напр. «helm_spangen», «mail», «wpn_sword». Порожній — предмет на моделі не видно
+        /// (аксесуари, ріг). Лише рядок: ядро не знає про сітки, гра вмикає частину за ключем.
+        /// </summary>
+        public string VisualKey;
+
+        /// <summary>
+        /// Id бойової зброї (<c>DefaultCombatContent.PlayerWeaponCatalog</c>) для предметів слоту
+        /// <see cref="EquipSlot.Weapon"/>: надіта зброя = зброя в бою (№19.2). Порожній — бій
+        /// обирає зброю за скілом, як і раніше.
+        /// </summary>
+        public string CombatWeaponId;
+
+        /// <summary>Дворучна зброя: займає й слот <see cref="EquipSlot.Offhand"/> (щит знімається).</summary>
+        public bool TwoHanded;
+
         public ItemDefinition() { }
 
         public ItemDefinition(string id, string displayName, EquipSlot slot)
@@ -85,6 +102,21 @@ namespace Game.Core.Items
         public ItemDefinition WithWorldEffect(string key, int charges)
         {
             WorldEffect = new ItemWorldEffect(key, charges);
+            return this;
+        }
+
+        /// <summary>Частина модульного набору, яку гра вмикає на моделі (№19.2).</summary>
+        public ItemDefinition Visual(string kitPart)
+        {
+            VisualKey = kitPart;
+            return this;
+        }
+
+        /// <summary>Бойова зброя, якою б'є/стріляє той, хто це надів (№19.2).</summary>
+        public ItemDefinition Fights(string combatWeaponId, bool twoHanded = false)
+        {
+            CombatWeaponId = combatWeaponId;
+            TwoHanded = twoHanded;
             return this;
         }
     }
