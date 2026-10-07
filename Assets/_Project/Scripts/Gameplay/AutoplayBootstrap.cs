@@ -109,6 +109,12 @@ namespace Game.Gameplay
         /// </summary>
         public const string BattleFlag = "-autoplay-battle";
 
+        /// <summary>
+        /// Лукбук (07.10.2026, після живої сесії власника): перебрати на екрані створення стать × культуру ×
+        /// вбрання і зняти кожен варіант спереду й збоку — щоб асистент бачив персонажів зблизька до віддачі.
+        /// </summary>
+        public const string LookbookFlag = "-autoplay-lookbook";
+
         /// <summary>Стеля кадрів туру в редакторі — див. <c>Start</c>.</summary>
         private const int EditorTourFrameRate = 60;
 
@@ -143,7 +149,7 @@ namespace Game.Gameplay
         /// вже й у <see cref="LongTourFlag"/>: сам вмикає <c>runInBackground</c>
         /// нижче (Start), окремо вказувати <see cref="CommandLineFlag"/> не треба.
         /// </summary>
-        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag) || HasArg(JournalFlag) || HasArg(BattleFlag);
+        public static bool RequestedFromCommandLine() => HasArg(CommandLineFlag) || HasArg(LongTourFlag) || HasArg(JournalFlag) || HasArg(BattleFlag) || HasArg(LookbookFlag);
 
         /// <summary>Командний рядок гри або, в редакторі, файл прапорців — див. <see cref="AutoplayArgs"/>.</summary>
         private static bool HasArg(string flag) => AutoplayArgs.Has(flag);
@@ -201,7 +207,8 @@ namespace Game.Gameplay
                           (longTour ? ", довгий тур до великого бунту" : "") + ")"));
 
             _driver = new AutoplayGameDriver(this, Shell, threshold, longTour);
-            _tour = _journalMode ? _driver.RunJournal() : (_battleOnlyMode ? _driver.RunBattleOnly() : _driver.Run());
+            _tour = HasArg(LookbookFlag) ? _driver.RunLookbook()
+                : _journalMode ? _driver.RunJournal() : (_battleOnlyMode ? _driver.RunBattleOnly() : _driver.Run());
         }
 
         private void Update()

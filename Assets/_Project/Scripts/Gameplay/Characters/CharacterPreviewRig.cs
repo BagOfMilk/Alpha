@@ -60,7 +60,9 @@ namespace Game.Gameplay.Characters
             if (_model == null) return;
             _model.transform.localPosition = Vector3.zero;
             _model.transform.localRotation = Quaternion.identity;
-            _baseFacing = CharacterAssembler.Facing(_model);
+            // Анімована (Idle) постать дивиться вздовж +Z кореня; бінд-поза — за стегнами.
+            var animLib = GetComponent<CharacterAnimLibrary>();
+            _baseFacing = animLib != null && animLib.IsComplete ? Vector3.forward : CharacterAssembler.Facing(_model);
             Frame();
 
             // Не бінд-поза, а жива стійка: кліп Idle з бібліотеки набору (якщо є).
@@ -78,9 +80,10 @@ namespace Game.Gameplay.Characters
         private void LateUpdate()
         {
             if (_model == null) return;
-            // Обличчям до камери (камера дивиться в -Z станка), плюс поворот мишею.
-            float face = Quaternion.FromToRotation(_baseFacing, Vector3.back).eulerAngles.y;
-            _model.transform.localRotation = Quaternion.Euler(0f, face + Yaw, 0f);
+            // Обличчям до камери: камера стоїть на +Z і дивиться в −Z станка, тож постать — у +Z; плюс поворот мишею.
+            float face = Quaternion.FromToRotation(_baseFacing, Vector3.forward).eulerAngles.y;
+            float yaw = LookbookControl.Yaw ?? Yaw; // лукбук-тур задає кут сам
+            _model.transform.localRotation = Quaternion.Euler(0f, face + yaw, 0f);
         }
 
         private void Frame()

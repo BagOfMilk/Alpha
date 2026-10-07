@@ -45,7 +45,11 @@ namespace Game.Gameplay.Characters
             _signature = sig;
             if (_model == null) return false;
             _model.transform.localPosition = Vector3.zero;
-            _model.transform.rotation = Quaternion.FromToRotation(CharacterAssembler.Facing(_model), transform.forward) * _model.transform.rotation;
+            // Гуманоїдна анімація ставить тіло вздовж +Z кореня — анімованій постаті доповорот не потрібен
+            // (він і розвертав героя задом наперед). Без кліпів — вирівнюємо бінд-позу за стегнами.
+            bool animated = anims != null && anims.IsComplete;
+            if (!animated)
+                _model.transform.rotation = Quaternion.FromToRotation(CharacterAssembler.Facing(_model), transform.forward) * _model.transform.rotation;
             _model.transform.localScale = Vector3.one * (ArtScale.World * extraScale);
 
             if (anims != null && anims.IsComplete)

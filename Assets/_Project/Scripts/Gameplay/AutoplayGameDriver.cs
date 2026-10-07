@@ -1530,6 +1530,7 @@ namespace Game.Gameplay
         /// <summary>Дійти до місця запитом шляху (той самий, що клік мишею); виняток, якщо не дійшов.</summary>
         private IEnumerable<int> WalkTo(string placeId)
         {
+            _shell.WalkFacingErrorMax = 0f;
             _shell.RequestWalkTo(placeId);
             int frames = 0;
             while ((_shell.NearbyPlace == null || _shell.NearbyPlace.Id != placeId) && frames < ExploreWalkFrameCap)
@@ -1540,7 +1541,12 @@ namespace Game.Gameplay
             if (_shell.NearbyPlace == null || _shell.NearbyPlace.Id != placeId)
                 throw new InvalidOperationException("Село: герой не дійшов до «" + placeId + "» за " + ExploreWalkFrameCap +
                                                     " кадрів; " + _shell.WalkDebug + ".");
-            _host.Log("Село: дійшов до «" + placeId + "» за " + frames + " кадрів.");
+            // Охоронець напрямку ходи: постать дивиться туди, куди йде (а не задом наперед чи боком).
+            if (_shell.WalkFacingErrorMax > 60f)
+                throw new InvalidOperationException("Село: герой ішов до «" + placeId + "» не обличчям уперед — розбіжність тіла й руху до " +
+                                                    _shell.WalkFacingErrorMax.ToString("0") + "°.");
+            _host.Log("Село: дійшов до «" + placeId + "» за " + frames + " кадрів; тіло й рух розходились до " +
+                      _shell.WalkFacingErrorMax.ToString("0") + "°.");
         }
 
         /// <summary>«F» (взаємодія) біля місця — має відкритися саме ця панель; знімок і закрити.</summary>
@@ -1834,6 +1840,50 @@ namespace Game.Gameplay
         /// ворога веде презентер сам (docs/COMBAT_V2.md §5), цей метод лише
         /// чекає й діагностує завис (<see cref="EnemyTurnWatchdogSeconds"/>).
         /// </summary>
+        /// <summary>
+        /// <c>-autoplay-lookbook</c>: екран створення — для кожної статі й культури кожне стартове вбрання,
+        /// знімки спереду (0°) і збоку (90°, лише для першого вбрання) з колесом прев'ю. Далі — прогулянка
+        /// до кількох місць з охоронцем напрямку ходи (тіло дивиться туди, куди рух).
+        /// </summary>
+        public IEnumerator<int> RunLookbook()
+        {
+            foreach (var f in WaitFrames(FramesMedium)) yield return f;
+            Run(() => Session.NewGame(new NewGameOptions
+            {
+                HitRule = HitRuleKind.Threshold, Seed = 1, Roller = _shell.Roller, SkipCreation = false
+            }));
+            foreach (var f in WaitFrames(FramesMedium)) yield return f;
+            foreach (var gender in new[] { Gender.Male, Gender.Female })
+            {
+                Run(() => Session.SetProtagonistGender(gender));
+                var look = new UI.CreationLookModel(Game.Core.Characters.AppearanceCatalog.DefaultProtagonist(gender));
+                for (int c = 0; c < look.Count(UI.CreationLookField.Culture); c++)
+                {
+                    for (int o = 0; o < look.Count(UI.CreationLookField.Outfit); o++)
+                    {
+                        var a = look.Build();
+                        Run(() => Session.SetProtagonistAppearance(a));
+                        string id = (gender == Gender.Male ? "m" : "f") + "-" + a.Culture + "-o" + o;
+                        UI.LookbookControl.Yaw = 0f;
+                        foreach (var f in WaitFrames(FramesMedium)) yield return f;
+                        _host.Capture("look-" + id + "-front");
+                        if (o == 0)
+                        {
+                            UI.LookbookControl.Yaw = 90f;
+                            foreach (var f in WaitFrames(FramesShort)) yield return f;
+                            _host.Capture("look-" + id + "-side");
+                        }
+                        look.Step(UI.CreationLookField.Outfit, 1);
+                    }
+                    look.Step(UI.CreationLookField.Culture, 1);
+                    look.Step(UI.CreationLookField.Hair, 3);
+                    look.Step(UI.CreationLookField.HairColor, 1);
+                }
+            }
+            UI.LookbookControl.Yaw = null;
+            _host.Log("Лукбук: усі варіанти знято.");
+        }
+
         public IEnumerator<int> RunBattleOnly()
         {
             foreach (var f in WaitFrames(FramesMedium)) yield return f;

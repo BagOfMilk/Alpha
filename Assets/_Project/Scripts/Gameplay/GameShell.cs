@@ -227,6 +227,12 @@ namespace Game.Gameplay
         /// <summary>Стан героя одним рядком (позиція, маршрут) — пише HeroWalker; автотур кладе його в лог, коли герой не дійшов.</summary>
         public string WalkDebug => WalkDebugSource != null ? WalkDebugSource() : string.Empty;
 
+        /// <summary>
+        /// Найбільший кут (°) між напрямком ходи героя і напрямком його тіла з останнього скидання — пише
+        /// HeroWalker, читає автотур. Понад 60° — герой іде боком чи задом наперед (власник, 07.10.2026).
+        /// </summary>
+        public float WalkFacingErrorMax { get; set; }
+
         /// <summary>Хто вміє описати стан героя (HeroWalker); рядок будується лише на читання.</summary>
         public Func<string> WalkDebugSource { get; set; }
 

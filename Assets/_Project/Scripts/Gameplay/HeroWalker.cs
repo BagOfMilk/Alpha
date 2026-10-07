@@ -49,6 +49,9 @@ namespace Game.Gameplay
         /// <summary>Поворот моделі відносно напрямку руху (градуси): фігурки набору дивляться вздовж +Z.</summary>
         public float modelYawOffset;
 
+        /// <summary>Швидкість обертання камери, поки тримають Q/E (градусів за секунду).</summary>
+        public float cameraSpinSpeed = 90f;
+
         [Header("Камера")]
         public float exploreZoom = 4.5f;
         public float interiorZoom = 4.2f;
@@ -150,11 +153,13 @@ namespace Game.Gameplay
                     else if (_shell.PendingExit && _inside != null) BeginExit();
                 }
                 if (!_shell.EscapeOpen && _transition == Transition.None) gait = MoveHero();
-                // Q/E — повернути камеру на 90° (той самий жест, що в бою; UX-17). У кімнаті не обертаємо: три стіни сірого каркаса.
-                if (!_ignoreRealInput && !_shell.EscapeOpen && _inside == null)
+                // Q/E — камера обертається, ПОКИ клавішу тримають (як у Wasteland 3), і плавно доїжджає після
+                // відпускання. Кроки по 90° за натискання були різкі — власник 07.10.2026: «E + Q Дуже різкі».
+                // У кімнаті не обертаємо: три стіни сірого каркаса.
+                if (!_ignoreRealInput && !_shell.EscapeOpen && _inside == null && !PlaytestLog.NoteOpen)
                 {
-                    if (Input.GetKeyDown(KeyCode.Q)) _yawTarget = CameraOrbit.Turn(_yawTarget, -1);
-                    else if (Input.GetKeyDown(KeyCode.E)) _yawTarget = CameraOrbit.Turn(_yawTarget, +1);
+                    float spin = (Input.GetKey(KeyCode.E) ? 1f : 0f) - (Input.GetKey(KeyCode.Q) ? 1f : 0f);
+                    if (spin != 0f) _yawTarget = CameraOrbit.Wrap(_yawTarget + spin * cameraSpinSpeed * Time.deltaTime);
                 }
                 int turn = _shell.ConsumeCameraTurn();
                 if (turn != 0 && _inside == null) _yawTarget = CameraOrbit.Turn(_yawTarget, turn);
@@ -180,7 +185,27 @@ namespace Game.Gameplay
             var anim = ActiveAnimation();
             if (anim != null) anim.Gait = gait;
             Footsteps(gait);
+            MeasureFacing(gait);
             UpdateCamera(exploring);
+        }
+
+        // Охоронець напрямку: кут між рухом (зсув за кадр) і тілом (стегна постаті набору) — для автотуру.
+        private Vector3 _lastPos;
+        private int _facingSettle;
+        private float _facingEma;
+
+        private void MeasureFacing(float gait)
+        {
+            var pos = transform.position;
+            var move = pos - _lastPos;
+            _lastPos = pos;
+            move.y = 0f;
+            if (gait < 0.5f || move.sqrMagnitude < 1e-6f || _kit == null || _kit.Model == null) { _facingSettle = 0; return; }
+            if (++_facingSettle < 12) return; // дати повернутись після зміни напрямку (Face згладжує)
+            float angle = Vector3.Angle(move, Game.Gameplay.Characters.CharacterAssembler.Facing(_kit.Model));
+            // Згладжено: поворот на розі маршруту — мить, задом наперед — постійно.
+            _facingEma = _facingSettle == 12 ? angle : Mathf.Lerp(_facingEma, angle, 0.1f);
+            if (_facingEma > _shell.WalkFacingErrorMax) _shell.WalkFacingErrorMax = _facingEma;
         }
 
         // Кроки (віха M1.19): такт на кожен крок — частіше, коли біжить; у будівлі — по дошках.
@@ -707,7 +732,9 @@ namespace Game.Gameplay
             if (!_camReady || hubCamera == null || !hubCamera.isActiveAndEnabled) return;
 
             float k = 1f - Mathf.Exp(-6f * Time.deltaTime);
-            _yaw = CameraOrbit.Approach(_yaw, exploring && _inside == null ? _yawTarget : 0f, k);
+            // Поворот — окремим, м'якшим згасанням: камера наздоганяє ціль без ривка.
+            float kYaw = 1f - Mathf.Exp(-8f * Time.deltaTime);
+            _yaw = CameraOrbit.Approach(_yaw, exploring && _inside == null ? _yawTarget : 0f, kYaw);
             var orbit = Quaternion.Euler(0f, _yaw, 0f);
             hubCamera.transform.rotation = orbit * _camRotBase;
 

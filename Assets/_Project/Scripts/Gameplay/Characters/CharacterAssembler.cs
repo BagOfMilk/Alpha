@@ -108,19 +108,32 @@ namespace Game.Gameplay.Characters
             for (int i = 0; i < t.childCount; i++) SetLayer(t.GetChild(i), layer);
         }
 
-        /// <summary>Напрям «обличчям уперед» у світових координатах: від п'яти до носка лівої стопи.</summary>
+        /// <summary>
+        /// Напрям «обличчям уперед» у світових координатах — з поточної пози: вектор від лівого стегна до
+        /// правого, повернутий навколо вертикалі (права рука персонажа — +X, коли він дивиться в +Z). Стегна
+        /// не міняються місцями ні в бінд-позі, ні в анімації. Перша версія брала «п'ята → носок» і
+        /// вказувала назад: герой ходив задом наперед (власник, 07.10.2026).
+        /// </summary>
         public static Vector3 Facing(GameObject model)
         {
-            Transform foot = null, ball = null;
-            foreach (var t in model.GetComponentsInChildren<Transform>(true))
+            Transform left = null, right = null;
+            var animator = model.GetComponentInChildren<Animator>();
+            if (animator != null && animator.isHuman)
             {
-                if (t.name == "foot_l") foot = t;
-                else if (t.name == "ball_l") ball = t;
+                left = animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+                right = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
             }
-            if (foot == null || ball == null) return model.transform.forward;
-            var d = ball.position - foot.position;
-            d.y = 0f;
-            return d.sqrMagnitude > 1e-6f ? d.normalized : model.transform.forward;
+            if (left == null || right == null)
+                foreach (var t in model.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t.name == "thigh_l") left = t;
+                    else if (t.name == "thigh_r") right = t;
+                }
+            if (left == null || right == null) return model.transform.forward;
+            var across = right.position - left.position;
+            across.y = 0f;
+            if (across.sqrMagnitude < 1e-6f) return model.transform.forward;
+            return Vector3.Cross(across.normalized, Vector3.up).normalized;
         }
     }
 }
