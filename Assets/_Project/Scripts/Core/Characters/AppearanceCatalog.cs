@@ -52,8 +52,10 @@ namespace Game.Core.Characters
                     // патериця старійшини (художнє — атрибут влади громади), беркутове перо роду.
                     return new Appearance { Culture = "ukrainian", Gender = Gender.Male, Hair = "hair_long01", HairColor = HairWhite,
                             FacialHair = "beard_full" }
-                        .With("robe", Linen).With("vest", Sheepskin).With("shoes", BootLeather)
+                        .With("robe", Linen).With("shoes", BootLeather)
                         .Accent("sash", "staff", "berkut_feather", "herb_pouch");
+                    // Безрукавку поверх халата прибрано (07.10.2026): оболонка з тіла на широкому кімоно рвалась
+                    // складками, а сама безрукавка — художня, не з першоджерела.
                 case "tuhar":
                     // Боярин Тугар Вовк — чужак, що хоче правити по-новому і йде на змову з ордою.
                     // Прізвище «Вовк» — вовче хутро на комірі (художнє); багатий малиновий жупан, золотий
@@ -200,7 +202,7 @@ namespace Game.Core.Characters
                     break;
                 case "middle_eastern":
                     list.Add(Outfit(g).With("robe", LinenWarm).With("turban", Linen).With("shoes", RedLeather).Accent("sash"));
-                    list.Add(Outfit(g).With("robe", Indigo).With("vest", Crimson).With("shoes", RedLeather));
+                    list.Add(Outfit(g).With("robe", Indigo).With("shoes", RedLeather).Accent("sash")); // без безрукавки поверх халата
                     list.Add(Outfit(g).With("tunic", Ochre).With("sharovary", Charcoal).With("boots", BootLeather));
                     break;
                 case "latin":
