@@ -62,6 +62,17 @@ namespace Game.Gameplay.Characters
             _model.transform.localRotation = Quaternion.identity;
             _baseFacing = CharacterAssembler.Facing(_model);
             Frame();
+
+            // Не бінд-поза, а жива стійка: кліп Idle з бібліотеки набору (якщо є).
+            var anims = GetComponent<CharacterAnimLibrary>();
+            var idle = anims != null ? anims.For(CharacterAnimState.Idle, WeaponStyle.Unarmed) : null;
+            if (idle != null)
+            {
+                var anim = _model.AddComponent<FigureAnimation>();
+                anim.idle = idle;
+                anim.enabled = false;
+                anim.enabled = true;
+            }
         }
 
         private void LateUpdate()

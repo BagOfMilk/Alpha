@@ -13,7 +13,7 @@ namespace Game.Gameplay.EditorTools
     ///
     /// Головне:
     /// 1. Матеріали — <c>ImportViaMaterialDescription</c> (граблі Kenney: підмінений шейдер губить колір).
-    /// 2. Персонажі — Generic без анімації і БЕЗ оптимізації ієрархії: збирач
+    /// 2. Персонажі й кліпи — Humanoid (ретаргет UAL на тіла набору), БЕЗ оптимізації ієрархії: збирач
     ///    (<c>CharacterAssembler</c>) переносить речі на скелет тіла за іменами кісток, тож кістки
     ///    мусять лишатися об'єктами.
     /// 3. Волосся, бороди, пір'я — альфа-зріз і дві сторони (картки волосся тонкі, прозорість
@@ -43,14 +43,17 @@ namespace Game.Gameplay.EditorTools
 
             if (assetPath.StartsWith(Characters))
             {
-                importer.animationType = ModelImporterAnimationType.Generic;
+                // Humanoid: кліпи UAL (інший скелет) ретаргетуються на тіла набору. Ієрархія не оптимізується —
+                // збирач переносить речі на кістки за іменами.
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
                 importer.importAnimation = false;
                 importer.optimizeGameObjects = false;
-                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             }
             else if (assetPath.StartsWith(Animations))
             {
-                importer.animationType = ModelImporterAnimationType.Generic;
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
                 importer.importAnimation = true;
                 importer.optimizeGameObjects = false;
             }
@@ -60,6 +63,32 @@ namespace Game.Gameplay.EditorTools
                 importer.animationType = ModelImporterAnimationType.None;
                 importer.importAnimation = false;
             }
+        }
+
+        /// <summary>
+        /// Кліпи UAL: ім'я без префікса дубля («Rig|Rig|Idle_Loop» → «Idle_Loop»), петля для «*_Loop» і
+        /// робочих циклів, корінь запечений у позу (рух веде гра, не кліп).
+        /// </summary>
+        private void OnPreprocessAnimation()
+        {
+            if (assetPath == null || !assetPath.StartsWith(Animations)) return;
+            var importer = (ModelImporter)assetImporter;
+            var clips = importer.defaultClipAnimations;
+            if (clips == null || clips.Length == 0) return;
+            foreach (var c in clips)
+            {
+                c.name = Game.Gameplay.UI.AnimStateTable.NormalizeClipName(c.takeName);
+                bool loop = c.name.EndsWith("_Loop") || c.name == "Farm_Harvest" || c.name == "Fixing_Kneeling"
+                            || c.name == "Interact" || c.name == "Sword_Idle" || c.name.StartsWith("Pistol_Aim");
+                c.loopTime = loop;
+                c.lockRootRotation = true;
+                c.lockRootHeightY = true;
+                c.lockRootPositionXZ = true;
+                c.keepOriginalOrientation = true;
+                c.keepOriginalPositionY = true;
+                c.keepOriginalPositionXZ = true;
+            }
+            importer.clipAnimations = clips;
         }
 
         private void OnPreprocessTexture()

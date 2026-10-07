@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Game.Core.Characters.Creation;
+using Game.Core.Session;
 using Game.Core.Session.Views;
 using Game.Gameplay.UI;
 using Game.Gameplay.Walk;
@@ -604,8 +605,42 @@ namespace Game.Gameplay
             }
         }
 
+        // Поправка №19: герой — постать із модульного набору за образом зі створення й надітим.
+        private Game.Gameplay.Characters.KitFigure _kit;
+        private int _kitLogCount = -1;
+        private List<string> _kitEquip;
+
+        private bool SyncKit()
+        {
+            var session = _shell.Session;
+            if (session == null) return false;
+            if (_kit == null)
+            {
+                var holder = new GameObject("kit");
+                holder.transform.SetParent(transform, false);
+                // Корінь героя повернутий на modelYawOffset під фігурки Kenney — постать набору дивиться прямо.
+                holder.transform.localRotation = Quaternion.Euler(0f, -modelYawOffset, 0f);
+                holder.layer = gameObject.layer;
+                _kit = holder.AddComponent<Game.Gameplay.Characters.KitFigure>();
+            }
+            if (_kitEquip == null || session.DayLog.Count != _kitLogCount)
+            {
+                var sheet = session.GetCharacterSheet(GameSession.ProtagonistId);
+                _kitEquip = Game.Gameplay.UI.InventoryModel.VisualKeys(sheet != null ? sheet.Equipment : null);
+                _kitLogCount = session.DayLog.Count;
+            }
+            return _kit.Show(session.GetAppearance(GameSession.ProtagonistId), _kitEquip,
+                Game.Gameplay.UI.CharacterAnimState.Idle, 1f, 0f, gameObject.layer);
+        }
+
         private void SyncModel()
         {
+            if (SyncKit())
+            {
+                if (maleModel != null && maleModel.activeSelf) maleModel.SetActive(false);
+                if (femaleModel != null && femaleModel.activeSelf) femaleModel.SetActive(false);
+                return;
+            }
             bool female = _shell.ProtagonistGender == Gender.Female;
             if (maleModel != null && maleModel.activeSelf == female) maleModel.SetActive(!female);
             if (femaleModel != null && femaleModel.activeSelf != female) femaleModel.SetActive(female);
@@ -613,6 +648,7 @@ namespace Game.Gameplay
 
         private FigureAnimation ActiveAnimation()
         {
+            if (_kit != null && _kit.Model != null) return _kit.Animation;
             var model = femaleModel != null && femaleModel.activeSelf ? femaleModel : maleModel;
             return model != null ? model.GetComponent<FigureAnimation>() : null;
         }

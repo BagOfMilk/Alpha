@@ -218,7 +218,7 @@ namespace Game.Gameplay.EditorTools
             obstacles.Add(House(hub, new Vector3(-4f, 0f, -4f), 2, 2, wood: true, facing: 180f));
             obstacles.Add(House(hub, new Vector3(2f, 0f, -4.5f), 3, 2, wood: false, facing: 180f));
 
-            var mill = KitBuilder.Place(Town + "watermill.fbx", new Vector3(9f, 0f, -1f), 210f, "Мельница");
+            var mill = ArtOrKenney("watermill", Town + "watermill.fbx", new Vector3(9f, 0f, -1f), 210f, "Мельница");
             if (mill != null) mill.transform.SetParent(hub.transform, true);
             obstacles.Add(mill);
 
@@ -243,6 +243,22 @@ namespace Game.Gameplay.EditorTools
             stage.postsRoot = posts.transform;
             stage.villagersRoot = villagers.transform;
             stage.plotsRoot = plots.transform;
+        }
+
+        /// <summary>Власна модель (трек V), якщо є, інакше — Kenney; та сама позиція й поворот.</summary>
+        private static GameObject ArtOrKenney(string artId, string kenneyPath, Vector3 at, float facing, string name)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ArtModels + artId + ".fbx");
+            if (prefab == null) return KitBuilder.Place(kenneyPath, at, facing, name);
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            go.name = name;
+            go.transform.position = at;
+            go.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+            go.transform.localScale = Vector3.one * Game.Gameplay.Visual.ArtScale.World;
+            // Будівля без стройки — показати готову стадію.
+            foreach (var t in go.GetComponentsInChildren<Transform>(true))
+                if (t.name.Contains(".stage") && !t.name.EndsWith(".stage5")) t.gameObject.SetActive(false);
+            return go;
         }
 
         private static GameObject House(GameObject hub, Vector3 origin, int width, int depth, bool wood, float facing)
@@ -567,7 +583,44 @@ namespace Game.Gameplay.EditorTools
             // 3D-мітка йде через ту саму таблицю "building.<id>", що й UI-панелі
             // (HubScreen/SummaryScreen), а не через def.DisplayName (Core, RU).
             string label = UkrainianText.Get("building." + buildingId, Gender.Male);
-            KitBuilder.Plot(Town, root, buildingId, label, at, width, depth, wood);
+            var plot = KitBuilder.Plot(Town, root, buildingId, label, at, width, depth, wood);
+            if (plot != null) UseArtBuilding(plot, buildingId);
+        }
+
+        /// <summary>Тека власних моделей треку V (Поправка №18): будівлі з вузлами stage1..5, реквізит, природа.</summary>
+        private const string ArtModels = "Assets/Art/Models/";
+
+        /// <summary>
+        /// Власна модель будівлі замість хатки Kenney (трек V4): у метрах, тож масштаб сцени
+        /// <see cref="Game.Gameplay.Visual.ArtScale.World"/>; півот — центр footprint, фасад у +Z — розвертаємо до −Z,
+        /// як у хаток Kenney, і ставимо двері перед фасадом. Стадії показує VillageStage (вузли stage1..5).
+        /// </summary>
+        private static void UseArtBuilding(GameObject plot, string buildingId)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ArtModels + buildingId + ".fbx");
+            if (prefab == null) return;
+            var old = plot.transform.Find("model");
+            Vector3 center = Vector3.zero;
+            if (old != null)
+            {
+                var b = KitBuilder.WorldBounds(old.gameObject);
+                center = new Vector3(b.center.x, 0f, b.center.z) - plot.transform.position;
+                Object.DestroyImmediate(old.gameObject);
+            }
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            model.name = "model";
+            model.transform.SetParent(plot.transform, false);
+            model.transform.localPosition = center;
+            model.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            model.transform.localScale = Vector3.one * Game.Gameplay.Visual.ArtScale.World;
+            foreach (var c in model.GetComponentsInChildren<Camera>(true)) Object.DestroyImmediate(c.gameObject);
+            var size = KitBuilder.WorldBounds(model).size;
+            model.SetActive(false);
+
+            var door = plot.transform.Find("door");
+            if (door != null) door.localPosition = center + new Vector3(0f, 0f, -size.z * 0.5f - 0.35f);
+            var label = plot.transform.Find("label");
+            if (label != null) label.localPosition = center + new Vector3(0f, size.y + 0.6f, 0f);
         }
     }
 }

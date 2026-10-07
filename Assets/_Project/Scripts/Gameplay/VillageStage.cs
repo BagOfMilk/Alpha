@@ -15,6 +15,9 @@ namespace Game.Gameplay
         public string OccupantId;
         /// <summary>Фігура жіноча (дочірня «f») чи чоловіча («m») — за людиною, а не за постом.</summary>
         public bool OccupantFemale;
+        /// <summary>Образ і надіте (Поправка №19) — для постаті з модульного набору; null — фігурка Kenney.</summary>
+        public Game.Core.Characters.Appearance Look;
+        public List<string> Equip;
     }
 
     /// <summary>Людина без поста біля вогнища Віча: місце idle:&lt;Index&gt; (docs/UX_DESIGN.md, UX-15).</summary>
@@ -23,6 +26,8 @@ namespace Game.Gameplay
         public int Index;
         public string CompanionId;
         public bool Female;
+        public Game.Core.Characters.Appearance Look;
+        public List<string> Equip;
     }
 
     /// <summary>Стадія стройки одного здання, 0..5 (US-7.3): 0 — ще не почато, 5 — готово.</summary>
@@ -197,7 +202,9 @@ namespace Game.Gameplay
                 StagePost post;
                 bool show = outside && occupied.TryGetValue(pair.Key, out post);
                 pair.Value.gameObject.SetActive(show);
-                if (show) ShowGender(pair.Value, occupied[pair.Key].OccupantFemale);
+                if (show && !ShowKit(pair.Value, occupied[pair.Key].Look, occupied[pair.Key].Equip,
+                        Game.Gameplay.UI.AnimStateTable.WorkFor(pair.Key)))
+                    ShowGender(pair.Value, occupied[pair.Key].OccupantFemale);
             }
 
             // Біля вогнища Віча — ті, хто без поста (з ними теж можна говорити).
@@ -211,8 +218,29 @@ namespace Game.Gameplay
                 StageIdlePerson person;
                 bool show = outside && idle.TryGetValue(pair.Key, out person);
                 pair.Value.gameObject.SetActive(show);
-                if (show) ShowGender(pair.Value, idle[pair.Key].Female);
+                if (show && !ShowKit(pair.Value, idle[pair.Key].Look, idle[pair.Key].Equip,
+                        pair.Key % 2 == 0 ? Game.Gameplay.UI.CharacterAnimState.Talk : Game.Gameplay.UI.CharacterAnimState.Idle))
+                    ShowGender(pair.Value, idle[pair.Key].Female);
             }
+        }
+
+        /// <summary>
+        /// Постать із модульного набору (трек V5): образ людини, надіте, робота поста. false — набору в сцені
+        /// немає чи образ невідомий; тоді лишаються фігурки Kenney «m»/«f».
+        /// </summary>
+        private static bool ShowKit(Transform holder, Game.Core.Characters.Appearance look, List<string> equip,
+            Game.Gameplay.UI.CharacterAnimState state)
+        {
+            if (look == null) return false;
+            var figure = holder.GetComponent<Game.Gameplay.Characters.KitFigure>();
+            if (figure == null) figure = holder.gameObject.AddComponent<Game.Gameplay.Characters.KitFigure>();
+            float phase = (holder.name.GetHashCode() & 0xff) / 255f;
+            if (!figure.Show(look, equip, state, 1f, phase, holder.gameObject.layer)) return false;
+            var m = holder.Find("m");
+            var f = holder.Find("f");
+            if (m != null) m.gameObject.SetActive(false);
+            if (f != null) f.gameObject.SetActive(false);
+            return true;
         }
 
         /// <summary>Фігура за статтю людини: діти «m» і «f»; без них — як було (одна модель).</summary>
@@ -254,12 +282,32 @@ namespace Game.Gameplay
                 if (model != null)
                 {
                     model.gameObject.SetActive(plot.Stage > 0);
-                    float height = plot.Stage >= 5 ? 1f : Mathf.Max(0.15f, plot.Stage / 5f);
-                    model.localScale = new Vector3(1f, height, 1f);
+                    // Власні моделі треку V мають вузли «<будівля>.stage1..5» (цоколь → риштування → крокви →
+                    // готово, Поправка №18): показуємо рівно поточний. Без них — старе «росте знизу вгору».
+                    if (!ShowStageNodes(model, plot.Stage))
+                    {
+                        float height = plot.Stage >= 5 ? 1f : Mathf.Max(0.15f, plot.Stage / 5f);
+                        model.localScale = new Vector3(1f, height, 1f);
+                    }
                 }
 
                 if (label != null) label.gameObject.SetActive(plot.Stage >= 5);
             }
+        }
+
+        private static bool ShowStageNodes(Transform model, int stage)
+        {
+            bool any = false;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true))
+            {
+                int dot = t.name.LastIndexOf(".stage", System.StringComparison.Ordinal);
+                if (dot < 0 || dot + 7 != t.name.Length) continue;
+                int n = t.name[dot + 6] - '0';
+                if (n < 1 || n > 5) continue;
+                t.gameObject.SetActive(n == Mathf.Clamp(stage, 1, 5));
+                any = true;
+            }
+            return any;
         }
 
         /// <summary>Мітка над місцем події: колір — полоса виходу, та ж угода кольорів, що в <see cref="VillageLife.MarkColor"/>.</summary>

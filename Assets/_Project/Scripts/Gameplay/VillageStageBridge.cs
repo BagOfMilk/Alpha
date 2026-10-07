@@ -48,8 +48,8 @@ namespace Game.Gameplay
                 Phase = morning || view.Phase != Game.Core.Loop.DayPhase.Night ? StagePhase.Day : StagePhase.Night,
                 Tier = view.Tier,
                 Patrolling = view.IsPatrolling,
-                Posts = BuildPosts(session.GetRosterView()),
-                Idle = BuildIdle(session.GetRosterView()),
+                Posts = WithLooks(session, BuildPosts(session.GetRosterView())),
+                Idle = WithLooks(session, BuildIdle(session.GetRosterView())),
                 Plots = BuildPlots(session.GetCityView()),
                 Incidents = BuildIncidents(session.LastDayReport)
             });
@@ -60,6 +60,43 @@ namespace Game.Gameplay
             if (_cachedStage != null) return _cachedStage;
             _cachedStage = Object.FindAnyObjectByType<VillageStage>();
             return _cachedStage;
+        }
+
+        /// <summary>Образ і надіте кожного, хто в селі (Поправка №19) — постать із модульного набору.</summary>
+        private static List<StagePost> WithLooks(GameSession session, List<StagePost> posts)
+        {
+            foreach (var p in posts)
+                if (!string.IsNullOrEmpty(p.OccupantId)) { p.Look = session.GetAppearance(p.OccupantId); p.Equip = EquipOf(session, p.OccupantId); }
+            return posts;
+        }
+
+        private static List<StageIdlePerson> WithLooks(GameSession session, List<StageIdlePerson> idle)
+        {
+            foreach (var p in idle)
+                if (!string.IsNullOrEmpty(p.CompanionId)) { p.Look = session.GetAppearance(p.CompanionId); p.Equip = EquipOf(session, p.CompanionId); }
+            return idle;
+        }
+
+        // Лист персонажа рахує агрегатор статів — не щокадру: надіте змінюється лише подією журналу
+        // (equip.changed), тож кеш живе, доки не виросте журнал або не зміниться сесія.
+        private static GameSession _equipSession;
+        private static int _equipLogCount = -1;
+        private static readonly Dictionary<string, List<string>> _equipCache = new Dictionary<string, List<string>>();
+
+        private static List<string> EquipOf(GameSession session, string companionId)
+        {
+            if (session != _equipSession || session.DayLog.Count != _equipLogCount)
+            {
+                _equipCache.Clear();
+                _equipSession = session;
+                _equipLogCount = session.DayLog.Count;
+            }
+            List<string> keys;
+            if (_equipCache.TryGetValue(companionId, out keys)) return keys;
+            var sheet = session.GetCharacterSheet(companionId);
+            keys = Game.Gameplay.UI.InventoryModel.VisualKeys(sheet != null ? sheet.Equipment : null);
+            _equipCache[companionId] = keys;
+            return keys;
         }
 
         private static List<StagePost> BuildPosts(RosterView roster)

@@ -83,6 +83,16 @@ namespace Game.Gameplay.EditorTools
             return bounds.size;
         }
 
+        /// <summary>Світові габарити екземпляра за рендерерами (зокрема неактивних дітей) — для розстановки моделей треку V.</summary>
+        public static Bounds WorldBounds(GameObject instance)
+        {
+            var renderers = instance.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return new Bounds(instance.transform.position, Vector3.one);
+            var b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b;
+        }
+
         /// <summary>Детермінований «шум» 0..1: ті самі числа за кожної перезбірки (інваріант 1 — жодного Random).</summary>
         public static float Hash(int i, int salt)
         {

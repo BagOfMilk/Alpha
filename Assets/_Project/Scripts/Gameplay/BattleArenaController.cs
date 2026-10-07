@@ -738,8 +738,12 @@ namespace Game.Gameplay
         {
             if (!_unitObjects.TryGetValue(unit.Id, out var go) || go == null)
             {
-                PickCharacter(unit.Id, out var prefab, out var clips);
-                go = prefab != null ? Instantiate(prefab, _unitRoot) : GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                BattleCharacterClips clips;
+                if (!TryBuildKitUnit(unit, out go, out clips))
+                {
+                    PickCharacter(unit.Id, out var prefab, out clips);
+                    go = prefab != null ? Instantiate(prefab, _unitRoot) : GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                }
                 go.name = "unit:" + unit.Id;
                 go.transform.SetParent(_unitRoot, false);
                 go.transform.localScale = Vector3.one * UnitVisualScale;
@@ -756,7 +760,9 @@ namespace Game.Gameplay
                 _unitRenderers[unit.Id] = go.GetComponentsInChildren<Renderer>();
                 _unitClipSets[unit.Id] = clips;
 
-                if (go.GetComponentInChildren<Animator>() != null)
+                var kitAnim = go.GetComponentInChildren<FigureAnimation>();
+                if (kitAnim != null) _unitAnimations[unit.Id] = kitAnim; // постать набору — кліпи UAL уже підключені
+                else if (go.GetComponentInChildren<Animator>() != null)
                 {
                     var anim = go.AddComponent<FigureAnimation>();
                     anim.idle = clips?.Idle;
@@ -772,6 +778,38 @@ namespace Game.Gameplay
             }
 
             ApplyUnitVisual(go, unit);
+        }
+
+        /// <summary>
+        /// Постать бою з модульного набору (Поправка №19, трек V5–V6): свої — за образом і надітим, вороги —
+        /// стабільний образ від id і зброя за типом атаки. false — набору в сцені немає (лишаються фігурки Kenney).
+        /// </summary>
+        private bool TryBuildKitUnit(BattleUnitView unit, out GameObject go, out BattleCharacterClips clips)
+        {
+            go = null;
+            clips = null;
+            Game.Gameplay.Characters.CharacterKitLibrary kit;
+            Game.Gameplay.Characters.CharacterAnimLibrary anims;
+            if (_session == null || !Game.Gameplay.Characters.KitFigure.TryFindLibraries(out kit, out anims)) return false;
+
+            var look = _session.GetAppearance(unit.Id);
+            var sheet = _session.GetCharacterSheet(unit.Id);
+            var equip = sheet != null
+                ? InventoryModel.VisualKeys(sheet.Equipment)
+                : new List<string> { AnimStateTable.EnemyWeaponFor(unit.Id, unit.WeaponIsMelee) };
+            go = new GameObject("unit:" + unit.Id);
+            go.transform.SetParent(_unitRoot, false);
+            var figure = go.AddComponent<Game.Gameplay.Characters.KitFigure>();
+            float phase = BattleArenaView.Hash01(unit.Id) * 0.9f;
+            if (!figure.Show(look, equip, CharacterAnimState.CombatIdle, 1f, phase, _unitRoot.gameObject.layer))
+            {
+                Destroy(go);
+                go = null;
+                return false;
+            }
+            var style = AnimStateTable.StyleOf(Game.Gameplay.Characters.KitFigure.WeaponOf(CharacterKitPlan.From(look, equip)));
+            clips = anims != null && anims.IsComplete ? anims.BattleClips(style) : null;
+            return true;
         }
 
         private void PickCharacter(string unitId, out GameObject prefab, out BattleCharacterClips clips)

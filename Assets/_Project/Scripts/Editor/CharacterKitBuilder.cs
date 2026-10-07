@@ -16,6 +16,7 @@ namespace Game.Gameplay.EditorTools
     public static class CharacterKitBuilder
     {
         public const string KitFolder = "Assets/Art/Characters/Kit";
+        public const string AnimFolder = "Assets/Art/Animations";
 
         public static GameObject Build()
         {
@@ -33,13 +34,24 @@ namespace Game.Gameplay.EditorTools
             bodies.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
             library.Bodies = bodies.ToArray();
 
+            // Кліпи UAL1/UAL2 (Humanoid) — таблицю «стан → кліп» тримає AnimStateTable.
+            var anims = go.AddComponent<CharacterAnimLibrary>();
+            var clips = new List<AnimationClip>();
+            foreach (var path in new[] { AnimFolder + "/UAL1_Standard.fbx", AnimFolder + "/UAL2_Standard.fbx" })
+                foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+                {
+                    var clip = asset as AnimationClip;
+                    if (clip != null && !clip.name.StartsWith("__preview__")) clips.Add(clip);
+                }
+            anims.Clips = clips.ToArray();
+
             var preview = go.AddComponent<CharacterPreviewRig>();
             preview.Library = library;
 
             if (!library.IsComplete)
                 Debug.LogWarning("[Kit] Набір неповний (" + KitFolder + "): екран створення лишиться на IMGUI.");
             else
-                Debug.Log("[Kit] Набір персонажів: 2 набори речей, " + bodies.Count + " тіл культур.");
+                Debug.Log("[Kit] Набір персонажів: 2 набори речей, " + bodies.Count + " тіл культур, " + clips.Count + " кліпів.");
             return go;
         }
 
