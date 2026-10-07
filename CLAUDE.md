@@ -346,6 +346,11 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
   mip; шрифтам резерв Segoe UI Symbol / Segoe UI / Arial для ▸ ▾ ✓, яких у
   Fixel немає). Kenney UI Pack / RPG Expansion / Cursor Pack у дозвіл не
   входять.
+- **Cinemachine 2.10.7** (рішення власника 07.10.2026, «так зараз шоб після бети вже
+  створювали»): у `Packages/manifest.json` для 3D-катсцен; версія — з комплекту самого
+  редактора 6000.4.10f1 (`Editor/Data/Resources/PackageManager/Editor/manifest.json`), не з
+  інтернету; коду поки немає; Timeline не ставимо. Unity допише `packages-lock.json` на
+  першому відкритті.
 - **Пайплайн — URP** (рішення власника, 20.09.2026). Пакет
   `com.unity.render-pipelines.universal` версії **17.4.0** прописаний у
   `Packages/manifest.json`; версія взята зі списку рекомендованих самим
@@ -445,6 +450,7 @@ Settlement, Factions, Checks, Signals, Loop}`. Вони **не посилают�
 | Постійно відкритий редактор Unity, автотур у Play Mode, Unity CLI | злито в trunk (`3832edd`); worktree `live` | сесія «Щ», 28.09.2026 — worktree `live` не чіпати (замок проєкту) |
 | UX поза HUD (Поправка №13): будівлі й інтер'єри, панелі замість вкладок, меню, `docs/UX_DESIGN.md` | `tb/ux-*` (worktree `stoic-blackwell-4b3412`) | сесія «Щ», 29.09.2026 — межу з HUD погоджено; **U3–U5 злито в main 30.09.2026** (`tb/ux-places`: будівлі з дверима, сіра кімната, розмова, панелі з карток, `HubScreen.cs` видалено); далі U6–U7 (простоює з 30.09.2026; Поправка №13 затверджена 01.10.2026); спільне малими правками після злиття trunk: `GameShell.cs` (partial `GameShell.Ux.cs`), `UkrainianText.cs` (блок `AddUxKeys`, R7), `GameSceneBuilder.cs`, `VillageWalk.cs`, `HeroWalker.cs`, `AutoplayGameDriver.cs` (крім `Journal*`) |
 | **Смуга UI зараз:** усе через світ і подача як у Wasteland 3 (Поправка №22, кроки U8–U13, W1–W2): спільні `GameShell*.cs`, `HeroWalker.cs`, `AutoplayGameDriver.cs`, `UkrainianText.cs` (блок `AddUxKeys`), `UI/Models/Ux*`, `Walk/*`, `NightScreen.cs`, `DungeonScreen.cs`, `DecisionScreen.cs` | `claude/analiz-sprav-38ce7e` (worktree `gmv-operativo-city-data-check-42bb16`) | сесія «Які в нас справи», з 06.10.2026 — активна; `tb/ux-places` і `ui/bg3` стоять на `2ff027d` і в цій смузі не працюють |
+| Наративна майстерня M1.15: канон світу, каст 100, квести, катсцени, вигляд персонажів; `docs/narrative/*` (`STORY_BIBLE.md`, `NARRATIVE_AUDIT.md`, `PRODUCTION_PIPELINE.md`, `MASTER_PROMPT.md` v6), скіли `narrative-workshop`, `cutscene-director` | `claude/narrative-workshop-m1-15-640445` | сесія майстерні, 07.10.2026 — зараз лише документи і пакет Cinemachine; код і канон — після BETA 1 (власник: робимо сюжет, катсцени, візуал і анімацію, коли BETA 1 протестована) |
 | Вигляд усіх вікон (Поправка №16): шкурка BG3 (`AlphaSkin`, `SkinTextures`, `Widgets`, `HudArt`), далі словник і хроніка рішень | `ui/bg3` (worktree `telegram-attachments-iphone-d30c7b`) | сесія «Localize VillageLife…», 30.09.2026 — межу з треком UX погоджено з «Щ»: вигляд тут, розкладка й структура екранів — там; 16.1 зроблено, 16.2–16.4 відкладено до окремого «ок» (Поправка №17.5); рендер — UI Toolkit (№17.4); простоює з 30.09.2026; бойовий HUD мігрує останнім |
 
 **Перша ігрова година зібрана (23.09.2026): кроки 1–7 порядку `FIRST_HOUR` §4
