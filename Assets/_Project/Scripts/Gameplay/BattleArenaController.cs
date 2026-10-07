@@ -577,6 +577,7 @@ namespace Game.Gameplay
             if (_paused) return;
 
             float dt = Time.deltaTime;
+            LogUnitsOnce();
 
             if (_resultPending)
             {
@@ -740,6 +741,38 @@ namespace Game.Gameplay
 
             if (view?.Units == null) return;
             foreach (var unit in view.Units) SpawnOrUpdateUnit(unit);
+        }
+
+        private float _diagAt = -1f;
+
+        /// <summary>
+        /// Один рядок у журнал на кожну постать через секунду після початку бою: скільки рендерерів видно, де межі
+        /// моделі. Тур 07.10.2026: Максима й героїню на полі не було видно (лише диски), а причини з коду не знайти.
+        /// </summary>
+        private void LogUnitsOnce()
+        {
+            if (_unitObjects.Count == 0) { _diagAt = -1f; return; }
+            if (_diagAt < 0f) { _diagAt = Time.time + 1f; return; }
+            if (_diagAt == 0f || Time.time < _diagAt) return;
+            _diagAt = 0f;
+            foreach (var pair in _unitObjects)
+            {
+                if (pair.Value == null) continue;
+                int all = 0, shown = 0, visible = 0;
+                var bounds = new Bounds(pair.Value.transform.position, Vector3.zero);
+                foreach (var r in pair.Value.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r.gameObject.name == "ring" || r.gameObject.name == "overwatch") continue;
+                    all++;
+                    if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                    shown++;
+                    if (r.isVisible) visible++;
+                    bounds.Encapsulate(r.bounds);
+                }
+                Debug.Log("[Бій] постать " + pair.Key + ": рендерерів " + all + ", увімкнено " + shown + ", у кадрі " + visible +
+                          ", корінь " + pair.Value.transform.position.ToString("0.00") + ", межі " + bounds.center.ToString("0.00") +
+                          " розмір " + bounds.size.ToString("0.00"));
+            }
         }
 
         private void SpawnOrUpdateUnit(BattleUnitView unit)
