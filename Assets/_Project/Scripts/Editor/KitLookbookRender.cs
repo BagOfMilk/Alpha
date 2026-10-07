@@ -143,6 +143,7 @@ namespace Game.Gameplay.EditorTools
             {
                 if (urp != null) urp.useSRPBatcher = batcher;
             }
+            if (anims != null && anims.IsComplete) AuditClips(lib, anims, looks[0].Value, report);
             if (urp != null) urp.useSRPBatcher = false;
             try { RenderBuildings(cam, report); }
             finally { if (urp != null) urp.useSRPBatcher = batcher; }
@@ -199,6 +200,44 @@ namespace Game.Gameplay.EditorTools
                 Object.DestroyImmediate(sheet);
                 Object.DestroyImmediate(go);
             }
+        }
+
+        /// <summary>
+        /// Кожен кліп, який гра бере з таблиці станів (стан × стиль зброї): де опиняється таз відносно кореня, на
+        /// якій висоті й куди дивиться тіло. Тур 07.10.2026: у бою Максима й героїню не було видно — бойові кліпи
+        /// не перевіряв ніхто. «!!» — таз далі 0,5 м від кореня, нижче 0,3 м (крім падіння) чи тіло повернуте понад 60°.
+        /// </summary>
+        private static void AuditClips(CharacterKitLibrary lib, CharacterAnimLibrary anims, Appearance look, StringBuilder report)
+        {
+            report.AppendLine();
+            report.AppendLine("==== КЛІПИ (стан × стиль → таз відносно кореня в середині кліпу)");
+            var plan = CharacterKitPlan.From(look, null);
+            var root = new GameObject("clip-audit");
+            var model = CharacterAssembler.Build(lib, plan, root.transform, 0);
+            if (model == null) { Object.DestroyImmediate(root); return; }
+            Transform pelvis = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true)) if (t.name == "pelvis") pelvis = t;
+            var seen = new HashSet<string>();
+            foreach (CharacterAnimState st in System.Enum.GetValues(typeof(CharacterAnimState)))
+                foreach (WeaponStyle style in System.Enum.GetValues(typeof(WeaponStyle)))
+                {
+                    var clip = anims.For(st, style);
+                    if (clip == null || !seen.Add(clip.name)) continue;
+                    var issues = new List<string>();
+                    foreach (float frac in new[] { 0.1f, 0.5f, 0.9f })
+                    {
+                        var g = Pose(model, clip, clip.length * frac);
+                        var p = pelvis != null ? pelvis.position - model.transform.position : Vector3.zero;
+                        float yaw = Yaw(CharacterAssembler.Facing(model));
+                        bool down = st == CharacterAnimState.Down || st == CharacterAnimState.Sit || st == CharacterAnimState.GetUp ||
+                                    st == CharacterAnimState.CoverIdle || st == CharacterAnimState.CoverMove || st == CharacterAnimState.Surrender;
+                        string bad = (new Vector2(p.x, p.z).magnitude > 0.5f || (!down && p.y < 0.3f) || Mathf.Abs(yaw) > 60f) ? " !!" : "";
+                        issues.Add(frac.ToString("0.0") + ": таз " + p.ToString("0.00") + ", тіло " + yaw.ToString("0") + "°" + bad);
+                        if (g.IsValid()) g.Destroy();
+                    }
+                    report.AppendLine(st + "/" + style + " → " + clip.name + " | " + string.Join(" · ", issues));
+                }
+            Object.DestroyImmediate(root);
         }
 
         /// <summary>Поставити модель у позу кліпу на мить <paramref name="t"/> (граф плейблів, як у грі; без Play Mode).</summary>
