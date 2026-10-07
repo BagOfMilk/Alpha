@@ -126,17 +126,28 @@ namespace Game.Gameplay
         private Texture2D RenderPortrait(string characterId)
         {
             EnsureRig();
-            var prefab = PickPrefab(characterId);
-            if (prefab == null || _camera == null) return null;
-
+            if (_camera == null) return null;
             if (_currentModel != null) Destroy(_currentModel);
-            _currentModel = Instantiate(prefab, _stage);
-            _currentModel.transform.localPosition = Vector3.zero;
-            _currentModel.transform.localRotation = Quaternion.Euler(0f, 200f, 0f);
-            SetLayerRecursively(_currentModel);
 
-            TintModel(_currentModel, characterId);
-            FrameCameraOnModel(_currentModel);
+            // Поправка №19: портрет — постать модульного набору за образом (свої кольори й символи).
+            _currentModel = BuildKitModel(characterId);
+            if (_currentModel != null)
+            {
+                SetLayerRecursively(_currentModel);
+                FrameCameraOnModel(_currentModel, 0.24f, 1.35f); // реальні пропорції: голова й плечі ≈ чверть зросту
+            }
+            else
+            {
+                var prefab = PickPrefab(characterId);
+                if (prefab == null) return null;
+                _currentModel = Instantiate(prefab, _stage);
+                _currentModel.transform.localPosition = Vector3.zero;
+                _currentModel.transform.localRotation = Quaternion.Euler(0f, 200f, 0f);
+                SetLayerRecursively(_currentModel);
+
+                TintModel(_currentModel, characterId);
+                FrameCameraOnModel(_currentModel, 0.6f, 1.7f);
+            }
 
             var rt = new RenderTexture(TextureSize, TextureSize, 16);
             var previousTarget = _camera.targetTexture;
@@ -177,7 +188,28 @@ namespace Game.Gameplay
         /// «бюст» (верхні ~42% зросту — голова й плечі) завжди влучає в кадр,
         /// хоч би яку модель з пулу підібрав <see cref="PickPrefab"/>.
         /// </summary>
-        private void FrameCameraOnModel(GameObject model)
+        /// <summary>Модель набору для портрета (без анімації — бінд-поза, бюст її не показує); null — набору немає.</summary>
+        private GameObject BuildKitModel(string characterId)
+        {
+            var kit = FindFirstObjectByType<Game.Gameplay.Characters.CharacterKitLibrary>();
+            if (kit == null || !kit.IsComplete) return null;
+            var shell = FindAnyObjectByType<GameShell>();
+            var session = shell != null ? shell.Session : null;
+            if (session == null) return null;
+            var look = session.GetAppearance(characterId);
+            if (look == null) return null;
+            var sheet = session.GetCharacterSheet(characterId);
+            var plan = Game.Gameplay.UI.CharacterKitPlan.From(look, Game.Gameplay.UI.InventoryModel.VisualKeys(sheet != null ? sheet.Equipment : null));
+            var model = Game.Gameplay.Characters.CharacterAssembler.Build(kit, plan, _stage, StageLayer);
+            if (model == null) return null;
+            model.transform.localPosition = Vector3.zero;
+            // Обличчям до камери (вона дивиться вздовж +Z станка) і на чверть обороту вбік — як на парадному портреті.
+            var facing = Game.Gameplay.Characters.CharacterAssembler.Facing(model);
+            model.transform.rotation = Quaternion.Euler(0f, 20f, 0f) * Quaternion.FromToRotation(facing, Vector3.back) * model.transform.rotation;
+            return model;
+        }
+
+        private void FrameCameraOnModel(GameObject model, float bustFraction, float margin)
         {
             if (_camera == null || model == null) return;
 
@@ -194,11 +226,11 @@ namespace Game.Gameplay
             // просто в очі/рот, не показуючи голову цілком. 0.6 зросту з
             // запасом ×1.7 лишає видимою всю голову з невеликим повітрям
             // навколо, а не тільки її нижню частину.
-            float bustHeight = bounds.size.y * 0.6f;
+            float bustHeight = bounds.size.y * bustFraction;
             float focusY = bounds.max.y - bustHeight * 0.5f;
 
             float halfFovRad = _camera.fieldOfView * 0.5f * Mathf.Deg2Rad;
-            float distance = (bustHeight * 0.5f) / Mathf.Tan(halfFovRad) * 1.7f;
+            float distance = (bustHeight * 0.5f) / Mathf.Tan(halfFovRad) * margin;
 
             var focusLocal = _stage.InverseTransformPoint(new Vector3(bounds.center.x, focusY, bounds.center.z));
             _camera.transform.localPosition = new Vector3(focusLocal.x, focusLocal.y, focusLocal.z - distance);
