@@ -75,6 +75,10 @@ namespace Game.Gameplay
                 return;
             }
             animator.applyRootMotion = false;
+            // Анімувати завжди: постать набору в бінд-позі розкидана (тіло культури й одяг набору авторовані в
+            // різних місцях FBX), і якщо в бінд-позі вона поза кадром, аніматор із відсіканням за видимістю не
+            // стартував ніколи — героїня й Максим у бою були невидимі, лише диски (тур 07.10.2026).
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             _graph = PlayableGraph.Create(name + ".figure");
             _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);

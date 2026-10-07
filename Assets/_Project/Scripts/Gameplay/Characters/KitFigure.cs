@@ -88,6 +88,15 @@ namespace Game.Gameplay.Characters
             if (_alignIn <= 0 || _model == null) return;
             if (--_alignIn > 0) return;
             AlignedYaw = CharacterAssembler.AlignBody(_model, transform.forward);
+            // Охоронець: постать, що й досі в бінд-позі, розкидана на метри (тіло й одяг авторовані в різних місцях
+            // FBX) — анімація не стартувала, і в кадрі її не видно. Помилка в журнал — тур провалює ворота G1.
+            var spread = new Bounds(_model.transform.position, Vector3.zero);
+            foreach (var r in _model.GetComponentsInChildren<SkinnedMeshRenderer>())
+                if (r.enabled && r.gameObject.activeInHierarchy) spread.Encapsulate(r.bounds);
+            float scale = Mathf.Max(1e-3f, _model.transform.lossyScale.y);
+            if (Mathf.Max(spread.size.x, spread.size.z) / scale > 3f)
+                Debug.LogError("[Постать] " + name + " у бінд-позі: частини розкидані на " +
+                               (Mathf.Max(spread.size.x, spread.size.z) / scale).ToString("0.0") + " м — анімація не стартувала.");
         }
 
         /// <summary>Ключ зброї, яку видно на моделі (надіта чи впізнавана); null — без зброї.</summary>

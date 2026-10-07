@@ -29,6 +29,9 @@ namespace Game.Gameplay.Characters
 
             var root = Object.Instantiate(bodyPrefab, parent, false);
             root.name = "Character(" + plan.BodyId + ")";
+            // Без відсікання за видимістю: у бінд-позі частини розкидані на метри, і постать, що почала поза кадром,
+            // так і не оживала (FigureAnimation ставить те саме — тут на випадок постаті без неї).
+            foreach (var an in root.GetComponentsInChildren<Animator>(true)) an.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             var bones = new Dictionary<string, Transform>();
             CollectBones(root.transform, bones);
 
