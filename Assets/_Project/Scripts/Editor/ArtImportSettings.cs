@@ -31,6 +31,40 @@ namespace Game.Gameplay.EditorTools
         /// <summary>Після вбудованого препроцесора URP — щоб наші правки матеріалу були останніми.</summary>
         public override int GetPostprocessOrder() => 100;
 
+        /// <summary>
+        /// Версія правил: зміна змушує Unity переімпортувати всі асети, яких вони стосуються.
+        /// 2 — текстура за назвою матеріалу (07.10.2026).
+        /// </summary>
+        public override uint GetVersion() => 2;
+
+        private static readonly string[] TextureFolders = { "Assets/Art/Textures/", "Assets/Art/Textures/Kit/" };
+        private static readonly string[] DiffuseSuffixes = { "", "_Diffuse", "_diff", "_col_01", "_COL", "_albedo" };
+        private static readonly string[] NormalSuffixes = { "_nor_gl", "_nor", "_normal" };
+        private static readonly string[] Extensions = { ".png", ".jpg", ".jpeg" };
+
+        /// <summary>
+        /// Текстура за назвою матеріалу, коли FBX її не приніс. Дві причини з першого запуску (07.10.2026):
+        /// Blender пише в FBX ім'я файлу з суфіксом роздільності («stone_wall_04_Diffuse_1k.jpg»), а на диску —
+        /// без нього; і шкіра MPFB іде до кольору через вузли, тож експортер не прив'язує її до DiffuseColor.
+        /// </summary>
+        private Texture2D FindByMaterialName(string materialName, string[] suffixes)
+        {
+            if (string.IsNullOrEmpty(materialName)) return null;
+            string name = materialName;
+            int dot = name.IndexOf('.');
+            if (dot > 0) name = name.Substring(0, dot); // «stone_wall_04.001» → «stone_wall_04»
+            foreach (var folder in TextureFolders)
+                foreach (var suffix in suffixes)
+                    foreach (var ext in Extensions)
+                    {
+                        string path = folder + name + suffix + ext;
+                        context.DependsOnSourceAsset(path);
+                        var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                        if (tex != null) return tex;
+                    }
+            return null;
+        }
+
         private void OnPreprocessModel()
         {
             if (!IsArt) return;
@@ -119,8 +153,23 @@ namespace Game.Gameplay.EditorTools
             // Колір дає текстура, а відтінок тканини — гра (_BaseColor через MaterialPropertyBlock).
             // Blender пише в FBX множник 0.8 — без цього все було б на п'яту частину темнішим.
             TexturePropertyDescription diffuse;
-            if (description.TryGetProperty("DiffuseColor", out diffuse) && material.HasProperty("_BaseColor"))
+            bool hasDiffuse = description.TryGetProperty("DiffuseColor", out diffuse) && diffuse.texture != null;
+            if (!hasDiffuse && material.HasProperty("_BaseMap"))
+            {
+                var tex = FindByMaterialName(description.materialName, DiffuseSuffixes);
+                if (tex != null) { material.SetTexture("_BaseMap", tex); hasDiffuse = true; }
+            }
+            if (hasDiffuse && material.HasProperty("_BaseColor"))
                 material.SetColor("_BaseColor", Color.white);
+            if (material.HasProperty("_BumpMap") && material.GetTexture("_BumpMap") == null)
+            {
+                var nor = FindByMaterialName(description.materialName, NormalSuffixes);
+                if (nor != null)
+                {
+                    material.SetTexture("_BumpMap", nor);
+                    material.EnableKeyword("_NORMALMAP");
+                }
+            }
 
             if (!NeedsCutout(description, diffuse)) return;
             if (material.HasProperty("_Surface")) material.SetFloat("_Surface", 0f);

@@ -265,6 +265,9 @@ namespace Game.Gameplay.Playtest
             int n;
             _errors[key] = _errors.TryGetValue(key, out n) ? n + 1 : 1;
             if (!_errorStacks.ContainsKey(key)) _errorStacks[key] = stackTrace;
+            // Виняток — одразу на диск: гра виходить через TerminateProcess (HardExit), і відкладений
+            // запис губився (тур 07.10.2026). Решта помилок — пачкою раз на 5 с.
+            if (type == LogType.Exception) { FlushErrors(); return; }
             if (!_errorsDirty) { _errorsDirty = true; _errorsFlushAt = Time.unscaledTime + 5f; }
         }
 

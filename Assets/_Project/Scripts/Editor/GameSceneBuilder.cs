@@ -731,7 +731,9 @@ namespace Game.Gameplay.EditorTools
             model.SetActive(false);
 
             var door = plot.transform.Find("door");
-            if (door != null) door.localPosition = center + new Vector3(0f, 0f, -size.z * 0.5f - 0.35f);
+            // Відступ від фасаду — як у хаток Kenney (0,75) з запасом: перешкода будівлі розширена на радіус
+            // героя, і двері ближче 0,5 опинялись усередині неї — герой не міг дійти (тур 07.10.2026).
+            if (door != null) door.localPosition = center + new Vector3(0f, 0f, -size.z * 0.5f - 0.85f);
             var label = plot.transform.Find("label");
             if (label != null) label.localPosition = center + new Vector3(0f, size.y + 0.6f, 0f);
         }
