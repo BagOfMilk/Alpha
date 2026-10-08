@@ -226,15 +226,15 @@ namespace Game.Gameplay.UI
         /// </summary>
         public static void Modal(string title, Action drawBody, Action onClose = null)
         {
-            var backdrop = new Rect(0f, 0f, Screen.width, Screen.height);
+            var backdrop = new Rect(0f, 0f, UiScale.Width, UiScale.Height);
             var previousColor = GUI.color;
             GUI.color = AlphaSkin.ModalDim;
             GUI.DrawTexture(backdrop, TintableTexture(), ScaleMode.StretchToFill);
             GUI.color = previousColor;
 
-            float width = Clamp(Screen.width * 0.5f, 480f, 900f);
-            float height = Clamp(Screen.height * 0.5f, 320f, 640f);
-            var area = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+            float width = Clamp(UiScale.Width * 0.5f, 480f, 900f);
+            float height = Clamp(UiScale.Height * 0.5f, 320f, 640f);
+            var area = new Rect((UiScale.Width - width) * 0.5f, (UiScale.Height - height) * 0.5f, width, height);
 
             GUILayout.BeginArea(area);
             Panel(title, drawBody);
@@ -287,9 +287,9 @@ namespace Game.Gameplay.UI
             width = Clamp(width + pad.left + pad.right + 4f, 180f, 560f);
             float height = lines.Count * lineHeight + (hasTitle ? dividerHeight : 0f) + pad.top + pad.bottom;
 
-            float x = Clamp(anchor.x, 8f, Math.Max(8f, Screen.width - width - 8f));
+            float x = Clamp(anchor.x, 8f, Math.Max(8f, UiScale.Width - width - 8f));
             float y = anchor.y + anchor.height + 6f;
-            if (y + height > Screen.height - 8f) y = Math.Max(8f, anchor.y - height - 6f);
+            if (y + height > UiScale.Height - 8f) y = Math.Max(8f, anchor.y - height - 6f);
             var box = new Rect(x, y, width, height);
 
             GUI.Box(box, GUIContent.none, AlphaSkin.TooltipPanel);
@@ -465,7 +465,7 @@ namespace Game.Gameplay.UI
         /// <summary>Прямокутник по центру екрана — та сама математика, що в <see cref="Modal"/>, для власних панелей.</summary>
         public static Rect CenteredRect(float width, float height)
         {
-            return new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+            return new Rect((UiScale.Width - width) * 0.5f, (UiScale.Height - height) * 0.5f, width, height);
         }
 
         /// <summary>Бічний відступ, що росте з роздільною здатністю (16px на контрольній ширині 1280).</summary>

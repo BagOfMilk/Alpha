@@ -71,9 +71,10 @@ namespace Game.Gameplay
         private void OnGUI()
         {
             if (_play == null) return;
+            UI.UiScale.Apply();
 
             var frame = _play.Current;
-            float w = Screen.width, h = Screen.height;
+            float w = UI.UiScale.Width, h = UI.UiScale.Height;
 
             GUI.Box(new Rect(0, 0, w, h), GUIContent.none);
 

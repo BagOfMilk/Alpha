@@ -68,6 +68,7 @@ namespace Game.Gameplay.UI
 
                 // Поправка №21.1: рівень графіки — до старту, щоб слабка машина не чекала першого меню паузи.
                 Widgets.Section(UkrainianText.Get("ui.gfx.title", g), () => EscapeMenuScreen.DrawGraphicsLevels(shell, g));
+                Widgets.Section(UkrainianText.Get("ui.uiscale.title", g), () => EscapeMenuScreen.DrawUiScale(g));
 
                 if (Widgets.TabButton(UkrainianText.Get("ui.title.skip_creation", g), _skipCreation))
                     _skipCreation = !_skipCreation;
@@ -116,7 +117,7 @@ namespace Game.Gameplay.UI
             // Титри асетів унизу титулу (Поправка №12.2): значки game-icons.net
             // під CC BY 3.0 вимагають атрибуції там, де гравець її бачить.
             var creditsStyle = new GUIStyle(AlphaSkin.HintLine) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
-            GUI.Label(new Rect(16f, Screen.height - 40f, Screen.width - 32f, 32f),
+            GUI.Label(new Rect(16f, UiScale.Height - 40f, UiScale.Width - 32f, 32f),
                 UkrainianText.Get("ui.title.credits", g), creditsStyle);
         }
 

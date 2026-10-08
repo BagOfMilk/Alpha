@@ -344,6 +344,7 @@ namespace Game.Gameplay
 
         private void OnGUI()
         {
+            UI.UiScale.Apply(); // увесь інтерфейс одним множником (власник 07.10.2026: «звенши усе вдвічі»)
             GUI.skin = AlphaSkin.Build();
             if (Session == null) return;
             if (PortraitProvider != null) PortraitProvider.ProtagonistGender = ProtagonistGender;
@@ -616,7 +617,7 @@ namespace Game.Gameplay
             {
                 // Шапку і стрічку малює UI Toolkit; IMGUI отримує лише тіло —
                 // прямокутник, що не перетинається з ними (HudLayout, критерій 5).
-                var body = HudLayout.For(Screen.width, Screen.height).Body;
+                var body = UI.UiScale.Frame().Body;
                 GUILayout.BeginArea(new Rect(body.X, body.Y, body.Width, body.Height));
                 GUILayout.BeginVertical();
                 // LastMessage не йде в шапку (HUD_DESIGN §4.2): відмова лишається
@@ -633,14 +634,14 @@ namespace Game.Gameplay
                 return;
             }
 
-            var area = new Rect(0f, 0f, Screen.width, Screen.height);
+            var area = new Rect(0f, 0f, UI.UiScale.Width, UI.UiScale.Height);
             GUILayout.BeginArea(area);
             GUILayout.BeginVertical();
 
             DrawTopBar();
 
             GUILayout.BeginHorizontal();
-            GUILayout.BeginVertical(GUILayout.Width(Screen.width * 0.7f), GUILayout.ExpandHeight(true));
+            GUILayout.BeginVertical(GUILayout.Width(UI.UiScale.Width * 0.7f), GUILayout.ExpandHeight(true));
             DrawHubBody(state);
             GUILayout.EndVertical();
 
@@ -679,7 +680,7 @@ namespace Game.Gameplay
 
         private void DrawFullScreen(Action body)
         {
-            var area = new Rect(0f, 0f, Screen.width, Screen.height);
+            var area = new Rect(0f, 0f, UI.UiScale.Width, UI.UiScale.Height);
             GUILayout.BeginArea(area);
             body();
             GUILayout.EndArea();

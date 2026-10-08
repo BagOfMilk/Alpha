@@ -65,6 +65,11 @@ namespace Game.Gameplay.UI
                 DrawGraphicsLevels(shell, g);
                 Widgets.TooltipLine(UkrainianText.Get("ui.gfx.hint", g));
 
+                // Розмір інтерфейсу (власник 07.10.2026: «Абсолютно увесь UI завеликий, звенши усе вдвічі»).
+                GUILayout.Label(UkrainianText.Get("ui.uiscale.title", g), AlphaSkin.Body);
+                DrawUiScale(g);
+                Widgets.TooltipLine(UkrainianText.Get("ui.uiscale.hint", g));
+
                 GUILayout.Space(8f);
 
                 // Гучність (віха M1.19): п'ять шарів, крок 10 %; зберігається між запусками.
@@ -135,6 +140,18 @@ namespace Game.Gameplay.UI
         {
             string key = "ui.state." + state.ToString().ToLowerInvariant();
             return UkrainianText.Has(key, g) ? UkrainianText.Get(key, g) : state.ToString();
+        }
+
+        /// <summary>Кнопки розміру інтерфейсу (50 / 75 / 100 %) — спільні для меню паузи й титулу.</summary>
+        internal static void DrawUiScale(Gender g)
+        {
+            GUILayout.BeginHorizontal();
+            foreach (float option in UiScale.Options)
+            {
+                string label = UkrainianText.Format("ui.uiscale.option", g, "pct", ((int)System.Math.Round(option * 100f)).ToString());
+                if (Widgets.TabButton(label, System.Math.Abs(UiScale.Factor - option) < 0.01f)) UiScale.Factor = option;
+            }
+            GUILayout.EndHorizontal();
         }
 
         /// <summary>Три кнопки рівня графіки — спільні для меню паузи й титулу.</summary>

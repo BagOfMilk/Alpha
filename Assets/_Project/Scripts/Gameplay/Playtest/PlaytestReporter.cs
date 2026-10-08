@@ -304,7 +304,7 @@ namespace Game.Gameplay.Playtest
             _panel = asset != null ? Instantiate(asset) : ScriptableObject.CreateInstance<PanelSettings>();
             _panel.name = "AlphaPlaytestPanel";
             _panel.scaleMode = PanelScaleMode.ConstantPixelSize;
-            _panel.scale = HudLayout.ScaleFor(Screen.width, Screen.height);
+            _panel.scale = UI.UiScale.PanelScale();
             _panel.sortingOrder = 50f; // поверх усіх екранів
             if (_panel.themeStyleSheet == null)
             {

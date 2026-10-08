@@ -1382,7 +1382,7 @@ namespace Game.Gameplay
         private bool IsPointerOverHud()
         {
             if (_hudRects == null || _hudRects.Count == 0) return false;
-            var guiPos = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+            var guiPos = UI.UiScale.MouseGui();
             for (int i = 0; i < _hudRects.Count; i++)
                 if (_hudRects[i].width > 0f && _hudRects[i].height > 0f && _hudRects[i].Contains(guiPos)) return true;
             return false;
@@ -2042,8 +2042,8 @@ namespace Game.Gameplay
                     {
                         TileX = trap.Pos.X,
                         TileY = trap.Pos.Y,
-                        ScreenX = tsp.x,
-                        ScreenY = Screen.height - tsp.y,
+                        ScreenX = tsp.x / UI.UiScale.Factor,
+                        ScreenY = (Screen.height - tsp.y) / UI.UiScale.Factor,
                         OnScreen = tsp.z > 0f && tsp.x >= 0f && tsp.x <= Screen.width && tsp.y >= 0f && tsp.y <= Screen.height,
                         TrapDamage = trap.TrapDamage
                     });
@@ -2095,7 +2095,7 @@ namespace Game.Gameplay
         {
             if (ArenaCamera == null) return Vector2.zero;
             var sp = ArenaCamera.WorldToScreenPoint(world);
-            return new Vector2(sp.x, Screen.height - sp.y);
+            return UI.UiScale.ScreenToGui(sp); // координати IMGUI (множник інтерфейсу)
         }
 
         // ================= камера (§4) =================
@@ -2156,7 +2156,8 @@ namespace Game.Gameplay
             for (int i = 0; i < _hudRects.Count; i++)
             {
                 var r = _hudRects[i];
-                converted.Add(new BattleArenaView.GuiRect(r.x, r.y, r.width, r.height));
+                float f = UI.UiScale.Factor; // прямокутники HUD — у координатах IMGUI, поля — у пікселях екрана
+                converted.Add(new BattleArenaView.GuiRect(r.x * f, r.y * f, r.width * f, r.height * f));
             }
             return BattleArenaView.MarginsFromRects(Screen.width, Screen.height, converted);
         }
