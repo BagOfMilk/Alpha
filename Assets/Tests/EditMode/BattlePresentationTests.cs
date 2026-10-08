@@ -150,6 +150,104 @@ namespace Game.Tests.EditMode
             CollectionAssert.AreEqual(new[] { "×1", "×1,5", "×2" }, BattleTactTiming.SpeedOptions.Select(BattleTactTiming.SpeedLabel).ToArray());
         }
 
+        // ---------------- П8: журнал називає джерело шкоди ----------------
+
+        private static string DamageLine(params string[] pairs)
+        {
+            var args = new System.Collections.Generic.Dictionary<string, string> { { "unitId", "victim" }, { "damage", "4" }, { "damageType", "fire" } };
+            for (int i = 0; i + 1 < pairs.Length; i += 2) args[pairs[i]] = pairs[i + 1];
+            var entry = new Game.Core.Session.Views.BattleLogLineView { Round = 1, Key = CombatLogKeys.Damage, Args = args };
+            return BattleLogText.Line(entry, true, id => id == "caster" ? "Гафія" : "Мирослава", id => false);
+        }
+
+        [Test]
+        public void DamageLine_NamesTheSource_UnitKegOrVolley()
+        {
+            StringAssert.Contains("від: Гафія", DamageLine("sourceId", "caster"));
+            StringAssert.Contains("вибух бочки", DamageLine("source", CombatLogKeys.SourceKeg));
+            StringAssert.Contains("обстріл", DamageLine("source", CombatLogKeys.SourceVolley));
+            string plain = DamageLine();
+            StringAssert.DoesNotContain("{", plain, "без джерела — жодного сліду плейсхолдера");
+            StringAssert.DoesNotContain("від:", DamageLine("sourceId", "victim"), "сам собі — не джерело");
+        }
+
+        [Test]
+        public void Core_AbilityDamage_RecordsTheCaster_AsSource()
+        {
+            var cs = new CombatState(new GridMap(8, 3), Cfg, new ThresholdRule(Cfg), null);
+            var hero = Unit("hero", Side.Player, accuracy: 200);
+            var foe = Unit("foe", Side.Enemy);
+            hero.Abilities.Add(new AbilityDefinition
+            {
+                Id = "ability.test_burn", DisplayName = "Burn", ApCost = 1, CooldownTurns = 0, Range = 6,
+                Targeting = AbilityTarget.Enemy, RequiresLineOfSight = false,
+                Effects = { new AbilityEffect(AbilityEffectKind.FlatDamage, 3) { Damage = DamageType.Fire } }
+            });
+            cs.AddUnit(hero, new GridPos(0, 0));
+            cs.AddUnit(foe, new GridPos(3, 0));
+            cs.Begin();
+            cs.UseAbility("ability.test_burn", foe.Id);
+
+            var damage = cs.Journal.Last(e => e.Key == CombatLogKeys.Damage);
+            Assert.AreEqual(hero.Id, damage.Args["sourceId"]);
+        }
+
+        // ---------------- П9: прев'ю витрати ОД ----------------
+
+        [Test]
+        public void ApForecast_ListsOnlyAbilitiesLostByThisAction()
+        {
+            var abilities = new[]
+            {
+                new Game.Core.Session.Views.BattleAbilityView { Id = "cheap", ApCost = 2 },
+                new Game.Core.Session.Views.BattleAbilityView { Id = "dear", ApCost = 5 },
+                new Game.Core.Session.Views.BattleAbilityView { Id = "cooling", ApCost = 1, CooldownRemaining = 2 },
+                new Game.Core.Session.Views.BattleAbilityView { Id = "already_too_dear", ApCost = 9 },
+            };
+            Assert.AreEqual(3, ApForecast.Left(6, 3));
+            Assert.AreEqual(0, ApForecast.Left(2, 5), "не нижче нуля");
+            CollectionAssert.AreEqual(new[] { "dear" }, ApForecast.NewlyUnaffordable(abilities, 6, 3),
+                "дешеву ще можна, на відкаті й так недоступна, надто дорога — недоступна й зараз");
+            CollectionAssert.IsEmpty(ApForecast.NewlyUnaffordable(abilities, 6, 6));
+            CollectionAssert.IsEmpty(ApForecast.NewlyUnaffordable(abilities, 6, 3, exceptAbilityId: "dear"), "сама дія — не втрата");
+        }
+
+        // ---------------- П6: уповільнення на вбивстві ----------------
+
+        [Test]
+        public void KillSlowMo_NeverStacks_EndsOnTime_AndCanBeOff()
+        {
+            var slow = new KillSlowMo();
+            Assert.AreEqual(1f, slow.TimeScale(0f));
+            slow.Trigger(10f);
+            slow.Trigger(10.1f);
+            slow.Trigger(10.2f);
+            Assert.AreEqual(KillSlowMo.Scale, slow.TimeScale(10.3f), "три вбивства — та сама глибина, без стакання");
+            Assert.AreEqual(1f, slow.TimeScale(10.2f + KillSlowMo.DurationSeconds + 0.01f), "вікно скінчилось від останнього вбивства");
+
+            var off = new KillSlowMo { Enabled = false };
+            off.Trigger(0f);
+            Assert.AreEqual(1f, off.TimeScale(0.1f), "вимкнено в налаштуваннях — жодного уповільнення");
+            Assert.IsFalse(KillSlowMo.DefaultEnabled(lowGraphics: true), "PERF-01: на Низькій типово вимкнено");
+        }
+
+        // ---------------- П7: камера на подію без залипання ----------------
+
+        [Test]
+        public void CameraEvents_AlwaysReturnToTheActiveUnit()
+        {
+            var cam = new BattleCameraEvents();
+            Assert.AreEqual("hero", cam.Tick(0.1f, "hero", false));
+            cam.Focus("foe");
+            Assert.AreEqual("foe", cam.Tick(0.1f, "hero", true));
+            Assert.AreEqual("foe", cam.Tick(BattleCameraEvents.HoldSeconds, "hero", true), "такти ще йдуть — тримаємо подію");
+            Assert.AreEqual("hero", cam.Tick(BattleCameraEvents.MaxSeconds, "hero", true), "що б не сталося — повернення до того, хто ходить");
+            Assert.IsFalse(cam.IsActive);
+
+            cam.Focus("foe");
+            Assert.AreEqual("hero", cam.Tick(BattleCameraEvents.HoldSeconds + 0.01f, "hero", false), "такти скінчились — одразу назад");
+        }
+
         // ---------------- П4: значок щита ----------------
 
         [Test]

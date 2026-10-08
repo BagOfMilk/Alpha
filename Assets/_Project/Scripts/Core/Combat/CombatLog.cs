@@ -103,6 +103,9 @@ namespace Game.Core.Combat
         // ---- здібності та їхні ефекти ----
         public const string Ability = "combat.log.ability";
         public const string Damage = "combat.log.damage";
+        /// <summary>Джерело шкоди без бійця (аргумент <c>source</c> рядка <see cref="Damage"/>, подача бою П8): вибух бочки, обстріл на старті бою.</summary>
+        public const string SourceKeg = "keg";
+        public const string SourceVolley = "volley";
         public const string Shred = "combat.log.shred";
         public const string Heal = "combat.log.heal";
         public const string ApGranted = "combat.log.ap_granted";

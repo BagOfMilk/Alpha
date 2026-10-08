@@ -388,7 +388,8 @@ namespace Game.Core.Combat
                     if (!u.IsActive || GridPos.Chebyshev(u.Pos, keg.Pos) > radius) continue;
                     int dmg = DamageResolver.FlatDamage(Balance.Combat.ExplosionDamage, DamageType.Fire, u);
                     Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{dmg} HP (взрыв)",
-                        "unitId", u.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(DamageType.Fire));
+                        "unitId", u.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(DamageType.Fire),
+                        "source", CombatLogKeys.SourceKeg); // журнал завжди називає джерело шкоди (подача бою П8)
                     ApplyDamage(u, dmg);
                 }
 
@@ -602,7 +603,8 @@ namespace Game.Core.Combat
                     {
                         u.Hp -= loss;
                         Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{loss} HP (обстрел)",
-                            "unitId", u.Id, "damage", I(loss), "damageType", CombatLogKeys.DamageTypeId(DamageType.Ballistic));
+                            "unitId", u.Id, "damage", I(loss), "damageType", CombatLogKeys.DamageTypeId(DamageType.Ballistic),
+                            "source", CombatLogKeys.SourceVolley);
                     }
                     ApplyStatus(u, StatusType.Bleeding);
                     wounded++;
@@ -956,7 +958,8 @@ namespace Game.Core.Combat
                         {
                             int dmg = DamageResolver.FlatDamage(fx.Amount, fx.Damage, target);
                             Record(CombatLogKeys.Damage, $"  {target.Profile.DisplayName}: −{dmg} HP ({fx.Damage})",
-                                "unitId", target.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(fx.Damage));
+                                "unitId", target.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(fx.Damage),
+                                "sourceId", unit.Id);
                             ApplyDamage(target, dmg);
                         }
                         break;

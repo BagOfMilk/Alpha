@@ -70,6 +70,14 @@ namespace Game.Gameplay.UI
                 GUILayout.EndHorizontal();
                 Widgets.TooltipLine(UkrainianText.Get("ui.battle_speed.hint", g));
 
+                // Уповільнення на вбивстві (подача П6): коротке, не стакається, вимикається тут.
+                bool slowMo = BattleSlowMoSetting.Enabled;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Get("ui.battle_slowmo.title", g), AlphaSkin.Body, GUILayout.Width(220f));
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.on", g), slowMo) && !slowMo) BattleSlowMoSetting.Enabled = true;
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.off", g), !slowMo) && slowMo) BattleSlowMoSetting.Enabled = false;
+                GUILayout.EndHorizontal();
+
                 GUILayout.Space(8f);
 
                 // Графіка (Поправка №21.1): три рівні, діє одразу, зберігається між запусками.

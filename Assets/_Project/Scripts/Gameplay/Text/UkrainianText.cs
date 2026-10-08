@@ -1433,6 +1433,10 @@ namespace Game.Gameplay.Text
             // Подача бою П1 (docs/research/RT_COMBAT_PRESENTATION.md).
             AddKey(t, "ui.battle_speed.title", "Швидкість бою");
             AddKey(t, "ui.battle_speed.hint", "Анімації, рух і хід ворога разом. На результат бою не впливає. Діє одразу.");
+            // Подача бою П6.
+            AddKey(t, "ui.battle_slowmo.title", "Уповільнення на вбивстві");
+            AddKey(t, "ui.battle_slowmo.on", "Увімк.");
+            AddKey(t, "ui.battle_slowmo.off", "Вимк.");
         }
 
         private static void AddAmbientAndThreatBandKeys(Dictionary<string, string> t)
@@ -2160,7 +2164,7 @@ namespace Game.Gameplay.Text
             // Бій v2, раунд 2 (аудит знімків п.6): заголовок панелі журналу —
             // «Журнал бою» (був «Хід бою», плутався зі щоденниковим «Хід:
             // {name}» картки поточного юніта — ui.battle.current_unit нижче).
-            AddKey(t, "ui.battle.log", "Журнал");
+            AddKey(t, "ui.battle.log", "Журнал · L");
             AddKey(t, "ui.battle.endturn", "Кінець ходу");
             AddKey(t, "ui.battle.unit.downed", "Виведений з бою — потребує допомоги");
 
@@ -2339,7 +2343,7 @@ namespace Game.Gameplay.Text
 
             // здібності та їхні наслідки
             AddKey(t, "combat.log.ability", "{unit} застосовує «{ability}».");
-            AddKey(t, "combat.log.damage", "{unit}: −{damage} здоров'я ({damageType}).");
+            AddKey(t, "combat.log.damage", "{unit}: −{damage} здоров'я ({damageType}){source_suffix}.");
             AddKey(t, "combat.log.shred", "{unit}: броню пробито, −{amount} (лишається {armor}).");
             AddKey(t, "combat.log.heal", "{unit}: +{amount} здоров'я ({hp}/{hpMax}).");
             AddKey(t, "combat.log.ap_granted", "{unit}: +{amount} ОД.");
@@ -2745,6 +2749,9 @@ namespace Game.Gameplay.Text
 
             // ---- ціна дії, показана ДО кліку (аудит HUD пп.4-5, Статут UI-02) ----
             AddKey(t, "ui.battle.ap_cost", "Ціна: {cost} ОД");
+            // Подача бою П9: прев'ю витрати ОД.
+            AddKey(t, "ui.battle.ap_left", "Лишиться: {left} ОД");
+            AddKey(t, "ui.battle.ap_lost", "Не вистачить на: {abilities}");
             // Картка юніта (§3): «Спис · удар 4 ОД · дальність 1» — буквально за прикладом специфікації.
             AddKey(t, "ui.battle.weapon.detail", "{name} · удар {cost} ОД · дальність {range}");
             AddKey(t, "ui.battle.move.cost", "Рух: −{cost} ОД");
@@ -2792,6 +2799,10 @@ namespace Game.Gameplay.Text
             // плейсхолдера. Щойно аргументи з'являться — суфікс сам візьметься.
             AddKey(t, "combat.log.suffix.ap", " · {ap} ОД");
             AddKey(t, "combat.log.suffix.cover", ", укриття цілі: {cover}");
+            // Подача бою П8: джерело шкоди.
+            AddKey(t, "combat.log.suffix.source.unit", " — від: {source}");
+            AddKey(t, "combat.log.suffix.source.keg", " — вибух бочки");
+            AddKey(t, "combat.log.suffix.source.volley", " — обстріл");
             AddKey(t, "combat.cover.label.none", "немає");
             AddKey(t, "combat.cover.label.half", "половинне");
             AddKey(t, "combat.cover.label.full", "повне");

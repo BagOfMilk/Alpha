@@ -93,6 +93,7 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("Alpha8",     UxKeyScope.Battle,   "BattleHudScreen.cs",         "здібність 8"),
             new UxKeyBinding("Alpha9",     UxKeyScope.Battle,   "BattleHudScreen.cs",         "здібність 9"),
             new UxKeyBinding("O",          UxKeyScope.Battle,   "BattleHudScreen.cs",         "дозор"),
+            new UxKeyBinding("L",          UxKeyScope.Battle,   "BattleHudScreen.cs",         "показати/сховати журнал бою (подача П8)"),
             new UxKeyBinding("Q",          UxKeyScope.Battle,   "BattleArenaController.cs",   "поворот камери"),
             new UxKeyBinding("E",          UxKeyScope.Battle,   "BattleArenaController.cs",   "поворот камери"),
             new UxKeyBinding("W",          UxKeyScope.Battle,   "BattleArenaController.cs",   "рух камери"),

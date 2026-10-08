@@ -180,7 +180,17 @@ namespace Game.Gameplay.UI
         private static void HandleHotkeys(IBattleHudData c, BattleView view)
         {
             var evt = Event.current;
-            if (evt == null || evt.type != EventType.KeyDown || c.IsBusy || c.Paused || c.ResultPending || PlaytestLog.NoteOpen) return;
+            if (evt == null || evt.type != EventType.KeyDown || c.Paused || PlaytestLog.NoteOpen) return;
+
+            // Подача бою П8: показати/сховати журнал — будь-коли, і під час тактів теж (нічого не озброює).
+            if (evt.keyCode == KeyCode.L)
+            {
+                _logCollapsed = !_logCollapsed;
+                evt.Use();
+                return;
+            }
+
+            if (c.IsBusy || c.ResultPending) return;
 
             if (c.IsPlayerTurn)
             {
@@ -1169,6 +1179,7 @@ namespace Game.Gameplay.UI
             }
 
             GUILayout.Label(UkrainianText.Format("ui.battle.ap_cost", false, "cost", I(p.ApCost)), AlphaSkin.Body);
+            if (p.Result == "Success") DrawApForecast(view, p.ApCost, p.AbilityId);
 
             // Перевірка здібності (docs/ABILITIES.md): що з чим порівнюється — до кліку (інваріант 8).
             string checkLine = CheckLine(p);
@@ -1252,7 +1263,10 @@ namespace Game.Gameplay.UI
             GUILayout.Label(UkrainianText.Get("ui.battle.hover.move_title", false), AlphaSkin.Body);
 
             if (path.Result == "Success")
+            {
                 GUILayout.Label(UkrainianText.Format("ui.battle.move.cost", false, "cost", I(path.ApCost)), AlphaSkin.Body);
+                DrawApForecast(view, path.ApCost, null);
+            }
             else if (path.Result == "NotReachable")
                 GUILayout.Label(UkrainianText.Get("ui.battle.move.unreachable", false), AlphaSkin.DangerText);
             else
@@ -1281,6 +1295,23 @@ namespace Game.Gameplay.UI
                         GUILayout.Label(UkrainianText.Get("ui.battle.move.threatened", false), AlphaSkin.DangerText);
                         break;
                     }
+        }
+
+        /// <summary>
+        /// Подача бою П9: скільки ОД лишиться після наведеної дії і на які здібності, доступні зараз, після неї
+        /// не вистачить (<see cref="ApForecast"/>). Лише в хід гравця — у підказці шляху й атаки.
+        /// </summary>
+        private static void DrawApForecast(BattleView view, int cost, string exceptAbilityId)
+        {
+            var current = FindUnit(view, view?.CurrentUnitId);
+            if (current == null) return;
+            int left = ApForecast.Left(current.Ap, cost);
+            GUILayout.Label(UkrainianText.Format("ui.battle.ap_left", false, "left", I(left)), AlphaSkin.HintLine);
+            var lost = ApForecast.NewlyUnaffordable(current.Abilities, current.Ap, left, exceptAbilityId);
+            if (lost.Count == 0) return;
+            var names = new List<string>(lost.Count);
+            foreach (var id in lost) names.Add(UkrainianText.Get(id, false));
+            GUILayout.Label(UkrainianText.Format("ui.battle.ap_lost", false, "abilities", string.Join(", ", names)), AlphaSkin.DangerText);
         }
 
         /// <summary>
