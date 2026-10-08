@@ -60,16 +60,13 @@ namespace Game.Gameplay.Characters
                 smr.updateWhenOffscreen = true;
                 if (tint != null) Tint(smr, tint);
             }
-            if (Application.isPlaying) Object.Destroy(kit); else Object.DestroyImmediate(kit); // лукбук редактора — поза Play
-
-            // Лук і рушниця: точки зброї знімаються зараз, поки скелет у позі спокою (до першого кадру анімації);
-            // лукові — ще й тятива, що тягнеться за правою рукою (власник 08.10.2026).
+            // Лук і рушниця: точки зброї — з кісток набору в позі спокою (на них зброю змодельовано), поки екземпляр
+            // набору ще живий; лукові — ще й тятива, що тягнеться за правою рукою (власник 08.10.2026).
             bool bow = plan.Wants("wpn_bow", out _), musket = plan.Wants("wpn_musket", out _);
-            if ((bow || musket) && Application.isPlaying)
-            {
-                var points = root.AddComponent<KitWeaponPoints>();
-                if (points.Capture(bow, musket) && bow) root.AddComponent<BowString>();
-            }
+            bool captured = false;
+            if (bow || musket) captured = root.AddComponent<KitWeaponPoints>().Capture(kit.transform, bow, musket);
+            if (Application.isPlaying) Object.Destroy(kit); else Object.DestroyImmediate(kit); // лукбук редактора — поза Play
+            if (captured && bow && Application.isPlaying) root.AddComponent<BowString>();
             SetLayer(root.transform, layer);
             return root;
         }

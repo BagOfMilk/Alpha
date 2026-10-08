@@ -213,9 +213,6 @@ namespace Game.Gameplay.EditorTools
                     string wname = weapon ?? "unarmed";
                     if (model == null) { report.AppendLine("== " + wname + ": НЕ ЗІБРАНО"); Object.DestroyImmediate(root); continue; }
                     var style = AnimStateTable.StyleOf(KitFigure.WeaponOf(plan));
-                    // Точки зброї (як у грі — з пози спокою, до першого кадру): лукбук звіряє їх із самою сіткою.
-                    var points = model.AddComponent<KitWeaponPoints>();
-                    points.Capture(weapon == "wpn_bow", weapon == "wpn_musket");
                     var g0 = Pose(model, anims.For(CharacterAnimState.CombatIdle, style), 0.2f);
                     var facing = CharacterAssembler.BodyFacing(model);
                     if (g0.IsValid()) g0.Destroy();
