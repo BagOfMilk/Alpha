@@ -187,10 +187,27 @@ namespace Game.Gameplay
             public float Duration;
             public float Elapsed;
             public bool FloatingSpawned;
+            /// <summary>Мить удару (с від початку такту): реакція цілі, шкода й напис; −1 — середина такту.</summary>
+            public float ImpactTime = -1f;
+            /// <summary>Мить випуску стріли чи пострілу (с); −1 — немає снаряда.</summary>
+            public float ReleaseTime = -1f;
+            public bool Released;
+            public CharacterAnimState Reaction = CharacterAnimState.Idle;
         }
 
         private readonly Queue<PendingTact> _pendingTacts = new Queue<PendingTact>();
         private ActiveTact _activeTact;
+
+        /// <summary>
+        /// Множник швидкості бою (1 — як є; більше — швидше): на нього діляться тривалості тактів і множиться темп
+        /// кліпів. Перемикач — трек подачі бою (П1 сесії наративної майстерні, 08.10.2026).
+        /// </summary>
+        public float BattleSpeed = 1f;
+
+        /// <summary>Хвіст після удару, с: ціль устигає здригнутись, удар дограє, а не обривається наступною дією.</summary>
+        private const float AttackTail = 0.35f;
+
+        private float TactSpeed(bool fast) => Mathf.Max(0.25f, BattleSpeed) * (fast ? 1.8f : 1f);
 
         // ================= Бій v2: камера (§4) =================
 
@@ -585,6 +602,8 @@ namespace Game.Gameplay
                 // HUD покаже панель результату, щойно такти скінчаться (!IsBusy).
                 if (_lastView != null) ApplyUnitPositionsAndHighlights(_lastView);
                 UpdateActiveTact(dt);
+                UpdateProjectiles(dt);
+                if (_victoryPending && _activeTact == null && _pendingTacts.Count == 0) PlayVictory();
                 UpdateFloatingTexts(dt);
                 RebuildOverlays();
                 UpdateCamera(dt);
@@ -596,6 +615,7 @@ namespace Game.Gameplay
             HandleMouseClicks();
             HandleHotkeys();
             UpdateActiveTact(dt);
+            UpdateProjectiles(dt);
             UpdateEnemyTurnDirector(dt);
             UpdateBannerAndAutoFocus(_lastView);
             UpdateFloatingTexts(dt);
@@ -835,9 +855,19 @@ namespace Game.Gameplay
 
             var look = _session.GetAppearance(unit.Id);
             var sheet = _session.GetCharacterSheet(unit.Id);
-            var equip = sheet != null
-                ? InventoryModel.VisualKeys(sheet.Equipment)
-                : new List<string> { AnimStateTable.EnemyWeaponFor(unit.Id, unit.WeaponIsMelee) };
+            // У руці — те, чим постать б'ється: раніше видиму зброю брали з образу, а удар — з бойової, і меч стріляв.
+            string combat = unit.WeaponId != null ? AnimStateTable.VisualForWeapon(unit.WeaponId, unit.WeaponIsMelee)
+                : sheet == null ? AnimStateTable.EnemyWeaponFor(unit.Id, unit.WeaponIsMelee)
+                : unit.WeaponIsMelee ? null : "wpn_bow";
+            var equip = sheet != null ? new List<string>(InventoryModel.VisualKeys(sheet.Equipment)) : new List<string>();
+            equip.RemoveAll(k => k.StartsWith("wpn_", StringComparison.Ordinal) &&
+                                 (combat == null || AnimStateTable.StyleOf(k) != AnimStateTable.StyleOf(combat)));
+            if (combat != null && !equip.Exists(k => k.StartsWith("wpn_", StringComparison.Ordinal))) equip.Add(combat);
+            if (combat == null && look != null && !string.IsNullOrEmpty(look.SignatureWeapon))
+            {
+                look = look.Clone();
+                look.SignatureWeapon = ""; // б'ється кулаками — без впізнаваної зброї в руці
+            }
             go = new GameObject("unit:" + unit.Id);
             go.transform.SetParent(_unitRoot, false);
             var figure = go.AddComponent<Game.Gameplay.Characters.KitFigure>();
@@ -883,6 +913,159 @@ namespace Game.Gameplay
         }
 
         // ================= щокадрове оновлення виду =================
+
+        // ================= стріли, постріли, перемога (трек V, 08.10.2026) =================
+
+        private sealed class Projectile
+        {
+            public GameObject Go;
+            public Vector3 From, To;
+            public float Arc, Age, Duration, Linger, GrowTo;
+            public bool Arrow, Rise;
+        }
+
+        private readonly List<Projectile> _projectiles = new List<Projectile>();
+        private bool _victoryPending;
+        private static Material _smokeMaterial;
+
+        /// <summary>Політ стріли, с: ~16 клітинок за секунду, від 0,12 до 0,5.</summary>
+        private float ArrowFlightTime(string actorId, string targetId)
+        {
+            var a = FindUnitById(actorId);
+            var t = FindUnitById(targetId);
+            if (a == null || t == null) return 0.2f;
+            float d = Mathf.Sqrt((a.Pos.X - t.Pos.X) * (a.Pos.X - t.Pos.X) + (a.Pos.Y - t.Pos.Y) * (a.Pos.Y - t.Pos.Y)) * BattleArenaView.TileSize;
+            return Mathf.Clamp(d / 16f, 0.12f, 0.5f);
+        }
+
+        private Game.Gameplay.Characters.KitWeaponPoints PointsOf(string unitId)
+        {
+            var go = UnitGo(unitId);
+            return go != null ? go.GetComponentInChildren<Game.Gameplay.Characters.KitWeaponPoints>() : null;
+        }
+
+        /// <summary>Груди постаті у світі — сюди летить стріла.</summary>
+        private Vector3 ChestOf(string unitId)
+        {
+            var go = UnitGo(unitId);
+            if (go == null) return Vector3.zero;
+            return go.transform.position + Vector3.up * 0.9f * go.transform.lossyScale.y / UnitVisualScale;
+        }
+
+        /// <summary>Стріла від лука до грудей цілі (промах — повз, у землю за ціллю) за час від випуску до удару.</summary>
+        private void SpawnArrow(ActiveTact tact)
+        {
+            var points = PointsOf(tact.ActorId);
+            if (points == null || ArenaRoot == null) { StartShotLine(tact.ActorId, tact.TargetId); return; }
+            var from = points.HandL.TransformPoint(points.BowGrip);
+            var to = ChestOf(tact.TargetId);
+            var flat = to - from; flat.y = 0f;
+            if (BattleLogText.KindOf(tact.Entry) == BattleLogKind.Miss && flat.sqrMagnitude > 1e-4f)
+            {
+                var dir = flat.normalized;
+                to += Vector3.Cross(Vector3.up, dir) * 0.45f + dir * 1.4f;
+                to.y = 0.03f;
+            }
+            float scale = points.HandL.lossyScale.x;
+            var go = Game.Gameplay.Characters.KitWeaponPoints.CreateArrow(ArenaRoot.transform, 0.82f * scale);
+            go.transform.position = from;
+            _projectiles.Add(new Projectile
+            {
+                Go = go, From = from, To = to, Arrow = true,
+                Arc = flat.magnitude * 0.05f, Duration = Mathf.Max(0.05f, tact.ImpactTime - tact.ReleaseTime),
+                Linger = BattleLogText.KindOf(tact.Entry) == BattleLogKind.Miss ? 1.2f : 0f
+            });
+        }
+
+        /// <summary>Постріл рушниці: спалах біля дула, а на Середній/Високій — ще й клуби диму (PERF-01).</summary>
+        private void MuzzleBlast(string unitId)
+        {
+            var points = PointsOf(unitId);
+            if (points == null || ArenaRoot == null) return;
+            var muzzle = points.HandR.TransformPoint(points.Muzzle);
+            float scale = points.HandR.lossyScale.x;
+            var flash = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            Destroy(flash.GetComponent<Collider>());
+            flash.transform.SetParent(ArenaRoot.transform, true);
+            flash.transform.position = muzzle;
+            flash.transform.localScale = Vector3.one * 0.22f * scale;
+            var fr = flash.GetComponent<Renderer>();
+            fr.sharedMaterial = EnsureEmissiveMaterial();
+            fr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _projectiles.Add(new Projectile { Go = flash, From = muzzle, To = muzzle, Duration = 0.07f });
+            if (GraphicsTier.IsLow) return;
+
+            if (_smokeMaterial == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit");
+                _smokeMaterial = new Material(shader);
+                _smokeMaterial.SetColor("_BaseColor", new Color(0.78f, 0.78f, 0.76f));
+            }
+            var forward = (muzzle - points.HandR.TransformPoint(points.PalmR)).normalized;
+            for (int i = 0; i < 3; i++)
+            {
+                var puff = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                Destroy(puff.GetComponent<Collider>());
+                puff.transform.SetParent(ArenaRoot.transform, true);
+                var at = muzzle + forward * (0.12f + 0.16f * i) * scale;
+                puff.transform.position = at;
+                puff.transform.localScale = Vector3.one * 0.06f * scale;
+                var pr = puff.GetComponent<Renderer>();
+                pr.sharedMaterial = _smokeMaterial;
+                pr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _projectiles.Add(new Projectile
+                {
+                    Go = puff, From = at, To = at + Vector3.up * 0.35f * scale + forward * 0.15f * scale,
+                    Duration = 0.9f + 0.15f * i, Rise = true, GrowTo = (0.32f + 0.08f * i) * scale
+                });
+            }
+        }
+
+        private void UpdateProjectiles(float dt)
+        {
+            for (int i = _projectiles.Count - 1; i >= 0; i--)
+            {
+                var p = _projectiles[i];
+                if (p.Go == null) { _projectiles.RemoveAt(i); continue; }
+                p.Age += dt;
+                float k = Mathf.Clamp01(p.Age / p.Duration);
+                if (p.Arrow)
+                {
+                    var pos = Vector3.Lerp(p.From, p.To, k) + Vector3.up * p.Arc * 4f * k * (1f - k);
+                    float k2 = Mathf.Min(1f, k + 0.02f);
+                    var ahead = Vector3.Lerp(p.From, p.To, k2) + Vector3.up * p.Arc * 4f * k2 * (1f - k2);
+                    if (k < 1f && (ahead - pos).sqrMagnitude > 1e-8f) p.Go.transform.rotation = Quaternion.LookRotation(ahead - pos, Vector3.up);
+                    p.Go.transform.position = pos;
+                }
+                else if (p.Rise)
+                {
+                    // Дим: росте й піднімається, наприкінці тане (матеріал непрозорий — тане розміром).
+                    p.Go.transform.position = Vector3.Lerp(p.From, p.To, Mathf.Sqrt(k));
+                    float size = Mathf.Lerp(p.GrowTo * 0.2f, p.GrowTo, Mathf.Sqrt(k)) * (k > 0.7f ? (1f - k) / 0.3f : 1f);
+                    p.Go.transform.localScale = Vector3.one * Mathf.Max(0.001f, size);
+                }
+                if (p.Age >= p.Duration + p.Linger)
+                {
+                    Destroy(p.Go);
+                    _projectiles.RemoveAt(i);
+                }
+            }
+        }
+
+        /// <summary>Перемога: живі свої, що стоять, — кліп «так!» перед панеллю підсумку (раніше стан був, але не грав).</summary>
+        private void PlayVictory()
+        {
+            _victoryPending = false;
+            if (_kitAnims == null || _lastView?.Units == null) return;
+            foreach (var u in _lastView.Units)
+            {
+                if (u == null || u.IsDowned || u.IsOutOfBattle || !string.Equals(u.Side, "Player", StringComparison.Ordinal)) continue;
+                if (!_unitAnimations.TryGetValue(u.Id, out var anim) || anim == null) continue;
+                _unitStyles.TryGetValue(u.Id, out var style);
+                var clip = _kitAnims.For(CharacterAnimState.Victory, style);
+                if (clip != null) anim.PlayOnce(clip, false);
+            }
+        }
 
         // ================= пастки гравця на арені =================
 
@@ -1494,24 +1677,44 @@ namespace Game.Gameplay
                     _activeTact.PathIndex = 0;
                     if (!_unitVisualPos.ContainsKey(unitId) && UnitGo(unitId) != null)
                         _unitVisualPos[unitId] = UnitGo(unitId).transform.localPosition;
-                    SetGait(unitId, 1f);
+                    // Постать набору — бігом (слот «біжить» = підтюпцем), темп кліпу підганяє FigureAnimation.
+                    SetGait(unitId, _unitStyles.ContainsKey(unitId ?? string.Empty) ? 2f : 1f);
                     break;
 
                 case TactKind.Attack:
-                    _activeTact.Duration = fast ? 0.15f : 0.5f;
+                {
+                    // Такт триває до миті удару в кліпі + хвіст; реакція цілі — в мить удару, а не разом із замахом
+                    // (лукбук бою 08.10.2026: такт 0,5 с обривав удар мечем 1,5 с, а ціль хиталась до удару).
                     FaceTowards(unitId, targetId);
-                    PlayAttackClip(unitId, targetId);
-                    PlayKitState(targetId, AnimStateTable.ReactionFor(entry.Key));
+                    float speed = TactSpeed(fast);
+                    var clip = AttackClipOf(unitId);
+                    float release = clip != null ? clip.length * AnimStateTable.ImpactAt(clip.name) / speed : 0.25f / speed;
+                    float flight = StyleOfUnit(unitId) == WeaponStyle.Bow ? ArrowFlightTime(unitId, targetId) / speed : 0f;
+                    _activeTact.ReleaseTime = release;
+                    _activeTact.ImpactTime = release + flight;
+                    _activeTact.Duration = release + flight + AttackTail / speed;
+                    _activeTact.Reaction = AnimStateTable.ReactionFor(entry.Key);
+                    if (clip != null) PlayClip(unitId, clip, false, speed);
+                    else PlayAttackClip(unitId, targetId);
                     break;
+                }
 
                 case TactKind.Ability:
-                    _activeTact.Duration = fast ? 0.12f : 0.4f;
+                {
+                    // Своїм рухом: удар чи постріл — зброєю, наказ — окриком, сітка — кидком (а не «закляття» на все).
                     if (!string.IsNullOrEmpty(targetId)) FaceTowards(unitId, targetId);
-                    PlayOneShot(unitId, clips => clips?.Interact, hold: false);
+                    float speed = TactSpeed(fast);
+                    var clip = AbilityClipOf(unitId, AnimStateTable.AbilityStateFor(Arg(args, "abilityId")));
+                    float impact = clip != null ? clip.length * AnimStateTable.ImpactAt(clip.name) / speed : 0.2f / speed;
+                    _activeTact.ImpactTime = impact;
+                    _activeTact.Duration = impact + AttackTail / speed;
+                    if (clip != null) PlayClip(unitId, clip, false, speed);
+                    else PlayOneShot(unitId, clips => clips?.Interact, hold: false);
                     break;
+                }
 
                 case TactKind.DownedOrDeath:
-                    _activeTact.Duration = fast ? 0.2f : 0.6f;
+                    _activeTact.Duration = 0.6f / TactSpeed(fast);
                     PlayOneShot(unitId, clips => clips?.Die, hold: true);
                     break;
             }
@@ -1522,8 +1725,7 @@ namespace Game.Gameplay
             var tact = _activeTact;
             if (tact.Path == null || tact.PathIndex >= tact.Path.Count) { CompleteTact(); return; }
 
-            float tileDuration = IsFastNow() ? 0.09f : 0.18f;
-            float speed = BattleArenaView.TileSize / tileDuration;
+            float speed = BattleArenaView.TileSize / MoveTileDuration(tact.ActorId);
 
             var currentPos = _unitVisualPos.TryGetValue(tact.ActorId, out var p) ? p : Vector3.zero;
             var targetTile = tact.Path[tact.PathIndex];
@@ -1557,19 +1759,50 @@ namespace Game.Gameplay
             var tact = _activeTact;
             tact.Elapsed += dt;
 
+            if (tact.ReleaseTime >= 0f && !tact.Released && tact.Elapsed >= tact.ReleaseTime)
+            {
+                tact.Released = true;
+                OnRelease(tact);
+            }
+
             // Напис — для БУДЬ-якого такту з написом (удар, здібність, впав/загинув),
             // плюс рядки шкоди/стану, що належать до нього, — стосом один над одним.
-            if (!tact.FloatingSpawned && tact.Elapsed >= tact.Duration * 0.5f)
+            float impactAt = tact.ImpactTime >= 0f ? tact.ImpactTime : tact.Duration * 0.5f;
+            if (!tact.FloatingSpawned && tact.Elapsed >= impactAt)
             {
                 tact.FloatingSpawned = true;
-                int stack = SpawnFloatingForEntry(tact.Entry, 0) ? 1 : 0;
-                if (tact.Extras != null)
-                    foreach (var extra in tact.Extras)
-                        if (SpawnFloatingForEntry(extra, stack)) stack++;
-                if (tact.Kind == TactKind.Attack) ApplyHitReaction(tact);
+                OnImpact(tact);
             }
 
             if (tact.Elapsed >= tact.Duration) CompleteTact();
+        }
+
+        /// <summary>
+        /// Мить удару: напис і шкода, спалах-відсіч цілі й її кліп реакції. Одна точка для всього, що має збігтися з
+        /// кадром влучання (звук бою під'єднується сюди ж — П2 треку подачі бою).
+        /// </summary>
+        private void OnImpact(ActiveTact tact)
+        {
+            int stack = SpawnFloatingForEntry(tact.Entry, 0) ? 1 : 0;
+            if (tact.Extras != null)
+                foreach (var extra in tact.Extras)
+                    if (SpawnFloatingForEntry(extra, stack)) stack++;
+            if (tact.Kind != TactKind.Attack) return;
+            ApplyHitReaction(tact);
+            PlayKitState(tact.TargetId, tact.Reaction);
+        }
+
+        /// <summary>Мить пострілу: стріла злітає з лука, з дула рушниці — спалах і дим; без набору — лінія пострілу.</summary>
+        private void OnRelease(ActiveTact tact)
+        {
+            var attacker = FindUnitById(tact.ActorId);
+            if (attacker == null || attacker.WeaponIsMelee) return;
+            switch (StyleOfUnit(tact.ActorId))
+            {
+                case WeaponStyle.Bow: SpawnArrow(tact); break;
+                case WeaponStyle.Ranged: MuzzleBlast(tact.ActorId); break;
+                default: StartShotLine(tact.ActorId, tact.TargetId); break;
+            }
         }
 
         private void CompleteTact()
@@ -1597,10 +1830,37 @@ namespace Game.Gameplay
             if (_session != null)
                 foreach (var s in _session.GetPendingSurrenders())
                     if (s != null && s.UnitId == unit.Id) { surrendering = true; break; }
-            var state = AnimStateTable.BattleIdleFor(unit.IsDowned, surrendering, unit.Statuses, unit.IsOverwatching);
-            if (state == CharacterAnimState.Down) return; // кліп падіння вже тримає останній кадр
             _unitStyles.TryGetValue(unit.Id, out var style);
+            // Підвівся (стабілізували, підняли): кліп «встає з землі» замінює утриману позу падіння — раніше
+            // стабілізований так і лежав.
+            bool wasDown = _unitWasDowned.TryGetValue(unit.Id, out var down) && down;
+            _unitWasDowned[unit.Id] = unit.IsDowned;
+            if (wasDown && !unit.IsDowned && !unit.IsOutOfBattle)
+            {
+                var up = _kitAnims.For(CharacterAnimState.GetUp, style);
+                if (up != null) anim.PlayOnce(up, false);
+            }
+            var state = AnimStateTable.BattleIdleFor(unit.IsDowned, surrendering, unit.Statuses, unit.IsOverwatching, BesideLowCover(unit));
+            if (state == CharacterAnimState.Down) return; // кліп падіння вже тримає останній кадр
             anim.SetIdleClip(_kitAnims.For(state, style));
+        }
+
+        private readonly Dictionary<string, bool> _unitWasDowned = new Dictionary<string, bool>(StringComparer.Ordinal);
+
+        /// <summary>Поруч (хрестом) клітинка з низьким укриттям — боєць присідає за ним.</summary>
+        private bool BesideLowCover(BattleUnitView unit)
+        {
+            var grid = _lastView?.Grid;
+            if (grid?.TileCover == null || unit == null) return false;
+            int[] dx = { 1, -1, 0, 0 }, dy = { 0, 0, 1, -1 };
+            for (int i = 0; i < 4; i++)
+            {
+                int x = unit.Pos.X + dx[i], y = unit.Pos.Y + dy[i];
+                if (x < 0 || y < 0 || x >= grid.Width || y >= grid.Height) continue;
+                int index = x + y * grid.Width;
+                if (index < grid.TileCover.Count && string.Equals(grid.TileCover[index], "Half", StringComparison.Ordinal)) return true;
+            }
+            return false;
         }
 
         /// <summary>Одноразовий кліп стану для постаті набору (реакція на удар тощо); Idle — нічого.</summary>
@@ -1617,6 +1877,38 @@ namespace Game.Gameplay
         private void SetGait(string unitId, float gait)
         {
             if (_unitAnimations.TryGetValue(unitId ?? string.Empty, out var anim) && anim != null) anim.Gait = gait;
+        }
+
+        private WeaponStyle StyleOfUnit(string unitId) =>
+            _unitStyles.TryGetValue(unitId ?? string.Empty, out var style) ? style : WeaponStyle.Unarmed;
+
+        /// <summary>Кліп удару постаті (стиль = видима зброя = бойова); null — постать не з набору.</summary>
+        private AnimationClip AttackClipOf(string unitId)
+        {
+            if (!_unitClipSets.TryGetValue(unitId ?? string.Empty, out var clips) || clips == null) return null;
+            var unit = FindUnitById(unitId);
+            return unit != null && unit.WeaponIsMelee ? clips.AttackMelee : clips.HoldingShoot;
+        }
+
+        private AnimationClip AbilityClipOf(string unitId, CharacterAnimState state)
+        {
+            if (_kitAnims == null || !_unitStyles.TryGetValue(unitId ?? string.Empty, out var style)) return null;
+            return state == CharacterAnimState.Attack ? AttackClipOf(unitId) : _kitAnims.For(state, style);
+        }
+
+        private void PlayClip(string unitId, AnimationClip clip, bool hold, float speed)
+        {
+            if (clip == null || !_unitAnimations.TryGetValue(unitId ?? string.Empty, out var anim) || anim == null) return;
+            anim.PlayOnce(clip, hold, null, speed);
+        }
+
+        /// <summary>Скільки триває крок на клітинку: з природного бігу постаті (ноги не ковзають), швидкий хід — швидше.</summary>
+        private float MoveTileDuration(string unitId)
+        {
+            float speed = TactSpeed(IsFastNow());
+            if (_unitAnimations.TryGetValue(unitId ?? string.Empty, out var anim) && anim != null && anim.RunSpeedWorld > 0.1f)
+                return BattleArenaView.TileSize / (anim.RunSpeedWorld * 1.05f) / speed;
+            return 0.18f / speed;
         }
 
         private void PlayOneShot(string unitId, Func<BattleCharacterClips, AnimationClip> select, bool hold)
@@ -2355,6 +2647,7 @@ namespace Game.Gameplay
                     _resultPending = true;
                     _resolvedByAutoResolve = string.Equals(evt.Key, "combat.autoresolved", StringComparison.Ordinal);
                     evt.Args.TryGetValue("outcome", out _resultOutcomeKey);
+                    _victoryPending = string.Equals(_resultOutcomeKey, "Victory", StringComparison.Ordinal);
                     evt.Args.TryGetValue("rounds", out _resultRounds);
                     if (string.Equals(evt.Key, "combat.autoresolved", StringComparison.Ordinal))
                         _logLines.Add(UkrainianText.Get("combat.autoresolved", Gender.Male));

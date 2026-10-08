@@ -49,6 +49,16 @@ namespace Game.Gameplay
         /// <summary>Грає зараз одноразовий такт (замах/здібність/смерть) — <see cref="Gait"/> тимчасово не впливає на позу.</summary>
         public bool IsPlayingOneShot => _oneShotActive;
 
+        /// <summary>Одноразовий кліп, що грає зараз (null — немає); <see cref="OneShotTime"/> — секунди від його початку.</summary>
+        public AnimationClip CurrentOneShot => _oneShotActive && _oneShotPlayable.IsValid() ? _oneShotPlayable.GetAnimationClip() : null;
+        public float OneShotTime => _oneShotElapsed;
+
+        /// <summary>Швидкість, з якою кліп бігу не ковзає (м/с у світі, з масштабом постаті); 0 — невідомо.</summary>
+        public float RunSpeedWorld => sprintNatural * Mathf.Max(1e-3f, transform.lossyScale.y);
+
+        /// <summary>Перехід між базою й одноразовим кліпом, с: без нього удар і реакція вмикались стрибком.</summary>
+        public const float FadeTime = 0.12f;
+
         private PlayableGraph _graph;
         private AnimationMixerPlayable _gaitMixer;
         private AnimationMixerPlayable _topMixer;
@@ -62,6 +72,8 @@ namespace Game.Gameplay
         private bool _oneShotHold;
         private float _oneShotLength;
         private float _oneShotElapsed;
+        private float _oneShotSpeed = 1f;
+        private float _oneShotWeight;
         private System.Action _oneShotCallback;
 
         private void OnEnable()
@@ -104,6 +116,7 @@ namespace Game.Gameplay
 
             _oneShotActive = false;
             _oneShotConnected = false;
+            _oneShotWeight = 0f;
 
             _graph.Play();
             _ready = true;
@@ -128,7 +141,11 @@ namespace Game.Gameplay
         /// дограв (чи одразу, якщо анімація не готова/кліп порожній — такт
         /// презентера не має зависнути, чекаючи callback, якого не буде).
         /// </summary>
-        public void PlayOnce(AnimationClip clip, bool holdLastFrame, System.Action onComplete = null)
+        public void PlayOnce(AnimationClip clip, bool holdLastFrame, System.Action onComplete = null) =>
+            PlayOnce(clip, holdLastFrame, onComplete, 1f);
+
+        /// <param name="speed">Темп кліпу (швидкі ходи ворога — швидше; удар лишається цілим, а не обрізаним).</param>
+        public void PlayOnce(AnimationClip clip, bool holdLastFrame, System.Action onComplete, float speed)
         {
             if (!_ready || clip == null)
             {
@@ -146,6 +163,7 @@ namespace Game.Gameplay
             _oneShotHold = holdLastFrame;
             _oneShotLength = clip.length > 0.01f ? clip.length : 1f;
             _oneShotElapsed = 0f;
+            _oneShotSpeed = speed > 0.05f ? speed : 1f;
             _oneShotCallback = onComplete;
         }
 
@@ -177,8 +195,7 @@ namespace Game.Gameplay
         {
             if (!_oneShotActive) return;
             _oneShotActive = false;
-            _oneShotCallback = null;
-            if (_ready) _topMixer.SetInputWeight(1, 0f);
+            _oneShotCallback = null; // вага згасає в Update — без стрибка
         }
 
         private void Update()
@@ -187,15 +204,11 @@ namespace Game.Gameplay
 
             if (_oneShotActive)
             {
-                _oneShotElapsed += Time.deltaTime;
+                _oneShotElapsed += Time.deltaTime * _oneShotSpeed;
                 if (_oneShotElapsed >= _oneShotLength)
                 {
                     _oneShotPlayable.SetTime(_oneShotLength);
-                    if (!_oneShotHold)
-                    {
-                        _oneShotActive = false;
-                        _topMixer.SetInputWeight(1, 0f);
-                    }
+                    if (!_oneShotHold) _oneShotActive = false; // остання поза тримається, поки згасає вага
                     var callback = _oneShotCallback;
                     _oneShotCallback = null;
                     callback?.Invoke();
@@ -206,9 +219,11 @@ namespace Game.Gameplay
                 }
             }
 
-            _topMixer.SetInputWeight(1, _oneShotActive ? 1f : 0f);
-            _topMixer.SetInputWeight(0, _oneShotActive ? 0f : 1f);
-            if (_oneShotActive) return; // База заморожена під замахом/смертю — не змінювати ваги під непоказуваним шаром.
+            // Плавний перехід: удар входить і виходить за FadeTime, а не стрибком із пози в позу.
+            _oneShotWeight = Mathf.MoveTowards(_oneShotWeight, _oneShotActive ? 1f : 0f, Time.deltaTime / FadeTime);
+            _topMixer.SetInputWeight(1, _oneShotWeight);
+            _topMixer.SetInputWeight(0, 1f - _oneShotWeight);
+            if (_oneShotWeight >= 0.999f) return; // База повністю під замахом/смертю — не змінювати ваги під непоказуваним шаром.
 
             // Справжня швидкість постаті (зсув за кадр, згладжено) — під неї темп кліпів руху.
             var pos = transform.position;

@@ -1,4 +1,5 @@
-# Кліпи анімацій (Quaternius UAL1/UAL2, CC0). <файл>:<кліп>. Генерується з FBX; таблиця станів — AnimStateTable.
+# Кліпи анімацій (Quaternius UAL1/UAL2, CC0; ALPHA_Weapons — власні, tools/blender/alpha_anims.py). <файл>:<кліп>.
+# Генерується з FBX; таблиця станів — AnimStateTable.
 UAL1_Standard:Crouch_Fwd_Loop
 UAL1_Standard:Crouch_Idle_Loop
 UAL1_Standard:Dance_Loop
@@ -86,3 +87,14 @@ UAL2_Standard:Yes
 UAL2_Standard:Zombie_Idle_Loop
 UAL2_Standard:Zombie_Scratch
 UAL2_Standard:Zombie_Walk_Fwd_Loop
+ALPHA_Weapons:Axe_Chop
+ALPHA_Weapons:Axe_Idle_Loop
+ALPHA_Weapons:Bow_Aim_Loop
+ALPHA_Weapons:Bow_Idle_Loop
+ALPHA_Weapons:Bow_Shoot
+ALPHA_Weapons:Rifle_Aim_Loop
+ALPHA_Weapons:Rifle_Idle_Loop
+ALPHA_Weapons:Rifle_Shoot
+ALPHA_Weapons:Spear_Idle_Loop
+ALPHA_Weapons:Spear_Thrust
+ALPHA_Weapons:Surrender_Loop

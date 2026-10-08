@@ -34,10 +34,10 @@ namespace Game.Gameplay.EditorTools
             bodies.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
             library.Bodies = bodies.ToArray();
 
-            // Кліпи UAL1/UAL2 (Humanoid) — таблицю «стан → кліп» тримає AnimStateTable.
+            // Кліпи UAL1/UAL2 і власні ALPHA_Weapons (Humanoid) — таблицю «стан → кліп» тримає AnimStateTable.
             var anims = go.AddComponent<CharacterAnimLibrary>();
             var clips = new List<AnimationClip>();
-            foreach (var path in new[] { AnimFolder + "/UAL1_Standard.fbx", AnimFolder + "/UAL2_Standard.fbx" })
+            foreach (var path in new[] { AnimFolder + "/UAL1_Standard.fbx", AnimFolder + "/UAL2_Standard.fbx", AnimFolder + "/ALPHA_Weapons.fbx" })
                 foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
                 {
                     var clip = asset as AnimationClip;

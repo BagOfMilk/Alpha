@@ -55,8 +55,8 @@ namespace Game.Tests.EditMode
         public void EnemyWeapon_IsStable_AndMatchesAttackType()
         {
             Assert.AreEqual(AnimStateTable.EnemyWeaponFor("raider_1", true), AnimStateTable.EnemyWeaponFor("raider_1", true));
-            Assert.AreEqual(WeaponStyle.Ranged, AnimStateTable.StyleOf(AnimStateTable.EnemyWeaponFor("archer_2", false)));
-            Assert.AreNotEqual(WeaponStyle.Ranged, AnimStateTable.StyleOf(AnimStateTable.EnemyWeaponFor("raider_1", true)));
+            Assert.IsTrue(AnimStateTable.IsRanged(AnimStateTable.StyleOf(AnimStateTable.EnemyWeaponFor("archer_2", false))));
+            Assert.IsFalse(AnimStateTable.IsRanged(AnimStateTable.StyleOf(AnimStateTable.EnemyWeaponFor("raider_1", true))));
             Assert.IsTrue(KitParts.Weapons.Contains(AnimStateTable.EnemyWeaponFor("x", true)));
         }
 
@@ -68,6 +68,69 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(CharacterAnimState.Stunned, AnimStateTable.BattleIdleFor(false, false, new[] { "bleeding", "stunned" }, true));
             Assert.AreEqual(CharacterAnimState.Overwatch, AnimStateTable.BattleIdleFor(false, false, null, true));
             Assert.AreEqual(CharacterAnimState.CombatIdle, AnimStateTable.BattleIdleFor(false, false, new[] { "bleeding" }, false));
+            Assert.AreEqual(CharacterAnimState.CoverIdle, AnimStateTable.BattleIdleFor(false, false, null, false, true));
+            Assert.AreEqual(CharacterAnimState.Overwatch, AnimStateTable.BattleIdleFor(false, false, null, true, true));
+        }
+
+        /// <summary>
+        /// Лук і рушниця — свої кліпи, а не пістоля (власник 08.10.2026: «лук стріляє кліпом пістоля… так не повинно
+        /// буть»); спис і сокира — свої удари.
+        /// </summary>
+        [Test]
+        public void BowRifleSpearAxe_HaveTheirOwnClips()
+        {
+            Assert.AreEqual(WeaponStyle.Bow, AnimStateTable.StyleOf("wpn_bow"));
+            Assert.AreEqual(WeaponStyle.Ranged, AnimStateTable.StyleOf("wpn_musket"));
+            foreach (WeaponStyle style in System.Enum.GetValues(typeof(WeaponStyle)))
+                foreach (var state in new[] { CharacterAnimState.CombatIdle, CharacterAnimState.Overwatch, CharacterAnimState.Attack })
+                    Assert.IsFalse(AnimStateTable.For(state, style).Clip.StartsWith("Pistol_"), style + "/" + state);
+            Assert.AreEqual("Bow_Shoot", AnimStateTable.For(CharacterAnimState.Attack, WeaponStyle.Bow).Clip);
+            Assert.AreEqual("Rifle_Shoot", AnimStateTable.For(CharacterAnimState.Attack, WeaponStyle.Ranged).Clip);
+            Assert.AreEqual("Spear_Thrust", AnimStateTable.For(CharacterAnimState.Attack, WeaponStyle.Polearm).Clip);
+            Assert.AreEqual("Axe_Chop", AnimStateTable.For(CharacterAnimState.Attack, WeaponStyle.Heavy).Clip);
+            Assert.AreNotEqual("Hit_Knockback", AnimStateTable.For(CharacterAnimState.HitHeavy, WeaponStyle.Blade).Clip,
+                "критичний удар не кидає на землю — падає лише той, хто впав");
+        }
+
+        /// <summary>Мить удару — всередині кліпу: реакція цілі не раніше замаху й не після кінця.</summary>
+        [Test]
+        public void ImpactMoment_IsInsideEveryAttackClip()
+        {
+            foreach (WeaponStyle style in System.Enum.GetValues(typeof(WeaponStyle)))
+            {
+                float at = AnimStateTable.ImpactAt(AnimStateTable.For(CharacterAnimState.Attack, style).Clip);
+                Assert.That(at, Is.InRange(0.1f, 0.8f), style.ToString());
+            }
+        }
+
+        /// <summary>У руці — те, чим б'ється: лучник — лук, рушничник — рушниця, з бойовою ближньою — ближня.</summary>
+        [Test]
+        public void VisibleWeapon_MatchesTheBattleWeapon()
+        {
+            Assert.AreEqual("wpn_bow", AnimStateTable.VisualForWeapon("weapon.horde_bow", false));
+            Assert.AreEqual("wpn_musket", AnimStateTable.VisualForWeapon("weapon.musket", false));
+            Assert.AreEqual("wpn_spear", AnimStateTable.VisualForWeapon("weapon.horde_spear", true));
+            Assert.AreEqual("wpn_axe", AnimStateTable.VisualForWeapon("weapon.bandit_cleaver", true));
+            Assert.AreEqual("wpn_sabre", AnimStateTable.VisualForWeapon("weapon.boyar_saber", true));
+            Assert.IsNull(AnimStateTable.VisualForWeapon(null, true), "без зброї — кулаки, без впізнаваної зброї в руці");
+            foreach (var id in new[] { "weapon.axe", "weapon.club", "weapon.dagger", "weapon.mace", "weapon.sword", "weapon.curved_blade",
+                                       "weapon.horde_axe", "weapon.burunda_mace", "weapon.sabre" })
+            {
+                var key = AnimStateTable.VisualForWeapon(id, true);
+                Assert.IsTrue(KitParts.Weapons.Contains(key), id + " → " + key);
+                Assert.IsFalse(AnimStateTable.IsRanged(AnimStateTable.StyleOf(key)), id);
+            }
+        }
+
+        /// <summary>Здібність показується своїм рухом, а не «закляттям» на всі випадки.</summary>
+        [Test]
+        public void Abilities_UseFittingMotions()
+        {
+            Assert.AreEqual(CharacterAnimState.Attack, AnimStateTable.AbilityStateFor("ability.volley"));
+            Assert.AreEqual(CharacterAnimState.Attack, AnimStateTable.AbilityStateFor("ability.lunge"));
+            Assert.AreEqual(CharacterAnimState.Social, AnimStateTable.AbilityStateFor("ability.rally"));
+            Assert.AreEqual(CharacterAnimState.Throw, AnimStateTable.AbilityStateFor("ability.net"));
+            Assert.AreEqual(CharacterAnimState.Interact, AnimStateTable.AbilityStateFor("ability.set_trap"));
         }
 
         [Test]
