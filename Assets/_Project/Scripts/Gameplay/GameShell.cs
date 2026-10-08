@@ -537,6 +537,7 @@ namespace Game.Gameplay
             {
                 try
                 {
+                    UI.BattleHudScreen.Portraits = PortraitProvider; // портрети загону в бою (як у BG3)
                     if (!BattlePresenter.IsActive) BattlePresenter.Enter(Session);
                     BattlePresenter.DrawHud(Session);
                     return;

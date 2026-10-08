@@ -3364,6 +3364,9 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "ui.dialogue.hint", "Пробіл чи Enter — далі");
             AddKey(t, "ui.dialogue.choice_hint", "1–9 — відповідь");
+            // Портрети загону в бою, як у BG3 (той самий день, той самий запит).
+            AddKey(t, "ui.battle.portrait.stats", "Здоров'я {hp}/{hpMax} · ОД {ap}/{apMax}");
+            AddKey(t, "ui.battle.portrait.downed", "Упав — ще можна підняти");
         }
     }
 }
