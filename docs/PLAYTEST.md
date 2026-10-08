@@ -103,6 +103,13 @@ powershell -ExecutionPolicy Bypass -File tools/playtest.ps1     # зібрати
   кожен образ в анімованій позі з чотирьох боків (перший — з боку тіла), серія кадрів ходи, природні швидкості
   кліпів, аудит усіх кліпів таблиці станів (таз відносно кореня, напрям тіла), будівлі з п'ятьма стадіями —
   `Logs/kitlook/` + `report.txt`.
+- **Лукбук бойових кліпів** — `Alpha/Лукбук бойових кліпів` або `-executeMethod Game.Gameplay.EditorTools.KitLookbookRender.RunBattle`:
+  кожен стан бою × зброя в руці, вісім кадрів збоку й спереду — `Logs/kitlook/battle/` + `battle.txt` (хват: напрям
+  передпліччя, великого пальця й зброї; точки зброї проти сітки). Серії з білда — тур `-autoplay-battle`, кадри
+  `burst-attack-<стиль>-NN`, `burst-enemy-<стиль>-NN`, `burst-move-NN`.
+- **Власні кліпи зброї** — `blender -b --python tools/blender/alpha_anims.py -- <репо> --look`: запікання в
+  `ALPHA_Weapons.fbx`, звіт найгіршого зап'ястя (межі гуманоїда: кисть не скручена, згин ≤ 80°, передпліччя ≤ 90°) і
+  кадри в `Logs/anims/`.
 - **Огляд сцени села** — `Alpha/Огляд сцени села` або `-executeMethod Game.Gameplay.EditorTools.VillageSceneAudit.Run`:
   кожен видимий об'єкт зібраної сцени з розміром і позначкою «пласке?», знімки згори й під кутом гри —
   `Logs/village/`. Лукбук бере FBX напряму й не бачить того, що робить збирач сцени (повороти, обгортки).
