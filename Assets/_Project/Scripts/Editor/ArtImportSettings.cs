@@ -95,18 +95,9 @@ namespace Game.Gameplay.EditorTools
             else if (assetPath.StartsWith(Animations))
             {
                 importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
                 importer.importAnimation = true;
                 importer.optimizeGameObjects = false;
-                // Власні кліпи — на тому самому скелеті, що набір: аватар набору, а не зібраний окремо. Окремий
-                // автоаватар повертав ліву кисть інакше, ніж аватар тіл, — лук лягав уздовж руки, хоч передпліччя
-                // збігалось до сотих (лукбук бою 08.10.2026, замір хвату).
-                var kitAvatar = KeepsOriginalOrientation(assetPath) ? KitAvatar() : null;
-                if (kitAvatar != null)
-                {
-                    importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
-                    importer.sourceAvatar = kitAvatar;
-                }
-                else importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             }
             else
             {
@@ -146,15 +137,6 @@ namespace Game.Gameplay.EditorTools
                 c.keepOriginalPositionXZ = true;
             }
             importer.clipAnimations = clips;
-        }
-
-        private const string KitAvatarSource = Characters + "Kit/kit_m.fbx";
-
-        private static Avatar KitAvatar()
-        {
-            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(KitAvatarSource))
-                if (asset is Avatar avatar) return avatar;
-            return null;
         }
 
         /// <summary>Власні кліпи на ригу набору — орієнтація з файлу; UAL — за тілом.</summary>
@@ -214,10 +196,6 @@ namespace Game.Gameplay.EditorTools
                     if (clip == null || clip.name.StartsWith("__preview__")) continue;
                     if (AnimationUtility.GetAnimationClipSettings(clip).keepOriginalOrientation != KeepsOriginalOrientation(path)) { stale = true; break; }
                 }
-                // Власні кліпи, імпортовані до того, як аватар набору був готовий (порядок імпорту теки), — з ним.
-                if (!stale && KeepsOriginalOrientation(path) && AssetImporter.GetAtPath(path) is ModelImporter mi &&
-                    mi.avatarSetup != ModelImporterAvatarSetup.CopyFromOther && KitAvatar() != null)
-                    stale = true;
                 if (!stale) continue;
                 Debug.Log("[Імпорт] Кліпи " + path + " — за старими правилами, переімпорт.");
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
