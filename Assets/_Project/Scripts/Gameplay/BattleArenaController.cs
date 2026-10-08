@@ -871,24 +871,15 @@ namespace Game.Gameplay
             if (clipPool != null && index < clipPool.Length) clips = clipPool[index];
         }
 
+        /// <summary>
+        /// Мітка сторони — тонке кільце під бійцем (власник 08.10.2026: «зроби тонкі кільця замість дисків»; суцільні
+        /// диски закривали ноги й читались як «червоне під персонажами»). Свої — сині, вороги — червоні.
+        /// </summary>
         private void BuildSideRing(GameObject unitGo, BattleUnitView unit)
         {
-            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            ring.name = "ring";
-            Destroy(ring.GetComponent<Collider>());
-            ring.transform.SetParent(unitGo.transform, false);
-            ring.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-            ring.transform.localScale = new Vector3(0.55f, 0.02f, 0.55f);
-
-            var renderer = ring.GetComponent<Renderer>();
-            if (renderer != null && _tileMaterial != null)
-            {
-                renderer.sharedMaterial = _tileMaterial;
-                var block = new MaterialPropertyBlock();
-                bool enemy = !string.Equals(unit.Side, "Player", StringComparison.Ordinal);
-                block.SetColor("_BaseColor", enemy ? new Color(0.75f, 0.20f, 0.18f) : new Color(0.25f, 0.45f, 0.85f));
-                renderer.SetPropertyBlock(block);
-            }
+            bool enemy = !string.Equals(unit.Side, "Player", StringComparison.Ordinal);
+            var color = enemy ? new Color(0.92f, 0.26f, 0.20f) : new Color(0.32f, 0.58f, 1.00f);
+            Visual.RingMesh.Spawn("ring", unitGo.transform, 0.02f, 0.255f, 0.29f, _tileMaterial, color);
         }
 
         // ================= щокадрове оновлення виду =================
@@ -1286,20 +1277,8 @@ namespace Game.Gameplay
             bool wantOverwatch = unit.IsOverwatching;
             if (wantOverwatch && overwatchMarker == null)
             {
-                var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                ring.name = "overwatch";
-                Destroy(ring.GetComponent<Collider>());
-                ring.transform.SetParent(go.transform, false);
-                ring.transform.localPosition = new Vector3(0f, 0.05f, 0f);
-                ring.transform.localScale = new Vector3(0.75f, 0.015f, 0.75f);
-                var r = ring.GetComponent<Renderer>();
-                if (r != null && _tileMaterial != null)
-                {
-                    r.sharedMaterial = _tileMaterial;
-                    var ob = new MaterialPropertyBlock();
-                    ob.SetColor("_BaseColor", new Color(0.35f, 0.85f, 0.95f));
-                    r.SetPropertyBlock(ob);
-                }
+                // Дозор — друге кільце, ширше за мітку сторони, бірюзове.
+                Visual.RingMesh.Spawn("overwatch", go.transform, 0.03f, 0.33f, 0.36f, _tileMaterial, new Color(0.35f, 0.85f, 0.95f));
             }
             else if (!wantOverwatch && overwatchMarker != null)
             {

@@ -117,6 +117,8 @@
     <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtSubstitutes.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/KitLookbookRender.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/VillageSceneAudit.cs" />
+    <!-- Процедурна сітка кільця: Mesh/MeshFilter/MeshRenderer у заглушці немає. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Visual/RingMesh.cs" />
   </ItemGroup>
 
   <ItemGroup>
