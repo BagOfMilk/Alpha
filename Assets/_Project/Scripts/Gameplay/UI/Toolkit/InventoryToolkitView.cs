@@ -78,7 +78,7 @@ namespace Game.Gameplay.UI.Toolkit
             _panel = asset != null ? UnityEngine.Object.Instantiate(asset) : ScriptableObject.CreateInstance<PanelSettings>();
             _panel.name = "AlphaInventoryPanel";
             _panel.scaleMode = PanelScaleMode.ConstantPixelSize;
-            _panel.scale = HudLayout.ScaleFor(Screen.width, Screen.height);
+            _panel.scale = UiScale.PanelScale();
             _panel.sortingOrder = 2f; // поверх шапки HUD
             if (_panel.themeStyleSheet == null)
             {

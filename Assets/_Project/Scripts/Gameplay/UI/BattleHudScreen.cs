@@ -77,7 +77,7 @@ namespace Game.Gameplay.UI
             float scale = Widgets.ScaleForScreen();
             float pad = Widgets.ScreenPadding();
 
-            var topRect = new Rect(0f, 0f, Screen.width, TopBarHeight(scale));
+            var topRect = new Rect(0f, 0f, UiScale.Width, TopBarHeight(scale));
             GUILayout.BeginArea(topRect, GUI.skin.box);
             DrawTopBar(c, view);
             GUILayout.EndArea();
@@ -87,14 +87,14 @@ namespace Game.Gameplay.UI
             // замість стрічки у верхній смузі. Клік блокують лише бейджі й
             // центр: між ними арена клікається (рецензія C1 — інакше колесо
             // з'їдало 9–15% поля на 720p).
-            bool compactWheel = Screen.height <= 760;
+            bool compactWheel = UiScale.Height <= 760;
             var wheel = TurnWheelModel.Build(view, compactWheel ? WheelCompactSlots : TurnWheelModel.DefaultMaxSlots);
             var wheelRect = TurnWheelRect(topRect, WheelScale(scale, compactWheel), pad);
             DrawTurnWheel(c, view, wheel, wheelRect, WheelScale(scale, compactWheel), blockingRects);
 
             float rightWidth = RightPanelWidth();
-            var rightRect = new Rect(Screen.width - rightWidth - pad, topRect.height + pad,
-                rightWidth, Screen.height - topRect.height - pad * 2f);
+            var rightRect = new Rect(UiScale.Width - rightWidth - pad, topRect.height + pad,
+                rightWidth, UiScale.Height - topRect.height - pad * 2f);
             GUILayout.BeginArea(rightRect, GUI.skin.box);
             DrawLogPanel(c);
             GUILayout.EndArea();
@@ -102,8 +102,8 @@ namespace Game.Gameplay.UI
 
             float bottomWidth = BottomPanelWidth();
             float bottomHeight = BottomPanelHeight(c, view);
-            var bottomRect = new Rect((Screen.width - rightWidth - pad - bottomWidth) * 0.5f,
-                Screen.height - bottomHeight - pad, bottomWidth, bottomHeight);
+            var bottomRect = new Rect((UiScale.Width - rightWidth - pad - bottomWidth) * 0.5f,
+                UiScale.Height - bottomHeight - pad, bottomWidth, bottomHeight);
             GUILayout.BeginArea(bottomRect, GUI.skin.box);
             DrawActionPanel(c, view);
             GUILayout.EndArea();
@@ -459,9 +459,9 @@ namespace Game.Gameplay.UI
             var banner = c.Banner;
             if (banner == null || string.IsNullOrEmpty(banner.Text) || banner.Alpha <= 0f) return;
 
-            float width = Clamp(Screen.width * 0.4f, 360f, 720f);
+            float width = Clamp(UiScale.Width * 0.4f, 360f, 720f);
             float height = 44f * Widgets.ScaleForScreen();
-            var rect = new Rect((Screen.width - width) * 0.5f, topRect.height + 6f, width, height);
+            var rect = new Rect((UiScale.Width - width) * 0.5f, topRect.height + 6f, width, height);
 
             var tint = banner.PlayerSide ? AlphaSkin.BattlePlayerSide : AlphaSkin.BattleEnemySide;
             float alpha = Clamp01(banner.Alpha);
@@ -798,7 +798,7 @@ namespace Game.Gameplay.UI
             float h = current == null
                 ? 80f
                 : Math.Max(EstimateCardHeight(current), EstimateColumnHeight(c, current, ButtonsColumnWidth())) + 30f;
-            _lastBottomPanelHeight = Clamp(h, 90f, Screen.height * 0.4f);
+            _lastBottomPanelHeight = Clamp(h, 90f, UiScale.Height * 0.4f);
             return _lastBottomPanelHeight;
         }
 
@@ -929,8 +929,8 @@ namespace Game.Gameplay.UI
             float height = attack != null ? EstimateAttackTooltipHeight(attack, FindUnit(view, attack.TargetId), view) : EstimatePathTooltipHeight(c, view);
 
             float freeTop = TopBarHeight(scale) + 8f;
-            float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
-            float freeRight = Screen.width - RightPanelWidth() - 8f;
+            float freeBottom = UiScale.Height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
+            float freeRight = UiScale.Width - RightPanelWidth() - 8f;
 
             var (x, y) = BattleTooltipLayout.PlaceNearAnchor(anchorX, anchorY, TooltipWidth, height,
                 8f, freeTop, freeRight, freeBottom);
@@ -972,8 +972,8 @@ namespace Game.Gameplay.UI
             float scale = Widgets.ScaleForScreen();
             float height = 24f + 34f + lines.Count * 30f;
             float freeTop = TopBarHeight(scale) + 8f;
-            float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
-            float freeRight = Screen.width - RightPanelWidth() - 8f;
+            float freeBottom = UiScale.Height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
+            float freeRight = UiScale.Width - RightPanelWidth() - 8f;
             var (x, y) = BattleTooltipLayout.PlaceNearAnchor(c.HoveredTileScreenX, c.HoveredTileScreenY, TooltipWidth, height,
                 8f, freeTop, freeRight, freeBottom);
 
@@ -1110,8 +1110,8 @@ namespace Game.Gameplay.UI
             float scale = Widgets.ScaleForScreen();
             float height = 24f + 34f + lines.Count * 30f;
             float freeTop = TopBarHeight(scale) + 8f;
-            float freeBottom = Screen.height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
-            float freeRight = Screen.width - RightPanelWidth() - 8f;
+            float freeBottom = UiScale.Height - _lastBottomPanelHeight - Widgets.ScreenPadding() - 8f;
+            float freeRight = UiScale.Width - RightPanelWidth() - 8f;
             var (x, y) = BattleTooltipLayout.PlaceNearAnchor(c.HoveredTileScreenX, c.HoveredTileScreenY, TooltipWidth, height,
                 8f, freeTop, freeRight, freeBottom);
 
@@ -1653,11 +1653,11 @@ namespace Game.Gameplay.UI
         {
             // Раунд 3: панель — до 1180 px, але не ширша за вільне місце лівіше
             // журналу; кнопки всередині самі діляться на ряди (AbilitiesPerRow).
-            float available = Screen.width - RightPanelWidth() - Widgets.ScreenPadding() * 4f;
+            float available = UiScale.Width - RightPanelWidth() - Widgets.ScreenPadding() * 4f;
             return Clamp(available, 560f, 1180f);
         }
 
-        private static Rect FullScreenRect() => new Rect(0f, 0f, Screen.width, Screen.height);
+        private static Rect FullScreenRect() => new Rect(0f, 0f, UiScale.Width, UiScale.Height);
 
         /// <summary>Прямокутник під смужку HP картки юніта — той самий трюк, що GUILayoutUtility.GetLastRect() у Widgets, але з фіксованою шириною.</summary>
         private static Rect GUILayoutBarRect(float width, float height)

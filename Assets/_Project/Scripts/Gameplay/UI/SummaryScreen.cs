@@ -14,7 +14,7 @@ namespace Game.Gameplay.UI
             var summary = shell.Session.GetSummaryView();
             var roster = shell.Session.GetRosterView();
 
-            var area = Widgets.CenteredRect(Screen.width * 0.7f, Screen.height * 0.85f);
+            var area = Widgets.CenteredRect(UiScale.Width * 0.7f, UiScale.Height * 0.85f);
             GUILayout.BeginArea(area);
             Widgets.Panel(UkrainianText.Get("summary.title", g), () =>
             {
@@ -75,7 +75,7 @@ namespace Game.Gameplay.UI
                 GUILayout.Space(10f);
                 if (Widgets.PrimaryButton(UkrainianText.Get("ui.summary.continue", g)))
                     shell.TryRun(() => shell.Session.AcknowledgeSummary());
-            }, GUILayout.Width(Screen.width * 0.7f), GUILayout.Height(Screen.height * 0.85f));
+            }, GUILayout.Width(UiScale.Width * 0.7f), GUILayout.Height(UiScale.Height * 0.85f));
             GUILayout.EndArea();
         }
     }

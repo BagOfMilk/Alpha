@@ -60,9 +60,15 @@ namespace Game.Gameplay.UI
         }
 
         /// <summary>Розкладка екрана міста: шапка на всю ширину, стрічка праворуч до низу, тіло — решта.</summary>
-        public static HudFrame For(float width, float height, bool exploring = false)
+        public static HudFrame For(float width, float height, bool exploring = false) =>
+            ForScale(width, height, exploring, ScaleFor(width, height));
+
+        /// <summary>
+        /// Те саме з явним масштабом: IMGUI малює у віртуальному екрані (множник інтерфейсу <c>UiScale</c>), а
+        /// масштаб бере справжнього — тоді шапка IMGUI і шапка UI Toolkit однієї висоти.
+        /// </summary>
+        public static HudFrame ForScale(float width, float height, bool exploring, float scale)
         {
-            float scale = ScaleFor(width, height);
             float headerH = (float)Math.Round(HeaderUnits * scale);
             float feedW = (float)Math.Round(Math.Min(FeedUnits * scale, width * 0.4f));
 

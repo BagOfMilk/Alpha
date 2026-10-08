@@ -63,6 +63,7 @@ namespace Game.Gameplay.UI.Toolkit
         private string _signature;
         private float _appliedWidth = -1f, _appliedHeight = -1f;
         private bool _appliedExploring;
+        private float _appliedFactor = -1f;
         private bool _visible = true;
 
         /// <summary>Дерево побудовано і панель живе — GameShell не малює IMGUI-шапку і стрічку.</summary>
@@ -161,7 +162,7 @@ namespace Game.Gameplay.UI.Toolkit
 
         private void Build()
         {
-            float scale = HudLayout.ScaleFor(Screen.width, Screen.height);
+            float scale = UiScale.PanelScale();
 
             // Асет з редактора (Editor/HudPanelAssets) — першим: він тримає
             // посилання на рантайм-шейдери UI Toolkit і тему, тож білд їх не
@@ -434,12 +435,15 @@ namespace Game.Gameplay.UI.Toolkit
         {
             float w = Screen.width, h = Screen.height;
             bool exploring = _shell.Exploring;
-            if (w == _appliedWidth && h == _appliedHeight && exploring == _appliedExploring) return;
+            float factor = UiScale.Factor;
+            if (w == _appliedWidth && h == _appliedHeight && exploring == _appliedExploring && factor == _appliedFactor) return;
             _appliedWidth = w;
             _appliedHeight = h;
             _appliedExploring = exploring;
+            _appliedFactor = factor;
 
-            var frame = HudLayout.For(w, h, exploring);
+            // Пікселі екрана, масштаб — з множником інтерфейсу (шапка й стрічка вдвічі менші, як і IMGUI).
+            var frame = HudLayout.ForScale(w, h, exploring, HudLayout.ScaleFor(w, h) * factor);
             _panel.scale = frame.Scale;
             Place(_header, frame.Header, frame.Scale);
             Place(_feed, frame.Feed, frame.Scale);

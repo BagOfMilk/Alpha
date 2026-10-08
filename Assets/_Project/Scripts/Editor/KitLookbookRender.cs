@@ -152,6 +152,109 @@ namespace Game.Gameplay.EditorTools
             if (Application.isBatchMode) EditorApplication.Exit(0);
         }
 
+        /// <summary>Видима зброя кожного стилю для бойових плівок (null — без зброї).</summary>
+        private static readonly string[] BattleWeapons = { null, "wpn_sword", "wpn_axe", "wpn_spear", "wpn_bow", "wpn_musket" };
+
+        /// <summary>Стани, кліп яких залежить від зброї, — плівка для кожної зброї.</summary>
+        private static readonly CharacterAnimState[] StyleStates =
+        {
+            CharacterAnimState.CombatIdle, CharacterAnimState.Overwatch, CharacterAnimState.Attack, CharacterAnimState.Ability,
+            CharacterAnimState.Reload
+        };
+
+        /// <summary>Стани з одним кліпом на всіх — одна плівка.</summary>
+        private static readonly CharacterAnimState[] SharedStates =
+        {
+            CharacterAnimState.Run, CharacterAnimState.Hit, CharacterAnimState.HitHeavy, CharacterAnimState.Block,
+            CharacterAnimState.Stunned, CharacterAnimState.Down, CharacterAnimState.GetUp, CharacterAnimState.Surrender,
+            CharacterAnimState.CoverIdle, CharacterAnimState.Victory, CharacterAnimState.Social
+        };
+
+        /// <summary>
+        /// Бойові кліпи в русі (власник 08.10.2026 на «не перевіряв, як анімації виглядають у русі»: «Це погано і так
+        /// не повинно буть»): кожен стан бою × зброя, постать із цією зброєю в руці, вісім кадрів збоку й спереду —
+        /// <c>Logs/kitlook/battle/&lt;стан&gt;-&lt;зброя&gt;.png</c> і числа в <c>battle.txt</c>. Меню
+        /// <c>Alpha/Лукбук бойових кліпів</c> або <c>-executeMethod Game.Gameplay.EditorTools.KitLookbookRender.RunBattle</c>.
+        /// </summary>
+        [MenuItem("Alpha/Лукбук бойових кліпів")]
+        public static void RunBattle()
+        {
+            ArtImportSettings.EnsureAnimationImport();
+            ArtImportSettings.EnsureModelImport();
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            string dir = OutDir + "/battle";
+            Directory.CreateDirectory(dir);
+            var report = new StringBuilder();
+
+            var libGo = CharacterKitBuilder.Build();
+            var lib = libGo.GetComponent<CharacterKitLibrary>();
+            var anims = libGo.GetComponent<CharacterAnimLibrary>();
+            if (lib == null || !lib.IsComplete || anims == null)
+            {
+                File.WriteAllText(dir + "/battle.txt", "Набір неповний");
+                if (Application.isBatchMode) EditorApplication.Exit(1);
+                return;
+            }
+            var cam = SetupStage();
+
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            bool batcher = urp != null && urp.useSRPBatcher;
+            if (urp != null) urp.useSRPBatcher = false; // батч-режим: інакше всі матеріали одного кольору
+            try
+            {
+                var look = AppearanceCatalog.DefaultProtagonist(Gender.Male).Clone();
+                look.SignatureWeapon = "";
+                bool first = true;
+                foreach (var weapon in BattleWeapons)
+                {
+                    var plan = CharacterKitPlan.From(look, weapon != null ? new[] { weapon } : null);
+                    var root = new GameObject("battle-look");
+                    var model = CharacterAssembler.Build(lib, plan, root.transform, 0);
+                    string wname = weapon ?? "unarmed";
+                    if (model == null) { report.AppendLine("== " + wname + ": НЕ ЗІБРАНО"); Object.DestroyImmediate(root); continue; }
+                    var style = AnimStateTable.StyleOf(KitFigure.WeaponOf(plan));
+                    var g0 = Pose(model, anims.For(CharacterAnimState.CombatIdle, style), 0.2f);
+                    var facing = CharacterAssembler.BodyFacing(model);
+                    if (g0.IsValid()) g0.Destroy();
+                    report.AppendLine("== " + wname + " (стиль " + style + ")");
+                    var states = new List<CharacterAnimState>(StyleStates);
+                    if (first) states.AddRange(SharedStates);
+                    first = false;
+                    foreach (var st in states)
+                    {
+                        var choice = AnimStateTable.For(st, style);
+                        var clip = anims.For(st, style);
+                        if (clip == null) { report.AppendLine(" " + st + " → «" + choice.Clip + "»: КЛІПУ НЕМАЄ"); continue; }
+                        report.AppendLine(" " + st + " → " + clip.name + (choice.Loop ? " (петля)" : " (раз)"));
+                        ShootMotion(cam, model, clip, facing, dir + "/" + st + "-" + wname + ".png", report, 256, 320, !choice.Loop);
+                    }
+                    Object.DestroyImmediate(root);
+                }
+            }
+            finally
+            {
+                if (urp != null) urp.useSRPBatcher = batcher;
+            }
+            File.WriteAllText(dir + "/battle.txt", report.ToString(), new UTF8Encoding(false));
+            Debug.Log("[Лукбук бою] → " + dir);
+            if (Application.isBatchMode) EditorApplication.Exit(0);
+        }
+
+        /// <summary>Світло й камера лукбука (той самий вигляд, що в <see cref="Run"/>).</summary>
+        private static Camera SetupStage()
+        {
+            var light = new GameObject("key").AddComponent<Light>();
+            light.type = LightType.Directional; light.intensity = 1.3f;
+            light.transform.rotation = Quaternion.Euler(35f, 150f, 0f);
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.48f);
+            var cam = new GameObject("cam").AddComponent<Camera>();
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.32f, 0.33f, 0.36f);
+            cam.fieldOfView = 24f;
+            return cam;
+        }
+
         /// <summary>
         /// Будівлі й реквізит треку V (<c>Assets/Art/Models</c>): кожна модель — п'ять стадій будівництва в ряд
         /// (через <see cref="VillageStage.ShowStageNodes"/>, ту саму логіку, що в грі) під кутом камери села.
@@ -318,11 +421,15 @@ namespace Game.Gameplay.EditorTools
         /// зсув кісток між сусідніми кадрами (0 — анімація стоїть, постать «замерзла»).
         /// </summary>
         private static void ShootMotion(Camera cam, GameObject model, AnimationClip walk, Vector3 facing, string path, StringBuilder report)
+            => ShootMotion(cam, model, walk, facing, path, report, Cell / 2, Cell, false);
+
+        /// <param name="toEnd">Одноразовий кліп: останній кадр — кінець кліпу (удар, падіння), а не «перед новим циклом».</param>
+        private static void ShootMotion(Camera cam, GameObject model, AnimationClip walk, Vector3 facing, string path, StringBuilder report,
+            int cw, int ch, bool toEnd)
         {
             const int frames = 8;
-            int cw = Cell / 2;
-            var sheet = new Texture2D(cw * frames, Cell * 2, TextureFormat.RGB24, false);
-            var rt = new RenderTexture(cw, Cell, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 4 };
+            var sheet = new Texture2D(cw * frames, ch * 2, TextureFormat.RGB24, false);
+            var rt = new RenderTexture(cw, ch, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 4 };
             var bones = model.GetComponentsInChildren<Transform>();
             Vector3[] prev = null;
             float moved = 0f;
@@ -335,7 +442,7 @@ namespace Game.Gameplay.EditorTools
             Bounds frame = default(Bounds);
             for (int i = 0; i < frames; i++)
             {
-                var graph = Pose(model, walk, walk.length * i / frames);
+                var graph = Pose(model, walk, walk.length * i / (toEnd ? frames - 1 : frames));
                 yaws.Append(Yaw(CharacterAssembler.Facing(model)).ToString("0")).Append("° ");
                 if (pelvis != null)
                 {
@@ -356,7 +463,9 @@ namespace Game.Gameplay.EditorTools
                 var b = frame;
                 var snap = Snapshot(model);
                 cam.targetTexture = rt;
-                float dist = Mathf.Max(b.size.y, 1f) * 0.55f / Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                // Клітинка ширша за половину висоти (бойові плівки) — відступаємо, щоб улазила й ширина зброї.
+                float dist = Mathf.Max(b.size.y, 1f) * 0.55f / Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) *
+                             Mathf.Max(1f, cw * 2f / ch);
                 for (int row = 0; row < 2; row++)
                 {
                     var dir = row == 0 ? side : facing;
@@ -365,7 +474,7 @@ namespace Game.Gameplay.EditorTools
                     Render(cam, rt);
                     var prevRt = RenderTexture.active;
                     RenderTexture.active = rt;
-                    sheet.ReadPixels(new Rect(0, 0, cw, Cell), i * cw, (1 - row) * Cell);
+                    sheet.ReadPixels(new Rect(0, 0, cw, ch), i * cw, (1 - row) * ch);
                     RenderTexture.active = prevRt;
                 }
                 Unsnap(model, snap);
@@ -373,9 +482,9 @@ namespace Game.Gameplay.EditorTools
             }
             sheet.Apply();
             File.WriteAllBytes(path, sheet.EncodeToPNG());
-            report.AppendLine("   хода «" + walk.name + "» (" + walk.length.ToString("0.00") + " с): середній зсув кісток між кадрами " +
+            report.AppendLine("   кліп «" + walk.name + "» (" + walk.length.ToString("0.00") + " с): середній зсув кісток між кадрами " +
                               (moved / (frames - 1)).ToString("0.000") + " (0 — анімація не грає) → " + Path.GetFileName(path));
-            report.AppendLine("   напрям тіла (стегна) по кадрах ходи: " + yaws + "· найбільший дрейф таза від кадру 0: " +
+            report.AppendLine("   напрям тіла (стегна) по кадрах: " + yaws + "· найбільший дрейф таза від кадру 0: " +
                               drift.ToString("0.00") + " м (кліп на місці — кілька см)");
             cam.targetTexture = null;
             rt.Release();

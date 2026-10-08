@@ -1427,6 +1427,9 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.gfx.medium", "Середня");
             AddKey(t, "ui.gfx.high", "Висока");
             AddKey(t, "ui.gfx.hint", "Низька — для вбудованої відеокарти й ноутбуків. Діє одразу.");
+            AddKey(t, "ui.uiscale.title", "Розмір інтерфейсу");
+            AddKey(t, "ui.uiscale.option", "{pct} %");
+            AddKey(t, "ui.uiscale.hint", "Менше — більше видно світу. Діє одразу; створення героя й речі — з наступного відкриття.");
         }
 
         private static void AddAmbientAndThreatBandKeys(Dictionary<string, string> t)

@@ -246,10 +246,10 @@ namespace Game.Gameplay
         private void DrawOverlays()
         {
             var g = ProtagonistGender;
-            float w = Screen.width, h = Screen.height;
+            float w = UI.UiScale.Width, h = UI.UiScale.Height;
             if (Ux.OpenPanel != UxPanelId.None)
             {
-                var frame = HudLayout.For(w, h);
+                var frame = UI.UiScale.Frame();
                 float top = ToolkitHudActive ? frame.Header.Y + frame.Header.Height + 8f : 80f;
                 var panelRect = new Rect(16f, top, Math.Max(360f, Math.Min(w * 0.55f, w - 48f)), Math.Max(200f, h - top - 24f));
                 _panelView.Draw(panelRect, Ux.CurrentModel(), Ux.Context, this, g);
@@ -381,7 +381,7 @@ namespace Game.Gameplay
         private void DrawWorld()
         {
             var g = ProtagonistGender;
-            float w = Screen.width, h = Screen.height;
+            float w = UI.UiScale.Width, h = UI.UiScale.Height;
             ExploreUiRects.Clear();
             if (InventoryOpen)
             {
@@ -395,7 +395,7 @@ namespace Game.Gameplay
             float rightReserve;
             if (ToolkitHudActive)
             {
-                var frame = HudLayout.For(w, h, exploring: true);
+                var frame = UI.UiScale.Frame(true);
                 ExploreUiRects.Add(new Rect(frame.Header.X, frame.Header.Y, frame.Header.Width, frame.Header.Height));
                 ExploreUiRects.Add(new Rect(frame.Feed.X, frame.Feed.Y, frame.Feed.Width, frame.Feed.Height));
                 top = frame.Header.Y + frame.Header.Height + 8f;

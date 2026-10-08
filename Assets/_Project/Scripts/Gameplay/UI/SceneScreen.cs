@@ -136,7 +136,7 @@ namespace Game.Gameplay.UI
 
             var g = shell.ProtagonistGender;
 
-            var area = new Rect(0f, 0f, Screen.width, Screen.height);
+            var area = new Rect(0f, 0f, UiScale.Width, UiScale.Height);
             GUILayout.BeginArea(area);
             GUILayout.FlexibleSpace();
 
@@ -171,7 +171,7 @@ namespace Game.Gameplay.UI
                     Widgets.TooltipLine(UkrainianText.Get("ui.scene.hint", g));
                     GUILayout.EndHorizontal();
                 }
-            }, GUILayout.Width(Screen.width * 0.8f));
+            }, GUILayout.Width(UiScale.Width * 0.8f));
 
             // Фікс-ревью (блокер, знайдено тур-автоплеєм): рект діалогової
             // панелі ЩОЙНО повністю розкладений (GetLastRect всередині того ж
@@ -333,8 +333,8 @@ namespace Game.Gameplay.UI
             // мовця. Частки екрана (не фіксовані пікселі) — той самий портрет
             // лишається пропорційним на інших роздільностях, а на цільових
             // 1600×900 дає рівно ~300×380.
-            float portraitWidth = Mathf01Clamp(Screen.width * 0.1875f, 180f, 340f);
-            float portraitHeight = Mathf01Clamp(Screen.height * 0.4222f, 220f, 420f);
+            float portraitWidth = Mathf01Clamp(UiScale.Width * 0.1875f, 180f, 340f);
+            float portraitHeight = Mathf01Clamp(UiScale.Height * 0.4222f, 220f, 420f);
 
             // Портрет стоїть НАД панеллю діалогу і ніколи не заходить на неї:
             // раніше він навмисно перекривав її верх на 12% висоти, і на

@@ -871,24 +871,15 @@ namespace Game.Gameplay
             if (clipPool != null && index < clipPool.Length) clips = clipPool[index];
         }
 
+        /// <summary>
+        /// Мітка сторони — тонке кільце під бійцем (власник 08.10.2026: «зроби тонкі кільця замість дисків»; суцільні
+        /// диски закривали ноги й читались як «червоне під персонажами»). Свої — сині, вороги — червоні.
+        /// </summary>
         private void BuildSideRing(GameObject unitGo, BattleUnitView unit)
         {
-            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            ring.name = "ring";
-            Destroy(ring.GetComponent<Collider>());
-            ring.transform.SetParent(unitGo.transform, false);
-            ring.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-            ring.transform.localScale = new Vector3(0.55f, 0.02f, 0.55f);
-
-            var renderer = ring.GetComponent<Renderer>();
-            if (renderer != null && _tileMaterial != null)
-            {
-                renderer.sharedMaterial = _tileMaterial;
-                var block = new MaterialPropertyBlock();
-                bool enemy = !string.Equals(unit.Side, "Player", StringComparison.Ordinal);
-                block.SetColor("_BaseColor", enemy ? new Color(0.75f, 0.20f, 0.18f) : new Color(0.25f, 0.45f, 0.85f));
-                renderer.SetPropertyBlock(block);
-            }
+            bool enemy = !string.Equals(unit.Side, "Player", StringComparison.Ordinal);
+            var color = enemy ? new Color(0.92f, 0.26f, 0.20f) : new Color(0.32f, 0.58f, 1.00f);
+            Visual.RingMesh.Spawn("ring", unitGo.transform, 0.02f, 0.255f, 0.29f, _tileMaterial, color);
         }
 
         // ================= щокадрове оновлення виду =================
@@ -1286,20 +1277,8 @@ namespace Game.Gameplay
             bool wantOverwatch = unit.IsOverwatching;
             if (wantOverwatch && overwatchMarker == null)
             {
-                var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                ring.name = "overwatch";
-                Destroy(ring.GetComponent<Collider>());
-                ring.transform.SetParent(go.transform, false);
-                ring.transform.localPosition = new Vector3(0f, 0.05f, 0f);
-                ring.transform.localScale = new Vector3(0.75f, 0.015f, 0.75f);
-                var r = ring.GetComponent<Renderer>();
-                if (r != null && _tileMaterial != null)
-                {
-                    r.sharedMaterial = _tileMaterial;
-                    var ob = new MaterialPropertyBlock();
-                    ob.SetColor("_BaseColor", new Color(0.35f, 0.85f, 0.95f));
-                    r.SetPropertyBlock(ob);
-                }
+                // Дозор — друге кільце, ширше за мітку сторони, бірюзове.
+                Visual.RingMesh.Spawn("overwatch", go.transform, 0.03f, 0.33f, 0.36f, _tileMaterial, new Color(0.35f, 0.85f, 0.95f));
             }
             else if (!wantOverwatch && overwatchMarker != null)
             {
@@ -1382,7 +1361,7 @@ namespace Game.Gameplay
         private bool IsPointerOverHud()
         {
             if (_hudRects == null || _hudRects.Count == 0) return false;
-            var guiPos = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+            var guiPos = UI.UiScale.MouseGui();
             for (int i = 0; i < _hudRects.Count; i++)
                 if (_hudRects[i].width > 0f && _hudRects[i].height > 0f && _hudRects[i].Contains(guiPos)) return true;
             return false;
@@ -2042,8 +2021,8 @@ namespace Game.Gameplay
                     {
                         TileX = trap.Pos.X,
                         TileY = trap.Pos.Y,
-                        ScreenX = tsp.x,
-                        ScreenY = Screen.height - tsp.y,
+                        ScreenX = tsp.x / UI.UiScale.Factor,
+                        ScreenY = (Screen.height - tsp.y) / UI.UiScale.Factor,
                         OnScreen = tsp.z > 0f && tsp.x >= 0f && tsp.x <= Screen.width && tsp.y >= 0f && tsp.y <= Screen.height,
                         TrapDamage = trap.TrapDamage
                     });
@@ -2068,8 +2047,8 @@ namespace Game.Gameplay
                 _overlays.Add(new BattleUnitOverlay
                 {
                     UnitId = unit.Id,
-                    ScreenX = sp.x,
-                    ScreenY = Screen.height - sp.y,
+                    ScreenX = sp.x / UI.UiScale.Factor,                      // координати IMGUI (множник інтерфейсу)
+                    ScreenY = (Screen.height - sp.y) / UI.UiScale.Factor,
                     OnScreen = onScreen,
                     IsCurrent = string.Equals(unit.Id, currentId, StringComparison.Ordinal),
                     IsHovered = isHovered,
@@ -2095,7 +2074,7 @@ namespace Game.Gameplay
         {
             if (ArenaCamera == null) return Vector2.zero;
             var sp = ArenaCamera.WorldToScreenPoint(world);
-            return new Vector2(sp.x, Screen.height - sp.y);
+            return UI.UiScale.ScreenToGui(sp); // координати IMGUI (множник інтерфейсу)
         }
 
         // ================= камера (§4) =================
@@ -2156,7 +2135,8 @@ namespace Game.Gameplay
             for (int i = 0; i < _hudRects.Count; i++)
             {
                 var r = _hudRects[i];
-                converted.Add(new BattleArenaView.GuiRect(r.x, r.y, r.width, r.height));
+                float f = UI.UiScale.Factor; // прямокутники HUD — у координатах IMGUI, поля — у пікселях екрана
+                converted.Add(new BattleArenaView.GuiRect(r.x * f, r.y * f, r.width * f, r.height * f));
             }
             return BattleArenaView.MarginsFromRects(Screen.width, Screen.height, converted);
         }

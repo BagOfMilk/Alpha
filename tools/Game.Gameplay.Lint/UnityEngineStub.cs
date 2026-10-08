@@ -385,8 +385,16 @@ namespace UnityEngine
         KeypadEnter = 271, F1 = 282, F10 = 291
     }
 
+    /// <summary>Мінімум для UiScale: точка екрана з камери чи миші.</summary>
+    public struct Vector3
+    {
+        public float x, y, z;
+        public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
+    }
+
     public static class Input
     {
+        public static Vector3 mousePosition { get { return new Vector3(0f, 0f, 0f); } }
         public static bool GetKeyDown(KeyCode key) { return false; }
         public static bool GetMouseButtonDown(int button) { return false; }
     }
@@ -527,6 +535,8 @@ namespace UnityEngine
         public static Color contentColor = new Color(1f, 1f, 1f, 1f);
         public static bool enabled = true;
         public static int depth;
+        /// <summary>Множник інтерфейсу (UiScale) ставить матрицю IMGUI.</summary>
+        public static Matrix4x4 matrix = Matrix4x4.identity;
 
         public static void Box(Rect position, GUIContent content) { }
         public static void Box(Rect position, string text) { }
@@ -708,8 +718,16 @@ namespace UnityEngine
         public static int processorCount { get { return 0; } }
     }
 
+    public struct Matrix4x4
+    {
+        public static readonly Matrix4x4 identity = new Matrix4x4();
+        public static Matrix4x4 Scale(Vector3 vector) { return new Matrix4x4(); }
+    }
+
     public static class PlayerPrefs
     {
+        public static float GetFloat(string key, float defaultValue) { return defaultValue; }
+        public static void SetFloat(string key, float value) { }
         public static bool HasKey(string key) { return false; }
         public static int GetInt(string key) { return 0; }
         public static int GetInt(string key, int defaultValue) { return defaultValue; }

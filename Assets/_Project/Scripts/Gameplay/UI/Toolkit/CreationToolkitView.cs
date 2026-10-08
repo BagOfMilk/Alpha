@@ -84,7 +84,7 @@ namespace Game.Gameplay.UI.Toolkit
             _panel = asset != null ? UnityEngine.Object.Instantiate(asset) : ScriptableObject.CreateInstance<PanelSettings>();
             _panel.name = "AlphaCreationPanel";
             _panel.scaleMode = PanelScaleMode.ConstantPixelSize;
-            _panel.scale = HudLayout.ScaleFor(Screen.width, Screen.height);
+            _panel.scale = UiScale.PanelScale();
             _panel.sortingOrder = 1f; // поверх шапки HUD (яка в Creation однаково схована)
             if (_panel.themeStyleSheet == null)
             {

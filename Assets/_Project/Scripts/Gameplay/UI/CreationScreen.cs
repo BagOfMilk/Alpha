@@ -25,7 +25,7 @@ namespace Game.Gameplay.UI
             // (заголовок/ім'я/рід/заголовок списку/кнопка) — ще ~320px. 740
             // (з запасом) дає скролу піти на 400px і все одно лишити
             // "Вирушати" видимою, а не притиснутою рівно до нижньої межі.
-            float panelHeight = Clamp(Screen.height - 60f, 480f, 740f);
+            float panelHeight = Clamp(UiScale.Height - 60f, 480f, 740f);
             var area = Widgets.CenteredRect(760f, panelHeight);
             GUILayout.BeginArea(area);
             Widgets.Panel(UkrainianText.Get("ui.creation.title", g), () =>

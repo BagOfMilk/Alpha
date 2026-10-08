@@ -383,8 +383,7 @@ namespace Game.Gameplay
 
         private bool PointerOverUi()
         {
-            var mouse = Input.mousePosition;
-            var gui = new Vector2(mouse.x, Screen.height - mouse.y);
+            var gui = UI.UiScale.MouseGui();
             var rects = _shell.ExploreUiRects;
             for (int i = 0; i < rects.Count; i++)
                 if (rects[i].Contains(gui)) return true;
@@ -788,6 +787,7 @@ namespace Game.Gameplay
         {
             if (_shell == null || !_shell.Exploring || hubCamera == null || !hubCamera.isActiveAndEnabled) return;
             GUI.depth = 10; // під інтерфейсом оболонки
+            UI.UiScale.Apply();
             EnsureStyles();
 
             var g = _shell.ProtagonistGender;
@@ -831,19 +831,20 @@ namespace Game.Gameplay
                 string text = VillagePlaces.Describe(place, g, stage, roster);
                 var style = isNear || isHovered ? _nearStyle : _labelStyle;
                 var size = style.CalcSize(new GUIContent(text));
-                var rect = new Rect(screen.x - size.x * 0.5f, Screen.height - screen.y - size.y, size.x, size.y);
+                var at = UI.UiScale.ScreenToGui(screen);
+                var rect = new Rect(at.x - size.x * 0.5f, at.y - size.y, size.x, size.y);
                 if (OverlapsUi(rect)) continue; // під шапкою, стрічкою, панеллю чи нижньою смугою — не видно
                 if (OverlapsDrawn(rect)) continue;
                 _drawnLabels.Add(rect);
                 GUI.Label(rect, text, style);
-                if (hasNews) DrawMark(new Vector3(screen.x, screen.y + size.y, screen.z));
+                if (hasNews) DrawMark(new Vector3(screen.x, screen.y + size.y * UI.UiScale.Factor, screen.z));
             }
 
             if (_inside != null)
             {
                 string title = UkrainianText(g, "building." + _inside);
                 var size = _titleStyle.CalcSize(new GUIContent(title));
-                var rect = new Rect((Screen.width - size.x) * 0.5f, Screen.height * 0.16f, size.x, size.y);
+                var rect = new Rect((UI.UiScale.Width - size.x) * 0.5f, UI.UiScale.Height * 0.16f, size.x, size.y);
                 if (!OverlapsUi(rect)) GUI.Label(rect, title, _titleStyle);
             }
 
@@ -851,7 +852,7 @@ namespace Game.Gameplay
             {
                 var previous = GUI.color;
                 GUI.color = new Color(0f, 0f, 0f, _fade);
-                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), _black);
+                GUI.DrawTexture(new Rect(0f, 0f, UI.UiScale.Width, UI.UiScale.Height), _black);
                 GUI.color = previous;
             }
         }
@@ -868,7 +869,8 @@ namespace Game.Gameplay
 
         private void DrawMark(Vector3 screen)
         {
-            var rect = new Rect(screen.x - 14f, Screen.height - screen.y - 34f, 28f, 30f);
+            var at = UI.UiScale.ScreenToGui(screen);
+            var rect = new Rect(at.x - 14f, at.y - 34f, 28f, 30f);
             if (!OverlapsUi(rect)) GUI.Label(rect, "!", _markStyle);
         }
 
