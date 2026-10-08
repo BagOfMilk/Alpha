@@ -577,35 +577,58 @@ def _club(m):
     r = bmesh.ops.create_cone(m, cap_ends=True, segments=8, radius1=0.02, radius2=0.05, depth=0.7)
     bmesh.ops.translate(m, vec=(0, 0, 0.35), verts=r["verts"])
 
+def _weapon_frame(rig, side):
+    """Рамка хвату в просторі ригу: X — куди вказує кисть (вздовж передпліччя), Z — куди виходить зброя з
+    кулака (від великого пальця), Y = Z × X. Зброя моделюється в цій рамці з центром долоні в нулі."""
+    grip, up = _grip(rig, side)
+    b = rig.data.bones
+    fore = (b["hand_" + side].head_local - b["lowerarm_" + side].head_local).normalized()
+    side_ax = up.cross(fore).normalized()
+    return grip, Matrix((fore, side_ax, up)).transposed().to_4x4()
+
 def _bow(rig, body):
-    grip, up = _grip(rig, "l")
-    m = bmesh.new(); prev = None; n = 14
+    """Лук у лівій руці, у рамці хвату: Z — уздовж лука (вгору, коли кисть великим пальцем угору), X — до цілі.
+    Натягнутий лук формою «D»: руків'я найдальше до цілі, кінці плечей відігнуті до лучника на 15 см.
+    Тятиви в сітці немає: її малює гра від кінців плечей (пряма в спокої, через праву руку — у натягу; власник
+    08.10.2026 — «лук стріляє кліпом пістоля… так не повинно буть»). Раніше тятива йшла крізь руків'я й
+    стирчала за кінці."""
+    grip, frame = _weapon_frame(rig, "l")
+    m = bmesh.new(); prev = None; n = 16
+    half, back = 0.62, 0.15
     for i in range(n + 1):
-        a = -0.75 + 1.5 * i / n
-        z = 0.75 * math.sin(a); x = -0.18 * (1 - math.cos(a) * 1.0)
-        rr = 0.016 * (1 - 0.4 * abs(a))
+        sgm = -1.0 + 2.0 * i / n
+        z = half * sgm; x = -back * sgm * sgm
+        rr = 0.021 if abs(z) < 0.06 else 0.017 * (1 - 0.55 * abs(sgm))   # обмотка руків'я товща
         ring = [m.verts.new((x + rr * math.cos(2 * math.pi * k / 6), rr * math.sin(2 * math.pi * k / 6), z)) for k in range(6)]
         if prev:
             for k in range(6):
                 m.faces.new((prev[k], prev[(k + 1) % 6], ring[(k + 1) % 6], ring[k]))
         prev = ring
-    s = bmesh.ops.create_cone(m, cap_ends=False, segments=3, radius1=0.002, radius2=0.002, depth=1.36)
-    bmesh.ops.translate(m, vec=(0.0, 0, 0), verts=s["verts"])
-    bmesh.ops.transform(m, matrix=up.to_track_quat('Z', 'Y').to_matrix().to_4x4(), verts=m.verts[:])
+    bmesh.ops.transform(m, matrix=frame, verts=m.verts[:])
     bmesh.ops.translate(m, vec=grip, verts=m.verts[:])
     return _rigid(f"{rig.name}.wpn_bow", m, rig, "hand_l", "wood", body)
 
 def _musket(rig, body):
-    grip, up = _grip(rig, "r")
-    fore = (rig.data.bones["hand_r"].head_local - rig.data.bones["lowerarm_r"].head_local).normalized()
+    """Кремінна рушниця в правій руці, хват за шийку ложі: ствол виходить з кулака від великого пальця (як
+    клинок), приклад — назад, до плеча. Рамка хвату: Z — до дула, X — униз (куди вказують пальці на шийці).
+    Раніше ствол ішов уздовж передпліччя — тримали як пістоль на витягнутій руці, до плеча не прикласти."""
+    grip, frame = _weapon_frame(rig, "r")
     m = bmesh.new()
-    st = bmesh.ops.create_cube(m, size=1.0); bmesh.ops.scale(m, vec=(0.05, 0.4, 0.09), verts=st["verts"])
-    bmesh.ops.translate(m, vec=(0, 0.15, -0.02), verts=st["verts"])
-    br = bmesh.ops.create_cone(m, cap_ends=True, segments=8, radius1=0.014, radius2=0.012, depth=0.95)
-    bmesh.ops.rotate(m, cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 2, 3, 'X'), verts=br["verts"])
-    bmesh.ops.translate(m, vec=(0, -0.5, 0.02), verts=br["verts"])
-    # ствол — уздовж передпліччя вперед (-Y моделі → напрям передпліччя)
-    bmesh.ops.transform(m, matrix=(-fore).to_track_quat('Y', 'Z').to_matrix().to_4x4(), verts=m.verts[:])
+
+    def box(x0, x1, y0, y1, z0, z1, x0b=None, x1b=None):
+        """Брусок від z0 до z1; на z1 переріз по X може бути іншим (x0b, x1b) — для прикладу."""
+        x0b = x0 if x0b is None else x0b; x1b = x1 if x1b is None else x1b
+        vs = [m.verts.new(v) for v in [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
+                                       (x0b, y0, z1), (x1b, y0, z1), (x1b, y1, z1), (x0b, y1, z1)]]
+        for f in [(0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]:
+            m.faces.new([vs[i] for i in f])
+
+    box(-0.065, -0.025, -0.022, 0.022, -0.04, 0.62)                       # цівка під стволом
+    box(-0.07, -0.02, -0.02, 0.02, -0.04, -0.40, x0b=-0.06, x1b=0.075)     # шийка → приклад (нижчий до плеча)
+    box(-0.098, -0.07, -0.012, 0.012, 0.02, 0.10)                          # замок і курок
+    br = bmesh.ops.create_cone(m, cap_ends=True, segments=8, radius1=0.013, radius2=0.011, depth=0.92)
+    bmesh.ops.translate(m, vec=(-0.08, 0, 0.50), verts=br["verts"])        # ствол уздовж Z, над цівкою
+    bmesh.ops.transform(m, matrix=frame, verts=m.verts[:])
     bmesh.ops.translate(m, vec=grip, verts=m.verts[:])
     return _rigid(f"{rig.name}.wpn_musket", m, rig, "hand_r", "wood", body)
 

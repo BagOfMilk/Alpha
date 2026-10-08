@@ -35,8 +35,8 @@ namespace Game.Gameplay.Characters
             Idle = For(CharacterAnimState.CombatIdle, style),
             Walk = For(CharacterAnimState.Walk, style),
             Sprint = For(CharacterAnimState.Run, style),
-            AttackMelee = For(CharacterAnimState.Attack, style == WeaponStyle.Ranged ? WeaponStyle.Unarmed : style),
-            HoldingShoot = For(CharacterAnimState.Attack, WeaponStyle.Ranged),
+            AttackMelee = For(CharacterAnimState.Attack, AnimStateTable.IsRanged(style) ? WeaponStyle.Unarmed : style),
+            HoldingShoot = For(CharacterAnimState.Attack, AnimStateTable.IsRanged(style) ? style : WeaponStyle.Ranged),
             Die = For(CharacterAnimState.Down, style),
             Interact = For(CharacterAnimState.Ability, style),
             Crouch = For(CharacterAnimState.CoverIdle, style)

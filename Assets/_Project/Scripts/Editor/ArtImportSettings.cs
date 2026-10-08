@@ -130,12 +130,18 @@ namespace Game.Gameplay.EditorTools
                 c.lockRootPositionXZ = true;
                 // Орієнтація — за тілом, а не з кореня файлу: корінь ригу UAL повернутий, і з «Original» тіло в
                 // ході дивилось назад — герой ішов задом наперед (власник 07.10.2026; тур — 179° між рухом і тілом).
-                c.keepOriginalOrientation = false;
+                // Власні кліпи (ALPHA_*) — з файлу: той самий риг, що й набір, а в пострілі з лука тулуб розвернутий
+                // боком — «за тілом» Unity повернув би весь кліп, і стріла пішла б убік від цілі.
+                c.keepOriginalOrientation = KeepsOriginalOrientation(assetPath);
                 c.keepOriginalPositionY = true;
                 c.keepOriginalPositionXZ = true;
             }
             importer.clipAnimations = clips;
         }
+
+        /// <summary>Власні кліпи на ригу набору — орієнтація з файлу; UAL — за тілом.</summary>
+        private static bool KeepsOriginalOrientation(string path) =>
+            System.IO.Path.GetFileName(path).StartsWith("ALPHA_", System.StringComparison.Ordinal);
 
         /// <summary>
         /// Будівлі й реквізит: поворот кореня FBX (конвертація осей Blender → Unity) — у дочірні вузли, корінь —
@@ -188,7 +194,7 @@ namespace Game.Gameplay.EditorTools
                 {
                     var clip = asset as AnimationClip;
                     if (clip == null || clip.name.StartsWith("__preview__")) continue;
-                    if (AnimationUtility.GetAnimationClipSettings(clip).keepOriginalOrientation) { stale = true; break; }
+                    if (AnimationUtility.GetAnimationClipSettings(clip).keepOriginalOrientation != KeepsOriginalOrientation(path)) { stale = true; break; }
                 }
                 if (!stale) continue;
                 Debug.Log("[Імпорт] Кліпи " + path + " — за старими правилами, переімпорт.");
