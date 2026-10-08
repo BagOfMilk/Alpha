@@ -215,6 +215,18 @@ namespace Game.Tests.EditMode
         // ---------------- П6: уповільнення на вбивстві ----------------
 
         [Test]
+        public void KillSlowMo_Rare_SkipsKillsSoonAfterTheWindow()
+        {
+            var slow = new KillSlowMo { MinGapSeconds = KillSlowMo.RareGapSeconds };
+            slow.Trigger(10f);
+            float end = 10f + KillSlowMo.DurationSeconds;
+            slow.Trigger(end + 1f);
+            Assert.AreEqual(1f, slow.TimeScale(end + 1.1f), "рідко: друге вбивство одразу після вікна — без уповільнення");
+            slow.Trigger(end + KillSlowMo.RareGapSeconds + 0.1f);
+            Assert.AreEqual(KillSlowMo.Scale, slow.TimeScale(end + KillSlowMo.RareGapSeconds + 0.2f), "після паузи — знову");
+        }
+
+        [Test]
         public void KillSlowMo_NeverStacks_EndsOnTime_AndCanBeOff()
         {
             var slow = new KillSlowMo();

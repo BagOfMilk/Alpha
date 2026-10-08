@@ -17,15 +17,28 @@ namespace Game.Gameplay.UI
         /// <summary>Скільки реальних секунд триває вікно від останнього вбивства.</summary>
         public const float DurationSeconds = 0.45f;
 
+        /// <summary>
+        /// Режим «рідко»: після вікна наступне не раніше ніж за стільки реальних секунд (розбір BG3, 08.10.2026: у
+        /// кінематографічних кадрів бою обмежена частота, щоб ефект не набрид).
+        /// </summary>
+        public const float RareGapSeconds = 8f;
+
         private float _until = float.NegativeInfinity;
 
         /// <summary>Налаштування гравця (меню паузи).</summary>
         public bool Enabled { get; set; } = true;
 
-        /// <summary>Вбивство в реальну секунду <paramref name="nowReal"/>: вікно продовжується, глибина не росте.</summary>
+        /// <summary>Пауза між вікнами: 0 — щоразу, <see cref="RareGapSeconds"/> — рідко.</summary>
+        public float MinGapSeconds { get; set; }
+
+        /// <summary>
+        /// Вбивство в реальну секунду <paramref name="nowReal"/>: у вікні — вікно продовжується, глибина не росте; одразу
+        /// після вікна, ближче ніж <see cref="MinGapSeconds"/>, — уповільнення немає.
+        /// </summary>
         public void Trigger(float nowReal)
         {
             if (!Enabled) return;
+            if (nowReal >= _until && nowReal - _until < MinGapSeconds) return;
             _until = Math.Max(_until, nowReal + DurationSeconds);
         }
 

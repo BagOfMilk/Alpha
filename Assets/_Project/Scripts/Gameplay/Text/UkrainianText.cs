@@ -3367,6 +3367,12 @@ namespace Game.Gameplay.Text
             // Портрети загону в бою, як у BG3 (той самий день, той самий запит).
             AddKey(t, "ui.battle.portrait.stats", "Здоров'я {hp}/{hpMax} · ОД {ap}/{apMax}");
             AddKey(t, "ui.battle.portrait.downed", "Упав — ще можна підняти");
+            // Налаштування з розбору BG3 (той самий день): камера діалогу й частота уповільнення в бою.
+            AddKey(t, "ui.dialogue_camera.title", "Камера в розмові");
+            AddKey(t, "ui.dialogue_camera.close", "Крупно");
+            AddKey(t, "ui.dialogue_camera.village", "Як у селі");
+            AddKey(t, "ui.battle_slowmo.always", "Щоразу");
+            AddKey(t, "ui.battle_slowmo.rare", "Рідко");
         }
     }
 }

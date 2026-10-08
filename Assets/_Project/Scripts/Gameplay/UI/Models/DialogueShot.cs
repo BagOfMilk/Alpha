@@ -66,6 +66,11 @@ namespace Game.Gameplay.UI
         public const float CloseDistance = 0.85f, CloseFov = 30f;
         /// <summary>Кут, на який камера крупного плану відходить від лінії погляду (щоб обличчя було в три чверті).</summary>
         public const float CloseSideDegrees = 28f;
+        /// <summary>
+        /// Другий варіант крупного (повернення до тієї самої людини): тісніше й ближче до осі погляду — склейка на того
+        /// самого не дає однакового кадру (розбір BG3, 08.10.2026: у кожного персонажа два крупні плани).
+        /// </summary>
+        public const float CloseBSideDegrees = 16f, CloseBDistance = 0.7f;
         public const float ShoulderFov = 32f, TwoFov = 36f, WideFov = 42f;
 
         /// <summary>
@@ -119,6 +124,11 @@ namespace Game.Gameplay.UI
         /// </summary>
         public static DialogueCameraPose Pose(DialogueShotKind kind, DialogueVec subjectHead, DialogueVec otherHead,
             DialogueVec axisFrom, DialogueVec axisTo, float height)
+            => Pose(kind, subjectHead, otherHead, axisFrom, axisTo, height, 0);
+
+        /// <summary>Те саме з варіантом крупного: 0 — основний, 1 — другий (<see cref="CloseBSideDegrees"/>).</summary>
+        public static DialogueCameraPose Pose(DialogueShotKind kind, DialogueVec subjectHead, DialogueVec otherHead,
+            DialogueVec axisFrom, DialogueVec axisTo, float height, int variant)
         {
             float h = height > 0.05f ? height : 1f;
             var axis = Flat(axisTo - axisFrom);
@@ -137,8 +147,9 @@ namespace Game.Gameplay.UI
             {
                 case DialogueShotKind.Close:
                 {
-                    float a = CloseSideDegrees * (float)Math.PI / 180f;
-                    float d = CloseDistance * h;
+                    bool b = (variant & 1) == 1;
+                    float a = (b ? CloseBSideDegrees : CloseSideDegrees) * (float)Math.PI / 180f;
+                    float d = (b ? CloseBDistance : CloseDistance) * h;
                     var pos = subjectHead + toOther * (d * (float)Math.Cos(a)) + across * (d * (float)Math.Sin(a));
                     pos.Y = subjectHead.Y - 0.03f * h;
                     return new DialogueCameraPose { Position = pos, LookAt = subjectHead + new DialogueVec(0f, -0.06f * h, 0f), Fov = CloseFov };

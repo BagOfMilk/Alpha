@@ -92,6 +92,18 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Pose_SecondCloseUp_DiffersButKeepsTheSide()
+        {
+            // Повернення до тієї самої людини — інший кадр, але з того самого боку осі (правило 180°).
+            var a = DialogueDirector.Pose(DialogueShotKind.Close, OtherHead, HeroHead, HeroHead, OtherHead, 0.7f, 0);
+            var b = DialogueDirector.Pose(DialogueShotKind.Close, OtherHead, HeroHead, HeroHead, OtherHead, 0.7f, 1);
+            Assert.That((a.Position - b.Position).FlatLength, Is.GreaterThan(0.05f));
+            Assert.That(DialogueDirector.SideOf(a.Position, HeroHead, OtherHead) * DialogueDirector.SideOf(b.Position, HeroHead, OtherHead),
+                Is.GreaterThan(0f));
+            Assert.That((b.Position - OtherHead).FlatLength, Is.LessThan((a.Position - OtherHead).FlatLength), "другий — ближче");
+        }
+
+        [Test]
         public void Pose_OverShoulder_SitsBehindTheListener()
         {
             var pose = DialogueDirector.Pose(DialogueShotKind.OverShoulder, OtherHead, HeroHead, HeroHead, OtherHead, 0.7f);

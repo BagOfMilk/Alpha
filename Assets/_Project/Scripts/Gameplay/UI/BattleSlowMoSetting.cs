@@ -10,6 +10,18 @@ namespace Game.Gameplay.UI
     public static class BattleSlowMoSetting
     {
         private const string Key = "battle_kill_slowmo";
+        private const string RareKey = "battle_kill_slowmo_rare";
+
+        /// <summary>Рідко (не частіше ніж раз на <see cref="KillSlowMo.RareGapSeconds"/>) — типово так.</summary>
+        public static bool Rare
+        {
+            get => PlayerPrefs.GetInt(RareKey, 1) != 0;
+            set
+            {
+                PlayerPrefs.SetInt(RareKey, value ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+        }
 
         public static bool Enabled
         {

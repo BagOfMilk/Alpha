@@ -74,8 +74,18 @@ namespace Game.Gameplay.UI
                 bool slowMo = BattleSlowMoSetting.Enabled;
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(UkrainianText.Get("ui.battle_slowmo.title", g), AlphaSkin.Body, GUILayout.Width(220f));
-                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.on", g), slowMo) && !slowMo) BattleSlowMoSetting.Enabled = true;
+                bool rare = BattleSlowMoSetting.Rare;
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.always", g), slowMo && !rare)) { BattleSlowMoSetting.Enabled = true; BattleSlowMoSetting.Rare = false; }
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.rare", g), slowMo && rare)) { BattleSlowMoSetting.Enabled = true; BattleSlowMoSetting.Rare = true; }
                 if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.off", g), !slowMo) && slowMo) BattleSlowMoSetting.Enabled = false;
+                GUILayout.EndHorizontal();
+
+                // Камера діалогу (розбір BG3, 08.10.2026: крупні плани в розмові вимикаються в налаштуваннях).
+                bool closeUps = DialogueCameraSetting.CloseUps;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Get("ui.dialogue_camera.title", g), AlphaSkin.Body, GUILayout.Width(220f));
+                if (Widgets.TabButton(UkrainianText.Get("ui.dialogue_camera.close", g), closeUps) && !closeUps) DialogueCameraSetting.CloseUps = true;
+                if (Widgets.TabButton(UkrainianText.Get("ui.dialogue_camera.village", g), !closeUps) && closeUps) DialogueCameraSetting.CloseUps = false;
                 GUILayout.EndHorizontal();
 
                 GUILayout.Space(8f);

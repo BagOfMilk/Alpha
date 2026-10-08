@@ -1760,6 +1760,7 @@ namespace Game.Gameplay
                     if (entry.Key == "combat.log.died")
                     {
                         _killSlowMo.Enabled = UI.BattleSlowMoSetting.Enabled;
+                        _killSlowMo.MinGapSeconds = UI.BattleSlowMoSetting.Rare ? UI.KillSlowMo.RareGapSeconds : 0f;
                         _killSlowMo.Trigger(Time.realtimeSinceStartup);
                     }
                     // Подача П7: камера на мить — до того, хто впав, і завжди назад до того, хто ходить.

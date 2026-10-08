@@ -38,6 +38,15 @@ namespace Game.Gameplay.UI.Toolkit
 
         private object _shownStep;
         private bool _shownConsequence;
+
+        /// <summary>
+        /// Затемнення на вході в розмову й виході з неї (розбір BG3, 08.10.2026): склейка камери села на крупний план і
+        /// назад ховається під коротким чорним кадром. Лише коли камера справді переходить (крупні плани ввімкнені).
+        /// </summary>
+        private const float FadeSeconds = 0.3f;
+        private VisualElement _fadeEl;
+        private float _fade;
+        private bool _wasOn;
         private float _appliedFactor = -1f;
 
         private DialogueToolkitView(GameShell shell)
@@ -105,6 +114,15 @@ namespace Game.Gameplay.UI.Toolkit
             _screen.style.display = DisplayStyle.None;
             root.Add(_screen);
 
+            _fadeEl = new VisualElement { name = "dialogue-fade" };
+            _fadeEl.pickingMode = PickingMode.Ignore;
+            _fadeEl.style.position = Position.Absolute;
+            _fadeEl.style.left = 0f; _fadeEl.style.right = 0f; _fadeEl.style.top = 0f; _fadeEl.style.bottom = 0f;
+            _fadeEl.style.backgroundColor = Color.black;
+            _fadeEl.style.opacity = 0f;
+            _fadeEl.style.display = DisplayStyle.None;
+            root.Add(_fadeEl);
+
             _box = new VisualElement { name = "dialogue-box" };
             _box.style.width = new Length(62f, LengthUnit.Percent);
             _box.style.maxWidth = 980f;
@@ -138,6 +156,11 @@ namespace Game.Gameplay.UI.Toolkit
             var session = _shell.Session;
             bool on = session != null && Handles(session.State) && _shell.Scene.Current != null;
             _screen.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
+            if (on != _wasOn && DialogueCameraSetting.CloseUps) _fade = 1f; // перехід камери — під чорним кадром
+            _wasOn = on;
+            _fade = Mathf.Max(0f, _fade - Time.unscaledDeltaTime / FadeSeconds);
+            _fadeEl.style.opacity = _fade;
+            _fadeEl.style.display = _fade > 0f ? DisplayStyle.Flex : DisplayStyle.None;
             if (!on)
             {
                 _stage.End();

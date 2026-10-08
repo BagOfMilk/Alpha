@@ -18,13 +18,19 @@ namespace Game.Gameplay
     /// <see cref="GameShell"/>), тож правок у HeroWalker не потрібно, а після сцени камера повертається рівно туди,
     /// де була. Між планами — склейки, як у BG3; у межах плану — повільний наїзд.
     /// Хто не стоїть поруч у селі (Тугар, ті, хто ще на посту далеко) — тимчасова постать набору навпроти героя.
-    /// Статут PERF-01: без DoF і без нових світел — на Низькій графіці працює так само.
+    ///
+    /// З розбору BG3 (08.10.2026, власник обрав усе): два варіанти крупного на людину (повернення до того самого — інший
+    /// кадр), співрозмовники дивляться одне на одного головою (кістка голови доповертається після аніматора, до 50°),
+    /// м'яке світло на обличчя в крупних планах з боку камери, «Як у селі» в меню паузи — без крупних планів.
+    /// Статут PERF-01: без DoF; світло діалогу на Низькій графіці вимкнене.
     /// </summary>
     public sealed class DialogueStage : MonoBehaviour
     {
         /// <summary>Далі за цю відстань (одиниці світу) жителя не знімаємо там, де стоїть, — ставимо постать поруч.</summary>
         private const float NearEnough = 3f;
         private const float ShotPushSeconds = 7f;
+        /// <summary>Найбільший поворот голови до співрозмовника, градуси; швидкість наростання ваги погляду.</summary>
+        private const float LookMaxDegrees = 50f, LookBlendPerSecond = 3f;
 
         private GameShell _shell;
         private bool _active;
@@ -51,6 +57,11 @@ namespace Game.Gameplay
         }
 
         private readonly Dictionary<string, Actor> _actors = new Dictionary<string, Actor>();
+        /// <summary>Скільки разів крупний план уже був на цій людині — варіант крупного чергується.</summary>
+        private readonly Dictionary<string, int> _closeCount = new Dictionary<string, int>();
+        private DialogueShot _shot;
+        private Light _keyLight;
+        private float _lookWeight;
         private string _shotSignature;
         private DialogueCameraPose _pose;
         private float _shotAge;
@@ -68,6 +79,11 @@ namespace Game.Gameplay
                 End();
                 return;
             }
+            if (!DialogueCameraSetting.CloseUps)
+            {
+                End(); // «Як у селі»: камера лишається на загальному плані, вікно діалогу те саме
+                return;
+            }
             if (!_active && !Begin()) return;
 
             var shot = DialogueDirector.Plan(current.Framing, current.ActorId, current.SecondActorId, current.SpeakerId,
@@ -75,6 +91,7 @@ namespace Game.Gameplay
             if (shot != null && shot.Signature != _shotSignature) Cut(shot);
 
             SetTalking(displaySpeakerId);
+            LookAtEachOther(displaySpeakerId);
 
             _shotAge += Time.unscaledDeltaTime;
             if (_camera == null) return;
@@ -118,6 +135,10 @@ namespace Game.Gameplay
                 else if (a.Root != (_hero != null ? _hero.transform : null)) a.Root.rotation = a.SavedRotation;
             }
             _actors.Clear();
+            _closeCount.Clear();
+            _shot = null;
+            _lookWeight = 0f;
+            if (_keyLight != null) _keyLight.enabled = false;
             if (_hero != null) _hero.transform.rotation = _heroSavedRot;
             if (_camera != null)
             {
@@ -161,9 +182,94 @@ namespace Game.Gameplay
             }
 
             float height = FigureHeight(subject);
-            _pose = DialogueDirector.Pose(shot.Kind, ToD(subjectHead), ToD(otherHead), ToD(axisFrom), ToD(axisTo), height);
+            int variant = 0;
+            if (shot.Kind == DialogueShotKind.Close)
+            {
+                _closeCount.TryGetValue(shot.SubjectId, out variant);
+                _closeCount[shot.SubjectId] = variant + 1;
+            }
+            _pose = DialogueDirector.Pose(shot.Kind, ToD(subjectHead), ToD(otherHead), ToD(axisFrom), ToD(axisTo), height, variant);
+            _shot = shot;
             _shotSignature = shot.Signature;
             _shotAge = 0f;
+            PlaceKeyLight(shot.Kind, subjectHead, height);
+        }
+
+        /// <summary>
+        /// М'яке світло на обличчя в крупних планах (розбір BG3: у розмови своє світло, що йде з боку камери). Одне
+        /// точкове світло на всю сцену; на Низькій графіці вимкнене (Статут PERF-01).
+        /// </summary>
+        private void PlaceKeyLight(DialogueShotKind kind, Vector3 subjectHead, float height)
+        {
+            bool want = !GraphicsTier.IsLow &&
+                        (kind == DialogueShotKind.Close || kind == DialogueShotKind.OverShoulder);
+            if (!want)
+            {
+                if (_keyLight != null) _keyLight.enabled = false;
+                return;
+            }
+            if (_keyLight == null)
+            {
+                var go = new GameObject("DialogueKeyLight");
+                go.transform.SetParent(transform, false);
+                _keyLight = go.AddComponent<Light>();
+                _keyLight.type = LightType.Spot;
+                _keyLight.color = new Color(1f, 0.92f, 0.82f);
+                _keyLight.shadows = LightShadows.None;
+            }
+            var cam = ToV(_pose.Position);
+            var toCam = cam - subjectHead;
+            toCam.y = 0f;
+            var side = Vector3.Cross(Vector3.up, toCam.normalized);
+            var pos = subjectHead + toCam.normalized * (0.9f * height) + side * (0.35f * height) + Vector3.up * (0.25f * height);
+            _keyLight.transform.position = pos;
+            _keyLight.transform.rotation = Quaternion.LookRotation(subjectHead - pos, Vector3.up);
+            _keyLight.range = 2.5f * height;
+            _keyLight.spotAngle = 50f;
+            _keyLight.intensity = 1.4f;
+            _keyLight.enabled = true;
+        }
+
+        /// <summary>
+        /// Погляд головою (розбір BG3: співрозмовники автоматично дивляться одне на одного): після аніматора доповернути
+        /// кістку голови (і трохи шию) до голови співрозмовника, не більше <see cref="LookMaxDegrees"/>. Аніматор щокадру
+        /// пише позу заново, тож поворот не накопичується; без анімації (статична постать) не чіпаємо.
+        /// </summary>
+        private void LookAtEachOther(string speakerId)
+        {
+            _lookWeight = Mathf.MoveTowards(_lookWeight, 1f, Time.unscaledDeltaTime * LookBlendPerSecond);
+            if (string.IsNullOrEmpty(speakerId) || !_actors.TryGetValue(speakerId, out var speaker) || speaker.Root == null) return;
+            string listenerId = _shot != null && _shot.SubjectId == speakerId ? _shot.OtherId : _shot?.SubjectId;
+            if (string.IsNullOrEmpty(listenerId) || listenerId == speakerId)
+                listenerId = speakerId == GameSession.ProtagonistId ? _anchorOtherId : GameSession.ProtagonistId;
+            Vector3 speakerHead = HeadOf(speaker);
+            foreach (var pair in _actors)
+            {
+                var a = pair.Value;
+                if (a.Root == null) continue;
+                Vector3 target;
+                if (pair.Key == speakerId)
+                {
+                    if (listenerId == null || !_actors.TryGetValue(listenerId, out var listener) || listener.Root == null) continue;
+                    target = HeadOf(listener);
+                }
+                else target = speakerHead;
+                TurnHead(a, target, _lookWeight);
+            }
+        }
+
+        private static void TurnHead(Actor actor, Vector3 target, float weight)
+        {
+            if (actor.Head == null || actor.Figure == null || actor.Figure.Model == null || actor.Figure.Animation == null) return;
+            var facing = CharacterAssembler.Facing(actor.Figure.Model);
+            facing.y = 0f;
+            var toTarget = target - actor.Head.position;
+            if (facing.sqrMagnitude < 1e-6f || toTarget.sqrMagnitude < 1e-6f) return;
+            var delta = Quaternion.FromToRotation(facing.normalized, toTarget.normalized);
+            delta = Quaternion.RotateTowards(Quaternion.identity, delta, LookMaxDegrees);
+            var neck = actor.Head.parent;
+            if (neck != null) neck.rotation = Quaternion.Slerp(Quaternion.identity, delta, 0.3f * weight) * neck.rotation;
+            actor.Head.rotation = Quaternion.Slerp(Quaternion.identity, delta, 0.7f * weight) * actor.Head.rotation;
         }
 
         private void Face(Actor actor, Vector3 point)
