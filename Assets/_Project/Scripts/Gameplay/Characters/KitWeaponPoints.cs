@@ -48,7 +48,10 @@ namespace Game.Gameplay.Characters
             BowTipB = gripL - foreL * BowBack - upL * BowHalf;
             BowGrip = gripL;
             PalmR = foreR * Palm;
-            Muzzle = PalmR + upR * MusketReach - foreR * MusketBarrelUp;
+            // Ствол = (кисть − бік)/√2, бік = великий палець × кисть у Blender. Unity — ліва система координат: той самий
+            // бік тут — Cross(кисть, палець). Ствол на 0,08 над хватом (у бік великого пальця).
+            var barrel = (foreR - Vector3.Cross(foreR, upR)).normalized;
+            Muzzle = PalmR + barrel * MusketReach + upR * MusketBarrelUp;
             HasBow = bow;
             HasMusket = musket;
             return true;

@@ -92,6 +92,7 @@ class Rig:
             self.iks["arm_" + s] = c
             c = pb["hand_" + s].constraints.new('COPY_ROTATION')
             c.target = self.empties["wrist_" + s]
+            self.iks["hand_" + s] = c
             c = pb["calf_" + s].constraints.new('IK')
             c.target = self.empties["ankle_" + s]; c.pole_target = self.empties["knee_" + s]; c.chain_count = 2
             self.iks["leg_" + s] = c
@@ -183,6 +184,9 @@ class Pose:
         self.hands = {}                 # side -> (grip|callable, fore, up)
         self.elbows = {}                # side -> полюс ліктя (точка або callable)
         self.fist = {"l": 0.35, "r": 0.35}
+        # Кисті, поворот яких задано (тримають зброю). Решта йде за передпліччям: силоміць повернута кисть без
+        # зброї давала Unity зап'ястя, яких гуманоїд не відтворює.
+        self.forced = {"l", "r"}
         for k, v in kw.items():
             setattr(self, k, v)
 
@@ -236,12 +240,17 @@ def apply(rig, p):
     S = {s: pb["upperarm_" + s].head.copy() for s in "lr"}
     S["head"] = pb["head"].head.copy() if "head" in pb else pb["neck_01"].tail.copy()
     S["chest"] = pb["spine_03"].head.copy()
+    straight = {}
     for s in "lr":
+        rig.iks["hand_" + s].influence = 1.0 if (s in p.hands and s in p.forced) else 0.0
         if s in p.hands:
             grip, fore, up = p.hands[s]
             grip = grip(S) if callable(grip) else grip
             fore = fore(S) if callable(fore) else fore
             up = up(S) if callable(up) else up
+            if fore is None:
+                straight[s] = (grip, up)
+                fore = knuckles(up)[0]
             f, u = ortho(fore, up)
             rig.empties["wrist_" + s].location = wrist_for_grip(grip, f)
             rig.empties["wrist_" + s].rotation_quaternion = hand_rotation(rig, s, f, u)
@@ -258,6 +267,15 @@ def apply(rig, p):
             el = S[s] + Vector((0.35 * (1 if s == "l" else -1), 0.25, -0.35))
         rig.empties["elbow_" + s].location = el(S) if callable(el) else el
     bpy.context.view_layer.update()
+    # Пряме зап'ястя: напрям кисті — передпліччя з розв'язаного IK (двічі: зап'ястя зсувається разом з напрямом).
+    for _ in range(2):
+        if not straight:
+            break
+        for s, (grip, up) in straight.items():
+            f, u = ortho(pb["hand_" + s].head - pb["lowerarm_" + s].head, up)
+            rig.empties["wrist_" + s].location = wrist_for_grip(grip, f)
+            rig.empties["wrist_" + s].rotation_quaternion = hand_rotation(rig, s, f, u)
+        bpy.context.view_layer.update()
 
 # ---------------------------------------------------------------- час
 
@@ -313,12 +331,12 @@ def bow_draw_elbows(S):
 
 def clip_bow_idle(t, L):
     return Pose(**stance_ready(0.12, 0.15, 0.02), hands=bow_rest_hands(), pitch=breathe(t, L, 0.8),
-                yaw=-8.0, fist={"l": 0.9, "r": 0.25})
+                yaw=-8.0, fist={"l": 0.9, "r": 0.25}, forced={"l"})
 
 def clip_bow_aim(t, L):
     hands = bow_drawn(0.42)
     p = Pose(**stance_ready(0.30, 0.17, 0.03), pelvis_yaw=-28.0, yaw=BOW_AIM_YAW + 28.0 + breathe(t, L, 0.8),
-             pitch=breathe(t, L, 0.6), hands=hands, fist={"l": 0.95, "r": 0.55})
+             pitch=breathe(t, L, 0.6), hands=hands, fist={"l": 0.95, "r": 0.55}, forced={"l"})
     p.elbows = {"l": lambda S: S["l"] + Vector((0.25, 0.0, -0.35)), "r": lambda S: S["r"] + Vector((-0.15, 0.45, 0.10))}
     return p
 
@@ -341,7 +359,7 @@ def clip_bow_shoot(t, L):
     p = Pose(**stance_ready(lerp(0.12, 0.30, k_raise), lerp(0.15, 0.17, k_raise), 0.03),
              pelvis_yaw=-28.0 * k_raise, yaw=lerp(-8.0, BOW_AIM_YAW + 28.0, k_raise),
              hands={"l": blend("l"), "r": blend("r")},
-             fist={"l": 0.95, "r": lerp(0.3, 0.6, k_raise) * (1 - 0.6 * follow)})
+             fist={"l": 0.95, "r": lerp(0.3, 0.6, k_raise) * (1 - 0.6 * follow)}, forced={"l"})
     p.elbows = {
         "l": lambda S: S["l"] + lerp(Vector((0.35, 0.25, -0.35)), Vector((0.25, 0.0, -0.35)), k_raise),
         "r": lambda S: S["r"] + lerp(Vector((-0.35, 0.25, -0.35)), Vector((-0.15, 0.45, 0.10)), k_raise),
@@ -365,16 +383,21 @@ def rifle_hands(k_aim, recoil=0.0):
         aim = pocket + barrel(S) * 0.38 + UP * 0.03
         return lerp(low, aim, k_aim)
 
+    def gun_up(S):
+        b = barrel(S)
+        return (UP - b * UP.dot(b)).normalized()
+
     def fore_r(S):
-        return knuckles(barrel(S))[0]
+        # Ствол = (кисть − бік)/√2 при великому пальці вгору: кисть = ствол, повернутий на 45° до вказівного боку.
+        b, u = barrel(S), gun_up(S)
+        return (b + u.cross(b)).normalized()
 
     def grip_l(S):
-        b = barrel(S)
-        f = knuckles(b)[0]                       # «униз» рушниці
-        return grip_r(S) + b * lerp(0.36, 0.27, k_aim) - f * 0.045 + f * 0.03
+        b, u = barrel(S), gun_up(S)
+        return grip_r(S) + b * lerp(0.36, 0.27, k_aim) + u * 0.045 - u * 0.03   # під цівкою
 
     return {
-        "r": (grip_r, fore_r, barrel),
+        "r": (grip_r, fore_r, gun_up),
         "l": (grip_l, lambda S: RIGHT - barrel(S) * RIGHT.dot(barrel(S)), barrel),
     }
 
@@ -383,8 +406,10 @@ def rifle_pose(t, k_aim, recoil, L=None):
              pelvis_yaw=-20.0 * k_aim, yaw=lerp(-15.0, RIFLE_YAW + 20.0, k_aim) + 2.0 * recoil,
              pitch=lerp(0.0, 9.0, k_aim) - 5.0 * recoil, head_pitch=lerp(0.0, 22.0, k_aim),
              roll=lerp(0.0, -6.0, k_aim),
-             hands=rifle_hands(k_aim, recoil), fist={"l": 0.7, "r": 0.8})
-    p.elbows = {"r": lambda S: S["r"] + lerp(Vector((-0.30, 0.20, -0.30)), Vector((-0.35, 0.05, -0.12)), k_aim),
+             hands=rifle_hands(k_aim, recoil), fist={"l": 0.7, "r": 0.8}, forced={"r"})
+    # Правий лікоть — донизу (стійка з опущеним ліктем): тоді кисть з великим пальцем угорі — природне скручування
+    # передпліччя; з ліктем збоку на рівні плеча кисть треба було скрутити на 134° (заміри 08.10.2026).
+    p.elbows = {"r": lambda S: S["r"] + lerp(Vector((-0.30, 0.20, -0.30)), Vector((-0.22, 0.12, -0.35)), k_aim),
                 "l": lambda S: S["l"] + lerp(Vector((0.20, 0.10, -0.40)), Vector((0.15, -0.05, -0.45)), k_aim)}
     return p
 
@@ -418,12 +443,12 @@ def spear_hands(reach, lift=0.38):
     def grip_l(S):
         return grip_r(S) + axis(S) * 0.48
 
-    return {"r": (grip_r, lambda S: knuckles(axis(S))[0], axis),
+    return {"r": (grip_r, None, axis),
             "l": (grip_l, lambda S: knuckles(axis(S))[0], axis)}
 
 def spear_pose(reach, lift, lunge, twist):
     p = Pose(**stance_ready(0.36, 0.17, 0.05 + 0.06 * lunge), pelvis_yaw=-18.0, yaw=-12.0 + twist,
-             pitch=4.0 + 10.0 * lunge, hands=spear_hands(reach, lift), fist={"l": 0.8, "r": 0.85})
+             pitch=4.0 + 10.0 * lunge, hands=spear_hands(reach, lift), fist={"l": 0.8, "r": 0.85}, forced={"r"})
     p.pelvis = p.pelvis + FWD * 0.10 * lunge
     p.elbows = {"r": lambda S: S["r"] + Vector((-0.30, 0.30, -0.30)), "l": lambda S: S["l"] + Vector((0.30, 0.0, -0.40))}
     return p
@@ -448,23 +473,28 @@ def clip_spear_thrust(t, L):
 def axe_hands(phase, back=0.0):
     """phase: 0 — стійка, 1 — замах за голову, 2 — удар перед собою, 3 — дотягнутий донизу; back — повернення
     з 3 просто в стійку (без проходу через замах)."""
+    # Кисть сокири не повертаємо силоміць: вона продовжує передпліччя, і руків'я (бік великого пальця) саме йде за
+    # дугою руки — за голову в замаху, вперед-угору в ударі, вперед унизу в довершенні. Задане руків'я вимагало
+    # скрутити кисть на 150–180°, чого гуманоїд не відтворює (заміри 08.10.2026). Вісь тут — лише для точки хвату.
     pts = [(Vector((-0.06, -0.24, -0.38)), (FWD * 0.5 + UP * 0.86)),
-           (Vector((0.05, 0.12, 0.40)), (BACK * 0.95 + UP * 0.30)),
-           (Vector((0.14, -0.52, -0.20)), (FWD * 0.70 + DOWN * 0.70)),
-           (Vector((0.16, -0.42, -0.48)), (FWD * 0.25 + DOWN * 0.97))]
+           (Vector((0.05, 0.10, 0.42)), (BACK * 0.95 + UP * 0.30)),
+           (Vector((0.12, -0.52, -0.25)), (FWD * 0.6 + UP * 0.8)),
+           (Vector((0.14, -0.38, -0.50)), FWD)]
     i = min(int(phase), 2)
     k = phase - i
     off = lerp(lerp(pts[i][0], pts[i + 1][0], k), pts[0][0], back)
     ax = lerp(lerp(pts[i][1], pts[i + 1][1], k).normalized(), pts[0][1].normalized(), back).normalized()
-    return {"r": (lambda S: S["r"] + off, knuckles(ax)[0], ax),
+    return {"r": (lambda S: S["r"] + off, None, ax),
             "l": (lambda S: S["l"] + Vector((-0.02, -0.26, -0.20)), DOWN + FWD, FWD + RIGHT * 0.6)}
 
 def axe_pose(phase, lean, back=0.0):
     yaw = lerp(-10.0 + 14.0 * min(phase, 1.0) - 22.0 * max(0.0, phase - 1.0), -10.0, back)
     p = Pose(**stance_ready(0.24, 0.16, 0.045 + 0.05 * max(0.0, lean)), yaw=yaw,
-             pitch=6.0 + 16.0 * lean, hands=axe_hands(phase, back), fist={"l": 0.85, "r": 0.9})
-    ez = lerp(0.05 * phase - 0.25, -0.25, back)
-    p.elbows = {"r": lambda S: S["r"] + Vector((-0.40, 0.10, ez)), "l": lambda S: S["l"] + Vector((0.3, 0.1, -0.4))}
+             pitch=6.0 + 16.0 * lean, hands=axe_hands(phase, back), fist={"l": 0.85, "r": 0.9}, forced=set())
+    poles = [Vector((-0.25, 0.15, -0.35)), Vector((-0.25, -0.25, 0.25)), Vector((-0.15, -0.05, -0.40)), Vector((-0.12, 0.10, -0.45))]
+    i = min(int(phase), 2)
+    pole = lerp(lerp(poles[i], poles[i + 1], phase - i), poles[0], back)
+    p.elbows = {"r": lambda S: S["r"] + pole, "l": lambda S: S["l"] + Vector((0.3, 0.1, -0.4))}
     return p
 
 def clip_axe_idle(t, L):
@@ -492,7 +522,7 @@ def clip_surrender(t, L):
     p = Pose(pelvis=Vector((0, -0.07, -0.42)), pitch=10.0 + breathe(t, L, 1.0), head_pitch=22.0,
              ankles=(ank_l, ank_r), foot_rot=(toe_back, toe_back),
              knees=(knees_l + FWD * 0.6 + UP * 0.2, knees_r + FWD * 0.6 + UP * 0.2),
-             fist={"l": 0.05, "r": 0.05})
+             fist={"l": 0.05, "r": 0.05}, forced=set())
     p.hands = {
         "l": (lambda S: S["l"] + Vector((0.12, -0.10, 0.36 + tremble)), UP + FWD * 0.15, RIGHT),
         "r": (lambda S: S["r"] + Vector((-0.12, -0.10, 0.36 - tremble)), UP + FWD * 0.15, LEFT),
@@ -520,12 +550,36 @@ CLIPS = [
 def capture(rig):
     return {pb.name: pb.matrix.copy() for pb in rig.arm.pose.bones}
 
+TWIST_MAX = math.radians(85)
+
+def move_twist_to_forearm(arm, cap):
+    """Скручування кисті відносно передпліччя — у саме передпліччя (до ±85°). Гуманоїд Unity не має скручування
+    кисті (лише згин і відведення), а скручування передпліччя тримає в ±90°: зап'ястя з IK, де весь оберт сидить у
+    кисті (до 177°), Unity переносив хибно — лук лягав уздовж руки (заміри 08.10.2026). Кисть у світі не змінюється."""
+    b = arm.data.bones
+    for s in "lr":
+        low, hand = "lowerarm_" + s, "hand_" + s
+        rest_rel = (b[low].matrix_local.inverted() @ b[hand].matrix_local).to_3x3()
+        total = 0.0
+        # Кілька кроків: за великого згину один крок лишав частину скручування в кисті.
+        for _ in range(6):
+            rel = (cap[low] @ Matrix.Rotation(total, 4, 'Y')).inverted().to_3x3() @ cap[hand].to_3x3() @ rest_rel.inverted()
+            q = rel.to_quaternion()
+            twist = 2 * math.atan2(q.y, q.w)
+            twist = (twist + math.pi) % (2 * math.pi) - math.pi
+            total = max(-TWIST_MAX, min(TWIST_MAX, total + twist))
+            if abs(twist) < 1e-3:
+                break
+        cap[low] = cap[low] @ Matrix.Rotation(total, 4, 'Y')
+
 def bake(rig, name, length, fn):
     frames = int(round(length * FPS))
     samples = []
     for f in range(frames + 1):
         apply(rig, fn(f / FPS, length))
-        samples.append(capture(rig))
+        cap = capture(rig)
+        move_twist_to_forearm(rig.arm, cap)
+        samples.append(cap)
     return samples
 
 def write_action(arm, name, samples):
@@ -558,6 +612,31 @@ def write_action(arm, name, samples):
             kp.interpolation = 'LINEAR'
     act.frame_range = (0, len(samples) - 1)
     return act
+
+def wrist_numbers(arm, cap, side):
+    b = arm.data.bones
+    def rel(child, parent):
+        r = (b[parent].matrix_local.inverted() @ b[child].matrix_local).to_3x3()
+        q = ((cap[parent].inverted() @ cap[child]).to_3x3() @ r.inverted()).to_quaternion()
+        tw = math.degrees(2 * math.atan2(q.y, q.w))
+        sw = q @ Quaternion((0, 1, 0), math.radians(-tw))
+        return round((tw + 180) % 360 - 180), round(math.degrees(sw.angle))
+    ht, hs = rel("hand_" + side, "lowerarm_" + side)
+    ft, _ = rel("lowerarm_" + side, "upperarm_" + side)
+    return ht, hs, ft
+
+def wrist_report(arm, cap, side):
+    """Скручування й згин кисті відносно передпліччя та скручування передпліччя (°) — межі гуманоїда: 90/80/90."""
+    b = arm.data.bones
+    def rel(child, parent):
+        r = (b[parent].matrix_local.inverted() @ b[child].matrix_local).to_3x3()
+        q = ((cap[parent].inverted() @ cap[child]).to_3x3() @ r.inverted()).to_quaternion()
+        tw = math.degrees(2 * math.atan2(q.y, q.w))
+        sw = q @ Quaternion((0, 1, 0), math.radians(-tw))
+        return round((tw + 180) % 360 - 180), round(math.degrees(sw.angle))
+    ht, hs = rel("hand_" + side, "lowerarm_" + side)
+    ft, fs = rel("lowerarm_" + side, "upperarm_" + side)
+    return f"кисть скручена {ht}°, зігнута {hs}°; передпліччя скручене {ft}°"
 
 def strip_constraints(rig):
     for pb in rig.arm.pose.bones:
@@ -645,8 +724,10 @@ def main():
         fore = (h("hand_" + side) - h("lowerarm_" + side)).normalized()
         thumb = (h("thumb_01_" + side) - h("hand_" + side)).normalized()
         f3 = lambda v: f"({-v.y:.2f}, {v.z:.2f}, {v.x:.2f})"       # (вперед, вгору, ліворуч) — як у лукбуку Unity
+        worst = max((wrist_numbers(arm, c, side) for c in s), key=lambda w: (abs(w[0]), w[1], abs(w[2])))
         print(f"[кліп] {name}: {length:.2f} с, {len(s)} кадрів; у середині рука {side}: передпліччя {f3(fore)}, "
-              f"великий палець {f3(thumb)}", flush=True)
+              f"великий палець {f3(thumb)}; найгірше зап'ястя {side}: кисть скручена {worst[0]}°, зігнута {worst[1]}°, "
+              f"передпліччя скручене {worst[2]}° (гуманоїд: 0 / ≤80 / ≤90)", flush=True)
     export(arm, actions)
     print("[експорт] " + OUT_FBX, flush=True)
     if LOOK:

@@ -213,6 +213,9 @@ namespace Game.Gameplay.EditorTools
                     string wname = weapon ?? "unarmed";
                     if (model == null) { report.AppendLine("== " + wname + ": НЕ ЗІБРАНО"); Object.DestroyImmediate(root); continue; }
                     var style = AnimStateTable.StyleOf(KitFigure.WeaponOf(plan));
+                    // Точки зброї (як у грі — з пози спокою, до першого кадру): лукбук звіряє їх із самою сіткою.
+                    var points = model.AddComponent<KitWeaponPoints>();
+                    points.Capture(weapon == "wpn_bow", weapon == "wpn_musket");
                     var g0 = Pose(model, anims.For(CharacterAnimState.CombatIdle, style), 0.2f);
                     var facing = CharacterAssembler.BodyFacing(model);
                     if (g0.IsValid()) g0.Destroy();
@@ -226,7 +229,18 @@ namespace Game.Gameplay.EditorTools
                         var clip = anims.For(st, style);
                         if (clip == null) { report.AppendLine(" " + st + " → «" + choice.Clip + "»: КЛІПУ НЕМАЄ"); continue; }
                         report.AppendLine(" " + st + " → " + clip.name + (choice.Loop ? " (петля)" : " (раз)"));
-                        if (weapon != null) GripReport(model, clip, facing, weapon, report);
+                        if (weapon != null)
+                        {
+                            GripReport(model, clip, facing, weapon, report);
+                            // Той самий кліп на голому скелеті набору (джерело кліпів) — чи винне перенесення між тілами.
+                            var kitGo = Object.Instantiate(lib.Kit(plan.KitId));
+                            var kg = Pose(kitGo, anims.For(CharacterAnimState.CombatIdle, style), 0.2f);
+                            var kitFacing = CharacterAssembler.BodyFacing(kitGo);
+                            if (kg.IsValid()) kg.Destroy();
+                            report.Append("   [скелет набору]");
+                            GripReport(kitGo, clip, kitFacing, weapon, report);
+                            Object.DestroyImmediate(kitGo);
+                        }
                         ShootMotion(cam, model, clip, facing, dir + "/" + st + "-" + wname + ".png", report, 256, 320, !choice.Loop);
                     }
                     Object.DestroyImmediate(root);
@@ -281,6 +295,31 @@ namespace Game.Gameplay.EditorTools
             if (low != null && hand != null && thumb != null)
                 report.AppendLine("   хват (вперед, вгору, ліворуч) у середині: передпліччя " + F(hand.position - low.position) +
                                   ", великий палець " + F(thumb.position - hand.position) + ", зброя " + axis);
+            var pts = model.GetComponent<KitWeaponPoints>();
+            if (pts != null && pts.HandL != null && (weapon == "wpn_bow" || weapon == "wpn_musket"))
+            {
+                // Найдальші точки сітки від кисті — кінці лука / дуло; формула з KitWeaponPoints має влучати в них.
+                foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                {
+                    if (!smr.name.EndsWith(weapon)) continue;
+                    var mesh = new Mesh();
+                    smr.BakeMesh(mesh, true);
+                    var m = smr.transform.localToWorldMatrix;
+                    var h = weapon == "wpn_bow" ? pts.HandL : pts.HandR;
+                    var formula = weapon == "wpn_bow" ? new[] { h.TransformPoint(pts.BowTipA), h.TransformPoint(pts.BowTipB) }
+                                                      : new[] { h.TransformPoint(pts.Muzzle) };
+                    float worst = 0f;
+                    foreach (var f in formula)
+                    {
+                        float best = float.MaxValue;
+                        foreach (var v in mesh.vertices) best = Mathf.Min(best, (m.MultiplyPoint3x4(v) - f).magnitude);
+                        worst = Mathf.Max(worst, best);
+                    }
+                    float scale = h.lossyScale.x;
+                    report.AppendLine("   точки зброї (формула → найближча вершина сітки): " + (worst / scale * 100f).ToString("0") + " см");
+                    Object.DestroyImmediate(mesh);
+                }
+            }
             if (g.IsValid()) g.Destroy();
         }
 
