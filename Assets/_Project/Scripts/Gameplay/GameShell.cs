@@ -159,6 +159,9 @@ namespace Game.Gameplay
         // Поправка №19.3: «лялька» спорядження й кузня (UI.Toolkit.InventoryToolkitView, клавіша I).
         private static readonly MethodInfo CreateInventoryOverlayMethod = ResolveBridgeMethod("UI.Toolkit.InventoryToolkitView", "TryCreate");
         private IShellOverlay _inventoryOverlay;
+        // Діалог у світі, як у BG3 (майстерня, 08.10.2026): вікно на UI Toolkit + камера на того, хто говорить.
+        private static readonly MethodInfo CreateDialogueOverlayMethod = ResolveBridgeMethod("UI.Toolkit.DialogueToolkitView", "TryCreate");
+        private IShellOverlay _dialogueOverlay;
 
         private void Awake()
         {
@@ -176,6 +179,8 @@ namespace Game.Gameplay
                     _creationOverlay = CreateCreationOverlayMethod.Invoke(null, new object[] { this }) as IShellOverlay;
                 if (CreateInventoryOverlayMethod != null)
                     _inventoryOverlay = CreateInventoryOverlayMethod.Invoke(null, new object[] { this }) as IShellOverlay;
+                if (CreateDialogueOverlayMethod != null)
+                    _dialogueOverlay = CreateDialogueOverlayMethod.Invoke(null, new object[] { this }) as IShellOverlay;
             }
 
             Application.wantsToQuit += HandleWantsToQuit; // §HandleWantsToQuit
@@ -190,6 +195,8 @@ namespace Game.Gameplay
             _creationOverlay = null;
             if (_inventoryOverlay != null) _inventoryOverlay.Dispose();
             _inventoryOverlay = null;
+            if (_dialogueOverlay != null) _dialogueOverlay.Dispose();
+            _dialogueOverlay = null;
         }
 
         /// <summary>Після Update усіх компонентів (зокрема автотуру): шапка бачить стан цього кадру.</summary>
@@ -197,6 +204,7 @@ namespace Game.Gameplay
         {
             if (_toolkitHud != null) _toolkitHud.Tick();
             if (_creationOverlay != null) _creationOverlay.Tick();
+            if (_dialogueOverlay != null) _dialogueOverlay.Tick();
             if (_inventoryOverlay != null) _inventoryOverlay.Tick();
             else if (InventoryOpen) InventoryOpen = false; // без UI Toolkit «ляльки» немає — лишається Склад
         }
@@ -495,7 +503,9 @@ namespace Game.Gameplay
                     break;
                 case SessionState.Scene:
                 case SessionState.Opening:
-                    _scene.Draw(this);
+                    // Вікно діалогу в світі (UI Toolkit) малює саме; тут — лише курсор сцени й клавіші.
+                    if (_dialogueOverlay != null && _dialogueOverlay.Handles(state)) _scene.HandleKeys(this);
+                    else _scene.Draw(this);
                     DrawOverlays();
                     break;
                 case SessionState.Battle:

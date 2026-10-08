@@ -711,6 +711,7 @@ namespace Game.Core.Session
             {
                 ActorId = frame.ActorId,
                 SecondActorId = frame.SecondActorId,
+                Framing = frame.Framing,
                 SpeakerId = frame.SpeakerId,
                 LineKey = frame.LineKey,
                 EffectKey = frame.EffectKey,

@@ -289,6 +289,9 @@ namespace Game.Gameplay.Text
             // ==== M1.2 (07.10.2026): рядки підсумку з сюжетних прапорів виборів — блок унизу файлу. ====
             AddStoryEchoKeys(t);
 
+            // ==== Діалог у світі, як у BG3 (майстерня M1.15, 08.10.2026) — блок унизу файлу. ====
+            AddDialogueKeys(t);
+
             return t;
         }
 
@@ -3351,6 +3354,16 @@ namespace Game.Gameplay.Text
                 "Максим мовчки став у стрій поруч, і ця мовчанка вартує слів.");
             AddKey(t, "summary.echo.abandoned_camp_grain_taken",
                 "Із покинутого табору авангарду забрали зерно — Тугар цього не пробачив.");
+        }
+
+        /// <summary>
+        /// Вікно діалогу поверх світу (власник, 08.10.2026: «зробити діалоги між персонажами як в baldursgayte 3»):
+        /// рамка вікна; самі репліки — ключі сцен (scene.*).
+        /// </summary>
+        private static void AddDialogueKeys(Dictionary<string, string> t)
+        {
+            AddKey(t, "ui.dialogue.hint", "Пробіл чи Enter — далі");
+            AddKey(t, "ui.dialogue.choice_hint", "1–9 — відповідь");
         }
     }
 }

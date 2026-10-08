@@ -79,6 +79,18 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("KeypadEnter", UxKeyScope.World,   "GameShell.Ux.cs",            "головна кнопка фази — «Почати день» (HP-2, №22)"),
             new UxKeyBinding("F10",        UxKeyScope.Global,   "GameShell.Ux.cs",            "журнал механік, тестова збірка (U5)"),
             new UxKeyBinding("Space",      UxKeyScope.Scene,    "SceneScreen.cs",             "далі"),
+            new UxKeyBinding("Return",     UxKeyScope.Scene,    "SceneScreen.cs",             "далі (вікно діалогу)"),
+            new UxKeyBinding("KeypadEnter", UxKeyScope.Scene,   "SceneScreen.cs",             "далі (вікно діалогу)"),
+            // Відповідь 1–9 у вікні діалогу: у коді Alpha1 + i, тому всі дев'ять рядків явно.
+            new UxKeyBinding("Alpha1",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 1"),
+            new UxKeyBinding("Alpha2",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 2"),
+            new UxKeyBinding("Alpha3",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 3"),
+            new UxKeyBinding("Alpha4",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 4"),
+            new UxKeyBinding("Alpha5",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 5"),
+            new UxKeyBinding("Alpha6",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 6"),
+            new UxKeyBinding("Alpha7",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 7"),
+            new UxKeyBinding("Alpha8",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 8"),
+            new UxKeyBinding("Alpha9",     UxKeyScope.Scene,    "SceneScreen.cs",             "відповідь 9"),
             new UxKeyBinding("Space",      UxKeyScope.Showcase, "ScenePlayer.cs",             "далі"),
             new UxKeyBinding("Space",      UxKeyScope.Battle,   "BattleHudScreen.cs",         "кінець ходу / прискорити хід ворога"),
             // Здібності 1–9: у коді лише KeyCode.Alpha1 + i, тому всі дев'ять рядків
