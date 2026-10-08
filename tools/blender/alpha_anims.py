@@ -571,7 +571,14 @@ def export(arm, actions):
         o.select_set(False)
     arm.select_set(True)
     bpy.context.view_layer.objects.active = arm
-    arm.animation_data.action = actions[0]
+    # Вузли FBX несуть ПОТОЧНУ позу як «спокій»: з призначеним кліпом Unity збудував би аватар з пози «лук у руці»
+    # і зсунув би кисті в усіх кліпах (лук лягав уздовж руки — лукбук бою 08.10.2026). Кліпи бере експорт сам.
+    arm.animation_data.action = None
+    for pb in arm.pose.bones:
+        pb.rotation_quaternion = Quaternion()
+        pb.location = Vector()
+    bpy.context.scene.frame_set(0)
+    bpy.context.view_layer.update()
     bpy.context.scene.render.fps = FPS
     os.makedirs(os.path.dirname(OUT_FBX), exist_ok=True)
     bpy.ops.export_scene.fbx(filepath=OUT_FBX, use_selection=True, object_types={'ARMATURE'},
