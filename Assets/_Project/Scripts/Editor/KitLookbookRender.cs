@@ -226,6 +226,18 @@ namespace Game.Gameplay.EditorTools
                         var clip = anims.For(st, style);
                         if (clip == null) { report.AppendLine(" " + st + " → «" + choice.Clip + "»: КЛІПУ НЕМАЄ"); continue; }
                         report.AppendLine(" " + st + " → " + clip.name + (choice.Loop ? " (петля)" : " (раз)"));
+                        if (weapon != null)
+                        {
+                            GripReport(model, clip, facing, weapon, report);
+                            // Той самий кліп на голому скелеті набору (джерело кліпів) — чи винне перенесення між тілами.
+                            var kitGo = Object.Instantiate(lib.Kit(plan.KitId));
+                            var kg = Pose(kitGo, anims.For(CharacterAnimState.CombatIdle, style), 0.2f);
+                            var kitFacing = CharacterAssembler.BodyFacing(kitGo);
+                            if (kg.IsValid()) kg.Destroy();
+                            report.Append("   [скелет набору]");
+                            GripReport(kitGo, clip, kitFacing, weapon, report);
+                            Object.DestroyImmediate(kitGo);
+                        }
                         ShootMotion(cam, model, clip, facing, dir + "/" + st + "-" + wname + ".png", report, 256, 320, !choice.Loop);
                     }
                     Object.DestroyImmediate(root);
@@ -238,6 +250,74 @@ namespace Game.Gameplay.EditorTools
             File.WriteAllText(dir + "/battle.txt", report.ToString(), new UTF8Encoding(false));
             Debug.Log("[Лукбук бою] → " + dir);
             if (Application.isBatchMode) EditorApplication.Exit(0);
+        }
+
+        /// <summary>
+        /// Хват зброї в середині кліпу: напрям передпліччя, великого пальця й самої зброї (найдовша вісь запеченої сітки)
+        /// у рамці тіла — (вперед, вгору, ліворуч). Лук у прицілі має стояти вертикально (вісь ≈ вгору), рушниця й спис —
+        /// дивитись уперед.
+        /// </summary>
+        private static void GripReport(GameObject model, AnimationClip clip, Vector3 facing, string weapon, StringBuilder report)
+        {
+            var g = Pose(model, clip, clip.length * 0.5f);
+            var left = Vector3.Cross(Vector3.up, facing).normalized * -1f;
+            string side = weapon == "wpn_bow" ? "l" : "r";
+            Transform low = null, hand = null, thumb = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "lowerarm_" + side) low = t;
+                else if (t.name == "hand_" + side) hand = t;
+                else if (t.name == "thumb_01_" + side) thumb = t;
+            }
+            string F(Vector3 v) { v.Normalize(); return "(" + Vector3.Dot(v, facing).ToString("0.00") + ", " + v.y.ToString("0.00") + ", " + Vector3.Dot(v, left).ToString("0.00") + ")"; }
+            string axis = "?";
+            foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+            {
+                if (!smr.name.EndsWith(weapon)) continue;
+                var mesh = new Mesh();
+                smr.BakeMesh(mesh, true);
+                var v = mesh.vertices;
+                var m = smr.transform.localToWorldMatrix;
+                Vector3 a = m.MultiplyPoint3x4(v[0]), b = a;
+                float best = 0f;
+                for (int i = 0; i < v.Length; i += 3)
+                    for (int j = i + 1; j < v.Length; j += 3)
+                    {
+                        float d = (v[i] - v[j]).sqrMagnitude;
+                        if (d > best) { best = d; a = m.MultiplyPoint3x4(v[i]); b = m.MultiplyPoint3x4(v[j]); }
+                    }
+                axis = F(b - a);
+                Object.DestroyImmediate(mesh);
+            }
+            if (low != null && hand != null && thumb != null)
+                report.AppendLine("   хват (вперед, вгору, ліворуч) у середині: передпліччя " + F(hand.position - low.position) +
+                                  ", великий палець " + F(thumb.position - hand.position) + ", зброя " + axis);
+            var pts = model.GetComponent<KitWeaponPoints>();
+            if (pts != null && pts.HandL != null && (weapon == "wpn_bow" || weapon == "wpn_musket"))
+            {
+                // Найдальші точки сітки від кисті — кінці лука / дуло; формула з KitWeaponPoints має влучати в них.
+                foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                {
+                    if (!smr.name.EndsWith(weapon)) continue;
+                    var mesh = new Mesh();
+                    smr.BakeMesh(mesh, true);
+                    var m = smr.transform.localToWorldMatrix;
+                    var h = weapon == "wpn_bow" ? pts.HandL : pts.HandR;
+                    var formula = weapon == "wpn_bow" ? new[] { h.TransformPoint(pts.BowTipA), h.TransformPoint(pts.BowTipB) }
+                                                      : new[] { h.TransformPoint(pts.Muzzle) };
+                    float worst = 0f;
+                    foreach (var f in formula)
+                    {
+                        float best = float.MaxValue;
+                        foreach (var v in mesh.vertices) best = Mathf.Min(best, (m.MultiplyPoint3x4(v) - f).magnitude);
+                        worst = Mathf.Max(worst, best);
+                    }
+                    float scale = h.lossyScale.x;
+                    report.AppendLine("   точки зброї (формула → найближча вершина сітки): " + (worst / scale * 100f).ToString("0") + " см");
+                    Object.DestroyImmediate(mesh);
+                }
+            }
+            if (g.IsValid()) g.Destroy();
         }
 
         /// <summary>Світло й камера лукбука (той самий вигляд, що в <see cref="Run"/>).</summary>

@@ -23,35 +23,42 @@ namespace Game.Gameplay.Characters
         /// <summary>У просторі HandR: центр долоні (точка натягу) і дуло рушниці.</summary>
         public Vector3 PalmR, Muzzle;
 
-        /// <summary>Зняти точки з моделі в позі спокою. false — скелета з потрібними кістками немає.</summary>
-        public bool Capture(bool bow, bool musket)
+        /// <summary>
+        /// Зняти точки. <paramref name="kitRest"/> — екземпляр FBX набору в позі спокою: зброю змодельовано на ЙОГО
+        /// кістках і прив'язано до кисті його bindpose, тож у просторі кисті тіла будь-якої культури вона лежить так само,
+        /// як у кисті набору. Рамка з кісток тіла культури (інші пропорції) давала похибку до 10 см на кінцях лука.
+        /// </summary>
+        public bool Capture(Transform kitRest, bool bow, bool musket)
         {
-            Transform lowL = null, lowR = null, thumbL = null, thumbR = null;
-            foreach (var t in GetComponentsInChildren<Transform>(true))
-            {
-                switch (t.name)
-                {
-                    case "hand_l": HandL = t; break;
-                    case "hand_r": HandR = t; break;
-                    case "lowerarm_l": lowL = t; break;
-                    case "lowerarm_r": lowR = t; break;
-                    case "thumb_01_l": thumbL = t; break;
-                    case "thumb_01_r": thumbR = t; break;
-                }
-            }
-            if (HandL == null || HandR == null || lowL == null || lowR == null || thumbL == null || thumbR == null) return false;
+            HandL = Find(transform, "hand_l");
+            HandR = Find(transform, "hand_r");
+            Transform kHandL = Find(kitRest, "hand_l"), kHandR = Find(kitRest, "hand_r");
+            Transform lowL = Find(kitRest, "lowerarm_l"), lowR = Find(kitRest, "lowerarm_r");
+            Transform thumbL = Find(kitRest, "thumb_01_l"), thumbR = Find(kitRest, "thumb_01_r");
+            if (HandL == null || HandR == null || kHandL == null || kHandR == null || lowL == null || lowR == null ||
+                thumbL == null || thumbR == null) return false;
 
-            Frame(HandL, lowL, thumbL, out var foreL, out var upL);
-            Frame(HandR, lowR, thumbR, out var foreR, out var upR);
+            Frame(kHandL, lowL, thumbL, out var foreL, out var upL);
+            Frame(kHandR, lowR, thumbR, out var foreR, out var upR);
             var gripL = foreL * Palm;
             BowTipA = gripL - foreL * BowBack + upL * BowHalf;
             BowTipB = gripL - foreL * BowBack - upL * BowHalf;
             BowGrip = gripL;
             PalmR = foreR * Palm;
-            Muzzle = PalmR + upR * MusketReach - foreR * MusketBarrelUp;
+            // Ствол = (кисть − бік)/√2, бік = великий палець × кисть у Blender. Unity — ліва система координат: той самий
+            // бік тут — Cross(кисть, палець). Ствол на 0,08 над хватом (у бік великого пальця).
+            var barrel = (foreR - Vector3.Cross(foreR, upR)).normalized;
+            Muzzle = PalmR + barrel * MusketReach + upR * MusketBarrelUp;
             HasBow = bow;
             HasMusket = musket;
             return true;
+        }
+
+        private static Transform Find(Transform root, string name)
+        {
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == name) return t;
+            return null;
         }
 
         /// <summary>Рамка хвату (передпліччя, великий палець) у просторі кисті — одиниці кисті = метри моделі.</summary>
