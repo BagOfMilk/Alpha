@@ -639,7 +639,14 @@ def main():
     strip_constraints(rig)
     actions = [write_action(arm, name, s) for name, length, s in samples]
     for name, length, s in samples:
-        print(f"[кліп] {name}: {length:.2f} с, {len(s)} кадрів", flush=True)
+        mid = s[len(s) // 2]
+        side = "r" if name.startswith(("Rifle", "Spear", "Axe")) else "l"
+        h = lambda n: mid[n].translation
+        fore = (h("hand_" + side) - h("lowerarm_" + side)).normalized()
+        thumb = (h("thumb_01_" + side) - h("hand_" + side)).normalized()
+        f3 = lambda v: f"({-v.y:.2f}, {v.z:.2f}, {v.x:.2f})"       # (вперед, вгору, ліворуч) — як у лукбуку Unity
+        print(f"[кліп] {name}: {length:.2f} с, {len(s)} кадрів; у середині рука {side}: передпліччя {f3(fore)}, "
+              f"великий палець {f3(thumb)}", flush=True)
     export(arm, actions)
     print("[експорт] " + OUT_FBX, flush=True)
     if LOOK:
