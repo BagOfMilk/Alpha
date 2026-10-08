@@ -2068,8 +2068,8 @@ namespace Game.Gameplay
                 _overlays.Add(new BattleUnitOverlay
                 {
                     UnitId = unit.Id,
-                    ScreenX = sp.x,
-                    ScreenY = Screen.height - sp.y,
+                    ScreenX = sp.x / UI.UiScale.Factor,                      // координати IMGUI (множник інтерфейсу)
+                    ScreenY = (Screen.height - sp.y) / UI.UiScale.Factor,
                     OnScreen = onScreen,
                     IsCurrent = string.Equals(unit.Id, currentId, StringComparison.Ordinal),
                     IsHovered = isHovered,
