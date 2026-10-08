@@ -186,6 +186,8 @@ namespace Game.Gameplay
             public int PathIndex;
             public float Duration;
             public float Elapsed;
+            /// <summary>Секунда від старту такту, у яку «влучання»: числа, звук, реакція цілі (подача П2).</summary>
+            public float ImpactAt;
             public bool FloatingSpawned;
         }
 
@@ -254,6 +256,17 @@ namespace Game.Gameplay
 
         private AttackPreviewView _hoverAttackCache;
         private MovePathView _hoverPathCache;
+
+        // ================= подача П3–П4: голограма руху, щити укриття (docs/research/RT_COMBAT_PRESENTATION.md) =================
+
+        /// <summary>Колір голограми: напівпрозорий холодний — читається як «тут буде», а не як ще один боєць.</summary>
+        private static readonly Color GhostColor = new Color(0.55f, 0.85f, 1f, 0.35f);
+        private GameObject _ghost;
+        private string _ghostUnitId;
+        private Material _ghostMaterial;
+        private string _ghostShotsKey;
+        private readonly Dictionary<string, int> _ghostShots = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly List<BattleCoverMarker> _coverMarkers = new List<BattleCoverMarker>();
         private (string current, string hovered, ArmedAction armed, string ability, int logCount, string tile)? _hoverKey;
 
         // ================= Бій v2: лінія пострілу =================
@@ -308,6 +321,7 @@ namespace Game.Gameplay
 
         public IReadOnlyList<BattleUnitOverlay> Overlays => _overlays;
         public IReadOnlyList<BattleTrapOverlay> TrapOverlays => _trapOverlays;
+        public IReadOnlyList<BattleCoverMarker> CoverMarkers => _coverMarkers;
         public IReadOnlyList<BattleFloatingText> FloatingTexts => _floatingTextsExposed;
         public BattleTurnBanner Banner => _banner;
 
@@ -374,6 +388,11 @@ namespace Game.Gameplay
             _lastMousePositionKnown = false;
             _hoverKey = null;
             _cameraInitialized = false;
+            if (_ghost != null) { Destroy(_ghost); _ghost = null; } // копія постаті минулого бою
+            _ghostUnitId = null;
+            _ghostShots.Clear();
+            _ghostShotsKey = null;
+            _coverMarkers.Clear();
 
             _protagonistGender = _session?.GetProtagonistCreationView()?.Gender ?? Gender.Male;
             var portraitRig = ArenaRoot != null ? ArenaRoot.GetComponent<PortraitRig>() : null;
@@ -389,6 +408,7 @@ namespace Game.Gameplay
             ProcessNewBattleLog(_lastView);
 
             _lastKnownDayLogCount = _session?.DayLog.Count ?? 0;
+            UI.SoundSettings.ArenaDrivesImpacts = true; // звук удару — у кадр влучання (П2), не в мить розрахунку
         }
 
         public void Exit() => TeardownAndDeactivate();
@@ -584,6 +604,8 @@ namespace Game.Gameplay
                 // Дограти такти фінальної дії (удар/смерть, що вирішили бій);
                 // HUD покаже панель результату, щойно такти скінчаться (!IsBusy).
                 if (_lastView != null) ApplyUnitPositionsAndHighlights(_lastView);
+                HideGhost();
+                _coverMarkers.Clear();
                 UpdateActiveTact(dt);
                 UpdateFloatingTexts(dt);
                 RebuildOverlays();
@@ -599,6 +621,8 @@ namespace Game.Gameplay
             UpdateEnemyTurnDirector(dt);
             UpdateBannerAndAutoFocus(_lastView);
             UpdateFloatingTexts(dt);
+            UpdateGhost();
+            UpdateCoverMarkers();
             RebuildOverlays();
             UpdateHoverPathLine();
             UpdateCamera(dt);
@@ -1464,6 +1488,9 @@ namespace Game.Gameplay
 
         private bool IsFastNow() => _fastEnemyTurns && _lastView != null && _lastView.IsAiTurn;
 
+        /// <summary>Множник швидкості бою з меню паузи (подача П1) — ритм тактів рахує <see cref="UI.BattleTactTiming"/>.</summary>
+        private static float Speed => UI.BattleSpeed.Multiplier;
+
         private void UpdateActiveTact(float dt)
         {
             if (_activeTact == null)
@@ -1498,22 +1525,36 @@ namespace Game.Gameplay
                     break;
 
                 case TactKind.Attack:
-                    _activeTact.Duration = fast ? 0.15f : 0.5f;
+                {
+                    // Замах — зараз; реакція цілі, лінія пострілу, числа й звук — у кадр удару (П2, UpdateTimedTact).
                     FaceTowards(unitId, targetId);
-                    PlayAttackClip(unitId, targetId);
-                    PlayKitState(targetId, AnimStateTable.ReactionFor(entry.Key));
+                    var attacker = FindUnitById(unitId);
+                    bool melee = attacker != null && attacker.WeaponIsMelee;
+                    float clipLength = PlayAttackClip(unitId, melee);
+                    var beat = UI.BattleTactTiming.Attack(melee, fast, clipLength, Speed);
+                    _activeTact.Duration = beat.Duration;
+                    _activeTact.ImpactAt = beat.ImpactAt;
                     break;
+                }
 
                 case TactKind.Ability:
-                    _activeTact.Duration = fast ? 0.12f : 0.4f;
+                {
+                    var beat = UI.BattleTactTiming.Ability(fast, Speed);
+                    _activeTact.Duration = beat.Duration;
+                    _activeTact.ImpactAt = beat.ImpactAt;
                     if (!string.IsNullOrEmpty(targetId)) FaceTowards(unitId, targetId);
                     PlayOneShot(unitId, clips => clips?.Interact, hold: false);
                     break;
+                }
 
                 case TactKind.DownedOrDeath:
-                    _activeTact.Duration = fast ? 0.2f : 0.6f;
+                {
+                    var beat = UI.BattleTactTiming.Down(fast, Speed);
+                    _activeTact.Duration = beat.Duration;
+                    _activeTact.ImpactAt = beat.ImpactAt;
                     PlayOneShot(unitId, clips => clips?.Die, hold: true);
                     break;
+                }
             }
         }
 
@@ -1522,7 +1563,7 @@ namespace Game.Gameplay
             var tact = _activeTact;
             if (tact.Path == null || tact.PathIndex >= tact.Path.Count) { CompleteTact(); return; }
 
-            float tileDuration = IsFastNow() ? 0.09f : 0.18f;
+            float tileDuration = UI.BattleTactTiming.Tile(IsFastNow(), Speed);
             float speed = BattleArenaView.TileSize / tileDuration;
 
             var currentPos = _unitVisualPos.TryGetValue(tact.ActorId, out var p) ? p : Vector3.zero;
@@ -1559,14 +1600,14 @@ namespace Game.Gameplay
 
             // Напис — для БУДЬ-якого такту з написом (удар, здібність, впав/загинув),
             // плюс рядки шкоди/стану, що належать до нього, — стосом один над одним.
-            if (!tact.FloatingSpawned && tact.Elapsed >= tact.Duration * 0.5f)
+            if (!tact.FloatingSpawned && tact.Elapsed >= tact.ImpactAt)
             {
                 tact.FloatingSpawned = true;
                 int stack = SpawnFloatingForEntry(tact.Entry, 0) ? 1 : 0;
                 if (tact.Extras != null)
                     foreach (var extra in tact.Extras)
                         if (SpawnFloatingForEntry(extra, stack)) stack++;
-                if (tact.Kind == TactKind.Attack) ApplyHitReaction(tact);
+                if (tact.Kind == TactKind.Attack) Impact(tact);
             }
 
             if (tact.Elapsed >= tact.Duration) CompleteTact();
@@ -1619,22 +1660,35 @@ namespace Game.Gameplay
             if (_unitAnimations.TryGetValue(unitId ?? string.Empty, out var anim) && anim != null) anim.Gait = gait;
         }
 
-        private void PlayOneShot(string unitId, Func<BattleCharacterClips, AnimationClip> select, bool hold)
+        /// <returns>Довжина кліпу при 1× (0 — кліпу немає); темп — множник швидкості бою (П1).</returns>
+        private float PlayOneShot(string unitId, Func<BattleCharacterClips, AnimationClip> select, bool hold)
         {
-            if (string.IsNullOrEmpty(unitId)) return;
-            if (!_unitAnimations.TryGetValue(unitId, out var anim) || anim == null) return;
+            if (string.IsNullOrEmpty(unitId)) return 0f;
+            if (!_unitAnimations.TryGetValue(unitId, out var anim) || anim == null) return 0f;
             _unitClipSets.TryGetValue(unitId, out var clips);
             var clip = select(clips);
-            if (clip != null) anim.PlayOnce(clip, hold);
+            if (clip == null) return 0f;
+            anim.OneShotSpeed = UI.BattleTactTiming.AnimationRate(Speed, IsFastNow());
+            anim.PlayOnce(clip, hold);
+            return clip.length;
         }
 
         /// <summary>Ближній/дальній замах — <c>WeaponIsMelee</c> (BattleUnitView, §7.1); дальній ще й лишає лінію пострілу на короткий час.</summary>
-        private void PlayAttackClip(string attackerId, string targetId)
+        private float PlayAttackClip(string attackerId, bool melee)
+            => PlayOneShot(attackerId, clips => melee ? clips?.AttackMelee : clips?.HoldingShoot, hold: false);
+
+        /// <summary>
+        /// Мить влучання (подача П2): лінія пострілу, реакція цілі, спалах і звук — разом зі спливними числами,
+        /// а не на старті замаху. Звук удару грає арена, а не режисер звуку (<see cref="UI.SoundSettings.ArenaDrivesImpacts"/>).
+        /// </summary>
+        private void Impact(ActiveTact tact)
         {
-            var attacker = FindUnitById(attackerId);
-            bool melee = attacker != null && attacker.WeaponIsMelee;
-            PlayOneShot(attackerId, clips => melee ? clips?.AttackMelee : clips?.HoldingShoot, hold: false);
-            if (!melee) StartShotLine(attackerId, targetId);
+            var attacker = FindUnitById(tact.ActorId);
+            if (attacker != null && !attacker.WeaponIsMelee) StartShotLine(tact.ActorId, tact.TargetId);
+            PlayKitState(tact.TargetId, AnimStateTable.ReactionFor(tact.Entry.Key));
+            ApplyHitReaction(tact);
+            var cue = UI.BattleTactTiming.ImpactCue(BattleLogText.KindOf(tact.Entry));
+            if (cue != UI.SoundCue.None) UI.SoundSettings.Request(cue);
         }
 
         private void FaceTowards(string actorId, string targetId)
@@ -1829,6 +1883,119 @@ namespace Game.Gameplay
         /// <see cref="RefreshIntentOverlayTiles"/> для тайлів під загрозою
         /// дозору), і сам шлях справді досяжний (Result == "Success").
         /// </summary>
+        /// <summary>
+        /// Голограма руху (подача П3): напівпрозора копія поточного бійця на кінцевій клітинці наведеного шляху і
+        /// шанси по ворогах звідти (<see cref="GameSession.PreviewShotsFrom"/>) — у тих самих умовах, що й лінія
+        /// шляху (<see cref="UpdateHoverPathLine"/>). Нічого не мутує; клік лишається тим самим рухом.
+        /// </summary>
+        private void UpdateGhost()
+        {
+            var current = CurrentUnit();
+            var path = (_armed == ArmedAction.None && IsPlayerTurn && !IsBusy && string.IsNullOrEmpty(HoveredUnitId)) ? HoverPath : null;
+            bool show = current != null && _session != null && path != null && path.Tiles != null && path.Tiles.Count > 0 &&
+                        string.Equals(path.Result, "Success", StringComparison.Ordinal);
+            if (!show) { HideGhost(); return; }
+
+            var ghost = EnsureGhost(current.Id);
+            if (ghost == null) return;
+
+            var last = path.Tiles[path.Tiles.Count - 1];
+            var lastWorld = BattleArenaView.TileToWorld(last.X, last.Y);
+            var source = UnitGo(current.Id);
+            float y = source != null ? source.transform.localPosition.y : 0f;
+            ghost.transform.localPosition = new Vector3(lastWorld.X, y, lastWorld.Z);
+            var from = BattleArenaView.TileToWorld(current.Pos.X, current.Pos.Y);
+            var facing = new Vector3(lastWorld.X - from.X, 0f, lastWorld.Z - from.Z);
+            if (facing.sqrMagnitude > 0.0001f) ghost.transform.localRotation = Quaternion.LookRotation(facing.normalized, Vector3.up);
+            if (!ghost.activeSelf) ghost.SetActive(true);
+
+            string key = current.Id + "@" + last.X + "_" + last.Y + "#" + (_lastView?.Log?.Count ?? 0);
+            if (key == _ghostShotsKey) return;
+            _ghostShotsKey = key;
+            _ghostShots.Clear();
+            foreach (var shot in _session.PreviewShotsFrom(new GridPos(last.X, last.Y)))
+                if (shot != null && !string.IsNullOrEmpty(shot.TargetId)) _ghostShots[shot.TargetId] = shot.Chance;
+        }
+
+        private void HideGhost()
+        {
+            if (_ghost != null && _ghost.activeSelf) _ghost.SetActive(false);
+            _ghostShots.Clear();
+            _ghostShotsKey = null;
+        }
+
+        /// <summary>
+        /// Копія постаті бійця без колайдерів, у напівпрозорому матеріалі (Sprites/Default — у списку
+        /// завжди включених шейдерів, тож у білді не стане рожевою); дихає тим самим idle.
+        /// Новий боєць — нова копія.
+        /// </summary>
+        private GameObject EnsureGhost(string unitId)
+        {
+            if (_ghost != null && string.Equals(_ghostUnitId, unitId, StringComparison.Ordinal)) return _ghost;
+            if (_ghost != null) { Destroy(_ghost); _ghost = null; }
+            _ghostUnitId = null;
+
+            var source = UnitGo(unitId);
+            if (source == null) return null;
+            if (_ghostMaterial == null)
+            {
+                var shader = Shader.Find("Sprites/Default");
+                if (shader == null) return null;
+                _ghostMaterial = new Material(shader) { color = GhostColor };
+            }
+
+            var ghost = Instantiate(source, source.transform.parent);
+            ghost.name = "move_ghost";
+            ghost.SetActive(false);
+            // Аніматор лишаємо: копія «дихає» тим самим idle. Без нього постать набору могла б упасти в
+            // бінд-позу, а вона в наборі розкидана на метри (граблі треку V, CLAUDE.md п. 9г).
+            foreach (var collider in ghost.GetComponentsInChildren<Collider>(true)) Destroy(collider);
+            foreach (var renderer in ghost.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = new Material[Mathf.Max(1, renderer.sharedMaterials.Length)];
+                for (int i = 0; i < mats.Length; i++) mats[i] = _ghostMaterial;
+                renderer.sharedMaterials = mats;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+            _ghost = ghost;
+            _ghostUnitId = unitId;
+            return ghost;
+        }
+
+        /// <summary>
+        /// Щити укриття (подача П4): на кожному боці клітинки під курсором, де є укриття, — значок пів-щита чи
+        /// повного щита (<see cref="GameSession.PreviewTileCover"/>). Лише в хід гравця й поза озброєною здібністю.
+        /// </summary>
+        private void UpdateCoverMarkers()
+        {
+            _coverMarkers.Clear();
+            if (_session == null || !HasHoveredTile || !IsPlayerTurn || IsBusy || _armed == ArmedAction.Ability) return;
+            var cover = _session.PreviewTileCover(new GridPos(HoveredTileX, HoveredTileY));
+            if (cover == null) return;
+            AddCoverMarker(cover.X, cover.Y, 0, 1, cover.North);
+            AddCoverMarker(cover.X, cover.Y, 1, 0, cover.East);
+            AddCoverMarker(cover.X, cover.Y, 0, -1, cover.South);
+            AddCoverMarker(cover.X, cover.Y, -1, 0, cover.West);
+        }
+
+        private void AddCoverMarker(int x, int y, int dx, int dy, string coverType)
+        {
+            if (string.IsNullOrEmpty(coverType) || string.Equals(coverType, "None", StringComparison.Ordinal) || ArenaCamera == null) return;
+            var a = BattleArenaView.TileToWorld(x, y);
+            var b = BattleArenaView.TileToWorld(x + dx, y + dy);
+            var world = new Vector3(Mathf.Lerp(a.X, b.X, 0.45f), 0.9f, Mathf.Lerp(a.Z, b.Z, 0.45f));
+            var sp = ArenaCamera.WorldToScreenPoint(world);
+            var gui = UI.UiScale.ScreenToGui(sp);
+            _coverMarkers.Add(new BattleCoverMarker
+            {
+                ScreenX = gui.x,
+                ScreenY = gui.y,
+                OnScreen = sp.z > 0f && sp.x >= 0f && sp.x <= Screen.width && sp.y >= 0f && sp.y <= Screen.height,
+                Full = string.Equals(coverType, "Full", StringComparison.Ordinal)
+            });
+        }
+
         private void UpdateHoverPathLine()
         {
             var line = EnsurePathLine();
@@ -1899,7 +2066,7 @@ namespace Game.Gameplay
         {
             if (_session == null || _lastView == null) return;
 
-            var decision = _turnDirector.Tick(dt, _lastView.IsAiTurn, _enemyAiEnabled, IsBusy, _fastEnemyTurns, _lastView.CurrentUnitId);
+            var decision = _turnDirector.Tick(dt * Speed, _lastView.IsAiTurn, _enemyAiEnabled, IsBusy, _fastEnemyTurns, _lastView.CurrentUnitId);
             switch (decision)
             {
                 case BattleTurnDirectorAction.StepAi:
@@ -2052,7 +2219,9 @@ namespace Game.Gameplay
                     OnScreen = onScreen,
                     IsCurrent = string.Equals(unit.Id, currentId, StringComparison.Ordinal),
                     IsHovered = isHovered,
-                    IsTargetable = isTargetable
+                    IsTargetable = isTargetable,
+                    GhostHitChance = _ghost != null && _ghost.activeSelf && _ghostShots.TryGetValue(unit.Id, out var ghostChance) ? ghostChance : -1,
+                    CoverBest = unit.IsDowned || _session == null ? null : _session.PreviewTileCover(new GridPos(unit.Pos.X, unit.Pos.Y))?.Best
                 });
             }
         }
@@ -2206,7 +2375,7 @@ namespace Game.Gameplay
             if (_cameraFlyTarget.HasValue)
             {
                 _cameraFlyElapsed += dt;
-                float t = Mathf.Clamp01(_cameraFlyElapsed / CameraFlyDuration);
+                float t = Mathf.Clamp01(_cameraFlyElapsed * Speed / CameraFlyDuration);
                 float eased = t * t * (3f - 2f * t);
                 _cameraPanFocus = Vector3.Lerp(_cameraFlyStart, _cameraFlyTarget.Value, eased);
                 if (t >= 1f) _cameraFlyTarget = null;
@@ -2505,6 +2674,8 @@ namespace Game.Gameplay
         private void TeardownAndDeactivate()
         {
             _active = false;
+            UI.SoundSettings.ArenaDrivesImpacts = false;
+            HideGhost();
             _resultPending = false;
             _armed = ArmedAction.None;
             _session = null;

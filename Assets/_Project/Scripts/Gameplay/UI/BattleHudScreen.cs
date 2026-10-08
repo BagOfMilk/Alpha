@@ -115,6 +115,7 @@ namespace Game.Gameplay.UI
             // навмисно НЕ входить у blockingRects — банер/оверлеї/спливаючі
             // написи/підказка не мають ловити клік, призначений арені (§3).
             DrawBanner(c, topRect);
+            DrawCoverMarkers(c);
             DrawOverlays(c, view);
             DrawFloatingTexts(c);
             DrawCursorTooltip(c, view);
@@ -1404,6 +1405,13 @@ namespace Game.Gameplay.UI
             style.normal.textColor = tint;
             GUI.Label(nameRect, name, style);
 
+            // Подача П4: боєць в укритті — щит ліворуч від імені (пів-щит / повний).
+            if (ov.CoverBest == "Half" || ov.CoverBest == "Full")
+            {
+                float size = nameRect.height;
+                DrawShield(new Rect(nameRect.x - size - 2f, nameRect.y, size, size), ov.CoverBest == "Full");
+            }
+
             float hpY = nameRect.y + nameRect.height + 2f;
             var hpRect = new Rect(nameRect.x, hpY, nameRect.width, 4f);
             Widgets.FilledBarAt(hpRect, FilledFraction(unit.Hp, unit.HpMax), tint);
@@ -1432,7 +1440,58 @@ namespace Game.Gameplay.UI
                 Widgets.SolidRect(badge, AlphaSkin.BattleEnemySide);
                 GUI.Label(badge, UkrainianText.Format("ui.battle.overlay.downed", false, "turns", I(unit.DownWindowRemaining)),
                     new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.TextMain } });
+                badgeY += 18f;
             }
+
+            // Подача П3: шанс по цьому ворогу з клітинки, куди веде голограма руху (той самий, що покаже прев'ю
+            // атаки, коли боєць там стоятиме — інваріант 8).
+            if (ov.GhostHitChance >= 0)
+            {
+                var badge = new Rect(nameRect.x, badgeY, nameRect.width, 16f);
+                Widgets.SolidRect(badge, new Color32(20, 40, 52, 220));
+                GUI.Label(badge, UkrainianText.Format("ui.battle.overlay.ghost_chance", false, "chance", I(ov.GhostHitChance)),
+                    new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = new Color(0.62f, 0.88f, 1f) } });
+            }
+        }
+
+        // ================= подача П4: щити укриття (docs/research/RT_COMBAT_PRESENTATION.md) =================
+
+        private const int ShieldTextureSize = 32;
+        private static Texture2D _shieldHalf, _shieldFull;
+
+        private static void DrawCoverMarkers(IBattleHudData c)
+        {
+            if (c.CoverMarkers == null) return;
+            const float size = 22f;
+            foreach (var m in c.CoverMarkers)
+                if (m != null && m.OnScreen)
+                    DrawShield(new Rect(m.ScreenX - size * 0.5f, m.ScreenY - size * 0.5f, size, size), m.Full);
+        }
+
+        private static void DrawShield(Rect rect, bool full)
+        {
+            var tex = full ? (_shieldFull != null ? _shieldFull : (_shieldFull = BuildShield(true)))
+                           : (_shieldHalf != null ? _shieldHalf : (_shieldHalf = BuildShield(false)));
+            GUI.DrawTexture(rect, tex, ScaleMode.ScaleToFit);
+        }
+
+        /// <summary>Текстура щита з маски <see cref="ShieldIcon"/>: контур темний, заливка світла (читається на траві й камені).</summary>
+        private static Texture2D BuildShield(bool full)
+        {
+            int n = ShieldTextureSize;
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var outline = new Color(0.08f, 0.07f, 0.06f, 0.95f);
+            var fill = new Color(0.86f, 0.90f, 0.95f, 0.95f);
+            var clear = new Color(0f, 0f, 0f, 0f);
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    int cell = ShieldIcon.Cell(x, y, n, full);
+                    // SetPixel рахує y знизу, маска — згори.
+                    tex.SetPixel(x, n - 1 - y, cell == ShieldIcon.Outline ? outline : cell == ShieldIcon.Fill ? fill : clear);
+                }
+            tex.Apply();
+            return tex;
         }
 
         private static void DrawFloatingTexts(IBattleHudData c)

@@ -2783,6 +2783,50 @@ namespace Game.Core.Session
             return r;
         }
 
+        /// <summary>
+        /// Шанси поточного юніта по ворогах, якби він стояв у <paramref name="from"/> (голограма руху, подача бою
+        /// П3). Ближня зброя — лише сусіди (Чебишев 1); дальня — усі активні вороги. Нічого не мутує.
+        /// </summary>
+        public IReadOnlyList<ShotFromView> PreviewShotsFrom(GridPos from)
+        {
+            var result = new List<ShotFromView>();
+            var unit = _battle?.Current;
+            if (unit == null || !unit.IsActive || unit.Weapon == null || _battle.Outcome != CombatOutcome.Ongoing) return result;
+            foreach (var target in _battle.Units)
+            {
+                if (target == null || target.Side == unit.Side || !target.IsActive) continue;
+                if (unit.Weapon.IsMelee && GridPos.Chebyshev(from, target.Pos) > 1) continue;
+                result.Add(new ShotFromView
+                {
+                    TargetId = target.Id,
+                    Chance = _battle.HitChancePreviewFrom(unit, from, target),
+                    TargetCover = _battle.Map.CoverAgainst(target.Pos, from).ToString()
+                });
+            }
+            return result;
+        }
+
+        /// <summary>Укриття клітинки з чотирьох боків (значки щита, подача бою П4); поза картою чи без бою — null.</summary>
+        public TileCoverView PreviewTileCover(GridPos p)
+        {
+            var map = _battle?.Map;
+            if (map == null || !map.InBounds(p)) return null;
+            var n = map.GetCover(p, Direction.North);
+            var e = map.GetCover(p, Direction.East);
+            var s = map.GetCover(p, Direction.South);
+            var w = map.GetCover(p, Direction.West);
+            var best = n;
+            if (e > best) best = e;
+            if (s > best) best = s;
+            if (w > best) best = w;
+            return new TileCoverView
+            {
+                X = p.X, Y = p.Y,
+                North = n.ToString(), East = e.ToString(), South = s.ToString(), West = w.ToString(),
+                Best = best.ToString()
+            };
+        }
+
         public int PreviewHitChance(string attackerId, string targetId)
         {
             if (_battle == null) return 0;

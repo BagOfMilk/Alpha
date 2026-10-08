@@ -160,6 +160,9 @@ namespace Game.Gameplay.UI
             Of(nameof(GameSession.PreviewHitChance), UxHomeKind.Event, "battle"),
             Of(nameof(GameSession.PreviewMovePath), UxHomeKind.Event, "battle"),
             Of(nameof(GameSession.PreviewOverwatchCone), UxHomeKind.Event, "battle"),
+            // Подача бою П3–П4 (docs/research/RT_COMBAT_PRESENTATION.md): голограма руху й щити укриття — на арені.
+            Of(nameof(GameSession.PreviewShotsFrom), UxHomeKind.Event, "battle"),
+            Of(nameof(GameSession.PreviewTileCover), UxHomeKind.Event, "battle"),
 
             // Не дії гравця
             Of(nameof(GameSession.OfferMyroslavaEveningScene), UxHomeKind.Auto, "evening"),

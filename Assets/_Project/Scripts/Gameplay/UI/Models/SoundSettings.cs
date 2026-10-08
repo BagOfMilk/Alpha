@@ -18,6 +18,13 @@ namespace Game.Gameplay.UI
         /// <summary>Гучності змінились і ще не збережені.</summary>
         public static bool Dirty { get; set; }
 
+        /// <summary>
+        /// Арена бою відкрита й сама грає звук удару в кадр влучання (<see cref="BattleTactTiming.ImpactCue"/>):
+        /// режисер звуку пропускає ці події журналу (<see cref="BattleTactTiming.IsImpactEvent"/>), щоб удар не
+        /// звучав двічі й раніше, ніж видно (подача бою П2).
+        /// </summary>
+        public static bool ArenaDrivesImpacts { get; set; }
+
         private static void Init()
         {
             if (_initialized) return;

@@ -234,6 +234,28 @@ namespace Game.Core.Session.Views
     }
 
     /// <summary>Прев'ю руху поточного юніта до тайла (docs/COMBAT_V2.md §3).</summary>
+    /// <summary>
+    /// Шанс удару поточного юніта по ворогу з гіпотетичної клітинки — «голограма» руху (подача бою П3,
+    /// docs/research/RT_COMBAT_PRESENTATION.md). Те саме число, що покаже прев'ю атаки, коли юніт уже
+    /// стоятиме там (інваріант 8: поріг/шанс видно заздалегідь).
+    /// </summary>
+    public sealed class ShotFromView
+    {
+        public string TargetId;
+        public int Chance;
+        /// <summary>Укриття цілі проти цієї точки: "None" | "Half" | "Full".</summary>
+        public string TargetCover;
+    }
+
+    /// <summary>Укриття клітинки з кожного боку (подача бою П4): "None" | "Half" | "Full".</summary>
+    public sealed class TileCoverView
+    {
+        public int X, Y;
+        public string North, East, South, West;
+        /// <summary>Найкраще з чотирьох — значок біля юніта.</summary>
+        public string Best;
+    }
+
     public sealed class MovePathView
     {
         /// <summary>"Success" | "NotReachable" | "NotEnoughAp" | "InvalidAction".</summary>

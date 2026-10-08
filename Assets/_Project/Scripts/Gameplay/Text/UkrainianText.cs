@@ -1430,6 +1430,9 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.uiscale.title", "Розмір інтерфейсу");
             AddKey(t, "ui.uiscale.option", "{pct} %");
             AddKey(t, "ui.uiscale.hint", "Менше — більше видно світу. Діє одразу; створення героя й речі — з наступного відкриття.");
+            // Подача бою П1 (docs/research/RT_COMBAT_PRESENTATION.md).
+            AddKey(t, "ui.battle_speed.title", "Швидкість бою");
+            AddKey(t, "ui.battle_speed.hint", "Анімації, рух і хід ворога разом. На результат бою не впливає. Діє одразу.");
         }
 
         private static void AddAmbientAndThreatBandKeys(Dictionary<string, string> t)
@@ -2775,6 +2778,8 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.overlay.downed", "Впав · {turns} х.");
             AddKey(t, "ui.battle.overlay.overwatch", "Дозор");
             AddKey(t, "ui.battle.overlay.trap", "Пастка");
+            // Подача бою П3: шанс по ворогу з клітинки, куди веде голограма руху.
+            AddKey(t, "ui.battle.overlay.ghost_chance", "Звідти: {chance} %");
 
             // ---- відмова "InvalidAction" (CombatActionResult) — загальна причина без власного тексту раніше ----
             AddKey(t, "ui.battle.action.rejected.invalidaction", "Дію неможливо виконати зараз.");

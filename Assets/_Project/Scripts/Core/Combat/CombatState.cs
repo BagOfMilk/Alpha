@@ -1349,6 +1349,10 @@ namespace Game.Core.Combat
         public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
             => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus + ProvokedBonus(attacker), WeatherRangedDelta);
 
+        /// <summary>Той самий шанс, якби атакуючий уже стояв у <paramref name="from"/> (прев'ю руху; нічого не мутує).</summary>
+        public int HitChancePreviewFrom(CombatUnit attacker, GridPos from, CombatUnit target)
+            => HitChanceCalculator.ComputeFrom(attacker, from, target, Map, Balance, ProvokedBonus(attacker), WeatherRangedDelta);
+
         /// <summary>Ультиматум відкинуто (старт <see cref="BattleOpening.Provoked"/>): ворог у раунді 1 влучніший.</summary>
         private int ProvokedBonus(CombatUnit attacker) =>
             Opening == BattleOpening.Provoked && Round == 1 && attacker != null && attacker.Side == Side.Enemy

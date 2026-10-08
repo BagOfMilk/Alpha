@@ -60,6 +60,18 @@ namespace Game.Gameplay.UI
 
                 GUILayout.Space(8f);
 
+                // Швидкість бою (подача П1, docs/research/RT_COMBAT_PRESENTATION.md): анімації, рух і хід ворога
+                // разом; діє одразу, зберігається між запусками. На розрахунок бою не впливає.
+                GUILayout.Label(UkrainianText.Get("ui.battle_speed.title", g), AlphaSkin.Body);
+                GUILayout.BeginHorizontal();
+                foreach (float option in BattleTactTiming.SpeedOptions)
+                    if (Widgets.TabButton(BattleTactTiming.SpeedLabel(option), System.Math.Abs(BattleSpeed.Multiplier - option) < 0.01f))
+                        BattleSpeed.Multiplier = option;
+                GUILayout.EndHorizontal();
+                Widgets.TooltipLine(UkrainianText.Get("ui.battle_speed.hint", g));
+
+                GUILayout.Space(8f);
+
                 // Графіка (Поправка №21.1): три рівні, діє одразу, зберігається між запусками.
                 GUILayout.Label(UkrainianText.Get("ui.gfx.title", g), AlphaSkin.Body);
                 DrawGraphicsLevels(shell, g);

@@ -49,6 +49,9 @@ namespace Game.Gameplay
         /// <summary>Грає зараз одноразовий такт (замах/здібність/смерть) — <see cref="Gait"/> тимчасово не впливає на позу.</summary>
         public bool IsPlayingOneShot => _oneShotActive;
 
+        /// <summary>Темп одноразових кліпів (множник швидкості бою, подача П1; <c>BattleTactTiming.AnimationRate</c>). 1 — як є.</summary>
+        public float OneShotSpeed { get; set; } = 1f;
+
         private PlayableGraph _graph;
         private AnimationMixerPlayable _gaitMixer;
         private AnimationMixerPlayable _topMixer;
@@ -187,7 +190,7 @@ namespace Game.Gameplay
 
             if (_oneShotActive)
             {
-                _oneShotElapsed += Time.deltaTime;
+                _oneShotElapsed += Time.deltaTime * Mathf.Max(0.05f, OneShotSpeed);
                 if (_oneShotElapsed >= _oneShotLength)
                 {
                     _oneShotPlayable.SetTime(_oneShotLength);

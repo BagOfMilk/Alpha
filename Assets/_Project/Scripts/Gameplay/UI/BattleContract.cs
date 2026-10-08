@@ -141,6 +141,9 @@ namespace Game.Gameplay
 
         /// <summary>Мітки над своїми пастками (координати GUI) — видно і там, де 3D-капкан закриває укриття.</summary>
         IReadOnlyList<BattleTrapOverlay> TrapOverlays { get; }
+
+        /// <summary>Щити укриття на боках клітинки під курсором (подача П4, docs/research/RT_COMBAT_PRESENTATION.md).</summary>
+        IReadOnlyList<BattleCoverMarker> CoverMarkers { get; }
         IReadOnlyList<BattleFloatingText> FloatingTexts { get; }
         BattleTurnBanner Banner { get; }
 
