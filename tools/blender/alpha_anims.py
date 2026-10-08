@@ -374,7 +374,8 @@ def rifle_hands(k_aim, recoil=0.0):
     """k_aim 0 — навскіс перед тілом (готовність), 1 — приклад у плечі, ствол до цілі."""
     def barrel(S):
         low = (FWD * 0.75 + UP * 0.45 + LEFT * 0.35).normalized()
-        aim = (FWD + UP * 0.09 * recoil).normalized()
+        # −0,2: у Unity (гуманоїд) ствол виходив задертим на ~11° відносно Blender (лукбук бою 08.10.2026).
+        aim = (FWD + UP * (0.09 * recoil - 0.2)).normalized()
         return lerp(low, aim, k_aim).normalized()
 
     def grip_r(S):

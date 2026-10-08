@@ -115,6 +115,25 @@ namespace Game.Gameplay
         private bool _btHoverTileShotTaken;
         private bool _btAfterMoveShotTaken;
         private bool _btAfterAttackShotTaken;
+
+        /// <summary>
+        /// Серії кадрів бою (власник 08.10.2026 на «не перевіряв, як анімації виглядають у русі»: «Це погано і так не
+        /// повинно буть»): перший удар кожним стилем зброї — свій і ворожий, і перший рух — по 14 кадрів через 0,1 с.
+        /// </summary>
+        private readonly HashSet<string> _btBursts = new HashSet<string>();
+
+        private IEnumerable<int> Burst(string slug, int count, float every)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                _host.Capture(slug + "-" + i.ToString("00", System.Globalization.CultureInfo.InvariantCulture));
+                float until = Time.realtimeSinceStartup + every;
+                while (Time.realtimeSinceStartup < until) yield return 0;
+            }
+        }
+
+        private static string StyleSlug(BattleUnitView unit) =>
+            unit == null ? "none" : AnimStateTable.StyleOf(AnimStateTable.VisualForWeapon(unit.WeaponId, unit.WeaponIsMelee)).ToString().ToLowerInvariant();
         private bool _btAbilityShotTaken;
         private bool _btOverwatchShotTaken;
         private bool _btAbilityUsedOnce;
@@ -2094,6 +2113,8 @@ namespace Game.Gameplay
                     _host.Capture("after-attack");
                     yield return 0;
                 }
+                string burst = "burst-attack-" + StyleSlug(current);
+                if (_btBursts.Add(burst)) foreach (var f in Burst(burst, 14, 0.1f)) yield return f;
                 yield break;
             }
             hud.ClearSimulatedHover();
@@ -2119,6 +2140,7 @@ namespace Game.Gameplay
                 foreach (var f in WaitFrames(FramesShort)) yield return f;
                 _host.Capture("after-move");
                 yield return 0;
+                foreach (var f in Burst("burst-move", 10, 0.1f)) yield return f;
             }
         }
 
@@ -2253,6 +2275,13 @@ namespace Game.Gameplay
                     _btEnemyActionShotTaken = true;
                     _host.Capture("enemy-action");
                     yield return 0;
+                }
+
+                // Серія на першу дію ворога кожним стилем зброї (рух чи удар — що трапиться).
+                if (captureArtifacts && hud.IsBusy)
+                {
+                    string burst = "burst-enemy-" + StyleSlug(BotSupport.FindCurrent(hud.View));
+                    if (_btBursts.Add(burst)) foreach (var f in Burst(burst, 14, 0.1f)) yield return f;
                 }
 
                 if (Time.realtimeSinceStartup - start > EnemyTurnWatchdogSeconds)
