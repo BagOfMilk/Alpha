@@ -74,7 +74,7 @@ namespace Game.Gameplay
             set
             {
                 _timeScale = value > 0.01f ? value : 1f;
-                if (_topMixer.IsValid()) _topMixer.SetSpeed(_timeScale);
+                if (_ready && _topMixer.IsValid()) _topMixer.SetSpeed(_timeScale);
             }
         }
         private AnimationClipPlayable[] _gaitClips;
@@ -134,6 +134,7 @@ namespace Game.Gameplay
             _oneShotWeight = 0f;
 
             _graph.Play();
+            _topMixer.SetSpeed(_timeScale); // темп, заданий до старту графа (П13), не губиться
             _ready = true;
         }
 
@@ -235,7 +236,7 @@ namespace Game.Gameplay
             }
 
             // Плавний перехід: удар входить і виходить за FadeTime, а не стрибком із пози в позу.
-            _oneShotWeight = Mathf.MoveTowards(_oneShotWeight, _oneShotActive ? 1f : 0f, Time.deltaTime / FadeTime);
+            _oneShotWeight = Mathf.MoveTowards(_oneShotWeight, _oneShotActive ? 1f : 0f, Time.deltaTime * _timeScale / FadeTime);
             _topMixer.SetInputWeight(1, _oneShotWeight);
             _topMixer.SetInputWeight(0, 1f - _oneShotWeight);
             if (_oneShotWeight >= 0.999f) return; // База повністю під замахом/смертю — не змінювати ваги під непоказуваним шаром.
