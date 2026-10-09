@@ -89,6 +89,7 @@ m:wolf_fur_collar
 m:wpn_axe
 m:wpn_axe_stowed
 m:wpn_bow
+m:wpn_bow_quiver_stowed
 m:wpn_bow_stowed
 m:wpn_club
 m:wpn_club_stowed
@@ -192,6 +193,7 @@ f:wolf_fur_collar
 f:wpn_axe
 f:wpn_axe_stowed
 f:wpn_bow
+f:wpn_bow_quiver_stowed
 f:wpn_bow_stowed
 f:wpn_club
 f:wpn_club_stowed

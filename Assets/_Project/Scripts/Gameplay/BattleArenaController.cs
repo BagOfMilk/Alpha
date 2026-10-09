@@ -55,7 +55,12 @@ namespace Game.Gameplay
     {
         // ================= камера: константи спільні з Editor (докорінно §4) =================
 
-        public const float CameraTiltDegrees = 52f;
+        // Власник 08.10.2026: «Бій занадто високо не як у референесах». Було 52° і кадр на всю арену — бійці дрібні,
+        // дивишся згори. У WL3 і Rogue Trader камера нижча й ближча, за тим, хто ходить: 40° і крупніший план.
+        public const float CameraTiltDegrees = 40f;
+
+        /// <summary>Розмір кадру на старті бою (половина висоти в од.): крупний план бійця, а не вся арена.</summary>
+        private const float CameraStartZoom = 5f;
         public const float InitialYawDegrees = 45f;
 
         // ================= призначається BattleArenaBuilder (Editor) =================
@@ -2706,7 +2711,8 @@ namespace Game.Gameplay
             var margins = CurrentHudMargins();
             float orthoSize = BattleArenaView.OrthographicSizeForFreeArea(view.Grid.Width, view.Grid.Height, Screen.width, Screen.height, margins);
             _cameraYawDegrees = InitialYawDegrees;
-            _cameraZoom = Mathf.Clamp(orthoSize, CameraMinZoom, CameraMaxZoom);
+            // Ближче за кадр на всю арену; коліщатком — до неї (CameraMaxZoom).
+            _cameraZoom = Mathf.Clamp(Mathf.Min(orthoSize, CameraStartZoom), CameraMinZoom, CameraMaxZoom);
             _cameraFlyTarget = null;
 
             var naturalFrame = BattleArenaView.FrameGrid(view.Grid.Width, view.Grid.Height);
@@ -2720,6 +2726,15 @@ namespace Game.Gameplay
             ApplyCameraPose(_cameraPanFocus);
             _cameraPanFocus = FocusPointForFreeArea(_cameraPanFocus);
             ApplyCameraPose(_cameraPanFocus);
+
+            // Крупний план — одразу на того, хто ходить першим.
+            var first = FindUnitById(view.CurrentUnitId);
+            if (first != null)
+            {
+                var w = BattleArenaView.TileToWorld(first.Pos.X, first.Pos.Y);
+                _cameraPanFocus = FocusPointForFreeArea(new Vector3(w.X, 0f, w.Z));
+                ApplyCameraPose(_cameraPanFocus);
+            }
 
             _cameraInitialized = true;
         }

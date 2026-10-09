@@ -176,6 +176,13 @@ namespace Game.Gameplay.UI
         /// </summary>
         public static bool SetAside(string part) => part == "wpn_spear" || part == "staff";
 
+        /// <summary>
+        /// Двійник за спиною. Лук із сагайдаком — окремий: навхрест поверх сагайдака впритул (власник 08.10.2026 про лук
+        /// над сагайдаком на відстані: «лук навіть не поруч»); без сагайдака — впритул до спини.
+        /// </summary>
+        private string TwinOf(string part) =>
+            part == "wpn_bow" && Accents.Contains("quiver") ? "wpn_bow_quiver" + StowedSuffix : part + StowedSuffix;
+
         private CharacterKitPlan Carry(bool keepHeld)
         {
             var p = new CharacterKitPlan { KitId = KitId, BodyId = BodyId };
@@ -183,7 +190,7 @@ namespace Game.Gameplay.UI
             {
                 if (!IsHeld(part.Part)) { p.Parts.Add(new KitPartPlan(part.Part, part.Tint)); continue; }
                 if (keepHeld) p.Parts.Add(new KitPartPlan(part.Part, part.Tint));
-                if (!SetAside(part.Part)) p.Parts.Add(new KitPartPlan(part.Part + StowedSuffix, part.Tint));
+                if (!SetAside(part.Part)) p.Parts.Add(new KitPartPlan(TwinOf(part.Part), part.Tint));
             }
             foreach (var a in Accents)
             {
