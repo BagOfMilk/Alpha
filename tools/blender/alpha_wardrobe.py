@@ -662,6 +662,9 @@ def stowed_copies(rig, body):
     лук над сагайдаком на відстані: «лук навіть не поруч»)."""
     import numpy as np
     out = {}
+    # Набір f зсунуто на 3 м уже після збирання — без оновлення сцени matrix_world дітей застарілі, і межа сагайдака
+    # виходила на 2,8 м убік (лук жінки висів попереду — лукбук 08.10.2026).
+    bpy.context.view_layer.update()
     inv = rig.matrix_world.inverted()
     b = rig.data.bones
     quiver = next((o for o in rig.children if o.get("kit_part") == "quiver"), None)
@@ -677,7 +680,7 @@ def stowed_copies(rig, body):
                 variants.append(("wpn_bow_quiver_stowed", -Vector((-TILT[0] * 1.6, 0.0, TILT[1])).normalized(), 1.36,
                                  quiver_back + 0.008))
         elif part in STOW_HILT_UP:
-            variants = [(part + "_stowed", Vector((-TILT[0], 0.0, TILT[1])), 1.30, 0.155)]       # руків'я — над правим плечем
+            variants = [(part + "_stowed", Vector((-TILT[0], 0.0, TILT[1])), 1.36, 0.155)]       # руків'я — над правим плечем
         elif part in STOW_HEAD_UP:
             variants = [(part + "_stowed", -Vector((-TILT[0], 0.0, TILT[1])), 1.30, 0.155)]      # голова — над правим плечем
         elif part in STOW_FLAT:
