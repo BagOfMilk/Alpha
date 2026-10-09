@@ -95,6 +95,7 @@ namespace Game.Gameplay.Audio
             int played = 0;
             for (int i = _seenLogCount; i < log.Count && played < 3; i++)
             {
+                if (SoundSettings.ArenaDrivesImpacts && BattleTactTiming.IsImpactEvent(log[i].Key)) continue; // удар грає арена в кадр влучання (П2)
                 var cue = SoundCueTable.ForEvent(log[i].Key);
                 if (cue == SoundCue.None) continue;
                 Play(cue);

@@ -209,6 +209,28 @@ namespace Game.Gameplay
 
         private float TactSpeed(bool fast) => Mathf.Max(0.25f, BattleSpeed) * (fast ? 1.8f : 1f);
 
+        /// <summary>Подача П6: вікно уповільнення на вбивстві (модель — <see cref="UI.KillSlowMo"/>).</summary>
+        private readonly UI.KillSlowMo _killSlowMo = new UI.KillSlowMo();
+
+        /// <summary>Подача П7: камера на подію без залипання (модель — <see cref="UI.BattleCameraEvents"/>).</summary>
+        private readonly UI.BattleCameraEvents _cameraEvents = new UI.BattleCameraEvents();
+        /// <summary>П11: кого камера подій показує зараз (щоб летіти лише на зміну).</summary>
+        private string _cameraEventShown;
+
+        /// <summary>П12: екшн-кадр (модель — <see cref="UI.BattleActionCamera"/>) і його стан на арені.</summary>
+        private readonly UI.BattleActionCamera _actionCamera = new UI.BattleActionCamera();
+        private float _actionShotLeft;
+        private bool _actionShotOn;
+        private bool _savedOrtho;
+        private float _savedFov, _savedNear;
+        private Vector3 _actionShotPos, _actionShotLook;
+        private float _actionShotFov;
+
+        /// <summary>П13: той, хто останнім бив, і той, кому зараз повернуто звичайний темп на вбивстві.</summary>
+        private string _lastStrikerId, _slowMoActorId;
+        /// <summary>П12: політ, запитаний під час екшн-кадру (перспектива), — виконується після повернення ортографічної камери.</summary>
+        private string _focusAfterShot;
+
         // ================= Бій v2: камера (§4) =================
 
         private const float CameraDistance = 24f;
@@ -271,6 +293,17 @@ namespace Game.Gameplay
 
         private AttackPreviewView _hoverAttackCache;
         private MovePathView _hoverPathCache;
+
+        // ================= подача П3–П4: голограма руху, щити укриття (docs/research/RT_COMBAT_PRESENTATION.md) =================
+
+        /// <summary>Колір голограми: напівпрозорий холодний — читається як «тут буде», а не як ще один боєць.</summary>
+        private static readonly Color GhostColor = new Color(0.55f, 0.85f, 1f, 0.35f);
+        private GameObject _ghost;
+        private string _ghostUnitId;
+        private Material _ghostMaterial;
+        private string _ghostShotsKey;
+        private readonly Dictionary<string, int> _ghostShots = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly List<BattleCoverMarker> _coverMarkers = new List<BattleCoverMarker>();
         private (string current, string hovered, ArmedAction armed, string ability, int logCount, string tile)? _hoverKey;
 
         // ================= Бій v2: лінія пострілу =================
@@ -325,6 +358,7 @@ namespace Game.Gameplay
 
         public IReadOnlyList<BattleUnitOverlay> Overlays => _overlays;
         public IReadOnlyList<BattleTrapOverlay> TrapOverlays => _trapOverlays;
+        public IReadOnlyList<BattleCoverMarker> CoverMarkers => _coverMarkers;
         public IReadOnlyList<BattleFloatingText> FloatingTexts => _floatingTextsExposed;
         public BattleTurnBanner Banner => _banner;
 
@@ -391,6 +425,19 @@ namespace Game.Gameplay
             _lastMousePositionKnown = false;
             _hoverKey = null;
             _cameraInitialized = false;
+            if (_ghost != null) { Destroy(_ghost); _ghost = null; } // копія постаті минулого бою
+            _ghostUnitId = null;
+            _ghostShots.Clear();
+            _ghostShotsKey = null;
+            _coverMarkers.Clear();
+            _killSlowMo.Reset();
+            _cameraEvents.Reset();
+            _cameraEventShown = null;
+            _actionCamera.Reset();
+            Debug.Log("[Бій] подача: графіка " + GraphicsTier.Current + " (" + QualitySettings.GetQualityLevel() + "/" + QualitySettings.names.Length + "), екшн-кадри " + (UI.BattleActionCameraSetting.Enabled ? "так" : "ні"));
+            EndActionShot();
+            _lastStrikerId = null;
+            ResetActorPace();
 
             _protagonistGender = _session?.GetProtagonistCreationView()?.Gender ?? Gender.Male;
             var portraitRig = ArenaRoot != null ? ArenaRoot.GetComponent<PortraitRig>() : null;
@@ -406,6 +453,7 @@ namespace Game.Gameplay
             ProcessNewBattleLog(_lastView);
 
             _lastKnownDayLogCount = _session?.DayLog.Count ?? 0;
+            UI.SoundSettings.ArenaDrivesImpacts = true; // звук удару — у кадр влучання (П2), не в мить розрахунку
         }
 
         public void Exit() => TeardownAndDeactivate();
@@ -474,6 +522,7 @@ namespace Game.Gameplay
         /// </summary>
         public void FocusCamera(string unitId)
         {
+            if (_actionShotOn) { _focusAfterShot = unitId; return; } // П12: фокус рахується з ортографічної пози
             var unit = FindUnitById(unitId);
             if (unit == null) return;
             var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
@@ -481,6 +530,102 @@ namespace Game.Gameplay
             _cameraFlyStart = _cameraPanFocus;
             _cameraFlyTarget = FocusPointForFreeArea(target);
             _cameraFlyElapsed = 0f;
+        }
+
+        /// <summary>
+        /// Подача П10 (будова камери RT §1.1): автоматичний політ — лише якщо бійця не видно в центральній рамці вільної
+        /// від HUD області; інакше камера не смикається. Клік по портрету чи колесу кличе <see cref="FocusCamera"/> —
+        /// туди летимо завжди (це воля гравця).
+        /// </summary>
+        private void FocusCameraIfOutside(string unitId)
+        {
+            var unit = FindUnitById(unitId);
+            if (unit == null || ArenaCamera == null || _actionShotOn) { FocusCamera(unitId); return; }
+            var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+            var sp = ArenaCamera.WorldToScreenPoint(new Vector3(world.X, 0f, world.Z));
+            var m = CurrentHudMargins();
+            bool inFront = sp.z > 0f;
+            float guiY = Screen.height - sp.y; // поля — у координатах GUI (Y згори)
+            if (inFront && UI.BattleCameraFraming.IsInsideSafeArea(sp.x, guiY, m.Left, m.Top, Screen.width - m.Right, Screen.height - m.Bottom))
+                return;
+            FocusCamera(unitId);
+        }
+
+        /// <summary>
+        /// Подача П12: екшн-кадр на удар — за моделлю (шанс без кубика, пауза, меню, PERF-01). Перспектива через плече
+        /// того, хто б'є, на ціль (план «через плече» <see cref="UI.DialogueDirector"/>), на час такту удару.
+        /// </summary>
+        private void TryStartActionShot(string attackerId, string targetId, float duration)
+        {
+            if (ArenaCamera == null || string.IsNullOrEmpty(attackerId) || string.IsNullOrEmpty(targetId) || attackerId == targetId) return;
+            bool shoot = _actionCamera.ShouldTrigger(Time.realtimeSinceStartup, duration, UI.BattleActionCameraSetting.Enabled, GraphicsTier.IsLow);
+            if (!shoot) return;
+            var a = UnitGo(attackerId);
+            var t = UnitGo(targetId);
+            if (a == null || t == null) return;
+            float height = 1.75f * a.transform.lossyScale.y / UnitVisualScale;
+            var aHead = HeadOfUnit(a, height);
+            var tHead = HeadOfUnit(t, height);
+            var pose = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder,
+                new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z),
+                new UI.DialogueVec(aHead.x, aHead.y, aHead.z), new UI.DialogueVec(tHead.x, tHead.y, tHead.z), height);
+            _actionShotPos = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
+            _actionShotLook = new Vector3(pose.LookAt.X, pose.LookAt.Y, pose.LookAt.Z);
+            _actionShotFov = pose.Fov;
+            if (!_actionShotOn)
+            {
+                _savedOrtho = ArenaCamera.orthographic;
+                _savedFov = ArenaCamera.fieldOfView;
+                _savedNear = ArenaCamera.nearClipPlane;
+            }
+            _actionShotOn = true;
+            _actionShotLeft = duration + 0.15f;
+            Debug.Log("[Бій] екшн-кадр: " + attackerId + " → " + targetId + " (" + duration.ToString("0.00", CultureInfo.InvariantCulture) + " с)");
+        }
+
+        private static Vector3 HeadOfUnit(GameObject go, float height)
+        {
+            var animator = go.GetComponentInChildren<Animator>();
+            if (animator != null && animator.isHuman)
+            {
+                var bone = animator.GetBoneTransform(HumanBodyBones.Head);
+                if (bone != null) return bone.position;
+            }
+            foreach (var tr in go.GetComponentsInChildren<Transform>())
+                if (tr.name.Equals("head", StringComparison.OrdinalIgnoreCase)) return tr.position;
+            return go.transform.position + Vector3.up * (0.93f * height);
+        }
+
+        /// <summary>Екшн-кадр скінчився: камера арени знову ортографічна, на своїй позі, без «доїзду».</summary>
+        private void EndActionShot()
+        {
+            if (!_actionShotOn) return;
+            _actionShotOn = false;
+            _actionShotLeft = 0f;
+            if (ArenaCamera == null) return;
+            ArenaCamera.orthographic = _savedOrtho;
+            ArenaCamera.fieldOfView = _savedFov;
+            ArenaCamera.nearClipPlane = _savedNear;
+            if (_cameraInitialized) ApplyCameraPose(_cameraPanFocus);
+            var pending = _focusAfterShot;
+            _focusAfterShot = null;
+            if (!string.IsNullOrEmpty(pending)) FocusCamera(pending);
+        }
+
+        /// <summary>П13: у вікні уповільнення той, хто вбив, рухається в звичайному темпі; після — як усі.</summary>
+        private void UpdateActorPace()
+        {
+            if (string.IsNullOrEmpty(_slowMoActorId)) return;
+            float pace = _paused ? 1f : _killSlowMo.ActorScale(Time.realtimeSinceStartup);
+            if (_unitAnimations.TryGetValue(_slowMoActorId, out var anim) && anim != null) anim.TimeScale = pace;
+            if (pace <= 1f) _slowMoActorId = null;
+        }
+
+        private void ResetActorPace()
+        {
+            if (!string.IsNullOrEmpty(_slowMoActorId) && _unitAnimations.TryGetValue(_slowMoActorId, out var anim) && anim != null)
+                anim.TimeScale = 1f;
+            _slowMoActorId = null;
         }
 
         public void SimulateHoverUnit(string unitId)
@@ -590,6 +735,10 @@ namespace Game.Gameplay
         private void Update()
         {
             if (!_active) return;
+            // Подача П1: множник з меню паузи — у поле треку V; П6: темп часу (на паузі — звичайний).
+            BattleSpeed = Speed;
+            Time.timeScale = _paused ? 1f : _killSlowMo.TimeScale(Time.realtimeSinceStartup);
+            UpdateActorPace();
             // Меню паузи: бій стоїть повністю — ні миші, ні клавіш, ні ШІ, ні тактів.
             if (_paused) return;
 
@@ -601,6 +750,8 @@ namespace Game.Gameplay
                 // Дограти такти фінальної дії (удар/смерть, що вирішили бій);
                 // HUD покаже панель результату, щойно такти скінчаться (!IsBusy).
                 if (_lastView != null) ApplyUnitPositionsAndHighlights(_lastView);
+                HideGhost();
+                _coverMarkers.Clear();
                 UpdateActiveTact(dt);
                 UpdateProjectiles(dt);
                 if (_victoryPending && _activeTact == null && _pendingTacts.Count == 0) PlayVictory();
@@ -616,9 +767,21 @@ namespace Game.Gameplay
             HandleHotkeys();
             UpdateActiveTact(dt);
             UpdateProjectiles(dt);
+            // Подача П7: подія скінчилась (чи минула стеля) — камера повертається до того, хто ходить.
+            // П11: черга подій — кожна по черзі, після останньої — назад; П10: летимо лише до того, хто поза рамкою.
+            bool cameraOnEvent = _cameraEvents.IsActive;
+            string cameraTarget = _cameraEvents.Tick(Time.unscaledDeltaTime, _lastView?.CurrentUnitId, IsBusy);
+            if ((cameraOnEvent || _cameraEvents.IsActive) && !string.Equals(cameraTarget, _cameraEventShown, StringComparison.Ordinal))
+            {
+                _cameraEventShown = cameraTarget;
+                if (!string.IsNullOrEmpty(cameraTarget)) FocusCameraIfOutside(cameraTarget);
+            }
+            if (!_cameraEvents.IsActive) _cameraEventShown = null;
             UpdateEnemyTurnDirector(dt);
             UpdateBannerAndAutoFocus(_lastView);
             UpdateFloatingTexts(dt);
+            UpdateGhost();
+            UpdateCoverMarkers();
             RebuildOverlays();
             UpdateHoverPathLine();
             UpdateCamera(dt);
@@ -1647,6 +1810,9 @@ namespace Game.Gameplay
 
         private bool IsFastNow() => _fastEnemyTurns && _lastView != null && _lastView.IsAiTurn;
 
+        /// <summary>Множник швидкості бою з меню паузи (подача П1) — ритм тактів рахує <see cref="UI.BattleTactTiming"/>.</summary>
+        private static float Speed => UI.BattleSpeed.Multiplier;
+
         private void UpdateActiveTact(float dt)
         {
             if (_activeTact == null)
@@ -1696,6 +1862,8 @@ namespace Game.Gameplay
                     _activeTact.Reaction = AnimStateTable.ReactionFor(entry.Key);
                     if (clip != null) PlayClip(unitId, clip, false, speed, CharacterAnimState.Attack);
                     else PlayAttackClip(unitId, targetId);
+                    _lastStrikerId = unitId;
+                    TryStartActionShot(unitId, targetId, _activeTact.Duration);
                     break;
                 }
 
@@ -1711,6 +1879,7 @@ namespace Game.Gameplay
                     _activeTact.Duration = impact + AttackTail / speed;
                     if (clip != null) PlayClip(unitId, clip, false, speed, abilityState);
                     else PlayOneShot(unitId, clips => clips?.Interact, hold: false);
+                    if (!string.IsNullOrEmpty(targetId)) _lastStrikerId = unitId;
                     break;
                 }
 
@@ -1718,6 +1887,17 @@ namespace Game.Gameplay
                     _activeTact.Duration = 0.6f / TactSpeed(fast);
                     PlayOneShot(unitId, clips => clips?.Die, hold: true);
                     if (!string.IsNullOrEmpty(unitId)) _unitOneShotState[unitId] = CharacterAnimState.Down;
+                    // Подача П6: уповільнення на вбивстві — коротке, без стакання, вимикається в меню паузи.
+                    if (entry.Key == "combat.log.died")
+                    {
+                        _killSlowMo.Enabled = UI.BattleSlowMoSetting.Enabled;
+                        _killSlowMo.MinGapSeconds = UI.BattleSlowMoSetting.Rare ? UI.KillSlowMo.RareGapSeconds : 0f;
+                        _killSlowMo.Trigger(Time.realtimeSinceStartup);
+                        // П13: світ гальмує, а той, хто вбив, — у звичайному темпі.
+                        if (_killSlowMo.TimeScale(Time.realtimeSinceStartup) < 1f) _slowMoActorId = _lastStrikerId;
+                    }
+                    // Подача П7/П11: камера на мить — до того, хто впав (черга з пріоритетом), і завжди назад до того, хто ходить.
+                    _cameraEvents.Focus(unitId, UI.BattleCameraEvents.PriorityDeath);
                     break;
             }
         }
@@ -1792,6 +1972,9 @@ namespace Game.Gameplay
             if (tact.Kind != TactKind.Attack) return;
             ApplyHitReaction(tact);
             PlayKitState(tact.TargetId, tact.Reaction);
+            // Подача П2: звук удару — у кадр влучання; режисер звуку ці події пропускає (SoundSettings.ArenaDrivesImpacts).
+            var cue = UI.BattleTactTiming.ImpactCue(BattleLogText.KindOf(tact.Entry));
+            if (cue != UI.SoundCue.None) UI.SoundSettings.Request(cue);
         }
 
         /// <summary>Мить пострілу: стріла злітає з лука, з дула рушниці — спалах і дим; без набору — лінія пострілу.</summary>
@@ -2140,6 +2323,119 @@ namespace Game.Gameplay
         /// <see cref="RefreshIntentOverlayTiles"/> для тайлів під загрозою
         /// дозору), і сам шлях справді досяжний (Result == "Success").
         /// </summary>
+        /// <summary>
+        /// Голограма руху (подача П3): напівпрозора копія поточного бійця на кінцевій клітинці наведеного шляху і
+        /// шанси по ворогах звідти (<see cref="GameSession.PreviewShotsFrom"/>) — у тих самих умовах, що й лінія
+        /// шляху (<see cref="UpdateHoverPathLine"/>). Нічого не мутує; клік лишається тим самим рухом.
+        /// </summary>
+        private void UpdateGhost()
+        {
+            var current = CurrentUnit();
+            var path = (_armed == ArmedAction.None && IsPlayerTurn && !IsBusy && string.IsNullOrEmpty(HoveredUnitId)) ? HoverPath : null;
+            bool show = current != null && _session != null && path != null && path.Tiles != null && path.Tiles.Count > 0 &&
+                        string.Equals(path.Result, "Success", StringComparison.Ordinal);
+            if (!show) { HideGhost(); return; }
+
+            var ghost = EnsureGhost(current.Id);
+            if (ghost == null) return;
+
+            var last = path.Tiles[path.Tiles.Count - 1];
+            var lastWorld = BattleArenaView.TileToWorld(last.X, last.Y);
+            var source = UnitGo(current.Id);
+            float y = source != null ? source.transform.localPosition.y : 0f;
+            ghost.transform.localPosition = new Vector3(lastWorld.X, y, lastWorld.Z);
+            var from = BattleArenaView.TileToWorld(current.Pos.X, current.Pos.Y);
+            var facing = new Vector3(lastWorld.X - from.X, 0f, lastWorld.Z - from.Z);
+            if (facing.sqrMagnitude > 0.0001f) ghost.transform.localRotation = Quaternion.LookRotation(facing.normalized, Vector3.up);
+            if (!ghost.activeSelf) ghost.SetActive(true);
+
+            string key = current.Id + "@" + last.X + "_" + last.Y + "#" + (_lastView?.Log?.Count ?? 0);
+            if (key == _ghostShotsKey) return;
+            _ghostShotsKey = key;
+            _ghostShots.Clear();
+            foreach (var shot in _session.PreviewShotsFrom(new GridPos(last.X, last.Y)))
+                if (shot != null && !string.IsNullOrEmpty(shot.TargetId)) _ghostShots[shot.TargetId] = shot.Chance;
+        }
+
+        private void HideGhost()
+        {
+            if (_ghost != null && _ghost.activeSelf) _ghost.SetActive(false);
+            _ghostShots.Clear();
+            _ghostShotsKey = null;
+        }
+
+        /// <summary>
+        /// Копія постаті бійця без колайдерів, у напівпрозорому матеріалі (Sprites/Default — у списку
+        /// завжди включених шейдерів, тож у білді не стане рожевою); дихає тим самим idle.
+        /// Новий боєць — нова копія.
+        /// </summary>
+        private GameObject EnsureGhost(string unitId)
+        {
+            if (_ghost != null && string.Equals(_ghostUnitId, unitId, StringComparison.Ordinal)) return _ghost;
+            if (_ghost != null) { Destroy(_ghost); _ghost = null; }
+            _ghostUnitId = null;
+
+            var source = UnitGo(unitId);
+            if (source == null) return null;
+            if (_ghostMaterial == null)
+            {
+                var shader = Shader.Find("Sprites/Default");
+                if (shader == null) return null;
+                _ghostMaterial = new Material(shader) { color = GhostColor };
+            }
+
+            var ghost = Instantiate(source, source.transform.parent);
+            ghost.name = "move_ghost";
+            ghost.SetActive(false);
+            // Аніматор лишаємо: копія «дихає» тим самим idle. Без нього постать набору могла б упасти в
+            // бінд-позу, а вона в наборі розкидана на метри (граблі треку V, CLAUDE.md п. 9г).
+            foreach (var collider in ghost.GetComponentsInChildren<Collider>(true)) Destroy(collider);
+            foreach (var renderer in ghost.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = new Material[Mathf.Max(1, renderer.sharedMaterials.Length)];
+                for (int i = 0; i < mats.Length; i++) mats[i] = _ghostMaterial;
+                renderer.sharedMaterials = mats;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+            _ghost = ghost;
+            _ghostUnitId = unitId;
+            return ghost;
+        }
+
+        /// <summary>
+        /// Щити укриття (подача П4): на кожному боці клітинки під курсором, де є укриття, — значок пів-щита чи
+        /// повного щита (<see cref="GameSession.PreviewTileCover"/>). Лише в хід гравця й поза озброєною здібністю.
+        /// </summary>
+        private void UpdateCoverMarkers()
+        {
+            _coverMarkers.Clear();
+            if (_session == null || !HasHoveredTile || !IsPlayerTurn || IsBusy || _armed == ArmedAction.Ability) return;
+            var cover = _session.PreviewTileCover(new GridPos(HoveredTileX, HoveredTileY));
+            if (cover == null) return;
+            AddCoverMarker(cover.X, cover.Y, 0, 1, cover.North);
+            AddCoverMarker(cover.X, cover.Y, 1, 0, cover.East);
+            AddCoverMarker(cover.X, cover.Y, 0, -1, cover.South);
+            AddCoverMarker(cover.X, cover.Y, -1, 0, cover.West);
+        }
+
+        private void AddCoverMarker(int x, int y, int dx, int dy, string coverType)
+        {
+            if (string.IsNullOrEmpty(coverType) || string.Equals(coverType, "None", StringComparison.Ordinal) || ArenaCamera == null) return;
+            var a = BattleArenaView.TileToWorld(x, y);
+            var b = BattleArenaView.TileToWorld(x + dx, y + dy);
+            var world = new Vector3(Mathf.Lerp(a.X, b.X, 0.45f), 0.9f, Mathf.Lerp(a.Z, b.Z, 0.45f));
+            var sp = ArenaCamera.WorldToScreenPoint(world);
+            var gui = UI.UiScale.ScreenToGui(sp);
+            _coverMarkers.Add(new BattleCoverMarker
+            {
+                ScreenX = gui.x,
+                ScreenY = gui.y,
+                OnScreen = sp.z > 0f && sp.x >= 0f && sp.x <= Screen.width && sp.y >= 0f && sp.y <= Screen.height,
+                Full = string.Equals(coverType, "Full", StringComparison.Ordinal)
+            });
+        }
+
         private void UpdateHoverPathLine()
         {
             var line = EnsurePathLine();
@@ -2210,11 +2506,11 @@ namespace Game.Gameplay
         {
             if (_session == null || _lastView == null) return;
 
-            var decision = _turnDirector.Tick(dt, _lastView.IsAiTurn, _enemyAiEnabled, IsBusy, _fastEnemyTurns, _lastView.CurrentUnitId);
+            var decision = _turnDirector.Tick(dt * Speed, _lastView.IsAiTurn, _enemyAiEnabled, IsBusy, _fastEnemyTurns, _lastView.CurrentUnitId);
             switch (decision)
             {
                 case BattleTurnDirectorAction.StepAi:
-                    FocusCamera(_lastView.CurrentUnitId);
+                    FocusCameraIfOutside(_lastView.CurrentUnitId);
                     TryStepAi();
                     break;
                 case BattleTurnDirectorAction.ForceEndTurn:
@@ -2268,7 +2564,7 @@ namespace Game.Gameplay
                     Alpha = 1f
                 };
                 _bannerTimer = 0f;
-                FocusCamera(currentId);
+                FocusCameraIfOutside(currentId);
             }
             UpdateBannerFade(Time.deltaTime);
         }
@@ -2363,7 +2659,9 @@ namespace Game.Gameplay
                     OnScreen = onScreen,
                     IsCurrent = string.Equals(unit.Id, currentId, StringComparison.Ordinal),
                     IsHovered = isHovered,
-                    IsTargetable = isTargetable
+                    IsTargetable = isTargetable,
+                    GhostHitChance = _ghost != null && _ghost.activeSelf && _ghostShots.TryGetValue(unit.Id, out var ghostChance) ? ghostChance : -1,
+                    CoverBest = unit.IsDowned || _session == null ? null : _session.PreviewTileCover(new GridPos(unit.Pos.X, unit.Pos.Y))?.Best
                 });
             }
         }
@@ -2493,6 +2791,22 @@ namespace Game.Gameplay
             if (ArenaCamera == null) return;
             if (!_cameraInitialized) { InitializeCamera(_lastView); return; }
 
+            // Подача П12: екшн-кадр — перспектива через плече, поки йде удар; потім склейка назад.
+            if (_actionShotOn)
+            {
+                _actionShotLeft -= dt;
+                if (_actionShotLeft > 0f)
+                {
+                    ArenaCamera.orthographic = false;
+                    ArenaCamera.fieldOfView = _actionShotFov;
+                    ArenaCamera.nearClipPlane = 0.05f;
+                    ArenaCamera.transform.position = _actionShotPos;
+                    ArenaCamera.transform.rotation = Quaternion.LookRotation(_actionShotLook - _actionShotPos, Vector3.up);
+                    return;
+                }
+                EndActionShot();
+            }
+
             bool overHud = IsPointerOverHud();
 
             float wheel = Input.mouseScrollDelta.y;
@@ -2517,7 +2831,7 @@ namespace Game.Gameplay
             if (_cameraFlyTarget.HasValue)
             {
                 _cameraFlyElapsed += dt;
-                float t = Mathf.Clamp01(_cameraFlyElapsed / CameraFlyDuration);
+                float t = Mathf.Clamp01(_cameraFlyElapsed * Speed / CameraFlyDuration);
                 float eased = t * t * (3f - 2f * t);
                 _cameraPanFocus = Vector3.Lerp(_cameraFlyStart, _cameraFlyTarget.Value, eased);
                 if (t >= 1f) _cameraFlyTarget = null;
@@ -2817,6 +3131,16 @@ namespace Game.Gameplay
         private void TeardownAndDeactivate()
         {
             _active = false;
+            UI.SoundSettings.ArenaDrivesImpacts = false;
+            HideGhost();
+            _killSlowMo.Reset();
+            _cameraEvents.Reset();
+            _cameraEventShown = null;
+            _actionCamera.Reset();
+            EndActionShot();
+            _lastStrikerId = null;
+            ResetActorPace();
+            Time.timeScale = 1f; // уповільнення бою не переходить у село
             _resultPending = false;
             _armed = ArmedAction.None;
             _session = null;

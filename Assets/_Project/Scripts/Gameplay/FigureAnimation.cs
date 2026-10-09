@@ -62,6 +62,21 @@ namespace Game.Gameplay
         private PlayableGraph _graph;
         private AnimationMixerPlayable _gaitMixer;
         private AnimationMixerPlayable _topMixer;
+        private float _timeScale = 1f;
+
+        /// <summary>
+        /// Власний темп постаті поверх <c>Time.timeScale</c> (подача бою П13: на вбивстві світ гальмує, а той, хто вбив,
+        /// рухається в звичайному темпі). 1 — звичайний.
+        /// </summary>
+        public float TimeScale
+        {
+            get => _timeScale;
+            set
+            {
+                _timeScale = value > 0.01f ? value : 1f;
+                if (_ready && _topMixer.IsValid()) _topMixer.SetSpeed(_timeScale);
+            }
+        }
         private AnimationClipPlayable[] _gaitClips;
         private readonly float[] _gaitWeights = new float[3];
         private bool _ready;
@@ -119,6 +134,7 @@ namespace Game.Gameplay
             _oneShotWeight = 0f;
 
             _graph.Play();
+            _topMixer.SetSpeed(_timeScale); // темп, заданий до старту графа (П13), не губиться
             _ready = true;
         }
 
@@ -204,7 +220,7 @@ namespace Game.Gameplay
 
             if (_oneShotActive)
             {
-                _oneShotElapsed += Time.deltaTime * _oneShotSpeed;
+                _oneShotElapsed += Time.deltaTime * _oneShotSpeed * _timeScale;
                 if (_oneShotElapsed >= _oneShotLength)
                 {
                     _oneShotPlayable.SetTime(_oneShotLength);
@@ -220,7 +236,7 @@ namespace Game.Gameplay
             }
 
             // Плавний перехід: удар входить і виходить за FadeTime, а не стрибком із пози в позу.
-            _oneShotWeight = Mathf.MoveTowards(_oneShotWeight, _oneShotActive ? 1f : 0f, Time.deltaTime / FadeTime);
+            _oneShotWeight = Mathf.MoveTowards(_oneShotWeight, _oneShotActive ? 1f : 0f, Time.deltaTime * _timeScale / FadeTime);
             _topMixer.SetInputWeight(1, _oneShotWeight);
             _topMixer.SetInputWeight(0, 1f - _oneShotWeight);
             if (_oneShotWeight >= 0.999f) return; // База повністю під замахом/смертю — не змінювати ваги під непоказуваним шаром.

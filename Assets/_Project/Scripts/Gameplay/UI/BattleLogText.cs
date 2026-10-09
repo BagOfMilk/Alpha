@@ -52,6 +52,8 @@ namespace Game.Gameplay.UI
                 // combat.log.suffix.*) — жодного сліду плейсхолдера в тексті.
                 "ap_suffix", ApSuffix(Arg(a, "ap"), female),
                 "cover_suffix", CoverSuffix(Arg(a, "cover"), female),
+                // Подача бою П8 (docs/research/RT_COMBAT_PRESENTATION.md): журнал завжди називає джерело шкоди.
+                "source_suffix", SourceSuffix(Arg(a, "sourceId"), Arg(a, "source"), unitId, unitName, female),
             };
             if (a != null)
                 foreach (var kv in a) { pairs.Add(kv.Key); pairs.Add(kv.Value); }
@@ -284,6 +286,23 @@ namespace Game.Gameplay.UI
         {
             if (string.IsNullOrEmpty(rawAp)) return string.Empty;
             return UkrainianText.Format("combat.log.suffix.ap", female, "ap", rawAp);
+        }
+
+        /// <summary>
+        /// Подача бою П8: " — від: Ім'я" (здібність бійця) або назва джерела без бійця (" — вибух бочки",
+        /// " — обстріл"); порожньо, коли джерела немає чи це сам постраждалий.
+        /// </summary>
+        private static string SourceSuffix(string sourceId, string sourceToken, string unitId,
+                                           Func<string, string> unitName, bool female)
+        {
+            if (!string.IsNullOrEmpty(sourceId) && !string.Equals(sourceId, unitId, StringComparison.Ordinal))
+                return UkrainianText.Format("combat.log.suffix.source.unit", female, "source", Name(unitName, sourceId));
+            if (!string.IsNullOrEmpty(sourceToken))
+            {
+                string key = "combat.log.suffix.source." + sourceToken;
+                if (UkrainianText.Has(key, female)) return UkrainianText.Get(key, female);
+            }
+            return string.Empty;
         }
 
         /// <summary>Бій v2 (§7.3): ", укриття цілі: половинне/повне" — порожньо, доки args["cover"] відсутній або ціль без укриття ("None").</summary>

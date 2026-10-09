@@ -133,11 +133,20 @@ namespace Game.Core.Combat
         /// <summary>Число юніта по юніту на карті поточною зброєю (+бонус точності від здібності).</summary>
         public static int Compute(CombatUnit attacker, CombatUnit target, GridMap map,
                                   BalanceConfig cfg, int accuracyBonus = 0, int rangedWeatherDelta = 0)
+            => ComputeFrom(attacker, attacker.Pos, target, map, cfg, accuracyBonus, rangedWeatherDelta);
+
+        /// <summary>
+        /// Те саме число, але атакуючий стоїть у <paramref name="attackerPos"/> — прев'ю «голограми» руху
+        /// (подача бою П3, docs/research/RT_COMBAT_PRESENTATION.md): гравець бачить шанс з клітинки, куди йде.
+        /// Позиція юніта не змінюється.
+        /// </summary>
+        public static int ComputeFrom(CombatUnit attacker, GridPos attackerPos, CombatUnit target, GridMap map,
+                                      BalanceConfig cfg, int accuracyBonus = 0, int rangedWeatherDelta = 0)
         {
             var w = attacker.Weapon;
             if (w == null) return 0;
-            var cover = map != null ? map.CoverAgainst(target.Pos, attacker.Pos) : CoverType.None;
-            int distance = GridPos.Chebyshev(attacker.Pos, target.Pos);
+            var cover = map != null ? map.CoverAgainst(target.Pos, attackerPos) : CoverType.None;
+            int distance = GridPos.Chebyshev(attackerPos, target.Pos);
             return Compute(attacker.Profile.Accuracy, attacker.HasStatus(StatusType.Suppressed),
                            target.Profile.Defense, cover, w.IsMelee,
                            distance, w.OptimalRange, cfg,

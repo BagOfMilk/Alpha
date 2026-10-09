@@ -105,6 +105,10 @@ namespace Game.Core.Session.Views
     public sealed class SceneStepView
     {
         public string ActorId, SecondActorId, SpeakerId, LineKey, EffectKey;
+
+        /// <summary>Як знято план (<see cref="Game.Core.Scenes.ShotFraming"/>): крупний, подвійний, порожній — показ ставить камеру діалогу за ним.</summary>
+        public Game.Core.Scenes.ShotFraming Framing;
+
         public bool IsFinished;
         public string TransitionKey;
 

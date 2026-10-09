@@ -40,6 +40,22 @@ namespace Game.Gameplay
         public bool IsCurrent, IsHovered;
         /// <summary>Під курсором і є валідною ціллю поточної дії.</summary>
         public bool IsTargetable;
+        /// <summary>
+        /// Шанс поточного юніта по цьому ворогу з клітинки голограми руху (подача П3); −1 — голограми немає
+        /// або цей ворог звідти недосяжний.
+        /// </summary>
+        public int GhostHitChance = -1;
+        /// <summary>Найкраще укриття клітинки юніта (подача П4): "None" | "Half" | "Full"; null — невідомо.</summary>
+        public string CoverBest;
+    }
+
+    /// <summary>Значок щита на боці клітинки під курсором (подача П4) — у координатах GUI.</summary>
+    public sealed class BattleCoverMarker
+    {
+        public float ScreenX, ScreenY;
+        public bool OnScreen;
+        /// <summary>true — повне укриття (щит залитий), false — часткове (наполовину).</summary>
+        public bool Full;
     }
 
     /// <summary>

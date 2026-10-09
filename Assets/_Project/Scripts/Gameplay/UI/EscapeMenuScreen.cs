@@ -60,6 +60,44 @@ namespace Game.Gameplay.UI
 
                 GUILayout.Space(8f);
 
+                // Швидкість бою (подача П1, docs/research/RT_COMBAT_PRESENTATION.md): анімації, рух і хід ворога
+                // разом; діє одразу, зберігається між запусками. На розрахунок бою не впливає.
+                GUILayout.Label(UkrainianText.Get("ui.battle_speed.title", g), AlphaSkin.Body);
+                GUILayout.BeginHorizontal();
+                foreach (float option in BattleTactTiming.SpeedOptions)
+                    if (Widgets.TabButton(BattleTactTiming.SpeedLabel(option), System.Math.Abs(BattleSpeed.Multiplier - option) < 0.01f))
+                        BattleSpeed.Multiplier = option;
+                GUILayout.EndHorizontal();
+                Widgets.TooltipLine(UkrainianText.Get("ui.battle_speed.hint", g));
+
+                // Уповільнення на вбивстві (подача П6): коротке, не стакається, вимикається тут.
+                bool slowMo = BattleSlowMoSetting.Enabled;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Get("ui.battle_slowmo.title", g), AlphaSkin.Body, GUILayout.Width(220f));
+                bool rare = BattleSlowMoSetting.Rare;
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.always", g), slowMo && !rare)) { BattleSlowMoSetting.Enabled = true; BattleSlowMoSetting.Rare = false; }
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.rare", g), slowMo && rare)) { BattleSlowMoSetting.Enabled = true; BattleSlowMoSetting.Rare = true; }
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.off", g), !slowMo) && slowMo) BattleSlowMoSetting.Enabled = false;
+                GUILayout.EndHorizontal();
+
+                // Екшн-кадри бою (подача П12): через плече того, хто б'є, на кожен ~третій удар; на Низькій — немає.
+                bool actionCam = BattleActionCameraSetting.Enabled;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Get("ui.battle_action_camera.title", g), AlphaSkin.Body, GUILayout.Width(220f));
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_action_camera.on", g), actionCam) && !actionCam) BattleActionCameraSetting.Enabled = true;
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_action_camera.off", g), !actionCam) && actionCam) BattleActionCameraSetting.Enabled = false;
+                GUILayout.EndHorizontal();
+
+                // Камера діалогу (розбір BG3, 08.10.2026: крупні плани в розмові вимикаються в налаштуваннях).
+                bool closeUps = DialogueCameraSetting.CloseUps;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Get("ui.dialogue_camera.title", g), AlphaSkin.Body, GUILayout.Width(220f));
+                if (Widgets.TabButton(UkrainianText.Get("ui.dialogue_camera.close", g), closeUps) && !closeUps) DialogueCameraSetting.CloseUps = true;
+                if (Widgets.TabButton(UkrainianText.Get("ui.dialogue_camera.village", g), !closeUps) && closeUps) DialogueCameraSetting.CloseUps = false;
+                GUILayout.EndHorizontal();
+
+                GUILayout.Space(8f);
+
                 // Графіка (Поправка №21.1): три рівні, діє одразу, зберігається між запусками.
                 GUILayout.Label(UkrainianText.Get("ui.gfx.title", g), AlphaSkin.Body);
                 DrawGraphicsLevels(shell, g);

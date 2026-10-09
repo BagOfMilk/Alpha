@@ -46,6 +46,11 @@ namespace Game.Gameplay
             }
 
             GraphicsLevel level;
+            if (TryCommandLineLevel(out level))
+            {
+                Apply(level); // лише на цей запуск, без збереження (тури: -gfx medium)
+                return;
+            }
             bool saved = PlayerPrefs.HasKey(PrefKey);
             if (saved)
                 level = Clamp(PlayerPrefs.GetInt(PrefKey));
@@ -75,6 +80,27 @@ namespace Game.Gameplay
             int now = QualitySettings.GetQualityLevel();
             if (now != _appliedIndex)
                 Debug.LogWarning("[Графіка] якість змінилась повз GraphicsTier: " + _appliedIndex + " → " + now);
+        }
+
+        /// <summary>
+        /// Рівень з командного рядка: <c>-gfx low|medium|high</c> — для турів і перевірок на певному рівні (власник,
+        /// 08.10.2026: «Постав Середню графіку в турі і покажи екшн-кадр»). Діє лише на запуск, вибору гравця не змінює.
+        /// </summary>
+        private static bool TryCommandLineLevel(out GraphicsLevel level)
+        {
+            level = GraphicsLevel.Medium;
+            var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i + 1 < args.Length; i++)
+            {
+                if (!string.Equals(args[i], "-gfx", System.StringComparison.OrdinalIgnoreCase)) continue;
+                switch (args[i + 1].ToLowerInvariant())
+                {
+                    case "low": level = GraphicsLevel.Low; return true;
+                    case "medium": level = GraphicsLevel.Medium; return true;
+                    case "high": level = GraphicsLevel.High; return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>Вибір гравця: діє одразу і запам'ятовується.</summary>

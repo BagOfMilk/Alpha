@@ -122,6 +122,74 @@ namespace Game.Gameplay.UI
             return _current;
         }
 
+        // ===================== вікно діалогу в світі (UI Toolkit) =====================
+        //
+        // Власник, 08.10.2026: «зробити діалоги між персонажами як в baldursgayte 3»; «Камера в світі, як у BG3».
+        // Коли вікно діалогу на UI Toolkit живе (UI.Toolkit.DialogueToolkitView), цей екран не малює IMGUI-панель
+        // і портрети — лише тримає курсор сцени й ловить клавіші; кнопки вікна кличуть ті самі Driver*-методи.
+
+        /// <summary>Хто говорить у кадрі на екрані: на виборі й на панелі наслідку — остання репліка (як у <see cref="Draw"/>).</summary>
+        public string DisplaySpeakerId
+        {
+            get
+            {
+                if (_current == null) return null;
+                if (!string.IsNullOrEmpty(_current.SpeakerId)) return _current.SpeakerId;
+                return _current.IsChoice || _showingConsequence ? _lastSpeakerId : null;
+            }
+        }
+
+        /// <summary>Ключ репліки на екрані — з тим самим відкатом, що <see cref="DisplaySpeakerId"/>.</summary>
+        public string DisplayLineKey
+        {
+            get
+            {
+                if (_current == null) return null;
+                if (!string.IsNullOrEmpty(_current.LineKey)) return _current.LineKey;
+                return _current.IsChoice || _showingConsequence ? _lastLineKey : null;
+            }
+        }
+
+        /// <summary>Перший кадр сцени, якщо його ще немає (те саме, що робить <see cref="Draw"/> на початку).</summary>
+        public void EnsureStarted(GameShell shell)
+        {
+            if (_current != null) return;
+            _lastSpeakerId = null;
+            _lastLineKey = null;
+            SetCurrent(shell.TryRun(() => shell.Session.AdvanceScene()));
+        }
+
+        /// <summary>
+        /// Клавіші сцени, коли малює вікно діалогу: Пробіл/Enter — далі (і на панелі наслідку), 1–9 — варіант
+        /// (номер видно поруч з варіантом). Кліки — кнопками вікна.
+        /// </summary>
+        public void HandleKeys(GameShell shell)
+        {
+            EnsureStarted(shell);
+            if (_current == null) return;
+            var evt = Event.current;
+            if (evt == null || evt.type != EventType.KeyDown) return;
+            bool next = evt.keyCode == KeyCode.Space || evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
+            if (_showingConsequence)
+            {
+                if (!next) return;
+                evt.Use();
+                ContinueAfterConsequence();
+                return;
+            }
+            if (_current.IsChoice)
+            {
+                int index = (int)evt.keyCode - (int)KeyCode.Alpha1;
+                if (_current.Options == null || index < 0 || index > 8 || index >= _current.Options.Count) return;
+                evt.Use();
+                ChooseOption(shell, index);
+                return;
+            }
+            if (!next) return;
+            evt.Use();
+            Advance(shell);
+        }
+
         public void Draw(GameShell shell)
         {
             if (_current == null)

@@ -388,7 +388,8 @@ namespace Game.Core.Combat
                     if (!u.IsActive || GridPos.Chebyshev(u.Pos, keg.Pos) > radius) continue;
                     int dmg = DamageResolver.FlatDamage(Balance.Combat.ExplosionDamage, DamageType.Fire, u);
                     Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{dmg} HP (взрыв)",
-                        "unitId", u.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(DamageType.Fire));
+                        "unitId", u.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(DamageType.Fire),
+                        "source", CombatLogKeys.SourceKeg); // журнал завжди називає джерело шкоди (подача бою П8)
                     ApplyDamage(u, dmg);
                 }
 
@@ -602,7 +603,8 @@ namespace Game.Core.Combat
                     {
                         u.Hp -= loss;
                         Record(CombatLogKeys.Damage, $"  {u.Profile.DisplayName}: −{loss} HP (обстрел)",
-                            "unitId", u.Id, "damage", I(loss), "damageType", CombatLogKeys.DamageTypeId(DamageType.Ballistic));
+                            "unitId", u.Id, "damage", I(loss), "damageType", CombatLogKeys.DamageTypeId(DamageType.Ballistic),
+                            "source", CombatLogKeys.SourceVolley);
                     }
                     ApplyStatus(u, StatusType.Bleeding);
                     wounded++;
@@ -956,7 +958,8 @@ namespace Game.Core.Combat
                         {
                             int dmg = DamageResolver.FlatDamage(fx.Amount, fx.Damage, target);
                             Record(CombatLogKeys.Damage, $"  {target.Profile.DisplayName}: −{dmg} HP ({fx.Damage})",
-                                "unitId", target.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(fx.Damage));
+                                "unitId", target.Id, "damage", I(dmg), "damageType", CombatLogKeys.DamageTypeId(fx.Damage),
+                                "sourceId", unit.Id);
                             ApplyDamage(target, dmg);
                         }
                         break;
@@ -1348,6 +1351,10 @@ namespace Game.Core.Combat
         /// прев'ю зобов'язане збігатися з фактичним ролом.</summary>
         public int HitChancePreview(CombatUnit attacker, CombatUnit target, int accuracyBonus = 0)
             => HitChanceCalculator.Compute(attacker, target, Map, Balance, accuracyBonus + ProvokedBonus(attacker), WeatherRangedDelta);
+
+        /// <summary>Той самий шанс, якби атакуючий уже стояв у <paramref name="from"/> (прев'ю руху; нічого не мутує).</summary>
+        public int HitChancePreviewFrom(CombatUnit attacker, GridPos from, CombatUnit target)
+            => HitChanceCalculator.ComputeFrom(attacker, from, target, Map, Balance, ProvokedBonus(attacker), WeatherRangedDelta);
 
         /// <summary>Ультиматум відкинуто (старт <see cref="BattleOpening.Provoked"/>): ворог у раунді 1 влучніший.</summary>
         private int ProvokedBonus(CombatUnit attacker) =>

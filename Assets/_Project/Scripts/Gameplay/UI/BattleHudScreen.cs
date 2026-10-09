@@ -109,12 +109,18 @@ namespace Game.Gameplay.UI
             GUILayout.EndArea();
             blockingRects.Add(bottomRect);
 
+            // Портрети загону, як у BG3 (власник, 08.10.2026): стовпець під колесом черги, до нижньої панелі.
+            float portraitsTop = wheelRect.y + wheelRect.height + pad;
+            float portraitsBottom = bottomRect.x < pad * 2f + PortraitWidth(scale) ? bottomRect.y - pad : UiScale.Height - pad;
+            DrawPartyPortraits(c, view, pad, portraitsTop, portraitsBottom, scale, blockingRects);
+
             c.SetHudRects(blockingRects);
 
             // Те, що йде нижче, малюється ПОВЕРХ уже намальованих панелей і
             // навмисно НЕ входить у blockingRects — банер/оверлеї/спливаючі
             // написи/підказка не мають ловити клік, призначений арені (§3).
             DrawBanner(c, topRect);
+            DrawCoverMarkers(c);
             DrawOverlays(c, view);
             DrawFloatingTexts(c);
             DrawCursorTooltip(c, view);
@@ -179,7 +185,17 @@ namespace Game.Gameplay.UI
         private static void HandleHotkeys(IBattleHudData c, BattleView view)
         {
             var evt = Event.current;
-            if (evt == null || evt.type != EventType.KeyDown || c.IsBusy || c.Paused || c.ResultPending || PlaytestLog.NoteOpen) return;
+            if (evt == null || evt.type != EventType.KeyDown || c.Paused || PlaytestLog.NoteOpen) return;
+
+            // Подача бою П8: показати/сховати журнал — будь-коли, і під час тактів теж (нічого не озброює).
+            if (evt.keyCode == KeyCode.L)
+            {
+                _logCollapsed = !_logCollapsed;
+                evt.Use();
+                return;
+            }
+
+            if (c.IsBusy || c.ResultPending) return;
 
             if (c.IsPlayerTurn)
             {
@@ -242,6 +258,135 @@ namespace Game.Gameplay.UI
             string ruleKey = view.IsHitRulePercent ? "ui.title.hitrule.percent" : "ui.title.hitrule.threshold";
             GUILayout.Label(UkrainianText.Get(ruleKey, false), AlphaSkin.HintLine, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
+        }
+
+        // ================= портрети загону, як у BG3 (08.10.2026) =================
+
+        /// <summary>
+        /// Хто дає обличчя: оболонка ставить <c>GameShell.PortraitProvider</c> (живий рендер набору) перед кожним
+        /// кадром бою; null чи ще не зрендерено — картка з ініціалами кольором персонажа.
+        /// </summary>
+        public static IPortraitProvider Portraits { get; set; }
+
+        /// <summary>Портрет під мишею — мітка бійця на арені підсвічується, як від колеса черги.</summary>
+        private static string _portraitHoverUnitId;
+        private static readonly Dictionary<string, Texture2D> _portraitCards = new Dictionary<string, Texture2D>();
+        private static Texture2D _portraitShade;
+
+        private static float PortraitWidth(float scale) => Clamp(78f * scale, 56f, 104f);
+
+        /// <summary>
+        /// Стовпець портретів загону (власник, 08.10.2026: «іконки персонажів такі самі на рушії гри»; «У бою»).
+        /// ЩО і ДЕ рахує <see cref="PartyPortraitsModel"/>; тут лише малювання: обличчя з рушія, золота рамка в
+        /// того, чий хід, упалий — притемнений, під обличчям — здоров'я й очки дії, при наведенні — підказка;
+        /// клік — камера до бійця (як бейдж колеса).
+        /// </summary>
+        private static void DrawPartyPortraits(IBattleHudData c, BattleView view, float x, float top, float bottom, float scale, List<Rect> blocking)
+        {
+            _portraitHoverUnitId = null;
+            var slots = PartyPortraitsModel.Build(view, Game.Core.Session.GameSession.ProtagonistId);
+            var rects = PartyPortraitsModel.Layout(slots.Count, x, top, bottom, PortraitWidth(scale), 8f);
+            PartyPortraitSlot hoveredSlot = null;
+            Rect hoveredCard = default(Rect);
+            for (int i = 0; i < rects.Count; i++)
+            {
+                var slot = slots[i];
+                var pr = rects[i];
+                var card = new Rect(pr.X, pr.Y, pr.Width, pr.Height);
+                var face = new Rect(pr.X, pr.Y, pr.Width, pr.Width * PartyPortraitsModel.CardAspect);
+                var unit = FindUnit(view, slot.UnitId);
+                string name = unit != null ? c.ResolveDisplayName(unit) : slot.CharacterId;
+
+                bool hovered = RectContainsMouse(card);
+                bool hoveredOnMap = string.Equals(c.HoveredUnitId, slot.UnitId, StringComparison.Ordinal);
+                if (hovered)
+                {
+                    _portraitHoverUnitId = slot.UnitId;
+                    hoveredSlot = slot;
+                    hoveredCard = card;
+                    var evt = Event.current;
+                    if (evt != null && evt.type == EventType.MouseDown && evt.button == 0)
+                    {
+                        c.FocusCamera(slot.UnitId);
+                        evt.Use();
+                    }
+                }
+
+                // Рамка: чий хід — товста золота; наведення (тут чи на арені) — світла; решта — тонка.
+                Color32 frame = slot.IsCurrent ? AlphaSkin.BattleCurrentUnit : (hovered || hoveredOnMap ? AlphaSkin.AccentHover : AlphaSkin.Border);
+                float b = slot.IsCurrent ? 3f : 1.5f;
+                Widgets.SolidRect(new Rect(face.x - b, face.y - b, face.width + 2f * b, face.height + 2f * b), frame);
+
+                var tex = Portraits != null ? Portraits.GetPortrait(slot.CharacterId) : null;
+                if (tex != null) GUI.DrawTexture(face, tex, ScaleMode.ScaleAndCrop);
+                else DrawPortraitCard(face, slot.CharacterId, name);
+                if (slot.IsDowned)
+                {
+                    if (_portraitShade == null) _portraitShade = AlphaSkin.SolidTexture(new Color32(10, 8, 6, 165));
+                    GUI.DrawTexture(face, _portraitShade, ScaleMode.StretchToFill);
+                }
+
+                ShadowedLabel(new Rect(face.x + 3f, face.y + face.height - 18f, face.width - 6f, 18f),
+                    TruncateName(name, face.width), slot.IsDowned ? AlphaSkin.TextDim : AlphaSkin.TextMain);
+                if (slot.Statuses.Count > 0)
+                    ShadowedLabel(new Rect(face.x + 3f, face.y + 2f, face.width - 6f, 18f),
+                        slot.Statuses.Count == 1 ? "◆" : "◆" + I(slot.Statuses.Count), AlphaSkin.BattleStatus);
+
+                float by = face.y + face.height + 2f;
+                Widgets.FilledBarAt(new Rect(face.x, by, face.width, 4f), slot.HpFraction, slot.IsDowned ? AlphaSkin.TextDim : SideColor("Player"));
+                Widgets.FilledBarAt(new Rect(face.x, by + 5f, face.width, 3f), slot.ApFraction, AlphaSkin.AccentHover);
+                blocking.Add(card);
+            }
+
+            if (hoveredSlot != null) DrawPortraitTip(c, view, hoveredSlot, hoveredCard);
+        }
+
+        /// <summary>Підказка біля портрета: ім'я, здоров'я й очки дії числом, стани з тривалістю — те саме, що картка бійця.</summary>
+        private static void DrawPortraitTip(IBattleHudData c, BattleView view, PartyPortraitSlot slot, Rect card)
+        {
+            var unit = FindUnit(view, slot.UnitId);
+            if (unit == null) return;
+            var lines = new List<string>
+            {
+                c.ResolveDisplayName(unit),
+                UkrainianText.Format("ui.battle.portrait.stats", false,
+                    "hp", I(slot.Hp), "hpMax", I(slot.HpMax), "ap", I(slot.Ap), "apMax", I(slot.ApMax))
+            };
+            if (slot.IsDowned) lines.Add(UkrainianText.Get("ui.battle.portrait.downed", false));
+            if (unit.StatusDetails != null)
+                foreach (var status in unit.StatusDetails)
+                {
+                    string key = BattleArenaView.StatusLabelKey(status.Type);
+                    if (key != null) lines.Add(UkrainianText.Get(key, false) + " (" + UkrainianText.DeclineTurns(status.RemainingTurns) + ")");
+                }
+            float w = 220f, lineH = 20f;
+            var tip = new Rect(card.x + card.width + 8f, card.y, w, lines.Count * lineH + 10f);
+            Widgets.SolidRect(tip, new Color32(12, 10, 8, 225));
+            for (int i = 0; i < lines.Count; i++)
+                GUI.Label(new Rect(tip.x + 8f, tip.y + 5f + i * lineH, w - 16f, lineH), lines[i],
+                    WheelText(i == 0 ? AlphaSkin.AccentHover : AlphaSkin.TextMain));
+        }
+
+        /// <summary>Поки живого рендера немає (перший кадр запиту): картка кольором персонажа з ініціалами, а не порожнє місце.</summary>
+        private static void DrawPortraitCard(Rect rect, string characterId, string name)
+        {
+            string id = characterId ?? string.Empty;
+            if (!_portraitCards.TryGetValue(id, out var tex) || tex == null)
+            {
+                var palette = BattleArenaView.CharacterTint("u_" + id, "Player", id);
+                tex = AlphaSkin.SolidTexture(new Color32((byte)(palette.R * 255f), (byte)(palette.G * 255f), (byte)(palette.B * 255f), 255));
+                _portraitCards[id] = tex;
+            }
+            GUI.DrawTexture(rect, tex, ScaleMode.StretchToFill);
+            string initials = "?";
+            if (!string.IsNullOrEmpty(name))
+            {
+                var words = name.Split(' ');
+                initials = words.Length >= 2 && words[0].Length > 0 && words[1].Length > 0
+                    ? (char.ToUpperInvariant(words[0][0]).ToString() + char.ToUpperInvariant(words[1][0]))
+                    : name.Substring(0, Math.Min(2, name.Length)).ToUpperInvariant();
+            }
+            GUI.Label(new Rect(rect.x, rect.y + rect.height * 0.3f, rect.width, 24f), initials, WheelText(AlphaSkin.BgDark));
         }
 
         // ================= колесо черги ходів (Поправка №14.5) =================
@@ -1168,6 +1313,7 @@ namespace Game.Gameplay.UI
             }
 
             GUILayout.Label(UkrainianText.Format("ui.battle.ap_cost", false, "cost", I(p.ApCost)), AlphaSkin.Body);
+            if (p.Result == "Success") DrawApForecast(view, p.ApCost, p.AbilityId);
 
             // Перевірка здібності (docs/ABILITIES.md): що з чим порівнюється — до кліку (інваріант 8).
             string checkLine = CheckLine(p);
@@ -1251,7 +1397,10 @@ namespace Game.Gameplay.UI
             GUILayout.Label(UkrainianText.Get("ui.battle.hover.move_title", false), AlphaSkin.Body);
 
             if (path.Result == "Success")
+            {
                 GUILayout.Label(UkrainianText.Format("ui.battle.move.cost", false, "cost", I(path.ApCost)), AlphaSkin.Body);
+                DrawApForecast(view, path.ApCost, null);
+            }
             else if (path.Result == "NotReachable")
                 GUILayout.Label(UkrainianText.Get("ui.battle.move.unreachable", false), AlphaSkin.DangerText);
             else
@@ -1280,6 +1429,23 @@ namespace Game.Gameplay.UI
                         GUILayout.Label(UkrainianText.Get("ui.battle.move.threatened", false), AlphaSkin.DangerText);
                         break;
                     }
+        }
+
+        /// <summary>
+        /// Подача бою П9: скільки ОД лишиться після наведеної дії і на які здібності, доступні зараз, після неї
+        /// не вистачить (<see cref="ApForecast"/>). Лише в хід гравця — у підказці шляху й атаки.
+        /// </summary>
+        private static void DrawApForecast(BattleView view, int cost, string exceptAbilityId)
+        {
+            var current = FindUnit(view, view?.CurrentUnitId);
+            if (current == null) return;
+            int left = ApForecast.Left(current.Ap, cost);
+            GUILayout.Label(UkrainianText.Format("ui.battle.ap_left", false, "left", I(left)), AlphaSkin.HintLine);
+            var lost = ApForecast.NewlyUnaffordable(current.Abilities, current.Ap, left, exceptAbilityId);
+            if (lost.Count == 0) return;
+            var names = new List<string>(lost.Count);
+            foreach (var id in lost) names.Add(UkrainianText.Get(id, false));
+            GUILayout.Label(UkrainianText.Format("ui.battle.ap_lost", false, "abilities", string.Join(", ", names)), AlphaSkin.DangerText);
         }
 
         /// <summary>
@@ -1378,7 +1544,8 @@ namespace Game.Gameplay.UI
             // Наведення на бейдж у колесі черги — світла рамка на мітці цього
             // бійця (зв'язок колесо → мапа, Поправка №14.5). Інший колір, ніж
             // «можна вдарити»: одна барва — один сенс (Статут UI-01).
-            bool wheelHovered = string.Equals(_wheelHoverUnitId, unit.Id, StringComparison.Ordinal);
+            bool wheelHovered = string.Equals(_wheelHoverUnitId, unit.Id, StringComparison.Ordinal)
+                || string.Equals(_portraitHoverUnitId, unit.Id, StringComparison.Ordinal);
             if (wheelHovered && !ov.IsTargetable)
             {
                 const float b = 2f;
@@ -1403,6 +1570,13 @@ namespace Game.Gameplay.UI
             var tint = unit.IsDowned ? AlphaSkin.BgRaised : (ov.IsCurrent ? AlphaSkin.BattleCurrentUnit : SideColor(unit.Side));
             style.normal.textColor = tint;
             GUI.Label(nameRect, name, style);
+
+            // Подача П4: боєць в укритті — щит ліворуч від імені (пів-щит / повний).
+            if (ov.CoverBest == "Half" || ov.CoverBest == "Full")
+            {
+                float size = nameRect.height;
+                DrawShield(new Rect(nameRect.x - size - 2f, nameRect.y, size, size), ov.CoverBest == "Full");
+            }
 
             float hpY = nameRect.y + nameRect.height + 2f;
             var hpRect = new Rect(nameRect.x, hpY, nameRect.width, 4f);
@@ -1432,7 +1606,58 @@ namespace Game.Gameplay.UI
                 Widgets.SolidRect(badge, AlphaSkin.BattleEnemySide);
                 GUI.Label(badge, UkrainianText.Format("ui.battle.overlay.downed", false, "turns", I(unit.DownWindowRemaining)),
                     new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = AlphaSkin.TextMain } });
+                badgeY += 18f;
             }
+
+            // Подача П3: шанс по цьому ворогу з клітинки, куди веде голограма руху (той самий, що покаже прев'ю
+            // атаки, коли боєць там стоятиме — інваріант 8).
+            if (ov.GhostHitChance >= 0)
+            {
+                var badge = new Rect(nameRect.x, badgeY, nameRect.width, 16f);
+                Widgets.SolidRect(badge, new Color32(20, 40, 52, 220));
+                GUI.Label(badge, UkrainianText.Format("ui.battle.overlay.ghost_chance", false, "chance", I(ov.GhostHitChance)),
+                    new GUIStyle(AlphaSkin.OverlayName) { normal = { textColor = new Color(0.62f, 0.88f, 1f) } });
+            }
+        }
+
+        // ================= подача П4: щити укриття (docs/research/RT_COMBAT_PRESENTATION.md) =================
+
+        private const int ShieldTextureSize = 32;
+        private static Texture2D _shieldHalf, _shieldFull;
+
+        private static void DrawCoverMarkers(IBattleHudData c)
+        {
+            if (c.CoverMarkers == null) return;
+            const float size = 22f;
+            foreach (var m in c.CoverMarkers)
+                if (m != null && m.OnScreen)
+                    DrawShield(new Rect(m.ScreenX - size * 0.5f, m.ScreenY - size * 0.5f, size, size), m.Full);
+        }
+
+        private static void DrawShield(Rect rect, bool full)
+        {
+            var tex = full ? (_shieldFull != null ? _shieldFull : (_shieldFull = BuildShield(true)))
+                           : (_shieldHalf != null ? _shieldHalf : (_shieldHalf = BuildShield(false)));
+            GUI.DrawTexture(rect, tex, ScaleMode.ScaleToFit);
+        }
+
+        /// <summary>Текстура щита з маски <see cref="ShieldIcon"/>: контур темний, заливка світла (читається на траві й камені).</summary>
+        private static Texture2D BuildShield(bool full)
+        {
+            int n = ShieldTextureSize;
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var outline = new Color(0.08f, 0.07f, 0.06f, 0.95f);
+            var fill = new Color(0.86f, 0.90f, 0.95f, 0.95f);
+            var clear = new Color(0f, 0f, 0f, 0f);
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    int cell = ShieldIcon.Cell(x, y, n, full);
+                    // SetPixel рахує y знизу, маска — згори.
+                    tex.SetPixel(x, n - 1 - y, cell == ShieldIcon.Outline ? outline : cell == ShieldIcon.Fill ? fill : clear);
+                }
+            tex.Apply();
+            return tex;
         }
 
         private static void DrawFloatingTexts(IBattleHudData c)
