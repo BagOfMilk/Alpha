@@ -874,7 +874,10 @@ namespace Game.Gameplay
                 // SyncObjectMarkers на клітинці об'єкта; декор-укриття генератора — лише без них.
                 bool templated = view.Objects != null && view.Objects.Count > 0;
                 if (!templated && !string.Equals(cover, "None", StringComparison.Ordinal))
-                    PlaceCoverProp(x, y, cover, world);
+                {
+                    string sides = view.Grid.TileCoverSides != null && index < view.Grid.TileCoverSides.Count ? view.Grid.TileCoverSides[index] : null;
+                    PlaceCoverProp(x, y, cover, sides, world);
+                }
             }
         }
 
@@ -902,22 +905,105 @@ namespace Game.Gameplay
             return tile;
         }
 
-        private void PlaceCoverProp(int x, int y, string cover, WorldPos world)
+        // Власник 08.10.2026: «…Не скрізь руку чи тіло». Укриття карти — властивість БОКУ клітинки, на якій стоїть
+        // боєць (GridMap.SetCover(pos, side)); модель ставилась у центр цієї ж клітинки, на випадковий кут і в
+        // повний розмір — колоди й брила проходили крізь тіло (знімки туру бою). Тепер модель стоїть на краю
+        // клітинки з того боку, звідки захищає, уздовж краю, і вписана в смугу між клітинками: боєць — поруч, за нею.
+        private const float EdgeCoverLength = 0.95f;
+        private const float EdgeCoverDepth = 0.40f;
+        private const float FullCoverHeight = 1.15f;
+        private const float HalfCoverHeight = 0.6f;
+
+        private void PlaceCoverProp(int x, int y, string cover, string sides, WorldPos world)
         {
-            var pool = string.Equals(cover, "Full", StringComparison.Ordinal) ? CoverFullPrefabs : CoverHalfPrefabs;
+            var parts = sides?.Split('|');
+            bool placed = false;
+            if (parts != null && parts.Length == 4)
+                for (int d = 0; d < 4; d++)
+                {
+                    if (string.IsNullOrEmpty(parts[d]) || string.Equals(parts[d], "None", StringComparison.Ordinal)) continue;
+                    PlaceEdgeCoverProp(x, y, d, parts[d], world);
+                    placed = true;
+                }
+            if (!placed) PlaceEdgeCoverProp(x, y, 0, cover, world);
+        }
+
+        /// <summary>Модель укриття на боці <paramref name="side"/> (0 — північ +Z, 1 — схід +X, 2 — південь, 3 — захід).</summary>
+        private void PlaceEdgeCoverProp(int x, int y, int side, string cover, WorldPos world)
+        {
+            bool full = string.Equals(cover, "Full", StringComparison.Ordinal);
+            var pool = full ? CoverFullPrefabs : CoverHalfPrefabs;
             if (pool == null || pool.Length == 0) return;
 
-            int index = (int)(BattleArenaView.Hash01("cover_" + x + "_" + y) * pool.Length);
+            string key = x + "_" + y + "_" + side;
+            int index = (int)(BattleArenaView.Hash01("cover_" + key) * pool.Length);
             if (index >= pool.Length) index = pool.Length - 1;
             var prefab = pool[index];
             if (prefab == null) return;
 
+            float half = BattleArenaView.TileSize * 0.5f;
+            var offset = side == 0 ? new Vector3(0f, 0f, half) : side == 1 ? new Vector3(half, 0f, 0f)
+                       : side == 2 ? new Vector3(0f, 0f, -half) : new Vector3(-half, 0f, 0f);
             var go = Instantiate(prefab, _propRoot);
-            go.name = "cover:" + x + "_" + y;
-            go.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
-            go.transform.localRotation = Quaternion.Euler(0f, BattleArenaView.Hash01("cover_yaw_" + x + "_" + y) * 360f, 0f);
-
+            go.name = "cover:" + key;
             foreach (var collider in go.GetComponentsInChildren<Collider>()) Destroy(collider);
+            FitProp(go, new Vector3(world.X, world.Y, world.Z) + offset, side == 0 || side == 2,
+                EdgeCoverLength * BattleArenaView.TileSize, EdgeCoverDepth * BattleArenaView.TileSize,
+                full ? FullCoverHeight : HalfCoverHeight, BattleArenaView.Hash01("cover_flip_" + key) < 0.5f);
+        }
+
+        /// <summary>
+        /// Вписує модель у прямокутник на землі: довга сторона моделі — уздовж X (<paramref name="alongX"/>) або Z
+        /// батьківського простору, довжина ≤ <paramref name="length"/>, глибина ≤ <paramref name="depth"/> (не ширша
+        /// за пропорцію), висота — до <paramref name="height"/> у межах ×0,5–×2 від горизонтального масштабу; низ — на
+        /// землі, центр — у <paramref name="centre"/>. Поворот лише на 0/90/180/270°, щоб межі лишались точними.
+        /// </summary>
+        private static void FitProp(GameObject go, Vector3 centre, bool alongX, float length, float depth, float height, bool flip)
+        {
+            var t = go.transform;
+            var baseScale = t.localScale;
+            t.localPosition = Vector3.zero;
+            t.localRotation = Quaternion.identity;
+            if (!TryLocalBounds(go, out var b) || b.size.x < 1e-4f || b.size.z < 1e-4f || b.size.y < 1e-4f)
+            {
+                t.localPosition = centre;
+                return;
+            }
+
+            bool modelLongX = b.size.x >= b.size.z;
+            float lng = Mathf.Max(b.size.x, b.size.z), shrt = Mathf.Min(b.size.x, b.size.z);
+            float sLong = length / lng;
+            float sShort = Mathf.Min(depth / shrt, sLong);
+            float sY = Mathf.Clamp(height / b.size.y, 0.5f * sLong, 2f * sLong);
+            var k = modelLongX ? new Vector3(sLong, sY, sShort) : new Vector3(sShort, sY, sLong);
+            float yaw = (modelLongX == alongX ? 0f : 90f) + (flip ? 180f : 0f);
+
+            t.localScale = Vector3.Scale(baseScale, k);
+            t.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            var c = t.localRotation * new Vector3(b.center.x * k.x, 0f, b.center.z * k.z);
+            t.localPosition = new Vector3(centre.x - c.x, centre.y - b.min.y * k.y, centre.z - c.z);
+        }
+
+        /// <summary>Межі всіх рендерерів у просторі батька (за поточної пози).</summary>
+        private static bool TryLocalBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = default;
+            var parent = go.transform.parent;
+            var toLocal = parent != null ? parent.worldToLocalMatrix : Matrix4x4.identity;
+            bool any = false;
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                if (r is LineRenderer || r is ParticleSystemRenderer) continue;
+                var w = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = new Vector3((i & 1) == 0 ? w.min.x : w.max.x, (i & 2) == 0 ? w.min.y : w.max.y, (i & 4) == 0 ? w.min.z : w.max.z);
+                    var p = toLocal.MultiplyPoint3x4(corner);
+                    if (!any) { bounds = new Bounds(p, Vector3.zero); any = true; }
+                    else bounds.Encapsulate(p);
+                }
+            }
+            return any;
         }
 
         private void RebuildUnits(BattleView view)
@@ -1352,10 +1438,13 @@ namespace Game.Gameplay
                     }
                     if (prefab != null)
                     {
+                        // Об'єкт займає свою клітинку: модель вписана в неї (у повний розмір колоди й брили виходили
+                        // на сусідні клітинки — у тіло того, хто за ними ховається).
                         var go = Instantiate(prefab, root.transform);
-                        go.transform.localPosition = Vector3.zero;
-                        go.transform.localRotation = Quaternion.Euler(0f, BattleArenaView.Hash01("object_yaw_" + o.Pos.X + "_" + o.Pos.Y) * 360f, 0f);
                         foreach (var collider in go.GetComponentsInChildren<Collider>()) Destroy(collider);
+                        float yawHash = BattleArenaView.Hash01("object_yaw_" + o.Pos.X + "_" + o.Pos.Y);
+                        FitProp(go, Vector3.zero, yawHash < 0.5f, 0.92f * BattleArenaView.TileSize, 0.92f * BattleArenaView.TileSize,
+                            o.Kind == "HighCover" ? FullCoverHeight : HalfCoverHeight, yawHash < 0.25f || yawHash >= 0.75f);
                     }
                     else
                     {
@@ -2057,19 +2146,16 @@ namespace Game.Gameplay
         private readonly Dictionary<string, CharacterAnimState> _unitOneShotState = new Dictionary<string, CharacterAnimState>(StringComparer.Ordinal);
 
         /// <summary>Поруч (хрестом) клітинка з низьким укриттям — боєць присідає за ним.</summary>
+        /// <summary>
+        /// Боєць за низьким укриттям — присідає. TileCover клітинки — це укриття ТОГО, ХТО НА НІЙ стоїть (і від карти, і
+        /// від об'єкта по сусідству, GridMap.GetCover); клітинка самого об'єкта непрохідна й укриття не має.
+        /// </summary>
         private bool BesideLowCover(BattleUnitView unit)
         {
             var grid = _lastView?.Grid;
             if (grid?.TileCover == null || unit == null) return false;
-            int[] dx = { 1, -1, 0, 0 }, dy = { 0, 0, 1, -1 };
-            for (int i = 0; i < 4; i++)
-            {
-                int x = unit.Pos.X + dx[i], y = unit.Pos.Y + dy[i];
-                if (x < 0 || y < 0 || x >= grid.Width || y >= grid.Height) continue;
-                int index = x + y * grid.Width;
-                if (index < grid.TileCover.Count && string.Equals(grid.TileCover[index], "Half", StringComparison.Ordinal)) return true;
-            }
-            return false;
+            int index = unit.Pos.X + unit.Pos.Y * grid.Width;
+            return index >= 0 && index < grid.TileCover.Count && string.Equals(grid.TileCover[index], "Half", StringComparison.Ordinal);
         }
 
         /// <summary>Одноразовий кліп стану для постаті набору (реакція на удар тощо); Idle — нічого.</summary>
@@ -3166,6 +3252,8 @@ namespace Game.Gameplay
             }
             if (_hubRoot == null) _hubRoot = GameObject.Find(HubRootName);
 
+            // Небо бою — те саме, що над селом цієї доби й погоди (не темна заливка): у перспективі його видно над обрієм.
+            if (_hubCamera != null && ArenaCamera != null) ArenaCamera.backgroundColor = _hubCamera.backgroundColor;
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(false);
             if (_hubRoot != null) _hubRoot.SetActive(false);
             if (ArenaCamera != null) ArenaCamera.gameObject.SetActive(true);
