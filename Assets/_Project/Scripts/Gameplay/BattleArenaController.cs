@@ -582,6 +582,12 @@ namespace Game.Gameplay
 
         private static Vector3 HeadOfUnit(GameObject go, float height)
         {
+            var animator = go.GetComponentInChildren<Animator>();
+            if (animator != null && animator.isHuman)
+            {
+                var bone = animator.GetBoneTransform(HumanBodyBones.Head);
+                if (bone != null) return bone.position;
+            }
             foreach (var tr in go.GetComponentsInChildren<Transform>())
                 if (tr.name.Equals("head", StringComparison.OrdinalIgnoreCase)) return tr.position;
             return go.transform.position + Vector3.up * (0.93f * height);

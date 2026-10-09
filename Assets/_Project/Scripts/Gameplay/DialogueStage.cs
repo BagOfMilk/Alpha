@@ -54,7 +54,15 @@ namespace Game.Gameplay
             public bool Temporary;
             public Quaternion SavedRotation;
             public AnimationClip SavedIdle;
+            /// <summary>Кадр створення тимчасової постаті: перші кадри вона ще в бінд-позі, кістки розкидані.</summary>
+            public int SpawnFrame = -100;
         }
+
+        /// <summary>Свіжа тимчасова постать ще не отримала анімовану позу — голову з неї брати рано.</summary>
+        private static bool NotSettled(Actor a) => a != null && a.Temporary && Time.frameCount - a.SpawnFrame < 4;
+
+        /// <summary>Перший план уже знято — до того камеру села не чіпаємо (немає валідної пози).</summary>
+        private bool _hasPose;
 
         private readonly Dictionary<string, Actor> _actors = new Dictionary<string, Actor>();
         /// <summary>Скільки разів крупний план уже був на цій людині — варіант крупного чергується.</summary>
@@ -94,7 +102,7 @@ namespace Game.Gameplay
             LookAtEachOther(displaySpeakerId);
 
             _shotAge += Time.unscaledDeltaTime;
-            if (_camera == null) return;
+            if (_camera == null || !_hasPose) return;
             var pos = DialogueDirector.PushIn(_pose, _shotAge / ShotPushSeconds);
             _camera.orthographic = false;
             _camera.fieldOfView = _pose.Fov;
@@ -137,6 +145,7 @@ namespace Game.Gameplay
             _actors.Clear();
             _closeCount.Clear();
             _shot = null;
+            _hasPose = false;
             _lookWeight = 0f;
             if (_keyLight != null) _keyLight.enabled = false;
             if (_hero != null) _hero.transform.rotation = _heroSavedRot;
@@ -160,9 +169,11 @@ namespace Game.Gameplay
         {
             var subject = ActorFor(shot.SubjectId);
             if (subject == null) return; // нікого показати — лишаємо попередній план
+            if (NotSettled(subject)) return; // постать ще в бінд-позі — знімемо за кадр-два
             string otherId = shot.OtherId;
             if (string.IsNullOrEmpty(otherId) && shot.SubjectId == GameSession.ProtagonistId) otherId = _anchorOtherId;
             var other = !string.IsNullOrEmpty(otherId) ? ActorFor(otherId) : null;
+            if (NotSettled(other)) return;
             if (shot.SubjectId != GameSession.ProtagonistId && _anchorOtherId == null) _anchorOtherId = shot.SubjectId;
             if (!string.IsNullOrEmpty(shot.OtherId) && shot.OtherId != GameSession.ProtagonistId && _anchorOtherId == null) _anchorOtherId = shot.OtherId;
 
@@ -190,6 +201,7 @@ namespace Game.Gameplay
             }
             _pose = DialogueDirector.Pose(shot.Kind, ToD(subjectHead), ToD(otherHead), ToD(axisFrom), ToD(axisTo), height, variant);
             _shot = shot;
+            _hasPose = true;
             _shotSignature = shot.Signature;
             _shotAge = 0f;
             PlaceKeyLight(shot.Kind, subjectHead, height);
@@ -393,16 +405,21 @@ namespace Game.Gameplay
                 Destroy(go);
                 return null;
             }
-            return new Actor { Root = go.transform, Figure = figure, Temporary = true, SavedRotation = go.transform.rotation };
+            return new Actor { Root = go.transform, Figure = figure, Temporary = true, SavedRotation = go.transform.rotation, SpawnFrame = Time.frameCount };
         }
 
         private static Transform FindHead(Transform root)
         {
             if (root == null) return null;
+            // Гуманоїдна кістка голови з аватара — надійно (за ім'ям «head» трапляються чужі вузли: шапка, древко).
+            var animator = root.GetComponentInChildren<Animator>();
+            if (animator != null && animator.isHuman)
+            {
+                var bone = animator.GetBoneTransform(HumanBodyBones.Head);
+                if (bone != null) return bone;
+            }
             foreach (var t in root.GetComponentsInChildren<Transform>())
                 if (t.name.Equals("head", System.StringComparison.OrdinalIgnoreCase)) return t;
-            var animator = root.GetComponentInChildren<Animator>();
-            if (animator != null && animator.isHuman) return animator.GetBoneTransform(HumanBodyBones.Head);
             return null;
         }
 
