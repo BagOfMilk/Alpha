@@ -335,7 +335,7 @@ namespace Game.Gameplay.EditorTools
             float s = Mathf.Max(1e-4f, spine.lossyScale.y);
             foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
             {
-                if (!smr.name.EndsWith(CharacterKitPlan.StowedSuffix)) continue;
+                if (!smr.name.EndsWith(CharacterKitPlan.StowedSuffix) && !smr.name.EndsWith("quiver")) continue;
                 var mesh = new Mesh();
                 smr.BakeMesh(mesh, true);
                 var m = smr.transform.localToWorldMatrix;
@@ -347,6 +347,17 @@ namespace Game.Gameplay.EditorTools
                     nearest = Mathf.Min(nearest, -Vector3.Dot(w, facing));
                 }
                 var c = sum / Mathf.Max(1, mesh.vertexCount);
+                // Нахил уперед-назад: найдовша вісь (найвіддаленіша пара вершин) відносно вертикалі тіла.
+                var vs = mesh.vertices; Vector3 pa = Vector3.zero, pb = Vector3.zero; float far = -1f;
+                for (int i = 0; i < vs.Length; i += 4)
+                    for (int j = i + 1; j < vs.Length; j += 4)
+                    {
+                        float d = (vs[i] - vs[j]).sqrMagnitude;
+                        if (d > far) { far = d; pa = m.MultiplyPoint3x4(vs[i]); pb = m.MultiplyPoint3x4(vs[j]); }
+                    }
+                var ax = pa.y > pb.y ? pa - pb : pb - pa; // знизу вгору
+                float pitch = Mathf.Atan2(Vector3.Dot(ax, facing), ax.y) * Mathf.Rad2Deg; // + — верх уперед (низ відходить назад)
+                report.AppendLine("   нахил " + smr.name + ": " + pitch.ToString("0") + "° (верх уперед — низ відходить від спини)");
                 report.AppendLine("   за спиною " + smr.name + ": центр (вперед " + (Vector3.Dot(c, facing) / s).ToString("0.00") +
                                   ", вгору " + (c.y / s).ToString("0.00") + ", ліворуч " + (Vector3.Dot(c, left) / s).ToString("0.00") +
                                   "), найближче до тіла — " + (nearest / s).ToString("0.00") + " м позаду spine_03");
