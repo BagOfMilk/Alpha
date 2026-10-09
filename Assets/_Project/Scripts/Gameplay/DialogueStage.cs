@@ -54,12 +54,15 @@ namespace Game.Gameplay
             public bool Temporary;
             public Quaternion SavedRotation;
             public AnimationClip SavedIdle;
-            /// <summary>Кадр створення тимчасової постаті: перші кадри вона ще в бінд-позі, кістки розкидані.</summary>
+            /// <summary>
+            /// Кадр, з якого поза постаті нова: створення тимчасової (бінд-поза, кістки розкидані) або зміна кліпу
+            /// «стоїть» (сидячий устає). Голову з неї беремо, коли поза встановилась.
+            /// </summary>
             public int SpawnFrame = -100;
         }
 
         /// <summary>Свіжа тимчасова постать ще не отримала анімовану позу — голову з неї брати рано.</summary>
-        private static bool NotSettled(Actor a) => a != null && a.Temporary && Time.frameCount - a.SpawnFrame < 4;
+        private static bool NotSettled(Actor a) => a != null && Time.frameCount - a.SpawnFrame < 4;
 
         /// <summary>Перший план уже знято — до того камеру села не чіпаємо (немає валідної пози).</summary>
         private bool _hasPose;
@@ -94,11 +97,14 @@ namespace Game.Gameplay
             }
             if (!_active && !Begin()) return;
 
+            // Спершу жест мовцю (сидячий на віче встає), і лише коли поза встановилась — план: інакше камера
+            // рахує голову сидячого, а знімає вже стоячого (тур 08.10.2026, крупний на Захара — груди).
+            if (!string.IsNullOrEmpty(displaySpeakerId)) ActorFor(displaySpeakerId);
+            SetTalking(displaySpeakerId);
+
             var shot = DialogueDirector.Plan(current.Framing, current.ActorId, current.SecondActorId, current.SpeakerId,
                 GameSession.ProtagonistId);
             if (shot != null && shot.Signature != _shotSignature) Cut(shot);
-
-            SetTalking(displaySpeakerId);
             LookAtEachOther(displaySpeakerId);
 
             _shotAge += Time.unscaledDeltaTime;
@@ -309,6 +315,11 @@ namespace Game.Gameplay
             var talk = anims != null && anims.IsComplete ? anims.For(CharacterAnimState.Talk, WeaponStyle.Unarmed) : null;
             if (talk == null) return;
             if (now.SavedIdle == null) now.SavedIdle = anim.idle;
+            if (anim.idle != talk)
+            {
+                now.SpawnFrame = Time.frameCount; // нова поза — план зачекає
+                if (_shot != null && (_shot.SubjectId == speakerId || _shot.OtherId == speakerId)) _shotSignature = null; // перезняти той самий план
+            }
             anim.SetIdleClip(talk);
         }
 

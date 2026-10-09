@@ -578,6 +578,7 @@ namespace Game.Gameplay
             }
             _actionShotOn = true;
             _actionShotLeft = duration + 0.15f;
+            Debug.Log("[Бій] екшн-кадр: " + attackerId + " → " + targetId + " (" + duration.ToString("0.00", CultureInfo.InvariantCulture) + " с)");
         }
 
         private static Vector3 HeadOfUnit(GameObject go, float height)
