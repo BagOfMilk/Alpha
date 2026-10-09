@@ -434,6 +434,7 @@ namespace Game.Gameplay
             _cameraEvents.Reset();
             _cameraEventShown = null;
             _actionCamera.Reset();
+            Debug.Log("[Бій] подача: графіка " + GraphicsTier.Current + " (" + QualitySettings.GetQualityLevel() + "/" + QualitySettings.names.Length + "), екшн-кадри " + (UI.BattleActionCameraSetting.Enabled ? "так" : "ні"));
             EndActionShot();
             _lastStrikerId = null;
             ResetActorPace();
