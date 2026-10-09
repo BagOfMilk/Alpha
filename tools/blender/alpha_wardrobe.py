@@ -692,6 +692,12 @@ def stowed_copies(rig, body):
             centre, inner, bone = Vector((0.0, 0.0, 0.98)), 0.145, "pelvis"
         if part == "wpn_bow":
             inner = 0.25                                # поверх сагайдака (до 0,246 м)
+        if part not in STOW_FLAT and t1.z != 0.0:
+            # Нижній кінець — на 6° від спини: у бігу штани, спідниця й поли на 0,6–0,9 м підходили до нього на
+            # 0,3–1,5 см (замір лукбука 08.10.2026); верх лишається впритул до лопаток.
+            down = t1 if t1.z < 0 else -t1
+            down = (down + Vector((0.0, math.tan(math.radians(6)), 0.0))).normalized()
+            t1 = down if t1.z < 0 else -down
         u1 = a1.normalized()
         u3 = (a3 - u1 * a3.dot(u1)).normalized()
         u2 = u3.cross(u1)
