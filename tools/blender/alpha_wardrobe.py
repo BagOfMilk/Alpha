@@ -671,6 +671,10 @@ def stowed_copies(rig, body):
         c = P.mean(axis=0)
         w, V = np.linalg.eigh(np.cov((P - c).T))
         a1, a3 = Vector(V[:, 2]), Vector(V[:, 0])
+        # Центр — середина між кінцями вздовж головної осі, не середнє вершин: у меча вершини густі на руків'ї, і
+        # «центр» зсувався до нього — лезо звисало до 0,55 м, куди в бігу закидається п'ята (замір 08.10.2026).
+        proj = (P - c) @ np.array(V[:, 2])
+        c = c + np.array(V[:, 2]) * (proj.min() + proj.max()) * 0.5
         grip_bone = "hand_l" if part in ("wpn_bow", "staff") else ("lowerarm_l" if part in STOW_FLAT else "hand_r")
         hand = b[grip_bone].head_local
         if (hand - Vector(c)).dot(a1) < 0:
@@ -680,10 +684,10 @@ def stowed_copies(rig, body):
             centre, inner, bone = Vector((0.0, 0.0, 1.28)), 0.155, "spine_03"   # низ — над полами й спідницею в бігу
         elif part in STOW_HILT_UP:
             t1 = Vector((-TILT[0], 0.0, TILT[1]))          # руків'я — вгору над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.34)), 0.155, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.30)), 0.155, "spine_03"
         elif part in STOW_HEAD_UP:
             t1 = -Vector((-TILT[0], 0.0, TILT[1]))         # хват (низ руків'я) — донизу, голова — над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.34)), 0.155, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.30)), 0.155, "spine_03"
         elif part in STOW_FLAT:
             t1 = Vector((0.0, 0.0, 1.0))
             centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.19, "spine_03"
