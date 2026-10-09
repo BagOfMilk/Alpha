@@ -145,6 +145,7 @@ namespace Game.Gameplay.EditorTools
                 if (urp != null) urp.useSRPBatcher = batcher;
             }
             if (anims != null && anims.IsComplete) AuditClips(lib, anims, looks[0].Value, report);
+            if (anims != null && anims.IsComplete) StowClearance(lib, anims, report);
             if (urp != null) urp.useSRPBatcher = false;
             try { RenderBuildings(cam, report); }
             finally { if (urp != null) urp.useSRPBatcher = batcher; }
@@ -351,6 +352,86 @@ namespace Game.Gameplay.EditorTools
                                   "), найближче до тіла — " + (nearest / s).ToString("0.00") + " м позаду spine_03");
                 Object.DestroyImmediate(mesh);
             }
+        }
+
+        /// <summary>
+        /// «Ніколи крізь тіло» (власник 08.10.2026) для речей за спиною: у стійці, ході й бігу (8 кадрів кожен) — найменша
+        /// відстань від вершин речі до вершин тіла й одягу. «!!» — ближче 1,5 см (дотик чи прохід крізь).
+        /// </summary>
+        private static void StowClearance(CharacterKitLibrary lib, CharacterAnimLibrary anims, StringBuilder report)
+        {
+            report.AppendLine();
+            report.AppendLine("==== ЗА СПИНОЮ: відстань до тіла й одягу (стійка, хода, біг)");
+            var cases = new List<KeyValuePair<string, KeyValuePair<Appearance, string[]>>>();
+            foreach (var id in new[] { "maksym", "myroslava", "tuhar" })
+                cases.Add(new KeyValuePair<string, KeyValuePair<Appearance, string[]>>(id,
+                    new KeyValuePair<Appearance, string[]>(AppearanceCatalog.Named(id), null)));
+            foreach (var g in new[] { Gender.Male, Gender.Female })
+                foreach (var kit in new[] { new[] { "wpn_musket" }, new[] { "wpn_sword", "shield_round" }, new[] { "wpn_bow" },
+                                            new[] { "wpn_katana", "cloak" }, new[] { "wpn_mace", "buckler" }, new[] { "wpn_dagger" } })
+                    cases.Add(new KeyValuePair<string, KeyValuePair<Appearance, string[]>>((g == Gender.Male ? "m" : "f") + "-" + string.Join("+", kit),
+                        new KeyValuePair<Appearance, string[]>(AppearanceCatalog.DefaultProtagonist(g), kit)));
+            foreach (var c in cases)
+            {
+                var look = c.Value.Key.Clone();
+                var extra = c.Value.Value;
+                if (extra != null && System.Array.IndexOf(extra, "cloak") >= 0) look = look.Accent("cloak");
+                var plan = CharacterKitPlan.From(look, extra).Stowed();
+                var root = new GameObject("stow-check");
+                var model = CharacterAssembler.Build(lib, plan, root.transform, 0);
+                if (model == null) { Object.DestroyImmediate(root); continue; }
+                var stowed = new List<SkinnedMeshRenderer>();
+                var rest = new List<SkinnedMeshRenderer>();
+                foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                {
+                    if (!smr.enabled || !smr.gameObject.activeInHierarchy) continue;
+                    if (smr.name.EndsWith(CharacterKitPlan.StowedSuffix)) stowed.Add(smr);
+                    else if (!smr.name.Contains("low-poly") && !smr.name.Contains("eyebrow") && !smr.name.Contains("eyelash")) rest.Add(smr);
+                }
+                if (stowed.Count == 0) { Object.DestroyImmediate(root); continue; }
+                foreach (var st in new[] { CharacterAnimState.Idle, CharacterAnimState.Walk, CharacterAnimState.Run })
+                {
+                    var clip = anims.For(st, WeaponStyle.Unarmed);
+                    if (clip == null) continue;
+                    var worst = new Dictionary<string, float>();
+                    for (int f = 0; f < 8; f++)
+                    {
+                        var g = Pose(model, clip, clip.length * f / 8f);
+                        var body = new List<Vector3>();
+                        foreach (var r in rest) body.AddRange(Baked(r));
+                        foreach (var sm in stowed)
+                        {
+                            float best = float.MaxValue;
+                            var pts = Baked(sm);
+                            for (int i = 0; i < pts.Count; i += 2)
+                                for (int j = 0; j < body.Count; j += 3)
+                                {
+                                    float d = (pts[i] - body[j]).sqrMagnitude;
+                                    if (d < best) best = d;
+                                }
+                            string key = CharacterAssembler.PartOf(sm.name);
+                            float dist = Mathf.Sqrt(best) / Mathf.Max(1e-4f, sm.transform.lossyScale.y);
+                            if (!worst.ContainsKey(key) || dist < worst[key]) worst[key] = dist;
+                        }
+                        if (g.IsValid()) g.Destroy();
+                    }
+                    foreach (var kv in worst)
+                        report.AppendLine(c.Key + " · " + st + " · " + kv.Key + ": " + (kv.Value * 100f).ToString("0.0") + " см" +
+                                          (kv.Value < 0.015f ? " !!" : ""));
+                }
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        private static List<Vector3> Baked(SkinnedMeshRenderer smr)
+        {
+            var mesh = new Mesh();
+            smr.BakeMesh(mesh, true);
+            var m = smr.transform.localToWorldMatrix;
+            var list = new List<Vector3>(mesh.vertexCount);
+            foreach (var v in mesh.vertices) list.Add(m.MultiplyPoint3x4(v));
+            Object.DestroyImmediate(mesh);
+            return list;
         }
 
         /// <summary>Світло й камера лукбука (той самий вигляд, що в <see cref="Run"/>).</summary>
