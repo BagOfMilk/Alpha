@@ -675,10 +675,8 @@ def stowed_copies(rig, body):
         if part in STOW_POLES:
             # лук і рушниця: верх — до лівого плеча, низ — над полами в бігу
             variants = [(part + "_stowed", -Vector((TILT[0], 0.0, TILT[1])), 1.36, 0.155)]
-            if part == "wpn_bow":
-                # навхрест поверх сагайдака (той іде від правого стегна до лівого плеча) — верх до правого плеча
-                variants.append(("wpn_bow_quiver_stowed", -Vector((-TILT[0] * 1.6, 0.0, TILT[1])).normalized(), 1.36,
-                                 quiver_back + 0.008))
+            if part == "wpn_bow" and quiver is not None:
+                out["wpn_bow_quiver_stowed"] = _stow_bow_by_quiver(rig, body, ob, quiver, np)
         elif part in STOW_HILT_UP:
             variants = [(part + "_stowed", Vector((-TILT[0], 0.0, TILT[1])), 1.36, 0.155)]       # руків'я — над правим плечем
         elif part in STOW_HEAD_UP:
@@ -690,6 +688,46 @@ def stowed_copies(rig, body):
         for name, t1, height, inner in variants:
             out[name] = _stow_one(rig, body, ob, part, name, t1, Vector((0.0, 0.0, height)), inner, np)
     return out
+
+def _stow_bow_by_quiver(rig, body, ob, quiver, np):
+    """Лук поруч із сагайдаком, паралельно йому, з правого боку, на тій самій глибині — впритул до спини (власник
+    08.10.2026 про лук поверх сагайдака: «лук навіть не поруч»). Дуга лука — назовні, від сагайдака; між ними — зазор."""
+    inv = rig.matrix_world.inverted()
+    Q = np.array([[w.x, w.y, w.z] for w in (inv @ (quiver.matrix_world @ v.co) for v in quiver.data.vertices)])
+    qc = Q.mean(axis=0)
+    _, QV = np.linalg.eigh(np.cov((Q - qc).T))
+    qa = Vector(QV[:, 2])
+    if qa.z < 0:
+        qa = -qa                                         # вісь сагайдака — знизу вгору
+    radius = float(np.max(np.linalg.norm(np.cross(Q - qc, np.array(qa)), axis=1)))
+    pts = [inv @ (ob.matrix_world @ v.co) for v in ob.data.vertices]
+    P = np.array([[v.x, v.y, v.z] for v in pts])
+    c = P.mean(axis=0)
+    _, V = np.linalg.eigh(np.cov((P - c).T))
+    a1 = Vector(V[:, 2])
+    proj = (P - c) @ np.array(V[:, 2])
+    # Хорда — між кінцями плечей; середнє вершин відхилене від неї туди, куди вигнута дуга.
+    tip_a, tip_b = P[int(np.argmin(proj))], P[int(np.argmax(proj))]
+    mid = (tip_a + tip_b) * 0.5
+    belly = Vector(c - mid); belly = (belly - a1 * belly.dot(a1)).normalized()     # куди вигнута дуга
+    u1, u2 = a1.normalized(), belly
+    u3 = u1.cross(u2)
+    t1 = qa.normalized()
+    t3 = Vector((0.0, 1.0, 0.0)); t3 = (t3 - t1 * t3.dot(t1)).normalized()       # назовні від спини
+    right = t3.cross(t1).normalized()
+    if right.x > 0:
+        right = -right                                   # праворуч від сагайдака (−X)
+    t2 = right
+    t3 = t1.cross(t2)
+    Rm = Matrix((t1, t2, t3)).transposed() @ Matrix((u1, u2, u3))
+    gap = radius + 0.02                                  # тятиву лука відведено від сагайдака (у грі — лінія)
+    centre = Vector(qc) + right * gap - t1 * 0.06        # низ лука ~0,85 м — над полами в бігу; верх трохи над головою
+    moved = [Rm @ (v - Vector(mid)) + centre for v in pts]
+    bm = bmesh.new(); bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    for v, q in zip(bm.verts, moved):
+        v.co = q
+    return _rigid(f"{rig.name}.wpn_bow_quiver_stowed", bm, rig, "spine_03", ob["kit_kind"], body)
 
 def _stow_one(rig, body, ob, part, name, t1, centre, inner, np):
     inv = rig.matrix_world.inverted()
