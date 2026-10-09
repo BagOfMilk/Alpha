@@ -114,6 +114,7 @@ namespace Game.Gameplay.EditorTools
                     }
                     var b = BoneBounds(modelGo);
                     report.AppendLine("   межі (кістки): " + b.center.ToString("0.00") + " розмір " + b.size.ToString("0.00"));
+                    StowReport(modelGo, facing, report);
                     var snap = Snapshot(modelGo);
                     Shoot(cam, b, facing, OutDir + "/" + look.Key + ".png");
                     Unsnap(modelGo, snap);
@@ -318,6 +319,38 @@ namespace Game.Gameplay.EditorTools
                 }
             }
             if (g.IsValid()) g.Destroy();
+        }
+
+        /// <summary>
+        /// Де лежить річ за спиною («_stowed») відносно тіла: центр і найближча до тіла точка в рамці (вперед, вгору,
+        /// ліворуч) від кістки spine_03, метри моделі. За спиною — «вперед» від'ємне.
+        /// </summary>
+        private static void StowReport(GameObject model, Vector3 facing, StringBuilder report)
+        {
+            Transform spine = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true)) if (t.name == "spine_03") spine = t;
+            if (spine == null) return;
+            var left = -Vector3.Cross(Vector3.up, facing).normalized;
+            float s = Mathf.Max(1e-4f, spine.lossyScale.y);
+            foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+            {
+                if (!smr.name.EndsWith(CharacterKitPlan.StowedSuffix)) continue;
+                var mesh = new Mesh();
+                smr.BakeMesh(mesh, true);
+                var m = smr.transform.localToWorldMatrix;
+                Vector3 sum = Vector3.zero; float nearest = float.MaxValue;
+                foreach (var v in mesh.vertices)
+                {
+                    var w = m.MultiplyPoint3x4(v) - spine.position;
+                    sum += w;
+                    nearest = Mathf.Min(nearest, -Vector3.Dot(w, facing));
+                }
+                var c = sum / Mathf.Max(1, mesh.vertexCount);
+                report.AppendLine("   за спиною " + smr.name + ": центр (вперед " + (Vector3.Dot(c, facing) / s).ToString("0.00") +
+                                  ", вгору " + (c.y / s).ToString("0.00") + ", ліворуч " + (Vector3.Dot(c, left) / s).ToString("0.00") +
+                                  "), найближче до тіла — " + (nearest / s).ToString("0.00") + " м позаду spine_03");
+                Object.DestroyImmediate(mesh);
+            }
         }
 
         /// <summary>Світло й камера лукбука (той самий вигляд, що в <see cref="Run"/>).</summary>
