@@ -55,12 +55,16 @@ namespace Game.Gameplay
     {
         // ================= камера: константи спільні з Editor (докорінно §4) =================
 
-        // Власник 08.10.2026: «Бій занадто високо не як у референесах». Було 52° і кадр на всю арену — бійці дрібні,
-        // дивишся згори. У WL3 і Rogue Trader камера нижча й ближча, за тим, хто ходить: 40° і крупніший план.
+        // Власник 08.10.2026: «Бій занадто високо не як у референесах». Було 52°, ортографія і кадр на всю арену —
+        // бійці дрібні, дивишся згори, як на схему. У WL3 і Rogue Trader камера перспективна, нижча й ближча, за тим,
+        // хто ходить: 40° у точці фокуса, вузький кут огляду (далеке менше й нижче — глибина), крупніший план.
         public const float CameraTiltDegrees = 40f;
 
-        /// <summary>Розмір кадру на старті бою (половина висоти в од.): крупний план бійця, а не вся арена.</summary>
-        private const float CameraStartZoom = 5f;
+        /// <summary>Кут огляду камери бою (по вертикалі). Вузький — мало спотворень, але є глибина.</summary>
+        public const float CameraFieldOfView = 30f;
+
+        /// <summary>Розмір кадру на старті бою (половина висоти в од. у точці фокуса): крупний план бійця, а не вся арена.</summary>
+        private const float CameraStartZoom = 4f;
         public const float InitialYawDegrees = 45f;
 
         // ================= призначається BattleArenaBuilder (Editor) =================
@@ -233,13 +237,12 @@ namespace Game.Gameplay
 
         /// <summary>П13: той, хто останнім бив, і той, кому зараз повернуто звичайний темп на вбивстві.</summary>
         private string _lastStrikerId, _slowMoActorId;
-        /// <summary>П12: політ, запитаний під час екшн-кадру (перспектива), — виконується після повернення ортографічної камери.</summary>
+        /// <summary>П12: політ, запитаний під час екшн-кадру (через плече), — виконується після повернення камери бою.</summary>
         private string _focusAfterShot;
 
         // ================= Бій v2: камера (§4) =================
 
-        private const float CameraDistance = 24f;
-        private const float CameraMinZoom = 4f;
+        private const float CameraMinZoom = 2.8f;
         private const float CameraMaxZoom = 12f;
         private const float CameraPanSpeed = 5f;
         private const float CameraFlyDuration = 0.45f;
@@ -601,7 +604,7 @@ namespace Game.Gameplay
             return go.transform.position + Vector3.up * (0.93f * height);
         }
 
-        /// <summary>Екшн-кадр скінчився: камера арени знову ортографічна, на своїй позі, без «доїзду».</summary>
+        /// <summary>Екшн-кадр скінчився: камера арени знову на своїй позі й куті огляду, без «доїзду».</summary>
         private void EndActionShot()
         {
             if (!_actionShotOn) return;
@@ -2743,10 +2746,40 @@ namespace Game.Gameplay
         private void ApplyCameraPose(Vector3 focus)
         {
             if (ArenaCamera == null) return;
-            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistance);
+            ArenaCamera.orthographic = false;
+            ArenaCamera.fieldOfView = CameraFieldOfView;
+            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistanceFor(_cameraZoom));
             ArenaCamera.transform.position = focus + new Vector3(offset.X, offset.Y, offset.Z);
             ArenaCamera.transform.rotation = Quaternion.LookRotation(-new Vector3(offset.X, offset.Y, offset.Z).normalized, Vector3.up);
-            if (ArenaCamera.orthographic) ArenaCamera.orthographicSize = _cameraZoom;
+            AimKeyLight();
+        }
+
+        /// <summary>Відстань перспективної камери, на якій у точці фокуса видно <paramref name="zoom"/> од. від центру до краю кадру.</summary>
+        private static float CameraDistanceFor(float zoom) => zoom / Mathf.Tan(CameraFieldOfView * 0.5f * Mathf.Deg2Rad);
+
+        // Сонце села стоїть під кут хабової камери; у бою з поворотом 45° воно світило бійцям у спину — на знімках
+        // туру всі постаті були чорними силуетами. На час бою ключове світло — з-за плеча камери, трохи збоку (як
+        // світять сцени WL3 і Rogue Trader: обличчя читаються), тінь падає від глядача. Сила й колір — від доби й
+        // погоди (ніч лишається ніччю); після бою кут повертається.
+        private const float KeyLightPitch = 50f;
+        private const float KeyLightYawFromCamera = 35f;
+        private Light _keyLight;
+        private Quaternion _keyLightSaved;
+        private bool _keyLightAimed;
+
+        private void AimKeyLight()
+        {
+            if (_keyLight == null) _keyLight = RenderSettings.sun;
+            if (_keyLight == null) return;
+            if (!_keyLightAimed) { _keyLightSaved = _keyLight.transform.rotation; _keyLightAimed = true; }
+            _keyLight.transform.rotation = Quaternion.Euler(KeyLightPitch, _cameraYawDegrees + KeyLightYawFromCamera, 0f);
+        }
+
+        private void RestoreKeyLight()
+        {
+            if (!_keyLightAimed) return;
+            _keyLightAimed = false;
+            if (_keyLight != null) _keyLight.transform.rotation = _keyLightSaved;
         }
 
         /// <summary>Поточні поля HUD — з останніх прямокутників <see cref="SetHudRects"/>, або розумний дефолт, поки їх ще не було цього бою.</summary>
@@ -2773,8 +2806,8 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Перетин променя ортографічної камери (промені паралельні — Unity
-        /// сам це гарантує для <c>Camera.orthographic == true</c>) із площиною
+        /// Перетин променя камери (перспективної — з її центру; Unity рахує
+        /// сам у <c>ScreenPointToRay</c>) із площиною
         /// арени (Y=0) для довільної екранної точки — БЕЗ Physics.Raycast
         /// (арену ще не обов'язково добудовано під час InitializeCamera).
         /// </summary>
@@ -2791,7 +2824,8 @@ namespace Game.Gameplay
         /// рендерився в центрі вільної від HUD області, а не всього екрана
         /// (§4, Бій v2 раунд 2). Працює на живій позі <see cref="ArenaCamera"/>
         /// (tilt/yaw/zoom — байдуже, який саме фокус камера тримає ЗАРАЗ:
-        /// ортографічна панорама лінійна, тож зсув виходить той самий).
+        /// панорама — паралельне перенесення камери над площиною, тож точка
+        /// землі під кожним пікселем зсувається на той самий вектор).
         /// </summary>
         private Vector3 FocusPointForFreeArea(Vector3 targetGround)
         {
@@ -2855,15 +2889,16 @@ namespace Game.Gameplay
             var clamped = BattleArenaView.ClampPanTarget(_cameraPanFocus.x, _cameraPanFocus.z, _gridWidth, _gridHeight, CameraPanMargin);
             _cameraPanFocus = new Vector3(clamped.X, 0f, clamped.Z);
 
-            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistance);
+            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistanceFor(_cameraZoom));
             var targetPos = _cameraPanFocus + new Vector3(offset.X, offset.Y, offset.Z);
             var targetRot = Quaternion.LookRotation(-new Vector3(offset.X, offset.Y, offset.Z).normalized, Vector3.up);
 
             float k = 1f - Mathf.Exp(-8f * dt);
             ArenaCamera.transform.position = Vector3.Lerp(ArenaCamera.transform.position, targetPos, k);
             ArenaCamera.transform.rotation = Quaternion.Slerp(ArenaCamera.transform.rotation, targetRot, k);
-            if (ArenaCamera.orthographic)
-                ArenaCamera.orthographicSize = Mathf.Lerp(ArenaCamera.orthographicSize, _cameraZoom, k);
+            ArenaCamera.orthographic = false;
+            ArenaCamera.fieldOfView = CameraFieldOfView;
+            AimKeyLight();   // щокадру: село могло переставити сонце (погода, фаза), а Q/E крутить камеру
         }
 
         // ================= виконання команд + переклад стрічки подій =================
@@ -3138,6 +3173,7 @@ namespace Game.Gameplay
 
         private void RestoreHubCamera()
         {
+            RestoreKeyLight();
             if (ArenaCamera != null) ArenaCamera.gameObject.SetActive(false);
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(true);
             if (_hubRoot != null) _hubRoot.SetActive(true);

@@ -173,8 +173,9 @@ namespace Game.Gameplay.EditorTools
             var go = new GameObject("ArenaCamera");
             var cam = go.AddComponent<Camera>();
 
-            cam.orthographic = true;
-            cam.orthographicSize = 8f;
+            // Перспектива, як у WL3 і Rogue Trader (власник 08.10.2026: «Бій занадто високо не як у референесах»).
+            cam.orthographic = false;
+            cam.fieldOfView = Game.Gameplay.BattleArenaController.CameraFieldOfView;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.10f, 0.10f, 0.12f);
             cam.nearClipPlane = 0.1f;
