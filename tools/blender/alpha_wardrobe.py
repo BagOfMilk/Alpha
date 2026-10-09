@@ -677,13 +677,13 @@ def stowed_copies(rig, body):
             a1 = -a1                                    # a1 — у бік кінця хвату
         if part in STOW_POLES:
             t1 = -Vector((TILT[0], 0.0, TILT[1]))          # хват — донизу, верх — до лівого плеча
-            centre, inner, bone = Vector((0.0, 0.0, 1.18)), 0.155, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.28)), 0.155, "spine_03"   # низ — над полами й спідницею в бігу
         elif part in STOW_HILT_UP:
             t1 = Vector((-TILT[0], 0.0, TILT[1]))          # руків'я — вгору над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.34)), 0.155, "spine_03"
         elif part in STOW_HEAD_UP:
             t1 = -Vector((-TILT[0], 0.0, TILT[1]))         # хват (низ руків'я) — донизу, голова — над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.34)), 0.155, "spine_03"
         elif part in STOW_FLAT:
             t1 = Vector((0.0, 0.0, 1.0))
             centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.19, "spine_03"
