@@ -394,30 +394,43 @@ namespace Game.Gameplay.EditorTools
                     var clip = anims.For(st, WeaponStyle.Unarmed);
                     if (clip == null) continue;
                     var worst = new Dictionary<string, float>();
+                    var where = new Dictionary<string, string>();
+                    float scale = Mathf.Max(1e-4f, model.transform.lossyScale.y);
                     for (int f = 0; f < 8; f++)
                     {
                         var g = Pose(model, clip, clip.length * f / 8f);
                         var body = new List<Vector3>();
-                        foreach (var r in rest) body.AddRange(Baked(r));
+                        var owner = new List<string>();
+                        foreach (var r in rest)
+                        {
+                            var b = Baked(r);
+                            body.AddRange(b);
+                            string n = CharacterAssembler.PartOf(r.name);
+                            for (int k = 0; k < b.Count; k++) owner.Add(n);
+                        }
                         foreach (var sm in stowed)
                         {
-                            float best = float.MaxValue;
+                            float best = float.MaxValue; int bi = -1, bj = -1;
                             var pts = Baked(sm);
                             for (int i = 0; i < pts.Count; i += 2)
                                 for (int j = 0; j < body.Count; j += 3)
                                 {
                                     float d = (pts[i] - body[j]).sqrMagnitude;
-                                    if (d < best) best = d;
+                                    if (d < best) { best = d; bi = i; bj = j; }
                                 }
                             string key = CharacterAssembler.PartOf(sm.name);
-                            float dist = Mathf.Sqrt(best) / Mathf.Max(1e-4f, sm.transform.lossyScale.y);
-                            if (!worst.ContainsKey(key) || dist < worst[key]) worst[key] = dist;
+                            float dist = Mathf.Sqrt(best) / scale;
+                            if (!worst.ContainsKey(key) || dist < worst[key])
+                            {
+                                worst[key] = dist;
+                                where[key] = owner[bj] + " на висоті " + ((pts[bi].y - model.transform.position.y) / scale).ToString("0.00") + " м";
+                            }
                         }
                         if (g.IsValid()) g.Destroy();
                     }
                     foreach (var kv in worst)
-                        report.AppendLine(c.Key + " · " + st + " · " + kv.Key + ": " + (kv.Value * 100f).ToString("0.0") + " см" +
-                                          (kv.Value < 0.015f ? " !!" : ""));
+                        report.AppendLine(c.Key + " · " + st + " · " + kv.Key + ": " + (kv.Value * 100f).ToString("0.0") + " см (" +
+                                          where[kv.Key] + ")" + (kv.Value < 0.015f ? " !!" : ""));
                 }
                 Object.DestroyImmediate(root);
             }
