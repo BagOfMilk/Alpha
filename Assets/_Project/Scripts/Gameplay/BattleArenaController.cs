@@ -557,7 +557,8 @@ namespace Game.Gameplay
         private void TryStartActionShot(string attackerId, string targetId, float duration)
         {
             if (ArenaCamera == null || string.IsNullOrEmpty(attackerId) || string.IsNullOrEmpty(targetId) || attackerId == targetId) return;
-            if (!_actionCamera.ShouldTrigger(Time.realtimeSinceStartup, duration, UI.BattleActionCameraSetting.Enabled, GraphicsTier.IsLow)) return;
+            bool shoot = _actionCamera.ShouldTrigger(Time.realtimeSinceStartup, duration, UI.BattleActionCameraSetting.Enabled, GraphicsTier.IsLow);
+            if (!shoot) return;
             var a = UnitGo(attackerId);
             var t = UnitGo(targetId);
             if (a == null || t == null) return;

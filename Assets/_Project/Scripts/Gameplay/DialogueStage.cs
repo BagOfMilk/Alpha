@@ -59,6 +59,40 @@ namespace Game.Gameplay
             /// «стоїть» (сидячий устає). Голову з неї беремо, коли поза встановилась.
             /// </summary>
             public int SpawnFrame = -100;
+            /// <summary>Зброя й щит, сховані на час розмови (повертаються в <see cref="End"/>).</summary>
+            public List<Renderer> Sheathed;
+        }
+
+        /// <summary>
+        /// Зброю на час розмови прибрано (власник, 08.10.2026: «Хоочу щоб Эквіп ніколи не був так, а нормально Не
+        /// скрізь руку чи тіло»; як у BG3 — у розмові зброя в піхвах): жест «говорить» — порожніми руками, і спис чи
+        /// палиця не прорізають пальці й тіло. Частини набору <c>wpn_*</c>, <c>shield_*</c> і тятива лука.
+        /// </summary>
+        private static void Sheathe(Actor actor)
+        {
+            if (actor?.Root == null || actor.Sheathed != null) return;
+            actor.Sheathed = new List<Renderer>();
+            foreach (var r in actor.Root.GetComponentsInChildren<Renderer>())
+            {
+                if (!r.enabled) continue;
+                string n = r.gameObject.name;
+                if (n.EndsWith("_stowed", System.StringComparison.OrdinalIgnoreCase)) continue; // за спиною — лишається (трек V)
+                bool gear = n.IndexOf("wpn_", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            n.IndexOf("shield_", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            n.IndexOf("buckler", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            n.IndexOf("staff", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            r is LineRenderer;
+                if (!gear) continue;
+                r.enabled = false;
+                actor.Sheathed.Add(r);
+            }
+        }
+
+        private static void Unsheathe(Actor actor)
+        {
+            if (actor?.Sheathed == null) return;
+            foreach (var r in actor.Sheathed) if (r != null) r.enabled = true;
+            actor.Sheathed = null;
         }
 
         /// <summary>Свіжа тимчасова постать ще не отримала анімовану позу — голову з неї брати рано.</summary>
@@ -145,6 +179,8 @@ namespace Game.Gameplay
             {
                 var a = pair.Value;
                 if (a.Root == null) continue;
+                Unsheathe(a);
+                RestoreIdle(a); // хто сидів на віче — сідає назад
                 if (a.Temporary) Destroy(a.Root.gameObject);
                 else if (a.Root != (_hero != null ? _hero.transform : null)) a.Root.rotation = a.SavedRotation;
             }
@@ -175,11 +211,9 @@ namespace Game.Gameplay
         {
             var subject = ActorFor(shot.SubjectId);
             if (subject == null) return; // нікого показати — лишаємо попередній план
-            if (NotSettled(subject)) return; // постать ще в бінд-позі — знімемо за кадр-два
             string otherId = shot.OtherId;
             if (string.IsNullOrEmpty(otherId) && shot.SubjectId == GameSession.ProtagonistId) otherId = _anchorOtherId;
             var other = !string.IsNullOrEmpty(otherId) ? ActorFor(otherId) : null;
-            if (NotSettled(other)) return;
             if (shot.SubjectId != GameSession.ProtagonistId && _anchorOtherId == null) _anchorOtherId = shot.SubjectId;
             if (!string.IsNullOrEmpty(shot.OtherId) && shot.OtherId != GameSession.ProtagonistId && _anchorOtherId == null) _anchorOtherId = shot.OtherId;
 
@@ -306,7 +340,7 @@ namespace Game.Gameplay
         private void SetTalking(string speakerId)
         {
             if (speakerId == _talkingId) return;
-            if (_talkingId != null && _actors.TryGetValue(_talkingId, out var was)) RestoreIdle(was);
+            if (_talkingId != null && _actors.TryGetValue(_talkingId, out var was)) StandStill(was);
             _talkingId = speakerId;
             if (speakerId == null || !_actors.TryGetValue(speakerId, out var now)) return;
             var anim = now.Figure != null ? now.Figure.Animation : null;
@@ -315,12 +349,24 @@ namespace Game.Gameplay
             var talk = anims != null && anims.IsComplete ? anims.For(CharacterAnimState.Talk, WeaponStyle.Unarmed) : null;
             if (talk == null) return;
             if (now.SavedIdle == null) now.SavedIdle = anim.idle;
-            if (anim.idle != talk)
-            {
-                now.SpawnFrame = Time.frameCount; // нова поза — план зачекає
-                if (_shot != null && (_shot.SubjectId == speakerId || _shot.OtherId == speakerId)) _shotSignature = null; // перезняти той самий план
-            }
+            if (anim.idle != talk) now.SpawnFrame = Time.frameCount; // нова поза — кістки голови довіряємо за кілька кадрів
             anim.SetIdleClip(talk);
+        }
+
+        /// <summary>
+        /// У розмові всі стоять (як у BG3): той, хто сидів на віче чи працював на посту, встає ще до першого плану —
+        /// інакше камера рахувала голову сидячого, а знімала стоячого (тур 08.10.2026, Захар — груди).
+        /// </summary>
+        private static void StandStill(Actor actor)
+        {
+            var anim = actor?.Figure != null ? actor.Figure.Animation : null;
+            if (anim == null) return;
+            KitFigure.TryFindLibraries(out _, out var anims);
+            var stand = anims != null && anims.IsComplete ? anims.For(CharacterAnimState.Idle, WeaponStyle.Unarmed) : null;
+            if (stand == null || anim.idle == stand) return;
+            if (actor.SavedIdle == null) actor.SavedIdle = anim.idle;
+            anim.SetIdleClip(stand);
+            actor.SpawnFrame = Time.frameCount;
         }
 
         private static void RestoreIdle(Actor actor)
@@ -352,6 +398,8 @@ namespace Game.Gameplay
             }
             if (actor == null) return null;
             actor.Head = FindHead(actor.Root);
+            Sheathe(actor);
+            if (!actor.Temporary && id != GameSession.ProtagonistId) StandStill(actor);
             if (actor.SavedIdle == null && actor.Figure != null && actor.Figure.Animation != null) actor.SavedIdle = actor.Figure.Animation.idle;
             _actors[id] = actor;
             return actor;
@@ -434,21 +482,27 @@ namespace Game.Gameplay
             return null;
         }
 
+        /// <summary>
+        /// Голова в світі. Поки поза не встановилась (свіжа постать у бінд-позі, щойно встав), кістка бреше — тоді
+        /// голова від кореня за стандартним зростом: план ріжеться одразу, без очікування й без стрибка.
+        /// </summary>
         private static Vector3 HeadOf(Actor actor)
         {
-            if (actor.Head != null) return actor.Head.position;
-            return actor.Root.position + Vector3.up * (0.93f * FigureHeight(actor));
+            if (actor.Head != null && !NotSettled(actor)) return actor.Head.position;
+            return actor.Root.position + Vector3.up * (0.93f * StandardHeight);
         }
+
+        private static float StandardHeight => 1.75f * Game.Gameplay.Visual.ArtScale.World;
 
         /// <summary>Зріст постаті в одиницях світу (масштаб сцени × людський зріст ≈ 1,75 м).</summary>
         private static float FigureHeight(Actor actor)
         {
-            if (actor?.Head != null && actor.Root != null)
+            if (actor?.Head != null && actor.Root != null && !NotSettled(actor))
             {
                 float h = (actor.Head.position.y - actor.Root.position.y) / 0.93f;
                 if (h > 0.05f) return h;
             }
-            return 1.75f * Game.Gameplay.Visual.ArtScale.World;
+            return StandardHeight;
         }
 
         private static DialogueVec ToD(Vector3 v) => new DialogueVec(v.x, v.y, v.z);
