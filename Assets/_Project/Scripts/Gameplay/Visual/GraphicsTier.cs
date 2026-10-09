@@ -34,12 +34,38 @@ namespace Game.Gameplay
             _initialised = true;
 
             GraphicsLevel level;
+            if (TryCommandLineLevel(out level))
+            {
+                Apply(level); // лише на цей запуск, без збереження (тури: -gfx medium)
+                return;
+            }
             if (PlayerPrefs.HasKey(PrefKey))
                 level = Clamp(PlayerPrefs.GetInt(PrefKey));
             else
                 level = GraphicsTierPicker.Pick(SystemInfo.graphicsDeviceName, SystemInfo.graphicsMemorySize,
                     SystemInfo.systemMemorySize, SystemInfo.processorCount);
             Apply(level);
+        }
+
+        /// <summary>
+        /// Рівень з командного рядка: <c>-gfx low|medium|high</c> — для турів і перевірок на певному рівні (власник,
+        /// 08.10.2026: «Постав Середню графіку в турі і покажи екшн-кадр»). Діє лише на запуск, вибору гравця не змінює.
+        /// </summary>
+        private static bool TryCommandLineLevel(out GraphicsLevel level)
+        {
+            level = GraphicsLevel.Medium;
+            var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i + 1 < args.Length; i++)
+            {
+                if (!string.Equals(args[i], "-gfx", System.StringComparison.OrdinalIgnoreCase)) continue;
+                switch (args[i + 1].ToLowerInvariant())
+                {
+                    case "low": level = GraphicsLevel.Low; return true;
+                    case "medium": level = GraphicsLevel.Medium; return true;
+                    case "high": level = GraphicsLevel.High; return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>Вибір гравця: діє одразу і запам'ятовується.</summary>

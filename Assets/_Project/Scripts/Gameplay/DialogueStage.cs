@@ -263,19 +263,20 @@ namespace Game.Gameplay
             _shotSignature = shot.Signature;
             _shotAge = 0f;
             PlaceKeyLight(shot.Kind, subjectHead, height);
-            HideOccluders(ToV(_pose.Position), ToV(_pose.LookAt), height);
+            HideOccluders(ToV(_pose.Position), ToV(_pose.LookAt), height, subject, other);
         }
 
         /// <summary>
         /// Хто з НЕучасників стоїть між камерою й тим, на кого вона дивиться (чи впритул до камери), на час плану
-        /// ховається, як у BG3 (тур 08.10.2026, знімок 12: житель закривав мовця). Учасники не ховаються ніколи.
+        /// ховається, як у BG3 (тур 08.10.2026, знімок 12: житель закривав мовця). Ті двоє, кого знімає план, — ніколи.
         /// </summary>
-        private void HideOccluders(Vector3 camera, Vector3 target, float height)
+        private void HideOccluders(Vector3 camera, Vector3 target, float height, Actor keepA, Actor keepB)
         {
             float radius = 0.45f * height;
             foreach (var fig in FindObjectsByType<KitFigure>(FindObjectsSortMode.None))
             {
-                if (fig == null || !fig.isActiveAndEnabled || IsParticipant(fig.transform)) continue;
+                // Не ховаємо лише тих, кого цей план знімає; хто вже договорив (Тугар пішов) — може й заважати.
+                if (fig == null || !fig.isActiveAndEnabled || Owns(keepA, fig.transform) || Owns(keepB, fig.transform)) continue;
                 var body = fig.transform.position + Vector3.up * (0.55f * StandardHeight);
                 if (!OnSightLine(body, camera, target, radius)) continue;
                 foreach (var r in fig.GetComponentsInChildren<Renderer>())
@@ -293,12 +294,8 @@ namespace Game.Gameplay
             _occluders.Clear();
         }
 
-        private bool IsParticipant(Transform t)
-        {
-            foreach (var a in _actors.Values)
-                if (a.Root != null && (t == a.Root || t.IsChildOf(a.Root) || a.Root.IsChildOf(t))) return true;
-            return false;
-        }
+        private static bool Owns(Actor a, Transform t) =>
+            a?.Root != null && (t == a.Root || t.IsChildOf(a.Root) || a.Root.IsChildOf(t));
 
         /// <summary>Точка біля відрізка «камера → ціль» (не за ціллю) або впритул до камери.</summary>
         private static bool OnSightLine(Vector3 point, Vector3 from, Vector3 to, float radius)
