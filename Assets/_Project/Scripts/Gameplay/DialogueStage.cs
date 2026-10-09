@@ -26,8 +26,12 @@ namespace Game.Gameplay
     /// </summary>
     public sealed class DialogueStage : MonoBehaviour
     {
-        /// <summary>Далі за цю відстань (одиниці світу) жителя не знімаємо там, де стоїть, — ставимо постать поруч.</summary>
-        private const float NearEnough = 3f;
+        /// <summary>
+        /// Розмовна відстань (одиниці світу, ≈ 0,85 зросту постаті): учасники стоять тут від героя. Хто далі
+        /// <see cref="GatherRadius"/>, переходить на розмовне місце на час сцени (як у BG3 — учасників зводять разом),
+        /// інакше подвійний план виходив далеким, а через плече — порожнім (тур 08.10.2026, знімок 13).
+        /// </summary>
+        private const float ConversationDistance = 0.6f, GatherRadius = 0.9f;
         private const float ShotPushSeconds = 7f;
         /// <summary>Найбільший поворот голови до співрозмовника, градуси; швидкість наростання ваги погляду.</summary>
         private const float LookMaxDegrees = 50f, LookBlendPerSecond = 3f;
@@ -61,6 +65,9 @@ namespace Game.Gameplay
             public int SpawnFrame = -100;
             /// <summary>Зброя й щит, сховані на час розмови (повертаються в <see cref="End"/>).</summary>
             public List<Renderer> Sheathed;
+            /// <summary>Житель перейшов на розмовне місце — після сцени вертається сюди.</summary>
+            public bool Moved;
+            public Vector3 SavedPosition;
         }
 
         /// <summary>
@@ -104,6 +111,10 @@ namespace Game.Gameplay
         private readonly Dictionary<string, Actor> _actors = new Dictionary<string, Actor>();
         /// <summary>Скільки разів крупний план уже був на цій людині — варіант крупного чергується.</summary>
         private readonly Dictionary<string, int> _closeCount = new Dictionary<string, int>();
+        /// <summary>Скільки розмовних місць біля героя вже зайнято (0 — навпроти, далі — по боках).</summary>
+        private int _slotsUsed;
+        /// <summary>Сторонні постаті, сховані на час плану, бо стоять між камерою й мовцем.</summary>
+        private readonly List<Renderer> _occluders = new List<Renderer>();
         private DialogueShot _shot;
         private Light _keyLight;
         private float _lookWeight;
@@ -182,9 +193,15 @@ namespace Game.Gameplay
                 Unsheathe(a);
                 RestoreIdle(a); // хто сидів на віче — сідає назад
                 if (a.Temporary) Destroy(a.Root.gameObject);
-                else if (a.Root != (_hero != null ? _hero.transform : null)) a.Root.rotation = a.SavedRotation;
+                else if (a.Root != (_hero != null ? _hero.transform : null))
+                {
+                    if (a.Moved) a.Root.position = a.SavedPosition;
+                    a.Root.rotation = a.SavedRotation;
+                }
             }
             _actors.Clear();
+            ShowOccluders();
+            _slotsUsed = 0;
             _closeCount.Clear();
             _shot = null;
             _hasPose = false;
@@ -209,6 +226,7 @@ namespace Game.Gameplay
 
         private void Cut(DialogueShot shot)
         {
+            ShowOccluders(); // учасник нового плану міг бути схованим стороннім попереднього
             var subject = ActorFor(shot.SubjectId);
             if (subject == null) return; // нікого показати — лишаємо попередній план
             string otherId = shot.OtherId;
@@ -245,6 +263,55 @@ namespace Game.Gameplay
             _shotSignature = shot.Signature;
             _shotAge = 0f;
             PlaceKeyLight(shot.Kind, subjectHead, height);
+            HideOccluders(ToV(_pose.Position), ToV(_pose.LookAt), height);
+        }
+
+        /// <summary>
+        /// Хто з НЕучасників стоїть між камерою й тим, на кого вона дивиться (чи впритул до камери), на час плану
+        /// ховається, як у BG3 (тур 08.10.2026, знімок 12: житель закривав мовця). Учасники не ховаються ніколи.
+        /// </summary>
+        private void HideOccluders(Vector3 camera, Vector3 target, float height)
+        {
+            float radius = 0.45f * height;
+            foreach (var fig in FindObjectsByType<KitFigure>(FindObjectsSortMode.None))
+            {
+                if (fig == null || !fig.isActiveAndEnabled || IsParticipant(fig.transform)) continue;
+                var body = fig.transform.position + Vector3.up * (0.55f * StandardHeight);
+                if (!OnSightLine(body, camera, target, radius)) continue;
+                foreach (var r in fig.GetComponentsInChildren<Renderer>())
+                {
+                    if (!r.enabled) continue;
+                    r.enabled = false;
+                    _occluders.Add(r);
+                }
+            }
+        }
+
+        private void ShowOccluders()
+        {
+            foreach (var r in _occluders) if (r != null) r.enabled = true;
+            _occluders.Clear();
+        }
+
+        private bool IsParticipant(Transform t)
+        {
+            foreach (var a in _actors.Values)
+                if (a.Root != null && (t == a.Root || t.IsChildOf(a.Root) || a.Root.IsChildOf(t))) return true;
+            return false;
+        }
+
+        /// <summary>Точка біля відрізка «камера → ціль» (не за ціллю) або впритул до камери.</summary>
+        private static bool OnSightLine(Vector3 point, Vector3 from, Vector3 to, float radius)
+        {
+            var seg = to - from;
+            float len2 = seg.sqrMagnitude;
+            if (len2 < 1e-6f) return false;
+            float t = Vector3.Dot(point - from, seg) / len2;
+            if (t > 0.92f) return false; // за ціллю чи біля неї — не заважає
+            if (t < 0f) return (point - from).magnitude < radius;
+            var closest = from + seg * t;
+            var d = point - closest;
+            return new Vector2(d.x, d.z).magnitude < radius && Mathf.Abs(d.y) < 1.5f * radius + 0.3f;
         }
 
         /// <summary>
@@ -391,8 +458,22 @@ namespace Game.Gameplay
             else
             {
                 var holder = VillageHolderOf(id);
-                if (holder != null && _hero != null && Vector3.Distance(holder.position, _hero.transform.position) <= NearEnough)
-                    actor = new Actor { Root = holder, Figure = holder.GetComponent<KitFigure>(), SavedRotation = holder.rotation };
+                if (holder != null && holder.GetComponent<KitFigure>() != null && _hero != null)
+                {
+                    actor = new Actor { Root = holder, Figure = holder.GetComponent<KitFigure>(), SavedRotation = holder.rotation, SavedPosition = holder.position };
+                    var flat = holder.position - _hero.transform.position;
+                    flat.y = 0f;
+                    if (flat.magnitude > GatherRadius)
+                    {
+                        // Як у BG3: учасника зводять до героя на час розмови, після — назад на своє місце.
+                        var dir = NextSlot();
+                        holder.position = new Vector3(_hero.transform.position.x, holder.position.y, _hero.transform.position.z) + dir * ConversationDistance;
+                        holder.rotation = Quaternion.LookRotation(-dir, Vector3.up);
+                        actor.Moved = true;
+                        actor.SpawnFrame = Time.frameCount; // кістки ще з того місця — голова поки за коренем
+                    }
+                    else _slotsUsed++;
+                }
                 else
                     actor = SpawnBeside(id);
             }
@@ -445,18 +526,12 @@ namespace Game.Gameplay
             if (_hero == null) return null;
             var look = _shell.Session.GetAppearance(id);
             if (look == null) return null;
-            int index = 0;
-            foreach (var a in _actors.Values) if (a.Temporary) index++;
+            int index = _slotsUsed;
             var heroPos = _hero.transform.position;
-            var forward = _hero.transform.rotation * Quaternion.Euler(0f, -_hero.modelYawOffset, 0f) * Vector3.forward;
-            forward.y = 0f;
-            if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
-            forward.Normalize();
-            float spread = index == 0 ? 0f : (index % 2 == 1 ? 35f : -35f) * ((index + 1) / 2);
-            var dir = Quaternion.Euler(0f, spread, 0f) * forward;
+            var dir = NextSlot();
             var go = new GameObject("dialogue:" + id);
             go.layer = _hero.gameObject.layer;
-            go.transform.position = heroPos + dir * 0.6f;
+            go.transform.position = heroPos + dir * ConversationDistance;
             go.transform.rotation = Quaternion.LookRotation(-dir, Vector3.up);
             var figure = go.AddComponent<KitFigure>();
             if (!figure.Show(look, new List<string>(), CharacterAnimState.Idle, 1f, 0.37f * (index + 1), go.layer))
@@ -465,6 +540,18 @@ namespace Game.Gameplay
                 return null;
             }
             return new Actor { Root = go.transform, Figure = figure, Temporary = true, SavedRotation = go.transform.rotation, SpawnFrame = Time.frameCount };
+        }
+
+        /// <summary>Напрям наступного розмовного місця від героя: перше — навпроти, далі — по боках по 35°.</summary>
+        private Vector3 NextSlot()
+        {
+            int index = _slotsUsed++;
+            var forward = _hero.transform.rotation * Quaternion.Euler(0f, -_hero.modelYawOffset, 0f) * Vector3.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
+            forward.Normalize();
+            float spread = index == 0 ? 0f : (index % 2 == 1 ? 35f : -35f) * ((index + 1) / 2);
+            return Quaternion.Euler(0f, spread, 0f) * forward;
         }
 
         private static Transform FindHead(Transform root)
