@@ -37,6 +37,7 @@ try:
             _tint_skin_materials([o for o in rig.children if o.get("kit_kind") == "skin" or o.name.endswith("low-poly")],
                                  (1, 1, 1), f"{g}_default", TEX)
             accents(rig, body)
+            stowed_copies(rig, body)          # зброя, щити й посох за спиною (поза боєм)
             tighten_boots(rig)
             tighten_waist(rig)
             moved = layer_clothes(rig)

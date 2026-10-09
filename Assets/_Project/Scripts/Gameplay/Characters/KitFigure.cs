@@ -44,11 +44,20 @@ namespace Game.Gameplay.Characters
         /// підтюпцем.
         /// </summary>
         public bool Show(Appearance look, IEnumerable<string> equipped, CharacterAnimState idleState, float extraScale, float phase, int layer, bool brisk)
+            => Show(look, equipped, idleState, extraScale, phase, layer, brisk, false);
+
+        /// <summary>
+        /// <paramref name="armed"/> — бій: зброя і в руці, і за спиною, перемикає <see cref="SetWeaponDrawn"/>. Інакше (село)
+        /// усе, що тримають у руці, — за спиною (<see cref="CharacterKitPlan.Stowed"/>).
+        /// </summary>
+        public bool Show(Appearance look, IEnumerable<string> equipped, CharacterAnimState idleState, float extraScale, float phase, int layer,
+            bool brisk, bool armed)
         {
             CharacterKitLibrary kit;
             CharacterAnimLibrary anims;
             if (look == null || !TryFindLibraries(out kit, out anims)) return false;
-            var plan = CharacterKitPlan.From(look, equipped);
+            var full = CharacterKitPlan.From(look, equipped);
+            var plan = armed ? full.WithStowedTwins() : full.Stowed();
             string sig = plan.Signature() + "|" + idleState + "|" + extraScale + "|" + brisk;
             if (sig == _signature && _model != null) return true;
             if (_model != null) Destroy(_model);
@@ -65,6 +74,17 @@ namespace Game.Gameplay.Characters
             _alignIn = animated ? 2 : 0;
             AlignedYaw = 0f;
             _model.transform.localScale = Vector3.one * (ArtScale.World * extraScale);
+
+            _held.Clear();
+            _stowed.Clear();
+            foreach (var smr in _model.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                string part = CharacterAssembler.PartOf(smr.name);
+                if (CharacterKitPlan.IsHeld(part)) _held.Add(smr.gameObject);
+                else if (part.EndsWith(CharacterKitPlan.StowedSuffix, System.StringComparison.Ordinal)) _stowed.Add(smr.gameObject);
+            }
+            _drawn = null;
+            if (armed) SetWeaponDrawn(true);
 
             if (anims != null && anims.IsComplete)
             {
@@ -99,13 +119,21 @@ namespace Game.Gameplay.Characters
                                (Mathf.Max(spread.size.x, spread.size.z) / scale).ToString("0.0") + " м — анімація не стартувала.");
         }
 
-        /// <summary>Ключ зброї, яку видно на моделі (надіта чи впізнавана); null — без зброї.</summary>
-        public static string WeaponOf(CharacterKitPlan plan)
+        private readonly List<GameObject> _held = new List<GameObject>();
+        private readonly List<GameObject> _stowed = new List<GameObject>();
+        private bool? _drawn;
+
+        /// <summary>Зброя (щит, посох) у руці чи за спиною — бій перемикає за станом (<see cref="AnimStateTable.HoldsWeapon"/>).</summary>
+        public void SetWeaponDrawn(bool drawn)
         {
-            foreach (var p in plan.Parts)
-                if (p.Part.StartsWith("wpn_", System.StringComparison.Ordinal)) return p.Part;
-            return null;
+            if (_drawn == drawn) return;
+            _drawn = drawn;
+            foreach (var go in _held) if (go != null) go.SetActive(drawn);
+            foreach (var go in _stowed) if (go != null) go.SetActive(!drawn);
         }
+
+        /// <summary>Ключ зброї, яку видно на моделі (надіта чи впізнавана); null — без зброї.</summary>
+        public static string WeaponOf(CharacterKitPlan plan) => plan.Weapon();
 
         public void Clear()
         {

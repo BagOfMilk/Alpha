@@ -122,6 +122,19 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>Зброя в руці лише там, де кліп її тримає: у русі, укритті, здачі, падінні — за спиною.</summary>
+        [Test]
+        public void WeaponIsHeld_OnlyInClipsThatGripIt()
+        {
+            foreach (var s in new[] { CharacterAnimState.CombatIdle, CharacterAnimState.Overwatch, CharacterAnimState.Attack,
+                                      CharacterAnimState.Block, CharacterAnimState.Hit, CharacterAnimState.HitHeavy })
+                Assert.IsTrue(AnimStateTable.HoldsWeapon(s), s.ToString());
+            foreach (var s in new[] { CharacterAnimState.Idle, CharacterAnimState.Talk, CharacterAnimState.WorkCouncil, CharacterAnimState.Run,
+                                      CharacterAnimState.CoverIdle, CharacterAnimState.Surrender, CharacterAnimState.Down,
+                                      CharacterAnimState.Social, CharacterAnimState.Throw, CharacterAnimState.Victory })
+                Assert.IsFalse(AnimStateTable.HoldsWeapon(s), s.ToString());
+        }
+
         /// <summary>Здібність показується своїм рухом, а не «закляттям» на всі випадки.</summary>
         [Test]
         public void Abilities_UseFittingMotions()

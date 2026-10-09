@@ -637,6 +637,74 @@ def _musket(rig, body):
     bmesh.ops.translate(m, vec=grip, verts=m.verts[:])
     return _rigid(f"{rig.name}.wpn_musket", m, rig, "hand_r", "wood", body)
 
+# ---------------------------------------------------------------- зброя за спиною
+
+# Власник 08.10.2026: «Хоочу щоб Эквіп ніколи не був так, а нормально Не скрізь руку чи тіло». Зброя жорстко сидить у
+# кисті, а мирні кліпи (стоїть, говорить, працює) її не тримають — спис і посох проходили крізь долоню й тіло. Як у
+# BG3: поза боєм річ — за спиною; гра вмикає двійника «<частина>_stowed» замість речі в руці.
+STOW_POLES = ("wpn_spear", "wpn_bow", "wpn_musket", "staff")             # древком донизу, навскіс до лівого плеча
+STOW_HILT_UP = ("wpn_sword", "wpn_sabre", "wpn_katana")               # руків'ям над правим плечем
+STOW_HEAD_UP = ("wpn_axe", "wpn_mace", "wpn_club")                      # головою над правим плечем, руків'ям донизу
+STOW_FLAT = ("shield_round", "shield_kite", "buckler")                  # плазом на спині, зовні
+STOW_BELT = ("wpn_dagger",)                                              # на поясі ззаду, впоперек
+
+def stowed_copies(rig, body):
+    """Двійник кожної зброї, щита й посоха за спиною (spine_03; кинджал — таз). Головна вісь речі (PCA) іде
+    навскіс уздовж спини, найтонша — назовні (+Y), щоб плаский бік лежав на спині; річ відсунута від спини так, щоб
+    найближча вершина була за поверхнею (з одягом). Кінець хвату визначає, що вгорі: у древкових — вістря, у клинків —
+    руків'я."""
+    import numpy as np
+    out = {}
+    inv = rig.matrix_world.inverted()
+    b = rig.data.bones
+    stowable = STOW_POLES + STOW_HILT_UP + STOW_HEAD_UP + STOW_FLAT + STOW_BELT
+    for ob in [o for o in rig.children if o.type == 'MESH' and o.get("kit_part") in stowable]:
+        part = ob["kit_part"]
+        pts = [inv @ (ob.matrix_world @ v.co) for v in ob.data.vertices]
+        P = np.array([[v.x, v.y, v.z] for v in pts])
+        c = P.mean(axis=0)
+        w, V = np.linalg.eigh(np.cov((P - c).T))
+        a1, a3 = Vector(V[:, 2]), Vector(V[:, 0])
+        grip_bone = "hand_l" if part in ("wpn_bow", "staff") else ("lowerarm_l" if part in STOW_FLAT else "hand_r")
+        hand = b[grip_bone].head_local
+        if (hand - Vector(c)).dot(a1) < 0:
+            a1 = -a1                                    # a1 — у бік кінця хвату
+        if part in STOW_POLES:
+            t1 = -Vector((0.40, 0.0, 0.92)).normalized()  # хват — донизу, вістря — вгору до лівого плеча
+            centre, inner, bone = Vector((0.0, 0.0, 1.18)), 0.20, "spine_03"
+        elif part in STOW_HILT_UP:
+            t1 = Vector((-0.42, 0.0, 0.91)).normalized()  # руків'я — вгору над правим плечем
+            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.20, "spine_03"
+        elif part in STOW_HEAD_UP:
+            t1 = -Vector((-0.42, 0.0, 0.91)).normalized() # хват (низ руків'я) — донизу, голова — над правим плечем
+            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.20, "spine_03"
+        elif part in STOW_FLAT:
+            t1 = Vector((0.0, 0.0, 1.0))
+            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.27, "spine_03"
+        else:
+            t1 = Vector((1.0, 0.0, 0.0))
+            centre, inner, bone = Vector((0.0, 0.0, 0.98)), 0.16, "pelvis"
+        if part == "wpn_bow":
+            inner = 0.27                                # поверх сагайдака
+        u1 = a1.normalized()
+        u3 = (a3 - u1 * a3.dot(u1)).normalized()
+        u2 = u3.cross(u1)
+        t3 = Vector((0.0, 1.0, 0.0))
+        t3 = (t3 - t1 * t3.dot(t1)).normalized()
+        t2 = t3.cross(t1)
+        B0 = Matrix((u1, u2, u3)).transposed()
+        B1 = Matrix((t1, t2, t3)).transposed()
+        Rm = B1 @ B0.transposed()
+        moved = [Rm @ (v - Vector(c)) + centre for v in pts]
+        shift = inner - min(v.y for v in moved)
+        lift = max(0.0, 0.15 - min(v.z for v in moved))   # нижній кінець — не в землі (посох, спис)
+        bm = bmesh.new(); bm.from_mesh(ob.data)
+        bm.verts.ensure_lookup_table()
+        for v, q in zip(bm.verts, moved):
+            v.co = q + Vector((0.0, shift, lift))
+        out[part + "_stowed"] = _rigid(f"{rig.name}.{part}_stowed", bm, rig, bone, ob["kit_kind"], body)
+    return out
+
 # ---------------------------------------------------------------- волосся обличчя
 
 def _mouth(rig):

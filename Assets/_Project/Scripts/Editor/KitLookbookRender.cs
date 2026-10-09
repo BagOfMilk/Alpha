@@ -85,7 +85,7 @@ namespace Game.Gameplay.EditorTools
             {
                 foreach (var look in looks)
                 {
-                    var plan = CharacterKitPlan.From(look.Value, null);
+                    var plan = CharacterKitPlan.From(look.Value, null).Stowed(); // як у селі: зброя за спиною
                     var root = new GameObject("look");
                     var modelGo = CharacterAssembler.Build(lib, plan, root.transform, 0);
                     report.AppendLine("== " + look.Key + " · " + plan.Signature());

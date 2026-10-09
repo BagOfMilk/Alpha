@@ -298,7 +298,7 @@ namespace Game.Gameplay.UI.Toolkit
 
             if (_builtFor != g) RebuildBackgrounds(view, g);
             RefreshTexts(view, g);
-            _preview.Show(CharacterKitPlan.From(_look.Build(), null));
+            _preview.Show(CharacterKitPlan.From(_look.Build(), null).Stowed());
             if (_image.image != _preview.Texture) _image.image = _preview.Texture;
         }
 

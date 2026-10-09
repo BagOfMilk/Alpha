@@ -199,7 +199,7 @@ namespace Game.Gameplay
             var look = session.GetAppearance(characterId);
             if (look == null) return null;
             var sheet = session.GetCharacterSheet(characterId);
-            var plan = Game.Gameplay.UI.CharacterKitPlan.From(look, Game.Gameplay.UI.InventoryModel.VisualKeys(sheet != null ? sheet.Equipment : null));
+            var plan = Game.Gameplay.UI.CharacterKitPlan.From(look, Game.Gameplay.UI.InventoryModel.VisualKeys(sheet != null ? sheet.Equipment : null)).Stowed();
             var model = Game.Gameplay.Characters.CharacterAssembler.Build(kit, plan, _stage, StageLayer);
             if (model == null) return null;
             model.transform.localPosition = Vector3.zero;
