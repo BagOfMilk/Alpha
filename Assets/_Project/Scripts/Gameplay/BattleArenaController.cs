@@ -427,6 +427,10 @@ namespace Game.Gameplay
             _unitVisualPos.Clear();
             _unitVisualRot.Clear();
             _unitHitReactions.Clear();
+            // Стан постатей минулого бою: «лежала» з минулого бою на вході в новий давало кліп «встає з землі»
+            // (фінал туру — протагоністка на старті в присіді підйому).
+            _unitWasDowned.Clear();
+            _unitOneShotState.Clear();
             _hasSimulatedHover = false;
             _simulatedHoverUnitId = null;
             _simulatedHoverTile = null;
