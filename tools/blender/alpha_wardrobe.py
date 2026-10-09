@@ -645,10 +645,13 @@ def _musket(rig, body):
 # Спис (2,3 м) і посох (1,7 м) за спиною не носять: нижній кінець у позі й ході заходив у поперек, ноги й поли (замір
 # лукбука 08.10.2026 — посох на 4 см позаду кістки грудей, тобто в тілі); поза боєм їх відкладено (CharacterKitPlan).
 STOW_POLES = ("wpn_bow", "wpn_musket")                                  # навскіс до лівого плеча
-STOW_HILT_UP = ("wpn_sword", "wpn_sabre", "wpn_katana")               # руків'ям над правим плечем
+# Нахил 15° від вертикалі (не 25°): нижній кінець ближче до середини спини, де руки в бігу не проходять — з 25°
+# рушниця, лук, катана й кинджал на поясі були в 0,2–1,4 см від кистей (замір лукбука 08.10.2026).
+TILT = (math.sin(math.radians(15)), math.cos(math.radians(15)))
+STOW_HILT_UP = ("wpn_sword", "wpn_sabre", "wpn_katana", "wpn_dagger")  # руків'ям над правим плечем
 STOW_HEAD_UP = ("wpn_axe", "wpn_mace", "wpn_club")                      # головою над правим плечем, руків'ям донизу
 STOW_FLAT = ("shield_round", "shield_kite", "buckler")                  # плазом на спині, зовні
-STOW_BELT = ("wpn_dagger",)                                              # на поясі ззаду, впоперек
+STOW_BELT = ()                                                           # (кинджал — між лопатками: на поясі ззаду руки в бігу його зачіпали)
 
 def stowed_copies(rig, body):
     """Двійник кожної зброї, щита й посоха за спиною (spine_03; кинджал — таз). Головна вісь речі (PCA) іде
@@ -673,13 +676,13 @@ def stowed_copies(rig, body):
         if (hand - Vector(c)).dot(a1) < 0:
             a1 = -a1                                    # a1 — у бік кінця хвату
         if part in STOW_POLES:
-            t1 = -Vector((0.40, 0.0, 0.92)).normalized()  # хват — донизу, вістря — вгору до лівого плеча
+            t1 = -Vector((TILT[0], 0.0, TILT[1]))          # хват — донизу, верх — до лівого плеча
             centre, inner, bone = Vector((0.0, 0.0, 1.18)), 0.155, "spine_03"
         elif part in STOW_HILT_UP:
-            t1 = Vector((-0.42, 0.0, 0.91)).normalized()  # руків'я — вгору над правим плечем
+            t1 = Vector((-TILT[0], 0.0, TILT[1]))          # руків'я — вгору над правим плечем
             centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
         elif part in STOW_HEAD_UP:
-            t1 = -Vector((-0.42, 0.0, 0.91)).normalized() # хват (низ руків'я) — донизу, голова — над правим плечем
+            t1 = -Vector((-TILT[0], 0.0, TILT[1]))         # хват (низ руків'я) — донизу, голова — над правим плечем
             centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
         elif part in STOW_FLAT:
             t1 = Vector((0.0, 0.0, 1.0))
