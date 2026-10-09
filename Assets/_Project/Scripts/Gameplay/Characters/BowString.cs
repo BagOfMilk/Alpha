@@ -38,6 +38,9 @@ namespace Game.Gameplay.Characters
                 _material.color = c;
             }
             _line.sharedMaterial = _material;
+            // До першого LateUpdate точки лінії — у початку координат світу: увімкненою вона розтягувала межі моделі
+            // (портрет на станку Y=−400 виходив чорним — тур майстерні 08.10.2026). Вмикає LateUpdate.
+            _line.enabled = false;
         }
 
         private void LateUpdate()
