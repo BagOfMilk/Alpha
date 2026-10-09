@@ -357,6 +357,7 @@ namespace UnityEngine
     public static class Time
     {
         public static float deltaTime { get { return 0f; } }
+        public static int frameCount { get { return 0; } }
 
         /// <summary>Спайк H4, критерій 4: автотур міряє час кадру без впливу timeScale.</summary>
         public static float unscaledDeltaTime { get { return 0f; } }
@@ -733,5 +734,6 @@ namespace UnityEngine
         public static int GetInt(string key, int defaultValue) { return defaultValue; }
         public static void SetInt(string key, int value) { }
         public static void Save() { }
+        public static void DeleteKey(string key) { }
     }
 }
