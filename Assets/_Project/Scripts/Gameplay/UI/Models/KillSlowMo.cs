@@ -45,6 +45,12 @@ namespace Game.Gameplay.UI
         /// <summary>Темп часу в реальну секунду <paramref name="nowReal"/>: <see cref="Scale"/> у вікні, 1 поза ним.</summary>
         public float TimeScale(float nowReal) => Enabled && nowReal < _until ? Scale : 1f;
 
+        /// <summary>
+        /// Вибіркове уповільнення (П13; будова RT §1.1): множник власного темпу того, хто вбив, поверх загального —
+        /// у вікні він компенсує <see cref="Scale"/> і боєць добиває в звичайному темпі, поки світ гальмує.
+        /// </summary>
+        public float ActorScale(float nowReal) => TimeScale(nowReal) < 1f ? 1f / Scale : 1f;
+
         /// <summary>Бій скінчився чи пауза: темп одразу 1.</summary>
         public void Reset() => _until = float.NegativeInfinity;
 

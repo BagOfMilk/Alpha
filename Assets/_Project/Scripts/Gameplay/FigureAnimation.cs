@@ -62,6 +62,21 @@ namespace Game.Gameplay
         private PlayableGraph _graph;
         private AnimationMixerPlayable _gaitMixer;
         private AnimationMixerPlayable _topMixer;
+        private float _timeScale = 1f;
+
+        /// <summary>
+        /// Власний темп постаті поверх <c>Time.timeScale</c> (подача бою П13: на вбивстві світ гальмує, а той, хто вбив,
+        /// рухається в звичайному темпі). 1 — звичайний.
+        /// </summary>
+        public float TimeScale
+        {
+            get => _timeScale;
+            set
+            {
+                _timeScale = value > 0.01f ? value : 1f;
+                if (_topMixer.IsValid()) _topMixer.SetSpeed(_timeScale);
+            }
+        }
         private AnimationClipPlayable[] _gaitClips;
         private readonly float[] _gaitWeights = new float[3];
         private bool _ready;
@@ -204,7 +219,7 @@ namespace Game.Gameplay
 
             if (_oneShotActive)
             {
-                _oneShotElapsed += Time.deltaTime * _oneShotSpeed;
+                _oneShotElapsed += Time.deltaTime * _oneShotSpeed * _timeScale;
                 if (_oneShotElapsed >= _oneShotLength)
                 {
                     _oneShotPlayable.SetTime(_oneShotLength);

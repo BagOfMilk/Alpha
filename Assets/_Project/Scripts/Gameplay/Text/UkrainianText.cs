@@ -3373,6 +3373,10 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.dialogue_camera.village", "Як у селі");
             AddKey(t, "ui.battle_slowmo.always", "Щоразу");
             AddKey(t, "ui.battle_slowmo.rare", "Рідко");
+            // Екшн-кадри бою (П12, будова бою RT).
+            AddKey(t, "ui.battle_action_camera.title", "Екшн-кадри в бою");
+            AddKey(t, "ui.battle_action_camera.on", "Так");
+            AddKey(t, "ui.battle_action_camera.off", "Ні");
         }
     }
 }

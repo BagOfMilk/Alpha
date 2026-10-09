@@ -214,6 +214,22 @@ namespace Game.Gameplay
 
         /// <summary>Подача П7: камера на подію без залипання (модель — <see cref="UI.BattleCameraEvents"/>).</summary>
         private readonly UI.BattleCameraEvents _cameraEvents = new UI.BattleCameraEvents();
+        /// <summary>П11: кого камера подій показує зараз (щоб летіти лише на зміну).</summary>
+        private string _cameraEventShown;
+
+        /// <summary>П12: екшн-кадр (модель — <see cref="UI.BattleActionCamera"/>) і його стан на арені.</summary>
+        private readonly UI.BattleActionCamera _actionCamera = new UI.BattleActionCamera();
+        private float _actionShotLeft;
+        private bool _actionShotOn;
+        private bool _savedOrtho;
+        private float _savedFov, _savedNear;
+        private Vector3 _actionShotPos, _actionShotLook;
+        private float _actionShotFov;
+
+        /// <summary>П13: той, хто останнім бив, і той, кому зараз повернуто звичайний темп на вбивстві.</summary>
+        private string _lastStrikerId, _slowMoActorId;
+        /// <summary>П12: політ, запитаний під час екшн-кадру (перспектива), — виконується після повернення ортографічної камери.</summary>
+        private string _focusAfterShot;
 
         // ================= Бій v2: камера (§4) =================
 
@@ -416,6 +432,11 @@ namespace Game.Gameplay
             _coverMarkers.Clear();
             _killSlowMo.Reset();
             _cameraEvents.Reset();
+            _cameraEventShown = null;
+            _actionCamera.Reset();
+            EndActionShot();
+            _lastStrikerId = null;
+            ResetActorPace();
 
             _protagonistGender = _session?.GetProtagonistCreationView()?.Gender ?? Gender.Male;
             var portraitRig = ArenaRoot != null ? ArenaRoot.GetComponent<PortraitRig>() : null;
@@ -500,6 +521,7 @@ namespace Game.Gameplay
         /// </summary>
         public void FocusCamera(string unitId)
         {
+            if (_actionShotOn) { _focusAfterShot = unitId; return; } // П12: фокус рахується з ортографічної пози
             var unit = FindUnitById(unitId);
             if (unit == null) return;
             var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
@@ -507,6 +529,94 @@ namespace Game.Gameplay
             _cameraFlyStart = _cameraPanFocus;
             _cameraFlyTarget = FocusPointForFreeArea(target);
             _cameraFlyElapsed = 0f;
+        }
+
+        /// <summary>
+        /// Подача П10 (будова камери RT §1.1): автоматичний політ — лише якщо бійця не видно в центральній рамці вільної
+        /// від HUD області; інакше камера не смикається. Клік по портрету чи колесу кличе <see cref="FocusCamera"/> —
+        /// туди летимо завжди (це воля гравця).
+        /// </summary>
+        private void FocusCameraIfOutside(string unitId)
+        {
+            var unit = FindUnitById(unitId);
+            if (unit == null || ArenaCamera == null || _actionShotOn) { FocusCamera(unitId); return; }
+            var world = BattleArenaView.TileToWorld(unit.Pos.X, unit.Pos.Y);
+            var sp = ArenaCamera.WorldToScreenPoint(new Vector3(world.X, 0f, world.Z));
+            var m = CurrentHudMargins();
+            bool inFront = sp.z > 0f;
+            float guiY = Screen.height - sp.y; // поля — у координатах GUI (Y згори)
+            if (inFront && UI.BattleCameraFraming.IsInsideSafeArea(sp.x, guiY, m.Left, m.Top, Screen.width - m.Right, Screen.height - m.Bottom))
+                return;
+            FocusCamera(unitId);
+        }
+
+        /// <summary>
+        /// Подача П12: екшн-кадр на удар — за моделлю (шанс без кубика, пауза, меню, PERF-01). Перспектива через плече
+        /// того, хто б'є, на ціль (план «через плече» <see cref="UI.DialogueDirector"/>), на час такту удару.
+        /// </summary>
+        private void TryStartActionShot(string attackerId, string targetId, float duration)
+        {
+            if (ArenaCamera == null || string.IsNullOrEmpty(attackerId) || string.IsNullOrEmpty(targetId) || attackerId == targetId) return;
+            if (!_actionCamera.ShouldTrigger(Time.realtimeSinceStartup, duration, UI.BattleActionCameraSetting.Enabled, GraphicsTier.IsLow)) return;
+            var a = UnitGo(attackerId);
+            var t = UnitGo(targetId);
+            if (a == null || t == null) return;
+            float height = 1.75f * a.transform.lossyScale.y / UnitVisualScale;
+            var aHead = HeadOfUnit(a, height);
+            var tHead = HeadOfUnit(t, height);
+            var pose = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder,
+                new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z),
+                new UI.DialogueVec(aHead.x, aHead.y, aHead.z), new UI.DialogueVec(tHead.x, tHead.y, tHead.z), height);
+            _actionShotPos = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
+            _actionShotLook = new Vector3(pose.LookAt.X, pose.LookAt.Y, pose.LookAt.Z);
+            _actionShotFov = pose.Fov;
+            if (!_actionShotOn)
+            {
+                _savedOrtho = ArenaCamera.orthographic;
+                _savedFov = ArenaCamera.fieldOfView;
+                _savedNear = ArenaCamera.nearClipPlane;
+            }
+            _actionShotOn = true;
+            _actionShotLeft = duration + 0.15f;
+        }
+
+        private static Vector3 HeadOfUnit(GameObject go, float height)
+        {
+            foreach (var tr in go.GetComponentsInChildren<Transform>())
+                if (tr.name.Equals("head", StringComparison.OrdinalIgnoreCase)) return tr.position;
+            return go.transform.position + Vector3.up * (0.93f * height);
+        }
+
+        /// <summary>Екшн-кадр скінчився: камера арени знову ортографічна, на своїй позі, без «доїзду».</summary>
+        private void EndActionShot()
+        {
+            if (!_actionShotOn) return;
+            _actionShotOn = false;
+            _actionShotLeft = 0f;
+            if (ArenaCamera == null) return;
+            ArenaCamera.orthographic = _savedOrtho;
+            ArenaCamera.fieldOfView = _savedFov;
+            ArenaCamera.nearClipPlane = _savedNear;
+            if (_cameraInitialized) ApplyCameraPose(_cameraPanFocus);
+            var pending = _focusAfterShot;
+            _focusAfterShot = null;
+            if (!string.IsNullOrEmpty(pending)) FocusCamera(pending);
+        }
+
+        /// <summary>П13: у вікні уповільнення той, хто вбив, рухається в звичайному темпі; після — як усі.</summary>
+        private void UpdateActorPace()
+        {
+            if (string.IsNullOrEmpty(_slowMoActorId)) return;
+            float pace = _paused ? 1f : _killSlowMo.ActorScale(Time.realtimeSinceStartup);
+            if (_unitAnimations.TryGetValue(_slowMoActorId, out var anim) && anim != null) anim.TimeScale = pace;
+            if (pace <= 1f) _slowMoActorId = null;
+        }
+
+        private void ResetActorPace()
+        {
+            if (!string.IsNullOrEmpty(_slowMoActorId) && _unitAnimations.TryGetValue(_slowMoActorId, out var anim) && anim != null)
+                anim.TimeScale = 1f;
+            _slowMoActorId = null;
         }
 
         public void SimulateHoverUnit(string unitId)
@@ -619,6 +729,7 @@ namespace Game.Gameplay
             // Подача П1: множник з меню паузи — у поле треку V; П6: темп часу (на паузі — звичайний).
             BattleSpeed = Speed;
             Time.timeScale = _paused ? 1f : _killSlowMo.TimeScale(Time.realtimeSinceStartup);
+            UpdateActorPace();
             // Меню паузи: бій стоїть повністю — ні миші, ні клавіш, ні ШІ, ні тактів.
             if (_paused) return;
 
@@ -648,9 +759,15 @@ namespace Game.Gameplay
             UpdateActiveTact(dt);
             UpdateProjectiles(dt);
             // Подача П7: подія скінчилась (чи минула стеля) — камера повертається до того, хто ходить.
+            // П11: черга подій — кожна по черзі, після останньої — назад; П10: летимо лише до того, хто поза рамкою.
             bool cameraOnEvent = _cameraEvents.IsActive;
             string cameraTarget = _cameraEvents.Tick(Time.unscaledDeltaTime, _lastView?.CurrentUnitId, IsBusy);
-            if (cameraOnEvent && !_cameraEvents.IsActive && !string.IsNullOrEmpty(cameraTarget)) FocusCamera(cameraTarget);
+            if ((cameraOnEvent || _cameraEvents.IsActive) && !string.Equals(cameraTarget, _cameraEventShown, StringComparison.Ordinal))
+            {
+                _cameraEventShown = cameraTarget;
+                if (!string.IsNullOrEmpty(cameraTarget)) FocusCameraIfOutside(cameraTarget);
+            }
+            if (!_cameraEvents.IsActive) _cameraEventShown = null;
             UpdateEnemyTurnDirector(dt);
             UpdateBannerAndAutoFocus(_lastView);
             UpdateFloatingTexts(dt);
@@ -1736,6 +1853,8 @@ namespace Game.Gameplay
                     _activeTact.Reaction = AnimStateTable.ReactionFor(entry.Key);
                     if (clip != null) PlayClip(unitId, clip, false, speed);
                     else PlayAttackClip(unitId, targetId);
+                    _lastStrikerId = unitId;
+                    TryStartActionShot(unitId, targetId, _activeTact.Duration);
                     break;
                 }
 
@@ -1750,6 +1869,7 @@ namespace Game.Gameplay
                     _activeTact.Duration = impact + AttackTail / speed;
                     if (clip != null) PlayClip(unitId, clip, false, speed);
                     else PlayOneShot(unitId, clips => clips?.Interact, hold: false);
+                    if (!string.IsNullOrEmpty(targetId)) _lastStrikerId = unitId;
                     break;
                 }
 
@@ -1762,10 +1882,11 @@ namespace Game.Gameplay
                         _killSlowMo.Enabled = UI.BattleSlowMoSetting.Enabled;
                         _killSlowMo.MinGapSeconds = UI.BattleSlowMoSetting.Rare ? UI.KillSlowMo.RareGapSeconds : 0f;
                         _killSlowMo.Trigger(Time.realtimeSinceStartup);
+                        // П13: світ гальмує, а той, хто вбив, — у звичайному темпі.
+                        if (_killSlowMo.TimeScale(Time.realtimeSinceStartup) < 1f) _slowMoActorId = _lastStrikerId;
                     }
-                    // Подача П7: камера на мить — до того, хто впав, і завжди назад до того, хто ходить.
-                    _cameraEvents.Focus(unitId);
-                    FocusCamera(unitId);
+                    // Подача П7/П11: камера на мить — до того, хто впав (черга з пріоритетом), і завжди назад до того, хто ходить.
+                    _cameraEvents.Focus(unitId, UI.BattleCameraEvents.PriorityDeath);
                     break;
             }
         }
@@ -2361,7 +2482,7 @@ namespace Game.Gameplay
             switch (decision)
             {
                 case BattleTurnDirectorAction.StepAi:
-                    FocusCamera(_lastView.CurrentUnitId);
+                    FocusCameraIfOutside(_lastView.CurrentUnitId);
                     TryStepAi();
                     break;
                 case BattleTurnDirectorAction.ForceEndTurn:
@@ -2415,7 +2536,7 @@ namespace Game.Gameplay
                     Alpha = 1f
                 };
                 _bannerTimer = 0f;
-                FocusCamera(currentId);
+                FocusCameraIfOutside(currentId);
             }
             UpdateBannerFade(Time.deltaTime);
         }
@@ -2641,6 +2762,22 @@ namespace Game.Gameplay
         {
             if (ArenaCamera == null) return;
             if (!_cameraInitialized) { InitializeCamera(_lastView); return; }
+
+            // Подача П12: екшн-кадр — перспектива через плече, поки йде удар; потім склейка назад.
+            if (_actionShotOn)
+            {
+                _actionShotLeft -= dt;
+                if (_actionShotLeft > 0f)
+                {
+                    ArenaCamera.orthographic = false;
+                    ArenaCamera.fieldOfView = _actionShotFov;
+                    ArenaCamera.nearClipPlane = 0.05f;
+                    ArenaCamera.transform.position = _actionShotPos;
+                    ArenaCamera.transform.rotation = Quaternion.LookRotation(_actionShotLook - _actionShotPos, Vector3.up);
+                    return;
+                }
+                EndActionShot();
+            }
 
             bool overHud = IsPointerOverHud();
 
@@ -2970,6 +3107,11 @@ namespace Game.Gameplay
             HideGhost();
             _killSlowMo.Reset();
             _cameraEvents.Reset();
+            _cameraEventShown = null;
+            _actionCamera.Reset();
+            EndActionShot();
+            _lastStrikerId = null;
+            ResetActorPace();
             Time.timeScale = 1f; // уповільнення бою не переходить у село
             _resultPending = false;
             _armed = ArmedAction.None;

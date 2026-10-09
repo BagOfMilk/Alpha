@@ -80,6 +80,14 @@ namespace Game.Gameplay.UI
                 if (Widgets.TabButton(UkrainianText.Get("ui.battle_slowmo.off", g), !slowMo) && slowMo) BattleSlowMoSetting.Enabled = false;
                 GUILayout.EndHorizontal();
 
+                // Екшн-кадри бою (подача П12): через плече того, хто б'є, на кожен ~третій удар; на Низькій — немає.
+                bool actionCam = BattleActionCameraSetting.Enabled;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(UkrainianText.Get("ui.battle_action_camera.title", g), AlphaSkin.Body, GUILayout.Width(220f));
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_action_camera.on", g), actionCam) && !actionCam) BattleActionCameraSetting.Enabled = true;
+                if (Widgets.TabButton(UkrainianText.Get("ui.battle_action_camera.off", g), !actionCam) && actionCam) BattleActionCameraSetting.Enabled = false;
+                GUILayout.EndHorizontal();
+
                 // Камера діалогу (розбір BG3, 08.10.2026: крупні плани в розмові вимикаються в налаштуваннях).
                 bool closeUps = DialogueCameraSetting.CloseUps;
                 GUILayout.BeginHorizontal();

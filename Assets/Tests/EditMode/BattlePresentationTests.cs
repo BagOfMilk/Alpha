@@ -215,6 +215,74 @@ namespace Game.Tests.EditMode
         // ---------------- П6: уповільнення на вбивстві ----------------
 
         [Test]
+        public void KillSlowMo_Killer_KeepsNormalPace_WhileWorldSlows()
+        {
+            var slow = new KillSlowMo();
+            Assert.AreEqual(1f, slow.ActorScale(0f), "поза вікном — звичайний темп");
+            slow.Trigger(1f);
+            Assert.AreEqual(1f, slow.TimeScale(1.1f) * slow.ActorScale(1.1f), 1e-4f, "у вікні той, хто вбив, — у звичайному темпі");
+            Assert.AreEqual(1f, slow.ActorScale(1f + KillSlowMo.DurationSeconds + 0.01f));
+        }
+
+        [Test]
+        public void CameraEvents_QueueByPriority_EachGetsItsTurn_ThenBackToActive()
+        {
+            var cam = new BattleCameraEvents();
+            cam.Focus("a", BattleCameraEvents.PriorityDeath);
+            cam.Focus("b", BattleCameraEvents.PriorityReinforcement);
+            cam.Focus("c", BattleCameraEvents.PriorityDeath);
+            Assert.AreEqual(2, cam.QueuedCount);
+            Assert.AreEqual("a", cam.Tick(0.1f, "hero", false));
+            Assert.AreEqual("c", cam.Tick(BattleCameraEvents.HoldSeconds, "hero", false), "смерть раніше за підкріплення");
+            Assert.AreEqual("b", cam.Tick(BattleCameraEvents.HoldSeconds + 0.01f, "hero", false));
+            Assert.AreEqual("hero", cam.Tick(BattleCameraEvents.HoldSeconds + 0.01f, "hero", false), "черга скінчилась — назад");
+            Assert.IsFalse(cam.IsActive);
+        }
+
+        [Test]
+        public void CameraEvents_HigherPriority_Preempts_QueueIsCapped()
+        {
+            var cam = new BattleCameraEvents();
+            cam.Focus("minor", BattleCameraEvents.PriorityMinor);
+            cam.Focus("death", BattleCameraEvents.PriorityDeath);
+            Assert.AreEqual("death", cam.Tick(0.1f, "hero", true), "важливіша подія перебиває поточну");
+            for (int i = 0; i < 6; i++) cam.Focus("x" + i, BattleCameraEvents.PriorityMinor);
+            Assert.AreEqual(BattleCameraEvents.MaxQueued, cam.QueuedCount);
+        }
+
+        [Test]
+        public void CameraFraming_SafeArea_IsTheCentreOfTheFreeArea()
+        {
+            Assert.IsTrue(BattleCameraFraming.IsInsideSafeArea(500f, 400f, 0f, 0f, 1000f, 800f));
+            Assert.IsFalse(BattleCameraFraming.IsInsideSafeArea(950f, 400f, 0f, 0f, 1000f, 800f), "край кадру — летимо");
+            Assert.IsFalse(BattleCameraFraming.IsInsideSafeArea(-10f, 400f, 0f, 0f, 1000f, 800f), "поза екраном — летимо");
+        }
+
+        [Test]
+        public void ActionCamera_EveryThirdStrike_WithCooldown_OffOnLow()
+        {
+            var ac = new BattleActionCamera();
+            int shots = 0;
+            for (int i = 0; i < 9; i++)
+                if (ac.ShouldTrigger(i * 10f, 1f, enabled: true, lowGraphics: false)) shots++;
+            Assert.AreEqual(3, shots, "шанс 0,34 без кубика — рівно кожен третій удар");
+
+            var cd = new BattleActionCamera();
+            cd.ShouldTrigger(0f, 1f, true, false); cd.ShouldTrigger(0.1f, 1f, true, false);
+            Assert.IsTrue(cd.ShouldTrigger(0.2f, 1f, true, false));
+            for (int i = 0; i < 5; i++) Assert.IsFalse(cd.ShouldTrigger(1f + i * 0.5f, 1f, true, false), "пауза між кадрами");
+
+            var off = new BattleActionCamera();
+            var low = new BattleActionCamera();
+            for (int i = 0; i < 6; i++)
+            {
+                Assert.IsFalse(off.ShouldTrigger(i * 10f, 1f, enabled: false, lowGraphics: false));
+                Assert.IsFalse(low.ShouldTrigger(i * 10f, 1f, enabled: true, lowGraphics: true), "PERF-01: на Низькій немає");
+            }
+            Assert.IsFalse(new BattleActionCamera().ShouldTrigger(0f, 0.1f, true, false) , "надто короткий удар");
+        }
+
+        [Test]
         public void KillSlowMo_Rare_SkipsKillsSoonAfterTheWindow()
         {
             var slow = new KillSlowMo { MinGapSeconds = KillSlowMo.RareGapSeconds };
