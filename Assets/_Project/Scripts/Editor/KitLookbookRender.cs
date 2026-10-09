@@ -85,7 +85,7 @@ namespace Game.Gameplay.EditorTools
             {
                 foreach (var look in looks)
                 {
-                    var plan = CharacterKitPlan.From(look.Value, null);
+                    var plan = CharacterKitPlan.From(look.Value, null).Stowed(); // як у селі: зброя за спиною
                     var root = new GameObject("look");
                     var modelGo = CharacterAssembler.Build(lib, plan, root.transform, 0);
                     report.AppendLine("== " + look.Key + " · " + plan.Signature());
@@ -114,6 +114,7 @@ namespace Game.Gameplay.EditorTools
                     }
                     var b = BoneBounds(modelGo);
                     report.AppendLine("   межі (кістки): " + b.center.ToString("0.00") + " розмір " + b.size.ToString("0.00"));
+                    StowReport(modelGo, facing, report);
                     var snap = Snapshot(modelGo);
                     Shoot(cam, b, facing, OutDir + "/" + look.Key + ".png");
                     Unsnap(modelGo, snap);
@@ -144,6 +145,7 @@ namespace Game.Gameplay.EditorTools
                 if (urp != null) urp.useSRPBatcher = batcher;
             }
             if (anims != null && anims.IsComplete) AuditClips(lib, anims, looks[0].Value, report);
+            if (anims != null && anims.IsComplete) StowClearance(lib, anims, report);
             if (urp != null) urp.useSRPBatcher = false;
             try { RenderBuildings(cam, report); }
             finally { if (urp != null) urp.useSRPBatcher = batcher; }
@@ -318,6 +320,131 @@ namespace Game.Gameplay.EditorTools
                 }
             }
             if (g.IsValid()) g.Destroy();
+        }
+
+        /// <summary>
+        /// Де лежить річ за спиною («_stowed») відносно тіла: центр і найближча до тіла точка в рамці (вперед, вгору,
+        /// ліворуч) від кістки spine_03, метри моделі. За спиною — «вперед» від'ємне.
+        /// </summary>
+        private static void StowReport(GameObject model, Vector3 facing, StringBuilder report)
+        {
+            Transform spine = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true)) if (t.name == "spine_03") spine = t;
+            if (spine == null) return;
+            var left = -Vector3.Cross(Vector3.up, facing).normalized;
+            float s = Mathf.Max(1e-4f, spine.lossyScale.y);
+            foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+            {
+                if (!smr.name.EndsWith(CharacterKitPlan.StowedSuffix)) continue;
+                var mesh = new Mesh();
+                smr.BakeMesh(mesh, true);
+                var m = smr.transform.localToWorldMatrix;
+                Vector3 sum = Vector3.zero; float nearest = float.MaxValue;
+                foreach (var v in mesh.vertices)
+                {
+                    var w = m.MultiplyPoint3x4(v) - spine.position;
+                    sum += w;
+                    nearest = Mathf.Min(nearest, -Vector3.Dot(w, facing));
+                }
+                var c = sum / Mathf.Max(1, mesh.vertexCount);
+                report.AppendLine("   за спиною " + smr.name + ": центр (вперед " + (Vector3.Dot(c, facing) / s).ToString("0.00") +
+                                  ", вгору " + (c.y / s).ToString("0.00") + ", ліворуч " + (Vector3.Dot(c, left) / s).ToString("0.00") +
+                                  "), найближче до тіла — " + (nearest / s).ToString("0.00") + " м позаду spine_03");
+                Object.DestroyImmediate(mesh);
+            }
+        }
+
+        /// <summary>
+        /// «Ніколи крізь тіло» (власник 08.10.2026) для речей за спиною: у стійці, ході й бігу (8 кадрів кожен) — найменша
+        /// відстань від вершин речі до вершин тіла й одягу. «!!» — ближче 1,5 см (дотик чи прохід крізь).
+        /// </summary>
+        private static void StowClearance(CharacterKitLibrary lib, CharacterAnimLibrary anims, StringBuilder report)
+        {
+            report.AppendLine();
+            report.AppendLine("==== ЗА СПИНОЮ: відстань до тіла й одягу (стійка, хода, біг)");
+            var cases = new List<KeyValuePair<string, KeyValuePair<Appearance, string[]>>>();
+            foreach (var id in new[] { "maksym", "myroslava", "tuhar" })
+                cases.Add(new KeyValuePair<string, KeyValuePair<Appearance, string[]>>(id,
+                    new KeyValuePair<Appearance, string[]>(AppearanceCatalog.Named(id), null)));
+            foreach (var g in new[] { Gender.Male, Gender.Female })
+                foreach (var kit in new[] { new[] { "wpn_musket" }, new[] { "wpn_sword", "shield_round" }, new[] { "wpn_bow" },
+                                            new[] { "wpn_katana", "cloak" }, new[] { "wpn_mace", "buckler" }, new[] { "wpn_dagger" } })
+                    cases.Add(new KeyValuePair<string, KeyValuePair<Appearance, string[]>>((g == Gender.Male ? "m" : "f") + "-" + string.Join("+", kit),
+                        new KeyValuePair<Appearance, string[]>(AppearanceCatalog.DefaultProtagonist(g), kit)));
+            foreach (var c in cases)
+            {
+                var look = c.Value.Key.Clone();
+                var extra = c.Value.Value;
+                if (extra != null && System.Array.IndexOf(extra, "cloak") >= 0) look = look.Accent("cloak");
+                var plan = CharacterKitPlan.From(look, extra).Stowed();
+                var root = new GameObject("stow-check");
+                var model = CharacterAssembler.Build(lib, plan, root.transform, 0);
+                if (model == null) { Object.DestroyImmediate(root); continue; }
+                var stowed = new List<SkinnedMeshRenderer>();
+                var rest = new List<SkinnedMeshRenderer>();
+                foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                {
+                    if (!smr.enabled || !smr.gameObject.activeInHierarchy) continue;
+                    if (smr.name.EndsWith(CharacterKitPlan.StowedSuffix)) stowed.Add(smr);
+                    else if (!smr.name.Contains("low-poly") && !smr.name.Contains("eyebrow") && !smr.name.Contains("eyelash")) rest.Add(smr);
+                }
+                if (stowed.Count == 0) { Object.DestroyImmediate(root); continue; }
+                foreach (var st in new[] { CharacterAnimState.Idle, CharacterAnimState.Walk, CharacterAnimState.Run })
+                {
+                    var clip = anims.For(st, WeaponStyle.Unarmed);
+                    if (clip == null) continue;
+                    var worst = new Dictionary<string, float>();
+                    var where = new Dictionary<string, string>();
+                    float scale = Mathf.Max(1e-4f, model.transform.lossyScale.y);
+                    for (int f = 0; f < 8; f++)
+                    {
+                        var g = Pose(model, clip, clip.length * f / 8f);
+                        var body = new List<Vector3>();
+                        var owner = new List<string>();
+                        foreach (var r in rest)
+                        {
+                            var b = Baked(r);
+                            body.AddRange(b);
+                            string n = CharacterAssembler.PartOf(r.name);
+                            for (int k = 0; k < b.Count; k++) owner.Add(n);
+                        }
+                        foreach (var sm in stowed)
+                        {
+                            float best = float.MaxValue; int bi = -1, bj = -1;
+                            var pts = Baked(sm);
+                            for (int i = 0; i < pts.Count; i += 2)
+                                for (int j = 0; j < body.Count; j += 3)
+                                {
+                                    float d = (pts[i] - body[j]).sqrMagnitude;
+                                    if (d < best) { best = d; bi = i; bj = j; }
+                                }
+                            string key = CharacterAssembler.PartOf(sm.name);
+                            float dist = Mathf.Sqrt(best) / scale;
+                            if (!worst.ContainsKey(key) || dist < worst[key])
+                            {
+                                worst[key] = dist;
+                                where[key] = owner[bj] + " на висоті " + ((pts[bi].y - model.transform.position.y) / scale).ToString("0.00") + " м";
+                            }
+                        }
+                        if (g.IsValid()) g.Destroy();
+                    }
+                    foreach (var kv in worst)
+                        report.AppendLine(c.Key + " · " + st + " · " + kv.Key + ": " + (kv.Value * 100f).ToString("0.0") + " см (" +
+                                          where[kv.Key] + ")" + (kv.Value < 0.015f ? " !!" : ""));
+                }
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        private static List<Vector3> Baked(SkinnedMeshRenderer smr)
+        {
+            var mesh = new Mesh();
+            smr.BakeMesh(mesh, true);
+            var m = smr.transform.localToWorldMatrix;
+            var list = new List<Vector3>(mesh.vertexCount);
+            foreach (var v in mesh.vertices) list.Add(m.MultiplyPoint3x4(v));
+            Object.DestroyImmediate(mesh);
+            return list;
         }
 
         /// <summary>Світло й камера лукбука (той самий вигляд, що в <see cref="Run"/>).</summary>

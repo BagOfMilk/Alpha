@@ -95,7 +95,8 @@ namespace Game.Gameplay.Playtest
             {
                 QualitySettings.vSyncCount = 0;
                 Application.targetFrameRate = 30;
-                if (GraphicsTier.Current != GraphicsLevel.Low) GraphicsTier.Set(GraphicsLevel.Low);
+                // Лише на цей запуск: збережений вибір гравця не чіпаємо (раніше «-lowcpu» лишав Низьку назавжди).
+                if (GraphicsTier.Current != GraphicsLevel.Low) GraphicsTier.UseForSession(GraphicsLevel.Low);
             }
             BuildWindow();
             Debug.Log("[Плейтест] нотатки — F8; тека: " + _dir);

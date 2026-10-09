@@ -12,7 +12,12 @@ namespace Game.Gameplay
     public static class GraphicsTier
     {
         private const string PrefKey = "alpha.gfx";
+        // Версія збереженого вибору: до 08.10.2026 «-lowcpu» плейтесту записував Низьку назавжди, і машина власника
+        // (RTX 3050) лишалась на Низькій без прикрас PERF-01 і поза плейтестом. Старий запис скидається один раз.
+        private const string PrefVersionKey = "alpha.gfx.v";
+        private const int PrefVersion = 2;
         private static bool _initialised;
+        private static int _appliedIndex = -1;
 
         public static GraphicsLevel Current
         {
@@ -33,18 +38,48 @@ namespace Game.Gameplay
             if (_initialised) return;
             _initialised = true;
 
+            if (PlayerPrefs.GetInt(PrefVersionKey, 0) < PrefVersion)
+            {
+                PlayerPrefs.DeleteKey(PrefKey);
+                PlayerPrefs.SetInt(PrefVersionKey, PrefVersion);
+                PlayerPrefs.Save();
+            }
+
             GraphicsLevel level;
             if (TryCommandLineLevel(out level))
             {
                 Apply(level); // лише на цей запуск, без збереження (тури: -gfx medium)
                 return;
             }
-            if (PlayerPrefs.HasKey(PrefKey))
+            bool saved = PlayerPrefs.HasKey(PrefKey);
+            if (saved)
                 level = Clamp(PlayerPrefs.GetInt(PrefKey));
             else
                 level = GraphicsTierPicker.Pick(SystemInfo.graphicsDeviceName, SystemInfo.graphicsMemorySize,
                     SystemInfo.systemMemorySize, SystemInfo.processorCount);
             Apply(level);
+            Debug.Log("[Графіка] " + (saved ? "збережений вибір" : "автопідбір") + ": " + SystemInfo.graphicsDeviceName + ", " +
+                      SystemInfo.graphicsMemorySize + " МБ, ОЗП " + SystemInfo.systemMemorySize + " МБ, ядер " +
+                      SystemInfo.processorCount + " → " + level + "; якість " + QualitySettings.GetQualityLevel() + "/" +
+                      QualitySettings.names.Length);
+        }
+
+        /// <summary>
+        /// Рівень лише на цей запуск, без запису (плейтест з «-lowcpu»): раніше він зберігався назавжди, і звичайна гра
+        /// теж ішла на Низькій.
+        /// </summary>
+        public static void UseForSession(GraphicsLevel level) => Apply(level);
+
+        /// <summary>
+        /// Перевірка після старту: якість змінив хтось повз <see cref="GraphicsTier"/> — попередження в журнал (тур і
+        /// плейтест його бачать). Майстерня 08.10.2026: на машині власника стояла Низька, хоча автопідбір дає Середню.
+        /// </summary>
+        public static void Verify()
+        {
+            if (_appliedIndex < 0) return;
+            int now = QualitySettings.GetQualityLevel();
+            if (now != _appliedIndex)
+                Debug.LogWarning("[Графіка] якість змінилась повз GraphicsTier: " + _appliedIndex + " → " + now);
         }
 
         /// <summary>
@@ -83,6 +118,7 @@ namespace Game.Gameplay
             if (count > 0 && index >= count) index = count - 1;
             if (QualitySettings.GetQualityLevel() != index)
                 QualitySettings.SetQualityLevel(index, true);
+            _appliedIndex = QualitySettings.GetQualityLevel();
         }
 
         private static GraphicsLevel Clamp(int value) =>

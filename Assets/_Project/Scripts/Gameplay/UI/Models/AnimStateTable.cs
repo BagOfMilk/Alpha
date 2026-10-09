@@ -93,6 +93,28 @@ namespace Game.Gameplay.UI
             }
         }
 
+        /// <summary>
+        /// Чи тримає постать зброю в руці в цьому стані. Лише бойова стійка, дозор, удар, блок і влучання мають кліпи з
+        /// хватом зброї; решта (рух, укриття, здача, падіння, окрик, кидок, допомога, перемога, мирні стани) — руки інші,
+        /// і зброя пройшла б крізь кисть чи тіло: тоді вона за спиною (власник 08.10.2026: «Хоочу щоб Эквіп ніколи не був
+        /// так, а нормально Не скрізь руку чи тіло»).
+        /// </summary>
+        public static bool HoldsWeapon(CharacterAnimState state)
+        {
+            switch (state)
+            {
+                case CharacterAnimState.CombatIdle:
+                case CharacterAnimState.Overwatch:
+                case CharacterAnimState.Attack:
+                case CharacterAnimState.Block:
+                case CharacterAnimState.Hit:
+                case CharacterAnimState.HitHeavy:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         /// <summary>Стріляє (лук чи рушниця), а не б'є.</summary>
         public static bool IsRanged(WeaponStyle style) => style == WeaponStyle.Ranged || style == WeaponStyle.Bow;
 

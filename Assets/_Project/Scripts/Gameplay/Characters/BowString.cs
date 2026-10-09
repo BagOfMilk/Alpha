@@ -16,7 +16,11 @@ namespace Game.Gameplay.Characters
         private LineRenderer _line;
         private FigureAnimation _anim;
         private GameObject _arrow;
+        private Renderer _bow;
         private static Material _material;
+
+        /// <summary>Сховати тятиву ззовні (діалог тощо). Без лука в руці (за спиною) вона й так не малюється.</summary>
+        public bool Hidden;
 
         private void Awake()
         {
@@ -45,7 +49,16 @@ namespace Game.Gameplay.Characters
 
         private void LateUpdate()
         {
-            if (_points == null || !_points.HasBow || _points.HandL == null) { _line.enabled = false; return; }
+            if (_bow == null)
+                foreach (var smr in GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    if (CharacterAssembler.PartOf(smr.name) == "wpn_bow") { _bow = smr; break; }
+            bool bowInHand = _bow != null && _bow.enabled && _bow.gameObject.activeInHierarchy;
+            if (Hidden || !bowInHand || _points == null || !_points.HasBow || _points.HandL == null)
+            {
+                _line.enabled = false;
+                if (_arrow != null) _arrow.SetActive(false);
+                return;
+            }
             if (_anim == null) _anim = GetComponent<FigureAnimation>();
             float scale = _points.HandL.lossyScale.x;
             _line.startWidth = _line.endWidth = 0.008f * scale;

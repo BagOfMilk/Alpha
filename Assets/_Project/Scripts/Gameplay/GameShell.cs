@@ -323,7 +323,11 @@ namespace Game.Gameplay
         {
             if (_quitRequested) HardExit.Now(0); // §HandleWantsToQuit — той самий безпечний вихід (HardExit)
             PersistAutosaveIfNew();
+            // Рівень графіки не змінив ніхто повз GraphicsTier (майстерня 08.10.2026: Низька замість Середньої).
+            if (!_graphicsVerified && Time.frameCount > 10) { _graphicsVerified = true; GraphicsTier.Verify(); }
         }
+
+        private bool _graphicsVerified;
 
         /// <summary>Версія автосейву, уже записана на диск (<see cref="GameSession.AutosaveVersion"/>).</summary>
         private int _persistedAutosaveVersion;

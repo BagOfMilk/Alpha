@@ -238,7 +238,7 @@ namespace Game.Gameplay.UI.Toolkit
             RefreshForge(offers, g);
 
             var look = session.GetAppearance(_companionId);
-            if (look != null) _preview.Show(CharacterKitPlan.From(look, InventoryModel.VisualKeys(equipment)));
+            if (look != null) _preview.Show(CharacterKitPlan.From(look, InventoryModel.VisualKeys(equipment)).Stowed());
             if (_image.image != _preview.Texture) _image.image = _preview.Texture;
         }
 

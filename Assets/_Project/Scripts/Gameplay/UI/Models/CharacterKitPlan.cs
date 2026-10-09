@@ -132,9 +132,68 @@ namespace Game.Gameplay.UI
             return false;
         }
 
-        /// <summary>Частина належить акценту: ключ дорівнює акценту або починається з «акцент_» (sash → sash_tails).</summary>
+        /// <summary>
+        /// Частина належить акценту: ключ дорівнює акценту або починається з «акцент_» (sash → sash_tails). Двійник
+        /// за спиною («staff_stowed») — лише за точним ключем: посох у руці не тягне за собою посох за спиною.
+        /// </summary>
         public static bool MatchesAccent(string partKey, string accent)
-            => partKey == accent || partKey.StartsWith(accent + "_", StringComparison.Ordinal);
+        {
+            if (partKey == accent) return true;
+            if (partKey.EndsWith(StowedSuffix, StringComparison.Ordinal)) return false;
+            return partKey.StartsWith(accent + "_", StringComparison.Ordinal);
+        }
+
+        /// <summary>Ключ зброї, яку видно (перша частина «wpn_*»; за спиною — «wpn_*_stowed», стиль кліпів тоді мирний); null — без.</summary>
+        public string Weapon()
+        {
+            foreach (var p in Parts)
+                if (p.Part.StartsWith("wpn_", StringComparison.Ordinal)) return p.Part;
+            return null;
+        }
+
+        /// <summary>Суфікс двійника речі за спиною (<c>tools/blender/alpha_wardrobe.py</c>, <c>stowed_copies</c>).</summary>
+        public const string StowedSuffix = "_stowed";
+
+        /// <summary>Річ, яку тримають у руці (зброя, щит, посох), — у неї є двійник за спиною.</summary>
+        public static bool IsHeld(string part) =>
+            !string.IsNullOrEmpty(part) && !part.EndsWith(StowedSuffix, StringComparison.Ordinal) &&
+            (part.StartsWith("wpn_", StringComparison.Ordinal) || part.StartsWith("shield_", StringComparison.Ordinal) ||
+             part == "buckler" || part == "staff");
+
+        /// <summary>
+        /// Поза боєм — усе, що тримають у руці, за спиною (власник 08.10.2026: «Хоочу щоб Эквіп ніколи не був так, а
+        /// нормально Не скрізь руку чи тіло»): мирні кліпи (стоїть, говорить, працює) зброї не тримають, і спис з посохом
+        /// проходили крізь долоню й тіло. Село, портрети, створення героя, речі.
+        /// </summary>
+        public CharacterKitPlan Stowed() => Carry(false);
+
+        /// <summary>Бій: і в руці, і за спиною — постать перемикає їх за станом (<c>KitFigure.SetWeaponDrawn</c>).</summary>
+        public CharacterKitPlan WithStowedTwins() => Carry(true);
+
+        /// <summary>
+        /// Довгі речі, яких за спиною не носять: нижній кінець списа (2,3 м) і посоха (1,7 м) у позі й ході заходив у
+        /// поперек, ноги й поли (замір лукбука 08.10.2026). Поза боєм вони відкладені — двійника немає.
+        /// </summary>
+        public static bool SetAside(string part) => part == "wpn_spear" || part == "staff";
+
+        private CharacterKitPlan Carry(bool keepHeld)
+        {
+            var p = new CharacterKitPlan { KitId = KitId, BodyId = BodyId };
+            foreach (var part in Parts)
+            {
+                if (!IsHeld(part.Part)) { p.Parts.Add(new KitPartPlan(part.Part, part.Tint)); continue; }
+                if (keepHeld) p.Parts.Add(new KitPartPlan(part.Part, part.Tint));
+                if (!SetAside(part.Part)) p.Parts.Add(new KitPartPlan(part.Part + StowedSuffix, part.Tint));
+            }
+            foreach (var a in Accents)
+            {
+                if (!IsHeld(a)) { p.Accents.Add(a); continue; }
+                if (keepHeld) p.Accents.Add(a);
+                if (!SetAside(a)) p.Accents.Add(a + StowedSuffix);
+            }
+            p.HiddenZones.AddRange(HiddenZones);
+            return p;
+        }
 
         /// <summary>Зону тіла <c>body_&lt;зона&gt;</c> показувати? (очі й голова — завжди).</summary>
         public bool ShowsBodyZone(string zone) => !HiddenZones.Contains(zone);

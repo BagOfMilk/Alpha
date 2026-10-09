@@ -1037,7 +1037,7 @@ namespace Game.Gameplay
             float phase = BattleArenaView.Hash01(unit.Id) * 0.9f;
             // 1,3: реалістичні пропорції читаються дрібніше за «чібі» Kenney того ж зросту — на клітинці
             // 1 од. постать мала ~0,95 од. і губилась поруч з ялицями (тур 07.10.2026); тепер ~1,2 од.
-            if (!figure.Show(look, equip, CharacterAnimState.CombatIdle, KitBattleScale, phase, _unitRoot.gameObject.layer))
+            if (!figure.Show(look, equip, CharacterAnimState.CombatIdle, KitBattleScale, phase, _unitRoot.gameObject.layer, false, true))
             {
                 Destroy(go);
                 go = null;
@@ -1226,7 +1226,7 @@ namespace Game.Gameplay
                 if (!_unitAnimations.TryGetValue(u.Id, out var anim) || anim == null) continue;
                 _unitStyles.TryGetValue(u.Id, out var style);
                 var clip = _kitAnims.For(CharacterAnimState.Victory, style);
-                if (clip != null) anim.PlayOnce(clip, false);
+                if (clip != null) { anim.PlayOnce(clip, false); _unitOneShotState[u.Id] = CharacterAnimState.Victory; }
             }
         }
 
@@ -1860,7 +1860,7 @@ namespace Game.Gameplay
                     _activeTact.ImpactTime = release + flight;
                     _activeTact.Duration = release + flight + AttackTail / speed;
                     _activeTact.Reaction = AnimStateTable.ReactionFor(entry.Key);
-                    if (clip != null) PlayClip(unitId, clip, false, speed);
+                    if (clip != null) PlayClip(unitId, clip, false, speed, CharacterAnimState.Attack);
                     else PlayAttackClip(unitId, targetId);
                     _lastStrikerId = unitId;
                     TryStartActionShot(unitId, targetId, _activeTact.Duration);
@@ -1872,11 +1872,12 @@ namespace Game.Gameplay
                     // Своїм рухом: удар чи постріл — зброєю, наказ — окриком, сітка — кидком (а не «закляття» на все).
                     if (!string.IsNullOrEmpty(targetId)) FaceTowards(unitId, targetId);
                     float speed = TactSpeed(fast);
-                    var clip = AbilityClipOf(unitId, AnimStateTable.AbilityStateFor(Arg(args, "abilityId")));
+                    var abilityState = AnimStateTable.AbilityStateFor(Arg(args, "abilityId"));
+                    var clip = AbilityClipOf(unitId, abilityState);
                     float impact = clip != null ? clip.length * AnimStateTable.ImpactAt(clip.name) / speed : 0.2f / speed;
                     _activeTact.ImpactTime = impact;
                     _activeTact.Duration = impact + AttackTail / speed;
-                    if (clip != null) PlayClip(unitId, clip, false, speed);
+                    if (clip != null) PlayClip(unitId, clip, false, speed, abilityState);
                     else PlayOneShot(unitId, clips => clips?.Interact, hold: false);
                     if (!string.IsNullOrEmpty(targetId)) _lastStrikerId = unitId;
                     break;
@@ -1885,6 +1886,7 @@ namespace Game.Gameplay
                 case TactKind.DownedOrDeath:
                     _activeTact.Duration = 0.6f / TactSpeed(fast);
                     PlayOneShot(unitId, clips => clips?.Die, hold: true);
+                    if (!string.IsNullOrEmpty(unitId)) _unitOneShotState[unitId] = CharacterAnimState.Down;
                     // Подача П6: уповільнення на вбивстві — коротке, без стакання, вимикається в меню паузи.
                     if (entry.Key == "combat.log.died")
                     {
@@ -2014,6 +2016,19 @@ namespace Game.Gameplay
                 foreach (var s in _session.GetPendingSurrenders())
                     if (s != null && s.UnitId == unit.Id) { surrendering = true; break; }
             _unitStyles.TryGetValue(unit.Id, out var style);
+            // Зброя в руці лише там, де кліп її тримає; інакше — за спиною (власник 08.10.2026: «Эквіп ніколи… Не скрізь
+            // руку чи тіло»). Поки грає одноразовий кліп — за його станом, у русі — за спиною.
+            var go = UnitGo(unit.Id);
+            var figure = go != null ? go.GetComponent<Game.Gameplay.Characters.KitFigure>() : null;
+            if (figure != null)
+            {
+                bool moving = _activeTact != null && _activeTact.Kind == TactKind.Move &&
+                              string.Equals(_activeTact.ActorId, unit.Id, StringComparison.Ordinal);
+                var shown = anim.IsPlayingOneShot && _unitOneShotState.TryGetValue(unit.Id, out var os) ? os
+                    : moving ? CharacterAnimState.Run
+                    : AnimStateTable.BattleIdleFor(unit.IsDowned, surrendering, unit.Statuses, unit.IsOverwatching, BesideLowCover(unit));
+                figure.SetWeaponDrawn(AnimStateTable.HoldsWeapon(shown));
+            }
             // Підвівся (стабілізували, підняли): кліп «встає з землі» замінює утриману позу падіння — раніше
             // стабілізований так і лежав.
             bool wasDown = _unitWasDowned.TryGetValue(unit.Id, out var down) && down;
@@ -2021,7 +2036,7 @@ namespace Game.Gameplay
             if (wasDown && !unit.IsDowned && !unit.IsOutOfBattle)
             {
                 var up = _kitAnims.For(CharacterAnimState.GetUp, style);
-                if (up != null) anim.PlayOnce(up, false);
+                if (up != null) { anim.PlayOnce(up, false); _unitOneShotState[unit.Id] = CharacterAnimState.GetUp; }
             }
             var state = AnimStateTable.BattleIdleFor(unit.IsDowned, surrendering, unit.Statuses, unit.IsOverwatching, BesideLowCover(unit));
             if (state == CharacterAnimState.Down) return; // кліп падіння вже тримає останній кадр
@@ -2029,6 +2044,9 @@ namespace Game.Gameplay
         }
 
         private readonly Dictionary<string, bool> _unitWasDowned = new Dictionary<string, bool>(StringComparer.Ordinal);
+
+        /// <summary>Стан одноразового кліпу, що грає на постаті, — щоб знати, чи тримає вона зброю.</summary>
+        private readonly Dictionary<string, CharacterAnimState> _unitOneShotState = new Dictionary<string, CharacterAnimState>(StringComparer.Ordinal);
 
         /// <summary>Поруч (хрестом) клітинка з низьким укриттям — боєць присідає за ним.</summary>
         private bool BesideLowCover(BattleUnitView unit)
@@ -2054,7 +2072,7 @@ namespace Game.Gameplay
             if (!_unitAnimations.TryGetValue(unitId, out var anim) || anim == null || anim.IsPlayingOneShot) return;
             var choice = AnimStateTable.For(state, style);
             var clip = _kitAnims.Clip(choice.Clip);
-            if (clip != null) anim.PlayOnce(clip, choice.HoldLastFrame);
+            if (clip != null) { anim.PlayOnce(clip, choice.HoldLastFrame); _unitOneShotState[unitId] = state; }
         }
 
         private void SetGait(string unitId, float gait)
@@ -2079,10 +2097,11 @@ namespace Game.Gameplay
             return state == CharacterAnimState.Attack ? AttackClipOf(unitId) : _kitAnims.For(state, style);
         }
 
-        private void PlayClip(string unitId, AnimationClip clip, bool hold, float speed)
+        private void PlayClip(string unitId, AnimationClip clip, bool hold, float speed, CharacterAnimState state)
         {
             if (clip == null || !_unitAnimations.TryGetValue(unitId ?? string.Empty, out var anim) || anim == null) return;
             anim.PlayOnce(clip, hold, null, speed);
+            _unitOneShotState[unitId] = state;
         }
 
         /// <summary>Скільки триває крок на клітинку: з природного бігу постаті (ноги не ковзають), швидкий хід — швидше.</summary>
