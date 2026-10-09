@@ -566,16 +566,19 @@ namespace Game.Gameplay
             float height = 1.75f * a.transform.lossyScale.y / UnitVisualScale;
             var aHead = HeadOfUnit(a, height);
             var tHead = HeadOfUnit(t, height);
-            var pose = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder,
-                new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z),
-                new UI.DialogueVec(aHead.x, aHead.y, aHead.z), new UI.DialogueVec(tHead.x, tHead.y, tHead.z), height);
+            var tD = new UI.DialogueVec(tHead.x, tHead.y, tHead.z);
+            var aD = new UI.DialogueVec(aHead.x, aHead.y, aHead.z);
+            // Над лівим плечем (вісь «хто б'є → ціль») — для ближнього бою; лучник тримає лук лівою, тож для лука — над
+            // правим, інакше лук і тятива перерізають кадр навпіл (тур 08.10.2026).
+            var leftShoulder = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder, tD, aD, aD, tD, height);
+            var rightShoulder = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder, tD, aD, tD, aD, height);
+            bool bow = StyleOfUnit(attackerId) == WeaponStyle.Bow;
+            var pose = bow ? rightShoulder : leftShoulder;
             // Укриття не має бути ні навколо камери, ні між нею й ціллю (тур 08.10.2026: камера опинилась усередині
-            // скелі-укриття). Заважає — дзеркальний бік осі; заважає й там — кадру не буде (ціль за повним укриттям).
+            // скелі-укриття). Заважає — інше плече; заважає й там — кадру не буде (ціль за повним укриттям).
             if (ShotBlocked(pose, height))
             {
-                pose = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder,
-                    new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z),
-                    new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z), height);
+                pose = bow ? leftShoulder : rightShoulder;
                 if (ShotBlocked(pose, height)) { _actionCamera.Refund(); return; }
             }
             _actionShotPos = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
