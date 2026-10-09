@@ -213,12 +213,46 @@ namespace Game.Gameplay
         {
             if (_camera == null || model == null) return;
 
-            var renderers = model.GetComponentsInChildren<Renderer>();
-            if (renderers.Length == 0) return;
+            var bounds = KitBounds(model);
+            if (!bounds.HasValue)
+            {
+                // Фігурки Kenney — за сітками; лінії (тятива) не рахуємо: до першого кадру вони в початку координат.
+                Bounds? acc = null;
+                foreach (var r in model.GetComponentsInChildren<Renderer>())
+                {
+                    if (r is LineRenderer || !r.enabled) continue;
+                    if (acc.HasValue) { var b = acc.Value; b.Encapsulate(r.bounds); acc = b; } else acc = r.bounds;
+                }
+                bounds = acc;
+            }
+            if (!bounds.HasValue || bounds.Value.size.y <= 0f) return;
+            FrameOnBounds(bounds.Value, bustFraction, margin);
+        }
 
-            var bounds = renderers[0].bounds;
-            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
-            if (bounds.size.y <= 0f) return;
+        /// <summary>
+        /// Постать набору — за кістками (голова, стопи), а не за сітками: лук і рушниця в позі спокою стирчать уперед
+        /// на метр і зсували центр (голова Максима з'їжджала вбік), а тятива до першого кадру стоїть у початку
+        /// координат (станок на Y=−400 — рамка на 400 од., портрет Мирослави чорний; тур майстерні 08.10.2026).
+        /// </summary>
+        private static Bounds? KitBounds(GameObject model)
+        {
+            Transform head = null, fl = null, fr = null;
+            foreach (var t in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "head") head = t;
+                else if (t.name == "foot_l") fl = t;
+                else if (t.name == "foot_r") fr = t;
+            }
+            if (head == null || fl == null || fr == null) return null;
+            float s = head.lossyScale.y;
+            float top = head.position.y + 0.22f * s;          // маківка над кісткою голови (метри моделі)
+            float feet = Mathf.Min(fl.position.y, fr.position.y) - 0.08f * s;
+            var c = new Vector3(head.position.x, (top + feet) * 0.5f, head.position.z);
+            return new Bounds(c, new Vector3(0.5f * s, top - feet, 0.5f * s));
+        }
+
+        private void FrameOnBounds(Bounds bounds, float bustFraction, float margin)
+        {
 
             // Kenney Mini Characters — «чіબі»-пропорції: голова сама ~40-50%
             // від зросту моделі. Перша спроба (0.42 зросту, запас ×1.25)
