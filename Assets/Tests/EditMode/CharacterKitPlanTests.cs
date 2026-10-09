@@ -62,13 +62,18 @@ namespace Game.Tests.EditMode
                     Assert.IsFalse(CharacterKitPlan.IsHeld(a), card.Id + ": у руці поза боєм — " + a);
                     Assert.IsTrue(m.Any(x => CharacterKitPlan.MatchesAccent(x, a)), card.Id + ": немає акценту " + a);
                 }
+                Assert.IsFalse(stowed.Wants("wpn_spear", out _) || stowed.Wants("wpn_spear_stowed", out _),
+                    card.Id + ": спис за спиною не носять — відкладено");
+                Assert.IsTrue(stowed.Wants("shield_round_stowed", out _), card.Id + ": щит — за спиною");
                 var armed = full.WithStowedTwins();
-                Assert.IsTrue(armed.Wants("wpn_spear", out _) && armed.Wants("wpn_spear_stowed", out _), card.Id);
+                Assert.IsTrue(armed.Wants("wpn_spear", out _) && !armed.Wants("wpn_spear_stowed", out _), card.Id);
             }
             var zakhar = CharacterKitPlan.From(AppearanceCatalog.Named("zakhar"), null);
             Assert.IsTrue(zakhar.Wants("staff", out _), "у Захара посох");
-            Assert.IsFalse(zakhar.Wants("staff_stowed", out _), "посох у руці не тягне двійника за спиною");
-            Assert.IsTrue(zakhar.Stowed().Wants("staff_stowed", out _) && !zakhar.Stowed().Wants("staff", out _));
+            Assert.IsFalse(zakhar.Stowed().Wants("staff", out _) || zakhar.Stowed().Wants("staff_stowed", out _),
+                "посох поза боєм відкладено — ні в руці, ні за спиною");
+            var bowman = CharacterKitPlan.From(AppearanceCatalog.Named("myroslava"), null);
+            Assert.IsTrue(bowman.Stowed().Wants("wpn_bow_stowed", out _) && !bowman.Stowed().Wants("wpn_bow", out _));
             Assert.AreEqual(WeaponStyle.Unarmed, AnimStateTable.StyleOf(zakhar.Stowed().Weapon()),
                 "зброя за спиною — мирні кліпи без хвату");
         }

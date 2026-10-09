@@ -170,6 +170,12 @@ namespace Game.Gameplay.UI
         /// <summary>Бій: і в руці, і за спиною — постать перемикає їх за станом (<c>KitFigure.SetWeaponDrawn</c>).</summary>
         public CharacterKitPlan WithStowedTwins() => Carry(true);
 
+        /// <summary>
+        /// Довгі речі, яких за спиною не носять: нижній кінець списа (2,3 м) і посоха (1,7 м) у позі й ході заходив у
+        /// поперек, ноги й поли (замір лукбука 08.10.2026). Поза боєм вони відкладені — двійника немає.
+        /// </summary>
+        public static bool SetAside(string part) => part == "wpn_spear" || part == "staff";
+
         private CharacterKitPlan Carry(bool keepHeld)
         {
             var p = new CharacterKitPlan { KitId = KitId, BodyId = BodyId };
@@ -177,13 +183,13 @@ namespace Game.Gameplay.UI
             {
                 if (!IsHeld(part.Part)) { p.Parts.Add(new KitPartPlan(part.Part, part.Tint)); continue; }
                 if (keepHeld) p.Parts.Add(new KitPartPlan(part.Part, part.Tint));
-                p.Parts.Add(new KitPartPlan(part.Part + StowedSuffix, part.Tint));
+                if (!SetAside(part.Part)) p.Parts.Add(new KitPartPlan(part.Part + StowedSuffix, part.Tint));
             }
             foreach (var a in Accents)
             {
                 if (!IsHeld(a)) { p.Accents.Add(a); continue; }
                 if (keepHeld) p.Accents.Add(a);
-                p.Accents.Add(a + StowedSuffix);
+                if (!SetAside(a)) p.Accents.Add(a + StowedSuffix);
             }
             p.HiddenZones.AddRange(HiddenZones);
             return p;

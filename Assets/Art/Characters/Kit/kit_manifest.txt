@@ -80,7 +80,6 @@ m:shirt
 m:shoes
 m:skirt_long
 m:staff
-m:staff_stowed
 m:tally_cord
 m:trousers
 m:tunic
@@ -104,7 +103,6 @@ m:wpn_musket_stowed
 m:wpn_sabre
 m:wpn_sabre_stowed
 m:wpn_spear
-m:wpn_spear_stowed
 m:wpn_sword
 m:wpn_sword_stowed
 f:berkut_feather
@@ -185,7 +183,6 @@ f:shirt
 f:shoes
 f:skirt_long
 f:staff
-f:staff_stowed
 f:tally_cord
 f:trousers
 f:tunic
@@ -209,7 +206,6 @@ f:wpn_musket_stowed
 f:wpn_sabre
 f:wpn_sabre_stowed
 f:wpn_spear
-f:wpn_spear_stowed
 f:wpn_sword
 f:wpn_sword_stowed
 m:culture:ukrainian
