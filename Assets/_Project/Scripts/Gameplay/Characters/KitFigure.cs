@@ -85,6 +85,8 @@ namespace Game.Gameplay.Characters
             }
             _drawn = null;
             if (armed) SetWeaponDrawn(true);
+            else if (Resting(idleState))
+                foreach (var go in _stowed) go.SetActive(false); // сидить чи навколішки — зброю відкладено (кінець списа йшов крізь лаву)
 
             if (anims != null && anims.IsComplete)
             {
@@ -118,6 +120,15 @@ namespace Game.Gameplay.Characters
                 Debug.LogError("[Постать] " + name + " у бінд-позі: частини розкидані на " +
                                (Mathf.Max(spread.size.x, spread.size.z) / scale).ToString("0.0") + " м — анімація не стартувала.");
         }
+
+        /// <summary>
+        /// Пози, в яких річ за спиною пройшла б крізь лаву, землю чи стегна (сидить, навколішки, нахилений над грядкою):
+        /// її тоді відкладено — як у BG3 зброя зникає, коли постать сідає. Власник 08.10.2026: «Эквіп ніколи… Не скрізь
+        /// руку чи тіло».
+        /// </summary>
+        public static bool Resting(CharacterAnimState state) =>
+            state == CharacterAnimState.Sit || state == CharacterAnimState.WorkCouncil ||
+            state == CharacterAnimState.WorkCraft || state == CharacterAnimState.WorkFarm;
 
         private readonly List<GameObject> _held = new List<GameObject>();
         private readonly List<GameObject> _stowed = new List<GameObject>();

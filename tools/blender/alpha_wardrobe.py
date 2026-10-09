@@ -652,7 +652,8 @@ def stowed_copies(rig, body):
     """Двійник кожної зброї, щита й посоха за спиною (spine_03; кинджал — таз). Головна вісь речі (PCA) іде
     навскіс уздовж спини, найтонша — назовні (+Y), щоб плаский бік лежав на спині; річ відсунута від спини так, щоб
     найближча вершина була за поверхнею (з одягом). Кінець хвату визначає, що вгорі: у древкових — вістря, у клинків —
-    руків'я."""
+    руків'я. Відстань від осі тіла (+Y): найоб'ємніший одяг на спині — плащ і кіраса, ~0,14 м (замір 08.10.2026);
+    зброя — на 0,155 (з 0,20 вона відставала від спини на 10–20 см), щит — поверх зброї, лук — поверх сагайдака."""
     import numpy as np
     out = {}
     inv = rig.matrix_world.inverted()
@@ -671,21 +672,21 @@ def stowed_copies(rig, body):
             a1 = -a1                                    # a1 — у бік кінця хвату
         if part in STOW_POLES:
             t1 = -Vector((0.40, 0.0, 0.92)).normalized()  # хват — донизу, вістря — вгору до лівого плеча
-            centre, inner, bone = Vector((0.0, 0.0, 1.18)), 0.20, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.18)), 0.155, "spine_03"
         elif part in STOW_HILT_UP:
             t1 = Vector((-0.42, 0.0, 0.91)).normalized()  # руків'я — вгору над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.20, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
         elif part in STOW_HEAD_UP:
             t1 = -Vector((-0.42, 0.0, 0.91)).normalized() # хват (низ руків'я) — донизу, голова — над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.20, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
         elif part in STOW_FLAT:
             t1 = Vector((0.0, 0.0, 1.0))
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.27, "spine_03"
+            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.19, "spine_03"
         else:
             t1 = Vector((1.0, 0.0, 0.0))
-            centre, inner, bone = Vector((0.0, 0.0, 0.98)), 0.16, "pelvis"
+            centre, inner, bone = Vector((0.0, 0.0, 0.98)), 0.145, "pelvis"
         if part == "wpn_bow":
-            inner = 0.27                                # поверх сагайдака
+            inner = 0.25                                # поверх сагайдака (до 0,246 м)
         u1 = a1.normalized()
         u3 = (a3 - u1 * a3.dot(u1)).normalized()
         u2 = u3.cross(u1)
