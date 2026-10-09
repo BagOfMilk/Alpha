@@ -569,6 +569,15 @@ namespace Game.Gameplay
             var pose = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder,
                 new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z),
                 new UI.DialogueVec(aHead.x, aHead.y, aHead.z), new UI.DialogueVec(tHead.x, tHead.y, tHead.z), height);
+            // Укриття не має бути ні навколо камери, ні між нею й ціллю (тур 08.10.2026: камера опинилась усередині
+            // скелі-укриття). Заважає — дзеркальний бік осі; заважає й там — кадру не буде (ціль за повним укриттям).
+            if (ShotBlocked(pose, height))
+            {
+                pose = UI.DialogueDirector.Pose(UI.DialogueShotKind.OverShoulder,
+                    new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z),
+                    new UI.DialogueVec(tHead.x, tHead.y, tHead.z), new UI.DialogueVec(aHead.x, aHead.y, aHead.z), height);
+                if (ShotBlocked(pose, height)) { _actionCamera.Refund(); return; }
+            }
             _actionShotPos = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
             _actionShotLook = new Vector3(pose.LookAt.X, pose.LookAt.Y, pose.LookAt.Z);
             _actionShotFov = pose.Fov;
@@ -581,6 +590,27 @@ namespace Game.Gameplay
             _actionShotOn = true;
             _actionShotLeft = duration + 0.15f;
             Debug.Log("[Бій] екшн-кадр: " + attackerId + " → " + targetId + " (" + duration.ToString("0.00", CultureInfo.InvariantCulture) + " с)");
+        }
+
+        /// <summary>Реквізит арени (укриття, бочки) навколо камери чи на лінії «камера → ціль» — колайдерів у нього немає, тож за межами рендерерів.</summary>
+        private bool ShotBlocked(UI.DialogueCameraPose pose, float height)
+        {
+            if (_propRoot == null) return false;
+            var cam = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
+            var target = new Vector3(pose.LookAt.X, pose.LookAt.Y, pose.LookAt.Z);
+            var dir = target - cam;
+            float len = dir.magnitude;
+            if (len < 1e-4f) return false;
+            var ray = new Ray(cam, dir / len);
+            foreach (var r in _propRoot.GetComponentsInChildren<Renderer>())
+            {
+                if (!r.enabled) continue;
+                var b = r.bounds;
+                b.Expand(0.05f);
+                if (b.Contains(cam)) return true;
+                if (b.IntersectRay(ray, out float d) && d < len - 0.15f * height) return true;
+            }
+            return false;
         }
 
         private static Vector3 HeadOfUnit(GameObject go, float height)

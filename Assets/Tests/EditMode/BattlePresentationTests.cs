@@ -259,6 +259,16 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void ActionCamera_Refund_GivesTheShotToTheNextStrike()
+        {
+            var ac = new BattleActionCamera();
+            ac.ShouldTrigger(0f, 1f, true, false); ac.ShouldTrigger(10f, 1f, true, false);
+            Assert.IsTrue(ac.ShouldTrigger(20f, 1f, true, false));
+            ac.Refund(); // камеру нема куди поставити — кадр не відбувся
+            Assert.IsTrue(ac.ShouldTrigger(20.5f, 1f, true, false), "шанс і пауза повернулись — наступний удар знімається");
+        }
+
+        [Test]
         public void ActionCamera_EveryThirdStrike_WithCooldown_OffOnLow()
         {
             var ac = new BattleActionCamera();

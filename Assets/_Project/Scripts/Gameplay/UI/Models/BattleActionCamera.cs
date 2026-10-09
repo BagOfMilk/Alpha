@@ -19,6 +19,7 @@ namespace Game.Gameplay.UI
 
         private float _accumulator;
         private float _lastShotAt = float.NegativeInfinity;
+        private float _prevAccumulator, _prevLastShotAt = float.NegativeInfinity;
 
         /// <summary>
         /// Удар у реальну секунду <paramref name="nowReal"/> триватиме <paramref name="shotSeconds"/>: чи знімати його
@@ -30,9 +31,21 @@ namespace Game.Gameplay.UI
             if (nowReal - _lastShotAt < CooldownSeconds) return false;
             _accumulator += Chance;
             if (_accumulator < 1f) return false;
+            _prevAccumulator = _accumulator;
+            _prevLastShotAt = _lastShotAt;
             _accumulator -= 1f;
             _lastShotAt = nowReal;
             return true;
+        }
+
+        /// <summary>
+        /// Кадр, щойно дозволений <see cref="ShouldTrigger"/>, не відбувся (камеру нема куди поставити — укриття): шанс і
+        /// пауза повертаються, наступний удар отримає кадр.
+        /// </summary>
+        public void Refund()
+        {
+            _accumulator = _prevAccumulator - Chance; // як до цього удару: наступний додасть шанс і дійде до кадру
+            _lastShotAt = _prevLastShotAt;
         }
 
         public void Reset()
