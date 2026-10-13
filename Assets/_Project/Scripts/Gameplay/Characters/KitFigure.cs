@@ -234,6 +234,7 @@ namespace Game.Gameplay.Characters
                 var fit = new GameObject(smr.name);
                 fit.layer = go.layer;
                 fit.transform.SetPositionAndRotation(smr.transform.position, smr.transform.rotation);
+                fit.transform.localScale = smr.transform.lossyScale; // поки без батька: локальний = світовий
                 float tilt = 0f;
                 if (lo != hi)
                 {
@@ -296,11 +297,13 @@ namespace Game.Gameplay.Characters
         private static List<Vector3> Baked(SkinnedMeshRenderer smr, Mesh into)
         {
             var mesh = into ?? new Mesh();
-            smr.BakeMesh(mesh, true);
+            // Без масштабу в сітці, у світ — повною матрицею рендерера: масштаб постаті (село 0,4, бій 1,35) живе в
+            // батьках, і запікання «з масштабом» його не враховувало — річ виходила в 2,5 раза більшою (трек V, 13.10.2026).
+            smr.BakeMesh(mesh, false);
             var verts = mesh.vertices;
             var list = new List<Vector3>(verts.Length);
-            var t = smr.transform;
-            foreach (var v in verts) list.Add(t.position + t.rotation * v);
+            var m = smr.transform.localToWorldMatrix;
+            foreach (var v in verts) list.Add(m.MultiplyPoint3x4(v));
             if (into == null) Destroy(mesh);
             return list;
         }
