@@ -76,6 +76,13 @@ namespace Game.Gameplay
         private List<WalkPoint> _path = new List<WalkPoint>();
         private int _pathIndex;
         private bool _pathRuns;
+        // Ціль маршруту й лічильник застрягання (власник 13.10.2026: «Нескінченний лагучій біг» уздовж паркану).
+        // Сітку перешкод перебудовують кожні 1,5 с (жителі, стадії будівель), а маршрут лишався старим: крок у
+        // зайняту клітинку щокадру відкидало назад на вільне місце, і герой біг на місці. Тепер такий крок
+        // переплановує маршрут, а без поступу ~0,6 с маршрут скасовується.
+        private WalkPoint _pathGoal;
+        private int _pathReplans;
+        private float _pathStuck;
         private float _worldAge = float.MaxValue;
 
         /// <summary>Місце, до якого герой іде, щоб з ним взаємодіяти (клік по будівлі чи людині).</summary>
@@ -258,6 +265,10 @@ namespace Game.Gameplay
                 var next = _grid.Slide(pos, dir.x * speed * dt, dir.z * speed * dt);
                 Face(dir);
                 SetHere(next);
+                // Уперся в паркан чи стіну — стоїть, а не біжить на місці.
+                float movedSq = (next.X - pos.X) * (next.X - pos.X) + (next.Z - pos.Z) * (next.Z - pos.Z);
+                float wantSq = speed * dt * speed * dt;
+                if (movedSq < wantSq * 0.04f) return 0f;
                 return run ? 2f : 1f;
             }
 
@@ -300,6 +311,7 @@ namespace Game.Gameplay
                 bool running = _pathRuns || run;
                 float speed = running ? runSpeed : walkSpeed;
                 float step = speed * dt;
+                var before = pos;
                 while (_pathIndex < _path.Count && step > 0f)
                 {
                     var target = _path[_pathIndex];
@@ -318,6 +330,17 @@ namespace Game.Gameplay
                         step = 0f;
                     }
                 }
+                if (_grid != null && !_grid.IsFree(pos))
+                {
+                    // Маршрут пішов у клітинку, що стала зайнятою, — новий маршрут від того, де стоїмо.
+                    if (++_pathReplans > 3) { StopPath(); return 0f; }
+                    _path = _grid.FindPath(before, _pathGoal);
+                    _pathIndex = 0;
+                    return 0f;
+                }
+                float progressed = Mathf.Sqrt((pos.X - before.X) * (pos.X - before.X) + (pos.Z - before.Z) * (pos.Z - before.Z));
+                _pathStuck = progressed < speed * dt * 0.3f ? _pathStuck + dt : 0f;
+                if (_pathStuck > 0.6f) { StopPath(); return 0f; }
                 SetHere(pos);
                 return running ? 2f : 1f;
             }
@@ -330,6 +353,20 @@ namespace Game.Gameplay
             _path = _grid.FindPath(from, to);
             _pathIndex = 0;
             _pathRuns = run;
+            _pathGoal = to;
+            _pathReplans = 0;
+            _pathStuck = 0f;
+        }
+
+        /// <summary>Скасувати маршрут, що не веде нікуди (ціль недосяжна) — герой зупиняється.</summary>
+        private void StopPath()
+        {
+            if (_pathIndex < _path.Count)
+                Debug.Log("[Село] маршрут скасовано: застряг (" + Here().X.ToString("0.0") + ", " + Here().Z.ToString("0.0") + ")");
+            _path.Clear();
+            _pathIndex = 0;
+            _pendingInteract = null;
+            _pathStuck = 0f;
         }
 
         private WalkPoint Here()
