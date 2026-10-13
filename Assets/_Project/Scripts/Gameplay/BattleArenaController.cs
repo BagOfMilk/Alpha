@@ -55,7 +55,16 @@ namespace Game.Gameplay
     {
         // ================= камера: константи спільні з Editor (докорінно §4) =================
 
-        public const float CameraTiltDegrees = 52f;
+        // Власник 08.10.2026: «Бій занадто високо не як у референесах». Було 52°, ортографія і кадр на всю арену —
+        // бійці дрібні, дивишся згори, як на схему. У WL3 і Rogue Trader камера перспективна, нижча й ближча, за тим,
+        // хто ходить: 40° у точці фокуса, вузький кут огляду (далеке менше й нижче — глибина), крупніший план.
+        public const float CameraTiltDegrees = 40f;
+
+        /// <summary>Кут огляду камери бою (по вертикалі). Вузький — мало спотворень, але є глибина.</summary>
+        public const float CameraFieldOfView = 30f;
+
+        /// <summary>Розмір кадру на старті бою (половина висоти в од. у точці фокуса): крупний план бійця, а не вся арена.</summary>
+        private const float CameraStartZoom = 4f;
         public const float InitialYawDegrees = 45f;
 
         // ================= призначається BattleArenaBuilder (Editor) =================
@@ -228,13 +237,12 @@ namespace Game.Gameplay
 
         /// <summary>П13: той, хто останнім бив, і той, кому зараз повернуто звичайний темп на вбивстві.</summary>
         private string _lastStrikerId, _slowMoActorId;
-        /// <summary>П12: політ, запитаний під час екшн-кадру (перспектива), — виконується після повернення ортографічної камери.</summary>
+        /// <summary>П12: політ, запитаний під час екшн-кадру (через плече), — виконується після повернення камери бою.</summary>
         private string _focusAfterShot;
 
         // ================= Бій v2: камера (§4) =================
 
-        private const float CameraDistance = 24f;
-        private const float CameraMinZoom = 4f;
+        private const float CameraMinZoom = 2.8f;
         private const float CameraMaxZoom = 12f;
         private const float CameraPanSpeed = 5f;
         private const float CameraFlyDuration = 0.45f;
@@ -419,6 +427,10 @@ namespace Game.Gameplay
             _unitVisualPos.Clear();
             _unitVisualRot.Clear();
             _unitHitReactions.Clear();
+            // Стан постатей минулого бою: «лежала» з минулого бою на вході в новий давало кліп «встає з землі»
+            // (фінал туру — протагоністка на старті в присіді підйому).
+            _unitWasDowned.Clear();
+            _unitOneShotState.Clear();
             _hasSimulatedHover = false;
             _simulatedHoverUnitId = null;
             _simulatedHoverTile = null;
@@ -629,7 +641,7 @@ namespace Game.Gameplay
             return go.transform.position + Vector3.up * (0.93f * height);
         }
 
-        /// <summary>Екшн-кадр скінчився: камера арени знову ортографічна, на своїй позі, без «доїзду».</summary>
+        /// <summary>Екшн-кадр скінчився: камера арени знову на своїй позі й куті огляду, без «доїзду».</summary>
         private void EndActionShot()
         {
             if (!_actionShotOn) return;
@@ -899,7 +911,10 @@ namespace Game.Gameplay
                 // SyncObjectMarkers на клітинці об'єкта; декор-укриття генератора — лише без них.
                 bool templated = view.Objects != null && view.Objects.Count > 0;
                 if (!templated && !string.Equals(cover, "None", StringComparison.Ordinal))
-                    PlaceCoverProp(x, y, cover, world);
+                {
+                    string sides = view.Grid.TileCoverSides != null && index < view.Grid.TileCoverSides.Count ? view.Grid.TileCoverSides[index] : null;
+                    PlaceCoverProp(x, y, cover, sides, world);
+                }
             }
         }
 
@@ -927,22 +942,105 @@ namespace Game.Gameplay
             return tile;
         }
 
-        private void PlaceCoverProp(int x, int y, string cover, WorldPos world)
+        // Власник 08.10.2026: «…Не скрізь руку чи тіло». Укриття карти — властивість БОКУ клітинки, на якій стоїть
+        // боєць (GridMap.SetCover(pos, side)); модель ставилась у центр цієї ж клітинки, на випадковий кут і в
+        // повний розмір — колоди й брила проходили крізь тіло (знімки туру бою). Тепер модель стоїть на краю
+        // клітинки з того боку, звідки захищає, уздовж краю, і вписана в смугу між клітинками: боєць — поруч, за нею.
+        private const float EdgeCoverLength = 0.95f;
+        private const float EdgeCoverDepth = 0.40f;
+        private const float FullCoverHeight = 1.15f;
+        private const float HalfCoverHeight = 0.6f;
+
+        private void PlaceCoverProp(int x, int y, string cover, string sides, WorldPos world)
         {
-            var pool = string.Equals(cover, "Full", StringComparison.Ordinal) ? CoverFullPrefabs : CoverHalfPrefabs;
+            var parts = sides?.Split('|');
+            bool placed = false;
+            if (parts != null && parts.Length == 4)
+                for (int d = 0; d < 4; d++)
+                {
+                    if (string.IsNullOrEmpty(parts[d]) || string.Equals(parts[d], "None", StringComparison.Ordinal)) continue;
+                    PlaceEdgeCoverProp(x, y, d, parts[d], world);
+                    placed = true;
+                }
+            if (!placed) PlaceEdgeCoverProp(x, y, 0, cover, world);
+        }
+
+        /// <summary>Модель укриття на боці <paramref name="side"/> (0 — північ +Z, 1 — схід +X, 2 — південь, 3 — захід).</summary>
+        private void PlaceEdgeCoverProp(int x, int y, int side, string cover, WorldPos world)
+        {
+            bool full = string.Equals(cover, "Full", StringComparison.Ordinal);
+            var pool = full ? CoverFullPrefabs : CoverHalfPrefabs;
             if (pool == null || pool.Length == 0) return;
 
-            int index = (int)(BattleArenaView.Hash01("cover_" + x + "_" + y) * pool.Length);
+            string key = x + "_" + y + "_" + side;
+            int index = (int)(BattleArenaView.Hash01("cover_" + key) * pool.Length);
             if (index >= pool.Length) index = pool.Length - 1;
             var prefab = pool[index];
             if (prefab == null) return;
 
+            float half = BattleArenaView.TileSize * 0.5f;
+            var offset = side == 0 ? new Vector3(0f, 0f, half) : side == 1 ? new Vector3(half, 0f, 0f)
+                       : side == 2 ? new Vector3(0f, 0f, -half) : new Vector3(-half, 0f, 0f);
             var go = Instantiate(prefab, _propRoot);
-            go.name = "cover:" + x + "_" + y;
-            go.transform.localPosition = new Vector3(world.X, world.Y, world.Z);
-            go.transform.localRotation = Quaternion.Euler(0f, BattleArenaView.Hash01("cover_yaw_" + x + "_" + y) * 360f, 0f);
-
+            go.name = "cover:" + key;
             foreach (var collider in go.GetComponentsInChildren<Collider>()) Destroy(collider);
+            FitProp(go, new Vector3(world.X, world.Y, world.Z) + offset, side == 0 || side == 2,
+                EdgeCoverLength * BattleArenaView.TileSize, EdgeCoverDepth * BattleArenaView.TileSize,
+                full ? FullCoverHeight : HalfCoverHeight, BattleArenaView.Hash01("cover_flip_" + key) < 0.5f);
+        }
+
+        /// <summary>
+        /// Вписує модель у прямокутник на землі: довга сторона моделі — уздовж X (<paramref name="alongX"/>) або Z
+        /// батьківського простору, довжина ≤ <paramref name="length"/>, глибина ≤ <paramref name="depth"/> (не ширша
+        /// за пропорцію), висота — до <paramref name="height"/> у межах ×0,5–×2 від горизонтального масштабу; низ — на
+        /// землі, центр — у <paramref name="centre"/>. Поворот лише на 0/90/180/270°, щоб межі лишались точними.
+        /// </summary>
+        private static void FitProp(GameObject go, Vector3 centre, bool alongX, float length, float depth, float height, bool flip)
+        {
+            var t = go.transform;
+            var baseScale = t.localScale;
+            t.localPosition = Vector3.zero;
+            t.localRotation = Quaternion.identity;
+            if (!TryLocalBounds(go, out var b) || b.size.x < 1e-4f || b.size.z < 1e-4f || b.size.y < 1e-4f)
+            {
+                t.localPosition = centre;
+                return;
+            }
+
+            bool modelLongX = b.size.x >= b.size.z;
+            float lng = Mathf.Max(b.size.x, b.size.z), shrt = Mathf.Min(b.size.x, b.size.z);
+            float sLong = length / lng;
+            float sShort = Mathf.Min(depth / shrt, sLong);
+            float sY = Mathf.Clamp(height / b.size.y, 0.5f * sLong, 2f * sLong);
+            var k = modelLongX ? new Vector3(sLong, sY, sShort) : new Vector3(sShort, sY, sLong);
+            float yaw = (modelLongX == alongX ? 0f : 90f) + (flip ? 180f : 0f);
+
+            t.localScale = Vector3.Scale(baseScale, k);
+            t.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            var c = t.localRotation * new Vector3(b.center.x * k.x, 0f, b.center.z * k.z);
+            t.localPosition = new Vector3(centre.x - c.x, centre.y - b.min.y * k.y, centre.z - c.z);
+        }
+
+        /// <summary>Межі всіх рендерерів у просторі батька (за поточної пози).</summary>
+        private static bool TryLocalBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = default;
+            var parent = go.transform.parent;
+            var toLocal = parent != null ? parent.worldToLocalMatrix : Matrix4x4.identity;
+            bool any = false;
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                if (r is LineRenderer || r is ParticleSystemRenderer) continue;
+                var w = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = new Vector3((i & 1) == 0 ? w.min.x : w.max.x, (i & 2) == 0 ? w.min.y : w.max.y, (i & 4) == 0 ? w.min.z : w.max.z);
+                    var p = toLocal.MultiplyPoint3x4(corner);
+                    if (!any) { bounds = new Bounds(p, Vector3.zero); any = true; }
+                    else bounds.Encapsulate(p);
+                }
+            }
+            return any;
         }
 
         private void RebuildUnits(BattleView view)
@@ -1377,10 +1475,13 @@ namespace Game.Gameplay
                     }
                     if (prefab != null)
                     {
+                        // Об'єкт займає свою клітинку: модель вписана в неї (у повний розмір колоди й брили виходили
+                        // на сусідні клітинки — у тіло того, хто за ними ховається).
                         var go = Instantiate(prefab, root.transform);
-                        go.transform.localPosition = Vector3.zero;
-                        go.transform.localRotation = Quaternion.Euler(0f, BattleArenaView.Hash01("object_yaw_" + o.Pos.X + "_" + o.Pos.Y) * 360f, 0f);
                         foreach (var collider in go.GetComponentsInChildren<Collider>()) Destroy(collider);
+                        float yawHash = BattleArenaView.Hash01("object_yaw_" + o.Pos.X + "_" + o.Pos.Y);
+                        FitProp(go, Vector3.zero, yawHash < 0.5f, 0.92f * BattleArenaView.TileSize, 0.92f * BattleArenaView.TileSize,
+                            o.Kind == "HighCover" ? FullCoverHeight : HalfCoverHeight, yawHash < 0.25f || yawHash >= 0.75f);
                     }
                     else
                     {
@@ -2082,19 +2183,16 @@ namespace Game.Gameplay
         private readonly Dictionary<string, CharacterAnimState> _unitOneShotState = new Dictionary<string, CharacterAnimState>(StringComparer.Ordinal);
 
         /// <summary>Поруч (хрестом) клітинка з низьким укриттям — боєць присідає за ним.</summary>
+        /// <summary>
+        /// Боєць за низьким укриттям — присідає. TileCover клітинки — це укриття ТОГО, ХТО НА НІЙ стоїть (і від карти, і
+        /// від об'єкта по сусідству, GridMap.GetCover); клітинка самого об'єкта непрохідна й укриття не має.
+        /// </summary>
         private bool BesideLowCover(BattleUnitView unit)
         {
             var grid = _lastView?.Grid;
             if (grid?.TileCover == null || unit == null) return false;
-            int[] dx = { 1, -1, 0, 0 }, dy = { 0, 0, 1, -1 };
-            for (int i = 0; i < 4; i++)
-            {
-                int x = unit.Pos.X + dx[i], y = unit.Pos.Y + dy[i];
-                if (x < 0 || y < 0 || x >= grid.Width || y >= grid.Height) continue;
-                int index = x + y * grid.Width;
-                if (index < grid.TileCover.Count && string.Equals(grid.TileCover[index], "Half", StringComparison.Ordinal)) return true;
-            }
-            return false;
+            int index = unit.Pos.X + unit.Pos.Y * grid.Width;
+            return index >= 0 && index < grid.TileCover.Count && string.Equals(grid.TileCover[index], "Half", StringComparison.Ordinal);
         }
 
         /// <summary>Одноразовий кліп стану для постаті набору (реакція на удар тощо); Idle — нічого.</summary>
@@ -2739,7 +2837,8 @@ namespace Game.Gameplay
             var margins = CurrentHudMargins();
             float orthoSize = BattleArenaView.OrthographicSizeForFreeArea(view.Grid.Width, view.Grid.Height, Screen.width, Screen.height, margins);
             _cameraYawDegrees = InitialYawDegrees;
-            _cameraZoom = Mathf.Clamp(orthoSize, CameraMinZoom, CameraMaxZoom);
+            // Ближче за кадр на всю арену; коліщатком — до неї (CameraMaxZoom).
+            _cameraZoom = Mathf.Clamp(Mathf.Min(orthoSize, CameraStartZoom), CameraMinZoom, CameraMaxZoom);
             _cameraFlyTarget = null;
 
             var naturalFrame = BattleArenaView.FrameGrid(view.Grid.Width, view.Grid.Height);
@@ -2754,6 +2853,15 @@ namespace Game.Gameplay
             _cameraPanFocus = FocusPointForFreeArea(_cameraPanFocus);
             ApplyCameraPose(_cameraPanFocus);
 
+            // Крупний план — одразу на того, хто ходить першим.
+            var first = FindUnitById(view.CurrentUnitId);
+            if (first != null)
+            {
+                var w = BattleArenaView.TileToWorld(first.Pos.X, first.Pos.Y);
+                _cameraPanFocus = FocusPointForFreeArea(new Vector3(w.X, 0f, w.Z));
+                ApplyCameraPose(_cameraPanFocus);
+            }
+
             _cameraInitialized = true;
         }
 
@@ -2761,10 +2869,40 @@ namespace Game.Gameplay
         private void ApplyCameraPose(Vector3 focus)
         {
             if (ArenaCamera == null) return;
-            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistance);
+            ArenaCamera.orthographic = false;
+            ArenaCamera.fieldOfView = CameraFieldOfView;
+            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistanceFor(_cameraZoom));
             ArenaCamera.transform.position = focus + new Vector3(offset.X, offset.Y, offset.Z);
             ArenaCamera.transform.rotation = Quaternion.LookRotation(-new Vector3(offset.X, offset.Y, offset.Z).normalized, Vector3.up);
-            if (ArenaCamera.orthographic) ArenaCamera.orthographicSize = _cameraZoom;
+            AimKeyLight();
+        }
+
+        /// <summary>Відстань перспективної камери, на якій у точці фокуса видно <paramref name="zoom"/> од. від центру до краю кадру.</summary>
+        private static float CameraDistanceFor(float zoom) => zoom / Mathf.Tan(CameraFieldOfView * 0.5f * Mathf.Deg2Rad);
+
+        // Сонце села стоїть під кут хабової камери; у бою з поворотом 45° воно світило бійцям у спину — на знімках
+        // туру всі постаті були чорними силуетами. На час бою ключове світло — з-за плеча камери, трохи збоку (як
+        // світять сцени WL3 і Rogue Trader: обличчя читаються), тінь падає від глядача. Сила й колір — від доби й
+        // погоди (ніч лишається ніччю); після бою кут повертається.
+        private const float KeyLightPitch = 50f;
+        private const float KeyLightYawFromCamera = 35f;
+        private Light _keyLight;
+        private Quaternion _keyLightSaved;
+        private bool _keyLightAimed;
+
+        private void AimKeyLight()
+        {
+            if (_keyLight == null) _keyLight = RenderSettings.sun;
+            if (_keyLight == null) return;
+            if (!_keyLightAimed) { _keyLightSaved = _keyLight.transform.rotation; _keyLightAimed = true; }
+            _keyLight.transform.rotation = Quaternion.Euler(KeyLightPitch, _cameraYawDegrees + KeyLightYawFromCamera, 0f);
+        }
+
+        private void RestoreKeyLight()
+        {
+            if (!_keyLightAimed) return;
+            _keyLightAimed = false;
+            if (_keyLight != null) _keyLight.transform.rotation = _keyLightSaved;
         }
 
         /// <summary>Поточні поля HUD — з останніх прямокутників <see cref="SetHudRects"/>, або розумний дефолт, поки їх ще не було цього бою.</summary>
@@ -2791,8 +2929,8 @@ namespace Game.Gameplay
         }
 
         /// <summary>
-        /// Перетин променя ортографічної камери (промені паралельні — Unity
-        /// сам це гарантує для <c>Camera.orthographic == true</c>) із площиною
+        /// Перетин променя камери (перспективної — з її центру; Unity рахує
+        /// сам у <c>ScreenPointToRay</c>) із площиною
         /// арени (Y=0) для довільної екранної точки — БЕЗ Physics.Raycast
         /// (арену ще не обов'язково добудовано під час InitializeCamera).
         /// </summary>
@@ -2809,7 +2947,8 @@ namespace Game.Gameplay
         /// рендерився в центрі вільної від HUD області, а не всього екрана
         /// (§4, Бій v2 раунд 2). Працює на живій позі <see cref="ArenaCamera"/>
         /// (tilt/yaw/zoom — байдуже, який саме фокус камера тримає ЗАРАЗ:
-        /// ортографічна панорама лінійна, тож зсув виходить той самий).
+        /// панорама — паралельне перенесення камери над площиною, тож точка
+        /// землі під кожним пікселем зсувається на той самий вектор).
         /// </summary>
         private Vector3 FocusPointForFreeArea(Vector3 targetGround)
         {
@@ -2873,15 +3012,16 @@ namespace Game.Gameplay
             var clamped = BattleArenaView.ClampPanTarget(_cameraPanFocus.x, _cameraPanFocus.z, _gridWidth, _gridHeight, CameraPanMargin);
             _cameraPanFocus = new Vector3(clamped.X, 0f, clamped.Z);
 
-            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistance);
+            var offset = BattleArenaView.CameraOffsetFromFocus(CameraTiltDegrees, _cameraYawDegrees, CameraDistanceFor(_cameraZoom));
             var targetPos = _cameraPanFocus + new Vector3(offset.X, offset.Y, offset.Z);
             var targetRot = Quaternion.LookRotation(-new Vector3(offset.X, offset.Y, offset.Z).normalized, Vector3.up);
 
             float k = 1f - Mathf.Exp(-8f * dt);
             ArenaCamera.transform.position = Vector3.Lerp(ArenaCamera.transform.position, targetPos, k);
             ArenaCamera.transform.rotation = Quaternion.Slerp(ArenaCamera.transform.rotation, targetRot, k);
-            if (ArenaCamera.orthographic)
-                ArenaCamera.orthographicSize = Mathf.Lerp(ArenaCamera.orthographicSize, _cameraZoom, k);
+            ArenaCamera.orthographic = false;
+            ArenaCamera.fieldOfView = CameraFieldOfView;
+            AimKeyLight();   // щокадру: село могло переставити сонце (погода, фаза), а Q/E крутить камеру
         }
 
         // ================= виконання команд + переклад стрічки подій =================
@@ -3149,6 +3289,8 @@ namespace Game.Gameplay
             }
             if (_hubRoot == null) _hubRoot = GameObject.Find(HubRootName);
 
+            // Небо бою — те саме, що над селом цієї доби й погоди (не темна заливка): у перспективі його видно над обрієм.
+            if (_hubCamera != null && ArenaCamera != null) ArenaCamera.backgroundColor = _hubCamera.backgroundColor;
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(false);
             if (_hubRoot != null) _hubRoot.SetActive(false);
             if (ArenaCamera != null) ArenaCamera.gameObject.SetActive(true);
@@ -3156,6 +3298,7 @@ namespace Game.Gameplay
 
         private void RestoreHubCamera()
         {
+            RestoreKeyLight();
             if (ArenaCamera != null) ArenaCamera.gameObject.SetActive(false);
             if (_hubCamera != null) _hubCamera.gameObject.SetActive(true);
             if (_hubRoot != null) _hubRoot.SetActive(true);

@@ -72,8 +72,11 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(zakhar.Wants("staff", out _), "у Захара посох");
             Assert.IsFalse(zakhar.Stowed().Wants("staff", out _) || zakhar.Stowed().Wants("staff_stowed", out _),
                 "посох поза боєм відкладено — ні в руці, ні за спиною");
-            var bowman = CharacterKitPlan.From(AppearanceCatalog.Named("myroslava"), null);
-            Assert.IsTrue(bowman.Stowed().Wants("wpn_bow_stowed", out _) && !bowman.Stowed().Wants("wpn_bow", out _));
+            var bowman = CharacterKitPlan.From(AppearanceCatalog.Named("myroslava"), null); // лук і сагайдак
+            Assert.IsTrue(bowman.Stowed().Wants("wpn_bow_quiver_stowed", out _), "лук — навхрест поверх сагайдака");
+            Assert.IsFalse(bowman.Stowed().Wants("wpn_bow", out _) || bowman.Stowed().Wants("wpn_bow_stowed", out _));
+            var plainBow = CharacterKitPlan.From(AppearanceCatalog.DefaultProtagonist(Gender.Male), new[] { "wpn_bow" }).Stowed();
+            Assert.IsTrue(plainBow.Wants("wpn_bow_stowed", out _), "без сагайдака — лук впритул до спини");
             Assert.AreEqual(WeaponStyle.Unarmed, AnimStateTable.StyleOf(zakhar.Stowed().Weapon()),
                 "зброя за спиною — мирні кліпи без хвату");
         }

@@ -199,7 +199,9 @@ namespace Game.Gameplay.EditorTools
             ground.name = "ArenaGround";
             ground.transform.SetParent(root.transform, false);
             ground.transform.localPosition = new Vector3(5f, -0.02f, 5f);
-            ground.transform.localScale = new Vector3(5f, 1f, 5f); // Plane 10×10 юнітів на localScale=1
+            // 200×200: камера бою перспективна (08.10.2026) — на віддаленні й в екшн-кадрі через плече край площини 50×50
+            // було видно, за ним — чорна порожнеча. Площина — ті самі 200 трикутників за будь-якого розміру.
+            ground.transform.localScale = new Vector3(20f, 1f, 20f); // Plane 10×10 юнітів на localScale=1
 
             var lit = Shader.Find("Universal Render Pipeline/Lit");
             if (lit != null)

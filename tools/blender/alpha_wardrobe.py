@@ -654,68 +654,116 @@ STOW_FLAT = ("shield_round", "shield_kite", "buckler")                  # пла
 STOW_BELT = ()                                                           # (кинджал — між лопатками: на поясі ззаду руки в бігу його зачіпали)
 
 def stowed_copies(rig, body):
-    """Двійник кожної зброї, щита й посоха за спиною (spine_03; кинджал — таз). Головна вісь речі (PCA) іде
-    навскіс уздовж спини, найтонша — назовні (+Y), щоб плаский бік лежав на спині; річ відсунута від спини так, щоб
-    найближча вершина була за поверхнею (з одягом). Кінець хвату визначає, що вгорі: у древкових — вістря, у клинків —
-    руків'я. Відстань від осі тіла (+Y): найоб'ємніший одяг на спині — плащ і кіраса, ~0,14 м (замір 08.10.2026);
-    зброя — на 0,155 (з 0,20 вона відставала від спини на 10–20 см), щит — поверх зброї, лук — поверх сагайдака."""
+    """Двійник кожної зброї й щита за спиною (spine_03). Головна вісь речі (PCA) іде навскіс уздовж спини, найтонша —
+    назовні (+Y), щоб плаский бік лежав на спині; найближча вершина — за поверхнею спини з одягом. Кінець хвату визначає,
+    що вгорі: у лука й рушниці — верх, у клинків — руків'я, у сокир і булав — голова. Відстань від осі тіла (+Y):
+    найоб'ємніший одяг на спині — плащ і кіраса, ~0,14 м (замір 08.10.2026); зброя — на 0,155, щит — поверх зброї.
+    Лук — два двійники: без сагайдака — впритул до спини, з сагайдаком — навхрест поверх нього (власник 08.10.2026 про
+    лук над сагайдаком на відстані: «лук навіть не поруч»)."""
     import numpy as np
     out = {}
+    # Набір f зсунуто на 3 м уже після збирання — без оновлення сцени matrix_world дітей застарілі, і межа сагайдака
+    # виходила на 2,8 м убік (лук жінки висів попереду — лукбук 08.10.2026).
+    bpy.context.view_layer.update()
     inv = rig.matrix_world.inverted()
     b = rig.data.bones
+    quiver = next((o for o in rig.children if o.get("kit_part") == "quiver"), None)
+    quiver_back = max(((inv @ (quiver.matrix_world @ v.co)).y for v in quiver.data.vertices), default=0.2) if quiver else 0.2
     stowable = STOW_POLES + STOW_HILT_UP + STOW_HEAD_UP + STOW_FLAT + STOW_BELT
     for ob in [o for o in rig.children if o.type == 'MESH' and o.get("kit_part") in stowable]:
         part = ob["kit_part"]
-        pts = [inv @ (ob.matrix_world @ v.co) for v in ob.data.vertices]
-        P = np.array([[v.x, v.y, v.z] for v in pts])
-        c = P.mean(axis=0)
-        w, V = np.linalg.eigh(np.cov((P - c).T))
-        a1, a3 = Vector(V[:, 2]), Vector(V[:, 0])
-        grip_bone = "hand_l" if part in ("wpn_bow", "staff") else ("lowerarm_l" if part in STOW_FLAT else "hand_r")
-        hand = b[grip_bone].head_local
-        if (hand - Vector(c)).dot(a1) < 0:
-            a1 = -a1                                    # a1 — у бік кінця хвату
         if part in STOW_POLES:
-            t1 = -Vector((TILT[0], 0.0, TILT[1]))          # хват — донизу, верх — до лівого плеча
-            centre, inner, bone = Vector((0.0, 0.0, 1.18)), 0.155, "spine_03"
+            # лук і рушниця: верх — до лівого плеча, низ — над полами в бігу
+            variants = [(part + "_stowed", -Vector((TILT[0], 0.0, TILT[1])), 1.36, 0.155)]
+            if part == "wpn_bow" and quiver is not None:
+                out["wpn_bow_quiver_stowed"] = _stow_bow_by_quiver(rig, body, ob, quiver, np)
         elif part in STOW_HILT_UP:
-            t1 = Vector((-TILT[0], 0.0, TILT[1]))          # руків'я — вгору над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
+            variants = [(part + "_stowed", Vector((-TILT[0], 0.0, TILT[1])), 1.36, 0.155)]       # руків'я — над правим плечем
         elif part in STOW_HEAD_UP:
-            t1 = -Vector((-TILT[0], 0.0, TILT[1]))         # хват (низ руків'я) — донизу, голова — над правим плечем
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.155, "spine_03"
+            variants = [(part + "_stowed", -Vector((-TILT[0], 0.0, TILT[1])), 1.30, 0.155)]      # голова — над правим плечем
         elif part in STOW_FLAT:
-            t1 = Vector((0.0, 0.0, 1.0))
-            centre, inner, bone = Vector((0.0, 0.0, 1.22)), 0.19, "spine_03"
+            variants = [(part + "_stowed", Vector((0.0, 0.0, 1.0)), 1.22, 0.19)]
         else:
-            t1 = Vector((1.0, 0.0, 0.0))
-            centre, inner, bone = Vector((0.0, 0.0, 0.98)), 0.145, "pelvis"
-        if part == "wpn_bow":
-            inner = 0.25                                # поверх сагайдака (до 0,246 м)
-        if part not in STOW_FLAT and t1.z != 0.0:
-            # Нижній кінець — на 6° від спини: у бігу штани, спідниця й поли на 0,6–0,9 м підходили до нього на
-            # 0,3–1,5 см (замір лукбука 08.10.2026); верх лишається впритул до лопаток.
-            down = t1 if t1.z < 0 else -t1
-            down = (down + Vector((0.0, math.tan(math.radians(6)), 0.0))).normalized()
-            t1 = down if t1.z < 0 else -down
-        u1 = a1.normalized()
-        u3 = (a3 - u1 * a3.dot(u1)).normalized()
-        u2 = u3.cross(u1)
-        t3 = Vector((0.0, 1.0, 0.0))
-        t3 = (t3 - t1 * t3.dot(t1)).normalized()
-        t2 = t3.cross(t1)
-        B0 = Matrix((u1, u2, u3)).transposed()
-        B1 = Matrix((t1, t2, t3)).transposed()
-        Rm = B1 @ B0.transposed()
-        moved = [Rm @ (v - Vector(c)) + centre for v in pts]
-        shift = inner - min(v.y for v in moved)
-        lift = max(0.0, 0.15 - min(v.z for v in moved))   # нижній кінець — не в землі (посох, спис)
-        bm = bmesh.new(); bm.from_mesh(ob.data)
-        bm.verts.ensure_lookup_table()
-        for v, q in zip(bm.verts, moved):
-            v.co = q + Vector((0.0, shift, lift))
-        out[part + "_stowed"] = _rigid(f"{rig.name}.{part}_stowed", bm, rig, bone, ob["kit_kind"], body)
+            continue
+        for name, t1, height, inner in variants:
+            out[name] = _stow_one(rig, body, ob, part, name, t1, Vector((0.0, 0.0, height)), inner, np)
     return out
+
+def _stow_bow_by_quiver(rig, body, ob, quiver, np):
+    """Лук поруч із сагайдаком, паралельно йому, з правого боку, на тій самій глибині — впритул до спини (власник
+    08.10.2026 про лук поверх сагайдака: «лук навіть не поруч»). Дуга лука — назовні, від сагайдака; між ними — зазор."""
+    inv = rig.matrix_world.inverted()
+    Q = np.array([[w.x, w.y, w.z] for w in (inv @ (quiver.matrix_world @ v.co) for v in quiver.data.vertices)])
+    qc = Q.mean(axis=0)
+    _, QV = np.linalg.eigh(np.cov((Q - qc).T))
+    qa = Vector(QV[:, 2])
+    if qa.z < 0:
+        qa = -qa                                         # вісь сагайдака — знизу вгору
+    radius = float(np.max(np.linalg.norm(np.cross(Q - qc, np.array(qa)), axis=1)))
+    pts = [inv @ (ob.matrix_world @ v.co) for v in ob.data.vertices]
+    P = np.array([[v.x, v.y, v.z] for v in pts])
+    c = P.mean(axis=0)
+    _, V = np.linalg.eigh(np.cov((P - c).T))
+    a1 = Vector(V[:, 2])
+    proj = (P - c) @ np.array(V[:, 2])
+    # Хорда — між кінцями плечей; середнє вершин відхилене від неї туди, куди вигнута дуга.
+    tip_a, tip_b = P[int(np.argmin(proj))], P[int(np.argmax(proj))]
+    mid = (tip_a + tip_b) * 0.5
+    belly = Vector(c - mid); belly = (belly - a1 * belly.dot(a1)).normalized()     # куди вигнута дуга
+    u1, u2 = a1.normalized(), belly
+    u3 = u1.cross(u2)
+    t1 = qa.normalized()
+    t3 = Vector((0.0, 1.0, 0.0)); t3 = (t3 - t1 * t3.dot(t1)).normalized()       # назовні від спини
+    right = t3.cross(t1).normalized()
+    if right.x > 0:
+        right = -right                                   # праворуч від сагайдака (−X)
+    t2 = right
+    t3 = t1.cross(t2)
+    Rm = Matrix((t1, t2, t3)).transposed() @ Matrix((u1, u2, u3))
+    gap = radius + 0.02                                  # тятиву лука відведено від сагайдака (у грі — лінія)
+    centre = Vector(qc) + right * gap - t1 * 0.06        # низ лука ~0,85 м — над полами в бігу; верх трохи над головою
+    moved = [Rm @ (v - Vector(mid)) + centre for v in pts]
+    bm = bmesh.new(); bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    for v, q in zip(bm.verts, moved):
+        v.co = q
+    return _rigid(f"{rig.name}.wpn_bow_quiver_stowed", bm, rig, "spine_03", ob["kit_kind"], body)
+
+def _stow_one(rig, body, ob, part, name, t1, centre, inner, np):
+    inv = rig.matrix_world.inverted()
+    b = rig.data.bones
+    pts = [inv @ (ob.matrix_world @ v.co) for v in ob.data.vertices]
+    P = np.array([[v.x, v.y, v.z] for v in pts])
+    c = P.mean(axis=0)
+    w, V = np.linalg.eigh(np.cov((P - c).T))
+    a1, a3 = Vector(V[:, 2]), Vector(V[:, 0])
+    # Центр — середина між кінцями вздовж головної осі, не середнє вершин: у меча вершини густі на руків'ї, і
+    # «центр» зсувався до нього — лезо звисало до 0,55 м, куди в бігу закидається п'ята (замір 08.10.2026).
+    proj = (P - c) @ np.array(V[:, 2])
+    c = c + np.array(V[:, 2]) * (proj.min() + proj.max()) * 0.5
+    grip_bone = "hand_l" if part in ("wpn_bow", "staff") else ("lowerarm_l" if part in STOW_FLAT else "hand_r")
+    if (b[grip_bone].head_local - Vector(c)).dot(a1) < 0:
+        a1 = -a1                                        # a1 — у бік кінця хвату
+    if part not in STOW_FLAT and t1.z != 0.0:
+        # Низ — на 4° від спини (з 9° річ збоку здавалась відірваною; безпеку в бігу тримає висота — замір лукбука).
+        down = t1 if t1.z < 0 else -t1
+        down = (down + Vector((0.0, math.tan(math.radians(4)), 0.0))).normalized()
+        t1 = down if t1.z < 0 else -down
+    u1 = a1.normalized()
+    u3 = (a3 - u1 * a3.dot(u1)).normalized()
+    u2 = u3.cross(u1)
+    t3 = Vector((0.0, 1.0, 0.0))
+    t3 = (t3 - t1 * t3.dot(t1)).normalized()
+    t2 = t3.cross(t1)
+    Rm = Matrix((t1, t2, t3)).transposed() @ Matrix((u1, u2, u3)).transposed().transposed()
+    moved = [Rm @ (v - Vector(c)) + centre for v in pts]
+    shift = inner - min(v.y for v in moved)
+    lift = max(0.0, 0.15 - min(v.z for v in moved))     # нижній кінець — не в землі
+    bm = bmesh.new(); bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    for v, q in zip(bm.verts, moved):
+        v.co = q + Vector((0.0, shift, lift))
+    return _rigid(f"{rig.name}.{name}", bm, rig, "spine_03", ob["kit_kind"], body)
 
 # ---------------------------------------------------------------- волосся обличчя
 
