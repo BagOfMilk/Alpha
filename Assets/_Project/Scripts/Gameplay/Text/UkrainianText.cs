@@ -3365,6 +3365,27 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "ui.dialogue.hint", "Пробіл чи Enter — далі");
             AddKey(t, "ui.dialogue.choice_hint", "1–9 — відповідь");
+            // Створення героя кроками, як у CRPG (плейтест 13.10.2026).
+            AddKey(t, "ui.creation.step.origin", "Походження");
+            AddKey(t, "ui.creation.step.origin.hint.m", "Рід і передісторія: звідки ти прийшов на перевал і хто прибився з тобою.");
+            AddKey(t, "ui.creation.step.origin.hint.f", "Рід і передісторія: звідки ти прийшла на перевал і хто прибився з тобою.");
+            AddKey(t, "ui.creation.step.class", "Клас");
+            AddKey(t, "ui.creation.step.class.hint", "Твоя роль у загоні: прийоми, до яких ти звичний. Передісторія його не замикає.");
+            AddKey(t, "ui.creation.step.attributes", "Атрибути");
+            AddKey(t, "ui.creation.step.attributes.hint", "Числа дає передісторія. Зменш один атрибут, щоб підняти інший, — сума лишається та сама.");
+            AddKey(t, "ui.creation.step.look", "Зовнішність");
+            AddKey(t, "ui.creation.step.look.hint", "Культура, волосся, вбрання. Тягни постать мишею, щоб повернути.");
+            AddKey(t, "ui.creation.step.name", "Ім'я");
+            AddKey(t, "ui.creation.step.name.hint", "Так тебе кликатимуть у громаді. Аркуш праворуч — усе, з чим ти вирушаєш.");
+            AddKey(t, "ui.creation.back", "Назад");
+            AddKey(t, "ui.creation.next", "Далі");
+            AddKey(t, "ui.creation.sheet.title", "Аркуш героя");
+            AddKey(t, "ui.creation.skills.title", "Навички передісторії");
+            AddKey(t, "ui.creation.attributes.points", "Перекладено {moved} з {budget} · вільних очок: {free}");
+            AddKey(t, "attr.strength.desc", "Здоров'я, ноша, ближній бій.");
+            AddKey(t, "attr.agility.desc", "Очки дії, влучність, захист, черговість у бою.");
+            AddKey(t, "attr.wits.desc", "Критичні удари, черговість, переконання.");
+            AddKey(t, "attr.will.desc", "Опір станам і залякуванню.");
             // Ходибельний вечір (Поправка №22, плейтест 13.10.2026): головна кнопка фази ввечері.
             AddKey(t, "ux.world.evening", "Вечір: варта чи сон · Enter");
             // Портрети загону в бою, як у BG3 (той самий день, той самий запит).

@@ -85,6 +85,24 @@ namespace Game.Core.Session.Views
         public IReadOnlyList<string> AvailableBackgrounds;
         /// <summary>Поточна зовнішність героя (Поправка №19.3) — копія; змінювати через SetProtagonistAppearance.</summary>
         public Appearance Appearance;
+
+        /// <summary>Клас героя (обраний або клас передісторії) і всі чотири класи (Поправка №15).</summary>
+        public CompanionClass Class;
+        public IReadOnlyList<CompanionClass> AvailableClasses = System.Array.Empty<CompanionClass>();
+        /// <summary>Чотири атрибути з урахуванням перерозподілу; Id — ім'я <c>AttributeType</c>.</summary>
+        public IReadOnlyList<CreationStatLine> Attributes = System.Array.Empty<CreationStatLine>();
+        /// <summary>Навички передісторії (ненульові); Id — ім'я <c>SkillType</c>.</summary>
+        public IReadOnlyList<CreationStatLine> Skills = System.Array.Empty<CreationStatLine>();
+        /// <summary>Вільні очки (звільнені зниженням), скільки вже перекладено і стеля перерозподілу.</summary>
+        public int FreePoints, PointsMoved, PointsBudget;
+    }
+
+    /// <summary>Рядок аркуша на екрані створення: значення, значення передісторії і чи дозволені ±.</summary>
+    public sealed class CreationStatLine
+    {
+        public string Id;
+        public int Value, Base;
+        public bool CanRaise, CanLower;
     }
 
     public sealed class SummaryView

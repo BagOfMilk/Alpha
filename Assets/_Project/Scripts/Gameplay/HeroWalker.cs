@@ -103,7 +103,7 @@ namespace Game.Gameplay
 
         private GUIStyle _labelStyle;
         private GUIStyle _nearStyle;
-        private GUIStyle _markStyle;
+        private GUIStyle _markStyle, _markShadowStyle;
         private GUIStyle _titleStyle;
         private Texture2D _black;
 
@@ -416,6 +416,7 @@ namespace Game.Gameplay
             {
                 BuildVillagePlaces();
                 RebuildVillageGrid();
+                LogDoors();
             }
             _shell.SetPlaces(new List<WalkPlace>(_places));
         }
@@ -556,6 +557,26 @@ namespace Game.Gameplay
             {
                 var slot = Interiors.Slot(i);
                 _grid.Block(slot.X - half, slot.Z - half, slot.X + half, slot.Z + half);
+            }
+        }
+
+        private readonly HashSet<string> _doorsLogged = new HashSet<string>();
+
+        /// <summary>
+        /// Плейтест 13.10.2026 («не могу зайти внутрь»): раз на кожну вхідну будівлю, щойно вона зведена, — чи вільна
+        /// клітинка дверей і чи веде до неї шлях від Віча. Журнал туру показує, яка саме будівля недосяжна.
+        /// </summary>
+        private void LogDoors()
+        {
+            foreach (var p in _places)
+            {
+                if (p.Kind != PlaceKind.Building || p.Panel != UxPanelId.None || !_doorsLogged.Add(p.Id)) continue;
+                var door = new WalkPoint(p.X, p.Z);
+                var path = _grid.FindPath(new WalkPoint(1.9f, 0.7f), door);
+                float end = path.Count > 0 ? WalkPoint.Distance(path[path.Count - 1], door) : -1f;
+                Debug.Log("[Прогулянка] двері " + p.BuildingId + ": (" + p.X.ToString("0.00") + ", " + p.Z.ToString("0.00") + "), клітинка "
+                    + (_grid.IsFree(door) ? "вільна" : "ЗАБЛОКОВАНА") + ", шлях від Віча " + path.Count + " точок, кінець за "
+                    + end.ToString("0.00") + (end >= 0f && end <= VillagePlaces.DoorRadius ? " — дійде" : " — НЕ ДІЙДЕ"));
             }
         }
 
@@ -818,7 +839,7 @@ namespace Game.Gameplay
                 bool inRange = _inside != null || WalkPoint.Distance(here, new WalkPoint(place.X, place.Z)) <= labelRadius;
                 if (!isNear && !isHovered && !_shell.Overview && !inRange && !hasNews) continue;
 
-                float height = place.Kind == PlaceKind.Person ? 1.5f : (place.Kind == PlaceKind.Building || place.Kind == PlaceKind.Plot ? 2.6f : 1.8f);
+                float height = place.Kind == PlaceKind.Person ? 1.0f : (place.Kind == PlaceKind.Building || place.Kind == PlaceKind.Plot ? 2.6f : 1.8f);
                 var screen = hubCamera.WorldToScreenPoint(new Vector3(place.LabelX, height, place.LabelZ));
                 if (screen.z < 0f) continue;
 
@@ -878,8 +899,12 @@ namespace Game.Gameplay
         {
             var at = UI.UiScale.ScreenToGui(screen);
             float bob = Mathf.Sin(Time.unscaledTime * 3f) * 4f;
-            var rect = new Rect(at.x - 18f, at.y - 46f + bob, 36f, 40f);
-            if (!OverlapsUi(rect)) GUI.Label(rect, "!", _markStyle);
+            var rect = new Rect(at.x - 20f, at.y - 58f + bob, 40f, 52f);
+            if (OverlapsUi(rect)) return;
+            for (int dx = -2; dx <= 2; dx += 2)
+                for (int dy = -2; dy <= 2; dy += 2)
+                    if (dx != 0 || dy != 0) GUI.Label(new Rect(rect.x + dx, rect.y + dy, rect.width, rect.height), "!", _markShadowStyle);
+            GUI.Label(rect, "!", _markStyle);
         }
 
         // Кільце під людиною чи місцем під курсором — виділення як у BG3 (той самий запит власника).
@@ -919,8 +944,11 @@ namespace Game.Gameplay
             };
             _nearStyle = new GUIStyle(_labelStyle) { font = AlphaSkin.StrongFont };
             _nearStyle.normal.textColor = AlphaSkin.BronzeHi;
-            _markStyle = new GUIStyle(AlphaSkin.TooltipPanel) { fontSize = 30, alignment = TextAnchor.MiddleCenter, font = AlphaSkin.StrongFont };
+            // Голий знак без панелі: панель-підказка з полями стискала «!» у крихітну позначку в чорному прямокутнику (тур 13.10.2026).
+            _markStyle = new GUIStyle { fontSize = 40, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, font = AlphaSkin.StrongFont };
             _markStyle.normal.textColor = new Color(1f, 0.82f, 0.32f);
+            _markShadowStyle = new GUIStyle(_markStyle);
+            _markShadowStyle.normal.textColor = new Color(0.08f, 0.05f, 0.02f, 0.9f);
             _titleStyle = new GUIStyle(AlphaSkin.TooltipPanel)
             {
                 fontSize = 26, alignment = TextAnchor.MiddleCenter, wordWrap = false,

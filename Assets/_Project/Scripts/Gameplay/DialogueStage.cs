@@ -85,7 +85,8 @@ namespace Game.Gameplay
             {
                 if (!r.enabled) continue;
                 string n = r.gameObject.name;
-                if (n.EndsWith("_stowed", System.StringComparison.OrdinalIgnoreCase)) continue; // за спиною — лишається (трек V)
+                // За спиною — теж ховаємо: на плані «через плече» лук і спис переднього учасника стирчали в небо
+                // через увесь кадр (тур 13.10.2026). Як у BG3 — у розмові зброї не видно.
                 bool gear = n.IndexOf("wpn_", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
                             n.IndexOf("shield_", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
                             n.IndexOf("buckler", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -102,6 +103,10 @@ namespace Game.Gameplay
             if (actor?.Sheathed == null) return;
             foreach (var r in actor.Sheathed) if (r != null) r.enabled = true;
             actor.Sheathed = null;
+            // Річ за спиною, яку KitFigure підігнав до спини вже під час розмови, успадкувала вимкнений рендерер.
+            if (actor.Root != null)
+                foreach (var r in actor.Root.GetComponentsInChildren<MeshRenderer>())
+                    if (!r.enabled && r.gameObject.name.EndsWith("_stowed", System.StringComparison.OrdinalIgnoreCase)) r.enabled = true;
         }
 
         /// <summary>Свіжа тимчасова постать ще не отримала анімовану позу — голову з неї брати рано.</summary>
@@ -278,8 +283,18 @@ namespace Game.Gameplay
             foreach (var fig in FindObjectsByType<KitFigure>(FindObjectsSortMode.None))
             {
                 // Не ховаємо лише тих, кого цей план знімає; хто вже договорив (Тугар пішов) — може й заважати.
-                if (fig == null || !fig.isActiveAndEnabled || Owns(keepA, fig.transform) || Owns(keepB, fig.transform)) continue;
+                if (fig == null || !fig.isActiveAndEnabled) continue;
                 var body = fig.transform.position + Vector3.up * (0.55f * StandardHeight);
+                // Довга зброя будь-кого біля камери (і учасника на передньому плані, чию постать перебудували вже після
+                // Sheathe) стирчала дугою через увесь кадр (тур 13.10.2026) — на час плану ховаємо її.
+                if ((body - camera).magnitude < 3f * height)
+                    foreach (var r in fig.GetComponentsInChildren<Renderer>())
+                        if (r.enabled && r.gameObject.name.IndexOf("wpn_", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            r.enabled = false;
+                            _occluders.Add(r);
+                        }
+                if (Owns(keepA, fig.transform) || Owns(keepB, fig.transform)) continue;
                 if (!OnSightLine(body, camera, target, radius)) continue;
                 foreach (var r in fig.GetComponentsInChildren<Renderer>())
                 {

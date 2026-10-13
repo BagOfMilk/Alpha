@@ -135,6 +135,12 @@ namespace Game.Gameplay
 
             _graph.Play();
             _topMixer.SetSpeed(_timeScale); // темп, заданий до старту графа (П13), не губиться
+            if (animator.isHuman)
+            {
+                _spine = animator.GetBoneTransform(HumanBodyBones.Spine);
+                _chest = animator.GetBoneTransform(HumanBodyBones.Chest);
+                _head = animator.GetBoneTransform(HumanBodyBones.Head);
+            }
             _ready = true;
         }
 
@@ -212,6 +218,32 @@ namespace Game.Gameplay
             if (!_oneShotActive) return;
             _oneShotActive = false;
             _oneShotCallback = null; // вага згасає в Update — без стрибка
+        }
+
+        // ---- жива стійка (плейтест 13.10.2026: «Немає айдл анімацій») ----
+        // Власні бойові стійки (лук, рушниця, спис, сокира) мають лише подих у 0,8° — постать читалась застиглою. Поверх
+        // кліпу «стоїть» — подих грудьми, переніс ваги й повільний погляд головою; у ході й під ударом вага згасає до нуля.
+        // Кути — у світових осях постаті, тож не залежать від осей кісток. Без випадковості: фаза — від phase.
+        private Transform _spine, _chest, _head;
+        private float _liveClock;
+
+        private void LateUpdate()
+        {
+            if (!_ready || _spine == null) return;
+            float w = _gaitWeights[0] * (1f - _oneShotWeight);
+            _liveClock += Time.deltaTime * _timeScale;
+            if (w < 0.01f) return;
+            float t = _liveClock + phase * 7f;
+            var right = transform.right;
+            var up = transform.up;
+            var fwd = transform.forward;
+            float breath = Mathf.Sin(t * 2f * Mathf.PI / 3.6f);
+            float shift = Mathf.Sin(t * 2f * Mathf.PI / 7.3f);
+            float look = Mathf.Sin(t * 2f * Mathf.PI / 9.1f) + 0.35f * Mathf.Sin(t * 2f * Mathf.PI / 4.3f);
+            _spine.rotation = Quaternion.AngleAxis(w * 1.6f * shift, fwd) * Quaternion.AngleAxis(w * 2f * shift, up) * _spine.rotation;
+            if (_chest != null) _chest.rotation = Quaternion.AngleAxis(-w * 1.8f * breath, right) * _chest.rotation;
+            if (_head != null)
+                _head.rotation = Quaternion.AngleAxis(w * 7f * look, up) * Quaternion.AngleAxis(w * 1.5f * breath, right) * _head.rotation;
         }
 
         private void Update()

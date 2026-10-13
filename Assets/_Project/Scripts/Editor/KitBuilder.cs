@@ -129,9 +129,10 @@ namespace Game.Gameplay.EditorTools
                 if (grass != null)
                 {
                     mat.SetTexture("_BaseMap", grass);
-                    mat.SetColor("_BaseColor", Color.Lerp(Color.white, baseColor, 0.25f));
-                    // Площина Unity — 10 од. на одиницю масштабу; плитка ~2 од. (≈5 м трави в масштабі сцени 0,4).
-                    mat.SetTextureScale("_BaseMap", new Vector2(scale.x * 5f, scale.z * 5f));
+                    // Плейтест 13.10.2026 («переделай весь список текстур для хутора»): плитка вдвічі більша й тонування
+                    // слабше — менше видно повтор, трава ближча до справжнього кольору фото.
+                    mat.SetColor("_BaseColor", Color.Lerp(Color.white, baseColor, 0.1f));
+                    mat.SetTextureScale("_BaseMap", new Vector2(scale.x * 2.6f, scale.z * 2.6f));
                     var nor = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/leafy_grass_nor_gl.jpg");
                     if (nor != null) { mat.SetTexture("_BumpMap", nor); mat.EnableKeyword("_NORMALMAP"); }
                 }
@@ -142,6 +143,88 @@ namespace Game.Gameplay.EditorTools
             }
 
             return ground;
+        }
+
+        // ================= витоптана земля й стежки =================
+
+        private static Material _dirtMaterial;
+
+        /// <summary>Матеріал витоптаної землі: стежка Poly Haven (CC0), UV за світовими координатами — плями зливаються без швів.</summary>
+        private static Material DirtMaterial()
+        {
+            if (_dirtMaterial != null) return _dirtMaterial;
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null) return null;
+            _dirtMaterial = new Material(lit) { name = "Стежка" };
+            var dirt = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/stony_dirt_path_Diffuse.jpg");
+            if (dirt != null) _dirtMaterial.SetTexture("_BaseMap", dirt);
+            var nor = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/stony_dirt_path_nor_gl.jpg");
+            if (nor != null) { _dirtMaterial.SetTexture("_BumpMap", nor); _dirtMaterial.EnableKeyword("_NORMALMAP"); }
+            _dirtMaterial.SetColor("_BaseColor", Color.white); // фото стежки й так темне під хмарним небом — без притемнення
+            if (_dirtMaterial.HasProperty("_Smoothness")) _dirtMaterial.SetFloat("_Smoothness", 0f);
+            Directory.CreateDirectory("Assets/Scenes");
+            AssetDatabase.CreateAsset(_dirtMaterial, "Assets/Scenes/GameDirt.mat");
+            return _dirtMaterial;
+        }
+
+        /// <summary>
+        /// Пляма витоптаної землі з нерівним краєм (детермінований шум за <paramref name="salt"/>, без Random). UV — світові
+        /// X/Z, тож сусідні плями однієї стежки зливаються в одну пляму без шву.
+        /// </summary>
+        public static GameObject DirtPatch(Transform parent, Vector3 center, float radius, int salt)
+        {
+            const int n = 22;
+            var verts = new Vector3[n + 1];
+            var uvs = new Vector2[n + 1];
+            var tris = new int[n * 3];
+            verts[0] = Vector3.zero;
+            uvs[0] = new Vector2(center.x, center.z) * 0.35f;
+            for (int i = 0; i < n; i++)
+            {
+                float a = i * Mathf.PI * 2f / n;
+                float r = radius * (0.78f + 0.34f * DirtHash(i, salt));
+                verts[i + 1] = new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
+                uvs[i + 1] = new Vector2(center.x + verts[i + 1].x, center.z + verts[i + 1].z) * 0.35f;
+                tris[i * 3] = 0;
+                tris[i * 3 + 1] = (i + 1) % n + 1;
+                tris[i * 3 + 2] = i + 1;
+            }
+            var mesh = new Mesh { name = "dirt" };
+            mesh.vertices = verts;
+            mesh.uv = uvs;
+            mesh.triangles = tris;
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+            var go = new GameObject("Витоптана земля");
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(center.x, 0.012f, center.z);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = DirtMaterial();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return go;
+        }
+
+        /// <summary>Стежка з плям від <paramref name="from"/> до <paramref name="to"/> завширшки ~<paramref name="width"/>.</summary>
+        public static void DirtPath(Transform parent, Vector3 from, Vector3 to, float width, int salt)
+        {
+            var d = to - from;
+            d.y = 0f;
+            int steps = Mathf.Max(1, Mathf.CeilToInt(d.magnitude / (width * 0.6f)));
+            for (int i = 0; i <= steps; i++)
+            {
+                var p = from + d * (i / (float)steps);
+                DirtPatch(parent, p, width * (0.45f + 0.15f * DirtHash(i, salt + 7)), salt * 131 + i);
+            }
+        }
+
+        private static float DirtHash(int i, int salt)
+        {
+            int h = i * 374761393 + salt * 668265263;
+            h = (h ^ (h >> 13)) * 1274126177;
+            h ^= h >> 16;
+            return ((h & 0x7fffffff) % 10000) / 10000f;
         }
 
         // ================= будівлі =================

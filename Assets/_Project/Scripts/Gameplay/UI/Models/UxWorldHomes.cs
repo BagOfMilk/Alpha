@@ -141,6 +141,8 @@ namespace Game.Gameplay.UI
             Of(nameof(GameSession.SetProtagonistGender), UxHomeKind.Event, "creation"),
             Of(nameof(GameSession.SetProtagonistBackground), UxHomeKind.Event, "creation"),
             Of(nameof(GameSession.SetProtagonistAppearance), UxHomeKind.Event, "creation"),
+            Of(nameof(GameSession.SetProtagonistClass), UxHomeKind.Event, "creation"),
+            Of(nameof(GameSession.AdjustProtagonistAttribute), UxHomeKind.Event, "creation"),
             Of(nameof(GameSession.ConfirmCreation), UxHomeKind.Event, "creation"),
             Of(nameof(GameSession.AdvanceScene), UxHomeKind.Event, "scene"),
             Of(nameof(GameSession.ChooseSceneOption), UxHomeKind.Event, "scene"),

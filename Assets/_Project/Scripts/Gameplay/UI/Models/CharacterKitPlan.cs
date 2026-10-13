@@ -95,6 +95,11 @@ namespace Game.Gameplay.UI
             foreach (var a in look.Accents)
                 if (!string.IsNullOrEmpty(a) && !plan.Accents.Contains(a)) plan.Accents.Add(a);
 
+            // Під халатом до п'ят штанів не видно, а крізь його поли вони проступали латками (Синдбад — сині плями;
+            // знахідка треку V 13.10.2026). Каптан до колін штани лишає — під ним видно гомілки.
+            if (plan.Parts.Exists(p => p.Part == "robe"))
+                plan.Parts.RemoveAll(p => p.Part == "trousers" || p.Part == "sharovary" || p.Part == "skirt_long");
+
             foreach (var p in plan.Parts)
             {
                 string[] zones;

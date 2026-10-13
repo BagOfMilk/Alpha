@@ -33,6 +33,10 @@ namespace Game.Gameplay.Characters
         /// <summary>Поворот моделі навколо вертикалі, градуси (тягнути мишею).</summary>
         public float Yaw { get; set; }
 
+        /// <summary>Наїзд на обличчя: 0 — на повний зріст, 1 — портрет (екран створення, крок «Ім'я»). Камера доїжджає плавно.</summary>
+        public float Zoom { get; set; }
+        private float _zoomShown;
+
         public RenderTexture Texture
         {
             get { EnsureRig(); return _texture; }
@@ -106,9 +110,15 @@ namespace Game.Gameplay.Characters
             }
             if (head != null && footL != null)
             {
+                _zoomShown = Mathf.MoveTowards(_zoomShown, Mathf.Clamp01(Zoom), Time.unscaledDeltaTime * 2.5f);
+                float z = Mathf.SmoothStep(0f, 1f, _zoomShown);
                 float feet = Mathf.Min(footL.position.y, footR != null ? footR.position.y : footL.position.y) - 0.1f;
                 float top = head.position.y + 0.25f; // маківка й зачіска над кісткою голови
-                float h = Mathf.Max(0.8f, top - feet);
+                // Портрет: від грудей до маківки (масштаб — від зросту постаті, не від метрів станка).
+                float full = Mathf.Max(0.8f, top - feet);
+                feet = Mathf.Lerp(feet, head.position.y - 0.27f * full, z);
+                top = Mathf.Lerp(top, head.position.y + 0.12f * full, z);
+                float h = Mathf.Max(Mathf.Lerp(0.8f, 0.3f, z), top - feet);
                 var c = new Vector3(_model.transform.position.x, (top + feet) * 0.5f, _model.transform.position.z);
                 float d = h * 0.5f / Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad) * 1.08f;
                 _camera.transform.position = new Vector3(c.x, c.y, c.z + d);

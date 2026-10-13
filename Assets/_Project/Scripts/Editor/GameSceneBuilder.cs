@@ -220,6 +220,7 @@ namespace Game.Gameplay.EditorTools
             var ground = KitBuilder.Ground(new Color(0.33f, 0.40f, 0.22f), new Vector3(6f, 1f, 6f),
                 "Assets/Scenes/GameGround.mat");
             ground.transform.SetParent(hub.transform, true);
+            Trodden(hub.transform);
 
             // Перешкоди для прогулянки героя (HeroWalker): стіни хат, млин, ліс,
             // ділянки (ті лише коли добудовані — неактивна модель не заважає).
@@ -367,6 +368,34 @@ namespace Game.Gameplay.EditorTools
 
         private static int _hutIndex;
 
+        /// <summary>
+        /// Витоптана земля хутора (плейтест 13.10.2026: «переделай весь список текстур для хутора, слишком сейчас плохо»):
+        /// площа Віча, вхід від воріт і стежки до ділянок — земля перестає бути однією зеленою площиною. Лише наявна
+        /// CC0-текстура стежки (Poly Haven), координати — ті самі, що в якорях і ділянках нижче.
+        /// </summary>
+        private static void Trodden(Transform hub)
+        {
+            var root = new GameObject("Стежки").transform;
+            root.SetParent(hub, false);
+            var plaza = new Vector3(1.9f, 0f, 0.7f);  // Віче (вогнище й лави)
+            var gate = new Vector3(0.5f, 0f, -8.6f);  // застава біля воріт
+            KitBuilder.DirtPatch(root, plaza, 2.1f, 1);
+            KitBuilder.DirtPatch(root, gate, 1.0f, 2);
+            // Від воріт — в обхід хати біля в'їзду (hut на (0,5; −5,5)), не крізь неї.
+            var bend1 = new Vector3(2.9f, 0f, -7.2f);
+            var bend2 = new Vector3(2.9f, 0f, -3.0f);
+            KitBuilder.DirtPath(root, gate, bend1, 0.8f, 3);
+            KitBuilder.DirtPath(root, bend1, bend2, 0.8f, 4);
+            KitBuilder.DirtPath(root, bend2, plaza, 0.8f, 5);
+            var doors = new[]
+            {
+                new Vector3(5.2f, 0f, -7.9f), new Vector3(-4.5f, 0f, 1.3f), new Vector3(0f, 0f, 1.7f), new Vector3(7.0f, 0f, 3.4f),
+                new Vector3(8.0f, 0f, -6.8f), new Vector3(0.5f, 0f, -3.0f), new Vector3(-7.1f, 0f, -4.2f), new Vector3(-1.9f, 0f, 4.4f),
+                new Vector3(4.4f, 0f, -1.2f)
+            };
+            for (int i = 0; i < doors.Length; i++) KitBuilder.DirtPath(root, plaza, doors[i], 0.45f, 10 + i);
+        }
+
         private static GameObject House(GameObject hub, Vector3 origin, int width, int depth, bool wood, float facing)
         {
             // Трек V4: житлова хата треку V (hut_a/b/c по черзі) на місці хатки Kenney — центр тієї ж
@@ -397,7 +426,8 @@ namespace Game.Gameplay.EditorTools
             group.transform.SetParent(hub.transform, false);
 
             KitBuilder.Anchor(group, "council_seat", new Vector3(0.2f, 0f, 0.5f));
-            KitBuilder.Anchor(group, "settlement_farms", new Vector3(-3.4f, 0f, -5.0f));
+            // З-за хати hut_b (край x = −3,9): ізометрична камера ховала за нею працівника Ферм (тур 13.10.2026).
+            KitBuilder.Anchor(group, "settlement_farms", new Vector3(-3.0f, 0f, -6.6f));
             KitBuilder.Anchor(group, "scouting_post", new Vector3(0.5f, 0f, -8.0f));
             BesideDoor(group, plots, "storehouse_dock", Game.Core.Base.DefaultBuildings.Storehouse);
             BesideDoor(group, plots, "settlement_market", Game.Core.Base.DefaultBuildings.Market);

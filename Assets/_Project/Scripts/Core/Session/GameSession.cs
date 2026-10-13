@@ -231,6 +231,10 @@ namespace Game.Core.Session
         private Appearance _pendingAppearance;
         private string _pendingBackgroundId = "warrior";
         private Gender _protagonistGender = Gender.Male;
+        // Плейтест 13.10.2026 (створення як у CRPG): клас окремо від передісторії (null — клас передісторії) і
+        // перерозподіл атрибутів — зсув від пресета, сума зсувів ніколи не більша за нуль (баланс пресета не росте).
+        private CompanionClass? _pendingClass;
+        private readonly int[] _pendingAttrShift = new int[Attributes.All.Length];
 
         // ---- Поправка №15.1: пізніше приєднання, шлях «Таверна» ----
         /// <summary>Хто заплановано наступним, кого приведе Таверна — id, або null, поки нікого не заплановано.</summary>
@@ -432,6 +436,8 @@ namespace Game.Core.Session
             _pendingGender = Gender.Male;
             _pendingAppearance = null;
             _pendingBackgroundId = Backgrounds.All()[0].Id;
+            _pendingClass = null;
+            System.Array.Clear(_pendingAttrShift, 0, _pendingAttrShift.Length);
             _pendingTavernSpecialistId = null;
             _pendingTavernDueDay = 0;
 
@@ -586,7 +592,55 @@ namespace Game.Core.Session
         public void SetProtagonistBackground(string presetId)
         {
             RequireState(SessionState.Creation);
+            if (_pendingBackgroundId != presetId) System.Array.Clear(_pendingAttrShift, 0, _pendingAttrShift.Length);
             _pendingBackgroundId = presetId;
+        }
+
+        /// <summary>
+        /// Скільки очок атрибутів можна перекласти з одного в інший на екрані створення (рішення власника 13.10.2026:
+        /// «Вони поки ні на шо не впливають, можеш додать 4 для візуалу»; уточнення Поправки №5.9). ПЛЕЙСХОЛДЕР.
+        /// </summary>
+        public const int CreationAttributeBudget = 3;
+        public const int CreationAttributeMin = 1, CreationAttributeMax = 10;
+
+        /// <summary>Клас героя окремо від передісторії (Поправка №15: Рубака, Стрілець, Знахар, Майстер).</summary>
+        public void SetProtagonistClass(CompanionClass cls)
+        {
+            RequireState(SessionState.Creation);
+            _pendingClass = cls;
+        }
+
+        /// <summary>
+        /// Перекласти одне очко атрибута (<paramref name="delta"/> = ±1). Знизити — звільнити очко (разом не більше
+        /// <see cref="CreationAttributeBudget"/>), підняти — лише за вільне очко. Межі 1–10. Сума атрибутів пресета не
+        /// росте ніколи. Повертає false і нічого не змінює, якщо крок заборонено.
+        /// </summary>
+        public bool AdjustProtagonistAttribute(AttributeType attribute, int delta)
+        {
+            RequireState(SessionState.Creation);
+            int i = System.Array.IndexOf(Attributes.All, attribute);
+            if (i < 0 || (delta != 1 && delta != -1)) return false;
+            var preset = Backgrounds.ById(_pendingBackgroundId) ?? Backgrounds.All()[0];
+            int value = preset.Attributes[attribute] + _pendingAttrShift[i] + delta;
+            if (value < CreationAttributeMin || value > CreationAttributeMax) return false;
+            if (delta > 0 && CreationFreePoints() <= 0) return false;
+            if (delta < 0 && _pendingAttrShift[i] <= 0 && CreationLoweredPoints() >= CreationAttributeBudget) return false;
+            _pendingAttrShift[i] += delta;
+            return true;
+        }
+
+        private int CreationFreePoints()
+        {
+            int sum = 0;
+            foreach (int d in _pendingAttrShift) sum += d;
+            return -sum;
+        }
+
+        private int CreationLoweredPoints()
+        {
+            int lowered = 0;
+            foreach (int d in _pendingAttrShift) if (d < 0) lowered -= d;
+            return lowered;
         }
 
         public SessionState ConfirmCreation()
@@ -595,6 +649,12 @@ namespace Game.Core.Session
             var preset = Backgrounds.ById(_pendingBackgroundId) ?? Backgrounds.All()[0];
             var protagonist = _worldRoster.Get(ProtagonistId);
             ProtagonistCreation.Apply(protagonist, preset, _pendingName);
+            if (protagonist != null)
+            {
+                for (int i = 0; i < Attributes.All.Length; i++)
+                    protagonist.Attributes[Attributes.All[i]] = preset.Attributes[Attributes.All[i]] + _pendingAttrShift[i];
+                if (_pendingClass.HasValue && protagonist.Card != null) protagonist.Card.Class = _pendingClass.Value;
+            }
             _protagonistGender = _pendingGender;
 
             LogEvent("creation.confirmed", Args("backgroundId", preset.Id));
@@ -606,12 +666,37 @@ namespace Game.Core.Session
         {
             var ids = new List<string>();
             foreach (var b in Backgrounds.All()) ids.Add(b.Id);
+            var preset = Backgrounds.ById(_pendingBackgroundId) ?? Backgrounds.All()[0];
+            var attrs = new List<CreationStatLine>();
+            for (int i = 0; i < Attributes.All.Length; i++)
+            {
+                var a = Attributes.All[i];
+                int value = preset.Attributes[a] + _pendingAttrShift[i];
+                attrs.Add(new CreationStatLine
+                {
+                    Id = a.ToString(), Value = value, Base = preset.Attributes[a],
+                    CanRaise = value < CreationAttributeMax && CreationFreePoints() > 0,
+                    CanLower = value > CreationAttributeMin && (_pendingAttrShift[i] > 0 || CreationLoweredPoints() < CreationAttributeBudget)
+                });
+            }
+            var skills = new List<CreationStatLine>();
+            foreach (var sk in Skills.All)
+                if (preset.Skills[sk] > 0) skills.Add(new CreationStatLine { Id = sk.ToString(), Value = preset.Skills[sk], Base = preset.Skills[sk] });
+            var classes = new List<CompanionClass>();
+            foreach (CompanionClass c in System.Enum.GetValues(typeof(CompanionClass))) classes.Add(c);
             return new ProtagonistCreationView
             {
                 Name = _pendingName,
                 Gender = _pendingGender,
                 BackgroundId = _pendingBackgroundId,
                 AvailableBackgrounds = ids,
+                Class = _pendingClass ?? CompanionClasses.ForBackground(preset.Id),
+                AvailableClasses = classes,
+                Attributes = attrs,
+                Skills = skills,
+                FreePoints = CreationFreePoints(),
+                PointsMoved = CreationLoweredPoints(),
+                PointsBudget = CreationAttributeBudget,
                 Appearance = (_pendingAppearance ?? AppearanceCatalog.DefaultProtagonist(_pendingGender)).Clone()
             };
         }

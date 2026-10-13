@@ -243,12 +243,31 @@ namespace Game.Gameplay
                 Run(() => Session.SetProtagonistBackground(bg));
             }
 
+            // Кроки створення як у CRPG (плейтест 13.10.2026): клас окремо від передісторії, перерозподіл атрибутів,
+            // наїзд на обличчя — кожен крок знімком.
+            UI.CreationSteps.TourStep = UI.CreationSteps.Class;
+            Run(() => Session.SetProtagonistClass(Game.Core.Characters.CompanionClass.Shooter));
             foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("creation-class");
+            foreach (var f in WaitFrames(FramesShort)) yield return f; // знімок пишеться наприкінці кадру — не перемикати крок раніше
+            UI.CreationSteps.TourStep = UI.CreationSteps.Attributes;
+            Run(() => Session.AdjustProtagonistAttribute(Game.Core.Stats.AttributeType.Strength, -1));
+            Run(() => Session.AdjustProtagonistAttribute(Game.Core.Stats.AttributeType.Agility, 1));
+            foreach (var f in WaitFrames(FramesShort)) yield return f;
+            _host.Capture("creation-attributes");
+            foreach (var f in WaitFrames(FramesShort)) yield return f; // знімок пишеться наприкінці кадру — не перемикати крок раніше
+            UI.CreationSteps.TourStep = UI.CreationSteps.Look;
+            foreach (var f in WaitFrames(45)) yield return f; // наїзд камери ~0,4 с
+            _host.Capture("creation-look");
+            foreach (var f in WaitFrames(FramesShort)) yield return f; // знімок пишеться наприкінці кадру — не перемикати крок раніше
+            UI.CreationSteps.TourStep = UI.CreationSteps.Name;
+            foreach (var f in WaitFrames(45)) yield return f; // наїзд камери ~0,4 с
             _host.Capture("creation-filled");
+            UI.CreationSteps.TourStep = null;
             yield return 0;
 
             Run(() => Session.ConfirmCreation());
-            _host.Log("Створення підтверджено: Оксана, жіночий рід, передісторія " + (backgroundId ?? "?") + ".");
+            _host.Log("Створення підтверджено: Оксана, жіночий рід, передісторія " + (backgroundId ?? "?") + ", клас Стрілець.");
 
             // ---------------- Головний диспетчер станів ----------------
             int sceneShots = 0;

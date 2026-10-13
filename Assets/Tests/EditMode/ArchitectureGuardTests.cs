@@ -641,6 +641,10 @@ namespace Game.Tests.EditMode
                 // character stats, not hidden scales"), не приховані шкали
                 // міста — Score покриває і AttributeLineView, і SkillLineView.
                 "XpToNextLevel", "Score", "Accuracy", "Defense", "Initiative", "Armor", "CritChance",
+                // Створення героя як у CRPG (плейтест 13.10.2026): CreationStatLine.Value/Base — ті самі
+                // атрибути (1..10) і скіли (0..10) персонажа, що й Score вище; FreePoints/PointsMoved/PointsBudget —
+                // очки перерозподілу на екрані створення, видимі гравцю. Не приховані шкали.
+                "Value", "Base", "FreePoints", "PointsMoved", "PointsBudget",
                 // Розширення (полірування, ціль 6 «Рішення»): скільки ворогів
                 // у тактичному бою, на який веде цей шлях/ця кімната —
                 // видима механічна деталь рішення (owner: "тактичний бій:

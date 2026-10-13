@@ -1698,7 +1698,9 @@ namespace Game.Gameplay
             bool movingThis = _activeTact != null && _activeTact.Kind == TactKind.Move &&
                                string.Equals(_activeTact.ActorId, unit.Id, StringComparison.Ordinal);
 
-            float sink = unit.IsDowned ? BattleArenaView.DownedSink : 0f;
+            // Повалений опускається, а не злітає (плейтест 13.10.2026: «Він взлетів» — знак був «+»). Постать набору лягає
+            // кліпом падіння сама — її корінь лишається на землі.
+            float sink = unit.IsDowned && !_unitStyles.ContainsKey(unit.Id) ? -BattleArenaView.DownedSink : 0f;
             Vector3 basePos;
             if (movingThis && _unitVisualPos.TryGetValue(unit.Id, out var moving))
             {
