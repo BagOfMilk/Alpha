@@ -438,10 +438,29 @@ def _helmet_mesh(kind, r):
                     m.faces.new((cur[k], cur[(k + 1) % segs], nxt[(k + 1) % segs], nxt[k]))
                 cur = nxt
     elif kind == "turban":
-        for i in range(5):
-            res = bmesh.ops.create_cone(m, cap_ends=False, segments=16, radius1=r * (1.12 - 0.05 * i), radius2=r * (1.05 - 0.07 * i), depth=r * 0.32)
-            bmesh.ops.rotate(m, cent=(0, 0, 0), matrix=Matrix.Rotation(0.12 * (1 if i % 2 else -1), 3, 'X'), verts=res["verts"])
-            bmesh.ops.translate(m, vec=(0, 0, r * (0.05 + 0.26 * i)), verts=res["verts"])
+        # Суцільний купол з верхом: раніше — п'ять окремих відкритих кілець навскоси, між ними світилося, і
+        # тюрбан читався як «стрічки» (власник 13.10.2026: шапка-«стрічки» в Синдбада). Намотування — навскісні
+        # складки на одній поверхні (радіус хвилюється вздовж гвинтової лінії), без щілин.
+        segs, rings = 24, 10
+        prof = [(1.02, 0.00), (1.07, 0.16), (1.09, 0.34), (1.08, 0.52), (1.04, 0.70), (0.97, 0.88),
+                (0.86, 1.04), (0.69, 1.18), (0.46, 1.28), (0.22, 1.34), (0.0, 1.36)]
+        prev = None
+        for i, (pr, pz) in enumerate(prof):
+            if pr == 0.0:
+                top = m.verts.new((0, 0, r * pz))
+                for k in range(segs):
+                    m.faces.new((prev[k], prev[(k + 1) % segs], top))
+                break
+            ring = []
+            for k in range(segs):
+                a = 2 * math.pi * k / segs
+                fold = 1.0 + 0.035 * math.sin(3 * a + i * 1.3) if 0 < i < len(prof) - 3 else 1.0
+                ring.append(m.verts.new((r * pr * fold * math.cos(a), r * pr * fold * math.sin(a), r * pz)))
+            if prev is not None:
+                for k in range(segs):
+                    m.faces.new((prev[k], prev[(k + 1) % segs], ring[(k + 1) % segs], ring[k]))
+            prev = ring
+        bmesh.ops.recalc_face_normals(m, faces=m.faces)
     return m
 
 def _skull(rig):
@@ -468,7 +487,7 @@ def helmets(rig, body):
         if kind == "kabuto":
             lift += 0.02
         if kind == "turban":
-            lift = sk.z - r * 0.62
+            lift = sk.z - r * 0.85                       # нижній край — над бровами, волосся сховане
         bmesh.ops.translate(m, vec=(sk.x, sk.y + 0.008, lift), verts=m.verts[:])
         out[part] = _rigid(f"{rig.name}.{part}", m, rig, "head", "linen" if kind == "turban" else "steel", body)
     return out
