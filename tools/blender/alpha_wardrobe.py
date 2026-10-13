@@ -1024,9 +1024,9 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
                     nw = (n3 @ v.normal).normalized() * sg
                     side = (p - loc).dot(nw)
                     if side < gap:
-                        # Не далі 4 см (крім безрукавки й плаща): над задом бібліотечних штанів поділ туніки
+                        # Не далі 7 см (крім безрукавки й плаща): над задом бібліотечних штанів поділ туніки
                         # виростав конусом на 10 см і пробивав плащ (Гобан, 13.10.2026).
-                        need[v.index] = min(gap - side, 0.04 if part not in ("vest", "cloak") else r)
+                        need[v.index] = min(gap - side, 0.07 if part not in ("vest", "cloak") else r)
                 adj = [[] for _ in me.vertices]
                 for e in me.edges:
                     a, b = e.vertices
@@ -1044,7 +1044,7 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
         lower += objs
     return moved
 
-def _cloak_over(cloak, lower, sg, reach=0.25, gap=0.012):
+def _cloak_over(cloak, lower, sg, reach=0.07, gap=0.012):
     """Плащ — один аркуш, і пошук найближчої «зовнішньої» стінки нижчих речей пропускав поли туніки за сідницями:
     вони проходили крізь плащ гострим клином (Гобан, 13.10.2026). Промінь від вершини плаща назовні: якщо він
     влучає в нижчу річ, плащ іде за неї. Усі грані нижчих речей, без відбору стінок."""
@@ -1064,16 +1064,10 @@ def _cloak_over(cloak, lower, sg, reach=0.25, gap=0.012):
     for v in me.vertices:
         p = mw @ v.co
         nw = (n3 @ v.normal).normalized() * sg
-        far = 0.0
+        # Лише близька річ одразу за плащем (до 7 см): довгий промінь уздовж рукава чи сукні рвав плащ на колючки.
         hit, _n, _i, d = tree.ray_cast(p, nw, reach)
-        while hit is not None:
-            far = d
-            hit2, _n, _i, d2 = tree.ray_cast(hit + nw * 0.001, nw, reach - d)
-            if hit2 is None:
-                break
-            hit, d = hit2, d + d2 + 0.001
-        if far > 0.0:
-            need[v.index] = far + gap
+        if hit is not None:
+            need[v.index] = d + gap
     adj = [[] for _ in me.vertices]
     for e in me.edges:
         a, b = e.vertices
