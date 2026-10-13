@@ -254,9 +254,10 @@ def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, 
     if widen != 1.0:
         # Плащ — ширший за спину: краї розходяться вбік від осі хребта, нижче плечей дедалі більше.
         zs = [v.co.z for v in bm.verts]; ztop = max(zs); zlo = min(zs)
+        cx = sum(v.co.x for v in bm.verts) / max(1, len(bm.verts))   # набір f стоїть не в нулі — від центру речі
         for v in bm.verts:
             t = (ztop - v.co.z) / max(1e-4, ztop - zlo)
-            v.co.x *= 1.0 + (widen - 1.0) * min(1.0, t * 1.6)
+            v.co.x = cx + (v.co.x - cx) * (1.0 + (widen - 1.0) * min(1.0, t * 1.6))
     if hem:
         length, zmax = hem
         edges = [e for e in bm.edges if e.is_boundary and max(v.co.z for v in e.verts) < zmax]
@@ -356,7 +357,7 @@ def wardrobe(rig, body):
     out["boots"] = shell(rig, body, "boots", "leather", CALVES | FEET, 0.012, cut=shin_cut)
     out["shoes"] = shell(rig, body, "shoes", "leather", FEET, 0.008)
     # --- плащ (спина від плечей, довгий)
-    out["cloak"] = shell(rig, body, "cloak", "wool", TORSO | UPPER_ARMS, 0.085,
+    out["cloak"] = shell(rig, body, "cloak", "wool", TORSO, 0.085,   # без рук: у жінок задні половини рук ставали «крилами»
                          cut=lambda co: co.y > _back_y(rig) and co.z > zw + 0.08,
                          hem=(zw - zk + 0.35, zw + 0.2), flare=1.3, rings=4, smooth=24, widen=1.35)   # без розширення: поли здувались грудками на стегнах
     # --- броня
