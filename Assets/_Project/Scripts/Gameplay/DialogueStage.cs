@@ -31,7 +31,9 @@ namespace Game.Gameplay
         /// <see cref="GatherRadius"/>, переходить на розмовне місце на час сцени (як у BG3 — учасників зводять разом),
         /// інакше подвійний план виходив далеким, а через плече — порожнім (тур 08.10.2026, знімок 13).
         /// </summary>
-        private const float ConversationDistance = 0.6f, GatherRadius = 0.9f;
+        private const float ConversationDistance = 0.65f, GatherRadius = 0.9f;
+        /// <summary>Ближче за це від кореня іншої постаті — місце зайняте (два персонажі в одному, плейтест 13.10.2026).</summary>
+        private const float PersonalSpace = 0.4f;
         private const float ShotPushSeconds = 7f;
         /// <summary>Найбільший поворот голови до співрозмовника, градуси; швидкість наростання ваги погляду.</summary>
         private const float LookMaxDegrees = 50f, LookBlendPerSecond = 3f;
@@ -460,7 +462,9 @@ namespace Game.Gameplay
                     actor = new Actor { Root = holder, Figure = holder.GetComponent<KitFigure>(), SavedRotation = holder.rotation, SavedPosition = holder.position };
                     var flat = holder.position - _hero.transform.position;
                     flat.y = 0f;
-                    if (flat.magnitude > GatherRadius)
+                    // Далеко — зводимо до героя; поруч, але впритул до когось (тимчасової постаті, іншого учасника) — теж
+                    // переходить на вільне місце: власник, 13.10.2026: «Два персонажі в один одному».
+                    if (flat.magnitude > GatherRadius || Crowded(holder.position, holder))
                     {
                         // Як у BG3: учасника зводять до героя на час розмови, після — назад на своє місце.
                         var dir = NextSlot();
@@ -469,7 +473,6 @@ namespace Game.Gameplay
                         actor.Moved = true;
                         actor.SpawnFrame = Time.frameCount; // кістки ще з того місця — голова поки за коренем
                     }
-                    else _slotsUsed++;
                 }
                 else
                     actor = SpawnBeside(id);
@@ -540,15 +543,40 @@ namespace Game.Gameplay
         }
 
         /// <summary>Напрям наступного розмовного місця від героя: перше — навпроти, далі — по боках по 35°.</summary>
+        private static readonly float[] SlotAngles = { 0f, 45f, -45f, 90f, -90f, 135f, -135f, 180f };
+
+        /// <summary>
+        /// Напрям першого ВІЛЬНОГО розмовного місця від героя: навпроти, далі по боках через 45°. Вільне — коли в
+        /// радіусі <see cref="PersonalSpace"/> немає жодної постаті (плейтест 13.10.2026: тимчасовий Тугар з'являвся
+        /// всередині Захара, що стояв на своєму місці).
+        /// </summary>
         private Vector3 NextSlot()
         {
-            int index = _slotsUsed++;
+            _slotsUsed++;
             var forward = _hero.transform.rotation * Quaternion.Euler(0f, -_hero.modelYawOffset, 0f) * Vector3.forward;
             forward.y = 0f;
             if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
             forward.Normalize();
-            float spread = index == 0 ? 0f : (index % 2 == 1 ? 35f : -35f) * ((index + 1) / 2);
-            return Quaternion.Euler(0f, spread, 0f) * forward;
+            var hero = _hero.transform.position;
+            foreach (float angle in SlotAngles)
+            {
+                var dir = Quaternion.Euler(0f, angle, 0f) * forward;
+                if (!Crowded(hero + dir * ConversationDistance, null)) return dir;
+            }
+            return forward;
+        }
+
+        /// <summary>Чи стоїть у точці (по горизонталі, ближче <see cref="PersonalSpace"/>) хтось, окрім <paramref name="self"/>.</summary>
+        private bool Crowded(Vector3 point, Transform self)
+        {
+            bool Near(Transform t) => t != null && t != self && (self == null || !t.IsChildOf(self)) &&
+                                     new Vector2(t.position.x - point.x, t.position.z - point.z).magnitude < PersonalSpace;
+            if (_hero != null && Near(_hero.transform)) return true;
+            foreach (var a in _actors.Values) if (Near(a.Root)) return true;
+            foreach (var fig in FindObjectsByType<KitFigure>(FindObjectsSortMode.None))
+                if (fig != null && fig.isActiveAndEnabled && (_hero == null || !fig.transform.IsChildOf(_hero.transform)) && Near(fig.transform))
+                    return true;
+            return false;
         }
 
         private static Transform FindHead(Transform root)

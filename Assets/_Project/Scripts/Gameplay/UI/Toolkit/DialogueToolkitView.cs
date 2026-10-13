@@ -179,6 +179,18 @@ namespace Game.Gameplay.UI.Toolkit
             var current = scene.Current;
             _stage.Tick(current, scene.DisplaySpeakerId);
 
+            // Службовий крок сцени (план, ефект, пауза) без репліки, вибору й наслідку — вікну нема що показати: проходимо
+            // одразу, а не лишаємо порожню рамку з «Пробіл чи Enter — далі» (плейтест власника 13.10.2026). Камера вже
+            // взяла план цього кроку вище.
+            if (!current.IsChoice && !scene.IsShowingConsequence && !current.IsFinished &&
+                string.IsNullOrEmpty(scene.DisplayLineKey) && string.IsNullOrEmpty(scene.DisplaySpeakerId))
+            {
+                _box.style.visibility = Visibility.Hidden;
+                scene.DriverAdvance(_shell);
+                return;
+            }
+            _box.style.visibility = Visibility.Visible;
+
             if (ReferenceEquals(current, _shownStep) && scene.IsShowingConsequence == _shownConsequence) return;
             _shownStep = current;
             _shownConsequence = scene.IsShowingConsequence;
