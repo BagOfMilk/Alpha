@@ -50,6 +50,7 @@ namespace UnityEngine
     public static class Application
     {
         public static bool isBatchMode { get { return false; } }
+        public static bool isEditor { get { return false; } }
         public static string dataPath { get { return "."; } }
         public static string persistentDataPath { get { return "."; } }
         public static bool runInBackground { get; set; }
@@ -72,6 +73,15 @@ namespace UnityEngine
         public string fileName;
         public string menuName;
         public int order;
+    }
+
+    public enum RuntimeInitializeLoadType { AfterSceneLoad = 0, BeforeSceneLoad = 1, AfterAssembliesLoaded = 2, BeforeSplashScreen = 3, SubsystemRegistration = 4 }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class RuntimeInitializeOnLoadMethodAttribute : Attribute
+    {
+        public RuntimeInitializeOnLoadMethodAttribute() { }
+        public RuntimeInitializeOnLoadMethodAttribute(RuntimeInitializeLoadType loadType) { }
     }
 
     [AttributeUsage(AttributeTargets.Field)]

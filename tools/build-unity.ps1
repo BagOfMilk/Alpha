@@ -68,7 +68,26 @@ if (-not (Test-Path $exe)) {
     exit 1
 }
 
+# Версія білда (власник 13.10.2026: «Наведи порядок, щоб всюди були версії»): номер збірки — кількість комітів,
+# далі коміт («+зміни», якщо код чи асети гри не закомічені) і дата. Гра показує version.txt на титулі
+# (Gameplay/BuildVersion.cs), ВЕРСІЯ.txt — для людини, build_commit.txt — для tools/playtest.ps1.
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+Push-Location $proj
+$hash = (git rev-parse --short HEAD).Trim()
+$count = (git rev-list --count HEAD).Trim()
+$branch = (git rev-parse --abbrev-ref HEAD).Trim()
+$dirty = (git status --porcelain --untracked-files=no -- Assets/_Project/Scripts Assets/Art Assets/Tests Assets/ThirdParty/CC0 Packages/manifest.json) -ne $null
+Pop-Location
+$commit = if ($dirty) { "$hash+зміни" } else { $hash }
+$date = Get-Date -Format "dd.MM.yyyy HH:mm"
+$version = "збірка $count · $commit · $date"
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText((Join-Path $out "version.txt"), $version, $utf8)
+[System.IO.File]::WriteAllText((Join-Path $out "build_commit.txt"), $commit, $utf8)
+[System.IO.File]::WriteAllText((Join-Path $out "ВЕРСІЯ.txt"),
+    "Alpha — $version`r`nГілка: $branch`r`nЗапуск: Alpha.exe у цій теці. Версію видно і на титулі гри (угорі праворуч).`r`n", $utf8)
+
 $size = [math]::Round(((Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum) / 1MB, 0)
-Write-Host "ГОТОВО: $exe (тека $size МБ)" -ForegroundColor Green
+Write-Host "ГОТОВО: $exe (тека $size МБ) — $version" -ForegroundColor Green
 Write-Host "Віддавати ВСЮ теку Build\Windows — exe без _Data не запуститься." -ForegroundColor Yellow
 exit 0
