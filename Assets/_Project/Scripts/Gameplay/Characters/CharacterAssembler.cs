@@ -58,6 +58,7 @@ namespace Game.Gameplay.Characters
                 smr.transform.SetParent(root.transform, false);
                 smr.gameObject.SetActive(true);
                 smr.updateWhenOffscreen = true;
+                if (!part.StartsWith("wpn_") && !part.StartsWith("shield_")) TwoSided(smr);
                 if (tint != null) Tint(smr, tint);
             }
             // Лук і рушниця: точки зброї — з кісток набору в позі спокою (на них зброю змодельовано), поки екземпляр
@@ -86,6 +87,36 @@ namespace Game.Gameplay.Characters
         {
             int dot = objectName.IndexOf('.');
             return dot >= 0 ? objectName.Substring(dot + 1) : objectName;
+        }
+
+        /// <summary>Двобічні копії матеріалів одягу — одна на вихідний матеріал (без нових копій на кожну постать).</summary>
+        private static readonly Dictionary<Material, Material> TwoSidedCache = new Dictionary<Material, Material>();
+
+        /// <summary>
+        /// Одяг набору — однобічна оболонка з відкритими горловиною, проймами й полами, а тіло під ним вимкнене: крізь отвір
+        /// з відсіченими задніми гранями видно фон (власник, 13.10.2026: «Прозорий персонаж», «Что за просвечивание и
+        /// прозначности на моделях?»). Двобічна тканина показує свій внутрішній бік, як справжня. Матеріали з FBX
+        /// (URP/Lit) мають Cull Back, а блок властивостей стан відсікання не змінює — тому копія з Cull Off.
+        /// </summary>
+        private static void TwoSided(SkinnedMeshRenderer smr)
+        {
+            var shared = smr.sharedMaterials;
+            bool changed = false;
+            for (int i = 0; i < shared.Length; i++)
+            {
+                var m = shared[i];
+                if (m == null || !m.HasProperty("_Cull") || m.GetFloat("_Cull") == 0f) continue;
+                if (!TwoSidedCache.TryGetValue(m, out var copy) || copy == null)
+                {
+                    copy = new Material(m) { name = m.name + " (двобічний)" };
+                    copy.SetFloat("_Cull", 0f);
+                    copy.doubleSidedGI = true;
+                    TwoSidedCache[m] = copy;
+                }
+                shared[i] = copy;
+                changed = true;
+            }
+            if (changed) smr.sharedMaterials = shared;
         }
 
         private static void CollectBones(Transform t, Dictionary<string, Transform> into)

@@ -829,7 +829,7 @@ BODY_ZONES = {
 }
 # Річ -> зони тіла, які вона повністю закриває (гра їх вимикає, щоб тіло не випирало крізь тканину).
 COVERS = {
-    "shirt": ["torso", "upperarms", "lowerarms"], "tunic": ["torso", "upperarms"],
+    "shirt": ["torso", "upperarms", "lowerarms"], "tunic": ["upperarms"],
     "kaftan": ["torso", "upperarms", "lowerarms", "thighs"], "robe": ["torso", "upperarms", "lowerarms", "thighs", "calves"],
     "vest": [], "trousers": ["thighs", "calves"], "sharovary": ["thighs", "calves"], "skirt_long": ["thighs", "calves"],
     "boots": ["feet"], "shoes": ["feet"], "cloak": [], "gambeson": ["torso", "upperarms"],

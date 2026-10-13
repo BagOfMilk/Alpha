@@ -263,6 +263,7 @@ namespace Game.Gameplay
 
             _hovered = real && !PointerOverUi() ? PickUnderMouse() : null;
             _shell.HoveredPlaceId = _hovered != null ? _hovered.Id : null;
+            UpdateHoverRing();
             if (real && Input.GetMouseButtonDown(0) && !PointerOverUi())
             {
                 if (_hovered != null)
@@ -869,11 +870,38 @@ namespace Game.Gameplay
             return false;
         }
 
+        /// <summary>
+        /// «!» над людиною, якій є що сказати, — як у BG3 (власник, 13.10.2026: «Квест марк тільки якщо навести + воно не
+        /// виділяється як в БГ3»): великий золотий знак, що м'яко погойдується, видно завжди, а не лише поруч.
+        /// </summary>
         private void DrawMark(Vector3 screen)
         {
             var at = UI.UiScale.ScreenToGui(screen);
-            var rect = new Rect(at.x - 14f, at.y - 34f, 28f, 30f);
+            float bob = Mathf.Sin(Time.unscaledTime * 3f) * 4f;
+            var rect = new Rect(at.x - 18f, at.y - 46f + bob, 36f, 40f);
             if (!OverlapsUi(rect)) GUI.Label(rect, "!", _markStyle);
+        }
+
+        // Кільце під людиною чи місцем під курсором — виділення як у BG3 (той самий запит власника).
+        private GameObject _hoverRing;
+
+        private void UpdateHoverRing()
+        {
+            bool show = _hovered != null && _inside == null &&
+                        (_hovered.Kind == PlaceKind.Person || _hovered.Kind == PlaceKind.Station);
+            if (!show)
+            {
+                if (_hoverRing != null && _hoverRing.activeSelf) _hoverRing.SetActive(false);
+                return;
+            }
+            if (_hoverRing == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Unlit");
+                var material = shader != null ? new Material(shader) : null;
+                _hoverRing = Visual.RingMesh.Spawn("hover-ring", null, 0f, 0.26f, 0.33f, material, new Color(1f, 0.84f, 0.45f));
+            }
+            _hoverRing.transform.position = new Vector3(_hovered.X, 0.03f, _hovered.Z);
+            if (!_hoverRing.activeSelf) _hoverRing.SetActive(true);
         }
 
         private static string UkrainianText(Gender g, string key) => Game.Gameplay.Text.UkrainianText.Get(key, g);
@@ -891,8 +919,8 @@ namespace Game.Gameplay
             };
             _nearStyle = new GUIStyle(_labelStyle) { font = AlphaSkin.StrongFont };
             _nearStyle.normal.textColor = AlphaSkin.BronzeHi;
-            _markStyle = new GUIStyle(AlphaSkin.TooltipPanel) { fontSize = 20, alignment = TextAnchor.MiddleCenter, font = AlphaSkin.StrongFont };
-            _markStyle.normal.textColor = AlphaSkin.BronzeHi;
+            _markStyle = new GUIStyle(AlphaSkin.TooltipPanel) { fontSize = 30, alignment = TextAnchor.MiddleCenter, font = AlphaSkin.StrongFont };
+            _markStyle.normal.textColor = new Color(1f, 0.82f, 0.32f);
             _titleStyle = new GUIStyle(AlphaSkin.TooltipPanel)
             {
                 fontSize = 26, alignment = TextAnchor.MiddleCenter, wordWrap = false,

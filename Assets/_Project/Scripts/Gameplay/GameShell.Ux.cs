@@ -282,10 +282,20 @@ namespace Game.Gameplay
                     RequestExit();
                     break;
                 default:
+                    // Увечері намет героя — місце, де вирішують варту чи сон і лягають до ночі (Поправка №22).
+                    if (Session != null && Session.State == SessionState.Evening && place.Id == Walk.VillagePlaces.HeroTentId)
+                    {
+                        ClosePanel();
+                        EveningOpen = true;
+                        break;
+                    }
                     OpenPanel(place.Panel, place.TargetId);
                     break;
             }
         }
+
+        /// <summary>Увечері відкрито вибір «варта чи сон» і «До ночі» (у наметі героя чи головною кнопкою фази).</summary>
+        public bool EveningOpen { get; set; }
 
         /// <summary>«E»: взаємодія з тим місцем, біля якого стоїть герой.</summary>
         public void InteractNearby() => Interact(NearbyPlace);
@@ -418,7 +428,18 @@ namespace Game.Gameplay
             float barW = Math.Min(w - 32f, 980f);
             var bar = new Rect((w - barW) * 0.5f, h - barH - 6f, barW, barH);
 
-            if (Ux.OpenPanel != UxPanelId.None)
+            if (Session == null || Session.State != SessionState.Evening) EveningOpen = false;
+            if (EveningOpen)
+            {
+                // Вечірній вибір — компактна панель ліворуч поверх світу, рух не блокується (Поправка №22).
+                float ew = Math.Max(420f, Math.Min(Math.Min(w * 0.42f, 640f), w - rightReserve - 32f));
+                var eveningRect = new Rect(16f, top, ew, Math.Max(200f, bar.y - top - 8f));
+                GUILayout.BeginArea(eveningRect);
+                _night.Draw(this);
+                GUILayout.EndArea();
+                ExploreUiRects.Add(eveningRect);
+            }
+            else if (Ux.OpenPanel != UxPanelId.None)
             {
                 var model = Ux.CurrentModel();
                 float panelW = Math.Max(420f, Math.Min(Math.Min(w * 0.42f, 640f), w - rightReserve - 32f));
@@ -459,7 +480,8 @@ namespace Game.Gameplay
             if (Widgets.SecondaryButton(UkrainianText.Get("ux.world.journal", g), GUILayout.ExpandWidth(false))) TogglePanel(UxPanelId.Journal);
             if (Widgets.SecondaryButton(UkrainianText.Get("ux.world.duty", g), GUILayout.ExpandWidth(false))) TogglePanel(UxPanelId.DutyBoard);
             GUILayout.FlexibleSpace();
-            if (Widgets.PrimaryButton(UkrainianText.Get("ux.world.start_day", g), GUILayout.ExpandWidth(false)))
+            bool evening = Session != null && Session.State == SessionState.Evening;
+            if (Widgets.PrimaryButton(UkrainianText.Get(evening ? "ux.world.evening" : "ux.world.start_day", g), GUILayout.ExpandWidth(false)))
                 RequestStartDay();
             GUILayout.EndHorizontal();
             GUILayout.Label(UkrainianText.Get("ux.world.keys", g), AlphaSkin.HintLine);
@@ -552,6 +574,13 @@ namespace Game.Gameplay
         /// </summary>
         public void RequestStartDay()
         {
+            // Увечері головна кнопка фази відкриває вечірній вибір (варта чи сон, «До ночі»), а не день.
+            if (Session != null && Session.State == SessionState.Evening)
+            {
+                ClosePanel();
+                EveningOpen = !EveningOpen;
+                return;
+            }
             var warnings = UxPreflight.Check(Session, ProtagonistGender);
             if (warnings.Count == 0) { StartDayNow(); return; }
             Ux.Ask(new UxConfirm(UkrainianText.Get("ux.preflight.question", ProtagonistGender),

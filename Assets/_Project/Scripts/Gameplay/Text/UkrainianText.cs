@@ -3121,10 +3121,10 @@ namespace Game.Gameplay.Text
             AddKey(t, "ui.battle.surrender.never", "Не здається.");
             AddKey(t, "ui.battle.surrender.boss", "Бос — не здається ніколи.");
             AddKey(t, "ui.battle.surrender.title", "Здалися");
-            AddKey(t, "ui.battle.surrender.hint", "Кого не вирішиш зараз — відпустять. Відпущений пам'ятатиме; полоненого громада годує; страта — кров і страх.");
+            AddKey(t, "ui.battle.surrender.hint", "Кого не вирішиш зараз — відпустять. Полоненого ведуть просто в громаду — в'язниці не треба: його годують і стережуть, а неспокійний може втекти. Відпущений пам'ятатиме; страта — кров і страх.");
             AddKey(t, "ui.battle.surrender.release", "Відпустити");
-            AddKey(t, "ui.battle.surrender.capture", "У полон (можна переманити)");
-            AddKey(t, "ui.battle.surrender.capture_no_recruit", "У полон (не переманиш)");
+            AddKey(t, "ui.battle.surrender.capture", "У полон, до громади (можна переманити)");
+            AddKey(t, "ui.battle.surrender.capture_no_recruit", "У полон, до громади (не переманиш)");
             AddKey(t, "ui.battle.surrender.execute", "Добити");
             AddKey(t, "ui.prisoners.title", "Полонені");
             AddKey(t, "ui.prisoners.unguarded", "Без Сторожі полонені тікають швидше.");
@@ -3365,6 +3365,8 @@ namespace Game.Gameplay.Text
         {
             AddKey(t, "ui.dialogue.hint", "Пробіл чи Enter — далі");
             AddKey(t, "ui.dialogue.choice_hint", "1–9 — відповідь");
+            // Ходибельний вечір (Поправка №22, плейтест 13.10.2026): головна кнопка фази ввечері.
+            AddKey(t, "ux.world.evening", "Вечір: варта чи сон · Enter");
             // Портрети загону в бою, як у BG3 (той самий день, той самий запит).
             AddKey(t, "ui.battle.portrait.stats", "Здоров'я {hp}/{hpMax} · ОД {ap}/{apMax}");
             AddKey(t, "ui.battle.portrait.downed", "Упав — ще можна підняти");

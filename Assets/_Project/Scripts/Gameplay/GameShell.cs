@@ -256,10 +256,13 @@ namespace Game.Gameplay
         /// <summary>Прямокутники інтерфейсу прогулянки (координати GUI): клік по них — не команда «йти».</summary>
         public readonly List<Rect> ExploreUiRects = new List<Rect>();
 
-        /// <summary>Гуляти можна вранці й у вільній грі — там, де гравець сам розпоряджається часом.</summary>
+        /// <summary>
+        /// Гуляти можна вранці, у вільній грі й увечері — там, де гравець сам розпоряджається часом. Вечір ходибельний за
+        /// Поправкою №22 (власник, 13.10.2026: «чому вверху конпка і не можна рухатись? Це гейм дизайн такий?»).
+        /// </summary>
         public bool CanExplore =>
             Session != null &&
-            (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay) &&
+            (Session.State == SessionState.Morning || Session.State == SessionState.FreePlay || Session.State == SessionState.Evening) &&
             !(BattlePresenter != null && BattlePresenter.IsActive);
 
         public void SetExploring(bool on)
@@ -622,7 +625,7 @@ namespace Game.Gameplay
         /// <summary>Хаб-стани (Morning/Day/Decision/Evening/Night/Dungeon/FreePlay) — спільна шапка + стрічка подій навколо власного вмісту екрана.</summary>
         private void DrawHubLike(SessionState state)
         {
-            if (Exploring && (state == SessionState.Morning || state == SessionState.FreePlay))
+            if (Exploring && (state == SessionState.Morning || state == SessionState.FreePlay || state == SessionState.Evening))
             {
                 DrawWorld();
                 return;

@@ -367,22 +367,30 @@ namespace Game.Gameplay
                 if (mark == null || string.IsNullOrEmpty(mark.DomainTag) || !TryFindAnchorByDomain(mark.DomainTag, out anchor))
                     continue;
 
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                go.name = "Подія: " + mark.DomainTag;
+                // Позначка події дня — прапорець на древку кольору наслідку, а не сирий куб, що світиться (власник,
+                // 13.10.2026: «Шо це за зелений куб»). Колір той самий (MarkColor), читається як мітка місця.
+                var go = new GameObject("Подія: " + mark.DomainTag);
                 go.transform.SetParent(transform, false);
-                go.transform.position = anchor.position + new Vector3(0f, 2.2f, 0f);
-                go.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
-                go.transform.rotation = Quaternion.Euler(45f, 45f, 0f);
-
+                go.transform.position = anchor.position + new Vector3(0.6f, 0f, 0.6f);
                 var lit = Shader.Find("Universal Render Pipeline/Lit");
+                var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                DestroyImmediate(pole.GetComponent<Collider>());
+                pole.transform.SetParent(go.transform, false);
+                pole.transform.localPosition = new Vector3(0f, 0.55f, 0f);
+                pole.transform.localScale = new Vector3(0.04f, 0.55f, 0.04f);
+                var cloth = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                DestroyImmediate(cloth.GetComponent<Collider>());
+                cloth.transform.SetParent(go.transform, false);
+                cloth.transform.localPosition = new Vector3(0.17f, 0.95f, 0f);
+                cloth.transform.localScale = new Vector3(0.32f, 0.2f, 0.015f);
                 if (lit != null)
                 {
+                    var wood = new Material(lit);
+                    wood.SetColor("_BaseColor", new Color(0.30f, 0.22f, 0.15f));
+                    pole.GetComponent<Renderer>().sharedMaterial = wood;
                     var material = new Material(lit);
-                    var color = MarkColor(mark);
-                    material.SetColor("_BaseColor", color);
-                    material.EnableKeyword("_EMISSION");
-                    material.SetColor("_EmissionColor", color * 1.6f);
-                    go.GetComponent<Renderer>().sharedMaterial = material;
+                    material.SetColor("_BaseColor", MarkColor(mark));
+                    cloth.GetComponent<Renderer>().sharedMaterial = material;
                 }
 
                 _marks.Add(go);

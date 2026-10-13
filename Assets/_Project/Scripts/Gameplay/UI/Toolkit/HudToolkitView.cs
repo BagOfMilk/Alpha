@@ -194,6 +194,8 @@ namespace Game.Gameplay.UI.Toolkit
             root.pickingMode = PickingMode.Ignore;
 
             _hud = new VisualElement { name = "alpha-hud" };
+            // W/S і стрілки — рух героя, а не навігація по шапці й стрічці (плейтест 13.10.2026).
+            _hud.RegisterCallback<NavigationMoveEvent>(e => e.StopPropagation(), TrickleDown.TrickleDown);
             _hud.pickingMode = PickingMode.Ignore;
             _hud.style.position = Position.Absolute;
             _hud.style.left = 0f;
@@ -325,6 +327,10 @@ namespace Game.Gameplay.UI.Toolkit
             var newsTitle = ZoneTitle("ui.hud.feed.news", g);
             _feed.Add(newsTitle);
             _newsScroll = new ScrollView(ScrollViewMode.Vertical) { name = "hud-news" };
+            // Плейтест власника 13.10.2026: «При ходьбе вверх и вниз листаются новости» — після кліку по стрічці
+            // навігація UI Toolkit віддавала їй W/S і стрілки. Стрічка гортається лише колесом миші й повзунком.
+            _newsScroll.focusable = false;
+            _newsScroll.RegisterCallback<NavigationMoveEvent>(e => e.StopPropagation(), TrickleDown.TrickleDown);
             _newsScroll.style.flexGrow = 1f;
             _newsScroll.style.flexShrink = 1f;
             _feed.Add(_newsScroll);

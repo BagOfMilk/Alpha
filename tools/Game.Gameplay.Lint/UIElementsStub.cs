@@ -181,13 +181,18 @@ namespace UnityEngine.UIElements
 
     public delegate void EventCallback<in TEventType>(TEventType evt);
 
-    public abstract class EventBase { }
+    public abstract class EventBase
+    {
+        public void StopPropagation() { }
+    }
 
     public abstract class EventBase<T> : EventBase where T : EventBase<T>, new() { }
 
     public sealed class PointerEnterEvent : EventBase<PointerEnterEvent> { }
 
     public sealed class PointerLeaveEvent : EventBase<PointerLeaveEvent> { }
+
+    public sealed class NavigationMoveEvent : EventBase<NavigationMoveEvent> { }
 
     public abstract class CallbackEventHandler
     {
