@@ -144,6 +144,17 @@ class Mesh:
         ob["part"] = part
         return ob
 
+def _append_mesh(ob, m):
+    """Доклеює геометрію Mesh-будівника до об'єкта (без булевих операцій)."""
+    if ob is None or not m.bm.verts:
+        m.bm.free(); return
+    tmp = bpy.data.meshes.new(ob.name + "_add")
+    m.bm.to_mesh(tmp); m.bm.free()
+    bm = bmesh.new(); bm.from_mesh(ob.data); bm.from_mesh(tmp)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(ob.data); bm.free()
+    bpy.data.meshes.remove(tmp)
+
 def _apply_mods(ob):
     with bpy.context.temp_override(object=ob, active_object=ob, selected_objects=[ob]):
         for m in list(ob.modifiers):
@@ -165,6 +176,8 @@ def _cut(ob, boxes):
         cutters.append(m.to_object(ob.name + "_cut", None, "cut"))
     for c in cutters:
         mod = ob.modifiers.new("cut", 'BOOLEAN'); mod.operation = 'DIFFERENCE'; mod.solver = 'EXACT'; mod.object = c
+        # Стіни — кілька ящиків, що торкаються гранями: без цих прапорців точний розв'язувач викидав цілі стіни.
+        mod.use_self = True; mod.use_hole_tolerant = True
     _apply_mods(ob)
     for c in cutters:
         bpy.data.objects.remove(c, do_unlink=True)
@@ -333,11 +346,15 @@ def house(name, w=6.0, d=4.5, h=2.4, style="plaster", roof="hip", rise=2.6, over
             _window_x(trim, glass, sx * w / 2, 0, base + 1.35, sx)
 
     hw, hd = w / 2 + over, d / 2 + over
+    # Фронтони мазанки — окремо від стін і доклеюються ПІСЛЯ вирізання дверей і вікон: торкаючись верху стін,
+    # вони ламали точний булевий розріз, і від стін hut_c лишався один трикутник (власник 13.10.2026: «В будівлі
+    # немає стін»).
+    gables = Mesh() if style == "plaster" else None
     if roof == "hip":
         roofm.pyramid(0, 0, top, hw, hd, rise, ridge=max(0.0, hw - hd))
     else:
         roofm.gable(0, 0, top, hw, hd, rise)
-        _gable_ends(walls if style == "plaster" else timber, w, d, top, rise * (d / 2) / hd)
+        _gable_ends(gables if style == "plaster" else timber, w, d, top, rise * (d / 2) / hd)
     if porch:
         _porch(timber, roofm, w, d, base, h)
     if chimney is not None:
@@ -348,6 +365,8 @@ def house(name, w=6.0, d=4.5, h=2.4, style="plaster", roof="hip", rise=2.6, over
     parts["foundation"] = found.to_object(f"{name}.foundation", full, "foundation")
     parts["walls"] = walls.to_object(f"{name}.walls", full, "walls" if style == "plaster" else "logs")
     _cut(parts["walls"], cuts)
+    if gables is not None:
+        _append_mesh(parts["walls"], gables)
     parts["timber"] = timber.to_object(f"{name}.timber", full, "timber")
     parts["trim"] = trim.to_object(f"{name}.trim", full, "timber")
     parts["glass"] = glass.to_object(f"{name}.glass", full, "glass")

@@ -40,10 +40,12 @@ namespace Game.Gameplay
         public Transform[] trunkRoots;
 
         [Header("Рух")]
-        // Під кліпи постаті набору (масштаб сцени 0,4): звичайно — підтюпцем ~3,2 м/с, з Shift — біг ~5,8 м/с.
-        // Було 2,2 / 4,4 од./с — 5,5 і 11 м/с кліпами ходи й бігу: ноги ковзали (власник 07.10.2026).
-        public float walkSpeed = 1.3f;
-        public float runSpeed = 2.3f;
+        // Під кліпи постаті набору (масштаб сцени 0,4): звичайно — біг ~4,8 м/с, як у CRPG (Pillars, Divinity), з
+        // Shift — ривок ~7 м/с; швидкості дорівнюють природній швидкості кліпів (AnimStateTable.JogNatural і
+        // SprintNatural), тож ноги не ковзають. Власник 13.10.2026: «Біг дуже повільний і смішний… ЧОму ти не зробив
+        // як в інших Сrpg» — було 3,2 м/с кліпом бігу на ~5 м/с, сповільненим.
+        public float walkSpeed = 1.92f;
+        public float runSpeed = 2.8f;
         public float heroRadius = 0.3f;
         public Vector2 areaMin = new Vector2(-10.4f, -8.4f);
         public Vector2 areaMax = new Vector2(11.4f, 7.4f);

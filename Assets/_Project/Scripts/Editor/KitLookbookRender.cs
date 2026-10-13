@@ -71,7 +71,7 @@ namespace Game.Gameplay.EditorTools
                     model.Step(CreationLookField.Culture, 1);
                 }
             }
-            foreach (var id in new[] { "zakhar", "maksym", "myroslava", "hafiia", "tuhar" })
+            foreach (var id in new[] { "zakhar", "maksym", "myroslava", "tuhar", "keeper", "healer", "goban", "sindbad", "horde_commander" })
             {
                 var a = AppearanceCatalog.Named(id);
                 if (a != null) looks.Add(new KeyValuePair<string, Appearance>("named-" + id, a));
