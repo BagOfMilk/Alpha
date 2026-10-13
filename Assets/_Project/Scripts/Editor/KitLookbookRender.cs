@@ -96,6 +96,7 @@ namespace Game.Gameplay.EditorTools
                     var graph = Pose(modelGo, idle, 0.4f);
                     var thighs = CharacterAssembler.Facing(modelGo);
                     var facing = CharacterAssembler.BodyFacing(modelGo);
+                    FitLikeGame(modelGo, facing, report);
                     report.AppendLine("   напрям тіла від +Z кореня: бінд (стегна) " + Yaw(bindFacing).ToString("0") + "°; поза «" +
                                       (idle != null ? idle.name : "немає кліпу") + "»: стегна " + Yaw(thighs).ToString("0") +
                                       "°, центр мас " + Yaw(facing).ToString("0") + "° (гра доповертає на цей кут; знімок 1 — з цього боку)");
@@ -562,6 +563,36 @@ namespace Game.Gameplay.EditorTools
         }
 
         /// <summary>Поставити модель у позу кліпу на мить <paramref name="t"/> (граф плейблів, як у грі; без Play Mode).</summary>
+        /// <summary>
+        /// Той самий підгін речей за спиною, що робить гра після першої анімованої пози (<c>KitFigure.FitStowed</c>, сесія
+        /// майстерні 13.10.2026): без нього лукбук показував би річ так, як її вже не бачить гравець.
+        /// </summary>
+        private static void FitLikeGame(GameObject model, Vector3 facing, StringBuilder report)
+        {
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            var fitter = new GameObject("fitter");
+            fitter.transform.rotation = Quaternion.LookRotation(new Vector3(facing.x, 0f, facing.z).normalized, Vector3.up);
+            try
+            {
+                var kf = fitter.AddComponent<KitFigure>();
+                var t = typeof(KitFigure);
+                var held = (List<GameObject>)t.GetField("_held", flags).GetValue(kf);
+                var stowed = (List<GameObject>)t.GetField("_stowed", flags).GetValue(kf);
+                foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    string part = CharacterAssembler.PartOf(smr.name);
+                    if (CharacterKitPlan.IsHeld(part)) held.Add(smr.gameObject);
+                    else if (part.EndsWith(CharacterKitPlan.StowedSuffix, System.StringComparison.Ordinal)) stowed.Add(smr.gameObject);
+                }
+                if (stowed.Count == 0) return;
+                t.GetField("_model", flags).SetValue(kf, model);
+                t.GetMethod("FitStowed", flags).Invoke(kf, null);
+                report.AppendLine("   підгін як у грі (KitFigure.FitStowed): " + stowed.Count + " реч.");
+            }
+            catch (System.Exception e) { report.AppendLine("   підгін як у грі: " + e.GetBaseException().Message); }
+            finally { Object.DestroyImmediate(fitter); }
+        }
+
         private static PlayableGraph Pose(GameObject model, AnimationClip clip, float t)
         {
             var animator = model.GetComponentInChildren<Animator>();
