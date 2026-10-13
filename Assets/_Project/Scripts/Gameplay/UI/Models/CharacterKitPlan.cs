@@ -43,7 +43,7 @@ namespace Game.Gameplay.UI
         public static readonly IReadOnlyDictionary<string, string[]> Covers = new Dictionary<string, string[]>
         {
             { "shirt", new[] { "torso", "upperarms", "lowerarms" } },
-            { "tunic", new[] { "upperarms" } }, // торс лишається: глибокий виріз туніки оголював ключиці — «голова над порожнім одягом» (плейтест 13.10.2026)
+            { "tunic", new string[0] }, // нічого не ховає: виріз оголював ключиці («голова над порожнім одягом», плейтест 13.10.2026), а туніка набору (shift dress) без рукавів — схована зона плечей лишала діру й рожеві уламки (лукбук треку V, Гобан)
             { "kaftan", new[] { "torso", "upperarms", "lowerarms", "thighs" } },
             { "robe", new[] { "torso", "upperarms", "lowerarms", "thighs", "calves" } },
             { "trousers", new[] { "thighs", "calves" } },
