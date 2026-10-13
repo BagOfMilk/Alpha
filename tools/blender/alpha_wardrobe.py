@@ -220,7 +220,7 @@ def _body_verts(src):
         keep &= (set(range(len(src.data.vertices))) - member) if m.invert_vertex_group else member
     return keep
 
-def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, rings=3, budget=2000):
+def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, rings=3, budget=2000, smooth=0, widen=1.0, subdiv=0):
     """Річ-оболонка: грані тіла, усі вершини яких належать кісткам `bones` (і проходять `cut`),
     зсунуті на `offset` назовні; hem=(довжина, z_max) — подовжити нижній край (поли)."""
     src = _source(rig)
@@ -241,9 +241,22 @@ def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, 
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if not all(v.index in keep for v in f.verts)], context='FACES')
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
     _smooth_boundary(bm)
+    if subdiv:
+        # густіша сітка — нижчий шар не прострілює між рідкими вершинами (плащ мав ~400)
+        bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=subdiv, use_grid_fill=True)
     bm.normal_update()
     for v in bm.verts:
         v.co += v.normal * offset
+    base_faces = None
+    if smooth:
+        bm.normal_update()
+        base_faces = ([v.co - v.normal * offset for v in bm.verts], [[v.index for v in f.verts] for f in bm.faces])
+    if widen != 1.0:
+        # Плащ — ширший за спину: краї розходяться вбік від осі хребта, нижче плечей дедалі більше.
+        zs = [v.co.z for v in bm.verts]; ztop = max(zs); zlo = min(zs)
+        for v in bm.verts:
+            t = (ztop - v.co.z) / max(1e-4, ztop - zlo)
+            v.co.x *= 1.0 + (widen - 1.0) * min(1.0, t * 1.6)
     if hem:
         length, zmax = hem
         edges = [e for e in bm.edges if e.is_boundary and max(v.co.z for v in e.verts) < zmax]
@@ -261,10 +274,33 @@ def shell(rig, body, part, kind, bones, offset, hem=None, cut=None, flare=1.12, 
                     v.co.y = cy + (v.co.y - cy) * k
                 cur = [g for g in res["geom"] if isinstance(g, bmesh.types.BMEdge) and g.is_boundary
                        and all(v in nv for v in g.verts)]
+    if base_faces is not None:
+        # Після пол: згладжується й поділ (жолобок між сідницями давав «хвіст» на полі ззаду).
+        _smooth_off_body(bm, smooth, offset, base_faces)
     bm.normal_update()
     ob = _new_skinned(f"{rig.name}.{part}", bm, src, rig, kind)
     _budget(ob, budget)
     return ob
+
+def _smooth_off_body(bm, iters, offset, base_faces):
+    """Оболонка повторювала анатомію тіла — груди, пах, лопатки (власник 13.10.2026 про туніку Гобана: «кістки вбрання»,
+    силует тіла крізь тканину). Лапласіан усередині (край не рухається), після кожного кроку вершина, що впала ближче
+    до тіла, ніж на offset, повертається назовні: тканина лягає по найвищих точках, як справжня, а не обтягує западини."""
+    from mathutils.bvhtree import BVHTree
+    body_tree = BVHTree.FromPolygons(*base_faces)   # тіло під оболонкою — вершини до зсуву назовні
+    inner = [v for v in bm.verts if not v.is_boundary]
+    for _ in range(iters):
+        new = {}
+        for v in inner:
+            nb = [e.other_vert(v).co for e in v.link_edges]
+            if nb:
+                avg = sum(nb, Vector()) / len(nb)
+                new[v] = v.co * 0.4 + avg * 0.6
+        for v, c in new.items():
+            loc, _n, _i, dist = body_tree.find_nearest(c)
+            if loc is not None and dist < offset * 0.7:
+                c = loc + (c - loc).normalized() * offset * 0.7
+            v.co = c
 
 def _smooth_boundary(bm, iters=6):
     """Край оболонки — зигзаг по ребрах тіла: вирівнюємо вершини межі вздовж самої межі (Лапласіан по
@@ -307,7 +343,7 @@ def wardrobe(rig, body):
     hips = lambda co: co.z > zh - 0.03
     hz = zh + 0.04
     out["shirt"] = shell(rig, body, "shirt", "linen", top | UPPER_ARMS | LOWER_ARMS, 0.010, cut=hips, hem=(0.16, hz), flare=1.06)
-    out["tunic"] = shell(rig, body, "tunic", "wool", top | UPPER_ARMS, 0.016, cut=hips, hem=(0.36, hz), flare=1.18)
+    out["tunic"] = shell(rig, body, "tunic", "wool", top | UPPER_ARMS, 0.034, cut=hips, hem=(0.36, hz), flare=1.18, smooth=30)
     out["kaftan"] = shell(rig, body, "kaftan", "wool", top | UPPER_ARMS | LOWER_ARMS, 0.022, cut=hips, hem=(zh - za - 0.12, hz), flare=1.35, rings=5)
     out["robe"] = shell(rig, body, "robe", "linen", top | NECK | UPPER_ARMS | LOWER_ARMS, 0.024, cut=hips, hem=(zh - za - 0.04, hz), flare=1.45, rings=5)
     out["vest"] = shell(rig, body, "vest", "fleece", top, 0.028, cut=hips, hem=(0.06, hz), flare=1.04)
@@ -320,9 +356,9 @@ def wardrobe(rig, body):
     out["boots"] = shell(rig, body, "boots", "leather", CALVES | FEET, 0.012, cut=shin_cut)
     out["shoes"] = shell(rig, body, "shoes", "leather", FEET, 0.008)
     # --- плащ (спина від плечей, довгий)
-    out["cloak"] = shell(rig, body, "cloak", "wool", TORSO | UPPER_ARMS, 0.05,
+    out["cloak"] = shell(rig, body, "cloak", "wool", TORSO | UPPER_ARMS, 0.085,
                          cut=lambda co: co.y > _back_y(rig) and co.z > zw + 0.08,
-                         hem=(zw - zk + 0.35, zw + 0.2), flare=1.0, rings=4)   # без розширення: поли здувались грудками на стегнах
+                         hem=(zw - zk + 0.35, zw + 0.2), flare=1.3, rings=4, smooth=24, widen=1.35)   # без розширення: поли здувались грудками на стегнах
     # --- броня
     out["gambeson"] = shell(rig, body, "gambeson", "quilt", top | UPPER_ARMS, 0.026, cut=hips, hem=(0.24, hz), flare=1.12)
     out["mail"] = shell(rig, body, "mail", "mail", top | UPPER_ARMS | LOWER_ARMS, 0.032, cut=hips, hem=(0.3, hz), flare=1.15)
@@ -336,7 +372,9 @@ def wardrobe(rig, body):
 # броня), лишається оболонкою. Власник 07.10.2026: оболонки «рвані й просвічують» — «роби краще».
 LIBRARY_CLOTHES = {
     "shirt":      {"m": "toigo_fisherman_sweater", "f": "toigo_fisherman_sweater"},
-    "tunic":      {"m": "toigo_shift_dress", "f": "toigo_shift_dress"},
+    # Чоловікам — власна оболонка з короткими рукавами: shift dress без рукавів і з бюстом читався жіночою сукнею
+    # (Гобан, власник 13.10.2026).
+    "tunic":      {"f": "toigo_shift_dress"},
     "robe":       {"m": "mindfront_kimono", "f": "mindfront_kimono"},
     "kaftan":     {"m": "mindfront_kimono", "f": "mindfront_kimono"},
     "trousers":   {"m": "toigo_wool_pants", "f": "toigo_wool_pants"},
@@ -986,7 +1024,9 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
                     nw = (n3 @ v.normal).normalized() * sg
                     side = (p - loc).dot(nw)
                     if side < gap:
-                        need[v.index] = gap - side
+                        # Не далі 4 см (крім безрукавки й плаща): над задом бібліотечних штанів поділ туніки
+                        # виростав конусом на 10 см і пробивав плащ (Гобан, 13.10.2026).
+                        need[v.index] = min(gap - side, 0.04 if part not in ("vest", "cloak") else r)
                 adj = [[] for _ in me.vertices]
                 for e in me.edges:
                     a, b = e.vertices
@@ -999,8 +1039,53 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
                         v.co = inv @ (mw @ v.co + nw * need[v.index])
                 me.update()
                 moved[o.get("kit_part")] = sum(1 for x in need if x > 0.0)
+                if part == "cloak":
+                    moved["cloak_ray"] = _cloak_over(o, lower, sg)
         lower += objs
     return moved
+
+def _cloak_over(cloak, lower, sg, reach=0.25, gap=0.012):
+    """Плащ — один аркуш, і пошук найближчої «зовнішньої» стінки нижчих речей пропускав поли туніки за сідницями:
+    вони проходили крізь плащ гострим клином (Гобан, 13.10.2026). Промінь від вершини плаща назовні: якщо він
+    влучає в нижчу річ, плащ іде за неї. Усі грані нижчих речей, без відбору стінок."""
+    from mathutils.bvhtree import BVHTree
+    verts, polys = [], []
+    for o in lower:
+        mw = o.matrix_world
+        base = len(verts)
+        verts += [mw @ v.co for v in o.data.vertices]
+        polys += [[base + i for i in f.vertices] for f in o.data.polygons]
+    if not polys:
+        return 0
+    tree = BVHTree.FromPolygons(verts, polys)
+    me = cloak.data
+    mw = cloak.matrix_world; inv = mw.inverted(); n3 = mw.to_3x3().inverted().transposed()
+    need = [0.0] * len(me.vertices)
+    for v in me.vertices:
+        p = mw @ v.co
+        nw = (n3 @ v.normal).normalized() * sg
+        far = 0.0
+        hit, _n, _i, d = tree.ray_cast(p, nw, reach)
+        while hit is not None:
+            far = d
+            hit2, _n, _i, d2 = tree.ray_cast(hit + nw * 0.001, nw, reach - d)
+            if hit2 is None:
+                break
+            hit, d = hit2, d + d2 + 0.001
+        if far > 0.0:
+            need[v.index] = far + gap
+    adj = [[] for _ in me.vertices]
+    for e in me.edges:
+        a, b = e.vertices
+        adj[a].append(b); adj[b].append(a)
+    for _ in range(4):
+        need = [max(need[i], 0.7 * max((need[j] for j in adj[i]), default=0.0)) for i in range(len(need))]
+    for v in me.vertices:
+        if need[v.index] > 0.0:
+            nw = (n3 @ v.normal).normalized() * sg
+            v.co = inv @ (mw @ v.co + nw * need[v.index])
+    me.update()
+    return sum(1 for x in need if x > 0.0)
 
 def split_body(rig, body):
     """Тіло-проксі -> окремі сітки зон (kit_m.body_torso тощо); оригінал ховається."""
