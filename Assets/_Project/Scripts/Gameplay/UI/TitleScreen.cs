@@ -119,6 +119,11 @@ namespace Game.Gameplay.UI
             var creditsStyle = new GUIStyle(AlphaSkin.HintLine) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
             GUI.Label(new Rect(16f, UiScale.Height - 40f, UiScale.Width - 32f, 32f),
                 UkrainianText.Get("ui.title.credits", g), creditsStyle);
+
+            // Версія білда (власник 13.10.2026: «щоб всюди були версії»): видно, яку саме збірку запущено.
+            var versionStyle = new GUIStyle(AlphaSkin.HintLine) { alignment = TextAnchor.UpperRight };
+            GUI.Label(new Rect(16f, 12f, UiScale.Width - 32f, 28f),
+                UkrainianText.Format("ui.title.version", g, "version", BuildVersion.Line), versionStyle);
         }
 
         private static void DrawSlots(GameShell shell, Gender g)
