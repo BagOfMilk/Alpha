@@ -19,7 +19,56 @@ REPO = _args[0] if _args else os.getcwd()
 _src = open(os.path.join(REPO, "tools", "blender", "alpha_anims.py"), encoding="utf-8").read()
 exec(_src.rsplit("\nmain()", 1)[0])          # Rig, Pose, track, smooth, lerp, breathe, write_action, … без запуску
 
+# ---------------------------------------------------------------- криві без зупинок
+# track() з alpha_anims — smoothstep на кожному відрізку: швидкість падає до нуля на КОЖНОМУ ключі, рух «зупиняється»,
+# як у робота. Тут — монотонний кубічний сплайн Ерміта (Фріч — Карлсон): швидкість безперервна через ключі, без
+# перельотів між ними; зупинка — лише там, де рух справді змінює напрям або ключ повторено (затримка), і на краях.
+
+def _mono_tangents(ts, vs):
+    n = len(ts)
+    d = [(vs[i + 1] - vs[i]) / (ts[i + 1] - ts[i]) if ts[i + 1] > ts[i] else 0.0 for i in range(n - 1)]
+    m = [0.0] * n
+    for i in range(1, n - 1):
+        if d[i - 1] * d[i] <= 0.0:
+            m[i] = 0.0
+        else:
+            h0, h1 = ts[i] - ts[i - 1], ts[i + 1] - ts[i]
+            w1, w2 = 2 * h1 + h0, h1 + 2 * h0
+            m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
+    return m
+
+def _hermite_scalar(t, ts, vs):
+    if t <= ts[0]:
+        return vs[0]
+    if t >= ts[-1]:
+        return vs[-1]
+    m = _mono_tangents(ts, vs)
+    for i in range(len(ts) - 1):
+        if t <= ts[i + 1]:
+            h = ts[i + 1] - ts[i]
+            if h <= 0:
+                return vs[i + 1]
+            u = (t - ts[i]) / h
+            h00 = 2 * u ** 3 - 3 * u ** 2 + 1
+            h10 = u ** 3 - 2 * u ** 2 + u
+            h01 = -2 * u ** 3 + 3 * u ** 2
+            h11 = u ** 3 - u ** 2
+            return h00 * vs[i] + h10 * h * m[i] + h01 * vs[i + 1] + h11 * h * m[i + 1]
+    return vs[-1]
+
+def track(t, keys):
+    """Ключі [(час, значення)] — число, Vector або кортеж; монотонний кубічний сплайн (див. вище)."""
+    ts = [k[0] for k in keys]
+    v0 = keys[0][1]
+    if isinstance(v0, (int, float)):
+        return _hermite_scalar(t, ts, [float(k[1]) for k in keys])
+    if isinstance(v0, tuple):
+        return tuple(_hermite_scalar(t, ts, [k[1][c] for k in keys]) for c in range(len(v0)))
+    return Vector([_hermite_scalar(t, ts, [k[1][c] for k in keys]) for c in range(len(v0))])
+
 LOOK = "--look" in _args
+STRICT = "--strict" in _args
+REELS = "--reels" in _args
 ONLY = None
 if "--only" in _args:
     ONLY = set(_args[_args.index("--only") + 1].split(","))
@@ -588,7 +637,139 @@ def capture_w(rig):
     return {pb.name: pb.matrix.copy() for pb in rig.arm.pose.bones}, {
         n: (W @ rig.arm.pose.bones[n].head, W @ rig.arm.pose.bones[n].tail) for n in CONTACT_BONES}
 
-RADIUS = {"pelvis": 0.15, "spine_01": 0.15, "spine_02": 0.16, "spine_03": 0.16, "neck_01": 0.06, "head": 0.1,
+def reach_error(rig, tag):
+    """Наскільки IK не дістав до цілей зап'ясть і щиколоток: (м, кінцівка)."""
+    W = rig.arm.matrix_world
+    pb = rig.arm.pose.bones
+    best = (0.0, "")
+    for s in "lr":
+        for empty, bone in (("wrist_" + s, "hand_" + s), ("ankle_" + s, "foot_" + s)):
+            e = (rig.empties[empty].location - W @ pb[bone].head).length
+            if e > best[0]:
+                best = (e, f"{tag}.{bone}")
+    return best
+
+# ---------------------------------------------------------------- канонічні пози-вузли
+# Кліп починається й закінчується в одній з поз-вузлів — тоді кліпи стикуються без змішування. Вузол не залежить від
+# місця на рингу й повороту (горизонтальне положення таза і поворот навколо вертикалі беруться з кліпу).
+
+NODE_POSES = {
+    "stance": lambda: stance(0.0, 2.4),
+    "lying_back": lambda: lying(),
+}
+NODES = {}             # вузол → базис кісток (лок. повороти) + таз у просторі ригу
+BLEND_S = 0.2          # довжина доведення до вузла на краях кліпу (с)
+
+def cap_basis(arm, cap):
+    """Локальні повороти кісток (і зсув таза) з матриць пози у просторі ригу."""
+    bones = arm.data.bones
+    out = {}
+    for pb in arm.pose.bones:
+        b = bones[pb.name]
+        m = cap[pb.name]
+        base = (cap[b.parent.name] @ b.parent.matrix_local.inverted() @ b.matrix_local) if b.parent else b.matrix_local
+        loc, rot, _ = (base.inverted() @ m).decompose()
+        out[pb.name] = (loc, rot)
+    return out
+
+def swing_twist_z(q):
+    """q = T(навколо Z світу) @ S: повертає (T, S)."""
+    p = q.conjugated()
+    proj = Vector((p.x, p.y, p.z)).dot(UP) * UP
+    tw = Quaternion((p.w, proj.x, proj.y, proj.z))
+    if tw.magnitude < 1e-8:
+        tw = Quaternion()
+    tw.normalize()
+    T = tw.conjugated()
+    S = T.inverted() @ q
+    return T, S
+
+def capture_node(rig, name):
+    place(rig.arm, Vector(), 0)
+    apply_w(rig, NODE_POSES[name]())
+    cap = {pb.name: pb.matrix.copy() for pb in rig.arm.pose.bones}
+    NODES[name] = (cap_basis(rig.arm, cap), cap["pelvis"].copy())
+
+LIMB_BONES = {"upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r", "hand_l", "hand_r",
+              "thigh_l", "thigh_r", "calf_l", "calf_r", "foot_l", "foot_r", "ball_l", "ball_r"}
+
+def set_basis(rig, basis, keep_limbs=False):
+    """Поставити локальні повороти. keep_limbs — руки й ноги не чіпати: їх наново розв'яже IK до цілей кліпу."""
+    for pb in rig.arm.pose.bones:
+        for c in pb.constraints:
+            c.mute = not keep_limbs
+    for pb in rig.arm.pose.bones:
+        if keep_limbs and pb.name in LIMB_BONES:
+            continue
+        loc, rot = basis[pb.name]
+        pb.rotation_quaternion = rot
+        pb.location = loc if pb.name == "pelvis" else Vector()
+    bpy.context.view_layer.update()
+
+def unmute(rig):
+    for pb in rig.arm.pose.bones:
+        for c in pb.constraints:
+            c.mute = False
+
+def node_gap(arm, cap, node):
+    """Наскільки поза відрізняється від вузла: найбільший кут суглоба (°), нахил таза (°), висота таза (см)."""
+    nb, npel = NODES[node]
+    cb = cap_basis(arm, cap)
+    worst = 0.0
+    for n, (loc, rot) in cb.items():
+        if n == "pelvis" or n.startswith(("thumb", "index", "middle", "ring", "pinky")):
+            continue
+        worst = max(worst, qangle(rot, nb[n][1]))
+    _, s_clip = swing_twist_z(cap["pelvis"].to_quaternion())
+    _, s_node = swing_twist_z(npel.to_quaternion())
+    tilt = qangle(s_clip, s_node)
+    dz = abs(cap["pelvis"].translation.z - npel.translation.z) * 100.0
+    return worst, tilt, dz
+
+def blend_to_node(rig, cap, node, w):
+    """Поза кліпу, доведена до вузла з вагою w (1 — точно вузол). Таз: горизонталь і курс — з кліпу."""
+    arm = rig.arm
+    nb, npel = NODES[node]
+    cb = cap_basis(arm, cap)
+    out = {}
+    for n, (loc, rot) in cb.items():
+        out[n] = (loc, rot) if n in LIMB_BONES else (loc, rot.slerp(nb[n][1], w))
+    T, s_clip = swing_twist_z(cap["pelvis"].to_quaternion())
+    _, s_node = swing_twist_z(npel.to_quaternion())
+    q = T @ s_clip.slerp(s_node, w)
+    t = cap["pelvis"].translation.copy()
+    t.z = t.z + (npel.translation.z - t.z) * w
+    m = Matrix.Translation(t) @ q.to_matrix().to_4x4()
+    b = arm.data.bones["pelvis"]
+    loc, rot, _ = (b.matrix_local.inverted() @ m).decompose()
+    out["pelvis"] = (loc, rot)
+    set_basis(rig, out, keep_limbs=True)
+
+# Вузли кліпів: роль → (з вузла, у вузол); None — поза не канонічна (перехідна, тримає партнера тощо).
+# Вузли, які задає кінець кліпу (ланцюжки): кліп → роль → ім'я вузла. Зсув пари наступного кліпу береться з кінця цього.
+CLIP_DEFINES = {"Lockup": {"A": "tied_A", "B": "tied_B"}}
+PAIR_AT = {}           # вузол-пара → (зсув B відносно A у просторі A, поворот B °)
+
+CLIP_NODES = {
+    "Ring_Stance_Loop": {"A": ("stance", "stance")},
+    "Lockup": {"A": ("stance", None), "B": ("stance", None)},
+    "Headlock": {"A": ("tied_A", None), "B": ("tied_B", None)},
+    "Bodyslam": {"A": ("stance", None), "B": ("stance", "lying_back")},
+    "Cover": {"A": ("stance", None), "B": ("lying_back", None)},
+    "Bump_Back": {"A": ("stance", "lying_back")},
+    "GetUp_Back": {"A": ("lying_back", "stance")},
+}
+# Задумані контакти тіл (A.кістка, B.кістка): у проникнення не рахуються, у звіті — окремо.
+CLIP_CONTACTS = {
+    "Headlock": {("upperarm_r", "head"), ("upperarm_r", "neck_01"), ("spine_03", "head"), ("spine_02", "head")},
+    "Cover": {("spine_03", "spine_02"), ("spine_03", "spine_03"), ("spine_02", "spine_02"), ("spine_02", "spine_03"),
+              ("upperarm_l", "spine_03"), ("upperarm_l", "spine_02"), ("spine_03", "spine_01"), ("spine_02", "spine_01")},
+    "Bodyslam": {("spine_03", "thigh_l"), ("spine_03", "thigh_r"), ("spine_02", "pelvis")},
+}
+
+# ---------------------------------------------------------------- якість
+
+RADIUS = {"pelvis": 0.13, "spine_01": 0.13, "spine_02": 0.13, "spine_03": 0.13, "neck_01": 0.06, "head": 0.1,
           "upperarm_l": 0.055, "upperarm_r": 0.055, "lowerarm_l": 0.045, "lowerarm_r": 0.045, "hand_l": 0.04,
           "hand_r": 0.04, "thigh_l": 0.08, "thigh_r": 0.08, "calf_l": 0.06, "calf_r": 0.06, "foot_l": 0.045, "foot_r": 0.045}
 
@@ -608,10 +789,22 @@ def seg_dist(p1, q1, p2, q2):
         t, s = 1.0, max(0.0, min(1.0, (b - c) / a)) if a > 1e-9 else 0.0
     return ((p1 + d1 * s) - (p2 + d2 * t)).length
 
-HAND_BONES = {"hand_l", "hand_r", "lowerarm_l", "lowerarm_r"}
+# Найменший просвіт суглоба над матом (м): лежачи, суглоб хребта ~5 см над матом, таза ~6, центр голови ~7.
+CLEAR = {"pelvis": 0.06, "spine_01": 0.05, "spine_02": 0.05, "spine_03": 0.05, "neck_01": 0.05, "head": 0.07,
+         "upperarm_l": 0.04, "upperarm_r": 0.04, "lowerarm_l": 0.035, "lowerarm_r": 0.035, "hand_l": 0.02, "hand_r": 0.02,
+         "thigh_l": 0.06, "thigh_r": 0.06, "calf_l": 0.045, "calf_r": 0.045, "foot_l": 0.03, "foot_r": 0.03}
 
-def quality(name, framesA, framesB):
-    """Ковзання стопи на опорі (см), найбільше проникнення тіл (см; руки-контакти не рахуються), найгірше зап'ястя."""
+HAND_BONES = {"hand_l", "hand_r", "lowerarm_l", "lowerarm_r"}
+SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "hand_r")
+              for body in ("pelvis", "spine_01", "spine_02")]
+
+# Пороги §4.1 плану (docs/TRPG_DESIGN.md §11.2): у см, градусах; ривок — лише у звіт.
+LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0}
+JERK_WARN = 6.0        # °/кадр² — пік кутового прискорення кістки
+
+def quality(name, framesA, framesB, bases):
+    q = {}
+    # ковзання опорної стопи — лише стоячи
     slide = 0.0
     for frames in (framesA, framesB):
         if not frames:
@@ -626,8 +819,10 @@ def quality(name, framesA, framesB):
                     slide = max(slide, (Vector((h.x, h.y, 0)) - Vector((anchor.x, anchor.y, 0))).length)
                 else:
                     anchor = None
-    pen = 0.0
-    worst = ""
+    q["slide"] = (slide * 100.0, "")
+    # проникнення двох тіл (без задуманих контактів) і найщільніший контакт
+    allowed = CLIP_CONTACTS.get(name, set())
+    pen, where, touch, twhere = 0.0, "", 0.0, ""
     if framesB:
         for fi, ((_, wa), (_, wb)) in enumerate(zip(framesA, framesB)):
             for na in CONTACT_BONES:
@@ -636,78 +831,273 @@ def quality(name, framesA, framesB):
                         continue
                     d = seg_dist(wa[na][0], wa[na][1], wb[nb][0], wb[nb][1])
                     v = RADIUS[na] + RADIUS[nb] - d
-                    if v > pen:
-                        pen, worst = v, f"A.{na} × B.{nb} на кадрі {fi}"
-    if worst:
-        print(f"   [проникнення] {name}: {pen * 100:.1f} см — {worst}", flush=True)
-    return slide * 100.0, max(0.0, pen) * 100.0
+                    if (na, nb) in allowed:
+                        if v > touch:
+                            touch, twhere = v, f"A.{na} × B.{nb}, кадр {fi}"
+                    elif v > pen:
+                        pen, where = v, f"A.{na} × B.{nb}, кадр {fi}"
+    q["pen"] = (max(0.0, pen) * 100.0, where)
+    q["touch"] = (max(0.0, touch) * 100.0, twhere)
+    # самопроникнення (передпліччя й кисті крізь свій тулуб)
+    selfp, swhere = 0.0, ""
+    for tag, frames in (("A", framesA), ("B", framesB)):
+        for fi, (_, w) in enumerate(frames or ()):
+            for a_, b_ in SELF_PAIRS:
+                v = RADIUS[a_] + RADIUS[b_] - seg_dist(w[a_][0], w[a_][1], w[b_][0], w[b_][1])
+                if v > selfp:
+                    selfp, swhere = v, f"{tag}.{a_} × {tag}.{b_}, кадр {fi}"
+    q["self"] = (max(0.0, selfp) * 100.0, swhere)
+    # кістки під матом (суглоб нижче половини свого радіуса — поверхня тіла під матом)
+    under, uwhere = 0.0, ""
+    for tag, frames in (("A", framesA), ("B", framesB)):
+        for fi, (_, w) in enumerate(frames or ()):
+            for n in CONTACT_BONES:
+                v = CLEAR[n] - w[n][0].z - 0.01
+                if v > under:
+                    under, uwhere = v, f"{tag}.{n}, кадр {fi}"
+    q["under"] = (under * 100.0, uwhere)
+    # ривки: пік кутового прискорення локального повороту кістки
+    jerk, jwhere = 0.0, ""
+    for tag, seq in bases:
+        for n in ("pelvis", "spine_02", "spine_03", "head", "upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r",
+                  "thigh_l", "thigh_r", "calf_l", "calf_r"):
+            steps_ = [qangle(seq[i][n][1], seq[i + 1][n][1]) for i in range(len(seq) - 1)]
+            for i in range(len(steps_) - 1):
+                v = abs(steps_[i + 1] - steps_[i])
+                if v > jerk:
+                    jerk, jwhere = v, f"{tag}.{n}, кадр {i + 1}"
+    q["jerk"] = (jerk, jwhere)
+    return q
+
+def qangle(a, b):
+    """Кут між поворотами (°) без стрибка через знак кватерніона (q і −q — той самий поворот)."""
+    d = math.degrees(a.rotation_difference(b).angle)
+    return min(d, 360.0 - d)
+
+def fails(q):
+    out = []
+    for k in ("slide", "pen", "self", "under", "reach"):
+        if k in q and q[k][0] > LIMITS[k] + 1e-6:
+            out.append(k)
+    if "node" in q and (q["node"][0] > LIMITS["node_deg"] or q["node"][1] > LIMITS["node_cm"]):
+        out.append("node")
+    return out
+
+# ---------------------------------------------------------------- запуск
+
+def bake_clip(rigA, rigB, name, length, fa, fb):
+    armA, armB = rigA.arm, rigB.arm
+    nodes = CLIP_NODES.get(name, {})
+    frames = int(round(length * FPS))
+    nblend = max(1, int(round(BLEND_S * FPS)))
+    sa, sb, wa, wb, ba, bb = [], [], [], [], [], []
+    reach = (0.0, "")
+    gaps = []
+    for f in range(frames + 1):
+        solve_frame(rigA, rigB, fa, fb, f / FPS, length)
+        for r_ in (reach_error(rigA, "A"), reach_error(rigB, "B") if fb is not None else (0.0, "")):
+            if r_[0] > reach[0]:
+                reach = (r_[0], f"{r_[1]}, кадр {f}")
+        for tag, rig in (("A", rigA), ("B", rigB)):
+            if tag == "B" and fb is None:
+                continue
+            start, end = nodes.get(tag, (None, None))
+            cap = {pb.name: pb.matrix.copy() for pb in rig.arm.pose.bones}
+            w = 0.0
+            node = None
+            if start and f < nblend:
+                node, w = start, 1.0 - smooth(f / nblend)
+            if end and f > frames - nblend:
+                node, w = end, smooth((f - (frames - nblend)) / nblend)
+            if f == 0 and start:
+                gaps.append((tag, "старт", start) + node_gap(rig.arm, cap, start))
+            if f == frames and end:
+                gaps.append((tag, "кінець", end) + node_gap(rig.arm, cap, end))
+            if node and w > 1e-4:
+                blend_to_node(rig, cap, node, w)
+        ca, w1 = capture_w(rigA)
+        move_twist_to_forearm(armA, ca)
+        sa.append(ca); wa.append((ca, w1)); ba.append(cap_basis(armA, ca))
+        if fb is not None:
+            cb, w2 = capture_w(rigB)
+            move_twist_to_forearm(armB, cb)
+            sb.append(cb); wb.append((cb, w2)); bb.append(cap_basis(armB, cb))
+        unmute(rigA)
+        unmute(rigB)
+    q = quality(name, wa, wb, [("A", ba)] + ([("B", bb)] if fb is not None else []))
+    q["reach"] = (reach[0] * 100.0, reach[1])
+    # після доведення поза на краях — точно вузол; залишкова різниця — для контролю
+    post = []
+    for tag, arm, seq in (("A", armA, sa), ("B", armB, sb)):
+        if not seq:
+            continue
+        start, end = nodes.get(tag, (None, None))
+        if start:
+            post.append(node_gap(arm, seq[0], start))
+        if end:
+            post.append(node_gap(arm, seq[-1], end))
+    if post:
+        q["node"] = (max(p_[0] for p_ in post), max(p_[2] for p_ in post))
+    return sa, sb, wa, wb, q, gaps
 
 def main():
     armA, armB = load_pair()
     rigA, rigB = Rig(armA), Rig(armB)
     init_rest(armA)
-    report = []
+    for n in NODE_POSES:
+        capture_node(rigA, n)
+    unmute(rigA)
+    report = ["# Звіт якості анімацій рингу (tools/blender/ring_anims.py)", "",
+              "Пороги: ковзання стопи ≤ %.1f см, проникнення ≤ %.1f см, самопроникнення ≤ %.1f см, під матом %.0f, "
+              "IK не дістав ≤ %.1f см, вузол ≤ %.0f° / %.0f см; ривок > %.0f °/кадр² — попередження."
+              % (LIMITS["slide"], LIMITS["pen"], LIMITS["self"], LIMITS["under"], LIMITS["reach"], LIMITS["node_deg"],
+                 LIMITS["node_cm"], JERK_WARN), "",
+              "| Кліп | Ковзання | Проникнення | Контакт | Само | Під матом | IK | Вузол | Ривок | Стан |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
     samples = []
-    manifest = ["# Кліпи рингу (tools/blender/ring_anims.py). <кліп> <пара A|B|-> <довжина с> <петля 0|1> "
-                "<зсув B: x y z (м, простір A)> <поворот B °>"]
+    reel_specs = []
+    failed = []
+    manifest = ["# Кліпи рингу (tools/blender/ring_anims.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> "
+                "<зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>"]
     for name, length, fa, fb, loop, offset, yaw in CLIPS:
         if ONLY and name not in ONLY:
             continue
+        start_b = CLIP_NODES.get(name, {}).get("B", (None, None))[0]
+        if fb is not None and start_b in PAIR_AT:
+            offset, yaw = PAIR_AT[start_b]                         # ланцюжок: пара стоїть так, як закінчила попередній
+        missing = [n_ for r_ in CLIP_NODES.get(name, {}).values() for n_ in r_ if n_ and n_ not in NODES]
+        if missing:
+            print(f"   [вузол] {name}: немає вузлів {missing} (запустіть разом з кліпом, що їх задає) — пропущено", flush=True)
+            continue
         place(armA, Vector(), 0)
-        if fb is not None:
-            place(armB, offset, yaw)
-        else:
-            place(armB, Vector((0, 50, 0)), 0)
-        frames = int(round(length * FPS))
-        sa, sb, wa, wb = [], [], [], []
-        for f in range(frames + 1):
-            solve_frame(rigA, rigB, fa, fb, f / FPS, length)
-            ca, w1 = capture_w(rigA)
-            move_twist_to_forearm(armA, ca)
-            sa.append(ca); wa.append((ca, w1))
-            if fb is not None:
-                cb, w2 = capture_w(rigB)
-                move_twist_to_forearm(armB, cb)
-                sb.append(cb); wb.append((cb, w2))
-        slide, pen = quality(name, wa, wb)
-        for tag, frames in (("A", wa), ("B", wb)):
-            for i in (0, len(frames) // 3, 2 * len(frames) // 3, len(frames) - 1) if frames else ():
-                w = frames[i][1]
-                f2 = lambda v: f"({v.x:+.2f},{v.y:+.2f},{v.z:+.2f})"
-                print(f"   [пози] {name} {tag} кадр {i}: голова {f2(w['head'][0])} груди {f2(w['spine_03'][0])} "
-                      f"таз {f2(w['pelvis'][0])} стопи {f2(w['foot_l'][0])} {f2(w['foot_r'][0])}", flush=True)
-        worst = max((wrist_numbers(armA, c, "r") for c in sa), key=lambda w: (abs(w[0]), w[1], abs(w[2])))
-        line = f"[кліп] {name}: {length:.2f} с; ковзання стопи {slide:.1f} см; проникнення {pen:.1f} см; " \
-               f"зап'ястя A(r) {worst}"
-        print(line, flush=True)
+        place(armB, offset if fb is not None else Vector((0, 50, 0)), yaw if fb is not None else 0)
+        sa, sb, wa, wb, q, gaps = bake_clip(rigA, rigB, name, length, fa, fb)
+        for role, node_name in CLIP_DEFINES.get(name, {}).items():
+            seq, arm_ = (sa, armA) if role == "A" else (sb, armB)
+            if seq:
+                NODES[node_name] = (cap_basis(arm_, seq[-1]), seq[-1]["pelvis"].copy())
+        if fb is not None and name in CLIP_DEFINES:
+            # пара наприкінці: B відносно A — у просторі кореня A (корінь = проєкція таза на мат)
+            pa, pbv = wa[-1][1]["pelvis"][0], wb[-1][1]["pelvis"][0]
+            rel = Vector((pbv.x - pa.x, pbv.y - pa.y, 0.0))
+            for node_name in CLIP_DEFINES[name].values():
+                PAIR_AT[node_name] = (rel, yaw)
+        for tag, edge, node, deg, tilt, dz in gaps:
+            print(f"   [вузол] {name} {tag} {edge} «{node}»: до доведення — суглоб {deg:.1f}°, нахил таза {tilt:.1f}°, "
+                  f"таз {dz:.1f} см", flush=True)
+        bad = fails(q)
+        state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
+        if q["jerk"][0] > JERK_WARN:
+            state += f" · ривок {q['jerk'][0]:.1f} ({q['jerk'][1]})"
+        node_s = f"{q['node'][0]:.1f}° / {q['node'][1]:.1f} см" if "node" in q else "—"
+        line = (f"| {name} | {q['slide'][0]:.1f} | {q['pen'][0]:.1f} {q['pen'][1]} | {q['touch'][0]:.1f} {q['touch'][1]} | "
+                f"{q['self'][0]:.1f} {q['self'][1]} | {q['under'][0]:.1f} {q['under'][1]} | {q['reach'][0]:.1f} {q['reach'][1]} | {node_s} | "
+                f"{q['jerk'][0]:.1f} {q['jerk'][1]} | {state} |")
+        print("[кліп] " + line, flush=True)
         report.append(line)
+        if bad:
+            failed.append(name)
+        nodes = CLIP_NODES.get(name, {})
         if fb is None:
             samples.append((name, sa, armA))
-            manifest.append(f"{name} - {length:.3f} {int(loop)} 0 0 0 0")
+            na = nodes.get("A", (None, None))
+            manifest.append(f"{name} - {length:.3f} {int(loop)} 0 0 0 0 {na[0] or '-'} {na[1] or '-'}")
+            reel_specs.append((name, name, None, None, 0))
         else:
             samples.append((name + "_A", sa, armA))
             samples.append((name + "_B", sb, armB))
             o = offset
-            manifest.append(f"{name}_A A {length:.3f} {int(loop)} {o.x:.3f} {o.y:.3f} {o.z:.3f} {yaw}")
-            manifest.append(f"{name}_B B {length:.3f} {int(loop)} {o.x:.3f} {o.y:.3f} {o.z:.3f} {yaw}")
+            for role in ("A", "B"):
+                nr = nodes.get(role, (None, None))
+                manifest.append(f"{name}_{role} {role} {length:.3f} {int(loop)} {o.x:.3f} {o.y:.3f} {o.z:.3f} {yaw} "
+                                f"{nr[0] or '-'} {nr[1] or '-'}")
+            reel_specs.append((name, name + "_A", name + "_B", offset, yaw))
         if LOOK:
             look_pair(name, armA, armB if fb is not None else None, sa, sb, length)
     strip_constraints(rigA)
     strip_constraints(rigB)
-    actions = [write_action(arm, n, s) for n, s, arm in samples]
+    actions = {n: write_action(arm, n, s_) for n, s_, arm in samples}
+    if REELS:
+        for name, an, bn, offset, yaw in reel_specs:
+            reel(name, armA, armB, actions[an], actions.get(bn) if bn else None, offset, yaw)
     # Експорт — лише риг A з усіма діями: кістки однакові, дії B грають на будь-якому скелеті набору.
     for o in list(bpy.data.objects):
         if o.get("pair") == "B":
             bpy.data.objects.remove(o, do_unlink=True)
     place(armA, Vector(), 0)
-    global OUT_FBX_PATH
     export_ring(armA)
     with open(MANIFEST, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(manifest) + "\n")
     os.makedirs(LOOK_DIR, exist_ok=True)
-    with open(os.path.join(LOOK_DIR, "report.txt"), "w", encoding="utf-8", newline="\n") as fh:
+    with open(os.path.join(LOOK_DIR, "report.md"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(report) + "\n")
     print("[експорт] " + OUT_FBX, flush=True)
+    if failed:
+        print("[якість] понад поріг: " + ", ".join(failed), flush=True)
+        if STRICT:
+            sys.stdout.flush()
+            os._exit(3)
+    else:
+        print("[якість] усі кліпи в межах порогів", flush=True)
+
+def reel(name, armA, armB, actA, actB, offset, yaw):
+    """Ролик кліпу (mp4, H.264): A — червоний, B — синій, камера на три чверті, рівень підлоги видно."""
+    scene = bpy.context.scene
+    try:
+        scene.render.engine = 'BLENDER_WORKBENCH'
+    except TypeError:
+        pass
+    scene.display.shading.light = 'STUDIO'
+    scene.display.shading.color_type = 'OBJECT'
+    scene.display.shading.show_shadows = True
+    scene.render.resolution_x, scene.render.resolution_y = 640, 480
+    scene.render.fps = FPS
+    floor = bpy.data.objects.get("reel_floor")
+    if floor is None:
+        me = bpy.data.meshes.new("reel_floor")
+        me.from_pydata([(-4, -4, 0), (4, -4, 0), (4, 4, 0), (-4, 4, 0)], [], [(0, 1, 2, 3)])
+        floor = bpy.data.objects.new("reel_floor", me)
+        scene.collection.objects.link(floor)
+        floor.color = (0.82, 0.82, 0.8, 1)
+    cam = bpy.data.objects.get("reel_cam")
+    if cam is None:
+        cam = bpy.data.objects.new("reel_cam", bpy.data.cameras.new("reel_cam"))
+        scene.collection.objects.link(cam)
+    scene.camera = cam
+    cam.data.lens = 35
+    for o in bpy.data.objects:
+        if o.type != 'MESH' or o is floor:
+            continue
+        tag = o.get("pair")
+        show = ("body" in o.name or "low-poly" in o.name or "trousers" in o.name) and (tag == "A" or actB is not None)
+        o.hide_viewport = not show
+        o.hide_render = not show
+        o.color = (0.8, 0.25, 0.2, 1) if tag == "A" else (0.25, 0.4, 0.85, 1)
+    place(armA, Vector(), 0)
+    armA.animation_data.action = actA
+    mid = Vector((0, 0, 0.9))
+    if actB is not None:
+        place(armB, offset, yaw)
+        armB.animation_data_create()
+        armB.animation_data.action = actB
+        mid = Vector((offset.x * 0.5, offset.y * 0.5, 0.9))
+    else:
+        place(armB, Vector((0, 50, 0)), 0)
+    d = Vector((3.4, -3.8, 1.9))
+    cam.location = mid + d
+    cam.rotation_euler = (-d).to_track_quat('-Z', 'Y').to_euler()
+    scene.frame_start = 0
+    scene.frame_end = int(actA.frame_range[1])
+    scene.render.image_settings.file_format = 'FFMPEG'
+    scene.render.ffmpeg.format = 'MPEG4'
+    scene.render.ffmpeg.codec = 'H264'
+    scene.render.ffmpeg.constant_rate_factor = 'MEDIUM'
+    out = os.path.join(LOOK_DIR, "reels")
+    os.makedirs(out, exist_ok=True)
+    scene.render.filepath = os.path.join(out, name + ".mp4")
+    bpy.ops.render.render(animation=True)
+    scene.render.image_settings.file_format = 'PNG'
+    print(f"[ролик] {name} → {scene.render.filepath}", flush=True)
 
 def export_ring(arm):
     for o in bpy.context.selected_objects:
