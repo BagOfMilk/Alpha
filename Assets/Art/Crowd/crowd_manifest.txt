@@ -1,0 +1,51 @@
+# Натовп (tools/blender/ring_crowd.py). fan <ім'я> <LOD0 трик.> <LOD1 трик.>; clip <ім'я> <сидячи|стоячи>
+fan fan_m_ukrainian_0 4557 900
+fan fan_f_ukrainian_0 4275 900
+fan fan_m_nordic_0 4559 900
+fan fan_f_nordic_0 4110 899
+fan fan_m_mediterranean_0 4903 899
+fan fan_f_mediterranean_0 4224 899
+fan fan_m_middle_eastern_0 4160 900
+fan fan_f_middle_eastern_0 4111 900
+fan fan_m_west_african_0 3262 900
+fan fan_f_west_african_0 4742 900
+fan fan_m_east_asian_0 3659 899
+fan fan_f_east_asian_0 4111 899
+fan fan_m_south_asian_0 3658 900
+fan fan_f_south_asian_0 4424 899
+fan fan_m_latin_0 4118 899
+fan fan_f_latin_0 4781 899
+fan fan_m_ukrainian_1 4180 900
+fan fan_f_ukrainian_1 4397 900
+fan fan_m_nordic_1 3660 900
+fan fan_f_nordic_1 4110 899
+fan fan_m_mediterranean_1 4558 900
+fan fan_f_mediterranean_1 4399 900
+fan fan_m_middle_eastern_1 4506 900
+fan fan_f_middle_eastern_1 4276 900
+fan fan_m_west_african_1 4181 899
+fan fan_f_west_african_1 4743 900
+fan fan_m_east_asian_1 4606 899
+fan fan_f_east_asian_1 4423 900
+fan fan_m_south_asian_1 4395 898
+fan fan_f_south_asian_1 4718 899
+fan fan_m_latin_1 4607 900
+fan fan_f_latin_1 4716 899
+clip Sit_Idle_Loop сидячи ik_cm 0.0
+clip Sit_Talk_Loop сидячи ik_cm 0.0
+clip Sit_Clap_Loop сидячи ik_cm 0.0
+clip Sit_Cheer_Loop сидячи ik_cm 0.0
+clip Sit_Boo_Loop сидячи ik_cm 0.0
+clip Sit_Point_Loop сидячи ik_cm 0.0
+clip Sit_Phone_Loop сидячи ik_cm 0.0
+clip Sit_Lean_Loop сидячи ik_cm 17.4
+clip Stand_Idle_Loop стоячи ik_cm 0.0
+clip Stand_Clap_Loop стоячи ik_cm 0.0
+clip Stand_Cheer_Loop стоячи ik_cm 1.3
+clip Stand_FistPump_Loop стоячи ik_cm 0.0
+clip Stand_Jump_Loop стоячи ik_cm 0.0
+clip Stand_Sign_Loop стоячи ik_cm 0.0
+clip Stand_Chant_Loop стоячи ik_cm 0.0
+clip Stand_Boo_Loop стоячи ik_cm 0.0
+clip Rail_Pound_Loop стоячи ik_cm 0.0
+clip Rail_Reach_Loop стоячи ik_cm 0.0

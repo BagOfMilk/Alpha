@@ -6,11 +6,12 @@
 всередині_канатів_м 2.038
 канати Red White Blue
 місткість 688
-об'єктів_сітки 76
-граней 20598
-трикутників_зблизька 42564
-трикутників_здалеку 19684
+об'єктів_сітки 78
+граней 8334
+трикутників_зблизька 18036
+трикутників_здалеку 18036
 бюджет_граней 60000
 бюджет_сіток 150
-текстурні_набори block_wall canvas cloth concrete metal_brushed metal_painted plastic tile_floor vinyl wood_board wood_strip
-пам'ять_текстур_ASTC_МБ 35.8
+текстурні_набори concrete_block_wall concrete_wall_006 fabric_leather_02 fabric_pattern_07 metal_plate metal_plate_02 painted_metal_shutter plastic rubber_tiles velour_velvet wood_board wood_floor worn_tile_floor
+пам'ять_текстур_ASTC_МБ 89.8
+екземпляри chair_folding 292 (LOD0 628 трик., LOD1 4 трик.; усі LOD0 — 183 тис.)
