@@ -103,6 +103,13 @@ MATS = {
     "Tire": ((0.03, 0.03, 0.03), 0.0, 0.9, 0), "Food": ((0.70, 0.45, 0.20), 0.0, 0.7, 0),
     "Water_Blue": ((0.35, 0.60, 0.90), 0.0, 0.1, 0), "Plant_Green": ((0.15, 0.40, 0.15), 0.0, 0.8, 0),
     "Flag_Gold": ((0.85, 0.65, 0.15), 0.3, 0.5, 0),
+    "Hall_Floor": ((0.42, 0.26, 0.14), 0.0, 0.35, 0), "Hall_Floor_Line": ((0.26, 0.15, 0.08), 0.0, 0.5, 0),
+    "Brick_Warm": ((0.46, 0.21, 0.14), 0.0, 0.9, 0), "Plaster_Cream": ((0.74, 0.68, 0.57), 0.0, 0.9, 0),
+    "Wainscot": ((0.22, 0.12, 0.07), 0.0, 0.55, 0), "Ceiling_Hall": ((0.30, 0.24, 0.18), 0.0, 0.8, 0),
+    "Balcony_Fascia": ((0.16, 0.09, 0.05), 0.0, 0.5, 0), "Carpet_Black": ((0.05, 0.05, 0.06), 0.0, 1.0, 0),
+    "Arena_Floor": ((0.22, 0.23, 0.26), 0.0, 0.6, 0), "Concourse": ((0.45, 0.45, 0.46), 0.0, 0.9, 0),
+    "LED_Ribbon": ((0.95, 0.55, 0.10), 0.0, 0.3, 4.0), "Aisle_Step": ((0.52, 0.52, 0.53), 0.0, 0.9, 0),
+    "Aisle_Nose": ((0.85, 0.70, 0.10), 0.0, 0.6, 0), "Post_Cap": ((0.75, 0.76, 0.78), 1.0, 0.3, 0),
 }
 
 def material(name):
@@ -211,10 +218,13 @@ def at(pos, yaw, local):
     """Точка local (простір речі, лицем у −Y) у світі для речі в pos з курсом yaw (рад)."""
     return Vector(pos) + rot2(local, yaw)
 
-SEATS = []           # (x, y, z, курс°) — місця для натовпу
+SEATS = []           # (x, y, z, курс°, сидить/стоїть) — місця для натовпу
+LIGHTS = []          # (позиція, напрям, колір, кут°) — прожектори; лише для огляду, у FBX не йдуть
+AREAS = []           # (позиція, розмір, колір, вати) — плафони; лише для огляду
+LENS_COLOR = {"Light_Lens": (1.0, 0.9, 0.75), "Light_Lens_Blue": (0.35, 0.5, 1.0), "Light_Lens_Red": (1.0, 0.3, 0.25)}
 
-def seat_mark(pos, yaw_rad, z):
-    SEATS.append((pos[0], pos[1], z, math.degrees(yaw_rad)))
+def seat_mark(pos, yaw_rad, z, kind="сидить"):
+    SEATS.append((pos[0], pos[1], z, math.degrees(yaw_rad), kind))
 
 # ---------------------------------------------------------------- реквізит
 
@@ -228,21 +238,33 @@ def folding_chair(P, pos, yaw, seat="Chair_Seat_Black", crowd=True):
         P.box("Chair_Frame", f((x, 0.2, 0.45)), (0.022, 0.022, 0.9), rz=yaw)
     P.box("Chair_Frame", f((0, -0.17, 0.08)), (0.38, 0.018, 0.018), rz=yaw)
     if crowd:
-        seat_mark(pos, yaw, 0.45)
+        seat_mark(pos, yaw, (pos[2] if len(pos) > 2 else 0.0) + 0.45)
 
-def chair_rows(P, origin, yaw, rows, per_row, pitch=0.52, row_depth=0.9, gap_every=0, gap=1.0, seat="Chair_Seat_Black",
-               skip=None):
-    """Ряди стільців: origin — центр першого ряду, лицем yaw; ряди відходять назад (+Y речі)."""
-    for r in range(rows):
-        width = per_row * pitch + (per_row // gap_every if gap_every else 0) * (gap - pitch)
-        x0 = -width / 2 + pitch / 2
-        x = x0
+def chair_rows(P, origin, yaw_unused, rows, per_row, pitch=0.52, row_depth=0.9, gap_every=0, gap=1.0,
+               seat="Chair_Seat_Black", skip=None, standing=2, focus=(0.0, 0.0)):
+    """Ряди стільців навколо рингу: origin — середина першого ряду; ряди відходять ВІД рингу (focus).
+    Кожен стілець дивиться на ринг, з невеликим розкидом місця (±7 см) і кута (±12°): люди не сидять рівно.
+    За останнім рядом — стоячі місця (standing рядів), лише позначки для натовпу."""
+    o = Vector((origin[0], origin[1], 0.0))
+    out = Vector((o.x - focus[0], o.y - focus[1], 0.0))
+    out = out.normalized() if out.length > 1e-4 else Vector((0, -1, 0))
+    tang = Vector((-out.y, out.x, 0.0))
+    salt = int(abs(o.x) * 7 + abs(o.y) * 13)
+    width = per_row * pitch + (per_row // gap_every if gap_every else 0) * (gap - pitch)
+    for r in range(rows + standing):
+        x = -width / 2 + pitch / 2
         for k in range(per_row):
             if gap_every and k and k % gap_every == 0:
                 x += gap - pitch
-            pos = at(origin, yaw, (x, r * row_depth, 0))
+            i = r * 1000 + k + salt * 7919
+            pos = o + tang * (x + (h01(i, 1) - 0.5) * 0.14) + out * (r * row_depth + (h01(i, 2) - 0.5) * 0.14)
+            d = Vector((focus[0] - pos.x, focus[1] - pos.y, 0.0))
+            yaw = math.atan2(d.x, -d.y) + math.radians((h01(i, 3) - 0.5) * 24.0)
             if not (skip and skip(pos)):
-                folding_chair(P, (pos.x, pos.y, 0.0), yaw, seat)
+                if r < rows:
+                    folding_chair(P, (pos.x, pos.y, 0.0), yaw, seat)
+                elif h01(i, 4) < 0.8:
+                    SEATS.append((pos.x, pos.y, 0.0, math.degrees(yaw), "стоїть"))
             x += pitch
 
 def folding_table(P, pos, yaw, length=1.83, width=0.76, cloth=None, h=0.74):
@@ -349,6 +371,7 @@ def par_can(P, pos, aim, lens="Light_Lens"):
     d = (aim - pos).normalized()
     P.cyl("Light_Body", pos - d * 0.12, pos + d * 0.14, 0.11, segs=10)
     P.cyl(lens, pos + d * 0.14, pos + d * 0.15, 0.09, segs=10)
+    LIGHTS.append((pos + d * 0.2, d, LENS_COLOR[lens], 28.0))
 
 def moving_head(P, pos, aim):
     pos, aim = Vector(pos), Vector(aim)
@@ -357,6 +380,7 @@ def moving_head(P, pos, aim):
     head = pos + Vector((0, 0, -0.3))
     P.cyl("Light_Body", head - d * 0.16, head + d * 0.14, 0.13, segs=12)
     P.cyl("Light_Lens", head + d * 0.14, head + d * 0.15, 0.1, segs=12)
+    LIGHTS.append((head + d * 0.2, d, (1.0, 0.95, 0.9), 18.0))
 
 def truss_beam(P, p0, p1, size=0.29, mat="Truss_Alu"):
     """Квадратна ферма: чотири пояси й розкоси."""
@@ -606,12 +630,22 @@ def build_ring(root, spec):
         else:
             P.box(spec["apron"], (0, sy * (half_plat - 0.01), (mz - 0.12) / 2), (half_plat * 2, 0.02, mz - 0.12))
             P.box(spec["band"], (0, sy * (half_plat + 0.003), mz * 0.6), (half_plat * 1.6, 0.01, 0.26))
+    for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        hor = sy != 0
+        c = (sx * (half_plat + 0.012), sy * (half_plat + 0.012))
+        P.box("Apron_Band_White", (c[0], c[1], mz - 0.03), (half_plat * 2 + 0.04 if hor else 0.025, 0.025 if hor else half_plat * 2 + 0.04, 0.06))
+        P.box("Apron_Black", (c[0], c[1], 0.06), (half_plat * 2 + 0.04 if hor else 0.03, 0.03 if hor else half_plat * 2 + 0.04, 0.12))
+        c = (sx * (half_plat + 0.008), sy * (half_plat + 0.008))
+        P.box(spec["band"], (c[0], c[1], mz * 0.6), (1.2 if hor else 0.012, 0.012 if hor else 1.2, mz * 0.5))   # логотип
     corners = {"NE": (1, 1), "NW": (-1, 1), "SE": (1, -1), "SW": (-1, -1)}
     pads = spec["pads"]
     for i_c, (name, (cx, cy)) in enumerate(corners.items()):
         px, py = cx * post, cy * post
         P.cyl(spec["post"], (px, py, mz - 0.1), (px, py, post_top), 0.06, segs=12)
         P.cyl(spec["post"], (px, py, 0.0), (px, py, mz - 0.1), 0.05, segs=8)       # нога під матом
+        P.cyl("Post_Cap", (px, py, post_top), (px, py, post_top + 0.03), 0.07, segs=12)
+        for h_ in (0.48, 0.86, 1.24):
+            P.cyl("Post_Cap", (px, py, mz + h_), (px - cx * 0.1, py - cy * 0.1, mz + h_), 0.022, segs=6)   # стяжка
         diag = math.atan2(cy, cx)
         for i, h in enumerate(ropes):
             z = mz + h
@@ -643,6 +677,10 @@ def build_ring(root, spec):
     # килимки навколо рингу
     mats_half = half_plat + spec.get("mats_extra", 1.3)
     P.box(spec["mats"], (0, 0, 0.015), (mats_half * 2, mats_half * 2, 0.03))
+    for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        hor = sy != 0
+        P.box(spec["band"], (sx * (mats_half - 0.05), sy * (mats_half - 0.05), 0.031),
+              (mats_half * 2 if hor else 0.06, 0.06 if hor else mats_half * 2, 0.002))
     P.finish()
     return {"half_plat": half_plat, "post": post, "inner": inner, "mat_z": mz, "mats_half": mats_half}
 
@@ -712,6 +750,7 @@ def build_gym(root):
     for i in range(6):
         for j in range(4):
             ceil.box("Ceiling_Light", (X0 + 3 + i * 6.0, Y0 + 3.5 + j * 6.0, H - 0.6), (1.2, 0.5, 0.12))
+            AREAS.append(((X0 + 3 + i * 6.0, Y0 + 3.5 + j * 6.0, H - 0.7), 1.2, (1.0, 0.98, 0.92), 260.0))
     ceil.finish()
 
     # --- спортзальне: висувні трибуни біля північної стіни, щити, табло
@@ -747,7 +786,7 @@ def build_gym(root):
     chair_rows(ch, (0, -m - 1.0, 0), 0.0, 4, 22, gap_every=11, gap=1.2)                          # південь, лицем на північ
     chair_rows(ch, (m + 1.0, 0, 0), math.pi / 2, 4, 18, gap_every=9, gap=1.2)                     # схід
     chair_rows(ch, (-m - 1.0, 0, 0), -math.pi / 2, 5, 18, gap_every=9, gap=2.2)                   # захід, прохід посередині
-    chair_rows(ch, (0, m + 1.0, 0), math.pi, 2, 18, gap_every=9, gap=1.2)                         # північ, перед трибунами
+    chair_rows(ch, (0, m + 1.0, 0), math.pi, 2, 18, gap_every=9, gap=1.2, standing=0)             # північ, перед трибунами
     ch.finish()
 
     # --- вихід: арка з завісою біля дверей роздягальні, прохід між стільцями до рингу
@@ -764,19 +803,11 @@ def build_gym(root):
     path_anchors(root, [(X0 + 2.6, 0), (X0 + 6.0, 0), (-8.0, 0), (-m - 0.3, 0), ("steps",)][:-1] +
                  [(-r["half_plat"] - 0.9, r["half_plat"] - 0.2)])
 
-    # --- світло: драбинчаста ферма на чотирьох стійках над рингом
+    # --- світло: дешево, по-клубному — чотири штативи з двома прожекторами на кутах (світло дає ще й зал)
     lt = Parts("lighting", root)
-    hz = 4.6
-    q = r["mats_half"] + 0.6
+    q = r["mats_half"] + 0.7
     for cx, cy_ in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
-        windup_stand(lt, (cx * q, cy_ * q, 0), hz)
-    pts = [(q, q, hz), (-q, q, hz), (-q, -q, hz), (q, -q, hz)]
-    for k in range(4):
-        ladder_truss(lt, pts[k], pts[(k + 1) % 4])
-    for k in range(4):
-        a, b = Vector(pts[k]), Vector(pts[(k + 1) % 4])
-        for j in range(1, 4):
-            par_can(lt, a + (b - a) * (j / 4) - Vector((0, 0, 0.3)), (0, 0, r["mat_z"]))
+        light_tree(lt, (cx * q, cy_ * q, 0), (0, 0, r["mat_z"] + 0.5), h=2.8, n=2)
     lt.finish()
 
     # --- біля рингу: стіл хронометриста й ведучого, дзвін, ноутбук, мікрофон, камера на стояку
@@ -869,13 +900,82 @@ def build_gym(root):
     cams(root, [("cam_entrance", (-4.0, -3.0, 2.2)), ("cam_crowd_low", (0.0, -4.0, 0.6)),
                 ("cam_high_wide", (10.0, -10.0, 7.0)), ("cam_backstage", (X0 - 6.0, 0.0, 2.6))])
     return dict(id="gym", title="Шкільний спортзал (інді)", ring=r, spec=spec, ropes=("Red", "White", "Blue"),
-                capacity=len(SEATS))
+                capacity=len(SEATS), ambient=0.35)
 
 def cams(root, items):
     for name, pos in items:
         empty("anchor_" + name, root, pos)
 
 # ---------------------------------------------------------------- 2. клубна зала з балконом (регіональний)
+
+def quad_n(P, mat, pts, normal):
+    """Чотирикутник з лицем у бік normal (Unity відкидає зворотні грані — порядок вершин важливий)."""
+    a, b, c = Vector(pts[0]), Vector(pts[1]), Vector(pts[2])
+    if (b - a).cross(c - b).dot(Vector(normal)) < 0:
+        pts = list(reversed(pts))
+    P.quad(mat, pts)
+
+def standing_area(cx, cy, w, d, n, focus=(0.0, 0.0), z=0.0, salt=0):
+    """Стоячі місця: n позначок у прямокутнику w × d, кожна лицем до рингу з розкидом."""
+    for k in range(n):
+        x = cx + (h01(k, 11 + salt) - 0.5) * w
+        y = cy + (h01(k, 12 + salt) - 0.5) * d
+        yaw = math.atan2(focus[0] - x, -(focus[1] - y)) + math.radians((h01(k, 13 + salt) - 0.5) * 30.0)
+        SEATS.append((x, y, z, math.degrees(yaw), "стоїть"))
+
+def chair_line(P, p0, p1, z, pitch=0.55, seat="Chair_Seat_Red", focus=(0.0, 0.0), salt=0):
+    """Ряд розкладних стільців на висоті z від p0 до p1, кожен лицем до рингу з розкидом (балкони)."""
+    p0, p1 = Vector((p0[0], p0[1], 0)), Vector((p1[0], p1[1], 0))
+    L = (p1 - p0).length
+    n = max(1, int(L / pitch))
+    tang = (p1 - p0).normalized()
+    side = Vector((-tang.y, tang.x, 0))
+    for k in range(n):
+        i = k + salt * 977
+        pos = p0 + tang * ((k + 0.5) * L / n + (h01(i, 21) - 0.5) * 0.1) + side * ((h01(i, 22) - 0.5) * 0.1)
+        yaw = math.atan2(focus[0] - pos.x, -(focus[1] - pos.y)) + math.radians((h01(i, 23) - 0.5) * 20.0)
+        folding_chair(P, (pos.x, pos.y, z), yaw, seat)
+
+def hall_wall(P, a, b, H, inward, windows=(), pil_step=4.0):
+    """Стіна старої зали: цегла внизу, тиньк угорі, дерев'яна панель, пілястри, карниз, високі вікна."""
+    a, b = Vector((a[0], a[1], 0)), Vector((b[0], b[1], 0))
+    d = b - a
+    L = d.length
+    t = d.normalized()
+    n = Vector(inward)
+    yaw = math.atan2(t.y, t.x)
+    mid = (a + b) / 2
+    th = 0.4
+    c = mid - n * (th / 2)
+    P.box("Brick_Warm", (c.x, c.y, 2.25), (L + th * 2 if abs(t.x) > 0.5 else th, th if abs(t.x) > 0.5 else L + th * 2, 4.5))
+    P.box("Plaster_Cream", (c.x, c.y, 4.5 + (H - 4.5) / 2), (L + th * 2 if abs(t.x) > 0.5 else th, th if abs(t.x) > 0.5 else L + th * 2, H - 4.5))
+    w = mid + n * 0.02
+    P.box("Wainscot", (w.x, w.y, 0.6), (L if abs(t.x) > 0.5 else 0.04, 0.04 if abs(t.x) > 0.5 else L, 1.2))
+    w = mid + n * 0.04
+    P.box("Wainscot", (w.x, w.y, 1.22), (L if abs(t.x) > 0.5 else 0.08, 0.08 if abs(t.x) > 0.5 else L, 0.06))
+    P.box("Wainscot", (w.x, w.y, 4.5), (L if abs(t.x) > 0.5 else 0.12, 0.12 if abs(t.x) > 0.5 else L, 0.18))       # пояс
+    P.box("Wainscot", (w.x, w.y, H - 0.4), (L if abs(t.x) > 0.5 else 0.2, 0.2 if abs(t.x) > 0.5 else L, 0.35))     # карниз
+    k = 0
+    s = pil_step / 2
+    while s < L:
+        p = a + t * s + n * 0.12
+        P.box("Brick_Warm", (p.x, p.y, H / 2), (0.5 if abs(t.x) > 0.5 else 0.24, 0.24 if abs(t.x) > 0.5 else 0.5, H))
+        s += pil_step
+        k += 1
+    for (s0, z0, ww, hh) in windows:
+        p = a + t * s0 + n * 0.03
+        P.box("Wainscot", (p.x, p.y, z0 + hh / 2), (ww + 0.2 if abs(t.x) > 0.5 else 0.06, 0.06 if abs(t.x) > 0.5 else ww + 0.2, hh + 0.2))
+        p = a + t * s0 + n * 0.07
+        P.box("Glass", (p.x, p.y, z0 + hh / 2), (ww if abs(t.x) > 0.5 else 0.03, 0.03 if abs(t.x) > 0.5 else ww, hh))
+        P.box("Wainscot", (p.x, p.y, z0 + hh / 2), (0.06 if abs(t.x) > 0.5 else 0.035, 0.035 if abs(t.x) > 0.5 else 0.06, hh))
+        P.box("Wainscot", (p.x, p.y, z0 + hh * 0.62), (ww if abs(t.x) > 0.5 else 0.035, 0.035 if abs(t.x) > 0.5 else ww, 0.05))
+
+def pendant(P, pos, z_top, drop=2.0):
+    x, y = pos[0], pos[1]
+    P.cyl("Light_Body", (x, y, z_top), (x, y, z_top - drop), 0.008, segs=4)
+    P.cyl("Light_Body", (x, y, z_top - drop), (x, y, z_top - drop - 0.25), 0.05, 0.3, segs=12)
+    P.cyl("Mirror_Bulb", (x, y, z_top - drop - 0.22), (x, y, z_top - drop - 0.3), 0.09, segs=8)
+    AREAS.append(((x, y, z_top - drop - 0.35), 0.4, (1.0, 0.78, 0.5), 60.0))
 
 def build_hall(root):
     spec = dict(size_ft=18, mat_z=1.1, canvas="Canvas_White", apron="Apron_Black", band="Apron_Band_Red",
@@ -884,62 +984,85 @@ def build_hall(root):
     r = build_ring(root, spec)
     X0, X1, Y0, Y1, H = -17.0, 17.0, -13.0, 16.0, 10.0
     m = r["mats_half"]
+    q = m + 0.9                                     # огорожа
+    BZ, BD = 3.6, 3.4                               # балкон: висота підлоги, глибина від стіни
+    SY0, SH = 11.0, 1.0                             # сцена: передній край, висота
 
+    # --- підлога: старий паркет дошками, навколо рингу — гумове покриття під огорожею
     sh = Parts("hall", root)
-    sh.box("Floor_Dark", (0, (Y0 + Y1) / 2, -0.05), (X1 - X0, Y1 - Y0, 0.1))
+    sh.box("Hall_Floor", (0, (Y0 + Y1) / 2, -0.05), (X1 - X0, Y1 - Y0, 0.1))
+    x = X0 + 0.6
+    while x < X1:
+        sh.box("Hall_Floor_Line", (x, (Y0 + Y1) / 2, 0.001), (0.02, Y1 - Y0, 0.002))
+        x += 0.6
+    sh.box("Carpet_Black", (0, 0, 0.004), (2 * q + 1.6, 2 * q + 1.6, 0.008))
     sh.finish()
+
+    # --- стіни: цегла внизу, кремовий тиньк угорі, пілястри, карниз; високі вікна над балконом на сході й заході
+    win = [(s_, 5.6, 1.4, 2.6) for s_ in (4.0, 8.0, 12.0, 16.0, 20.0)]
     walls = {n_: Parts("wall_" + n_, root) for n_ in ("N", "S", "E", "W")}
-    t = 0.4
-    walls["S"].box("Brick_Dark", (0, Y0 - t / 2, H / 2), (X1 - X0 + 2 * t, t, H))
-    walls["E"].box("Brick_Dark", (X1 + t / 2, (Y0 + Y1) / 2, H / 2), (t, Y1 - Y0, H))
-    walls["W"].box("Brick_Dark", (X0 - t / 2, (Y0 + Y1) / 2, H / 2), (t, Y1 - Y0, H))
-    # північна стіна (за сценою) з проходом у закулісся посередині (x ∈ [−1.2, 1.2], до 2,8 м)
-    walls["N"].box("Brick_Dark", ((X0 - 1.2) / 2, Y1 + t / 2, H / 2), (-1.2 - X0 + t, t, H))
-    walls["N"].box("Brick_Dark", ((X1 + 1.2) / 2, Y1 + t / 2, H / 2), (X1 - 1.2 + t, t, H))
-    walls["N"].box("Brick_Dark", (0, Y1 + t / 2, 2.8 + (H - 2.8) / 2), (2.4, t, H - 2.8))
-    for P_, pos, yaw in ((walls["E"], (X1 - 0.05, -8.0, 0), -math.pi / 2), (walls["W"], (X0 + 0.05, -8.0, 0), math.pi / 2),
+    hall_wall(walls["S"], (X0, Y0), (X1, Y0), H, (0, 1, 0))
+    hall_wall(walls["E"], (X1, Y0), (X1, Y1), H, (-1, 0, 0), windows=win)
+    hall_wall(walls["W"], (X0, Y0), (X0, Y1), H, (1, 0, 0), windows=win)
+    hall_wall(walls["N"], (X0, Y1), (X1, Y1), H, (0, -1, 0), pil_step=34.0)
+    for P_, pos, yaw in ((walls["E"], (X1 - 0.05, -9.0, 0), -math.pi / 2), (walls["W"], (X0 + 0.05, -9.0, 0), math.pi / 2),
                          (walls["S"], (-6.0, Y0 + 0.05, 0), 0.0), (walls["S"], (6.0, Y0 + 0.05, 0), 0.0)):
         door(P_, pos, yaw, w=1.6, mat="Door_Wood", sign=True)
     for P_ in walls.values():
         P_.finish()
+    # стеля: дерев'яна обшивка, лучкові ферми через зал
     ceil = Parts("ceiling", root)
-    ceil.box("Ceiling", (0, (Y0 + Y1) / 2, H + 0.05), (X1 - X0, Y1 - Y0, 0.1))
-    for k in range(8):
-        ceil.box("Steel_Beam", (X0 + 2 + k * (X1 - X0 - 4) / 7, (Y0 + Y1) / 2, H - 0.25), (0.3, Y1 - Y0, 0.45))
+    ceil.box("Ceiling_Hall", (0, (Y0 + Y1) / 2, H + 1.25), (X1 - X0, Y1 - Y0, 0.1))
+    for k in range(7):
+        y = Y0 + 2.0 + k * (Y1 - Y0 - 4.0) / 6
+        prev = None
+        for j in range(13):
+            u = j / 12
+            p = Vector((X0 + u * (X1 - X0), y, H - 0.6 + 1.7 * math.sin(math.pi * u)))
+            if prev is not None:
+                ceil.cyl("Steel_Beam", prev, p, 0.07, segs=6)
+                ceil.cyl("Steel_Beam", (prev.x, y, H - 0.6), (p.x, y, H - 0.6), 0.05, segs=6)
+                ceil.cyl("Steel_Beam", (p.x, y, H - 0.6), p, 0.03, segs=4)
+            prev = p
     ceil.finish()
 
-    # --- сцена з виходом: завіса, LED-екран над нею, банери, колонки, сходи вниз, прохід між огорожами
+    # --- сцена-портал на півночі: портал з банером, задник, завіса виходу, екран, бокові екрани, колонки
     st = Parts("stage", root)
-    SY0, SH = 11.0, 1.2
     st.box("Stage_Black", (0, (SY0 + Y1) / 2, SH / 2), (16.0, Y1 - SY0, SH))
-    drape(st, (-8.0, Y1 - 0.2, SH), (-1.2, Y1 - 0.2, SH), 6.0)
-    drape(st, (1.2, Y1 - 0.2, SH), (8.0, Y1 - 0.2, SH), 6.0)
-    for sx in (-1, 1):                                                                          # куліси
-        drape(st, (sx * 8.0, SY0 + 0.2, SH), (sx * 8.0, Y1 - 0.2, SH), 6.0)
-    st.finish()
-    for P_ in (st,):
-        pass
-    ent = Parts("entrance", root)
-    # завіса виходу посередині, над нею невеликий екран 4 × 2,25 м
-    drape(ent, (-1.2, Y1 - 0.25, SH), (0.0, Y1 - 0.25, SH), 2.8, "Drape_Red")
-    drape(ent, (0.0, Y1 - 0.25, SH), (1.2, Y1 - 0.25, SH), 2.8, "Drape_Red")
-    led_wall(ent, (0, Y1 - 0.45, SH + 4.2), 4.0, 2.25)
+    st.box("Cloth_Black", (0, SY0 - 0.01, SH / 2), (16.0, 0.02, SH))                            # спідниця сцени
+    st.box("LED_Strip", (0, SY0 + 0.02, SH + 0.01), (16.0, 0.04, 0.02))                          # світла смуга по краю
     for sx in (-1, 1):
-        ent.box("Banner_Black", (sx * 4.5, Y1 - 0.35, SH + 3.4), (1.4, 0.03, 4.2))
-        ent.box("Banner_Gold", (sx * 4.5, Y1 - 0.37, SH + 3.4), (1.2, 0.02, 0.3))
-        speaker_stack(ent, (sx * 7.2, SY0 + 0.8, SH), 0.0, n=2)
-        light_tree(ent, (sx * 5.5, SY0 + 0.6, SH), (0, 2.0, 1.2), h=2.4)
-    stairs(ent, (0, SY0, 0), 0.0, SH, 2.4, 4)                                                   # сходи зі сцени
-    barricade_run(ent, (-1.6, SY0 - 1.3, 0), (-1.6, m + 0.2, 0))
-    barricade_run(ent, (1.6, SY0 - 1.3, 0), (1.6, m + 0.2, 0))
+        st.box("Stage_Black", (sx * 7.6, SY0 + 0.5, SH + 3.4), (0.8, 1.0, 6.8))                  # стовпи порталу
+        st.box("Banner_Red", (sx * 7.6, SY0 - 0.01, SH + 3.4), (0.6, 0.02, 6.4))
+        drape(st, (sx * 7.2, SY0 + 1.2, SH), (sx * 7.2, Y1 - 0.4, SH), 6.0, "Drape_Black")         # куліси
+    st.box("Stage_Black", (0, SY0 + 0.5, SH + 7.2), (16.0, 1.0, 1.2))                             # перемичка порталу
+    st.box("Banner_Gold", (0, SY0 - 0.01, SH + 7.2), (9.0, 0.02, 0.8))
+    st.box("Banner_Black", (0, SY0 - 0.02, SH + 7.2), (8.4, 0.02, 0.55))
+    drape(st, (-7.2, Y1 - 0.3, SH), (-1.3, Y1 - 0.3, SH), 6.4, "Drape_Black")                     # задник
+    drape(st, (1.3, Y1 - 0.3, SH), (7.2, Y1 - 0.3, SH), 6.4, "Drape_Black")
+    st.box("Stage_Black", (0, Y1 - 0.3, SH + 2.8 + 1.8), (2.6, 0.2, 3.6))
+    st.finish()
+    ent = Parts("entrance", root)
+    for sx in (-1, 1):                                                                           # завіса виходу
+        drape(ent, (sx * 1.25, Y1 - 0.45, SH), (sx * 0.02, Y1 - 0.45, SH), 2.8, "Drape_Red")
+        ent.box("LED_Side", (sx * 1.55, Y1 - 0.5, SH + 1.4), (0.2, 0.05, 2.8))                    # світлові стовпи обабіч
+    ent.box("Truss_Black", (0, Y1 - 0.5, SH + 2.9), (3.3, 0.3, 0.25))
+    led_wall(ent, (0, Y1 - 0.6, SH + 4.6), 4.0, 2.25)
+    for sx in (-1, 1):
+        led_wall(ent, (sx * 4.6, Y1 - 0.6, SH + 3.6), 2.0, 3.6, mat="LED_Side")
+        speaker_stack(ent, (sx * 9.0, SY0 - 0.6, 0), 0.0, n=3)                                    # колонки на підлозі
+        light_tree(ent, (sx * 5.8, SY0 + 0.8, SH), (0, 4.0, 1.2), h=2.2, n=3)
+    stairs(ent, (0, SY0, 0), 0.0, SH, 3.0, 4)                                                    # сходи зі сцени
+    ent.box("Carpet_Red", (0, (SY0 - 1.2 + q) / 2, 0.006), (2.2, SY0 - 1.2 - q, 0.012))           # доріжка до рингу
+    barricade_run(ent, (-1.6, SY0 - 1.3, 0), (-1.6, q, 0))
+    barricade_run(ent, (1.6, SY0 - 1.3, 0), (1.6, q, 0))
     ent.finish()
-    empty("anchor_curtain", root, (0, Y1 - 0.6, SH), yaw=180)
-    path_anchors(root, [(0, Y1 - 1.2, SH), (0, SY0 + 0.4, SH), (0, SY0 - 1.4, 0), (0, m + 0.6, 0),
+    empty("anchor_curtain", root, (0, Y1 - 0.8, SH), yaw=180)
+    path_anchors(root, [(0, Y1 - 1.4, SH), (0, SY0 + 0.4, SH), (0, SY0 - 1.4, 0), (0, q + 0.4, 0),
                         (r["half_plat"] + 0.9, r["half_plat"] - 0.2, 0)])
 
-    # --- огорожа навколо рингу (прохід з півночі й вихід хронометриста з півдня)
+    # --- огорожа навколо рингу (прохід з півночі, вихід хронометриста з півдня)
     bar = Parts("barricade", root)
-    q = m + 0.9
     barricade_run(bar, (-q, q, 0), (-1.6, q, 0))
     barricade_run(bar, (1.6, q, 0), (q, q, 0))
     barricade_run(bar, (q, q, 0), (q, -q, 0))
@@ -948,7 +1071,7 @@ def build_hall(root):
     barricade_run(bar, (-q, -q, 0), (-q, q, 0))
     bar.finish()
 
-    # --- біля рингу: коментатори (схід), хронометрист (захід), камера на помості (південь), ручні камери
+    # --- біля рингу: коментатори (схід), хронометрист (захід), поміст камери з режисером (південь)
     rs = Parts("ringside", root)
     cx = r["half_plat"] + 1.0
     folding_table(rs, (cx, -1.2, 0), -math.pi / 2, length=2.4, cloth="Cloth_Black")
@@ -959,99 +1082,120 @@ def build_hall(root):
     ring_bell(rs, (-cx, -1.5, 0), 0.78)
     laptop(rs, (-cx, -0.5, 0), -math.pi / 2, 0.76)
     folding_chair(rs, (-cx - 0.6, -1.0, 0), math.pi / 2, crowd=False)
-    rs.box("Stage_Black", (0, Y0 + 2.2, 0.6), (2.0, 2.0, 1.2))                                   # поміст камери
-    railing(rs, (-1.0, Y0 + 3.2, 1.2), (1.0, Y0 + 3.2, 1.2))
-    hd_camera(rs, (0, Y0 + 2.2, 0), 0.0, 1.2)
-    folding_table(rs, (3.0, Y0 + 2.0, 0), 0.0, length=2.4, cloth="Cloth_Black")                 # стіл режисера трансляції
-    for k in range(3):
-        monitor(rs, (2.2 + 0.8 * k, Y0 + 2.2, 0), math.pi, z=0.76)
+    rs.box("Stage_Black", (-5.5, Y0 + 4.4, 0.6), (2.0, 2.0, 1.2))                               # поміст камери
+    railing(rs, (-6.5, Y0 + 5.4, 1.2), (-4.5, Y0 + 5.4, 1.2))
+    hd_camera(rs, (-5.5, Y0 + 4.4, 0), 0.0, 1.2)
     rs.finish()
     empty("anchor_commentary", root, (cx + 0.6, -1.2, 0), yaw=-90)
     empty("anchor_timekeeper", root, (-cx - 0.6, -1.0, 0), yaw=90)
     empty("anchor_bell", root, (-cx, -1.5, 0.78))
-    empty("anchor_hardcam", root, (0, Y0 + 2.2, 2.6))
+    empty("anchor_hardcam", root, (-5.5, Y0 + 4.4, 2.6))
     for i, (x, y) in enumerate(((q - 0.4, -q + 0.4), (-q + 0.4, -q + 0.4), (q - 0.4, q - 0.4), (-q + 0.4, q - 0.4))):
         empty("anchor_handheld_%d" % (i + 1), root, (x, y, 1.6))
 
-    # --- партер: стільці рядами за огорожею, біля сцени — стоячі місця
+    # --- партер: стільці рядами за огорожею з трьох боків, лицем до рингу, позаду — стоячі
     ch = Parts("chairs", root)
-    chair_rows(ch, (0, -q - 1.0, 0), 0.0, 7, 26, gap_every=13, gap=1.3)
-    chair_rows(ch, (q + 1.0, -1.0, 0), math.pi / 2, 6, 20, gap_every=10, gap=1.3)
-    chair_rows(ch, (-q - 1.0, -1.0, 0), -math.pi / 2, 6, 20, gap_every=10, gap=1.3)
+    cam_skip = lambda p_: abs(p_.x + 5.5) < 1.6 and p_.y < Y0 + 5.8
+    chair_rows(ch, (0, -q - 1.0, 0), 0.0, 5, 24, gap_every=12, gap=1.3, skip=cam_skip, standing=2, focus=(0, 0))
+    chair_rows(ch, (q + 1.0, -0.5, 0), 0.0, 6, 22, gap_every=11, gap=1.3, standing=1, focus=(0, 0))
+    chair_rows(ch, (-q - 1.0, -0.5, 0), 0.0, 6, 22, gap_every=11, gap=1.3, standing=1, focus=(0, 0))
     ch.finish()
-    for k in range(60):                                                                         # стоячі біля сцени
-        x = -9.0 + (k % 12) * 1.5 + 0.3 * h01(k, 1)
-        y = SY0 - 2.5 - (k // 12) * 0.9 + 0.3 * h01(k, 2)
-        if abs(x) < 2.2:
-            continue
-        SEATS.append((x, y, 0.0, 180.0))
+    for sx in (-1, 1):                                                                           # стоячі біля сцени
+        standing_area(sx * 5.4, (q + SY0) / 2 + 0.3, 6.0, SY0 - q - 1.6, 45, salt=sx + 5)
 
-    # --- балкон буквою П уздовж півдня, сходу й заходу, з поруччям, колонами й двома рядами стільців
+    # --- балкон буквою П: тонка плита на колонах, дерев'яний фасад з банерами, три ряди на сходинках
     bc = Parts("balcony", root)
-    BZ, BD = 4.0, 3.2
-    bc.box("Concrete", (0, Y0 + BD / 2, BZ - 0.15), (X1 - X0, BD, 0.3))
-    bc.box("Concrete", (X1 - BD / 2, (Y0 + BD + SY0 - 1.0) / 2, BZ - 0.15), (BD, SY0 - 1.0 - Y0 - BD, 0.3))
-    bc.box("Concrete", (X0 + BD / 2, (Y0 + BD + SY0 - 1.0) / 2, BZ - 0.15), (BD, SY0 - 1.0 - Y0 - BD, 0.3))
-    railing(bc, (X0 + BD, Y0 + BD, BZ), (X1 - BD, Y0 + BD, BZ))
-    railing(bc, (X1 - BD, Y0 + BD, BZ), (X1 - BD, SY0 - 1.0, BZ))
-    railing(bc, (X0 + BD, Y0 + BD, BZ), (X0 + BD, SY0 - 1.0, BZ))
-    for x in range(-12, 13, 4):
-        bc.cyl("Steel_Beam", (x, Y0 + BD - 0.2, 0), (x, Y0 + BD - 0.2, BZ - 0.3), 0.12, segs=10)
-    for y in range(-6, 10, 4):
-        for sx in (-1, 1):
-            bc.cyl("Steel_Beam", (sx * (X1 - BD + 0.2), y, 0), (sx * (X1 - BD + 0.2), y, BZ - 0.3), 0.12, segs=10)
-    for sx in (-1, 1):                                                                          # сходи на балкон
-        for k in range(14):
-            h = BZ * (k + 1) / 14
-            bc.box("Concrete", (sx * (X1 - 1.0), Y0 + BD + 0.2 + k * 0.28 + 0.14, h / 2), (1.6, 0.28, h))
-    bc.finish()
     bch = Parts("balcony_chairs", root)
-    for r_ in range(2):
-        for k in range(50):
-            x = -12.5 + k * 0.52
-            folding_chair(bch, (x, Y0 + BD - 0.8 - r_ * 1.0, BZ), 0.0, "Chair_Seat_Red")
-            SEATS[-1] = (SEATS[-1][0], SEATS[-1][1], BZ + 0.45, SEATS[-1][3])
-        for sx in (-1, 1):
-            for k in range(26):
-                y = Y0 + BD + 0.6 + k * 0.52
-                folding_chair(bch, (sx * (X1 - BD + 0.8 + r_ * 1.0), y, BZ), sx * math.pi / 2, "Chair_Seat_Red")
-                SEATS[-1] = (SEATS[-1][0], SEATS[-1][1], BZ + 0.45, SEATS[-1][3])
-    # стільці балкона стоять на балконі: геометрію піднято
-    bch_obs = bch.finish()
-    for o in bch_obs:
-        o.location.z = BZ
+    EY1 = SY0 - 1.0
+    fx0, fx1, fy0 = X0 + BD, X1 - BD, Y0 + BD
+    slabs = [((0, Y0 + BD / 2), (X1 - X0, BD)),
+             ((X1 - BD / 2, (fy0 + EY1) / 2), (BD, EY1 - fy0)),
+             ((X0 + BD / 2, (fy0 + EY1) / 2), (BD, EY1 - fy0))]
+    for (c, s) in slabs:
+        bc.box("Concrete", (c[0], c[1], BZ - 0.12), (s[0], s[1], 0.24))
+    fronts = [((fx0, fy0), (fx1, fy0)), ((fx1, fy0), (fx1, EY1)), ((fx0, fy0), (fx0, EY1))]
+    for k, (a, b) in enumerate(fronts):
+        a, b = Vector((a[0], a[1], 0)), Vector((b[0], b[1], 0))
+        c = (a + b) / 2
+        L = (b - a).length
+        horiz = abs(b.x - a.x) > abs(b.y - a.y)
+        bc.box("Balcony_Fascia", (c.x, c.y, BZ), (L + 0.1 if horiz else 0.12, 0.12 if horiz else L + 0.1, 0.8))
+        bc.box("Wainscot", (c.x, c.y, BZ + 0.43), (L + 0.2 if horiz else 0.22, 0.22 if horiz else L + 0.2, 0.06))
+        railing(bc, (a.x, a.y, BZ + 0.45), (b.x, b.y, BZ + 0.45), h=0.6)
+        # банери, перекинуті через фасад
+        nb = int(L / 3.2)
+        for j in range(nb):
+            p = a + (b - a) * ((j + 0.5) / nb)
+            off = Vector((0, -0.08, 0)) if horiz else Vector((0.08 if b.x < 0 else -0.08, 0, 0))
+            p = p + off
+            mat = ("Banner_Red", "Banner_Black", "Banner_Gold", "Backdrop_White")[(j + k) % 4]
+            bc.box(mat, (p.x, p.y, BZ - 0.55), (1.8 if horiz else 0.02, 0.02 if horiz else 1.8, 1.1))
+        nc = max(1, int(L / 4.0))
+        for j in range(nc + 1):
+            p = a + (b - a) * (j / nc)
+            bc.cyl("Steel_Beam", (p.x, p.y, 0), (p.x, p.y, BZ - 0.24), 0.09, segs=10)
+    # сходинки (три ряди: від фасаду до стіни, кожен на 0,32 вище)
+    rows = (0.55, 1.5, 2.45)
+    for i, d in enumerate(rows):
+        z = BZ + 0.32 * i
+        if i:
+            bc.box("Concrete", (0, Y0 + (BD - d + 0.45) / 2, z - 0.16), (X1 - X0, BD - d + 0.45, 0.32))
+            for sx in (-1, 1):
+                w_ = BD - d + 0.45
+                bc.box("Concrete", (sx * (X1 - w_ / 2), (fy0 + EY1) / 2, z - 0.16), (w_, EY1 - fy0, 0.32))
+        chair_line(bch, (fx0 + 0.8, fy0 - d), (fx1 - 0.8, fy0 - d), z, seat="Chair_Seat_Red", salt=i)
+        chair_line(bch, (fx1 + d, fy0 + 0.8), (fx1 + d, EY1 - 0.4), z, seat="Chair_Seat_Red", salt=10 + i)
+        chair_line(bch, (fx0 - d, fy0 + 0.8), (fx0 - d, EY1 - 0.4), z, seat="Chair_Seat_Red", salt=20 + i)
+    # сходи на балкон біля сцени, вздовж бокових стін
+    for sx in (-1, 1):
+        n_ = 12
+        for k in range(n_):
+            h = BZ * (k + 1) / n_
+            bc.box("Concrete", (sx * (X1 - 0.8), EY1 + 3.6 - (k + 0.5) * 0.3, h / 2), (1.4, 0.3, h))
+        railing(bc, (sx * (X1 - 1.5), EY1 + 3.6, 0.0), (sx * (X1 - 1.5), EY1, BZ), h=0.95)
+    bc.finish()
+    bch.finish()
 
-    # --- бар уздовж сходу під балконом
+    # --- бар під балконом на сході: стійка, полиці з пляшками й підсвіткою, табурети
     br = Parts("bar", root)
-    br.box("Bar_Wood", (X1 - 1.6, 4.0, 0.55), (0.7, 7.0, 1.1))
-    br.box("Bar_Top", (X1 - 1.6, 4.0, 1.12), (0.9, 7.2, 0.05))
+    br.box("Bar_Wood", (X1 - 1.8, 2.0, 0.55), (0.7, 7.0, 1.1))
+    br.box("Bar_Top", (X1 - 1.8, 2.0, 1.12), (0.9, 7.2, 0.05))
+    br.box("Brick_Warm", (X1 - 1.45, 2.0, 0.1), (0.05, 7.0, 0.2))
     for k in range(3):
-        br.box("Bar_Wood", (X1 - 0.3, 4.0, 1.2 + 0.45 * k), (0.35, 7.0, 0.04))
+        br.box("Bar_Wood", (X1 - 0.35, 2.0, 1.2 + 0.45 * k), (0.35, 7.0, 0.04))
         for j in range(24):
-            br.cyl("Bottle", (X1 - 0.3, 0.8 + j * 0.28, 1.22 + 0.45 * k), (X1 - 0.3, 0.8 + j * 0.28, 1.5 + 0.45 * k), 0.035, segs=6)
-    br.box("Shelf_Light", (X1 - 0.14, 4.0, 2.7), (0.04, 7.0, 0.06))
+            br.cyl(("Bottle", "Bar_Top", "Water_Blue")[(j + k) % 3], (X1 - 0.35, -1.2 + j * 0.28, 1.22 + 0.45 * k),
+                   (X1 - 0.35, -1.2 + j * 0.28, 1.5 + 0.45 * k), 0.035, segs=6)
+    br.box("Shelf_Light", (X1 - 0.2, 2.0, 2.65), (0.04, 7.0, 0.06))
+    br.box("Shelf_Light", (X1 - 1.8, 2.0, BZ - 0.3), (0.6, 7.0, 0.04))
     for k in range(6):
-        br.cyl("Chair_Frame", (X1 - 2.4, 1.2 + k * 1.1, 0), (X1 - 2.4, 1.2 + k * 1.1, 0.75), 0.03, segs=6)
-        br.cyl("Chair_Seat_Black", (X1 - 2.4, 1.2 + k * 1.1, 0.75), (X1 - 2.4, 1.2 + k * 1.1, 0.8), 0.19, segs=12)
+        br.cyl("Chair_Frame", (X1 - 2.6, -0.8 + k * 1.1, 0), (X1 - 2.6, -0.8 + k * 1.1, 0.75), 0.03, segs=6)
+        br.cyl("Chair_Seat_Black", (X1 - 2.6, -0.8 + k * 1.1, 0.75), (X1 - 2.6, -0.8 + k * 1.1, 0.8), 0.19, segs=12)
+    for k in range(3):                                                                            # високі столики
+        p = (X1 - 4.4 + 0.3 * h01(k, 31), -2.0 + 2.6 * k)
+        br.cyl("Table_Leg", (p[0], p[1], 0), (p[0], p[1], 1.05), 0.03, segs=6)
+        br.cyl("Bar_Top", (p[0], p[1], 1.05), (p[0], p[1], 1.09), 0.32, segs=12)
     br.finish()
-    empty("anchor_bar", root, (X1 - 2.6, 4.0, 0), yaw=-90)
+    empty("anchor_bar", root, (X1 - 2.8, 2.0, 0), yaw=-90)
+    standing_area(X1 - 3.4, 2.0, 2.4, 7.0, 25, salt=40)
 
     # --- мерч під балконом на заході
     mc = Parts("merch", root)
     for k in range(3):
-        folding_table(mc, (X0 + 1.2, 2.0 + 2.0 * k, 0), -math.pi / 2, cloth="Cloth_Black")
-        merch_rack(mc, (X0 + 0.5, 2.0 + 2.0 * k, 0), -math.pi / 2)
+        folding_table(mc, (X0 + 1.4, 1.0 + 2.0 * k, 0), -math.pi / 2, cloth=("Cloth_Black", "Cloth_Red")[k % 2])
+        merch_rack(mc, (X0 + 0.5, 1.0 + 2.0 * k, 0), -math.pi / 2)
+    mc.box("Banner_Gold", (X0 + 0.06, 3.0, 2.6), (0.02, 5.8, 0.6))
     mc.finish()
-    empty("anchor_merch", root, (X0 + 2.0, 4.0, 0), yaw=-90)
+    empty("anchor_merch", root, (X0 + 2.2, 3.0, 0), yaw=-90)
 
-    # --- світло: підвісна коробка 32 × 32 фути над рингом, фронтальна ферма над сценою
+    # --- світло: коробка над рингом 32 × 32 фути (пари й голови), ферма над сценою, теплі підвіси над залом
     lt = Parts("lighting", root)
-    hb = 6.5
+    hb = 6.6
     b = 9.75 / 2
     pts = [(b, b, hb), (-b, b, hb), (-b, -b, hb), (b, -b, hb)]
     for k in range(4):
         truss_beam(lt, pts[k], pts[(k + 1) % 4])
-        lt.cyl("Steel_Beam", pts[k], (pts[k][0], pts[k][1], H - 0.3), 0.012, segs=4)            # підвіс
+        lt.cyl("Steel_Beam", pts[k], (pts[k][0], pts[k][1], H - 0.6), 0.012, segs=4)
         a, c = Vector(pts[k]), Vector(pts[(k + 1) % 4])
         for j in range(1, 6):
             p = a + (c - a) * (j / 6) - Vector((0, 0, 0.25))
@@ -1059,10 +1203,17 @@ def build_hall(root):
                 par_can(lt, p, (0, 0, r["mat_z"]))
             else:
                 moving_head(lt, p, (0, 0, r["mat_z"]))
-    truss_beam(lt, (-8.0, SY0 - 1.0, 7.0), (8.0, SY0 - 1.0, 7.0))
+    truss_beam(lt, (-8.0, SY0 - 1.5, 7.4), (8.0, SY0 - 1.5, 7.4))
     for k in range(7):
-        par_can(lt, (-6.0 + 2.0 * k, SY0 - 1.0, 6.7), (0, SY0 + 2.0, SH + 1.0),
+        par_can(lt, (-6.0 + 2.0 * k, SY0 - 1.5, 7.1), (-3.0 + 1.0 * k, Y1 - 1.0, SH + 1.5),
                 ("Light_Lens", "Light_Lens_Blue", "Light_Lens_Red")[k % 3])
+    for i in range(4):
+        for j in range(3):
+            x = -9.0 + 6.0 * i
+            y = -9.0 + 7.0 * j
+            if abs(x) < 6 and abs(y) < 6:
+                continue
+            pendant(lt, (x, y), H - 0.6, drop=2.2)
     lt.finish()
 
     # --- зброя
@@ -1088,7 +1239,7 @@ def build_hall(root):
     bkw.box("Wall_Grey", (0, BY1 + 0.15, 1.6), (X1 - X0, 0.3, 3.2))
     bkw.box("Wall_Grey", (X0 - 0.15, (BY0 + BY1) / 2, 1.6), (0.3, BY1 - BY0, 3.2))
     bkw.box("Wall_Grey", (X1 + 0.15, (BY0 + BY1) / 2, 1.6), (0.3, BY1 - BY0, 3.2))
-    bkw.box("Wall_Grey", ((X0 - 1.0) / 2 - 1.0, BY0 + 3.6, 1.6), (-1.0 - X0 - 2.0, 0.2, 3.2))       # коридор | гримерки
+    bkw.box("Wall_Grey", ((X0 - 1.0) / 2 - 1.0, BY0 + 3.6, 1.6), (-1.0 - X0 - 2.0, 0.2, 3.2))
     bkw.box("Wall_Grey", ((X1 + 1.0) / 2 + 1.0, BY0 + 3.6, 1.6), (X1 - 1.0 - 2.0, 0.2, 3.2))
     bkw.box("Wall_Grey", (0, (BY0 + 3.6 + BY1) / 2, 1.6), (0.2, BY1 - BY0 - 3.6, 3.2))
     bkw.finish()
@@ -1097,17 +1248,16 @@ def build_hall(root):
         mirror_wall(bk, (sx * 9.0, BY1 - 0.2, 0), math.pi, 4)
         bench(bk, (sx * 8.0, BY0 + 6.5, 0), 0.0, 3.0)
         lockers(bk, (sx * (X1 - 0.3), BY0 + 7.5, 0), sx * math.pi / 2 + (math.pi if sx > 0 else 0), 8, "Locker_Grey")
-    for k in range(6):                                                                           # вішаки з костюмами
+    for k in range(6):
         bk.box(("Shirt_A", "Shirt_B", "Shirt_C")[k % 3], (-3.0 - 0.25 * k, BY1 - 2.0, 1.2), (0.05, 0.5, 0.9))
     massage_table(bk, (4.0, BY1 - 2.5, 0), 0.0)
-    # «горила» одразу за проходом зі сцени: стіл з моніторами, гарнітура
     folding_table(bk, (2.6, BY0 + 1.5, 0), math.pi / 2, length=1.83, cloth="Cloth_Black")
     for k in range(2):
         monitor(bk, (2.6, BY0 + 1.0 + k * 0.9, 0), math.pi / 2, z=0.76)
-    step_and_repeat(bk, (X1 - 2.5, BY0 + 1.7, 0), -math.pi / 2, 2.8, 2.3)                       # інтерв'ю
+    step_and_repeat(bk, (X1 - 2.5, BY0 + 1.7, 0), -math.pi / 2, 2.8, 2.3)
     for k in range(2):
         light_tree(bk, (X1 - 5.0, BY0 + 0.8 + 1.8 * k, 0), (X1 - 2.5, BY0 + 1.7, 1.6), h=1.8, n=2)
-    for k in range(2):                                                                           # кейтеринг
+    for k in range(2):
         folding_table(bk, (X0 + 2.0 + 2.0 * k, BY0 + 1.8, 0), 0.0, cloth="Cloth_Blue")
         for j in range(4):
             bk.box("Food", (X0 + 1.4 + 2.0 * k + 0.4 * j, BY0 + 1.8, 0.8), (0.3, 0.4, 0.06))
@@ -1118,6 +1268,8 @@ def build_hall(root):
     bkc = Parts("ceiling_backstage", root)
     bkc.box("Ceiling", (0, (BY0 + BY1) / 2, 3.25), (X1 - X0, BY1 - BY0, 0.1))
     bkc.finish()
+    for k in range(4):
+        AREAS.append(((-12.0 + 8.0 * k, (BY0 + BY1) / 2, 3.1), 1.2, (1.0, 0.95, 0.88), 150.0))
     empty("anchor_backstage_gorilla", root, (1.6, BY0 + 1.4, 0), yaw=-90)
     empty("anchor_backstage_lockers", root, (-(X1 - 1.0), BY0 + 7.5, 0))
     empty("anchor_backstage_bench", root, (-8.0, BY0 + 6.0, 0))
@@ -1130,47 +1282,167 @@ def build_hall(root):
                 ("cam_high_wide", (12.0, -11.0, 8.0)), ("cam_balcony", (0.0, Y0 + 1.5, BZ + 1.6)),
                 ("cam_backstage", (0.0, BY0 + 2.0, 2.6))])
     return dict(id="hall", title="Клубна зала з балконом (регіональний)", ring=r, spec=spec,
-                ropes=("Black", "Black", "Black"), capacity=len(SEATS))
+                ropes=("Black", "Black", "Black"), capacity=len(SEATS), ambient=0.12)
 
 # ---------------------------------------------------------------- 3. палац спорту (середній промоушен)
 
-def tier(P, side, start, rows, rise, depth, length, z0, seat_mat, aisle_every=20, skip=None, back_wall=True):
-    """Ярус трибуни вздовж боку side ('S','E','W','N'): start — відстань від центру до першого ряду."""
-    for r_ in range(rows):
-        d = start + r_ * depth
-        z = z0 + r_ * rise
-        n = int(length / 0.5)
-        if side in ("S", "N"):
-            sgn = -1 if side == "S" else 1
-            P.box("Tier_Concrete", (0, sgn * (d + depth / 2), z / 2), (length, depth, z))
-            yaw = 0.0 if side == "S" else math.pi
-            for k in range(n):
-                x = -length / 2 + 0.25 + k * 0.5
-                if (k % aisle_every) in (0, 1) or (skip and skip(x, r_)):
-                    continue
-                stadium_seat(P, (x, sgn * (d + 0.35), z), yaw, seat_mat)
+class Bowl:
+    """Чаша трибун: заокруглений прямокутник навколо підлоги (півосі ax, ay, центр cy, радіус кута rc),
+    відкритий на півночі (там сцена) — кінці на y = top. t — довжина вздовж осьової лінії від сходу через південь
+    на захід; точка з відступом d — на зовнішній нормалі."""
+    def __init__(self, ax, ay, cy, rc, top):
+        self.ax, self.ay, self.cy, self.rc, self.top = ax, ay, cy, rc, top
+        self.L1 = top - (cy - ay + rc)
+        self.La = rc * math.pi / 2
+        self.L2 = 2 * (ax - rc)
+        self.total = 2 * self.L1 + 2 * self.La + self.L2
+
+    def at(self, t, d):
+        ax, ay, cy, rc = self.ax, self.ay, self.cy, self.rc
+        L1, La, L2 = self.L1, self.La, self.L2
+        if t <= L1:
+            p, n = Vector((ax, self.top - t)), Vector((1, 0))
+        elif t <= L1 + La:
+            a = -(t - L1) / rc
+            n = Vector((math.cos(a), math.sin(a)))
+            p = Vector((ax - rc, cy - ay + rc)) + n * rc
+        elif t <= L1 + La + L2:
+            p, n = Vector((ax - rc - (t - L1 - La), cy - ay)), Vector((0, -1))
+        elif t <= L1 + 2 * La + L2:
+            a = -math.pi / 2 - (t - L1 - La - L2) / rc
+            n = Vector((math.cos(a), math.sin(a)))
+            p = Vector((-ax + rc, cy - ay + rc)) + n * rc
         else:
-            sgn = 1 if side == "E" else -1
-            P.box("Tier_Concrete", (sgn * (d + depth / 2), 0, z / 2), (depth, length, z))
-            yaw = math.pi / 2 if side == "E" else -math.pi / 2
+            p, n = Vector((-ax, cy - ay + rc + (t - L1 - 2 * La - L2))), Vector((-1, 0))
+        q = p + n * d
+        return Vector((q.x, q.y, 0.0)), Vector((n.x, n.y, 0.0))
+
+    def samples(self, extra=()):
+        L1, La, L2 = self.L1, self.La, self.L2
+        ts = set()
+        for (t0, t1, step) in ((0, L1, 1.0), (L1, L1 + La, La / 12), (L1 + La, L1 + La + L2, 1.0),
+                               (L1 + La + L2, L1 + 2 * La + L2, La / 12), (L1 + 2 * La + L2, self.total, 1.0)):
+            n = max(1, round((t1 - t0) / step))
+            for k in range(n + 1):
+                ts.add(round(t0 + (t1 - t0) * k / n, 4))
+        for t in extra:
+            if 0 < t < self.total:
+                ts.add(round(t, 4))
+        return sorted(ts)
+
+    def length(self, t0, t1, d, step=0.05):
+        n = max(2, int((t1 - t0) / step))
+        pts = [self.at(t0 + (t1 - t0) * k / n, d)[0] for k in range(n + 1)]
+        acc = [0.0]
+        for k in range(n):
+            acc.append(acc[-1] + (pts[k + 1] - pts[k]).length)
+        return pts, acc
+
+def bowl_tier(B, P, walls, d0, z0, rows, depth, rise, seat_mat, aisles, voms=(), vom_rows=0, front_mat="Tier_Front",
+              back_h=None, fascia=None):
+    """Ярус чаші: сходинки (проступ + підступ) суцільною стрічкою, крісла між проходами, сходи в проходах,
+    вомиторії (тунелі) у перших vom_rows рядах. back_h — висота задньої стіни над останнім рядом (окремі wall_*)."""
+    ts = B.samples([v[0] for v in voms] + [v[1] for v in voms])
+    in_vom = lambda t, r_: r_ < vom_rows and any(a <= t <= b for (a, b) in voms)
+    for r_ in range(rows):
+        di, do = d0 + r_ * depth, d0 + (r_ + 1) * depth
+        z = z0 + r_ * rise
+        zl = 0.0 if r_ == 0 else z - rise
+        mat_r = front_mat if r_ == 0 else "Tier_Concrete"
+        if r_ == 0 and fascia:
+            mat_r = None
+        for k in range(len(ts) - 1):
+            t0, t1 = ts[k], ts[k + 1]
+            if in_vom((t0 + t1) / 2, r_):
+                continue
+            a0, n0 = B.at(t0, di)
+            a1, n1 = B.at(t1, di)
+            b0, _ = B.at(t0, do)
+            b1, _ = B.at(t1, do)
+            quad_n(P, "Tier_Concrete", [(a0.x, a0.y, z), (a1.x, a1.y, z), (b1.x, b1.y, z), (b0.x, b0.y, z)], (0, 0, 1))
+            nin = -(n0 + n1)
+            if mat_r:
+                quad_n(P, mat_r, [(a0.x, a0.y, zl), (a1.x, a1.y, zl), (a1.x, a1.y, z), (a0.x, a0.y, z)], nin)
+            elif fascia:
+                zf = max(zl, z - fascia[1])
+                if zf > zl:
+                    quad_n(P, "Tier_Front", [(a0.x, a0.y, zl), (a1.x, a1.y, zl), (a1.x, a1.y, zf), (a0.x, a0.y, zf)], nin)
+                quad_n(P, fascia[0], [(a0.x, a0.y, zf), (a1.x, a1.y, zf), (a1.x, a1.y, z), (a0.x, a0.y, z)], nin)
+            if r_ == rows - 1 and back_h:
+                side = "S" if (n0.y + n1.y) < -1.414 else ("E" if n0.x + n1.x > 0 else "W")
+                quad_n(walls[side], "Wall_Dark", [(b0.x, b0.y, z), (b1.x, b1.y, z), (b1.x, b1.y, z + back_h), (b0.x, b0.y, z + back_h)], nin)
+                quad_n(P, "Tier_Front", [(b0.x, b0.y, z), (b1.x, b1.y, z), (b1.x, b1.y, z + 1.0), (b0.x, b0.y, z + 1.0)], nin)
+    # вомиторії: підлога тунелю, стіни сходинками, портал під першим цілим рядом
+    for (va, vb) in voms:
+        if not vom_rows:
+            continue
+        dv = d0 + vom_rows * depth
+        zv = z0 + (vom_rows - 1) * rise
+        p0, n0 = B.at(va, d0)
+        p1, _ = B.at(vb, d0)
+        q0, _ = B.at(va, dv)
+        q1, _ = B.at(vb, dv)
+        quad_n(P, "Concourse", [(p0.x, p0.y, 0.01), (p1.x, p1.y, 0.01), (q1.x, q1.y, 0.01), (q0.x, q0.y, 0.01)], (0, 0, 1))
+        quad_n(P, "Floor_Dark", [(q0.x, q0.y, 0.0), (q1.x, q1.y, 0.0), (q1.x, q1.y, zv), (q0.x, q0.y, zv)], -n0)
+        for (tv, sgn) in ((va, 1), (vb, -1)):
+            tan = (B.at(tv + 0.01, d0)[0] - B.at(tv, d0)[0]).normalized()
+            for r_ in range(vom_rows):
+                di, do = d0 + r_ * depth, d0 + (r_ + 1) * depth
+                z = z0 + r_ * rise
+                c0, _ = B.at(tv, di)
+                c1, _ = B.at(tv, do)
+                quad_n(P, "Tier_Front", [(c0.x, c0.y, 0.0), (c1.x, c1.y, 0.0), (c1.x, c1.y, z), (c0.x, c0.y, z)], tan * sgn)
+            c0, _ = B.at(tv, d0)
+            c1, _ = B.at(tv, dv)
+            P.cyl("Railing_Steel", (c0.x, c0.y, z0 + 1.0), (c1.x, c1.y, zv + 1.0), 0.025, segs=6)
+    # проходи: проміжна сходинка на кожному ряду
+    for ta in aisles:
+        for r_ in range(rows):
+            if in_vom(ta, r_):
+                continue
+            di = d0 + r_ * depth
+            z = z0 + r_ * rise
+            c, n = B.at(ta, di + depth * 0.75)
+            yaw = math.atan2(n.y, n.x)
+            P.box("Aisle_Step", (c.x, c.y, z + rise / 4), (depth / 2, 1.0, rise / 2), rz=yaw)
+            P.box("Aisle_Nose", (c.x - n.x * depth / 4, c.y - n.y * depth / 4, z + rise / 2 + 0.002), (0.05, 1.0, 0.006), rz=yaw)
+    # крісла: між проходами й вомиторіями, крок 0,52 м за справжньою довжиною ряду
+    cuts = sorted([(ta - 0.6, ta + 0.6) for ta in aisles])
+    for r_ in range(rows):
+        dseat = d0 + r_ * depth + 0.32
+        z = z0 + r_ * rise
+        blocked = list(cuts) + ([(a - 0.3, b + 0.3) for (a, b) in voms] if r_ < vom_rows else [])
+        blocked.sort()
+        spans, cur = [], 0.15
+        for (a, b) in blocked:
+            if a > cur:
+                spans.append((cur, a))
+            cur = max(cur, b)
+        if cur < B.total - 0.15:
+            spans.append((cur, B.total - 0.15))
+        for (ta, tb) in spans:
+            pts, acc = B.length(ta, tb, dseat)
+            L = acc[-1]
+            n = int(L / 0.52)
+            if n < 1:
+                continue
+            j = 0
             for k in range(n):
-                y = -length / 2 + 0.25 + k * 0.5
-                if (k % aisle_every) in (0, 1) or (skip and skip(y, r_)):
-                    continue
-                stadium_seat(P, (sgn * (d + 0.35), y, z), yaw, seat_mat)
-    # стінка перед першим рядом
-    if side in ("S", "N"):
-        sgn = -1 if side == "S" else 1
-        P.box("Tier_Front", (0, sgn * (start - 0.05), z0 / 2 + 0.5), (length, 0.1, z0 + 1.0))
-    else:
-        sgn = 1 if side == "E" else -1
-        P.box("Tier_Front", (sgn * (start - 0.05), 0, z0 / 2 + 0.5), (0.1, length, z0 + 1.0))
+                s = (k + 0.5) * L / n
+                while j < len(acc) - 2 and acc[j + 1] < s:
+                    j += 1
+                u = (s - acc[j]) / max(1e-6, acc[j + 1] - acc[j])
+                p = pts[j].lerp(pts[j + 1], u)
+                tt = ta + (tb - ta) * (j + u) / (len(pts) - 1)
+                _, nn = B.at(tt, dseat)
+                stadium_seat(P, (p.x, p.y, z), math.atan2(-nn.x, nn.y), seat_mat)
+    return d0 + rows * depth, z0 + (rows - 1) * rise
 
 def stadium_seat(P, pos, yaw, mat):
     f = lambda v: at(pos, yaw, v)
-    P.box(mat, f((0, 0, 0.44)), (0.44, 0.42, 0.06), rz=yaw)
-    P.box(mat, f((0, 0.2, 0.7)), (0.44, 0.05, 0.45), rz=yaw)
-    P.box("Chair_Frame", f((0, 0.05, 0.22)), (0.06, 0.06, 0.44), rz=yaw)
+    P.box(mat, f((0, -0.02, 0.44)), (0.46, 0.42, 0.07), rz=yaw)
+    P.box(mat, f((0, 0.19, 0.72)), (0.46, 0.05, 0.5), rz=yaw, rx=math.radians(-8))
+    P.box("Chair_Frame", f((0, 0.08, 0.22)), (0.07, 0.07, 0.44), rz=yaw)
     seat_mark(pos, yaw, pos[2] + 0.44)
 
 def build_arena(root):
@@ -1179,83 +1451,123 @@ def build_arena(root):
                 mats="Mat_Black", mats_extra=1.4)
     r = build_ring(root, spec)
     m = r["mats_half"]
-    FX, FY0, FY1 = 22.0, -14.0, 20.0         # підлога арени
-    H = 22.0
+    q = m + 1.0
+    FX, FY0, CY, TOP = 20.0, -14.0, 1.0, 18.0           # підлога: ±FX, від FY0; центр чаші CY; кінці чаші на TOP
+    SY0, SY1, SH = 16.0, 23.0, 1.5                       # сцена
+    H = 24.0
+    B = Bowl(FX, CY - FY0, CY, 6.0, TOP)
 
+    # --- підлога арени: темний настил, доріжки до вомиторіїв, смуга навколо огорожі
     sh = Parts("arena", root)
-    sh.box("Floor_Dark", (0, (FY0 + FY1) / 2, -0.05), (2 * FX + 40, FY1 - FY0 + 40, 0.1))
+    sh.box("Arena_Floor", (0, (FY0 + SY1) / 2, -0.05), (2 * FX + 60, SY1 - FY0 + 60, 0.1))
+    sh.box("Carpet_Red", (0, (FY0 - q) / 2, 0.005), (2.0, -q - FY0, 0.01))
+    sh.box("Carpet_Red", ((q + FX) / 2, CY, 0.005), (FX - q, 2.0, 0.01))
+    sh.box("Carpet_Red", (-(q + FX) / 2, CY, 0.005), (FX - q, 2.0, 0.01))
+    for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        sh.box("Carpet_Black", (sx * (q + 0.6), sy * (q + 0.6), 0.004),
+               (1.2 if sx else 2 * q + 2.4, 1.2 if sy else 2 * q + 2.4, 0.008))
     sh.finish()
 
-    # --- трибуни: нижній ярус з трьох боків (південь, схід, захід), верхній — на сході й заході
+    # --- чаша: нижній ярус (16 рядів, вомиторії), кільцевий хол, світлодіодний пояс, верхній ярус (12 рядів)
+    walls = {n_: Parts("wall_" + n_, root) for n_ in ("S", "E", "W", "N")}
+    aisles = []
+    for (t0, t1, step) in ((0, B.L1, 6.5), (B.L1 + B.La + 1.5, B.L1 + B.La + B.L2 - 1.5, 6.0),
+                           (B.total - B.L1, B.total, 6.5)):
+        n = max(1, round((t1 - t0) / step))
+        for k in range(1, n):
+            aisles.append(t0 + (t1 - t0) * k / n)
+    aisles += [B.L1 + B.La / 2, B.total - B.L1 - B.La / 2]
+    voms = [(B.L1 * 0.45 - 1.5, B.L1 * 0.45 + 1.5), (B.total / 2 - 1.5, B.total / 2 + 1.5),
+            (B.total - B.L1 * 0.45 - 1.5, B.total - B.L1 * 0.45 + 1.5)]
+    aisles = [a for a in aisles if not any(v0 - 2.0 < a < v1 + 2.0 for (v0, v1) in voms)]
     lower = Parts("tiers_lower", root)
-    vom = lambda u, r_: abs(u) < 1.6 and r_ < 6                                                  # вомиторії (проходи)
-    tier(lower, "S", -FY0, 14, 0.42, 0.85, 2 * FX, 1.1, "Seat_Red", skip=lambda x, r_: vom(x, r_))
-    tier(lower, "E", FX, 14, 0.42, 0.85, FY1 - FY0 - 6, 1.1, "Seat_Red", skip=lambda y, r_: vom(y - 2, r_))
-    tier(lower, "W", FX, 14, 0.42, 0.85, FY1 - FY0 - 6, 1.1, "Seat_Red", skip=lambda y, r_: vom(y - 2, r_))
+    lo_d, lo_z = bowl_tier(B, lower, walls, 0.0, 1.2, 14, 0.85, 0.38, "Seat_Red", aisles, voms, vom_rows=6)
     lower.finish()
+    con = Parts("concourse", root)
+    cz = lo_z + 0.35
+    ts = B.samples()
+    for k in range(len(ts) - 1):
+        a0, n0 = B.at(ts[k], lo_d)
+        a1, n1 = B.at(ts[k + 1], lo_d)
+        b0, _ = B.at(ts[k], lo_d + 2.6)
+        b1, _ = B.at(ts[k + 1], lo_d + 2.6)
+        quad_n(con, "Concourse", [(a0.x, a0.y, cz), (a1.x, a1.y, cz), (b1.x, b1.y, cz), (b0.x, b0.y, cz)], (0, 0, 1))
+        quad_n(con, "Tier_Front", [(a0.x, a0.y, lo_z), (a1.x, a1.y, lo_z), (a1.x, a1.y, cz), (a0.x, a0.y, cz)], -(n0 + n1))
+        if k % 3 == 0:
+            con.cyl("Railing_Steel", (a0.x, a0.y, cz), (a0.x, a0.y, cz + 1.0), 0.02, segs=6)
+        con.cyl("Railing_Steel", (a0.x, a0.y, cz + 1.0), (a1.x, a1.y, cz + 1.0), 0.025, segs=6)
+    con.finish()
     upper = Parts("tiers_upper", root)
-    tier(upper, "E", FX + 14 * 0.85 + 2.5, 9, 0.5, 0.9, FY1 - FY0 - 4, 8.8, "Seat_Blue", aisle_every=18)
-    tier(upper, "W", FX + 14 * 0.85 + 2.5, 9, 0.5, 0.9, FY1 - FY0 - 4, 8.8, "Seat_Blue", aisle_every=18)
-    tier(upper, "S", -FY0 + 14 * 0.85 + 2.5, 9, 0.5, 0.9, 2 * FX, 8.8, "Seat_Blue", aisle_every=18)
+    up_d, up_z = bowl_tier(B, upper, walls, lo_d + 2.6, cz + 1.4, 10, 0.9, 0.55, "Seat_Blue", aisles,
+                           back_h=H - (cz + 1.4 + 9 * 0.55), fascia=("LED_Ribbon", 0.9))
     upper.finish()
-    # стіни й дах арени (окремо — ізометрична камера ховає ближні)
-    OX, OY0, OY1 = FX + 26.0, FY0 - 26.0, FY1 + 16.0
-    for name, c, s in (("S", (0, OY0, H / 2), (2 * OX, 0.5, H)), ("E", (OX, (OY0 + OY1) / 2, H / 2), (0.5, OY1 - OY0, H)),
-                       ("W", (-OX, (OY0 + OY1) / 2, H / 2), (0.5, OY1 - OY0, H)), ("N", (0, OY1, H / 2), (2 * OX, 0.5, H))):
-        P_ = Parts("wall_" + name, root)
-        P_.box("Wall_Dark", c, s)
-        P_.finish()
-    ro = Parts("ceiling", root)
-    ro.box("Ceiling", (0, (OY0 + OY1) / 2, H + 0.1), (2 * OX, OY1 - OY0, 0.2))
-    for k in range(9):
-        y = OY0 + 4 + k * (OY1 - OY0 - 8) / 8
-        ro.box("Steel_Beam", (0, y, H - 1.2), (2 * OX, 0.5, 2.2))
-    ro.finish()
-    # банери на стінах, табличка «вихід» над вомиторіями
-    dec = Parts("decor", root)
-    for k in range(6):
-        dec.box(("Banner_Red", "Banner_Black", "Banner_Gold")[k % 3], (-15.0 + 6.0 * k, OY0 + 0.3, 16.0), (3.0, 0.05, 4.5))
+    # торці чаші біля сцени: стіни-кулісні щити від підлоги до даху
     for sx in (-1, 1):
-        for y in (2.0,):
-            exit_sign(dec, (sx * (FX - 0.1), y, 2.6), sx * math.pi / 2)
-    exit_sign(dec, (0, FY0 + 0.1, 2.6), 0.0)
+        x0, x1 = sx * FX, sx * (FX + up_d)
+        walls["N"].box("Wall_Dark", ((x0 + x1) / 2, TOP + 0.2, H / 2), (abs(x1 - x0), 0.4, H))
+        walls["N"].box("Drape_Black", (sx * (FX + 0.5 - 4.0), TOP - 0.05, 4.5), (8.0, 0.05, 9.0))
+    walls["N"].box("Wall_Dark", (0, SY1 + 0.3, H / 2), (2 * (FX + up_d), 0.5, H))
+    for P_ in walls.values():
+        P_.finish()
+
+    # --- дах: стеля, головні балки, технічний місток над рингом
+    ro = Parts("ceiling", root)
+    ro.box("Ceiling", (0, CY, H + 0.1), (2 * (FX + up_d) + 2, 2 * (CY - FY0 + up_d) + 10, 0.2))
+    for k in range(9):
+        y = FY0 - up_d + 3 + k * (SY1 - FY0 + up_d - 6) / 8
+        ro.box("Steel_Beam", (0, y, H - 1.0), (2 * (FX + up_d), 0.5, 1.8))
+    ro.finish()
+    dec = Parts("wall_S_banners", root)                                                           # банери чемпіонів під дахом (ховаються зі стіною)
+    for k in range(7):
+        dec.box(("Banner_Red", "Banner_Black", "Banner_Gold")[k % 3], (-15.0 + 5.0 * k, FY0 - up_d + 0.6, H - 4.5), (2.6, 0.05, 4.0))
+        dec.box("Banner_Gold", (-15.0 + 5.0 * k, FY0 - up_d + 0.57, H - 3.0), (2.0, 0.02, 0.4))
+    dec.finish()
+    dec = Parts("decor", root)
+    for v in voms:
+        p, n = B.at((v[0] + v[1]) / 2, 0.0)
+        exit_sign(dec, (p.x - n.x * 0.05, p.y - n.y * 0.05, 2.6), math.atan2(-n.x, n.y) + math.pi)
     dec.finish()
 
-    # --- вихідна сцена на півночі: LED-стіна 12 × 6,5 м, два бічні екрани, рамна ферма зі світлом, рампа
+    # --- вихідна сцена на півночі: LED-стіна з проходом, бічні екрани під кутом, рамна ферма з головами, рампа
     st = Parts("stage", root)
-    SY0, SY1, SH = FY1 - 6.0, FY1, 1.5
     st.box("Stage_Black", (0, (SY0 + SY1) / 2, SH / 2), (24.0, SY1 - SY0, SH))
+    st.box("LED_Strip", (0, SY0 - 0.01, SH - 0.05), (24.0, 0.02, 0.06))
+    for sx in (-1, 1):                                                                           # маскувальні щити по боках
+        drape(st, (sx * 12.5, SY0, 0), (sx * 12.5, SY1, 0), 9.0, "Drape_Black", folds=True)
     st.finish()
     ent = Parts("entrance", root)
-    led_wall(ent, (-3.75, SY1 - 0.4, SH + 3.5), 4.5, 6.5)
-    led_wall(ent, (3.75, SY1 - 0.4, SH + 3.5), 4.5, 6.5)
-    led_wall(ent, (0, SY1 - 0.4, SH + 5.3), 3.0, 2.9)                                           # над проходом
-    drape(ent, (-1.5, SY1 - 0.3, SH), (1.5, SY1 - 0.3, SH), 3.6, "Drape_Black")
+    led_wall(ent, (-4.0, SY1 - 0.6, SH + 3.6), 5.0, 6.6)
+    led_wall(ent, (4.0, SY1 - 0.6, SH + 3.6), 5.0, 6.6)
+    led_wall(ent, (0, SY1 - 0.6, SH + 5.4), 3.0, 3.0)
+    drape(ent, (-1.5, SY1 - 0.5, SH), (1.5, SY1 - 0.5, SH), 3.8, "Drape_Black")
     for sx in (-1, 1):
-        led_wall(ent, (sx * 9.5, SY1 - 1.6, SH + 3.0), 3.0, 5.0, yaw=sx * math.radians(-20), mat="LED_Side")
-        truss_beam(ent, (sx * 11.5, SY0 + 0.5, SH), (sx * 11.5, SY0 + 0.5, SH + 8.5), 0.4)
-        speaker_stack(ent, (sx * 11.0, SY0 + 2.0, SH), 0.0, n=3)
-    truss_beam(ent, (-11.5, SY0 + 0.5, SH + 8.5), (11.5, SY0 + 0.5, SH + 8.5), 0.4)
+        ent.box("LED_Strip", (sx * 1.55, SY1 - 0.55, SH + 1.9), (0.08, 0.05, 3.8))
+        led_wall(ent, (sx * 9.6, SY1 - 2.2, SH + 3.2), 3.2, 5.2, yaw=sx * math.radians(-22), mat="LED_Side")
+        truss_beam(ent, (sx * 11.6, SY0 + 0.6, SH), (sx * 11.6, SY0 + 0.6, SH + 8.6), 0.4)
+        speaker_stack(ent, (sx * 11.0, SY0 + 2.2, SH), 0.0, n=3)
+    truss_beam(ent, (-11.6, SY0 + 0.6, SH + 8.6), (11.6, SY0 + 0.6, SH + 8.6), 0.4)
     for k in range(9):
-        moving_head(ent, (-9.0 + 2.25 * k, SY0 + 0.5, SH + 8.1), (0, SY0 - 4.0, SH))
-    # рампа зі сцени до рингу, підсвічені краї, огорожа вздовж
-    RY0 = m + 0.9
-    ramp_len = SY0 - RY0
-    ent.box("Ramp_Black", (0, (SY0 + RY0) / 2, SH / 2), (3.0, ramp_len, SH))
+        moving_head(ent, (-9.0 + 2.25 * k, SY0 + 0.6, SH + 8.2), (-4.0 + k, SY0 - 6.0, SH))
+    RY0 = q
+    ramp_len = SY0 - RY0 - 1.6
+    rc_ = SY0 - ramp_len / 2
+    ent.box("Ramp_Black", (0, rc_, SH / 2), (3.0, ramp_len, SH))
     for sx in (-1, 1):
-        ent.box("LED_Strip", (sx * 1.52, (SY0 + RY0) / 2, SH + 0.005), (0.05, ramp_len, 0.02))
+        ent.box("LED_Strip", (sx * 1.52, rc_, SH + 0.005), (0.05, ramp_len, 0.02))
+        ent.box("LED_Strip", (sx * 1.505, rc_, SH - 0.1), (0.01, ramp_len, 0.04))
+        ent.box("Cloth_Black", (sx * 1.51, rc_, SH / 2), (0.01, ramp_len, SH))
         barricade_run(ent, (sx * 2.6, SY0 - 0.2, 0), (sx * 2.6, RY0, 0))
-    stairs(ent, (0, RY0, 0), math.pi, SH, 2.6, 5, "Ramp_Black")                                # з рампи на підлогу біля рингу
+    stairs(ent, (0, SY0 - ramp_len, 0), math.pi, SH, 3.0, 5, "Ramp_Black")
     for k in range(6):
         empty("anchor_pyro_%d" % (k + 1), root, (-10.0 + 4.0 * k, SY0 + 0.3, SH))
+        ent.box("Case_Black", (-10.0 + 4.0 * k, SY0 + 0.3, SH + 0.12), (0.3, 0.3, 0.24))
     ent.finish()
-    empty("anchor_curtain", root, (0, SY1 - 0.8, SH), yaw=180)
-    path_anchors(root, [(0, SY1 - 1.4, SH), (0, SY0 - 0.2, SH), (0, (SY0 + RY0) / 2, SH),
-                        (0, RY0 - 0.3 - 1.5, 0), (r["half_plat"] + 0.9, r["half_plat"] - 0.2, 0)])
+    empty("anchor_curtain", root, (0, SY1 - 1.0, SH), yaw=180)
+    path_anchors(root, [(0, SY1 - 1.6, SH), (0, SY0 - 0.2, SH), (0, rc_, SH),
+                        (0, SY0 - ramp_len - 1.8, 0), (r["half_plat"] + 0.9, r["half_plat"] - 0.2, 0)])
 
     # --- огорожа навколо рингу з проходом під рампу
     bar = Parts("barricade", root)
-    q = m + 1.0
     barricade_run(bar, (-q, q, 0), (-2.6, q, 0))
     barricade_run(bar, (2.6, q, 0), (q, q, 0))
     barricade_run(bar, (q, q, 0), (q, -q, 0))
@@ -1263,56 +1575,56 @@ def build_arena(root):
     barricade_run(bar, (-q, -q, 0), (-q, q, 0))
     bar.finish()
 
-    # --- біля рингу: стіл коментаторів з передньою панеллю, хронометрист, поміст камери, кран, режисерський пульт
+    # --- біля рингу: стіл коментаторів з панеллю, хронометрист, поміст камери, кран, режисерський пульт
     rs = Parts("ringside", root)
     cx = q + 1.3
     rs.box("Table_Top", (cx, 0, 0.76), (1.0, 3.6, 0.05))
     rs.box("Banner_Black", (cx - 0.5, 0, 0.38), (0.04, 3.6, 0.76))
     rs.box("Banner_Gold", (cx - 0.53, 0, 0.55), (0.02, 3.0, 0.15))
+    rs.box("LED_Strip", (cx - 0.53, 0, 0.1), (0.02, 3.6, 0.03))
     for k in range(3):
         folding_chair(rs, (cx + 0.75, -1.2 + 1.2 * k, 0), -math.pi / 2, crowd=False)
         monitor(rs, (cx - 0.25, -1.2 + 1.2 * k, 0), math.pi / 2, z=0.79)
-    rs.box("Backdrop_White", (cx + 1.6, 0, 1.4), (0.05, 4.0, 2.8))
-    folding_table(rs, (-q + 0.6, -1.0, 0), math.pi / 2, cloth="Cloth_Black")                     # хронометрист усередині огорожі
+    folding_table(rs, (-q + 0.6, -1.0, 0), math.pi / 2, cloth="Cloth_Black")
     ring_bell(rs, (-q + 0.6, -1.5, 0), 0.78)
     laptop(rs, (-q + 0.6, -0.5, 0), -math.pi / 2, 0.76)
     folding_chair(rs, (-q + 0.05, -1.0, 0), math.pi / 2, crowd=False)
-    rs.box("Stage_Black", (0, FY0 + 3.0, 1.1), (3.4, 2.4, 2.2))                                 # поміст основної камери
-    railing(rs, (-1.7, FY0 + 4.2, 2.2), (1.7, FY0 + 4.2, 2.2))
-    hd_camera(rs, (-0.7, FY0 + 3.0, 0), 0.0, 2.2)
-    hd_camera(rs, (0.7, FY0 + 3.0, 0), 0.0, 2.2)
+    rs.box("Stage_Black", (6.5, FY0 + 2.4, 1.1), (3.4, 2.4, 2.2))                                # поміст основної камери
+    railing(rs, (4.8, FY0 + 3.6, 2.2), (8.2, FY0 + 3.6, 2.2))
+    hd_camera(rs, (5.8, FY0 + 2.4, 0), 0.0, 2.2)
+    hd_camera(rs, (7.2, FY0 + 2.4, 0), 0.0, 2.2)
     jib(rs, (q + 3.5, -q - 3.5, 0), (0, 0, 1.5))
-    rs.box("Stage_Black", (0, FY0 + 0.9, 0.3), (6.0, 1.6, 0.6))                                  # режисерський пульт
-    folding_table(rs, (0, FY0 + 0.9, 0.6), 0.0, length=5.0, cloth="Cloth_Black")
+    rs.box("Stage_Black", (-8.5, FY0 + 1.3, 0.3), (6.0, 1.8, 0.6))                                # режисерський пульт
+    folding_table(rs, (-8.5, FY0 + 1.3, 0.6), 0.0, length=5.0, cloth="Cloth_Black")
     for k in range(5):
-        monitor(rs, (-2.0 + k, FY0 + 1.1, 0), math.pi, z=1.36)
+        monitor(rs, (-10.5 + k, FY0 + 1.5, 0), math.pi, z=1.36)
     rs.finish()
     empty("anchor_commentary", root, (cx + 0.75, 0, 0), yaw=-90)
     empty("anchor_timekeeper", root, (-q + 0.05, -1.0, 0), yaw=90)
     empty("anchor_bell", root, (-q + 0.6, -1.5, 0.78))
-    empty("anchor_hardcam", root, (0, FY0 + 3.0, 3.6))
+    empty("anchor_hardcam", root, (6.5, FY0 + 2.4, 3.6))
     empty("anchor_jib", root, (q + 3.5, -q - 3.5, 3.5))
     for i, (x, y) in enumerate(((q - 0.4, -q + 0.4), (-q + 0.4, -q + 0.4), (q - 0.4, q - 0.4), (-q + 0.4, q - 0.4))):
         empty("anchor_handheld_%d" % (i + 1), root, (x, y, 1.6))
 
-    # --- стільці на підлозі арени (ближні до рингу ряди) — за огорожею з трьох боків
+    # --- стільці на підлозі арени: три блоки, лицем до рингу з розкидом, проходи до вомиторіїв
     ch = Parts("chairs", root)
-    chair_rows(ch, (0, -q - 1.2, 0), 0.0, 6, 34, gap_every=17, gap=1.4, seat="Chair_Seat_Black",
-               skip=lambda p_: abs(p_.x) < 2.2 and p_.y < FY0 + 5.0)
-    chair_rows(ch, (q + 3.2, -2.0, 0), math.pi / 2, 5, 22, gap_every=11, gap=1.4, seat="Chair_Seat_Black",
-               skip=lambda p_: p_.x > FX - 1.0)
-    chair_rows(ch, (-q - 1.2, -2.0, 0), -math.pi / 2, 6, 22, gap_every=11, gap=1.4, seat="Chair_Seat_Black",
-               skip=lambda p_: p_.x < -FX + 1.0)
+    skip_s = lambda p_: (abs(p_.x - 6.5) < 2.3 and p_.y < FY0 + 4.2) or (abs(p_.x + 8.5) < 3.4 and p_.y < FY0 + 3.0)
+    skip_e = lambda p_: p_.x > FX - 1.0 or (p_ - Vector((q + 3.5, -q - 3.5, 0))).length < 2.2 or p_.y > SY0 - 1.5
+    skip_w = lambda p_: p_.x < -FX + 1.0 or p_.y > SY0 - 1.5
+    chair_rows(ch, (0, -q - 1.4, 0), 0.0, 7, 36, gap_every=18, gap=2.0, skip=skip_s, standing=0, focus=(0, 0))
+    chair_rows(ch, (q + 3.4, CY, 0), 0.0, 10, 36, gap_every=18, gap=2.0, skip=skip_e, standing=0, focus=(0, 0))
+    chair_rows(ch, (-q - 1.6, CY, 0), 0.0, 12, 36, gap_every=18, gap=2.0, skip=skip_w, standing=0, focus=(0, 0))
     ch.finish()
 
-    # --- підвісне світло: коробка 40 × 40 футів, лінійні масиви по кутах, відеокуб над рингом
+    # --- підвісне світло: коробка 40 × 40 футів, лінійні масиви по кутах, відеокуб над рингом, ферма над рампою
     lt = Parts("lighting", root)
     hb = 10.0
     b = 12.2 / 2
     pts = [(b, b, hb), (-b, b, hb), (-b, -b, hb), (b, -b, hb)]
     for k in range(4):
         truss_beam(lt, pts[k], pts[(k + 1) % 4], 0.45)
-        lt.cyl("Steel_Beam", pts[k], (pts[k][0], pts[k][1], H - 2.3), 0.014, segs=4)
+        lt.cyl("Steel_Beam", pts[k], (pts[k][0], pts[k][1], H - 1.9), 0.014, segs=4)
         a, c = Vector(pts[k]), Vector(pts[(k + 1) % 4])
         for j in range(1, 8):
             p = a + (c - a) * (j / 8) - Vector((0, 0, 0.35))
@@ -1320,16 +1632,21 @@ def build_arena(root):
                 moving_head(lt, p, (0, 0, r["mat_z"]))
             else:
                 par_can(lt, p, (0, 0, r["mat_z"]))
-        line_array(lt, (pts[k][0] * 1.25, pts[k][1] * 1.25, 0), math.atan2(-pts[k][1], -pts[k][0]) + math.pi / 2, 13.0)
-    for k in range(4):                                                                            # відеокуб
+        line_array(lt, (pts[k][0] * 1.35, pts[k][1] * 1.35, 0), math.atan2(-pts[k][1], -pts[k][0]) + math.pi / 2, 13.0)
+    for k in range(4):
         a = k * math.pi / 2
         c = Vector((1.6 * math.cos(a), 1.6 * math.sin(a), 15.0))
         lt.box("Screen_Frame", c, (3.2 if k % 2 else 0.1, 0.1 if k % 2 else 3.2, 2.0))
         lt.box("LED_Screen", c * 1.02 + Vector((0, 0, -0.3)), (3.0 if k % 2 else 0.02, 0.02 if k % 2 else 3.0, 1.8))
-    lt.cyl("Steel_Beam", (0, 0, 16.0), (0, 0, H - 2.3), 0.05, segs=6)
-    truss_beam(lt, (-6.0, (SY0 + RY0) / 2, 9.0), (6.0, (SY0 + RY0) / 2, 9.0), 0.4)
+    lt.cyl("Steel_Beam", (0, 0, 16.0), (0, 0, H - 1.9), 0.05, segs=6)
+    truss_beam(lt, (-6.0, rc_, 9.0), (6.0, rc_, 9.0), 0.4)
     for k in range(5):
-        moving_head(lt, (-4.0 + 2.0 * k, (SY0 + RY0) / 2, 8.6), (0, (SY0 + RY0) / 2, SH))
+        moving_head(lt, (-4.0 + 2.0 * k, rc_, 8.6), (0, rc_, SH))
+    # «будинкове» світло над трибунами — тьмяне, щоб трибуни читались, а ринг лишався найяскравішим
+    for k in range(10):
+        t = B.total * (k + 0.5) / 10
+        p, n = B.at(t, lo_d + 1.3)
+        AREAS.append(((p.x, p.y, H - 2.5), 6.0, (0.85, 0.9, 1.0), 2500.0))
     lt.finish()
 
     # --- зброя
@@ -1348,51 +1665,45 @@ def build_arena(root):
     empty("anchor_weapon_kendo", root, (-q + 0.6, -2.4, 0))
 
     # --- закулісся за сценою: тунель, «горила», роздягальні, лікар, інтерв'ю, кейтеринг, рампа завантаження
-    BY0, BY1 = SY1 + 0.2, SY1 + 15.0
+    BY0, BY1 = SY1 + 0.6, SY1 + 15.4
     BX = 30.0
     bk = Parts("backstage", root)
     bk.box("Concrete", (0, (BY0 + BY1) / 2, -0.05), (2 * BX, BY1 - BY0, 0.1))
-    bk.box("Ramp_Black", (0, BY0 + 2.0, SH / 2), (3.0, 4.0, SH))                                 # тунель на рівні сцени
+    bk.box("Ramp_Black", (0, BY0 + 2.0, SH / 2), (3.0, 4.0, SH))
     stairs(bk, (0, BY0 + 4.0, 0), math.pi, SH, 3.0, 5, "Ramp_Black")
     bkw = Parts("wall_backstage", root)
     bkw.box("Wall_Grey", (0, BY1 + 0.15, 2.0), (2 * BX, 0.3, 4.0))
     for sx in (-1, 1):
         bkw.box("Wall_Grey", (sx * BX, (BY0 + BY1) / 2, 2.0), (0.3, BY1 - BY0, 4.0))
-        bkw.box("Wall_Grey", (sx * 1.7, BY0 + 2.0, 1.4 + SH / 2), (0.2, 4.0, 2.8))              # стінки тунелю
+        bkw.box("Wall_Grey", (sx * 1.7, BY0 + 2.0, 1.4 + SH / 2), (0.2, 4.0, 2.8))
         bkw.box("Wall_Grey", (sx * 16.0, BY0 + 9.0, 2.0), (0.25, 12.0, 4.0))
         bkw.box("Wall_Grey", (sx * 23.0, BY0 + 6.0, 2.0), (14.0, 0.25, 4.0))
     bkw.finish()
-    # «горила»: пульт з моніторами одразу за виходом
     folding_table(bk, (2.8, BY0 + 5.5, 0), math.pi / 2, length=2.4, cloth="Cloth_Black")
     for k in range(3):
         monitor(bk, (2.8, BY0 + 4.8 + 0.7 * k, 0), math.pi / 2, z=0.76)
     for k in range(2):
         folding_chair(bk, (3.5, BY0 + 5.0 + k, 0), -math.pi / 2, crowd=False)
-    # роздягальні (схід / захід за перегородками)
     for sx in (-1, 1):
         lockers(bk, (sx * (BX - 0.3), BY0 + 10.5, 0), (-math.pi / 2 if sx > 0 else math.pi / 2), 14, "Locker_Grey")
         bench(bk, (sx * 22.5, BY0 + 10.0, 0), 0.0, 5.0)
         bench(bk, (sx * 22.5, BY0 + 12.0, 0), 0.0, 5.0)
         mirror_wall(bk, (sx * 20.0, BY1 - 0.2, 0), math.pi, 5)
         door(bk, (sx * 18.0, BY0 + 6.0, 0), 0.0)
-    # лікар: дві кушетки, полиці, рушники
     for k in range(2):
         massage_table(bk, (-10.0 + 3.0 * k, BY0 + 11.5, 0), math.pi / 2)
     bk.box("Shelf_Light", (-12.0, BY1 - 0.3, 1.8), (3.0, 0.3, 0.05))
     bk.box("Bench_Wood", (-12.0, BY1 - 0.3, 1.2), (3.0, 0.4, 0.04))
-    # інтерв'ю: банер з логотипами, два світлові стояки, камера
     step_and_repeat(bk, (9.0, BY1 - 0.5, 0), math.pi, 4.0, 2.6)
     for sx in (-1, 1):
         light_tree(bk, (9.0 + sx * 2.5, BY1 - 4.0, 0), (9.0, BY1 - 0.5, 1.7), h=2.0, n=2)
     hd_camera(bk, (9.0, BY1 - 4.5, 0), math.pi, 0.0)
-    # кейтеринг
     for k in range(3):
         folding_table(bk, (-6.0 + 2.2 * k, BY0 + 7.0, 0), 0.0, cloth="Cloth_Blue")
         for j in range(4):
             bk.box("Food", (-6.6 + 2.2 * k + 0.4 * j, BY0 + 7.0, 0.8), (0.3, 0.4, 0.06))
     for k in range(8):
         folding_chair(bk, (-6.5 + 1.0 * k, BY0 + 8.3, 0), math.pi, crowd=False)
-    # рампа завантаження з вантажівкою й кейсами
     bk.box("Concrete", (BX + 6.0, BY0 + 8.0, 0.6), (12.0, 10.0, 1.2))
     bk.box("Truck_White", (BX + 7.5, BY0 + 6.5, 2.2), (2.5, 7.5, 2.6))
     bk.box("Truck_Cab", (BX + 7.5, BY0 + 1.6, 1.6), (2.4, 2.2, 2.2))
@@ -1400,10 +1711,14 @@ def build_arena(root):
         bk.cyl("Tire", (tx - 0.15, ty, 0.5), (tx + 0.15, ty, 0.5), 0.5, segs=12)
     for k in range(8):
         road_case(bk, (20.0 + 1.3 * (k % 4), BY0 + 1.2 + 1.0 * (k // 4), 0), 0.0)
+    for k in range(6):                                                                            # кейси й за кулісами сцени
+        road_case(bk, ((14.5 + 1.4 * (k % 3)) * (1 if k < 3 else -1), SY0 + 2.0 - BY0 + BY0, 0), 0.0)
     bk.finish()
     bkc = Parts("ceiling_backstage", root)
     bkc.box("Ceiling", (0, (BY0 + BY1) / 2, 4.05), (2 * BX, BY1 - BY0, 0.1))
     bkc.finish()
+    for k in range(5):
+        AREAS.append(((-20.0 + 10.0 * k, (BY0 + BY1) / 2, 3.9), 1.5, (1.0, 0.95, 0.9), 250.0))
     empty("anchor_backstage_gorilla", root, (2.0, BY0 + 5.5, 0), yaw=-90)
     empty("anchor_backstage_lockers", root, (-(BX - 1.2), BY0 + 10.5, 0))
     empty("anchor_backstage_bench", root, (-22.5, BY0 + 11.0, 0))
@@ -1417,17 +1732,54 @@ def build_arena(root):
                 ("cam_high_wide", (22.0, -24.0, 16.0)), ("cam_ramp", (4.0, SY0 - 2.0, 3.5)),
                 ("cam_backstage", (0.0, BY0 + 6.0, 3.0))])
     return dict(id="arena", title="Палац спорту (середній промоушен)", ring=r, spec=spec,
-                ropes=("Black", "Black", "Gold"), capacity=len(SEATS))
+                ropes=("Black", "Black", "Gold"), capacity=len(SEATS), ambient=0.1)
 
 # ---------------------------------------------------------------- огляд і експорт
+
+def set_engine(scene, names):
+    for n in names:
+        try:
+            scene.render.engine = n
+            return n
+        except TypeError:
+            continue
+    return None
+
+def add_lights(info):
+    made = []
+    for k, (pos, d, color, cone) in enumerate(LIGHTS):
+        L = bpy.data.lights.new("spot%d" % k, 'SPOT')
+        L.energy = 2500.0 if cone < 20 else 1500.0
+        L.color = color
+        L.spot_size = math.radians(cone)
+        L.spot_blend = 0.4
+        L.shadow_soft_size = 0.1
+        o = bpy.data.objects.new("spot%d" % k, L)
+        bpy.context.scene.collection.objects.link(o)
+        o.location = pos
+        o.rotation_euler = Vector(d).to_track_quat('-Z', 'Y').to_euler()
+        made.append(o)
+    for k, (pos, size, color, watts) in enumerate(AREAS):
+        L = bpy.data.lights.new("area%d" % k, 'AREA')
+        L.energy = watts
+        L.color = color
+        L.size = size
+        L.use_shadow = False
+        o = bpy.data.objects.new("area%d" % k, L)
+        bpy.context.scene.collection.objects.link(o)
+        o.location = pos
+        made.append(o)
+    w = bpy.data.worlds.new("look_world")
+    w.use_nodes = True
+    bg = next(n for n in w.node_tree.nodes if n.type == "BACKGROUND")
+    bg.inputs[0].default_value = (0.55, 0.6, 0.7, 1)
+    bg.inputs[1].default_value = info.get("ambient", 0.2)
+    bpy.context.scene.world = w
+    return made
 
 def look(root, info):
     os.makedirs(LOOK_DIR, exist_ok=True)
     scene = bpy.context.scene
-    try:
-        scene.render.engine = 'BLENDER_WORKBENCH'
-    except TypeError:
-        pass
     scene.display.shading.light = 'STUDIO'
     scene.display.shading.color_type = 'MATERIAL'
     scene.display.shading.show_shadows = True
@@ -1463,7 +1815,22 @@ def look(root, info):
     }
     curtain = obs["anchor_curtain"].matrix_world.translation
     gor = obs["anchor_backstage_gorilla"].matrix_world.translation
+    shots["overview_flat"] = shots["overview"]
+    shots["overview_west"] = ((-ext * 0.95, -ext * 1.15, ext * 0.95), (0, 0, 1.0), 28, ["ceiling", "wall_S", "wall_W"])
+    lights = add_lights(info)
+    lit = set_engine(scene, ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"))
+    if lit:
+        try:
+            scene.eevee.taa_render_samples = 24
+        except AttributeError:
+            pass
+        try:
+            scene.eevee.use_shadows = True
+        except AttributeError:
+            pass
+        scene.view_settings.view_transform = 'AgX' if 'AgX' in [i.identifier for i in bpy.types.ColorManagedViewSettings.bl_rna.properties["view_transform"].enum_items] else 'Filmic'
     for name, (pos, target, lens, hidden) in shots.items():
+        set_engine(scene, ("BLENDER_WORKBENCH",) if (name == "overview_flat" or not lit) else ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"))
         if name == "entrance":
             pos = (curtain.x * 0.1 + 6.0, curtain.y * 0.1 - 6.0, 4.5)
             target = (curtain.x, curtain.y, 2.0)
@@ -1479,7 +1846,7 @@ def look(root, info):
         scene.render.filepath = os.path.join(LOOK_DIR, "%s_%s.png" % (info["id"], name))
         bpy.ops.render.render(write_still=True)
         hide(hidden, False)
-    for o in ropes:
+    for o in ropes + lights:
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.data.objects.remove(cam, do_unlink=True)
 
@@ -1501,9 +1868,11 @@ def export(root, info):
     with open(os.path.join(OUT, "venue_%s_anchors.txt" % info["id"]), "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
     with open(os.path.join(OUT, "venue_%s_seats.txt" % info["id"]), "w", encoding="utf-8", newline="\n") as f:
-        f.write("# Місця для натовпу: x y z курс° (лицем до рингу). Разом: %d\n" % len(SEATS))
+        sit = sum(1 for s_ in SEATS if s_[4] == "сидить")
+        f.write("# Місця для натовпу: x y z курс° сидить|стоїть (лицем до рингу). Разом: %d (сидячих %d, стоячих %d)\n"
+                % (len(SEATS), sit, len(SEATS) - sit))
         for s_ in SEATS:
-            f.write("%.2f %.2f %.2f %.0f\n" % s_)
+            f.write("%.2f %.2f %.2f %.0f %s\n" % s_)
     r = info["ring"]
     tris = sum(len(o.data.polygons) for o in root.children_recursive if o.type == 'MESH')
     objs = sum(1 for o in root.children_recursive if o.type == 'MESH')
@@ -1519,6 +1888,8 @@ BUILDERS = {"gym": build_gym, "hall": build_hall, "arena": build_arena}
 for vid in WANT:
     bpy.ops.wm.read_homefile(use_empty=True)
     SEATS.clear()
+    LIGHTS.clear()
+    AREAS.clear()
     COL = collection("Venue_" + vid)
     root = empty("venue_" + vid, None)
     info = BUILDERS[vid](root)
