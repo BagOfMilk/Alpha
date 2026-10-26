@@ -17,7 +17,11 @@
 # Однакові дрібниці (стільці, сидіння, сходинки) злито в один об'єкт на матеріал — мало викликів малювання.
 # Виходи: Assets/Art/Ring/venue_<id>.fbx, venue_<id>_anchors.txt (якорі), venue_<id>_seats.txt (місця для натовпу:
 # x y z курс°), venue_<id>_info.txt (розмір рингу, висота мату, кольори канатів, місткість).
-# Матеріали — лише колір (власна робота, без чужих текстур). Розміри рингів — як у справжніх: інді 16–18 футів,
+# Ітерація 2: матеріали з власними процедурними текстурами (tools/blender/ring_textures.py → Assets/Art/Ring/Textures):
+# розгортка в метрах світу (плитка набору), колір текстури × відтінок матеріалу, нормаль і шорсткість; фаски на великих
+# коробках; наклейки (афіші, емблема на полотні, скотч, бруд); LOD для стільців і крісел (_LOD0 — повні, _LOD1 — дві
+# площини: Unity сам збирає LODGroup за суфіксами); бюджет граней і сіток перевіряється і валить генератор.
+# Ітерація 1 — лише колір (власна робота, без чужих текстур). Розміри рингів — як у справжніх: інді 16–18 футів,
 # стандарт 20; килимки навколо рингу; вихідна арка ~2,4 м; ферма світла на стійках (інді) і підвісна коробка
 # 32–40 футів (більші шоу).
 
@@ -110,16 +114,130 @@ MATS = {
     "Arena_Floor": ((0.22, 0.23, 0.26), 0.0, 0.6, 0), "Concourse": ((0.45, 0.45, 0.46), 0.0, 0.9, 0),
     "LED_Ribbon": ((0.95, 0.55, 0.10), 0.0, 0.3, 4.0), "Aisle_Step": ((0.52, 0.52, 0.53), 0.0, 0.9, 0),
     "Aisle_Nose": ((0.85, 0.70, 0.10), 0.0, 0.6, 0), "Post_Cap": ((0.75, 0.76, 0.78), 1.0, 0.3, 0),
+    "Fire_Red": ((0.70, 0.05, 0.04), 0.3, 0.4, 0), "Cup_White": ((0.92, 0.92, 0.9), 0.0, 0.5, 0),
+    "Panel_Grey": ((0.55, 0.57, 0.58), 0.6, 0.5, 0), "Cable_Black": ((0.03, 0.03, 0.03), 0.0, 0.6, 0),
 }
+
+TEX_DIR = os.path.join(REPO, "Assets", "Art", "Ring", "Textures")
+TILE = {}                       # набір → плитка в метрах (з маніфесту текстур)
+try:
+    for line in open(os.path.join(TEX_DIR, "textures_manifest.txt"), encoding="utf-8"):
+        f_ = line.split()
+        if len(f_) == 3 and not line.startswith("#") and f_[2] != "decal":
+            TILE[f_[0]] = float(f_[2])
+except OSError:
+    pass
+
+# матеріал → текстурний набір (сірі деталі × відтінок; tint — свій відтінок замість кольору матеріалу)
+KIT_RULES = [
+    ("wood_strip", ("Gym_Floor",)),
+    ("wood_board", ("Hall_Floor", "Bleacher_Wood", "Bench_Wood", "Bar_Wood", "Bar_Top", "Wainscot", "Balcony_Fascia",
+                    "Door_Wood", "Kendo")),
+    ("block_wall", ("Block_Wall", "Wall_Band_Blue")),
+    ("brick", ("Brick_Warm", "Brick_Dark")),
+    ("concrete", ("Concrete", "Tier_Concrete", "Concourse", "Aisle_Step", "Wall_Grey", "Wall_Dark", "Ceiling", "Tier_Front",
+                  "Floor_Dark")),
+    ("plaster", ("Plaster_Cream", "Ceiling_Hall")),
+    ("canvas", ("Canvas_White", "Canvas_Grey")),
+    ("vinyl", ("Pad_", "Mat_", "Vinyl_Black", "Apron_", "Speaker_Black")),
+    ("cloth", ("Cloth_", "Drape_", "Banner_", "Backdrop_", "Shirt_", "Towel_White", "Speaker_Grille")),
+    ("metal_brushed", ("Post_Steel", "Steps_Steel", "Truss_Alu", "Barricade_Steel", "Bike_Rack", "Railing_Steel",
+                       "Ladder_Alu", "Case_Edge", "Post_Cap", "Trash_Grey", "Steel_Beam", "Panel_Grey")),
+    ("metal_painted", ("Post_Black", "Steps_Black", "Truss_Black", "Chair_Frame", "Table_Leg", "Locker_", "Door_Grey",
+                       "Light_Body", "Bleacher_Frame", "Case_Black", "Truck_", "Trash_Green", "Camera_Body", "Monitor",
+                       "Hoop_Rim", "Scoreboard", "Screen_Frame", "Fire_Red")),
+    ("plastic", ("Chair_Seat_", "Seat_", "Table_Top", "Cooler_", "Hoop_Board", "Cup_White")),
+    ("carpet", ("Carpet_",)),
+    ("tile_floor", ("Floor_Tile",)),
+    ("panel_floor", ("Arena_Floor", "Stage_Black", "Ramp_Black")),
+    ("led_pixels", ("LED_Screen", "LED_Side", "LED_Ribbon")),
+]
+KIT_TINT = {"Brick_Warm": (1.0, 1.0, 1.0), "Brick_Dark": (0.55, 0.55, 0.55)}
+KIT_SCALE = {"Gym_Floor": 1.0, "Hall_Floor": 1.0}            # множник плитки (1 — як у маніфесті)
+
+def kit(name):
+    for kset, prefixes in KIT_RULES:
+        if any(name == p_ or (p_.endswith("_") and name.startswith(p_)) for p_ in prefixes):
+            if kset in TILE and os.path.exists(os.path.join(TEX_DIR, kset + "_albedo.png")):
+                return kset
+    return None
+
+# фаски: матеріал → ширина (м); лише на коробках, де найменший розмір > 3 фаски
+BEVEL = {"Canvas_White": 0.04, "Canvas_Grey": 0.04, "Steps_Steel": 0.015, "Steps_Black": 0.015, "Table_Top": 0.012,
+         "Speaker_Black": 0.02, "Case_Black": 0.02, "Locker_Grey": 0.01, "Locker_Blue": 0.01, "Bar_Wood": 0.02,
+         "Bar_Top": 0.015, "Stage_Black": 0.02, "Barricade_Cover": 0.03, "Bench_Wood": 0.01, "Cooler_Blue": 0.02,
+         "Cooler_White": 0.02, "Pad_Red": 0.03, "Pad_Blue": 0.03, "Pad_Black": 0.03, "Pad_Yellow": 0.03,
+         "Vinyl_Black": 0.03, "Ramp_Black": 0.02, "Monitor": 0.006, "Camera_Body": 0.01, "Truck_White": 0.08,
+         "Truck_Cab": 0.1, "Balcony_Fascia": 0.02, "Wainscot": 0.01}
+
+def tex_node(m, path, non_color):
+    t = m.node_tree.nodes.new("ShaderNodeTexImage")
+    t.image = bpy.data.images.load(path, check_existing=True)
+    if non_color:
+        t.image.colorspace_settings.name = 'Non-Color'
+    return t
+
+def decal_material(name):
+    """Наклейка: Decal_<x> → Textures/decal_<x>.png з прозорістю."""
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    t = tex_node(m, os.path.join(TEX_DIR, "decal_" + name[6:].lower() + ".png"), False)
+    nt.links.new(t.outputs["Color"], b.inputs["Base Color"])
+    nt.links.new(t.outputs["Alpha"], b.inputs["Alpha"])
+    b.inputs["Roughness"].default_value = 0.8
+    try:
+        m.surface_render_method = 'BLENDED'
+    except (AttributeError, TypeError):
+        m.blend_method = 'BLEND'
+    m.diffuse_color = (1, 1, 1, 1)
+    return m
 
 def material(name):
     m = bpy.data.materials.get(name)
     if m is not None:
         return m
+    if name.startswith("Decal_"):
+        return decal_material(name)
     color, metal, rough, emit = MATS[name]
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    kset = kit(name)
+    if kset:
+        nt = m.node_tree
+        tint = KIT_TINT.get(name, color)
+        alb = tex_node(m, os.path.join(TEX_DIR, kset + "_albedo.png"), False)
+        mul = nt.nodes.new("ShaderNodeMix")
+        mul.data_type = 'RGBA'
+        mul.blend_type = 'MULTIPLY'
+        mul.inputs["Factor"].default_value = 1.0
+        nt.links.new(alb.outputs["Color"], mul.inputs[6])
+        mul.inputs[7].default_value = (*tint, 1)
+        nt.links.new(mul.outputs[2], b.inputs["Base Color"])
+        rg = tex_node(m, os.path.join(TEX_DIR, kset + "_rough.png"), True)
+        rm = nt.nodes.new("ShaderNodeMath")
+        rm.operation = 'MULTIPLY'
+        rm.use_clamp = True
+        nt.links.new(rg.outputs["Color"], rm.inputs[0])
+        rm.inputs[1].default_value = rough / 0.6                       # карти мають середнє ~0,6
+        nt.links.new(rm.outputs[0], b.inputs["Roughness"])
+        nm = tex_node(m, os.path.join(TEX_DIR, kset + "_normal.png"), True)
+        nn = nt.nodes.new("ShaderNodeNormalMap")
+        nt.links.new(nm.outputs["Color"], nn.inputs["Color"])
+        nt.links.new(nn.outputs["Normal"], b.inputs["Normal"])
+        b.inputs["Metallic"].default_value = metal
+        if emit:
+            for key in ("Emission Color", "Emission"):
+                if key in b.inputs:
+                    nt.links.new(mul.outputs[2], b.inputs[key])
+                    break
+            if "Emission Strength" in b.inputs:
+                b.inputs["Emission Strength"].default_value = emit
+        m.diffuse_color = (*color, 1)
+        m["kit"] = kset
+        return m
     b.inputs["Base Color"].default_value = (*color, 1)
     b.inputs["Metallic"].default_value = metal
     b.inputs["Roughness"].default_value = rough
@@ -154,18 +272,49 @@ def empty(name, parent, loc=(0, 0, 0), yaw=0.0):
     return e
 
 class Parts:
-    """Набір геометрії однієї групи: на кожен матеріал — один об'єкт «<група>_<матеріал>» (мало викликів малювання)."""
-    def __init__(self, group, parent):
-        self.group, self.parent = group, parent
-        self.bms = {}
+    """Набір геометрії однієї групи: на кожен матеріал — один об'єкт «<група>_<матеріал>» (мало викликів малювання).
+    lod=True — ще й спрощений рівень (level = 1 під час запису): об'єкти «…_LOD0» і «…_LOD1» під порожнім «<група>»."""
+    def __init__(self, group, parent, lod=False):
+        self.group, self.parent, self.lod = group, parent, lod
+        self.bms, self.bms1 = {}, {}
+        self.level = 0
 
     def bm(self, mat):
-        if mat not in self.bms:
-            self.bms[mat] = bmesh.new()
-        return self.bms[mat]
+        d = self.bms1 if self.level else self.bms
+        if mat not in d:
+            d[mat] = bmesh.new()
+        return d[mat]
 
-    def box(self, mat, c, s, rz=0.0, rx=0.0):
+    def decal(self, mat, c, right, up):
+        """Наклейка-площина: центр c, півосі right і up (вектори), розгортка 0..1, лицем у бік right × up."""
         bm = self.bm(mat)
+        c, right, up = Vector(c), Vector(right), Vector(up)
+        vs = [bm.verts.new(c - right - up), bm.verts.new(c + right - up), bm.verts.new(c + right + up), bm.verts.new(c - right + up)]
+        f = bm.faces.new(vs)
+        uv = bm.loops.layers.uv.verify()
+        for loop, t in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
+            loop[uv].uv = t
+
+    def box(self, mat, c, s, rz=0.0, rx=0.0, bevel=None):
+        bm = self.bm(mat)
+        bw = BEVEL.get(mat, 0.0) if bevel is None else bevel
+        if bw and min(s) > 3 * bw and not self.level:
+            # фаска: коробка будується в окремому bmesh і доливається в загальний
+            tb = bmesh.new()
+            bmesh.ops.create_cube(tb, size=1.0)
+            bmesh.ops.scale(tb, vec=s, verts=list(tb.verts))
+            bmesh.ops.bevel(tb, geom=list(tb.edges), offset=bw, segments=1, affect='EDGES', profile=0.5)
+            if rx:
+                bmesh.ops.rotate(tb, cent=(0, 0, 0), matrix=Matrix.Rotation(rx, 3, 'X'), verts=list(tb.verts))
+            if rz:
+                bmesh.ops.rotate(tb, cent=(0, 0, 0), matrix=Matrix.Rotation(rz, 3, 'Z'), verts=list(tb.verts))
+            bmesh.ops.translate(tb, vec=c, verts=list(tb.verts))
+            me = bpy.data.meshes.new("_bevel")
+            tb.to_mesh(me)
+            tb.free()
+            bm.from_mesh(me)
+            bpy.data.meshes.remove(me)
+            return
         r = bmesh.ops.create_cube(bm, size=1.0)
         bmesh.ops.scale(bm, vec=s, verts=r["verts"])
         if rx:
@@ -193,22 +342,52 @@ class Parts:
 
     def finish(self, smooth=()):
         out = []
-        for mat, bm in self.bms.items():
-            if not bm.verts:
+        has_lod = bool(self.bms1)
+        parent = self.parent
+        if has_lod:
+            parent = empty(self.group, self.parent)
+        for level, d in ((0, self.bms), (1, self.bms1)):
+            for mat, bm in d.items():
+                if not bm.verts:
+                    bm.free()
+                    continue
+                world_uv(bm, mat)
+                name = self.group + "_" + mat + (("_LOD%d" % level) if has_lod else "")
+                me = bpy.data.meshes.new(name)
+                bm.to_mesh(me)
                 bm.free()
-                continue
-            me = bpy.data.meshes.new(self.group + "_" + mat)
-            bm.to_mesh(me)
-            bm.free()
-            ob = bpy.data.objects.new(self.group + "_" + mat, me)
-            COL.objects.link(ob)
-            ob.parent = self.parent
-            me.materials.append(material(mat))
-            for p in me.polygons:
-                p.use_smooth = mat in smooth
-            out.append(ob)
-        self.bms = {}
+                ob = bpy.data.objects.new(name, me)
+                COL.objects.link(ob)
+                ob.parent = parent
+                me.materials.append(material(mat))
+                for p in me.polygons:
+                    p.use_smooth = mat in smooth
+                ob["lod"] = level if has_lod else -1
+                ob["group"] = self.group
+                out.append(ob)
+        self.bms, self.bms1 = {}, {}
         return out
+
+def world_uv(bm, mat):
+    """Розгортка в метрах світу: грань проєктується на площину за найбільшою складовою нормалі, ділиться на плитку
+    текстурного набору — плитка однакового розміру на всіх об'єктах, швів між коробками не видно. Наклейки — свої 0..1."""
+    if mat.startswith("Decal_"):
+        return
+    kset = kit(mat)
+    tile = TILE.get(kset, 1.0) * KIT_SCALE.get(mat, 1.0) if kset else 1.0
+    uv = bm.loops.layers.uv.verify()
+    bm.normal_update()
+    for f in bm.faces:
+        n = f.normal
+        ax, ay, az = abs(n.x), abs(n.y), abs(n.z)
+        for loop in f.loops:
+            co = loop.vert.co
+            if az >= ax and az >= ay:
+                loop[uv].uv = (co.x / tile, co.y / tile)
+            elif ax >= ay:
+                loop[uv].uv = (co.y / tile, co.z / tile)
+            else:
+                loop[uv].uv = (co.x / tile, co.z / tile)
 
 def rot2(v, yaw):
     c, s = math.cos(yaw), math.sin(yaw)
@@ -237,6 +416,8 @@ def folding_chair(P, pos, yaw, seat="Chair_Seat_Black", crowd=True):
         P.box("Chair_Frame", f((x, -0.17, 0.225)), (0.022, 0.022, 0.45), rz=yaw)
         P.box("Chair_Frame", f((x, 0.2, 0.45)), (0.022, 0.022, 0.9), rz=yaw)
     P.box("Chair_Frame", f((0, -0.17, 0.08)), (0.38, 0.018, 0.018), rz=yaw)
+    if P.lod:
+        lod_seat(P, f, seat, 0.45, 0.19, 0.74, 0.3)
     if crowd:
         seat_mark(pos, yaw, (pos[2] if len(pos) > 2 else 0.0) + 0.45)
 
@@ -610,6 +791,67 @@ def railing(P, p0, p1, h=1.05):
 def exit_sign(P, pos, yaw):
     P.box("Exit_Sign", at(pos, yaw, (0, 0, 0)), (0.45, 0.04, 0.18), rz=yaw)
 
+# ---------------------------------------------------------------- дрібні деталі (ітерація 2)
+
+def wall_decal(P, mat, pos, inward, w, h):
+    """Наклейка на стіну: pos — центр (на стіні), inward — нормаль у зал."""
+    n = Vector(inward).normalized()
+    right = Vector((n.y, -n.x, 0)) * (w / 2)
+    c = Vector(pos) + n * 0.012
+    P.decal(mat, c, -right, Vector((0, 0, h / 2)))
+
+def floor_decal(P, mat, pos, size, yaw=0.0, z=0.0):
+    right = rot2((size / 2, 0, 0), yaw)
+    up = rot2((0, size / 2, 0), yaw)
+    P.decal(mat, (pos[0], pos[1], z + 0.006), right, up)
+
+def poster_row(P, a, b, z, inward, n, salt=0, w=0.6, h=0.9):
+    a, b = Vector(a), Vector(b)
+    for k in range(n):
+        u = (k + 0.5) / n + (h01(k, 60 + salt) - 0.5) * 0.3 / n
+        p = a + (b - a) * u
+        wall_decal(P, "Decal_Poster_%d" % int(h01(k, 61 + salt) * 3.99), (p.x, p.y, z + (h01(k, 62 + salt) - 0.5) * 0.25),
+                   inward, w, h)
+
+def extinguisher(P, pos, inward):
+    n = Vector(inward).normalized()
+    c = Vector(pos) + n * 0.12
+    P.cyl("Fire_Red", (c.x, c.y, 0.75), (c.x, c.y, 1.25), 0.08, segs=10)
+    P.cyl("Light_Body", (c.x, c.y, 1.25), (c.x, c.y, 1.33), 0.03, segs=6)
+    P.box("Panel_Grey", (c.x - n.x * 0.1, c.y - n.y * 0.1, 1.05), (0.2 if abs(n.y) > 0.5 else 0.02, 0.02 if abs(n.y) > 0.5 else 0.2, 0.08))
+
+def wall_panel(P, pos, inward, w=0.5, h=0.7, z=1.6):
+    """Електрощиток / решітка вентиляції на стіні."""
+    n = Vector(inward).normalized()
+    c = Vector(pos) + n * 0.06
+    P.box("Panel_Grey", (c.x, c.y, z), (w if abs(n.y) > 0.5 else 0.12, 0.12 if abs(n.y) > 0.5 else w, h))
+    for k in range(4):
+        q = c + n * 0.062
+        P.box("Light_Body", (q.x, q.y, z - h / 2 + (k + 1) * h / 5), (w * 0.8 if abs(n.y) > 0.5 else 0.005, 0.005 if abs(n.y) > 0.5 else w * 0.8, 0.02))
+
+def cable(P, pts, r=0.012):
+    """Кабель по підлозі: ламана з невеликим провисанням між точками, прихоплена скотчем."""
+    pts = [Vector((p[0], p[1], p[2] if len(p) > 2 else r)) for p in pts]
+    for a, b in zip(pts, pts[1:]):
+        m_ = (a + b) / 2 + Vector((0.08 * h01(int(a.x * 10), 70), 0.08 * h01(int(a.y * 10), 71), 0))
+        P.cyl("Cable_Black", a, m_, r, segs=5)
+        P.cyl("Cable_Black", m_, b, r, segs=5)
+        P.box("Panel_Grey", (m_.x, m_.y, 0.004), (0.06, 0.06, 0.004), rz=math.atan2(b.y - a.y, b.x - a.x))
+
+def litter(P, cx, cy, w, d, n, salt=0):
+    """Стаканчики й програмки на підлозі."""
+    for k in range(n):
+        x = cx + (h01(k, 80 + salt) - 0.5) * w
+        y = cy + (h01(k, 81 + salt) - 0.5) * d
+        if h01(k, 82 + salt) < 0.6:
+            if h01(k, 83 + salt) < 0.5:
+                P.cyl("Cup_White", (x, y, 0.0), (x, y, 0.11), 0.035, 0.045, segs=8)
+            else:
+                a = h01(k, 84 + salt) * math.pi
+                P.cyl("Cup_White", (x, y, 0.04), (x + 0.11 * math.cos(a), y + 0.11 * math.sin(a), 0.04), 0.04, 0.03, segs=8)
+        else:
+            P.box("Backdrop_White", (x, y, 0.003), (0.15, 0.21, 0.003), rz=h01(k, 85 + salt) * math.pi)
+
 # ---------------------------------------------------------------- ринг
 
 def build_ring(root, spec):
@@ -674,8 +916,16 @@ def build_ring(root, spec):
             c = base + d * (depth / 2)
             P.box(spec["steps_mat"], (c.x, c.y, h / 2), (depth, 0.95, h), rz=diag)
         empty("anchor_steps_%s" % corner, root, tuple(base + d * 1.4))
+    floor_decal(P, "Decal_Logo", (0, 0), min(2.6, inner * 1.1), 0.0, mz)
+    for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        n = Vector((sx, sy, 0))
+        c = n * (half_plat + 0.03)
+        P.decal("Decal_Logo", (c.x, c.y, mz * 0.6), Vector((-sy, sx, 0)) * 0.3, Vector((0, 0, 0.3)))
     # килимки навколо рингу
     mats_half = half_plat + spec.get("mats_extra", 1.3)
+    for k in range(6):
+        a = k * math.pi / 3 + 0.4
+        floor_decal(P, "Decal_Grime", ((half_plat + 0.6) * math.cos(a), (half_plat + 0.6) * math.sin(a)), 1.4, a, 0.03)
     P.box(spec["mats"], (0, 0, 0.015), (mats_half * 2, mats_half * 2, 0.03))
     for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         hor = sy != 0
@@ -780,8 +1030,39 @@ def build_gym(root):
     hp.box("Banner_Gold", (X0 + 0.05, -6.0, 4.2), (0.02, 5.6, 0.25))
     hp.finish()
 
+    # --- дрібниці: афіші, вогнегасники, щитки, годинник, вентиляція під стелею, кабелі, сміття, скотч
+    wd = {k_: Parts("wall_%s_decor" % k_, root) for k_ in "NSEW"}
+    poster_row(wd["E"], (X1 - 0.02, -11.0, 0), (X1 - 0.02, 12.0, 0), 1.8, (-1, 0, 0), 9, salt=1)
+    poster_row(wd["S"], (-6.0, Y0 + 0.02, 0), (12.0, Y0 + 0.02, 0), 1.8, (0, 1, 0), 6, salt=2)
+    for k_, pos, n_ in (("E", (X1, -6.5), (-1, 0, 0)), ("E", (X1, 8.5), (-1, 0, 0)), ("N", (-14.0, Y1), (0, -1, 0)), ("W", (X0, -3.0), (1, 0, 0))):
+        extinguisher(wd[k_], (pos[0], pos[1], 0), n_)
+    wall_panel(wd["N"], (-15.5, Y1, 0), (0, -1, 0))
+    wall_panel(wd["E"], (X1, 11.5, 0), (-1, 0, 0), 0.8, 0.5, 2.6)
+    for P_ in wd.values():
+        P_.finish()
+    dt = Parts("details", root)
+    dt.cyl("Scoreboard", (8.0, Y1 - 0.05, 5.0), (8.0, Y1 - 0.12, 5.0), 0.3, segs=16)
+    dt.cyl("Backdrop_White", (8.0, Y1 - 0.121, 5.0), (8.0, Y1 - 0.125, 5.0), 0.26, segs=16)
+    cable(dt, [(1.8, -r["mats_half"] + 0.55), (0.6, -r["half_plat"] - 0.3), (-r["half_plat"] - 0.3, -r["half_plat"] - 0.3)])
+    cable(dt, [(2.4, -r["mats_half"] + 0.4), (1.0, -r["mats_half"] - 3.0), (0.2, -r["mats_half"] - 6.0)])
+    litter(dt, 0, -r["mats_half"] - 3.5, 12, 5, 30, salt=1)
+    litter(dt, r["mats_half"] + 3, 0, 4, 10, 20, salt=2)
+    litter(dt, X1 - 2.5, -6.0, 3, 8, 20, salt=3)
+    floor_decal(dt, "Decal_Tape", (X0 + 2.2, 0), 0.5)
+    floor_decal(dt, "Decal_Tape", (-r["mats_half"] - 0.6, 0), 0.4)
+    for k in range(3):
+        floor_decal(dt, "Decal_Grime", (X1 - 2.0, -9.5 + 3.0 * k), 2.0, k)
+    dt.finish()
+    ce = Parts("ceiling_ducts", root)
+    for sy in (-1, 1):
+        ce.cyl("Steel_Beam", (X0 + 1.0, 1.0 + sy * 7.0, H - 1.2), (X1 - 1.0, 1.0 + sy * 7.0, H - 1.2), 0.3, segs=12)
+        for k in range(6):
+            x = X0 + 4.0 + k * 6.0
+            ce.box("Panel_Grey", (x, 1.0 + sy * 7.0, H - 1.55), (0.6, 0.4, 0.12))
+    ce.finish()
+
     # --- місця: розкладні стільці з трьох боків, прохід від завіси
-    ch = Parts("chairs", root)
+    ch = Parts("chairs", root, lod=True)
     m = r["mats_half"]
     chair_rows(ch, (0, -m - 1.0, 0), 0.0, 4, 22, gap_every=11, gap=1.2)                          # південь, лицем на північ
     chair_rows(ch, (m + 1.0, 0, 0), math.pi / 2, 4, 18, gap_every=9, gap=1.2)                     # схід
@@ -890,6 +1171,10 @@ def build_gym(root):
     for k in range(5):
         bkc.box("Ceiling_Light", ((BX0 + BX1) / 2, -9.0 + 4.5 * k, 2.95), (1.2, 0.3, 0.08))
     bkc.finish()
+    pb = Parts("details_backstage", root)
+    poster_row(pb, (X0 - 3.5, 2.0, 0), (X0 - 3.5, 11.0, 0), 1.6, (1, 0, 0), 5, salt=21)
+    extinguisher(pb, (X0 - 3.5, -4.5, 0), (1, 0, 0))
+    pb.finish()
     empty("anchor_backstage_gorilla", root, (X0 - 1.2, 1.2, 0), yaw=-90)
     empty("anchor_backstage_lockers", root, ((BX0 + X0 - 3.6) / 2, 9.0, 0))
     empty("anchor_backstage_bench", root, ((BX0 + X0 - 3.6) / 2, 5.0, 0))
@@ -1094,7 +1379,7 @@ def build_hall(root):
         empty("anchor_handheld_%d" % (i + 1), root, (x, y, 1.6))
 
     # --- партер: стільці рядами за огорожею з трьох боків, лицем до рингу, позаду — стоячі
-    ch = Parts("chairs", root)
+    ch = Parts("chairs", root, lod=True)
     cam_skip = lambda p_: abs(p_.x + 5.5) < 1.6 and p_.y < Y0 + 5.8
     chair_rows(ch, (0, -q - 1.0, 0), 0.0, 5, 24, gap_every=12, gap=1.3, skip=cam_skip, standing=2, focus=(0, 0))
     chair_rows(ch, (q + 1.0, -0.5, 0), 0.0, 6, 22, gap_every=11, gap=1.3, standing=1, focus=(0, 0))
@@ -1105,7 +1390,7 @@ def build_hall(root):
 
     # --- балкон буквою П: тонка плита на колонах, дерев'яний фасад з банерами, три ряди на сходинках
     bc = Parts("balcony", root)
-    bch = Parts("balcony_chairs", root)
+    bch = Parts("balcony_chairs", root, lod=True)
     EY1 = SY0 - 1.0
     fx0, fx1, fy0 = X0 + BD, X1 - BD, Y0 + BD
     slabs = [((0, Y0 + BD / 2), (X1 - X0, BD)),
@@ -1178,6 +1463,26 @@ def build_hall(root):
     br.finish()
     empty("anchor_bar", root, (X1 - 2.8, 2.0, 0), yaw=-90)
     standing_area(X1 - 3.4, 2.0, 2.4, 7.0, 25, salt=40)
+
+    # --- дрібниці: афіші, вогнегасники, щитки, кабелі, сміття біля бару, скотч на сцені, бруд
+    wd = {k_: Parts("wall_%s_decor" % k_, root) for k_ in "SEW"}
+    poster_row(wd["W"], (X0 + 0.02, -11.0, 0), (X0 + 0.02, -2.0, 0), 1.7, (1, 0, 0), 4, salt=11)
+    poster_row(wd["S"], (-12.0, Y0 + 0.02, 0), (12.0, Y0 + 0.02, 0), 1.7, (0, 1, 0), 8, salt=12)
+    for k_, pos, n_ in (("E", (X1, -6.0), (-1, 0, 0)), ("W", (X0, -6.0), (1, 0, 0)), ("S", (-10.0, Y0), (0, 1, 0)), ("S", (10.0, Y0), (0, 1, 0))):
+        extinguisher(wd[k_], (pos[0], pos[1], 0), n_)
+    wall_panel(wd["W"], (X0, 9.0, 0), (1, 0, 0))
+    for P_ in wd.values():
+        P_.finish()
+    dt = Parts("details", root)
+    cable(dt, [(cx, -1.2), (r["half_plat"] + 0.3, -2.5), (2.0, -r["half_plat"] - 0.3)])
+    cable(dt, [(-5.5, Y0 + 4.4), (-3.0, -q - 0.6), (-cx, -1.0)])
+    litter(dt, X1 - 3.4, 2.0, 3, 7, 30, salt=4)
+    litter(dt, 0, -q - 3.5, 12, 4, 25, salt=5)
+    for x in (-4.0, 0.0, 4.0):
+        floor_decal(dt, "Decal_Tape", (x, SY0 + 1.5), 0.45, z=SH)
+    for k in range(4):
+        floor_decal(dt, "Decal_Grime", (X1 - 2.8, -1.0 + 2.0 * k), 2.2, k)
+    dt.finish()
 
     # --- мерч під балконом на заході
     mc = Parts("merch", root)
@@ -1270,6 +1575,11 @@ def build_hall(root):
     bkc.finish()
     for k in range(4):
         AREAS.append(((-12.0 + 8.0 * k, (BY0 + BY1) / 2, 3.1), 1.2, (1.0, 0.95, 0.88), 150.0))
+    pb = Parts("details_backstage", root)
+    poster_row(pb, (-14.0, BY0 + 3.48, 0), (-3.0, BY0 + 3.48, 0), 1.6, (0, -1, 0), 5, salt=22)
+    poster_row(pb, (-14.0, BY1 - 0.02, 0), (-12.0, BY1 - 0.02, 0), 1.6, (0, -1, 0), 1, salt=23)
+    extinguisher(pb, (6.0, BY0 + 3.5, 0), (0, -1, 0))
+    pb.finish()
     empty("anchor_backstage_gorilla", root, (1.6, BY0 + 1.4, 0), yaw=-90)
     empty("anchor_backstage_lockers", root, (-(X1 - 1.0), BY0 + 7.5, 0))
     empty("anchor_backstage_bench", root, (-8.0, BY0 + 6.0, 0))
@@ -1342,6 +1652,7 @@ def bowl_tier(B, P, walls, d0, z0, rows, depth, rise, seat_mat, aisles, voms=(),
               back_h=None, fascia=None):
     """Ярус чаші: сходинки (проступ + підступ) суцільною стрічкою, крісла між проходами, сходи в проходах,
     вомиторії (тунелі) у перших vom_rows рядах. back_h — висота задньої стіни над останнім рядом (окремі wall_*)."""
+    SP = Parts(P.group + "_seats", P.parent, lod=True)
     ts = B.samples([v[0] for v in voms] + [v[1] for v in voms])
     in_vom = lambda t, r_: r_ < vom_rows and any(a <= t <= b for (a, b) in voms)
     for r_ in range(rows):
@@ -1435,7 +1746,8 @@ def bowl_tier(B, P, walls, d0, z0, rows, depth, rise, seat_mat, aisles, voms=(),
                 p = pts[j].lerp(pts[j + 1], u)
                 tt = ta + (tb - ta) * (j + u) / (len(pts) - 1)
                 _, nn = B.at(tt, dseat)
-                stadium_seat(P, (p.x, p.y, z), math.atan2(-nn.x, nn.y), seat_mat)
+                stadium_seat(SP, (p.x, p.y, z), math.atan2(-nn.x, nn.y), seat_mat)
+    SP.finish()
     return d0 + rows * depth, z0 + (rows - 1) * rise
 
 def stadium_seat(P, pos, yaw, mat):
@@ -1443,7 +1755,17 @@ def stadium_seat(P, pos, yaw, mat):
     P.box(mat, f((0, -0.02, 0.44)), (0.46, 0.42, 0.07), rz=yaw)
     P.box(mat, f((0, 0.19, 0.72)), (0.46, 0.05, 0.5), rz=yaw, rx=math.radians(-8))
     P.box("Chair_Frame", f((0, 0.08, 0.22)), (0.07, 0.07, 0.44), rz=yaw)
+    if P.lod:
+        lod_seat(P, f, mat, 0.44, 0.19, 0.72, 0.5)
     seat_mark(pos, yaw, pos[2] + 0.44)
+
+def lod_seat(P, f, mat, zs, yb, zb, hb):
+    """Далекий рівень сидіння: дві площини (сидіння і спинка лицем уперед) — 2 грані замість 18–42."""
+    P.level = 1
+    w = 0.22
+    P.quad(mat, [f((-w, -0.2, zs)), f((w, -0.2, zs)), f((w, 0.2, zs)), f((-w, 0.2, zs))])
+    P.quad(mat, [f((-w, yb, zb - hb / 2)), f((-w, yb, zb + hb / 2)), f((w, yb, zb + hb / 2)), f((w, yb, zb - hb / 2))])
+    P.level = 0
 
 def build_arena(root):
     spec = dict(size_ft=20, mat_z=1.2, canvas="Canvas_White", apron="Apron_Black", band="Apron_Band_Gold",
@@ -1608,7 +1930,7 @@ def build_arena(root):
         empty("anchor_handheld_%d" % (i + 1), root, (x, y, 1.6))
 
     # --- стільці на підлозі арени: три блоки, лицем до рингу з розкидом, проходи до вомиторіїв
-    ch = Parts("chairs", root)
+    ch = Parts("chairs", root, lod=True)
     skip_s = lambda p_: (abs(p_.x - 6.5) < 2.3 and p_.y < FY0 + 4.2) or (abs(p_.x + 8.5) < 3.4 and p_.y < FY0 + 3.0)
     skip_e = lambda p_: p_.x > FX - 1.0 or (p_ - Vector((q + 3.5, -q - 3.5, 0))).length < 2.2 or p_.y > SY0 - 1.5
     skip_w = lambda p_: p_.x < -FX + 1.0 or p_.y > SY0 - 1.5
@@ -1616,6 +1938,21 @@ def build_arena(root):
     chair_rows(ch, (q + 3.4, CY, 0), 0.0, 10, 36, gap_every=18, gap=2.0, skip=skip_e, standing=0, focus=(0, 0))
     chair_rows(ch, (-q - 1.6, CY, 0), 0.0, 12, 36, gap_every=18, gap=2.0, skip=skip_w, standing=0, focus=(0, 0))
     ch.finish()
+
+    # --- дрібниці: кабелі від столів, скотч на сцені й рампі, бруд біля вомиторіїв, сміття на підлозі
+    dt = Parts("details", root)
+    cable(dt, [(cx, 0), (q + 0.4, -2.0), (r["half_plat"] + 0.3, -r["half_plat"] - 0.3)])
+    cable(dt, [(6.5, FY0 + 2.4), (4.0, -q - 1.0), (q + 0.5, -q - 0.3)])
+    cable(dt, [(-8.5, FY0 + 1.3), (-5.0, -q - 2.0), (-q - 0.4, -1.0)])
+    for x in (-8.0, -4.0, 0.0, 4.0, 8.0):
+        floor_decal(dt, "Decal_Tape", (x, SY0 + 1.2), 0.5, z=SH)
+    for v in voms:
+        p_, n_ = B.at((v[0] + v[1]) / 2, -1.2)
+        floor_decal(dt, "Decal_Grime", (p_.x, p_.y), 2.6, 0.3)
+    litter(dt, 0, -q - 4.0, 20, 6, 40, salt=6)
+    litter(dt, q + 7.0, 1.0, 8, 16, 30, salt=7)
+    litter(dt, -q - 7.0, 1.0, 8, 16, 30, salt=8)
+    dt.finish()
 
     # --- підвісне світло: коробка 40 × 40 футів, лінійні масиви по кутах, відеокуб над рингом, ферма над рампою
     lt = Parts("lighting", root)
@@ -1719,6 +2056,13 @@ def build_arena(root):
     bkc.finish()
     for k in range(5):
         AREAS.append(((-20.0 + 10.0 * k, (BY0 + BY1) / 2, 3.9), 1.5, (1.0, 0.95, 0.9), 250.0))
+    pb = Parts("details_backstage", root)
+    poster_row(pb, (4.0, BY0 + 6.13, 0), (15.0, BY0 + 6.13, 0), 1.6, (0, -1, 0), 5, salt=24)
+    poster_row(pb, (-15.0, BY0 + 6.13, 0), (-4.0, BY0 + 6.13, 0), 1.6, (0, -1, 0), 5, salt=25)
+    for x in (-15.5, 15.5):
+        extinguisher(pb, (x, BY0 + 6.1, 0), (0, -1, 0))
+        wall_panel(pb, (x * 0.6, BY1, 0), (0, -1, 0))
+    pb.finish()
     empty("anchor_backstage_gorilla", root, (2.0, BY0 + 5.5, 0), yaw=-90)
     empty("anchor_backstage_lockers", root, (-(BX - 1.2), BY0 + 10.5, 0))
     empty("anchor_backstage_bench", root, (-22.5, BY0 + 11.0, 0))
@@ -1816,6 +2160,8 @@ def look(root, info):
     curtain = obs["anchor_curtain"].matrix_world.translation
     gor = obs["anchor_backstage_gorilla"].matrix_world.translation
     shots["overview_flat"] = shots["overview"]
+    hp = info["ring"]["half_plat"]
+    shots["closeup"] = ((hp + 2.6, -hp - 3.2, 1.9), (hp * 0.2, -hp * 0.4, 0.9), 35, ["ceiling", "wall_S"])
     shots["overview_west"] = ((-ext * 0.95, -ext * 1.15, ext * 0.95), (0, 0, 1.0), 28, ["ceiling", "wall_S", "wall_W"])
     lights = add_lights(info)
     lit = set_engine(scene, ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"))
@@ -1850,7 +2196,107 @@ def look(root, info):
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.data.objects.remove(cam, do_unlink=True)
 
+# Злиття перед експортом: нерухомі групи — в «static», декор стіни — у стіну, дрібні групи — у свою кімнату; усередині
+# цілі матеріали одного текстурного набору стають ОДНИМ матеріалом «Kit_<набір>», а відтінок (RGB) і множник
+# шорсткості (A) переїжджають у колір вершин «tint». Так сітка = ціль × набір: на Android — десяток викликів малювання
+# замість сотні. У Unity — один простий шейдер: альбедо × колір вершин (ітерація 3, сцена рингу).
+# Світні матеріали (екрани, лінзи) і матеріали без набору лишаються як є. Групи з LOD не зливаються.
+MERGE_STATIC = {"gym", "hall", "arena", "details", "ringside", "barricade", "merch", "bar", "bleachers", "hoops", "decor",
+                "stage", "concourse", "tiers_lower", "tiers_upper", "balcony"}
+MERGE_INTO = {"details_backstage": "backstage", "ceiling_ducts": "ceiling"}
+KIT_METAL = {"metal_brushed": 0.9, "metal_painted": 0.25}
+
+def merge_target(group):
+    if group in MERGE_STATIC:
+        return "static"
+    if group.startswith("wall_") and len(group) > 6 and group[5] in "NSEW" and group[6] == "_":
+        return group[:6]
+    return MERGE_INTO.get(group, group)
+
+def kit_material(kset):
+    name = "Kit_" + kset
+    m = bpy.data.materials.get(name)
+    if m is not None:
+        return m
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    alb = tex_node(m, os.path.join(TEX_DIR, kset + "_albedo.png"), False)
+    ca = nt.nodes.new("ShaderNodeVertexColor")
+    ca.layer_name = "tint"
+    mul = nt.nodes.new("ShaderNodeMix")
+    mul.data_type = 'RGBA'
+    mul.blend_type = 'MULTIPLY'
+    mul.inputs["Factor"].default_value = 1.0
+    nt.links.new(alb.outputs["Color"], mul.inputs[6])
+    nt.links.new(ca.outputs["Color"], mul.inputs[7])
+    nt.links.new(mul.outputs[2], b.inputs["Base Color"])
+    rg = tex_node(m, os.path.join(TEX_DIR, kset + "_rough.png"), True)
+    rm = nt.nodes.new("ShaderNodeMath")
+    rm.operation = 'MULTIPLY'
+    rm.use_clamp = True
+    nt.links.new(rg.outputs["Color"], rm.inputs[0])
+    nt.links.new(ca.outputs["Alpha"], rm.inputs[1])
+    r2 = nt.nodes.new("ShaderNodeMath")
+    r2.operation = 'MULTIPLY'
+    r2.use_clamp = True
+    nt.links.new(rm.outputs[0], r2.inputs[0])
+    r2.inputs[1].default_value = 1.7
+    nt.links.new(r2.outputs[0], b.inputs["Roughness"])
+    nm = tex_node(m, os.path.join(TEX_DIR, kset + "_normal.png"), True)
+    nn = nt.nodes.new("ShaderNodeNormalMap")
+    nt.links.new(nm.outputs["Color"], nn.inputs["Color"])
+    nt.links.new(nn.outputs["Normal"], b.inputs["Normal"])
+    b.inputs["Metallic"].default_value = KIT_METAL.get(kset, 0.0)
+    m["kit"] = kset
+    return m
+
+def merge_static(root):
+    buckets = {}
+    for o in list(root.children_recursive):
+        if o.type != 'MESH' or o.get("lod", -1) != -1 or not o.matrix_world.is_identity:
+            continue
+        mat = o.active_material.name
+        kset = kit(mat) if mat in MATS and not MATS[mat][3] else None
+        key = (merge_target(o.get("group", "")), ("Kit_" + kset) if kset else mat)
+        buckets.setdefault(key, []).append((o, mat))
+    for (tgt, mname), items in buckets.items():
+        name = tgt + "_" + mname
+        if len(items) == 1 and items[0][0].name == name and not mname.startswith("Kit_"):
+            continue
+        bm = bmesh.new()
+        spans = []
+        for o, mat in items:
+            n0 = len(bm.verts)
+            bm.from_mesh(o.data)
+            spans.append((n0, len(bm.verts), mat))
+        if mname.startswith("Kit_"):
+            # відтінок пишемо після злиття, по шматках: from_mesh не переносить шари кольору наступних сіток
+            layer = bm.verts.layers.float_color.new("tint")
+            bm.verts.ensure_lookup_table()
+            for n0, n1, mat in spans:
+                color, metal, rough, emit = MATS[mat]
+                val = Vector((*KIT_TINT.get(mat, color), rough / 0.6 / 1.7))   # A — шорсткість/1,7 (0..1); шейдер ×1,7
+                for i in range(n0, n1):
+                    bm.verts[i][layer] = val
+        me = bpy.data.meshes.new(name + "_m")
+        bm.to_mesh(me)
+        bm.free()
+        for o, _ in items:
+            old = o.data
+            bpy.data.objects.remove(o, do_unlink=True)
+            if old.users == 0:
+                bpy.data.meshes.remove(old)
+        ob = bpy.data.objects.new(name, me)
+        COL.objects.link(ob)
+        ob.parent = root
+        me.materials.append(kit_material(mname[4:]) if mname.startswith("Kit_") else material(mname))
+        ob["lod"] = -1
+        ob["group"] = tgt
+
 def export(root, info):
+    merge_static(root)
     os.makedirs(OUT, exist_ok=True)
     bpy.ops.object.select_all(action='DESELECT')
     for o in [root] + list(root.children_recursive):
@@ -1874,16 +2320,38 @@ def export(root, info):
         for s_ in SEATS:
             f.write("%.2f %.2f %.2f %.0f %s\n" % s_)
     r = info["ring"]
-    tris = sum(len(o.data.polygons) for o in root.children_recursive if o.type == 'MESH')
-    objs = sum(1 for o in root.children_recursive if o.type == 'MESH')
+    meshes = [o for o in root.children_recursive if o.type == 'MESH']
+    near = [o for o in meshes if o.get("lod", -1) != 1]                 # видно зблизька (LOD0 і без LOD)
+    far = [o for o in meshes if o.get("lod", -1) != 0]                  # видно здалеку (LOD1 і без LOD)
+    faces = lambda obs: sum(len(o.data.polygons) for o in obs)
+    trisf = lambda obs: sum(len(p.vertices) - 2 for o in obs for p in o.data.polygons)
+    tris = faces(near)
+    objs = len(near)
+    kits = sorted({o.active_material.get("kit") for o in meshes if o.active_material and o.active_material.get("kit")})
+    tex_bytes = 0
+    for k_ in kits:
+        size = 2048 if k_ in ("wood_strip", "wood_board", "canvas", "panel_floor") else (512 if k_ in ("plastic", "led_pixels") else 1024)
+        tex_bytes += 3 * size * size * 0.445 * 1.33                      # три карти, ASTC 6×6 = 3,56 біт/піксель, мипи +33 %
+    budget_f, budget_o = BUDGET[info["id"]]
+    over = []
+    if tris > budget_f:
+        over.append("граней %d > %d" % (tris, budget_f))
+    if objs > budget_o:
+        over.append("сіток %d > %d" % (objs, budget_o))
     with open(os.path.join(OUT, "venue_%s_info.txt" % info["id"]), "w", encoding="utf-8", newline="\n") as f:
         f.write("назва %s\n" % info["title"])
         f.write("ринг_фути %d\nплатформа_половина_м %.3f\nмат_висота_м %.3f\nстійки_м %.3f\nвсередині_канатів_м %.3f\n"
                 % (info["spec"]["size_ft"], r["half_plat"], r["mat_z"], r["post"], r["inner"]))
         f.write("канати %s\nмісткість %d\nоб'єктів_сітки %d\nграней %d\n" % (" ".join(info["ropes"]), len(SEATS), objs, tris))
+        f.write("трикутників_зблизька %d\nтрикутників_здалеку %d\nбюджет_граней %d\nбюджет_сіток %d\n"
+                % (trisf(near), trisf(far), budget_f, budget_o))
+        f.write("текстурні_набори %s\nпам'ять_текстур_ASTC_МБ %.1f\n" % (" ".join(kits), tex_bytes / 1e6))
+    if over:
+        raise SystemExit("БЮДЖЕТ %s перевищено: %s" % (info["id"], "; ".join(over)))
     return path, len(lines) - 1, objs, tris
 
 BUILDERS = {"gym": build_gym, "hall": build_hall, "arena": build_arena}
+BUDGET = {"gym": (60000, 150), "hall": (120000, 150), "arena": (250000, 150)}      # граней зблизька, сіток (§11.0)
 
 for vid in WANT:
     bpy.ops.wm.read_homefile(use_empty=True)
