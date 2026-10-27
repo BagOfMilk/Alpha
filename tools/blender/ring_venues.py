@@ -310,10 +310,67 @@ def build_textured(m, kset, factor=None, rough=1.0, metal=0.0, emit=0.0, attr=No
         if "Emission Strength" in b.inputs:
             b.inputs["Emission Strength"].default_value = emit
 
+# Героїчні предмети (tools/blender/ring_hero.py): легкі сітки з запеченими текстурами замість коробок. Матеріал
+# «Hero_<предмет>__<варіант>[__<матеріал-відтінок>]»: нейтральний предмет (подушка) фарбується кольором матеріалу арени.
+HERO_DIR = os.path.join(REPO, "Assets", "Art", "Ring", "Hero", "Textures")
+HERO_LIB = os.path.join(REPO, "Logs", "hero", "hero_lib.blend")
+HERO = {}
+
+def hero_mesh(asset):
+    """Легка сітка предмета з бібліотеки ring_hero.py або None (тоді генератор ставить коробки, як раніше)."""
+    if asset not in HERO:
+        me = bpy.data.meshes.get("hero_" + asset)
+        if me is None and os.path.exists(HERO_LIB):
+            with bpy.data.libraries.load(HERO_LIB) as (src, dst):
+                dst.meshes = [n for n in src.meshes if n == "hero_" + asset]
+            me = dst.meshes[0] if dst.meshes else None
+        if me is None:
+            print("HERO: немає %s — запусти tools/blender/ring_hero.py" % asset, flush=True)
+        HERO[asset] = me
+    return HERO[asset]
+
+def hero_material(name):
+    parts = name[5:].split("__")
+    asset, var = parts[0], parts[1]
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    def tex(fn, cs):
+        t = nt.nodes.new("ShaderNodeTexImage")
+        t.image = bpy.data.images.load(os.path.join(HERO_DIR, fn), check_existing=True)
+        t.image.colorspace_settings.name = cs
+        return t
+    col = tex("hero_%s_%s_albedo.png" % (asset, var), 'sRGB').outputs["Color"]
+    if len(parts) > 2:                                     # відтінок: нейтральний альбедо ~0,8 → колір матеріалу арени
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type, mix.blend_type = 'RGBA', 'MULTIPLY'
+        mix.inputs["Factor"].default_value = 1.0
+        mix.inputs[7].default_value = (*(min(1.0, c / 0.8) for c in MATS[parts[2]][0]), 1)
+        nt.links.new(col, mix.inputs[6])
+        col = mix.outputs[2]
+    nt.links.new(col, b.inputs["Base Color"])
+    tm = tex("hero_%s_%s_mask.png" % (asset, var), 'Non-Color')
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(tm.outputs["Color"], sep.inputs["Color"])
+    nt.links.new(sep.outputs[0], b.inputs["Metallic"])
+    inv = nt.nodes.new("ShaderNodeMath")
+    inv.operation = 'SUBTRACT'
+    inv.inputs[0].default_value = 1.0
+    nt.links.new(tm.outputs["Alpha"], inv.inputs[1])
+    nt.links.new(inv.outputs[0], b.inputs["Roughness"])
+    nm = nt.nodes.new("ShaderNodeNormalMap")
+    nt.links.new(tex("hero_%s_normal.png" % asset, 'Non-Color').outputs["Color"], nm.inputs["Color"])
+    nt.links.new(nm.outputs["Normal"], b.inputs["Normal"])
+    m["kit"] = "hero_" + asset
+    return m
+
 def material(name):
     m = bpy.data.materials.get(name)
     if m is not None:
         return m
+    if name.startswith("Hero_"):
+        return hero_material(name)
     if name.startswith(("Decal_", "Art_")):
         return decal_material(name)
     if name == "LED_Content":
@@ -411,6 +468,19 @@ class Parts:
         uv = bm.loops.layers.uv.verify()
         for loop, t in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
             loop[uv].uv = t
+
+    def hero(self, asset, mat, loc, yaw=0.0):
+        """Героїчний предмет: легка сітка з бібліотеки, повернута на yaw і поставлена в loc. False — бібліотеки немає."""
+        me = hero_mesh(asset)
+        if me is None:
+            return False
+        M = Matrix.Translation(Vector(loc)) @ Matrix.Rotation(yaw, 4, 'Z')
+        for bm in self._targets(mat):
+            tmp = me.copy()
+            tmp.transform(M)
+            bm.from_mesh(tmp)
+            bpy.data.meshes.remove(tmp)
+        return True
 
     def _targets(self, mat):
         """Куди писати геометрію: bmesh матеріалу і, якщо відкрито предмет (with item(...)), — ще й bmesh предмета."""
@@ -512,7 +582,7 @@ class Parts:
                 ob.parent = parent
                 me.materials.append(material(mat))
                 for p in me.polygons:
-                    p.use_smooth = mat in smooth
+                    p.use_smooth = mat in smooth or mat.startswith("Hero_")    # запечена нормаль — на гладкій сітці
                 ob["lod"] = level if has_lod else -1
                 ob["group"] = self.group
                 out.append(ob)
@@ -522,7 +592,7 @@ class Parts:
 def world_uv(bm, mat):
     """Розгортка в метрах світу: грань проєктується на площину за найбільшою складовою нормалі, ділиться на плитку
     текстурного набору — плитка однакового розміру на всіх об'єктах, швів між коробками не видно. Наклейки — свої 0..1."""
-    if mat.startswith(("Decal_", "Art_")) or mat == "LED_Content":
+    if mat.startswith(("Decal_", "Art_", "Hero_")) or mat == "LED_Content":
         return
     kset = kit(mat)
     tile = TILE.get(kset, 1.0) * KIT_SCALE.get(mat, 1.0) if kset else 1.0
@@ -1197,16 +1267,18 @@ def build_ring(root, spec):
     pads = spec["pads"]
     for i_c, (name, (cx, cy)) in enumerate(corners.items()):
         px, py = cx * post, cy * post
-        P.cyl(spec["post"], (px, py, mz - 0.1), (px, py, post_top), 0.06, segs=12)
-        P.cyl(spec["post"], (px, py, 0.0), (px, py, mz - 0.1), 0.05, segs=8)       # нога під матом
-        P.cyl("Post_Cap", (px, py, post_top), (px, py, post_top + 0.03), 0.07, segs=12)
-        for h_ in (0.48, 0.86, 1.24):
-            P.cyl("Post_Cap", (px, py, mz + h_), (px - cx * 0.1, py - cy * 0.1, mz + h_), 0.022, segs=6)   # стяжка
         diag = math.atan2(cy, cx)
+        P.cyl(spec["post"], (px, py, 0.0), (px, py, mz - 0.1), 0.05, segs=8)       # нога під матом
+        if not P.hero("ring_post", "Hero_ring_post__%s" % ("steel" if spec["post"] == "Post_Steel" else "black"), (px, py, mz), diag):
+            P.cyl(spec["post"], (px, py, mz - 0.1), (px, py, post_top), 0.06, segs=12)
+            P.cyl("Post_Cap", (px, py, post_top), (px, py, post_top + 0.03), 0.07, segs=12)
+            for h_ in (0.48, 0.86, 1.24):
+                P.cyl("Post_Cap", (px, py, mz + h_), (px - cx * 0.1, py - cy * 0.1, mz + h_), 0.022, segs=6)   # стяжка
         for i, h in enumerate(ropes):
             z = mz + h
             pad = pads[(i_c + i) % len(pads)] if spec.get("mixed_pads") else pads[i_c % len(pads)]
-            P.box(pad, (px - cx * 0.16, py - cy * 0.16, z), (0.12, 0.24, 0.26), rz=diag)
+            if not P.hero("ring_pad", "Hero_ring_pad__neutral__" + pad, (px - cx * 0.16, py - cy * 0.16, z), diag):
+                P.box(pad, (px - cx * 0.16, py - cy * 0.16, z), (0.12, 0.24, 0.26), rz=diag)
             empty("anchor_rope_%s_%d" % (name, i + 1), root, (px - cx * 0.08, py - cy * 0.08, z))
         empty("anchor_corner_top_%s" % name, root, (cx * (post - 0.35), cy * (post - 0.35), mz + ropes[1]))
         empty("anchor_corner_%s" % name, root, (cx * (inner - 0.4), cy * (inner - 0.4), mz))
@@ -1224,6 +1296,10 @@ def build_ring(root, spec):
         d = Vector((cx, cy, 0)).normalized()
         diag = math.atan2(cy, cx)
         base = Vector((cx * (half_plat + 0.1), cy * (half_plat + 0.1), 0))
+        if P.hero("ring_steps_%03d" % round(mz * 100), "Hero_ring_steps_%03d__%s" % (
+                round(mz * 100), "black" if spec["steps_mat"] == "Steps_Black" else "steel"), base, diag):
+            empty("anchor_steps_%s" % corner, root, tuple(base + d * 1.4))
+            continue
         for k in range(3):
             h = mz * (k + 1) / 3 - 0.04
             depth = 0.42 * (3 - k)

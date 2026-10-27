@@ -1,0 +1,6 @@
+# Героїчні предмети (tools/blender/ring_hero.py): hero <ім'я> <трикутників> <розмір текстур> <варіанти…>
+hero ring_pad 456 512 neutral
+hero ring_post 440 1024 black steel
+hero ring_steps_100 460 2048 steel black
+hero ring_steps_110 460 2048 steel black
+hero ring_steps_120 460 2048 steel black
