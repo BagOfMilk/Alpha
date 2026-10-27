@@ -94,12 +94,10 @@ def check_collisions(root, info):
             trees.append((t, _bounds(vs)))
         if not trees:
             continue
-        own = None                                     # свій стілець — найближчий у межах 0,35 м
-        best = 0.35
+        own = set()                                    # свій стілець (і його рюкзак, куртка) — у межах 0,35 м
         for c in near(x, y):
-            d = math.hypot(c[2][0] - x, c[2][1] - y)
-            if d < best:
-                own, best = c[0], d
+            if math.hypot(c[2][0] - x, c[2][1] - y) < 0.35 and abs(c[2][2] - (CROWD[i][2] if CROWD[i][5].startswith("Cam_") else c[2][2])) < 0.5:
+                own.add(c[0])
         fans.append((i, x, y, clip, trees, own))
     fgrid = {}
     for f in fans:
@@ -114,7 +112,7 @@ def check_collisions(root, info):
                     if any(_boxes_touch(a[1], b[1]) and a[0].overlap(b[0]) for a in trees for b in trees2):
                         report("фанат↔фанат", "%s (%.2f, %.2f) і %s (%.2f, %.2f)" % (clip, x, y, clip2, x2, y2), (j,))
         for c in near(x, y):
-            if c[0] == own:
+            if c[0] in own:
                 continue
             if any(_boxes_touch(a[1], c[4]) and a[0].overlap(c[3]) for a in trees):
                 yw = math.radians(CROWD[i][3])
@@ -125,6 +123,23 @@ def check_collisions(root, info):
         for name, ts, bbs in statics:
             if any(_boxes_touch(a[1], bbs) and a[0].overlap(ts) for a in trees):
                 report("фанат↔арена", "%s (%.2f, %.2f) у «%s»" % (clip, x, y, name), (i,))
+    # реквізит ↔ реквізит: кожен предмет (with item / itemize у ring_venues.py) проти інших
+    items = []
+    for name, bm in ITEMS.items():
+        if not bm.verts:
+            continue
+        bm.verts.index_update()                      # без цього індекси вершин випадкові — BVH падає
+        bm.verts.ensure_lookup_table()
+        vs = [v.co.copy() for v in bm.verts]
+        c = sum(vs, Vector()) / len(vs)
+        vs = [v + (c - v).normalized() * SHRINK if (c - v).length > SHRINK else v for v in vs]
+        t = BVHTree.FromPolygons(vs, [[v.index for v in f.verts] for f in bm.faces], epsilon=0.0)
+        items.append((name, t, _bounds(vs)))
+    for i_ in range(len(items)):
+        for j_ in range(i_ + 1, len(items)):
+            (na, ta, ba), (nb, tb, bb) = items[i_], items[j_]
+            if _boxes_touch(ba, bb) and ta.overlap(tb):
+                report("реквізит↔реквізит", "«%s» і «%s»" % (na, nb))
     # чисті зони: ринг з килимками і прохід борця
     mh = info["ring"]["mats_half"] + 0.15
     path = sorted([o for o in root.children_recursive if o.name.startswith("anchor_path_")], key=lambda o: o.name)
@@ -146,6 +161,8 @@ def check_collisions(root, info):
             report("стілець у проході борця", "(%.2f, %.2f)" % (p.x, p.y))
     for (i, x, y, clip, trees, own) in fans:
         p = Vector((x, y))
+        if clip.startswith("Cam_"):
+            continue                                   # оператори працюють біля рингу й у проході за задумом
         if abs(x) < mh and abs(y) < mh:
             report("фанат у зоні рингу", "(%.2f, %.2f)" % (x, y), (i,))
         if in_path(p):

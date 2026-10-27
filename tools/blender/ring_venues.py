@@ -233,12 +233,14 @@ def tex_node(m, path, non_color):
     return t
 
 def decal_material(name):
-    """Наклейка: Decal_<x> → Textures/decal_<x>.png з прозорістю."""
+    """Наклейка: Decal_<x> → Textures/decal_<x>.png з прозорістю; Art_<x> → Textures/art_<x>.png (графіка без слів —
+    банери, фартух, табло; написи поверх — реєстр текстів)."""
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     nt = m.node_tree
     b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
-    t = tex_node(m, os.path.join(TEX_DIR, "decal_" + name[6:].lower() + ".png"), False)
+    fn = ("decal_" + name[6:].lower()) if name.startswith("Decal_") else ("art_" + name[4:].lower())
+    t = tex_node(m, os.path.join(TEX_DIR, fn + ".png"), False)
     nt.links.new(t.outputs["Color"], b.inputs["Base Color"])
     nt.links.new(t.outputs["Alpha"], b.inputs["Alpha"])
     b.inputs["Roughness"].default_value = 0.8
@@ -312,7 +314,7 @@ def material(name):
     m = bpy.data.materials.get(name)
     if m is not None:
         return m
-    if name.startswith("Decal_"):
+    if name.startswith(("Decal_", "Art_")):
         return decal_material(name)
     if name == "LED_Content":
         m = bpy.data.materials.new(name)
@@ -410,15 +412,25 @@ class Parts:
         for loop, t in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
             loop[uv].uv = t
 
-    def box(self, mat, c, s, rz=0.0, rx=0.0, bevel=None):
-        bm = self.bm(mat)
+    def _targets(self, mat):
+        """Куди писати геометрію: bmesh матеріалу і, якщо відкрито предмет (with item(...)), — ще й bmesh предмета."""
+        out = [self.bm(mat)]
+        if ITEM_STACK and not self.level and not mat.startswith(("Decal_", "Art_")):
+            out.append(ITEMS.setdefault(ITEM_STACK[0], bmesh.new()))
+        return out
+
+    def box(self, mat, c, s, rz=0.0, rx=0.0, bevel=None, segs=1):
+        for bm in self._targets(mat):
+            self._box(bm, mat, c, s, rz, rx, bevel, segs)
+
+    def _box(self, bm, mat, c, s, rz, rx, bevel, segs):
         bw = BEVEL.get(mat, 0.0) if bevel is None else bevel
         if bw and min(s) > 3 * bw and not self.level:
             # фаска: коробка будується в окремому bmesh і доливається в загальний
             tb = bmesh.new()
             bmesh.ops.create_cube(tb, size=1.0)
             bmesh.ops.scale(tb, vec=s, verts=list(tb.verts))
-            bmesh.ops.bevel(tb, geom=list(tb.edges), offset=bw, segments=1, affect='EDGES', profile=0.5)
+            bmesh.ops.bevel(tb, geom=list(tb.edges), offset=bw, segments=segs, affect='EDGES', profile=0.5)
             if rx:
                 bmesh.ops.rotate(tb, cent=(0, 0, 0), matrix=Matrix.Rotation(rx, 3, 'X'), verts=list(tb.verts))
             if rz:
@@ -439,7 +451,10 @@ class Parts:
         bmesh.ops.translate(bm, vec=c, verts=r["verts"])
 
     def cyl(self, mat, p0, p1, r0, r1=None, segs=12):
-        bm = self.bm(mat)
+        for bm in self._targets(mat):
+            self._cyl(bm, p0, p1, r0, r1, segs)
+
+    def _cyl(self, bm, p0, p1, r0, r1, segs):
         p0, p1 = Vector(p0), Vector(p1)
         d = p1 - p0
         if d.length < 1e-6:
@@ -451,9 +466,30 @@ class Parts:
         bmesh.ops.translate(bm, vec=p0 + d / 2, verts=res["verts"])
 
     def quad(self, mat, pts):
-        bm = self.bm(mat)
-        vs = [bm.verts.new(p) for p in pts]
-        bm.faces.new(vs)
+        for bm in self._targets(mat):
+            vs = [bm.verts.new(p) for p in pts]
+            bm.faces.new(vs)
+
+    def lathe(self, mat, base, profile, segs=16, axis=(0, 0, 1)):
+        """Тіло обертання: профіль [(радіус, висота)] навколо осі axis з точки base (PAR, бак, абажур)."""
+        base, ax = Vector(base), Vector(axis).normalized()
+        rot = ax.to_track_quat('Z', 'Y').to_matrix()
+        for bm in self._targets(mat):
+            rings = []
+            for (r, h) in profile:
+                ring = []
+                for k in range(segs):
+                    a = 2 * math.pi * k / segs
+                    ring.append(bm.verts.new(base + rot @ Vector((r * math.cos(a), r * math.sin(a), h))))
+                rings.append(ring)
+            for i in range(len(rings) - 1):
+                for k in range(segs):
+                    a, b = rings[i][k], rings[i][(k + 1) % segs]
+                    c, d = rings[i + 1][(k + 1) % segs], rings[i + 1][k]
+                    try:
+                        bm.faces.new((a, b, c, d))
+                    except ValueError:
+                        pass
 
     def finish(self, smooth=()):
         out = []
@@ -486,7 +522,7 @@ class Parts:
 def world_uv(bm, mat):
     """Розгортка в метрах світу: грань проєктується на площину за найбільшою складовою нормалі, ділиться на плитку
     текстурного набору — плитка однакового розміру на всіх об'єктах, швів між коробками не видно. Наклейки — свої 0..1."""
-    if mat.startswith("Decal_") or mat == "LED_Content":
+    if mat.startswith(("Decal_", "Art_")) or mat == "LED_Content":
         return
     kset = kit(mat)
     tile = TILE.get(kset, 1.0) * KIT_SCALE.get(mat, 1.0) if kset else 1.0
@@ -521,6 +557,114 @@ def seat_mark(pos, yaw_rad, z, kind="сидить"):
     SEATS.append((pos[0], pos[1], z, math.degrees(yaw_rad), kind))
 
 # ---------------------------------------------------------------- реквізит
+
+ITEMS = {}           # предмет → bmesh (світові координати) — для перевірки «реквізит ↔ реквізит» (ring_collide.py)
+ITEM_STACK = []      # відкритий предмет (вкладені виклики пишуть у зовнішній)
+_ITEM_N = [0]
+
+class item:
+    """with item("стіл хронометриста"): уся геометрія всередині — один предмет для перевірки колізій."""
+    def __init__(self, name):
+        _ITEM_N[0] += 1
+        self.name = "%s#%d" % (name, _ITEM_N[0])
+    def __enter__(self):
+        if not ITEM_STACK:
+            ITEM_STACK.append(self.name)
+            self.own = True
+        else:
+            self.own = False
+        return self
+    def __exit__(self, *a):
+        if self.own:
+            ITEM_STACK.pop()
+
+def itemize(fn, name=None):
+    """Обгортка функції реквізиту: кожен виклик — окремий предмет."""
+    def w(*a, **k):
+        with item(name or fn.__name__):
+            return fn(*a, **k)
+    w.__name__ = fn.__name__
+    return w
+
+# Тексти — лише текстом з ключами перекладу (власник 27.10.2026: «Эти надписи должны быть текстом, что бы на
+# другие языки переводить»): у текстурах слів немає; кожен напис — запис тут → venue_<id>_texts.txt (якір для гри) і
+# ring_strings_uk.txt (рядки); у знімках огляду Blender ставить ті самі рядки шрифтом Fixel, у FBX текст не йде.
+TEXTS = []           # dict(key, text, pos, right, up, size, color, align, emit, width)
+
+def label(key, text, pos, right, up=(0, 0, 1), size=0.2, color=(0.95, 0.95, 0.95), align="CENTER", emit=0.0, width=0.0,
+          font="display"):
+    TEXTS.append(dict(key=key, text=text, pos=Vector(pos), right=Vector(right).normalized(), up=Vector(up).normalized(),
+                      size=size, color=color, align=align, emit=emit, width=width, font=font))
+
+def wall_label(key, text, pos, inward, size, **kw):
+    """Напис на стіні/щиті: inward — нормаль на глядача; читається зліва направо, коли дивишся на поверхню."""
+    n = Vector(inward).normalized()
+    right = Vector((-n.y, n.x, 0)) if abs(n.z) < 0.9 else Vector((1, 0, 0))
+    label(key, text, Vector(pos) + n * 0.006, right, n.cross(right) if abs(n.z) > 0.9 else (0, 0, 1), size, **kw)
+
+STRINGS_FILE = os.path.join(OUT, "ring_strings_uk.txt")
+
+def write_texts(vid):
+    with open(os.path.join(OUT, "venue_%s_texts.txt" % vid), "w", encoding="utf-8", newline="\n") as f:
+        f.write("# Написи арени (рушій малює текст сам за ключем — переклад у ring_strings_<мова>.txt): ключ x y z "
+                "вправо(x y z) вгору(x y z) висота_літер r g b вирівнювання світіння макс_ширина шрифт\n")
+        for t in TEXTS:
+            f.write("%s %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %s %.1f %.2f %s\n" % (
+                t["key"], *t["pos"], *t["right"], *t["up"], t["size"], *t["color"], t["align"], t["emit"], t["width"], t["font"]))
+    known = {}
+    if os.path.exists(STRINGS_FILE):
+        for line in open(STRINGS_FILE, encoding="utf-8"):
+            if "=" in line and not line.startswith("#"):
+                k, v = line.rstrip("\n").split("=", 1)
+                known[k] = v
+    for t in TEXTS:
+        known[t["key"]] = t["text"]
+    with open(STRINGS_FILE, "w", encoding="utf-8", newline="\n") as f:
+        f.write("# Рядки арен «Рингу», українська (мова за замовчуванням). ключ=текст; переклад — ring_strings_<код мови>.txt\n")
+        for k in sorted(known):
+            f.write("%s=%s\n" % (k, known[k]))
+
+FONTS = {"display": os.path.join(REPO, "Assets", "ThirdParty", "Fonts", "Fixel", "FixelDisplay-SemiBold.ttf"),
+         "text": os.path.join(REPO, "Assets", "ThirdParty", "Fonts", "Fixel", "FixelText-Bold.ttf")}
+
+def preview_texts(scene):
+    """Знімки: написи — об'єкти тексту Blender (поза коренем арени, тож у FBX не йдуть)."""
+    made = []
+    for k, t in enumerate(TEXTS):
+        cu = bpy.data.curves.new("txt%d" % k, 'FONT')
+        cu.body = t["text"]
+        try:
+            cu.font = bpy.data.fonts.load(FONTS.get(t["font"], FONTS["display"]), check_existing=True)
+        except RuntimeError:
+            pass
+        cu.size = t["size"] / 0.72                        # висота великої літери ≈ 0,72 кегля
+        cu.align_x = t["align"]
+        cu.align_y = 'CENTER'
+        o = bpy.data.objects.new("txt%d" % k, cu)
+        scene.collection.objects.link(o)
+        r, u = t["right"], t["up"]
+        n = r.cross(u)
+        o.matrix_world = Matrix((r, u, n)).transposed().to_4x4()
+        o.location = t["pos"]
+        m = bpy.data.materials.new("TextMat%d" % k)
+        m.use_nodes = True
+        b = next(nd for nd in m.node_tree.nodes if nd.type == "BSDF_PRINCIPLED")
+        b.inputs["Base Color"].default_value = (*t["color"], 1)
+        b.inputs["Roughness"].default_value = 0.6
+        if t["emit"]:
+            for key in ("Emission Color", "Emission"):
+                if key in b.inputs:
+                    b.inputs[key].default_value = (*t["color"], 1)
+                    break
+            b.inputs["Emission Strength"].default_value = t["emit"]
+        cu.materials.append(m)
+        if t["width"]:
+            bpy.context.view_layer.update()
+            w = o.dimensions.x
+            if w > t["width"]:
+                o.scale = (t["width"] / w,) * 3
+        made.append(o)
+    return made
 
 PLACE = []           # (модель, (x, y, z), курс рад, колір сидіння) — екземпляри реквізиту (ring_props.py)
 STAFF = set()        # індекси PLACE службових стільців
@@ -616,9 +760,9 @@ def monitor(P, pos, yaw, w=0.55, h=0.33, z=0.0):
 
 def laptop(P, pos, yaw, z):
     f = lambda v: at(pos, yaw, v)
-    P.box("Monitor", f((0, 0, z + 0.01)), (0.34, 0.24, 0.02), rz=yaw)
-    P.box("Monitor", f((0, 0.12, z + 0.12)), (0.34, 0.015, 0.22), rz=yaw, rx=math.radians(-15))
-    P.box("Monitor_Screen", f((0, 0.11, z + 0.12)), (0.31, 0.003, 0.19), rz=yaw, rx=math.radians(-15))
+    P.box("Monitor", f((0, 0, z + 0.022)), (0.34, 0.24, 0.02), rz=yaw)
+    P.box("Monitor", f((0, 0.14, z + 0.145)), (0.34, 0.015, 0.22), rz=yaw, rx=math.radians(-15))
+    P.box("Monitor_Screen", f((0, 0.13, z + 0.145)), (0.31, 0.003, 0.19), rz=yaw, rx=math.radians(-15))
 
 def ring_bell(P, pos, z):
     P.cyl("Table_Leg", (pos[0], pos[1], z), (pos[0], pos[1], z + 0.05), 0.09, segs=16)
@@ -633,8 +777,9 @@ def mic_stand(P, pos, h=1.5):
 
 def trash_can(P, pos, mat="Trash_Green"):
     x, y = pos[0], pos[1]
-    P.cyl(mat, (x, y, 0.0), (x, y, 0.85), 0.28, 0.3, segs=16)
-    P.cyl(mat, (x, y, 0.85), (x, y, 0.92), 0.31, segs=16)
+    z = pos[2] if len(pos) > 2 else 0.0
+    P.cyl(mat, (x, y, z), (x, y, z + 0.85), 0.28, 0.3, segs=16)
+    P.cyl(mat, (x, y, z + 0.85), (x, y, z + 0.92), 0.31, segs=16)
 
 def ladder(P, base, top):
     base, top = Vector(base), Vector(top)
@@ -885,8 +1030,8 @@ def barricade_run(P, p0, p1, h=1.1, cover="Barricade_Cover"):
     n = max(1, round(L / 2.0))
     seg = L / n
     for k in range(n):
-        q0 = p0 + d * (k / n) + t * 0.03
-        q1 = p0 + d * ((k + 1) / n) - t * 0.03
+        q0 = p0 + d * (k / n) + t * (0.16 if k == 0 else 0.03)
+        q1 = p0 + d * ((k + 1) / n) - t * (0.16 if k == n - 1 else 0.03)
         c = (q0 + q1) / 2
         for zz, r in ((h - 0.06, 0.024), (0.12, 0.022), (h * 0.55, 0.016)):
             P.cyl("Barricade_Steel", (q0.x, q0.y, zz), (q1.x, q1.y, zz), r, segs=8)
@@ -1086,6 +1231,15 @@ def build_ring(root, spec):
             P.box(spec["steps_mat"], (c.x, c.y, h / 2), (depth, 0.95, h), rz=diag)
         empty("anchor_steps_%s" % corner, root, tuple(base + d * 1.4))
     floor_decal(P, "Decal_Logo", (0, 0), min(2.6, inner * 1.1), 0.0, mz)
+    for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):         # фартух: графіка без слів + назва текстом
+        nrm = Vector((sx, sy, 0))
+        c_ = nrm * (half_plat + 0.036)
+        rgt = Vector((-sy, sx, 0))
+        P.decal("Art_Apron", (c_.x, c_.y, mz * 0.52), rgt * (half_plat * 0.96), Vector((0, 0, mz * 0.24)))
+        for u in (-0.6, 0.6):
+            p_ = c_ + rgt * (half_plat * u) + nrm * 0.002
+            label("ring.apron.brand", "РИНГ", (p_.x, p_.y, mz * 0.52), rgt, (0, 0, 1), mz * 0.16, (0.95, 0.95, 0.95), "CENTER", 0.0,
+                  half_plat * 0.7)
     for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         n = Vector((sx, sy, 0))
         c = n * (half_plat + 0.03)
@@ -1095,7 +1249,10 @@ def build_ring(root, spec):
     for k in range(6):
         a = k * math.pi / 3 + 0.4
         floor_decal(P, "Decal_Grime", ((half_plat + 0.6) * math.cos(a), (half_plat + 0.6) * math.sin(a)), 1.4, a, 0.03)
+    _saved = ITEM_STACK[:]
+    ITEM_STACK.clear()                                   # килимки — підлога: на них стоять, це не колізія
     P.box(spec["mats"], (0, 0, 0.015), (mats_half * 2, mats_half * 2, 0.03))
+    ITEM_STACK[:] = _saved
     for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         hor = sy != 0
         P.box(spec["band"], (sx * (mats_half - 0.05), sy * (mats_half - 0.05), 0.031),
@@ -2535,9 +2692,13 @@ def look(root, info):
         for k in range(4):
             a = obs["anchor_rope_%s_%d" % (order[k], i + 1)].matrix_world.translation
             b = obs["anchor_rope_%s_%d" % (order[(k + 1) % 4], i + 1)].matrix_world.translation
-            P.cyl("Pad_Red" if info["id"] == "gym" and i == 0 else ("Apron_Band_White" if info["id"] == "gym" and i == 1 else
-                  ("Pad_Blue" if info["id"] == "gym" else ("Apron_Band_Gold" if info["id"] == "arena" and i == 2 else "Pad_Black"))),
-                  a, b, 0.022, segs=8)
+            col = info.get("ropes", ("Black",) * 3)[i]
+            P.cyl({"White": "Apron_Band_White", "Gold": "Apron_Band_Gold", "Red": "Pad_Red", "Blue": "Pad_Blue"}.get(col, "Pad_Black"),
+                  a, b, 0.024, segs=10)
+            for u in (0.2, 0.5, 0.8):                     # обмотка скотчем
+                c_ = a.lerp(b, u)
+                dd = (b - a).normalized() * 0.09
+                P.cyl("Tape_Silver" if col != "White" else "Canvas_White", c_ - dd, c_ + dd, 0.0265, segs=10)
     ropes = P.finish()
     def hide(names, state):
         for o in root.children_recursive:
@@ -2558,6 +2719,7 @@ def look(root, info):
     shots["closeup"] = ((hp + 2.6, -hp - 3.2, 1.9), (hp * 0.2, -hp * 0.4, 0.9), 35, ["ceiling", "wall_S"])
     shots["overview_west"] = ((-ext * 0.95, -ext * 1.15, ext * 0.95), (0, 0, 1.0), 28, ["ceiling", "wall_S", "wall_W"])
     show = Show(root, info, scene)
+    texts = preview_texts(scene)
     place_crowd(scene)
     lib = props_library()
     icol = bpy.data.collections.new("Instances")
@@ -2607,7 +2769,8 @@ def look(root, info):
         cam.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
         cam.data.lens = lens
         cam.data.clip_end = 400
-        scene.render.filepath = os.path.join(LOOK_DIR, fname + ".png")
+        suffix = ("_a%02d" % round(crowd_target(info["id"])[1] * 100)) if (ATT_ARG is not None or PEOPLE_ARG is not None) else ""
+        scene.render.filepath = os.path.join(LOOK_DIR, fname + suffix + ".png")
         bpy.ops.render.render(write_still=True)
         hide(hidden, False)
     show.remove()
@@ -2754,6 +2917,12 @@ def export(root, info):
         raise SystemExit("БЮДЖЕТ %s перевищено: %s" % (info["id"], "; ".join(over)))
     return path, len(lines) - 1, objs, tris
 
+for _fn in ("folding_table", "monitor", "laptop", "ring_bell", "mic_stand", "trash_can", "ladder", "kendo_bin", "chair_stack",
+            "cooler", "water_cooler", "speaker_tripod", "speaker_stack", "line_array", "light_tree", "hd_camera", "jib",
+            "lockers", "bench", "massage_table", "road_case", "merch_rack", "step_and_repeat", "barricade_run",
+            "bike_rack", "arch_curtain", "extinguisher", "build_ring"):
+    globals()[_fn] = itemize(globals()[_fn])
+
 exec(open(os.path.join(REPO, "tools", "blender", "ring_props.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_show.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_collide.py"), encoding="utf-8").read())
@@ -2789,45 +2958,80 @@ def crowd_fans():
     except OSError:
         return []
 
+CAMOPS = []          # оператори: (x, y, z, кліп) — з якорів anchor_camop_* (лицем до рингу)
+
+# Відвідуваність — змінна шоу (власник 27.10.2026: «Натовп це плаваюча та рандомізована одиниця, їх від шоу к шоу
+# може бути різна кількісь… зараз головне шоб це динамічно було і реально відображало скількі людей на шоу»).
+# Вхід: частка (--attendance=0.6) або кількість людей (--people=300) і зерно шоу (--seed=7): та сама пара — та сама
+# розсадка. Механіку (скільки прийде) гра визначить сама; генератор лише чесно показує задане число:
+#   * компанії по 2–5 сусідніх місць заповнюються від найбажаніших — ближче до рингу й центру сектора, з розкидом
+#     від зерна; лави трибун трохи менш бажані за стільці, стоячі — лише коли сидячих не лишилось (майже аншлаг);
+#   * на малому шоу задні ряди й стоячі порожні, на аншлагу заповнені стоячі;
+#   * колізії не зменшують число: знятого фаната заміняє наступний із запасу (наступне найкраще вільне місце).
+ATT_ARG = next((float(a_.split("=", 1)[1]) for a_ in args if a_.startswith("--attendance=")), None)
+PEOPLE_ARG = next((int(a_.split("=", 1)[1]) for a_ in args if a_.startswith("--people=")), None)
+SEED_ARG = next((int(a_.split("=", 1)[1]) for a_ in args if a_.startswith("--seed=")), 0)
+CROWD_RESERVE = []   # запас (наступні найкращі вільні місця) — для заміни знятих перевіркою колізій
+
+def crowd_target(vid):
+    cap = len(SEATS)
+    if PEOPLE_ARG is not None:
+        return max(0, min(cap, PEOPLE_ARG)), PEOPLE_ARG / max(1, cap)
+    att = ATTENDANCE.get(vid, 0.8) if ATT_ARG is None else ATT_ARG
+    return int(round(att * cap)), att
+
+def _fan_at(i, seat, color, standing, fans, seed):
+    x, y, z, yaw, kind = seat
+    fan = fans[int(h01(i * 31 + seed, 36) * len(fans)) % len(fans)]
+    clip = pick(MOOD_STAND if standing else MOOD_SIT, h01(i * 17 + seed, 37))
+    col = color if h01(i + seed, 38) < 0.7 else pick(MERCH, h01(i + seed, 39))
+    zz = z if kind == "стоїть" else z - 0.45
+    if standing and kind != "стоїть":                                # підвівся перед своїм стільцем, у прохід
+        a_ = math.radians(yaw)
+        x, y = x + 0.36 * math.sin(a_), y - 0.36 * math.cos(a_)
+    return (x, y, zz, yaw, fan, clip, int(h01(i + seed, 40) * 2), col)
+
 def assign_crowd(vid):
-    """[(x, y, z, курс°, фанат, кліп, фаза, колір футболки)] — хто сидить і стоїть на місцях SEATS."""
+    """[(x, y, z, курс°, фанат, кліп, фаза, колір футболки)]: оператори + люди на найкращих місцях до цільового числа."""
     fans = crowd_fans()
     if not fans:
         return []
-    att = ATTENDANCE.get(vid, 0.8)
+    seed = SEED_ARG
+    target, att = crowd_target(vid)
     out = []
-    k = 0
-    gi = 0
+    for i, (x, y, z, clip) in enumerate(CAMOPS):                     # оператори — у чорному, як команда шоу
+        yaw = math.degrees(math.atan2(-x, y)) if clip != "Cam_Walk_Gimbal_Loop" else (90.0 if x < 0 else -90.0)
+        out.append((x, y, z, yaw, fans[(i * 7 + 3) % len(fans)], clip, i % 2, (0.025, 0.025, 0.03)))
+    groups, k, gi = [], 0, 0                                         # компанії сусідніх місць
     while k < len(SEATS):
-        g = 2 + int(h01(gi, 31) * 4)                                   # компанія 2..5 сусідніх місць
-        seats = SEATS[k:k + g]
-        x0, y0 = seats[0][0], seats[0][1]
-        d = math.hypot(x0, y0)
-        p = att * (1.12 - 0.012 * d)                                     # ближче до рингу — густіше
-        if seats[0][4] == "стоїть":
-            p = min(1.0, att * 1.15)
-        busy = h01(gi, 32) < p
-        color = pick(MERCH, h01(gi, 33))
-        excited = h01(gi, 34) < 0.16                                     # компанія підвелась
-        for j, (x, y, z, yaw, kind) in enumerate(seats):
-            i = k + j
-            if not busy or h01(i, 35) > 0.92:
-                continue
-            fan = fans[int(h01(i, 36) * len(fans)) % len(fans)]
-            standing = kind == "стоїть" or (excited and kind != "лава")     # з лави трибуни не підводяться
-            clip = pick(MOOD_STAND if standing else MOOD_SIT, h01(i, 37))
-            col = color if h01(i, 38) < 0.7 else pick(MERCH, h01(i, 39))
-            if kind == "стоїть":
-                zz = z
-            else:
-                zz = z - 0.45 if not standing else z - 0.45
-            if standing and kind != "стоїть":                            # підвівся перед своїм стільцем
-                a = math.radians(yaw)
-                x, y = x + 0.36 * math.sin(a), y - 0.36 * math.cos(a)
-            out.append((x, y, zz, yaw, fan, clip, int(h01(i, 40) * 2), col))
-        k += g
+        g = 2 + int(h01(gi * 13 + seed, 31) * 4)
+        idx = [j for j in range(k, min(len(SEATS), k + g)) if SEATS[j][4] == SEATS[k][4]]
+        x0 = sum(SEATS[j][0] for j in idx) / len(idx)
+        y0 = sum(SEATS[j][1] for j in idx) / len(idx)
+        kind = SEATS[idx[0]][4]
+        want = -math.hypot(x0, y0) / 10.0 + (h01(gi * 7 + seed, 41) - 0.5) * 0.5
+        if kind == "лава":
+            want -= 0.12
+        if kind == "стоїть":
+            want -= 3.0                                              # стоять, лише коли сидячих не лишилось
+        groups.append((want, gi, idx))
+        k += len(idx)
         gi += 1
-    return out
+    groups.sort(key=lambda g_: -g_[0])
+    people, reserve = [], []
+    for want, gi, idx in groups:
+        color = pick(MERCH, h01(gi + seed, 33))
+        excited = h01(gi * 3 + seed, 34) < 0.16
+        for j in idx:
+            if h01(j * 5 + seed, 35) > 0.93 and att < 0.95:            # «дірка» в компанії
+                continue
+            kind = SEATS[j][4]
+            standing = kind == "стоїть" or (excited and kind != "лава")
+            (people if len(people) < target else reserve).append(_fan_at(j, SEATS[j], color, standing, fans, seed))
+    CROWD_RESERVE[:] = reserve
+    print("CROWD %s: відвідуваність %.0f %%, людей %d з %d місць, зерно %d" % (vid, att * 100, len(people), len(SEATS), seed),
+          flush=True)
+    return out + people
 
 CROWD = []
 
@@ -2835,8 +3039,10 @@ def write_crowd(vid, keep=False):
     if not keep:
         CROWD[:] = assign_crowd(vid)
     with open(os.path.join(OUT, "venue_%s_crowd.txt" % vid), "w", encoding="utf-8", newline="\n") as f:
-        f.write("# Натовп (відвідуваність %.0f %%): x y z курс° фанат кліп фаза r g b. Разом: %d з %d місць\n"
-                % (ATTENDANCE.get(vid, 0.8) * 100, len(CROWD), len(SEATS)))
+        tg, att_ = crowd_target(vid)
+        f.write("# Натовп (відвідуваність %.0f %%, зерно %d — приклад одного шоу; число людей задає гра): x y z курс° фанат "
+                "кліп фаза r g b. Разом: %d (з них операторів %d) з %d місць\n"
+                % (att_ * 100, SEED_ARG, len(CROWD), len(CAMOPS), len(SEATS)))
         for c in CROWD:
             f.write("%.2f %.2f %.2f %.0f %s %s %d %.3f %.3f %.3f\n" % (c[0], c[1], c[2], c[3], c[4], c[5], c[6], *c[7]))
 
@@ -2865,16 +3071,22 @@ def place_crowd(scene):
     return made
 
 BUILDERS = {"gym": build_gym, "hall": build_hall, "arena": build_arena}
-BUDGET = {"gym": (60000, 150), "hall": (120000, 150), "arena": (250000, 150)}      # граней зблизька, сіток (§11.0)
+BUDGET = {"gym": (120000, 150), "hall": (120000, 150), "arena": (250000, 150)}     # граней зблизька, сіток (§11.0)
+exec(open(os.path.join(REPO, "tools", "blender", "ring_gym.py"), encoding="utf-8").read())   # спортзал за референсом
 
 for vid in WANT:
     bpy.ops.wm.read_homefile(use_empty=True)
     SEATS.clear()
     CROWD.clear()
+    CAMOPS.clear()
     LIGHTS.clear()
     AREAS.clear()
     PLACE.clear()
     STAFF.clear()
+    TEXTS.clear()
+    for _bm in ITEMS.values():
+        _bm.free()
+    ITEMS.clear()
     PROPS.clear()
     if vid == WANT[0]:
         _pp, _pt = export_props(os.path.join(REPO, "Assets", "Art", "Ring", "Props"))
@@ -2884,18 +3096,21 @@ for vid in WANT:
     info = BUILDERS[vid](root)
     write_crowd(vid)
     write_cues(vid)
+    write_texts(vid)
     path, n_anchors, objs, tris = export(root, info)
     print("VENUE %s: %s — якорів %d, місць %d, об'єктів %d, граней %d" % (vid, path, n_anchors, len(SEATS), objs, tris), flush=True)
     if CHECK:
-        for pass_ in range(3):
+        for pass_ in range(5):
             total_, bad_fans = check_collisions(root, info)
-            if not bad_fans or pass_ == 2 or CHECK_RAW:
+            if not bad_fans or pass_ == 4 or CHECK_RAW:
                 break
             for i_ in sorted(bad_fans, reverse=True):
                 c_ = CROWD[i_]
                 calm = "Sit_Idle_Loop" if c_[5].startswith("Sit_") else "Stand_Idle_Loop"
                 if pass_ == 0 and c_[5] != calm:
                     CROWD[i_] = c_[:5] + (calm,) + c_[6:]
+                elif CROWD_RESERVE and not c_[5].startswith("Cam_"):
+                    CROWD[i_] = CROWD_RESERVE.pop(0)                   # те саме число людей: наступне найкраще місце
                 else:
                     CROWD.pop(i_)
             print("CHECK %s: прохід %d — фанатів змінено/знято: %d" % (vid, pass_ + 1, len(bad_fans)), flush=True)

@@ -217,7 +217,44 @@ def c_rail_reach(t, L_):
     p.fist = {"l": 0.9, "r": 0.0}
     return p
 
+# --- оператори з недорогими камерами (власник 27.10.2026: «додай шо люди з недорогими камерами ходять»)
+CAM_GRIP = lambda S: (S["l"] + S["r"]) / 2 + Vector((0, -0.34, -0.12))
+
+def cam_hands(p, grip_fn, low=0.0):
+    """Обидві руки тримають рукоятку стабілізатора/камеру перед собою: лікті при тілі."""
+    p.hands = {"l": (lambda S: grip_fn(S) + Vector((0.06, 0.02, low)), FWD + UP * 0.6, RIGHT),
+               "r": (lambda S: grip_fn(S) + Vector((-0.06, 0.02, low)), FWD + UP * 0.6, LEFT)}
+    p.forced = {"l", "r"}
+    p.fist = {"l": 0.85, "r": 0.85}
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.18, 0.1, -0.35)), "r": lambda S: S["r"] + Vector((-0.18, 0.1, -0.35))}
+    return p
+
+def c_cam_walk(t, L_):
+    """Іде зі стабілізатором: крок на місці (гра рухає постать уздовж шляху), камера тримається рівно."""
+    ph = 2 * math.pi * t / L_ * 2          # два кроки за петлю
+    yl, yr = -0.2 * math.sin(ph), 0.2 * math.sin(ph)
+    zl = 0.071 + 0.07 * max(0.0, math.cos(ph))
+    zr = 0.071 + 0.07 * max(0.0, -math.cos(ph))
+    p = stand(t, pitch=6.0, head_pitch=4.0)
+    p.pelvis = Vector((0, 0, -0.02 - 0.015 * abs(math.cos(ph))))
+    p.ankles = (Vector((0.12, yl, zl)), Vector((-0.12, yr, zr)))
+    return cam_hands(p, CAM_GRIP)
+
+def c_cam_stand(t, L_):
+    p = stand(t, pitch=4.0, head_pitch=6.0, yaw=8.0 * wave(t, 0.5))
+    return cam_hands(p, lambda S: (S["l"] + S["r"]) / 2 + Vector((0, -0.36, 0.02)))
+
+def c_cam_kneel(t, L_):
+    """Знімає з коліна (нижній ракурс): праве коліно на підлозі, ліва нога попереду."""
+    p = Pose(pelvis=Vector((0, 0.05, -0.42)), pitch=10.0 + breathe(t, L_, 1.0), head_pitch=8.0,
+             ankles=(Vector((0.15, -0.42, 0.071)), Vector((-0.13, 0.4, 0.1))),
+             foot_rot=(Quaternion(UP, math.radians(6)), Quaternion(LEFT, math.radians(-70))),
+             knees=(Vector((0.2, -1.2, 0.6)), Vector((-0.14, -0.9, 0.0))), fist={"l": 0.85, "r": 0.85}, forced=set())
+    return cam_hands(p, lambda S: (S["l"] + S["r"]) / 2 + Vector((0, -0.32, -0.05)))
+
 CLIPS_C = [
+    ("Cam_Walk_Gimbal_Loop", c_cam_walk, "stand"), ("Cam_Stand_Film_Loop", c_cam_stand, "stand"),
+    ("Cam_Kneel_Film_Loop", c_cam_kneel, "stand"),
     ("Sit_Idle_Loop", c_sit_idle, "sit"), ("Sit_Talk_Loop", c_sit_talk, "sit"), ("Sit_Clap_Loop", c_sit_clap, "sit"),
     ("Sit_Cheer_Loop", c_sit_cheer, "sit"), ("Sit_Boo_Loop", c_sit_boo, "sit"), ("Sit_Point_Loop", c_sit_point, "sit"),
     ("Sit_Phone_Loop", c_sit_phone, "sit"), ("Sit_Lean_Loop", c_sit_lean, "sit"),
@@ -291,7 +328,7 @@ OUTFITS = {"m": [("male_casualsuit01",), ("male_casualsuit02",), ("male_casualsu
 SHOES = ("shoes01", "shoes02", "shoes03", "shoes04", "shoes05", "shoes06")
 RECOLOR_TOPS = {"elvs_crude_t-shirt_male", "toigo_basic_tucked_t-shirt", "joepal_crude_t-shirt_female",
                 "namuhekam_male_polo_shirt", "toigo_keyhole_tank_top"}
-TRIS = {"proxy": 1500, "suit": 2200, "top": 1100, "bottom": 900, "shoes": 360, "hair": 900}
+TRIS = {"proxy": 1500, "suit": 2400, "top": 1200, "bottom": 1000, "shoes": 1000, "hair": 1000}   # шкарпетки й гомілки не губляться
 N_FANS = 32
 
 def fan_specs():
@@ -528,6 +565,9 @@ def bake_pose(arm, mesh_obj, action, frame, kind, name):
 
 def add_props(me, arm, clip):
     """Телефон у правій руці (Sit_Phone) і табличка над головою (Stand_Sign) — частина запеченої сітки."""
+    if clip.startswith("Cam_"):
+        add_camera(me, arm, clip)
+        return
     if clip not in ("Sit_Phone_Loop", "Stand_Sign_Loop"):
         return
     pb = arm.pose.bones
@@ -571,6 +611,61 @@ def add_props(me, arm, clip):
     bm.to_mesh(me)
     bm.free()
     me.materials.append(mat)
+
+def add_camera(me, arm, clip):
+    """Недорога камера в руках: бездзеркалка (корпус, об'єктив, бленда, монітор) на ручному стабілізаторі
+    (рукоятка, кільце, підвіс) — розташована між кистями, дивиться вперед постаті."""
+    pb, W = arm.pose.bones, arm.matrix_world
+    a, b = W @ pb["hand_l"].head, W @ pb["hand_r"].head
+    mid = (a + b) / 2
+    fwd = (W.to_3x3() @ Vector((0, -1, 0))).normalized()
+    right = fwd.cross(Vector((0, 0, 1))).normalized()
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    k0 = len(me.materials)
+    def box(c, s, mat_i):
+        r = bmesh.ops.create_cube(bm, size=1.0)
+        M = Matrix((right, fwd, Vector((0, 0, 1)))).transposed()
+        for v in r["verts"]:
+            v.co = c + M @ Vector((v.co.x * s[0], v.co.y * s[1], v.co.z * s[2]))
+        for f in {f for v in r["verts"] for f in v.link_faces}:
+            f.material_index = k0 + mat_i
+    def cyl(p0, p1, rad, mat_i, segs=10):
+        d = p1 - p0
+        r = bmesh.ops.create_cone(bm, cap_ends=True, segments=segs, radius1=rad, radius2=rad, depth=d.length)
+        bmesh.ops.transform(bm, matrix=d.to_track_quat('Z', 'Y').to_matrix().to_4x4(), verts=r["verts"])
+        bmesh.ops.translate(bm, vec=p0 + d / 2, verts=r["verts"])
+        for f in {f for v in r["verts"] for f in v.link_faces}:
+            f.material_index = k0 + mat_i
+    up = Vector((0, 0, 1))
+    if clip == "Cam_Walk_Gimbal_Loop":
+        cyl(mid - up * 0.04, mid + up * 0.12, 0.018, 0)                # рукоятка
+        cyl(mid + up * 0.12, mid + up * 0.2 + fwd * 0.05, 0.012, 0)    # підвіс
+        cam = mid + up * 0.24 + fwd * 0.08
+    else:
+        cam = mid + up * 0.06 + fwd * 0.05
+    box(cam, (0.13, 0.08, 0.09), 0)
+    cyl(cam + fwd * 0.04, cam + fwd * 0.13, 0.034, 1, 14)
+    cyl(cam + fwd * 0.13, cam + fwd * 0.16, 0.042, 0, 14)
+    box(cam - fwd * 0.045 + up * 0.0, (0.07, 0.006, 0.05), 2)          # монітор ззаду
+    bm.to_mesh(me)
+    bm.free()
+    for nm, col, em in (("Cam_Body", (0.04, 0.04, 0.045), 0.0), ("Cam_Glass", (0.02, 0.02, 0.03), 0.0),
+                        ("Cam_Screen", (0.3, 0.5, 0.8), 1.5)):
+        m = bpy.data.materials.get(nm)
+        if m is None:
+            m = bpy.data.materials.new(nm)
+            m.use_nodes = True
+            bs = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+            bs.inputs["Base Color"].default_value = (*col, 1)
+            bs.inputs["Roughness"].default_value = 0.35
+            if em:
+                bs.inputs["Emission Strength"].default_value = em
+                for key in ("Emission Color", "Emission"):
+                    if key in bs.inputs:
+                        bs.inputs[key].default_value = (*col, 1)
+                        break
+        me.materials.append(m)
 
 def sign_material():
     m = bpy.data.materials.new("Fan_Sign")

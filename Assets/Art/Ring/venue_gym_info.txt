@@ -1,17 +1,19 @@
-назва Шкільний спортзал (інді)
+назва Спортзал спорткомплексу (інді)
 ринг_фути 16
 платформа_половина_м 2.438
 мат_висота_м 1.000
 стійки_м 2.218
 всередині_канатів_м 2.038
-канати Red White Blue
-місткість 493
-об'єктів_сітки 78
-граней 7992
-трикутників_зблизька 17160
-трикутників_здалеку 17160
-бюджет_граней 60000
+канати White White White
+місткість 515
+об'єктів_сітки 144
+граней 37740
+трикутників_зблизька 78070
+трикутників_здалеку 78070
+бюджет_граней 120000
 бюджет_сіток 150
-текстурні_набори concrete_block_wall concrete_wall_006 fabric_leather_02 fabric_pattern_07 metal_plate metal_plate_02 painted_metal_shutter plastic rubber_tiles velour_velvet wood_board wood_floor worn_tile_floor
-пам'ять_текстур_ASTC_МБ 89.8
-екземпляри chair_folding 169 (LOD0 628 трик., LOD1 4 трик.; усі LOD0 — 106 тис.)
+текстурні_набори concrete_block_wall concrete_wall_006 dirty_carpet fabric_leather_02 fabric_pattern_07 metal_plate metal_plate_02 painted_metal_shutter plastered_wall_04 plastic rubber_tiles sport_floor velour_velvet wood_board worn_tile_floor
+пам'ять_текстур_ASTC_МБ 99.1
+екземпляри bag 60 (LOD0 256 трик., LOD1 12 трик.; усі LOD0 — 15 тис.)
+екземпляри chair_folding 198 (LOD0 628 трик., LOD1 4 трик.; усі LOD0 — 124 тис.)
+екземпляри jacket 35 (LOD0 248 трик., LOD1 2 трик.; усі LOD0 — 8 тис.)

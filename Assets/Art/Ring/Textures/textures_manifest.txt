@@ -1,4 +1,5 @@
 # Текстури арен (tools/blender/ring_textures.py). <набір> <розмір px> <плитка м>; карти _albedo/_normal/_rough.
+sport_floor 2048 3.00
 wood_strip 2048 2.00
 wood_board 2048 2.00
 block_wall 1024 1.60

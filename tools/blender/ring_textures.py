@@ -287,7 +287,22 @@ def t_led_pixels(n):
     lum = 0.12 + 0.88 * dot
     return gray(lum), dot, np.full((n, n), 0.3, np.float32), 0.5
 
+def t_sport_floor(n):
+    """Спортивне ПВХ-покриття (як у референсі «СК на Відрадному»): дрібна крапчастість, легкі плями зносу, шви рулонів
+    по 1,5 м, напівглянець з потертостями від взуття."""
+    u, v = grid(n)
+    speck = noise(n, 0.7, 401) * 0.5 + noise(n, 1.6, 402) * 0.5
+    blot = fbm(n, 220, 403, 4)
+    rf = u * 2 / n
+    seam = edge_mask(rf - np.floor(rf), 0.0025)
+    scuff = np.clip(noise(n, 5, 404, ax=6.0) * noise(n, 60, 405) - 0.9, 0, None)
+    lum = (0.9 + 0.035 * speck + 0.04 * blot - 0.12 * np.clip(scuff, 0, 1)) * (0.9 + 0.1 * seam)
+    rough = np.clip(0.42 + 0.06 * speck + 0.25 * np.clip(scuff, 0, 1) + 0.25 * (1 - seam), 0, 1)
+    height = 0.25 * speck + 1.2 * seam
+    return gray(np.clip(lum, 0, 1)), height, rough, 0.6
+
 SETS = {
+    "sport_floor": (t_sport_floor, 2048, 3.0),
     "wood_strip": (t_wood_strip, 2048, 2.0), "wood_board": (t_wood_board, 2048, 2.0),
     "block_wall": (t_block_wall, 1024, 1.6), "brick": (t_brick, 1024, 1.8), "concrete": (t_concrete, 1024, 3.0),
     "plaster": (t_plaster, 1024, 2.0), "canvas": (t_canvas, 2048, 2.0), "vinyl": (t_vinyl, 1024, 1.0),

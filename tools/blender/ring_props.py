@@ -149,6 +149,28 @@ def _lod1_mesh(name, zs, yb, zb, hb):
         bm.faces.new([bm.verts.new(p) for p in pts])
     return _mesh(name, [("Prop_Seat", bm)])
 
+def build_bag():
+    """Рюкзак під сидінням стільця (між ніжками): корпус із заокругленнями, кишеня, лямки."""
+    b, s_ = bmesh.new(), bmesh.new()
+    _rbox(b, (0, 0.0, 0.16), (0.28, 0.16, 0.3), 0.04, 2)
+    _rbox(b, (0, -0.09, 0.11), (0.2, 0.04, 0.14), 0.015, 2)
+    for sx in (-0.07, 0.07):
+        _tube(s_, [(sx, 0.08, 0.29), (sx, 0.11, 0.2), (sx, 0.095, 0.06)], 0.012, 5)
+    lod0 = _mesh("prop_bag_LOD0", [("Prop_Seat", b), ("Cable_Black", s_)])
+    bm1 = bmesh.new()
+    _rbox(bm1, (0, 0, 0.16), (0.28, 0.16, 0.3), 0.0, 1)
+    return lod0, _mesh("prop_bag_LOD1", [("Prop_Seat", bm1)])
+
+def build_jacket():
+    """Куртка, перекинута через спинку стільця: складка зверху й пола позаду (не заходить на місце людини)."""
+    b = bmesh.new()
+    prof = [(0.18, 0.885), (0.205, 0.9), (0.235, 0.885), (0.25, 0.8), (0.255, 0.68), (0.25, 0.55), (0.26, 0.47)]
+    _shell(b, prof, 0.44, 8, cup=-0.015, thick=0.01)
+    lod0 = _mesh("prop_jacket_LOD0", [("Prop_Seat", b)])
+    b1 = bmesh.new()
+    b1.faces.new([b1.verts.new(p) for p in ((-0.22, 0.25, 0.47), (0.22, 0.25, 0.47), (0.22, 0.24, 0.89), (-0.22, 0.24, 0.89))])
+    return lod0, _mesh("prop_jacket_LOD1", [("Prop_Seat", b1)])
+
 PROPS = {}
 
 def props_library():
@@ -156,6 +178,8 @@ def props_library():
     if not PROPS:
         PROPS["chair_folding"] = build_chair_folding()
         PROPS["seat_stadium"] = build_seat_stadium()
+        PROPS["bag"] = build_bag()
+        PROPS["jacket"] = build_jacket()
     return PROPS
 
 def export_props(out_dir):
