@@ -1,0 +1,2 @@
+# Мітки подій кліпів рингу (tools/blender/ring_anims.py): <кліп> <подія> <час с> <кістка A> <кістка B>
+Forearm_Strike contact 0.420 lowerarm_r spine_03

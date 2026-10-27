@@ -10,3 +10,5 @@ Cover_A A 3.000 0 0.120 -0.600 0.000 90 stance -
 Cover_B B 3.000 0 0.120 -0.600 0.000 90 lying_back -
 Bump_Back - 1.300 0 0 0 0 0 stance lying_back
 GetUp_Back - 2.600 0 0 0 0 0 lying_back stance
+Forearm_Strike_A A 1.600 0 0.000 -0.800 0.000 180 stance stance
+Forearm_Strike_B B 1.600 0 0.000 -0.800 0.000 180 stance stance
