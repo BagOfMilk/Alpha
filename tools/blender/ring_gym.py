@@ -355,6 +355,8 @@ def stanchions(P, pts, h=0.95, sag=0.12):
     """Стійки з мотузкою (огорожа інді-шоу): хромовані стовпчики на важких базах, червоний канат провисає."""
     with item("stanchions"):
         for (x, y) in pts:
+            if abs(h - 0.95) < 1e-6 and P.hero("stanchion", "Hero_stanchion__chrome", (x, y, 0)):
+                continue
             P.lathe("Chrome", (x, y, 0), [(0.17, 0.0), (0.17, 0.02), (0.06, 0.05), (0.03, 0.07), (0.025, h), (0.04, h + 0.02),
                                           (0.04, h + 0.07), (0.0, h + 0.09)], segs=12)
         for (a, b) in zip(pts, pts[1:]):

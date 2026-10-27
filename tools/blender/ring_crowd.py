@@ -4,7 +4,7 @@
 #
 # Власник 27.10.2026: «Немає фанатів, до речі вони повинні займати різні місця», «в фанів теж мають бути анімації».
 #
-# Фанат = людина MPFB (тіло-проксі proxy741, шкіра за расою й віком; 8 культур, обидві статі, вік від підлітка до
+# Фанат = людина MPFB (тіло-проксі male1591 / female1605 (CC0, ~3,2 тис. трикутників; раніше proxy741), шкіра за расою й віком; 8 культур, обидві статі, вік від підлітка до
 # 60+) у сучасному одязі з бібліотеки MakeHuman — лише CC0: повсякденні комплекти з джинсами, футболки й поло,
 # карго, джинсові шорти, кросівки, 23 зачіски; бейсболка — своя. Футболки перефарбовуються з екземпляра (колір
 # об'єкта; у грі — MaterialPropertyBlock): мерч промоушену — найчастіше чорний. Рівні: LOD0 (~5 тис. трикутників,
@@ -301,7 +301,7 @@ def build_anims():
 
 # ---------------------------------------------------------------- фанати
 
-# Фанати збираються MPFB (як персонажі Alpha — tools/blender/alpha_people.py): тіло-проксі proxy741 (легке, для
+# Фанати збираються MPFB (як персонажі Alpha — tools/blender/alpha_people.py): тіло-проксі male1591 / female1605 (легкі, для
 # натовпу), шкіра за расою й віком, сучасний одяг і зачіски з бібліотеки MakeHuman — лише CC0 (перевірка ліцензії
 # кожного асета — asset_license з alpha_people.py; AGPL і CC BY відкидаються). Риг — game_engine, той самий, що
 # в кліпів натовпу.
@@ -328,7 +328,8 @@ OUTFITS = {"m": [("male_casualsuit01",), ("male_casualsuit02",), ("male_casualsu
 SHOES = ("shoes01", "shoes02", "shoes03", "shoes04", "shoes05", "shoes06")
 RECOLOR_TOPS = {"elvs_crude_t-shirt_male", "toigo_basic_tucked_t-shirt", "joepal_crude_t-shirt_female",
                 "namuhekam_male_polo_shirt", "toigo_keyhole_tank_top"}
-TRIS = {"proxy": 1500, "suit": 2400, "top": 1200, "bottom": 1000, "shoes": 1000, "hair": 1000}   # шкарпетки й гомілки не губляться
+PROXIES = ("proxy741", "male1591", "female1605")
+TRIS = {"proxy": 3400, "suit": 2400, "top": 1200, "bottom": 1000, "shoes": 1000, "hair": 1000}   # шкарпетки й гомілки не губляться
 N_FANS = 32
 
 def fan_specs():
@@ -352,7 +353,7 @@ def fan_specs():
         if i == 21:
             hair = "cortu_shaggy_green_hair"                          # один фрик із зеленим волоссям — реслінг-публіка
         spec = dict(g=1.0 if sex == "m" else 0.0, age=age, mus=0.3 + 0.4 * h01(tag, 15), w=0.3 + 0.5 * h01(tag, 16),
-                    h=0.3 + 0.5 * h01(tag, 17), race=race, skin=skin, proxy="proxy741",
+                    h=0.3 + 0.5 * h01(tag, 17), race=race, skin=skin, proxy="male1591" if sex == "m" else "female1605",   # CC0; удвічі детальніші за proxy741
                     clothes=list(outfit) + [SHOES[int(h01(tag, 18) * len(SHOES)) % len(SHOES)]], hair=hair,
                     brows="eyebrow%03d" % (1 + int(h01(tag, 19) * 12) % 12), cap=h01(tag, 20) < 0.18)
         out.append((tag, spec))
@@ -488,7 +489,7 @@ def build_fan(tag, spec):
             continue
         apply_masks(o)
         short = o.name.split(".", 1)[-1]
-        if short.startswith("proxy"):
+        if short.startswith(PROXIES):
             if skin is not None:
                 o.data.materials.clear()
                 o.data.materials.append(skin)
@@ -522,7 +523,7 @@ def build_fan(tag, spec):
                             bs.inputs["Specular IOR Level"].default_value = 0.25
         keep.append(o)
     if spec.get("cap"):
-        head = next((o for o in keep if o.name.split(".", 1)[-1].startswith("proxy")), keep[0])
+        head = next((o for o in keep if o.name.split(".", 1)[-1].startswith(PROXIES)), keep[0])
         keep.append(make_cap(rig, head))
     bpy.data.objects.remove(base, do_unlink=True)
     lod0 = join(keep, tag + "_LOD0")

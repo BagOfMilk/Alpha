@@ -44,7 +44,20 @@ ZONES = {
     "strap":   ((0.025, 0.025, 0.025), 0.0, 0.85, "none", "weave"),
     "rubber":  ((0.02, 0.02, 0.02), 0.0, 0.88, "none", "none"),
     "weld":    ((0.20, 0.19, 0.18), 1.0, 0.55, "none", "none"),
+    # нові зони — лише в кінець (колір-ідентифікатор зони залежить від її номера)
+    "duratex": ((0.03, 0.03, 0.032), 0.0, 0.72, "scuff", "peel"),        # фактурна фарба корпусів колонок
+    "grille":  ((0.035, 0.035, 0.04), 0.7, 0.5, "polish", "none"),
+    "chrome":  ((0.90, 0.90, 0.90), 1.0, 0.1, "polish", "none"),
+    "hdpe":    ((0.80, 0.80, 0.78), 0.0, 0.55, "scuff", "grain"),        # литий пластик стільниці
+    "wood":    ((0.30, 0.17, 0.08), 0.0, 0.5, "scuff", "grain"),
+    "brass":   ((0.85, 0.62, 0.25), 1.0, 0.25, "polish", "brushed"),
+    "alu":     ((0.60, 0.61, 0.63), 1.0, 0.35, "polish", "brushed"),
+    "plastic": ((0.02, 0.02, 0.022), 0.0, 0.5, "scuff", "none"),
+    "seat":    ((0.80, 0.80, 0.80), 0.0, 0.5, "scuff", "grain"),         # колір дає екземпляр (маска B)
+    "glass":   ((0.01, 0.01, 0.012), 0.0, 0.05, "none", "none"),
+    "canvas":  ((0.66, 0.66, 0.64), 0.0, 0.85, "grime", "grain"),       # полотно рингу: не біле, а затерте
 }
+TINT_ZONES = {"vinyl", "seat"}       # маска B = 1: тут колір множиться на колір екземпляра/арени
 ZONE_NAMES = list(ZONES)
 STEEL_BARE = (0.50, 0.50, 0.52)
 
@@ -478,6 +491,302 @@ def build_steps(mz):
             cyl(bm, (x, s * (W / 2 - 0.04), 0.0), (x, s * (W / 2 - 0.04), 0.024), 0.023, segs=8)
     return low("ring_steps_%03d" % round(mz * 100), bm, bevel=0.004)
 
+def perforated(bm, cx, cz, w, h, y, pitch=0.0075, hr=0.0026, depth=0.004):
+    """Перфорована решітка в площині XZ на глибині y (лице — у −Y): клітинки з восьмикутними отворами-трубками
+    (позаду отворів — темна задня стінка: AO і зони роблять їх чорними)."""
+    nx, nz = int(w / pitch), int(h / pitch)
+    x0, z0 = cx - nx * pitch / 2, cz - nz * pitch / 2
+    oc = [(math.cos(math.radians(247.5 + 45 * k)), math.sin(math.radians(247.5 + 45 * k))) for k in range(8)]
+    sq = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+    for i in range(nx):
+        for j in range(nz):
+            ux = x0 + (i + 0.5) * pitch
+            uz = z0 + (j + 0.5) * pitch
+            C = [bm.verts.new((ux + a * pitch / 2, y, uz + b * pitch / 2)) for (a, b) in sq]
+            O = [bm.verts.new((ux + a * hr, y, uz + b * hr)) for (a, b) in oc]
+            B = [bm.verts.new((ux + a * hr, y + depth, uz + b * hr)) for (a, b) in oc]
+            for k in range(4):
+                bm.faces.new((C[k], C[(k + 1) % 4], O[2 * k + 1], O[2 * k]))
+                bm.faces.new((C[(k + 1) % 4], O[(2 * k + 2) % 8], O[2 * k + 1]))
+            for k in range(8):
+                bm.faces.new((O[k], O[(k + 1) % 8], B[(k + 1) % 8], B[k]))
+
+def build_speaker(w, d, h, name):
+    """Пасивна колонка: корпус у фактурній фарбі, перфорована решітка в рамці, кутники, утоплені ручки з боків,
+    роз'єми ззаду, чашки під стек зверху, ніжки знизу. Нуль — центр корпусу, лице — у −Y."""
+    bm = bmesh.new()
+    rbox(bm, (0, 0, 0), (w, d, h), 0.012, cuts=8)
+    high(name + "_body", bm, "duratex")
+    bm = bmesh.new()
+    perforated(bm, 0, 0, w - 0.07, h - 0.07, -d / 2 - 0.004)
+    high(name + "_grille", bm, "grille", smooth=False)
+    bm = bmesh.new()
+    box(bm, (0, -d / 2 + 0.03, 0), (w - 0.06, 0.004, h - 0.06))                   # задня стінка за решіткою
+    for (z, r) in ((-h * 0.15, min(w, h) * 0.36), (h * 0.33, min(w, h) * 0.12)):  # дифузор і рупор
+        lathe(bm, (0, -d / 2 + 0.028, z), (0, -d / 2 + 0.008, z), [(r, 0), (r * 0.9, 0.4), (r * 0.3, 0.9), (0.0, 1.0)], segs=40)
+    for s_ in (-1, 1):                                                             # рамка решітки
+        box(bm, (s_ * (w / 2 - 0.02), -d / 2 - 0.002, 0), (0.025, 0.012, h - 0.03))
+        box(bm, (0, -d / 2 - 0.002, s_ * (h / 2 - 0.02)), (w - 0.03, 0.012, 0.025))
+    high(name + "_inner", bm, "plastic", bevel=0.002, segs=2)
+    bm = bmesh.new()
+    for sx in (-1, 1):                                                             # кутники
+        for sy in (-1, 1):
+            for sz in (-1, 1):
+                p = Vector((sx * (w / 2 - 0.012), sy * (d / 2 - 0.012), sz * (h / 2 - 0.012)))
+                res = bmesh.ops.create_icosphere(bm, subdivisions=3, radius=0.03)
+                bmesh.ops.translate(bm, vec=p, verts=res["verts"])
+    high(name + "_corners", bm, "paint")
+    bm = bmesh.new()
+    for s_ in (-1, 1):                                                             # ручки-чашки з боків
+        rbox(bm, (s_ * (w / 2 + 0.002), 0.0, h * 0.25), (0.012, min(0.2, d * 0.5), 0.07), 0.005, cuts=4)
+    for x in (-0.06, 0.06):                                                        # роз'єми ззаду
+        cyl(bm, (x, d / 2, -h * 0.25), (x, d / 2 + 0.012, -h * 0.25), 0.014, segs=24)
+    box(bm, (0, d / 2 + 0.002, -h * 0.25), (min(0.22, w * 0.6), 0.004, 0.08))
+    if h > 0.6:
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                cyl(bm, (sx * w * 0.3, sy * d * 0.3, -h / 2 - 0.012), (sx * w * 0.3, sy * d * 0.3, -h / 2), 0.025, segs=24)   # ніжки
+                torus(bm, (sx * w * 0.3, sy * d * 0.3, h / 2 + 0.001), (0, 0, 1), 0.03, 0.004)              # чашки під стек
+    high(name + "_hw", bm, "rubber", bevel=0.001, segs=2)
+    bm = bmesh.new()
+    rbox(bm, (0, 0, 0), (w + 0.008, d + 0.008, h + 0.006), 0.016, cuts=1)
+    return low(name, bm)
+
+def build_stanchion():
+    """Стійка огорожі: важка хромована база-купол з гумовим кільцем, стовпчик, ковпак з гніздами під гачки канату."""
+    hh = 0.95
+    T = hh + 0.09
+    bm = bmesh.new()
+    lathe(bm, (0, 0, 0.004), (0, 0, T), [(0.168, 0.0), (0.168, 0.02 / T), (0.15, 0.03 / T), (0.09, 0.045 / T),
+                                        (0.045, 0.062 / T), (0.03, 0.075 / T), (0.026, 0.09 / T), (0.026, (hh - 0.01) / T),
+                                        (0.034, hh / T), (0.042, (hh + 0.02) / T), (0.042, (hh + 0.06) / T),
+                                        (0.03, (hh + 0.08) / T), (0.0, 1.0)], segs=64)
+    high("st_chrome", bm, "chrome", subsurf=1)
+    bm = bmesh.new()
+    torus(bm, (0, 0, 0.006), (0, 0, 1), 0.16, 0.007, segs=64)
+    for a in range(4):                                                            # гнізда під гачки
+        ang = a * math.pi / 2
+        rbox(bm, (0.043 * math.cos(ang), 0.043 * math.sin(ang), hh + 0.04), (0.012, 0.012, 0.03), 0.004, cuts=3)
+    high("st_rubber", bm, "rubber")
+    bm = bmesh.new()
+    T2 = hh + 0.092
+    lathe(bm, (0, 0, 0.0), (0, 0, T2), [(0.17, 0.0), (0.17, 0.024 / T2), (0.1, 0.045 / T2), (0.035, 0.07 / T2),
+                                       (0.028, 0.09 / T2), (0.028, hh / T2), (0.044, (hh + 0.02) / T2),
+                                       (0.044, (hh + 0.06) / T2), (0.0, 1.0)], segs=20)
+    return low("stanchion", bm)
+
+def build_table(L=1.83, W=0.76, H=0.74):
+    """Розкладний стіл: литий пластик стільниці з ребрами знизу, ноги П-рамами з розпірками, кронштейни, болти,
+    гумові ковпачки. Нуль — підлога під центром, стільниця — на висоті H (центр плити)."""
+    bm = bmesh.new()
+    rbox(bm, (0, 0, H), (L, W, 0.045), 0.016, cuts=10)
+    high("tb_top", bm, "hdpe")
+    bm = bmesh.new()
+    for k in range(-5, 6):                                                        # ребра жорсткості під стільницею
+        box(bm, (k * L / 12, 0, H - 0.026), (0.012, W - 0.1, 0.012))
+    high("tb_ribs", bm, "hdpe", bevel=0.003, segs=2)
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        x = sx * (L / 2 - 0.09)
+        for sy in (-1, 1):
+            tube(bm, [(x, sy * (W / 2 - 0.07), 0.02), (x, sy * (W / 2 - 0.07), H - 0.025)], 0.0125, segs=16)
+        tube(bm, [(x, -(W / 2 - 0.07), 0.12), (x, W / 2 - 0.07, 0.12)], 0.009, segs=12)            # нижня поперечка
+        tube(bm, [(x, -(W / 2 - 0.07), H - 0.04), (x, W / 2 - 0.07, H - 0.04)], 0.011, segs=12)     # верхня (шарнір)
+        tube(bm, [(x, 0, 0.12), (x - sx * 0.35, 0, H - 0.035)], 0.008, segs=12)                     # розпірка до центру
+    tube(bm, [(-L / 2 + 0.44, 0, H - 0.035), (L / 2 - 0.44, 0, H - 0.035)], 0.008, segs=12)
+    high("tb_legs", bm, "paint")
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        x = sx * (L / 2 - 0.09)
+        for sy in (-1, 1):
+            cyl(bm, (x, sy * (W / 2 - 0.07), 0.0), (x, sy * (W / 2 - 0.07), 0.035), 0.016, segs=20)        # ковпачки
+            box(bm, (x, sy * (W / 2 - 0.07), H - 0.03), (0.05, 0.035, 0.012))                               # кронштейн
+            hexbolt(bm, (x + sx * 0.0125, sy * (W / 2 - 0.07), H - 0.04), (sx, 0, 0), r=0.006, h=0.003)
+    high("tb_hw", bm, "rubber", bevel=0.001, segs=2)
+    bm = bmesh.new()
+    rbox(bm, (0, 0, H), (L + 0.004, W + 0.004, 0.049), 0.018, cuts=1)
+    for sx in (-1, 1):
+        x = sx * (L / 2 - 0.09)
+        for sy in (-1, 1):
+            cyl(bm, (x, sy * (W / 2 - 0.07), 0.0), (x, sy * (W / 2 - 0.07), H - 0.02), 0.016, segs=6)
+        cyl(bm, (x, -(W / 2 - 0.07), 0.12), (x, W / 2 - 0.07, 0.12), 0.011, segs=5)
+        cyl(bm, (x, 0, 0.12), (x - sx * 0.35, 0, H - 0.035), 0.01, segs=5)
+    cyl(bm, (-L / 2 + 0.44, 0, H - 0.035), (L / 2 - 0.44, 0, H - 0.035), 0.01, segs=5)
+    return low("folding_table", bm)
+
+def build_bell():
+    """Гонг рингу: латунна чаша на дерев'яній основі, центральна гайка, гвинти, молоточок на стійці."""
+    bm = bmesh.new()
+    lathe(bm, (0, 0, 0), (0, 0, 0.052), [(0.088, 0), (0.092, 0.15), (0.092, 0.75), (0.084, 1.0), (0.0, 1.0)], segs=64)
+    high("bl_wood", bm, "wood", bevel=0.002, segs=3)
+    bm = bmesh.new()
+    lathe(bm, (0, 0, 0.05), (0, 0, 0.175), [(0.13, 0), (0.134, 0.04), (0.128, 0.1), (0.11, 0.35), (0.08, 0.65), (0.05, 0.9),
+                                            (0.02, 1.0), (0.0, 1.0)], segs=96)
+    torus(bm, (0, 0, 0.065), (0, 0, 1), 0.128, 0.004, segs=96)                    # бортик чаші
+    high("bl_brass", bm, "brass", subsurf=1)
+    bm = bmesh.new()
+    cyl(bm, (0.15, 0, 0.0), (0.15, 0, 0.21), 0.009, segs=16)                       # стійка молоточка
+    high("bl_handle", bm, "wood")
+    bm = bmesh.new()
+    cyl(bm, (0, 0, 0.17), (0, 0, 0.19), 0.016, segs=6)                             # гайка
+    cyl(bm, (0.15, -0.035, 0.215), (0.15, 0.035, 0.215), 0.017, segs=24)           # головка молоточка
+    for a in range(3):
+        ang = a * 2 * math.pi / 3 + 0.3
+        hexbolt(bm, (0.07 * math.cos(ang), 0.07 * math.sin(ang), 0.052), (0, 0, 1), r=0.005, h=0.002)
+    high("bl_steel", bm, "steel", bevel=0.001, segs=2)
+    bm = bmesh.new()
+    lathe(bm, (0, 0, 0), (0, 0, 0.054), [(0.093, 0), (0.093, 1.0), (0.0, 1.0)], segs=16)
+    lathe(bm, (0, 0, 0.05), (0, 0, 0.192), [(0.136, 0), (0.12, 0.25), (0.08, 0.55), (0.04, 0.85), (0.0, 1.0)], segs=20)
+    cyl(bm, (0.15, 0, 0.0), (0.15, 0, 0.21), 0.011, segs=6)
+    cyl(bm, (0.15, -0.037, 0.215), (0.15, 0.037, 0.215), 0.019, segs=8)
+    return low("ring_bell", bm)
+
+LID = lambda: Matrix.Translation((0, 0.14, 0.145)) @ Matrix.Rotation(math.radians(-15), 4, 'X') @ Matrix.Translation((0, -0.14, -0.145))
+
+def build_laptop():
+    """Ноутбук: алюмінієвий корпус, клавіатура (окремі клавіші), тачпад, шарнір, кришка з рамкою і склом екрана
+    (зображення малює генератор арени окремо — воно світиться). Нуль — стіл під центром основи, лице — у −Y."""
+    bm = bmesh.new()
+    rbox(bm, (0, 0, 0.011), (0.34, 0.24, 0.018), 0.006, cuts=8)
+    rbox(bm, (0, 0.14, 0.145), (0.34, 0.012, 0.22), 0.005, cuts=8, M=LID())
+    high("lt_alu", bm, "alu")
+    bm = bmesh.new()
+    kw, gap = 0.0175, 0.0025
+    for r in range(6):
+        n = 14 if r < 5 else 9
+        for c in range(n):
+            wide = r == 5 and c == 4
+            x = -0.13 + c * (kw + gap) + (0.02 if r == 5 else 0.0) + (kw * 1.5 + gap * 1.5 if r == 5 and c > 4 else 0.0)
+            box(bm, (x + (kw * 1.5 + gap * 1.5 if wide else 0.0), 0.07 - r * (kw + gap), 0.0205), (kw * 4 + gap * 3 if wide else kw, kw, 0.002))
+    rbox(bm, (0, -0.075, 0.0202), (0.11, 0.065, 0.001), 0.006, cuts=3)             # тачпад
+    cyl(bm, (-0.15, 0.118, 0.022), (0.15, 0.118, 0.022), 0.006, segs=16)            # шарнір
+    high("lt_keys", bm, "plastic", bevel=0.0006, segs=2)
+    bm = bmesh.new()
+    rbox(bm, (0, 0.1325, 0.15), (0.31, 0.002, 0.19), 0.003, cuts=3, M=LID())
+    high("lt_glass", bm, "glass")
+    bm = bmesh.new()
+    rbox(bm, (0, 0, 0.0115), (0.342, 0.242, 0.021), 0.007, cuts=1)
+    rbox(bm, (0, 0.14, 0.145), (0.342, 0.014, 0.222), 0.006, cuts=1, M=LID())
+    return low("laptop", bm)
+
+CHAIR_BACK = [(0.17 + 0.012 * math.sin(math.pi * k / 10), 0.64 + 0.22 * k / 10) for k in range(11)]
+
+def _shell_back(bm, prof, nx, width, thick, flip_front=False):
+    """Вигнута спинка стільця: оболонка з товщиною (лице, спина, торці)."""
+    rows = []
+    for i in range(nx + 1):
+        u = i / nx
+        x = (u - 0.5) * width
+        dy = 0.025 * (1 - (2 * u - 1) ** 2)
+        rows.append([Vector((x, y_ + dy, z_)) for (y_, z_) in prof])
+    n = len(prof)
+    F = [[bm.verts.new(p) for p in row] for row in rows]
+    B = [[bm.verts.new(p + Vector((0, thick, 0))) for p in row] for row in rows]
+    for i in range(nx):
+        for j in range(n - 1):
+            bm.faces.new((F[i][j], F[i][j + 1], F[i + 1][j + 1], F[i + 1][j]))
+            bm.faces.new((B[i][j], B[i + 1][j], B[i + 1][j + 1], B[i][j + 1]))
+    for i in range(nx):
+        bm.faces.new((F[i][0], F[i + 1][0], B[i + 1][0], B[i][0]))
+        bm.faces.new((F[i][n - 1], B[i][n - 1], B[i + 1][n - 1], F[i + 1][n - 1]))
+    for j in range(n - 1):
+        bm.faces.new((F[0][j], B[0][j], B[0][j + 1], F[0][j + 1]))
+        bm.faces.new((F[nx][j], F[nx][j + 1], B[nx][j + 1], B[nx][j]))
+
+def build_chair():
+    """Розкладний стілець (габарити — як ring_props.build_chair_folding: на ньому сидять пози натовпу): гнуті труби,
+    заклепки шарнірів зі зварними стиками, литі сидіння й спинка, ребра під сидінням, ковпачки ніг."""
+    r = 0.011
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        x = 0.19 * sx
+        tube(bm, [(x, 0.21, 0.03), (x, 0.195, 0.24), (x, 0.18, 0.44), (x, 0.188, 0.62), (x, 0.195, 0.78), (x, 0.215, 0.86)], r, segs=16)
+        tube(bm, [(x, -0.21, 0.03), (x, -0.185, 0.17), (x, -0.16, 0.30), (x, -0.13, 0.425)], r, segs=16)
+        tube(bm, [(x * 0.97, -0.19, 0.425), (x * 0.97, 0.17, 0.425)], r * 0.9, segs=16)
+    tube(bm, [(-0.19, -0.19, 0.09), (0.19, -0.19, 0.09)], r * 0.85, segs=16)
+    tube(bm, [(-0.19, 0.205, 0.12), (0.19, 0.205, 0.12)], r * 0.85, segs=16)
+    tube(bm, [(-0.19, 0.19, 0.62), (0.19, 0.19, 0.62)], r * 0.8, segs=16)
+    high("ch_frame", bm, "paint")
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        x = 0.19 * sx
+        for (y, z) in ((0.18, 0.44), (-0.13, 0.425), (0.19, 0.62)):
+            cyl(bm, (x + sx * 0.008, y, z), (x + sx * 0.0135, y, z), 0.0065, segs=16)      # заклепки
+        for y in (0.21, -0.21):
+            rbox(bm, (x, y, 0.016), (0.026, 0.03, 0.032), 0.008, cuts=4)                   # ковпачки
+    high("ch_hw", bm, "rubber")
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        x = 0.19 * sx
+        for (y, z) in ((0.18, 0.44), (-0.13, 0.425), (0.19, 0.62)):
+            weld(bm, [(x - sx * 0.006, y - 0.008, z + 0.008), (x - sx * 0.006, y + 0.008, z + 0.008)], r=0.0022)
+    high("ch_weld", bm, "weld")
+    bm = bmesh.new()
+    rbox(bm, (0, -0.01, 0.445), (0.40, 0.39, 0.035), 0.013, cuts=10,
+         bulge=lambda p, half: Vector((0, 0, -0.004 * max(0.0, 1 - (p.x / half.x) ** 2) * max(0.0, 1 - (p.y / half.y) ** 2)
+                                       if p.z > 0 else 0.0)))
+    for k in range(-3, 4):
+        box(bm, (k * 0.05, -0.01, 0.424), (0.008, 0.33, 0.01))                    # ребра під сидінням
+    _shell_back(bm, CHAIR_BACK, 16, 0.354, 0.012)                       # між стійками рами (труби по x = ±0,19)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    high("ch_seat", bm, "seat", subsurf=1)
+    # легка — як LOD0 ring_props (трубки 6 граней): силует і пози натовпу не змінюються
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        x = 0.19 * sx
+        tube(bm, [(x, 0.21, 0.03), (x, 0.18, 0.44), (x, 0.195, 0.78), (x, 0.215, 0.86)], r, segs=6)
+        tube(bm, [(x, -0.21, 0.03), (x, -0.16, 0.30), (x, -0.13, 0.425)], r, segs=6)
+        tube(bm, [(x * 0.97, -0.19, 0.425), (x * 0.97, 0.17, 0.425)], r, segs=6)
+        for y in (0.21, -0.21):
+            box(bm, (x, y, 0.012), (0.03, 0.034, 0.024))
+    tube(bm, [(-0.19, -0.19, 0.09), (0.19, -0.19, 0.09)], r, segs=6)
+    tube(bm, [(-0.19, 0.205, 0.12), (0.19, 0.205, 0.12)], r, segs=6)
+    tube(bm, [(-0.19, 0.19, 0.62), (0.19, 0.19, 0.62)], r, segs=6)
+    rbox(bm, (0, -0.01, 0.445), (0.40, 0.39, 0.037), 0.013, cuts=1)          # габарити — як у ring_props (колізії)
+    _shell_back(bm, [(y_ - 0.001, z_) for (y_, z_) in CHAIR_BACK[::2]], 8, 0.356, 0.014)
+    return low("chair_folding", bm)
+
+def _h(i, salt):
+    x = (i * 374761393 + salt * 668265263 + 1442695041) & 0xFFFFFFFF
+    x = ((x ^ (x >> 13)) * 1274126177) & 0xFFFFFFFF
+    return ((x ^ (x >> 16)) & 0xFFFF) / 65535.0
+
+def build_canvas(ft):
+    """Полотно рингу: верх платформи з прогином до центру, складками від кутів (натяг до стійок) і випадковими
+    зморшками; край загнутий на подушку. Легка — плаский верх із заокругленим краєм. Нуль — рівень мату."""
+    hp = ft * 0.3048 / 2
+    creases = []
+    for k in range(4):                                                     # від кутів до центру
+        cx, cy = (1 if k in (0, 3) else -1), (1 if k < 2 else -1)
+        for j in range(3):
+            a = math.atan2(-cy, -cx) + (j - 1) * 0.22 + (_h(k * 3 + j, 1) - 0.5) * 0.1
+            creases.append((cx * (hp - 0.25), cy * (hp - 0.25), a, 0.5 + 0.5 * _h(k * 3 + j, 2), 0.0035, 0.05))
+    for k in range(14):                                                    # випадкові зморшки
+        creases.append(((_h(k, 3) - 0.5) * hp * 1.6, (_h(k, 4) - 0.5) * hp * 1.6, _h(k, 5) * math.pi, 0.3 + 0.6 * _h(k, 6),
+                        (0.0015 + 0.002 * _h(k, 7)) * (1 if _h(k, 8) > 0.35 else -1), 0.035 + 0.04 * _h(k, 9)))
+    def wrinkle(p, half):
+        if p.z < half.z - 0.002:
+            return Vector((0, 0, 0))
+        x, y = p.x, p.y
+        edge = min(1.0, max(0.0, (hp - max(abs(x), abs(y))) / 0.12))
+        z = -0.006 * (1 - (x / hp) ** 2) * (1 - (y / hp) ** 2)
+        for (cx, cy, a, L, amp, w) in creases:
+            dx, dy = x - cx, y - cy
+            par = dx * math.cos(a) + dy * math.sin(a)
+            perp = -dx * math.sin(a) + dy * math.cos(a)
+            if 0 <= par <= L * 1.5 or amp < 0.003:
+                z += amp * math.exp(-(perp / w) ** 2) * math.exp(-((par - L * 0.5) / L) ** 2)
+        z += 0.0008 * math.sin(x * 7.3 + y * 2.1) * math.sin(y * 6.1 - x * 1.7)
+        return Vector((0, 0, z * edge))
+    bm = bmesh.new()
+    rbox(bm, (0, 0, -0.06), (2 * hp, 2 * hp, 0.12), 0.045, cuts=200, bulge=wrinkle)
+    high("canvas_top", bm, "canvas")
+    bm = bmesh.new()
+    rbox(bm, (0, 0, -0.06), (2 * hp + 0.004, 2 * hp + 0.004, 0.124), 0.047, cuts=4)
+    bm.normal_update()
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.normal.z < -0.9], context='FACES')   # низ не видно: текстура — верху
+    return low("ring_canvas_%d" % ft, bm)
+
 # предмет: (будівник, розмір текстури, варіанти {ім'я: {зона: колір}}, дальність променя)
 ASSETS = {
     "ring_post": (build_post, 1024, {"black": {}, "steel": {"paint": (0.30, 0.31, 0.33)}}, 0.02),
@@ -485,6 +794,17 @@ ASSETS = {
     "ring_steps_100": (lambda: build_steps(1.0), 2048, {"steel": {}, "black": {"plate": "paint"}}, 0.03),
     "ring_steps_110": (lambda: build_steps(1.1), 2048, {"steel": {}, "black": {"plate": "paint"}}, 0.03),
     "ring_steps_120": (lambda: build_steps(1.2), 2048, {"steel": {}, "black": {"plate": "paint"}}, 0.03),
+    "speaker_stack": (lambda: build_speaker(0.9, 0.7, 0.88, "speaker_stack"), 2048, {"black": {}}, 0.04),
+    "speaker_top": (lambda: build_speaker(0.42, 0.38, 0.65, "speaker_top"), 1024, {"black": {}}, 0.04),
+    "speaker_la": (lambda: build_speaker(1.1, 0.55, 0.38, "speaker_la"), 1024, {"black": {}}, 0.04),
+    "stanchion": (build_stanchion, 512, {"chrome": {}}, 0.02),
+    "folding_table": (build_table, 2048, {"white": {}}, 0.03),
+    "ring_bell": (build_bell, 512, {"brass": {}}, 0.02),
+    "laptop": (build_laptop, 1024, {"silver": {}}, 0.012),
+    "chair_folding": (build_chair, 512, {"frame": {"paint": (0.06, 0.06, 0.065)}}, 0.02),
+    "ring_canvas_16": (lambda: build_canvas(16), 2048, {"white": {}, "grey": {"canvas": (0.42, 0.43, 0.44)}}, 0.02),
+    "ring_canvas_18": (lambda: build_canvas(18), 2048, {"white": {}, "grey": {"canvas": (0.42, 0.43, 0.44)}}, 0.02),
+    "ring_canvas_20": (lambda: build_canvas(20), 2048, {"white": {}, "grey": {"canvas": (0.42, 0.43, 0.44)}}, 0.02),
 }
 
 # ---------------------------------------------------------------- запікання
@@ -683,6 +1003,10 @@ def compose(name, S, nrm, ao, idmap, ppm, variants):
                 s_ = np.clip(e * 1.2 + n_wear[sel] * 0.3 - 0.2, 0, 1)
                 c = c * (1 + 0.25 * s_[:, None])
                 r_ = r_ + 0.25 * s_
+            elif wear == "grime":                                         # затерті плями, бруд від ніг
+                spots = np.clip((n_wear[sel] * 0.9 + n_low[sel] * 0.7 - 0.3) * 2.5, 0, 1)
+                c = c * (1 - 0.16 * np.clip(n_dirt[sel] + 0.4, 0, 1))[:, None] * (1 - 0.22 * spots)[:, None]
+                r_ = r_ - 0.08 * spots
             elif wear == "polish":
                 p_ = np.clip(e * 1.5, 0, 1)
                 c = c * (1 + 0.25 * p_[:, None])
@@ -695,7 +1019,8 @@ def compose(name, S, nrm, ao, idmap, ppm, variants):
             metal[sel] = m_
             rough[sel] = np.clip(r_, 0.05, 1)
         save_png(to_srgb(alb), os.path.join(TEX, "hero_%s_%s_albedo.png" % (name, var)), True)
-        save_png(np.stack([metal, ao, np.zeros_like(ao), 1 - rough], -1), os.path.join(TEX, "hero_%s_%s_mask.png" % (name, var)), False)
+        tint = np.isin(zi, [ZONE_NAMES.index(z_) for z_ in TINT_ZONES]).astype(np.float32)
+        save_png(np.stack([metal, ao, tint, 1 - rough], -1), os.path.join(TEX, "hero_%s_%s_mask.png" % (name, var)), False)
 
 # ---------------------------------------------------------------- матеріал з текстур (огляд і генератор арен)
 

@@ -126,7 +126,16 @@ def build_chair_folding():
     _rbox(seat, (0, -0.01, 0.445), (0.40, 0.39, 0.035), 0.012, 2)
     prof = [(0.17 + 0.012 * math.sin(math.pi * k / 5), 0.64 + 0.22 * k / 5) for k in range(6)]
     _shell(seat, prof, 0.40, 6, cup=0.025, thick=0.012)
-    lod0 = _mesh("prop_chair_folding_LOD0", [("Chair_Frame", fr), ("Prop_Seat", seat)])
+    hm = hero_mesh("chair_folding")                     # героїчна модель (ring_hero.py): ті самі габарити, запечена деталь
+    if hm is not None:
+        fr.free()
+        seat.free()
+        lod0 = hm.copy()
+        lod0.name = "prop_chair_folding_LOD0"
+        lod0.materials.clear()
+        lod0.materials.append(material("Hero_chair_folding__frame__obj"))   # колір сидіння — колір екземпляра (маска B)
+    else:
+        lod0 = _mesh("prop_chair_folding_LOD0", [("Chair_Frame", fr), ("Prop_Seat", seat)])
     return lod0, _lod1_mesh("prop_chair_folding_LOD1", 0.45, 0.19, 0.74, 0.24)
 
 def build_seat_stadium():

@@ -6,14 +6,14 @@
 всередині_канатів_м 2.038
 канати White White White
 місткість 515
-об'єктів_сітки 145
-граней 42336
-трикутників_зблизька 81958
-трикутників_здалеку 81958
+об'єктів_сітки 147
+граней 51348
+трикутників_зблизька 89056
+трикутників_здалеку 89056
 бюджет_граней 120000
 бюджет_сіток 150
-текстурні_набори concrete_block_wall concrete_wall_006 dirty_carpet fabric_leather_02 fabric_pattern_07 hero_ring_pad hero_ring_post hero_ring_steps_100 metal_plate_02 painted_metal_shutter plastered_wall_04 plastic rubber_tiles sport_floor velour_velvet wood_board worn_tile_floor
-пам'ять_текстур_ASTC_МБ 97.3
+текстурні_набори concrete_block_wall concrete_wall_006 dirty_carpet fabric_leather_02 fabric_pattern_07 hero_folding_table hero_laptop hero_ring_bell hero_ring_canvas_16 hero_ring_pad hero_ring_post hero_ring_steps_100 hero_speaker_top hero_stanchion metal_plate_02 painted_metal_shutter plastered_wall_04 plastic rubber_tiles sport_floor velour_velvet wood_board worn_tile_floor
+пам'ять_текстур_ASTC_МБ 108.4
 екземпляри bag 60 (LOD0 256 трик., LOD1 12 трик.; усі LOD0 — 15 тис.)
-екземпляри chair_folding 198 (LOD0 628 трик., LOD1 4 трик.; усі LOD0 — 124 тис.)
+екземпляри chair_folding 198 (LOD0 560 трик., LOD1 4 трик.; усі LOD0 — 110 тис.)
 екземпляри jacket 35 (LOD0 248 трик., LOD1 2 трик.; усі LOD0 — 8 тис.)

@@ -318,6 +318,11 @@ HERO = {}
 
 def hero_mesh(asset):
     """Легка сітка предмета з бібліотеки ring_hero.py або None (тоді генератор ставить коробки, як раніше)."""
+    if asset in HERO and HERO[asset] is not None:
+        try:
+            HERO[asset].name                                # між аренами сцену очищають — сітка могла зникнути
+        except ReferenceError:
+            del HERO[asset]
     if asset not in HERO:
         me = bpy.data.meshes.get("hero_" + asset)
         if me is None and os.path.exists(HERO_LIB):
@@ -342,7 +347,27 @@ def hero_material(name):
         t.image.colorspace_settings.name = cs
         return t
     col = tex("hero_%s_%s_albedo.png" % (asset, var), 'sRGB').outputs["Color"]
-    if len(parts) > 2:                                     # відтінок: нейтральний альбедо ~0,8 → колір матеріалу арени
+    tm = tex("hero_%s_%s_mask.png" % (asset, var), 'Non-Color')
+    if len(parts) > 2 and parts[2] == "obj":               # колір екземпляра (стільці) — лише в зоні маски B
+        oi = nt.nodes.new("ShaderNodeObjectInfo")
+        sep_ = nt.nodes.new("ShaderNodeSeparateColor")
+        nt.links.new(tm.outputs["Color"], sep_.inputs["Color"])
+        k_ = nt.nodes.new("ShaderNodeVectorMath")
+        k_.operation = 'SCALE'
+        k_.inputs["Scale"].default_value = 1.25
+        nt.links.new(oi.outputs["Color"], k_.inputs[0])
+        lerp = nt.nodes.new("ShaderNodeMix")
+        lerp.data_type = 'RGBA'
+        nt.links.new(sep_.outputs[2], lerp.inputs["Factor"])
+        lerp.inputs[6].default_value = (1, 1, 1, 1)
+        nt.links.new(k_.outputs[0], lerp.inputs[7])
+        mul = nt.nodes.new("ShaderNodeMix")
+        mul.data_type, mul.blend_type = 'RGBA', 'MULTIPLY'
+        mul.inputs["Factor"].default_value = 1.0
+        nt.links.new(col, mul.inputs[6])
+        nt.links.new(lerp.outputs[2], mul.inputs[7])
+        col = mul.outputs[2]
+    elif len(parts) > 2:                                   # відтінок: нейтральний альбедо ~0,8 → колір матеріалу арени
         mix = nt.nodes.new("ShaderNodeMix")
         mix.data_type, mix.blend_type = 'RGBA', 'MULTIPLY'
         mix.inputs["Factor"].default_value = 1.0
@@ -350,7 +375,6 @@ def hero_material(name):
         nt.links.new(col, mix.inputs[6])
         col = mix.outputs[2]
     nt.links.new(col, b.inputs["Base Color"])
-    tm = tex("hero_%s_%s_mask.png" % (asset, var), 'Non-Color')
     sep = nt.nodes.new("ShaderNodeSeparateColor")
     nt.links.new(tm.outputs["Color"], sep.inputs["Color"])
     nt.links.new(sep.outputs[0], b.inputs["Metallic"])
@@ -469,12 +493,13 @@ class Parts:
         for loop, t in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
             loop[uv].uv = t
 
-    def hero(self, asset, mat, loc, yaw=0.0):
-        """Героїчний предмет: легка сітка з бібліотеки, повернута на yaw і поставлена в loc. False — бібліотеки немає."""
+    def hero(self, asset, mat, loc, yaw=0.0, rx=0.0):
+        """Героїчний предмет: легка сітка з бібліотеки, нахилена на rx, повернута на yaw і поставлена в loc.
+        False — бібліотеки немає (тоді викликач ставить коробки, як раніше)."""
         me = hero_mesh(asset)
         if me is None:
             return False
-        M = Matrix.Translation(Vector(loc)) @ Matrix.Rotation(yaw, 4, 'Z')
+        M = Matrix.Translation(Vector(loc)) @ Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(rx, 4, 'X')
         for bm in self._targets(mat):
             tmp = me.copy()
             tmp.transform(M)
@@ -813,10 +838,11 @@ def chair_rows(P, origin, yaw_unused, rows, per_row, pitch=0.56, row_depth=1.0, 
 
 def folding_table(P, pos, yaw, length=1.83, width=0.76, cloth=None, h=0.74):
     f = lambda v: at(pos, yaw, v)
-    P.box("Table_Top", f((0, 0, h)), (length, width, 0.04), rz=yaw)
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            P.box("Table_Leg", f((sx * (length / 2 - 0.08), sy * (width / 2 - 0.06), h / 2)), (0.03, 0.03, h), rz=yaw)
+    if not ((length, width, h) == (1.83, 0.76, 0.74) and P.hero("folding_table", "Hero_folding_table__white", f((0, 0, 0)), yaw)):
+        P.box("Table_Top", f((0, 0, h)), (length, width, 0.04), rz=yaw)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                P.box("Table_Leg", f((sx * (length / 2 - 0.08), sy * (width / 2 - 0.06), h / 2)), (0.03, 0.03, h), rz=yaw)
     if cloth:
         P.box(cloth, f((0, 0, h + 0.022)), (length + 0.04, width + 0.04, 0.005), rz=yaw)
         P.box(cloth, f((0, -width / 2 - 0.02, h / 2 + 0.05)), (length + 0.04, 0.01, h - 0.05), rz=yaw)
@@ -830,11 +856,14 @@ def monitor(P, pos, yaw, w=0.55, h=0.33, z=0.0):
 
 def laptop(P, pos, yaw, z):
     f = lambda v: at(pos, yaw, v)
-    P.box("Monitor", f((0, 0, z + 0.022)), (0.34, 0.24, 0.02), rz=yaw)
-    P.box("Monitor", f((0, 0.14, z + 0.145)), (0.34, 0.015, 0.22), rz=yaw, rx=math.radians(-15))
+    if not P.hero("laptop", "Hero_laptop__silver", f((0, 0, z)), yaw):
+        P.box("Monitor", f((0, 0, z + 0.022)), (0.34, 0.24, 0.02), rz=yaw)
+        P.box("Monitor", f((0, 0.14, z + 0.145)), (0.34, 0.015, 0.22), rz=yaw, rx=math.radians(-15))
     P.box("Monitor_Screen", f((0, 0.13, z + 0.145)), (0.31, 0.003, 0.19), rz=yaw, rx=math.radians(-15))
 
 def ring_bell(P, pos, z):
+    if P.hero("ring_bell", "Hero_ring_bell__brass", (pos[0], pos[1], z)):
+        return
     P.cyl("Table_Leg", (pos[0], pos[1], z), (pos[0], pos[1], z + 0.05), 0.09, segs=16)
     P.cyl("Bell_Brass", (pos[0], pos[1], z + 0.05), (pos[0], pos[1], z + 0.17), 0.13, 0.05, segs=20)
     P.cyl("Table_Leg", (pos[0] + 0.15, pos[1], z), (pos[0] + 0.15, pos[1], z + 0.28), 0.012)
@@ -894,12 +923,16 @@ def speaker_tripod(P, pos, yaw, h=2.2):
         P.cyl("Light_Body", (x + 0.45 * math.cos(a), y + 0.45 * math.sin(a), 0.0), (x, y, 0.9), 0.015, segs=6)
     P.cyl("Light_Body", (x, y, 0.9), (x, y, h - 0.35), 0.02, segs=8)
     f = lambda v: at(pos, yaw, v)
+    if P.hero("speaker_top", "Hero_speaker_top__black", f((0, 0, h)), yaw):
+        return
     P.box("Speaker_Black", f((0, 0, h)), (0.42, 0.38, 0.65), rz=yaw)
     P.box("Speaker_Grille", f((0, -0.195, h)), (0.36, 0.01, 0.58), rz=yaw)
 
 def speaker_stack(P, pos, yaw, n=2):
     f = lambda v: at(pos, yaw, v)
     for k in range(n):
+        if P.hero("speaker_stack", "Hero_speaker_stack__black", f((0, 0, 0.45 + 0.9 * k)), yaw):
+            continue
         P.box("Speaker_Black", f((0, 0, 0.45 + 0.9 * k)), (0.9, 0.7, 0.88), rz=yaw)
         P.box("Speaker_Grille", f((0, -0.355, 0.45 + 0.9 * k)), (0.8, 0.01, 0.78), rz=yaw)
 
@@ -907,7 +940,8 @@ def line_array(P, pos, yaw, top, n=6):
     f = lambda v: at(pos, yaw, v)
     for k in range(n):
         z = top - 0.42 * k
-        P.box("Speaker_Black", f((0, 0.0 + 0.04 * k, z)), (1.1, 0.55, 0.38), rz=yaw, rx=math.radians(-3 * k))
+        if not P.hero("speaker_la", "Hero_speaker_la__black", f((0, 0.0 + 0.04 * k, z)), yaw, rx=math.radians(-3 * k)):
+            P.box("Speaker_Black", f((0, 0.0 + 0.04 * k, z)), (1.1, 0.55, 0.38), rz=yaw, rx=math.radians(-3 * k))
     P.cyl("Light_Body", f((0, 0, top + 0.2)), f((0, 0, top + 3.0)), 0.015, segs=6)
 
 def par_can(P, pos, aim, lens="Light_Lens"):
@@ -1171,6 +1205,8 @@ def railing(P, p0, p1, h=1.05):
 
 def exit_sign(P, pos, yaw):
     P.box("Exit_Sign", at(pos, yaw, (0, 0, 0)), (0.45, 0.04, 0.18), rz=yaw)
+    wall_label("sign.exit", "ВИХІД", at(pos, yaw, (0, -0.021, 0)), rot2((0, -1, 0), yaw), 0.08, color=(0.96, 1.0, 0.96),
+               emit=2.0, width=0.3)
 
 # ---------------------------------------------------------------- дрібні деталі (ітерація 2)
 
@@ -1248,7 +1284,9 @@ def build_ring(root, spec):
     mz = spec["mat_z"]
     ropes = (0.48, 0.86, 1.24)
     post_top = mz + 1.5
-    P.box(spec["canvas"], (0, 0, mz - 0.06), (half_plat * 2, half_plat * 2, 0.12))
+    if not P.hero("ring_canvas_%d" % spec["size_ft"], "Hero_ring_canvas_%d__%s" % (
+            spec["size_ft"], "grey" if spec["canvas"] == "Canvas_Grey" else "white"), (0, 0, mz)):
+        P.box(spec["canvas"], (0, 0, mz - 0.06), (half_plat * 2, half_plat * 2, 0.12))
     for sx, sy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         if sx:
             P.box(spec["apron"], (sx * (half_plat - 0.01), 0, (mz - 0.12) / 2), (0.02, half_plat * 2, mz - 0.12))
@@ -1795,6 +1833,14 @@ def build_hall(root):
     empty("anchor_timekeeper", root, (-cx - 0.6, -1.0, 0), yaw=90)
     empty("anchor_bell", root, (-cx, -1.5, 0.78))
     empty("anchor_hardcam", root, (-5.5, Y0 + 4.4, 2.6))
+    for i, (x, y, z, clip) in enumerate(((2.0, -q + 0.45, 0.0, "Cam_Stand_Film_Loop"), (-2.6, -q + 0.45, 0.0, "Cam_Kneel_Film_Loop"),
+                                         (q - 0.45, 2.3, 0.0, "Cam_Kneel_Film_Loop"), (-q + 0.45, 2.5, 0.0, "Cam_Stand_Film_Loop"),
+                                         (1.1, SY0 - 2.6, 0.0, "Cam_Walk_Gimbal_Loop"))):
+        empty("anchor_camop_%d" % (i + 1), root, (x, y, z))         # оператори з камерами — біля рингу й на проході
+        CAMOPS.append((x, y, z, clip))
+    wall_label("hall.stage.title", "РИНГ", (0, SY0 - 0.035, SH + 7.22), (0, -1, 0), 0.42, color=(0.95, 0.8, 0.35), width=8.0)
+    wall_label("hall.bar", "БАР", (X1 - 0.05, 2.0, 3.0), (-1, 0, 0), 0.34, color=(1.0, 0.62, 0.3), emit=3.0, width=2.0)
+    wall_label("hall.merch", "МЕРЧ", (X0 + 0.05, 3.0, 2.6), (1, 0, 0), 0.3, color=(0.95, 0.95, 0.9), emit=1.5, width=2.0)
     for i, (x, y) in enumerate(((q - 0.4, -q + 0.4), (-q + 0.4, -q + 0.4), (q - 0.4, q - 0.4), (-q + 0.4, q - 0.4))):
         empty("anchor_handheld_%d" % (i + 1), root, (x, y, 1.6))
 
@@ -2350,6 +2396,11 @@ def build_arena(root):
     empty("anchor_timekeeper", root, (-q + 0.62, -1.0, 0), yaw=90)
     empty("anchor_bell", root, (-q + 1.25, -1.5, 0.78))
     empty("anchor_hardcam", root, (6.5, FY0 + 2.4, 3.6))
+    for i, (x, y, z, clip) in enumerate(((2.4, -q + 0.5, 0.0, "Cam_Stand_Film_Loop"), (-2.2, -q + 0.5, 0.0, "Cam_Kneel_Film_Loop"),
+                                         (q - 0.5, 3.3, 0.0, "Cam_Kneel_Film_Loop"), (-q + 0.5, 2.7, 0.0, "Cam_Stand_Film_Loop"),
+                                         (1.4, SY0 - ramp_len - 1.0, 0.0, "Cam_Walk_Gimbal_Loop"))):
+        empty("anchor_camop_%d" % (i + 1), root, (x, y, z))         # оператори з камерами — біля рингу й біля рампи
+        CAMOPS.append((x, y, z, clip))
     empty("anchor_jib", root, (q + 3.5, -q - 3.5, 3.5))
     for i, (x, y) in enumerate(((q - 0.4, -q + 0.4), (-q + 0.4, -q + 0.4), (q - 0.4, q - 0.4), (-q + 0.4, q - 0.4))):
         empty("anchor_handheld_%d" % (i + 1), root, (x, y, 1.6))
@@ -2810,9 +2861,19 @@ def look(root, info):
     if lit:
         for attr, val in (("taa_render_samples", 32), ("use_shadows", True), ("volumetric_tile_size", '4'),
                           ("volumetric_samples", 64), ("volumetric_end", 140.0), ("use_volumetric_shadows", True),
-                          ("volumetric_light_clamp", 0.0)):
+                          ("volumetric_light_clamp", 0.0),
+                          # відбиття й відбите світло на екрані (у Unity — SSAO, проби відбиття): без них хром, латунь і
+                          # сталь героїчних предметів нічого не відбивали, і кадр був пласким
+                          ("use_raytracing", True), ("ray_tracing_method", 'SCREEN'), ("use_fast_gi", True),
+                          ("fast_gi_method", 'GLOBAL_ILLUMINATION'), ("fast_gi_distance", 2.0), ("fast_gi_quality", 0.5),
+                          ("use_gtao", True), ("gtao_distance", 0.6), ("shadow_ray_count", 2), ("shadow_step_count", 8)):
             try:
                 setattr(scene.eevee, attr, val)
+            except (AttributeError, TypeError):
+                pass
+        for attr, val in (("trace_max_roughness", 0.45), ("resolution_scale", '2'), ("screen_trace_quality", 0.5)):
+            try:
+                setattr(scene.eevee.ray_tracing_options, attr, val)
             except (AttributeError, TypeError):
                 pass
         scene.view_settings.view_transform = 'AgX' if 'AgX' in [i.identifier for i in bpy.types.ColorManagedViewSettings.bl_rna.properties["view_transform"].enum_items] else 'Filmic'
@@ -3035,6 +3096,10 @@ def crowd_fans():
         return []
 
 CAMOPS = []          # оператори: (x, y, z, кліп) — з якорів anchor_camop_* (лицем до рингу)
+# оператори — лише ті фанати, що вдягнені як знімальна група: футболка (перефарбовується в чорне) і карго-штани
+# (не шорти й не костюм); склад гардеробу — ring_crowd.fan_specs
+CAMOP_FANS = ("fan_m_middle_eastern_0", "fan_f_ukrainian_0", "fan_m_west_african_0", "fan_f_middle_eastern_1",
+              "fan_m_south_asian_1")
 
 # Відвідуваність — змінна шоу (власник 27.10.2026: «Натовп це плаваюча та рандомізована одиниця, їх від шоу к шоу
 # може бути різна кількісь… зараз головне шоб це динамічно було і реально відображало скількі людей на шоу»).
@@ -3077,7 +3142,8 @@ def assign_crowd(vid):
     out = []
     for i, (x, y, z, clip) in enumerate(CAMOPS):                     # оператори — у чорному, як команда шоу
         yaw = math.degrees(math.atan2(-x, y)) if clip != "Cam_Walk_Gimbal_Loop" else (90.0 if x < 0 else -90.0)
-        out.append((x, y, z, yaw, fans[(i * 7 + 3) % len(fans)], clip, i % 2, (0.025, 0.025, 0.03)))
+        crew = [f_ for f_ in CAMOP_FANS if f_ in fans] or fans
+        out.append((x, y, z, yaw, crew[i % len(crew)], clip, i % 2, (0.025, 0.025, 0.03)))
     groups, k, gi = [], 0, 0                                         # компанії сусідніх місць
     while k < len(SEATS):
         g = 2 + int(h01(gi * 13 + seed, 31) * 4)

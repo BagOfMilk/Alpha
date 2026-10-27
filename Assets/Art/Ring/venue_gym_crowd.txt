@@ -1,13 +1,13 @@
 # Натовп (відвідуваність 80 %, зерно 3 — приклад одного шоу; число людей задає гра): x y z курс° фанат кліп фаза r g b. Разом: 417 (з них операторів 5) з 515 місць
--3.15 -1.80 0.03 120 fan_f_nordic_0 Cam_Stand_Film_Loop 0 0.025 0.025 0.030
-3.15 1.40 0.03 -66 fan_m_east_asian_0 Cam_Kneel_Film_Loop 1 0.025 0.025 0.030
-1.70 -3.15 0.03 -152 fan_f_ukrainian_1 Cam_Stand_Film_Loop 0 0.025 0.025 0.030
-12.04 11.22 1.26 0 fan_f_mediterranean_0 Sit_Clap_Loop 1 0.025 0.025 0.030
--7.00 0.55 0.00 90 fan_f_latin_1 Cam_Walk_Gimbal_Loop 0 0.025 0.025 0.030
+-3.15 -1.80 0.03 120 fan_m_middle_eastern_0 Cam_Stand_Film_Loop 0 0.025 0.025 0.030
+3.15 1.40 0.03 -66 fan_f_ukrainian_0 Cam_Kneel_Film_Loop 1 0.025 0.025 0.030
+1.70 -3.15 0.03 -152 fan_m_west_african_0 Cam_Stand_Film_Loop 0 0.025 0.025 0.030
+12.60 11.22 1.26 0 fan_m_east_asian_0 Sit_Lean_Loop 0 0.025 0.025 0.030
+-7.00 0.55 0.00 90 fan_m_south_asian_1 Cam_Walk_Gimbal_Loop 0 0.025 0.025 0.030
 -2.33 4.85 0.00 21 fan_m_middle_eastern_0 Sit_Lean_Loop 1 0.025 0.025 0.030
 -3.37 4.88 0.00 40 fan_f_nordic_0 Sit_Idle_Loop 0 0.025 0.025 0.030
+12.04 11.22 1.26 0 fan_f_mediterranean_0 Sit_Clap_Loop 1 0.025 0.025 0.030
 11.48 11.22 1.26 0 fan_f_nordic_1 Sit_Lean_Loop 1 0.850 0.850 0.830
-10.92 11.22 1.26 0 fan_m_nordic_0 Sit_Talk_Loop 0 0.025 0.025 0.030
 5.14 5.87 0.00 -47 fan_m_ukrainian_0 Sit_Idle_Loop 1 0.850 0.850 0.830
 5.88 -0.56 0.00 -89 fan_m_east_asian_1 Sit_Phone_Loop 0 0.550 0.050 0.050
 5.89 0.64 0.00 -74 fan_f_latin_0 Sit_Boo_Loop 0 0.250 0.250 0.270
@@ -26,11 +26,11 @@
 1.21 -4.85 0.00 -171 fan_m_east_asian_1 Sit_Point_Loop 0 0.850 0.850 0.830
 2.25 -4.88 0.00 -149 fan_m_middle_eastern_0 Sit_Idle_Loop 1 0.850 0.850 0.830
 4.88 -2.24 0.00 -121 fan_m_west_african_1 Sit_Idle_Loop 0 0.025 0.025 0.030
--10.36 13.12 2.10 0 fan_m_west_african_1 Sit_Idle_Loop 1 0.025 0.025 0.030
+10.92 11.22 1.26 0 fan_m_nordic_0 Sit_Talk_Loop 0 0.025 0.025 0.030
 0.55 -5.85 0.00 -165 fan_m_south_asian_0 Sit_Idle_Loop 0 0.250 0.250 0.270
 1.13 -5.88 0.00 -168 fan_f_middle_eastern_0 Sit_Talk_Loop 0 0.850 0.850 0.830
 1.74 -5.85 0.00 -153 fan_f_east_asian_1 Sit_Clap_Loop 0 0.550 0.050 0.050
--10.92 13.12 2.10 0 fan_f_mediterranean_1 Sit_Clap_Loop 1 0.025 0.025 0.030
+-10.36 13.12 2.10 0 fan_m_west_african_1 Sit_Idle_Loop 1 0.025 0.025 0.030
 0.59 5.88 0.00 -12 fan_f_west_african_0 Sit_Idle_Loop 1 0.850 0.850 0.830
 -0.57 5.88 0.00 -2 fan_m_ukrainian_1 Sit_Talk_Loop 0 0.850 0.850 0.830
 -1.21 5.83 0.00 11 fan_f_east_asian_1 Sit_Idle_Loop 0 0.850 0.850 0.830
@@ -41,7 +41,7 @@
 6.85 -1.74 0.00 -99 fan_m_ukrainian_1 Sit_Clap_Loop 0 0.050 0.080 0.250
 6.88 -1.18 0.00 -95 fan_m_ukrainian_1 Sit_Clap_Loop 1 0.050 0.080 0.250
 -6.88 3.72 0.00 54 fan_f_mediterranean_0 Sit_Talk_Loop 0 0.050 0.080 0.250
--11.48 13.12 2.10 0 fan_f_west_african_0 Sit_Clap_Loop 0 0.025 0.025 0.030
+-10.92 13.12 2.10 0 fan_f_mediterranean_1 Sit_Clap_Loop 1 0.025 0.025 0.030
 -6.88 2.08 0.00 78 fan_f_latin_0 Sit_Talk_Loop 1 0.750 0.550 0.100
 -6.86 1.53 0.00 87 fan_m_mediterranean_0 Sit_Talk_Loop 0 0.750 0.550 0.100
 5.12 -6.84 0.00 -148 fan_f_middle_eastern_0 Sit_Idle_Loop 1 0.025 0.025 0.030
@@ -56,7 +56,7 @@
 -4.83 3.74 0.00 63 fan_m_west_african_1 Sit_Clap_Loop 0 0.850 0.850 0.830
 -4.88 3.14 0.00 50 fan_m_latin_1 Sit_Idle_Loop 1 0.025 0.025 0.030
 -4.86 2.05 0.00 73 fan_f_latin_0 Sit_Point_Loop 0 0.850 0.850 0.830
-2.82 -4.87 0.00 -147 fan_m_ukrainian_0 Sit_Clap_Loop 0 0.250 0.250 0.270
+-11.48 13.12 2.10 0 fan_f_west_african_0 Sit_Clap_Loop 0 0.025 0.025 0.030
 3.98 -4.83 0.00 -149 fan_m_south_asian_0 Sit_Clap_Loop 1 0.250 0.250 0.270
 -12.04 13.12 2.10 0 fan_f_nordic_1 Sit_Talk_Loop 0 0.050 0.080 0.250
 6.13 -4.89 0.00 -130 fan_f_east_asian_0 Sit_Cheer_Loop 1 0.250 0.250 0.270
@@ -283,7 +283,7 @@
 -8.68 11.22 1.26 0 fan_f_latin_0 Sit_Idle_Loop 1 0.025 0.025 0.030
 -8.12 11.22 1.26 0 fan_f_ukrainian_0 Sit_Phone_Loop 1 0.025 0.025 0.030
 -7.56 11.22 1.26 0 fan_f_nordic_1 Sit_Clap_Loop 1 0.025 0.025 0.030
-8.88 2.33 0.00 -73 fan_m_east_asian_1 Stand_Chant_Loop 0 0.025 0.025 0.030
+8.83 4.02 0.00 -72 fan_m_nordic_1 Stand_Clap_Loop 1 0.025 0.025 0.030
 -8.68 10.28 0.84 0 fan_m_latin_1 Sit_Idle_Loop 1 0.025 0.025 0.030
 6.44 13.12 2.10 0 fan_f_mediterranean_0 Sit_Clap_Loop 0 0.850 0.850 0.830
 -7.56 10.28 0.84 0 fan_m_east_asian_1 Sit_Lean_Loop 1 0.025 0.025 0.030
@@ -367,7 +367,7 @@
 -7.56 13.12 2.10 0 fan_f_nordic_0 Sit_Cheer_Loop 1 0.025 0.025 0.030
 -7.00 13.12 2.10 0 fan_f_south_asian_0 Sit_Point_Loop 1 0.025 0.025 0.030
 -6.44 13.12 2.10 0 fan_f_middle_eastern_1 Sit_Idle_Loop 1 0.025 0.025 0.030
--5.88 13.12 2.10 0 fan_m_mediterranean_1 Sit_Idle_Loop 1 0.025 0.025 0.030
+-5.88 13.12 2.10 0 fan_m_mediterranean_1 Sit_Talk_Loop 1 0.025 0.025 0.030
 -5.32 13.12 2.10 0 fan_m_south_asian_0 Sit_Clap_Loop 0 0.025 0.025 0.030
 -10.36 11.22 1.26 0 fan_f_south_asian_0 Sit_Point_Loop 0 0.025 0.025 0.030
 -9.80 11.22 1.26 0 fan_m_mediterranean_0 Sit_Point_Loop 1 0.850 0.850 0.830
@@ -387,7 +387,7 @@
 9.80 10.28 0.84 0 fan_m_nordic_0 Sit_Idle_Loop 1 0.550 0.050 0.050
 10.36 10.28 0.84 0 fan_m_south_asian_1 Sit_Idle_Loop 1 0.025 0.025 0.030
 9.24 8.38 0.00 0 fan_m_ukrainian_0 Sit_Clap_Loop 0 0.025 0.025 0.030
-8.87 1.12 0.00 -81 fan_m_west_african_1 Stand_FistPump_Loop 1 0.025 0.025 0.030
+8.88 2.33 0.00 -73 fan_m_east_asian_1 Stand_Chant_Loop 0 0.025 0.025 0.030
 10.36 8.38 0.00 0 fan_m_ukrainian_1 Sit_Point_Loop 0 0.550 0.050 0.050
 -0.84 13.12 2.10 0 fan_m_west_african_1 Sit_Talk_Loop 1 0.025 0.025 0.030
 -0.28 13.12 2.10 0 fan_m_nordic_0 Sit_Idle_Loop 0 0.025 0.025 0.030
@@ -403,7 +403,7 @@
 -5.32 12.18 1.68 0 fan_m_mediterranean_0 Sit_Idle_Loop 0 0.025 0.025 0.030
 -4.76 12.18 1.68 0 fan_f_west_african_1 Sit_Cheer_Loop 0 0.025 0.025 0.030
 1.96 13.12 2.10 0 fan_m_south_asian_0 Sit_Clap_Loop 1 0.050 0.080 0.250
-12.60 11.22 1.26 0 fan_m_east_asian_0 Sit_Lean_Loop 0 0.025 0.025 0.030
+8.87 1.12 0.00 -81 fan_m_west_african_1 Stand_FistPump_Loop 1 0.025 0.025 0.030
 3.08 13.12 2.10 0 fan_m_mediterranean_1 Sit_Idle_Loop 1 0.550 0.050 0.050
 9.80 13.12 2.10 0 fan_m_ukrainian_1 Sit_Clap_Loop 0 0.750 0.550 0.100
 -2.52 13.12 2.10 0 fan_f_west_african_0 Sit_Clap_Loop 1 0.050 0.080 0.250
