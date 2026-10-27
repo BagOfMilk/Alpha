@@ -22,3 +22,7 @@ decal_poster_3 512 decal
 decal_logo 1024 decal
 decal_tape 256 decal
 decal_grime 512 decal
+led_logo 512 led
+led_fire 512 led
+led_waves 512 led
+led_name 512 led

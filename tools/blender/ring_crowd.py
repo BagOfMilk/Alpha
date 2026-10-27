@@ -45,7 +45,7 @@ def h01(s, salt=0):
 # ---------------------------------------------------------------- пози
 
 SEAT_Z = 0.45                    # висота сидіння (стілець і крісло трибуни)
-SIT_PELVIS_Z = 0.55              # кістка таза сидячи (над сидінням — товщина стегна)
+SIT_PELVIS_Z = 0.56              # кістка таза сидячи (над сидінням — товщина стегна)
 L = 2.0                          # довжина кожної петлі (с)
 G = {"sit_dz": -0.4}             # зсув таза сидячи (рахується від спокою ригу)
 
@@ -59,12 +59,12 @@ def pulse(t, hz, width=0.35):
 
 def sit(t, lean=0.0, **kw):
     p = Pose(pelvis=Vector((0, 0.07, G["sit_dz"])), pelvis_pitch=-8.0 + lean * 0.25, pitch=lean + breathe(t, L, 1.0),
-             ankles=(Vector((0.13, -0.46, 0.071)), Vector((-0.13, -0.47, 0.071))),
+             ankles=(Vector((0.13, -0.40, 0.071)), Vector((-0.13, -0.41, 0.071))),      # гомілки майже вертикально
              knees=(Vector((0.16, -1.3, 0.62)), Vector((-0.16, -1.3, 0.62))), feet_yaw=(6.0, -6.0),
              fist={"l": 0.3, "r": 0.3}, forced=set())
     p.hands = {"l": (lambda S: Vector((0.16, -0.3, SIT_PELVIS_Z + 0.11)), FWD + DOWN * 0.3, RIGHT),
                "r": (lambda S: Vector((-0.16, -0.3, SIT_PELVIS_Z + 0.11)), FWD + DOWN * 0.3, LEFT)}
-    p.elbows = {"l": lambda S: S["l"] + Vector((0.3, 0.2, -0.3)), "r": lambda S: S["r"] + Vector((-0.3, 0.2, -0.3))}
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.12, 0.25, -0.35)), "r": lambda S: S["r"] + Vector((-0.12, 0.25, -0.35))}
     for k, v in kw.items():
         setattr(p, k, v)
     return p
@@ -86,16 +86,16 @@ def clap_hands(p, gap_fn, lift=0.0, fwd=0.32):
     p.hands = {"l": (grip("l"), CLAP_FORE, CLAP_UP), "r": (grip("r"), CLAP_FORE, CLAP_UP)}
     p.forced = {"l", "r"}
     p.fist = {"l": 0.05, "r": 0.05}
-    p.elbows = {"l": lambda S: S["l"] + Vector((0.35, 0.05, -0.3)), "r": lambda S: S["r"] + Vector((-0.35, 0.05, -0.3))}
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.16, 0.1, -0.35)), "r": lambda S: S["r"] + Vector((-0.16, 0.1, -0.35))}
     return p
 
-def arms_up(p, t, hz=1.0, spread=0.14, height=0.5, amp=0.06, fist=0.85, ph=0.0):
+def arms_up(p, t, hz=1.0, spread=0.06, height=0.5, amp=0.06, fist=0.85, ph=0.0):
     a = amp * wave(t, hz, ph)
     p.hands = {"l": (lambda S: S["l"] + Vector((spread, -0.06, height + a)), UP, RIGHT),
                "r": (lambda S: S["r"] + Vector((-spread, -0.06, height - a)), UP, LEFT)}
     p.forced = set()
     p.fist = {"l": fist, "r": fist}
-    p.elbows = {"l": lambda S: S["l"] + Vector((0.4, 0.1, 0.1)), "r": lambda S: S["r"] + Vector((-0.4, 0.1, 0.1))}
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.22, 0.15, 0.1)), "r": lambda S: S["r"] + Vector((-0.22, 0.15, 0.1))}
     return p
 
 def boo(p, t):
@@ -472,6 +472,17 @@ def build_fan(tag, spec):
             pass
         else:
             decimate_to(o, TRIS["hair"])                              # зачіска
+            for m in o.data.materials:                                # без блиску карти «spec»: зблизька пасма біліли
+                if m and m.use_nodes:
+                    bs = next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+                    if bs:
+                        for l in list(bs.inputs["Roughness"].links):
+                            m.node_tree.links.remove(l)
+                        bs.inputs["Roughness"].default_value = 0.7
+                        if "Specular IOR Level" in bs.inputs:
+                            for l in list(bs.inputs["Specular IOR Level"].links):
+                                m.node_tree.links.remove(l)
+                            bs.inputs["Specular IOR Level"].default_value = 0.25
         keep.append(o)
     if spec.get("cap"):
         head = next((o for o in keep if o.name.split(".", 1)[-1].startswith("proxy")), keep[0])
@@ -506,6 +517,9 @@ def bake_pose(arm, mesh_obj, action, frame, kind, name):
     if kind == "sit":
         pz = (arm.matrix_world @ arm.pose.bones["pelvis"].head).z
         dz = SIT_PELVIS_Z - pz
+        low = min(v.co.z for v in me.vertices) + dz          # довгі ноги: стопи не в підлогу — таз трохи вище
+        if low < 0.004:
+            dz += 0.004 - low
     else:
         dz = -min(v.co.z for v in me.vertices) + 0.005
     me.transform(Matrix.Translation((0, 0, dz)))
@@ -660,9 +674,19 @@ def main():
             f.write("clip %s %s ik_cm %.1f\n" % (name, "сидячи" if kind == "sit" else "стоячи", cm))
     if LOOK:
         look_crowd(fans, actions_named=acts)
-    # бібліотека для знімків арен: лише запечені пози (і їхні матеріали)
+    # бібліотека для знімків арен: запечені пози + скелети фанатів (колекція FanRigs — для відео з живим натовпом)
+    rigs = bpy.data.collections.new("FanRigs")
+    rigs.use_fake_user = True
+    keep = set()
+    for arm, l0, l1 in fans:
+        for o in (arm, l0, l1):
+            for c in list(o.users_collection):
+                c.objects.unlink(o)
+            rigs.objects.link(o)
+            keep.add(o.name)
     for o in list(bpy.data.objects):
-        bpy.data.objects.remove(o, do_unlink=True)
+        if o.name not in keep:
+            bpy.data.objects.remove(o, do_unlink=True)
     os.makedirs(os.path.dirname(LIB_BLEND), exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=LIB_BLEND, compress=True)
     print("[натовп] бібліотека поз → %s" % LIB_BLEND, flush=True)

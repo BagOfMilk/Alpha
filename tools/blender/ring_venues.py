@@ -26,12 +26,15 @@
 # 32–40 футів (більші шоу).
 
 import bpy, bmesh, math, os, sys
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Quaternion
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 REPO = args[0] if args else os.getcwd()
 LOOK = "--look" in args
 SHOTS = next((a.split("=", 1)[1].split(",") for a in args if a.startswith("--shots=")), None)   # лише ці знімки
+VIDEO = next((a.split("=", 1)[1] for a in args if a.startswith("--video=")), None)              # відео сцени світла
+CHECK = "--check" in args or "--check-raw" in args                                              # перевірка колізій
+CHECK_RAW = "--check-raw" in args                                                               # без розв'язання (звіт)
 WANT = [a for a in args[1:] if not a.startswith("--")] or ["gym", "hall", "arena"]
 OUT = os.path.join(REPO, "Assets", "Art", "Ring")
 LOOK_DIR = os.path.join(REPO, "Logs", "venues")
@@ -148,7 +151,7 @@ _cc0("fabric_pattern_07", 0.4, None, diff=False)                     # лише 
 try:
     for line in open(os.path.join(TEX_DIR, "textures_manifest.txt"), encoding="utf-8"):
         f_ = line.split()
-        if len(f_) == 3 and not line.startswith("#") and f_[2] != "decal" and f_[0] not in SETS:
+        if len(f_) == 3 and not line.startswith("#") and f_[2] not in ("decal", "led") and f_[0] not in SETS:
             if os.path.exists(os.path.join(TEX_DIR, f_[0] + "_albedo.png")):
                 SETS[f_[0]] = {"diff": os.path.join(TEX_DIR, f_[0] + "_albedo.png"),
                                "nor": os.path.join(TEX_DIR, f_[0] + "_normal.png"),
@@ -217,7 +220,7 @@ TILE = {k: v["tile"] for k, v in SETS.items()}
 # фаски: матеріал → ширина (м); лише на коробках, де найменший розмір > 3 фаски
 BEVEL = {"Canvas_White": 0.04, "Canvas_Grey": 0.04, "Steps_Steel": 0.015, "Steps_Black": 0.015, "Table_Top": 0.012,
          "Speaker_Black": 0.02, "Case_Black": 0.02, "Locker_Grey": 0.01, "Locker_Blue": 0.01, "Bar_Wood": 0.02,
-         "Bar_Top": 0.015, "Stage_Black": 0.02, "Barricade_Cover": 0.03, "Bench_Wood": 0.01, "Cooler_Blue": 0.02,
+         "Bar_Top": 0.015, "Stage_Black": 0.02, "Barricade_Cover": 0.0, "Bench_Wood": 0.01, "Cooler_Blue": 0.02,
          "Cooler_White": 0.02, "Pad_Red": 0.03, "Pad_Blue": 0.03, "Pad_Black": 0.03, "Pad_Yellow": 0.03,
          "Vinyl_Black": 0.03, "Ramp_Black": 0.02, "Monitor": 0.006, "Camera_Body": 0.01, "Truck_White": 0.08,
          "Truck_Cab": 0.1, "Balcony_Fascia": 0.02, "Wainscot": 0.01}
@@ -311,6 +314,35 @@ def material(name):
         return m
     if name.startswith("Decal_"):
         return decal_material(name)
+    if name == "LED_Content":
+        m = bpy.data.materials.new(name)
+        m.use_nodes = True
+        nt = m.node_tree
+        b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+        t = tex_node(m, os.path.join(TEX_DIR, "led_logo.png"), False)
+        mk = SETS.get("led_pixels")
+        mul = nt.nodes.new("ShaderNodeMix")
+        mul.data_type = 'RGBA'
+        mul.blend_type = 'MULTIPLY'
+        mul.inputs["Factor"].default_value = 1.0
+        nt.links.new(t.outputs["Color"], mul.inputs[6])
+        if mk:                                            # решітка пікселів поверх заставки
+            px = tex_node(m, mk["diff"], False)
+            mp = nt.nodes.new("ShaderNodeMapping")
+            tc = nt.nodes.new("ShaderNodeTexCoord")
+            mp.inputs["Scale"].default_value = (60.0, 34.0, 1.0)
+            nt.links.new(tc.outputs["UV"], mp.inputs["Vector"])
+            nt.links.new(mp.outputs["Vector"], px.inputs["Vector"])
+            nt.links.new(px.outputs["Color"], mul.inputs[7])
+        else:
+            mul.inputs[7].default_value = (1, 1, 1, 1)
+        nt.links.new(mul.outputs[2], b.inputs["Base Color"])
+        for key in ("Emission Color", "Emission"):
+            if key in b.inputs:
+                nt.links.new(mul.outputs[2], b.inputs[key])
+                break
+        b.inputs["Emission Strength"].default_value = 5.0
+        return m
     color, metal, rough, emit = MATS[name]
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -454,7 +486,7 @@ class Parts:
 def world_uv(bm, mat):
     """Розгортка в метрах світу: грань проєктується на площину за найбільшою складовою нормалі, ділиться на плитку
     текстурного набору — плитка однакового розміру на всіх об'єктах, швів між коробками не видно. Наклейки — свої 0..1."""
-    if mat.startswith("Decal_"):
+    if mat.startswith("Decal_") or mat == "LED_Content":
         return
     kset = kit(mat)
     tile = TILE.get(kset, 1.0) * KIT_SCALE.get(mat, 1.0) if kset else 1.0
@@ -481,7 +513,7 @@ def at(pos, yaw, local):
     return Vector(pos) + rot2(local, yaw)
 
 SEATS = []           # (x, y, z, курс°, сидить/стоїть) — місця для натовпу
-LIGHTS = []          # (позиція, напрям, колір, кут°) — прожектори; лише для огляду, у FBX не йдуть
+LIGHTS = []          # (позиція, напрям, колір, кут°, par|head) — прилади; джерела лише для огляду, у грі — сцени світла
 AREAS = []           # (позиція, розмір, колір, вати) — плафони; лише для огляду
 LENS_COLOR = {"Light_Lens": (1.0, 0.9, 0.75), "Light_Lens_Blue": (0.35, 0.5, 1.0), "Light_Lens_Red": (1.0, 0.3, 0.25)}
 
@@ -491,15 +523,49 @@ def seat_mark(pos, yaw_rad, z, kind="сидить"):
 # ---------------------------------------------------------------- реквізит
 
 PLACE = []           # (модель, (x, y, z), курс рад, колір сидіння) — екземпляри реквізиту (ring_props.py)
+STAFF = set()        # індекси PLACE службових стільців
 
 def folding_chair(P, pos, yaw, seat="Chair_Seat_Black", crowd=True):
     """Розкладний стілець, лицем у напрямку yaw (рад, 0 — лицем у −Y): екземпляр моделі chair_folding."""
     z = pos[2] if len(pos) > 2 else 0.0
     PLACE.append(("chair_folding", (pos[0], pos[1], z), yaw, MATS[seat][0]))
+    if not crowd:
+        STAFF.add(len(PLACE) - 1)                       # службовий стілець (хронометрист, коментатори, гримерки)
     if crowd:
         seat_mark(pos, yaw, z + 0.45)
 
-def chair_rows(P, origin, yaw_unused, rows, per_row, pitch=0.52, row_depth=0.9, gap_every=0, gap=1.0,
+CHAIR_HALF = (0.225, 0.24)       # півширина й півглибина стільця з трубками (м), запас 1,5 см — у chair_free
+
+def _obb_overlap(c1, y1, c2, y2, h, pad=0.015):
+    """Перетин двох прямокутників (центр, курс) з півосями h — теорема про розділову вісь."""
+    axes = []
+    for yaw in (y1, y2):
+        axes += [Vector((math.cos(yaw), math.sin(yaw))), Vector((-math.sin(yaw), math.cos(yaw)))]
+    d = Vector((c2[0] - c1[0], c2[1] - c1[1]))
+    for ax in axes:
+        def rad(yaw):
+            u, v = Vector((math.cos(yaw), math.sin(yaw))), Vector((-math.sin(yaw), math.cos(yaw)))
+            return abs(ax.dot(u)) * (h[0] + pad) + abs(ax.dot(v)) * (h[1] + pad)
+        if abs(d.dot(ax)) > rad(y1) + rad(y2):
+            return False
+    return True
+
+def chair_free(pos, yaw):
+    """Чи вільне місце для стільця: жоден уже поставлений стілець (PLACE) його не перетинає."""
+    for (pm, pp, py, pc) in PLACE:
+        if pm != "chair_folding" or abs(pp[0] - pos[0]) > 0.8 or abs(pp[1] - pos[1]) > 0.8 or abs(pp[2] - (pos[2] if len(pos) > 2 else 0)) > 0.3:
+            continue
+        if _obb_overlap(pos, yaw, pp, py, CHAIR_HALF):
+            return False
+    return True
+
+def stand_free(x, y, z, min_d=0.55):
+    for s_ in SEATS:
+        if s_[4] == "стоїть" and abs(s_[2] - z) < 0.3 and (s_[0] - x) ** 2 + (s_[1] - y) ** 2 < min_d * min_d:
+            return False
+    return True
+
+def chair_rows(P, origin, yaw_unused, rows, per_row, pitch=0.56, row_depth=1.0, gap_every=0, gap=1.0,
                seat="Chair_Seat_Black", skip=None, standing=2, focus=(0.0, 0.0)):
     """Ряди стільців навколо рингу: origin — середина першого ряду; ряди відходять ВІД рингу (focus).
     Кожен стілець дивиться на ринг, з невеликим розкидом місця (±7 см) і кута (±12°): люди не сидять рівно.
@@ -509,20 +575,25 @@ def chair_rows(P, origin, yaw_unused, rows, per_row, pitch=0.52, row_depth=0.9, 
     out = out.normalized() if out.length > 1e-4 else Vector((0, -1, 0))
     tang = Vector((-out.y, out.x, 0.0))
     salt = int(abs(o.x) * 7 + abs(o.y) * 13)
-    width = per_row * pitch + (per_row // gap_every if gap_every else 0) * (gap - pitch)
+    width = per_row * pitch + ((per_row - 1) // gap_every if gap_every else 0) * (gap - pitch)
     for r in range(rows + standing):
         x = -width / 2 + pitch / 2
         for k in range(per_row):
             if gap_every and k and k % gap_every == 0:
                 x += gap - pitch
             i = r * 1000 + k + salt * 7919
-            pos = o + tang * (x + (h01(i, 1) - 0.5) * 0.14) + out * (r * row_depth + (h01(i, 2) - 0.5) * 0.14)
-            d = Vector((focus[0] - pos.x, focus[1] - pos.y, 0.0))
-            yaw = math.atan2(d.x, -d.y) + math.radians((h01(i, 3) - 0.5) * 24.0)
-            if not (skip and skip(pos)):
+            for jit in (1.0, 0.6, 0.3, 0.0):                       # розкид — лише якщо не налізе на сусіда
+                pos = o + tang * (x + (h01(i, 1) - 0.5) * 0.14 * jit) + out * (r * row_depth + (h01(i, 2) - 0.5) * 0.06 * jit)
+                d = Vector((focus[0] - pos.x, focus[1] - pos.y, 0.0))
+                yaw = math.atan2(d.x, -d.y) + math.radians((h01(i, 3) - 0.5) * 24.0 * jit)
+                if r >= rows or chair_free((pos.x, pos.y, 0.0), yaw):
+                    break
+            else:
+                pos = None
+            if pos is not None and not (skip and skip(pos)):
                 if r < rows:
                     folding_chair(P, (pos.x, pos.y, 0.0), yaw, seat)
-                elif h01(i, 4) < 0.8:
+                elif h01(i, 4) < 0.8 and stand_free(pos.x, pos.y, 0.0):
                     SEATS.append((pos.x, pos.y, 0.0, math.degrees(yaw), "стоїть"))
             x += pitch
 
@@ -630,7 +701,7 @@ def par_can(P, pos, aim, lens="Light_Lens"):
     d = (aim - pos).normalized()
     P.cyl("Light_Body", pos - d * 0.12, pos + d * 0.14, 0.11, segs=10)
     P.cyl(lens, pos + d * 0.14, pos + d * 0.15, 0.09, segs=10)
-    LIGHTS.append((pos + d * 0.2, d, LENS_COLOR[lens], 28.0))
+    LIGHTS.append((pos + d * 0.2, d, LENS_COLOR[lens], 28.0, "par"))
 
 def moving_head(P, pos, aim):
     pos, aim = Vector(pos), Vector(aim)
@@ -639,7 +710,7 @@ def moving_head(P, pos, aim):
     head = pos + Vector((0, 0, -0.3))
     P.cyl("Light_Body", head - d * 0.16, head + d * 0.14, 0.13, segs=12)
     P.cyl("Light_Lens", head + d * 0.14, head + d * 0.15, 0.1, segs=12)
-    LIGHTS.append((head + d * 0.2, d, (1.0, 0.95, 0.9), 18.0))
+    LIGHTS.append((head + d * 0.2, d, (1.0, 0.95, 0.9), 18.0, "head"))
 
 def truss_beam(P, p0, p1, size=0.29, mat="Truss_Alu"):
     """Квадратна ферма: чотири пояси й розкоси."""
@@ -750,11 +821,11 @@ def mirror_wall(P, origin, yaw, n, bulbs=True):
     for k in range(n):
         x = (k - (n - 1) / 2) * 1.2
         P.box("Mirror", f((x, 0, 1.55)), (1.0, 0.02, 0.8), rz=yaw)
-        P.box("Bar_Top", f((x, -0.25, 0.78)), (1.15, 0.5, 0.04), rz=yaw)
+        P.box("Bar_Top", f((x, 0.25, 0.78)), (1.15, 0.5, 0.04), rz=yaw)
         if bulbs:
             for b in range(5):
-                P.cyl("Mirror_Bulb", f((x - 0.4 + 0.2 * b, -0.02, 2.0)), f((x - 0.4 + 0.2 * b, -0.06, 2.0)), 0.03, segs=6)
-        folding_chair(P, at(origin, yaw, (x, -0.75, 0)), yaw + math.pi, "Chair_Seat_Black", crowd=False)
+                P.cyl("Mirror_Bulb", f((x - 0.4 + 0.2 * b, 0.02, 2.0)), f((x - 0.4 + 0.2 * b, 0.06, 2.0)), 0.03, segs=6)
+        folding_chair(P, at(origin, yaw, (x, 0.8, 0)), yaw, "Chair_Seat_Black", crowd=False)   # лицем до дзеркала
 
 def massage_table(P, pos, yaw):
     f = lambda v: at(pos, yaw, v)
@@ -795,23 +866,40 @@ def led_wall(P, center, w, h, yaw=0.0, mat="LED_Screen"):
     f = lambda v: at(center, yaw, v)
     P.box("Screen_Frame", f((0, 0.06, 0)), (w + 0.2, 0.1, h + 0.2), rz=yaw)
     P.box(mat, f((0, 0.0, 0)), (w, 0.02, h), rz=yaw)
+    if mat in ("LED_Screen", "LED_Side"):       # контент — заставка сцени світла (ring_show.py), розгортка 0..1 на екран
+        P.decal("LED_Content", f((0, -0.012, 0)), rot2((w / 2, 0, 0), yaw), Vector((0, 0, h / 2)))
 
 def barricade_run(P, p0, p1, h=1.1, cover="Barricade_Cover"):
-    """Сталева огорожа з м'якою накладкою зверху, секціями по ~2 м."""
+    """Огорожа біля рингу секціями по ~2 м: рама з труб (поручень, низ, стійки), опорні п'яти назад (до глядачів),
+    м'який валик зверху, тканинний банер з емблемою на боці до рингу."""
     p0, p1 = Vector(p0), Vector(p1)
     d = p1 - p0
     L = d.length
     if L < 0.2:
         return
     a = math.atan2(d.y, d.x)
+    t = d.normalized()
+    n_ = Vector((-t.y, t.x, 0))                      # нормаль: бік від рингу — туди, де далі від центру
+    if (p0 + d / 2 + n_).length < (p0 + d / 2).length:
+        n_ = -n_
     n = max(1, round(L / 2.0))
     seg = L / n
     for k in range(n):
-        c = p0 + d * ((k + 0.5) / n)
-        P.box("Barricade_Steel", (c.x, c.y, h / 2), (seg - 0.06, 0.08, h - 0.1), rz=a)
-        P.box("Barricade_Steel", (c.x, c.y, 0.03), (seg - 0.06, 0.7, 0.04), rz=a)       # опорна плита
-        P.box(cover, (c.x, c.y, h - 0.02), (seg - 0.04, 0.22, 0.14), rz=a)
-        P.box(cover, (c.x, c.y, h * 0.55), (seg - 0.06, 0.1, h * 0.7), rz=a)           # банер-обтяжка
+        q0 = p0 + d * (k / n) + t * 0.03
+        q1 = p0 + d * ((k + 1) / n) - t * 0.03
+        c = (q0 + q1) / 2
+        for zz, r in ((h - 0.06, 0.024), (0.12, 0.022), (h * 0.55, 0.016)):
+            P.cyl("Barricade_Steel", (q0.x, q0.y, zz), (q1.x, q1.y, zz), r, segs=8)
+        for q in (q0, q1):
+            P.cyl("Barricade_Steel", (q.x, q.y, 0.0), (q.x, q.y, h - 0.04), 0.026, segs=8)
+            f = q + n_ * 0.3                          # п'ята-підпора назад
+            P.cyl("Barricade_Steel", (q.x, q.y, 0.75), (f.x, f.y, 0.02), 0.018, segs=6)
+            P.box("Barricade_Steel", (f.x, f.y, 0.01), (0.12, 0.12, 0.02), rz=a)
+        P.cyl(cover, (q0.x, q0.y, h + 0.02), (q1.x, q1.y, h + 0.02), 0.085, segs=12)   # м'який валик
+        cb = c - n_ * 0.035
+        P.box(cover, (cb.x, cb.y, h * 0.52), (seg - 0.1, 0.012, h * 0.78), rz=a)        # банер
+        dc = cb - n_ * 0.008
+        P.decal("Decal_Logo", (dc.x, dc.y, h * 0.52), Vector((n_.y, -n_.x, 0)) * 0.28, Vector((0, 0, 0.28)))   # лицем до рингу
 
 def bike_rack(P, p0, p1, h=1.05):
     p0, p1 = Vector(p0), Vector(p1)
@@ -917,10 +1005,13 @@ def cable(P, pts, r=0.012):
         P.box("Panel_Grey", (m_.x, m_.y, 0.004), (0.06, 0.06, 0.004), rz=math.atan2(b.y - a.y, b.x - a.x))
 
 def litter(P, cx, cy, w, d, n, salt=0):
-    """Стаканчики й програмки на підлозі."""
+    """Стаканчики й програмки на підлозі — не під стільцями й не там, де стоять або сидять люди."""
     for k in range(n):
         x = cx + (h01(k, 80 + salt) - 0.5) * w
         y = cy + (h01(k, 81 + salt) - 0.5) * d
+        if any(abs(pp_[0] - x) < 0.45 and abs(pp_[1] - y) < 0.45 for (_, pp_, _, _) in PLACE) or \
+           any(abs(s_[0] - x) < 0.5 and abs(s_[1] - y) < 0.5 for s_ in SEATS):
+            continue
         if h01(k, 82 + salt) < 0.6:
             if h01(k, 83 + salt) < 0.5:
                 P.cyl("Cup_White", (x, y, 0.0), (x, y, 0.11), 0.035, 0.045, segs=8)
@@ -1083,15 +1174,15 @@ def build_gym(root):
 
     # --- спортзальне: висувні трибуни біля північної стіни, щити, табло
     bl = Parts("bleachers", root)
-    rows, rd, rr = 6, 0.75, 0.42
+    rows, rd, rr = 6, 0.95, 0.42
     for k in range(rows):
         y = Y1 - 0.6 - (rows - 1 - k) * rd
-        z = 0.42 + k * rr
+        z = 0.45 + k * rr - 0.025                                                               # центр дошки; верх — 0,45 + k·підйом
         bl.box("Bleacher_Wood", (0, y - rd / 2 + 0.2, z), (26.0, 0.32, 0.05))
-        bl.box("Bleacher_Wood", (0, y - rd / 2 + 0.55, z - 0.2), (26.0, 0.25, 0.04))         # підніжка
+        bl.box("Bleacher_Wood", (0, y - rd / 2 - 0.16, z - 0.445), (26.0, 0.36, 0.04))       # підніжка попереду: верх = сидіння − 0,45
         bl.box("Bleacher_Frame", (0, y, z / 2), (26.0, 0.05, z))
-        for s in range(52):
-            seat_mark((-12.75 + s * 0.5, y - rd / 2 + 0.2), 0.0, z)                             # лицем на південь, до рингу
+        for s in range(46):
+            seat_mark((-12.6 + s * 0.56, y - rd / 2 + 0.2), 0.0, z + 0.025, "лава")              # лицем на південь, до рингу
     for x in (-13, -6.5, 0, 6.5, 13):
         bl.box("Bleacher_Frame", (x, Y1 - 0.6 - rows * rd / 2, 0.02), (0.08, rows * rd, 0.04))
     bl.finish()
@@ -1123,9 +1214,6 @@ def build_gym(root):
     dt.cyl("Backdrop_White", (8.0, Y1 - 0.121, 5.0), (8.0, Y1 - 0.125, 5.0), 0.26, segs=16)
     cable(dt, [(1.8, -r["mats_half"] + 0.55), (0.6, -r["half_plat"] - 0.3), (-r["half_plat"] - 0.3, -r["half_plat"] - 0.3)])
     cable(dt, [(2.4, -r["mats_half"] + 0.4), (1.0, -r["mats_half"] - 3.0), (0.2, -r["mats_half"] - 6.0)])
-    litter(dt, 0, -r["mats_half"] - 3.5, 12, 5, 30, salt=1)
-    litter(dt, r["mats_half"] + 3, 0, 4, 10, 20, salt=2)
-    litter(dt, X1 - 2.5, -6.0, 3, 8, 20, salt=3)
     floor_decal(dt, "Decal_Tape", (X0 + 2.2, 0), 0.5)
     floor_decal(dt, "Decal_Tape", (-r["mats_half"] - 0.6, 0), 0.4)
     for k in range(3):
@@ -1142,11 +1230,22 @@ def build_gym(root):
     # --- місця: розкладні стільці з трьох боків, прохід від завіси
     ch = Parts("chairs", root, lod=True)
     m = r["mats_half"]
-    chair_rows(ch, (0, -m - 1.0, 0), 0.0, 4, 22, gap_every=11, gap=1.2)                          # південь, лицем на північ
-    chair_rows(ch, (m + 1.0, 0, 0), math.pi / 2, 4, 18, gap_every=9, gap=1.2)                     # схід
-    chair_rows(ch, (-m - 1.0, 0, 0), -math.pi / 2, 5, 18, gap_every=9, gap=2.2)                   # захід, прохід посередині
-    chair_rows(ch, (0, m + 1.0, 0), math.pi, 2, 18, gap_every=9, gap=1.2, standing=0)             # північ, перед трибунами
+    qt = m + 0.7                                                                               # штативи світла на кутах
+    trees = [Vector((sx * qt, sy * qt, 0)) for sx in (-1, 1) for sy in (-1, 1)]
+    no_tree = lambda p_: any((Vector((p_.x, p_.y, 0)) - t_).length < 1.0 for t_ in trees)
+    no_cam = lambda p_: no_tree(p_) or (abs(p_.x) < 1.4 and p_.y < -m - 5.0)                   # поміст камери
+    chair_rows(ch, (0, -m - 1.0, 0), 0.0, 4, 22, gap_every=11, gap=1.2, skip=no_cam)             # південь, лицем на північ
+    side = lambda p_: no_tree(p_) or abs(p_.y) > m + 0.5                                      # кути — за південним/північним
+    chair_rows(ch, (m + 1.0, 0, 0), math.pi / 2, 4, 18, gap_every=9, gap=1.2, skip=side)         # схід
+    chair_rows(ch, (-m - 1.0, 0, 0), -math.pi / 2, 5, 18, gap_every=9, gap=3.0, skip=side)       # захід, прохід посередині
+    chair_rows(ch, (0, m + 1.0, 0), math.pi, 2, 18, gap_every=9, gap=1.2, standing=0, skip=no_tree)   # північ
     ch.finish()
+
+    lit = Parts("details", root)                                                               # сміття — після стільців
+    litter(lit, 0, -m - 3.5, 12, 5, 30, salt=1)
+    litter(lit, m + 3, 0, 4, 10, 20, salt=2)
+    litter(lit, X1 - 2.5, -6.0, 3, 8, 20, salt=3)
+    lit.finish()
 
     # --- вихід: арка з завісою біля дверей роздягальні, прохід між стільцями до рингу
     ent = Parts("entrance", root)
@@ -1172,7 +1271,7 @@ def build_gym(root):
     # --- біля рингу: стіл хронометриста й ведучого, дзвін, ноутбук, мікрофон, камера на стояку
     rs = Parts("ringside", root)
     ty = -r["mats_half"] + 0.55
-    folding_table(rs, (1.8, ty, 0), 0.0, cloth="Cloth_Black")
+    folding_table(rs, (1.8, ty, 0), math.pi, cloth="Cloth_Black")
     ring_bell(rs, (1.3, ty, 0), 0.78)
     laptop(rs, (2.2, ty, 0), math.pi, 0.76)
     for x in (1.3, 2.3):
@@ -1280,13 +1379,20 @@ def quad_n(P, mat, pts, normal):
 
 def standing_area(cx, cy, w, d, n, focus=(0.0, 0.0), z=0.0, salt=0):
     """Стоячі місця: n позначок у прямокутнику w × d, кожна лицем до рингу з розкидом."""
-    for k in range(n):
+    placed = 0
+    for k in range(n * 6):                                         # не ближче 0,55 м одне до одного
+        if placed >= n:
+            break
         x = cx + (h01(k, 11 + salt) - 0.5) * w
         y = cy + (h01(k, 12 + salt) - 0.5) * d
+        if not stand_free(x, y, z):
+            continue
         yaw = math.atan2(focus[0] - x, -(focus[1] - y)) + math.radians((h01(k, 13 + salt) - 0.5) * 30.0)
         SEATS.append((x, y, z, math.degrees(yaw), "стоїть"))
+        placed += 1
 
 def chair_line(P, p0, p1, z, pitch=0.55, seat="Chair_Seat_Red", focus=(0.0, 0.0), salt=0):
+    """Ряд стільців на балконі; розкид — лише якщо стілець не налізе на сусіда."""
     """Ряд розкладних стільців на висоті z від p0 до p1, кожен лицем до рингу з розкидом (балкони)."""
     p0, p1 = Vector((p0[0], p0[1], 0)), Vector((p1[0], p1[1], 0))
     L = (p1 - p0).length
@@ -1295,9 +1401,12 @@ def chair_line(P, p0, p1, z, pitch=0.55, seat="Chair_Seat_Red", focus=(0.0, 0.0)
     side = Vector((-tang.y, tang.x, 0))
     for k in range(n):
         i = k + salt * 977
-        pos = p0 + tang * ((k + 0.5) * L / n + (h01(i, 21) - 0.5) * 0.1) + side * ((h01(i, 22) - 0.5) * 0.1)
-        yaw = math.atan2(focus[0] - pos.x, -(focus[1] - pos.y)) + math.radians((h01(i, 23) - 0.5) * 20.0)
-        folding_chair(P, (pos.x, pos.y, z), yaw, seat)
+        for jit in (1.0, 0.5, 0.0):
+            pos = p0 + tang * ((k + 0.5) * L / n + (h01(i, 21) - 0.5) * 0.1 * jit) + side * ((h01(i, 22) - 0.5) * 0.1 * jit)
+            yaw = math.atan2(focus[0] - pos.x, -(focus[1] - pos.y)) + math.radians((h01(i, 23) - 0.5) * 20.0 * jit)
+            if chair_free((pos.x, pos.y, z), yaw):
+                folding_chair(P, (pos.x, pos.y, z), yaw, seat)
+                break                                      # не влазить без перетину — місця немає
 
 def hall_wall(P, a, b, H, inward, windows=(), pil_step=4.0):
     """Стіна старої зали: цегла внизу, тиньк угорі, дерев'яна панель, пілястри, карниз, високі вікна."""
@@ -1458,10 +1567,18 @@ def build_hall(root):
 
     # --- партер: стільці рядами за огорожею з трьох боків, лицем до рингу, позаду — стоячі
     ch = Parts("chairs", root, lod=True)
-    cam_skip = lambda p_: abs(p_.x + 5.5) < 1.6 and p_.y < Y0 + 5.8
+    cols = []                                                                                  # колони балкона (як нижче)
+    for (a_, b_) in (((X0 + BD, Y0 + BD), (X1 - BD, Y0 + BD)), ((X1 - BD, Y0 + BD), (X1 - BD, SY0 - 1.0)),
+                     ((X0 + BD, Y0 + BD), (X0 + BD, SY0 - 1.0))):
+        a_, b_ = Vector((a_[0], a_[1], 0)), Vector((b_[0], b_[1], 0))
+        nc_ = max(1, int((b_ - a_).length / 4.0))
+        cols += [a_ + (b_ - a_) * (j_ / nc_) for j_ in range(nc_ + 1)]
+    no_col = lambda p_: any((Vector((p_.x, p_.y, 0)) - c_).length < 0.5 for c_ in cols)
+    cam_skip = lambda p_: (abs(p_.x + 5.5) < 1.6 and p_.y < Y0 + 5.8) or no_col(p_)
     chair_rows(ch, (0, -q - 1.0, 0), 0.0, 5, 24, gap_every=12, gap=1.3, skip=cam_skip, standing=2, focus=(0, 0))
-    chair_rows(ch, (q + 1.0, -0.5, 0), 0.0, 6, 22, gap_every=11, gap=1.3, standing=1, focus=(0, 0))
-    chair_rows(ch, (-q - 1.0, -0.5, 0), 0.0, 6, 22, gap_every=11, gap=1.3, standing=1, focus=(0, 0))
+    side_h = lambda p_: no_col(p_) or p_.y < -q - 0.6                                         # кут — за південним блоком
+    chair_rows(ch, (q + 1.15, -0.5, 0), 0.0, 6, 22, gap_every=11, gap=1.3, standing=1, focus=(0, 0), skip=side_h)
+    chair_rows(ch, (-q - 1.15, -0.5, 0), 0.0, 6, 22, gap_every=11, gap=1.3, standing=1, focus=(0, 0), skip=side_h)
     ch.finish()
     for sx in (-1, 1):                                                                           # стоячі біля сцени
         standing_area(sx * 5.4, (q + SY0) / 2 + 0.3, 6.0, SY0 - q - 1.6, 45, salt=sx + 5)
@@ -1604,14 +1721,14 @@ def build_hall(root):
     chair_stack(wp, (X0 + 0.5, -3.0, 0), -math.pi / 2)
     folding_table(wp, (X0 + 0.7, -6.0, 0), math.pi / 2)
     ladder(wp, (-q - 0.6, q + 0.4, 0), (-q - 0.1, q + 0.4, 3.0))
-    trash_can(wp, (q + 0.5, -q - 0.5, 0), "Trash_Grey")
+    trash_can(wp, (q - 0.45, -q + 0.45, 0), "Trash_Grey")                                     # усередині огорожі
     kendo_bin(wp, (-cx, -2.4, 0))
     wp.box("Table_Top", (0, -r["half_plat"] + 0.4, 0.12), (1.83, 0.76, 0.04))
     wp.finish()
     empty("anchor_weapon_table", root, (X0 + 0.9, -6.0, 0))
     empty("anchor_weapon_chairs", root, (X0 + 0.9, -3.0, 0))
     empty("anchor_weapon_ladder", root, (-q - 0.4, q + 0.4, 0))
-    empty("anchor_weapon_trash", root, (q + 0.5, -q - 0.5, 0))
+    empty("anchor_weapon_trash", root, (q - 0.45, -q + 0.45, 0))
     empty("anchor_weapon_kendo", root, (-cx, -2.4, 0))
 
     # --- закулісся за північною стіною: коридор, дві гримерки, «горила», інтерв'ю, кейтеринг, лікар
@@ -1735,6 +1852,8 @@ def bowl_tier(B, P, walls, d0, z0, rows, depth, rise, seat_mat, aisles, voms=(),
     in_vom = lambda t, r_: r_ < vom_rows and any(a <= t <= b for (a, b) in voms)
     for r_ in range(rows):
         di, do = d0 + r_ * depth, d0 + (r_ + 1) * depth
+        if r_ == rows - 1 and back_h:
+            do += 0.12                                # остання сходинка ширша: спинки крісел не в задній стіні
         z = z0 + r_ * rise
         zl = 0.0 if r_ == 0 else z - rise
         mat_r = front_mat if r_ == 0 else "Tier_Concrete"
@@ -1798,7 +1917,7 @@ def bowl_tier(B, P, walls, d0, z0, rows, depth, rise, seat_mat, aisles, voms=(),
     # крісла: між проходами й вомиторіями, крок 0,52 м за справжньою довжиною ряду
     cuts = sorted([(ta - 0.6, ta + 0.6) for ta in aisles])
     for r_ in range(rows):
-        dseat = d0 + r_ * depth + 0.32
+        dseat = d0 + r_ * depth + depth - 0.3         # сидіння в глибині сходинки: ноги — на своїй сходинці
         z = z0 + r_ * rise
         blocked = list(cuts) + ([(a - 0.3, b + 0.3) for (a, b) in voms] if r_ < vom_rows else [])
         blocked.sort()
@@ -1812,7 +1931,7 @@ def bowl_tier(B, P, walls, d0, z0, rows, depth, rise, seat_mat, aisles, voms=(),
         for (ta, tb) in spans:
             pts, acc = B.length(ta, tb, dseat)
             L = acc[-1]
-            n = int(L / 0.52)
+            n = int(L / 0.56)
             if n < 1:
                 continue
             j = 0
@@ -1826,7 +1945,7 @@ def bowl_tier(B, P, walls, d0, z0, rows, depth, rise, seat_mat, aisles, voms=(),
                 _, nn = B.at(tt, dseat)
                 stadium_seat(SP, (p.x, p.y, z), math.atan2(-nn.x, nn.y), seat_mat)
     SP.finish()
-    return d0 + rows * depth, z0 + (rows - 1) * rise
+    return d0 + rows * depth + (0.12 if back_h else 0.0), z0 + (rows - 1) * rise
 
 def stadium_seat(P, pos, yaw, mat):
     PLACE.append(("seat_stadium", (pos[0], pos[1], pos[2]), yaw, MATS[mat][0]))
@@ -1876,7 +1995,7 @@ def build_arena(root):
             (B.total - B.L1 * 0.45 - 1.5, B.total - B.L1 * 0.45 + 1.5)]
     aisles = [a for a in aisles if not any(v0 - 2.0 < a < v1 + 2.0 for (v0, v1) in voms)]
     lower = Parts("tiers_lower", root)
-    lo_d, lo_z = bowl_tier(B, lower, walls, 0.0, 1.2, 14, 0.85, 0.38, "Seat_Red", aisles, voms, vom_rows=6)
+    lo_d, lo_z = bowl_tier(B, lower, walls, 0.0, 1.2, 13, 0.95, 0.4, "Seat_Red", aisles, voms, vom_rows=6)
     lower.finish()
     con = Parts("concourse", root)
     cz = lo_z + 0.35
@@ -1893,8 +2012,8 @@ def build_arena(root):
         con.cyl("Railing_Steel", (a0.x, a0.y, cz + 1.0), (a1.x, a1.y, cz + 1.0), 0.025, segs=6)
     con.finish()
     upper = Parts("tiers_upper", root)
-    up_d, up_z = bowl_tier(B, upper, walls, lo_d + 2.6, cz + 1.4, 10, 0.9, 0.55, "Seat_Blue", aisles,
-                           back_h=H - (cz + 1.4 + 9 * 0.55), fascia=("LED_Ribbon", 0.9))
+    up_d, up_z = bowl_tier(B, upper, walls, lo_d + 2.6, cz + 1.4, 9, 1.0, 0.58, "Seat_Blue", aisles,
+                           back_h=H - (cz + 1.4 + 8 * 0.58), fascia=("LED_Ribbon", 0.9))
     upper.finish()
     # торці чаші біля сцени: стіни-кулісні щити від підлоги до даху
     for sx in (-1, 1):
@@ -1980,10 +2099,10 @@ def build_arena(root):
     for k in range(3):
         folding_chair(rs, (cx + 0.75, -1.2 + 1.2 * k, 0), -math.pi / 2, crowd=False)
         monitor(rs, (cx - 0.25, -1.2 + 1.2 * k, 0), math.pi / 2, z=0.79)
-    folding_table(rs, (-q + 0.6, -1.0, 0), math.pi / 2, cloth="Cloth_Black")
-    ring_bell(rs, (-q + 0.6, -1.5, 0), 0.78)
-    laptop(rs, (-q + 0.6, -0.5, 0), -math.pi / 2, 0.76)
-    folding_chair(rs, (-q + 0.05, -1.0, 0), math.pi / 2, crowd=False)
+    folding_table(rs, (-q + 1.25, -1.0, 0), -math.pi / 2, cloth="Cloth_Black")
+    ring_bell(rs, (-q + 1.25, -1.5, 0), 0.78)
+    laptop(rs, (-q + 1.25, -0.5, 0), -math.pi / 2, 0.76)
+    folding_chair(rs, (-q + 0.62, -1.0, 0), math.pi / 2, crowd=False)
     rs.box("Stage_Black", (6.5, FY0 + 2.4, 1.1), (3.4, 2.4, 2.2))                                # поміст основної камери
     railing(rs, (4.8, FY0 + 3.6, 2.2), (8.2, FY0 + 3.6, 2.2))
     hd_camera(rs, (5.8, FY0 + 2.4, 0), 0.0, 2.2)
@@ -1995,8 +2114,8 @@ def build_arena(root):
         monitor(rs, (-10.5 + k, FY0 + 1.5, 0), math.pi, z=1.36)
     rs.finish()
     empty("anchor_commentary", root, (cx + 0.75, 0, 0), yaw=-90)
-    empty("anchor_timekeeper", root, (-q + 0.05, -1.0, 0), yaw=90)
-    empty("anchor_bell", root, (-q + 0.6, -1.5, 0.78))
+    empty("anchor_timekeeper", root, (-q + 0.62, -1.0, 0), yaw=90)
+    empty("anchor_bell", root, (-q + 1.25, -1.5, 0.78))
     empty("anchor_hardcam", root, (6.5, FY0 + 2.4, 3.6))
     empty("anchor_jib", root, (q + 3.5, -q - 3.5, 3.5))
     for i, (x, y) in enumerate(((q - 0.4, -q + 0.4), (-q + 0.4, -q + 0.4), (q - 0.4, q - 0.4), (-q + 0.4, q - 0.4))):
@@ -2004,9 +2123,11 @@ def build_arena(root):
 
     # --- стільці на підлозі арени: три блоки, лицем до рингу з розкидом, проходи до вомиторіїв
     ch = Parts("chairs", root, lod=True)
-    skip_s = lambda p_: (abs(p_.x - 6.5) < 2.3 and p_.y < FY0 + 4.2) or (abs(p_.x + 8.5) < 3.4 and p_.y < FY0 + 3.0)
-    skip_e = lambda p_: p_.x > FX - 1.0 or (p_ - Vector((q + 3.5, -q - 3.5, 0))).length < 2.2 or p_.y > SY0 - 1.5
-    skip_w = lambda p_: p_.x < -FX + 1.0 or p_.y > SY0 - 1.5
+    jib_at = Vector((q + 3.5, -q - 3.5, 0))
+    skip_s = lambda p_: ((abs(p_.x - 6.5) < 2.3 and p_.y < FY0 + 4.2) or (abs(p_.x + 8.5) < 3.4 and p_.y < FY0 + 3.0)
+                         or (Vector((p_.x, p_.y, 0)) - jib_at).length < 2.4)
+    skip_e = lambda p_: p_.x > FX - 1.0 or (Vector((p_.x, p_.y, 0)) - jib_at).length < 2.4 or p_.y > SY0 - 1.5 or p_.y < -q - 0.8
+    skip_w = lambda p_: p_.x < -FX + 1.0 or p_.y > SY0 - 1.5 or p_.y < -q - 0.8
     chair_rows(ch, (0, -q - 1.4, 0), 0.0, 7, 36, gap_every=18, gap=2.0, skip=skip_s, standing=0, focus=(0, 0))
     chair_rows(ch, (q + 3.4, CY, 0), 0.0, 10, 36, gap_every=18, gap=2.0, skip=skip_e, standing=0, focus=(0, 0))
     chair_rows(ch, (-q - 1.6, CY, 0), 0.0, 12, 36, gap_every=18, gap=2.0, skip=skip_w, standing=0, focus=(0, 0))
@@ -2061,7 +2182,7 @@ def build_arena(root):
 
     # --- зброя
     wp = Parts("weapons", root)
-    chair_stack(wp, (-q - 0.6, q + 0.8, 0), math.pi, 10)
+    chair_stack(wp, (-q + 0.5, q - 0.35, 0), math.pi, 10)                                     # усередині огорожі
     folding_table(wp, (q + 0.8, q + 0.6, 0), 0.0)
     ladder(wp, (-q - 0.2, -q - 0.6, 0), (-q - 0.2, -q - 0.05, 3.4))
     trash_can(wp, (q + 0.5, -q - 0.5, 0), "Trash_Grey")
@@ -2069,7 +2190,7 @@ def build_arena(root):
     wp.box("Table_Top", (0, -r["half_plat"] + 0.4, 0.12), (1.83, 0.76, 0.04))
     wp.finish()
     empty("anchor_weapon_table", root, (q + 0.8, q + 0.6, 0))
-    empty("anchor_weapon_chairs", root, (-q - 0.6, q + 0.8, 0))
+    empty("anchor_weapon_chairs", root, (-q + 0.5, q - 0.35, 0))
     empty("anchor_weapon_ladder", root, (-q - 0.2, -q - 0.8, 0))
     empty("anchor_weapon_trash", root, (q + 0.5, -q - 0.5, 0))
     empty("anchor_weapon_kendo", root, (-q + 0.6, -2.4, 0))
@@ -2194,6 +2315,206 @@ def add_lights(info):
     bpy.context.scene.world = w
     return made
 
+def glare(scene):
+    """Відблиск яскравих лінз, екранів та іскор (композитор): світло читається як світло."""
+    try:
+        scene.use_nodes = True
+        nt = scene.node_tree
+        rl = next((n for n in nt.nodes if n.type == 'R_LAYERS'), None) or nt.nodes.new("CompositorNodeRLayers")
+        comp = next((n for n in nt.nodes if n.type == 'COMPOSITE'), None) or nt.nodes.new("CompositorNodeComposite")
+        g = nt.nodes.new("CompositorNodeGlare")
+        for attr, val in (("glare_type", 'FOG_GLOW'), ("quality", 'MEDIUM'), ("threshold", 1.2), ("size", 7), ("mix", -0.6)):
+            try:
+                setattr(g, attr, val)
+            except (AttributeError, TypeError):
+                pass
+        for attr, val in (("Threshold", 1.2), ("Size", 0.6), ("Strength", 0.35)):
+            if attr in g.inputs:
+                g.inputs[attr].default_value = val
+        nt.links.new(rl.outputs["Image"], g.inputs[0])
+        nt.links.new(g.outputs[0], comp.inputs[0])
+    except Exception as e:                                  # композитор — лише прикраса знімка
+        print("glare: %s" % e, flush=True)
+
+VIDEO_S = next((float(a.split("=", 1)[1]) for a in args if a.startswith("--video-s=")), 7.0)
+VIDEO_FPS = 30
+ANIM_RADIUS = {"gym": 9.0, "hall": 9.5, "arena": 13.0}       # ближче до рингу — живі фанати зі скелетом, далі — пози
+
+def live_fans(scene):
+    """Ближні фанати — справжні скелети з кліпами (зсув фази — NLA), далекі лишаються запеченими позами."""
+    with bpy.data.libraries.load(CROWD_LIB, link=False) as (src, dst):
+        dst.collections = [c for c in src.collections if c == "FanRigs"]
+        dst.actions = [a for a in src.actions if a.endswith("_Loop")]      # кліпи натовпу (лежать з фіктивним користувачем)
+    rigs = bpy.data.collections.get("FanRigs")
+    if rigs is None:
+        return 0
+    proto = {}
+    for o in rigs.objects:
+        if o.type == 'ARMATURE':
+            proto.setdefault(o.name, {})["arm"] = o
+        elif o.name.endswith("_LOD0"):
+            proto.setdefault(o.name[:-5], {})["mesh"] = o
+    col = bpy.data.collections.new("LiveCrowd")
+    scene.collection.children.link(col)
+    dz_cache = {}
+    n = 0
+    R = ANIM_RADIUS.get(scene.get("venue", ""), 10.0)
+    cand = [o for o in bpy.data.objects if o.type == 'MESH' and "crowd" in o.keys()]
+    print("VIDEO кандидатів %d, прототипів %d (%s)" % (len(cand), len(proto), list(proto)[:2]), flush=True)
+    for o in cand:
+        f_ = o["crowd"].split()
+        x, y, z, yaw, fan, clip, ph = float(f_[0]), float(f_[1]), float(f_[2]), float(f_[3]), f_[4], f_[5], int(f_[6])
+        if math.hypot(x, y) > R or fan not in proto or "mesh" not in proto[fan]:
+            continue
+        act = next((a for a in bpy.data.actions if a.name.endswith(clip)), None)
+        if act is None:
+            continue
+        pa, pm = proto[fan]["arm"], proto[fan]["mesh"]
+        arm = pa.copy()
+        col.objects.link(arm)
+        me = pm.copy()
+        col.objects.link(me)
+        me.parent = arm
+        for md in me.modifiers:
+            if md.type == 'ARMATURE':
+                md.object = arm
+        ad = arm.animation_data_create()
+        ad.action = None
+        tr = ad.nla_tracks.new()
+        st = tr.strips.new(clip, 1, act)
+        st.repeat = 20.0
+        st.frame_start = 1 - int(ph * 30 + 17 * h01(n, 77)) % 60
+        if hasattr(st, "action_slot") and getattr(act, "slots", None):
+            st.action_slot = act.slots[0]
+        key = (fan, clip)
+        if key not in dz_cache:                               # як у запечених поз: таз на сидінні / стопи на підлозі
+            arm.location = (0, 0, 0)
+            arm.rotation_euler = (0, 0, 0)
+            scene.frame_set(1)
+            bpy.context.view_layer.update()
+            dg = bpy.context.evaluated_depsgraph_get()
+            ev = me.evaluated_get(dg)
+            low = min((ev.matrix_world @ v.co).z for v in ev.data.vertices)
+            if clip.startswith("Sit_"):                       # як bake_pose у ring_crowd.py
+                dz = 0.56 - (arm.matrix_world @ arm.pose.bones["pelvis"].head).z
+                dz_cache[key] = dz + max(0.0, 0.004 - (low + dz))
+            else:
+                dz_cache[key] = -low + 0.005
+        arm.location = (x, y, z + dz_cache[key])
+        arm.rotation_euler = (0, 0, math.radians(yaw))
+        me.color = o.color
+        me.matrix_parent_inverse = arm.matrix_world.inverted() @ arm.matrix_world   # одиничне: сітка в просторі скелета
+        o.hide_render = True
+        n += 1
+    return n
+
+def video(root, info, scene, show, cam, hide):
+    """Відео 7 с: сцена світла VIDEO, погоня голів по такту, іскри частинками, ближній натовп живий, камера пливе."""
+    c = next(c_ for c_ in CUES.get(info["id"], ()) if c_["name"] == VIDEO)
+    scene["venue"] = info["id"]
+    nlive = live_fans(scene)
+    print("VIDEO %s/%s: живих фанатів %d" % (info["id"], VIDEO, nlive), flush=True)
+    scene.render.fps = VIDEO_FPS
+    scene.frame_start, scene.frame_end = 1, int(VIDEO_S * VIDEO_FPS)
+    beat_frames = VIDEO_FPS * 60.0 / max(60, c["bpm"] or 120)
+    for f in range(scene.frame_start, scene.frame_end + 1):
+        beat = int((f - 1) / beat_frames)
+        sub = ((f - 1) % beat_frames) / beat_frames
+        show.apply(c, beat=beat)
+        for o, pos, d, color, kind in show.spots:
+            L = o.data
+            if kind == "par" and c["bpm"]:                        # PAR дихають у такт: удар — спалах, далі спад
+                L.energy *= 0.55 + 0.9 * (1.0 - sub) ** 2
+            L.keyframe_insert("energy", frame=f)
+            L.keyframe_insert("color", frame=f)
+            o.keyframe_insert("rotation_euler", frame=f)
+        if f % 6 == 1:
+            print("VIDEO ключі %d/%d" % (f, scene.frame_end), flush=True)
+    # іскри — частинки (у відео летять), статичні іскри знімків ховаємо
+    for name in ("sparklers", "pyro"):
+        for o in show.fx.get(name, ()):
+            if o.type == 'MESH':
+                o.hide_render = True
+    particle_sparks(scene, show, c)
+    # камера: від кута рингу до виходу, повільно
+    curtain = show.obs["anchor_curtain"].matrix_world.translation
+    hp = info["ring"]["half_plat"]
+    p0 = Vector((hp + 4.0, -hp - 5.0, 2.4))
+    p1 = Vector((hp + 1.8, -hp - 2.4, 3.2))
+    for f, p in ((scene.frame_start, p0), (scene.frame_end, p1)):
+        cam.location = p
+        tgt = curtain.lerp(Vector((0, 0, 1.4)), 0.45) + Vector((0, 0, 1.0))
+        cam.rotation_euler = (tgt - p).to_track_quat('-Z', 'Y').to_euler()
+        cam.keyframe_insert("location", frame=f)
+        cam.keyframe_insert("rotation_euler", frame=f)
+    cam.data.lens = 26
+    hide(["ceiling"], True)
+    scene.render.resolution_x, scene.render.resolution_y = 1280, 720
+    for fr in sorted({scene.frame_start + (scene.frame_end - scene.frame_start) // 3, scene.frame_end - 2}):   # контрольні кадри
+        scene.frame_set(fr)
+        scene.render.image_settings.file_format = 'PNG'
+        scene.render.filepath = os.path.join(LOOK_DIR, "%s_%s_videoframe_%03d.png" % (info["id"], VIDEO, fr))
+        bpy.ops.render.render(write_still=True)
+    scene.render.image_settings.file_format = 'FFMPEG'
+    scene.render.ffmpeg.format = 'MPEG4'
+    scene.render.ffmpeg.codec = 'H264'
+    scene.render.ffmpeg.constant_rate_factor = 'HIGH'
+    scene.render.filepath = os.path.join(LOOK_DIR, "%s_%s_video.mp4" % (info["id"], VIDEO))
+    try:
+        scene.eevee.taa_render_samples = 16
+    except AttributeError:
+        pass
+    bpy.ops.render.render(animation=True)
+    print("VIDEO готове: %s" % scene.render.filepath, flush=True)
+
+def particle_sparks(scene, show, c):
+    """Холодні іскри / піро як системи частинок (гравітація, час життя) — у грі те саме дає Particle System."""
+    spots = []
+    if "sparklers" in c["fx"]:
+        cp = show.obs["anchor_curtain"].matrix_world.translation
+        spots += [(cp + Vector((sx, -1.4, 0.1)), 5.5, 0.9, 1500) for sx in (-2.2, 2.2)]
+    if "pyro" in c["fx"]:
+        spots += [(o.matrix_world.translation + Vector((0, 0, 0.3)), 10.0, 1.4, 2500)
+                  for nm, o in show.obs.items() if nm.startswith("anchor_pyro_")]
+    if not spots:
+        return
+    bm = bmesh.new()
+    r = bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=(0.012, 0.012, 0.09), verts=r["verts"])
+    me = bpy.data.meshes.new("spark")
+    bm.to_mesh(me)
+    bm.free()
+    spark = bpy.data.objects.new("spark", me)
+    scene.collection.objects.link(spark)
+    me.materials.append(show._emit_mat("FX_Spark", SPARK_COLOR, 40.0))
+    spark.hide_render = True
+    for j, (base, v0, life, count) in enumerate(spots):
+        bm = bmesh.new()
+        bmesh.ops.create_circle(bm, cap_ends=True, segments=8, radius=0.08)
+        em = bpy.data.meshes.new("emitter%d" % j)
+        bm.to_mesh(em)
+        bm.free()
+        eo = bpy.data.objects.new("emitter%d" % j, em)
+        scene.collection.objects.link(eo)
+        eo.location = base
+        ps = eo.modifiers.new("sparks", 'PARTICLE_SYSTEM').particle_system
+        st = ps.settings
+        st.count = count
+        st.frame_start, st.frame_end = 1, scene.frame_end
+        st.lifetime = int(life * VIDEO_FPS)
+        st.lifetime_random = 0.5
+        st.normal_factor = v0
+        st.factor_random = v0 * 0.35
+        st.render_type = 'OBJECT'
+        st.instance_object = spark
+        st.particle_size = 1.0
+        st.size_random = 0.5
+        st.use_rotations = True
+        st.rotation_mode = 'VEL'
+        st.emit_from = 'FACE'
+        eo.hide_render = False
+        em.materials.append(show._emit_mat("FX_Spark", SPARK_COLOR, 40.0))
+
 def look(root, info):
     os.makedirs(LOOK_DIR, exist_ok=True)
     scene = bpy.context.scene
@@ -2236,7 +2557,7 @@ def look(root, info):
     hp = info["ring"]["half_plat"]
     shots["closeup"] = ((hp + 2.6, -hp - 3.2, 1.9), (hp * 0.2, -hp * 0.4, 0.9), 35, ["ceiling", "wall_S"])
     shots["overview_west"] = ((-ext * 0.95, -ext * 1.15, ext * 0.95), (0, 0, 1.0), 28, ["ceiling", "wall_S", "wall_W"])
-    lights = add_lights(info)
+    show = Show(root, info, scene)
     place_crowd(scene)
     lib = props_library()
     icol = bpy.data.collections.new("Instances")
@@ -2249,18 +2570,30 @@ def look(root, info):
         o.color = (*pc, 1)
     lit = set_engine(scene, ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"))
     if lit:
-        try:
-            scene.eevee.taa_render_samples = 24
-        except AttributeError:
-            pass
-        try:
-            scene.eevee.use_shadows = True
-        except AttributeError:
-            pass
+        for attr, val in (("taa_render_samples", 32), ("use_shadows", True), ("volumetric_tile_size", '4'),
+                          ("volumetric_samples", 64), ("volumetric_end", 140.0), ("use_volumetric_shadows", True),
+                          ("volumetric_light_clamp", 0.0)):
+            try:
+                setattr(scene.eevee, attr, val)
+            except (AttributeError, TypeError):
+                pass
         scene.view_settings.view_transform = 'AgX' if 'AgX' in [i.identifier for i in bpy.types.ColorManagedViewSettings.bl_rna.properties["view_transform"].enum_items] else 'Filmic'
-    for name, (pos, target, lens, hidden) in shots.items():
-        if SHOTS and name not in SHOTS:
+        glare(scene)
+    if VIDEO:
+        video(root, info, scene, show, cam, hide)
+        show.remove()
+        return
+    plan = []                                            # (файл, знімок, сцена світла)
+    for c in CUES.get(info["id"], [cue("match", shots=tuple(shots))]):
+        for sh in c["shots"]:
+            plan.append(("%s_%s_%s" % (info["id"], c["name"], sh), sh, c))
+    plan.append(("%s_overview_flat" % info["id"], "overview_flat", None))
+    for fname, name, c in plan:
+        if SHOTS and name not in SHOTS and (c is None or c["name"] not in SHOTS):
             continue
+        pos, target, lens, hidden = shots[name]
+        if c is not None:
+            show.apply(c)
         set_engine(scene, ("BLENDER_WORKBENCH",) if (name == "overview_flat" or not lit) else ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"))
         if name == "entrance":
             pos = (curtain.x * 0.1 + 6.0, curtain.y * 0.1 - 6.0, 4.5)
@@ -2274,10 +2607,11 @@ def look(root, info):
         cam.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
         cam.data.lens = lens
         cam.data.clip_end = 400
-        scene.render.filepath = os.path.join(LOOK_DIR, "%s_%s.png" % (info["id"], name))
+        scene.render.filepath = os.path.join(LOOK_DIR, fname + ".png")
         bpy.ops.render.render(write_still=True)
         hide(hidden, False)
-    for o in ropes + lights:
+    show.remove()
+    for o in ropes:
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.data.objects.remove(cam, do_unlink=True)
 
@@ -2375,7 +2709,7 @@ def export(root, info):
         for (pm, pp, py, pc) in PLACE:
             f.write("%s %.3f %.3f %.3f %.1f %.3f %.3f %.3f\n" % (pm, pp[0], pp[1], pp[2], math.degrees(py), *pc))
     with open(os.path.join(OUT, "venue_%s_seats.txt" % info["id"]), "w", encoding="utf-8", newline="\n") as f:
-        sit = sum(1 for s_ in SEATS if s_[4] == "сидить")
+        sit = sum(1 for s_ in SEATS if s_[4] != "стоїть")
         f.write("# Місця для натовпу: x y z курс° сидить|стоїть (лицем до рингу). Разом: %d (сидячих %d, стоячих %d)\n"
                 % (len(SEATS), sit, len(SEATS) - sit))
         for s_ in SEATS:
@@ -2421,6 +2755,9 @@ def export(root, info):
     return path, len(lines) - 1, objs, tris
 
 exec(open(os.path.join(REPO, "tools", "blender", "ring_props.py"), encoding="utf-8").read())
+exec(open(os.path.join(REPO, "tools", "blender", "ring_show.py"), encoding="utf-8").read())
+exec(open(os.path.join(REPO, "tools", "blender", "ring_collide.py"), encoding="utf-8").read())
+CHECK_FAILS = 0
 
 # ---------------------------------------------------------------- натовп (ring_crowd.py)
 # Хто де: відвідуваність 0..1 → компанії по 2–5 сусідніх місць (одна компанія — одні кольори мерчу), перші ряди
@@ -2477,7 +2814,7 @@ def assign_crowd(vid):
             if not busy or h01(i, 35) > 0.92:
                 continue
             fan = fans[int(h01(i, 36) * len(fans)) % len(fans)]
-            standing = kind == "стоїть" or excited
+            standing = kind == "стоїть" or (excited and kind != "лава")     # з лави трибуни не підводяться
             clip = pick(MOOD_STAND if standing else MOOD_SIT, h01(i, 37))
             col = color if h01(i, 38) < 0.7 else pick(MERCH, h01(i, 39))
             if kind == "стоїть":
@@ -2486,7 +2823,7 @@ def assign_crowd(vid):
                 zz = z - 0.45 if not standing else z - 0.45
             if standing and kind != "стоїть":                            # підвівся перед своїм стільцем
                 a = math.radians(yaw)
-                x, y = x + 0.12 * math.sin(a), y - 0.12 * math.cos(a)
+                x, y = x + 0.36 * math.sin(a), y - 0.36 * math.cos(a)
             out.append((x, y, zz, yaw, fan, clip, int(h01(i, 40) * 2), col))
         k += g
         gi += 1
@@ -2494,8 +2831,9 @@ def assign_crowd(vid):
 
 CROWD = []
 
-def write_crowd(vid):
-    CROWD[:] = assign_crowd(vid)
+def write_crowd(vid, keep=False):
+    if not keep:
+        CROWD[:] = assign_crowd(vid)
     with open(os.path.join(OUT, "venue_%s_crowd.txt" % vid), "w", encoding="utf-8", newline="\n") as f:
         f.write("# Натовп (відвідуваність %.0f %%): x y z курс° фанат кліп фаза r g b. Разом: %d з %d місць\n"
                 % (ATTENDANCE.get(vid, 0.8) * 100, len(CROWD), len(SEATS)))
@@ -2522,6 +2860,7 @@ def place_crowd(scene):
         o.location = (x, y, z)
         o.rotation_euler = (0, 0, math.radians(yaw))
         o.color = (*colr, 1)
+        o["crowd"] = "%.3f %.3f %.3f %.1f %s %s %d" % (x, y, z, yaw, fan, clip, ph)
         made.append(o)
     return made
 
@@ -2535,6 +2874,7 @@ for vid in WANT:
     LIGHTS.clear()
     AREAS.clear()
     PLACE.clear()
+    STAFF.clear()
     PROPS.clear()
     if vid == WANT[0]:
         _pp, _pt = export_props(os.path.join(REPO, "Assets", "Art", "Ring", "Props"))
@@ -2543,8 +2883,26 @@ for vid in WANT:
     root = empty("venue_" + vid, None)
     info = BUILDERS[vid](root)
     write_crowd(vid)
+    write_cues(vid)
     path, n_anchors, objs, tris = export(root, info)
     print("VENUE %s: %s — якорів %d, місць %d, об'єктів %d, граней %d" % (vid, path, n_anchors, len(SEATS), objs, tris), flush=True)
+    if CHECK:
+        for pass_ in range(3):
+            total_, bad_fans = check_collisions(root, info)
+            if not bad_fans or pass_ == 2 or CHECK_RAW:
+                break
+            for i_ in sorted(bad_fans, reverse=True):
+                c_ = CROWD[i_]
+                calm = "Sit_Idle_Loop" if c_[5].startswith("Sit_") else "Stand_Idle_Loop"
+                if pass_ == 0 and c_[5] != calm:
+                    CROWD[i_] = c_[:5] + (calm,) + c_[6:]
+                else:
+                    CROWD.pop(i_)
+            print("CHECK %s: прохід %d — фанатів змінено/знято: %d" % (vid, pass_ + 1, len(bad_fans)), flush=True)
+            write_crowd(vid, keep=True)
+        CHECK_FAILS += total_
     if LOOK:
         look(root, info)
         print("VENUE %s: огляд готовий" % vid, flush=True)
+if CHECK and CHECK_FAILS:
+    raise SystemExit("КОЛІЗІЇ: %d (звіти — Assets/Art/Ring/venue_*_collisions.txt)" % CHECK_FAILS)

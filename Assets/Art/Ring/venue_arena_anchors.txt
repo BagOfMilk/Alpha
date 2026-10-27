@@ -12,7 +12,7 @@ anchor_backstage_loading 33.000 29.600 1.200 0
 anchor_backstage_lockers -28.800 34.100 0.000 0
 anchor_backstage_mirror -20.000 37.400 0.000 0
 anchor_backstage_trainer -8.500 34.100 0.000 0
-anchor_bell -4.848 -1.500 0.780 0
+anchor_bell -4.198 -1.500 0.780 0
 anchor_cam_backstage 0.000 29.600 3.000 0
 anchor_cam_crowd_low 0.000 -6.000 0.600 0
 anchor_cam_entrance 0.000 4.000 2.800 0
@@ -80,12 +80,12 @@ anchor_rope_mid_W_2 -2.828 0.000 2.060 0
 anchor_rope_mid_W_3 -2.828 0.000 2.440 0
 anchor_steps_NE 4.138 4.138 0.000 0
 anchor_steps_SW -4.138 -4.138 0.000 0
-anchor_timekeeper -5.398 -1.000 0.000 90
+anchor_timekeeper -4.828 -1.000 0.000 90
 anchor_under_ring_E 2.748 0.000 0.000 0
 anchor_under_ring_N 0.000 2.748 0.000 0
 anchor_under_ring_S 0.000 -2.748 0.000 0
 anchor_under_ring_W -2.748 0.000 0.000 0
-anchor_weapon_chairs -6.048 6.248 0.000 0
+anchor_weapon_chairs -4.948 5.098 0.000 0
 anchor_weapon_kendo -4.848 -2.400 0.000 0
 anchor_weapon_ladder -5.648 -6.248 0.000 0
 anchor_weapon_table 6.248 6.048 0.000 0

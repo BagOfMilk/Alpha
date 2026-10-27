@@ -361,6 +361,49 @@ def d_grime(n):
     col = np.ones((n, n, 3), np.float32) * np.array((0.12, 0.1, 0.08), np.float32)
     return col, alpha
 
+# ---------------------------------------------------------------- контент LED-екранів (сцени світла, ring_show.py)
+
+def led_logo(n):
+    """Заставка промоушену: емблема на темно-червоному градієнті з променями."""
+    u, v = grid(n)
+    x, y = u / n * 2 - 1, v / n * 2 - 1
+    r = np.sqrt(x * x + y * y)
+    a = np.arctan2(y, x)
+    rays = 0.5 + 0.5 * np.cos(a * 12)
+    bg = np.stack([0.35 + 0.3 * (1 - r), 0.02 + 0.03 * rays * (1 - r), 0.05 + 0.04 * rays], -1)
+    ring = ((r > 0.5) & (r < 0.6)).astype(np.float32)
+    star = (r < 0.32 + 0.12 * np.abs(np.cos(a * 4))).astype(np.float32)
+    band = ((np.abs(y) < 0.07) & (np.abs(x) < 0.62)).astype(np.float32)
+    img = bg * (1 - np.maximum(ring, star)[..., None]) + np.array((1.0, 0.85, 0.4)) * np.maximum(ring, star)[..., None]
+    img = img * (1 - band[..., None]) + np.array((0.05, 0.05, 0.06)) * band[..., None]
+    return np.clip(img, 0, 1)
+
+def led_fire(n):
+    u, v = grid(n)
+    y = v / n
+    f = fbm(n, 40, 301, 4, ax=1.0, ay=2.5)
+    t = np.clip(1.15 - y * 1.3 + 0.35 * f, 0, 1)
+    return np.stack([np.clip(t * 1.6, 0, 1), np.clip(t * t * 1.1, 0, 1), np.clip(t ** 4 * 0.6, 0, 1)], -1)
+
+def led_waves(n):
+    u, v = grid(n)
+    x, y = u / n, v / n
+    w = 0.5 + 0.5 * np.sin((x * 6 + 0.6 * np.sin(y * 9)) * math.pi)
+    return np.stack([0.05 + 0.15 * w, 0.2 + 0.5 * w, 0.6 + 0.4 * w], -1)
+
+def led_name(n):
+    """Заставка виходу борця: «ім'я» блоками й смуги кольору борця (без тексту — гра підставить свій)."""
+    u, v = grid(n)
+    x, y = u / n, v / n
+    img = np.zeros((n, n, 3), np.float32) + np.array((0.02, 0.02, 0.03))
+    stripes = (np.abs(((x + y * 0.5) * 8) % 1.0 - 0.5) < 0.12)
+    img[stripes] = (0.6, 0.05, 0.05)
+    blocks = (y > 0.42) & (y < 0.58) & (x > 0.12) & (x < 0.88) & (((x - 0.12) * 12 % 1.0) < 0.82)
+    img[blocks] = (0.95, 0.95, 0.95)
+    return img
+
+LED = {"led_logo": (led_logo, 512), "led_fire": (led_fire, 512), "led_waves": (led_waves, 512), "led_name": (led_name, 512)}
+
 DECALS = {"decal_poster_%d" % k: (lambda n, k=k: d_poster(n, k), 512) for k in range(4)}
 DECALS.update({"decal_logo": (d_logo, 1024), "decal_tape": (d_tape, 256), "decal_grime": (d_grime, 512)})
 
@@ -381,6 +424,12 @@ for name, (fn, size) in DECALS.items():
         continue
     col, alpha = fn(size)
     save(name, col, alpha)
+    print("TEX %s %d" % (name, size), flush=True)
+for name, (fn, size) in LED.items():
+    manifest.append("%s %d led" % (name, size))
+    if WANT and name not in WANT:
+        continue
+    save(name, fn(size))
     print("TEX %s %d" % (name, size), flush=True)
 with open(os.path.join(OUT, "textures_manifest.txt"), "w", encoding="utf-8", newline="\n") as f:
     f.write("\n".join(manifest) + "\n")

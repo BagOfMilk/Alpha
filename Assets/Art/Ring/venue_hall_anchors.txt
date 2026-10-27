@@ -83,4 +83,4 @@ anchor_weapon_chairs -16.100 -3.000 0.000 0
 anchor_weapon_kendo -3.743 -2.400 0.000 0
 anchor_weapon_ladder -5.343 5.343 0.000 0
 anchor_weapon_table -16.100 -6.000 0.000 0
-anchor_weapon_trash 5.443 -5.443 0.000 0
+anchor_weapon_trash 4.493 -4.493 0.000 0
