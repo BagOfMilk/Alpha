@@ -8,6 +8,8 @@ name = sys.argv[sys.argv.index("--") + 1]
 ring_lab.setup()
 mv = ring_lab.load_map(name)
 M.MOVE_MAP = mv
+if name == "Lockup":
+    print("[лабораторія] крок до суперника:", M.calibrate_reach(mv), flush=True)
 t0 = time.time()
 {"Lockup": M.lockup_frames, "Bodyslam": M.slam_frames}[name]()
 res = ring_lab.check_clip(mv)

@@ -25,6 +25,7 @@ def _base(fwd=0.0, crouch=0.0, pitch=None, lean_x=0.0):
 
 SURF = {}                   # точка долоні на потилиці партнера (простір свого ригу), за роллю
 APART = [0.0]
+REACH = {"A": 0.0, "B": 0.0}   # додатковий крок до суперника (м), якщо рука не дістає (тіла різних пропорцій)
 MOVE_MAP = None              # карта прийому (tools/blender/moves/*.json), якщо задана — кисті в триманні за нею               # додатковий розхід пари вбік (м) у кадрі, якщо голови перетинаються
 def neck_surface():
     """Цілі хвату на шкірі партнера для обох. Референс зчепу (фото тренування, пара в ринзі): ПРАВА рука — через ліве
@@ -54,7 +55,7 @@ def tie(fwd, grip=1.0, push=0.0, hold_head=1.0, role=None):
     def f(Pt):
         P_ = G["P"]
         FWD, DOWN, UP, LEFT, RIGHT = G["FWD"], G["DOWN"], G["UP"], G["LEFT"], G["RIGHT"]
-        p = _base(fwd + 0.04 * push, crouch=0.09 * hold_head)
+        p = _base(fwd + 0.04 * push + REACH.get(role, 0.0) * grip, crouch=0.09 * hold_head)
         p.pelvis = p.pelvis + Vector((0.2 * hold_head, 0.2 * hold_head, 0.0))     # голова — ліворуч; таз відведений назад (референс)
         p.pitch = 16.0 + 30.0 * hold_head + 5.0 * push       # тулуби назустріч, нижче — дистанція
         p.roll = -4.0 * hold_head
@@ -87,6 +88,26 @@ def tie(fwd, grip=1.0, push=0.0, hold_head=1.0, role=None):
         p.fist = {"r": 0.25 - 0.15 * grip, "l": 0.25 + 0.1 * grip}    # на шиї — пальці лише ледь зігнуті (шия товста), на лікті — підтримує
         return p
     return f
+
+
+def calibrate_reach(mv, d=None):
+    """Скільки кожному підійти ближче, щоб рука на шиї дістала (тіла різних культур мають різні пропорції)."""
+    d = LOCKUP_FWD if d is None else d
+    REACH["A"] = REACH["B"] = 0.0
+    for _ in range(4):
+        SURF.clear()
+        ring_lab.solve(tie(d, role="A"), tie(d, role="B")); neck_surface(); ring_lab.solve(tie(d, role="A"), tie(d, role="B"))
+        ring_lab.place_hands(mv)
+        done = True
+        for t in ("A", "B"):
+            rig = ring_lab.LAB["rig" + t]; W = rig.arm.matrix_world; pb = rig.arm.pose.bones
+            miss = (rig.empties["wrist_r"].location - W @ pb["hand_r"].head).length
+            if miss > 0.008:
+                REACH[t] += miss + 0.005
+                done = False
+        if done:
+            break
+    return dict(REACH)
 
 
 def settle_pair(rounds=10, ok=0.003):
@@ -153,7 +174,7 @@ def lockup_frames(fps=30, settle=True):
                 return p
             return pose
         APART[0] = 0.0
-        for _try in range(8):                        # голови — щока до щоки, але не одна в одній
+        for _try in range(1):                        # розведення голів вимкнено: голова повз плече (карта), а зсув таза ламав досяжність кисті
             SURF.clear()
             ring_lab.solve(mk(1.0), mk(-1.0))
             if ga > 0.05:                            # шкіра потилиці партнера — з уже поставленої пари, і ще раз

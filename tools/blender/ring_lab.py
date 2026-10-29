@@ -566,11 +566,58 @@ def check_clip(mv, step=1, report=None):
 
 
 # ---------------------------------------------------------------- ворота 2: кисті за картою
+def _hand_pen(arm, s, other):
+    """Скільки вершин самої кисті боку s усередині тіла other (без кистей і передпліч суперника)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    whole = _bvh([o for o in _meshes(other) if not o.name.endswith(("body_hands", "body_lowerarms"))], dg)
+    n = 0
+    for o in _meshes(arm):
+        if not o.name.endswith("body_hands"):
+            continue
+        e = o.evaluated_get(dg); me = e.to_mesh(); g = {x.index: x.name for x in o.vertex_groups}
+        for v in list(me.vertices)[::2]:
+            w = max(((g.get(x.group, ""), x.weight) for x in v.groups), key=lambda z: z[1], default=("", 0))[0]
+            if w.endswith("_" + s) and _inside(whole, e.matrix_world @ v.co):
+                n += 1
+        e.to_mesh_clear()
+    return n
+
+
 def _arm_pen(arm, s, other, dg=None):
     """Скільки вершин руки (кисть, передпліччя) боку s усередині тіла other."""
     dg = dg or bpy.context.evaluated_depsgraph_get()
-    whole = _bvh(_meshes(other), dg)
+    # кисті суперника не рахуються: за картою вони тримають цю руку (лікоть) — це задуманий контакт, не зіткнення
+    whole = _bvh([o for o in _meshes(other) if not o.name.endswith(("body_hands", "body_lowerarms"))], dg)   # кисть і передпліччя суперника тримають мій лікоть
     return sum(1 for v in _arm_verts(arm, s, dg)[::2] if _inside(whole, v))
+
+
+def reach_with_clavicle(arm, s, target_w, max_deg=28.0):
+    """Ціль поза досяжністю — плече виноситься вперед ключицею (як у живої людини), до max_deg."""
+    pb = arm.pose.bones
+    W = arm.matrix_world
+    up, lo = pb["upperarm_" + s], pb["lowerarm_" + s]
+    L = (up.length + lo.length) * 0.985
+    cl = pb["clavicle_" + s]
+    for _ in range(6):
+        bpy.context.view_layer.update()
+        sh = W @ up.head
+        gap = (target_w - sh).length - L
+        if gap <= 0.003:
+            return gap
+        c0 = W @ cl.head
+        a, b = (sh - c0), (target_w - c0)
+        ax = a.cross(b)
+        if ax.length < 1e-6:
+            return gap
+        step = min(math.radians(max_deg) / 3, gap / max(a.length, 1e-3) * 1.2)
+        if math.degrees(cl.rotation_quaternion.angle) > max_deg:
+            return gap
+        Wi = W.to_3x3().inverted()
+        ax_l = (Wi @ ax).normalized()                  # вісь у просторі арматури
+        h = cl.head.copy()
+        cl.matrix = Matrix.Translation(h) @ Quaternion(ax_l, step).to_matrix().to_4x4() @ Matrix.Translation(-h) @ cl.matrix
+    bpy.context.view_layer.update()
+    return (target_w - W @ up.head).length - L
 
 
 def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
@@ -599,8 +646,8 @@ def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
     # кандидати осі: пальці за картою, повернуті навколо нормалі шкіри (±25°) і з піднятими кінчиками (0..30°) —
     # обираємо без проникнення руки, далі — найменша похибка долоні (вісь не «вгадується», а перевіряється)
     for up_sign in (1.0, -1.0):
-        for yaw in (0.0, -25.0, 25.0):
-            for lift in (0.0, 15.0, 30.0):
+        for yaw in (0.0, -25.0, 25.0, -50.0, 50.0):
+            for lift in (0.0, 15.0, 30.0, 45.0):
                 w2 = Quaternion(nrm, math.radians(yaw)) @ want
                 w2 = Quaternion(w2.cross(nrm).normalized(), math.radians(-lift)) @ w2
                 up = (thumb_world - nrm * thumb_world.dot(nrm))
@@ -624,6 +671,7 @@ def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
     e.location, e.rotation_quaternion = best[1], best[2]
     ik.influence = 1.0
     bpy.context.view_layer.update()
+    reach_with_clavicle(arm, s, e.location)
     # лікоть: кандидати навколо осі плече—кисть; найменше проникнення руки, далі — висота ліктя
     sh = W @ arm.pose.bones["upperarm_" + s].head
     wr = e.location.copy()
@@ -647,15 +695,32 @@ def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
     el.location = cands[0][2]
     bpy.context.view_layer.update()
     # якщо рука все ще торкається тіла глибше за шкіру — відсунути долоню по нормалі шкіри (до 3 см), не в тіло
-    pen = cands[0][0]
+    pen = _hand_pen(arm, s, ot)                 # підйом — лише якщо в тілі сама кисть (передпліччя — справа ліктя)
     lifted = 0.0
     while pen > 0 and lifted < 0.03:
         e.location = e.location + nrm * 0.005
         lifted += 0.005
         bpy.context.view_layer.update()
-        pen = _arm_pen(arm, s, ot)
-    cands[0] = (pen,) + cands[0][1:]
+        pen = _hand_pen(arm, s, ot)
+    cands[0] = (_arm_pen(arm, s, ot),) + cands[0][1:]
     return {"кут_долоні": round(best[0][1]), "проникнення_руки": cands[0][0]}
+
+
+def tuck_thumb(arm, s, k=0.85):
+    """Великий палець — уздовж вказівного (кисть «лопаткою»): на шиї він інакше впирається в потилицю суперника."""
+    pb = arm.pose.bones
+    bpy.context.view_layer.update()
+    idx = pb["index_01_" + s]
+    want = (idx.tail - idx.head).normalized()
+    for k_ in ("01", "02"):
+        b = pb[f"thumb_{k_}_{s}"]
+        d = (b.tail - b.head).normalized()
+        ax = d.cross(want)
+        if ax.length < 1e-6:
+            continue
+        R = b.matrix.to_3x3()
+        b.rotation_quaternion = b.rotation_quaternion @ Quaternion((R.inverted() @ ax.normalized()).normalized(), d.angle(want) * k)
+        bpy.context.view_layer.update()
 
 
 def place_hands(mv):
@@ -664,5 +729,7 @@ def place_hands(mv):
     for tag in ("A", "B"):
         for limb, spec in mv["hold"].items():
             if limb.startswith("hand_"):
+                if spec.get("thumb") == "притиснутий":
+                    tuck_thumb(LAB["arm" + tag], limb[-1])
                 out[f"{tag}.{limb}"] = place_hand(tag, limb[-1], spec)
     return out
