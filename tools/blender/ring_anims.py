@@ -1003,7 +1003,7 @@ SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "han
 
 # Пороги §4.1 плану (docs/TRPG_DESIGN.md §11.2): у см, градусах; ривок — лише у звіт.
 LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0,
-          "hand_jump": 25.0}                                        # см за кадр (30 к/с) — 7,5 м/с
+          "hand_jump": 25.0, "rope": 2.0}                                        # см за кадр (30 к/с) — 7,5 м/с
 JERK_WARN = 6.0        # °/кадр² — пік кутового прискорення кістки
 
 def quality(name, framesA, framesB, bases):
@@ -1076,6 +1076,26 @@ def quality(name, framesA, framesB, bases):
                 if d_ > jump:
                     jump, jwh = d_, f"{tag}.{hb}, кадр {fi}"
     q["hand_jump"] = (jump * 100.0, jwh)
+    # канати (кліпи з ROPE_CHECK): точки тіла не за площиною каната з урахуванням його прогину — інакше тіло
+    # «проходить крізь канат» (власник 29.10.2026). Кисті, що тримають канат, не рахуються.
+    rope, rwh = 0.0, ""
+    rc = ROPE_CHECK.get(name) if "ROPE_CHECK" in globals() else None
+    if rc:
+        rope_y, sink_at = rc
+        for fi, (_, w) in enumerate(framesA):
+            d_now = sink_at(fi / FPS)
+            for n_ in CONTACT_BONES:
+                if n_ in ("hand_l", "hand_r", "lowerarm_l", "lowerarm_r"):
+                    continue
+                for pt in w[n_]:
+                    if pt.z < 0.3:
+                        continue
+                    x = max(-1.0, min(1.0, pt.x / 2.1))
+                    plane = rope_y - d_now * (1.0 - x * x)
+                    v = plane - (pt.y - RADIUS.get(n_, 0.05))
+                    if v > rope:
+                        rope, rwh = v, f"A.{n_}, кадр {fi}"
+    q["rope"] = (rope * 100.0, rwh)
     # ривки: пік кутового прискорення локального повороту кістки
     jerk, jwhere = 0.0, ""
     for tag, seq in bases:
@@ -1096,7 +1116,7 @@ def qangle(a, b):
 
 def fails(q):
     out = []
-    for k in ("slide", "pen", "self", "under", "reach", "hand_jump"):
+    for k in ("slide", "pen", "self", "under", "reach", "hand_jump", "rope"):
         if k in q and q[k][0] > LIMITS[k] + 1e-6:
             out.append(k)
     if "node" in q and (q["node"][0] > LIMITS["node_deg"] or q["node"][1] > LIMITS["node_cm"]):
@@ -1287,6 +1307,8 @@ def main():
                   f"таз {dz:.1f} см", flush=True)
         bad = fails(q)
         state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
+        if q.get("rope", (0, ""))[0] > LIMITS["rope"]:
+            state += f" · за канатом {q['rope'][0]:.0f} см ({q['rope'][1]})"
         if q["hand_jump"][0] > LIMITS["hand_jump"]:
             state += f" · кисть стрибнула {q['hand_jump'][0]:.0f} см ({q['hand_jump'][1]})"
         if q["jerk"][0] > JERK_WARN:

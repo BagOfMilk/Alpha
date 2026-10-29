@@ -42,9 +42,9 @@ def reb_plan(R):
     D = ROPE_D
     sd = R.side
     face = {"side": -90.0 * sd, "back": -180.0, "chest": 0.0}[R.hit]
-    ret_face = -180.0 if R.ret else face
+    ret_face = (180.0 if face > 0 else -180.0) if R.ret else face   # розворот коротшим боком
     rope_y = -(D + 0.12)
-    gap = {"side": 0.17, "back": 0.17, "chest": 0.22}[R.hit]       # таз від лінії каната в мить контакту
+    gap = {"side": 0.3, "back": 0.36, "chest": 0.4}[R.hit]          # таз від каната в мить дотику: плече й рука — не за канатом
     T = dict(hit=0.66 * k, sink=0.8 * k, push=(0.94 + h) * k, end=(1.62 + h) * k if R.ret else (1.3 + h) * k)
     path_y = [(0.0, 0.0), (0.14 * k, -0.12), (0.5 * k, -(D - 0.55)), (T["hit"], rope_y + gap),
               (T["sink"], rope_y + gap - R.sink), (T["push"], rope_y + gap)]
@@ -89,7 +89,7 @@ def reb_plan(R):
 def rebound_pose(t, L, R):
     T, path_y, path_yaw, falls, face, rope_y = reb_plan(R)
     yaw = track(t, path_yaw)
-    on = track(t, [(0.0, 0.0), (T["hit"] - 0.2, 0.0), (T["hit"], 1.0), (T["push"], 1.0), (T["push"] + 0.24, 0.0), (L, 0.0)])   # рука до каната — 0,2 с, не стрибком
+    on = track(t, [(0.0, 0.0), (T["hit"] - 0.2, 0.0), (T["hit"], 1.0), (T["push"], 1.0), (T["push"] + 0.34, 0.0), (L, 0.0)])   # рука до каната — 0,2 с, з каната — 0,34 с
     run = 1.0 - on
     ret_t = max(0.0, t - T["push"])
     duck = R.duck * smooth(min(1.0, ret_t / 0.2)) if R.ret else 0.0
@@ -97,12 +97,15 @@ def rebound_pose(t, L, R):
     bob = 0.025 * math.cos(2 * math.pi * t / 0.33) * run
     p.pelvis = Vector((0.0, track(t, path_y), -0.07 - bob - 0.14 * on - 0.06 * R.crouch * on - 0.03 * R.heavy - 0.08 * duck))
     p.pelvis_yaw = yaw
-    hit_tilt = {"side": -2.0, "back": -14.0, "chest": 22.0}[R.hit]
+    hit_tilt = {"side": -2.0, "back": -8.0, "chest": 10.0}[R.hit]
     p.pitch = (R.lean + 4.0 * R.heavy) * run + hit_tilt * on + 30.0 * duck
-    p.roll = (22.0 * R.side if R.hit == "side" else 0.0) * on       # плече в канати
+    # плече в канати — лише трохи: більший крен виносить голову й шию за канат (власник 29.10.2026, кадр «крізь канат»)
+    p.roll = (6.0 * R.side if R.hit == "side" else 0.0) * on
     p.yaw = -6.0 * math.cos(2 * math.pi * t / 0.66) * run
-    p.head_pitch = -6.0
-    p.head_yaw = 0.0
+    p.head_pitch = -6.0 + 10.0 * on                                 # біля канатів — підборіддя трохи вниз, не закидати
+    # погляд: на розбігу — куди біжить; біля канатів — через плече в центр ринга (суперник, зворотний біг)
+    look_c = face - 65.0 * R.side if R.hit == "side" else (face if R.hit == "back" else 0.0)
+    p.head_yaw = yaw * (1 - on) + look_c * on
     fl, yl = foot_plan_track(t, falls["l"])
     fr, yr = foot_plan_track(t, falls["r"])
     p.ankles = (fl, fr)
@@ -117,21 +120,30 @@ def rebound_pose(t, L, R):
             grab = (s_ == near) if R.hit == "side" else True
             if not grab:
                 # вільна рука: розслаблено вниз і трохи назад (не на груди), або вгору — до публіки
-                tgt = S[s_] + Rz(yaw) @ (Vector((0.1 * sg, -0.12, 0.42)) if R.arm_up else Vector((0.16 * sg, 0.08, -0.5)))
+                tgt = S[s_] + Rz(yaw) @ (Vector((0.1 * sg, -0.12, 0.42)) if R.arm_up else Vector((0.18 * sg, -0.06, -0.34)))
                 return lerp(free, tgt, on)
             hz = ROPE_H[2] - (0.02 if R.grip == "hand" else 0.14)
             side_off = Rz(yaw) @ Vector((0.18 * sg, 0.0, 0.0)) if R.hit != "side" else Vector()
             # хват — на канаті попереду тіла (уздовж каната, куди дивиться борець), не біля самого плеча
             fwd_w = Rz(yaw) @ Vector((0.0, -1.0, 0.0))
-            along = -fwd_w.x * (0.3 if R.hit == "side" else 0.0)
+            along = fwd_w.x * (0.28 if R.hit == "side" else 0.0)        # трохи попереду плеча
             rope = Vector((S[s_].x + side_off.x + along, rope_y + 0.04, hz))
             # дуга: кисть іде до каната збоку-зверху, не крізь тіло
-            arc = Rz(yaw) @ Vector((0.12 * sg, 0.0, 0.1)) * math.sin(math.pi * on)
+            arc = Rz(yaw) @ Vector((0.3 * sg, 0.0, 0.12)) * math.sin(math.pi * on)   # дугою збоку, не крізь тулуб
             return lerp(free, rope, on) + arc
         return g
     p.hands = {s_: (hand(s_), FWD.lerp(DOWN, on), LEFT if s_ == "l" else RIGHT) for s_ in "lr"}
-    p.elbows = {"l": lambda S: S["l"] + Rz(yaw) @ Vector((0.16 + 0.12 * on, 0.32 - 0.07 * on, -0.28 + 0.45 * on)),
-                "r": lambda S: S["r"] + Rz(yaw) @ Vector((-0.16 - 0.12 * on, 0.32 - 0.07 * on, -0.28 + 0.45 * on))}
+    near_s = "l" if R.side > 0 else "r"
+    def elbow(s_):
+        sg = 1 if s_ == "l" else -1
+        grab = (s_ == near_s) if R.hit == "side" else True
+        def e(S):
+            run_el = S[s_] + Rz(yaw) @ Vector((0.16 * sg, 0.32, -0.28))
+            # лікоть — з боку рингу (до центру, +Y простору ригу) і вниз: рука не виходить за канат
+            rope_el = S[s_] + (Vector((0.0, 0.35, -0.3)) if grab else Rz(yaw) @ Vector((0.2 * sg, 0.2, -0.35)))
+            return run_el.lerp(rope_el, on)                                   # лікоть униз-назад, не за голову
+        return e
+    p.elbows = {s_: elbow(s_) for s_ in "lr"}
     p.fist = {"l": 0.55, "r": 0.55}
     return p
 
@@ -188,7 +200,7 @@ def rebound_full(t, L, R):
     contact_y = track(T["hit"], path_y)
     tau_hit = abs(contact_y) / v
     hit, push = T["hit"], T["push"]
-    wc = track(t, [(0.0, 0.0), (hit - 0.16, 0.0), (hit, 1.0), (push, 1.0), (push + 0.16, 0.0), (L + 1.0, 0.0)])
+    wc = track(t, [(0.0, 0.0), (hit - 0.2, 0.0), (hit, 1.0), (push, 1.0), (push + 0.26, 0.0), (L + 1.0, 0.0)])
     c = rebound_pose(t, L, R)
     if t < push:
         a = run_at(tau_hit * _warp(t / hit) if t < hit else tau_hit + v * 0 + (t - hit) * 0.0, 0.0, 0.0, RL)
@@ -196,9 +208,16 @@ def rebound_full(t, L, R):
     if not R.ret:
         return c
     tr = (t - push) / 0.25
-    b = run_at(0.25 * _warp(tr) if tr < 1 else 0.25 * (tr - 0.5) + 0.125, contact_y, 180.0, RL)
+    b = run_at(0.25 * _warp(tr) if tr < 1 else 0.25 * (tr - 0.5) + 0.125, contact_y, (180.0 if R.side < 0 and R.hit == "side" else -180.0), RL)   # −180, не 180: змішування кутів з фазою відскоку (−90…−180) без перекруту
     return blend_pose(b, c, wc) if wc > 0.0 else b
 
 MOVE_CLIPS[:] = [c if not any(c[0] == r.name for r in REBS) else
                  (c[0], c[1], (lambda t, L, r=next(r for r in REBS if r.name == c[0]): rebound_full(t, L, r)), None, False, None, 0)
                  for c in MOVE_CLIPS]
+
+# перевірка «крізь канат» у генераторі: лінія каната й прогин у часі для кожного варіанту
+def _sink_fn(R):
+    T = reb_plan(R)[0]
+    return lambda tt: track(tt, [(0.0, 0.0), (T["hit"], 0.0), (T["sink"], R.sink), (T["push"], R.sink * 0.6),
+                                 (T["push"] + 0.15, 0.0), (99.0, 0.0)])
+ROPE_CHECK = {r.name: (-(ROPE_D + 0.12), _sink_fn(r)) for r in REBS}
