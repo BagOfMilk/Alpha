@@ -984,6 +984,34 @@ def fails(q):
         out.append("node")
     return out
 
+# ---------------------------------------------------------------- перекриття (ітерація 1 «як в АА», 29.10.2026)
+# Власник: «делай тогда в блендере анимации такие как в АА играх». Живе тіло не рухається всіма ланками разом: хребет,
+# шия й голова, а в кліпах без хватки — і руки, відстають від таза на частки кадру, тож рух «тече» по ланцюгу (перекриття,
+# гасіння інерції). Зсув лише кривих повороту верхніх ланок: ноги, таз і стопи не змінюються — опора й ковзання ті самі.
+LAG_BODY = {"spine_02": 0.7, "spine_03": 1.4, "neck_01": 2.2, "head": 3.0}
+LAG_ARMS = {"clavicle_l": 1.2, "clavicle_r": 1.2, "upperarm_l": 1.8, "upperarm_r": 1.8,
+            "lowerarm_l": 2.8, "lowerarm_r": 2.8, "hand_l": 3.8, "hand_r": 3.8}
+# кліпи, де руки тримають партнера, канат чи мат — руки без зсуву, інакше хватка «пливе»
+HOLDS = ("Lockup", "Headlock", "Bodyslam", "Cover", "Forearm", "Raise", "Rope", "Corner", "Count_Pin", "Ask")
+
+def overlap(act, clip, loop):
+    import re
+    lags = dict(LAG_BODY)
+    if not any(h in clip for h in HOLDS):
+        lags.update(LAG_ARMS)
+    f0, f1 = act.frame_range
+    span = f1 - f0
+    for fc in act.fcurves:
+        m = re.match(r'pose\.bones\["(.+)"\]\.rotation_quaternion', fc.data_path)
+        if not m or m.group(1) not in lags:
+            continue
+        lag = lags[m.group(1)]
+        ev = lambda fr: fc.evaluate(f0 + ((fr - f0) % span) if loop else max(f0, fr))
+        vals = [ev(k.co[0] - lag) for k in fc.keyframe_points]
+        for k, v in zip(fc.keyframe_points, vals):
+            k.co[1] = k.handle_left[1] = k.handle_right[1] = v
+        fc.update()
+
 # ---------------------------------------------------------------- запуск
 
 def bake_clip(rigA, rigB, name, length, fa, fb):
@@ -1126,6 +1154,10 @@ def main():
     strip_constraints(rigA)
     strip_constraints(rigB)
     actions = {n: write_action(arm, n, s_) for n, s_, arm in samples}
+    loop_of = {c[0]: c[4] for c in CLIPS}
+    for n, act in actions.items():
+        base = n[:-2] if n.endswith(("_A", "_B")) else n
+        overlap(act, base, loop_of.get(base, False))
     if REELS:
         for name, an, bn, offset, yaw in reel_specs:
             reel(name, armA, armB, actions[an], actions.get(bn) if bn else None, offset, yaw)
