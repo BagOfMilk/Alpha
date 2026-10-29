@@ -443,3 +443,23 @@ def save_clip(name=None):
     with open(p, "w", encoding="utf-8") as fh:
         json.dump(out, fh, separators=(",", ":"))
     return p
+
+
+def surface_frame(arm, bone, along, from_local, palm=0.025, down_bone=("spine_03", "spine_02")):
+    """Як surface_point, але ще й рамка долоні: (точка, нормаль назовні, дотична «вниз уздовж тіла» — від кістки
+    down_bone[0] до down_bone[1]). Пальці кладуться по дотичній, долоня — на нормаль (не в тіло)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    whole = _bvh(_meshes(arm), dg)
+    pb = arm.pose.bones[bone]
+    W = arm.matrix_world
+    c = W @ (pb.head + (pb.tail - pb.head) * along)
+    d = (W.to_3x3() @ Vector(from_local)).normalized()
+    hit = whole.ray_cast(c + d * 0.35, -d, 0.6)
+    if hit[0] is None:
+        p, n = c + d * 0.08, d
+    else:
+        p, n = hit[0] + hit[1] * palm, hit[1].normalized()
+    a, b = arm.pose.bones[down_bone[0]], arm.pose.bones[down_bone[1]]
+    down = (W @ b.head) - (W @ a.tail)
+    tan = (down - n * down.dot(n)).normalized()
+    return p, n, tan

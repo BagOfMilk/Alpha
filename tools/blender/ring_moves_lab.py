@@ -8,7 +8,7 @@ import ring_lab
 G = ring_lab.G
 
 LOCKUP_START = 1.18        # м між тазами на старті (стійка навпроти)
-LOCKUP_FWD = 0.33          # кожен проходить назустріч: плечі майже впритул (рука на шиї — зігнута)
+LOCKUP_FWD = 0.31          # кожен проходить назустріч: плечі майже впритул (рука на шиї — зігнута)
 NECK_OUT = {"l": (0.0, -1.0, 0.35)}   # кисть на шиї виходить з тіла за шию (назад і вгору), не на горло
 
 
@@ -28,10 +28,19 @@ APART = [0.0]               # додатковий розхід пари вбі�
 def neck_surface():
     """Точки долоні на шкірі потилиці партнера для обох (ліва кисть): промінь ззаду-згори до основи шиї."""
     A, B = ring_lab.LAB["armA"], ring_lab.LAB["armB"]
-    pa = ring_lab.surface_point(B, "neck_01", 0.2, (0.0, 1.0, 0.25))     # потилиця B (його «назад» — +Y ригу)
-    pb = ring_lab.surface_point(A, "neck_01", 0.2, (0.0, 1.0, 0.25))
-    SURF["A"] = ring_lab.to_rig(A, pa)
-    SURF["B"] = ring_lab.to_rig(B, pb)
+    # основа шиї й верх трапеції ззаду: суперник нахилений уперед, тож промінь іде згори-ззаду до верху хребта —
+    # ззаду-згори до шиї він влучав у потилицю голови, і долоня лягала на маківку (власник 29.10.2026)
+    for me, ot, k in ((A, B, "A"), (B, A, "B")):
+        pw, nw, tw = ring_lab.surface_frame(ot, "spine_03", 0.9, (0.0, 1.0, 0.2))   # «назад» партнера — +Y його ригу
+        R = me.matrix_world.to_3x3().inverted()
+        SURF[k] = ring_lab.to_rig(me, pw)
+        SURF[k + "_n"] = (R @ nw).normalized() * (1.0 if k == "A" else -1.0)   # B дзеркальний: інакше великий палець — у тіло
+        SURF[k + "_t"] = (R @ tw).normalized()            # уздовж спини суперника донизу
+    # під ліктем руки суперника, що лежить на моїй шиї: промінь знизу до суглоба — кисть охоплює лікоть знизу
+    ea = ring_lab.surface_point(B, "lowerarm_l", 0.06, (0.0, 0.0, -1.0), palm=0.03)
+    eb = ring_lab.surface_point(A, "lowerarm_l", 0.06, (0.0, 0.0, -1.0), palm=0.03)
+    SURF["A_r"] = ring_lab.to_rig(A, ea)
+    SURF["B_r"] = ring_lab.to_rig(B, eb)
 
 
 def tie(fwd, grip=1.0, push=0.0, hold_head=1.0, role=None):
@@ -41,13 +50,13 @@ def tie(fwd, grip=1.0, push=0.0, hold_head=1.0, role=None):
     def f(Pt):
         P_ = G["P"]
         FWD, DOWN, UP, LEFT, RIGHT = G["FWD"], G["DOWN"], G["UP"], G["LEFT"], G["RIGHT"]
-        p = _base(fwd + 0.04 * push, crouch=0.13 * hold_head)
-        p.pelvis = p.pelvis + Vector((0.19 * hold_head, 0.1 * hold_head, 0.0))
-        p.pitch = 16.0 + 32.0 * hold_head + 5.0 * push
-        p.roll = -4.0 * hold_head
-        p.yaw = -10.0 * hold_head + 4.0 * push
-        p.head_yaw = -40.0 * hold_head
-        p.head_pitch = -10.0 - 2.0 * hold_head
+        p = _base(fwd + 0.04 * push, crouch=0.09 * hold_head)
+        p.pelvis = p.pelvis + Vector((-0.17 * hold_head, 0.1 * hold_head, 0.0))   # голови — праворуч, рука на шиї — ліворуч, вільно
+        p.pitch = 16.0 + 18.0 * hold_head + 5.0 * push
+        p.roll = 4.0 * hold_head
+        p.yaw = 10.0 * hold_head + 4.0 * push
+        p.head_yaw = 38.0 * hold_head
+        p.head_pitch = -6.0 + 6.0 * hold_head
         p.ankles = (G["foot"](0.2 + 0.1 * hold_head, -0.105 - fwd - 0.055 * hold_head),
                     G["foot"](-0.2 + 0.02 * hold_head, 0.075 - fwd + 0.145 * hold_head))
         p.forced = {"l"} if grip > 0.5 else set()
@@ -55,20 +64,37 @@ def tie(fwd, grip=1.0, push=0.0, hold_head=1.0, role=None):
         arc = math.sin(math.pi * grip)
         def hl(S):
             t = (SURF.get(role) if grip > 0.6 else None) or P_(S, "neck_01", 0.15, Vector((-0.02, -0.07, 0.0))) or (S["l"] + base["l"])
-            return (S["l"] + base["l"]).lerp(t, grip) + Vector((0.06, 0.0, 0.12)) * arc      # дуга вгору й назовні
+            return (S["l"] + base["l"]).lerp(t, grip) + Vector((0.1, 0.04, 0.2)) * arc       # дуга вгору й назовні — над плечем суперника
         def hr(S):
-            t = P_(S, "lowerarm_l", 0.02, Vector((0.0, 0.0, -0.05))) or (S["r"] + base["r"])          # лікоть руки суперника на моїй шиї, знизу
+            t = (SURF.get(f"{role}_r") if grip > 0.6 else None) or P_(S, "lowerarm_l", 0.02, Vector((0.0, 0.0, -0.05))) or (S["r"] + base["r"])          # лікоть руки суперника на моїй шиї, знизу
             return (S["r"] + base["r"]).lerp(t, grip) + Vector((-0.05, 0.0, -0.04)) * arc
         _, fl, ul = p.hands["l"]; _, fr, ur = p.hands["r"]
         # долоня на основі шиї ззаду: пальці — донизу по спині суперника, великий палець — убік
-        p.hands = {"l": (hl, fl.lerp(DOWN + FWD * 0.15, grip), ul.lerp(RIGHT, grip)),
+        # пальці — уздовж спини суперника (дотична), долоня — на шкіру; великий палець — убік (перпендикуляр)
+        tl = SURF.get(f"{role}_t") if grip > 0.6 else None
+        nl = SURF.get(f"{role}_n") if grip > 0.6 else None
+        fore_l = tl if tl is not None else DOWN + FWD * 0.15
+        up_l = nl.cross(tl) if (tl is not None and nl is not None) else RIGHT
+        p.hands = {"l": (hl, fl.lerp(fore_l, grip), ul.lerp(up_l, grip)),
                    "r": (hr, fr.lerp(FWD + LEFT * 0.4 + UP * 0.2, grip), ur.lerp(LEFT * 0.4 + UP, grip))}   # долоня вгору під лікоть
         el = p.elbows
-        p.elbows = {"l": lambda S: el["l"](S).lerp(S["l"] + Vector((-0.12, -0.45, -0.45)), grip),   # лікоть спереду-внизу, перед грудьми суперника
+        p.elbows = {"l": lambda S: el["l"](S).lerp(S["l"] + Vector((-0.1, -0.35, -0.75)), grip),   # лікоть спереду-внизу, перед грудьми суперника
                     "r": lambda S: el["r"](S).lerp(S["r"] + Vector((-0.4, 0.05, -0.3)), grip)}
-        p.fist = {"l": 0.25 - 0.1 * grip, "r": 0.25 + 0.55 * grip}          # на шиї — пальці зімкнені, на лікті — охоплюють          # на шиї — пальці зімкнені, майже прямі
+        p.fist = {"l": 0.25 - 0.1 * grip, "r": 0.25 + 0.35 * grip}          # на шиї — пальці зімкнені, на лікті — охоплюють          # на шиї — пальці зімкнені, майже прямі
         return p
     return f
+
+
+def settle_pair(rounds=6, ok=0.01):
+    """Посадка кистей обох по черзі (посадка одного зсуває руки другого), доки залишок кожного ≤ ok або вичерпано
+    кола; наприкінці — перевірка по всьому тілу (depth2) і ще коло, якщо щось лишилось."""
+    for _ in range(rounds):
+        a = ring_lab.settle("A"); b = ring_lab.settle("B")
+        if max(list(a.values()) + list(b.values())) <= ok * 100:
+            a2 = ring_lab.settle("A")
+            if max(a2.values()) <= ok * 100:
+                return True
+    return False
 
 
 def stance_at(fwd=0.0, crouch=0.0, pitch=None):
@@ -106,7 +132,7 @@ def lockup_frames(fps=30, settle=True):
     fwd = [(0, 0.0), (6, -0.03), (12, d * 0.45), (17, d * 0.9), (20, d * 0.84), (26, d), (72, d)]
     grip = [(0, 0.0), (8, 0.0), (17, 0.9), (22, 1.0), (72, 1.0)]
     head = [(0, 0.0), (6, 0.0), (12, 0.3), (17, 0.8), (26, 1.0), (72, 1.0)]
-    push = [(0, 0.0), (17, 0.0), (20, -0.6), (26, 0.0), (40, 1.0), (54, -0.8), (66, 0.3), (72, 0.0)]
+    push = [(0, 0.0), (17, 0.0), (20, -0.3), (26, 0.0), (40, 0.7), (54, -0.6), (66, 0.25), (72, 0.0)]
     crouch = [(0, 0.0), (6, 0.06), (12, 0.02), (72, 0.0)]          # 2 передчуття: присід перед кроком
     n = 72
     out = {"A": [], "B": []}
@@ -118,8 +144,8 @@ def lockup_frames(fps=30, settle=True):
         def mk(sign):
             def pose(Pt):
                 p = tie(fw, ga, push=sign * pu, hold_head=h, role="A" if sign > 0 else "B")(Pt)
-                p.pelvis = p.pelvis + Vector((APART[0], 0, -c))
-                p.head_yaw -= APART[0] * 150.0
+                p.pelvis = p.pelvis + Vector((-APART[0], 0, -c))
+                p.head_yaw += APART[0] * 150.0
                 return p
             return pose
         APART[0] = 0.0
@@ -129,12 +155,11 @@ def lockup_frames(fps=30, settle=True):
             if ga > 0.6:                             # шкіра потилиці партнера — з уже поставленої пари, і ще раз
                 neck_surface()
                 ring_lab.solve(mk(1.0), mk(-1.0))
-            if h < 0.5 or ring_lab.part_depth("body_head", "body_head") <= 0.012:
+            if h < 0.5 or ring_lab.part_depth("body_head", "body_head") <= 0.008:
                 break
             APART[0] += 0.012
-        if settle and ga > 0.05:
-            for _ in range(3):                       # по черзі: посадка одного зсуває руки другого
-                ring_lab.settle("A"); ring_lab.settle("B")
+        if settle and ga > 0.05:                     # посадка кистей (у хваті — точки на шкірі, лише доведення)
+            settle_pair()
         out["A"].append(ring_lab.capture("A")); out["B"].append(ring_lab.capture("B"))
     ring_lab.LAB["frames"] = out
     ring_lab.LAB["contacts"] = []
