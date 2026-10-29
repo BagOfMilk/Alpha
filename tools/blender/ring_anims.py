@@ -405,10 +405,17 @@ def clip_headlock_b(t, L, partner=None):
     # B зігнутий уперед (голова під пахвою A), таз відведений назад, ноги широко для опору
     p.ankles = steps(t, [(0.0, (0.2, -0.105)), (0.3, (0.2, -0.105)), (0.6, (0.28, 0.02))],
                         [(0.0, (-0.2, 0.075)), (0.45, (-0.2, 0.075)), (0.75, (-0.24, 0.24))])
-    p.pelvis = Vector((0.06 * k, 0.26 * k, -0.2 - 0.04 * sq))
-    p.pitch = 18.0 + 60.0 * k
-    p.head_pitch = 15.0 * k
-    p.head_yaw = -20.0 * k
+    # «продаж» захвату: на кожному стисканні A коліна просідають і тіло смикається; між ними — викручується,
+    # шукаючи вихід (тулуб і таз ходять у протифазі), голова тисне з-під пахви
+    fight = smooth((t - 0.75) / 0.4) if t > 0.75 else 0.0
+    w = math.sin(2 * math.pi * max(0.0, t - 0.7) / 0.9)
+    jolt = hit_spring(t % 0.75 + 0.7, 0.7, w=18.0, z=0.4) * fight if t > 0.7 else 0.0
+    p.pelvis = Vector((0.06 * k + 0.04 * w * fight, 0.26 * k, -0.2 - 0.06 * sq * fight - 0.02 * jolt))
+    p.pitch = 18.0 + 60.0 * k + 6.0 * jolt
+    p.roll = 9.0 * w * fight
+    p.yaw = -7.0 * w * fight
+    p.head_pitch = 15.0 * k + 6.0 * jolt
+    p.head_yaw = -20.0 * k + 8.0 * w * fight
     p.forced = set()
     p.hands = {
         # обидві руки чіпляються за руку A, що тримає голову
@@ -450,7 +457,16 @@ def clip_slam_b(t, L, partner=None):
         kk = (k - 3.0)
         fall = kk * kk                                             # падіння прискорюється
         pel, q = lerp(carry_abs, mat_abs, fall), q_carry
-    p = body(off_for(pel), q, knee_bend=0.25)
+    T_LAND = 1.68
+    sell = smooth((t - T_LAND - 0.15) / 0.4) if t > T_LAND else 0.0
+    writhe = math.sin(2 * math.pi * max(0.0, t - T_LAND) / 1.1)
+    air = math.sin(2 * math.pi * t / 0.5) if 1.0 < k < 3.6 else 0.0
+    p = body(off_for(pel), q, knee_bend=0.25 + 0.12 * air + 0.45 * sell * (0.6 + 0.4 * writhe))
+    bang = hit_spring(t, T_LAND, w=16.0, z=0.3)
+    if k >= 3.9:
+        p.pelvis = p.pelvis + q @ Vector((0.0, 0.0, -0.03 * max(0.0, -bang)))          # підкидає від мату
+        p.pitch = -16.0 * bang + 10.0 * sell                                          # прогин, потім згортається
+        p.roll = 12.0 * writhe * sell
     if k < 1.0:                                                    # спочатку стоїть ногами на маті
         kk = smooth(k)
         p.ankles = (lerp(foot(0.16, -0.015), p.ankles[0], kk * 0.2), lerp(foot(-0.16, -0.015), p.ankles[1], kk * 0.2))
@@ -458,15 +474,17 @@ def clip_slam_b(t, L, partner=None):
     elif k < 2.0:
         kk = smooth(k - 1.0)
         p.ankles = (lerp(foot(0.16, -0.015), p.ankles[0], 0.2 + 0.8 * kk), lerp(foot(-0.16, -0.015), p.ankles[1], 0.2 + 0.8 * kk))
-    p.head_pitch = -20.0 if k >= 2.0 else 10.0
     land = smooth((k - 3.85) / 0.15) if k > 3.0 else 0.0
+    # удар об мат: підборіддя до грудей (голова не б'ється об мат), потім піднімає голову, корчачись
+    p.head_pitch = (-20.0 if k >= 2.0 else 10.0) + (40.0 * abs(bang) + 25.0 * land if k >= 3.6 else 0.0) + 18.0 * sell
+    p.head_yaw = 18.0 * writhe * sell
     if k < 3.6:
         # руки тримаються за спину й плечі A
         p.hands = {"l": (lambda S: P(S, "spine_03", 0.6, Vector((0.12, 0.08, 0.0))) or S["l"], FWD, UP),
                    "r": (lambda S: P(S, "upperarm_l", 0.2, Vector((0.0, 0.06, 0.04))) or S["r"], FWD, UP)}
         p.fist = {"l": 0.5, "r": 0.5}
     else:
-        arms_on_mat(p, q, lift_l=0.3 * (1 - land), lift_r=0.3 * (1 - land))
+        arms_on_mat(p, q, lift_l=0.3 * (1 - land) + 0.5 * sell * max(0.0, writhe), lift_r=0.3 * (1 - land) + 0.6 * sell)
     return p
 
 def clip_slam_a(t, L, partner=None):
@@ -506,7 +524,15 @@ def cover_k(t):
 def clip_cover_b(t, L, partner=None):
     k = cover_k(t)
     kick = smooth(k - 1.0) if k > 1.0 else 0.0
-    p = lying(sit=0.45 * kick, knee_bend=0.2 + 0.3 * kick)
+    pinned = smooth((t - 0.6) / 0.3) if t > 0.6 else 0.0
+    grow = min(1.0, max(0.0, (t - 0.6) / 1.4))                      # чим ближче «три», тим відчайдушніше
+    w = math.sin(2 * math.pi * t / (0.7 - 0.25 * grow))
+    struggle = pinned * (1 - kick) * (0.4 + 0.6 * grow)
+    p = lying(sit=0.45 * kick + 0.08 * struggle * max(0.0, w), knee_bend=0.2 + 0.3 * kick + 0.3 * struggle * (0.5 + 0.5 * w))
+    p.roll = 8.0 * struggle * w
+    p.head_yaw = 25.0 * struggle * math.sin(2 * math.pi * t / 0.9)
+    arms_on_mat(p, Quaternion(UP, 0.0) @ Q_BACK, lift_l=0.45 * kick + 0.4 * struggle * max(0.0, w),
+                lift_r=0.27 * kick + 0.4 * struggle * max(0.0, -w))
     return p
 
 def clip_cover_a(t, L, partner=None):
@@ -1178,7 +1204,10 @@ def main():
             look_pair(name, armA, armB if fb is not None else None, sa, sb, length)
     strip_constraints(rigA)
     strip_constraints(rigB)
-    actions = {n: write_action(arm, n, s_) for n, s_, arm in samples}
+    # Усі дії — на риг A: експорт іде з нього, а дія пам'ятає слот ригу, на якому її записано (Blender 4.4+).
+    # Дії B, записані на риг B, у FBX виходили позою спокою — жертва в грі не рухалась (знайдено 29.10.2026).
+    # Пози в просторі ригу, скелети однакові — тож запис на A дає ту саму дію.
+    actions = {n: write_action(armA, n, s_) for n, s_, arm in samples}
     loop_of = {c[0]: c[4] for c in CLIPS}
     for n, act in actions.items():
         base = n[:-2] if n.endswith(("_A", "_B")) else n
