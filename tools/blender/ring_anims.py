@@ -961,6 +961,7 @@ CLIP_CONTACTS = {
 
 # Партія 1 (рух борця й рефері) — окремий файл, ті самі хелпери.
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_move.py"), encoding="utf-8").read())
+exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_run.py"), encoding="utf-8").read())
 CLIPS += MOVE_CLIPS
 CLIP_NODES.update(MOVE_CLIP_NODES)
 CLIP_EVENTS.update(MOVE_EVENTS)
