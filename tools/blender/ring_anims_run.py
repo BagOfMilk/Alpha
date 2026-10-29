@@ -14,26 +14,32 @@ class Run:
                  arms=0.17, elbow=0.0, twist=7.0, head=-4.0, width=0.1, limp=0.0, heavy=0.0, fist=0.55):
         self.__dict__.update({k: v for k, v in locals().items() if k != "self"})
 
+# Манера за статтю (власник 29.10.2026: «різні люди по різному це роблять, чоловіки та дівчата»): у жінок вужча
+# постановка стоп (майже по одній лінії), більше обертання таза й менше — плечей, лікті ближче до тіла, коротша
+# амплітуда рук, легший відскок угору.
+STYLE = {"width": 0.6, "pelvis_twist": 1.5, "shoulder_twist": 0.7, "arms": 0.8, "elbow_in": 0.06, "bounce": 1.15}     if globals().get("FEMALE") else {"width": 1.0, "pelvis_twist": 1.0, "shoulder_twist": 1.0, "arms": 1.0, "elbow_in": 0.0, "bounce": 1.0}
+
 def run_pose(t, R):
     """Поза бігу в час t для варіанту R. Шлях — уздовж −Y зі швидкістю stride/L; петля замкнена."""
     L, v = R.L, R.stride / R.L
+    ST = STYLE
     u = (t / L) % 1.0
     p = RPose(forced=set())
     # таз нижче після контакту кожної ноги (двічі за цикл), вище у фазі польоту; кульгання — глибше на хвору
     k = math.cos(2 * math.pi * 2 * (u - R.duty * 0.5))
-    dz = -R.sink - R.bounce * 0.5 * k - R.limp * 0.04 * max(0.0, math.sin(2 * math.pi * u)) - 0.02 * R.heavy
+    dz = -R.sink - R.bounce * ST["bounce"] * 0.5 * k - R.limp * 0.04 * max(0.0, math.sin(2 * math.pi * u)) - 0.02 * R.heavy
     p.pelvis = Vector((0.0, -v * t, dz))
     p.pitch = R.lean + 4.0 * R.heavy
     c = math.cos(2 * math.pi * u)
-    p.pelvis_yaw = R.twist * c                       # таз за опорною ногою
-    p.yaw = -R.twist * 1.6 * c                       # плечі — назустріч тазу
+    p.pelvis_yaw = R.twist * ST["pelvis_twist"] * c         # таз за опорною ногою
+    p.yaw = -R.twist * 1.6 * ST["shoulder_twist"] * c         # плечі — назустріч тазу
     p.roll = 2.5 * math.sin(2 * math.pi * u) + 6.0 * R.limp * math.sin(2 * math.pi * u)
     p.head_pitch = R.head
     p.head_yaw = 0.0
     span = v * R.duty * L
     ahead, behind = span * 0.4, span * 0.6         # ставиться ближче під таз, відривається далеко позаду
     def foot_at(ph, side):
-        x = R.width * (1 if side == "l" else -1)
+        x = R.width * ST["width"] * (1 if side == "l" else -1)
         t0 = t - ph * L                              # момент контакту цієї ноги
         if ph < R.duty:                              # опора: стопа нерухома у світі
             kk = ph / R.duty
@@ -63,13 +69,14 @@ def run_pose(t, R):
         knees.append(a + Vector((0.06 if side == "l" else -0.06, -(0.9 + (R.knee * 2.0 if swing else 0.0)), 0.45)))
     p.ankles, p.foot_rot, p.knees = tuple(ankles), tuple(rots), tuple(knees)
     # руки: протифаза до ніг, лікті ~90°, коротка робота
-    sw = R.arms
+    sw = R.arms * ST["arms"]
     def hand(side):
         sgn = 1 if side == "l" else -1
         ph = math.cos(2 * math.pi * u) * (-sgn)      # +1 — рука вперед
         return lambda S: S[side] + Vector((0.1 * sgn, -0.06 - sw * ph, -0.32 + 0.1 * max(0.0, ph) + R.elbow))   # кисті вздовж тіла, не поперек грудей
     p.hands = {s_: (hand(s_), FWD + UP * 0.5, LEFT if s_ == "l" else RIGHT) for s_ in "lr"}
-    p.elbows = {"l": lambda S: S["l"] + Vector((0.14, 0.32, -0.28)), "r": lambda S: S["r"] + Vector((-0.14, 0.32, -0.28))}
+    ei = ST["elbow_in"]
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.14 - ei, 0.32, -0.28)), "r": lambda S: S["r"] + Vector((-0.14 + ei, 0.32, -0.28))}
     p.fist = {"l": R.fist, "r": R.fist}
     return p
 

@@ -1,0 +1,18 @@
+# Кліпи рингу (tools/blender/ring_anims.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> <зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>
+Rope_Side_L - 1.620 0 0 0 0 0 - -
+Rope_Side_R - 1.620 0 0 0 0 0 - -
+Rope_Fast - 1.350 0 0 0 0 0 - -
+Rope_Slow_Tired - 1.976 0 0 0 0 0 - -
+Rope_Deep - 1.620 0 0 0 0 0 - -
+Rope_Light - 1.620 0 0 0 0 0 - -
+Rope_Back - 1.620 0 0 0 0 0 - -
+Rope_Elbow_Hook - 1.620 0 0 0 0 0 - -
+Rope_Stop_Lean - 1.300 0 0 0 0 0 - -
+Rope_Duck_Return - 1.620 0 0 0 0 0 - -
+Rope_Roar - 1.620 0 0 0 0 0 - -
+Rope_Heavy - 1.800 0 0 0 0 0 - -
+Rope_Chest_Stop - 1.300 0 0 0 0 0 - -
+Rope_Hesitate - 1.870 0 0 0 0 0 - -
+Rope_Side_R_Fast - 1.350 0 0 0 0 0 - -
+Lockup_A A 2.433 0 0.000 -1.180 0.000 180 stance -
+Lockup_B B 2.433 0 0.000 -1.180 0.000 180 stance -

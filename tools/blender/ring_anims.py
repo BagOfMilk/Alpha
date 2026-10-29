@@ -72,9 +72,12 @@ REELS = "--reels" in _args
 ONLY = None
 if "--only" in _args:
     ONLY = set(_args[_args.index("--only") + 1].split(","))
-OUT_FBX = os.path.join(REPO, "Assets", "Art", "Animations", "RING_Moves.fbx")
-MANIFEST = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims_manifest.txt")
-LOOK_DIR = os.path.join(REPO, "Logs", "ring_anims")
+# --female: ті самі кліпи на жіночому скелеті набору з жіночою манерою (ring_anims_run.STYLE) — окремий FBX і маніфести
+FEMALE = "--female" in _args
+SFX = "_F" if FEMALE else ""
+OUT_FBX = os.path.join(REPO, "Assets", "Art", "Animations", "RING_Moves%s.fbx" % SFX)
+MANIFEST = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims%s_manifest.txt" % SFX.lower())
+LOOK_DIR = os.path.join(REPO, "Logs", "ring_anims" + SFX.lower())
 
 GAP = 0.62          # відстань між тазами в зчепі (м)
 
@@ -85,7 +88,7 @@ def load_pair():
     arms = []
     for tag in ("A", "B"):
         before = set(bpy.data.objects)
-        bpy.ops.import_scene.fbx(filepath=os.path.join(REPO, "Assets", "Art", "Characters", "Kit", "kit_m.fbx"),
+        bpy.ops.import_scene.fbx(filepath=os.path.join(REPO, "Assets", "Art", "Characters", "Kit", "kit_f.fbx" if FEMALE else "kit_m.fbx"),
                                  primary_bone_axis='Y', secondary_bone_axis='X', automatic_bone_orientation=False,
                                  ignore_leaf_bones=False)
         new = [o for o in bpy.data.objects if o not in before]
@@ -805,7 +808,7 @@ CLIP_EVENTS = {
     "Forearm_Strike": [("contact", STRIKE_HIT, "lowerarm_r", "spine_03")],
     "Lockup": [("contact", LOCKUP_HIT, "spine_03", "spine_03")],
 }
-EVENTS = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims_events.txt")
+EVENTS = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims%s_events.txt" % SFX.lower())
 
 # ---------------------------------------------------------------- запікання пари і якість
 
@@ -968,7 +971,7 @@ CLIP_NODES.update(MOVE_CLIP_NODES)
 CLIP_EVENTS.update(MOVE_EVENTS)
 NODE_POSES.update(MOVE_NODE_POSES)
 CLIP_CONTACTS.update(MOVE_CONTACTS)
-MOTION = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims_motion.txt")
+MOTION = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims%s_motion.txt" % SFX.lower())
 
 # ---------------------------------------------------------------- якість
 
@@ -1161,6 +1164,7 @@ def overlap(act, clip, loop):
 # Парні прийоми, поставлені в живому Blender ключовими позами з посадкою кистей на шкіру і перевіркою по сітці
 # (власник 29.10.2026: керований риг). Файл tools/blender/lab_clips/<кліп>.json замінює дію з формули.
 LAB_DIR = os.path.join(REPO, "tools", "blender", "lab_clips")
+LAB_EXTRA = []         # (дія, роль, довжина с, кліп) — варіанти лише з лабораторії, для маніфесту
 
 def load_lab_clips(arm, actions):
     import json
@@ -1174,8 +1178,7 @@ def load_lab_clips(arm, actions):
         data = json.load(open(os.path.join(LAB_DIR, fn), encoding="utf-8"))
         for role in ("A", "B"):
             name = f"{clip}_{role}"
-            if name not in actions:
-                continue
+            fresh = name not in actions               # кліп лише з лабораторії (варіант) — нова дія
             act = bpy.data.actions.new(name + "_lab")
             act.use_fake_user = True
             arm.animation_data_create()
@@ -1199,8 +1202,10 @@ def load_lab_clips(arm, actions):
                 for kp in fc.keyframe_points:
                     kp.interpolation = 'LINEAR'
             act.frame_range = (0, len(data[role]) - 1)
-            old = actions[name]
-            bpy.data.actions.remove(old)
+            if not fresh:
+                bpy.data.actions.remove(actions[name])
+            else:
+                LAB_EXTRA.append((name, role, len(data[role]) / 30.0, clip))
             act.name = name
             actions[name] = act
         done.add(clip)
@@ -1371,6 +1376,8 @@ def main():
             bpy.data.objects.remove(o, do_unlink=True)
     place(armA, Vector(), 0)
     export_ring(armA)
+    for nm, role, ln, clip in LAB_EXTRA:                # варіанти з лабораторії: зсув пари — як у базового зчепу
+        manifest.append(f"{nm} {role} {ln:.3f} 0 0.000 -1.180 0.000 180 stance -")
     with open(MANIFEST, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(manifest) + "\n")
     if not ONLY:

@@ -126,10 +126,11 @@ def rebound_pose(t, L, R):
             side_off = Rz(yaw) @ Vector((0.18 * sg, 0.0, 0.0)) if R.hit != "side" else Vector()
             # хват — на канаті попереду тіла (уздовж каната, куди дивиться борець), не біля самого плеча
             fwd_w = Rz(yaw) @ Vector((0.0, -1.0, 0.0))
-            along = fwd_w.x * ((0.42 if R.grip == "elbow" else 0.28) if R.hit == "side" else 0.0)        # трохи попереду плеча
+            along = fwd_w.x * ((0.42 if R.grip == "elbow" else 0.28) if R.hit == "side" else 0.0) * (0.75 if globals().get("FEMALE") else 1.0)
             rope = Vector((S[s_].x + side_off.x + along, rope_y + 0.04, hz))
             # дуга: кисть іде до каната збоку-зверху, не крізь тіло
-            arc = Rz(yaw) @ Vector(((0.45 if R.hit == "back" else 0.3) * sg, 0.0, 0.12)) * math.sin(math.pi * on)   # дугою збоку
+            arm_k = 0.7 if globals().get("FEMALE") else 1.0                 # коротша рука — менша дуга
+            arc = Rz(yaw) @ Vector(((0.45 if R.hit == "back" else 0.3) * sg * arm_k, 0.0, 0.12)) * math.sin(math.pi * on)
             return lerp(free, rope, on) + arc
         return g
     p.hands = {s_: (hand(s_), FWD.lerp(DOWN, on), LEFT if s_ == "l" else RIGHT) for s_ in "lr"}
