@@ -1003,7 +1003,7 @@ SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "han
 
 # Пороги §4.1 плану (docs/TRPG_DESIGN.md §11.2): у см, градусах; ривок — лише у звіт.
 LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0,
-          "hand_jump": 25.0, "rope": 2.0}                                        # см за кадр (30 к/с) — 7,5 м/с
+          "hand_jump": 30.0, "rope": 2.0}                           # кисть: 9 м/с — швидкість реального удару                                        # см за кадр (30 к/с) — 7,5 м/с
 JERK_WARN = 6.0        # °/кадр² — пік кутового прискорення кістки
 
 def quality(name, framesA, framesB, bases):
@@ -1070,8 +1070,14 @@ def quality(name, framesA, framesB, bases):
         for fi in range(1, len(fr)):
             for hb in ("hand_l", "hand_r"):
                 # відносно таза: біг і розворот несуть кисть разом із тілом — це не телепорт
-                rel1 = fr[fi][1][hb][0] - fr[fi][1]["pelvis"][0]
-                rel0 = fr[fi - 1][1][hb][0] - fr[fi - 1][1]["pelvis"][0]
+                # у рамці таза (без його повороту): розворот тіла несе кисть — це не телепорт
+                def local(w_):
+                    ax = w_["thigh_l"][0] - w_["thigh_r"][0]
+                    a_ = math.atan2(ax.y, ax.x)
+                    r_ = w_[hb][0] - w_["pelvis"][0]
+                    return Matrix.Rotation(-a_, 3, 'Z') @ r_
+                rel1 = local(fr[fi][1])
+                rel0 = local(fr[fi - 1][1])
                 d_ = (rel1 - rel0).length
                 if d_ > jump:
                     jump, jwh = d_, f"{tag}.{hb}, кадр {fi}"

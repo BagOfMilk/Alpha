@@ -44,7 +44,7 @@ def reb_plan(R):
     face = {"side": -90.0 * sd, "back": -180.0, "chest": 0.0}[R.hit]
     ret_face = (180.0 if face > 0 else -180.0) if R.ret else face   # розворот коротшим боком
     rope_y = -(D + 0.12)
-    gap = {"side": 0.3, "back": 0.36, "chest": 0.4}[R.hit]          # таз від каната в мить дотику: плече й рука — не за канатом
+    gap = {"side": 0.3, "back": 0.36, "chest": 0.4}[R.hit] + 0.05 * R.crouch          # таз від каната в мить дотику: плече й рука — не за канатом
     T = dict(hit=0.66 * k, sink=0.8 * k, push=(0.94 + h) * k, end=(1.62 + h) * k if R.ret else (1.3 + h) * k)
     path_y = [(0.0, 0.0), (0.14 * k, -0.12), (0.5 * k, -(D - 0.55)), (T["hit"], rope_y + gap),
               (T["sink"], rope_y + gap - R.sink), (T["push"], rope_y + gap)]
@@ -89,7 +89,7 @@ def reb_plan(R):
 def rebound_pose(t, L, R):
     T, path_y, path_yaw, falls, face, rope_y = reb_plan(R)
     yaw = track(t, path_yaw)
-    on = track(t, [(0.0, 0.0), (T["hit"] - 0.2, 0.0), (T["hit"], 1.0), (T["push"], 1.0), (T["push"] + 0.34, 0.0), (L, 0.0)])   # рука до каната — 0,2 с, з каната — 0,34 с
+    on = track(t, [(0.0, 0.0), (T["hit"] - (0.4 if R.hit == "back" else 0.28), 0.0), (T["hit"], 1.0), (T["push"], 1.0), (T["push"] + 0.42, 0.0), (L, 0.0)])   # рука до каната — 0,2 с, з каната — 0,34 с
     run = 1.0 - on
     ret_t = max(0.0, t - T["push"])
     duck = R.duck * smooth(min(1.0, ret_t / 0.2)) if R.ret else 0.0
@@ -98,7 +98,7 @@ def rebound_pose(t, L, R):
     p.pelvis = Vector((0.0, track(t, path_y), -0.07 - bob - 0.14 * on - 0.06 * R.crouch * on - 0.03 * R.heavy - 0.08 * duck))
     p.pelvis_yaw = yaw
     hit_tilt = {"side": -2.0, "back": -8.0, "chest": 10.0}[R.hit]
-    p.pitch = (R.lean + 4.0 * R.heavy) * run + hit_tilt * on + 30.0 * duck
+    p.pitch = (R.lean + 4.0 * R.heavy) * run + hit_tilt * on + 10.0 * duck
     # плече в канати — лише трохи: більший крен виносить голову й шию за канат (власник 29.10.2026, кадр «крізь канат»)
     p.roll = (6.0 * R.side if R.hit == "side" else 0.0) * on
     p.yaw = -6.0 * math.cos(2 * math.pi * t / 0.66) * run
@@ -126,10 +126,10 @@ def rebound_pose(t, L, R):
             side_off = Rz(yaw) @ Vector((0.18 * sg, 0.0, 0.0)) if R.hit != "side" else Vector()
             # хват — на канаті попереду тіла (уздовж каната, куди дивиться борець), не біля самого плеча
             fwd_w = Rz(yaw) @ Vector((0.0, -1.0, 0.0))
-            along = fwd_w.x * (0.28 if R.hit == "side" else 0.0)        # трохи попереду плеча
+            along = fwd_w.x * ((0.42 if R.grip == "elbow" else 0.28) if R.hit == "side" else 0.0)        # трохи попереду плеча
             rope = Vector((S[s_].x + side_off.x + along, rope_y + 0.04, hz))
             # дуга: кисть іде до каната збоку-зверху, не крізь тіло
-            arc = Rz(yaw) @ Vector((0.3 * sg, 0.0, 0.12)) * math.sin(math.pi * on)   # дугою збоку, не крізь тулуб
+            arc = Rz(yaw) @ Vector(((0.45 if R.hit == "back" else 0.3) * sg, 0.0, 0.12)) * math.sin(math.pi * on)   # дугою збоку
             return lerp(free, rope, on) + arc
         return g
     p.hands = {s_: (hand(s_), FWD.lerp(DOWN, on), LEFT if s_ == "l" else RIGHT) for s_ in "lr"}
@@ -140,7 +140,10 @@ def rebound_pose(t, L, R):
         def e(S):
             run_el = S[s_] + Rz(yaw) @ Vector((0.16 * sg, 0.32, -0.28))
             # лікоть — з боку рингу (до центру, +Y простору ригу) і вниз: рука не виходить за канат
-            rope_el = S[s_] + (Vector((0.0, 0.35, -0.3)) if grab else Rz(yaw) @ Vector((0.2 * sg, 0.2, -0.35)))
+            if R.hit == "back":                                                # обидві руки назад-убік: лікті назовні
+                rope_el = S[s_] + Rz(yaw) @ Vector((0.45 * sg, 0.05, -0.15))
+            else:
+                rope_el = S[s_] + (Vector((0.0, 0.35, -0.3)) if grab else Rz(yaw) @ Vector((0.2 * sg, 0.2, -0.35)))
             return run_el.lerp(rope_el, on)                                   # лікоть униз-назад, не за голову
         return e
     p.elbows = {s_: elbow(s_) for s_ in "lr"}
@@ -200,7 +203,7 @@ def rebound_full(t, L, R):
     contact_y = track(T["hit"], path_y)
     tau_hit = abs(contact_y) / v
     hit, push = T["hit"], T["push"]
-    wc = track(t, [(0.0, 0.0), (hit - 0.2, 0.0), (hit, 1.0), (push, 1.0), (push + 0.26, 0.0), (L + 1.0, 0.0)])
+    wc = track(t, [(0.0, 0.0), (hit - 0.28, 0.0), (hit, 1.0), (push, 1.0), (push + 0.3, 0.0), (L + 1.0, 0.0)])
     c = rebound_pose(t, L, R)
     if t < push:
         a = run_at(tau_hit * _warp(t / hit) if t < hit else tau_hit + v * 0 + (t - hit) * 0.0, 0.0, 0.0, RL)
@@ -218,6 +221,65 @@ MOVE_CLIPS[:] = [c if not any(c[0] == r.name for r in REBS) else
 # перевірка «крізь канат» у генераторі: лінія каната й прогин у часі для кожного варіанту
 def _sink_fn(R):
     T = reb_plan(R)[0]
+    if not R.ret:                                         # тіло лишається на канатах — прогин тримається
+        return lambda tt: track(tt, [(0.0, 0.0), (T["hit"], 0.0), (T["sink"], R.sink), (99.0, R.sink * 0.8)])
     return lambda tt: track(tt, [(0.0, 0.0), (T["hit"], 0.0), (T["sink"], R.sink), (T["push"], R.sink * 0.6),
                                  (T["push"] + 0.15, 0.0), (99.0, 0.0)])
 ROPE_CHECK = {r.name: (-(ROPE_D + 0.12), _sink_fn(r)) for r in REBS}
+
+
+# ---------------------------------------------------------------- замок стоп (foot lock), загальний
+# На стиках змішувань стопа на маті повзе (змішуються дві різні точки опори). Замок: стопа, що стоїть на маті,
+# тримає точку, де стала; коли відривається — ціль повертається до кліпу за 3 кадри. Стан — по кліпу, кадри йдуть
+# підряд (bake_clip).
+def foot_locked(fn, ground=0.096, release=3.0 / 30.0):
+    st = {"t": None}
+    def g(t, L, *a):
+        p = fn(t, L, *a)
+        if st["t"] is None or t <= 1e-6 or t < st["t"]:
+            st.update(lock=[None, None], free=[0.0, 0.0], step=[None, None], lock_prev=[None, None])
+        st["t"] = t
+        out = list(p.ankles)
+        for i in (0, 1):
+            a_ = p.ankles[i]
+            side = "l" if i == 0 else "r"
+            hip = REST["hip_" + side] + p.pelvis
+            leg = (REST["hip_" + side] - REST["ankle_" + side]).length * 0.98
+            if st["lock"][i] is not None and (Vector((st["lock"][i].x, st["lock"][i].y, 0.071)) - hip).length > leg * 0.92:
+                st["lock"][i] = None                              # нога не дістає — стопа переступає (крок)
+                st["step"] = st.get("step", [None, None])
+                lp = st["lock_prev"][i] if st.get("lock_prev") and st["lock_prev"][i] else a_
+                start = hip + (Vector((lp.x, lp.y, 0.071)) - hip).normalized() * leg   # з досяжної точки
+                st["step"][i] = (t, start)
+            stp = st.get("step", [None, None])[i]
+            if stp is not None:                                   # короткий крок: дуга до точки кліпу за 0,2 с
+                k = min(1.0, (t - stp[0]) / 0.2)
+                pos = stp[1].lerp(a_, smooth(k))
+                pos.z = max(a_.z, (0.1 + 0.06 * math.sin(math.pi * k)) if k < 0.97 else a_.z)   # відрив одразу
+                out[i] = pos
+                if k >= 1.0:
+                    st["step"][i] = None
+                continue
+            if a_.z < ground:
+                if st["lock"][i] is None:
+                    st["lock"][i] = a_.copy()
+                lk = st["lock"][i]
+                out[i] = Vector((lk.x, lk.y, a_.z))
+                st["free"][i] = t
+                st.setdefault("lock_prev", [None, None])[i] = lk
+            else:
+                lk = st["lock"][i]
+                if lk is not None:
+                    k = min(1.0, (t - st["free"][i]) / release)
+                    out[i] = Vector((lk.x, lk.y, a_.z)).lerp(a_, smooth(k))
+                    if k >= 1.0:
+                        st["lock"][i] = None
+        if p.knees:
+            p.knees = (p.knees[0] + (out[0] - p.ankles[0]), p.knees[1] + (out[1] - p.ankles[1]))
+        p.ankles = tuple(out)
+        return p
+    return g
+
+MOVE_CLIPS[:] = [c if not any(c[0] == r.name for r in REBS) else
+                 (c[0], c[1], foot_locked(lambda t, L, r=next(r for r in REBS if r.name == c[0]): rebound_full(t, L, r)),
+                  None, False, None, 0) for c in MOVE_CLIPS]
