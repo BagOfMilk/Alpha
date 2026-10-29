@@ -277,47 +277,67 @@ def clip_stance(t, L):
 # --- зчеп «комір — лікоть»: крок назустріч, ліва рука на шию партнера, права — на його лікоть; боротьба за позицію.
 LOCKUP_LEN = 2.4
 
-LOCKUP_APPROACH = 0.28     # кожен проходить назустріч (м): тази зійдуться на ~0,62 м
+LOCKUP_APPROACH = 0.3      # кожен проходить назустріч (м): тази зійдуться на ~0,58 м
 
-def lockup_side(t, L, partner_tag):
-    approach = track(t, [(0.0, 0.0), (0.2, 0.15), (0.6, 1.0)])
-    push = math.sin(2 * math.pi * max(0.0, t - 0.9) / 1.5) if t > 0.9 else 0.0
-    p = stance(t, L, sway=0.0)
+LOCKUP_HIT = 0.56          # с — груди в груди (мітка contact)
+
+def lockup_side(t, L, partner_tag, sign=1.0):
+    """Зчеп «комір — лікоть». Карта кінцівок у фазі тримання (обидва дзеркально):
+         ліва кисть — потилиця суперника, рука ВИТЯГНУТА (лікоть донизу-вбік);
+         права кисть — його лівий лікоть знизу, лікоть притиснутий до свого боку;
+         голова — вухо до вуха з суперником (праворуч від його голови); стопи — розкрок, ліва попереду.
+    Фази: передчуття (присід, плечі назад) → два кроки назустріч → удар грудьми з віддачею → боротьба: пара
+    хитається в протифазі (sign: A тисне, коли B подається), вага перекочується, переступання, стискання рук."""
     d = LOCKUP_APPROACH
-    # Два кроки назустріч: ліва (передня) — далеко, права — підтягується; далі тиснуть, переступаючи.
-    p.ankles = steps(t, [(0.0, (0.2, -0.105)), (0.12, (0.2, -0.105)), (0.38, (0.2, -0.105 - d))],
-                        [(0.0, (-0.2, 0.075)), (0.3, (-0.2, 0.075)), (0.58, (-0.2, 0.075 - d * 0.9)),
-                         (1.5, (-0.2, 0.075 - d * 0.9)), (1.7, (-0.22, 0.03 - d * 0.9))])
-    # таз відведений назад (нахил уперед — плечима, не стегнами), ноги не перехрещуються
-    p.pelvis = Vector((0.04 * smooth(approach), -d * approach + 0.05 * smooth(approach) - 0.025 * push,
-                       -0.13 - 0.02 * approach))
-    p.pitch = 18.0 + 20.0 * smooth(approach) + 3.0 * push
-    p.yaw = 8.0 * smooth(approach) + 5.0 * push
-    p.roll = 4.0 * push
-    p.head_pitch = -6.0
-    p.head_yaw = 28.0 * smooth(approach)       # голова — збоку від голови партнера
-    p.roll += 6.0 * smooth(approach)           # плече вбік — голови не стикаються
-    reach = smooth((t - 0.32) / 0.32)
+    antic = track(t, [(0.0, 0.0), (0.16, 1.0), (0.3, 0.0)])                       # 2 передчуття
+    approach = track(t, [(0.0, 0.0), (0.2, 0.0), (0.52, 1.0)])
+    jolt = hit_spring(t, LOCKUP_HIT, w=16.0, z=0.35)                              # віддача від удару грудьми
+    fight = smooth((t - 0.8) / 0.4) if t > 0.8 else 0.0
+    ph = 2 * math.pi * max(0.0, t - 0.8) / 1.1
+    push = sign * math.sin(ph) * fight                                            # +1 — тисне вперед
+    shift = -sign * math.sin(ph + 0.9) * fight                                    # вага: ліва/права нога (пара разом)
+    p = stance(t, L, sway=0.0)
+    # кроки: ліва (передня) далеко, права підтягується; у боротьбі — ще по кроку-перестановці
+    p.ankles = steps(t, [(0.0, (0.2, -0.105)), (0.2, (0.2, -0.105)), (0.4, (0.2, -0.105 - d)),
+                         (1.35, (0.2, -0.105 - d)), (1.55, (0.22, -0.105 - d - 0.06 * sign))],
+                        [(0.0, (-0.2, 0.075)), (0.32, (-0.2, 0.075)), (0.54, (-0.2, 0.075 - d * 0.9)),
+                         (1.8, (-0.2, 0.075 - d * 0.9)), (2.0, (-0.23, 0.04 - d * 0.9 - 0.04 * sign))])
+    # 1 стискання й 11 асиметрія: присід перед кроком, таз відведений, плечі вперед; вага ходить з ноги на ногу
+    p.pelvis = p.pelvis + Vector((0.04 * smooth(approach) + 0.012 * shift,
+                                  -d * approach + 0.05 * smooth(approach) + 0.04 * antic - 0.015 * push + 0.012 * max(0.0, jolt),
+                                  -0.04 * antic - 0.06 * approach - 0.015 * abs(push)))
+    p.pitch = p.pitch - 6.0 * antic + 20.0 * smooth(approach) + 2.0 * push - 2.5 * jolt
+    p.yaw = 8.0 * smooth(approach) + 3.0 * push
+    p.roll = 10.0 * smooth(approach) + 2.0 * shift                                 # плече вбік — голови не стикаються
+    p.head_pitch = p.head_pitch + 4.0 * smooth(approach) + 4.0 * jolt
+    p.head_yaw = 34.0 * smooth(approach) - 3.0 * push                              # вухо до вуха
+    reach = smooth((t - 0.32) / 0.42)                                              # хватка доходить після віддачі
     p.forced = set()
-    base_l = Vector((-0.07, -0.27, -0.2))
-    base_r = Vector((0.07, -0.27, -0.2))
-    p.hands = {
-        # ліва — на потилицю партнера
-        "l": (lambda S: lerp(S["l"] + base_l, P(S, "neck_01", 0.7, Vector((0.0, -0.07, 0.0))) or (S["l"] + base_l), reach),
-              FWD + DOWN * 0.4, RIGHT + DOWN * 0.3),
-        # права — тримає лікоть партнера (його ліву руку, що лежить на моїй шиї)
-        "r": (lambda S: lerp(S["r"] + base_r, P(S, "lowerarm_l", 0.05, Vector((0.0, 0.0, -0.03))) or (S["r"] + base_r), reach),
-              FWD + LEFT * 0.5, UP + FWD * 0.3),
-    }
-    p.fist = {"l": 0.25 + 0.35 * reach, "r": 0.25 + 0.5 * reach}
-    p.elbows = {"l": lambda S: S["l"] + Vector((0.12, -0.25, -0.35)), "r": lambda S: S["r"] + Vector((-0.38, -0.05, -0.32))}
+    base_l, base_r = Vector((-0.07, -0.27, -0.2)), Vector((0.07, -0.27, -0.2))
+    arc = math.sin(math.pi * reach)                                                # 7 дуга: кисть іде вгору й назовні
+    def hand_l(S):
+        tgt = P(S, "neck_01", 0.5, Vector((0.025, -0.03, 0.0))) or (S["l"] + base_l)
+        return lerp(S["l"] + base_l, tgt, reach) + Vector((0.08, 0.0, 0.1)) * arc
+    def hand_r(S):
+        tgt = P(S, "lowerarm_l", 0.05, Vector((0.0, 0.0, -0.035))) or (S["r"] + base_r)
+        return lerp(S["r"] + base_r, tgt, reach) + Vector((-0.06, 0.0, -0.05)) * arc
+    _, fl0, ul0 = p.hands["l"]
+    _, fr0, ur0 = p.hands["r"]
+    p.hands = {"l": (hand_l, fl0.lerp(FWD + DOWN * 0.4, reach), ul0.lerp(RIGHT + DOWN * 0.3, reach)),
+               "r": (hand_r, fr0.lerp(FWD + LEFT * 0.5, reach), ur0.lerp(UP + FWD * 0.3, reach))}
+    grip = 0.15 * fight * (0.5 + 0.5 * math.sin(ph * 2))                           # 8 пальці стискають у такт
+    p.fist = {"l": 0.25 + 0.35 * reach + grip, "r": 0.25 + 0.5 * reach + grip}
+    el_l, el_r = p.elbows["l"], p.elbows["r"]
+    # витягнута ліва: лікоть униз-назовні, майже прямий; права: лікоть до свого боку
+    p.elbows = {"l": lambda S: el_l(S).lerp(S["l"] + Vector((0.16, -0.32, -0.3)), reach),
+                "r": lambda S: el_r(S).lerp(S["r"] + Vector((-0.38, -0.05, -0.32)), reach)}
     return p
 
 def clip_lockup_a(t, L, partner=None):
-    return lockup_side(t, L, "B")
+    return lockup_side(t, L, "B", 1.0)
 
 def clip_lockup_b(t, L, partner=None):
-    return lockup_side(max(0.0, t - 0.04), L, "A")
+    return lockup_side(max(0.0, t - 0.04), L, "A", -1.0)
 
 # --- рамка тіла: точки пози спокою, повернуті разом із тазом (лежати, падати, бути піднятим)
 REST = {}
@@ -442,15 +462,17 @@ def clip_slam_b(t, L, partner=None):
     pr = REST["pelvis"]
     stand_abs = a_to_b(Vector((0.0, -GAP, pr.z)))                 # = pr
     tilt_abs = a_to_b(Vector((-0.12, -0.46, pr.z + 0.12)))         # підхоплений — трохи вгору й правіше від голови A
-    carry_abs = a_to_b(Vector((0.08, -0.5, 1.05)))                # горизонтально на передпліччях перед грудьми A
-    mat_abs = a_to_b(Vector((0.0, -0.86, LIE_Z)))                 # на маті перед A
+    # Карта тіла B у підйомі: горизонтально, обличчям угору, притиснутий до грудей A на висоті його грудей; голова —
+    # ліворуч від A, ноги — праворуч; спина лежить на передпліччях A. Падає прямо перед A, на спину.
+    carry_abs = a_to_b(Vector((0.05, -0.34, 1.2)))
+    mat_abs = a_to_b(Vector((0.0, -0.98, LIE_Z)))                 # на маті перед A, ноги B — повз стопи A
     q_carry = Quaternion(UP, math.radians(-90.0)) @ Q_BACK        # голова — праворуч від A, спина вниз
     if k < 1.0:
         kk = smooth(k)
-        pel, q = lerp(stand_abs, tilt_abs, kk), Quaternion(LEFT, math.radians(10.0 * kk))
+        pel, q = lerp(stand_abs, tilt_abs, kk), Quaternion(LEFT, math.radians(28.0 * kk))   # перевисає через плече A
     elif k < 2.0:
         kk = smooth(k - 1.0)
-        pel, q = lerp(tilt_abs, carry_abs, kk), Quaternion(LEFT, math.radians(10.0)).slerp(q_carry, kk)
+        pel, q = lerp(tilt_abs, carry_abs, kk), Quaternion(LEFT, math.radians(28.0)).slerp(q_carry, kk)
     elif k < 3.0:
         pel, q = carry_abs + Vector((0, 0, 0.02 * math.sin(math.pi * (k - 2.0)))), q_carry
     else:
@@ -471,18 +493,24 @@ def clip_slam_b(t, L, partner=None):
         kk = smooth(k)
         p.ankles = (lerp(foot(0.16, -0.015), p.ankles[0], kk * 0.2), lerp(foot(-0.16, -0.015), p.ankles[1], kk * 0.2))
         p.foot_rot = (Quaternion(), Quaternion())
-    elif k < 2.0:
-        kk = smooth(k - 1.0)
+    elif k < 1.35:
+        kk = smooth((k - 1.0) / 0.35)                               # стопи відриваються одразу, ноги не волочаться
         p.ankles = (lerp(foot(0.16, -0.015), p.ankles[0], 0.2 + 0.8 * kk), lerp(foot(-0.16, -0.015), p.ankles[1], 0.2 + 0.8 * kk))
     land = smooth((k - 3.85) / 0.15) if k > 3.0 else 0.0
     # удар об мат: підборіддя до грудей (голова не б'ється об мат), потім піднімає голову, корчачись
     p.head_pitch = (-20.0 if k >= 2.0 else 10.0) + (40.0 * abs(bang) + 25.0 * land if k >= 3.6 else 0.0) + 18.0 * sell
     p.head_yaw = 18.0 * writhe * sell
-    if k < 3.6:
-        # руки тримаються за спину й плечі A
+    if k < 1.0:
+        # ще стоїть: руки на плечах A
         p.hands = {"l": (lambda S: P(S, "spine_03", 0.6, Vector((0.12, 0.08, 0.0))) or S["l"], FWD, UP),
                    "r": (lambda S: P(S, "upperarm_l", 0.2, Vector((0.0, 0.06, 0.04))) or S["r"], FWD, UP)}
         p.fist = {"l": 0.5, "r": 0.5}
+    elif k < 3.6:
+        # у повітрі: руки звисають до мату й теліпаються (вторинна дія), пальці розкриті
+        fl = math.sin(2 * math.pi * t / 0.45)
+        p.hands = {"l": (lambda S: S["l"] + Vector((0.08 * fl, 0.06, -0.42)), DOWN, FWD),
+                   "r": (lambda S: S["r"] + Vector((-0.08 * fl, -0.06, -0.42)), DOWN, FWD)}
+        p.fist = {"l": 0.1, "r": 0.1}
     else:
         arms_on_mat(p, q, lift_l=0.3 * (1 - land) + 0.5 * sell * max(0.0, writhe), lift_r=0.3 * (1 - land) + 0.6 * sell)
     return p
@@ -498,14 +526,17 @@ def clip_slam_a(t, L, partner=None):
     slam = smooth((k - 3.0) / 1.0) if k > 3.0 else 0.0
     p.pelvis = Vector((0.1 * scoop * (1 - lift), -0.06 * scoop, -0.1 - 0.2 * scoop + 0.18 * lift - 0.22 * slam))
     p.roll = 12.0 * scoop * (1 - lift)          # голова — ліворуч, під руку B, а не в його груди
-    p.pitch = 18.0 + 22.0 * scoop - 32.0 * lift + 34.0 * slam
+    p.pitch = 18.0 + 22.0 * scoop - 34.0 * lift + 34.0 * slam      # з вагою на руках — відхиляється назад
     p.yaw = -10.0 * lift
     p.head_pitch = -5.0
     p.forced = set()
+    under = smooth(k - 1.0) if k > 1.0 else 0.0                   # з підйомом кисті переходять під тіло B
+    grab = smooth(min(1.0, t / 0.32))                             # 2 передчуття: руки йдуть до хватки, а не стрибають
+    g0 = {"l": Vector((-0.07, -0.27, -0.2)), "r": Vector((0.07, -0.27, -0.2))}
     p.hands = {
-        # права — під стегно B (між ніг), ліва — на верх спини / плече
-        "r": (lambda S: P(S, "thigh_r", 0.25, Vector((0.0, 0.0, -0.07))) or S["r"], FWD, UP),
-        "l": (lambda S: P(S, "spine_03", 0.6, Vector((0.0, 0.0, 0.08))) or S["l"], FWD + UP * 0.3, UP),
+        # права — між ніг B під стегно, ліва — за плече B, у підйомі — під лопатки (B лежить на передпліччях)
+        "r": (lambda S: lerp(S["r"] + g0["r"], P(S, "thigh_r", 0.3, Vector((0.0, 0.0, -0.07 - 0.03 * under))) or S["r"], grab), FWD, UP),
+        "l": (lambda S: lerp(S["l"] + g0["l"], P(S, "spine_03", 0.5, Vector((0.0, 0.0, 0.08 - 0.18 * under))) or S["l"], grab), FWD + UP * 0.3, UP),
     }
     if slam > 0.6:
         p.hands = {"r": (lambda S: S["r"] + Vector((0.05, -0.35, -0.35)), DOWN, FWD),
@@ -753,6 +784,7 @@ CLIPS = [
 # натовпу); <кліп> <подія> <час, с> <кістка A> <кістка B>.
 CLIP_EVENTS = {
     "Forearm_Strike": [("contact", STRIKE_HIT, "lowerarm_r", "spine_03")],
+    "Lockup": [("contact", LOCKUP_HIT, "spine_03", "spine_03")],
 }
 EVENTS = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims_events.txt")
 

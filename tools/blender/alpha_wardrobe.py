@@ -1005,19 +1005,37 @@ def layer_clothes(rig, gap=0.004, reach=0.15):
 def split_body(rig, body):
     """Тіло-проксі -> окремі сітки зон (kit_m.body_torso тощо); оригінал ховається."""
     dom = _dominant(body, set(rig.data.bones.keys()))
+
+    def zone_of_bone(d):
+        if d is None:
+            return None
+        for zone, bones in BODY_ZONES.items():
+            if (bones == "hands" and any(d.startswith(p) for p in HANDS_PREFIX)) or (bones != "hands" and d in bones):
+                return zone
+        return None
+
+    # Кожна грань — рівно в одній зоні: за більшістю вершин, а нічию (2 вершини ліктя проти 2 зап'ястя) вирішує сума
+    # ваг кісток зони на вершинах грані. Раніше нічия викидала грань з обох зон — передпліччя мали 6 граней, плечі 40,
+    # і руки в усіх тілах набору світились наскрізь (власник 29.10.2026: «Руки прозрачные»).
+    gnames = {g.index: g.name for g in body.vertex_groups}
+    face_zone = {}
+    for f in body.data.polygons:
+        votes, weight = {}, {}
+        for vi in f.vertices:
+            z = zone_of_bone(dom[vi])
+            if z:
+                votes[z] = votes.get(z, 0) + 1
+            for g in body.data.vertices[vi].groups:
+                zg = zone_of_bone(gnames.get(g.group))
+                if zg:
+                    weight[zg] = weight.get(zg, 0.0) + g.weight
+        if votes:
+            face_zone[f.index] = max(votes, key=lambda z: (votes[z], weight.get(z, 0.0)))
     out = {}
     for zone, bones in BODY_ZONES.items():
         bm = bmesh.new(); bm.from_mesh(body.data)
-        bm.verts.ensure_lookup_table()
-        def ok(v):
-            d = dom[v.index]
-            if d is None:
-                return False
-            if bones == "hands":
-                return any(d.startswith(p) for p in HANDS_PREFIX)
-            return d in bones
-        # грань належить зоні за більшістю вершин — зони не перетинаються і не мають щілин
-        bmesh.ops.delete(bm, geom=[f for f in bm.faces if sum(ok(v) for v in f.verts) * 2 <= len(f.verts)], context='FACES')
+        bm.faces.ensure_lookup_table()
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if face_zone.get(f.index) != zone], context='FACES')
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
         me = bpy.data.meshes.new(f"{rig.name}.body_{zone}"); bm.to_mesh(me); bm.free()
         ob = bpy.data.objects.new(me.name, me); kit_collection().objects.link(ob)
@@ -1028,6 +1046,9 @@ def split_body(rig, body):
             ob.data.materials.append(mat)
         ob["kit_part"] = "body_" + zone; ob["kit_kind"] = "skin"
         out["body_" + zone] = ob
+    zoned = sum(len(o.data.polygons) for o in out.values())
+    print(f"[зони] {rig.name}: граней у зонах {zoned} з {len(body.data.polygons)} "
+          f"(без зони — допоміжна геометрія MPFB: {len(body.data.polygons) - len(face_zone)})", flush=True)
     body.hide_set(True); body.hide_render = True
     return out
 

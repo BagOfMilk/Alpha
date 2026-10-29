@@ -1,9 +1,9 @@
 # Кліпи рингу (tools/blender/ring_anims.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> <зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>
 Ring_Stance_Loop - 2.400 1 0 0 0 0 stance stance
-Lockup_A A 2.400 0 0.000 -1.180 0.000 180 stance -
-Lockup_B B 2.400 0 0.000 -1.180 0.000 180 stance -
-Headlock_A A 2.200 0 -0.080 -0.718 0.000 180 tied_A -
-Headlock_B B 2.200 0 -0.080 -0.718 0.000 180 tied_B -
+Lockup_A A 2.400 0 0.000 -1.220 0.000 180 stance -
+Lockup_B B 2.400 0 0.000 -1.220 0.000 180 stance -
+Headlock_A A 2.200 0 -0.082 -0.717 0.000 180 tied_A -
+Headlock_B B 2.200 0 -0.082 -0.717 0.000 180 tied_B -
 Bodyslam_A A 2.800 0 0.000 -0.620 0.000 180 stance -
 Bodyslam_B B 2.800 0 0.000 -0.620 0.000 180 stance lying_back
 Cover_A A 3.000 0 0.120 -0.600 0.000 90 stance -
