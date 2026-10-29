@@ -302,3 +302,109 @@ def slam_frames():
     ring_lab.LAB["contacts"] = []
     ring_lab.LAB["name"] = "Bodyslam"
     return SLAM_T["end"]
+
+
+# ================================================================ локап — 15 варіантів (власник: «локап … по 15»)
+# Варіант — параметри одного зчепу: тиск (push), дрейф пари вперед/назад (drift, + — A тисне B назад), боковий
+# дрейф (lat), присід, темп підходу, розрив наприкінці. Стопи не ковзають: кожна переступає сходинками (крок кожні
+# 0,3 с, ліва й права по черзі, з відривом), таз іде плавно.
+def _stairs(f, F, period=9, phase=0, dur=5):
+    """Положення стопи (вперед, м) для плавної кривої F(кадр): переступає раз на period кадрів, крок — dur кадрів."""
+    k = (f - phase) // period
+    t0 = phase + k * period
+    prev = F(max(0, t0 - period + dur)) if t0 > 0 else F(0)
+    cur = F(t0 + dur)
+    if f < t0:
+        return F(0), 0.0
+    s = min(1.0, (f - t0) / dur)
+    lift = 0.06 * math.sin(math.pi * s) if abs(cur - prev) > 0.01 else 0.0
+    return prev + (cur - prev) * G["smooth"](s), lift
+
+
+LOCKUP_VARS = {
+    "Lockup": {},
+    "Lockup_Power_A": {"drift": [(26, 0.0), (60, 0.55), (72, 0.6)], "push": [(26, 0.0), (36, 0.9), (72, 0.8)]},
+    "Lockup_Power_B": {"drift": [(26, 0.0), (60, -0.55), (72, -0.6)], "push": [(26, 0.0), (36, -0.9), (72, -0.8)]},
+    "Lockup_Stalemate": {"push": [(26, 0.0), (32, 0.9), (38, -0.9), (44, 0.9), (50, -0.9), (56, 0.9), (62, -0.6), (72, 0.0)]},
+    "Lockup_To_Ropes": {"drift": [(26, 0.0), (66, 1.1), (72, 1.15)], "push": [(26, 0.0), (34, 1.0), (72, 1.0)]},
+    "Lockup_Side_Walk": {"lat": [(26, 0.0), (72, 0.7)], "push": [(26, 0.0), (40, 0.5), (56, -0.4), (72, 0.0)]},
+    "Lockup_Side_Walk_R": {"lat": [(26, 0.0), (72, -0.7)], "push": [(26, 0.0), (40, -0.5), (56, 0.4), (72, 0.0)]},
+    "Lockup_Fast": {"tempo": 1.4},
+    "Lockup_Cautious": {"tempo": 0.7, "crouch_x": 0.04},
+    "Lockup_Heavy": {"crouch_x": 0.06, "push": [(26, 0.0), (44, 0.5), (60, -0.5), (72, 0.0)]},
+    "Lockup_Shove_Off": {"break": True, "push": [(26, 0.0), (40, 0.6), (54, 1.0), (72, 0.0)]},
+    "Lockup_Ref_Break": {"break": True, "push": [(26, 0.0), (40, 0.3), (72, 0.0)]},
+    "Lockup_Exchange": {"drift": [(26, 0.0), (40, 0.3), (54, -0.3), (66, 0.2), (72, 0.15)],
+                        "push": [(26, 0.0), (36, 0.8), (48, -0.8), (60, 0.6), (72, 0.0)]},
+    "Lockup_Low": {"crouch_x": 0.1, "push": [(26, 0.0), (40, 0.4), (56, -0.4), (72, 0.0)]},
+    "Lockup_Drive_Back_Ropes": {"drift": [(26, 0.0), (66, -1.1), (72, -1.15)], "push": [(26, 0.0), (34, -1.0), (72, -1.0)]},
+}
+
+
+def lockup_var_frames(name, settle=True):
+    """Варіант локапу name (LOCKUP_VARS). Підхід і хват — як у базовому; далі — тиск, дрейф, присід, розрив."""
+    T = G["track"]
+    v = LOCKUP_VARS[name]
+    d = LOCKUP_FWD
+    tempo = v.get("tempo", 1.0)
+    sc = lambda keys: [(k[0] / tempo if k[0] <= 26 else k[0] - 26 + 26 / tempo, k[1]) for k in keys]
+    fwd = sc([(0, 0.0), (6, -0.03), (12, d * 0.45), (17, d * 0.9), (20, d * 0.84), (26, d)])
+    grip = sc([(0, 0.0), (6, 0.0), (12, 0.4), (17, 0.75), (24, 1.0), (26, 1.0)])
+    head = sc([(0, 0.0), (6, 0.0), (12, 0.3), (17, 0.8), (26, 1.0)])
+    t_hold = 26 / tempo
+    n = int(round(t_hold + 46))
+    shift = lambda keys: [(k[0] - 26 + t_hold, k[1]) for k in keys]
+    push = [(0, 0.0)] + shift(v.get("push", [(26, 0.0), (40, 0.7), (54, -0.6), (66, 0.25), (72, 0.0)]))
+    drift = [(0, 0.0)] + shift(v.get("drift", [(26, 0.0), (72, 0.0)]))
+    lat = [(0, 0.0)] + shift(v.get("lat", [(26, 0.0), (72, 0.0)]))
+    if v.get("break"):                                   # розрив: руки відпускають, обидва крок назад
+        fwd += [(n - 12, d), (n, d - 0.3)]
+        grip += [(n - 14, 1.0), (n - 4, 0.0)]
+        head += [(n - 14, 1.0), (n - 4, 0.0)]
+    fwd += [(n + 1, fwd[-1][1])]
+    grip += [(n + 1, grip[-1][1])]
+    head += [(n + 1, head[-1][1])]
+    crouch = [(0, 0.0), (6 / tempo, 0.06), (12 / tempo, 0.02), (t_hold, v.get("crouch_x", 0.0)), (n, v.get("crouch_x", 0.0))]
+    ring_lab.place((0, -LOCKUP_START, 0), 180, z=1.0)
+    out = {"A": [], "B": []}
+    for f in range(n + 1):
+        ff = float(f)
+        ga, h, pu, c = T(ff, grip), T(ff, head), T(ff, push), T(ff, crouch)
+        fw, dr, la = T(ff, fwd), T(ff, drift), T(ff, lat)
+        def mk(sign):
+            role = "A" if sign > 0 else "B"
+            Ftot = lambda x: T(float(x), fwd) + sign * T(float(x), drift)
+            Ltot = lambda x: sign * T(float(x), lat)
+            def pose(Pt):
+                p = tie(fw, ga, push=sign * pu, hold_head=h, role=role)(Pt)
+                body_f = fw + sign * dr
+                p.pelvis = p.pelvis + Vector((sign * la, -(body_f - fw), -c))
+                p.head_yaw -= APART[0] * 150.0
+                al, ar = list(p.ankles)
+                for i, (ph) in enumerate((0, 4)):
+                    sf, lf = _stairs(f, Ftot, phase=ph)
+                    sl, ll = _stairs(f, Ltot, phase=ph)
+                    a_ = (al, ar)[i]
+                    a_ = a_ + Vector((sl, -(sf - fw), max(lf, ll)))
+                    if i == 0: al = a_
+                    else: ar = a_
+                p.ankles = (al, ar)
+                if p.knees:
+                    p.knees = (p.knees[0] + Vector((0, -(body_f - fw), 0)), p.knees[1] + Vector((0, -(body_f - fw), 0)))
+                return p
+            return pose
+        APART[0] = 0.0
+        SURF.clear()
+        ring_lab.solve(mk(1.0), mk(-1.0))
+        if ga > 0.05:
+            neck_surface()
+            ring_lab.solve(mk(1.0), mk(-1.0))
+        if MOVE_MAP and ga >= 0.99:
+            ring_lab.place_hands(MOVE_MAP); ring_lab.place_hands(MOVE_MAP)
+        elif settle and ga > 0.05:
+            settle_pair()
+        out["A"].append(ring_lab.capture("A")); out["B"].append(ring_lab.capture("B"))
+    ring_lab.LAB["frames"] = out
+    ring_lab.LAB["contacts"] = []
+    ring_lab.LAB["name"] = name
+    return n

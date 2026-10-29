@@ -648,24 +648,25 @@ def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
     for up_sign in (1.0, -1.0):
         for yaw in (0.0, -25.0, 25.0, -50.0, 50.0):
             for lift in (0.0, 15.0, 30.0, 45.0):
-                w2 = Quaternion(nrm, math.radians(yaw)) @ want
-                w2 = Quaternion(w2.cross(nrm).normalized(), math.radians(-lift)) @ w2
-                up = (thumb_world - nrm * thumb_world.dot(nrm))
-                if up.length < 1e-3:
+              for roll in (0.0, -20.0, 20.0):
+                  w2 = Quaternion(nrm, math.radians(yaw)) @ want
+                  w2 = Quaternion(w2.cross(nrm).normalized(), math.radians(-lift)) @ w2
+                  up = (thumb_world - nrm * thumb_world.dot(nrm))
+                  if up.length < 1e-3:
                     up = nrm.cross(w2)
-                up = up.normalized() * up_sign
-                f_l, u_l = Ri @ w2, Ri @ up
-                e.location = W @ G["wrist_for_grip"](W.inverted() @ grip_w, f_l)
-                e.rotation_quaternion = W.to_quaternion() @ G["hand_rotation"](rig, s, f_l, u_l)
-                bpy.context.view_layer.update()
-                c, pn, fd = _palm(arm, s)
-                err = math.degrees(pn.angle(-nrm))
-                if err > 45:
-                    continue
-                pen = _arm_pen(arm, s, ot)
-                key = (pen, err)
-                if best is None or key < best[0]:
-                    best = (key, e.location.copy(), e.rotation_quaternion.copy())
+                  up = Quaternion(w2.normalized(), math.radians(roll)) @ (up.normalized() * up_sign)   # крен навколо пальців
+                  f_l, u_l = Ri @ w2, Ri @ up
+                  e.location = W @ G["wrist_for_grip"](W.inverted() @ grip_w, f_l)
+                  e.rotation_quaternion = W.to_quaternion() @ G["hand_rotation"](rig, s, f_l, u_l)
+                  bpy.context.view_layer.update()
+                  c, pn, fd = _palm(arm, s)
+                  err = math.degrees(pn.angle(-nrm))
+                  if err > 45:
+                      continue
+                  pen = _arm_pen(arm, s, ot)
+                  key = (pen, err)
+                  if best is None or key < best[0]:
+                      best = (key, e.location.copy(), e.rotation_quaternion.copy())
     if best is None:
         best = ((0, 99), e.location.copy(), e.rotation_quaternion.copy())
     e.location, e.rotation_quaternion = best[1], best[2]
@@ -697,7 +698,7 @@ def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
     # якщо рука все ще торкається тіла глибше за шкіру — відсунути долоню по нормалі шкіри (до 3 см), не в тіло
     pen = _hand_pen(arm, s, ot)                 # підйом — лише якщо в тілі сама кисть (передпліччя — справа ліктя)
     lifted = 0.0
-    while pen > 0 and lifted < 0.03:
+    while pen > 3 and lifted < 0.03:              # кілька вершин кінчика — це дотик, не проникнення
         e.location = e.location + nrm * 0.005
         lifted += 0.005
         bpy.context.view_layer.update()
