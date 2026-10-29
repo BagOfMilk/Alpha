@@ -284,7 +284,7 @@ def _arm_verts(arm, side, dg):
     return out
 
 
-def settle(tag, sides=("l", "r"), max_depth=0.008, iters=14, prefer=None):
+def settle(tag, sides=("l", "r"), max_depth=0.003, iters=20, prefer=None):
     """Посадка на поверхню: вершини кисті й передпліччя, що опинились усередині тіла партнера (тест парності
     променів), виштовхуються по нормалі найближчої поверхні — ціль IK зап'ястя зсувається, доки глибина ≤ max_depth.
     prefer: {бік: вектор у просторі свого ригу} — кисть виходить з тіла саме туди (за шию, а не на горло).
@@ -347,7 +347,7 @@ def _inside(tree, v):
     return votes >= 2
 
 
-def depth2(f, tol=0.012):
+def depth2(f, tol=0.004):   # 4 мм: власник бачить і 1,5 см «руки крізь спину»
     """Проникнення в кадрі f за тестом «всередині»: вершини кожної частини A всередині тіла B (одна сітка) і навпаки;
     глибина — до найближчої поверхні. Повертає [(см, 'A.частина → B')] понад tol."""
     show(f)
@@ -463,3 +463,15 @@ def surface_frame(arm, bone, along, from_local, palm=0.025, down_bone=("spine_03
     down = (W @ b.head) - (W @ a.tail)
     tan = (down - n * down.dot(n)).normalized()
     return p, n, tan
+
+
+def surface_world(arm, bone, along, dir_world, palm=0.03):
+    """Точка на шкірі фігури arm з боку світового напрямку dir_world від точки кістки (напр. (0,0,-1) — знизу)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    whole = _bvh(_meshes(arm), dg)
+    pb = arm.pose.bones[bone]
+    W = arm.matrix_world
+    c = W @ (pb.head + (pb.tail - pb.head) * along)
+    d = Vector(dir_world).normalized()
+    hit = whole.ray_cast(c + d * 0.35, -d, 0.6)
+    return (hit[0] + hit[1] * palm) if hit[0] is not None else c + d * 0.1
