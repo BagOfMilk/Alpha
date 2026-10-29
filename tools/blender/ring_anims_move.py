@@ -341,7 +341,7 @@ def slap(t, times, hold_last=False):
     """0..1 — висота руки (1 — угорі, 0 — на маті) для ударів у моменти times."""
     h = 0.0
     for i, tc in enumerate(times):
-        up0, top = tc - 0.55, tc - 0.22
+        up0, top = tc - 0.6, tc - 0.3          # удар долонею — 0,3 с, кисть не перескакує
         if up0 <= t <= tc:
             h = smooth((t - up0) / (top - up0)) if t < top else 1.0 - ((t - top) / (tc - top)) ** 2
         elif tc < t < tc + 0.18:
@@ -527,7 +527,7 @@ REB_HIT, REB_OFF = 0.98, 1.16           # с — контакт спиною і 
 def reb_path(t):
     y = track(t, [(0.0, 0.0), (0.22, 0.06), (0.52, 0.75), (0.8, 1.55), (REB_HIT, ROPE_D + 0.02),
                   (1.06, ROPE_D + ROPE_SINK - 0.18), (REB_OFF, ROPE_D), (1.45, 0.85), (REB_LEN, -0.35)])
-    yaw = track(t, [(0.0, 0.0), (0.3, 180.0), (0.78, 180.0), (0.97, 360.0), (REB_LEN, 360.0)])
+    yaw = track(t, [(0.0, 0.0), (0.3, 180.0), (0.66, 180.0), (0.97, 360.0), (REB_LEN, 360.0)])   # розворот 0,3 с
     return (0.0, y), yaw
 
 def reb_keys():
@@ -550,7 +550,7 @@ def reb_keys():
 def clip_rope_rebound(t, L):
     RUN_PH[0] = t / RUN_LEN
     kl, kr = reb_keys()
-    on = track(t, [(0.0, 0.0), (0.9, 0.0), (REB_HIT, 1.0), (REB_OFF, 1.0), (1.3, 0.0), (L, 0.0)])   # спиною на канатах
+    on = track(t, [(0.0, 0.0), (0.78, 0.0), (REB_HIT, 1.0), (REB_OFF, 1.0), (1.4, 0.0), (L, 0.0)])   # спиною на канатах
     st = track(t, [(0.0, 1.0), (0.28, 0.0), (L, 0.0)])                                              # зі стійки в біг
     def base(t_, L_):
         r = run_base(t_, L_)

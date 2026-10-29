@@ -500,19 +500,30 @@ def clip_slam_b(t, L, partner=None):
     # удар об мат: підборіддя до грудей (голова не б'ється об мат), потім піднімає голову, корчачись
     p.head_pitch = (-20.0 if k >= 2.0 else 10.0) + (40.0 * abs(bang) + 25.0 * land if k >= 3.6 else 0.0) + 18.0 * sell
     p.head_yaw = 18.0 * writhe * sell
-    if k < 1.0:
-        # ще стоїть: руки на плечах A
-        p.hands = {"l": (lambda S: P(S, "spine_03", 0.6, Vector((0.12, 0.08, 0.0))) or S["l"], FWD, UP),
-                   "r": (lambda S: P(S, "upperarm_l", 0.2, Vector((0.0, 0.06, 0.04))) or S["r"], FWD, UP)}
-        p.fist = {"l": 0.5, "r": 0.5}
-    elif k < 3.6:
-        # у повітрі: руки звисають до мату й теліпаються (вторинна дія), пальці розкриті
-        fl = math.sin(2 * math.pi * t / 0.45)
-        p.hands = {"l": (lambda S: S["l"] + Vector((0.08 * fl, 0.06, -0.42)), DOWN, FWD),
-                   "r": (lambda S: S["r"] + Vector((-0.08 * fl, -0.06, -0.42)), DOWN, FWD)}
-        p.fist = {"l": 0.1, "r": 0.1}
+    if k < 1.4:
+        # ще стоїть: руки на плечах A; з відривом від мату плавно відпускає й руки звисають
+        on_a = {"l": lambda S: P(S, "spine_03", 0.6, Vector((0.12, 0.08, 0.0))) or S["l"],
+                "r": lambda S: P(S, "upperarm_l", 0.2, Vector((0.0, 0.06, 0.04))) or S["r"]}
+        let = smooth((k - 0.8) / 0.6) if k > 0.8 else 0.0
+        hang = {"l": S_off((0.0, 0.06, -0.42), "l"), "r": S_off((0.0, -0.06, -0.42), "r")}
+        p.hands = {s_: (lambda S, s_=s_: lerp(on_a[s_](S), hang[s_](S), let), FWD.lerp(DOWN, let), UP.lerp(FWD, let))
+                   for s_ in "lr"}
+        p.fist = {"l": 0.5 - 0.4 * let, "r": 0.5 - 0.4 * let}
     else:
+        # у повітрі руки звисають і теліпаються (вторинна дія); перед ударом об мат плавно розкидаються під 45° і
+        # б'ють по мату — без перескоку кисті (власник: «Руки не повинні телепортуватись»)
+        fl = math.sin(2 * math.pi * t / 0.45)
+        hang = {"l": (lambda S: S["l"] + Vector((0.08 * fl, 0.06, -0.42)), DOWN, FWD),
+                "r": (lambda S: S["r"] + Vector((-0.08 * fl, -0.06, -0.42)), DOWN, FWD)}
         arms_on_mat(p, q, lift_l=0.3 * (1 - land) + 0.5 * sell * max(0.0, writhe), lift_r=0.3 * (1 - land) + 0.6 * sell)
+        w = smooth((k - 3.1) / 0.9) if k > 3.1 else 0.0
+        mat_h, mat_e = p.hands, p.elbows
+        p.hands = {s_: (lambda S, s_=s_: lerp(hang[s_][0](S), mat_h[s_][0](S), w), hang[s_][1].lerp(mat_h[s_][1], w),
+                        hang[s_][2].lerp(mat_h[s_][2], w)) for s_ in "lr"}
+        if w < 1.0:
+            p.elbows = {s_: (lambda S, s_=s_: (S[s_] + Vector((0.3 if s_ == "l" else -0.3, 0.0, -0.2))).lerp(mat_e[s_](S), w))
+                        for s_ in "lr"}
+        p.fist = {"l": 0.1 + 0.05 * w, "r": 0.1 + 0.05 * w}
     return p
 
 def clip_slam_a(t, L, partner=None):
@@ -538,9 +549,12 @@ def clip_slam_a(t, L, partner=None):
         "r": (lambda S: lerp(S["r"] + g0["r"], P(S, "thigh_r", 0.3, Vector((0.0, 0.0, -0.07 - 0.03 * under))) or S["r"], grab), FWD, UP),
         "l": (lambda S: lerp(S["l"] + g0["l"], P(S, "spine_03", 0.5, Vector((0.0, 0.0, 0.08 - 0.18 * under))) or S["l"], grab), FWD + UP * 0.3, UP),
     }
-    if slam > 0.6:
-        p.hands = {"r": (lambda S: S["r"] + Vector((0.05, -0.35, -0.35)), DOWN, FWD),
-                   "l": (lambda S: S["l"] + Vector((-0.05, -0.35, -0.35)), DOWN, FWD)}
+    rel = smooth((slam - 0.35) / 0.5) if slam > 0.35 else 0.0      # відпускає B плавно, кисті йдуть за ним униз
+    if rel > 0.0:
+        held = p.hands
+        free = {"r": S_off((0.05, -0.35, -0.35), "r"), "l": S_off((-0.05, -0.35, -0.35), "l")}
+        p.hands = {s_: (lambda S, s_=s_: lerp(held[s_][0](S), free[s_](S), rel), held[s_][1].lerp(DOWN, rel),
+                        held[s_][2].lerp(FWD, rel)) for s_ in "lr"}
     p.fist = {"l": 0.5, "r": 0.5}
     p.elbows = {"l": lambda S: S["l"] + Vector((0.4, 0.05, -0.3)), "r": lambda S: S["r"] + Vector((-0.4, 0.0, -0.4))}
     return p
@@ -672,6 +686,11 @@ STRIKE_LEN = 2.0          # с — з повним «продажем» і по�
 STRIKE_HIT = 0.42          # с — контакт (мітка «contact»)
 STRIKE_GAP = 0.8           # м — тази на старті
 
+def S_off(v, s):
+    """Ціль кисті: точка плеча s + зсув v (простір ригу)."""
+    v = Vector(v)
+    return lambda S: S[s] + v
+
 def _phase(t, keys):
     """Ваги фаз [(час, (w0, w1, …))] — лінійно між ключами, з м'яким входом і виходом."""
     if t <= keys[0][0]:
@@ -697,7 +716,7 @@ def clip_forearm_a(t, L, partner=None):
     p.pitch = 16.0 + 8.0 * fwd
     p.head_pitch = -12.0
     p.head_yaw = 10.0 * wind
-    w_up, w_hit, w_fol = _phase(t, [(0.0, (0, 0, 0)), (0.16, (0, 0, 0)), (0.32, (1, 0, 0)), (STRIKE_HIT, (0, 1, 0)),
+    w_up, w_hit, w_fol = _phase(t, [(0.0, (0, 0, 0)), (0.12, (0, 0, 0)), (0.27, (1, 0, 0)), (STRIKE_HIT, (0, 1, 0)),
                                     (0.6, (0, 0, 1)), (1.25, (0, 0, 0))])
     guard_r = Vector((0.07, -0.27, -0.2))
     def hand_r(S):
@@ -752,11 +771,11 @@ def clip_forearm_b(t, L, partner=None):
     fly = max(0.0, spr)
     guard_l, guard_r = Vector((-0.07, -0.27, -0.2)), Vector((0.07, -0.27, -0.2))
     def hand_l(S):
-        h = S["l"] + guard_l + Vector((0.28, 0.12, 0.02)) * fly                       # рука відлітає вбік
+        h = S["l"] + guard_l + Vector((0.17, 0.08, 0.01)) * fly                       # рука відлітає вбік
         bal = S["l"] + Vector((0.3, -0.12, -0.28))                                    # шукає рівновагу
         return lerp(h, bal, sell)
     def hand_r(S):
-        h = S["r"] + guard_r + Vector((-0.22, 0.16, -0.06)) * fly
+        h = S["r"] + guard_r + Vector((-0.13, 0.1, -0.04)) * fly
         chest = S["chest"] + Vector((0.05, -0.17, 0.08))                             # долоня на грудях, де влучило
         return lerp(h, chest, sell)
     p.hands = {"l": (hand_l, FWD * 0.4 + UP, RIGHT),
@@ -981,7 +1000,8 @@ SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "han
               for body in ("pelvis", "spine_01", "spine_02")]
 
 # Пороги §4.1 плану (docs/TRPG_DESIGN.md §11.2): у см, градусах; ривок — лише у звіт.
-LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0}
+LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0,
+          "hand_jump": 25.0}                                        # см за кадр (30 к/с) — 7,5 м/с
 JERK_WARN = 6.0        # °/кадр² — пік кутового прискорення кістки
 
 def quality(name, framesA, framesB, bases):
@@ -1040,6 +1060,17 @@ def quality(name, framesA, framesB, bases):
                 if v > under:
                     under, uwhere = v, f"{tag}.{n}, кадр {fi}"
     q["under"] = (under * 100.0, uwhere)
+    # телепорт кисті (власник 29.10.2026: «Руки не повинні телепортуватись»): переміщення кисті за кадр понад межу —
+    # швидше за будь-який удар; ловить кисть, що перескакує до цілі або між цілями
+    jump, jwh = 0.0, ""
+    for tag, frames in (("A", framesA), ("B", framesB)):
+        fr = frames or ()
+        for fi in range(1, len(fr)):
+            for hb in ("hand_l", "hand_r"):
+                d_ = (fr[fi][1][hb][0] - fr[fi - 1][1][hb][0]).length
+                if d_ > jump:
+                    jump, jwh = d_, f"{tag}.{hb}, кадр {fi}"
+    q["hand_jump"] = (jump * 100.0, jwh)
     # ривки: пік кутового прискорення локального повороту кістки
     jerk, jwhere = 0.0, ""
     for tag, seq in bases:
@@ -1060,7 +1091,7 @@ def qangle(a, b):
 
 def fails(q):
     out = []
-    for k in ("slide", "pen", "self", "under", "reach"):
+    for k in ("slide", "pen", "self", "under", "reach", "hand_jump"):
         if k in q and q[k][0] > LIMITS[k] + 1e-6:
             out.append(k)
     if "node" in q and (q["node"][0] > LIMITS["node_deg"] or q["node"][1] > LIMITS["node_cm"]):
@@ -1201,6 +1232,8 @@ def main():
                   f"таз {dz:.1f} см", flush=True)
         bad = fails(q)
         state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
+        if q["hand_jump"][0] > LIMITS["hand_jump"]:
+            state += f" · кисть стрибнула {q['hand_jump'][0]:.0f} см ({q['hand_jump'][1]})"
         if q["jerk"][0] > JERK_WARN:
             state += f" · ривок {q['jerk'][0]:.1f} ({q['jerk'][1]})"
         node_s = f"{q['node'][0]:.1f}° / {q['node'][1]:.1f} см" if "node" in q else "—"
