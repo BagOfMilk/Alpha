@@ -99,7 +99,7 @@ def rebound_pose(t, L, R):
     p.pelvis_yaw = yaw
     hit_tilt = {"side": -2.0, "back": -14.0, "chest": 22.0}[R.hit]
     p.pitch = (R.lean + 4.0 * R.heavy) * run + hit_tilt * on + 30.0 * duck
-    p.roll = (14.0 * R.side if R.hit == "side" else 0.0) * on       # плече в канати
+    p.roll = (22.0 * R.side if R.hit == "side" else 0.0) * on       # плече в канати
     p.yaw = -6.0 * math.cos(2 * math.pi * t / 0.66) * run
     p.head_pitch = -6.0
     p.head_yaw = 0.0
@@ -113,21 +113,25 @@ def rebound_pose(t, L, R):
     def hand(s_):
         sg = 1 if s_ == "l" else -1
         def g(S):
-            free = S[s_] + Rz(yaw) @ Vector((0.1 * sg, -0.06 - 0.16 * pump * sg, -0.32))
+            free = S[s_] + Rz(yaw) @ Vector((0.1 * sg, -0.06 - 0.24 * pump * sg, -0.28 + 0.08 * max(0.0, pump * sg)))
             grab = (s_ == near) if R.hit == "side" else True
             if not grab:
-                tgt = S[s_] + Rz(yaw) @ (Vector((0.1 * sg, -0.12, 0.42)) if R.arm_up else Vector((0.14 * sg, -0.2, -0.18)))
+                # вільна рука: розслаблено вниз і трохи назад (не на груди), або вгору — до публіки
+                tgt = S[s_] + Rz(yaw) @ (Vector((0.1 * sg, -0.12, 0.42)) if R.arm_up else Vector((0.16 * sg, 0.08, -0.5)))
                 return lerp(free, tgt, on)
             hz = ROPE_H[2] - (0.02 if R.grip == "hand" else 0.14)
             side_off = Rz(yaw) @ Vector((0.18 * sg, 0.0, 0.0)) if R.hit != "side" else Vector()
-            rope = Vector((S[s_].x + side_off.x, rope_y + 0.04, hz))
+            # хват — на канаті попереду тіла (уздовж каната, куди дивиться борець), не біля самого плеча
+            fwd_w = Rz(yaw) @ Vector((0.0, -1.0, 0.0))
+            along = -fwd_w.x * (0.3 if R.hit == "side" else 0.0)
+            rope = Vector((S[s_].x + side_off.x + along, rope_y + 0.04, hz))
             # дуга: кисть іде до каната збоку-зверху, не крізь тіло
             arc = Rz(yaw) @ Vector((0.12 * sg, 0.0, 0.1)) * math.sin(math.pi * on)
             return lerp(free, rope, on) + arc
         return g
     p.hands = {s_: (hand(s_), FWD.lerp(DOWN, on), LEFT if s_ == "l" else RIGHT) for s_ in "lr"}
-    p.elbows = {"l": lambda S: S["l"] + Rz(yaw) @ Vector((0.28, 0.25, -0.2 + 0.35 * on)),
-                "r": lambda S: S["r"] + Rz(yaw) @ Vector((-0.28, 0.25, -0.2 + 0.35 * on))}
+    p.elbows = {"l": lambda S: S["l"] + Rz(yaw) @ Vector((0.16 + 0.12 * on, 0.32 - 0.07 * on, -0.28 + 0.45 * on)),
+                "r": lambda S: S["r"] + Rz(yaw) @ Vector((-0.16 - 0.12 * on, 0.32 - 0.07 * on, -0.28 + 0.45 * on))}
     p.fist = {"l": 0.55, "r": 0.55}
     return p
 
