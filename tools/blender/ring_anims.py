@@ -962,6 +962,7 @@ CLIP_CONTACTS = {
 # Партія 1 (рух борця й рефері) — окремий файл, ті самі хелпери.
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_move.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_run.py"), encoding="utf-8").read())
+exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_ropes.py"), encoding="utf-8").read())
 CLIPS += MOVE_CLIPS
 CLIP_NODES.update(MOVE_CLIP_NODES)
 CLIP_EVENTS.update(MOVE_EVENTS)
@@ -1068,7 +1069,10 @@ def quality(name, framesA, framesB, bases):
         fr = frames or ()
         for fi in range(1, len(fr)):
             for hb in ("hand_l", "hand_r"):
-                d_ = (fr[fi][1][hb][0] - fr[fi - 1][1][hb][0]).length
+                # відносно таза: біг і розворот несуть кисть разом із тілом — це не телепорт
+                rel1 = fr[fi][1][hb][0] - fr[fi][1]["pelvis"][0]
+                rel0 = fr[fi - 1][1][hb][0] - fr[fi - 1][1]["pelvis"][0]
+                d_ = (rel1 - rel0).length
                 if d_ > jump:
                     jump, jwh = d_, f"{tag}.{hb}, кадр {fi}"
     q["hand_jump"] = (jump * 100.0, jwh)
