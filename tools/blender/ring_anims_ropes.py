@@ -95,7 +95,7 @@ def rebound_pose(t, L, R):
     duck = R.duck * smooth(min(1.0, ret_t / 0.2)) if R.ret else 0.0
     p = RPose(forced=set())
     bob = 0.025 * math.cos(2 * math.pi * t / 0.33) * run
-    p.pelvis = Vector((0.0, track(t, path_y), -0.07 - bob - 0.06 * on - 0.06 * R.crouch * on - 0.03 * R.heavy - 0.08 * duck))
+    p.pelvis = Vector((0.0, track(t, path_y), -0.07 - bob - 0.14 * on - 0.06 * R.crouch * on - 0.03 * R.heavy - 0.08 * duck))
     p.pelvis_yaw = yaw
     hit_tilt = {"side": -2.0, "back": -14.0, "chest": 22.0}[R.hit]
     p.pitch = (R.lean + 4.0 * R.heavy) * run + hit_tilt * on + 30.0 * duck
@@ -160,3 +160,45 @@ MOVE_CLIPS += [(r.name, reb_len(r), (lambda t, L, r=r: rebound_pose(t, L, r)), N
 MOVE_EVENTS.update({r.name: [("rope_hit", reb_plan(r)[0]["hit"], "spine_02", "rope2:%.2f" % r.sink),
                              ("rope_hit", reb_plan(r)[0]["hit"] + 0.02, "spine_03", "rope3:%.2f" % (r.sink * 0.8)),
                              ("rope_release", reb_plan(r)[0]["push"], "-", "-")] for r in REBS})
+
+
+# ---------------------------------------------------------------- збірка: розбіг і біг назад — з перевіреного циклу бігу
+# (власник 29.10.2026: на відштовхуванні рука викручувалась, ноги перехрещувались на зворотному бігу). Розбіг і біг
+# назад — run_pose (ring_anims_run.py), відскок — rebound_pose; між ними — короткі змішування.
+
+def run_at(tau, origin_y, yaw, R):
+    p = run_pose(tau, R)
+    Rm = Rz(yaw)
+    off = Vector((0.0, origin_y, 0.0))
+    ankles = tuple(off + Rm @ a for a in p.ankles)
+    knees = tuple(off + Rm @ k for k in p.knees)
+    rots = tuple(Quaternion(UP, math.radians(yaw)) @ q for q in p.foot_rot)
+    orient(p, (0.0, origin_y), yaw)
+    p.ankles, p.knees, p.foot_rot = ankles, knees, rots
+    return p
+
+def _warp(x):
+    x = max(0.0, x)
+    return x * x * (2.0 - x) if x < 1.0 else x       # розгін з нуля, на x=1 — рівна швидкість
+
+def rebound_full(t, L, R):
+    T, path_y, path_yaw, falls, face, rope_y = reb_plan(R)
+    RL = RUN_LOOPS["Run_Heavy_Loop" if R.heavy else ("Run_Tired_Loop" if R.lean > 10 else "Run_Loop")]
+    v = RL.stride / RL.L
+    contact_y = track(T["hit"], path_y)
+    tau_hit = abs(contact_y) / v
+    hit, push = T["hit"], T["push"]
+    wc = track(t, [(0.0, 0.0), (hit - 0.16, 0.0), (hit, 1.0), (push, 1.0), (push + 0.16, 0.0), (L + 1.0, 0.0)])
+    c = rebound_pose(t, L, R)
+    if t < push:
+        a = run_at(tau_hit * _warp(t / hit) if t < hit else tau_hit + v * 0 + (t - hit) * 0.0, 0.0, 0.0, RL)
+        return blend_pose(a, c, wc) if wc < 1.0 else c
+    if not R.ret:
+        return c
+    tr = (t - push) / 0.25
+    b = run_at(0.25 * _warp(tr) if tr < 1 else 0.25 * (tr - 0.5) + 0.125, contact_y, 180.0, RL)
+    return blend_pose(b, c, wc) if wc > 0.0 else b
+
+MOVE_CLIPS[:] = [c if not any(c[0] == r.name for r in REBS) else
+                 (c[0], c[1], (lambda t, L, r=next(r for r in REBS if r.name == c[0]): rebound_full(t, L, r)), None, False, None, 0)
+                 for c in MOVE_CLIPS]
