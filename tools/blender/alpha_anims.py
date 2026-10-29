@@ -63,12 +63,16 @@ class Rig:
         self.finger_axis = {}
         for s in "lr":
             hinge = (b["pinky_01_" + s].head_local - b["index_01_" + s].head_local).normalized()
-            palm = b["thumb_01_" + s].head_local
+            # Бік долоні — нормаль площини кісточок, повернута туди, де великий палець. Стара перевірка («кінчик
+            # ближче до основи великого») на правій кисті давала хибний знак: пальці гнулись НАЗАД — кисть-«лапа з
+            # жахів» (власник 29.10.2026). Тепер: згин має вести кінчик у бік долоні.
+            mid0, hand0 = b["middle_01_" + s].head_local, b["hand_" + s].head_local
+            n = (b["index_01_" + s].head_local - b["pinky_01_" + s].head_local).cross(mid0 - hand0).normalized()
+            if (b["thumb_02_" + s].head_local - mid0).dot(n) < 0:
+                n = -n
             tip, base = b["index_02_" + s].tail_local, b["index_01_" + s].head_local
-            sign = 1.0
             q = Quaternion(hinge, math.radians(60))
-            if ((base + q @ (tip - base)) - palm).length > (tip - palm).length:
-                sign = -1.0
+            sign = 1.0 if (q @ (tip - base)).dot(n) > (tip - base).dot(n) else -1.0
             for f in ("index", "middle", "ring", "pinky"):
                 for k in ("01", "02", "03"):
                     n = f"{f}_{k}_{s}"

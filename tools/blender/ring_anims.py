@@ -1126,6 +1126,56 @@ def overlap(act, clip, loop):
             k.co[1] = k.handle_left[1] = k.handle_right[1] = v
         fc.update()
 
+# ---------------------------------------------------------------- кліпи з лабораторії (tools/blender/ring_lab.py)
+# Парні прийоми, поставлені в живому Blender ключовими позами з посадкою кистей на шкіру і перевіркою по сітці
+# (власник 29.10.2026: керований риг). Файл tools/blender/lab_clips/<кліп>.json замінює дію з формули.
+LAB_DIR = os.path.join(REPO, "tools", "blender", "lab_clips")
+
+def load_lab_clips(arm, actions):
+    import json
+    done = set()
+    if not os.path.isdir(LAB_DIR):
+        return done
+    for fn in sorted(os.listdir(LAB_DIR)):
+        if not fn.endswith(".json"):
+            continue
+        clip = fn[:-5]
+        data = json.load(open(os.path.join(LAB_DIR, fn), encoding="utf-8"))
+        for role in ("A", "B"):
+            name = f"{clip}_{role}"
+            if name not in actions:
+                continue
+            act = bpy.data.actions.new(name + "_lab")
+            act.use_fake_user = True
+            arm.animation_data_create()
+            arm.animation_data.action = act
+            prev = {}
+            for f, fr in enumerate(data[role]):
+                for pb in arm.pose.bones:
+                    if pb.name not in fr:
+                        continue
+                    loc, rot = fr[pb.name]
+                    q = Quaternion(rot)
+                    if pb.name in prev and prev[pb.name].dot(q) < 0:
+                        q.negate()
+                    prev[pb.name] = q
+                    pb.rotation_quaternion = q
+                    pb.keyframe_insert("rotation_quaternion", frame=f)
+                    if pb.name == "pelvis":
+                        pb.location = Vector(loc)
+                        pb.keyframe_insert("location", frame=f)
+            for fc in act.fcurves:
+                for kp in fc.keyframe_points:
+                    kp.interpolation = 'LINEAR'
+            act.frame_range = (0, len(data[role]) - 1)
+            old = actions[name]
+            bpy.data.actions.remove(old)
+            act.name = name
+            actions[name] = act
+        done.add(clip)
+        print(f"[лабораторія] {clip}: {len(data['A'])} кадрів з {fn}", flush=True)
+    return done
+
 # ---------------------------------------------------------------- запуск
 
 def bake_clip(rigA, rigB, name, length, fa, fb):
@@ -1274,9 +1324,11 @@ def main():
     # Пози в просторі ригу, скелети однакові — тож запис на A дає ту саму дію.
     actions = {n: write_action(armA, n, s_) for n, s_, arm in samples}
     loop_of = {c[0]: c[4] for c in CLIPS}
+    lab = load_lab_clips(armA, actions)
     for n, act in actions.items():
         base = n[:-2] if n.endswith(("_A", "_B")) else n
-        overlap(act, base, loop_of.get(base, False))
+        if base not in lab:                       # кліпи з лабораторії вже з перекриттям і посадкою кистей
+            overlap(act, base, loop_of.get(base, False))
     if REELS:
         for name, an, bn, offset, yaw in reel_specs:
             reel(name, armA, armB, actions[an], actions.get(bn) if bn else None, offset, yaw)
