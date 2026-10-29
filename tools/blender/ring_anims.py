@@ -857,6 +857,15 @@ CLIP_CONTACTS = {
                        ("hand_r", "upperarm_r")},
 }
 
+# Партія 1 (рух борця й рефері) — окремий файл, ті самі хелпери.
+exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_move.py"), encoding="utf-8").read())
+CLIPS += MOVE_CLIPS
+CLIP_NODES.update(MOVE_CLIP_NODES)
+CLIP_EVENTS.update(MOVE_EVENTS)
+NODE_POSES.update(MOVE_NODE_POSES)
+CLIP_CONTACTS.update(MOVE_CONTACTS)
+MOTION = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims_motion.txt")
+
 # ---------------------------------------------------------------- якість
 
 RADIUS = {"pelvis": 0.13, "spine_01": 0.13, "spine_02": 0.13, "spine_03": 0.13, "neck_01": 0.06, "head": 0.1,
@@ -1049,6 +1058,8 @@ def main():
     samples = []
     reel_specs = []
     failed = []
+    motion = ["# Root motion кліпів однієї постаті (tools/blender/ring_anims.py): <кліп> <dx dy м, простір ригу: −Y — уперед> "
+              "<поворот ° (+ ліворуч)> <швидкість м/с>"]
     manifest = ["# Кліпи рингу (tools/blender/ring_anims.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> "
                 "<зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>"]
     for name, length, fa, fb, loop, offset, yaw in CLIPS:
@@ -1091,6 +1102,12 @@ def main():
             failed.append(name)
         nodes = CLIP_NODES.get(name, {})
         if fb is None:
+            # root motion: зсув і поворот таза від першого до останнього кадру (простір ригу, A у нулі)
+            m0, m1 = sa[0]["pelvis"], sa[-1]["pelvis"]
+            d = m1.translation - m0.translation
+            dq = swing_twist_z(m0.to_quaternion())[0].inverted() @ swing_twist_z(m1.to_quaternion())[0]
+            dyaw = math.degrees(dq.angle) * (1 if dq.z >= 0 else -1)
+            motion.append(f"{name} {d.x:.3f} {d.y:.3f} {dyaw:.1f} {math.hypot(d.x, d.y) / length:.3f}")
             samples.append((name, sa, armA))
             na = nodes.get("A", (None, None))
             manifest.append(f"{name} - {length:.3f} {int(loop)} 0 0 0 0 {na[0] or '-'} {na[1] or '-'}")
@@ -1120,6 +1137,9 @@ def main():
     export_ring(armA)
     with open(MANIFEST, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(manifest) + "\n")
+    if not ONLY:
+        with open(MOTION, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("\n".join(motion) + "\n")
     with open(EVENTS, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("# Мітки подій кліпів рингу (tools/blender/ring_anims.py): <кліп> <подія> <час с> <кістка A> <кістка B>\n")
         for name, *_ in CLIPS:
@@ -1273,7 +1293,8 @@ def look_pair(name, armA, armB, sa, sb, length):
             if armB is not None:
                 set_pose(armB, sb[i])
             bpy.context.view_layer.update()
-            cam.location = loc
+            c_ = sa[i]["pelvis"].translation if armB is None else Vector()
+            cam.location = Vector(loc) + Vector((c_.x, c_.y + 0.3, 0.0))
             cam.rotation_euler = rot
             path = os.path.join(LOOK_DIR, "_tile.png")
             scene.render.filepath = path
