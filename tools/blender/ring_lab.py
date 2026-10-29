@@ -475,3 +475,194 @@ def surface_world(arm, bone, along, dir_world, palm=0.03):
     d = Vector(dir_world).normalized()
     hit = whole.ray_cast(c + d * 0.35, -d, 0.6)
     return (hit[0] + hit[1] * palm) if hit[0] is not None else c + d * 0.1
+
+
+# ---------------------------------------------------------------- ворота 3: перевірки за картою прийому
+# Карта — tools/blender/moves/<прийом>.json (ворота 1, з референсів). Перевіряє ТЕ, що власник бачив очима:
+# правильна кінцівка на правильному місці, вісь кисті, бік ліктя й голови, проникнення по сітці.
+
+def load_map(name):
+    import json
+    return json.load(open(os.path.join(REPO, "tools", "blender", "moves", name + ".json"), encoding="utf-8"))
+
+
+def _palm(arm, s):
+    """Центр долоні, нормаль долоні (у бік, куди згинаються пальці) і напрям пальців — у світі."""
+    pb = arm.pose.bones
+    W = arm.matrix_world
+    h = W @ pb["hand_" + s].head
+    m0 = W @ pb["middle_01_" + s].head
+    tip = W @ pb["middle_03_" + s].tail
+    i0, p0 = W @ pb["index_01_" + s].head, W @ pb["pinky_01_" + s].head
+    n = (i0 - p0).cross(m0 - h).normalized()
+    if (tip - m0).dot(n) < 0:               # нормаль — у бік долоні (туди, куди зігнуті пальці)
+        n = -n
+    return (h + m0) / 2 + n * 0.012, n, (m0 - h).normalized()
+
+
+def check_frame(mv, f):
+    """Провали кадру f за картою mv (фаза тримання). Кадр уже поставлений show(f)."""
+    lim = mv["limits"]
+    out = []
+    hold = any(ph.get("hold") and ph["from"] <= f <= ph["to"] for ph in mv["phases"])
+    for me_tag, ot_tag in (("A", "B"), ("B", "A")):
+        me, ot = LAB["arm" + me_tag], LAB["arm" + ot_tag]
+        if not hold:
+            continue
+        for limb, spec in mv["hold"].items():
+            if not limb.startswith("hand_"):
+                continue
+            s = limb[-1]
+            if "from" in spec:
+                tgt, nrm, _t = surface_frame(ot, spec["bone"], spec["along"], spec["from"], palm=0.0)
+            else:
+                tgt = surface_world(ot, spec["bone"], spec["along"], spec["from_world"], palm=0.0)
+                nrm = Vector(spec["from_world"]).normalized()
+            c, pn, fd = _palm(me, s)
+            dist = (c - tgt).length * 100 - spec.get("palm_off", 0.03) * 100
+            if abs(dist) > lim["contact_cm"]:
+                out.append(f"{me_tag}.{limb}: долоня за {dist:.1f} см від «{spec['on']}»")
+            ang = math.degrees(pn.angle(-nrm))
+            if ang > lim["axis_deg"]:
+                out.append(f"{me_tag}.{limb}: долоня не до шкіри — {ang:.0f}°")
+            if "fingers_dir_partner" in spec:
+                want = (ot.matrix_world.to_3x3() @ Vector(spec["fingers_dir_partner"])).normalized()
+                want = (want - nrm * want.dot(nrm)).normalized()
+                fa = math.degrees(fd.angle(want))
+                if fa > lim["axis_deg"] + 15:
+                    out.append(f"{me_tag}.{limb}: пальці не туди — {fa:.0f}°")
+        pb, W = me.pose.bones, me.matrix_world
+        if "elbow_r" in mv["hold"]:
+            drop = ((W @ pb["upperarm_r"].head).z - (W @ pb["lowerarm_r"].head).z) * 100
+            if drop > lim["elbow_drop_cm"]:
+                out.append(f"{me_tag}.лікоть_r: нижче плеча на {drop:.0f} см")
+        if mv["hold"].get("head", "").startswith("зі свого лівого"):
+            hm, ho = W @ pb["head"].head, ot.matrix_world @ ot.pose.bones["head"].head
+            side = (W.inverted() @ ho - W.inverted() @ hm).x       # голова партнера має бути праворуч (−X), моя — зліва
+            if side > -0.02:
+                out.append(f"{me_tag}.голова: не зліва від голови партнера")
+    pen = depth2(f, tol=lim["pen_cm"] / 100)
+    for d, where in pen[:3]:
+        out.append(f"проникнення {d:.1f} см ({where})")
+    return out
+
+
+def check_clip(mv, step=1, report=None):
+    """Усі кадри; повертає {кадр: [провали]} і пише звіт Logs/ring_anims/<прийом>_check.md."""
+    res = {}
+    for f in range(0, len(LAB["frames"]["A"]), step):
+        show(f)
+        bad = check_frame(mv, f)
+        if bad:
+            res[f] = bad
+    lines = [f"# Перевірка «{mv['title']}» за картою tools/blender/moves/{mv['name']}.json", "",
+             f"Кадрів з провалами: {len(res)} з {len(LAB['frames']['A'])}", ""]
+    for f, b in res.items():
+        lines.append(f"- кадр {f}: " + "; ".join(b))
+    path = report or os.path.join(REPO, "Logs", "ring_anims", mv["name"] + "_check.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
+    return res
+
+
+# ---------------------------------------------------------------- ворота 2: кисті за картою
+def _arm_pen(arm, s, other, dg=None):
+    """Скільки вершин руки (кисть, передпліччя) боку s усередині тіла other."""
+    dg = dg or bpy.context.evaluated_depsgraph_get()
+    whole = _bvh(_meshes(other), dg)
+    return sum(1 for v in _arm_verts(arm, s, dg)[::2] if _inside(whole, v))
+
+
+def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
+    """Поставити кисть ригу tag за специфікацією карти: долоня на шкірі цілі, пальці — за картою, долоня — до шкіри;
+    полюс ліктя — серед кандидатів той, з яким рука не входить у тіло суперника (а за рівних — вищий лікоть)."""
+    rig = LAB["rig" + tag]
+    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
+    W = arm.matrix_world
+    Ri = W.to_3x3().inverted()
+    if "from" in spec:
+        tgt, nrm, _t = surface_frame(ot, spec["bone"], spec["along"], spec["from"], palm=0.0)
+    else:
+        tgt = surface_world(ot, spec["bone"], spec["along"], spec["from_world"], palm=0.0)
+        nrm = Vector(spec["from_world"]).normalized()
+    if "fingers_dir_partner" in spec:
+        want = ot.matrix_world.to_3x3() @ Vector(spec["fingers_dir_partner"])
+    else:                                    # уздовж кістки цілі (охопити лікоть / передпліччя)
+        pb_ = ot.pose.bones[spec["bone"]]
+        want = ot.matrix_world.to_3x3() @ (pb_.tail - pb_.head)
+    want = (want - nrm * want.dot(nrm)).normalized()
+    grip_w = tgt + nrm * spec.get("palm_off", 0.03)               # центр долоні — над шкірою на товщину долоні
+    ik = arm.pose.bones["lowerarm_" + s].constraints[0]
+    rig.iks["hand_" + s].influence = 1.0
+    e = rig.empties["wrist_" + s]
+    best = None
+    # кандидати осі: пальці за картою, повернуті навколо нормалі шкіри (±25°) і з піднятими кінчиками (0..30°) —
+    # обираємо без проникнення руки, далі — найменша похибка долоні (вісь не «вгадується», а перевіряється)
+    for up_sign in (1.0, -1.0):
+        for yaw in (0.0, -25.0, 25.0):
+            for lift in (0.0, 15.0, 30.0):
+                w2 = Quaternion(nrm, math.radians(yaw)) @ want
+                w2 = Quaternion(w2.cross(nrm).normalized(), math.radians(-lift)) @ w2
+                up = (thumb_world - nrm * thumb_world.dot(nrm))
+                if up.length < 1e-3:
+                    up = nrm.cross(w2)
+                up = up.normalized() * up_sign
+                f_l, u_l = Ri @ w2, Ri @ up
+                e.location = W @ G["wrist_for_grip"](W.inverted() @ grip_w, f_l)
+                e.rotation_quaternion = W.to_quaternion() @ G["hand_rotation"](rig, s, f_l, u_l)
+                bpy.context.view_layer.update()
+                c, pn, fd = _palm(arm, s)
+                err = math.degrees(pn.angle(-nrm))
+                if err > 45:
+                    continue
+                pen = _arm_pen(arm, s, ot)
+                key = (pen, err)
+                if best is None or key < best[0]:
+                    best = (key, e.location.copy(), e.rotation_quaternion.copy())
+    if best is None:
+        best = ((0, 99), e.location.copy(), e.rotation_quaternion.copy())
+    e.location, e.rotation_quaternion = best[1], best[2]
+    ik.influence = 1.0
+    bpy.context.view_layer.update()
+    # лікоть: кандидати навколо осі плече—кисть; найменше проникнення руки, далі — висота ліктя
+    sh = W @ arm.pose.bones["upperarm_" + s].head
+    wr = e.location.copy()
+    axis = (wr - sh).normalized()
+    ref = Vector((0, 0, 1)) - axis * axis.z
+    if ref.length < 1e-3:
+        ref = Vector((1, 0, 0))
+    ref.normalize()
+    side = ref.cross(axis)
+    el = rig.empties["elbow_" + s]
+    cands = []
+    for k in range(12):
+        a = 2 * math.pi * k / 12
+        d = ref * math.cos(a) + side * math.sin(a)
+        el.location = (sh + wr) / 2 + d * 0.5
+        bpy.context.view_layer.update()
+        pen = _arm_pen(arm, s, ot)
+        ez = (W @ arm.pose.bones["lowerarm_" + s].head).z
+        cands.append((pen, -ez, el.location.copy()))
+    cands.sort(key=lambda c: (c[0], c[1]))
+    el.location = cands[0][2]
+    bpy.context.view_layer.update()
+    # якщо рука все ще торкається тіла глибше за шкіру — відсунути долоню по нормалі шкіри (до 3 см), не в тіло
+    pen = cands[0][0]
+    lifted = 0.0
+    while pen > 0 and lifted < 0.03:
+        e.location = e.location + nrm * 0.005
+        lifted += 0.005
+        bpy.context.view_layer.update()
+        pen = _arm_pen(arm, s, ot)
+    cands[0] = (pen,) + cands[0][1:]
+    return {"кут_долоні": round(best[0][1]), "проникнення_руки": cands[0][0]}
+
+
+def place_hands(mv):
+    """Усі кисті обох за фазою тримання карти."""
+    out = {}
+    for tag in ("A", "B"):
+        for limb, spec in mv["hold"].items():
+            if limb.startswith("hand_"):
+                out[f"{tag}.{limb}"] = place_hand(tag, limb[-1], spec)
+    return out

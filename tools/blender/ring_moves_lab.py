@@ -24,7 +24,8 @@ def _base(fwd=0.0, crouch=0.0, pitch=None, lean_x=0.0):
 
 
 SURF = {}                   # точка долоні на потилиці партнера (простір свого ригу), за роллю
-APART = [0.0]               # додатковий розхід пари вбік (м) у кадрі, якщо голови перетинаються
+APART = [0.0]
+MOVE_MAP = None              # карта прийому (tools/blender/moves/*.json), якщо задана — кисті в триманні за нею               # додатковий розхід пари вбік (м) у кадрі, якщо голови перетинаються
 def neck_surface():
     """Цілі хвату на шкірі партнера для обох. Референс зчепу (фото тренування, пара в ринзі): ПРАВА рука — через ліве
     плече суперника на основу його шиї ззаду; ЛІВА — тримає його правий лікоть знизу; голови — щока до щоки, у кожного
@@ -54,11 +55,11 @@ def tie(fwd, grip=1.0, push=0.0, hold_head=1.0, role=None):
         P_ = G["P"]
         FWD, DOWN, UP, LEFT, RIGHT = G["FWD"], G["DOWN"], G["UP"], G["LEFT"], G["RIGHT"]
         p = _base(fwd + 0.04 * push, crouch=0.09 * hold_head)
-        p.pelvis = p.pelvis + Vector((0.17 * hold_head, 0.1 * hold_head, 0.0))    # голова — ліворуч, рука на шиї — праворуч
-        p.pitch = 16.0 + 18.0 * hold_head + 5.0 * push
+        p.pelvis = p.pelvis + Vector((0.2 * hold_head, 0.2 * hold_head, 0.0))     # голова — ліворуч; таз відведений назад (референс)
+        p.pitch = 16.0 + 30.0 * hold_head + 5.0 * push       # тулуби назустріч, нижче — дистанція
         p.roll = -4.0 * hold_head
         p.yaw = -10.0 * hold_head + 4.0 * push
-        p.head_yaw = -38.0 * hold_head
+        p.head_yaw = -60.0 * hold_head               # дивиться повз плече суперника, не в обличчя
         p.head_pitch = -6.0 + 6.0 * hold_head
         p.ankles = (G["foot"](0.2 + 0.1 * hold_head, -0.105 - fwd - 0.055 * hold_head),
                     G["foot"](-0.2 + 0.02 * hold_head, 0.075 - fwd + 0.145 * hold_head))
@@ -83,7 +84,7 @@ def tie(fwd, grip=1.0, push=0.0, hold_head=1.0, role=None):
         el = p.elbows
         p.elbows = {"r": lambda S: el["r"](S).lerp(S["r"] + Vector((-0.45, -0.15, 0.15)), grip),   # лікоть високо й назовні (референс)
                     "l": lambda S: el["l"](S).lerp(S["l"] + Vector((0.4, 0.05, -0.3)), grip)}
-        p.fist = {"r": 0.25 + 0.15 * grip, "l": 0.25 + 0.35 * grip}   # на шиї — пальці охоплюють шию; на лікті — лікоть
+        p.fist = {"r": 0.25 - 0.15 * grip, "l": 0.25 + 0.1 * grip}    # на шиї — пальці лише ледь зігнуті (шия товста), на лікті — підтримує
         return p
     return f
 
@@ -161,7 +162,9 @@ def lockup_frames(fps=30, settle=True):
             if h < 0.5 or max(ring_lab.part_depth("body_head", "body_head"), ring_lab.part_depth("body_torso", "body_torso")) <= 0.006:
                 break
             APART[0] += 0.01
-        if settle and ga > 0.05:                     # посадка кистей (у хваті — точки на шкірі, лише доведення)
+        if MOVE_MAP and ga >= 0.99:                  # тримання: кисті за картою прийому (ворота 2)
+            ring_lab.place_hands(MOVE_MAP); ring_lab.place_hands(MOVE_MAP)
+        elif settle and ga > 0.05:                   # підхід: посадка кистей на поверхню
             settle_pair()
         out["A"].append(ring_lab.capture("A")); out["B"].append(ring_lab.capture("B"))
     ring_lab.LAB["frames"] = out
