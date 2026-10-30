@@ -368,7 +368,8 @@ def lockup_side(t, L, partner_tag, sign=1.0):
                                   -d * approach + 0.05 * smooth(approach) + 0.04 * antic - 0.015 * push + 0.012 * max(0.0, jolt),
                                   -0.04 * antic - 0.06 * approach - 0.015 * abs(push)))
     p.pitch = p.pitch - 6.0 * antic + 20.0 * smooth(approach) + 2.0 * push - 2.5 * jolt
-    p.yaw = 8.0 * smooth(approach) + 3.0 * push
+    # коротша рука (жіночий набір) — ліве плече більше вперед, інакше передпліччя до шиї суперника лягало на свої груди
+    p.yaw = (8.0 - 110.0 * (1.0 - BODY["arm"])) * smooth(approach) + 3.0 * push
     p.roll = 10.0 * smooth(approach) + 2.0 * shift                                 # плече вбік — голови не стикаються
     p.head_pitch = p.head_pitch + 4.0 * smooth(approach) + 4.0 * jolt
     p.head_yaw = 34.0 * smooth(approach) - 3.0 * push                              # вухо до вуха
