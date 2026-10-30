@@ -74,6 +74,7 @@ if "--only" in _args:
     ONLY = set(_args[_args.index("--only") + 1].split(","))
 # --female: ті самі кліпи на жіночому скелеті набору з жіночою манерою (ring_anims_run.STYLE) — окремий FBX і маніфести
 FEMALE = "--female" in _args
+DIAG = set(_args[_args.index("--diag") + 1].split(",")) if "--diag" in _args else set()
 SFX = "_F" if FEMALE else ""
 OUT_FBX = os.path.join(REPO, "Assets", "Art", "Animations", "RING_Moves%s.fbx" % SFX)
 MANIFEST = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims%s_manifest.txt" % SFX.lower())
@@ -161,6 +162,8 @@ def apply_w(rig, p, partner=None):
     rots = p.foot_rot or (Quaternion(UP, yl), Quaternion(UP, yr))
     for s, a, qf in (("l", ank[0], rots[0]), ("r", ank[1], rots[1])):
         e = rig.empties["ankle_" + s]
+        if a.z < ANKLE_FLOOR:                              # щиколотка не під матом (падіння: тіло повертається навколо таза)
+            a = Vector((a.x, a.y, ANKLE_FLOOR))
         # стопа не далі ноги: кроки сплановано під чоловічий набір — коротшій нозі ціль виходила за досяжність
         th = pb["thigh_" + s]
         Ll = (th.length + pb["calf_" + s].length) * 0.995
@@ -225,6 +228,46 @@ def apply_w(rig, p, partner=None):
             rig.empties["wrist_" + s].location = W @ wrist_for_grip(grip, f)
             rig.empties["wrist_" + s].rotation_quaternion = Wq @ hand_rotation(rig, s, f, u)
         bpy.context.view_layer.update()
+    pole_side_fix(rig)
+
+
+ANKLE_FLOOR = 0.068    # м: щиколотка над матом (стопа на маті — 0,071)
+
+def pole_side_fix(rig):
+    """Суглоб (коліно, лікоть) — на боці полюса. Кут полюса IK залежить від осі кореневої кістки, і коли таз
+    повернутий (лежить, падає), на жіночому скелеті коліно розв'язувалось дзеркально — під мат (30.10.2026). Якщо
+    суглоб по інший бік лінії корінь—ціль, ніж полюс, кадр розв'язується з кутом +180°."""
+    pb = rig.arm.pose.bones
+    W = rig.arm.matrix_world
+    base = rig.__dict__.setdefault("pole_base", {k: c.pole_angle for k, c in rig.iks.items() if k.startswith(("arm_", "leg_"))})
+    for key, root, mid, pole in (("leg_l", "thigh_l", "calf_l", "knee_l"), ("leg_r", "thigh_r", "calf_r", "knee_r"),
+                                 ("arm_l", "upperarm_l", "lowerarm_l", "elbow_l"), ("arm_r", "upperarm_r", "lowerarm_r", "elbow_r")):
+        c = rig.iks[key]
+        if c.influence <= 0.0:
+            continue
+        def side():
+            a = W @ pb[root].head; t = W @ pb[mid].tail; m = W @ pb[mid].head
+            ax = (t - a)
+            if ax.length < 1e-4:
+                return 1.0
+            axn = ax.normalized()
+            pm = (m - a) - axn * (m - a).dot(axn)
+            pp = (rig.empties[pole].location - a) - axn * (rig.empties[pole].location - a).dot(axn)
+            if pm.length < 0.02 or pp.length < 1e-4:          # майже пряма — бік не важливий
+                return 1.0
+            return pm.normalized().dot(pp.normalized())
+        c.pole_angle = base[key]
+        bpy.context.view_layer.update()
+        if side() < 0.0:                                  # суглоб по інший бік лінії, ніж полюс — підібрати кут
+            best = (side(), base[key])
+            for d in range(15, 360, 15):
+                c.pole_angle = base[key] + math.radians(d)
+                bpy.context.view_layer.update()
+                v = side()
+                if v > best[0]:
+                    best = (v, c.pole_angle)
+            c.pole_angle = best[1]
+            bpy.context.view_layer.update()
 
 CONTACT_BONES = ("pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "head", "upperarm_l", "upperarm_r",
                  "lowerarm_l", "lowerarm_r", "hand_l", "hand_r", "thigh_l", "thigh_r", "calf_l", "calf_r",
@@ -370,8 +413,17 @@ def init_rest(arm):
     # пропорції набору відносно чоловічого (під нього задано метри поз): жіночий — ноги 0,88, руки 0,85 (заміри 30.10.2026)
     BODY["leg"] = (b["thigh_l"].length + b["calf_l"].length) / (0.4177 + 0.4361)
     BODY["arm"] = (b["upperarm_l"].length + b["lowerarm_l"].length) / (0.2519 + 0.2662)
+    BODY["thigh"], BODY["calf"] = b["thigh_l"].length, b["calf_l"].length
 
-BODY = {"leg": 1.0, "arm": 1.0}
+BODY = {"leg": 1.0, "arm": 1.0, "thigh": 0.4177, "calf": 0.4361}
+
+def kneel_geom():
+    """Стоїть на правому коліні: таз над коліном на довжину стегна, гомілка лежить на маті назад (з кісток набору)."""
+    kz = 0.07
+    pel_z = BODY["thigh"] * 0.97 + kz
+    knee_y = 0.12
+    ankle_y = knee_y + BODY["calf"] * 0.97
+    return pel_z, knee_y, ankle_y
 ARM_SCALED = {"Ref_Raise_Hand"}       # пари, де відстань задана довжиною руки
 
 def xf(off, q, pt):
@@ -650,7 +702,7 @@ def clip_bump_back(t, L):
     abs_pel = Vector((0.0, y, z + bounce))
     kb = track(t, [(0.0, 0.0), (0.56, 0.45), (0.95, 0.45), (1.3, 0.15)])      # наприкінці — коліна, як у «лежить на спині»
     p = body(off_for(abs_pel), q, knee_bend=kb * smooth(th / 90.0) + 0.15 * (1 - smooth(th / 90.0)) * 0.0)
-    planted = 1.0 - smooth((th - 45.0) / 40.0)
+    planted = 1.0 - smooth((th - 25.0) / 35.0)          # стопи відриваються, поки таз ще над п'ятами (не складати ноги під мат)
     sl, sr = foot(0.2, -0.105), foot(-0.2, 0.075)           # стопи стоять там, де були в стійці (без ковзання)
     p.ankles = (lerp(p.ankles[0], sl, planted), lerp(p.ankles[1], sr, planted))
     yl, yr = Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0))
@@ -672,8 +724,8 @@ def clip_bump_back(t, L):
         p.elbows = {s_: (lambda S, s_=s_: el0[s_](S).lerp(st_el[s_](S), g)) for s_ in "lr"}
     # кінець — руки й лікті пози «лежить на спині» (вузол lying_back): плавно після відбою об мат
     end_w = smooth((t - 0.95) / 0.3)
-    if end_w > 0:
-        return _arms_to(p, lying(sit=0.0, knee_bend=0.15), end_w)
+    if end_w > 0:                                      # уся поза — до «лежить на спині» (вузол), тут же, де впав
+        return blend_pose(_filled(p), _filled(lying(y=0.4, sit=0.0, knee_bend=0.15)), end_w)
     return p
 
 def _arms_to(p, q, w):
@@ -700,28 +752,30 @@ def _getup_phase(t, L, k):
         kk = smooth(k - 1.0)
         # сидить → коліно: таз піднімається, тіло обертається вертикально, руки — на мат за собою
         q = Quaternion(LEFT, math.radians(-90.0 * (1 - kk) + 0.0))
-        abs_pel = Vector((0.0, lerp(0.0, 0.1, kk), lerp(LIE_Z, 0.55 * BODY["leg"], kk)))      # таз на коліні — за довжиною ноги
+        kpz, kny, kay = kneel_geom()
+        abs_pel = Vector((0.0, lerp(0.0, 0.1, kk), lerp(LIE_Z, kpz, kk)))      # таз над коліном — за довжиною стегна
         p = RPose()
         p.pelvis = off_for(abs_pel)
         p.pelvis_q = q
         p.pitch = lerp(55.0, 30.0, kk)
         lk = BODY["leg"]                                # відстані стоп — за довжиною ноги набору
         p.ankles = (lerp(Vector((0.18, -0.45 * lk, 0.071)), foot(0.2, -0.25 * lk), kk),
-                    lerp(Vector((-0.16, -0.55 * lk, 0.071)), Vector((-0.18, 0.45 * lk, 0.09)), kk))
+                    lerp(Vector((-0.16, -0.55 * lk, 0.071)), Vector((-0.18, kay, 0.09)), kk))
         tip = Quaternion(RIGHT, math.radians(-70.0 * kk))
         p.foot_rot = (Quaternion(), tip)
-        p.knees = (Vector((0.22, -0.6, 0.6 * lk)), lerp(Vector((-0.2, -0.6, 0.6 * lk)), Vector((-0.2, -0.3, 0.1)), kk))
+        p.knees = (Vector((0.22, -0.6, 0.6 * lk)), lerp(Vector((-0.2, -0.6, 0.6 * lk)), Vector((-0.2, kny - 0.5, 0.02)), kk))
         p.forced = set()
         p.hands = {"l": (lambda S: S["l"] + Vector((0.15, -0.35 * kk + 0.25 * (1 - kk), -0.6 * (1 - kk) - 0.4 * kk)), DOWN, FWD),
                    "r": (lambda S: S["r"] + Vector((-0.2, 0.25 * (1 - kk), -0.55)), DOWN, FWD)}
         return p
     kk = smooth(k - 2.0)
     p = stance(t, L, sway=0.0)
-    p.pelvis = lerp(off_for(Vector((0.0, 0.1, 0.55 * BODY["leg"]))), p.pelvis, kk)
+    kpz, kny, kay = kneel_geom()
+    p.pelvis = lerp(off_for(Vector((0.0, 0.1, kpz))), p.pelvis, kk)
     p.pitch = lerp(30.0, p.pitch, kk)
     lk = BODY["leg"]
     p.ankles = (feet_track(kk, [(0.0, foot(0.2, -0.25 * lk)), (0.5, foot(0.2, -0.25 * lk)), (1.0, foot(0.2, -0.105))])[0],
-                feet_track(kk, [(0.0, Vector((-0.18, 0.45 * lk, 0.09))), (0.5, foot(-0.2, 0.075)), (1.0, foot(-0.2, 0.075))])[0])
+                feet_track(kk, [(0.0, Vector((-0.18, kay, 0.09))), (0.5, foot(-0.2, 0.075)), (1.0, foot(-0.2, 0.075))])[0])
     tip = Quaternion(RIGHT, math.radians(-70.0 * (1 - kk)))
     # права стопа доходить до розвороту стійки (−14°): інакше кінець кліпу на 14° не збігався з вузлом «stance»
     p.foot_rot = (Quaternion(UP, math.radians(10)), Quaternion(UP, math.radians(-14.0 * kk)) @ tip)
@@ -952,6 +1006,10 @@ def capture_node(rig, name):
     place(rig.arm, Vector(), 0)
     apply_w(rig, NODE_POSES[name]())
     cap = {pb.name: pb.matrix.copy() for pb in rig.arm.pose.bones}
+    move_twist_to_forearm(rig.arm, cap)          # як і кадри кліпів: інакше вузол і кліп різнились скручуванням передпліччя
+    pbn = rig.arm.pose.bones
+    NODE_KNEE[name] = {s_: pbn["pelvis"].matrix.inverted() @ (pbn["calf_" + s_].head + (pbn["calf_" + s_].head - (pbn["thigh_" + s_].head + pbn["foot_" + s_].head) / 2) * 3.0)
+                       for s_ in "lr"}           # точка полюса — на продовженні від середини стегно—стопа через коліно
     NODES[name] = (cap_basis(rig.arm, cap), cap["pelvis"].copy())
 
 LIMB_BONES = {"upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r", "hand_l", "hand_r",
@@ -995,14 +1053,19 @@ def node_gap(arm, cap, node):
     dz = abs(cap["pelvis"].translation.z - npel.translation.z) * 100.0
     return worst, tilt, dz
 
-def blend_to_node(rig, cap, node, w):
+FREE_LIMBS = ("upperarm_l", "upperarm_r", "lowerarm_l", "lowerarm_r", "hand_l", "hand_r", "foot_l", "foot_r", "ball_l", "ball_r")
+NODE_KNEE = {}         # вузол → {бік: коліно в системі таза} — щоб на стику гомілка мала те саме скручування
+
+def blend_to_node(rig, cap, node, w, free=False):
     """Поза кліпу, доведена до вузла з вагою w (1 — точно вузол). Таз: горизонталь і курс — з кліпу."""
     arm = rig.arm
     nb, npel = NODES[node]
     cb = cap_basis(arm, cap)
     out = {}
     for n, (loc, rot) in cb.items():
-        out[n] = (loc, rot) if n in LIMB_BONES else (loc, rot.slerp(nb[n][1], w))
+        # стопи — теж до вузла (поворот навколо щиколотки, щиколотка на місці): кінець повороту на місці відрізнявся
+        # від стійки на 4–5° саме стопою (жіночий набір, 30.10.2026)
+        out[n] = (loc, rot) if (n in LIMB_BONES and not n.startswith(("foot_", "ball_"))) else (loc, rot.slerp(nb[n][1], w))
     T, s_clip = swing_twist_z(cap["pelvis"].to_quaternion())
     _, s_node = swing_twist_z(npel.to_quaternion())
     q = T @ s_clip.slerp(s_node, w)
@@ -1013,6 +1076,30 @@ def blend_to_node(rig, cap, node, w):
     loc, rot, _ = (b.matrix_local.inverted() @ m).decompose()
     out["pelvis"] = (loc, rot)
     set_basis(rig, out, keep_limbs=True)
+    # стопи (завжди) і руки (якщо кліп одиночний, без хвату) — теж до вузла: IK тих самих цілей на іншому скелеті
+    # давав інше скручування гомілки/передпліччя, і стик кліпів клацав на 4–9° (жіночий набір, 30.10.2026)
+    names = FREE_LIMBS if free else ("foot_l", "foot_r", "ball_l", "ball_r")
+    pbs = arm.pose.bones
+    for n in names:
+        if n not in pbs:
+            continue
+        for c in pbs[n].constraints:
+            c.mute = True
+    if free:
+        for s_ in "lr":
+            rig.iks["arm_" + s_].mute = True
+    for n in names:
+        if n in pbs:
+            pbs[n].rotation_quaternion = cb[n][1].slerp(nb[n][1], w)
+    # коліна: стопи лишаються, полюс — туди, де коліно у вузлі (відносно таза)
+    if node in NODE_KNEE:
+        W = arm.matrix_world
+        pm = pbs["pelvis"].matrix
+        for s_ in "lr":
+            e = rig.empties["knee_" + s_]
+            want = W @ (pm @ NODE_KNEE[node][s_])
+            e.location = e.location.lerp(want, w)
+    bpy.context.view_layer.update()
 
 # Вузли кліпів: роль → (з вузла, у вузол); None — поза не канонічна (перехідна, тримає партнера тощо).
 # Вузли, які задає кінець кліпу (ланцюжки): кліп → роль → ім'я вузла. Зсув пари наступного кліпу береться з кінця цього.
@@ -1349,7 +1436,12 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
             if f == frames and end:
                 gaps.append((tag, "кінець", end) + node_gap(rig.arm, cap, end))
             if node and w > 1e-4:
-                blend_to_node(rig, cap, node, w)
+                blend_to_node(rig, cap, node, w, free=(fb is None and not getattr(rig, "holds", False)))
+        if DIAG and name in DIAG:                       # --diag Кліп: поточні точки ніг і цілі IK для розбору
+            pbd, Wd = rigA.arm.pose.bones, rigA.arm.matrix_world
+            r_ = lambda v: tuple(round(x, 2) for x in v)
+            print("DIAG", name, f, {s_: (r_(Wd @ pbd["thigh_" + s_].head), r_(Wd @ pbd["calf_" + s_].head), r_(Wd @ pbd["foot_" + s_].head),
+                                         r_(rigA.empties["ankle_" + s_].location), r_(rigA.empties["knee_" + s_].location)) for s_ in "lr"}, flush=True)
         ca, w1 = capture_w(rigA)
         move_twist_to_forearm(armA, ca)
         for s_ in "lr":
@@ -1378,14 +1470,23 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
         start, end = nodes.get(tag, (None, None))
         if start:
             post.append(node_gap(arm, seq[0], start))
+            if post[-1][0] > LIMITS["node_deg"]:
+                print(f"   [вузол після] {name} {tag} старт: {post[-1][0]:.1f}° ({NODE_WORST[0]})", flush=True)
         if end:
             post.append(node_gap(arm, seq[-1], end))
+            if post[-1][0] > LIMITS["node_deg"]:
+                print(f"   [вузол після] {name} {tag} кінець: {post[-1][0]:.1f}° ({NODE_WORST[0]})", flush=True)
     if post:
         q["node"] = (max(p_[0] for p_ in post), max(p_[2] for p_ in post))
     return sa, sb, wa, wb, q, gaps
 
 def main():
     armA, armB = load_pair()
+    for a_ in (armA, armB):
+        print(f"[риг] {a_.name}: світ до калібрування {tuple(round(x, 3) for x in a_.matrix_world.to_euler())} "
+              f"{tuple(round(x, 3) for x in a_.matrix_world.to_scale())}", flush=True)
+        a_.matrix_world = Matrix.Identity(4)          # калібрування полюсів IK — у просторі ригу без повороту імпорту
+    bpy.context.view_layer.update()
     rigA, rigB = Rig(armA), Rig(armB)
     init_rest(armA)
     for n in NODE_POSES:

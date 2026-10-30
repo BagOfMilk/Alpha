@@ -54,6 +54,12 @@ def orient(p, pos, yaw):
     """Поза, задана «у себе» (обличчям у −Y, у нулі), — у рамку (pos, yaw): таз, руки й лікті повертаються разом."""
     R = Rz(yaw)
     p.pelvis = Vector((pos[0], pos[1], 0.0)) + R @ p.pelvis
+    # таз крутиться навколо своєї голівки, стопи — навколо нуля ригу: голівка не в нулі (жіночий набір — на кілька см)
+    # зсувала таз відносно стоп після повороту, стегно відрізнялось від стійки на 4–5° (30.10.2026)
+    hr = REST.get("pelvis")
+    if hr is not None:
+        h = Vector((hr.x, hr.y, 0.0))
+        p.pelvis = p.pelvis + (R @ h - h)
     p.pelvis_yaw = p.pelvis_yaw + yaw
     p.head_yaw = yaw + (p.head_yaw or 0.0)
     hands = {}

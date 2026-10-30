@@ -119,7 +119,9 @@ class Rig:
                 if e != wrist:
                     self.empties[e].location = self._rest_end(e)
             best = None
-            for deg in (0, 90, -90, 180):
+            # крок 5° (не 90°): грубий кут на жіночому скелеті набору перевертав коліно в лежачих позах — колінний
+            # суглоб ішов під мат протилежно полюсу (30.10.2026). Міра — відстань суглоба до полюса.
+            for deg in range(-180, 180, 5):
                 self.iks[key].pole_angle = math.radians(deg)
                 bpy.context.view_layer.update()
                 d = (arm.pose.bones[mid].head - pl).length
