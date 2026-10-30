@@ -650,10 +650,16 @@ def clip_cover_b(t, L, partner=None):
     grow = min(1.0, max(0.0, (t - 0.6) / 1.4))                      # чим ближче «три», тим відчайдушніше
     w = math.sin(2 * math.pi * t / (0.7 - 0.25 * grow))
     struggle = pinned * (1 - kick) * (0.4 + 0.6 * grow)
-    p = lying(sit=0.45 * kick + 0.08 * struggle * max(0.0, w), knee_bend=0.2 + 0.3 * kick + 0.3 * struggle * (0.5 + 0.5 * w))
+    p = lying(sit=0.45 * kick + 0.08 * struggle * max(0.0, w),
+              knee_bend=0.15 + 0.05 * pinned + 0.3 * kick + 0.3 * struggle * (0.5 + 0.5 * w))      # старт — як вузол «лежить»
+    # права (вільна) нога — майже пряма, б'є лише п'ятою по мату; ліву тримає A під коліном — вона й зігнута
+    kb_r = 0.15 + 0.08 * struggle * (0.5 + 0.5 * w) + 0.2 * kick
+    off_b = off_for(Vector((0.0, 0.0, LIE_Z)))
+    p.ankles = (p.ankles[0], xf(off_b, Q_BACK, REST["ankle_r"] + Vector((0.0, -0.25 * kb_r, 0.35 * kb_r))))
     p.roll = 8.0 * struggle * w
     p.head_yaw = 25.0 * struggle * math.sin(2 * math.pi * t / 0.9)
-    arms_on_mat(p, Quaternion(UP, 0.0) @ Q_BACK, lift_l=0.45 * kick + 0.4 * struggle * max(0.0, w),
+    # ліва рука B — під колінами A: піднімається мало (раніше била A в стегно)
+    arms_on_mat(p, Quaternion(UP, 0.0) @ Q_BACK, lift_l=0.45 * kick + 0.12 * struggle * max(0.0, w),
                 lift_r=0.27 * kick + 0.4 * struggle * max(0.0, -w))
     return p
 
@@ -670,22 +676,26 @@ def clip_cover_a(t, L, partner=None):
         kk = smooth((lay - 0.35) / 0.65)
         # навколішки поруч із B, тулуб падає грудьми на B
         q = Quaternion(LEFT, math.radians(82.0 * kk + 20.0 * (1 - kk) - 45.0 * thrown))
-        abs_pel = Vector((-0.05 * kk, -0.27 * kk + 0.15 * thrown, 0.62 - 0.34 * kk + 0.24 * thrown))
+        abs_pel = Vector((-0.05 * kk, -0.27 * kk + 0.15 * thrown, 0.7 - 0.34 * kk + 0.24 * thrown))   # коліна над матом
         p = RPose()
         p.pelvis = off_for(abs_pel)
         p.pelvis_q = q
         p.pitch = 25.0 * kk
         # навколішки: коліна позаду таза на маті, гомілки ще далі назад
-        p.ankles = (Vector((0.17, 0.42, 0.09)), Vector((-0.17, 0.42, 0.09)))
+        p.ankles = (Vector((0.17, 0.42, 0.11)), Vector((-0.17, 0.42, 0.11)))      # гомілки на маті, не в ньому
         tip = Quaternion(RIGHT, math.radians(-75.0))
         p.foot_rot = (tip, tip)
-        p.knees = (Vector((0.18, 0.1, -0.25)), Vector((-0.18, 0.1, -0.25)))
+        p.knees = (Vector((0.18, 0.0, 0.0)), Vector((-0.18, 0.0, 0.0)))
         p.forced = set()
+        # руки — кожна зі свого боку (30.10.2026: права тяглась до ноги B через свої груди): ліва (бік ніг B, +X) —
+        # під стегном B, «чіпляє ногу»; права (бік голови B, −X) — через його плечі на мат
         p.hands = {
-            "l": (lambda S: P(S, "spine_03", 0.8, Vector((0.0, -0.16, 0.14))) or S["l"], DOWN, FWD),
-            "r": (lambda S: P(S, "thigh_l", 0.6, Vector((0.0, 0.0, 0.07))) or S["r"], DOWN + FWD * 0.3, FWD),
+            # відкинутий («викрутився» на два) — ліва відпускає ногу B і йде на мат біля себе
+            "l": (lambda S: (P(S, "thigh_l", 0.55, Vector((0.0, 0.0, 0.08))) or S["l"]).lerp(S["l"] + Vector((0.2, -0.15, -0.35)), thrown),
+                  DOWN + FWD * 0.3, FWD),
+            "r": (lambda S: P(S, "spine_03", 0.9, Vector((-0.08, -0.12, 0.1))) or S["r"], DOWN, FWD),
         }
-        p.elbows = {"l": lambda S: S["l"] + Vector((0.3, -0.2, 0.35)), "r": lambda S: S["r"] + Vector((-0.3, 0.0, 0.2))}
+        p.elbows = {"l": lambda S: S["l"] + Vector((0.35, 0.0, 0.25)), "r": lambda S: S["r"] + Vector((-0.35, -0.1, 0.3))}
         p.head_pitch = 25.0
     return p
 
@@ -1461,7 +1471,9 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
             if f == frames and end:
                 gaps.append((tag, "кінець", end) + node_gap(rig.arm, cap, end))
             if node and w > 1e-4:
-                blend_to_node(rig, cap, node, w, free=(fb is None and not getattr(rig, "holds", False)))
+                # руки — теж до вузла, якщо кліп одиночний або це старт зі стійки (на старті ще ніхто нікого не тримає)
+                blend_to_node(rig, cap, node, w, free=((fb is None and not getattr(rig, "holds", False))
+                                                        or (node == "stance" and f < nblend)))
         if DIAG and name in DIAG:                       # --diag Кліп: поточні точки ніг і цілі IK для розбору
             pbd, Wd = rigA.arm.pose.bones, rigA.arm.matrix_world
             r_ = lambda v: tuple(round(x, 2) for x in v)
@@ -1547,6 +1559,8 @@ def main():
         if missing:
             print(f"   [вузол] {name}: немає вузлів {missing} (запустіть разом з кліпом, що їх задає) — пропущено", flush=True)
             continue
+        if fb is not None and name == "Cover":                     # коротші ноги — A на тій самій відстані наступав на руку B
+            offset = offset + Vector((0.0, -0.6 * (1.0 - BODY["leg"]), 0.0))
         if fb is not None and name in ARM_SCALED and start_b not in PAIR_AT:
             offset = offset * BODY["arm"]                             # відстань пари на витягнуту руку — за руками набору
         place(armA, Vector(), 0)
