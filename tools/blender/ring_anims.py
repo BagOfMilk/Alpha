@@ -161,6 +161,12 @@ def apply_w(rig, p, partner=None):
     rots = p.foot_rot or (Quaternion(UP, yl), Quaternion(UP, yr))
     for s, a, qf in (("l", ank[0], rots[0]), ("r", ank[1], rots[1])):
         e = rig.empties["ankle_" + s]
+        # стопа не далі ноги: кроки сплановано під чоловічий набір — коротшій нозі ціль виходила за досяжність
+        th = pb["thigh_" + s]
+        Ll = (th.length + pb["calf_" + s].length) * 0.995
+        d_ = a - th.head
+        if d_.length > Ll:
+            a = th.head + d_.normalized() * Ll
         e.location = W @ a
         e.rotation_quaternion = Wq @ qf @ rest(arm, "foot_" + s).to_quaternion()
         knee = (p.knees[0 if s == "l" else 1] if p.knees else
@@ -185,6 +191,15 @@ def apply_w(rig, p, partner=None):
                 fore = knuckles(up)[0]
             f, u = ortho(fore, up)
             e = rig.empties["wrist_" + s]
+            if s not in p.forced:
+                # жест без хвату: ціль — не далі 0,97 своєї руки (цілі задано під чоловічу руку; жіноча коротша —
+                # IK «не діставав» у суддівських жестах, 30.10.2026). Хвати (forced) не чіпаються — там промах видно.
+                pbs = rig.arm.pose.bones
+                Lr = (pbs["upperarm_" + s].length + pbs["lowerarm_" + s].length) * 0.97 + PALM_FROM_WRIST
+                sh = pbs["upperarm_" + s].head
+                d_ = grip - sh
+                if d_.length > Lr:
+                    grip = sh + d_.normalized() * Lr
             wl = W @ wrist_for_grip(grip, f)
             wl.z = max(wl.z, 0.05)              # кисть не йде крізь мат
             e.location = wl
@@ -1004,7 +1019,8 @@ CLEAR = {"pelvis": 0.06, "spine_01": 0.05, "spine_02": 0.05, "spine_03": 0.05, "
 HAND_BONES = {"hand_l", "hand_r", "lowerarm_l", "lowerarm_r"}
 # Тулуб для «рука у своєму тілі»: півглибина грудей і живота по сітці набору (циліндр 13 см давав хибні 2–3 см, коли
 # передпліччя лише проходить перед грудьми — сітка набору це не підтвердила, 30.10.2026)
-SELF_RADIUS = {"spine_02": 0.11, "spine_03": 0.10}
+BODY_K = 0.9 if globals().get("FEMALE") else 1.0   # жіноче тіло набору вужче (зріст 1,56 проти 1,68 м)
+SELF_RADIUS = {"spine_01": 0.11, "spine_02": 0.11, "spine_03": 0.10}   # живіт — теж за сіткою (Rope_Heavy: сітка чиста)
 SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "hand_r")
               for body in ("pelvis", "spine_01", "spine_02", "spine_03")]   # spine_03 — груди (власник 30.10.2026)
 
@@ -1058,7 +1074,7 @@ def quality(name, framesA, framesB, bases):
     for tag, frames in (("A", framesA), ("B", framesB)):
         for fi, (_, w) in enumerate(frames or ()):
             for a_, b_ in SELF_PAIRS:
-                v = RADIUS[a_] + SELF_RADIUS.get(b_, RADIUS[b_]) - seg_dist(w[a_][0], w[a_][1], w[b_][0], w[b_][1])
+                v = RADIUS[a_] + SELF_RADIUS.get(b_, RADIUS[b_]) * BODY_K - seg_dist(w[a_][0], w[a_][1], w[b_][0], w[b_][1])
                 if v > selfp:
                     selfp, swhere = v, f"{tag}.{a_} × {tag}.{b_}, кадр {fi}"
     q["self"] = (max(0.0, selfp) * 100.0, swhere)

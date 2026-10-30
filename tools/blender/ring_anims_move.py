@@ -411,8 +411,9 @@ def clip_ref_call_bell(t, L):
     p.head_pitch = -10.0
     st = p.hands
     fore = DOWN * (1 - k) + UP * k + FWD * 0.5
-    p.hands = {"l": (lambda S: lerp(st["l"][0](S), S["l"] + Vector((-0.12 - 0.1 * x, -0.12, 0.45)), k), fore, FWD + UP * 0.2),
-               "r": (lambda S: lerp(st["r"][0](S), S["r"] + Vector((0.12 + 0.1 * x, -0.12, 0.45)), k), fore, FWD + UP * 0.2)}
+    out = math.sin(math.pi * min(1.0, k)) if t < 0.35 or t > 1.65 else 0.0   # підйом і спуск — дугою назовні, не крізь груди
+    p.hands = {"l": (lambda S: lerp(st["l"][0](S), S["l"] + Vector((-0.12 - 0.1 * x, -0.12, 0.45)), k) + Vector((0.22 * out, -0.1 * out, 0.0)), fore, FWD + UP * 0.2),
+               "r": (lambda S: lerp(st["r"][0](S), S["r"] + Vector((0.12 + 0.1 * x, -0.12, 0.45)), k) + Vector((-0.22 * out, -0.1 * out, 0.0)), fore, FWD + UP * 0.2)}
     el = p.elbows
     p.elbows = {"l": lambda S: el["l"](S).lerp(S["l"] + Vector((0.35, 0.0, 0.2)), k),
                 "r": lambda S: el["r"](S).lerp(S["r"] + Vector((-0.35, 0.0, 0.2)), k)}
