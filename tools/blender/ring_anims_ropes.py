@@ -10,7 +10,8 @@
 # нерухомо до відриву, між опорами йде дугою з підтягнутою п'ятою. Так розворот і зворотний біг не ковзають.
 
 class Reb:
-    def __init__(self, name, side=1, speed=1.0, sink=0.26, hit="side", grip="hand", ret=True, lean=7.0,
+    # hit — лише "back": власник 30.10.2026 «Бег от канатов всегда спиной»; side — через яке плече розворот перед канатами
+    def __init__(self, name, side=1, speed=1.0, sink=0.26, hit="back", grip="hand", ret=True, lean=7.0,
                  crouch=0.0, arm_up=0.0, duck=0.0, heavy=0.0, hesitate=0.0):
         self.__dict__.update({k: v for k, v in locals().items() if k != "self"})
 
@@ -151,22 +152,22 @@ def rebound_pose(t, L, R):
     p.fist = {"l": 0.55, "r": 0.55}
     return p
 
-REBS = [
-    Reb("Rope_Side_L"),
-    Reb("Rope_Side_R", side=-1),
+REBS = [                                       # усі — спиною до канатів (власник 30.10.2026)
+    Reb("Rope_Back_L"),                                     # розворот через ліве плече
+    Reb("Rope_Back_R", side=-1),                            # через праве
     Reb("Rope_Fast", speed=1.2, sink=0.3),
     Reb("Rope_Slow_Tired", speed=0.82, sink=0.2, lean=13.0),
     Reb("Rope_Deep", sink=0.34, crouch=1.0),
     Reb("Rope_Light", sink=0.15),
-    Reb("Rope_Back", hit="back"),
+    Reb("Rope_Back_Low", crouch=0.6),
     Reb("Rope_Elbow_Hook", grip="elbow"),
     Reb("Rope_Stop_Lean", ret=False),
     Reb("Rope_Duck_Return", duck=1.0),
     Reb("Rope_Roar", arm_up=1.0),
     Reb("Rope_Heavy", heavy=1.0, speed=0.9, sink=0.32),
-    Reb("Rope_Chest_Stop", hit="chest", ret=False, sink=0.2),
+    Reb("Rope_Back_Stop", ret=False, sink=0.2, crouch=0.4),
     Reb("Rope_Hesitate", hesitate=0.25),
-    Reb("Rope_Side_R_Fast", side=-1, speed=1.2, sink=0.3),
+    Reb("Rope_Back_R_Fast", side=-1, speed=1.2, sink=0.3),
 ]
 
 def reb_len(R):

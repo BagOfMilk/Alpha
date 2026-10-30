@@ -57,10 +57,15 @@ def setup(a="Rig_Red", b="Rig_Blue"):
     return "ok"
 
 
+ORIGIN = Vector((0.0, 0.59, 0.0))   # де стоїть A: середина пари (A + зсув B / 2) — у центрі рингу (0, 0)
+# Власник 30.10.2026: «все прийоми по центру ринга, если не требуется иначе (приемы в углу, у канатов, за рингом)» —
+# місце прийому з карти (moves/*.json, поле "place"); для «center» ORIGIN = −зсув B / 2.
+
+
 def place(offset, yaw, z=0.0):
-    """Поставити пару: A — у (0, 0, z) обличчям у −Y, B — зі зсувом offset (простір A) і поворотом yaw (°)."""
-    G["place"](LAB["armA"], Vector((0, 0, z)), 0)
-    G["place"](LAB["armB"], Vector(offset) + Vector((0, 0, z)), yaw)
+    """Поставити пару: A — у ORIGIN (висота z) обличчям у −Y, B — зі зсувом offset від A і поворотом yaw (°)."""
+    G["place"](LAB["armA"], ORIGIN + Vector((0, 0, z)), 0)
+    G["place"](LAB["armB"], ORIGIN + Vector(offset) + Vector((0, 0, z)), yaw)
 
 
 def solve(fa, fb):

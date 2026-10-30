@@ -143,6 +143,7 @@ def _make_body(cid, spec):
         except Exception:
             pass
     ts.reapply_macro_details(base)
+    _hands_to_norm(base, spec)
     s.MPFB_ADR_standard_rig = 'game_engine'
     _activate(base); bpy.ops.mpfb.add_standard_rig()
     rig = base.parent

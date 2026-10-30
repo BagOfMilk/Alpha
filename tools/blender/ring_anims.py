@@ -1003,11 +1003,13 @@ CLEAR = {"pelvis": 0.06, "spine_01": 0.05, "spine_02": 0.05, "spine_03": 0.05, "
 
 HAND_BONES = {"hand_l", "hand_r", "lowerarm_l", "lowerarm_r"}
 SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "hand_r")
-              for body in ("pelvis", "spine_01", "spine_02")]
+              for body in ("pelvis", "spine_01", "spine_02", "spine_03")]   # spine_03 — груди (власник 30.10.2026)
 
 # Пороги §4.1 плану (docs/TRPG_DESIGN.md §11.2): у см, градусах; ривок — лише у звіт.
 LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0,
-          "hand_jump": 30.0, "rope": 2.0}                           # кисть: 9 м/с — швидкість реального удару                                        # см за кадр (30 к/с) — 7,5 м/с
+          "hand_jump": 30.0, "rope": 2.0, "wrist": 15.0, "elbow_in": 0.0}
+# wrist — скручування кисті (°), що лишилось після переносу в передпліччя: кисть сама не скручується, шкіра жгутом;
+# elbow_in — лікоть усередині свого тулуба (см): «руки из груди торчат … руки из плечей растут» (власник 30.10.2026)                           # кисть: 9 м/с — швидкість реального удару                                        # см за кадр (30 к/с) — 7,5 м/с
 JERK_WARN = 6.0        # °/кадр² — пік кутового прискорення кістки
 
 def quality(name, framesA, framesB, bases):
@@ -1057,6 +1059,17 @@ def quality(name, framesA, framesB, bases):
                 if v > selfp:
                     selfp, swhere = v, f"{tag}.{a_} × {tag}.{b_}, кадр {fi}"
     q["self"] = (max(0.0, selfp) * 100.0, swhere)
+    # лікоть (кінець плеча) у своєму тулубі: рука росте з плеча, а не з грудей
+    elb, ewhere = 0.0, ""
+    for tag, frames in (("A", framesA), ("B", framesB)):
+        for fi, (_, w) in enumerate(frames or ()):
+            for s_ in "lr":
+                e_ = w["upperarm_" + s_][1]
+                for body in ("spine_01", "spine_02", "spine_03"):
+                    v = RADIUS[body] - seg_dist(e_, e_, w[body][0], w[body][1])
+                    if v > elb:
+                        elb, ewhere = v, f"{tag}.лікоть_{s_} у {body}, кадр {fi}"
+    q["elbow_in"] = (elb * 100.0, ewhere)
     # кістки під матом (суглоб нижче половини свого радіуса — поверхня тіла під матом)
     under, uwhere = 0.0, ""
     for tag, frames in (("A", framesA), ("B", framesB)):
@@ -1119,6 +1132,15 @@ def quality(name, framesA, framesB, bases):
     q["jerk"] = (jerk, jwhere)
     return q
 
+def residual_twist(arm, cap, s):
+    """Скручування кисті відносно передпліччя (°) у знімку cap — після move_twist_to_forearm має бути ≈ 0."""
+    b = arm.data.bones
+    low, hand = "lowerarm_" + s, "hand_" + s
+    rest_rel = (b[low].matrix_local.inverted() @ b[hand].matrix_local).to_3x3()
+    q_ = (cap[low].inverted().to_3x3() @ cap[hand].to_3x3() @ rest_rel.inverted()).to_quaternion()
+    t_ = math.degrees(2 * math.atan2(q_.y, q_.w))
+    return (t_ + 180.0) % 360.0 - 180.0
+
 def qangle(a, b):
     """Кут між поворотами (°) без стрибка через знак кватерніона (q і −q — той самий поворот)."""
     d = math.degrees(a.rotation_difference(b).angle)
@@ -1126,7 +1148,7 @@ def qangle(a, b):
 
 def fails(q):
     out = []
-    for k in ("slide", "pen", "self", "under", "reach", "hand_jump", "rope"):
+    for k in ("slide", "pen", "self", "under", "reach", "hand_jump", "rope", "wrist", "elbow_in"):
         if k in q and q[k][0] > LIMITS[k] + 1e-6:
             out.append(k)
     if "node" in q and (q["node"][0] > LIMITS["node_deg"] or q["node"][1] > LIMITS["node_cm"]):
@@ -1222,6 +1244,7 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
     nblend = max(1, int(round(BLEND_S * FPS)))
     sa, sb, wa, wb, ba, bb = [], [], [], [], [], []
     reach = (0.0, "")
+    wrist = [0.0, ""]
     gaps = []
     for f in range(frames + 1):
         solve_frame(rigA, rigB, fa, fb, f / FPS, length)
@@ -1247,15 +1270,24 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
                 blend_to_node(rig, cap, node, w)
         ca, w1 = capture_w(rigA)
         move_twist_to_forearm(armA, ca)
+        for s_ in "lr":
+            t_ = residual_twist(armA, ca, s_)
+            if abs(t_) > wrist[0]:
+                wrist[:] = [abs(t_), f"A.кисть_{s_}, кадр {f}"]
         sa.append(ca); wa.append((ca, w1)); ba.append(cap_basis(armA, ca))
         if fb is not None:
             cb, w2 = capture_w(rigB)
             move_twist_to_forearm(armB, cb)
+            for s_ in "lr":
+                t_ = residual_twist(armB, cb, s_)
+                if abs(t_) > wrist[0]:
+                    wrist[:] = [abs(t_), f"B.кисть_{s_}, кадр {f}"]
             sb.append(cb); wb.append((cb, w2)); bb.append(cap_basis(armB, cb))
         unmute(rigA)
         unmute(rigB)
     q = quality(name, wa, wb, [("A", ba)] + ([("B", bb)] if fb is not None else []))
     q["reach"] = (reach[0] * 100.0, reach[1])
+    q["wrist"] = (wrist[0], wrist[1])
     # після доведення поза на краях — точно вузол; залишкова різниця — для контролю
     post = []
     for tag, arm, seq in (("A", armA, sa), ("B", armB, sb)):
@@ -1323,6 +1355,10 @@ def main():
             state += f" · за канатом {q['rope'][0]:.0f} см ({q['rope'][1]})"
         if q["hand_jump"][0] > LIMITS["hand_jump"]:
             state += f" · кисть стрибнула {q['hand_jump'][0]:.0f} см ({q['hand_jump'][1]})"
+        if q.get("wrist", (0, ""))[0] > LIMITS["wrist"]:
+            state += f" · кисть скручена {q['wrist'][0]:.0f}° ({q['wrist'][1]})"
+        if q.get("elbow_in", (0, ""))[0] > LIMITS["elbow_in"]:
+            state += f" · лікоть у тулубі {q['elbow_in'][0]:.0f} см ({q['elbow_in'][1]})"
         if q["jerk"][0] > JERK_WARN:
             state += f" · ривок {q['jerk'][0]:.1f} ({q['jerk'][1]})"
         node_s = f"{q['node'][0]:.1f}° / {q['node'][1]:.1f} см" if "node" in q else "—"

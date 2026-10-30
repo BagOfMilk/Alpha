@@ -113,6 +113,35 @@ PEOPLE = {
                        hair="cortu_short_messy_hair", brows="eyebrow004"),
 }
 
+HAND_SCALE_DECR = 0.45      # штатні цілі MPFB hands/*-hand-scale-decr: 0 → кисть 11,7 % зросту, 0,5 → 10,6 % (норма ~10,8)
+FINGER_DIAM_DECR = 0.4      # *-fingers-diameter-decr: пальці 2,2 см завтовшки → ~1,9
+# Власник 30.10.2026: «Руки и пальцы неестественно огромные» — заміри: кисть 21–22 см при зрості 1,68 м.
+
+
+def _hand_target_dir():
+    import importlib
+    for name in ("bl_ext.user_default.mpfb",):
+        try:
+            m = importlib.import_module(name)
+            return os.path.join(os.path.dirname(m.__file__), "data", "targets", "hands")
+        except Exception:
+            pass
+    return None
+
+
+def _hands_to_norm(base, spec):
+    """Кисті й пальці до людської пропорції (до ригу: кістки ригу MPFB підганяються під сітку — вкорочуються разом)."""
+    td = _hand_target_dir()
+    if not td:
+        print("[кисті] цілі MPFB не знайдено — кисті лишаються великими")
+        return
+    ts = _svc("services.targetservice", "TargetService")
+    for sd in "lr":
+        ts.load_target(base, os.path.join(td, f"{sd}-hand-scale-decr.target.gz"), weight=spec.get("hand", HAND_SCALE_DECR))
+        ts.load_target(base, os.path.join(td, f"{sd}-hand-fingers-diameter-decr.target.gz"),
+                       weight=spec.get("fingers", FINGER_DIAM_DECR))
+
+
 def make_person(cid, spec):
     _collection(); _remove(cid)
     s = bpy.context.scene
@@ -127,6 +156,7 @@ def make_person(cid, spec):
                  ("height", spec["h"]), ("african", a / tot), ("asian", asn / tot), ("caucasian", c / tot)):
         hp.set_value(k, v, entity_reference=base)
     ts.reapply_macro_details(base)
+    _hands_to_norm(base, spec)
     s.MPFB_ADR_standard_rig = 'game_engine'
     _activate(base); bpy.ops.mpfb.add_standard_rig()
     rig = base.parent

@@ -165,9 +165,12 @@ def hand_rotation(rig, side, fore, up):
     rw = b1 @ b0.transposed()
     return (rw @ rest(rig.arm, "hand_" + side).to_3x3()).to_quaternion()
 
+PALM_FROM_WRIST = 0.052   # м: зап'ястя → центр долоні (як рахує ring_lab._palm: пів відстані до кісточок); заміряно на наборі
+                          # з людськими кистями 30.10.2026. Було 0,07 — ціль хвату виходила на 1,4 см углиб до пальців
+
 def wrist_for_grip(grip, fore):
     """Зап'ястя, з яким центр долоні опиняється в grip."""
-    return grip - fore.normalized() * 0.07
+    return grip - fore.normalized() * PALM_FROM_WRIST
 
 class Pose:
     """Опис кадру: усе, чого не задано, лишається в спокої."""
