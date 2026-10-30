@@ -390,7 +390,7 @@ def lockup_side(t, L, partner_tag, sign=1.0):
     p.fist = {"l": 0.25 + 0.35 * reach + grip, "r": 0.25 + 0.5 * reach + grip}
     el_l, el_r = p.elbows["l"], p.elbows["r"]
     # витягнута ліва: лікоть униз-назовні, майже прямий; права: лікоть до свого боку
-    p.elbows = {"l": lambda S: el_l(S).lerp(S["l"] + Vector((0.16, -0.32, -0.3)), reach),
+    p.elbows = {"l": lambda S: el_l(S).lerp(S["l"] + Vector((0.3, -0.26, -0.3)), reach),     # назовні: інакше передпліччя лягало на свої груди
                 "r": lambda S: el_r(S).lerp(S["r"] + Vector((-0.38, -0.05, -0.32)), reach)}
     return p
 
@@ -924,7 +924,7 @@ def clip_forearm_b(t, L, partner=None):
         fwd = lr.cross(up).normalized()
         if fwd.y > 0:
             fwd = -fwd                                                               # уперед — у −Y ригу
-        chest = S["chest"] + up * 0.05 + fwd * 0.2 * BODY_K - lr * 0.02
+        chest = S["chest"] + up * 0.05 + fwd * 0.2 - lr * 0.02          # груди жіночого набору не мілкіші на 10 %
         return lerp(h, chest, sell)
     p.hands = {"l": (hand_l, FWD * 0.4 + UP, RIGHT),
                "r": (hand_r, lambda S: (FWD * 0.4 + UP) * (1 - sell) + _body_ax(S)[1] * sell,
