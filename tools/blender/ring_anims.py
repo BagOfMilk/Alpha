@@ -877,6 +877,15 @@ def hit_spring(t, t_hit, w=15.0, z=0.32, delay=0.0):
         return 0.0
     return math.exp(-z * w * u) * math.sin(w * u) / 0.62
 
+def _body_ax(S):
+    """Осі тулуба зі своїх кісток: (уперед, уліво)."""
+    up = (S["chest"] - S["pelvis"]).normalized()
+    lr = (S["l"] - S["r"]).normalized()
+    fwd = lr.cross(up).normalized()
+    if fwd.y > 0:
+        fwd = -fwd
+    return fwd, lr
+
 def clip_forearm_b(t, L, partner=None):
     # Реакція того, кого б'ють, у три шари: (1) пружний поштовх тулуба й голови проти удару — голова з запізненням,
     # «хлист»; (2) хитання: два кроки назад, коліна просідають; (3) «продаж»: зігнувся, права долоня на грудях, ліва
@@ -908,10 +917,18 @@ def clip_forearm_b(t, L, partner=None):
         return lerp(h, bal, sell)
     def hand_r(S):
         h = S["r"] + guard_r + Vector((-0.13, 0.1, -0.04)) * fly
-        chest = S["chest"] + Vector((0.05, -0.17, 0.08))                             # долоня на грудях, де влучило
+        # долоня на грудях, де влучило: точка — в осях тулуба (він зігнутий у «продажу»), не ригу — інакше кисть
+        # опинялась у грудях на 6–8 см (30.10.2026)
+        up = (S["chest"] - S["pelvis"]).normalized()
+        lr = (S["l"] - S["r"]).normalized()
+        fwd = lr.cross(up).normalized()
+        if fwd.y > 0:
+            fwd = -fwd                                                               # уперед — у −Y ригу
+        chest = S["chest"] + up * 0.05 + fwd * 0.2 * BODY_K - lr * 0.02
         return lerp(h, chest, sell)
     p.hands = {"l": (hand_l, FWD * 0.4 + UP, RIGHT),
-               "r": (hand_r, (FWD * 0.4 + UP) * (1 - sell) + (LEFT + BACK * 0.3) * sell, LEFT * (1 - sell) + UP * sell)}
+               "r": (hand_r, lambda S: (FWD * 0.4 + UP) * (1 - sell) + _body_ax(S)[1] * sell,
+                     lambda S: LEFT * (1 - sell) + _body_ax(S)[0] * sell)}       # пальці поперек грудей, долоня — до них
     el_l, el_r = p.elbows["l"], p.elbows["r"]
     p.elbows = {"l": lambda S: el_l(S).lerp(S["l"] + Vector((0.35, 0.05, -0.3)), max(fly, sell)),
                 "r": lambda S: el_r(S).lerp(S["r"] + Vector((-0.3, -0.05, -0.35)), max(fly, sell))}
@@ -1444,6 +1461,10 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
             r_ = lambda v: tuple(round(x, 2) for x in v)
             print("DIAG", name, f, {s_: (r_(Wd @ pbd["thigh_" + s_].head), r_(Wd @ pbd["calf_" + s_].head), r_(Wd @ pbd["foot_" + s_].head),
                                          r_(rigA.empties["ankle_" + s_].location), r_(rigA.empties["knee_" + s_].location)) for s_ in "lr"}, flush=True)
+            if fb is not None:
+                pbb, Wb = rigB.arm.pose.bones, rigB.arm.matrix_world
+                print("DIAGB", name, f, {k_: r_(Wb @ pbb[k_].head) for k_ in ("spine_03", "neck_01", "hand_r", "lowerarm_r", "upperarm_r")},
+                      "ціль_r", r_(rigB.empties["wrist_r"].location), flush=True)
         ca, w1 = capture_w(rigA)
         move_twist_to_forearm(armA, ca)
         for s_ in "lr":
