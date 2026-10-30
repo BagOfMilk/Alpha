@@ -57,7 +57,7 @@ def reb_plan(R):
     turn0 = 0.64 * k - max(0.3 * k, 0.3)        # розворот не коротший за 0,3 с і на швидкому варіанті (кисть летіла 0,7 м за кадр)
     path_yaw = [(0.0, 0.0), (turn0, 0.0), (0.64 * k, face), (T["push"], face)]
     path_yaw += [(T["push"] + 0.3 * k, ret_face), (T["end"], ret_face)] if R.ret else [(T["end"], face * 0.5)]
-    legk = 0.92 if globals().get("FEMALE") else 1.0      # коротші ноги жіночого набору — коротші кроки (стопа не діставала)
+    legk = BODY["leg"]                                       # кроки — під довжину ноги набору (жіночий 0,88)
     def at(tt, lat, ahead, yaw_extra=0.0):
         y = track(tt, path_y)
         yw = track(tt, path_yaw) + yaw_extra
@@ -131,7 +131,7 @@ def rebound_pose(t, L, R):
             # не далі 0,88 довжини руки від плеча: тіло відштовхується від канатів, а точка хвату лишається позаду —
             # рука випрямлялась до кінця й ривком згиналась (30.10.2026)
             pt = g0(S)
-            reach = 0.44 if globals().get("FEMALE") else 0.46
+            reach = 0.46 * BODY["arm"]
             d = pt - S[s_]
             return S[s_] + d.normalized() * reach if d.length > reach else pt
         def g0(S):
@@ -150,11 +150,11 @@ def rebound_pose(t, L, R):
             along = fwd_w.x * ((0.42 if R.grip == "elbow" else 0.28) if R.hit == "side" else 0.0) * (0.75 if globals().get("FEMALE") else 1.0)
             # точка хвату — у кінцевій позі (спиною до канатів, курс face), а не від плеча в поточному розвороті:
             # на розвороті плече перетинає середню лінію, і ціль правої кисті стрибала до грудей (кадр 16, 30.10.2026)
-            span = (0.38 if not globals().get("FEMALE") else 0.33) * sg
+            span = 0.38 * BODY["arm"] * sg
             rope = Vector(((Rz(face) @ Vector((span, 0.0, 0.0))).x + along, rope_y + 0.04, hz))
             # шлях: перед тілом → збоку від свого плеча → канат позаду. Пряма «перед → позаду» на розвороті різала
             # груди на 12–17 см (перевірка рук у грудях, 30.10.2026: «руки из плечей растут»)
-            arm_k = 0.8 if globals().get("FEMALE") else 1.0
+            arm_k = BODY["arm"]
             side_pt = S[s_] + Rz(yaw) @ Vector((0.4 * sg * arm_k, 0.05, -0.14))     # збоку від плеча (ближче — лікоть у ребрах)
             # до каната — лише коли спина вже біля нього (on > 0,75): раніше точка на канаті була за 0,5 м позаду, рука
             # випрямлялась до кінця й знову згиналась — лікоть ривком 50–60° за кадр (30.10.2026)

@@ -367,6 +367,12 @@ def init_rest(arm):
         REST["ankle_" + s] = b["foot_" + s].head_local.copy()
         REST["knee_" + s] = b["calf_" + s].head_local.copy()
         REST["hip_" + s] = b["thigh_" + s].head_local.copy()
+    # пропорції набору відносно чоловічого (під нього задано метри поз): жіночий — ноги 0,88, руки 0,85 (заміри 30.10.2026)
+    BODY["leg"] = (b["thigh_l"].length + b["calf_l"].length) / (0.4177 + 0.4361)
+    BODY["arm"] = (b["upperarm_l"].length + b["lowerarm_l"].length) / (0.2519 + 0.2662)
+
+BODY = {"leg": 1.0, "arm": 1.0}
+ARM_SCALED = {"Ref_Raise_Hand"}       # пари, де відстань задана довжиною руки
 
 def xf(off, q, pt):
     """Точка пози спокою pt після зсуву таза off і повороту тіла q навколо таза (простір ригу)."""
@@ -637,7 +643,7 @@ def clip_bump_back(t, L):
     # присідає назад → сідниці й спина торкаються мату одночасно → руки б'ють по мату під 45°, підборіддя до грудей
     th = track(t, [(0.0, 0.0), (0.18, 12.0), (0.42, 55.0), (0.56, 90.0), (1.3, 90.0)])
     y = track(t, [(0.0, 0.0), (0.2, 0.08), (0.45, 0.3), (0.56, 0.4), (1.3, 0.4)])
-    z = track(t, [(0.0, REST["pelvis"].z - 0.09), (0.22, 0.66), (0.44, 0.3), (0.56, LIE_Z), (1.3, LIE_Z)])   # старт — висота таза стійки
+    z = track(t, [(0.0, REST["pelvis"].z - 0.09), (0.22, 0.66 * BODY["leg"]), (0.44, 0.3 * BODY["leg"]), (0.56, LIE_Z), (1.3, LIE_Z)])   # старт — висота таза стійки
     slap = track(t, [(0.0, 0.0), (0.48, 0.0), (0.57, 1.0), (1.0, 0.65)])
     bounce = math.sin(math.pi * smooth((t - 0.56) / 0.22)) * 0.03 if 0.56 < t < 0.78 else 0.0
     q = Quaternion(LEFT, math.radians(-th))
@@ -694,25 +700,28 @@ def _getup_phase(t, L, k):
         kk = smooth(k - 1.0)
         # сидить → коліно: таз піднімається, тіло обертається вертикально, руки — на мат за собою
         q = Quaternion(LEFT, math.radians(-90.0 * (1 - kk) + 0.0))
-        abs_pel = Vector((0.0, lerp(0.0, 0.1, kk), lerp(LIE_Z, 0.55, kk)))
+        abs_pel = Vector((0.0, lerp(0.0, 0.1, kk), lerp(LIE_Z, 0.55 * BODY["leg"], kk)))      # таз на коліні — за довжиною ноги
         p = RPose()
         p.pelvis = off_for(abs_pel)
         p.pelvis_q = q
         p.pitch = lerp(55.0, 30.0, kk)
-        p.ankles = (lerp(Vector((0.18, -0.45, 0.071)), foot(0.2, -0.25), kk), lerp(Vector((-0.16, -0.55, 0.071)), Vector((-0.18, 0.45, 0.09)), kk))
+        lk = BODY["leg"]                                # відстані стоп — за довжиною ноги набору
+        p.ankles = (lerp(Vector((0.18, -0.45 * lk, 0.071)), foot(0.2, -0.25 * lk), kk),
+                    lerp(Vector((-0.16, -0.55 * lk, 0.071)), Vector((-0.18, 0.45 * lk, 0.09)), kk))
         tip = Quaternion(RIGHT, math.radians(-70.0 * kk))
         p.foot_rot = (Quaternion(), tip)
-        p.knees = (Vector((0.22, -0.6, 0.6)), lerp(Vector((-0.2, -0.6, 0.6)), Vector((-0.2, -0.3, 0.1)), kk))
+        p.knees = (Vector((0.22, -0.6, 0.6 * lk)), lerp(Vector((-0.2, -0.6, 0.6 * lk)), Vector((-0.2, -0.3, 0.1)), kk))
         p.forced = set()
         p.hands = {"l": (lambda S: S["l"] + Vector((0.15, -0.35 * kk + 0.25 * (1 - kk), -0.6 * (1 - kk) - 0.4 * kk)), DOWN, FWD),
                    "r": (lambda S: S["r"] + Vector((-0.2, 0.25 * (1 - kk), -0.55)), DOWN, FWD)}
         return p
     kk = smooth(k - 2.0)
     p = stance(t, L, sway=0.0)
-    p.pelvis = lerp(off_for(Vector((0.0, 0.1, 0.55))), p.pelvis, kk)
+    p.pelvis = lerp(off_for(Vector((0.0, 0.1, 0.55 * BODY["leg"]))), p.pelvis, kk)
     p.pitch = lerp(30.0, p.pitch, kk)
-    p.ankles = (feet_track(kk, [(0.0, foot(0.2, -0.25)), (0.5, foot(0.2, -0.25)), (1.0, foot(0.2, -0.105))])[0],
-                feet_track(kk, [(0.0, Vector((-0.18, 0.45, 0.09))), (0.5, foot(-0.2, 0.075)), (1.0, foot(-0.2, 0.075))])[0])
+    lk = BODY["leg"]
+    p.ankles = (feet_track(kk, [(0.0, foot(0.2, -0.25 * lk)), (0.5, foot(0.2, -0.25 * lk)), (1.0, foot(0.2, -0.105))])[0],
+                feet_track(kk, [(0.0, Vector((-0.18, 0.45 * lk, 0.09))), (0.5, foot(-0.2, 0.075)), (1.0, foot(-0.2, 0.075))])[0])
     tip = Quaternion(RIGHT, math.radians(-70.0 * (1 - kk)))
     # права стопа доходить до розвороту стійки (−14°): інакше кінець кліпу на 14° не збігався з вузлом «stance»
     p.foot_rot = (Quaternion(UP, math.radians(10)), Quaternion(UP, math.radians(-14.0 * kk)) @ tip)
@@ -1406,6 +1415,8 @@ def main():
         if missing:
             print(f"   [вузол] {name}: немає вузлів {missing} (запустіть разом з кліпом, що їх задає) — пропущено", flush=True)
             continue
+        if fb is not None and name in ARM_SCALED and start_b not in PAIR_AT:
+            offset = offset * BODY["arm"]                             # відстань пари на витягнуту руку — за руками набору
         place(armA, Vector(), 0)
         place(armB, offset if fb is not None else Vector((0, 50, 0)), yaw if fb is not None else 0)
         sa, sb, wa, wb, q, gaps = bake_clip(rigA, rigB, name, length, fa, fb)
