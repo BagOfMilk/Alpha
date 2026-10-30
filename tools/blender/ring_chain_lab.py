@@ -381,8 +381,45 @@ def self_push(tag, s, max_depth=0.004, iters=20):
     return round(worst * 100, 1)
 
 
+def _upper_verts(arm, s, dg, skip=0.08):
+    """Вершини плеча руки s (зона body_upperarms, вага upperarm_s), крім смуги біля плечового суглоба (там шкіра плеча
+    й тулуба переходять одна в одну — це не проникнення)."""
+    sh = arm.matrix_world @ arm.pose.bones["upperarm_" + s].head
+    out = []
+    for o in ring_lab._meshes(arm):
+        if not o.name.endswith("body_upperarms"):
+            continue
+        e = o.evaluated_get(dg); me = e.to_mesh(); mw = e.matrix_world
+        gi = {g.index: g.name for g in o.vertex_groups}
+        for v in me.vertices:
+            w = max(((gi.get(g.group, ""), g.weight) for g in v.groups), key=lambda x: x[1], default=("", 0))[0]
+            if w == "upperarm_" + s:
+                p = mw @ v.co
+                if (p - sh).length > skip:
+                    out.append(p)
+        e.to_mesh_clear()
+    return out
+
+
+def self_arm_count(tag, s, tol=0.006):
+    """Скільки вершин руки s (з плечем) у своєму тулубі/голові — для вибору полюса ліктя."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    arm = LAB["arm" + tag]
+    trees = ring_lab._part_trees(arm, dg)
+    body = [trees[p][0] for p in ("body_torso", "body_head") if p in trees]
+    n = 0
+    for v in (ring_lab._arm_verts(arm, s, dg) + _upper_verts(arm, s, dg))[::3]:
+        for t in body:
+            loc, _n, _i, d = t.find_nearest(v, 0.2)
+            if loc is not None and d > tol and ring_lab._inside(t, v):
+                n += 1
+                break
+    return n
+
+
 def self_pen(tol=0.006):
-    """Руки у своєму тулубі й голові (кисть за спиною, рука біля грудей): [(см, 'B.l')] понад tol."""
+    """Уся рука (кисть, передпліччя, плече) у своєму тулубі й голові: [(см, 'B.l')] понад tol. Власник 30.10.2026:
+    «Руки из груди торчат … руки из плечей растут» — плече в грудях раніше не перевірялось зовсім."""
     dg = bpy.context.evaluated_depsgraph_get()
     res = []
     for tag in "AB":
@@ -390,14 +427,16 @@ def self_pen(tol=0.006):
         trees = ring_lab._part_trees(arm, dg)
         body = [trees[p][0] for p in ("body_torso", "body_head") if p in trees]
         for s in "lr":
-            worst = 0.0
-            for v in ring_lab._arm_verts(arm, s, dg)[::2]:
+            deep = []
+            for v in (ring_lab._arm_verts(arm, s, dg) + _upper_verts(arm, s, dg))[::2]:
                 for t in body:
                     loc, _n, _i, d = t.find_nearest(v, 0.2)
-                    if loc is not None and d > max(tol, worst) and ring_lab._inside(t, v):
-                        worst = d
-            if worst > tol:
-                res.append((round(worst * 100, 1), f"{tag}.{s}"))
+                    if loc is not None and d > tol and ring_lab._inside(t, v):
+                        deep.append(d)
+                        break
+            deep.sort(reverse=True)
+            if len(deep) >= 3:
+                res.append((round(deep[2] * 100, 1), f"{tag}.{s}"))
     return res
 
 
@@ -612,6 +651,59 @@ def contact_misses(contacts):
     return out
 
 
+def hand_twist(arm, s):
+    """Скручування кисті відносно передпліччя (°), яке лишиться після переносу в передпліччя (±85°, як у гуманоїді
+    Unity). Ненуль — кисть скручена понад суглоб: шкіра зап'ястя жгутом (власник 30.10.2026: «руки сломались»)."""
+    cap = {pb.name: pb.matrix.copy() for pb in arm.pose.bones}
+    G["move_twist_to_forearm"](arm, cap)
+    b = arm.data.bones
+    low, hand = "lowerarm_" + s, "hand_" + s
+    rest_rel = (b[low].matrix_local.inverted() @ b[hand].matrix_local).to_3x3()
+    q = (cap[low].inverted().to_3x3() @ cap[hand].to_3x3() @ rest_rel.inverted()).to_quaternion()
+    t = math.degrees(2 * math.atan2(q.y, q.w))
+    return (t + 180.0) % 360.0 - 180.0
+
+
+def fit_elbow(tag, s, n=16):
+    """Полюс ліктя (плечо обертається) — так, щоб скручування кисті вмістилось у суглоби; за рівних — без проникнення
+    в суперника й лікоть нижче (природно). Кисть у світі не рухається: ціль зап'ястя та сама."""
+    rig = LAB["rig" + tag]
+    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
+    W = arm.matrix_world
+    sh = W @ arm.pose.bones["upperarm_" + s].head
+    wr = rig.empties["wrist_" + s].location.copy()
+    axis = (wr - sh).normalized()
+    ref = Vector((0, 0, -1)) - axis * (-axis.z)
+    if ref.length < 1e-3:
+        ref = Vector((1, 0, 0))
+    ref.normalize()
+    side = axis.cross(ref)
+    el = rig.empties["elbow_" + s]
+    best = None
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        el.location = (sh + wr) / 2 + (ref * math.cos(a) + side * math.sin(a)) * 0.5
+        bpy.context.view_layer.update()
+        tw = abs(hand_twist(arm, s))
+        pen = ring_lab._arm_pen(arm, s, ot)
+        own = self_arm_count(tag, s)                         # рука в своїх грудях — так не буває
+        down = math.cos(a)                                   # 1 — лікоть донизу
+        cost = max(0.0, tw - 10.0) * 2.0 + pen * 1.5 + own * 3.0 - down * 8.0
+        if best is None or cost < best[0]:
+            best = (cost, el.location.copy(), tw, pen)
+    el.location = best[1]
+    bpy.context.view_layer.update()
+    return round(best[2]), best[3]
+
+
+def capture_limited(tag):
+    """Знімок пози з перенесеним у передпліччя скручуванням кисті (як піде в гуманоїд), а не сирий IK."""
+    arm = LAB["arm" + tag]
+    cap = {pb.name: pb.matrix.copy() for pb in arm.pose.bones}
+    G["move_twist_to_forearm"](arm, cap)
+    return G["cap_basis"](arm, cap)
+
+
 def place_hold(specs):
     """Кисті в фазі хвату — розв'язувачем лабораторії ring_lab.place_hand (ворота 2): долоня по нормалі шкіри, вісь кисті
     й полюс ліктя — перебором кандидатів без проникнення. specs: [(тег, бік, spec)] — spec як у карті прийому."""
@@ -679,10 +771,16 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
             for tag, sd, _k in contacts:
                 ring_lab.tuck_thumb(LAB["arm" + tag], sd, 0.85)
             bpy.context.view_layer.update()
+        for tag in "AB":                              # суглоби: скручування кисті — у межах, лікоть — під нього
+            for sd in "lr":
+                if abs(hand_twist(LAB["arm" + tag], sd)) > 10.0 or self_arm_count(tag, sd) > 2:
+                    fit_elbow(tag, sd)
         for (tag, k), b0 in e0.items():
             corr[(tag, k)] = LAB["rig" + tag].empties[k].location - b0
-        ca, cb = ring_lab.capture("A"), ring_lab.capture("B")
-        miss[f] = contact_misses(contacts)
+        miss[f] = contact_misses(contacts) + [(round(abs(t)), f"суглоб {tag}.{sd}: кисть скручена {round(t)}°")
+                                              for tag in "AB" for sd in "lr"
+                                              for t in (hand_twist(LAB["arm" + tag], sd),) if abs(t) > 15.0]
+        ca, cb = capture_limited("A"), capture_limited("B")
         if f < blend_in:
             w = G["smooth"](f / blend_in)
             ca = {n: (la[-1][n][0].lerp(l, w), la[-1][n][1].slerp(r, w)) for n, (l, r) in ca.items()}
