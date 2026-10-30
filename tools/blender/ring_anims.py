@@ -917,6 +917,8 @@ def unmute(rig):
         for c in pb.constraints:
             c.mute = False
 
+NODE_WORST = [""]      # кістка з найбільшою різницею з вузлом — для звіту
+
 def node_gap(arm, cap, node):
     """Наскільки поза відрізняється від вузла: найбільший кут суглоба (°), нахил таза (°), висота таза (см)."""
     nb, npel = NODES[node]
@@ -925,7 +927,10 @@ def node_gap(arm, cap, node):
     for n, (loc, rot) in cb.items():
         if n == "pelvis" or n.startswith(("thumb", "index", "middle", "ring", "pinky")):
             continue
-        worst = max(worst, qangle(rot, nb[n][1]))
+        a_ = qangle(rot, nb[n][1])
+        if a_ > worst:
+            worst = a_
+            NODE_WORST[0] = n
     _, s_clip = swing_twist_z(cap["pelvis"].to_quaternion())
     _, s_node = swing_twist_z(npel.to_quaternion())
     tilt = qangle(s_clip, s_node)
@@ -1085,7 +1090,7 @@ def quality(name, framesA, framesB, bases):
             for s_ in "lr":
                 e_ = w["upperarm_" + s_][1]
                 for body in ("spine_01", "spine_02", "spine_03"):
-                    v = RADIUS[body] - seg_dist(e_, e_, w[body][0], w[body][1])
+                    v = SELF_RADIUS.get(body, RADIUS[body]) * BODY_K - seg_dist(e_, e_, w[body][0], w[body][1])
                     if v > elb:
                         elb, ewhere = v, f"{tag}.лікоть_{s_} у {body}, кадр {fi}"
     q["elbow_in"] = (elb * 100.0, ewhere)
@@ -1367,7 +1372,7 @@ def main():
                 PAIR_AT[node_name] = (rel, yaw)
         for tag, edge, node, deg, tilt, dz in gaps:
             print(f"   [вузол] {name} {tag} {edge} «{node}»: до доведення — суглоб {deg:.1f}°, нахил таза {tilt:.1f}°, "
-                  f"таз {dz:.1f} см", flush=True)
+                  f"таз {dz:.1f} см ({NODE_WORST[0]})", flush=True)
         bad = fails(q)
         state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
         if q.get("rope", (0, ""))[0] > LIMITS["rope"]:

@@ -676,7 +676,8 @@ MOVE_CLIPS += [
     ("Move_Corner_Lean_Loop", 3.0, clip_corner_lean, None, True, None, 0),
     ("Move_Corner_Exit", CORNER_IN, clip_corner_exit, None, False, None, 0),
     ("Ref_Count_Outside_Loop", 2 * OUT_BEAT, clip_ref_count_outside, None, True, None, 0),
-    ("Ref_Raise_Hand", RAISE_LEN, clip_ref_raise_a, clip_ref_raise_b, False, Vector((-0.75, 0.0, 0.0)), 0),
+    ("Ref_Raise_Hand", RAISE_LEN, clip_ref_raise_a, clip_ref_raise_b, False,
+     Vector((-0.75 * (0.9 if globals().get("FEMALE") else 1.0), 0.0, 0.0)), 0),   # жіночий набір — ближче: рука коротша
 ]
 MOVE_NODE_POSES["corner_lean"] = lambda: corner_lean(0.0, 3.0)
 MOVE_CLIP_NODES.update({
