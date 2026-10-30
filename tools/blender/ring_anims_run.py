@@ -115,6 +115,10 @@ def blend_pose(a, b, k):
     ea, eb = a.elbows, b.elbows
     p.elbows = {s: (lambda S, s=s: ea[s](S).lerp(eb[s](S), k)) for s in "lr"}
     p.fist = {s: a.fist[s] * (1 - k) + b.fist[s] * k for s in "lr"}
+    # повний поворот таза (лежачі, кидки): без нього змішування втрачало орієнтацію — таз і кисті стрибали (30.10.2026)
+    qa, qb = getattr(a, "pelvis_q", None), getattr(b, "pelvis_q", None)
+    if qa is not None or qb is not None:
+        p.pelvis_q = (qa or Quaternion()).slerp(qb or Quaternion(), k)
     return p
 
 # старт, стоп — через деформацію часу циклу: усі положення стоп — функції одного «часу бігу», тож прискорення й

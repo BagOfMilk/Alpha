@@ -637,15 +637,18 @@ def clip_bump_back(t, L):
     # присідає назад → сідниці й спина торкаються мату одночасно → руки б'ють по мату під 45°, підборіддя до грудей
     th = track(t, [(0.0, 0.0), (0.18, 12.0), (0.42, 55.0), (0.56, 90.0), (1.3, 90.0)])
     y = track(t, [(0.0, 0.0), (0.2, 0.08), (0.45, 0.3), (0.56, 0.4), (1.3, 0.4)])
-    z = track(t, [(0.0, REST["pelvis"].z), (0.22, 0.66), (0.44, 0.3), (0.56, LIE_Z), (1.3, LIE_Z)])
+    z = track(t, [(0.0, REST["pelvis"].z - 0.09), (0.22, 0.66), (0.44, 0.3), (0.56, LIE_Z), (1.3, LIE_Z)])   # старт — висота таза стійки
     slap = track(t, [(0.0, 0.0), (0.48, 0.0), (0.57, 1.0), (1.0, 0.65)])
     bounce = math.sin(math.pi * smooth((t - 0.56) / 0.22)) * 0.03 if 0.56 < t < 0.78 else 0.0
     q = Quaternion(LEFT, math.radians(-th))
     abs_pel = Vector((0.0, y, z + bounce))
-    p = body(off_for(abs_pel), q, knee_bend=0.45 * smooth(th / 90.0))
+    kb = track(t, [(0.0, 0.0), (0.56, 0.45), (0.95, 0.45), (1.3, 0.15)])      # наприкінці — коліна, як у «лежить на спині»
+    p = body(off_for(abs_pel), q, knee_bend=kb * smooth(th / 90.0) + 0.15 * (1 - smooth(th / 90.0)) * 0.0)
     planted = 1.0 - smooth((th - 45.0) / 40.0)
-    p.ankles = (lerp(p.ankles[0], foot(0.16, -0.015), planted), lerp(p.ankles[1], foot(-0.16, -0.015), planted))
-    p.foot_rot = (Quaternion().slerp(q, 1 - planted), Quaternion().slerp(q, 1 - planted))
+    sl, sr = foot(0.2, -0.105), foot(-0.2, 0.075)           # стопи стоять там, де були в стійці (без ковзання)
+    p.ankles = (lerp(p.ankles[0], sl, planted), lerp(p.ankles[1], sr, planted))
+    yl, yr = Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0))
+    p.foot_rot = (yl.slerp(q, 1 - planted), yr.slerp(q, 1 - planted))
     p.knees = (lerp(p.knees[0], Vector((0.2, -0.6, 0.5)), planted), lerp(p.knees[1], Vector((-0.2, -0.6, 0.5)), planted))
     p.pitch = 20.0 * (1 - smooth(th / 80.0))      # спершу зігнутий, при ударі — рівно
     p.head_pitch = 35.0 * smooth(th / 90.0)       # підборіддя до грудей — голова не б'ється об мат
@@ -655,16 +658,34 @@ def clip_bump_back(t, L):
         mat_l, mat_r = p.hands["l"], p.hands["r"]
         g = guard
         p.hands = {
-            "l": (lambda S: lerp(mat_l[0](S), S["l"] + Vector((-0.07, -0.27, -0.2)), g), FWD * 0.4 + UP, RIGHT),
-            "r": (lambda S: lerp(mat_r[0](S), S["r"] + Vector((0.07, -0.27, -0.2)), g), FWD * 0.4 + UP, LEFT),
+            "l": (lambda S: lerp(mat_l[0](S), S["l"] + Vector((-0.07, -0.27, -0.2)), g), FWD * 0.4 + UP, RIGHT + FWD * 0.3),
+            "r": (lambda S: lerp(mat_r[0](S), S["r"] + Vector((0.07, -0.27, -0.2)), g), FWD * 0.4 + UP, LEFT + FWD * 0.3),
         }
+        st_el = stance(0.0, L, sway=0.0).elbows          # лікті стійки на старті — кліп починається точно з вузла
+        el0 = _filled(p).elbows
+        p.elbows = {s_: (lambda S, s_=s_: el0[s_](S).lerp(st_el[s_](S), g)) for s_ in "lr"}
+    # кінець — руки й лікті пози «лежить на спині» (вузол lying_back): плавно після відбою об мат
+    end_w = smooth((t - 0.95) / 0.3)
+    if end_w > 0:
+        return _arms_to(p, lying(sit=0.0, knee_bend=0.15), end_w)
+    return p
+
+def _arms_to(p, q, w):
+    """Кисті й лікті пози p — до пози q з вагою w (тіло — з p)."""
+    p, q = _filled(p), _filled(q)
+    ph, qh, pe, qe = p.hands, q.hands, p.elbows, q.elbows
+    ev = lambda v, S: v(S) if callable(v) else v
+    p.hands = {s_: (lambda S, s_=s_: lerp(ev(ph[s_][0], S), ev(qh[s_][0], S), w),
+                    lambda S, s_=s_: lerp(ev(ph[s_][1], S), ev(qh[s_][1], S), w),
+                    lambda S, s_=s_: lerp(ev(ph[s_][2], S), ev(qh[s_][2], S), w)) for s_ in "lr"}
+    p.elbows = {s_: (lambda S, s_=s_: pe[s_](S).lerp(qe[s_](S), w)) for s_ in "lr"}
+    p.fist = {s_: p.fist[s_] * (1 - w) + q.fist[s_] * w for s_ in "lr"}
     return p
 
 GETUP_LEN = 2.6
 
-def clip_getup_back(t, L):
+def _getup_phase(t, L, k):
     # лежить → сідає → перекочується на праве коліно, ліва нога спереду → встає в стійку
-    k = track(t, [(0.0, 0.0), (0.7, 1.0), (1.5, 2.0), (2.3, 3.0), (2.6, 3.0)])
     pr = REST["pelvis"]
     if k <= 1.0:
         p = lying(sit=smooth(k) * 1.0, knee_bend=0.15 + 0.5 * smooth(k))
@@ -693,8 +714,36 @@ def clip_getup_back(t, L):
     p.ankles = (feet_track(kk, [(0.0, foot(0.2, -0.25)), (0.5, foot(0.2, -0.25)), (1.0, foot(0.2, -0.105))])[0],
                 feet_track(kk, [(0.0, Vector((-0.18, 0.45, 0.09))), (0.5, foot(-0.2, 0.075)), (1.0, foot(-0.2, 0.075))])[0])
     tip = Quaternion(RIGHT, math.radians(-70.0 * (1 - kk)))
-    p.foot_rot = (Quaternion(UP, math.radians(10)), tip)
+    # права стопа доходить до розвороту стійки (−14°): інакше кінець кліпу на 14° не збігався з вузлом «stance»
+    p.foot_rot = (Quaternion(UP, math.radians(10)), Quaternion(UP, math.radians(-14.0 * kk)) @ tip)
     return p
+
+def _filled(p):
+    """Поза з усіма полями для змішування: лікті й кисті за замовчуванням (як у apply_w)."""
+    el = dict(p.elbows or {})
+    for s_ in "lr":
+        if s_ not in el:
+            el[s_] = (lambda S, s_=s_: S[s_] + Vector((0.35 * (1 if s_ == "l" else -1), 0.25, -0.35)))
+    p.elbows = el
+    hs = dict(p.hands or {})
+    for s_ in "lr":
+        if s_ not in hs:
+            sd = 1 if s_ == "l" else -1
+            hs[s_] = (lambda S, s_=s_, sd=sd: S[s_] + Vector((0.07 * sd, -0.05, -0.5)), DOWN + FWD * 0.2, FWD + Vector((0.3 * -sd, 0, 0)))
+    p.hands = hs
+    if p.fist is None or not isinstance(p.fist, dict):
+        p.fist = {"l": 0.25, "r": 0.25}
+    return p
+
+def clip_getup_back(t, L):
+    """Фази стикуються змішуванням (±0,15 фази): раніше на межі «сидить → коліно» кисть перескакувала на 72 см за
+    кадр (власник 29.10.2026: руки не телепортуються; звіт 30.10.2026)."""
+    k = track(t, [(0.0, 0.0), (0.7, 1.0), (1.5, 2.0), (2.3, 3.0), (2.6, 3.0)])
+    for edge in (1.0, 2.0):
+        if abs(k - edge) < 0.15:
+            w = smooth((k - (edge - 0.15)) / 0.3)
+            return blend_pose(_filled(_getup_phase(t, L, min(k, edge))), _filled(_getup_phase(t, L, max(k, edge + 1e-4))), w)
+    return _getup_phase(t, L, k)
 
 # --- удар передпліччям (будова прийому — docs/research/RING_ANIM_REFERENCES.md §4–5): A — замах (правий лікоть назад,
 # крок лівою вперед) → контакт передпліччям поперек грудей B → супровід → повернення в стійку; B — стоїть → удар
