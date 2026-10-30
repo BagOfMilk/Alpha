@@ -252,10 +252,10 @@ def hl_surface():
     """Цілі кистей на шкірі для фази захвату: B — поперек A ззаду і передпліччя A знизу; A — петля навколо шиї B."""
     A, B = LAB["armA"], LAB["armB"]
     fwd = heading(HL["b_head"])
-    SURF["Bl"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "spine_01", 0.6, (0.3, 1.0, 0.0), palm=0.03))
+    SURF["Bl"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "spine_01", 0.6, (0.3, 1.0, 0.0), palm=PALM))
     # права B — упирається A в праве стегно спереду (кадр власника); тягнутись до передпліччя під своїм підборіддям —
     # рука лізе у власну голову
-    SURF["Br"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "thigh_r", 0.2, (-0.3, -1.0, 0.2), palm=0.03))
+    SURF["Br"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "thigh_r", 0.2, (-0.3, -1.0, 0.2), palm=PALM))
     pb = B.pose.bones["head"]
     c = B.matrix_world @ (pb.head + (pb.tail - pb.head) * 0.4)
     left = Vector((-fwd.y, fwd.x, 0.0))
@@ -266,7 +266,23 @@ def hl_surface():
     hs = HL.get("hs", ("head", 0.6, (0.6, 0.0, 0.8)))      # куди б'є ліва A: (кістка B, частка, звідки) — за ланкою
     SURF["Hs"] = ring_lab.to_rig(A, ring_lab.surface_world(B, hs[0], hs[1], hs[2], palm=0.045))
     cx, cl, cz = HL["a_chin"]
-    SURF["Ar"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "head", 0.15, fwd * cx + left * cl + up * cz, palm=0.035))
+    SURF["Ar"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "head", 0.15, fwd * cx + left * cl + up * cz, palm=PALM))
+
+
+PUSH_MAX = 0.04     # м: виштовхування не відводить кисть від цілі далі (29.10.2026: без межі ціль летіла на 1,2 м,
+                    # проникнення «зникало», а рука опинялась не там — власник: «усі шо по руки так погано»)
+
+
+def _step_capped(rig, s, start, push):
+    """Зсунути ціль зап'ястя й полюс ліктя на push, не далі PUSH_MAX від стартової цілі. False — межа досягнута."""
+    e = rig.empties["wrist_" + s]
+    d = (e.location + push) - start["wrist_" + s]
+    if d.length > PUSH_MAX:
+        return False
+    for k in ("wrist_" + s, "elbow_" + s):
+        rig.empties[k].location = rig.empties[k].location + push
+    bpy.context.view_layer.update()
+    return True
 
 
 def push_arm(tag, s, max_depth=0.003, iters=25):
@@ -276,6 +292,7 @@ def push_arm(tag, s, max_depth=0.003, iters=25):
     me = LAB["rig" + tag]
     other = LAB["armB" if tag == "A" else "armA"]
     worst = 0.0
+    start = {k: me.empties[k].location.copy() for k in ("wrist_" + s, "elbow_" + s)}
     for _ in range(iters):
         dg = bpy.context.evaluated_depsgraph_get()
         av = ring_lab._arm_verts(me.arm, s, dg)
@@ -306,9 +323,8 @@ def push_arm(tag, s, max_depth=0.003, iters=25):
         if worst <= max_depth:
             break
         push /= max(n, 1)
-        for k in ("wrist_" + s, "elbow_" + s):
-            em = me.empties[k]; em.location = em.location + push
-        bpy.context.view_layer.update()
+        if not _step_capped(me, s, start, push):
+            break
     return round(worst * 100, 1)
 
 
@@ -343,6 +359,7 @@ def self_push(tag, s, max_depth=0.004, iters=20):
     """Рука s виходить зі свого тулуба (кисть і передпліччя): ціль зап'ястя — по нормалі назовні, кроком ≤ 1 см."""
     rig = LAB["rig" + tag]
     worst = 0.0
+    start = {k: rig.empties[k].location.copy() for k in ("wrist_" + s, "elbow_" + s)}
     for _ in range(iters):
         dg = bpy.context.evaluated_depsgraph_get()
         trees = ring_lab._part_trees(rig.arm, dg)
@@ -359,9 +376,8 @@ def self_push(tag, s, max_depth=0.004, iters=20):
         if worst <= max_depth:
             break
         push /= max(n, 1)
-        for k in ("wrist_" + s, "elbow_" + s):
-            e = rig.empties[k]; e.location = e.location + push
-        bpy.context.view_layer.update()
+        if not _step_capped(rig, s, start, push):
+            break
     return round(worst * 100, 1)
 
 
@@ -444,9 +460,15 @@ def _key_feet(keys, name, side):
     return out
 
 
+HL_CONTACTS = [("A", "r", "Ar"), ("B", "l", "Bl"), ("B", "r", "Br")]
+AW_CONTACTS = [("A", "l", "Wl"), ("A", "r", "Wr")]
+HM_CONTACTS = [("A", "l", "Hl"), ("A", "r", "Hr")]
+WS_CONTACTS = [("A", "r", "Wbr"), ("B", "r", "Pr"), ("B", "l", "Pl")]   # ліва A — на своїй правій, не на тілі B
+
+
 def headlock_frames(frames=None):
     keys = [(f, dict(k, b_feet=k["b_feet"] or b_feet_hold(k["b_pel"], k["b_head"]))) for f, k in HEADLOCK_KEYS]
-    return chain_frames("Chain_Headlock", keys, HEADLOCK_LEN, a_hold, b_hold, hl_surface, frames=frames)
+    return chain_frames("Chain_Headlock", keys, HEADLOCK_LEN, a_hold, b_hold, hl_surface, frames=frames, contacts=HL_CONTACTS)
 
 
 # ================================================================ викрут руки
@@ -538,8 +560,8 @@ def aw_a(k=1.0):
 def aw_surface():
     """Кисті A на шкірі правої руки B: ліва — на зап'ясті згори, права — на кисті збоку."""
     A, B = LAB["armA"], LAB["armB"]
-    SURF["Wl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "lowerarm_r", 0.9, (0.0, 0.0, 1.0), palm=0.03))
-    SURF["Wr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "hand_r", 0.45, (1.0, 0.0, 0.2), palm=0.03))
+    SURF["Wl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "lowerarm_r", 0.9, (0.0, 0.0, 1.0), palm=PALM))
+    SURF["Wr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "hand_r", 0.45, (1.0, 0.0, 0.2), palm=PALM))
 
 
 def _aw(**kw):
@@ -562,7 +584,46 @@ ARMWRINGER_KEYS = [
 ARMWRINGER_LEN = 66
 
 
-def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smooth=True):
+PALM = 0.015       # центр долоні (як рахує _palm) від шкіри: долоня лежить, а не висить і не входить
+CONTACT_CM = 2.0    # центр долоні від шкіри суперника — не далі (долоня лежить на тілі, а не висить)
+PLACE_CM = 8.0      # і від задуманої точки хвату — не далі (кисть там, де каже карта, а не деінде на тілі)
+
+
+def contact_misses(contacts):
+    """Для поточної пози: [(см, 'A.r→Wb …')] кистей у фазі хвату (grab ≥ 0,95), що не лежать на тілі суперника
+    (центр долоні далі CONTACT_CM від його шкіри) або лежать не там (далі PLACE_CM від точки з карти).
+    Без цього звіт «без проникнень» пропускав руки не там (власник 30.10.2026: «усі шо по руки так погано»)."""
+    if HL.get("grab", 0.0) < 0.95:
+        return []
+    dg = bpy.context.evaluated_depsgraph_get()
+    out = []
+    for tag, s, key in contacts:
+        if key not in SURF:
+            continue
+        arm, ot = (LAB["armA"], LAB["armB"]) if tag == "A" else (LAB["armB"], LAB["armA"])
+        tree = ring_lab._bvh(ring_lab._meshes(ot), dg)
+        c, _n, _f = ring_lab._palm(arm, s)
+        _loc, _nn, _i, skin = tree.find_nearest(c, 1.0)
+        place = (c - arm.matrix_world @ SURF[key]).length * 100
+        if skin * 100 > CONTACT_CM:
+            out.append((round(skin * 100, 1), f"{tag}.{s} не на тілі ({key})"))
+        if place > PLACE_CM:
+            out.append((round(place, 1), f"{tag}.{s} не там ({key})"))
+    return out
+
+
+def place_hold(specs):
+    """Кисті в фазі хвату — розв'язувачем лабораторії ring_lab.place_hand (ворота 2): долоня по нормалі шкіри, вісь кисті
+    й полюс ліктя — перебором кандидатів без проникнення. specs: [(тег, бік, spec)] — spec як у карті прийому."""
+    out = {}
+    for tag, s, spec in specs:
+        if spec.get("thumb") == "притиснутий":
+            ring_lab.tuck_thumb(LAB["arm" + tag], s, 0.85)
+        out[f"{tag}.{s}"] = ring_lab.place_hand(tag, s, spec)
+    return out
+
+
+def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smooth=True, contacts=(), place=None):
     """Ланка чейну покадрово (як headlock_frames): криві параметрів за ключами, кадр розв'язується заново, кисті
     сідають, руки виштовхуються; перші blend_in кадрів — вхід з останнього кадру зчепу. Стопи — ключі в кожному
     ключі (a_feet, b_feet), між різними — крок з підйомом."""
@@ -578,6 +639,7 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
     out = {"A": [], "B": []}
     log = []
     corr = {}
+    miss = {}
     for f in (frames or range(length + 1)):
         ff = float(f)
         HL.clear(); HL.update(base)
@@ -602,7 +664,8 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
             for k in ("wrist_l", "wrist_r", "elbow_l", "elbow_r"):
                 e = rig.empties[k]
                 e0[(tag, k)] = e.location.copy()
-                e.location = e.location + corr.get((tag, k), Vector()) * 0.85
+                # тепла поправка з попереднього кадру вимкнена: накопичувалась і відводила кисть від цілі на 20+ см
+                # (перевірка контакту, 30.10.2026); межа зсуву PUSH_MAX тримає кадри поруч і без неї
         bpy.context.view_layer.update()
         for _ in range(2):
             ring_lab.settle("A", max_depth=0.002); push_arm("A", "r", iters=40); push_arm("A", "l", iters=40)
@@ -610,9 +673,16 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
             for tag in "AB":
                 for sd in "lr":
                     self_push(tag, sd)
+        if place is not None and HL.get("grab", 0.0) >= 0.95:
+            place_hold(place())
+        if HL.get("grab", 0.0) > 0.5:                 # долоня на шкірі: великий палець притиснутий, не стирчить у тіло
+            for tag, sd, _k in contacts:
+                ring_lab.tuck_thumb(LAB["arm" + tag], sd, 0.85)
+            bpy.context.view_layer.update()
         for (tag, k), b0 in e0.items():
             corr[(tag, k)] = LAB["rig" + tag].empties[k].location - b0
         ca, cb = ring_lab.capture("A"), ring_lab.capture("B")
+        miss[f] = contact_misses(contacts)
         if f < blend_in:
             w = G["smooth"](f / blend_in)
             ca = {n: (la[-1][n][0].lerp(l, w), la[-1][n][1].slerp(r, w)) for n, (l, r) in ca.items()}
@@ -626,7 +696,9 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
         show_fk(f)
         pen = _pen() + self_pen()
         pen.sort(reverse=True)
-        log.append((f, pen[:3]))
+        fr = (frames or list(range(length + 1)))[f] if f < len(frames or range(length + 1)) else f
+        pen = pen[:3] + [(d, "контакт " + w) for d, w in miss.get(fr, [])]
+        log.append((f, pen))
         print(f"[{name}] кадр {f}: {pen[:3]}", flush=True)
     LAB["contacts"] = []
     LAB["name"] = name
@@ -667,7 +739,7 @@ def smooth_frames(frames, keep=0, w=(1.0, 2.0, 3.0, 2.0, 1.0)):
 
 
 def armwringer_frames():
-    return chain_frames("Chain_ArmWringer", ARMWRINGER_KEYS, ARMWRINGER_LEN, aw_a, aw_b, aw_surface)
+    return chain_frames("Chain_ArmWringer", ARMWRINGER_KEYS, ARMWRINGER_LEN, aw_a, aw_b, aw_surface, contacts=AW_CONTACTS)
 
 
 # ================================================================ хаммерлок
@@ -783,8 +855,8 @@ def hm_a(k=1.0):
 def hm_surface():
     """Кисті A на шкірі B: ліва — на правому зап'ясті B ззаду (тисне вгору), права — на його правому плечі згори."""
     A, B = LAB["armA"], LAB["armB"]
-    SURF["Hl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "lowerarm_r", 0.85, (0.0, 1.0, -0.3), palm=0.03))
-    SURF["Hr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "upperarm_r", 0.1, (0.0, 0.3, 1.0), palm=0.03))
+    SURF["Hl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "lowerarm_r", 0.85, (0.0, 1.0, -0.3), palm=PALM))
+    SURF["Hr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "upperarm_r", 0.1, (0.0, 0.3, 1.0), palm=PALM))
 
 
 def _hm(**kw):
@@ -809,7 +881,7 @@ HAMMERLOCK_LEN = 72
 
 
 def hammerlock_frames():
-    return chain_frames("Chain_Hammerlock", HAMMERLOCK_KEYS, HAMMERLOCK_LEN, hm_a, hm_b, hm_surface)
+    return chain_frames("Chain_Hammerlock", HAMMERLOCK_KEYS, HAMMERLOCK_LEN, hm_a, hm_b, hm_surface, contacts=HM_CONTACTS)
 
 
 # ================================================================ захват корпусу ззаду (go-behind)
@@ -817,7 +889,7 @@ def hammerlock_frames():
 # голова збоку від його плеча; руки обхоплюють пояс B, кисті замкнені на його животі (одна на іншій); B трохи
 # зігнутий, лікті назовні, обидві кисті на передпліччях A — розчіплює. Тут розвертаються обидва: a_head — курс A
 # (кадр A, як b_head), A обходить B зліва, B доводять спиною до A.
-WS = dict(HM, a_head=90.0, a_pel=(-0.58, -0.9), a_pz=-0.16, a_pitch=22.0, a_yaw=0.0, a_roll=-10.0, a_hy=-60.0,
+WS = dict(HM, a_head=90.0, a_pel=(-0.46, -0.95), a_pz=-0.16, a_pitch=30.0, a_yaw=-15.0, a_roll=-20.0, a_hy=-60.0,
           a_hp=5.0, a_feet=((-0.5, -0.8), (-0.68, -1.15)), a_fyaw=(10.0, -20.0),
           b_head=90.0, b_pel=(-0.2, -0.98), b_drop=0.06, b_pelpitch=8.0, b_pitch=20.0, b_yaw=0.0, b_roll=0.0,
           b_hy=10.0, b_hp=10.0, b_feet=((-0.1, -0.83), (-0.16, -1.13)), grab=1.0)
@@ -852,10 +924,21 @@ def ws_b(k=1.0):
         tie_l = lambda S: SURF.get("tBl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Bl"])) or S["l"] + Vector((0, -0.3, -0.3))
         on_r = lambda S: SURF.get("Pr") or P_(S, "lowerarm_r", 0.75, Vector((0, 0, 0.05))) or S["r"] + Vector((0, -0.3, -0.4))
         on_l = lambda S: SURF.get("Pl") or P_(S, "lowerarm_l", 0.75, Vector((0, 0, 0.05))) or S["l"] + Vector((0, -0.3, -0.4))
-        p.hands = {"r": (lambda S: tie_r(S).lerp(on_r(S), wb), Vector((-1, 0, -0.2)).lerp(Vector((0.3, -1, -0.5)), wb),
-                         Vector((0, 0, 1))),
+        # хват передпліччя A згори: долоня донизу, пальці вперед-донизу (обхоплюють), великий палець — усередину;
+        # осі — свого тулуба (B розвернутий), не ригу (29.10.2026: долоні дивились повз руки A)
+        def grip_f(S):                                 # пальці донизу, через кисті A
+            up, lr, back = _body_axes(S)
+            return -up - back * 0.3
+
+        def grip_u(side):
+            def g(S):
+                up, lr, back = _body_axes(S)
+                return lr if side == "r" else -lr          # перевірено заміром: долоня до кисті A
+            return g
+        p.hands = {"r": (lambda S: tie_r(S).lerp(on_r(S), wb),
+                         lambda S: Vector((-1, 0, -0.2)).lerp(grip_f(S), wb), lambda S: Vector((0, 0, 1)).lerp(grip_u("r")(S), wb)),
                    "l": (lambda S: _phase(es, tie_l(S).lerp(on_l(S), wb), wind(S), shoulder(S)),
-                         Vector((0, -1, 0.3)).lerp(Vector((-0.3, -1, -0.5)), wb), Vector((0.4, 0, 1)).lerp(Vector((0, 0, 1)), wb))}
+                         lambda S: Vector((0, -1, 0.3)).lerp(grip_f(S), wb), lambda S: Vector((0.4, 0, 1)).lerp(grip_u("l")(S), wb))}
         es = HL.get("b_es", 0.0)                       # удар лівим ліктем назад: 0 на руках A, 1 замах уперед, 2 лікоть назад
 
         def wind(S):
@@ -902,23 +985,28 @@ def ws_a(k=1.0):
         w = HL["grab"]
         tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((0.07, -0.27, -0.2))
         tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
-        belly = lambda S: SURF.get("Wb") or P_(S, "spine_01", 0.5, Vector((0, -0.15, 0))) or S["r"] + Vector((0, -0.3, -0.4))
-        # кисті: права — на животі B, ліва — поверх неї (замок); у дорозі — убік від тіла B, щоб обійти його
-        side_r = lambda S: (SURF.get("Sr") or belly(S))
-        side_l = lambda S: (SURF.get("Sl") or belly(S))
+        belly_r = lambda S: SURF.get("Wbr") or P_(S, "spine_01", 0.5, Vector((0, -0.15, 0))) or S["r"] + Vector((0, -0.3, -0.4))
+        belly_l = lambda S: SURF.get("Wbl") or P_(S, "spine_01", 0.5, Vector((0, -0.15, 0))) or S["l"] + Vector((0, -0.3, -0.4))
+        # кисті на животі B, у дорозі — повз боки B, щоб обійти тіло, а не пройти крізь нього
+        side_r = lambda S: (SURF.get("Sr") or belly_r(S))
+        side_l = lambda S: (SURF.get("Sl") or belly_l(S))
 
         def via(a, m, b, u):
             return a.lerp(m, u / 0.5) if u < 0.5 else m.lerp(b, (u - 0.5) / 0.5)
-        p.hands = {"r": (lambda S: via(tie_r(S), side_r(S), belly(S), w), Vector((-1, 0, -0.2)).lerp(left, w),
-                         Vector((0, 0, 1)).lerp(fwd, w)),
-                   "l": (lambda S: via(tie_l(S), side_l(S), belly(S) + left * 0.0 + Vector((0, 0, 0.03)), w),
-                         Vector((0, -1, 0.3)).lerp(-left, w), Vector((-0.4, 0, 1)).lerp(fwd, w))}
+        # пальці правої — до лівого боку B (left), лівої — до правого; долоні — до живота (назад до A, −fwd)
+        p.hands = {"r": (lambda S: via(tie_r(S), side_r(S), belly_r(S), w), Vector((-1, 0, -0.2)).lerp(left, w),
+                         Vector((0, 0, 1)).lerp(UPV, w)),
+                   "l": (lambda S: via(tie_l(S), side_l(S), belly_l(S), w),
+                         Vector((0, -1, 0.3)).lerp(-left, w), Vector((-0.4, 0, 1)).lerp(UPV, w))}
         p.elbows = {"r": lambda S: (S["r"] + Vector((-0.45, -0.15, 0.15))).lerp(S["r"] - left * 0.35 + Vector((0, 0, -0.3)), w),
                     "l": lambda S: (S["l"] + Vector((0.4, 0.05, -0.3))).lerp(S["l"] + left * 0.35 + Vector((0, 0, -0.3)), w)}
-        p.fist = {"r": 0.1 + 0.2 * w, "l": 0.35 - 0.1 * w}     # долоні пласко на животі — зігнуті пальці входять у нього
+        p.fist = {"r": 0.1 * (1 - w), "l": 0.35 * (1 - w)}     # долоні пласко на животі — зігнуті пальці входять у нього
         p.forced = {"l", "r"}
         return p
     return f
+
+
+UPV = Vector((0, 0, 1))
 
 
 def ws_surface():
@@ -926,11 +1014,16 @@ def ws_surface():
     A, B = LAB["armA"], LAB["armB"]
     fwd = heading(HL["b_head"])
     left = Vector((-fwd.y, fwd.x, 0.0))
-    SURF["Wb"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_01", 0.4, fwd, palm=0.045))
+    # кисті A — за картою «одна на іншій»: права долонею на животі B посередині, ліва — на тильному боці правої
+    # (30.10.2026: дві кисті поруч на опуклому животі входили в нього пальцями на 6 см)
+    pr = ring_lab.surface_world(B, "spine_01", 0.4, fwd, palm=PALM)
+    SURF["Wbr"] = ring_lab.to_rig(A, pr)
+    SURF["Wbl"] = ring_lab.to_rig(A, pr + fwd * 0.035 + Vector((0, 0, 0.01)))     # на тильному боці правої
     SURF["Sr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_01", 0.4, -left + fwd * 0.3, palm=0.08))
     SURF["Sl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_01", 0.4, left + fwd * 0.3, palm=0.08))
-    SURF["Pr"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "lowerarm_r", 0.75, fwd * 0.6 + Vector((0, 0, 0.8)), palm=0.04))
-    SURF["Pl"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "lowerarm_l", 0.75, fwd * 0.6 + Vector((0, 0, 0.8)), palm=0.04))
+    # B — долоні на тильному боці кистей A перед своїм животом (референс: «розчіплює замок»)
+    SURF["Pr"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "hand_r", 0.3, fwd + Vector((0, 0, 0.3)), palm=PALM))
+    SURF["Pl"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "hand_l", 0.3, fwd + Vector((0, 0, 0.3)), palm=PALM))
 
 
 def _ws(**kw):
@@ -940,21 +1033,21 @@ def _ws(**kw):
 WAISTLOCK_KEYS = [
     (0, dict(WS_TIE)),
     (4, dict(WS_TIE, a_pz=-0.28, a_pitch=40.0, a_hy=-50.0, b_pitch=36.0)),                  # A пірнає під руку B
-    (10, _ws(a_head=40.0, a_pel=(-0.6, -0.4), a_pz=-0.22, a_pitch=22.0, a_roll=0.0, a_hy=-20.0,
+    (10, _ws(a_head=40.0, a_pel=(-0.6, -0.4), a_pz=-0.22, a_pitch=22.0, a_roll=0.0, a_yaw=0.0, a_hy=-20.0,
              a_feet=((-0.36, -0.4), (-0.66, -0.2)), b_head=150.0, b_pel=(-0.18, -1.0), b_pitch=26.0, b_hy=-30.0,
              b_feet=((-0.3, -0.7), (0.14, -1.06)), grab=0.4)),                                    # обходить зліва, широко
-    (17, _ws(a_pz=-0.2, a_pitch=20.0, b_pitch=16.0, b_hp=-10.0, grab=0.9)),
-    (23, _ws(a_pz=-0.14, a_pitch=18.0, b_drop=0.02, b_pitch=12.0, b_hp=-15.0)),   # стиснув — B випрямляється
-    (36, _ws(a_pitch=20.0, a_hy=-70.0, b_pitch=22.0, b_yaw=6.0, b_hy=-12.0, b_hp=5.0, b_drop=0.06)),   # B крутиться (голова — від A)
-    (50, _ws(a_pitch=20.0, b_pitch=16.0, b_yaw=-5.0, b_hy=-20.0, b_hp=0.0)),
-    (62, _ws(a_pz=-0.13, a_pitch=18.0, b_drop=0.03, b_pitch=12.0, b_hp=-15.0)),
+    (17, _ws(a_pz=-0.18, b_pitch=16.0, b_hp=-10.0, grab=0.9)),
+    (23, _ws(a_pz=-0.14, a_pitch=26.0, b_drop=0.02, b_pitch=12.0, b_hp=-15.0)),   # стиснув — B випрямляється
+    (36, _ws(b_pitch=20.0, b_yaw=-8.0, b_hy=-25.0, b_hp=5.0, b_drop=0.05)),   # B крутиться — від голови A, не на неї
+    (50, _ws(b_pitch=16.0, b_yaw=-5.0, b_hy=-20.0, b_hp=0.0)),
+    (62, _ws(a_pz=-0.14, a_pitch=26.0, b_drop=0.03, b_pitch=12.0, b_hp=-15.0)),
     (72, _ws()),
 ]
 WAISTLOCK_LEN = 72
 
 
 def waistlock_frames():
-    return chain_frames("Chain_Waistlock", WAISTLOCK_KEYS, WAISTLOCK_LEN, ws_a, ws_b, ws_surface)
+    return chain_frames("Chain_Waistlock", WAISTLOCK_KEYS, WAISTLOCK_LEN, ws_a, ws_b, ws_surface, contacts=WS_CONTACTS)
 
 
 # ================================================================ передній захват голови (front facelock)
@@ -988,7 +1081,7 @@ FACELOCK_LEN = 72
 
 def facelock_frames():
     keys = [(f, dict(k, b_feet=k["b_feet"] or b_feet_hold(k["b_pel"], k["b_head"]))) for f, k in FACELOCK_KEYS]
-    return chain_frames("Chain_FrontFacelock", keys, FACELOCK_LEN, a_hold, b_hold, hl_surface)
+    return chain_frames("Chain_FrontFacelock", keys, FACELOCK_LEN, a_hold, b_hold, hl_surface, contacts=HL_CONTACTS)
 
 
 # ================================================================ викрут кисті (wristlock)
@@ -1020,7 +1113,7 @@ WRISTLOCK_LEN = 66
 
 
 def wristlock_frames():
-    return chain_frames("Chain_Wristlock", WRISTLOCK_KEYS, WRISTLOCK_LEN, aw_a, aw_b, aw_surface)
+    return chain_frames("Chain_Wristlock", WRISTLOCK_KEYS, WRISTLOCK_LEN, aw_a, aw_b, aw_surface, contacts=AW_CONTACTS)
 
 
 # ================================================================ відштовхування (розрив зчепу)
@@ -1074,8 +1167,8 @@ def sh_a(k=1.0):
 def sh_surface():
     """Долоні A — на грудях B (ліва — на його правому грудному м'язі, права — на лівому)."""
     A, B = LAB["armA"], LAB["armB"]
-    SURF["Cl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_03", 0.5, (0.12, 1.0, 0.1), palm=0.03))
-    SURF["Cr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_03", 0.5, (-0.12, 1.0, 0.1), palm=0.03))
+    SURF["Cl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_03", 0.5, (0.12, 1.0, 0.1), palm=PALM))
+    SURF["Cr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_03", 0.5, (-0.12, 1.0, 0.1), palm=PALM))
 
 
 def _sh(**kw):
@@ -1122,7 +1215,7 @@ def _hp_keys():
 
 def headlock_punches_frames():
     keys = [(f, dict(k, b_feet=k["b_feet"] or b_feet_hold(k["b_pel"], k["b_head"]))) for f, k in _hp_keys()]
-    return chain_frames("Chain_Headlock_Punches", keys, 72, a_hold, b_hold, hl_surface, smooth=False)
+    return chain_frames("Chain_Headlock_Punches", keys, 72, a_hold, b_hold, hl_surface, smooth=False, contacts=HL_CONTACTS[1:])
 
 
 # ================================================================ передній захват + удари передпліччям по спині
@@ -1142,7 +1235,7 @@ def _fc_keys():
 
 def facelock_clubs_frames():
     keys = [(f, dict(k, b_feet=k["b_feet"] or b_feet_hold(k["b_pel"], k["b_head"]))) for f, k in _fc_keys()]
-    return chain_frames("Chain_FrontFacelock_Clubs", keys, 72, a_hold, b_hold, hl_surface, smooth=False)
+    return chain_frames("Chain_FrontFacelock_Clubs", keys, 72, a_hold, b_hold, hl_surface, smooth=False, contacts=HL_CONTACTS[1:])
 
 
 # ================================================================ захват корпусу + удари ліктем назад (вихід)
@@ -1163,4 +1256,37 @@ def _we_keys():
 
 
 def waistlock_elbows_frames():
-    return chain_frames("Chain_Waistlock_Elbows", _we_keys(), 72, ws_a, ws_b, ws_surface, smooth=False)
+    return chain_frames("Chain_Waistlock_Elbows", _we_keys(), 72, ws_a, ws_b, ws_surface, smooth=False, contacts=WS_CONTACTS[:3])
+
+
+
+# ---------------------------------------------------------------- кисті в триманні — за картами (ring_lab.place_hand)
+# ВИМКНЕНО 30.10.2026: перебір полюсів ліктя в place_hand прибирає проникнення, але обирає неприродні руки (лікті B угору
+# за спиною, кисті за 12–16 см від точки хвату — знято й переглянуто). Не підключати без огляду знімка.
+def _fl():
+    f = heading(HL["b_head"]); return f, Vector((-f.y, f.x, 0.0)), Vector((0, 0, 1))
+
+
+def ws_place():
+    f, l, u = _fl()
+    return [("A", "r", dict(bone="spine_01", along=0.4, from_world=tuple(f), fingers_dir_world=tuple(l), palm_off=0.02, thumb="притиснутий")),
+            ("B", "r", dict(bone="hand_r", along=0.4, from_world=tuple(f + u * 0.3), fingers_dir_world=tuple(-u), palm_off=0.02)),
+            ("B", "l", dict(bone="hand_r", along=0.6, from_world=tuple(f + u * 0.3), fingers_dir_world=tuple(-u), palm_off=0.02))]
+
+
+def hl_place():
+    f, l, u = _fl()
+    return [("A", "r", dict(bone="head", along=0.15, from_world=tuple(f * HL["a_chin"][0] + l * HL["a_chin"][1] + u * HL["a_chin"][2]),
+                            fingers_dir_world=tuple(-l), palm_off=0.02, thumb="притиснутий")),
+            ("B", "l", dict(bone="spine_01", along=0.6, from_world=(0.3, 1.0, 0.0), fingers_dir_world=(-1.0, 0.0, 0.0), palm_off=0.02)),
+            ("B", "r", dict(bone="thigh_r", along=0.2, from_world=(-0.3, -1.0, 0.2), fingers_dir_world=(0.0, 0.0, -1.0), palm_off=0.02))]
+
+
+def aw_place():
+    return [("A", "l", dict(bone="lowerarm_r", along=0.9, from_world=(0.0, 0.0, 1.0), palm_off=0.02)),
+            ("A", "r", dict(bone="hand_r", along=0.45, from_world=(1.0, 0.0, 0.2), palm_off=0.02))]
+
+
+def hm_place():
+    return [("A", "l", dict(bone="lowerarm_r", along=0.85, from_world=(0.0, 1.0, -0.3), palm_off=0.02)),
+            ("A", "r", dict(bone="upperarm_r", along=0.1, from_world=(0.0, 0.3, 1.0), palm_off=0.02, thumb="притиснутий"))]

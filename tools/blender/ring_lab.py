@@ -284,7 +284,7 @@ def _arm_verts(arm, side, dg):
     return out
 
 
-def settle(tag, sides=("l", "r"), max_depth=0.003, iters=20, prefer=None):
+def settle(tag, sides=("l", "r"), max_depth=0.003, iters=20, prefer=None, max_shift=0.04):
     """Посадка на поверхню: вершини кисті й передпліччя, що опинились усередині тіла партнера (тест парності
     променів), виштовхуються по нормалі найближчої поверхні — ціль IK зап'ястя зсувається, доки глибина ≤ max_depth.
     prefer: {бік: вектор у просторі свого ригу} — кисть виходить з тіла саме туди (за шию, а не на горло).
@@ -294,6 +294,7 @@ def settle(tag, sides=("l", "r"), max_depth=0.003, iters=20, prefer=None):
     res = {}
     for s in sides:
         e = me.empties["wrist_" + s]
+        e0 = e.location.copy()
         worst = 0.0
         for _ in range(iters):
             dg = bpy.context.evaluated_depsgraph_get()
@@ -312,6 +313,8 @@ def settle(tag, sides=("l", "r"), max_depth=0.003, iters=20, prefer=None):
                         push = (loc - v).normalized() * (dist + 0.004)
             if worst <= max_depth:
                 break
+            if max_shift is not None and (e.location + push - e0).length > max_shift:
+                break                                      # не відводити кисть від цілі: краще звіт про проникнення
             e.location = e.location + push
             bpy.context.view_layer.update()
         res[s] = round(worst * 100, 1)
@@ -632,7 +635,9 @@ def place_hand(tag, s, spec, thumb_world=Vector((0, 0, 1))):
     else:
         tgt = surface_world(ot, spec["bone"], spec["along"], spec["from_world"], palm=0.0)
         nrm = Vector(spec["from_world"]).normalized()
-    if "fingers_dir_partner" in spec:
+    if "fingers_dir_world" in spec:              # пальці — у світових осях (ланки чейну: суперник розвернутий)
+        want = Vector(spec["fingers_dir_world"])
+    elif "fingers_dir_partner" in spec:
         want = ot.matrix_world.to_3x3() @ Vector(spec["fingers_dir_partner"])
     else:                                    # уздовж кістки цілі (охопити лікоть / передпліччя)
         pb_ = ot.pose.bones[spec["bone"]]
