@@ -454,8 +454,8 @@ def body(off, q, knee_bend=0.0, spread=0.0):
 def arms_on_mat(p, q, lift_l=0.0, lift_r=0.0):
     """Руки розкинуті на маті під ~45° (лежачи на спині), lift — рука відривається від мату."""
     p.hands = {
-        "l": (lambda S: S["l"] + q @ Vector((0.42, 0.05 - 0.4 * lift_l, -0.32 + 0.3 * lift_l)), q @ DOWN, q @ FWD),
-        "r": (lambda S: S["r"] + q @ Vector((-0.42, 0.05 - 0.4 * lift_r, -0.32 + 0.3 * lift_r)), q @ DOWN, q @ FWD),
+        "l": (lambda S: S["l"] + q @ (Vector((0.42, 0.05 - 0.4 * lift_l, -0.32 + 0.3 * lift_l)) * BODY["arm"]), q @ DOWN, q @ FWD),
+        "r": (lambda S: S["r"] + q @ (Vector((-0.42, 0.05 - 0.4 * lift_r, -0.32 + 0.3 * lift_r)) * BODY["arm"]), q @ DOWN, q @ FWD),
     }
     p.elbows = {"l": lambda S: S["l"] + q @ Vector((0.4, 0.1, -0.1)), "r": lambda S: S["r"] + q @ Vector((-0.4, 0.1, -0.1))}
     p.fist = {"l": 0.15, "r": 0.15}
@@ -765,8 +765,9 @@ def _getup_phase(t, L, k):
         p.foot_rot = (Quaternion(), tip)
         p.knees = (Vector((0.22, -0.6, 0.6 * lk)), lerp(Vector((-0.2, -0.6, 0.6 * lk)), Vector((-0.2, kny - 0.5, 0.02)), kk))
         p.forced = set()
-        p.hands = {"l": (lambda S: S["l"] + Vector((0.15, -0.35 * kk + 0.25 * (1 - kk), -0.6 * (1 - kk) - 0.4 * kk)), DOWN, FWD),
-                   "r": (lambda S: S["r"] + Vector((-0.2, 0.25 * (1 - kk), -0.55)), DOWN, FWD)}
+        ak = BODY["arm"]                             # опора руками на мат — на довжину руки набору
+        p.hands = {"l": (lambda S: S["l"] + Vector((0.15, -0.35 * kk + 0.25 * (1 - kk), -0.6 * (1 - kk) - 0.4 * kk)) * ak, DOWN, FWD),
+                   "r": (lambda S: S["r"] + Vector((-0.2, 0.25 * (1 - kk), -0.55)) * ak, DOWN, FWD)}
         return p
     kk = smooth(k - 2.0)
     p = stance(t, L, sway=0.0)
@@ -775,7 +776,8 @@ def _getup_phase(t, L, k):
     p.pitch = lerp(30.0, p.pitch, kk)
     lk = BODY["leg"]
     p.ankles = (feet_track(kk, [(0.0, foot(0.2, -0.25 * lk)), (0.5, foot(0.2, -0.25 * lk)), (1.0, foot(0.2, -0.105))])[0],
-                feet_track(kk, [(0.0, Vector((-0.18, kay, 0.09))), (0.5, foot(-0.2, 0.075)), (1.0, foot(-0.2, 0.075))])[0])
+                feet_track(kk, [(0.0, Vector((-0.18, kay, 0.09))), (0.36, Vector((-0.2, 0.075, 0.16))), (0.5, foot(-0.2, 0.075)),
+                                (1.0, foot(-0.2, 0.075))])[0])      # стопа ставиться згори, не доїжджає по мату
     tip = Quaternion(RIGHT, math.radians(-70.0 * (1 - kk)))
     # права стопа доходить до розвороту стійки (−14°): інакше кінець кліпу на 14° не збігався з вузлом «stance»
     p.foot_rot = (Quaternion(UP, math.radians(10)), Quaternion(UP, math.radians(-14.0 * kk)) @ tip)
