@@ -51,6 +51,7 @@ def reb_plan(R):
               (T["sink"], rope_y + gap - R.sink), (T["push"], rope_y + gap)]
     path_y += [(T["push"] + 0.18 * k, rope_y + gap + 0.55), (T["end"], -0.25)] if R.ret else [(T["end"], rope_y + gap + 0.3)]
     # повороти — по 0,3 с: швидше кисті «летять» разом із тілом (і на екрані це ривок)
+    # розворот спиною — 0,3 с: стопи розставлені під нього (0,42 с давало ковзання стоп 3 см і ривок стегна)
     path_yaw = [(0.0, 0.0), (0.34 * k, 0.0), (0.64 * k, face), (T["push"], face)]
     path_yaw += [(T["push"] + 0.3 * k, ret_face), (T["end"], ret_face)] if R.ret else [(T["end"], face * 0.5)]
     def at(tt, lat, ahead, yaw_extra=0.0):
@@ -87,10 +88,12 @@ def reb_plan(R):
         falls[leg].sort(key=lambda f: f[0])
     return T, path_y, path_yaw, falls, face, rope_y
 
+REL = 0.62     # с: кисті з каната вперед. За 0,42 с плече оберталось на 85–150° за кадр (ривок, 30.10.2026)
+
 def rebound_pose(t, L, R):
     T, path_y, path_yaw, falls, face, rope_y = reb_plan(R)
     yaw = track(t, path_yaw)
-    on = track(t, [(0.0, 0.0), (T["hit"] - (0.4 if R.hit == "back" else 0.28), 0.0), (T["hit"], 1.0), (T["push"], 1.0), (T["push"] + 0.42, 0.0), (L, 0.0)])   # рука до каната — 0,2 с, з каната — 0,34 с
+    on = track(t, [(0.0, 0.0), (T["hit"] - (0.4 if R.hit == "back" else 0.28), 0.0), (T["hit"], 1.0), (T["push"], 1.0), (min(T["push"] + REL, L - 0.04), 0.0), (L + 0.01, 0.0)])   # з каната — REL с (не далі кінця кліпу: ключі назад у часі давали стрибок кисті на 38 см)
     run = 1.0 - on
     ret_t = max(0.0, t - T["push"])
     duck = R.duck * smooth(min(1.0, ret_t / 0.2)) if R.ret else 0.0
@@ -117,7 +120,16 @@ def rebound_pose(t, L, R):
     def hand(s_):
         sg = 1 if s_ == "l" else -1
         def g(S):
-            free = S[s_] + Rz(yaw) @ Vector((0.1 * sg, -0.06 - 0.24 * pump * sg, -0.28 + 0.08 * max(0.0, pump * sg)))
+            # не далі 0,88 довжини руки від плеча: тіло відштовхується від канатів, а точка хвату лишається позаду —
+            # рука випрямлялась до кінця й ривком згиналась (30.10.2026)
+            pt = g0(S)
+            reach = 0.44 if globals().get("FEMALE") else 0.46
+            d = pt - S[s_]
+            return S[s_] + d.normalized() * reach if d.length > reach else pt
+        def g0(S):
+            free = S[s_] + Rz(yaw) @ Vector((0.14 * sg, -0.06 - 0.24 * pump * sg, -0.28 + 0.08 * max(0.0, pump * sg)))
+            if not R.ret and t > T["push"]:            # зупинка біля канатів: руки опускаються вздовж тіла, не біг
+                free = S[s_] + Rz(yaw) @ Vector((0.2 * sg, 0.03, -0.42))
             grab = (s_ == near) if R.hit == "side" else True
             if not grab:
                 # вільна рука: розслаблено вниз і трохи назад (не на груди), або вгору — до публіки
@@ -128,26 +140,32 @@ def rebound_pose(t, L, R):
             # хват — на канаті попереду тіла (уздовж каната, куди дивиться борець), не біля самого плеча
             fwd_w = Rz(yaw) @ Vector((0.0, -1.0, 0.0))
             along = fwd_w.x * ((0.42 if R.grip == "elbow" else 0.28) if R.hit == "side" else 0.0) * (0.75 if globals().get("FEMALE") else 1.0)
-            rope = Vector((S[s_].x + side_off.x + along, rope_y + 0.04, hz))
-            # дуга: кисть іде до каната збоку-зверху, не крізь тіло
-            arm_k = 0.7 if globals().get("FEMALE") else 1.0                 # коротша рука — менша дуга
-            arc = Rz(yaw) @ Vector(((0.45 if R.hit == "back" else 0.3) * sg * arm_k, 0.0, 0.12)) * math.sin(math.pi * on)
-            return lerp(free, rope, on) + arc
+            # точка хвату — у кінцевій позі (спиною до канатів, курс face), а не від плеча в поточному розвороті:
+            # на розвороті плече перетинає середню лінію, і ціль правої кисті стрибала до грудей (кадр 16, 30.10.2026)
+            span = (0.38 if not globals().get("FEMALE") else 0.33) * sg
+            rope = Vector(((Rz(face) @ Vector((span, 0.0, 0.0))).x + along, rope_y + 0.04, hz))
+            # шлях: перед тілом → збоку від свого плеча → канат позаду. Пряма «перед → позаду» на розвороті різала
+            # груди на 12–17 см (перевірка рук у грудях, 30.10.2026: «руки из плечей растут»)
+            arm_k = 0.8 if globals().get("FEMALE") else 1.0
+            side_pt = S[s_] + Rz(yaw) @ Vector((0.42 * sg * arm_k, 0.04, -0.12))
+            # до каната — лише коли спина вже біля нього (on > 0,75): раніше точка на канаті була за 0,5 м позаду, рука
+            # випрямлялась до кінця й знову згиналась — лікоть ривком 50–60° за кадр (30.10.2026)
+            if t > T["push"]:                          # відпускання: канат → бік (пів часу) → біг, без поспіху
+                u = 1.0 - on
+                if u < 0.5:
+                    return lerp(rope, side_pt, smooth(u / 0.5))
+                return lerp(side_pt, free, smooth((u - 0.5) / 0.5))
+            if on < 0.45:
+                u = smooth(on / 0.45)
+                return lerp(free, side_pt, u) + Rz(yaw) @ Vector((0.06 * sg, 0.0, 0.04)) * math.sin(math.pi * u)
+            if on < 0.75:
+                return side_pt
+            return lerp(side_pt, rope, smooth((on - 0.75) / 0.25))
         return g
     p.hands = {s_: (hand(s_), FWD.lerp(DOWN, on), LEFT if s_ == "l" else RIGHT) for s_ in "lr"}
-    near_s = "l" if R.side > 0 else "r"
     def elbow(s_):
-        sg = 1 if s_ == "l" else -1
-        grab = (s_ == near_s) if R.hit == "side" else True
-        def e(S):
-            run_el = S[s_] + Rz(yaw) @ Vector((0.16 * sg, 0.32, -0.28))
-            # лікоть — з боку рингу (до центру, +Y простору ригу) і вниз: рука не виходить за канат
-            if R.hit == "back":                                                # обидві руки назад-убік: лікті назовні
-                rope_el = S[s_] + Rz(yaw) @ Vector((0.45 * sg, 0.05, -0.15))
-            else:
-                rope_el = S[s_] + (Vector((0.0, 0.35, -0.3)) if grab else Rz(yaw) @ Vector((0.2 * sg, 0.2, -0.35)))
-            return run_el.lerp(rope_el, on)                                   # лікоть униз-назад, не за голову
-        return e
+        hf = hand(s_)
+        return lambda S: perp_pole(S[s_], hf(S), yaw, 1 if s_ == "l" else -1, (R.name, s_), t)
     p.elbows = {s_: elbow(s_) for s_ in "lr"}
     p.fist = {"l": 0.55, "r": 0.55}
     return p
@@ -198,6 +216,62 @@ def _warp(x):
     x = max(0.0, x)
     return x * x * (2.0 - x) if x < 1.0 else x       # розгін з нуля, на x=1 — рівна швидкість
 
+def body_blend_arms(a, c, k, yaw_m, key=None, t=None):
+    """Цілі кистей і полюси ліктів двох поз (a — біг, c — відскок), змішані в системі тіла (відносно плеча, без курсу
+    кожної пози) і повернуті в поточний курс yaw_m. Лікоть: у бігу — свій полюс бігу (там лікоть не в грудях), у
+    відскоку — perp_pole (без перевертань), між ними — змішування точок полюса в системі тіла."""
+    ev = lambda v, S: v(S) if callable(v) else v
+    ya, yc = a.pelvis_yaw or 0.0, c.pelvis_yaw or 0.0
+    ah, ch, ae = dict(a.hands), dict(c.hands), dict(a.elbows)     # знімок: результат може замінити a.hands
+    def loc(v, S, s_, y):
+        return Rz(-y) @ (v - S[s_])
+    def hand(s_):
+        def g(S):
+            la = loc(ev(ah[s_][0], S), S, s_, ya); lc = loc(ev(ch[s_][0], S), S, s_, yc)
+            return S[s_] + Rz(yaw_m) @ lerp(la, lc, k)
+        def d(i):
+            return lambda S: Rz(yaw_m) @ lerp(Rz(-ya) @ ev(ah[s_][i], S), Rz(-yc) @ ev(ch[s_][i], S), k)
+        return (g, d(1), d(2))
+    hs = {s_: hand(s_) for s_ in "lr"}
+    def elbow(s_):
+        def e(S):
+            pc = perp_pole(S[s_], hs[s_][0](S), yaw_m, 1 if s_ == "l" else -1, key and (key, s_), t)
+            if k >= 1.0:
+                return pc
+            la = loc(ev(ae[s_], S), S, s_, ya)
+            return S[s_] + Rz(yaw_m) @ lerp(la, Rz(-yaw_m) @ (pc - S[s_]), k)
+        return e
+    return hs, {s_: elbow(s_) for s_ in "lr"}
+
+
+POLE_DIR = (0.15, 0.6, -1.0)   # бажаний бік ліктя в системі тіла на старті кліпу: донизу, трохи назад і назовні
+_POLE_MEM = {}                 # (кліп, бік) -> (час, напрям ліктя в системі тіла) — неперервність між кадрами
+
+
+def perp_pole(sh, wr, yaw, sg, key=None, t=None):
+    """Полюс ліктя — перпендикулярно до лінії плече—кисть, у бік, найближчий до напряму ліктя попереднього кадру
+    (key, t). Будь-який нерухомий напрям рано чи пізно лягає на лінію руки (кисть на розвороті проходить спереду,
+    збоку й ззаду) — IK перевертав плече на 90–176° за кадр (30.10.2026)."""
+    Rm = Rz(yaw)
+    want = Rm @ Vector((POLE_DIR[0] * sg, POLE_DIR[1], POLE_DIR[2]))
+    if key is not None and key in _POLE_MEM:
+        t0, d0 = _POLE_MEM[key]
+        if t is not None and 0.0 <= t - t0 <= 0.06:
+            # тягнеться до попереднього, але повертається до бажаного боку: без цього полюс дрейфував у груди
+            # (лікоть у тулубі на 8–12 см наприкінці кліпу, 30.10.2026)
+            want = Rm @ (d0 * 0.75 + Vector((POLE_DIR[0] * sg, POLE_DIR[1], POLE_DIR[2])).normalized() * 0.25)
+    ax = wr - sh
+    if ax.length < 1e-4:
+        return sh + want.normalized() * 0.4
+    axn = ax.normalized()
+    perp = want - axn * want.dot(axn)
+    if perp.length < 1e-3:
+        perp = Rm @ Vector((sg, 0.0, 0.0)) - axn * (Rm @ Vector((sg, 0.0, 0.0))).dot(axn)
+    perp.normalize()
+    if key is not None and t is not None:
+        _POLE_MEM[key] = (t, Rz(-yaw) @ perp)
+    return sh + ax * 0.5 + perp * 0.4
+
 def rebound_full(t, L, R):
     T, path_y, path_yaw, falls, face, rope_y = reb_plan(R)
     RL = RUN_LOOPS["Run_Heavy_Loop" if R.heavy else ("Run_Tired_Loop" if R.lean > 10 else "Run_Loop")]
@@ -205,16 +279,26 @@ def rebound_full(t, L, R):
     contact_y = track(T["hit"], path_y)
     tau_hit = abs(contact_y) / v
     hit, push = T["hit"], T["push"]
+    # тіло й стопи — до бігу за 0,3 с (довше — стопи ковзали); руки — за REL (швидше — плече крутилось ривком)
     wc = track(t, [(0.0, 0.0), (hit - 0.28, 0.0), (hit, 1.0), (push, 1.0), (push + 0.3, 0.0), (L + 1.0, 0.0)])
+    wa = track(t, [(0.0, 0.0), (hit - 0.28, 0.0), (hit, 1.0), (push, 1.0), (min(push + REL, L - 0.04), 0.0), (L + 1.0, 0.0)])
     c = rebound_pose(t, L, R)
     if t < push:
-        a = run_at(tau_hit * _warp(t / hit) if t < hit else tau_hit + v * 0 + (t - hit) * 0.0, 0.0, 0.0, RL)
-        return blend_pose(a, c, wc) if wc < 1.0 else c
-    if not R.ret:
+        run = run_at(tau_hit * _warp(t / hit) if t < hit else tau_hit + v * 0 + (t - hit) * 0.0, 0.0, 0.0, RL)
+    elif not R.ret:
         return c
-    tr = (t - push) / 0.25
-    b = run_at(0.25 * _warp(tr) if tr < 1 else 0.25 * (tr - 0.5) + 0.125, contact_y, (180.0 if R.side < 0 and R.hit == "side" else -180.0), RL)   # −180, не 180: змішування кутів з фазою відскоку (−90…−180) без перекруту
-    return blend_pose(b, c, wc) if wc > 0.0 else b
+    else:
+        tr = (t - push) / 0.25
+        run = run_at(0.25 * _warp(tr) if tr < 1 else 0.25 * (tr - 0.5) + 0.125, contact_y, (180.0 if R.side < 0 and R.hit == "side" else -180.0), RL)   # −180, не 180: змішування кутів з фазою відскоку (−90…−180) без перекруту
+    if wc >= 1.0 and wa >= 1.0:
+        return c
+    if wc <= 0.0 and wa <= 0.0:
+        return run
+    m = blend_pose(run, c, wc) if wc > 0.0 else run
+    # руки змішуються в системі тіла, а не у світі: цілі бігу задані для курсу 0°, тіло вже повернуте на
+    # −60…−130°, і середнє двох світових цілей лягало в груди (30.10.2026)
+    m.hands, m.elbows = body_blend_arms(run, c, wa, m.pelvis_yaw, R.name, t)
+    return m
 
 MOVE_CLIPS[:] = [c if not any(c[0] == r.name for r in REBS) else
                  (c[0], c[1], (lambda t, L, r=next(r for r in REBS if r.name == c[0]): rebound_full(t, L, r)), None, False, None, 0)

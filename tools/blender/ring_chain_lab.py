@@ -715,7 +715,29 @@ def place_hold(specs):
     return out
 
 
-def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smooth=True, contacts=(), place=None):
+PEN_MAX = 0.004    # м: проникнення тіл — правило ≤ 4 мм (власник 30.10.2026: «Чуть-чуть входит в тело, я думал есть на это
+                   # правило»)
+
+
+def resolve(contacts, rounds=5):
+    """Доведення до ≤ PEN_MAX: кисть і передпліччя виходять з тіла суперника (зап'ястя — до 6 см, лікоть — під руку),
+    поки є проникнення; кисті з хватом лишаються біля своєї точки (межа зсуву)."""
+    for _ in range(rounds):
+        bad = [(d, w) for d, w in _pen(PEN_MAX) if ("hands" in w or "lowerarms" in w)]
+        if not bad:
+            return True
+        for tag in "AB":
+            if any(w.startswith(tag + ".") for _d, w in bad):
+                ring_lab.settle(tag, max_depth=0.002, iters=30, max_shift=0.06)
+                for sd in "lr":
+                    push_arm(tag, sd, iters=30)
+                    if ring_lab._arm_pen(LAB["arm" + tag], sd, LAB["armB" if tag == "A" else "armA"]) > 2:
+                        fit_elbow(tag, sd)
+    return not [w for d, w in _pen(PEN_MAX) if ("hands" in w or "lowerarms" in w)]
+
+
+def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smooth=True, contacts=(), place=None,
+                 do_resolve=False):
     """Ланка чейну покадрово (як headlock_frames): криві параметрів за ключами, кадр розв'язується заново, кисті
     сідають, руки виштовхуються; перші blend_in кадрів — вхід з останнього кадру зчепу. Стопи — ключі в кожному
     ключі (a_feet, b_feet), між різними — крок з підйомом."""
@@ -735,6 +757,8 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
     for f in (frames or range(length + 1)):
         ff = float(f)
         HL.clear(); HL.update(base)
+        prev = max((kv for kv in keys if kv[0] <= ff), key=lambda kv: kv[0], default=keys[0])[1]
+        HL.update({n: v for n, v in prev.items() if n not in scal and n not in tup})   # нечислові — з попереднього ключа
         for n in scal + tup:
             HL[n] = T(ff, [(k, v[n]) for k, v in keys])
         HL["grab"] = max(0.0, min(1.0, HL["grab"]))
@@ -749,6 +773,13 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
             if HL["grab"] > 0.05:
                 surf()
             ring_lab.solve(fa(), fb())
+        # плече вперед ключицею (до 28°), якщо кисть у хваті не дістає: обіймаючи, людина виносить плече, а не
+        # тягне кисть крізь тіло суперника (на наборі з людськими кистями рука A не діставала на 3,7 см, 30.10.2026)
+        if HL.get("grab", 0.0) > 0.5:
+            for tag, sd, _k in contacts:
+                rig = LAB["rig" + tag]
+                ring_lab.reach_with_clavicle(rig.arm, sd, rig.empties["wrist_" + sd].location)
+            bpy.context.view_layer.update()
         # посадка з теплого старту: поправка цілей з попереднього кадру (згасає), щоб руки не стрибали через кадр
         e0 = {}
         for tag in "AB":
@@ -767,12 +798,16 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
                     self_push(tag, sd)
         if place is not None and HL.get("grab", 0.0) >= 0.95:
             place_hold(place())
+        if do_resolve:
+            resolve(contacts)
         if HL.get("grab", 0.0) > 0.5:                 # долоня на шкірі: великий палець притиснутий, не стирчить у тіло
             for tag, sd, _k in contacts:
                 ring_lab.tuck_thumb(LAB["arm" + tag], sd, 0.85)
             bpy.context.view_layer.update()
         for tag in "AB":                              # суглоби: скручування кисті — у межах, лікоть — під нього
             for sd in "lr":
+                if (tag, sd) in HL.get("keep_elbows", ()):
+                    continue                          # полюс задано позою (обійми: лікті назовні від боків суперника)
                 if abs(hand_twist(LAB["arm" + tag], sd)) > 10.0 or self_arm_count(tag, sd) > 2:
                     fit_elbow(tag, sd)
         for (tag, k), b0 in e0.items():
@@ -987,12 +1022,14 @@ def hammerlock_frames():
 # голова збоку від його плеча; руки обхоплюють пояс B, кисті замкнені на його животі (одна на іншій); B трохи
 # зігнутий, лікті назовні, обидві кисті на передпліччях A — розчіплює. Тут розвертаються обидва: a_head — курс A
 # (кадр A, як b_head), A обходить B зліва, B доводять спиною до A.
-WS = dict(HM, a_head=90.0, a_pel=(-0.46, -0.95), a_pz=-0.26, a_pitch=26.0, a_yaw=-25.0, a_roll=-24.0, a_hy=-60.0,
+WS = dict(HM, a_head=90.0, a_pel=(-0.5, -0.95), a_pz=-0.26, a_pitch=26.0, a_yaw=-25.0, a_roll=-24.0, a_hy=-60.0,
           # присів нижче — лікті на рівні пояса B, руки обхоплюють пояс, а не груди (власник 30.10.2026:
           # «руки из груди торчат»); голова A — збоку від плеча B
           a_hp=5.0, a_feet=((-0.5, -0.8), (-0.68, -1.15)), a_fyaw=(10.0, -20.0),
           b_head=90.0, b_pel=(-0.2, -0.98), b_drop=0.06, b_pelpitch=8.0, b_pitch=20.0, b_yaw=0.0, b_roll=0.0,
-          b_hy=10.0, b_hp=10.0, b_feet=((-0.1, -0.83), (-0.16, -1.13)), grab=1.0)
+          b_hy=10.0, b_hp=10.0, b_feet=((-0.1, -0.83), (-0.16, -1.13)), grab=1.0, a_elo=(0.45, -0.25), belly_gap=0.03,
+          keep_elbows=(("A", "l"), ("A", "r")))
+# набір з людськими кистями (30.10.2026): лікті A назовні від боків B, кисті на 3 см попереду живота, A ближче до B
 # вихід за спину: A обходить B з його лівого боку (пірнає під ліву руку), B розвертається лише на чверть
 WS_TIE = dict(WS, **{k: HM_TIE[k] for k in HM_TIE if k not in ("a_head",)}, a_head=0.0)
 
@@ -1098,8 +1135,9 @@ def ws_a(k=1.0):
                          Vector((0, 0, 1)).lerp(UPV, w)),
                    "l": (lambda S: via(tie_l(S), side_l(S), belly_l(S), w),
                          Vector((0, -1, 0.3)).lerp(-left, w), Vector((-0.4, 0, 1)).lerp(UPV, w))}
-        p.elbows = {"r": lambda S: (S["r"] + Vector((-0.45, -0.15, 0.15))).lerp(S["r"] - left * 0.35 + Vector((0, 0, -0.3)), w),
-                    "l": lambda S: (S["l"] + Vector((0.4, 0.05, -0.3))).lerp(S["l"] + left * 0.35 + Vector((0, 0, -0.3)), w)}
+        eo = HL.get("a_elo", (0.35, -0.3))           # лікті A: назовні від боків B і вниз
+        p.elbows = {"r": lambda S: (S["r"] + Vector((-0.45, -0.15, 0.15))).lerp(S["r"] - left * eo[0] + Vector((0, 0, eo[1])), w),
+                    "l": lambda S: (S["l"] + Vector((0.4, 0.05, -0.3))).lerp(S["l"] + left * eo[0] + Vector((0, 0, eo[1])), w)}
         p.fist = {"r": 0.1 * (1 - w), "l": 0.35 * (1 - w)}     # долоні пласко на животі — зігнуті пальці входять у нього
         p.forced = {"l", "r"}
         return p
@@ -1117,6 +1155,7 @@ def ws_surface():
     # кисті A — за картою «одна на іншій»: права долонею на животі B посередині, ліва — на тильному боці правої
     # (30.10.2026: дві кисті поруч на опуклому животі входили в нього пальцями на 6 см)
     pr = ring_lab.surface_world(B, "spine_01", 0.4, fwd, palm=PALM)
+    pr = pr + fwd * HL.get("belly_gap", 0.0)        # кисті трохи попереду живота: передпліччя не врізаються в боки
     SURF["Wbr"] = ring_lab.to_rig(A, pr)
     SURF["Wbl"] = ring_lab.to_rig(A, pr + fwd * 0.035 + Vector((0, 0, 0.01)))     # на тильному боці правої
     SURF["Sr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "spine_01", 0.4, -left + fwd * 0.3, palm=0.08))
@@ -1390,3 +1429,38 @@ def aw_place():
 def hm_place():
     return [("A", "l", dict(bone="lowerarm_r", along=0.85, from_world=(0.0, 1.0, -0.3), palm_off=0.02)),
             ("A", "r", dict(bone="upperarm_r", along=0.1, from_world=(0.0, 0.3, 1.0), palm_off=0.02, thumb="притиснутий"))]
+
+
+# ---------------------------------------------------------------- огляд у живому Blender
+def worst(src_tag, part, k=3, tol=0.006):
+    """Найглибші вершини частини part фігури src_tag у частинах суперника: [(см, частина суперника, точка)]."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    src = LAB["arm" + src_tag]; ot = LAB["armB" if src_tag == "A" else "armA"]
+    To = ring_lab._part_trees(ot, dg); Ts = ring_lab._part_trees(src, dg)
+    res = []
+    for v in Ts[part][1][::2]:
+        for on, (tree, _) in To.items():
+            loc, _n, _i, d = tree.find_nearest(v, 0.2)
+            if loc is not None and d > tol and ring_lab._inside(tree, v):
+                res.append((round(d * 100, 1), on, tuple(round(x, 2) for x in v)))
+    res.sort(reverse=True)
+    return res[:k]
+
+
+def view(tag, tgt, dirs, dist=2.0, lens=35, res=520, out=None):
+    """Знімки пари з кількох боків (рендер у файли) — для огляду перед показом."""
+    import os
+    sc = bpy.context.scene
+    c = bpy.data.objects.get("Close_Cam") or bpy.data.objects.new("Close_Cam", bpy.data.cameras.new("Close_Cam"))
+    if c.name not in sc.collection.objects:
+        sc.collection.objects.link(c)
+    out = out or os.path.join(ring_lab.REPO, "Logs", "ring_anims", "views")
+    os.makedirs(out, exist_ok=True)
+    ps = []
+    for i, d in enumerate(dirs):
+        loc = Vector(tgt) + Vector(d).normalized() * dist
+        c.location = loc; c.rotation_euler = (Vector(tgt) - loc).to_track_quat('-Z', 'Y').to_euler(); c.data.lens = lens
+        sc.camera = c; p = os.path.join(out, f"{tag}_v{i}.png"); sc.render.filepath = p
+        sc.render.resolution_x = sc.render.resolution_y = res
+        bpy.ops.render.render(write_still=True); ps.append(p)
+    return ps

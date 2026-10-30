@@ -1002,6 +1002,9 @@ CLEAR = {"pelvis": 0.06, "spine_01": 0.05, "spine_02": 0.05, "spine_03": 0.05, "
          "thigh_l": 0.06, "thigh_r": 0.06, "calf_l": 0.045, "calf_r": 0.045, "foot_l": 0.03, "foot_r": 0.03}
 
 HAND_BONES = {"hand_l", "hand_r", "lowerarm_l", "lowerarm_r"}
+# Тулуб для «рука у своєму тілі»: півглибина грудей і живота по сітці набору (циліндр 13 см давав хибні 2–3 см, коли
+# передпліччя лише проходить перед грудьми — сітка набору це не підтвердила, 30.10.2026)
+SELF_RADIUS = {"spine_02": 0.11, "spine_03": 0.10}
 SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "hand_r")
               for body in ("pelvis", "spine_01", "spine_02", "spine_03")]   # spine_03 — груди (власник 30.10.2026)
 
@@ -1055,7 +1058,7 @@ def quality(name, framesA, framesB, bases):
     for tag, frames in (("A", framesA), ("B", framesB)):
         for fi, (_, w) in enumerate(frames or ()):
             for a_, b_ in SELF_PAIRS:
-                v = RADIUS[a_] + RADIUS[b_] - seg_dist(w[a_][0], w[a_][1], w[b_][0], w[b_][1])
+                v = RADIUS[a_] + SELF_RADIUS.get(b_, RADIUS[b_]) - seg_dist(w[a_][0], w[a_][1], w[b_][0], w[b_][1])
                 if v > selfp:
                     selfp, swhere = v, f"{tag}.{a_} × {tag}.{b_}, кадр {fi}"
     q["self"] = (max(0.0, selfp) * 100.0, swhere)
