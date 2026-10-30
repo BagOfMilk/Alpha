@@ -180,11 +180,11 @@ def b_hold(k=1.0):
                 return tie_l(S).lerp(side, wb / 0.5)
             return side.lerp(hl_l(S), (wb - 0.5) / 0.5)
         p.hands = {"l": (bl,
-                         Vector((0, -1, 0.3)).lerp(d2b(Vector((1, 0.3, 0))), wb), Vector((0.4, 0, 1)).lerp(d2b(Vector((0, 1, 0.2))), wb)),
-                   "r": (br, Vector((-1, 0, -0.2)).lerp(d2b(Vector((1, 0, 0))), wb), Vector((0, 0, 1)))}
+                         Vector((0, -1, 0.3)).lerp(d2b(Vector((1, 0.3, 0))), wb), Vector((0.4, 0, 1)).lerp(Vector((0, 0, 1)), wb)),
+                   "r": (br, Vector((-1, 0, -0.2)).lerp(Vector((0, 0, -1)), wb), Vector((0, 0, 1)).lerp(d2b(Vector((1, 0, 0))), wb))}
         p.elbows = {"l": lambda S: (S["l"] + Vector((0.4, 0.05, -0.3))).lerp(S["l"] + d2b(Vector((0.1, 0.35, -0.25))), wb),
                     "r": lambda S: (S["r"] + Vector((-0.45, -0.15, 0.15))).lerp(S["r"] + d2b(Vector((-0.3, -0.15, -0.3))), wb)}
-        p.fist = {"l": 0.35 + 0.15 * wb, "r": 0.1 + 0.1 * wb}
+        p.fist = {"l": 0.35 - 0.25 * wb, "r": 0.1}
         p.forced = {"l", "r"}
         return p
     return f
@@ -417,6 +417,30 @@ def self_arm_count(tag, s, tol=0.006):
     return n
 
 
+def _behind(v, loc, nrm):
+    """Точка з внутрішнього боку найближчої грані. Парність променів бреше біля відкритих країв (пояс штанів,
+    горловина зони тіла): кисть над поясом A «сиділа на 9 см» у штанях, а на кадрі висіла поруч (30.10.2026)."""
+    d = v - loc
+    return d.length < 1e-6 or d.normalized().dot(nrm) < -0.5
+
+
+def own_pen(tag, s, tol=0.006, dg=None, trees=None):
+    """Третя найглибша вершина руки s (з плечем) у своєму тулубі й голові, м (та сама міра, що в self_pen)."""
+    dg = dg or bpy.context.evaluated_depsgraph_get()
+    arm = LAB["arm" + tag]
+    trees = trees or ring_lab._part_trees(arm, dg)
+    body = [trees[p][0] for p in ("body_torso", "body_head") if p in trees]
+    deep = []
+    for v in (ring_lab._arm_verts(arm, s, dg) + _upper_verts(arm, s, dg))[::2]:
+        for t in body:
+            loc, nrm, _i, d = t.find_nearest(v, 0.2)
+            if loc is not None and d > tol and _behind(v, loc, nrm) and ring_lab._inside(t, v):
+                deep.append(d)
+                break
+    deep.sort(reverse=True)
+    return deep[2] if len(deep) >= 3 else 0.0
+
+
 def self_pen(tol=0.006):
     """Уся рука (кисть, передпліччя, плече) у своєму тулубі й голові: [(см, 'B.l')] понад tol. Власник 30.10.2026:
     «Руки из груди торчат … руки из плечей растут» — плече в грудях раніше не перевірялось зовсім."""
@@ -430,8 +454,8 @@ def self_pen(tol=0.006):
             deep = []
             for v in (ring_lab._arm_verts(arm, s, dg) + _upper_verts(arm, s, dg))[::2]:
                 for t in body:
-                    loc, _n, _i, d = t.find_nearest(v, 0.2)
-                    if loc is not None and d > tol and ring_lab._inside(t, v):
+                    loc, nrm, _i, d = t.find_nearest(v, 0.2)
+                    if loc is not None and d > tol and _behind(v, loc, nrm) and ring_lab._inside(t, v):
                         deep.append(d)
                         break
             deep.sort(reverse=True)
@@ -452,8 +476,8 @@ def _pen(tol=0.004):
             deep = []
             for v in vs[::2]:
                 for tree in parts_ot:
-                    loc, _n, _i, dist = tree.find_nearest(v, 0.3)
-                    if loc is not None and dist > tol and ring_lab._inside(tree, v):
+                    loc, nrm, _i, dist = tree.find_nearest(v, 0.3)
+                    if loc is not None and dist > tol and _behind(v, loc, nrm) and ring_lab._inside(tree, v):
                         deep.append(dist)
                         break
             # одна вершина «глибоко» — промінь пройшов крізь відкриту горловину зони тіла, не проникнення
@@ -550,7 +574,8 @@ def aw_b(k=1.0):
         tie_r = lambda S: SURF.get("tBr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Br"])) or S["r"] + Vector((0, -0.3, -0.3))
         tie_l = lambda S: SURF.get("tBl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Bl"])) or S["l"] + Vector((0, -0.3, -0.3))
         wr = a2b(Vector(HL["b_wr"]) - Vector((0, 0, Z0)))               # права кисть — туди, куди тягне A
-        own = lambda S: S["chest"] + Vector((-0.12, -0.12, 0.1))         # ліва — біля свого правого плеча
+        # ліва — тягнеться до свого скрученого плеча ПЕРЕД грудьми (передпліччя не крізь груди: «руки з плечей»)
+        own = lambda S: S["chest"] + Vector((-0.1, -0.26, 0.12))
         arc = math.sin(math.pi * w) * 0.06
         p.hands = {"r": (lambda S: tie_r(S).lerp(wr, w) + Vector((0, 0, arc)),
                          Vector((-1, 0, -0.2)).lerp(Vector((0, -1, 0)), w), Vector((0, 0, 1)).lerp(Vector((1, 0, 0.3)), w)),
@@ -559,7 +584,7 @@ def aw_b(k=1.0):
         # права рука закручена: лікоть угору-назовні; ліва — лікоть угору перед грудьми (реакція)
         relb = Vector(HL.get("b_relb", (-0.25, 0.1, 0.45)))
         p.elbows = {"r": lambda S: (S["r"] + Vector((-0.45, -0.15, 0.15))).lerp(S["r"] + relb, w),
-                    "l": lambda S: (S["l"] + Vector((0.4, 0.05, -0.3))).lerp(S["l"] + Vector((0.2, -0.35, 0.05)), w)}
+                    "l": lambda S: (S["l"] + Vector((0.4, 0.05, -0.3))).lerp(S["l"] + Vector((0.25, -0.4, -0.15)), w)}
         p.fist = {"r": 0.3 + 0.4 * w, "l": 0.35 + 0.35 * w}
         p.forced = {"l", "r"}
         return p
@@ -623,7 +648,7 @@ ARMWRINGER_KEYS = [
 ARMWRINGER_LEN = 66
 
 
-PALM = 0.015       # центр долоні (як рахує _palm) від шкіри: долоня лежить, а не висить і не входить
+PALM = 0.011       # центр долоні (як рахує _palm) від шкіри: долоня лежить, а не висить і не входить
 CONTACT_CM = 2.0    # центр долоні від шкіри суперника — не далі (долоня лежить на тілі, а не висить)
 PLACE_CM = 8.0      # і від задуманої точки хвату — не далі (кисть там, де каже карта, а не деінде на тілі)
 
@@ -649,6 +674,292 @@ def contact_misses(contacts):
         if place > PLACE_CM:
             out.append((round(place, 1), f"{tag}.{s} не там ({key})"))
     return out
+
+
+SEAT_DEG = 70.0     # найбільший доворот кисті до шкіри за крок (°)
+SEAT_NEAR = 0.05    # м: кисть ближче — сідає на шкіру; далі — у повітрі, не чіпається
+SEAT_MOVE = 0.05    # і найбільший зсув зап'ястя (м): долоню доводять до шкіри, а не переносять в інше місце
+
+
+def _skin_out(ot, tree, c):
+    """Шкіра суперника над точкою c і зовнішня нормаль: напрям — від осі найближчої кістки (кінцівки й тулуб — майже
+    циліндри), точка — перший перетин променя ЗЗОВНІ. Найближча точка сітки не каже, з якого боку c: кисть усередині
+    стегна A «була за 3 см від шкіри» (30.10.2026), а парність променів бреше на одязі поверх тіла."""
+    from mathutils.geometry import intersect_point_line
+    W = ot.matrix_world
+    best = None
+    for pb in ot.pose.bones:
+        if not pb.bone.use_deform or pb.name.startswith(("ik_", "root")):
+            continue
+        h, t = W @ pb.head, W @ pb.tail
+        q, k = intersect_point_line(c, h, t)
+        q = h if k < 0 else (t if k > 1 else q)
+        d = (c - q).length
+        if best is None or d < best[0]:
+            best = (d, q)
+    if best is None or best[0] < 1e-4:
+        return None, None
+    n = (c - best[1]).normalized()
+    hit = tree.ray_cast(best[1] + n * 0.4, -n, 0.45)
+    if hit[0] is None:
+        return None, None
+    return hit[0], n
+
+
+def _hand_in(arm, s, ot):
+    """Глибина (м) третьої найглибшої вершини кисті s у будь-якій частині тіла суперника — з його руками й кистями
+    (ring_lab._hand_pen їх навмисно пропускає, а долоня на передпліччі суперника входила в нього на 2,7 см)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    parts = [t for t, _v in ring_lab._part_trees(ot, dg).values()]
+    deep = []
+    for o in ring_lab._meshes(arm):
+        if not o.name.endswith("body_hands"):
+            continue
+        e = o.evaluated_get(dg); me = e.to_mesh(); g = {x.index: x.name for x in o.vertex_groups}
+        for v in list(me.vertices)[::2]:
+            bn = max(((g.get(x.group, ""), x.weight) for x in v.groups), key=lambda z: z[1], default=("", 0))[0]
+            if not bn.endswith("_" + s):
+                continue
+            p = e.matrix_world @ v.co
+            for t in parts:
+                loc, nrm, _i, d = t.find_nearest(p, 0.1)
+                if loc is not None and d > 0.002 and _behind(p, loc, nrm) and ring_lab._inside(t, p):
+                    deep.append(d)
+                    break
+        e.to_mesh_clear()
+    deep.sort(reverse=True)
+    return deep[2] if len(deep) >= 3 else 0.0
+
+
+def seat_palm(tag, s, w=1.0, iters=3, near=None, target=None):
+    """Долоня — до шкіри суперника: кисть довертається навколо центру долоні, доки нормаль долоні не дивиться на
+    шкіру, і центр долоні стає на PALM над нею (зовні). Цілі з ключів задають лише місце й напрям пальців; бік
+    долоні в них вгадувався, і кисті B лягали на A тильним боком або входили в нього (30.10.2026: нормаль долоні від
+    шкіри −0,7…−1,0, недотик 3–4 см, кисть у стегні на 5 см)."""
+    rig = LAB["rig" + tag]
+    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
+    e = rig.empties["wrist_" + s]
+    dg = bpy.context.evaluated_depsgraph_get()
+    tree = ring_lab._bvh(ring_lab._meshes(ot), dg)
+    n_out = None
+    c, _pn, _fd = ring_lab._palm(arm, s)
+    loc, n0 = _skin_out(ot, tree, c)
+    near = SEAT_NEAR if near is None else near
+    if loc is None or (c - loc).dot(n0) > near:
+        return                                        # кисть у повітрі (перехід між хватами) — не чіпаємо
+    keep = (e.location.copy(), e.rotation_quaternion.copy())
+    own0 = own_pen(tag, s)
+    for _ in range(iters):
+        c, pn, _fd = ring_lab._palm(arm, s)
+        loc, n_out = _skin_out(ot, tree, c)
+        if loc is None:
+            return
+        q = pn.rotation_difference(-n_out)
+        if math.degrees(q.angle) > SEAT_DEG:
+            q = Quaternion(q.axis, math.radians(SEAT_DEG))
+        q = Quaternion().slerp(q, w)
+        r0, l0 = e.rotation_quaternion.copy(), e.location.copy()
+        for k in (1.0, 0.6, 0.3, 0.0):                # доворот — у межах суглоба (скручування кисті ≤ 15°)
+            qk = Quaternion().slerp(q, k)
+            e.rotation_quaternion = qk @ r0
+            e.location = c + qk @ (l0 - c)
+            bpy.context.view_layer.update()
+            if abs(hand_twist(arm, s)) <= 15.0:
+                break
+        c, pn, _fd = ring_lab._palm(arm, s)
+        loc, n_out = _skin_out(ot, tree, c)
+        if loc is None:
+            return
+        move = (loc + n_out * PALM) - c
+        if move.length > near:
+            move = move.normalized() * near
+        e.location = e.location + move * w
+        bpy.context.view_layer.update()
+    c, _pn, _fd = ring_lab._palm(arm, s)
+    off = (c - arm.matrix_world @ target).length if target is not None else 0.0
+    if off > PLACE_CM / 100.0 or own_pen(tag, s) > max(own0, 0.004) + 0.002:
+        # лягла не туди (на іншу частину тіла) або доворот завів руку у власне тіло — лишаємо, як було
+        e.location, e.rotation_quaternion = keep
+        bpy.context.view_layer.update()
+        return
+    # долоня (не пальці — їх облягає conform_fingers) у тілі — трохи вище по нормалі шкіри (до 1,2 см: краї долоні на
+    # тонкій опуклій кінцівці)
+    lifted = 0.0
+    while n_out is not None and lifted < 0.012 and _hand_in(arm, s, ot) > 0.004:
+        e.location = e.location + n_out * 0.003
+        lifted += 0.003
+        bpy.context.view_layer.update()
+
+
+FINGER_R = 0.009    # м: товщина пальця від осі кістки — кінчик не ближче до шкіри суперника
+
+
+def conform_fingers(tag, s, step=8.0, max_deg=64.0, max_curl=48.0):
+    """Кожен палець, що входить у суперника, розгинається або стискається (що виводить фаланги над шкіру — те й
+    обирається): пальці лежать на тілі, як у живій кисті, а не входять у нього (кінчики сиділи на 1,8–2,3 см у стегні
+    й голові; пальці, спрямовані в тіло, від розгинання йшли глибше — 6,6 см у стегні A, 30.10.2026)."""
+    rig = LAB["rig" + tag]
+    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
+    pb = arm.pose.bones
+    W = arm.matrix_world
+    dg = bpy.context.evaluated_depsgraph_get()
+    tree = ring_lab._bvh(ring_lab._meshes(ot), dg)
+
+    def clear(names):
+        """Найменший просвіт фаланг над шкірою мінус товщина пальця (м): ≥ 0 — палець зовні."""
+        worst = 1.0
+        for n in names:
+            for p in (W @ pb[n].head, W @ pb[n].tail):
+                loc, nrm = _skin_out(ot, tree, p)
+                if loc is not None:
+                    worst = min(worst, (p - loc).dot(nrm) - FINGER_R)
+        return worst
+
+    for fg in ("thumb", "index", "middle", "ring", "pinky"):
+        names = [f"{fg}_{k}_{s}" for k in ("01", "02", "03") if f"{fg}_{k}_{s}" in pb]
+        tip = names[1:]
+        c0 = clear(tip)
+        if c0 >= 0.0:
+            continue
+        base = {n: pb[n].rotation_quaternion.copy() for n in names}
+
+        def bend(deg):
+            for n in names:
+                ax = rig.finger_axis.get(n)
+                if ax is not None:
+                    pb[n].rotation_quaternion = base[n] @ Quaternion(ax, math.radians(deg * (0.6 if n.endswith("01_" + s) else 1.0)))
+            bpy.context.view_layer.update()
+
+        best = (c0, 0.0)
+        cands = [-step * i for i in range(1, int(max_deg / step) + 1)] + [step * i for i in range(1, int(max_curl / step) + 1)]
+        for deg in cands:
+            bend(deg)
+            c = clear(tip)
+            if c > best[0]:
+                best = (c, deg)
+            if c >= 0.0:
+                break
+        bend(best[1])
+
+
+def _hand_in(arm, s, ot):
+    """Глибина (м) третьої найглибшої вершини кисті s у будь-якій частині тіла суперника — з його руками й кистями
+    (ring_lab._hand_pen їх навмисно пропускає, а долоня на передпліччі суперника входила в нього на 2,7 см)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    parts = [t for t, _v in ring_lab._part_trees(ot, dg).values()]
+    deep = []
+    for o in ring_lab._meshes(arm):
+        if not o.name.endswith("body_hands"):
+            continue
+        e = o.evaluated_get(dg); me = e.to_mesh(); g = {x.index: x.name for x in o.vertex_groups}
+        for v in list(me.vertices)[::2]:
+            bn = max(((g.get(x.group, ""), x.weight) for x in v.groups), key=lambda z: z[1], default=("", 0))[0]
+            if not bn.endswith("_" + s):
+                continue
+            p = e.matrix_world @ v.co
+            for t in parts:
+                loc, nrm, _i, d = t.find_nearest(p, 0.1)
+                if loc is not None and d > 0.002 and _behind(p, loc, nrm) and ring_lab._inside(t, p):
+                    deep.append(d)
+                    break
+        e.to_mesh_clear()
+    deep.sort(reverse=True)
+    return deep[2] if len(deep) >= 3 else 0.0
+
+
+def seat_palm(tag, s, w=1.0, iters=3, near=None, target=None):
+    """Долоня — до шкіри суперника: кисть довертається навколо центру долоні, доки нормаль долоні не дивиться на
+    шкіру, і центр долоні стає на PALM над нею (зовні). Цілі з ключів задають лише місце й напрям пальців; бік
+    долоні в них вгадувався, і кисті B лягали на A тильним боком або входили в нього (30.10.2026: нормаль долоні від
+    шкіри −0,7…−1,0, недотик 3–4 см, кисть у стегні на 5 см)."""
+    rig = LAB["rig" + tag]
+    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
+    e = rig.empties["wrist_" + s]
+    dg = bpy.context.evaluated_depsgraph_get()
+    tree = ring_lab._bvh(ring_lab._meshes(ot), dg)
+    n_out = None
+    c, _pn, _fd = ring_lab._palm(arm, s)
+    loc, n0 = _skin_out(ot, tree, c)
+    near = SEAT_NEAR if near is None else near
+    if loc is None or (c - loc).dot(n0) > near:
+        return                                        # кисть у повітрі (перехід між хватами) — не чіпаємо
+    keep = (e.location.copy(), e.rotation_quaternion.copy())
+    own0 = own_pen(tag, s)
+    for _ in range(iters):
+        c, pn, _fd = ring_lab._palm(arm, s)
+        loc, n_out = _skin_out(ot, tree, c)
+        if loc is None:
+            return
+        q = pn.rotation_difference(-n_out)
+        if math.degrees(q.angle) > SEAT_DEG:
+            q = Quaternion(q.axis, math.radians(SEAT_DEG))
+        q = Quaternion().slerp(q, w)
+        r0, l0 = e.rotation_quaternion.copy(), e.location.copy()
+        for k in (1.0, 0.6, 0.3, 0.0):                # доворот — у межах суглоба (скручування кисті ≤ 15°)
+            qk = Quaternion().slerp(q, k)
+            e.rotation_quaternion = qk @ r0
+            e.location = c + qk @ (l0 - c)
+            bpy.context.view_layer.update()
+            if abs(hand_twist(arm, s)) <= 15.0:
+                break
+        c, pn, _fd = ring_lab._palm(arm, s)
+        loc, n_out = _skin_out(ot, tree, c)
+        if loc is None:
+            return
+        move = (loc + n_out * PALM) - c
+        if move.length > near:
+            move = move.normalized() * near
+        e.location = e.location + move * w
+        bpy.context.view_layer.update()
+    c, _pn, _fd = ring_lab._palm(arm, s)
+    off = (c - arm.matrix_world @ target).length if target is not None else 0.0
+    if off > PLACE_CM / 100.0 or own_pen(tag, s) > max(own0, 0.004) + 0.002:
+        # лягла не туди (на іншу частину тіла) або доворот завів руку у власне тіло — лишаємо, як було
+        e.location, e.rotation_quaternion = keep
+        bpy.context.view_layer.update()
+        return
+    # долоня (не пальці — їх облягає conform_fingers) у тілі — трохи вище по нормалі шкіри (до 1,2 см: краї долоні на
+    # тонкій опуклій кінцівці)
+    lifted = 0.0
+    while n_out is not None and lifted < 0.012 and _hand_in(arm, s, ot) > 0.004:
+        e.location = e.location + n_out * 0.003
+        lifted += 0.003
+        bpy.context.view_layer.update()
+
+
+FINGER_R = 0.009    # м: товщина пальця від осі кістки — кінчик не ближче до шкіри суперника
+
+
+def conform_fingers(tag, s, step=8.0, max_deg=64.0):
+    """Кожен палець у хваті розгинається покроково, доки його фаланги не над шкірою суперника: пальці лежать на
+    тілі, як у живій кисті, а не входять у нього (кінчики сиділи на 1,8–2,3 см у стегні й голові, 30.10.2026)."""
+    rig = LAB["rig" + tag]
+    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
+    pb = arm.pose.bones
+    W = arm.matrix_world
+    dg = bpy.context.evaluated_depsgraph_get()
+    tree = ring_lab._bvh(ring_lab._meshes(ot), dg)
+
+    def inside(names):
+        for n in names:
+            for p in (W @ pb[n].head, W @ pb[n].tail):
+                loc, nrm = _skin_out(ot, tree, p)
+                if loc is not None and (p - loc).dot(nrm) < FINGER_R:
+                    return True
+        return False
+
+    for fg in ("thumb", "index", "middle", "ring", "pinky"):
+        names = [f"{fg}_{k}_{s}" for k in ("01", "02", "03") if f"{fg}_{k}_{s}" in pb]
+        tip = names[1:]
+        done = 0.0
+        while done < max_deg and inside(tip):
+            for n in names:
+                ax = rig.finger_axis.get(n)
+                if ax is None:
+                    continue
+                pb[n].rotation_quaternion = pb[n].rotation_quaternion @ Quaternion(ax, math.radians(-step * (0.6 if n.endswith("01_" + s) else 1.0)))
+            done += step
+            bpy.context.view_layer.update()
 
 
 def hand_twist(arm, s):
@@ -800,9 +1111,17 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
             place_hold(place())
         if do_resolve:
             resolve(contacts)
+        held = {(tag, sd): k for tag, sd, k in contacts if k in SURF} if HL.get("grab", 0.0) >= 0.95 else {}
+        for tag in "AB":                              # долоня — до шкіри й на шкірі (не тильним боком, не над тілом)
+            for sd in "lr":
+                k = held.get((tag, sd))
+                seat_palm(tag, sd, near=0.12 if k else SEAT_NEAR, target=SURF[k] if k else None)
         if HL.get("grab", 0.0) > 0.5:                 # долоня на шкірі: великий палець притиснутий, не стирчить у тіло
             for tag, sd, _k in contacts:
                 ring_lab.tuck_thumb(LAB["arm" + tag], sd, 0.85)
+        for tag in "AB":                              # пальці облягають тіло, а не входять у нього
+            for sd in "lr":
+                conform_fingers(tag, sd)
             bpy.context.view_layer.update()
         for tag in "AB":                              # суглоби: скручування кисті — у межах, лікоть — під нього
             for sd in "lr":
@@ -871,8 +1190,8 @@ def smooth_frames(frames, keep=0, w=(1.0, 2.0, 3.0, 2.0, 1.0)):
     return out
 
 
-def armwringer_frames():
-    return chain_frames("Chain_ArmWringer", ARMWRINGER_KEYS, ARMWRINGER_LEN, aw_a, aw_b, aw_surface, contacts=AW_CONTACTS)
+def armwringer_frames(frames=None):
+    return chain_frames("Chain_ArmWringer", ARMWRINGER_KEYS, ARMWRINGER_LEN, aw_a, aw_b, aw_surface, frames=frames, contacts=AW_CONTACTS)
 
 
 # ================================================================ хаммерлок
@@ -973,7 +1292,15 @@ def hm_a(k=1.0):
         tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
         wrist = lambda S: SURF.get("Hl") or P_(S, "lowerarm_r", 0.9, Vector((0, 0, 0.05))) or S["l"] + Vector((0, -0.3, -0.3))
         shoulder = lambda S: SURF.get("Hr") or P_(S, "upperarm_r", 0.15, Vector((0, 0, 0.06))) or S["r"] + Vector((0, -0.3, -0.2))
-        p.hands = {"l": (lambda S: tie_l(S).lerp(wrist(S), w), Vector((0, -1, 0.3)).lerp(Vector((-1, 0, -0.3)), w),
+
+        def slide_l(S):                               # ліва не відпускає передпліччя B: ковзає по ньому від ліктя до
+            if w <= 0.05:                             # зап'ястя (навпростець ішла крізь його тулуб, коли B розвертався)
+                return tie_l(S)
+            if w >= 0.95:
+                return wrist(S)
+            on = P_(S, "lowerarm_r", 0.06 + 0.84 * w, Vector(TIE_OFF["Al"]).lerp(Vector((0, 0, 0.05)), w))
+            return on or tie_l(S).lerp(wrist(S), w)
+        p.hands = {"l": (slide_l, Vector((0, -1, 0.3)).lerp(Vector((-1, 0, -0.3)), w),
                          Vector((-0.4, 0, 1)).lerp(Vector((0, -1, 0.2)), w)),
                    "r": (lambda S: tie_r(S).lerp(shoulder(S), w) + Vector((0, 0, math.sin(math.pi * w) * 0.08)),
                          Vector((-1, 0, -0.2)).lerp(Vector((0, -1, -0.3)), w), Vector((0, 0, 1)))}
@@ -1013,8 +1340,8 @@ HAMMERLOCK_KEYS = [
 HAMMERLOCK_LEN = 72
 
 
-def hammerlock_frames():
-    return chain_frames("Chain_Hammerlock", HAMMERLOCK_KEYS, HAMMERLOCK_LEN, hm_a, hm_b, hm_surface, contacts=HM_CONTACTS)
+def hammerlock_frames(frames=None):
+    return chain_frames("Chain_Hammerlock", HAMMERLOCK_KEYS, HAMMERLOCK_LEN, hm_a, hm_b, hm_surface, frames=frames, contacts=HM_CONTACTS)
 
 
 # ================================================================ захват корпусу ззаду (go-behind)
@@ -1185,8 +1512,8 @@ WAISTLOCK_KEYS = [
 WAISTLOCK_LEN = 72
 
 
-def waistlock_frames():
-    return chain_frames("Chain_Waistlock", WAISTLOCK_KEYS, WAISTLOCK_LEN, ws_a, ws_b, ws_surface, contacts=WS_CONTACTS)
+def waistlock_frames(frames=None):
+    return chain_frames("Chain_Waistlock", WAISTLOCK_KEYS, WAISTLOCK_LEN, ws_a, ws_b, ws_surface, frames=frames, contacts=WS_CONTACTS)
 
 
 # ================================================================ передній захват голови (front facelock)
@@ -1218,9 +1545,9 @@ FACELOCK_KEYS = [
 FACELOCK_LEN = 72
 
 
-def facelock_frames():
+def facelock_frames(frames=None):
     keys = [(f, dict(k, b_feet=k["b_feet"] or b_feet_hold(k["b_pel"], k["b_head"]))) for f, k in FACELOCK_KEYS]
-    return chain_frames("Chain_FrontFacelock", keys, FACELOCK_LEN, a_hold, b_hold, hl_surface, contacts=HL_CONTACTS)
+    return chain_frames("Chain_FrontFacelock", keys, FACELOCK_LEN, a_hold, b_hold, hl_surface, frames=frames, contacts=HL_CONTACTS)
 
 
 # ================================================================ викрут кисті (wristlock)
@@ -1251,8 +1578,8 @@ WRISTLOCK_KEYS = [
 WRISTLOCK_LEN = 66
 
 
-def wristlock_frames():
-    return chain_frames("Chain_Wristlock", WRISTLOCK_KEYS, WRISTLOCK_LEN, aw_a, aw_b, aw_surface, contacts=AW_CONTACTS)
+def wristlock_frames(frames=None):
+    return chain_frames("Chain_Wristlock", WRISTLOCK_KEYS, WRISTLOCK_LEN, aw_a, aw_b, aw_surface, frames=frames, contacts=AW_CONTACTS)
 
 
 # ================================================================ відштовхування (розрив зчепу)
