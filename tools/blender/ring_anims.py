@@ -1185,6 +1185,7 @@ exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_run.py"), encoding=
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_ropes.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_chain.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_sell.py"), encoding="utf-8").read())
+exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_center.py"), encoding="utf-8").read())
 CLIPS += MOVE_CLIPS
 CLIP_NODES.update(MOVE_CLIP_NODES)
 CLIP_EVENTS.update(MOVE_EVENTS)
@@ -1825,7 +1826,13 @@ def look_pair(name, armA, armB, sa, sb, length):
             if armB is not None:
                 set_pose(armB, sb[i])
             bpy.context.view_layer.update()
-            c_ = sa[i]["pelvis"].translation if armB is None else Vector()
+            if armB is None:
+                c_ = sa[i]["pelvis"].translation
+            else:                                        # пара — центр між тазами (дії з розбігу виходили з кадру)
+                pa = armA.matrix_world @ sa[i]["pelvis"].translation
+                pb_ = armB.matrix_world @ sb[i]["pelvis"].translation
+                c_ = (pa + pb_) / 2 - Vector((0.0, -0.3, 0.0))
+                c_ = c_ if c_.length > 0.6 else Vector()
             cam.location = Vector(loc) + Vector((c_.x, c_.y + 0.3, 0.0))
             cam.rotation_euler = rot
             path = os.path.join(LOOK_DIR, "_tile.png")
