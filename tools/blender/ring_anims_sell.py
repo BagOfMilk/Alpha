@@ -99,3 +99,177 @@ def clip_bump_sell(kind):
 for _k in SELLS:
     MOVE_CLIPS.append((f"Bump_Back_Sell_{_k}", SELL_LEN, clip_bump_sell(_k), None, False, None, 0))
     MOVE_CLIP_NODES[f"Bump_Back_Sell_{_k}"] = {"A": ("stance", "lying_back")}
+
+
+# ================================================================ бамп обличчям донизу (front bump)
+# Референс (записи матчів і навчальні відео, своїми словами): з удару в спину чи з підсічки — коліна підгинаються,
+# тіло падає вперед прямим; передпліччя й долоні б'ють мат першими (під кутом, біля голови), груди й стегна
+# лягають одночасно, голова повернута вбік. Продаж: нокаут лицем донизу; відкочується на спину, тримаючись за груди;
+# піднімається на лікті й падає знову; повзе до канатів; стає рачки, тримаючись за живіт, і падає назад.
+Q_FRONT = Quaternion(LEFT, math.radians(90.0))      # лежить на животі, голова — у −Y ригу
+FRONT_Z = 0.13
+FRONT_END_Y = -0.45
+FBUMP_LEN = 1.3
+
+
+def lying_front(y=FRONT_END_Y, knee_bend=0.05, head_side=1.0, push=0.0, roll=0.0, frog=(0.0, 0.0)):
+    """Лежить на животі: передпліччя на маті біля голови, голова повернута вбік (обличчям не в мат).
+    frog — коліно лівої/правої підтягнуте вбік по мату (лежачи на животі коліно не може йти «вперед» — там мат)."""
+    q = Q_FRONT @ Quaternion(UP, math.radians(roll))
+    off = off_for(Vector((0.0, y, FRONT_Z + 0.1 * push + 0.09 * abs(math.sin(math.radians(roll))) + 0.03 * max(frog))))
+    p = body(off, q, knee_bend=knee_bend)
+    for i, (s_, f_) in enumerate((("l", frog[0]), ("r", frog[1]))):
+        if f_ > 1e-4:
+            sg = 1 if s_ == "l" else -1
+            an = xf(off, q, REST["ankle_" + s_] + Vector((0.12 * sg * f_, 0.0, 0.3 * f_)))
+            kn = xf(off, q, REST["knee_" + s_] + Vector((0.5 * sg, 0.0, 0.2)))
+            ank, kns = list(p.ankles), list(p.knees)
+            ank[i], kns[i] = an, kn
+            p.ankles, p.knees = tuple(ank), tuple(kns)
+    p.pitch = -25.0 * push                                  # на ліктях — груди вгору
+    p.head_yaw = 75.0 * head_side
+    p.head_pitch = -10.0 - 20.0 * push
+    ak = BODY["arm"]
+    def hand(s_):
+        sg = 1 if s_ == "l" else -1
+        def g(S):
+            pt = S[s_] + q @ (Vector((0.12 * sg, 0.0, 0.32)) * ak) + Vector((0, 0, 0.05 * push))
+            return Vector((pt.x, pt.y, max(pt.z, 0.06)))
+        return g
+    p.hands = {s_: (hand(s_), q @ UP, DOWN) for s_ in "lr"}        # долоні на мат, пальці — до голови
+    p.elbows = {"l": lambda S: S["l"] + q @ Vector((0.4, 0.0, 0.0)) + Vector((0, 0, 0.1)),
+                "r": lambda S: S["r"] + q @ Vector((-0.4, 0.0, 0.0)) + Vector((0, 0, 0.1))}
+    p.fist = {"l": 0.15, "r": 0.15}
+    return p
+
+
+def clip_bump_front(t, L):
+    """Стоїть → коліна підгинаються → падає вперед прямим → передпліччя й груди на мат."""
+    th = track(t, [(0.0, 0.0), (0.2, 6.0), (0.45, 50.0), (0.58, 90.0), (FBUMP_LEN, 90.0)])
+    y = track(t, [(0.0, 0.0), (0.2, -0.04), (0.45, -0.3), (0.58, FRONT_END_Y), (FBUMP_LEN, FRONT_END_Y)])
+    z = track(t, [(0.0, REST["pelvis"].z - 0.09), (0.2, REST["pelvis"].z - 0.16), (0.45, (0.45 + 0.25 * (1.0 - BODY["leg"])) * BODY["leg"]),
+                  (0.58, FRONT_Z), (FBUMP_LEN, FRONT_Z)])
+    bounce = math.sin(math.pi * smooth((t - 0.58) / 0.2)) * 0.025 if 0.58 < t < 0.78 else 0.0
+    q = Quaternion(LEFT, math.radians(th))
+    p = body(off_for(Vector((0.0, y, z + bounce))), q, knee_bend=0.25 * (1 - smooth(th / 90.0)))
+    planted = 1.0 - smooth((th - 25.0) / 35.0)
+    sl, sr = foot(0.2, -0.105), foot(-0.2, 0.075)
+    p.ankles = (lerp(p.ankles[0], sl, planted), lerp(p.ankles[1], sr, planted))
+    yl, yr = Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0))
+    p.foot_rot = (yl.slerp(q, 1 - planted), yr.slerp(q, 1 - planted))
+    p.pitch = 14.0 * (1 - smooth(th / 70.0))
+    p.head_yaw = 75.0 * smooth((th - 40.0) / 40.0)          # обличчя — вбік до удару об мат
+    p.head_pitch = -15.0 * smooth(th / 90.0)
+    st = stance(0.0, L, sway=0.0)
+    lf = lying_front()
+    w = smooth((th - 20.0) / 50.0)                          # руки — з гарду вперед на мат раніше за груди
+    p = _arms_to(p, st, 1.0)
+    p = _arms_to(p, lf, w)
+    end_w = smooth((t - 0.95) / 0.3)
+    if end_w > 0:
+        return blend_pose(_filled(p), _filled(lying_front()), end_w)
+    return p
+
+
+FSELLS = {
+    # end: вузол наприкінці; push — на ліктях; roll — перекат (°, 180 — на спину)
+    "KO":     dict(end="lying_front"),
+    "RollBack": dict(end="lying_back"),
+    "PushUp": dict(end="lying_front"),
+    "Crawl":  dict(end="lying_front"),
+    "Knees":  dict(end="lying_front"),
+}
+FSELL_LEN = 3.4
+
+
+def fsell_pose(t, kind):
+    s = track(t, [(SELL_IN, 0.0), (SELL_HOLD, 1.0), (SELL_OUT, 1.0), (FSELL_LEN - 0.15, 0.0), (FSELL_LEN + 1.0, 0.0)])
+    br = math.sin(2 * math.pi * t / 0.9) * 0.5 + 0.5
+    if kind == "KO":
+        p = lying_front()
+        p.pitch = -3.0 * br
+        return p
+    if kind == "PushUp":
+        p = lying_front(push=s * (0.85 + 0.15 * br))
+        return p
+    if kind == "Crawl":                                     # тягнеться правою вперед, підтягує ліве коліно
+        k = track(t, [(SELL_IN, 0.0), (SELL_HOLD, 1.0), (SELL_OUT, 1.0), (FSELL_LEN - 0.15, 0.0), (FSELL_LEN + 1, 0.0)])
+        p = lying_front(roll=-15.0 * k, frog=(0.8 * k, 0.0))
+        q = Q_FRONT @ Quaternion(UP, math.radians(-15.0 * k))
+        g0 = p.hands["r"][0]
+        p.hands["r"] = (lambda S: g0(S).lerp(Vector((S["r"].x, (S["r"] + q @ Vector((0, 0, 0.5 * BODY["arm"]))).y, 0.07)), k),
+                        q @ UP, DOWN)
+        return p
+    if kind == "Knees":                                     # рачки, рука на животі, далі знову на мат
+        p = lying_front(push=0.6 * s, frog=(0.6 * s, 0.6 * s))
+        p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.12 * s * BODY["leg"]))
+        q = Q_FRONT
+        g0 = p.hands["l"][0]
+        p.hands["l"] = (lambda S: g0(S).lerp(S["pelvis"] + q @ Vector((0.05, -0.16, 0.15)), s), q @ UP, DOWN)
+        return p
+    if kind == "RollBack":                                  # перекат на спину одним поворотом, долоня на грудях
+        r = smooth(track(t, [(SELL_IN, 0.0), (SELL_HOLD + 0.2, 1.0), (FSELL_LEN + 1, 1.0)]))
+        hold = track(t, [(SELL_IN, 0.0), (SELL_HOLD + 0.2, 1.0), (SELL_OUT, 1.0), (FSELL_LEN - 0.15, 0.0), (FSELL_LEN + 1, 0.0)])
+        roll = -180.0 * r                                  # на лівий бік: права рука — зверху, вільна до грудей
+        q = Q_FRONT @ Quaternion(UP, math.radians(roll))
+        # на боці таз і плечі — на півширини над матом (інакше нижнє плече й лікоть ішли під мат)
+        off = off_for(Vector((0.0, FRONT_END_Y, FRONT_Z + 0.19 * abs(math.sin(math.radians(roll))))))
+        p = body(off, q, knee_bend=0.05 + 0.1 * r + 0.4 * hold * r)        # наприкінці — коліна як у «лежить на спині»
+        p.head_yaw = 75.0 * (1 - r)
+        p.head_pitch = -10.0 - 20.0 * r
+        ak = BODY["arm"]
+        lb = smooth(track(t, [(SELL_HOLD + 0.15, 0.0), (SELL_HOLD + 0.65, 1.0), (FSELL_LEN + 1, 1.0)]))
+        def hand(s_):
+            sg = 1 if s_ == "l" else -1
+            def g(S):
+                # перекат «колодою»: обидві долоні притиснуті до грудей (рука не потрапляє під тіло), після — ліва на мат
+                front = S[s_] + q @ (Vector((0.12 * sg, 0.0, 0.32)) * ak)
+                chest = S["chest"] + q @ Vector((0.07 * sg, -0.2, 0.06))
+                back = S[s_] + q @ (Vector((0.42 * sg, 0.05, -0.32)) * ak)
+                over = S[s_] + q @ (Vector((0.05, 0.0, 0.45)) * ak)   # нижня (ліва) — над головою вздовж осі перекату
+                if s_ == "l":
+                    if r < 0.25:
+                        pt = front.lerp(over, smooth(r / 0.25))
+                    else:                                       # на мат — уже після перекату, за 0,5 с (не стрибком)
+                        pt = over.lerp(back, lb)
+                elif r < 0.35:                                 # права — дугою вбік від тіла, не крізь живіт
+                    u = smooth(r / 0.35)
+                    pt = front.lerp(chest, u) + q @ Vector((-0.18, 0.0, 0.0)) * math.sin(math.pi * u)
+                else:
+                    pt = chest
+                if s_ == "r":                                  # права лишається на грудях, поки триває продаж
+                    pt = pt.lerp(back, smooth(1.0 - hold) * r) if r > 0.99 else pt
+                return Vector((pt.x, pt.y, max(pt.z, 0.07)))
+            return g
+        p.hands = {s_: (hand(s_), q @ (UP.lerp(DOWN, r)), DOWN.lerp(q @ FWD, r)) for s_ in "lr"}
+        tuck = smooth(min(1.0, r / 0.25)) * (1.0 - smooth(max(0.0, (r - 0.8) / 0.2)) * 0.0)
+        def elb(s_):
+            sg = 1 if s_ == "l" else -1
+            def e(S):
+                side = S[s_] + q @ Vector((0.4 * sg, 0.0, 0.0)) + Vector((0, 0, 0.15))
+                if s_ == "l":                                   # витягнута над головою — лікоть угору від мату
+                    ov = S[s_] + q @ Vector((0.0, 0.0, 0.25)) + Vector((0, 0, 0.3))
+                    return side.lerp(ov, tuck * (1.0 - lb))
+                front = S[s_] + q @ Vector((-0.12, -0.3, -0.2))  # права притиснута — лікоть перед грудьми
+                return side.lerp(front, tuck)
+            return e
+        p.elbows = {s_: elb(s_) for s_ in "lr"}
+        p.fist = {"l": 0.15, "r": 0.15 + 0.3 * hold}
+        return p
+    raise KeyError(kind)
+
+
+def clip_fbump_sell(kind):
+    def f(t, L):
+        if t < SELL_IN:
+            return clip_bump_front(t, FBUMP_LEN)
+        return fsell_pose(t, kind)
+    return f
+
+
+MOVE_NODE_POSES["lying_front"] = lambda: lying_front()
+MOVE_CLIPS.append(("Bump_Front", FBUMP_LEN, clip_bump_front, None, False, None, 0))
+MOVE_CLIP_NODES["Bump_Front"] = {"A": ("stance", "lying_front")}
+for _k, _v in FSELLS.items():
+    MOVE_CLIPS.append((f"Bump_Front_Sell_{_k}", FSELL_LEN, clip_fbump_sell(_k), None, False, None, 0))
+    MOVE_CLIP_NODES[f"Bump_Front_Sell_{_k}"] = {"A": ("stance", _v["end"])}

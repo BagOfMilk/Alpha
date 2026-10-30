@@ -1278,10 +1278,14 @@ def quality(name, framesA, framesB, bases):
                 # відносно таза: біг і розворот несуть кисть разом із тілом — це не телепорт
                 # у рамці таза (без його повороту): розворот тіла несе кисть — це не телепорт
                 def local(w_):
-                    ax = w_["thigh_l"][0] - w_["thigh_r"][0]
-                    a_ = math.atan2(ax.y, ax.x)
-                    r_ = w_[hb][0] - w_["pelvis"][0]
-                    return Matrix.Rotation(-a_, 3, 'Z') @ r_
+                    # повна 3D-система таза (вісь стегон + вгору по хребту): на перекаті вісь стегон стає
+                    # вертикальною, і поворот лише навколо Z вироджувався — хибні «стрибки» на 1–2 м (30.10.2026)
+                    x_ = (w_["thigh_l"][0] - w_["thigh_r"][0]).normalized()
+                    u_ = w_["spine_02"][0] - w_["pelvis"][0]
+                    z_ = (u_ - x_ * u_.dot(x_)).normalized()
+                    y_ = z_.cross(x_)
+                    M_ = Matrix((x_, y_, z_))
+                    return M_ @ (w_[hb][0] - w_["pelvis"][0])
                 rel1 = local(fr[fi][1])
                 rel0 = local(fr[fi - 1][1])
                 d_ = (rel1 - rel0).length
@@ -1462,6 +1466,8 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
             r_ = lambda v: tuple(round(x, 2) for x in v)
             print("DIAG", name, f, {s_: (r_(Wd @ pbd["thigh_" + s_].head), r_(Wd @ pbd["calf_" + s_].head), r_(Wd @ pbd["foot_" + s_].head),
                                          r_(rigA.empties["ankle_" + s_].location), r_(rigA.empties["knee_" + s_].location)) for s_ in "lr"}, flush=True)
+            print("DIAGH", name, f, {s_: (r_(Wd @ pbd["hand_" + s_].head), r_(rigA.empties["wrist_" + s_].location),
+                                          r_(Wd @ pbd["lowerarm_" + s_].head), r_(rigA.empties["elbow_" + s_].location)) for s_ in "lr"}, flush=True)
             if fb is not None:
                 pbb, Wb = rigB.arm.pose.bones, rigB.arm.matrix_world
                 print("DIAGB", name, f, {k_: r_(Wb @ pbb[k_].head) for k_ in ("spine_03", "neck_01", "hand_r", "lowerarm_r", "upperarm_r")},
