@@ -9,7 +9,7 @@
 # B стоїть у центрі обличчям до A; кліп починається з бігу (вузла немає: гра змішує з кінця відскоку), A закінчує
 # в стійці там, де зупинився, B — у вузлі свого бампа або в стійці.
 
-CT_RUN = RUN_LOOPS["Run_Loop"]
+CT_RUN = RUN_LOOPS["Run_Jog_Loop"]                # 2,5 м/с: з бігу 3,9 м/с A вилітав після удару на край рингу
 CT_HEAVY = RUN_LOOPS["Run_Heavy_Loop"]
 
 
@@ -22,7 +22,7 @@ class Ctr:
         self.name, self.a, self.b, self.bx, self.pass_, self.gap = name, a, b, bx, pass_, gap
         self.run, self.L, self.t_hit = run or CT_RUN, L, t_hit
         if pass_:
-            self.t0, self.td = t_hit + 0.25, 0.6                 # тримає швидкість крізь контакт, гальмує далеко за B
+            self.t0, self.td = t_hit + 0.3, 0.85                # тримає швидкість крізь контакт, гальмує далеко за B
                                                                  # (поруч із головою й руками B на маті)
         else:
             self.t0, self.td = t_hit - 0.3, 0.45                 # гальмує до удару, б'є майже з місця
@@ -48,7 +48,7 @@ class Ctr:
 
 CENTER = [
     Ctr("Center_ShoulderBlock", "block", "back", 0.64, gap=0.42),
-    Ctr("Center_Clothesline", "line", "back", -0.58),
+    Ctr("Center_Clothesline", "line", "back", -0.66),
     Ctr("Center_Clothesline_Flip", "line", "front", -0.58),         # розвертає — падає обличчям, позаду A
     Ctr("Center_Lariat_Left", "line_l", "side", 0.62),
     Ctr("Center_RunningElbow", "elbow", "side", 0.62),            # лівим ліктем; B падає на бік — геть від лінії бігу
@@ -107,8 +107,13 @@ def center_a(c):
         w = _act_w(t, c)
         if c.a == "nosell" and t > c.t_hit:
             # B не зрушив — A відскакує від нього й падає на спину сам (той самий бамп, з того місця, де вдарився)
-            hb = blend_pose(_filled(p), _filled(_shift(clip_bump_back(t - c.t_hit, BUMP_LEN), -c.v * c.tau(c.t_hit))),
-                            smooth((t - c.t_hit) / 0.12))
+            bb = _shift(clip_bump_back(t - c.t_hit, BUMP_LEN), -c.v * c.tau(c.t_hit))
+            r0 = run_pose(c.tau(c.t_hit), c.run)           # стопи — де стояли при ударі, доки не піднімуться
+            u = smooth((t - c.t_hit - 0.2) / 0.22)
+            if u < 1.0 and bb.ankles:
+                bb.ankles = tuple(Vector((m.x, m.y, b_.z)) for m, b_ in ((lerp(f0, b_, u), b_) for f0, b_ in zip(r0.ankles, bb.ankles)))
+            hb = blend_pose(_filled(p), _filled(bb), smooth((t - c.t_hit) / 0.12))
+            hb.ankles = bb.ankles
             return hb
         if c.a in ("line", "line_l"):
             s_ = "r" if c.a == "line" else "l"
