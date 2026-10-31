@@ -1474,9 +1474,18 @@ FACELOCK_KEYS = [
 FACELOCK_LEN = 72
 
 
+def fl_surface():
+    """Передній захват: B спереду, зігнутий — обидві долоні впираються A в стегна спереду (цілі бічного захвату —
+    ліва за поперек A — вели руку B крізь його тулуб)."""
+    hl_surface()
+    A, B = LAB["armA"], LAB["armB"]
+    SURF["Bl"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "thigh_r", 0.3, (0.0, -1.0, 0.1), palm=PALM))
+    SURF["Br"] = ring_lab.to_rig(B, ring_lab.surface_world(A, "thigh_l", 0.3, (0.0, -1.0, 0.1), palm=PALM))
+
+
 def facelock_frames(frames=None):
     keys = [(f, dict(k, b_feet=k["b_feet"] or b_feet_hold(k["b_pel"], k["b_head"]))) for f, k in FACELOCK_KEYS]
-    return chain_frames("Chain_FrontFacelock", keys, FACELOCK_LEN, a_hold, b_hold, hl_surface, frames=frames, contacts=HL_CONTACTS)
+    return chain_frames("Chain_FrontFacelock", keys, FACELOCK_LEN, a_hold, b_hold, fl_surface, frames=frames, contacts=HL_CONTACTS)
 
 
 # ================================================================ викрут кисті (wristlock)
@@ -1630,7 +1639,7 @@ def _fc_keys():
 
 def facelock_clubs_frames():
     keys = [(f, dict(k, b_feet=k["b_feet"] or b_feet_hold(k["b_pel"], k["b_head"]))) for f, k in _fc_keys()]
-    return chain_frames("Chain_FrontFacelock_Clubs", keys, 72, a_hold, b_hold, hl_surface, smooth=False, contacts=HL_CONTACTS[1:])
+    return chain_frames("Chain_FrontFacelock_Clubs", keys, 72, a_hold, b_hold, fl_surface, smooth=False, contacts=HL_CONTACTS[1:])
 
 
 # ================================================================ захват корпусу + удари ліктем назад (вихід)
@@ -1773,4 +1782,4 @@ def facelock_knees_frames(frames=None):
           (58, _ff(a_pitch=44.0, a_pz=-0.2, b_drop=0.28, b_pitch=60.0, b_hp=28.0)),
           (72, _ff())]
     k = [(f, dict(v, b_feet=v["b_feet"] or b_feet_hold(v["b_pel"], v["b_head"]))) for f, v in k]
-    return chain_frames("Chain_FrontFacelock_Knees", k, 72, a_hold, b_hold, hl_surface, frames=frames, contacts=HL_CONTACTS)
+    return chain_frames("Chain_FrontFacelock_Knees", k, 72, a_hold, b_hold, fl_surface, frames=frames, contacts=HL_CONTACTS)
