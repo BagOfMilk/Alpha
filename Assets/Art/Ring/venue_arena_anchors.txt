@@ -18,6 +18,11 @@ anchor_cam_crowd_low 0.000 -6.000 0.600 0
 anchor_cam_entrance 0.000 4.000 2.800 0
 anchor_cam_high_wide 22.000 -24.000 16.000 0
 anchor_cam_ramp 4.000 14.000 3.500 0
+anchor_camop_1 2.400 -4.948 0.000 0
+anchor_camop_2 -2.200 -4.948 0.000 0
+anchor_camop_3 4.948 3.300 0.000 0
+anchor_camop_4 -4.948 2.700 0.000 0
+anchor_camop_5 1.400 6.048 0.000 0
 anchor_center 0.000 0.000 1.200 0
 anchor_commentary 7.498 0.000 0.000 -90
 anchor_corner_NE 2.248 2.248 1.200 0

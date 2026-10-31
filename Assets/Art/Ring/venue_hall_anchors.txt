@@ -18,6 +18,11 @@ anchor_cam_balcony 0.000 -11.500 5.200 0
 anchor_cam_crowd_low 0.000 -5.500 0.600 0
 anchor_cam_entrance 0.000 3.000 2.400 0
 anchor_cam_high_wide 12.000 -11.000 8.000 0
+anchor_camop_1 2.000 -4.493 0.000 0
+anchor_camop_2 -2.600 -4.493 0.000 0
+anchor_camop_3 4.493 2.300 0.000 0
+anchor_camop_4 -4.493 2.500 0.000 0
+anchor_camop_5 1.100 8.400 0.000 0
 anchor_center 0.000 0.000 1.100 0
 anchor_commentary 4.343 -1.200 0.000 -90
 anchor_corner_NE 1.943 1.943 1.100 0

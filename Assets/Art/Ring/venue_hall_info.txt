@@ -6,12 +6,12 @@
 всередині_канатів_м 2.343
 канати Black Black Black
 місткість 693
-об'єктів_сітки 106
-граней 17527
-трикутників_зблизька 39318
-трикутників_здалеку 39318
+об'єктів_сітки 110
+граней 26957
+трикутників_зблизька 47408
+трикутників_здалеку 47408
 бюджет_граней 120000
 бюджет_сіток 150
-текстурні_набори black_painted_planks concrete_wall_006 dirty_carpet fabric_leather_02 fabric_pattern_07 led_pixels metal_plate metal_plate_02 painted_metal_shutter plastered_wall_04 plastic red_brick rubber_tiles velour_velvet wood_board wood_floor_worn worn_tile_floor
-пам'ять_текстур_ASTC_МБ 112.6
-екземпляри chair_folding 551 (LOD0 628 трик., LOD1 4 трик.; усі LOD0 — 346 тис.)
+текстурні_набори black_painted_planks concrete_wall_006 dirty_carpet fabric_leather_02 fabric_pattern_07 hero_folding_table hero_laptop hero_ring_bell hero_ring_canvas_18 hero_ring_pad hero_ring_post hero_ring_steps_110 hero_speaker_stack led_pixels metal_plate_02 painted_metal_shutter plastered_wall_04 plastic red_brick rubber_tiles velour_velvet wood_board wood_floor_worn worn_tile_floor
+пам'ять_текстур_ASTC_МБ 120.1
+екземпляри chair_folding 551 (LOD0 560 трик., LOD1 4 трик.; усі LOD0 — 308 тис.)
