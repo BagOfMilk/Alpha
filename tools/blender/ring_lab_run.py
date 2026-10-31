@@ -13,7 +13,10 @@ if name.startswith("Chain_"):                        # ланки чейну: с
            "Chain_Hammerlock": C.hammerlock_frames, "Chain_Waistlock": C.waistlock_frames,
            "Chain_FrontFacelock": C.facelock_frames, "Chain_Wristlock": C.wristlock_frames,
            "Chain_ShoveOff": C.shove_frames, "Chain_Headlock_Punches": C.headlock_punches_frames,
-           "Chain_FrontFacelock_Clubs": C.facelock_clubs_frames, "Chain_Waistlock_Elbows": C.waistlock_elbows_frames}[name]()
+           "Chain_FrontFacelock_Clubs": C.facelock_clubs_frames, "Chain_Waistlock_Elbows": C.waistlock_elbows_frames,
+           "Chain_ArmWringer_Kneel": C.armwringer_kneel_frames, "Chain_Headlock_Crank": C.headlock_crank_frames,
+           "Chain_Hammerlock_Lift": C.hammerlock_lift_frames, "Chain_Wristlock_Spin": C.wristlock_spin_frames,
+           "Chain_FrontFacelock_Knees": C.facelock_knees_frames}[name]()
     bad = [(f, p) for f, p in log if p]
     print(f"[лабораторія] {name}: {round(time.time() - t0)} с, кадрів з проникненням {len(bad)}", flush=True)
     for f, p in bad:
