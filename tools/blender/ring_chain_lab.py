@@ -1240,9 +1240,9 @@ def hm_b(k=1.0):
         tie_r = lambda S: SURF.get("tBr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Br"])) or S["r"] + Vector((0, -0.3, -0.3))
         tie_l = lambda S: SURF.get("tBl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Bl"])) or S["l"] + Vector((0, -0.3, -0.3))
 
-        def side(S):                                   # рука відведена вбік-уперед на рівні пояса (як у викруті)
-            up, lr, back = _body_axes(S)
-            return S["r"] - lr * 0.22 - back * 0.3 - up * 0.42
+        def side(S):                                   # рука витягнута вбік на рівні пояса — A тягне її від тіла
+            up, lr, back = _body_axes(S)                # (було 22 см убік: кисть стояла перед животом B)
+            return S["r"] - lr * 0.45 - back * 0.18 - up * 0.32
 
         def behind(S):                                 # кисть за спиною, під лівою лопаткою
             up, lr, back = _body_axes(S)
@@ -1251,7 +1251,9 @@ def hm_b(k=1.0):
         def hr(S):
             if w < 0.5:
                 return tie_r(S).lerp(side(S), w / 0.5)
-            return side(S).lerp(behind(S), (w - 0.5) / 0.5)
+            u = (w - 0.5) / 0.5                        # за спину — дугою зовні, не крізь тулуб
+            up, lr, back = _body_axes(S)
+            return side(S).lerp(behind(S), u) - lr * 0.22 * math.sin(math.pi * u)
 
         def er(S):                                     # лікоть: від зчепу — убік, за спиною — назовні й назад
             up, lr, back = _body_axes(S)
@@ -1269,7 +1271,7 @@ def hm_b(k=1.0):
         p.hands = {"r": (hr, fr_, ur_),
                    "l": (lambda S: tie_l(S).lerp(free(S), w), Vector((0, -1, 0.3)), Vector((0.4, 0, 1)))}
         p.elbows = {"r": er, "l": lambda S: S["l"] + Vector((0.35, 0.05, -0.35))}
-        p.fist = {"r": 0.2 + 0.5 * w, "l": 0.35 - 0.2 * w}
+        p.fist = {"r": 0.2 + 0.75 * w, "l": 0.35 - 0.2 * w}       # кулак за спиною щільний — пальці не в руці A
         p.forced = {"l", "r"}
         return p
     return f
@@ -1298,7 +1300,7 @@ def hm_a(k=1.0):
                 return tie_l(S)
             if w >= 0.95:
                 return wrist(S)
-            on = P_(S, "lowerarm_r", 0.06 + 0.84 * w, Vector(TIE_OFF["Al"]).lerp(Vector((0, 0, 0.05)), w))
+            on = P_(S, "lowerarm_r", 0.06 + 0.56 * w, Vector(TIE_OFF["Al"]).lerp(Vector((0, 0, 0.05)), w))
             return on or tie_l(S).lerp(wrist(S), w)
         p.hands = {"l": (slide_l, Vector((0, -1, 0.3)).lerp(Vector((-1, 0, -0.3)), w),
                          Vector((-0.4, 0, 1)).lerp(Vector((0, -1, 0.2)), w)),
@@ -1315,7 +1317,7 @@ def hm_a(k=1.0):
 def hm_surface():
     """Кисті A на шкірі B: ліва — на правому зап'ясті B ззаду (тисне вгору), права — на його правому плечі згори."""
     A, B = LAB["armA"], LAB["armB"]
-    SURF["Hl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "lowerarm_r", 0.85, (0.0, 1.0, -0.3), palm=PALM))
+    SURF["Hl"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "lowerarm_r", 0.62, (0.0, 1.0, -0.3), palm=PALM))   # вище зап'ястя: кисті не переплітаються
     SURF["Hr"] = ring_lab.to_rig(A, ring_lab.surface_world(B, "upperarm_r", 0.1, (0.0, 0.3, 1.0), palm=PALM))
 
 
@@ -1333,9 +1335,9 @@ HAMMERLOCK_KEYS = [
              b_feet=((-0.36, -1.02), (0.1, -0.9)))),
     (25, _hm(b_drop=-0.02, b_pitch=34.0, b_hp=-20.0, b_hy=-10.0)),          # ривок угору від болю, на носки
     (36, _hm(a_pitch=24.0, a_pz=-0.14, b_drop=0.06, b_pitch=54.0, b_hp=5.0, b_hy=-30.0)),
-    (50, _hm(b_pitch=40.0, b_hy=10.0, b_hp=-10.0, b_lh=(0.1, 0.35, 0.25))),  # тягнеться лівою назад до A
-    (62, _hm(a_pitch=24.0, a_pz=-0.14, b_drop=0.07, b_pitch=56.0, b_hp=8.0, b_hy=-30.0)),
-    (72, _hm()),
+    (50, _hm(a_pitch=24.0, a_pz=-0.14, b_pitch=40.0, b_hy=10.0, b_hp=-10.0, b_lh=(0.1, 0.35, 0.25))),  # тягнеться лівою назад до A
+    (62, _hm(a_pitch=32.0, a_pz=-0.18, b_drop=0.07, b_pitch=56.0, b_hp=8.0, b_hy=-30.0)),   # B найнижче — A тисне згори
+    (72, _hm(a_pitch=20.0, a_pz=-0.12)),                                     # A лишається нахиленим — права на плечі B
 ]
 HAMMERLOCK_LEN = 72
 
