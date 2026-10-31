@@ -38,8 +38,12 @@ class Ctr:
         u = min(t - self.t0, self.td)
         return self.t0 + u - u * u / (2 * self.td)
 
+    def b_run(self):
+        """Скільки B пробігає сам до контакту (шолдер такл — біжать обидва)."""
+        return self.v * self.t_hit if self.b == "run_back" else 0.0
+
     def b_offset(self):
-        return Vector((self.bx, self.y_hit - self.gap, 0.0))
+        return Vector((self.bx, self.y_hit - self.gap - self.b_run(), 0.0))
 
 
 CENTER = [
@@ -58,6 +62,8 @@ CENTER = [
     Ctr("Center_ShoulderBlock_Heavy", "block", "back_fast", 0.64, gap=0.42, run=CT_HEAVY),
     Ctr("Center_BigBoot_Stagger", "boot", "stagger", -0.22, pass_=False, gap=1.02),
     Ctr("Center_Lariat_Heavy", "line", "back", -0.58, run=CT_HEAVY),
+    # шолдер такл: обидва біжать назустріч, плече в плече — B збито з ніг на ходу
+    Ctr("Center_ShoulderTackle", "block", "run_back", 0.64, gap=0.42),
 ]
 
 
@@ -174,6 +180,22 @@ def center_b(c):
     def f(t, L, partner=None):
         tb = t - (c.t_hit - (0.12 if c.pass_ else 0.04))  # бамп — на мить раніше удару (борці «приймають» його);
                                                           # від удару з місця — майже разом, інакше нога не дістає
+        if c.b == "run_back":                            # біжить назустріч A, від удару — на спину з місця, де збили
+            d = c.b_run()
+            if tb <= 0:
+                return run_pose(t, CT_RUN)
+            hit = _shift(clip_bump_back(min(BUMP_LEN, tb * 1.2), BUMP_LEN), -d)
+            r0 = run_pose(c.t_hit - 0.12, CT_RUN)              # стопи — де стояли в мить удару, доки не піднімуться
+            u = smooth((tb - (0.12 if globals().get("FEMALE") else 0.2)) / 0.22)   # коротші ноги — відрив раніше (коліно під мат)
+            if u < 1.0 and hit.ankles:
+                hit.ankles = tuple(Vector((m.x, m.y, a_.z)) for m, a_ in
+                                   ((lerp(f0, a_, u), a_) for f0, a_ in zip(r0.ankles, hit.ankles)))
+            w = smooth(tb / 0.12)
+            if w >= 1.0:
+                return hit
+            q = blend_pose(_filled(run_pose(min(t, c.t_hit - 0.12), CT_RUN)), _filled(hit), w)
+            q.ankles = hit.ankles
+            return q
         if c.b in ("back", "back_fast"):
             if tb <= 0:
                 return stance(t, L, sway=0.0)
@@ -205,11 +227,12 @@ def center_b(c):
     return f
 
 
-_B_END = {"back": "lying_back", "back_fast": "lying_back", "front": "lying_front", "side": None,
+_B_END = {"run_back": "lying_back", "back": "lying_back", "back_fast": "lying_back", "front": "lying_front", "side": None,
           "stagger": "stance", "sidestep": "stance", "duck": "stance"}
 for _c in CENTER:
     MOVE_CLIPS.append((_c.name, _c.L, center_a(_c), center_b(_c), False, _c.b_offset(), 180))
-    MOVE_CLIP_NODES[_c.name] = {"A": (None, "lying_back" if _c.a == "nosell" else "stance"), "B": ("stance", _B_END[_c.b])}
+    MOVE_CLIP_NODES[_c.name] = {"A": (None, "lying_back" if _c.a == "nosell" else "stance"),
+                                "B": (None if _c.b == "run_back" else "stance", _B_END[_c.b])}
     CLIP_EVENTS[_c.name] = [("contact", _c.t_hit, "spine_03", "spine_03")] if _c.b not in ("sidestep", "duck") else []
     _hit = {"line": ("upperarm_r", "lowerarm_r", "hand_r"), "line_l": ("upperarm_l", "lowerarm_l", "hand_l"),
             "elbow": ("upperarm_l", "lowerarm_l"), "forearm": ("lowerarm_r", "hand_r"), "block": ("upperarm_l", "spine_03"),
