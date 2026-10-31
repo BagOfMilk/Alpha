@@ -785,7 +785,7 @@ def seat_palm(tag, s, w=1.0, iters=3, near=None, target=None):
     # долоня (не пальці — їх облягає conform_fingers) у тілі — трохи вище по нормалі шкіри (до 1,2 см: краї долоні на
     # тонкій опуклій кінцівці)
     lifted = 0.0
-    while n_out is not None and lifted < 0.012 and _hand_in(arm, s, ot) > 0.004:
+    while target is None and n_out is not None and lifted < 0.012 and _hand_in(arm, s, ot) > 0.004:   # хват — на шкірі
         e.location = e.location + n_out * 0.003
         lifted += 0.003
         bpy.context.view_layer.update()
@@ -840,126 +840,6 @@ def conform_fingers(tag, s, step=8.0, max_deg=64.0, max_curl=48.0):
             if c >= 0.0:
                 break
         bend(best[1])
-
-
-def _hand_in(arm, s, ot):
-    """Глибина (м) третьої найглибшої вершини кисті s у будь-якій частині тіла суперника — з його руками й кистями
-    (ring_lab._hand_pen їх навмисно пропускає, а долоня на передпліччі суперника входила в нього на 2,7 см)."""
-    dg = bpy.context.evaluated_depsgraph_get()
-    parts = [t for t, _v in ring_lab._part_trees(ot, dg).values()]
-    deep = []
-    for o in ring_lab._meshes(arm):
-        if not o.name.endswith("body_hands"):
-            continue
-        e = o.evaluated_get(dg); me = e.to_mesh(); g = {x.index: x.name for x in o.vertex_groups}
-        for v in list(me.vertices)[::2]:
-            bn = max(((g.get(x.group, ""), x.weight) for x in v.groups), key=lambda z: z[1], default=("", 0))[0]
-            if not bn.endswith("_" + s):
-                continue
-            p = e.matrix_world @ v.co
-            for t in parts:
-                loc, nrm, _i, d = t.find_nearest(p, 0.1)
-                if loc is not None and d > 0.002 and _behind(p, loc, nrm) and ring_lab._inside(t, p):
-                    deep.append(d)
-                    break
-        e.to_mesh_clear()
-    deep.sort(reverse=True)
-    return deep[2] if len(deep) >= 3 else 0.0
-
-
-def seat_palm(tag, s, w=1.0, iters=3, near=None, target=None):
-    """Долоня — до шкіри суперника: кисть довертається навколо центру долоні, доки нормаль долоні не дивиться на
-    шкіру, і центр долоні стає на PALM над нею (зовні). Цілі з ключів задають лише місце й напрям пальців; бік
-    долоні в них вгадувався, і кисті B лягали на A тильним боком або входили в нього (30.10.2026: нормаль долоні від
-    шкіри −0,7…−1,0, недотик 3–4 см, кисть у стегні на 5 см)."""
-    rig = LAB["rig" + tag]
-    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
-    e = rig.empties["wrist_" + s]
-    dg = bpy.context.evaluated_depsgraph_get()
-    tree = ring_lab._bvh(ring_lab._meshes(ot), dg)
-    n_out = None
-    c, _pn, _fd = ring_lab._palm(arm, s)
-    loc, n0 = _skin_out(ot, tree, c)
-    near = SEAT_NEAR if near is None else near
-    if loc is None or (c - loc).dot(n0) > near:
-        return                                        # кисть у повітрі (перехід між хватами) — не чіпаємо
-    keep = (e.location.copy(), e.rotation_quaternion.copy())
-    own0 = own_pen(tag, s)
-    for _ in range(iters):
-        c, pn, _fd = ring_lab._palm(arm, s)
-        loc, n_out = _skin_out(ot, tree, c)
-        if loc is None:
-            return
-        q = pn.rotation_difference(-n_out)
-        if math.degrees(q.angle) > SEAT_DEG:
-            q = Quaternion(q.axis, math.radians(SEAT_DEG))
-        q = Quaternion().slerp(q, w)
-        r0, l0 = e.rotation_quaternion.copy(), e.location.copy()
-        for k in (1.0, 0.6, 0.3, 0.0):                # доворот — у межах суглоба (скручування кисті ≤ 15°)
-            qk = Quaternion().slerp(q, k)
-            e.rotation_quaternion = qk @ r0
-            e.location = c + qk @ (l0 - c)
-            bpy.context.view_layer.update()
-            if abs(hand_twist(arm, s)) <= 15.0:
-                break
-        c, pn, _fd = ring_lab._palm(arm, s)
-        loc, n_out = _skin_out(ot, tree, c)
-        if loc is None:
-            return
-        move = (loc + n_out * PALM) - c
-        if move.length > near:
-            move = move.normalized() * near
-        e.location = e.location + move * w
-        bpy.context.view_layer.update()
-    c, _pn, _fd = ring_lab._palm(arm, s)
-    off = (c - arm.matrix_world @ target).length if target is not None else 0.0
-    if off > PLACE_CM / 100.0 or own_pen(tag, s) > max(own0, 0.004) + 0.002:
-        # лягла не туди (на іншу частину тіла) або доворот завів руку у власне тіло — лишаємо, як було
-        e.location, e.rotation_quaternion = keep
-        bpy.context.view_layer.update()
-        return
-    # долоня (не пальці — їх облягає conform_fingers) у тілі — трохи вище по нормалі шкіри (до 1,2 см: краї долоні на
-    # тонкій опуклій кінцівці)
-    lifted = 0.0
-    while n_out is not None and lifted < 0.012 and _hand_in(arm, s, ot) > 0.004:
-        e.location = e.location + n_out * 0.003
-        lifted += 0.003
-        bpy.context.view_layer.update()
-
-
-FINGER_R = 0.009    # м: товщина пальця від осі кістки — кінчик не ближче до шкіри суперника
-
-
-def conform_fingers(tag, s, step=8.0, max_deg=64.0):
-    """Кожен палець у хваті розгинається покроково, доки його фаланги не над шкірою суперника: пальці лежать на
-    тілі, як у живій кисті, а не входять у нього (кінчики сиділи на 1,8–2,3 см у стегні й голові, 30.10.2026)."""
-    rig = LAB["rig" + tag]
-    arm, ot = rig.arm, LAB["armB" if tag == "A" else "armA"]
-    pb = arm.pose.bones
-    W = arm.matrix_world
-    dg = bpy.context.evaluated_depsgraph_get()
-    tree = ring_lab._bvh(ring_lab._meshes(ot), dg)
-
-    def inside(names):
-        for n in names:
-            for p in (W @ pb[n].head, W @ pb[n].tail):
-                loc, nrm = _skin_out(ot, tree, p)
-                if loc is not None and (p - loc).dot(nrm) < FINGER_R:
-                    return True
-        return False
-
-    for fg in ("thumb", "index", "middle", "ring", "pinky"):
-        names = [f"{fg}_{k}_{s}" for k in ("01", "02", "03") if f"{fg}_{k}_{s}" in pb]
-        tip = names[1:]
-        done = 0.0
-        while done < max_deg and inside(tip):
-            for n in names:
-                ax = rig.finger_axis.get(n)
-                if ax is None:
-                    continue
-                pb[n].rotation_quaternion = pb[n].rotation_quaternion @ Quaternion(ax, math.radians(-step * (0.6 if n.endswith("01_" + s) else 1.0)))
-            done += step
-            bpy.context.view_layer.update()
 
 
 def hand_twist(arm, s):
