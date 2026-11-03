@@ -440,3 +440,11 @@ AGPL і CC BY відкидаються. Текстури (зменшені до 
 детальні й легкі моделі кодом (`tools/blender/ring_hero.py`), текстури запечені й складені кодом (шум — фіксоване
 зерно). Чужих асетів немає; ліцензія — власна робота проєкту. Вихід: `Assets/Art/Ring/Hero/` (`hero.fbx`,
 `hero_manifest.txt`, `Textures/hero_*`).
+
+### Мікрофон і кліпи «промо з мікрофоном» — власна генерація (03.11.2026)
+
+Ручний мікрофон (`tools/blender/ring_mic.py` → `Assets/Art/Ring/Props/mic.fbx`; LOD0 592 трикутники, LOD1 60; решітка —
+власна процедурна текстура `mic_grille_diff.png` / `mic_grille_nor.png`, 256×256, без слів і логотипів; порожній об'єкт
+`Mic_Grip` — центр рукояті) і два кліпи `Promo_Mic_Talk_Loop`, `Promo_Mic_Point` на скелеті набору
+(`tools/blender/ring_anims_promo.py` → `Assets/Art/Animations/RING_Promo.fbx`, `RING_Promo_F.fbx`, маніфести
+`ring_promo[_f]_manifest.txt`, вузол `promo`). Чужих асетів і завантажень немає; ліцензія — власна робота проєкту.

@@ -1,0 +1,1213 @@
+{
+ "id": "feud_hammer",
+ "title": "feud.hammer.title",
+ "player": {
+  "id": "player",
+  "name": "w.player.name",
+  "finisher": "strength",
+  "attr": {
+   "strength": 1,
+   "agility": 1,
+   "technique": 1,
+   "stamina": 1,
+   "charisma": 0
+  }
+ },
+ "rival": {
+  "id": "hammer",
+  "name": "w.hammer.name",
+  "finisher": "strength",
+  "startMomentum": 2,
+  "attr": {
+   "strength": 2,
+   "agility": 0,
+   "technique": 1,
+   "stamina": 2,
+   "charisma": 1
+  }
+ },
+ "start": {
+  "audience": 3,
+  "heat": 0,
+  "momentum": 0,
+  "trust": 2,
+  "locker": 0
+ },
+ "promos": [
+  {
+   "id": "p1_challenge",
+   "act": 1,
+   "title": "promo.p1.title",
+   "place": "promo.p1.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p1.n1",
+     "next": "n2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "speaker": "crowd",
+     "text": "p1.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p1.n3",
+     "next": "n4"
+    },
+    {
+     "id": "n4",
+     "type": "choice",
+     "options": [
+      {
+       "id": "respect",
+       "text": "p1.n4.respect",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "locker",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "crowd",
+       "text": "p1.n4.crowd",
+       "requires": [
+        {
+         "attr": "charisma",
+         "min": 1
+        }
+       ],
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "push",
+       "text": "p1.n4.push",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        },
+        {
+         "flag": "pushed"
+        },
+        {
+         "close": "handshake"
+        }
+       ],
+       "next": "n5"
+      }
+     ]
+    },
+    {
+     "id": "n5",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p1.n5",
+     "next": "n6"
+    },
+    {
+     "id": "n6",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p1.n6",
+     "next": "n7"
+    },
+    {
+     "id": "n7",
+     "type": "check",
+     "attr": "charisma",
+     "mod": 0,
+     "pick10": 2,
+     "pick7": 1,
+     "rewards": [
+      {
+       "id": "aud",
+       "text": "reward.audience",
+       "effects": [
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "heat",
+       "text": "reward.heat",
+       "effects": [
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "mom",
+       "text": "reward.momentum",
+       "effects": [
+        {
+         "var": "momentum",
+         "add": 2
+        }
+       ]
+      },
+      {
+       "id": "trust",
+       "text": "reward.trust",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ]
+      }
+     ],
+     "fail": [
+      {
+       "var": "momentum",
+       "add": -1
+      }
+     ],
+     "next": "n8",
+     "next6": "n8"
+    },
+    {
+     "id": "n8",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p1.n8",
+     "next": "n9"
+    },
+    {
+     "id": "n9",
+     "type": "choice",
+     "options": [
+      {
+       "id": "thank",
+       "text": "p1.n9.thank",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "n10"
+      },
+      {
+       "id": "mic",
+       "text": "p1.n9.mic",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ],
+       "next": "n10"
+      },
+      {
+       "id": "walk",
+       "text": "p1.n9.walk",
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "momentum",
+         "add": 1
+        }
+       ],
+       "next": "n10"
+      }
+     ]
+    },
+    {
+     "id": "n10",
+     "type": "line",
+     "speaker": "crowd",
+     "text": "p1.n10",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ]
+  },
+  {
+   "id": "p2_booker",
+   "act": 1,
+   "title": "promo.p2.title",
+   "place": "promo.p2.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p2.n1",
+     "next": "n2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p2.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n3",
+     "type": "choice",
+     "options": [
+      {
+       "id": "lose",
+       "text": "p2.n3.lose",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "plan": "lose_clean"
+        },
+        {
+         "close": "plan"
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "clean",
+       "text": "p2.n3.clean",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 3
+        }
+       ],
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "plan": "win_clean"
+        },
+        {
+         "close": "plan"
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "any",
+       "text": "p2.n3.any",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        },
+        {
+         "plan": "win_any"
+        },
+        {
+         "close": "plan"
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "bargain",
+       "text": "p2.n3.bargain",
+       "effects": [
+        {
+         "flag": "bargained"
+        }
+       ],
+       "next": "n4"
+      },
+      {
+       "id": "refuse",
+       "text": "p2.n3.refuse",
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        },
+        {
+         "flag": "plan_refused"
+        },
+        {
+         "close": "plan"
+        }
+       ],
+       "next": "n5"
+      }
+     ]
+    },
+    {
+     "id": "n4",
+     "type": "check",
+     "attr": "charisma",
+     "mod": 0,
+     "pick10": 2,
+     "pick7": 1,
+     "rewards": [
+      {
+       "id": "clean",
+       "text": "reward.plan_clean",
+       "effects": [
+        {
+         "plan": "win_clean"
+        },
+        {
+         "close": "plan"
+        }
+       ]
+      },
+      {
+       "id": "trust",
+       "text": "reward.trust",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "aud",
+       "text": "reward.audience",
+       "effects": [
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "locker",
+       "text": "reward.locker",
+       "effects": [
+        {
+         "var": "locker",
+         "add": 1
+        }
+       ]
+      }
+     ],
+     "fail": [
+      {
+       "var": "trust",
+       "add": -1
+      }
+     ],
+     "next": "n5",
+     "next6": "n5"
+    },
+    {
+     "id": "n5",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p2.n5",
+     "next": "n6"
+    },
+    {
+     "id": "n6",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p2.n6",
+     "next": "n7"
+    },
+    {
+     "id": "n7",
+     "type": "choice",
+     "options": [
+      {
+       "id": "hands",
+       "text": "p2.n7.hands",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "locker",
+         "add": 1
+        }
+       ],
+       "next": "n8"
+      },
+      {
+       "id": "bag",
+       "text": "p2.n7.bag",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "locker",
+         "add": -1
+        }
+       ],
+       "next": "n8"
+      },
+      {
+       "id": "quiet",
+       "text": "p2.n7.quiet",
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "flag": "quiet"
+        }
+       ],
+       "next": "n8"
+      }
+     ]
+    },
+    {
+     "id": "n8",
+     "type": "line",
+     "speaker": "veteran",
+     "text": "p2.n8",
+     "next": "n9"
+    },
+    {
+     "id": "n9",
+     "type": "choice",
+     "options": [
+      {
+       "id": "ally",
+       "text": "p2.n9.ally",
+       "requires": [
+        {
+         "var": "locker",
+         "min": 1
+        }
+       ],
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "ally": true
+        }
+       ],
+       "next": "n10"
+      },
+      {
+       "id": "decline",
+       "text": "p2.n9.decline",
+       "requires": [
+        {
+         "var": "locker",
+         "min": 1
+        }
+       ],
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "close": "semen"
+        }
+       ],
+       "next": "n10"
+      },
+      {
+       "id": "pass",
+       "text": "p2.n9.pass",
+       "effects": [
+        {
+         "flag": "semen_passed"
+        },
+        {
+         "close": "semen"
+        }
+       ],
+       "next": "n10"
+      }
+     ]
+    },
+    {
+     "id": "n10",
+     "type": "line",
+     "speaker": "veteran",
+     "text": "p2.n10",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ]
+  },
+  {
+   "id": "p3_parking",
+   "act": 2,
+   "title": "promo.p3.title",
+   "place": "promo.p3.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p3.n1",
+     "next": "n2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p3.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p3.n3",
+     "next": "n4"
+    },
+    {
+     "id": "n4",
+     "type": "choice",
+     "options": [
+      {
+       "id": "fight",
+       "text": "p3.n4.fight",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        },
+        {
+         "stip": "no_dq"
+        },
+        {
+         "flag": "brawled"
+        },
+        {
+         "close": "security"
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "guard",
+       "text": "p3.n4.guard",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "n6"
+      },
+      {
+       "id": "camera",
+       "text": "p3.n4.camera",
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "flag": "filmed"
+        }
+       ],
+       "next": "n7"
+      }
+     ]
+    },
+    {
+     "id": "n5",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p3.n5",
+     "next": "n8"
+    },
+    {
+     "id": "n6",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p3.n6",
+     "next": "n8"
+    },
+    {
+     "id": "n7",
+     "type": "check",
+     "attr": "charisma",
+     "mod": 0,
+     "pick10": 2,
+     "pick7": 1,
+     "rewards": [
+      {
+       "id": "aud",
+       "text": "reward.audience",
+       "effects": [
+        {
+         "var": "audience",
+         "add": 2
+        }
+       ]
+      },
+      {
+       "id": "heat",
+       "text": "reward.heat",
+       "effects": [
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "mom",
+       "text": "reward.momentum",
+       "effects": [
+        {
+         "var": "momentum",
+         "add": 2
+        }
+       ]
+      }
+     ],
+     "fail": [
+      {
+       "var": "audience",
+       "add": -1
+      }
+     ],
+     "next": "n8",
+     "next6": "n8"
+    },
+    {
+     "id": "n8",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p3.n8",
+     "next": "n9"
+    },
+    {
+     "id": "n9",
+     "type": "choice",
+     "options": [
+      {
+       "id": "calm",
+       "text": "p3.n9.calm",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "momentum",
+         "add": 1
+        }
+       ],
+       "next": "n10"
+      },
+      {
+       "id": "threat",
+       "text": "p3.n9.threat",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ],
+       "next": "n10"
+      },
+      {
+       "id": "silent",
+       "text": "p3.n9.silent",
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "momentum",
+         "add": 1
+        }
+       ],
+       "next": "n10"
+      }
+     ]
+    },
+    {
+     "id": "n10",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p3.n10",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ]
+  },
+  {
+   "id": "p4_contract",
+   "act": 3,
+   "title": "promo.p4.title",
+   "place": "promo.p4.place",
+   "start": "n1",
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p4.n1",
+     "next": "n2"
+    },
+    {
+     "id": "n2",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n2",
+     "next": "n3"
+    },
+    {
+     "id": "n3",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p4.n3",
+     "next": "n4"
+    },
+    {
+     "id": "n4",
+     "type": "choice",
+     "options": [
+      {
+       "id": "hand",
+       "text": "p4.n4.hand",
+       "requires": [
+        {
+         "open": "handshake"
+        }
+       ],
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "guard",
+       "text": "p4.n4.guard",
+       "requires": [
+        {
+         "open": "security"
+        }
+       ],
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "recall",
+       "text": "p4.n4.recall",
+       "requires": [
+        {
+         "flag": "brawled"
+        }
+       ],
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "calm",
+       "text": "p4.n4.calm",
+       "requires": [
+        {
+         "notFlag": "brawled"
+        }
+       ],
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "skilled",
+       "text": "p4.n4.skilled",
+       "requires": [
+        {
+         "attr": "charisma",
+         "min": 1
+        }
+       ],
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 2
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "ownplan",
+       "text": "p4.n4.ownplan",
+       "requires": [
+        {
+         "flag": "plan_refused"
+        }
+       ],
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      },
+      {
+       "id": "sign",
+       "text": "p4.n4.sign",
+       "effects": [
+        {
+         "var": "momentum",
+         "add": 1
+        }
+       ],
+       "next": "n5"
+      }
+     ]
+    },
+    {
+     "id": "n5",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p4.n5",
+     "next": "n6"
+    },
+    {
+     "id": "n6",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n6",
+     "next": "n7"
+    },
+    {
+     "id": "n7",
+     "type": "choice",
+     "options": [
+      {
+       "id": "nodq",
+       "text": "p4.n7.nodq",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        },
+        {
+         "stip": "no_dq"
+        }
+       ],
+       "next": "n8"
+      },
+      {
+       "id": "noally",
+       "text": "p4.n7.noally",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "stip": "no_ally"
+        }
+       ],
+       "next": "n8"
+      },
+      {
+       "id": "std",
+       "text": "p4.n7.std",
+       "effects": [
+        {
+         "var": "trust",
+         "add": 1
+        }
+       ],
+       "next": "n8"
+      }
+     ]
+    },
+    {
+     "id": "n8",
+     "type": "line",
+     "speaker": "narrator",
+     "text": "p4.n8",
+     "next": "n9"
+    },
+    {
+     "id": "n9",
+     "type": "check",
+     "attr": "charisma",
+     "mod": 0,
+     "pick10": 2,
+     "pick7": 1,
+     "rewards": [
+      {
+       "id": "aud",
+       "text": "reward.audience",
+       "effects": [
+        {
+         "var": "audience",
+         "add": 2
+        }
+       ]
+      },
+      {
+       "id": "heat",
+       "text": "reward.heat",
+       "effects": [
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ]
+      },
+      {
+       "id": "mom",
+       "text": "reward.momentum",
+       "effects": [
+        {
+         "var": "momentum",
+         "add": 2
+        }
+       ]
+      },
+      {
+       "id": "noally",
+       "text": "reward.noally",
+       "effects": [
+        {
+         "stip": "no_ally"
+        }
+       ]
+      }
+     ],
+     "fail": [
+      {
+       "var": "audience",
+       "add": -1
+      }
+     ],
+     "next": "n10",
+     "next6": "n10"
+    },
+    {
+     "id": "n10",
+     "type": "line",
+     "speaker": "crowd",
+     "text": "p4.n10",
+     "next": "n11"
+    },
+    {
+     "id": "n11",
+     "type": "choice",
+     "options": [
+      {
+       "id": "meet",
+       "text": "p4.n11.meet",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "audience",
+         "add": 1
+        }
+       ],
+       "next": "n12"
+      },
+      {
+       "id": "spit",
+       "text": "p4.n11.spit",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "heat",
+         "add": 1
+        }
+       ],
+       "next": "n12"
+      },
+      {
+       "id": "own",
+       "text": "p4.n11.own",
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "momentum",
+         "add": 1
+        }
+       ],
+       "next": "n12"
+      }
+     ]
+    },
+    {
+     "id": "n12",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p4.n12",
+     "next": "end"
+    },
+    {
+     "id": "end",
+     "type": "end"
+    }
+   ]
+  }
+ ]
+}
