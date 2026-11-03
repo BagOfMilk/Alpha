@@ -18,7 +18,9 @@ namespace Game.Gameplay.UI
         /// <summary>Тактичний бій.</summary>
         Battle,
         /// <summary>Вікно нотатки плейтесту (<c>-playtest</c>, docs/PLAYTEST.md).</summary>
-        Playtest
+        Playtest,
+        /// <summary>Екрани зрізу «Ринг» (сцена RingFeud, UI Toolkit): окрема сцена, зі світом і боєм не перетинається.</summary>
+        Ring
     }
 
     /// <summary>Рядок реєстру: клавіша, область, файл-власник, дія.</summary>
@@ -116,6 +118,19 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("DownArrow",  UxKeyScope.Battle,   "BattleArenaController.cs",   "рух камери"),
             new UxKeyBinding("LeftArrow",  UxKeyScope.Battle,   "BattleArenaController.cs",   "рух камери"),
             new UxKeyBinding("RightArrow", UxKeyScope.Battle,   "BattleArenaController.cs",   "рух камери"),
+            // Зріз «Ринг» (RingFeud): цифри — варіанти реплік, дії матчу, нагороди, реакція; Enter/Space — «Далі».
+            new UxKeyBinding("Return",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "далі / головна дія екрана"),
+            new UxKeyBinding("KeypadEnter", UxKeyScope.Ring,    "RingFeudBootstrap.cs",       "далі / головна дія екрана"),
+            new UxKeyBinding("Space",      UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "далі / головна дія екрана"),
+            new UxKeyBinding("Alpha1",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 1"),
+            new UxKeyBinding("Alpha2",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 2"),
+            new UxKeyBinding("Alpha3",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 3"),
+            new UxKeyBinding("Alpha4",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 4"),
+            new UxKeyBinding("Alpha5",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 5"),
+            new UxKeyBinding("Alpha6",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 6"),
+            new UxKeyBinding("Alpha7",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 7"),
+            new UxKeyBinding("Alpha8",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 8"),
+            new UxKeyBinding("Alpha9",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 9"),
         };
 
         public static IReadOnlyList<UxKeyBinding> All => Entries;

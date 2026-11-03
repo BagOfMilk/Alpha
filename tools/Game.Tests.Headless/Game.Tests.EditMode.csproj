@@ -90,6 +90,8 @@
       застосовує — він лінтується в Game.Gameplay.Lint.
     -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/Models/*.cs" />
+    <!-- Ринг (зріз Ворожнеча): моделі екранів — чистий C# без UnityEngine, тим самим прийомом. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Models/*.cs" />
   </ItemGroup>
 
   <ItemGroup>

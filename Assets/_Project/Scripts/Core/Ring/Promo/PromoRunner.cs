@@ -30,6 +30,9 @@ namespace Game.Core.Ring
         public RollTier? LastTier { get; private set; }
         /// <summary>Сума останнього кидка 2d6 + модифікатор (0, якщо ступінь задано напряму).</summary>
         public int LastTotal { get; private set; }
+        /// <summary>Кубики останнього кидка (0, якщо ступінь задано напряму) — лише для показу.</summary>
+        public int LastDie1 { get; private set; }
+        public int LastDie2 { get; private set; }
         /// <summary>Кидок зроблено, і треба обрати нагороди.</summary>
         public bool AwaitingRewards { get; private set; }
         /// <summary>Скільки нагород треба обрати (рівно).</summary>
@@ -120,10 +123,16 @@ namespace Game.Core.Ring
         {
             Require(PromoNodeType.Check);
             if (_rolled) throw new InvalidOperationException("кидок уже зроблено");
-            int total = TwoD6.Roll(dice, "promo:" + Promo.Id + ":" + Current.Id) + CheckModifier();
+            // Те саме, що TwoD6.Roll (два виклики Die підряд), але з окремими кубиками для показу.
+            string stream = "promo:" + Promo.Id + ":" + Current.Id;
+            int d1 = TwoD6.Die(dice, stream);
+            int d2 = TwoD6.Die(dice, stream);
+            int total = d1 + d2 + CheckModifier();
             var tier = TwoD6.TierOf(total);
             ApplyCheckTier(tier);
             LastTotal = total;
+            LastDie1 = d1;
+            LastDie2 = d2;
             return tier;
         }
 
@@ -138,6 +147,8 @@ namespace Game.Core.Ring
             var n = Current;
             LastTier = tier;
             LastTotal = 0;
+            LastDie1 = 0;
+            LastDie2 = 0;
             if (tier == RollTier.Miss)
             {
                 State.Apply(n.Fail);

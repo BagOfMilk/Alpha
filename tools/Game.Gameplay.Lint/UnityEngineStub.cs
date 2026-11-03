@@ -33,7 +33,10 @@ namespace UnityEngine
         public static T CreateInstance<T>() where T : ScriptableObject { return null; }
     }
 
-    public class Component : Object { }
+    public class Component : Object
+    {
+        public GameObject gameObject { get { return null; } }
+    }
 
     public class Behaviour : Component { }
 
@@ -45,6 +48,8 @@ namespace UnityEngine
         public GameObject(string name) { }
         public T AddComponent<T>() where T : Component { return null; }
         public void SetActive(bool value) { }
+        /// <summary>Ринг: збирач сцени позначає камеру тегом MainCamera.</summary>
+        public string tag { get; set; }
     }
 
     public static class Application
@@ -58,6 +63,30 @@ namespace UnityEngine
 
         /// <summary>Реальна сигнатура — <c>public static event Func&lt;bool&gt; wantsToQuit</c> (GameShell.cs, фікс краху при виході).</summary>
         public static event Func<bool> wantsToQuit;
+    }
+
+    /// <summary>Ринг: текстовий асет (Resources.Load&lt;TextAsset&gt;): json кампанії й рядків.</summary>
+    public class TextAsset : Object
+    {
+        public string text { get { return ""; } }
+    }
+
+    public enum CameraClearFlags { Skybox = 1, Color = 2, SolidColor = 2, Depth = 3, Nothing = 4 }
+
+    /// <summary>Ринг: збирач сцени ставить камеру із суцільним темним тлом (екран на UI Toolkit, 3D немає).</summary>
+    public class Camera : Behaviour
+    {
+        public CameraClearFlags clearFlags { get; set; }
+        public Color backgroundColor { get; set; }
+    }
+
+    public class AudioListener : Behaviour { }
+
+    /// <summary>Ринг: мінімум Mathf для масштабу панелі.</summary>
+    public static class Mathf
+    {
+        public static float Clamp(float value, float min, float max) { return value < min ? min : value > max ? max : value; }
+        public static float Abs(float f) { return f < 0f ? -f : f; }
     }
 
     public static class Debug

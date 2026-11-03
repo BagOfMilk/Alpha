@@ -14,6 +14,8 @@ namespace UnityEngine.UIElements
     public enum FlexDirection { Column = 0, ColumnReverse = 1, Row = 2, RowReverse = 3 }
     public enum Align { Auto = 0, FlexStart = 1, Center = 2, FlexEnd = 3, Stretch = 4 }
     public enum WhiteSpace { Normal = 0, NoWrap = 1 }
+    public enum Justify { FlexStart = 0, Center = 1, FlexEnd = 2, SpaceBetween = 3, SpaceAround = 4, SpaceEvenly = 5 }
+    public enum Wrap { NoWrap = 0, Wrap = 1, WrapReverse = 2 }
     public enum ScrollViewMode { Vertical = 0, Horizontal = 1, VerticalAndHorizontal = 2 }
     public enum PanelScaleMode { ConstantPixelSize = 0, ConstantPhysicalSize = 1, ScaleWithScreenSize = 2 }
     public enum LengthUnit { Pixel = 0, Percent = 1 }
@@ -122,6 +124,17 @@ namespace UnityEngine.UIElements
         StyleColor borderRightColor { get; set; }
         StyleBackground backgroundImage { get; set; }
         StyleColor unityBackgroundImageTintColor { get; set; }
+        StyleEnum<Justify> justifyContent { get; set; }
+        StyleEnum<Wrap> flexWrap { get; set; }
+        StyleEnum<Align> alignSelf { get; set; }
+        StyleLength maxWidth { get; set; }
+        StyleLength minHeight { get; set; }
+        StyleLength maxHeight { get; set; }
+        StyleEnum<TextAnchor> unityTextAlign { get; set; }
+        StyleLength borderTopLeftRadius { get; set; }
+        StyleLength borderTopRightRadius { get; set; }
+        StyleLength borderBottomLeftRadius { get; set; }
+        StyleLength borderBottomRightRadius { get; set; }
     }
 
     /// <summary>Фонове зображення елемента (значки шапки, Поправка №12.2).</summary>
@@ -175,6 +188,17 @@ namespace UnityEngine.UIElements
         public StyleColor borderRightColor { get; set; }
         public StyleBackground backgroundImage { get; set; }
         public StyleColor unityBackgroundImageTintColor { get; set; }
+        public StyleEnum<Justify> justifyContent { get; set; }
+        public StyleEnum<Wrap> flexWrap { get; set; }
+        public StyleEnum<Align> alignSelf { get; set; }
+        public StyleLength maxWidth { get; set; }
+        public StyleLength minHeight { get; set; }
+        public StyleLength maxHeight { get; set; }
+        public StyleEnum<TextAnchor> unityTextAlign { get; set; }
+        public StyleLength borderTopLeftRadius { get; set; }
+        public StyleLength borderTopRightRadius { get; set; }
+        public StyleLength borderBottomLeftRadius { get; set; }
+        public StyleLength borderBottomRightRadius { get; set; }
     }
 
     // ---------------- події ----------------
