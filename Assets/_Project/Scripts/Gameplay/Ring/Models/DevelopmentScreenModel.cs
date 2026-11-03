@@ -58,14 +58,54 @@ namespace Game.Gameplay.Ring.Models
             _t = text ?? throw new ArgumentNullException(nameof(text));
         }
 
-        public string EndingTitle { get { return _c.HasEnding ? RingLabels.EndingName(_t, _c.Ending) : ""; } }
-        public string EndingDesc { get { return _c.HasEnding ? RingLabels.EndingDesc(_t, _c.Ending) : ""; } }
+        /// <summary>Розв'язка зіграна — показуємо кінцівку; між матчами (розвиток після матчу 1 чи 2) — підсумок «Матч k з N».</summary>
+        public bool IsFinal { get { return _c.HasEnding; } }
+
+        public string EndingTitle
+        {
+            get
+            {
+                return _c.HasEnding ? RingLabels.EndingName(_t, _c.Ending)
+                    : _t.Format("dev.match.title", _c.CurrentMatchIndex + 1, _c.MatchCount);
+            }
+        }
+
+        public string EndingDesc { get { return _t.Get(_c.HasEnding ? FeudEndings.TitleKey(_c.Ending) + ".desc" : "dev.match.desc"); } }
+
+        /// <summary>Підсумки всіх зіграних матчів ворожнечі: «Матч k: переможець, чим скінчилось».</summary>
+        public List<string> MatchLines()
+        {
+            var res = new List<string>();
+            for (int i = 0; i < _c.Records.Count; i++)
+            {
+                var r = _c.Records[i].Result;
+                res.Add(_t.Format("dev.match.line", i + 1, RingLabels.WinnerName(_t, r.Winner), RingLabels.EndKind(_t, r.Kind)));
+            }
+            return res;
+        }
+
+        /// <summary>Можна йти далі до наступного промо чи матчу (не розв'язка).</summary>
+        public bool CanContinue { get { return _c.CanContinue; } }
+
+        public string ContinueText
+        {
+            get
+            {
+                int next = _c.StepIndex + 1;
+                if (next >= _c.Script.Flow.Count) return _t.Get("ui.next");
+                var st = _c.Script.Flow[next];
+                if (!st.IsMatch) return _t.Get("dev.continue.promo");
+                return _t.Get(_c.Script.Matches[st.Index].Decisive ? "dev.continue.final" : "dev.continue.match");
+            }
+        }
+
+        public void Continue() { if (_c.CanContinue) _c.ContinueAfterDevelopment(); }
 
         public string PlanText
         {
             get
             {
-                return _t.Format("dev.plan", RingLabels.PlanName(_t, _c.State.Plan), RingLabels.PlanOutcome(_t, _c.PlanOutcome));
+                return _t.Format("dev.plan", RingLabels.PlanName(_t, _c.LastPlan), RingLabels.PlanOutcome(_t, _c.PlanOutcome));
             }
         }
 

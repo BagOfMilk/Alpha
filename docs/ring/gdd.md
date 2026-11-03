@@ -181,6 +181,7 @@
 | `choice` | `options[]`: `id`, `text`, `requires[]`, `effects[]`, `next`, `hidden` (bool), `path` (позначка шляху) | Вибір. Недоступний варіант показується сірим з причиною (як репліки з навичкою WL3), крім `hidden` і закритих гілок. **Кожен вибір має хоча б один ефект** |
 | `check` | `attr`, `mod`, `pick10`, `pick7`, `rewards[]` (`id`, `text`, `effects[]`), `fail[]`, `next`, `next6` (необов'язк.) | Кидок промо 2d6 + атрибут, шанс видно. 10+ — обрати `pick10` нагород, 7–9 — `pick7`, ≤6 — ефекти `fail` і перехід на `next6` (якщо є) |
 | `end` | — | Кінець промо |
+| `branch` | `cases[]` (`requires`, `next`), `next` | Перехід без вибору гравця за станом — перша виконана умова; так промо читає результат попереднього матчу (`m1_won`…). **Н**: без нього наслідок матчу в діалозі не показати |
 
 Умови (`requires`): `{"flag":"x"}`, `{"notFlag":"x"}`, `{"open":"b"}` (гілка не закрита), `{"var":"heat","min":2}`,
 `{"attr":"charisma","min":1}`, `{"path":"heel","min":2}`.
@@ -229,6 +230,8 @@
   ]
 }
 ```
+
+Порядок етапів ворожнечі — `flow` (id промо й матчів, напр. `["p1_challenge","m1","p2_booker","p3_parking","m2","p4_contract","m3"]`), матчі — `matches[]` (`id`, `act`, `plan` — правила плану за замовчуванням, `stipulations`, `decisive` у розв'язки). Розвиток після кожного матчу й кінцівка після розв'язки — неявні.
 
 `speaker`: `player`, `rival`, `booker`, `veteran`, `crowd`, `narrator`. Ключ імені мовця — `speaker.<speaker>`.
 
@@ -385,6 +388,7 @@
 | Матч: очки дій, дії, реакції, захисні кидки, рефері, ШІ | `Core/Ring/Match/` | 84 тести; 1000 матчів ШІ проти ШІ завершуються ≤ 20 раундів (~5,7 раунду, 0,88 «на два» за матч) |
 | Розвиток і перки | `Core/Ring/Progression/` | тести; перк міняє наступний матч (реванш) |
 | Фасад кампанії | `Core/Ring/RingCampaign.cs` | повний прохід кампанії в тесті, сейв у свіжий об'єкт |
+| **Три матчі (рішення 03.11.2026)** | дані: `matches[]` (план за правилами, умови, `decisive`) і `flow[]` (порядок кроків) у `feud_hammer.json`, вузол промо `branch` (перехід за прапорами без вибору); ядро: `FeudState.PrepareMatch/CompleteMatch`, план `no_clean_loss`, прапори `m{N}_won/_lost/_draw/_dirty/_plan_ok/_plan_swerved`, Heat лишається до розв'язки, популярність розв'язки ×2; фасад: `StepIndex`, `CurrentMatchIndex/MatchCount`, `ContinueAfterDevelopment`, зліпок `ring2`; екрани ворожнечі й розвитку показують «Акт N · матч k з 3» і «Далі» між матчами | `FeudThreeMatchesTests` (порядок етапів, Heat, прапори, плани, розвиток після кожного матчу, сейв на кожній межі, досяжність 6 кінцівок за ~3 с) |
 | Моделі екранів, тексти | `Gameplay/Ring/Models/`, `Assets/Resources/Ring/*.json` | тести: жодного ключа без тексту, відсотки = 100 |
 | Екрани UI Toolkit, сцена | `Gameplay/Ring/UI/`, `RingFeudBootstrap.cs`, `Editor/RingSceneBuilder.cs` → `Assets/Scenes/RingFeud.unity` | компіляція в Unity 6000.4.10f1, сцена збирається в батч-режимі; **вигляд і клік не перевірені** |
 | Мікрофон, кліпи промо | `Assets/Art/Ring/Props/mic.fbx`, `Assets/Art/Animations/RING_Promo*.fbx` | імпорт в Unity без помилок; скелет збігається з `RING_Moves*.fbx` |

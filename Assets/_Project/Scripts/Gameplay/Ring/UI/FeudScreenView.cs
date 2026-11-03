@@ -73,7 +73,7 @@ namespace Game.Gameplay.Ring.UI
 
             var plan = RingUi.Card();
             RingUi.Gap(plan, 12f);
-            plan.Add(RingUi.Heading(t.Get("feud.section.plan")));
+            plan.Add(RingUi.Heading(_m.PlanSectionText));
             plan.Add(RingUi.Lbl(_m.PlanText, 18f));
             var stipTitle = RingUi.Heading(t.Get("feud.section.stip"));
             stipTitle.style.marginTop = 10f;

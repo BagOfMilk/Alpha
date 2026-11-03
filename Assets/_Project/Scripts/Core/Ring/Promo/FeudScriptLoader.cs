@@ -31,7 +31,69 @@ namespace Game.Core.Ring
 
             foreach (var po in JsonRead.ObjList(root, "promos", "feud"))
                 s.Promos.Add(ReadPromo(po));
+            foreach (var mo in JsonRead.ObjList(root, "matches", "feud"))
+                s.Matches.Add(ReadMatch(mo));
+            ReadFlow(root, s);
             return s;
+        }
+
+        private static MatchDef ReadMatch(Dictionary<string, object> o)
+        {
+            string id = JsonRead.Str(o, "id", "match");
+            string where = "match " + id;
+            var m = new MatchDef { Id = id, Act = JsonRead.Int(o, "act", where, 0), Decisive = JsonRead.Bool(o, "decisive", where, false) };
+            foreach (var po in JsonRead.ObjList(o, "plan", where))
+            {
+                var rule = new PlanRule();
+                string pn = JsonRead.Str(po, "plan", where + ".plan");
+                if (!FeudVars.TryPlan(pn, out rule.Plan)) throw new FormatException(where + ".plan: невідомий план '" + pn + "'");
+                foreach (var co in JsonRead.ObjList(po, "requires", where + ".plan")) rule.Requires.Add(FeudCondition.FromJson(co, where + ".plan.requires"));
+                m.Plans.Add(rule);
+            }
+            object sv;
+            if (o.TryGetValue("stipulations", out sv) && sv != null)
+            {
+                var list = sv as List<object>;
+                if (list == null) throw new FormatException(where + ".stipulations: очікувався масив");
+                foreach (var x in list)
+                {
+                    string k = x as string;
+                    if (k == "no_dq") m.Stipulations |= MatchStipulations.NoDq;
+                    else if (k == "no_ally") m.Stipulations |= MatchStipulations.NoAlly;
+                    else throw new FormatException(where + ".stipulations: невідома умова '" + k + "'");
+                }
+            }
+            return m;
+        }
+
+        /// <summary>
+        /// Порядок кроків: "flow": ["p1_challenge", "m1", …] — кожен елемент або id промо, або id матчу. Без flow — старий порядок:
+        /// усі промо підряд і один матч-розв'язка (якщо matches не задано, створюється m1).
+        /// </summary>
+        private static void ReadFlow(Dictionary<string, object> root, FeudScript s)
+        {
+            object fv;
+            if (root.TryGetValue("flow", out fv) && fv != null)
+            {
+                var list = fv as List<object>;
+                if (list == null) throw new FormatException("feud.flow: очікувався масив");
+                foreach (var x in list)
+                {
+                    string id = x as string;
+                    if (id == null) throw new FormatException("feud.flow: очікувались рядки");
+                    int pi = s.Promos.FindIndex(p => p.Id == id);
+                    int mi = s.Matches.FindIndex(m => m.Id == id);
+                    if (pi >= 0 && mi >= 0) throw new FormatException("feud.flow: id '" + id + "' і промо, і матч");
+                    if (pi < 0 && mi < 0) throw new FormatException("feud.flow: немає ні промо, ні матчу '" + id + "'");
+                    s.Flow.Add(new FlowStep { Id = id, IsMatch = mi >= 0, Index = mi >= 0 ? mi : pi });
+                }
+                return;
+            }
+            if (s.Matches.Count == 0) s.Matches.Add(new MatchDef { Id = "m1", Decisive = true });
+            else if (s.Matches.Count > 1) throw new FormatException("feud: кілька матчів потребують поля flow");
+            for (int i = 0; i < s.Promos.Count; i++) s.Flow.Add(new FlowStep { Id = s.Promos[i].Id, Index = i });
+            s.Matches[0].Decisive = true;
+            s.Flow.Add(new FlowStep { Id = s.Matches[0].Id, IsMatch = true, Index = 0 });
         }
 
         private static WrestlerStats ReadWrestler(Dictionary<string, object> o, string where)
@@ -110,6 +172,16 @@ namespace Game.Core.Ring
                     n.Fail = ReadEffects(o, "fail", where);
                     n.Next = JsonRead.Str(o, "next", where);
                     n.Next6 = JsonRead.Str(o, "next6", where, false);
+                    break;
+                case "branch":
+                    n.Type = PromoNodeType.Branch;
+                    n.Next = JsonRead.Str(o, "next", where);
+                    foreach (var co in JsonRead.ObjList(o, "cases", where))
+                    {
+                        var bc = new PromoBranchCase { Next = JsonRead.Str(co, "next", where + ".cases") };
+                        foreach (var ro in JsonRead.ObjList(co, "requires", where + ".cases")) bc.Requires.Add(FeudCondition.FromJson(ro, where + ".cases.requires"));
+                        n.Cases.Add(bc);
+                    }
                     break;
                 case "end":
                     n.Type = PromoNodeType.End;

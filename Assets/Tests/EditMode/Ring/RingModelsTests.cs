@@ -214,20 +214,43 @@ namespace Game.Tests.EditMode
                 var c = RingCampaignDriver.NewCampaign(seed);
                 var feud = new FeudScreenModel(c, t);
                 int guard = 0;
+                int promos = 0, matches = 0, interDev = 0;
 
-                while (c.Stage == RingStage.Overview || c.Stage == RingStage.Promo)
+                // Усі три акти через моделі: промо → матч → розвиток між матчами → … → розв'язка (стан Ending).
+                while (c.Stage != RingStage.Ending)
                 {
-                    Assert.Less(++guard, 2000);
+                    Assert.Less(++guard, 4000);
                     if (c.Stage == RingStage.Overview)
                     {
                         TouchFeud(feud);
                         c.StartPromo();
+                        promos++;
+                        continue;
+                    }
+                    if (c.Stage == RingStage.MatchPrep)
+                    {
+                        TouchFeud(feud);
+                        Assert.AreEqual(matches + 1, feud.MatchNumber);
+                        PlayMatchThroughModel(c, t);
+                        matches++;
+                        continue;
+                    }
+                    if (c.Stage == RingStage.Development)
+                    {
+                        var between = new DevelopmentScreenModel(c, t);
+                        Assert.IsFalse(between.IsFinal, "кінцівка лише після розв'язки");
+                        TouchDev(between, c);
+                        AssertClean(between.ContinueText, "continue");
+                        Assert.IsTrue(between.CanContinue);
+                        Assert.AreEqual(matches, between.MatchLines().Count);
+                        between.Continue();
+                        interDev++;
                         continue;
                     }
                     var pm = new PromoScreenModel(c.CurrentPromoRunner, t);
                     while (!pm.IsFinished)
                     {
-                        Assert.Less(++guard, 2000);
+                        Assert.Less(++guard, 4000);
                         AssertClean(pm.TitleText, "title");
                         AssertClean(pm.PlaceText, "place");
                         switch (pm.Kind)
@@ -263,9 +286,9 @@ namespace Game.Tests.EditMode
                     c.FinishPromo();
                 }
 
-                Assert.AreEqual(RingStage.MatchPrep, c.Stage);
-                TouchFeud(feud);
-                PlayMatchThroughModel(c, t);
+                Assert.AreEqual(4, promos);
+                Assert.AreEqual(3, matches);
+                Assert.AreEqual(2, interDev, "розвиток між матчами — після першого й другого");
                 Assert.AreEqual(RingStage.Ending, c.Stage);
 
                 c.OpenDevelopment();

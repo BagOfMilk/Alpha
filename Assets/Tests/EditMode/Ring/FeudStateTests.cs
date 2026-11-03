@@ -286,6 +286,13 @@ namespace Game.Tests.EditMode
         [TestCase(BookerPlan.WinAny, MatchWinner.Player, MatchEndKind.Disqualification, 3, 0, FeudPlanOutcome.Fulfilled)]
         [TestCase(BookerPlan.WinAny, MatchWinner.Rival, MatchEndKind.Pin, 0, 0, FeudPlanOutcome.Swerved)]
         [TestCase(BookerPlan.WinAny, MatchWinner.Draw, MatchEndKind.TimeLimit, 0, 0, FeudPlanOutcome.Neither)]
+        [TestCase(BookerPlan.NoCleanLoss, MatchWinner.Rival, MatchEndKind.Pin, 0, 0, FeudPlanOutcome.Swerved)]
+        [TestCase(BookerPlan.NoCleanLoss, MatchWinner.Rival, MatchEndKind.Submission, 0, 0, FeudPlanOutcome.Swerved)]
+        [TestCase(BookerPlan.NoCleanLoss, MatchWinner.Rival, MatchEndKind.Disqualification, 0, 0, FeudPlanOutcome.Fulfilled)]
+        [TestCase(BookerPlan.NoCleanLoss, MatchWinner.Rival, MatchEndKind.CountOut, 0, 0, FeudPlanOutcome.Fulfilled)]
+        [TestCase(BookerPlan.NoCleanLoss, MatchWinner.Player, MatchEndKind.Pin, 0, 0, FeudPlanOutcome.Fulfilled)]
+        [TestCase(BookerPlan.NoCleanLoss, MatchWinner.Draw, MatchEndKind.TimeLimit, 0, 0, FeudPlanOutcome.Fulfilled)]
+        [TestCase(BookerPlan.NoCleanLoss, MatchWinner.Draw, MatchEndKind.DoubleCountOut, 0, 0, FeudPlanOutcome.Fulfilled)]
         public void EvaluatePlan_Table(BookerPlan plan, MatchWinner w, MatchEndKind kind, int dirty, int kick, FeudPlanOutcome expected)
         {
             var st = Fresh();

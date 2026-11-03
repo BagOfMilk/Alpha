@@ -276,7 +276,7 @@
   },
   {
    "id": "p2_booker",
-   "act": 1,
+   "act": 2,
    "title": "promo.p2.title",
    "place": "promo.p2.place",
    "start": "n1",
@@ -286,6 +286,65 @@
      "type": "line",
      "speaker": "booker",
      "text": "p2.n1",
+     "next": "nb"
+    },
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "flag": "m1_plan_swerved"
+        }
+       ],
+       "next": "ns"
+      },
+      {
+       "requires": [
+        {
+         "flag": "m1_won"
+        }
+       ],
+       "next": "nw"
+      },
+      {
+       "requires": [
+        {
+         "flag": "m1_lost"
+        }
+       ],
+       "next": "nl"
+      }
+     ],
+     "next": "nd"
+    },
+    {
+     "id": "ns",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p2.n2.swerved",
+     "next": "n2"
+    },
+    {
+     "id": "nw",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p2.n2.won",
+     "next": "n2"
+    },
+    {
+     "id": "nl",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p2.n2.lost",
+     "next": "n2"
+    },
+    {
+     "id": "nd",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p2.n2.draw",
      "next": "n2"
     },
     {
@@ -300,8 +359,8 @@
      "type": "choice",
      "options": [
       {
-       "id": "lose",
-       "text": "p2.n3.lose",
+       "id": "accept",
+       "text": "p2.n3.accept",
        "path": "face",
        "effects": [
         {
@@ -313,10 +372,10 @@
          "add": 1
         },
         {
-         "plan": "lose_clean"
+         "plan": "no_clean_loss"
         },
         {
-         "close": "plan"
+         "close": "plan_m2"
         }
        ],
        "next": "n5"
@@ -340,7 +399,7 @@
          "plan": "win_clean"
         },
         {
-         "close": "plan"
+         "close": "plan_m2"
         }
        ],
        "next": "n5"
@@ -362,7 +421,7 @@
          "plan": "win_any"
         },
         {
-         "close": "plan"
+         "close": "plan_m2"
         }
        ],
        "next": "n5"
@@ -394,7 +453,7 @@
          "flag": "plan_refused"
         },
         {
-         "close": "plan"
+         "close": "plan_m2"
         }
        ],
        "next": "n5"
@@ -417,7 +476,7 @@
          "plan": "win_clean"
         },
         {
-         "close": "plan"
+         "close": "plan_m2"
         }
        ]
       },
@@ -621,7 +680,29 @@
      "type": "line",
      "speaker": "narrator",
      "text": "p3.n1",
+     "next": "nb"
+    },
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "flag": "m1_won"
+        }
+       ],
+       "next": "n2w"
+      }
+     ],
      "next": "n2"
+    },
+    {
+     "id": "n2w",
+     "type": "line",
+     "speaker": "rival",
+     "text": "p3.n2.won",
+     "next": "n3"
     },
     {
      "id": "n2",
@@ -861,7 +942,191 @@
      "type": "line",
      "speaker": "rival",
      "text": "p4.n3",
-     "next": "n4"
+     "next": "nb"
+    },
+    {
+     "id": "nb",
+     "type": "branch",
+     "cases": [
+      {
+       "requires": [
+        {
+         "flag": "m2_plan_swerved"
+        }
+       ],
+       "next": "n3s"
+      },
+      {
+       "requires": [
+        {
+         "flag": "m2_dirty"
+        }
+       ],
+       "next": "n3d"
+      },
+      {
+       "requires": [
+        {
+         "flag": "m2_won"
+        }
+       ],
+       "next": "n3w"
+      },
+      {
+       "requires": [
+        {
+         "flag": "m2_lost"
+        }
+       ],
+       "next": "n3l"
+      }
+     ],
+     "next": "n3x"
+    },
+    {
+     "id": "n3s",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n3.swerved",
+     "next": "n3p"
+    },
+    {
+     "id": "n3d",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n3.dirty",
+     "next": "n3p"
+    },
+    {
+     "id": "n3w",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n3.won",
+     "next": "n3p"
+    },
+    {
+     "id": "n3l",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n3.lost",
+     "next": "n3p"
+    },
+    {
+     "id": "n3x",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n3.draw",
+     "next": "n3p"
+    },
+    {
+     "id": "n3p",
+     "type": "line",
+     "speaker": "booker",
+     "text": "p4.n3p",
+     "next": "np"
+    },
+    {
+     "id": "np",
+     "type": "choice",
+     "options": [
+      {
+       "id": "win",
+       "text": "p4.np.win",
+       "requires": [
+        {
+         "var": "trust",
+         "min": 3
+        }
+       ],
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "plan": "win_clean"
+        },
+        {
+         "close": "plan_m3"
+        }
+       ],
+       "next": "n4"
+      },
+      {
+       "id": "lose",
+       "text": "p4.np.lose",
+       "path": "face",
+       "effects": [
+        {
+         "path": "face",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": 1
+        },
+        {
+         "plan": "lose_clean"
+        },
+        {
+         "close": "plan_m3"
+        }
+       ],
+       "next": "n4"
+      },
+      {
+       "id": "any",
+       "text": "p4.np.any",
+       "path": "heel",
+       "effects": [
+        {
+         "path": "heel",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        },
+        {
+         "plan": "win_any"
+        },
+        {
+         "close": "plan_m3"
+        }
+       ],
+       "next": "n4"
+      },
+      {
+       "id": "own",
+       "text": "p4.np.own",
+       "path": "rebel",
+       "effects": [
+        {
+         "path": "rebel",
+         "add": 1
+        },
+        {
+         "var": "trust",
+         "add": -1
+        },
+        {
+         "plan": "none"
+        },
+        {
+         "flag": "plan_refused"
+        },
+        {
+         "close": "plan_m3"
+        }
+       ],
+       "next": "n4"
+      }
+     ]
     },
     {
      "id": "n4",
@@ -1209,5 +1474,53 @@
     }
    ]
   }
+ ],
+ "matches": [
+  {
+   "id": "m1",
+   "act": 1,
+   "plan": [
+    {
+     "requires": [
+      {
+       "var": "trust",
+       "min": 3
+      }
+     ],
+     "plan": "win_any"
+    },
+    {
+     "plan": "lose_clean"
+    }
+   ]
+  },
+  {
+   "id": "m2",
+   "act": 2,
+   "plan": [
+    {
+     "requires": [
+      {
+       "notFlag": "plan_refused"
+      }
+     ],
+     "plan": "no_clean_loss"
+    }
+   ]
+  },
+  {
+   "id": "m3",
+   "act": 3,
+   "decisive": true
+  }
+ ],
+ "flow": [
+  "p1_challenge",
+  "m1",
+  "p2_booker",
+  "p3_parking",
+  "m2",
+  "p4_contract",
+  "m3"
  ]
 }

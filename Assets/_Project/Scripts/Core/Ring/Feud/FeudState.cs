@@ -129,9 +129,8 @@ namespace Game.Core.Ring
                     Stipulations |= e.Key == "no_dq" ? MatchStipulations.NoDq : MatchStipulations.NoAlly;
                     break;
                 case EffectKind.Plan:
-                    Plan = e.Key == "win_clean" ? BookerPlan.WinClean
-                         : e.Key == "lose_clean" ? BookerPlan.LoseClean
-                         : e.Key == "win_any" ? BookerPlan.WinAny : BookerPlan.None;
+                    BookerPlan bp;
+                    Plan = FeudVars.TryPlan(e.Key, out bp) ? bp : BookerPlan.None;
                     break;
                 case EffectKind.Ally: HasAlly = e.Value; break;
             }
@@ -157,6 +156,9 @@ namespace Game.Core.Ring
                 case BookerPlan.LoseClean:
                     if (r.Winner == MatchWinner.Rival && clean && r.PlayerKickoutsAtTwo >= 1) return FeudPlanOutcome.Fulfilled;
                     return r.Winner == MatchWinner.Player ? FeudPlanOutcome.Swerved : FeudPlanOutcome.Neither;
+                case BookerPlan.NoCleanLoss:
+                    // «Не програй чисто»: виконано, якщо не програв утриманням чи здачею; звернути — програти чисто.
+                    return r.Winner == MatchWinner.Rival && clean ? FeudPlanOutcome.Swerved : FeudPlanOutcome.Fulfilled;
                 case BookerPlan.WinAny:
                     if (r.Winner == MatchWinner.Player) return FeudPlanOutcome.Fulfilled;
                     return r.Winner == MatchWinner.Rival ? FeudPlanOutcome.Swerved : FeudPlanOutcome.Neither;
@@ -168,13 +170,52 @@ namespace Game.Core.Ring
         /// Застосувати підсумок матчу до стану (gdd §3 «Матч → ворожнеча»), нарахувати очки розвитку (§6), повернути оцінку плану.
         /// Ажіотаж ≥ 7 і при звернутому плані дає популярність +1 двічі (загальне правило + правило swerve) — так у gdd.
         /// </summary>
-        public FeudPlanOutcome ApplyMatchResult(MatchResult r)
+        public FeudPlanOutcome ApplyMatchResult(MatchResult r) { return ApplyResult(r, 1); }
+
+        /// <summary>Вага популярності розв'язки: ажіотаж фіналу ворожнечі важить удвічі (gdd §6).</summary>
+        public const int DecisiveAudienceWeight = 2;
+
+        /// <summary>
+        /// Підсумок матча ворожнечі з трьох (gdd §3, §5.2, §6): умови й план матчу з даних (<see cref="PrepareMatch"/>), результат
+        /// у стан (популярність — ×2 для розв'язки), прапори результату m{N}_won / _lost / _draw / _dirty / _plan_ok /
+        /// _plan_swerved, і план та умови очищаються — наступний матч дістане свої з промо чи з даних. Heat НЕ скидається
+        /// (його скидає лише кінцівка, <see cref="ResetHeatAfterFeud"/>). Повертає оцінку плану цього матчу.
+        /// </summary>
+        public FeudPlanOutcome CompleteMatch(MatchResult r, MatchDef def)
+        {
+            if (def == null) throw new ArgumentNullException(nameof(def));
+            PrepareMatch(def);
+            var outcome = ApplyResult(r, def.Decisive ? DecisiveAudienceWeight : 1);
+            Flags.Add(FeudVars.MatchFlag(def.Id, r.Winner == MatchWinner.Player ? "won" : r.Winner == MatchWinner.Rival ? "lost" : "draw"));
+            if (r.Kind == MatchEndKind.Disqualification || r.Kind == MatchEndKind.CountOut || r.Kind == MatchEndKind.DoubleCountOut)
+                Flags.Add(FeudVars.MatchFlag(def.Id, "dirty"));
+            if (outcome == FeudPlanOutcome.Fulfilled) Flags.Add(FeudVars.MatchFlag(def.Id, "plan_ok"));
+            if (outcome == FeudPlanOutcome.Swerved) Flags.Add(FeudVars.MatchFlag(def.Id, "plan_swerved"));
+            Plan = BookerPlan.None;
+            Stipulations = MatchStipulations.None;
+            return outcome;
+        }
+
+        /// <summary>
+        /// Підготувати стан до матчу з даних (ідемпотентно): умови матчу = з промо + за замовчуванням матчу; план — з промо, а
+        /// якщо промо його не задали, то перше правило плану матчу з виконаними умовами.
+        /// </summary>
+        public void PrepareMatch(MatchDef def)
+        {
+            if (def == null) return;
+            if (Plan == BookerPlan.None)
+                foreach (var rule in def.Plans)
+                    if (FirstFailed(rule.Requires) == null) { Plan = rule.Plan; break; }
+            Stipulations |= def.Stipulations;
+        }
+
+        private FeudPlanOutcome ApplyResult(MatchResult r, int audienceWeight)
         {
             if (r == null) throw new ArgumentNullException(nameof(r));
             var outcome = EvaluatePlan(r);
 
-            if (r.FinalHype >= 7) Audience += 1;
-            else if (r.FinalHype <= 3) Audience -= 1;
+            if (r.FinalHype >= 7) Audience += audienceWeight;
+            else if (r.FinalHype <= 3) Audience -= audienceWeight;
 
             if (outcome == FeudPlanOutcome.Fulfilled) Trust += 1;
             else if (outcome == FeudPlanOutcome.Swerved)
@@ -191,7 +232,7 @@ namespace Game.Core.Ring
             return outcome;
         }
 
-        /// <summary>Після кінцівки ворожнеча скидається до 1 (gdd §3). Викликає той, хто веде потік (не ApplyMatchResult).</summary>
+        /// <summary>Після розв'язки ворожнеча скидається до 1 (gdd §3). Викликає той, хто веде потік, лише після останнього матчу.</summary>
         public void ResetHeatAfterFeud() { Heat = 1; }
 
         // ---------- збирання матчу ----------

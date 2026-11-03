@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using Game.Core.Randomness;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
@@ -42,7 +43,7 @@ namespace Game.Tests.EditMode
             }
         }
 
-        /// <summary>Один крок кампанії (для побудови прогону з перервами на сейв). false — дійшли до розвитку.</summary>
+        /// <summary>Один крок кампанії (для побудови прогону з перервами на сейв). false — дійшли до розвитку після розв'язки.</summary>
         public static bool Step(RingCampaign c)
         {
             switch (c.Stage)
@@ -57,7 +58,22 @@ namespace Game.Tests.EditMode
                     c.FinishMatch();
                     return true;
                 case RingStage.Ending: c.OpenDevelopment(); return true;
+                case RingStage.Development:
+                    if (!c.CanContinue) return false;
+                    c.ContinueAfterDevelopment();
+                    return true;
                 default: return false;
+            }
+        }
+
+        /// <summary>Дограти до підготовки розв'язки (проміжні матчі й розвиток між ними пройдено).</summary>
+        public static void ToFinalMatchPrep(RingCampaign c)
+        {
+            int guard = 0;
+            while (!(c.Stage == RingStage.MatchPrep && c.CurrentMatchDef.Decisive))
+            {
+                Assert.IsTrue(Step(c), "кампанія скінчилась до розв'язки");
+                Assert.Less(++guard, 2000);
             }
         }
 
@@ -81,6 +97,8 @@ namespace Game.Tests.EditMode
                 Assert.AreEqual(RingStage.Development, c.Stage, "зерно " + seed);
                 Assert.IsTrue(c.HasEnding, "зерно " + seed);
                 Assert.AreEqual(c.PromoCount, c.PromoIndex);
+                Assert.AreEqual(3, c.Records.Count, "три матчі ворожнечі");
+                CollectionAssert.AreEqual(new[] { "m1", "m2", "m3" }, c.Records.Select(r => r.MatchId).ToArray());
                 Assert.IsNotNull(c.Result);
                 Assert.IsTrue(c.CanRematch);
                 Assert.Greater(c.State.DevPoints, 0, "очки розвитку нараховано за матч");
@@ -135,7 +153,7 @@ namespace Game.Tests.EditMode
         public void SaveInsideMatch_ComesBackAsMatchPrep_AndRematchAsDevelopment()
         {
             var c = RingCampaignDriver.NewCampaign(2);
-            while (c.Stage != RingStage.MatchPrep) RingCampaignDriver.Step(c);
+            RingCampaignDriver.ToFinalMatchPrep(c);
             c.StartMatch();
             string blob = c.CaptureState();
             var fresh = RingCampaign.New(RingCampaignDriver.RealScript(), new SeededDiceRoller(5));
@@ -192,7 +210,7 @@ namespace Game.Tests.EditMode
         public void Rematch_StartsFromThePreMatchState_NotFromTheEndingOne()
         {
             var c = RingCampaignDriver.NewCampaign(4);
-            while (c.Stage != RingStage.MatchPrep) RingCampaignDriver.Step(c);
+            RingCampaignDriver.ToFinalMatchPrep(c);
             var first = c.State.BuildMatchSetup(c.Script);
             RingCampaignDriver.Step(c);
             c.OpenDevelopment();

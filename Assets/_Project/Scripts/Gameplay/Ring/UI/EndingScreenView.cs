@@ -47,6 +47,14 @@ namespace Game.Gameplay.Ring.UI
             left.Add(RingUi.Heading(t.Get("dev.section.result")));
             foreach (var l in _m.ResultLines()) left.Add(RingUi.Lbl(l, 18f));
             left.Add(RingUi.Lbl(_m.PlanText, 17f, RingUi.Gold));
+            var matchLines = _m.MatchLines();
+            if (matchLines.Count > 1)
+            {
+                var mt = RingUi.Heading(t.Get("dev.section.matches"));
+                mt.style.marginTop = 12f;
+                left.Add(mt);
+                foreach (var l in matchLines) left.Add(RingUi.Lbl(l, 17f));
+            }
             if (_m.HasRematchResult)
             {
                 var rt = RingUi.Heading(t.Get("dev.section.rematch"));
@@ -84,13 +92,22 @@ namespace Game.Gameplay.Ring.UI
                 string text = a.Name + "  " + a.ValueText + "   " + (a.CanBuy ? a.BuyText : a.ReasonText);
                 right.Add(RingUi.MakeButton(text, () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, 17f));
             }
-            var hint = RingUi.Lbl(t.Get("dev.rematch.hint"), 14f, RingUi.Dim);
-            hint.style.marginTop = 10f;
-            right.Add(hint);
-            right.Add(RingUi.PrimaryButton(t.Get("ui.rematch"), OnRematch, _m.CanRematch));
-            var restart = RingUi.MakeButton(t.Get("ui.restart"), () => { if (Ctx.Restart != null) Ctx.Restart(); }, true, RingUi.Dim, 17f);
-            restart.style.unityTextAlign = TextAnchor.MiddleCenter;
-            right.Add(restart);
+            if (_m.IsFinal)
+            {
+                var hint = RingUi.Lbl(t.Get("dev.rematch.hint"), 14f, RingUi.Dim);
+                hint.style.marginTop = 10f;
+                right.Add(hint);
+                right.Add(RingUi.PrimaryButton(t.Get("ui.rematch"), OnRematch, _m.CanRematch));
+                var restart = RingUi.MakeButton(t.Get("ui.restart"), () => { if (Ctx.Restart != null) Ctx.Restart(); }, true, RingUi.Dim, 17f);
+                restart.style.unityTextAlign = TextAnchor.MiddleCenter;
+                right.Add(restart);
+            }
+            else
+            {
+                var space = RingUi.Lbl("", 8f);
+                right.Add(space);
+                right.Add(RingUi.PrimaryButton(_m.ContinueText, OnConfirm, _m.CanContinue));
+            }
             body.Add(right);
 
             Root.Add(body);
@@ -108,6 +125,12 @@ namespace Game.Gameplay.Ring.UI
             bool can = r.State == PerkState.Available;
             var b = RingUi.MakeButton(text, () => { _m.BuyPerk(id); Refresh(); }, can, r.State == PerkState.Owned ? RingUi.Good : accent, 16f);
             return b;
+        }
+
+        /// <summary>Enter/Пробіл/кнопка: між матчами — далі за сюжетом; після розв'язки нічого (реванш чи «Заново» — кнопками).</summary>
+        public override void OnConfirm()
+        {
+            if (_m.CanContinue) _m.Continue();
         }
 
         private void OnRematch()

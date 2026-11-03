@@ -18,6 +18,7 @@ namespace Game.Gameplay.Ring.Models
                 case BookerPlan.WinClean: return t.Get("plan.win_clean");
                 case BookerPlan.LoseClean: return t.Get("plan.lose_clean");
                 case BookerPlan.WinAny: return t.Get("plan.win_any");
+                case BookerPlan.NoCleanLoss: return t.Get("plan.no_clean_loss");
                 default: return t.Get("plan.none");
             }
         }

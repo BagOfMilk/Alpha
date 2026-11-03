@@ -43,7 +43,22 @@ namespace Game.Core.Ring
             Script = script ?? throw new ArgumentNullException(nameof(script));
             Promo = promo ?? throw new ArgumentNullException(nameof(promo));
             State = state ?? throw new ArgumentNullException(nameof(state));
-            Current = Node(startNodeId ?? promo.Start);
+            Current = ResolveBranches(Node(startNodeId ?? promo.Start));
+        }
+
+        /// <summary>Вузли branch проходяться самі: перший випадок з виконаними умовами, інакше next (захист від циклів — довжина промо).</summary>
+        private PromoNode ResolveBranches(PromoNode n)
+        {
+            int guard = 0;
+            while (n.Type == PromoNodeType.Branch)
+            {
+                if (++guard > Promo.Nodes.Count + 1) throw new InvalidOperationException("промо " + Promo.Id + ": цикл із вузлів branch");
+                string next = n.Next;
+                foreach (var c in n.Cases)
+                    if (State.FirstFailed(c.Requires) == null) { next = c.Next; break; }
+                n = Node(next);
+            }
+            return n;
         }
 
         public bool IsFinished => Current.Type == PromoNodeType.End;
@@ -57,7 +72,7 @@ namespace Game.Core.Ring
 
         private void GoTo(string id)
         {
-            Current = Node(id);
+            Current = ResolveBranches(Node(id));
             _rolled = false;
             AwaitingRewards = false;
             RewardsToPick = 0;

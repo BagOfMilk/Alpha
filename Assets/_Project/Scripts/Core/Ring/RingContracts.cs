@@ -12,8 +12,11 @@ namespace Game.Core.Ring
     /// <summary>Шлях ворожнечі (gdd §3): ранги відкривають перки, домінантний шлях — роль у матчі.</summary>
     public enum RingPath { Face = 0, Heel = 1, Rebel = 2 }
 
-    /// <summary>План букера на фінальний матч (gdd §3).</summary>
-    public enum BookerPlan { None = 0, WinClean = 1, LoseClean = 2, WinAny = 3 }
+    /// <summary>
+    /// План букера на матч (gdd §3, §5.2). NoCleanLoss («не програй чисто») — для проміжного матчу: виконано, якщо гравець не
+    /// програв утриманням чи здачею; звернути — програти чисто. Значення додаються лише в кінець (сейви).
+    /// </summary>
+    public enum BookerPlan { None = 0, WinClean = 1, LoseClean = 2, WinAny = 3, NoCleanLoss = 4 }
 
     /// <summary>Умови матчу з промо (gdd §3).</summary>
     [Flags]

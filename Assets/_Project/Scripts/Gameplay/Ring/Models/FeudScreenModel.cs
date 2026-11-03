@@ -92,13 +92,19 @@ namespace Game.Gameplay.Ring.Models
             return rows;
         }
 
-        public string PlanText { get { return RingLabels.PlanName(_t, _c.State.Plan); } }
+        // План і умови — найближчого матчу: з промо плюс значення за замовчуванням з даних (gdd §5.2); стан не міняється.
+        private FeudState Upcoming { get { return _c.PreviewNextMatchState(); } }
+
+        public string PlanText { get { return RingLabels.PlanName(_t, Upcoming.Plan); } }
+
+        /// <summary>Заголовок картки плану: «План і умови матчу k».</summary>
+        public string PlanSectionText { get { return _t.Format("feud.section.matchplan", MatchNumber); } }
 
         /// <summary>Умови матчу текстом; порожній список — без умов.</summary>
         public List<string> StipulationTexts()
         {
             var res = new List<string>();
-            var s = _c.State.Stipulations;
+            var s = Upcoming.Stipulations;
             if ((s & MatchStipulations.NoDq) != 0) res.Add(_t.Get("stip.no_dq"));
             if ((s & MatchStipulations.NoAlly) != 0) res.Add(_t.Get("stip.no_ally"));
             if (res.Count == 0) res.Add(_t.Get("stip.none"));
@@ -109,26 +115,49 @@ namespace Game.Gameplay.Ring.Models
 
         // ---------- де ми в сюжеті ----------
 
+        /// <summary>Номер найближчого матчу ворожнечі (з одиниці) і скільки їх усього.</summary>
+        public int MatchNumber { get { return _c.CurrentMatchIndex + 1; } }
+        public int MatchCount { get { return _c.MatchCount; } }
         public int PromoNumber { get { return Math.Min(_c.PromoIndex + 1, _c.PromoCount); } }
         public int PromoCount { get { return _c.PromoCount; } }
 
-        /// <summary>Чи є наступне промо (інакше — вихід на матч).</summary>
-        public bool HasNextPromo { get { return _c.PromoIndex < _c.PromoCount; } }
+        private PromoDef NextPromo
+        {
+            get
+            {
+                var st = _c.CurrentStep;
+                return st != null && !st.IsMatch ? _c.Script.Promos[st.Index] : null;
+            }
+        }
 
-        public int NextAct { get { return HasNextPromo ? _c.Script.Promos[_c.PromoIndex].Act : 0; } }
+        /// <summary>Чи наступний крок — промо (інакше — вихід на матч).</summary>
+        public bool HasNextPromo { get { return NextPromo != null; } }
 
+        /// <summary>Чи найближчий матч — розв'язка.</summary>
+        public bool NextMatchIsFinal { get { return _c.CurrentMatchDef.Decisive; } }
+
+        public int NextAct { get { return _c.CurrentAct; } }
+
+        /// <summary>«Акт N · матч k з 3»: промо перед матчем або сам матч (розв'язка — з позначкою).</summary>
         public string ProgressText
         {
             get
             {
-                if (!HasNextPromo) return _t.Get("feud.progress.match");
-                return _t.Format("feud.progress", NextAct, PromoNumber, PromoCount);
+                if (HasNextPromo) return _t.Format("feud.progress.promo", NextAct, MatchNumber, MatchCount);
+                return _t.Format(NextMatchIsFinal ? "feud.progress.final" : "feud.progress.matchn", NextAct, MatchNumber, MatchCount);
             }
         }
 
-        public string NextTitleText { get { return HasNextPromo ? _t.Get(_c.Script.Promos[_c.PromoIndex].TitleKey) : ""; } }
-        public string NextPlaceText { get { return HasNextPromo ? _t.Get(_c.Script.Promos[_c.PromoIndex].PlaceKey) : ""; } }
+        public string NextTitleText { get { return HasNextPromo ? _t.Get(NextPromo.TitleKey) : ""; } }
+        public string NextPlaceText { get { return HasNextPromo ? _t.Get(NextPromo.PlaceKey) : ""; } }
 
-        public string ContinueText { get { return _t.Get(HasNextPromo ? "feud.continue.promo" : "feud.continue.match"); } }
+        public string ContinueText
+        {
+            get
+            {
+                if (HasNextPromo) return _t.Get("feud.continue.promo");
+                return NextMatchIsFinal ? _t.Get("feud.continue.final") : _t.Format("feud.continue.matchn", MatchNumber, MatchCount);
+            }
+        }
     }
 }

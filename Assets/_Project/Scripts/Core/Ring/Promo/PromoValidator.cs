@@ -14,7 +14,8 @@ namespace Game.Core.Ring
         PickTooMany = 7,
         MissingText = 8,
         NoEnd = 9,
-        EmptyChoice = 10
+        EmptyChoice = 10,
+        BadFlow = 11
     }
 
     public sealed class PromoError
@@ -36,7 +37,32 @@ namespace Game.Core.Ring
             Text(errs, strings, "feud", "-", script.Player.NameKey);
             Text(errs, strings, "feud", "-", script.Rival.NameKey);
             foreach (var p in script.Promos) ValidatePromo(p, strings, errs);
+            ValidateFlow(script, errs);
             return errs;
+        }
+
+        /// <summary>
+        /// Порядок кроків (gdd §5.2): кожне промо й кожен матч рівно один раз; перший крок — промо; останній — єдина розв'язка.
+        /// </summary>
+        private static void ValidateFlow(FeudScript script, List<PromoError> errs)
+        {
+            if (script.Flow.Count == 0) { Add(errs, "flow", "-", PromoErrorCode.BadFlow, "порядок кроків порожній"); return; }
+            var seen = new HashSet<string>();
+            foreach (var st in script.Flow)
+                if (!seen.Add(st.Id)) Add(errs, "flow", st.Id, PromoErrorCode.BadFlow, "крок '" + st.Id + "' повторюється");
+            foreach (var p in script.Promos)
+                if (!seen.Contains(p.Id)) Add(errs, "flow", p.Id, PromoErrorCode.BadFlow, "промо не входить у порядок кроків");
+            foreach (var m in script.Matches)
+                if (!seen.Contains(m.Id)) Add(errs, "flow", m.Id, PromoErrorCode.BadFlow, "матч не входить у порядок кроків");
+            if (script.Flow[0].IsMatch) Add(errs, "flow", script.Flow[0].Id, PromoErrorCode.BadFlow, "перший крок має бути промо");
+            var last = script.Flow[script.Flow.Count - 1];
+            if (!last.IsMatch) Add(errs, "flow", last.Id, PromoErrorCode.BadFlow, "останній крок має бути матчем-розв'язкою");
+            foreach (var m in script.Matches)
+            {
+                bool isLast = last.IsMatch && last.Id == m.Id;
+                if (m.Decisive && !isLast) Add(errs, "flow", m.Id, PromoErrorCode.BadFlow, "розв'язка — лише останній матч");
+                if (!m.Decisive && isLast) Add(errs, "flow", m.Id, PromoErrorCode.BadFlow, "останній матч має бути розв'язкою (decisive)");
+            }
         }
 
         private static void Add(List<PromoError> errs, string promo, string node, PromoErrorCode code, string msg)

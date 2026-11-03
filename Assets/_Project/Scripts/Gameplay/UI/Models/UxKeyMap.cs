@@ -131,6 +131,7 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("Alpha7",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 7"),
             new UxKeyBinding("Alpha8",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 8"),
             new UxKeyBinding("Alpha9",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 9"),
+            new UxKeyBinding("L",          UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "повний журнал матчу"),
         };
 
         public static IReadOnlyList<UxKeyBinding> All => Entries;

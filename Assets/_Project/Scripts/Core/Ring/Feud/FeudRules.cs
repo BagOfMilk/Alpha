@@ -50,6 +50,18 @@ namespace Game.Core.Ring
             return i >= 0;
         }
 
+        public static readonly string[] PlanNames = { "none", "win_clean", "lose_clean", "win_any", "no_clean_loss" };
+
+        public static bool TryPlan(string name, out BookerPlan p)
+        {
+            int i = Array.IndexOf(PlanNames, name);
+            p = (BookerPlan)(i < 0 ? 0 : i);
+            return i >= 0;
+        }
+
+        /// <summary>Прапор результату матчу: m1_won, m1_lost, m1_draw, m1_dirty, m1_plan_ok, m1_plan_swerved.</summary>
+        public static string MatchFlag(string matchId, string suffix) => matchId + "_" + suffix;
+
         public static string AttrName(RingAttr a) => AttrNames[(int)a];
         public static string PathName(RingPath p) => PathNames[(int)p];
         /// <summary>Прапор закритої гілки (ефект close).</summary>
@@ -146,7 +158,8 @@ namespace Game.Core.Ring
             else if (JsonRead.Has(o, "plan"))
             {
                 e.Kind = EffectKind.Plan; e.Key = JsonRead.Str(o, "plan", where);
-                if (e.Key != "win_clean" && e.Key != "lose_clean" && e.Key != "win_any" && e.Key != "none")
+                BookerPlan bp;
+                if (!FeudVars.TryPlan(e.Key, out bp))
                     throw new FormatException(where + ": невідомий план '" + e.Key + "'");
             }
             else if (o.ContainsKey("ally") && o["ally"] is bool) { e.Kind = EffectKind.Ally; e.Value = (bool)o["ally"]; e.Key = "ally"; }

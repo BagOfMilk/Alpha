@@ -71,9 +71,12 @@ namespace Game.Core.Ring
         }
     }
 
+
     /// <summary>
-    /// Перебір усіх шляхів по промо (усі доступні варіанти × усі три ступені кожного кидка × усі комбінації нагород) і всіх
-    /// абстрактних результатів матчу (gdd §4.2 п.4). Мемоізація за серіалізованим станом; ліміт станів проти вибуху.
+    /// Перебір усіх шляхів по порядку кроків ворожнечі (усі доступні варіанти × усі три ступені кожного кидка × усі комбінації
+    /// нагород) і абстрактних результатів кожного матчу (gdd §4.2 п.4, §5.2). Проміжні матчі — невеликий набір характерних
+    /// результатів (перемога, поразка, нічия, чисто/брудно, вплив на шляхи й план), розв'язка — повний перебір. Мемоізація за
+    /// серіалізованим канонічним станом; ліміт станів проти вибуху.
     /// </summary>
     public static class FeudReachability
     {
@@ -82,38 +85,35 @@ namespace Game.Core.Ring
         public static ReachabilityReport Analyze(FeudScript script, int stateLimit = DefaultStateLimit)
         {
             var rep = new ReachabilityReport();
-            if (script.Promos.Count == 0)
+            if (script.Flow.Count == 0)
             {
-                Finish(script.NewState(), rep, new HashSet<string>());
+                rep.DeadEnds.Add("flow: порожній порядок кроків");
                 return rep;
             }
-            var reads = ReadsOf(script);
+            var reads = new Ahead(script);
             var visited = new HashSet<string>();
             var finals = new HashSet<string>();
             var work = new Stack<Item>();
-            work.Push(new Item { Promo = 0, Node = script.Promos[0].Start, State = script.NewState() });
+            Enter(script, 0, script.NewState(), work, rep, finals, reads);
 
             while (work.Count > 0)
             {
                 var it = work.Pop();
-                it.State = Canon(it.State, reads);
-                string key = it.Promo + "|" + it.Node + "|" + it.State.CaptureState();
+                it.State = reads.Canon(it.State, it.Step, it.Node);
+                string key = it.Step + "|" + it.Node + "|" + it.State.CaptureState();
                 if (!visited.Add(key)) continue;
                 if (++rep.StatesVisited > stateLimit) { rep.Truncated = true; break; }
-
-                var promo = script.Promos[it.Promo];
+                var promo = script.Promos[script.Flow[it.Step].Index];
                 var r = new PromoRunner(script, promo, it.State.Clone(), it.Node);
                 var n = r.Current;
                 switch (n.Type)
                 {
                     case PromoNodeType.End:
-                        if (it.Promo + 1 < script.Promos.Count)
-                            work.Push(new Item { Promo = it.Promo + 1, Node = script.Promos[it.Promo + 1].Start, State = r.State });
-                        else Finish(r.State, rep, finals);
+                        Enter(script, it.Step + 1, r.State, work, rep, finals, reads);
                         break;
                     case PromoNodeType.Line:
                         r.Advance();
-                        work.Push(new Item { Promo = it.Promo, Node = r.Current.Id, State = r.State });
+                        work.Push(new Item { Step = it.Step, Node = r.Current.Id, State = r.State });
                         break;
                     case PromoNodeType.Choice:
                         {
@@ -124,7 +124,7 @@ namespace Game.Core.Ring
                                 any = true;
                                 var r2 = new PromoRunner(script, promo, it.State.Clone(), it.Node);
                                 r2.Choose(v.Option.Id);
-                                work.Push(new Item { Promo = it.Promo, Node = r2.Current.Id, State = r2.State });
+                                work.Push(new Item { Step = it.Step, Node = r2.Current.Id, State = r2.State });
                             }
                             if (!any) rep.DeadEnds.Add(promo.Id + "/" + n.Id + ": немає доступного варіанта");
                             break;
@@ -136,7 +136,7 @@ namespace Game.Core.Ring
                             probe.ApplyCheckTier(tier);
                             if (!probe.AwaitingRewards)
                             {
-                                work.Push(new Item { Promo = it.Promo, Node = probe.Current.Id, State = probe.State });
+                                work.Push(new Item { Step = it.Step, Node = probe.Current.Id, State = probe.State });
                                 continue;
                             }
                             foreach (var combo in Combinations(n.Rewards, probe.RewardsToPick))
@@ -144,7 +144,7 @@ namespace Game.Core.Ring
                                 var r3 = new PromoRunner(script, promo, it.State.Clone(), it.Node);
                                 r3.ApplyCheckTier(tier);
                                 r3.ChooseRewards(combo);
-                                work.Push(new Item { Promo = it.Promo, Node = r3.Current.Id, State = r3.State });
+                                work.Push(new Item { Step = it.Step, Node = r3.Current.Id, State = r3.State });
                             }
                         }
                         break;
@@ -154,47 +154,211 @@ namespace Game.Core.Ring
             return rep;
         }
 
-        private sealed class Item { public int Promo; public string Node; public FeudState State; }
+        private sealed class Item { public int Step; public string Node; public FeudState State; }
 
-        /// <summary>Що читають умови сценарію: змінні за іменем і чи є умови на очки шляху.</summary>
-        private sealed class Reads { public readonly HashSet<string> Vars = new HashSet<string>(); public readonly HashSet<string> Flags = new HashSet<string>(); public bool Paths; }
-
-        private static Reads ReadsOf(FeudScript script)
+        /// <summary>
+        /// Увійти в крок порядку: промо — стартовий вузол (запускає раннер, який проходить branch сам); матч — розгалуження за
+        /// абстрактними результатами й перехід до наступного кроку; розв'язка — кінцівка.
+        /// </summary>
+        private static void Enter(FeudScript script, int step, FeudState state, Stack<Item> work, ReachabilityReport rep,
+                                  HashSet<string> finals, Ahead reads)
         {
-            var r = new Reads();
-            foreach (var p in script.Promos)
-                foreach (var n in p.Nodes)
-                    if (n.Options != null)
-                        foreach (var o in n.Options)
-                            if (o.Requires != null)
-                                foreach (var c in o.Requires)
-                                {
-                                    if (c.Kind == ConditionKind.Var) r.Vars.Add(c.Key);
-                                    if (c.Kind == ConditionKind.Path) r.Paths = true;
-                                    if (c.Kind == ConditionKind.Flag || c.Kind == ConditionKind.NotFlag) r.Flags.Add(c.Key);
-                                    if (c.Kind == ConditionKind.Open) r.Flags.Add(FeudVars.ClosedFlag(c.Key));
-                                }
-            return r;
+            if (step >= script.Flow.Count) return;
+            var st = script.Flow[step];
+            if (!st.IsMatch)
+            {
+                var probe = new PromoRunner(script, script.Promos[st.Index], state.Clone());
+                work.Push(new Item { Step = step, Node = probe.Current.Id, State = state });
+                return;
+            }
+            var def = script.Matches[st.Index];
+            foreach (var res in def.Decisive ? FinalResults() : MiddleResults())
+            {
+                var s = state.Clone();
+                var outcome = s.CompleteMatch(res, def);
+                if (def.Decisive)
+                {
+                    // Ворожнеча скінчена: Resolve читає стан після підсумку (домінантний шлях).
+                    string fkey = s.CaptureState() + "|" + res.Winner + res.FinalHype + res.Kind + outcome;
+                    if (finals.Add(fkey)) rep.Reached.Add(FeudEndings.Resolve(s, res, outcome));
+                }
+                else Enter(script, step + 1, reads.Canon(s, step + 1, null), work, rep, finals, reads);
+            }
         }
 
         /// <summary>
-        /// Канонічний стан для мемоізації: змінні й прапори, яких не читає жодна умова, на кінцівку не впливають (кінцівка — план,
-        /// домінантний шлях і абстрактний матч), тож обнуляються; без умов на шлях очки шляхів зсуваються до мінімуму —
-        /// домінантність від спільного зсуву не залежить. Без цього перебір справжньої ворожнечі вибухав за 300 тис. станів.
+        /// Що читають умови сценарію ВІД кроку step і далі (змінні, прапори, чи є умови на шляхи), і скільки очок кожного шляху
+        /// ще можна здобути (верхня межа). Це дає канонічний стан: усе, чого вже ніхто не читає, на кінцівку не впливає.
         /// </summary>
-        private static FeudState Canon(FeudState s, Reads reads)
+        private sealed class Ahead
         {
-            foreach (var v in new[] { FeudVars.Audience, FeudVars.Heat, FeudVars.Momentum, FeudVars.Trust, FeudVars.Locker })
-                if (!reads.Vars.Contains(v)) s.SetVar(v, 0);
-            s.DevPoints = 0;
-            s.Flags.RemoveWhere(f => !reads.Flags.Contains(f));
-            if (!reads.Paths)
+            private sealed class Reads { public readonly HashSet<string> Vars = new HashSet<string>(); public readonly HashSet<string> Flags = new HashSet<string>(); public bool Paths; }
+            private readonly FeudScript _script;
+            private readonly Reads[] _reads;
+            private readonly int[] _gain;
+            private readonly Dictionary<string, Reads> _nodeReads = new Dictionary<string, Reads>();
+            private readonly Dictionary<string, int> _nodeGain = new Dictionary<string, int>();
+
+            public Ahead(FeudScript script)
             {
-                int min = int.MaxValue;
-                for (int i = 0; i < FeudState.PathCount; i++) min = Math.Min(min, s.GetPath((RingPath)i));
-                for (int i = 0; i < FeudState.PathCount; i++) s.AddPath((RingPath)i, -min);
+                _script = script;
+                int n = script.Flow.Count;
+                _reads = new Reads[n + 1];
+                _gain = new int[n + 1];
+                _reads[n] = new Reads();
+                for (int i = n - 1; i >= 0; i--)
+                {
+                    var r = new Reads();
+                    foreach (var v in _reads[i + 1].Vars) r.Vars.Add(v);
+                    foreach (var f in _reads[i + 1].Flags) r.Flags.Add(f);
+                    r.Paths = _reads[i + 1].Paths;
+                    var st = script.Flow[i];
+                    int gain = 0;
+                    if (st.IsMatch)
+                    {
+                        foreach (var rule in script.Matches[st.Index].Plans) ReadCond(r, rule.Requires);
+                        gain = 1;   // підсумок матчу додає шляху щонайбільше +1 (брудні → Лиходій, «продати» → Герой, звернення → Бунтар)
+                    }
+                    else
+                    {
+                        foreach (var nd in script.Promos[st.Index].Nodes)
+                        {
+                            if (nd.Options != null) foreach (var o in nd.Options) ReadCond(r, o.Requires);
+                            if (nd.Cases != null) foreach (var c in nd.Cases) ReadCond(r, c.Requires);
+                            gain += PathGain(nd);
+                        }
+                    }
+                    _reads[i] = r;
+                    _gain[i] = _gain[i + 1] + gain;
+                }
             }
-            return s;
+
+            private static void ReadCond(Reads r, IEnumerable<FeudCondition> conds)
+            {
+                if (conds == null) return;
+                foreach (var c in conds)
+                {
+                    if (c.Kind == ConditionKind.Var) r.Vars.Add(c.Key);
+                    if (c.Kind == ConditionKind.Path) r.Paths = true;
+                    if (c.Kind == ConditionKind.Flag || c.Kind == ConditionKind.NotFlag) r.Flags.Add(c.Key);
+                    if (c.Kind == ConditionKind.Open) r.Flags.Add(FeudVars.ClosedFlag(c.Key));
+                }
+            }
+
+            /// <summary>Скільки очок шляху вузол може дати за один прохід: вибір — найбільше з варіантів, кидок — усі нагороди (з запасом).</summary>
+            private static int PathGain(PromoNode n)
+            {
+                int best = 0;
+                if (n.Type == PromoNodeType.Choice)
+                {
+                    foreach (var o in n.Options) best = Math.Max(best, Sum(o.Effects));
+                }
+                else if (n.Type == PromoNodeType.Check)
+                {
+                    int all = 0;
+                    foreach (var r in n.Rewards) all += Sum(r.Effects);
+                    best = Math.Max(all, Sum(n.Fail));
+                }
+                return best;
+            }
+
+            private static int Sum(List<FeudEffect> effects)
+            {
+                int s = 0;
+                if (effects != null) foreach (var e in effects) if (e.Kind == EffectKind.Path && e.Amount > 0) s += e.Amount;
+                return s;
+            }
+
+            /// <summary>Що читають умови від вузла node промо кроку step і далі (досяжні вузли цього промо + пізніші кроки).</summary>
+            private Reads ReadsFrom(int step, string node)
+            {
+                string key = step + "|" + node;
+                Reads r;
+                if (_nodeReads.TryGetValue(key, out r)) return r;
+                r = new Reads();
+                var after = _reads[step + 1];
+                foreach (var v in after.Vars) r.Vars.Add(v);
+                foreach (var f in after.Flags) r.Flags.Add(f);
+                r.Paths = after.Paths;
+                var promo = _script.Promos[_script.Flow[step].Index];
+                var seen = new HashSet<string>();
+                var stack = new Stack<string>();
+                stack.Push(node);
+                seen.Add(node);
+                while (stack.Count > 0)
+                {
+                    var nd = promo.Find(stack.Pop());
+                    if (nd == null) continue;
+                    if (nd.Options != null) foreach (var o in nd.Options) ReadCond(r, o.Requires);
+                    if (nd.Cases != null) foreach (var c in nd.Cases) ReadCond(r, c.Requires);
+                    foreach (var t in nd.Targets()) if (t != null && seen.Add(t)) stack.Push(t);
+                }
+                _nodeReads[key] = r;
+                return r;
+            }
+
+            /// <summary>Скільки очок шляху ще можна здобути від вузла node: найдовший маршрут по промо + пізніші кроки.</summary>
+            private int GainFrom(int step, string node)
+            {
+                var promo = _script.Promos[_script.Flow[step].Index];
+                return _gain[step + 1] + Longest(step, promo, node, new HashSet<string>());
+            }
+
+            private int Longest(int step, PromoDef promo, string node, HashSet<string> onPath)
+            {
+                string key = step + "|" + node;
+                int memo;
+                if (_nodeGain.TryGetValue(key, out memo)) return memo;
+                var nd = promo.Find(node);
+                if (nd == null || !onPath.Add(node)) return 0;
+                int best = 0;
+                foreach (var t in nd.Targets()) if (t != null) best = Math.Max(best, Longest(step, promo, t, onPath));
+                onPath.Remove(node);
+                int total = PathGain(nd) + best;
+                _nodeGain[key] = total;
+                return total;
+            }
+
+            /// <summary>
+            /// Канонічний стан для мемоізації перед кроком step: змінні й прапори, яких уже не читає жодна умова, на кінцівку не
+            /// впливають (кінцівка — план, домінантний шлях і абстрактні матчі), тож обнуляються; умови матчу й напарник кінцівку не
+            /// міняють. Без умов на шлях очки шляхів зводяться до різниці з лідером, а шлях, що відстав на більше, ніж ще можна
+            /// надолужити, — до «безнадійно позаду»: домінантність від цього не змінюється, а станів стає в рази менше.
+            /// </summary>
+            public FeudState Canon(FeudState s, int step, string node)
+            {
+                Reads reads;
+                int gain;
+                if (step >= _script.Flow.Count) { reads = _reads[_script.Flow.Count]; gain = 0; }
+                else if (_script.Flow[step].IsMatch) { reads = _reads[step]; gain = _gain[step]; }
+                else
+                {
+                    if (node == null) node = _script.Promos[_script.Flow[step].Index].Start;
+                    reads = ReadsFrom(step, node);
+                    gain = GainFrom(step, node);
+                }
+                foreach (var v in new[] { FeudVars.Audience, FeudVars.Heat, FeudVars.Momentum, FeudVars.Trust, FeudVars.Locker })
+                    if (!reads.Vars.Contains(v)) s.SetVar(v, 0);
+                s.DevPoints = 0;
+                s.Stipulations = MatchStipulations.None;
+                s.HasAlly = false;
+                s.Flags.RemoveWhere(f => !reads.Flags.Contains(f));
+                if (!reads.Paths)
+                {
+                    int slack = gain + 1;
+                    int max = 0;
+                    for (int i = 0; i < FeudState.PathCount; i++) max = Math.Max(max, s.GetPath((RingPath)i));
+                    for (int i = 0; i < FeudState.PathCount; i++)
+                    {
+                        int behind = max - s.GetPath((RingPath)i);
+                        if (behind > slack) s.AddPath((RingPath)i, behind - slack);   // підтягнути до межі «не надолужити»
+                    }
+                    int min = int.MaxValue;
+                    for (int i = 0; i < FeudState.PathCount; i++) min = Math.Min(min, s.GetPath((RingPath)i));
+                    for (int i = 0; i < FeudState.PathCount; i++) s.AddPath((RingPath)i, -min);
+                }
+                return s;
+            }
         }
 
         private static IEnumerable<List<string>> Combinations(List<PromoReward> rewards, int k)
@@ -219,30 +383,37 @@ namespace Game.Core.Ring
             }
         }
 
-        /// <summary>Усі абстрактні результати матчу для кінцевого стану промо → досяжні кінцівки.</summary>
-        private static void Finish(FeudState final, ReachabilityReport rep, HashSet<string> finals)
+        private static MatchResult R(MatchWinner w, MatchEndKind k, int hype, int dirty, int sells, int kick)
         {
-            if (!finals.Add(final.CaptureState())) return;
+            return new MatchResult { Winner = w, Kind = k, FinalHype = hype, PlayerDirtyMoves = dirty, PlayerSells = sells, PlayerKickoutsAtTwo = kick, Rounds = 10 };
+        }
+
+        /// <summary>Характерні результати проміжного матчу: перемога/поразка/нічия, чисто й брудно, ажіотаж, вплив на шляхи й план.</summary>
+        private static IEnumerable<MatchResult> MiddleResults()
+        {
+            yield return R(MatchWinner.Player, MatchEndKind.Pin, 8, 0, 0, 0);
+            yield return R(MatchWinner.Player, MatchEndKind.Pin, 3, 2, 0, 0);
+            yield return R(MatchWinner.Player, MatchEndKind.Pin, 8, 0, 2, 0);
+            yield return R(MatchWinner.Player, MatchEndKind.Disqualification, 3, 0, 0, 0);
+            yield return R(MatchWinner.Player, MatchEndKind.Pin, 8, 2, 2, 1);
+            yield return R(MatchWinner.Rival, MatchEndKind.Pin, 8, 0, 2, 1);
+            yield return R(MatchWinner.Rival, MatchEndKind.Pin, 3, 2, 0, 0);
+            yield return R(MatchWinner.Rival, MatchEndKind.Disqualification, 8, 0, 0, 0);
+            yield return R(MatchWinner.Rival, MatchEndKind.CountOut, 3, 2, 2, 1);
+            yield return R(MatchWinner.Draw, MatchEndKind.TimeLimit, 8, 0, 0, 0);
+            yield return R(MatchWinner.Draw, MatchEndKind.TimeLimit, 3, 2, 2, 0);
+            yield return R(MatchWinner.Draw, MatchEndKind.DoubleCountOut, 3, 0, 0, 0);
+        }
+
+        /// <summary>Усі абстрактні результати розв'язки: переможець × ажіотаж × брудні × «продати» × вирвані «на два».</summary>
+        private static IEnumerable<MatchResult> FinalResults()
+        {
             foreach (MatchWinner w in new[] { MatchWinner.Player, MatchWinner.Rival, MatchWinner.Draw })
                 foreach (int hype in new[] { 3, 8 })
                     foreach (int dirty in new[] { 0, 2 })
                         foreach (int sells in new[] { 0, 2 })
                             foreach (int kick in new[] { 0, 1 })
-                            {
-                                var res = new MatchResult
-                                {
-                                    Winner = w,
-                                    Kind = w == MatchWinner.Draw ? MatchEndKind.TimeLimit : MatchEndKind.Pin,
-                                    FinalHype = hype,
-                                    PlayerDirtyMoves = dirty,
-                                    PlayerSells = sells,
-                                    PlayerKickoutsAtTwo = kick,
-                                    Rounds = 10
-                                };
-                                var st = final.Clone();
-                                var outcome = st.ApplyMatchResult(res);
-                                rep.Reached.Add(FeudEndings.Resolve(st, res, outcome));
-                            }
+                                yield return R(w, w == MatchWinner.Draw ? MatchEndKind.TimeLimit : MatchEndKind.Pin, hype, dirty, sells, kick);
         }
     }
 }

@@ -215,11 +215,11 @@ namespace Game.Gameplay.Ring
             {
                 case RingStage.Overview:
                 case RingStage.MatchPrep:
-                    key = "feud:" + _campaign.Stage + ":" + _campaign.PromoIndex;
+                    key = "feud:" + _campaign.Stage + ":" + _campaign.StepIndex;
                     break;
                 case RingStage.Promo: key = _campaign.CurrentPromoRunner; break;
                 case RingStage.Match: key = _campaign.CurrentMatch; break;
-                default: key = "end"; break;
+                default: key = "end:" + _campaign.StepIndex; break;
             }
             if (_view != null && Equals(key, _viewKey)) return;
             _viewKey = key;
@@ -277,9 +277,9 @@ namespace Game.Gameplay.Ring
                 return;
             }
             string name = string.Format("{0:000}_{1}{2}.png", _shotIndex++, _campaign.Stage,
-                _campaign.Stage == RingStage.Promo ? "_p" + (_campaign.PromoIndex + 1) : "");
+                _campaign.Stage == RingStage.Promo ? "_p" + (_campaign.PromoIndex + 1) : _campaign.Stage == RingStage.Match ? "_m" + (_campaign.CurrentMatchIndex + 1) : "");
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, name));
-            bool atEnd = _campaign.Stage == RingStage.Ending || _campaign.Stage == RingStage.Development;
+            bool atEnd = _campaign.HasEnding && (_campaign.Stage == RingStage.Ending || _campaign.Stage == RingStage.Development);
             if (atEnd && ++_endShots >= 2 || _shotIndex >= ShotLimit)
             {
                 Debug.Log("[Ринг] Огляд: знято " + _shotIndex + " кадрів");
