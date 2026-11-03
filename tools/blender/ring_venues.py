@@ -3264,6 +3264,12 @@ for vid in WANT:
         print("VENUE %s: огляд готовий" % vid, flush=True)
     if SAVE_BLEND:                                   # сцена арени з текстурами, світлом і натовпом — для огляду й ролика
         os.makedirs(LOOK_DIR, exist_ok=True)
+        for eng in ('BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'):   # огляд закінчується пласким проходом у Workbench
+            try:
+                bpy.context.scene.render.engine = eng
+                break
+            except TypeError:
+                pass
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(LOOK_DIR, "%s.blend" % vid), copy=True)
         print("VENUE %s: сцена %s" % (vid, os.path.join(LOOK_DIR, "%s.blend" % vid)), flush=True)
 if CHECK and CHECK_FAILS:
