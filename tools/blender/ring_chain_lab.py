@@ -526,7 +526,7 @@ def _key_feet(keys, name, side):
 HL_CONTACTS = [("A", "r", "Ar"), ("B", "l", "Bl"), ("B", "r", "Br")]
 AW_CONTACTS = [("A", "l", "Wl"), ("A", "r", "Wr")]
 HM_CONTACTS = [("A", "l", "Hl"), ("A", "r", "Hr")]
-WS_CONTACTS = [("B", "r", "Pr"), ("B", "l", "Pl")]   # кисті A — замком перед животом B, не на ньому   # ліва A — на своїй правій, не на тілі B
+WS_CONTACTS = []   # кисті A — замком перед животом B; B виривається, руки вільні (03.11.2026: кисті стосом входили одна в одну)
 
 
 def headlock_frames(frames=None):
@@ -1025,6 +1025,8 @@ def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smoo
         print(f"[{name}] кадр {f} розв'язано", flush=True)
     if smooth:                                        # удари не згладжуються: згладжування зрізає пік контакту
         out = {t: smooth_frames(fr, keep=blend_in) for t, fr in out.items()}
+    if frames is None and "limit_jerk" in G:          # ітерація 2: обмежувач ривка (той самий, що в генераторі)
+        out = {t: G["limit_jerk"](fr) for t, fr in out.items()}
     LAB["frames"] = out
     if frames is None and len(out["A"]) > 3:
         repair_frames(name, keep=blend_in)
@@ -1325,6 +1327,13 @@ def ws_b(k=1.0):
                 up, lr, back = _body_axes(S)
                 return lr if side == "r" else -lr          # перевірено заміром: долоня до кисті A
             return g
+        if HL.get("b_free"):                           # B не тримає кистей A — лікті розведені, руки вгору-вперед
+            def fr_(side):                             # (виривається), без кистей стосом на кулаках A
+                def g(S):
+                    up, lr, back = _body_axes(S)
+                    return S[side] - back * 0.3 + up * 0.05 + lr * (0.18 if side == "l" else -0.18)
+                return g
+            on_r, on_l = fr_("r"), fr_("l")
         p.hands = {"r": (lambda S: tie_r(S).lerp(on_r(S), wb),
                          lambda S: Vector((-1, 0, -0.2)).lerp(grip_f(S), wb), lambda S: Vector((0, 0, 1)).lerp(grip_u("r")(S), wb)),
                    "l": (lambda S: _phase(es, tie_l(S).lerp(on_l(S), wb), wind(S), shoulder(S)),
@@ -1422,7 +1431,7 @@ def ws_surface():
 
 
 def _ws(**kw):
-    d = dict(WS, no_seat=(("A", "l"), ("A", "r"))); d.update(kw); return d
+    d = dict(WS, no_seat=(("A", "l"), ("A", "r")), b_free=True); d.update(kw); return d
 
 
 WAISTLOCK_KEYS = [

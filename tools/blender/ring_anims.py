@@ -1187,6 +1187,7 @@ exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_chain.py"), encodin
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_sell.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_center.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_ref.py"), encoding="utf-8").read())
+exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_polish.py"), encoding="utf-8").read())
 CLIPS += MOVE_CLIPS
 CLIP_NODES.update(MOVE_CLIP_NODES)
 CLIP_EVENTS.update(MOVE_EVENTS)
@@ -1465,7 +1466,7 @@ def load_lab_clips(arm, actions):
 
 # ---------------------------------------------------------------- запуск
 
-def bake_clip(rigA, rigB, name, length, fa, fb):
+def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
     armA, armB = rigA.arm, rigB.arm
     nodes = CLIP_NODES.get(name, {})
     frames = int(round(length * FPS))
@@ -1527,6 +1528,15 @@ def bake_clip(rigA, rigB, name, length, fa, fb):
         unmute(rigA)
         unmute(rigB)
     q = quality(name, wa, wb, [("A", ba)] + ([("B", bb)] if fb is not None else []))
+    if POLISH:                                        # ітерація 2: перекриття, запізнення, дихання (ring_anims_polish.py)
+        holds = fb is not None                       # пара: руки — як розв'язав IK (хвати й навмисні дотики)
+        pa_ = polish_seq(armA, ba, loop, fb is not None, holds)
+        pb_ = polish_seq(armB, bb, loop, True, holds) if fb is not None else (bb, sb, wb)
+        qp = quality(name, pa_[2], pb_[2], [("A", pa_[0])] + ([("B", pb_[0])] if fb is not None else []))
+        if fails(qp) and not fails(q):               # шар не робить кліп гіршим: тоді — без нього
+            print(f"   [оживлення] {name}: без шару ({', '.join(fails(qp))})", flush=True)
+        else:
+            (ba, sa, wa), (bb, sb, wb), q = pa_, pb_, qp
     q["reach"] = (reach[0] * 100.0, reach[1])
     q["wrist"] = (wrist[0], wrist[1])
     # після доведення поза на краях — точно вузол; залишкова різниця — для контролю
@@ -1589,7 +1599,7 @@ def main():
             offset = offset * BODY["arm"]                             # відстань пари на витягнуту руку — за руками набору
         place(armA, Vector(), 0)
         place(armB, offset if fb is not None else Vector((0, 50, 0)), yaw if fb is not None else 0)
-        sa, sb, wa, wb, q, gaps = bake_clip(rigA, rigB, name, length, fa, fb)
+        sa, sb, wa, wb, q, gaps = bake_clip(rigA, rigB, name, length, fa, fb, loop)
         for role, node_name in CLIP_DEFINES.get(name, {}).items():
             seq, arm_ = (sa, armA) if role == "A" else (sb, armB)
             if seq:

@@ -51,7 +51,7 @@ def reb_plan(R):
     T = dict(hit=0.66 * k, sink=0.8 * k, push=(0.94 + h) * k, end=(1.62 + h) * k if R.ret else (1.3 + h) * k)
     path_y = [(0.0, 0.0), (0.14 * k, -0.12), (0.5 * k, -(D - 0.55)), (T["hit"], rope_y + gap),
               (T["sink"], rope_y + gap - R.sink), (T["push"], rope_y + gap)]
-    path_y += [(T["push"] + 0.18 * k, rope_y + gap + 0.55), (T["end"], -0.25)] if R.ret else [(T["end"], rope_y + gap + 0.3)]
+    path_y += [(T["push"] + 0.26 * k, rope_y + gap + 0.55), (T["end"], -0.25)]   # поштовх 0,26 с: за 0,18 — ривок опорної ноги if R.ret else [(T["end"], rope_y + gap + 0.3)]
     # повороти — по 0,3 с: швидше кисті «летять» разом із тілом (і на екрані це ривок)
     # розворот спиною — 0,3 с: стопи розставлені під нього (0,42 с давало ковзання стоп 3 см і ривок стегна)
     turn0 = 0.64 * k - max(0.3 * k, 0.3)        # розворот не коротший за 0,3 с і на швидкому варіанті (кисть летіла 0,7 м за кадр)
@@ -122,6 +122,13 @@ def rebound_pose(t, L, R):
     p.head_yaw = yaw * (1 - on) + look_c * on
     fl, yl = foot_plan_track(t, falls["l"])
     fr, yr = foot_plan_track(t, falls["r"])
+    # ітерація 2: на швидкому розвороті опорна стопа провертається на подушечці разом із тазом (навколо щиколотки —
+    # щиколотка на місці, ковзання 0); нерухома стопа скручувала стегно відносно таза — ривок 84 °/кадр²
+    rate = abs(track(min(L, t + 0.02), path_yaw) - track(max(0.0, t - 0.02), path_yaw)) / 0.04
+    piv = min(1.0, rate / 450.0) * 0.7
+    if piv > 1e-3:
+        yl = yl + (yaw + 10.0 - yl) * piv * smooth((0.1 - fl.z) / 0.03)     # плавно гасне, коли стопа відривається
+        yr = yr + (yaw - 14.0 - yr) * piv * smooth((0.1 - fr.z) / 0.03)
     p.ankles = (fl, fr)
     p.foot_rot = (Quaternion(UP, math.radians(yl)), Quaternion(UP, math.radians(yr)))
     p.knees = (fl + Rz(yl) @ Vector((0.08, -0.9, 0.45)), fr + Rz(yr) @ Vector((-0.08, -0.9, 0.45)))
