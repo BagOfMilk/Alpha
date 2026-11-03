@@ -42,9 +42,20 @@ namespace Game.Gameplay.Ring.UI
             top.style.justifyContent = Justify.SpaceBetween;
             top.style.alignItems = Align.FlexStart;
             var head = RingUi.Column();
-            head.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 13f, RingUi.Dim));
-            head.Add(RingUi.Lbl(_m.TitleText, 21f, RingUi.Gold, true));
-            head.Add(RingUi.Lbl(_m.PlaceText, 14f, RingUi.Dim));
+            head.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 12f, RingUi.Dim));
+            head.Add(RingUi.Lbl(_m.TitleText, 18f, RingUi.Gold, true));
+            head.Add(RingUi.Lbl(_m.PlaceText, 12f, RingUi.Dim));
+            // Назва на напівпрозорій плашці в куті: не налазить на ринг у кадрі (3D під UI).
+            if (RingStageHub.Has3D)
+            {
+                head.style.backgroundColor = new Color(0.04f, 0.035f, 0.05f, 0.74f);
+                head.style.paddingLeft = head.style.paddingRight = 12f;
+                head.style.paddingTop = head.style.paddingBottom = 8f;
+                head.style.borderTopLeftRadius = head.style.borderTopRightRadius =
+                    head.style.borderBottomLeftRadius = head.style.borderBottomRightRadius = 6f;
+                head.style.maxWidth = 330f;
+                head.style.flexShrink = 1f;
+            }
             top.Add(head);
             top.Add(BuildStatus());
             Root.Add(top);

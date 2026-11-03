@@ -24,6 +24,21 @@ namespace Game.Gameplay.EditorTools
             assets.bodyRival = Load<GameObject>("Assets/Art/Characters/Kit/body_m_nordic.fbx");
             assets.bodyRef = Load<GameObject>("Assets/Art/Characters/Kit/body_m_mediterranean.fbx");
             assets.mic = Load<GameObject>(Art + "Props/mic.fbx");
+            // Зала: стільці (props.fbx читається - сітки склеюються в рантаймі), натовп з анімаціями, тексти розстановки.
+            assets.props = Load<GameObject>(Art + "Props/props.fbx");
+            assets.crowd = Load<GameObject>("Assets/Art/Crowd/crowd_fans.fbx");
+            assets.venueAnchors = Load<TextAsset>(Art + "venue_gym_anchors.txt");
+            assets.venueProps = Load<TextAsset>(Art + "venue_gym_props.txt");
+            assets.venueCrowd = Load<TextAsset>(Art + "venue_gym_crowd.txt");
+            var crowdClips = new List<AnimationClip>();
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath("Assets/Art/Animations/CROWD_Anims.fbx"))
+            {
+                var c = o as AnimationClip;
+                if (c != null && !c.name.StartsWith("__preview__")) crowdClips.Add(c);
+                var av = o as Avatar;
+                if (av != null && av.isHuman) assets.crowdAvatar = av;
+            }
+            assets.crowdClips = crowdClips.ToArray();
 
             string[] sets = { "body_m_ukrainian", "body_m_nordic", "ref_m_mediterranean" };
             for (int i = 0; i < 3; i++)

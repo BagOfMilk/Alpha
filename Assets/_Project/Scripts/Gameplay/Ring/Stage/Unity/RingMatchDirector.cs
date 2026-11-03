@@ -263,7 +263,9 @@ namespace Game.Gameplay.Ring.Stage
                 pB += sh;
             }
             Vector3 mid = (pA + pB) * 0.5f;
-            Vector3 pRef = new Vector3(Mathf.Clamp(mid.x, -1.2f, 1.2f), RingStage3D.MatY, Mathf.Clamp(mid.z + 1.35f, -1.0f, 1.65f));
+            // Рефері збоку від пари (~1,2 м), у бік центру рингу й трохи за борцями: не перекриває ані їх, ані камеру.
+            float sideX = mid.x > 0.15f ? -1f : 1f;
+            Vector3 pRef = new Vector3(Mathf.Clamp(mid.x + sideX * 1.25f, -1.7f, 1.7f), RingStage3D.MatY, Mathf.Clamp(mid.z + 0.9f, -1.2f, 1.7f));
             float yawRef = RingStage3D.YawTo(pRef, mid);
 
             var refActor = _s.Referee;

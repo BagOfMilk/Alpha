@@ -256,5 +256,19 @@
  "match.chances.short": "10+ {2}%   7–9 {1}%   ≤6 {0}%",
  "match.endturn.short": "Завершити хід",
  "match.card.short.damage": "Ушкодження",
- "match.card.short.impulse": "Імпульс"
+ "match.card.short.impulse": "Імпульс",
+ "plan.no_clean_loss": "Не програй чисто",
+ "feud.progress.promo": "Акт {0} · промо перед матчем {1} з {2}",
+ "feud.progress.matchn": "Акт {0} · матч {1} з {2}",
+ "feud.progress.final": "Акт {0} · матч {1} з {2} — розв'язка",
+ "feud.continue.matchn": "До матчу {0} з {1}",
+ "feud.continue.final": "До розв'язки",
+ "feud.section.matchplan": "План і умови матчу {0}",
+ "dev.match.title": "Матч {0} з {1}: підсумок",
+ "dev.match.desc": "Кінцівка ворожнечі буде після розв'язки. Очки розвитку можна витратити вже зараз: вони згодяться в наступному матчі.",
+ "dev.continue.promo": "Далі — до наступного промо",
+ "dev.continue.match": "Далі — до матчу",
+ "dev.continue.final": "Далі — до розв'язки",
+ "dev.section.matches": "Матчі ворожнечі",
+ "dev.match.line": "Матч {0}: {1}, {2}"
 }

@@ -15,6 +15,13 @@ namespace Game.Gameplay.Ring.Stage
         public GameObject bodyRef;
         public GameObject mic;
 
+        /// <summary>Реквізит (стільці), натовп і його анімації, тексти зали (якорі канатів, списки стільців і фанатів).</summary>
+        public GameObject props;
+        public GameObject crowd;
+        public AnimationClip[] crowdClips = new AnimationClip[0];
+        public Avatar crowdAvatar;
+        public TextAsset venueAnchors, venueProps, venueCrowd;
+
         /// <summary>Порядок: 0 — гравець, 1 — суперник, 2 — рефері.</summary>
         public Texture2D[] albedo = new Texture2D[3];
         public Texture2D[] normal = new Texture2D[3];

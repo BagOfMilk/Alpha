@@ -26,6 +26,7 @@ namespace Game.Gameplay.EditorTools
         private const string Characters = Root + "Characters/";
         private const string Animations = Root + "Animations/";
         private const string Models = Root + "Models/";
+        private const string Crowd = Root + "Crowd/";
 
         private bool IsArt => assetPath != null && assetPath.StartsWith(Root);
 
@@ -98,6 +99,18 @@ namespace Game.Gameplay.EditorTools
                 importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
                 importer.importAnimation = true;
                 importer.optimizeGameObjects = false;
+            }
+            else if (assetPath.StartsWith(Crowd))
+            {
+                // Натовп рингу: скінінг і осі як у CROWD_Anims (без запікання): кліпи натовпу
+                // гуманоїдні й грають через аватар CROWD_Anims на цій ієрархії (Animator.avatar у RingVenueDress).
+                // Humanoid зі своїм аватаром (як тіла борців): з Generic + чужим аватаром CROWD_Anims кліпи не лягали,
+                // фанати стояли в бінд-позі з розведеними руками (03.11.2026).
+                importer.animationType = ModelImporterAnimationType.Human;
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                importer.importAnimation = false;
+                importer.optimizeGameObjects = false;
+                importer.bakeAxisConversion = false;
             }
             else
             {
@@ -212,7 +225,9 @@ namespace Game.Gameplay.EditorTools
             importer.mipmapEnabled = true;
 
             bool hairDiffuse = lower.StartsWith("hairn_"); // нейтральна текстура волосся, не нормаль
-            if (!hairDiffuse && (lower.Contains("_nor") || lower.EndsWith("normal")))
+            // Нормаль — за суфіксом (…_nor, …_nor_gl, …_nor_gl_2k, …_normal), а не за підрядком: «_nor» у «…_nordic_albedo»
+            // робило альбедо борця картою нормалей (білі плями на шкірі Молота, 03.11.2026).
+            if (!hairDiffuse && (System.Text.RegularExpressions.Regex.IsMatch(lower, @"(^|_)nor(mal)?(_gl)?(_\d+k)?$") || lower.EndsWith("normal")))
             {
                 importer.textureType = TextureImporterType.NormalMap;
                 return;

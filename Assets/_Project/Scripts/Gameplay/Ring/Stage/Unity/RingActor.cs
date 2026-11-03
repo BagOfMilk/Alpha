@@ -64,6 +64,9 @@ namespace Game.Gameplay.Ring.Stage
             _graph.Play();
         }
 
+        /// <summary>Кістка гуманоїда за ім'ям (для канатів: капсули тіла). Null, якщо аватара немає.</summary>
+        public Transform GetBone(HumanBodyBones b) { return Bone(b); }
+
         private Transform Bone(HumanBodyBones b)
         {
             return Anim != null && Anim.avatar != null && Anim.isHuman ? Anim.GetBoneTransform(b) : null;

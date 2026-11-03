@@ -3,6 +3,8 @@ using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using Game.Gameplay.Ring;
 
 namespace Game.Gameplay.EditorTools
@@ -29,6 +31,13 @@ namespace Game.Gameplay.EditorTools
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.055f, 0.05f, 0.065f, 1f);
             camGo.AddComponent<AudioListener>();
+            // Пост-обробка (віньєтка, тональна корекція, м'яке свічення) і згладжування країв: кадр виглядає як шоу, а не макет.
+            var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
+            camData.renderPostProcessing = true;
+            camData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+            var post = new GameObject("RingPost").AddComponent<Volume>();
+            post.isGlobal = true;
+            post.sharedProfile = EnsurePostProfile();
 
             var host = new GameObject("RingFeud");
             host.AddComponent<RingFeudBootstrap>();
@@ -39,6 +48,39 @@ namespace Game.Gameplay.EditorTools
             EditorSceneManager.SaveScene(scene, ScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log("[Ринг] Сцену ворожнечі збережено: " + ScenePath);
+        }
+
+        private const string PostPath = "Assets/Art/Ring/Materials/ring_post.asset";
+
+        /// <summary>Профіль пост-обробки рингу (створюється кодом, лежить у Assets/Art/Ring/Materials).</summary>
+        private static VolumeProfile EnsurePostProfile()
+        {
+            var old = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PostPath);
+            if (old != null) AssetDatabase.DeleteAsset(PostPath);
+            var p = ScriptableObject.CreateInstance<VolumeProfile>();
+            AssetDatabase.CreateAsset(p, PostPath);
+
+            var tone = p.Add<Tonemapping>(true);
+            tone.mode.Override(TonemappingMode.ACES);
+
+            var vig = p.Add<Vignette>(true);
+            vig.intensity.Override(0.34f);
+            vig.smoothness.Override(0.55f);
+            vig.rounded.Override(false);
+
+            var ca = p.Add<ColorAdjustments>(true);
+            ca.postExposure.Override(0.15f);
+            ca.contrast.Override(16f);
+            ca.saturation.Override(14f);
+
+            var bloom = p.Add<Bloom>(true);
+            bloom.threshold.Override(1.05f);
+            bloom.intensity.Override(0.22f);
+            bloom.scatter.Override(0.6f);
+
+            EditorUtility.SetDirty(p);
+            AssetDatabase.SaveAssets();
+            return p;
         }
 
         /// <summary>

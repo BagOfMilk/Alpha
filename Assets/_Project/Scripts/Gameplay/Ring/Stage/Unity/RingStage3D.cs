@@ -59,6 +59,11 @@ namespace Game.Gameplay.Ring.Stage
         private RingMatchDirector _director;
         private RingStageMode _mode = RingStageMode.Idle;
         private Material _litCache;
+        private RingRopes _ropes;
+        private RingVenueDress _dress;
+        private float _budgetAt;
+        private int _budgetShots;
+        private StageCam _budgetShot = (StageCam)(-1);
 
         // ---------- промо ----------
         private string _promoSpeaker;
@@ -97,6 +102,7 @@ namespace Game.Gameplay.Ring.Stage
             BuildCamera();
             BuildLights();
             BuildActors();
+            BuildDress();
             _director = gameObject.AddComponent<RingMatchDirector>();
             _director.Init(this);
             RingStageHub.Current = this;
@@ -202,55 +208,91 @@ namespace Game.Gameplay.Ring.Stage
                 _cam = go.AddComponent<Camera>();
             }
             _cam.clearFlags = CameraClearFlags.SolidColor;
-            _cam.backgroundColor = new Color(0.03f, 0.03f, 0.04f, 1f);
+            _cam.backgroundColor = new Color(0.012f, 0.012f, 0.02f, 1f);
             _cam.nearClipPlane = 0.1f;
-            _cam.farClipPlane = 80f;
+            _cam.farClipPlane = 70f;
             _cam.fieldOfView = _camFov;
+            _cam.allowHDR = true;
         }
 
+        /// <summary>
+        /// Світло матчу за сценою «match» з venue_*_cues: ринг яскравий і теплий (прожектори над ним), зала темніша
+        /// (низький амбієнт, туман, віньєтка в пост-обробці), з глядацького боку - холодний підсвіт, збоку - тепле
+        /// контр-світло. Єдине світло з тінями - ключове; решта приладів без тіней (PERF-01: дешево на слабких машинах).
+        /// </summary>
         private void BuildLights()
         {
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.17f, 0.17f, 0.22f);
-            RenderSettings.fog = false;
+            RenderSettings.ambientLight = new Color(0.050f, 0.054f, 0.075f);
+            RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Custom;
+            RenderSettings.reflectionIntensity = 0.12f;
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogColor = new Color(0.016f, 0.017f, 0.028f);
+            RenderSettings.fogDensity = 0.034f;
 
-            // Ключове: єдине світло з тінями — зверху-спереду (як прожектори над рингом).
+            // Ключове: одне світло з тінями - зверху-спереду, тепле (прожектори над рингом).
             var key = new GameObject("Key").AddComponent<Light>();
             key.transform.SetParent(transform, false);
             key.type = LightType.Directional;
-            key.transform.rotation = Quaternion.Euler(58f, 18f, 0f);
-            key.color = new Color(1f, 0.96f, 0.9f);
-            key.intensity = 0.55f;
+            key.transform.rotation = Quaternion.Euler(62f, 14f, 0f);
+            key.color = new Color(1f, 0.90f, 0.76f);
+            key.intensity = 0.60f;
             key.shadows = LightShadows.Soft;
-            key.shadowStrength = 0.75f;
+            key.shadowStrength = 0.82f;
+            key.shadowBias = 0.03f;
+            key.shadowNormalBias = 0.4f;
 
-            // Заповнювальне без тіней: холодне з боку глядачів.
-            var fill = new GameObject("Fill").AddComponent<Light>();
-            fill.transform.SetParent(transform, false);
-            fill.type = LightType.Directional;
-            fill.transform.rotation = Quaternion.Euler(28f, 200f, 0f);
-            fill.color = new Color(0.55f, 0.62f, 0.85f);
-            fill.intensity = 0.22f;
-            fill.shadows = LightShadows.None;
+            // Чотири прожектори над кутами рингу (PAR): тепле біле, пляма на полотні й борцях, зала лишається темнішою.
+            Vector3[] par = { new Vector3(-2.6f, 6.4f, -2.6f), new Vector3(2.6f, 6.4f, -2.6f), new Vector3(-2.6f, 6.4f, 2.6f), new Vector3(2.6f, 6.4f, 2.6f) };
+            for (int i = 0; i < par.Length; i++)
+                AddSpot("PAR" + i, par[i], new Vector3(0f, 1.05f, 0f), new Color(1f, 0.88f, 0.70f), 22f, 46f);
 
-            // Пляма світла над рингом (без тіней).
-            var spot = new GameObject("RingSpot").AddComponent<Light>();
-            spot.transform.SetParent(transform, false);
-            spot.type = LightType.Spot;
-            spot.transform.position = new Vector3(0f, 8f, 0f);
-            spot.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            spot.spotAngle = 70f;
-            spot.range = 14f;
-            spot.intensity = 3f;
-            spot.color = new Color(1f, 0.95f, 0.85f);
-            spot.shadows = LightShadows.None;
+            // Холодний підсвіт з боку глядачів і тепле контр-світло: відділяють борців від тла.
+            // М'яке фронтальне заповнення з боку камери: канати й боки борців не чорніють.
+            AddSpot("Fill_front", new Vector3(0f, 3.4f, -7.5f), new Vector3(0f, 1.6f, 0f), new Color(0.86f, 0.90f, 1f), 14f, 52f);
+            AddSpot("Rim_cool", new Vector3(-6.5f, 5.2f, 5.5f), new Vector3(0f, 1.4f, 0f), new Color(0.40f, 0.55f, 1f), 30f, 44f);
+            AddSpot("Rim_warm", new Vector3(6.5f, 5.2f, 5.5f), new Vector3(0f, 1.4f, 0f), new Color(1f, 0.52f, 0.30f), 24f, 44f);
+        }
+
+        private void AddSpot(string name, Vector3 pos, Vector3 target, Color c, float intensity, float angle)
+        {
+            var l = new GameObject(name).AddComponent<Light>();
+            l.transform.SetParent(transform, false);
+            l.type = LightType.Spot;
+            l.transform.position = pos;
+            l.transform.rotation = Quaternion.LookRotation(target - pos, Vector3.up);
+            l.spotAngle = angle;
+            l.innerSpotAngle = angle * 0.5f;
+            l.range = 18f;
+            l.intensity = intensity;
+            l.color = c;
+            l.shadows = LightShadows.None;
+        }
+
+        /// <summary>Канати, стільці й натовп. Відвідуваність - параметр (-ring-crowd N у командному рядку).</summary>
+        private void BuildDress()
+        {
+            var actors = new[] { _player, _rival, _ref };
+            var ropeGo = new GameObject("Ropes");
+            ropeGo.transform.SetParent(transform, false);
+            _ropes = ropeGo.AddComponent<RingRopes>();
+            _ropes.Build(assets.venueAnchors, assets.wrestlerTemplate, actors);
+
+            var dressGo = new GameObject("VenueDress");
+            dressGo.transform.SetParent(transform, false);
+            _dress = dressGo.AddComponent<RingVenueDress>();
+            string n = ReadArg("-ring-crowd");
+            if (n != null) { int v; if (int.TryParse(n, out v)) _dress.attendance = Mathf.Clamp(v, 0, 200); }
+            _dress.BuildChairs(assets.props, assets.venueProps, assets.wrestlerTemplate);
+            if (_dress.attendance > 0) _dress.BuildCrowd(assets.crowd, assets.venueCrowd, assets.crowdClips, assets.crowdAvatar);
         }
 
         private void BuildActors()
         {
-            _player = Spawn("Гравець", assets.bodyPlayer, 0, new Vector3(1f, 1f, 1f), true);
-            _rival = Spawn("Молот", assets.bodyRival, 1, new Vector3(1.1f, 1.05f, 1.1f), false);
-            _ref = Spawn("Рефері", assets.bodyRef, 2, Vector3.one, false);
+            _player = Spawn("Гравець", assets.bodyPlayer, 0, new Vector3(1f, 1f, 1f), TintPlayer);
+            _rival = Spawn("Молот", assets.bodyRival, 1, new Vector3(1.1f, 1.05f, 1.1f), TintRival);
+            _ref = Spawn("Рефері", assets.bodyRef, 2, Vector3.one, 0);
             if (assets.mic != null)
             {
                 _mic = Instantiate(assets.mic, transform);
@@ -260,7 +302,11 @@ namespace Game.Gameplay.Ring.Stage
             }
         }
 
-        private RingActor Spawn(string name, GameObject prefab, int texIndex, Vector3 scale, bool tint)
+        // Гравець - синій одяг, Молот - темно-червоний; шкіра лишається зі своєї текстури (маска тонує лише зони одягу),
+        // з м'яким підбором відтінку: світла скандинавська шкіра Молота без рожевого (трохи засмаги й рум'янцю).
+        private const int TintPlayer = 1, TintRival = 2;
+
+        private RingActor Spawn(string name, GameObject prefab, int texIndex, Vector3 scale, int tint)
         {
             var a = new RingActor(name, prefab, transform);
             a.Model.transform.localScale = scale;
@@ -280,14 +326,16 @@ namespace Game.Gameplay.Ring.Stage
             return a;
         }
 
-        private Material MakeMaterial(int i, bool tint)
+        private Material MakeMaterial(int i, int tint)
         {
             Material template = assets.wrestlerTemplate;
             var m = template != null ? new Material(template) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
             Texture2D albedo = assets.albedo[i];
-            if (tint && albedo != null && assets.mask[i] != null)
+            if (tint != 0 && albedo != null && assets.mask[i] != null)
             {
-                var t = RingTint.TeamTint(albedo, assets.mask[i], 0.60f);
+                Texture2D t = tint == TintPlayer
+                    ? RingTint.Grade(albedo, assets.mask[i], 0.60f, 1.35f, new Color(0.98f, 0.90f, 0.84f))
+                    : RingTint.Grade(albedo, assets.mask[i], 0.995f, 1.05f, new Color(0.94f, 0.80f, 0.74f));
                 if (t != null) albedo = t;
             }
             if (albedo != null) { m.SetTexture("_BaseMap", albedo); m.SetTexture("_MainTex", albedo); }
@@ -297,7 +345,7 @@ namespace Game.Gameplay.Ring.Stage
                 m.SetTexture("_BumpMap", assets.normal[i]);
                 m.EnableKeyword("_NORMALMAP");
             }
-            m.SetFloat("_Smoothness", 0.22f);
+            m.SetFloat("_Smoothness", 0.16f);
             m.SetFloat("_Metallic", 0f);
             return m;
         }
@@ -320,7 +368,7 @@ namespace Game.Gameplay.Ring.Stage
             }
         }
 
-        public static Vector3 RefPos { get { return new Vector3(0f, MatY, 1.3f); } }
+        public static Vector3 RefPos { get { return new Vector3(0f, MatY, 1.5f); } }
 
         public static float YawTo(Vector3 from, Vector3 to)
         {
@@ -391,8 +439,9 @@ namespace Game.Gameplay.Ring.Stage
             _promoSameCount = 0;
             _hasPromoPose = false;
             HideMic();
-            // Перший план промо — двоє в кадрі, поки ніхто не заговорив.
-            _promoWide = false;
+            // Мікрофон завжди в руці - від першої секунди в гравця; далі переходить до того, хто говорить.
+            AttachMic(_player);
+            _promoWide = true;
             ComputePromoShot(DialogueShotKind.Two, "player", "rival", 0);
         }
 
@@ -416,8 +465,9 @@ namespace Game.Gameplay.Ring.Stage
             }
             else
             {
+                // Оповідач, публіка, букер: обидва стоять, мікрофон лишається в руці того, хто говорив останнім.
                 if (idle != null) { _player.PlayHere(idle, true); _rival.PlayHere(idle, true); }
-                HideMic();
+                if (_micHolder == null) AttachMic(_player);
             }
 
             // Камера — режисура діалогу села (DialogueDirector): план і бік за правилом 180°.
@@ -471,7 +521,7 @@ namespace Game.Gameplay.Ring.Stage
             // Кріплення з маніфесту промо (простір кістки Blender: початок — центр рукояті).
             _mic.transform.localPosition = new Vector3(-0.0053f, 0.0510f, -0.0086f);
             _mic.transform.localRotation = new Quaternion(0.26931f, 0.31194f, 0.74840f, 0.51968f);
-            _mic.transform.localScale = Vector3.one;
+            _mic.transform.localScale = Vector3.one * 1.45f;      // справжній мікрофон ~20 см: на загальному плані видно лише збільшений
             _micHolder = holder;
         }
 
@@ -513,6 +563,14 @@ namespace Game.Gameplay.Ring.Stage
                 pos = ToV(DialogueDirector.PushIn(p, _promoPoseAge / 7f));
                 look = ToV(p.LookAt);
                 fov = p.Fov;
+                if (_promoWide)
+                {
+                    // Загальний план промо: двоє в кадрі по пояс-повний зріст, камера з боку глядачів, трохи збоку й зверху.
+                    Vector3 m = (_player.HeadPos + _rival.HeadPos) * 0.5f;
+                    look = new Vector3(m.x, MatY + 1.1f, m.z);
+                    pos = look + new Vector3(1.1f, 1.4f, -5.0f);
+                    fov = 32f;
+                }
             }
             else
             {
@@ -520,9 +578,10 @@ namespace Game.Gameplay.Ring.Stage
                 switch (_shot)
                 {
                     case StageCam.Close:
-                        look = mid + new Vector3(0f, 1.35f, 0f);
-                        pos = look + new Vector3(1.0f, 1.3f, -6.2f);
-                        fov = 34f;
+                        // Обидва борці в кадрі приблизно по пояс і вище, без обрізання голів; рефері лишається збоку.
+                        look = mid + new Vector3(0f, 1.25f, 0f);
+                        pos = look + new Vector3(1.3f, 1.5f, -7.4f);
+                        fov = 33f;
                         break;
                     case StageCam.Big:
                         look = mid + new Vector3(0f, 1.2f, 0f);
@@ -557,6 +616,42 @@ namespace Game.Gameplay.Ring.Stage
             }
             _cam.transform.SetPositionAndRotation(_camPos, _camRot);
             _cam.fieldOfView = _camFov;
+            LogBudget(dt);
+        }
+
+        /// <summary>
+        /// Бюджет кадру для Android (Статут PERF-01): трикутники видимих сіток і кількість викликів малювання (оцінка:
+        /// видимі рендерери x підсітки; тіні ключового світла не враховані). Рядок «[Ринг] бюджет» - у Player.log на
+        /// старті й коли міняється ракурс (раз на ракурс, через пів секунди після зміни).
+        /// </summary>
+        private void LogBudget(float dt)
+        {
+            _budgetAt += dt;
+            bool changed = _shot != _budgetShot || (_mode == RingStageMode.Promo && _budgetShots == 0);
+            if (_budgetShots == 0 && _budgetAt > 1.2f) changed = true;
+            if (!changed || _budgetAt < 0.8f) return;
+            if (_budgetShots > 14) return;
+            _budgetShot = _shot;
+            _budgetShots++;
+            _budgetAt = 0f;
+            long tris = 0; int calls = 0, rends = 0;
+            foreach (var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                if (!r.enabled || !r.gameObject.activeInHierarchy || !r.isVisible) continue;
+                Mesh m = null;
+                var smr = r as SkinnedMeshRenderer;
+                if (smr != null) m = smr.sharedMesh;
+                else { var mf = r.GetComponent<MeshFilter>(); if (mf != null) m = mf.sharedMesh; }
+                if (m == null) continue;
+                rends++;
+                int subs = Mathf.Min(m.subMeshCount, Mathf.Max(1, r.sharedMaterials.Length));
+                for (int i = 0; i < subs; i++) { tris += m.GetIndexCount(i) / 3; calls++; }
+            }
+            if (_budgetShots == 2 && _dress != null) _dress.Diagnose();
+            if (_budgetShots == 2 && _dress != null && _dress.FanCount > 4 && System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-ring-crowd-debug") >= 0)
+                _dress.DebugShot(_cam, System.IO.Path.Combine(Application.dataPath, "..", "crowd_debug.png"));
+            Debug.Log("[Ринг] бюджет: " + (_mode == RingStageMode.Promo ? "промо" : _shot.ToString()) + " трикутників " + tris + ", рендерерів " + rends + ", викликів ~" + calls
+                + ", фанатів " + (_dress != null ? _dress.FanCount : 0));
         }
 
         public bool InDemo { get; set; }
