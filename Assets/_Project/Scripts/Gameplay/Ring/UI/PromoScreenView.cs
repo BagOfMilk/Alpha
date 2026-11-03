@@ -180,10 +180,22 @@ namespace Game.Gameplay.Ring.UI
             var chips = RingUi.Row();
             chips.style.flexWrap = Wrap.Wrap;
             chips.style.justifyContent = Justify.FlexEnd;
-            chips.style.maxWidth = 460f;
-            foreach (var r in meters) chips.Add(Chip(r.Name, r.ValueText, RingUi.Dim));
-            foreach (var p in paths) chips.Add(Chip(p.Name, p.RankText, RingUi.PathColor(p.Path)));
+            chips.style.maxWidth = 620f;
+            // Під час промо — лише числа (шкали з максимумом і ранги — на екрані ворожнечі): менше тексту поверх сцени.
+            foreach (var r in meters) chips.Add(Chip(r.Name, r.Min < 0 ? RingChances.Signed(r.Value) : r.Value.ToString(), RingUi.Dim));
             col.Add(chips);
+            var pathChip = RingUi.Row();
+            StyleChip(pathChip);
+            foreach (var p in paths)
+            {
+                var mk = RingUi.Lbl(p.Name, 13f, RingUi.PathColor(p.Path), p.Dominant);
+                mk.style.marginRight = 4f;
+                pathChip.Add(mk);
+                var pt = RingUi.Lbl(p.Points.ToString(), 13f, RingUi.Text, true);
+                pt.style.marginRight = 12f;
+                pathChip.Add(pt);
+            }
+            col.Add(pathChip);
             _toastHost = RingUi.Column();
             _toastHost.style.alignItems = Align.FlexEnd;
             _toastHost.pickingMode = PickingMode.Ignore;
@@ -192,14 +204,19 @@ namespace Game.Gameplay.Ring.UI
             return col;
         }
 
-        private static VisualElement Chip(string name, string value, Color nameColor)
+        private static void StyleChip(VisualElement c)
         {
-            var c = RingUi.Row();
             c.style.backgroundColor = new Color(0.07f, 0.065f, 0.085f, 0.62f);
             c.style.borderTopLeftRadius = 10f; c.style.borderTopRightRadius = 10f;
             c.style.borderBottomLeftRadius = 10f; c.style.borderBottomRightRadius = 10f;
             c.style.paddingLeft = 9f; c.style.paddingRight = 9f; c.style.paddingTop = 3f; c.style.paddingBottom = 3f;
             c.style.marginLeft = 5f; c.style.marginBottom = 5f;
+        }
+
+        private static VisualElement Chip(string name, string value, Color nameColor)
+        {
+            var c = RingUi.Row();
+            StyleChip(c);
             c.Add(RingUi.Lbl(name + " ", 13f, nameColor));
             c.Add(RingUi.Lbl(value, 13f, RingUi.Text, true));
             return c;

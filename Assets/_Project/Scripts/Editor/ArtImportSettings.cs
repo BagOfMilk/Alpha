@@ -37,7 +37,7 @@ namespace Game.Gameplay.EditorTools
         /// Версія правил: зміна змушує Unity переімпортувати всі асети, яких вони стосуються.
         /// 2 — текстура за назвою матеріалу; 3 — матовість; 4 — очі MPFB; 5 — текстури зачісок (07.10.2026).
         /// </summary>
-        public override uint GetVersion() => 6;
+        public override uint GetVersion() => 7;
 
         private static readonly string[] TextureFolders = { "Assets/Art/Textures/", "Assets/Art/Textures/Kit/" };
         private static readonly string[] DiffuseSuffixes = { "", "_Diffuse", "_diff", "_col_01", "_COL", "_albedo" };

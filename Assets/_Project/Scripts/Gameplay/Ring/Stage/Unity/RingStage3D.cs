@@ -635,6 +635,10 @@ namespace Game.Gameplay.Ring.Stage
             _budgetShots++;
             _budgetAt = 0f;
             long tris = 0; int calls = 0, rends = 0;
+            var byCat = new System.Collections.Generic.Dictionary<string, long[]>();
+            var passes = new System.Collections.Generic.HashSet<string>();
+            var matSet = new System.Collections.Generic.HashSet<int>();
+            int lodded = 0;
             foreach (var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
             {
                 if (!r.enabled || !r.gameObject.activeInHierarchy || !r.isVisible) continue;
@@ -645,13 +649,59 @@ namespace Game.Gameplay.Ring.Stage
                 if (m == null) continue;
                 rends++;
                 int subs = Mathf.Min(m.subMeshCount, Mathf.Max(1, r.sharedMaterials.Length));
-                for (int i = 0; i < subs; i++) { tris += m.GetIndexCount(i) / 3; calls++; }
+                long t0 = tris; int c0 = calls;
+                int lod = MeshLodGuess(r, m);
+                if (lod > 0) lodded++;
+                for (int i = 0; i < subs; i++)
+                {
+                    tris += (lod > 0 ? m.GetLod(i, lod).indexCount : (int)m.GetIndexCount(i)) / 3; calls++;
+                    if (i < r.sharedMaterials.Length && r.sharedMaterials[i] != null) passes.Add(r.sharedMaterials[i].shader.name);
+                    if (i < r.sharedMaterials.Length && r.sharedMaterials[i] != null) matSet.Add(r.sharedMaterials[i].GetInstanceID());
+                }
+                string cat = BudgetCategory(r.transform);
+                long[] acc;
+                if (!byCat.TryGetValue(cat, out acc)) { acc = new long[2]; byCat[cat] = acc; }
+                acc[0] += tris - t0; acc[1] += calls - c0;
             }
+            var parts = new System.Text.StringBuilder();
+            foreach (var kv in byCat) parts.Append(" | " + kv.Key + " " + kv.Value[0] + "/" + kv.Value[1]);
             if (_budgetShots == 2 && _dress != null) _dress.Diagnose();
             if (_budgetShots == 2 && _dress != null && _dress.FanCount > 4 && System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-ring-crowd-debug") >= 0)
                 _dress.DebugShot(_cam, System.IO.Path.Combine(Application.dataPath, "..", "crowd_debug.png"));
             Debug.Log("[Ринг] бюджет: " + (_mode == RingStageMode.Promo ? "промо" : _shot.ToString()) + " трикутників " + tris + ", рендерерів " + rends + ", викликів ~" + calls
-                + ", фанатів " + (_dress != null ? _dress.FanCount : 0));
+                + ", матеріалів " + matSet.Count + ", шейдерів " + passes.Count + ", на Mesh LOD > 0: " + lodded
+                + ", фанатів " + (_dress != null ? _dress.FanCount : 0) + parts);
+        }
+
+        /// <summary>
+        /// Оцінка рівня Mesh LOD рушія (зали імпортуються з generateMeshLods): площа рендерера на екрані в пікселях і
+        /// крива вибору сітки — lodSlope·log2(площа) + lodBias. Це оцінка для рядка бюджету, не те, що вибрав рушій.
+        /// </summary>
+        private int MeshLodGuess(Renderer r, Mesh m)
+        {
+            if (m.lodCount <= 1 || _cam == null) return 0;
+            float d = Vector3.Distance(_cam.transform.position, r.bounds.center);
+            float radius = r.bounds.extents.magnitude;
+            float px = radius / Mathf.Max(0.01f, d * Mathf.Tan(_cam.fieldOfView * 0.5f * Mathf.Deg2Rad)) * Screen.height * 0.5f;
+            float area = Mathf.PI * px * px;
+            var curve = m.lodSelectionCurve;
+            int lod = Mathf.RoundToInt(curve.lodSlope * Mathf.Log(Mathf.Max(1f, area), 2f) + curve.lodBias);
+            return Mathf.Clamp(lod, 0, m.lodCount - 1);
+        }
+
+        /// <summary>Категорія рендерера для рядка бюджету: фанати, стільці або ім'я кореня під сценою.</summary>
+        private static string BudgetCategory(Transform t)
+        {
+            var chain = new System.Collections.Generic.List<Transform>();
+            for (var c = t; c != null; c = c.parent)
+            {
+                if (c.name.StartsWith("fan_")) return "фанати";
+                if (c.name.StartsWith("chairs_")) return "стільці";
+                chain.Add(c);
+            }
+            // Корінь сцени і його дитина — завжди спільні; категорія — третій рівень (арена, борець, реквізит).
+            Transform top = chain[Mathf.Max(0, chain.Count - 3)];
+            return top.name.Length > 18 ? top.name.Substring(0, 18) : top.name;
         }
 
         public bool InDemo { get; set; }

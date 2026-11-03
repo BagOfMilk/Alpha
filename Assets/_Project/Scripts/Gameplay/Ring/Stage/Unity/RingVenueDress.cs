@@ -12,15 +12,14 @@ namespace Game.Gameplay.Ring.Stage
     /// Стільці — склеєні сітки за кольором сидіння (кілька викликів на весь зал; поблизу детальна модель, далі —
     /// спрощена). Фанати — лише LOD1 (~0,9 тис. трикутників), кількість задає відвідуваність (<c>attendance</c>, для
     /// зрізу ~44 — найближчі до рингу спершу, оператори завжди). Кожен грає свою петлю зі зсувом фази.
-    /// Бюджет Android (≤ ~100 тис. трикутників у кадрі) виводить <see cref="RingStage3D"/> рядком «[Ринг] бюджет».
+    /// Рядок «[Ринг] бюджет» (<see cref="RingStage3D"/>) — лише довідка: бюджет Android не обмеження (власник 03.11.2026).
     /// Не лінтується (скінінг, плейбли, склеювання сіток).
     /// </summary>
     public sealed class RingVenueDress : MonoBehaviour
     {
-        // Натовп вимкнено (03.11.2026): фанати вже видні й анімуються, але сітки деформуються на кліпах CROWD_Anims
-        // (уламки за стільцями) — ретаргетинг на скелет набору ще не налагоджено. Увімкнути: 40–60.
-        public int attendance = 48;
-        public float chairNear = 6.4f;
+        // Повна зала (власник 03.11.2026: «Ми тут АА робимо» — бюджет Android не обмеження): усі стільці детальні.
+        public int attendance = 120;
+        public float chairNear = 99f;
 
         private sealed class Fan
         {
@@ -263,8 +262,11 @@ namespace Game.Gameplay.Ring.Stage
                         {
                             var mc = new Material(s);
                             int hh = (r.name.GetHashCode() ^ (i * 7919)) & 0x7fffffff;
-                            bool skinLike = s.name.ToLowerInvariant().Contains("skin") || s.name.ToLowerInvariant().Contains("body");
+                            string ln = s.name.ToLowerInvariant();
+                            bool skinLike = ln.Contains("skin") || ln.Contains("body");
+                            // Волосся — природні кольори (раніше відтінок брався з усього кола, і фанати були зеленоволосі).
                             mc.SetColor("_BaseColor", skinLike ? s.GetColor("_BaseColor")
+                                : ln.Contains("hair") || ln.Contains("brow") || ln.Contains("lash") ? HairColors[hh % HairColors.Length]
                                 : Color.HSVToRGB((hh % 360) / 360f, 0.45f, 0.30f + (hh % 35) / 100f));
                             dst[i] = mc;
                         }
@@ -302,6 +304,12 @@ namespace Game.Gameplay.Ring.Stage
             if (map != null && map.isHuman) { var own = OwnAvatar(root, map.humanDescription, fan); if (own != null) anim.avatar = own; }
             return root;
         }
+
+        private static readonly Color[] HairColors =
+        {
+            new Color(0.05f, 0.04f, 0.035f), new Color(0.12f, 0.08f, 0.05f), new Color(0.25f, 0.16f, 0.09f),
+            new Color(0.45f, 0.33f, 0.18f), new Color(0.62f, 0.52f, 0.33f), new Color(0.35f, 0.14f, 0.07f), new Color(0.5f, 0.5f, 0.5f),
+        };
 
         private static Avatar OwnAvatar(GameObject root, HumanDescription hd, string fan)
         {
