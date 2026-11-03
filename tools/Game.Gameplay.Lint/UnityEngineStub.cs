@@ -87,6 +87,11 @@ namespace UnityEngine
     {
         public static float Clamp(float value, float min, float max) { return value < min ? min : value > max ? max : value; }
         public static float Abs(float f) { return f < 0f ? -f : f; }
+        public static float Clamp01(float v) { return v < 0f ? 0f : v > 1f ? 1f : v; }
+        public static float Min(float a, float b) { return a < b ? a : b; }
+        public static int Min(int a, int b) { return a < b ? a : b; }
+        public static float Max(float a, float b) { return a > b ? a : b; }
+        public static int Max(int a, int b) { return a > b ? a : b; }
     }
 
     public static class Debug
@@ -329,6 +334,8 @@ namespace UnityEngine
         {
             this.r = r; this.g = g; this.b = b; this.a = a;
         }
+
+        public static Color clear { get { return new Color(0f, 0f, 0f, 0f); } }
     }
 
     // Байтова палітра (0..255) — так теплі темні тони читаються в коді

@@ -1,23 +1,33 @@
+using System.Collections.Generic;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
 using Game.Gameplay.Ring.Models;
+using Game.Gameplay.Ring.Stage;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Game.Gameplay.Ring.UI
 {
     /// <summary>
-    /// Екран матчу (gdd §2) без 3D: зверху раунд, ажіотаж, відлік, рефері, очки дій; посередині картки борців і журнал;
-    /// знизу список дій з ціною, атрибутом і трьома відсотками (недоступні — сірі з причиною). Реакція на прийом і докрутка
-    /// імпульсом — модальні. Хід суперника веде ШІ з паузою, щоб гравець встигав бачити, що відбувається.
+    /// Екран матчу (gdd §2), сучасний і небагатослівний: ринг — головне. Угорі по боках плашки борців (ім'я, смужки
+    /// ушкодження й імпульсу, стан і зона коротко), по центру тонка смуга раунду й ажіотажу; знизу — 2–3 останні події
+    /// журналу (повний — L), рядок підказки й ряд кнопок ЛИШЕ доступних дій: ціна ОД точками, шанси трикольоровою
+    /// смужкою (відсотки — у підказці при наведенні). Недоступні згорнуті в «ще N недоступно». Реакція на прийом і
+    /// докрутка імпульсом — компактні модальні. Хід суперника веде ШІ з паузою (чекає, поки 3D-режисер дограє кліп).
     /// </summary>
     public sealed class MatchScreenView : RingScreenView
     {
         /// <summary>Пауза між діями ШІ, с.</summary>
         public const float AiPause = 0.6f;
 
+        private static readonly Color Glass = new Color(0.07f, 0.065f, 0.085f, 0.78f);
+        private static readonly Color GlassHi = new Color(0.13f, 0.12f, 0.15f, 0.9f);
+
         private readonly MatchScreenModel _m;
         private float _aiTimer;
+        private bool _showUnavailable;
+        private bool _showFullLog;
+        private Label _hint;
 
         public MatchScreenView(RingUiContext ctx, MatchEngine engine) : base(ctx)
         {
@@ -29,6 +39,8 @@ namespace Game.Gameplay.Ring.UI
         public override void Tick(float dt)
         {
             if (_m.Input != MatchInput.Ai) { _aiTimer = 0f; return; }
+            // Хід суперника чекає, поки 3D-режисер дограє поточний кліп (потім ще звичайна пауза).
+            if (RingStageHub.Busy) { _aiTimer = 0f; return; }
             _aiTimer += dt;
             if (_aiTimer < AiPause) return;
             _aiTimer = 0f;
@@ -40,197 +52,379 @@ namespace Game.Gameplay.Ring.UI
 
         public override void Refresh()
         {
-            var t = Ctx.Text;
             Root.Clear();
-            RingUi.HudPad(Root);
+            bool stage = RingStageHub.Has3D;
+            Root.style.backgroundColor = stage ? Color.clear : RingUi.Bg;
+            Root.style.justifyContent = Justify.SpaceBetween;
+            Root.style.paddingLeft = 22f; Root.style.paddingRight = 22f;
+            Root.style.paddingTop = 14f; Root.style.paddingBottom = 14f;
 
-            Root.Add(BuildTopBar());
+            Root.Add(BuildTop());
 
-            var mid = RingUi.Row();
-            RingUi.Grow(mid, 1f);
-            mid.style.marginTop = 10f;
-            mid.style.marginBottom = 10f;
-            var pc = BuildCard(_m.Card(MatchSide.Player), RingUi.Face);
-            pc.style.marginRight = 10f;
-            mid.Add(pc);
-            var rc = BuildCard(_m.Card(MatchSide.Rival), RingUi.Heel);
-            rc.style.marginRight = 10f;
-            mid.Add(rc);
-            mid.Add(BuildLog());
-            Root.Add(mid);
-
-            Root.Add(BuildBottom());
+            var bottom = RingUi.Column();
+            bottom.pickingMode = PickingMode.Ignore;
+            if (_m.IsOver) bottom.Add(BuildResult());
+            else
+            {
+                bottom.Add(BuildLogStrip());
+                bottom.Add(BuildActions());
+            }
+            Root.Add(bottom);
 
             if (_m.Input == MatchInput.PlayerReaction) Root.Add(BuildReactionModal());
             else if (_m.Input == MatchInput.PlayerBoost) Root.Add(BuildBoostModal());
+            if (_showFullLog) Root.Add(BuildFullLog());
         }
 
-        private VisualElement BuildTopBar()
+        private static VisualElement Panel(float pad = 8f, float alpha = -1f)
         {
-            var bar = RingUi.Card(8f);
-            bar.style.flexDirection = FlexDirection.Row;
-            bar.style.alignItems = Align.Center;
-            bar.style.justifyContent = Justify.SpaceBetween;
+            var e = RingUi.Column();
+            e.style.backgroundColor = alpha >= 0f ? new Color(Glass.r, Glass.g, Glass.b, alpha) : Glass;
+            e.style.borderTopLeftRadius = 8f; e.style.borderTopRightRadius = 8f;
+            e.style.borderBottomLeftRadius = 8f; e.style.borderBottomRightRadius = 8f;
+            e.style.paddingLeft = pad + 3f; e.style.paddingRight = pad + 3f;
+            e.style.paddingTop = pad; e.style.paddingBottom = pad;
+            return e;
+        }
 
-            bar.Add(RingUi.Lbl(_m.RoundText, 20f, RingUi.Gold, true));
+        // ---------- верх: плашки борців і смуга раунду ----------
 
-            var hype = RingUi.Column();
-            RingUi.Grow(hype, 1f);
-            hype.style.marginLeft = 20f; hype.style.marginRight = 20f;
-            hype.Add(RingUi.Lbl(_m.HypeText, 17f));
-            hype.Add(RingUi.Bar(_m.Hype / (float)_m.HypeMax, RingUi.Warn, 10f));
-            bar.Add(hype);
+        private VisualElement BuildTop()
+        {
+            var row = RingUi.Row();
+            row.style.alignItems = Align.FlexStart;
+            row.pickingMode = PickingMode.Ignore;
+            var left = BuildPlate(_m.Card(MatchSide.Player), RingUi.Face);
+            var right = BuildPlate(_m.Card(MatchSide.Rival), RingUi.Heel);
+            row.Add(left);
+            var mid = BuildRoundStrip();
+            RingUi.Grow(mid, 1f);
+            mid.style.marginLeft = 12f; mid.style.marginRight = 12f;
+            row.Add(mid);
+            row.Add(right);
+            return row;
+        }
 
-            var info = RingUi.Column();
-            info.style.marginRight = 20f;
-            info.Add(RingUi.Lbl(_m.RefereeText, 15f, RingUi.Dim));
+        private VisualElement BuildPlate(FighterCardModel c, Color accent)
+        {
+            var p = Panel(7f);
+            p.style.width = Length.Percent(26f);
+            p.style.flexShrink = 0f;
+            p.style.borderLeftWidth = 3f;
+            p.style.borderLeftColor = accent;
+
+            var head = RingUi.Row();
+            head.style.justifyContent = Justify.SpaceBetween;
+            head.style.alignItems = Align.Center;
+            head.Add(RingUi.Lbl(c.Name, 17f, accent, true));
+            // Стан і зона — коротко: «Стоїть · Центр».
+            head.Add(RingUi.Lbl(c.PostureText + " · " + c.ZoneText, 13f, RingUi.Dim));
+            p.Add(head);
+
+            p.Add(BarLine(c.Damage, c.DamageMax, c.Penalty > 0 ? RingUi.Bad : RingUi.Warn, 8f, Ctx.Text.Get("match.card.short.damage"), c.Damage + "/" + c.DamageMax));
+            p.Add(BarLine(c.Momentum, c.MomentumMax, accent, 6f, Ctx.Text.Get("match.card.short.impulse"), c.Momentum + "/" + c.MomentumMax));
+
+            string extra = "";
+            if (c.PenaltyText.Length > 0) extra += c.PenaltyText;
+            if (c.WarningsText.Length > 0) extra += (extra.Length > 0 ? "  " : "") + c.WarningsText;
+            if (c.Tokens > 0) extra += (extra.Length > 0 ? "  " : "") + c.TokensText;
+            if (extra.Length > 0)
+            {
+                var l = RingUi.Lbl(extra, 12f, c.PenaltyText.Length > 0 ? RingUi.Bad : RingUi.Warn);
+                l.style.marginTop = 3f;
+                p.Add(l);
+            }
+            return p;
+        }
+
+        private static VisualElement BarLine(int v, int max, Color fill, float h, string label, string value)
+        {
+            var row = RingUi.Row();
+            row.style.alignItems = Align.Center;
+            row.style.marginTop = 4f;
+            var lab = RingUi.Lbl(label, 11f, RingUi.Dim);
+            lab.style.width = 76f;
+            row.Add(lab);
+            var bar = RingUi.Bar(max > 0 ? v / (float)max : 0f, fill, h);
+            RingUi.Grow(bar, 1f);
+            bar.style.borderTopWidth = 0f; bar.style.borderBottomWidth = 0f; bar.style.borderLeftWidth = 0f; bar.style.borderRightWidth = 0f;
+            bar.style.borderTopLeftRadius = 4f; bar.style.borderTopRightRadius = 4f;
+            bar.style.borderBottomLeftRadius = 4f; bar.style.borderBottomRightRadius = 4f;
+            row.Add(bar);
+            var val = RingUi.Lbl(value, 12f, RingUi.Text);
+            val.style.width = 40f;
+            val.style.unityTextAlign = TextAnchor.MiddleRight;
+            row.Add(val);
+            return row;
+        }
+
+        private VisualElement BuildRoundStrip()
+        {
+            var p = Panel(6f, 0.62f);
+            p.style.alignItems = Align.Center;
+            var top = RingUi.Row();
+            top.style.justifyContent = Justify.Center;
+            top.Add(RingUi.Lbl(_m.RoundText, 15f, RingUi.Gold, true));
             string count = _m.CountText;
-            if (count.Length > 0) info.Add(RingUi.Lbl(count, 15f, RingUi.Bad));
-            bar.Add(info);
-
-            var turn = RingUi.Column();
-            turn.style.alignItems = Align.FlexEnd;
-            turn.Add(RingUi.Lbl(_m.TurnText, 20f, _m.Input == MatchInput.Ai ? RingUi.Heel : RingUi.Face, true));
-            turn.Add(RingUi.Lbl(_m.ApText, 16f, RingUi.Dim));
-            bar.Add(turn);
-            return bar;
+            if (count.Length > 0) { var c = RingUi.Lbl("   " + count, 13f, RingUi.Bad); top.Add(c); }
+            p.Add(top);
+            var hype = RingUi.Bar(_m.Hype / (float)_m.HypeMax, RingUi.Warn, 5f);
+            hype.style.width = Length.Percent(100f);
+            hype.style.marginTop = 4f; hype.style.marginBottom = 3f;
+            p.Add(hype);
+            p.Add(RingUi.Lbl(_m.HypeText + " · " + _m.RefereeText, 12f, RingUi.Dim));
+            return p;
         }
 
-        private VisualElement BuildCard(FighterCardModel c, Color accent)
-        {
-            var card = RingUi.Card();
-            // Частка ширини, а не ріст за вмістом: інакше довгі рядки журналу стискали картки й «Поза рингом» ламалось.
-            card.style.flexGrow = 0f;
-            card.style.flexShrink = 0f;
-            card.style.width = Length.Percent(24f);
-            card.style.borderTopWidth = 3f;
-            card.style.borderTopColor = accent;
-            card.Add(RingUi.Lbl(c.Name, 22f, accent, true));
+        // ---------- низ: журнал, підказка, дії ----------
 
-            card.Add(RingUi.Lbl(c.DamageText, 17f));
-            // Ушкодження з порогами: червона смужка, пороги штрафу видно заздалегідь.
-            card.Add(RingUi.Bar(c.Damage / (float)c.DamageMax, c.Penalty > 0 ? RingUi.Bad : RingUi.Warn, 12f));
-            var th = RingUi.Row();
-            th.style.marginBottom = 8f;
-            th.Add(RingUi.Lbl(Ctx.Text.Format("match.card.thresholds", c.ExhaustedAt, c.EdgeAt), 13f, RingUi.Dim));
-            card.Add(th);
-            if (c.PenaltyText.Length > 0) card.Add(RingUi.Lbl(c.PenaltyText, 16f, RingUi.Bad, true));
-
-            card.Add(RingUi.Lbl(c.MomentumText, 17f));
-            var mom = RingUi.Bar(c.Momentum / (float)c.MomentumMax, accent, 10f);
-            RingUi.Gap(mom, 8f);
-            card.Add(mom);
-
-            card.Add(RingUi.Lbl(c.PostureText + "  ·  " + c.ZoneText, 18f, RingUi.Text, true));
-            card.Add(RingUi.Lbl(c.TokensText, 16f, RingUi.Dim));
-            if (c.WarningsText.Length > 0) card.Add(RingUi.Lbl(c.WarningsText, 16f, RingUi.Warn));
-            return card;
-        }
-
-        private VisualElement BuildLog()
+        private VisualElement BuildLogStrip()
         {
             var t = Ctx.Text;
-            var log = RingUi.Card();
-            RingUi.Grow(log, 1.3f);
-            log.Add(RingUi.Heading(t.Get("match.log.title")));
             var lines = _m.LogTexts();
-            for (int i = 0; i < lines.Count; i++)
+            var box = Panel(6f, 0.55f);
+            box.style.alignSelf = Align.FlexStart;
+            box.style.maxWidth = Length.Percent(46f);
+            box.style.marginBottom = 8f;
+            int from = Mathf.Max(0, lines.Count - 3);
+            for (int i = from; i < lines.Count; i++)
             {
                 bool last = i == lines.Count - 1;
-                var l = RingUi.Lbl(lines[i], 15f, last ? RingUi.Text : RingUi.Dim);
-                RingUi.Gap(l, 4f);
-                log.Add(l);
+                box.Add(RingUi.Lbl(lines[i], 14f, last ? RingUi.Text : RingUi.Dim));
             }
-            return log;
+            var more = RingUi.Lbl(t.Get("match.log.hint"), 11f, RingUi.Dim);
+            more.style.marginTop = 2f;
+            box.Add(more);
+            box.RegisterCallback<ClickEvent>(e => { _showFullLog = true; Refresh(); });
+            return box;
         }
 
-        private VisualElement BuildBottom()
+        private VisualElement BuildActions()
         {
             var t = Ctx.Text;
-            var bottom = RingUi.Card(10f);
-            if (_m.IsOver)
-            {
-                bottom.Add(RingUi.Lbl(t.Get("match.result.title"), 22f, RingUi.Gold, true));
-                foreach (var l in _m.ResultLines()) bottom.Add(RingUi.Lbl(l, 18f));
-                bottom.Add(RingUi.PrimaryButton(t.Get("ui.next"), OnConfirm));
-                return bottom;
-            }
+            var wrap = Panel(8f);
+            wrap.style.backgroundColor = Glass;
 
-            var header = RingUi.Row();
-            header.style.justifyContent = Justify.SpaceBetween;
-            header.style.alignItems = Align.Center;
-            header.Add(RingUi.Lbl(t.Get("match.actions.title"), 16f, RingUi.Dim));
-            bottom.Add(header);
             if (_m.Input == MatchInput.Ai)
             {
-                bottom.Add(RingUi.Lbl(t.Get("ui.ai.thinking"), 18f, RingUi.Dim));
-                return bottom;
+                wrap.Add(RingUi.Lbl(t.Get("ui.ai.thinking"), 17f, RingUi.Dim));
+                return wrap;
             }
-            if (_m.Input != MatchInput.PlayerAction) return bottom;
+            if (_m.Input != MatchInput.PlayerAction) return wrap;
 
-            // Доступні — дві стрічки (назва, ціна, шанси), недоступні — одна дрібна (назва і причина): 17 дій мають
-            // уміститися на 720p, інакше нижній ряд виходив за край. «Перевести подих» — окрема кнопка в шапці.
-            var grid = RingUi.Row();
-            grid.style.flexWrap = Wrap.Wrap;
+            _hint = RingUi.Lbl(t.Get("match.hint.default"), 14f, RingUi.Dim);
+            _hint.style.marginBottom = 6f;
+            wrap.Add(_hint);
+
+            var row = RingUi.Row();
+            row.style.flexWrap = Wrap.Wrap;
+            row.style.alignItems = Align.Stretch;
+            MatchActionRow endTurn = null;
+            var unavailable = new List<MatchActionRow>();
             foreach (var a in _m.Actions())
             {
-                var id = a.Id;
-                if (id == MatchActionId.CatchBreath)
-                {
-                    var end = RingUi.MakeButton((a.Number > 0 ? a.Number + ". " : "") + t.Get("match.endturn"),
-                        () => { _m.Perform(id); Refresh(); }, a.Available, null, 15f);
-                    end.style.width = new Length(34f, LengthUnit.Percent);
-                    header.Add(end);
-                    continue;
-                }
-                string head = (a.Number > 0 ? a.Number + ". " : "") + a.Name + "  —  " + a.CostText
-                              + (a.AttrText.Length > 0 ? "  ·  " + a.AttrText + " " + a.ModifierText : "");
-                string text;
-                if (!a.Available) text = a.Name + "  —  " + a.ReasonText;
-                else if (a.HasRoll)
-                    text = head + "\n" + t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.action.chances",
-                        a.Percents[0], a.Percents[1], a.Percents[2]);
-                else text = head;
-                var b = RingUi.MakeButton(text, () => { _m.Perform(id); Refresh(); }, a.Available,
-                    a.IsBig ? RingUi.Warn : (Color?)null, a.Available ? 15f : 13f);
-                b.style.width = new Length(24.2f, LengthUnit.Percent);
-                b.style.marginRight = 6f;
-                grid.Add(b);
+                if (a.Id == MatchActionId.CatchBreath) { endTurn = a; continue; }
+                if (!a.Available) { unavailable.Add(a); continue; }
+                row.Add(ActionButton(a));
             }
-            bottom.Add(grid);
+            if (endTurn != null && endTurn.Available) row.Add(EndTurnButton(endTurn));
+            wrap.Add(row);
+
+            if (unavailable.Count > 0)
+            {
+                var chip = RingUi.Lbl(_showUnavailable ? t.Get("match.unavail.hide") : t.Format("match.unavail.more", unavailable.Count), 13f, RingUi.Dim);
+                chip.style.marginTop = 6f;
+                chip.RegisterCallback<ClickEvent>(e => { _showUnavailable = !_showUnavailable; Refresh(); });
+                wrap.Add(chip);
+                if (_showUnavailable)
+                {
+                    var list = RingUi.Row();
+                    list.style.flexWrap = Wrap.Wrap;
+                    foreach (var a in unavailable)
+                    {
+                        var l = RingUi.Lbl(a.Name + " — " + a.ReasonText, 12f, RingUi.Disabled);
+                        l.style.marginRight = 14f; l.style.marginTop = 3f;
+                        list.Add(l);
+                    }
+                    wrap.Add(list);
+                }
+            }
+            return wrap;
+        }
+
+        private VisualElement ActionButton(MatchActionRow a)
+        {
+            var t = Ctx.Text;
+            var id = a.Id;
+            var b = RingUi.Column();
+            b.style.backgroundColor = GlassHi;
+            b.style.borderTopLeftRadius = 6f; b.style.borderTopRightRadius = 6f;
+            b.style.borderBottomLeftRadius = 6f; b.style.borderBottomRightRadius = 6f;
+            b.style.paddingLeft = 9f; b.style.paddingRight = 9f; b.style.paddingTop = 6f; b.style.paddingBottom = 6f;
+            b.style.marginRight = 6f; b.style.marginBottom = 6f;
+            b.style.minWidth = 138f;
+            if (a.IsBig) { b.style.borderBottomWidth = 0f; b.style.borderLeftWidth = 3f; b.style.borderLeftColor = RingUi.Warn; }
+
+            var top = RingUi.Row();
+            top.style.justifyContent = Justify.SpaceBetween;
+            top.style.alignItems = Align.Center;
+            top.Add(RingUi.Lbl((a.Number > 0 ? a.Number + "  " : "") + a.Name, 15f, RingUi.Text, true));
+            var dots = RingUi.Lbl(Dots(a.Cost), 13f, RingUi.Gold);
+            dots.style.marginLeft = 8f;
+            top.Add(dots);
+            b.Add(top);
+
+            if (a.HasRoll && a.Percents.Length == 3)
+            {
+                var strip = RingUi.Row();
+                strip.style.height = 4f;
+                strip.style.marginTop = 5f;
+                strip.style.borderTopLeftRadius = 2f; strip.style.borderTopRightRadius = 2f;
+                strip.style.borderBottomLeftRadius = 2f; strip.style.borderBottomRightRadius = 2f;
+                strip.style.overflow = Overflow.Hidden;
+                strip.Add(Seg(a.Percents[0], RingUi.Bad));
+                strip.Add(Seg(a.Percents[1], RingUi.Warn));
+                strip.Add(Seg(a.Percents[2], RingUi.Good));
+                b.Add(strip);
+            }
+            else
+            {
+                var gap = new VisualElement();
+                gap.style.height = 4f; gap.style.marginTop = 5f;
+                b.Add(gap);
+            }
+
+            string hint = HintText(a);
+            b.RegisterCallback<PointerEnterEvent>(e => { b.style.backgroundColor = RingUi.PanelHover; if (_hint != null) { _hint.text = hint; _hint.style.color = RingUi.Text; } });
+            b.RegisterCallback<PointerLeaveEvent>(e => { b.style.backgroundColor = GlassHi; if (_hint != null) { _hint.text = t.Get("match.hint.default"); _hint.style.color = RingUi.Dim; } });
+            b.RegisterCallback<ClickEvent>(e => { _m.Perform(id); Refresh(); });
+            return b;
+        }
+
+        private VisualElement EndTurnButton(MatchActionRow a)
+        {
+            var id = a.Id;
+            var b = RingUi.Column();
+            b.style.backgroundColor = new Color(0.22f, 0.17f, 0.08f, 0.9f);
+            b.style.borderTopLeftRadius = 6f; b.style.borderTopRightRadius = 6f;
+            b.style.borderBottomLeftRadius = 6f; b.style.borderBottomRightRadius = 6f;
+            b.style.paddingLeft = 12f; b.style.paddingRight = 12f; b.style.paddingTop = 6f; b.style.paddingBottom = 6f;
+            b.style.marginBottom = 6f;
+            b.style.justifyContent = Justify.Center;
+            b.Add(RingUi.Lbl((a.Number > 0 ? a.Number + "  " : "") + Ctx.Text.Get("match.endturn.short"), 15f, RingUi.Gold, true));
+            string hint = Ctx.Text.Get("match.endturn");
+            b.RegisterCallback<PointerEnterEvent>(e => { if (_hint != null) { _hint.text = hint; _hint.style.color = RingUi.Text; } });
+            b.RegisterCallback<PointerLeaveEvent>(e => { if (_hint != null) { _hint.text = Ctx.Text.Get("match.hint.default"); _hint.style.color = RingUi.Dim; } });
+            b.RegisterCallback<ClickEvent>(e => { _m.Perform(id); Refresh(); });
+            return b;
+        }
+
+        private string HintText(MatchActionRow a)
+        {
+            var t = Ctx.Text;
+            string s = a.Name + "  ·  " + a.CostText;
+            if (a.AttrText.Length > 0) s += "  ·  " + a.AttrText + " " + a.ModifierText;
+            if (a.HasRoll && a.Percents.Length == 3)
+                s += "   |   " + t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.chances.short", a.Percents[0], a.Percents[1], a.Percents[2]);
+            return s;
+        }
+
+        private static string Dots(int n)
+        {
+            if (n <= 0) return "";
+            return new string('●', Mathf.Min(n, 6));
+        }
+
+        private static VisualElement Seg(int percent, Color c)
+        {
+            var e = new VisualElement();
+            e.style.flexGrow = Mathf.Max(1, percent);
+            e.style.flexBasis = 0f;
+            e.style.backgroundColor = c;
+            return e;
+        }
+
+        private VisualElement BuildResult()
+        {
+            var t = Ctx.Text;
+            var bottom = Panel(12f, 0.88f);
+            bottom.Add(RingUi.Lbl(t.Get("match.result.title"), 22f, RingUi.Gold, true));
+            foreach (var l in _m.ResultLines()) bottom.Add(RingUi.Lbl(l, 17f));
+            bottom.Add(RingUi.PrimaryButton(t.Get("ui.next"), OnConfirm));
             return bottom;
         }
 
         // ---------- модальні ----------
 
+        private static VisualElement ModalShade(out VisualElement panel)
+        {
+            var shade = RingUi.Column();
+            shade.style.position = Position.Absolute;
+            shade.style.left = 0f; shade.style.right = 0f; shade.style.top = 0f; shade.style.bottom = 0f;
+            shade.style.backgroundColor = new Color(0f, 0f, 0f, 0.28f);
+            shade.style.justifyContent = Justify.FlexEnd;
+            shade.style.alignItems = Align.Center;
+            shade.style.paddingBottom = 150f;
+            panel = Panel(14f, 0.9f);
+            panel.style.width = new Length(46f, LengthUnit.Percent);
+            panel.style.minWidth = 380f;
+            panel.style.maxWidth = 680f;
+            shade.Add(panel);
+            return shade;
+        }
+
         private VisualElement BuildReactionModal()
         {
-            var t = Ctx.Text;
             VisualElement panel;
-            var shade = RingUi.Modal(out panel);
+            var shade = ModalShade(out panel);
             var r = _m.Reaction();
             panel.Add(RingUi.Heading(r.PromptText));
-            panel.Add(RingUi.MakeButton("1. " + r.SellText, () => { _m.React(ReactionChoice.Sell); Refresh(); }, true, RingUi.Face, 19f));
-            panel.Add(RingUi.MakeButton("2. " + r.ReverseText, () => { _m.React(ReactionChoice.Reverse); Refresh(); }, r.CanReverse, RingUi.Heel, 19f));
+            panel.Add(RingUi.MakeButton("1. " + r.SellText, () => { _m.React(ReactionChoice.Sell); Refresh(); }, true, RingUi.Face, 17f));
+            panel.Add(RingUi.MakeButton("2. " + r.ReverseText, () => { _m.React(ReactionChoice.Reverse); Refresh(); }, r.CanReverse, RingUi.Heel, 17f));
             return shade;
         }
 
         private VisualElement BuildBoostModal()
         {
-            var t = Ctx.Text;
             VisualElement panel;
-            var shade = RingUi.Modal(out panel);
+            var shade = ModalShade(out panel);
             panel.Add(RingUi.Heading(_m.BoostPrompt));
             foreach (var o in _m.BoostOptions())
             {
                 int points = o.Points;
                 panel.Add(RingUi.MakeButton(o.Number + ". " + o.Text, () => { _m.Commit(points); Refresh(); }, true,
-                    RingUi.TierColor(o.Tier), 19f));
+                    RingUi.TierColor(o.Tier), 17f));
             }
             return shade;
         }
 
+        private VisualElement BuildFullLog()
+        {
+            var t = Ctx.Text;
+            var shade = RingUi.Column();
+            shade.style.position = Position.Absolute;
+            shade.style.left = 0f; shade.style.right = 0f; shade.style.top = 0f; shade.style.bottom = 0f;
+            shade.style.backgroundColor = new Color(0f, 0f, 0f, 0.45f);
+            shade.style.justifyContent = Justify.Center;
+            shade.style.alignItems = Align.Center;
+            var p = Panel(14f, 0.94f);
+            p.style.width = Length.Percent(60f);
+            p.style.maxWidth = 820f;
+            p.Add(RingUi.Heading(t.Get("match.log.full")));
+            foreach (var l in _m.LogTexts()) p.Add(RingUi.Lbl(l, 15f, RingUi.Text));
+            p.Add(RingUi.Lbl("L", 12f, RingUi.Dim));
+            shade.Add(p);
+            shade.RegisterCallback<ClickEvent>(e => { _showFullLog = false; Refresh(); });
+            return shade;
+        }
+
         // ---------- клавіші ----------
+
+        public override void OnToggleLog()
+        {
+            _showFullLog = !_showFullLog;
+            Refresh();
+        }
 
         public override void OnDigit(int n)
         {

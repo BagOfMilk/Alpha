@@ -78,6 +78,15 @@
       лінтяться разом з рештою Gameplay/UI, компілюються заглушкою без змін.
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/BattleArenaController.cs" />
+
+    <!--
+      Ринг, ітерація 1 (3D): Stage/Unity — плейбли, Animator, RenderTexture, світло й камера (той самий «глибокий рушій»,
+      що VillageStage/BattleArenaController). Лінтуються контракт і таблиця кліпів (Stage/*.cs), екрани й моделі.
+      RingSceneBuilder + RingStageSceneSetup — AssetDatabase/PrefabUtility, як GameSceneBuilder.
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/**/*.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingSceneBuilder.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingStageSceneSetup.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/PortraitRig.cs" />
     <!--
       Прогулянка селом: HeroWalker (Camera/Renderer/Input/Plane, OnGUI поверх

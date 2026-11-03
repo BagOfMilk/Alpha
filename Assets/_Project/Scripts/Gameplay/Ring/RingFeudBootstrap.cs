@@ -4,6 +4,7 @@ using Game.Core.Ring;
 using Game.Core.Randomness;
 using Game.Gameplay.Combat;
 using Game.Gameplay.Ring.Models;
+using Game.Gameplay.Ring.Stage;
 using Game.Gameplay.Ring.UI;
 using Game.Gameplay.UI.Toolkit;
 using UnityEngine;
@@ -27,7 +28,10 @@ namespace Game.Gameplay.Ring
         // Огляд вигляду (-ring-shots <тека>): бот тисне ті самі клавіші, що й людина (цифри по колу і «Далі»), і знімає
         // кадр на кожному кроці. Кінець — екран розвитку, потім вихід.
         private const float ShotStep = 0.45f;
-        private const int ShotLimit = 200;
+        private const int ShotLimit = 420;
+        // Поки режисер 3D грає кліпи, кадри знімаються і посеред анімації (кожні AnimShotEvery с), а крок бота чекає.
+        private const float AnimShotEvery = 1.3f;
+        private float _animClock;
         private string _shotsDir;
         private float _shotClock;
         private int _shotIndex;
@@ -120,7 +124,9 @@ namespace Game.Gameplay.Ring
             }
             _root.style.position = Position.Absolute;
             _root.style.left = 0f; _root.style.right = 0f; _root.style.top = 0f; _root.style.bottom = 0f;
-            _root.style.backgroundColor = RingUi.Bg;
+            // З 3D-рингом корінь прозорий: екрани малюють лише свої панелі, ринг видно крізь решту.
+            _root.style.backgroundColor = RingStageHub.Has3D ? Color.clear : RingUi.Bg;
+            if (RingStageHub.DemoRequested) _root.style.display = DisplayStyle.None;
             return true;
         }
 
@@ -228,10 +234,35 @@ namespace Game.Gameplay.Ring
             _root.Clear();
             _root.Add(_view.Root);
             _view.Refresh();
+            SyncStage();
+        }
+
+        /// <summary>Сказати 3D-рингу, який екран зараз: матч, промо чи нейтральний (ринг стоїть).</summary>
+        private void SyncStage()
+        {
+            var stage = RingStageHub.Current;
+            if (stage == null || RingStageHub.DemoRequested) return;
+            switch (_campaign.Stage)
+            {
+                case RingStage.Match: stage.BeginMatch(_campaign.CurrentMatch); break;
+                case RingStage.Promo: stage.BeginPromo(); break;
+                default: stage.ShowIdle(); break;
+            }
         }
 
         private void ShotsStep()
         {
+            if (RingStageHub.Busy)
+            {
+                _animClock += Time.unscaledDeltaTime;
+                if (_animClock >= AnimShotEvery && _shotIndex < ShotLimit)
+                {
+                    _animClock = 0f;
+                    ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_{1}_anim.png", _shotIndex++, _campaign.Stage)));
+                }
+                return;
+            }
+            _animClock = 0f;
             _shotClock += Time.unscaledDeltaTime;
             if (_shotClock < ShotStep) return;
             _shotClock = 0f;
@@ -266,6 +297,7 @@ namespace Game.Gameplay.Ring
                 _view.OnDigit(i);
                 return;
             }
+            if (Input.GetKeyDown(KeyCode.L)) _view.OnToggleLog();
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
                 _view.OnConfirm();
             // Esc нічого не ламає: виходу з кампанії зі зрізу нема.

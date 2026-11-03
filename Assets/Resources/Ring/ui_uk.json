@@ -247,5 +247,14 @@
  "ui.error.validate": "Знайдено помилок: {0}",
  "ui.title": "Ринг: ворожнеча",
  "ui.dice": "Кубики",
- "ui.ai.thinking": "Суперник думає…"
+ "ui.ai.thinking": "Суперник думає…",
+ "match.unavail.more": "ще {0} недоступно",
+ "match.unavail.hide": "сховати недоступні",
+ "match.log.hint": "L — журнал",
+ "match.log.full": "Журнал матчу",
+ "match.hint.default": "Наведи на дію — побачиш шанси",
+ "match.chances.short": "10+ {2}%   7–9 {1}%   ≤6 {0}%",
+ "match.endturn.short": "Завершити хід",
+ "match.card.short.damage": "Ушкодження",
+ "match.card.short.impulse": "Імпульс"
 }

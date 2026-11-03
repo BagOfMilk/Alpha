@@ -104,6 +104,16 @@ namespace Game.Gameplay.Ring.Models
             }
         }
 
+        /// <summary>Id мовця вузла-репліки (player, rival, booker...); порожньо, якщо вузол не репліка.</summary>
+        public string SpeakerId
+        {
+            get
+            {
+                var n = _runner.Current;
+                return n.Type == PromoNodeType.Line && !string.IsNullOrEmpty(n.Speaker) ? n.Speaker : "";
+            }
+        }
+
         public bool IsNarrator { get { return _runner.Current.Type == PromoNodeType.Line && _runner.Current.Speaker == "narrator"; } }
 
         public bool IsPlayerSpeaker { get { return _runner.Current.Type == PromoNodeType.Line && _runner.Current.Speaker == "player"; } }

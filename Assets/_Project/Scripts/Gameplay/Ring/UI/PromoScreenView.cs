@@ -1,5 +1,6 @@
 using Game.Core.Ring;
 using Game.Gameplay.Ring.Models;
+using Game.Gameplay.Ring.Stage;
 using Game.Gameplay.UI.Toolkit;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -32,6 +33,7 @@ namespace Game.Gameplay.Ring.UI
         {
             var t = Ctx.Text;
             Root.Clear();
+            Root.style.backgroundColor = RingStageHub.Has3D ? Color.clear : RingUi.Bg;
             RingUi.HudPad(Root);
             Root.style.justifyContent = Justify.SpaceBetween;
 
@@ -40,9 +42,9 @@ namespace Game.Gameplay.Ring.UI
             top.style.justifyContent = Justify.SpaceBetween;
             top.style.alignItems = Align.FlexStart;
             var head = RingUi.Column();
-            head.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 17f, RingUi.Dim));
-            head.Add(RingUi.Title(_m.TitleText));
-            head.Add(RingUi.Lbl(_m.PlaceText, 18f, RingUi.Dim));
+            head.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 13f, RingUi.Dim));
+            head.Add(RingUi.Lbl(_m.TitleText, 21f, RingUi.Gold, true));
+            head.Add(RingUi.Lbl(_m.PlaceText, 14f, RingUi.Dim));
             top.Add(head);
             top.Add(BuildStatus());
             Root.Add(top);
@@ -53,9 +55,7 @@ namespace Game.Gameplay.Ring.UI
             box.style.maxWidth = 1100f;
             box.style.minWidth = 560f;
             box.style.alignSelf = Align.Center;
-            box.style.borderTopWidth = 2f;
-            box.style.borderTopColor = RingUi.Gold;
-            box.style.backgroundColor = new Color(0.05f, 0.045f, 0.06f, 0.94f);
+            box.style.backgroundColor = new Color(0.05f, 0.045f, 0.06f, RingStageHub.Has3D ? 0.84f : 0.94f);
             Root.Add(box);
 
             var kind = _m.Kind;
@@ -64,6 +64,9 @@ namespace Game.Gameplay.Ring.UI
                 _lastSpeaker = _m.SpeakerText;
                 _lastLine = _m.LineText;
                 _lastNarrator = _m.IsNarrator;
+                // Камера діалогу: мовець вузла промо -> постать на рингу.
+                var stage = RingStageHub.Current;
+                if (stage != null) stage.SetPromoSpeaker(_m.SpeakerId);
             }
             bool context = kind != PromoViewKind.Line;
             if (_lastLine.Length > 0)
@@ -101,47 +104,94 @@ namespace Game.Gameplay.Ring.UI
             box.Add(RingUi.Lbl(t.Get("ui.hint.keys"), 14f, RingUi.Dim));
         }
 
-        // ---------- шкали ворожнечі ----------
+        // ---------- шкали ворожнечі: компактно в кутку, зміна — коротким «+1 Популярність» ----------
+
+        private sealed class Toast
+        {
+            public string Text;
+            public Color Color;
+            public float Left;
+        }
+
+        private readonly System.Collections.Generic.List<Toast> _toasts = new System.Collections.Generic.List<Toast>();
+        private VisualElement _toastHost;
+        private const float ToastSeconds = 2.4f;
+
+        public override void Tick(float dt)
+        {
+            if (_toasts.Count == 0) return;
+            for (int i = _toasts.Count - 1; i >= 0; i--)
+            {
+                _toasts[i].Left -= dt;
+                if (_toasts[i].Left <= 0f) _toasts.RemoveAt(i);
+            }
+            RebuildToasts();
+        }
+
+        private void RebuildToasts()
+        {
+            if (_toastHost == null) return;
+            _toastHost.Clear();
+            foreach (var tt in _toasts)
+            {
+                var l = RingUi.Lbl(tt.Text, 17f, tt.Color, true);
+                l.style.opacity = Mathf.Clamp01(tt.Left / 0.7f);
+                l.style.marginTop = 3f;
+                l.style.unityTextAlign = TextAnchor.MiddleRight;
+                _toastHost.Add(l);
+            }
+        }
 
         private VisualElement BuildStatus()
         {
             var meters = _feud.Meters();
             var paths = _feud.Paths();
             var now = new System.Collections.Generic.Dictionary<string, int>();
-            foreach (var r in meters) now[r.Id] = r.Value;
-            foreach (var p in paths) now["path." + p.Path] = p.Points;
-            // Підсвічується лише остання зміна: щойно щось змінилось, старі дельти скидаються.
-            bool anyChange = false;
+            var names = new System.Collections.Generic.Dictionary<string, string>();
+            var colors = new System.Collections.Generic.Dictionary<string, Color>();
+            foreach (var r in meters) { now[r.Id] = r.Value; names[r.Id] = r.Name; colors[r.Id] = RingUi.Gold; }
+            foreach (var p in paths) { now["path." + p.Path] = p.Points; names["path." + p.Path] = p.Name; colors["path." + p.Path] = RingUi.PathColor(p.Path); }
+            // Зміна від попереднього малювання — тост, що гасне сам.
             foreach (var kv in now)
             {
                 int before;
                 if (_seen.TryGetValue(kv.Key, out before) && before != kv.Value)
                 {
-                    if (!anyChange) { _delta.Clear(); anyChange = true; }
-                    _delta[kv.Key] = kv.Value - before;
+                    int d = kv.Value - before;
+                    _toasts.Add(new Toast { Text = RingChances.Signed(d) + " " + names[kv.Key], Color = d > 0 ? RingUi.Good : RingUi.Bad, Left = ToastSeconds });
                 }
             }
             foreach (var kv in now) _seen[kv.Key] = kv.Value;
 
-            var card = RingUi.Card(10f);
-            card.style.minWidth = 300f;
-            foreach (var r in meters) card.Add(StatusLine(r.Id, r.Name, r.ValueText, null));
-            foreach (var p in paths) card.Add(StatusLine("path." + p.Path, p.Name, p.RankText, RingUi.PathColor(p.Path)));
-            return card;
+            var col = RingUi.Column();
+            col.style.alignItems = Align.FlexEnd;
+            col.pickingMode = PickingMode.Ignore;
+            var chips = RingUi.Row();
+            chips.style.flexWrap = Wrap.Wrap;
+            chips.style.justifyContent = Justify.FlexEnd;
+            chips.style.maxWidth = 460f;
+            foreach (var r in meters) chips.Add(Chip(r.Name, r.ValueText, RingUi.Dim));
+            foreach (var p in paths) chips.Add(Chip(p.Name, p.RankText, RingUi.PathColor(p.Path)));
+            col.Add(chips);
+            _toastHost = RingUi.Column();
+            _toastHost.style.alignItems = Align.FlexEnd;
+            _toastHost.pickingMode = PickingMode.Ignore;
+            col.Add(_toastHost);
+            RebuildToasts();
+            return col;
         }
 
-        private VisualElement StatusLine(string id, string name, string valueText, Color? nameColor)
+        private static VisualElement Chip(string name, string value, Color nameColor)
         {
-            int d;
-            bool changed = _delta.TryGetValue(id, out d) && d != 0;
-            var row = RingUi.Row();
-            row.style.justifyContent = Justify.SpaceBetween;
-            row.Add(RingUi.Lbl(name, 15f, nameColor ?? RingUi.Dim));
-            var right = RingUi.Row();
-            if (changed) right.Add(RingUi.Lbl(RingChances.Signed(d) + "  ", 15f, d > 0 ? RingUi.Good : RingUi.Bad, true));
-            right.Add(RingUi.Lbl(valueText, 15f, changed ? RingUi.Text : RingUi.Dim, changed));
-            row.Add(right);
-            return row;
+            var c = RingUi.Row();
+            c.style.backgroundColor = new Color(0.07f, 0.065f, 0.085f, 0.62f);
+            c.style.borderTopLeftRadius = 10f; c.style.borderTopRightRadius = 10f;
+            c.style.borderBottomLeftRadius = 10f; c.style.borderBottomRightRadius = 10f;
+            c.style.paddingLeft = 9f; c.style.paddingRight = 9f; c.style.paddingTop = 3f; c.style.paddingBottom = 3f;
+            c.style.marginLeft = 5f; c.style.marginBottom = 5f;
+            c.Add(RingUi.Lbl(name + " ", 13f, nameColor));
+            c.Add(RingUi.Lbl(value, 13f, RingUi.Text, true));
+            return c;
         }
 
         // ---------- вибір реплік ----------

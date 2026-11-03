@@ -39,6 +39,9 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Enter або Пробіл — «Далі» / головна дія екрана.</summary>
         public virtual void OnConfirm() { }
 
+        /// <summary>Клавіша L — повний журнал (матч).</summary>
+        public virtual void OnToggleLog() { }
+
         /// <summary>Кожен кадр (для ходу суперника з паузою).</summary>
         public virtual void Tick(float unscaledDeltaTime) { }
     }
@@ -119,6 +122,13 @@ namespace Game.Gameplay.Ring.UI
             e.style.borderBottomLeftRadius = 6f; e.style.borderBottomRightRadius = 6f;
             HudToolkitTheme.Padding(e, pad, pad + 2f);
             return e;
+        }
+
+        /// <summary>Напівпрозорий фон панелі: з 3D-рингом крізь неї видно арену, а не чорний лист.</summary>
+        public static void Glass(VisualElement e, float alpha = 0.80f)
+        {
+            if (!Stage.RingStageHub.Has3D) return;
+            e.style.backgroundColor = new Color(Panel.r, Panel.g, Panel.b, alpha);
         }
 
         public static Label Lbl(string text, float size = 17f, Color? color = null, bool bold = false)

@@ -9,8 +9,8 @@ namespace Game.Gameplay.EditorTools
 {
     /// <summary>
     /// Збирає сцену зрізу «Ворожнеча» кодом (як ChronicleSceneBuilder: сцена не лежить у репозиторії готовою, бо посилається
-    /// на скрипт за GUID із .meta, а .meta локальні). У сцені лише камера й об'єкт з RingFeudBootstrap: увесь екран —
-    /// UI Toolkit, 3D немає. Сцену НЕ додаємо в Build Settings: єдина сцена білду — Game.unity старої збірки.
+    /// на скрипт за GUID із .meta, а .meta локальні). У сцені камера й об'єкт з RingFeudBootstrap (панелі UI Toolkit) і
+    /// RingStage3D (3D-ринг під ними; ассети прив'язує RingStageSceneSetup). Сцену НЕ додаємо в Build Settings: єдина сцена білду — Game.unity старої збірки.
     /// Із консолі: Unity.exe -batchmode -quit -projectPath ... -executeMethod Game.Gameplay.EditorTools.RingSceneBuilder.Build
     /// </summary>
     public static class RingSceneBuilder
@@ -32,6 +32,8 @@ namespace Game.Gameplay.EditorTools
 
             var host = new GameObject("RingFeud");
             host.AddComponent<RingFeudBootstrap>();
+            // Ітерація 1: 3D-ринг під панелями (арена, борці, рефері, режисер кліпів).
+            RingStageSceneSetup.Attach(host);
 
             if (!AssetDatabase.IsValidFolder(SceneFolder)) AssetDatabase.CreateFolder("Assets", "Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);

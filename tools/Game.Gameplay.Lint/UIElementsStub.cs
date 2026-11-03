@@ -15,6 +15,7 @@ namespace UnityEngine.UIElements
     public enum Align { Auto = 0, FlexStart = 1, Center = 2, FlexEnd = 3, Stretch = 4 }
     public enum WhiteSpace { Normal = 0, NoWrap = 1 }
     public enum Justify { FlexStart = 0, Center = 1, FlexEnd = 2, SpaceBetween = 3, SpaceAround = 4, SpaceEvenly = 5 }
+    public enum Overflow { Visible = 0, Hidden = 1 }
     public enum Wrap { NoWrap = 0, Wrap = 1, WrapReverse = 2 }
     public enum ScrollViewMode { Vertical = 0, Horizontal = 1, VerticalAndHorizontal = 2 }
     public enum PanelScaleMode { ConstantPixelSize = 0, ConstantPhysicalSize = 1, ScaleWithScreenSize = 2 }
@@ -98,6 +99,9 @@ namespace UnityEngine.UIElements
         StyleEnum<FlexDirection> flexDirection { get; set; }
         StyleEnum<Align> alignItems { get; set; }
         StyleFloat flexGrow { get; set; }
+        StyleFloat opacity { get; set; }
+        StyleLength flexBasis { get; set; }
+        StyleEnum<Overflow> overflow { get; set; }
         StyleFloat flexShrink { get; set; }
         StyleEnum<DisplayStyle> display { get; set; }
         StyleColor backgroundColor { get; set; }
@@ -162,6 +166,9 @@ namespace UnityEngine.UIElements
         public StyleEnum<FlexDirection> flexDirection { get; set; }
         public StyleEnum<Align> alignItems { get; set; }
         public StyleFloat flexGrow { get; set; }
+        public StyleFloat opacity { get; set; }
+        public StyleLength flexBasis { get; set; }
+        public StyleEnum<Overflow> overflow { get; set; }
         public StyleFloat flexShrink { get; set; }
         public StyleEnum<DisplayStyle> display { get; set; }
         public StyleColor backgroundColor { get; set; }
@@ -211,6 +218,8 @@ namespace UnityEngine.UIElements
     }
 
     public abstract class EventBase<T> : EventBase where T : EventBase<T>, new() { }
+
+    public sealed class ClickEvent : EventBase<ClickEvent> { }
 
     public sealed class PointerEnterEvent : EventBase<PointerEnterEvent> { }
 
