@@ -403,8 +403,18 @@ def lockup_var_frames(name, settle=True):
             ring_lab.place_hands(MOVE_MAP); ring_lab.place_hands(MOVE_MAP)
         elif settle and ga > 0.05:
             settle_pair()
+        if ga > 0.05:                                    # ітерація 2: долоня на шкірі й пальці облягають (як у чейні) —
+            import ring_chain_lab as C                   # по сітках кисть B входила в голову A на 4–7 см
+            for tag in "AB":
+                for sd in "lr":
+                    C.seat_palm(tag, sd)
+                    C.conform_fingers(tag, sd)
         out["A"].append(ring_lab.capture("A")); out["B"].append(ring_lab.capture("B"))
+    import ring_chain_lab as C
+    if "limit_jerk" in G:
+        out = {t: G["limit_jerk"](fr) for t, fr in out.items()}
     ring_lab.LAB["frames"] = out
+    C.repair_frames(name)
     ring_lab.LAB["contacts"] = []
     ring_lab.LAB["name"] = name
     return n

@@ -47,9 +47,9 @@ class Ctr:
 
 
 CENTER = [
-    Ctr("Center_ShoulderBlock", "block", "back", 0.64, gap=0.42),
-    Ctr("Center_Clothesline", "line", "back", -0.66),
-    Ctr("Center_Clothesline_Flip", "line", "front", -0.58),         # розвертає — падає обличчям, позаду A
+    Ctr("Center_ShoulderBlock", "block", "back", 0.9, gap=0.42),
+    Ctr("Center_Clothesline", "line", "back", -0.9),
+    Ctr("Center_Clothesline_Flip", "line", "front", -0.66),         # розвертає — падає обличчям, позаду A
     Ctr("Center_Lariat_Left", "line_l", "side", 0.62),
     Ctr("Center_RunningElbow", "elbow", "side", 0.62),            # лівим ліктем; B падає на бік — геть від лінії бігу
     Ctr("Center_ForearmShiver", "forearm", "stagger", -0.3, pass_=False, gap=0.72),
@@ -59,11 +59,11 @@ CENTER = [
     Ctr("Center_Sidestep", "line", "sidestep", -0.42),
     Ctr("Center_Duck", "line", "duck", -0.58),
     Ctr("Center_Headbutt", "head", "stagger", 0.0, pass_=False, gap=0.72),
-    Ctr("Center_ShoulderBlock_Heavy", "block", "back_fast", 0.64, gap=0.42, run=CT_HEAVY),
+    Ctr("Center_ShoulderBlock_Heavy", "block", "back_fast", 0.78, gap=0.42, run=CT_HEAVY),
     Ctr("Center_BigBoot_Stagger", "boot", "stagger", -0.22, pass_=False, gap=1.02),
-    Ctr("Center_Lariat_Heavy", "line", "back", -0.58, run=CT_HEAVY),
+    Ctr("Center_Lariat_Heavy", "line", "back", -0.82, run=CT_HEAVY),
     # шолдер такл: обидва біжать назустріч, плече в плече — B збито з ніг на ходу
-    Ctr("Center_ShoulderTackle", "block", "run_back", 0.64, gap=0.42),
+    Ctr("Center_ShoulderTackle", "block", "run_back", 0.9, gap=0.42),
 ]
 
 
@@ -119,7 +119,8 @@ def center_a(c):
             s_ = "r" if c.a == "line" else "l"
             sd = -1 if s_ == "r" else 1
             hold = p.hands[s_]
-            arm = lambda S, s_=s_, sd=sd: S[s_] + Vector((0.55 * sd, -0.12, 0.02))        # рука вбік, на рівні шиї
+            hz = 0.06 if c.b in ("sidestep", "duck") else -0.1                    # промах (B ухилився) — вище, над ним
+            arm = lambda S, s_=s_, sd=sd: S[s_] + Vector((0.55 * sd, -0.12, hz))         # рука вбік, на рівні грудей (на рівні шиї — крізь голову)
             p.hands = dict(p.hands)
             p.hands[s_] = (lambda S, h=hold, a_=arm: lerp(h[0](S), a_(S), w), lambda S, h=hold: lerp(h[1] if not callable(h[1]) else h[1](S), Vector((sd, -0.2, 0.0)), w),
                            lambda S, h=hold: lerp(h[2] if not callable(h[2]) else h[2](S), UP, w))
@@ -160,7 +161,7 @@ def center_a(c):
             kw = _act_w(t, c, before=0.28, after=0.4)
             hip = REST["hip_r"] + p.pelvis
             if c.a == "boot":
-                kick = hip + Vector((0.0, -0.8 * BODY["leg"], 0.3 * BODY["leg"]))           # підошва — у груди, не в голову
+                kick = hip + Vector((0.0, -0.75 * BODY["leg"], 0.3 * BODY["leg"]))           # підошва — у груди, не в голову
             else:
                 kick = hip + Vector((0.0, -0.3 * BODY["leg"], 0.0))
             p.ankles = (p.ankles[0], lerp(p.ankles[1], kick, kw))
@@ -183,7 +184,8 @@ def _stagger_b(t, L, c):
 
 def center_b(c):
     def f(t, L, partner=None):
-        tb = t - (c.t_hit - (0.12 if c.pass_ else 0.04))  # бамп — на мить раніше удару (борці «приймають» його);
+        lead = (0.19 if c.a in ("line", "line_l") else 0.12) if c.pass_ else 0.04
+        tb = t - (c.t_hit - lead)                         # бамп — на мить раніше удару (борці «приймають» його);
                                                           # від удару з місця — майже разом, інакше нога не дістає
         if c.b == "run_back":                            # біжить назустріч A, від удару — на спину з місця, де збили
             d = c.b_run()

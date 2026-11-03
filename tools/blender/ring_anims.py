@@ -542,7 +542,7 @@ def clip_slam_b(t, L, partner=None):
     # Карта тіла B у підйомі: горизонтально, обличчям угору, притиснутий до грудей A на висоті його грудей; голова —
     # ліворуч від A, ноги — праворуч; спина лежить на передпліччях A. Падає прямо перед A, на спину.
     carry_abs = a_to_b(Vector((0.05, -0.47, 1.27)))               # вище й далі від грудей A (стегно B входило в груди A)
-    mat_abs = a_to_b(Vector((0.0, -0.98, LIE_Z)))                 # на маті перед A, ноги B — повз стопи A
+    mat_abs = a_to_b(Vector((0.0, -1.1, LIE_Z)))                  # на маті перед A, ноги B — повз стопи A; руки B на падінні — повз стегна A
     q_carry = Quaternion(UP, math.radians(90.0)) @ Q_BACK         # голова — ліворуч від A (його ліва рука — під лопатками), спина вниз
     if k < 1.0:
         kk = smooth(k)
@@ -586,7 +586,7 @@ def clip_slam_b(t, L, partner=None):
     p.head_yaw = 18.0 * writhe * sell
     # права рука B (бік до грудей A) тримається за ліве плече A аж до кидка — звисаючи, вона йшла в свій таз
     on_a = {"l": lambda S: S["l"] + Vector((0.22, -0.12, -0.3)),        # ліва — вільна, збоку (над плечем A била в його голову)
-            "r": lambda S: P(S, "spine_03", 0.9, Vector((-0.12, -0.12, 0.05))) or S["r"]}
+            "r": lambda S: P(S, "spine_03", 0.9, Vector((-0.2, -0.12, 0.05))) or S["r"]}
     hold_r = 1.0 - smooth((k - 2.9) / 0.5) if k > 2.9 else 1.0
     if k < 1.4:
         # ще стоїть: руки на плечах A; з відривом від мату ліва плавно відпускає й звисає
@@ -595,7 +595,10 @@ def clip_slam_b(t, L, partner=None):
         hang = {"l": lambda S: S["l"] + q @ Vector((0.3, 0.15, -0.1)) + Vector((0, 0, -0.2)),
                 "r": lambda S: S["r"] + q @ Vector((-0.3, 0.15, -0.1)) + Vector((0, 0, -0.2))}
         lt = {"l": let, "r": 0.0}
-        p.hands = {s_: (lambda S, s_=s_: lerp(on_a[s_](S), hang[s_](S), lt[s_]), FWD.lerp(DOWN, lt[s_]), UP.lerp(FWD, lt[s_]))
+        gb = smooth(min(1.0, t / 0.3))                              # зі стійки — до плеча A дугою зверху (навпростець — крізь тулуб)
+        guard_b = {"l": lambda S: S["l"] + Vector((0.12, -0.2, -0.26)), "r": lambda S: S["r"] + Vector((-0.07, -0.27, -0.2))}
+        on_g = {s_: (lambda S, s_=s_: lerp(guard_b[s_](S), on_a[s_](S), gb) + Vector((0, 0, 0.18 * math.sin(math.pi * gb)))) for s_ in "lr"}
+        p.hands = {s_: (lambda S, s_=s_: lerp(on_g[s_](S), hang[s_](S), lt[s_]), FWD.lerp(DOWN, lt[s_]), UP.lerp(FWD, lt[s_]))
                    for s_ in "lr"}
         p.fist = {"l": 0.5 - 0.4 * let, "r": 0.5}
     else:
@@ -604,8 +607,10 @@ def clip_slam_b(t, L, partner=None):
         fl = math.sin(2 * math.pi * t / 0.45)
         # руки звисають униз-назовні від плечей (горизонтальний B: прямо «вниз» — крізь власну спину)
         hang = {"l": (lambda S: S["l"] + q @ Vector((0.3 + 0.06 * fl, 0.15, -0.1)) + Vector((0, 0, -0.2)), DOWN, FWD),
-                "r": (lambda S: lerp(S["r"] + q @ Vector((-0.3 - 0.06 * fl, 0.15, -0.1)) + Vector((0, 0, -0.2)),
-                                     on_a["r"](S), hold_r), FWD.lerp(DOWN, 1 - hold_r), UP.lerp(FWD, 1 - hold_r))}
+                # ближня до A права — відпустивши плече, притиснута до своїх грудей (у звисанні й на падінні йшла крізь
+                # коліна присілого A, 4,8 см по сітках); на мат — разом із тілом (злиття з мат-позою нижче)
+                "r": (lambda S: lerp(S["chest"] + q @ Vector((-0.06, -0.14, 0.06)), on_a["r"](S), hold_r),
+                      FWD.lerp(DOWN, 1 - hold_r), UP.lerp(FWD, 1 - hold_r))}
         arms_on_mat(p, q, lift_l=0.3 * (1 - land) + 0.5 * sell * max(0.0, writhe), lift_r=0.3 * (1 - land) + 0.6 * sell)
         w = smooth((k - 3.1) / 0.9) if k > 3.1 else 0.0
         mat_h, mat_e = p.hands, p.elbows
@@ -633,6 +638,7 @@ def clip_slam_a(t, L, partner=None):
     scoop = smooth(k) if k < 1.0 else 1.0
     lift = smooth(k - 1.0) if 1.0 <= k < 2.0 else (1.0 if k >= 2.0 else 0.0)
     slam = smooth((k - 3.0) / 1.0) if k > 3.0 else 0.0
+    slam = slam * (1.0 - smooth((t - 1.8) / 0.5))                  # після кидка випрямляється (у присіді руки B били в стегна)
     p.pelvis = Vector((0.1 * scoop * (1 - lift), -0.06 * scoop, -0.1 - 0.2 * scoop + 0.18 * lift - 0.22 * slam))
     p.roll = -12.0 * scoop * (1 - lift)         # голова — праворуч, повз тулуб B (він іде ліворуч), а не в його руку
     p.pitch = 18.0 + 4.0 * scoop - 34.0 * lift + 34.0 * slam      # з вагою на руках — відхиляється назад
@@ -642,11 +648,14 @@ def clip_slam_a(t, L, partner=None):
     under = smooth(k - 1.0) if k > 1.0 else 0.0                   # з підйомом кисті переходять під тіло B
     grab = smooth(min(1.0, t / 0.32))                             # 2 передчуття: руки йдуть до хватки, а не стрибають
     g0 = {"l": Vector((-0.07, -0.27, -0.2)), "r": Vector((0.07, -0.27, -0.2))}
+    arc = math.sin(math.pi * grab)                                # підхід дугою в обхід тулуба B (навпростець — крізь нього)
     p.hands = {
         # права — між ніг B під стегно, ліва — за плече B, у підйомі — під лопатки (B лежить на передпліччях)
-        "r": (lambda S: lerp(S["r"] + g0["r"], P(S, "thigh_r", 0.3 + 0.2 * under, Vector((0.0, 0.0, -0.11 - 0.03 * under))) or S["r"], grab), FWD, UP),
+        "r": (lambda S: lerp(S["r"] + g0["r"], P(S, "thigh_r", 0.3 + 0.2 * under, Vector((0.0, 0.0, -0.11 - 0.03 * under))) or S["r"], grab)
+                    + Vector((0,0,0)) * arc, FWD, UP),
         # ліва — на праве плече B збоку (зі свого лівого боку): до центру спини B передпліччя лягало на свої груди
-        "l": (lambda S: lerp(S["l"] + g0["l"], P(S, "spine_03", 0.5, Vector((0.16 * (1 - under), 0.0, -0.1 - 0.04 * under))) or S["l"], grab), FWD + UP * 0.3, UP),
+        "l": (lambda S: lerp(S["l"] + g0["l"], P(S, "spine_03", 0.5, Vector((0.16 * (1 - under), 0.0, -0.1 - 0.04 * under))) or S["l"], grab)
+                    + Vector((0.14, 0, 0)) * arc, FWD + UP * 0.3, UP),
     }
     rel = smooth((slam - 0.35) / 0.5) if slam > 0.35 else 0.0      # відпускає B плавно, кисті йдуть за ним униз
     if rel > 0.0:
@@ -681,7 +690,7 @@ def clip_cover_b(t, L, partner=None):
     p.roll = 8.0 * struggle * w
     p.head_yaw = 25.0 * struggle * math.sin(2 * math.pi * t / 0.9)
     # ліва рука B — під колінами A: піднімається мало (раніше била A в стегно)
-    arms_on_mat(p, Quaternion(UP, 0.0) @ Q_BACK, lift_l=0.45 * kick + 0.12 * struggle * max(0.0, w),
+    arms_on_mat(p, Quaternion(UP, 0.0) @ Q_BACK, lift_l=0.25 * kick + 0.06 * struggle * max(0.0, w),
                 lift_r=0.27 * kick + 0.4 * struggle * max(0.0, -w))
     return p
 
@@ -698,7 +707,7 @@ def clip_cover_a(t, L, partner=None):
         kk = smooth((lay - 0.35) / 0.65)
         # навколішки поруч із B, тулуб падає грудьми на B
         q = Quaternion(LEFT, math.radians(82.0 * kk + 20.0 * (1 - kk) - 45.0 * thrown))
-        abs_pel = Vector((-0.05 * kk, -0.27 * kk + 0.15 * thrown, 0.7 - 0.34 * kk + 0.24 * thrown))   # коліна над матом
+        abs_pel = Vector((-0.05 * kk, -0.27 * kk + 0.26 * thrown, 0.7 - 0.28 * kk + 0.26 * thrown))   # коліна над матом; груди на грудях B, не в них (5 см по сітках)
         p = RPose()
         p.pelvis = off_for(abs_pel)
         p.pelvis_q = q
@@ -713,9 +722,10 @@ def clip_cover_a(t, L, partner=None):
         # під стегном B, «чіпляє ногу»; права (бік голови B, −X) — через його плечі на мат
         p.hands = {
             # відкинутий («викрутився» на два) — ліва відпускає ногу B і йде на мат біля себе
-            "l": (lambda S: (P(S, "thigh_l", 0.55, Vector((0.0, 0.0, 0.08))) or S["l"]).lerp(S["l"] + Vector((0.2, -0.15, -0.35)), thrown),
+            "l": (lambda S: (P(S, "thigh_l", 0.55, Vector((0.0, 0.0, 0.08))) or S["l"]).lerp(S["l"] + Vector((0.2, -0.15, -0.35)), thrown)
+                  + Vector((0.0, 0.0, 0.16 * math.sin(math.pi * thrown))),           # відпускаючи — дугою над стегном B
                   DOWN + FWD * 0.3, FWD),
-            "r": (lambda S: P(S, "spine_03", 0.9, Vector((-0.08, -0.12, 0.1))) or S["r"], DOWN, FWD),
+            "r": (lambda S: P(S, "spine_03", 0.9, Vector((-0.08, -0.12, 0.15))) or S["r"], DOWN, FWD),
         }
         p.elbows = {"l": lambda S: S["l"] + Vector((0.35, 0.0, 0.25)), "r": lambda S: S["r"] + Vector((-0.35, -0.1, 0.3))}
         p.head_pitch = 25.0
@@ -887,7 +897,7 @@ def clip_forearm_a(t, L, partner=None):
     def hand_r(S):
         g = S["r"] + guard_r
         up = S["r"] + Vector((-0.2, 0.06, 0.04))                        # лікоть назад-угору, кулак біля вуха
-        hit = P(S, "spine_03", 0.7, Vector((0.16, 0.06, 0.02))) or (S["r"] + Vector((0.1, -0.55, -0.05)))
+        hit = P(S, "spine_03", 0.7, Vector((0.16, 0.13, 0.02))) or (S["r"] + Vector((0.1, -0.55, -0.05)))   # на поверхні грудей B (було в них, 4,3 см по сітках)
         fol = S["r"] + Vector((0.26, -0.36, -0.14))                     # рука пройшла крізь ціль і пішла далі
         rest = max(0.0, 1.0 - w_up - w_hit - w_fol)
         return g * rest + up * w_up + hit * w_hit + fol * w_fol
@@ -1232,7 +1242,8 @@ SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "han
 
 # Пороги §4.1 плану (docs/TRPG_DESIGN.md §11.2): у см, градусах; ривок — лише у звіт.
 LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0,
-          "hand_jump": 30.0, "rope": 2.0, "wrist": 15.0, "elbow_in": 0.0}
+          "hand_jump": 30.0, "rope": 2.0, "wrist": 15.0, "elbow_in": 0.0,
+          "mpen": 2.0}    # mpen — пара по сітках тіл (ітерація 2, 03.11.2026: капсули пропускали тіло в тілі до 20 см)
 # wrist — скручування кисті (°), що лишилось після переносу в передпліччя: кисть сама не скручується, шкіра жгутом;
 # elbow_in — лікоть усередині свого тулуба (см): «руки из груди торчат … руки из плечей растут» (власник 30.10.2026)                           # кисть: 9 м/с — швидкість реального удару                                        # см за кадр (30 к/с) — 7,5 м/с
 JERK_WARN = 6.0        # °/кадр² — пік кутового прискорення кістки
@@ -1377,7 +1388,7 @@ def qangle(a, b):
 
 def fails(q):
     out = []
-    for k in ("slide", "pen", "self", "under", "reach", "hand_jump", "rope", "wrist", "elbow_in"):
+    for k in ("slide", "pen", "self", "under", "reach", "hand_jump", "rope", "wrist", "elbow_in", "mpen"):
         if k in q and q[k][0] > LIMITS[k] + 1e-6:
             out.append(k)
     if "node" in q and (q["node"][0] > LIMITS["node_deg"] or q["node"][1] > LIMITS["node_cm"]):
@@ -1500,6 +1511,8 @@ def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
                 # руки — теж до вузла, якщо кліп одиночний або це старт зі стійки (на старті ще ніхто нікого не тримає)
                 blend_to_node(rig, cap, node, w, free=((fb is None and not getattr(rig, "holds", False))
                                                         or (node == "stance" and f < nblend)))
+        if POLISH and fb is not None and 0 < f <= frames - nblend:   # кисть/стопа не в тілі суперника (по сітках) — після доведення
+            settle_contacts(rigA, rigB)                  # до вузла (воно ставило руки стійки в тулуб суперника)
         if DIAG and name in DIAG:                       # --diag Кліп: поточні точки ніг і цілі IK для розбору
             pbd, Wd = rigA.arm.pose.bones, rigA.arm.matrix_world
             r_ = lambda v: tuple(round(x, 2) for x in v)
@@ -1531,9 +1544,10 @@ def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
     q = quality(name, wa, wb, [("A", ba)] + ([("B", bb)] if fb is not None else []))
     if POLISH:                                        # ітерація 2: перекриття, запізнення, дихання (ring_anims_polish.py)
         holds = fb is not None                       # пара: руки — як розв'язав IK (хвати й навмисні дотики)
+        fa_, fb_ = None, None                        # (заморожування рук біля суперника давало ривки 60–94)
         for lite in (0, 1, 2):                       # повний шар → руки як є → ще й ноги як є → без шару
-            pa_ = polish_seq(armA, ba, loop, fb is not None, holds, lite)
-            pb_ = polish_seq(armB, bb, loop, True, holds, lite) if fb is not None else (bb, sb, wb)
+            pa_ = polish_seq(armA, ba, loop, fb is not None, holds, lite, fa_)
+            pb_ = polish_seq(armB, bb, loop, True, holds, lite, fb_) if fb is not None else (bb, sb, wb)
             qp = quality(name, pa_[2], pb_[2], [("A", pa_[0])] + ([("B", pb_[0])] if fb is not None else []))
             if not (fails(qp) and not fails(q)):
                 (ba, sa, wa), (bb, sb, wb), q = pa_, pb_, qp
@@ -1542,6 +1556,8 @@ def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
                 break
         else:                                        # шар не робить кліп гіршим: тоді — без нього
             print(f"   [оживлення] {name}: без шару ({', '.join(fails(qp))})", flush=True)
+    if fb is not None and not os.path.exists(os.path.join(LAB_DIR, name + ".json")):   # пара — по сітках тіл
+        q["mpen"] = mesh_pen(armA, armB, sa, sb)       # (лабораторні кліпи замінюють цей — їх перевіряє lab_mesh_report)
     q["reach"] = (reach[0] * 100.0, reach[1])
     q["wrist"] = (wrist[0], wrist[1])
     # після доведення поза на краях — точно вузол; залишкова різниця — для контролю
@@ -1626,6 +1642,8 @@ def main():
             state += f" · кисть стрибнула {q['hand_jump'][0]:.0f} см ({q['hand_jump'][1]})"
         if q.get("wrist", (0, ""))[0] > LIMITS["wrist"]:
             state += f" · кисть скручена {q['wrist'][0]:.0f}° ({q['wrist'][1]})"
+        if q.get("mpen", (0, ""))[0] > LIMITS["mpen"]:
+            state += f" · тіла по сітках {q['mpen'][0]:.1f} см ({q['mpen'][1]})"
         if q.get("elbow_in", (0, ""))[0] > LIMITS["elbow_in"]:
             state += f" · лікоть у тулубі {q['elbow_in'][0]:.0f} см ({q['elbow_in'][1]})"
         if q["jerk"][0] > JERK_WARN:
@@ -1669,9 +1687,13 @@ def main():
     actions = {n: write_action(armA, n, s_) for n, s_, arm in samples}
     loop_of = {c[0]: c[4] for c in CLIPS}
     lab = load_lab_clips(armA, actions)
+    if POLISH:                                    # ітерація 2: лабораторні кліпи — теж перевірка по сітках (саме те, що йде у FBX)
+        report.extend(lab_mesh_report(armA, armB))
     for n, act in actions.items():
         base = n[:-2] if n.endswith(("_A", "_B")) else n
-        if base not in lab:                       # кліпи з лабораторії вже з перекриттям і посадкою кистей
+        # ітерація 2: старе перекриття (зсув кривих) — ПІСЛЯ перевірок, тож у FBX ішов неперевірений рух; його робить
+        # перевірений шар оживлення (ring_anims_polish.py)
+        if base not in lab and not POLISH:            # кліпи з лабораторії вже з перекриттям і посадкою кистей
             overlap(act, base, loop_of.get(base, False))
     if REELS:
         for name, an, bn, offset, yaw in reel_specs:

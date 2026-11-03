@@ -1081,6 +1081,67 @@ def repair_frames(name, keep=0):
             else:
                 out["A"][f], out["B"][f] = old
     print(f"[{name}] ремонт ключами: {fixed} кадрів, добрих {sum(1 for x in score if x <= REPAIR_OK)}/{n}", flush=True)
+    if "limit_jerk" in G:
+        for rnd in range(4):
+            pushed = [f for f in range(n) if score[f] > REPAIR_OK and push_frame(f, score[f])]
+            if not pushed:
+                break
+            out.update({t: G["limit_jerk"](out[t]) for t in ("A", "B")})
+            score = [_body_pen(f) for f in range(n)]
+            print(f"[{name}] доводка по сітках {rnd + 1}: {len(pushed)} кадрів, добрих "
+                  f"{sum(1 for x in score if x <= REPAIR_OK)}/{n}, найгірший {max(score):.1f} см", flush=True)
+        for f in range(n):
+            if score[f] > REPAIR_OK:
+                show_fk(f)
+                print(f"[{name}] лишилось: кадр {f} {(_pen() + self_pen())[:3]}", flush=True)
+
+
+def _arm_bones(arm, s):
+    root = arm.pose.bones["clavicle_" + s]
+    return {root.name} | {c.name for c in root.children_recursive}
+
+
+def push_frame(f, before):
+    """Доводка кадру, якого ремонт ключами не врятував (03.11.2026: кисті на підході в тулубі суперника, 2–9 см по
+    сітках): цілі IK рук — у поточну FK-позу, далі посадка й виштовхування з тіла суперника, як під час розв'язання;
+    руки беруться з нового розв'язку, лише якщо проникнення менше."""
+    out = LAB["frames"]
+    show_fk(f)
+    for tag in "AB":
+        rig = LAB["rig" + tag]
+        arm, mw = rig.arm, rig.arm.matrix_world
+        pb = arm.pose.bones
+        for s in "lr":
+            want = mw @ pb["hand_" + s].head
+            rig.empties["wrist_" + s].rotation_quaternion = (mw @ pb["hand_" + s].matrix).to_quaternion()
+            sh, el, wr = pb["upperarm_" + s].head, pb["lowerarm_" + s].head, pb["hand_" + s].head
+            d = el - (sh + wr) / 2
+            rig.empties["elbow_" + s].location = mw @ (el + (d.normalized() * 0.3 if d.length > 1e-4 else Vector()))
+            rig.empties["wrist_" + s].location = want
+            for bn in ("lowerarm_" + s, "hand_" + s):
+                for c in pb[bn].constraints:
+                    c.mute = False
+            bpy.context.view_layer.update()
+            for _ in range(3):                        # ціль зап'ястя — не точно основа кисті: довести
+                got = mw @ pb["hand_" + s].head
+                if (got - want).length < 0.003:
+                    break
+                rig.empties["wrist_" + s].location += want - got
+                bpy.context.view_layer.update()
+    for _ in range(2):
+        for tag in "AB":
+            ring_lab.settle(tag, max_depth=0.002, max_shift=0.12)
+            push_arm(tag, "r", iters=30); push_arm(tag, "l", iters=30)
+    caps = {tag: capture_limited(tag) for tag in "AB"}
+    old = (out["A"][f], out["B"][f])
+    for tag in "AB":
+        arm = LAB["arm" + tag]
+        keep = _arm_bones(arm, "l") | _arm_bones(arm, "r")
+        out[tag][f] = {n_: (caps[tag][n_] if n_ in keep else v) for n_, v in out[tag][f].items()}
+    if _body_pen(f) < before:
+        return True
+    out["A"][f], out["B"][f] = old
+    return False
 
 
 def show_fk(f):
@@ -1569,8 +1630,9 @@ def sh_a(k=1.0):
         tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
         chest = {s: (lambda S, s=s: SURF.get("C" + s) or S[s] + Vector((0.0, -0.45, -0.1))) for s in "lr"}
         open_ = {"l": lambda S: S["l"] + Vector((0.45, -0.15, 0.05)), "r": lambda S: S["r"] + Vector((-0.45, -0.15, 0.05))}
-        p.hands = {"r": (lambda S: _phase(ph, tie_r(S), chest["r"](S), open_["r"](S)), Vector((0, 0, 1)), Vector((0, 1, 0))),
-                   "l": (lambda S: _phase(ph, tie_l(S), chest["l"](S), open_["l"](S)), Vector((0, 0, 1)), Vector((0, 1, 0)))}
+        back = Vector((0.0, 0.14, -0.04)) * math.sin(math.pi * min(1.0, ph))   # з хвату на груди — до себе й назад (навпростець — крізь B)
+        p.hands = {"r": (lambda S: _phase(ph, tie_r(S), chest["r"](S), open_["r"](S)) + back, Vector((0, 0, 1)), Vector((0, 1, 0))),
+                   "l": (lambda S: _phase(ph, tie_l(S), chest["l"](S), open_["l"](S)) + back, Vector((0, 0, 1)), Vector((0, 1, 0)))}
         p.elbows = {"l": lambda S: S["l"] + Vector((0.3, 0.05, -0.35)), "r": lambda S: S["r"] + Vector((-0.3, 0.05, -0.35))}
         p.fist = {"l": 0.1, "r": 0.1}
         return p
