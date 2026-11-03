@@ -167,8 +167,11 @@ def foot_roll(arm, basis_seq, order, axis=Vector((1.0, 0.0, 0.0)), sign=1.0):
     return seq
 
 
-def polish_seq(arm, basis_seq, loop, pair, holds):
-    """Повертає (локальні повороти, матриці, точки контакту) після шару оживлення."""
+def polish_seq(arm, basis_seq, loop, pair, holds, lite=0):
+    """Повертає (локальні повороти, матриці, точки контакту) після шару оживлення.
+    lite: 0 — повний шар; 1 — руки як розв'язав IK; 2 — ще й ноги (без перекату й обмежувача)."""
+    if lite:
+        holds = True
     n = len(basis_seq)
     if n < 4:
         caps = [_fk(arm, b, _order(arm)) for b in basis_seq]
@@ -178,12 +181,12 @@ def polish_seq(arm, basis_seq, loop, pair, holds):
     caps0 = [_fk(arm, b, order) for b in basis_seq]
     springs = {}
     for b in order:
-        if b.name in SPRING and not (pair and holds and b.name in ARM_BONES):
+        if b.name in SPRING and not ((pair or lite) and holds and b.name in ARM_BONES):
             w, dev = SPRING[b.name]
             if pair:
                 w, dev = w * 2.0, dev * 0.15                # пара: хребет жорсткіший — кисті суперника на шиї/плечах
             springs[b.name] = (w, math.radians(dev))
-        elif b.name.startswith(FINGERS) and not (pair and holds):
+        elif b.name.startswith(FINGERS) and not ((pair or lite) and holds):
             springs[b.name] = (FINGER_SPRING[0], math.radians(FINGER_SPRING[1]))
     # дихання: період кратний довжині петлі (шов без стрибка)
     L = (n - 1) * dt
@@ -198,6 +201,8 @@ def polish_seq(arm, basis_seq, loop, pair, holds):
         for f in range(n):
             tgt = caps0[f]
             edge = min(1.0, smooth(f / nb), smooth((n - 1 - f) / nb))   # краї — точно вузол (і в петлях: шов = вузол)
+            # лежачи пружина хребта тисне плечима в мат — гасне, коли таз опускається до мату
+            edge *= smooth(((arm.matrix_world @ tgt["pelvis"].translation).z - 0.25) / 0.2)
             br = math.sin(2 * math.pi * f * dt / per)
             nbasis = {}
             cap = {}
@@ -227,9 +232,10 @@ def polish_seq(arm, basis_seq, loop, pair, holds):
             out_basis.append(nbasis)
         if loop and ps == 0:
             continue
-    out_basis = limit_jerk(out_basis)
-    out_basis = foot_roll(arm, out_basis, order)
-    out_basis = limit_jerk_swing(arm, out_basis, order)
+    out_basis = limit_jerk(out_basis, keep=ARM_BONES if lite else ())    # lite: руки торкаються мату/суперника
+    if lite < 2:
+        out_basis = foot_roll(arm, out_basis, order)
+        out_basis = limit_jerk_swing(arm, out_basis, order)
     caps = [_fk(arm, b, order) for b in out_basis]
     return out_basis, caps, [(c, _contact_pts(arm, c)) for c in caps]
 

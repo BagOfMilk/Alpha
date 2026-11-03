@@ -1531,13 +1531,17 @@ def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
     q = quality(name, wa, wb, [("A", ba)] + ([("B", bb)] if fb is not None else []))
     if POLISH:                                        # ітерація 2: перекриття, запізнення, дихання (ring_anims_polish.py)
         holds = fb is not None                       # пара: руки — як розв'язав IK (хвати й навмисні дотики)
-        pa_ = polish_seq(armA, ba, loop, fb is not None, holds)
-        pb_ = polish_seq(armB, bb, loop, True, holds) if fb is not None else (bb, sb, wb)
-        qp = quality(name, pa_[2], pb_[2], [("A", pa_[0])] + ([("B", pb_[0])] if fb is not None else []))
-        if fails(qp) and not fails(q):               # шар не робить кліп гіршим: тоді — без нього
+        for lite in (0, 1, 2):                       # повний шар → руки як є → ще й ноги як є → без шару
+            pa_ = polish_seq(armA, ba, loop, fb is not None, holds, lite)
+            pb_ = polish_seq(armB, bb, loop, True, holds, lite) if fb is not None else (bb, sb, wb)
+            qp = quality(name, pa_[2], pb_[2], [("A", pa_[0])] + ([("B", pb_[0])] if fb is not None else []))
+            if not (fails(qp) and not fails(q)):
+                (ba, sa, wa), (bb, sb, wb), q = pa_, pb_, qp
+                if lite:
+                    print(f"   [оживлення] {name}: шар без {'рук' if lite == 1 else 'рук і ніг'}", flush=True)
+                break
+        else:                                        # шар не робить кліп гіршим: тоді — без нього
             print(f"   [оживлення] {name}: без шару ({', '.join(fails(qp))})", flush=True)
-        else:
-            (ba, sa, wa), (bb, sb, wb), q = pa_, pb_, qp
     q["reach"] = (reach[0] * 100.0, reach[1])
     q["wrist"] = (wrist[0], wrist[1])
     # після доведення поза на краях — точно вузол; залишкова різниця — для контролю
