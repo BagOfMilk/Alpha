@@ -1657,7 +1657,7 @@ def facelock_clubs_frames():
 # не дістає: голова A — за плечем B далі, ніж плече й лікоть, перевірено 29.10.2026.)
 def _we_keys():
     k = [(f, dict(v, b_es=0.0)) for f, v in WAISTLOCK_KEYS if f <= 23]
-    hold = dict(WS, b_es=0.0)
+    hold = _ws(b_es=0.0)                              # та сама основа, що й у захваті корпусу (замок, B виривається)
     for f0 in (27, 39, 51):
         k.append((f0, dict(hold, b_es=1.0, b_yaw=-6.0, b_pitch=18.0, b_hy=10.0)))
         k.append((f0 + 4, dict(hold, b_es=2.0, b_yaw=14.0, b_pitch=10.0, b_hy=-10.0,

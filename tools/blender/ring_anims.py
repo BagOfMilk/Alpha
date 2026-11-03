@@ -1475,8 +1475,9 @@ def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
     reach = (0.0, "")
     wrist = [0.0, ""]
     gaps = []
+    warp = make_warp(name, length) if POLISH and fb is not None else None   # ітерація 2: мить удару
     for f in range(frames + 1):
-        solve_frame(rigA, rigB, fa, fb, f / FPS, length)
+        solve_frame(rigA, rigB, fa, fb, warp(f / FPS) if warp else f / FPS, length)
         for r_ in (reach_error(rigA, "A"), reach_error(rigB, "B") if fb is not None else (0.0, "")):
             if r_[0] > reach[0]:
                 reach = (r_[0], f"{r_[1]}, кадр {f}")
@@ -1686,10 +1687,17 @@ def main():
             fh.write("\n".join(motion) + "\n")
     with open(EVENTS, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("# Мітки подій кліпів рингу (tools/blender/ring_anims.py): <кліп> <подія> <час с> <кістка A> <кістка B>\n")
-        for name, *_ in CLIPS:
+        for name, length_, *_ in CLIPS:
             if ONLY and name not in ONLY:
                 continue
+            wp = make_warp(name, length_) if POLISH else None
             for ev, tt, ba, bb in CLIP_EVENTS.get(name, []):
+                if wp:                                 # мить удару зсуває контакт у часі кадрів — обернена таблиця
+                    lo_, hi_ = 0.0, length_
+                    for _ in range(40):
+                        mid = (lo_ + hi_) / 2
+                        lo_, hi_ = (mid, hi_) if wp(mid) < tt else (lo_, mid)
+                    tt = (lo_ + hi_) / 2
                 fh.write(f"{name} {ev} {tt:.3f} {ba} {bb}\n")
     os.makedirs(LOOK_DIR, exist_ok=True)
     with open(os.path.join(LOOK_DIR, "report.md"), "w", encoding="utf-8", newline="\n") as fh:

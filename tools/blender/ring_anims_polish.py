@@ -232,3 +232,49 @@ def polish_seq(arm, basis_seq, loop, pair, holds):
     out_basis = limit_jerk_swing(arm, out_basis, order)
     caps = [_fk(arm, b, order) for b in out_basis]
     return out_basis, caps, [(c, _contact_pts(arm, c)) for c in caps]
+
+
+# ---------------------------------------------------------------- мить удару («хіт-стоп»)
+# На контакті удару рух обох майже завмирає на ~0,1 с і надолужує після (так подають удар ігри рівня АА: вага й сила).
+# Час кліпу переналаштовується монотонно — довжина, початок і кінець ті самі (вузли стикування точні).
+HITSTOP = 0.1          # с — тривалість «завмирання»
+HITSTOP_SLOW = 0.2     # частка швидкості в мить удару
+HITSTOP_OFF = {c.name for c in CENTER if c.b in ("stagger", "sidestep", "duck") or c.a == "nosell"}
+
+
+def hit_times(name):
+    # лише там, де жертва від удару падає: якщо вона «продає» удар кроком, стиснутий після удару час прискорював крок
+    # і опорна стопа ковзала (1,9 см)
+    if name.startswith("Forearm") or name in HITSTOP_OFF:
+        return []
+    return [ev[1] for ev in CLIP_EVENTS.get(name, []) if ev[0] == "contact"]
+
+
+def make_warp(name, length, n=600):
+    """Таблиця «час кадру → час кліпу» з уповільненням біля кожного контакту (інтеграл швидкості, нормований)."""
+    hits = hit_times(name)
+    if not hits:
+        return None
+    ts = [length * i / n for i in range(n + 1)]
+    def speed(t):
+        v = 1.0
+        for h in hits:
+            u = (t - h) / HITSTOP
+            if -1.0 < u < 1.0:
+                v = min(v, 1.0 - (1.0 - HITSTOP_SLOW) * (0.5 + 0.5 * math.cos(math.pi * u)))
+        return v
+    acc = [0.0]
+    for i in range(n):
+        acc.append(acc[-1] + 0.5 * (speed(ts[i]) + speed(ts[i + 1])))
+    k = length / acc[-1]
+    vals = [a * k for a in acc]
+    def warp(t):
+        if t <= 0:
+            return 0.0
+        if t >= length:
+            return length
+        x = t / length * n
+        i = int(x)
+        return vals[i] + (vals[min(n, i + 1)] - vals[i]) * (x - i)
+    return warp
+
