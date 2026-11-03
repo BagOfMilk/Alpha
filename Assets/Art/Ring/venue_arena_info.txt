@@ -1,0 +1,18 @@
+назва Палац спорту (середній промоушен)
+ринг_фути 20
+платформа_половина_м 3.048
+мат_висота_м 1.200
+стійки_м 2.828
+всередині_канатів_м 2.648
+канати Black Black Gold
+місткість 5223
+об'єктів_сітки 85
+граней 35979
+трикутників_зблизька 64808
+трикутників_здалеку 64808
+бюджет_граней 250000
+бюджет_сіток 150
+текстурні_набори black_painted_planks concrete_wall_006 dirty_carpet fabric_leather_02 fabric_pattern_07 hero_folding_table hero_laptop hero_ring_bell hero_ring_canvas_20 hero_ring_pad hero_ring_post hero_ring_steps_120 hero_speaker_la hero_speaker_stack led_pixels metal_plate_02 painted_metal_shutter plastic rubber_tiles smooth_concrete_floor velour_velvet wood_board
+пам'ять_текстур_ASTC_МБ 99.6
+екземпляри chair_folding 689 (LOD0 560 трик., LOD1 4 трик.; усі LOD0 — 385 тис.)
+екземпляри seat_stadium 4558 (LOD0 416 трик., LOD1 4 трик.; усі LOD0 — 1896 тис.)

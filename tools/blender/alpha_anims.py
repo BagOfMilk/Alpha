@@ -63,12 +63,16 @@ class Rig:
         self.finger_axis = {}
         for s in "lr":
             hinge = (b["pinky_01_" + s].head_local - b["index_01_" + s].head_local).normalized()
-            palm = b["thumb_01_" + s].head_local
+            # Бік долоні — нормаль площини кісточок, повернута туди, де великий палець. Стара перевірка («кінчик
+            # ближче до основи великого») на правій кисті давала хибний знак: пальці гнулись НАЗАД — кисть-«лапа з
+            # жахів» (власник 29.10.2026). Тепер: згин має вести кінчик у бік долоні.
+            mid0, hand0 = b["middle_01_" + s].head_local, b["hand_" + s].head_local
+            n = (b["index_01_" + s].head_local - b["pinky_01_" + s].head_local).cross(mid0 - hand0).normalized()
+            if (b["thumb_02_" + s].head_local - mid0).dot(n) < 0:
+                n = -n
             tip, base = b["index_02_" + s].tail_local, b["index_01_" + s].head_local
-            sign = 1.0
             q = Quaternion(hinge, math.radians(60))
-            if ((base + q @ (tip - base)) - palm).length > (tip - palm).length:
-                sign = -1.0
+            sign = 1.0 if (q @ (tip - base)).dot(n) > (tip - base).dot(n) else -1.0
             for f in ("index", "middle", "ring", "pinky"):
                 for k in ("01", "02", "03"):
                     n = f"{f}_{k}_{s}"
@@ -115,7 +119,9 @@ class Rig:
                 if e != wrist:
                     self.empties[e].location = self._rest_end(e)
             best = None
-            for deg in (0, 90, -90, 180):
+            # крок 5° (не 90°): грубий кут на жіночому скелеті набору перевертав коліно в лежачих позах — колінний
+            # суглоб ішов під мат протилежно полюсу (30.10.2026). Міра — відстань суглоба до полюса.
+            for deg in range(-180, 180, 5):
                 self.iks[key].pole_angle = math.radians(deg)
                 bpy.context.view_layer.update()
                 d = (arm.pose.bones[mid].head - pl).length
@@ -161,9 +167,12 @@ def hand_rotation(rig, side, fore, up):
     rw = b1 @ b0.transposed()
     return (rw @ rest(rig.arm, "hand_" + side).to_3x3()).to_quaternion()
 
+PALM_FROM_WRIST = 0.052   # м: зап'ястя → центр долоні (як рахує ring_lab._palm: пів відстані до кісточок); заміряно на наборі
+                          # з людськими кистями 30.10.2026. Було 0,07 — ціль хвату виходила на 1,4 см углиб до пальців
+
 def wrist_for_grip(grip, fore):
     """Зап'ястя, з яким центр долоні опиняється в grip."""
-    return grip - fore.normalized() * 0.07
+    return grip - fore.normalized() * PALM_FROM_WRIST
 
 class Pose:
     """Опис кадру: усе, чого не задано, лишається в спокої."""

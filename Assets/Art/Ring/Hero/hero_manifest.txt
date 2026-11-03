@@ -1,0 +1,17 @@
+# Героїчні предмети (tools/blender/ring_hero.py): hero <ім'я> <трикутників> <розмір текстур> <варіанти…>
+hero chair_folding 560 512 frame
+hero folding_table 208 2048 white
+hero laptop 96 1024 silver
+hero ring_bell 336 512 brass
+hero ring_canvas_16 250 2048 white grey
+hero ring_canvas_18 250 2048 white grey
+hero ring_canvas_20 250 2048 white grey
+hero ring_pad 456 512 neutral
+hero ring_post 440 1024 black steel
+hero ring_steps_100 460 2048 steel black
+hero ring_steps_110 460 2048 steel black
+hero ring_steps_120 460 2048 steel black
+hero speaker_la 48 1024 black
+hero speaker_stack 48 2048 black
+hero speaker_top 48 1024 black
+hero stanchion 356 512 chrome
