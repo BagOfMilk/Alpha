@@ -119,7 +119,7 @@ def limit_jerk_swing(arm, basis_seq, order, passes=6):
             changed = False
             for name in bones_:
                 for i in range(1, n - 1):
-                    if not (air[i - 1] and air[i] and air[i + 1]):
+                    if not air[i]:                           # сам кадр у повітрі (і перед приземленням)
                         continue
                     q0, q1, q2 = seq[i - 1][name][1], seq[i][name][1], seq[i + 1][name][1]
                     mid = q0.slerp(q2, 0.5)
