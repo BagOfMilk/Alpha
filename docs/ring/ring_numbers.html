@@ -1,0 +1,198 @@
+<title>Ринг: числа матчу</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Макет: «картка матчу» — темний ринг-постер у світлій темі як канвас, смуги ступенів 2d6 як головний мотив */
+:root{
+  --bg:#f3f1ee; --panel:#ffffff; --ink:#1d1b20; --dim:#6b6670; --line:#ddd8d2;
+  --miss:#c8423a; --part:#d98b1c; --strong:#3c8a4c; --face:#2f7fc1; --heel:#c8423a; --rebel:#5c9a2b; --gold:#b8862a;
+  --f-display:"Oswald","Arial Narrow",sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121014; --panel:#1c1a20; --ink:#ece7df; --dim:#9a939c; --line:#2e2a33;
+  --miss:#e2574e; --part:#eaa23a; --strong:#5cb36c; --face:#5aa8e6; --heel:#e2574e; --rebel:#8cc45a; --gold:#e6bd66; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121014; --panel:#1c1a20; --ink:#ece7df; --dim:#9a939c; --line:#2e2a33;
+  --miss:#e2574e; --part:#eaa23a; --strong:#5cb36c; --face:#5aa8e6; --heel:#e2574e; --rebel:#8cc45a; --gold:#e6bd66; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 60px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+h1{font-size:40px;line-height:1.05;text-transform:uppercase}
+h2{font-size:24px;text-transform:uppercase;display:flex;gap:10px;align-items:baseline}
+h2 small{font:600 12px var(--f-body);color:var(--dim);letter-spacing:.08em}
+p{margin:0;max-width:68ch}
+.dim{color:var(--dim)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.mono,td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.loop{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.loop span{border:1px solid var(--line);border-radius:3px;padding:5px 10px;background:var(--panel);font-weight:600}
+.loop i{color:var(--dim);font-style:normal}
+.tier-bar{display:flex;height:22px;border-radius:3px;overflow:hidden;font:500 11px var(--f-mono);color:#fff}
+.tier-bar div{display:flex;align-items:center;justify-content:center;min-width:0;white-space:nowrap;overflow:hidden}
+.m{background:var(--miss)}.p{background:var(--part)}.s{background:var(--strong)}
+.row{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:center}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font:600 11px var(--f-body);text-transform:uppercase;letter-spacing:.07em;color:var(--dim);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n{text-align:center;white-space:nowrap}
+.ap{display:inline-flex;gap:3px}.ap b{width:10px;height:10px;border-radius:50%;background:var(--gold);display:inline-block}
+.big{font:600 10px var(--f-body);letter-spacing:.06em;color:var(--part);border:1px solid var(--part);border-radius:3px;padding:0 4px;margin-left:4px}
+.c-m{color:var(--miss)}.c-p{color:var(--part)}.c-s{color:var(--strong)}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center}
+.ctl label{font-size:14px}
+.ctl output{font-family:var(--f-mono);min-width:3ch;text-align:right}
+input[type=range]{width:100%;accent-color:var(--gold)}
+.ctl .chk{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.result{font:700 30px var(--f-display);display:flex;gap:18px;flex-wrap:wrap}
+.result div{display:flex;flex-direction:column}
+.result small{font:600 11px var(--f-body);color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+.track{position:relative;height:30px;border-radius:3px;background:linear-gradient(90deg,var(--part) 0 50%,var(--miss) 50% 100%);opacity:.9}
+.track span{position:absolute;top:0;bottom:0;width:2px;background:var(--ink)}
+.track em{position:absolute;top:32px;font:500 11px var(--f-mono);font-style:normal;transform:translateX(-50%);color:var(--dim)}
+.stats{display:flex;flex-wrap:wrap;gap:24px}
+.stats div{display:flex;flex-direction:column}
+.stats b{font:700 32px var(--f-display)}
+.stats small{color:var(--dim);font-size:12px}
+.ends{display:flex;height:26px;border-radius:3px;overflow:hidden;font:500 12px var(--f-mono);color:#fff}
+.ends div{display:flex;align-items:center;padding-left:8px;white-space:nowrap;overflow:hidden}
+.note{font-size:13px;color:var(--dim)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <span class="dim" style="font:600 12px var(--f-body);letter-spacing:.1em;text-transform:uppercase">Ринг · зріз «Ворожнеча» · GDD §1–§2 · числа — плейсхолдер</span>
+    <h1>Матч на рингу в числах</h1>
+    <p class="dim">Основний цикл ворожнечі й правила пошагового матчу: кидок 2d6 + атрибут, три ступені, 3 очки дій на хід. Дані — з <span class="mono">docs/ring/gdd.md</span> і <span class="mono">MatchRules.cs</span> станом на 03.11.2026.</p>
+  </header>
+
+  <section class="card">
+    <h2>§1 Цикл <small>одна ворожнеча</small></h2>
+    <div class="loop">
+      <span>Промо 1 · Виклик</span><i>→</i><span>Промо 2 · Кабінет букера</span><i>→</i><span>Промо 3 · Парковка</span><i>→</i><span>Промо 4 · Контракт</span><i>→</i><span style="border-color:var(--gold)">Фінальний матч</span><i>→</i><span>Кінцівка (6)</span><i>→</i><span>Розвиток</span><i>→</i><span>Реванш</span>
+    </div>
+    <p class="dim">Кожен вибір у промо змінює хоча б одну шкалу. Перед матчем стан збирається в старт: імпульс = імпульс ворожнечі (0–5) + перки; ажіотаж = 1 + ворожнеча (0–4) + перки; план букера, умови матчу, напарник.</p>
+  </section>
+
+  <section class="card">
+    <h2>Кидок 2d6 + атрибут <small>шанс видно до кидка</small></h2>
+    <p class="dim">Модифікатор = атрибут (−1…+3) мінус штрафи ушкодження плюс бонуси зон і перків. Ступені: <b class="c-m">≤6 провал</b> (хід кінчається), <b class="c-p">7–9 частково</b>, <b class="c-s">10+ чисто</b>.</p>
+    <div id="tiers" style="display:flex;flex-direction:column;gap:6px"></div>
+  </section>
+
+  <section class="card">
+    <h2>§2.2 Хід <small>чергування, очки дій</small></h2>
+    <div class="grid2">
+      <div><b class="mono" style="font-size:28px">3 ОД</b><p class="dim">на хід; до 1 невитраченого переходить на наступний («Завершити хід»).</p></div>
+      <div><b class="mono" style="font-size:28px">≤6</b><p class="dim">провал одразу кінчає хід — решта ОД згорає.</p></div>
+      <div><b class="mono" style="font-size:28px">+1</b><p class="dim">імпульсу за кожен кидок 10+; 1 імпульс = +1 до свого кидка після кидка, якщо це піднімає ступінь.</p></div>
+      <div><b class="mono" style="font-size:28px">2</b><p class="dim">жетони реверсу на матч; «приголомшений» реверсувати не може і має −1 ОД.</p></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>§2.3 Дії <small>17, ціна в очках дій</small></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Дія</th><th>ОД</th><th>Атрибут</th><th>Умова</th><th class="c-s">10+</th><th class="c-p">7–9</th><th class="c-m">≤6</th></tr></thead>
+      <tbody id="acts"></tbody>
+    </table></div>
+    <p class="note">Повтор тієї самої дії вдруге поспіль у ході — ажіотаж −1. Герой за брудний прийом −2 ажіотажу; лиходій за брудний без попередження +1.</p>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Ушкодження <small>0–12</small></h2>
+      <div style="padding-bottom:18px"><div class="track" style="background:linear-gradient(90deg,var(--line) 0 50%,var(--part) 50% 83.3%,var(--miss) 83.3% 100%)">
+        <span style="left:50%"></span><span style="left:83.3%"></span>
+        <em style="left:0%;transform:none">0</em><em style="left:50%">6 · −1</em><em style="left:83.3%">10 · −2</em><em style="left:100%;transform:translateX(-100%)">12</em>
+      </div></div>
+      <p class="dim">Утримання й больовий — лише коли в суперника ушкодження ≥ 4. Перк «Залізна щелепа» зсуває пороги на 8 і 12.</p>
+    </section>
+    <section class="card">
+      <h2>Ажіотаж <small>0–10, спільний</small></h2>
+      <div class="tier-bar" style="height:26px"><div style="width:40%;background:var(--line);color:var(--ink)">0–3 холодно</div><div style="width:30%;background:var(--part)">4–6</div><div style="width:30%;background:var(--strong)">7–10</div></div>
+      <p class="dim">Фінішер відкривається з ажіотажу 4 (і імпульсу 5, ушкодження суперника ≥ 6). Після матчу ажіотаж ≥ 7 дає популярність +1 і очко розвитку, ≤ 3 — популярність −1.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>§2.6 «Вирватися» з утримання <small>калькулятор</small></h2>
+    <p class="dim">2d6 + 2 + Витривалість − вирвані раніше − поріг ушкодження − бонус фінішера − пізня стадія + перк. <b class="c-s">10+</b> — на «раз», <b class="c-p">7–9</b> — на «два» (ажіотаж +2), <b class="c-m">≤6</b> — три, поразка.</p>
+    <div class="grid2">
+      <div class="ctl">
+        <label for="st">Витривалість</label><output id="stv"></output><input id="st" type="range" min="-1" max="3" value="1" style="grid-column:1/-1">
+        <label for="dm">Ушкодження</label><output id="dmv"></output><input id="dm" type="range" min="4" max="12" value="6" style="grid-column:1/-1">
+        <label for="ko">Уже вирвався разів</label><output id="kov"></output><input id="ko" type="range" min="0" max="4" value="0" style="grid-column:1/-1">
+        <label for="fin">Після фінішера</label>
+        <select id="fin"><option value="0">ні</option><option value="2">так, 7–9 (−2)</option><option value="3">так, 10+ (−3)</option></select>
+        <div class="chk"><input id="late" type="checkbox"><label for="late">раунд 12+ (−1)</label></div>
+        <div class="chk"><input id="sw" type="checkbox"><label for="sw">перк «Друге дихання» (+1)</label></div>
+        <div class="chk"><input id="jaw" type="checkbox"><label for="jaw">перк «Залізна щелепа» (пороги 8 і 12)</label></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        <div class="mono dim" id="modt"></div>
+        <div class="result">
+          <div class="c-s"><span id="r1"></span><small>на «раз»</small></div>
+          <div class="c-p"><span id="r2"></span><small>на «два»</small></div>
+          <div class="c-m"><span id="r3"></span><small>три — поразка</small></div>
+        </div>
+        <div class="tier-bar" id="kbar" style="height:28px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Кінець матчу <small>1000 матчів ШІ проти ШІ</small></h2>
+    <div class="stats">
+      <div><b>5,71</b><small>раунду в середньому</small></div>
+      <div><b>≤ 20</b><small>ліміт раундів → нічия</small></div>
+      <div><b>0,88</b><small>вирвань «на два» за матч</small></div>
+      <div><b>49,6 / 50,4</b><small>% перемог гравець / суперник</small></div>
+    </div>
+    <div class="ends"><div style="width:82.6%;background:var(--strong)">утримання 826</div><div style="width:14.8%;background:var(--part)">больовий 148</div><div style="width:2.6%;background:var(--miss)">DQ</div></div>
+    <p class="note">Також кінчають матч: відлік за рингом (+3 за хід поза рингом, на 10 — поразка; обидва поза рингом — нічия) і 3-тє попередження (дискваліфікація, крім умови «без DQ»). До балансу (без порогу 4 і основи +2) матч тривав 4,95 раунду, перше утримання вигравало ~42 % спроб.</p>
+  </section>
+</div>
+
+<script>
+function dist(mod){const c=[0,0,0];for(let a=1;a<=6;a++)for(let b=1;b<=6;b++){const t=a+b+mod;c[t>=10?2:t>=7?1:0]++}return c}
+function pct(c){const raw=c.map(x=>x*100/36),fl=raw.map(Math.floor);let left=100-fl.reduce((a,b)=>a+b,0);raw.map((x,i)=>[x-fl[i],i]).sort((a,b)=>b[0]-a[0]).forEach(([_,i])=>{if(left>0){fl[i]++;left--}});return fl}
+function bar(p){return `<div class="m" style="width:${p[0]}%">${p[0]>6?p[0]+'%':''}</div><div class="p" style="width:${p[1]}%">${p[1]>6?p[1]+'%':''}</div><div class="s" style="width:${p[2]}%">${p[2]>6?p[2]+'%':''}</div>`}
+const sg=v=>v>0?'+'+v:v<0?'−'+(-v):'0';
+document.getElementById('tiers').innerHTML=[-3,-2,-1,0,1,2,3,4,5].map(m=>`<div class="row"><span class="mono">${sg(m)}</span><div class="tier-bar">${bar(pct(dist(m)))}</div></div>`).join('');
+
+const A=[
+ ['Удар',1,'Сила','обидва стоять, одна зона','+2 ушк., ажіотаж +1','+1 ушк.','контрудар: собі +1'],
+ ['Кидок',2,'Сила','суперник стоїть','+3 ушк., лежить, ажіотаж +1','+2 ушк., лежить, собі +1','ти лежиш',1],
+ ['У канати',1,'Техніка','суперник стоїть','канати, наступний удар/кидок +1','канати','вивернувся'],
+ ['У кут',1,'Сила','суперник стоїть','кут: удари по ньому +1','кут','ти в куті'],
+ ['Зі стійки',2,'Спритність','ти в куті','+4 ушк., лежить, ажіотаж +2','+2 ушк., собі +1','собі +2, лежиш',1],
+ ['Дражнити публіку',1,'Харизма','суперник лежить або поза рингом','ажіотаж +2, імпульс +1','ажіотаж +1, він встає','собі +1'],
+ ['Брудний прийом',1,'Харизма','—','+2 ушк., імпульс +1','+2 ушк., попередження','попередження, ажіотаж −1'],
+ ['Больовий',2,'Техніка','лежить, у рингу, ушк. ≥ 4','«Терпіти» з −2','«Терпіти» з −1','він вирвався'],
+ ['Утримання',1,'—','лежить, у рингу, не на канатах, ушк. ≥ 4','він «Вирватися»','—','—'],
+ ['Фінішер',3,'атрибут фінішера','імпульс ≥ 5, ажіотаж ≥ 4, ушк. ≥ 6','+4 ушк. і утримання −3','+3 ушк. і утримання −2','ухилився: ти лежиш',1],
+ ['Відчайдушний прийом',2,'Витривалість','свій імпульс ≤ 2, ушк. ≥ 6, раз на матч','+3 ушк., лежить, імпульс +3','+2 ушк., собі +1','собі +2, лежиш'],
+ ['Встати',1,'Витривалість','ти лежиш','встав','встав, −1 ОД','лежиш далі'],
+ ['Вийти / повернутися',1,'—','—','зона змінюється','—','—'],
+ ['Відновитися',1,'—','—','ушк. −1, ажіотаж −1','—','—'],
+ ['Напарник',1,'—','напарник у куті, раз на матч','рефері відволікся до кінця раунду','—','—'],
+ ['Завершити хід',0,'—','—','до 1 ОД на наступний хід','—','—'],
+];
+document.getElementById('acts').innerHTML=A.map(a=>`<tr><td><b>${a[0]}</b>${a[7]?'<span class="big">ВЕЛИКИЙ</span>':''}</td><td class="n"><span class="ap">${'<b></b>'.repeat(a[1])||'—'}</span></td><td>${a[2]}</td><td class="dim">${a[3]}</td><td class="c-s">${a[4]}</td><td class="c-p">${a[5]}</td><td class="c-m">${a[6]}</td></tr>`).join('')
+ +`<tr><td colspan="7" class="dim">Реакція на великий прийом: «Продати» (без кидка, імпульс +1, герою ажіотаж +1) або «Реверс» (жетон, Техніка; проти фінішера −2, проти утримання — ні).</td></tr>`;
+
+const $=id=>document.getElementById(id);
+function upd(){
+  const st=+$('st').value,dm=+$('dm').value,ko=+$('ko').value,fin=+$('fin').value,jaw=$('jaw').checked;
+  const t1=jaw?8:6,t2=jaw?12:10;const th=dm>=t2?2:dm>=t1?1:0;
+  const mod=2+st-ko-th-fin-($('late').checked?1:0)+($('sw').checked?1:0);
+  $('stv').textContent=sg(st);$('dmv').textContent=dm;$('kov').textContent=ko;
+  $('modt').textContent=`модифікатор: 2 ${sg(st)} − ${ko} вирв. − ${th} поріг − ${fin} фін.${$('late').checked?' − 1 пізня':''}${$('sw').checked?' + 1 перк':''} = ${sg(mod)}`;
+  const p=pct(dist(mod));$('r1').textContent=p[2]+'%';$('r2').textContent=p[1]+'%';$('r3').textContent=p[0]+'%';$('kbar').innerHTML=bar(p);
+}
+['st','dm','ko','fin','late','sw','jaw'].forEach(id=>$(id).addEventListener('input',upd));upd();
+</script>
