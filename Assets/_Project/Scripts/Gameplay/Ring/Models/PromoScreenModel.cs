@@ -235,7 +235,7 @@ namespace Game.Gameplay.Ring.Models
                 Total = _runner.LastTotal,
                 Tier = tier,
                 TierText = RingLabels.TierName(_t, tier),
-                TotalText = _t.Format("promo.roll.total", _runner.LastDie1, _runner.LastDie2, RingChances.Signed(mod), _runner.LastTotal)
+                TotalText = _t.Format("promo.roll.total", _runner.LastDie1, _runner.LastDie2, RingChances.Term(mod), _runner.LastTotal)
             };
             _picked.Clear();
             return _result;

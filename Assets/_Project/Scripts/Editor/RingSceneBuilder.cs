@@ -1,4 +1,6 @@
+using System.IO;
 using UnityEditor;
+using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using Game.Gameplay.Ring;
@@ -35,6 +37,29 @@ namespace Game.Gameplay.EditorTools
             EditorSceneManager.SaveScene(scene, ScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log("[Ринг] Сцену ворожнечі збережено: " + ScenePath);
+        }
+
+        /// <summary>
+        /// Окремий білд зрізу: лише сцена RingFeud у Build/Ring/Ring.exe (Build Settings не чіпаємо — сцена передається
+        /// прямо). Для огляду вигляду: <c>Ring.exe -ring-shots &lt;тека&gt;</c> проходить ворожнечу ботом і знімає екрани.
+        /// Із консолі: -executeMethod Game.Gameplay.EditorTools.RingSceneBuilder.BuildPlayer
+        /// </summary>
+        public static void BuildPlayer()
+        {
+            Build();
+            string outDir = Path.Combine(Directory.GetCurrentDirectory(), "Build", "Ring");
+            Directory.CreateDirectory(outDir);
+            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = new[] { ScenePath },
+                locationPathName = Path.Combine(outDir, "Ring.exe"),
+                target = BuildTarget.StandaloneWindows64,
+                targetGroup = BuildTargetGroup.Standalone,
+                options = BuildOptions.Development
+            });
+            bool ok = report.summary.result == BuildResult.Succeeded;
+            Debug.Log("[Ринг] Білд: " + report.summary.result + ", помилок " + report.summary.totalErrors);
+            if (Application.isBatchMode) EditorApplication.Exit(ok ? 0 : 1);
         }
     }
 }

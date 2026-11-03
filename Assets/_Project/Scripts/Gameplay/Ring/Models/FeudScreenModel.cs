@@ -60,7 +60,10 @@ namespace Game.Gameplay.Ring.Models
                     Value = val,
                     Min = FeudVars.Min(v),
                     Max = FeudVars.Max(v),
-                    ValueText = _t.Format("feud.meter", val, FeudVars.Max(v))
+                    // Шкала, що йде в мінус (повага роздягальні −2…+2), — зі знаком і діапазоном: «0 / 2» читалось як «нуль із двох».
+                    ValueText = FeudVars.Min(v) < 0
+                        ? _t.Format("feud.meter.signed", RingChances.Signed(val), RingChances.Signed(FeudVars.Min(v)), RingChances.Signed(FeudVars.Max(v)))
+                        : _t.Format("feud.meter", val, FeudVars.Max(v))
                 });
             }
             return rows;

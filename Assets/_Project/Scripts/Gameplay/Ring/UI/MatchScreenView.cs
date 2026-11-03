@@ -99,7 +99,10 @@ namespace Game.Gameplay.Ring.UI
         private VisualElement BuildCard(FighterCardModel c, Color accent)
         {
             var card = RingUi.Card();
-            RingUi.Grow(card, 1f);
+            // Частка ширини, а не ріст за вмістом: інакше довгі рядки журналу стискали картки й «Поза рингом» ламалось.
+            card.style.flexGrow = 0f;
+            card.style.flexShrink = 0f;
+            card.style.width = Length.Percent(24f);
             card.style.borderTopWidth = 3f;
             card.style.borderTopColor = accent;
             card.Add(RingUi.Lbl(c.Name, 22f, accent, true));
@@ -153,7 +156,11 @@ namespace Game.Gameplay.Ring.UI
                 return bottom;
             }
 
-            bottom.Add(RingUi.Lbl(t.Get("match.actions.title"), 16f, RingUi.Dim));
+            var header = RingUi.Row();
+            header.style.justifyContent = Justify.SpaceBetween;
+            header.style.alignItems = Align.Center;
+            header.Add(RingUi.Lbl(t.Get("match.actions.title"), 16f, RingUi.Dim));
+            bottom.Add(header);
             if (_m.Input == MatchInput.Ai)
             {
                 bottom.Add(RingUi.Lbl(t.Get("ui.ai.thinking"), 18f, RingUi.Dim));
@@ -161,21 +168,33 @@ namespace Game.Gameplay.Ring.UI
             }
             if (_m.Input != MatchInput.PlayerAction) return bottom;
 
+            // Доступні — дві стрічки (назва, ціна, шанси), недоступні — одна дрібна (назва і причина): 17 дій мають
+            // уміститися на 720p, інакше нижній ряд виходив за край. «Перевести подих» — окрема кнопка в шапці.
             var grid = RingUi.Row();
             grid.style.flexWrap = Wrap.Wrap;
             foreach (var a in _m.Actions())
             {
                 var id = a.Id;
-                string head = (a.Number > 0 ? a.Number + ". " : "·  ") + a.Name + "  —  " + a.CostText
+                if (id == MatchActionId.CatchBreath)
+                {
+                    var end = RingUi.MakeButton((a.Number > 0 ? a.Number + ". " : "") + t.Get("match.endturn"),
+                        () => { _m.Perform(id); Refresh(); }, a.Available, null, 15f);
+                    end.style.width = new Length(34f, LengthUnit.Percent);
+                    header.Add(end);
+                    continue;
+                }
+                string head = (a.Number > 0 ? a.Number + ". " : "") + a.Name + "  —  " + a.CostText
                               + (a.AttrText.Length > 0 ? "  ·  " + a.AttrText + " " + a.ModifierText : "");
-                string second = !a.Available ? a.ReasonText
-                    : a.HasRoll ? t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.action.chances", a.Percents[0], a.Percents[1], a.Percents[2])
-                    : "";
-                string text = second.Length > 0 ? head + "\n" + second : head;
+                string text;
+                if (!a.Available) text = a.Name + "  —  " + a.ReasonText;
+                else if (a.HasRoll)
+                    text = head + "\n" + t.Format(a.RollIsOpponents ? "match.action.chances.opp" : "match.action.chances",
+                        a.Percents[0], a.Percents[1], a.Percents[2]);
+                else text = head;
                 var b = RingUi.MakeButton(text, () => { _m.Perform(id); Refresh(); }, a.Available,
-                    a.IsBig ? RingUi.Warn : (Color?)null, 15f);
-                b.style.width = new Length(32.5f, LengthUnit.Percent);
-                b.style.marginRight = 8f;
+                    a.IsBig ? RingUi.Warn : (Color?)null, a.Available ? 15f : 13f);
+                b.style.width = new Length(24.2f, LengthUnit.Percent);
+                b.style.marginRight = 6f;
                 grid.Add(b);
             }
             bottom.Add(grid);

@@ -400,6 +400,7 @@ namespace UnityEngine
 
         /// <summary>Спайк H4, критерій 4: автотур міряє час кадру без впливу timeScale.</summary>
         public static float unscaledDeltaTime { get { return 0f; } }
+        public static float unscaledTime { get { return 0f; } }
 
         /// <summary>
         /// Бій v2 (docs/COMBAT_V2.md §7.4, автотур): реальний час з

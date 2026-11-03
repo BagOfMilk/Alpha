@@ -91,5 +91,11 @@ namespace Game.Gameplay.Ring.Models
             if (v < 0) return "−" + (-v).ToString(CultureInfo.InvariantCulture);
             return "0";
         }
+
+        /// <summary>Модифікатор як доданок суми кидка: «+ 0», «+ 2», «− 1» (у «4 + 5 + 0 = 9» нуль теж зі знаком).</summary>
+        public static string Term(int v)
+        {
+            return (v < 0 ? "− " : "+ ") + Math.Abs(v).ToString(CultureInfo.InvariantCulture);
+        }
     }
 }

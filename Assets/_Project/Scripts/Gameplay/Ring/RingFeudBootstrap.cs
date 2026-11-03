@@ -22,6 +22,20 @@ namespace Game.Gameplay.Ring
         private const string StringsPath = "Ring/strings_uk";
         private const string UiStringsPath = "Ring/ui_uk";
         private const string SeedArg = "-ring-seed";
+        private const string ShotsArg = "-ring-shots";
+
+        // Огляд вигляду (-ring-shots <тека>): бот тисне ті самі клавіші, що й людина (цифри по колу і «Далі»), і знімає
+        // кадр на кожному кроці. Кінець — екран розвитку, потім вихід.
+        private const float ShotStep = 0.45f;
+        private const int ShotLimit = 200;
+        private string _shotsDir;
+        private float _shotClock;
+        private int _shotIndex;
+        private int _shotDigit;
+        private int _endShots;
+        private float _quitAt = -1f;
+        private bool _shotAct = true;
+        private bool _shotPressDigit;
 
         private RingText _text;
         private FeudScript _script;
@@ -41,6 +55,12 @@ namespace Game.Gameplay.Ring
         private void Start()
         {
             _seed = ReadSeed();
+            _shotsDir = ReadArg(ShotsArg);
+            if (_shotsDir != null)
+            {
+                Application.runInBackground = true;
+                System.IO.Directory.CreateDirectory(_shotsDir);
+            }
             if (!BuildUi()) return;
             if (!LoadData()) return;
             NewCampaign();
@@ -63,6 +83,14 @@ namespace Game.Gameplay.Ring
                 if (args[i] == SeedArg && ulong.TryParse(args[i + 1], out v)) return v;
             }
             return (ulong)DateTime.UtcNow.Ticks;
+        }
+
+        private static string ReadArg(string name)
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            for (int i = 0; i + 1 < args.Length; i++)
+                if (args[i] == name) return args[i + 1];
+            return null;
         }
 
         private bool BuildUi()
@@ -162,11 +190,13 @@ namespace Game.Gameplay.Ring
 
         private void Update()
         {
+            if (_quitAt > 0f && Time.unscaledTime >= _quitAt) HardExit.Now(0);
             if (_campaign == null || _root == null) return;
             ApplyScale();
             Sync();
             if (_view == null) return;
             HandleKeys();
+            if (_shotsDir != null) ShotsStep();
             if (_view != null) _view.Tick(Time.unscaledDeltaTime);
             Sync();
         }
@@ -198,6 +228,34 @@ namespace Game.Gameplay.Ring
             _root.Clear();
             _root.Add(_view.Root);
             _view.Refresh();
+        }
+
+        private void ShotsStep()
+        {
+            _shotClock += Time.unscaledDeltaTime;
+            if (_shotClock < ShotStep) return;
+            _shotClock = 0f;
+            // Тик через тик: знімок (екран ДО натискання, як його бачить гравець) — потім дія.
+            _shotAct = !_shotAct;
+            if (_shotAct)
+            {
+                // Одне натискання за тик, «Далі» і цифра по черзі — інакше вибір з'являвся й обирався в одному кадрі.
+                if (_shotPressDigit) _view.OnDigit(1 + _shotDigit++ % 3);
+                else _view.OnConfirm();
+                _shotPressDigit = !_shotPressDigit;
+                return;
+            }
+            string name = string.Format("{0:000}_{1}{2}.png", _shotIndex++, _campaign.Stage,
+                _campaign.Stage == RingStage.Promo ? "_p" + (_campaign.PromoIndex + 1) : "");
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, name));
+            bool atEnd = _campaign.Stage == RingStage.Ending || _campaign.Stage == RingStage.Development;
+            if (atEnd && ++_endShots >= 2 || _shotIndex >= ShotLimit)
+            {
+                Debug.Log("[Ринг] Огляд: знято " + _shotIndex + " кадрів");
+                _shotsDir = null;
+                _quitAt = Time.unscaledTime + 1f;   // кадр має встигнути записатися
+                return;
+            }
         }
 
         private void HandleKeys()

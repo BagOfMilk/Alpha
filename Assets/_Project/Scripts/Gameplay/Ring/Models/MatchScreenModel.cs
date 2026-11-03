@@ -196,7 +196,8 @@ namespace Game.Gameplay.Ring.Models
                     case MatchInput.PlayerReaction: return _t.Get("match.turn.react");
                     case MatchInput.PlayerBoost: return _t.Get("match.turn.boost");
                     case MatchInput.PlayerAction: return _t.Get("match.turn.player");
-                    default: return _t.Get("match.turn.rival");
+                    default:
+                        return _t.Get(_e.Phase == MatchPhase.AwaitReaction ? "match.turn.rival.react" : "match.turn.rival");
                 }
             }
         }
@@ -319,7 +320,7 @@ namespace Game.Gameplay.Ring.Models
                 if (Input != MatchInput.PlayerBoost) return "";
                 var pr = _e.PendingRoll;
                 return _t.Format("match.boost.prompt", RingLabels.ActionName(_t, pr.Action), pr.Roll,
-                    RingChances.Signed(pr.Modifier), pr.Total, RingLabels.TierName(_t, pr.Tier), pr.Impulse);
+                    RingChances.Term(pr.Modifier), pr.Total, RingLabels.TierName(_t, pr.Tier), pr.Impulse);
             }
         }
 

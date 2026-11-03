@@ -17,10 +17,15 @@ namespace Game.Gameplay.Ring.UI
         private string _lastSpeaker = "";
         private string _lastLine = "";
         private bool _lastNarrator;
+        private readonly FeudScreenModel _feud;
+        // Значення шкал на початку промо і при попередньому малюванні: зміна від останнього вибору підсвічується.
+        private readonly System.Collections.Generic.Dictionary<string, int> _seen = new System.Collections.Generic.Dictionary<string, int>();
+        private readonly System.Collections.Generic.Dictionary<string, int> _delta = new System.Collections.Generic.Dictionary<string, int>();
 
         public PromoScreenView(RingUiContext ctx, PromoRunner runner) : base(ctx)
         {
             _m = new PromoScreenModel(runner, ctx.Text);
+            _feud = new FeudScreenModel(ctx.Campaign, ctx.Text);
         }
 
         public override void Refresh()
@@ -30,11 +35,16 @@ namespace Game.Gameplay.Ring.UI
             RingUi.HudPad(Root);
             Root.style.justifyContent = Justify.SpaceBetween;
 
-            // Шапка промо.
-            var top = RingUi.Column();
-            top.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 17f, RingUi.Dim));
-            top.Add(RingUi.Title(_m.TitleText));
-            top.Add(RingUi.Lbl(_m.PlaceText, 18f, RingUi.Dim));
+            // Шапка промо: назва й місце зліва, шкали ворожнечі справа — видно, що кожен вибір щось змінює.
+            var top = RingUi.Row();
+            top.style.justifyContent = Justify.SpaceBetween;
+            top.style.alignItems = Align.FlexStart;
+            var head = RingUi.Column();
+            head.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 17f, RingUi.Dim));
+            head.Add(RingUi.Title(_m.TitleText));
+            head.Add(RingUi.Lbl(_m.PlaceText, 18f, RingUi.Dim));
+            top.Add(head);
+            top.Add(BuildStatus());
             Root.Add(top);
 
             // Вікно діалогу.
@@ -89,6 +99,49 @@ namespace Game.Gameplay.Ring.UI
                     break;
             }
             box.Add(RingUi.Lbl(t.Get("ui.hint.keys"), 14f, RingUi.Dim));
+        }
+
+        // ---------- шкали ворожнечі ----------
+
+        private VisualElement BuildStatus()
+        {
+            var meters = _feud.Meters();
+            var paths = _feud.Paths();
+            var now = new System.Collections.Generic.Dictionary<string, int>();
+            foreach (var r in meters) now[r.Id] = r.Value;
+            foreach (var p in paths) now["path." + p.Path] = p.Points;
+            // Підсвічується лише остання зміна: щойно щось змінилось, старі дельти скидаються.
+            bool anyChange = false;
+            foreach (var kv in now)
+            {
+                int before;
+                if (_seen.TryGetValue(kv.Key, out before) && before != kv.Value)
+                {
+                    if (!anyChange) { _delta.Clear(); anyChange = true; }
+                    _delta[kv.Key] = kv.Value - before;
+                }
+            }
+            foreach (var kv in now) _seen[kv.Key] = kv.Value;
+
+            var card = RingUi.Card(10f);
+            card.style.minWidth = 300f;
+            foreach (var r in meters) card.Add(StatusLine(r.Id, r.Name, r.ValueText, null));
+            foreach (var p in paths) card.Add(StatusLine("path." + p.Path, p.Name, p.RankText, RingUi.PathColor(p.Path)));
+            return card;
+        }
+
+        private VisualElement StatusLine(string id, string name, string valueText, Color? nameColor)
+        {
+            int d;
+            bool changed = _delta.TryGetValue(id, out d) && d != 0;
+            var row = RingUi.Row();
+            row.style.justifyContent = Justify.SpaceBetween;
+            row.Add(RingUi.Lbl(name, 15f, nameColor ?? RingUi.Dim));
+            var right = RingUi.Row();
+            if (changed) right.Add(RingUi.Lbl(RingChances.Signed(d) + "  ", 15f, d > 0 ? RingUi.Good : RingUi.Bad, true));
+            right.Add(RingUi.Lbl(valueText, 15f, changed ? RingUi.Text : RingUi.Dim, changed));
+            row.Add(right);
+            return row;
         }
 
         // ---------- вибір реплік ----------
