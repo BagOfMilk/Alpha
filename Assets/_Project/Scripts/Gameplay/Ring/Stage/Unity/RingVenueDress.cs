@@ -19,7 +19,7 @@ namespace Game.Gameplay.Ring.Stage
     {
         // Натовп вимкнено (03.11.2026): фанати вже видні й анімуються, але сітки деформуються на кліпах CROWD_Anims
         // (уламки за стільцями) — ретаргетинг на скелет набору ще не налагоджено. Увімкнути: 40–60.
-        public int attendance = 0;
+        public int attendance = 48;
         public float chairNear = 6.4f;
 
         private sealed class Fan
@@ -185,7 +185,7 @@ namespace Game.Gameplay.Ring.Stage
                 GameObject proto;
                 if (!protos.TryGetValue(f.Fan, out proto))
                 {
-                    proto = MakeProto(crowd, f.Fan, holder);
+                    proto = MakeProto(crowd, f.Fan, holder, avatar);
                     protos[f.Fan] = proto;
                 }
                 if (proto == null) continue;
@@ -219,7 +219,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private struct FanSpec { public Vector3 Pos; public float Yaw; public string Fan, Clip; public float Phase, Dist; public bool Operator; }
 
-        private GameObject MakeProto(GameObject crowd, string fan, Transform holder)
+        private GameObject MakeProto(GameObject crowd, string fan, Transform holder, Avatar shared)
         {
             var root = Instantiate(crowd, holder);
             root.name = "proto_" + fan;
@@ -294,7 +294,25 @@ namespace Game.Gameplay.Ring.Stage
             }
             var anim = root.GetComponent<Animator>();
             if (anim == null) anim = root.AddComponent<Animator>();
+            // Аватар FBX один на весь набір і знятий зі скелета першого фаната (fan_f_east_asian_0): у решти інші
+            // пропорції й спокій кісток, і м'язи кліпів лягали на чужі довжини — сітки рвались на уламки (03.11.2026).
+            // Будуємо аватар під КОЖНУ модель: та сама карта кісток, але скелет спокою — її власний.
+            // Карта кісток — з аватара моделі, якщо він людський, інакше з CROWD_Anims (імена кісток ті самі).
+            Avatar map = anim.avatar != null && anim.avatar.isHuman ? anim.avatar : shared;
+            if (map != null && map.isHuman) { var own = OwnAvatar(root, map.humanDescription, fan); if (own != null) anim.avatar = own; }
             return root;
+        }
+
+        private static Avatar OwnAvatar(GameObject root, HumanDescription hd, string fan)
+        {
+            var bones = new List<SkeletonBone>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                bones.Add(new SkeletonBone { name = t.name, position = t.localPosition, rotation = t.localRotation, scale = t.localScale });
+            hd.skeleton = bones.ToArray();
+            var av = AvatarBuilder.BuildHumanAvatar(root, hd);
+            av.name = "avatar_" + fan;
+            if (!av.isValid || !av.isHuman) Debug.LogWarning("[Ринг] 3D: аватар " + fan + " не зібрався — лишаю спільний.");
+            return av.isValid && av.isHuman ? av : null;
         }
 
         private void LateUpdate()
