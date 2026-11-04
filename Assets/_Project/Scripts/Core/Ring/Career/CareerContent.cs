@@ -140,8 +140,13 @@ namespace Game.Core.Ring.Career
         public readonly List<GimmickDef> Gimmicks = new List<GimmickDef>();
         public readonly List<NpcDef> Roster = new List<NpcDef>();
         public string BeltHolderId;
+        /// <summary>Закулісні сцени (career_backstage.json). null — файлу не передали: «Закулісся» лишається кидком Харизми.</summary>
+        public BackstageContent Backstage;
 
-        public static CareerContent Load(string feudJson, string movesJson, string gimmicksJson, string rosterJson)
+        /// <summary>Мови сцен, крім ростера: букер, гравець, оповідач, публіка, ведуча місцевого каналу, агент чужої федерації.</summary>
+        public static readonly string[] ExtraSpeakers = { "booker", "player", "narrator", "crowd", "host", "scout" };
+
+        public static CareerContent Load(string feudJson, string movesJson, string gimmicksJson, string rosterJson, string backstageJson = null)
         {
             var c = new CareerContent { Feud = FeudScriptLoader.Load(feudJson), Moves = MoveCatalog.Load(movesJson) };
             var g = MiniJson.ParseObject(gimmicksJson);
@@ -193,6 +198,7 @@ namespace Game.Core.Ring.Career
                 n.Stats = w;
                 c.Roster.Add(n);
             }
+            if (!string.IsNullOrEmpty(backstageJson)) c.Backstage = BackstageContent.Load(backstageJson);
             c.Validate();
             return c;
         }
@@ -224,6 +230,38 @@ namespace Game.Core.Ring.Career
             for (int i = 0; i < 5; i++)
                 if (hammer.Stats.Get((RingAttr)i) != Feud.Rival.Get((RingAttr)i))
                     throw new FormatException("атрибути Молота в ростері не збігаються зі сценарієм ворожнечі");
+            if (Backstage != null) ValidateBackstage();
+        }
+
+        /// <summary>Закулісні сцени посилаються лише на наявних NPC й допустимих мовців; ефекти не чіпають план і умови матчу ворожнечі.</summary>
+        private void ValidateBackstage()
+        {
+            foreach (var sc in Backstage.Scenes)
+            {
+                string where = "закулісна сцена " + sc.Id;
+                var effects = new List<FeudEffect>();
+                var conds = new List<FeudCondition>(sc.Requires);
+                foreach (var n in sc.Promo.Nodes)
+                {
+                    if (n.Type == PromoNodeType.Line && n.Speaker != null && FindNpc(n.Speaker) == null
+                        && Array.IndexOf(ExtraSpeakers, n.Speaker) < 0)
+                        throw new FormatException(where + "/" + n.Id + ": невідомий мовець '" + n.Speaker + "'");
+                    foreach (var o in n.Options) { effects.AddRange(o.Effects); conds.AddRange(o.Requires); }
+                    foreach (var r in n.Rewards) effects.AddRange(r.Effects);
+                    effects.AddRange(n.Fail);
+                    foreach (var cs in n.Cases) conds.AddRange(cs.Requires);
+                }
+                foreach (var e in effects)
+                {
+                    if (e.Kind == EffectKind.Plan || e.Kind == EffectKind.Stip || e.Kind == EffectKind.Ally)
+                        throw new FormatException(where + ": ефекти plan/stip/ally належать ворожнечі; у сценах — career:plan");
+                    if (e.Kind == EffectKind.Career && e.Key == "npc_feud" && e.Target != "opponent" && e.Target != "last_opponent" && FindNpc(e.Target) == null)
+                        throw new FormatException(where + ": ворожнеча з невідомим NPC '" + e.Target + "'");
+                }
+                foreach (var cd in conds)
+                    if (cd.Kind == ConditionKind.Career && cd.Key == "npc_feud" && FindNpc(cd.Target) == null)
+                        throw new FormatException(where + ": умова ворожнечі з невідомим NPC '" + cd.Target + "'");
+            }
         }
 
         public NpcDef FindNpc(string id)

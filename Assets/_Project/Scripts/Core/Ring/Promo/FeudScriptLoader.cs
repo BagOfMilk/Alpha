@@ -120,7 +120,7 @@ namespace Game.Core.Ring
             return w;
         }
 
-        private static PromoDef ReadPromo(Dictionary<string, object> o)
+        internal static PromoDef ReadPromo(Dictionary<string, object> o)
         {
             string id = JsonRead.Str(o, "id", "promo");
             string where = "promo " + id;

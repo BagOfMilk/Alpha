@@ -181,6 +181,13 @@ namespace Game.Core.Ring.Career
         public ShowResult Last;
         public SeasonReport Report;
 
+        /// <summary>Закулісні сцени, що вже були: «сезон:id» (подія — раз на сезон).</summary>
+        public readonly SortedSet<string> BackstageSeen = new SortedSet<string>(StringComparer.Ordinal);
+        /// <summary>Результат останнього шоу (переживає перехід тижня; закулісні розмови його читають): 0 — не грав, 1 — перемога,
+        /// 2 — поразка, 3 — нічия, 4 — зійшов травмованим.</summary>
+        public int LastOutcome;
+        public FeudPlanOutcome LastPlanOutcome;
+
         public int FiredCount;
         public int TitlesWon;
         public bool FeudResolved;
@@ -233,6 +240,10 @@ namespace Game.Core.Ring.Career
             sb.Append("|report=").Append(Report == null ? "" : Esc(Report.Capture()));
             sb.Append("|fired=").Append(FiredCount).Append("|titles=").Append(TitlesWon).Append("|resolved=").Append(b(FeudResolved));
             sb.Append("|devstart=").Append(DevPointsAtMatchStart);
+            var bs = new List<string>();
+            foreach (var k in BackstageSeen) bs.Add(Esc(k));
+            sb.Append("|bs=").Append(string.Join(",", bs));
+            sb.Append("|lastout=").Append(LastOutcome).Append("|lastplan=").Append((int)LastPlanOutcome);
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -266,6 +277,14 @@ namespace Game.Core.Ring.Career
             Last = ShowResult.Parse(S("last")); Report = SeasonReport.Parse(S("report"));
             FiredCount = I("fired"); TitlesWon = I("titles"); FeudResolved = B("resolved");
             DevPointsAtMatchStart = I("devstart");
+            // закулісся додано пізніше за перші зліпки ring3: старі зліпки без цих ключів читаються як «сцен ще не було»
+            BackstageSeen.Clear();
+            string bs;
+            if (kv.TryGetValue("bs", out bs))
+                foreach (var k in bs.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) BackstageSeen.Add(Uri.UnescapeDataString(k));
+            string v;
+            LastOutcome = kv.TryGetValue("lastout", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            LastPlanOutcome = kv.TryGetValue("lastplan", out v) ? (FeudPlanOutcome)int.Parse(v, CultureInfo.InvariantCulture) : FeudPlanOutcome.Neither;
         }
 
         private static string Need(Dictionary<string, string> kv, string key)

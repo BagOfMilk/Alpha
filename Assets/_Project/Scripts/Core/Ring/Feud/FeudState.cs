@@ -88,7 +88,20 @@ namespace Game.Core.Ring
 
         // ---------- умови й ефекти ----------
 
+        /// <summary>
+        /// Зв'язок із кар'єрою для умов і ефектів kind=Career (закулісні сцени). Без них умова кар'єри хибна, а ефект нічого не робить —
+        /// тож ворожнеча з Молотом поводиться як раніше. Ставить CareerSession на робочу копію стану на час сцени.
+        /// </summary>
+        public Func<FeudCondition, bool> CareerProbe;
+        public Action<FeudEffect> CareerSink;
+
         public bool Check(FeudCondition c)
+        {
+            bool v = CheckRaw(c);
+            return c.Negate ? !v : v;
+        }
+
+        private bool CheckRaw(FeudCondition c)
         {
             switch (c.Kind)
             {
@@ -102,6 +115,7 @@ namespace Game.Core.Ring
                 case ConditionKind.Path:
                     RingPath p;
                     return FeudVars.TryPath(c.Key, out p) && GetPath(p) >= c.Min;
+                case ConditionKind.Career: return CareerProbe != null && CareerProbe(c);
                 default: return false;
             }
         }
@@ -133,7 +147,24 @@ namespace Game.Core.Ring
                     Plan = FeudVars.TryPlan(e.Key, out bp) ? bp : BookerPlan.None;
                     break;
                 case EffectKind.Ally: HasAlly = e.Value; break;
+                case EffectKind.Career:
+                    if (CareerSink != null) CareerSink(e);
+                    break;
             }
+        }
+
+        /// <summary>
+        /// Перенести в цей стан підсумок сцени з робочої копії: шкали, шляхи, прапори, очки розвитку. План, умови матчу, напарник,
+        /// перки й борець лишаються як були (сцена не має їх чіпати).
+        /// </summary>
+        public void AbsorbSceneResult(FeudState work)
+        {
+            if (work == null) throw new ArgumentNullException(nameof(work));
+            Audience = work._audience; Heat = work._heat; Momentum = work._momentum; Trust = work._trust; Locker = work._locker;
+            for (int i = 0; i < PathCount; i++) _path[i] = work._path[i];
+            DevPoints = work._devPoints;
+            Flags.Clear();
+            foreach (var f in work.Flags) Flags.Add(f);
         }
 
         public void Apply(IEnumerable<FeudEffect> effects)

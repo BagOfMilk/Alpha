@@ -14,9 +14,60 @@ namespace Game.Tests.EditMode
     {
         public static string Read(string file) { return File.ReadAllText(Path.Combine(RingCampaignDriver.Dir(), file)); }
 
+        /// <summary>Вміст кар'єри з закулісними сценами (як у грі після підключення career_backstage.json).</summary>
         public static CareerContent Content()
         {
+            return CareerContent.Load(Read("feud_hammer.json"), Read("career_moves.json"), Read("career_gimmicks.json"), Read("career_roster.json"),
+                Read("career_backstage.json"));
+        }
+
+        /// <summary>Вміст без закулісних сцен: «Закулісся» лишається старим кидком Харизми.</summary>
+        public static CareerContent ContentWithoutBackstage()
+        {
             return CareerContent.Load(Read("feud_hammer.json"), Read("career_moves.json"), Read("career_gimmicks.json"), Read("career_roster.json"));
+        }
+
+        /// <summary>Тексти сцен разом із рештою (як RingText.FromJson(strings, ui, backstage)).</summary>
+        public static System.Collections.Generic.Dictionary<string, string> BackstageStrings()
+        {
+            var d = new Dictionary<string, string>();
+            foreach (var f in new[] { "strings_uk.json", "ui_uk.json", "backstage_uk.json" })
+                foreach (var kv in MiniJson.ParseObject(Read(f))) d[kv.Key] = (string)kv.Value;
+            return d;
+        }
+
+        /// <summary>
+        /// Пройти відкриту закулісну сцену до кінця: репліки, перший доступний варіант (зі зсувом на variant), кидки з першими
+        /// нагородами — і закінчити її. Повертає підсумок (дію тижня витрачено).
+        /// </summary>
+        public static WeekActionResult PlayScene(CareerSession s, int variant = 0)
+        {
+            var r = s.CurrentBackstage;
+            int guard = 0;
+            while (!r.IsFinished)
+            {
+                if (++guard > 200) throw new InvalidOperationException("сцена не закінчується: " + s.CurrentBackstageScene.Id);
+                switch (r.Current.Type)
+                {
+                    case PromoNodeType.Line: r.Advance(); break;
+                    case PromoNodeType.Choice:
+                        var open = new List<PromoOptionView>();
+                        foreach (var v in r.AvailableOptions()) if (!v.Locked) open.Add(v);
+                        r.Choose(open[variant % open.Count].Option.Id);
+                        break;
+                    case PromoNodeType.Check:
+                        s.BackstageRollCheck();
+                        if (r.AwaitingRewards)
+                        {
+                            var ids = new List<string>();
+                            for (int i = 0; i < r.RewardsToPick; i++) ids.Add(r.Current.Rewards[(i + variant) % r.Current.Rewards.Count].Id);
+                            if (new HashSet<string>(ids).Count != ids.Count) { ids.Clear(); for (int i = 0; i < r.RewardsToPick; i++) ids.Add(r.Current.Rewards[i].Id); }
+                            r.ChooseRewards(ids);
+                        }
+                        break;
+                }
+            }
+            return s.FinishBackstage();
         }
 
         public static CharacterDraft Draft(Gimmick g = Gimmick.Monster, CareerRole role = CareerRole.Hero, RingAttr free = RingAttr.Strength, string name = "Тест")
@@ -59,6 +110,8 @@ namespace Game.Tests.EditMode
         public int Shows, Wins, Losses, Withdrawals, Titles, Fired, Injuries, HopeSpots, TitleMatches, Strained;
         public int MinMoney = int.MaxValue, MinPopularity = 99, MaxPopularity = -1, MaxMoney;
         public int Steps;
+        /// <summary>Закулісні сцени, що трапились (id).</summary>
+        public readonly List<string> Scenes = new List<string>();
     }
 
     /// <summary>
@@ -135,7 +188,10 @@ namespace Game.Tests.EditMode
                         for (int z = 0; z < 3 && (r == null || !r.Ok); z++) r = s.Recover((BodyZone)z, s.Money > 50);
                         break;
                     case WeekActionKind.Promo: r = s.Promo(); break;
-                    case WeekActionKind.Backstage: r = s.Backstage(); break;
+                    case WeekActionKind.Backstage:
+                        r = s.Backstage();
+                        if (r.NeedsScene) { rep.Scenes.Add(r.SceneId); CareerKit.PlayScene(s, variant + s.State.Week); }
+                        break;
                     case WeekActionKind.SideJob: r = s.SideJob(); break;
                 }
                 if (r.Ok) rep.Actions[(int)kind]++;

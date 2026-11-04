@@ -68,7 +68,27 @@ namespace Game.Core.Ring
         public static string ClosedFlag(string branch) => "closed." + branch;
     }
 
-    public enum ConditionKind { Flag = 0, NotFlag = 1, Open = 2, Var = 3, Attr = 4, Path = 5 }
+    /// <summary>Імена умов і ефектів кар'єри (закулісні сцени): ті, що читає чи пише не FeudState, а CareerSession.</summary>
+    public static class CareerFx
+    {
+        /// <summary>Умови: money(min), season(min), week(min), parity(min 0/1 — парність тижня), injured, champion, last_won,
+        /// last_lost, last_draw, last_swerved, plan_set, title_eligible, actions(min), npc_feud(target, min).</summary>
+        public static readonly string[] Conditions =
+        {
+            "money", "season", "week", "parity", "injured", "champion", "last_won", "last_lost", "last_draw", "last_swerved",
+            "plan_set", "title_eligible", "actions", "npc_feud"
+        };
+
+        /// <summary>Ефекти: money(add), injure(target зона head/body/legs/random, add — ушкодження), npc_feud(target NPC | opponent |
+        /// last_opponent, add), hype(add — ажіотаж старту наступного матчу), boost(add — імпульс суперника), plan(target — план
+        /// наступного шоу), actions(add — дії тижня), dev(add — очки розвитку).</summary>
+        public static readonly string[] Effects = { "money", "injure", "npc_feud", "hype", "boost", "plan", "actions", "dev" };
+
+        public static bool IsCondition(string n) { return Array.IndexOf(Conditions, n) >= 0; }
+        public static bool IsEffect(string n) { return Array.IndexOf(Effects, n) >= 0; }
+    }
+
+    public enum ConditionKind { Flag = 0, NotFlag = 1, Open = 2, Var = 3, Attr = 4, Path = 5, Career = 6 }
 
     /// <summary>Умова варіанта вибору (gdd §4.1 requires).</summary>
     public sealed class FeudCondition
@@ -76,13 +96,31 @@ namespace Game.Core.Ring
         public ConditionKind Kind;
         /// <summary>Прапор / гілка / змінна / атрибут / шлях — залежно від Kind.</summary>
         public string Key;
-        /// <summary>Мінімум (для Var, Attr, Path).</summary>
+        /// <summary>Мінімум (для Var, Attr, Path, Career).</summary>
         public int Min;
+        /// <summary>Ціль (для Career: id NPC в умові npc_feud).</summary>
+        public string Target;
+        /// <summary>Інверсія результату: «not»: true.</summary>
+        public bool Negate;
 
         public static FeudCondition FromJson(Dictionary<string, object> o, string where)
         {
+            var c = FromJsonCore(o, where);
+            c.Negate = JsonRead.Bool(o, "not", where, false);
+            return c;
+        }
+
+        private static FeudCondition FromJsonCore(Dictionary<string, object> o, string where)
+        {
             var c = new FeudCondition();
-            if (JsonRead.Has(o, "flag")) { c.Kind = ConditionKind.Flag; c.Key = JsonRead.Str(o, "flag", where); }
+            if (JsonRead.Has(o, "career"))
+            {
+                c.Kind = ConditionKind.Career; c.Key = JsonRead.Str(o, "career", where); c.Min = JsonRead.Int(o, "min", where, 0);
+                c.Target = JsonRead.Str(o, "target", where, false);
+                if (!CareerFx.IsCondition(c.Key)) throw new FormatException(where + ": невідома умова кар'єри '" + c.Key + "'");
+                if (c.Key == "npc_feud" && c.Target == null) throw new FormatException(where + ": npc_feud потребує target");
+            }
+            else if (JsonRead.Has(o, "flag")) { c.Kind = ConditionKind.Flag; c.Key = JsonRead.Str(o, "flag", where); }
             else if (JsonRead.Has(o, "notFlag")) { c.Kind = ConditionKind.NotFlag; c.Key = JsonRead.Str(o, "notFlag", where); }
             else if (JsonRead.Has(o, "open")) { c.Kind = ConditionKind.Open; c.Key = JsonRead.Str(o, "open", where); }
             else if (JsonRead.Has(o, "var"))
@@ -109,6 +147,11 @@ namespace Game.Core.Ring
         /// <summary>Стисла причина для сірого варіанта (UI локалізує за Kind/Key/Min).</summary>
         public override string ToString()
         {
+            return (Negate ? "not:" : "") + Describe();
+        }
+
+        private string Describe()
+        {
             switch (Kind)
             {
                 case ConditionKind.Flag: return "flag:" + Key;
@@ -116,12 +159,13 @@ namespace Game.Core.Ring
                 case ConditionKind.Open: return "open:" + Key;
                 case ConditionKind.Var: return "var:" + Key + ">=" + Min;
                 case ConditionKind.Attr: return "attr:" + Key + ">=" + Min;
+                case ConditionKind.Career: return "career:" + Key + (Target == null ? "" : "@" + Target) + ">=" + Min;
                 default: return "path:" + Key + ">=" + Min;
             }
         }
     }
 
-    public enum EffectKind { Var = 0, Flag = 1, Close = 2, Path = 3, Stip = 4, Plan = 5, Ally = 6 }
+    public enum EffectKind { Var = 0, Flag = 1, Close = 2, Path = 3, Stip = 4, Plan = 5, Ally = 6, Career = 7 }
 
     /// <summary>Ефект варіанта/нагороди/провалу (gdd §4.1).</summary>
     public sealed class FeudEffect
@@ -129,15 +173,30 @@ namespace Game.Core.Ring
         public EffectKind Kind;
         /// <summary>Змінна / прапор / гілка / шлях / умова матчу / план — залежно від Kind.</summary>
         public string Key;
-        /// <summary>Приріст (Var, Path).</summary>
+        /// <summary>Приріст (Var, Path, Career).</summary>
         public int Amount;
+        /// <summary>Ціль (для Career: зона, id NPC чи назва плану — залежно від ефекту).</summary>
+        public string Target;
         /// <summary>Значення для Ally.</summary>
         public bool Value = true;
 
         public static FeudEffect FromJson(Dictionary<string, object> o, string where)
         {
             var e = new FeudEffect();
-            if (JsonRead.Has(o, "var"))
+            if (JsonRead.Has(o, "career"))
+            {
+                e.Kind = EffectKind.Career; e.Key = JsonRead.Str(o, "career", where); e.Amount = JsonRead.Int(o, "add", where, 0);
+                e.Target = JsonRead.Str(o, "target", where, false);
+                if (!CareerFx.IsEffect(e.Key)) throw new FormatException(where + ": невідомий ефект кар'єри '" + e.Key + "'");
+                if ((e.Key == "injure" || e.Key == "npc_feud" || e.Key == "plan") && e.Target == null)
+                    throw new FormatException(where + ": ефект " + e.Key + " потребує target");
+                if (e.Key == "injure" && Array.IndexOf(new[] { "head", "body", "legs", "random" }, e.Target) < 0)
+                    throw new FormatException(where + ": невідома зона '" + e.Target + "'");
+                BookerPlan cp;
+                if (e.Key == "plan" && !FeudVars.TryPlan(e.Target, out cp)) throw new FormatException(where + ": невідомий план '" + e.Target + "'");
+                if (e.Key != "plan" && e.Key != "npc_feud" && e.Amount == 0) throw new FormatException(where + ": ефект " + e.Key + " без add");
+            }
+            else if (JsonRead.Has(o, "var"))
             {
                 e.Kind = EffectKind.Var; e.Key = JsonRead.Str(o, "var", where); e.Amount = JsonRead.Int(o, "add", where);
                 if (!FeudVars.IsKnown(e.Key)) throw new FormatException(where + ": невідома змінна '" + e.Key + "'");

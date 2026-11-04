@@ -201,7 +201,7 @@ namespace Game.Core.Ring.Career
                 ActionsLeft = State.ActionsLeft, ActionsTotal = State.Strained ? CareerRules.StrainedActions : CareerRules.ActionsPerWeek,
                 Strained = State.Strained, PromoChoicePending = State.PromoChoicePending, Money = State.Money, Popularity = Popularity,
                 Trust = Trust, DevPoints = DevPoints, IsBigShowWeek = State.IsBigWeek(State.Week), Card = GetShowCard(),
-                CanRecover = HasSomethingToRecover()
+                CanRecover = HasSomethingToRecover(), BackstageOpen = _bs != null
             };
             foreach (var k in State.ActionsDone) v.ActionsDone.Add((WeekActionKind)k);
             v.Injuries = InjuryViews();
@@ -240,6 +240,7 @@ namespace Game.Core.Ring.Career
         {
             var r = new WeekActionResult { Kind = kind };
             if (Stage != CareerStage.Week) { r.Reason = "stage"; return r; }
+            if (_bs != null) { r.Reason = "scene_open"; return r; }
             if (State.PromoChoicePending) { r.Reason = "choice_pending"; return r; }
             if (State.ActionsLeft <= 0) { r.Reason = "no_actions"; return r; }
             r.Ok = true;
@@ -341,10 +342,25 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>
-        /// Закулісся (§6.1): Харизма 2d6. 10+ — довіра букера +1 і чутка; 7–9 — лише чутка; решта — нічого. Чутка — підказка про
-        /// найближче (ключ рядка в ui_uk.json: rumor.*).
+        /// Закулісся (§6.1, §7): відкриває сцену — розмову з букером або подію поза рингом (<see cref="CurrentBackstage"/>, граф у
+        /// форматі промо; кидки — <see cref="BackstageRollCheck"/>). Вибір сцени детермінований і залежить від стану: подія, що
+        /// «дозріла» цього тижня й чиї умови виконані, — раз на сезон; інакше розмова з букером. Дію тижня витрачає
+        /// <see cref="FinishBackstage"/>, до того інші дії й кінець тижня недоступні (Reason «scene_open»). Незавершена сцена не
+        /// зберігається: після відновлення з сейва дія не витрачена, а сцена відкривається з початку.
+        /// Без career_backstage.json у вмісті діє стара дія: Харизма 2d6, 10+ — довіра +1 і чутка, 7–9 — чутка.
         /// </summary>
         public WeekActionResult Backstage()
+        {
+            if (Content.Backstage == null) return BackstageDice();
+            var r = Begin(WeekActionKind.Backstage);
+            if (!r.Ok) return r;
+            var scene = PickBackstageScene();
+            OpenBackstage(scene);
+            r.NeedsScene = true; r.SceneId = scene.Id; r.SceneKind = scene.Kind;
+            return r;
+        }
+
+        private WeekActionResult BackstageDice()
         {
             var r = Begin(WeekActionKind.Backstage);
             if (!r.Ok) return r;
@@ -357,6 +373,194 @@ namespace Game.Core.Ring.Career
             }
             if (r.Tier != RollTier.Miss) r.RumorKey = RumorKey();
             return Done(r);
+        }
+
+        // ---------- закулісні сцени ----------
+
+        /// <summary>Сцена, що йде: робоча копія стану ворожнеччі (сцена не чіпає справжній стан до завершення) і відкладені ефекти кар'єри.</summary>
+        private sealed class BackstageRun
+        {
+            public BackstageScene Scene;
+            public PromoRunner Runner;
+            public FeudState Work;
+            public readonly List<FeudEffect> Pending = new List<FeudEffect>();
+            public int Money;
+            public int Actions;
+        }
+
+        private BackstageRun _bs;
+
+        /// <summary>Іде закулісна сцена.</summary>
+        public bool BackstageOpen { get { return _bs != null; } }
+
+        /// <summary>Курсор по графу відкритої сцени (репліки, вибори, кидки); null — сцени немає.</summary>
+        public PromoRunner CurrentBackstage { get { return _bs == null ? null : _bs.Runner; } }
+
+        /// <summary>Опис відкритої сцени (вид, id); null — сцени немає.</summary>
+        public BackstageScene CurrentBackstageScene { get { return _bs == null ? null : _bs.Scene; } }
+
+        /// <summary>Кидок вузла check відкритої сцени через кубик кар'єри (той самий потік, що й решта кидків).</summary>
+        public RollTier BackstageRollCheck()
+        {
+            if (_bs == null) throw new InvalidOperationException("Закулісної сцени немає");
+            return _bs.Runner.RollCheck(Dice);
+        }
+
+        private static string SeenKey(int season, string sceneId) { return season.ToString(CultureInfo.InvariantCulture) + ":" + sceneId; }
+
+        /// <summary>Подія була цього сезону.</summary>
+        public bool BackstageSeenThisSeason(string sceneId) { return State.BackstageSeen.Contains(SeenKey(State.Season, sceneId)); }
+
+        /// <summary>Тиждень сезону, з якого подія доступна (детермінований розкид за зерном кар'єри; не пізніше останнього тижня).</summary>
+        public int BackstageDueWeek(BackstageScene sc)
+        {
+            int idx = Content.Backstage.Scenes.IndexOf(sc);
+            int spread = sc.Spread > 1 ? ShowBooker.Mix(State.Seed, State.Season * 10, 40 + idx) % sc.Spread : 0;
+            return Math.Min(CareerRules.WeeksInSeason(State.Season), sc.FromWeek + spread);
+        }
+
+        private bool SceneHolds(BackstageScene sc)
+        {
+            foreach (var c in sc.Requires)
+            {
+                bool ok = c.Kind == ConditionKind.Career ? ProbeCareer(c, 0, 0) != c.Negate : Feud.State.Check(c);
+                if (!ok) return false;
+            }
+            return true;
+        }
+
+        private BackstageScene PickBackstageScene()
+        {
+            var all = Content.Backstage.Scenes;
+            foreach (var sc in all)
+            {
+                if (sc.Kind != BackstageKind.Event) continue;
+                if (BackstageSeenThisSeason(sc.Id) || State.Season < sc.MinSeason || State.Week < BackstageDueWeek(sc)) continue;
+                if (SceneHolds(sc)) return sc;
+            }
+            foreach (var sc in all) if (sc.Kind == BackstageKind.Booker && SceneHolds(sc)) return sc;
+            throw new InvalidOperationException("Немає закулісної сцени для відкриття");
+        }
+
+        private void OpenBackstage(BackstageScene sc)
+        {
+            var run = new BackstageRun { Scene = sc };
+            var work = new FeudState();
+            work.RestoreState(Feud.State.CaptureState());
+            work.CareerProbe = c => ProbeCareer(c, run.Money, run.Actions);
+            work.CareerSink = e =>
+            {
+                run.Pending.Add(e);
+                if (e.Key == "money") run.Money += e.Amount;
+                else if (e.Key == "actions") run.Actions += e.Amount;
+            };
+            run.Work = work;
+            run.Runner = new PromoRunner(Content.Feud, sc.Promo, work);
+            _bs = run;
+        }
+
+        /// <summary>Умови кар'єри для сцен (без урахування «not»: його застосовує FeudState). Гроші й дії враховують уже обіцяне сценою.</summary>
+        private bool ProbeCareer(FeudCondition c, int pendingMoney, int pendingActions)
+        {
+            switch (c.Key)
+            {
+                case "money": return State.Money + pendingMoney >= c.Min;
+                case "season": return State.Season >= c.Min;
+                case "week": return State.Week >= c.Min;
+                case "parity": return State.Week % 2 == c.Min;
+                case "injured": return State.IsInjured;
+                case "champion": return IsChampion;
+                case "last_won": return State.LastOutcome == 1;
+                case "last_lost": return State.LastOutcome == 2;
+                case "last_draw": return State.LastOutcome == 3;
+                case "last_swerved": return State.LastPlanOutcome == FeudPlanOutcome.Swerved;
+                case "plan_set": return State.Plan != BookerPlan.None && !State.IsFeudShow && !State.IsTitle;
+                case "title_eligible":
+                    Func<string, int> lv = FeudLevel;
+                    return ShowBooker.TitleEligible(Content, State, Trust, HammerAvailable, lv);
+                case "actions": return State.ActionsLeft + pendingActions >= c.Min;
+                case "npc_feud": return FeudLevel(c.Target) >= c.Min;
+                default: return false;
+            }
+        }
+
+        /// <summary>
+        /// Закінчити сцену: зміни шкал і прапорів із робочої копії переходять у стан, відкладені ефекти кар'єри (гроші, травма зони,
+        /// ворожнеча з NPC, ажіотаж, план наступного шоу, дії тижня, очки розвитку) застосовуються, дія тижня витрачається рівно одна
+        /// (плюс дії, які сцена забрала сама, — «витратити день»). Повертає дельти для екрана. Сцена мусить бути дійденою до кінця.
+        /// </summary>
+        public WeekActionResult FinishBackstage()
+        {
+            if (_bs == null) throw new InvalidOperationException("Закулісної сцени немає");
+            if (!_bs.Runner.IsFinished) throw new InvalidOperationException("Сцену ще не закінчено");
+            Require(CareerStage.Week);
+            var run = _bs;
+            var r = new WeekActionResult { Kind = WeekActionKind.Backstage, Ok = true, SceneId = run.Scene.Id, SceneKind = run.Scene.Kind };
+            int pop0 = Popularity, trust0 = Trust, locker0 = Feud.State.Locker, dev0 = DevPoints;
+            Feud.State.AbsorbSceneResult(run.Work);
+            int extraActions = 0;
+            foreach (var e in run.Pending) ApplyCareerEffect(e, r, ref extraActions);
+            r.PopularityDelta = Popularity - pop0; r.TrustDelta = Trust - trust0; r.LockerDelta = Feud.State.Locker - locker0;
+            r.DevPointsDelta = DevPoints - dev0;
+            State.BackstageSeen.Add(SeenKey(State.Season, run.Scene.Id));
+            _bs = null;
+            if (run.Scene.Kind == BackstageKind.Booker) r.RumorKey = RumorKey();
+            Done(r);
+            if (extraActions < 0)
+            {
+                int spend = Math.Min(State.ActionsLeft, -extraActions);
+                State.ActionsLeft -= spend;
+                for (int i = 0; i < spend; i++) State.ActionsDone.Add((int)WeekActionKind.Backstage);
+                r.ActionsDelta = -spend;
+            }
+            else if (extraActions > 0)
+            {
+                int gain = Math.Min(extraActions, CareerRules.ActionsPerWeek - State.ActionsLeft);
+                State.ActionsLeft += Math.Max(0, gain);
+                r.ActionsDelta = Math.Max(0, gain);
+            }
+            return r;
+        }
+
+        private void ApplyCareerEffect(FeudEffect e, WeekActionResult r, ref int extraActions)
+        {
+            switch (e.Key)
+            {
+                case "money":
+                    int m0 = State.Money;
+                    State.Money = Math.Max(0, State.Money + e.Amount);
+                    r.MoneyDelta += State.Money - m0;
+                    break;
+                case "injure":
+                    int zone = e.Target == "head" ? 0 : e.Target == "body" ? 1 : e.Target == "legs" ? 2
+                        : ShowBooker.Mix(State.Seed, State.Season * 100 + State.Week, 17) % 3;
+                    if (AddZoneDamage(zone, e.Amount) && r.InjuredZone < 0) r.InjuredZone = zone;
+                    break;
+                case "npc_feud":
+                    string id = e.Target == "opponent" ? State.Opponent : e.Target == "last_opponent" ? State.LastOpponent : e.Target;
+                    if (string.IsNullOrEmpty(id) || Content.FindNpc(id) == null) break;
+                    int before = FeudLevel(id);
+                    if (id == CareerContent.HammerId && !State.FeudResolved) Feud.State.Heat += e.Amount;
+                    else State.SetNpcFeud(id, before + e.Amount);
+                    r.FeudDelta += FeudLevel(id) - before;
+                    break;
+                case "hype":
+                    State.NextHypeBonus += e.Amount; r.HypeBonusDelta += e.Amount;
+                    break;
+                case "boost":
+                    State.RivalBoost = Math.Max(0, State.RivalBoost + e.Amount);
+                    break;
+                case "plan":
+                    BookerPlan p;
+                    if (!State.IsFeudShow && !State.IsTitle && FeudVars.TryPlan(e.Target, out p)) { State.Plan = p; r.PlanChanged = true; }
+                    break;
+                case "actions":
+                    extraActions += e.Amount;
+                    break;
+                case "dev":
+                    Feud.State.DevPoints += e.Amount;
+                    break;
+            }
         }
 
         private string RumorKey()
@@ -403,6 +607,7 @@ namespace Game.Core.Ring.Career
         public void EndWeek()
         {
             Require(CareerStage.Week);
+            if (_bs != null) throw new InvalidOperationException("Спершу закінчіть закулісну сцену");
             if (State.PromoChoicePending) throw new InvalidOperationException("Спершу оберіть нагороду промо");
             Stage = CareerStage.Show;
             State.Phase = ShowPhase.Card;
@@ -411,7 +616,7 @@ namespace Game.Core.Ring.Career
 
         // ---------- розвиток ----------
 
-        private bool CanDevelop { get { return Stage == CareerStage.Week || Stage == CareerStage.SeasonEnd; } }
+        private bool CanDevelop { get { return (Stage == CareerStage.Week && _bs == null) || Stage == CareerStage.SeasonEnd; } }
 
         public bool CanBuyAttr(RingAttr a, out string reason)
         {
@@ -545,6 +750,7 @@ namespace Game.Core.Ring.Career
                 PopularityAfter = Popularity, TrustBefore = trustBefore, TrustAfter = Trust
             };
             State.NextHypeBonus = 0; State.RivalBoost = 0;
+            State.LastOutcome = 4; State.LastPlanOutcome = FeudPlanOutcome.Neither;
             State.Phase = ShowPhase.Result;
         }
 
@@ -649,6 +855,8 @@ namespace Game.Core.Ring.Career
             r.PopularityAfter = Popularity; r.TrustAfter = Trust;
             r.DevPointsGained = DevPoints - State.DevPointsAtMatchStart;
             State.LastOpponent = State.Opponent;
+            State.LastOutcome = res.Winner == MatchWinner.Player ? 1 : res.Winner == MatchWinner.Rival ? 2 : 3;
+            State.LastPlanOutcome = outcome;
             State.NextHypeBonus = 0; State.RivalBoost = 0;
             State.Last = r;
             if (!feudMatch) { _engine = null; State.Phase = ShowPhase.Result; }
@@ -895,6 +1103,7 @@ namespace Game.Core.Ring.Career
             State = st;
             Stage = stage;
             _engine = null;
+            _bs = null;   // незавершена сцена не зберігається: дія тижня не витрачена, сцена відкриється з початку
         }
     }
 }

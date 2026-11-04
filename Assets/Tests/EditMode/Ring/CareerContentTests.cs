@@ -119,6 +119,7 @@ namespace Game.Tests.EditMode
             {
                 var s = CareerKit.NewHero(seed, Gimmick.Showman);
                 var r = s.Backstage();
+                if (r.NeedsScene) r = CareerKit.PlayScene(s, (int)seed);
                 if (r.RumorKey != null) AssertHas(k, r.RumorKey);
             }
         }

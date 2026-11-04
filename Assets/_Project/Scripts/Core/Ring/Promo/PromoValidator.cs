@@ -41,6 +41,14 @@ namespace Game.Core.Ring
             return errs;
         }
 
+        /// <summary>Перевірка окремих графів (закулісні сцени кар'єри): ті самі правила, що й для промо ворожнечі.</summary>
+        public static List<PromoError> ValidateScenes(IEnumerable<PromoDef> promos, IDictionary<string, string> strings)
+        {
+            var errs = new List<PromoError>();
+            foreach (var p in promos) ValidatePromo(p, strings, errs);
+            return errs;
+        }
+
         /// <summary>
         /// Порядок кроків (gdd §5.2): кожне промо й кожен матч рівно один раз; перший крок — промо; останній — єдина розв'язка.
         /// </summary>

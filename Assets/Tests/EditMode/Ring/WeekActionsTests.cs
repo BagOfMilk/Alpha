@@ -11,11 +11,18 @@ namespace Game.Tests.EditMode
     public class WeekActionsTests
     {
         /// <summary>Знайти зерно, за якого перша дія тижня дає потрібний ступінь (кубик детермінований).</summary>
-        private static CareerSession HeroWhere(Func<CareerSession, WeekActionResult> act, RollTier tier, out WeekActionResult res, Gimmick g = Gimmick.Showman)
+        private static CareerSession HeroWhere(Func<CareerSession, WeekActionResult> act, RollTier tier, out WeekActionResult res, Gimmick g = Gimmick.Showman,
+            bool legacyBackstage = false)
         {
             for (ulong seed = 1; seed < 600; seed++)
             {
-                var s = CareerKit.NewHero(seed, g, CareerRole.Hero, RingAttr.Technique);
+                CareerSession s;
+                if (legacyBackstage)
+                {
+                    s = CareerKit.NewAtCreate(seed, CareerKit.ContentWithoutBackstage());
+                    s.CreateHero(CareerKit.Draft(g, CareerRole.Hero, RingAttr.Technique));
+                }
+                else s = CareerKit.NewHero(seed, g, CareerRole.Hero, RingAttr.Technique);
                 var r = act(s);
                 if (r.HasRoll && r.Tier == tier) { res = r; return s; }
             }
@@ -148,16 +155,16 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Backstage_Strong_TrustPlusOne_AndRumor_PartialRumorOnly_MissNothing()
+        public void Backstage_WithoutScenesInTheContent_StaysTheOldCharismaRoll_Strong_TrustPlusOne_AndRumor_PartialRumorOnly_MissNothing()
         {
             WeekActionResult r;
-            var s = HeroWhere(x => x.Backstage(), RollTier.Strong, out r);
+            var s = HeroWhere(x => x.Backstage(), RollTier.Strong, out r, Gimmick.Showman, true);
             Assert.AreEqual(1, r.TrustDelta);
             StringAssert.StartsWith("rumor.", r.RumorKey);
-            s = HeroWhere(x => x.Backstage(), RollTier.Partial, out r);
+            s = HeroWhere(x => x.Backstage(), RollTier.Partial, out r, Gimmick.Showman, true);
             Assert.AreEqual(0, r.TrustDelta);
             Assert.IsNotNull(r.RumorKey);
-            s = HeroWhere(x => x.Backstage(), RollTier.Miss, out r);
+            s = HeroWhere(x => x.Backstage(), RollTier.Miss, out r, Gimmick.Showman, true);
             Assert.AreEqual(0, r.TrustDelta);
             Assert.IsNull(r.RumorKey);
         }

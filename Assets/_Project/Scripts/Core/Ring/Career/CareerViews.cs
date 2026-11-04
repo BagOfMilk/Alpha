@@ -83,6 +83,8 @@ namespace Game.Core.Ring.Career
         public ShowCardView Card;
         /// <summary>Чи є що лікувати (для кнопки «Відновлення»).</summary>
         public bool CanRecover;
+        /// <summary>Іде закулісна сцена: інші дії тижня й кінець тижня недоступні, доки її не закінчено (<see cref="CareerSession.FinishBackstage"/>).</summary>
+        public bool BackstageOpen;
     }
 
     /// <summary>Результат дії тижня: кидок (якщо був), ступінь, зміни шкал, ключ чутки.</summary>
@@ -90,7 +92,7 @@ namespace Game.Core.Ring.Career
     {
         public WeekActionKind Kind;
         public bool Ok;
-        /// <summary>Причина відмови (ключ): "stage", "no_actions", "money", "choice_pending", "nothing", "zone".</summary>
+        /// <summary>Причина відмови (ключ): "stage", "no_actions", "money", "choice_pending", "nothing", "zone", "scene_open".</summary>
         public string Reason;
         public bool HasRoll;
         public int Roll;
@@ -108,6 +110,17 @@ namespace Game.Core.Ring.Career
         public string RumorKey;
         /// <summary>«7–9» на промо: треба обрати нагороду (<see cref="CareerSession.ChoosePromoReward"/>).</summary>
         public bool NeedsChoice;
+        /// <summary>Закулісся: відкрито сцену (<see cref="CareerSession.CurrentBackstage"/>); дію ще не витрачено — її витрачає FinishBackstage.</summary>
+        public bool NeedsScene;
+        /// <summary>Id і вид закулісної сцени (відкритої чи щойно закінченої).</summary>
+        public string SceneId;
+        public BackstageKind SceneKind;
+        /// <summary>Підсумок закулісної сцени: зміни популярності, поваги роздягальні, дій тижня (від'ємне — витрачено на сцену).</summary>
+        public int PopularityDelta;
+        public int LockerDelta;
+        public int ActionsDelta;
+        /// <summary>Сцена змінила план найближчого шоу.</summary>
+        public bool PlanChanged;
     }
 
     /// <summary>Рядок списку прийомів матчу: прийом + доступність дії з урахуванням травми зони і бонусу прийому.</summary>
