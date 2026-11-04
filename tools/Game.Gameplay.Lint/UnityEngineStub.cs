@@ -398,12 +398,14 @@ namespace UnityEngine
     {
         public static int width { get { return 1280; } }
         public static int height { get { return 720; } }
+        public static bool fullScreen { get; set; }
     }
 
     public static class Time
     {
         public static float deltaTime { get { return 0f; } }
         public static int frameCount { get { return 0; } }
+        public static float timeScale { get; set; }
 
         /// <summary>Спайк H4, критерій 4: автотур міряє час кадру без впливу timeScale.</summary>
         public static float unscaledDeltaTime { get { return 0f; } }
@@ -443,6 +445,7 @@ namespace UnityEngine
     public static class Input
     {
         public static Vector3 mousePosition { get { return new Vector3(0f, 0f, 0f); } }
+        public static bool anyKeyDown { get { return false; } }
         public static bool GetKeyDown(KeyCode key) { return false; }
         public static bool GetMouseButtonDown(int button) { return false; }
     }

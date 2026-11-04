@@ -109,7 +109,10 @@ namespace Game.Gameplay.Ring.UI
         {
             var c = Ctx.Campaign;
             if (c.Stage == RingStage.Overview) c.StartPromo();
-            else if (c.Stage == RingStage.MatchPrep) c.StartMatch();
+            else if (c.Stage == RingStage.MatchPrep)
+            {
+                if (Ctx.StartFeudMatch != null) Ctx.StartFeudMatch(); else c.StartMatch();
+            }
         }
     }
 }

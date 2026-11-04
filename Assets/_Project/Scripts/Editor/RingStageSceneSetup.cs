@@ -49,7 +49,23 @@ namespace Game.Gameplay.EditorTools
                 assets.mask[i] = Load<Texture2D>(Tex + sets[i] + "_mask.png");
             }
 
+            var bodies = new List<GameObject>(); var ba = new List<Texture2D>(); var bn = new List<Texture2D>(); var bm = new List<Texture2D>();
+            foreach (string sex in new[] { "m", "f" })
+                foreach (string culture in new[] { "ukrainian", "nordic", "mediterranean", "latin", "west_african", "east_asian", "south_asian", "middle_eastern" })
+                {
+                    string id = "body_" + sex + "_" + culture;
+                    var b = Load<GameObject>("Assets/Art/Characters/Kit/" + id + ".fbx");
+                    if (b == null) continue;
+                    bodies.Add(b);
+                    ba.Add(Load<Texture2D>(Tex + id + "_albedo.png"));
+                    bn.Add(Load<Texture2D>(Tex + id + "_normal.png"));
+                    bm.Add(Load<Texture2D>(Tex + id + "_mask.png"));
+                }
+            assets.bodies = bodies.ToArray(); assets.bodyAlbedo = ba.ToArray(); assets.bodyNormal = bn.ToArray(); assets.bodyMask = bm.ToArray();
+            assets.kitFemale = Load<GameObject>("Assets/Art/Characters/Kit/kit_f.fbx");
+
             assets.wrestlerTemplate = EnsureMaterial();
+            assets.screenTemplate = EnsureScreenMaterial();
             var clips = new List<AnimationClip>();
             foreach (string fbx in new[] { "Assets/Art/Animations/RING_Moves.fbx", "Assets/Art/Animations/RING_Promo.fbx" })
             {
@@ -73,6 +89,27 @@ namespace Game.Gameplay.EditorTools
             var o = AssetDatabase.LoadAssetAtPath<T>(path);
             if (o == null) Debug.LogError("[Ринг] 3D: немає ассета " + path);
             return o;
+        }
+
+        /// <summary>
+        /// Матеріал екрана (титантрон): URP/Lit з увімкненою емісією — щоб варіант шейдера з емісією потрапив у білд
+        /// (матеріали, створені в рантаймі, варіантів не тягнуть).
+        /// </summary>
+        private static Material EnsureScreenMaterial()
+        {
+            const string path = "Assets/Art/Ring/Materials/ring_screen.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                if (!AssetDatabase.IsValidFolder("Assets/Art/Ring/Materials")) AssetDatabase.CreateFolder("Assets/Art/Ring", "Materials");
+                m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.EnableKeyword("_EMISSION");
+            m.SetColor("_EmissionColor", Color.white);
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            EditorUtility.SetDirty(m);
+            return m;
         }
 
         private static Material EnsureMaterial()

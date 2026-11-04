@@ -31,7 +31,7 @@ namespace Game.Gameplay.Ring.UI
 
         public MatchScreenView(RingUiContext ctx, MatchEngine engine) : base(ctx)
         {
-            _m = new MatchScreenModel(engine, ctx.Text);
+            _m = new MatchScreenModel(engine, ctx.Text, ctx.Career);
         }
 
         // ---------- кадр: хід суперника ----------
@@ -255,7 +255,6 @@ namespace Game.Gameplay.Ring.UI
         private VisualElement ActionButton(MatchActionRow a)
         {
             var t = Ctx.Text;
-            var id = a.Id;
             var b = RingUi.Column();
             b.style.backgroundColor = GlassHi;
             b.style.borderTopLeftRadius = 6f; b.style.borderTopRightRadius = 6f;
@@ -297,13 +296,12 @@ namespace Game.Gameplay.Ring.UI
             string hint = HintText(a);
             b.RegisterCallback<PointerEnterEvent>(e => { b.style.backgroundColor = RingUi.PanelHover; if (_hint != null) { _hint.text = hint; _hint.style.color = RingUi.Text; } });
             b.RegisterCallback<PointerLeaveEvent>(e => { b.style.backgroundColor = GlassHi; if (_hint != null) { _hint.text = t.Get("match.hint.default"); _hint.style.color = RingUi.Dim; } });
-            b.RegisterCallback<ClickEvent>(e => { _m.Perform(id); Refresh(); });
+            b.RegisterCallback<ClickEvent>(e => { _m.PerformRow(a); Refresh(); });
             return b;
         }
 
         private VisualElement EndTurnButton(MatchActionRow a)
         {
-            var id = a.Id;
             var b = RingUi.Column();
             b.style.backgroundColor = new Color(0.22f, 0.17f, 0.08f, 0.9f);
             b.style.borderTopLeftRadius = 6f; b.style.borderTopRightRadius = 6f;
@@ -315,7 +313,7 @@ namespace Game.Gameplay.Ring.UI
             string hint = Ctx.Text.Get("match.endturn");
             b.RegisterCallback<PointerEnterEvent>(e => { if (_hint != null) { _hint.text = hint; _hint.style.color = RingUi.Text; } });
             b.RegisterCallback<PointerLeaveEvent>(e => { if (_hint != null) { _hint.text = Ctx.Text.Get("match.hint.default"); _hint.style.color = RingUi.Dim; } });
-            b.RegisterCallback<ClickEvent>(e => { _m.Perform(id); Refresh(); });
+            b.RegisterCallback<ClickEvent>(e => { _m.PerformRow(a); Refresh(); });
             return b;
         }
 
@@ -443,7 +441,7 @@ namespace Game.Gameplay.Ring.UI
         public override void OnConfirm()
         {
             if (!_m.IsOver) return;
-            Ctx.Campaign.FinishMatch();
+            if (Ctx.FinishMatch != null) Ctx.FinishMatch(); else Ctx.Campaign.FinishMatch();
         }
     }
 }

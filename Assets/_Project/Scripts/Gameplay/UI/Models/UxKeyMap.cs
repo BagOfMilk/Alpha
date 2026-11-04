@@ -20,7 +20,9 @@ namespace Game.Gameplay.UI
         /// <summary>Вікно нотатки плейтесту (<c>-playtest</c>, docs/PLAYTEST.md).</summary>
         Playtest,
         /// <summary>Екрани зрізу «Ринг» (сцена RingFeud, UI Toolkit): окрема сцена, зі світом і боєм не перетинається.</summary>
-        Ring
+        Ring,
+        /// <summary>Уся гра «Ринг» — кар'єра (RingGameBootstrap): та сама сцена, інший хост; зі зрізом не співіснує.</summary>
+        RingCareer
     }
 
     /// <summary>Рядок реєстру: клавіша, область, файл-власник, дія.</summary>
@@ -132,6 +134,21 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("Alpha8",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 8"),
             new UxKeyBinding("Alpha9",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 9"),
             new UxKeyBinding("L",          UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "повний журнал матчу"),
+            // Кар'єра «Ринг» (RingGameBootstrap): ті самі клавіші екранів; Esc на тижні — у головне меню (зі збереженням).
+            new UxKeyBinding("Return",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "далі / головна дія екрана"),
+            new UxKeyBinding("KeypadEnter", UxKeyScope.RingCareer, "RingGameBootstrap.cs",    "далі / головна дія екрана"),
+            new UxKeyBinding("Space",      UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "далі / головна дія екрана"),
+            new UxKeyBinding("Alpha1",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 1"),
+            new UxKeyBinding("Alpha2",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 2"),
+            new UxKeyBinding("Alpha3",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 3"),
+            new UxKeyBinding("Alpha4",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 4"),
+            new UxKeyBinding("Alpha5",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 5"),
+            new UxKeyBinding("Alpha6",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 6"),
+            new UxKeyBinding("Alpha7",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 7"),
+            new UxKeyBinding("Alpha8",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 8"),
+            new UxKeyBinding("Alpha9",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 9"),
+            new UxKeyBinding("L",          UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "повний журнал матчу"),
+            new UxKeyBinding("Escape",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "з тижня — у головне меню"),
         };
 
         public static IReadOnlyList<UxKeyBinding> All => Entries;

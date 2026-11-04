@@ -56,6 +56,12 @@ namespace Game.Gameplay.Ring
         private RingScreenView _view;
         private object _viewKey;
 
+        // Шоу 3D поверх потоку: вступ перед першим екраном, виходи обох борців перед кожним матчем. Поки шоу грає, UI
+        // сховано, будь-яка клавіша пропускає (власник 03.11.2026: виходи, титантрони, вступна анімація перед меню).
+        private bool _introPlayed;
+        private readonly Queue<bool> _entrances = new Queue<bool>();
+        private object _matchPending;
+
         private void Start()
         {
             _seed = ReadSeed();
@@ -199,6 +205,7 @@ namespace Game.Gameplay.Ring
             if (_quitAt > 0f && Time.unscaledTime >= _quitAt) HardExit.Now(0);
             if (_campaign == null || _root == null) return;
             ApplyScale();
+            if (ShowStep()) return;
             Sync();
             if (_view == null) return;
             HandleKeys();
@@ -237,6 +244,51 @@ namespace Game.Gameplay.Ring
             SyncStage();
         }
 
+        /// <summary>
+        /// Крок шоу: вступ один раз, далі черга виходів перед матчем; true — шоу ще грає (екран схований, бот чекає).
+        /// </summary>
+        private bool ShowStep()
+        {
+            var stage = RingStageHub.Current;
+            if (stage == null || RingStageHub.DemoRequested) return false;
+            if (!_introPlayed)
+            {
+                _introPlayed = true;
+                stage.BeginIntro(_text.Get("ui.title"), "");
+            }
+            if (!stage.ShowBusy && _entrances.Count > 0)
+            {
+                bool player = _entrances.Dequeue();
+                var f = _campaign.CurrentMatch.State.Get(player ? Core.Ring.Match.MatchSide.Player : Core.Ring.Match.MatchSide.Rival);
+                stage.BeginEntrance(player, _text.Get(f.Stats.NameKey), "", player ? 0x2F6FD0 : 0xB0201A);
+            }
+            // Лише шоу (вступ, вихід) ховає UI; кліпи матчу йдуть під панеллю матчу.
+            bool showing = stage.ShowBusy || _entrances.Count > 0;
+            if (!showing && _matchPending != null)
+            {
+                if (Equals(_matchPending, _campaign.CurrentMatch)) stage.BeginMatch(_campaign.CurrentMatch);
+                _matchPending = null;
+            }
+            _root.style.display = showing ? DisplayStyle.None : DisplayStyle.Flex;
+            if (showing)
+            {
+                if (Input.anyKeyDown || _shotsDir != null && ShowShot()) stage.SkipShow();
+                return true;
+            }
+            return false;
+        }
+
+        // Бот огляду знімає шоу кожні 1,3 с і пропускає його після восьми кадрів (вступ і виходи видно, тур не стоїть).
+        private int _showShots;
+        private bool ShowShot()
+        {
+            _animClock += Time.unscaledDeltaTime;
+            if (_animClock < AnimShotEvery || _shotIndex >= ShotLimit) return false;
+            _animClock = 0f;
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_show.png", _shotIndex++)));
+            return ++_showShots % 8 == 0;
+        }
+
         /// <summary>Сказати 3D-рингу, який екран зараз: матч, промо чи нейтральний (ринг стоїть).</summary>
         private void SyncStage()
         {
@@ -244,7 +296,13 @@ namespace Game.Gameplay.Ring
             if (stage == null || RingStageHub.DemoRequested) return;
             switch (_campaign.Stage)
             {
-                case RingStage.Match: stage.BeginMatch(_campaign.CurrentMatch); break;
+                case RingStage.Match:
+                    // Спершу виходи обох борців, тоді матч (ShowStep).
+                    _entrances.Clear();
+                    _entrances.Enqueue(true);
+                    _entrances.Enqueue(false);
+                    _matchPending = _campaign.CurrentMatch;
+                    break;
                 case RingStage.Promo: stage.BeginPromo(); break;
                 default: stage.ShowIdle(); break;
             }

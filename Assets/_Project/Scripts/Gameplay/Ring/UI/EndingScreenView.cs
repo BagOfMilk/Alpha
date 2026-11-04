@@ -92,7 +92,14 @@ namespace Game.Gameplay.Ring.UI
                 string text = a.Name + "  " + a.ValueText + "   " + (a.CanBuy ? a.BuyText : a.ReasonText);
                 right.Add(RingUi.MakeButton(text, () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, 17f));
             }
-            if (_m.IsFinal)
+            if (Ctx.AfterDevelopment != null)
+            {
+                // Кар'єра: ворожнеча — лише крок великого шоу; далі підсумок вечора (реванш і «Заново» — у зрізі).
+                var space = RingUi.Lbl("", 8f);
+                right.Add(space);
+                right.Add(RingUi.PrimaryButton(Ctx.Text.Get("ui.next"), OnConfirm));
+            }
+            else if (_m.IsFinal)
             {
                 var hint = RingUi.Lbl(t.Get("dev.rematch.hint"), 14f, RingUi.Dim);
                 hint.style.marginTop = 10f;
@@ -130,6 +137,7 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Enter/Пробіл/кнопка: між матчами — далі за сюжетом; після розв'язки нічого (реванш чи «Заново» — кнопками).</summary>
         public override void OnConfirm()
         {
+            if (Ctx.AfterDevelopment != null) { Ctx.AfterDevelopment(); return; }
             if (_m.CanContinue) _m.Continue();
         }
 

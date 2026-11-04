@@ -16,6 +16,16 @@ namespace Game.Gameplay.Ring.Stage
         public GameObject mic;
         /// <summary>Речі модульного набору (kit_m): одяг рефері, зачіски борців (<see cref="RingDress"/>).</summary>
         public GameObject kitMale;
+        public GameObject kitFemale;
+
+        /// <summary>
+        /// Усі 16 тіл набору (body_&lt;стать&gt;_&lt;культура&gt;) і їхні текстури борця (ring_wrestler.py) — для героя з
+        /// екрана створення й NPC кар'єри; індекси збігаються.
+        /// </summary>
+        public GameObject[] bodies = new GameObject[0];
+        public Texture2D[] bodyAlbedo = new Texture2D[0];
+        public Texture2D[] bodyNormal = new Texture2D[0];
+        public Texture2D[] bodyMask = new Texture2D[0];
 
         /// <summary>Реквізит (стільці), натовп і його анімації, тексти зали (якорі канатів, списки стільців і фанатів).</summary>
         public GameObject props;
@@ -31,6 +41,9 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Шаблон матеріала борця (URP/Lit); клонується на кожну постать.</summary>
         public Material wrestlerTemplate;
+
+        /// <summary>Шаблон екрана (URP/Lit з емісією) — для титантрона.</summary>
+        public Material screenTemplate;
 
         /// <summary>Усі кліпи RING_Moves і RING_Promo (за іменем із маніфесту).</summary>
         public AnimationClip[] clips = new AnimationClip[0];

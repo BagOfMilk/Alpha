@@ -274,6 +274,19 @@ namespace UnityEngine.UIElements
         public Button(Action clickEvent) { clicked += clickEvent; }
     }
 
+    public class ChangeEvent<T> : EventBase
+    {
+        public T previousValue { get { return default(T); } }
+        public T newValue { get { return default(T); } }
+    }
+
+    public class TextField : TextElement
+    {
+        public string value { get; set; }
+        public int maxLength { get; set; }
+        public void RegisterValueChangedCallback(EventCallback<ChangeEvent<string>> callback) { }
+    }
+
     public class ScrollView : VisualElement
     {
         public ScrollView() { }

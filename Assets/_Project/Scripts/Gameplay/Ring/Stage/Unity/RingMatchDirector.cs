@@ -144,6 +144,9 @@ namespace Game.Gameplay.Ring.Stage
                     yield return RunStep(st, ev);
                 }
                 if (!applied) Apply(ev);
+                // Натовп живе за ажіотажем; кікаут і кінець матчу — вибух залу.
+                if (_e != null) _s.CrowdMood(_e.State.Hype);
+                if (ev.Kind == MatchEventKind.Kickout || ev.Kind == MatchEventKind.MatchEnd) _s.CrowdPop();
                 if (ev.Kind == MatchEventKind.MatchEnd) { _ended = true; break; }
                 if (steps.Count > 0 || ev.Kind == MatchEventKind.TurnEnd) yield return Settle();
             }

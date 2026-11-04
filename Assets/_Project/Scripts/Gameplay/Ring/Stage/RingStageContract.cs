@@ -29,6 +29,30 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Усі інші екрани (ворожнеча, розвиток, кінцівка): ринг стоїть, камера — загальний план.</summary>
         void ShowIdle();
+
+        /// <summary>Вступ перед меню: пролітка камери по залі, титантрон з назвою гри, вихід героя. Поки грає — IsBusy.</summary>
+        void BeginIntro(string title, string subtitle);
+
+        /// <summary>
+        /// Вихід борця (гравця чи суперника) перед матчем: титантрон з іменем, хода від завіси, поза в куті.
+        /// <paramref name="rgb"/> — колір борця (0xRRGGBB). Поки грає — IsBusy.
+        /// </summary>
+        void BeginEntrance(bool player, string title, string subtitle, int rgb);
+
+        /// <summary>Пропустити вступ чи вихід (будь-яка клавіша).</summary>
+        void SkipShow();
+
+        /// <summary>Грає саме шоу (вступ чи вихід), а не кліпи матчу: тоді UI ховається.</summary>
+        bool ShowBusy { get; }
+
+        /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>
+        void ShowBackstage();
+
+        /// <summary>
+        /// Хто на рингу: тіла набору (<c>body_m_latin</c>…), колір екіпіровки 0xRRGGBB, зачіска (ключ частини набору або
+        /// порожньо), масштаб суперника (1 — як герой). Та сама зовнішність — без перебудови.
+        /// </summary>
+        void SetWrestlers(string playerBody, int playerRgb, string playerHair, string rivalBody, int rivalRgb, string rivalHair, float rivalScale);
     }
 
     /// <summary>Єдина точка доступу до 3D-сцени з екранів. Пуста, якщо сцена без <c>RingStage3D</c>.</summary>

@@ -13,6 +13,16 @@ namespace Game.Gameplay.Ring.UI
         public RingCampaign Campaign;
         public RingText Text;
         public Action Restart;
+        /// <summary>Кар'єра (null — зріз ворожнечі): матч тоді показує прийоми набору борця.</summary>
+        public Game.Core.Ring.Career.CareerSession Career;
+        /// <summary>Кінець матчу «Далі»: кар'єра підміняє Campaign.FinishMatch своїм підсумком.</summary>
+        public Action FinishMatch;
+        /// <summary>«Далі» на підготовці до матчу ворожнечі: кар'єра починає матч через StartFeudMatch (промінь надії, бонуси промо).</summary>
+        public Action StartFeudMatch;
+        /// <summary>«Далі» на розвитку/кінцівці ворожнечі: кар'єра закриває велике шоу (FinishBigShow) замість реваншу й «Заново».</summary>
+        public Action AfterDevelopment;
+        /// <summary>Хост кар'єри (сейв, меню, вигляд героя); null у зрізі ворожнечі.</summary>
+        public ICareerHost Host;
     }
 
     /// <summary>Спільна основа екрана «Рингу»: корінь, перемальовування, гарячі клавіші, годинник кадру.</summary>

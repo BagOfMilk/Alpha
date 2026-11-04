@@ -39,8 +39,9 @@ namespace Game.Gameplay.EditorTools
             post.isGlobal = true;
             post.sharedProfile = EnsurePostProfile();
 
-            var host = new GameObject("RingFeud");
-            host.AddComponent<RingFeudBootstrap>();
+            var host = new GameObject("Ring");
+            // Уся гра (кар'єра альфи — ітерація 1); зріз ворожнечі (RingFeudBootstrap) лишається компонентом без сцени.
+            host.AddComponent<RingGameBootstrap>();
             // Ітерація 1: 3D-ринг під панелями (арена, борці, рефері, режисер кліпів).
             RingStageSceneSetup.Attach(host);
 

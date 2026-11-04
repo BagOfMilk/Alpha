@@ -28,7 +28,16 @@ namespace Game.Gameplay.Ring.Stage
             public AnimationClipPlayable Clip;
             public float Length, Phase, Speed;
             public Animator Anim;
+            public AnimationPlayableOutput Output;
+            /// <summary>Кліп зі списку зали (спокійний настрій) і той, що грає зараз.</summary>
+            public string Base, Current;
+            public bool Standing;
+            public int Salt;
         }
+
+        private Dictionary<string, AnimationClip> _clipByName = new Dictionary<string, AnimationClip>();
+        private int _mood;
+        private float _popUntil;
 
         private readonly List<Fan> _fans = new List<Fan>();
         private readonly List<GameObject> _owned = new List<GameObject>();
@@ -147,7 +156,7 @@ namespace Game.Gameplay.Ring.Stage
         public void BuildCrowd(GameObject crowd, TextAsset list, AnimationClip[] clips, Avatar avatar)
         {
             if (crowd == null || list == null || avatar == null) { Debug.LogWarning("[Ринг] 3D: натовпу не буде (немає моделі, списку чи аватара)."); return; }
-            var clipByName = new Dictionary<string, AnimationClip>();
+            var clipByName = _clipByName;
             foreach (var c in clips) if (c != null && !c.name.StartsWith("__preview__")) clipByName[c.name] = c;
 
             var cand = new List<FanSpec>();
@@ -204,6 +213,10 @@ namespace Game.Gameplay.Ring.Stage
                 fan.Clip = AnimationClipPlayable.Create(fan.Graph, clip);
                 fan.Clip.SetApplyFootIK(false);
                 output.SetSourcePlayable(fan.Clip);
+                fan.Output = output;
+                fan.Base = fan.Current = clip.name;
+                fan.Standing = clip.name.StartsWith("Stand_");
+                fan.Salt = (int)(unchecked((uint)idx * 2654435761u) % 100u);
                 fan.Graph.Play();
                 _fans.Add(fan);
                 foreach (var r in go.GetComponentsInChildren<SkinnedMeshRenderer>())
@@ -323,8 +336,63 @@ namespace Game.Gameplay.Ring.Stage
             return av.isValid && av.isHuman ? av : null;
         }
 
+        // ============================ настрій натовпу ============================
+
+        /// <summary>
+        /// Настрій за ажіотажем матчу (0 — зал холодний … 3 — зал кипить): частка фанатів, що перемикаються з
+        /// «сидить, говорить, телефон» на оплески, а далі на крики й руки вгору; лиходієві — «бу» (<paramref name="boo"/>).
+        /// Детерміновано: хто реагує першим — з номера фаната, не випадково.
+        /// </summary>
+        public void SetMood(int mood, bool boo)
+        {
+            _mood = Mathf.Clamp(mood, 0, 3);
+            _boo = boo;
+            if (Time.time >= _popUntil) ApplyMood(_mood);
+        }
+
+        private bool _boo;
+
+        /// <summary>Великий момент (фінішер, відлік на 2, кікаут): на 2,5 с більшість фанатів скочує на крик.</summary>
+        public void Pop()
+        {
+            _popUntil = Time.time + 2.5f;
+            ApplyMood(3);
+        }
+
+        private void ApplyMood(int mood)
+        {
+            // Частки фанатів, що реагують: 0, 35 %, 65 %, 90 %.
+            int[] share = { 0, 35, 65, 90 };
+            foreach (var f in _fans)
+            {
+                if (f.Base.StartsWith("Cam_")) continue;
+                string want = f.Base;
+                if (f.Salt < share[mood])
+                {
+                    bool hot = mood >= 2 && f.Salt < share[mood] - 20;
+                    if (f.Standing) want = _boo ? "Stand_Boo_Loop" : hot ? (f.Salt % 2 == 0 ? "Stand_Cheer_Loop" : "Stand_FistPump_Loop") : "Stand_Clap_Loop";
+                    else want = _boo ? "Sit_Boo_Loop" : hot ? (f.Salt % 3 == 0 ? "Sit_Point_Loop" : "Sit_Cheer_Loop") : "Sit_Clap_Loop";
+                }
+                SetFanClip(f, want);
+            }
+        }
+
+        private void SetFanClip(Fan f, string name)
+        {
+            if (f.Current == name || !f.Graph.IsValid()) return;
+            AnimationClip clip;
+            if (!_clipByName.TryGetValue(name, out clip)) return;
+            if (f.Clip.IsValid()) f.Clip.Destroy();
+            f.Clip = AnimationClipPlayable.Create(f.Graph, clip);
+            f.Clip.SetApplyFootIK(false);
+            f.Output.SetSourcePlayable(f.Clip);
+            f.Length = clip.length;
+            f.Current = name;
+        }
+
         private void LateUpdate()
         {
+            if (_popUntil > 0f && Time.time >= _popUntil) { _popUntil = 0f; ApplyMood(_mood); }
             float t = Time.time;
             for (int i = 0; i < _fans.Count; i++)
             {

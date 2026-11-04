@@ -36,6 +36,10 @@ namespace Game.Gameplay.Ring.Models
     {
         public int Number;
         public MatchActionId Id;
+        /// <summary>Прийом кар'єри (ключ каталогу) або null — системна дія рушія.</summary>
+        public string MoveId;
+        /// <summary>Той самий прийом двічі поспіль: −1 ажіотажу.</summary>
+        public bool RepeatWarning;
         public string Name;
         public int Cost;
         public string CostText;
@@ -88,11 +92,17 @@ namespace Game.Gameplay.Ring.Models
 
         private readonly MatchEngine _e;
         private readonly RingText _t;
+        private readonly Game.Core.Ring.Career.CareerSession _career;
 
-        public MatchScreenModel(MatchEngine engine, RingText text)
+        /// <summary>
+        /// <paramref name="career"/> — матч кар'єри: замість 17 дій рушія гравець обирає прийоми свого набору (TRPG_DESIGN §5.4)
+        /// плюс системні дії (утримання, встати, промінь надії…). Без кар'єри — дії рушія, як у зрізі ворожнечі.
+        /// </summary>
+        public MatchScreenModel(MatchEngine engine, RingText text, Game.Core.Ring.Career.CareerSession career = null)
         {
             _e = engine ?? throw new ArgumentNullException(nameof(engine));
             _t = text ?? throw new ArgumentNullException(nameof(text));
+            _career = career;
         }
 
         public MatchEngine Engine { get { return _e; } }
@@ -210,6 +220,7 @@ namespace Game.Gameplay.Ring.Models
             var rows = new List<MatchActionRow>();
             if (Input != MatchInput.PlayerAction) return rows;
             int n = 1;
+            if (_career != null) return CareerActions();
             foreach (var o in _e.GetAvailableActions())
             {
                 var r = new MatchActionRow
@@ -236,6 +247,69 @@ namespace Game.Gameplay.Ring.Models
             return rows;
         }
 
+        /// <summary>Прийоми набору (назва — прийом, шанси — дії рушія з травмою й бонусом) і системні дії кар'єри.</summary>
+        private List<MatchActionRow> CareerActions()
+        {
+            var rows = new List<MatchActionRow>();
+            int n = 1;
+            foreach (var mo in _career.GetMoveOptions())
+            {
+                var r = Row(mo.Option, _t.Get(mo.Move.NameKey));
+                r.MoveId = mo.Move.Id;
+                r.RepeatWarning = mo.RepeatWarning;
+                if (r.Available && n <= 9) r.Number = n++;
+                rows.Add(r);
+            }
+            foreach (var o in _career.GetUniversalOptions())
+            {
+                var r = Row(o, RingLabels.ActionName(_t, o.Id));
+                if (r.Available && n <= 9) r.Number = n++;
+                rows.Add(r);
+            }
+            return rows;
+        }
+
+        private MatchActionRow Row(ActionOption o, string name)
+        {
+            var r = new MatchActionRow
+            {
+                Id = o.Id,
+                Name = name,
+                Cost = o.Cost,
+                CostText = o.Cost > 0 ? _t.Format("match.action.cost", o.Cost) : _t.Get("match.action.free"),
+                Available = o.Available,
+                IsBig = o.IsBig,
+                HasRoll = o.HasRoll,
+                RollIsOpponents = o.RollIsOpponents
+            };
+            if (o.HasAttr) r.AttrText = RingLabels.AttrName(_t, o.Attr);
+            if (o.HasRoll && o.Chances != null)
+            {
+                r.Percents = RingChances.Percent(o.Chances);
+                r.ModifierText = RingChances.Signed(o.Modifier);
+            }
+            if (!o.Available) r.ReasonText = RingLabels.Unavailable(_t, o.Reason);
+            return r;
+        }
+
+        /// <summary>Виконати рядок: прийом кар'єри або дію рушія.</summary>
+        public bool PerformRow(MatchActionRow row)
+        {
+            if (row == null) return false;
+            if (row.MoveId == null || _career == null) return _career != null ? PerformCareerAction(row.Id) : Perform(row.Id);
+            if (Input != MatchInput.PlayerAction || !row.Available) return false;
+            _career.PerformMove(row.MoveId);
+            return true;
+        }
+
+        private bool PerformCareerAction(MatchActionId id)
+        {
+            if (Input != MatchInput.PlayerAction) return false;
+            if (!_e.Describe(id).Available) return false;
+            _career.PerformAction(id);
+            return true;
+        }
+
         /// <summary>Виконати дію гравця. «Перевести подих» — це кінець ходу.</summary>
         public bool Perform(MatchActionId id)
         {
@@ -248,7 +322,7 @@ namespace Game.Gameplay.Ring.Models
 
         public bool PerformNumber(int number)
         {
-            foreach (var r in Actions()) if (r.Number == number) return Perform(r.Id);
+            foreach (var r in Actions()) if (r.Number == number) return PerformRow(r);
             return false;
         }
 

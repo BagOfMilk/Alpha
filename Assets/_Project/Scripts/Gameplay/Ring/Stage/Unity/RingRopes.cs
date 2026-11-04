@@ -165,6 +165,13 @@ namespace Game.Gameplay.Ring.Stage
 
         // ---------------- тіла ----------------
 
+        /// <summary>Постаті змінились (новий суперник, інше тіло героя): канати чіпляються за нові кістки.</summary>
+        public void SetActors(RingActor[] actors)
+        {
+            _actors = actors;
+            if (_actors != null) CacheRigs();
+        }
+
         private void CacheRigs()
         {
             _rigs = new Rig[_actors.Length];

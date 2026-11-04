@@ -76,7 +76,10 @@ namespace Game.Gameplay.Ring.Stage
 
         private enum RingStageMode { Idle = 0, Match = 1, Promo = 2 }
 
-        public bool IsBusy { get { return _director != null && _director.IsBusy; } }
+        public bool IsBusy { get { return (_director != null && _director.IsBusy) || (_show != null && _show.Busy); } }
+
+        private RingShow _show;
+        public RingShow Show { get { return _show; } }
 
         public static string ReadArg(string name)
         {
@@ -105,6 +108,8 @@ namespace Game.Gameplay.Ring.Stage
             BuildDress();
             _director = gameObject.AddComponent<RingMatchDirector>();
             _director.Init(this);
+            _show = gameObject.AddComponent<RingShow>();
+            _show.Init(this);
             RingStageHub.Current = this;
             ShowIdle();
             SnapCamera();
@@ -324,9 +329,13 @@ namespace Game.Gameplay.Ring.Stage
 
         private RingActor Spawn(string name, GameObject prefab, int texIndex, Vector3 scale, int tint)
         {
+            return SpawnWith(name, prefab, scale, MakeMaterial(texIndex, tint));
+        }
+
+        private RingActor SpawnWith(string name, GameObject prefab, Vector3 scale, Material mat)
+        {
             var a = new RingActor(name, prefab, transform);
             a.Model.transform.localScale = scale;
-            var mat = MakeMaterial(texIndex, tint);
             foreach (var r in a.Model.GetComponentsInChildren<Renderer>())
             {
                 // Очі, брови й вії мають свої матеріали: під текстурою тіла обличчя ставало порожнім манекеном.
@@ -358,8 +367,6 @@ namespace Game.Gameplay.Ring.Stage
 
         private Material MakeMaterial(int i, int tint)
         {
-            Material template = assets.wrestlerTemplate;
-            var m = template != null ? new Material(template) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
             Texture2D albedo = assets.albedo[i];
             if (tint != 0 && albedo != null && assets.mask[i] != null)
             {
@@ -368,16 +375,86 @@ namespace Game.Gameplay.Ring.Stage
                     : RingTint.Grade(albedo, assets.mask[i], 0.995f, 1.05f, new Color(0.94f, 0.80f, 0.74f));
                 if (t != null) albedo = t;
             }
+            return MaterialFrom(albedo, assets.normal[i]);
+        }
+
+        private Material MaterialFrom(Texture2D albedo, Texture2D normal)
+        {
+            Material template = assets.wrestlerTemplate;
+            var m = template != null ? new Material(template) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
             if (albedo != null) { m.SetTexture("_BaseMap", albedo); m.SetTexture("_MainTex", albedo); }
             m.SetColor("_BaseColor", Color.white);
-            if (assets.normal[i] != null)
+            if (normal != null)
             {
-                m.SetTexture("_BumpMap", assets.normal[i]);
+                m.SetTexture("_BumpMap", normal);
                 m.EnableKeyword("_NORMALMAP");
             }
             m.SetFloat("_Smoothness", 0.16f);
             m.SetFloat("_Metallic", 0f);
             return m;
+        }
+
+        // ============================ хто на рингу ============================
+
+        private string _lookPlayer, _lookRival;
+
+        /// <summary>
+        /// Зовнішність борців під кар'єру: тіло набору (<c>body_m_latin</c>…), колір екіпіровки (0xRRGGBB), зачіска (ключ
+        /// частини набору або порожньо), масштаб суперника. Та сама зовнішність — нічого не перебудовується.
+        /// </summary>
+        public void SetWrestlers(string playerBody, int playerRgb, string playerHair, string rivalBody, int rivalRgb, string rivalHair, float rivalScale)
+        {
+            string lp = playerBody + "|" + playerRgb + "|" + playerHair, lr = rivalBody + "|" + rivalRgb + "|" + rivalHair + "|" + rivalScale;
+            bool changed = false;
+            if (lp != _lookPlayer)
+            {
+                var a = Rebuild("Гравець", playerBody, playerRgb, playerHair, 1f);
+                if (a != null) { if (_player != null) Kill(_player); _player = a; _lookPlayer = lp; changed = true; }
+            }
+            if (lr != _lookRival)
+            {
+                var a = Rebuild("Суперник", rivalBody, rivalRgb, rivalHair, rivalScale);
+                if (a != null) { if (_rival != null) Kill(_rival); _rival = a; _lookRival = lr; changed = true; }
+            }
+            if (!changed) return;
+            HideMic();
+            if (_ropes != null) _ropes.SetActors(new[] { _player, _rival, _ref });
+            if (_mode == RingStageMode.Idle && (_show == null || !_show.Busy)) ShowIdle();
+        }
+
+        private void Kill(RingActor a)
+        {
+            a.Destroy();
+            if (a.Slot != null) Destroy(a.Slot.gameObject);
+        }
+
+        private RingActor Rebuild(string name, string body, int rgb, string hair, float scale)
+        {
+            int i = Array.FindIndex(assets.bodies, b => b != null && b.name == body);
+            if (i < 0) { Debug.LogWarning("[Ринг] 3D: немає тіла " + body); return null; }
+            Texture2D albedo = assets.bodyAlbedo[i];
+            var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
+            float h, sat, v;
+            Color.RGBToHSV(c, out h, out sat, out v);
+            if (albedo != null && assets.bodyMask[i] != null)
+            {
+                var t = RingTint.Grade(albedo, assets.bodyMask[i], h, 0.8f + v * 0.7f, new Color(0.97f, 0.9f, 0.84f));
+                if (t != null) albedo = t;
+            }
+            float hgt = 1f + (scale - 1f) * 0.5f;
+            var a = SpawnWith(name, assets.bodies[i], new Vector3(scale, hgt, scale), MaterialFrom(albedo, assets.bodyNormal[i]));
+            bool female = body.StartsWith("body_f_");
+            if (!string.IsNullOrEmpty(hair))
+                RingDress.Apply(a.Model, female ? assets.kitFemale : assets.kitMale, new[] { new RingDress.Piece(hair, HairColor(body)) });
+            return a;
+        }
+
+        private static Color HairColor(string body)
+        {
+            if (body.Contains("nordic")) return new Color(0.55f, 0.42f, 0.26f);
+            if (body.Contains("ukrainian")) return new Color(0.2f, 0.13f, 0.08f);
+            if (body.Contains("mediterranean") || body.Contains("latin")) return new Color(0.1f, 0.07f, 0.05f);
+            return new Color(0.04f, 0.035f, 0.03f);
         }
 
         // ============================ місця ============================
@@ -420,6 +497,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void ShowIdle()
         {
+            LeaveShow();
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
@@ -434,10 +512,12 @@ namespace Game.Gameplay.Ring.Stage
 
         public void BeginMatch(MatchEngine engine)
         {
+            LeaveShow();
             _mode = RingStageMode.Match;
             HideMic();
             _ref.Model.SetActive(true);
             _director.Begin(engine);
+            CrowdMood(engine != null ? engine.State.Hype : 0);
             SetShot(StageCam.Overview);
         }
 
@@ -459,6 +539,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void BeginPromo()
         {
+            LeaveShow();
             _mode = RingStageMode.Promo;
             if (_director != null) _director.EndMatch();
             _ref.Model.SetActive(false);
@@ -563,6 +644,55 @@ namespace Game.Gameplay.Ring.Stage
             _micHolder = null;
         }
 
+        // ============================ шоу: вступ, вихід, закулісся ============================
+
+        private void LeaveShow()
+        {
+            if (_show == null) return;
+            _show.LeaveBackstage();
+            if (_show.Busy) _show.Skip();
+        }
+
+        public void BeginIntro(string title, string subtitle)
+        {
+            _mode = RingStageMode.Idle;
+            if (_director != null) _director.EndMatch();
+            HideMic();
+            _show.LeaveBackstage();
+            _show.BeginIntro(title, subtitle);
+        }
+
+        public void BeginEntrance(bool player, string title, string subtitle, int rgb)
+        {
+            _mode = RingStageMode.Idle;
+            if (_director != null) _director.EndMatch();
+            HideMic();
+            _show.LeaveBackstage();
+            var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
+            _show.BeginEntrance(player ? _player : _rival, title, subtitle, c);
+        }
+
+        /// <summary>Настрій залу за ажіотажем матчу (0…10): холодний, оплески, крики, кипить.</summary>
+        public void CrowdMood(int hype)
+        {
+            if (_dress == null) return;
+            _dress.SetMood(hype <= 2 ? 0 : hype <= 5 ? 1 : hype <= 8 ? 2 : 3, false);
+        }
+
+        public void CrowdPop() { if (_dress != null) _dress.Pop(); }
+
+        public bool ShowBusy { get { return _show != null && _show.Busy; } }
+
+        public void SkipShow() { if (_show != null) _show.Skip(); }
+
+        public void ShowBackstage()
+        {
+            _mode = RingStageMode.Idle;
+            if (_director != null) _director.EndMatch();
+            HideMic();
+            _show.ShowBackstage(assets.bodyRef, assets.kitMale);
+        }
+
         // ============================ камера ============================
 
         public void SetShot(StageCam cam)
@@ -579,12 +709,21 @@ namespace Game.Gameplay.Ring.Stage
             if (_player != null) _player.Tick(Time.deltaTime);
             if (_rival != null) _rival.Tick(Time.deltaTime);
             if (_ref != null) _ref.Tick(Time.deltaTime);
+            if (_show != null) _show.TickBooker(Time.deltaTime);
             if (_cam == null) return;
             _shotAge += dt;
 
             Vector3 pos, look;
             float fov;
-            if (_mode == RingStageMode.Promo && _hasPromoPose)
+            bool show = _show != null && _show.CamActive;
+            if (show)
+            {
+                pos = _show.CamPos;
+                look = _show.CamLook;
+                fov = _show.CamFov;
+                if (_show.CamCut) { _camInit = false; _show.CamCut = false; }
+            }
+            else if (_mode == RingStageMode.Promo && _hasPromoPose)
             {
                 _promoPoseAge += dt;
                 RecomputePromoPose();
@@ -630,7 +769,7 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 fwd = (look - pos).normalized;
             Vector3 up = Vector3.Cross(Vector3.Cross(fwd, Vector3.up), fwd).normalized;
             float halfH = (look - pos).magnitude * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
-            Vector3 aim = look - up * (halfH * _frameShift);
+            Vector3 aim = look - up * (halfH * (show ? 0f : _frameShift));
             Quaternion rot = Quaternion.LookRotation(aim - pos, Vector3.up);
 
             if (!_camInit)
