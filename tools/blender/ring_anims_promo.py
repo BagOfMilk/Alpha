@@ -561,7 +561,8 @@ def promo_main():
             failed.append(name)
         samples.append((name, sa, armA))
         seq_for_look[name] = (sa, length)
-        manifest.append("%s - %.3f %d 0 0 0 0 promo promo" % (name, length, int(loop)))
+        nd = CLIP_NODES.get(name, {}).get("A", (None, None))             # Stare: мікрофон опущено — вузла «promo» немає
+        manifest.append("%s - %.3f %d 0 0 0 0 %s %s" % (name, length, int(loop), nd[0] or "-", nd[1] or "-"))
     strip_constraints(rig)
     actions = {n: write_action(armA, n, s_) for n, s_, arm in samples}
     loop_of = {c[0]: c[4] for c in PROMO_CLIPS}

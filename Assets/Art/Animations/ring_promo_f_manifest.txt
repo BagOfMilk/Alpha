@@ -5,4 +5,4 @@ Promo_Mic_Point - 2.500 0 0 0 0 0 promo promo
 Promo_Mic_Point_Crowd - 3.000 0 0 0 0 0 promo promo
 Promo_Mic_Turn_Crowd - 3.800 0 0 0 0 0 promo promo
 Promo_Mic_Fist - 3.200 0 0 0 0 0 promo promo
-Promo_Mic_Stare_Loop - 3.000 1 0 0 0 0 promo promo
+Promo_Mic_Stare_Loop - 3.000 1 0 0 0 0 - -
