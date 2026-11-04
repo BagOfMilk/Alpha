@@ -197,7 +197,7 @@ namespace Game.Core.Ring.Career
         {
             var v = new WeekView
             {
-                Season = State.Season, Week = State.Week, WeeksInSeason = CareerRules.WeeksPerSeason,
+                Season = State.Season, Week = State.Week, WeeksInSeason = CareerRules.WeeksInSeason(State.Season),
                 ActionsLeft = State.ActionsLeft, ActionsTotal = State.Strained ? CareerRules.StrainedActions : CareerRules.ActionsPerWeek,
                 Strained = State.Strained, PromoChoicePending = State.PromoChoicePending, Money = State.Money, Popularity = Popularity,
                 Trust = Trust, DevPoints = DevPoints, IsBigShowWeek = State.IsBigWeek(State.Week), Card = GetShowCard(),
@@ -760,7 +760,7 @@ namespace Game.Core.Ring.Career
                 return;
             }
             EndOfWeekBookkeeping();
-            if (State.Week >= CareerRules.WeeksPerSeason) EnterSeasonEnd();
+            if (State.Week >= CareerRules.WeeksInSeason(State.Season)) EnterSeasonEnd();
             else
             {
                 State.Week++;

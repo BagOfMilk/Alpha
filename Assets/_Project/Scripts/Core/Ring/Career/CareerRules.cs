@@ -8,9 +8,15 @@ namespace Game.Core.Ring.Career
     public static class CareerRules
     {
         // ---------- час ----------
-        /// <summary>Сезон = 8 тижнів (два цикли по 4); кожен четвертий тиждень — велике шоу.</summary>
-        public const int WeeksPerSeason = 8;
+        /// <summary>
+        /// Звичайний сезон — 4 тижні, четвертий — велике шоу (власник 04.11.2026: «давай не больше 4х только некоторые в
+        /// будущем сюжетные будут больше»). Довші сюжетні сезони задаватиме вміст — через <see cref="WeeksInSeason"/>.
+        /// </summary>
+        public const int WeeksPerSeason = 4;
         public const int BigShowEvery = 4;
+
+        /// <summary>Тижнів у сезоні. Поки всі сезони звичайні; сюжетні (довші) прийдуть із вмістом кампанії.</summary>
+        public static int WeeksInSeason(int season) { return WeeksPerSeason; }
         public const int ActionsPerWeek = 3;
         /// <summary>Тиждень після невиплаченого проживання (бідність): дві дії.</summary>
         public const int StrainedActions = 2;

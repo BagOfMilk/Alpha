@@ -99,7 +99,7 @@ namespace Game.Gameplay.Ring.UI
             var chips = RingUi.Row();
             chips.style.flexWrap = Wrap.Wrap;
             chips.style.marginTop = 4f;
-            chips.Add(Chip(T.Format("c.season_week", v.Season, v.Week, CareerRules.WeeksPerSeason), RingUi.Text));
+            chips.Add(Chip(T.Format("c.season_week", v.Season, v.Week, CareerRules.WeeksInSeason(v.Season)), RingUi.Text));
             chips.Add(Chip(T.Format("c.money", v.Money), RingUi.Gold));
             chips.Add(Chip(T.Format("c.popularity", v.Popularity, CareerRules.MaxPopularity), RingUi.Face));
             chips.Add(Chip(T.Format("c.trust", v.Trust, CareerRules.MaxTrust), RingUi.Text));

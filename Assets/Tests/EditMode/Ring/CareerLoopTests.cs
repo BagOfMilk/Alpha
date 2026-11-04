@@ -41,7 +41,7 @@ namespace Game.Tests.EditMode
             for (int v = 0; v < Variants; v++)
             {
                 var s = CareerKit.NewAtCreate(200 + (ulong)v);
-                CareerBot.Play(s, 2, v);
+                CareerBot.Play(s, 3, v);   // сезон — 4 тижні з одним великим шоу: три матчі Молота — три сезони
                 Assert.IsTrue(s.State.FeudResolved, "варіант " + v);
                 Assert.IsTrue(s.Feud.HasEnding);
                 Assert.AreEqual(3, s.Feud.Records.Count, "три матчі ворожнечі");
@@ -55,14 +55,15 @@ namespace Game.Tests.EditMode
             var rep = new CareerRunReport();
             var bigWeeks = new List<int>(); var feudFlags = new List<bool>();
             int guard = 0;
-            while (s.State.Season <= 2 && guard++ < 2000)
+            while (s.State.Season <= 4 && guard++ < 2000)
             {
                 if (s.Stage == CareerStage.Week && s.State.IsBig && s.State.ActionsLeft == CareerRules.ActionsPerWeek && s.State.ActionsDone.Count == 0)
                 { bigWeeks.Add(s.State.Week); feudFlags.Add(s.State.IsFeudShow); }
                 if (s.Stage == CareerStage.SeasonEnd && s.CanStartTitleMatch) s.SkipTitle();
                 CareerBot.Step(s, 0, rep);
             }
-            CollectionAssert.AreEqual(new[] { 4, 8, 4, 8 }, bigWeeks);
+            // Сезон — 4 тижні (власник 04.11.2026), велике шоу — четвертий тиждень кожного сезону.
+            CollectionAssert.AreEqual(new[] { 4, 4, 4, 4 }, bigWeeks);
             CollectionAssert.AreEqual(new[] { true, true, true, false }, feudFlags, "три великі шоу — Молот, далі — ростер");
         }
 
