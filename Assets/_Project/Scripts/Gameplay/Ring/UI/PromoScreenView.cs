@@ -336,14 +336,15 @@ namespace Game.Gameplay.Ring.UI
             switch (_m.Kind)
             {
                 case PromoViewKind.Line: _m.Advance(); break;
-                case PromoViewKind.Check: _m.Roll(Ctx.Campaign.Dice); break;
+                case PromoViewKind.Check: _m.Roll(Ctx.PromoDice ?? Ctx.Campaign.Dice); break;
                 case PromoViewKind.Rewards:
                     if (!_m.CanConfirmRewards) return;
                     _m.ConfirmRewards();
                     break;
                 case PromoViewKind.Result: _m.AcknowledgeResult(); break;
                 case PromoViewKind.Finished:
-                    Ctx.Campaign.FinishPromo();
+                    // Сцена закулісся кар'єри закривається своїм методом (наслідки, витрачена дія тижня).
+                    if (Ctx.FinishPromo != null) Ctx.FinishPromo(); else Ctx.Campaign.FinishPromo();
                     return;
                 default: return;
             }

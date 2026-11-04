@@ -23,6 +23,9 @@ namespace Game.Gameplay.Ring.UI
         public Action AfterDevelopment;
         /// <summary>Хост кар'єри (сейв, меню, вигляд героя); null у зрізі ворожнечі.</summary>
         public ICareerHost Host;
+        /// <summary>Кубик і кінець сцени для екрана діалогу, якщо це не промо ворожнечі (сцена закулісся кар'єри).</summary>
+        public Game.Core.Randomness.IDiceRoller PromoDice;
+        public Action FinishPromo;
     }
 
     /// <summary>Спільна основа екрана «Рингу»: корінь, перемальовування, гарячі клавіші, годинник кадру.</summary>

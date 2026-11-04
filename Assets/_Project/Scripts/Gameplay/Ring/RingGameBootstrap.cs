@@ -27,6 +27,8 @@ namespace Game.Gameplay.Ring
         private const string MovesPath = "Ring/career_moves";
         private const string GimmicksPath = "Ring/career_gimmicks";
         private const string RosterPath = "Ring/career_roster";
+        private const string BackstagePath = "Ring/career_backstage";
+        private const string BackstageTextPath = "Ring/backstage_uk";
         private const string SeedArg = "-ring-seed";
         private const string ShotsArg = "-ring-shots";
 
@@ -219,15 +221,17 @@ namespace Game.Gameplay.Ring
             var moves = Resources.Load<TextAsset>(MovesPath);
             var gimmicks = Resources.Load<TextAsset>(GimmicksPath);
             var roster = Resources.Load<TextAsset>(RosterPath);
-            if (feud == null || strings == null || ui == null || moves == null || gimmicks == null || roster == null)
+            var backstage = Resources.Load<TextAsset>(BackstagePath);
+            var backstageText = Resources.Load<TextAsset>(BackstageTextPath);
+            if (feud == null || strings == null || ui == null || moves == null || gimmicks == null || roster == null || backstage == null || backstageText == null)
             {
                 ShowError(new List<string> { "Resources/Ring: немає даних кар'єри" });
                 return false;
             }
             try
             {
-                _text = RingText.FromJson(strings.text, ui.text);
-                _content = CareerContent.Load(feud.text, moves.text, gimmicks.text, roster.text);
+                _text = RingText.FromJson(strings.text, ui.text, backstageText.text);
+                _content = CareerContent.Load(feud.text, moves.text, gimmicks.text, roster.text, backstage.text);
             }
             catch (Exception ex)
             {
@@ -235,6 +239,7 @@ namespace Game.Gameplay.Ring
                 return false;
             }
             var errors = PromoValidator.Validate(_content.Feud, _text.AsDictionary());
+            errors.AddRange(PromoValidator.ValidateScenes(_content.Backstage.Promos(), _text.AsDictionary()));
             if (errors.Count > 0)
             {
                 var lines = new List<string>();
@@ -359,7 +364,9 @@ namespace Game.Gameplay.Ring
             switch (_career.Stage)
             {
                 case CareerStage.Create: return "create";
-                case CareerStage.Week: return "week:" + st.Season + ":" + st.Week;
+                case CareerStage.Week:
+                    // Сцена закулісся (розмова з букером чи подія поза рингом) — окремий екран діалогу поверх тижня.
+                    return _career.BackstageOpen ? (object)_career.CurrentBackstage : "week:" + st.Season + ":" + st.Week;
                 case CareerStage.SeasonEnd: return "season:" + st.Season;
                 case CareerStage.Show:
                     switch (st.Phase)
@@ -389,7 +396,9 @@ namespace Game.Gameplay.Ring
             switch (_career.Stage)
             {
                 case CareerStage.Create: return new CreateScreenView(_ctx);
-                case CareerStage.Week: return new WeekScreenView(_ctx);
+                case CareerStage.Week:
+                    if (_career.BackstageOpen) return new PromoScreenView(BackstageCtx(), _career.CurrentBackstage);
+                    return new WeekScreenView(_ctx);
                 case CareerStage.SeasonEnd: return new SeasonEndScreenView(_ctx);
                 case CareerStage.Show:
                     switch (_career.State.Phase)
@@ -413,6 +422,17 @@ namespace Game.Gameplay.Ring
             return new TitleScreenView(_ctx);
         }
 
+        /// <summary>Контекст екрана сцени закулісся: той самий діалог, що й промо, але кубик і кінець — кар'єри.</summary>
+        private RingUiContext BackstageCtx()
+        {
+            return new RingUiContext
+            {
+                Campaign = _ctx.Campaign, Text = _ctx.Text, Career = _ctx.Career, Host = this, Restart = _ctx.Restart,
+                PromoDice = _career.Dice,
+                FinishPromo = () => { LastWeekResult = _career.FinishBackstage(); Save(); }
+            };
+        }
+
         private void StartShow()
         {
             Save();
@@ -431,7 +451,7 @@ namespace Game.Gameplay.Ring
                     opp.Body, opp.Rgb, opp.Hair, opp.Scale);
             }
             if (_onTitle || _career.Stage == CareerStage.Create || _career.Stage == CareerStage.SeasonEnd) { stage.ShowIdle(); return; }
-            if (_career.Stage == CareerStage.Week) { stage.ShowBackstage(); return; }
+            if (_career.Stage == CareerStage.Week) { stage.ShowBackstage(); return; }   // сцена закулісся — там само, камера за мовцем
             var phase = _career.State.Phase;
             MatchEngine match = null;
             if (phase == ShowPhase.Match) match = _career.Engine;
@@ -491,7 +511,7 @@ namespace Game.Gameplay.Ring
             if (_shotAct)
             {
                 // На тижні бот робить усі три дії різними цифрами, тоді «Далі»; деінде — цифра й «Далі» по черзі.
-                bool week = !_onTitle && _career.Stage == CareerStage.Week;
+                bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
                 if (week && (_career.State.ActionsLeft > 0 || _career.State.PromoChoicePending)) _view.OnDigit(1 + _shotDigit++ % 6);
                 else if (_shotPressDigit) _view.OnDigit(1 + _shotDigit++ % 5);
                 else _view.OnConfirm();

@@ -563,6 +563,8 @@ namespace Game.Gameplay.Ring.Stage
 
         public void SetPromoSpeaker(string speaker)
         {
+            // Сцена закулісся йде в роздягальні: камера — на того, хто говорить (букер, герой) або загальний план.
+            if (_show != null && _show.InBackstage) { _show.BackstageSpeaker(speaker); return; }
             if (_mode != RingStageMode.Promo || string.IsNullOrEmpty(speaker)) return;
             if (speaker == _promoSpeaker) return;
             _promoSpeaker = speaker;
@@ -699,7 +701,9 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
-            _show.ShowBackstage(assets.bodyRef, assets.kitMale);
+            // Букер — Ліна Ворон (сцени закулісся): жіноче тіло набору у власних матеріалах FBX.
+            int bi = Array.FindIndex(assets.bodies, b => b != null && b.name == "body_f_mediterranean");
+            _show.ShowBackstage(bi >= 0 ? assets.bodies[bi] : assets.bodyRef, bi >= 0 ? assets.kitFemale : assets.kitMale);
             if (_sound != null) { _sound.MusicOff(); _sound.Crowd(-1); }
         }
 

@@ -512,6 +512,8 @@ namespace Game.Gameplay.Ring.UI
 
         private void Do(WeekActionResult r)
         {
+            // Закулісся відкриває сцену (екран діалогу): результат покаже хост, коли сцену доведуть до кінця.
+            if (r.NeedsScene) { Host.LastWeekResult = null; return; }
             Host.LastWeekResult = r;
             Host.Save();
             Refresh();
@@ -529,6 +531,10 @@ namespace Game.Gameplay.Ring.UI
             if (r.HypeBonusDelta != 0) parts.Add(T.Format("c.delta.hype", Signed(r.HypeBonusDelta)));
             if (r.RivalBoosted) parts.Add(T.Get("c.delta.rival"));
             if (r.InjuredZone >= 0) parts.Add(T.Format("c.delta.injury", T.Get("bodyzone." + r.InjuredZone)));
+            if (r.PopularityDelta != 0) parts.Add(T.Format("c.delta.pop", Signed(r.PopularityDelta)));
+            if (r.LockerDelta != 0) parts.Add(T.Format("c.delta.locker", Signed(r.LockerDelta)));
+            if (r.ActionsDelta != 0) parts.Add(T.Format("c.delta.actions", Signed(r.ActionsDelta)));
+            if (r.PlanChanged) parts.Add(T.Get("c.delta.plan"));
             if (r.NeedsChoice) parts.Add(T.Get("c.week.promo_choice"));
             string s = string.Join(" · ", parts);
             if (!string.IsNullOrEmpty(r.RumorKey)) s += "\n" + T.Get(r.RumorKey);

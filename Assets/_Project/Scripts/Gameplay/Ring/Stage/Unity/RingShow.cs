@@ -337,6 +337,20 @@ namespace Game.Gameplay.Ring.Stage
             Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, true);
         }
 
+        public bool InBackstage { get { return _backstage != null && _backstage.activeSelf; } }
+
+        /// <summary>Камера розмови в роздягальні: букер через плече героя, герой через плече букера, інші — загальний план.</summary>
+        public void BackstageSpeaker(string speaker)
+        {
+            if (!InBackstage || _booker == null) return;
+            var hero = _s.Actor(Core.Ring.Match.MatchSide.Player);
+            Vector3 b = _booker.HeadPos, h = hero.HeadPos;
+            Vector3 across = Vector3.Cross(Vector3.up, (b - h).normalized);
+            if (speaker == "booker") Look(h + (h - b).normalized * 0.9f + across * 0.45f + Vector3.up * 0.1f, b, 34f, true);
+            else if (speaker == "player") Look(b + (b - h).normalized * 0.9f - across * 0.45f + Vector3.up * 0.1f, h, 34f, true);
+            else { var o = BackstageOrigin; Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, false); }
+        }
+
         public void LeaveBackstage()
         {
             if (_backstage != null) _backstage.SetActive(false);
@@ -391,10 +405,8 @@ namespace Game.Gameplay.Ring.Stage
                     new RingDress.Piece("shirt", new Color(0.55f, 0.62f, 0.7f)),
                     new RingDress.Piece("trousers", new Color(0.2f, 0.2f, 0.22f)),
                     new RingDress.Piece("shoes", new Color(0.12f, 0.08f, 0.06f)),
-                    // Коротка зачіска й коротка борода: з повною бородою й «їжаком» голова читалась темною грудкою без обличчя
-                    // (огляд 04.11.2026).
-                    new RingDress.Piece("hair_short02", new Color(0.42f, 0.4f, 0.38f)),
-                    new RingDress.Piece("beard_short", new Color(0.42f, 0.4f, 0.38f)),
+                    // Ліна Ворон (сцени закулісся): каре з сивиною; без бороди й «їжака» — там голова читалась темною грудкою.
+                    new RingDress.Piece("hair_bob01", new Color(0.3f, 0.28f, 0.27f)),
                 });
             }
         }
