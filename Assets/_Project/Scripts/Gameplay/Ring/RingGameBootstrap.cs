@@ -141,6 +141,9 @@ namespace Game.Gameplay.Ring
                 int lim;
                 string ls = ReadArg("-ring-shot-limit");
                 if (ls != null && int.TryParse(ls, out lim) && lim > 0) ShotLimit = lim;
+                // Скільки сезонів проходить огляд (за замовчуванням 1; уся ворожнеча з Молотом — 3).
+                string ss = ReadArg("-ring-shot-seasons");
+                if (ss != null && int.TryParse(ss, out lim) && lim > 0) _shotSeasons = lim;
             }
             if (!BuildUi()) return;
             if (!LoadData()) return;
@@ -149,6 +152,8 @@ namespace Game.Gameplay.Ring
             _onTitle = true;
             Rebind();
             var stage = RingStageHub.Current;
+            string look = ReadArg("-ring-lookbook");
+            if (look != null && stage != null) { StartCoroutine(Lookbook(stage, look)); return; }
             if (stage != null && !RingStageHub.DemoRequested)
             {
                 _inIntro = true;
@@ -160,6 +165,55 @@ namespace Game.Gameplay.Ring
         {
             if (_host != null) Destroy(_host);
             if (_panel != null) Destroy(_panel);
+        }
+
+        /// <summary>
+        /// Лукбук вигляду (-ring-lookbook &lt;тека&gt;): усі тіла створення героя (стать × культура) з різними зачісками й кольорами
+        /// костюма, по двоє на ринг, кадр зблизька; і всі NPC федерації. Для перевірки очима, без гри.
+        /// </summary>
+        private System.Collections.IEnumerator Lookbook(IRingStage stage, string dir)
+        {
+            Application.runInBackground = true;
+            System.IO.Directory.CreateDirectory(dir);
+            _root.style.display = DisplayStyle.None;
+            int n = CareerLooks.HeroBodies.Length;
+            for (int i = 0; i < n; i += 2)
+            {
+                stage.SetWrestlers(CareerLooks.HeroBodies[i], CareerLooks.CostumeRgb(i % 8), CareerLooks.HeroHair[i % CareerLooks.HeroHair.Length],
+                    CareerLooks.HeroBodies[i + 1], CareerLooks.CostumeRgb((i + 3) % 8), CareerLooks.HeroHair[(i + 1) % CareerLooks.HeroHair.Length], 1f);
+                stage.LookbookShot();
+                yield return new WaitForSeconds(1.2f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, string.Format("look_{0:00}_{1}_{2}.png", i, CareerLooks.HeroBodies[i], CareerLooks.HeroBodies[i + 1])));
+                yield return new WaitForSeconds(0.4f);
+            }
+            foreach (var npc in _content.Roster)
+            {
+                var l = CareerLooks.ForNpc(npc.Id);
+                stage.SetWrestlers(CareerLooks.HeroBodies[0], CareerLooks.CostumeRgb(0), CareerLooks.HeroHair[0], l.Body, l.Rgb, l.Hair, l.Scale);
+                stage.LookbookShot();
+                yield return new WaitForSeconds(1.2f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "npc_" + npc.Id + ".png"));
+                yield return new WaitForSeconds(0.4f);
+            }
+            // Закулісся: Ліна й гості подій — загальний план і зблизька (камера на співрозмовника й на героя).
+            foreach (var scene in new[] { null, "ev_parking", "ev_friend", "ev_interview", "ev_contract" })
+            {
+                stage.ShowBackstage();
+                stage.SetBackstageScene(scene);
+                yield return new WaitForSeconds(1.0f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "bs_" + (scene ?? "booker") + "_wide.png"));
+                yield return new WaitForSeconds(0.3f);
+                stage.SetPromoSpeaker("booker");
+                yield return new WaitForSeconds(1.0f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "bs_" + (scene ?? "booker") + "_close.png"));
+                yield return new WaitForSeconds(0.3f);
+                stage.SetPromoSpeaker("player");
+                yield return new WaitForSeconds(1.0f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "bs_" + (scene ?? "booker") + "_hero.png"));
+                yield return new WaitForSeconds(0.3f);
+            }
+            yield return new WaitForSeconds(0.5f);
+            HardExit.Now(0);
         }
 
         private static ulong ReadSeed()
@@ -451,7 +505,14 @@ namespace Game.Gameplay.Ring
                     opp.Body, opp.Rgb, opp.Hair, opp.Scale);
             }
             if (_onTitle || _career.Stage == CareerStage.Create || _career.Stage == CareerStage.SeasonEnd) { stage.ShowIdle(); return; }
-            if (_career.Stage == CareerStage.Week) { stage.ShowBackstage(); return; }   // сцена закулісся — там само, камера за мовцем
+            if (_career.Stage == CareerStage.Week)
+            {
+                // Сцена закулісся — там само, камера за мовцем; подія — гість на місці букера.
+                stage.ShowBackstage();
+                var sc = _career.BackstageOpen ? _career.CurrentBackstageScene : null;
+                stage.SetBackstageScene(sc != null && sc.Kind == BackstageKind.Event ? sc.Id : null);
+                return;
+            }
             var phase = _career.State.Phase;
             MatchEngine match = null;
             if (phase == ShowPhase.Match) match = _career.Engine;
@@ -545,7 +606,7 @@ namespace Game.Gameplay.Ring
                 return;
             }
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_{1}.png", _shotIndex++, Label())));
-            bool done = !_onTitle && _career.Stage == CareerStage.SeasonEnd && _career.State.Season >= 1 && _seasonShots++ >= 3;
+            bool done = !_onTitle && _career.Stage == CareerStage.SeasonEnd && _career.State.Season >= _shotSeasons && _seasonShots++ >= 3;
             if (done || _shotIndex >= ShotLimit)
             {
                 Debug.Log("[Ринг] Огляд: знято " + _shotIndex + " кадрів, сезон " + _career.State.Season + ", тиждень " + _career.State.Week);
@@ -555,6 +616,7 @@ namespace Game.Gameplay.Ring
         }
 
         private int _seasonShots;
+        private int _shotSeasons = 1;
 
         private static bool BotTurn(MatchEngine e)
         {

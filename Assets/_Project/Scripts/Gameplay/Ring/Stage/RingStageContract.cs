@@ -47,10 +47,16 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Лічильник великих моментів світло-шоу (фінішер, перемога) і назва останнього — для кадрів огляду.</summary>
         int FxMoments { get; }
+
+        /// <summary>Лукбук (-ring-lookbook): обидва борці в центрі, камера зблизька по пояс.</summary>
+        void LookbookShot();
         string FxLastMoment { get; }
 
         /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>
         void ShowBackstage();
+
+        /// <summary>Сцена закулісся: null — розмова з букером; ev_* — подія з гостем на місці букера.</summary>
+        void SetBackstageScene(string sceneId);
 
         /// <summary>
         /// Хто на рингу: тіла набору (<c>body_m_latin</c>…), колір екіпіровки 0xRRGGBB, зачіска (ключ частини набору або

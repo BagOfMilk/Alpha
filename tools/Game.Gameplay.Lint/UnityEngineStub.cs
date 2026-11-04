@@ -40,7 +40,15 @@ namespace UnityEngine
 
     public class Behaviour : Component { }
 
-    public class MonoBehaviour : Behaviour { }
+    public class MonoBehaviour : Behaviour
+    {
+        public Coroutine StartCoroutine(System.Collections.IEnumerator routine) { return null; }
+        public void StopCoroutine(Coroutine routine) { }
+    }
+
+    public class YieldInstruction { }
+    public sealed class Coroutine : YieldInstruction { }
+    public sealed class WaitForSeconds : YieldInstruction { public WaitForSeconds(float seconds) { } }
 
     public class GameObject : Object
     {

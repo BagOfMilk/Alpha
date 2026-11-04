@@ -172,7 +172,7 @@ namespace Game.Gameplay.Ring.Stage
             Color parTint;
             switch (_cue)
             {
-                case "entrance": house = 0.35f; parMul = 0.55f; haze = 1.8f; keyMul = 0.35f; parTint = Red; break;
+                case "entrance": house = 0.35f; parMul = 0.55f; haze = 1.8f; keyMul = 0.5f; parTint = new Color(1f, 0.45f, 0.4f); break;
                 case "finisher": house = 0.3f; parMul = Strobe() ? 1.8f : 0.15f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
                 case "victory": house = 1.1f; parMul = 1.3f; haze = 1.3f; keyMul = 1.1f; parTint = Gold; break;
                 default: house = 1f; parMul = 1f; haze = 1f; keyMul = 1f; parTint = Color.clear; break;
@@ -197,7 +197,7 @@ namespace Game.Gameplay.Ring.Stage
                 var h = _heads[i];
                 if (_headMode == "off" || _headColors.Length == 0) { h.intensity = Mathf.Lerp(h.intensity, 0f, k); continue; }
                 h.color = _headColors[(i + beat) % _headColors.Length];
-                h.intensity = Mathf.Lerp(h.intensity, 40f, k);
+                h.intensity = Mathf.Lerp(h.intensity, _headMode == "curtain" ? 16f : 40f, k);
                 Vector3 tgt = HeadTarget(i, _cueT);
                 h.transform.rotation = Quaternion.Slerp(h.transform.rotation, Quaternion.LookRotation(tgt - h.transform.position), 1f - Mathf.Exp(-6f * dt));
             }

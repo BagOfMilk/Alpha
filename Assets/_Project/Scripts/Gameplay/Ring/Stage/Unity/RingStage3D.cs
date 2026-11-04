@@ -720,9 +720,60 @@ namespace Game.Gameplay.Ring.Stage
 
         public bool ShowBusy { get { return _show != null && _show.Busy; } }
         public int FxMoments { get { return _fx != null ? _fx.Moments : 0; } }
+
+        public void LookbookShot()
+        {
+            ShowIdle();
+            SetShot(StageCam.Close);
+            SnapCamera();
+        }
         public string FxLastMoment { get { return _fx != null ? _fx.LastMoment : null; } }
 
         public void SkipShow() { if (_show != null) _show.Skip(); }
+
+        /// <summary>Постать у сорочці, штанях і взутті поверх тіла з текстурою борця (букер, гості закулісся).</summary>
+        public RingActor MakeDressed(string name, string body, int rgb, string hair, Color shirt)
+        {
+            var a = Rebuild(name, body, rgb, hair, 1f);
+            if (a == null) return null;
+            bool f = body.StartsWith("body_f_");
+            RingDress.Apply(a.Model, f ? assets.kitFemale : assets.kitMale, new[]
+            {
+                new RingDress.Piece("shirt", shirt), new RingDress.Piece("trousers", new Color(0.12f, 0.12f, 0.13f)),
+                new RingDress.Piece("shoes", new Color(0.08f, 0.06f, 0.05f)),
+            });
+            return a;
+        }
+
+        /// <summary>Сцена закулісся: хто на місці Ліни (подія — гість), парковка — холодна лампа.</summary>
+        public void SetBackstageScene(string sceneId)
+        {
+            if (_show == null || !_show.InBackstage) return;
+            string body = null, hair = ""; int rgb = 0x5A6A78; bool dress = true;
+            switch (sceneId)
+            {
+                case "ev_parking": { var l = CareerLooks.ForNpc("baron"); body = l.Body; rgb = l.Rgb; hair = l.Hair; break; }
+                case "ev_friend": { var l = CareerLooks.ForNpc("stalevyi"); body = l.Body; rgb = l.Rgb; hair = l.Hair; dress = false; break; }
+                case "ev_interview": body = "body_f_south_asian"; hair = "hair_bob02"; rgb = 0x3B5BA0; break;
+                case "ev_contract": body = "body_m_east_asian"; hair = "hair_short02"; rgb = 0x202024; break;
+            }
+            RingActor guest = null;
+            if (body != null)
+            {
+                guest = Rebuild("Гість", body, rgb, hair, 1f);
+                if (guest != null && dress)
+                {
+                    bool f = body.StartsWith("body_f_");
+                    var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
+                    RingDress.Apply(guest.Model, f ? assets.kitFemale : assets.kitMale, new[]
+                    {
+                        new RingDress.Piece("shirt", c), new RingDress.Piece("trousers", new Color(0.12f, 0.12f, 0.13f)),
+                        new RingDress.Piece("shoes", new Color(0.08f, 0.06f, 0.05f)),
+                    });
+                }
+            }
+            _show.SetGuest(guest, sceneId ?? "", sceneId == "ev_parking");
+        }
 
         public void ShowBackstage()
         {
@@ -757,6 +808,7 @@ namespace Game.Gameplay.Ring.Stage
 
             Vector3 pos, look;
             float fov;
+            if (_show != null && _show.LeftBackstage) { _show.LeftBackstage = false; _camInit = false; }
             bool show = _show != null && _show.CamActive;
             if (show)
             {

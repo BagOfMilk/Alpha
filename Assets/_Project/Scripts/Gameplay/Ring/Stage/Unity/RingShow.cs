@@ -324,7 +324,7 @@ namespace Game.Gameplay.Ring.Stage
             // Пролітка: чотири точки над залою — від кута над рядами, вздовж трибуни, до рингу; дивиться в центр.
             Vector3[] fly =
             {
-                new Vector3(14f, 9f, -14f), new Vector3(8f, 6f, -11f), new Vector3(-2f, 4.2f, -9f), new Vector3(-7f, 3.4f, -6.5f)
+                new Vector3(12f, 7f, -9.5f), new Vector3(8f, 6f, -9.5f), new Vector3(-2f, 4.2f, -9f), new Vector3(-7f, 3.4f, -6.5f)
             };
             float seg = 3.2f;
             for (int i = 0; i + 1 < fly.Length && !_skip; i++)
@@ -376,20 +376,63 @@ namespace Game.Gameplay.Ring.Stage
 
         public bool InBackstage { get { return _backstage != null && _backstage.activeSelf; } }
 
+        /// <summary>Щойно вийшли з закулісся — камера рингу має стати на місце різко (RingStage3D читає й скидає).</summary>
+        public bool LeftBackstage { get; set; }
+
         /// <summary>Камера розмови в роздягальні: букер через плече героя, герой через плече букера, інші — загальний план.</summary>
         public void BackstageSpeaker(string speaker)
         {
             if (!InBackstage || _booker == null) return;
             var hero = _s.Actor(Core.Ring.Match.MatchSide.Player);
-            Vector3 b = _booker.HeadPos, h = hero.HeadPos;
+            var other = _guest ?? _booker;
+            Vector3 b = other.HeadPos, h = hero.HeadPos;
+            if (speaker != "player" && speaker != "narrator" && speaker != null) speaker = "booker";
             Vector3 across = Vector3.Cross(Vector3.up, (b - h).normalized);
             if (speaker == "booker") Look(h + (h - b).normalized * 0.9f + across * 0.45f + Vector3.up * 0.1f, b, 34f, true);
             else if (speaker == "player") Look(b + (b - h).normalized * 0.9f - across * 0.45f + Vector3.up * 0.1f, h, 34f, true);
             else { var o = BackstageOrigin; Look(o + new Vector3(0.6f, 1.75f, -3.6f), o + new Vector3(0f, 1.2f, 0.4f), 46f, false); }
         }
 
+        private RingActor _guest;
+        private string _guestKey;
+        private Light _lamp;
+
+        /// <summary>
+        /// Хто в кадрі сцени закулісся: розмова — Ліна Ворон; подія — гість на її місці (Барон на парковці, Сталевий у лазареті,
+        /// ведучий інтерв'ю, агент із контрактом), Ліни немає. Парковка — холодна лампа, що мерехтить.
+        /// </summary>
+        public void SetGuest(RingActor guest, string key, bool parking)
+        {
+            if (_guestKey == key) return;
+            if (_guest != null) { _guest.Destroy(); Destroy(_guest.Slot.gameObject); _guest = null; }
+            _guestKey = key;
+            _guest = guest;
+            Vector3 o = BackstageOrigin;
+            if (_booker != null) _booker.Model.SetActive(guest == null);
+            if (guest != null)
+            {
+                guest.Slot.SetParent(_backstage.transform, true);
+                _s.Place(guest, o + new Vector3(0.8f, 0f, 0.5f), -110f, "Ref_Idle_Loop");
+            }
+            if (_lamp != null)
+            {
+                _lamp.color = parking ? new Color(0.62f, 0.75f, 1f) : new Color(1f, 0.86f, 0.62f);
+                _flicker = parking;
+            }
+        }
+
+        private bool _flicker;
+
+        private void Update()
+        {
+            if (_lamp != null && InBackstage)
+                _lamp.intensity = _flicker ? (Mathf.PerlinNoise(Time.time * 7f, 0.3f) > 0.32f ? 3.2f : 0.6f) : 4.5f;
+            if (_guest != null && InBackstage) _guest.Tick(Time.deltaTime);
+        }
+
         public void LeaveBackstage()
         {
+            if (InBackstage) LeftBackstage = true;
             if (_backstage != null) _backstage.SetActive(false);
             CamActive = false;
         }
@@ -424,7 +467,7 @@ namespace Game.Gameplay.Ring.Stage
             Box("Двері", o + new Vector3(3.44f, 1.05f, -1.2f), new Vector3(0.05f, 2.1f, 0.95f), door);
             Box("Стіл букера", o + new Vector3(2.1f, 0.75f, 1.1f), new Vector3(1.4f, 0.06f, 0.7f), wood);
             Box("Ніжка столу", o + new Vector3(2.1f, 0.37f, 1.1f), new Vector3(1.2f, 0.74f, 0.05f), wood);
-            var lamp = new GameObject("Лампа").AddComponent<Light>();
+            var lamp = _lamp = new GameObject("Лампа").AddComponent<Light>();
             lamp.transform.SetParent(_backstage.transform, false);
             lamp.type = LightType.Point;
             lamp.transform.position = o + new Vector3(0f, 2.8f, 0.6f);
@@ -434,18 +477,10 @@ namespace Game.Gameplay.Ring.Stage
             lamp.shadows = LightShadows.Soft;
             Box("Плафон", o + new Vector3(0f, 2.92f, 0.6f), new Vector3(0.5f, 0.06f, 0.5f), Lit(new Color(1f, 0.95f, 0.8f)));
 
-            if (bookerPrefab != null)
-            {
-                _booker = new RingActor("Букер", bookerPrefab, _backstage.transform);
-                RingDress.Apply(_booker.Model, kit, new[]
-                {
-                    new RingDress.Piece("shirt", new Color(0.55f, 0.62f, 0.7f)),
-                    new RingDress.Piece("trousers", new Color(0.2f, 0.2f, 0.22f)),
-                    new RingDress.Piece("shoes", new Color(0.12f, 0.08f, 0.06f)),
-                    // Ліна Ворон (сцени закулісся): каре з сивиною; без бороди й «їжака» — там голова читалась темною грудкою.
-                    new RingDress.Piece("hair_bob01", new Color(0.3f, 0.28f, 0.27f)),
-                });
-            }
+            // Ліна Ворон: тіло з текстурою шкіри борців (як гості) — з голого FBX обличчя було сірою маскою (лукбук 04.11.2026);
+            // хвіст замість каре, що закривало обличчя; сорочка, штани, взуття.
+            _booker = _s.MakeDressed("Букер", "body_f_mediterranean", 0x8C9EB3, "hair_ponytail01", new Color(0.55f, 0.62f, 0.7f));
+            if (_booker != null) _booker.Slot.SetParent(_backstage.transform, true);
         }
 
         private void Box(string name, Vector3 pos, Vector3 size, Material m)

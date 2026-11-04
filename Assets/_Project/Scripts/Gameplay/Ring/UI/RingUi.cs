@@ -40,7 +40,8 @@ namespace Game.Gameplay.Ring.UI
             Root = RingUi.Column();
             Root.style.position = Position.Absolute;
             Root.style.left = 0f; Root.style.right = 0f; Root.style.top = 0f; Root.style.bottom = 0f;
-            Root.style.backgroundColor = RingUi.Bg;
+            // З 3D — напівпрозоре тло: ринг і зала видно крізь екрани ворожнечі й розвитку (огляд 04.11.2026: суцільні й громіздкі).
+            Root.style.backgroundColor = Stage.RingStageHub.Has3D ? new Color(RingUi.Bg.r, RingUi.Bg.g, RingUi.Bg.b, 0.45f) : RingUi.Bg;
         }
 
         /// <summary>Перемалювати вміст за поточним станом моделі.</summary>
@@ -129,7 +130,7 @@ namespace Game.Gameplay.Ring.UI
         public static VisualElement Card(float pad = 12f)
         {
             var e = Column();
-            e.style.backgroundColor = Panel;
+            e.style.backgroundColor = Stage.RingStageHub.Has3D ? new Color(Panel.r, Panel.g, Panel.b, 0.86f) : Panel;
             HudToolkitTheme.Border(e, 1f, Border);
             e.style.borderTopLeftRadius = 6f; e.style.borderTopRightRadius = 6f;
             e.style.borderBottomLeftRadius = 6f; e.style.borderBottomRightRadius = 6f;
