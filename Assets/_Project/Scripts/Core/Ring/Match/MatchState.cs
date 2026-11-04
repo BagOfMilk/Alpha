@@ -16,6 +16,8 @@ namespace Game.Core.Ring.Match
         public int KickoutsDone;
         public int Warnings;
         public bool DesperateUsed;
+        /// <summary>«Промінь надії» уже використано (раз за матч на бік).</summary>
+        public bool HopeUsed;
         /// <summary>Перенесений на наступний хід AP (до 1).</summary>
         public int CarryAp;
         /// <summary>«У канати» вдався з бонусом: наступний удар/кидок +1 (діє до кінця ходу).</summary>
@@ -43,6 +45,8 @@ namespace Game.Core.Ring.Match
         public bool AllyUsed;
         public bool HasLastAction;
         public MatchActionId LastAction;
+        /// <summary>Ключ прийому останньої дії (кар'єра: два різні прийоми з тією самою дією повтором не вважаються); null — без ключа.</summary>
+        public string LastMoveKey;
         public int PlayerDirtyMoves;
         public int PlayerSells;
         public int PlayerKickoutsAtTwo;

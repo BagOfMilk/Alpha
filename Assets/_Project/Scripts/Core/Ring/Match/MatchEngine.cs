@@ -17,6 +17,7 @@ namespace Game.Core.Ring.Match
         private MatchEvent _cur;
         private int _extraDamage;
         private bool _repeatPending;
+        private MoveHint _hint = MoveHint.Default;
 
         public MatchEngine(MatchSetup setup, IDiceRoller dice)
         {
@@ -40,6 +41,8 @@ namespace Game.Core.Ring.Match
         public int Round { get { return _s.Round; } }
         public int Ap { get { return _s.Ap; } }
         public MatchSetup Setup { get { return _setup; } }
+        /// <summary>Зараз хід того, хто може вжити «промінь надії» (для кнопки в UI).</summary>
+        public bool HopeSpotAvailable { get { return Phase == MatchPhase.AwaitAction && Describe(MatchActionId.HopeSpot).Available; } }
 
         public static MatchSide Opp(MatchSide s) { return s == MatchSide.Player ? MatchSide.Rival : MatchSide.Player; }
 
@@ -84,7 +87,10 @@ namespace Game.Core.Ring.Match
             return list;
         }
 
-        public ActionOption Describe(MatchActionId id)
+        public ActionOption Describe(MatchActionId id) { return Describe(id, 0); }
+
+        /// <summary>Те саме з додатком до кидка від прийому (кар'єра: травма зони, бонус прийому) — шанси показують його.</summary>
+        public ActionOption Describe(MatchActionId id, int extraRollMod)
         {
             var o = new ActionOption { Id = id, Cost = MatchRules.Cost(id), IsBig = MatchRules.IsBig(id) };
             if (Phase != MatchPhase.AwaitAction) { o.Reason = UnavailableReason.WrongPhase; return o; }
@@ -102,7 +108,7 @@ namespace Game.Core.Ring.Match
             else if (o.HasAttr)
             {
                 o.HasRoll = true;
-                o.Modifier = RollModifier(id, me);
+                o.Modifier = RollModifier(id, me) + extraRollMod;
                 o.Chances = TwoD6.ChancesOf36(o.Modifier);
             }
             return o;
@@ -118,6 +124,12 @@ namespace Game.Core.Ring.Match
             {
                 case MatchActionId.GetUp:
                     if (me.Posture != Posture.Down) r = UnavailableReason.NotLying;
+                    break;
+                case MatchActionId.HopeSpot:
+                    if (me.HopeUsed) r = UnavailableReason.AlreadyUsed;
+                    else if (!_setup.HopeSpotEnabled || me.Damage < MatchRules.HopeMinDamage
+                             || me.Damage - opp.Damage < MatchRules.HopeGap) r = UnavailableReason.NotFarBehind;
+                    else if (!bothIn) r = UnavailableReason.NotInRing;
                     break;
                 case MatchActionId.Recover:
                     if (me.Damage <= 0) r = UnavailableReason.NothingToRecover;
@@ -184,7 +196,8 @@ namespace Game.Core.Ring.Match
             return r;
         }
 
-        private static bool AttrOf(MatchActionId id, Fighter me, out RingAttr attr)
+        /// <summary>Атрибут кидка дії (для кар'єри: каталог прийомів показує атрибут за дією).</summary>
+        public static bool AttrOf(MatchActionId id, Fighter me, out RingAttr attr)
         {
             attr = RingAttr.Strength;
             switch (id)
@@ -205,6 +218,7 @@ namespace Game.Core.Ring.Match
                     attr = me.Stats.FinisherAttr; return true;
                 case MatchActionId.Desperate:
                 case MatchActionId.GetUp:
+                case MatchActionId.HopeSpot:
                     attr = RingAttr.Stamina; return true;
             }
             return false;
@@ -258,10 +272,14 @@ namespace Game.Core.Ring.Match
 
         // ---------- публічні команди ----------
 
-        public IReadOnlyList<MatchEvent> Perform(MatchActionId id)
+        public IReadOnlyList<MatchEvent> Perform(MatchActionId id) { return Perform(id, null); }
+
+        /// <summary>Дія з підказкою прийому (кар'єра): ключ для повтору, додаток до кидка, ажіотаж за чистий успіх.</summary>
+        public IReadOnlyList<MatchEvent> Perform(MatchActionId id, MoveHint hint)
         {
             RequirePhase(MatchPhase.AwaitAction);
-            var opt = Describe(id);
+            _hint = hint ?? MoveHint.Default;
+            var opt = Describe(id, _hint.RollMod);
             if (!opt.Available) throw new InvalidOperationException("Дія " + id + " недоступна: " + opt.Reason);
             BeginCall();
             var me = _s.Actor; var opp = _s.Other;
@@ -270,8 +288,9 @@ namespace Game.Core.Ring.Match
             _s.Ap -= opt.Cost;
             if (id == MatchActionId.Finisher) me.Momentum -= MatchRules.FinisherMomentum;
             if (id == MatchActionId.Desperate) me.DesperateUsed = true;
-            _repeatPending = _s.HasLastAction && _s.LastAction == id;
-            _s.HasLastAction = true; _s.LastAction = id;
+            if (id == MatchActionId.HopeSpot) me.HopeUsed = true;
+            _repeatPending = _s.HasLastAction && _s.LastAction == id && _s.LastMoveKey == _hint.Key;
+            _s.HasLastAction = true; _s.LastAction = id; _s.LastMoveKey = _hint.Key;
             _extraDamage = 0;
 
             switch (id)
@@ -346,7 +365,9 @@ namespace Game.Core.Ring.Match
             if (boostPoints > 0) Fx(MatchEffectKind.Momentum, me.Side, -boostPoints);
             if (_repeatPending) { Hype(-1); _repeatPending = false; }
             ApplyRolled(pr.Action, tier, me, opp);
-            AfterAction(tier == RollTier.Miss);
+            if (tier == RollTier.Strong && _hint.HypeOnStrong > 0 && !IsOver) Hype(_hint.HypeOnStrong);
+            _hint = MoveHint.Default;
+            AfterAction(tier == RollTier.Miss && pr.Action != MatchActionId.HopeSpot);
             return EndCall();
         }
 
@@ -380,7 +401,7 @@ namespace Game.Core.Ring.Match
         private void BeginRoll(MatchActionId id, Fighter me)
         {
             int roll = TwoD6.Roll(_dice, "m:act:" + id + ":" + me.Side);
-            int mod = RollModifier(id, me);
+            int mod = RollModifier(id, me) + _hint.RollMod;
             int total = roll + mod; var tier = TwoD6.TierOf(total);
             int toPartial = tier == RollTier.Miss ? 7 - total : 0;
             int toStrong = tier != RollTier.Strong ? 10 - total : 0;
@@ -458,6 +479,12 @@ namespace Game.Core.Ring.Match
                     if (miss) { Dmg(me, 2); GoDown(me); break; }
                     if (strong) { Dmg(opp, 3 + extra); GoDown(opp); }
                     else { Dmg(opp, 2 + extra); Dmg(me, 1); }
+                    break;
+                case MatchActionId.HopeSpot:
+                    // Надія не підводить цілком: навіть невдалий кидок дає «7–9». Матч закінчити не може — жодного утримання.
+                    Dmg(opp, (strong ? 4 : 3) + extra); GoDown(opp);
+                    Hype(strong ? 3 : 2); AddMomentum(me, strong ? 2 : 1);
+                    if (me.Posture == Posture.Down) { me.Posture = Posture.Standing; Fx(MatchEffectKind.Stand, me.Side, 1); }
                     break;
                 case MatchActionId.GetUp:
                     if (miss) break;

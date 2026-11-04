@@ -1,0 +1,107 @@
+{
+ "beltHolder": "komet",
+ "npcs": [
+  {
+   "id": "stalevyi",
+   "name": "w.stalevyi.name",
+   "bio": "npc.stalevyi.bio",
+   "gimmick": "monster",
+   "role": "hero",
+   "rank": 1,
+   "startMomentum": 0,
+   "finisher": "strength",
+   "attr": {
+    "strength": 2,
+    "agility": -1,
+    "technique": 0,
+    "stamina": 1,
+    "charisma": 0
+   }
+  },
+  {
+   "id": "dzhura",
+   "name": "w.dzhura.name",
+   "bio": "npc.dzhura.bio",
+   "gimmick": "flyer",
+   "role": "hero",
+   "rank": 2,
+   "startMomentum": 1,
+   "finisher": "agility",
+   "attr": {
+    "strength": 0,
+    "agility": 2,
+    "technique": 1,
+    "stamina": 0,
+    "charisma": 1
+   }
+  },
+  {
+   "id": "vdova",
+   "name": "w.vdova.name",
+   "bio": "npc.vdova.bio",
+   "gimmick": "technician",
+   "role": "villain",
+   "rank": 3,
+   "startMomentum": 1,
+   "finisher": "technique",
+   "attr": {
+    "strength": 0,
+    "agility": 1,
+    "technique": 2,
+    "stamina": 1,
+    "charisma": 0
+   }
+  },
+  {
+   "id": "baron",
+   "name": "w.baron.name",
+   "bio": "npc.baron.bio",
+   "gimmick": "showman",
+   "role": "villain",
+   "rank": 4,
+   "startMomentum": 1,
+   "finisher": "charisma",
+   "attr": {
+    "strength": 0,
+    "agility": 0,
+    "technique": 1,
+    "stamina": 1,
+    "charisma": 3
+   }
+  },
+  {
+   "id": "hammer",
+   "name": "w.hammer.name",
+   "bio": "npc.hammer.bio",
+   "gimmick": "monster",
+   "role": "villain",
+   "rank": 5,
+   "startMomentum": 2,
+   "finisher": "strength",
+   "attr": {
+    "strength": 2,
+    "agility": 0,
+    "technique": 1,
+    "stamina": 2,
+    "charisma": 1
+   }
+  },
+  {
+   "id": "komet",
+   "name": "w.komet.name",
+   "bio": "npc.komet.bio",
+   "gimmick": "flyer",
+   "role": "hero",
+   "rank": 6,
+   "startMomentum": 2,
+   "finisher": "agility",
+   "attr": {
+    "strength": 1,
+    "agility": 3,
+    "technique": 1,
+    "stamina": 1,
+    "charisma": 1
+   }
+  }
+ ]
+}

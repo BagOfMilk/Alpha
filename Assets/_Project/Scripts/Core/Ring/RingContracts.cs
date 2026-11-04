@@ -93,6 +93,8 @@ namespace Game.Core.Ring
         /// <summary>Суперник зрізу — лиходій.</summary>
         public RingPath RivalRole = RingPath.Heel;
         public int RoundLimit = 20;
+        /// <summary>Кар'єра: слабший бік, що сильно відстає, раз за матч отримує «промінь надії» (ПЛЕЙСХОЛДЕР, TRPG_DESIGN §4). Зріз ворожнечі лишає вимкненим.</summary>
+        public bool HopeSpotEnabled;
     }
 
     /// <summary>Підсумок матчу — усе, що ворожнеча читає назад (gdd §3 «Матч → ворожнеча»).</summary>

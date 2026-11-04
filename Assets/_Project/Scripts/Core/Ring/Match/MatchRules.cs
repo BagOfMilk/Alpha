@@ -48,6 +48,13 @@ namespace Game.Core.Ring.Match
         public const int AiSubmissionDamage = 6;
         public const int AiReverseDamage = 6;
 
+        /// <summary>
+        /// «Промінь надії» (ПЛЕЙСХОЛДЕР): відстаючий бік — його ушкодження не менше HopeMinDamage і на HopeGap більше за суперника —
+        /// раз за матч може зробити великий прийом, що ніколи не завершує матч (без утримання й больового, суддя не дивиться).
+        /// </summary>
+        public const int HopeGap = 4;
+        public const int HopeMinDamage = 6;
+
         public static int Cost(MatchActionId id)
         {
             switch (id)
@@ -56,6 +63,7 @@ namespace Game.Core.Ring.Match
                 case MatchActionId.TopRope:
                 case MatchActionId.Submission:
                 case MatchActionId.Desperate:
+                case MatchActionId.HopeSpot:
                     return 2;
                 case MatchActionId.Finisher:
                     return 3;

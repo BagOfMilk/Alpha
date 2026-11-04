@@ -17,14 +17,18 @@ namespace Game.Core.Ring.Match
     {
         Strike = 0, Throw = 1, IntoRopes = 2, IntoCorner = 3, TopRope = 4, Taunt = 5, Dirty = 6,
         Submission = 7, Pin = 8, Finisher = 9, Desperate = 10, GetUp = 11, LeaveRing = 12, ReturnToRing = 13,
-        Recover = 14, Ally = 15, CatchBreath = 16
+        Recover = 14, Ally = 15, CatchBreath = 16,
+        /// <summary>«Промінь надії» (кар'єра): великий прийом слабшого, що не може закінчити матч. Не входить до GetAvailableActions —
+        /// пропонується окремо (Describe/HopeSpotAvailable), доки матч не ввімкнув MatchSetup.HopeSpotEnabled.</summary>
+        HopeSpot = 17
     }
 
     public enum UnavailableReason
     {
         None = 0, WrongPhase, NotEnoughAp, ActorDown, TargetNotStanding, TargetNotDown, TargetNotDownOrOutside,
         NotSameZone, NotInRing, NotInCorner, InRopes, NeedImpulse, NeedHype, TargetNotHurt, ImpulseTooHigh,
-        NotExhausted, AlreadyUsed, NoAlly, AllyForbidden, NotLying, NotOutside, AlreadyOutside, NothingToRecover
+        NotExhausted, AlreadyUsed, NoAlly, AllyForbidden, NotLying, NotOutside, AlreadyOutside, NothingToRecover,
+        NotFarBehind
     }
 
     public enum MatchEventKind { Exchange = 0, Action, Sell, Reverse, Kickout, Endure, Rescue, TurnEnd, MatchEnd }

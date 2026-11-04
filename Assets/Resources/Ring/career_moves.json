@@ -1,0 +1,270 @@
+{
+ "moves": [
+  {
+   "id": "forearm",
+   "name": "move.forearm",
+   "action": "strike",
+   "category": "strike",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "basic"
+  },
+  {
+   "id": "low_kick",
+   "name": "move.low_kick",
+   "action": "strike",
+   "category": "strike",
+   "zone": "legs",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "basic"
+  },
+  {
+   "id": "hip_toss",
+   "name": "move.hip_toss",
+   "action": "throw",
+   "category": "throw",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "basic"
+  },
+  {
+   "id": "whip",
+   "name": "move.whip",
+   "action": "intoRopes",
+   "category": "throw",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "basic"
+  },
+  {
+   "id": "corner_drag",
+   "name": "move.corner_drag",
+   "action": "intoCorner",
+   "category": "power",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "basic"
+  },
+  {
+   "id": "armbar",
+   "name": "move.armbar",
+   "action": "submission",
+   "category": "submission",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "basic"
+  },
+  {
+   "id": "shoulder_charge",
+   "name": "move.shoulder_charge",
+   "action": "strike",
+   "category": "power",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "monster",
+   "cost": 2
+  },
+  {
+   "id": "lift_slam",
+   "name": "move.lift_slam",
+   "action": "throw",
+   "category": "power",
+   "zone": "body",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "monster",
+   "cost": 2
+  },
+  {
+   "id": "dropkick",
+   "name": "move.dropkick",
+   "action": "strike",
+   "category": "aerial",
+   "zone": "head",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "flyer",
+   "cost": 2
+  },
+  {
+   "id": "springboard",
+   "name": "move.springboard",
+   "action": "topRope",
+   "category": "aerial",
+   "zone": "body",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "flyer",
+   "cost": 2
+  },
+  {
+   "id": "leg_lock",
+   "name": "move.leg_lock",
+   "action": "submission",
+   "category": "submission",
+   "zone": "legs",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "technician",
+   "cost": 2
+  },
+  {
+   "id": "snap_suplex",
+   "name": "move.snap_suplex",
+   "action": "throw",
+   "category": "throw",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "technician",
+   "cost": 2
+  },
+  {
+   "id": "strut",
+   "name": "move.strut",
+   "action": "taunt",
+   "category": "showy",
+   "zone": "head",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "showman",
+   "cost": 2
+  },
+  {
+   "id": "cheap_shot",
+   "name": "move.cheap_shot",
+   "action": "dirty",
+   "category": "hardcore",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "gimmick",
+   "gimmick": "showman",
+   "cost": 2
+  },
+  {
+   "id": "bulldozer",
+   "name": "move.bulldozer",
+   "action": "throw",
+   "category": "power",
+   "zone": "body",
+   "heat": 2,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "monster"
+  },
+  {
+   "id": "swallow_dive",
+   "name": "move.swallow_dive",
+   "action": "topRope",
+   "category": "aerial",
+   "zone": "body",
+   "heat": 2,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "flyer"
+  },
+  {
+   "id": "spider_lock",
+   "name": "move.spider_lock",
+   "action": "submission",
+   "category": "submission",
+   "zone": "legs",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "technician"
+  },
+  {
+   "id": "spotlight_blow",
+   "name": "move.spotlight_blow",
+   "action": "strike",
+   "category": "showy",
+   "zone": "head",
+   "heat": 2,
+   "rollBonus": 0,
+   "kind": "signature",
+   "gimmick": "showman"
+  },
+  {
+   "id": "crusher",
+   "name": "move.crusher",
+   "action": "finisher",
+   "category": "power",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "monster"
+  },
+  {
+   "id": "meteor",
+   "name": "move.meteor",
+   "action": "finisher",
+   "category": "aerial",
+   "zone": "body",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "flyer"
+  },
+  {
+   "id": "iron_clamp",
+   "name": "move.iron_clamp",
+   "action": "finisher",
+   "category": "submission",
+   "zone": "legs",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "technician"
+  },
+  {
+   "id": "grand_finale",
+   "name": "move.grand_finale",
+   "action": "finisher",
+   "category": "showy",
+   "zone": "head",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "finisher",
+   "gimmick": "showman"
+  },
+  {
+   "id": "eye_poke",
+   "name": "move.eye_poke",
+   "action": "dirty",
+   "category": "hardcore",
+   "zone": "head",
+   "heat": 0,
+   "rollBonus": 0,
+   "kind": "learn",
+   "cost": 2
+  },
+  {
+   "id": "crowd_pump",
+   "name": "move.crowd_pump",
+   "action": "taunt",
+   "category": "showy",
+   "zone": "head",
+   "heat": 1,
+   "rollBonus": 0,
+   "kind": "learn",
+   "cost": 2
+  }
+ ]
+}

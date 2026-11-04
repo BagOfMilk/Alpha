@@ -1,0 +1,145 @@
+using System.Collections.Generic;
+using Game.Core.Ring.Match;
+
+namespace Game.Core.Ring.Career
+{
+    /// <summary>Заготовка героя з екрана створення (TRPG_DESIGN §5.1): ґімік, роль, вільний бал, ім'я на рингу, колір костюма.</summary>
+    public sealed class CharacterDraft
+    {
+        public Gimmick Gimmick;
+        public CareerRole Role;
+        /// <summary>Атрибут, у який іде +1 вільний бал (межі −1…+3).</summary>
+        public RingAttr FreePoint;
+        public string RingName = "";
+        /// <summary>Індекс кольору костюма (0…<see cref="CareerSession.CostumeCount"/>−1) — лише вигляд.</summary>
+        public int CostumeColor;
+    }
+
+    public sealed class GimmickView
+    {
+        public GimmickDef Def;
+        /// <summary>Атрибути ґіміка до вільного балу (RingAttr за індексом).</summary>
+        public int[] BaseAttr;
+        public List<MoveDef> StartMoves = new List<MoveDef>();
+    }
+
+    public sealed class CreationView
+    {
+        public List<GimmickView> Gimmicks = new List<GimmickView>();
+        public int FreePoints = 1;
+        public int MinAttr = WrestlerStats.MinAttr;
+        public int MaxAttr = WrestlerStats.MaxAttr;
+        public int CostumeCount;
+        public int MaxNameLength;
+    }
+
+    public sealed class InjuryView
+    {
+        public BodyZone Zone;
+        /// <summary>Накопичене ушкодження зони 0–3 (3 = травма).</summary>
+        public int ZoneDamage;
+        /// <summary>Тижнів до загоєння травми (0 — здорова).</summary>
+        public int WeeksLeft;
+    }
+
+    /// <summary>Картка вечора (TRPG_DESIGN §3, §8): суперник, місце в картці, план букера, умови, гонорар.</summary>
+    public sealed class ShowCardView
+    {
+        public bool IsBig;
+        public bool IsTitle;
+        /// <summary>Велике шоу з етапами ворожнечі з Молотом (проходить екранами RingCampaign).</summary>
+        public bool IsFeud;
+        public NpcDef Opponent;
+        public int OpponentFeudLevel;
+        public CardPosition Position;
+        public BookerPlan Plan;
+        public MatchStipulations Stipulations;
+        /// <summary>Гонорар за місце в картці (без бонусів за перемогу й ажіотаж).</summary>
+        public int Fee;
+        public int WinBonus;
+        public int HypeBonus;
+        /// <summary>Ажіотаж-бонус промо, що чекає на матч.</summary>
+        public int PromoHypeBonus;
+        public bool CanWithdraw;
+        public List<InjuryView> Injuries = new List<InjuryView>();
+    }
+
+    public sealed class WeekView
+    {
+        public int Season;
+        public int Week;
+        public int WeeksInSeason;
+        public int ActionsLeft;
+        public int ActionsTotal;
+        public bool Strained;
+        public bool PromoChoicePending;
+        public int Money;
+        public int Popularity;
+        public int Trust;
+        public int DevPoints;
+        public bool IsBigShowWeek;
+        public List<WeekActionKind> ActionsDone = new List<WeekActionKind>();
+        public List<InjuryView> Injuries = new List<InjuryView>();
+        public ShowCardView Card;
+        /// <summary>Чи є що лікувати (для кнопки «Відновлення»).</summary>
+        public bool CanRecover;
+    }
+
+    /// <summary>Результат дії тижня: кидок (якщо був), ступінь, зміни шкал, ключ чутки.</summary>
+    public sealed class WeekActionResult
+    {
+        public WeekActionKind Kind;
+        public bool Ok;
+        /// <summary>Причина відмови (ключ): "stage", "no_actions", "money", "choice_pending", "nothing", "zone".</summary>
+        public string Reason;
+        public bool HasRoll;
+        public int Roll;
+        public int Modifier;
+        public int Total;
+        public RollTier Tier;
+        public int MoneyDelta;
+        public int DevPointsDelta;
+        public int TrustDelta;
+        public int FeudDelta;
+        public int HypeBonusDelta;
+        public bool RivalBoosted;
+        /// <summary>Нова травма від підробітку: зона або −1.</summary>
+        public int InjuredZone = -1;
+        public string RumorKey;
+        /// <summary>«7–9» на промо: треба обрати нагороду (<see cref="CareerSession.ChoosePromoReward"/>).</summary>
+        public bool NeedsChoice;
+    }
+
+    /// <summary>Рядок списку прийомів матчу: прийом + доступність дії з урахуванням травми зони і бонусу прийому.</summary>
+    public sealed class MoveOption
+    {
+        public MoveDef Move;
+        public ActionOption Option;
+        /// <summary>Штраф до кидка від травми зони (0 або 1).</summary>
+        public int InjuryPenalty;
+        /// <summary>Той самий прийом двічі поспіль — −1 ажіотажу.</summary>
+        public bool RepeatWarning;
+    }
+
+    public sealed class CareerView
+    {
+        public string RingName;
+        public int Costume;
+        public Gimmick Gimmick;
+        public RingPath Role;
+        public int[] Attr = new int[5];
+        public int Money;
+        public int Popularity;
+        public int Trust;
+        public int DevPoints;
+        public List<MoveDef> Moves = new List<MoveDef>();
+        public List<string> Perks = new List<string>();
+        public List<InjuryView> Injuries = new List<InjuryView>();
+        public bool IsChampion;
+        public int Season;
+        public int Week;
+        public int TitlesWon;
+        public int FiredCount;
+        public bool FeudResolved;
+    }
+}

@@ -1,0 +1,76 @@
+{
+ "gimmicks": [
+  {
+   "id": "monster",
+   "name": "gimmick.monster",
+   "finisher": "strength",
+   "attr": {
+    "strength": 2,
+    "agility": -1,
+    "technique": 0,
+    "stamina": 2,
+    "charisma": 0
+   },
+   "moves": [
+    "shoulder_charge",
+    "lift_slam"
+   ],
+   "signature": "bulldozer",
+   "finisherMove": "crusher"
+  },
+  {
+   "id": "flyer",
+   "name": "gimmick.flyer",
+   "finisher": "agility",
+   "attr": {
+    "strength": 0,
+    "agility": 3,
+    "technique": 0,
+    "stamina": -1,
+    "charisma": 0
+   },
+   "moves": [
+    "dropkick",
+    "springboard"
+   ],
+   "signature": "swallow_dive",
+   "finisherMove": "meteor"
+  },
+  {
+   "id": "technician",
+   "name": "gimmick.technician",
+   "finisher": "technique",
+   "attr": {
+    "strength": 0,
+    "agility": 0,
+    "technique": 3,
+    "stamina": 0,
+    "charisma": 0
+   },
+   "moves": [
+    "leg_lock",
+    "snap_suplex"
+   ],
+   "signature": "spider_lock",
+   "finisherMove": "iron_clamp"
+  },
+  {
+   "id": "showman",
+   "name": "gimmick.showman",
+   "finisher": "charisma",
+   "attr": {
+    "strength": -1,
+    "agility": 0,
+    "technique": 0,
+    "stamina": 0,
+    "charisma": 3
+   },
+   "moves": [
+    "strut",
+    "cheap_shot"
+   ],
+   "signature": "spotlight_blow",
+   "finisherMove": "grand_finale"
+  }
+ ]
+}

@@ -13,6 +13,8 @@ namespace Game.Core.Ring.Match
         {
             var me = e.State.Actor; var opp = e.State.Other;
             var opts = e.GetAvailableActions();
+            // «Промінь надії» — лише коли матч його ввімкнув (кар'єра); сильно відстаючий ШІ вживає його одразу.
+            if (e.Describe(MatchActionId.HopeSpot).Available) return MatchActionId.HopeSpot;
             if (Ok(opts, MatchActionId.Finisher)) return MatchActionId.Finisher;
             if (Ok(opts, MatchActionId.Pin) && opp.Damage >= MatchRules.AiPinDamage) return MatchActionId.Pin;
             if (Ok(opts, MatchActionId.Submission) && opp.Damage >= MatchRules.AiSubmissionDamage) return MatchActionId.Submission;
