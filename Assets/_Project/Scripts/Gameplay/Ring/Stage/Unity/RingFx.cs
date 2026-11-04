@@ -93,8 +93,9 @@ namespace Game.Gameplay.Ring.Stage
             _co2L = Co2(cl, alpha); _co2R = Co2(cr, alpha);
             _sparkL = Sparks(cl + new Vector3(0.3f, 0f, -0.4f), additive, 5.5f, new Color(1f, 0.9f, 0.6f));
             _sparkR = Sparks(cr + new Vector3(0.3f, 0f, 0.4f), additive, 5.5f, new Color(1f, 0.9f, 0.6f));
-            _pyroL = Sparks(new Vector3(-2.6f, 1.05f, -2.6f), additive, 9f, new Color(1f, 0.55f, 0.15f));
-            _pyroR = Sparks(new Vector3(2.6f, 1.05f, -2.6f), additive, 9f, new Color(1f, 0.55f, 0.15f));
+            // Фонтани — на задніх кутах (за переможцем з боку камери); на передніх полум'я закривало ринг (огляд 04.11.2026).
+            _pyroL = Sparks(new Vector3(-2.6f, 1.05f, 2.6f), additive, 9f, new Color(1f, 0.55f, 0.15f));
+            _pyroR = Sparks(new Vector3(2.6f, 1.05f, 2.6f), additive, 9f, new Color(1f, 0.55f, 0.15f));
             _confetti = Confetti(paper);
         }
 
@@ -125,8 +126,13 @@ namespace Game.Gameplay.Ring.Stage
         }
 
         /// <summary>Фінішер: короткий стробоскоп і віяло білих і золотих променів на ринг.</summary>
+        /// <summary>Лічильник великих моментів (фінішер, перемога) — огляд ботом знімає кадр саме тоді.</summary>
+        public int Moments { get; private set; }
+        public string LastMoment { get; private set; }
+
         public void Finisher()
         {
+            Moments++; LastMoment = "finisher";
             _cue = "finisher"; _cueT = 0f; _headMode = "fan"; _bpm = 0f;
             _headColors = new[] { White, Gold, White, Purple };
             StartCoroutine(BackToMatch(2.2f, "finisher"));
@@ -135,6 +141,7 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Перемога: конфеті над рингом, промені по трибунах, яскраві PAR; вогняні фонтани з кутів.</summary>
         public void Victory(Transform winner)
         {
+            Moments++; LastMoment = "victory";
             _cue = "victory"; _cueT = 0f; _headMode = "crowd"; _bpm = 128f; _followTarget = winner;
             _headColors = new[] { Gold, Blue, Gold, Purple };
             Burst(_confetti);

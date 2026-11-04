@@ -15,7 +15,12 @@ namespace Game.Core.Ring.Match
         public const int EdgeDamage = 10;
 
         public const int BaseReversalTokens = 2;
-        public const int FinisherMomentum = 5;
+        /// <summary>
+        /// Імпульс для фінішера. Було 5 — за короткий матч (≈5 раундів) імпульсу набиралось у середньому ~2,5, фінішер ставав
+        /// доступним лише в 20 % матчів кар'єри (власник 04.11.2026: «бот жодного разу не зробив успішний фінішер … це погано»).
+        /// З 3 — доступний у ~66 %, проведений у ~52 % (охоронець FinisherReachTests). ПЛЕЙСХОЛДЕР.
+        /// </summary>
+        public const int FinisherMomentum = 3;
         public const int FinisherHype = 4;
         public const int FinisherTargetDamage = 6;
         public const int DesperateMaxMomentum = 2;

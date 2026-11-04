@@ -569,7 +569,7 @@ namespace Game.Tests.EditMode
         public void Finisher_SpendsMomentum_AutoPinsWithPenalty()
         {
             var e = MatchKit.Engine(true, new[] { 11, 12 });
-            e.State.Player.Momentum = 5; e.State.Hype = 4; e.State.Rival.Damage = 6;
+            e.State.Player.Momentum = MatchRules.FinisherMomentum; e.State.Hype = 4; e.State.Rival.Damage = 6;
             e.Perform(MatchActionId.Finisher);
             Assert.AreEqual(0, e.State.Player.Momentum);
             e.React(ReactionChoice.Sell);

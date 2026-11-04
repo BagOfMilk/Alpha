@@ -45,6 +45,10 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Грає саме шоу (вступ чи вихід), а не кліпи матчу: тоді UI ховається.</summary>
         bool ShowBusy { get; }
 
+        /// <summary>Лічильник великих моментів світло-шоу (фінішер, перемога) і назва останнього — для кадрів огляду.</summary>
+        int FxMoments { get; }
+        string FxLastMoment { get; }
+
         /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>
         void ShowBackstage();
 

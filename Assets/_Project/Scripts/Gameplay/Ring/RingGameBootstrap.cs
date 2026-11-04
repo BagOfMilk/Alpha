@@ -491,8 +491,25 @@ namespace Game.Gameplay.Ring
             }
         }
 
+        private int _fxSeen;
+        private float _fxShotAt = -1f;
+        private int _fxShotsLeft;
+
+        /// <summary>Кадри великого моменту (фінішер, перемога): одразу й ще двічі з інтервалом 0,12 с — стробоскоп короткий.</summary>
+        private void FxShots()
+        {
+            var stage = RingStageHub.Current;
+            if (stage == null) return;
+            if (stage.FxMoments != _fxSeen) { _fxSeen = stage.FxMoments; _fxShotsLeft = 3; _fxShotAt = 0f; }
+            if (_fxShotsLeft <= 0 || Time.unscaledTime < _fxShotAt) return;
+            _fxShotsLeft--;
+            _fxShotAt = Time.unscaledTime + 0.12f;
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_fx_{1}.png", _shotIndex++, stage.FxLastMoment)));
+        }
+
         private void ShotsStep()
         {
+            FxShots();
             if (RingStageHub.Busy)
             {
                 _animClock += Time.unscaledDeltaTime;
@@ -511,6 +528,15 @@ namespace Game.Gameplay.Ring
             if (_shotAct)
             {
                 // На тижні бот робить усі три дії різними цифрами, тоді «Далі»; деінде — цифра й «Далі» по черзі.
+                // Матч: бот грає за героя тим самим ШІ, що й за суперника (раніше випадкові цифри — фінішера огляд так і не
+                // побачив; власник 04.11.2026: «це погано»).
+                var eng = !_onTitle ? _career.Engine : null;
+                if (eng != null && !eng.IsOver && BotTurn(eng))
+                {
+                    MatchAi.Step(eng);
+                    _view.Refresh();
+                    return;
+                }
                 bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
                 if (week && (_career.State.ActionsLeft > 0 || _career.State.PromoChoicePending)) _view.OnDigit(1 + _shotDigit++ % 6);
                 else if (_shotPressDigit) _view.OnDigit(1 + _shotDigit++ % 5);
@@ -529,6 +555,16 @@ namespace Game.Gameplay.Ring
         }
 
         private int _seasonShots;
+
+        private static bool BotTurn(MatchEngine e)
+        {
+            switch (e.Phase)
+            {
+                case MatchPhase.AwaitReaction: return e.PendingReaction.Defender == MatchSide.Player;
+                case MatchPhase.AwaitBoost: return e.PendingRoll.Actor == MatchSide.Player;
+                default: return e.CurrentActor == MatchSide.Player;
+            }
+        }
 
         private string Label()
         {

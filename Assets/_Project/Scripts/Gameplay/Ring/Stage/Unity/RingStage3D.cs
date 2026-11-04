@@ -719,6 +719,8 @@ namespace Game.Gameplay.Ring.Stage
         public void CrowdPop() { if (_dress != null) _dress.Pop(); if (_sound != null) _sound.Pop(); }
 
         public bool ShowBusy { get { return _show != null && _show.Busy; } }
+        public int FxMoments { get { return _fx != null ? _fx.Moments : 0; } }
+        public string FxLastMoment { get { return _fx != null ? _fx.LastMoment : null; } }
 
         public void SkipShow() { if (_show != null) _show.Skip(); }
 
