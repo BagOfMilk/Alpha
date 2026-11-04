@@ -138,6 +138,7 @@ namespace Game.Gameplay.Ring.Stage
             }
             ParseManifest(assets.manifest);
             ParseManifest(assets.promoManifest);
+            ParseManifest(assets.entranceManifest);
             Debug.Log("[Ринг] 3D: кліпів " + _clips.Count + ", у маніфесті " + _info.Count);
         }
 
@@ -561,6 +562,22 @@ namespace Game.Gameplay.Ring.Stage
             ComputePromoShot(DialogueShotKind.Two, "player", "rival", 0);
         }
 
+        private Coroutine _gestureRun;
+        private int _gestureIx;
+        private static readonly string[] Gestures = { "Promo_Mic_Point_Crowd", "Promo_Mic_Fist", "Promo_Mic_Point", "Promo_Mic_Turn_Crowd" };
+
+        private System.Collections.IEnumerator GestureThenTalk(RingActor talker, AnimationClip talk)
+        {
+            var g = Clip(Gestures[_gestureIx++ % Gestures.Length]);
+            if (g != null)
+            {
+                talker.PlayHere(g, false);
+                yield return new WaitForSeconds(g.length);
+            }
+            if (talk != null && _mode == RingStageMode.Promo) talker.PlayHere(talk, true);
+            _gestureRun = null;
+        }
+
         public void SetPromoSpeaker(string speaker)
         {
             // Сцена закулісся йде в роздягальні: камера — на того, хто говорить (букер, герой) або загальний план.
@@ -574,11 +591,15 @@ namespace Game.Gameplay.Ring.Stage
             var talker = player ? _player : rival ? _rival : null;
             var listener = player ? _rival : rival ? _player : null;
             var idle = Clip("Ring_Stance_Loop");
+            var stare = Clip("Promo_Mic_Stare_Loop") ?? idle;
             var talk = Clip("Promo_Mic_Talk_Loop");
             if (talker != null)
             {
-                if (talk != null) talker.PlayHere(talk, true);
-                if (idle != null && listener != null) listener.PlayHere(idle, true);
+                // Кожна нова репліка — жест (вказати на зал, кулак, обернутися до залу), потім розмова; той, хто слухає, —
+                // мовчазний погляд (власник 04.11.2026: «жести промо»).
+                if (_gestureRun != null) StopCoroutine(_gestureRun);
+                _gestureRun = StartCoroutine(GestureThenTalk(talker, talk));
+                if (stare != null && listener != null) listener.PlayHere(stare, true);
                 AttachMic(talker);
             }
             else

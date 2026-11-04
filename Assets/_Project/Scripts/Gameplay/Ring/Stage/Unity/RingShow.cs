@@ -46,12 +46,23 @@ namespace Game.Gameplay.Ring.Stage
         private GameObject _backstage;
         private RingActor _booker;
 
+        // Оголошені ДО Path: статичні поля ініціалізуються за порядком тексту — інакше ClimbStart у шляху був нулем, і борець
+        // ішов підлогою в центр рингу («по пояс у маті», огляд 04.11.2026).
+        /// <summary>
+        /// Сходи північно-західного кута (anchor_steps_NW, Unity) і напрям підйому — по діагоналі до кута рингу. Кліп
+        /// Entrance_Climb_Steps починається тазом за 0,207 м перед якорем (ring_anims_entrance.py).
+        /// </summary>
+        private static readonly Vector3 StepsAnchor = new Vector3(-3.528f, 0f, 3.528f);
+        private static readonly Vector3 ClimbDir = new Vector3(1f, 0f, -1f).normalized;
+        private static readonly Vector3 ClimbStart = StepsAnchor - ClimbDir * 0.207f;
+
         /// <summary>Шлях виходу (Unity, Y = підлога зали): від завіси вздовж проходу до сходинок північно-західного кута.</summary>
         private static readonly Vector3[] Path =
         {
-            new Vector3(-15.4f, 0f, 0f), new Vector3(-12f, 0f, 0f), new Vector3(-8f, 0f, 0f), new Vector3(-4.5f, 0f, 0f),
-            new Vector3(-3.4f, 0f, 2.2f)
+            new Vector3(-15.4f, 0f, 0f), new Vector3(-12f, 0f, 0f), new Vector3(-8f, 0f, 0f), new Vector3(-4.5f, 0f, 1.2f),
+            ClimbStart
         };
+
         // Над завісою, вище банера зали (на 3,4 м екран закривав банер — огляд 04.11.2026).
         private static readonly Vector3 CurtainTop = new Vector3(-15.9f, 5.3f, 0f);
         private const float WalkSpeed = 1.15f; // Ref_Walk_Loop: 1 м за цикл 1 с — швидкість = швидкість відтворення
@@ -208,7 +219,7 @@ namespace Game.Gameplay.Ring.Stage
             // 1. Темна зала, екран спалахує: камера з рингу на завісу.
             // Кадр з проходу: і борець біля завіси, і екран над нею (огляд 04.11.2026: камера дивилась під титантрон).
             Look(new Vector3(-6.5f, 2.2f, -2.4f), new Vector3(-16f, 2.9f, 0f), 42f, true);
-            var walk = _s.Clip("Ref_Walk_Loop");
+            var walk = _s.Clip("Entrance_Walk_Loop") ?? _s.Clip("Ref_Walk_Loop");
             var hype = _s.Clip("Idle_Hype_Loop") ?? _s.Clip("Ring_Stance_Loop");
             _s.Place(a, Path[0], 90f, "Idle_Hype_Loop");
             a.SetHeight(0f);
@@ -234,12 +245,34 @@ namespace Game.Gameplay.Ring.Stage
             }
             _walker = null;
 
-            // 3. Склейка: у кутку рингу, руки до публіки (залізання через канати — у кліпах прийомів, не тут).
-            Vector3 corner = new Vector3(-1.25f, RingStage3D.MatY, 1.25f);
-            if (hype != null) a.PlayAt(hype, true, corner, RingStage3D.YawTo(corner, Vector3.zero));
+            // 3. Сходами на фартух (висота й крок — у кліпі), між середнім і верхнім канатом у ринг, поза в куті до залу.
+            // Без кліпів (старі FBX) — склейка просто в кут.
+            float climbYaw = RingStage3D.YawTo(Vector3.zero, ClimbDir);
+            var climb = _s.Clip("Entrance_Climb_Steps");
+            var ropes = _s.Clip("Entrance_Through_Ropes");
+            var pose = _s.Clip("Entrance_Corner_Pose") ?? hype;
+            Vector3 side = Quaternion.Euler(0f, 90f, 0f) * ClimbDir;
+            if (climb != null && ropes != null && !_skip)
+            {
+                a.SetHeight(0f);
+                a.PlayAt(climb, false, ClimbStart, climbYaw);
+                Look(StepsAnchor + side * 3.2f + ClimbDir * 0.6f + Vector3.up * 1.6f, StepsAnchor + ClimbDir * 1.0f + Vector3.up * 1.4f, 40f, true);
+                yield return Wait(climb.length);
+                // Кінець підйому: таз над фартухом. Канатний кліп відраховує висоту від фартуха (MatY), тож слот — на рівні мату.
+                Vector3 onApron = a.PosePos;
+                a.SetHeight(RingStage3D.MatY);
+                a.PlayAt(ropes, false, new Vector3(onApron.x, RingStage3D.MatY, onApron.z), climbYaw);
+                Look(onApron + side * 2.6f + Vector3.up * 1.9f - ClimbDir * 0.4f, onApron + ClimbDir * 0.4f + Vector3.up * 1.5f, 40f, true);
+                yield return Wait(ropes.length);
+            }
+            Vector3 corner = climb != null && ropes != null && !_skip ? a.PosePos : new Vector3(-1.25f, RingStage3D.MatY, 1.25f);
+            corner.y = RingStage3D.MatY;
+            // Обличчям до залу через діагональ кута (руки вгору до публіки).
+            if (pose != null) a.PlayAt(pose, true, corner, climbYaw + 180f);
             a.SetHeight(RingStage3D.MatY);
-            Look(corner + new Vector3(3.2f, 1.0f, -2.6f), corner + new Vector3(0f, 1.5f, 0f), 34f, true);
-            yield return Wait(2.2f);
+            // Камера з боку залу (за кутом, вище канатів): борець обличчям до неї й до публіки; зсередини рингу була спина.
+            Look(corner - ClimbDir * 3.6f + Vector3.up * 1.9f + side * 1.0f, corner + Vector3.up * 1.4f, 38f, true);
+            yield return Wait(2.6f);
 
             SetTitantron("", "", Color.black);
             foreach (var other in new[] { _s.Actor(Core.Ring.Match.MatchSide.Player), _s.Actor(Core.Ring.Match.MatchSide.Rival), _s.Referee })

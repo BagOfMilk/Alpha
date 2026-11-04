@@ -56,5 +56,6 @@ namespace Game.Gameplay.Ring.Stage
 
         public TextAsset manifest;
         public TextAsset promoManifest;
+        public TextAsset entranceManifest;
     }
 }

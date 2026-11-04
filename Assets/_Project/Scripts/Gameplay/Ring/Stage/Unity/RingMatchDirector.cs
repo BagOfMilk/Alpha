@@ -226,6 +226,15 @@ namespace Game.Gameplay.Ring.Stage
             a.SetHeight(target.y);
         }
 
+        /// <summary>
+        /// Чи прийом іде в центрі: обидва до прийому в зоні «центр». Зона — стан до прийому, тож «у канати» (Lockup_To_Ropes)
+        /// теж стартує з центру; біля канатів, у куті й поза рингом пара лишається там.
+        /// </summary>
+        private bool InCenter(StageStep st, MatchSide a, MatchSide b)
+        {
+            return _m[I(a)].Zone == Zone.Center && _m[I(b)].Zone == Zone.Center;
+        }
+
         private IEnumerator RunPair(StageStep st)
         {
             var ia = _s.Info(st.Clip + "_A");
@@ -262,8 +271,18 @@ namespace Game.Gameplay.Ring.Stage
             pA = pB - Quaternion.Euler(0f, yawA, 0f) * ia.Offset;
             pA.y = pB.y = _m[I(sb)].Zone == Zone.Outside ? 0f : RingStage3D.MatY;
 
+            // Прийом по центру рингу, якщо він не вимагає кута, канатів чи місця поза рингом (власник 30.10.2026 і 04.11.2026:
+            // «Чому прийому не по центру ринга? завжди по центру»): пара зсувається так, що її середина — у центрі. Раніше
+            // якорем був B на своїй точці (0,85 м убік) чи там, де впав, і пара працювала збоку.
+            if (InCenter(st, sa, sb))
+            {
+                Vector3 d = new Vector3(0f, RingStage3D.MatY, 0f) - (pA + pB) * 0.5f;
+                d.y = 0f;
+                pA += d;
+                pB += d;
+            }
             // Обидва лишаються всередині рингу: зсув усієї пари до центру.
-            if (_m[I(sb)].Zone != Zone.Outside && _m[I(sa)].Zone != Zone.Outside)
+            else if (_m[I(sb)].Zone != Zone.Outside && _m[I(sa)].Zone != Zone.Outside)
             {
                 Vector3 sh = Vector3.zero;
                 float lim = RingStage3D.RingHalf - 0.1f;

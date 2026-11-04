@@ -83,7 +83,7 @@ namespace Game.Gameplay.EditorTools
             assets.wrestlerTemplate = EnsureMaterial();
             assets.screenTemplate = EnsureScreenMaterial();
             var clips = new List<AnimationClip>();
-            foreach (string fbx in new[] { "Assets/Art/Animations/RING_Moves.fbx", "Assets/Art/Animations/RING_Promo.fbx" })
+            foreach (string fbx in new[] { "Assets/Art/Animations/RING_Moves.fbx", "Assets/Art/Animations/RING_Promo.fbx", "Assets/Art/Animations/RING_Entrance.fbx" })
             {
                 foreach (var o in AssetDatabase.LoadAllAssetsAtPath(fbx))
                 {
@@ -94,6 +94,7 @@ namespace Game.Gameplay.EditorTools
             assets.clips = clips.ToArray();
             assets.manifest = Load<TextAsset>("Assets/Art/Animations/ring_anims_manifest.txt");
             assets.promoManifest = Load<TextAsset>("Assets/Art/Animations/ring_promo_manifest.txt");
+            assets.entranceManifest = Load<TextAsset>("Assets/Art/Animations/ring_entrance_manifest.txt");
 
             var stage = host.AddComponent<RingStage3D>();
             stage.assets = assets;
