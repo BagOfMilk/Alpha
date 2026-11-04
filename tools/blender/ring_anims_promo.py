@@ -178,13 +178,174 @@ def point_pose(t, L):
     p.finger_open = {"l": ["index"]} if e > 0.4 else {}
     return p
 
+# ---------------------------------------------------------------- жести: на публіку, поворот до залу, кулак, мовчазний погляд
+# Усі починаються й закінчуються у вузлі «promo» (крім Stare: мікрофон опущено — вузла немає). Мікрофон лишається в правій
+# руці; ліва — жест. «Зал» — по боках і навколо ринга: вказівка йде вліво-вгору від борця, поворот — на ~120°.
+
+CROWD_LEN, TURN_LEN, FIST_LEN, STARE_LEN = 3.0, 3.8, 3.2, 3.0
+
+def lerp_v(a, b, k):
+    return a + (b - a) * k
+
+def _arm_out(p, dirv, reach, e, fo_up=None, elbow=Vector((0.26, 0.10, -0.34))):
+    """Ліва рука виходить від плеча в напрямку dirv на reach (довжини руки) з вагою e."""
+    r = REST_L
+    d = dirv.normalized()
+    def lpos(S):
+        v = r[0].lerp(d * reach, e)
+        return S["l"] + v * BODY["arm"]
+    fo = (DOWN + FWD * 0.15).lerp(d, e)
+    up = (FWD + RIGHT * 0.3).lerp(fo_up if fo_up is not None else UP, e)
+    p.hands["l"] = (lpos, fo, up)
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.30 - 0.08 * e, 0.08, -0.32)).lerp(elbow, e),
+                "r": lambda S: S["r"] + Vector((-0.22, 0.12, -0.34))}
+
+def crowd_pose(t, L):
+    """Вказує на зал: корпус і голова повертаються вліво, ліва рука виходить вліво-вгору, два тички, потім повільний
+    змах по залу до центру; мікрофон іде за головою."""
+    p = talk_pose(0.0, TALK_LEN)
+    e = bump(t, 0.12, 0.70, 2.10, 2.80)
+    ds = smooth((t - 1.15) / 1.0)                                     # змах по залу: від лівого краю до фронту
+    stab = bump(t, 0.80, 0.90, 0.93, 1.02) + bump(t, 1.00, 1.10, 1.13, 1.22)
+    A = Vector((0.88, -0.28, 0.38))
+    B = Vector((0.30, -0.85, 0.30))
+    dirv = lerp_v(A, B, ds)
+    p.pelvis = p.pelvis + Vector((0.0, -0.03 * e, -0.012 * e))
+    p.pitch = p.pitch + 5.0 * e + breathe(t, L, 0.5)
+    p.pelvis_yaw = 7.0 * e * (1 - 0.5 * ds)
+    p.yaw = 16.0 * e * (1 - 0.6 * ds)
+    p.head_yaw = 40.0 * e * (1 - 0.7 * ds)
+    p.head_pitch = p.head_pitch + 2.0 * e
+    hy = p.head_yaw
+    p.hands["r"] = mic_hand(lambda: hy, lambda: 0.082 + 0.008 * e)
+    _arm_out(p, dirv, 0.46 + 0.035 * stab, e)
+    p.fist = {"l": 0.3 + 0.62 * e, "r": 0.85}
+    p.finger_open = {"l": ["index"]} if e > 0.4 else {}
+    return p
+
+def _turn_A(t):
+    """Огинаюча повороту 0..1: туди 0.2–1.3 с (перші 0,2 с — вузол), тримає, назад 2.1–3.2 с."""
+    if t < 1.7:
+        return smooth((t - 0.2) / 1.1)
+    return 1.0 - smooth((t - 2.1) / 1.1)
+
+TURN_DEG = 120.0
+
+def _turn_feet(t):
+    """Чотири переступи туди (права, ліва, права, ліва по 0,22 с) і чотири назад: стопи повертаються навколо нуля."""
+    sq = [(0.24, 0.50, "r", 0.5), (0.52, 0.78, "l", 0.5), (0.80, 1.06, "r", 1.0), (1.08, 1.34, "l", 1.0),
+          (2.15, 2.41, "r", 0.5), (2.43, 2.69, "l", 0.5), (2.71, 2.97, "r", 0.0), (2.99, 3.25, "l", 0.0)]
+    out = {}
+    for s, base, by in (("l", PF_L, YL), ("r", PF_R, YR)):
+        keys = [(0.0, ("w", base, by), Vector(), 0.0)]
+        for a, b, who, frac in sq:
+            if who != s:
+                continue
+            ang = TURN_DEG * frac
+            keys.append((a, keys[-1][1], Vector(), 0.0))
+            keys.append((b, ("w", Rz(ang) @ base, by + ang), Vector(), 0.0))
+        keys.append((TURN_LEN, keys[-1][1], Vector(), 0.0))
+        out[s] = foot_plan(t, keys)
+    return out["l"], out["r"]
+
+def turn_pose(t, L):
+    """Повертається до залу (ліворуч на 120°) і назад: голова веде, потім плечі, потім таз; стопи переступають; ліва рука
+    відкрита долонею вгору в бік залу; мікрофон з головою."""
+    p = talk_pose(0.0, TALK_LEN)
+    Ap, At, Ah = _turn_A(t - 0.10), _turn_A(t), _turn_A(t + 0.12)
+    hold = bump(t, 1.1, 1.5, 2.0, 2.4)
+    _arm_out(p, Vector((0.55, -0.60, 0.12)), 0.46, hold, fo_up=LEFT * 0.4 + UP * 0.9)
+    p.fist = {"l": 0.3 - 0.2 * hold, "r": 0.85}
+    p.pitch = p.pitch + breathe(t, L, 0.5)
+    fl, fr = _turn_feet(t)
+    set_feet(p, fl, fr)
+    p = orient(p, Vector(), TURN_DEG * Ap)
+    p.yaw = TURN_DEG * (At - Ap) + 6.0 * hold                    # плечі випереджають таз
+    p.head_yaw = TURN_DEG * Ah + 6.0 * hold
+    mid = (fl[0] + fr[0]) * 0.5
+    sup = max(bump(t, 0.24, 0.30, 0.50, 0.56), bump(t, 0.80, 0.86, 1.06, 1.12), bump(t, 2.15, 2.21, 2.41, 2.47), bump(t, 2.71, 2.77, 2.97, 3.03))
+    p.pelvis = p.pelvis + Vector((mid.x * 0.7, mid.y * 0.7, -0.012 * max(sup, hold)))
+    hy = p.head_yaw
+    p.hands["r"] = mic_hand(lambda: hy, lambda: 0.084)
+    return p
+
+FIST_KEYS = [
+    (0.00, Vector((0.06, -0.03, -0.52)), DOWN + FWD * 0.15, FWD + RIGHT * 0.3, 0.30),
+    (0.30, Vector((0.10, -0.20, -0.36)), FWD + UP * 0.3, UP * 0.8 + RIGHT * 0.3, 0.55),
+    (0.70, Vector((0.07, -0.30, -0.12)), FWD + UP * 0.5, UP * 0.8 + RIGHT * 0.3, 1.0),
+    (1.55, Vector((0.05, -0.34, -0.10)), FWD + UP * 0.5, UP * 0.8 + RIGHT * 0.3, 1.0),
+    (1.82, Vector((0.02, -0.52, -0.06)), FWD + UP * 0.2, UP * 0.8 + RIGHT * 0.3, 1.0),       # кулак вперед — «попереджаю»
+    (2.10, Vector((0.05, -0.32, -0.11)), FWD + UP * 0.5, UP * 0.8 + RIGHT * 0.3, 1.0),
+    (2.65, Vector((0.10, -0.20, -0.38)), DOWN + FWD * 0.6, FWD + RIGHT * 0.3, 0.45),
+    (FIST_LEN, Vector((0.06, -0.03, -0.52)), DOWN + FWD * 0.15, FWD + RIGHT * 0.3, 0.30),
+]
+
+def fist_pose(t, L):
+    """Стискає кулак і погрожує: кулак піднімається до грудей, тремтить, випад уперед, назад і вниз; корпус нахиляється,
+    погляд спідлоба; мікрофон біля рота."""
+    p = talk_pose(0.0, TALK_LEN)
+    e = bump(t, 0.20, 0.80, 2.20, 2.85)
+    env = bump(t, 0.85, 1.0, 1.55, 1.75)
+    pos = key_track(t, FIST_KEYS, 1)
+    fo, up, fist = key_track(t, FIST_KEYS, 2), key_track(t, FIST_KEYS, 3), key_track(t, FIST_KEYS, 4)
+    off = Vector((0.010 * math.sin(2 * math.pi * 11.0 * t) * env, 0.004 * env, 0.012 * math.sin(2 * math.pi * 11.0 * t + 1.3) * env))
+    p.hands["l"] = ((lambda S, pos=pos, off=off: S["l"] + (pos + off) * BODY["arm"]), fo, up)
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.30, 0.08 - 0.08 * e, -0.32 + 0.02 * e)),
+                "r": lambda S: S["r"] + Vector((-0.22, 0.12, -0.34))}
+    p.fist = {"l": fist, "r": 0.85}
+    p.pelvis = p.pelvis + Vector((0.0, -0.035 * e, -0.02 * e))
+    p.pitch = p.pitch + 9.0 * e + breathe(t, L, 0.5)
+    p.yaw = 7.0 * e
+    p.head_yaw = 7.0 * e
+    p.head_pitch = p.head_pitch + 7.0 * e                         # погляд спідлоба: підборіддя вниз
+    hy = p.head_yaw
+    p.hands["r"] = mic_hand(lambda: hy, lambda: 0.088 + 0.004 * e)
+    return p
+
+# мікрофон опущено: рука біля стегна, мікрофон стирчить угору-вперед, як ліхтар (вісь — повернута з talk-стану навколо X)
+LOW_MIC_TILT = 74.0
+
+def mic_hand_low(offset_fn):
+    Rx = Matrix.Rotation(math.radians(LOW_MIC_TILT), 3, 'X')
+    fore, a = Rx @ Vector((0.9, -0.25, 0.1)), (Rx @ MIC_A).normalized()
+    def grip(S):
+        G = S["r"] + offset_fn() * BODY["arm"]
+        MIC_LOG.append((G.copy(), a.copy()))
+        return G
+    return (grip, fore, a)
+
+def stare_pose(t, L):
+    """Мовчазний погляд: мікрофон опущено біля стегна, руки спокійні, повільно дихає, вага ледь переходить, погляд
+    ковзає по залу й вертається. Петля: усе — цілі гармоніки циклу."""
+    ph = 2 * math.pi * t / L
+    p = promo_base(t, L, tf=0.0)
+    p.pitch = 1.5 + breathe(t, L, 0.7) * 1.0
+    p.pelvis = p.pelvis + Vector((0.012 * math.sin(ph), 0.0, 0.0))
+    p.roll = -1.2 * math.sin(ph)
+    p.yaw = 3.0 * math.sin(ph + 0.5)
+    p.head_yaw = 9.0 * math.sin(ph + 0.9) + 2.0 * math.sin(2 * ph)
+    p.head_pitch = -2.0 + 1.0 * math.sin(2 * ph + 0.4)
+    p.hands["r"] = mic_hand_low(lambda: Vector((-0.07, -0.11, -0.50 + 0.008 * math.sin(2 * ph))))
+    p.hands["l"] = (lambda S: S["l"] + Vector((0.06, -0.03 + 0.012 * math.sin(ph + 1.0), -0.52)) * BODY["arm"],
+                    DOWN + FWD * 0.15, FWD + RIGHT * 0.3)
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.28, 0.12, -0.32)), "r": lambda S: S["r"] + Vector((-0.28, 0.14, -0.32))}
+    p.fist = {"l": 0.3, "r": 0.8}
+    return p
+
 PROMO_CLIPS = [
     ("Promo_Mic_Talk_Loop", TALK_LEN, talk_pose, None, True, None, 0),
     ("Promo_Mic_Point", POINT_LEN, point_pose, None, False, None, 0),
+    ("Promo_Mic_Point_Crowd", CROWD_LEN, crowd_pose, None, False, None, 0),
+    ("Promo_Mic_Turn_Crowd", TURN_LEN, turn_pose, None, False, None, 0),
+    ("Promo_Mic_Fist", FIST_LEN, fist_pose, None, False, None, 0),
+    ("Promo_Mic_Stare_Loop", STARE_LEN, stare_pose, None, True, None, 0),
 ]
 NODE_POSES["promo"] = lambda: talk_pose(0.0, TALK_LEN)
 CLIP_NODES["Promo_Mic_Talk_Loop"] = {"A": ("promo", "promo")}
 CLIP_NODES["Promo_Mic_Point"] = {"A": ("promo", "promo")}
+for _n in ("Promo_Mic_Point_Crowd", "Promo_Mic_Turn_Crowd", "Promo_Mic_Fist"):
+    CLIP_NODES[_n] = {"A": ("promo", "promo")}
+MIC_LOW_CLIPS = {"Promo_Mic_Stare_Loop"}      # мікрофон опущено: відстані до рота й голови для нього не перевіряються
 
 # ---------------------------------------------------------------- перевірки мікрофона
 
@@ -202,14 +363,16 @@ def pt_seg(p, a, b):
     t = 0.0 if d.length < 1e-9 else max(0.0, min(1.0, (p - a).dot(d) / d.dot(d)))
     return (p - (a + d * t)).length
 
+MOUTH_LOCAL = [None]
+
 def mic_checks(seq, loc_attach):
     """Мікрофон у руці за кістками: відстань верху решітки до рота, найближче підхід руки й мікрофона до центру голови."""
-    out = {"tip": [9, 0], "head_hand": 9.0, "head_mic": 9.0, "drift": 0.0}
+    out = {"tip": [9, 0], "head_hand": 9.0, "head_mic": 9.0, "drift": 0.0, "drift_at": 0}
     for f, cap in enumerate(seq):
         M = cap["hand_r"] @ loc_attach
         tip = M @ Vector((0, 0, MIC_LEN_ABOVE))
-        hb, hh = cap["head"].translation, cap["head"] @ Vector((0, 0.07, 0.0))        # центр черепа ≈ над головою кістки
-        mouth = hb + Vector((0.0, -0.09, 0.04))
+        hb = cap["head"].translation
+        mouth = cap["head"] @ MOUTH_LOCAL[0]                                          # рот іде за поворотом голови
         d_tip = (tip - mouth).length
         out["tip"] = [min(out["tip"][0], d_tip), max(out["tip"][1], d_tip)]
         c_head = hb + Vector((0.0, 0.0, 0.07))
@@ -217,7 +380,10 @@ def mic_checks(seq, loc_attach):
         out["head_hand"] = min(out["head_hand"], pt_seg(c_head, cap["lowerarm_r"].translation, cap["hand_r"].translation))
         if f < len(MIC_LOG):
             G, a = MIC_LOG[f]
-            out["drift"] = max(out["drift"], (M.translation - G).length)
+            d_ = (M.translation - G).length
+            if d_ > out["drift"]:
+                out["drift"], out["drift_at"] = d_, f
+
     return out
 
 # ---------------------------------------------------------------- огляд з мікрофоном
@@ -280,7 +446,8 @@ def look_promo(name, arm, seq, mic, attach, length):
             pb.rotation_quaternion = rot
             pb.location = loc if pb.name == "pelvis" else Vector()
     n = len(seq)
-    idx = [round((n - 1) * i / 5) for i in range(6)]
+    K = int(_args[_args.index("--frames") + 1]) if "--frames" in _args else 6          # кількість кадрів на лист (щільно: 16–24)
+    idx = [round((n - 1) * i / (K - 1)) for i in range(K)]
     ctr = Vector((0.0, -0.15, 0.95))
     views = [Vector((-3.2, -3.4, 0.5)), Vector((3.2, -3.4, 0.5))]       # з боку мікрофона й з боку жестів
     tiles = []
@@ -300,7 +467,11 @@ def look_promo(name, arm, seq, mic, attach, length):
             px = np.array(img.pixels[:], dtype=np.float32).reshape(H, W, 4)
             bpy.data.images.remove(img)
             row.append(px)
-        tiles.append(np.concatenate(row, axis=1))
+        COLS = 8
+        while len(row) % COLS:
+            row.append(np.zeros_like(row[0]))
+        for r0 in range(0, len(row), COLS):
+            tiles.append(np.concatenate(row[r0:r0 + COLS], axis=1))
     sheet = np.concatenate(tiles[::-1], axis=0)
     a_ = sheet[..., 3:4]
     sheet = np.concatenate([sheet[..., :3] * a_ + 0.85 * (1 - a_), np.ones_like(a_)], axis=-1)      # світлий фон
@@ -344,7 +515,17 @@ def promo_main():
     manifest = ["# Кліпи промо (tools/blender/ring_anims_promo.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> "
                 "<зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>"]
     samples, failed, attach, seq_for_look = [], [], None, {}
+    hb_ = armA.data.bones["head"].matrix_local
+    MOUTH_LOCAL[0] = hb_.inverted() @ (hb_.translation + Vector((0.0, -0.09, 0.04)))
+    # кріплення мікрофона до кисті — з вузла «promo» (кадр 0 Talk), щоб не залежало від того, який кліп іде першим
+    place(armA, Vector(), 0)
+    MIC_LOG.clear()
+    apply_w(rig, talk_pose(0.0, TALK_LEN))
+    attach = armA.pose.bones["hand_r"].matrix.copy().inverted() @ mic_matrix(*MIC_LOG[0])
+    MIC_LOG.clear()
     for name, length, fa, fb, loop, offset, yaw in PROMO_CLIPS:
+        if ONLY and name not in ONLY:
+            continue
         place(armA, Vector(), 0)
         MIC_LOG.clear()
         sa, sb, wa, wb, q, gaps = bake_clip(rig, rig, name, length, fa, None)
@@ -359,12 +540,13 @@ def promo_main():
         state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
         if q["jerk"][0] > JERK_WARN:
             state += " · ривок %.1f (%s)" % q["jerk"]
-        if not (0.05 < mc["tip"][0] and mc["tip"][1] < 0.13):
+        low = name in MIC_LOW_CLIPS
+        if not low and not (0.05 < mc["tip"][0] and mc["tip"][1] < 0.13):
             state += " · мікрофон далеко від рота"
-        if mc["head_hand"] < 0.10 or mc["head_mic"] < 0.0615:
+        if not low and (mc["head_hand"] < 0.10 or mc["head_mic"] < 0.0615):
             state += " · мікрофон/рука в голові"
         if mc["drift"] > 0.02:
-            state += " · мікрофон «пливе»"
+            state += " · мікрофон «пливе» (кадр %d)" % mc["drift_at"]
         node_s = "%.1f° / %.1f см" % q["node"] if "node" in q else "—"
         line = ("| %s | %.1f %s | %.1f %s | %.1f %s | %.1f %s | %s | %.1f %s | %.1f–%.1f | %.1f / %.1f | %.1f | %s |" % (
             name, q["slide"][0], q["slide"][1], q["self"][0], q["self"][1], q["under"][0], q["under"][1],
@@ -375,7 +557,7 @@ def promo_main():
                 line += " %s %.0f (%s)" % (k, q[k][0], q[k][1])
         print("[кліп] " + line, flush=True)
         report.append(line)
-        if bad:
+        if bad or any(w_ in state for w_ in ("мікрофон далеко", "в голові", "«пливе»")):
             failed.append(name)
         samples.append((name, sa, armA))
         seq_for_look[name] = (sa, length)
@@ -408,5 +590,8 @@ def promo_main():
     print("[експорт] " + OUT_FBX, flush=True)
     print("[кріплення] pos=%.4f,%.4f,%.4f quat=%.5f,%.5f,%.5f,%.5f" % (loc.x, loc.y, loc.z, rot.w, rot.x, rot.y, rot.z), flush=True)
     print("[якість] " + ("понад поріг: " + ", ".join(failed) if failed else "усі кліпи в межах порогів"), flush=True)
+    if failed and STRICT:
+        sys.stdout.flush()
+        os._exit(3)
 
 promo_main()

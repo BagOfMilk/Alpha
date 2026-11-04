@@ -2,3 +2,7 @@
 # attach mic bone=hand_r pos=-0.0064,0.0507,-0.0093 quat_wxyz=0.51841,0.23437,0.29936,0.76597 (простір кістки Blender: Y уздовж кістки; початок мікрофона — центр рукояті, вісь Z мікрофона — до верху решітки, −Y — кнопка; Mic_Grip у mic.fbx = початок)
 Promo_Mic_Talk_Loop - 4.000 1 0 0 0 0 promo promo
 Promo_Mic_Point - 2.500 0 0 0 0 0 promo promo
+Promo_Mic_Point_Crowd - 3.000 0 0 0 0 0 promo promo
+Promo_Mic_Turn_Crowd - 3.800 0 0 0 0 0 promo promo
+Promo_Mic_Fist - 3.200 0 0 0 0 0 promo promo
+Promo_Mic_Stare_Loop - 3.000 1 0 0 0 0 promo promo

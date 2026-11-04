@@ -1,0 +1,5 @@
+# Кліпи виходу (tools/blender/ring_anims_entrance.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> <зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>
+Entrance_Walk_Loop - 1.000 1 0 0 0 0 - -
+Entrance_Climb_Steps - 4.900 0 0 0 0 0 - -
+Entrance_Through_Ropes - 3.800 0 0 0 0 0 - -
+Entrance_Corner_Pose - 3.000 1 0 0 0 0 - -
