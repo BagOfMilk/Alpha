@@ -31,7 +31,7 @@ namespace Game.Gameplay.Ring
         private const string ShotsArg = "-ring-shots";
 
         private const float ShotStep = 0.45f;
-        private const int ShotLimit = 900;
+        private const int ShotLimit = 1500;
         private const float AnimShotEvery = 1.3f;
         private float _animClock, _shotClock;
         private string _shotsDir;

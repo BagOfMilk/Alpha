@@ -206,12 +206,13 @@ namespace Game.Gameplay.Ring.Stage
             SetTitantron(title, sub, color);
 
             // 1. Темна зала, екран спалахує: камера з рингу на завісу.
-            Look(new Vector3(-4f, 2.4f, -3.2f), CurtainTop + new Vector3(0f, -1.2f, 0f), 40f, true);
+            // Кадр з проходу: і борець біля завіси, і екран над нею (огляд 04.11.2026: камера дивилась під титантрон).
+            Look(new Vector3(-6.5f, 2.2f, -2.4f), new Vector3(-16f, 2.9f, 0f), 42f, true);
             var walk = _s.Clip("Ref_Walk_Loop");
             var hype = _s.Clip("Idle_Hype_Loop") ?? _s.Clip("Ring_Stance_Loop");
             _s.Place(a, Path[0], 90f, "Idle_Hype_Loop");
             a.SetHeight(0f);
-            yield return Wait(1.6f);
+            yield return Wait(2.2f);
 
             // 2. Хода вздовж проходу: камера попереду борця, задкує разом з ним.
             if (walk != null) a.PlayAt(walk, true, Path[0], 90f, WalkSpeed);
@@ -287,7 +288,7 @@ namespace Game.Gameplay.Ring.Stage
             // Пролітка: чотири точки над залою — від кута над рядами, вздовж трибуни, до рингу; дивиться в центр.
             Vector3[] fly =
             {
-                new Vector3(14f, 9f, -14f), new Vector3(8f, 6f, -11f), new Vector3(-2f, 4.2f, -9f), new Vector3(-6f, 2.6f, -4.5f)
+                new Vector3(14f, 9f, -14f), new Vector3(8f, 6f, -11f), new Vector3(-2f, 4.2f, -9f), new Vector3(-7f, 3.4f, -6.5f)
             };
             float seg = 3.2f;
             for (int i = 0; i + 1 < fly.Length && !_skip; i++)
