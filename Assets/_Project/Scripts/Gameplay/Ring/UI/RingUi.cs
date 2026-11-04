@@ -236,6 +236,80 @@ namespace Game.Gameplay.Ring.UI
             return s;
         }
 
+        // ---------------- компактний вигляд кар'єри (власник 04.11.2026: «зроби значно меньше та зручніше») ----------------
+
+        /// <summary>Вузька колонка праворуч, решта екрана — 3D (тиждень, кінець сезону, ворожнеча, розвиток у кар'єрі).</summary>
+        public static VisualElement SideColumn(VisualElement root)
+        {
+            root.style.flexDirection = FlexDirection.Row;
+            root.style.justifyContent = Justify.FlexEnd;
+            root.style.backgroundColor = Color.clear;
+            var col = Column();
+            col.style.width = new Length(36f, LengthUnit.Percent);
+            col.style.minWidth = 360f;
+            col.style.maxWidth = 470f;
+            root.Add(col);
+            return col;
+        }
+
+        /// <summary>Скляна картка компактного вигляду.</summary>
+        public static VisualElement GlassCard(float pad = 8f)
+        {
+            var c = Card(pad);
+            Glass(c, 0.84f);
+            return c;
+        }
+
+        /// <summary>Заголовок розділу компактного вигляду.</summary>
+        public static Label Section(string text)
+        {
+            var l = Lbl(text, 13f, Gold, true);
+            l.style.marginTop = 6f;
+            l.style.marginBottom = 3f;
+            return l;
+        }
+
+        /// <summary>Рядок-підказка: опис дії при наведенні на однорядкову кнопку.</summary>
+        public static Label HintLine()
+        {
+            var h = Lbl("", 12f, Dim);
+            h.style.whiteSpace = WhiteSpace.Normal;
+            h.style.minHeight = 30f;
+            h.style.marginTop = 4f;
+            return h;
+        }
+
+        /// <summary>Однорядкова кнопка; <paramref name="hintText"/> — у рядок-підказку <paramref name="hint"/> при наведенні.</summary>
+        public static Button SmallButton(string text, Action onClick, bool enabled, Color? accent, Label hint = null, string hintText = null)
+        {
+            var b = MakeButton(text, onClick, enabled, accent, 13f);
+            b.style.paddingTop = 3f; b.style.paddingBottom = 3f; b.style.paddingLeft = 8f; b.style.paddingRight = 8f;
+            b.style.marginBottom = 3f;
+            b.style.marginRight = 4f;
+            b.style.borderLeftWidth = 3f;
+            if (hint != null && !string.IsNullOrEmpty(hintText))
+            {
+                b.RegisterCallback<PointerEnterEvent>(e => { hint.text = hintText; hint.style.color = Text; });
+                b.RegisterCallback<PointerLeaveEvent>(e => { hint.text = ""; });
+            }
+            return b;
+        }
+
+        /// <summary>Шкала одним рядком: назва, значення й тонка смужка.</summary>
+        public static VisualElement MeterRow(string name, string value, float frac, Color fill)
+        {
+            var col = Column();
+            var row = Row();
+            row.style.justifyContent = Justify.SpaceBetween;
+            row.Add(Lbl(name, 12f));
+            row.Add(Lbl(value, 12f, Gold, true));
+            col.Add(row);
+            var bar = Bar(frac, fill, 4f);
+            bar.style.marginBottom = 4f;
+            col.Add(bar);
+            return col;
+        }
+
         /// <summary>Півпрозорий шар на весь екран із центрованою панеллю (модальні реакція й докрутка).</summary>
         public static VisualElement Modal(out VisualElement panel)
         {

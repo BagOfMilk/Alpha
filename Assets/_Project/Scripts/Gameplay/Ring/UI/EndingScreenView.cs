@@ -29,6 +29,7 @@ namespace Game.Gameplay.Ring.UI
             }
             Root.Clear();
             RingUi.HudPad(Root);
+            if (Ctx.Career != null) { RefreshCompact(); return; }
 
             // Шапка: кінцівка.
             var head = RingUi.Column();
@@ -118,6 +119,69 @@ namespace Game.Gameplay.Ring.UI
             body.Add(right);
 
             Root.Add(body);
+        }
+
+        /// <summary>
+        /// Кар'єра: вузька колонка праворуч — кінцівка чи підсумок матчу, шляхи одним рядком, очки, атрибути й перки
+        /// однорядковими кнопками (опис — у рядку-підказці), «Далі».
+        /// </summary>
+        private void RefreshCompact()
+        {
+            var t = Ctx.Text;
+            var col = RingUi.SideColumn(Root);
+            var hint = RingUi.HintLine();
+
+            var head = RingUi.GlassCard();
+            head.Add(RingUi.Lbl(_m.EndingTitle, 16f, RingUi.Gold, true));
+            var desc = RingUi.Lbl(_m.EndingDesc, 12f, RingUi.Dim);
+            desc.style.whiteSpace = WhiteSpace.Normal;
+            head.Add(desc);
+            head.Add(RingUi.Lbl(string.Join(" · ", _m.ResultLines()), 12f));
+            head.Add(RingUi.Lbl(_m.PlanText, 12f, RingUi.Gold));
+            var matchLines = _m.MatchLines();
+            if (matchLines.Count > 1) head.Add(RingUi.Lbl(string.Join("  ·  ", matchLines), 12f, RingUi.Dim));
+            var paths = RingUi.Row();
+            paths.style.flexWrap = Wrap.Wrap;
+            foreach (var p in _m.Paths())
+            {
+                var l = RingUi.Lbl(p.Name + " " + p.RankText, 12f, RingUi.PathColor(p.Path));
+                l.style.marginRight = 12f;
+                paths.Add(l);
+            }
+            head.Add(paths);
+            col.Add(head);
+
+            var dev = RingUi.GlassCard();
+            dev.style.marginTop = 6f;
+            dev.Add(RingUi.Section(_m.PointsText));
+            var attrs = RingUi.Row();
+            attrs.style.flexWrap = Wrap.Wrap;
+            foreach (var a in _m.Attrs())
+            {
+                var attr = a.Attr;
+                attrs.Add(RingUi.SmallButton(a.Name + " " + a.ValueText, () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, hint,
+                    a.CanBuy ? a.BuyText : a.ReasonText));
+            }
+            dev.Add(attrs);
+            dev.Add(RingUi.Section(t.Get("dev.section.perks")));
+            var perks = RingUi.Row();
+            perks.style.flexWrap = Wrap.Wrap;
+            foreach (var r in _m.Perks())
+            {
+                if (r.State == PerkState.Owned) continue;
+                string id = r.Id;
+                bool can = r.State == PerkState.Available;
+                perks.Add(RingUi.SmallButton(r.Name + " · " + r.Cost, () => { _m.BuyPerk(id); Refresh(); }, can,
+                    r.IsGeneral ? RingUi.Gold : RingUi.PathColor(r.Path), hint, r.PathText + " — " + r.Desc + (can ? "" : " · " + r.ReasonText)));
+            }
+            dev.Add(perks);
+            dev.Add(hint);
+            col.Add(dev);
+
+            var go = RingUi.PrimaryButton(Ctx.AfterDevelopment != null ? t.Get("ui.next") : _m.ContinueText, OnConfirm,
+                Ctx.AfterDevelopment != null || _m.CanContinue);
+            go.style.fontSize = 16f;
+            col.Add(go);
         }
 
         private VisualElement PerkButton(PerkRow r)

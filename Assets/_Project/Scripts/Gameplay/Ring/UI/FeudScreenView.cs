@@ -23,6 +23,7 @@ namespace Game.Gameplay.Ring.UI
             var t = Ctx.Text;
             Root.Clear();
             RingUi.HudPad(Root);
+            if (Ctx.Career != null) { RefreshCompact(); return; }
 
             var header = RingUi.Column();
             RingUi.Gap(header, 12f);
@@ -103,6 +104,55 @@ namespace Game.Gameplay.Ring.UI
             body.Add(right);
 
             Root.Add(body);
+        }
+
+        /// <summary>Кар'єра: вузька колонка праворуч — шапка, шкали тонкими смужками, шляхи одним рядком, план і умови, «Далі».</summary>
+        private void RefreshCompact()
+        {
+            var t = Ctx.Text;
+            var col = RingUi.SideColumn(Root);
+            var head = RingUi.GlassCard();
+            head.Add(RingUi.Lbl(_m.TitleText, 16f, RingUi.Gold, true));
+            head.Add(RingUi.Lbl(_m.VersusText, 13f, RingUi.Text, true));
+            head.Add(RingUi.Lbl(_m.ProgressText, 12f, RingUi.Dim));
+            col.Add(head);
+
+            var meters = RingUi.GlassCard();
+            meters.style.marginTop = 6f;
+            meters.Add(RingUi.Section(t.Get("feud.section.meters")));
+            foreach (var r in _m.Meters())
+            {
+                float span = r.Max - r.Min;
+                meters.Add(RingUi.MeterRow(r.Name, r.ValueText, span <= 0 ? 0f : (r.Value - r.Min) / span, RingUi.Gold));
+            }
+            var paths = RingUi.Row();
+            paths.style.flexWrap = Wrap.Wrap;
+            foreach (var p in _m.Paths())
+            {
+                var l = RingUi.Lbl(p.Mark + " " + p.Name + " · " + p.RankText, 12f, RingUi.PathColor(p.Path), p.Dominant);
+                l.style.marginRight = 12f;
+                paths.Add(l);
+            }
+            meters.Add(RingUi.Section(t.Get("feud.section.paths")));
+            meters.Add(paths);
+            col.Add(meters);
+
+            var plan = RingUi.GlassCard();
+            plan.style.marginTop = 6f;
+            plan.Add(RingUi.Section(_m.PlanSectionText));
+            plan.Add(RingUi.Lbl(_m.PlanText, 12f));
+            plan.Add(RingUi.Lbl(t.Get("feud.section.stip") + ": " + string.Join(", ", _m.StipulationTexts()), 12f));
+            plan.Add(RingUi.Lbl(t.Get("feud.section.ally") + ": " + _m.AllyText, 12f));
+            if (_m.HasNextPromo)
+            {
+                plan.Add(RingUi.Section(t.Get("feud.section.next")));
+                plan.Add(RingUi.Lbl(_m.NextTitleText, 13f, RingUi.Text, true));
+                plan.Add(RingUi.Lbl(_m.NextPlaceText, 12f, RingUi.Dim));
+            }
+            var go = RingUi.PrimaryButton(_m.ContinueText, OnConfirm);
+            go.style.fontSize = 16f;
+            plan.Add(go);
+            col.Add(plan);
         }
 
         public override void OnConfirm()
