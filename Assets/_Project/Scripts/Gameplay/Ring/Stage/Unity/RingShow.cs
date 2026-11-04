@@ -215,6 +215,8 @@ namespace Game.Gameplay.Ring.Stage
                 if (other != a) other.Model.SetActive(false);
             a.Model.SetActive(true);
             SetTitantron(title, sub, color);
+            var fx = _s.Fx;
+            if (fx != null) fx.Entrance(a.Hips != null ? a.Hips : a.Slot, color);
 
             // 1. Темна зала, екран спалахує: камера з рингу на завісу.
             // Кадр з проходу: і борець біля завіси, і екран над нею (огляд 04.11.2026: камера дивилась під титантрон).
@@ -275,6 +277,7 @@ namespace Game.Gameplay.Ring.Stage
             yield return Wait(2.6f);
 
             SetTitantron("", "", Color.black);
+            if (fx != null) fx.Match();
             foreach (var other in new[] { _s.Actor(Core.Ring.Match.MatchSide.Player), _s.Actor(Core.Ring.Match.MatchSide.Rival), _s.Referee })
                 other.Model.SetActive(true);
             CamActive = false;
@@ -334,8 +337,9 @@ namespace Game.Gameplay.Ring.Stage
                     yield return null;
                 }
 
-            // Екран спалахує назвою гри; вихід героя, якщо не пропущено.
+            // Екран спалахує назвою гри (іскри й CO2 біля завіси); вихід героя, якщо не пропущено.
             SetTitantron(title, sub, new Color(0.75f, 0.12f, 0.08f));
+            if (_s.Fx != null) _s.Fx.TitleHit();
             yield return Wait(2.4f);
             if (!_skip)
             {

@@ -45,6 +45,9 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Шаблон екрана (URP/Lit з емісією) — для титантрона.</summary>
         public Material screenTemplate;
 
+        /// <summary>Матеріали частинок (URP Particles/Unlit): адитивний — іскри й піро, прозорий — CO2 і конфеті.</summary>
+        public Material particleAdd, particleAlpha;
+
         /// <summary>Усі кліпи RING_Moves і RING_Promo (за іменем із маніфесту).</summary>
         public AnimationClip[] clips = new AnimationClip[0];
 

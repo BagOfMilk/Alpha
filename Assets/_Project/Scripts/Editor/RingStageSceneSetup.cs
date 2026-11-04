@@ -82,6 +82,8 @@ namespace Game.Gameplay.EditorTools
 
             assets.wrestlerTemplate = EnsureMaterial();
             assets.screenTemplate = EnsureScreenMaterial();
+            assets.particleAdd = EnsureParticleMaterial("ring_particle_add", true);
+            assets.particleAlpha = EnsureParticleMaterial("ring_particle_alpha", false);
             var clips = new List<AnimationClip>();
             foreach (string fbx in new[] { "Assets/Art/Animations/RING_Moves.fbx", "Assets/Art/Animations/RING_Promo.fbx", "Assets/Art/Animations/RING_Entrance.fbx" })
             {
@@ -125,6 +127,34 @@ namespace Game.Gameplay.EditorTools
             m.EnableKeyword("_EMISSION");
             m.SetColor("_EmissionColor", Color.white);
             m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        /// <summary>
+        /// Матеріал частинок шоу (URP Particles/Unlit, прозорий): адитивний для іскор і піро, звичайний для CO2 й конфеті.
+        /// Ассет — щоб шейдер частинок потрапив у білд (матеріали з рантайму варіантів не тягнуть).
+        /// </summary>
+        private static Material EnsureParticleMaterial(string name, bool additive)
+        {
+            string path = "Assets/Art/Ring/Materials/" + name + ".mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                if (!AssetDatabase.IsValidFolder("Assets/Art/Ring/Materials")) AssetDatabase.CreateFolder("Assets/Art/Ring", "Materials");
+                m = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", additive ? 2f : 0f);
+            m.SetFloat("_ZWrite", 0f);
+            m.SetFloat("_Cull", 0f);
+            m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)(additive ? UnityEngine.Rendering.BlendMode.One : UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            m.SetColor("_BaseColor", Color.white);
             EditorUtility.SetDirty(m);
             return m;
         }

@@ -145,6 +145,16 @@ namespace Game.Gameplay.Ring.Stage
                     _s.Sound.OnEvent(ev, steps.Count > 0 ? 0.4f / RingStage3D.PlaySpeed : 0f, pinEnd);
                     if (ev.Kind == MatchEventKind.MatchEnd) _s.Sound.BellEnd();
                 }
+                // Світло-шоу: успішний фінішер — стробоскоп і віяло; кінець матчу — перемога (конфеті, фонтани, промені).
+                if (_s.Fx != null)
+                {
+                    if (ev.Action == MatchActionId.Finisher && (ev.Kind == MatchEventKind.Action || ev.Kind == MatchEventKind.Sell) && ev.Tier != RollTier.Miss) _s.Fx.Finisher();
+                    if (ev.Kind == MatchEventKind.MatchEnd && _e != null && _e.IsOver && _e.Result.Winner != MatchWinner.Draw)
+                    {
+                        var w = _s.Actor(_e.Result.Winner == MatchWinner.Player ? MatchSide.Player : MatchSide.Rival);
+                        _s.Fx.Victory(w.Hips != null ? w.Hips : w.Slot);
+                    }
+                }
                 foreach (var st in steps)
                 {
                     if (st.Kind == StageStepKind.Walk && !applied) { Apply(ev); applied = true; }

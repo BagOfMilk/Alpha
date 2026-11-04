@@ -81,6 +81,8 @@ namespace Game.Gameplay.Ring.Stage
         private RingShow _show;
         private RingSound _sound;
         public RingSound Sound { get { return _sound; } }
+        private RingFx _fx;
+        public RingFx Fx { get { return _fx; } }
         public RingShow Show { get { return _show; } }
 
         public static string ReadArg(string name)
@@ -114,6 +116,8 @@ namespace Game.Gameplay.Ring.Stage
             _show.Init(this);
             _sound = gameObject.AddComponent<RingSound>();
             _sound.Init(assets);
+            _fx = gameObject.AddComponent<RingFx>();
+            _fx.Init(this, assets.particleAdd, assets.particleAlpha);
             RingStageHub.Current = this;
             ShowIdle();
             SnapCamera();
@@ -522,6 +526,7 @@ namespace Game.Gameplay.Ring.Stage
             HideMic();
             _ref.Model.SetActive(true);
             _director.Begin(engine);
+            if (_fx != null) _fx.Match();
             CrowdMood(engine != null ? engine.State.Hype : 0);
             if (_sound != null) { _sound.MusicOff(); if (engine != null && engine.State.Log.Count <= 1) _sound.BellStart(); }
             SetShot(StageCam.Overview);
