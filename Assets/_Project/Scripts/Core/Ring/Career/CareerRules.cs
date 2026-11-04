@@ -71,8 +71,6 @@ namespace Game.Core.Ring.Career
 
         // ---------- промо й закулісся (§6.1) ----------
         public const int PromoStrongHype = 2;
-        public const int ShowPromoStrongHype = 1;
-        public const int ShowPromoMissHype = -1;
 
         // ---------- NPC-ворожнеча ----------
         /// <summary>Ажіотаж фіналу, з якого матч піднімає ворожнечу з NPC на рівень.</summary>

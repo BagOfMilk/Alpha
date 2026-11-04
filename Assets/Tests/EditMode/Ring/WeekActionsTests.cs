@@ -271,21 +271,17 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void ShortShowPromo_RollsOnceAndShiftsStartHype()
+        public void WeeklyShow_HasNoPromo_StartHypeIsFeudOnly()
         {
-            var tiers = new HashSet<RollTier>();
-            for (ulong seed = 1; seed < 100; seed++)
+            // Власник 04.11.2026: «промо тільки в фьюді, інши не треба» — звичайне шоу без кидка промо.
+            for (ulong seed = 1; seed < 40; seed++)
             {
                 var s = CareerKit.NewHero(seed, Gimmick.Showman);
                 s.EndWeek();
                 var e = s.StartShow();
-                var tier = (RollTier)s.State.ShowPromoTier;
-                tiers.Add(tier);
-                int baseHype = 1 + s.FeudLevel(s.State.Opponent);
-                int delta = tier == RollTier.Strong ? 1 : tier == RollTier.Miss ? -1 : 0;
-                Assert.AreEqual(Math.Max(0, baseHype + delta), e.State.Hype);
+                Assert.IsFalse(s.State.ShowPromoDone);
+                Assert.AreEqual(1 + s.FeudLevel(s.State.Opponent), e.State.Hype);
             }
-            Assert.AreEqual(3, tiers.Count);
         }
     }
 }

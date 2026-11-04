@@ -486,7 +486,8 @@ namespace Game.Core.Ring.Career
         }
 
         /// <summary>
-        /// Почати вечір. Звичайне шоу: коротке промо (Харизма 2d6: 10+ ажіотаж +1, 6− ажіотаж −1) і матч — повертає рушій (Phase=Match).
+        /// Почати вечір. Звичайне шоу — лише матч, без промо (власник 04.11.2026: «промо тільки в фьюді, інши не треба») —
+        /// повертає рушій (Phase=Match).
         /// Велике шоу ворожнечі: Phase=Feud, повертає null — далі екрани <see cref="Feud"/> (промо, підготовка), матч — через
         /// <see cref="StartFeudMatch"/>.
         /// </summary>
@@ -500,15 +501,9 @@ namespace Game.Core.Ring.Career
                 State.Phase = ShowPhase.Feud;
                 return null;
             }
-            // коротке промо шоу
-            int roll = TwoD6.Roll(Dice, "career:showpromo");
-            var tier = TwoD6.TierOf(roll + Player.Get(RingAttr.Charisma) - State.InjuryPenaltyFor(BodyZone.Head));
-            State.ShowPromoTier = (int)tier;
-            State.ShowPromoDone = true;
             var npc = Content.FindNpc(State.Opponent);
             var mods = Development.ToModifiers(Feud.State.Perks);
             int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus
-                       + (tier == RollTier.Strong ? CareerRules.ShowPromoStrongHype : tier == RollTier.Miss ? CareerRules.ShowPromoMissHype : 0)
                        + (State.IsInjured ? CareerRules.InjuredShowHype : 0);
             var setup = new MatchSetup
             {
