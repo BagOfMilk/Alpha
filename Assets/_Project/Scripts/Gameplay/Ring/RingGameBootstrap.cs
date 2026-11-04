@@ -195,6 +195,24 @@ namespace Game.Gameplay.Ring
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "npc_" + npc.Id + ".png"));
                 yield return new WaitForSeconds(0.4f);
             }
+            // Ноги збоку на рівні мату: підошви проти полотна (огляд 04.11.2026 — «боти проходять крізь ринг»).
+            stage.SetWrestlers(CareerLooks.HeroBodies[0], CareerLooks.CostumeRgb(0), CareerLooks.HeroHair[0],
+                CareerLooks.HeroBodies[8], CareerLooks.CostumeRgb(3), CareerLooks.HeroHair[1], 1f);
+            stage.LookbookShot();
+            yield return new WaitForSeconds(1.2f);
+            stage.LookbookFeet(true);
+            yield return new WaitForSeconds(0.6f);
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "feet_side.png"));
+            yield return new WaitForSeconds(0.4f);
+            // Лежання після кидка (кінець Bodyslam_B) збоку: з Foot IK і без (огляд 04.11.2026 — ступні стирчать угору).
+            foreach (bool ik in new[] { true, false })
+            {
+                stage.LookbookClip("Bodyslam_B", ik);
+                yield return new WaitForSeconds(3.4f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "lying_side_ik" + (ik ? "1" : "0") + ".png"));
+                yield return new WaitForSeconds(0.4f);
+            }
+            stage.LookbookFeet(false);
             // Закулісся: Ліна й гості подій — загальний план і зблизька (камера на співрозмовника й на героя).
             foreach (var scene in new[] { null, "ev_parking", "ev_friend", "ev_interview", "ev_contract" })
             {

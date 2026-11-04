@@ -50,6 +50,12 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Лукбук (-ring-lookbook): обидва борці в центрі, камера зблизька по пояс.</summary>
         void LookbookShot();
+
+        /// <summary>Лукбук: камера збоку на рівні мату (ноги й підошви проти полотна) і заміри висоти стоп у лог.</summary>
+        void LookbookFeet(bool on);
+
+        /// <summary>Лукбук: гравець грає кліп (без петлі, тримає останній кадр) з Foot IK чи без — порівняння пози.</summary>
+        void LookbookClip(string clip, bool footIk);
         string FxLastMoment { get; }
 
         /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>

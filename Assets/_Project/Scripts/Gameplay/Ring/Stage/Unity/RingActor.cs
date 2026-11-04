@@ -30,6 +30,9 @@ namespace Game.Gameplay.Ring.Stage
         private bool _finished;
         private float _speed = 1f;
 
+        /// <summary>Foot IK у кліпах (лукбук порівнює з ним і без нього).</summary>
+        public static bool FootIK = true;
+
         public AnimationClip CurrentClip { get { return _clip; } }
         public bool Finished { get { return _finished; } }
 
@@ -55,6 +58,11 @@ namespace Game.Gameplay.Ring.Stage
             RightLeg = Bone(HumanBodyBones.RightUpperLeg);
             Head = Bone(HumanBodyBones.Head);
             RightHand = Bone(HumanBodyBones.RightHand);
+            // Висота кісток стоп у бінд-позі (у просторі моделі): там підошва стоїть рівно на підлозі слота.
+            _feet = new[] { Bone(HumanBodyBones.LeftFoot), Bone(HumanBodyBones.RightFoot), Bone(HumanBodyBones.LeftToes), Bone(HumanBodyBones.RightToes) };
+            _feetBind = new float[_feet.Length];
+            for (int i = 0; i < _feet.Length; i++)
+                if (_feet[i] != null) _feetBind[i] = Model.transform.InverseTransformPoint(_feet[i].position).y;
 
             _graph = PlayableGraph.Create(name + ".ring");
             _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
@@ -93,7 +101,9 @@ namespace Game.Gameplay.Ring.Stage
                 _p[slot].Destroy();
             }
             var pl = AnimationClipPlayable.Create(_graph, clip);
-            pl.SetApplyFootIK(false);
+            // Foot IK: стопи там, де їх поставив автор кліпа. Без нього перенесення на інші пропорції тіла зводило коліна
+            // всередину, розводило стопи й топило підошви в мат на 4–5 см (огляд 04.11.2026).
+            pl.SetApplyFootIK(FootIK);
             pl.SetSpeed(speed);
             pl.SetTime(0);
             _graph.Connect(pl, 0, _mix, slot);
@@ -142,8 +152,37 @@ namespace Game.Gameplay.Ring.Stage
             PlayAt(clip, loop, PosePos, PoseYaw, speed);
         }
 
+        private readonly Transform[] _feet;
+        private readonly float[] _feetBind;
+        private float _lift;
+
+        /// <summary>
+        /// Стопи не крізь підлогу: кліпи рингу опускають таз без прив'язки ступень (стійка — підошва на 4–5 см у маті,
+        /// огляд 04.11.2026). Після анімації модель піднімається рівно на глибину, на яку найнижча кістка стопи пішла нижче
+        /// своєї бінд-висоти над слотом; вниз не тягне ніколи (стрибки, кидки — як у кліпі). Стеля — 15 см. Лише коли таз
+        /// високо (стоїть, присів): лежачи й на колінах стопа на боці, бінд-висота нічого не означає. Підйом плавний.
+        /// </summary>
+        public void Ground(float dt)
+        {
+            if (_feet == null) return;
+            float scale = Model.transform.lossyScale.y;
+            float baseY = Slot.position.y;
+            float need = 0f;
+            for (int i = 0; i < _feet.Length; i++)
+            {
+                if (_feet[i] == null) continue;
+                float y = _feet[i].position.y - _lift;                   // без поточного підйому
+                need = Mathf.Max(need, baseY + _feetBind[i] * scale - y);
+            }
+            if (Hips == null || (Hips.position.y - _lift - baseY) / Mathf.Max(1e-4f, scale) < 0.6f) need = 0f;
+            float target = Mathf.Min(need, 0.15f);
+            _lift = dt <= 0f ? target : Mathf.MoveTowards(_lift, target, 0.6f * dt);
+            Model.transform.localPosition = new Vector3(0f, _lift / Mathf.Max(1e-4f, Slot.lossyScale.y), 0f);
+        }
+
         public void Tick(float dt)
         {
+            Ground(dt);
             if (_cur < 0) return;
             if (_fadeFrom >= 0)
             {

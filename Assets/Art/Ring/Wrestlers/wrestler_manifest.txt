@@ -1,19 +1,19 @@
 # Борці (tools/blender/ring_wrestler.py): wrestler <тіло> <трик. легкої> <трик. детальної> <текстура> <зони=пікселі…>
-wrestler body_f_east_asian 3168 202752 1024 skin=806153 trunks=68875 band=9688 boots=69198 laces=862 pads=10943 tape=3926 top=78931
-wrestler body_f_latin 3168 202752 1024 skin=807710 trunks=66181 band=9210 boots=68034 laces=916 pads=10129 tape=3999 top=82397
-wrestler body_f_mediterranean 3168 202752 1024 skin=808022 trunks=65245 band=9049 boots=67776 laces=927 pads=9855 tape=4039 top=83663
-wrestler body_f_middle_eastern 3168 202752 1024 skin=808222 trunks=65281 band=9058 boots=67548 laces=921 pads=9871 tape=4088 top=83587
-wrestler body_f_nordic 3168 202752 1024 skin=808248 trunks=65159 band=9043 boots=67660 laces=934 pads=9837 tape=3927 top=83768
-wrestler body_f_south_asian 3168 202752 1024 skin=807872 trunks=66157 band=9205 boots=67929 laces=915 pads=10125 tape=3981 top=82392
-wrestler body_f_ukrainian 3168 202752 1024 skin=808207 trunks=65159 band=9043 boots=67692 laces=933 pads=9837 tape=3938 top=83767
-wrestler body_f_west_african 3168 202752 1024 skin=809573 trunks=63327 band=8697 boots=66707 laces=939 pads=9308 tape=4012 top=86013
-wrestler body_m_east_asian 3140 200960 1024 skin=883211 trunks=75864 band=9339 boots=67799 laces=773 pads=7621 tape=3969
-wrestler body_m_latin 3140 200960 1024 skin=888521 trunks=72957 band=8837 boots=65994 laces=834 pads=7361 tape=4072
-wrestler body_m_mediterranean 3140 200960 1024 skin=890542 trunks=71603 band=8664 boots=65572 laces=829 pads=7280 tape=4086
-wrestler body_m_middle_eastern 3140 200960 1024 skin=890466 trunks=71733 band=8677 boots=65496 laces=829 pads=7286 tape=4089
-wrestler body_m_nordic 3140 200960 1024 skin=890972 trunks=71431 band=8652 boots=65469 laces=824 pads=7269 tape=3959
-wrestler body_m_south_asian 3140 200960 1024 skin=888380 trunks=73072 band=8840 boots=65952 laces=837 pads=7357 tape=4138
-wrestler body_m_ukrainian 3140 200960 1024 skin=890797 trunks=71431 band=8652 boots=65641 laces=824 pads=7269 tape=3962
-wrestler body_m_west_african 3140 200960 1024 skin=893323 trunks=70341 band=8338 boots=64312 laces=831 pads=7073 tape=4358
+wrestler body_f_east_asian 3168 202752 1024 skin=791311 trunks=68875 band=9688 boots=68342 laces=1718 pads=25785 tape=3926 top=78931
+wrestler body_f_latin 3168 202752 1024 skin=793437 trunks=66181 band=9210 boots=67121 laces=1829 pads=24403 tape=3998 top=82397
+wrestler body_f_mediterranean 3168 202752 1024 skin=793994 trunks=65245 band=9049 boots=66852 laces=1851 pads=23880 tape=4042 top=83663
+wrestler body_f_middle_eastern 3168 202752 1024 skin=794183 trunks=65281 band=9058 boots=66621 laces=1848 pads=23910 tape=4087 top=83588
+wrestler body_f_nordic 3168 202752 1024 skin=794247 trunks=65159 band=9043 boots=66738 laces=1856 pads=23837 tape=3928 top=83768
+wrestler body_f_south_asian 3168 202752 1024 skin=793594 trunks=66157 band=9205 boots=67015 laces=1829 pads=24405 tape=3979 top=82392
+wrestler body_f_ukrainian 3168 202752 1024 skin=794207 trunks=65159 band=9043 boots=66769 laces=1856 pads=23837 tape=3938 top=83767
+wrestler body_f_west_african 3168 202752 1024 skin=795864 trunks=63327 band=8697 boots=65777 laces=1869 pads=23019 tape=4011 top=86012
+wrestler body_m_east_asian 3140 200960 1024 skin=873356 trunks=75864 band=9339 boots=67051 laces=1521 pads=17476 tape=3969
+wrestler body_m_latin 3140 200960 1024 skin=879144 trunks=72957 band=8837 boots=65187 laces=1641 pads=16739 tape=4071
+wrestler body_m_mediterranean 3140 200960 1024 skin=881292 trunks=71603 band=8664 boots=64764 laces=1637 pads=16530 tape=4086
+wrestler body_m_middle_eastern 3140 200960 1024 skin=881235 trunks=71733 band=8677 boots=64689 laces=1636 pads=16517 tape=4089
+wrestler body_m_nordic 3140 200960 1024 skin=881711 trunks=71431 band=8652 boots=64665 laces=1628 pads=16530 tape=3959
+wrestler body_m_south_asian 3140 200960 1024 skin=879026 trunks=73072 band=8840 boots=65143 laces=1646 pads=16713 tape=4136
+wrestler body_m_ukrainian 3140 200960 1024 skin=881536 trunks=71431 band=8652 boots=64837 laces=1628 pads=16530 tape=3962
+wrestler body_m_west_african 3140 200960 1024 skin=884574 trunks=70341 band=8338 boots=63495 laces=1648 pads=15820 tape=4360
 wrestler ref_f_mediterranean 3168 202752 1024 skin=651065 shirt_w=95355 shirt_b=96233 pants=149738 shoes=56185
 wrestler ref_m_mediterranean 3140 200960 1024 skin=642260 shirt_w=99555 shirt_b=100248 pants=150139 shoes=56374

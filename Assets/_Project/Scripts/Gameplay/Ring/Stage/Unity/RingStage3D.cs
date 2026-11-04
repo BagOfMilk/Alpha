@@ -729,6 +729,49 @@ namespace Game.Gameplay.Ring.Stage
         }
         public string FxLastMoment { get { return _fx != null ? _fx.LastMoment : null; } }
 
+        private bool _feetCam;
+
+        public void LookbookClip(string clip, bool footIk)
+        {
+            RingActor.FootIK = footIk;
+            var c = Clip(clip);
+            if (c != null && _player != null) _player.PlayAt(c, false, new Vector3(-0.6f, MatY, 0f), 90f);
+            RingActor.FootIK = true;
+        }
+
+        public void LookbookFeet(bool on)
+        {
+            _feetCam = on;
+            SnapCamera();
+            if (!on) return;
+            // Верх полотна: найвища точка рендерерів зали над центром рингу (у межах 0.5 м по горизонталі), нижче 2 м.
+            float top = float.MinValue;
+            foreach (var r in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+            {
+                if (r.sharedMesh == null || r.GetComponentInParent<Animator>() != null) continue;
+                var b = r.GetComponent<Renderer>();
+                if (b == null || !b.bounds.Contains(new Vector3(0f, b.bounds.center.y, 0f))) continue;
+                if (b.bounds.max.y < 2f && b.bounds.max.y > top) top = b.bounds.max.y;
+            }
+            foreach (var a in new[] { _player, _rival, _ref })
+            {
+                if (a == null || a.Anim == null || !a.Anim.isHuman) continue;
+                float lowest = float.MaxValue;
+                foreach (var sm in a.Model.GetComponentsInChildren<SkinnedMeshRenderer>())
+                {
+                    var baked = new Mesh();
+                    sm.BakeMesh(baked, true);
+                    var m = sm.transform.localToWorldMatrix;
+                    foreach (var v in baked.vertices) lowest = Mathf.Min(lowest, m.MultiplyPoint3x4(v).y);
+                    Destroy(baked);
+                }
+                Debug.Log(string.Format("[Ринг] ноги: {0} slot={1:F3} стопа={2:F3} пальці={3:F3} найнижча вершина={4:F3} верх полотна={5:F3} MatY={6:F3}",
+                    a.Slot.name, a.Slot.position.y, a.Anim.GetBoneTransform(HumanBodyBones.LeftFoot).position.y,
+                    a.Anim.GetBoneTransform(HumanBodyBones.LeftToes) != null ? a.Anim.GetBoneTransform(HumanBodyBones.LeftToes).position.y : -1f,
+                    lowest, top, MatY));
+            }
+        }
+
         public void SkipShow() { if (_show != null) _show.Skip(); }
 
         /// <summary>Постать у сорочці, штанях і взутті поверх тіла з текстурою борця (букер, гості закулісся).</summary>
@@ -810,7 +853,15 @@ namespace Game.Gameplay.Ring.Stage
             float fov;
             if (_show != null && _show.LeftBackstage) { _show.LeftBackstage = false; _camInit = false; }
             bool show = _show != null && _show.CamActive;
-            if (show)
+            if (_feetCam && _player != null && _rival != null)
+            {
+                Vector3 m = (_player.PosePos + _rival.PosePos) * 0.5f;
+                look = new Vector3(m.x, MatY + 0.25f, m.z);
+                pos = look + new Vector3(0f, 0.02f, -3.2f);
+                fov = 30f;
+                show = true;
+            }
+            else if (show)
             {
                 pos = _show.CamPos;
                 look = _show.CamLook;

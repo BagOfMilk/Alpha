@@ -32,7 +32,8 @@ ZONES = {
     "band":   ((0.02, 0.02, 0.02), 0.0, 0.5, False),        # пояс трусів
     "boots":  ((0.015, 0.015, 0.016), 0.0, 0.3, True),      # шкіра взуття
     "laces":  ((0.6, 0.6, 0.58), 0.0, 0.7, False),
-    "pads":   ((0.02, 0.02, 0.022), 0.0, 0.6, True),        # неопрен наколінників
+    # неопрен наколінників — у колір команди, темніший за труси (огляд 04.11.2026: чорні латки читались як дірки, не як екіпіровка)
+    "pads":   ((0.06, 0.012, 0.012), 0.0, 0.6, True),
     "tape":   ((0.75, 0.74, 0.7), 0.0, 0.8, False),         # спортивний тейп
     "top":    ((0.10, 0.02, 0.02), 0.0, 0.35, True),        # спортивний топ (жіночі тіла), у колір трусів
     # форма рефері: смугаста сорочка з короткими рукавами, чорні штани, чорне взуття
@@ -148,7 +149,12 @@ def classify(p, B, female, ref=False):
     текстури (межі зон рівні: раніше зони бралися з граней сітки й ішли сходинками)."""
     hip = B["pelvis"][0]
     z, d = "skin", 0.0
-    knee_d = min(seg_d(p, *B["calf_" + s])[0] if seg_d(p, *B["calf_" + s])[1] < 0.18 else 9 for s in "lr")
+    # Наколінник — манжета навколо самого колінного суглоба (голова кістки гомілки), з усіх боків, спереду товща.
+    # Бік — найближча нога (знак X не збігається з _l/_r рігу: раніше шнурівка й наколінник були лише на одній нозі).
+    ks = min("lr", key=lambda s_: seg_d(p, *B["calf_" + s_])[0])
+    knee = B["calf_" + ks][0]
+    knee_ax = p.z - knee.z
+    knee_r = min(seg_d(p, *B["calf_" + ks])[0], seg_d(p, *B["thigh_" + ks])[0])
     wrist_d = min(seg_d(p, *B["lowerarm_" + s]) for s in "lr")
     foot_z = min(B["foot_l"][0].z, B["foot_r"][0].z)
     on_arm = min(seg_d(p, *B[n + "_" + s])[0] for n in ("upperarm", "lowerarm", "hand") for s in "lr") < 0.1
@@ -161,12 +167,13 @@ def classify(p, B, female, ref=False):
         d = 0.004 if z == "trunks" else 0.007
     elif p.z < foot_z + 0.2 and not on_arm:
         z = "boots"; d = 0.006
-        fs = "foot_l" if p.x > 0 else "foot_r"                # шнурівка — вузька смужка по центру підйому стопи
+        fs = "foot_" + min("lr", key=lambda s_: (p - B["foot_" + s_][0]).length)   # шнурівка — смужка по центру підйому стопи
         front = p.y < B[fs][0].y - 0.02 and abs(p.x - B[fs][0].x) < 0.022
         if front and foot_z + 0.03 < p.z < foot_z + 0.17 and int((p.z - foot_z) / 0.018) % 2 == 0:
             z = "laces"; d = 0.008
-    elif knee_d < 0.075 and not on_arm and p.y < min(B["calf_l"][0].y, B["calf_r"][0].y) + 0.02:
-        z = "pads"; d = 0.012 * (1 - knee_d / 0.075) ** 0.5 + 0.004
+    elif -0.075 < knee_ax < 0.06 and knee_r < 0.12 and not on_arm:
+        edge = 1 - min(1.0, abs(knee_ax + 0.0075) / 0.0675) ** 4                 # краї манжети м'яко сходять до шкіри
+        z = "pads"; d = 0.003 + 0.005 * edge + (0.005 * edge if p.y < knee.y else 0.0)
     elif wrist_d[1] > 0.72 and wrist_d[0] < 0.07:
         z = "tape"; d = 0.0025 + 0.0008 * math.sin((p - B["hand_l" if p.x > 0 else "hand_r"][0]).length * 2 * math.pi / 0.012)
     return z, d
