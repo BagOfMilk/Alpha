@@ -24,6 +24,7 @@ namespace Game.Gameplay.EditorTools
             assets.bodyRival = Load<GameObject>("Assets/Art/Characters/Kit/body_m_nordic.fbx");
             assets.bodyRef = Load<GameObject>("Assets/Art/Characters/Kit/body_m_mediterranean.fbx");
             assets.mic = Load<GameObject>(Art + "Props/mic.fbx");
+            assets.kitMale = Load<GameObject>("Assets/Art/Characters/Kit/kit_m.fbx");
             // Зала: стільці (props.fbx читається - сітки склеюються в рантаймі), натовп з анімаціями, тексти розстановки.
             assets.props = Load<GameObject>(Art + "Props/props.fbx");
             assets.crowd = Load<GameObject>("Assets/Art/Crowd/crowd_fans.fbx");

@@ -14,6 +14,8 @@ namespace Game.Gameplay.Ring.Stage
         public GameObject bodyRival;
         public GameObject bodyRef;
         public GameObject mic;
+        /// <summary>Речі модульного набору (kit_m): одяг рефері, зачіски борців (<see cref="RingDress"/>).</summary>
+        public GameObject kitMale;
 
         /// <summary>Реквізит (стільці), натовп і його анімації, тексти зали (якорі канатів, списки стільців і фанатів).</summary>
         public GameObject props;

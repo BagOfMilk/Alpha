@@ -293,6 +293,22 @@ namespace Game.Gameplay.Ring.Stage
             _player = Spawn("Гравець", assets.bodyPlayer, 0, new Vector3(1f, 1f, 1f), TintPlayer);
             _rival = Spawn("Молот", assets.bodyRival, 1, new Vector3(1.1f, 1.05f, 1.1f), TintRival);
             _ref = Spawn("Рефері", assets.bodyRef, 2, Vector3.one, 0);
+            // Справжній одяг з набору замість фарби форми на голому тілі, зачіски замість лисин (власник 03.11.2026:
+            // «Суддя виглядає як слендер мен»). Борці лишаються в трусах з текстури — їм лише волосся.
+            Color black = new Color(0.06f, 0.06f, 0.065f);
+            RingDress.Apply(_ref.Model, assets.kitMale, new[]
+            {
+                new RingDress.Piece("shirt", Color.white, true),
+                new RingDress.Piece("trousers", black),
+                new RingDress.Piece("shoes", black),
+                new RingDress.Piece("hair_short02", new Color(0.16f, 0.11f, 0.08f)),
+            });
+            RingDress.Apply(_player.Model, assets.kitMale, new[] { new RingDress.Piece("hair_short01", new Color(0.12f, 0.08f, 0.05f)) });
+            RingDress.Apply(_rival.Model, assets.kitMale, new[]
+            {
+                new RingDress.Piece("hair_short04", new Color(0.55f, 0.42f, 0.26f)),
+                new RingDress.Piece("beard_short", new Color(0.5f, 0.38f, 0.24f)),
+            });
             if (assets.mic != null)
             {
                 _mic = Instantiate(assets.mic, transform);
@@ -313,6 +329,20 @@ namespace Game.Gameplay.Ring.Stage
             var mat = MakeMaterial(texIndex, tint);
             foreach (var r in a.Model.GetComponentsInChildren<Renderer>())
             {
+                // Очі, брови й вії мають свої матеріали: під текстурою тіла обличчя ставало порожнім манекеном.
+                if (Characters.CharacterAssembler.IsFacePart(Characters.CharacterAssembler.PartOf(r.name)))
+                {
+                    var face = r as SkinnedMeshRenderer;
+                    if (face != null) face.updateWhenOffscreen = true;
+                    // Білки очей у темній залі світилися (знімок промо 03.11.2026) — приглушити, не прибираючи текстуру.
+                    if (Characters.CharacterAssembler.PartOf(r.name).ToLowerInvariant() == "low-poly")
+                    {
+                        var block = new MaterialPropertyBlock();
+                        block.SetColor("_BaseColor", new Color(0.62f, 0.6f, 0.58f));
+                        r.SetPropertyBlock(block);
+                    }
+                    continue;
+                }
                 var mats = new Material[Mathf.Max(1, r.sharedMaterials.Length)];
                 for (int i = 0; i < mats.Length; i++) mats[i] = mat;
                 r.sharedMaterials = mats;
