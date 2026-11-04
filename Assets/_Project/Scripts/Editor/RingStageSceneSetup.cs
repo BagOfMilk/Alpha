@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Game.Gameplay.Ring.Stage;
 using UnityEditor;
 using UnityEngine;
@@ -63,6 +64,21 @@ namespace Game.Gameplay.EditorTools
                 }
             assets.bodies = bodies.ToArray(); assets.bodyAlbedo = ba.ToArray(); assets.bodyNormal = bn.ToArray(); assets.bodyMask = bm.ToArray();
             assets.kitFemale = Load<GameObject>("Assets/Art/Characters/Kit/kit_f.fbx");
+
+            const string Snd = "Assets/ThirdParty/CC0/Audio/Ring/";
+            assets.musicTitle = Load<AudioClip>(Snd + "music_rock_theme_loop.wav");
+            assets.musicHero = Load<AudioClip>(Snd + "music_rock_city_ransom.ogg");
+            assets.musicHammer = Load<AudioClip>(Snd + "music_hammer_of_the_berserker.ogg");
+            assets.musicRoster = Load<AudioClip>(Snd + "music_downtown_destruction.ogg");
+            assets.sndCrowd = Load<AudioClip>(Snd + "crowd_shouting.ogg");
+            assets.sndApplause = Load<AudioClip>(Snd + "applause_hall.wav");
+            assets.sndBell = Load<AudioClip>(Snd + "bell_01.ogg");
+            assets.sndBellEnd = Load<AudioClip>(Snd + "bell_02.ogg");
+            assets.sndGong = Load<AudioClip>(Snd + "gong_01.ogg");
+            assets.sndMatSlap = Load<AudioClip>(Snd + "mat_slap.mp3");
+            assets.sndLand = Load<AudioClip>(Snd + "land.wav");
+            assets.sndHit = new[] { "hit_01", "hit_02", "hit_03", "hit_04" }.Select(n => Load<AudioClip>(Snd + n + ".ogg")).ToArray();
+            assets.sndSlam = new[] { "slam_01", "slam_02", "slam_03", "slam_04", "slam_05" }.Select(n => Load<AudioClip>(Snd + n + ".ogg")).ToArray();
 
             assets.wrestlerTemplate = EnsureMaterial();
             assets.screenTemplate = EnsureScreenMaterial();

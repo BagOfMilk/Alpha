@@ -48,6 +48,12 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Усі кліпи RING_Moves і RING_Promo (за іменем із маніфесту).</summary>
         public AnimationClip[] clips = new AnimationClip[0];
 
+        /// <summary>Звук рингу (CC0, Assets/ThirdParty/CC0/Audio/Ring — LICENSES.md).</summary>
+        public AudioClip musicTitle, musicHero, musicHammer, musicRoster;
+        public AudioClip sndCrowd, sndApplause, sndBell, sndBellEnd, sndGong, sndMatSlap, sndLand;
+        public AudioClip[] sndHit = new AudioClip[0];
+        public AudioClip[] sndSlam = new AudioClip[0];
+
         public TextAsset manifest;
         public TextAsset promoManifest;
     }

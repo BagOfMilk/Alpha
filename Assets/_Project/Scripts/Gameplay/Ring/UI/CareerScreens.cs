@@ -36,21 +36,74 @@ namespace Game.Gameplay.Ring.UI
             if (RingStageHub.Has3D) Root.style.backgroundColor = Color.clear;
         }
 
-        protected VisualElement Glass(float pad = 14f)
+        protected VisualElement Glass(float pad = 10f)
         {
             var c = RingUi.Card(pad);
-            RingUi.Glass(c, 0.86f);
+            RingUi.Glass(c, 0.84f);
             return c;
         }
 
         protected static Label Chip(string text, Color color)
         {
-            var l = RingUi.Lbl(text, 16f, color, true);
-            l.style.backgroundColor = new Color(0.08f, 0.07f, 0.09f, 0.82f);
-            l.style.paddingLeft = 10f; l.style.paddingRight = 10f; l.style.paddingTop = 4f; l.style.paddingBottom = 4f;
-            l.style.marginRight = 8f; l.style.marginBottom = 6f;
-            l.style.borderTopLeftRadius = 4f; l.style.borderTopRightRadius = 4f;
-            l.style.borderBottomLeftRadius = 4f; l.style.borderBottomRightRadius = 4f;
+            var l = RingUi.Lbl(text, 13f, color, true);
+            l.style.backgroundColor = new Color(0.08f, 0.07f, 0.09f, 0.8f);
+            l.style.paddingLeft = 7f; l.style.paddingRight = 7f; l.style.paddingTop = 2f; l.style.paddingBottom = 2f;
+            l.style.marginRight = 5f; l.style.marginBottom = 4f;
+            l.style.borderTopLeftRadius = 3f; l.style.borderTopRightRadius = 3f;
+            l.style.borderBottomLeftRadius = 3f; l.style.borderBottomRightRadius = 3f;
+            return l;
+        }
+
+        /// <summary>Рядок-підказка екрана: пояснення дії з'являється тут при наведенні (кнопки — однорядкові).</summary>
+        protected Label HintLine;
+
+        protected Label MakeHint()
+        {
+            HintLine = RingUi.Lbl("", 12f, RingUi.Dim);
+            HintLine.style.whiteSpace = WhiteSpace.Normal;
+            HintLine.style.minHeight = 30f;
+            HintLine.style.marginTop = 4f;
+            return HintLine;
+        }
+
+        /// <summary>Компактна однорядкова кнопка; <paramref name="hint"/> — у рядок-підказку при наведенні.</summary>
+        protected Button Small(string text, Action onClick, bool enabled, Color? accent, string hint = null)
+        {
+            var b = RingUi.MakeButton(text, onClick, enabled, accent, 13f);
+            HudPad(b, 3f, 8f);
+            b.style.marginBottom = 3f;
+            b.style.borderLeftWidth = 3f;
+            if (!string.IsNullOrEmpty(hint))
+            {
+                b.RegisterCallback<PointerEnterEvent>(e => { if (HintLine != null) { HintLine.text = hint; HintLine.style.color = RingUi.Text; } });
+                b.RegisterCallback<PointerLeaveEvent>(e => { if (HintLine != null) { HintLine.text = ""; } });
+            }
+            return b;
+        }
+
+        private static void HudPad(VisualElement e, float v, float h)
+        {
+            e.style.paddingTop = v; e.style.paddingBottom = v; e.style.paddingLeft = h; e.style.paddingRight = h;
+        }
+
+        /// <summary>Вузька колонка праворуч (тиждень, кінець сезону): решта екрана — 3D.</summary>
+        protected VisualElement SideColumn()
+        {
+            Root.style.flexDirection = FlexDirection.Row;
+            Root.style.justifyContent = Justify.FlexEnd;
+            var col = RingUi.Column();
+            col.style.width = new Length(36f, LengthUnit.Percent);
+            col.style.minWidth = 360f;
+            col.style.maxWidth = 470f;
+            Root.Add(col);
+            return col;
+        }
+
+        protected static Label Section(string text)
+        {
+            var l = RingUi.Lbl(text, 13f, RingUi.Gold, true);
+            l.style.marginTop = 6f;
+            l.style.marginBottom = 3f;
             return l;
         }
 
@@ -82,38 +135,33 @@ namespace Game.Gameplay.Ring.UI
             return parts.Count == 0 ? T.Get("c.injury.none") : string.Join(" · ", parts);
         }
 
-        /// <summary>Шапка кар'єри: ім'я, сезон/тиждень, гроші, популярність, довіра, очки розвитку, пояс.</summary>
+        /// <summary>Шапка кар'єри: ім'я й ґімік рядком, далі чипи — тиждень, гроші, популярність, довіра, очки; травми — лише якщо є.</summary>
         protected VisualElement Header()
         {
             var col = RingUi.Column();
-            col.style.marginBottom = 10f;
+            col.style.marginBottom = 6f;
             var v = C.GetCareerView();
-            var title = RingUi.Row();
-            title.style.alignItems = Align.FlexEnd;
-            title.Add(RingUi.Lbl(v.RingName, 30f, RingUi.Gold, true));
-            var sub = RingUi.Lbl("  " + T.Get("gimmick." + C.Content.GimmickOf(v.Gimmick).Key) + " · " + RingLabels.PathName(T, v.Role)
-                + (v.IsChampion ? " · " + T.Get("c.champion") : ""), 17f, RingUi.Dim);
-            sub.style.marginBottom = 4f;
-            title.Add(sub);
-            col.Add(title);
+            col.Add(RingUi.Lbl(v.RingName + "  ·  " + T.Get("gimmick." + C.Content.GimmickOf(v.Gimmick).Key) + " · " + RingLabels.PathName(T, v.Role)
+                + (v.IsChampion ? " · " + T.Get("c.champion") : ""), 16f, RingUi.Gold, true));
             var chips = RingUi.Row();
             chips.style.flexWrap = Wrap.Wrap;
-            chips.style.marginTop = 4f;
+            chips.style.marginTop = 3f;
             chips.Add(Chip(T.Format("c.season_week", v.Season, v.Week, CareerRules.WeeksInSeason(v.Season)), RingUi.Text));
             chips.Add(Chip(T.Format("c.money", v.Money), RingUi.Gold));
             chips.Add(Chip(T.Format("c.popularity", v.Popularity, CareerRules.MaxPopularity), RingUi.Face));
             chips.Add(Chip(T.Format("c.trust", v.Trust, CareerRules.MaxTrust), RingUi.Text));
             chips.Add(Chip(T.Format("c.devpoints", v.DevPoints), RingUi.Good));
             col.Add(chips);
-            col.Add(RingUi.Lbl(InjuryText(v.Injuries), 15f, RingUi.Dim));
+            string inj = InjuryText(v.Injuries);
+            if (inj != T.Get("c.injury.none")) col.Add(RingUi.Lbl(inj, 12f, RingUi.Bad));
             return col;
         }
 
-        /// <summary>Розвиток: атрибути, нові прийоми, перки (тиждень і кінець сезону).</summary>
+        /// <summary>Розвиток: атрибути, нові прийоми, перки — компактні кнопки, описи в рядку-підказці.</summary>
         protected VisualElement DevelopmentPanel(Action changed)
         {
-            var card = Glass(12f);
-            card.Add(RingUi.Heading(T.Format("dev.points", C.DevPoints)));
+            var card = Glass(8f);
+            card.Add(Section(T.Format("dev.points", C.DevPoints)));
             var attrs = RingUi.Row();
             attrs.style.flexWrap = Wrap.Wrap;
             for (int i = 0; i < 5; i++)
@@ -121,17 +169,15 @@ namespace Game.Gameplay.Ring.UI
                 var a = (RingAttr)i;
                 string reason;
                 bool can = C.CanBuyAttr(a, out reason);
-                var b = RingUi.MakeButton(RingLabels.AttrName(T, a) + " " + Signed(C.Player.Get(a)) + "   " + T.Format("dev.attr.buy", Development.AttrCost),
-                    () => { C.BuyAttr(a); changed(); }, can, null, 15f);
-                b.style.marginRight = 6f;
+                var b = Small(RingLabels.AttrName(T, a) + " " + Signed(C.Player.Get(a)), () => { C.BuyAttr(a); changed(); }, can, null,
+                    T.Format("dev.attr.buy", Development.AttrCost) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
+                b.style.marginRight = 4f;
                 attrs.Add(b);
             }
             card.Add(attrs);
-            var moves = RingUi.Heading(T.Get("c.dev.moves"));
-            moves.style.marginTop = 6f;
-            card.Add(moves);
             var mrow = RingUi.Row();
             mrow.style.flexWrap = Wrap.Wrap;
+            int mc = 0, pc = 0;
             foreach (var m in C.Content.Moves.All)
             {
                 if (!m.IsLearnable || C.KnowsMove(m.Id)) continue;
@@ -139,14 +185,13 @@ namespace Game.Gameplay.Ring.UI
                 string reason;
                 bool can = C.CanLearnMove(m.Id, out reason);
                 string id = m.Id;
-                var b = RingUi.MakeButton(T.Get(m.NameKey) + " · " + T.Format("dev.cost", m.Cost), () => { C.LearnMove(id); changed(); }, can, RingUi.Warn, 15f);
-                b.style.marginRight = 6f;
+                var b = Small(T.Get(m.NameKey) + " · " + m.Cost, () => { C.LearnMove(id); changed(); }, can, RingUi.Warn,
+                    T.Get("c.dev.moves") + ": " + T.Get(m.NameKey) + " — " + T.Format("dev.cost", m.Cost));
+                b.style.marginRight = 4f;
                 mrow.Add(b);
+                mc++;
             }
-            card.Add(mrow);
-            var perks = RingUi.Heading(T.Get("dev.section.perks"));
-            perks.style.marginTop = 6f;
-            card.Add(perks);
+            if (mc > 0) { card.Add(Section(T.Get("c.dev.moves"))); card.Add(mrow); }
             var prow = RingUi.Row();
             prow.style.flexWrap = Wrap.Wrap;
             foreach (var p in PerkCatalog.All)
@@ -155,13 +200,14 @@ namespace Game.Gameplay.Ring.UI
                 string reason;
                 bool can = C.CanBuyPerk(p.Id, out reason);
                 string id = p.Id;
-                var b = RingUi.MakeButton(RingLabels.PerkName(T, id) + " · " + T.Format("dev.cost", p.Cost) + "\n" + RingLabels.PerkDesc(T, id),
-                    () => { C.BuyPerk(id); changed(); }, can, p.Path.HasValue ? RingUi.PathColor(p.Path.Value) : RingUi.Gold, 14f);
-                b.style.marginRight = 6f;
-                b.style.maxWidth = 300f;
+                var b = Small(RingLabels.PerkName(T, id) + " · " + p.Cost, () => { C.BuyPerk(id); changed(); }, can,
+                    p.Path.HasValue ? RingUi.PathColor(p.Path.Value) : RingUi.Gold,
+                    RingLabels.PerkDesc(T, id) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
+                b.style.marginRight = 4f;
                 prow.Add(b);
+                pc++;
             }
-            card.Add(prow);
+            if (pc > 0) { card.Add(Section(T.Get("dev.section.perks"))); card.Add(prow); }
             return card;
         }
 
@@ -180,16 +226,16 @@ namespace Game.Gameplay.Ring.UI
             Root.Clear();
             RingUi.HudPad(Root);
             Root.style.justifyContent = Justify.FlexEnd;
-            var box = Glass(20f);
-            box.style.maxWidth = 460f;
-            box.Add(RingUi.Lbl(T.Get("c.game.title"), 44f, RingUi.Gold, true));
-            box.Add(RingUi.Lbl(T.Get("c.game.sub"), 17f, RingUi.Dim));
-            var gap = new VisualElement(); gap.style.height = 14f; box.Add(gap);
+            var box = Glass(14f);
+            box.style.maxWidth = 340f;
+            box.Add(RingUi.Lbl(T.Get("c.game.title"), 30f, RingUi.Gold, true));
+            box.Add(RingUi.Lbl(T.Get("c.game.sub"), 13f, RingUi.Dim));
+            var gap = new VisualElement(); gap.style.height = 8f; box.Add(gap);
             int n = 1;
-            if (Host.HasSave) box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.continue"), Host.ContinueGame, true, RingUi.Gold, 20f));
-            box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.new"), Host.NewGame, true, RingUi.Good, 20f));
-            box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.fullscreen"), Host.ToggleFullscreen, true, RingUi.Dim, 18f));
-            box.Add(RingUi.MakeButton(n + ". " + T.Get("c.menu.quit"), Host.Quit, true, RingUi.Bad, 18f));
+            if (Host.HasSave) box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.continue"), Host.ContinueGame, true, RingUi.Gold, 15f));
+            box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.new"), Host.NewGame, true, RingUi.Good, 15f));
+            box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.fullscreen"), Host.ToggleFullscreen, true, RingUi.Dim, 14f));
+            box.Add(RingUi.MakeButton(n + ". " + T.Get("c.menu.quit"), Host.Quit, true, RingUi.Bad, 14f));
             Root.Add(box);
         }
 
@@ -230,45 +276,40 @@ namespace Game.Gameplay.Ring.UI
         {
             Root.Clear();
             RingUi.HudPad(Root);
-            Root.Add(RingUi.Title(T.Get("career.stage.1")));
-            var body = RingUi.Row();
-            RingUi.Grow(body, 1f);
+            // Одна колонка праворуч: ліворуч видно героя на рингу таким, як його збирають.
+            var col = SideColumn();
+            col.Add(RingUi.Lbl(T.Get("career.stage.1"), 18f, RingUi.Gold, true));
 
-            // Ліворуч: ґімік і роль.
-            var left = Glass();
-            RingUi.Grow(left, 1f);
-            left.style.marginRight = 12f;
-            left.Add(RingUi.Heading(T.Get("c.create.gimmick")));
+            var left = Glass(8f);
+            left.Add(Section(T.Get("c.create.gimmick")));
             foreach (var g in _v.Gimmicks)
             {
                 var gid = g.Def.Id;
                 bool sel = gid == _d.Gimmick;
                 string attrs = AttrLine(g.BaseAttr);
-                left.Add(RingUi.MakeButton((sel ? "▸ " : "") + T.Get(g.Def.NameKey) + "   " + attrs + "\n" + T.Get(g.Def.NameKey + ".desc"),
-                    () => { _d.Gimmick = gid; Refresh(); }, true, sel ? RingUi.Gold : RingUi.Border, 16f));
+                left.Add(Small((sel ? "▸ " : "") + T.Get(g.Def.NameKey) + "  ·  " + attrs, () => { _d.Gimmick = gid; Refresh(); }, true,
+                    sel ? RingUi.Gold : RingUi.Border, T.Get(g.Def.NameKey + ".desc")));
             }
-            var roleH = RingUi.Heading(T.Get("c.create.role"));
-            roleH.style.marginTop = 8f;
-            left.Add(roleH);
+            left.Add(RingUi.Lbl(T.Get(Current.Def.NameKey + ".desc"), 12f, RingUi.Dim));
+            left.Add(Section(T.Get("c.create.role")));
             var roles = RingUi.Row();
             foreach (var r in new[] { CareerRole.Hero, CareerRole.Villain })
             {
                 var rr = r;
                 bool sel = r == _d.Role;
                 string key = r == CareerRole.Hero ? "role.hero" : "role.villain";
-                var b = RingUi.MakeButton((sel ? "▸ " : "") + T.Get(key) + "\n" + T.Get(key + ".desc"), () => { _d.Role = rr; Refresh(); }, true,
-                    r == CareerRole.Hero ? RingUi.Face : RingUi.Heel, 15f);
+                var b = Small((sel ? "▸ " : "") + T.Get(key), () => { _d.Role = rr; Refresh(); }, true,
+                    r == CareerRole.Hero ? RingUi.Face : RingUi.Heel, T.Get(key + ".desc"));
                 RingUi.Grow(b, 1f);
-                b.style.marginRight = 6f;
+                b.style.marginRight = 4f;
                 roles.Add(b);
             }
             left.Add(roles);
-            body.Add(left);
+            col.Add(left);
 
-            // Праворуч: бал, ім'я, вигляд, почати.
-            var right = Glass();
-            RingUi.Grow(right, 1f);
-            right.Add(RingUi.Heading(T.Get("c.create.freepoint")));
+            var right = Glass(8f);
+            right.style.marginTop = 6f;
+            right.Add(Section(T.Get("c.create.freepoint")));
             var pts = RingUi.Row();
             pts.style.flexWrap = Wrap.Wrap;
             var baseAttr = Current.BaseAttr;
@@ -277,33 +318,29 @@ namespace Game.Gameplay.Ring.UI
                 var a = (RingAttr)i;
                 bool sel = a == _d.FreePoint;
                 bool ok = baseAttr[i] + 1 <= _v.MaxAttr;
-                var b = RingUi.MakeButton((sel ? "▸ " : "") + RingLabels.AttrName(T, a) + " " + Signed(baseAttr[i] + (sel ? 1 : 0)),
-                    () => { _d.FreePoint = a; Refresh(); }, ok, sel ? RingUi.Good : RingUi.Border, 15f);
-                b.style.marginRight = 6f;
+                var b = Small((sel ? "▸ " : "") + RingLabels.AttrName(T, a) + " " + Signed(baseAttr[i] + (sel ? 1 : 0)),
+                    () => { _d.FreePoint = a; Refresh(); }, ok, sel ? RingUi.Good : RingUi.Border);
+                b.style.marginRight = 4f;
                 pts.Add(b);
             }
             right.Add(pts);
 
-            var nameH = RingUi.Heading(T.Get("c.create.name"));
-            nameH.style.marginTop = 8f;
-            right.Add(nameH);
+            right.Add(Section(T.Get("c.create.name")));
             var field = new TextField { value = _d.RingName, maxLength = _v.MaxNameLength };
-            field.style.fontSize = 18f;
+            field.style.fontSize = 14f;
             field.style.color = new Color(0.08f, 0.07f, 0.09f);
             field.RegisterValueChangedCallback(e => _d.RingName = e.newValue);
             right.Add(field);
 
-            var costH = RingUi.Heading(T.Get("c.create.costume"));
-            costH.style.marginTop = 8f;
-            right.Add(costH);
+            right.Add(Section(T.Get("c.create.costume")));
             var sw = RingUi.Row();
             for (int i = 0; i < _v.CostumeCount; i++)
             {
                 int ci = i;
                 var s = new Button(() => { _d.CostumeColor = ci; Refresh(); }) { text = "" };
                 int rgb = CareerLooks.CostumeRgb(i);
-                s.style.width = 34f; s.style.height = 34f;
-                s.style.marginRight = 6f;
+                s.style.width = 24f; s.style.height = 24f;
+                s.style.marginRight = 4f;
                 s.style.backgroundColor = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
                 float bw = i == _d.CostumeColor ? 3f : 1f;
                 s.style.borderTopWidth = bw; s.style.borderBottomWidth = bw; s.style.borderLeftWidth = bw; s.style.borderRightWidth = bw;
@@ -313,27 +350,23 @@ namespace Game.Gameplay.Ring.UI
             }
             right.Add(sw);
 
-            var lookH = RingUi.Heading(T.Get("c.create.look"));
-            lookH.style.marginTop = 8f;
-            right.Add(lookH);
+            right.Add(Section(T.Get("c.create.look")));
             right.Add(Cycler(T.Get("c.create.body") + ": " + BodyName(CareerLooks.HeroBodies[Host.HeroBody]),
                 d => Host.HeroBody = (Host.HeroBody + d + CareerLooks.HeroBodies.Length) % CareerLooks.HeroBodies.Length));
             right.Add(Cycler(T.Get("c.create.hair") + ": " + HairName(CareerLooks.HeroHair[Host.HeroHair]),
                 d => Host.HeroHair = (Host.HeroHair + d + CareerLooks.HeroHair.Length) % CareerLooks.HeroHair.Length));
 
-            var movesH = RingUi.Heading(T.Get("c.create.moves"));
-            movesH.style.marginTop = 8f;
-            right.Add(movesH);
+            right.Add(Section(T.Get("c.create.moves")));
             var names = new List<string>();
             foreach (var m in Current.StartMoves) names.Add(T.Get(m.NameKey));
-            right.Add(RingUi.Lbl(string.Join(", ", names), 14f, RingUi.Dim));
+            right.Add(RingUi.Lbl(string.Join(", ", names), 12f, RingUi.Dim));
 
             string reason;
             bool can = C.CanCreate(_d, out reason);
             right.Add(RingUi.PrimaryButton(T.Get("c.create.start"), OnConfirm, can));
-            if (!can) right.Add(RingUi.Lbl(T.Get("create.reason." + reason), 14f, RingUi.Bad));
-            body.Add(right);
-            Root.Add(body);
+            if (!can) right.Add(RingUi.Lbl(T.Get("create.reason." + reason), 12f, RingUi.Bad));
+            right.Add(MakeHint());
+            col.Add(right);
             ApplyLook();
         }
 
@@ -341,9 +374,9 @@ namespace Game.Gameplay.Ring.UI
         {
             var row = RingUi.Row();
             row.style.alignItems = Align.Center;
-            var l = RingUi.MakeButton("◀", () => { step(-1); Refresh(); }, true, RingUi.Border, 15f);
-            var r = RingUi.MakeButton("▶", () => { step(1); Refresh(); }, true, RingUi.Border, 15f);
-            var lbl = RingUi.Lbl(text, 16f);
+            var l = Small("◀", () => { step(-1); Refresh(); }, true, RingUi.Border);
+            var r = Small("▶", () => { step(1); Refresh(); }, true, RingUi.Border);
+            var lbl = RingUi.Lbl(text, 13f);
             lbl.style.marginLeft = 8f; lbl.style.marginRight = 8f;
             RingUi.Grow(lbl, 1f);
             row.Add(l); row.Add(lbl); row.Add(r);
@@ -407,62 +440,63 @@ namespace Game.Gameplay.Ring.UI
 
         public override void Refresh()
         {
+            // Одна вузька колонка праворуч: шапка, дії тижня, результат, картка вечора, розвиток, «до вечора».
+            // Решта екрана — закулісся в 3D (власник 04.11.2026: «Занадто громісткий hud … зроби значно меньше та зручніше»).
             Root.Clear();
             RingUi.HudPad(Root);
-            Root.Add(Header());
+            var col = SideColumn();
             var w = C.GetWeekView();
-            var body = RingUi.Row();
-            RingUi.Grow(body, 1f);
+            var top = Glass(8f);
+            top.Add(Header());
+            col.Add(top);
 
-            var left = RingUi.Column();
-            RingUi.Grow(left, 1.1f);
-            left.style.marginRight = 12f;
-            var acts = Glass();
-            acts.Add(RingUi.Heading(T.Format("c.week.actions", w.ActionsLeft, w.ActionsTotal)));
-            if (w.Strained) acts.Add(RingUi.Lbl(T.Get("week.strained"), 14f, RingUi.Bad));
+            var acts = Glass(8f);
+            acts.style.marginTop = 6f;
+            acts.Add(Section(T.Format("c.week.actions", w.ActionsLeft, w.ActionsTotal)));
+            if (w.Strained) acts.Add(RingUi.Lbl(T.Get("week.strained"), 12f, RingUi.Bad));
             if (w.PromoChoicePending)
             {
-                acts.Add(RingUi.Lbl(T.Get("c.week.promo_choice"), 16f, RingUi.Warn, true));
-                acts.Add(RingUi.MakeButton("1. " + T.Get("week.promo.reward.0"), () => Do(C.ChoosePromoReward(WeekPromoReward.Feud)), true, RingUi.Heel, 16f));
-                acts.Add(RingUi.MakeButton("2. " + T.Get("week.promo.reward.1"), () => Do(C.ChoosePromoReward(WeekPromoReward.Hype)), true, RingUi.Warn, 16f));
+                acts.Add(RingUi.Lbl(T.Get("c.week.promo_choice"), 13f, RingUi.Warn, true));
+                acts.Add(Small("1  " + T.Get("week.promo.reward.0"), () => Do(C.ChoosePromoReward(WeekPromoReward.Feud)), true, RingUi.Heel));
+                acts.Add(Small("2  " + T.Get("week.promo.reward.1"), () => Do(C.ChoosePromoReward(WeekPromoReward.Hype)), true, RingUi.Warn));
             }
             else
             {
                 bool any = w.ActionsLeft > 0;
-                acts.Add(ActionBtn(1, "week.action.0", () => C.Train(false), any));
-                acts.Add(ActionBtn(2, "c.week.train_coach", () => C.Train(true), any && w.Money >= CareerRules.TrainerCost));
-                acts.Add(ActionBtn(3, "week.action.1", () => C.Recover(WorstZone(w), false), any && w.CanRecover));
-                acts.Add(ActionBtn(4, "week.action.2", C.Promo, any));
-                acts.Add(ActionBtn(5, "week.action.3", C.Backstage, any));
-                acts.Add(ActionBtn(6, "week.action.4", C.SideJob, any));
+                var grid = RingUi.Row();
+                grid.style.flexWrap = Wrap.Wrap;
+                grid.Add(ActionBtn(1, "week.action.0", () => C.Train(false), any));
+                grid.Add(ActionBtn(2, "c.week.train_coach", () => C.Train(true), any && w.Money >= CareerRules.TrainerCost));
+                grid.Add(ActionBtn(3, "week.action.1", () => C.Recover(WorstZone(w), false), any && w.CanRecover));
+                grid.Add(ActionBtn(4, "week.action.2", C.Promo, any));
+                grid.Add(ActionBtn(5, "week.action.3", C.Backstage, any));
+                grid.Add(ActionBtn(6, "week.action.4", C.SideJob, any));
+                acts.Add(grid);
             }
-            left.Add(acts);
             var last = Host.LastWeekResult;
-            if (last != null)
-            {
-                var res = Glass(10f);
-                res.style.marginTop = 8f;
-                res.Add(RingUi.Lbl(ResultText(last), 16f, last.Ok ? RingUi.Text : RingUi.Bad));
-                left.Add(res);
-            }
-            body.Add(left);
+            if (last != null) acts.Add(RingUi.Lbl(ResultText(last), 12f, last.Ok ? RingUi.Text : RingUi.Bad));
+            acts.Add(MakeHint());
+            col.Add(acts);
 
-            var right = RingUi.Column();
-            RingUi.Grow(right, 1f);
-            right.Add(CardPanel(w.Card, w.IsBigShowWeek));
-            var dev = RingUi.MakeButton((_dev ? "▾ " : "▸ ") + T.Get("dev.title") + " · " + T.Format("dev.points", w.DevPoints), () => { _dev = !_dev; Refresh(); }, true, RingUi.Good, 16f);
-            dev.style.marginTop = 8f;
-            right.Add(dev);
-            if (_dev) right.Add(DevelopmentPanel(Refresh));
-            right.Add(RingUi.PrimaryButton(T.Get("week.end"), OnConfirm, !w.PromoChoicePending));
-            body.Add(right);
-            Root.Add(body);
+            var card = CardPanel(w.Card, w.IsBigShowWeek);
+            card.style.marginTop = 6f;
+            col.Add(card);
+            var dev = Small((_dev ? "▾ " : "▸ ") + T.Get("dev.title") + " · " + w.DevPoints, () => { _dev = !_dev; Refresh(); }, true, RingUi.Good);
+            dev.style.marginTop = 6f;
+            col.Add(dev);
+            if (_dev) col.Add(DevelopmentPanel(Refresh));
+            var go = RingUi.PrimaryButton(T.Get("week.end"), OnConfirm, !w.PromoChoicePending);
+            go.style.fontSize = 16f;
+            col.Add(go);
         }
 
+        // Дві кнопки в ряд, опис дії — у рядку-підказці при наведенні.
         private Button ActionBtn(int n, string key, Func<WeekActionResult> act, bool enabled)
         {
-            string desc = key.StartsWith("week.action.") ? T.Get(key + ".desc") : T.Get(key + ".desc");
-            return RingUi.MakeButton(n + ". " + T.Get(key) + "\n" + desc, () => Do(act()), enabled, RingUi.Gold, 15f);
+            var b = Small(n + "  " + T.Get(key), () => Do(act()), enabled, RingUi.Gold, T.Get(key + ".desc"));
+            b.style.width = new Length(49f, LengthUnit.Percent);
+            b.style.marginRight = new Length(1f, LengthUnit.Percent);
+            return b;
         }
 
         private static BodyZone WorstZone(WeekView w)
@@ -503,19 +537,18 @@ namespace Game.Gameplay.Ring.UI
 
         private VisualElement CardPanel(ShowCardView c, bool big)
         {
-            var p = Glass();
-            p.Add(RingUi.Heading(T.Get(c.IsTitle ? "c.card.title_match" : big ? "c.card.big" : "c.card.weekly")));
+            var p = Glass(8f);
+            p.Add(Section(T.Get(c.IsTitle ? "c.card.title_match" : big ? "c.card.big" : "c.card.weekly")));
             if (c.Opponent != null)
             {
-                p.Add(RingUi.Lbl(T.Format("c.card.vs", T.Get(c.Opponent.NameKey)), 20f, RingUi.Text, true));
-                p.Add(RingUi.Lbl(T.Get(c.Opponent.BioKey), 14f, RingUi.Dim));
+                p.Add(RingUi.Lbl(T.Get(c.Opponent.NameKey), 15f, RingUi.Text, true));
                 p.Add(RingUi.Lbl(T.Get("gimmick." + C.Content.GimmickOf(c.Opponent.Gimmick).Key) + " · " + RingLabels.PathName(T, c.Opponent.Path)
-                    + " · " + T.Format("c.card.feud", c.OpponentFeudLevel), 14f, RingUi.Dim));
+                    + " · " + T.Format("c.card.feud", c.OpponentFeudLevel), 12f, RingUi.Dim));
             }
-            p.Add(RingUi.Lbl(T.Get("card.pos." + (int)c.Position) + " · " + T.Format("c.card.fee", c.Fee, c.WinBonus, c.HypeBonus), 15f, RingUi.Gold));
-            if (!c.IsFeud) p.Add(RingUi.Lbl(T.Get("c.card.plan") + ": " + PlanText(c.Plan), 15f));
-            p.Add(RingUi.Lbl(T.Get("c.card.stip") + ": " + StipText(c.Stipulations), 15f));
-            if (c.PromoHypeBonus != 0) p.Add(RingUi.Lbl(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus)), 15f, RingUi.Warn));
+            p.Add(RingUi.Lbl(T.Get("card.pos." + (int)c.Position) + " · " + T.Format("c.card.fee_short", c.Fee), 12f, RingUi.Gold));
+            string plan = (c.IsFeud ? "" : T.Get("c.card.plan") + ": " + PlanText(c.Plan) + " · ") + StipText(c.Stipulations);
+            p.Add(RingUi.Lbl(plan, 12f));
+            if (c.PromoHypeBonus != 0) p.Add(RingUi.Lbl(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus)), 12f, RingUi.Warn));
             return p;
         }
 
@@ -564,16 +597,16 @@ namespace Game.Gameplay.Ring.UI
             RingUi.HudPad(Root);
             Root.style.justifyContent = Justify.FlexEnd;
             var c = C.GetShowCard();
-            var p = Glass(18f);
-            p.style.maxWidth = 640f;
-            p.Add(RingUi.Lbl(T.Get(c.IsTitle ? "c.card.title_match" : c.IsBig ? "c.card.big" : "c.card.weekly"), 16f, RingUi.Dim));
-            if (c.Opponent != null) p.Add(RingUi.Lbl(T.Format("c.card.vs", T.Get(c.Opponent.NameKey)), 30f, RingUi.Gold, true));
-            p.Add(RingUi.Lbl(T.Get("card.pos." + (int)c.Position) + " · " + T.Format("c.card.fee", c.Fee, c.WinBonus, c.HypeBonus), 16f));
-            if (!c.IsFeud) p.Add(RingUi.Lbl(T.Get("c.card.plan") + ": " + PlanText(c.Plan), 16f));
-            p.Add(RingUi.Lbl(T.Get("c.card.stip") + ": " + StipText(c.Stipulations), 16f));
-            p.Add(RingUi.Lbl(InjuryText(c.Injuries), 15f, RingUi.Dim));
+            var p = Glass(10f);
+            p.style.maxWidth = 440f;
+            p.Add(RingUi.Lbl(T.Get(c.IsTitle ? "c.card.title_match" : c.IsBig ? "c.card.big" : "c.card.weekly"), 12f, RingUi.Dim));
+            if (c.Opponent != null) p.Add(RingUi.Lbl(T.Format("c.card.vs", T.Get(c.Opponent.NameKey)), 20f, RingUi.Gold, true));
+            p.Add(RingUi.Lbl(T.Get("card.pos." + (int)c.Position) + " · " + T.Format("c.card.fee", c.Fee, c.WinBonus, c.HypeBonus), 13f));
+            if (!c.IsFeud) p.Add(RingUi.Lbl(T.Get("c.card.plan") + ": " + PlanText(c.Plan), 13f));
+            p.Add(RingUi.Lbl(T.Get("c.card.stip") + ": " + StipText(c.Stipulations), 13f));
+            p.Add(RingUi.Lbl(InjuryText(c.Injuries), 12f, RingUi.Dim));
             p.Add(RingUi.PrimaryButton(T.Get(c.IsFeud ? "c.card.go_feud" : "c.card.go"), OnConfirm));
-            if (c.CanWithdraw) p.Add(RingUi.MakeButton(T.Get("c.card.withdraw"), () => { C.WithdrawFromShow(); Host.Save(); }, true, RingUi.Bad, 16f));
+            if (c.CanWithdraw) p.Add(RingUi.MakeButton(T.Get("c.card.withdraw"), () => { C.WithdrawFromShow(); Host.Save(); }, true, RingUi.Bad, 13f));
             Root.Add(p);
         }
 
@@ -591,22 +624,22 @@ namespace Game.Gameplay.Ring.UI
             RingUi.HudPad(Root);
             Root.style.justifyContent = Justify.FlexEnd;
             var r = C.GetShowResult();
-            var p = Glass(18f);
-            p.style.maxWidth = 680f;
+            var p = Glass(10f);
+            p.style.maxWidth = 460f;
             if (r == null) { p.Add(RingUi.PrimaryButton(T.Get("ui.next"), OnConfirm)); Root.Add(p); return; }
-            if (r.Withdrew) p.Add(RingUi.Lbl(T.Get("show.withdrew"), 28f, RingUi.Warn, true));
+            if (r.Withdrew) p.Add(RingUi.Lbl(T.Get("show.withdrew"), 20f, RingUi.Warn, true));
             else
             {
                 string head = r.Winner == MatchWinner.Player ? "show.won" : r.Winner == MatchWinner.Rival ? "show.lost" : "show.draw";
-                p.Add(RingUi.Lbl(T.Get(head) + " — " + NpcName(r.OpponentId), 28f, r.Winner == MatchWinner.Player ? RingUi.Good : RingUi.Bad, true));
-                p.Add(RingUi.Lbl(RingLabels.EndKind(T, r.EndKind) + " · " + T.Format("c.result.rounds", r.Rounds) + " · " + T.Format("c.result.hype", r.Hype), 16f, RingUi.Dim));
-                if (r.TitleWon) p.Add(RingUi.Lbl(T.Get("show.belt_won"), 24f, RingUi.Gold, true));
-                p.Add(RingUi.Lbl(T.Format("c.result.fee", r.TotalFee, r.Fee, r.FeeWinBonus + r.FeeHypeBonus), 17f, RingUi.Gold));
-                if (!r.IsTitle && !r.IsFeud) p.Add(RingUi.Lbl(RingLabels.PlanOutcome(T, r.PlanOutcome), 16f));
-                if (r.DevPointsGained != 0) p.Add(RingUi.Lbl(T.Format("c.delta.dev", Signed(r.DevPointsGained)), 16f, RingUi.Good));
-                if (r.InjuredZone >= 0) p.Add(RingUi.Lbl(T.Format("c.result.injury", T.Get("bodyzone." + r.InjuredZone), r.InjuryWeeks), 16f, RingUi.Bad));
+                p.Add(RingUi.Lbl(T.Get(head) + " — " + NpcName(r.OpponentId), 20f, r.Winner == MatchWinner.Player ? RingUi.Good : RingUi.Bad, true));
+                p.Add(RingUi.Lbl(RingLabels.EndKind(T, r.EndKind) + " · " + T.Format("c.result.rounds", r.Rounds) + " · " + T.Format("c.result.hype", r.Hype), 13f, RingUi.Dim));
+                if (r.TitleWon) p.Add(RingUi.Lbl(T.Get("show.belt_won"), 18f, RingUi.Gold, true));
+                p.Add(RingUi.Lbl(T.Format("c.result.fee", r.TotalFee, r.Fee, r.FeeWinBonus + r.FeeHypeBonus), 14f, RingUi.Gold));
+                if (!r.IsTitle && !r.IsFeud) p.Add(RingUi.Lbl(RingLabels.PlanOutcome(T, r.PlanOutcome), 13f));
+                if (r.DevPointsGained != 0) p.Add(RingUi.Lbl(T.Format("c.delta.dev", Signed(r.DevPointsGained)), 13f, RingUi.Good));
+                if (r.InjuredZone >= 0) p.Add(RingUi.Lbl(T.Format("c.result.injury", T.Get("bodyzone." + r.InjuredZone), r.InjuryWeeks), 13f, RingUi.Bad));
             }
-            p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter) + " · " + T.Format("c.result.trust", r.TrustBefore, r.TrustAfter), 16f));
+            p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter) + " · " + T.Format("c.result.trust", r.TrustBefore, r.TrustAfter), 13f));
             p.Add(RingUi.PrimaryButton(T.Get("ui.next"), OnConfirm));
             Root.Add(p);
         }
@@ -629,30 +662,29 @@ namespace Game.Gameplay.Ring.UI
         {
             Root.Clear();
             RingUi.HudPad(Root);
-            Root.Add(Header());
+            var col = SideColumn();
             var rep = C.GetSeasonReport();
-            var body = RingUi.Row();
-            RingUi.Grow(body, 1f);
-            var left = Glass(16f);
-            RingUi.Grow(left, 1f);
-            left.style.marginRight = 12f;
-            left.Add(RingUi.Title(T.Format("c.season.title", rep.Season)));
-            left.Add(RingUi.Lbl(T.Format("c.season.line", rep.Popularity, rep.Trust, rep.Money), 18f));
-            if (rep.Fired) left.Add(RingUi.Lbl(T.Get("season.fired"), 18f, RingUi.Bad, true));
-            if (rep.TitleDone) left.Add(RingUi.Lbl(T.Get(rep.TitleWon || rep.BeltIsPlayers ? "c.season.belt_yes" : "c.season.belt_no"), 18f, rep.BeltIsPlayers ? RingUi.Gold : RingUi.Dim));
-            else if (rep.TitleEligible) left.Add(RingUi.Lbl(T.Get(rep.IsDefense ? "season.defense" : "season.title_shot"), 18f, RingUi.Gold, true));
+            var top = Glass(8f);
+            top.Add(Header());
+            col.Add(top);
+            var left = Glass(8f);
+            left.style.marginTop = 6f;
+            left.Add(RingUi.Lbl(T.Format("c.season.title", rep.Season), 18f, RingUi.Gold, true));
+            left.Add(RingUi.Lbl(T.Format("c.season.line", rep.Popularity, rep.Trust, rep.Money), 13f));
+            if (rep.Fired) left.Add(RingUi.Lbl(T.Get("season.fired"), 13f, RingUi.Bad, true));
+            if (rep.TitleDone) left.Add(RingUi.Lbl(T.Get(rep.TitleWon || rep.BeltIsPlayers ? "c.season.belt_yes" : "c.season.belt_no"), 13f, rep.BeltIsPlayers ? RingUi.Gold : RingUi.Dim));
+            else if (rep.TitleEligible) left.Add(RingUi.Lbl(T.Get(rep.IsDefense ? "season.defense" : "season.title_shot"), 13f, RingUi.Gold, true));
             if (C.CanStartTitleMatch)
             {
                 left.Add(RingUi.PrimaryButton(T.Get("c.season.title_go"), () => { C.StartTitleMatch(); Host.Save(); }));
-                left.Add(RingUi.MakeButton(T.Get("c.season.title_skip"), () => { C.SkipTitle(); Host.Save(); Refresh(); }, true, RingUi.Dim, 16f));
+                left.Add(Small(T.Get("c.season.title_skip"), () => { C.SkipTitle(); Host.Save(); Refresh(); }, true, RingUi.Dim));
             }
             if (C.CanStartNextSeason) left.Add(RingUi.PrimaryButton(T.Get("season.next"), OnConfirm));
-            body.Add(left);
-            var right = RingUi.Column();
-            RingUi.Grow(right, 1f);
-            right.Add(DevelopmentPanel(Refresh));
-            body.Add(right);
-            Root.Add(body);
+            col.Add(left);
+            var dev = DevelopmentPanel(Refresh);
+            dev.style.marginTop = 6f;
+            col.Add(dev);
+            col.Add(MakeHint());
         }
 
         public override void OnConfirm()

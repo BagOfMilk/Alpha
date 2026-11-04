@@ -35,9 +35,10 @@ namespace Game.Gameplay.EditorTools
 
         /// <summary>
         /// Версія правил: зміна змушує Unity переімпортувати всі асети, яких вони стосуються.
-        /// 2 — текстура за назвою матеріалу; 3 — матовість; 4 — очі MPFB; 5 — текстури зачісок (07.10.2026).
+        /// 2 — текстура за назвою матеріалу; 3 — матовість; 4 — очі MPFB; 5 — текстури зачісок (07.10.2026);
+        /// 8–10 — текстури натовпу: з TransparencyFactor (так їх пише експортер Blender) або з теки Textures поруч (04.11.2026).
         /// </summary>
-        public override uint GetVersion() => 7;
+        public override uint GetVersion() => 10;
 
         private static readonly string[] TextureFolders = { "Assets/Art/Textures/", "Assets/Art/Textures/Kit/" };
         private static readonly string[] DiffuseSuffixes = { "", "_Diffuse", "_diff", "_col_01", "_COL", "_albedo" };
@@ -71,6 +72,23 @@ namespace Game.Gameplay.EditorTools
                         var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
                         if (tex != null) return tex;
                     }
+            return null;
+        }
+
+        /// <summary>Текстура з ім'ям файлу зі шляху в описі матеріалу — у теці Textures поруч із FBX.</summary>
+        private Texture2D FindBesideModel(TexturePropertyDescription d)
+        {
+            string src = !string.IsNullOrEmpty(d.relativePath) ? d.relativePath : d.path;
+            if (string.IsNullOrEmpty(src)) return null;
+            string file = System.IO.Path.GetFileNameWithoutExtension(src.Replace('\\', '/'));
+            string dir = System.IO.Path.GetDirectoryName(assetPath).Replace('\\', '/') + "/Textures/";
+            foreach (var ext in Extensions)
+            {
+                string path = dir + file + ext;
+                context.DependsOnSourceAsset(path);
+                var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                if (tex != null) return tex;
+            }
             return null;
         }
 
@@ -246,9 +264,25 @@ namespace Game.Gameplay.EditorTools
             // Blender пише в FBX множник 0.8 — без цього все було б на п'яту частину темнішим.
             TexturePropertyDescription diffuse;
             bool hasDiffuse = description.TryGetProperty("DiffuseColor", out diffuse) && diffuse.texture != null;
+            // Натовп (ring_crowd.py → FBX): експортер Blender чіпляє зображення до TransparencyFactor, а не до DiffuseColor
+            // (вузли MPFB), — текстура в описі є, лише не там. Без цього весь натовп був без текстур (огляд 04.11.2026).
+            TexturePropertyDescription alphaTex;
+            if (!hasDiffuse && assetPath.StartsWith(Crowd) && description.TryGetProperty("TransparencyFactor", out alphaTex) && alphaTex.texture != null)
+            {
+                diffuse = alphaTex;
+                if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", alphaTex.texture);
+                if (material.HasProperty("_Surface")) material.SetFloat("_Surface", 0f);
+                material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                material.renderQueue = (int)RenderQueue.Geometry;
+                hasDiffuse = true;
+            }
             if (!hasDiffuse && material.HasProperty("_BaseMap"))
             {
-                var tex = FindByMaterialName(description.materialName, DiffuseSuffixes);
+                // FBX натовпу пише шлях текстури з бібліотеки MakeHuman (/data/clothes/…/x.png), а ring_crowd.py кладе
+                // файл поруч у <тека FBX>/Textures під тим самим іменем. Unity за таким шляхом не знаходив нічого —
+                // увесь натовп був без текстур: білі тіла без облич, одяг випадкових кольорів (огляд 04.11.2026).
+                var tex = FindBesideModel(diffuse);
+                if (tex == null) tex = FindByMaterialName(description.materialName, DiffuseSuffixes);
                 // Очі MPFB: матеріал «Human.low-poly.NNN», текстура йде через вузли — беремо карі очі набору.
                 if (tex == null && (description.materialName ?? "").ToLowerInvariant().Contains("low-poly"))
                     tex = FindByMaterialName("brown_eye", DiffuseSuffixes);
@@ -300,6 +334,9 @@ namespace Game.Gameplay.EditorTools
         {
             string name = (description.materialName ?? string.Empty).ToLowerInvariant();
             string tex = diffuse.path != null ? System.IO.Path.GetFileNameWithoutExtension(diffuse.path).ToLowerInvariant() : string.Empty;
+            // Зачіски натовпу (MakeHuman): текстури afro_diffuse, short03_diffuse, bob01_diffuse… — альфа пасом.
+            if (System.Text.RegularExpressions.Regex.IsMatch(tex, @"^(afro|bob\d+|braid\d+|long\d+|ponytail\d+|short\d+|short_messy|straight_bangs|shaggy_green|hair(_\d+)?|blackhair)(_diff(use)?)?$"))
+                return true;
             foreach (var s in new[] { name, tex })
                 if (s.StartsWith("hairn_") || s.EndsWith("_hair") || s.Contains("beard") || s.Contains("moustache") || s.Contains("feather") ||
                     s.Contains("eyebrow") || s.Contains("eyelash"))

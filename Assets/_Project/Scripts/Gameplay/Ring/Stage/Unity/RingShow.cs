@@ -391,8 +391,10 @@ namespace Game.Gameplay.Ring.Stage
                     new RingDress.Piece("shirt", new Color(0.55f, 0.62f, 0.7f)),
                     new RingDress.Piece("trousers", new Color(0.2f, 0.2f, 0.22f)),
                     new RingDress.Piece("shoes", new Color(0.12f, 0.08f, 0.06f)),
-                    new RingDress.Piece("hair_short03", new Color(0.35f, 0.33f, 0.31f)),
-                    new RingDress.Piece("beard_full", new Color(0.35f, 0.33f, 0.31f)),
+                    // Коротка зачіска й коротка борода: з повною бородою й «їжаком» голова читалась темною грудкою без обличчя
+                    // (огляд 04.11.2026).
+                    new RingDress.Piece("hair_short02", new Color(0.42f, 0.4f, 0.38f)),
+                    new RingDress.Piece("beard_short", new Color(0.42f, 0.4f, 0.38f)),
                 });
             }
         }

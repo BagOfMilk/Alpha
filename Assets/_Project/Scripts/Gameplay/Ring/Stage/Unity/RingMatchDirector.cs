@@ -138,6 +138,13 @@ namespace Game.Gameplay.Ring.Stage
                 var ev = _q.Dequeue();
                 var steps = RingClipTable.Plan(ev);
                 bool applied = false;
+                // Звук події — на контакті приблизно (0,4 с від початку кроку); кінець матчу — дзвін.
+                if (_s.Sound != null)
+                {
+                    bool pinEnd = ev.Kind == MatchEventKind.MatchEnd && _e != null && _e.IsOver && _e.Result.Kind == MatchEndKind.Pin;
+                    _s.Sound.OnEvent(ev, steps.Count > 0 ? 0.4f / RingStage3D.PlaySpeed : 0f, pinEnd);
+                    if (ev.Kind == MatchEventKind.MatchEnd) _s.Sound.BellEnd();
+                }
                 foreach (var st in steps)
                 {
                     if (st.Kind == StageStepKind.Walk && !applied) { Apply(ev); applied = true; }

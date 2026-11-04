@@ -268,6 +268,27 @@ namespace Game.Gameplay.Ring.Stage
                 for (int i = 0; i < src.Length; i++)
                 {
                     var s = src[i];
+                    // Зачіска набору «shaggy green» має зелену текстуру — фанати виходили зеленоволосими (огляд 03.11.2026,
+                    // власник 04.11.2026: «Дороби»). Текстуру прибираємо, колір — з природної палітри.
+                    if (s != null && s.name.ToLowerInvariant().Contains("green_hair"))
+                    {
+                        var hm = s.shader != null && s.shader.name.StartsWith("Universal Render Pipeline") ? new Material(s) : new Material(lit);
+                        var brown = BrownHairTex(crowd);
+                        if (brown != null)
+                        {
+                            // Пасма й прозорість лишаються (та сама будова текстури), колір — каштанова зачіска того ж автора.
+                            if (hm.HasProperty("_BaseMap")) hm.SetTexture("_BaseMap", brown);
+                            if (hm.HasProperty("_MainTex")) hm.SetTexture("_MainTex", brown);
+                            hm.SetColor("_BaseColor", Color.white);
+                        }
+                        else
+                        {
+                            int hh = (r.name.GetHashCode() ^ (i * 7919)) & 0x7fffffff;
+                            hm.SetColor("_BaseColor", HairColors[hh % HairColors.Length]);
+                        }
+                        dst[i] = hm;
+                        continue;
+                    }
                     if (s != null && s.shader != null && s.shader.name.StartsWith("Universal Render Pipeline"))
                     {
                         // Без текстури — сірий манекен: даємо одягу колір (детерміновано від імені моделі й підмеша).
@@ -316,6 +337,25 @@ namespace Game.Gameplay.Ring.Stage
             Avatar map = anim.avatar != null && anim.avatar.isHuman ? anim.avatar : shared;
             if (map != null && map.isHuman) { var own = OwnAvatar(root, map.humanDescription, fan); if (own != null) anim.avatar = own; }
             return root;
+        }
+
+        private Texture _brownHair;
+        private bool _brownHairLooked;
+
+        /// <summary>Текстура каштанової зачіски набору (short_messy) — заміна зеленої «shaggy green».</summary>
+        private Texture BrownHairTex(GameObject crowd)
+        {
+            if (_brownHairLooked) return _brownHair;
+            _brownHairLooked = true;
+            foreach (var r in crowd.GetComponentsInChildren<Renderer>(true))
+                foreach (var m in r.sharedMaterials)
+                {
+                    if (m == null || !m.name.ToLowerInvariant().Contains("short_messy_hair")) continue;
+                    Texture t = m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : null;
+                    if (t == null && m.HasProperty("_MainTex")) t = m.GetTexture("_MainTex");
+                    if (t != null) { _brownHair = t; return t; }
+                }
+            return null;
         }
 
         private static readonly Color[] HairColors =

@@ -79,6 +79,8 @@ namespace Game.Gameplay.Ring.Stage
         public bool IsBusy { get { return (_director != null && _director.IsBusy) || (_show != null && _show.Busy); } }
 
         private RingShow _show;
+        private RingSound _sound;
+        public RingSound Sound { get { return _sound; } }
         public RingShow Show { get { return _show; } }
 
         public static string ReadArg(string name)
@@ -110,6 +112,8 @@ namespace Game.Gameplay.Ring.Stage
             _director.Init(this);
             _show = gameObject.AddComponent<RingShow>();
             _show.Init(this);
+            _sound = gameObject.AddComponent<RingSound>();
+            _sound.Init(assets);
             RingStageHub.Current = this;
             ShowIdle();
             SnapCamera();
@@ -518,6 +522,7 @@ namespace Game.Gameplay.Ring.Stage
             _ref.Model.SetActive(true);
             _director.Begin(engine);
             CrowdMood(engine != null ? engine.State.Hype : 0);
+            if (_sound != null) { _sound.MusicOff(); if (engine != null && engine.State.Log.Count <= 1) _sound.BellStart(); }
             SetShot(StageCam.Overview);
         }
 
@@ -660,6 +665,7 @@ namespace Game.Gameplay.Ring.Stage
             HideMic();
             _show.LeaveBackstage();
             _show.BeginIntro(title, subtitle);
+            if (_sound != null) { _sound.TitleMusic(); _sound.Crowd(0); }
         }
 
         public void BeginEntrance(bool player, string title, string subtitle, int rgb)
@@ -670,16 +676,19 @@ namespace Game.Gameplay.Ring.Stage
             _show.LeaveBackstage();
             var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
             _show.BeginEntrance(player ? _player : _rival, title, subtitle, c);
+            if (_sound != null) { _sound.Crowd(1); _sound.EntranceMusic(player, !player && _lookRival != null && _lookRival.StartsWith("body_m_nordic")); }
         }
 
         /// <summary>Настрій залу за ажіотажем матчу (0…10): холодний, оплески, крики, кипить.</summary>
         public void CrowdMood(int hype)
         {
             if (_dress == null) return;
-            _dress.SetMood(hype <= 2 ? 0 : hype <= 5 ? 1 : hype <= 8 ? 2 : 3, false);
+            int mood = hype <= 2 ? 0 : hype <= 5 ? 1 : hype <= 8 ? 2 : 3;
+            _dress.SetMood(mood, false);
+            if (_sound != null) _sound.Crowd(mood);
         }
 
-        public void CrowdPop() { if (_dress != null) _dress.Pop(); }
+        public void CrowdPop() { if (_dress != null) _dress.Pop(); if (_sound != null) _sound.Pop(); }
 
         public bool ShowBusy { get { return _show != null && _show.Busy; } }
 
@@ -691,6 +700,7 @@ namespace Game.Gameplay.Ring.Stage
             if (_director != null) _director.EndMatch();
             HideMic();
             _show.ShowBackstage(assets.bodyRef, assets.kitMale);
+            if (_sound != null) { _sound.MusicOff(); _sound.Crowd(-1); }
         }
 
         // ============================ камера ============================

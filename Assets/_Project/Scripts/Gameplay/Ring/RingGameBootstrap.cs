@@ -31,7 +31,7 @@ namespace Game.Gameplay.Ring
         private const string ShotsArg = "-ring-shots";
 
         private const float ShotStep = 0.45f;
-        private const int ShotLimit = 1500;
+        private int ShotLimit = 1500;
         private const float AnimShotEvery = 1.3f;
         private float _animClock, _shotClock;
         private string _shotsDir;
@@ -136,6 +136,9 @@ namespace Game.Gameplay.Ring
                 System.IO.Directory.CreateDirectory(_shotsDir);
                 // Огляд проходить сезон: кліпи й паузи ШІ втричі швидше (кадри ті самі, лише менше чекання).
                 Time.timeScale = 3f;
+                int lim;
+                string ls = ReadArg("-ring-shot-limit");
+                if (ls != null && int.TryParse(ls, out lim) && lim > 0) ShotLimit = lim;
             }
             if (!BuildUi()) return;
             if (!LoadData()) return;
@@ -201,7 +204,8 @@ namespace Game.Gameplay.Ring
 
         private void ApplyScale()
         {
-            float s = Mathf.Clamp(Screen.height / 720f, 0.75f, 3f);
+            // Еталон 900 рядків (а не 720, як у зрізі): панелі менші, ринг видно (власник 04.11.2026: «зроби значно меньше»).
+            float s = Mathf.Clamp(Screen.height / 900f, 0.65f, 2.4f);
             if (Mathf.Abs(s - _appliedScale) < 0.001f) return;
             _appliedScale = s;
             _panel.scale = s;
