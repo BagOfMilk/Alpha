@@ -32,6 +32,8 @@ namespace Game.Gameplay.Ring.Stage
             /// <summary>Кліп зі списку зали (спокійний настрій) і той, що грає зараз.</summary>
             public string Base, Current;
             public bool Standing;
+            public Renderer[] Rends;
+            public bool Hidden;
             public int Salt;
         }
 
@@ -170,6 +172,8 @@ namespace Game.Gameplay.Ring.Stage
                 f.Dist = new Vector2(f.Pos.x, f.Pos.z).magnitude;
                 f.Operator = f.Clip.StartsWith("Cam_");
                 if (f.Dist > 11f) continue;
+                // Коридор виходу вільний: борець ішов крізь фанатів, що стояли впритул до доріжки (огляд 05.11.2026).
+                if (!f.Operator && NearAisle(f.Pos, 1.0f)) continue;
                 cand.Add(f);
             }
             cand.Sort((a, b) =>
@@ -227,6 +231,21 @@ namespace Game.Gameplay.Ring.Stage
             }
             Destroy(holder.gameObject);
             Debug.Log("[Ринг] 3D: фанатів " + _fans.Count + " з " + cand.Count + " кандидатів, типів моделей " + protos.Count);
+        }
+
+        private static bool NearAisle(Vector3 p, float r)
+        {
+            var path = RingShow.Path;
+            var q = new Vector2(p.x, p.z);
+            for (int i = 0; i + 1 < path.Length; i++)
+            {
+                var a = new Vector2(path[i].x, path[i].z);
+                var b = new Vector2(path[i + 1].x, path[i + 1].z);
+                Vector2 ab = b - a;
+                float t = Mathf.Clamp01(Vector2.Dot(q - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+                if ((q - (a + ab * t)).magnitude < r) return true;
+            }
+            return false;
         }
 
         private struct FanSpec { public Vector3 Pos; public float Yaw; public string Fan, Clip; public float Phase, Dist; public bool Operator; }
@@ -414,6 +433,30 @@ namespace Game.Gameplay.Ring.Stage
                     else want = _boo ? "Sit_Boo_Loop" : hot ? (f.Salt % 3 == 0 ? "Sit_Point_Loop" : "Sit_Cheer_Loop") : "Sit_Clap_Loop";
                 }
                 SetFanClip(f, want);
+            }
+        }
+
+        /// <summary>
+        /// Фанат упритул до камери не закриває кадр (огляд 04.11.2026: на виході пів екрана — голова фаната біля проходу):
+        /// ховається, хто ближче 2 м до камери або стоїть на лінії камера → ціль ближче 0,7 м (у межах відрізка).
+        /// </summary>
+        public void Occlude(Vector3 cam, Vector3 target)
+        {
+            Vector3 d = target - cam;
+            float len = d.magnitude;
+            if (len < 1e-3f) return;
+            d /= len;
+            foreach (var f in _fans)
+            {
+                if (f.Go == null) continue;
+                Vector3 p = f.Go.transform.position + Vector3.up * (f.Standing ? 1.2f : 0.8f);
+                float t = Vector3.Dot(p - cam, d);
+                bool hide = (p - cam).magnitude < 2.0f
+                    || (t > 0f && t < len - 0.6f && (p - (cam + d * t)).magnitude < 0.7f);
+                if (hide == f.Hidden) continue;
+                if (f.Rends == null) f.Rends = f.Go.GetComponentsInChildren<Renderer>(true);
+                foreach (var r in f.Rends) r.enabled = !hide;
+                f.Hidden = hide;
             }
         }
 

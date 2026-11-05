@@ -185,6 +185,12 @@ namespace Game.Gameplay.Ring
                 yield return new WaitForSeconds(1.2f);
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, string.Format("look_{0:00}_{1}_{2}.png", i, CareerLooks.HeroBodies[i], CareerLooks.HeroBodies[i + 1])));
                 yield return new WaitForSeconds(0.4f);
+                // Ноги збоку на рівні мату: наколінники, чоботи, підошви проти полотна (заміри — у лог).
+                stage.LookbookFeet(true);
+                yield return new WaitForSeconds(0.6f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, string.Format("legs_{0:00}_{1}_{2}.png", i, CareerLooks.HeroBodies[i], CareerLooks.HeroBodies[i + 1])));
+                yield return new WaitForSeconds(0.3f);
+                stage.LookbookFeet(false);
             }
             foreach (var npc in _content.Roster)
             {
@@ -194,6 +200,11 @@ namespace Game.Gameplay.Ring
                 yield return new WaitForSeconds(1.2f);
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "npc_" + npc.Id + ".png"));
                 yield return new WaitForSeconds(0.4f);
+                stage.LookbookFeet(true);
+                yield return new WaitForSeconds(0.6f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "legs_npc_" + npc.Id + ".png"));
+                yield return new WaitForSeconds(0.3f);
+                stage.LookbookFeet(false);
             }
             // Ноги збоку на рівні мату: підошви проти полотна (огляд 04.11.2026 — «боти проходять крізь ринг»).
             stage.SetWrestlers(CareerLooks.HeroBodies[0], CareerLooks.CostumeRgb(0), CareerLooks.HeroHair[0],

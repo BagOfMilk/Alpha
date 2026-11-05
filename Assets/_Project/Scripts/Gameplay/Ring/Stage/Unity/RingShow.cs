@@ -57,7 +57,7 @@ namespace Game.Gameplay.Ring.Stage
         private static readonly Vector3 ClimbStart = StepsAnchor - ClimbDir * 0.207f;
 
         /// <summary>Шлях виходу (Unity, Y = підлога зали): від завіси вздовж проходу до сходинок північно-західного кута.</summary>
-        private static readonly Vector3[] Path =
+        internal static readonly Vector3[] Path =
         {
             new Vector3(-15.4f, 0f, 0f), new Vector3(-12f, 0f, 0f), new Vector3(-8f, 0f, 0f), new Vector3(-4.5f, 0f, 1.2f),
             ClimbStart
@@ -241,7 +241,16 @@ namespace Game.Gameplay.Ring.Stage
                     _walkYaw = Mathf.LerpAngle(_walkYaw, yaw, 1f - Mathf.Exp(-8f * Time.deltaTime));
                     if (i == 0 && t < 0.05f) _walkYaw = yaw;
                     Vector3 fwd = Quaternion.Euler(0f, _walkYaw, 0f) * Vector3.forward;
-                    Look(_walkPos + fwd * 3.4f + new Vector3(0.9f, 1.7f, 0f), _walkPos + new Vector3(0f, 1.3f, 0f), 38f, false);
+                    Vector3 ahead = _walkPos + fwd * 3.4f + new Vector3(0.9f, 1.7f, 0f);
+                    if (Mathf.Abs(ahead.x) > 4.2f || Mathf.Abs(ahead.z) > 4.2f)
+                        Look(ahead, _walkPos + new Vector3(0f, 1.3f, 0f), 38f, false);
+                    else
+                    {
+                        // Біля рингу камера попереду в'їжджала у сходи, фартух і огорожу (огляд 05.11.2026) —
+                        // тут вона з боку рингу, вище верхнього каната, дивиться на борця згори-збоку.
+                        Vector3 toRing = new Vector3(-_walkPos.x, 0f, -_walkPos.z).normalized;
+                        Look(_walkPos + toRing * 3.2f + Vector3.up * 3.0f, _walkPos + Vector3.up * 1.1f, 42f, false);
+                    }
                     yield return null;
                 }
             }
@@ -258,13 +267,17 @@ namespace Game.Gameplay.Ring.Stage
             {
                 a.SetHeight(0f);
                 a.PlayAt(climb, false, ClimbStart, climbYaw);
-                Look(StepsAnchor + side * 3.2f + ClimbDir * 0.6f + Vector3.up * 1.6f, StepsAnchor + ClimbDir * 1.0f + Vector3.up * 1.4f, 40f, true);
+                // Підйом на метр угору: камера далі й вище, ціль — на рівні голови посеред підйому (огляд 05.11.2026 — голова за кадром).
+                Vector3 steps = new Vector3(StepsAnchor.x, 0f, StepsAnchor.z);
+                Look(steps + side * 4.2f + ClimbDir * 0.4f + Vector3.up * 2.3f, steps + ClimbDir * 0.8f + Vector3.up * 2.0f, 44f, true);
                 yield return Wait(climb.length);
                 // Кінець підйому: таз над фартухом. Канатний кліп відраховує висоту від фартуха (MatY), тож слот — на рівні мату.
                 Vector3 onApron = a.PosePos;
                 a.SetHeight(RingStage3D.MatY);
                 a.PlayAt(ropes, false, new Vector3(onApron.x, RingStage3D.MatY, onApron.z), climbYaw);
-                Look(onApron + side * 2.6f + Vector3.up * 1.9f - ClimbDir * 0.4f, onApron + ClimbDir * 0.4f + Vector3.up * 1.5f, 40f, true);
+                // Борець на фартуху: висота камери й цілі — від фартуха (PosePos.y тут ще підлога, голова була за рамкою).
+                Vector3 apron = new Vector3(onApron.x, RingStage3D.MatY, onApron.z);
+                Look(apron + side * 3.0f + Vector3.up * 1.6f - ClimbDir * 0.6f, apron + ClimbDir * 0.3f + Vector3.up * 1.3f, 44f, true);
                 yield return Wait(ropes.length);
             }
             Vector3 corner = climb != null && ropes != null && !_skip ? a.PosePos : new Vector3(-1.25f, RingStage3D.MatY, 1.25f);

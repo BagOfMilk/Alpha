@@ -929,6 +929,7 @@ namespace Game.Gameplay.Ring.Stage
                 _camFov = Mathf.Lerp(_camFov, fov, k);
             }
             _cam.transform.SetPositionAndRotation(_camPos, _camRot);
+            if (_dress != null) _dress.Occlude(_camPos, look);
             _cam.fieldOfView = _camFov;
             LogBudget(dt);
         }
