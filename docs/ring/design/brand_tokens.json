@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "owner": "арт-директор «Рингу» (сесія «Дизайн-система игры»)",
+  "note": "Єдине джерело палітри, кеглів і руху «Рингу». BrandTokens.cs, RingTheme.cs, tools/blender/ring_brand.py і brand_tokens.css згенеровані: tools/ring_design/gen_brand.py, вручну не правити. Нові кольори й шрифти — лише через арт-директора (Статут вигляду, docs/ring/DESIGN_SYSTEM.md).",
+
+  "colors": {
+    "ink0": "#0E0D12",
+    "ink1": "#17151D",
+    "ink2": "#221F2B",
+    "ink3": "#2E2A39",
+    "paper": "#EDE5D6",
+    "dim": "#9A948A",
+    "ash": "#6B6672",
+    "gold": "#E8BA3C",
+    "crimson": "#AA141C",
+    "signal": "#E5483F",
+    "cobalt": "#2F6FD6",
+    "cobaltText": "#6DB6FF",
+    "rose": "#FF7AB8",
+    "black": "#000000"
+  },
+
+  "roles": {
+    "bg": "ink0",
+    "panel": "ink1",
+    "panelRaised": "ink2",
+    "border": "ink3",
+    "hover": "ink3",
+    "text": "paper",
+    "textDim": "dim",
+    "disabled": "ash",
+    "accent": "gold",
+    "reward": "gold",
+    "primaryAction": "gold",
+    "strong": "gold",
+    "partial": "paper",
+    "miss": "signal",
+    "damage": "signal",
+    "danger": "signal",
+    "hero": "cobalt",
+    "heroText": "cobaltText",
+    "villain": "crimson",
+    "villainText": "signal",
+    "rebel": "rose",
+    "scrim": "black"
+  },
+
+  "alpha": {
+    "panel": 0.86,
+    "glass": 0.84,
+    "shade": 0.45,
+    "scrim": 0.72,
+    "plate": 0.94
+  },
+
+  "type": {
+    "refHeight": 900,
+    "minInfo": 15,
+    "sizes": {
+      "micro": 13,
+      "label": 15,
+      "body": 17,
+      "lead": 20,
+      "title": 28,
+      "display": 44
+    },
+    "stinger": {
+      "t0": 36,
+      "t1": 46,
+      "t2": 72,
+      "t3": 80,
+      "t4": 96,
+      "result": 110
+    },
+    "fontRoles": {
+      "display": "SofiaSansExtraCondensed",
+      "text": "FixelText",
+      "hand": "AmaticSC",
+      "spray": "RubikSprayPaint"
+    }
+  },
+
+  "space": {
+    "unit": 4,
+    "slantDeg": 12,
+    "stroke": 2,
+    "strokeAccent": 4,
+    "shadowOffset": 6,
+    "radiusControl": 4
+  },
+
+  "motion": {
+    "stingerInMs": 80,
+    "stingerOvershoot": 1.25,
+    "stingerOutMs": 120,
+    "hitStopCleanMs": 70,
+    "hitStopFinisherMs": 120,
+    "holdT1Ms": 800,
+    "holdT2Ms": 1100,
+    "holdT3Ms": 1500,
+    "holdT4Ms": 2600
+  },
+
+  "pairs": [
+    { "fg": "paper", "bg": "ink0", "min": 4.5, "use": "основний текст на фоні" },
+    { "fg": "paper", "bg": "ink1", "min": 4.5, "use": "основний текст на панелі" },
+    { "fg": "paper", "bg": "ink2", "min": 4.5, "use": "текст на піднятій панелі" },
+    { "fg": "dim", "bg": "ink1", "min": 4.5, "use": "підписи на панелі" },
+    { "fg": "dim", "bg": "ink2", "min": 4.5, "use": "підписи на піднятій панелі" },
+    { "fg": "gold", "bg": "ink0", "min": 4.5, "use": "золотий текст на фоні" },
+    { "fg": "gold", "bg": "ink1", "min": 4.5, "use": "золотий текст на панелі" },
+    { "fg": "signal", "bg": "ink0", "min": 4.5, "use": "сигнал-червоний на фоні" },
+    { "fg": "signal", "bg": "ink1", "min": 4.5, "use": "сигнал-червоний на панелі" },
+    { "fg": "cobaltText", "bg": "ink1", "min": 4.5, "use": "текст героя на панелі" },
+    { "fg": "rose", "bg": "ink1", "min": 4.5, "use": "текст бунтаря на панелі" },
+    { "fg": "ink0", "bg": "gold", "min": 4.5, "use": "текст на золотій пластині" },
+    { "fg": "ink0", "bg": "signal", "min": 4.5, "use": "текст на сигнальній пластині" },
+    { "fg": "paper", "bg": "crimson", "min": 4.5, "use": "текст на кармінній поверхні" },
+    { "fg": "paper", "bg": "cobalt", "min": 3.0, "use": "великий текст на кобальті (не дрібний)" },
+    { "fg": "ash", "bg": "ink1", "min": 3.0, "use": "недоступне (XAG: 3:1)" }
+  ],
+
+  "distinct": [
+    { "a": "gold", "b": "signal", "minDeltaE": 20, "use": "успіх проти шкоди" },
+    { "a": "gold", "b": "paper", "minDeltaE": 20, "use": "чисто проти частково" },
+    { "a": "paper", "b": "signal", "minDeltaE": 20, "use": "частково проти провалу" },
+    { "a": "cobaltText", "b": "signal", "minDeltaE": 20, "use": "герой проти лиходія (текст)" },
+    { "a": "cobaltText", "b": "gold", "minDeltaE": 20, "use": "герой проти нагороди" },
+    { "a": "rose", "b": "gold", "minDeltaE": 20, "use": "бунтар проти нагороди" },
+    { "a": "rose", "b": "signal", "minDeltaE": 20, "use": "бунтар проти шкоди" },
+    { "a": "rose", "b": "cobaltText", "minDeltaE": 20, "use": "бунтар проти героя" },
+    { "a": "rose", "b": "paper", "minDeltaE": 20, "use": "бунтар проти звичайного тексту" },
+    { "a": "crimson", "b": "cobalt", "minDeltaE": 20, "use": "лиходій проти героя (поверхні)" }
+  ]
+}
