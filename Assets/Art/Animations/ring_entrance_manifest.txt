@@ -1,0 +1,27 @@
+# Кліпи виходу (tools/blender/ring_anims_entrance.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> <зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>
+Entrance_Walk_Loop - 1.000 1 0 0 0 0 - -
+Entrance_Climb_Steps - 4.900 0 0 0 0 0 - -
+Entrance_Through_Ropes - 3.800 0 0 0 0 0 - -
+Entrance_Corner_Pose - 3.000 1 0 0 0 0 - -
+Entrance_Curtain_Monster - 3.400 0 0 0 0 0 - -
+Entrance_Curtain_Flyer - 2.600 0 0 0 0 0 - -
+Entrance_Curtain_Technician - 3.400 0 0 0 0 0 - -
+Entrance_Curtain_Showman - 3.600 0 0 0 0 0 - -
+Entrance_Curtain_Face_Point - 2.400 0 0 0 0 0 - -
+Entrance_Curtain_Heel_Dismiss - 2.800 0 0 0 0 0 - -
+Entrance_Walk_Heavy_Loop - 1.300 1 0 0 0 0 - -
+Entrance_Walk_Bouncy_Loop - 0.920 1 0 0 0 0 - -
+Entrance_Walk_Focused_Loop - 1.080 1 0 0 0 0 - -
+Entrance_Walk_Strut_Loop - 1.200 1 0 0 0 0 - -
+Entrance_Walk_Limp_Loop - 1.450 1 0 0 0 0 - -
+Entrance_Barrier_High_Five - 2.600 0 0 0 0 0 - -
+Entrance_Barrier_Heel_Taunt - 2.600 0 0 0 0 0 - -
+Entrance_Vault_Over_Top - 2.600 0 0 0 0 0 - -
+Entrance_Roll_In - 3.750 0 0 0 0 0 - -
+Entrance_Pose_Turnbuckle_Arms - 5.600 0 0 0 0 0 - -
+Entrance_Pose_Turnbuckle_Point - 5.600 0 0 0 0 0 - -
+Entrance_Pose_Monster_Roar - 3.200 0 0 0 0 0 - -
+Entrance_Pose_Technician_Stretch - 4.600 0 0 0 0 0 - -
+Entrance_Pose_Heel_Shush - 3.000 0 0 0 0 0 - -
+Entrance_Pose_Heel_Mock - 3.200 0 0 0 0 0 - -
+Entrance_Pose_Belt_Raise - 3.000 0 0 0 0 0 - -

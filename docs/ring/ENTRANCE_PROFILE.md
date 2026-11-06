@@ -1,0 +1,146 @@
+# Персональний вихід борця — профіль і кліпи
+
+Власник 06.11.2026: «Выходы что бы были персонализированные, что бы выход зависил от твоих статов + от того какой у тебя
+гиммик, хил\фейс и тд.» Рішення того ж дня: робити зараз; **вихід — лише вигляд**, на ажіотаж матчу не впливає.
+
+## Як влаштовано
+Вихід складається з п'яти бітів. Біт отримує варіант від **детермінованої чистої функції** від даних борця
+(без випадковості). Тому той самий борець за тих самих умов виходить однаково, і вихід стає його підписом. Біти:
+
+1. **Завіса** — жест ґіміка біля завіси, далі жест шляху.
+2. **Хода** — цикл ходи; біля бар'єра є зупинка з жестом шляху.
+3. **Вхід у ринг**.
+4. **Поза** в рингу; у чемпіона після неї — пояс.
+5. **Шоу** — світло, піро й гомін залу. Окремих кліпів у цього біта немає, лише параметри.
+
+Функція `EntranceProfile Compose(дані борця)` живе в `Gameplay/Ring/Stage/` (як `RingClipTable`), її покривають
+EditMode-тести. Вхідні дані профілю, однакові для гравця й суперника-NPC:
+
+| Поле | Звідки (гравець) | Звідки (NPC) |
+|---|---|---|
+| ґімік | `CareerState.Gimmick` | `NpcDef.Gimmick` |
+| шлях Face / Heel / Rebel | `CareerSession.CurrentRole` (`DominantPath`) | `NpcDef.Path` |
+| Сила, Спритність, Техніка, Харизма (−1..3) | `WrestlerStats` | `NpcDef.Stats` |
+| травма | `CareerState.IsInjured` | — |
+| популярність 0..10 | `Feud.State.Audience` | `Rank` × 2 (1..6 → 2..10, обмежити 10) |
+| жар 0..4 | `FeudVars heat` | `NpcFeud` |
+| чемпіон | `BeltHolder == player` | `BeltHolder == id` |
+| головний бій / титульний | `Position == Main`, `IsTitle` | ті самі для вечора |
+| стать | тіло `body_f_*` → кліпи з `RING_Entrance_F.fbx` | те саме |
+
+## Правила вибору (порядок перевірки — згори вниз, перше збігання виграє)
+
+**Біт 1. Завіса**
+- Жест ґіміка (обов'язковий):
+
+| Ґімік | Кліп |
+|---|---|
+| Monster | `Entrance_Curtain_Monster` |
+| Flyer | `Entrance_Curtain_Flyer` |
+| Technician | `Entrance_Curtain_Technician` |
+| Showman | `Entrance_Curtain_Showman` |
+
+- Жест шляху (додається, якщо Харизма ≥ 1):
+
+| Шлях | Кліп |
+|---|---|
+| Face | `Entrance_Curtain_Face_Point` |
+| Heel | `Entrance_Curtain_Heel_Dismiss` |
+| Rebel | без жесту |
+
+**Біт 2. Хода**
+- Цикл ходи:
+
+| Умова | Кліп |
+|---|---|
+| травма | `Entrance_Walk_Limp_Loop` |
+| Сила ≥ 3 і ґімік не Flyer | `Entrance_Walk_Heavy_Loop` |
+| Спритність ≥ 3 і ґімік не Monster | `Entrance_Walk_Bouncy_Loop` |
+| інакше, Monster | `Entrance_Walk_Heavy_Loop` |
+| інакше, Flyer | `Entrance_Walk_Bouncy_Loop` |
+| інакше, Technician | `Entrance_Walk_Focused_Loop` |
+| інакше, Showman | `Entrance_Walk_Strut_Loop` |
+| запасний | `Entrance_Walk_Loop` (наявний) |
+
+- Темп ходи — `WalkSpeed` із `ring_entrance_motion.txt` кожного циклу; таз веде шлях, як зараз.
+- Зупинка біля бар'єра (точка шляху `(-8,0,0)`, обличчям до залу ліворуч):
+
+| Умова | Кліп |
+|---|---|
+| Face і популярність ≥ 4 | `Entrance_Barrier_High_Five` |
+| Heel і жар ≥ 2 | `Entrance_Barrier_Heel_Taunt` |
+| інакше | без зупинки |
+
+**Біт 3. Вхід у ринг**
+- Сходи `Entrance_Climb_Steps` лишаються для всіх, крім `Entrance_Roll_In`. Ланцюжки:
+
+| Умова | Ланцюжок |
+|---|---|
+| Monster і Сила ≥ 2 | сходи → `Entrance_Through_Ropes`, обидва на швидкості 0,8 (повільно, важко) |
+| Flyer і Спритність ≥ 2 | сходи → `Entrance_Vault_Over_Top` (перемах через верхній канат) |
+| Heel, або Спритність ≥ 2 | `Entrance_Roll_In` із підлоги біля фартуха, без сходів (закочується під нижній канат) |
+| інакше | сходи → `Entrance_Through_Ropes` (наявний) |
+
+**Біт 4. Поза**
+- Поза за ґіміком і шляхом:
+
+| Ґімік | Face / Rebel | Heel |
+|---|---|---|
+| Monster | `Entrance_Pose_Monster_Roar` (центр) | `Entrance_Pose_Monster_Roar` |
+| Flyer | `Entrance_Pose_Turnbuckle_Point` (на другому канаті в куті) | `Entrance_Pose_Heel_Shush` |
+| Technician | `Entrance_Pose_Technician_Stretch` (канати) | `Entrance_Pose_Heel_Mock` |
+| Showman | `Entrance_Pose_Turnbuckle_Arms` (на другому канаті в куті) | `Entrance_Pose_Heel_Shush` |
+
+- Тривалість пози: 2,6 с; якщо Харизма ≥ 2, то 4,0 с.
+- Чемпіон: після пози `Entrance_Pose_Belt_Raise`, пояс — реквізит на `hand_r` (кліп тримає обидві кисті над головою).
+- Запасний: `Entrance_Corner_Pose` (наявний).
+
+**Біт 5. Шоу** (параметри `RingFx` / `RingSound`)
+- Кольори голів:
+
+| Шлях | Кольори |
+|---|---|
+| Face | костюм, Gold, White, White |
+| Heel | костюм, Red, `#3A0A0A`, Red; світло залу −30 % |
+| Rebel | костюм, White, Red, Gold |
+
+- Темп голів: Monster 96 BPM, Technician 110, Showman 120, Flyer 132.
+- Піро (`_pyroL/_pyroR`): лише якщо головний бій, титульний або чемпіон. Іскри: Харизма ≥ 2.
+- Гомін залу на виході (`Crowd(n)` замість фіксованого 1):
+  - Face: 1 + популярність / 3, тобто 1..4.
+  - Heel: гул, 1 + жар / 2.
+  - Rebel: 2.
+- Музика — як зараз (вибір доріжки гравцем — окремо, поки ні).
+
+## Кліпи (`RING_Entrance.fbx` і `RING_Entrance_F.fbx`, однакові імена)
+Системи координат такі ж, як у наявних кліпах (`tools/blender/ring_anims_entrance.py`). Борець дивиться в −Y, Z угору.
+
+| Кліп | Біт | Петля | Система координат |
+|---|---|---|---|
+| `Entrance_Curtain_Monster` | 1 | ні | на місці, підлога 0; починається й закінчується позою ходи |
+| `Entrance_Curtain_Flyer` | 1 | ні | те саме |
+| `Entrance_Curtain_Technician` | 1 | ні | те саме |
+| `Entrance_Curtain_Showman` | 1 | ні | те саме |
+| `Entrance_Curtain_Face_Point` | 1 | ні | те саме |
+| `Entrance_Curtain_Heel_Dismiss` | 1 | ні | те саме |
+| `Entrance_Walk_Heavy_Loop`, `_Bouncy_`, `_Focused_`, `_Strut_`, `_Limp_` | 2 | так | рух уперед, root motion у `ring_entrance_motion.txt` |
+| `Entrance_Barrier_High_Five` | 2 | ні | на місці; бар'єр ліворуч від борця (+X), 0,6 м |
+| `Entrance_Barrier_Heel_Taunt` | 2 | ні | те саме |
+| `Entrance_Vault_Over_Top` | 3 | ні | як `Entrance_Through_Ropes`: площина канатів y = 0, початок на фартуху за 0,32 м від канатів (z = 0 = MatY), кінець у рингу y ≈ −0,6 |
+| `Entrance_Roll_In` | 3 | ні | як `Entrance_Climb_Steps`: початок — підлога зали (z = 0), за 0,36 м від краю фартуха; край фартуха — y = +0,5 від площини канатів; кінець — на маті (z = +1,0), y = −0,62. Слот — `PlayAt` на підлозі, після кліпу `SetHeight(MatY)` |
+| `Entrance_Pose_Turnbuckle_Point`, `_Arms` | 4 | ні | обличчям до кутової стійки (до залу); перетин канатів кута — на (0, −0,9) від старту, канати від нього під 45° назад; стає на нижній, потім на середній канат, тримає позу, зістрибує назад на мат |
+| `Entrance_Pose_Technician_Stretch` | 4 | ні | обличчям до канатів; площина канатів — на 0,62 м попереду |
+| `Entrance_Pose_Monster_Roar`, `_Heel_Shush`, `_Heel_Mock`, `_Belt_Raise` | 4 | ні | на місці на маті |
+
+Кожен кліп проходить: перевірки генератора (ковзання, самопроникнення, канати й сходи ≤ 2 см для торса), стики
+бітів (кінцева поза біта N = початкова біта N+1) і огляд очима.
+
+## Стан (06.11.2026)
+- Генератор: `tools/blender/ring_anims_entrance.py` + `tools/blender/ring_anims_entrance_personal.py`.
+- 27 кліпів: 4 наявні й 23 нові, чоловічі та жіночі. Перевірки генератора пройшли всі 27 в обох наборах:
+  ковзання, самопроникнення, IK, канати з прогином під руками й ногами, сходи, фартух, бар'єр.
+- Кліпи на сходах і канатах печуться без шару оживлення, якщо шар заводить кінцівку в оточення.
+- Монстр, що розсуває канати (стопа на середньому, рука підіймає верхній), не вийшов правдоподібним на скелеті
+  1,68 м. Монстр заходить сходами й канатами на швидкості 0,8.
+- Гра ще не вибирає біти. Функцію `Compose`, параметри `RingShow`/`RingFx`/`RingSound` і підключення `_F`-FBX робить
+  сесія сцени «Ринг» за цією специфікацією.
