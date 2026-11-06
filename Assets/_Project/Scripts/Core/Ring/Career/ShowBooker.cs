@@ -10,6 +10,49 @@ namespace Game.Core.Ring.Career
     /// </summary>
     public static class ShowBooker
     {
+        /// <summary>
+        /// Підсилити суперника на <paramref name="steps"/> щаблів (сила за місцем у картці): кожен щабель — +1 першому атрибуту
+        /// з черги, що ще нижче межі: атрибут фінішера, Витривалість (вириватися), Техніка (реверси, перший хід), Сила.
+        /// Повертає, скільки щаблів лягло (на межі всіх атрибутів і без mods — менше). Детерміновано.
+        /// </summary>
+        public static int Strengthen(WrestlerStats s, int steps) { return Strengthen(s, steps, null); }
+
+        /// <summary>
+        /// Те саме, а щаблі понад межу атрибутів переходять у витримку суперника <paramref name="mods"/> (коли не null): по черзі
+        /// +1 стартового імпульсу (раніше до фінішера), +1 до «Вирватися», «залізна щелепа» (поріг ушкодження +1), +1 жетон реверсу.
+        /// </summary>
+        public static int Strengthen(WrestlerStats s, int steps, MatchModifiers mods)
+        {
+            // Лише атрибути, що б'ють у кожному матчі; Спритність і Харизма (політ, дражнити) майже не додають сили — замір 06.11.2026:
+            // пізні щаблі туди не робили суперника сильнішим. Далі — витримка й імпульс (mods).
+            var order = new[] { s.FinisherAttr, RingAttr.Stamina, RingAttr.Technique, RingAttr.Strength };
+            int applied = 0;
+            for (int i = 0; i < steps; i++)
+            {
+                bool done = false;
+                foreach (var a in order)
+                {
+                    if (s.Get(a) >= WrestlerStats.MaxAttr) continue;
+                    s.Set(a, s.Get(a) + 1);
+                    done = true;
+                    break;
+                }
+                if (!done)
+                {
+                    if (mods == null) break;
+                    switch (applied % 4)
+                    {
+                        case 0: mods.StartMomentumBonus++; break;
+                        case 1: mods.KickOutBonus++; break;
+                        case 2: mods.DamageThresholdShift++; break;
+                        default: mods.ExtraReversalTokens++; break;
+                    }
+                }
+                applied++;
+            }
+            return applied;
+        }
+
         /// <summary>Хеш (splitmix) — замість System.Random: те саме зерно й аргументи дають те саме число.</summary>
         public static int Mix(ulong seed, int a, int b)
         {

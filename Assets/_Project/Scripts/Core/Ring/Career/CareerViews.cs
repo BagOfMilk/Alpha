@@ -61,6 +61,8 @@ namespace Game.Core.Ring.Career
         /// <summary>Ажіотаж-бонус промо, що чекає на матч.</summary>
         public int PromoHypeBonus;
         public bool CanWithdraw;
+        /// <summary>Щаблів сили суперника цього вечора (за місцем у картці, ворожнечею, титулом).</summary>
+        public int RivalSteps;
         public List<InjuryView> Injuries = new List<InjuryView>();
     }
 

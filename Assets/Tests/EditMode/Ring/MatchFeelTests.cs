@@ -122,7 +122,15 @@ namespace Game.Tests.EditMode
                     int season = s.State.Season, week = s.State.Week;
                     switch (s.State.Phase)
                     {
-                        case ShowPhase.Card: s.StartShow(); break;
+                        case ShowPhase.Card:
+                        {
+                            int[] st;
+                            string sk = "~щаблі s" + season + (s.State.IsTitle ? " титул" : s.State.IsFeudShow ? " ворожнеча" : "");
+                            if (!d.TryGetValue(sk, out st)) d[sk] = st = new int[4];
+                            st[0] += s.RivalStepsNow(); st[1] += s.PlayerGrowth(); st[2]++; st[3] += s.State.IsInjured ? 100 : 0;
+                            s.StartShow();
+                            break;
+                        }
                         case ShowPhase.Match:
                         {
                             AiPlay(s.Engine);
@@ -153,12 +161,33 @@ namespace Game.Tests.EditMode
             var sb = new System.Text.StringBuilder();
             foreach (var kv in d)
             {
+                if (kv.Key.StartsWith("~"))
+                {
+                    sb.AppendFormat("{0}: щаблів {1:F1}, ріст {2:F1}, травмований {3:F0} %; ", kv.Key, (double)kv.Value[0] / kv.Value[2], (double)kv.Value[1] / kv.Value[2], (double)kv.Value[3] / kv.Value[2]);
+                    continue;
+                }
                 int n = kv.Value[0] + kv.Value[1] + kv.Value[2];
                 sb.AppendFormat("{0}: перемог {1:P0} ({2}/{3}); ", kv.Key, (double)kv.Value[0] / n, kv.Value[0], n);
             }
             TestContext.WriteLine(sb.ToString());
             System.Console.WriteLine("[wins] " + sb);
-            Assert.Greater(d.Count, 0);
+            // Сила суперника росте разом із гравцем (власник 06.11.2026: «1: за місцем у картці»; CareerRules «сила суперника»).
+            // Замір 06.11.2026: щотижневі s1 61–73 %, s2 50–55 %, s3 54–62 %; Молот 50 / 59 / 52 %; титул 41 %.
+            // Без цього було: s3 91–95 %, Молот 60 → 89 → 98 %, титул 82 %. Межі — із запасом на шум 300 кар'єр.
+            for (int season = 1; season <= 3; season++)
+            {
+                int w = 0, n = 0;
+                foreach (var kv in d)
+                    if (kv.Key.StartsWith("s" + season + " w")) { w += kv.Value[0]; n += kv.Value[0] + kv.Value[1] + kv.Value[2]; }
+                double rate = (double)w / n;
+                Assert.That(rate, Is.InRange(0.45, 0.75), "щотижневі матчі сезону " + season + ": " + rate.ToString("P0"));
+                var f = d["ворожнеча s" + season];
+                double fr = (double)f[0] / (f[0] + f[1] + f[2]);
+                Assert.That(fr, Is.InRange(0.38, 0.68), "ворожнеча з Молотом, сезон " + season + ": " + fr.ToString("P0"));
+            }
+            var t = d["титул"];
+            double tr = (double)t[0] / (t[0] + t[1] + t[2]);
+            Assert.That(tr, Is.InRange(0.30, 0.52), "титульний матч: " + tr.ToString("P0"));
         }
 
         [Test]

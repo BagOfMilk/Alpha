@@ -1,3 +1,4 @@
+using System;
 using Game.Core.Ring.Match;
 
 namespace Game.Core.Ring.Career
@@ -78,6 +79,28 @@ namespace Game.Core.Ring.Career
         public const int NoDqFeudLevel = 3;
         /// <summary>Після розв'язки ворожнеча з NPC повертається до цього рівня.</summary>
         public const int FeudLevelAfterBlowoff = 2;
+
+        // ---------- сила суперника (власник 06.11.2026: «1: за місцем у картці»; замір — docs/ring/fun_audit_2026-11-06.md §1.1) ----------
+        // Гравець росте (розвиток, перки, прийоми), ростер — ні: без цього з другого сезону перемоги 90 %+. Щабель — +1 атрибут
+        // суперникові (ShowBooker.Strengthen). Ціль: щотижневі 55–65 %, ворожнеча ~50 %, титул 35–45 %, у кожному сезоні.
+
+        /// <summary>Щаблів сили на щотижневому шоу за місцем у картці: відкривання → мейн-івент.</summary>
+        public static readonly int[] RivalStepsByPosition = { 1, 1, 1, 1 };
+        /// <summary>
+        /// Букер ставить суперників рівня гравця: + щабель за кожен куплений атрибут понад базу ґіміка і за кожні
+        /// <see cref="RivalPerksPerStep"/> перки. Без цього місце в картці насичується на мейн-івенті, а гравець росте далі
+        /// (замір 06.11.2026: лише за місцем — третій сезон 67–81 %, Молот 78–88 %).
+        /// </summary>
+        public const int RivalPerksPerStep = 2;
+        /// <summary>Щаблі за ріст гравця: (Num·одиниці − Offset) / Den, не менше 0 (замір: щабель за одиницю — перебір, усе 25–45 %).</summary>
+        public const int RivalGrowthNum = 5, RivalGrowthOffset = 16, RivalGrowthDen = 8;
+        /// <summary>Молот: щаблів у першому матчі ворожнечі й за кожен наступний (матчі — у різних сезонах).</summary>
+        public const int HammerBaseSteps = 1;
+        public const int HammerStepsPerMatch = 2;
+        /// <summary>Титульний матч (і захист пояса): чемпіон — найсильніший у федерації.</summary>
+        public const int TitleSteps = 5;
+
+        public static int RivalSteps(CardPosition p, int growth) { return RivalStepsByPosition[(int)p] + Math.Max(0, growth); }
 
         /// <summary>Місце в картці за популярністю 0–10.</summary>
         public static CardPosition PositionFor(int popularity)

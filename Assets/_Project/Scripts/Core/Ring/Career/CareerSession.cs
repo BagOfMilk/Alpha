@@ -217,10 +217,43 @@ namespace Game.Core.Ring.Career
                 OpponentFeudLevel = opp == null ? 0 : FeudLevel(opp.Id), Position = State.Position, Plan = State.Plan,
                 Stipulations = State.Stip, Fee = ShowBooker.Fee(State.Position, State.IsBig),
                 WinBonus = CareerRules.WinBonus, HypeBonus = CareerRules.HypeBonus, PromoHypeBonus = State.NextHypeBonus,
-                CanWithdraw = State.IsInjured && !State.IsBig
+                CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow()
             };
             c.Injuries = InjuryViews();
             return c;
+        }
+
+        /// <summary>
+        /// Ріст гравця від створення: куплені атрибути понад базу ґіміка (+1 вільний бал), перки (кожні два — одиниця) і вивчені
+        /// загальні прийоми; у щаблі — опукло (<see cref="CareerRules.RivalGrowthNum"/>).
+        /// </summary>
+        public int PlayerGrowth()
+        {
+            var g = Content.GimmickOf(State.Gimmick);
+            int bought = 0;
+            for (int i = 0; i < 5; i++) bought += Math.Max(0, Player.Get((RingAttr)i) - g.Attr[i]);
+            int learned = 0;
+            foreach (var id in State.Moves) { var m = Content.Moves.Find(id); if (m != null && m.Kind == MoveKind.Learn) learned++; }
+            int units = Math.Max(0, bought - 1) + Feud.State.Perks.Count / CareerRules.RivalPerksPerStep + learned;
+            // Опукло: перші одиниці росту (вільний бал, перший перк) майже не роблять гравця сильнішим — суперник ще не росте;
+            // далі — щабель на кожні ~1,6 одиниці (замір 06.11.2026: лінійно — другий сезон 40–45 %, третій 47–60 %).
+            return Math.Max(0, (CareerRules.RivalGrowthNum * units - CareerRules.RivalGrowthOffset) / CareerRules.RivalGrowthDen);
+        }
+
+        private WrestlerStats Strengthened(WrestlerStats npc, MatchModifiers rivalMods)
+        {
+            var s = npc.Clone();
+            ShowBooker.Strengthen(s, RivalStepsNow(), rivalMods);
+            return s;
+        }
+
+        /// <summary>Скільки щаблів сили отримає суперник цього вечора (картка вечора показує заздалегідь).</summary>
+        public int RivalStepsNow()
+        {
+            int growth = PlayerGrowth();
+            if (State.IsFeudShow) return CareerRules.HammerBaseSteps + Feud.Records.Count * CareerRules.HammerStepsPerMatch + growth;
+            if (State.IsTitle) return CareerRules.TitleSteps + growth;
+            return CareerRules.RivalSteps(State.Position, growth);
         }
 
         private List<InjuryView> InjuryViews()
@@ -708,13 +741,14 @@ namespace Game.Core.Ring.Career
             }
             var npc = Content.FindNpc(State.Opponent);
             var mods = Development.ToModifiers(Feud.State.Perks);
+            var rivalMods = new MatchModifiers();
             int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus
                        + (State.IsInjured ? CareerRules.InjuredShowHype : 0);
             var setup = new MatchSetup
             {
-                Player = Player.Clone(), Rival = npc.Stats.Clone(), PlayerMods = mods,
+                Player = Player.Clone(), Rival = Strengthened(npc.Stats, rivalMods), PlayerMods = mods, RivalMods = rivalMods,
                 PlayerStartMomentum = Math.Max(0, Math.Min(10, mods.StartMomentumBonus)),
-                RivalStartMomentum = Math.Max(0, Math.Min(10, npc.StartMomentum + State.RivalBoost)),
+                RivalStartMomentum = Math.Max(0, Math.Min(10, npc.StartMomentum + State.RivalBoost + rivalMods.StartMomentumBonus)),
                 StartHype = Math.Max(0, Math.Min(10, hype)), PlayerHasAlly = false, Stipulations = State.Stip,
                 Plan = State.IsTitle ? BookerPlan.None : State.Plan, PlayerRole = Feud.State.DominantPath(), RivalRole = npc.Path,
                 HopeSpotEnabled = true
@@ -728,8 +762,20 @@ namespace Game.Core.Ring.Career
         public MatchEngine StartFeudMatch()
         {
             RequireShow(ShowPhase.Feud);
+            int steps = RivalStepsNow();
             var e = Feud.StartMatch();
             e.Setup.HopeSpotEnabled = true;
+            // Молот росте від матчу до матчу ворожнечі (сила за місцем у картці: велике шоу — мейн-івент).
+            var hammer = e.State.Rival.Stats.Clone();
+            var over = new MatchModifiers();
+            ShowBooker.Strengthen(hammer, steps, over);
+            e.State.Rival.Stats = hammer;
+            // Понад межу атрибутів — витримка: рушій уже створено, тож жетони додаються одразу, решта — через модифікатори.
+            var rm = e.Setup.RivalMods ?? (e.Setup.RivalMods = new MatchModifiers());
+            rm.KickOutBonus += over.KickOutBonus;
+            rm.DamageThresholdShift += over.DamageThresholdShift;
+            e.State.Rival.ReversalTokens += over.ExtraReversalTokens;
+            e.State.Rival.Momentum = Math.Min(MatchRules.MaxMomentum, e.State.Rival.Momentum + over.StartMomentumBonus);
             e.State.Hype = Math.Max(0, Math.Min(MatchRules.MaxHype, e.State.Hype + State.NextHypeBonus + (State.IsInjured ? CareerRules.InjuredShowHype : 0)));
             e.State.Rival.Momentum = Math.Max(0, Math.Min(MatchRules.MaxMomentum, e.State.Rival.Momentum + State.RivalBoost));
             State.DevPointsAtMatchStart = DevPoints;
