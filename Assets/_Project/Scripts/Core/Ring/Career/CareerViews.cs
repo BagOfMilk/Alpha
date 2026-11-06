@@ -63,6 +63,8 @@ namespace Game.Core.Ring.Career
         public bool CanWithdraw;
         /// <summary>Щаблів сили суперника цього вечора (за місцем у картці, ворожнечею, титулом).</summary>
         public int RivalSteps;
+        /// <summary>Реванш із тим, хто переміг гравця: суперник слабший (ти знаєш його слабкість).</summary>
+        public bool IsRematch;
         public List<InjuryView> Injuries = new List<InjuryView>();
     }
 

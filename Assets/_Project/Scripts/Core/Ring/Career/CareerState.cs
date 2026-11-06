@@ -188,6 +188,15 @@ namespace Game.Core.Ring.Career
         public int LastOutcome;
         public FeudPlanOutcome LastPlanOutcome;
 
+        /// <summary>
+        /// Сходинки сили (власник 06.11.2026: «Піки 70–80%»): щабель картки, на якому знято знімок росту гравця (−1 — ще ні), і сам
+        /// знімок. Щотижневі суперники рівняються на знімок, а не на поточний ріст: прокачка між підвищеннями відчувається.
+        /// </summary>
+        public int TierPos = -1;
+        public int TierGrowth;
+        /// <summary>Хто переміг гравця останнього разу (реванш — суперник слабший: ти знаєш його слабкість). Перемога знімає образу.</summary>
+        public readonly SortedSet<string> Grudges = new SortedSet<string>(StringComparer.Ordinal);
+
         public int FiredCount;
         public int TitlesWon;
         public bool FeudResolved;
@@ -244,6 +253,10 @@ namespace Game.Core.Ring.Career
             foreach (var k in BackstageSeen) bs.Add(Esc(k));
             sb.Append("|bs=").Append(string.Join(",", bs));
             sb.Append("|lastout=").Append(LastOutcome).Append("|lastplan=").Append((int)LastPlanOutcome);
+            sb.Append("|tierpos=").Append(TierPos).Append("|tiergrowth=").Append(TierGrowth);
+            var gr = new List<string>();
+            foreach (var g in Grudges) gr.Add(Esc(g));
+            sb.Append("|grudges=").Append(string.Join(",", gr));
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -285,6 +298,12 @@ namespace Game.Core.Ring.Career
             string v;
             LastOutcome = kv.TryGetValue("lastout", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
             LastPlanOutcome = kv.TryGetValue("lastplan", out v) ? (FeudPlanOutcome)int.Parse(v, CultureInfo.InvariantCulture) : FeudPlanOutcome.Neither;
+            // сходинки сили додано 06.11.2026: старі зліпки — «знімка ще не було», образ немає
+            TierPos = kv.TryGetValue("tierpos", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
+            TierGrowth = kv.TryGetValue("tiergrowth", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            Grudges.Clear();
+            if (kv.TryGetValue("grudges", out v))
+                foreach (var g in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) Grudges.Add(Uri.UnescapeDataString(g));
         }
 
         private static string Need(Dictionary<string, string> kv, string key)

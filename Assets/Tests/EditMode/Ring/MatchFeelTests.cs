@@ -111,6 +111,7 @@ namespace Game.Tests.EditMode
                 var s = CareerKit.NewHero((ulong)(9000 + i));
                 var rep = new CareerRunReport();
                 int guard = 0;
+                string extra = null;
                 while (s.State.Season <= seasons && guard++ < 3000)
                 {
                     if (s.Stage == CareerStage.SeasonEnd)
@@ -128,6 +129,17 @@ namespace Game.Tests.EditMode
                             string sk = "~щаблі s" + season + (s.State.IsTitle ? " титул" : s.State.IsFeudShow ? " ворожнеча" : "");
                             if (!d.TryGetValue(sk, out st)) d[sk] = st = new int[4];
                             st[0] += s.RivalStepsNow(); st[1] += s.PlayerGrowth(); st[2]++; st[3] += s.State.IsInjured ? 100 : 0;
+                            // Пік — щотижневий матч, де суперник слабший за поточний ріст гравця хоча б на щабель (виріс між підвищеннями).
+                            extra = null;
+                            if (!s.State.IsTitle && !s.State.IsFeudShow)
+                            {
+                                if (s.IsRematch) extra = "реванш";
+                                else
+                                {
+                                    int lag = CareerRules.RivalSteps(s.State.Position, s.PlayerGrowth()) - s.RivalStepsNow();
+                                    if (lag >= 2) extra = "пік 2+"; else if (lag == 1) extra = "пік 1";
+                                }
+                            }
                             s.StartShow();
                             break;
                         }
@@ -136,6 +148,7 @@ namespace Game.Tests.EditMode
                             AiPlay(s.Engine);
                             var r = s.FinishMatch();
                             add(r.IsTitle ? "титул" : "s" + season + " w" + week, r.Winner);
+                            if (extra != null) add(extra, r.Winner);
                             break;
                         }
                         case ShowPhase.Feud:
@@ -184,6 +197,14 @@ namespace Game.Tests.EditMode
                 var f = d["ворожнеча s" + season];
                 double fr = (double)f[0] / (f[0] + f[1] + f[2]);
                 Assert.That(fr, Is.InRange(0.38, 0.68), "ворожнеча з Молотом, сезон " + season + ": " + fr.ToString("P0"));
+            }
+            // Піки сили (власник 06.11.2026: «Піки 70–80%»): реванш і щотижневий матч після прокачки (суперник відстає на 2+
+            // щаблі) — 70–80 %. Замір 06.11.2026: реванш 73 %, пік 2+ 71 %. Межі — із запасом на шум.
+            foreach (var key in new[] { "реванш", "пік 2+" })
+            {
+                var pk = d[key];
+                double pr = (double)pk[0] / (pk[0] + pk[1] + pk[2]);
+                Assert.That(pr, Is.InRange(0.64, 0.86), key + ": " + pr.ToString("P0"));
             }
             var t = d["титул"];
             double tr = (double)t[0] / (t[0] + t[1] + t[2]);

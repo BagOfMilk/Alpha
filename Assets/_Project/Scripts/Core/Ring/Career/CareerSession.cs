@@ -187,6 +187,7 @@ namespace Game.Core.Ring.Career
                     ? ShowBooker.ChooseBig(Content, State, Popularity, HammerAvailable, lv)
                     : ShowBooker.ChooseWeekly(Content, State, Popularity, HammerAvailable, lv);
                 State.Position = State.IsBig ? CardPosition.Main : CareerRules.PositionFor(Popularity);
+                if (!State.IsBig) UpdateTier();
                 State.Plan = ShowBooker.PlanFor(opp, Popularity, Trust);
                 State.Stip = ShowBooker.StipulationsFor(lv(opp.Id));
             }
@@ -217,7 +218,7 @@ namespace Game.Core.Ring.Career
                 OpponentFeudLevel = opp == null ? 0 : FeudLevel(opp.Id), Position = State.Position, Plan = State.Plan,
                 Stipulations = State.Stip, Fee = ShowBooker.Fee(State.Position, State.IsBig),
                 WinBonus = CareerRules.WinBonus, HypeBonus = CareerRules.HypeBonus, PromoHypeBonus = State.NextHypeBonus,
-                CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow()
+                CanWithdraw = State.IsInjured && !State.IsBig, RivalSteps = RivalStepsNow(), IsRematch = IsRematch
             };
             c.Injuries = InjuryViews();
             return c;
@@ -251,9 +252,25 @@ namespace Game.Core.Ring.Career
         public int RivalStepsNow()
         {
             int growth = PlayerGrowth();
+            // Кульмінації — на поточному рості: ворожнеча й титул лишаються важкими.
             if (State.IsFeudShow) return CareerRules.HammerBaseSteps + Feud.Records.Count * CareerRules.HammerStepsPerMatch + growth;
             if (State.IsTitle) return CareerRules.TitleSteps + growth;
-            return CareerRules.RivalSteps(State.Position, growth);
+            // Щотижневі — на знімку росту, знятому на вході в щабель картки: виріс між підвищеннями — виграєш частіше (пік);
+            // підвищили — суперники знову твого рівня. Реванш — суперник слабший.
+            int steps = CareerRules.RivalSteps(State.Position, State.TierPos < 0 ? growth : State.TierGrowth);
+            if (IsRematch) steps -= CareerRules.RematchSteps;
+            return Math.Max(0, steps);
+        }
+
+        /// <summary>Цього вечора — реванш із тим, хто переміг гравця останнього разу.</summary>
+        public bool IsRematch { get { return !State.IsFeudShow && !State.IsTitle && State.Grudges.Contains(State.Opponent); } }
+
+        /// <summary>Сходинка: на новому (вищому) щаблі картки — знімок поточного росту; на нижчому — щабель знижено, знімок той самий.</summary>
+        private void UpdateTier()
+        {
+            int pos = (int)State.Position;
+            if (pos > State.TierPos) State.TierGrowth = PlayerGrowth();
+            State.TierPos = pos;
         }
 
         private List<InjuryView> InjuryViews()
@@ -902,6 +919,9 @@ namespace Game.Core.Ring.Career
             r.DevPointsGained = DevPoints - State.DevPointsAtMatchStart;
             State.LastOpponent = State.Opponent;
             State.LastOutcome = res.Winner == MatchWinner.Player ? 1 : res.Winner == MatchWinner.Rival ? 2 : 3;
+            // Реванш одноразовий: перевага «знаю його слабкість» — на один матч; програв і реванш — нової образи немає.
+            bool rematch = State.Grudges.Remove(State.Opponent);
+            if (res.Winner == MatchWinner.Rival && !rematch && !State.IsTitle) State.Grudges.Add(State.Opponent);
             State.LastPlanOutcome = outcome;
             State.NextHypeBonus = 0; State.RivalBoost = 0;
             State.Last = r;
@@ -1084,6 +1104,10 @@ namespace Game.Core.Ring.Career
         public void StartNextSeason()
         {
             if (!CanStartNextSeason) throw new InvalidOperationException("Сезон ще не закрито");
+            // Новий сезон — хедлайнери підтягуються: знімок росту наздоганяє поточний на CatchUp/Den (на мейн-івенті вищого
+            // щабля немає, і без цього знімок застигав: третій сезон 81–87 %).
+            if (State.TierPos >= 0)
+                State.TierGrowth += (PlayerGrowth() - State.TierGrowth) * CareerRules.SeasonCatchUpNum / CareerRules.SeasonCatchUpDen;
             if (State.Report.Fired)
             {
                 Feud.State.Audience = CareerRules.FiredPopularity;

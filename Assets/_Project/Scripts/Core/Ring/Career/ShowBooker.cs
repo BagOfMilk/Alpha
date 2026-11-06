@@ -137,6 +137,7 @@ namespace Game.Core.Ring.Career
                 if (!Eligible(n, st, hammerAvailable) || n.Id == exclude) continue;
                 int score = 20 - 3 * Math.Abs(n.Rank - target) + 2 * feudLevel(n.Id) + Mix(st.Seed, salt, n.Rank) % 3;
                 if (n.Id == st.LastOpponent) score -= 8;
+                if (st.Grudges.Contains(n.Id)) score += CareerRules.RematchBookingScore;
                 if (score > bestScore) { best = n; bestScore = score; }
             }
             return best;

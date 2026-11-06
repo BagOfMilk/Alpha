@@ -16,6 +16,31 @@ namespace Game.Tests.EditMode
             return fresh;
         }
 
+        /// <summary>Сходинки сили (06.11.2026): знімок щабля й образи переживають зліпок; старий зліпок без них — «знімка ще не було».</summary>
+        [Test]
+        public void PowerSteps_TierSnapshotAndGrudges_SurviveSave_AndOldSavesStillLoad()
+        {
+            var s = CareerKit.NewHero(41);
+            s.State.TierPos = 2; s.State.TierGrowth = 3;
+            s.State.Grudges.Add("baron"); s.State.Grudges.Add("vdova");
+            var f = Restored(s, 41);
+            Assert.AreEqual(2, f.State.TierPos);
+            Assert.AreEqual(3, f.State.TierGrowth);
+            CollectionAssert.AreEquivalent(new[] { "baron", "vdova" }, f.State.Grudges);
+
+            string old = s.CaptureState();
+            foreach (var key in new[] { "|tierpos=", "|tiergrowth=", "|grudges=" })
+            {
+                int i = old.IndexOf(key, StringComparison.Ordinal);
+                int j = old.IndexOf('|', i + 1);
+                old = old.Remove(i, (j < 0 ? old.Length : j) - i);
+            }
+            var g = CareerKit.Fresh(41, s.Content);
+            g.RestoreState(old);
+            Assert.AreEqual(-1, g.State.TierPos);
+            Assert.AreEqual(0, g.State.Grudges.Count);
+        }
+
         private static void AssertRestoresEqual(CareerSession s, ulong seed, string where)
         {
             var fresh = Restored(s, seed);

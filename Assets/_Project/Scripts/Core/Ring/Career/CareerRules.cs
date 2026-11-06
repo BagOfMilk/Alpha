@@ -100,6 +100,13 @@ namespace Game.Core.Ring.Career
         /// Offset 21: перші одиниці росту (кінець першого — початок другого сезону) ще не підсилюють суперника.
         /// </summary>
         public const int RivalGrowthNum = 5, RivalGrowthOffset = 21, RivalGrowthDen = 8;
+        /// <summary>На початку сезону знімок росту щабля наздоганяє поточний ріст на Num/Den.</summary>
+        public const int SeasonCatchUpNum = 1, SeasonCatchUpDen = 1;
+        /// <summary>Реванш із тим, хто тебе переміг: суперник слабший на стільки щаблів (ти знаєш його слабкість).</summary>
+        public const int RematchSteps = 2;
+        /// <summary>Букер охоче ставить реванш: стільки балів до вибору суперника, який тебе переміг.</summary>
+        public const int RematchBookingScore = 3;
+
         /// <summary>Молот: щаблів у першому матчі ворожнечі й за кожен наступний (матчі — у різних сезонах).</summary>
         public const int HammerBaseSteps = 1;
         public const int HammerStepsPerMatch = 2;
