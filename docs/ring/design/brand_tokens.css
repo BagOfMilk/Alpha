@@ -48,6 +48,9 @@
   --alpha-scrim: 0.72;
   --alpha-plate: 0.94;
   --alpha-underlay: 0.62;
+  --alpha-tronGhost: 0.18;
+  --alpha-tronDim: 0.34;
+  --alpha-tronMid: 0.58;
   --size-micro: 13px;
   --size-label: 15px;
   --size-body: 17px;
