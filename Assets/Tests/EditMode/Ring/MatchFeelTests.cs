@@ -86,6 +86,81 @@ namespace Game.Tests.EditMode
                 f.Wins, f.Losses, f.Draws, f.FinisherLanded, f.ComebackWins);
         }
 
+        private static void AiPlay(MatchEngine e)
+        {
+            int guard = 0;
+            while (!e.IsOver && guard++ < 4000) MatchAi.Step(e);
+        }
+
+        /// <summary>
+        /// Перемоги гравця за тижнем сезону, на великому шоу ворожнечі й у титульному матчі (відповідь власника 06.11.2026 «Так,
+        /// поміряй» на 75 % перемог у тижні 1). Кар'єру веде CareerBot (дії тижня, розвиток), кожен матч — однаковий ШІ за обидві
+        /// сторони; титульний шанс береться завжди. Ключ — «s{сезон} w{тиждень}» і окремо «ворожнеча», «титул».
+        /// </summary>
+        public static SortedDictionary<string, int[]> WinRates(int careers, int seasons)
+        {
+            var d = new SortedDictionary<string, int[]>();
+            Action<string, MatchWinner> add = (k, w) =>
+            {
+                int[] v;
+                if (!d.TryGetValue(k, out v)) d[k] = v = new int[3];
+                v[w == MatchWinner.Player ? 0 : w == MatchWinner.Rival ? 1 : 2]++;
+            };
+            for (int i = 0; i < careers; i++)
+            {
+                var s = CareerKit.NewHero((ulong)(9000 + i));
+                var rep = new CareerRunReport();
+                int guard = 0;
+                while (s.State.Season <= seasons && guard++ < 3000)
+                {
+                    if (s.Stage == CareerStage.SeasonEnd)
+                    {
+                        if (s.CanStartTitleMatch) s.StartTitleMatch(); else s.StartNextSeason();
+                        continue;
+                    }
+                    if (s.Stage != CareerStage.Show) { CareerBot.Step(s, i % 8, rep); continue; }
+                    int season = s.State.Season, week = s.State.Week;
+                    switch (s.State.Phase)
+                    {
+                        case ShowPhase.Card: s.StartShow(); break;
+                        case ShowPhase.Match:
+                        {
+                            AiPlay(s.Engine);
+                            var r = s.FinishMatch();
+                            add(r.IsTitle ? "титул" : "s" + season + " w" + week, r.Winner);
+                            break;
+                        }
+                        case ShowPhase.Feud:
+                            if (s.Feud.Stage == RingStage.MatchPrep)
+                            {
+                                AiPlay(s.StartFeudMatch());
+                                var r = s.FinishMatch();
+                                add("ворожнеча s" + season, r.Winner);
+                            }
+                            else CareerBot.Step(s, i % 8, rep);
+                            break;
+                        case ShowPhase.Result: s.ContinueFromShow(); break;
+                    }
+                }
+            }
+            return d;
+        }
+
+        [Test]
+        public void WinRates_ByWeek_FeudAndTitle()
+        {
+            var d = WinRates(300, 3);
+            var sb = new System.Text.StringBuilder();
+            foreach (var kv in d)
+            {
+                int n = kv.Value[0] + kv.Value[1] + kv.Value[2];
+                sb.AppendFormat("{0}: перемог {1:P0} ({2}/{3}); ", kv.Key, (double)kv.Value[0] / n, kv.Value[0], n);
+            }
+            TestContext.WriteLine(sb.ToString());
+            System.Console.WriteLine("[wins] " + sb);
+            Assert.Greater(d.Count, 0);
+        }
+
         [Test]
         public void MatchFeel_Measure1000()
         {
