@@ -35,6 +35,7 @@ namespace Game.Gameplay.Ring.Models
         public const float AlphaShade = 0.45f;
         public const float AlphaScrim = 0.72f;
         public const float AlphaPlate = 0.94f;
+        public const float AlphaUnderlay = 0.62f;
 
         // ---- кегль (еталон 900 px висоти екрана) ----
         public const int TypeRefHeight = 900;

@@ -20,7 +20,7 @@
 | `Overlay` | `RingTheme.WithAlpha(RingTheme.Scrim, BrandTokens.AlphaScrim)` | |
 
 - `RingUi.PathColor`: Face → `HeroText`, Heel → `VillainText`, Rebel → `Rebel`. `RingUi.TierColor`: Strong → `Strong` (золото), Partial → `Partial` (папір), Miss → `Miss` (сигнал).
-- Прозорості (`0,45; 0,86; 0,80; 0,84`) → `BrandTokens.AlphaShade/AlphaPanel/AlphaGlass`.
+- Прозорості (`0,45; 0,86; 0,80; 0,84`) → `BrandTokens.AlphaShade/AlphaPanel/AlphaGlass`; підкладка слова виноски (`0,62`) → `BrandTokens.AlphaUnderlay`, «ПОРАЗКА» (`0,62; 0,72; 0,95`) → `RingTheme.Defeat`.
 - Решту літералів кольору (`MatchScreenView`, `PromoScreenView`, `CareerScreens`, `RingCallout`, `RingShow` `#FFD966`, `CareerLooks` костюми не чіпати — це вибір гравця) — замінити на `RingTheme.*`. Мета: числа в `guard_baseline.json` падають.
 - `CareerScreenView` дублює `RingUi.SideColumn/GlassCard/Section/HintLine/SmallButton` (`CareerScreens.cs:39–108`) — злити в `RingUi`.
 

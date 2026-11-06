@@ -75,6 +75,7 @@ ALPHA = {
     'shade': 0.45,
     'scrim': 0.72,
     'plate': 0.94,
+    'underlay': 0.62,
 }
 
 
