@@ -84,16 +84,22 @@ namespace Game.Core.Ring.Career
         // Гравець росте (розвиток, перки, прийоми), ростер — ні: без цього з другого сезону перемоги 90 %+. Щабель — +1 атрибут
         // суперникові (ShowBooker.Strengthen). Ціль: щотижневі 55–65 %, ворожнеча ~50 %, титул 35–45 %, у кожному сезоні.
 
-        /// <summary>Щаблів сили на щотижневому шоу за місцем у картці: відкривання → мейн-івент.</summary>
-        public static readonly int[] RivalStepsByPosition = { 1, 1, 1, 1 };
+        /// <summary>
+        /// Щаблів сили на щотижневому шоу за місцем у картці: відкривання → мейн-івент. Мейн-івент +1 — рішення власника 06.11.2026
+        /// («Повернути»); провал другого сезону від цієї надбавки знято порогом росту (<see cref="RivalGrowthOffset"/> 16 → 21).
+        /// </summary>
+        public static readonly int[] RivalStepsByPosition = { 1, 1, 1, 2 };
         /// <summary>
         /// Букер ставить суперників рівня гравця: + щабель за кожен куплений атрибут понад базу ґіміка і за кожні
         /// <see cref="RivalPerksPerStep"/> перки. Без цього місце в картці насичується на мейн-івенті, а гравець росте далі
         /// (замір 06.11.2026: лише за місцем — третій сезон 67–81 %, Молот 78–88 %).
         /// </summary>
         public const int RivalPerksPerStep = 2;
-        /// <summary>Щаблі за ріст гравця: (Num·одиниці − Offset) / Den, не менше 0 (замір: щабель за одиницю — перебір, усе 25–45 %).</summary>
-        public const int RivalGrowthNum = 5, RivalGrowthOffset = 16, RivalGrowthDen = 8;
+        /// <summary>
+        /// Щаблі за ріст гравця: (Num·одиниці − Offset) / Den, не менше 0 (замір: щабель за одиницю — перебір, усе 25–45 %).
+        /// Offset 21: перші одиниці росту (кінець першого — початок другого сезону) ще не підсилюють суперника.
+        /// </summary>
+        public const int RivalGrowthNum = 5, RivalGrowthOffset = 21, RivalGrowthDen = 8;
         /// <summary>Молот: щаблів у першому матчі ворожнечі й за кожен наступний (матчі — у різних сезонах).</summary>
         public const int HammerBaseSteps = 1;
         public const int HammerStepsPerMatch = 2;
