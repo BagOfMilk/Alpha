@@ -26,15 +26,28 @@ namespace Game.Core.Ring
         public const string NoNet = "no_net";
         public const string Veteran = "veteran";
         public const string IronJaw = "iron_jaw";
+        // Перки з дією (06.11.2026, пункт 2 плану лупу): міняють спосіб гри, а не цифру. Детерміновано, без нового кубика.
+        public const string Comeback = "comeback";        // Герой: друге вирване утримання за матч — жетон реверсу й імпульс до фінішера
+        public const string HeroOfCrowd = "hero_of_crowd"; // Герой, вінець: при ажіотажі ≥ 7 «продати» +1 імпульсу, «Вирватися» +1
+        public const string BribedRef = "bribed_ref";      // Лиходій: раз за матч рефері «не дорахував» — утримання зупиняється на «два»
+        public const string DirtyGame = "dirty_game";      // Лиходій, вінець: раз за матч брудний прийом без попередження й без мінуса ажіотажу
+        public const string PlanBreaker = "plan_breaker";  // Бунтар: звернутий план букера — +1 популярності й +1 очко розвитку
+        public const string Improvise = "improvise";       // Бунтар, вінець: раз за матч провал (не фінішер) стає «частково»
 
         public static readonly IReadOnlyList<PerkDef> All = new List<PerkDef>
         {
             P(SecondWind, RingPath.Face, 1, 1),
             P(CrowdFavorite, RingPath.Face, 2, 1),
+            P(Comeback, RingPath.Face, 2, 2),
+            P(HeroOfCrowd, RingPath.Face, 3, 3),
             P(EyesBehind, RingPath.Heel, 1, 1),
             P(ColdBlood, RingPath.Heel, 2, 1),
+            P(BribedRef, RingPath.Heel, 2, 2),
+            P(DirtyGame, RingPath.Heel, 3, 3),
             P(OwnScript, RingPath.Rebel, 1, 1),
             P(NoNet, RingPath.Rebel, 2, 1),
+            P(PlanBreaker, RingPath.Rebel, 2, 2),
+            P(Improvise, RingPath.Rebel, 3, 3),
             new PerkDef { Id = Veteran, NameKey = "perk." + Veteran, Path = null, Rank = 0, Cost = 2 },
             new PerkDef { Id = IronJaw, NameKey = "perk." + IronJaw, Path = null, Rank = 0, Cost = 2 }
         };
@@ -55,9 +68,10 @@ namespace Game.Core.Ring
         /// <summary>Ціна +1 до атрибута.</summary>
         public const int AttrCost = 2;
         public const int RankPointsStep = 2;
-        public const int MaxRank = 2;
+        /// <summary>Ранг 3 — «вінець» шляху (~6 очок шляху), перк, що визначає стиль. ПЛЕЙСХОЛДЕР (06.11.2026).</summary>
+        public const int MaxRank = 3;
 
-        /// <summary>Ранг шляху за очками: 2 → 1, 4 → 2.</summary>
+        /// <summary>Ранг шляху за очками: 2 → 1, 4 → 2, 6 → 3.</summary>
         public static int PathRank(int pathPoints)
         {
             int r = pathPoints / RankPointsStep;
@@ -127,6 +141,11 @@ namespace Game.Core.Ring
                     case PerkCatalog.NoNet: m.RiskyMoveBonus += 1; break;
                     case PerkCatalog.Veteran: m.ExtraReversalTokens += 1; break;
                     case PerkCatalog.IronJaw: m.DamageThresholdShift += 2; break;
+                    case PerkCatalog.Comeback: m.Comeback = true; break;
+                    case PerkCatalog.HeroOfCrowd: m.HeroOfCrowd = true; break;
+                    case PerkCatalog.BribedRef: m.BribedRef = true; break;
+                    case PerkCatalog.DirtyGame: m.DirtyGame = true; break;
+                    case PerkCatalog.Improvise: m.Improvise = true; break;
                 }
             }
             return m;

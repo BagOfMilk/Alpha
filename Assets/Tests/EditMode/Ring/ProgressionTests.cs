@@ -29,17 +29,28 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, Development.PathRank(2));
             Assert.AreEqual(1, Development.PathRank(3));
             Assert.AreEqual(2, Development.PathRank(4));
-            Assert.AreEqual(2, Development.PathRank(9), "ранг не вищий за 2");
+            Assert.AreEqual(2, Development.PathRank(5));
+            Assert.AreEqual(3, Development.PathRank(6), "ранг 3 — вінець шляху");
+            Assert.AreEqual(3, Development.PathRank(9), "ранг не вищий за 3");
         }
 
         [Test]
-        public void Catalog_HasEightPerks_WithPricesFromGdd()
+        public void Catalog_HasFourteenPerks_FourPerPath_CrownAtRankThree()
         {
-            Assert.AreEqual(8, PerkCatalog.All.Count);
+            // 06.11.2026 (пункт 2 плану лупу): 2 загальні + по 4 на шлях; ціна 1–3, ранг шляху 1–3, ранг 3 — вінець.
+            Assert.AreEqual(14, PerkCatalog.All.Count);
             foreach (var p in PerkCatalog.All)
             {
-                Assert.AreEqual(p.IsGeneral ? 2 : 1, p.Cost, p.Id);
-                if (!p.IsGeneral) Assert.IsTrue(p.Rank == 1 || p.Rank == 2, p.Id);
+                if (p.IsGeneral) { Assert.AreEqual(2, p.Cost, p.Id); continue; }
+                Assert.That(p.Cost, Is.InRange(1, 3), p.Id);
+                Assert.That(p.Rank, Is.InRange(1, 3), p.Id);
+            }
+            foreach (RingPath path in new[] { RingPath.Face, RingPath.Heel, RingPath.Rebel })
+            {
+                int n = 0, crowns = 0;
+                foreach (var p in PerkCatalog.All) if (p.Path == path) { n++; if (p.Rank == 3) crowns++; }
+                Assert.AreEqual(4, n, path.ToString());
+                Assert.AreEqual(1, crowns, "вінець " + path);
             }
             Assert.AreEqual(RingPath.Face, PerkCatalog.Find(PerkCatalog.SecondWind).Path);
             Assert.AreEqual(2, PerkCatalog.Find(PerkCatalog.CrowdFavorite).Rank);

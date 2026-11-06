@@ -76,7 +76,7 @@ namespace Game.Core.Ring.Career
         public static int Fee(CardPosition pos, bool big)
         {
             int f = CareerRules.FeeByPosition[(int)pos];
-            return big ? f * CareerRules.BigShowFeeMultiplier : f;
+            return big ? f * CareerRules.BigShowFeePercent / 100 : f;
         }
 
         /// <summary>Суперник звичайного шоу: близький за рівнем, із продовженням гарячих ворожнеч, не той самий двічі поспіль.</summary>

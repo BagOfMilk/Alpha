@@ -70,6 +70,16 @@ namespace Game.Core.Ring
         public int ExtraReversalTokens;
         /// <summary>«Залізна щелепа»: зсув порогів ушкодження (6/10 → 6+N/10+N).</summary>
         public int DamageThresholdShift;
+        /// <summary>«Камбек»: друге вирване утримання за матч дає жетон реверсу.</summary>
+        public bool Comeback;
+        /// <summary>«Герой залу»: при ажіотажі ≥ 7 «продати» прийом дає ще +1 імпульсу, а «Вирватися» — +1.</summary>
+        public bool HeroOfCrowd;
+        /// <summary>«Підкуплений суддя»: раз за матч програний «Вирватися» рефері зупиняє на «два».</summary>
+        public bool BribedRef;
+        /// <summary>«Брудна гра»: раз за матч брудний прийом без попередження й без мінуса ажіотажу.</summary>
+        public bool DirtyGame;
+        /// <summary>«Імпровізація»: раз за матч провал (не фінішер, не промінь надії) стає «частково».</summary>
+        public bool Improvise;
     }
 
     /// <summary>Усе, що матч отримує від ворожнечі (gdd §1, §3).</summary>

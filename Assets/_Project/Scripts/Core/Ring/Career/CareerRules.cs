@@ -25,13 +25,14 @@ namespace Game.Core.Ring.Career
         // ---------- гроші (§8) ----------
         public const int StartMoney = 60;
         /// <summary>Проживання за тиждень (якір шкали грошей).</summary>
-        public const int LivingCost = 20;
+        public const int LivingCost = 48;
         /// <summary>Плата тренеру за тренування (дає +1 очко розвитку понад звичайне).</summary>
         public const int TrainerCost = 10;
         public const int DoctorCost = 15;
         /// <summary>Гонорар за місцем у картці: відкриття, середина, півголовна, головна подія.</summary>
         public static readonly int[] FeeByPosition = { 10, 20, 35, 60 };
-        public const int BigShowFeeMultiplier = 2;
+        /// <summary>Велике шоу: гонорар у відсотках від звичайного (було ×2; 06.11.2026 — менше, щоб кінець сезону не заливав грошима).</summary>
+        public const int BigShowFeePercent = 150;
         public const int WinBonus = 5;
         public const int HypeBonus = 5;
         public const int HypeBonusAt = 7;
@@ -40,6 +41,24 @@ namespace Game.Core.Ring.Career
         public const int SideJobInjuryAtMost = 4;
         public const int SideJobZoneDamage = 2;
         public const int TitleWinBonus = 60;
+
+        // ---------- сітки витрат (06.11.2026, пункт 3 плану лупу: «гроші мають програвати часу чи травмі»). ПЛЕЙСХОЛДЕР ----------
+        /// <summary>Костюм: разово; +1 до ажіотажу на старті кожного матчу (вихід виглядає дорожче).</summary>
+        public const int CostumeCost = 60;
+        public const int CostumeHype = 1;
+        /// <summary>Тренер-ростер: плата за тиждень, поки найнятий; кожне тренування — прогрес його атрибута, за CoachProgressStep — +1.</summary>
+        public const int CoachWeeklyFee = 20;
+        public const int CoachProgressStep = 3;
+        /// <summary>Атрибути трьох тренерів ростера (індекс — номер тренера).</summary>
+        public static readonly RingAttr[] Coaches = { RingAttr.Strength, RingAttr.Technique, RingAttr.Stamina };
+        /// <summary>Клініка — лікар другого рівня: травма зони знімається повністю, ушкодження зони — до нуля.</summary>
+        public const int ClinicCost = 45;
+        /// <summary>Виїзне шоу: дорога коштує грошей, гонорар ×2 (на відкриванні — у мінус, вище в картці — у плюс), наступного тижня на одну дію менше (тиск часу).</summary>
+        public const int AwayTravelCost = 20;
+        /// <summary>Гонорар виїзного шоу у відсотках від звичайного.</summary>
+        public const int AwayFeePercent = 200;
+        /// <summary>Страховка на сезон: кожна нова травма коротша на тиждень (не менше одного).</summary>
+        public const int InsuranceCost = 40;
 
         // ---------- розвиток ----------
         public const int TrainingPoints = 1;

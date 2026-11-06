@@ -257,7 +257,9 @@ namespace Game.Core.Ring.Match
         /// <summary>«Вирватися»: Витривалість - вирвані - поріг - штраф прийому - пізня стадія + KickOutBonus.</summary>
         private int KickoutMod(Fighter def, int penalty)
         {
-            return MatchRules.DefenseBase + def.Stats.Get(RingAttr.Stamina) - def.KickoutsDone - Threshold(def) - penalty - Late() + Mods(def.Side).KickOutBonus;
+            // «Герой залу»: при ажіотажі 7+ зал тягне героя — +1 до «Вирватися».
+            int crowd = Mods(def.Side).HeroOfCrowd && _s.Hype >= MatchRules.HeroOfCrowdHype ? 1 : 0;
+            return MatchRules.DefenseBase + def.Stats.Get(RingAttr.Stamina) - def.KickoutsDone - Threshold(def) - penalty - Late() + Mods(def.Side).KickOutBonus + crowd;
         }
 
         private int EndureMod(Fighter def, int penalty)
@@ -359,9 +361,16 @@ namespace Game.Core.Ring.Match
             me.Momentum -= boostPoints;
             int total = pr.Total + boostPoints;
             var tier = TwoD6.TierOf(total);
+            bool improvised = false;
+            if (tier == RollTier.Miss && Mods(me.Side).Improvise && !me.ImproviseUsed
+                && pr.Action != MatchActionId.Finisher && pr.Action != MatchActionId.HopeSpot)
+            {
+                tier = RollTier.Partial; me.ImproviseUsed = true; improvised = true;
+            }
             PendingRoll = null; Phase = MatchPhase.AwaitAction;
             var ev = Ev(MatchEventKind.Action, me.Side, pr.Action);
             ev.HasRoll = true; ev.Roll = pr.Roll; ev.Modifier = pr.Modifier; ev.Total = total; ev.Tier = tier; ev.BoostSpent = boostPoints;
+            ev.Perk = improvised ? PerkCatalog.Improvise : null;
             if (boostPoints > 0) Fx(MatchEffectKind.Momentum, me.Side, -boostPoints);
             if (_repeatPending) { Hype(-1); _repeatPending = false; }
             ApplyRolled(pr.Action, tier, me, opp);
@@ -394,6 +403,7 @@ namespace Game.Core.Ring.Match
         {
             Ev(MatchEventKind.Sell, def.Side, id);
             AddMomentum(def, 1);
+            if (Mods(def.Side).HeroOfCrowd && _s.Hype >= MatchRules.HeroOfCrowdHype) AddMomentum(def, 1);
             if (RoleOf(def.Side) == RingPath.Face) Hype(1);
             if (def.Side == MatchSide.Player) _s.PlayerSells++;
         }
@@ -504,8 +514,11 @@ namespace Game.Core.Ring.Match
             bool warned = false;
             if (t != RollTier.Miss) Dmg(opp, 2 + _extraDamage);
             bool sees = !_s.RefereeDistracted;
+            // «Брудна гра»: раз за матч рефері дивиться вбік — ні попередження, ні мінуса ажіотажу.
+            bool covered = Mods(me.Side).DirtyGame && !me.DirtyCoverUsed && (t == RollTier.Miss || (t == RollTier.Partial && !Mods(me.Side).DirtyNoWarningOnPartial));
+            if (covered) { me.DirtyCoverUsed = true; sees = false; }
             if (t == RollTier.Partial && sees && !Mods(me.Side).DirtyNoWarningOnPartial) warned = Warn(me);
-            else if (t == RollTier.Miss) { if (sees) warned = Warn(me); Hype(-1); }
+            else if (t == RollTier.Miss) { if (sees) warned = Warn(me); if (!covered) Hype(-1); }
             if (role == RingPath.Heel && t != RollTier.Miss && !warned) Hype(1);
         }
 
@@ -539,8 +552,11 @@ namespace Game.Core.Ring.Match
         {
             int roll = TwoD6.Roll(_dice, "m:kick:" + def.Side);
             int mod = KickoutMod(def, penalty); int total = roll + mod; var tier = TwoD6.TierOf(total);
+            // «Підкуплений суддя»: раз за матч рахунок зупиняється на «два» замість «трьох».
+            string perk = null;
+            if (tier == RollTier.Miss && Mods(def.Side).BribedRef && !def.BribeUsed) { tier = RollTier.Partial; def.BribeUsed = true; perk = PerkCatalog.BribedRef; }
             var ev = Ev(MatchEventKind.Kickout, def.Side, MatchActionId.Pin);
-            ev.HasRoll = true; ev.Roll = roll; ev.Modifier = mod; ev.Total = total; ev.Tier = tier;
+            ev.HasRoll = true; ev.Roll = roll; ev.Modifier = mod; ev.Total = total; ev.Tier = tier; ev.Perk = perk;
             if (tier == RollTier.Miss)
             {
                 if (def.Side == MatchSide.Player && _setup.PlayerHasAlly && !_s.AllyUsed
@@ -554,6 +570,12 @@ namespace Game.Core.Ring.Match
                 return;
             }
             def.KickoutsDone++;
+            if (Mods(def.Side).Comeback && !def.ComebackGiven && def.KickoutsDone >= MatchRules.ComebackKickouts)
+            {
+                // Камбек: жетон реверсу й імпульс до порогу фінішера — зал піднімає героя.
+                def.ComebackGiven = true; def.ReversalTokens++; Fx(MatchEffectKind.Token, def.Side, 1);
+                if (def.Momentum < MatchRules.FinisherMomentum) AddMomentum(def, MatchRules.FinisherMomentum - def.Momentum);
+            }
             if (tier == RollTier.Partial)
             {
                 Hype(2); AddMomentum(def, 1);

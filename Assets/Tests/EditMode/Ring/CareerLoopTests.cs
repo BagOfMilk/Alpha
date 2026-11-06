@@ -190,7 +190,8 @@ namespace Game.Tests.EditMode
         {
             Assert.Less(ShowBooker.Fee(CardPosition.Opener, false), ShowBooker.Fee(CardPosition.Midcard, false));
             Assert.Less(ShowBooker.Fee(CardPosition.SemiMain, false), ShowBooker.Fee(CardPosition.Main, false));
-            Assert.AreEqual(ShowBooker.Fee(CardPosition.Midcard, false) * 2, ShowBooker.Fee(CardPosition.Midcard, true));
+            Assert.AreEqual(ShowBooker.Fee(CardPosition.Midcard, false) * CareerRules.BigShowFeePercent / 100, ShowBooker.Fee(CardPosition.Midcard, true));
+            Assert.Greater(ShowBooker.Fee(CardPosition.Midcard, true), ShowBooker.Fee(CardPosition.Midcard, false), "велике шоу платить більше");
             Assert.AreEqual(CardPosition.Opener, CareerRules.PositionFor(0));
             Assert.AreEqual(CardPosition.Midcard, CareerRules.PositionFor(3));
             Assert.AreEqual(CardPosition.SemiMain, CareerRules.PositionFor(6));

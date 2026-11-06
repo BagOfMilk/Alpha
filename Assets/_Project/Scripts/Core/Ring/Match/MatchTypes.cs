@@ -63,6 +63,8 @@ namespace Game.Core.Ring.Match
         public int Total;
         public RollTier Tier;
         public int BoostSpent;
+        /// <summary>Перк з дією, що змінив цю подію (показ: «Імпровізація», «Підкуплений суддя»); null — жоден.</summary>
+        public string Perk;
         public List<MatchEffect> Effects = new List<MatchEffect>();
 
         public int EffectSum(MatchEffectKind kind, MatchSide who)

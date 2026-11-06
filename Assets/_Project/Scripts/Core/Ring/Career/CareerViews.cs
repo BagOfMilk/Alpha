@@ -96,6 +96,8 @@ namespace Game.Core.Ring.Career
     {
         public WeekActionKind Kind;
         public bool Ok;
+        /// <summary>Тренер ростера підняв свій атрибут цим тренуванням.</summary>
+        public bool CoachRaised;
         /// <summary>Причина відмови (ключ): "stage", "no_actions", "money", "choice_pending", "nothing", "zone", "scene_open".</summary>
         public string Reason;
         public bool HasRoll;

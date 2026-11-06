@@ -157,6 +157,7 @@ namespace Game.Core.Ring.Career
         private void StartWeek()
         {
             State.ActionsLeft = State.Strained ? CareerRules.StrainedActions : CareerRules.ActionsPerWeek;
+            if (State.AwayTired) { State.ActionsLeft = Math.Max(1, State.ActionsLeft - 1); State.AwayTired = false; }
             State.ActionsDone.Clear();
             State.PromoChoicePending = false;
             State.Phase = ShowPhase.None;
@@ -235,7 +236,10 @@ namespace Game.Core.Ring.Career
             for (int i = 0; i < 5; i++) bought += Math.Max(0, Player.Get((RingAttr)i) - g.Attr[i]);
             int learned = 0;
             foreach (var id in State.Moves) { var m = Content.Moves.Find(id); if (m != null && m.Kind == MoveKind.Learn) learned++; }
-            int units = Math.Max(0, bought - 1) + Feud.State.Perks.Count / CareerRules.RivalPerksPerStep + learned;
+            // Перки — за ціною (вінець за 3 очки сильніший за перк за 1): кожні RivalPerksPerStep очок ціни — одиниця.
+            int perkCost = 0;
+            foreach (var id in Feud.State.Perks) { var pd = PerkCatalog.Find(id); perkCost += pd != null ? pd.Cost : 1; }
+            int units = Math.Max(0, bought - 1) + perkCost / CareerRules.RivalPerksPerStep + learned;
             // Опукло: перші одиниці росту (вільний бал, перший перк) майже не роблять гравця сильнішим — суперник ще не росте;
             // далі — щабель на кожні ~1,6 одиниці (замір 06.11.2026: лінійно — другий сезон 40–45 %, третій 47–60 %).
             return Math.Max(0, (CareerRules.RivalGrowthNum * units - CareerRules.RivalGrowthOffset) / CareerRules.RivalGrowthDen);
@@ -271,6 +275,58 @@ namespace Game.Core.Ring.Career
             int pos = (int)State.Position;
             if (pos > State.TierPos) State.TierGrowth = PlayerGrowth();
             State.TierPos = pos;
+        }
+
+        // ---------- сітки витрат (не займають дій тижня) ----------
+
+        public bool CanBuyCostume { get { return Stage == CareerStage.Week && !State.CostumeBought && State.Money >= CareerRules.CostumeCost; } }
+
+        public bool BuyCostume()
+        {
+            if (!CanBuyCostume) return false;
+            State.Money -= CareerRules.CostumeCost; State.CostumeBought = true;
+            return true;
+        }
+
+        /// <summary>Найняти тренера ростера (0..2) або звільнити (−1). Плата — щотижня в кінці тижня; перший тиждень — одразу.</summary>
+        public bool HireCoach(int coach)
+        {
+            if (Stage != CareerStage.Week) return false;
+            if (coach < 0) { State.Coach = -1; return true; }
+            if (coach >= CareerRules.Coaches.Length || coach == State.Coach || State.Money < CareerRules.CoachWeeklyFee) return false;
+            State.Money -= CareerRules.CoachWeeklyFee;
+            State.Coach = coach; State.CoachProgress = 0;
+            return true;
+        }
+
+        public bool CanBuyInsurance { get { return Stage == CareerStage.Week && State.InsuredSeason != State.Season && State.Money >= CareerRules.InsuranceCost; } }
+
+        public bool BuyInsurance()
+        {
+            if (!CanBuyInsurance) return false;
+            State.Money -= CareerRules.InsuranceCost; State.InsuredSeason = State.Season;
+            return true;
+        }
+
+        /// <summary>Клініка: травма зони знімається повністю (лікар другого рівня). Не займає дії тижня.</summary>
+        public bool CanClinic(BodyZone z) { return Stage == CareerStage.Week && State.Money >= CareerRules.ClinicCost && (State.Injury[(int)z] > 0 || State.ZoneDamage[(int)z] > 0); }
+
+        public bool Clinic(BodyZone z)
+        {
+            if (!CanClinic(z)) return false;
+            State.Money -= CareerRules.ClinicCost;
+            State.Injury[(int)z] = 0; State.ZoneDamage[(int)z] = 0;
+            return true;
+        }
+
+        /// <summary>Виїзне шоу цього тижня (не велике й не титульне): дорога зараз, гонорар ×2, наступного тижня на дію менше.</summary>
+        public bool CanGoAway { get { return Stage == CareerStage.Week && !State.AwayShow && !State.IsBig && State.Money >= CareerRules.AwayTravelCost; } }
+
+        public bool GoAway()
+        {
+            if (!CanGoAway) return false;
+            State.Money -= CareerRules.AwayTravelCost; State.AwayShow = true;
+            return true;
         }
 
         private List<InjuryView> InjuryViews()
@@ -328,6 +384,16 @@ namespace Game.Core.Ring.Career
                 pts += CareerRules.TrainerExtraPoints;
             }
             Feud.State.DevPoints += pts; r.DevPointsDelta = pts;
+            if (State.Coach >= 0)
+            {
+                var a = CareerRules.Coaches[State.Coach];
+                if (++State.CoachProgress >= CareerRules.CoachProgressStep && Player.Get(a) < WrestlerStats.MaxAttr)
+                {
+                    State.CoachProgress = 0;
+                    Player.Set(a, Player.Get(a) + 1);
+                    r.CoachRaised = true;
+                }
+            }
             return Done(r);
         }
 
@@ -650,6 +716,7 @@ namespace Game.Core.Ring.Career
             State.ZoneDamage[zone] = 0;
             int span = CareerRules.MaxInjuryWeeks - CareerRules.MinInjuryWeeks + 1;
             State.Injury[zone] = CareerRules.MinInjuryWeeks + ShowBooker.Mix(State.Seed, State.Season * 100 + State.Week, 11 + zone) % span;
+            if (State.InsuredSeason == State.Season) State.Injury[zone] = Math.Max(1, State.Injury[zone] - 1);
             return true;
         }
 
@@ -759,7 +826,7 @@ namespace Game.Core.Ring.Career
             var npc = Content.FindNpc(State.Opponent);
             var mods = Development.ToModifiers(Feud.State.Perks);
             var rivalMods = new MatchModifiers();
-            int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus
+            int hype = 1 + FeudLevel(npc.Id) + mods.StartHypeBonus + State.NextHypeBonus + (State.CostumeBought ? CareerRules.CostumeHype : 0)
                        + (State.IsInjured ? CareerRules.InjuredShowHype : 0);
             var setup = new MatchSetup
             {
@@ -906,11 +973,17 @@ namespace Game.Core.Ring.Career
                 Position = State.Position, Winner = res.Winner, EndKind = res.Kind, Hype = res.FinalHype, Rounds = res.Rounds,
                 PlanOutcome = outcome, PopularityBefore = popBefore, TrustBefore = trustBefore
             };
-            r.Fee = ShowBooker.Fee(State.Position, State.IsBig);
+            r.Fee = ShowBooker.Fee(State.Position, State.IsBig) * (State.AwayShow ? CareerRules.AwayFeePercent : 100) / 100;
             if (res.Winner == MatchWinner.Player) r.FeeWinBonus = CareerRules.WinBonus;
             if (res.FinalHype >= CareerRules.HypeBonusAt) r.FeeHypeBonus = CareerRules.HypeBonus;
             State.Money += r.TotalFee;
 
+            // «Злам плану» (Бунтар): звернутий план букера — зал це любить і букер запам'ятовує.
+            if (outcome == FeudPlanOutcome.Swerved && Feud.State.Perks.Contains(PerkCatalog.PlanBreaker))
+            {
+                Feud.State.Audience = Math.Min(CareerRules.MaxPopularity, Feud.State.Audience + 1);
+                Feud.State.DevPoints += 1;
+            }
             ApplyBodyDamage(e, r, wasInjured, res);
             ApplyOpponentFeud(res, feudMatch);
             if (State.IsTitle) ApplyTitle(res, r);
@@ -1042,6 +1115,13 @@ namespace Game.Core.Ring.Career
         {
             if (State.Money >= CareerRules.LivingCost) { State.Money -= CareerRules.LivingCost; State.Strained = false; }
             else { State.Money = 0; State.Strained = true; }
+            // Тренер ростера: плата щотижня; не вистачило — йде.
+            if (State.Coach >= 0)
+            {
+                if (State.Money >= CareerRules.CoachWeeklyFee) State.Money -= CareerRules.CoachWeeklyFee;
+                else State.Coach = -1;
+            }
+            if (State.AwayShow) { State.AwayShow = false; State.AwayTired = true; }
             for (int z = 0; z < 3; z++)
             {
                 State.ZoneDamage[z] = Math.Max(0, State.ZoneDamage[z] - CareerRules.WeeklyZoneHeal);

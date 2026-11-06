@@ -24,6 +24,8 @@ namespace Game.Core.Ring.Match
         public bool NextHitBonus;
         /// <summary>Зона «канати/кут» лишилась з минулого ходу — на кінці цього ходу скинеться до центру.</summary>
         public bool ZoneCarried;
+        /// <summary>Перки з дією «раз за матч»: уже спрацювали.</summary>
+        public bool ComebackGiven, BribeUsed, DirtyCoverUsed, ImproviseUsed;
 
         public bool IsUpright { get { return Posture != Posture.Down; } }
     }

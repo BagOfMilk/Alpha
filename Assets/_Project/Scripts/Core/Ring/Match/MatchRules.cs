@@ -3,6 +3,10 @@ namespace Game.Core.Ring.Match
     /// <summary>Усі числа матчу в одному місці (gdd §2). ПЛЕЙСХОЛДЕР: балансуються тут, а не по коду.</summary>
     public static class MatchRules
     {
+        /// <summary>«Герой залу»: з якого ажіотажу «продати» дає ще +1 імпульсу. ПЛЕЙСХОЛДЕР (06.11.2026).</summary>
+        public const int HeroOfCrowdHype = 7;
+        /// <summary>«Камбек»: після скількох вирваних утримань — жетон реверсу й імпульс до порогу фінішера. ПЛЕЙСХОЛДЕР (06.11.2026).</summary>
+        public const int ComebackKickouts = 2;
         public const int ApPerTurn = 3;
         public const int MaxCarryAp = 1;
         public const int StunApPenalty = 1;

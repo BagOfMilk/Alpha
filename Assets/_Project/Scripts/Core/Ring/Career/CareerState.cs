@@ -193,6 +193,14 @@ namespace Game.Core.Ring.Career
         /// знімок. Щотижневі суперники рівняються на знімок, а не на поточний ріст: прокачка між підвищеннями відчувається.
         /// </summary>
         public int TierPos = -1;
+        /// <summary>Сітки витрат (06.11.2026): костюм куплено; тренер ростера (−1 — немає) і прогрес його атрибута; страховка на
+        /// сезон (номер сезону, 0 — ні); виїзне шоу цього тижня й штраф часу наступного.</summary>
+        public bool CostumeBought;
+        public int Coach = -1;
+        public int CoachProgress;
+        public int InsuredSeason;
+        public bool AwayShow;
+        public bool AwayTired;
         public int TierGrowth;
         /// <summary>Хто переміг гравця останнього разу (реванш — суперник слабший: ти знаєш його слабкість). Перемога знімає образу.</summary>
         public readonly SortedSet<string> Grudges = new SortedSet<string>(StringComparer.Ordinal);
@@ -254,6 +262,8 @@ namespace Game.Core.Ring.Career
             sb.Append("|bs=").Append(string.Join(",", bs));
             sb.Append("|lastout=").Append(LastOutcome).Append("|lastplan=").Append((int)LastPlanOutcome);
             sb.Append("|tierpos=").Append(TierPos).Append("|tiergrowth=").Append(TierGrowth);
+            sb.Append("|costume2=").Append(b(CostumeBought)).Append("|coach=").Append(Coach).Append("|coachp=").Append(CoachProgress);
+            sb.Append("|insured=").Append(InsuredSeason).Append("|away=").Append(b(AwayShow)).Append("|awaytired=").Append(b(AwayTired));
             var gr = new List<string>();
             foreach (var g in Grudges) gr.Add(Esc(g));
             sb.Append("|grudges=").Append(string.Join(",", gr));
@@ -301,6 +311,13 @@ namespace Game.Core.Ring.Career
             // сходинки сили додано 06.11.2026: старі зліпки — «знімка ще не було», образ немає
             TierPos = kv.TryGetValue("tierpos", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
             TierGrowth = kv.TryGetValue("tiergrowth", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            // сітки витрат додано 06.11.2026: старі зліпки — нічого не куплено
+            CostumeBought = kv.TryGetValue("costume2", out v) && v == "1";
+            Coach = kv.TryGetValue("coach", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
+            CoachProgress = kv.TryGetValue("coachp", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            InsuredSeason = kv.TryGetValue("insured", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : 0;
+            AwayShow = kv.TryGetValue("away", out v) && v == "1";
+            AwayTired = kv.TryGetValue("awaytired", out v) && v == "1";
             Grudges.Clear();
             if (kv.TryGetValue("grudges", out v))
                 foreach (var g in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) Grudges.Add(Uri.UnescapeDataString(g));
