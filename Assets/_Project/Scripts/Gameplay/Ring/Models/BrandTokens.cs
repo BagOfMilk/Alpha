@@ -25,6 +25,8 @@ namespace Game.Gameplay.Ring.Models
         public const uint Cobalt = 0x2F6FD6;
         public const uint CobaltText = 0x6DB6FF;
         public const uint Rose = 0xFF7AB8;
+        public const uint Frost = 0xB7C6E0;
+        public const uint Slate = 0x232A39;
         public const uint Black = 0x000000;
 
         // ---- прозорості ----

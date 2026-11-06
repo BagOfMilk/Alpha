@@ -17,6 +17,8 @@
     "cobalt": "#2F6FD6",
     "cobaltText": "#6DB6FF",
     "rose": "#FF7AB8",
+    "frost": "#B7C6E0",
+    "slate": "#232A39",
     "black": "#000000"
   },
 
@@ -42,6 +44,10 @@
     "villain": "crimson",
     "villainText": "signal",
     "rebel": "rose",
+    "impulse": "gold",
+    "hype": "paper",
+    "defeat": "frost",
+    "defeatPlate": "slate",
     "scrim": "black"
   },
 
@@ -117,6 +123,9 @@
     { "fg": "ink0", "bg": "signal", "min": 4.5, "use": "текст на сигнальній пластині" },
     { "fg": "paper", "bg": "crimson", "min": 4.5, "use": "текст на кармінній поверхні" },
     { "fg": "paper", "bg": "cobalt", "min": 3.0, "use": "великий текст на кобальті (не дрібний)" },
+    { "fg": "frost", "bg": "slate", "min": 4.5, "use": "текст поразки на холодній пластині" },
+    { "fg": "dim", "bg": "slate", "min": 4.5, "use": "підпис поразки" },
+    { "fg": "paper", "bg": "slate", "min": 4.5, "use": "текст на холодній пластині" },
     { "fg": "ash", "bg": "ink1", "min": 3.0, "use": "недоступне (XAG: 3:1)" }
   ],
 
@@ -130,6 +139,8 @@
     { "a": "rose", "b": "signal", "minDeltaE": 20, "use": "бунтар проти шкоди" },
     { "a": "rose", "b": "cobaltText", "minDeltaE": 20, "use": "бунтар проти героя" },
     { "a": "rose", "b": "paper", "minDeltaE": 20, "use": "бунтар проти звичайного тексту" },
+    { "a": "frost", "b": "cobaltText", "minDeltaE": 20, "use": "поразка проти героя" },
+    { "a": "frost", "b": "gold", "minDeltaE": 20, "use": "поразка проти нагороди" },
     { "a": "crimson", "b": "cobalt", "minDeltaE": 20, "use": "лиходій проти героя (поверхні)" }
   ]
 }

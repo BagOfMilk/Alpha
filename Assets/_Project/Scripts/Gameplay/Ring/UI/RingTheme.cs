@@ -47,6 +47,8 @@ namespace Game.Gameplay.Ring.UI
         public static readonly Color Cobalt = Rgb(BrandTokens.Cobalt);
         public static readonly Color CobaltText = Rgb(BrandTokens.CobaltText);
         public static readonly Color Rose = Rgb(BrandTokens.Rose);
+        public static readonly Color Frost = Rgb(BrandTokens.Frost);
+        public static readonly Color Slate = Rgb(BrandTokens.Slate);
         public static readonly Color Black = Rgb(BrandTokens.Black);
 
         // ---- ролі (колір = сенс; один колір — один сенс, Статут COL-02) ----
@@ -71,6 +73,10 @@ namespace Game.Gameplay.Ring.UI
         public static readonly Color Villain = Crimson;
         public static readonly Color VillainText = Signal;
         public static readonly Color Rebel = Rose;
+        public static readonly Color Impulse = Gold;
+        public static readonly Color Hype = Paper;
+        public static readonly Color Defeat = Frost;
+        public static readonly Color DefeatPlate = Slate;
         public static readonly Color Scrim = Black;
     }
 }

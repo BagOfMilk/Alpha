@@ -19,6 +19,8 @@ description: Арт-директор «Рингу» — протокол У0–�
 | текст / другорядний / недоступне | `Text` / `TextDim` / `Disabled` | `#EDE5D6` `#9A948A` `#6B6672` |
 | успіх, нагорода, головна дія ГРАВЦЯ | `Gold` (`Reward`, `PrimaryAction`, `Strong`) | `#E8BA3C` |
 | шкода, провал, небезпека | `Signal` (`Damage`, `Miss`) | `#E5483F` |
+| шкали: ушкодження / імпульс / ажіотаж | `Damage` / `Impulse` (золото) / `Hype` (папір, 10/10 — золото) | — |
+| поразка (текст / пластина) | `Defeat` / `DefeatPlate` | `#B7C6E0` / `#232A39` |
 | герой / лиходій / бунтар | `Hero`+`HeroText` / `Villain`+`VillainText` / `Rebel` | `#2F6FD6`+`#6DB6FF` / `#AA141C`+`#E5483F` / `#FF7AB8` |
 - Кармін `#AA141C` — лише поверхні (контраст 2,4 — не текст). Зеленого й бурштинового немає.
 - Заборонено в Ring-коді: `new Color(`, `#RRGGBB`, `Color.red/white/…`, `FontDefinition.FromFont`/`LoadFont` поза темою,

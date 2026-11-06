@@ -13,6 +13,8 @@
   --cobalt: #2F6FD6;
   --cobaltText: #6DB6FF;
   --rose: #FF7AB8;
+  --frost: #B7C6E0;
+  --slate: #232A39;
   --black: #000000;
   --role-bg: var(--ink0);
   --role-panel: var(--ink1);
@@ -35,6 +37,10 @@
   --role-villain: var(--crimson);
   --role-villainText: var(--signal);
   --role-rebel: var(--rose);
+  --role-impulse: var(--gold);
+  --role-hype: var(--paper);
+  --role-defeat: var(--frost);
+  --role-defeatPlate: var(--slate);
   --role-scrim: var(--black);
   --alpha-panel: 0.86;
   --alpha-glass: 0.84;

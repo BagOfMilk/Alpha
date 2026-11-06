@@ -16,6 +16,8 @@ HEX = {
     'cobalt': '#2F6FD6',
     'cobaltText': '#6DB6FF',
     'rose': '#FF7AB8',
+    'frost': '#B7C6E0',
+    'slate': '#232A39',
     'black': '#000000',
 }
 
@@ -33,6 +35,8 @@ COLORS = {
     'cobalt': (47, 111, 214),
     'cobaltText': (109, 182, 255),
     'rose': (255, 122, 184),
+    'frost': (183, 198, 224),
+    'slate': (35, 42, 57),
     'black': (0, 0, 0),
 }
 
@@ -58,6 +62,10 @@ ROLES = {
     'villain': 'crimson',
     'villainText': 'signal',
     'rebel': 'rose',
+    'impulse': 'gold',
+    'hype': 'paper',
+    'defeat': 'frost',
+    'defeatPlate': 'slate',
     'scrim': 'black',
 }
 
