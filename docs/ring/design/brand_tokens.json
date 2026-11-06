@@ -72,7 +72,9 @@
       "body": 17,
       "lead": 20,
       "title": 28,
-      "display": 44
+      "display": 44,
+      "menu": 34,
+      "logo": 164
     },
     "stinger": {
       "t0": 36,

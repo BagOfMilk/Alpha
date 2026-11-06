@@ -50,6 +50,8 @@ namespace Game.Gameplay.Ring.Models
         public const int TypeLead = 20;
         public const int TypeTitle = 28;
         public const int TypeDisplay = 44;
+        public const int TypeMenu = 34;
+        public const int TypeLogo = 164;
         public const int StingerT0 = 36;
         public const int StingerT1 = 46;
         public const int StingerT2 = 72;
