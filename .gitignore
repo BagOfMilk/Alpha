@@ -67,3 +67,7 @@ compile.log
 Assets/Art/Prefabs/
 Assets/Art/Prefabs.meta
 /[Pp]laytest/
+
+# Python-байткод генераторів tools/ring_design і tools/blender
+__pycache__/
+*.pyc
