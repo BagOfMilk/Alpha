@@ -145,22 +145,35 @@ namespace Game.Gameplay.Ring.Stage
                     _s.Sound.OnEvent(ev, steps.Count > 0 ? 0.4f / RingStage3D.PlaySpeed : 0f, pinEnd);
                     if (ev.Kind == MatchEventKind.MatchEnd) _s.Sound.BellEnd();
                 }
-                // Світло-шоу: успішний фінішер — стробоскоп і віяло; кінець матчу — перемога (конфеті, фонтани, промені).
+                // Світло-шоу: успішний фінішер — стробоскоп і віяло; кінець матчу — перемога гравця (конфеті, фонтани, промені),
+                // поразка — холодна тьмяна зала без свята (огляд 06.11.2026: конфеті на «Поразці» — хибний сигнал).
                 if (_s.Fx != null)
                 {
                     if (ev.Action == MatchActionId.Finisher && (ev.Kind == MatchEventKind.Action || ev.Kind == MatchEventKind.Sell) && ev.Tier != RollTier.Miss) _s.Fx.Finisher();
                     if (ev.Kind == MatchEventKind.MatchEnd && _e != null && _e.IsOver && _e.Result.Winner != MatchWinner.Draw)
                     {
-                        var w = _s.Actor(_e.Result.Winner == MatchWinner.Player ? MatchSide.Player : MatchSide.Rival);
-                        _s.Fx.Victory(w.Hips != null ? w.Hips : w.Slot);
+                        if (_e.Result.Winner == MatchWinner.Player)
+                        {
+                            var w = _s.Actor(MatchSide.Player);
+                            _s.Fx.Victory(w.Hips != null ? w.Hips : w.Slot);
+                        }
+                        else
+                        {
+                            var l = _s.Actor(MatchSide.Player);
+                            _s.Fx.Defeat(l.Hips != null ? l.Hips : l.Slot);
+                        }
                     }
                 }
+                // Такт на контакті: виноска на екрані, тремтіння, стоп-кадр, спалах, сповільнення фінішера.
+                StartCoroutine(Impact(ev, steps.Count > 0 ? 0.4f / RingStage3D.PlaySpeed : 0f));
                 foreach (var st in steps)
                 {
                     if (st.Kind == StageStepKind.Walk && !applied) { Apply(ev); applied = true; }
                     yield return RunStep(st, ev);
                 }
                 if (!applied) Apply(ev);
+                // Стан ядра = поза в кадрі: «лежить» без падіння — продаж падінням; «стоїть», а лежить — встає.
+                if (ev.Kind != MatchEventKind.MatchEnd) yield return MatchPoses(ev);
                 // Натовп живе за ажіотажем; кікаут і кінець матчу — вибух залу.
                 if (_e != null) _s.CrowdMood(_e.State.Hype);
                 if (ev.Kind == MatchEventKind.Kickout || ev.Kind == MatchEventKind.MatchEnd) _s.CrowdPop();
@@ -175,7 +188,8 @@ namespace Game.Gameplay.Ring.Stage
 
         private IEnumerator RunStep(StageStep st, MatchEvent ev)
         {
-            _s.SetShot(st.Cam);
+            // Утримання — низька камера біля мату (рахунок «раз — два»), а не загальний кіноплан.
+            _s.SetShot(ev.Kind == MatchEventKind.Kickout ? StageCam.Low : st.Cam);
             switch (st.Kind)
             {
                 case StageStepKind.Pair: yield return RunPair(st); break;
@@ -354,12 +368,99 @@ namespace Game.Gameplay.Ring.Stage
             yield return Slide(new[] { new SlideItem(W, pB, yaw), new SlideItem(R, pA, yaw) });
             if (_m[I(RingClipTable.Opp(sw))].Posture != Posture.Down)
             {
-                var tired = _s.Clip("Idle_Tired_Loop");
-                if (tired != null) L.PlayHere(tired, true);
+                // Той, хто програв, не стоїть як на старті: зігнувся від болю (огляд 06.11.2026 — однакова поза на результаті).
+                var hurt = _s.Clip("Idle_Hurt_Body_Loop") ?? _s.Clip("Idle_Tired_Loop");
+                if (hurt != null) L.PlayHere(hurt, true);
             }
             R.PlayAt(ca, false, pA, yaw, RingStage3D.PlaySpeed);
             W.PlayAt(cb, false, pB, yaw, RingStage3D.PlaySpeed);
             yield return new WaitForSeconds(Mathf.Max(ca.length, cb.length) / RingStage3D.PlaySpeed);
+        }
+
+        // ============================ відчуття удару ============================
+
+        /// <summary>
+        /// Такт події на контакті і віддача за ступенем: чистий — стоп-кадр, тремтіння, яскравий спалах; «частково» — ледь;
+        /// провал — без тремтіння. Фінішер — сповільнення 0,4 на ~0,9 с і сильне тремтіння; «на два» — поп залу й спалах.
+        /// </summary>
+        private IEnumerator Impact(MatchEvent ev, float delay)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            _s.Beat(ev);
+            bool finisher = ev.Action == MatchActionId.Finisher && ev.Kind == MatchEventKind.Action && ev.Tier != RollTier.Miss;
+            if (finisher)
+            {
+                _s.TimeWarp(0.4f, 0.9f);
+                _s.Shake(0.09f, 0.7f);
+                if (_s.Fx != null) _s.Fx.Impact(1f);
+                yield break;
+            }
+            if (ev.Kind == MatchEventKind.Kickout)
+            {
+                // Відлік іде кліпом рефері; поп — на «два» (кікаут) чи на «три».
+                yield return new WaitForSeconds(1.1f / RingStage3D.PlaySpeed);
+                if (_s.Fx != null) _s.Fx.Impact(ev.Tier == RollTier.Partial ? 0.9f : 0.6f);
+                _s.Shake(0.04f, 0.35f);
+                yield break;
+            }
+            if (ev.Kind != MatchEventKind.Action && ev.Kind != MatchEventKind.Reverse) yield break;
+            if (!ev.HasRoll) yield break;
+            switch (ev.Tier)
+            {
+                case RollTier.Strong:
+                    _s.TimeWarp(0.05f, 0.07f);
+                    _s.Shake(0.05f, 0.35f);
+                    if (_s.Fx != null) _s.Fx.Impact(0.8f);
+                    break;
+                case RollTier.Partial:
+                    _s.Shake(0.02f, 0.2f);
+                    if (_s.Fx != null) _s.Fx.Impact(0.3f);
+                    break;
+            }
+        }
+
+        // ============================ поза = стан ядра ============================
+
+        private static readonly string[] Sells = { "Bump_Back_Sell_Back", "Bump_Back_Sell_Head", "Bump_Back_Sell_Arch", "Bump_Back_Sell_Reach" };
+
+        private bool Lying(RingActor a)
+        {
+            var c = a.CurrentClip;
+            if (c == null) return false;
+            var info = _s.Info(c.name);
+            return info != null && info.EndsLying;
+        }
+
+        private bool Standing(RingActor a)
+        {
+            var c = a.CurrentClip;
+            if (c == null) return true;
+            var info = _s.Info(c.name);
+            return info == null || info.EndsStanding || info.Loop;
+        }
+
+        /// <summary>
+        /// Розсинхрон «ядро каже — лежить, модель стоїть» (огляд 04.11.2026, кадр фінішера: «Лежить 10/12», а постать
+        /// стоїть): кліп прийому скінчився стоячи, а ефект поклав борця. Тоді він продає падіння (кліп продажу; вибитий —
+        /// нокаут). Навпаки — ядро підняло, а модель лежить: встає.
+        /// </summary>
+        private IEnumerator MatchPoses(MatchEvent ev)
+        {
+            foreach (var side in new[] { MatchSide.Player, MatchSide.Rival })
+            {
+                var a = _s.Actor(side);
+                var m = _m[I(side)];
+                AnimationClip clip = null;
+                if (m.Posture == Posture.Down && !Lying(a) && Standing(a))
+                {
+                    string name = m.Damage >= MatchRules.ExhaustedDamage ? "Bump_Back_Sell_KO" : Sells[(ev.Seq + I(side)) % Sells.Length];
+                    clip = _s.Clip(name) ?? _s.Clip("Bump_Back");
+                }
+                else if (m.Posture != Posture.Down && Lying(a)) clip = _s.Clip("GetUp_Back");
+                if (clip == null) continue;
+                a.PlayHere(clip, false, RingStage3D.PlaySpeed);
+                yield return new WaitForSeconds(Mathf.Min(clip.length, 2.2f) / RingStage3D.PlaySpeed);
+            }
         }
 
         // ============================ повернення в стійку ============================

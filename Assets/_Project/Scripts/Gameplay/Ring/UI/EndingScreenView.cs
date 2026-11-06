@@ -154,27 +154,53 @@ namespace Game.Gameplay.Ring.UI
             var dev = RingUi.GlassCard();
             dev.style.marginTop = 6f;
             dev.Add(RingUi.Section(_m.PointsText));
-            var attrs = RingUi.Row();
-            attrs.style.flexWrap = Wrap.Wrap;
-            foreach (var a in _m.Attrs())
+            // Спершу до трьох рекомендацій з поясненням одним рядком (огляд фану 06.11.2026, R6/F7), решта — під «Усе (N)».
+            var perkRows = new System.Collections.Generic.List<PerkRow>();
+            foreach (var r in _m.Perks()) if (r.State != PerkState.Owned) perkRows.Add(r);
+            var attrRows = _m.Attrs();
+            int shown = 0;
+            foreach (var r in perkRows)
             {
-                var attr = a.Attr;
-                attrs.Add(RingUi.SmallButton(a.Name + " " + a.ValueText, () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, hint,
-                    a.CanBuy ? a.BuyText : a.ReasonText));
-            }
-            dev.Add(attrs);
-            dev.Add(RingUi.Section(t.Get("dev.section.perks")));
-            var perks = RingUi.Row();
-            perks.style.flexWrap = Wrap.Wrap;
-            foreach (var r in _m.Perks())
-            {
-                if (r.State == PerkState.Owned) continue;
+                if (r.State != PerkState.Available || shown >= 2) continue;
                 string id = r.Id;
-                bool can = r.State == PerkState.Available;
-                perks.Add(RingUi.SmallButton(r.Name + " · " + r.Cost, () => { _m.BuyPerk(id); Refresh(); }, can,
-                    r.IsGeneral ? RingUi.Gold : RingUi.PathColor(r.Path), hint, r.PathText + " — " + r.Desc + (can ? "" : " · " + r.ReasonText)));
+                dev.Add(RecRow(r.Name + " · " + r.Cost, r.PathText + " — " + r.Desc, r.IsGeneral ? RingUi.Gold : RingUi.PathColor(r.Path),
+                    () => { _m.BuyPerk(id); Refresh(); }));
+                shown++;
             }
-            dev.Add(perks);
+            AttrRow weakest = null;
+            foreach (var a in attrRows) if (a.CanBuy && (weakest == null || a.Value < weakest.Value)) weakest = a;
+            if (weakest != null)
+            {
+                var attr = weakest.Attr;
+                dev.Add(RecRow(weakest.Name + " " + Signed(weakest.Value) + " → " + Signed(weakest.Value + 1), t.Get("c.dev.attr.why." + (int)attr),
+                    RingUi.Text, () => { _m.BuyAttr(attr); Refresh(); }));
+                shown++;
+            }
+            if (shown == 0) dev.Add(RingUi.Lbl(t.Get("c.dev.none"), 12f, RingUi.Dim));
+            dev.Add(RingUi.SmallButton((_all ? "▾ " : "▸ ") + t.Format("c.dev.all", perkRows.Count + attrRows.Count), () => { _all = !_all; Refresh(); }, true, null));
+            if (_all)
+            {
+                var attrs = RingUi.Row();
+                attrs.style.flexWrap = Wrap.Wrap;
+                foreach (var a in attrRows)
+                {
+                    var attr = a.Attr;
+                    attrs.Add(RingUi.SmallButton(a.Name + " " + Signed(a.Value) + " → " + Signed(a.Value + 1), () => { _m.BuyAttr(attr); Refresh(); }, a.CanBuy, null, hint,
+                        (a.CanBuy ? a.BuyText : a.ReasonText) + " — " + t.Get("c.dev.attr.why." + (int)attr)));
+                }
+                dev.Add(attrs);
+                dev.Add(RingUi.Section(t.Get("dev.section.perks")));
+                var perks = RingUi.Row();
+                perks.style.flexWrap = Wrap.Wrap;
+                foreach (var r in perkRows)
+                {
+                    string id = r.Id;
+                    bool can = r.State == PerkState.Available;
+                    perks.Add(RingUi.SmallButton(r.Name + " · " + r.Cost, () => { _m.BuyPerk(id); Refresh(); }, can,
+                        r.IsGeneral ? RingUi.Gold : RingUi.PathColor(r.Path), hint, r.PathText + " — " + r.Desc + (can ? "" : " · " + r.ReasonText)));
+                }
+                dev.Add(perks);
+            }
             dev.Add(hint);
             col.Add(dev);
 
@@ -182,6 +208,25 @@ namespace Game.Gameplay.Ring.UI
                 Ctx.AfterDevelopment != null || _m.CanContinue);
             go.style.fontSize = 16f;
             col.Add(go);
+        }
+
+        private bool _all;
+
+        private static string Signed(int v) { return v > 0 ? "+" + v : v < 0 ? "\u2212" + (-v) : "0"; }
+
+        /// <summary>Рекомендація: кнопка й під нею пояснення одним рядком.</summary>
+        private static VisualElement RecRow(string title, string why, Color accent, System.Action buy)
+        {
+            var box = RingUi.Column();
+            box.style.marginBottom = 4f;
+            var b = RingUi.SmallButton(title, buy, true, accent);
+            b.style.marginBottom = 0f;
+            box.Add(b);
+            var l = RingUi.Lbl(why, 11f, RingUi.Dim);
+            l.style.whiteSpace = WhiteSpace.Normal;
+            l.style.marginLeft = 6f;
+            box.Add(l);
+            return box;
         }
 
         private VisualElement PerkButton(PerkRow r)

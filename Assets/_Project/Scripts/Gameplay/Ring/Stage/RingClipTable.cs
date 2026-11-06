@@ -5,7 +5,7 @@ using Game.Core.Ring.Match;
 namespace Game.Gameplay.Ring.Stage
 {
     /// <summary>Яким планом знімати крок: загальним, ближче (удар) чи кіно (кидок, фінішер, утримання).</summary>
-    public enum StageCam { Overview = 0, Close = 1, Big = 2 }
+    public enum StageCam { Overview = 0, Close = 1, Big = 2, Low = 3 }
 
     public enum StageStepKind
     {

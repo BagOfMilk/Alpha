@@ -24,7 +24,12 @@ namespace Game.Gameplay.Ring.UI
         private static readonly Color GlassHi = new Color(0.13f, 0.12f, 0.15f, 0.9f);
 
         private readonly MatchScreenModel _m;
+        private readonly RingCallout _call = new RingCallout();
+        private int _beatSeen = -1;
+        private float _overAt = -1f;
         private float _aiTimer;
+        private bool _wasBusy;
+        private FighterCardModel _snapP, _snapR;
         private bool _showUnavailable;
         private bool _showFullLog;
         private Label _hint;
@@ -36,8 +41,25 @@ namespace Game.Gameplay.Ring.UI
 
         // ---------- кадр: хід суперника ----------
 
+        /// <summary>
+        /// Кінець матчу — спершу момент (виноска «ПЕРЕМОГА/ПОРАЗКА», рефері, зал), лише тоді цифри (огляд 06.11.2026:
+        /// результат був відомістю одразу, поки 3D ще дограє утримання).
+        /// </summary>
+        public const float ResultMoment = 2.6f;
+
+        private bool HoldingResult
+        {
+            get
+            {
+                if (!_m.IsOver || !RingStageHub.Has3D) return false;
+                if (_overAt < 0f) return true;
+                return RingStageHub.Busy || Time.unscaledTime - _overAt < ResultMoment;
+            }
+        }
+
         public override void Tick(float dt)
         {
+            TickBeat(dt);
             if (_m.Input != MatchInput.Ai) { _aiTimer = 0f; return; }
             // Хід суперника чекає, поки 3D-режисер дограє поточний кліп (потім ще звичайна пауза).
             if (RingStageHub.Busy) { _aiTimer = 0f; return; }
@@ -46,6 +68,31 @@ namespace Game.Gameplay.Ring.UI
             _aiTimer = 0f;
             _m.StepAi();
             Refresh();
+        }
+
+        /// <summary>Новий такт режисера → виноска; кінець матчу — момент, потім цифри.</summary>
+        private void TickBeat(float dt)
+        {
+            var st = RingStageHub.Current;
+            if (st != null && st.BeatSeq != _beatSeen)
+            {
+                bool first = _beatSeen < 0;
+                _beatSeen = st.BeatSeq;
+                if (!first && st.BeatEvent != null) RingCallouts.Push(_call, st.BeatEvent, Ctx.Text, _m.IsOver ? _m.Engine.Result.Winner : (MatchWinner?)null);
+                // Такт останньої події кроку — табло наздоганяє кадр саме на контакті (а не після всієї серії кліпів).
+                var log = _m.Engine.State.Log;
+                if (!first && st.BeatEvent != null && log.Count > 0 && st.BeatEvent.Seq >= log[log.Count - 1].Seq) { _snapP = null; Refresh(); }
+            }
+            // Режисер дограв — табло наздоганяє кадр (стан ядра показуємо, коли 3D його вже показав).
+            bool busy = RingStageHub.Busy;
+            if (_wasBusy && !busy) { _wasBusy = false; Refresh(); }
+            _wasBusy = busy;
+            bool wasHolding = HoldingResult;
+            if (_m.IsOver && _overAt < 0f && !RingStageHub.Busy) _overAt = Time.unscaledTime;
+            // Ігровий час, а не реальний: виноска йде в такт кліпу за будь-якого темпу (огляд на ×3), сповільнення фінішера
+            // розтягує й «ФІНІШЕР!».
+            _call.Tick(Time.deltaTime);
+            if (wasHolding && !HoldingResult) Refresh();
         }
 
         // ---------- малювання ----------
@@ -63,7 +110,7 @@ namespace Game.Gameplay.Ring.UI
 
             var bottom = RingUi.Column();
             bottom.pickingMode = PickingMode.Ignore;
-            if (_m.IsOver) bottom.Add(BuildResult());
+            if (_m.IsOver) { if (!HoldingResult) bottom.Add(BuildResult()); }
             else
             {
                 bottom.Add(BuildLogStrip());
@@ -74,6 +121,7 @@ namespace Game.Gameplay.Ring.UI
             if (_m.Input == MatchInput.PlayerReaction) Root.Add(BuildReactionModal());
             else if (_m.Input == MatchInput.PlayerBoost) Root.Add(BuildBoostModal());
             if (_showFullLog) Root.Add(BuildFullLog());
+            Root.Add(_call.Layer);
         }
 
         private static VisualElement Panel(float pad = 8f, float alpha = -1f)
@@ -94,8 +142,12 @@ namespace Game.Gameplay.Ring.UI
             var row = RingUi.Row();
             row.style.alignItems = Align.FlexStart;
             row.pickingMode = PickingMode.Ignore;
-            var left = BuildPlate(_m.Card(MatchSide.Player), RingUi.Face);
-            var right = BuildPlate(_m.Card(MatchSide.Rival), RingUi.Heel);
+            // Ядро рахує миттєво, 3D відстає на кліп: поки режисер грає, плашки показують стан до події (огляд фану 06.11.2026,
+            // R8/F4: «Лежить», а постать ще стоїть і кидає).
+            bool lag = RingStageHub.Busy && _snapP != null;
+            if (!lag) { _snapP = _m.Card(MatchSide.Player); _snapR = _m.Card(MatchSide.Rival); }
+            var left = BuildPlate(_snapP, RingUi.Face);
+            var right = BuildPlate(_snapR, RingUi.Heel);
             row.Add(left);
             var mid = BuildRoundStrip();
             RingUi.Grow(mid, 1f);
@@ -207,7 +259,8 @@ namespace Game.Gameplay.Ring.UI
 
             if (_m.Input == MatchInput.Ai)
             {
-                wrap.Add(RingUi.Lbl(t.Get("ui.ai.thinking"), 17f, RingUi.Dim));
+                // Не «думає»: хід суперника йде кліпами на рингу — пишемо, чий хід (огляд 06.11.2026 — довге «Суперник думає…»).
+                wrap.Add(RingUi.Lbl(t.Format("match.rival.turn", _m.Card(MatchSide.Rival).Name), 15f, RingUi.Heel, true));
                 return wrap;
             }
             if (_m.Input != MatchInput.PlayerAction) return wrap;
@@ -440,7 +493,7 @@ namespace Game.Gameplay.Ring.UI
 
         public override void OnConfirm()
         {
-            if (!_m.IsOver) return;
+            if (!_m.IsOver || HoldingResult) return;
             if (Ctx.FinishMatch != null) Ctx.FinishMatch(); else Ctx.Campaign.FinishMatch();
         }
     }

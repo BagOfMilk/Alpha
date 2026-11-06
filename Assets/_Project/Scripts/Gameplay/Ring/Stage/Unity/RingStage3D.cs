@@ -19,6 +19,10 @@ namespace Game.Gameplay.Ring.Stage
         public Vector3 Offset;
         /// <summary>Поворот B відносно A, градуси (Blender, проти годинникової зверху; в Unity курс B = курс A мінус це).</summary>
         public float Rotation;
+        /// <summary>Вузол пози в кінці кліпа (stance, lying_back, …; «-» — невідомо).</summary>
+        public string EndNode;
+        public bool EndsLying { get { return EndNode != null && EndNode.StartsWith("lying"); } }
+        public bool EndsStanding { get { return EndNode == "stance" || EndNode == "ref_stand"; } }
     }
 
     /// <summary>
@@ -47,6 +51,52 @@ namespace Game.Gameplay.Ring.Stage
         private StageCam _shot = StageCam.Overview;
         private float _shotAge;
         private const float CamRate = 3.2f;
+
+        // ---------------- відчуття удару: такт, тремтіння камери, час ----------------
+
+        public int BeatSeq { get; private set; }
+        public MatchEvent BeatEvent { get; private set; }
+
+        /// <summary>Режисер: ця подія показується зараз (контакт).</summary>
+        public void Beat(MatchEvent ev) { BeatEvent = ev; BeatSeq++; }
+
+        private float _shakeAmp, _shakeT, _shakeDur;
+
+        /// <summary>Тремтіння камери (м, с): удар — ледь, фінішер і падіння після кидка — сильніше.</summary>
+        public void Shake(float amp, float dur)
+        {
+            if (amp < _shakeAmp * (1f - _shakeT / Mathf.Max(0.01f, _shakeDur))) return;
+            _shakeAmp = amp; _shakeDur = dur; _shakeT = 0f;
+        }
+
+        private float _timeBase = -1f;
+        private Coroutine _timeCo;
+
+        /// <summary>
+        /// Час на мить: стоп-кадр удару (mul ≈ 0,05 на 0,06 с) чи сповільнення фінішера (0,4 на ~0,9 с). Відносно базового
+        /// темпу (бот огляду грає на ×3), тривалість — реальні секунди.
+        /// </summary>
+        public void TimeWarp(float mul, float realSeconds)
+        {
+            if (_timeBase < 0f) _timeBase = Time.timeScale;
+            if (_timeCo != null) StopCoroutine(_timeCo);
+            _timeCo = StartCoroutine(TimeWarpCo(mul, realSeconds));
+        }
+
+        private System.Collections.IEnumerator TimeWarpCo(float mul, float realSeconds)
+        {
+            Time.timeScale = _timeBase * mul;
+            yield return new WaitForSecondsRealtime(realSeconds);
+            // Плавне повернення за 0,15 с — без смикання.
+            for (float t = 0f; t < 0.15f; t += Time.unscaledDeltaTime)
+            {
+                Time.timeScale = Mathf.Lerp(_timeBase * mul, _timeBase, t / 0.15f);
+                yield return null;
+            }
+            Time.timeScale = _timeBase;
+            _timeBase = -1f;
+            _timeCo = null;
+        }
         /// <summary>Частка половини висоти кадру, на яку ринг піднято над центром (внизу — панель дій).</summary>
         private float _frameShift = 0.27f;
 
@@ -163,7 +213,8 @@ namespace Game.Gameplay.Ring.Stage
                     Loop = p[3] == "1",
                     // Blender: A дивиться в −Y, праворуч від A — −X. Unity: вперед +Z, вправо +X: (x,y) -> (-x, -y).
                     Offset = new Vector3(-F(p[4]), 0f, -F(p[5])),
-                    Rotation = F(p[7])
+                    Rotation = F(p[7]),
+                    EndNode = p[8]
                 };
                 _info[ci.Name] = ci;
             }
@@ -519,6 +570,48 @@ namespace Game.Gameplay.Ring.Stage
             Debug.Log("[Ринг] 3D: гравець slot=" + _player.Slot.position + " renderers=" + rr.Length + (rr.Length > 0 ? " bounds=" + rr[0].bounds + " vis=" + rr[0].isVisible : "") + " scale=" + _player.Model.transform.lossyScale);
         }
 
+        private readonly float[] _camTime = new float[4];
+
+        /// <summary>Лог частки планів камери за матч (поки режисер грає дії) і скидання лічильника.</summary>
+        private void LogCamShare()
+        {
+            float sum = _camTime[0] + _camTime[1] + _camTime[2] + _camTime[3];
+            if (sum <= 0f) return;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] камера матчу: огляд {0:P0}, ближче {1:P0}, кіно {2:P0}, низька {3:P0} ({4:F0} с дій)",
+                _camTime[0] / sum, _camTime[1] / sum, _camTime[2] / sum, _camTime[3] / sum, sum));
+            for (int i = 0; i < 4; i++) _camTime[i] = 0f;
+        }
+
+        public void ShowAftermath(bool playerWon)
+        {
+            LogCamShare();
+            LeaveShow();
+            _mode = RingStageMode.Idle;
+            if (_director != null) _director.EndMatch();
+            HideMic();
+            _ref.Model.SetActive(true);
+            var w = playerWon ? _player : _rival;
+            var l = playerWon ? _rival : _player;
+            // Переможець — у центрі ближче до камери, руки вгору до залу; рефері поруч; той, хто програв, — нокаут позаду.
+            Place(w, new Vector3(-0.3f, MatY, -0.6f), 180f, Clip("Entrance_Corner_Pose") != null ? "Entrance_Corner_Pose" : "Idle_Hype_Loop");
+            Place(_ref, new Vector3(0.6f, MatY, -0.3f), 200f, "Ref_Idle_Loop");
+            var ko = Clip("Bump_Back_Sell_KO") ?? Clip("Bump_Back");
+            if (ko != null)
+            {
+                l.PlayAt(ko, false, new Vector3(0.4f, MatY, 0.9f), 120f);
+                l.SetHeight(MatY);
+            }
+            if (_fx != null)
+            {
+                var t = playerWon ? w : l;
+                if (playerWon) _fx.VictoryLights(t.Hips != null ? t.Hips : t.Slot);
+                else _fx.Defeat(t.Hips != null ? t.Hips : t.Slot);
+            }
+            CrowdMood(playerWon ? 3 : 1);
+            SetShot(StageCam.Close);
+            SnapCamera();
+        }
+
         public void BeginMatch(MatchEngine engine)
         {
             LeaveShow();
@@ -545,6 +638,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void EndMatch()
         {
+            LogCamShare();
             if (_mode == RingStageMode.Match) ShowIdle();
         }
 
@@ -833,6 +927,8 @@ namespace Game.Gameplay.Ring.Stage
 
         public void SetShot(StageCam cam)
         {
+            // Низький план утримання — склейкою: камера, що пливе з загального плану всередину рингу, пролітала крізь канат.
+            if (cam == StageCam.Low && _shot != StageCam.Low) _camInit = false;
             if (_shot != cam) _shotAge = 0f;
             _shot = cam;
         }
@@ -848,6 +944,7 @@ namespace Game.Gameplay.Ring.Stage
             if (_show != null) _show.TickBooker(Time.deltaTime);
             if (_cam == null) return;
             _shotAge += dt;
+            if (_mode == RingStageMode.Match && _director != null && _director.IsBusy) _camTime[(int)_shot] += dt;
 
             Vector3 pos, look;
             float fov;
@@ -897,6 +994,17 @@ namespace Game.Gameplay.Ring.Stage
                         pos = look + new Vector3(1.3f, 1.5f, -7.4f);
                         fov = 33f;
                         break;
+                    case StageCam.Low:
+                        // Утримання: камера низько біля мату, збоку — накриття, плече на маті й рука рефері, що б'є «раз — два».
+                        look = mid + new Vector3(0f, 0.3f, 0f);
+                        // Камера з боку, протилежного рефері (він за парою, z+), вздовж тіл; ринг тісний — ширший кут замість відстані.
+                        pos = look + new Vector3(1.7f, 0.95f, -1.5f);
+                        // Біля канатів пара зсунута — камера лишається всередині рингу, канат не перетинає кадр.
+                        float lim = RingHalf - 0.35f;
+                        pos.x = Mathf.Clamp(pos.x, -lim, lim);
+                        pos.z = Mathf.Clamp(pos.z, -lim, lim);
+                        fov = 50f;
+                        break;
                     case StageCam.Big:
                         look = mid + new Vector3(0f, 1.2f, 0f);
                         pos = look + new Vector3(-2.4f, 1.1f, -5.2f);
@@ -928,7 +1036,19 @@ namespace Game.Gameplay.Ring.Stage
                 _camRot = Quaternion.Slerp(_camRot, rot, k);
                 _camFov = Mathf.Lerp(_camFov, fov, k);
             }
-            _cam.transform.SetPositionAndRotation(_camPos, _camRot);
+            Vector3 shake = Vector3.zero;
+            if (_shakeAmp > 0f)
+            {
+                _shakeT += dt;
+                float k2 = 1f - _shakeT / Mathf.Max(0.01f, _shakeDur);
+                if (k2 <= 0f) _shakeAmp = 0f;
+                else
+                {
+                    float a2 = _shakeAmp * k2 * k2;
+                    shake = new Vector3(Mathf.PerlinNoise(_shakeT * 31f, 0.1f) - 0.5f, Mathf.PerlinNoise(0.7f, _shakeT * 29f) - 0.5f, 0f) * (2f * a2);
+                }
+            }
+            _cam.transform.SetPositionAndRotation(_camPos + _camRot * shake, _camRot);
             if (_dress != null) _dress.Occlude(_camPos, look);
             _cam.fieldOfView = _camFov;
             LogBudget(dt);

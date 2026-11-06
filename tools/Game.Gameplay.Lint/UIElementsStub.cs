@@ -251,6 +251,7 @@ namespace UnityEngine.UIElements
         public UnityEngine.Rect worldBound { get { return default(UnityEngine.Rect); } }
 
         public void Add(VisualElement child) { }
+        public void Insert(int index, VisualElement child) { }
         public void Clear() { }
         public void SetEnabled(bool value) { }
     }

@@ -58,6 +58,19 @@ namespace Game.Gameplay.Ring.Stage
         void LookbookClip(string clip, bool footIk);
         string FxLastMoment { get; }
 
+        /// <summary>
+        /// Такт режисера матчу: подія, яку 3D показує ЗАРАЗ (на контакті), і її лічильник. Екран матчу на кожен новий такт
+        /// кладе виноску (слово ступеня, «на два», фінішер) — відгук іде разом із кадром, а не тоді, коли ядро вже порахувало.
+        /// </summary>
+        int BeatSeq { get; }
+
+        /// <summary>
+        /// Після матчу (екран результату): переможець у позі до залу, той, хто програв, лежить; світло — свято чи холодна
+        /// зала. Раніше результат скидав обох у стартову стійку (огляд фану 06.11.2026, R3/R4/F5).
+        /// </summary>
+        void ShowAftermath(bool playerWon);
+        MatchEvent BeatEvent { get; }
+
         /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>
         void ShowBackstage();
 

@@ -558,6 +558,9 @@ namespace Game.Gameplay.Ring
             }
             _stageKey = null;
             if (phase == ShowPhase.Feud && _career.Feud.Stage == RingStage.Promo) stage.BeginPromo();
+            else if (phase == ShowPhase.Result && _career.GetShowResult() != null && _career.GetShowResult().Played
+                && _career.GetShowResult().Winner != MatchWinner.Draw)
+                stage.ShowAftermath(_career.GetShowResult().Winner == MatchWinner.Player);
             else stage.ShowIdle();
         }
 
@@ -597,9 +600,27 @@ namespace Game.Gameplay.Ring
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_fx_{1}.png", _shotIndex++, stage.FxLastMoment)));
         }
 
+        private int _beatShot = -1;
+        private float _beatShotAt = -1f;
+
+        /// <summary>Кадр кожного такту режисера (кидок, утримання, фінішер) через 0,15 с — виноска вже на екрані.</summary>
+        private void BeatShots()
+        {
+            var stage = RingStageHub.Current;
+            if (stage == null || stage.BeatEvent == null) return;
+            if (stage.BeatSeq != _beatShot) { _beatShot = stage.BeatSeq; _beatShotAt = Time.unscaledTime + 0.15f; return; }
+            if (_beatShotAt < 0f || Time.unscaledTime < _beatShotAt || _shotIndex >= ShotLimit) return;
+            _beatShotAt = -1f;
+            var ev = stage.BeatEvent;
+            if (ev.Kind == MatchEventKind.TurnEnd || ev.Kind == MatchEventKind.Sell) return;
+            string kind = ev.Kind == MatchEventKind.Kickout ? "pin" + (int)ev.Tier : ev.Kind + "_" + ev.Action + (ev.HasRoll ? "_" + ev.Tier : "");
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_beat_{1}.png", _shotIndex++, kind)));
+        }
+
         private void ShotsStep()
         {
             FxShots();
+            BeatShots();
             if (RingStageHub.Busy)
             {
                 _animClock += Time.unscaledDeltaTime;

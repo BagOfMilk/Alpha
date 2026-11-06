@@ -1,0 +1,131 @@
+using System.Collections.Generic;
+using Game.Core.Ring;
+using Game.Core.Ring.Match;
+using Game.Gameplay.Ring.Models;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace Game.Gameplay.Ring.UI
+{
+    /// <summary>
+    /// Виноска матчу: велике слово по центру ринга на мить (огляд фану 06.11.2026, R1/F2: кидок закінчувався рядком журналу).
+    /// Чистий успіх — найбільше й золоте з «ударом» масштабу, «частково» — менше й біле, провал — червоне й тихе; «на два»,
+    /// фінішер і кінець матчу — найгучніші. Черга: «РАЗ» → «ДВА» → «ВИРВАВСЯ!» ідуть одна за одною в такт відліку рефері.
+    /// Шар не ловить мишу.
+    /// </summary>
+    public sealed class RingCallout
+    {
+        public readonly VisualElement Layer;
+        private readonly Label _word;
+        private readonly Label _sub;
+
+        private struct Item { public string Word, Sub; public Color Color; public float Size, Dur; }
+
+        private readonly Queue<Item> _q = new Queue<Item>();
+        private Item _cur;
+        private float _t = -1f;
+
+        public RingCallout()
+        {
+            Layer = RingUi.Column();
+            Layer.pickingMode = PickingMode.Ignore;
+            Layer.style.position = Position.Absolute;
+            Layer.style.left = 0f; Layer.style.right = 0f; Layer.style.top = Length.Percent(12.5f);
+            Layer.style.alignItems = Align.Center;
+            _word = RingUi.Lbl("", 40f, RingUi.Gold, true);
+            _word.pickingMode = PickingMode.Ignore;
+            // Темна підкладка: червоне «Провал» губилось на сорочці рефері й натовпі.
+            _word.style.backgroundColor = new Color(0.04f, 0.035f, 0.05f, 0.62f);
+            _word.style.paddingLeft = 18f; _word.style.paddingRight = 18f; _word.style.paddingTop = 2f; _word.style.paddingBottom = 4f;
+            _word.style.borderTopLeftRadius = 8f; _word.style.borderTopRightRadius = 8f;
+            _word.style.borderBottomLeftRadius = 8f; _word.style.borderBottomRightRadius = 8f;
+            _word.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _sub = RingUi.Lbl("", 16f, RingUi.Text);
+            _sub.pickingMode = PickingMode.Ignore;
+            _sub.style.unityTextAlign = TextAnchor.MiddleCenter;
+            Layer.Add(_word);
+            Layer.Add(_sub);
+            Layer.style.opacity = 0f;
+        }
+
+        public bool Showing { get { return _t >= 0f || _q.Count > 0; } }
+
+        public void Push(string word, string sub, Color color, float size, float dur)
+        {
+            _q.Enqueue(new Item { Word = word, Sub = sub ?? "", Color = color, Size = size, Dur = dur });
+        }
+
+        public void Clear() { _q.Clear(); _t = -1f; Layer.style.opacity = 0f; }
+
+        public void Tick(float dt)
+        {
+            if (_t < 0f)
+            {
+                if (_q.Count == 0) return;
+                _cur = _q.Dequeue();
+                _t = 0f;
+                if (string.IsNullOrEmpty(_cur.Word)) { _word.style.display = DisplayStyle.None; _sub.text = ""; }
+                else _word.style.display = DisplayStyle.Flex;
+                _word.text = _cur.Word;
+                _word.style.color = _cur.Color;
+                _sub.text = _cur.Sub;
+            }
+            _t += dt;
+            // Удар масштабу на вході (0,12 с: 1,35 → 1), утримання, згасання за останні 0,25 с.
+            float pop = Mathf.Clamp01(_t / 0.12f);
+            _word.style.fontSize = _cur.Size * Mathf.Lerp(1.35f, 1f, pop);
+            float fade = _cur.Dur - _t;
+            Layer.style.opacity = Mathf.Clamp01(fade / 0.25f);
+            if (_t >= _cur.Dur) { _t = -1f; Layer.style.opacity = 0f; }
+        }
+    }
+
+    /// <summary>Що сказати на такт режисера: подія → слово, підрядок і вага (розмір, колір, тривалість).</summary>
+    public static class RingCallouts
+    {
+        public static void Push(RingCallout c, MatchEvent ev, RingText t, MatchWinner? winner)
+        {
+            switch (ev.Kind)
+            {
+                case MatchEventKind.Kickout:
+                    // Відлік рефері: «раз», «два» — і вирвався на два (найгучніший момент вечора, gdd §4.6) чи «три».
+                    // Пауза — поки нападник накриває (кліп Cover), щоб «раз» не обганяв кадр.
+                    c.Push("", null, RingUi.Text, 0f, 0.7f);
+                    c.Push(t.Get("match.call.one"), null, RingUi.Text, 34f, 0.45f);
+                    c.Push(t.Get("match.call.two"), null, RingUi.Warn, 40f, 0.45f);
+                    if (ev.Tier == RollTier.Miss) c.Push(t.Get("match.call.three"), null, RingUi.Bad, 64f, 1.4f);
+                    else c.Push(t.Get(ev.Tier == RollTier.Partial ? "match.call.kickout.two" : "match.call.kickout"), Who(t, ev), RingUi.Gold, 54f, 1.5f);
+                    return;
+                case MatchEventKind.MatchEnd:
+                    if (winner == null) return;
+                    string key = winner == MatchWinner.Player ? "match.call.win" : winner == MatchWinner.Rival ? "match.call.loss" : "match.call.draw";
+                    Color col = winner == MatchWinner.Player ? RingUi.Gold : winner == MatchWinner.Rival ? new Color(0.62f, 0.72f, 0.95f) : RingUi.Text;
+                    c.Push(t.Get(key), null, col, 72f, MatchScreenView.ResultMoment);
+                    return;
+                case MatchEventKind.Reverse:
+                    if (ev.Tier == RollTier.Strong) c.Push(t.Get("match.call.reverse"), Who(t, ev), RingUi.Gold, 46f, 1.1f);
+                    return;
+                case MatchEventKind.Action:
+                    if (!ev.HasRoll) return;
+                    string sub = Who(t, ev) + " · " + RingLabels.ActionName(t, ev.Action) + " · " + ev.Total;
+                    if (ev.Action == MatchActionId.Finisher && ev.Tier != RollTier.Miss)
+                    {
+                        c.Push(t.Get("match.call.finisher"), sub, RingUi.Gold, 62f, 1.6f);
+                        return;
+                    }
+                    switch (ev.Tier)
+                    {
+                        case RollTier.Strong: c.Push(t.Get("match.call.strong"), sub, RingUi.Gold, 46f, 1.1f); break;
+                        case RollTier.Partial: c.Push(t.Get("match.call.partial"), sub, RingUi.Text, 26f, 0.8f); break;
+                        default: c.Push(t.Get("match.call.miss"), sub, RingUi.Bad, 26f, 0.8f); break;
+                    }
+                    return;
+            }
+        }
+
+        private static string Who(RingText t, MatchEvent ev)
+        {
+            return t.Get(ev.Actor == MatchSide.Player ? "match.call.you" : "match.call.rival");
+        }
+    }
+}

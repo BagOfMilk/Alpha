@@ -148,6 +148,28 @@ namespace Game.Gameplay.Ring.Stage
             Burst(_pyroL); Burst(_pyroR);
         }
 
+        /// <summary>
+        /// Поразка гравця: жодного свята (огляд 06.11.2026 — конфеті на «Поразці»). Зала тьмяніє в холодне, PAR сині й
+        /// слабкі, холодний прожектор супроводу на тому, хто програв.
+        /// </summary>
+        public void Defeat(Transform loser)
+        {
+            Moments++; LastMoment = "defeat";
+            _cue = "defeat"; _cueT = 0f; _headMode = "off"; _bpm = 0f; _followTarget = loser;
+        }
+
+        /// <summary>Світло перемоги без нових частинок (екран результату після матчу).</summary>
+        public void VictoryLights(Transform winner)
+        {
+            _cue = "victory"; _cueT = 0f; _headMode = "crowd"; _bpm = 128f; _followTarget = winner;
+            _headColors = new[] { Gold, Blue, Gold, Purple };
+        }
+
+        private float _flash;
+
+        /// <summary>Спалах удару: PAR на мить яскравішають (чистий удар — сильніше, «частково» — ледь).</summary>
+        public void Impact(float strength) { _flash = Mathf.Max(_flash, strength); }
+
         /// <summary>Великий момент вступу (назва гри на титантроні): іскри й CO2 біля завіси.</summary>
         public void TitleHit()
         {
@@ -175,11 +197,14 @@ namespace Game.Gameplay.Ring.Stage
                 case "entrance": house = 0.35f; parMul = 0.55f; haze = 1.8f; keyMul = 0.5f; parTint = new Color(1f, 0.45f, 0.4f); break;
                 case "finisher": house = 0.3f; parMul = Strobe() ? 1.8f : 0.15f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
                 case "victory": house = 1.1f; parMul = 1.3f; haze = 1.3f; keyMul = 1.1f; parTint = Gold; break;
+                case "defeat": house = 0.45f; parMul = 0.35f; haze = 1.5f; keyMul = 0.5f; parTint = new Color(0.45f, 0.58f, 1f); break;
                 default: house = 1f; parMul = 1f; haze = 1f; keyMul = 1f; parTint = Color.clear; break;
             }
+            _flash = Mathf.MoveTowards(_flash, 0f, dt * 5f);
+            parMul *= 1f + _flash * 1.6f;
             for (int i = 0; i < _par.Count; i++)
             {
-                _par[i].intensity = Mathf.Lerp(_par[i].intensity, _parBase[i] * parMul, _cue == "finisher" ? 1f : k);
+                _par[i].intensity = Mathf.Lerp(_par[i].intensity, _parBase[i] * parMul, _cue == "finisher" || _flash > 0f ? 1f : k);
                 var target = parTint.a > 0f ? Color.Lerp(_parColorBase[i], parTint, 0.75f) : _parColorBase[i];
                 _par[i].color = Color.Lerp(_par[i].color, target, k);
             }
@@ -202,9 +227,10 @@ namespace Game.Gameplay.Ring.Stage
                 h.transform.rotation = Quaternion.Slerp(h.transform.rotation, Quaternion.LookRotation(tgt - h.transform.position), 1f - Mathf.Exp(-6f * dt));
             }
             // Прожектор супроводу: на таз борця, трохи вище.
-            if (_followTarget != null && (_cue == "entrance" || _cue == "victory"))
+            if (_followTarget != null && (_cue == "entrance" || _cue == "victory" || _cue == "defeat"))
             {
-                _follow.intensity = Mathf.Lerp(_follow.intensity, 120f, k);
+                _follow.intensity = Mathf.Lerp(_follow.intensity, _cue == "defeat" ? 70f : 120f, k);
+                _follow.color = Color.Lerp(_follow.color, _cue == "defeat" ? new Color(0.6f, 0.72f, 1f) : Color.white, k);
                 var p = _followTarget.position + Vector3.up * 0.3f;
                 _follow.transform.rotation = Quaternion.LookRotation(p - _follow.transform.position);
             }

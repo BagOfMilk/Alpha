@@ -158,10 +158,79 @@ namespace Game.Gameplay.Ring.UI
         }
 
         /// <summary>Розвиток: атрибути, нові прийоми, перки — компактні кнопки, описи в рядку-підказці.</summary>
-        protected VisualElement DevelopmentPanel(Action changed)
+        private bool _devAll;
+
+        /// <summary>
+        /// Розвиток: спершу до трьох рекомендацій, кожна з поясненням одним рядком (огляд фану 06.11.2026, R6/F7: ~16 кнопок без
+        /// пояснень, «Спритність −1» на кнопці), далі «Усе (N)» — повний список. Атрибут — «було → стане».
+        /// Рекомендація: доступний перк (найдешевший), доступний прийом (спершу свого ґіміка), найслабший атрибут, який можна купити.
+        /// </summary>
+        protected VisualElement DevelopmentPanel(Action changed, int maxRecs = 3)
         {
             var card = Glass(8f);
             card.Add(Section(T.Format("dev.points", C.DevPoints)));
+
+            var recs = new List<VisualElement>();
+            string gimmick = C.Content.GimmickOf(C.State.Gimmick).Key;
+            int all = 0;
+            string perkId = null; int perkCost = int.MaxValue; RingPath? perkPath = null;
+            foreach (var p in PerkCatalog.All)
+            {
+                if (C.Feud.State.Perks.Contains(p.Id)) continue;
+                all++;
+                string r;
+                if (C.CanBuyPerk(p.Id, out r) && p.Cost < perkCost) { perkId = p.Id; perkCost = p.Cost; perkPath = p.Path; }
+            }
+            MoveDef bestMove = null;
+            foreach (var m in C.Content.Moves.All)
+            {
+                if (!m.IsLearnable || C.KnowsMove(m.Id)) continue;
+                if (m.GimmickId != null && m.GimmickId != gimmick) continue;
+                all++;
+                string r;
+                if (!C.CanLearnMove(m.Id, out r)) continue;
+                if (bestMove == null || (m.GimmickId != null && bestMove.GimmickId == null)) bestMove = m;
+            }
+            int bestAttr = -1;
+            for (int i = 0; i < 5; i++)
+            {
+                all++;
+                string r;
+                if (!C.CanBuyAttr((RingAttr)i, out r)) continue;
+                if (bestAttr < 0 || C.Player.Get((RingAttr)i) < C.Player.Get((RingAttr)bestAttr)) bestAttr = i;
+            }
+            if (perkId != null)
+            {
+                string id = perkId;
+                recs.Add(Rec(RingLabels.PerkName(T, id) + " · " + perkCost, RingLabels.PerkDesc(T, id),
+                    perkPath.HasValue ? RingUi.PathColor(perkPath.Value) : RingUi.Gold, () => { C.BuyPerk(id); changed(); }));
+            }
+            if (bestMove != null)
+            {
+                string id = bestMove.Id;
+                recs.Add(Rec(T.Get(bestMove.NameKey) + " · " + bestMove.Cost, T.Format("c.dev.move.why", RingLabels.ActionName(T, bestMove.Action)),
+                    RingUi.Warn, () => { C.LearnMove(id); changed(); }));
+            }
+            if (bestAttr >= 0)
+            {
+                var a = (RingAttr)bestAttr;
+                int v = C.Player.Get(a);
+                recs.Add(Rec(RingLabels.AttrName(T, a) + " " + Signed(v) + " → " + Signed(v + 1) + " · " + Development.AttrCost,
+                    T.Get("c.dev.attr.why." + bestAttr), RingUi.Text, () => { C.BuyAttr(a); changed(); }));
+            }
+            if (recs.Count > maxRecs) recs.RemoveRange(maxRecs, recs.Count - maxRecs);
+            if (recs.Count > 0)
+            {
+                card.Add(RingUi.Lbl(T.Get("c.dev.recommended"), 12f, RingUi.Dim));
+                foreach (var r in recs) card.Add(r);
+            }
+            else card.Add(RingUi.Lbl(T.Get("c.dev.none"), 12f, RingUi.Dim));
+
+            var more = Small((_devAll ? "▾ " : "▸ ") + T.Format("c.dev.all", all), () => { _devAll = !_devAll; changed(); }, true, null);
+            more.style.marginTop = 4f;
+            card.Add(more);
+            if (!_devAll) return card;
+
             var attrs = RingUi.Row();
             attrs.style.flexWrap = Wrap.Wrap;
             for (int i = 0; i < 5; i++)
@@ -169,11 +238,13 @@ namespace Game.Gameplay.Ring.UI
                 var a = (RingAttr)i;
                 string reason;
                 bool can = C.CanBuyAttr(a, out reason);
-                var b = Small(RingLabels.AttrName(T, a) + " " + Signed(C.Player.Get(a)), () => { C.BuyAttr(a); changed(); }, can, null,
-                    T.Format("dev.attr.buy", Development.AttrCost) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
+                int v = C.Player.Get(a);
+                var b = Small(RingLabels.AttrName(T, a) + " " + Signed(v) + " → " + Signed(v + 1), () => { C.BuyAttr(a); changed(); }, can, null,
+                    T.Format("dev.attr.buy", Development.AttrCost) + " — " + T.Get("c.dev.attr.why." + i) + (can ? "" : " · " + T.Get("dev.reason." + reason)));
                 b.style.marginRight = 4f;
                 attrs.Add(b);
             }
+            card.Add(Section(T.Get("c.dev.attrs")));
             card.Add(attrs);
             var mrow = RingUi.Row();
             mrow.style.flexWrap = Wrap.Wrap;
@@ -181,12 +252,12 @@ namespace Game.Gameplay.Ring.UI
             foreach (var m in C.Content.Moves.All)
             {
                 if (!m.IsLearnable || C.KnowsMove(m.Id)) continue;
-                if (m.GimmickId != null && m.GimmickId != C.Content.GimmickOf(C.State.Gimmick).Key) continue;
+                if (m.GimmickId != null && m.GimmickId != gimmick) continue;
                 string reason;
                 bool can = C.CanLearnMove(m.Id, out reason);
                 string id = m.Id;
                 var b = Small(T.Get(m.NameKey) + " · " + m.Cost, () => { C.LearnMove(id); changed(); }, can, RingUi.Warn,
-                    T.Get("c.dev.moves") + ": " + T.Get(m.NameKey) + " — " + T.Format("dev.cost", m.Cost));
+                    T.Format("c.dev.move.why", RingLabels.ActionName(T, m.Action)) + " — " + T.Format("dev.cost", m.Cost));
                 b.style.marginRight = 4f;
                 mrow.Add(b);
                 mc++;
@@ -211,7 +282,22 @@ namespace Game.Gameplay.Ring.UI
             return card;
         }
 
-        protected static string Signed(int v) { return v > 0 ? "+" + v : v.ToString(); }
+        /// <summary>Рекомендація: кнопка-назва з ціною і під нею пояснення одним рядком (видно одразу, без наведення).</summary>
+        private VisualElement Rec(string title, string why, Color accent, Action buy)
+        {
+            var box = RingUi.Column();
+            box.style.marginBottom = 4f;
+            var b = Small(title, buy, true, accent);
+            b.style.marginBottom = 0f;
+            box.Add(b);
+            var l = RingUi.Lbl(why, 11f, RingUi.Dim);
+            l.style.whiteSpace = WhiteSpace.Normal;
+            l.style.marginLeft = 6f;
+            box.Add(l);
+            return box;
+        }
+
+        protected static string Signed(int v) { return v > 0 ? "+" + v : v < 0 ? "\u2212" + (-v) : "0"; }
     }
 
     // ============================ титул ============================
@@ -465,12 +551,19 @@ namespace Game.Gameplay.Ring.UI
                 bool any = w.ActionsLeft > 0;
                 var grid = RingUi.Row();
                 grid.style.flexWrap = Wrap.Wrap;
-                grid.Add(ActionBtn(1, "week.action.0", () => C.Train(false), any));
-                grid.Add(ActionBtn(2, "c.week.train_coach", () => C.Train(true), any && w.Money >= CareerRules.TrainerCost));
-                grid.Add(ActionBtn(3, "week.action.1", () => C.Recover(WorstZone(w), false), any && w.CanRecover));
-                grid.Add(ActionBtn(4, "week.action.2", C.Promo, any));
-                grid.Add(ActionBtn(5, "week.action.3", C.Backstage, any));
-                grid.Add(ActionBtn(6, "week.action.4", C.SideJob, any));
+                // Віддача — на самій кнопці до кліку (огляд фану 06.11.2026, R5/F6: «меню без ставок»): що зміниться й шанс кидка.
+                int cha = C.Player.Get(RingAttr.Charisma) - C.State.InjuryPenaltyFor(BodyZone.Head);
+                string chaOdds = Odds(cha);
+                int job = CareerRules.SideJobBase + 5 * Math.Max(0, C.Player.Get(RingAttr.Stamina));
+                grid.Add(ActionBtn(1, "week.action.0", () => C.Train(false), any, T.Format("c.week.pay.train", CareerRules.TrainingPoints)));
+                grid.Add(ActionBtn(2, "c.week.train_coach", () => C.Train(true), any && w.Money >= CareerRules.TrainerCost,
+                    T.Format("c.week.pay.coach", CareerRules.TrainingPoints + CareerRules.TrainerExtraPoints, CareerRules.TrainerCost)));
+                grid.Add(ActionBtn(3, "week.action.1", () => C.Recover(WorstZone(w), false), any && w.CanRecover,
+                    w.CanRecover ? T.Format("c.week.pay.recover", CareerRules.RecoverZoneHeal) : T.Get("c.week.pay.healthy")));
+                grid.Add(ActionBtn(4, "week.action.2", C.Promo, any, T.Format("c.week.pay.promo", chaOdds)));
+                grid.Add(ActionBtn(5, "week.action.3", C.Backstage, any, T.Format("c.week.pay.backstage", chaOdds)));
+                grid.Add(ActionBtn(6, "week.action.4", C.SideJob, any,
+                    T.Format("c.week.pay.job", job, Pct(Sum36AtMost(CareerRules.SideJobInjuryAtMost)))));
                 acts.Add(grid);
             }
             var last = Host.LastWeekResult;
@@ -490,13 +583,31 @@ namespace Game.Gameplay.Ring.UI
             col.Add(go);
         }
 
-        // Дві кнопки в ряд, опис дії — у рядку-підказці при наведенні.
-        private Button ActionBtn(int n, string key, Func<WeekActionResult> act, bool enabled)
+        // Дві кнопки в ряд: назва й під нею дрібно віддача (що зміниться, шанс); повний опис — у рядку-підказці при наведенні.
+        private Button ActionBtn(int n, string key, Func<WeekActionResult> act, bool enabled, string pay)
         {
-            var b = Small(n + "  " + T.Get(key), () => Do(act()), enabled, RingUi.Gold, T.Get(key + ".desc"));
+            var b = Small(n + "  " + T.Get(key) + "\n<size=11><color=#CDBB8E>" + pay + "</color></size>", () => Do(act()), enabled, RingUi.Gold, T.Get(key + ".desc"));
+            b.style.whiteSpace = WhiteSpace.Normal;
+            b.style.unityTextAlign = TextAnchor.MiddleLeft;
             b.style.width = new Length(49f, LengthUnit.Percent);
             b.style.marginRight = new Length(1f, LengthUnit.Percent);
             return b;
+        }
+
+        /// <summary>«10+ 28 % · 7–9 44 %» для модифікатора кидка 2d6.</summary>
+        private string Odds(int mod)
+        {
+            var c = TwoD6.ChancesOf36(mod);
+            return T.Format("c.week.pay.odds", Pct(c[2]), Pct(c[1]));
+        }
+
+        private static int Pct(int of36) { return (int)Math.Round(of36 * 100.0 / 36.0); }
+
+        private static int Sum36AtMost(int total)
+        {
+            int n = 0;
+            for (int a = 1; a <= 6; a++) for (int b = 1; b <= 6; b++) if (a + b <= total) n++;
+            return n;
         }
 
         private static BodyZone WorstZone(WeekView w)
@@ -645,7 +756,20 @@ namespace Game.Gameplay.Ring.UI
                 if (r.DevPointsGained != 0) p.Add(RingUi.Lbl(T.Format("c.delta.dev", Signed(r.DevPointsGained)), 13f, RingUi.Good));
                 if (r.InjuredZone >= 0) p.Add(RingUi.Lbl(T.Format("c.result.injury", T.Get("bodyzone." + r.InjuredZone), r.InjuryWeeks), 13f, RingUi.Bad));
             }
-            p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter) + " · " + T.Format("c.result.trust", r.TrustBefore, r.TrustAfter), 13f));
+            // Стовп «програти й стати зіркою» (огляд фану 06.11.2026, R4): зростання популярності після поразки — окремий поп,
+            // великим золотом над відомістю, а не рядок у кінці.
+            if (!r.Withdrew && r.Winner != MatchWinner.Player && r.PopularityAfter > r.PopularityBefore)
+            {
+                var pop = RingUi.Lbl(T.Format("c.result.lost_but_loved", r.PopularityBefore, r.PopularityAfter), 17f, RingUi.Gold, true);
+                pop.style.whiteSpace = WhiteSpace.Normal;
+                pop.style.marginTop = 4f; pop.style.marginBottom = 4f;
+                p.Insert(1, pop);
+            }
+            else if (r.PopularityAfter > r.PopularityBefore)
+                p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter), 15f, RingUi.Gold, true));
+            if (!(r.PopularityAfter > r.PopularityBefore))
+                p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter), 13f));
+            p.Add(RingUi.Lbl(T.Format("c.result.trust", r.TrustBefore, r.TrustAfter), 13f));
             p.Add(RingUi.PrimaryButton(T.Get("ui.next"), OnConfirm));
             Root.Add(p);
         }
@@ -687,7 +811,7 @@ namespace Game.Gameplay.Ring.UI
             }
             if (C.CanStartNextSeason) left.Add(RingUi.PrimaryButton(T.Get("season.next"), OnConfirm));
             col.Add(left);
-            var dev = DevelopmentPanel(Refresh);
+            var dev = DevelopmentPanel(Refresh, 2);
             dev.style.marginTop = 6f;
             col.Add(dev);
             col.Add(MakeHint());

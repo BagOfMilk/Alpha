@@ -100,6 +100,7 @@ namespace UnityEngine
         public static int Min(int a, int b) { return a < b ? a : b; }
         public static float Max(float a, float b) { return a > b ? a : b; }
         public static int Max(int a, int b) { return a > b ? a : b; }
+        public static float Lerp(float a, float b, float t) { return a + (b - a) * Clamp01(t); }
     }
 
     public static class Debug
