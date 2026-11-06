@@ -84,7 +84,8 @@ namespace Game.Tests.EditMode
             Assert.Throws<System.FormatException>(() => Three(ThreeJson.Replace("'flow':['a','m1','b','m2']", "'flow':['a','zzz']")));
             Assert.Throws<System.FormatException>(() => Three(ThreeJson.Replace("'flow':['a','m1','b','m2']", "'flow':'a'")));
             // Кілька матчів без flow — порядок невідомий.
-            var noFlow = ThreeJson.Replace(",\n 'flow':['a','m1','b','m2']", "");
+            // Переноси — як у робочій копії: на Windows з autocrlf=true рядок має \r\n, і пошук «,\n» нічого не знаходив.
+            var noFlow = ThreeJson.Replace("\r\n", "\n").Replace(",\n 'flow':['a','m1','b','m2']", "");
             Assert.Throws<System.FormatException>(() => Three(noFlow));
             Assert.Throws<System.FormatException>(() => Three(ThreeJson.Replace("'plan':'win_any'", "'plan':'nope'")));
             Assert.Throws<System.FormatException>(() => Three(ThreeJson.Replace("'no_dq'", "'x'")));
