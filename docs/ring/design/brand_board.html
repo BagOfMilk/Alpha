@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>РИНГ — дошка вигляду (напрям, не фінал)</title>
+<meta name="viewport" content="width=1280">
+<link rel="stylesheet" href="brand_tokens.css">
+<style>
+/* Шрифти беруться з репозиторію (OFL); дошка працює офлайн. Статут вигляду: docs/ring/DESIGN_SYSTEM.md */
+@font-face{font-family:Sofia;font-weight:700;src:url("../../../Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Bold.ttf")}
+@font-face{font-family:Sofia;font-weight:800;src:url("../../../Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-ExtraBold.ttf")}
+@font-face{font-family:Sofia;font-weight:900;src:url("../../../Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Black.ttf")}
+@font-face{font-family:Fixel;font-weight:400;src:url("../../../Assets/ThirdParty/Fonts/Fixel/FixelText-Regular.ttf")}
+@font-face{font-family:Fixel;font-weight:600;src:url("../../../Assets/ThirdParty/Fonts/Fixel/FixelText-SemiBold.ttf")}
+@font-face{font-family:Amatic;font-weight:700;src:url("../../../Assets/ThirdParty/Fonts/AmaticSC/AmaticSC-Bold.ttf")}
+@font-face{font-family:Spray;font-weight:400;src:url("../../../Assets/ThirdParty/Fonts/RubikSprayPaint/RubikSprayPaint-Regular.ttf")}
+*{box-sizing:border-box}
+body{margin:0;background:#08070b;color:var(--paper);font:400 14px Fixel,system-ui,sans-serif}
+.wrap{width:1240px;margin:0 auto;padding:18px 0 48px}
+h1{font:900 36px Sofia;letter-spacing:.04em;margin:0 0 2px;color:var(--gold);text-transform:uppercase}
+.lead{color:var(--dim);margin:0 0 4px}
+h2{font:800 15px Sofia;letter-spacing:.2em;color:var(--gold);text-transform:uppercase;margin:26px 0 10px;border-bottom:1px solid var(--ink3);padding-bottom:6px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.card{background:var(--ink1);border:1px solid var(--ink3);padding:14px 16px}
+.cap{font:700 12px Sofia;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-bottom:8px}
+.chip{width:136px;height:84px;padding:8px 10px;font:700 12px Sofia;letter-spacing:.06em;text-transform:uppercase;display:flex;flex-direction:column;justify-content:flex-end;line-height:1.25}
+.chip i{font:400 11px Fixel;text-transform:none;letter-spacing:0;font-style:normal;opacity:.9}
+.disp{font-family:Sofia;font-weight:900;text-transform:uppercase}
+.stage{position:relative;height:200px;background:radial-gradient(ellipse at 50% 130%,#4a3318 0%,#1b1822 52%,var(--ink0) 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--ink3)}
+.tag{position:absolute;left:8px;top:6px;font:700 11px Sofia;letter-spacing:.12em;color:var(--dim);text-transform:uppercase}
+.st{display:inline-block;transform:skewX(-12deg);line-height:1}
+.st b{display:block;padding:8px 26px 4px;font-family:Sofia;font-weight:900;text-transform:uppercase}
+.subl{font:700 14px Sofia;letter-spacing:.12em;margin-top:12px;text-transform:uppercase}
+.plate-gold{background:var(--gold);color:var(--ink0);box-shadow:var(--space-shadowOffset) var(--space-shadowOffset) 0 var(--crimson)}
+.plate-rival{background:var(--ink1);color:var(--paper);box-shadow:inset 0 0 0 4px var(--signal),6px 6px 0 #000}
+/* HUD */
+.hud{position:relative;height:380px;background:radial-gradient(ellipse at 50% 60%,#5a4a30 0%,#2a2218 34%,var(--ink0) 80%);border:1px solid var(--ink3);overflow:hidden}
+.pl{position:absolute;top:12px;width:330px;height:86px}.pl .bg,.pl .in{position:absolute}
+.pl .bg{inset:0}.pl .in{inset:4px;padding:5px 14px;background:var(--ink1)}
+.pl.l{left:12px}.pl.l .bg{background:var(--cobalt);clip-path:polygon(0 0,100% 0,calc(100% - 26px) 100%,0 100%)}.pl.l .in{clip-path:polygon(0 0,100% 0,calc(100% - 24px) 100%,0 100%)}
+.pl.r{right:12px;text-align:right}.pl.r .bg{background:var(--crimson);clip-path:polygon(26px 0,100% 0,100% 100%,0 100%)}.pl.r .in{clip-path:polygon(24px 0,100% 0,100% 100%,0 100%)}
+.nm{font:900 25px Sofia;letter-spacing:.04em;text-transform:uppercase;line-height:1;white-space:nowrap;display:flex;justify-content:space-between;align-items:baseline}
+.pl.r .nm{flex-direction:row-reverse}
+.tg{font:700 12px Sofia;letter-spacing:.16em;text-transform:uppercase;margin:0 4px}
+.segs{white-space:nowrap;margin-top:3px;line-height:9px}.lbl{font:700 12px Sofia;letter-spacing:.14em;color:var(--dim);display:inline-block;width:92px;text-transform:uppercase}
+.pl.r .lbl{width:auto;margin-left:6px}
+.seg{display:inline-block;width:14px;height:7px;margin-right:3px;background:var(--ink3);transform:skewX(-20deg)}
+.seg.d{background:var(--signal)}.seg.i{background:var(--gold)}.seg.h{background:var(--paper)}
+.cen{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:260px;text-align:center}
+.rd{display:inline-block;background:var(--gold);color:var(--ink0);padding:2px 26px 0;clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%);font:900 38px Sofia;text-transform:uppercase}
+.bar{position:absolute;left:12px;right:12px;bottom:12px;display:flex;gap:8px}
+.tile{position:relative;flex:1;height:70px;background:var(--ink1);border-left:6px solid var(--gold);padding:8px 12px 6px;clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+.tile .k{position:absolute;right:18px;top:0;background:var(--gold);color:var(--ink0);font:900 15px Sofia;padding:1px 8px}
+.tile .n{font:800 18px Sofia;text-transform:uppercase;line-height:1.05;padding-right:26px}
+.tile .ch{position:absolute;left:12px;right:26px;bottom:8px;height:6px;display:flex;gap:2px}.tile .ch s{display:block;height:100%}
+.end{width:176px;height:70px;background:var(--gold);color:var(--ink0);display:flex;align-items:center;justify-content:center;font:900 20px Sofia;letter-spacing:.06em;text-transform:uppercase;clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+/* меню */
+.menu{position:relative;height:400px;background:radial-gradient(ellipse at 72% 70%,#6a5434 0%,#241d16 36%,var(--ink0) 80%);border:1px solid var(--ink3);overflow:hidden}
+.mb{width:360px;height:48px;margin-bottom:10px;background:var(--ink1);border-left:8px solid var(--dim);padding:0 16px;display:flex;align-items:center;font:800 22px Sofia;letter-spacing:.06em;text-transform:uppercase;clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%)}
+.mb.act{background:var(--gold);color:var(--ink0);border-left-color:var(--crimson)}.mb.q{border-left-color:var(--signal)}.mb .n{font:900 18px Sofia;margin-right:12px;opacity:.7}
+/* щаблі */
+.tier{height:230px;position:relative;overflow:hidden;border:1px solid var(--ink3);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.tier.gym{background:var(--paper);color:var(--ink0)}
+.tier.club{background:var(--ink0);background-image:radial-gradient(var(--crimson) 22%,transparent 24%);background-size:14px 14px}
+.tier.palace{background:linear-gradient(180deg,#0b0a10,#1a1722)}
+.tape{position:absolute;width:90px;height:26px;background:color-mix(in srgb,var(--gold) 78%,transparent);transform:rotate(-8deg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>РИНГ · дошка вигляду — «Афіша підвальної ліги»</h1>
+<p class="lead">Ескіз напряму арт-директора, не фінал. Усі кольори — з <code>brand_tokens.css</code> (одне джерело); шрифти — з репозиторію.</p>
+
+<section id="palette"><h2>1 · Палітра (токени)</h2>
+<div class="row">
+<div class="chip" style="background:var(--ink0);color:var(--paper)">Сцена<i>#0E0D12 · тло</i></div>
+<div class="chip" style="background:var(--ink1);color:var(--paper)">Туш 1<i>#17151D · панель</i></div>
+<div class="chip" style="background:var(--ink2);color:var(--paper)">Туш 2<i>#221F2B · піднята</i></div>
+<div class="chip" style="background:var(--ink3);color:var(--paper)">Туш 3<i>#2E2A39 · межа, порожній сегмент</i></div>
+<div class="chip" style="background:var(--paper);color:var(--ink0)">Папір<i>#EDE5D6 · текст, «частково»</i></div>
+<div class="chip" style="background:var(--gold);color:var(--ink0)">Золото<i>#E8BA3C · успіх гравця</i></div>
+<div class="chip" style="background:var(--signal);color:var(--ink0)">Сигнал<i>#E5483F · шкода, провал</i></div>
+<div class="chip" style="background:var(--crimson);color:var(--paper)">Кармін<i>#AA141C · лише поверхні</i></div>
+<div class="chip" style="background:var(--cobalt);color:var(--paper)">Кобальт<i>#2F6FD6 · герой (поверхня)</i></div>
+<div class="chip" style="background:var(--cobaltText);color:var(--ink0)">Кобальт-текст<i>#6DB6FF · герой (текст)</i></div>
+<div class="chip" style="background:var(--rose);color:var(--ink0)">Рожевий<i>#FF7AB8 · бунтар</i></div>
+</div></section>
+
+<section id="identity"><h2>2 · Знак і шрифти</h2>
+<div class="g3">
+<div class="card"><div class="cap">Печатка (мат, дрібні місця)</div>
+<svg viewBox="0 0 200 200" width="150" style="display:block;margin:auto" role="img"><title>Печатка</title><circle cx="100" cy="100" r="92" style="fill:var(--ink0);stroke:var(--gold);stroke-width:7"/><g style="stroke:var(--gold);stroke-width:4"><line x1="22" y1="68" x2="178" y2="68"/><line x1="14" y1="100" x2="186" y2="100"/><line x1="22" y1="132" x2="178" y2="132"/></g><polygon points="100,34 112.5,69.5 150.9,53.1 134.5,91.5 166,100 134.5,108.5 150.9,146.9 112.5,130.5 100,166 87.5,130.5 49.1,146.9 65.5,108.5 34,100 65.5,91.5 49.1,53.1 87.5,69.5" style="fill:var(--crimson);stroke:var(--ink0);stroke-width:5;stroke-linejoin:round"/><circle cx="100" cy="100" r="13" style="fill:var(--gold)"/></svg></div>
+<div class="card"><div class="cap">Канатна рамка + ЖИВИЙ текст</div>
+<svg viewBox="0 0 520 160" width="100%" role="img"><title>Вордмарк</title><g><rect x="22" y="40" width="476" height="8" style="fill:var(--crimson)"/><rect x="22" y="76" width="476" height="8" style="fill:var(--paper)"/><rect x="22" y="112" width="476" height="8" style="fill:var(--crimson)"/><rect x="8" y="22" width="22" height="116" rx="4" style="fill:var(--gold)"/><rect x="490" y="22" width="22" height="116" rx="4" style="fill:var(--gold)"/><rect x="4" y="36" width="30" height="16" rx="4" style="fill:var(--crimson)"/><rect x="486" y="36" width="30" height="16" rx="4" style="fill:var(--crimson)"/><rect x="4" y="108" width="30" height="16" rx="4" style="fill:var(--crimson)"/><rect x="486" y="108" width="30" height="16" rx="4" style="fill:var(--crimson)"/></g><text x="260" y="121" text-anchor="middle" font-family="Sofia" font-weight="900" font-style="italic" font-size="134" letter-spacing="6" style="fill:var(--gold);stroke:var(--ink0);stroke-width:12;stroke-linejoin:round;paint-order:stroke fill">РИНГ</text></svg>
+<div class="cap" style="margin:8px 0 0">текст «РИНГ» — живий (шрифт display, ВЕЛИКІ); у текстурі літер немає</div></div>
+<div class="card"><div class="cap">Мат зверху</div>
+<svg viewBox="0 0 200 200" width="150" style="display:block;margin:auto" role="img"><title>Мат</title><rect x="6" y="6" width="188" height="188" style="fill:var(--ink1);stroke:var(--ink3)"/><rect x="18" y="18" width="164" height="164" fill="none" style="stroke:var(--crimson);stroke-width:5"/><rect x="26" y="26" width="148" height="148" fill="none" style="stroke:var(--paper);stroke-width:5"/><rect x="34" y="34" width="132" height="132" fill="none" style="stroke:var(--crimson);stroke-width:5"/><rect x="46" y="46" width="108" height="108" style="fill:color-mix(in srgb,var(--crimson) 82%,#000)"/><circle cx="100" cy="100" r="44" style="fill:var(--ink0);stroke:var(--gold);stroke-width:4"/><g style="stroke:var(--gold);stroke-width:2.5"><line x1="62" y1="82" x2="138" y2="82"/><line x1="56" y1="100" x2="144" y2="100"/><line x1="62" y1="118" x2="138" y2="118"/></g><polygon points="100,66 106,86 124,76 114,94 134,100 114,106 124,124 106,114 100,134 94,114 76,124 86,106 66,100 86,94 76,76 94,86" style="fill:var(--crimson);stroke:var(--ink0);stroke-width:3;stroke-linejoin:round"/><circle cx="100" cy="100" r="7" style="fill:var(--gold)"/></svg></div>
+</div>
+<div class="g3" style="margin-top:12px">
+<div class="card"><div class="cap">Дисплей · Sofia Sans Extra Condensed 700–900 · лише ВЕЛИКІ</div><div class="disp" style="font-size:60px;line-height:1;color:var(--gold)">Фінішер!</div><div class="disp" style="font-size:28px;margin-top:6px;font-weight:800">Їжак, Єнот, Ґанок · Л — «Λ»</div><div class="cap" style="margin-top:8px">малі кириличні в ній — болгарські форми; ₴ немає</div></div>
+<div class="card"><div class="cap">Текст · Fixel Text (речення, ціни зі ₴)</div><div style="font-size:19px;line-height:1.35">Наведи на дію — побачиш шанси. Гонорар 30 ₴: ставка 20 і бонуси 10.</div><div style="font:600 21px Fixel;margin-top:8px;color:var(--gold);font-variant-numeric:tabular-nums">06/12 · 10+ 17% · 7–9 42%</div></div>
+<div class="card"><div class="cap">Світ · Amatic SC (таблички) і Rubik Spray Paint (спрей)</div><div style="font:700 44px Amatic;line-height:1">Нехай скаже! 150 ₴</div><div style="font:400 34px Spray;color:var(--gold);margin-top:6px">ОРЕНДА ЗАЛУ · ВХІД</div></div>
+</div></section>
+
+<section id="callouts"><h2>3 · Відгук світу: вага = форма + тінь + розмір; золото лише для гравця</h2>
+<div class="g4">
+<div class="stage"><span class="tag">T0 · провал</span><div class="st"><b style="font-size:40px;color:var(--signal);background:color-mix(in srgb,var(--ink0) 62%,transparent)">Провал</b></div><div class="subl" style="color:var(--dim)">Ти · кидок · 4</div></div>
+<div class="stage"><span class="tag">T1 · частково</span><div class="st"><b style="font-size:50px;color:var(--paper);border-bottom:5px solid var(--gold);padding:2px 12px;background:color-mix(in srgb,var(--ink0) 62%,transparent)">Частково</b></div><div class="subl" style="color:var(--dim)">Ти · кидок · 8</div></div>
+<div class="stage"><span class="tag">T2 · чисто (ГРАВЕЦЬ)</span><div class="st"><b class="plate-gold" style="font-size:78px">Чисто!</b></div><div class="subl">Ти · удар · 10</div></div>
+<div class="stage"><span class="tag">T2 · чисто (СУПЕРНИК)</span><div class="st"><b class="plate-rival" style="font-size:78px">Чисто!</b></div><div class="subl" style="color:var(--signal)">Суперник · удар · 10</div></div>
+<div class="stage"><span class="tag">T3 · відлік</span><div style="display:flex;gap:16px;align-items:center"><div class="st"><b style="font-size:44px;color:var(--paper);padding:0 4px">Раз…</b></div><div class="st"><b style="font-size:54px;color:var(--gold);padding:0 4px">Два…</b></div></div><div class="st" style="margin-top:6px"><b class="plate-gold" style="font-size:52px;padding:4px 22px 0">На два!</b></div></div>
+<div class="stage"><span class="tag">T4 · фінішер</span><svg viewBox="0 0 300 200" width="300" height="200" style="position:absolute;left:50%;top:0;transform:translateX(-50%)"><polygon points="150,2 163,38 192,16 188,53 227,48 208,80 246,92 211,112 236,142 197,147 204,184 168,166 150,198 132,166 96,184 103,147 64,142 89,112 54,92 92,80 73,48 112,53 108,16 137,38" style="fill:var(--crimson)"/></svg><div class="st" style="position:relative"><b class="plate-gold" style="font-size:70px;box-shadow:10px 10px 0 #000">Фінішер!</b></div></div>
+<div class="stage"><span class="tag">T5 · перемога</span><div style="position:absolute;left:0;right:0;top:56px;height:92px;background:var(--gold)"></div><div style="position:absolute;left:0;right:0;top:48px;height:6px;background:var(--crimson)"></div><div style="position:absolute;left:0;right:0;top:150px;height:6px;background:var(--crimson)"></div><div class="st" style="position:relative"><b style="font-size:66px;color:var(--ink0);padding:0 28px">Перемога</b></div></div>
+<div class="stage" style="background:radial-gradient(ellipse at 50% 130%,color-mix(in srgb,var(--slate) 70%,var(--cobalt)) 0%,var(--ink1) 55%,var(--ink0) 100%)"><span class="tag">T5 · поразка (тиха)</span><div class="st"><b style="font-size:64px;color:var(--frost);background:var(--slate);padding:6px 26px 2px">Поразка</b></div><div class="subl" style="color:var(--dim)">Зал пошанував тебе</div></div>
+</div></section>
+
+<section id="hud"><h2>4 · HUD матчу — площа ≤ поточної (≤ 400×100 px в еталоні 900): герой кобальт ліворуч, лиходій кармін праворуч</h2>
+<div class="hud">
+<div class="pl l"><div class="bg"></div><div class="in"><div class="nm"><span>Новачок</span><span class="tg" style="color:var(--cobaltText)">Лежить</span></div><div class="segs"><span class="lbl">Ушкодження</span><span class="seg d"></span><span class="seg d"></span><span class="seg d"></span><span class="seg d"></span><span class="seg d"></span><span class="seg d"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div><div class="segs"><span class="lbl">Імпульс</span><span class="seg i"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div></div></div>
+<div class="cen"><div class="rd">Раунд 4<span style="font-size:22px"> / 20</span></div><div class="segs" style="margin-top:12px"><span class="lbl" style="width:auto;margin-right:8px;color:var(--paper)">Ажіотаж</span><span class="seg h"></span><span class="seg h"></span><span class="seg h"></span><span class="seg h"></span><span class="seg h"></span><span class="seg h"></span><span class="seg h"></span><span class="seg h"></span><span class="seg h"></span><span class="seg"></span></div><div style="font:700 13px Sofia;letter-spacing:.16em;text-transform:uppercase;margin-top:4px">Зал на ногах · рефері стежить</div></div>
+<div class="pl r"><div class="bg"></div><div class="in"><div class="nm" style="font-size:22px"><span>Матео «Колібрі» Рамос</span><span class="tg" style="color:var(--signal)">Стоїть</span></div><div class="segs"><span class="seg d"></span><span class="seg d"></span><span class="seg d"></span><span class="seg d"></span><span class="seg d"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="lbl">Ушкодження</span></div><div class="segs"><span class="seg i"></span><span class="seg i"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="lbl">Імпульс</span></div></div></div>
+<div class="st" style="position:absolute;left:50%;top:146px;transform:translateX(-50%) skewX(-12deg)"><b class="plate-gold" style="font-size:90px;display:block;padding:6px 30px 2px">Чисто!</b></div>
+<div class="bar">
+<div class="tile"><span class="k">1</span><div class="n">Удар передпліччям</div><div class="ch"><s style="flex:17;background:var(--signal)"></s><s style="flex:42;background:var(--paper)"></s><s style="flex:41;background:var(--gold)"></s></div></div><div class="tile"><span class="k">2</span><div class="n">Низький удар ногою</div><div class="ch"><s style="flex:17;background:var(--signal)"></s><s style="flex:42;background:var(--paper)"></s><s style="flex:41;background:var(--gold)"></s></div></div><div class="tile"><span class="k">3</span><div class="n">Кидок через стегно</div><div class="ch"><s style="flex:30;background:var(--signal)"></s><s style="flex:40;background:var(--paper)"></s><s style="flex:30;background:var(--gold)"></s></div></div><div class="tile"><span class="k">4</span><div class="n">Затягнути до канатів</div><div class="ch"><s style="flex:17;background:var(--signal)"></s><s style="flex:42;background:var(--paper)"></s><s style="flex:41;background:var(--gold)"></s></div></div><div class="tile" style="border-left-color:var(--signal)"><span class="k">5</span><div class="n">Фінішер</div><div class="ch"><s style="flex:45;background:var(--signal)"></s><s style="flex:35;background:var(--paper)"></s><s style="flex:20;background:var(--gold)"></s></div></div><div class="end">Завершити хід</div>
+</div></div></section>
+
+<section id="title"><h2>5 · Титульне меню: канатна рамка + живий текст, афішні пластини</h2>
+<div class="menu"><div style="position:absolute;left:48px;top:40px;width:430px">
+<svg viewBox="0 0 520 160" width="100%" role="img"><title>РИНГ</title><g><rect x="22" y="40" width="476" height="8" style="fill:var(--crimson)"/><rect x="22" y="76" width="476" height="8" style="fill:var(--paper)"/><rect x="22" y="112" width="476" height="8" style="fill:var(--crimson)"/><rect x="8" y="22" width="22" height="116" rx="4" style="fill:var(--gold)"/><rect x="490" y="22" width="22" height="116" rx="4" style="fill:var(--gold)"/><rect x="4" y="36" width="30" height="16" rx="4" style="fill:var(--crimson)"/><rect x="486" y="36" width="30" height="16" rx="4" style="fill:var(--crimson)"/><rect x="4" y="108" width="30" height="16" rx="4" style="fill:var(--crimson)"/><rect x="486" y="108" width="30" height="16" rx="4" style="fill:var(--crimson)"/></g><text x="260" y="121" text-anchor="middle" font-family="Sofia" font-weight="900" font-style="italic" font-size="134" letter-spacing="6" style="fill:var(--gold);stroke:var(--ink0);stroke-width:12;stroke-linejoin:round;paint-order:stroke fill">РИНГ</text></svg>
+<div style="font:700 15px Sofia;letter-spacing:.2em;color:var(--dim);margin:10px 0 24px;text-transform:uppercase">Місцева федерація · один борець · сезон за сезоном</div>
+<div class="mb act"><span class="n">1</span>Нова кар'єра</div><div class="mb"><span class="n">2</span>Повний екран / вікно</div><div class="mb q"><span class="n">3</span>Вийти з гри</div></div>
+<div style="position:absolute;right:48px;bottom:28px;text-align:right"><div style="font:700 14px Sofia;letter-spacing:.2em;color:var(--dim);text-transform:uppercase">Наступне шоу</div><div class="disp" style="font-size:44px">Субота · 19:00</div></div></div></section>
+
+<section id="tiers"><h2>6 · Підвал → Палац: ті самі токени, інша інтенсивність фактури</h2>
+<div class="g3">
+<div class="tier gym"><div class="tape" style="left:-14px;top:18px"></div><div class="tape" style="right:-18px;bottom:26px;transform:rotate(7deg)"></div><div style="font:400 58px Spray;color:var(--ink0);line-height:1">РИНГ</div><div style="font:700 40px Amatic;margin-top:6px;color:var(--crimson)">нехай скаже!</div><div class="cap" style="position:absolute;left:8px;bottom:6px;color:#555">Спортзал · ксерокс, спрей, скотч</div></div>
+<div class="tier club"><div class="disp" style="font-size:78px;color:var(--ink0);-webkit-text-stroke:3px var(--gold);letter-spacing:.04em;text-shadow:5px 5px 0 var(--crimson)">Ринг</div><div class="disp" style="font-size:26px;letter-spacing:.2em;color:var(--paper);margin-top:6px;background:var(--ink0);padding:2px 10px">Живе шоу · щомісяця</div><div class="cap" style="position:absolute;left:8px;bottom:6px">Клуб · шовкодрук, неон</div></div>
+<div class="tier palace"><div style="display:flex;gap:6px"><div class="disp" style="background:var(--gold);color:var(--ink0);font-size:46px;padding:2px 16px;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%)">Ринг</div><div class="disp" style="background:var(--ink2);color:var(--paper);font-size:46px;padding:2px 16px;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%)">Палац спорту</div></div><div style="display:flex;gap:8px;margin-top:18px"><span style="width:46px;height:70px;border:6px solid var(--signal)"></span><span style="width:46px;height:70px;border:6px solid var(--signal)"></span><span style="width:26px;height:70px"></span><span style="width:30px;height:46px;border:4px solid var(--gold);align-self:center"></span><span style="width:30px;height:46px;border:4px solid var(--gold);align-self:center"></span></div><div class="cap" style="position:absolute;left:8px;bottom:6px">Палац · ефірне LED</div></div>
+</div></section>
+</div>
+<script>
+// ?only=hud|callouts|title|identity|tiers|palette — показати один розділ (для експорту ключових кадрів у PNG)
+var o=(location.search.match(/only=(\w+)/)||[])[1];
+if(o){document.querySelectorAll('section').forEach(function(s){if(s.id!==o)s.style.display='none'});document.querySelector('h1').style.display='none';document.querySelector('.lead').style.display='none'}
+</script>
+</body>
+</html>

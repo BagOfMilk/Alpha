@@ -18,6 +18,15 @@ args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 REPO = args[0] if args else os.getcwd()
 WANT = [a for a in args[1:] if not a.startswith("--")]
 OUT = os.path.join(REPO, "Assets", "Art", "Ring", "Textures")
+sys.path.insert(0, os.path.join(REPO, "tools", "blender"))
+sys.path.insert(0, os.path.join(REPO, "tools", "ring_design"))
+import ring_brand as B              # палітра — токени арт-директора (Статут вигляду COL-01)
+import emblem_geometry as G         # геометрія знака (Статут вигляду ARENA-03): одна на PIL, numpy і SVG
+
+
+def _c(name):
+    r, g, b = B.rgb(name)
+    return np.array((r / 255.0, g / 255.0, b / 255.0), np.float32)
 
 # ---------------------------------------------------------------- шум і допоміжне
 
@@ -343,20 +352,38 @@ def d_poster(n, k):
     alpha = np.ones((n, n), np.float32)
     return img, alpha
 
-def d_logo(n):
-    """Емблема промоушену на полотні: кільце, восьмикутна зірка, смуга — лише геометрія."""
+def seal_layers(n, scale=1.0):
+    """Печатка «Рингу» шарами (колір, альфа): золоте кільце, чорне поле, три канати, зірка з обідком, цятка.
+    БЕЗ планки (стара планка читалась як «в'їзд заборонено»). scale < 1 — менша печатка в кадрі. Геометрія — emblem_geometry."""
     u, v = grid(n)
-    x, y = u / n * 2 - 1, v / n * 2 - 1
+    x = (u / n * 2 - 1) * 100.0 / scale
+    y = (v / n * 2 - 1) * 100.0 / scale
     r = np.sqrt(x * x + y * y)
     a = np.arctan2(y, x)
-    ring = (r > 0.82) & (r < 0.95)
-    star = r < 0.55 + 0.2 * np.abs(np.cos(a * 4))
-    band = (np.abs(y) < 0.12) & (np.abs(x) < 0.9)
-    alpha = (ring | star | band).astype(np.float32) * 0.85
-    col = np.ones((n, n, 3), np.float32) * np.array((0.6, 0.08, 0.1), np.float32)
-    col[band] = (0.1, 0.1, 0.12)
-    col[ring] = (0.12, 0.12, 0.14)
-    alpha *= np.clip(0.75 + 0.25 * fbm(n, 30, 211, 3), 0, 1)        # фарба стерта
+    col = np.zeros((n, n, 3), np.float32)
+    alpha = np.zeros((n, n), np.float32)
+
+    def paint(mask, color, al=1.0):
+        col[mask] = color
+        alpha[mask] = al
+
+    outer, inner = G.RING_R + G.RING_W / 2, G.RING_R - G.RING_W / 2
+    paint(r < outer, _c("gold"))
+    paint(r < inner, _c("ink0"))
+    for yy, x0, x1 in G.ROPES:
+        paint((np.abs(y - (yy - 100.0)) < G.ROPE_W / 2) & (x >= x0 - 100.0) & (x <= x1 - 100.0) & (r < inner), _c("gold"))
+    rho = G.star_radius_numpy(a, G.STAR_OUT, G.STAR_IN, G.STAR_POINTS)
+    paint(r < rho + G.STAR_OUTLINE / 2, _c("ink0"))
+    paint(r < rho - G.STAR_OUTLINE / 2, _c("crimson"))
+    paint(r < G.DOT_R, _c("gold"))
+    return col, alpha
+
+def d_logo(n):
+    """Печатка промоушену на полотні рингу: золоте кільце, чорне поле, канати, зірка (на червоному мату «в'їзд заборонено»
+    утворювала планка + зірка кольору мату — тепер чорне поле тримає зірку видимою)."""
+    col, alpha = seal_layers(n)
+    alpha = alpha * 0.92
+    alpha *= np.clip(0.80 + 0.20 * fbm(n, 30, 211, 3), 0, 1)        # фарба злегка стерта
     return col, alpha
 
 def d_tape(n):
@@ -379,26 +406,27 @@ def d_grime(n):
 # ---------------------------------------------------------------- контент LED-екранів (сцени світла, ring_show.py)
 
 def led_logo(n):
-    """Заставка промоушену: емблема на темно-червоному градієнті з променями."""
+    """Заставка промоушену: печатка (та сама, що на мату й банерах) на темно-червоному градієнті з променями."""
     u, v = grid(n)
     x, y = u / n * 2 - 1, v / n * 2 - 1
     r = np.sqrt(x * x + y * y)
     a = np.arctan2(y, x)
     rays = 0.5 + 0.5 * np.cos(a * 12)
     bg = np.stack([0.35 + 0.3 * (1 - r), 0.02 + 0.03 * rays * (1 - r), 0.05 + 0.04 * rays], -1)
-    ring = ((r > 0.5) & (r < 0.6)).astype(np.float32)
-    star = (r < 0.32 + 0.12 * np.abs(np.cos(a * 4))).astype(np.float32)
-    band = ((np.abs(y) < 0.07) & (np.abs(x) < 0.62)).astype(np.float32)
-    img = bg * (1 - np.maximum(ring, star)[..., None]) + np.array((1.0, 0.85, 0.4)) * np.maximum(ring, star)[..., None]
-    img = img * (1 - band[..., None]) + np.array((0.05, 0.05, 0.06)) * band[..., None]
+    col, al = seal_layers(n, scale=0.66)
+    img = bg * (1 - al[..., None]) + col * al[..., None]
     return np.clip(img, 0, 1)
 
 def led_fire(n):
+    """Полум'я в плоскому стилі афіш (Статут ARENA-04): три шари язиків — кармін, сигнал, золото — на чорному."""
     u, v = grid(n)
-    y = v / n
-    f = fbm(n, 40, 301, 4, ax=1.0, ay=2.5)
-    t = np.clip(1.15 - y * 1.3 + 0.35 * f, 0, 1)
-    return np.stack([np.clip(t * 1.6, 0, 1), np.clip(t * t * 1.1, 0, 1), np.clip(t ** 4 * 0.6, 0, 1)], -1)
+    x, y = u / n, v / n                                  # y — знизу вгору, 0 = низ кадру
+    img = np.zeros((n, n, 3), np.float32) + _c("ink0")
+    for base, amp, freq, phase, name in ((0.40, 0.42, 5.0, 0.00, "crimson"), (0.30, 0.34, 7.0, 0.35, "signal"), (0.18, 0.26, 9.0, 0.70, "gold")):
+        tri = np.abs(((x * freq + phase) % 1.0) - 0.5) * 2.0       # 0 — вершина язика, 1 — западина
+        h = base + amp * (1.0 - tri) ** 1.4
+        img[y < h] = _c(name)
+    return img
 
 def led_waves(n):
     u, v = grid(n)
