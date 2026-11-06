@@ -48,7 +48,7 @@ namespace Game.Gameplay.Ring.UI
             // Назва на напівпрозорій плашці в куті: не налазить на ринг у кадрі (3D під UI).
             if (RingStageHub.Has3D)
             {
-                head.style.backgroundColor = new Color(0.04f, 0.035f, 0.05f, 0.74f);
+                head.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaGlass);
                 head.style.paddingLeft = head.style.paddingRight = 12f;
                 head.style.paddingTop = head.style.paddingBottom = 8f;
                 head.style.borderTopLeftRadius = head.style.borderTopRightRadius =
@@ -66,7 +66,7 @@ namespace Game.Gameplay.Ring.UI
             box.style.maxWidth = 1100f;
             box.style.minWidth = 560f;
             box.style.alignSelf = Align.Center;
-            box.style.backgroundColor = new Color(0.05f, 0.045f, 0.06f, RingStageHub.Has3D ? 0.84f : 0.94f);
+            box.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, RingStageHub.Has3D ? BrandTokens.AlphaGlass : BrandTokens.AlphaPlate);
             Root.Add(box);
 
             var kind = _m.Kind;
@@ -206,7 +206,7 @@ namespace Game.Gameplay.Ring.UI
 
         private static void StyleChip(VisualElement c)
         {
-            c.style.backgroundColor = new Color(0.07f, 0.065f, 0.085f, 0.62f);
+            c.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaUnderlay);
             c.style.borderTopLeftRadius = 10f; c.style.borderTopRightRadius = 10f;
             c.style.borderBottomLeftRadius = 10f; c.style.borderBottomRightRadius = 10f;
             c.style.paddingLeft = 9f; c.style.paddingRight = 9f; c.style.paddingTop = 3f; c.style.paddingBottom = 3f;
@@ -294,7 +294,7 @@ namespace Game.Gameplay.Ring.UI
             d.style.backgroundColor = RingUi.Text;
             d.style.borderTopLeftRadius = 8f; d.style.borderTopRightRadius = 8f;
             d.style.borderBottomLeftRadius = 8f; d.style.borderBottomRightRadius = 8f;
-            d.Add(RingUi.Lbl(value.ToString(), 28f, new Color(0.08f, 0.07f, 0.08f, 1f), true));
+            d.Add(RingUi.Lbl(value.ToString(), 28f, RingTheme.Bg, true));
             return d;
         }
 

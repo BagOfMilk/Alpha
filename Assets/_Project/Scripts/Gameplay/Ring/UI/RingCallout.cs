@@ -35,7 +35,7 @@ namespace Game.Gameplay.Ring.UI
             _word = RingUi.Lbl("", 40f, RingUi.Gold, true);
             _word.pickingMode = PickingMode.Ignore;
             // Темна підкладка: червоне «Провал» губилось на сорочці рефері й натовпі.
-            _word.style.backgroundColor = new Color(0.04f, 0.035f, 0.05f, 0.62f);
+            _word.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaUnderlay);
             _word.style.paddingLeft = 18f; _word.style.paddingRight = 18f; _word.style.paddingTop = 2f; _word.style.paddingBottom = 4f;
             _word.style.borderTopLeftRadius = 8f; _word.style.borderTopRightRadius = 8f;
             _word.style.borderBottomLeftRadius = 8f; _word.style.borderBottomRightRadius = 8f;
@@ -99,7 +99,7 @@ namespace Game.Gameplay.Ring.UI
                 case MatchEventKind.MatchEnd:
                     if (winner == null) return;
                     string key = winner == MatchWinner.Player ? "match.call.win" : winner == MatchWinner.Rival ? "match.call.loss" : "match.call.draw";
-                    Color col = winner == MatchWinner.Player ? RingUi.Gold : winner == MatchWinner.Rival ? new Color(0.62f, 0.72f, 0.95f) : RingUi.Text;
+                    Color col = winner == MatchWinner.Player ? RingUi.Gold : winner == MatchWinner.Rival ? RingTheme.Defeat : RingUi.Text;
                     c.Push(t.Get(key), null, col, 72f, MatchScreenView.ResultMoment);
                     return;
                 case MatchEventKind.Reverse:

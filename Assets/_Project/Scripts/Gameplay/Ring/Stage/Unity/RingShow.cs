@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Game.Gameplay.Ring.UI;
 using Game.Gameplay.UI.Toolkit;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -112,7 +113,6 @@ namespace Game.Gameplay.Ring.Stage
             _tronRoot.style.left = 0; _tronRoot.style.right = 0; _tronRoot.style.top = 0; _tronRoot.style.bottom = 0;
             _tronRoot.style.justifyContent = Justify.Center;
             _tronRoot.style.alignItems = Align.Center;
-            var font = HudToolkitTheme.LoadFont();
             _tronTitle = new Label();
             _tronTitle.style.fontSize = 110;
             _tronTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
@@ -120,13 +120,11 @@ namespace Game.Gameplay.Ring.Stage
             _tronTitle.style.unityTextAlign = TextAnchor.MiddleCenter;
             _tronSub = new Label();
             _tronSub.style.fontSize = 44;
-            _tronSub.style.color = new Color(1f, 0.85f, 0.4f);
+            _tronSub.style.color = RingTheme.Gold;   // токен (ТЗ B00): було #FFD966
             _tronSub.style.unityTextAlign = TextAnchor.MiddleCenter;
-            if (font != null)
-            {
-                _tronTitle.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(font));
-                _tronSub.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(font));
-            }
+            // Шрифт — лише через роль (ТЗ B00 §2); вигляд титантрона без змін до свого пакета.
+            RingFonts.Apply(_tronTitle, RingFontRole.Text);
+            RingFonts.Apply(_tronSub, RingFontRole.Text);
             _tronRoot.Add(_tronTitle);
             _tronRoot.Add(_tronSub);
 

@@ -20,8 +20,8 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Пауза між діями ШІ, с.</summary>
         public const float AiPause = 0.6f;
 
-        private static readonly Color Glass = new Color(0.07f, 0.065f, 0.085f, 0.78f);
-        private static readonly Color GlassHi = new Color(0.13f, 0.12f, 0.15f, 0.9f);
+        private static readonly Color Glass = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaGlass);
+        private static readonly Color GlassHi = RingTheme.WithAlpha(RingTheme.PanelRaised, BrandTokens.AlphaPanel);
 
         private readonly MatchScreenModel _m;
         private readonly RingCallout _call = new RingCallout();
@@ -127,7 +127,7 @@ namespace Game.Gameplay.Ring.UI
         private static VisualElement Panel(float pad = 8f, float alpha = -1f)
         {
             var e = RingUi.Column();
-            e.style.backgroundColor = alpha >= 0f ? new Color(Glass.r, Glass.g, Glass.b, alpha) : Glass;
+            e.style.backgroundColor = alpha >= 0f ? RingTheme.WithAlpha(Glass, alpha) : Glass;
             e.style.borderTopLeftRadius = 8f; e.style.borderTopRightRadius = 8f;
             e.style.borderBottomLeftRadius = 8f; e.style.borderBottomRightRadius = 8f;
             e.style.paddingLeft = pad + 3f; e.style.paddingRight = pad + 3f;
@@ -356,7 +356,7 @@ namespace Game.Gameplay.Ring.UI
         private VisualElement EndTurnButton(MatchActionRow a)
         {
             var b = RingUi.Column();
-            b.style.backgroundColor = new Color(0.22f, 0.17f, 0.08f, 0.9f);
+            b.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Hover, BrandTokens.AlphaPanel);
             b.style.borderTopLeftRadius = 6f; b.style.borderTopRightRadius = 6f;
             b.style.borderBottomLeftRadius = 6f; b.style.borderBottomRightRadius = 6f;
             b.style.paddingLeft = 12f; b.style.paddingRight = 12f; b.style.paddingTop = 6f; b.style.paddingBottom = 6f;
@@ -412,7 +412,7 @@ namespace Game.Gameplay.Ring.UI
             var shade = RingUi.Column();
             shade.style.position = Position.Absolute;
             shade.style.left = 0f; shade.style.right = 0f; shade.style.top = 0f; shade.style.bottom = 0f;
-            shade.style.backgroundColor = new Color(0f, 0f, 0f, 0.28f);
+            shade.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Scrim, 0.28f);
             shade.style.justifyContent = Justify.FlexEnd;
             shade.style.alignItems = Align.Center;
             shade.style.paddingBottom = 150f;
@@ -455,7 +455,7 @@ namespace Game.Gameplay.Ring.UI
             var shade = RingUi.Column();
             shade.style.position = Position.Absolute;
             shade.style.left = 0f; shade.style.right = 0f; shade.style.top = 0f; shade.style.bottom = 0f;
-            shade.style.backgroundColor = new Color(0f, 0f, 0f, 0.45f);
+            shade.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Scrim, BrandTokens.AlphaShade);
             shade.style.justifyContent = Justify.Center;
             shade.style.alignItems = Align.Center;
             var p = Panel(14f, 0.94f);

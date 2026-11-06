@@ -147,6 +147,7 @@ namespace Game.Gameplay.Ring
             }
             if (!BuildUi()) return;
             if (!LoadData()) return;
+            MigrateSave();
             _career = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
             _seed += 1;
             _onTitle = true;
@@ -154,6 +155,8 @@ namespace Game.Gameplay.Ring
             var stage = RingStageHub.Current;
             string look = ReadArg("-ring-lookbook");
             if (look != null && stage != null) { StartCoroutine(Lookbook(stage, look)); return; }
+            string spike = ReadArg("-ring-font-spike");
+            if (spike != null) { StartCoroutine(FontSpike(spike)); return; }
             if (stage != null && !RingStageHub.DemoRequested)
             {
                 _inIntro = true;
@@ -243,6 +246,51 @@ namespace Game.Gameplay.Ring
             }
             yield return new WaitForSeconds(0.5f);
             HardExit.Now(0);
+        }
+
+        /// <summary>Спайк шрифтів (ТЗ B00 §2): стрічка кожної ролі на трьох кеглях — кадр у файл і вихід.</summary>
+        private bool _fontSpike;
+
+        private System.Collections.IEnumerator FontSpike(string file)
+        {
+            _fontSpike = true;
+            Application.runInBackground = true;
+            _root.Clear();
+            _root.style.display = DisplayStyle.Flex;
+            _root.Add(Game.Gameplay.Ring.UI.RingFontSpike.Build());
+            yield return new WaitForSeconds(1.5f);
+            ScreenCapture.CaptureScreenshot(file);
+            yield return new WaitForSeconds(0.8f);
+            HardExit.Now(0);
+        }
+
+        /// <summary>
+        /// Перенесення сейву (ТЗ B00 §3): з назвою застосунку «Ринг» тека persistentDataPath змінилась
+        /// (…/DefaultCompany/Ринг замість …/DefaultCompany/Alpha) — при першому запуску копіюємо старий сейв, якщо нового ще немає.
+        /// Старий файл не видаляємо; один запис у лог.
+        /// </summary>
+        private static void MigrateSave()
+        {
+            try
+            {
+                string now = Application.persistentDataPath;
+                var company = System.IO.Directory.GetParent(now);
+                if (company == null || company.Parent == null) return;
+                string oldDir = System.IO.Path.Combine(company.Parent.FullName, "DefaultCompany", "Alpha");
+                var seps = new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar };
+                if (string.Equals(System.IO.Path.GetFullPath(oldDir).TrimEnd(seps), System.IO.Path.GetFullPath(now).TrimEnd(seps),
+                        System.StringComparison.OrdinalIgnoreCase)) return;
+                string oldFile = System.IO.Path.Combine(oldDir, "ring_career.txt");
+                string newFile = System.IO.Path.Combine(now, "ring_career.txt");
+                if (System.IO.File.Exists(newFile) || !System.IO.File.Exists(oldFile)) return;
+                System.IO.Directory.CreateDirectory(now);
+                System.IO.File.Copy(oldFile, newFile);
+                Debug.Log("[Ринг] сейв перенесено зі старої теки: " + oldFile + " → " + newFile);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[Ринг] сейв не перенесено: " + e.Message);
+            }
         }
 
         private static ulong ReadSeed()
@@ -366,6 +414,7 @@ namespace Game.Gameplay.Ring
         private void Update()
         {
             if (_quitAt > 0f && Time.unscaledTime >= _quitAt) HardExit.Now(0);
+            if (_fontSpike) return;   // спайк шрифтів: екран не оновлюється
             if (_career == null || _root == null) return;
             ApplyScale();
             if (ShowStep()) return;

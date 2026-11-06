@@ -39,14 +39,14 @@ namespace Game.Gameplay.Ring.UI
         protected VisualElement Glass(float pad = 10f)
         {
             var c = RingUi.Card(pad);
-            RingUi.Glass(c, 0.84f);
+            RingUi.Glass(c, BrandTokens.AlphaGlass);
             return c;
         }
 
         protected static Label Chip(string text, Color color)
         {
             var l = RingUi.Lbl(text, 13f, color, true);
-            l.style.backgroundColor = new Color(0.08f, 0.07f, 0.09f, 0.8f);
+            l.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaGlass);
             l.style.paddingLeft = 7f; l.style.paddingRight = 7f; l.style.paddingTop = 2f; l.style.paddingBottom = 2f;
             l.style.marginRight = 5f; l.style.marginBottom = 4f;
             l.style.borderTopLeftRadius = 3f; l.style.borderTopRightRadius = 3f;
@@ -59,10 +59,7 @@ namespace Game.Gameplay.Ring.UI
 
         protected Label MakeHint()
         {
-            HintLine = RingUi.Lbl("", 12f, RingUi.Dim);
-            HintLine.style.whiteSpace = WhiteSpace.Normal;
-            HintLine.style.minHeight = 30f;
-            HintLine.style.marginTop = 4f;
+            HintLine = RingUi.HintLine();
             return HintLine;
         }
 
@@ -86,26 +83,10 @@ namespace Game.Gameplay.Ring.UI
             e.style.paddingTop = v; e.style.paddingBottom = v; e.style.paddingLeft = h; e.style.paddingRight = h;
         }
 
-        /// <summary>Вузька колонка праворуч (тиждень, кінець сезону): решта екрана — 3D.</summary>
-        protected VisualElement SideColumn()
-        {
-            Root.style.flexDirection = FlexDirection.Row;
-            Root.style.justifyContent = Justify.FlexEnd;
-            var col = RingUi.Column();
-            col.style.width = new Length(36f, LengthUnit.Percent);
-            col.style.minWidth = 360f;
-            col.style.maxWidth = 470f;
-            Root.Add(col);
-            return col;
-        }
+        /// <summary>Вузька колонка праворуч (тиждень, кінець сезону): решта екрана — 3D. Спільна з RingUi (ТЗ B00).</summary>
+        protected VisualElement SideColumn() { return RingUi.SideColumn(Root); }
 
-        protected static Label Section(string text)
-        {
-            var l = RingUi.Lbl(text, 13f, RingUi.Gold, true);
-            l.style.marginTop = 6f;
-            l.style.marginBottom = 3f;
-            return l;
-        }
+        protected static Label Section(string text) { return RingUi.Section(text); }
 
         protected string NpcName(string id)
         {
@@ -414,7 +395,7 @@ namespace Game.Gameplay.Ring.UI
             right.Add(Section(T.Get("c.create.name")));
             var field = new TextField { value = _d.RingName, maxLength = _v.MaxNameLength };
             field.style.fontSize = 14f;
-            field.style.color = new Color(0.08f, 0.07f, 0.09f);
+            field.style.color = RingTheme.Bg;
             field.RegisterValueChangedCallback(e => _d.RingName = e.newValue);
             right.Add(field);
 
@@ -427,7 +408,7 @@ namespace Game.Gameplay.Ring.UI
                 int rgb = CareerLooks.CostumeRgb(i);
                 s.style.width = 24f; s.style.height = 24f;
                 s.style.marginRight = 4f;
-                s.style.backgroundColor = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
+                s.style.backgroundColor = RingTheme.Rgb((uint)rgb);
                 float bw = i == _d.CostumeColor ? 3f : 1f;
                 s.style.borderTopWidth = bw; s.style.borderBottomWidth = bw; s.style.borderLeftWidth = bw; s.style.borderRightWidth = bw;
                 var bc = i == _d.CostumeColor ? RingUi.Gold : RingUi.Border;
@@ -586,7 +567,7 @@ namespace Game.Gameplay.Ring.UI
         // Дві кнопки в ряд: назва й під нею дрібно віддача (що зміниться, шанс); повний опис — у рядку-підказці при наведенні.
         private Button ActionBtn(int n, string key, Func<WeekActionResult> act, bool enabled, string pay)
         {
-            var b = Small(n + "  " + T.Get(key) + "\n<size=11><color=#CDBB8E>" + pay + "</color></size>", () => Do(act()), enabled, RingUi.Gold, T.Get(key + ".desc"));
+            var b = Small(n + "  " + T.Get(key) + "\n<size=11><color=#" + BrandTokens.Dim.ToString("X6") + ">" + pay + "</color></size>", () => Do(act()), enabled, RingUi.Gold, T.Get(key + ".desc"));
             b.style.whiteSpace = WhiteSpace.Normal;
             b.style.unityTextAlign = TextAnchor.MiddleLeft;
             b.style.width = new Length(49f, LengthUnit.Percent);

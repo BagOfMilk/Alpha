@@ -5,19 +5,12 @@
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingDress.cs": 2,
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingFx.cs": 16,
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingRopes.cs": 1,
-    "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingShow.cs": 15,
+    "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingShow.cs": 14,
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingStage3D.cs": 28,
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingTint.cs": 3,
-    "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingVenueDress.cs": 9,
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/CareerScreens.cs": 3,
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/MatchScreenView.cs": 6,
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/PromoScreenView.cs": 4,
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/RingCallout.cs": 2,
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/RingUi.cs": 21
+    "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingVenueDress.cs": 9
   },
-  "hexLiteral": {
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/CareerScreens.cs": 1
-  },
+  "hexLiteral": {},
   "namedColor": {
     "Assets/_Project/Scripts/Editor/RingStageSceneSetup.cs": 2,
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingFx.cs": 1,
@@ -27,12 +20,9 @@
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingTint.cs": 1,
     "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingVenueDress.cs": 2
   },
-  "fontLoad": {
-    "Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/RingShow.cs": 5,
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/RingUi.cs": 6
-  },
+  "fontLoad": {},
   "smallFont": {
-    "Assets/_Project/Scripts/Gameplay/Ring/UI/CareerScreens.cs": 41,
+    "Assets/_Project/Scripts/Gameplay/Ring/UI/CareerScreens.cs": 39,
     "Assets/_Project/Scripts/Gameplay/Ring/UI/EndingScreenView.cs": 10,
     "Assets/_Project/Scripts/Gameplay/Ring/UI/FeudScreenView.cs": 9,
     "Assets/_Project/Scripts/Gameplay/Ring/UI/MatchScreenView.cs": 13,

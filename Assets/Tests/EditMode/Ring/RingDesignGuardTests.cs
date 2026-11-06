@@ -208,7 +208,8 @@ namespace Game.Tests.EditMode
         private static readonly Regex HexLiteral = new Regex(@"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?\b", RegexOptions.Compiled);
         private static readonly Regex NamedColor = new Regex(@"\bColor\.(red|green|blue|white|black|yellow|cyan|magenta|gray|grey)\b", RegexOptions.Compiled);
         private static readonly Regex FontLoad = new Regex(@"FontDefinition\.FromFont|unityFontDefinition|Resources\.Load<Font>|CreateDynamicFontFromOSFont|\bLoadFont\s*\(", RegexOptions.Compiled);
-        private static readonly string[] Allowlist = { "RingTheme.cs", "BrandTokens.cs" };
+        // RingFonts.cs — єдина точка шрифтів за ролями (ТЗ B00 §2): там вантаження шрифту законне.
+        private static readonly string[] Allowlist = { "RingTheme.cs", "BrandTokens.cs", "RingFonts.cs" };
         private static readonly string[] Categories = { "colorCtor", "hexLiteral", "namedColor", "fontLoad", "smallFont" };
 
         private sealed class SourceFile { public string Rel; public string Code; }

@@ -41,7 +41,7 @@ namespace Game.Gameplay.Ring.UI
             Root.style.position = Position.Absolute;
             Root.style.left = 0f; Root.style.right = 0f; Root.style.top = 0f; Root.style.bottom = 0f;
             // З 3D — напівпрозоре тло: ринг і зала видно крізь екрани ворожнечі й розвитку (огляд 04.11.2026: суцільні й громіздкі).
-            Root.style.backgroundColor = Stage.RingStageHub.Has3D ? new Color(RingUi.Bg.r, RingUi.Bg.g, RingUi.Bg.b, 0.45f) : RingUi.Bg;
+            Root.style.backgroundColor = Stage.RingStageHub.Has3D ? RingTheme.WithAlpha(RingUi.Bg, BrandTokens.AlphaShade) : RingUi.Bg;
         }
 
         /// <summary>Перемалювати вміст за поточним станом моделі.</summary>
@@ -66,22 +66,24 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public static class RingUi
     {
-        public static readonly Color Bg = new Color(0.055f, 0.05f, 0.065f, 1f);
-        public static readonly Color Panel = new Color(0.10f, 0.09f, 0.115f, 1f);
-        public static readonly Color PanelRaised = new Color(0.145f, 0.13f, 0.165f, 1f);
-        public static readonly Color PanelHover = new Color(0.22f, 0.19f, 0.15f, 1f);
-        public static readonly Color Border = new Color(0.30f, 0.27f, 0.22f, 1f);
-        public static readonly Color Text = new Color(0.93f, 0.90f, 0.84f, 1f);
-        public static readonly Color Dim = new Color(0.60f, 0.57f, 0.52f, 1f);
-        public static readonly Color Gold = new Color(0.92f, 0.76f, 0.40f, 1f);
-        public static readonly Color Good = new Color(0.45f, 0.78f, 0.45f, 1f);
-        public static readonly Color Bad = new Color(0.88f, 0.33f, 0.30f, 1f);
-        public static readonly Color Warn = new Color(0.95f, 0.70f, 0.25f, 1f);
-        public static readonly Color Disabled = new Color(0.40f, 0.38f, 0.36f, 1f);
-        public static readonly Color Face = new Color(0.40f, 0.72f, 0.95f, 1f);
-        public static readonly Color Heel = new Color(0.90f, 0.35f, 0.33f, 1f);
-        public static readonly Color Rebel = new Color(0.62f, 0.85f, 0.40f, 1f);
-        public static readonly Color Overlay = new Color(0f, 0f, 0f, 0.72f);
+        // Фасад RingTheme (ТЗ B00 §1, Статут вигляду): імена ті самі, значення — з токенів арт-директора. Зеленого й бурштинового
+        // більше немає: успіх і перевага — золото, шкода й провал — сигнал.
+        public static readonly Color Bg = RingTheme.Bg;
+        public static readonly Color Panel = RingTheme.Panel;
+        public static readonly Color PanelRaised = RingTheme.PanelRaised;
+        public static readonly Color PanelHover = RingTheme.Hover;
+        public static readonly Color Border = RingTheme.Border;
+        public static readonly Color Text = RingTheme.Text;
+        public static readonly Color Dim = RingTheme.TextDim;
+        public static readonly Color Gold = RingTheme.Gold;
+        public static readonly Color Good = RingTheme.Gold;
+        public static readonly Color Bad = RingTheme.Signal;
+        public static readonly Color Warn = RingTheme.Gold;
+        public static readonly Color Disabled = RingTheme.Disabled;
+        public static readonly Color Face = RingTheme.HeroText;
+        public static readonly Color Heel = RingTheme.VillainText;
+        public static readonly Color Rebel = RingTheme.Rebel;
+        public static readonly Color Overlay = RingTheme.WithAlpha(RingTheme.Scrim, BrandTokens.AlphaScrim);
 
         public static Color PathColor(RingPath p)
         {
@@ -97,9 +99,9 @@ namespace Game.Gameplay.Ring.UI
         {
             switch (t)
             {
-                case RollTier.Strong: return Good;
-                case RollTier.Partial: return Warn;
-                default: return Bad;
+                case RollTier.Strong: return RingTheme.Strong;
+                case RollTier.Partial: return RingTheme.Partial;
+                default: return RingTheme.Miss;
             }
         }
 
@@ -122,15 +124,14 @@ namespace Game.Gameplay.Ring.UI
 
         private static void ApplyFont(VisualElement e)
         {
-            var font = HudToolkitTheme.LoadFont();
-            if (font != null) e.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(font));
+            RingFonts.Apply(e, RingFontRole.Text);   // шрифт — лише через роль (ТЗ B00 §2)
             e.style.color = Text;
         }
 
         public static VisualElement Card(float pad = 12f)
         {
             var e = Column();
-            e.style.backgroundColor = Stage.RingStageHub.Has3D ? new Color(Panel.r, Panel.g, Panel.b, 0.86f) : Panel;
+            e.style.backgroundColor = Stage.RingStageHub.Has3D ? RingTheme.WithAlpha(Panel, BrandTokens.AlphaPanel) : Panel;
             HudToolkitTheme.Border(e, 1f, Border);
             e.style.borderTopLeftRadius = 6f; e.style.borderTopRightRadius = 6f;
             e.style.borderBottomLeftRadius = 6f; e.style.borderBottomRightRadius = 6f;
@@ -139,10 +140,10 @@ namespace Game.Gameplay.Ring.UI
         }
 
         /// <summary>Напівпрозорий фон панелі: з 3D-рингом крізь неї видно арену, а не чорний лист.</summary>
-        public static void Glass(VisualElement e, float alpha = 0.80f)
+        public static void Glass(VisualElement e, float alpha = BrandTokens.AlphaGlass)
         {
             if (!Stage.RingStageHub.Has3D) return;
-            e.style.backgroundColor = new Color(Panel.r, Panel.g, Panel.b, alpha);
+            e.style.backgroundColor = RingTheme.WithAlpha(Panel, alpha);
         }
 
         public static Label Lbl(string text, float size = 17f, Color? color = null, bool bold = false)
@@ -177,7 +178,7 @@ namespace Game.Gameplay.Ring.UI
             if (frac > 1f) frac = 1f;
             var track = new VisualElement();
             track.style.height = height;
-            track.style.backgroundColor = new Color(0.04f, 0.04f, 0.05f, 1f);
+            track.style.backgroundColor = RingTheme.Bg;
             track.style.flexDirection = FlexDirection.Row;
             HudToolkitTheme.Border(track, 1f, Border);
             var f = new VisualElement();
@@ -198,13 +199,12 @@ namespace Game.Gameplay.Ring.UI
             b.style.fontSize = size;
             b.style.unityTextAlign = TextAnchor.MiddleLeft;
             b.style.whiteSpace = WhiteSpace.Normal;
-            var font = HudToolkitTheme.LoadFont();
-            if (font != null) b.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(font));
+            RingFonts.Apply(b, RingFontRole.Text);
             HudToolkitTheme.Padding(b, 8f, 12f);
             b.style.marginLeft = 0f; b.style.marginRight = 0f; b.style.marginTop = 0f; b.style.marginBottom = 6f;
             b.style.borderTopLeftRadius = 4f; b.style.borderTopRightRadius = 4f;
             b.style.borderBottomLeftRadius = 4f; b.style.borderBottomRightRadius = 4f;
-            HudToolkitTheme.Border(b, 1f, enabled ? Border : new Color(Border.r, Border.g, Border.b, 0.4f));
+            HudToolkitTheme.Border(b, 1f, enabled ? Border : RingTheme.WithAlpha(Border, 0.4f));
             b.style.borderLeftWidth = 4f;
             b.style.borderLeftColor = accent ?? (enabled ? Gold : Disabled);
             var back = enabled ? PanelRaised : Panel;
@@ -256,7 +256,7 @@ namespace Game.Gameplay.Ring.UI
         public static VisualElement GlassCard(float pad = 8f)
         {
             var c = Card(pad);
-            Glass(c, 0.84f);
+            Glass(c, BrandTokens.AlphaGlass);
             return c;
         }
 
