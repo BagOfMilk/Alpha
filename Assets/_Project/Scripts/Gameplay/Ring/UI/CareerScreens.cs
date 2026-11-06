@@ -662,7 +662,8 @@ namespace Game.Gameplay.Ring.UI
                 p.Add(RingUi.Lbl(T.Get("gimmick." + C.Content.GimmickOf(c.Opponent.Gimmick).Key) + " · " + RingLabels.PathName(T, c.Opponent.Path)
                     + " · " + T.Format("c.card.feud", c.OpponentFeudLevel), 12f, RingUi.Dim));
                 // Сила суперника видна заздалегідь: росте разом із гравцем (власник 06.11.2026: «1: за місцем у картці»).
-                if (c.IsRematch) p.Add(RingUi.Lbl(T.Get("c.card.rematch"), 12f, RingUi.Good));
+                // Кегль — мінімальний інформаційний із токенів (Статут вигляду, ТЗ B03); решта картки підніметься в B03.
+                if (c.IsRematch) p.Add(RingUi.Lbl(T.Get("c.card.rematch"), BrandTokens.TypeMinInfo, RingUi.Good));
                 if (c.RivalSteps > 0) p.Add(RingUi.Lbl(T.Format("c.card.rival_form", c.RivalSteps), 12f, RingUi.Heel));
             }
             p.Add(RingUi.Lbl(T.Get("card.pos." + (int)c.Position) + " · " + T.Format("c.card.fee_short", c.Fee), 12f, RingUi.Gold));
