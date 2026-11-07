@@ -31,6 +31,9 @@ namespace Game.Gameplay.Ring.UI
         protected ICareerHost Host { get { return Ctx.Host; } }
         protected RingText T { get { return Ctx.Text; } }
 
+        /// <summary>Огляд вигляду (-ring-shots): згорнуті «Розвиток» і «Витрати» знімаються розгорнутими.</summary>
+        public static bool ExpandForShots;
+
         protected CareerScreenView(RingUiContext ctx) : base(ctx)
         {
             if (RingStageHub.Has3D) Root.style.backgroundColor = Color.clear;
@@ -501,7 +504,7 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class WeekScreenView : CareerScreenView
     {
-        private bool _dev;
+        private bool _dev = ExpandForShots;
 
         public WeekScreenView(RingUiContext ctx) : base(ctx) { }
 
@@ -559,9 +562,60 @@ namespace Game.Gameplay.Ring.UI
             dev.style.marginTop = 6f;
             col.Add(dev);
             if (_dev) col.Add(DevelopmentPanel(Refresh));
+            // Витрати (06.11.2026, пункт 3 плану лупу): гроші проти часу й травми; покупки не займають дій тижня.
+            var shop = Small((_shop ? "▾ " : "▸ ") + T.Format("c.shop.title", ShopAvailable()), () => { _shop = !_shop; Refresh(); }, true, RingUi.Dim);
+            shop.style.marginTop = 4f;
+            col.Add(shop);
+            if (_shop) col.Add(ShopPanel());
             var go = RingUi.PrimaryButton(T.Get("week.end"), OnConfirm, !w.PromoChoicePending);
             go.style.fontSize = 16f;
             col.Add(go);
+        }
+
+        private bool _shop = ExpandForShots;
+
+        /// <summary>Витрати тижня: костюм, тренер ростера, клініка, страховка, виїзне шоу. Опис — у рядку-підказці при наведенні.</summary>
+        /// <summary>Скільки витрат доступно зараз (число в стрічці — У0 арт-директора, 06.11.2026).</summary>
+        private int ShopAvailable()
+        {
+            int n = (C.CanBuyCostume ? 1 : 0) + (C.CanBuyInsurance ? 1 : 0) + (C.CanGoAway ? 1 : 0);
+            if (C.State.Coach < 0 && C.Money >= CareerRules.CoachWeeklyFee) n++;
+            for (int z = 0; z < 3; z++) if (C.CanClinic((BodyZone)z)) { n++; break; }
+            return n;
+        }
+
+        private VisualElement ShopPanel()
+        {
+            var card = Glass(8f);
+            var row = RingUi.Row();
+            row.style.flexWrap = Wrap.Wrap;
+            var st = C.State;
+            row.Add(ShopBtn(st.CostumeBought ? T.Get("c.shop.costume.owned") : T.Format("c.shop.costume", CareerRules.CostumeCost),
+                () => C.BuyCostume(), C.CanBuyCostume, T.Get("c.shop.costume.desc")));
+            for (int i = 0; i < CareerRules.Coaches.Length; i++)
+            {
+                int k = i;
+                bool hired = st.Coach == i;
+                string name = RingLabels.AttrName(T, CareerRules.Coaches[i]);
+                row.Add(ShopBtn(hired ? T.Format("c.shop.coach.hired", name, st.CoachProgress, CareerRules.CoachProgressStep) : T.Format("c.shop.coach", name, CareerRules.CoachWeeklyFee),
+                    () => C.HireCoach(hired ? -1 : k), hired || C.Money >= CareerRules.CoachWeeklyFee, T.Format("c.shop.coach.desc", name, CareerRules.CoachProgressStep)));
+            }
+            BodyZone worst = BodyZone.Body; int score = -1;
+            for (int z = 0; z < 3; z++) { int sc = st.Injury[z] * 10 + st.ZoneDamage[z]; if (sc > score) { score = sc; worst = (BodyZone)z; } }
+            row.Add(ShopBtn(T.Format("c.shop.clinic", CareerRules.ClinicCost), () => C.Clinic(worst), C.CanClinic(worst), T.Get("c.shop.clinic.desc")));
+            row.Add(ShopBtn(st.InsuredSeason == st.Season ? T.Get("c.shop.insurance.owned") : T.Format("c.shop.insurance", CareerRules.InsuranceCost),
+                () => C.BuyInsurance(), C.CanBuyInsurance, T.Get("c.shop.insurance.desc")));
+            row.Add(ShopBtn(st.AwayShow ? T.Get("c.shop.away.on") : T.Format("c.shop.away", CareerRules.AwayTravelCost), () => C.GoAway(), C.CanGoAway,
+                T.Get("c.shop.away.desc")));
+            card.Add(row);
+            return card;
+        }
+
+        private Button ShopBtn(string text, Func<bool> act, bool enabled, string hint)
+        {
+            var b = Small(text, () => { if (act()) Host.Save(); Refresh(); }, enabled, RingUi.Gold, hint);
+            b.style.marginRight = 4f;
+            return b;
         }
 
         // Дві кнопки в ряд: назва й під нею дрібно віддача (що зміниться, шанс); повний опис — у рядку-підказці при наведенні.
@@ -627,6 +681,7 @@ namespace Game.Gameplay.Ring.UI
             if (r.LockerDelta != 0) parts.Add(T.Format("c.delta.locker", Signed(r.LockerDelta)));
             if (r.ActionsDelta != 0) parts.Add(T.Format("c.delta.actions", Signed(r.ActionsDelta)));
             if (r.PlanChanged) parts.Add(T.Get("c.delta.plan"));
+            if (r.CoachRaised) parts.Add(T.Get("c.delta.coach"));
             if (r.NeedsChoice) parts.Add(T.Get("c.week.promo_choice"));
             string s = string.Join(" · ", parts);
             if (!string.IsNullOrEmpty(r.RumorKey)) s += "\n" + T.Get(r.RumorKey);
@@ -718,6 +773,8 @@ namespace Game.Gameplay.Ring.UI
     /// <summary>Підсумок вечора: результат, гонорар, шкали до/після, травма, очки розвитку, план, пояс.</summary>
     public sealed class ShowResultScreenView : CareerScreenView
     {
+        private bool _dev = ExpandForShots;
+
         public ShowResultScreenView(RingUiContext ctx) : base(ctx) { }
 
         public override void Refresh()
@@ -755,6 +812,13 @@ namespace Game.Gameplay.Ring.UI
             if (!(r.PopularityAfter > r.PopularityBefore))
                 p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter), 13f));
             p.Add(RingUi.Lbl(T.Format("c.result.trust", r.TrustBefore, r.TrustAfter), 13f));
+            // Очки розвитку — одразу після матчу (06.11.2026: наприкінці сезону лишалось 21–24 невитрачених).
+            if (C.DevPoints > 0)
+            {
+                var dev = Small((_dev ? "▾ " : "▸ ") + T.Get("dev.title") + " · " + C.DevPoints, () => { _dev = !_dev; Refresh(); }, true, RingUi.Good);
+                p.Add(dev);
+                if (_dev) p.Add(DevelopmentPanel(Refresh, 2));
+            }
             p.Add(RingUi.PrimaryButton(T.Get("ui.next"), OnConfirm));
             Root.Add(p);
         }

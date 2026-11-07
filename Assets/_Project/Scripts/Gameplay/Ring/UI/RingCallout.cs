@@ -94,7 +94,8 @@ namespace Game.Gameplay.Ring.UI
                     c.Push(t.Get("match.call.one"), null, RingUi.Text, 34f, 0.45f);
                     c.Push(t.Get("match.call.two"), null, RingUi.Warn, 40f, 0.45f);
                     if (ev.Tier == RollTier.Miss) c.Push(t.Get("match.call.three"), null, RingUi.Bad, 64f, 1.4f);
-                    else c.Push(t.Get(ev.Tier == RollTier.Partial ? "match.call.kickout.two" : "match.call.kickout"), Who(t, ev), RingUi.Gold, 54f, 1.5f);
+                    else c.Push(t.Get(ev.Tier == RollTier.Partial ? "match.call.kickout.two" : "match.call.kickout"),
+                        ev.Perk != null ? RingLabels.PerkName(t, ev.Perk) + " · " + Who(t, ev) : Who(t, ev), RingUi.Gold, 54f, 1.5f);
                     return;
                 case MatchEventKind.MatchEnd:
                     if (winner == null) return;
@@ -108,6 +109,7 @@ namespace Game.Gameplay.Ring.UI
                 case MatchEventKind.Action:
                     if (!ev.HasRoll) return;
                     string sub = Who(t, ev) + " · " + RingLabels.ActionName(t, ev.Action) + " · " + ev.Total;
+                    if (ev.Perk != null) sub = RingLabels.PerkName(t, ev.Perk) + " · " + sub;   // перк з дією змінив кидок
                     if (ev.Action == MatchActionId.Finisher && ev.Tier != RollTier.Miss)
                     {
                         c.Push(t.Get("match.call.finisher"), sub, RingUi.Gold, 62f, 1.6f);

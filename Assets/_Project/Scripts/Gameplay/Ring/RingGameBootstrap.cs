@@ -135,6 +135,7 @@ namespace Game.Gameplay.Ring
             if (_shotsDir != null)
             {
                 Application.runInBackground = true;
+                UI.CareerScreenView.ExpandForShots = true;
                 System.IO.Directory.CreateDirectory(_shotsDir);
                 // Огляд проходить сезон: кліпи й паузи ШІ втричі швидше (кадри ті самі, лише менше чекання).
                 Time.timeScale = 3f;
@@ -668,6 +669,10 @@ namespace Game.Gameplay.Ring
 
         private void ShotsStep()
         {
+            // Огляд перків з дією (06.11.2026): герой огляду має «Імпровізацію» і «Підкупленого суддю», щоб виноска з назвою перка
+            // потрапила в кадр. Лише сейв бота (ring_career_bot.txt), гравця не торкається.
+            if (_career.Stage == CareerStage.Week && _career.Feud != null && !_career.Feud.State.Perks.Contains(PerkCatalog.Improvise))
+            { _career.Feud.State.Perks.Add(PerkCatalog.Improvise); _career.Feud.State.Perks.Add(PerkCatalog.BribedRef); }
             FxShots();
             BeatShots();
             if (RingStageHub.Busy)

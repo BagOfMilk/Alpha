@@ -733,7 +733,8 @@ namespace Game.Core.Ring.Career
 
         // ---------- розвиток ----------
 
-        private bool CanDevelop { get { return (Stage == CareerStage.Week && _bs == null) || Stage == CareerStage.SeasonEnd; } }
+        // Розвиток — на тижні, на підсумку шоу (одразу після матчу, 06.11.2026) і наприкінці сезону.
+        private bool CanDevelop { get { return (Stage == CareerStage.Week && _bs == null) || Stage == CareerStage.SeasonEnd || (Stage == CareerStage.Show && State.Phase == ShowPhase.Result); } }
 
         public bool CanBuyAttr(RingAttr a, out string reason)
         {

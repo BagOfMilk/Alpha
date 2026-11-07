@@ -110,7 +110,7 @@ namespace Game.Tests.EditMode
                             if (s.Feud.Stage == RingStage.MatchPrep) { AiPlay(s.StartFeudMatch()); s.FinishMatch(); SpendPoints(s); }
                             else CareerBot.Step(s, i % 8, rep);
                             break;
-                        case ShowPhase.Result: s.ContinueFromShow(); break;
+                        case ShowPhase.Result: SpendPoints(s); s.ContinueFromShow(); break;
                     }
                 }
             }
