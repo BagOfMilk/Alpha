@@ -154,7 +154,11 @@ def clip_bump_front(t, L):
     p = body(off_for(Vector((0.0, y, z + bounce))), q, knee_bend=0.25 * (1 - smooth(th / 90.0)))
     planted = 1.0 - smooth((th - 25.0) / 35.0)
     sl, sr = foot(0.2, -0.105), foot(-0.2, 0.075)
-    p.ankles = (lerp(p.ankles[0], sl, planted), lerp(p.ankles[1], sr, planted))
+    planted_xy = 1.0 - smooth((th - 30.0) / 25.0)          # стопи спершу відриваються, потім летять (без ковзання по мату)
+    def fl_(a_, s_):
+        xy = lerp(a_, s_, planted_xy)
+        return Vector((xy.x, xy.y, a_.z + (s_.z - a_.z) * planted))
+    p.ankles = (fl_(p.ankles[0], sl), fl_(p.ankles[1], sr))
     yl, yr = Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0))
     p.foot_rot = (yl.slerp(q, 1 - planted), yr.slerp(q, 1 - planted))
     p.pitch = 14.0 * (1 - smooth(th / 70.0))
@@ -168,6 +172,43 @@ def clip_bump_front(t, L):
     end_w = smooth((t - 0.95) / 0.3)
     if end_w > 0:
         return blend_pose(_filled(p), _filled(lying_front()), end_w)
+    return p
+
+
+FLIP_LEN = 1.5
+FLIP_BACK = 0.6          # м: сальто відносить назад від удару
+
+
+def clip_flip_front(t, L):
+    """Сальто назад від «шлагбаума» (огляд 04.11.2026: «Clothesline_Flip — без перевороту»): ноги вилітають угору,
+    тіло крутиться назад на три чверті оберту в згрупованому стані й лягає грудьми на мат; руки — на мат першими.
+    Референс — записи матчів, своїми словами: удар підрізає під шию, ноги йдуть уперед-угору, оберт навколо шиї."""
+    th = track(t, [(0.0, 0.0), (0.1, 25.0), (0.3, 150.0), (0.46, 250.0), (0.56, 270.0), (L, 270.0)])
+    y = track(t, [(0.0, 0.0), (0.1, 0.05), (0.3, 0.35), (0.56, FLIP_BACK), (L, FLIP_BACK)])
+    z0 = REST["pelvis"].z - 0.09
+    z = track(t, [(0.0, z0), (0.1, z0 + 0.04), (0.28, z0 + 0.32), (0.38, z0 + 0.22), (0.46, 0.6 * BODY["leg"]), (0.56, FRONT_Z), (L, FRONT_Z)])
+    bounce = math.sin(math.pi * smooth((t - 0.56) / 0.2)) * 0.03 if 0.56 < t < 0.76 else 0.0
+    q = Quaternion(LEFT, math.radians(-th))
+    tuck = math.sin(math.pi * min(1.0, max(0.0, (th - 20.0) / 230.0)))      # згрупований посередині оберту
+    p = body(off_for(Vector((0.0, y, z + bounce))), q, knee_bend=0.05 + 0.65 * tuck)
+    planted = 1.0 - smooth((th - 8.0) / 25.0)
+    sl, sr = foot(0.2, -0.105), foot(-0.2, 0.075)
+    planted_xy = 1.0 - smooth((th - 30.0) / 25.0)          # стопи спершу відриваються, потім летять (без ковзання по мату)
+    def fl_(a_, s_):
+        xy = lerp(a_, s_, planted_xy)
+        return Vector((xy.x, xy.y, a_.z + (s_.z - a_.z) * planted))
+    p.ankles = (fl_(p.ankles[0], sl), fl_(p.ankles[1], sr))
+    yl, yr = Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0))
+    p.foot_rot = (yl.slerp(q, 1 - planted), yr.slerp(q, 1 - planted))
+    p.pitch = 20.0 * tuck                                   # підборіддя й коліна до грудей
+    p.head_pitch = 30.0 * tuck - 15.0 * smooth((th - 240.0) / 30.0)
+    p.head_yaw = 75.0 * smooth((th - 230.0) / 40.0)
+    st = stance(0.0, L, sway=0.0)
+    p = _arms_to(p, st, 1.0)
+    p = _arms_to(p, lying_front(y=FLIP_BACK), smooth((th - 200.0) / 50.0))     # руки на мат перед грудьми
+    end_w = smooth((t - 0.9) / 0.4)
+    if end_w > 0:
+        return blend_pose(_filled(p), _filled(lying_front(y=FLIP_BACK)), end_w)
     return p
 
 
@@ -190,23 +231,50 @@ def fsell_pose(t, kind):
         p.pitch = -3.0 * br
         return p
     if kind == "PushUp":
-        p = lying_front(push=s * (0.85 + 0.15 * br))
+        p = lying_front(push=s * (1.5 + 0.2 * br))           # огляд 04.11.2026: груди майже не відривались
         return p
     if kind == "Crawl":                                     # тягнеться правою вперед, підтягує ліве коліно
         k = track(t, [(SELL_IN, 0.0), (SELL_HOLD, 1.0), (SELL_OUT, 1.0), (FSELL_LEN - 0.15, 0.0), (FSELL_LEN + 1, 0.0)])
-        p = lying_front(roll=-15.0 * k, frog=(0.8 * k, 0.0))
-        q = Q_FRONT @ Quaternion(UP, math.radians(-15.0 * k))
+        # огляд 04.11.2026: від нокауту не відрізнялось — два ривки: права далеко вперед, ліве коліно вбік, таз за рукою
+        pull = 0.5 - 0.5 * math.cos(2 * math.pi * min(1.0, max(0.0, (t - SELL_HOLD) / (SELL_OUT - SELL_HOLD))) * 2) if t > SELL_HOLD else 0.0
+        p = lying_front(y=FRONT_END_Y - 0.12 * k * min(1.0, max(0.0, (t - SELL_HOLD) / (SELL_OUT - SELL_HOLD))),
+                        roll=-22.0 * k, frog=(min(1.0, 1.1 * k * (0.5 + 0.5 * pull)), 0.0), push=0.3 * k)
+        q = Q_FRONT @ Quaternion(UP, math.radians(-22.0 * k))
         g0 = p.hands["r"][0]
-        p.hands["r"] = (lambda S: g0(S).lerp(Vector((S["r"].x, (S["r"] + q @ Vector((0, 0, 0.5 * BODY["arm"]))).y, 0.07)), k),
+        reach = 0.55 + 0.25 * (1 - pull)
+        p.hands["r"] = (lambda S: g0(S).lerp(Vector((S["r"].x, (S["r"] + q @ Vector((0, 0, reach * BODY["arm"]))).y, 0.07)), k),
                         q @ UP, DOWN)
+        p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.025))     # підтягнуте коліно — над матом (стегно йшло під мат на 0,6 см)
         return p
     if kind == "Knees":                                     # рачки, рука на животі, далі знову на мат
-        p = lying_front(push=0.6 * s, frog=(0.6 * s, 0.6 * s))
-        p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.12 * s * BODY["leg"]))
-        q = Q_FRONT
-        g0 = p.hands["l"][0]
-        p.hands["l"] = (lambda S: g0(S).lerp(S["pelvis"] + q @ Vector((0.05, -0.16, 0.15)), s), q @ UP, DOWN)
-        return p
+        # огляд 04.11.2026 (двічі): «дошка» на прямих ногах, а не рачки — тепер окрема поза: стегна прямовисно,
+        # коліна на маті під тазом, гомілки й п'яти позаду, права долоня на маті під плечем, ліва — на животі
+        lf = lying_front()
+        if s <= 1e-4:
+            return lf
+        y0 = FRONT_END_Y + 0.42
+        lk = BODY["leg"]
+        q = Quaternion(LEFT, math.radians(78.0))
+        kp = body(off_for(Vector((0.0, y0, 0.5 * lk + 0.06))), q, knee_bend=0.0)
+        kp.ankles = (Vector((0.13, y0 + 0.44 * lk, 0.1)), Vector((-0.13, y0 + 0.44 * lk, 0.1)))
+        tip = Quaternion(RIGHT, math.radians(-75.0))
+        kp.foot_rot = (tip, tip)
+        kp.knees = (Vector((0.14, y0 - 0.4, 0.0)), Vector((-0.14, y0 - 0.4, 0.0)))
+        kp.pitch = 8.0
+        kp.head_pitch = 20.0
+        kp.head_yaw = 0.0
+        kp.hands = {"r": (lambda S: Vector((S["r"].x - 0.02, S["r"].y, max(0.07, S["r"].z - 0.48 * BODY["arm"]))), q @ UP, DOWN),
+                    "l": (lambda S: S["pelvis"] + q @ Vector((0.04, -0.14, 0.2)), q @ UP, DOWN)}
+        kp.elbows = {"r": lambda S: S["r"] + Vector((-0.2, 0.15, -0.1)), "l": lambda S: S["l"] + Vector((0.25, 0.2, -0.15))}
+        kp.fist = {"l": 0.4, "r": 0.1}
+        kp.forced = set()
+        out = blend_pose(_filled(lf), _filled(kp), smooth(s))
+        hump = 0.12 * math.sin(math.pi * smooth(s)) + 0.02 * min(1.0, s * 15.0)   # на переході — таз і коліна над матом (лінійне змішування вело гомілку в мат)
+        out.pelvis = out.pelvis + Vector((0.0, 0.0, hump))
+        if out.knees:
+            out.knees = tuple(k_ + Vector((0.0, 0.0, hump)) for k_ in out.knees)
+        out.ankles = tuple(a_ + Vector((0.0, 0.0, 0.6 * hump)) for a_ in out.ankles)
+        return hands_out_of_torso(out, r=0.19)
     if kind == "RollBack":                                  # перекат на спину одним поворотом, долоня на грудях
         r = smooth(track(t, [(SELL_IN, 0.0), (SELL_HOLD + 0.2, 1.0), (FSELL_LEN + 1, 1.0)]))
         hold = track(t, [(SELL_IN, 0.0), (SELL_HOLD + 0.2, 1.0), (SELL_OUT, 1.0), (FSELL_LEN - 0.15, 0.0), (FSELL_LEN + 1, 0.0)])
@@ -316,6 +384,13 @@ def side_lying(t, roll, knees=0.3, knees_r=None, hands=None, head_pitch=-20.0, h
     hs = dict(p.hands)
     g_mat = hs[down][0]
     hs[down] = (lambda S: g_mat(S).lerp(on_mat_front(S), wd), (q @ DOWN).lerp(q @ FWD, wd), (q @ FWD).lerp(DOWN, wd))
+    # верхня рука на боці — на своє стегно (огляд 04.11.2026: ціль «долоня на маті» з пози на спині на боці опинялась
+    # над тілом, і рука стирчала вгору 30+ кадрів)
+    up = "l" if down == "r" else "r"
+    g_up = hs[up][0]
+    def on_hip(S):
+        return S["pelvis"].lerp(S[up], 0.3) + (q @ FWD) * 0.08 + Vector((0.0, 0.0, 0.1))
+    hs[up] = (lambda S: g_up(S).lerp(on_hip(S), wd), (q @ DOWN).lerp(DOWN, wd), q @ FWD)
     for s_, g in (hands or {}).items():
         hs[s_] = (g, q @ FWD, q @ UP)
     hs = {s_: (lambda S, h=hs[s_][0]: (lambda v: Vector((v.x, v.y, max(v.z, 0.1))))(h(S)), hs[s_][1], hs[s_][2]) for s_ in "lr"}
@@ -377,8 +452,10 @@ def sside_pose(t, kind):
         def hip(S):
             q = side_q(SIDE_ROLL * (1 - rb))
             return S["pelvis"] + q @ Vector((0.24, -0.06, 0.04))
-        p = side_lying(t, SIDE_ROLL * (1 - rb), knees=0.3 + 0.25 * s * (0.5 + 0.5 * w), knees_r=0.3 + 0.25 * s * (0.5 - 0.5 * w),
-                       curl=6.0 * s, head_pitch=-20 + 10 * s)
+        # огляд 04.11.2026: «корчиться» майже не рухалось — коліна по черзі до грудей, тулуб гойдається, голова назад
+        p = side_lying(t, SIDE_ROLL * (1 - rb) + 12.0 * s * w, knees=0.25 + 0.55 * s * (0.5 + 0.5 * w),
+                       knees_r=0.25 + 0.55 * s * (0.5 - 0.5 * w), curl=6.0 * s + 14.0 * s * (0.5 + 0.5 * w),
+                       head_pitch=-20 + 10 * s - 15.0 * s * (0.5 - 0.5 * w))
         g0 = p.hands["l"][0]
         p.hands["l"] = (lambda S: g0(S).lerp(hip(S), s) + Vector((0, 0, 0.15)) * math.sin(math.pi * s), p.hands["l"][1], p.hands["l"][2])
         return p
@@ -387,7 +464,8 @@ def sside_pose(t, kind):
         # на животі коліна не згинаються (гомілка пішла б у мат); таз — на висоті «лежить на животі»
         p = side_lying(t, SIDE_ROLL + 90.0 * r, knees=0.3 * (1 - smooth(r / 0.6)) + 0.05 * smooth((r - 0.9) / 0.1), head_yaw=-70.0 * r, zoff=(FRONT_Z - LIE_Z + 0.02) * r)
         p.pitch = p.pitch - 15.0 * r * s                    # на животі — груди вгору на ліктях
-        return p
+        p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.03 * math.sin(math.pi * r)))       # перекат — над матом, не крізь нього
+        return hands_out_of_torso(p, r=0.17)                # кисть не в тазу на перекаті
     if kind == "BackArch":                                  # на спину, вигин, долоня на попереку
         r = smooth(track(t, [(SELL_IN, 0.0), (SELL_HOLD + 0.45, 1.0), (SELL_LEN + 1, 1.0)]))
         return side_lying(t, SIDE_ROLL * (1 - r), knees=0.3 + 0.4 * s * r, curl=-6.0 * s * r, head_pitch=-20 - 15 * s)

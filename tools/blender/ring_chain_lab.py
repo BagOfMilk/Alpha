@@ -34,7 +34,7 @@ def heading(deg):
 
 
 def load_frames(name):
-    p = os.path.join(ring_lab.REPO, "tools", "blender", "lab_clips", name + ".json")
+    p = os.path.join(ring_lab.CLIPS, name + ".json")
     d = json.load(open(p, encoding="utf-8"))
     conv = lambda fr: {n: (Vector(l), Quaternion(r)) for n, (l, r) in fr.items()}
     return [conv(f) for f in d["A"]], [conv(f) for f in d["B"]]
@@ -47,12 +47,14 @@ def load_frames(name):
 #       замикає праве зап'ястя під обличчям B; голова A піднята (кричить у зал).
 #   B — зігнутий у попереку, тіло йде ВБІК від A (праворуч), голова — під правою пахвою A, ПЕРЕД його грудьми (не за
 #       спиною); ліва рука B обхоплює A за поперек ззаду, права тягне вниз передпліччя, що душить; коліна зігнуті.
+# 04.11.2026 (огляд очима): таз B був на 24 см попереду A — голова B опинялась перед грудьми, як у передньому
+# захваті; тепер таз B майже на лінії A (8 см уперед), голова — під пахвою збоку.
 # Параметри пози (кадр A): a_pel/a_pz — таз A; a_pitch/a_yaw/a_roll — тулуб; a_hy/a_hp — голова; a_feet — стопи;
 # b_head — курс B; b_pel/b_drop — таз B; b_pelpitch + b_pitch — нахил; b_hy/b_hp — голова; b_feet — стопи;
 # grab 0..1 — кисті від хвату зчепу (шия + лікоть) до петлі захвату.
 HOLD = dict(a_pel=(0.04, -0.04), a_pz=-0.12, a_pitch=4.0, a_yaw=0.0, a_roll=6.0, a_hy=15.0, a_hp=-18.0,
             a_feet=((0.2, -0.2), (-0.24, 0.2)), a_fyaw=(15.0, -30.0),
-            b_head=90.0, b_pel=(-0.6, -0.24), b_drop=-0.021, b_pelpitch=30.0, b_pitch=50.0, b_yaw=-8.0, b_roll=0.0,
+            b_head=90.0, b_pel=(-0.68, -0.14), b_drop=-0.021, b_pelpitch=30.0, b_pitch=50.0, b_yaw=-8.0, b_roll=0.0,
             b_hy=20.0, b_hp=25.0, b_feet=None, b_fl=0.3, grab=1.0,
             a_eloop=(-0.12, -0.2, 0.05), a_chin=(0.0, 0.1, -1.0), a_lh=(0.06, -0.03, -0.03), a_lel=(0.3, -0.2, -0.35),
             a_arc=(-0.08, -0.05, 0.28))
@@ -213,8 +215,8 @@ def a_hold(k=1.0):
         p.feet_yaw = HL["a_fyaw"]
         w = HL["grab"]
         # зчеп: права — на основі шиї B ззаду (B у зчепі дивиться на A, його потилиця — у −Y), ліва — під його правим ліктем
-        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((0.07, -0.27, -0.2))
-        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
+        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((-0.04, -0.34, -0.14))
+        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((0.04, -0.34, -0.14))
         chin = lambda S: SURF.get("Ar") or P_(S, "head", 0.3, Vector((0, 0, -0.12))) or S["r"] + Vector((0.1, -0.3, -0.2))
         ls = HL.get("a_ls", 0.0)                       # удар лівою: 0 замок, 1 замах, 2 кулак у голову B
         arc = math.sin(math.pi * w)
@@ -570,6 +572,17 @@ def aw_b(k=1.0):
         zl, zr = HL.get("b_feet_z", (0.0, 0.0))
         p.ankles = (G["foot"](*a2b(fl).xy) + Vector((0, 0, zl)), G["foot"](*a2b(fr).xy) + Vector((0, 0, zr)))
         p.feet_yaw = (p.pelvis_yaw + 10.0, p.pelvis_yaw - 14.0)
+        kn = HL.get("b_kneel", 0.0)                    # права (задня) — коліном на мат, стопа на носку позаду
+        if kn > 0.0:                                   # (огляд 04.11.2026: «на коліно» було присіданням)
+            pb_ = p.pelvis + G["REST"]["pelvis"]
+            knee = Vector((pb_.x, pb_.y, 0.0)) + db * 0.14 + Vector((-db.y, db.x, 0.0)) * -0.1 + Vector((0, 0, 0.06))
+            ank = knee - db * 0.4 + Vector((0, 0, 0.07))
+            p.ankles = (p.ankles[0], p.ankles[1].lerp(ank, kn))
+            tip = Quaternion(Vector((-db.y, db.x, 0.0)), math.radians(-65.0 * kn))
+            p.foot_rot = (Quaternion(Vector((0, 0, 1)), math.radians(p.feet_yaw[0])),
+                          tip @ Quaternion(Vector((0, 0, 1)), math.radians(p.feet_yaw[1])))
+            p.knees = (p.ankles[0] + Vector((0, 0, 0.45)) + db * 0.9,
+                       p.ankles[1].lerp(knee + db * 0.3 + Vector((0, 0, -0.05)), kn) + Vector((0, 0, 0.45 * (1 - kn))) + db * 0.9 * (1 - kn))
         w = HL["grab"]
         tie_r = lambda S: SURF.get("tBr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Br"])) or S["r"] + Vector((0, -0.3, -0.3))
         tie_l = lambda S: SURF.get("tBl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Bl"])) or S["l"] + Vector((0, -0.3, -0.3))
@@ -604,8 +617,8 @@ def aw_a(k=1.0):
         p.ankles = (G["foot"](lx, ly) + Vector((0, 0, zl)), G["foot"](rx, ry) + Vector((0, 0, zr)))
         p.feet_yaw = HL["a_fyaw"]
         w = HL["grab"]
-        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((0.07, -0.27, -0.2))
-        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
+        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((-0.04, -0.34, -0.14))
+        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((0.04, -0.34, -0.14))
         wrist = lambda S: SURF.get("Wl") or P_(S, "lowerarm_r", 0.92, Vector((0, 0, 0.05))) or S["l"] + Vector((0, -0.3, -0.3))
         hand = lambda S: SURF.get("Wr") or P_(S, "hand_r", 0.5, Vector((0, 0, 0.04))) or S["r"] + Vector((0, -0.3, -0.3))
         arc = math.sin(math.pi * w) * 0.08
@@ -927,12 +940,32 @@ def resolve(contacts, rounds=5):
     return not [w for d, w in _pen(PEN_MAX) if ("hands" in w or "lowerarms" in w)]
 
 
+GRAB_ARC = 0.1     # м: на переході зі зчепу в хват кисті йдуть дугою до себе (навпростець — крізь суперника, 03.11.2026)
+
+
+def _arced(fn):
+    """Поза з кистями, відведеними до себе й донизу на переході хвату (0 < grab < 1): пік на півдорозі."""
+    def g():
+        inner = fn()
+        def f(Pt):
+            p = inner(Pt)
+            w = math.sin(math.pi * max(0.0, min(1.0, HL.get("grab", 0.0)))) * GRAB_ARC
+            if w > 1e-4 and p.hands:
+                off = Vector((0.0, 1.0, -0.4)) * w
+                p.hands = {s: ((lambda S, h=h: (h[0](S) if callable(h[0]) else h[0]) + off),) + tuple(h[1:])
+                           for s, h in p.hands.items()}
+            return p
+        return f
+    return g
+
+
 def chain_frames(name, keys, length, fa, fb, surf, blend_in=0, frames=None, smooth=True, contacts=(), place=None,
                  do_resolve=False):
     """Ланка чейну покадрово (як headlock_frames): криві параметрів за ключами, кадр розв'язується заново, кисті
     сідають, руки виштовхуються; перші blend_in кадрів — вхід з останнього кадру зчепу. Стопи — ключі в кожному
     ключі (a_feet, b_feet), між різними — крок з підйомом."""
     T = G["track"]
+    fa, fb = _arced(fa), _arced(fb)
     ring_lab.place((0, -1.18, 0), 180, z=1.0)
     base = keys[0][1]
     scal = [n for n, v in base.items() if isinstance(v, float)]
@@ -1047,9 +1080,45 @@ REPAIR_OK = 2.0     # см: кадр без проникнень глибше �
 REPAIR_GAP = 14     # кадрів: найдовший проміжок між добрими кадрами, який заповнюється переходом
 
 
+def gen_pen(tol=0.006):
+    """Міра генератора (ring_anims_polish.mesh_pen) на поточному кадрі: одне дерево на всі зони тіла суперника,
+    кожна третя вершина, третя найглибша. Лабораторія казала ≤ 2 см, а генератор на тих самих кадрах бачив до 2,5
+    (04.11.2026) — кадр приймається лише за обома мірами. [(см, 'A.body_hands'), (см, 'B.body_lowerarms')]."""
+    from mathutils.bvhtree import BVHTree
+    dg = bpy.context.evaluated_depsgraph_get()
+    data = {}
+    for tag in "AB":
+        vs, ps, vo, fo = [], [], [], []
+        for o in ring_lab._meshes(LAB["arm" + tag]):
+            if "body_" not in o.name:
+                continue
+            part = "body_" + o.name.split("body_", 1)[1].split(".")[0]
+            e = o.evaluated_get(dg); me = e.to_mesh(); mw = e.matrix_world; base = len(vs)
+            vs += [mw @ v.co for v in me.vertices]; vo += [part] * len(me.vertices)
+            ps += [[base + i for i in p.vertices] for p in me.polygons]; fo += [part] * len(me.polygons)
+            e.to_mesh_clear()
+        data[tag] = (BVHTree.FromPolygons(vs, ps), vs, vo, fo)
+    worst = (0.0, None)
+    for a, b in (("A", "B"), ("B", "A")):
+        tree = data[b][0]
+        deep = []
+        for k in range(0, len(data[a][1]), 3):
+            v = data[a][1][k]
+            loc, nrm, fi, d = tree.find_nearest(v, 0.3)
+            if loc is not None and d > tol and nrm.dot(v - loc) < 0 and G["_inside3"](tree, v):
+                deep.append((d, data[a][2][k], data[b][3][fi]))
+        deep.sort(key=lambda x: x[0], reverse=True)
+        if len(deep) >= 3 and deep[2][0] > worst[0]:
+            worst = (deep[2][0], (f"{a}.{deep[2][1]}", f"{b}.{deep[2][2]}"))
+    if worst[1] is None:
+        return []
+    d = round(worst[0] * 100, 1)
+    return [(d, worst[1][0]), (d, worst[1][1])]
+
+
 def _body_pen(f):
     show_fk(f)
-    pen = _pen() + self_pen()
+    pen = _pen() + self_pen() + gen_pen()
     return max((d for d, _w in pen), default=0.0)
 
 
@@ -1082,18 +1151,214 @@ def repair_frames(name, keep=0):
                 out["A"][f], out["B"][f] = old
     print(f"[{name}] ремонт ключами: {fixed} кадрів, добрих {sum(1 for x in score if x <= REPAIR_OK)}/{n}", flush=True)
     if "limit_jerk" in G:
-        for rnd in range(4):
+        exc = lambda sc: sum(max(0.0, x - REPAIR_OK) for x in sc)      # сумарне перевищення: і глибина, і кількість кадрів
+        best = (exc(score), 0, {t: list(out[t]) for t in ("A", "B")}, list(score))
+        frozen = set()
+        for rnd in range(8):
             pushed = [f for f in range(n) if score[f] > REPAIR_OK and push_frame(f, score[f])]
             if not pushed:
                 break
-            out.update({t: G["limit_jerk"](out[t]) for t in ("A", "B")})
+            frozen |= set(pushed)
+            # обмежувач ривка не тягне доведені руки назад у тіло — гасить ривок сусідніми кадрами
+            for t in ("A", "B"):
+                arm = LAB["arm" + t]
+                fz = _arm_bones(arm, "l") | _arm_bones(arm, "r")
+                out[t] = G["limit_jerk"](out[t], freeze=[fz if i in frozen else set() for i in range(n)])
             score = [_body_pen(f) for f in range(n)]
+            if exc(score) < best[0]:
+                best = (exc(score), 0, {t: list(out[t]) for t in ("A", "B")}, list(score))
             print(f"[{name}] доводка по сітках {rnd + 1}: {len(pushed)} кадрів, добрих "
                   f"{sum(1 for x in score if x <= REPAIR_OK)}/{n}, найгірший {max(score):.1f} см", flush=True)
+        out.update(best[2]); score = best[3]          # найкращий раунд, а не останній (раунди коливались 3,4 → 5,1 см)
+        score = nudge_frames(name, score)
+        print(f"[{name}] доводка — найкращий раунд: найгірший {max(score):.1f} см, добрих "
+              f"{sum(1 for x in score if x <= REPAIR_OK)}/{n}", flush=True)
         for f in range(n):
             if score[f] > REPAIR_OK:
                 show_fk(f)
                 print(f"[{name}] лишилось: кадр {f} {(_pen() + self_pen())[:3]}", flush=True)
+
+
+NUDGE_BONES = {"hands": ("upperarm", "lowerarm", "hand"), "lowerarms": ("upperarm", "lowerarm"),
+               "upperarms": ("clavicle", "upperarm"), "trousers": ("thigh", "calf"), "calves": ("thigh", "calf"),
+               "feet": ("calf", "foot"), "thighs": ("thigh", "calf"), "head": ("neck_01", "head", "spine_03"),
+               "torso": ("spine_03",)}
+NUDGE_AXES = (Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))
+
+
+def _nudge_bones(label):
+    """Позначка міри ('A.body_hands', 'B.r', 'A.trousers') → [(борець, кістка)] для підбору."""
+    tag, part = label.split(".", 1)
+    if part in ("l", "r"):
+        return [(tag, f"{b}_{part}") for b in ("upperarm", "lowerarm", "hand")]
+    part = part.replace("body_", "")
+    out = []
+    for b in NUDGE_BONES.get(part, ()):
+        out += [(tag, b)] if b in ("neck_01", "head", "spine_03") else [(tag, f"{b}_l"), (tag, f"{b}_r")]
+    if part == "hands":                     # кисть у кисті — крутити можна й руку партнера
+        ot = "B" if tag == "A" else "A"
+        out += [(ot, f"{b}_{sd}") for b in ("lowerarm", "hand") for sd in "lr"]
+    return out
+
+
+ZIG_DEG = 0.6      # °: крок повороту, з якого перемикання напрямку через кадр уже видно як тремтіння
+
+
+def _zig(seq, f, bn):
+    """Кістка bn у кадрі f — перемикання напрямку (вперед-назад) щодо сусідів понад ZIG_DEG з обох боків."""
+    q0, q1, q2 = seq[f - 1][bn][1], seq[f][bn][1], seq[f + 1][bn][1]
+    d1 = q0.inverted() @ q1
+    d2 = q1.inverted() @ q2
+    a1, a2 = _rotvec(d1), _rotvec(d2)
+    return (a1.length > math.radians(ZIG_DEG) and a2.length > math.radians(ZIG_DEG)
+            and a1.normalized().dot(a2.normalized()) < -0.3)
+
+
+def _rotvec(q):
+    if q.w < 0:
+        q = -q
+    a = 2.0 * math.acos(max(-1.0, min(1.0, q.w)))
+    s_ = math.sqrt(max(1e-12, 1.0 - q.w * q.w))
+    return Vector((q.x / s_, q.y / s_, q.z / s_)) * a if a > 1e-7 else Vector()
+
+
+def dezigzag(name, score, passes=3):
+    """Після підбору поворотів (04.11.2026): покадровий підбір лишав зигзаг — кисть і передпліччя туди-сюди через кадр
+    (20–30 перемикань за кліп). Кадр-зигзаг кістки → середнє сусідів (і таз — зсув), якщо проникнення не гірше межі."""
+    out = LAB["frames"]
+    n = len(score)
+    done = left = 0
+    for _p in range(passes):
+        left = 0
+        for t in "AB":
+            seq = out[t]
+            for f in range(1, n - 1):
+                bones = [bn for bn in seq[f] if _zig(seq, f, bn)]
+                if not bones:
+                    continue
+                old = dict(seq[f])
+                for bn in bones:
+                    l0, q0 = seq[f - 1][bn]; l2, q2 = seq[f + 1][bn]
+                    seq[f][bn] = (l0.lerp(l2, 0.5), q0.slerp(q2, 0.5))
+                sc = _body_pen(f)
+                if sc <= max(REPAIR_OK, score[f]):
+                    score[f] = sc; done += len(bones)
+                else:
+                    seq[f] = old; left += len(bones)
+        if not left:
+            break
+    print(f"[{name}] тремтіння: згладжено {done}, лишилось {left} (кістка × кадр)", flush=True)
+    return score
+
+
+def nudge_frames(name, score, angles=(8.0, 5.0, 2.5, 1.2), rounds=6):
+    """Останній прохід (04.11.2026): доводка тягла ціль IK, а обмеження суглобів повертали руку в тіло, і 18 кліпів
+    стояли на 2–7 см. Тут — підбір малих поворотів кісток з позначки, оцінка тією самою мірою, що йде у звіт; поворот
+    лишається, лише якщо проникнення менше. Зміна розноситься на три сусідні кадри з убуванням (без ривка), якщо
+    сусідові не гірше."""
+    out = LAB["frames"]
+    n = len(score)
+    fixed = 0
+    for f in range(n):
+        if score[f] <= REPAIR_OK:
+            continue
+        start = {t: dict(out[t][f]) for t in "AB"}
+        for _r in range(rounds):
+            show_fk(f)
+            labels = [w for d, w in (_pen() + self_pen() + gen_pen()) if d > REPAIR_OK]
+            cand = []
+            for lb in labels:
+                cand += [c for c in _nudge_bones(lb) if c not in cand]
+            improved = False
+            for tag, bn in cand:
+                if bn not in out[tag][f]:
+                    continue
+                for ang in angles:
+                    for ax in NUDGE_AXES:
+                        for sg in (1, -1):
+                            loc, q = out[tag][f][bn]
+                            out[tag][f][bn] = (loc, q @ Quaternion(ax, math.radians(ang * sg)))
+                            sc = _body_pen(f)
+                            if sc < score[f] - 0.05:
+                                score[f], improved = sc, True
+                                break
+                            out[tag][f][bn] = (loc, q)
+                        if score[f] <= REPAIR_OK:
+                            break
+                    if score[f] <= REPAIR_OK:
+                        break
+                if score[f] <= REPAIR_OK:
+                    break
+            if score[f] > REPAIR_OK and any(("trousers" in lb or "thighs" in lb or "calves" in lb) for lb in labels):
+                # ноги в ногах поворотами не розвести — зсув таза на 1–2 см (кожного з борців)
+                for tag in "AB":
+                    if "pelvis" not in out[tag][f] or score[f] <= REPAIR_OK:
+                        continue
+                    for st in (0.02, 0.01):
+                        for ax in NUDGE_AXES[:2]:
+                            for sg in (1, -1):
+                                loc, q = out[tag][f]["pelvis"]
+                                out[tag][f]["pelvis"] = (loc + ax * st * sg, q)
+                                sc = _body_pen(f)
+                                if sc < score[f] - 0.05:
+                                    score[f], improved = sc, True
+                                    break
+                                out[tag][f]["pelvis"] = (loc, q)
+            if not improved or score[f] <= REPAIR_OK:
+                break
+        if score[f] > REPAIR_OK and 0 < f < n - 1:
+            # запасний: проміжна поза між сусідами (кадр з перевищенням на міліметр, а сусіди чисті)
+            old = (out["A"][f], out["B"][f])
+            for k in (0.5, 0.3, 0.7, 0.15, 0.85):
+                out["A"][f] = _blend_pose(out["A"][f - 1], out["A"][f + 1], k)
+                out["B"][f] = _blend_pose(out["B"][f - 1], out["B"][f + 1], k)
+                sc = _body_pen(f)
+                if sc <= REPAIR_OK:
+                    score[f], old = sc, None
+                    break
+            if old:
+                out["A"][f], out["B"][f] = old
+        # розносимо зміну на сусідів
+        for t in "AB":
+            for bn, (l1, q1) in out[t][f].items():
+                l0, q0 = start[t][bn]
+                if q1 == q0 and l1 == l0:
+                    continue
+                if l1 != l0:
+                    for k, w in ((1, 0.66), (2, 0.4), (3, 0.15)):
+                        for g in (f - k, f + k):
+                            if 0 < g < n - 1:
+                                old = out[t][g][bn]
+                                out[t][g][bn] = (old[0] + (l1 - l0) * w, old[1])
+                                sg_ = _body_pen(g)
+                                if sg_ <= max(score[g], REPAIR_OK):
+                                    score[g] = sg_
+                                else:
+                                    out[t][g][bn] = old
+                    if q1 == q0:
+                        continue
+                d = q0.inverted() @ q1
+                for k, w in ((1, 0.66), (2, 0.4), (3, 0.15)):
+                    for g in (f - k, f + k):
+                        if 0 < g < n - 1 and g != f:
+                            lg, qg = out[t][g][bn]
+                            old = out[t][g][bn]
+                            out[t][g][bn] = (lg, qg @ Quaternion().slerp(d, w))
+                            sg_ = _body_pen(g)
+                            if sg_ <= max(score[g], REPAIR_OK):
+                                score[g] = sg_
+                            else:
+                                out[t][g][bn] = old
+        if score[f] <= REPAIR_OK:
+            fixed += 1
+    score = dezigzag(name, score)
+    print(f"[{name}] підбір поворотів: доведено {fixed}, найгірший {max(score):.1f} см, добрих "
+          f"{sum(1 for x in score if x <= REPAIR_OK)}/{n}", flush=True)
+    for f in range(n):
+        if score[f] > REPAIR_OK:
+            show_fk(f)
+            print(f"[{name}] після підбору лишилось: кадр {f} {(_pen() + self_pen())[:3]}", flush=True)
+    return score
 
 
 def _arm_bones(arm, s):
@@ -1128,10 +1393,15 @@ def push_frame(f, before):
                     break
                 rig.empties["wrist_" + s].location += want - got
                 bpy.context.view_layer.update()
-    for _ in range(2):
+    global PUSH_MAX
+    keep_max, PUSH_MAX = PUSH_MAX, 0.12               # глибокі кисті (до 9 см) межа 4 см не випускала
+    for _ in range(3):
         for tag in "AB":
             ring_lab.settle(tag, max_depth=0.002, max_shift=0.12)
             push_arm(tag, "r", iters=30); push_arm(tag, "l", iters=30)
+            for sd in "lr":
+                self_push(tag, sd, iters=45)          # і зі свого тіла (вільна рука B крізь власний тулуб)
+    PUSH_MAX = keep_max
     caps = {tag: capture_limited(tag) for tag in "AB"}
     old = (out["A"][f], out["B"][f])
     for tag in "AB":
@@ -1187,10 +1457,10 @@ def armwringer_frames(frames=None):
 # вгору, правою давить на праве плече; B зігнутий уперед, на носках від болю, ліва рука вільна — тягнеться вперед
 # або назад до A. grab: 0 — хват зчепу, 0,5 — рука B відведена вбік (як у викруті), 1 — за спиною.
 HM = dict(AW, a_pel=(0.02, -0.28), a_pz=-0.1, a_pitch=18.0, a_yaw=-8.0, a_roll=0.0, a_hy=-8.0, a_hp=20.0,
-          a_feet=((0.18, -0.42), (-0.22, -0.08)), a_fyaw=(10.0, -20.0),
-          b_head=0.0, b_pel=(-0.12, -0.78), b_drop=0.04, b_pelpitch=18.0, b_pitch=44.0, b_yaw=10.0, b_roll=8.0,
-          b_hy=-20.0, b_hp=-5.0, b_feet=((-0.32, -1.06), (0.1, -0.86)), b_lh=(0.0, 0.0, 0.0), grab=1.0,
-          b_behind=(1.0, 0.24, 0.05))     # кисть між лопатками, без входу у власну спину (лабораторія 29.10.2026)
+          a_feet=((0.24, -0.3), (-0.2, -0.02)), a_fyaw=(10.0, -20.0),
+          b_head=0.0, b_pel=(-0.12, -0.5), b_drop=0.04, b_pelpitch=18.0, b_pitch=44.0, b_yaw=10.0, b_roll=8.0,
+          b_hy=-20.0, b_hp=-5.0, b_feet=((-0.32, -0.78), (0.1, -0.58)), b_lh=(0.0, 0.0, 0.0), grab=1.0,
+          b_behind=(0.7, 0.13, 0.06))     # кисть притиснута до спини під лопаткою (04.11.2026: на 24 см від спини висіла в повітрі)
 HM_TIE = dict(HM, **{k: AW_TIE[k] for k in AW_TIE if k not in ("b_wr",)}, b_lh=(0.0, 0.0, 0.0))
 
 
@@ -1277,8 +1547,8 @@ def hm_a(k=1.0):
         p.ankles = (G["foot"](lx, ly) + Vector((0, 0, zl)), G["foot"](rx, ry) + Vector((0, 0, zr)))
         p.feet_yaw = HL["a_fyaw"]
         w = HL["grab"]
-        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((0.07, -0.27, -0.2))
-        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
+        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((-0.04, -0.34, -0.14))
+        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((0.04, -0.34, -0.14))
         wrist = lambda S: SURF.get("Hl") or P_(S, "lowerarm_r", 0.9, Vector((0, 0, 0.05))) or S["l"] + Vector((0, -0.3, -0.3))
         shoulder = lambda S: SURF.get("Hr") or P_(S, "upperarm_r", 0.15, Vector((0, 0, 0.06))) or S["r"] + Vector((0, -0.3, -0.2))
 
@@ -1316,10 +1586,10 @@ HAMMERLOCK_KEYS = [
     (0, dict(HM_TIE)),
     (4, dict(HM_TIE, a_pz=-0.2, a_pitch=40.0, b_pitch=40.0)),
     (11, dict(HM, a_pel=(0.12, -0.12), a_pitch=14.0, a_yaw=-15.0, a_hy=-10.0, a_feet=((0.28, -0.4), (-0.14, -0.05)),
-              b_head=150.0, b_pel=(-0.24, -1.0), b_drop=0.08, b_pelpitch=8.0, b_pitch=26.0, b_yaw=-20.0,
-              b_hy=-30.0, b_hp=15.0, b_feet=((-0.38, -0.72), (0.12, -1.08)), grab=0.5)),
-    (19, _hm(b_head=30.0, b_pel=(-0.14, -0.8), b_pitch=38.0, b_hp=10.0, grab=0.85,
-             b_feet=((-0.36, -1.02), (0.1, -0.9)))),
+              b_head=150.0, b_pel=(-0.24, -0.72), b_drop=0.08, b_pelpitch=8.0, b_pitch=26.0, b_yaw=-20.0,
+              b_hy=-30.0, b_hp=15.0, b_feet=((-0.38, -0.44), (0.12, -0.8)), grab=0.5)),
+    (19, _hm(b_head=30.0, b_pel=(-0.14, -0.52), b_pitch=38.0, b_hp=10.0, grab=0.85,
+             b_feet=((-0.36, -0.74), (0.1, -0.62)))),
     (25, _hm(b_drop=-0.02, b_pitch=34.0, b_hp=-20.0, b_hy=-10.0)),          # ривок угору від болю, на носки
     (36, _hm(a_pitch=24.0, a_pz=-0.14, b_drop=0.06, b_pitch=54.0, b_hp=5.0, b_hy=-30.0)),
     (50, _hm(a_pitch=24.0, a_pz=-0.14, b_pitch=40.0, b_hy=10.0, b_hp=-10.0, b_lh=(0.1, 0.35, 0.25))),  # тягнеться лівою назад до A
@@ -1412,7 +1682,8 @@ def ws_b(k=1.0):
         def el(side):                                  # лікті назовні — в осях свого тулуба (B розвернутий)
             def g(S):
                 up, lr, back = _body_axes(S)
-                return S[side] + lr * (0.4 if side == "l" else -0.4) - up * 0.3 - back * 0.1
+                # 18 см убік, а не 40 (огляд 04.11.2026: руки B стирчали «літаком») — лікті трохи назовні над руками A
+                return S[side] + lr * (0.18 if side == "l" else -0.18) - up * 0.38 - back * 0.12
             return g
         def el_l(S):                                   # у ліктьовому ударі — лікоть назад, до голови A
             up, lr, back = _body_axes(S)
@@ -1443,8 +1714,8 @@ def ws_a(k=1.0):
         p.feet_yaw = (HL["a_head"] + HL["a_fyaw"][0], HL["a_head"] + HL["a_fyaw"][1])
         p.knees = (fl + fwd * 0.6 + left * 0.1 + Vector((0, 0, 0.5)), fr + fwd * 0.6 - left * 0.1 + Vector((0, 0, 0.5)))
         w = HL["grab"]
-        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((0.07, -0.27, -0.2))
-        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
+        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((-0.04, -0.34, -0.14))
+        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((0.04, -0.34, -0.14))
         belly_r = lambda S: SURF.get("Wbr") or P_(S, "spine_01", 0.5, Vector((0, -0.15, 0))) or S["r"] + Vector((0, -0.3, -0.4))
         belly_l = lambda S: SURF.get("Wbl") or P_(S, "spine_01", 0.5, Vector((0, -0.15, 0))) or S["l"] + Vector((0, -0.3, -0.4))
         # кисті на животі B, у дорозі — повз боки B, щоб обійти тіло, а не пройти крізь нього
@@ -1492,7 +1763,9 @@ def ws_surface():
 
 
 def _ws(**kw):
-    d = dict(WS, no_seat=(("A", "l"), ("A", "r")), b_free=True); d.update(kw); return d
+    # B розчіплює замок кистями на передпліччях A (референс); «вільні» руки вгору — лише на обході (огляд 04.11.2026:
+    # руки B увесь прийом стирчали «літаком»)
+    d = dict(WS, no_seat=(("A", "l"), ("A", "r")), b_free=False); d.update(kw); return d
 
 
 WAISTLOCK_KEYS = [
@@ -1500,7 +1773,7 @@ WAISTLOCK_KEYS = [
     (4, dict(WS_TIE, a_pz=-0.28, a_pitch=40.0, a_hy=-50.0, b_pitch=36.0)),                  # A пірнає під руку B
     (10, _ws(a_head=40.0, a_pel=(-0.6, -0.4), a_pz=-0.22, a_pitch=22.0, a_roll=0.0, a_yaw=0.0, a_hy=-20.0,
              a_feet=((-0.36, -0.4), (-0.66, -0.2)), b_head=150.0, b_pel=(-0.18, -1.0), b_pitch=26.0, b_hy=-30.0,
-             b_feet=((-0.3, -0.7), (0.14, -1.06)), grab=0.4)),                                    # обходить зліва, широко
+             b_feet=((-0.3, -0.7), (0.14, -1.06)), grab=0.4, b_free=True)),                       # обходить зліва, широко
     (17, _ws(a_pz=-0.28, b_pitch=16.0, b_hp=-10.0, grab=0.9)),
     (23, _ws(a_pz=-0.26, a_pitch=24.0, b_drop=0.02, b_pitch=12.0, b_hp=-15.0)),   # стиснув — B випрямляється
     (36, _ws(a_pz=-0.26, a_pitch=24.0, b_pitch=14.0, b_yaw=-8.0, b_hy=-25.0, b_hp=5.0, b_drop=0.03)),   # B крутиться — від голови A
@@ -1611,7 +1884,7 @@ def sh_b(k=1.0):
         tie_r = lambda S: SURF.get("tBr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Br"])) or S["r"] + Vector((0, -0.3, -0.3))
         tie_l = lambda S: SURF.get("tBl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Bl"])) or S["l"] + Vector((0, -0.3, -0.3))
         FWD, DOWN, UP, LEFT, RIGHT = (G[n] for n in ("FWD", "DOWN", "UP", "LEFT", "RIGHT"))
-        guard = {"l": lambda S: S["l"] + Vector((-0.07, -0.27, -0.2)), "r": lambda S: S["r"] + Vector((0.07, -0.27, -0.2))}
+        guard = {"l": lambda S: S["l"] + Vector((0.04, -0.34, -0.14)), "r": lambda S: S["r"] + Vector((-0.04, -0.34, -0.14))}
         flail = {"l": lambda S: S["l"] + Vector((0.42, -0.05, -0.05)), "r": lambda S: S["r"] + Vector((-0.42, -0.05, -0.05))}
         p.hands = {"r": (lambda S: _phase(ph, tie_r(S), flail["r"](S), guard["r"](S)), FWD + DOWN * 0.3, LEFT + UP * 0.3),
                    "l": (lambda S: _phase(ph, tie_l(S), flail["l"](S), guard["l"](S)), FWD + DOWN * 0.3, RIGHT + UP * 0.3)}
@@ -1626,8 +1899,8 @@ def sh_a(k=1.0):
         P_ = G["P"]
         p = aw_a()(Pt)
         ph = HL["ph"]
-        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((0.07, -0.27, -0.2))
-        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((-0.07, -0.27, -0.2))
+        tie_r = lambda S: SURF.get("tAr") or P_(S, "neck_01", 0.1, Vector(TIE_OFF["Ar"])) or S["r"] + Vector((-0.04, -0.34, -0.14))
+        tie_l = lambda S: SURF.get("tAl") or P_(S, "lowerarm_r", 0.06, Vector(TIE_OFF["Al"])) or S["l"] + Vector((0.04, -0.34, -0.14))
         chest = {s: (lambda S, s=s: SURF.get("C" + s) or S[s] + Vector((0.0, -0.45, -0.1))) for s in "lr"}
         open_ = {"l": lambda S: S["l"] + Vector((0.45, -0.15, 0.05)), "r": lambda S: S["r"] + Vector((-0.45, -0.15, 0.05))}
         back = Vector((0.0, 0.14, -0.04)) * math.sin(math.pi * min(1.0, ph))   # з хвату на груди — до себе й назад (навпростець — крізь B)
@@ -1719,6 +1992,8 @@ def facelock_clubs_frames():
 # не дістає: голова A — за плечем B далі, ніж плече й лікоть, перевірено 29.10.2026.)
 def _we_keys():
     k = [(f, dict(v, b_es=0.0)) for f, v in WAISTLOCK_KEYS if f <= 23]
+    # без згладжування ноги на обході йшли одна в одну (кадри 8–13, до 2,7 см, 04.11.2026) — обхід ширший
+    k[2] = (10, dict(k[2][1], a_pel=(-0.66, -0.42), a_feet=((-0.44, -0.44), (-0.74, -0.2))))
     hold = _ws(b_es=0.0)                              # та сама основа, що й у захваті корпусу (замок, B виривається)
     for f0 in (27, 39, 51):
         k.append((f0, dict(hold, b_es=1.0, b_yaw=-6.0, b_pitch=18.0, b_hy=10.0)))
@@ -1731,7 +2006,7 @@ def _we_keys():
 
 
 def waistlock_elbows_frames():
-    return chain_frames("Chain_Waistlock_Elbows", _we_keys(), 72, ws_a, ws_b, ws_surface, smooth=False, contacts=WS_CONTACTS[:3])
+    return chain_frames("Chain_Waistlock_Elbows", _we_keys(), 72, ws_a, ws_b, ws_surface, contacts=WS_CONTACTS[:3])
 
 
 
@@ -1812,10 +2087,10 @@ def _keys_upto(keys, last):
 
 def armwringer_kneel_frames(frames=None):
     k = _keys_upto(ARMWRINGER_KEYS, 26)
-    k += [(38, _aw(a_pitch=18.0, a_pz=-0.18, b_pitch=34.0, b_yaw=-25.0, b_roll=10.0, b_drop=0.32, b_hy=-30.0, b_hp=25.0,
-                   b_wr=(0.06, -0.55, 1.72))),                       # на коліно: таз униз, рука тягнеться за A
-          (54, _aw(a_pitch=18.0, a_pz=-0.18, b_pitch=30.0, b_yaw=-20.0, b_roll=8.0, b_drop=0.3, b_hy=-25.0, b_hp=20.0,
-                   b_wr=(0.06, -0.56, 1.74))),
+    k += [(38, _aw(a_pitch=24.0, a_pz=-0.22, b_pitch=24.0, b_yaw=-25.0, b_roll=10.0, b_drop=0.4, b_hy=-30.0, b_hp=25.0,
+                   b_kneel=1.0, b_wr=(0.06, -0.55, 1.55))),           # на коліно: праве коліно на мат, A тисне руку вниз
+          (54, _aw(a_pitch=24.0, a_pz=-0.22, b_pitch=20.0, b_yaw=-20.0, b_roll=8.0, b_drop=0.4, b_hy=-25.0, b_hp=20.0,
+                   b_kneel=1.0, b_wr=(0.06, -0.56, 1.57))),
           (66, _aw())]
     return chain_frames("Chain_ArmWringer_Kneel", k, 66, aw_a, aw_b, aw_surface, frames=frames, contacts=AW_CONTACTS)
 
@@ -1849,8 +2124,9 @@ def wristlock_spin_frames(frames=None):
 
 def facelock_knees_frames(frames=None):
     k = [(f, dict(v)) for f, v in FACELOCK_KEYS if f <= 22]
-    k += [(40, _ff(a_pitch=46.0, a_pz=-0.22, b_drop=0.3, b_pitch=62.0, b_hp=30.0)),   # B опускається на коліна
-          (58, _ff(a_pitch=44.0, a_pz=-0.2, b_drop=0.28, b_pitch=60.0, b_hp=28.0)),
+    # B опускається на коліна — і відсувається тазом назад (на місці голова йшла в стегна A, 4 см по сітках)
+    k += [(40, _ff(a_pitch=46.0, a_pz=-0.22, b_pel=(-0.3, -0.86), b_drop=0.3, b_pitch=50.0, b_hp=30.0)),
+          (58, _ff(a_pitch=44.0, a_pz=-0.2, b_pel=(-0.3, -0.84), b_drop=0.28, b_pitch=50.0, b_hp=28.0)),
           (72, _ff())]
     k = [(f, dict(v, b_feet=v["b_feet"] or b_feet_hold(v["b_pel"], v["b_head"]))) for f, v in k]
     return chain_frames("Chain_FrontFacelock_Knees", k, 72, a_hold, b_hold, fl_surface, frames=frames, contacts=HL_CONTACTS)

@@ -220,9 +220,14 @@ def polish_seq(arm, basis_seq, loop, pair, holds, lite=0, freeze=None):
                     st = state[b.name]
                     if st[0] is None:
                         st[0] = q_t.copy()
-                    err = _rotvec(q_t @ st[0].inverted())
-                    st[1] = st[1] + (err * (w * w) - st[1] * (2.0 * ZETA * w)) * dt
-                    st[0] = (_expq(st[1] * dt) @ st[0]).normalized()
+                    # підкроки: за ω·dt ≈ 1,1 (хребет, 34 рад/с при 30 к/с) швидкість множилась на −0,4 щокадру — кістка
+                    # мінялась туди-сюди через кадр (суддя «трясеться», власник 04.11.2026); крок ω·h ≤ 0,15 — стійко
+                    k_sub = max(1, math.ceil(w * dt / 0.15))
+                    h = dt / k_sub
+                    for _s in range(k_sub):
+                        err = _rotvec(q_t @ st[0].inverted())
+                        st[1] = st[1] + (err * (w * w) - st[1] * (2.0 * ZETA * w)) * h
+                        st[0] = (_expq(st[1] * h) @ st[0]).normalized()
                     d = st[0].rotation_difference(q_t).angle
                     if d > dev:                                           # не далі межі від розв'язаної пози
                         st[0] = st[0].slerp(q_t, 1.0 - dev / d)
@@ -527,3 +532,196 @@ def lab_mesh_report(armA, armB):
     armA.matrix_world, armB.matrix_world = keepA, keepB
     bpy.context.view_layer.update()
     return lines
+
+
+# ---------------------------------------------------------------- тремтіння (перемикання напрямку через кадр)
+ZIGZAG_MAX = 2          # допустимо пар перемикань на сусідніх кадрах (крок ≥ ZIGZAG_EPS в обидва боки) на криву за кліп
+ZIGZAG_EPS = 0.008      # компонента кватерніона за кадр (≈ 1 °)
+
+
+def _fcurves(act):
+    if getattr(act, "fcurves", None):
+        return list(act.fcurves)
+    return [fc for l in act.layers for st in l.strips for cb in st.channelbags for fc in cb.fcurves]
+
+
+def zigzag_report(actions):
+    """Тремтіння в діях, що йдуть у FBX (04.11.2026: суддя «трясеться» — хребет мінявся туди-сюди через кадр, а
+    перевірка ривків дивилась на кадри ДО шару оживлення й казала OK). Крива повороту, що понад ZIGZAG_MAX разів
+    міняє напрямок кроками ≥ ZIGZAG_EPS з обох боків, — ПОНАД ПОРІГ."""
+    lines = []
+    for name, act in sorted(actions.items()):
+        n0, n1 = int(act.frame_range[0]), int(act.frame_range[1])
+        worst = (0, "")
+        for fc in _fcurves(act):
+            if "rotation" not in fc.data_path:
+                continue
+            v = [fc.evaluate(f) for f in range(n0, n1 + 1)]
+            ext = [i for i in range(1, len(v) - 1)
+                   if (v[i] - v[i - 1]) * (v[i + 1] - v[i]) < 0
+                   and abs(v[i] - v[i - 1]) > ZIGZAG_EPS and abs(v[i + 1] - v[i]) > ZIGZAG_EPS]
+            # тремтіння — перемикання на СУСІДНІХ кадрах (туди-сюди-туди); поодинокий злам — звичайний рух (крок бігу)
+            es = set(ext)
+            k = sum(1 for i in ext if i + 1 in es)
+            if k > worst[0]:
+                worst = (k, fc.data_path.split('"')[1] if '"' in fc.data_path else fc.data_path)
+        if worst[0] > ZIGZAG_MAX:
+            line = f"| {name} (тремтіння) | ПОНАД ПОРІГ: {worst[0]} перемикань через кадр ({worst[1]}) |"
+            print("[тремтіння] " + line, flush=True)
+            lines.append(line)
+    print(f"[тремтіння] кліпів понад поріг: {len(lines)}", flush=True)
+    return lines
+
+
+def dezigzag_actions(actions, passes=12):
+    """Прибрати тремтіння в діях, що йдуть у FBX (04.11.2026): точка кривої повороту, де напрямок міняється туди-сюди
+    на сусідніх кадрах кроками ≥ ZIGZAG_EPS, замінюється середнім сусідів. Поодинокі злами (крок бігу, удар)
+    не чіпаються — лише пари перемикань поспіль, ті самі, що рахує zigzag_report."""
+    fixed = 0
+    for act in actions.values():
+        for fc in _fcurves(act):
+            if "rotation" not in fc.data_path:
+                continue
+            kp = fc.keyframe_points
+            if len(kp) < 4:
+                continue
+            for _ in range(passes):
+                v = [k.co[1] for k in kp]
+                ext = [i for i in range(1, len(v) - 1)
+                       if (v[i] - v[i - 1]) * (v[i + 1] - v[i]) < 0
+                       and abs(v[i] - v[i - 1]) > ZIGZAG_EPS and abs(v[i + 1] - v[i]) > ZIGZAG_EPS]
+                es = set(ext)
+                bad = [i for i in ext if i + 1 in es or i - 1 in es]
+                if not bad:
+                    break
+                for i in bad:
+                    kp[i].co[1] = (v[i - 1] + v[i + 1]) / 2
+                    kp[i].handle_left[1] = kp[i].handle_right[1] = kp[i].co[1]
+                    fixed += 1
+            fc.update()
+    print(f"[тремтіння] згладжено точок: {fixed}", flush=True)
+
+
+FLOOR_MAX = 1.0         # см: найглибша вершина тіла під матом (04.11.2026: капсули казали 0, а сітка — до 12,5 см)
+
+
+def floor_report(arm, actions):
+    """Тіло під матом по сітці — у тому, що йде у FBX (дія на ригу A в нулі). Мат — площина z = 0."""
+    meshes = [o for o in _body_meshes(arm)]
+    for o in meshes:
+        o.hide_viewport = False
+    ad = arm.animation_data or arm.animation_data_create()
+    keep = ad.action
+    keep_mw = arm.matrix_world.copy()
+    arm.matrix_world = Matrix.Identity(4)
+    for pb in arm.pose.bones:
+        for c in pb.constraints:
+            c.mute = True
+    lines = []
+    for name, act in sorted(actions.items()):
+        ad.action = act
+        if getattr(act, "slots", None):
+            ad.action_slot = act.slots[0]
+        f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
+        worst = (0.0, "", 0)
+        for f in range(f0, f1 + 1, 2):
+            bpy.context.scene.frame_set(f)
+            dg = bpy.context.evaluated_depsgraph_get()
+            for o in meshes:
+                e = o.evaluated_get(dg); me = e.to_mesh(); mw = e.matrix_world
+                z = min(((mw @ v.co).z for v in me.vertices), default=0.0)
+                e.to_mesh_clear()
+                if -z * 100 > worst[0]:
+                    worst = (-z * 100, o.name.split("body_")[-1], f - f0)
+        if worst[0] > FLOOR_MAX:
+            line = f"| {name} (мат) | ПОНАД ПОРІГ: під матом {worst[0]:.1f} см ({worst[1]}, кадр {worst[2]}) |"
+            print("[мат] " + line, flush=True)
+            lines.append(line)
+    ad.action = keep
+    arm.matrix_world = keep_mw
+    for pb in arm.pose.bones:
+        for c in pb.constraints:
+            c.mute = False
+    for o in meshes:
+        o.hide_viewport = True
+    print(f"[мат] кліпів понад поріг: {len(lines)}", flush=True)
+    return lines
+
+
+def floor_fix(arm, actions, skip=()):
+    """Підняти все тіло на глибину найнижчої вершини під матом (04.11.2026: падіння вперед — стопи на 12,5 см у маті,
+    підйом зі спини — 10,6, кисті на добиваннях — 3–9). Найнижча точка лягає на мат; підйом — максимум по сусідніх
+    кадрах і згладжування (без стрибка). Пари (skip) не чіпаються: їх тіла зведені одне з одним."""
+    meshes = _body_meshes(arm)
+    for o in meshes:
+        o.hide_viewport = False
+    ad = arm.animation_data or arm.animation_data_create()
+    keep, keep_mw = ad.action, arm.matrix_world.copy()
+    arm.matrix_world = Matrix.Identity(4)
+    for pb in arm.pose.bones:
+        for c in pb.constraints:
+            c.mute = True
+    inv = arm.data.bones["pelvis"].matrix_local.to_3x3().inverted()
+    n_fixed = 0
+
+    def depth_of(act):
+        ad.action = act
+        if getattr(act, "slots", None):
+            ad.action_slot = act.slots[0]
+        f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
+        out = []
+        for f in range(f0, f1 + 1):
+            bpy.context.scene.frame_set(f)
+            dg = bpy.context.evaluated_depsgraph_get()
+            z = 0.0
+            for o in meshes:
+                e = o.evaluated_get(dg); me = e.to_mesh(); mw = e.matrix_world
+                z = min(z, min(((mw @ v.co).z for v in me.vertices), default=0.0))
+                e.to_mesh_clear()
+            out.append(max(0.0, -z))
+        return out
+
+    # пари: A і B піднімаються разом на більшу з двох глибин — контакт між ними не ламається (зсув B лише в площині)
+    groups = {}
+    for name in actions:
+        base = name[:-2] if name.endswith(("_A", "_B")) else name
+        groups.setdefault(base, []).append(name)
+    for base, names in groups.items():
+        ds = [depth_of(actions[nm]) for nm in names]
+        m = min(len(d) for d in ds)
+        depth = [max(d[i] for d in ds) for i in range(m)]
+        if max(depth) * 100 <= FLOOR_MAX * 0.5:
+            continue
+        for nm in names:
+            act = actions[nm]
+            f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
+            _lift_action(act, depth, f0, f1, inv)
+        n_fixed += 1
+    ad.action, arm.matrix_world = keep, keep_mw
+    for pb in arm.pose.bones:
+        for c in pb.constraints:
+            c.mute = False
+    for o in meshes:
+        o.hide_viewport = True
+    print(f"[мат] піднято кліпів: {n_fixed}", flush=True)
+
+
+def _lift_action(act, depth, f0, f1, inv):
+    if True:
+        k = 3
+        lift = [max(depth[max(0, i - k):i + k + 1]) for i in range(len(depth))]
+        w = (1, 2, 3, 2, 1)
+        lift = [sum(lift[min(len(lift) - 1, max(0, i + j - 2))] * w[j] for j in range(5)) / 9 for i in range(len(lift))]
+        lift = [max(a, b) for a, b in zip(lift, depth)]
+        fcs = {fc.array_index: fc for fc in _fcurves(act) if fc.data_path == 'pose.bones["pelvis"].location'}
+        if len(fcs) < 3:
+            return
+        for i, f in enumerate(range(f0, min(f1 + 1, f0 + len(lift)))):
+            dl = inv @ Vector((0.0, 0.0, lift[i]))
+            for ax in range(3):
+                fc = fcs[ax]
+                kp = min(fc.keyframe_points, key=lambda k_: abs(k_.co[0] - f))
+                if abs(kp.co[0] - f) < 0.5:
+                    kp.co[1] += dl[ax]; kp.handle_left[1] += dl[ax]; kp.handle_right[1] += dl[ax]
+        for fc in fcs.values():
+            fc.update()

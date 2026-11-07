@@ -49,17 +49,17 @@ class Ctr:
 CENTER = [
     Ctr("Center_ShoulderBlock", "block", "back", 0.9, gap=0.42),
     Ctr("Center_Clothesline", "line", "back", -0.9),
-    Ctr("Center_Clothesline_Flip", "line", "front", -0.66),         # розвертає — падає обличчям, позаду A
+    Ctr("Center_Clothesline_Flip", "line", "flip", -0.78),          # сальто назад — лягає грудьми на мат
     Ctr("Center_Lariat_Left", "line_l", "side", 0.62),
     Ctr("Center_RunningElbow", "elbow", "side", 0.62),            # лівим ліктем; B падає на бік — геть від лінії бігу
-    Ctr("Center_ForearmShiver", "forearm", "stagger", -0.3, pass_=False, gap=0.72),
+    Ctr("Center_ForearmShiver", "forearm", "stagger", -0.3, pass_=False, gap=0.68),    # 0,72 — передпліччя не діставало (04.11.2026)
     Ctr("Center_BigBoot", "boot", "back", -0.22, pass_=False, gap=1.02),
     Ctr("Center_RunningKnee", "knee", "back", -0.26, pass_=False, gap=0.85),
     Ctr("Center_ShoulderBlock_NoSell", "nosell", "stagger", 0.12, pass_=False, gap=0.75),
     Ctr("Center_Sidestep", "line", "sidestep", -0.42),
     Ctr("Center_Duck", "line", "duck", -0.58),
-    Ctr("Center_Headbutt", "head", "stagger", 0.0, pass_=False, gap=0.72),
-    Ctr("Center_ShoulderBlock_Heavy", "block", "back_fast", 0.78, gap=0.42, run=CT_HEAVY),
+    Ctr("Center_Headbutt", "head", "stagger", 0.0, pass_=False, gap=0.7),           # 0,72 — лоб не діставав грудей
+    Ctr("Center_ShoulderBlock_Heavy", "block", "back_fast", 0.78, gap=0.5, run=CT_HEAVY),
     Ctr("Center_BigBoot_Stagger", "boot", "stagger", -0.22, pass_=False, gap=1.02),
     Ctr("Center_Lariat_Heavy", "line", "back", -0.82, run=CT_HEAVY),
     # шолдер такл: обидва біжать назустріч, плече в плече — B збито з ніг на ходу
@@ -104,7 +104,7 @@ def center_a(c):
             q.foot_rot = tuple(fr.slerp(r_, k) for fr, r_ in zip(p.foot_rot, st_rot))
             q.knees = None if k > 0.5 else p.knees
             p = q
-        w = _act_w(t, c)
+        w = _act_w(t, c, after=0.14) if c.b == "flip" else _act_w(t, c)   # на сальто рука одразу йде вниз — ноги B летять над нею
         if c.a == "nosell" and t > c.t_hit:
             # B не зрушив — A відскакує від нього й падає на спину сам (той самий бамп, з того місця, де вдарився)
             bb = _shift(clip_bump_back(t - c.t_hit, BUMP_LEN), -c.v * c.tau(c.t_hit))
@@ -144,7 +144,7 @@ def center_a(c):
             p.yaw = p.yaw - 18.0 * w
         elif c.a == "forearm":
             hold = p.hands["r"]
-            hit = lambda S: P(S, "spine_03", 0.7, Vector((0.14, 0.06, 0.02))) or (S["r"] + Vector((0.1, -0.55, -0.05)))
+            hit = lambda S: P(S, "spine_03", 0.7, Vector((0.12, 0.21, 0.02))) or (S["r"] + Vector((0.1, -0.55, -0.05)))   # на поверхні грудей B, не в них
             p.hands = dict(p.hands)
             p.hands["r"] = (lambda S, h=hold: lerp(h[0](S), hit(S), w), lambda S, h=hold: lerp(h[1] if not callable(h[1]) else h[1](S), FWD + LEFT * 0.6, w),
                             lambda S, h=hold: lerp(h[2] if not callable(h[2]) else h[2](S), UP, w))
@@ -154,8 +154,9 @@ def center_a(c):
             p.yaw = p.yaw - 20.0 * w
             p.fist = dict(p.fist); p.fist["r"] = 0.85
         elif c.a == "head":                                   # лобом у груди, не в голову
-            p.pitch = p.pitch + 30.0 * w
-            p.head_pitch = p.head_pitch + 10.0 * w
+            p.pitch = p.pitch + 48.0 * w                          # лоб — у груди B, нижче його голови
+            p.head_pitch = p.head_pitch + 22.0 * w
+            p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.08 * w))
         elif c.a in ("boot", "knee"):
             # опорна — ліва (стоїть там, де стала), права — удар уперед: підошвою в груди або коліном у живіт
             kw = _act_w(t, c, before=0.28, after=0.4)
@@ -212,8 +213,38 @@ def center_b(c):
             return stance(t, L, sway=0.0) if tb <= 0 else clip_bump_side(min(SBUMP_LEN, tb), SBUMP_LEN)
         if c.b == "front":
             return stance(t, L, sway=0.0) if tb <= 0 else clip_bump_front(min(FBUMP_LEN, tb), FBUMP_LEN)
+        if c.b == "flip":
+            return stance(t, L, sway=0.0) if tb <= 0 else clip_flip_front(min(FLIP_LEN, tb), FLIP_LEN)
         if c.b == "stagger":
-            return _stagger_b(t, L, c) if t > c.t_hit - STRIKE_HIT else stance(t, L, sway=0.0)
+            low = track(t, [(0.0, 0.0), (c.t_hit - 0.45, 0.0), (c.t_hit - 0.2, 1.0), (c.t_hit + 0.3, 1.0), (c.t_hit + 0.6, 0.0), (99.0, 0.0)]) \
+                if c.a == "head" else 0.0
+            def lower(q0):                               # перед ударом головою руки B опущені (у стійці входили в груди A, що нахилився)
+                if low <= 0.0:
+                    return q0
+                hs = {}
+                for s_, (g_, a_, b_) in q0.hands.items():
+                    sd_ = 1 if s_ == "l" else -1
+                    hs[s_] = (lambda S, g_=g_, s_=s_, sd_=sd_: lerp(g_(S) if callable(g_) else g_, S[s_] + Vector((0.18 * sd_, -0.06, -0.42)) * BODY["arm"], low), a_, b_)
+                q0.hands = hs
+                return q0
+            if t <= c.t_hit - STRIKE_HIT:
+                return lower(stance(t, L, sway=0.0))
+            # відходить від удару й там лишається (огляд 04.11.2026: повертався впритул до A — тіла одне в одному)
+            D = 0.45 if c.a == "boot" else 0.35
+            u = t - c.t_hit
+            q = lower(_stagger_b(t, L, c))
+            if u <= 0.0:
+                return q
+            q.pelvis = q.pelvis + Vector((0.0, D * smooth(u / 0.55), 0.0))
+            if q.ankles:                                # два кроки назад з відривом стоп (без ковзання по мату)
+                def st_(a, b_):
+                    w = min(1.0, max(0.0, (u - a) / (b_ - a)))
+                    h = smooth(min(1.0, max(0.0, (w - 0.12) / 0.76)))          # горизонталь — лише над матом
+                    return Vector((0.0, D * h, 0.07 * math.sin(math.pi * w)))
+                q.ankles = (q.ankles[0] + st_(0.04, 0.3), q.ankles[1] + st_(0.26, 0.55))
+                if q.knees:
+                    q.knees = (q.knees[0] + Vector((0, D * smooth(min(1, u / 0.3)), 0)), q.knees[1] + Vector((0, D * smooth(min(1, u / 0.55)), 0)))
+            return q
         p = stance(t, L, sway=0.0)
         if c.b == "sidestep":                                # крок убік від лінії бігу A — і лишається там
             o = 1.0 if c.bx < 0 else -1.0                     # простір B: + — його ліво (= праворуч від A)
@@ -234,10 +265,12 @@ def center_b(c):
     return f
 
 
-_B_END = {"run_back": "lying_back", "back": "lying_back", "back_fast": "lying_back", "front": "lying_front", "side": None,
+_B_END = {"run_back": "lying_back", "back": "lying_back", "back_fast": "lying_back", "front": "lying_front", "flip": "lying_front", "side": None,
           "stagger": "stance", "sidestep": "stance", "duck": "stance"}
 for _c in CENTER:
-    MOVE_CLIPS.append((_c.name, _c.L, center_a(_c), center_b(_c), False, _c.b_offset(), 180))
+    MOVE_CLIPS.append((_c.name, _c.L, center_a(_c),
+                       (lambda fb_: (lambda t, L, partner=None: hands_out_of_torso(fb_(t, L, partner), r=0.19)))(center_b(_c)),
+                       False, _c.b_offset(), 180))   # кисть B не в своєму тулубі на падінні (жіночий набір: 2,3 см)
     MOVE_CLIP_NODES[_c.name] = {"A": (None, "lying_back" if _c.a == "nosell" else "stance"),
                                 "B": (None if _c.b == "run_back" else "stance", _B_END[_c.b])}
     CLIP_EVENTS[_c.name] = [("contact", _c.t_hit, "spine_03", "spine_03")] if _c.b not in ("sidestep", "duck") else []
