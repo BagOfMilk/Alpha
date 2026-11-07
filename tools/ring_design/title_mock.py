@@ -55,7 +55,8 @@ def trapezoid(w, h, fill, a=1.0, slant=12):
 
 # ---------------------------------------------------------------- сцена: рамка, світло, колір
 
-def scene():
+def prepared_source():
+    """Знімок збірки без запеченого UI: стара картка й ноутбук замальовані, верхні рядки обрізані."""
     src = Image.open(SRC).convert("RGB")
     ImageDraw.Draw(src).rectangle([24, 510, 312, 722], fill=(26, 24, 31))   # стара UI-картка запечена в знімку — прибираємо
     # ноутбук на столі (реквізит прибрати з кадру титулу): замальовуємо кольором стільниці з розтушованим краєм
@@ -65,7 +66,11 @@ def scene():
     m = Image.new("L", patch.size, 0)
     ImageDraw.Draw(m).rectangle([6, 6, patch.width - 7, patch.height - 7], fill=255)
     src.paste(patch, box[:2], m.filter(ImageFilter.GaussianBlur(4)))
-    src = src.crop((0, 6, src.width, src.height))                            # верхні рядки знімка — чорна смуга
+    return src.crop((0, 6, src.width, src.height))                            # верхні рядки знімка — чорна смуга
+
+
+def scene():
+    src = prepared_source()
     s = W / src.width * 1.20                      # камера ближче; ринг зміщено у праву третину
     big = src.resize((round(src.width * s), round(src.height * s)), Image.LANCZOS)
     a = np.asarray(big.crop((0, 0, W, H))).astype(np.float32) / 255.0
