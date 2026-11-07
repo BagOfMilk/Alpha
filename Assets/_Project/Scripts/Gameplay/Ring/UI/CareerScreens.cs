@@ -807,7 +807,7 @@ namespace Game.Gameplay.Ring.UI
             else
             {
                 string head = r.Winner == MatchWinner.Player ? "show.won" : r.Winner == MatchWinner.Rival ? "show.lost" : "show.draw";
-                p.Add(RingUi.Lbl(T.Get(head) + " — " + NpcName(r.OpponentId), 20f, r.Winner == MatchWinner.Player ? RingUi.Good : RingUi.Bad, true));
+                p.Add(RingUi.Lbl(T.Format(head + ".vs", NpcName(r.OpponentId)), 20f, r.Winner == MatchWinner.Player ? RingUi.Good : RingUi.Bad, true));
                 p.Add(RingUi.Lbl(RingLabels.EndKind(T, r.EndKind) + " · " + T.Format("c.result.rounds", r.Rounds) + " · " + T.Format("c.result.hype", r.Hype), 13f, RingUi.Dim));
                 if (r.TitleWon) p.Add(RingUi.Lbl(T.Get("show.belt_won"), 18f, RingUi.Gold, true));
                 p.Add(RingUi.Lbl(T.Format("c.result.fee", r.TotalFee, r.Fee, r.FeeWinBonus + r.FeeHypeBonus), 14f, RingUi.Gold));
