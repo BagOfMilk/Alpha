@@ -1,0 +1,262 @@
+{
+  "version": 1,
+  "grip_contract": "Початок координат предмета — центр кулака на ручці. +Z — уздовж ручки (у бік великого пальця). +Y — від хвату до основної маси предмета. X = Y × Z. Координати — у просторі Blender props.blend (Z вгору). Експортери конвертують осі: у FBX (forward −Z, up Y) і GLB (+Y вгору) вісь Blender Z стає Y, Y стає −Z. Пояс — виняток: прямий уздовж +Z, центр центральної пластини в початку, верх (пластини) дивиться в +Y.",
+  "frame_blender": "Z вгору, метри",
+  "gltf_mapping": "gltf(x, y, z) = blender(x, z, −y)",
+  "textures": "1024², PBR: *_albedo.png (sRGB), *_normal.png (OpenGL, Y+), *_orm.png (R — AO, G — шорсткість, B — метал)",
+  "props": {
+    "belt": {
+      "file": "belt.fbx",
+      "node": "Prop_belt",
+      "size_m": [
+        0.2,
+        0.0196,
+        1.25
+      ],
+      "bbox_min": [
+        -0.1,
+        -0.004,
+        -0.625
+      ],
+      "bbox_max": [
+        0.1,
+        0.0156,
+        0.625
+      ],
+      "triangles": 2448,
+      "textures": {
+        "albedo": "Textures/belt_albedo.png",
+        "normal": "Textures/belt_normal.png",
+        "orm": "Textures/belt_orm.png"
+      },
+      "grip": "Прямий уздовж +Z; початок — центр центральної пластини; верх ременя й пластин дивиться у +Y (внутрішній бік — −Y).",
+      "belt_straight": true,
+      "length_m": 1.25,
+      "strap_width_m": 0.085,
+      "strap_thickness_m": 0.008,
+      "strap_segments": 48,
+      "strap_y_range": [
+        -0.004,
+        0.004
+      ],
+      "plate_vertex_rule": "вершина належить пластині, якщо y > 0.0041",
+      "plates": [
+        {
+          "id": "center",
+          "z": 0.0,
+          "length_m": 0.24,
+          "width_m": 0.2
+        },
+        {
+          "id": "L1",
+          "z": -0.2,
+          "length_m": 0.1,
+          "width_m": 0.075
+        },
+        {
+          "id": "L2",
+          "z": -0.322,
+          "length_m": 0.1,
+          "width_m": 0.075
+        },
+        {
+          "id": "R1",
+          "z": 0.2,
+          "length_m": 0.1,
+          "width_m": 0.075
+        },
+        {
+          "id": "R2",
+          "z": 0.322,
+          "length_m": 0.1,
+          "width_m": 0.075
+        }
+      ]
+    },
+    "chair": {
+      "file": "chair.fbx",
+      "node": "Prop_chair",
+      "size_m": [
+        0.0499,
+        0.8394,
+        0.4432
+      ],
+      "bbox_min": [
+        -0.0315,
+        -0.0104,
+        -0.2216
+      ],
+      "bbox_max": [
+        0.0184,
+        0.829,
+        0.2216
+      ],
+      "triangles": 2004,
+      "textures": {
+        "albedo": "Textures/chair_albedo.png",
+        "normal": "Textures/chair_normal.png",
+        "orm": "Textures/chair_orm.png"
+      },
+      "grip": "Хват — центр верхньої поперечини спинки; поперечина вздовж Z, тіло стільця (складеного) вздовж +Y, до ніг.",
+      "folded": true,
+      "orientation": "висить вниз від хвату: ніжки на y≈0.84, передня площина піддонів дивиться в −X"
+    },
+    "kendo": {
+      "file": "kendo.fbx",
+      "node": "Prop_kendo",
+      "size_m": [
+        0.0904,
+        0.0904,
+        1.1205
+      ],
+      "bbox_min": [
+        -0.0452,
+        -0.0452,
+        -0.09
+      ],
+      "bbox_max": [
+        0.0452,
+        0.0452,
+        1.0305
+      ],
+      "triangles": 1370,
+      "textures": {
+        "albedo": "Textures/kendo_albedo.png",
+        "normal": "Textures/kendo_normal.png",
+        "orm": "Textures/kendo_orm.png"
+      },
+      "grip": "Хват — нижня частина шкіряного рукава (0.09 м від торця рукояті); +Z від рукояті до кінчика, шнур цуру — з боку +Y.",
+      "grip_z_from_butt_m": 0.09,
+      "length_m": 1.12,
+      "tsuru_side": "+Y",
+      "tip_description": "кінець саківи",
+      "tip_m": [
+        0,
+        0,
+        1.03
+      ]
+    },
+    "case": {
+      "file": "case.fbx",
+      "node": "Prop_case",
+      "size_m": [
+        0.132,
+        0.4192,
+        0.468
+      ],
+      "bbox_min": [
+        -0.0655,
+        -0.0167,
+        -0.234
+      ],
+      "bbox_max": [
+        0.0665,
+        0.4025,
+        0.234
+      ],
+      "triangles": 1464,
+      "textures": {
+        "albedo": "Textures/case_albedo.png",
+        "normal": "Textures/case_normal.png",
+        "orm": "Textures/case_orm.png"
+      },
+      "grip": "Хват — центр гумової накладки ручки; ручка горизонтальна вздовж Z, тіло кейса вниз уздовж +Y; передня сторона з замками дивиться в +X.",
+      "handle_length_m": 0.15,
+      "orientation": "замки — на стороні +X, петлі — на −X"
+    },
+    "mic": {
+      "file": "mic.fbx",
+      "node": "Prop_mic",
+      "size_m": [
+        0.0502,
+        0.0502,
+        0.1905
+      ],
+      "bbox_min": [
+        -0.0251,
+        -0.0251,
+        -0.065
+      ],
+      "bbox_max": [
+        0.0251,
+        0.0251,
+        0.1255
+      ],
+      "triangles": 488,
+      "textures": {
+        "grille_albedo": "Textures/mic_grille_diff.png",
+        "grille_normal": "Textures/mic_grille_nor.png"
+      },
+      "grip": "Хват — центр рукояті (Mic_Grip у mic.fbx); рукоять вздовж Z, решітка в бік +Z; кнопка — на стороні −Y.",
+      "source": "Assets/Art/Ring/Props/mic.fbx (LOD0 без кабелю)",
+      "length_m": 0.1905,
+      "tip_m": [
+        0.0,
+        0.0,
+        0.1255
+      ]
+    },
+    "spray_tank": {
+      "file": "spray_tank.fbx",
+      "node": "Prop_spray_tank",
+      "size_m": [
+        0.1609,
+        0.3109,
+        0.1199
+      ],
+      "bbox_min": [
+        -0.1,
+        -0.0124,
+        -0.06
+      ],
+      "bbox_max": [
+        0.0609,
+        0.2985,
+        0.06
+      ],
+      "triangles": 1420,
+      "textures": {
+        "albedo": "Textures/spray_tank_albedo.png",
+        "normal": "Textures/spray_tank_normal.png",
+        "orm": "Textures/spray_tank_orm.png"
+      },
+      "grip": "Хват — центр гумової накладки верхньої ручки; ручка вздовж Z, тіло бака вниз уздовж +Y.",
+      "body_diameter_m": 0.12,
+      "hose_attach": "штуцер із шлангом на стороні −X; манометр дивиться в +X"
+    },
+    "spray_gun": {
+      "file": "spray_gun.fbx",
+      "node": "Prop_spray_gun",
+      "size_m": [
+        0.04,
+        0.2194,
+        0.2149
+      ],
+      "bbox_min": [
+        -0.02,
+        -0.0539,
+        -0.1229
+      ],
+      "bbox_max": [
+        0.02,
+        0.1655,
+        0.092
+      ],
+      "triangles": 1436,
+      "textures": {
+        "albedo": "Textures/spray_gun_albedo.png",
+        "normal": "Textures/spray_gun_normal.png",
+        "orm": "Textures/spray_gun_orm.png"
+      },
+      "grip": "Хват — центр пістолетної рукояті; рукоять вздовж Z (вгору до ствола), сопло вперед уздовж +Y; курок — з боку +Y.",
+      "length_m": 0.2,
+      "hose_stub": "гумовий обрізок униз із низу рукояті (−Z)",
+      "nozzle_axis": "+Y",
+      "tip_m": [
+        0.0,
+        0.1655,
+        0.072
+      ]
+    }
+  }
+}

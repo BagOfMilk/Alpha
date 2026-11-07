@@ -1,0 +1,1692 @@
+{
+"masks": {
+"full": [
+"mixamorig:Hips",
+"mixamorig:Spine",
+"mixamorig:Spine1",
+"mixamorig:Spine2",
+"mixamorig:Neck",
+"mixamorig:Head",
+"mixamorig:LeftShoulder",
+"mixamorig:LeftArm",
+"mixamorig:LeftForeArm",
+"mixamorig:LeftHand",
+"mixamorig:LeftUpLeg",
+"mixamorig:LeftLeg",
+"mixamorig:LeftFoot",
+"mixamorig:LeftToeBase",
+"mixamorig:LeftHandThumb1",
+"mixamorig:LeftHandThumb2",
+"mixamorig:LeftHandThumb3",
+"mixamorig:LeftHandIndex1",
+"mixamorig:LeftHandIndex2",
+"mixamorig:LeftHandIndex3",
+"mixamorig:LeftHandMiddle1",
+"mixamorig:LeftHandMiddle2",
+"mixamorig:LeftHandMiddle3",
+"mixamorig:LeftHandRing1",
+"mixamorig:LeftHandRing2",
+"mixamorig:LeftHandRing3",
+"mixamorig:LeftHandPinky1",
+"mixamorig:LeftHandPinky2",
+"mixamorig:LeftHandPinky3",
+"mixamorig:RightShoulder",
+"mixamorig:RightArm",
+"mixamorig:RightForeArm",
+"mixamorig:RightHand",
+"mixamorig:RightUpLeg",
+"mixamorig:RightLeg",
+"mixamorig:RightFoot",
+"mixamorig:RightToeBase",
+"mixamorig:RightHandThumb1",
+"mixamorig:RightHandThumb2",
+"mixamorig:RightHandThumb3",
+"mixamorig:RightHandIndex1",
+"mixamorig:RightHandIndex2",
+"mixamorig:RightHandIndex3",
+"mixamorig:RightHandMiddle1",
+"mixamorig:RightHandMiddle2",
+"mixamorig:RightHandMiddle3",
+"mixamorig:RightHandRing1",
+"mixamorig:RightHandRing2",
+"mixamorig:RightHandRing3",
+"mixamorig:RightHandPinky1",
+"mixamorig:RightHandPinky2",
+"mixamorig:RightHandPinky3"
+],
+"upper_body": [
+"mixamorig:Spine",
+"mixamorig:Spine1",
+"mixamorig:Spine2",
+"mixamorig:Neck",
+"mixamorig:Head",
+"mixamorig:LeftShoulder",
+"mixamorig:LeftArm",
+"mixamorig:LeftForeArm",
+"mixamorig:LeftHand",
+"mixamorig:LeftHandThumb1",
+"mixamorig:LeftHandThumb2",
+"mixamorig:LeftHandThumb3",
+"mixamorig:LeftHandIndex1",
+"mixamorig:LeftHandIndex2",
+"mixamorig:LeftHandIndex3",
+"mixamorig:LeftHandMiddle1",
+"mixamorig:LeftHandMiddle2",
+"mixamorig:LeftHandMiddle3",
+"mixamorig:LeftHandRing1",
+"mixamorig:LeftHandRing2",
+"mixamorig:LeftHandRing3",
+"mixamorig:LeftHandPinky1",
+"mixamorig:LeftHandPinky2",
+"mixamorig:LeftHandPinky3",
+"mixamorig:RightShoulder",
+"mixamorig:RightArm",
+"mixamorig:RightForeArm",
+"mixamorig:RightHand",
+"mixamorig:RightHandThumb1",
+"mixamorig:RightHandThumb2",
+"mixamorig:RightHandThumb3",
+"mixamorig:RightHandIndex1",
+"mixamorig:RightHandIndex2",
+"mixamorig:RightHandIndex3",
+"mixamorig:RightHandMiddle1",
+"mixamorig:RightHandMiddle2",
+"mixamorig:RightHandMiddle3",
+"mixamorig:RightHandRing1",
+"mixamorig:RightHandRing2",
+"mixamorig:RightHandRing3",
+"mixamorig:RightHandPinky1",
+"mixamorig:RightHandPinky2",
+"mixamorig:RightHandPinky3"
+],
+"right_arm": [
+"mixamorig:RightShoulder",
+"mixamorig:RightArm",
+"mixamorig:RightForeArm",
+"mixamorig:RightHand",
+"mixamorig:RightHandThumb1",
+"mixamorig:RightHandThumb2",
+"mixamorig:RightHandThumb3",
+"mixamorig:RightHandIndex1",
+"mixamorig:RightHandIndex2",
+"mixamorig:RightHandIndex3",
+"mixamorig:RightHandMiddle1",
+"mixamorig:RightHandMiddle2",
+"mixamorig:RightHandMiddle3",
+"mixamorig:RightHandRing1",
+"mixamorig:RightHandRing2",
+"mixamorig:RightHandRing3",
+"mixamorig:RightHandPinky1",
+"mixamorig:RightHandPinky2",
+"mixamorig:RightHandPinky3"
+],
+"left_arm": [
+"mixamorig:LeftShoulder",
+"mixamorig:LeftArm",
+"mixamorig:LeftForeArm",
+"mixamorig:LeftHand",
+"mixamorig:LeftHandThumb1",
+"mixamorig:LeftHandThumb2",
+"mixamorig:LeftHandThumb3",
+"mixamorig:LeftHandIndex1",
+"mixamorig:LeftHandIndex2",
+"mixamorig:LeftHandIndex3",
+"mixamorig:LeftHandMiddle1",
+"mixamorig:LeftHandMiddle2",
+"mixamorig:LeftHandMiddle3",
+"mixamorig:LeftHandRing1",
+"mixamorig:LeftHandRing2",
+"mixamorig:LeftHandRing3",
+"mixamorig:LeftHandPinky1",
+"mixamorig:LeftHandPinky2",
+"mixamorig:LeftHandPinky3"
+],
+"arms": [
+"mixamorig:LeftShoulder",
+"mixamorig:LeftArm",
+"mixamorig:LeftForeArm",
+"mixamorig:LeftHand",
+"mixamorig:LeftHandThumb1",
+"mixamorig:LeftHandThumb2",
+"mixamorig:LeftHandThumb3",
+"mixamorig:LeftHandIndex1",
+"mixamorig:LeftHandIndex2",
+"mixamorig:LeftHandIndex3",
+"mixamorig:LeftHandMiddle1",
+"mixamorig:LeftHandMiddle2",
+"mixamorig:LeftHandMiddle3",
+"mixamorig:LeftHandRing1",
+"mixamorig:LeftHandRing2",
+"mixamorig:LeftHandRing3",
+"mixamorig:LeftHandPinky1",
+"mixamorig:LeftHandPinky2",
+"mixamorig:LeftHandPinky3",
+"mixamorig:RightShoulder",
+"mixamorig:RightArm",
+"mixamorig:RightForeArm",
+"mixamorig:RightHand",
+"mixamorig:RightHandThumb1",
+"mixamorig:RightHandThumb2",
+"mixamorig:RightHandThumb3",
+"mixamorig:RightHandIndex1",
+"mixamorig:RightHandIndex2",
+"mixamorig:RightHandIndex3",
+"mixamorig:RightHandMiddle1",
+"mixamorig:RightHandMiddle2",
+"mixamorig:RightHandMiddle3",
+"mixamorig:RightHandRing1",
+"mixamorig:RightHandRing2",
+"mixamorig:RightHandRing3",
+"mixamorig:RightHandPinky1",
+"mixamorig:RightHandPinky2",
+"mixamorig:RightHandPinky3"
+],
+"lower_body": [
+"mixamorig:Hips",
+"mixamorig:LeftUpLeg",
+"mixamorig:LeftLeg",
+"mixamorig:LeftFoot",
+"mixamorig:LeftToeBase",
+"mixamorig:RightUpLeg",
+"mixamorig:RightLeg",
+"mixamorig:RightFoot",
+"mixamorig:RightToeBase"
+]
+},
+"states": {
+"idle": {
+"clip": "U_Idle_Loop",
+"label": "Стоїть вільно"
+},
+"walk": {
+"clip": "U_Walk_Loop",
+"label": "Ходьба"
+},
+"jog": {
+"clip": "Run_Jog_Loop",
+"label": "Підтюпцем"
+},
+"run": {
+"clip": "Run_Loop",
+"label": "Біг по рингу"
+},
+"stance": {
+"clip": "Ring_Stance_Loop",
+"label": "Стійка захисту"
+},
+"stance_walk": {
+"clip": "Move_Walk_Fwd_Loop",
+"label": "Хода в стійці"
+},
+"crouch": {
+"clip": "U_Crouch_Idle_Loop",
+"label": "Присід"
+},
+"kneel": {
+"clip": "Kneel_Idle_Loop",
+"label": "На колінах"
+},
+"sit_mat": {
+"clip": "Sit_Mat_Idle_Loop",
+"label": "Сидить на маті"
+},
+"lying_back": {
+"clip": "Lying_Back_Loop",
+"label": "Лежить на спині"
+},
+"lying_front": {
+"clip": "Lying_Front_Loop",
+"label": "Лежить на животі"
+},
+"corner_lean": {
+"clip": "Move_Corner_Lean_Loop",
+"label": "Спирається в куті"
+},
+"top_rope": {
+"clip": "Top_Rope_Perch_Loop",
+"label": "На верхньому канаті"
+},
+"promo": {
+"clip": "promo_idle",
+"label": "Промо з мікрофоном"
+},
+"entrance_walk": {
+"clip": "Entrance_Walk_Loop",
+"label": "Вихід: хода"
+},
+"held_stand": {
+"clip": "Held_Stand_Loop",
+"label": "У захваті стоячи"
+},
+"held_sit": {
+"clip": "Held_Sit_Loop",
+"label": "У захваті сидячи"
+},
+"held_kneel": {
+"clip": "Held_Kneel_Loop",
+"label": "У захваті на колінах"
+}
+},
+"bout": [
+{
+"id": "idle",
+"label": "Idle",
+"me": "U_Idle_Loop",
+"partner": "Ring_Stance_Loop",
+"hold": 1.2
+},
+{
+"id": "walk",
+"label": "Ходьба",
+"me": "U_Walk_Loop",
+"partner": "Ring_Stance_Loop",
+"hold": 1.6,
+"approach": true
+},
+{
+"id": "to_stance",
+"label": "У стійку",
+"me": "Tr_Idle_To_Stance",
+"partner": "Ring_Stance_Loop"
+},
+{
+"id": "stance",
+"label": "Стійка",
+"me": "Ring_Stance_Loop",
+"partner": "Ring_Stance_Loop",
+"hold": 0.8
+},
+{
+"id": "strike",
+"label": "Удар",
+"pair": "Forearm_Strike",
+"me_role": "A"
+},
+{
+"id": "hit_back",
+"label": "Удар у відповідь",
+"pair": "Forearm_Strike",
+"me_role": "B"
+},
+{
+"id": "bump",
+"label": "Бамп",
+"me": "Bump_Back",
+"partner": "Ring_Stance_Loop"
+},
+{
+"id": "down",
+"label": "Лежить",
+"me": "Lying_Back_Loop",
+"partner": "Ring_Stance_Loop",
+"hold": 0.8
+},
+{
+"id": "getup",
+"label": "Встати",
+"me": "GetUp_Back",
+"partner": "Ring_Stance_Loop"
+},
+{
+"id": "reversal",
+"label": "Реверс",
+"pair": "Chain_Wristlock_Spin",
+"me_role": "A"
+},
+{
+"id": "whip",
+"label": "Кидок у канат",
+"pair": "Whip_Ropes",
+"me_role": "B"
+},
+{
+"id": "rebound",
+"label": "Від канатів",
+"me": "Rope_Back_L",
+"partner": "Ring_Stance_Loop"
+},
+{
+"id": "dodge",
+"label": "Ухил",
+"pair": "Center_Duck",
+"me_role": "A"
+},
+{
+"id": "rebound2",
+"label": "Знову від канатів",
+"me": "Rope_Duck_Return",
+"partner": "Ring_Stance_Loop"
+},
+{
+"id": "hit",
+"label": "Клоузлайн / плече / лікоть",
+"choice": [
+"Center_Clothesline",
+"Center_ShoulderBlock",
+"Center_RunningElbow"
+],
+"me_role": "A"
+},
+{
+"id": "pin",
+"label": "Удержання",
+"pair": "Cover",
+"me_role": "A"
+}
+],
+"mix_examples": [
+{
+"label": "Б'є на ходу",
+"base": "U_Walk_Loop",
+"upper": "U_Punch_Cross",
+"who": null
+},
+{
+"label": "Удар передпліччям на ходу в стійці",
+"base": "Move_Walk_Fwd_Loop",
+"upper": "Forearm_Strike_A",
+"who": null
+},
+{
+"label": "Менеджерка бризкає на місці",
+"base": "U_Idle_Loop",
+"upper": "spray_water",
+"who": "lina"
+},
+{
+"label": "Менеджерка бризкає на ходу",
+"base": "U_Walk_Loop",
+"upper": "spray_water",
+"who": "lina"
+},
+{
+"label": "Реакція на удар поверх ходьби",
+"base": "U_Walk_Loop",
+"additive": "U_Hit_Chest",
+"who": null
+},
+{
+"label": "Реакція на удар поверх стійки",
+"base": "Ring_Stance_Loop",
+"additive": "U_Hit_Head",
+"who": null
+},
+{
+"label": "Захват поверх стійки",
+"base": "Ring_Stance_Loop",
+"upper": "Layer_Held_Arms_Loop",
+"who": "komet"
+},
+{
+"label": "Ходьба з поясом",
+"base": "U_Walk_Loop",
+"upper": "belt_hold",
+"who": "stalevyi"
+},
+{
+"label": "Ходьба зі стільцем",
+"base": "U_Walk_Loop",
+"upper": "chair_idle_Loop",
+"who": "dzhura"
+},
+{
+"label": "Промо на ходу",
+"base": "U_Walk_Loop",
+"upper": "promo_idle",
+"who": "komet"
+}
+],
+"missing": [
+{
+"name": "Рагдол після фінішера",
+"note": "За брифом падіння після фінішера робить рагдол рушія, кліпа не буде. На сторінці — Bump_Back + Lying_Back_Loop як заміна."
+},
+{
+"name": "Фінішери за ґіміком",
+"note": "Є лише спільні удари (Center_Lariat_Heavy тощо). Підписні фінішери не зроблені сесією анімацій."
+},
+{
+"name": "Больовий із реальною підсадкою",
+"note": "Є Chain_Headlock* і власні пози захвату. Парних больових із здачею немає."
+},
+{
+"name": "Кидки й класика (суплекс, пауербомба, DDT, армдраг)",
+"note": "У плані сесії анімацій (ітерація 2, черга 3), кліпів ще немає. Є лише Bodyslam."
+},
+{
+"name": "Робота в куті (удари, удар із розбігу, підсадка)",
+"note": "У плані сесії анімацій (черга 2). Зараз є Whip_Corner_*, Move_Corner_* і чорновий Corner_Strike."
+},
+{
+"name": "Стрибки від канатів і другого каната",
+"note": "У плані сесії анімацій (черга 4). Зараз — чорнові Top_Dive_Crossbody і Top_Dive_Elbow."
+},
+{
+"name": "Парний удар стільцем / палицею / кейсом по суперникові",
+"note": "Є одинокі chair_swing, kendo_swing, case_swing; реакція — звичайний бамп."
+}
+],
+"edges": {
+"m": [
+{
+"from": "idle",
+"to": "walk",
+"via": null,
+"fade": 0.238,
+"metric": [
+0.017,
+0.31,
+61.824
+],
+"warn": false
+},
+{
+"from": "walk",
+"to": "idle",
+"via": null,
+"fade": 0.238,
+"metric": [
+0.017,
+0.31,
+61.824
+],
+"warn": false
+},
+{
+"from": "walk",
+"to": "jog",
+"via": null,
+"fade": 0.185,
+"metric": [
+0.003,
+0.138,
+54.807
+],
+"warn": false
+},
+{
+"from": "jog",
+"to": "walk",
+"via": null,
+"fade": 0.185,
+"metric": [
+0.003,
+0.138,
+54.807
+],
+"warn": false
+},
+{
+"from": "jog",
+"to": "run",
+"via": null,
+"fade": 0.113,
+"metric": [
+0.015,
+0.053,
+13.882
+],
+"warn": false
+},
+{
+"from": "run",
+"to": "jog",
+"via": null,
+"fade": 0.113,
+"metric": [
+0.015,
+0.053,
+13.882
+],
+"warn": false
+},
+{
+"from": "idle",
+"to": "stance",
+"via": "Tr_Idle_To_Stance",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.068
+],
+"metric_out": [
+0.0,
+0.0,
+0.053
+]
+},
+{
+"from": "stance",
+"to": "idle",
+"via": "Tr_Stance_To_Idle",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.053
+],
+"metric_out": [
+0.0,
+0.0,
+0.068
+]
+},
+{
+"from": "stance",
+"to": "stance_walk",
+"via": null,
+"fade": 0.113,
+"metric": [
+0.01,
+0.005,
+21.077
+],
+"warn": false
+},
+{
+"from": "stance_walk",
+"to": "stance",
+"via": null,
+"fade": 0.113,
+"metric": [
+0.01,
+0.005,
+21.077
+],
+"warn": false
+},
+{
+"from": "stance",
+"to": "crouch",
+"via": "Tr_Stance_To_Crouch",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.053
+],
+"metric_out": [
+0.0,
+0.0,
+0.052
+]
+},
+{
+"from": "crouch",
+"to": "stance",
+"via": "Tr_Crouch_To_Stance",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.052
+],
+"metric_out": [
+0.0,
+0.0,
+0.053
+]
+},
+{
+"from": "crouch",
+"to": "kneel",
+"via": "Tr_Crouch_To_Kneel",
+"fade_in": 0.07,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.0,
+0.052
+],
+"metric_out": [
+0.0,
+0.002,
+1.833
+]
+},
+{
+"from": "kneel",
+"to": "crouch",
+"via": "Tr_Kneel_To_Crouch",
+"fade_in": 0.073,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.002,
+1.833
+],
+"metric_out": [
+0.0,
+0.0,
+0.052
+]
+},
+{
+"from": "stance",
+"to": "kneel",
+"via": "Tr_Stance_To_Kneel",
+"fade_in": 0.07,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.0,
+0.053
+],
+"metric_out": [
+0.0,
+0.002,
+1.833
+]
+},
+{
+"from": "kneel",
+"to": "stance",
+"via": "Tr_Kneel_To_Stance",
+"fade_in": 0.073,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.002,
+1.833
+],
+"metric_out": [
+0.0,
+0.0,
+0.053
+]
+},
+{
+"from": "kneel",
+"to": "sit_mat",
+"via": "Tr_Kneel_To_Sit",
+"fade_in": 0.073,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.002,
+1.833
+],
+"metric_out": [
+0.0,
+0.002,
+1.833
+]
+},
+{
+"from": "sit_mat",
+"to": "kneel",
+"via": "Tr_Sit_To_Kneel",
+"fade_in": 0.073,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.002,
+1.833
+],
+"metric_out": [
+0.0,
+0.002,
+1.833
+]
+},
+{
+"from": "stance",
+"to": "run",
+"via": "Run_Start",
+"fade_in": 0.354,
+"fade_out": 0.116,
+"metric_in": [
+0.057,
+0.517,
+91.172
+],
+"metric_out": [
+0.027,
+0.02,
+13.125
+]
+},
+{
+"from": "run",
+"to": "stance",
+"via": "Run_Stop",
+"fade_in": 0.107,
+"fade_out": 0.172,
+"metric_in": [
+0.009,
+0.029,
+15.885
+],
+"metric_out": [
+0.011,
+0.0,
+58.154
+]
+},
+{
+"from": "stance",
+"to": "lying_back",
+"via": "Bump_Back",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.308
+],
+"metric_out": [
+0.0,
+0.0,
+0.04
+]
+},
+{
+"from": "lying_back",
+"to": "stance",
+"via": "GetUp_Back",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.036
+],
+"metric_out": [
+0.0,
+0.0,
+0.053
+]
+},
+{
+"from": "stance",
+"to": "lying_front",
+"via": "Bump_Front",
+"fade_in": 0.071,
+"fade_out": 0.07,
+"metric_in": [
+0.001,
+0.0,
+0.308
+],
+"metric_out": [
+0.0,
+0.0,
+0.032
+]
+},
+{
+"from": "lying_front",
+"to": "lying_back",
+"via": "Roll_Front_To_Back",
+"fade_in": 0.07,
+"fade_out": 0.071,
+"metric_in": [
+0.0,
+0.0,
+0.065
+],
+"metric_out": [
+0.001,
+0.0,
+0.047
+]
+},
+{
+"from": "stance",
+"to": "corner_lean",
+"via": "Move_Corner_Enter",
+"fade_in": 0.07,
+"fade_out": 0.071,
+"metric_in": [
+0.0,
+0.0,
+0.053
+],
+"metric_out": [
+0.0,
+0.0,
+0.918
+]
+},
+{
+"from": "corner_lean",
+"to": "stance",
+"via": "Move_Corner_Exit",
+"fade_in": 0.073,
+"fade_out": 0.07,
+"metric_in": [
+0.001,
+0.0,
+0.918
+],
+"metric_out": [
+0.0,
+0.0,
+0.053
+]
+},
+{
+"from": "stance",
+"to": "top_rope",
+"via": "Corner_Climb_Top",
+"fade_in": 0.258,
+"fade_out": 0.08,
+"metric_in": [
+0.0,
+0.334,
+79.66
+],
+"metric_out": [
+0.0,
+0.006,
+5.443
+]
+},
+{
+"from": "top_rope",
+"to": "lying_front",
+"via": "Top_Dive_Crossbody",
+"fade_in": 0.149,
+"fade_out": 0.071,
+"metric_in": [
+0.0,
+0.006,
+48.727
+],
+"metric_out": [
+0.0,
+0.002,
+0.329
+]
+},
+{
+"from": "idle",
+"to": "promo",
+"via": "Tr_Idle_To_Promo",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.068
+],
+"metric_out": [
+0.0,
+0.0,
+0.049
+]
+},
+{
+"from": "promo",
+"to": "idle",
+"via": "Tr_Promo_To_Idle",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.049
+],
+"metric_out": [
+0.0,
+0.0,
+0.068
+]
+},
+{
+"from": "idle",
+"to": "entrance_walk",
+"via": "Entrance_Curtain_Face_Point",
+"fade_in": 0.238,
+"fade_out": 0.218,
+"metric_in": [
+0.02,
+0.197,
+72.795
+],
+"metric_out": [
+0.054,
+0.243,
+38.027
+]
+},
+{
+"from": "entrance_walk",
+"to": "stance",
+"via": "Entrance_Through_Ropes",
+"fade_in": 0.235,
+"fade_out": 0.314,
+"metric_in": [
+0.054,
+0.254,
+47.685
+],
+"metric_out": [
+0.08,
+0.398,
+67.6
+]
+},
+{
+"from": "stance",
+"to": "held_stand",
+"via": "Tr_To_Held_stand",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.053
+],
+"metric_out": [
+0.0,
+0.0,
+0.049
+]
+},
+{
+"from": "held_stand",
+"to": "stance",
+"via": "Tr_From_Held_stand",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.049
+],
+"metric_out": [
+0.0,
+0.0,
+0.053
+]
+},
+{
+"from": "kneel",
+"to": "held_kneel",
+"via": "Tr_To_Held_kneel",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.042
+],
+"metric_out": [
+0.0,
+0.0,
+0.057
+]
+},
+{
+"from": "held_kneel",
+"to": "kneel",
+"via": "Tr_From_Held_kneel",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.057
+],
+"metric_out": [
+0.0,
+0.0,
+0.042
+]
+},
+{
+"from": "sit_mat",
+"to": "held_sit",
+"via": "Tr_To_Held_sit",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.037
+],
+"metric_out": [
+0.0,
+0.0,
+0.041
+]
+},
+{
+"from": "held_sit",
+"to": "sit_mat",
+"via": "Tr_From_Held_sit",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.041
+],
+"metric_out": [
+0.0,
+0.0,
+0.037
+]
+}
+],
+"f": [
+{
+"from": "idle",
+"to": "walk",
+"via": null,
+"fade": 0.229,
+"metric": [
+0.015,
+0.268,
+61.83
+],
+"warn": false
+},
+{
+"from": "walk",
+"to": "idle",
+"via": null,
+"fade": 0.229,
+"metric": [
+0.015,
+0.268,
+61.83
+],
+"warn": false
+},
+{
+"from": "walk",
+"to": "jog",
+"via": null,
+"fade": 0.148,
+"metric": [
+0.001,
+0.101,
+36.821
+],
+"warn": false
+},
+{
+"from": "jog",
+"to": "walk",
+"via": null,
+"fade": 0.148,
+"metric": [
+0.001,
+0.101,
+36.821
+],
+"warn": false
+},
+{
+"from": "jog",
+"to": "run",
+"via": null,
+"fade": 0.113,
+"metric": [
+0.027,
+0.036,
+9.478
+],
+"warn": false
+},
+{
+"from": "run",
+"to": "jog",
+"via": null,
+"fade": 0.113,
+"metric": [
+0.027,
+0.036,
+9.478
+],
+"warn": false
+},
+{
+"from": "idle",
+"to": "stance",
+"via": "Tr_Idle_To_Stance",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.066
+],
+"metric_out": [
+0.0,
+0.0,
+0.058
+]
+},
+{
+"from": "stance",
+"to": "idle",
+"via": "Tr_Stance_To_Idle",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.058
+],
+"metric_out": [
+0.0,
+0.0,
+0.066
+]
+},
+{
+"from": "stance",
+"to": "stance_walk",
+"via": null,
+"fade": 0.118,
+"metric": [
+0.011,
+0.004,
+24.123
+],
+"warn": false
+},
+{
+"from": "stance_walk",
+"to": "stance",
+"via": null,
+"fade": 0.118,
+"metric": [
+0.011,
+0.004,
+24.123
+],
+"warn": false
+},
+{
+"from": "stance",
+"to": "crouch",
+"via": "Tr_Stance_To_Crouch",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.058
+],
+"metric_out": [
+0.0,
+0.0,
+0.035
+]
+},
+{
+"from": "crouch",
+"to": "stance",
+"via": "Tr_Crouch_To_Stance",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.035
+],
+"metric_out": [
+0.0,
+0.0,
+0.058
+]
+},
+{
+"from": "crouch",
+"to": "kneel",
+"via": "Tr_Crouch_To_Kneel",
+"fade_in": 0.07,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.0,
+0.035
+],
+"metric_out": [
+0.0,
+0.002,
+1.834
+]
+},
+{
+"from": "kneel",
+"to": "crouch",
+"via": "Tr_Kneel_To_Crouch",
+"fade_in": 0.073,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.002,
+1.834
+],
+"metric_out": [
+0.0,
+0.0,
+0.035
+]
+},
+{
+"from": "stance",
+"to": "kneel",
+"via": "Tr_Stance_To_Kneel",
+"fade_in": 0.07,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.0,
+0.058
+],
+"metric_out": [
+0.0,
+0.002,
+1.834
+]
+},
+{
+"from": "kneel",
+"to": "stance",
+"via": "Tr_Kneel_To_Stance",
+"fade_in": 0.073,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.002,
+1.834
+],
+"metric_out": [
+0.0,
+0.0,
+0.058
+]
+},
+{
+"from": "kneel",
+"to": "sit_mat",
+"via": "Tr_Kneel_To_Sit",
+"fade_in": 0.073,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.002,
+1.834
+],
+"metric_out": [
+0.0,
+0.002,
+1.834
+]
+},
+{
+"from": "sit_mat",
+"to": "kneel",
+"via": "Tr_Sit_To_Kneel",
+"fade_in": 0.073,
+"fade_out": 0.073,
+"metric_in": [
+0.0,
+0.002,
+1.834
+],
+"metric_out": [
+0.0,
+0.002,
+1.834
+]
+},
+{
+"from": "stance",
+"to": "run",
+"via": "Run_Start",
+"fade_in": 0.343,
+"fade_out": 0.128,
+"metric_in": [
+0.05,
+0.506,
+88.708
+],
+"metric_out": [
+0.011,
+0.063,
+23.676
+]
+},
+{
+"from": "run",
+"to": "stance",
+"via": "Run_Stop",
+"fade_in": 0.136,
+"fade_out": 0.189,
+"metric_in": [
+0.0,
+0.071,
+33.035
+],
+"metric_out": [
+0.007,
+0.076,
+62.669
+]
+},
+{
+"from": "stance",
+"to": "lying_back",
+"via": "Bump_Back",
+"fade_in": 0.074,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+2.538
+],
+"metric_out": [
+0.0,
+0.0,
+0.059
+]
+},
+{
+"from": "lying_back",
+"to": "stance",
+"via": "GetUp_Back",
+"fade_in": 0.072,
+"fade_out": 0.07,
+"metric_in": [
+0.002,
+0.0,
+0.059
+],
+"metric_out": [
+0.0,
+0.0,
+0.058
+]
+},
+{
+"from": "stance",
+"to": "lying_front",
+"via": "Bump_Front",
+"fade_in": 0.074,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+2.538
+],
+"metric_out": [
+0.0,
+0.0,
+0.055
+]
+},
+{
+"from": "lying_front",
+"to": "lying_back",
+"via": "Roll_Front_To_Back",
+"fade_in": 0.07,
+"fade_out": 0.071,
+"metric_in": [
+0.0,
+0.0,
+0.103
+],
+"metric_out": [
+0.001,
+0.0,
+0.059
+]
+},
+{
+"from": "stance",
+"to": "corner_lean",
+"via": "Move_Corner_Enter",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.058
+],
+"metric_out": [
+0.0,
+0.0,
+0.305
+]
+},
+{
+"from": "corner_lean",
+"to": "stance",
+"via": "Move_Corner_Exit",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.305
+],
+"metric_out": [
+0.0,
+0.0,
+0.044
+]
+},
+{
+"from": "stance",
+"to": "top_rope",
+"via": "Corner_Climb_Top",
+"fade_in": 0.235,
+"fade_out": 0.078,
+"metric_in": [
+0.0,
+0.3,
+69.499
+],
+"metric_out": [
+0.0,
+0.007,
+4.492
+]
+},
+{
+"from": "top_rope",
+"to": "lying_front",
+"via": "Top_Dive_Crossbody",
+"fade_in": 0.14,
+"fade_out": 0.071,
+"metric_in": [
+0.0,
+0.007,
+42.668
+],
+"metric_out": [
+0.0,
+0.001,
+0.328
+]
+},
+{
+"from": "idle",
+"to": "promo",
+"via": "Tr_Idle_To_Promo",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.066
+],
+"metric_out": [
+0.0,
+0.0,
+0.044
+]
+},
+{
+"from": "promo",
+"to": "idle",
+"via": "Tr_Promo_To_Idle",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.044
+],
+"metric_out": [
+0.0,
+0.0,
+0.066
+]
+},
+{
+"from": "idle",
+"to": "entrance_walk",
+"via": "Entrance_Curtain_Face_Point",
+"fade_in": 0.221,
+"fade_out": 0.214,
+"metric_in": [
+0.017,
+0.18,
+65.902
+],
+"metric_out": [
+0.054,
+0.209,
+39.307
+]
+},
+{
+"from": "entrance_walk",
+"to": "stance",
+"via": "Entrance_Through_Ropes",
+"fade_in": 0.229,
+"fade_out": 0.299,
+"metric_in": [
+0.051,
+0.22,
+49.316
+],
+"metric_out": [
+0.084,
+0.37,
+59.18
+]
+},
+{
+"from": "stance",
+"to": "held_stand",
+"via": "Tr_To_Held_stand",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.058
+],
+"metric_out": [
+0.0,
+0.0,
+0.058
+]
+},
+{
+"from": "held_stand",
+"to": "stance",
+"via": "Tr_From_Held_stand",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.058
+],
+"metric_out": [
+0.0,
+0.0,
+0.058
+]
+},
+{
+"from": "kneel",
+"to": "held_kneel",
+"via": "Tr_To_Held_kneel",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.055
+],
+"metric_out": [
+0.0,
+0.0,
+0.055
+]
+},
+{
+"from": "held_kneel",
+"to": "kneel",
+"via": "Tr_From_Held_kneel",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.055
+],
+"metric_out": [
+0.0,
+0.0,
+0.055
+]
+},
+{
+"from": "sit_mat",
+"to": "held_sit",
+"via": "Tr_To_Held_sit",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.064
+],
+"metric_out": [
+0.0,
+0.0,
+0.053
+]
+},
+{
+"from": "held_sit",
+"to": "sit_mat",
+"via": "Tr_From_Held_sit",
+"fade_in": 0.07,
+"fade_out": 0.07,
+"metric_in": [
+0.0,
+0.0,
+0.053
+],
+"metric_out": [
+0.0,
+0.0,
+0.064
+]
+}
+]
+},
+"ring": {
+"size": 6.096,
+"cell": 1.5,
+"note": "Ринг 6×6 м — ігровий ring_canvas_20 (20 футів): venue_arena.fbx. Сторінка бере ринг із venue_*.fbx (ring_web.py)."
+}
+}
