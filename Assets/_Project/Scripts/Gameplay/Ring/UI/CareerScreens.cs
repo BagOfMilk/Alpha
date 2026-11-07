@@ -135,9 +135,16 @@ namespace Game.Gameplay.Ring.UI
             chips.Add(Chip(T.Format("c.popularity", v.Popularity, CareerRules.MaxPopularity), RingUi.Face));
             chips.Add(Chip(T.Format("c.trust", v.Trust, CareerRules.MaxTrust), RingUi.Text));
             chips.Add(Chip(T.Format("c.devpoints", v.DevPoints), RingUi.Good));
+            chips.style.flexShrink = 0f;   // У2 арт-директора: стиснута колонка клала травми на чипи
             col.Add(chips);
             string inj = InjuryText(v.Injuries);
-            if (inj != T.Get("c.injury.none")) col.Add(RingUi.Lbl(inj, 12f, RingUi.Bad));
+            if (inj != T.Get("c.injury.none"))
+            {
+                var il = RingUi.Lbl(inj, 12f, RingUi.Bad);
+                il.style.flexShrink = 0f;
+                il.style.whiteSpace = WhiteSpace.Normal;
+                col.Add(il);
+            }
             return col;
         }
 
@@ -274,8 +281,10 @@ namespace Game.Gameplay.Ring.UI
             var b = Small(title, buy, true, accent);
             b.style.marginBottom = 0f;
             box.Add(b);
-            var l = RingUi.Lbl(why, 11f, RingUi.Dim);
+            var l = RingUi.Lbl(why, BrandTokens.TypeMinInfo, RingUi.Dim);
             l.style.whiteSpace = WhiteSpace.Normal;
+            l.style.flexShrink = 0f;   // рядок росте разом із підказкою, а не підлазить під наступну кнопку
+            box.style.flexShrink = 0f;
             l.style.marginLeft = 6f;
             box.Add(l);
             return box;
@@ -504,7 +513,7 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class WeekScreenView : CareerScreenView
     {
-        private bool _dev = ExpandForShots;
+        private bool _dev;   // акордеон з «Витратами»: в огляді розгорнуто «Витрати», «Розвиток» видно на підсумку шоу
 
         public WeekScreenView(RingUiContext ctx) : base(ctx) { }
 
@@ -551,19 +560,27 @@ namespace Game.Gameplay.Ring.UI
                 acts.Add(grid);
             }
             var last = Host.LastWeekResult;
-            if (last != null) acts.Add(RingUi.Lbl(ResultText(last), 12f, last.Ok ? RingUi.Text : RingUi.Bad));
+            if (last != null)
+            {
+                // Відгук дії — окремим рядком під сіткою, не поверх плиток (У2 арт-директора, 06.11.2026).
+                var fb = RingUi.Lbl(ResultText(last), 12f, last.Ok ? RingUi.Text : RingUi.Bad);
+                fb.style.flexShrink = 0f;
+                fb.style.whiteSpace = WhiteSpace.Normal;
+                fb.style.marginTop = 4f;
+                acts.Add(fb);
+            }
             acts.Add(MakeHint());
             col.Add(acts);
 
             var card = CardPanel(w.Card, w.IsBigShowWeek);
             card.style.marginTop = 6f;
             col.Add(card);
-            var dev = Small((_dev ? "▾ " : "▸ ") + T.Get("dev.title") + " · " + w.DevPoints, () => { _dev = !_dev; Refresh(); }, true, RingUi.Good);
+            var dev = Small((_dev ? "▾ " : "▸ ") + T.Get("dev.title") + " · " + w.DevPoints, () => { _dev = !_dev; if (_dev) _shop = false; Refresh(); }, true, RingUi.Good);
             dev.style.marginTop = 6f;
             col.Add(dev);
             if (_dev) col.Add(DevelopmentPanel(Refresh));
             // Витрати (06.11.2026, пункт 3 плану лупу): гроші проти часу й травми; покупки не займають дій тижня.
-            var shop = Small((_shop ? "▾ " : "▸ ") + T.Format("c.shop.title", ShopAvailable()), () => { _shop = !_shop; Refresh(); }, true, RingUi.Dim);
+            var shop = Small((_shop ? "▾ " : "▸ ") + T.Format("c.shop.title", ShopAvailable()), () => { _shop = !_shop; if (_shop) _dev = false; Refresh(); }, true, RingUi.Dim);
             shop.style.marginTop = 4f;
             col.Add(shop);
             if (_shop) col.Add(ShopPanel());
