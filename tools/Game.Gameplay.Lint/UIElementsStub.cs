@@ -373,6 +373,7 @@ namespace UnityEngine.UIElements
         public UnityEngine.Rect layout { get { return default(UnityEngine.Rect); } }
         public VisualElement parent { get { return null; } }
         public int childCount { get { return 0; } }
+        public VisualElement this[int index] { get { return null; } }
         public void Remove(VisualElement element) { }
         public void RemoveFromHierarchy() { }
         public void BringToFront() { }

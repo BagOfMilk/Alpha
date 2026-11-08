@@ -152,12 +152,19 @@ namespace Game.Gameplay.Ring
                 System.IO.Directory.CreateDirectory(_shotsDir);
                 // Огляд проходить сезон: кліпи й паузи ШІ втричі швидше (кадри ті самі, лише менше чекання).
                 Time.timeScale = 3f;
+                // -ring-shot-speed 1 — справжня швидкість (огляд відчуття матчу й анімацій, а не лише екранів).
+                float spd;
+                string sp = ReadArg("-ring-shot-speed");
+                if (sp != null && float.TryParse(sp, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out spd) && spd > 0f)
+                    Time.timeScale = spd;
                 int lim;
                 string ls = ReadArg("-ring-shot-limit");
                 if (ls != null && int.TryParse(ls, out lim) && lim > 0) ShotLimit = lim;
                 // Скільки сезонів проходить огляд (за замовчуванням 1; уся ворожнеча з Молотом — 3).
                 string ss = ReadArg("-ring-shot-seasons");
                 if (ss != null && int.TryParse(ss, out lim) && lim > 0) _shotSeasons = lim;
+                // -ring-shot-grow: перед діями тижня бот витрачає очки розвитку, як CareerBot тестів балансу (прийом → атрибут → перк).
+                _shotGrow = Array.IndexOf(Environment.GetCommandLineArgs(), "-ring-shot-grow") >= 0;
             }
             // Меню (ТЗ B08): налаштування з диска, ввід, шари; далі екран завантаження веде справжні кроки старту (Boot).
             InitMenus();
@@ -740,12 +747,14 @@ namespace Game.Gameplay.Ring
                     return;
                 }
                 bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
+                if (week && _shotGrow && BotGrow()) { _view.Refresh(); return; }
                 if (week && (_career.State.ActionsLeft > 0 || _career.State.PromoChoicePending)) _view.OnDigit(1 + _shotDigit++ % 6);
                 else if (_shotPressDigit) _view.OnDigit(1 + _shotDigit++ % 5);
                 else _view.OnConfirm();
                 _shotPressDigit = !_shotPressDigit;
                 return;
             }
+            DumpScreenText(_shotIndex);
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_{1}.png", _shotIndex++, Label())));
             bool done = !_onTitle && _career.Stage == CareerStage.SeasonEnd && _career.State.Season >= _shotSeasons && _seasonShots++ >= 3;
             if (done || _shotIndex >= ShotLimit)
@@ -754,6 +763,48 @@ namespace Game.Gameplay.Ring
                 _shotsDir = null;
                 _quitAt = Time.unscaledTime + 1f;
             }
+        }
+
+        private string _lastDump;
+
+        /// <summary>
+        /// Текст екрана поруч із кадром (<c>screens.txt</c> у теці огляду): що саме гравцеві запропоновано й показано — щоб
+        /// розбір проходу не вгадував вибори й числа з картинок. Лише нові екрани (той самий текст не повторюється).
+        /// </summary>
+        private void DumpScreenText(int index)
+        {
+            var sb = new System.Text.StringBuilder();
+            CollectText(_root, sb);
+            string s = sb.ToString();
+            if (s == _lastDump) return;
+            _lastDump = s;
+            System.IO.File.AppendAllText(System.IO.Path.Combine(_shotsDir, "screens.txt"),
+                string.Format("=== {0:000} {1} · t={3:0.0}с ===\n{2}\n", index, Label(), s, Time.realtimeSinceStartup));
+        }
+
+        private static void CollectText(VisualElement e, System.Text.StringBuilder sb)
+        {
+            if (e == null || e.style.display.value == DisplayStyle.None) return;
+            var t = e as TextElement;
+            if (t != null && !string.IsNullOrEmpty(t.text)) sb.Append(t.text.Replace("\n", " / ")).Append('\n');
+            for (int i = 0; i < e.childCount; i++) CollectText(e[i], sb);
+        }
+
+        private bool _shotGrow;
+
+        /// <summary>Одна покупка розвитку за крок (видно в кадрі): перший доступний прийом, атрибут, перк — порядок CareerBot.</summary>
+        private bool BotGrow()
+        {
+            foreach (var m in _career.Content.Moves.All) if (_career.LearnMove(m.Id)) { ShotNote("розвиток: прийом " + m.Id); return true; }
+            foreach (RingAttr a in new[] { RingAttr.Strength, RingAttr.Agility, RingAttr.Technique, RingAttr.Stamina, RingAttr.Charisma })
+                if (_career.BuyAttr(a)) { ShotNote("розвиток: атрибут " + a); return true; }
+            foreach (var pk in PerkCatalog.All) if (_career.BuyPerk(pk.Id)) { ShotNote("розвиток: перк " + pk.Id); return true; }
+            return false;
+        }
+
+        private void ShotNote(string line)
+        {
+            System.IO.File.AppendAllText(System.IO.Path.Combine(_shotsDir, "screens.txt"), "--- бот: " + line + "\n");
         }
 
         private int _seasonShots;
