@@ -48,7 +48,9 @@
 `BuildPlayer` («Відео огляд»).
 
 **Передача:** правки переробки бою в `CareerContent.cs`, `CareerSession.cs`, `GimmickTests.cs`, `CareerKit.cs`
-(гілка `claude/ring-combat-overhaul`) після злиття переходять у зону Кар'єри.
+(гілка `claude/ring-combat-overhaul`) після злиття переходять у зону Кар'єри. У `b478385` до них додалось
+`CareerSession.UniversalActions`: дії «Вийти з рингу», «Повернутися в ринг», «Стілець або стіл» (бій за рингом, §4.4).
+Нові тести бою (`MatchOutsideTests`) — зона «ПМ + Бій» за шаблоном `Match*`.
 
 ## Етап 0 — «Одна версія»
 
