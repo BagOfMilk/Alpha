@@ -37,7 +37,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private readonly Dictionary<RingActor, Track> _tracks = new Dictionary<RingActor, Track>();
         private readonly List<KeyValuePair<float, string>> _worst = new List<KeyValuePair<float, string>>();
-        public int Frames, Teleports, TeleportsUnderCut, RopeCrossings, FootSlides;
+        public int Frames, Teleports, TeleportsUnderCut, RopeCrossings, RopeCrossingsByDesign, FootSlides;
         public float WorstSlide;
         private int _logged;
 
@@ -48,7 +48,7 @@ namespace Game.Gameplay.Ring.Stage
         {
             _tracks.Clear();
             _worst.Clear();
-            Frames = Teleports = TeleportsUnderCut = RopeCrossings = FootSlides = 0;
+            Frames = Teleports = TeleportsUnderCut = RopeCrossings = RopeCrossingsByDesign = FootSlides = 0;
             WorstSlide = 0f;
             _logged = 0;
         }
@@ -83,8 +83,14 @@ namespace Game.Gameplay.Ring.Stage
                     bool wasIn = Inside(t.Hip), isIn = Inside(hip);
                     if (wasIn != isIn && hy < TopRope)
                     {
-                        RopeCrossings++;
-                        Note(0f, a, (isIn ? "у ринг" : "з рингу") + " крізь канати, таз " + F(hy) + " м над матом", true);
+                        // Вихід борця: сходи → між канатами, перемах, закочування — крізь канати за задумом (ENTRANCE_PROFILE.md).
+                        var cc = a.CurrentClip;
+                        if (cc != null && cc.name.StartsWith("Entrance_", System.StringComparison.Ordinal)) RopeCrossingsByDesign++;
+                        else
+                        {
+                            RopeCrossings++;
+                            Note(0f, a, (isIn ? "у ринг" : "з рингу") + " крізь канати, таз " + F(hy) + " м над матом", true);
+                        }
                     }
                 }
                 t.Hip = hip;
@@ -145,9 +151,9 @@ namespace Game.Gameplay.Ring.Stage
         {
             var sb = new StringBuilder();
             sb.AppendFormat(CultureInfo.InvariantCulture,
-                "[Ринг] фаз-тест: {0} кадрів; телепорти на очах {1} (під склейкою {2}); перетини канатів нижче верхнього {3}; " +
-                "ковзання стоп понад {4:0.00} м — {5} (найгірше {6:0.00} м)",
-                Frames, Teleports, TeleportsUnderCut, RopeCrossings, SlideLimit, FootSlides, WorstSlide);
+                "[Ринг] фаз-тест: {0} кадрів; телепорти на очах {1} (під склейкою {2}); перетини канатів нижче верхнього {3} " +
+                "(+ за задумом виходу {7}); ковзання стоп понад {4:0.00} м — {5} (найгірше {6:0.00} м)",
+                Frames, Teleports, TeleportsUnderCut, RopeCrossings, SlideLimit, FootSlides, WorstSlide, RopeCrossingsByDesign);
             _worst.Sort((x, y) => y.Key.CompareTo(x.Key));
             for (int i = 0; i < _worst.Count && i < 12; i++) sb.Append("\n    ").Append(_worst[i].Value);
             return sb.ToString();

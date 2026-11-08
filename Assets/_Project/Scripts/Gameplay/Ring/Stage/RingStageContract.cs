@@ -34,10 +34,11 @@ namespace Game.Gameplay.Ring.Stage
         void BeginIntro(string title, string subtitle);
 
         /// <summary>
-        /// Вихід борця (гравця чи суперника) перед матчем: титантрон з іменем, хода від завіси, поза в куті.
-        /// <paramref name="rgb"/> — колір борця (0xRRGGBB). Поки грає — IsBusy.
+        /// Вихід борця (гравця чи суперника) перед матчем: екран виходу за рецептом (ТЗ B07 — ґімік, роль, щабель, ім'я) і
+        /// персональні біти за профілем (docs/ring/ENTRANCE_PROFILE.md — завіса, хода, вхід у ринг, поза, шоу).
+        /// <paramref name="costumeRgb"/> — колір костюма (0xRRGGBB, перша голова світла). Поки грає — IsBusy.
         /// </summary>
-        void BeginEntrance(bool player, string title, string subtitle, int rgb);
+        void BeginEntrance(bool player, EntranceRecipe recipe, EntranceProfile profile, int costumeRgb);
 
         /// <summary>Пропустити вступ чи вихід (будь-яка клавіша).</summary>
         void SkipShow();

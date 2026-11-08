@@ -1364,20 +1364,26 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         private RingCine.Shot VictoryFrame(Vector3 pW, Vector3 pR, float hW, float hR, Vector3? lie, float yawW, bool inside)
         {
+            // Голови переможця й рефері — одразу під зоною слова «ПЕРЕМОГА» (24 %), піднята рука може зайти вище (до 8 %):
+            // пара більша, порожньої зали над нею менше (зауваження «Відео огляду» до сезону s11: пара в нижній третині).
             var pts = new List<Vector3>
             {
                 pW, pW + Vector3.up * (hW + 0.45f),                          // стопи й піднята рука
                 pR, pR + Vector3.up * hR,
+                pW + Vector3.up * hW,                                        // голова переможця
             };
-            if (lie.HasValue) pts.Add(lie.Value + Vector3.up * 0.15f);
+            var tops = new List<float> { 0.27f, 0.08f, 0.27f, 0.24f, 0.24f };
+            if (lie.HasValue) { pts.Add(lie.Value + Vector3.up * 0.15f); tops.Add(0.27f); }
             float yawCam = yawW + 180f;
-            float edge = RingStage3D.RingHalf - 0.22f;
+            // Камера в рингу — не ближче 0,5 м до канатів: біля самих канатів верхній канат різав кадр навскіс на передньому
+            // плані (той самий огляд, кадри 158–161).
+            float edge = RingStage3D.RingHalf - 0.5f;
             var fovs = new[] { 44f, 50f, 56f, 62f, 68f };
             if (inside)
                 return RingCine.FrameAny(pts, yawCam, -8f, fovs, _s.CamAspect, 0.27f, 0.95f, 0.06f,
-                    p => Mathf.Abs(p.x) <= edge && Mathf.Abs(p.z) <= edge && p.y >= RingStage3D.MatY + 0.3f, 1.0f, 5f);
+                    p => Mathf.Abs(p.x) <= edge && Mathf.Abs(p.z) <= edge && p.y >= RingStage3D.MatY + 0.3f, 1.0f, 5f, tops);
             return RingCine.FrameAny(pts, yawCam, -4f, fovs, _s.CamAspect, 0.25f, 0.97f, 0.04f,
-                p => p.y >= RingStage3D.MatY + 0.3f && Mathf.Abs(p.x) < 7f && Mathf.Abs(p.z) < 7f, 1.0f, 9f);
+                p => p.y >= RingStage3D.MatY + 0.3f && Mathf.Abs(p.x) < 7f && Mathf.Abs(p.z) < 7f, 1.0f, 9f, tops);
         }
 
         /// <summary>Скільки рингу від точки до канатів у напрямку <paramref name="d"/>; бік залу (−Z) — з перевагою 0,3 м.</summary>
@@ -1576,8 +1582,31 @@ namespace Game.Gameplay.Ring.Stage
             return g;
         }
 
+        private readonly Dictionary<RingActor, AnimationClip> _idleOverride = new Dictionary<RingActor, AnimationClip>();
+
+        /// <summary>
+        /// Хода поза матчем (вихід борця, ENTRANCE_PROFILE.md біт 4: до центру, до кута, до канатів) — та сама, що в матчі
+        /// (кроки, розвороти кліпами, кермо дугою), з заданою стійкою наприкінці: стан минулого матчу (лежить, кут) не діє.
+        /// </summary>
+        public IEnumerator WalkFree(RingActor a, Vector3 pos, float yaw, AnimationClip idle)
+        {
+            if (a == null || idle == null) yield break;
+            _idleOverride[a] = idle;
+            try { yield return Walk(new[] { new SlideItem(a, pos, yaw) }); }
+            finally { _idleOverride.Remove(a); }
+        }
+
+        /// <summary>Зупинити ходу поза матчем (вихід пропущено).</summary>
+        public void StopWalkFree(RingActor a)
+        {
+            StopWalk(a);
+            _idleOverride.Remove(a);
+        }
+
         private AnimationClip IdleOf(RingActor a)
         {
+            AnimationClip over;
+            if (a != null && _idleOverride.TryGetValue(a, out over)) return over;
             if (a == _s.Referee) return _s.Clip("Ref_Idle_Loop");
             var side = a == _s.Actor(MatchSide.Player) ? MatchSide.Player : MatchSide.Rival;
             string n = IdleName(side);

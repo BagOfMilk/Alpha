@@ -26,6 +26,7 @@ namespace Game.Gameplay.Ring.Stage
             Application.runInBackground = true;
             yield return new WaitForSeconds(1.0f);
             if (RingStage3D.ReadArg("-ring-locotest") != null) { yield return LocoTest(stage, folder); yield break; }
+            if (RingStage3D.ReadArg("-ring-entrances") != null) { yield return Entrances(stage, folder); yield break; }
 
             // ---- промо ----
             stage.BeginPromo();
@@ -169,6 +170,178 @@ namespace Game.Gameplay.Ring.Stage
             yield return new WaitForSeconds(wait);
             Capture(folder, tag);
             yield return new WaitForSeconds(0.2f);
+        }
+
+        // ============================ огляд виходів ============================
+
+        // Тег екрана в огляді — ті самі слова, що в ui_uk.json (gimmick.*, path.*); у грі — ключами перекладу.
+        private static readonly string[] UaGimmick = { "Монстр", "Летун", "Технік", "Шоумен" };
+        private static readonly string[] UaPath = { "Герой", "Лиходій", "Бунтар" };
+
+        private sealed class EntranceCase
+        {
+            public string Id, Body, Name, Tier;
+            public Game.Core.Ring.Career.Gimmick Gimmick;
+            public RingPath Path;
+            public int Str, Agi, Tech, Cha, Pop, Heat, Rgb;
+            public bool Injured, Champion, Main, Player;
+        }
+
+        /// <summary>
+        /// Огляд виходів (<c>-ring-demo &lt;тека&gt; -ring-entrances 1</c>; пакет «Відео огляд» 08.11.2026, п. 4; приймання У2 ТЗ
+        /// B07). А — екран: три рецепти × три щаблі (монстр/лиходій · літун/герой · шоумен/бунтар; спортзал · клуб · палац),
+        /// текстура 1024×512 у PNG на мітях «удар −0,2 · 0 · +0,3 · +2 с»; гравцеві — золото; «Менше руху». Б — повні виходи
+        /// в 3D: кожен біт профілю (завіса, хода й зупинка, вхід — канати / перемах / закочування, поза — центр / кут / канати /
+        /// на місці, пояс) з кадром щосекунди, на мітях удару й на початку кожного біта; наостанок — повтор (скорочений).
+        /// </summary>
+        private static IEnumerator Entrances(RingStage3D stage, string folder)
+        {
+            var show = stage.Show;
+            LogBrightSurfaces();
+            // ---- А. екран виходу ----
+            string[][] recipes =
+            {
+                new[] { "monster", "villain", "Тарас «Молот» Гребінь", "Монстр · Лиходій" },
+                new[] { "flyer", "hero", "Амара «Комета» Окафор", "Летун · Герой" },
+                new[] { "showman", "rebel", "Ґанна «Їжачиха» Євтушенко-Підгірна", "Шоумен · Бунтар" },
+            };
+            foreach (var tier in new[] { "gym", "hall", "arena" })
+                foreach (var r in recipes)
+                    yield return ScreenMoments(show, folder, new EntranceRecipe { Gimmick = r[0], Role = r[1], Tier = tier, Name = r[2], TagText = r[3] }, "");
+            // Гравцеві — золото (B07: $accent і $flash гравця); «Менше руху» — без тремтіння, спалаху й мерехтіння.
+            yield return ScreenMoments(show, folder, new EntranceRecipe { Gimmick = "showman", Role = "rebel", Tier = "arena", Name = "Ґанна «Їжачиха» Євтушенко-Підгірна", TagText = "Шоумен · Бунтар", Player = true }, "_player");
+            UI.Menus.RingAccessibility.ReduceMotion = true;
+            yield return ScreenMoments(show, folder, new EntranceRecipe { Gimmick = "monster", Role = "villain", Tier = "arena", Name = "Тарас «Молот» Гребінь", TagText = "Монстр · Лиходій" }, "_reduce");
+            UI.Menus.RingAccessibility.ReduceMotion = false;
+            show.ScreenOff();
+
+            // ---- Б. повні виходи ----
+            var M = Game.Core.Ring.Career.Gimmick.Monster; var F = Game.Core.Ring.Career.Gimmick.Flyer;
+            var T = Game.Core.Ring.Career.Gimmick.Technician; var S = Game.Core.Ring.Career.Gimmick.Showman;
+            var cases = new[]
+            {
+                new EntranceCase { Id = "a_monster_heel", Body = "body_m_nordic", Name = "Тарас «Молот» Гребінь", Gimmick = M, Path = RingPath.Heel, Str = 3, Cha = 2, Heat = 3, Main = true, Tier = "arena", Rgb = 0x5A1A14 },
+                new EntranceCase { Id = "b_flyer_face_f", Body = "body_f_west_african", Name = "Амара «Комета» Окафор", Gimmick = F, Path = RingPath.Face, Agi = 3, Cha = 1, Pop = 6, Tier = "hall", Rgb = 0x2F6FD6 },
+                new EntranceCase { Id = "c_showman_rebel_player", Body = "body_f_ukrainian", Name = "Ґанна «Їжачиха» Євтушенко-Підгірна", Gimmick = S, Path = RingPath.Rebel, Agi = 2, Cha = 3, Tier = "gym", Rgb = 0xFF7AB8, Player = true },
+                new EntranceCase { Id = "d_tech_face", Body = "body_m_latin", Name = "Іван «Ключ» Їжак", Gimmick = T, Path = RingPath.Face, Tech = 3, Tier = "gym", Rgb = 0x2E6B4F },
+                new EntranceCase { Id = "e_tech_heel_injured_f", Body = "body_f_east_asian", Name = "Мей «Вдова» Лін", Gimmick = T, Path = RingPath.Heel, Tech = 2, Injured = true, Tier = "gym", Rgb = 0x3A2340 },
+                new EntranceCase { Id = "f_showman_heel_champ", Body = "body_m_mediterranean", Name = "Олівер «Барон» Вінслоу", Gimmick = S, Path = RingPath.Heel, Cha = 2, Heat = 2, Champion = true, Tier = "hall", Rgb = 0x6B4A12 },
+                new EntranceCase { Id = "g_monster_face", Body = "body_m_ukrainian", Name = "Богдан «Сталевий» Дуб", Gimmick = M, Path = RingPath.Face, Str = 1, Pop = 2, Tier = "gym", Rgb = 0x24466E },
+                new EntranceCase { Id = "h_repeat_monster_heel", Body = "body_m_nordic", Name = "Тарас «Молот» Гребінь", Gimmick = M, Path = RingPath.Heel, Str = 3, Cha = 2, Heat = 3, Main = true, Tier = "arena", Rgb = 0x5A1A14 },
+            };
+            string only = RingStage3D.ReadArg("-ring-entrance-only");
+            foreach (var c in cases)
+            {
+                if (only != null && !c.Id.StartsWith(only)) continue;
+                stage.SetWrestlers(c.Body, c.Rgb, "", "body_m_nordic", 0x5A1A14, "", 1f);
+                yield return null;
+                var input = new EntranceInput
+                {
+                    Gimmick = c.Gimmick, Path = c.Path, Strength = c.Str, Agility = c.Agi, Technique = c.Tech, Charisma = c.Cha,
+                    Injured = c.Injured, Popularity = c.Pop, Heat = c.Heat, Champion = c.Champion, MainEvent = c.Main, Player = c.Player,
+                    Female = c.Body.StartsWith("body_f_"),
+                };
+                var prof = EntranceProfile.Compose(input);
+                var rec = new EntranceRecipe
+                {
+                    Gimmick = EntranceScreenSlots.GimmickKey(c.Gimmick), Role = EntranceScreenSlots.RoleOf(c.Path), Tier = c.Tier,
+                    Name = c.Name, Player = c.Player, TagText = UaGimmick[(int)c.Gimmick] + " · " + UaPath[(int)c.Path],
+                };
+                stage.BeginEntrance(true, rec, prof, c.Rgb);
+                yield return null;
+                float hitAt = show.HitAt;
+                float[] marks = { hitAt - 0.2f, hitAt, hitAt + 0.3f, hitAt + 2f };
+                string[] markTags = { "hit-0.2", "hit+0", "hit+0.3", "hit+2" };
+                int mi = 0;
+                float next = Time.time + 1f;
+                string beat = null;
+                float beatShot = -1f;
+                float guard = Time.time + 120f;
+                while (stage.ShowBusy && Time.time < guard)
+                {
+                    if (show.Beat != beat) { beat = show.Beat; beatShot = Time.time + 0.45f; }
+                    if (mi < marks.Length && Time.time >= marks[mi])
+                    {
+                        Capture(folder, "ent_" + c.Id + "_" + markTags[mi]);
+                        mi++;
+                    }
+                    else if (beatShot > 0f && Time.time >= beatShot)
+                    {
+                        Capture(folder, "ent_" + c.Id + "_" + beat + "_start");
+                        beatShot = -1f;
+                    }
+                    else if (Time.time >= next)
+                    {
+                        Capture(folder, "ent_" + c.Id + "_" + beat);
+                        next = Time.time + 1f;
+                    }
+                    yield return null;
+                }
+                Debug.Log("[Ринг] огляд виходу " + c.Id + ": " + (stage.ShowBusy ? "ЗАВИС (120 с)" : "завершено"));
+                yield return new WaitForSeconds(0.3f);
+            }
+            Debug.Log("[Ринг] огляд виходів: знято " + _n + " кадрів");
+            Debug.Log(stage.PlayedReport());
+            HardExit.Now(0);
+        }
+
+        /// <summary>
+        /// Великі світлі поверхні зали (зауваження «Відео огляду»: «яскраво-білий прямокутник» у залі): об'єкт, матеріал,
+        /// базовий колір і текстура, межі — щоб знайти, що це, а не вгадувати.
+        /// </summary>
+        private static void LogBrightSurfaces()
+        {
+            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                var b = r.bounds;
+                if (b.size.x * b.size.y + b.size.y * b.size.z + b.size.x * b.size.z < 1.5f) continue;
+                foreach (var m in r.sharedMaterials)
+                {
+                    if (m == null) continue;
+                    Color c = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : m.HasProperty("_Color") ? m.color : Color.clear;
+                    Texture t = m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : null;
+                    Color e = m.HasProperty("_EmissionColor") && m.IsKeywordEnabled("_EMISSION") ? m.GetColor("_EmissionColor") : Color.clear;
+                    float lum = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b, emi = e.maxColorComponent;
+                    if (lum < 0.6f && emi < 0.5f) continue;
+                    Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        "[Ринг] світла поверхня: {0} / {1} — база ({2:0.00},{3:0.00},{4:0.00}) текстура {5}, емісія {6:0.00}; центр ({7:0.0},{8:0.0},{9:0.0}), розмір ({10:0.0},{11:0.0},{12:0.0})",
+                        r.name, m.name, c.r, c.g, c.b, t != null ? t.name : "—", emi, b.center.x, b.center.y, b.center.z, b.size.x, b.size.y, b.size.z));
+                }
+            }
+        }
+
+        /// <summary>Ролик екрана виходу — текстура в PNG на мітях «удар −0,2 · 0 · +0,3 · +2 с» (крок часу — вручну, точно).</summary>
+        private static IEnumerator ScreenMoments(RingShow show, string folder, EntranceRecipe r, string suffix)
+        {
+            var scr = show.Screen;
+            show.ManualScreen = true;
+            if (!scr.Play(r, false, false)) { show.ManualScreen = false; yield break; }
+            double hit = scr.HitIn;
+            double[] moments = { hit - 0.2, hit, hit + 0.3, hit + 2.0 };
+            string[] tags = { "m02", "h00", "p03", "p20" };
+            for (int i = 0; i < moments.Length; i++)
+            {
+                scr.Seek(moments[i]);
+                yield return null;
+                yield return new WaitForEndOfFrame();
+                SaveRt(show.ScreenTexture, System.IO.Path.Combine(folder, string.Format("{0:000}_tron_{1}{2}_{3}.png", _n++, r.PoolName, suffix, tags[i])));
+            }
+            show.ManualScreen = false;
+            Debug.Log("[Ринг] екран виходу " + r.PoolName + suffix + ": " + scr.Describe + ", шарів " + scr.LayerCount + ", удар "
+                + hit.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " с");
+        }
+
+        private static void SaveRt(RenderTexture rt, string path)
+        {
+            if (rt == null) return;
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            tex.Apply();
+            RenderTexture.active = prev;
+            System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.Destroy(tex);
         }
 
         private static void Capture(string folder, string tag)

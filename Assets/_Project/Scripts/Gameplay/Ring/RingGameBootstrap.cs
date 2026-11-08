@@ -439,8 +439,14 @@ namespace Game.Gameplay.Ring
                 var f = engine != null ? engine.State.Get(player ? MatchSide.Player : MatchSide.Rival) : null;
                 string name = f != null ? _text.Get(f.Stats.NameKey) : "";
                 int rgb = player ? CareerLooks.CostumeRgb(_career.State.Costume) : CareerLooks.ForNpc(_career.State.Opponent).Rgb;
-                string sub = player ? _text.Get("gimmick." + _content.GimmickOf(_career.State.Gimmick).Key) : NpcGimmick();
-                stage.BeginEntrance(player, name, sub, rgb);
+                // Персональний вихід (ENTRANCE_PROFILE.md) і екран виходу (ТЗ B07) — з тих самих даних кар'єри для обох.
+                var npc = player ? null : _content.FindNpc(_career.State.Opponent);
+                string body = player ? CareerLooks.HeroBodies[HeroBody] : CareerLooks.ForNpc(_career.State.Opponent).Body;
+                bool female = body != null && body.StartsWith("body_f_", StringComparison.Ordinal);
+                var input = player ? EntranceInput.ForPlayer(_career, female)
+                    : npc != null ? EntranceInput.ForNpc(_career, npc, female) : new EntranceInput { Female = female };
+                if (!player && npc == null && f != null) input.SetStats(f.Stats);
+                stage.BeginEntrance(player, EntranceRecipeFor(input, name), EntranceProfile.Compose(input), rgb);
             }
             // Лише шоу (вступ, вихід) ховає UI; кліпи матчу йдуть під панеллю матчу.
             bool showing = stage.ShowBusy || _entrances.Count > 0;
@@ -461,10 +467,16 @@ namespace Game.Gameplay.Ring
             return true;
         }
 
-        private string NpcGimmick()
+        /// <summary>Рецепт екрана виходу (ТЗ B07): ґімік і роль борця, щабель — спортзал, тег «ґімік · шлях» ключами перекладу.</summary>
+        private EntranceRecipe EntranceRecipeFor(EntranceInput input, string name)
         {
-            var n = _content.FindNpc(_career.State.Opponent);
-            return n != null ? _text.Get("gimmick." + _content.GimmickOf(n.Gimmick).Key) : "";
+            string g = EntranceScreenSlots.GimmickKey(input.Gimmick);
+            string pathKey = input.Path == RingPath.Heel ? "path.heel" : input.Path == RingPath.Rebel ? "path.rebel" : "path.face";
+            return new EntranceRecipe
+            {
+                Gimmick = g, Role = EntranceScreenSlots.RoleOf(input.Path), Tier = "gym", Name = name, Seed = 0, Player = input.Player,
+                TagText = _text.Get("gimmick." + _content.GimmickOf(input.Gimmick).Key) + " · " + _text.Get(pathKey),
+            };
         }
 
         private bool ShowShot()
