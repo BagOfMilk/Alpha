@@ -192,6 +192,12 @@ function Start-Editor {
     $psi.FileName = $UnityPath
     $psi.Arguments = "-projectPath `"$ProjectPath`" -logFile `"$log`""
     $psi.UseShellExecute = $false
+    # З пісочниці процес іде з низькою цілісністю: у звичайну %TEMP% писати не може (Burst падав «Access to the path is
+    # denied» у GetTempFileName — знахідка сесії меню 08.11.2026), а в LocalLow — може.
+    $tmp = Join-Path $env:USERPROFILE 'AppData\LocalLow\RingTmp'
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+    $psi.EnvironmentVariables['TMP'] = $tmp
+    $psi.EnvironmentVariables['TEMP'] = $tmp
     $p = [System.Diagnostics.Process]::Start($psi)
     Write-Host "Редактор запущено (PID $($p.Id)) на $ProjectPath. Перший запуск на теці імпортує проєкт — це кілька хвилин."
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
