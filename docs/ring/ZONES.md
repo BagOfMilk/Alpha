@@ -41,7 +41,7 @@
 | **Изучение игры Ring** — `local_4d3baef2…` | Сцена, камера, вихід: `Gameplay/Ring/Stage/Unity/**` (крім `RingMatchDirector`, `RingSound`, `RingMenuAudio`, `RingMenuAssets`), `Stage/RingStageContract.cs`, `Stage/EntranceProfile.cs`, `Stage/EntranceScreen.cs`, `Core/Ring/RopeSim.cs`, `RingGameBootstrap.cs` (каркас), Editor: `RingSceneBuilder` (сцена), `RingStageSceneSetup`, `RingInEditor`, `RingEntranceScreenImport`; Blender: арени, натовп, реквізит, cast, закулісся (`tools/blender/ring_venues*`, `ring_gym`, `ring_show`, `ring_crowd`, `ring_props`, `ring_hero`, `ring_cast/**`); `docs/ring/ENTRANCE_PROFILE.md`, `Assets/Art/Ring/Cast/CAST_ANIM.md`; тести `Entrance*` |
 | **Кар'єра** — нова сесія | `Core/Ring/Career/**`, `Core/Ring/Feud/**`, `Core/Ring/Promo/**`, `Core/Ring/Progression/**`, `Core/Ring/Json/**`, `Core/Ring/RingCampaign.cs`, `Models/DevelopmentScreenModel.cs`, `FeudScreenModel.cs`, `PromoScreenModel.cs`, нові моделі екранів кар'єри, `CareerLooks.cs`, `RingFeudBootstrap.cs`, `RingGameBootstrap.Career.cs`, `RingSaveFile.cs` (після злиття «Скилів»); ресурси `career_backstage.json`, `career_gimmicks.json`, `career_roster.json`, `feud_hammer.json`, `backstage_uk.json`; тести `Career*`, `Feud*`, `Promo*`, `Gimmick*`, `Economy*`, `Progression*`, `Backstage*`, `WeekActions*`, `RingCampaign*`, `MiniJson*` |
 | **Меню** — `local_d8c816ac…` (+ форк звуку `local_bc183877…`) | `Gameplay/Ring/UI/Menus/**`, вигляд екранів кар'єри (`UI/Career/**` B03 v2, `UI/CareerScreens.cs` — на зняття, `FeudScreenView`, `PromoScreenView`, `EndingScreenView`), `UI/RingUi.cs`, `Models/RingText.cs`, `MenuMotion.cs`, `RingSettings.cs`, `RingPause.cs`, `RingAudioMix.cs`, `RingSoundApproval.cs`, `RingGameBootstrap.Menus.cs`, `RingMenuShots.cs`, `RingSoundGate.cs`, `Stage/Unity/RingSound.cs`, `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor `RingMenuAudioImport`; `sound_approvals.json`, `tools/ring_audio/**`, переклади `ui_<мова>.json` і `ring_strings_<мова>.txt` (крім `uk`); тести `RingMenuModel*`, `RingSoundApproval*`, `MonoBehaviourFileName*` |
-| **Кліпи** — `local_815630bf…` (+ wwe `local_383c333e…`) | `tools/blender/ring_anims*`, `Assets/Art/Animations/RING_Moves*.fbx`, `ring_anims_*.txt`, `docs/ring/ANIM_BRIEF_COMBAT_CENTER.md`, `docs/ring/ANIM_PLAN_ITER2.md`, `docs/research/RING_ANIM_REFERENCES.md` |
+| **Кліпи** — `local_815630bf…` (+ wwe `local_383c333e…`) | `tools/blender/ring_anims*`, `tools/blender/ring_review.py` (огляд кліпів; створено лінією анімацій, 8861986), `docs/ring/ANIM_REVIEW_*.md`, `Assets/Art/Animations/RING_Moves*.fbx`, `ring_anims_*.txt`, `docs/ring/ANIM_BRIEF_COMBAT_CENTER.md`, `docs/ring/ANIM_PLAN_ITER2.md`, `docs/research/RING_ANIM_REFERENCES.md` |
 | **Відео огляд** — `local_c3c3cec5…` (інтегратор) | Злиття в основну гілку, `tools/run-offscreen.ps1`, `tools/ring-editor.ps1`, Editor `RingSceneBuilder.Player.cs` (BuildPlayer*), `RingLaunchArgs.cs`, `Assets/Settings/URP-*`, `ProjectSettings/QualitySettings.asset`, оточення збірки (Burst) |
 | **Скилы** — `local_f69d1b50…` (QA) | `.claude/skills/**`, `docs/ring/playtest_*`, `docs/ring/skills_audit_*`. Код інших зон не правити, вади — промптом ПМ |
 | **Арт-директор** — нова сесія замість зниклої | `docs/ring/DESIGN_SYSTEM.md`, `docs/ring/design/**`, `tools/ring_design/**`, `Models/BrandTokens.cs`, `UI/RingTheme.cs`, `UI/RingFonts.cs`, `RingFontSet.cs`, `RingFontSpike.cs`, Editor `RingFontAssets`, шрифти, тести `RingDesignGuard*`, `TitantronAssetsGuard*` |
@@ -113,7 +113,10 @@
 перебазування гілок сесій на 7f19686 з SHA бази ПМ (крок 7):
 - «ПМ + Бій» — **злито**: 1c03451 (тести 2292/0); від неї гілки пакета бою «Изучение» і форку звуку;
 - «Меню» — 7 комітів від 734fa50 (c5c27a1 … 775e753), після поновлення ліміту;
-- «Кліпи» — основу передано 17:08, SHA ще немає.
+- «Кліпи» — **перебазовано**: `claude/ring-anims-center-544e67` від 7f19686, верхівка 15bb78c (не запушено; ПМ звірив
+  `merge-base --is-ancestor`: 7f19686 і ворота звуку ef64920 — у гілці). Три коміти, лише генератори зони «Кліпи»
+  (`ring_anims.py`, `ring_anims_combat.py`, `ring_review.py`): P1-1 утримання — у порогах (8c9f806), P1-2 — WIP;
+  FBX нових кліпів у `Assets` ще немає.
 
 1. Кожна сесія комітить поточну роботу на своїй гілці (незавершене — «WIP»). Першою — пачка «Изучение»: **закомічено
    08.11.2026** (власник у вікні «Изучение»: «Так, комітити») — bec45bf (матч, P1-4; правки в `MatchScreenView` /
@@ -151,7 +154,7 @@
 | P0-1 level0 | — | злито (06ece58, 734fa50) |
 | P0-2 стільці, P1-5 (ядро), P1-7 (частина), P2-3, P2-4, частина P3 | Изучение | у пачці, незакомічено |
 | P0-3 Burst AOT | Відео огляд | відкрито |
-| P1-1 утримання, P1-2 больовий, P1-3 фінішер → утримання | Бій (таймінг) + Кліпи | відкрито |
+| P1-1 утримання, P1-2 больовий, P1-3 фінішер → утримання | Бій (таймінг) + Кліпи | Кліпи: P1-1 у генераторі в порогах (8c9f806, рахунок 1,6 с), FBX ще не в `Assets`; P1-2 WIP (15bb78c); P1-3 «Метеор» — далі. Бій: таймінг — Ф2 |
 | P1-4 3D і журнал | Изучение (пачка); Бій тримає в новому режисері | у пачці |
 | P1-5 вигляд розвитку, P3 екранів кар'єри | Меню (B03 v2) | відкрито |
 | P1-6 популярність, P2-2 поради розвитку, P2-6 стать суперника | Кар'єра + рішення власника | відкрито |
