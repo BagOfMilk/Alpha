@@ -277,7 +277,7 @@ namespace Game.Gameplay.Ring.UI
             }
             box.Add(sw);
 
-            var body = Carousel(T.Get("c.create.body"), BodyName(CareerLooks.HeroBodies[Host.HeroBody]),
+            var body = Carousel(T.Get("c.create.body"), BodyName(Host.HeroBody),
                 d => Host.HeroBody = (Host.HeroBody + d + CareerLooks.HeroBodies.Length) % CareerLooks.HeroBodies.Length);
             ArenaKit.Place(body, 24f, 124f, 40f, null, null, 54f);
             box.Add(body);
@@ -569,11 +569,15 @@ namespace Game.Gameplay.Ring.UI
 
         // ---------------- допоміжне ----------------
 
-        private string BodyName(string body)
+        /// <summary>
+        /// Тіло — номером і будовою, без національності: «3 з 16 · чоловіче» (плейтест 08.11.2026, P3, 8c3f16b: «чоловік,
+        /// українець(-ка)» — і національність, і «(-ка)» для чоловічого тіла).
+        /// </summary>
+        private string BodyName(int index)
         {
+            string body = CareerLooks.HeroBodies[index];
             string sex = body.StartsWith("body_f_") ? "f" : "m";
-            string culture = body.Substring(7);
-            return T.Get("c.look.sex." + sex) + ", " + T.Get("c.look.culture." + culture);
+            return T.Format("c.look.body", index + 1, CareerLooks.HeroBodies.Length, T.Get("c.look.build." + sex));
         }
 
         private string HairName(string hair)

@@ -19,7 +19,10 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class WeekScreenView : CareerScreenView
     {
-        private bool _dev;
+        // Шухляда: є очки — відкрито «Розвиток» (плейтест 08.11.2026, P1-5 «Изучение», 8c3f16b: бот проходу накопичив 39
+        // невитрачених очок — «Розвиток» був згорнутий); «Витрати» — в огляді, коли очок немає. Лише на першій побудові тижня:
+        // далі шухлядою керує гравець (вкладки, Esc).
+        private bool _dev, _accordionSet;
         private bool _shop = ExpandForShots;
         private readonly List<ActionTile> _tiles = new List<ActionTile>();
         private Label _hint;
@@ -53,6 +56,12 @@ namespace Game.Gameplay.Ring.UI
             _tiles.Clear();
             var v = C.GetCareerView();
             var w = C.GetWeekView();
+            if (!_accordionSet)
+            {
+                _accordionSet = true;
+                _dev = w.DevPoints > 0;
+                _shop = ExpandForShots && !_dev;
+            }
             Root.Add(ShowKit.PlayerStrip(C, T, v));
             Root.Add(ShowKit.Resources(T, v));
             _weekPlate = WeekPlate(v);
@@ -94,7 +103,7 @@ namespace Game.Gameplay.Ring.UI
                 AddTile(2, T.Get("c.week.train_coach"), T.Format("c.week.pay.coach", CareerRules.TrainingPoints + CareerRules.TrainerExtraPoints, CareerRules.TrainerCost),
                     null, any && coach, any ? T.Format("c.hub.need_money", CareerRules.TrainerCost - w.Money) : spent, () => Do(C.Train(true)), T.Get("c.week.train_coach.desc"));
                 AddTile(3, T.Get("week.action.1"), w.CanRecover ? T.Format("c.week.pay.recover", CareerRules.RecoverZoneHeal) : T.Get("c.week.pay.healthy"),
-                    null, any && w.CanRecover, any ? null : spent, () => Do(C.Recover(WorstZone(w), false)), T.Get("week.action.1.desc"));   // «ти цілий» уже в ефекті
+                    InjuryWarn(w), any && w.CanRecover, any ? null : spent, () => Do(C.Recover(WorstZone(w), false)), T.Get("week.action.1.desc"));   // «ти цілий» уже в ефекті
                 var promo = AddTile(4, T.Get("week.action.2"), T.Format("c.week.pay.promo", chaOdds), null, any, spent, () => Do(C.Promo()), T.Get("week.action.2.desc"));
                 var back = AddTile(5, T.Get("week.action.3"), T.Format("c.week.pay.backstage", chaOdds), null, any, spent, () => Do(C.Backstage()), T.Get("week.action.3.desc"));
                 var odds = TwoD6.ChancesOf36(cha);
@@ -245,8 +254,10 @@ namespace Game.Gameplay.Ring.UI
             col.Add(MenuKit.Body(plan, BrandTokens.TypeMinInfo, RingTheme.Bg, true));
             if (c.PromoHypeBonus != 0) col.Add(Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
             if (c.IsRematch) col.Add(Bullet(T.Get("c.hub.rematch")));
+            // P2-4 (8c3f16b): до росту гравця — нейтральний рядок «за місцем у картці», без червоної наліпки
+            if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) col.Add(Bullet(ShowKit.RivalStepsText(T, c)));
             box.Add(col);
-            if (c.Opponent != null && c.RivalSteps > 0)
+            if (c.Opponent != null && c.RivalSteps > 0 && ShowKit.RivalInForm(C))
             {
                 var st = new Sticker(T.Format("c.hub.form", c.RivalSteps));
                 st.style.position = Position.Absolute;
@@ -357,7 +368,7 @@ namespace Game.Gameplay.Ring.UI
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             scroll.style.flexShrink = 1f; scroll.style.minHeight = 60f;
             scroll.style.paddingLeft = 18f; scroll.style.paddingRight = 24f; scroll.style.paddingBottom = 10f;
-            var content = _dev ? DevelopmentPanel(Refresh) : ShopPanel();
+            var content = _dev ? DevelopmentPanel(Refresh, 2) : ShopPanel();
             content.style.backgroundColor = Color.clear;
             content.style.borderTopWidth = 0f; content.style.borderBottomWidth = 0f; content.style.borderLeftWidth = 0f; content.style.borderRightWidth = 0f;
             scroll.Add(content);
@@ -423,7 +434,7 @@ namespace Game.Gameplay.Ring.UI
         private string Odds(int mod)
         {
             var c = TwoD6.ChancesOf36(mod);
-            return T.Format("c.week.pay.odds", Pct(c[2]), Pct(c[1]));
+            return T.Format("c.week.pay.odds", Pct(c[2]), Pct(c[1]), Pct(c[0]));   // і провал «≤6» (P3, 8c3f16b)
         }
 
         private static int Pct(int of36) { return (int)Math.Round(of36 * 100.0 / 36.0); }
@@ -433,6 +444,24 @@ namespace Game.Gameplay.Ring.UI
             int n = 0;
             for (int a = 1; a <= 6; a++) for (int b = 1; b <= 6; b++) if (a + b <= total) n++;
             return n;
+        }
+
+        /// <summary>
+        /// Травма на плитці «Відновлення» рядком тривоги: «Корпус травмовано: −1 до кидків, ще 2 тиж. (клініка лікує)» (плейтест
+        /// 08.11.2026, P2-3, 8c3f16b: бот двічі травмувався й жодного разу не лікувався). У плитці — найгірша зона (місця на два
+        /// рядки); null — травм немає.
+        /// </summary>
+        private string InjuryWarn(WeekView w)
+        {
+            if (w.Injuries == null) return null;
+            bool any = false;
+            foreach (var i in w.Injuries) if (i.WeeksLeft > 0) any = true;
+            if (!any) return null;
+            var z = WorstZone(w);
+            foreach (var i in w.Injuries)
+                if (i.Zone == z && i.WeeksLeft > 0)
+                    return T.Format("c.injury.warn", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft);
+            return null;
         }
 
         private static BodyZone WorstZone(WeekView w)
@@ -459,7 +488,8 @@ namespace Game.Gameplay.Ring.UI
         {
             if (!r.Ok) return T.Get("week.reason." + r.Reason);
             var parts = new List<string> { T.Get("week.action." + (int)r.Kind) };
-            if (r.HasRoll) parts.Add(T.Format("c.roll", r.Roll, Signed(r.Modifier), r.Total, RingLabels.TierName(T, r.Tier)));
+            // «кидок 6 + 0 = 6», а не «кидок 6 0 = 6» (плейтест 08.11.2026, P3, 8c3f16b)
+            if (r.HasRoll) parts.Add(T.Format("c.roll", r.Roll, RingChances.Term(r.Modifier), r.Total, RingLabels.TierName(T, r.Tier)));
             if (r.MoneyDelta != 0) parts.Add(T.Format("c.delta.money", Signed(r.MoneyDelta)));
             if (r.DevPointsDelta != 0) parts.Add(T.Format("c.delta.dev", Signed(r.DevPointsDelta)));
             if (r.TrustDelta != 0) parts.Add(T.Format("c.delta.trust", Signed(r.TrustDelta)));

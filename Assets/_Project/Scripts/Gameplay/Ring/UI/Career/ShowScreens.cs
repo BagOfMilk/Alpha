@@ -166,6 +166,18 @@ namespace Game.Gameplay.Ring.UI
             r.Add(l);
             return r;
         }
+
+        /// <summary>
+        /// Червона наліпка «У формі · сильніший на N» — лише коли гравець справді виріс (плейтест 08.11.2026, P2-4, 8c3f16b:
+        /// попередження вже на першому тижні новачок читав як «щось не так»). До того — нейтральний рядок <see cref="RivalStepsText"/>.
+        /// </summary>
+        public static bool RivalInForm(CareerSession c) { return c.PlayerGrowth() > 0; }
+
+        /// <summary>Нейтрально: «Суперник під твоє місце в картці: +N до сили» або «Сильний суперник: +N» (ворожнеча, титул).</summary>
+        public static string RivalStepsText(RingText t, ShowCardView card)
+        {
+            return t.Format(card.IsFeud || card.IsTitle ? "c.card.rival_strong" : "c.card.rival_place", card.RivalSteps);
+        }
     }
 
     /// <summary>Ряд дій унизу праворуч, збирається справа наліво (золота плита, далі плитки); вузька панель (4:3) — вужчі плити.</summary>
@@ -302,11 +314,13 @@ namespace Game.Gameplay.Ring.UI
             col.Add(ShowKit.Bullet(T.Get("c.card.stip") + ": " + StipText(c.Stipulations)));
             if (c.PromoHypeBonus != 0) col.Add(ShowKit.Bullet(T.Format("c.card.promo_bonus", Signed(c.PromoHypeBonus))));
             if (c.IsRematch) col.Add(ShowKit.Bullet(T.Get("c.hub.rematch")));
+            // P2-4 (8c3f16b): до росту гравця — нейтральний рядок «за місцем у картці», без червоної наліпки
+            if (c.Opponent != null && c.RivalSteps > 0 && !ShowKit.RivalInForm(C)) col.Add(ShowKit.Bullet(ShowKit.RivalStepsText(T, c)));
             var inj = MenuKit.Body(InjuryText(c.Injuries), BrandTokens.TypeMinInfo, RingTheme.Ash);
             inj.style.marginTop = 8f;
             col.Add(inj);
             box.Add(col);
-            if (c.Opponent != null && c.RivalSteps > 0)
+            if (c.Opponent != null && c.RivalSteps > 0 && ShowKit.RivalInForm(C))
             {
                 var st = new Sticker(T.Format("c.hub.form", c.RivalSteps));
                 st.style.position = Position.Absolute;
@@ -558,7 +572,8 @@ namespace Game.Gameplay.Ring.UI
             }
 
             col.Add(ScaleRow(T.Get("c.hub.pop"), r.PopularityBefore, r.PopularityAfter, !lostLoved));
-            col.Add(ScaleRow(T.Get("c.hub.trust"), r.TrustBefore, r.TrustAfter, true));
+            // довіра — лише якщо змінилась («1 → 1» — шум; плейтест 08.11.2026, P3, 8c3f16b)
+            if (r.TrustAfter != r.TrustBefore) col.Add(ScaleRow(T.Get("c.hub.trust"), r.TrustBefore, r.TrustAfter, true));
             if (!r.Withdrew && r.DevPointsGained != 0)
             {
                 var dr = ArenaKit.Row();
@@ -711,9 +726,25 @@ namespace Game.Gameplay.Ring.UI
             title.style.whiteSpace = WhiteSpace.Normal;
             col.Add(title);
             col.Add(ShowKit.Rule());
-            var line = MenuKit.Body(T.Format("c.season.line", rep.Popularity, rep.Trust, rep.Money), 17f, RingTheme.Bg, true);
+            // Підсумок сезону (плейтест 08.11.2026, P1-7, 8c3f16b): рекорд, популярність «було → стало», ворожнеча з Молотом,
+            // умова титулу.
+            var rec = C.State.SeasonRecord;
+            var record = MenuKit.Body(T.Format("c.season.record", rec[0], rec[1], rec[2]), 19f, RingTheme.Bg, true);
+            record.style.whiteSpace = WhiteSpace.Normal;
+            col.Add(record);
+            if (C.State.SeasonPopStart >= 0)
+                col.Add(ShowKit.Bullet(T.Format("c.season.pop", C.State.SeasonPopStart, rep.Popularity)));
+            var line = MenuKit.Body(T.Format("c.season.line", rep.Popularity, rep.Trust, rep.Money), BrandTokens.TypeMinInfo, RingTheme.Bg, true);
             line.style.whiteSpace = WhiteSpace.Normal;
+            line.style.marginTop = 6f;
             col.Add(line);
+            var hammer = C.Content.FindNpc(CareerContent.HammerId);
+            if (hammer != null)
+            {
+                string hn = T.Get(hammer.NameKey);
+                col.Add(ShowKit.Bullet(C.State.FeudResolved ? T.Format("c.season.feud_done", hn)
+                    : T.Format("c.season.feud", hn, C.FeudLevel(CareerContent.HammerId), CareerRules.MaxFeud)));
+            }
             if (rep.Fired)
             {
                 var f = MenuKit.Body(T.Get("season.fired"), BrandTokens.TypeBody, RingTheme.Crimson, true);
@@ -727,6 +758,8 @@ namespace Game.Gameplay.Ring.UI
             }
             else if (rep.TitleEligible)
                 col.Add(ShowKit.Bullet(T.Get(rep.IsDefense ? "season.defense" : "season.title_shot")));
+            else if (!rep.Fired)
+                col.Add(ShowKit.Bullet(T.Format("c.season.goal", CareerRules.TitleShotTrust, CareerRules.MaxFeud)));
             box.Add(col);
             return box;
         }
