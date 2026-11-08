@@ -19,17 +19,13 @@ namespace Game.Gameplay.Ring
     /// вечір (картка, виходи з титантроном, матч або етапи ворожнечі з Молотом на великому шоу, підсумок) → кінець сезону → новий
     /// сезон. Правил тут немає — лише показ, клавіші й автозбереження після кожного кроку (<see cref="CareerSession.CaptureState"/>).
     /// Огляд вигляду: <c>-ring-shots &lt;тека&gt;</c> — бот проходить перший сезон тими самими кнопками і знімає кадри.
+    ///
+    /// Файли хоста за зонами сесій (docs/ring/ZONES.md, розподіл Етапу 0, 08.11.2026): тут — каркас (запуск, UI, кадр, шоу 3D,
+    /// виходи, клавіші, огляд); <c>RingGameBootstrap.Career.cs</c> — кар'єра (сейв, дані, контекст і вибір екранів);
+    /// <c>RingGameBootstrap.Match.cs</c> — бій (бот матчу в огляді, кадри тактів режисера); <c>RingGameBootstrap.Menus.cs</c> — меню.
     /// </summary>
     public sealed partial class RingGameBootstrap : MonoBehaviour, ICareerHost
     {
-        private const string FeudPath = "Ring/feud_hammer";
-        private const string StringsPath = "Ring/strings_uk";
-        private const string UiStringsPath = "Ring/ui_uk";
-        private const string MovesPath = "Ring/career_moves";
-        private const string GimmicksPath = "Ring/career_gimmicks";
-        private const string RosterPath = "Ring/career_roster";
-        private const string BackstagePath = "Ring/career_backstage";
-        private const string BackstageTextPath = "Ring/backstage_uk";
         private const string SeedArg = "-ring-seed";
         private const string ShotsArg = "-ring-shots";
 
@@ -65,78 +61,7 @@ namespace Game.Gameplay.Ring
         private string _openedShow;
         private object _stageKey;
 
-        // ---------------- ICareerHost ----------------
-
-        public int HeroBody { get; set; }
-        public int HeroHair { get; set; }
-        public WeekActionResult LastWeekResult { get; set; }
-
-        private string SavePath
-        {
-            get
-            {
-                // Огляди пишуть свій файл: сейв гравця не чіпають (огляд кар'єри — ring_career_bot, огляд меню — ring_menu_bot).
-                string file = _shotsDir != null ? "ring_career_bot.txt" : _menuShotsDir != null ? "ring_menu_bot.txt" : "ring_career.txt";
-                return System.IO.Path.Combine(Application.persistentDataPath, file);
-            }
-        }
-
-        public bool HasSave { get { return _shotsDir == null && RingSaveFile.Exists(SavePath); } }
-
-        public void NewGame()
-        {
-            _career = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
-            _seed += 1;
-            HeroBody = 0; HeroHair = 0;
-            LastWeekResult = null;
-            _career.StartNewGame();
-            _onTitle = false;
-            Rebind();
-        }
-
-        public void ContinueGame()
-        {
-            try
-            {
-                CareerSession c = null;
-                bool fromBackup;
-                var lines = RingSaveFile.Read(SavePath, l =>
-                {
-                    var t = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
-                    t.RestoreState(l[0]);
-                    c = t;
-                }, out fromBackup);
-                if (fromBackup) Debug.LogWarning("[Ринг] основний сейв зіпсований — продовжено з запасної копії (.bak)");
-                if (lines.Length > 1)
-                {
-                    var p = lines[1].Split('|');
-                    int b, h;
-                    if (p.Length > 1 && int.TryParse(p[0], out b) && int.TryParse(p[1], out h)) { HeroBody = Math.Max(0, Math.Min(b, CareerLooks.HeroBodies.Length - 1)); HeroHair = Math.Max(0, Math.Min(h, CareerLooks.HeroHair.Length - 1)); }
-                }
-                _career = c;
-                _onTitle = false;
-                LastWeekResult = null;
-                Rebind();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError("[Ринг] Сейв не відкрився: " + ex.Message);
-            }
-        }
-
-        public void Save()
-        {
-            if (_career == null || _career.Stage == CareerStage.Title || _career.Stage == CareerStage.Create) return;
-            try
-            {
-                RingSaveFile.Write(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
-                InvalidateSaveSummary();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError("[Ринг] Сейв не записався: " + ex.Message);
-            }
-        }
+        // ---------------- ICareerHost: застосунок (кар'єра — RingGameBootstrap.Career.cs) ----------------
 
         public void Quit() { HardExit.Now(0); }
 
@@ -278,35 +203,6 @@ namespace Game.Gameplay.Ring
             HardExit.Now(0);
         }
 
-        /// <summary>
-        /// Перенесення сейву (ТЗ B00 §3): з назвою застосунку «Ринг» тека persistentDataPath змінилась
-        /// (…/DefaultCompany/Ринг замість …/DefaultCompany/Alpha) — при першому запуску копіюємо старий сейв, якщо нового ще немає.
-        /// Старий файл не видаляємо; один запис у лог.
-        /// </summary>
-        private static void MigrateSave()
-        {
-            try
-            {
-                string now = Application.persistentDataPath;
-                var company = System.IO.Directory.GetParent(now);
-                if (company == null || company.Parent == null) return;
-                string oldDir = System.IO.Path.Combine(company.Parent.FullName, "DefaultCompany", "Alpha");
-                var seps = new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar };
-                if (string.Equals(System.IO.Path.GetFullPath(oldDir).TrimEnd(seps), System.IO.Path.GetFullPath(now).TrimEnd(seps),
-                        System.StringComparison.OrdinalIgnoreCase)) return;
-                string oldFile = System.IO.Path.Combine(oldDir, "ring_career.txt");
-                string newFile = System.IO.Path.Combine(now, "ring_career.txt");
-                if (System.IO.File.Exists(newFile) || !System.IO.File.Exists(oldFile)) return;
-                System.IO.Directory.CreateDirectory(now);
-                System.IO.File.Copy(oldFile, newFile);
-                Debug.Log("[Ринг] сейв перенесено зі старої теки: " + oldFile + " → " + newFile);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[Ринг] сейв не перенесено: " + e.Message);
-            }
-        }
-
         private static ulong ReadSeed()
         {
             string s = ReadArg(SeedArg);
@@ -382,43 +278,6 @@ namespace Game.Gameplay.Ring
             _root.style.bottom = sane ? Mathf.Max(0f, safe.yMin) * k : 0f;
         }
 
-        private bool LoadData()
-        {
-            var feud = Resources.Load<TextAsset>(FeudPath);
-            var strings = Resources.Load<TextAsset>(StringsPath);
-            var ui = Resources.Load<TextAsset>(UiStringsPath);
-            var moves = Resources.Load<TextAsset>(MovesPath);
-            var gimmicks = Resources.Load<TextAsset>(GimmicksPath);
-            var roster = Resources.Load<TextAsset>(RosterPath);
-            var backstage = Resources.Load<TextAsset>(BackstagePath);
-            var backstageText = Resources.Load<TextAsset>(BackstageTextPath);
-            if (feud == null || strings == null || ui == null || moves == null || gimmicks == null || roster == null || backstage == null || backstageText == null)
-            {
-                ShowError(new List<string> { "Resources/Ring: немає даних кар'єри" });
-                return false;
-            }
-            try
-            {
-                _text = RingText.FromJson(strings.text, ui.text, backstageText.text);
-                _content = CareerContent.Load(feud.text, moves.text, gimmicks.text, roster.text, backstage.text);
-            }
-            catch (Exception ex)
-            {
-                ShowError(new List<string> { ex.Message });
-                return false;
-            }
-            var errors = PromoValidator.Validate(_content.Feud, _text.AsDictionary());
-            errors.AddRange(PromoValidator.ValidateScenes(_content.Backstage.Promos(), _text.AsDictionary()));
-            if (errors.Count > 0)
-            {
-                var lines = new List<string>();
-                foreach (var e in errors) lines.Add(e.ToString());
-                ShowError(lines);
-                return false;
-            }
-            return true;
-        }
-
         private void ShowError(List<string> lines)
         {
             foreach (var l in lines) Debug.LogError("[Ринг] " + l);
@@ -429,23 +288,6 @@ namespace Game.Gameplay.Ring
             box.Add(RingUi.Lbl(_text != null ? _text.Get("ui.error.title") : "Ring data error", 26f, RingUi.Bad, true));
             foreach (var l in lines) box.Add(RingUi.Lbl(l, 16f));
             layer.Add(box);
-        }
-
-        /// <summary>Нова чи відновлена кар'єра: контекст екранів, ім'я героя в тексті матчу й промо.</summary>
-        private void Rebind()
-        {
-            _ctx = new RingUiContext
-            {
-                Campaign = _career.Feud, Text = _text, Career = _career, Host = this,
-                Restart = NewGame,
-                FinishMatch = () => { _career.FinishMatch(); Save(); },
-                StartFeudMatch = () => { _career.StartFeudMatch(); },
-                AfterDevelopment = () => { _career.FinishBigShow(); Save(); }
-            };
-            if (!string.IsNullOrEmpty(_career.State.RingName)) _text.Add("w.player.name", _career.State.RingName);
-            _view = null;
-            _viewKey = null;
-            _stageKey = null;
         }
 
         // ---------------- кадр ----------------
@@ -582,88 +424,6 @@ namespace Game.Gameplay.Ring
             SyncStage();
         }
 
-        private object ViewKey()
-        {
-            if (_onTitle) return "title";
-            var st = _career.State;
-            switch (_career.Stage)
-            {
-                case CareerStage.Create: return "create";
-                case CareerStage.Week:
-                    // Сцена закулісся (розмова з букером чи подія поза рингом) — окремий екран діалогу поверх тижня.
-                    return _career.BackstageOpen ? (object)_career.CurrentBackstage : "week:" + st.Season + ":" + st.Week;
-                case CareerStage.SeasonEnd: return "season:" + st.Season;
-                case CareerStage.Show:
-                    switch (st.Phase)
-                    {
-                        case ShowPhase.Card: return "card:" + st.Season + ":" + st.Week + ":" + st.IsTitle;
-                        case ShowPhase.Match: return _career.Engine;
-                        case ShowPhase.Result: return "result:" + st.Season + ":" + st.Week + ":" + st.IsTitle;
-                        case ShowPhase.Feud:
-                            var f = _career.Feud;
-                            switch (f.Stage)
-                            {
-                                case RingStage.Promo: return f.CurrentPromoRunner;
-                                case RingStage.Match: return f.CurrentMatch;
-                                case RingStage.Overview:
-                                case RingStage.MatchPrep: return "feud:" + f.Stage + ":" + f.StepIndex;
-                                default: return "feudend:" + f.StepIndex;
-                            }
-                    }
-                    break;
-            }
-            return "title";
-        }
-
-        private RingScreenView MakeView()
-        {
-            if (_onTitle) return new TitleMenuView(_ctx, this);
-            switch (_career.Stage)
-            {
-                case CareerStage.Create: return new CreateScreenView(_ctx);
-                case CareerStage.Week:
-                    if (_career.BackstageOpen) return new PromoScreenView(BackstageCtx(), _career.CurrentBackstage);
-                    return new WeekScreenView(_ctx);
-                case CareerStage.SeasonEnd: return new SeasonEndScreenView(_ctx);
-                case CareerStage.Show:
-                    switch (_career.State.Phase)
-                    {
-                        case ShowPhase.Card: return new ShowCardScreenView(_ctx, StartShow);
-                        case ShowPhase.Match: return new MatchScreenView(_ctx, _career.Engine);
-                        case ShowPhase.Result: return new ShowResultScreenView(_ctx);
-                        case ShowPhase.Feud:
-                            var f = _career.Feud;
-                            switch (f.Stage)
-                            {
-                                case RingStage.Promo: return new PromoScreenView(_ctx, f.CurrentPromoRunner);
-                                case RingStage.Match: return new MatchScreenView(_ctx, f.CurrentMatch);
-                                case RingStage.Overview:
-                                case RingStage.MatchPrep: return new FeudScreenView(_ctx);
-                                default: return new EndingScreenView(_ctx);
-                            }
-                    }
-                    break;
-            }
-            return new TitleMenuView(_ctx, this);
-        }
-
-        /// <summary>Контекст екрана сцени закулісся: той самий діалог, що й промо, але кубик і кінець — кар'єри.</summary>
-        private RingUiContext BackstageCtx()
-        {
-            return new RingUiContext
-            {
-                Campaign = _ctx.Campaign, Text = _ctx.Text, Career = _ctx.Career, Host = this, Restart = _ctx.Restart,
-                PromoDice = _career.Dice,
-                FinishPromo = () => { LastWeekResult = _career.FinishBackstage(); Save(); }
-            };
-        }
-
-        private void StartShow()
-        {
-            Save();
-            _career.StartShow();
-        }
-
         /// <summary>3D під екраном: хто на рингу (герой і суперник вечора), закулісся тижня, виходи перед матчем, промо.</summary>
         private void SyncStage()
         {
@@ -762,33 +522,9 @@ namespace Game.Gameplay.Ring
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_fx_{1}.png", _shotIndex++, stage.FxLastMoment)));
         }
 
-        private int _beatShot = -1;
-        private float _beatShotAt = -1f;
-
-        /// <summary>
-        /// Кадр кожного такту режисера (кидок, утримання, фінішер) — наступним кадром після такту: виноска вже на екрані, а
-        /// тіло ще на контакті (огляд іде на ×3, тож давніші 0,15 с реального часу були 0,45 с гри — після контакту).
-        /// Утримання — кадр на кожну долоню рефері (<c>pin&lt;ступінь&gt;_c1/_c2/_c3</c>).
-        /// </summary>
-        private void BeatShots()
-        {
-            var stage = RingStageHub.Current;
-            if (stage == null || stage.BeatEvent == null) return;
-            if (stage.BeatSeq != _beatShot) { _beatShot = stage.BeatSeq; _beatShotAt = Time.unscaledTime; return; }
-            if (_beatShotAt < 0f || Time.unscaledTime < _beatShotAt || _shotIndex >= ShotLimit) return;
-            _beatShotAt = -1f;
-            var ev = stage.BeatEvent;
-            if (ev.Kind == MatchEventKind.TurnEnd || ev.Kind == MatchEventKind.Sell) return;
-            string kind = ev.Kind == MatchEventKind.Kickout ? "pin" + (int)ev.Tier + "_c" + stage.BeatPhase : ev.Kind + "_" + ev.Action + (ev.HasRoll ? "_" + ev.Tier : "");
-            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_beat_{1}.png", _shotIndex++, kind)));
-        }
-
         private void ShotsStep()
         {
-            // Огляд перків з дією (06.11.2026): герой огляду має «Імпровізацію» і «Підкупленого суддю», щоб виноска з назвою перка
-            // потрапила в кадр. Лише сейв бота (ring_career_bot.txt), гравця не торкається.
-            if (_career.Stage == CareerStage.Week && _career.Feud != null && !_career.Feud.State.Perks.Contains(PerkCatalog.Improvise))
-            { _career.Feud.State.Perks.Add(PerkCatalog.Improvise); _career.Feud.State.Perks.Add(PerkCatalog.BribedRef); }
+            ReviewPerks();   // перки з дією для виносок — RingGameBootstrap.Career.cs
             FxShots();
             BeatShots();
             if (RingStageHub.Busy)
@@ -808,20 +544,16 @@ namespace Game.Gameplay.Ring
             _shotAct = !_shotAct;
             if (_shotAct)
             {
-                // На тижні бот робить усі три дії різними цифрами, тоді «Далі»; деінде — цифра й «Далі» по черзі.
-                // Матч: бот грає за героя тим самим ШІ, що й за суперника (раніше випадкові цифри — фінішера огляд так і не
-                // побачив; власник 04.11.2026: «це погано»).
-                var eng = !_onTitle ? _career.Engine : null;
-                if (eng != null && !eng.IsOver && BotTurn(eng))
+                // Матч: хід бота за героя — RingGameBootstrap.Match.cs (BotMatchStep); тиждень: розвиток і дії тижня —
+                // RingGameBootstrap.Career.cs (BotWeekStep); деінде — цифра й «Далі» по черзі.
+                if (BotMatchStep()) return;
+                bool grew;
+                if (BotWeekStep(out grew))
                 {
-                    if (!ReviewRopes(eng)) MatchAi.Step(eng);
-                    _view.Refresh();
+                    if (!grew) _shotPressDigit = !_shotPressDigit;
                     return;
                 }
-                bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
-                if (week && _shotGrow && BotGrow()) { _view.Refresh(); return; }
-                if (week && (_career.State.ActionsLeft > 0 || _career.State.PromoChoicePending)) _view.OnDigit(1 + _shotDigit++ % 6);
-                else if (_shotPressDigit) _view.OnDigit(1 + _shotDigit++ % 5);
+                if (_shotPressDigit) _view.OnDigit(1 + _shotDigit++ % 5);
                 else _view.OnConfirm();
                 _shotPressDigit = !_shotPressDigit;
                 return;
@@ -863,18 +595,6 @@ namespace Game.Gameplay.Ring
             for (int i = 0; i < e.childCount; i++) CollectText(e[i], sb);
         }
 
-        private bool _shotGrow;
-
-        /// <summary>Одна покупка розвитку за крок (видно в кадрі): перший доступний прийом, атрибут, перк — порядок CareerBot.</summary>
-        private bool BotGrow()
-        {
-            foreach (var m in _career.Content.Moves.All) if (_career.LearnMove(m.Id)) { ShotNote("розвиток: прийом " + m.Id); return true; }
-            foreach (RingAttr a in new[] { RingAttr.Strength, RingAttr.Agility, RingAttr.Technique, RingAttr.Stamina, RingAttr.Charisma })
-                if (_career.BuyAttr(a)) { ShotNote("розвиток: атрибут " + a); return true; }
-            foreach (var pk in PerkCatalog.All) if (_career.BuyPerk(pk.Id)) { ShotNote("розвиток: перк " + pk.Id); return true; }
-            return false;
-        }
-
         private void ShotNote(string line)
         {
             System.IO.File.AppendAllText(System.IO.Path.Combine(_shotsDir, "screens.txt"), "--- бот: " + line + "\n");
@@ -882,35 +602,6 @@ namespace Game.Gameplay.Ring
 
         private int _seasonShots;
         private int _shotSeasons = 1;
-        private int _reviewRopes;
-
-        /// <summary>
-        /// Канати й кут в огляді (08.11.2026, пакет «Відео огляд», п. 8: «на кадрах сезону видно біг у канати й відскок
-        /// спиною»). ШІ ці дії не обирає ніколи — кидок стоїть вище в його переліку, — тож за сезон огляду біг у канати не
-        /// траплявся жодного разу. Лише бот огляду за героя: кожен другий «кидок чи удар» міняє на «У канати» / «У кут» по
-        /// черзі, якщо дія доступна. Правила матчу й ШІ суперника не змінюються.
-        /// </summary>
-        private bool ReviewRopes(MatchEngine eng)
-        {
-            if (eng.Phase != MatchPhase.AwaitAction) return false;
-            var id = MatchAi.ChooseAction(eng);
-            if (id != MatchActionId.Throw && id != MatchActionId.Strike) return false;
-            int k = _reviewRopes++ % 4;
-            var alt = k == 1 ? MatchActionId.IntoRopes : k == 3 ? MatchActionId.IntoCorner : id;
-            if (alt == id || !eng.Describe(alt).Available) return false;
-            eng.Perform(alt);
-            return true;
-        }
-
-        private static bool BotTurn(MatchEngine e)
-        {
-            switch (e.Phase)
-            {
-                case MatchPhase.AwaitReaction: return e.PendingReaction.Defender == MatchSide.Player;
-                case MatchPhase.AwaitBoost: return e.PendingRoll.Actor == MatchSide.Player;
-                default: return e.CurrentActor == MatchSide.Player;
-            }
-        }
 
         private string Label()
         {

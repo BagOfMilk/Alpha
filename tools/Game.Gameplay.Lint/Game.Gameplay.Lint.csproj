@@ -86,6 +86,7 @@
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/**/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/RingSceneBuilder.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingSceneBuilder.Player.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/RingStageSceneSetup.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/PortraitRig.cs" />
     <!--
