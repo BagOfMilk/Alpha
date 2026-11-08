@@ -33,6 +33,13 @@ namespace UnityEngine.UIElements
         public static Length Percent(float value) { return new Length(value, LengthUnit.Percent); }
     }
 
+    public static class UQueryExtensions
+    {
+        public static VisualElement Q(this VisualElement e, string name = null, string className = null) { return null; }
+    }
+
+    public enum StyleKeyword { Undefined = 0, Null, Auto, None, Initial }
+
     public struct StyleLength
     {
         public Length value;
@@ -42,6 +49,7 @@ namespace UnityEngine.UIElements
 
         public static implicit operator StyleLength(float v) { return new StyleLength(v); }
         public static implicit operator StyleLength(Length v) { return new StyleLength(v); }
+        public static implicit operator StyleLength(StyleKeyword k) { return new StyleLength(0f); }
     }
 
     public struct StyleFloat

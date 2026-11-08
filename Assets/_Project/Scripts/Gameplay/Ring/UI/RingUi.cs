@@ -128,13 +128,17 @@ namespace Game.Gameplay.Ring.UI
             e.style.color = Text;
         }
 
+        /// <summary>
+        /// Картка (мова «Арена», B08 §0.1 / B03): кутаста плита без заокруглень, тонка обводка, кармінна смужка ліворуч — як плити
+        /// меню й хабу тижня (власник 08.11.2026: «давай дизайн більш схожий на реслінг»).
+        /// </summary>
         public static VisualElement Card(float pad = 12f)
         {
             var e = Column();
             e.style.backgroundColor = Stage.RingStageHub.Has3D ? RingTheme.WithAlpha(Panel, BrandTokens.AlphaPanel) : Panel;
             HudToolkitTheme.Border(e, 1f, Border);
-            e.style.borderTopLeftRadius = 6f; e.style.borderTopRightRadius = 6f;
-            e.style.borderBottomLeftRadius = 6f; e.style.borderBottomRightRadius = 6f;
+            e.style.borderLeftWidth = 4f;
+            e.style.borderLeftColor = RingTheme.Crimson;
             HudToolkitTheme.Padding(e, pad, pad + 2f);
             return e;
         }
@@ -154,11 +158,19 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Поля екрана: відступ від краю.</summary>
         public static void HudPad(VisualElement e) { HudToolkitTheme.Padding(e, 22f, 34f); }
 
-        public static Label Title(string text) { return Lbl(text, 26f, Gold, true); }
+        /// <summary>Заголовок екрана — display Black ВЕЛИКИМИ курсивом (як титр-плита меню).</summary>
+        public static Label Title(string text)
+        {
+            var l = Menus.MenuKit.Display(text, 28f, Gold, RingFontRole.Display900, 0.02f);
+            l.style.unityFontStyleAndWeight = FontStyle.Italic;
+            l.style.whiteSpace = WhiteSpace.Normal;
+            return l;
+        }
 
         public static Label Heading(string text)
         {
-            var l = Lbl(text, 18f, Gold, true);
+            var l = Menus.MenuKit.Display(text, 21f, Gold, RingFontRole.Display800, 0.04f);
+            l.style.whiteSpace = WhiteSpace.Normal;
             l.style.marginBottom = 6f;
             return l;
         }
@@ -194,6 +206,12 @@ namespace Game.Gameplay.Ring.UI
         /// </summary>
         public static Button MakeButton(string text, Action onClick, bool enabled = true, Color? accent = null, float size = 17f)
         {
+            return Make(text, onClick, enabled, accent, size, enabled ? PanelRaised : Panel, PanelHover, enabled ? Text : Disabled);
+        }
+
+        /// <summary>Кнопка «Арени»: кутаста плита (без заокруглень), смужка-акцент ліворуч, наведення — світліша плита.</summary>
+        private static Button Make(string text, Action onClick, bool enabled, Color? accent, float size, Color back, Color hover, Color textColor)
+        {
             var b = new Button();
             b.text = text;
             b.style.fontSize = size;
@@ -202,28 +220,31 @@ namespace Game.Gameplay.Ring.UI
             RingFonts.Apply(b, RingFontRole.Text);
             HudToolkitTheme.Padding(b, 8f, 12f);
             b.style.marginLeft = 0f; b.style.marginRight = 0f; b.style.marginTop = 0f; b.style.marginBottom = 6f;
-            b.style.borderTopLeftRadius = 4f; b.style.borderTopRightRadius = 4f;
-            b.style.borderBottomLeftRadius = 4f; b.style.borderBottomRightRadius = 4f;
             HudToolkitTheme.Border(b, 1f, enabled ? Border : RingTheme.WithAlpha(Border, 0.4f));
             b.style.borderLeftWidth = 4f;
             b.style.borderLeftColor = accent ?? (enabled ? Gold : Disabled);
-            var back = enabled ? PanelRaised : Panel;
             b.style.backgroundColor = back;
-            b.style.color = enabled ? Text : Disabled;
+            b.style.color = textColor;
             if (enabled && onClick != null)
             {
                 b.clicked += onClick;
-                b.RegisterCallback<PointerEnterEvent>(e => b.style.backgroundColor = PanelHover);
+                b.RegisterCallback<PointerEnterEvent>(e => b.style.backgroundColor = hover);
                 b.RegisterCallback<PointerLeaveEvent>(e => b.style.backgroundColor = back);
             }
             return b;
         }
 
-        /// <summary>Велика кнопка головної дії («Далі», «Кинути»).</summary>
+        /// <summary>
+        /// Головна дія («Далі», «На ринг») — золота плита з написом display Black ВЕЛИКИМИ, як золота плита хабу (B03): золото —
+        /// головна дія гравця. Недоступна — темна плита й сірий текст.
+        /// </summary>
         public static Button PrimaryButton(string text, Action onClick, bool enabled = true)
         {
-            var b = MakeButton(text, onClick, enabled, Gold, 20f);
+            var b = Make(RingTheme.Caps(text), onClick, enabled, enabled ? RingTheme.Crimson : Disabled, 24f,
+                enabled ? Gold : Panel, enabled ? RingTheme.Paper : Panel, enabled ? Bg : Disabled);
+            RingFonts.Apply(b, RingFontRole.Display900);
             b.style.unityTextAlign = TextAnchor.MiddleCenter;
+            b.style.borderLeftWidth = 8f;
             b.style.marginTop = 8f;
             return b;
         }
@@ -263,7 +284,8 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Заголовок розділу компактного вигляду.</summary>
         public static Label Section(string text)
         {
-            var l = Lbl(text, 13f, Gold, true);
+            var l = Menus.MenuKit.Display(text, BrandTokens.TypeLabel, Gold, RingFontRole.Display800, 0.1f);
+            l.style.whiteSpace = WhiteSpace.Normal;
             l.style.marginTop = 6f;
             l.style.marginBottom = 3f;
             return l;
@@ -325,6 +347,8 @@ namespace Game.Gameplay.Ring.UI
             panel.style.maxWidth = 760f;
             panel.style.backgroundColor = PanelRaised;
             HudToolkitTheme.Border(panel, 2f, Gold);
+            panel.style.borderLeftWidth = 8f;
+            panel.style.borderLeftColor = RingTheme.Crimson;
             shade.Add(panel);
             return shade;
         }
