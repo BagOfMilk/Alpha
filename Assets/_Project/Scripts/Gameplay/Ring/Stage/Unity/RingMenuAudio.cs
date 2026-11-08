@@ -77,7 +77,8 @@ namespace Game.Gameplay.Ring.Stage
                 if (_old != null && _old != _cur) _old.Stop();   // третій трек поспіль: попередній «старий» не лишається висіти
                 _old = _cur; _oldLevel = _curLevel;
             }
-            if (clip == null) { _cur = null; _curLevel = 0f; return; }
+            // ворота звуку (рішення власника 08.11.2026): грає лише схвалене в бібліотеці звуку
+            if (!RingSoundGate.Allows(clip)) { _cur = null; _curLevel = 0f; return; }
             var next = _cur == _musA ? _musB : _musA;
             if (next == _old) { _old = _cur; _oldLevel = _curLevel; }
             next.clip = clip;
@@ -92,7 +93,7 @@ namespace Game.Gameplay.Ring.Stage
         {
             if (_a == null || _a.sfx == null) return;
             int i = (int)cue;
-            if (i < 0 || i >= _a.sfx.Length || _a.sfx[i] == null) return;
+            if (i < 0 || i >= _a.sfx.Length || !RingSoundGate.Allows(_a.sfx[i])) return;
             _sfx.PlayOneShot(_a.sfx[i], RingAudioMix.Current.Gain(RingBus.Sfx));
         }
 
@@ -111,7 +112,7 @@ namespace Game.Gameplay.Ring.Stage
         private void Play(AudioSource s, MenuSfx cue, float gain)
         {
             var c = _a.sfx[(int)cue];
-            if (c == null) return;
+            if (!RingSoundGate.Allows(c)) return;
             s.Stop();
             s.PlayOneShot(c, gain);
         }

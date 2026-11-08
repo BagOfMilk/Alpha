@@ -92,7 +92,9 @@ namespace UnityEngine
         public Color backgroundColor { get; set; }
     }
 
-    public class AudioListener : Behaviour { public static bool pause { get; set; } }
+    public class AudioListener : Behaviour { public static bool pause { get; set; } public static float volume { get; set; } }
+    /// <summary>Ринг: ворота звуку (RingSoundGate) питають кліп за назвою.</summary>
+    public class AudioClip : Object { }
 
     /// <summary>Ринг: мінімум Mathf для масштабу панелі.</summary>
     public static class Mathf
