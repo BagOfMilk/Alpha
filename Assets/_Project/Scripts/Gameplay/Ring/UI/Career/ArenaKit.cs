@@ -100,6 +100,37 @@ namespace Game.Gameplay.Ring.UI
             return MenuKit.Display(text, size, color, RingFontRole.Display700, 0.12f);
         }
 
+        /// <summary>
+        /// Ім'я й мітка ролі в одному рядку стрічки (рев'ю 08.11.2026: довге ім'я наїжджало на мітку — нічого їх не міряло).
+        /// Після розкладки, доки ім'я не влазить до мітки з проміжком: (1) зменшити кегль імені пропорційно, не нижче
+        /// <paramref name="minSize"/>; (2) сховати <paramref name="optional"/> (ґімік у мітці); (3) обрізати ім'я по ширині.
+        /// <paramref name="nameLeft"/> — ім'я ліворуч, мітка праворуч (стрічка гравця), інакше дзеркально (суперник).
+        /// </summary>
+        public static void FitNameAndTag(VisualElement box, Label name, VisualElement tag, VisualElement optional, bool nameLeft, float size, float minSize)
+        {
+            float cur = size;
+            int stage = 0;
+            box.RegisterCallback<GeometryChangedEvent>(e =>
+            {
+                Rect n = name.layout, t = tag.layout;
+                if (float.IsNaN(n.width) || float.IsNaN(t.width) || n.width <= 0f) return;
+                float avail = nameLeft ? t.x - n.x - 14f : (n.x + n.width) - (t.x + t.width) - 14f;
+                if (stage >= 3 || n.width <= avail + 0.5f) return;
+                if (stage == 0 && cur > minSize)
+                {
+                    cur = Mathf.Max(minSize, (float)Math.Floor(cur * avail / n.width));
+                    name.style.fontSize = cur;
+                    name.style.letterSpacing = new Length(cur * 0.01f);
+                    if (cur <= minSize) stage = 1;
+                    return;
+                }
+                if (stage <= 1 && optional != null) { optional.style.display = DisplayStyle.None; stage = 2; return; }
+                name.style.width = Mathf.Max(40f, avail);
+                name.style.overflow = Overflow.Hidden;
+                stage = 3;
+            });
+        }
+
         /// <summary>Число / коротке слово display Black.</summary>
         public static Label Big(string text, float size, Color color, bool italic = false)
         {
@@ -337,7 +368,7 @@ namespace Game.Gameplay.Ring.UI
         private readonly ArenaPlate _plate;
         private readonly Label _title, _effect, _risk, _key;
         private readonly CheckMark _check;
-        private readonly VisualElement _keyBox, _chances, _body, _head;
+        private readonly VisualElement _keyBox, _chances, _body, _head, _face;
         private readonly bool _enabled;
         private bool _compact;
         private bool _focus, _selected;
@@ -355,13 +386,22 @@ namespace Game.Gameplay.Ring.UI
             style.height = ArenaKit.TileH;
             style.marginRight = 9f;
             style.overflow = Overflow.Visible;
+            // Усе видиме — у шарі _face; фокус зсуває лише його. Сама плитка (зона наведення) стоїть: коли зсувалась плитка,
+            // курсор у нижніх 7 px випадав з неї — фокус знімався, плитка падала під курсор — і так щокадру (рев'ю 08.11.2026).
+            _face = new VisualElement();
+            _face.style.position = Position.Absolute;
+            _face.style.left = 0f; _face.style.top = 0f; _face.style.right = 0f; _face.style.bottom = 0f;
+            _face.style.overflow = Overflow.Visible;
+            _face.pickingMode = PickingMode.Ignore;
+            Add(_face);
             _plate = new ArenaPlate { Fill = RingTheme.Panel, Stripe = RingTheme.Gold, StripeW = 6f };
-            Add(_plate);
+            _plate.pickingMode = PickingMode.Ignore;
+            _face.Add(_plate);
             var body = new VisualElement();
             body.style.position = Position.Absolute;
             body.style.left = 18f; body.style.right = 22f; body.style.top = 10f; body.style.bottom = 8f;
             body.pickingMode = PickingMode.Ignore;
-            Add(body);
+            _face.Add(body);
             _body = body;
             var head = ArenaKit.Row();
             _head = head;
@@ -392,12 +432,12 @@ namespace Game.Gameplay.Ring.UI
             _chances.style.flexDirection = FlexDirection.Row;
             _chances.style.display = DisplayStyle.None;
             _chances.pickingMode = PickingMode.Ignore;
-            Add(_chances);
+            _face.Add(_chances);
             _check = new CheckMark();   // галочка малюється: у display-шрифті немає U+2713 (перевірено fontTools 08.11.2026)
             _check.style.position = Position.Absolute;
             _check.style.right = 50f; _check.style.top = 14f;   // ліворуч від ключа: унизу лягала на рядок ефекту (кадр 4:3)
             _check.style.display = DisplayStyle.None;
-            Add(_check);
+            _face.Add(_check);
             RegisterCallback<PointerEnterEvent>(e => { if (OnHover != null) OnHover(); });
             RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && OnClick != null) OnClick(); });
             Sync();
@@ -425,7 +465,7 @@ namespace Game.Gameplay.Ring.UI
                 _keyBox.style.width = 24f; _keyBox.style.height = 24f;
                 _keyBox.style.marginLeft = 0f;
                 _key.style.fontSize = 17f;
-                Add(_keyBox);
+                _face.Add(_keyBox);
             }
             else
             {
@@ -479,7 +519,7 @@ namespace Game.Gameplay.Ring.UI
             _key.style.color = darkText ? RingTheme.Gold : RingTheme.Bg;
             _check.style.display = _selected ? DisplayStyle.Flex : DisplayStyle.None;
             _check.Ink = darkText ? RingTheme.Bg : RingTheme.Text;
-            style.translate = new Translate(new Length(0f), new Length(_focus && _enabled && !MenuAnimator.Reduced ? -7f : 0f));
+            _face.style.translate = new Translate(new Length(0f), new Length(_focus && _enabled && !MenuAnimator.Reduced ? -7f : 0f));
         }
     }
 

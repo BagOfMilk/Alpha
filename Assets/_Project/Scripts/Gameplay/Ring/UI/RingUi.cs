@@ -158,19 +158,35 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Поля екрана: відступ від краю.</summary>
         public static void HudPad(VisualElement e) { HudToolkitTheme.Padding(e, 22f, 34f); }
 
-        /// <summary>Заголовок екрана — display Black ВЕЛИКИМИ курсивом (як титр-плита меню).</summary>
+        /// <summary>
+        /// Статут TYPE-02: ВЕЛИКІ display — лише для ≤2 слів (мітки, імена). Довше — речення, sentence case у ролі text.
+        /// Словом рахується відрізок із літерою чи цифрою («—», «·» — ні). Рев'ю 08.11.2026: підказка реакції матчу
+        /// («Тайгер: «…». Як відповісти?») і підказка натиску стали довгими реченнями ВЕЛИКИМИ — важко читати.
+        /// </summary>
+        public static bool ShortCaption(string text) { return RingCaption.IsShort(text); }
+
+        /// <summary>Заголовок за TYPE-02: коротка мітка — display ВЕЛИКИМИ, речення — Fixel жирним того ж кольору.</summary>
+        private static Label CaptionOrSentence(string text, float displaySize, float textSize, RingFontRole role, float tracking)
+        {
+            Label l;
+            if (ShortCaption(text)) l = Menus.MenuKit.Display(text, displaySize, Gold, role, tracking);
+            else l = Menus.MenuKit.Body(text, textSize, Gold, true);
+            l.style.whiteSpace = WhiteSpace.Normal;
+            return l;
+        }
+
+        /// <summary>Заголовок екрана — display Black ВЕЛИКИМИ курсивом (як титр-плита меню); речення — Fixel жирним.</summary>
         public static Label Title(string text)
         {
-            var l = Menus.MenuKit.Display(text, 28f, Gold, RingFontRole.Display900, 0.02f);
-            l.style.unityFontStyleAndWeight = FontStyle.Italic;
-            l.style.whiteSpace = WhiteSpace.Normal;
+            bool caps = ShortCaption(text);
+            var l = CaptionOrSentence(text, 28f, 22f, RingFontRole.Display900, 0.02f);
+            if (caps) l.style.unityFontStyleAndWeight = FontStyle.Italic;
             return l;
         }
 
         public static Label Heading(string text)
         {
-            var l = Menus.MenuKit.Display(text, 21f, Gold, RingFontRole.Display800, 0.04f);
-            l.style.whiteSpace = WhiteSpace.Normal;
+            var l = CaptionOrSentence(text, 21f, 18f, RingFontRole.Display800, 0.04f);
             l.style.marginBottom = 6f;
             return l;
         }
@@ -240,9 +256,11 @@ namespace Game.Gameplay.Ring.UI
         /// </summary>
         public static Button PrimaryButton(string text, Action onClick, bool enabled = true)
         {
-            var b = Make(RingTheme.Caps(text), onClick, enabled, enabled ? RingTheme.Crimson : Disabled, 24f,
+            // TYPE-02: «Далі», «На ринг» — display ВЕЛИКИМИ; довший напис («Далі — до наступного промо») — Fixel жирним
+            bool caps = ShortCaption(text);
+            var b = Make(caps ? RingTheme.Caps(text) : text, onClick, enabled, enabled ? RingTheme.Crimson : Disabled, caps ? 24f : 19f,
                 enabled ? Gold : Panel, enabled ? RingTheme.Paper : Panel, enabled ? Bg : Disabled);
-            RingFonts.Apply(b, RingFontRole.Display900);
+            RingFonts.Apply(b, caps ? RingFontRole.Display900 : RingFontRole.TextBold);
             b.style.unityTextAlign = TextAnchor.MiddleCenter;
             b.style.borderLeftWidth = 8f;
             b.style.marginTop = 8f;
@@ -284,8 +302,7 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Заголовок розділу компактного вигляду.</summary>
         public static Label Section(string text)
         {
-            var l = Menus.MenuKit.Display(text, BrandTokens.TypeLabel, Gold, RingFontRole.Display800, 0.1f);
-            l.style.whiteSpace = WhiteSpace.Normal;
+            var l = CaptionOrSentence(text, BrandTokens.TypeLabel, BrandTokens.TypeLabel, RingFontRole.Display800, 0.1f);
             l.style.marginTop = 6f;
             l.style.marginBottom = 3f;
             return l;

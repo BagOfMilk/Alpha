@@ -23,8 +23,11 @@ namespace Game.Gameplay.Ring.UI
         private bool _shop = ExpandForShots;
         private readonly List<ActionTile> _tiles = new List<ActionTile>();
         private Label _hint;
-        private VisualElement _row, _gold, _weekPlate, _last, _ropes, _header, _drawer;
+        private VisualElement _row, _gold, _weekPlate, _last, _ropes, _header, _drawer, _poster;
         private string _hintDefault = "";
+        private bool _hintWarn;
+        private ScrollView _drawerScroll;
+        private Vector2 _drawerOffset;
 
         public WeekScreenView(RingUiContext ctx) : base(ctx)
         {
@@ -33,17 +36,22 @@ namespace Game.Gameplay.Ring.UI
 
         public override void Refresh()
         {
+            // покупка в шухляді перебудовує екран: місце в довгому списку «Усе (N)» не губиться (рев'ю 08.11.2026)
+            if (_drawerScroll != null) _drawerOffset = _drawerScroll.scrollOffset;
+            _drawerScroll = null;
             Root.Clear();
             Root.style.paddingLeft = 0f; Root.style.paddingRight = 0f; Root.style.paddingTop = 0f; Root.style.paddingBottom = 0f;
             _tiles.Clear();
             var v = C.GetCareerView();
             var w = C.GetWeekView();
-            Root.Add(PlayerStrip(v));
-            Root.Add(Resources(v));
+            Root.Add(ShowKit.PlayerStrip(C, T, v));
+            Root.Add(ShowKit.Resources(T, v));
             _weekPlate = WeekPlate(v);
             Root.Add(_weekPlate);
-            Root.Add(RivalStrip(w.Card));
-            Root.Add(Poster(w.Card, w.IsBigShowWeek));
+            Root.Add(ShowKit.RivalStrip(C, T, w.Card.Opponent, w.Card.OpponentFeudLevel, true));
+            _poster = Poster(w.Card, w.IsBigShowWeek);
+            _poster.RegisterCallback<GeometryChangedEvent>(e => Fit());   // висота афіші відома лише після розкладки (межа шухляди)
+            Root.Add(_poster);
             var last = Host.LastWeekResult;
             _last = last != null ? LastResult(last) : null;
             if (_last != null) Root.Add(_last);
@@ -117,7 +125,21 @@ namespace Game.Gameplay.Ring.UI
             }
             if (_ropes != null) _ropes.style.bottom = ArenaKit.RopesBottom + lift;
             if (_header != null) _header.style.bottom = ArenaKit.HeaderBottom + lift;
-            if (_drawer != null) _drawer.style.bottom = ArenaKit.HeaderBottom + 50f + lift;
+            if (_drawer != null)
+            {
+                _drawer.style.bottom = ArenaKit.HeaderBottom + 50f + lift;
+                // шухляда не закриває афішу (гонорар, план), доки під нею лишається >= 260 на список; інакше — лише до стрічки
+                // суперника (вузька панель, ряд плиток піднятий) — рев'ю 08.11.2026
+                float height = Root.layout.height;
+                float bottomY = height - (ArenaKit.HeaderBottom + 50f + lift);
+                bool posterReady = _poster != null && !float.IsNaN(_poster.layout.height) && _poster.layout.height > 0f;
+                if (posterReady && !float.IsNaN(height))
+                {
+                    float room = bottomY - (_poster.layout.y + _poster.layout.height) - 12f;
+                    if (room < 260f) room = bottomY - (ArenaKit.Top + ArenaKit.StripH + 12f);
+                    if (room > 120f) _drawer.style.maxHeight = room;
+                }
+            }
             if (_weekPlate != null)
             {
                 if (narrow) { _weekPlate.style.left = ArenaKit.Edge; _weekPlate.style.marginLeft = 0f; _weekPlate.style.top = ArenaKit.SecondY + 104f + 14f; }
@@ -146,83 +168,11 @@ namespace Game.Gameplay.Ring.UI
         {
             if (_hint == null) return;
             _hint.text = text ?? "";
+            _hint.style.color = _hintWarn && text == _hintDefault ? RingTheme.Signal : RingTheme.Text;
             _hint.style.opacity = string.IsNullOrEmpty(text) ? 0f : 1f;
         }
 
         // ---------------- верх: стрічки, ресурси, табличка, афіша ----------------
-
-        private VisualElement PlayerStrip(CareerView v)
-        {
-            var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.Top, null, null, ArenaKit.StripW, ArenaKit.StripH);
-            box.style.overflow = Overflow.Visible;
-            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Outline = ArenaKit.RoleColor(v.Role), Stripe = ArenaKit.RoleColor(v.Role) });
-            var name = ArenaKit.Big(v.RingName, 40f, RingTheme.Text);
-            ArenaKit.Place(name, 24f, 8f, null, null);
-            box.Add(name);
-            var tag = ArenaKit.Row();
-            ArenaKit.Place(tag, null, 12f, 34f, null);
-            tag.Add(ArenaKit.Tag(T.Get("gimmick." + C.Content.GimmickOf(v.Gimmick).Key) + " · ", RingTheme.TextDim));
-            tag.Add(ArenaKit.Tag(RingLabels.PathName(T, v.Role), ArenaKit.RoleText(v.Role)));
-            if (v.IsChampion) tag.Add(ArenaKit.Tag(" · " + T.Get("c.champion"), RingTheme.Gold));
-            box.Add(tag);
-            var zones = new VisualElement();
-            ArenaKit.Place(zones, 24f, 54f, null, null);
-            zones.pickingMode = PickingMode.Ignore;
-            var doll = new InjuryDoll();
-            for (int z = 0; z < 3; z++)
-            {
-                int dmg = 0, weeks = 0;
-                foreach (var i in v.Injuries) if ((int)i.Zone == z) { dmg = i.ZoneDamage; weeks = i.WeeksLeft; }
-                int filled = weeks > 0 ? 3 : Math.Min(3, dmg);
-                var r = ArenaKit.Row();
-                r.style.height = 17f;
-                var l = ArenaKit.Tag(T.Get("bodyzone." + z), RingTheme.TextDim);
-                l.style.width = 92f;
-                r.Add(l);
-                r.Add(ArenaKit.Segments(3, filled, RingTheme.Signal, 66f, 11f));
-                var val = MenuKit.Display(weeks > 0 ? T.Format("c.hub.weeks", weeks) : filled + "/3", BrandTokens.TypeLabel, filled > 0 ? RingTheme.Text : RingTheme.TextDim, RingFontRole.Display900, 0.02f);
-                val.style.marginLeft = 10f;
-                r.Add(val);
-                zones.Add(r);
-                doll.Set(z, filled > 0);
-            }
-            box.Add(zones);
-            ArenaKit.Place(doll, null, 26f, 48f, null);
-            box.Add(doll);
-            return box;
-        }
-
-        private VisualElement Resources(CareerView v)
-        {
-            var box = ArenaKit.Abs(ArenaKit.Edge, ArenaKit.SecondY, null, null, ArenaKit.StripW, 104f);
-            box.style.overflow = Overflow.Visible;
-            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Stripe = ArenaKit.RoleColor(v.Role) });
-            var money = ArenaKit.Row();
-            ArenaKit.Place(money, 24f, 6f, null, null);
-            money.style.alignItems = Align.FlexEnd;
-            money.Add(ArenaKit.Money(v.Money, 40f, RingTheme.Text));
-            var ml = ArenaKit.Tag(T.Get("c.hub.money"), RingTheme.TextDim);
-            ml.style.marginLeft = 10f; ml.style.marginBottom = 6f;
-            money.Add(ml);
-            box.Add(money);
-            box.Add(MeterLine(T.Get("c.hub.pop"), v.Popularity, CareerRules.MaxPopularity, 56f));
-            box.Add(MeterLine(T.Get("c.hub.trust"), v.Trust, CareerRules.MaxTrust, 78f));
-            return box;
-        }
-
-        private VisualElement MeterLine(string name, int value, int max, float top)
-        {
-            var r = ArenaKit.Row();
-            ArenaKit.Place(r, 24f, top, null, null);
-            var l = ArenaKit.Tag(name, RingTheme.TextDim);
-            l.style.width = 170f;
-            r.Add(l);
-            r.Add(ArenaKit.Segments(max, value, RingTheme.Text, max * 13f, 12f));
-            var val = MenuKit.Display(value + "/" + max, BrandTokens.TypeLabel, RingTheme.Text, RingFontRole.Display900, 0.02f);
-            val.style.marginLeft = 10f;
-            r.Add(val);
-            return r;
-        }
 
         private VisualElement WeekPlate(CareerView v)
         {
@@ -250,43 +200,6 @@ namespace Game.Gameplay.Ring.UI
             right.Add(ArenaKit.Segments(total, v.Week, RingTheme.Bg, total * 20f, 14f, RingTheme.TextDim));   // на папері темне «порожнє» не видно
             row.Add(right);
             box.Add(row);
-            return box;
-        }
-
-        private VisualElement RivalStrip(ShowCardView c)
-        {
-            var box = ArenaKit.Abs(null, ArenaKit.Top, ArenaKit.Edge, null, ArenaKit.StripW, ArenaKit.StripH);
-            box.style.overflow = Overflow.Visible;
-            var npc = c.Opponent;
-            Color role = npc != null ? ArenaKit.RoleColor(npc.Path) : RingTheme.Border;
-            box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPanel), Outline = role, Stripe = role, Mirror = true });
-            if (npc == null) return box;
-            string nick, name;
-            ArenaKit.SplitNick(T.Get(npc.NameKey), out nick, out name);
-            var nl = ArenaKit.Big(nick, 40f, RingTheme.Text);
-            ArenaKit.Place(nl, null, 8f, 24f, null);
-            box.Add(nl);
-            var tag = ArenaKit.Row();
-            ArenaKit.Place(tag, 40f, 12f, null, null);
-            tag.Add(ArenaKit.Tag(RingLabels.PathName(T, npc.Path), ArenaKit.RoleText(npc.Path)));
-            tag.Add(ArenaKit.Tag(" · " + T.Get("gimmick." + C.Content.GimmickOf(npc.Gimmick).Key), RingTheme.TextDim));
-            box.Add(tag);
-            if (!string.IsNullOrEmpty(name))
-            {
-                var real = ArenaKit.Tag(name, RingTheme.TextDim);
-                ArenaKit.Place(real, null, 54f, 24f, null);
-                box.Add(real);
-            }
-            var feud = ArenaKit.Row();
-            ArenaKit.Place(feud, null, 78f, 24f, null);
-            feud.Add(ArenaKit.Tag(T.Get("c.hub.feud"), RingTheme.TextDim));
-            var seg = ArenaKit.Segments(CareerRules.MaxFeud, c.OpponentFeudLevel, RingTheme.Signal, 120f, 12f);
-            seg.style.marginLeft = 12f;
-            feud.Add(seg);
-            var fv = MenuKit.Display(c.OpponentFeudLevel + "/" + CareerRules.MaxFeud, BrandTokens.TypeLabel, RingTheme.Text, RingFontRole.Display900, 0.02f);
-            fv.style.marginLeft = 10f;
-            feud.Add(fv);
-            box.Add(feud);
             return box;
         }
 
@@ -390,16 +303,24 @@ namespace Game.Gameplay.Ring.UI
                 left.style.marginLeft = 8f;
                 row.Add(left);
             }
-            _hintDefault = w.Strained ? T.Get("week.strained") : w.PromoChoicePending ? T.Get("c.week.promo_choice") : "";
-            _hint = MenuKit.Body(_hintDefault, BrandTokens.TypeMinInfo, w.Strained ? RingTheme.Signal : RingTheme.Text);
+            // вибір нагороди за промо й перевтома — обидва тексти (раніше перевтома ховала інструкцію вибору); сигнальний колір —
+            // лише для попередження, опис плитки при наведенні — звичайним (рев'ю 08.11.2026)
+            string promo = w.PromoChoicePending ? T.Get("c.week.promo_choice") : null;
+            string strained = w.Strained ? T.Get("week.strained") : null;
+            _hintDefault = promo != null && strained != null ? promo + " " + strained : promo ?? strained ?? "";
+            _hintWarn = strained != null;
+            _hint = MenuKit.Body(_hintDefault, BrandTokens.TypeMinInfo, RingTheme.Text);
             _hint.style.marginLeft = 22f;
-            _hint.style.flexShrink = 1f; _hint.style.flexGrow = 0f;
+            _hint.style.flexShrink = 1f; _hint.style.flexGrow = 0f; _hint.style.minWidth = 0f;
+            // не більше двох рядків у висоту шапки (42): на вузькій панелі довгий опис не вилазить на канати й плитки
+            _hint.style.maxHeight = 40f;
+            _hint.style.overflow = Overflow.Hidden;
             MenuKit.Underlay(_hint);
             row.Add(_hint);
             SetHint(_hintDefault);
             row.Add(ArenaKit.Spacer());
-            row.Add(new TabPlate(T.Get("dev.title"), w.DevPoints, _dev, () => { _dev = !_dev; if (_dev) _shop = false; Refresh(); }, w.DevPoints > 0));
-            row.Add(new TabPlate(T.Get("c.hub.shop"), ShopAvailable(), _shop, () => { _shop = !_shop; if (_shop) _dev = false; Refresh(); }, false));
+            row.Add(new TabPlate(T.Get("dev.title"), w.DevPoints, _dev, () => { _dev = !_dev; if (_dev) _shop = false; _drawerScroll = null; _drawerOffset = Vector2.zero; Refresh(); }, w.DevPoints > 0));
+            row.Add(new TabPlate(T.Get("c.hub.shop"), ShopAvailable(), _shop, () => { _shop = !_shop; if (_shop) _dev = false; _drawerScroll = null; _drawerOffset = Vector2.zero; Refresh(); }, false));
             return row;
         }
 
@@ -407,22 +328,35 @@ namespace Game.Gameplay.Ring.UI
         private VisualElement Drawer()
         {
             var box = ArenaKit.Abs(null, null, ArenaKit.Edge, ArenaKit.HeaderBottom + 50f, 560f, null);
-            box.style.maxHeight = 430f;
+            box.style.maxHeight = 430f;   // уточнює Fit: не вище афіші, якщо під нею є місце
             box.style.overflow = Overflow.Visible;
+            box.style.flexDirection = FlexDirection.Column;
             box.pickingMode = PickingMode.Position;
             box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, 0.96f), Stripe = RingTheme.Gold, StripeW = 6f });
-            var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.style.maxHeight = 420f;
-            scroll.style.paddingLeft = 18f; scroll.style.paddingRight = 24f; scroll.style.paddingTop = 8f; scroll.style.paddingBottom = 10f;
+            // заголовок і рядок-підказка — над прокруткою: опис пункту й причина «чому недоступно» видні завжди, а не внизу
+            // довгого списку (рев'ю 08.11.2026)
+            var top = new VisualElement();
+            top.pickingMode = PickingMode.Ignore;
+            top.style.paddingLeft = 18f; top.style.paddingRight = 24f; top.style.paddingTop = 8f;
+            top.style.flexShrink = 0f;
             var head = MenuKit.Display(_dev ? T.Get("dev.title") : T.Get("c.hub.shop"), 25f, RingTheme.Text, RingFontRole.Display900, 0.02f);
-            head.style.marginBottom = 4f;
-            scroll.Add(head);
+            top.Add(head);
+            var hint = MakeHint();   // кнопки розвитку й витрат пишуть сюди при наведенні
+            hint.style.marginTop = 2f;
+            top.Add(hint);
+            box.Add(top);
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexShrink = 1f; scroll.style.minHeight = 60f;
+            scroll.style.paddingLeft = 18f; scroll.style.paddingRight = 24f; scroll.style.paddingBottom = 10f;
             var content = _dev ? DevelopmentPanel(Refresh) : ShopPanel();
             content.style.backgroundColor = Color.clear;
             content.style.borderTopWidth = 0f; content.style.borderBottomWidth = 0f; content.style.borderLeftWidth = 0f; content.style.borderRightWidth = 0f;
             scroll.Add(content);
-            scroll.Add(MakeHint());   // опис пункту при наведенні (кнопки розвитку й витрат пишуть сюди)
             box.Add(scroll);
+            _drawerScroll = scroll;
+            var restore = _drawerOffset;
+            bool restored = restore.x == 0f && restore.y == 0f;
+            scroll.RegisterCallback<GeometryChangedEvent>(e => { if (restored) return; restored = true; scroll.scrollOffset = restore; });
             return box;
         }
 

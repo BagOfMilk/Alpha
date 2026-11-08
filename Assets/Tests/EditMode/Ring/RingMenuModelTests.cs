@@ -139,6 +139,19 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Caption_TwoWordsOrLess_IsCaps_SentencesAreNot()
+        {
+            // Статут TYPE-02 (рев'ю B03 v2, 08.11.2026): речення в заголовках матчу й промо — не ВЕЛИКИМИ
+            Assert.IsTrue(RingCaption.IsShort("Далі"));
+            Assert.IsTrue(RingCaption.IsShort("На ринг"));
+            Assert.IsTrue(RingCaption.IsShort("Тиждень 3"));
+            Assert.IsTrue(RingCaption.IsShort("Тайгер — Лиходій"), "тире словом не рахується");
+            Assert.IsTrue(RingCaption.IsShort(""));
+            Assert.IsFalse(RingCaption.IsShort("Далі — до наступного промо"));
+            Assert.IsFalse(RingCaption.IsShort("Тайгер: «Поганий хлопець». Як відповісти?"));
+        }
+
+        [Test]
         public void Settings_Rebind_SwapsConflicts_NoActionLosesItsKey()
         {
             var m = new RingSettingsModel();

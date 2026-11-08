@@ -26,10 +26,12 @@ namespace Game.Gameplay.Ring.UI
             box.Add(name);
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, null, 12f, 34f, null);
-            tag.Add(ArenaKit.Tag(t.Get("gimmick." + c.Content.GimmickOf(v.Gimmick).Key) + " · ", RingTheme.TextDim));
+            var gimmick = ArenaKit.Tag(t.Get("gimmick." + c.Content.GimmickOf(v.Gimmick).Key) + " · ", RingTheme.TextDim);
+            tag.Add(gimmick);
             tag.Add(ArenaKit.Tag(RingLabels.PathName(t, v.Role), ArenaKit.RoleText(v.Role)));
             if (v.IsChampion) tag.Add(ArenaKit.Tag(" · " + t.Get("c.champion"), RingTheme.Gold));
             box.Add(tag);
+            ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, 40f, 26f);
             var zones = new VisualElement();
             ArenaKit.Place(zones, 24f, 54f, null, null);
             zones.pickingMode = PickingMode.Ignore;
@@ -52,7 +54,7 @@ namespace Game.Gameplay.Ring.UI
                 doll.Set(z, filled > 0);
             }
             box.Add(zones);
-            ArenaKit.Place(doll, null, 26f, 48f, null);
+            ArenaKit.Place(doll, null, 34f, 48f, null);   // нижче мітки ролі: голова ляльки торкалась її кінця (рев'ю 08.11.2026)
             box.Add(doll);
             return box;
         }
@@ -105,8 +107,10 @@ namespace Game.Gameplay.Ring.UI
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, 40f, 12f, null, null);
             tag.Add(ArenaKit.Tag(RingLabels.PathName(t, npc.Path), ArenaKit.RoleText(npc.Path)));
-            tag.Add(ArenaKit.Tag(" · " + t.Get("gimmick." + c.Content.GimmickOf(npc.Gimmick).Key), RingTheme.TextDim));
+            var rg = ArenaKit.Tag(" · " + t.Get("gimmick." + c.Content.GimmickOf(npc.Gimmick).Key), RingTheme.TextDim);
+            tag.Add(rg);
             box.Add(tag);
+            ArenaKit.FitNameAndTag(box, nl, tag, rg, false, 40f, 26f);
             if (!string.IsNullOrEmpty(name))
             {
                 var real = ArenaKit.Tag(name, RingTheme.TextDim);
