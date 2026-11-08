@@ -74,6 +74,8 @@ section.group { display: grid; gap: 10px; }
 .meta .label { font-weight: 700; }
 .meta .dur { font-family: var(--mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .meta .src { font-size: 12px; color: var(--ash); }
+.meta .design { font-size: 13px; color: var(--paper); }
+.meta .round { font: 700 11px/1 var(--mono); color: var(--gold); border: 1px solid var(--gold); padding: 2px 6px; margin-left: 8px; }
 .meta .verdict-note { font-size: 12px; color: var(--signal); }
 .wave { width: 100%; height: 28px; display: block; cursor: pointer; }
 .acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
@@ -246,8 +248,10 @@ footer ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; max-wi
     var meta = el("div", "meta");
     var r1 = el("div", "row1");
     r1.appendChild(el("span", "label", c.label));
+    if (c.round) r1.appendChild(el("span", "round", "Новий · раунд " + c.round));
     r1.appendChild(el("span", "dur", fmt(c.seconds)));
     meta.appendChild(r1);
+    if (c.design) meta.appendChild(el("div", "design", c.design));
     var cv = el("canvas", "wave"); cv.setAttribute("data-wave", c.id); cv.setAttribute("aria-hidden", "true");
     cv.addEventListener("click", function (e) { seek(c, e); });
     meta.appendChild(cv);
