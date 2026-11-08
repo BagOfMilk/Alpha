@@ -28,8 +28,8 @@ namespace Game.Core.Ring.Career
         /// <summary>Дії, що доступні завжди й не є прийомами каталогу (системні).</summary>
         public static readonly MatchActionId[] UniversalActions =
         {
-            MatchActionId.Pin, MatchActionId.Desperate, MatchActionId.HopeSpot, MatchActionId.GetUp, MatchActionId.LeaveRing,
-            MatchActionId.ReturnToRing, MatchActionId.Recover, MatchActionId.Ally, MatchActionId.CatchBreath
+            MatchActionId.Pin, MatchActionId.Desperate, MatchActionId.HopeSpot, MatchActionId.GetUp,
+            MatchActionId.Recover, MatchActionId.Ally, MatchActionId.CatchBreath
         };
 
         public CareerContent Content { get; }
@@ -910,7 +910,7 @@ namespace Game.Core.Ring.Career
             return l;
         }
 
-        /// <summary>Системні дії (утримання, встати, вийти з рингу, відчайдушний, напарник, промінь надії, перевести подих).</summary>
+        /// <summary>Системні дії (утримання, встати, відчайдушний, напарник, промінь надії, відновитися, перевести подих).</summary>
         public List<ActionOption> GetUniversalOptions()
         {
             var e = Engine;

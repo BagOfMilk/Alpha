@@ -6,7 +6,7 @@ using Game.Core.Ring.Match;
 
 namespace Game.Gameplay.Ring.Models
 {
-    /// <summary>Картка борця (gdd §2.1): ушкодження з порогами, імпульс, стан, зона, жетони.</summary>
+    /// <summary>Картка борця (TRPG_DESIGN §4.3): ушкодження з порогами, імпульс, «Сили», стан, жетони.</summary>
     public sealed class FighterCardModel
     {
         public MatchSide Side;
@@ -24,7 +24,12 @@ namespace Game.Gameplay.Ring.Models
         public int MomentumMax;
         public string MomentumText;
         public string PostureText;
-        public string ZoneText;
+        /// <summary>«Сили» 0–10 (гальмо ланцюга ініціативи) і їх текст.</summary>
+        public int Stamina;
+        public int StaminaMax;
+        public string StaminaText;
+        /// <summary>Ініціатива зараз у цього борця.</summary>
+        public bool HasInitiative;
         public int Tokens;
         public string TokensText;
         public int Warnings;
@@ -41,8 +46,11 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Той самий прийом двічі поспіль: −1 ажіотажу.</summary>
         public bool RepeatWarning;
         public string Name;
+        /// <summary>Ціна в «Силах».</summary>
         public int Cost;
         public string CostText;
+        /// <summary>«Сил» 0: у шансах уже −1.</summary>
+        public bool Winded;
         /// <summary>Атрибут кидка («Сила»); порожньо, якщо кидка нема.</summary>
         public string AttrText = "";
         public bool Available;
@@ -82,7 +90,7 @@ namespace Game.Gameplay.Ring.Models
     public enum MatchInput { PlayerAction = 0, PlayerReaction = 1, PlayerBoost = 2, Ai = 3, Over = 4 }
 
     /// <summary>
-    /// Модель екрана матчу (gdd §2): картки борців, ажіотаж, раунд, список дій із шансами й причинами, модальні реакція
+    /// Модель екрана матчу (TRPG_DESIGN §4): картки борців, ажіотаж, ініціатива, список дій із шансами й причинами, модальні реакція
     /// і докрутка, журнал. Читає MatchEngine через його публічний API; команди — тонкі обгортки. Хід суперника веде ШІ
     /// (<see cref="StepAi"/>), темп (пауза) задає екран.
     /// </summary>
@@ -166,13 +174,16 @@ namespace Game.Gameplay.Ring.Models
                 Momentum = f.Momentum,
                 MomentumMax = MatchRules.MaxMomentum,
                 PostureText = RingLabels.PostureName(_t, f.Posture),
-                ZoneText = RingLabels.ZoneName(_t, f.Zone),
+                Stamina = f.Stamina,
+                StaminaMax = MatchRules.MaxStamina,
+                HasInitiative = !_e.IsOver && _e.CurrentActor == side,
                 Tokens = f.ReversalTokens,
                 Warnings = f.Warnings
             };
             c.DamageText = _t.Format("match.card.damage", f.Damage, MatchRules.MaxDamage);
             c.PenaltyText = pen > 0 ? _t.Format("match.card.penalty", pen) : "";
             c.MomentumText = _t.Format("match.card.momentum", f.Momentum, MatchRules.MaxMomentum);
+            c.StaminaText = _t.Format("match.card.stamina", f.Stamina, MatchRules.MaxStamina);
             c.TokensText = _t.Format("match.card.tokens", f.ReversalTokens);
             c.WarningsText = f.Warnings > 0 ? _t.Format("match.card.warnings", f.Warnings, MatchRules.WarningsToDq) : "";
             return c;
@@ -181,16 +192,17 @@ namespace Game.Gameplay.Ring.Models
         public int Hype { get { return _e.State.Hype; } }
         public int HypeMax { get { return MatchRules.MaxHype; } }
         public string HypeText { get { return _t.Format("match.hype", Hype, HypeMax, RingLabels.HypeStageText(_t, Hype)); } }
-        public string RoundText { get { return _t.Format("match.round", _e.Round, _e.Setup.RoundLimit); } }
-        public string ApText { get { return _t.Format("match.ap", _e.Ap); } }
+        /// <summary>Номер дії матчу з ліміту (ланцюг ініціативи рахує кожну дію; раундів немає).</summary>
+        public string RoundText { get { return _t.Format("match.round", Math.Min(_e.Round, _e.Setup.RoundLimit), _e.Setup.RoundLimit); } }
 
-        /// <summary>Відлік за рингом; порожньо, якщо ніхто не за рингом.</summary>
-        public string CountText
+        /// <summary>У кого ініціатива і яка це дія ланцюга («Ініціатива: ти ×3»); порожньо після кінця.</summary>
+        public string InitiativeText
         {
             get
             {
-                int c = _e.State.OutsideCount;
-                return c > 0 ? _t.Format("match.count", c, MatchRules.OutsideCountLimit) : "";
+                if (_e.IsOver) return "";
+                string key = _e.CurrentActor == MatchSide.Player ? "match.initiative.player" : "match.initiative.rival";
+                return _t.Format(key, _e.Chain + 1);
             }
         }
 
@@ -223,25 +235,8 @@ namespace Game.Gameplay.Ring.Models
             if (_career != null) return CareerActions();
             foreach (var o in _e.GetAvailableActions())
             {
-                var r = new MatchActionRow
-                {
-                    Id = o.Id,
-                    Name = RingLabels.ActionName(_t, o.Id),
-                    Cost = o.Cost,
-                    CostText = o.Cost > 0 ? _t.Format("match.action.cost", o.Cost) : _t.Get("match.action.free"),
-                    Available = o.Available,
-                    IsBig = o.IsBig,
-                    HasRoll = o.HasRoll,
-                    RollIsOpponents = o.RollIsOpponents
-                };
-                if (o.HasAttr) r.AttrText = RingLabels.AttrName(_t, o.Attr);
-                if (o.HasRoll && o.Chances != null)
-                {
-                    r.Percents = RingChances.Percent(o.Chances);
-                    r.ModifierText = RingChances.Signed(o.Modifier);
-                }
-                if (!o.Available) r.ReasonText = RingLabels.Unavailable(_t, o.Reason);
-                else if (n <= 9) r.Number = n++;
+                var r = Row(o, RingLabels.ActionName(_t, o.Id));
+                if (r.Available && n <= 9) r.Number = n++;
                 rows.Add(r);
             }
             return rows;
@@ -280,7 +275,8 @@ namespace Game.Gameplay.Ring.Models
                 Available = o.Available,
                 IsBig = o.IsBig,
                 HasRoll = o.HasRoll,
-                RollIsOpponents = o.RollIsOpponents
+                RollIsOpponents = o.RollIsOpponents,
+                Winded = o.Winded
             };
             if (o.HasAttr) r.AttrText = RingLabels.AttrName(_t, o.Attr);
             if (o.HasRoll && o.Chances != null)
@@ -310,7 +306,7 @@ namespace Game.Gameplay.Ring.Models
             return true;
         }
 
-        /// <summary>Виконати дію гравця. «Перевести подих» — це кінець ходу.</summary>
+        /// <summary>Виконати дію гравця. «Перевести подих» віддає ініціативу.</summary>
         public bool Perform(MatchActionId id)
         {
             if (Input != MatchInput.PlayerAction) return false;
@@ -439,13 +435,14 @@ namespace Game.Gameplay.Ring.Models
             sb.Append(_t.Format("log.round", ev.Round)).Append(' ');
             switch (ev.Kind)
             {
-                case MatchEventKind.Exchange: sb.Append(_t.Format("log.exchange", name)); break;
+                case MatchEventKind.Exchange: sb.Append(_t.Format("log.exchange", name, ev.Total, ev.OtherTotal)); break;
                 case MatchEventKind.Sell: sb.Append(_t.Format("log.sell", name, action)); break;
                 case MatchEventKind.Reverse: sb.Append(_t.Format("log.reverse", name, action, RingLabels.TierName(_t, ev.Tier))); break;
                 case MatchEventKind.Kickout: sb.Append(_t.Format("log.kickout", name, RingLabels.TierName(_t, ev.Tier))); break;
                 case MatchEventKind.Endure: sb.Append(_t.Format("log.endure", name, RingLabels.TierName(_t, ev.Tier))); break;
                 case MatchEventKind.Rescue: sb.Append(_t.Format("log.rescue", name)); break;
                 case MatchEventKind.TurnEnd: sb.Append(_t.Format("log.turnend", name)); break;
+                case MatchEventKind.Flourish: sb.Append(_t.Format("log.flourish", name, action)); break;
                 case MatchEventKind.MatchEnd: sb.Append(_t.Get("log.matchend")); break;
                 default:
                     if (ev.HasRoll)
@@ -469,8 +466,6 @@ namespace Game.Gameplay.Ring.Models
             string kind = _t.Get("fx." + (int)e.Kind);
             switch (e.Kind)
             {
-                case MatchEffectKind.ZoneChange:
-                    return _t.Format("fx.zone", who, RingLabels.ZoneName(_t, (Zone)e.Amount));
                 case MatchEffectKind.Down:
                 case MatchEffectKind.Stand:
                 case MatchEffectKind.Stunned:
@@ -486,7 +481,7 @@ namespace Game.Gameplay.Ring.Models
 
         public MatchResult Result { get { return _e.Result; } }
 
-        /// <summary>Підсумок матчу рядками: переможець, як закінчився, раунди, ажіотаж.</summary>
+        /// <summary>Підсумок матчу рядками: переможець, як закінчився, скільки дій, ажіотаж.</summary>
         public List<string> ResultLines()
         {
             var res = new List<string>();

@@ -304,7 +304,7 @@ namespace Game.Tests.EditMode
             foreach (var m in moves) if (m.Option.Available && m.Move.Action != MatchActionId.Dirty) avail.Add(m);
             if (avail.Count > 0)
             {
-                int pick = (e.Round * 7 + e.Ap + variant) % avail.Count;
+                int pick = (e.Round * 7 + e.Chain + variant) % avail.Count;
                 s.PerformMove(avail[pick].Move.Id);
                 return;
             }

@@ -37,12 +37,17 @@ namespace Game.Core.Ring.Career
         public string GimmickId;
         /// <summary>Ціна вивчення в очках розвитку (лише для Gimmick/Learn).</summary>
         public int Cost;
+        /// <summary>
+        /// Постановка для показу (рішення власника 08.11.2026): усе в центрі рингу, прийом із канатів чи кута — склейкою кадру.
+        /// У JSON — «staging»: center | ropes | corner; без поля — ризикований трюк з кута, решта в центрі.
+        /// </summary>
+        public MoveStaging Staging;
 
         public bool IsLearnable { get { return Kind == MoveKind.Gimmick || Kind == MoveKind.Learn; } }
 
         public MoveHint ToHint(int injuryPenalty)
         {
-            return new MoveHint { Key = Id, RollMod = RollBonus - injuryPenalty, HypeOnStrong = Heat };
+            return new MoveHint { Key = Id, RollMod = RollBonus - injuryPenalty, HypeOnStrong = Heat, Staging = Staging };
         }
     }
 
@@ -86,6 +91,9 @@ namespace Game.Core.Ring.Career
                     GimmickId = JsonRead.Str(o, "gimmick", where, false),
                     Cost = JsonRead.Int(o, "cost", where, 0)
                 };
+                string staging = JsonRead.Str(o, "staging", where, false);
+                m.Staging = staging != null ? ParseEnum<MoveStaging>(staging, where + ".staging")
+                          : m.Action == MatchActionId.TopRope ? MoveStaging.Corner : MoveStaging.Center;
                 if (c._byId.ContainsKey(id)) throw new FormatException("повторний прийом " + id);
                 c._byId[id] = m;
                 c.All.Add(m);

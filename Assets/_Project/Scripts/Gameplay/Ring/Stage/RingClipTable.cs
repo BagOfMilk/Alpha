@@ -6,37 +6,41 @@ namespace Game.Gameplay.Ring.Stage
 {
     /// <summary>
     /// Яким планом знімати крок: загальним, ближче (удар) чи кіно (кидок, фінішер, утримання). <see cref="Cine"/> — кіноплан,
-    /// який режисер рахує сам з поз борців (фінішер, перемога): склейкою, а не наїздом.
+    /// який режисер рахує сам з поз борців (фінішер, перемога): склейкою, а не наїздом. <see cref="Low"/> — знизу вгору (план
+    /// «на канаті» склейки).
     /// </summary>
     public enum StageCam { Overview = 0, Close = 1, Big = 2, Low = 3, Cine = 4 }
 
+    /// <summary>
+    /// Вид кроку режисури. Рішення власника 08.11.2026 (TRPG_DESIGN §4.4, §4.12): усе — у центрі рингу, бігу по рингу немає;
+    /// прийом із канатів чи кута — склейкою кадру (<see cref="Cut"/>). Значення 2 (хода в зону) і 5 (кидок у канати з бігом)
+    /// прибрано разом із зонами.
+    /// </summary>
     public enum StageStepKind
     {
-        /// <summary>Парний кліп: A і B за зсувом із маніфесту (<see cref="StageStep.Clip"/> + _A/_B).</summary>
+        /// <summary>Парний кліп: A і B за зсувом із маніфесту (<see cref="StageStep.Clip"/> + _A/_B), центр пари — центр рингу.</summary>
         Pair = 0,
         /// <summary>Один борець грає кліп на місці.</summary>
-        Solo,
-        /// <summary>Борець іде в нову зону (ходьба).</summary>
-        Walk,
+        Solo = 1,
         /// <summary>Лише рефері (попередження, відлік).</summary>
-        Ref,
+        Ref = 3,
         /// <summary>Кінець матчу: рефері піднімає руку переможцю.</summary>
-        End,
+        End = 4,
         /// <summary>
-        /// Кидок у канати чи в кут: пара <see cref="StageStep.Clip"/> (Whip_*), далі кинутий (B) біжить сам — бігом
-        /// <see cref="StageStep.Run"/> до каната й удар спиною (<see cref="StageStep.Rope1"/>), за потреби відскок і ще канат
-        /// (<see cref="StageStep.Rope2"/>). Лінія каната кліпа лягає на канат рингу вздовж осі.
+        /// Склейка (план 1 з двох): нападник уже на канаті чи куті (<see cref="StageStep.Perch"/>) грає <see cref="StageStep.Clip"/>,
+        /// суперник стоїть у центрі й не рухається; далі — жорстка склейка на наступний крок (приземлення пари в центрі). Ходьби між
+        /// планами немає: режисер ставить нападника на місце одразу. Такту не несе — такт на контакті приземлення.
         /// </summary>
-        Whip
+        Cut = 6
     }
 
     /// <summary>Один крок режисури: що зіграти й ким. Чисті дані — без рушія, тож таблицю «дія → кліп» видно окремо.</summary>
     public sealed class StageStep
     {
         public StageStepKind Kind;
-        /// <summary>Хто виконує (A парного кліпу, сольний борець).</summary>
+        /// <summary>Хто виконує (A парного кліпу, сольний борець, нападник склейки).</summary>
         public MatchSide Actor;
-        /// <summary>База імені парного кліпу (без _A/_B) або ім'я сольного.</summary>
+        /// <summary>База імені парного кліпу (без _A/_B) або ім'я сольного (і кліпа «на канаті» склейки).</summary>
         public string Clip;
         /// <summary>Кліп рефері, що йде разом із кроком (або єдиний у кроку Ref).</summary>
         public string RefClip;
@@ -48,12 +52,8 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Рефері дивиться на цього борця (попередження).</summary>
         public bool RefFacesActor;
         public string Note;
-        /// <summary>Кидок: цикл бігу кинутого між кліпами (вставка до каната).</summary>
-        public string Run;
-        /// <summary>Кидок у канати: перший канат (удар спиною) і, якщо є, другий — після відскоку, через ринг.</summary>
-        public string Rope1, Rope2;
-        /// <summary>Кидок у кут (кліп Whip_Corner_* сам доводить до кута).</summary>
-        public bool Corner;
+        /// <summary>Склейка: де стоїть нападник на плані 1 — на канатах чи на куті.</summary>
+        public MoveStaging Perch;
         /// <summary>Крок-наслідок, а не сама дія події (суперник підвівся, рефері попереджає): такт на ньому не ставиться.</summary>
         public bool Aside;
 
@@ -67,41 +67,85 @@ namespace Game.Gameplay.Ring.Stage
             return new StageStep { Kind = StageStepKind.Solo, Actor = who, Clip = clip, Cam = cam, Once = once, Note = note };
         }
 
-        /// <summary>Кидок: <paramref name="whipper"/> кидає суперника (B кліпа) у канати чи в кут.</summary>
-        public static StageStep Whip(MatchSide whipper, string whip, string run, string rope1, string rope2, bool corner, StageCam cam, string note)
+        /// <summary>План 1 склейки: <paramref name="who"/> на канаті чи куті грає <paramref name="clip"/> (один раз).</summary>
+        public static StageStep Cut(MatchSide who, MoveStaging perch, string clip, string note = null)
         {
-            return new StageStep { Kind = StageStepKind.Whip, Actor = whipper, Clip = whip, Run = run, Rope1 = rope1, Rope2 = rope2, Corner = corner, Cam = cam, Note = note };
+            return new StageStep { Kind = StageStepKind.Cut, Actor = who, Perch = perch, Clip = clip, Cam = StageCam.Low, Once = true, Note = note };
         }
 
-        /// <summary>Усі кліпи кроку (для перевірки, що вони є в маніфесті): пара — _A і _B, кидок — ще біг і канати.</summary>
+        /// <summary>Усі кліпи кроку (для перевірки, що вони є в маніфесті): пара — _A і _B.</summary>
         public IEnumerable<string> AllClips()
         {
             switch (Kind)
             {
                 case StageStepKind.Pair:
-                case StageStepKind.Whip:
                     yield return Clip + "_A"; yield return Clip + "_B";
                     break;
                 case StageStepKind.Solo:
-                case StageStepKind.Walk:
+                case StageStepKind.Cut:
                     yield return Clip;
                     break;
             }
-            if (Run != null) yield return Run;
-            if (Rope1 != null) yield return Rope1;
-            if (Rope2 != null) yield return Rope2;
             if (RefClip != null) yield return RefClip;
         }
     }
 
     /// <summary>
-    /// Таблиця «подія матчу → кроки режисури» (gdd §8): дію й ступінь кидка перекладає на кліпи рингу. Чиста функція;
-    /// стан зон і поз режисер веде окремо з ефектів подій. Дії без власного кліпа (больовий, брудний, відчайдушний,
-    /// фінішер, напарник, летючий) узято найближчим наявним — див. Note.
+    /// Таблиця «подія матчу → кроки режисури» (TRPG_DESIGN §4.12): прийом кар'єри (<see cref="MatchEvent.MoveKey"/>) і ступінь кидка
+    /// перекладає на кліпи рингу; без ключа — запасний вибір за дією. Усе грається в центрі рингу; постановка «канати» чи «кут»
+    /// (<see cref="MatchEvent.Staging"/>) додає склейку (<see cref="StageStepKind.Cut"/>) перед приземленням у центрі. Чиста функція;
+    /// пози режисер веде окремо з ефектів подій. Прийоми без власного кліпа взято найближчим наявним — див. Note і бриф
+    /// <c>docs/ring/ANIM_BRIEF_COMBAT_CENTER.md</c>.
     /// </summary>
     public static class RingClipTable
     {
         public static MatchSide Opp(MatchSide s) { return s == MatchSide.Player ? MatchSide.Rival : MatchSide.Player; }
+
+        /// <summary>Кліпи прийому кар'єри: частковий успіх (7–9), чистий (10+) і план «на канаті/куті», якщо прийом зі склейкою.</summary>
+        private struct MoveClips
+        {
+            public string Partial, Strong, Perch;
+            public StageCam Cam;
+            public bool Solo;
+            public string Note;
+            public MoveClips(string partial, string strong, StageCam cam, string perch = null, bool solo = false, string note = null)
+            { Partial = partial; Strong = strong; Cam = cam; Perch = perch; Solo = solo; Note = note; }
+        }
+
+        /// <summary>24 прийоми каталогу <c>career_moves.json</c> → наявні кліпи (центр рингу).</summary>
+        private static readonly Dictionary<string, MoveClips> Moves = new Dictionary<string, MoveClips>
+        {
+            { "forearm",         new MoveClips("Forearm_Strike", "Center_ForearmShiver", StageCam.Close) },
+            { "low_kick",        new MoveClips("Center_BigBoot", "Center_BigBoot_Stagger", StageCam.Close, null, false, "бракує кліпа лоу-кіка — біґ-бут") },
+            { "whip",            new MoveClips("Center_Clothesline", "Center_Clothesline_Flip", StageCam.Big, "Rope_Back_R_Fast", false, "відскок від канатів склейкою → ларіат у центрі") },
+            { "corner_drag",     new MoveClips("Chain_Headlock_Punches", "Chain_FrontFacelock_Clubs", StageCam.Close, null, false, "серія ударів у центрі") },
+            { "shoulder_charge", new MoveClips("Center_ShoulderBlock", "Center_ShoulderBlock_Heavy", StageCam.Big) },
+            { "dropkick",        new MoveClips("Center_RunningKnee", "Center_BigBoot_Stagger", StageCam.Big, null, false, "бракує дропкіка — удар коліном") },
+            { "spotlight_blow",  new MoveClips("Center_RunningElbow", "Center_Lariat_Left", StageCam.Big) },
+            { "hip_toss",        new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує кидка через стегно — боді-слем") },
+            { "lift_slam",       new MoveClips("Bodyslam", "Bodyslam", StageCam.Big) },
+            { "snap_suplex",     new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує суплекса — боді-слем") },
+            { "bulldozer",       new MoveClips("Bodyslam", "Bodyslam", StageCam.Big, null, false, "бракує бульдозера — боді-слем") },
+            { "springboard",     new MoveClips("Center_ShoulderTackle", "Center_ShoulderTackle", StageCam.Big, "Rope_Back_L", false, "з канатів склейкою → таран у центрі; бракує стрибка з каната") },
+            { "swallow_dive",    new MoveClips("Center_ShoulderTackle", "Center_ShoulderTackle", StageCam.Big, "Move_Corner_Exit", false, "з кута склейкою → таран у центрі; бракує стрибка з третього каната") },
+            { "armbar",          new MoveClips("Chain_ArmWringer", "Chain_ArmWringer_Kneel", StageCam.Close) },
+            { "leg_lock",        new MoveClips("Chain_Hammerlock", "Chain_Hammerlock_Lift", StageCam.Close, null, false, "бракує замка ноги — гамерлок") },
+            { "spider_lock",     new MoveClips("Chain_Wristlock", "Chain_Wristlock_Spin", StageCam.Close) },
+            { "strut",           new MoveClips("Idle_Hype_Loop", "Idle_Hype_Loop", StageCam.Close, null, true) },
+            { "crowd_pump",      new MoveClips("Idle_Hype_Loop", "Idle_Hype_Loop", StageCam.Close, null, true) },
+            { "cheap_shot",      new MoveClips("Center_Headbutt", "Center_Headbutt", StageCam.Close) },
+            { "eye_poke",        new MoveClips("Center_Headbutt", "Center_Headbutt", StageCam.Close, null, false, "бракує тицяння в очі — удар головою") },
+            { "crusher",         new MoveClips("Center_Lariat_Heavy", "Center_Lariat_Heavy", StageCam.Big, null, false, "бракує підписного фінішера — важкий ларіат") },
+            { "meteor",          new MoveClips("Center_ShoulderTackle", "Center_ShoulderTackle", StageCam.Big, "Move_Corner_Exit", false, "з кута склейкою → таран у центрі; бракує стрибка з кута") },
+            { "iron_clamp",      new MoveClips("Chain_Headlock_Crank", "Chain_Headlock_Crank", StageCam.Close, null, false, "бракує больового фінішера — затиск голови") },
+            { "grand_finale",    new MoveClips("Center_Clothesline_Flip", "Center_Clothesline_Flip", StageCam.Big) },
+        };
+
+        /// <summary>Чи знає таблиця цей прийом (охоронець: усі прийоми каталогу мають кліпи).</summary>
+        public static bool KnowsMove(string key) { return key != null && Moves.ContainsKey(key); }
+
+        /// <summary>План «на канаті/куті» за замовчуванням, якщо прийом зі склейкою, а свого плану в таблиці не має.</summary>
+        public static string DefaultPerch(MoveStaging s) { return s == MoveStaging.Corner ? "Move_Corner_Exit" : "Rope_Back_R_Fast"; }
 
         public static List<StageStep> Plan(MatchEvent ev)
         {
@@ -114,7 +158,7 @@ namespace Game.Gameplay.Ring.Stage
                     PlanAction(list, ev, a, b, t);
                     break;
                 case MatchEventKind.Reverse:
-                    // Реверс: захисник (Actor) відповідає. 7-9 — обмін захватами, 10+ — кидає нападника.
+                    // Реверс: захисник (Actor) відповідає. 7-9 — обмін захватами (і знову Обмін ініціативи), 10+ — кидає нападника.
                     if (t == RollTier.Strong) list.Add(StageStep.Pair(a, "Bodyslam", StageCam.Big, null, "реверс: кидок"));
                     else if (t == RollTier.Partial) list.Add(StageStep.Pair(a, "Lockup_Exchange", StageCam.Close, null, "реверс: обмін захватами"));
                     break;
@@ -133,6 +177,7 @@ namespace Game.Gameplay.Ring.Stage
                 case MatchEventKind.MatchEnd:
                     list.Add(new StageStep { Kind = StageStepKind.End, Cam = StageCam.Big, Note = "кінець: рефері піднімає руку" });
                     break;
+                // Exchange (захват у центрі грає режисер між діями), TurnEnd (ініціатива переходить), Flourish (QTE) — кроків не мають.
             }
             // Попередження борцеві — рефері реагує окремим кроком.
             if (ev.Kind == MatchEventKind.Action)
@@ -147,16 +192,36 @@ namespace Game.Gameplay.Ring.Stage
             return list;
         }
 
+        private static bool StoodUp(MatchEvent ev, MatchSide b)
+        {
+            for (int i = 0; i < ev.Effects.Count; i++)
+                if (ev.Effects[i].Kind == MatchEffectKind.Stand && ev.Effects[i].Who == b) return true;
+            return false;
+        }
+
         private static void PlanAction(List<StageStep> list, MatchEvent ev, MatchSide a, MatchSide b, RollTier t)
         {
             bool miss = t == RollTier.Miss, strong = t == RollTier.Strong;
-            bool stoodUp = false;
-            for (int i = 0; i < ev.Effects.Count; i++)
-                if (ev.Effects[i].Kind == MatchEffectKind.Stand && ev.Effects[i].Who == b) stoodUp = true;
+            bool cut = ev.Staging != MoveStaging.Center;
+
+            MoveClips mc;
+            if (ev.MoveKey != null && Moves.TryGetValue(ev.MoveKey, out mc) && ev.Action != MatchActionId.Pin && ev.Action != MatchActionId.GetUp)
+            {
+                if (cut) list.Add(StageStep.Cut(a, ev.Staging, mc.Perch ?? DefaultPerch(ev.Staging), mc.Note));
+                if (mc.Solo)
+                {
+                    list.Add(StageStep.Solo(a, miss ? "Idle_Hurt_Body_Loop" : mc.Partial, StageCam.Close, true, mc.Note));
+                    if (StoodUp(ev, b)) { var up = StageStep.Solo(b, "GetUp_Back", StageCam.Overview); up.Aside = true; list.Add(up); }
+                }
+                else if (miss) AddMiss(list, ev.Action, a, cut);
+                else list.Add(StageStep.Pair(a, strong ? mc.Strong : mc.Partial, strong ? StageCam.Big : mc.Cam, null, cut ? null : mc.Note));
+                return;
+            }
 
             switch (ev.Action)
             {
                 case MatchActionId.Strike:
+                    if (cut) list.Add(StageStep.Cut(a, ev.Staging, DefaultPerch(ev.Staging)));
                     list.Add(StageStep.Pair(a, miss ? "Center_Sidestep" : strong ? "Center_BigBoot_Stagger" : "Forearm_Strike",
                         strong ? StageCam.Big : StageCam.Close, null, miss ? "промах: суперник ухиляється" : null));
                     break;
@@ -164,29 +229,16 @@ namespace Game.Gameplay.Ring.Stage
                     if (miss) list.Add(StageStep.Solo(a, "Bump_Back", StageCam.Close, false, "кидок не вдався: падає сам"));
                     else list.Add(StageStep.Pair(a, "Bodyslam", StageCam.Big));
                     break;
-                case MatchActionId.IntoRopes:
-                    // Огляд 08.11.2026 (пункт 8): у матчі не було ні бігу, ні канатів. Кидок у канати, біг і удар спиною в канат
-                    // (відскок — завжди спиною до канатів, власник 30.10.2026); чисто — відскок і через ринг у протилежні канати.
-                    // Бік кидка (повз праве чи ліве плече) чергується. Промах — обережний захват, як і раніше.
-                    if (miss) list.Add(StageStep.Pair(a, "Lockup_Cautious", StageCam.Close, null, "у канати не вийшло: обережний захват"));
-                    else if (strong) list.Add(StageStep.Whip(a, "Whip_Ropes_Fast", "Run_Loop", "Rope_Back_L", "Rope_Back_Stop", false, StageCam.Close,
-                        "у канати з відскоком: біг, спина в канат, відскок і через ринг у протилежні канати"));
-                    else list.Add(StageStep.Whip(a, ev.Seq % 2 == 0 ? "Whip_Ropes" : "Whip_Ropes_Left", "Run_Jog_Loop", "Rope_Back_Stop", null, false, StageCam.Close,
-                        "у канати: біг і спина в канат, зупинився на канатах"));
-                    break;
-                case MatchActionId.IntoCorner:
-                    // Кидок у кут; промах — реверс: кидають самого нападника (ядро ставить у кут його).
-                    if (miss) list.Add(StageStep.Whip(b, "Whip_Corner", null, null, null, true, StageCam.Close, "у кут не вийшло: реверс, у кут летить нападник"));
-                    else list.Add(StageStep.Whip(a, strong ? "Whip_Corner_Fast" : "Whip_Corner", null, null, null, true, StageCam.Close, "кидок у кут"));
-                    break;
                 case MatchActionId.TopRope:
-                    list.Add(StageStep.Solo(a, "Move_Corner_Enter", StageCam.Overview, false, "бракує кліпа «з третього каната»"));
-                    if (miss) list.Add(StageStep.Solo(a, "Bump_Back", StageCam.Close));
+                    // Ризикований трюк: склейка — нападник на куті (план 1), далі приземлення в центрі (план 2). Без бігу до кута.
+                    list.Add(StageStep.Cut(a, cut ? ev.Staging : MoveStaging.Corner, DefaultPerch(cut ? ev.Staging : MoveStaging.Corner),
+                        "бракує кліпа «з третього каната» — бриф Ф4"));
+                    if (miss) AddMiss(list, ev.Action, a, true);
                     else list.Add(StageStep.Pair(a, "Center_ShoulderTackle", StageCam.Big, null, "летючий — найближчий таран"));
                     break;
                 case MatchActionId.Taunt:
                     list.Add(StageStep.Solo(a, miss ? "Idle_Hurt_Body_Loop" : "Idle_Hype_Loop", StageCam.Close, true));
-                    if (stoodUp) { var up = StageStep.Solo(b, "GetUp_Back", StageCam.Overview); up.Aside = true; list.Add(up); }
+                    if (StoodUp(ev, b)) { var up = StageStep.Solo(b, "GetUp_Back", StageCam.Overview); up.Aside = true; list.Add(up); }
                     break;
                 case MatchActionId.Dirty:
                     list.Add(StageStep.Pair(a, miss ? "Center_Sidestep" : "Center_Headbutt", StageCam.Close, null, "брудний прийом: удар головою"));
@@ -196,10 +248,12 @@ namespace Game.Gameplay.Ring.Stage
                         null, "бракує больового з реальною підсадкою"));
                     break;
                 case MatchActionId.Finisher:
+                    if (cut) list.Add(StageStep.Cut(a, ev.Staging, DefaultPerch(ev.Staging)));
                     if (miss) list.Add(StageStep.Solo(a, "Bump_Back", StageCam.Big, false, "фінішер не вдався"));
                     else list.Add(StageStep.Pair(a, "Center_Lariat_Heavy", StageCam.Big, null, "бракує підписного фінішера — важкий ларіат"));
                     break;
                 case MatchActionId.Desperate:
+                case MatchActionId.HopeSpot:
                     if (miss) list.Add(StageStep.Solo(a, "Bump_Back", StageCam.Close));
                     else list.Add(StageStep.Pair(a, strong ? "Center_ShoulderBlock_Heavy" : "Center_ShoulderBlock", StageCam.Big, null, "відчайдушний — важкий таран"));
                     break;
@@ -208,15 +262,30 @@ namespace Game.Gameplay.Ring.Stage
                     break;
                 case MatchActionId.Pin:
                     break; // сам відлік — у події Kickout, що йде слідом
-                case MatchActionId.LeaveRing:
-                case MatchActionId.ReturnToRing:
-                    list.Add(new StageStep { Kind = StageStepKind.Walk, Actor = a, Clip = "Move_Walk_Fwd_Loop", Cam = StageCam.Overview, Note = "вихід/повернення — ходьба, бракує перелазу через канати" });
-                    break;
                 case MatchActionId.Recover:
-                    list.Add(StageStep.Solo(a, "Idle_Tired_Loop", StageCam.Overview, true));
+                case MatchActionId.CatchBreath:
+                    list.Add(StageStep.Solo(a, "Idle_Tired_Loop", StageCam.Overview, true, ev.Action == MatchActionId.CatchBreath ? "переводить подих" : null));
                     break;
                 case MatchActionId.Ally:
                     list.Add(new StageStep { Kind = StageStepKind.Ref, RefClip = "Ref_Point_Ropes", Hold = 1.4f, Cam = StageCam.Overview, Note = "бракує виходу напарника" });
+                    break;
+            }
+        }
+
+        /// <summary>Промах прийому з таблиці: удар — суперник ухиляється, решта (кидок, стрибок, фінішер) — нападник падає сам.</summary>
+        private static void AddMiss(List<StageStep> list, MatchActionId action, MatchSide a, bool fromCut)
+        {
+            switch (action)
+            {
+                case MatchActionId.Strike:
+                case MatchActionId.Dirty:
+                    list.Add(StageStep.Pair(a, "Center_Sidestep", StageCam.Close, null, "промах: суперник ухиляється"));
+                    break;
+                case MatchActionId.Submission:
+                    list.Add(StageStep.Pair(a, "Lockup_Stalemate", StageCam.Close, null, "больовий не вдався: нічия в захваті"));
+                    break;
+                default:
+                    list.Add(StageStep.Solo(a, "Bump_Back", fromCut ? StageCam.Big : StageCam.Close, false, "прийом не вдався: падає сам"));
                     break;
             }
         }

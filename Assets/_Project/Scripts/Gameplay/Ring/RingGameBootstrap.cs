@@ -701,7 +701,7 @@ namespace Game.Gameplay.Ring
                 var eng = !_onTitle ? _career.Engine : null;
                 if (eng != null && !eng.IsOver && BotTurn(eng))
                 {
-                    if (!ReviewRopes(eng)) MatchAi.Step(eng);
+                    if (!ReviewMoves(eng)) MatchAi.Step(eng);
                     _view.Refresh();
                     return;
                 }
@@ -725,23 +725,28 @@ namespace Game.Gameplay.Ring
 
         private int _seasonShots;
         private int _shotSeasons = 1;
-        private int _reviewRopes;
+        private int _reviewMoves;
 
         /// <summary>
-        /// Канати й кут в огляді (08.11.2026, пакет «Відео огляд», п. 8: «на кадрах сезону видно біг у канати й відскок
-        /// спиною»). ШІ ці дії не обирає ніколи — кидок стоїть вище в його переліку, — тож за сезон огляду біг у канати не
-        /// траплявся жодного разу. Лише бот огляду за героя: кожен другий «кидок чи удар» міняє на «У канати» / «У кут» по
-        /// черзі, якщо дія доступна. Правила матчу й ШІ суперника не змінюються.
+        /// Прийоми кар'єри в огляді (08.11.2026, переробка бою): бот за героя обирає дію тим самим ШІ, а виконує її вивченим
+        /// прийомом героя з цією дією — тоді в кадр ідуть кліпи прийому (таблиця за ключем) і склейки «з канатів» / «з кута».
+        /// Кожен другий раз бере прийом зі склейкою, якщо такий є: інакше за сезон огляду склейку можна й не побачити. Правила
+        /// матчу й ШІ суперника не змінюються.
         /// </summary>
-        private bool ReviewRopes(MatchEngine eng)
+        private bool ReviewMoves(MatchEngine eng)
         {
-            if (eng.Phase != MatchPhase.AwaitAction) return false;
+            if (eng.Phase != MatchPhase.AwaitAction || eng.CurrentActor != MatchSide.Player) return false;
             var id = MatchAi.ChooseAction(eng);
-            if (id != MatchActionId.Throw && id != MatchActionId.Strike) return false;
-            int k = _reviewRopes++ % 4;
-            var alt = k == 1 ? MatchActionId.IntoRopes : k == 3 ? MatchActionId.IntoCorner : id;
-            if (alt == id || !eng.Describe(alt).Available) return false;
-            eng.Perform(alt);
+            MoveOption plain = null, staged = null;
+            foreach (var o in _career.GetMoveOptions())
+            {
+                if (o.Move.Action != id || !o.Option.Available) continue;
+                if (o.Move.Staging != MoveStaging.Center) { if (staged == null) staged = o; }
+                else if (plain == null || (plain.RepeatWarning && !o.RepeatWarning)) plain = o;
+            }
+            var pick = (_reviewMoves++ % 2 == 1 && staged != null) ? staged : plain ?? staged;
+            if (pick == null) return false;
+            _career.PerformMove(pick.Move.Id);
             return true;
         }
 

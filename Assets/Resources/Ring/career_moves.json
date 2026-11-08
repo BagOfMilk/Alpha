@@ -33,22 +33,24 @@
   {
    "id": "whip",
    "name": "move.whip",
-   "action": "intoRopes",
+   "action": "strike",
    "category": "throw",
    "zone": "body",
    "heat": 0,
    "rollBonus": 0,
-   "kind": "basic"
+   "kind": "basic",
+   "staging": "ropes"
   },
   {
    "id": "corner_drag",
    "name": "move.corner_drag",
-   "action": "intoCorner",
+   "action": "strike",
    "category": "power",
    "zone": "body",
    "heat": 0,
    "rollBonus": 0,
-   "kind": "basic"
+   "kind": "basic",
+   "staging": "center"
   },
   {
    "id": "armbar",
@@ -106,7 +108,8 @@
    "rollBonus": 0,
    "kind": "gimmick",
    "gimmick": "flyer",
-   "cost": 2
+   "cost": 2,
+   "staging": "ropes"
   },
   {
    "id": "leg_lock",
@@ -176,7 +179,8 @@
    "heat": 2,
    "rollBonus": 0,
    "kind": "signature",
-   "gimmick": "flyer"
+   "gimmick": "flyer",
+   "staging": "corner"
   },
   {
    "id": "spider_lock",
@@ -220,7 +224,8 @@
    "heat": 0,
    "rollBonus": 0,
    "kind": "finisher",
-   "gimmick": "flyer"
+   "gimmick": "flyer",
+   "staging": "corner"
   },
   {
    "id": "iron_clamp",

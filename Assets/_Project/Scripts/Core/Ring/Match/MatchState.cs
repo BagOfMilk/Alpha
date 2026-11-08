@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace Game.Core.Ring.Match
 {
-    /// <summary>Борець у матчі (gdd §2.1). Поля відкриті для читання UI і тестів; міняє їх лише рушій.</summary>
+    /// <summary>Борець у матчі (TRPG_DESIGN §4.3). Поля відкриті для читання UI і тестів; міняє їх лише рушій.</summary>
     public sealed class Fighter
     {
         public MatchSide Side;
@@ -10,7 +10,8 @@ namespace Game.Core.Ring.Match
         public int Damage;
         public int Momentum;
         public Posture Posture;
-        public Zone Zone;
+        /// <summary>«Сили» 0–10: гальмо ланцюга ініціативи (кожен прийом коштує, захисник відновлює 1 після прийому суперника).</summary>
+        public int Stamina;
         public int ReversalTokens;
         /// <summary>Вирвані утримання: кожне — −1 до наступного «Вирватися».</summary>
         public int KickoutsDone;
@@ -18,33 +19,31 @@ namespace Game.Core.Ring.Match
         public bool DesperateUsed;
         /// <summary>«Промінь надії» уже використано (раз за матч на бік).</summary>
         public bool HopeUsed;
-        /// <summary>Перенесений на наступний хід AP (до 1).</summary>
-        public int CarryAp;
-        /// <summary>«У канати» вдався з бонусом: наступний удар/кидок +1 (діє до кінця ходу).</summary>
-        public bool NextHitBonus;
-        /// <summary>Зона «канати/кут» лишилась з минулого ходу — на кінці цього ходу скинеться до центру.</summary>
-        public bool ZoneCarried;
         /// <summary>Перки з дією «раз за матч»: уже спрацювали.</summary>
         public bool ComebackGiven, BribeUsed, DirtyCoverUsed, ImproviseUsed;
 
         public bool IsUpright { get { return Posture != Posture.Down; } }
     }
 
-    /// <summary>Повний стан матчу (gdd §2.1). Єдине джерело правди для показу.</summary>
+    /// <summary>Повний стан матчу. Єдине джерело правди для показу.</summary>
     public sealed class MatchState
     {
         public Fighter Player;
         public Fighter Rival;
         public int Hype;
         public bool RefereeDistracted;
-        public int OutsideCount;
+        /// <summary>Номер наступної дії матчу (від 1; ліміт — MatchSetup.RoundLimit). Назва лишилась від раундів зрізу 03.11.2026.</summary>
         public int Round = 1;
-        /// <summary>0 — ходить перший у раунді, 1 — другий.</summary>
-        public int TurnInRound;
+        /// <summary>Хто виграв стартовий Обмін.</summary>
         public MatchSide FirstActor;
+        /// <summary>У кого ініціатива — той і діє.</summary>
         public MatchSide CurrentActor;
-        public int Ap;
+        /// <summary>Скільки дій поспіль зробив нинішній власник ініціативи.</summary>
+        public int Chain;
+        /// <summary>Скільки разів ініціатива переходила (охоронець «ланцюг не нескінченний»).</summary>
+        public int InitiativeChanges;
         public bool AllyUsed;
+        /// <summary>Остання дія в поточному ланцюгу (скидається, коли ініціатива переходить).</summary>
         public bool HasLastAction;
         public MatchActionId LastAction;
         /// <summary>Ключ прийому останньої дії (кар'єра: два різні прийоми з тією самою дією повтором не вважаються); null — без ключа.</summary>
@@ -55,6 +54,7 @@ namespace Game.Core.Ring.Match
         public bool PlayerUsedAlly;
         public readonly List<MatchEvent> Log = new List<MatchEvent>();
 
+        public MatchSide Initiative { get { return CurrentActor; } }
         public Fighter Get(MatchSide s) { return s == MatchSide.Player ? Player : Rival; }
         public Fighter Actor { get { return Get(CurrentActor); } }
         public Fighter Other { get { return Get(MatchEngine.Opp(CurrentActor)); } }

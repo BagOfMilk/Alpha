@@ -1,15 +1,22 @@
 namespace Game.Core.Ring.Match
 {
-    /// <summary>Усі числа матчу в одному місці (gdd §2). ПЛЕЙСХОЛДЕР: балансуються тут, а не по коду.</summary>
+    /// <summary>Усі числа матчу в одному місці (TRPG_DESIGN §4). ПЛЕЙСХОЛДЕР: балансуються тут, а не по коду.</summary>
     public static class MatchRules
     {
         /// <summary>«Герой залу»: з якого ажіотажу «продати» дає ще +1 імпульсу. ПЛЕЙСХОЛДЕР (06.11.2026).</summary>
         public const int HeroOfCrowdHype = 7;
         /// <summary>«Камбек»: після скількох вирваних утримань — жетон реверсу й імпульс до порогу фінішера. ПЛЕЙСХОЛДЕР (06.11.2026).</summary>
         public const int ComebackKickouts = 2;
-        public const int ApPerTurn = 3;
-        public const int MaxCarryAp = 1;
-        public const int StunApPenalty = 1;
+
+        /// <summary>«Сили» (TRPG_DESIGN §4.3, рішення 08.11.2026 разом із ланцюгом ініціативи §4.5). ПЛЕЙСХОЛДЕР.</summary>
+        public const int MaxStamina = 10;
+        public const int StartStamina = 10;
+        /// <summary>Захисник після кожного прийому суперника відновлює стільки «Сил» (§4.5).</summary>
+        public const int DefenderStaminaRegen = 1;
+        /// <summary>«Перевести подих»: стільки «Сил» — і ініціатива переходить.</summary>
+        public const int CatchBreathStamina = 3;
+        /// <summary>«Сил» 0 — стільки мінус до кидків дій (крім променя надії).</summary>
+        public const int WindedPenalty = 1;
 
         public const int MaxDamage = 12;
         public const int MaxMomentum = 10;
@@ -38,11 +45,14 @@ namespace Game.Core.Ring.Match
         /// <summary>Основа захисних кидків «Вирватися» й «Терпіти»: свіжий борець майже не програє з першого покриття.</summary>
         public const int DefenseBase = 2;
 
-        public const int OutsideCountStep = 3;
-        public const int OutsideCountLimit = 10;
         public const int WarningsToDq = 3;
 
-        public const int LateStageRound = 12;
+        /// <summary>
+        /// Ліміт матчу в діях (§4.11, ПЛЕЙСХОЛДЕР): далі нічия. Зріз 03.11.2026 мав 20 раундів по ~4 дії; ланцюг рахує кожну дію.
+        /// </summary>
+        public const int ActionLimit = 40;
+        /// <summary>Пізня стадія з цієї дії: −1 до «Вирватися» й «Терпіти» (втома, матч іде до фіналу).</summary>
+        public const int LateStageRound = 24;
         public const int LateStagePenalty = 1;
 
         /// <summary>Реверс фінішера і штрафи «Вирватися» після фінішера (10+ / 7–9).</summary>
@@ -64,23 +74,33 @@ namespace Game.Core.Ring.Match
         public const int HopeGap = 4;
         public const int HopeMinDamage = 6;
 
+        /// <summary>Ціна дії в «Силах» (ПЛЕЙСХОЛДЕР, TRPG_DESIGN §4.3): удар 1, кидок і больовий 2, ризикований трюк 3, фінішер 4.</summary>
         public static int Cost(MatchActionId id)
         {
             switch (id)
             {
-                case MatchActionId.Throw:
-                case MatchActionId.TopRope:
-                case MatchActionId.Submission:
+                case MatchActionId.Strike:
+                case MatchActionId.Taunt:
+                case MatchActionId.Dirty:
+                case MatchActionId.Pin:
                 case MatchActionId.Desperate:
-                case MatchActionId.HopeSpot:
-                    return 2;
-                case MatchActionId.Finisher:
-                    return 3;
-                case MatchActionId.CatchBreath:
-                    return 0;
-                default:
                     return 1;
+                case MatchActionId.Throw:
+                case MatchActionId.Submission:
+                    return 2;
+                case MatchActionId.TopRope:
+                    return 3;
+                case MatchActionId.Finisher:
+                    return 4;
+                default:
+                    return 0;   // встати, відновитися, напарник, перевести подих, промінь надії
             }
+        }
+
+        /// <summary>Ризикований трюк і фінішер вимагають повну ціну; решту можна робити й на нулі «Сил» (з −1 до кидка).</summary>
+        public static bool NeedsFullStamina(MatchActionId id)
+        {
+            return id == MatchActionId.TopRope || id == MatchActionId.Finisher;
         }
 
         /// <summary>Великі прийоми: захисник може відповісти до кидка нападника (gdd §2.5).</summary>

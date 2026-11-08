@@ -43,7 +43,6 @@ namespace Game.Gameplay.Ring.Models
             }
         }
 
-        public static string ZoneName(RingText t, Zone z) { return t.Get("zone." + (int)z); }
         public static string PostureName(RingText t, Posture p) { return t.Get("posture." + (int)p); }
         public static string ActionName(RingText t, MatchActionId id) { return t.Get("action." + (int)id); }
         public static string Unavailable(RingText t, UnavailableReason r) { return t.Get("unavail." + (int)r); }

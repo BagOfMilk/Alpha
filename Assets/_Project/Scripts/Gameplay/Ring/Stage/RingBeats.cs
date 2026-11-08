@@ -147,10 +147,8 @@ namespace Game.Gameplay.Ring.Stage
                 case StageStepKind.Solo: return st.Clip;
                 case StageStepKind.Ref: return st.RefClip;
                 case StageStepKind.End: return "Ref_Raise_Hand";
-                // Кидок: у кут — удар об кут у самому кліпі кидка; у канати — удар спиною в перший канат (кліп відскоку
-                // стартує посеред кроку, режисер відлічує від його старту).
-                case StageStepKind.Whip: return st.Corner || st.Rope1 == null ? st.Clip : st.Rope1;
-                default: return null;    // хода — петля без такту
+                // Склейка: план «на канаті/куті» такту не несе (удар спиною в канат — не контакт прийому); такт — на приземленні.
+                default: return null;
             }
         }
 
@@ -233,7 +231,7 @@ namespace Game.Gameplay.Ring.Stage
                 p.Step = i; p.ClipTime = Rule(len); p.Source = BeatSource.Rule; p.Clip = c;
                 return p;
             }
-            // Лише хода (вихід за канати й назад): такт на початку кроку.
+            // Лише склейка без приземлення: такт на початку кроку.
             p.Step = 0; p.ClipTime = 0f; p.Source = BeatSource.None;
             return p;
         }

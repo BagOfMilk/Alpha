@@ -9,7 +9,7 @@ using NUnit.Framework;
 
 namespace Game.Tests.EditMode
 {
-    /// <summary>Кінець матчу (gdd §2.7): утримання, здача, відлік, дискваліфікація, ліміт; гарантія кінця; детермінізм.</summary>
+    /// <summary>Кінець матчу (TRPG_DESIGN §4.11): утримання, здача, дискваліфікація, ліміт дій; гарантія кінця; детермінізм.</summary>
     public class MatchEndTests
     {
         // ---------- утримання ----------
@@ -49,22 +49,25 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(e.IsOver);
             Assert.AreEqual(1, e.State.PlayerKickoutsAtTwo);
             e.State.Player.Posture = Posture.Standing;
-            // доводимо до кінця й читаємо результат
-            e.State.Rival.Zone = Zone.Outside;
-            e.State.Player.Zone = Zone.Outside;
+            // доводимо до кінця (ліміт дій) і читаємо результат
             while (!e.IsOver) e.EndTurn();
+            Assert.AreEqual(MatchEndKind.TimeLimit, e.Result.Kind);
             Assert.AreEqual(1, e.Result.PlayerKickoutsAtTwo);
         }
 
         [Test]
         public void AllyRescue_BreaksTheThreeCount_OncePerMatch()
         {
-            var e = MatchKit.Engine(false, new[] { 4, 4 }, s => s.PlayerHasAlly = true);
+            // утримання 4+2 — «три», напарник розриває; далі больовий 7–9 тримається; друге утримання — рятунку немає
+            var e = MatchKit.Engine(false, new[] { 4, 7, 7, 4 }, s => s.PlayerHasAlly = true);
             e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage);
             e.Perform(MatchActionId.Pin);
             Assert.IsFalse(e.IsOver, "напарник розірвав утримання");
             Assert.IsTrue(e.State.PlayerUsedAlly);
             Assert.IsTrue(e.State.Log.Any(x => x.Kind == MatchEventKind.Rescue));
+            Assert.AreEqual(UnavailableReason.JustPinned, e.Describe(MatchActionId.Pin).Reason, "накрити знову — після іншого прийому");
+            MatchKit.Play(e, MatchActionId.Submission);
+            Assert.IsFalse(e.IsOver);
             e.Perform(MatchActionId.Pin);
             Assert.AreEqual(MatchWinner.Rival, e.Result.Winner, "удруге рятунку немає");
             Assert.IsTrue(e.Result.PlayerUsedAlly);
@@ -118,69 +121,17 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Submission_PartialEndure_InRopes_Breaks_AndLateStagePenalises()
+        public void Submission_PartialEndure_LateStagePenalises()
         {
             var late = MatchKit.Engine(true, new[] { 8, 9 });
-            late.State.Round = 12;
+            late.State.Round = MatchRules.LateStageRound;
             late.State.Rival.Posture = Posture.Down; late.State.Rival.Damage = Math.Max(late.State.Rival.Damage, MatchRules.PinMinDamage);
             MatchKit.Play(late, MatchActionId.Submission);
             var ev = late.State.Log.Last(x => x.Kind == MatchEventKind.Endure);
             Assert.AreEqual(MatchRules.DefenseBase - 2, ev.Modifier, "-1 за 7–9 больового, -1 пізня стадія");
         }
 
-        // ---------- відлік за рингом ----------
-
-        [Test]
-        public void CountOut_PlayerStaysOutside_RivalWins()
-        {
-            var e = MatchKit.Engine(true);
-            MatchKit.Play(e, MatchActionId.LeaveRing);
-            e.EndTurn(); Assert.AreEqual(3, e.State.OutsideCount);
-            e.EndTurn();
-            e.EndTurn(); Assert.AreEqual(6, e.State.OutsideCount);
-            e.EndTurn();
-            e.EndTurn(); Assert.AreEqual(9, e.State.OutsideCount);
-            e.EndTurn();
-            e.EndTurn();
-            Assert.IsTrue(e.IsOver);
-            Assert.AreEqual(MatchEndKind.CountOut, e.Result.Kind);
-            Assert.AreEqual(MatchWinner.Rival, e.Result.Winner);
-        }
-
-        [Test]
-        public void CountOut_ReturningResetsTheCount()
-        {
-            var e = MatchKit.Engine(true);
-            MatchKit.Play(e, MatchActionId.LeaveRing);
-            e.EndTurn(); e.EndTurn();
-            Assert.AreEqual(3, e.State.OutsideCount);
-            MatchKit.Play(e, MatchActionId.ReturnToRing);
-            Assert.AreEqual(0, e.State.OutsideCount);
-        }
-
-        [Test]
-        public void DoubleCountOut_BothOutside_IsADraw()
-        {
-            var e = MatchKit.Engine(true);
-            e.State.Player.Zone = Zone.Outside; e.State.Rival.Zone = Zone.Outside;
-            for (int i = 0; i < 3; i++) e.EndTurn();
-            Assert.IsFalse(e.IsOver);
-            e.EndTurn();
-            Assert.IsTrue(e.IsOver);
-            Assert.AreEqual(MatchWinner.Draw, e.Result.Winner);
-            Assert.AreEqual(MatchEndKind.DoubleCountOut, e.Result.Kind);
-        }
-
-        [Test]
-        public void RivalOutside_PlayerInside_CountTicksOnRivalsTurnEndsOnly()
-        {
-            var e = MatchKit.Engine(true);
-            e.State.Rival.Zone = Zone.Outside;
-            e.EndTurn();
-            Assert.AreEqual(0, e.State.OutsideCount, "хід гравця в рингу — відлік стоїть");
-            e.EndTurn();
-            Assert.AreEqual(3, e.State.OutsideCount);
-        }
+        // Відліку за рингом немає з 08.11.2026: усе в центрі рингу, бої за рингом повернуться з типами матчів (TRPG_DESIGN §9).
 
         // ---------- дискваліфікація ----------
 
@@ -213,14 +164,15 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(0, e.State.Player.Warnings);
         }
 
-        // ---------- ліміт раундів ----------
+        // ---------- ліміт дій ----------
 
         [Test]
-        public void RoundLimit_EndsInADraw()
+        public void ActionLimit_EndsInADraw()
         {
             var e = MatchKit.Engine(true, null, s => s.RoundLimit = 3);
-            for (int i = 0; i < 6; i++) e.EndTurn();
-            Assert.IsTrue(e.IsOver);
+            int n = 0;
+            while (!e.IsOver) { e.EndTurn(); n++; }
+            Assert.AreEqual(3, n, "кожна дія, і «перевести подих» теж, рахується");
             Assert.AreEqual(MatchEndKind.TimeLimit, e.Result.Kind);
             Assert.AreEqual(MatchWinner.Draw, e.Result.Winner);
             Assert.AreEqual(3, e.Result.Rounds);
@@ -234,7 +186,7 @@ namespace Game.Tests.EditMode
             MatchKit.Play(e, MatchActionId.Throw);
             MatchKit.Play(e, MatchActionId.Pin);
             Assert.AreEqual(e.State.Hype, e.Result.FinalHype);
-            Assert.AreEqual(1, e.Result.Rounds);
+            Assert.AreEqual(2, e.Result.Rounds, "кидок і утримання — дві дії");
         }
 
         // ---------- гарантія кінця, детермінізм ----------
@@ -273,7 +225,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void ThousandAiMatches_AllFinish_WithinLimit_BothWinnersHappen()
         {
-            int pw = 0, rw = 0, draws = 0, rounds = 0, kickTwo = 0, kickAll = 0;
+            int pw = 0, rw = 0, draws = 0, rounds = 0, kickTwo = 0, kickAll = 0, changes = 0, noChange = 0, longest = 0;
             var kinds = new Dictionary<MatchEndKind, int>();
             for (int seed = 1; seed <= 1000; seed++)
             {
@@ -286,15 +238,28 @@ namespace Game.Tests.EditMode
                 Assert.GreaterOrEqual(r.Rounds, 1);
                 if (r.Winner == MatchWinner.Player) pw++; else if (r.Winner == MatchWinner.Rival) rw++; else draws++;
                 rounds += r.Rounds;
-                foreach (var ev in e.State.Log) if (ev.Kind == MatchEventKind.Kickout) { kickAll++; if (ev.Tier == RollTier.Partial) kickTwo++; }
+                changes += e.State.InitiativeChanges;
+                if (e.State.InitiativeChanges == 0)
+                {
+                    noChange++;
+                    Assert.AreNotEqual(MatchEndKind.TimeLimit, r.Kind, "до ліміту без жодної зміни ініціативи — seed " + seed);
+                }
+                foreach (var ev in e.State.Log)
+                {
+                    if (ev.Kind == MatchEventKind.Kickout) { kickAll++; if (ev.Tier == RollTier.Partial) kickTwo++; }
+                    if (ev.ChainIndex > longest) longest = ev.ChainIndex;
+                }
                 int n; kinds.TryGetValue(r.Kind, out n); kinds[r.Kind] = n + 1;
             }
             TestContext.WriteLine("1000 матчів ШІ-ШІ: гравець " + pw + ", суперник " + rw + ", нічиї " + draws
                                   + ", вирвалось на «два» за матч " + (kickTwo / 1000.0).ToString("F2") + " (усього вирвань " + (kickAll / 1000.0).ToString("F2") + ")"
-                                  + ", середнє раундів " + (rounds / 1000.0).ToString("F2")
+                                  + ", середнє дій " + (rounds / 1000.0).ToString("F2")
+                                  + ", змін ініціативи " + (changes / 1000.0).ToString("F2") + " (без жодної — " + noChange + ")"
+                                  + ", найдовший ланцюг " + longest
                                   + "; кінці: " + string.Join(", ", kinds.Select(k => k.Key + "=" + k.Value).ToArray()));
             Assert.Greater(pw, 0);
             Assert.Greater(rw, 0);
+            Assert.LessOrEqual(noChange, 50, "ініціатива переходить хоч раз майже в кожному матчі");
         }
 
         [Test]
@@ -302,10 +267,11 @@ namespace Game.Tests.EditMode
         {
             for (int seed = 1; seed <= 50; seed++)
             {
-                var e = new MatchEngine(SeededSetup(seed), new SeededDiceRoller((ulong)seed));
+                var setup = SeededSetup(seed);
+                var e = new MatchEngine(setup, new SeededDiceRoller((ulong)seed));
                 var r = MatchAutoplay.Run(e, false);
                 Assert.IsNotNull(r);
-                Assert.LessOrEqual(r.Rounds, 20);
+                Assert.LessOrEqual(r.Rounds, setup.RoundLimit);
             }
         }
 
@@ -370,6 +336,10 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(MatchActionId.GetUp, MatchAi.ChooseAction(g));
             var h = MatchKit.Engine(false);
             Assert.AreEqual(MatchActionId.Throw, MatchAi.ChooseAction(h));
+            h.State.Rival.Stamina = MatchRules.Cost(MatchActionId.Throw);
+            Assert.AreEqual(MatchActionId.Strike, MatchAi.ChooseAction(h), "без запасу «Сил» кидок не ризикує");
+            h.State.Rival.Stamina = 0;
+            Assert.AreEqual(MatchActionId.CatchBreath, MatchAi.ChooseAction(h), "видихся — переводить подих");
         }
     }
 }

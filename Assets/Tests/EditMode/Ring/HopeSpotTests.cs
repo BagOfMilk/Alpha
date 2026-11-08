@@ -111,13 +111,14 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void CostsTwoAp_AndNotWhileOutsideTheRing()
+        public void CostsNoStamina_AvailableEvenWinded()
         {
             var e = PlayerFirst(true);
             e.State.Player.Damage = 9; e.State.Rival.Damage = 0;
-            Assert.AreEqual(2, e.Describe(MatchActionId.HopeSpot).Cost);
-            e.State.Player.Zone = Zone.Outside;
-            Assert.AreEqual(UnavailableReason.NotInRing, e.Describe(MatchActionId.HopeSpot).Reason);
+            Assert.AreEqual(0, e.Describe(MatchActionId.HopeSpot).Cost);
+            e.State.Player.Stamina = 0;
+            Assert.IsTrue(e.Describe(MatchActionId.HopeSpot).Available);
+            Assert.IsFalse(e.Describe(MatchActionId.HopeSpot).Winded, "промінь надії без штрафу «Сил»");
         }
 
         [Test]

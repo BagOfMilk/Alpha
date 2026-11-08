@@ -3,12 +3,15 @@ using System;
 namespace Game.Core.Ring.Match
 {
     /// <summary>
-    /// Суперник (gdd §2.8): детермінований перелік пріоритетів. Працює через той самий публічний API рушія,
-    /// що й гравець: GetAvailableActions / Perform / React / Commit — жодного доступу в обхід.
-    /// Хвіст переліку (після «удару») — доповнення: тяг до умов фінішера, повернення в ринг, брудне для лиходія.
+    /// Суперник: детермінований перелік пріоритетів (ланцюг ініціативи, TRPG_DESIGN §4.5). Працює через той самий публічний API
+    /// рушія, що й гравець: GetAvailableActions / Perform / React / Commit — жодного доступу в обхід. Враховує «Сили»: ризикує лише з
+    /// запасом, на нулі переводить подих (інакше −1 до кожного кидка). Нескінченного ланцюга не буде — є ліміт матчу.
     /// </summary>
     public static class MatchAi
     {
+        /// <summary>Запас «Сил» понад ціну, з яким ШІ йде на ризикований трюк чи кидок.</summary>
+        public const int StaminaReserve = 1;
+
         public static MatchActionId ChooseAction(MatchEngine e)
         {
             var me = e.State.Actor; var opp = e.State.Other;
@@ -17,17 +20,24 @@ namespace Game.Core.Ring.Match
             if (e.Describe(MatchActionId.HopeSpot).Available) return MatchActionId.HopeSpot;
             if (Ok(opts, MatchActionId.Finisher)) return MatchActionId.Finisher;
             if (Ok(opts, MatchActionId.Pin) && opp.Damage >= MatchRules.AiPinDamage) return MatchActionId.Pin;
-            if (Ok(opts, MatchActionId.Submission) && opp.Damage >= MatchRules.AiSubmissionDamage) return MatchActionId.Submission;
+            if (Ok(opts, MatchActionId.Submission) && opp.Damage >= MatchRules.AiSubmissionDamage && Spare(me, MatchActionId.Submission))
+                return MatchActionId.Submission;
             if (Ok(opts, MatchActionId.GetUp)) return MatchActionId.GetUp;
+            // видихся — краще віддати ініціативу, ніж бити з −1
+            if (me.Stamina <= 0) return MatchActionId.CatchBreath;
             if (Ok(opts, MatchActionId.Desperate)) return MatchActionId.Desperate;
-            if (Ok(opts, MatchActionId.Throw)) return MatchActionId.Throw;
+            if (Ok(opts, MatchActionId.TopRope) && Spare(me, MatchActionId.TopRope) && opp.Posture != Posture.Standing)
+                return MatchActionId.TopRope;
+            if (Ok(opts, MatchActionId.Throw) && Spare(me, MatchActionId.Throw)) return MatchActionId.Throw;
             if (Ok(opts, MatchActionId.Strike)) return MatchActionId.Strike;
-            if (Ok(opts, MatchActionId.ReturnToRing)) return MatchActionId.ReturnToRing;
             if (Ok(opts, MatchActionId.Taunt) && e.State.Hype < MatchRules.FinisherHype + 2) return MatchActionId.Taunt;
             var role = me.Side == MatchSide.Player ? e.Setup.PlayerRole : e.Setup.RivalRole;
             if (role == RingPath.Heel && Ok(opts, MatchActionId.Dirty)) return MatchActionId.Dirty;
+            if (Ok(opts, MatchActionId.Submission) && Spare(me, MatchActionId.Submission)) return MatchActionId.Submission;
             return MatchActionId.CatchBreath;
         }
+
+        private static bool Spare(Fighter me, MatchActionId id) { return me.Stamina >= MatchRules.Cost(id) + StaminaReserve; }
 
         /// <summary>Реверс, якщо є жетон і прийом — фінішер або ушкодження вже ≥ 6, інакше продати.</summary>
         public static ReactionChoice ChooseReaction(MatchEngine e)
@@ -76,7 +86,7 @@ namespace Game.Core.Ring.Match
     {
         public const int MaxSteps = 20000;
 
-        /// <summary>true — ШІ веде обох; false — ШІ веде лише суперника, а гравець пасивний (дихає й продає).</summary>
+        /// <summary>true — ШІ веде обох; false — ШІ веде лише суперника, а гравець пасивний (переводить подих і продає).</summary>
         public static MatchResult Run(MatchEngine e, bool aiForBothSides)
         {
             int steps = 0;
