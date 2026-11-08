@@ -349,6 +349,18 @@ Unity-кадри — сесія «Ринг».
 
 ---
 
+## 08.11.2026 — шрифт display: Fira Sans Extra Condensed замість Sofia Sans
+
+**Рішення власника (08.11.2026):** «Підбери шрифт сам» — після огляду кадрів виходу борця, де «Л» у Sofia Sans
+Extra Condensed малювалась як грецька «Λ» («МОΛОТ», «ΛИХОДІЙ»); сесії арт-директора немає. Завантаження чотирьох файлів
+з `github.com/google/fonts` (`ofl/firasansextracondensed/`, ≈1,5 МБ, OFL 1.1) — «Так, завантаж».
+**Що зроблено:** кандидатів (Fira Sans EC, Oswald, Roboto Condensed, Saira EC, Ubuntu Condensed) порівняно очима й виміром
+гліфів; обрано **Fira Sans Extra Condensed** 700/800/900 — така ж вузька й важка, українські «Л», «Д» і малі, є ₴ (Roboto
+Condensed без ₴, Saira EC без кирилиці, Oswald легша). Токен `type.fontRoles.display`, збирач `RingFontAssets`, генератор
+екранів виходу (`titantron/kits.json`), титри; Статут вигляду v1.4 (TYPE-01, TYPE-03). Файли Sofia лишені для архівних ескізів.
+
+---
+
 ## Відкрито
 
 - Точний список каталогів коду до видалення (manifest).

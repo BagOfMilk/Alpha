@@ -25,8 +25,8 @@ namespace Game.Gameplay.Ring.UI
         }
 
         /// <summary>
-        /// ВЕЛИКІ літери для ролі display (Sofia Sans Extra Condensed): її малі кириличні мають болгарські форми
-        /// (г як r, д як g, и як u) — для українського читача чужі, тому display лише ВЕЛИКИМИ (Статут вигляду, TYPE-03).
+        /// ВЕЛИКІ літери для ролі display (Fira Sans Extra Condensed): мітки, імена й виноски — ВЕЛИКИМИ (Статут вигляду,
+        /// TYPE-02/TYPE-03). До 08.11.2026 display була Sofia Sans з болгарськими малими й гостроверхою «Л» — замінено.
         /// </summary>
         public static string Caps(string s)
         {

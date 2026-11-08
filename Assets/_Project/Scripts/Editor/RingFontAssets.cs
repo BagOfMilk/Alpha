@@ -24,9 +24,9 @@ namespace Game.Gameplay.EditorTools
             }
             set.Text = Load("Fixel/FixelText-Regular.ttf");
             set.TextBold = Load("Fixel/FixelText-SemiBold.ttf");
-            set.Display700 = Load("SofiaSansExtraCondensed/SofiaSansExtraCondensed-Bold.ttf");
-            set.Display800 = Load("SofiaSansExtraCondensed/SofiaSansExtraCondensed-ExtraBold.ttf");
-            set.Display900 = Load("SofiaSansExtraCondensed/SofiaSansExtraCondensed-Black.ttf");
+            set.Display700 = Load("FiraSansExtraCondensed/FiraSansExtraCondensed-Bold.ttf");
+            set.Display800 = Load("FiraSansExtraCondensed/FiraSansExtraCondensed-ExtraBold.ttf");
+            set.Display900 = Load("FiraSansExtraCondensed/FiraSansExtraCondensed-Black.ttf");
             set.Hand = Load("AmaticSC/AmaticSC-Bold.ttf");
             set.Spray = Load("RubikSprayPaint/RubikSprayPaint-Regular.ttf");
             EditorUtility.SetDirty(set);

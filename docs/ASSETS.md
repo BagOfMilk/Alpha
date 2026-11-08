@@ -15,7 +15,7 @@ Cursor Pack у цей дозвіл не входять — стиль панел
 |---|---|---|---|
 | **Fixel** Text (Regular, Medium, SemiBold, Bold) + Display SemiBold — статичні TTF | `Assets/ThirdParty/Fonts/Fixel/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md` |
 | **Noto Serif** (Regular, Italic, Bold) — статичні TTF, unhinted | `Assets/ThirdParty/Fonts/NotoSerif/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md` |
-| **Sofia Sans Extra Condensed** (Bold, ExtraBold, Black) — статичні TTF зі змінного, лише ВЕЛИКІ літери; **Amatic SC** Bold; **Rubik Spray Paint** Regular (06.11.2026, «Ринг», дозволено власником) | `Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/`, `AmaticSC/`, `RubikSprayPaint/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md`, Статут вигляду TYPE-01 |
+| **Fira Sans Extra Condensed** (Bold, ExtraBold, Black; display з 08.11.2026, «Підбери шрифт сам») — `Assets/ThirdParty/Fonts/FiraSansExtraCondensed/`, OFL 1.1; ~~Sofia Sans Extra Condensed~~ (06–08.11.2026, замінено: гостроверха «Л», болгарські малі) — статичні TTF зі змінного; **Amatic SC** Bold; **Rubik Spray Paint** Regular (06.11.2026, «Ринг», дозволено власником) | `Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/`, `AmaticSC/`, `RubikSprayPaint/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md`, Статут вигляду TYPE-01 |
 | **game-icons.net** — 20 значків PNG 512×512 (ресурси, фази, стани, пости) | `Assets/ThirdParty/GameIcons/` | CC BY 3.0 — атрибуція обов'язкова | `Assets/ThirdParty/GameIcons/ATTRIBUTION.md` (автор і посилання на кожен значок) + рядок у титрах внизу титулу |
 
 Пастку variable-шрифту Fixel (нижче) обійдено: взяті статичні накреслення.

@@ -16,13 +16,15 @@ TextCore / FontAsset файл не модифікує. Завантажено 29
 
 | Папка | Шрифт | Файли | Джерело | Навіщо |
 |---|---|---|---|---|
-| `SofiaSansExtraCondensed/` | Sofia Sans Extra Condensed (Lettersoup, B. Nikoltchev, A. Petrova) | `-Bold` (700), `-ExtraBold` (800), `-Black` (900) — статичні TTF, зібрані зі змінного `tools/ring_design/font_sources/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Variable.ttf` (345 304 Б) скриптом `tools/ring_design/make_font_instances.py` (fontTools instancer) | https://github.com/google/fonts (`ofl/sofiasansextracondensed/`), OFL 1.1, Reserved Font Name не заявлено | display: виноски, мітки, імена — **лише ВЕЛИКІ літери** |
+| `FiraSansExtraCondensed/` | **Fira Sans Extra Condensed** (Mozilla, Telefonica; Carrois) — **display з 08.11.2026** | `-Bold` (700, 496 872 Б), `-ExtraBold` (800, 498 256 Б), `-Black` (900, 516 808 Б) — статичні TTF як є | https://github.com/google/fonts (`ofl/firasansextracondensed/`), OFL 1.1 (`OFL.txt` поруч) | display: виноски, мітки, імена; українські «Л», «Д», малі й ₴ — є |
+| `SofiaSansExtraCondensed/` | Sofia Sans Extra Condensed (Lettersoup, B. Nikoltchev, A. Petrova) — **у грі не використовується з 08.11.2026** (лишена для архівних ескізів `tools/ring_design/brutal_mock.py`) | `-Bold` (700), `-ExtraBold` (800), `-Black` (900) — статичні TTF, зібрані зі змінного `tools/ring_design/font_sources/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Variable.ttf` (345 304 Б) скриптом `tools/ring_design/make_font_instances.py` (fontTools instancer) | https://github.com/google/fonts (`ofl/sofiasansextracondensed/`), OFL 1.1, Reserved Font Name не заявлено | display: виноски, мітки, імена — **лише ВЕЛИКІ літери** |
 | `AmaticSC/` | Amatic SC (V. Adams, B. Nathan, T. Jockin) | `AmaticSC-Bold.ttf` (статичний, 156 180 Б) | `ofl/amaticsc/` | таблички шанувальників у 3D-світі (не UI) |
 | `RubikSprayPaint/` | Rubik Spray Paint (NaN, L. Prowse) | `RubikSprayPaint-Regular.ttf` (статичний, 941 576 Б) | `ofl/rubikspraypaint/` | спрей-написи підвалу у 3D-світі (не UI) |
 
 Перевірка гліфів — `python -I tools/ring_design/check_font_glyphs.py <файли>`: Ґ ґ Є є І і Ї ї, кирилиця А–Я а–я, апостроф ’,
 « » № — –, цифри, латиниця — у всіх трьох родинах є. **Особливості (перевірено очима, рендер з файлів репозиторію):**
-(1) у Sofia Sans Extra Condensed **немає знака ₴** — гроші зі знаком лише в ролі text (Fixel має ₴);
+(0) **з 08.11.2026 display — Fira Sans Extra Condensed:** «Л» і «Д» українські, малі звичайні, ₴ є (рендер очима); пункти
+(1)–(2) нижче — про Sofia, через них її й замінено. (1) у Sofia Sans Extra Condensed **немає знака ₴** — гроші зі знаком лише в ролі text (Fixel має ₴);
 (2) її **малі кириличні — болгарські форми** (г як r, д як g, и як u, к як k), великі чисті (велика Л гостроверха «Λ») —
 тому display лише ВЕЛИКИМИ через `RingTheme.Caps()`; (3) змінний файл у `Assets/` не кладемо (TextCore будує SDF зі
 статичних накреслень) — він лежить поза `Assets/`, у `tools/ring_design/font_sources/`.
