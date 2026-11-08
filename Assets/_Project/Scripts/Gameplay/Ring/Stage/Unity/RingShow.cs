@@ -411,11 +411,13 @@ namespace Game.Gameplay.Ring.Stage
                 float end = Time.time + g.length;
                 while (Time.time < end && !_skip)
                 {
-                    // Після 2,2 с від удару — ближче: жест борця на весь зріст (екран уже прочитано).
+                    // Після 2,2 с від удару — ближче, але екран лишається в кадрі: знизу, борець ~40 % висоти кадру, над ним екран
+                    // (зауваження «Відео огляду» 08.11.2026 до s15: на ближньому плані від екрана лишалась смужка — ролик гравець не бачив).
+                    // Камера на 7 м перед аркою, на 1,2 м; ціль — між грудьми борця й низом екрана; кут 38° — від колін до верху екрана.
                     if (!close && Time.time > HitAt + 2.2f)
                     {
                         close = true;
-                        Look(CurtainOut + new Vector3(4.2f, 1.5f, -1.5f), CurtainOut + new Vector3(0f, 1.25f, 0f), 34f, true);
+                        Look(CurtainOut + new Vector3(6.6f, 1.2f, -2.2f), new Vector3(CurtainOut.x - 0.7f, 2.6f, 0f), 38f, true);
                     }
                     yield return null;
                 }
@@ -561,7 +563,8 @@ namespace Game.Gameplay.Ring.Stage
             bool exact = prof.PoseSpot == EntrancePoseSpot.Turnbuckle || prof.PoseSpot == EntrancePoseSpot.Ropes;
             if (pose != null)
                 a.PlayAtBlend(pose, 0f, false, exact ? spot : a.PosePos, prof.PoseSpot == EntrancePoseSpot.Here ? a.PoseYaw : spotYaw, 0.2f);
-            if (prof.Pyro && fx != null) fx.RingPyro();
+            // Велике шоу — фонтани на позі кожного (плейтест 08.11.2026, P1-7); інакше — за бітом 5 профілю.
+            if ((prof.Pyro || (fx != null && fx.Big)) && fx != null) fx.RingPyro();
             float poseEnd = Time.time + Mathf.Max(pose != null ? pose.length : 0f, prof.PoseSeconds);
             bool held = false;
             while (Time.time < poseEnd && !_skip)
@@ -948,6 +951,54 @@ namespace Game.Gameplay.Ring.Stage
             _s.Referee.Model.SetActive(true);
             _s.Actor(Core.Ring.Match.MatchSide.Rival).Model.SetActive(true);
             hero.Model.SetActive(true);
+            CamActive = false;
+            Busy = false;
+        }
+
+        /// <summary>
+        /// Відкриття великого шоу перед виходами (плейтест 08.11.2026, P1-7: велике шоу знімалося тим самим планом, що й
+        /// щотижневе): пролітка над рядами до рингу, назва вечора на екрані над завісою, іскри й CO2, фонтани на стійках. Борці
+        /// й рефері на цей час сховані. Пропуск — будь-яка клавіша.
+        /// </summary>
+        public void BeginOpen(string title, string sub)
+        {
+            StopAllCoroutines();
+            BeltOff();
+            _walker = null;
+            _skip = false;
+            StartCoroutine(Open(title, sub));
+        }
+
+        private IEnumerator Open(string title, string sub)
+        {
+            Busy = true;
+            var hero = _s.Actor(Core.Ring.Match.MatchSide.Player);
+            var rival = _s.Actor(Core.Ring.Match.MatchSide.Rival);
+            _s.Referee.Model.SetActive(false);
+            hero.Model.SetActive(false);
+            rival.Model.SetActive(false);
+            ScreenOff();
+            _titleLayer.style.display = DisplayStyle.Flex;
+            ShowTitle(title, sub, RingTheme.Gold);
+            // З протилежної від камери матчу трибуни (північ) — на ринг, далі збоку вздовж рядів — на завісу (інакше, ніж вступ
+            // гри з півдня). Зала спортзалу: x −18…18, z −12…14, стеля 8 м, ферма PAR — 6,2 м над кутами рингу: камера нижче 6,1 м
+            // і далі 7 м від центру, поки вище ферми.
+            Vector3[] fly = { new Vector3(-5f, 6.0f, 11.5f), new Vector3(5f, 5.0f, 10.5f), new Vector3(10f, 3.6f, 4.0f) };
+            float seg = 2.4f;
+            for (int i = 0; i + 1 < fly.Length && !_skip; i++)
+                for (float t = 0f; t < seg && !_skip; t += Time.deltaTime)
+                {
+                    float sm = Mathf.SmoothStep(0f, 1f, t / seg);
+                    Vector3 look = Vector3.Lerp(new Vector3(0f, 1.2f, 0f), CurtainTop + new Vector3(0f, -1.6f, 0f), Mathf.Clamp01((i + sm) / 2f));
+                    Look(Vector3.Lerp(fly[i], fly[i + 1], sm), look, 46f, i == 0 && t == 0f);
+                    if (i == 1 && t == 0f && _s.Fx != null) { _s.Fx.TitleHit(); _s.Fx.RingPyro(); }
+                    yield return null;
+                }
+            if (!_skip) yield return Wait(1.6f);
+            _s.Referee.Model.SetActive(true);
+            hero.Model.SetActive(true);
+            rival.Model.SetActive(true);
+            ScreenOff();
             CamActive = false;
             Busy = false;
         }

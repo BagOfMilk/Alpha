@@ -33,6 +33,14 @@ namespace Game.Gameplay.Ring.Stage
         public AnimationClip[] crowdClips = new AnimationClip[0];
         public Avatar crowdAvatar;
         public TextAsset venueAnchors, venueProps, venueCrowd;
+        /// <summary>
+        /// Процедурні набори текстур арени (Art/Ring/Textures, manifest): ім'я, карта кольору, нормаль, плитка (м) — для
+        /// матеріалів Kit_* (<see cref="RingVenueKit"/>).
+        /// </summary>
+        public string[] kitSets = new string[0];
+        public Texture2D[] kitAlbedo = new Texture2D[0];
+        public Texture2D[] kitNormal = new Texture2D[0];
+        public float[] kitTile = new float[0];
 
         /// <summary>Порядок: 0 — гравець, 1 — суперник, 2 — рефері.</summary>
         public Texture2D[] albedo = new Texture2D[3];

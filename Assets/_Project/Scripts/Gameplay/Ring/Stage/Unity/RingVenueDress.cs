@@ -173,7 +173,9 @@ namespace Game.Gameplay.Ring.Stage
                 f.Operator = f.Clip.StartsWith("Cam_");
                 if (f.Dist > 11f) continue;
                 // Коридор виходу вільний: борець ішов крізь фанатів, що стояли впритул до доріжки (огляд 05.11.2026).
-                if (!f.Operator && NearAisle(f.Pos, 1.0f)) continue;
+                // 1,6 м (було 1,0): біля рингу камера ходи йде над борцем, і фанати впритул до проходу ставали на пів кадру —
+                // зблизька видно спрощену модель (зауваження «Відео огляду» 08.11.2026, кадри 036, 185).
+                if (!f.Operator && NearAisle(f.Pos, 1.6f)) continue;
                 cand.Add(f);
             }
             cand.Sort((a, b) =>

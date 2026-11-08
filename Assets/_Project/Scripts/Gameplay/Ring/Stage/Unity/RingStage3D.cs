@@ -328,6 +328,9 @@ namespace Game.Gameplay.Ring.Stage
         {
             var v = Instantiate(assets.venue, transform);
             v.name = "Venue";
+            // Kit_* — колір вершин × сіра карта набору (у Unity були світло-сірими без текстури: плейтест 08.11.2026, P3).
+            RingVenueKit.Apply(v, null, assets.kitSets, assets.kitAlbedo, assets.kitNormal, assets.kitTile);
+            RingVenueKit.TameEmission(v, "Fridge_Inner", 0.18f);   // білий «!» за рингом у промо
             v.transform.localPosition = Vector3.zero;
             // FBX арени імпортується без конвертації осей: Unity бачить (x, y_blender, -z_blender). Поворот +90° навколо X дає
             // (x, z_blender, y_blender) — рівно як у Blender, лицьовий бік (hardcam, −Y) дивиться на −Z.
@@ -464,6 +467,7 @@ namespace Game.Gameplay.Ring.Stage
                 _mic = Instantiate(assets.mic, transform);
                 _mic.name = "Mic";
                 foreach (var c in _mic.GetComponentsInChildren<Collider>()) Destroy(c);
+                RingVenueKit.DropSubmesh(_mic, "Mic_Cable");   // бездротовий: кабель був жорстким стрижнем до підлоги
                 _mic.SetActive(false);
             }
         }
@@ -564,7 +568,11 @@ namespace Game.Gameplay.Ring.Stage
             if (!changed) return;
             HideMic();
             if (_ropes != null) _ropes.SetActors(new[] { _player, _rival, _ref });
-            if (_mode == RingStageMode.Idle && (_show == null || !_show.Busy)) ShowIdle();
+            if (_mode == RingStageMode.Idle && (_show == null || !_show.Busy))
+            {
+                if (_heroOnly) HeroAlone(_heroGood, _heroCreate, true);
+                else ShowIdle();
+            }
         }
 
         private void Kill(RingActor a)
@@ -646,7 +654,10 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
-            _ref.Model.SetActive(true);
+            ShowAll();
+            // Світло зали — робоче: холодне світло поразки лишалося на картці й промо наступного тижня (плейтест 08.11.2026, P3:
+            // «картка шоу тижня 2 і далі має холодне синє світло»).
+            if (_fx != null) _fx.Match();
             Place(_player, ZonePos(MatchSide.Player, Zone.Center), 90f, "Ring_Stance_Loop");
             Place(_rival, ZonePos(MatchSide.Rival, Zone.Center), -90f, "Ring_Stance_Loop");
             Place(_ref, RefPos, 180f, "Ref_Idle_Loop");
@@ -675,7 +686,7 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
-            _ref.Model.SetActive(true);
+            ShowAll();
             var w = playerWon ? _player : _rival;
             var l = playerWon ? _rival : _player;
             // Переможець — у центрі ближче до камери, руки вгору до залу; рефері поруч; той, хто програв, — нокаут позаду.
@@ -704,7 +715,7 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Match;
             ForgetWatch();
             HideMic();
-            _ref.Model.SetActive(true);
+            ShowAll();
             _director.Begin(engine);
             if (_fx != null) _fx.Match();
             CrowdMood(engine != null ? engine.State.Hype : 0);
@@ -724,6 +735,74 @@ namespace Game.Gameplay.Ring.Stage
             return _director;
         }
 
+        /// <summary>Усі троє на рингу видимі (кінець сезону й створення ховають суперника й рефері).</summary>
+        private void ShowAll()
+        {
+            _heroOnly = false;
+            _player.Model.SetActive(true);
+            _rival.Model.SetActive(true);
+            _ref.Model.SetActive(true);
+        }
+
+        public void SetBigShow(bool big) { if (_fx != null && _fx.Big != big) _fx.SetBig(big); }
+
+        public void BeginShowOpen(string title, string subtitle)
+        {
+            _heroOnly = false;
+            _mode = RingStageMode.Idle;
+            if (_director != null) _director.EndMatch();
+            HideMic();
+            _show.LeaveBackstage();
+            if (_fx != null) _fx.Match();
+            _show.BeginOpen(title, subtitle);
+            if (_sound != null) _sound.Crowd(3);
+        }
+
+        public void ShowSeasonEnd(bool good) { HeroAlone(good, false, false); }
+
+        public void ShowCreate() { HeroAlone(false, true, false); }
+
+        // «Герой сам» (створення, кінець сезону): тримається й після перебудови зовнішності (SetWrestlers).
+        private bool _heroOnly, _heroGood, _heroCreate;
+
+        /// <summary>
+        /// Герой сам у центрі рингу обличчям до камери, суперник і рефері сховані; кіноплан — герой у лівій частині кадру
+        /// (праворуч — колонка екрана). Створення — ближче, по коліна (плейтест 08.11.2026, P3: на створенні камера показувала
+        /// весь ринг із двома борцями, і було неясно, хто «я»); кінець сезону — ширше, добрий сезон — свято (P1-7).
+        /// <paramref name="again"/> — після перебудови моделі: без нового конфеті.
+        /// </summary>
+        private void HeroAlone(bool good, bool create, bool again)
+        {
+            if (!again)
+            {
+                LeaveShow();
+                _mode = RingStageMode.Idle;
+                if (_director != null) _director.EndMatch();
+                HideMic();
+            }
+            ShowAll();
+            _rival.Model.SetActive(false);
+            _ref.Model.SetActive(false);
+            _heroOnly = true; _heroGood = good; _heroCreate = create;
+            string pose = good && Clip("Entrance_Corner_Pose") != null ? "Entrance_Corner_Pose" : good ? "Idle_Hype_Loop" : "Ring_Stance_Loop";
+            // Герой ближче до дальніх канатів, камера — всередині рингу: зовні верхній канат перетинав героя на рівні рук
+            // (огляд pt1, кадр 015 створення).
+            var at = new Vector3(0f, MatY, 1.3f);
+            Place(_player, at, 180f, pose);
+            if (!again && _fx != null)
+            {
+                if (good) _fx.Victory(_player.Hips != null ? _player.Hips : _player.Slot);
+                else _fx.Match();
+            }
+            if (!again) CrowdMood(good ? 3 : 1);
+            // Вертикальний кут 30° (створення) / 40°: півширина кадру на відстані d — d·tan(fov/2)·аспект; герой — на 0,36 півширини
+            // лівіше центру (≈32 % ширини екрана). Камера на z = 1,3 − d ≈ −1,8 — всередині канатів (2,04).
+            float fov = create ? 30f : 40f, d = 3.1f;
+            float half = d * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * CamAspect;
+            var look = at + new Vector3(0.36f * half, create ? 1.15f : 1.25f, 0f);
+            Cine(look + new Vector3(0.5f, 0.15f, -d), look, fov, !again);
+        }
+
         public void EndMatch()
         {
             LogCamShare();
@@ -735,6 +814,8 @@ namespace Game.Gameplay.Ring.Stage
             LeaveShow();
             _mode = RingStageMode.Promo;
             if (_director != null) _director.EndMatch();
+            ShowAll();
+            if (_fx != null) _fx.Match();
             _ref.Model.SetActive(false);
             Place(_player, new Vector3(-1.1f, MatY, 0f), 90f, "Ring_Stance_Loop");
             Place(_rival, new Vector3(1.1f, MatY, 0f), -90f, "Ring_Stance_Loop");
@@ -870,6 +951,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void BeginIntro(string title, string subtitle)
         {
+            _heroOnly = false;
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
@@ -887,17 +969,13 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         private string TronTier(string asked)
         {
-            if (_tronTier == null)
-            {
-                _tronTier = "";
-                var args = Environment.GetCommandLineArgs();
-                for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "-tron-tier") _tronTier = args[i + 1];
-            }
+            if (_tronTier == null) _tronTier = ReadArg("-tron-tier") ?? "";
             return _tronTier.Length > 0 ? _tronTier : string.IsNullOrEmpty(asked) ? "gym" : asked;
         }
 
         public void BeginEntrance(bool player, EntranceRecipe recipe, EntranceProfile profile, int costumeRgb)
         {
+            _heroOnly = false;
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
@@ -1029,6 +1107,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void ShowBackstage()
         {
+            _heroOnly = false;
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();

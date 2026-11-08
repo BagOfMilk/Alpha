@@ -40,6 +40,21 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         void BeginEntrance(bool player, EntranceRecipe recipe, EntranceProfile profile, int costumeRgb);
 
+        /// <summary>
+        /// Велике шоу (ворожнеча, титул, велике шоу тижня): світло арени (зала темніша, ринг яскравіший, голови над трибунами),
+        /// вогонь біля завіси на виходах, фонтани на позі. false — щотижневе. Плейтест 08.11.2026, P1-7.
+        /// </summary>
+        void SetBigShow(bool big);
+
+        /// <summary>Відкриття великого шоу перед виходами: пролітка над залою, назва вечора на екрані, іскри. Поки грає — ShowBusy.</summary>
+        void BeginShowOpen(string title, string subtitle);
+
+        /// <summary>Кінець сезону: герой сам у центрі рингу; добрий сезон — свято (конфеті, фонтани), інакше — робоче світло.</summary>
+        void ShowSeasonEnd(bool good);
+
+        /// <summary>Створення борця: герой сам у центрі, камера ближче (по коліна) — видно, як змінюється вигляд.</summary>
+        void ShowCreate();
+
         /// <summary>Пропустити вступ чи вихід (будь-яка клавіша).</summary>
         void SkipShow();
 

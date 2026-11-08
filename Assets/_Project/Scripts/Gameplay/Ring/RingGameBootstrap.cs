@@ -60,6 +60,9 @@ namespace Game.Gameplay.Ring
         private bool _onTitle;
         private readonly Queue<bool> _entrances = new Queue<bool>();
         private MatchEngine _matchPending;
+        /// <summary>Відкриття великого шоу ще не зіграно (перед першими виходами вечора) і ключ шоу, для якого вже зіграно.</summary>
+        private bool _openPending;
+        private string _openedShow;
         private object _stageKey;
 
         // ---------------- ICareerHost ----------------
@@ -436,7 +439,12 @@ namespace Game.Gameplay.Ring
         {
             var stage = RingStageHub.Current;
             if (stage == null || RingStageHub.DemoRequested) return false;
-            if (!stage.ShowBusy && _entrances.Count > 0)
+            if (!stage.ShowBusy && _openPending)
+            {
+                _openPending = false;
+                stage.BeginShowOpen(ShowOpenTitle(), ShowOpenSub());
+            }
+            else if (!stage.ShowBusy && _entrances.Count > 0)
             {
                 bool player = _entrances.Dequeue();
                 var engine = _matchPending ?? _career.Engine;
@@ -453,7 +461,7 @@ namespace Game.Gameplay.Ring
                 stage.BeginEntrance(player, EntranceRecipeFor(input, name), EntranceProfile.Compose(input), rgb);
             }
             // Лише шоу (вступ, вихід) ховає UI; кліпи матчу йдуть під панеллю матчу.
-            bool showing = stage.ShowBusy || _entrances.Count > 0;
+            bool showing = stage.ShowBusy || _entrances.Count > 0 || _openPending;
             if (!showing)
             {
                 if (_inIntro) { _inIntro = false; _viewKey = null; }
@@ -471,14 +479,41 @@ namespace Game.Gameplay.Ring
             return true;
         }
 
-        /// <summary>Рецепт екрана виходу (ТЗ B07): ґімік і роль борця, щабель — спортзал, тег «ґімік · шлях» ключами перекладу.</summary>
+        /// <summary>Велике шоу вечора: ворожнеча, титул чи велике шоу тижня (плейтест 08.11.2026, P1-7).</summary>
+        private bool BigShowNow
+        {
+            get
+            {
+                if (_career == null || _career.Stage != CareerStage.Show) return false;
+                var st = _career.State;
+                return st.IsBig || st.IsTitle || st.IsFeudShow;
+            }
+        }
+
+        private string ShowOpenTitle()
+        {
+            var st = _career.State;
+            return _text.Get(st.IsTitle ? "c.card.title_match" : st.IsFeudShow ? "c.open.feud" : "c.card.big");
+        }
+
+        private string ShowOpenSub()
+        {
+            var opp = _content.FindNpc(_career.State.Opponent);
+            return opp == null ? "" : _text.Format("c.open.vs", _career.State.RingName, _text.Get(opp.NameKey));
+        }
+
+        /// <summary>
+        /// Рецепт екрана виходу (ТЗ B07): ґімік і роль борця, тег «ґімік · шлях» ключами перекладу. Щабель — спортзал; велике шоу —
+        /// зала, титул — арена (багатший ролик екрана, плейтест 08.11.2026, P1-7).
+        /// </summary>
         private EntranceRecipe EntranceRecipeFor(EntranceInput input, string name)
         {
             string g = EntranceScreenSlots.GimmickKey(input.Gimmick);
             string pathKey = input.Path == RingPath.Heel ? "path.heel" : input.Path == RingPath.Rebel ? "path.rebel" : "path.face";
+            string tier = !BigShowNow ? "gym" : _career.State.IsTitle ? "arena" : "hall";
             return new EntranceRecipe
             {
-                Gimmick = g, Role = EntranceScreenSlots.RoleOf(input.Path), Tier = "gym", Name = name, Seed = 0, Player = input.Player,
+                Gimmick = g, Role = EntranceScreenSlots.RoleOf(input.Path), Tier = tier, Name = name, Seed = 0, Player = input.Player,
                 TagText = _text.Get("gimmick." + _content.GimmickOf(input.Gimmick).Key) + " · " + _text.Get(pathKey),
             };
         }
@@ -600,7 +635,17 @@ namespace Game.Gameplay.Ring
                 stage.SetWrestlers(CareerLooks.HeroBodies[HeroBody], CareerLooks.CostumeRgb(_career.State.Costume), CareerLooks.HeroHair[HeroHair],
                     opp.Body, opp.Rgb, opp.Hair, opp.Scale);
             }
-            if (_onTitle || _career.Stage == CareerStage.Create || _career.Stage == CareerStage.SeasonEnd) { stage.ShowIdle(); return; }
+            stage.SetBigShow(!_onTitle && BigShowNow);
+            if (!_onTitle && _career.Stage == CareerStage.SeasonEnd)
+            {
+                // Кінець сезону — своя сцена: герой у центрі, добрий сезон — свято (плейтест 08.11.2026, P1-7).
+                var rec = _career.State.SeasonRecord;
+                var rep = _career.GetSeasonReport();
+                stage.ShowSeasonEnd(rec[0] > rec[1] || (rep != null && (rep.TitleWon || rep.BeltIsPlayers)));
+                return;
+            }
+            if (!_onTitle && _career.Stage == CareerStage.Create) { stage.ShowCreate(); return; }
+            if (_onTitle) { stage.ShowIdle(); return; }
             if (_career.Stage == CareerStage.Week)
             {
                 // Сцена закулісся — там само, камера за мовцем; подія — гість на місці букера.
@@ -621,6 +666,10 @@ namespace Game.Gameplay.Ring
                 _entrances.Enqueue(true);
                 _entrances.Enqueue(false);
                 _matchPending = match;
+                // Велике шоу відкривається пролітками й назвою вечора — раз за шоу (перед першими виходами).
+                string showKey = _career.State.Season + ":" + _career.State.Week + ":" + _career.State.IsTitle;
+                _openPending = BigShowNow && showKey != _openedShow;
+                if (_openPending) _openedShow = showKey;
                 return;
             }
             _stageKey = null;

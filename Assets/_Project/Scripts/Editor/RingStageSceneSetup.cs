@@ -20,13 +20,20 @@ namespace Game.Gameplay.EditorTools
         public static void Attach(GameObject host)
         {
             var assets = host.AddComponent<RingStageAssets>();
+            // Сітки арени читаються в рантаймі: матеріали Kit_* діляться за кольором вершин (RingVenueKit).
+            Readable(Art + "venue_gym.fbx");
             assets.venue = Load<GameObject>(Art + "venue_gym.fbx");
+            KitSets(assets);
             assets.bodyPlayer = Load<GameObject>("Assets/Art/Characters/Kit/body_m_ukrainian.fbx");
             assets.bodyRival = Load<GameObject>("Assets/Art/Characters/Kit/body_m_nordic.fbx");
             assets.bodyRef = Load<GameObject>("Assets/Art/Characters/Kit/body_m_mediterranean.fbx");
+            Readable(Art + "Props/mic.fbx");   // кабель прибирається з сітки в рантаймі (RingVenueKit.DropSubmesh)
             assets.mic = Load<GameObject>(Art + "Props/mic.fbx");
             assets.kitMale = Load<GameObject>("Assets/Art/Characters/Kit/kit_m.fbx");
             // Зала: стільці (props.fbx читається - сітки склеюються в рантаймі), натовп з анімаціями, тексти розстановки.
+            // .meta цього FBX не в git: згенерований Unity має isReadable 0, і в грі не було жодного стільця — фанати
+            // «сиділи в повітрі» (плейтест 08.11.2026, P0-2). Читання вмикається тут, у будь-якій робочій копії.
+            Readable(Art + "Props/props.fbx");
             assets.props = Load<GameObject>(Art + "Props/props.fbx");
             assets.crowd = Load<GameObject>("Assets/Art/Crowd/crowd_fans.fbx");
             assets.venueAnchors = Load<TextAsset>(Art + "venue_gym_anchors.txt");
@@ -139,6 +146,37 @@ namespace Game.Gameplay.EditorTools
             var stage = host.AddComponent<RingStage3D>();
             stage.assets = assets;
             Debug.Log("[Ринг] 3D: ассети прив'язано, кліпів " + clips.Count);
+        }
+
+        /// <summary>Процедурні набори арени з textures_manifest.txt («набір розмір плитка»; без наклейок і LED) — для RingVenueKit.</summary>
+        private static void KitSets(RingStageAssets assets)
+        {
+            var man = AssetDatabase.LoadAssetAtPath<TextAsset>(Art + "Textures/textures_manifest.txt");
+            var sets = new List<string>(); var alb = new List<Texture2D>(); var nor = new List<Texture2D>(); var tile = new List<float>();
+            if (man != null)
+                foreach (var raw in man.text.Split((char)10))
+                {
+                    var p = raw.Trim().Split(new[] { ' ', (char)9 }, System.StringSplitOptions.RemoveEmptyEntries);
+                    if (p.Length != 3 || p[0].StartsWith("#")) continue;
+                    float t;
+                    if (!float.TryParse(p[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out t)) continue;
+                    var a = AssetDatabase.LoadAssetAtPath<Texture2D>(Art + "Textures/" + p[0] + "_albedo.png");
+                    if (a == null) continue;
+                    sets.Add(p[0]); alb.Add(a); tile.Add(t);
+                    nor.Add(AssetDatabase.LoadAssetAtPath<Texture2D>(Art + "Textures/" + p[0] + "_normal.png"));
+                }
+            else Debug.LogError("[Ринг] 3D: немає Art/Ring/Textures/textures_manifest.txt — матеріали Kit лишаться сірими");
+            assets.kitSets = sets.ToArray(); assets.kitAlbedo = alb.ToArray(); assets.kitNormal = nor.ToArray(); assets.kitTile = tile.ToArray();
+        }
+
+        /// <summary>Сітки моделі доступні з коду (склеювання стільців у рантаймі); переімпорт — лише якщо вимкнено.</summary>
+        private static void Readable(string path)
+        {
+            var mi = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (mi == null || mi.isReadable) return;
+            mi.isReadable = true;
+            mi.SaveAndReimport();
+            Debug.Log("[Ринг] 3D: " + path + " — увімкнено читання сіток (isReadable).");
         }
 
         private static T Load<T>(string path) where T : Object

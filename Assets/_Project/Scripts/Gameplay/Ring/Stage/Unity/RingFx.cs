@@ -19,7 +19,7 @@ namespace Game.Gameplay.Ring.Stage
         private readonly List<Light> _heads = new List<Light>();
         private Light _follow;
         private Transform _followTarget;
-        private float[] _parBase;
+        private float[] _parBase, _parAngleBase;
         private Color[] _parColorBase;
         private float _keyBase, _fillBase, _rimCoolBase, _rimWarmBase;
         private Color _ambientBase;
@@ -34,7 +34,22 @@ namespace Game.Gameplay.Ring.Stage
         private ParticleSystem _co2L, _co2R, _sparkL, _sparkR, _confetti, _pyroL, _pyroR;
 
         private static readonly Color Red = new Color(1f, 0.12f, 0.08f), Gold = new Color(1f, 0.7f, 0.2f), Blue = new Color(0.15f, 0.3f, 1f),
-            White = new Color(1f, 0.97f, 0.92f), Purple = new Color(0.6f, 0.15f, 1f);
+            White = new Color(1f, 0.97f, 0.92f), Purple = new Color(0.6f, 0.15f, 1f), Fire = new Color(1f, 0.55f, 0.15f);
+
+        /// <summary>
+        /// Велике шоу (ворожнеча, титул, велике шоу тижня — плейтест 08.11.2026, P1-7: «виглядає так само, як щотижневе»): за
+        /// сценами арени (venue_arena_cues) — зала темніша, ринг яскравіший, рухомі голови й у бою (повільно над трибунами),
+        /// вихід — ще темніша зала й вогонь біля завіси на ударі, поза — фонтани на стійках.
+        /// </summary>
+        public bool Big { get; private set; }
+
+        public void SetBig(bool big)
+        {
+            Big = big;
+            if (_cue == "match") Match();
+        }
+
+        private ParticleSystem _fireL, _fireR;
 
         public void Init(RingStage3D stage, Material additive, Material alpha)
         {
@@ -54,7 +69,8 @@ namespace Game.Gameplay.Ring.Stage
             }
             _parBase = new float[_par.Count];
             _parColorBase = new Color[_par.Count];
-            for (int i = 0; i < _par.Count; i++) { _parBase[i] = _par[i].intensity; _parColorBase[i] = _par[i].color; }
+            _parAngleBase = new float[_par.Count];
+            for (int i = 0; i < _par.Count; i++) { _parBase[i] = _par[i].intensity; _parColorBase[i] = _par[i].color; _parAngleBase[i] = _par[i].spotAngle; }
             _keyBase = _key != null ? _key.intensity : 0f;
             _fillBase = _fill != null ? _fill.intensity : 0f;
             _rimCoolBase = _rimCool != null ? _rimCool.intensity : 0f;
@@ -94,8 +110,11 @@ namespace Game.Gameplay.Ring.Stage
             _sparkL = Sparks(cl + new Vector3(0.3f, 0f, -0.4f), additive, 5.5f, new Color(1f, 0.9f, 0.6f));
             _sparkR = Sparks(cr + new Vector3(0.3f, 0f, 0.4f), additive, 5.5f, new Color(1f, 0.9f, 0.6f));
             // Фонтани — на задніх кутах (за переможцем з боку камери); на передніх полум'я закривало ринг (огляд 04.11.2026).
-            _pyroL = Sparks(new Vector3(-2.6f, 1.05f, 2.6f), additive, 9f, new Color(1f, 0.55f, 0.15f));
-            _pyroR = Sparks(new Vector3(2.6f, 1.05f, 2.6f), additive, 9f, new Color(1f, 0.55f, 0.15f));
+            _pyroL = Sparks(new Vector3(-2.6f, 1.05f, 2.6f), additive, 9f, Fire);
+            _pyroR = Sparks(new Vector3(2.6f, 1.05f, 2.6f), additive, 9f, Fire);
+            // Вогонь біля завіси — лише великого шоу (на ударі екрана виходу).
+            _fireL = Sparks(cl + new Vector3(0.5f, 0f, -0.2f), additive, 9f, Fire);
+            _fireR = Sparks(cr + new Vector3(0.5f, 0f, 0.2f), additive, 9f, Fire);
             _confetti = Confetti(paper);
         }
 
@@ -104,7 +123,8 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Бій: робоче тепле світло над рингом, голови й прожектор вимкнені.</summary>
         public void Match()
         {
-            _cue = "match"; _cueT = 0f; _headMode = "off"; _bpm = 0f; _followTarget = null;
+            _cue = "match"; _cueT = 0f; _headMode = Big ? "hall" : "off"; _bpm = 0f; _followTarget = null;
+            if (Big) _headColors = new[] { Gold, White, Blue, White };
             if (_entranceCo != null) { StopCoroutine(_entranceCo); _entranceCo = null; }
             _entranceRing = false;
             Stop(_co2L); Stop(_co2R); Stop(_sparkL); Stop(_sparkR);
@@ -136,6 +156,7 @@ namespace Game.Gameplay.Ring.Stage
             if (hitIn > 0f) yield return new WaitForSeconds(hitIn);
             Burst(_co2L); Burst(_co2R);
             if (sparks) { Burst(_sparkL); Burst(_sparkR); }
+            if (Big) { Burst(_fireL); Burst(_fireR); }
             // Другий подих CO2 — через чотири такти після удару (на сітці бітів).
             yield return new WaitForSeconds(4f * 60f / bpm);
             Burst(_co2L); Burst(_co2R);
@@ -227,17 +248,29 @@ namespace Game.Gameplay.Ring.Stage
                 case "entrance":
                     if (_entranceRing) { house = 0.5f * _hall; parMul = 1.0f; haze = 1.4f; keyMul = 1.0f; parTint = Color.clear; }
                     else { house = 0.35f * _hall; parMul = 0.55f * _hall; haze = 1.8f; keyMul = 0.5f; parTint = new Color(1f, 0.45f, 0.4f); }
+                    if (Big) { house *= 0.6f; haze *= 1.25f; }
                     break;
                 // стробоскоп фінішера; «Спалахи» вимкнено — рівне яскраве світло без блимання (фотосенситивність)
                 case "finisher": house = 0.3f; parMul = !Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes ? 1.2f : Strobe() ? 1.8f : 0.15f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
                 case "victory": house = 1.1f; parMul = 1.3f; haze = 1.3f; keyMul = 1.1f; parTint = Gold; break;
-                case "defeat": house = 0.45f; parMul = 0.35f; haze = 1.5f; keyMul = 0.5f; parTint = new Color(0.45f, 0.58f, 1f); break;
-                default: house = 1f; parMul = 1f; haze = 1f; keyMul = 1f; parTint = Color.clear; break;
+                // Холодно, але читається (плейтест 08.11.2026, P3: кадри поразки й результату «дуже темні» — було 0,45 / 0,35 / 0,5).
+                case "defeat": house = 0.7f; parMul = 0.6f; haze = 1.4f; keyMul = 0.75f; parTint = new Color(0.45f, 0.58f, 1f); break;
+                default:
+                    // Велике шоу: зала темна, ринг у плямі світла (сцена «match» арени: зал 0,30, PAR 1,2). Залу рівно світить ключове
+                    // спрямоване світло — без його приглушення трибуни лишались як щотижня (огляд pt3: яскравість трибун 49 → 45).
+                    if (Big) { house = 0.35f; parMul = 1.6f; haze = 1.5f; keyMul = 0.45f; }
+                    else { house = 1f; parMul = 1f; haze = 1f; keyMul = 1f; }
+                    parTint = Color.clear;
+                    break;
             }
             _flash = Mathf.MoveTowards(_flash, 0f, dt * 5f);
             parMul *= 1f + _flash * 1.6f;
+            // Велике шоу: промені PAR вужчі — світло тримається рингу, трибуни в тіні.
+            float angleMul = Big && _cue != "entrance" ? 0.8f : 1f;
             for (int i = 0; i < _par.Count; i++)
             {
+                _par[i].spotAngle = Mathf.Lerp(_par[i].spotAngle, _parAngleBase[i] * angleMul, k);
+                _par[i].innerSpotAngle = _par[i].spotAngle * 0.5f;
                 _par[i].intensity = Mathf.Lerp(_par[i].intensity, _parBase[i] * parMul, _cue == "finisher" || _flash > 0f ? 1f : k);
                 var target = parTint.a > 0f ? Color.Lerp(_parColorBase[i], parTint, 0.75f) : _parColorBase[i];
                 _par[i].color = Color.Lerp(_par[i].color, target, k);
@@ -259,7 +292,7 @@ namespace Game.Gameplay.Ring.Stage
                 int ci = (i + beat) % _headColors.Length;
                 h.color = _headColors[ci];
                 float g = _cue == "entrance" && _headGain != null && ci < _headGain.Length ? _headGain[ci] : 1f;
-                h.intensity = Mathf.Lerp(h.intensity, (_headMode == "curtain" ? 16f : 40f) * g, k);
+                h.intensity = Mathf.Lerp(h.intensity, (_headMode == "curtain" ? 16f : _headMode == "hall" ? 28f : 40f) * g, k);
                 Vector3 tgt = HeadTarget(i, _cueT);
                 h.transform.rotation = Quaternion.Slerp(h.transform.rotation, Quaternion.LookRotation(tgt - h.transform.position), 1f - Mathf.Exp(-6f * dt));
             }
@@ -289,6 +322,10 @@ namespace Game.Gameplay.Ring.Stage
                 case "crowd":
                     float sweep = t * 0.9f + i;
                     return new Vector3(Mathf.Cos(sweep) * 8f, 1.5f, Mathf.Sin(sweep) * 8f);
+                case "hall":
+                    // Велике шоу в бою: повільно над трибунами, не на ринг (борців не засвічує).
+                    float slow = t * 0.22f + i * 1.05f;
+                    return new Vector3(Mathf.Cos(slow) * 7.5f, 2.2f, Mathf.Sin(slow) * 7.5f);
             }
             return Vector3.zero;
         }

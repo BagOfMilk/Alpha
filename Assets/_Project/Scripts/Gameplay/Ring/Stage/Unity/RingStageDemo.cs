@@ -29,12 +29,18 @@ namespace Game.Gameplay.Ring.Stage
             if (RingStage3D.ReadArg("-ring-entrances") != null) { yield return Entrances(stage, folder); yield break; }
 
             // ---- промо ----
+            bool probe = RingStage3D.ReadArg("-ring-probe") != null;
+            // Світло великого шоу (-ring-demo-big) — порівняння з щотижневим на тих самих кадрах.
+            if (RingStage3D.ReadArg("-ring-demo-big") != null) stage.SetBigShow(true);
             stage.BeginPromo();
             yield return Shot(folder, "promo_two", 1.2f);
+            if (probe) yield return ProbeBright("promo_two");
             stage.SetPromoSpeaker("player");
             yield return Shot(folder, "promo_player", 1.6f);
+            if (probe) yield return ProbeBright("promo_player");
             stage.SetPromoSpeaker("rival");
             yield return Shot(folder, "promo_rival", 1.6f);
+            if (probe) yield return ProbeBright("promo_rival");
             stage.SetPromoSpeaker("player");
             stage.SetPromoSpeaker("rival");
             stage.SetPromoSpeaker("player");
@@ -163,6 +169,72 @@ namespace Game.Gameplay.Ring.Stage
                 t += _every;
                 Capture(folder, tag);
             }
+        }
+
+        private static bool _probeColliders;
+
+        /// <summary>
+        /// Зонд білих плям (-ring-probe): кадр екрана → клітинки 24 px, де ≥ 30 % пікселів майже білі (усі канали ≥ 245) →
+        /// промінь з камери через центр клітинки → яка сітка, підсітка й матеріал там стоять (тимчасові MeshCollider на всіх
+        /// читаних сітках сцени). Плейтест 08.11.2026, P3: білий «!» у промо, джерело якого не знайшли ні текстом арени, ні UI.
+        /// </summary>
+        private static IEnumerator ProbeBright(string tag)
+        {
+            if (!_probeColliders)
+            {
+                _probeColliders = true;
+                int added = 0;
+                foreach (var mf in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                {
+                    if (mf.sharedMesh == null || !mf.sharedMesh.isReadable || mf.GetComponent<Collider>() != null) continue;
+                    if (mf.GetComponent<MeshRenderer>() == null || !mf.GetComponent<MeshRenderer>().enabled) continue;
+                    var mc = mf.gameObject.AddComponent<MeshCollider>();
+                    mc.sharedMesh = mf.sharedMesh;
+                    added++;
+                }
+                Debug.Log("[Ринг] зонд: колайдерів " + added);
+                yield return new WaitForFixedUpdate();
+            }
+            yield return new WaitForEndOfFrame();
+            var cam = Camera.main;
+            var tex = ScreenCapture.CaptureScreenshotAsTexture();
+            var px = tex.GetPixels32();
+            int w = tex.width, h = tex.height, cell = 24, found = 0;
+            for (int cy = 0; cy + cell <= h; cy += cell)
+                for (int cx = 0; cx + cell <= w; cx += cell)
+                {
+                    int white = 0;
+                    for (int y = cy; y < cy + cell; y++)
+                        for (int x = cx; x < cx + cell; x++)
+                        {
+                            var c = px[y * w + x];
+                            if (c.r >= 245 && c.g >= 245 && c.b >= 245) white++;
+                        }
+                    if (white < cell * cell * 3 / 10) continue;
+                    // Екран: (0,0) — лівий нижній кут, як і рядки текстури знімка.
+                    var ray = cam.ScreenPointToRay(new Vector3((cx + cell * 0.5f) * Screen.width / w, (cy + cell * 0.5f) * Screen.height / h, 0f));
+                    RaycastHit hit;
+                    string what = "нічого";
+                    if (Physics.Raycast(ray, out hit, 80f))
+                    {
+                        var mr = hit.collider.GetComponent<MeshRenderer>();
+                        var mesh = hit.collider is MeshCollider ? ((MeshCollider)hit.collider).sharedMesh : null;
+                        string mat = "?";
+                        if (mesh != null && mr != null && hit.triangleIndex >= 0)
+                            for (int s = 0; s < mesh.subMeshCount; s++)
+                            {
+                                var sd = mesh.GetSubMesh(s);
+                                int t0 = sd.indexStart / 3, t1 = t0 + sd.indexCount / 3;
+                                if (hit.triangleIndex >= t0 && hit.triangleIndex < t1) { mat = s < mr.sharedMaterials.Length && mr.sharedMaterials[s] != null ? mr.sharedMaterials[s].name : "null"; break; }
+                            }
+                        what = hit.collider.name + " / " + mat + string.Format(System.Globalization.CultureInfo.InvariantCulture, " @ ({0:0.00},{1:0.00},{2:0.00}) за {3:0.0} м",
+                            hit.point.x, hit.point.y, hit.point.z, hit.distance);
+                    }
+                    Debug.Log(string.Format("[Ринг] зонд {0}: біла пляма ({1},{2}) {3}% — {4}", tag, cx, h - cy, white * 100 / (cell * cell), what));
+                    if (++found > 40) { Object.Destroy(tex); yield break; }
+                }
+            Debug.Log("[Ринг] зонд " + tag + ": білих клітинок " + found);
+            Object.Destroy(tex);
         }
 
         private static IEnumerator Shot(string folder, string tag, float wait)
