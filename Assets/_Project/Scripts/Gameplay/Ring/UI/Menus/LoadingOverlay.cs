@@ -143,7 +143,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             float f = _progress.Shown;
             _bar.Set(14, f * 14f, RingTheme.Gold, RingTheme.Border);
             _pct.text = (int)Math.Round(f * 100f) + " %";
-            int step = Math.Min(_progress.StepsDone, _stepKeys.Length - 1);
+            int step = Math.Min(_progress.StepAtShown(), _stepKeys.Length - 1);
             _stage.text = RingTheme.Caps(string.Format(_t.Get("m.load.stage"), step + 1, _stepKeys.Length));
             _stageText.text = _t.Get(_stepKeys[Math.Max(0, step)]);
             int tip = LoadingProgress.TipIndex(_progress.ElapsedMs, BrandTokens.MotionMenuTipEveryMs, _tipFirst, _tips.Count);
