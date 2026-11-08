@@ -215,6 +215,9 @@ namespace Game.Gameplay.Ring.Stage
 
         private static void PlanAction(List<StageStep> list, MatchEvent ev, MatchSide a, MatchSide b, RollTier t)
         {
+            // Промінь надії не підводить цілком (ядро, MatchEngine.ApplyRolled): провал рахується як 7–9 — суперник лягає,
+            // нападник не падає. Тож і кліп провалу — той самий, що 7–9, а не «Bump_Back» (звірка зі звуком, F2_DIRECTOR п. 1).
+            if (ev.Action == MatchActionId.HopeSpot && t == RollTier.Miss) t = RollTier.Partial;
             bool miss = t == RollTier.Miss, strong = t == RollTier.Strong;
             // за рингом склейок «канати/кут» немає: прийом грається там, де пара (план «за рингом» ставить режисер)
             bool cut = ev.Staging != MoveStaging.Center && !ev.Outside;

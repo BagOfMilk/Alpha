@@ -282,6 +282,34 @@ namespace Game.Tests.EditMode
                 Assert.IsTrue(RingClipTable.KnowsMove(m.Id), "прийом каталогу без кліпів у таблиці: " + m.Id);
         }
 
+        /// <summary>
+        /// Охоронець звірки зі звуком (F2_DIRECTOR п. 1): промінь надії не підводить цілком — ядро на провалі кладе суперника,
+        /// як на 7–9. Отже провал грається тим самим планом, що й 7–9: пара від нападника, жодного «Bump_Back» (падає сам).
+        /// </summary>
+        [Test]
+        public void HopeSpot_Miss_PlaysLikePartial_AndTheAttackerNeverFallsAlone()
+        {
+            // Без ключа — як дає рушій (надія пропонується окремо); з ключами каталогу — щоб гілка таблиці прийомів теж трималась.
+            foreach (var key in new string[] { null }.Concat(CareerKit.Content().Moves.All.Select(m => m.Id)))
+            {
+                Func<RollTier, MatchEvent> ev = t => new MatchEvent
+                {
+                    Kind = MatchEventKind.Action, Action = MatchActionId.HopeSpot, Tier = t, HasRoll = true, Actor = MatchSide.Player, MoveKey = key
+                };
+                var miss = RingClipTable.Plan(ev(RollTier.Miss));
+                var partial = RingClipTable.Plan(ev(RollTier.Partial));
+                string what = Describe(ev(RollTier.Miss), miss);
+                if (key == null)
+                    Assert.IsTrue(miss.Any(s => s.Kind == StageStepKind.Pair && s.Actor == MatchSide.Player), "пара від нападника: " + what);
+                Assert.IsFalse(miss.Any(s => s.AllClips().Contains("Bump_Back")), "нападник не падає сам: " + what);
+                CollectionAssert.AreEqual(partial.Select(s => s.Kind + ":" + s.Actor + ":" + s.Clip),
+                    miss.Select(s => s.Kind + ":" + s.Actor + ":" + s.Clip), "провал = 7–9: " + what);
+            }
+            // Відчайдушний прийом надією не є: його провал і далі кладе нападника (ядро: Dmg(me), GoDown(me)).
+            var desperate = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Desperate, Tier = RollTier.Miss, HasRoll = true, Actor = MatchSide.Player });
+            Assert.IsTrue(desperate.Any(s => s.AllClips().Contains("Bump_Back")), "відчайдушний провал — падає сам");
+        }
+
         /// <summary>Охоронець (2а): кікаут відкривається не раніше «два» рефері; «три» — на третій долоні.</summary>
         [Test]
         public void Kickout_IsRevealedNoEarlierThanTheRefereesTwo()
