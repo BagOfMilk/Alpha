@@ -34,10 +34,26 @@ namespace Game.Gameplay.Ring.Stage
         void BeginIntro(string title, string subtitle);
 
         /// <summary>
-        /// Вихід борця (гравця чи суперника) перед матчем: титантрон з іменем, хода від завіси, поза в куті.
-        /// <paramref name="rgb"/> — колір борця (0xRRGGBB). Поки грає — IsBusy.
+        /// Вихід борця (гравця чи суперника) перед матчем: екран виходу за рецептом (ТЗ B07 — ґімік, роль, щабель, ім'я) і
+        /// персональні біти за профілем (docs/ring/ENTRANCE_PROFILE.md — завіса, хода, вхід у ринг, поза, шоу).
+        /// <paramref name="costumeRgb"/> — колір костюма (0xRRGGBB, перша голова світла). Поки грає — IsBusy.
         /// </summary>
-        void BeginEntrance(bool player, string title, string subtitle, int rgb);
+        void BeginEntrance(bool player, EntranceRecipe recipe, EntranceProfile profile, int costumeRgb);
+
+        /// <summary>
+        /// Велике шоу (ворожнеча, титул, велике шоу тижня): світло арени (зала темніша, ринг яскравіший, голови над трибунами),
+        /// вогонь біля завіси на виходах, фонтани на позі. false — щотижневе. Плейтест 08.11.2026, P1-7.
+        /// </summary>
+        void SetBigShow(bool big);
+
+        /// <summary>Відкриття великого шоу перед виходами: пролітка над залою, назва вечора на екрані, іскри. Поки грає — ShowBusy.</summary>
+        void BeginShowOpen(string title, string subtitle);
+
+        /// <summary>Кінець сезону: герой сам у центрі рингу; добрий сезон — свято (конфеті, фонтани), інакше — робоче світло.</summary>
+        void ShowSeasonEnd(bool good);
+
+        /// <summary>Створення борця: герой сам у центрі, камера ближче (по коліна) — видно, як змінюється вигляд.</summary>
+        void ShowCreate();
 
         /// <summary>Пропустити вступ чи вихід (будь-яка клавіша).</summary>
         void SkipShow();
@@ -88,6 +104,12 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>
         void ShowBackstage();
+
+        /// <summary>
+        /// Настрій зали за ажіотажем (0 — тихий гул, як на титулі). Пауза → «На титул» з шоу: інакше оплески матчу лишались
+        /// під музикою титулу (рев'ю 08.11.2026).
+        /// </summary>
+        void CrowdMood(int hype);
 
         /// <summary>Сцена закулісся: null — розмова з букером; ev_* — подія з гостем на місці букера.</summary>
         void SetBackstageScene(string sceneId);

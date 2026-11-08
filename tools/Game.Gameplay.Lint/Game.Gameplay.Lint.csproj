@@ -86,6 +86,7 @@
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/Unity/**/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/RingSceneBuilder.cs" />
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingSceneBuilder.Player.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/RingStageSceneSetup.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/PortraitRig.cs" />
     <!--
@@ -123,6 +124,8 @@
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/DialogueStage.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/CharacterKitBuilder.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/ArtImportSettings.cs" />
+    <!-- Ринг: імпорт масок екрана виходу (TextureImporter, AssetPostprocessor) — лише в Unity. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingEntranceScreenImport.cs" />
     <!-- Звук (віха M1.19): AudioSource, PlayerPrefs, AudioImporter — поза заглушками; таблиця тактів лінтується. -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Audio/*.cs" />
     <!-- Плейтест (docs/PLAYTEST.md): ScreenCapture, OnDemandRendering, logMessageReceived; формат — PlaytestLog, лінтується. -->

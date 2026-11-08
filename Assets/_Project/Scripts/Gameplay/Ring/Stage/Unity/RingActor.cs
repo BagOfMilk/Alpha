@@ -216,6 +216,16 @@ namespace Game.Gameplay.Ring.Stage
             return n;
         }
 
+        /// <summary>Швидкість ходу петлі на цьому тілі, м/с (хід тазу за оберт / довжина) — для ходи виходу без ковзання.</summary>
+        public float LoopSpeed(AnimationClip c)
+        {
+            if (c == null || c.length <= 1e-3f) return 0f;
+            var n = Net(c);
+            Vector3 d = n.HipEnd - n.Hip0;
+            d.y = 0f;
+            return d.magnitude / c.length;
+        }
+
         /// <summary>
         /// Петля з запеченим ходом перемоталась (таз у кліпі стрибнув назад на хід петлі): слот переноситься вперед на хід
         /// з вагою входу, тож таз на екрані йде далі без стрибка (огляд 08.11.2026, фаз-тест: Run_Loop — «телепорт 2,6 м»).

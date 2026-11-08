@@ -176,60 +176,39 @@ namespace Game.Gameplay.Ring.UI.Menus
             return l;
         }
 
-        private static readonly float[] CollageSize = { 1f, 0.80f, 0.92f, 0.76f, 0.98f, 0.84f };
-        private static readonly float[] CollageDy = { 0f, 0.14f, -0.08f, 0.18f, 0.02f, -0.04f };
 
         /// <summary>
-        /// Колаж заголовка (мова «Енергія»): кожна літера — на своїй вирізці зі зрізом 12°, розмір і висота трохи різні, кольори
-        /// плашок — папір / тло / золото / кармін / кобальт по колу (жодного нового кольору). Текст не обертається (запобіжник
-        /// читабельності, RING_WRESTLING_UI_REFERENCES), базова лінія одна. Лише для заголовків ≤2 слів (TYPE-02).
+        /// Заголовок екрана — титр-плита (палітра «Арена»; власник 08.11.2026 про колаж літер: «Стиль надпису "завантаження"
+        /// теж наче з дитячої гри, точно не реслінг брутальність»): одне слово display 900 курсивом ВЕЛИКИМИ, кольору паперу, з
+        /// жорсткою кармінною тінню, на чорній плиті зі зрізом 12°, кармінна смуга зліва, золота нитка внизу — як титр бою на
+        /// трансляції. Колаж з різнокольорових вирізок прибрано. <paramref name="seed"/> лишився для сумісності викликів.
         /// </summary>
         public static VisualElement Collage(string text, float size, int seed = 0)
         {
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.FlexEnd;
-            row.pickingMode = PickingMode.Ignore;
-            string caps = RingTheme.Caps(text) ?? "";
-            int n = 0;
-            foreach (char ch in caps)
-            {
-                if (ch == ' ') { var sp = new VisualElement(); sp.style.width = size * 0.3f; row.Add(sp); continue; }
-                int k = (n + seed) % CollageSize.Length;
-                int c = (n + seed) % 5;
-                n++;
-                Color bg, fg;
-                switch (c)
-                {
-                    case 0: bg = RingTheme.Paper; fg = RingTheme.Bg; break;
-                    case 1: bg = RingTheme.Bg; fg = RingTheme.Paper; break;
-                    case 2: bg = RingTheme.Gold; fg = RingTheme.Bg; break;
-                    case 3: bg = RingTheme.Crimson; fg = RingTheme.Paper; break;
-                    default: bg = RingTheme.Hero; fg = RingTheme.Paper; break;   // кобальт — холодна палітра варіанта А
-                }
-                float px = size * CollageSize[k];
-                var cell = new VisualElement();
-                cell.pickingMode = PickingMode.Ignore;
-                cell.style.paddingLeft = px * 0.16f; cell.style.paddingRight = px * 0.22f;
-                cell.style.paddingTop = px * 0.02f; cell.style.paddingBottom = px * 0.02f;
-                cell.style.marginRight = -px * 0.04f;
-                cell.style.translate = new Translate(new Length(0f), new Length(size * CollageDy[k]));
-                Color cbg = bg;
-                cell.generateVisualContent = ctx =>
-                {
-                    // малюємо під усім елементом разом із відступами: локальні координати 0…layout
-                    float w = cell.layout.width, h = cell.layout.height;
-                    if (w < 2f || h < 2f) return;
-                    float sh = BrandTokens.SpaceShadowOffset;
-                    MenuShapes.Parallelogram(ctx.painter2D, sh, sh, w - MenuShapes.SlantK * h, h, MenuShapes.SlantK, RingTheme.Bg);
-                    MenuShapes.Parallelogram(ctx.painter2D, 0f, 0f, w - MenuShapes.SlantK * h, h, MenuShapes.SlantK, cbg);
-                };
-                var l = Display(ch.ToString(), px, fg, RingFontRole.Display900, 0f);
-                l.style.unityTextAlign = TextAnchor.MiddleCenter;
-                cell.Add(l);
-                row.Add(cell);
-            }
-            return row;
+            var box = new VisualElement();
+            box.pickingMode = PickingMode.Ignore;
+            box.style.flexDirection = FlexDirection.Row;
+            box.style.alignSelf = Align.FlexStart;
+            box.style.overflow = Overflow.Visible;
+            var slab = new TitleSlab();
+            slab.style.position = Position.Absolute;
+            slab.style.left = 0f; slab.style.top = 0f; slab.style.right = 0f; slab.style.bottom = 0f;
+            box.Add(slab);
+            var wrap = new VisualElement();
+            wrap.pickingMode = PickingMode.Ignore;
+            wrap.style.paddingLeft = size * 0.5f; wrap.style.paddingRight = size * 0.75f;
+            wrap.style.paddingTop = size * 0.06f; wrap.style.paddingBottom = size * 0.1f;
+            var shadow = Display(text, size, RingTheme.Crimson, RingFontRole.Display900, 0.02f);
+            shadow.style.unityFontStyleAndWeight = FontStyle.Italic;
+            shadow.style.position = Position.Absolute;
+            shadow.style.left = size * 0.5f; shadow.style.top = size * 0.06f;
+            shadow.style.translate = new Translate(new Length(size * 0.06f), new Length(size * 0.07f));
+            wrap.Add(shadow);
+            var word = Display(text, size, RingTheme.Paper, RingFontRole.Display900, 0.02f);
+            word.style.unityFontStyleAndWeight = FontStyle.Italic;
+            wrap.Add(word);
+            box.Add(wrap);
+            return box;
         }
 
         /// <summary>Підвал: підказки клавіш ліворуч, версія праворуч — у безпечній зоні (ACC-04: низ ≥ 45, боки ≥ 80 @900).</summary>
@@ -296,7 +275,9 @@ namespace Game.Gameplay.Ring.UI.Menus
             Hint.style.display = string.IsNullOrEmpty(hint) ? DisplayStyle.None : DisplayStyle.Flex;
             Add(Hint);
             RegisterCallback<PointerEnterEvent>(e => { if (_enabled && OnHover != null) OnHover(); });
-            RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && OnClick != null) OnClick(); });
+            // На відпусканні над кнопкою (ClickEvent), а не на натисканні: на дотику палець, що почав прокрутку чи з'їхав, не тисне
+            // кнопку випадково (аудит 08.11.2026, В4).
+            RegisterCallback<ClickEvent>(e => { if (_enabled && e.button == 0 && OnClick != null) OnClick(); });
         }
 
         public bool Enabled { get { return _enabled; } set { _enabled = value; if (!value) State = PlateState.Disabled; else if (State == PlateState.Disabled) State = PlateState.Normal; } }

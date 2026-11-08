@@ -136,7 +136,7 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("Alpha8",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 8"),
             new UxKeyBinding("Alpha9",     UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "варіант / дія / нагорода 9"),
             new UxKeyBinding("L",          UxKeyScope.Ring,     "RingFeudBootstrap.cs",       "повний журнал матчу"),
-            // Кар'єра «Ринг» (RingGameBootstrap): ті самі клавіші екранів; Esc на тижні — у головне меню (зі збереженням).
+            // Кар'єра «Ринг» (RingGameBootstrap): ті самі клавіші екранів; Esc / Start — пауза (B01 §6.2), «На титул» — зі збереженням.
             new UxKeyBinding("Return",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "далі / головна дія екрана"),
             new UxKeyBinding("KeypadEnter", UxKeyScope.RingCareer, "RingGameBootstrap.cs",    "далі / головна дія екрана"),
             new UxKeyBinding("Space",      UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "далі / головна дія екрана"),
@@ -150,7 +150,8 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("Alpha8",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 8"),
             new UxKeyBinding("Alpha9",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 9"),
             new UxKeyBinding("L",          UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "повний журнал матчу"),
-            new UxKeyBinding("Escape",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "з тижня — у головне меню"),
+            new UxKeyBinding("Escape",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "пауза (будь-який екран кар'єри); у паузі — назад у гру"),
+            new UxKeyBinding("JoystickButton7", UxKeyScope.RingCareer, "RingGameBootstrap.cs", "геймпад Start — пауза"),
             // Меню «Рингу» (ТЗ B08, RingMenuInput): перепризначувані дії — з налаштувань (ring.key.*), тут — сталі запасні й геймпад.
             new UxKeyBinding("Space", UxKeyScope.RingMenu, "RingMenuInput.cs", "підтвердити (запасна до перепризначуваної)"),
             new UxKeyBinding("KeypadEnter", UxKeyScope.RingMenu, "RingMenuInput.cs", "підтвердити (запасна)"),

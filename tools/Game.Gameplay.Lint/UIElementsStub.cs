@@ -317,7 +317,7 @@ namespace UnityEngine.UIElements
 
     public abstract class EventBase<T> : EventBase where T : EventBase<T>, new() { }
 
-    public sealed class ClickEvent : EventBase<ClickEvent> { }
+    public sealed class ClickEvent : EventBase<ClickEvent> { public int button { get { return 0; } } }
 
     public sealed class PointerEnterEvent : EventBase<PointerEnterEvent> { }
 
@@ -348,6 +348,13 @@ namespace UnityEngine.UIElements
     public abstract class Focusable : CallbackEventHandler
     {
         public bool focusable { get; set; }
+        public FocusController focusController { get { return null; } }
+        public void Blur() { }
+    }
+
+    public class FocusController
+    {
+        public Focusable focusedElement { get { return null; } }
     }
 
     // ---------------- елементи ----------------
@@ -373,6 +380,7 @@ namespace UnityEngine.UIElements
         public UnityEngine.Rect layout { get { return default(UnityEngine.Rect); } }
         public VisualElement parent { get { return null; } }
         public int childCount { get { return 0; } }
+        public VisualElement this[int index] { get { return null; } }
         public void Remove(VisualElement element) { }
         public void RemoveFromHierarchy() { }
         public void BringToFront() { }
@@ -416,7 +424,11 @@ namespace UnityEngine.UIElements
         public ScrollView(ScrollViewMode scrollViewMode) { }
 
         public Vector2 scrollOffset { get; set; }
+        public ScrollerVisibility verticalScrollerVisibility { get; set; }
+        public ScrollerVisibility horizontalScrollerVisibility { get; set; }
     }
+
+    public enum ScrollerVisibility { Auto, AlwaysVisible, Hidden }
 
     // ---------------- панель і документ ----------------
 

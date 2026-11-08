@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Game.Core.Ring.Match;
 using Game.Core.Scenes;
+using Game.Gameplay.Ring.UI;
 using Game.Gameplay.UI;
 using UnityEngine;
 
@@ -98,39 +99,53 @@ namespace Game.Gameplay.Ring.Stage
 
         private float _shakeAmp, _shakeT, _shakeDur;
 
-        /// <summary>Тремтіння камери (м, с): удар — ледь, фінішер і падіння після кидка — сильніше.</summary>
+        /// <summary>
+        /// Тремтіння камери (м, с): удар — ледь, фінішер і падіння після кидка — сильніше. Налаштування → Доступність:
+        /// «Тремтіння екрана» вимкнено або «Менше руху» — камера не тремтить (ТЗ B01 §7.8).
+        /// </summary>
         public void Shake(float amp, float dur)
         {
+            if (!Game.Gameplay.Ring.UI.Menus.RingAccessibility.ScreenShake) return;
             if (amp < _shakeAmp * (1f - _shakeT / Mathf.Max(0.01f, _shakeDur))) return;
             _shakeAmp = amp; _shakeDur = dur; _shakeT = 0f;
         }
 
-        private float _timeBase = -1f;
         private Coroutine _timeCo;
 
         /// <summary>
         /// Час на мить: стоп-кадр удару (mul ≈ 0,05 на 0,06 с) чи сповільнення фінішера (0,4 на ~0,9 с). Відносно базового
-        /// темпу (бот огляду грає на ×3), тривалість — реальні секунди.
+        /// темпу (бот огляду грає на ×3), тривалість — реальні секунди без пауз. Темп — через <see cref="Game.Gameplay.Ring.Models.RingTime"/>: кінець
+        /// сповільнення під час паузи гри не відпускає паузу.
         /// </summary>
         public void TimeWarp(float mul, float realSeconds)
         {
-            if (_timeBase < 0f) _timeBase = Time.timeScale;
+            if (UI.Menus.RingAccessibility.ReduceMotion) return;   // «Зменшити рух»: без стоп-кадрів і сповільнень
             if (_timeCo != null) StopCoroutine(_timeCo);
             _timeCo = StartCoroutine(TimeWarpCo(mul, realSeconds));
         }
 
+        private static void SetWarp(float w)
+        {
+            Game.Gameplay.Ring.Models.RingTime.Warp = w;
+            Time.timeScale = Game.Gameplay.Ring.Models.RingTime.Scale;
+        }
+
         private System.Collections.IEnumerator TimeWarpCo(float mul, float realSeconds)
         {
-            Time.timeScale = _timeBase * mul;
-            yield return new WaitForSecondsRealtime(realSeconds);
-            // Плавне повернення за 0,15 с — без смикання.
-            for (float t = 0f; t < 0.15f; t += Time.unscaledDeltaTime)
+            SetWarp(mul);
+            for (float t = 0f; t < realSeconds; )
             {
-                Time.timeScale = Mathf.Lerp(_timeBase * mul, _timeBase, t / 0.15f);
                 yield return null;
+                if (!Game.Gameplay.Ring.Models.RingTime.Paused) t += Time.unscaledDeltaTime;
             }
-            Time.timeScale = _timeBase;
-            _timeBase = -1f;
+            // Плавне повернення за 0,15 с — без смикання.
+            for (float t = 0f; t < 0.15f; )
+            {
+                SetWarp(Mathf.Lerp(mul, 1f, t / 0.15f));
+                yield return null;
+                if (!Game.Gameplay.Ring.Models.RingTime.Paused) t += Time.unscaledDeltaTime;
+            }
+            SetWarp(1f);
             _timeCo = null;
         }
         /// <summary>Частка половини висоти кадру, на яку ринг піднято над центром (внизу — панель дій).</summary>
@@ -142,6 +157,8 @@ namespace Game.Gameplay.Ring.Stage
         private RingActor _micHolder;
         private readonly Dictionary<string, RingClipInfo> _info = new Dictionary<string, RingClipInfo>();
         private readonly Dictionary<string, AnimationClip> _clips = new Dictionary<string, AnimationClip>();
+        /// <summary>Жіночий набір виходу (RING_Entrance_F.fbx): ті самі імена — окремий словник, щоб не затерти чоловічі.</summary>
+        private readonly Dictionary<string, AnimationClip> _clipsF = new Dictionary<string, AnimationClip>();
         private RingMatchDirector _director;
         private RingStageMode _mode = RingStageMode.Idle;
         private Material _litCache;
@@ -202,12 +219,14 @@ namespace Game.Gameplay.Ring.Stage
             RingStageHub.Current = this;
             ShowIdle();
             SnapCamera();
+            UI.Menus.RingAccessibility.ApplyCommandLine();   // демо без меню: перемикачі доступності з командного рядка
             string demo = ReadArg("-ring-demo");
             if (demo != null) StartCoroutine(RingStageDemo.Run(this, _director, demo));
         }
 
         private void OnDestroy()
         {
+            if (_timeCo != null) SetWarp(1f);   // сповільнення не переживає сцену
             if (RingStageHub.Current == (IRingStage)this) RingStageHub.Current = null;
             if (_player != null) _player.Destroy();
             if (_rival != null) _rival.Destroy();
@@ -221,6 +240,9 @@ namespace Game.Gameplay.Ring.Stage
                 if (c == null || c.name.StartsWith("__preview__")) continue;
                 _clips[c.name] = c;
             }
+            if (assets.clipsFemale != null)
+                foreach (var c in assets.clipsFemale)
+                    if (c != null && !c.name.StartsWith("__preview__")) _clipsF[c.name] = c;
             ParseManifest(assets.manifest);
             foreach (var k in _info.Keys) _matchClips.Add(k.EndsWith("_A") || k.EndsWith("_B") ? k.Substring(0, k.Length - 2) : k);
             ParseManifest(assets.promoManifest);
@@ -284,10 +306,33 @@ namespace Game.Gameplay.Ring.Stage
             return null;
         }
 
+        /// <summary>Кліп для постаті певної статі: жінці — з жіночого набору виходу, якщо він там є; інакше — чоловічий.</summary>
+        public AnimationClip Clip(string name, bool female)
+        {
+            AnimationClip c;
+            if (female && name != null && _clipsF.TryGetValue(name, out c)) return c;
+            return name != null ? Clip(name) : null;
+        }
+
+        /// <summary>Постать — з жіночим тілом набору (body_f_*): виходить жіночими кліпами (ENTRANCE_PROFILE.md, «стать»).</summary>
+        public bool IsFemale(RingActor a)
+        {
+            string look = a == _player ? _lookPlayer : a == _rival ? _lookRival : null;
+            return look != null && look.StartsWith("body_f_", StringComparison.Ordinal);
+        }
+
+        internal RingMatchDirector Director { get { return _director; } }
+
+        /// <summary>Скасувати відкладений звук удару виходу (тема, гонг, оплески) — вихід закінчився чи пропущений.</summary>
+        internal void CancelEntranceSound() { if (_sound != null) _sound.CancelEntranceHit(); }
+
         private void BuildArena()
         {
             var v = Instantiate(assets.venue, transform);
             v.name = "Venue";
+            // Kit_* — колір вершин × сіра карта набору (у Unity були світло-сірими без текстури: плейтест 08.11.2026, P3).
+            RingVenueKit.Apply(v, null, assets.kitSets, assets.kitAlbedo, assets.kitNormal, assets.kitTile);
+            RingVenueKit.TameEmission(v, "Fridge_Inner", 0.18f);   // білий «!» за рингом у промо
             v.transform.localPosition = Vector3.zero;
             // FBX арени імпортується без конвертації осей: Unity бачить (x, y_blender, -z_blender). Поворот +90° навколо X дає
             // (x, z_blender, y_blender) — рівно як у Blender, лицьовий бік (hardcam, −Y) дивиться на −Z.
@@ -424,6 +469,7 @@ namespace Game.Gameplay.Ring.Stage
                 _mic = Instantiate(assets.mic, transform);
                 _mic.name = "Mic";
                 foreach (var c in _mic.GetComponentsInChildren<Collider>()) Destroy(c);
+                RingVenueKit.DropSubmesh(_mic, "Mic_Cable");   // бездротовий: кабель був жорстким стрижнем до підлоги
                 _mic.SetActive(false);
             }
         }
@@ -524,7 +570,11 @@ namespace Game.Gameplay.Ring.Stage
             if (!changed) return;
             HideMic();
             if (_ropes != null) _ropes.SetActors(new[] { _player, _rival, _ref });
-            if (_mode == RingStageMode.Idle && (_show == null || !_show.Busy)) ShowIdle();
+            if (_mode == RingStageMode.Idle && (_show == null || !_show.Busy))
+            {
+                if (_heroOnly) HeroAlone(_heroGood, _heroCreate, true);
+                else ShowIdle();
+            }
         }
 
         private void Kill(RingActor a)
@@ -606,7 +656,10 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
-            _ref.Model.SetActive(true);
+            ShowAll();
+            // Світло зали — робоче: холодне світло поразки лишалося на картці й промо наступного тижня (плейтест 08.11.2026, P3:
+            // «картка шоу тижня 2 і далі має холодне синє світло»).
+            if (_fx != null) _fx.Match();
             Place(_player, ZonePos(MatchSide.Player, Zone.Center), 90f, "Ring_Stance_Loop");
             Place(_rival, ZonePos(MatchSide.Rival, Zone.Center), -90f, "Ring_Stance_Loop");
             Place(_ref, RefPos, 180f, "Ref_Idle_Loop");
@@ -635,7 +688,7 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
-            _ref.Model.SetActive(true);
+            ShowAll();
             var w = playerWon ? _player : _rival;
             var l = playerWon ? _rival : _player;
             // Переможець — у центрі ближче до камери, руки вгору до залу; рефері поруч; той, хто програв, — нокаут позаду.
@@ -664,7 +717,7 @@ namespace Game.Gameplay.Ring.Stage
             _mode = RingStageMode.Match;
             ForgetWatch();
             HideMic();
-            _ref.Model.SetActive(true);
+            ShowAll();
             _director.Begin(engine);
             if (_fx != null) _fx.Match();
             CrowdMood(engine != null ? engine.State.Hype : 0);
@@ -684,6 +737,74 @@ namespace Game.Gameplay.Ring.Stage
             return _director;
         }
 
+        /// <summary>Усі троє на рингу видимі (кінець сезону й створення ховають суперника й рефері).</summary>
+        private void ShowAll()
+        {
+            _heroOnly = false;
+            _player.Model.SetActive(true);
+            _rival.Model.SetActive(true);
+            _ref.Model.SetActive(true);
+        }
+
+        public void SetBigShow(bool big) { if (_fx != null && _fx.Big != big) _fx.SetBig(big); }
+
+        public void BeginShowOpen(string title, string subtitle)
+        {
+            _heroOnly = false;
+            _mode = RingStageMode.Idle;
+            if (_director != null) _director.EndMatch();
+            HideMic();
+            _show.LeaveBackstage();
+            if (_fx != null) _fx.Match();
+            _show.BeginOpen(title, subtitle);
+            if (_sound != null) _sound.Crowd(3);
+        }
+
+        public void ShowSeasonEnd(bool good) { HeroAlone(good, false, false); }
+
+        public void ShowCreate() { HeroAlone(false, true, false); }
+
+        // «Герой сам» (створення, кінець сезону): тримається й після перебудови зовнішності (SetWrestlers).
+        private bool _heroOnly, _heroGood, _heroCreate;
+
+        /// <summary>
+        /// Герой сам у центрі рингу обличчям до камери, суперник і рефері сховані; кіноплан — герой у лівій частині кадру
+        /// (праворуч — колонка екрана). Створення — ближче, по коліна (плейтест 08.11.2026, P3: на створенні камера показувала
+        /// весь ринг із двома борцями, і було неясно, хто «я»); кінець сезону — ширше, добрий сезон — свято (P1-7).
+        /// <paramref name="again"/> — після перебудови моделі: без нового конфеті.
+        /// </summary>
+        private void HeroAlone(bool good, bool create, bool again)
+        {
+            if (!again)
+            {
+                LeaveShow();
+                _mode = RingStageMode.Idle;
+                if (_director != null) _director.EndMatch();
+                HideMic();
+            }
+            ShowAll();
+            _rival.Model.SetActive(false);
+            _ref.Model.SetActive(false);
+            _heroOnly = true; _heroGood = good; _heroCreate = create;
+            string pose = good && Clip("Entrance_Corner_Pose") != null ? "Entrance_Corner_Pose" : good ? "Idle_Hype_Loop" : "Ring_Stance_Loop";
+            // Герой ближче до дальніх канатів, камера — всередині рингу: зовні верхній канат перетинав героя на рівні рук
+            // (огляд pt1, кадр 015 створення).
+            var at = new Vector3(0f, MatY, 1.3f);
+            Place(_player, at, 180f, pose);
+            if (!again && _fx != null)
+            {
+                if (good) _fx.Victory(_player.Hips != null ? _player.Hips : _player.Slot);
+                else _fx.Match();
+            }
+            if (!again) CrowdMood(good ? 3 : 1);
+            // Вертикальний кут 30° (створення) / 40°: півширина кадру на відстані d — d·tan(fov/2)·аспект; герой — на 0,36 півширини
+            // лівіше центру (≈32 % ширини екрана). Камера на z = 1,3 − d ≈ −1,8 — всередині канатів (2,04).
+            float fov = create ? 30f : 40f, d = 3.1f;
+            float half = d * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * CamAspect;
+            var look = at + new Vector3(0.36f * half, create ? 1.15f : 1.25f, 0f);
+            Cine(look + new Vector3(0.5f, 0.15f, -d), look, fov, !again);
+        }
+
         public void EndMatch()
         {
             LogCamShare();
@@ -695,6 +816,8 @@ namespace Game.Gameplay.Ring.Stage
             LeaveShow();
             _mode = RingStageMode.Promo;
             if (_director != null) _director.EndMatch();
+            ShowAll();
+            if (_fx != null) _fx.Match();
             _ref.Model.SetActive(false);
             Place(_player, new Vector3(-1.1f, MatY, 0f), 90f, "Ring_Stance_Loop");
             Place(_rival, new Vector3(1.1f, MatY, 0f), -90f, "Ring_Stance_Loop");
@@ -830,6 +953,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void BeginIntro(string title, string subtitle)
         {
+            _heroOnly = false;
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
@@ -838,15 +962,38 @@ namespace Game.Gameplay.Ring.Stage
             if (_sound != null) { _sound.TitleMusic(); _sound.Crowd(0); }
         }
 
-        public void BeginEntrance(bool player, string title, string subtitle, int rgb)
+        /// <summary>Хто вже виходив за цю сесію (B07 п. 4: повтор — скорочений, без тизера й тремтіння).</summary>
+        private readonly HashSet<string> _entered = new HashSet<string>();
+        private string _tronTier;
+
+        /// <summary>
+        /// Щабель екрана виходу: нині в грі лише спортзал (gym); для огляду — <c>-tron-tier hall|arena</c> (ТЗ B07, «Рецепт»).
+        /// </summary>
+        private string TronTier(string asked)
         {
+            if (_tronTier == null) _tronTier = ReadArg("-tron-tier") ?? "";
+            return _tronTier.Length > 0 ? _tronTier : string.IsNullOrEmpty(asked) ? "gym" : asked;
+        }
+
+        public void BeginEntrance(bool player, EntranceRecipe recipe, EntranceProfile profile, int costumeRgb)
+        {
+            _heroOnly = false;
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
             _show.LeaveBackstage();
-            var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
-            _show.BeginEntrance(player ? _player : _rival, title, subtitle, c);
-            if (_sound != null) { _sound.Crowd(1); _sound.EntranceMusic(player, !player && _lookRival != null && _lookRival.StartsWith("body_m_nordic")); }
+            if (recipe == null) recipe = new EntranceRecipe { Player = player, Role = player ? "hero" : "villain" };
+            if (profile == null) profile = EntranceProfile.Compose(new EntranceInput { Player = player });
+            recipe.Tier = TronTier(recipe.Tier);
+            var a = player ? _player : _rival;
+            bool repeat = !_entered.Add(recipe.Name ?? "");
+            var costume = RingTheme.Rgb((uint)costumeRgb);
+            _show.BeginEntrance(a, recipe, profile, costume, IsFemale(a), repeat);
+            if (_sound != null)
+            {
+                _sound.Crowd(profile.Crowd);
+                _sound.EntranceMusic(player, !player && _lookRival != null && _lookRival.StartsWith("body_m_nordic"), _show.HitIn, !profile.CrowdBoo);
+            }
         }
 
         /// <summary>Настрій залу за ажіотажем матчу (0…10): холодний, оплески, крики, кипить.</summary>
@@ -962,6 +1109,7 @@ namespace Game.Gameplay.Ring.Stage
 
         public void ShowBackstage()
         {
+            _heroOnly = false;
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
@@ -1007,6 +1155,7 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Фаз-тест матчу (телепорти, крізь канати, ковзання стоп) — підсумок у <see cref="PlayedReport"/>.</summary>
         public RingStageWatch Watch { get; } = new RingStageWatch();
         private readonly RingActor[] _watchActors = new RingActor[3];
+        private readonly RingActor[] _watchShow = new RingActor[1];
 
         /// <summary>Постаті переставлено поза кадром (новий матч) — фаз-тест починає відлік з нових місць.</summary>
         private void ForgetWatch()
@@ -1016,14 +1165,22 @@ namespace Game.Gameplay.Ring.Stage
 
         private void LateUpdate()
         {
-            float dt = Time.unscaledDeltaTime;
+            // реальний час — щоб камера жила й під стоп-кадром; але на паузі гри стоїть і вона (рев'ю 08.11.2026)
+            float dt = Game.Gameplay.Ring.Models.RingTime.Paused ? 0f : Time.unscaledDeltaTime;
             if (_player != null) _player.Tick(Time.deltaTime);
             if (_rival != null) _rival.Tick(Time.deltaTime);
             if (_ref != null) _ref.Tick(Time.deltaTime);
+            if (_show != null) _show.PinWalker();
             if (_mode == RingStageMode.Match)
             {
                 _watchActors[0] = _player; _watchActors[1] = _rival; _watchActors[2] = _ref;
                 Watch.Tick(_watchActors, Time.deltaTime, !_camInit);
+            }
+            else if (_show != null && _show.Busy && _show.EntranceActor != null)
+            {
+                // Фаз-тест і для виходу (пакет «Відео огляд», п. 4): телепорти, крізь канати, ковзання стоп того, хто виходить.
+                _watchShow[0] = _show.EntranceActor;
+                Watch.Tick(_watchShow, Time.deltaTime, !_camInit || _show.CamCut);
             }
             if (_show != null) _show.TickBooker(Time.deltaTime);
             if (_cam == null) return;

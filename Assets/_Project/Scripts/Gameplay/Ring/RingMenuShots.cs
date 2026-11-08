@@ -7,13 +7,14 @@ namespace Game.Gameplay.Ring
 {
     /// <summary>
     /// Огляд меню (<c>Ring.exe -ring-menu-shots &lt;тека&gt;</c>): бот проходить вхід, налаштування, титри, діалоги, помилку
-    /// сейву, вхід у гру й екран завантаження ТИМ САМИМ шляхом вводу, що й гравець (<see cref="IMenuNavigable.OnMenu"/> —
+    /// сейву, вхід у гру й екран завантаження, паузу в грі ТИМ САМИМ шляхом вводу, що й гравець (<see cref="IMenuNavigable.OnMenu"/> —
     /// туди ж приходять клавіатура й геймпад), і знімає кадр кожного стану. Сейв — свій (ring_menu_bot.txt), налаштування —
     /// у пам'яті: гравцеві нічого не змінюється. Наведення мишею бот не імітує (події вказівника йдуть лише від миші).
     /// </summary>
     internal static class MenuShots
     {
-        private static IEnumerator Wait(float s) { yield return new WaitForSeconds(s); }
+        /// <summary>Реальний час: під паузою гри (Time.timeScale = 0) звичайне очікування стояло б вічно.</summary>
+        private static IEnumerator Wait(float s) { yield return new WaitForSecondsRealtime(s); }
 
         /// <summary>
         /// Знімок і два кадри очікування: Unity знімає екран у кінці кадру, тож дія в тому самому кадрі потрапила б у знімок
@@ -28,7 +29,7 @@ namespace Game.Gameplay.Ring
 
         private static void Nav(RingGameBootstrap h, RingAction a, MenuDevice d = MenuDevice.Keyboard)
         {
-            var nav = h.CurrentView as IMenuNavigable;
+            var nav = (h.CurrentPause as IMenuNavigable) ?? (h.CurrentView as IMenuNavigable);   // пауза — поверх екрана
             if (nav != null) nav.OnMenu(a, d);
         }
 
@@ -175,6 +176,51 @@ namespace Game.Gameplay.Ring
             while ((h.CurrentLoading != null || h.Wipe.Busy) && guard < 20f) { guard += Time.unscaledDeltaTime; yield return null; }
             yield return Wait(1.0f);
             yield return Snap(h, "game_after_load");
+            // ---- пауза в грі (B01 §6.2): поява, фокус, налаштування поверх, діалог «На титул?», повернення ----
+            h.OpenPauseForShots();
+            yield return Wait(0.09f);
+            yield return Snap(h, "pause_opening");
+            yield return Wait(0.6f);
+            yield return Snap(h, "pause_idle");
+            Nav(h, RingAction.Down);
+            yield return Wait(0.3f);
+            yield return Snap(h, "pause_focus_settings");
+            Nav(h, RingAction.Confirm);
+            yield return Wait(0.7f);
+            yield return Snap(h, "pause_settings");
+            Nav(h, RingAction.Back);                      // змін немає — одразу назад у паузу
+            yield return Wait(0.5f);
+            yield return Snap(h, "pause_back_from_settings");
+            Nav(h, RingAction.Down);                      // «На титул»
+            yield return Wait(0.3f);
+            Nav(h, RingAction.Confirm);
+            yield return Wait(0.5f);
+            yield return Snap(h, "pause_leave_dialog");
+            Nav(h, RingAction.Back);                      // «Ні, лишитися»
+            yield return Wait(0.4f);
+            Nav(h, RingAction.Back);                      // Esc на корені — назад у гру
+            yield return Wait(0.08f);
+            yield return Snap(h, "pause_closing");
+            yield return Wait(0.6f);
+            yield return Snap(h, "pause_resumed");
+            // ---- тиждень: пауза з рядком «Сезон · Тиждень» і безпечним «На титул?» ----
+            h.CurrentView.OnConfirm();                    // «Почати кар'єру» на створенні героя → тиждень
+            yield return Wait(1.6f);
+            yield return Snap(h, "week_before_pause");
+            h.OpenPauseForShots();
+            yield return Wait(0.6f);
+            yield return Snap(h, "pause_week");
+            Nav(h, RingAction.Down); Nav(h, RingAction.Down);
+            yield return Wait(0.3f);
+            Nav(h, RingAction.Confirm);
+            yield return Wait(0.5f);
+            yield return Snap(h, "pause_leave_dialog_week");
+            // ---- «На титул» з паузи: збереження, розріз, титул ----
+            Nav(h, RingAction.Confirm);                   // «Так, на титул»: на тижні нічого не втрачається — фокус уже на ньому
+            guard = 0f;
+            while ((h.CurrentPause != null || h.Wipe.Busy) && guard < 5f) { guard += Time.unscaledDeltaTime; yield return null; }
+            yield return Wait(2.2f);                      // поява титулу ≤ 2 с
+            yield return Snap(h, "title_after_pause");
             Debug.Log("[Ринг] огляд меню: кадри в " + h.MenuShotsDir);
             h.ExitAfterShots();
         }

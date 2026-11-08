@@ -260,7 +260,20 @@ namespace Game.Gameplay.Ring
             {
                 bool player = _entrances.Dequeue();
                 var f = _campaign.CurrentMatch.State.Get(player ? Core.Ring.Match.MatchSide.Player : Core.Ring.Match.MatchSide.Rival);
-                stage.BeginEntrance(player, _text.Get(f.Stats.NameKey), "", player ? 0x2F6FD0 : 0xB0201A);
+                // Ворожнеча з Молотом без кар'єри: герой — шоумен-герой, Молот — монстр-лиходій (ENTRANCE_PROFILE.md, B07).
+                var input = new EntranceInput
+                {
+                    Gimmick = player ? Core.Ring.Career.Gimmick.Showman : Core.Ring.Career.Gimmick.Monster,
+                    Path = player ? RingPath.Face : RingPath.Heel, Player = player,
+                };
+                input.SetStats(f.Stats);
+                var recipe = new EntranceRecipe
+                {
+                    Gimmick = EntranceScreenSlots.GimmickKey(input.Gimmick), Role = EntranceScreenSlots.RoleOf(input.Path), Tier = "gym",
+                    Name = _text.Get(f.Stats.NameKey), Player = player,
+                    TagText = _text.Get(player ? "gimmick.showman" : "gimmick.monster") + " · " + _text.Get(player ? "path.face" : "path.heel"),
+                };
+                stage.BeginEntrance(player, recipe, EntranceProfile.Compose(input), player ? 0x2F6FD0 : 0xB0201A);
             }
             // Лише шоу (вступ, вихід) ховає UI; кліпи матчу йдуть під панеллю матчу.
             bool showing = stage.ShowBusy || _entrances.Count > 0;

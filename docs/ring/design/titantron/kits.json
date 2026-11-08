@@ -25,9 +25,9 @@
     "showman":    { "bpm": 120 }
   },
   "fonts": {
-    "display900": "Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Black.ttf",
-    "display800": "Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-ExtraBold.ttf",
-    "display700": "Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Bold.ttf",
+    "display900": "Assets/ThirdParty/Fonts/FiraSansExtraCondensed/FiraSansExtraCondensed-Black.ttf",
+    "display800": "Assets/ThirdParty/Fonts/FiraSansExtraCondensed/FiraSansExtraCondensed-ExtraBold.ttf",
+    "display700": "Assets/ThirdParty/Fonts/FiraSansExtraCondensed/FiraSansExtraCondensed-Bold.ttf",
     "hand":       "Assets/ThirdParty/Fonts/AmaticSC/AmaticSC-Bold.ttf",
     "text":       "Assets/ThirdParty/Fonts/Fixel/FixelText-SemiBold.ttf"
   },

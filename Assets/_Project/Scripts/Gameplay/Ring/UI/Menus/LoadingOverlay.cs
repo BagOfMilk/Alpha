@@ -88,14 +88,22 @@ namespace Game.Gameplay.Ring.UI.Menus
             _pct.style.position = Position.Absolute;
             _pct.style.left = 820f; _pct.style.top = 698f;
             box.Add(_pct);
+            // рядок етапу — одним рядком на темній підкладці (ACC-03): «Борці й костюми» переносився й ховався під порадою,
+            // а сірий «ЕТАП» на кармінному клині мав слабкий контраст (кадри 08.11.2026)
+            var stageRow = new VisualElement();
+            stageRow.style.position = Position.Absolute;
+            stageRow.style.left = 0f; stageRow.style.top = 750f;
+            stageRow.style.flexDirection = FlexDirection.Row;
+            stageRow.style.alignItems = Align.Center;
+            stageRow.pickingMode = PickingMode.Ignore;
+            MenuKit.Underlay(stageRow);
             _stage = MenuKit.Display("", 18f, RingTheme.TextDim, RingFontRole.Display800, 0.12f);
-            _stage.style.position = Position.Absolute;
-            _stage.style.left = 0f; _stage.style.top = 754f;
-            box.Add(_stage);
+            _stage.style.marginRight = 18f;
+            stageRow.Add(_stage);
             _stageText = MenuKit.Body("", BrandTokens.TypeBody, RingTheme.Text, true);
-            _stageText.style.position = Position.Absolute;
-            _stageText.style.left = 130f; _stageText.style.top = 752f;
-            box.Add(_stageText);
+            _stageText.style.whiteSpace = WhiteSpace.NoWrap;
+            stageRow.Add(_stageText);
+            box.Add(stageRow);
 
             // порада — паперова плашка (єдина паперова поверхня екрана)
             _tipCard = new VisualElement();

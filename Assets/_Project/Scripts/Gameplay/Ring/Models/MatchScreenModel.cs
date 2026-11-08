@@ -181,7 +181,8 @@ namespace Game.Gameplay.Ring.Models
                 Warnings = f.Warnings
             };
             c.DamageText = _t.Format("match.card.damage", f.Damage, MatchRules.MaxDamage);
-            c.PenaltyText = pen > 0 ? _t.Format("match.card.penalty", pen) : "";
+            // Звідки штраф — у самому рядку (плейтест 08.11.2026, P2-3: «штраф −1/−2» червоним без пояснення).
+            c.PenaltyText = pen > 0 ? _t.Format("match.card.penalty", pen, pen >= 2 ? c.EdgeAt : c.ExhaustedAt) : "";
             c.MomentumText = _t.Format("match.card.momentum", f.Momentum, MatchRules.MaxMomentum);
             c.StaminaText = _t.Format("match.card.stamina", f.Stamina, MatchRules.MaxStamina);
             c.TokensText = _t.Format("match.card.tokens", f.ReversalTokens);

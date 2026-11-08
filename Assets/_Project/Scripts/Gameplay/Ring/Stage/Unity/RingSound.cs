@@ -25,7 +25,8 @@ namespace Game.Gameplay.Ring.Stage
             _crowd = Src("Натовп", true, 0f);
             _sfx = Src("Ефекти", false, 0.9f);
             _sfx2 = Src("Ефекти 2", false, 0.8f);
-            if (_a.sndCrowd != null) { _crowd.clip = _a.sndCrowd; _crowd.Play(); }
+            // ворота звуку (рішення власника 08.11.2026): грає лише схвалене в бібліотеці звуку
+            if (RingSoundGate.Allows(_a.sndCrowd)) { _crowd.clip = _a.sndCrowd; _crowd.Play(); }
             // Меню (ТЗ B08): хост вмикає й вимикає музику зали, коли гравець входить у гру чи повертається на титул.
             RingMenuServices.GameMusic = on => { if (on) Music(_a.musicTitle, 0.55f); else MusicOff(); };
         }
@@ -65,18 +66,41 @@ namespace Game.Gameplay.Ring.Stage
             Music(_a.musicTitle, 0.55f);
         }
 
-        /// <summary>Музика виходу: Молот — своя, герой — своя, борці федерації — спільна.</summary>
-        public void EntranceMusic(bool player, bool hammer)
+        /// <summary>
+        /// Музика виходу: Молот — своя, герой — своя, борці федерації — спільна. Гонг — стінгер на ударі екрана виходу
+        /// (ТЗ B07 п. 4: «удар = перший звук»; <paramref name="hitIn"/> — секунд до удару), там же оплески залу, якщо
+        /// вихід не лиходійський (<paramref name="cheer"/>; лиходію — лише гул, ENTRANCE_PROFILE.md біт 5).
+        /// </summary>
+        public void EntranceMusic(bool player, bool hammer, double hitIn, bool cheer)
         {
-            Music(player ? _a.musicHero : hammer ? _a.musicHammer : _a.musicRoster, 0.7f);
+            // До удару — лише гул залу й тизер екрана; тема вступає разом зі стінгером на ударі.
+            MusicOff();
+            if (_hitCo != null) StopCoroutine(_hitCo);
+            _hitCo = StartCoroutine(OnHit(player ? _a.musicHero : hammer ? _a.musicHammer : _a.musicRoster, (float)hitIn, cheer));
+        }
+
+        private Coroutine _hitCo;
+
+        /// <summary>Скасувати відкладений удар виходу (пропуск виходу): тема й гонг не звучать уже в матчі.</summary>
+        public void CancelEntranceHit()
+        {
+            if (_hitCo != null) { StopCoroutine(_hitCo); _hitCo = null; }
+        }
+
+        private System.Collections.IEnumerator OnHit(AudioClip theme, float after, bool cheer)
+        {
+            if (after > 0f) yield return new WaitForSeconds(after);
+            Music(theme, 0.7f);
             OneShot(_a.sndGong, 0.8f);
+            if (cheer) OneShot(_a.sndApplause, 0.6f, true);
+            _hitCo = null;
         }
 
         public void MusicOff() { _musicTarget = 0f; }
 
         private void Music(AudioClip c, float vol)
         {
-            if (c == null) return;
+            if (!RingSoundGate.Allows(c)) return;
             if (_music.clip != c || !_music.isPlaying)
             {
                 _music.clip = c;
@@ -88,8 +112,8 @@ namespace Game.Gameplay.Ring.Stage
 
         // ============================ натовп ============================
 
-        /// <summary>Гул залу: 0 — тиша (закулісся), далі за настроєм ажіотажу 0…3.</summary>
-        public void Crowd(int mood) { _crowdTarget = mood < 0 ? 0f : 0.12f + 0.12f * Mathf.Clamp(mood, 0, 3); }
+        /// <summary>Гул залу: −1 — тиша (закулісся), далі за настроєм 0…3 (матч) і до 4 (вихід популярного борця).</summary>
+        public void Crowd(int mood) { _crowdTarget = mood < 0 ? 0f : 0.12f + 0.12f * Mathf.Clamp(mood, 0, 4); }
 
         public void Pop() { OneShot(_a.sndApplause, 0.75f, true); }
 
@@ -139,7 +163,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void OneShot(AudioClip c, float vol, bool second = false)
         {
-            if (c == null) return;
+            if (!RingSoundGate.Allows(c)) return;
             (second ? _sfx2 : _sfx).PlayOneShot(c, vol * SfxGain);
         }
 

@@ -1,0 +1,414 @@
+<title>Звук «Рингу»</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sofia+Sans+Extra+Condensed:ital,wght@0,800;1,900&family=Sofia+Sans:wght@400;600;700&display=swap">
+<style>
+/* Пульт схвалення звуку: темна зала гри, плита-титр на кожну групу, рядок = слот гри, під ним — варіанти. Одна тема (свідомо). */
+:root {
+  --ink: #0E0D12; --panel: #17151D; --raised: #221F2B; --line: #2E2A39;
+  --paper: #EDE5D6; --dim: #9A948A; --ash: #6B6672;
+  --crimson: #AA141C; --signal: #E5483F; --gold: #E8BA3C;
+  --display: "Sofia Sans Extra Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Sofia Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+body { background: var(--ink); color: var(--paper); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ink); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { padding-block: 28px 18px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; color: var(--dim); text-transform: uppercase; }
+h1 { margin: 6px 0 10px; font-family: var(--display); font-weight: 900; font-style: italic; font-size: clamp(40px, 7vw, 64px); line-height: .95; text-transform: uppercase; letter-spacing: .01em; text-wrap: balance; }
+h1 .q { color: var(--gold); }
+.lead { max-width: 64ch; color: var(--paper); margin: 0 0 14px; }
+.lead b { color: var(--gold); font-weight: 700; }
+.tally { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--paper); }
+.chip b { font-weight: 600; }
+.chip.ok b { color: var(--gold); } .chip.no b { color: var(--signal); }
+.note { margin-top: 10px; font-size: 13px; color: var(--dim); max-width: 70ch; }
+.note.warn { color: var(--signal); }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--ink) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.bar .wrap { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding-block: 10px; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters button { font: 600 13px/1 var(--body); color: var(--paper); background: var(--panel); border: 1px solid var(--line); padding: 8px 12px; cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--paper); color: var(--ink); border-color: var(--paper); }
+.filters button .n { font-family: var(--mono); font-size: 11px; opacity: .75; margin-left: 4px; }
+.spacer { flex: 1 1 auto; }
+.vol { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+.vol input { accent-color: var(--gold); width: 120px; }
+.stop { font: 800 15px/1 var(--display); text-transform: uppercase; letter-spacing: .04em; color: var(--paper); background: var(--crimson); border: 0; padding: 10px 16px; cursor: pointer; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+.stop:hover { background: var(--signal); }
+
+main { padding-block: 18px 40px; display: grid; gap: 28px; }
+section.group { display: grid; gap: 10px; }
+.slab { justify-self: start; display: flex; align-items: center; gap: 12px; background: #000; padding: 8px 34px 9px 0; clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); border-bottom: 3px solid var(--gold); }
+.slab::before { content: ""; align-self: stretch; width: 10px; background: var(--crimson); }
+.slab h2 { margin: 0; font: italic 900 30px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.slab .n { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+
+.slot { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--line); display: grid; gap: 0; }
+.slot[data-state="approved"] { border-left-color: var(--gold); }
+.slot[data-state="needs"] { border-left-color: var(--signal); }
+.slot-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 14px 10px; align-items: start; }
+.slot-head h3 { margin: 0; font: 800 22px/1.05 var(--display); text-transform: uppercase; letter-spacing: .02em; }
+.slot-head .where { grid-column: 1; color: var(--dim); font-size: 13px; }
+.slot-head .clip { font-family: var(--mono); font-size: 11px; color: var(--ash); }
+.pill { grid-row: 1 / span 2; grid-column: 2; font: 800 13px/1 var(--display); text-transform: uppercase; letter-spacing: .06em; padding: 6px 10px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+.pill.approved { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.pill.needs { color: var(--signal); border-color: var(--signal); }
+.needs-note { margin: 0 14px 10px; padding: 8px 10px; border: 1px dashed var(--signal); color: var(--paper); font-size: 13px; }
+.cands { display: grid; border-top: 1px solid var(--line); }
+.cand { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 14px; align-items: center; border-top: 1px solid var(--line); }
+.cand:first-child { border-top: 0; }
+.cand[data-verdict="reject"] { opacity: .55; }
+.cand[data-verdict="approve"] { background: color-mix(in srgb, var(--gold) 8%, var(--panel)); }
+.play { width: 44px; height: 44px; display: grid; place-items: center; background: var(--raised); color: var(--paper); border: 1px solid var(--line); cursor: pointer; }
+.play:hover { border-color: var(--paper); }
+.play[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+.play svg { width: 16px; height: 16px; fill: currentColor; }
+.meta { min-width: 0; display: grid; gap: 4px; }
+.meta .row1 { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.meta .label { font-weight: 700; }
+.meta .dur { font-family: var(--mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.meta .src { font-size: 12px; color: var(--ash); }
+.meta .verdict-note { font-size: 12px; color: var(--signal); }
+.wave { width: 100%; height: 28px; display: block; cursor: pointer; }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.btn { font: 800 14px/1 var(--display); text-transform: uppercase; letter-spacing: .05em; padding: 9px 12px; border: 1px solid var(--line); background: var(--raised); color: var(--paper); cursor: pointer; }
+.btn.yes:hover, .btn.yes.on { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.btn.no:hover, .btn.no.on { background: var(--crimson); border-color: var(--crimson); }
+.btn.ghost { background: transparent; color: var(--dim); }
+.btn.ghost:hover { color: var(--paper); border-color: var(--paper); }
+.btn:disabled { opacity: .4; cursor: default; }
+.reject-form { grid-column: 2 / -1; display: grid; gap: 6px; }
+.reject-form textarea { width: 100%; min-height: 52px; box-sizing: border-box; background: var(--ink); color: var(--paper); border: 1px solid var(--line); font: 14px/1.4 var(--body); padding: 8px; resize: vertical; }
+.reject-form .acts { justify-content: flex-start; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+footer { padding-block: 10px 40px; color: var(--dim); font-size: 13px; }
+footer ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; max-width: 74ch; }
+.empty { color: var(--dim); padding: 18px 0; }
+@media (max-width: 640px) {
+  .cand { grid-template-columns: 44px minmax(0, 1fr); }
+  .acts { grid-column: 1 / -1; justify-content: flex-start; }
+  .reject-form { grid-column: 1 / -1; }
+  .vol input { width: 90px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<header class="top wrap">
+  <div class="eyebrow">«Ринг» · бібліотека звуку</div>
+  <h1>Звук <span class="q">«Рингу»</span></h1>
+  <p class="lead">У грі звучить <b>лише те, що ти схвалиш тут</b>. Поки нічого не схвалено, уся гра мовчить у кожній збірці. Відхилений трек отримує 3 нові варіанти, і так доти, доки ти не обереш.</p>
+  <div class="tally" id="tally" aria-live="polite"></div>
+  <p class="note" id="status">Завантажую список треків…</p>
+</header>
+
+<div class="bar">
+  <div class="wrap">
+    <div class="filters" role="group" aria-label="Показати">
+      <button type="button" id="f-all" data-f="all" aria-pressed="true">Усі<span class="n"></span></button>
+      <button type="button" id="f-pending" data-f="pending" aria-pressed="false">Чекають рішення<span class="n"></span></button>
+      <button type="button" id="f-needs" data-f="needs" aria-pressed="false">Потрібні нові<span class="n"></span></button>
+      <button type="button" id="f-approved" data-f="approved" aria-pressed="false">Схвалені<span class="n"></span></button>
+    </div>
+    <div class="spacer"></div>
+    <label class="vol" for="vol">Гучність <input type="range" id="vol" min="0" max="100" value="70"></label>
+    <button type="button" class="stop" id="stop">Стоп усе</button>
+  </div>
+</div>
+
+<main class="wrap" id="groups"></main>
+
+<footer class="wrap">
+  <strong>Як це працює</strong>
+  <ol>
+    <li>Слухай кнопкою ▶. Сторінка нічого не грає сама, «Стоп усе» вимикає все одразу.</li>
+    <li>«Схвалити» — цей варіант іде в гру. «Відхилити» — за бажання напиши, що не так: Claude врахує це в нових варіантах.</li>
+    <li>Коли всі варіанти слота відхилені, Claude робить 3 нові. Напиши в чат «перевір бібліотеку звуку» — він перенесе схвалене в гру й підготує нові варіанти.</li>
+    <li>Схвалене звучить у збірках після того, як Claude внесе його в гру (файл <code>sound_approvals.json</code>). Решта мовчить.</li>
+  </ol>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var catalog = null, decisions = {}, db = null, canWrite = false, filter = "all";
+  var openReject = null, busy = {};
+  var audio = new Audio(); audio.preload = "none";
+  var playing = null, ctx = null, peaksCache = {};
+  var groupsEl = document.getElementById("groups");
+  var statusEl = document.getElementById("status");
+
+  try { var v = localStorage.getItem("ring-sound-vol"); if (v !== null) document.getElementById("vol").value = v; } catch (e) {}
+  audio.volume = document.getElementById("vol").value / 100;
+  document.getElementById("vol").addEventListener("input", function (e) {
+    audio.volume = e.target.value / 100;
+    try { localStorage.setItem("ring-sound-vol", e.target.value); } catch (er) {}
+  });
+  document.getElementById("stop").addEventListener("click", stopAll);
+  document.querySelectorAll(".filters button").forEach(function (b) {
+    b.addEventListener("click", function () { filter = b.getAttribute("data-f"); render(); });
+  });
+
+  function stopAll() { audio.pause(); audio.removeAttribute("src"); audio.load(); playing = null; syncPlay(); }
+
+  function fmt(s) {
+    if (s == null || !isFinite(s)) return "—";
+    if (s < 10) return s.toFixed(2).replace(".", ",") + " с";
+    var m = Math.floor(s / 60), r = Math.round(s - m * 60);
+    if (r === 60) { m++; r = 0; }
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  }
+
+  function slotState(slot) {
+    var cs = slot.candidates, approved = null, rejected = 0;
+    cs.forEach(function (c) {
+      var d = decisions[c.id];
+      if (d && d.verdict === "approve") approved = c;
+      else if (d && d.verdict === "reject") rejected++;
+    });
+    if (approved) return { state: "approved", approved: approved };
+    if (rejected === cs.length) return { state: "needs" };
+    return { state: "pending" };
+  }
+
+  function counts() {
+    var n = { all: 0, pending: 0, needs: 0, approved: 0 };
+    if (!catalog) return n;
+    catalog.groups.forEach(function (g) { g.slots.forEach(function (s) { n.all++; n[slotState(s).state]++; }); });
+    return n;
+  }
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  var PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5v13l11-6.5z"/></svg>';
+  var PAUSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5h3.5v13H3zM9.5 1.5H13v13H9.5z"/></svg>';
+
+  function render() {
+    if (!catalog) return;
+    var n = counts();
+    var tally = document.getElementById("tally");
+    tally.textContent = "";
+    var c1 = el("span", "chip ok"); c1.innerHTML = "Схвалено <b></b> з " + n.all; c1.querySelector("b").textContent = n.approved; tally.appendChild(c1);
+    var c2 = el("span", "chip"); c2.innerHTML = "Чекають рішення <b></b>"; c2.querySelector("b").textContent = n.pending; tally.appendChild(c2);
+    var c3 = el("span", "chip no"); c3.innerHTML = "Потрібні нові варіанти <b></b>"; c3.querySelector("b").textContent = n.needs; tally.appendChild(c3);
+    ["all", "pending", "needs", "approved"].forEach(function (f) {
+      var b = document.getElementById("f-" + f);
+      b.setAttribute("aria-pressed", String(filter === f));
+      b.querySelector(".n").textContent = n[f];
+    });
+
+    groupsEl.textContent = "";
+    var shown = 0;
+    catalog.groups.forEach(function (g) {
+      var slots = g.slots.filter(function (s) { return filter === "all" || slotState(s).state === filter; });
+      if (!slots.length) return;
+      var sec = el("section", "group");
+      var slab = el("div", "slab"); slab.appendChild(el("h2", null, g.title)); slab.appendChild(el("span", "n", slots.length + " / " + g.slots.length));
+      sec.appendChild(slab);
+      slots.forEach(function (s) { sec.appendChild(renderSlot(s)); shown++; });
+      groupsEl.appendChild(sec);
+    });
+    if (!shown) groupsEl.appendChild(el("p", "empty", filter === "needs" ? "Немає слотів, де всі варіанти відхилені." : filter === "approved" ? "Ще нічого не схвалено — гра мовчить." : "Тут порожньо."));
+    syncPlay();
+  }
+
+  function renderSlot(s) {
+    var st = slotState(s);
+    var box = el("article", "slot"); box.setAttribute("data-state", st.state); box.id = "slot-" + s.clip;
+    var head = el("div", "slot-head");
+    var h = el("h3", null, s.title); head.appendChild(h);
+    var pill = el("span", "pill " + st.state, st.state === "approved" ? "Схвалено" : st.state === "needs" ? "Потрібні нові" : "Чекає");
+    head.appendChild(pill);
+    var w = el("div", "where"); w.textContent = s.where; head.appendChild(w);
+    var clip = el("div", "clip", s.clip); head.appendChild(clip);
+    box.appendChild(head);
+    if (st.state === "needs") box.appendChild(el("p", "needs-note", "Усі варіанти відхилено. Claude зробить ще 3 — напиши в чат «перевір бібліотеку звуку»."));
+    var list = el("div", "cands");
+    var ordered = s.candidates.slice().sort(function (a, b) { return (b.round || 0) - (a.round || 0); });
+    ordered.forEach(function (c) { list.appendChild(renderCand(s, c, st)); });
+    box.appendChild(list);
+    return box;
+  }
+
+  function renderCand(s, c, st) {
+    var d = decisions[c.id] || null, verdict = d ? d.verdict : null;
+    var row = el("div", "cand"); row.setAttribute("data-verdict", verdict || "none"); row.setAttribute("data-id", c.id);
+    var pb = el("button", "play"); pb.type = "button"; pb.setAttribute("aria-label", "Слухати: " + s.title + ", " + c.label);
+    pb.setAttribute("data-play", c.id); pb.setAttribute("aria-pressed", "false"); pb.innerHTML = PLAY;
+    pb.addEventListener("click", function () { toggle(c); });
+    row.appendChild(pb);
+
+    var meta = el("div", "meta");
+    var r1 = el("div", "row1");
+    r1.appendChild(el("span", "label", c.label));
+    r1.appendChild(el("span", "dur", fmt(c.seconds)));
+    meta.appendChild(r1);
+    var cv = el("canvas", "wave"); cv.setAttribute("data-wave", c.id); cv.setAttribute("aria-hidden", "true");
+    cv.addEventListener("click", function (e) { seek(c, e); });
+    meta.appendChild(cv);
+    meta.appendChild(el("div", "src", c.source));
+    if (verdict === "reject" && d.note) meta.appendChild(el("div", "verdict-note", "Відхилено: " + d.note));
+    row.appendChild(meta);
+
+    var acts = el("div", "acts");
+    if (canWrite) {
+      if (verdict === "approve") {
+        acts.appendChild(button("Скасувати схвалення", "btn ghost", function () { setVerdict(s, c, null); }));
+      } else if (verdict === "reject") {
+        acts.appendChild(button("Скасувати відмову", "btn ghost", function () { setVerdict(s, c, null); }));
+      } else {
+        acts.appendChild(button("Схвалити", "btn yes", function () { setVerdict(s, c, "approve"); }));
+        acts.appendChild(button("Відхилити", "btn no", function () { openReject = c.id; render(); focusNote(c.id); }));
+      }
+    }
+    row.appendChild(acts);
+
+    if (canWrite && openReject === c.id && verdict !== "reject") {
+      var f = el("div", "reject-form");
+      var ta = el("textarea"); ta.id = "note-" + c.id; ta.placeholder = "Що не так? Наприклад: «надто весело», «тихо», «хочу важчі гітари». Можна лишити порожнім.";
+      ta.setAttribute("aria-label", "Чому відхилено");
+      f.appendChild(ta);
+      var fa = el("div", "acts");
+      fa.appendChild(button("Відхилити", "btn no on", function () { setVerdict(s, c, "reject", ta.value.trim()); }));
+      fa.appendChild(button("Назад", "btn ghost", function () { openReject = null; render(); }));
+      f.appendChild(fa);
+      row.appendChild(f);
+    }
+    requestAnimationFrame(function () { drawWave(c.id); });
+    return row;
+  }
+
+  function focusNote(id) { requestAnimationFrame(function () { var t = document.getElementById("note-" + id); if (t) t.focus(); }); }
+
+  function button(text, cls, fn) {
+    var b = el("button", cls, text); b.type = "button";
+    b.addEventListener("click", function () { if (!b.disabled) fn(); });
+    return b;
+  }
+
+  async function setVerdict(slot, cand, verdict, note) {
+    if (!db || busy[cand.id]) return;
+    busy[cand.id] = true;
+    statusEl.className = "note"; statusEl.textContent = "Зберігаю…";
+    try {
+      if (verdict === "approve") {
+        // в одному слоті схвалений лише один варіант: інші схвалення знімаються
+        for (var i = 0; i < slot.candidates.length; i++) {
+          var o = slot.candidates[i];
+          if (o.id !== cand.id && decisions[o.id] && decisions[o.id].verdict === "approve") await db.collection("decisions").doc(o.id).delete();
+        }
+      }
+      var ref = db.collection("decisions").doc(cand.id);
+      if (verdict) await ref.set({ slot: slot.clip, candidate: cand.id, verdict: verdict, note: note || "", at: new Date().toISOString() });
+      else await ref.delete();
+      openReject = null;
+      statusEl.textContent = verdict === "approve" ? "Схвалено: «" + slot.title + "». Claude перенесе це в гру." :
+        verdict === "reject" ? "Відхилено: «" + slot.title + "»." : "Рішення скасовано.";
+    } catch (e) {
+      statusEl.className = "note warn";
+      statusEl.textContent = e && e.code === "invalid_argument" ? "Змінювати рішення може лише власник або редактор." : "Не зберіглося (" + (e && e.code || "помилка") + "). Спробуй ще раз.";
+    } finally { busy[cand.id] = false; }
+  }
+
+  // ---------- відтворення ----------
+  function toggle(c) {
+    if (playing === c.id && !audio.paused) { audio.pause(); syncPlay(); return; }
+    if (playing !== c.id) { audio.src = c.audio; playing = c.id; }
+    audio.play().catch(function () {});
+    syncPlay();
+    loadPeaks(c);
+  }
+
+  function seek(c, e) {
+    var r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+    if (playing !== c.id) { audio.src = c.audio; playing = c.id; }
+    var go = function () { if (isFinite(audio.duration)) audio.currentTime = Math.max(0, Math.min(1, x)) * audio.duration; audio.play().catch(function () {}); syncPlay(); };
+    if (audio.readyState >= 1) go(); else audio.addEventListener("loadedmetadata", go, { once: true });
+    loadPeaks(c);
+  }
+
+  function syncPlay() {
+    document.querySelectorAll("[data-play]").forEach(function (b) {
+      var on = b.getAttribute("data-play") === playing && !audio.paused;
+      b.setAttribute("aria-pressed", String(on)); b.innerHTML = on ? PAUSE : PLAY;
+    });
+  }
+  audio.addEventListener("ended", function () { syncPlay(); drawWave(playing); });
+  audio.addEventListener("pause", syncPlay);
+  audio.addEventListener("play", syncPlay);
+  audio.addEventListener("loadedmetadata", function () {
+    var c = findCand(playing); if (c && (c.seconds == null)) { c.seconds = audio.duration; var r = document.querySelector('.cand[data-id="' + cssId(playing) + '"] .dur'); if (r) r.textContent = fmt(audio.duration); }
+  });
+  (function tick() { if (playing && !audio.paused) drawWave(playing); requestAnimationFrame(tick); })();
+
+  function cssId(id) { return id.replace(/"/g, ""); }
+  function findCand(id) {
+    var out = null; if (!catalog || !id) return null;
+    catalog.groups.forEach(function (g) { g.slots.forEach(function (s) { s.candidates.forEach(function (c) { if (c.id === id) out = c; }); }); });
+    return out;
+  }
+
+  async function loadPeaks(c) {
+    if (peaksCache[c.id]) return;
+    peaksCache[c.id] = "loading";
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      var buf = await (await fetch(c.audio)).arrayBuffer();
+      var ab = await ctx.decodeAudioData(buf);
+      var ch = ab.getChannelData(0), n = 160, step = Math.max(1, Math.floor(ch.length / n)), peaks = [];
+      for (var i = 0; i < n; i++) { var m = 0; for (var j = i * step; j < Math.min(ch.length, (i + 1) * step); j++) { var a = Math.abs(ch[j]); if (a > m) m = a; } peaks.push(m); }
+      peaksCache[c.id] = peaks;
+    } catch (e) { peaksCache[c.id] = null; }
+    drawWave(c.id);
+  }
+
+  function drawWave(id) {
+    if (!id) return;
+    var cv = document.querySelector('canvas[data-wave="' + cssId(id) + '"]'); if (!cv) return;
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    if (!w) return;
+    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    var cs = getComputedStyle(document.documentElement);
+    var line = cs.getPropertyValue("--line").trim(), paper = cs.getPropertyValue("--paper").trim(), gold = cs.getPropertyValue("--gold").trim();
+    var peaks = Array.isArray(peaksCache[id]) ? peaksCache[id] : null;
+    var prog = (playing === id && isFinite(audio.duration) && audio.duration > 0) ? audio.currentTime / audio.duration : 0;
+    if (!peaks) { g.fillStyle = line; g.fillRect(0, h / 2 - 1, w, 2); if (prog > 0) { g.fillStyle = gold; g.fillRect(0, h / 2 - 1, w * prog, 2); } return; }
+    var bw = w / peaks.length;
+    for (var i = 0; i < peaks.length; i++) {
+      var ph = Math.max(2, peaks[i] * (h - 2));
+      g.fillStyle = (i / peaks.length) < prog ? gold : (playing === id ? paper : line);
+      g.fillRect(i * bw, (h - ph) / 2, Math.max(1, bw - 1), ph);
+    }
+  }
+  window.addEventListener("resize", function () { if (catalog) catalog.groups.forEach(function (g) { g.slots.forEach(function (s) { s.candidates.forEach(function (c) { drawWave(c.id); }); }); }); });
+
+  // ---------- дані ----------
+  fetch("catalog.json").then(function (r) { return r.json(); }).then(function (c) {
+    catalog = c; render();
+    statusEl.textContent = "Підключаю збережені рішення…";
+    connect();
+  }).catch(function () { statusEl.className = "note warn"; statusEl.textContent = "Список треків не завантажився. Онови сторінку."; });
+
+  async function connect() {
+    if (!window.claude || !window.claude.use) { statusEl.className = "note warn"; statusEl.textContent = "Рішення тут не зберігаються: сторінку відкрито поза Claude. Слухати можна."; return; }
+    var user = await window.claude.use("user");
+    db = await window.claude.use("db");
+    if (!db) { statusEl.className = "note warn"; statusEl.textContent = "Рішення недоступні в цьому перегляді — слухати можна, схвалювати ні."; return; }
+    canWrite = user ? await user.canEdit() : false;
+    var timer = setTimeout(function () { statusEl.className = "note warn"; statusEl.textContent = "Збережені рішення поки не підвантажились — показую без них."; }, 10000);
+    db.collection("decisions").onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { if (d.exists) next[d.id] = d.data(); });
+      decisions = next;
+      if (!snap.metadata.fromCache) { clearTimeout(timer); if (!/Зберігаю|Схвалено:|Відхилено:|скасовано/.test(statusEl.textContent)) { statusEl.className = "note"; statusEl.textContent = canWrite ? "Готово. Слухай і вирішуй." : "Лише перегляд: схвалювати може власник."; } }
+      render();
+    }, function () { clearTimeout(timer); statusEl.className = "note warn"; statusEl.textContent = "Зв'язок із рішеннями обірвався. Онови сторінку."; });
+  }
+})();
+</script>

@@ -52,14 +52,19 @@ namespace Game.Gameplay.Ring
             errorKey = null;
             try
             {
-                var lines = System.IO.File.ReadAllLines(SavePath);
-                if (lines.Length == 0 || string.IsNullOrEmpty(lines[0])) { errorKey = "m.error.save.empty"; return false; }
-                var c = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
-                c.RestoreState(lines[0]);
+                CareerSession c = null;
+                bool fromBackup;
+                RingSaveFile.Read(SavePath, l =>
+                {
+                    var t = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
+                    t.RestoreState(l[0]);
+                    c = t;
+                }, out fromBackup);
                 _saveSummary = string.Format(_text.Get("m.title.summary"), c.State.Season, c.State.Week);
                 return true;
             }
             catch (System.IO.FileNotFoundException) { errorKey = "m.error.save.missing"; }
+            catch (System.IO.InvalidDataException) { errorKey = "m.error.save.empty"; }
             catch (Exception ex)
             {
                 Debug.LogWarning("[Ринг] сейв не пройшов перевірку: " + ex.Message);
@@ -258,6 +263,103 @@ namespace Game.Gameplay.Ring
             return true;
         }
 
+        // ---------------- пауза (ТЗ B01 §6.2) ----------------
+
+        private PauseOverlay _pause;
+
+        /// <summary>Пауза відкрита: екран гри не тікає, клавіш не бере, час і звук зали стоять.</summary>
+        private bool Paused { get { return _pause != null; } }
+
+        /// <summary>
+        /// Паузу можна відкрити на будь-якому екрані кар'єри (не на титулі), коли немає завантаження чи розрізу. Бот огляду
+        /// кар'єри (<c>-ring-shots</c>) паузи не відкриває: він грає сезон і знімає екрани гри.
+        /// </summary>
+        private bool CanPause
+        {
+            get
+            {
+                return _pause == null && !_onTitle && _career != null && _career.Stage != CareerStage.Title && _view != null
+                    && !MenuOverlayBusy && _shotsDir == null;
+            }
+        }
+
+        private void OpenPause()
+        {
+            if (!CanPause) return;
+            string context = _career.Stage == CareerStage.Create ? null
+                : string.Format(_text.Get("m.title.summary"), _career.State.Season, _career.State.Week);
+            // поле вводу (ім'я героя на створенні) не лишається у фокусі: інакше W/S/Пробіл/Backspace меню паузи друкувались би в нього
+            var focused = _root.focusController != null ? _root.focusController.focusedElement : null;
+            if (focused != null) focused.Blur();
+            _menuInput.ResetMouse();
+            _pause = new PauseOverlay(_text, this, context, PauseLeaveKey, ClosePause, PauseToTitle);
+            _overlayLayer.Insert(0, _pause.Root);       // над екраном гри, під розрізом
+            RingTime.Paused = true;
+            Time.timeScale = RingTime.Scale;
+            AudioListener.pause = true;                   // зала й музика гри стоять; звуки меню (ignoreListenerPause) — грають
+            RingMenuServices.Play(MenuSfx.Confirm);
+            _appliedScale = -1f;
+        }
+
+        private string PauseLeaveKey()
+        {
+            return PauseRules.LeaveBodyKey(_career.Stage, _career.State.Phase, _career.BackstageOpen);
+        }
+
+        /// <summary>Пауза закрилась сама (анімація виходу скінчилась): час і звук повертаються.</summary>
+        private void ClosePause()
+        {
+            _pause = null;
+            ResumeTime();
+            _appliedScale = -1f;
+            // момент результату матчу (2,6 с) рахується реальним часом: якщо пауза його з'їла, перехід «момент → цифри» екран
+            // не побачить (рев'ю 08.11.2026) — перемальовуємо одразу
+            if (_view is MatchScreenView) _view.Refresh();
+        }
+
+        private void ResumeTime()
+        {
+            RingTime.Paused = false;
+            Time.timeScale = RingTime.Scale;
+            AudioListener.pause = false;
+        }
+
+        /// <summary>
+        /// «На титул» з паузи: розріз, під ним — збереження (як і раніше Esc на тижні) і титул; час і звук повертаються (титул
+        /// живий: зала дихає, музика меню). Що не ввійшло в зліпок (матч, що йде, сцена закулісся), діалог назвав заздалегідь.
+        /// </summary>
+        private void PauseToTitle()
+        {
+            if (_wipe.Busy) return;
+            _wipe.Play(() =>
+            {
+                if (_pause != null) { _pause.Root.RemoveFromHierarchy(); _pause = null; }
+                ResumeTime();
+                Save();
+                _onTitle = true;
+                _entrances.Clear();          // виходи, що чекали в черзі, на титулі не грають
+                _matchPending = null;
+                var stage = RingStageHub.Current;
+                if (stage != null) stage.CrowdMood(0);   // зала — тихий гул, як на титулі (а не оплески матчу)
+                _appliedScale = -1f;
+            }, null);
+        }
+
+        /// <summary>
+        /// Ввід паузи: меню паузи бере все. <paramref name="escapeDown"/> (Esc натиснуто в цьому кадрі) закриває паузу й тоді,
+        /// коли «Назад» перепризначено на іншу клавішу.
+        /// </summary>
+        private void PollPause(bool escapeDown)
+        {
+            if (_menuInput == null || _pause == null) return;
+            if (escapeDown && !_menuInput.Capturing && _pause.AtRoot && !RingMenuInput.IsCancel(_menuInput.KeyOf(RingAction.Back)))
+            {
+                _pause.OnMenu(RingAction.Back, MenuDevice.Keyboard);
+                return;
+            }
+            _menuInput.Poll(_pause, Time.unscaledDeltaTime);
+        }
+
         /// <summary>Сейв огляду меню: справжній стан нової кар'єри (true) або зіпсований рядок (false) — для стану «помилка».</summary>
         internal void WriteBotSave(bool valid)
         {
@@ -271,7 +373,10 @@ namespace Game.Gameplay.Ring
                     state = c.CaptureState();
                 }
                 else state = "зіпсовано|42|не сейв";
-                System.IO.File.WriteAllLines(SavePath, new[] { state, "0|0" });
+                // Огляд показує биту кар'єру: запасна копія не повинна її «врятувати».
+                RingSaveFile.Delete(SavePath);
+                if (valid) RingSaveFile.Write(SavePath, new[] { state, "0|0" });
+                else System.IO.File.WriteAllLines(SavePath, new[] { state, "0|0" });
                 _saveSummary = null;
             }
             catch (Exception ex) { Debug.LogWarning("[Ринг] огляд меню: сейв не записано: " + ex.Message); }
@@ -284,6 +389,8 @@ namespace Game.Gameplay.Ring
         internal LoadingOverlay CurrentLoading { get { return _loading; } }
         internal WipeTransition Wipe { get { return _wipe; } }
         internal bool OnTitle { get { return _onTitle; } }
+        internal PauseOverlay CurrentPause { get { return _pause; } }
+        internal void OpenPauseForShots() { OpenPause(); }
         internal void Shot(string name)
         {
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_menuShotsDir, string.Format("{0:000}_{1}.png", _menuShot++, name)));

@@ -33,6 +33,14 @@ namespace Game.Gameplay.Ring.Stage
         public AnimationClip[] crowdClips = new AnimationClip[0];
         public Avatar crowdAvatar;
         public TextAsset venueAnchors, venueProps, venueCrowd;
+        /// <summary>
+        /// Процедурні набори текстур арени (Art/Ring/Textures, manifest): ім'я, карта кольору, нормаль, плитка (м) — для
+        /// матеріалів Kit_* (<see cref="RingVenueKit"/>).
+        /// </summary>
+        public string[] kitSets = new string[0];
+        public Texture2D[] kitAlbedo = new Texture2D[0];
+        public Texture2D[] kitNormal = new Texture2D[0];
+        public float[] kitTile = new float[0];
 
         /// <summary>Порядок: 0 — гравець, 1 — суперник, 2 — рефері.</summary>
         public Texture2D[] albedo = new Texture2D[3];
@@ -50,6 +58,24 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Усі кліпи RING_Moves і RING_Promo (за іменем із маніфесту).</summary>
         public AnimationClip[] clips = new AnimationClip[0];
+
+        /// <summary>
+        /// Жіночий набір виходу (RING_Entrance_F.fbx — ті самі імена, що й у чоловічому; таз нижче на ~0,1 м): постаті з тілом
+        /// body_f_* виходять ним (docs/ring/ENTRANCE_PROFILE.md, «стать»).
+        /// </summary>
+        public AnimationClip[] clipsFemale = new AnimationClip[0];
+
+        /// <summary>
+        /// Екран виходу (ТЗ B07): 36 запечених пулів (Assets/Art/Ring/Titantron/pools, ім'я = {gimmick}_{role}_{tier}), білі
+        /// маски мотивів (sprites, без слів) і печатка бренду (Brand/emblem_seal_1024.png, шар brand_seal).
+        /// </summary>
+        public TextAsset[] tronPools = new TextAsset[0];
+        public Texture2D[] tronSprites = new Texture2D[0];
+        public Texture2D tronSeal;
+
+        /// <summary>Пояс чемпіона (Cast/Props/belt.fbx, прямий; центр — центральна пластина) і його текстури — для пози з поясом.</summary>
+        public GameObject beltProp;
+        public Texture2D beltAlbedo, beltNormal;
 
         /// <summary>Звук рингу (CC0, Assets/ThirdParty/CC0/Audio/Ring — LICENSES.md).</summary>
         public AudioClip musicTitle, musicHero, musicHammer, musicRoster;
