@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
 
@@ -77,14 +76,17 @@ namespace Game.Gameplay.Ring.Models
     /// Таблиця «подія → звук» (критерій М1: «без порожніх подій» — удар, гонг, рахунок, натовп, QTE, вихід; бій за рингом — запит ПМ
     /// 08.11.2026). Чистий C#: що звучить, вирішує тут, а грає <c>Stage/Unity/RingSound</c> лише схвалене власником
     /// (<see cref="RingSoundApproval"/>).
-    /// <para>Ключі — НАЗВИ значень переліків ядра, а не самі значення: та сама таблиця працює і з основною гілкою, і з переробкою бою
-    /// (там з'явились подія <c>Flourish</c>, дія <c>Weapon</c>, наслідок <c>Place</c> і поле <c>MatchEvent.Outside</c>, а
-    /// <c>IntoRopes</c>/<c>IntoCorner</c> зникли). Охоронець — <c>RingSoundMapTests</c>: кожне значення <see cref="MatchEventKind"/>,
+    /// <para>Ключі — НАЗВИ значень переліків ядра, а не самі значення. Таблиця пережила обидва ядра: основну гілку (там є
+    /// <c>IntoRopes</c>/<c>IntoCorner</c>) і переробку бою (подія <c>Flourish</c>, дія <c>Weapon</c>, наслідок <c>Place</c>). Гілка звуку
+    /// стоїть на гілці бою (1c03451) і йде в основну разом із пакетом бою, тож поля переробки (<c>MatchEvent.Outside</c>,
+    /// <c>MatchEvent.MoveKey</c>) читаються напряму. Охоронець — <c>RingSoundMapTests</c>: кожне значення <see cref="MatchEventKind"/>,
     /// <see cref="MatchActionId"/> і <see cref="MatchEffectKind"/> має рядок.</para>
-    /// <para>Звук іде за тим, що видно на екрані (<c>Stage/RingClipTable</c>): промах удару — ухил без контакту. Предмет — за
-    /// docs/ring/CLIP_NEEDS.md і TRPG_DESIGN §4.4 (ПМ 08.11.2026): 10+ — чистий удар стільцем або кидок на стіл (реквізит обирає режисер,
-    /// <see cref="RingProp"/>), 7–9 — стілець по дотичній і нападник зачепив себе, ≤6 — замах повз і нападник сам у бар'єр. Другий дотик
-    /// (самоудар, бар'єр) — <see cref="FollowUpOf(MatchEvent)"/>, на мітці кліпа.</para>
+    /// <para>Звук іде за тим, що видно на екрані (<c>Stage/RingClipTable</c>): промах удару — ухил без контакту, реверс 7–9 — обмін
+    /// захватами. Де таблиця кліпів ставить заглушку («бракує …» — кидок у бар'єр, кидок через канати, удар стільцем), звук іде за
+    /// задуманим рухом із docs/ring/CLIP_NEEDS.md, а не за заглушкою. Предмет — за CLIP_NEEDS і TRPG_DESIGN §4.4 (ПМ 08.11.2026): 10+ —
+    /// чистий удар стільцем або кидок на стіл (реквізит обирає режисер, <see cref="RingProp"/>), 7–9 — стілець по дотичній і нападник
+    /// зачепив себе, ≤6 — замах повз і нападник сам у бар'єр. Другий дотик (самоудар, бар'єр) — <see cref="FollowUpOf(MatchEvent)"/>, на
+    /// мітці кліпа.</para>
     /// </summary>
     public static class RingSoundMap
     {
@@ -97,7 +99,7 @@ namespace Game.Gameplay.Ring.Models
             { "Exchange", RingCue.Lockup },
             { "Action", RingCue.None },          // за дією
             { "Sell", RingCue.CrowdBed },        // продаж — до удару; удар звучить на самій дії (раніше звучав двічі, і до контакту)
-            { "Reverse", RingCue.Slam },
+            { "Reverse", RingCue.Slam },         // 10+ — кидок; 7–9 — обмін захватами, провал — нічого (ступінь — у ForEvent)
             { "Kickout", RingCue.MatSlap },      // «раз-два» долонею, далі вибух залу (CrowdPop режисера)
             { "Endure", RingCue.HoldStrain },
             { "Rescue", RingCue.Pop },
@@ -182,6 +184,13 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Скільки цифр відліку за рингом грати на один наслідок Count (ядро додає +3 за дію).</summary>
         public const int MaxCountTicks = 3;
 
+        // Фінішери-больові (категорія submission у career_moves.json): на екрані захват (RingClipTable: iron_clamp — Chain_Headlock_Crank),
+        // тож звучать скрипом захвату, а не падінням. Охоронець — RingSoundMapTests звіряє набір із каталогом прийомів.
+        private static readonly HashSet<string> HoldFinisherKeys = new HashSet<string> { "iron_clamp" };
+
+        /// <summary>Фінішери-больові: прийом звучить захватом (<see cref="RingCue.HoldStrain"/>), а не падінням.</summary>
+        public static IReadOnlyCollection<string> HoldFinishers { get { return HoldFinisherKeys; } }
+
         /// <summary>Звук події матчу без ступеня кидка й місця пари (як у журналі без кидка, на рингу).</summary>
         public static RingCue ForEvent(MatchEventKind kind, MatchActionId action)
         {
@@ -195,19 +204,28 @@ namespace Game.Gameplay.Ring.Models
         public static RingCue ForEvent(MatchEvent ev, RingProp prop)
         {
             if (ev == null) return RingCue.None;
-            return ForEvent(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier, OutsideOf(ev), prop);
+            return ForEvent(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier, ev.Outside, prop, ev.MoveKey);
         }
 
         /// <summary>
-        /// Звук за назвами (обидва ядра): для дії й продажу — за дією, інакше — за видом події. None — лише для невідомих назв.
+        /// Звук за назвами: для дії й продажу — за дією, інакше — за видом події. None — лише для невідомих назв.
+        /// <paramref name="moveKey"/> — прийом з каталогу (<c>MatchEvent.MoveKey</c>), null — дія без прийому.
         /// </summary>
-        public static RingCue ForEvent(string kind, string action, bool hasRoll, RollTier tier, bool outside, RingProp prop = RingProp.Chair)
+        public static RingCue ForEvent(string kind, string action, bool hasRoll, RollTier tier, bool outside, RingProp prop = RingProp.Chair,
+            string moveKey = null)
         {
             RingCue c;
             if (kind == null || !Kinds.TryGetValue(kind, out c)) return RingCue.None;
+            if (kind == "Reverse" && hasRoll)
+            {
+                // RingClipTable.Plan: 10+ — захисник кидає нападника (Bodyslam), 7–9 — обмін захватами (Lockup_Exchange), провал —
+                // кроків немає (далі кидок самого нападника), тож і звуку немає.
+                if (tier == RollTier.Strong) return RingCue.Slam;
+                return tier == RollTier.Partial ? RingCue.Lockup : RingCue.CrowdBed;
+            }
             if (c != RingCue.None) return c;
             if (action == null || !Actions.TryGetValue(action, out c)) return RingCue.None;
-            return Refine(action, c, hasRoll, tier, outside, prop);
+            return Refine(action, c, hasRoll, tier, outside, prop, moveKey);
         }
 
         /// <summary>
@@ -237,11 +255,15 @@ namespace Game.Gameplay.Ring.Models
         }
 
         /// <summary>
-        /// Ступінь кидка й місце пари — так, як показує <c>RingClipTable</c>: удар чи брудний прийом з провалом — ухил без контакту;
-        /// «Вийти з рингу» з провалом — суперник утримався в захваті; відчайдушний з провалом — сам падає; предмет 10+ — реквізит
-        /// режисера (стілець чи стіл), 7–9 — стілець, ≤6 — замах повз (бар'єр — другим дотиком); за рингом удар і кидок ідуть у бар'єр.
+        /// Ступінь кидка й місце пари — так, як показує <c>RingClipTable</c>. Провал: удар чи брудний прийом — ухил без контакту
+        /// (<c>Center_Sidestep</c>); «Вийти з рингу» і больовий — пара в захваті (<c>Lockup_Stalemate</c>); кидок, відчайдушний, промінь
+        /// надії, фінішер і стрибок з канатів — падіння (<c>Bump_Back</c>; у промені надії ядро однаково кладе суперника, звук той самий);
+        /// провокація — борцю боляче, оплесків немає (<c>Idle_Hurt_Body_Loop</c>); підйом — той самий кліп, що в «відновитися»
+        /// (<c>Idle_Tired_Loop</c>), тож і звук той самий. Провал важить більше за місце: за рингом промах удару — теж ухил.
+        /// Фінішер-больовий (<see cref="HoldFinishers"/>) — захват. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 —
+        /// замах повз (бар'єр — другим дотиком); за рингом удар і кидок ідуть у бар'єр.
         /// </summary>
-        private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside, RingProp prop)
+        private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside, RingProp prop, string moveKey)
         {
             if (action == "Weapon")
             {
@@ -251,11 +273,22 @@ namespace Game.Gameplay.Ring.Models
             }
             if (hasRoll && tier == RollTier.Miss)
             {
-                if (action == "Strike" || action == "Dirty") return RingCue.Whiff;
-                if (action == "LeaveRing") return RingCue.Lockup;
-                if (action == "Desperate") return RingCue.Slam;
+                switch (action)
+                {
+                    case "Strike":
+                    case "Dirty": return RingCue.Whiff;
+                    case "LeaveRing":
+                    case "Submission": return RingCue.Lockup;
+                    case "Throw":
+                    case "Desperate":
+                    case "HopeSpot":
+                    case "Finisher":
+                    case "TopRope": return RingCue.Slam;
+                    case "Taunt": return RingCue.CrowdBed;
+                }
                 return c;
             }
+            if (action == "Finisher" && moveKey != null && HoldFinisherKeys.Contains(moveKey)) return RingCue.HoldStrain;
             if (outside)
             {
                 if (action == "Strike") return RingCue.BarrierHit;
@@ -296,29 +329,5 @@ namespace Game.Gameplay.Ring.Models
                 if (c != RingCue.None) yield return c;
         }
 
-        // ---------- місце пари ----------
-
-        private static readonly Dictionary<Type, FieldInfo> OutsideFields = new Dictionary<Type, FieldInfo>();
-
-        /// <summary>
-        /// Чи була пара за рингом, коли дія почалась (<c>MatchEvent.Outside</c> переробки бою). Поле читається за назвою, бо в основному
-        /// ядрі його ще немає: до злиття переробки — завжди false. Після злиття можна читати <c>ev.Outside</c> напряму.
-        /// </summary>
-        public static bool OutsideOf(object ev)
-        {
-            if (ev == null) return false;
-            var t = ev.GetType();
-            FieldInfo f;
-            lock (OutsideFields)
-            {
-                if (!OutsideFields.TryGetValue(t, out f))
-                {
-                    f = t.GetField("Outside", BindingFlags.Public | BindingFlags.Instance);
-                    if (f != null && f.FieldType != typeof(bool)) f = null;
-                    OutsideFields[t] = f;
-                }
-            }
-            return f != null && (bool)f.GetValue(ev);
-        }
     }
 }

@@ -176,7 +176,14 @@ namespace Game.Gameplay.Ring.Stage
 
         public void BellStart() { Play(RingCue.BellStart, 0.9f); }
 
-        public void BellEnd() { StartCoroutine(Repeat(RingCue.BellEnd, 3, 0.32f, 0.9f)); }
+        /// <summary>
+        /// Дзвін кінця — тричі. Якщо ще звучить відлік за рингом попередньої дії (кінець відліком чи подвійним відліком), дзвін
+        /// чекає останньої цифри: «останні цифри на дії, далі дзвін», а не поверх них.
+        /// </summary>
+        public void BellEnd() { StartCoroutine(Repeat(RingCue.BellEnd, 3, 0.32f, 0.9f, Mathf.Max(0f, _countEndsAt - Time.time))); }
+
+        // Коли договорить відлік за рингом (ігровий час, як у WaitForSeconds); дзвін кінця не лягає поверх цифр.
+        private float _countEndsAt;
 
         /// <summary>Долоня рефері об мат — на мітці відліку його кліпа (count_1/2/3).</summary>
         public void Slap() { Play(RingCue.MatSlap, 0.9f); }
@@ -187,13 +194,20 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public void Qte(RingQte q) { Play(q == RingQte.Prompt ? RingCue.QtePrompt : RingCue.QteMiss, q == RingQte.Prompt ? 0.7f : 0.85f); }
 
-        // Бій за рингом: склейка звучить, коли кадр уже на новому місці; відлік — після контакту, цифра за цифрою.
+        // Бій за рингом: склейка звучить, коли кадр уже на новому місці; відлік — після контакту, цифра за цифрою. Числа — секунди
+        // кліпа: як і режисер (RingMatchDirector.BeatAt), ділимо на швидкість показу RingStage3D.PlaySpeed, щоб звук ішов у такт кадру.
         private const float SurgeDelay = 0.35f, CountDelay = 0.7f, CountGap = 0.6f;
+        // хвіст останньої цифри відліку (count_out ≤ 0,4 с) — після нього може бити дзвін кінця
+        private const float CountTail = 0.4f;
+        private static float OnScreen(float seconds) { return seconds / RingStage3D.PlaySpeed; }
 
         /// <summary>
         /// Звук події матчу за таблицею <see cref="RingSoundMap"/> (зі ступенем кидка й місцем пари) і звуки її наслідків: склейка місця
         /// (Place) — зал здіймається, відлік за рингом (Count) — по звуку на цифру. Утримання й кікаут — долоня рефері, повтором.
         /// Кінець матчу відліком чи подвійним відліком: останні цифри звучать на дії, дзвін — режисер (BellEnd).
+        /// <para>Гілки Kickout і MatchEnd — запасні. Чинний режисер ці події сюди не подає: долоню б'є сам на мітках кліпа рефері
+        /// (<see cref="Slap"/>), а pinEnd завжди false. Якщо режисер почне подавати їх сюди, хай прибере свої Slap — інакше долоня
+        /// подвоїться.</para>
         /// <paramref name="prop"/> — реквізит чистого удару предметом 10+, який обрав режисер (стілець чи стіл).
         /// </summary>
         public void OnEvent(MatchEvent ev, float delay, bool pinEnd, RingProp prop = RingProp.Chair)
@@ -218,11 +232,14 @@ namespace Game.Gameplay.Ring.Stage
             {
                 var fx = ev.Effects[i];
                 var fc = RingSoundMap.ForEffect(fx.Kind);
-                if (fc == RingCue.CrowdSurge && !surged) { surged = true; Play(RingCue.CrowdSurge, 0.7f, delay + SurgeDelay, true); }
+                if (fc == RingCue.CrowdSurge && !surged) { surged = true; Play(RingCue.CrowdSurge, 0.7f, delay + OnScreen(SurgeDelay), true); }
                 else if (fc == RingCue.CountOut && !counted && fx.Amount > 0)
                 {
                     counted = true;
-                    StartCoroutine(Repeat(RingCue.CountOut, Mathf.Min(fx.Amount, RingSoundMap.MaxCountTicks), CountGap, 0.8f, delay + CountDelay));
+                    int ticks = Mathf.Min(fx.Amount, RingSoundMap.MaxCountTicks);
+                    float start = delay + OnScreen(CountDelay), gap = OnScreen(CountGap);
+                    _countEndsAt = Mathf.Max(_countEndsAt, Time.time + start + (ticks - 1) * gap + CountTail);
+                    StartCoroutine(Repeat(RingCue.CountOut, ticks, gap, 0.8f, start));
                 }
             }
         }

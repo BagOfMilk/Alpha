@@ -5,7 +5,9 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
+using Game.Core.Ring.Career;
 using Game.Gameplay.Ring.Models;
+using Game.Gameplay.Ring.Stage;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -104,6 +106,30 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent("Action", "Dirty", true, RollTier.Miss, false));
             Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", "Desperate", true, RollTier.Miss, false), "відчайдушний: сам падає");
             Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent("Action", "Strike", false, RollTier.Miss, false), "без кидка ступінь не читається");
+            // Решта провалів — за RingClipTable: пара в захваті (Lockup_Stalemate), нападник падає сам (Bump_Back), провокація — без оплесків.
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent("Action", "Submission", true, RollTier.Miss, false), "больовий: нічия в захваті");
+            Assert.AreEqual(RingCue.HoldStrain, RingSoundMap.ForEvent("Action", "Submission", true, RollTier.Partial, false));
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", "TopRope", true, RollTier.Miss, false), "стрибок не вдався: падає сам");
+            Assert.AreEqual(RingCue.Land, RingSoundMap.ForEvent("Action", "TopRope", true, RollTier.Strong, false));
+            Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent("Action", "Taunt", true, RollTier.Miss, false), "провокація не вдалась: оплесків немає");
+            Assert.AreEqual(RingCue.Pop, RingSoundMap.ForEvent("Action", "Taunt", true, RollTier.Strong, false));
+            foreach (var a in new[] { "Throw", "HopeSpot", "Finisher" })
+                Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", a, true, RollTier.Miss, false), a + ": падіння");
+            // підйом з провалом — той самий кліп, що в «відновитися» (Idle_Tired_Loop), тож і звук той самий
+            Assert.AreEqual(RingSoundMap.ForEvent("Action", "Recover", true, RollTier.Strong, false),
+                RingSoundMap.ForEvent("Action", "GetUp", true, RollTier.Miss, false), "підйом з провалом звучить як «відновитися»");
+        }
+
+        [Test]
+        public void RealEvent_GoesThroughTheSameTable()
+        {
+            // Подія матчу (не назви) — той самий шлях: ступінь кидка уточнює звук. Поля — спільні для обох ядер.
+            Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Strike, HasRoll = true, Tier = RollTier.Miss }));
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Strike, HasRoll = true, Tier = RollTier.Strong }));
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Submission, HasRoll = true, Tier = RollTier.Miss }));
+            Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.Taunt, HasRoll = true, Tier = RollTier.Miss }));
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.TopRope, HasRoll = true, Tier = RollTier.Miss }));
+            Assert.AreEqual(RingCue.None, RingSoundMap.ForEvent(null));
         }
 
         [Test]
@@ -120,15 +146,94 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(new MatchEvent()), "порожня подія — без другого дотику");
         }
 
-        private sealed class FakeOutsideEvent { public bool Outside = true; }
+        private static MatchEvent Act(MatchActionId a, RollTier t, bool outside = false, string moveKey = null)
+        {
+            return new MatchEvent { Kind = MatchEventKind.Action, Action = a, HasRoll = true, Tier = t, Outside = outside, MoveKey = moveKey };
+        }
 
         [Test]
-        public void OutsideOf_ReadsTheFieldByName()
+        public void Outside_GoesThroughTheRealEvent()
         {
-            Assert.IsTrue(RingSoundMap.OutsideOf(new FakeOutsideEvent()));
-            Assert.IsFalse(RingSoundMap.OutsideOf(new object()));
-            Assert.IsFalse(RingSoundMap.OutsideOf(null));
-            Assert.IsFalse(RingSoundMap.OutsideOf(new MatchEvent()), "нова подія — на рингу (чи поля ще немає)");
+            // Поле MatchEvent.Outside читається напряму (гілка звуку стоїть на гілці бою): за рингом удар і кидок — у бар'єр.
+            Assert.AreEqual(RingCue.BarrierHit, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Strong, true)));
+            Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.ForEvent(Act(MatchActionId.Throw, RollTier.Partial, true)));
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Strong)), "на рингу — як завжди");
+            // провал важить більше за місце: за рингом промах удару — теж ухил, невдалий кидок — падіння
+            Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Miss, true)));
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Throw, RollTier.Miss, true)));
+            Assert.IsFalse(new MatchEvent().Outside, "нова подія — на рингу");
+        }
+
+        [Test]
+        public void Reverse_SoundsByTier()
+        {
+            // RingClipTable.Plan: 10+ — захисник кидає (Bodyslam), 7–9 — обмін захватами (Lockup_Exchange), провал — кроків немає.
+            Func<RollTier, MatchEvent> rev = t => new MatchEvent { Kind = MatchEventKind.Reverse, Action = MatchActionId.Throw, HasRoll = true, Tier = t };
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(rev(RollTier.Strong)));
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(rev(RollTier.Partial)));
+            Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent(rev(RollTier.Miss)), "провал реверсу — на екрані нічого, удару немає");
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(MatchEventKind.Reverse, MatchActionId.Throw), "без кидка — кидок");
+        }
+
+        [Test]
+        public void HoldFinisher_SoundsLikeAHold()
+        {
+            // Фінішер-больовий на екрані — захват (iron_clamp — Chain_Headlock_Crank): скрип захвату, а не падіння.
+            Assert.AreEqual(RingCue.HoldStrain, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Strong, false, "iron_clamp")));
+            Assert.AreEqual(RingCue.HoldStrain, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Partial, false, "iron_clamp")));
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Miss, false, "iron_clamp")), "провал — падіння (Bump_Back)");
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Strong, false, "crusher")));
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Strong)));
+            // набір звірено з каталогом прийомів: кожен фінішер категорії «больовий» — і лише він
+            var catalog = MoveCatalog.Load(CareerKit.Read("career_moves.json"));
+            var expected = catalog.All.Where(m => m.Action == MatchActionId.Finisher && m.Category == MoveCategory.Submission).Select(m => m.Id).OrderBy(s => s).ToList();
+            CollectionAssert.AreEqual(expected, RingSoundMap.HoldFinishers.OrderBy(s => s).ToList(), "фінішери-больові каталогу й таблиці звуку");
+        }
+
+        // Що показує кліп провалу → який звук (RingClipTable). Новий кліп провалу без рядка тут — червоний тест: спершу вирішити звук.
+        private static readonly Dictionary<string, RingCue> MissClipSound = new Dictionary<string, RingCue>
+        {
+            { "Center_Sidestep", RingCue.Whiff },          // ухил: контакту немає
+            { "Lockup_Stalemate", RingCue.Lockup },        // нічия в захваті
+            { "Bump_Back", RingCue.Slam },                 // падіння
+            { "Idle_Hurt_Body_Loop", RingCue.CrowdBed },   // борцю боляче: ні удару, ні оплесків
+        };
+
+        [Test]
+        public void Misses_FollowTheClipTable()
+        {
+            // Кожна дія з провалом: звук відповідає останньому кліпу пари чи соло з RingClipTable.Plan.
+            foreach (MatchActionId a in Enum.GetValues(typeof(MatchActionId)))
+            {
+                var ev = Act(a, RollTier.Miss);
+                StageStep last = null;
+                foreach (var st in RingClipTable.Plan(ev))
+                    if (st.Kind == StageStepKind.Pair || st.Kind == StageStepKind.Solo) last = st;
+                if (last == null) continue;                       // кроків пари немає (утримання — у Kickout, союзник — рефері)
+                var cue = RingSoundMap.ForEvent(ev);
+                if (last.Clip == "Idle_Tired_Loop")
+                {
+                    // той самий кліп, що в «відновитися» — і звук той самий
+                    Assert.AreEqual(RingSoundMap.ForEvent(Act(MatchActionId.Recover, RollTier.Strong)), cue, a + ": " + last.Clip);
+                    continue;
+                }
+                RingCue want;
+                Assert.IsTrue(MissClipSound.TryGetValue(last.Clip, out want), a + ": новий кліп провалу «" + last.Clip + "» — вирішити його звук");
+                // Предмет ≤6 — за порядком ПМ: замах повз (Whiff), падіння в бар'єр — другим дотиком на мітці кліпа.
+                if (a == MatchActionId.Weapon) { Assert.AreEqual(RingCue.Whiff, cue); Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.FollowUpOf(ev)); continue; }
+                Assert.AreEqual(want, cue, a + ": провал показує «" + last.Clip + "»");
+            }
+            // реверс: той самий принцип за ступенями
+            foreach (var a in new[] { MatchActionId.Throw, MatchActionId.TopRope, MatchActionId.Finisher })
+                foreach (RollTier t in Enum.GetValues(typeof(RollTier)))
+                {
+                    var ev = new MatchEvent { Kind = MatchEventKind.Reverse, Action = a, HasRoll = true, Tier = t };
+                    var steps = RingClipTable.Plan(ev);
+                    var cue = RingSoundMap.ForEvent(ev);
+                    if (steps.Count == 0) { Assert.AreEqual(RingCue.CrowdBed, cue, "реверс без кроків — без удару"); continue; }
+                    var clip = steps[steps.Count - 1].Clip;
+                    Assert.AreEqual(clip == "Bodyslam" ? RingCue.Slam : RingCue.Lockup, cue, "реверс " + t + ": " + clip);
+                }
         }
 
         [Test]
