@@ -22,7 +22,9 @@ namespace Game.Gameplay.UI
         /// <summary>Екрани зрізу «Ринг» (сцена RingFeud, UI Toolkit): окрема сцена, зі світом і боєм не перетинається.</summary>
         Ring,
         /// <summary>Уся гра «Ринг» — кар'єра (RingGameBootstrap): та сама сцена, інший хост; зі зрізом не співіснує.</summary>
-        RingCareer
+        RingCareer,
+        /// <summary>Меню «Рингу» (ТЗ B08): вхід, налаштування, завантаження — свій ввід (клавіатура, геймпад), поки відкрите меню.</summary>
+        RingMenu
     }
 
     /// <summary>Рядок реєстру: клавіша, область, файл-власник, дія.</summary>
@@ -149,6 +151,22 @@ namespace Game.Gameplay.UI
             new UxKeyBinding("Alpha9",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "варіант / дія тижня / прийом 9"),
             new UxKeyBinding("L",          UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "повний журнал матчу"),
             new UxKeyBinding("Escape",     UxKeyScope.RingCareer, "RingGameBootstrap.cs",     "з тижня — у головне меню"),
+            // Меню «Рингу» (ТЗ B08, RingMenuInput): перепризначувані дії — з налаштувань (ring.key.*), тут — сталі запасні й геймпад.
+            new UxKeyBinding("Space", UxKeyScope.RingMenu, "RingMenuInput.cs", "підтвердити (запасна до перепризначуваної)"),
+            new UxKeyBinding("KeypadEnter", UxKeyScope.RingMenu, "RingMenuInput.cs", "підтвердити (запасна)"),
+            new UxKeyBinding("Backspace", UxKeyScope.RingMenu, "RingMenuInput.cs", "назад (запасна)"),
+            new UxKeyBinding("Tab", UxKeyScope.RingMenu, "RingMenuInput.cs", "наступна вкладка (запасна)"),
+            new UxKeyBinding("W", UxKeyScope.RingMenu, "RingMenuInput.cs", "вгору (запасна)"),
+            new UxKeyBinding("S", UxKeyScope.RingMenu, "RingMenuInput.cs", "вниз (запасна)"),
+            new UxKeyBinding("A", UxKeyScope.RingMenu, "RingMenuInput.cs", "ліворуч / менше (запасна)"),
+            new UxKeyBinding("D", UxKeyScope.RingMenu, "RingMenuInput.cs", "праворуч / більше (запасна)"),
+            new UxKeyBinding("Escape", UxKeyScope.RingMenu, "RingMenuInput.cs", "скасувати перепризначення клавіші"),
+            new UxKeyBinding("JoystickButton0", UxKeyScope.RingMenu, "RingMenuInput.cs", "геймпад A — підтвердити"),
+            new UxKeyBinding("JoystickButton1", UxKeyScope.RingMenu, "RingMenuInput.cs", "геймпад B — назад"),
+            new UxKeyBinding("JoystickButton4", UxKeyScope.RingMenu, "RingMenuInput.cs", "геймпад LB — попередня вкладка"),
+            new UxKeyBinding("JoystickButton5", UxKeyScope.RingMenu, "RingMenuInput.cs", "геймпад RB — наступна вкладка"),
+            new UxKeyBinding("JoystickButton7", UxKeyScope.RingMenu, "RingMenuInput.cs", "геймпад Start — підтвердити"),
+            new UxKeyBinding("DownArrow", UxKeyScope.RingMenu, "RingMenuShots.cs", "огляд меню: «натиснута» клавіша перепризначення"),
         };
 
         public static IReadOnlyList<UxKeyBinding> All => Entries;

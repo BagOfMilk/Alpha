@@ -67,6 +67,9 @@ namespace UnityEngine
         public static string dataPath { get { return "."; } }
         public static string persistentDataPath { get { return "."; } }
         public static bool runInBackground { get; set; }
+        public static int targetFrameRate { get; set; }
+        public static string version { get { return "0.0"; } }
+        public static bool isFocused { get { return true; } }
         public static void Quit(int exitCode) { }
 
         /// <summary>Реальна сигнатура — <c>public static event Func&lt;bool&gt; wantsToQuit</c> (GameShell.cs, фікс краху при виході).</summary>
@@ -277,6 +280,7 @@ namespace UnityEngine
         public static string[] names { get { return new string[0]; } }
         public static int GetQualityLevel() { return 0; }
         public static void SetQualityLevel(int index, bool applyExpensiveChanges) { }
+        public static int vSyncCount { get; set; }
         public static UnityEngine.Rendering.RenderPipelineAsset renderPipeline { get; set; }
     }
 }
@@ -408,6 +412,26 @@ namespace UnityEngine
         public static int width { get { return 1280; } }
         public static int height { get { return 720; } }
         public static bool fullScreen { get; set; }
+        public static FullScreenMode fullScreenMode { get; set; }
+        public static Resolution[] resolutions { get { return new Resolution[0]; } }
+        public static Resolution currentResolution { get { return default(Resolution); } }
+        public static void SetResolution(int width, int height, FullScreenMode fullscreenMode) { }
+    }
+
+    public enum FullScreenMode { ExclusiveFullScreen = 0, FullScreenWindow = 1, MaximizedWindow = 2, Windowed = 3 }
+
+    public struct RefreshRate
+    {
+        public uint numerator;
+        public uint denominator;
+        public double value { get { return denominator == 0 ? 0.0 : (double)numerator / denominator; } }
+    }
+
+    public struct Resolution
+    {
+        public int width { get; set; }
+        public int height { get; set; }
+        public RefreshRate refreshRateRatio { get; set; }
     }
 
     public static class Time
@@ -441,7 +465,13 @@ namespace UnityEngine
         Alpha1 = 49, Alpha2 = 50, Alpha3 = 51, Alpha4 = 52, Alpha5 = 53,
         Alpha6 = 54, Alpha7 = 55, Alpha8 = 56, Alpha9 = 57,
         C = 99, E = 101, F = 102, I = 105, J = 106, L = 108, N = 110, O = 111, Q = 113,
-        KeypadEnter = 271, F1 = 282, F10 = 291
+        KeypadEnter = 271, F1 = 282, F10 = 291,
+        // Меню «Рингу» (ТЗ B08): стрілки, WASD, Delete, кнопки геймпада — справжні коди UnityEngine.KeyCode.
+        A = 97, D = 100, S = 115, W = 119, Delete = 127,
+        UpArrow = 273, DownArrow = 274, RightArrow = 275, LeftArrow = 276,
+        Mouse0 = 323, Mouse1 = 324, Mouse2 = 325,
+        JoystickButton0 = 330, JoystickButton1 = 331, JoystickButton2 = 332, JoystickButton3 = 333, JoystickButton4 = 334,
+        JoystickButton5 = 335, JoystickButton6 = 336, JoystickButton7 = 337, JoystickButton8 = 338, JoystickButton9 = 339
     }
 
     /// <summary>Мінімум для UiScale: точка екрана з камери чи миші.</summary>
@@ -457,6 +487,11 @@ namespace UnityEngine
         public static bool anyKeyDown { get { return false; } }
         public static bool GetKeyDown(KeyCode key) { return false; }
         public static bool GetMouseButtonDown(int button) { return false; }
+        public static bool GetKey(KeyCode key) { return false; }
+        public static bool anyKey { get { return false; } }
+        /// <summary>Осі менеджера вводу (ProjectSettings/InputManager.asset); невідома вісь у справжньому Unity кидає ArgumentException.</summary>
+        public static float GetAxisRaw(string axisName) { return 0f; }
+        public static Vector2 mouseScrollDelta { get { return Vector2.zero; } }
     }
 
     public static class Resources
@@ -794,5 +829,7 @@ namespace UnityEngine
         public static void SetInt(string key, int value) { }
         public static void Save() { }
         public static void DeleteKey(string key) { }
+        public static string GetString(string key, string defaultValue) { return defaultValue; }
+        public static void SetString(string key, string value) { }
     }
 }

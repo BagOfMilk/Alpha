@@ -98,6 +98,19 @@ namespace Game.Gameplay.EditorTools
             assets.promoManifest = Load<TextAsset>("Assets/Art/Animations/ring_promo_manifest.txt");
             assets.entranceManifest = Load<TextAsset>("Assets/Art/Animations/ring_entrance_manifest.txt");
 
+            // Меню (ТЗ B08): три варіації лейтмотиву й десять звуків одного тембру (власна генерація tools/ring_audio),
+            // печатка й канатна рамка для лого-локапу. Програвач (RingMenuAudio) сам бере ці ассети в Awake.
+            var menu = host.AddComponent<RingMenuAssets>();
+            const string MenuSnd = Art + "Audio/Menu/";
+            menu.musicLogin = Load<AudioClip>(MenuSnd + "music_login.wav");
+            menu.musicLoading = Load<AudioClip>(MenuSnd + "music_loading.wav");
+            menu.musicSettings = Load<AudioClip>(MenuSnd + "music_settings.wav");
+            menu.sfx = new[] { "ui_move", "ui_confirm", "ui_back", "ui_error", "ui_toggle", "ui_slider", "ui_tab", "ui_transition", "ui_load_done", "ui_login_ok" }
+                .Select(n => Load<AudioClip>(MenuSnd + n + ".wav")).ToArray();
+            menu.seal = Load<Texture2D>(Art + "Brand/emblem_seal_1024.png");
+            menu.ropeFrame = Load<Texture2D>(Art + "Brand/rope_frame_1040.png");
+            host.AddComponent<RingMenuAudio>();
+
             var stage = host.AddComponent<RingStage3D>();
             stage.assets = assets;
             Debug.Log("[Ринг] 3D: ассети прив'язано, кліпів " + clips.Count);

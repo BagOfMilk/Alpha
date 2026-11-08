@@ -7,6 +7,7 @@ using Game.Gameplay.Combat;
 using Game.Gameplay.Ring.Models;
 using Game.Gameplay.Ring.Stage;
 using Game.Gameplay.Ring.UI;
+using Game.Gameplay.Ring.UI.Menus;
 using Game.Gameplay.UI.Toolkit;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -19,7 +20,7 @@ namespace Game.Gameplay.Ring
     /// сезон. Правил тут немає — лише показ, клавіші й автозбереження після кожного кроку (<see cref="CareerSession.CaptureState"/>).
     /// Огляд вигляду: <c>-ring-shots &lt;тека&gt;</c> — бот проходить перший сезон тими самими кнопками і знімає кадри.
     /// </summary>
-    public sealed class RingGameBootstrap : MonoBehaviour, ICareerHost
+    public sealed partial class RingGameBootstrap : MonoBehaviour, ICareerHost
     {
         private const string FeudPath = "Ring/feud_hammer";
         private const string StringsPath = "Ring/strings_uk";
@@ -69,7 +70,12 @@ namespace Game.Gameplay.Ring
 
         private string SavePath
         {
-            get { return System.IO.Path.Combine(Application.persistentDataPath, _shotsDir != null ? "ring_career_bot.txt" : "ring_career.txt"); }
+            get
+            {
+                // Огляди пишуть свій файл: сейв гравця не чіпають (огляд кар'єри — ring_career_bot, огляд меню — ring_menu_bot).
+                string file = _shotsDir != null ? "ring_career_bot.txt" : _menuShotsDir != null ? "ring_menu_bot.txt" : "ring_career.txt";
+                return System.IO.Path.Combine(Application.persistentDataPath, file);
+            }
         }
 
         public bool HasSave { get { return _shotsDir == null && System.IO.File.Exists(SavePath); } }
@@ -115,6 +121,7 @@ namespace Game.Gameplay.Ring
             try
             {
                 System.IO.File.WriteAllLines(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
+                InvalidateSaveSummary();
             }
             catch (Exception ex)
             {
@@ -146,23 +153,11 @@ namespace Game.Gameplay.Ring
                 string ss = ReadArg("-ring-shot-seasons");
                 if (ss != null && int.TryParse(ss, out lim) && lim > 0) _shotSeasons = lim;
             }
+            // Меню (ТЗ B08): налаштування з диска, ввід, шари; далі екран завантаження веде справжні кроки старту (Boot).
+            InitMenus();
             if (!BuildUi()) return;
-            if (!LoadData()) return;
-            MigrateSave();
-            _career = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
-            _seed += 1;
-            _onTitle = true;
-            Rebind();
-            var stage = RingStageHub.Current;
-            string look = ReadArg("-ring-lookbook");
-            if (look != null && stage != null) { StartCoroutine(Lookbook(stage, look)); return; }
-            string spike = ReadArg("-ring-font-spike");
-            if (spike != null) { StartCoroutine(FontSpike(spike)); return; }
-            if (stage != null && !RingStageHub.DemoRequested)
-            {
-                _inIntro = true;
-                stage.BeginIntro(_text.Get("c.game.title"), _text.Get("c.game.sub"));
-            }
+            BuildLayers();
+            StartCoroutine(Boot());
         }
 
         private void OnDestroy()
@@ -339,7 +334,10 @@ namespace Game.Gameplay.Ring
         private void ApplyScale()
         {
             // Еталон 900 рядків (а не 720, як у зрізі): панелі менші, ринг видно (власник 04.11.2026: «зроби значно меньше»).
-            float s = Mathf.Clamp(Screen.height / 900f, 0.65f, 2.4f);
+            // «Розмір інтерфейсу» діє на екрани гри (гнучка розкладка); меню й завантаження — завжди в еталоні 900 (розкладка за
+            // безпечними зонами B01/B08: на 120 % кнопки й рядок стану пішли б за край).
+            bool menu = _view is IMenuNavigable || _loading != null || !_bootDone;
+            float s = Mathf.Clamp(Screen.height / 900f, 0.65f, 2.4f) * (_settings != null && !menu ? _settings.UiScale : 1f);
             if (Mathf.Abs(s - _appliedScale) < 0.001f) return;
             _appliedScale = s;
             _panel.scale = s;
@@ -385,12 +383,13 @@ namespace Game.Gameplay.Ring
         private void ShowError(List<string> lines)
         {
             foreach (var l in lines) Debug.LogError("[Ринг] " + l);
-            _root.Clear();
+            var layer = _screenLayer ?? _root;
+            layer.Clear();
             var box = RingUi.Card(20f);
             box.style.marginLeft = 40f; box.style.marginRight = 40f; box.style.marginTop = 40f; box.style.marginBottom = 40f;
             box.Add(RingUi.Lbl(_text != null ? _text.Get("ui.error.title") : "Ring data error", 26f, RingUi.Bad, true));
             foreach (var l in lines) box.Add(RingUi.Lbl(l, 16f));
-            _root.Add(box);
+            layer.Add(box);
         }
 
         /// <summary>Нова чи відновлена кар'єра: контекст екранів, ім'я героя в тексті матчу й промо.</summary>
@@ -416,13 +415,14 @@ namespace Game.Gameplay.Ring
         {
             if (_quitAt > 0f && Time.unscaledTime >= _quitAt) HardExit.Now(0);
             if (_fontSpike) return;   // спайк шрифтів: екран не оновлюється
-            if (_career == null || _root == null) return;
+            TickMenuOverlays();       // завантаження й розріз живуть і до появи кар'єри
+            if (_career == null || _root == null || !_bootDone) return;
             ApplyScale();
             if (ShowStep()) return;
             Sync();
             if (_view == null) return;
             HandleKeys();
-            if (_shotsDir != null) ShotsStep();
+            if (_shotsDir != null && !MenuOverlayBusy) ShotsStep();
             if (_view != null) _view.Tick(Time.unscaledDeltaTime);
             Sync();
         }
@@ -453,7 +453,8 @@ namespace Game.Gameplay.Ring
                     _matchPending = null;
                 }
             }
-            _root.style.display = showing ? DisplayStyle.None : DisplayStyle.Flex;
+            // ховаємо лише екран: розріз і завантаження поверх лишаються видимими
+            _screenLayer.style.display = showing ? DisplayStyle.None : DisplayStyle.Flex;
             if (!showing) return false;
             if (Input.anyKeyDown) stage.SkipShow();
             else if (_shotsDir != null && ShowShot()) stage.SkipShow();
@@ -484,8 +485,8 @@ namespace Game.Gameplay.Ring
             if (_view != null && Equals(key, _viewKey)) return;
             _viewKey = key;
             _view = MakeView();
-            _root.Clear();
-            _root.Add(_view.Root);
+            _screenLayer.Clear();
+            _screenLayer.Add(_view.Root);
             _view.Refresh();
             SyncStage();
         }
@@ -525,7 +526,7 @@ namespace Game.Gameplay.Ring
 
         private RingScreenView MakeView()
         {
-            if (_onTitle) return new TitleScreenView(_ctx);
+            if (_onTitle) return new TitleMenuView(_ctx, this);
             switch (_career.Stage)
             {
                 case CareerStage.Create: return new CreateScreenView(_ctx);
@@ -552,7 +553,7 @@ namespace Game.Gameplay.Ring
                     }
                     break;
             }
-            return new TitleScreenView(_ctx);
+            return new TitleMenuView(_ctx, this);
         }
 
         /// <summary>Контекст екрана сцени закулісся: той самий діалог, що й промо, але кубик і кінець — кар'єри.</summary>
@@ -618,16 +619,19 @@ namespace Game.Gameplay.Ring
 
         private void HandleKeys()
         {
+            if (MenuOverlayBusy) return;          // під завантаженням і розрізом екран клавіш не бере
+            if (PollMenuInput()) return;          // меню (вхід, налаштування): свій ввід — клавіатура, геймпад, колесо
             for (int i = 1; i <= 9; i++)
             {
                 if (!Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i - 1))) continue;
                 _view.OnDigit(i);
                 return;
             }
-            if (Input.GetKeyDown(KeyCode.L)) _view.OnToggleLog();
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+            // перепризначені в налаштуваннях «Журнал», «Підтвердити», «Назад» діють і на екранах кар'єри; заводські — запасні
+            if (Input.GetKeyDown(KeyCode.L) || BoundDown(RingAction.Log)) _view.OnToggleLog();
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space) || BoundDown(RingAction.Confirm))
                 _view.OnConfirm();
-            if (Input.GetKeyDown(KeyCode.Escape) && !_onTitle && _career.Stage == CareerStage.Week)
+            if ((Input.GetKeyDown(KeyCode.Escape) || BoundDown(RingAction.Back)) && !_onTitle && _career.Stage == CareerStage.Week)
             {
                 Save();
                 _onTitle = true;
