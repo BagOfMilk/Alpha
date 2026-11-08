@@ -1,5 +1,6 @@
 // Сторінка анімацій «Рингу»: інтерфейс, режими «Кліпи / Переходи / Мікси», ланцюг бою, window.ring для перевірки.
-import { THREE, makeStage, AnimLib, Actor, loadGLB, RING, placeRel, wrapPi, smooth, BONE, solveTwoBone } from './engine.js';
+import { THREE, makeStage, AnimLib, Actor, loadGLB, RING, placeRel, baseFrom, rootRel, wrapPi, smooth, BONE, solveTwoBone } from './engine.js';
+import { PoseBank, planBout, planRoam, roamOn, Director, Track, goTo, ropeLineRel, pairPoseB, ropeNeed } from './director.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -77,7 +78,7 @@ async function selectActor(id, opts = {}) {
   renderCast(); buildClipList(); fillPartner();
   const cfg = S.data.cast.characters[id];
   S.stage.setRulerHeight(cfg.height);
-  S.bout = null; S.slide = null; S.trans = null;
+  stopDirector(); S.bout = null; S.slide = null; S.trans = null;
   for (const a of Object.values(S.actors)) a.holder.visible = false;
   if (!S.avail[id]) {
     S.me = null; overlay(`Модель «${cfg.name}» ще збирається.`, true); status('Модель ще збирається'); refreshAll(); return;
@@ -185,12 +186,14 @@ function startPlacement(a, name) {
     let far = 0, fx = 0, fz = 0;
     for (const r of m.root) { const x = r[0] * a.hs, z = -r[1] * a.hs, d = Math.hypot(x, z); if (d > far) { far = d; fx = x; fz = z; } }
     const phi = Math.atan2(fx, fz), yaw = -phi;
-    // найглибша точка кліпу — трохи за лінією каната: канат прогинається під тілом (ropes.js)
-    return { x: 0, z: Math.max(-1.5, Math.min(1.8, RING.rope + 0.1 - far)), yaw };
+    // лінія каната кліпу (генератор: ROPE_D + 0,12 від старту) — на канат рингу; таз у найглибшій точці трохи перед канатом,
+    // спина й кисті — на канаті, канат прогинається під тілом (ropes.js)
+    return { x: 0, z: Math.max(-(RING.rope - 0.3), RING.rope - ropeLineRel(m) * a.hs), yaw };
   }
   const e = reachEnd(a, name); return { x: -e.x / 2, z: -e.z / 2, yaw: 0 };
 }
 function isRopeRun(name, m) { return m.category === 'rope' || name === 'Move_Rope_Rebound'; }
+function isMovingClip(a, name) { const m = meta(a, name) || {}; const r = rootRel(m, m.duration || 1); return Math.hypot(r[0], r[1]) * a.hs > 0.02 || Math.abs(r[2]) > 0.02; }
 // Кліп із підйомом: ступні в кліпі піднімаються на rise × зріст; сторінка веде постать із підлоги зали на фартух
 function startClimb(a, name) { a.yRamp = { name, from: -RING.mat, to: -a.hs, k: 1 / 0.86 }; a.yOff = -RING.mat; a.apply(); }
 // Кліп ставить стопи на другий канат за зростом постаті, а канат на своїй висоті: стопи опускаємо на нього
@@ -243,12 +246,20 @@ function resetPartner() { if (S.partner) { S.partner.reset(); S.partner.holder.v
 function playClip(name, o = {}) {
   const me = S.me; if (!me) { status('Моделі ще немає: нічого програвати', true); return; }
   const m = meta(me, name); if (!m) { status('Немає кліпа: ' + name, true); return; }
-  S.bout = null; S.trans = null; S.restartAt = null; S.contact = null;
+  if (!me.has(name)) { status(`У «${me.cfg.name}» немає кліпа ${name}`, true); return; }   // напр. кліп судді після зміни постаті
+  stopDirector(); S.bout = null; S.trans = null; S.restartAt = null; S.contact = null;
   me.reset(); resetPartner();
   S.mixProp = null; S.mixUpMeta = null;
   syncLook();
   S.cur = { name };
   if (m.role === 'A' || m.role === 'B') { playPair(m.base, m.role); return; }
+  // цикл, що рухається, «по рингу»: біг — канатами, хода — колом, кружляння — навколо центру (план режисера, без кермування)
+  if (m.loop && S.roam && !S.stairs && isMovingClip(me, name)) {
+    const plan = planRoam(me, name, poseBank, { T: 120 });
+    S.director = new Director(plan, null, onSegStart); S.director.start(0); S.roamName = name;
+    S.heldMode = 'free'; syncHeld(); updatePropsOnly(); refreshAll();
+    return;
+  }
   const p = startPlacement(me, name);
   me.place(p.x, p.z, p.yaw);
   me.play(name, { fade: 0 });
@@ -283,7 +294,9 @@ async function playPair(base, roleMe) {
     const c = Math.cos(ph), sn = Math.sin(ph);
     tx = gx - (P.x * c + P.z * sn); tz = gz - (-P.x * sn + P.z * c);
   };
-  if (/^Whip_Corner/.test(base)) toTarget(Math.SQRT1_2, Math.SQRT1_2, RING.post - 0.32 * B.hs, RING.post - 0.32 * B.hs);
+  // дії по центру: жертва стоїть у самому центрі (так задумано в генераторі), нападник вбігає з боку каната
+  if (/^Center_/.test(base)) { const Bs = pairPoseB({ x: 0, z: 0, yaw: 0 }, A, B, base); tx = -Bs.x; tz = -Bs.z; B0.x = Bs.x; B0.z = Bs.z; B0.yaw = Bs.yaw; }
+  else if (/^Whip_Corner/.test(base)) toTarget(Math.SQRT1_2, Math.SQRT1_2, RING.post - 0.32 * B.hs, RING.post - 0.32 * B.hs);
   else if (/^Lockup_(To_Ropes|Drive_Back_Ropes)/.test(base)) toTarget(0, 1, 0, RING.rope - 0.26 * B.hs);
   else if (/^Whip_Ropes/.test(base) && mB.root) {      // суперника кинуто в канат: кінець забігу — біля самого каната
     let best = null, far = -1;
@@ -399,6 +412,7 @@ function tickApp(dt) {
   S.sim += sdt;
   applyTimeFlags();
   if (S.bout) boutTick(sdt);
+  else if (S.director && S.roamName) S.director.tick(sdt);
   graphTick(sdt);
   const acts = Object.values(S.actors).filter((a) => a.holder.visible);
   for (const a of acts) {
@@ -665,32 +679,122 @@ function buildGraph() {
   }
   S.graphEdges = edges;
 }
-function runEdge(e) {
-  const a = S.me; if (!a) return; S.edgeRun = null;
-  const g = S.data.graph, to = g.states[e.to];
-  S.bout = null; S.contact = null; S.cur = { name: to.clip }; S.edgeMove = null;
-  if (e.via && a.has(e.via)) {
-    const start = () => { a.play(e.via, { fade: e.fade_in ?? e.fade ?? 0.2, forceReal: true }); applyTopRope(a, e.via); S.trans = { edge: e }; S.edgeRun = e; updatePropsOnly(); graphUi(true); };
-    a.inPlace = /^(Move_Corner_Enter|Corner_Climb_Top|Entrance_Through_Ropes)$/.test(e.via) ? false : a.inPlace;
-    if (e.via === 'Entrance_Through_Ropes') { const P = startPlacement(a, e.via); a.place(P.x, P.z, P.yaw); }   // поза рингом ходи немає: кадр уже на фартуху
-    if (/^(Move_Corner_Enter|Corner_Climb_Top)$/.test(e.via)) {
-      const P = startPlacement(a, e.via), dd = Math.hypot(P.x - a.world.x, P.z - a.world.z);
-      S.edgeRun = e; S.edgeMove = { after: null };
-      const go = () => { S.edgeMove = null; start(); };
-      if (dd > RUN_FROM) runTo(S.edgeMove, a, P.x, P.z, P.yaw, go);
-      else slideTo(S.edgeMove, [{ a, dx: P.x - a.world.x, dz: P.z - a.world.z, dy: wrapPi(P.yaw - a.world.yaw) }], go);
-      updatePropsOnly(); graphUi(true);
-      return;
-    }
-    start();
-    return;
-  } else {
-    a.play(to.clip, { fade: e.fade ?? 0.25 }); a.stateId = e.to; S.trans = null; S.edgeRun = e; S.edgeRunUntil = S.sim + (e.fade ?? 0.25);
+// Ребра «Переходів» — план режисера (director.js): кліп переходу з поточної пози; якщо кліп прив'язаний до місця (кут,
+// верхній канат, довгий розгін) — спершу підійти кроками; стан руху (біг, хода, кружляння) далі — по рингу: біг канатами,
+// хода колом. Без ковзань і телепортів.
+function isMovingState(a, clip) { return S.roam && !S.stairs && isMovingClip(a, clip); }
+function edgeNeedsPlace(a, via, from) {
+  if (/^(Move_Corner_Enter|Corner_Climb_Top)$/.test(via)) return true;
+  if (from && !/^(stance|idle|walk|jog|run|stance_walk)$/.test(from)) return false;   // стрибок з кута, вихід — з того місця, де борець є
+  const m = meta(a, via) || {}; const n = m.net || [0, 0, 0];
+  return Math.hypot(n[0], n[1]) * a.hs > 0.9;                      // довгий рух (розгін, зупинка з бігу): потрібне місце попереду
+}
+function viaLength(a, via) { const m = meta(a, via) || {}; const n = m.net || [0, 0, 0]; return Math.hypot(n[0], n[1]) * a.hs; }
+function edgeStart(a, via) {
+  if (/^(Move_Corner_Enter|Corner_Climb_Top)$/.test(via)) return startPlacement(a, via);
+  // довгий рух — уздовж осі рингу через центр (бічний зсув до 0,3 м): кінець кліпу — не ближче запасу до каната, а біг далі
+  // йде в канат, а не в кут. Відступати — не далі, ніж треба, щоб кліп уміщався; з чотирьох осей — та, куди дійти найшвидше
+  // (оцінка — тими самими кроками, що в goTo: до 1,15 м — переступити, далі — розворот, хода, доворот).
+  const L = viaLength(a, via), margin = via === 'Run_Start' ? 0.7 * a.hs : 0.45, W = a.world;
+  const dur = (n, d) => (a.has(n) ? (meta(a, n) || {}).duration || d : d);
+  const turnT = (dy) => { const x = Math.abs(dy); return x > 2.2 ? dur('Move_Turn_180', 1.5) : x > 0.75 ? dur('Move_Turn_R90', 1.0) : x > 0.01 ? 0.25 : 0; };
+  const stepSp = 0.36 * a.hs, walkSp = ((meta(a, 'U_Walk_Loop') || {}).speed || 1.1) * a.hs;
+  let best = null;
+  for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const ux = Math.sin(yaw), uz = Math.cos(yaw), nx = Math.cos(yaw), nz = -Math.sin(yaw);
+    const sMax = RING.rope - L - margin, sMin = -(RING.rope - 0.6);
+    const along = Math.max(sMin, Math.min(W.x * ux + W.z * uz, sMax)), lat = Math.max(-0.3, Math.min(0.3, W.x * nx + W.z * nz));
+    const P = { x: ux * along + nx * lat, z: uz * along + nz * lat, yaw };
+    const d = Math.hypot(P.x - W.x, P.z - W.z);
+    let t;
+    if (d <= 1.15) t = turnT(wrapPi(yaw - W.yaw)) + d / stepSp;
+    else { const head = Math.atan2(P.x - W.x, P.z - W.z); t = turnT(wrapPi(head - W.yaw)) + d / walkSp + turnT(wrapPi(yaw - head)); }
+    if (!best || t < best.t) best = { t, P };
   }
+  return best.P;
+}
+function continueTrack(a) {
+  const tr = new Track(a, { ...a.world }, 0);
+  const v = a.curBase(); if (v) tr.add(v.name, { t0: v.pose(), dur: 0.02, fade: 0 });
+  return tr;
+}
+// кліп переходу (з підходом, якщо треба) і цикл стану після нього; tr — доріжка, з якої продовжувати
+function edgePlan(a, e, tr, place) {
+  const to = S.data.graph.states[e.to];
+  if (place) goTo(tr, edgeStart(a, e.via), null, { rateMax: 1.2 });
+  const viaStart = tr.T;
+  const sv = tr.add(e.via, { fade: e.fade_in ?? 0.2 });
+  let viaEnd = tr.T - Math.min(sv.dur * 0.5, e.fade_out ?? 0.2);
+  // розгін, що не вміщається (високий борець на малому рингу): обірвати там, де до каната лишається місце на вхід у відскок —
+  // швидкість уже набрана, а доганяти лінію каната поправкою означало б ковзання
+  if (e.via === 'Run_Start' && isMovingState(a, to.clip)) {
+    const need = ropeNeed(a, to.clip) - 0.2;          // до 0,2 м добирає поправка лінії каната (≈ 0,2 м/с на розгоні)
+    for (let T = sv.at + sv.dur * 0.45; T < viaEnd; T += 1 / 30) {
+      const P = tr.worldIn(sv, T), room = RING.rope - (P.x * Math.sin(P.yaw) + P.z * Math.cos(P.yaw));
+      if (room < need) { viaEnd = T; break; }
+    }
+  }
+  tr.cut(viaEnd);
+  if (isMovingState(a, to.clip)) roamOn(tr, to.clip, poseBank, viaEnd + 90);
+  else tr.hold(to.clip, viaEnd + 600, { fade: e.fade_out ?? 0.2 });
+  return { tracks: [tr], marks: [{ t0: 0, t1: viaStart }, { t0: viaStart, t1: viaEnd }], T: tr.T, notes: [], report: [], viaStart, viaEnd };
+}
+function startEdgeDir(plan, e, T0 = 0, roam = null) {
+  S.edgeDir = { dir: new Director(plan, null, onSegStart), e, plan, set: false, roam };
+  S.edgeDir.dir.start(T0); S.edgeRun = e; updatePropsOnly(); graphUi(true);
+}
+function runEdge(e) {
+  const a = S.me; if (!a) return;
+  const g = S.data.graph, to = g.states[e.to], prev = S.edgeDir;
+  S.bout = null; S.contact = null; S.cur = { name: to.clip }; S.trans = null; S.edgeRun = null;
+  const via = e.via && a.has(e.via) ? e.via : null;
+  const corner = via && /^(Move_Corner_Enter|Corner_Climb_Top)$/.test(via);
+  // зі стану руху по рингу — у найближчу мить, коли борець біжить чи йде сам (не спиною на канаті: відскок уже відштовхнув),
+  // а кліпу, якому треба місце попереду (зупинка з бігу), — ще й коли попереду досить місця
+  if (prev && prev.roam && via !== 'Entrance_Through_Ropes') {
+    const T0 = prev.dir.T, tr = prev.plan.tracks[0].clone();
+    const need = via && !corner && edgeNeedsPlace(a, via, e.from) ? viaLength(a, via) + 0.45 : 0;
+    let Ts = null;
+    for (let T = T0; T < tr.T - 0.05; T += 1 / 30) {
+      const s = tr.segs[tr.segAt(T)];
+      const rel = /^Rope_/.test(s.clip) && s.m.events && s.m.events.find((x) => x.event === 'rope_release');
+      const free = s.clip === prev.roam ? T - s.at >= Math.min(s.fade || 0, s.dur) : !!rel && tr.clipTime(s, T) >= rel.t + 0.12;
+      if (!free) continue;
+      if (need) { const P = tr.pose(T), room = RING.rope - (P.x * Math.sin(P.yaw) + P.z * Math.cos(P.yaw)); if (room < need) continue; }
+      Ts = T; break;
+    }
+    if (Ts != null) {
+      tr.truncate(Ts);
+      const roam = isMovingState(a, to.clip) ? to.clip : null;
+      let plan;
+      if (via) plan = edgePlan(a, e, tr, corner);
+      else if (roam) { roamOn(tr, to.clip, poseBank, Ts + 90); plan = { tracks: [tr], marks: [], T: tr.T, notes: [], report: [], viaEnd: Ts }; }
+      else { tr.hold(to.clip, Ts + 600, { fade: e.fade ?? 0.25 }); plan = { tracks: [tr], marks: [], T: tr.T, notes: [], report: [], viaEnd: Ts }; }
+      for (const t of plan.tracks) t.a.driveWorld = null;
+      startEdgeDir(plan, e, T0, roam); return;
+    }
+  }
+  stopDirector();
+  if (via === 'Entrance_Through_Ropes') {      // вихід — поза рингом: кадр уже на фартуху (склейка, як у трансляції)
+    const P = startPlacement(a, via); a.place(P.x, P.z, P.yaw);
+    a.inPlace = false; a.play(via, { fade: e.fade_in ?? 0.2, forceReal: true }); S.trans = { edge: e }; S.edgeRun = e; updatePropsOnly(); graphUi(true);
+    return;
+  }
+  if (via) { startEdgeDir(edgePlan(a, e, continueTrack(a), edgeNeedsPlace(a, via, e.from)), e, 0, isMovingState(a, to.clip) ? to.clip : null); return; }
+  if (isMovingState(a, to.clip)) {             // без кліпу переходу, у рух: кросфейд — і далі по рингу
+    const tr = continueTrack(a); roamOn(tr, to.clip, poseBank, 90);
+    startEdgeDir({ tracks: [tr], marks: [], T: tr.T, notes: [], report: [], viaEnd: 0 }, e, 0, to.clip);
+    return;
+  }
+  a.play(to.clip, { fade: e.fade ?? 0.25 }); a.stateId = e.to; S.edgeRun = e; S.edgeRunUntil = S.sim + (e.fade ?? 0.25);
   updatePropsOnly(); graphUi(true);
 }
 function graphTick(sdt) {
-  if (S.edgeMove && moveTick(S.edgeMove, sdt)) return;
+  if (S.edgeDir) {
+    const E = S.edgeDir; E.dir.tick(sdt);
+    if (!E.set && E.dir.T >= (E.plan.viaEnd || 0)) { E.set = true; S.me.stateId = E.e.to; S.edgeRun = null; graphUi(true); }
+    return;
+  }
   const a = S.me; if (!a || !S.trans) { if (S.edgeRun && S.edgeRunUntil && S.sim > S.edgeRunUntil) { S.edgeRun = null; S.edgeRunUntil = 0; } return; }
   const e = S.trans.edge, v = a.curBase(); const g = S.data.graph;
   if (v && v.name === e.via && v.t >= v.dur - (e.fade_out ?? 0.2) - 1e-4) {
@@ -719,227 +823,92 @@ function graphUi(force) {
 function graphEnter() {
   const a = S.me; if (!a) return;
   S.bout = null; resetPartner();
-  a.reset(); a.place(0, 0, 0); S.cur = null; S.trans = null; S.edgeRun = null; S.edgeMove = null;
+  stopDirector(); a.reset(); a.place(0, 0, 0); S.cur = null; S.trans = null; S.edgeRun = null;
   const first = ['idle', 'stance'].find((s) => stateAvail(a, s)); if (first) { a.play(S.data.graph.states[first].clip, { fade: 0 }); a.stateId = first; S.cur = { name: S.data.graph.states[first].clip }; }
   syncLook(); buildGraph(); buildBoutUi(); lastGraphKey = ''; graphUi(true);
 }
 
-// ---------------------------------------------------------------- ланцюг бою
+// ---------------------------------------------------------------- ланцюг бою (план і програвання — director.js)
 function boutSteps() { return S.data.graph.bout; }
 function log(msg, err = false) { const l = $('#boutLog'); l.innerHTML += `<div class="${err ? 'e' : ''}">${esc(msg)}</div>`; l.scrollTop = l.scrollHeight; }
+const HIT_UA = { Center_ShoulderBlock: 'Плече', Center_ShoulderBlock_Heavy: 'Плече важке', Center_Clothesline: 'Клоузлайн', Center_Lariat_Heavy: 'Ларіат важкий', Center_BigBoot: 'Бутс', Center_RunningKnee: 'Коліно з бігу', Center_RunningElbow: 'Лікоть' };
 function buildBoutUi() {
   const box = $('#boutSteps'); box.innerHTML = '';
   boutSteps().forEach((st, i) => { const b = el('button', 'btn', esc(st.label)); b.dataset.i = i; b.onclick = () => boutRun([i], false); box.append(b); });
   const ch = boutSteps().find((s) => s.choice);
-  $('#hitSel').innerHTML = ch ? ch.choice.map((c) => `<option value="${c}">${c.replace(/^Center_/, '').replace(/([a-z])([A-Z])/g, '$1 $2')}</option>`).join('') : '';
+  $('#hitSel').innerHTML = ch ? ch.choice.map((c) => `<option value="${c}">${esc(HIT_UA[c] || c.replace(/^Center_/, '').replace(/([a-z])([A-Z])/g, '$1 $2'))}</option>`).join('') : '';
   $('#boutPartner').textContent = S.partnerId ? S.data.cast.characters[S.partnerId].name : '—';
 }
 function boutMarks() { $$('#boutSteps .btn').forEach((b) => { const i = +b.dataset.i; b.classList.toggle('cur', !!S.bout && S.bout.cur === i); b.classList.toggle('done', !!S.bout && S.bout.done.has(i)); }); }
+const poseBank = new PoseBank();
+const planCache = new Map();
+// борець більше не під режисером: продовжує з тієї самої пози й того самого кліпу
+function undrive(a) {
+  if (!a || !a.driveWorld) return;
+  const w = { ...a.world }; a.driveWorld = null;
+  for (const v of a.voices) v.clock = null;
+  const v = a.curBase(); a.base = v ? baseFrom(w, v.rootAt(v.t), a.hs) : w; a.world = w;
+}
+function stopDirector() { S.director = null; S.edgeDir = null; S.roamName = null; for (const a of Object.values(S.actors)) undrive(a); }
+// початок відрізку плану: висота на канатах/сходах, реквізит
+function onSegStart(a, s) { applyTopRope(a, s.clip); if (a === S.me) { S.cur = { name: s.clip }; updatePropsOnly(); } }
+function boutPlan(me, p) {
+  const choice = $('#hitSel').value || null;
+  const key = [me.id, p.id, RING.rope.toFixed(3), choice].join('|');
+  if (planCache.has(key)) return planCache.get(key);
+  me.reset(); p.reset();
+  const plan = planBout(me, p, boutSteps(), choice, poseBank);
+  planCache.set(key, plan); return plan;
+}
 async function boutRun(idxs, full) {
   const me = S.me; if (!me) return;
   const p = S.partner || await ensurePartner();
   if (me !== S.me) return;
   if (!p) { log('Немає партнера з готовою моделлю', true); return; }
   $('#boutPartner').textContent = p.cfg.name;
-  p.holder.visible = true; S.slide = null; S.trans = null;
-  if (full || !me.curBase()) {
-    me.reset(); p.reset(); me.inPlace = p.inPlace = false;
-    me.place(0, -Math.min(2.3, RING.rope - 0.45), 0); p.place(0, 0.2, Math.PI);
-    p.play('Ring_Stance_Loop', { fade: 0, forceReal: true }); me.play('U_Idle_Loop', { fade: 0, forceReal: true }); $('#boutLog').innerHTML = '';
+  if (me.cfg.role !== 'wrestler') { $('#boutLog').innerHTML = ''; log(`${me.cfg.name} — не борець: прийомів і канатів у неї немає, ланцюг бою — для борців`, true); return; }
+  stopDirector();
+  S.trans = null; S.edgeRun = null; S.pairActors = null; S.contact = null; S.slide = null;
+  let plan; const t0 = performance.now();
+  try { plan = boutPlan(me, p); } catch (e) { log('Не вдалося розрахувати ланцюг: ' + e.message, true); S.errors.push(String(e.stack || e)); return; }
+  const steps = boutSteps();
+  let T0 = 0, T1 = plan.T;
+  if (!full) {
+    const m = plan.marks[idxs[0]];
+    if (m.t0 == null) { $('#boutLog').innerHTML = ''; log(`Кроку «${steps[idxs[0]].label}» у цьому ланцюгу немає: ${plan.notes[0] || 'для цієї пари він не вміщається'}`, true); return; }
+    T0 = m.t0; T1 = Math.max(m.t1 ?? T0, T0 + 0.25);
   }
-  me.inPlace = p.inPlace = false; me.steer = p.steer = false; S.pairActors = null; S.contact = null;
-  S.bout = { q: idxs.slice(), qi: -1, cur: null, done: new Set(), step: null, t0: 0, phase: 'idle', finished: false };
-  log(full ? 'Весь ланцюг: старт' : `Крок: ${boutSteps()[idxs[0]].label}`);
-  boutNext();
+  S.director = new Director(plan, (pr) => { S.pairActors = pr; }, onSegStart);
+  S.director.start(T0, T1);
+  S.bout = { full, cur: null, done: new Set(), T0, T1, plan };
+  S.boutDone = false;
+  $('#boutLog').innerHTML = '';
+  if (full) { log(`Весь ланцюг: ${f2(plan.T, 1)} с · удар «${HIT_UA[plan.hitBase] || plan.hitBase}» · план за ${Math.round(performance.now() - t0)} мс`); logPlan(plan); }
+  else log(`Крок «${steps[idxs[0]].label}»: ${f2(T0, 1)}–${f2(T1, 1)} с ланцюга`);
+  for (const n of plan.notes) log('  ' + n, true);
+  boutMarks();
 }
-function boutNext() {
-  const B = S.bout; if (!B) return;
-  if (B.cur != null) B.done.add(B.cur);
-  B.qi++; if (B.qi >= B.q.length) { log('Готово'); S.bout = null; S.boutDone = true; boutMarks(); S.pairActors = null; return; }
-  B.cur = B.q[B.qi]; B.step = boutSteps()[B.cur]; B.t0 = S.sim; B.phase = 'start'; B.pair = null; B.approach = null; B.slideInfo = null; B.cut = null; boutMarks();
-  try { boutStart(B); } catch (e) { log('Помилка кроку: ' + e.message, true); S.errors.push(String(e.stack)); S.bout = null; }
-}
-function faceTarget(a, tx, tz, rate, sdt) {
-  const des = Math.atan2(tx - a.world.x, tz - a.world.z), d = wrapPi(des - a.world.yaw); const st = Math.max(-rate * sdt, Math.min(rate * sdt, d)); if (Math.abs(st) > 1e-5) a.shift(0, 0, st);
-}
-function pairTarget(base, roleMe) {
-  const me = S.me, p = S.partner; const A = roleMe === 'A' ? me : p, B = roleMe === 'A' ? p : me;
-  const mA = A.metaOf(`${base}_A`); const off = mA.offset || [0, 0, 0], rot = (mA.rot || 0) * Math.PI / 180, s = (A.hs + B.hs) / 2;
-  if (roleMe === 'A') { const w = placeRel({ x: me.world.x, z: me.world.z, yaw: me.world.yaw }, [off[0], off[1], rot], s); return { x: w.x, z: w.z, yaw: w.yaw }; }
-  // я B: партнер A стоїть так, що B = A + Ry(yawA)*(dx*s, -dy*s), yawB = yawA + rot
-  const yawA = me.world.yaw - rot, c = Math.cos(yawA), sn = Math.sin(yawA);
-  const dx = off[0] * s, dz = -off[1] * s;
-  return { x: me.world.x - (dx * c + dz * sn), z: me.world.z - (dz * c - dx * sn), yaw: yawA };
-}
-const RUN_FROM = 0.75;      // далі цього борець добігає, а не ковзає
-function runTo(B, a, tx, tz, tyaw, after, extra) {
-  const c = ['Run_Loop', 'Run_Jog_Loop', 'U_Walk_Loop'].find((n) => a.has(n));
-  a.play(c, { fade: 0.18, forceReal: true });
-  B.run = { a, tx, tz, tyaw, el: 0, d0: Math.hypot(tx - a.world.x, tz - a.world.z), extra: extra || null, done: 0 };
-  B.after = after; B.phase = 'runto';
-}
-function isDown(a) { const h = a.boneWorld('mixamorigHips', _a); return !!h && h.y < 0.5 * a.hs; }
-function slideTo(B, slides, after) {
-  const far = Math.max(0, ...slides.map((x) => Math.hypot(x.dx, x.dz)));
-  B.slides = slides; B.slideDur = Math.min(0.6, 0.25 + far * 0.12); B.slideEl = 0; B.slideProg = 0; B.after = after; B.phase = 'slide';
-  return far;
-}
-// Куди стати партнерові, щоб пара вмістилася в канатах: кінцеві точки обох борців
-function pairPlan(base, role) {
-  const me = S.me, p = S.partner, tgt = pairTarget(base, role);
-  const A = role === 'A' ? me : p, Bb = role === 'A' ? p : me;
-  const A0 = role === 'A' ? { x: me.world.x, z: me.world.z, yaw: me.world.yaw } : tgt, B0 = role === 'A' ? tgt : { x: me.world.x, z: me.world.z, yaw: me.world.yaw };
-  const eA = placeRel(A0, A.metaOf(`${base}_A`).net || [0, 0, 0], A.hs), eB = placeRel(B0, Bb.metaOf(`${base}_B`).net || [0, 0, 0], Bb.hs);
-  const xs = [A0.x, B0.x, eA.x, eB.x], zs = [A0.z, B0.z, eA.z, eB.z], L = RING.rope - 0.15;
-  const fit = (lo, hi) => (hi - lo > 2 * L ? -(hi + lo) / 2 : hi > L ? L - hi : lo < -L ? -L - lo : 0);
-  const sx = fit(Math.min(...xs), Math.max(...xs)), sz = fit(Math.min(...zs), Math.max(...zs));
-  const slides = [{ a: p, dx: tgt.x - p.world.x + sx, dz: tgt.z - p.world.z + sz, dy: wrapPi(tgt.yaw - p.world.yaw) }];
-  if (Math.hypot(sx, sz) > 0.02) slides.push({ a: me, dx: sx, dz: sz, dy: 0 });
-  return { tgt, sx, sz, slides, pFar: Math.hypot(slides[0].dx, slides[0].dz) };
-}
-// Біг від канатів: наступний прийом починається, щойно борець добіг до місця, де пара вміщається (без ковзання назад)
-function ropeCutPlan(B, mm) {
-  const nx = boutSteps()[B.q[B.qi + 1]];
-  if (!nx || !(nx.pair || nx.choice) || !mm.root) return null;
-  let iF = 0, far = 0; mm.root.forEach((r, i) => { const d = Math.hypot(r[0], r[1]); if (d > far) { far = d; iF = i; } });
-  return { base: nx.pair || ($('#hitSel').value || nx.choice[0]), role: nx.me_role || 'A', tFar: iF / Math.max(1, mm.root.length - 1) * mm.duration, best: 1e9 };
-}
-function boutStart(B) {
-  const me = S.me, p = S.partner, st = B.step;
-  const opt = { fade: 0.25, forceReal: true };
-  const isPair = st.pair || st.choice;
-  if (isPair) {
-    const base = st.pair || ($('#hitSel').value || st.choice[0]); const role = st.me_role || 'A';
-    B.pair = { base, role };
-    // суперник лежить: він лишається на місці, підходить нападник
-    if (role === 'A' && isDown(p)) {
-      const mA = me.metaOf(`${base}_A`); const off = mA.offset || [0, 0, 0], rot = (mA.rot || 0) * Math.PI / 180, s = (me.hs + p.hs) / 2;
-      const yawA = p.world.yaw - rot, c = Math.cos(yawA), sn = Math.sin(yawA), dx = off[0] * s, dz = -off[1] * s;
-      const tm = { x: p.world.x - (dx * c + dz * sn), z: p.world.z - (dz * c - dx * sn), yaw: yawA };
-      const start = () => {
-        const nMe = `${base}_A`, nP = `${base}_B`;
-        if (!me.has(nMe) || !p.has(nP)) { log(`  немає кліпів ${nMe}/${nP}`, true); boutNext(); return; }
-        me.play(nMe, { fade: 0.2, forceReal: true }); p.play(nP, { fade: 0.2, forceReal: true });
-        S.pairActors = { A: me, B: p, base }; S.cur = { name: nMe, pair: base, role }; S.contact = null;
-        B.phase = 'run'; B.t0 = S.sim;
-      };
-      const d = Math.hypot(tm.x - me.world.x, tm.z - me.world.z);
-      if (d > RUN_FROM) { runTo(B, me, tm.x, tm.z, tm.yaw, start); log(`  ${st.label}: ${base} (я A); суперник лежить, борець добігає ${f2(d)} м`); }
-      else { slideTo(B, [{ a: me, dx: tm.x - me.world.x, dz: tm.z - me.world.z, dy: wrapPi(tm.yaw - me.world.yaw) }], start); log(`  ${st.label}: ${base} (я A); суперник лежить, борець підходить ${f2(d)} м`); }
-      return;
-    }
-    const { tgt, sx, sz, slides, pFar } = pairPlan(base, role);
-    const cutIn = B.cutIn; B.cutIn = false;
-    if (pFar <= RUN_FROM && p.curBase() && p.curBase().name !== 'Ring_Stance_Loop' && p.has('Ring_Stance_Loop')) p.play('Ring_Stance_Loop', opt);
-    const startPair = () => {
-      const rp = role === 'A' ? 'B' : 'A', nMe = `${base}_${role}`, nP = `${base}_${rp}`;
-      if (!me.has(nMe) || !p.has(nP)) { log(`  немає кліпів ${nMe}/${nP}`, true); boutNext(); return; }
-      me.play(nMe, { fade: 0.2, forceReal: true }); p.play(nP, { fade: 0.2, forceReal: true });
-      S.pairActors = { A: role === 'A' ? me : p, B: role === 'A' ? p : me, base }; S.cur = { name: nMe, pair: base, role }; S.contact = null;
-      B.phase = 'run'; B.t0 = S.sim;
-    };
-    const shifted = Math.hypot(sx, sz) > 0.02 ? ', пару зсунуто в межі рингу' : '';
-    if (cutIn) {                                       // борець уже біжить: прийом починається одразу, партнер доходить під час нього
-      startPair(); B.bg = { slides, dur: Math.min(0.6, 0.3 + pFar * 0.3), el: 0, prog: 0 };
-      log(`  ${st.label}: ${base} (я ${role}); просто з бігу, партнер підходить ${f2(pFar)} м${shifted}`);
-      return;
-    }
-    if (pFar > RUN_FROM) {
-      runTo(B, p, p.world.x + slides[0].dx, p.world.z + slides[0].dz, tgt.yaw, startPair, slides[1] || null);
-      log(`  ${st.label}: ${base} (я ${role}); партнер добігає ${f2(pFar)} м${shifted}`);
-    } else {
-      const far = slideTo(B, slides, startPair);
-      log(`  ${st.label}: ${base} (я ${role}); партнер підходить ${f2(far)} м за ${f2(B.slideDur)} с${shifted}`);
-    }
-    return;
+function logPlan(plan) {
+  const steps = boutSteps(), [M, P] = plan.tracks;
+  const clipsIn = (tr, a, b) => tr.segs.filter((s) => s.at < b - 1e-3 && s.at + s.dur > a + 1e-3 && s.dur > 0.03).map((s) => s.clip + (s.rate > 1.02 ? ` ×${f2(s.rate)}` : '')).filter((c, i, arr) => arr.indexOf(c) === i);
+  steps.forEach((st, i) => {
+    const m = plan.marks[i]; if (m.t0 == null) return;
+    const mine = clipsIn(M, m.t0, Math.max(m.t1, m.t0 + 0.05)), his = clipsIn(P, m.t0, Math.max(m.t1, m.t0 + 0.05));
+    log(`  ${st.label} · ${f2(m.t0, 1)}–${f2(m.t1, 1)} с: ${mine.join(' → ')}${his.length ? ` | суперник: ${his.join(' → ')}` : ''}`);
+  });
+  for (const r of plan.report) {
+    if (r.k === 'opening') log(`  центр: середина удару ${f2(r.strikeMid * 100, 0)} см від центру`);
+    if (r.k === 'rope1' || r.k === 'rope2') log(`  канат ${r.k === 'rope1' ? 1 : 2}: лінія каната кліпу на канаті (поправка ${f2(r.err * 100, 0)} см)`);
+    if (r.k === 'duck') log(`  ухил: суперник за ${f2(r.centre * 100, 0)} см від центру`);
+    if (r.k === 'hit') log(`  удар: суперник за ${f2(r.centre * 100, 0)} см від центру, перейшов ${f2(r.pTravel * 100, 0)} см`);
+    if (r.k === 'pin') log(`  удержання: ${f2(r.centre * 100, 0)} см від центру`);
   }
-  // одиночний крок
-  const mm = st.me ? me.metaOf(st.me) : null;
-  const go = () => {
-    const cm = me.curBase();
-    if (st.me) { if (!cm || cm.name !== st.me || !cm.loop) me.play(st.me, opt); }
-    if (st.partner && p.has(st.partner)) { const pm = p.curBase(); if (!pm || pm.name !== st.partner || !pm.loop) p.play(st.partner, opt); }
-    if (st.approach) {
-      const nx = boutSteps().slice(S.bout.qi + 1).find((x) => x.pair || x.choice);
-      const base = nx ? (nx.pair || nx.choice[0]) : 'Forearm_Strike'; const m = me.metaOf(`${base}_A`) || {}; const off = m.offset || [0, -0.9, 0];
-      B.approach = Math.hypot(off[0], off[1]) * (me.hs + p.hs) / 2 + 0.05;
-    }
-    B.phase = 'run'; B.t0 = S.sim;
-    B.cut = mm && isRopeRun(st.me, mm) ? ropeCutPlan(B, mm) : null;
-  };
-  if (mm && isRopeRun(st.me, mm)) {          // забіг у канати: борця плавно підводимо до стартової точки
-    const P = startPlacement(me, st.me);
-    const dd = Math.hypot(P.x - me.world.x, P.z - me.world.z);
-    if (dd > RUN_FROM) { runTo(B, me, P.x, P.z, P.yaw, go); log(`  ${st.label}: ${st.me}; борець добігає до стартової точки (${f2(dd)} м)`); return; }
-    const far = slideTo(B, [{ a: me, dx: P.x - me.world.x, dz: P.z - me.world.z, dy: wrapPi(P.yaw - me.world.yaw) }], go);
-    log(`  ${st.label}: ${st.me}; борець підходить до стартової точки (${f2(far)} м за ${f2(B.slideDur)} с)`);
-    return;
-  }
-  go(); log(`  ${st.label}: ${st.me || ''}${st.partner ? ' / ' + st.partner : ''}`);
-}
-function slideTick() { }
-// Добіг і підхід: спільні для ланцюга бою й режиму переходів. true — рух ще триває.
-function moveTick(B, sdt) {
-  if (B.phase === 'runto') {
-    const r = B.run, a = r.a; r.el += sdt;
-    const headErr = Math.abs(wrapPi(Math.atan2(r.tx - a.world.x, r.tz - a.world.z) - a.world.yaw));
-    if (headErr > 0.5 && r.px !== undefined) a.shift(r.px - a.world.x, r.pz - a.world.z, 0);
-    faceTarget(a, r.tx, r.tz, 9, sdt);
-    r.px = a.world.x; r.pz = a.world.z;
-    const dx = r.tx - a.world.x, dz = r.tz - a.world.z, d = Math.hypot(dx, dz);
-    if (r.extra) { const pr = Math.max(r.done, Math.min(1, 1 - d / Math.max(r.d0, 0.01))), k = pr - r.done; r.done = pr; r.extra.a.shift(r.extra.dx * k, r.extra.dz * k, 0); }
-    if (d < 0.32 || r.el > 4) {
-      // зупинка: кліп бігу більше не веде корінь, інакше борець проскакує точку ще на метр
-      const stop = ['Ring_Stance_Loop', 'U_Idle_Loop'].find((n) => a.has(n));
-      if (stop) a.play(stop, { fade: 0.22, forceReal: true });
-      const slides = [{ a, dx: r.tx - a.world.x, dz: r.tz - a.world.z, dy: wrapPi(r.tyaw - a.world.yaw) }];
-      if (r.extra && r.done < 1) slides.push({ a: r.extra.a, dx: r.extra.dx * (1 - r.done), dz: r.extra.dz * (1 - r.done), dy: 0 });
-      B.slides = slides; B.slideDur = 0.26; B.slideEl = 0; B.slideProg = 0; B.phase = 'slide';
-    }
-    return true;
-  }
-  if (B.phase === 'slide') {
-    B.slideEl += sdt; const pr = smooth(B.slideEl / B.slideDur), d = pr - B.slideProg; B.slideProg = pr;
-    for (const x of B.slides) x.a.shift(x.dx * d, x.dz * d, x.dy * d);
-    if (B.slideEl >= B.slideDur) { const f = B.after; B.after = null; f && f(); }
-    return true;
-  }
-  return false;
 }
 function boutTick(sdt) {
-  const B = S.bout; if (!B) return; const me = S.me, p = S.partner, st = B.step;
-  if (B.bg) {
-    const g = B.bg; g.el += sdt; const pr = smooth(g.el / g.dur), d = pr - g.prog; g.prog = pr;
-    for (const x of g.slides) x.a.shift(x.dx * d, x.dz * d, x.dy * d);
-    if (g.el >= g.dur) B.bg = null;
-  }
-  if (moveTick(B, sdt)) return;
-  if (B.phase !== 'run') return;
-  const mv = me.curBase(), pv = p.curBase(); const el = S.sim - B.t0;
-  if (B.cut && mv.name === st.me) {
-    faceTarget(p, me.world.x, me.world.z, 4, sdt);
-    if (mv.t > B.cut.tFar + 0.1) {
-      const pl = pairPlan(B.cut.base, B.cut.role), sc = Math.hypot(pl.sx, pl.sz) + pl.pFar;
-      const go = sc < 0.3 || (sc > B.cut.best + 0.03 && B.cut.best < 1.2);
-      B.cut.best = Math.min(B.cut.best, sc);
-      if (go) { B.cut = null; B.cutIn = true; boutNext(); return; }
-    }
-  }
-  let done = false;
-  if (B.pair) done = mv.finished && pv.finished && el > 0.05;
-  else {
-    if (st.approach) {
-      faceTarget(me, p.world.x, p.world.z, 4, sdt); faceTarget(p, me.world.x, me.world.z, 3, sdt);
-      const dist = Math.hypot(p.world.x - me.world.x, p.world.z - me.world.z);
-      done = dist <= B.approach || el > 6;
-    } else {
-      const nonLoop = (!mv.loop) || (!pv.loop && st.partner);
-      if (nonLoop) done = (mv.loop || mv.finished) && (pv.loop || pv.finished) && el > 0.05;
-      else done = el >= (st.hold || 1);
-    }
-  }
-  if (el > 14) { log('  таймаут кроку', true); done = true; }
-  if (done) { if (B.pair) S.pairActors = null; boutNext(); }
+  const B = S.bout, D = S.director; if (!B || !D) return;
+  D.tick(sdt);
+  const cur = D.stepAt(); if (cur !== B.cur) { if (B.cur != null) B.done.add(B.cur); B.cur = cur; boutMarks(); }
+  if (D.done) { if (B.cur != null) B.done.add(B.cur); log('Готово'); S.bout = null; S.boutDone = true; boutMarks(); }
 }
 
 // ---------------------------------------------------------------- режим «Мікси»
@@ -993,7 +962,7 @@ function mixApply() {
 // ---------------------------------------------------------------- режими
 function enterMode(m, force) {
   if (!force && m === S.mode) return;
-  S.mode = m; S.bout = null; S.slide = null; S.restartAt = null;
+  stopDirector(); S.mode = m; S.bout = null; S.slide = null; S.restartAt = null;
   document.body.dataset.mode = m;
   $$('#modes button').forEach((b) => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
   $('#paneClips').hidden = m !== 'clips'; $('#paneGraph').hidden = m !== 'graph'; $('#paneMix').hidden = m !== 'mix';

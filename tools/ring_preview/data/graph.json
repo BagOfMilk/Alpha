@@ -336,7 +336,7 @@
 {
 "id": "whip",
 "label": "Кидок у канат",
-"pair": "Whip_Ropes",
+"pair": "Whip_Ropes_Left",
 "me_role": "B"
 },
 {
@@ -354,16 +354,15 @@
 {
 "id": "rebound2",
 "label": "Знову від канатів",
-"me": "Rope_Duck_Return",
+"me": "Rope_Back_R",
 "partner": "Ring_Stance_Loop"
 },
 {
 "id": "hit",
-"label": "Клоузлайн / плече / лікоть",
+"label": "Удар плечем",
 "choice": [
-"Center_Clothesline",
 "Center_ShoulderBlock",
-"Center_RunningElbow"
+"Center_ShoulderBlock_Heavy"
 ],
 "me_role": "A"
 },

@@ -33,6 +33,27 @@ export function relFromWorld(base, w, hs) {
 }
 export const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 export const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+// база, з якої кліп у мить t дає світову позу w: placeRel(baseFrom(w, rel, hs), rel, hs) === w
+export function baseFrom(w, rel, hs) {
+  const yaw = w.yaw - rel[2], c = Math.cos(yaw), s = Math.sin(yaw), dx = rel[0] * hs, dz = -rel[1] * hs;
+  return { x: w.x - (dx * c + dz * s), z: w.z - (dz * c - dx * s), yaw };
+}
+// Рух кореня кліпу [X,Y,ψ] у просторі ригу (без масштабу за зростом) — те саме, що рахує голос під час програвання.
+// Цикл без кривої рухається рівномірно за полем speed; неперервний кліп без кривої стоїть на місці.
+export function clipNet(meta, dur) { return meta.root ? (meta.net || [0, 0, 0]) : [0, (meta.speed || 0) ? -(meta.speed) * dur : 0, 0]; }
+export function rootRel(meta, t, dur = meta.duration, loop = !!meta.loop) {
+  const r = meta.root, net = clipNet(meta, dur);
+  const curve = (u) => {
+    if (!r) { const k = loop ? u / dur : 0; return [net[0] * k, net[1] * k, net[2] * k]; }
+    const f = Math.min(Math.max(u * FPS, 0), r.length - 1), i = Math.floor(f), j = Math.min(i + 1, r.length - 1), w = f - i;
+    return [r[i][0] + (r[j][0] - r[i][0]) * w, r[i][1] + (r[j][1] - r[i][1]) * w, r[i][2] + (r[j][2] - r[i][2]) * w];
+  };
+  t = Math.max(0, t);
+  if (!loop) return curve(Math.min(t, dur));
+  const k = Math.floor(t / dur); let acc = [0, 0, 0];
+  for (let i = 0; i < k; i++) acc = se2.compose(acc, net);
+  return se2.compose(acc, curve(t - k * dur));
+}
 
 // ---------------------------------------------------------------- бібліотека кліпів за статтю
 export class AnimLib {
@@ -247,8 +268,8 @@ class Voice {
     this.t = 0; this.tPrev = 0; this.w = 0; this.w0 = 0; this.speed = 1;
     this.finished = false; this.parts = {}; this.id = ++voiceSeq;
     this.root = this.meta.root || null; this.layerW = 0;
-    const net = this.meta.net || [0, 0, 0];
-    this.net = this.root ? net : [0, (this.meta.speed || 0) ? -(this.meta.speed) * this.dur : 0, 0];
+    this.net = clipNet(this.meta, this.dur);
+    this.clock = null;            // режисер ланцюга задає час голосу сам (функція → секунди кліпу)
     this.moving = this.loop && (Math.hypot(this.net[0], this.net[1]) > 1e-3 || Math.abs(this.net[2]) > 1e-3);
     this.maskName = this.meta.layer_mask || 'upper_body';
   }
@@ -271,16 +292,7 @@ class Voice {
   // rel root: [X,Y,ψ] у просторі ригу (без hipScale)
   rootAt(t) {
     if (this.kind !== 'base') return [0, 0, 0];
-    if (!this.loop) return this.sampleCurve(Math.min(t, this.dur));
-    const k = Math.floor(t / this.dur); let acc = [0, 0, 0];
-    for (let i = 0; i < k; i++) acc = se2.compose(acc, this.net);
-    return se2.compose(acc, this.sampleCurve(t - k * this.dur));
-  }
-  sampleCurve(t) {
-    const r = this.root;
-    if (!r) { const u = this.loop ? t / this.dur : 0; return [this.net[0] * u, this.net[1] * u, this.net[2] * u]; }   // синтетичний рух циклу без кривої: рівномірний
-    const f = Math.min(Math.max(t * FPS, 0), r.length - 1), i = Math.floor(f), j = Math.min(i + 1, r.length - 1), u = f - i;
-    return [r[i][0] + (r[j][0] - r[i][0]) * u, r[i][1] + (r[j][1] - r[i][1]) * u, r[i][2] + (r[j][2] - r[i][2]) * u];
+    return rootRel(this.meta, t, this.dur, this.loop);
   }
   pose() { return this.loop ? this.t % this.dur : Math.min(this.t, this.dur); }
   dispose() {
@@ -386,9 +398,12 @@ export class Actor {
     if (o.t) v.t = o.t;
     // синхронізація фази циклів
     if (prev && prev.loop && v.loop && prev.meta.phase && v.meta.phase && !o.noPhase) v.t = v.dur * ((prev.t % prev.dur) / prev.dur);
+    if (o.speed) v.speed = o.speed;
     const goesTread = this.inPlace && v.moving && !o.forceReal;
     if (!goesTread || !wasTread) this.treadV = [0, 0, 0];
     this.treadActive = goesTread;
+    // Кліп, що стартує не з нуля (фаза циклу, середина кліпу), не має стрибати: база така, щоб поза в світі лишилась та сама.
+    if (!goesTread && prev) this.base = baseFrom(this.world, v.rootAt(v.t), this.hs);
     this.voices.push(v);
     if (fade > 0.001 && this.voices.length > 1) {
       for (const o2 of this.voices) o2.w0 = o2.w;
@@ -436,8 +451,9 @@ export class Actor {
     const base = this.curBase();
     // час голосів
     const adv = (v) => {
-      v.tPrev = v.t; v.t += sdt * v.speed;
-      if (!v.loop && v.t >= v.dur) { v.t = v.dur; v.finished = true; }
+      v.tPrev = v.t;
+      if (v.clock) { v.t = Math.max(0, v.clock()); v.finished = !v.loop && v.t >= v.dur; if (v.finished) v.t = v.dur; }
+      else { v.t += sdt * v.speed; if (!v.loop && v.t >= v.dur) { v.t = v.dur; v.finished = true; } }
       const evs = v.meta.events;
       if (evs && this.onEvent && sdt > 0) {
         const p0 = v.loop ? v.tPrev % v.dur : v.tPrev, p1 = v.loop ? v.t % v.dur : v.t;
@@ -497,6 +513,7 @@ export class Actor {
     this.mixer.update(0);
   }
   updateRoot(sdt) {
+    if (this.driveWorld) { const w = this.driveWorld(); this.world = { x: w.x, z: w.z, yaw: w.yaw }; return; }   // місце задає режисер ланцюга
     const v = this.curBase(); if (!v) return;
     const rel = v.rootAt(v.t);
     if (this.treadActive) {
@@ -535,7 +552,7 @@ export class Actor {
     this.base.x += dx; this.base.z += dz; this.world.x += dx; this.world.z += dz; this.apply();
   }
   reset() {
-    this.yOff = 0; this.yRamp = null;
+    this.yOff = 0; this.yRamp = null; this.driveWorld = null;
     for (const v of this.voices) v.dispose();
     this.voices = []; this.fade = null;
     if (this.layer) { this.layer.dispose(); this.layer = null; }
