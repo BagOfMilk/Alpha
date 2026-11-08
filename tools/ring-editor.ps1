@@ -187,7 +187,12 @@ function Start-Editor {
     Remove-Item -Force -ErrorAction SilentlyContinue $statusFile, $cmdFile
     $log = Join-Path $ProjectPath 'Logs\ring-editor.log'
     New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
-    $p = Start-Process -FilePath $UnityPath -ArgumentList @('-projectPath', "`"$ProjectPath`"", '-logFile', "`"$log`"") -PassThru
+    # Прямий запуск без оболонки Windows (UseShellExecute = false) — без її перевірок і вікон підтвердження.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $UnityPath
+    $psi.Arguments = "-projectPath `"$ProjectPath`" -logFile `"$log`""
+    $psi.UseShellExecute = $false
+    $p = [System.Diagnostics.Process]::Start($psi)
     Write-Host "Редактор запущено (PID $($p.Id)) на $ProjectPath. Перший запуск на теці імпортує проєкт — це кілька хвилин."
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     # Перші секунди вікна з'являються й переставляються часто — ховаємо їх щойно з'явились.

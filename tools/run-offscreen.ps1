@@ -88,7 +88,15 @@ foreach ($chunk in $GameArgs) { $gameArgList += $chunk.Split(@(' ', ','), [Syste
 $launchArgs = @('-screen-fullscreen', '0', '-screen-width', "$Width", '-screen-height', "$Height") + $gameArgList
 Write-Host ("Аргументи гри: " + ($launchArgs -join ' '))
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
-$p = Start-Process -FilePath $Exe -ArgumentList $launchArgs -PassThru
+# Не Start-Process: той іде через оболонку Windows (ShellExecute), а вона для непідписаного Ring.exe/Alpha.exe
+# показує «Open File — Security Warning» і чекає клацання людини (власник, 08.11.2026: «Постійні запити…»).
+# Прямий запуск процесу (UseShellExecute = false) цієї перевірки не проходить.
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = (Resolve-Path $Exe).Path
+$psi.WorkingDirectory = Split-Path $psi.FileName -Parent
+$psi.UseShellExecute = $false
+$psi.Arguments = (($launchArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' ')
+$p = [System.Diagnostics.Process]::Start($psi)
 
 # Перші секунди — часто: Unity створює вікно, потім може його перерозмірити й
 # поставити по центру. Далі — рідше, до кінця гри (раптом вікно повернуть).
