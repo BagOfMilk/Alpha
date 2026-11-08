@@ -82,6 +82,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             if (_touchDisplay && (byPlayer || _savedByPlayer)) ApplyDisplay(v);
             PreviewAudio(v);
             ApplyAccessibility(v);
+            RingMatchPrefs.SetFrom(v);
         }
 
         /// <summary>Гучність, фоновий звук — одразу (ще до «Застосувати»): гравець чує зміну (ТЗ: «зміну гучності чути одразу»).</summary>
