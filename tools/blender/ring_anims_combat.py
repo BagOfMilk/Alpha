@@ -101,7 +101,7 @@ def clip_kneel_disbelief(t, L):
     p.roll = 4.0 * shake
     kh = p.hands
     top = {"l": lambda S: S["head"] + Vector((0.11, 0.03, 0.08)), "r": lambda S: S["head"] + Vector((-0.11, 0.03, 0.08))}
-    p.hands = {s_: (lambda S, s_=s_: lerp(kh[s_][0](S), top[s_](S), k) + Vector((0.12 * (1 if s_ == "l" else -1), -0.12, 0.0)) * math.sin(math.pi * k) * 0.6,
+    p.hands = {s_: (lambda S, s_=s_: lerp(kh[s_][0](S), top[s_](S), k) + Vector((0.15 * (1 if s_ == "l" else -1), -0.22, 0.0)) * math.sin(math.pi * k) * 0.7,
                     (FWD + DOWN * 0.6).lerp(UP + BACK * 0.3, k), (UP + FWD * 0.2).lerp(RIGHT if s_ == "l" else LEFT, k)) for s_ in "lr"}
     ke = p.elbows
     p.elbows = {s_: (lambda S, s_=s_: ke[s_](S).lerp(S[s_] + Vector((0.4 * (1 if s_ == "l" else -1), -0.1, 0.25)), k)) for s_ in "lr"}
@@ -129,13 +129,14 @@ def pin_a(thrown=0.0, press=0.0, breath=0.0, lift=0.0):
     tl = BODY["thigh"] * 0.97
     th = math.radians(42.0 - 34.0 * thrown - 4.0 * lift)
     kx = -0.12
-    abs_pel = Vector((kx, PIN_KNEE_Y - tl * math.sin(th), 0.085 + tl * math.cos(th) - 0.015 * press))
+    ky = PIN_KNEE_Y - 0.3 * (1.0 - BODY["leg"])      # коротші ноги (жіночий набір) — коліна ближче до B, груди ті самі
+    abs_pel = Vector((kx, ky - tl * math.sin(th), 0.085 + tl * math.cos(th) - 0.015 * press + 0.04 * lift))
     p = RPose()
     p.pelvis = off_for(abs_pel)
-    p.pelvis_q = Quaternion(LEFT, math.radians(55.0 - 42.0 * thrown - 5.0 * lift))
-    p.pitch = 37.0 + 1.5 * breath - 30.0 * thrown - 6.0 * lift + 2.0 * press
+    p.pelvis_q = Quaternion(LEFT, math.radians(55.0 - 42.0 * thrown - 10.0 * lift))
+    p.pitch = 37.0 + 1.5 * breath - 30.0 * thrown - 22.0 * lift + 2.0 * press
     p.roll = -4.0
-    ay = PIN_KNEE_Y + BODY["calf"] * 0.97
+    ay = ky + BODY["calf"] * 0.97
     p.ankles = (Vector((kx + 0.16, ay, 0.11)), Vector((kx - 0.16, ay, 0.11)))
     tip = Quaternion(RIGHT, math.radians(-75.0))
     p.foot_rot = (tip, tip)
@@ -152,12 +153,12 @@ def pin_a(thrown=0.0, press=0.0, breath=0.0, lift=0.0):
     free_l = lambda S: S["l"] + Vector((0.2, 0.0, -0.35))
     free_r = lambda S: S["r"] + Vector((-0.22, 0.0, -0.3))
     # відпускання — не крізь B: ліва спершу виходить з-під коліна до себе, права спершу вгору над грудьми B
-    out_ = smooth(min(1.0, thrown / 0.45))
+    out_ = smooth(min(1.0, max(thrown / 0.45, 1.4 * lift)))     # руки знімаються вже тоді, коли B лише піднімає плечі
     go_ = smooth(max(0.0, (thrown - 0.3) / 0.7))
     def hl(S):
         return (hook(S) + Vector((0.0, 0.2 * out_, 0.06 * out_))).lerp(free_l(S), go_)
     def hr(S):
-        return (far(S) + Vector((0.0, 0.1 * out_, 0.42 * out_))).lerp(free_r(S), go_)
+        return (far(S) + Vector((0.0, 0.16 * out_, 0.42 * out_))).lerp(free_r(S), go_)
     p.hands = {"l": (hl, LEFT + DOWN * 0.3, DOWN * 0.3 + BACK),
                "r": (hr, FWD + DOWN * 0.4, UP)}
     p.elbows = {"l": lambda S: S["l"] + Vector((0.4, 0.15, -0.05)), "r": lambda S: S["r"] + Vector((-0.4, 0.0, 0.3))}
@@ -190,7 +191,7 @@ def pin_b(pinned=1.0, struggle=0.0, w=0.0, kick=0.0, sit_side=0.0, legs=0.0, tuc
     p = lying(sit=0.45 * kick + 0.06 * struggle * max(0.0, w),
               knee_bend=0.15 + 0.05 * pinned + 0.3 * kick + 0.25 * struggle * (0.5 + 0.5 * w) + 0.35 * legs)
     kb_r = 0.15 + 0.07 * struggle * (0.5 + 0.5 * w) + 0.2 * kick + 0.4 * legs
-    kb_l = 0.15 + 0.35 * pinned + 0.3 * kick + 0.2 * struggle * (0.5 - 0.5 * w) + 0.35 * legs   # ближнє коліно — у гаку A
+    kb_l = 0.15 + 0.35 * pinned + 0.2 * kick + 0.2 * struggle * (0.5 - 0.5 * w) + 0.1 * legs    # ближнє коліно — у гаку A
     off_b = off_for(Vector((0.0, 0.0, LIE_Z)))
     p.ankles = (xf(off_b, Q_BACK, REST["ankle_l"] + Vector((0.0, -0.25 * kb_l, 0.35 * kb_l))),
                 xf(off_b, Q_BACK, REST["ankle_r"] + Vector((0.0, -0.25 * kb_r, 0.35 * kb_r))))
@@ -218,11 +219,16 @@ def clip_cover_enter_a(t, L, partner=None):
     p = pin_drop(t, L, COVER_LAND)
     pr = _win(t, COVER_LAND - 0.05, COVER_LAND + 0.06, COVER_LAND + 0.1, COVER_LAND + 0.35)
     p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.02 * pr))
+    # гак: ліва спершу лягає біля коліна B зі свого боку, потім заходить під нього, поки B підтягує коліно
+    g0, f0, u0 = p.hands["l"]
+    side = 1.0 - smooth((t - 0.42) / 0.3)
+    p.hands = dict(p.hands)
+    p.hands["l"] = (lambda S: g0(S) + Vector((0.0, 0.14, 0.07)) * side, f0, u0)
     return p
 
 def clip_cover_enter_b(t, L, partner=None):
     hit = hit_spring(t, COVER_LAND, w=16.0, z=0.35) if t > COVER_LAND else 0.0
-    p = pin_b(pinned=smooth((t - COVER_LAND) / 0.3), struggle=0.0, tuck=smooth((t - 0.06) / 0.34))
+    p = pin_b(pinned=smooth((t - 0.42) / 0.35), struggle=0.0, tuck=smooth((t - 0.06) / 0.34))
     p.pitch = p.pitch + 5.0 * abs(hit)                         # вагою на груди — плечі й голова здригаються
     p.head_pitch = p.head_pitch + 10.0 * abs(hit)
     return p
@@ -260,8 +266,9 @@ KICKS = [
 def kick_a(K):
     def f(t, L, partner=None):
         tk = K.t_k
-        thrown = smooth((t - tk + 0.04) / (0.38 * K.slow)) * min(1.0, K.power)
-        p = pin_a(thrown=thrown, lift=_win(t, tk - 0.12, tk, tk + 0.05, tk + 0.3) * (1.0 - min(1.0, K.power) * 0.5))
+        thrown = smooth((t - tk + 0.06) / (0.38 * K.slow)) * min(1.0, K.power)
+        carried = _win(t, tk - 0.14 * K.slow, tk + 0.04, tk + 0.12 * K.slow, tk + 0.5 * K.slow) * min(1.0, K.power)
+        p = pin_a(thrown=thrown, lift=carried * (1.0 - 0.6 * thrown))
         rise = smooth((t - (tk + 0.45 * K.slow)) / (0.7 * K.slow))
         if rise > 0.0:
             p = blend_pose(_filled(p), _filled(kneel_up(t, L)), rise)
@@ -368,7 +375,7 @@ MOVE_EVENTS.update({
 })
 for K in KICKS:
     MOVE_EVENTS[K.name] = [("kickout", K.t_k, "-", "upperarm_l"), ("sell", K.t_k + 0.5 * K.slow, "-", "spine_03")]
-COVER_SHIFT = {"Cover_Enter", "Cover_Hold_Loop", "Cover_Release"} | {K.name for K in KICKS}   # зсув пари — як у Cover
+COVER_SHIFT = set()          # зсув пари для жіночого набору (як у Cover) не потрібен: рука B не лежить під колінами A
 
 MOVE_NODE_POSES["kneel_up"] = lambda: kneel_up(0.0, 2.4)
 for _nm, _ln, _fn in [("Kneel_To_Stance", KNEEL_RISE_LEN, clip_kneel_to_stance),
