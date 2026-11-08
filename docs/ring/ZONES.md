@@ -37,7 +37,7 @@
 
 | Сесія | Файли |
 |---|---|
-| **ПМ + Бій** — `local_27331424…`, гілка `claude/ring-combat-overhaul` | `Core/Ring/Match/**`, `Core/Ring/RingContracts.cs` (кар'єрне з нього переїде в `CareerContracts.cs` — Кар'єрі), `Gameplay/Ring/Stage/RingClipTable.cs`, `Stage/RingBeats.cs`, `Stage/Unity/RingMatchDirector.cs`, `Models/MatchScreenModel.cs`, `Models/RingLabels.cs`, `UI/MatchScreenView.cs`, `UI/RingCallout.cs`, `RingGameBootstrap.Match.cs`; `Assets/Resources/Ring/career_moves.json`; тести `Match*`, `HopeSpot*`, `FinisherReach*`, `RingBeat*`, матчеві частини `RingModelsTests`; документи `docs/TRPG_DESIGN.md`, `docs/TRPG_DECISIONS.md`, `docs/ring/iter1_gaps.md`, `docs/ring/ZONES.md`, `docs/ring/CLIP_NEEDS.md` |
+| **ПМ + Бій** — `local_27331424…`, гілка `claude/ring-combat-overhaul` | `Core/Ring/Match/**`, `Core/Ring/RingContracts.cs` (кар'єрне з нього переїде в `CareerContracts.cs` — Кар'єрі), `Gameplay/Ring/Stage/RingClipTable.cs`, `Stage/RingBeats.cs`, `Stage/Unity/RingMatchDirector.cs`, `Models/MatchScreenModel.cs`, `Models/RingLabels.cs`, `UI/MatchScreenView.cs`, `UI/RingCallout.cs`, `RingGameBootstrap.Match.cs`; `Assets/Resources/Ring/career_moves.json`; тести `Match*`, `HopeSpot*`, `FinisherReach*`, `RingBeat*`, матчеві частини `RingModelsTests`; документи `docs/TRPG_DESIGN.md`, `docs/TRPG_DECISIONS.md`, `docs/ring/iter1_gaps.md`, `docs/ring/ZONES.md`, `docs/ring/CLIP_NEEDS.md`, `docs/ring/F2_DIRECTOR.md` |
 | **Изучение игры Ring** — `local_4d3baef2…` | Сцена, камера, вихід: `Gameplay/Ring/Stage/Unity/**` (крім `RingMatchDirector`, `RingSound`, `RingMenuAudio`, `RingMenuAssets`), `Stage/RingStageContract.cs`, `Stage/EntranceProfile.cs`, `Stage/EntranceScreen.cs`, `Core/Ring/RopeSim.cs`, `RingGameBootstrap.cs` (каркас), Editor: `RingSceneBuilder` (сцена), `RingStageSceneSetup`, `RingInEditor`, `RingEntranceScreenImport`; Blender: арени, натовп, реквізит, cast, закулісся (`tools/blender/ring_venues*`, `ring_gym`, `ring_show`, `ring_crowd`, `ring_props`, `ring_hero`, `ring_cast/**`); `docs/ring/ENTRANCE_PROFILE.md`, `Assets/Art/Ring/Cast/CAST_ANIM.md`; тести `Entrance*` |
 | **Кар'єра** — нова сесія | `Core/Ring/Career/**`, `Core/Ring/Feud/**`, `Core/Ring/Promo/**`, `Core/Ring/Progression/**`, `Core/Ring/Json/**`, `Core/Ring/RingCampaign.cs`, `Models/DevelopmentScreenModel.cs`, `FeudScreenModel.cs`, `PromoScreenModel.cs`, нові моделі екранів кар'єри, `CareerLooks.cs`, `RingFeudBootstrap.cs`, `RingGameBootstrap.Career.cs`, `RingSaveFile.cs` (після злиття «Скилів»); ресурси `career_backstage.json`, `career_gimmicks.json`, `career_roster.json`, `feud_hammer.json`, `backstage_uk.json`; тести `Career*`, `Feud*`, `Promo*`, `Gimmick*`, `Economy*`, `Progression*`, `Backstage*`, `WeekActions*`, `RingCampaign*`, `MiniJson*` |
 | **Меню** — `local_d8c816ac…` (+ форк звуку `local_bc183877…`) | `Gameplay/Ring/UI/Menus/**`, вигляд екранів кар'єри (`UI/Career/**` B03 v2, `UI/CareerScreens.cs` — під цією назвою до ітерації 2, `FeudScreenView`, `PromoScreenView`, `EndingScreenView`), `UI/RingUi.cs`, `Models/RingText.cs`, `MenuMotion.cs`, `RingSettings.cs`, `RingPause.cs`, `RingAudioMix.cs`, `RingSoundApproval.cs`, `RingGameBootstrap.Menus.cs`, `RingMenuShots.cs`, `RingSoundGate.cs`, `Stage/Unity/RingSound.cs`, `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor `RingMenuAudioImport`; `sound_approvals.json`, `tools/ring_audio/**`, переклади всіх `*_<мова>` (крім `uk`: `ui_`, `ring_strings_`, `strings_`, `backstage_`) і охоронець «кожен ключ перекладено»; тести `RingMenuModel*`, `RingSoundApproval*`, `MonoBehaviourFileName*`; журнал `docs/menus-progress.md` |
@@ -83,6 +83,9 @@
   основну одним злиттям: окремо одне без одного не збирається. Порядок: Етап 0 → ПМ зливає основну в
   `claude/ring-combat-overhaul` (merge, без переписування SHA) → «Изучение» і форк роблять гілки від її верхівки →
   ПМ вливає їх → «так» власника → інтегратор.
+  - **Звук пакета бою:** `claude/ring-sound-outside-wip` від 1c03451, верхівка 3979ff6 (WIP, не запушено; ПМ звірив
+    `merge-base`; 46 файлів — зона звуку; тести в них 2310/0, звукові 23/23). Нотатки режисерові (8) і рішення ПМ —
+    `docs/ring/F2_DIRECTOR.md`. 21 кандидат раунду 2 бібліотеки не опубліковано — чекають рішення власника за раундом 1.
 
 **Черга Unity / Blender** (веде ПМ; оновлюється тут):
 1. ~~«Меню» — збірка без Development + офскрін-тури меню й кар'єри (1080p, 720p, 4:3, масштаб 120 %)~~ — **зроблено
@@ -100,7 +103,9 @@
    сезони — три (1920×1080, 1280×720, 1024×768); разом ~65 хв, Unity ~8. О 19:55 — прогін `pass3` на 1337 кадрах із
    4000 (кінець ~20:35), вільно 1,8 ГБ; «Кліпи» паралельно тримали два Blender (ч. і ж. «Метеор»). «Меню» розбило
    слот: **27** — Unity ~8 хв, тур меню 1080, повні сезони 1080 і 1024×768; **27b** — лише Ring.exe тієї ж збірки:
-   повний сезон 1280×720, 21:9, 4K (~25 хв). ПМ дає «можна» на обидва одним повідомленням (27b — одразу після 27). Запит 19:48; **чекає**: кінця прогону трьох сезонів (Ring.exe pid 28808, `pass3`, з 19:36 — за
+   повний сезон 1280×720, 21:9, 4K (~25 хв). ПМ дає «можна» на обидва одним повідомленням (27b — одразу після 27).
+7. Форк звуку — прохід компіляції гілки звуку пакета бою в Unity — **після Ф2 режисера**: на 1c03451 `Stage/Unity`
+   під нове ядро не збирається, раніше прохід нічого не покаже. Запит 19:48; **чекає**: кінця прогону трьох сезонів (Ring.exe pid 28808, `pass3`, з 19:36 — за
    чергою «Скилы») і ≥ 4 ГБ вільної пам'яті (о 19:48 — 2,4 ГБ). Тури заглушені: глушник «Меню» + `mute_loop` ПМ. Якщо
    «Відео огляд» (п. 5) на той час не готовий — «Меню» йде першим.
 
