@@ -40,7 +40,7 @@
 | **ПМ + Бій** — `local_27331424…`, гілка `claude/ring-combat-overhaul` | `Core/Ring/Match/**`, `Core/Ring/RingContracts.cs` (кар'єрне з нього переїде в `CareerContracts.cs` — Кар'єрі), `Gameplay/Ring/Stage/RingClipTable.cs`, `Stage/RingBeats.cs`, `Stage/Unity/RingMatchDirector.cs`, `Models/MatchScreenModel.cs`, `Models/RingLabels.cs`, `UI/MatchScreenView.cs`, `UI/RingCallout.cs`, `RingGameBootstrap.Match.cs`; `Assets/Resources/Ring/career_moves.json`; тести `Match*`, `HopeSpot*`, `FinisherReach*`, `RingBeat*`, матчеві частини `RingModelsTests`; документи `docs/TRPG_DESIGN.md`, `docs/TRPG_DECISIONS.md`, `docs/ring/iter1_gaps.md`, `docs/ring/ZONES.md`, `docs/ring/CLIP_NEEDS.md` |
 | **Изучение игры Ring** — `local_4d3baef2…` | Сцена, камера, вихід: `Gameplay/Ring/Stage/Unity/**` (крім `RingMatchDirector`, `RingSound`, `RingMenuAudio`, `RingMenuAssets`), `Stage/RingStageContract.cs`, `Stage/EntranceProfile.cs`, `Stage/EntranceScreen.cs`, `Core/Ring/RopeSim.cs`, `RingGameBootstrap.cs` (каркас), Editor: `RingSceneBuilder` (сцена), `RingStageSceneSetup`, `RingInEditor`, `RingEntranceScreenImport`; Blender: арени, натовп, реквізит, cast, закулісся (`tools/blender/ring_venues*`, `ring_gym`, `ring_show`, `ring_crowd`, `ring_props`, `ring_hero`, `ring_cast/**`); `docs/ring/ENTRANCE_PROFILE.md`, `Assets/Art/Ring/Cast/CAST_ANIM.md`; тести `Entrance*` |
 | **Кар'єра** — нова сесія | `Core/Ring/Career/**`, `Core/Ring/Feud/**`, `Core/Ring/Promo/**`, `Core/Ring/Progression/**`, `Core/Ring/Json/**`, `Core/Ring/RingCampaign.cs`, `Models/DevelopmentScreenModel.cs`, `FeudScreenModel.cs`, `PromoScreenModel.cs`, нові моделі екранів кар'єри, `CareerLooks.cs`, `RingFeudBootstrap.cs`, `RingGameBootstrap.Career.cs`, `RingSaveFile.cs` (після злиття «Скилів»); ресурси `career_backstage.json`, `career_gimmicks.json`, `career_roster.json`, `feud_hammer.json`, `backstage_uk.json`; тести `Career*`, `Feud*`, `Promo*`, `Gimmick*`, `Economy*`, `Progression*`, `Backstage*`, `WeekActions*`, `RingCampaign*`, `MiniJson*` |
-| **Меню** — `local_d8c816ac…` (+ форк звуку `local_bc183877…`) | `Gameplay/Ring/UI/Menus/**`, вигляд екранів кар'єри (`UI/Career/**` B03 v2, `UI/CareerScreens.cs` — на зняття, `FeudScreenView`, `PromoScreenView`, `EndingScreenView`), `UI/RingUi.cs`, `Models/RingText.cs`, `MenuMotion.cs`, `RingSettings.cs`, `RingPause.cs`, `RingAudioMix.cs`, `RingSoundApproval.cs`, `RingGameBootstrap.Menus.cs`, `RingMenuShots.cs`, `RingSoundGate.cs`, `Stage/Unity/RingSound.cs`, `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor `RingMenuAudioImport`; `sound_approvals.json`, `tools/ring_audio/**`, переклади `ui_<мова>.json` і `ring_strings_<мова>.txt` (крім `uk`); тести `RingMenuModel*`, `RingSoundApproval*`, `MonoBehaviourFileName*`; журнал `docs/menus-progress.md` |
+| **Меню** — `local_d8c816ac…` (+ форк звуку `local_bc183877…`) | `Gameplay/Ring/UI/Menus/**`, вигляд екранів кар'єри (`UI/Career/**` B03 v2, `UI/CareerScreens.cs` — під цією назвою до ітерації 2, `FeudScreenView`, `PromoScreenView`, `EndingScreenView`), `UI/RingUi.cs`, `Models/RingText.cs`, `MenuMotion.cs`, `RingSettings.cs`, `RingPause.cs`, `RingAudioMix.cs`, `RingSoundApproval.cs`, `RingGameBootstrap.Menus.cs`, `RingMenuShots.cs`, `RingSoundGate.cs`, `Stage/Unity/RingSound.cs`, `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor `RingMenuAudioImport`; `sound_approvals.json`, `tools/ring_audio/**`, переклади `ui_<мова>.json` і `ring_strings_<мова>.txt` (крім `uk`); тести `RingMenuModel*`, `RingSoundApproval*`, `MonoBehaviourFileName*`; журнал `docs/menus-progress.md` |
 | **Кліпи** — `local_815630bf…` (+ wwe `local_383c333e…`) | `tools/blender/ring_anims*`, `tools/blender/ring_review.py` (огляд кліпів; створено лінією анімацій, 8861986), `docs/ring/ANIM_REVIEW_*.md`, `Assets/Art/Animations/RING_Moves*.fbx`, `ring_anims_*.txt`, `docs/ring/ANIM_BRIEF_COMBAT_CENTER.md`, `docs/ring/ANIM_PLAN_ITER2.md`, `docs/research/RING_ANIM_REFERENCES.md` |
 | **Відео огляд** — `local_c3c3cec5…` (інтегратор) | Злиття в основну гілку, `tools/run-offscreen.ps1`, `tools/ring-editor.ps1`, Editor `RingSceneBuilder.Player.cs` (BuildPlayer*), `RingLaunchArgs.cs`, `Assets/Settings/URP-*`, `ProjectSettings/QualitySettings.asset`, оточення збірки (Burst) |
 | **Скилы** — `local_f69d1b50…` (QA) | `.claude/skills/**`, `docs/ring/playtest_*`, `docs/ring/skills_audit_*`. Код інших зон не правити, вади — промптом ПМ |
@@ -93,8 +93,8 @@
 5. Етап 0 — прохід компіляції в редакторі й коміт згенерованих `.meta` (зокрема `RingSoundApprovalTests.cs.meta`) —
    «Відео огляд», після поновлення ліміту сесії; перед стартом питає «можна».
 6. «Меню» — збірка 27 (компіляція + `BuildPlayerShow`, ~8 хв Unity), тур меню 1920×1080, два повні сезони кар'єри
-   (seed 7, 1920×1080 і 1024×768, ~15 хв кожен, Unity вже закрито) — перевірка очима 1c68a70 (8c3f16b у B03 v2) і
-   6b7c6d9 («Акт 0»). Запит 19:48; **чекає**: кінця прогону трьох сезонів (Ring.exe pid 28808, `pass3`, з 19:36 — за
+   (seed 7, 1920×1080 і 1024×768, ~15 хв кожен, Unity вже закрито) — перевірка очима 1c68a70 (8c3f16b у B03 v2),
+   6b7c6d9 + 41617f7 («Акт 0») і 8e19721 (мертвий код). Запит 19:48; **чекає**: кінця прогону трьох сезонів (Ring.exe pid 28808, `pass3`, з 19:36 — за
    чергою «Скилы») і ≥ 4 ГБ вільної пам'яті (о 19:48 — 2,4 ГБ). Тури заглушені: глушник «Меню» + `mute_loop` ПМ. Якщо
    «Відео огляд» (п. 5) на той час не готовий — «Меню» йде першим.
 
@@ -111,11 +111,16 @@
 3. ПМ, 08.11.2026 — запис відсотків: бриф B03 і `TRPG_DESIGN` пишуть «17 %», дошка бренду (`brand_board.html`) —
    «17%»; плейтест 08.11 (P3): «привести до одного вигляду». «Меню» в 1c68a70 узяло «17%» (`c.hub.risk`).
    Питання директору: який запис чинний у Статуті (і чи нерозривний пробіл), щоб звести ключі й ТЗ.
+4. ПМ, 08.11.2026 — борг дрібних кеглів у `UI/CareerScreens.cs` (базова лінія 38; лишились переважно у шухляді
+   «Розвиток», `DevelopmentPanel`) і перейменування файлу в `UI/Career/CareerScreenView.cs`. Охоронець рахує борг за
+   шляхом, тож нове ім'я без перенесення ключа в `guard_baseline.json` — червоний тест. **Рішення ПМ: у М1 ім'я
+   лишається** (на гру не впливає; старі екрани прибрано — 47e0048, мертвий код — 8e19721). Ітерація 2: директор
+   переносить ключ базової лінії, «Меню» перейменовує і піднімає кеглі за його У0. Якщо на У2 B03 v2 директор
+   визнає кеглі шухляди нечитабельними на 1080 / 4:3 — це правка М1.
 
-**Виняток до появи «Кар'єри»:** «Меню» в 6b7c6d9 додало в модель `PromoScreenModel.ActText` (без «Акт 0» у сценах
-кар'єри, P3) і тест `RingModelsTests.Promo_ActLabel_OnlyWhereThereAreActs` — це зона Кар'єри; ПМ прийняв (сесії
-Кар'єри ще немає, зміна додавальна), разом із файлом переходить до Кар'єри. Далі правки моделей кар'єри до її появи —
-лише через ПМ.
+**Моделі кар'єри до появи «Кар'єри» — лише через ПМ.** Випадок 08.11.2026: «Меню» в 6b7c6d9 додало
+`PromoScreenModel.ActText`, а в 41617f7 саме повернуло модель і `RingModelsTests` як у базі — умова «Акт 0» тепер у
+`PromoScreenView`, тест у `RingMenuModelTests` (зона «Меню»).
 
 **Передача:** правки переробки бою в `CareerContent.cs`, `CareerSession.cs`, `GimmickTests.cs`, `CareerKit.cs`
 (гілка `claude/ring-combat-overhaul`) після злиття переходять у зону Кар'єри. У `b478385` до них додалось
