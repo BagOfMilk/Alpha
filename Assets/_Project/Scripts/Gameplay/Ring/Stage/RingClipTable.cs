@@ -256,7 +256,8 @@ namespace Game.Gameplay.Ring.Stage
                 case MatchActionId.Weapon:
                     if (miss) list.Add(StageStep.Solo(a, "Bump_Back", StageCam.Close, false, "предмет не влучив"));
                     else list.Add(StageStep.Pair(a, strong ? "Center_Lariat_Heavy" : "Center_Headbutt", StageCam.Big, null,
-                        strong ? "бракує кидка на стіл (набір «за рингом»)" : "бракує удару стільцем (набір «за рингом»)"));
+                        strong ? "бракує удару стільцем або кидка на стіл — режисер чергує (набір «за рингом»)"
+                               : "бракує удару стільцем по дотичній, нападник зачепив себе (набір «за рингом»)"));
                     break;
                 case MatchActionId.TopRope:
                     // Ризикований трюк: склейка — нападник на куті (план 1), далі приземлення в центрі (план 2). Без бігу до кута.
