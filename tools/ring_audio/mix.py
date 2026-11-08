@@ -1,4 +1,4 @@
-"""Секвенування на сітці 1/16 зі свінгом, гуманізація, панорама, реверб, стискання, ліміт.
+"""Секвенування на сітці 1/16 (без свінгу — похмурий напрям), гуманізація, панорама, реверб, стискання, ліміт.
 
 Петля будується ЦИКЛІЧНО: ноти, що виходять за кінець такту петлі, загортаються на її
 початок; усі лінійні фільтри та реверб — циклічна згортка довжиною петлі. Тому шов
@@ -37,9 +37,9 @@ def pan_gains(pan):
 
 
 class Song:
-    JIT_MS = {"drums": 1.0, "bass": 1.6, "keys": 3.0, "brass": 2.0, "guitar": 2.5, "pad": 0.0, "fx": 0.0}
+    JIT_MS = {"drums": 0.8, "bass": 0.8, "keys": 2.0, "brass": 2.0, "gtr": 1.2, "lead": 1.5, "pad": 0.0, "fx": 0.0}
 
-    def __init__(self, bpm, bars, swing=0.0, seed=1, groups=("drums", "bass", "keys", "brass", "guitar", "pad", "fx")):
+    def __init__(self, bpm, bars, swing=0.0, seed=1, groups=("drums", "bass", "gtr", "lead", "brass", "keys", "pad", "fx")):
         ideal = bars * 16 * 60.0 / bpm / 4.0 * SR
         self.n = loop_length(ideal)
         self.bars = bars
