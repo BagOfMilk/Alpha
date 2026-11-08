@@ -5,24 +5,6 @@ using UnityEngine;
 namespace Game.Gameplay.Ring.Stage
 {
     /// <summary>
-    /// Ассети меню (ТЗ B08): музика трьох варіацій лейтмотиву, десять звуків одного тембру, печатка й канатна рамка.
-    /// Прив'язує <c>Editor/RingStageSceneSetup</c> зі <c>Assets/Art/Ring/Audio/Menu</c> і <c>Assets/Art/Ring/Brand</c>.
-    /// </summary>
-    public sealed class RingMenuAssets : MonoBehaviour
-    {
-        public AudioClip musicLogin, musicLoading, musicSettings;
-        /// <summary>Порядок — як <see cref="MenuSfx"/>: Move, Confirm, Back, Error, Toggle, Slider, Tab, Transition, LoadDone, LoginOk.</summary>
-        public AudioClip[] sfx = new AudioClip[10];
-        public Texture2D seal, ropeFrame;
-
-        private void Awake()
-        {
-            RingMenuArt.Seal = seal;
-            RingMenuArt.RopeFrame = ropeFrame;
-        }
-    }
-
-    /// <summary>
     /// Програвач меню (ТЗ B08 §5): музика з кросфейдом 0,8 с між двома джерелами (музика не обривається при зміні екрана),
     /// звуки меню, тестовий звук шини в налаштуваннях. Гучність — шини <see cref="RingAudioMix"/> (Master × шина); вікно
     /// без фокусу — тиша, якщо так обрано. Не лінтується (тека Stage/Unity).

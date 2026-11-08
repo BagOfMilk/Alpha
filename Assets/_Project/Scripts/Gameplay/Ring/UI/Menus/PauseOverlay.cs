@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 namespace Game.Gameplay.Ring.UI.Menus
 {
     /// <summary>
-    /// Пауза в грі (ТЗ B01 §6.2, мова «Енергія» B08): затемнення <c>Scrim</c> α <c>AlphaScrim</c>, кобальтова смуга навскіс,
+    /// Пауза в грі (ТЗ B01 §6.2, мова «Енергія» B08, палітра «Арена»): затемнення <c>Scrim</c> α <c>AlphaScrim</c>, кармінна смуга навскіс,
     /// заголовок «ПАУЗА» display 62 <c>Gold</c> у нахиленій пластині, по центру три пластини сходинкою — «Продовжити»,
     /// «Налаштування» (той самий <see cref="SettingsPanel"/>, що на титулі), «На титул» (з попередженням, якщо поточне не
     /// збережеться). Час і звук зали стоять, поки пауза відкрита (це робить хост). Нових механік немає.
@@ -278,7 +278,7 @@ namespace Game.Gameplay.Ring.UI.Menus
         public void ShotFocus(int i) { if (_focus.Set(Math.Max(0, Math.Min(i, _plates.Count - 1)))) SyncFocus(); }
     }
 
-    /// <summary>Кобальтова смуга навскіс через центр екрана (за колонкою паузи) з кармінним краєм — «Енергія», не клин титулу.</summary>
+    /// <summary>Кармінна смуга навскіс через центр екрана (за колонкою паузи) з чорним краєм і золотою ниткою (палітра «Арена»).</summary>
     public sealed class PauseBand : VisualElement
     {
         public PauseBand()
@@ -300,8 +300,9 @@ namespace Game.Gameplay.Ring.UI.Menus
             float bw = Math.Min(620f, W * 0.62f);
             float x0 = W * 0.5f - bw * 0.5f - H * k * 0.5f;     // нахил 12° на всю висоту, центр смуги — центр екрана
             // майже щільна (як клин налаштувань): крізь 0,78 яскраві речі зали — екран ноутбука — читались як глюк (кадр 08.11.2026)
-            MenuShapes.Parallelogram(p, x0, 0f, bw, H, k, RingTheme.WithAlpha(RingTheme.Hero, 0.88f));
-            MenuShapes.Parallelogram(p, x0 + bw - 2f, 0f, 12f, H, k, RingTheme.WithAlpha(RingTheme.Villain, 0.9f));
+            MenuShapes.Parallelogram(p, x0, 0f, bw, H, k, RingTheme.WithAlpha(MenuPalette.Wedge, 0.88f));
+            MenuShapes.Parallelogram(p, x0 + bw - 2f, 0f, 14f, H, k, RingTheme.WithAlpha(MenuPalette.Grit, 0.95f));      // чорний край
+            MenuShapes.Parallelogram(p, x0 + bw + 14f, 0f, 3f, H, k, MenuPalette.Trim);                                   // золота нитка
             MenuShapes.Parallelogram(p, x0 + 14f, 0f, 4f, H, k, RingTheme.WithAlpha(RingTheme.Text, BrandTokens.AlphaTronDim));
         }
     }

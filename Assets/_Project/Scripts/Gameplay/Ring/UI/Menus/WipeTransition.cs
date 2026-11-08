@@ -50,8 +50,8 @@ namespace Game.Gameplay.Ring.UI.Menus
             if (W < 4f || H < 4f) return;
             var p = ctx.painter2D;
             float k = SlantH * H;    // крута діагональ «удару»
-            // смуги ліворуч направо (частки ширини шару): кобальт 0–4 %, кармін 4–6 %, тло 6–86 % (закриває екран), золото 86–88 %
-            Band(p, 0f, W * 0.04f, H, k, RingTheme.Hero);
+            // смуги ліворуч направо (частки ширини шару): сталь 0–4 %, кармін 4–6 %, тло 6–86 % (закриває екран), золото 86–88 %
+            Band(p, 0f, W * 0.04f, H, k, MenuPalette.Steel);
             Band(p, W * 0.04f, W * 0.02f, H, k, RingTheme.Villain);
             Band(p, W * 0.06f, W * 0.80f, H, k, RingTheme.Bg);
             Band(p, W * 0.86f, W * 0.02f, H, k, RingTheme.Gold);
