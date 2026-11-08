@@ -75,10 +75,13 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(RingSoundMap.HasAction("Weapon"));
             Assert.AreEqual(RingCue.CrowdSurge, RingSoundMap.ForEffect("Place"), "склейка місця");
             Assert.AreEqual(RingCue.CountOut, RingSoundMap.ForEffect("Count"), "відлік за рингом");
-            // предмет — як показує RingClipTable: 10+ кидок на стіл, 7–9 удар стільцем, провал — сам у бар'єр
-            Assert.AreEqual(RingCue.WeaponTable, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Strong, true));
-            Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Partial, true));
-            Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Miss, true));
+            // предмет — docs/ring/CLIP_NEEDS.md, TRPG_DESIGN §4.4 (ПМ 08.11.2026): 10+ — реквізит режисера, 7–9 — стілець, ≤6 — замах повз
+            Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Strong, true), "10+ без реквізиту — стілець");
+            Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Strong, true, RingProp.Chair));
+            Assert.AreEqual(RingCue.WeaponTable, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Strong, true, RingProp.Table));
+            Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Partial, true, RingProp.Table), "7–9 — завжди стілець");
+            Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Miss, true, RingProp.Table), "≤6 — замах повз");
+            Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", false, RollTier.Miss, true, RingProp.Table), "без кидка — стілець");
             // за рингом удар і кидок ідуть у бар'єр; на рингу — як завжди
             Assert.AreEqual(RingCue.BarrierHit, RingSoundMap.ForEvent("Action", "Strike", true, RollTier.Partial, true));
             Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.ForEvent("Action", "Throw", true, RollTier.Strong, true));
@@ -101,6 +104,20 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent("Action", "Dirty", true, RollTier.Miss, false));
             Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", "Desperate", true, RollTier.Miss, false), "відчайдушний: сам падає");
             Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent("Action", "Strike", false, RollTier.Miss, false), "без кидка ступінь не читається");
+        }
+
+        [Test]
+        public void Weapon_SecondTouch_IsSelfHitOrBarrier()
+        {
+            // Другий дотик режисер кличе на мітці кліпа: 7–9 — нападник зачепив себе, ≤6 — після замаху сам у бар'єр; 10+ — без нього.
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.FollowUpOf("Action", "Weapon", true, RollTier.Partial));
+            Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.FollowUpOf("Action", "Weapon", true, RollTier.Miss));
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Weapon", true, RollTier.Strong));
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Weapon", false, RollTier.Miss), "без кидка ступінь не читається");
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Sell", "Weapon", true, RollTier.Miss), "продаж — не дія");
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf("Action", "Strike", true, RollTier.Miss));
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(null));
+            Assert.AreEqual(RingCue.None, RingSoundMap.FollowUpOf(new MatchEvent()), "порожня подія — без другого дотику");
         }
 
         private sealed class FakeOutsideEvent { public bool Outside = true; }

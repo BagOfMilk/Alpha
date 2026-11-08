@@ -194,8 +194,9 @@ namespace Game.Gameplay.Ring.Stage
         /// Звук події матчу за таблицею <see cref="RingSoundMap"/> (зі ступенем кидка й місцем пари) і звуки її наслідків: склейка місця
         /// (Place) — зал здіймається, відлік за рингом (Count) — по звуку на цифру. Утримання й кікаут — долоня рефері, повтором.
         /// Кінець матчу відліком чи подвійним відліком: останні цифри звучать на дії, дзвін — режисер (BellEnd).
+        /// <paramref name="prop"/> — реквізит чистого удару предметом 10+, який обрав режисер (стілець чи стіл).
         /// </summary>
-        public void OnEvent(MatchEvent ev, float delay, bool pinEnd)
+        public void OnEvent(MatchEvent ev, float delay, bool pinEnd, RingProp prop = RingProp.Chair)
         {
             switch (ev.Kind)
             {
@@ -205,7 +206,7 @@ namespace Game.Gameplay.Ring.Stage
                     if (pinEnd) StartCoroutine(Repeat(RingCue.MatSlap, 3, 0.45f, 0.9f, delay));
                     return;
             }
-            var cue = RingSoundMap.ForEvent(ev);
+            var cue = RingSoundMap.ForEvent(ev, prop);
             // Гул залу вже звучить петлею (гучність веде ажіотаж) — окремого удару в цієї події немає.
             if (cue != RingCue.None && cue != RingCue.CrowdBed)
             {
@@ -224,6 +225,16 @@ namespace Game.Gameplay.Ring.Stage
                     StartCoroutine(Repeat(RingCue.CountOut, Mathf.Min(fx.Amount, RingSoundMap.MaxCountTicks), CountGap, 0.8f, delay + CountDelay));
                 }
             }
+        }
+
+        /// <summary>
+        /// Другий дотик предмета на мітці кліпа (режисер): 7–9 — нападник зачепив себе, ≤6 — після замаху сам у бар'єр. Без мітки не
+        /// звучить: краще тиша, ніж звук не в такт показу.
+        /// </summary>
+        public void FollowUp(MatchEvent ev, float delay = 0f)
+        {
+            var c = RingSoundMap.FollowUpOf(ev);
+            if (c != RingCue.None) Play(c, c == RingCue.Hit ? 0.7f : 0.85f, delay, true);
         }
 
         private void OneShot(AudioClip c, float vol, bool second = false)

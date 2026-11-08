@@ -50,22 +50,28 @@ namespace Game.Gameplay.Ring.Models
         QteMiss,
         /// <summary>Бій за рингом: удар відкидає суперника на сталевий бар'єр.</summary>
         BarrierHit,
-        /// <summary>Бій за рингом: кидок у бар'єр; промах предметом — нападник сам летить у бар'єр.</summary>
+        /// <summary>Бій за рингом: кидок у бар'єр; предмет із провалом ≤6 — нападник після замаху сам летить у бар'єр (другий дотик).</summary>
         BarrierSlam,
-        /// <summary>Предмет 7–9: удар складаним сталевим стільцем.</summary>
+        /// <summary>Предмет: удар складаним сталевим стільцем — чистий 10+ (якщо режисер обрав стілець) і по дотичній 7–9.</summary>
         WeaponChair,
-        /// <summary>Предмет 10+: кидок на стіл — стіл ламається під тілом.</summary>
+        /// <summary>Предмет 10+, якщо режисер обрав стіл: кидок на стіл — стіл ламається під тілом.</summary>
         WeaponTable,
         /// <summary>Відлік рефері за рингом — один звук на кожну цифру.</summary>
         CountOut,
         /// <summary>Склейка місця: пара вилетіла за ринг чи повернулась — зал здіймається.</summary>
         CrowdSurge,
-        /// <summary>Промах удару: суперник ухилився, контакту немає — лише рух повітря.</summary>
+        /// <summary>Промах удару чи замах предметом повз (≤6): суперник ухилився, контакту немає — лише рух повітря.</summary>
         Whiff
     }
 
     /// <summary>Звук QTE, який кличе режисер матчу: поява й пропуск. Вдале QTE — подія ядра Flourish (таблиця → <see cref="RingCue.QteHit"/>).</summary>
     public enum RingQte { Prompt = 0, Miss = 1 }
+
+    /// <summary>
+    /// Предмет чистого удару 10+ за рингом — його обирає режисер матчу (чергує; docs/ring/CLIP_NEEDS.md, TRPG_DESIGN §4.4) і передає звуку
+    /// явно: стілець чи стіл.
+    /// </summary>
+    public enum RingProp { Chair = 0, Table = 1 }
 
     /// <summary>
     /// Таблиця «подія → звук» (критерій М1: «без порожніх подій» — удар, гонг, рахунок, натовп, QTE, вихід; бій за рингом — запит ПМ
@@ -75,8 +81,10 @@ namespace Game.Gameplay.Ring.Models
     /// (там з'явились подія <c>Flourish</c>, дія <c>Weapon</c>, наслідок <c>Place</c> і поле <c>MatchEvent.Outside</c>, а
     /// <c>IntoRopes</c>/<c>IntoCorner</c> зникли). Охоронець — <c>RingSoundMapTests</c>: кожне значення <see cref="MatchEventKind"/>,
     /// <see cref="MatchActionId"/> і <see cref="MatchEffectKind"/> має рядок.</para>
-    /// <para>Звук іде за тим, що видно на екрані (<c>Stage/RingClipTable</c>): промах удару — ухил без контакту, предмет 10+ — кидок на
-    /// стіл, 7–9 — удар стільцем, провал — нападник сам у бар'єр.</para>
+    /// <para>Звук іде за тим, що видно на екрані (<c>Stage/RingClipTable</c>): промах удару — ухил без контакту. Предмет — за
+    /// docs/ring/CLIP_NEEDS.md і TRPG_DESIGN §4.4 (ПМ 08.11.2026): 10+ — чистий удар стільцем або кидок на стіл (реквізит обирає режисер,
+    /// <see cref="RingProp"/>), 7–9 — стілець по дотичній і нападник зачепив себе, ≤6 — замах повз і нападник сам у бар'єр. Другий дотик
+    /// (самоудар, бар'єр) — <see cref="FollowUpOf(MatchEvent)"/>, на мітці кліпа.</para>
     /// </summary>
     public static class RingSoundMap
     {
@@ -180,23 +188,45 @@ namespace Game.Gameplay.Ring.Models
             return ForEvent(kind.ToString(), action.ToString(), false, RollTier.Strong, false);
         }
 
-        /// <summary>Звук події матчу: ступінь кидка й місце пари (бій за рингом) уточнюють звук дії.</summary>
-        public static RingCue ForEvent(MatchEvent ev)
+        /// <summary>Звук події матчу: ступінь кидка й місце пари (бій за рингом) уточнюють звук дії; предмет 10+ — стілець.</summary>
+        public static RingCue ForEvent(MatchEvent ev) { return ForEvent(ev, RingProp.Chair); }
+
+        /// <summary>Звук події матчу з реквізитом чистого удару предметом 10+, який обрав режисер.</summary>
+        public static RingCue ForEvent(MatchEvent ev, RingProp prop)
         {
             if (ev == null) return RingCue.None;
-            return ForEvent(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier, OutsideOf(ev));
+            return ForEvent(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier, OutsideOf(ev), prop);
         }
 
         /// <summary>
         /// Звук за назвами (обидва ядра): для дії й продажу — за дією, інакше — за видом події. None — лише для невідомих назв.
         /// </summary>
-        public static RingCue ForEvent(string kind, string action, bool hasRoll, RollTier tier, bool outside)
+        public static RingCue ForEvent(string kind, string action, bool hasRoll, RollTier tier, bool outside, RingProp prop = RingProp.Chair)
         {
             RingCue c;
             if (kind == null || !Kinds.TryGetValue(kind, out c)) return RingCue.None;
             if (c != RingCue.None) return c;
             if (action == null || !Actions.TryGetValue(action, out c)) return RingCue.None;
-            return Refine(action, c, hasRoll, tier, outside);
+            return Refine(action, c, hasRoll, tier, outside, prop);
+        }
+
+        /// <summary>
+        /// Другий дотик тієї самої дії — режисер кличе його на мітці кліпа (як <see cref="RingCue.RopeRebound"/> на канаті): предмет 7–9 —
+        /// нападник зачепив себе (<see cref="RingCue.Hit"/>), ≤6 — після замаху повз сам летить у бар'єр (<see cref="RingCue.BarrierSlam"/>).
+        /// None — другого дотику немає.
+        /// </summary>
+        public static RingCue FollowUpOf(MatchEvent ev)
+        {
+            return ev == null ? RingCue.None : FollowUpOf(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier);
+        }
+
+        /// <summary>Другий дотик за назвами (обидва ядра).</summary>
+        public static RingCue FollowUpOf(string kind, string action, bool hasRoll, RollTier tier)
+        {
+            if (kind != "Action" || action != "Weapon" || !hasRoll) return RingCue.None;
+            if (tier == RollTier.Partial) return RingCue.Hit;
+            if (tier == RollTier.Miss) return RingCue.BarrierSlam;
+            return RingCue.None;
         }
 
         /// <summary>Звук дії (подія Action) без ступеня кидка, на рингу.</summary>
@@ -208,13 +238,17 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>
         /// Ступінь кидка й місце пари — так, як показує <c>RingClipTable</c>: удар чи брудний прийом з провалом — ухил без контакту;
-        /// «Вийти з рингу» з провалом — суперник утримався в захваті; відчайдушний з провалом — сам падає; предмет 10+ — стіл, 7–9 —
-        /// стілець, провал — сам у бар'єр; за рингом удар і кидок ідуть у бар'єр.
+        /// «Вийти з рингу» з провалом — суперник утримався в захваті; відчайдушний з провалом — сам падає; предмет 10+ — реквізит
+        /// режисера (стілець чи стіл), 7–9 — стілець, ≤6 — замах повз (бар'єр — другим дотиком); за рингом удар і кидок ідуть у бар'єр.
         /// </summary>
-        private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside)
+        private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside, RingProp prop)
         {
             if (action == "Weapon")
-                return !hasRoll || tier == RollTier.Partial ? RingCue.WeaponChair : tier == RollTier.Strong ? RingCue.WeaponTable : RingCue.BarrierSlam;
+            {
+                if (!hasRoll || tier == RollTier.Partial) return RingCue.WeaponChair;
+                if (tier == RollTier.Strong) return prop == RingProp.Table ? RingCue.WeaponTable : RingCue.WeaponChair;
+                return RingCue.Whiff;
+            }
             if (hasRoll && tier == RollTier.Miss)
             {
                 if (action == "Strike" || action == "Dirty") return RingCue.Whiff;
