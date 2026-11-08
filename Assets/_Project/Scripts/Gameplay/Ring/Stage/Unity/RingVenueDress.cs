@@ -235,16 +235,17 @@ namespace Game.Gameplay.Ring.Stage
 
         private static bool NearAisle(Vector3 p, float r)
         {
-            var path = RingShow.Path;
             var q = new Vector2(p.x, p.z);
-            for (int i = 0; i + 1 < path.Length; i++)
-            {
-                var a = new Vector2(path[i].x, path[i].z);
-                var b = new Vector2(path[i + 1].x, path[i + 1].z);
-                Vector2 ab = b - a;
-                float t = Mathf.Clamp01(Vector2.Dot(q - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
-                if ((q - (a + ab * t)).magnitude < r) return true;
-            }
+            // Обидва шляхи виходу: до сходинок і до закочування під канатом (ENTRANCE_PROFILE.md, біт 3).
+            foreach (var path in new[] { RingShow.Path, RingShow.RollPath })
+                for (int i = 0; i + 1 < path.Length; i++)
+                {
+                    var a = new Vector2(path[i].x, path[i].z);
+                    var b = new Vector2(path[i + 1].x, path[i + 1].z);
+                    Vector2 ab = b - a;
+                    float t = Mathf.Clamp01(Vector2.Dot(q - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+                    if ((q - (a + ab * t)).magnitude < r) return true;
+                }
             return false;
         }
 

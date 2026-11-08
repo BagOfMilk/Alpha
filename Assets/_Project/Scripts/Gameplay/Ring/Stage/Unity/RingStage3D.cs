@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Game.Core.Ring.Match;
 using Game.Core.Scenes;
+using Game.Gameplay.Ring.UI;
 using Game.Gameplay.UI;
 using UnityEngine;
 
@@ -155,6 +156,8 @@ namespace Game.Gameplay.Ring.Stage
         private RingActor _micHolder;
         private readonly Dictionary<string, RingClipInfo> _info = new Dictionary<string, RingClipInfo>();
         private readonly Dictionary<string, AnimationClip> _clips = new Dictionary<string, AnimationClip>();
+        /// <summary>Жіночий набір виходу (RING_Entrance_F.fbx): ті самі імена — окремий словник, щоб не затерти чоловічі.</summary>
+        private readonly Dictionary<string, AnimationClip> _clipsF = new Dictionary<string, AnimationClip>();
         private RingMatchDirector _director;
         private RingStageMode _mode = RingStageMode.Idle;
         private Material _litCache;
@@ -235,6 +238,9 @@ namespace Game.Gameplay.Ring.Stage
                 if (c == null || c.name.StartsWith("__preview__")) continue;
                 _clips[c.name] = c;
             }
+            if (assets.clipsFemale != null)
+                foreach (var c in assets.clipsFemale)
+                    if (c != null && !c.name.StartsWith("__preview__")) _clipsF[c.name] = c;
             ParseManifest(assets.manifest);
             foreach (var k in _info.Keys) _matchClips.Add(k.EndsWith("_A") || k.EndsWith("_B") ? k.Substring(0, k.Length - 2) : k);
             ParseManifest(assets.promoManifest);
@@ -297,6 +303,26 @@ namespace Game.Gameplay.Ring.Stage
             Debug.LogWarning("[Ринг] 3D: немає кліпа " + name);
             return null;
         }
+
+        /// <summary>Кліп для постаті певної статі: жінці — з жіночого набору виходу, якщо він там є; інакше — чоловічий.</summary>
+        public AnimationClip Clip(string name, bool female)
+        {
+            AnimationClip c;
+            if (female && name != null && _clipsF.TryGetValue(name, out c)) return c;
+            return name != null ? Clip(name) : null;
+        }
+
+        /// <summary>Постать — з жіночим тілом набору (body_f_*): виходить жіночими кліпами (ENTRANCE_PROFILE.md, «стать»).</summary>
+        public bool IsFemale(RingActor a)
+        {
+            string look = a == _player ? _lookPlayer : a == _rival ? _lookRival : null;
+            return look != null && look.StartsWith("body_f_", StringComparison.Ordinal);
+        }
+
+        internal RingMatchDirector Director { get { return _director; } }
+
+        /// <summary>Скасувати відкладений звук удару виходу (тема, гонг, оплески) — вихід закінчився чи пропущений.</summary>
+        internal void CancelEntranceSound() { if (_sound != null) _sound.CancelEntranceHit(); }
 
         private void BuildArena()
         {
@@ -852,15 +878,42 @@ namespace Game.Gameplay.Ring.Stage
             if (_sound != null) { _sound.TitleMusic(); _sound.Crowd(0); }
         }
 
-        public void BeginEntrance(bool player, string title, string subtitle, int rgb)
+        /// <summary>Хто вже виходив за цю сесію (B07 п. 4: повтор — скорочений, без тизера й тремтіння).</summary>
+        private readonly HashSet<string> _entered = new HashSet<string>();
+        private string _tronTier;
+
+        /// <summary>
+        /// Щабель екрана виходу: нині в грі лише спортзал (gym); для огляду — <c>-tron-tier hall|arena</c> (ТЗ B07, «Рецепт»).
+        /// </summary>
+        private string TronTier(string asked)
+        {
+            if (_tronTier == null)
+            {
+                _tronTier = "";
+                var args = Environment.GetCommandLineArgs();
+                for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "-tron-tier") _tronTier = args[i + 1];
+            }
+            return _tronTier.Length > 0 ? _tronTier : string.IsNullOrEmpty(asked) ? "gym" : asked;
+        }
+
+        public void BeginEntrance(bool player, EntranceRecipe recipe, EntranceProfile profile, int costumeRgb)
         {
             _mode = RingStageMode.Idle;
             if (_director != null) _director.EndMatch();
             HideMic();
             _show.LeaveBackstage();
-            var c = new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
-            _show.BeginEntrance(player ? _player : _rival, title, subtitle, c);
-            if (_sound != null) { _sound.Crowd(1); _sound.EntranceMusic(player, !player && _lookRival != null && _lookRival.StartsWith("body_m_nordic")); }
+            if (recipe == null) recipe = new EntranceRecipe { Player = player, Role = player ? "hero" : "villain" };
+            if (profile == null) profile = EntranceProfile.Compose(new EntranceInput { Player = player });
+            recipe.Tier = TronTier(recipe.Tier);
+            var a = player ? _player : _rival;
+            bool repeat = !_entered.Add(recipe.Name ?? "");
+            var costume = RingTheme.Rgb((uint)costumeRgb);
+            _show.BeginEntrance(a, recipe, profile, costume, IsFemale(a), repeat);
+            if (_sound != null)
+            {
+                _sound.Crowd(profile.Crowd);
+                _sound.EntranceMusic(player, !player && _lookRival != null && _lookRival.StartsWith("body_m_nordic"), _show.HitIn, !profile.CrowdBoo);
+            }
         }
 
         /// <summary>Настрій залу за ажіотажем матчу (0…10): холодний, оплески, крики, кипить.</summary>
@@ -1021,6 +1074,7 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Фаз-тест матчу (телепорти, крізь канати, ковзання стоп) — підсумок у <see cref="PlayedReport"/>.</summary>
         public RingStageWatch Watch { get; } = new RingStageWatch();
         private readonly RingActor[] _watchActors = new RingActor[3];
+        private readonly RingActor[] _watchShow = new RingActor[1];
 
         /// <summary>Постаті переставлено поза кадром (новий матч) — фаз-тест починає відлік з нових місць.</summary>
         private void ForgetWatch()
@@ -1035,10 +1089,17 @@ namespace Game.Gameplay.Ring.Stage
             if (_player != null) _player.Tick(Time.deltaTime);
             if (_rival != null) _rival.Tick(Time.deltaTime);
             if (_ref != null) _ref.Tick(Time.deltaTime);
+            if (_show != null) _show.PinWalker();
             if (_mode == RingStageMode.Match)
             {
                 _watchActors[0] = _player; _watchActors[1] = _rival; _watchActors[2] = _ref;
                 Watch.Tick(_watchActors, Time.deltaTime, !_camInit);
+            }
+            else if (_show != null && _show.Busy && _show.EntranceActor != null)
+            {
+                // Фаз-тест і для виходу (пакет «Відео огляд», п. 4): телепорти, крізь канати, ковзання стоп того, хто виходить.
+                _watchShow[0] = _show.EntranceActor;
+                Watch.Tick(_watchShow, Time.deltaTime, !_camInit || _show.CamCut);
             }
             if (_show != null) _show.TickBooker(Time.deltaTime);
             if (_cam == null) return;

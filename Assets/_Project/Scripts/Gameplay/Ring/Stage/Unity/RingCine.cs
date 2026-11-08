@@ -24,8 +24,10 @@ namespace Game.Gameplay.Ring.Stage
         /// <param name="top">Найвища точка — не вище цієї частки висоти кадру від верху.</param>
         /// <param name="bottom">Найнижча — не нижче цієї частки.</param>
         /// <param name="side">Поле збоку, частка ширини.</param>
+        /// <param name="tops">Межа зверху для кожної точки окремо (null — <paramref name="top"/> для всіх): голови — під зоною
+        /// слова, піднята рука може зайти вище (Статут FX-05 стереже обличчя, не руки).</param>
         public static Shot Frame(IList<Vector3> pts, float yawDeg, float pitchDeg, float fov, float aspect,
-            float top, float bottom, float side, Func<Vector3, bool> allowed, float dMin = 1.2f, float dMax = 12f)
+            float top, float bottom, float side, Func<Vector3, bool> allowed, float dMin = 1.2f, float dMax = 12f, IList<float> tops = null)
         {
             var best = new Shot { Ok = false, Fov = fov };
             if (pts == null || pts.Count == 0) return best;
@@ -48,8 +50,9 @@ namespace Game.Gameplay.Ring.Stage
                     float z = Vector3.Dot(v, F) + d;
                     if (z < 0.4f) { front = false; break; }
                     float y = Vector3.Dot(v, U), x = Vector3.Dot(v, R);
+                    float hiI = tops != null && i < tops.Count ? 1f - 2f * tops[i] : hi;
                     // (y − h) / (z·tanH) ∈ [lo, hi]  ⇔  h ∈ [y − hi·z·tanH, y − lo·z·tanH]
-                    hLo = Mathf.Max(hLo, y - hi * z * tanH);
+                    hLo = Mathf.Max(hLo, y - hiI * z * tanH);
                     hHi = Mathf.Min(hHi, y - lo * z * tanH);
                     wLo = Mathf.Max(wLo, x - k * z * tanH * aspect);
                     wHi = Mathf.Min(wHi, x + k * z * tanH * aspect);
@@ -70,12 +73,12 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Те саме з кількома кутами огляду: перший вдалий (ширший кут — лише якщо ближче не вміщається).</summary>
         public static Shot FrameAny(IList<Vector3> pts, float yawDeg, float pitchDeg, float[] fovs, float aspect,
-            float top, float bottom, float side, Func<Vector3, bool> allowed, float dMin = 1.2f, float dMax = 12f)
+            float top, float bottom, float side, Func<Vector3, bool> allowed, float dMin = 1.2f, float dMax = 12f, IList<float> tops = null)
         {
             var s = new Shot();
             for (int i = 0; i < fovs.Length; i++)
             {
-                s = Frame(pts, yawDeg, pitchDeg, fovs[i], aspect, top, bottom, side, allowed, dMin, dMax);
+                s = Frame(pts, yawDeg, pitchDeg, fovs[i], aspect, top, bottom, side, allowed, dMin, dMax, tops);
                 s.Fov = fovs[i];
                 if (s.Ok) return s;
             }

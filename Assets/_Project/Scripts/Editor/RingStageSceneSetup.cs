@@ -94,7 +94,29 @@ namespace Game.Gameplay.EditorTools
                 }
             }
             assets.clips = clips.ToArray();
-            assets.manifest = Load<TextAsset>("Assets/Art/Animations/ring_anims_manifest.txt");
+            // Жіночий набір виходу — окремим масивом: ті самі імена, що в RING_Entrance.fbx (ENTRANCE_PROFILE.md).
+            var clipsF = new List<AnimationClip>();
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath("Assets/Art/Animations/RING_Entrance_F.fbx"))
+            {
+                var c = o as AnimationClip;
+                if (c != null && !c.name.StartsWith("__preview__")) clipsF.Add(c);
+            }
+            assets.clipsFemale = clipsF.ToArray();
+            // Екран виходу (ТЗ B07): пули й маски мотивів лишаються в теці директора (генератор пише туди) — у білд їх
+            // тягнуть ці посилання; печатка — з бренду.
+            const string Tron = Art + "Titantron/";
+            assets.tronPools = AssetDatabase.FindAssets("t:TextAsset", new[] { Tron + "pools" })
+                .Select(g => AssetDatabase.LoadAssetAtPath<TextAsset>(AssetDatabase.GUIDToAssetPath(g)))
+                .Where(t => t != null).OrderBy(t => t.name).ToArray();
+            assets.tronSprites = AssetDatabase.FindAssets("t:Texture2D", new[] { Tron + "sprites" })
+                .Select(g => AssetDatabase.LoadAssetAtPath<Texture2D>(AssetDatabase.GUIDToAssetPath(g)))
+                .Where(t => t != null).OrderBy(t => t.name).ToArray();
+            assets.tronSeal = Load<Texture2D>(Art + "Brand/emblem_seal_1024.png");
+            assets.beltProp = Load<GameObject>(Art + "Cast/Props/belt.fbx");
+            assets.beltAlbedo = Load<Texture2D>(Art + "Cast/Props/Textures/belt_albedo.png");
+            assets.beltNormal = Load<Texture2D>(Art + "Cast/Props/Textures/belt_normal.png");
+            Debug.Log("[Ринг] 3D: виходи — жіночих кліпів " + clipsF.Count + ", пулів екрана " + assets.tronPools.Length + ", мотивів " + assets.tronSprites.Length);
+            assets.manifest =Load<TextAsset>("Assets/Art/Animations/ring_anims_manifest.txt");
             assets.promoManifest = Load<TextAsset>("Assets/Art/Animations/ring_promo_manifest.txt");
             assets.entranceManifest = Load<TextAsset>("Assets/Art/Animations/ring_entrance_manifest.txt");
             assets.events = Load<TextAsset>("Assets/Art/Animations/ring_anims_events.txt");

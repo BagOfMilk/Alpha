@@ -105,25 +105,52 @@ namespace Game.Gameplay.Ring.Stage
         public void Match()
         {
             _cue = "match"; _cueT = 0f; _headMode = "off"; _bpm = 0f; _followTarget = null;
+            if (_entranceCo != null) { StopCoroutine(_entranceCo); _entranceCo = null; }
+            _entranceRing = false;
             Stop(_co2L); Stop(_co2R); Stop(_sparkL); Stop(_sparkR);
         }
 
-        /// <summary>Вихід: зала гасне, червоні PAR, голови ходять по такту, прожектор веде борця, CO2 й холодні іскри біля завіси.</summary>
-        public void Entrance(Transform wrestler, Color color)
+        /// <summary>
+        /// Вихід: зала гасне (лиходію — ще на 30 %), PAR червоніють, голови ходять по такту ролика екрана виходу
+        /// (<paramref name="bpm"/> — його темп, ТЗ B07 п. 2) кольорами профілю (ENTRANCE_PROFILE.md біт 5), прожектор веде
+        /// борця. CO2 — на ударі екрана (<paramref name="hitIn"/> с), холодні іскри — лише з Харизмою ≥ 2.
+        /// </summary>
+        public void Entrance(Transform wrestler, Color[] heads, float[] gain, float bpm, float hitIn, bool sparks, float hall)
         {
-            _cue = "entrance"; _cueT = 0f; _headMode = "curtain"; _bpm = 120f; _followTarget = wrestler;
-            _headColors = new[] { color, Gold, Red, White };
-            StartCoroutine(EntranceFx());
+            if (_entranceCo != null) StopCoroutine(_entranceCo);
+            _cue = "entrance"; _cueT = 0f; _headMode = "curtain"; _bpm = bpm > 0f ? bpm : 120f; _followTarget = wrestler;
+            _headColors = heads != null && heads.Length > 0 ? heads : new[] { White };
+            _headGain = gain;
+            _hall = hall > 0f ? hall : 1f;
+            _entranceRing = false;
+            _beatAt = -hitIn;   // такт голів — від удару: перший колір міняється разом зі спалахом екрана
+            _entranceCo = StartCoroutine(EntranceFx(hitIn, sparks, _bpm));
         }
 
-        private IEnumerator EntranceFx()
+        private Coroutine _entranceCo;
+        private float[] _headGain;
+        private float _hall = 1f, _beatAt;
+
+        private IEnumerator EntranceFx(float hitIn, bool sparks, float bpm)
         {
+            if (hitIn > 0f) yield return new WaitForSeconds(hitIn);
             Burst(_co2L); Burst(_co2R);
-            yield return new WaitForSeconds(0.35f);
-            Burst(_sparkL); Burst(_sparkR);
-            yield return new WaitForSeconds(2.4f);
+            if (sparks) { Burst(_sparkL); Burst(_sparkR); }
+            // Другий подих CO2 — через чотири такти після удару (на сітці бітів).
+            yield return new WaitForSeconds(4f * 60f / bpm);
             Burst(_co2L); Burst(_co2R);
         }
+
+        /// <summary>
+        /// Борець уже в рингу (поза, пояс): ринг підсвічено спереду, як для бою, зала лишається темною, голови йдуть далі тим
+        /// самим тактом (огляд виходів 08.11.2026: поза на канаті в куті виходила майже чорною).
+        /// </summary>
+        public void EntranceRing() { if (_cue == "entrance") _entranceRing = true; }
+
+        private bool _entranceRing;
+
+        /// <summary>Вогняні фонтани на задніх кутах рингу — на позі головного, титульного бою чи чемпіона (біт 5).</summary>
+        public void RingPyro() { Burst(_pyroL); Burst(_pyroR); }
 
         /// <summary>Фінішер: короткий стробоскоп і віяло білих і золотих променів на ринг.</summary>
         /// <summary>Лічильник великих моментів (фінішер, перемога) — огляд ботом знімає кадр саме тоді.</summary>
@@ -197,7 +224,10 @@ namespace Game.Gameplay.Ring.Stage
             Color parTint;
             switch (_cue)
             {
-                case "entrance": house = 0.35f; parMul = 0.55f; haze = 1.8f; keyMul = 0.5f; parTint = new Color(1f, 0.45f, 0.4f); break;
+                case "entrance":
+                    if (_entranceRing) { house = 0.5f * _hall; parMul = 1.0f; haze = 1.4f; keyMul = 1.0f; parTint = Color.clear; }
+                    else { house = 0.35f * _hall; parMul = 0.55f * _hall; haze = 1.8f; keyMul = 0.5f; parTint = new Color(1f, 0.45f, 0.4f); }
+                    break;
                 // стробоскоп фінішера; «Спалахи» вимкнено — рівне яскраве світло без блимання (фотосенситивність)
                 case "finisher": house = 0.3f; parMul = !Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes ? 1.2f : Strobe() ? 1.8f : 0.15f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
                 case "victory": house = 1.1f; parMul = 1.3f; haze = 1.3f; keyMul = 1.1f; parTint = Gold; break;
@@ -220,13 +250,16 @@ namespace Game.Gameplay.Ring.Stage
             RenderSettings.fogDensity = Mathf.Lerp(RenderSettings.fogDensity, _fogBase * haze, k);
 
             // Рухомі голови: колір по черзі за тактом, напрям — за режимом.
-            int beat = _bpm > 0f ? Mathf.FloorToInt(_cueT * _bpm / 60f) : 0;
+            int beat = _bpm > 0f ? Mathf.FloorToInt((_cueT + (_cue == "entrance" ? _beatAt : 0f)) * _bpm / 60f) : 0;
+            if (beat < 0) beat = 0;
             for (int i = 0; i < _heads.Count; i++)
             {
                 var h = _heads[i];
                 if (_headMode == "off" || _headColors.Length == 0) { h.intensity = Mathf.Lerp(h.intensity, 0f, k); continue; }
-                h.color = _headColors[(i + beat) % _headColors.Length];
-                h.intensity = Mathf.Lerp(h.intensity, _headMode == "curtain" ? 16f : 40f, k);
+                int ci = (i + beat) % _headColors.Length;
+                h.color = _headColors[ci];
+                float g = _cue == "entrance" && _headGain != null && ci < _headGain.Length ? _headGain[ci] : 1f;
+                h.intensity = Mathf.Lerp(h.intensity, (_headMode == "curtain" ? 16f : 40f) * g, k);
                 Vector3 tgt = HeadTarget(i, _cueT);
                 h.transform.rotation = Quaternion.Slerp(h.transform.rotation, Quaternion.LookRotation(tgt - h.transform.position), 1f - Mathf.Exp(-6f * dt));
             }
