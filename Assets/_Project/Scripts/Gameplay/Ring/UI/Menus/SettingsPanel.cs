@@ -107,7 +107,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             b.Text.style.marginLeft = 22f;
             b.style.marginLeft = 12f;
             int idx = _buttons.Count;
-            b.OnHover = () => { if (_dialog == null && _capturing == null && _focus.Set(_rows.Count + idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
+            b.OnHover = () => { if (RingMenuInput.MouseArmed && _dialog == null && _capturing == null && _focus.Set(_rows.Count + idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
             b.OnClick = () => { if (_dialog == null && _capturing == null) act(); };
             _buttons.Add(b);
             row.Add(b);
@@ -216,7 +216,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             r.style.marginBottom = RowGap;
             r.style.marginLeft = _rows.Count * RowStep;
             int idx = _rows.Count;
-            r.OnHover = () => { if (_dialog == null && _capturing == null && _focus.Set(idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
+            r.OnHover = () => { if (RingMenuInput.MouseArmed && _dialog == null && _capturing == null && _focus.Set(idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
             _rows.Add(r);
             _rowsBox.Add(r);
             return r;

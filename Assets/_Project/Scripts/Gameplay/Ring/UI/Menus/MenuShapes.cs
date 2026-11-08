@@ -154,7 +154,8 @@ namespace Game.Gameplay.Ring.UI.Menus
                 case PlateState.Focus:
                 case PlateState.Pressed: fill = RingTheme.PrimaryAction; break;
                 case PlateState.Disabled: fill = RingTheme.Panel; break;
-                default: fill = _primary ? RingTheme.PrimaryAction : RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaPlate); break;
+                // непрозоро: у лінійному кольорі навіть 6 % паперу з-під обведення висвітлювали заливку до сірого (кадр 08.11.2026)
+                default: fill = _primary ? RingTheme.PrimaryAction : RingTheme.Bg; break;
             }
             MenuShapes.Trapezoid(p, 0f, 0f, w, h, k, fill);
             if (_stripe > 0f)

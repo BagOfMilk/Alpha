@@ -151,6 +151,21 @@ namespace Game.Gameplay.Ring.Models
 
         public void CompleteStep() { if (_done < _weights.Length) _done++; }
 
+        /// <summary>
+        /// Етап за ПОКАЗАНОЮ шкалою (0…кроків−1): підпис «Етап N / M» іде разом зі шкалою, а не з роботою, яка на швидкій
+        /// машині закінчується раніше (кадр огляду 08.11.2026: «Етап 4 / 4» при 31 %).
+        /// </summary>
+        public int StepAtShown()
+        {
+            float cum = 0f;
+            for (int i = 0; i < _weights.Length; i++)
+            {
+                cum += _weights[i];
+                if (_shown < cum - 0.0001f) return i;
+            }
+            return Math.Max(0, _weights.Length - 1);
+        }
+
         public bool WorkDone { get { return _done >= _weights.Length; } }
 
         /// <summary>Можна йти далі: робота готова, показ дійшов до 100 % і минув мінімальний час.</summary>

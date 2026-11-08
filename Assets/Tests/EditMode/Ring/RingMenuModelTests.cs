@@ -213,6 +213,18 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Loading_StageLabelFollowsShownBar()
+        {
+            var p = new LoadingProgress(new[] { 1f, 1f, 1f, 1f }, 1400f);
+            p.CompleteStep(); p.CompleteStep(); p.CompleteStep(); p.CompleteStep();
+            Assert.AreEqual(0, p.StepAtShown(), "робота вже вся, а шкала на нулі — підпис «Етап 1»");
+            while (p.Shown < 0.3f) p.Tick(16f);
+            Assert.AreEqual(1, p.StepAtShown(), "30 % при чотирьох рівних кроках — другий етап");
+            while (!p.CanExit) p.Tick(16f);
+            Assert.AreEqual(3, p.StepAtShown());
+        }
+
+        [Test]
         public void Loading_TipsRotate()
         {
             Assert.AreEqual(3, LoadingProgress.TipIndex(0f, 4500f, 3, 10));
