@@ -105,6 +105,11 @@
     -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AutoplayInEditor.cs" />
     <!--
+      «Ринг» у Play Mode редактора без збірки (08.11.2026): та сама глибина редактора (SessionState, EditorWindow,
+      події Play Mode, RingSceneBuilder). RingLaunchArgs у Gameplay лінтується — редакторна частина під UNITY_EDITOR.
+    -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingInEditor.cs" />
+    <!--
       Модульні персонажі й екран створення (Поправка №19, 07.10.2026): SkinnedMeshRenderer,
       bindposes, RenderTexture, MaterialPropertyBlock, Image/TextField/події вказівника UI Toolkit —
       глибше за заглушки. Компілюються проти справжніх DLL Unity 6000.4 окремим прогоном; чисті

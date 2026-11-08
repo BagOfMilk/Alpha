@@ -135,13 +135,8 @@ namespace Game.Gameplay.Ring.Stage
         public RingFx Fx { get { return _fx; } }
         public RingShow Show { get { return _show; } }
 
-        public static string ReadArg(string name)
-        {
-            string[] args = Environment.GetCommandLineArgs();
-            for (int i = 0; i + 1 < args.Length; i++)
-                if (args[i] == name) return args[i + 1];
-            return null;
-        }
+        /// <summary>Аргумент запуску; у Play Mode редактора — ще й з файла RingInEditor (див. <see cref="RingLaunchArgs"/>).</summary>
+        public static string ReadArg(string name) { return RingLaunchArgs.Value(name); }
 
         // ============================ запуск ============================
 
@@ -1101,7 +1096,7 @@ namespace Game.Gameplay.Ring.Stage
             var parts = new System.Text.StringBuilder();
             foreach (var kv in byCat) parts.Append(" | " + kv.Key + " " + kv.Value[0] + "/" + kv.Value[1]);
             if (_budgetShots == 2 && _dress != null) _dress.Diagnose();
-            if (_budgetShots == 2 && _dress != null && _dress.FanCount > 4 && System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-ring-crowd-debug") >= 0)
+            if (_budgetShots == 2 && _dress != null && _dress.FanCount > 4 && RingLaunchArgs.Has("-ring-crowd-debug"))
                 _dress.DebugShot(_cam, System.IO.Path.Combine(Application.dataPath, "..", "crowd_debug.png"));
             Debug.Log("[Ринг] бюджет: " + (_mode == RingStageMode.Promo ? "промо" : _shot.ToString()) + " трикутників " + tris + ", рендерерів " + rends + ", викликів ~" + calls
                 + ", матеріалів " + matSet.Count + ", шейдерів " + passes.Count + ", на Mesh LOD > 0: " + lodded

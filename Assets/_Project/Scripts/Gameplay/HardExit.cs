@@ -18,7 +18,9 @@ namespace Game.Gameplay
     /// <c>TerminateProcess</c> завершує процес одразу і з потрібним кодом
     /// виходу. Усе, що має зберегтися, на цей момент вже записано:
     /// автосейв робиться вранці, підсумок автопрогону — перед викликом.
-    /// У редакторі та на інших платформах — звичайний <c>Application.Quit</c>.
+    /// У редакторі — вихід із Play Mode: <c>Application.Quit</c> там нічого не робить, і огляд «Рингу» в редакторі
+    /// (<c>Editor/RingInEditor</c>, власник 08.11.2026: «ти її міг локально тестувати без білдку») стояв би до тайм-ауту.
+    /// На інших платформах — звичайний <c>Application.Quit</c>.
     /// </summary>
     public static class HardExit
     {
@@ -35,6 +37,8 @@ namespace Game.Gameplay
         {
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
             TerminateProcess(GetCurrentProcess(), unchecked((uint)exitCode));
+#elif UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
 #else
             UnityEngine.Application.Quit(exitCode);
 #endif

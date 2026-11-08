@@ -296,13 +296,8 @@ namespace Game.Gameplay.Ring
             return s != null && ulong.TryParse(s, out v) ? v : (ulong)DateTime.UtcNow.Ticks;
         }
 
-        private static string ReadArg(string name)
-        {
-            string[] args = Environment.GetCommandLineArgs();
-            for (int i = 0; i + 1 < args.Length; i++)
-                if (args[i] == name) return args[i + 1];
-            return null;
-        }
+        /// <summary>Аргумент запуску; у Play Mode редактора — ще й з файла RingInEditor (див. <see cref="RingLaunchArgs"/>).</summary>
+        private static string ReadArg(string name) { return RingLaunchArgs.Value(name); }
 
         private bool BuildUi()
         {

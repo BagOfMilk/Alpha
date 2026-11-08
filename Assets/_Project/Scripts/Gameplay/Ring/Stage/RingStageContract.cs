@@ -95,12 +95,7 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Запущено налагоджувальний показ <c>-ring-demo &lt;тека&gt;</c>: UI сховано, 3D програє сам.</summary>
         public static bool DemoRequested
         {
-            get
-            {
-                string[] args = System.Environment.GetCommandLineArgs();
-                for (int i = 0; i < args.Length; i++) if (args[i] == "-ring-demo") return true;
-                return false;
-            }
+            get { return RingLaunchArgs.Has("-ring-demo"); }
         }
 
         /// <summary>Режисер чекає кліпів (false, якщо 3D немає).</summary>

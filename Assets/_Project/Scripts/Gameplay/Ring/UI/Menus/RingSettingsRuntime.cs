@@ -48,11 +48,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             if (HasArg("-gfx")) { GraphicsTier.InitOnce(); _defaultQuality = QualitySettings.GetQualityLevel(); }
         }
 
-        private static bool HasArg(string name)
-        {
-            foreach (var a in Environment.GetCommandLineArgs()) if (string.Equals(a, name, StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
-        }
+        private static bool HasArg(string name) { return RingLaunchArgs.Has(name); }
 
         /// <summary>Множник масштабу UI з налаштувань (90–120 %).</summary>
         public float UiScale { get { return Model.Applied.UiScale / 100f; } }

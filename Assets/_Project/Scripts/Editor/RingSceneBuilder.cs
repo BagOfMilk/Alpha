@@ -89,10 +89,21 @@ namespace Game.Gameplay.EditorTools
         /// Окремий білд зрізу: лише сцена RingFeud у Build/Ring/Ring.exe (Build Settings не чіпаємо — сцена передається
         /// прямо). Для огляду вигляду: <c>Ring.exe -ring-shots &lt;тека&gt;</c> проходить ворожнечу ботом і знімає екрани.
         /// Із консолі: -executeMethod Game.Gameplay.EditorTools.RingSceneBuilder.BuildPlayer
+        ///
+        /// Без Development (власник, 08.11.2026: «Зроби так шоб гра більше не ходила в інтернет»): Development-збірка при
+        /// старті відкриває мережевий порт підключення профайлера (player connection, 192.168.x.x:55000, режим Listen у
+        /// boot.config) — Windows питала дозвіл на мережу, а в кадрі стояв напис «Development Build». Код гри в мережу не
+        /// ходить, сервіси Unity (аналітика, звіти про збої) вимкнені в UnityConnectSettings. Профайлер — <see cref="BuildPlayerDev"/>.
         /// </summary>
-        public static void BuildPlayer() { BuildPlayerTo("Ring", true); }
+        public static void BuildPlayer() { BuildPlayerTo("Ring", false); }
 
-        /// <summary>Збірка для показу власнику: без Development (без напису «Development Build» у кадрі) — Build/RingShow/Ring.exe.</summary>
+        /// <summary>
+        /// Збірка з профайлером і налагоджувачем (Development) — лише коли потрібен Unity Profiler; вона відкриває мережевий
+        /// порт. Build/RingDev/Ring.exe. Для огляду й тестів — <see cref="BuildPlayer"/> або Play Mode редактора (RingInEditor).
+        /// </summary>
+        public static void BuildPlayerDev() { BuildPlayerTo("RingDev", true); }
+
+        /// <summary>Збірка для показу власнику — та сама, що <see cref="BuildPlayer"/>, у Build/RingShow/Ring.exe (лишається для старих команд).</summary>
         public static void BuildPlayerShow() { BuildPlayerTo("RingShow", false); }
 
         /// <summary>

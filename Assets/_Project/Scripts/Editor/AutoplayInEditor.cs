@@ -97,7 +97,8 @@ namespace Game.Gameplay.EditorTools
             return "started" + sizeNote;
         }
 
-        private static EditorWindow FindGameView()
+        // internal: те саме бере огляд «Рингу» в редакторі (RingInEditor).
+        internal static EditorWindow FindGameView()
         {
             var gameViewType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GameView");
             if (gameViewType == null) return null;
@@ -114,7 +115,7 @@ namespace Game.Gameplay.EditorTools
         /// цій версії Unity щось перейменовано, тур іде в поточному розмірі
         /// Game view, а відповідь каже чому.
         /// </summary>
-        private static string TrySetGameViewSize(EditorWindow gameView, int width, int height)
+        internal static string TrySetGameViewSize(EditorWindow gameView, int width, int height)
         {
             try
             {
