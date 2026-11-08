@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "note": "Дані генератора екранів виходу (див. docs/ring/design/briefs/B07_entrance_screen.md). Кольори — лише слоти `$…` (карта нижче) або імена токенів brand_tokens.json; прозорість — лише кроки з `alpha`. Власник палітри — арт-директор. Числа ритму й розкладки — ПЛЕЙСХОЛДЕР до перегляду в грі.",
+  "frame": { "w": 1024, "h": 512 },
+  "alpha": { "ghost": "tronGhost", "dim": "tronDim", "mid": "tronMid" },
+  "playerSlots": { "$accent": "gold", "$flash": "gold" },
+  "monoSlots": { "$roleText": "paper", "$cool": "paper", "$flash": "paper", "$ground2": "ink0" },
+  "variants": 4,
+  "roles": ["hero", "villain", "rebel"],
+  "tiersOrder": ["gym", "hall", "arena"],
+  "slots": {
+    "hero":    { "$role": "cobalt",  "$roleText": "cobaltText", "$flash": "cobaltText", "$shadow": "ink0", "$onRole": "paper", "$accent": "paper", "$cool": "frost", "$ground": "ink0", "$ground2": "ink1", "$paper": "paper" },
+    "villain": { "$role": "crimson", "$roleText": "signal",     "$flash": "signal",     "$shadow": "ink0", "$onRole": "paper", "$accent": "paper", "$cool": "frost", "$ground": "ink0", "$ground2": "ink1", "$paper": "paper" },
+    "rebel":   { "$role": "rose",    "$roleText": "rose",       "$flash": "rose",       "$shadow": "paper", "$onRole": "ink0",  "$accent": "paper", "$cool": "frost", "$ground": "ink0", "$ground2": "ink1", "$paper": "paper" }
+  },
+  "tiers": {
+    "gym":   { "fps": 6,  "hitBeat": 2, "maxLayers": 12, "mono": true,  "handFont": true,  "scan": true,  "label": "спортзал: проєктор на простирадлі" },
+    "hall":  { "fps": 12, "hitBeat": 2, "maxLayers": 18, "mono": false, "handFont": false, "scan": false, "label": "клуб: ТВ-панелі" },
+    "arena": { "fps": 30, "hitBeat": 4, "maxLayers": 30, "mono": false, "handFont": false, "scan": false, "label": "Палац: LED-стіна" }
+  },
+  "gimmicks": {
+    "monster":    { "bpm": 100 },
+    "flyer":      { "bpm": 132 },
+    "technician": { "bpm": 112 },
+    "showman":    { "bpm": 120 }
+  },
+  "fonts": {
+    "display900": "Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Black.ttf",
+    "display800": "Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-ExtraBold.ttf",
+    "display700": "Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/SofiaSansExtraCondensed-Bold.ttf",
+    "hand":       "Assets/ThirdParty/Fonts/AmaticSC/AmaticSC-Bold.ttf",
+    "text":       "Assets/ThirdParty/Fonts/Fixel/FixelText-SemiBold.ttf"
+  },
+  "easing": ["l", "o2", "o3", "i2", "i3", "io2", "ob", "s"],
+  "sampleRecipes": [
+    { "id": "stalevyi", "nick": "Сталевий", "full": "Богдан Дуб",        "gimmick": "monster",    "role": "hero",    "player": false },
+    { "id": "dzhura",   "nick": "Колібрі",  "full": "Матео Рамос",       "gimmick": "flyer",      "role": "hero",    "player": false },
+    { "id": "vdova",    "nick": "Вдова",    "full": "Мей Лін",           "gimmick": "technician", "role": "villain", "player": false },
+    { "id": "baron",    "nick": "Барон",    "full": "Олівер Вінслоу",    "gimmick": "showman",    "role": "villain", "player": false },
+    { "id": "hammer",   "nick": "Молот",    "full": "Тарас Гребінь",     "gimmick": "monster",    "role": "villain", "player": false },
+    { "id": "komet",    "nick": "Комета",   "full": "Амара Окафор",      "gimmick": "flyer",      "role": "hero",    "player": false },
+    { "id": "player",   "nick": "Новачок",  "full": "",                  "gimmick": "showman",    "role": "rebel",   "player": true  }
+  ]
+}

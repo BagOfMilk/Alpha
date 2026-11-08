@@ -36,6 +36,9 @@ namespace Game.Gameplay.Ring.Models
         public const float AlphaScrim = 0.72f;
         public const float AlphaPlate = 0.94f;
         public const float AlphaUnderlay = 0.62f;
+        public const float AlphaTronGhost = 0.18f;
+        public const float AlphaTronDim = 0.34f;
+        public const float AlphaTronMid = 0.58f;
 
         // ---- кегль (еталон 900 px висоти екрана) ----
         public const int TypeRefHeight = 900;
@@ -47,6 +50,8 @@ namespace Game.Gameplay.Ring.Models
         public const int TypeLead = 20;
         public const int TypeTitle = 28;
         public const int TypeDisplay = 44;
+        public const int TypeMenu = 34;
+        public const int TypeLogo = 164;
         public const int StingerT0 = 36;
         public const int StingerT1 = 46;
         public const int StingerT2 = 72;

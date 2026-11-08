@@ -1,0 +1,107 @@
+{
+ "rays24": {
+  "w": 1024,
+  "h": 1024,
+  "tile": false
+ },
+ "rays12w": {
+  "w": 1024,
+  "h": 1024,
+  "tile": false
+ },
+ "speed": {
+  "w": 1024,
+  "h": 1024,
+  "tile": false
+ },
+ "crack": {
+  "w": 1024,
+  "h": 1024,
+  "tile": false
+ },
+ "bolt1": {
+  "w": 512,
+  "h": 1024,
+  "tile": false
+ },
+ "bolt2": {
+  "w": 512,
+  "h": 1024,
+  "tile": false
+ },
+ "flame": {
+  "w": 1024,
+  "h": 512,
+  "tile": false
+ },
+ "halftone_r": {
+  "w": 1024,
+  "h": 512,
+  "tile": false
+ },
+ "halftone_flat": {
+  "w": 256,
+  "h": 256,
+  "tile": true
+ },
+ "grid": {
+  "w": 128,
+  "h": 128,
+  "tile": true
+ },
+ "ticks": {
+  "w": 1024,
+  "h": 48,
+  "tile": true
+ },
+ "bulbs_a": {
+  "w": 1024,
+  "h": 96,
+  "tile": false
+ },
+ "bulbs_b": {
+  "w": 1024,
+  "h": 96,
+  "tile": false
+ },
+ "cone": {
+  "w": 512,
+  "h": 1024,
+  "tile": false
+ },
+ "torn": {
+  "w": 1024,
+  "h": 128,
+  "tile": false
+ },
+ "chevron": {
+  "w": 170,
+  "h": 256,
+  "tile": true
+ },
+ "star8": {
+  "w": 512,
+  "h": 512,
+  "tile": false
+ },
+ "scan": {
+  "w": 8,
+  "h": 8,
+  "tile": true
+ },
+ "bracket": {
+  "w": 128,
+  "h": 128,
+  "tile": false
+ },
+ "curtain": {
+  "w": 256,
+  "h": 64,
+  "tile": true
+ },
+ "confetti": {
+  "w": 256,
+  "h": 256,
+  "tile": true
+ }
+}

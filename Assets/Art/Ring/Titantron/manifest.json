@@ -1,0 +1,124 @@
+{
+ "version": 1,
+ "frame": {
+  "w": 1024,
+  "h": 512
+ },
+ "pools": [
+  "flyer_hero_arena.json",
+  "flyer_hero_gym.json",
+  "flyer_hero_hall.json",
+  "flyer_rebel_arena.json",
+  "flyer_rebel_gym.json",
+  "flyer_rebel_hall.json",
+  "flyer_villain_arena.json",
+  "flyer_villain_gym.json",
+  "flyer_villain_hall.json",
+  "monster_hero_arena.json",
+  "monster_hero_gym.json",
+  "monster_hero_hall.json",
+  "monster_rebel_arena.json",
+  "monster_rebel_gym.json",
+  "monster_rebel_hall.json",
+  "monster_villain_arena.json",
+  "monster_villain_gym.json",
+  "monster_villain_hall.json",
+  "showman_hero_arena.json",
+  "showman_hero_gym.json",
+  "showman_hero_hall.json",
+  "showman_rebel_arena.json",
+  "showman_rebel_gym.json",
+  "showman_rebel_hall.json",
+  "showman_villain_arena.json",
+  "showman_villain_gym.json",
+  "showman_villain_hall.json",
+  "technician_hero_arena.json",
+  "technician_hero_gym.json",
+  "technician_hero_hall.json",
+  "technician_rebel_arena.json",
+  "technician_rebel_gym.json",
+  "technician_rebel_hall.json",
+  "technician_villain_arena.json",
+  "technician_villain_gym.json",
+  "technician_villain_hall.json"
+ ],
+ "sprites": [
+  "bolt1",
+  "bolt2",
+  "bracket",
+  "brand_seal",
+  "bulbs_a",
+  "bulbs_b",
+  "chevron",
+  "cone",
+  "confetti",
+  "crack",
+  "curtain",
+  "flame",
+  "grid",
+  "halftone_flat",
+  "halftone_r",
+  "rays12w",
+  "rays24",
+  "scan",
+  "speed",
+  "star8",
+  "ticks",
+  "torn"
+ ],
+ "textSlots": [
+  "nick",
+  "full",
+  "tag"
+ ],
+ "easing": [
+  "l",
+  "o2",
+  "o3",
+  "i2",
+  "i3",
+  "io2",
+  "ob",
+  "s"
+ ],
+ "mods": [
+  "pulse",
+  "spin",
+  "sway",
+  "rock",
+  "drift",
+  "blink",
+  "flick",
+  "sweep"
+ ],
+ "tiers": {
+  "gym": {
+   "fps": 6,
+   "hitBeat": 2
+  },
+  "hall": {
+   "fps": 12,
+   "hitBeat": 2
+  },
+  "arena": {
+   "fps": 30,
+   "hitBeat": 4
+  }
+ },
+ "gimmicks": {
+  "monster": {
+   "bpm": 100
+  },
+  "flyer": {
+   "bpm": 132
+  },
+  "technician": {
+   "bpm": 112
+  },
+  "showman": {
+   "bpm": 120
+  }
+ },
+ "variants": 4,
+ "variantPick": "FNV-1a 32 біти від UTF-8 рядка «ім'я|seed», variant = hash mod variants"
+}
