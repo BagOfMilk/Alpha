@@ -350,7 +350,778 @@ def clip_ref_count2half(t, L):
     return p
 
 
+# ================================================================ больовий на ногу (P1-2, leg_lock)
+# Пара: A у нулі обличчям у −Y; B лежить на спині ногами до A (зсув (0; −1,05), 180°). A на колінах (як вузол kneel_up),
+# права нога B піднята під ~40°, щиколотка — біля грудей A під лівою пахвою: ліве передпліччя A під ахілом, права кисть —
+# на стопі B (викручує). Тягне — A відхиляється назад і тягне щиколотку на себе. Жертва викручується, б'є долонею по
+# мату (здача), тягнеться рукою за голову по мату — до каната (сам канат — окремий план, Rope_Grab_Back).
+LL_OFF = Vector((0.0, -1.15, 0.0))
+LL_YAW = 180
+LL_LOOP = 3.2
+
+
+def _to_b(v):
+    """Точка простору A (пари) → простір ригу B (B повернутий на 180° і зсунутий на LL_OFF)."""
+    return Vector((-(v.x - LL_OFF.x), -(v.y - LL_OFF.y), v.z))
+
+
+def _from_b(v):
+    return Vector((-v.x + LL_OFF.x, -v.y + LL_OFF.y, v.z))
+
+
+def ll_ankle(crank=0.0, bent=0.0, lift=1.0):
+    """Щиколотка правої ноги B у просторі A. lift 0 — на маті (як у вузлі lying_back), 1 — у захваті; crank — A тягне
+    на себе (кут ноги росте); bent — коліно B зігнуте (неповний захват, 7–9)."""
+    hip = Vector((0.09, LL_OFF.y + 0.05, 0.12))
+    lg = 0.84 * BODY["leg"] * (1.0 - 0.18 * bent)
+    ang = math.radians(34.0 + 8.0 * crank + 10.0 * bent)
+    a1 = hip + Vector((0.0, lg * math.cos(ang), lg * math.sin(ang)))
+    if lift >= 1.0:
+        return a1
+    off_b = off_for(Vector((0.0, 0.0, LIE_Z)))
+    a0 = _from_b(xf(off_b, Q_BACK, REST["ankle_r"] + Vector((0.0, -0.25 * 0.15, 0.35 * 0.15))))
+    k = smooth(lift)
+    return a0.lerp(a1, k) + Vector((0.0, -0.06, 0.08)) * math.sin(math.pi * k)
+
+
+def ll_a(crank=0.0, grip=1.0, t=0.0, L=2.4):
+    """A на колінах обіймає гомілку B: нахилений уперед над щиколоткою, на тязі — відхиляється назад."""
+    p = kneel_up(t, L)
+    p.pitch = 38.0 - 26.0 * crank + breathe(t, L, 1.0)
+    p.pelvis = p.pelvis + Vector((0.0, 0.02 * crank, 0.0))
+    p.yaw = -6.0
+    p.head_pitch = 5.0 - 12.0 * crank
+    p.head_yaw = -10.0
+    kh = dict(p.hands)
+    def under(S):                                       # ліва — передпліччям під ахілом, кисть з того боку гомілки
+        c = P(S, "calf_r", 0.84, Vector((-0.06, 0.0, -0.065)))
+        return c or S["l"] + Vector((-0.1, -0.3, -0.2))
+    def over(S):                                        # права — на підошві B, викручує стопу
+        f = P(S, "foot_r", 0.45, Vector((0.0, 0.085, 0.0)))
+        return f or S["r"] + Vector((0.15, -0.3, -0.1))
+    g_ = smooth(grip)
+    p.hands = {"l": (lambda S: kh["l"][0](S).lerp(under(S), g_), RIGHT + DOWN * 0.2, UP),
+               "r": (lambda S: kh["r"][0](S).lerp(over(S), g_), FWD + LEFT * 0.4, UP + BACK * 0.3)}
+    p.elbows = {"l": lambda S: S["l"] + Vector((0.35, 0.1, -0.3)), "r": lambda S: S["r"] + Vector((-0.35, 0.15, -0.2))}
+    p.fist = {"l": 0.3 + 0.5 * g_, "r": 0.3 + 0.4 * g_}
+    return p
+
+
+def sweep_l(S, q, k, end=(0.2, 0.04, 0.6), lift=0.12):
+    """Ліва рука лежачого на спині — від розкинутої на маті (arms_on_mat) за голову дугою по колу над матом (навпростець
+    передпліччя провалювалось під мат через плече). k — 0..1; end — кінцева точка в просторі тіла q (частка руки)."""
+    a0, r0 = math.atan2(-0.32, 0.42), math.hypot(0.42, -0.32)
+    a1, r1 = math.atan2(end[2], end[0]), math.hypot(end[0], end[2])
+    a, r = a0 + (a1 - a0) * k, r0 + (r1 - r0) * k
+    yq = 0.05 + (end[1] - 0.05) * k - lift * math.sin(math.pi * k)          # −y тіла — угору від мату
+    return S["l"] + q @ (Vector((r * math.cos(a), yq, r * math.sin(a))) * BODY["arm"])
+
+
+def ll_b(crank=0.0, writhe=0.0, w=0.0, bent=0.0, lift=1.0, sit=0.0, tap=0.0, reach=0.0, held=1.0):
+    """B на спині, права нога в захваті. writhe/w — викручується (фаза −1..1); sit — плечі вгору (крик);
+    tap — права долоня над матом (1 — угорі, 0 — на маті); reach — ліва рука тягнеться за голову по мату;
+    held — 0: вільна нога й руки як у вузлі lying_back, 1 — як у захваті."""
+    p = lying(sit=0.0, knee_bend=0.15)
+    q = Q_BACK
+    off_b = off_for(Vector((0.0, 0.0, LIE_Z)))
+    hd = smooth(held)
+    kl = 0.15 + hd * (0.05 + 0.35 * writhe * (0.5 + 0.5 * w))           # вільна нога — згинається, впирається
+    al = xf(off_b, q, REST["ankle_l"] + Vector((0.12 * hd, -0.25 * kl, 0.35 * kl)))
+    p.ankles = (al, _to_b(ll_ankle(crank, bent, lift)))
+    p.knees = (xf(off_b, q, REST["knee_l"] + Vector((0.03 + 0.17 * hd, -0.6, 0.0))),
+               xf(off_b, q, REST["knee_r"] + Vector((-0.03 - 0.02 * lift, -0.6, 0.1 * lift))))
+    p.pitch = 26.0 * sit + 6.0 * writhe * max(0.0, w)
+    p.roll = 12.0 * writhe * w - 10.0 * reach
+    p.head_pitch = -30.0 - 25.0 * sit
+    p.head_yaw = 30.0 * writhe * w + 35.0 * reach
+    arms_on_mat(p, q, lift_l=0.0, lift_r=0.0)
+    hl, hr = p.hands["l"], p.hands["r"]
+    ak = BODY["arm"]
+    # права: ближче до стегна, долонею на маті; tap — б'є по мату (1 — угорі)
+    slap = lambda S: S["r"] + q @ (Vector((-0.24, 0.02 - 0.3 * tap, -0.42)) * ak)
+    # ліва: за голову по мату дугою (sweep_l), рука витягнута
+    rk = hd * 0.6 + 0.4 * min(1.0, 3.0 * tap)
+    rs = smooth(reach)
+    p.hands = {"r": (lambda S: hr[0](S).lerp(slap(S), rk), q @ DOWN, q @ FWD),
+               "l": ((lambda S: sweep_l(S, q, rs)) if rs > 0.0 else hl[0], q @ DOWN, (q @ FWD).lerp(q @ UP, rs))}
+    if rs > 0.0:
+        el0 = p.elbows["l"]
+        p.elbows = dict(p.elbows)
+        p.elbows["l"] = lambda S: el0(S).lerp(S["l"] + Vector((0.4, 0.1, 0.35)), rs)
+    p.fist = {"l": 0.15 - 0.1 * reach, "r": 0.15 + hd * 0.35 * writhe * (0.5 - 0.5 * w)}
+    return p
+
+
+LL_ENTER_LEN = 1.8
+LL_LOCK = 1.35          # с — захват зафіксовано (мітка contact)
+
+def clip_ll_enter_a(t, L, partner=None):
+    """Зі стійки на коліна біля ніг B (права, ліва) → нахил, обидві руки на щиколотку B на маті → підводиться з ногою
+    B до грудей → захват під пахвою (мітка contact)."""
+    st = stance(t, L, sway=0.0)
+    kn = ll_a(crank=0.3, grip=0.0, t=t, L=L)
+    fin = ll_a(crank=0.3, grip=1.0, t=t, L=L)
+    kneel = smooth((t - 0.26) / 0.5)
+    p = blend_pose(_filled(st), _filled(kn), kneel)
+    bend = _win(t, 0.42, 0.74, 0.86, 1.3)                                # нахил до щиколотки на маті
+    p.pitch = p.pitch + 50.0 * bend
+    p.head_pitch = p.head_pitch + 15.0 * bend
+    fr0, fl0 = foot(-0.2, 0.075), foot(0.2, -0.105)
+    kl_, kr_ = kn.ankles
+    # стопи по черзі: права назад — на одне коліно (ліва стоїть), потім ліва (обидві в повітрі — підскок, огляд 08.11.2026)
+    p.ankles = (feet_track(t, [(0.0, fl0), (0.5, fl0), (0.78, kl_), (L + 1, kl_)])[0],
+                feet_track(t, [(0.0, fr0), (0.04, fr0), (0.32, kr_), (L + 1, kr_)])[0])
+    tip = Quaternion(RIGHT, math.radians(-75.0))
+    p.foot_rot = (Quaternion(UP, math.radians(10.0)).slerp(tip, smooth((t - 0.52) / 0.3)),
+                  Quaternion(UP, math.radians(-14.0)).slerp(tip, smooth((t - 0.08) / 0.3)))
+    # ліве коліно, поки A на одному коліні, — назовні, не над стопою B (гомілка A входила в неї на 5 см)
+    p.knees = (lerp(p.ankles[0] + Vector((0.6, -0.55, 0.45)), kn.knees[0], smooth((t - 0.5) / 0.3)),
+               lerp(p.ankles[1] + Vector((-0.22, -0.9, 0.45)), kn.knees[1], smooth((t - 0.04) / 0.3)))
+    grab = smooth((t - 0.5) / 0.28)
+    hold = smooth((t - 1.0) / (LL_LOCK - 1.0))
+    def hand(s_):
+        base = p.hands[s_]
+        def g(S):
+            ank = P(S, "foot_r", 0.0)
+            if ank is None:
+                return base[0](S)
+            on = ank + Vector((0.06 if s_ == "l" else -0.06, 0.05, 0.03))   # з боків щиколотки
+            return base[0](S).lerp(on, grab).lerp(fin.hands[s_][0](S), hold)
+        return (g, fin.hands[s_][1], fin.hands[s_][2])
+    p.hands = {s_: hand(s_) for s_ in "lr"}
+    p.elbows = {s_: (lambda S, s_=s_: kn.elbows[s_](S).lerp(fin.elbows[s_](S), grab)) for s_ in "lr"}
+    p.fist = {"l": 0.3 + 0.5 * grab, "r": 0.3 + 0.4 * grab}
+    return p
+
+def clip_ll_enter_b(t, L, partner=None):
+    lift = smooth((t - 0.8) / (LL_LOCK - 0.85))
+    lock = hit_spring(t, LL_LOCK, w=14.0, z=0.4)
+    wr = smooth((t - LL_LOCK) / 0.35)
+    p = ll_b(crank=0.3 * lift + 0.12 * abs(lock), writhe=0.6 * wr, w=math.sin(2 * math.pi * (t - L) / 0.8) * wr, lift=lift,
+             held=smooth((t - 0.95) / 0.6))
+    p.head_pitch = p.head_pitch - 15.0 * abs(lock)
+    return p
+
+
+def clip_ll_hold_a(t, L, partner=None):
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    return ll_a(crank=0.3 + 0.4 * cr, t=t, L=L)
+
+def clip_ll_hold_b(t, L, partner=None):
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    env = smoothstep_edges(t, L)
+    return ll_b(crank=0.3 + 0.4 * cr, writhe=0.6 + 0.3 * env * math.sin(_ph(t, L, 3.2)), w=math.sin(_ph(t, L, 0.8)),
+                sit=0.25 * cr)
+
+
+# --- решта родини: дотиск (QTE) і його ефектний хвіст, здача, вихід, «до каната», провал входу, неповний захват.
+# Усі, крім провалу, стикуються з вузлами leglock_A/leglock_B (crank 0,3, writhe 0,6, w 0).
+LL_N = dict(crank=0.3, writhe=0.6)
+
+def ll_node_b(t, L, **kw):
+    a = dict(LL_N)
+    a.update(kw)
+    return ll_b(**a)
+
+
+class Crank:
+    """Дотиск у больовому: QTE до QTE_CLOSE, пік (contact) у t_pk, тримає до t_hold, назад у вузол до L. Ефектний
+    хвіст — сильніше, довше на піку, нападник відхиляється далі й задирає голову."""
+    def __init__(self, name, L, t_pk, t_hold, peak, sell):
+        self.name, self.L, self.t_pk, self.t_hold, self.peak, self.sell = name, L, t_pk, t_hold, peak, sell
+
+
+QTE_OPEN, QTE_CLOSE = 0.15, 0.75
+LL_CRANKS = [Crank("LegLock_Crank", 1.5, 0.95, 1.05, 1.25, 0.6), Crank("LegLock_Crank_Hype", 1.95, 1.0, 1.45, 1.6, 0.9)]
+
+def crank_curve(t, C):
+    """Сила тягу: 0,3 → підготовка 0,12 (подався вперед) до QTE_CLOSE → ривок до піку → тримає → 0,3. До QTE_CLOSE
+    обидва хвости однакові (режисер перемикає без змішування)."""
+    return track(t, [(0.0, 0.3), (0.3, 0.3), (QTE_CLOSE, 0.12), (C.t_pk, C.peak), (C.t_hold, C.peak * 0.95), (C.L, 0.3),
+                     (C.L + 1.0, 0.3)])
+
+def crank_a(C):
+    def f(t, L, partner=None):
+        cr = crank_curve(t, C)
+        p = ll_a(crank=cr, t=t, L=L)
+        p.pitch = p.pitch - breathe(t, L, 1.0)          # дихання залежить від L — без нього пози обох хвостів на qte_close однакові
+        roar = _win(t, C.t_pk, C.t_pk + 0.12, C.t_hold, C.L - 0.1) * max(0.0, C.peak - 1.3) * 3.0   # ефектний: голова вгору
+        p.head_pitch = p.head_pitch - 25.0 * roar
+        return p
+    return f
+
+def crank_b(C):
+    def f(t, L, partner=None):
+        cr = crank_curve(t, C)
+        sl = _win(t, C.t_pk - 0.05, C.t_pk + 0.1, C.t_hold, C.L - 0.05) * C.sell
+        hit = hit_spring(t, C.t_pk, w=13.0, z=0.4)
+        env = smooth(t / 0.3) * smooth((L - t) / 0.3)
+        return ll_node_b(t, L, crank=cr, writhe=0.6 + 0.3 * sl * env, w=math.sin(2 * math.pi * t / 0.8) * env,
+                         sit=0.55 * sl + 0.1 * abs(hit))
+    return f
+
+
+LL_TAP_LEN = 2.9
+LL_TAPS = (0.48, 0.8, 1.12)
+
+def tap_height(t, taps, up=0.16):
+    """Долоня над матом для серії ударів по мату: підйом за up с до кожного удару, удар — у мить зі списку."""
+    h = 0.0
+    for tt in taps:
+        if tt - up <= t <= tt:
+            h = max(h, math.sin(math.pi * (t - (tt - up)) / up))
+    return max(0.0, min(1.0, h))
+
+def clip_ll_tap_a(t, L, partner=None):
+    """Тримає й тягне, поки B стукає; після третього удару відпускає ногу й стає рівно на колінах (kneel_up)."""
+    cr = track(t, [(0.0, 0.3), (0.4, 0.75), (1.3, 0.75), (1.7, 0.3), (L, 0.3)])
+    rel = smooth((t - 1.45) / 0.9)
+    p = ll_a(crank=cr, grip=1.0 - smooth((t - 1.45) / 0.5), t=t, L=L)
+    return blend_pose(_filled(p), _filled(kneel_up(t, L)), rel)
+
+def clip_ll_tap_b(t, L, partner=None):
+    cr = track(t, [(0.0, 0.3), (0.4, 0.75), (1.3, 0.75), (1.7, 0.3), (L, 0.3)])
+    lift = 1.0 - smooth((t - 1.55) / 0.85)
+    held = 1.0 - smooth((t - 1.9) / 0.8)
+    pain = _win(t, 0.2, 0.45, 1.3, 2.0)
+    return ll_b(crank=cr, writhe=(0.6 + 0.2 * pain) * held, w=math.sin(2 * math.pi * t / 0.7) * smooth(t / 0.3) * held,
+                lift=lift, sit=0.35 * pain, tap=tap_height(t, LL_TAPS), held=held)
+
+
+LL_ESC_LEN = 2.2
+
+def clip_ll_escape_a(t, L, partner=None):
+    """Нога вислизає: A ще тягне — хват розкривається — відкидається назад на колінах (сам продає) — рівно (kneel_up)."""
+    slip = smooth((t - 0.38) / 0.22)
+    back = hit_spring(t, 0.5, w=9.0, z=0.45)
+    p = ll_a(crank=0.3 + 0.25 * smooth(t / 0.35), grip=1.0 - slip, t=t, L=L)
+    p = blend_pose(_filled(p), _filled(kneel_up(t, L)), smooth((t - 0.6) / 1.2))
+    p.pitch = p.pitch - 22.0 * back
+    p.head_pitch = p.head_pitch - 10.0 * back
+    return p
+
+def clip_ll_escape_b(t, L, partner=None):
+    """Згинає коліно й висмикує ногу до себе, хапається за коліно, потім лягає (вузол lying_back)."""
+    pull = smooth((t - 0.25) / 0.4)
+    down = smooth((t - 1.2) / 0.8)
+    hip = Vector((0.09, LL_OFF.y + 0.05, 0.12))
+    held_ank = ll_ankle(0.3 + 0.25 * smooth(t / 0.35), 0.0, 1.0)
+    tuck = hip + Vector((0.0, 0.32 * BODY["leg"], 0.42 * BODY["leg"]))      # коліно до грудей, стопа в повітрі
+    mat = ll_ankle(0.0, 0.0, 0.0)
+    ank = held_ank.lerp(tuck, pull).lerp(mat, down)
+    clutch = _win(t, 0.55, 0.85, 1.25, 1.75)
+    p = ll_b(crank=0.3, writhe=0.6 * (1.0 - pull), lift=1.0, held=1.0 - down, sit=0.45 * clutch)
+    p.ankles = (p.ankles[0], _to_b(ank))
+    q = Q_BACK
+    if clutch > 0.0:                                    # обидві долоні — на гомілку під правим коліном
+        hl, hr = p.hands["l"], p.hands["r"]
+        hip_b = xf(off_for(Vector((0.0, 0.0, LIE_Z))), q, REST["hip_r"])
+        ank_b = _to_b(ank)
+        d = ank_b - hip_b
+        dl = max(1e-4, d.length)
+        tl, cl = BODY["thigh"], BODY["calf"]
+        a_ = (tl * tl - cl * cl + dl * dl) / (2.0 * dl)
+        h_ = math.sqrt(max(0.0, tl * tl - a_ * a_))
+        dn = d / dl
+        pole = UP - dn * UP.dot(dn)
+        kn = hip_b + dn * a_ + pole.normalized() * h_          # коліно (аналітично, згин угору)
+        shin = kn.lerp(ank_b, 0.25) + Vector((0.0, 0.04, 0.0))  # гомілка трохи нижче коліна, з боку тулуба
+        ax = (kn - ank_b).normalized()                          # великий палець — уздовж гомілки до коліна
+        fl, ul, fr_, ur = hl[1], hl[2], hr[1], hr[2]
+        p.hands = {"l": (lambda S: hl[0](S).lerp(shin + Vector((0.07, 0.0, 0.0)), clutch), fl.lerp(RIGHT + q @ DOWN * 0.3, clutch),
+                         ul.lerp(ax, clutch)),
+                   "r": (lambda S: hr[0](S).lerp(shin + Vector((-0.08, 0.0, 0.0)), clutch), fr_.lerp(LEFT + q @ DOWN * 0.3, clutch),
+                         ur.lerp(ax, clutch))}
+        p.fist = {"l": 0.15 + 0.4 * clutch, "r": 0.15 + 0.4 * clutch}
+    return p
+
+
+LL_REACH_LEN = 2.9
+
+def clip_ll_reach_a(t, L, partner=None):
+    return ll_a(crank=track(t, [(0.0, 0.3), (0.5, 0.3), (1.1, 0.8), (2.0, 0.8), (2.6, 0.3), (L, 0.3)]), t=t, L=L)
+
+def clip_ll_reach_b(t, L, partner=None):
+    """Тягнеться лівою рукою за голову по мату — до каната (сам канат — Rope_Grab_Back склейкою), потім рука падає."""
+    rc = track(t, [(0.0, 0.0), (0.3, 0.0), (1.1, 1.0), (2.05, 1.0), (2.7, 0.0), (L, 0.0)])
+    cr = track(t, [(0.0, 0.3), (0.5, 0.3), (1.1, 0.8), (2.0, 0.8), (2.6, 0.3), (L, 0.3)])
+    claw = _win(t, 1.1, 1.3, 1.85, 2.05) * math.sin(2 * math.pi * (t - 1.1) / 0.35)
+    env = smooth(t / 0.3) * smooth((L - t) / 0.3)
+    p = ll_b(crank=cr, writhe=0.6, w=-0.4 * env * smooth(rc), reach=rc)
+    p.fist = {"l": 0.3 + 0.25 * claw, "r": p.fist["r"]}
+    return p
+
+
+LL_FAIL_LEN = 1.8
+
+def clip_ll_fail_a(t, L, partner=None):
+    """≤ 6: стає на коліна й тягнеться до щиколотки — B відштовхує стопою в плече — A відкидається й лишається на колінах."""
+    p = clip_ll_enter_a(min(t, 0.8), LL_ENTER_LEN)
+    hit = hit_spring(t, 0.92, w=10.0, z=0.4) * (1.0 - smooth((t - 1.2) / 0.35))
+    rec = smooth((t - 0.95) / 0.6)
+    p = blend_pose(_filled(p), _filled(kneel_up(t, L)), rec)
+    p.pitch = p.pitch - 24.0 * hit
+    p.head_pitch = p.head_pitch - 12.0 * hit
+    p.roll = p.roll + 6.0 * hit
+    return p
+
+def clip_ll_fail_b(t, L, partner=None):
+    """Підтягує праву ногу й штовхає стопою A в ліве плече (мітка contact), нога повертається на мат."""
+    hip = Vector((0.09, LL_OFF.y + 0.05, 0.12))
+    mat = ll_ankle(0.0, 0.0, 0.0)
+    chamber = hip + Vector((0.0, 0.3 * BODY["leg"], 0.4 * BODY["leg"]))
+    ch = smooth((t - 0.5) / 0.3)
+    ext = _win(t, 0.78, 0.92, 1.0, 1.3)
+    back = smooth((t - 1.2) / 0.5)
+    p = ll_b(crank=0.0, writhe=0.0, lift=0.0, held=0.0, sit=0.3 * _win(t, 0.5, 0.8, 1.0, 1.5))
+    target = Vector((0.2, -0.44, 0.6))                                  # ліве плече A, нахиленого до щиколотки (повз голову)
+    a_ = mat.lerp(chamber, ch).lerp(target, ext).lerp(mat, back)
+    p.ankles = (p.ankles[0], _to_b(a_))
+    return p
+
+
+def clip_ll_partial_a(t, L, partner=None):
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    return ll_a(crank=0.3 + 0.2 * cr, t=t, L=L)
+
+def clip_ll_partial_b(t, L, partner=None):
+    """7–9: захват неповний — B згинає коліно й тримає його зігнутим, A тягне, але нога не випрямляється."""
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    env = smoothstep_edges(t, L, 0.5)
+    return ll_node_b(t, L, crank=0.3 + 0.2 * cr, bent=0.9 * env, writhe=0.6 + 0.3 * env, w=math.sin(_ph(t, L, 0.8)) * env)
+
+
+# --- «дотягнувся до каната»: окремий крупний план (рішення сесії «Ринг» 08.11.2026 — пара лишається в центрі, рука на
+# канаті — склейкою). Жертва одна, на спині (Rope_Grab_Back) або на животі (Rope_Grab_Front); нижній канат — лінія
+# вздовж X ригу на rope_grab_y() від таза (за головою), висота ROPE_H[0]. Мітка rope_grab — долоня на канаті.
+ROPE_GRAB_LEN = 2.2
+ROPE_GRAB_T = 1.05
+
+def rope_grab_y():
+    return 0.5 + 0.4 * BODY["arm"]
+
+def rope_grab_front_y():
+    """Лежачи на животі канат перед головою (від 0 ригу; голова до −Y): плече ≈ −0,92, рука вперед-угору ≈ 0,5."""
+    return FRONT_END_Y - 0.47 - 0.5 * BODY["arm"]
+
+def clip_rope_grab_back(t, L):
+    p = lying(knee_bend=0.15)
+    q = Q_BACK
+    rc = smooth((t - 0.15) / 0.6)
+    up = smooth((t - 0.7) / (ROPE_GRAB_T - 0.7))
+    pull = smooth((t - ROPE_GRAB_T - 0.1) / 0.5)
+    p.roll = -10.0 * rc
+    p.pitch = 14.0 * pull
+    p.head_pitch = -30.0 - 25.0 * rc
+    p.head_yaw = 30.0 * rc
+    hl = p.hands["l"]
+    rope = lambda S: Vector((S["l"].x - 0.02, rope_grab_y(), ROPE_H[0] + 0.02 - 0.03 * pull))
+    p.hands = dict(p.hands)
+    p.hands["l"] = (lambda S: sweep_l(S, q, rc, end=(0.16, 0.04, 0.58)).lerp(rope(S), up), (q @ DOWN).lerp(UP, up),
+                    (q @ FWD).lerp(BACK, up))
+    p.elbows = dict(p.elbows)
+    el0 = p.elbows["l"]
+    p.elbows["l"] = lambda S: el0(S).lerp(S["l"] + Vector((0.4, 0.1, 0.35)), rc)
+    p.fist = {"l": 0.15 + 0.75 * smooth((t - ROPE_GRAB_T + 0.05) / 0.15), "r": 0.15}
+    return p
+
+
+def clip_rope_grab_front(t, L):
+    from_ = lying_front()
+    p = lying_front(push=0.3 * smooth((t - ROPE_GRAB_T - 0.1) / 0.5))
+    q = Q_FRONT
+    rc = smooth((t - 0.15) / 0.6)
+    up = smooth((t - 0.7) / (ROPE_GRAB_T - 0.7))
+    hl = from_.hands["l"]
+    fwd = lambda S: S["l"] + q @ (Vector((0.1, 0.0, 0.58)) * BODY["arm"])
+    rope = lambda S: Vector((S["l"].x - 0.02, rope_grab_front_y(), ROPE_H[0] + 0.02))
+    arc = Vector((0.0, 0.0, 0.1 * math.sin(math.pi * rc)))
+    p.hands = dict(p.hands)
+    p.hands["l"] = (lambda S: (hl[0](S).lerp(fwd(S), rc) + arc).lerp(rope(S), up), q @ UP, DOWN)
+    p.fist = {"l": 0.15 + 0.75 * smooth((t - ROPE_GRAB_T + 0.05) / 0.15), "r": 0.15}
+    p.head_yaw = 75.0 * (1.0 - 0.6 * rc)
+    return p
+
+
+# ================================================================ больовий на лікоть (P1-2, armbar)
+# Референс (навчальні матеріали й записи матчів, своїми словами): після викруту руки нападник тягне руку суперника
+# донизу — той падає грудьми на мат; нападник стає на коліна збоку від його плеча й тримає випрямлену руку вгору:
+# одна кисть на зап'ясті, друга — над ліктем; дотиск — відхиляється назад, рука жертви йде до нього, плече відривається
+# від мату. Жертва стукає вільною долонею по мату або тягнеться вільною рукою вперед — до каната (Rope_Grab_Front
+# склейкою). Карта кінцівок у фазі тримання:
+#   A — обидва коліна на маті, тулуб рівно; ліва кисть — зап'ястя B з боку A; права — середина передпліччя B
+#       (на плечі над ліктем кисть опинялась на рівні таза A — передпліччя A входило в живіт); лікті назовні.
+#   B — на животі, тіло впоперек перед A (голова праворуч від A); права рука випрямлена догори над плечем;
+#       ліва долоня — на маті біля голови; ноги — на маті, у болю коліна розходяться жабкою.
+AB_OFF = Vector((0.92, -0.55, 0.0))     # B на животі: хребет — на 0,55 м перед A, праве плече — навпроти A
+AB_YAW = -90
+AB_LOOP = 3.2
+AB_REACH = 0.66                          # м — кисть від плеча (розв'язувач тримає ≤ 0,97 руки — рука пряма)
+
+def _ab_to_b(v):
+    """Точка простору A → простір B (B = R(+90°)·(A − зсув))."""
+    return Vector((-(v.y - AB_OFF.y), v.x - AB_OFF.x, v.z))
+
+def ab_dir(crank=0.0):
+    """Напрям утримуваної руки B (простір B): угору, з дотиском — до A (у бік −X ригу B)."""
+    a = math.radians(6.0 + 12.0 * crank)
+    return Vector((-math.sin(a), 0.0, math.cos(a)))
+
+def ab_a(crank=0.0, grip=1.0, t=0.0, L=2.4):
+    """A на колінах (вузол kneel_up) тримає руку B: дотиск — відхиляється назад."""
+    p = kneel_up(t, L)
+    p.pitch = 8.0 - 16.0 * crank + breathe(t, L, 1.0)
+    p.pelvis = p.pelvis + Vector((0.0, 0.03 * crank, 0.0))
+    p.head_pitch = 10.0 - 10.0 * crank
+    p.head_yaw = 0.0
+    kh = p.hands
+    g = smooth(grip)
+    def on(s_, bone, along):
+        def f(S):
+            pt = P(S, bone, along, Vector((0.0, 0.045, 0.0)))
+            return kh[s_][0](S) if pt is None else kh[s_][0](S).lerp(pt, g)
+        return f
+    p.hands = {"l": (on("l", "lowerarm_r", 0.88), kh["l"][1].lerp(FWD, g), kh["l"][2].lerp(UP, g)),
+               "r": (on("r", "lowerarm_r", 0.5), kh["r"][1].lerp(FWD, g), kh["r"][2].lerp(UP, g))}
+    ke = p.elbows
+    p.elbows = {"l": lambda S: ke["l"](S).lerp(S["l"] + Vector((0.4, 0.04, -0.18)), g),
+                "r": lambda S: ke["r"](S).lerp(S["r"] + Vector((-0.44, 0.04, -0.16)), g)}
+    p.fist = {"l": 0.3 + 0.5 * g, "r": 0.3 + 0.4 * g}
+    return p
+
+def ab_b(crank=0.0, writhe=0.0, w=0.0, bent=0.0, held=1.0, tap=0.0, reach=0.0, sit=0.0):
+    """B на животі, права рука в захваті. held — 0: вузол lying_front, 1 — рука вгорі; bent — лікоть зігнутий (7–9);
+    tap — ліва долоня над матом (б'є); reach — ліва рука вперед по мату (до каната); sit — голова й плечі від мату."""
+    hd = smooth(held)
+    roll = -(6.0 + 10.0 * crank) * hd
+    fl = 0.35 * writhe * (0.5 + 0.5 * w)
+    fr = 0.35 * writhe * (0.5 - 0.5 * w)
+    p = lying_front(push=0.25 * sit, roll=roll, frog=(fl, fr))
+    p.ankles = tuple(a_ + Vector((0.0, 0.0, 0.012 * hd)) for a_ in p.ankles)
+    q = Q_FRONT @ Quaternion(UP, math.radians(roll))
+    d = ab_dir(crank)
+    ln = AB_REACH * (1.0 - 0.3 * bent)
+    hr, hl = p.hands["r"], p.hands["l"]
+    up = lambda S: S["r"] + d * ln
+    p.hands = dict(p.hands)
+    p.hands["r"] = (lambda S: hr[0](S).lerp(up(S), hd), hr[1].lerp(d, hd), hr[2].lerp(FWD, hd))
+    er = p.elbows["r"]
+    p.elbows = dict(p.elbows)
+    p.elbows["r"] = lambda S: er(S).lerp(S["r"] + Vector((-0.25, 0.3, 0.25)), hd)
+    rs = smooth(reach)
+    ak = BODY["arm"]
+    fwd = lambda S: S["l"] + q @ (Vector((0.1, 0.0, 0.58)) * ak)
+    lift = Vector((0.0, 0.0, 0.16 * tap + 0.1 * math.sin(math.pi * rs)))
+    p.hands["l"] = (lambda S: hl[0](S).lerp(fwd(S), rs) + lift, hl[1], hl[2])
+    p.fist = {"l": 0.15, "r": 0.15 + 0.15 * hd}
+    p.head_pitch = p.head_pitch - 12.0 * sit
+    return p
+
+AB_N = dict(crank=0.3, writhe=0.5)
+
+def ab_node_b(**kw):
+    a = dict(AB_N)
+    a.update(kw)
+    return ab_b(**a)
+
+
+# --- переведення на мат: старт — поза викруту руки (Chain_ArmWringer, склейкою; вузла в ланки чейну немає):
+# A стоїть, обидві кисті на зап'ясті B; B зігнутий уперед, права рука випрямлена до A. Ривок донизу — B падає грудьми
+# на мат (Bump_Front), A йде на коліна й підхоплює руку вгору; захват фіксується (мітка contact).
+AB_ENTER_LEN = 2.1
+AB_T0 = 0.35            # с — ривок, B починає падати
+AB_LAND = AB_T0 + 0.58  # с — груди B на маті (мітка sell)
+AB_LOCK = 1.55          # с — A на колінах, рука B пряма (мітка contact)
+AB_W = [(0.0, (0.25, -0.4, 1.0)), (AB_T0, (0.25, -0.4, 1.0)), (0.65, (0.12, -0.35, 1.08)),
+        (AB_LAND, (0.03, -0.3, 0.88)), (1.4, (0.0, -0.33, 0.83))]
+
+def ab_wrist(t):
+    """Кисть B у переведенні (простір A): A тримає її й веде донизу-до себе."""
+    return Vector(tuple(track(t, [(tt, w_[i]) for tt, w_ in AB_W]) for i in range(3)))
+
+def ab_start_b(t, L):
+    """Поза B до ривка: як у викруті — зігнутий уперед, права рука до A."""
+    p = clip_bump_front(0.0, L)
+    p.pitch = p.pitch + 18.0
+    p.head_pitch = 20.0
+    p.head_yaw = -25.0
+    return p
+
+def _ab_right_on_path(p, t, k_end=0.0):
+    """Права кисть B — на шляху ab_wrist (у руках A), лікоть назовні-вгору."""
+    hr = p.hands["r"]
+    wb = _ab_to_b(ab_wrist(t))
+    p.hands = dict(p.hands)
+    p.hands["r"] = (lambda S: wb, lambda S: (wb - S["r"]).normalized() if (wb - S["r"]).length > 1e-3 else UP, UP)
+    p.elbows = dict(p.elbows)
+    p.elbows["r"] = lambda S: S["r"] + Vector((-0.3, 0.05, 0.25))
+    p.fist = {"l": p.fist["l"], "r": 0.3}
+    return p
+
+def clip_ab_enter_b(t, L, partner=None):
+    tb = max(0.0, t - AB_T0)
+    if t <= AB_T0:
+        p = ab_start_b(t, L)
+    else:
+        p = clip_bump_front(tb, L)
+        lean = 1.0 - smooth(tb / 0.35)
+        p.pitch = p.pitch + 18.0 * lean
+        p.head_pitch = p.head_pitch + 35.0 * lean
+    p = _ab_right_on_path(_filled(p), t)
+    return blend_pose(_filled(p), _filled(ab_node_b()), smooth((t - 1.2) / 0.6))
+
+def clip_ab_enter_a(t, L, partner=None):
+    """Стоїть, повернутий до руки B (обидві кисті на зап'ясті) → тягне донизу → на коліна збоку від плеча B →
+    права кисть переходить на плече над ліктем (захват)."""
+    st = stance(t, L, sway=0.0)
+    turn = 1.0 - smooth((t - 0.5) / 0.7)
+    st.yaw = 25.0 * turn
+    st.pitch = st.pitch + 8.0 * turn + 6.0 * _win(t, 0.3, 0.6, 0.8, 1.1)
+    kn = ab_a(crank=0.3, grip=1.0, t=t, L=L)
+    kneel = smooth((t - 0.85) / 0.6)
+    p = blend_pose(_filled(st), _filled(kn), kneel)
+    fl0, fr0 = foot(0.2, -0.105), foot(-0.2, 0.075)
+    kl_, kr_ = kn.ankles
+    p.ankles = (feet_track(t, [(0.0, fl0), (1.0, fl0), (1.28, kl_), (L + 1, kl_)])[0],          # стопи по черзі:
+                feet_track(t, [(0.0, fr0), (0.62, fr0), (0.9, kr_), (L + 1, kr_)])[0])          # права, потім ліва
+    tip = Quaternion(RIGHT, math.radians(-75.0))
+    p.foot_rot = (Quaternion(UP, math.radians(10.0)).slerp(tip, smooth((t - 1.02) / 0.3)),
+                  Quaternion(UP, math.radians(-14.0)).slerp(tip, smooth((t - 0.66) / 0.3)))
+    p.knees = (lerp(p.ankles[0] + Vector((0.22, -0.9, 0.45)), kn.knees[0], smooth((t - 1.0) / 0.3)),
+               lerp(p.ankles[1] + Vector((-0.22, -0.9, 0.45)), kn.knees[1], smooth((t - 0.62) / 0.3)))
+    move_r = smooth((t - 1.1) / 0.4)                     # права — з кисті B на середину передпліччя
+    def hand(s_):
+        def g(S):
+            pw = P(S, "lowerarm_r", 0.88, Vector((0.0, 0.045, 0.0)))
+            if pw is None:
+                return st.hands[s_][0](S)
+            if s_ == "l":
+                return pw
+            ph = P(S, "hand_r", 0.35, Vector((0.0, 0.045, 0.0)))
+            pe = P(S, "lowerarm_r", 0.5, Vector((0.0, 0.045, 0.0)))
+            return ph.lerp(pe, move_r)
+        return g
+    p.hands = {s_: (hand(s_), FWD + LEFT * 0.3 * turn, UP) for s_ in "lr"}
+    p.fist = {"l": 0.8, "r": 0.7}
+    return p
+
+
+def clip_ab_hold_a(t, L, partner=None):
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    return ab_a(crank=0.3 + 0.4 * cr, t=t, L=L)
+
+def clip_ab_hold_b(t, L, partner=None):
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    env = smoothstep_edges(t, L)
+    return ab_node_b(crank=0.3 + 0.4 * cr, writhe=0.5 + 0.3 * env * math.sin(_ph(t, L, 3.2)),
+                     w=math.sin(_ph(t, L, 0.8)) * env, sit=0.3 * cr)
+
+
+AB_CRANKS = [Crank("Armbar_Crank", 1.5, 0.95, 1.05, 1.25, 0.6), Crank("Armbar_Crank_Hype", 1.95, 1.0, 1.45, 1.6, 0.9)]
+
+def ab_crank_a(C):
+    def f(t, L, partner=None):
+        p = ab_a(crank=crank_curve(t, C), t=t, L=L)
+        p.pitch = p.pitch - breathe(t, L, 1.0)          # як у LegLock_Crank: однакова поза обох хвостів на qte_close
+        roar = _win(t, C.t_pk, C.t_pk + 0.12, C.t_hold, C.L - 0.1) * max(0.0, C.peak - 1.3) * 3.0
+        p.head_pitch = p.head_pitch - 25.0 * roar
+        return p
+    return f
+
+def ab_crank_b(C):
+    def f(t, L, partner=None):
+        cr = crank_curve(t, C)
+        sl = _win(t, C.t_pk - 0.05, C.t_pk + 0.1, C.t_hold, C.L - 0.05) * C.sell
+        env = smooth(t / 0.3) * smooth((L - t) / 0.3)
+        return ab_node_b(crank=cr, writhe=0.5 + 0.3 * sl * env, w=math.sin(2 * math.pi * t / 0.8) * env,
+                         sit=0.7 * sl + 0.15 * abs(hit_spring(t, C.t_pk, w=13.0, z=0.4)))
+    return f
+
+
+AB_TAP_LEN = 2.9
+AB_TAPS = (0.48, 0.8, 1.12)
+
+def clip_ab_tap_a(t, L, partner=None):
+    """Тримає й дотискає, поки B стукає; після третього удару відпускає й лишається на колінах (kneel_up)."""
+    cr = track(t, [(0.0, 0.3), (0.4, 0.75), (1.3, 0.75), (1.7, 0.3), (L, 0.3)])
+    p = ab_a(crank=cr, grip=1.0 - smooth((t - 1.45) / 0.5), t=t, L=L)
+    return blend_pose(_filled(p), _filled(kneel_up(t, L)), smooth((t - 1.45) / 0.9))
+
+def clip_ab_tap_b(t, L, partner=None):
+    cr = track(t, [(0.0, 0.3), (0.4, 0.75), (1.3, 0.75), (1.7, 0.3), (L, 0.3)])
+    held = 1.0 - smooth((t - 1.55) / 0.85)
+    pain = _win(t, 0.2, 0.45, 1.3, 2.0)
+    return ab_b(crank=cr, writhe=(0.5 + 0.2 * pain) * held, w=math.sin(2 * math.pi * t / 0.7) * smooth(t / 0.3) * held,
+                held=held, tap=tap_height(t, AB_TAPS), sit=0.4 * pain)
+
+
+AB_ESC_LEN = 2.4
+
+def clip_ab_escape_a(t, L, partner=None):
+    """Рука вислизає: хват розкривається — A відкидається назад на колінах — рівно (kneel_up)."""
+    slip = smooth((t - 0.3) / 0.2)
+    back = hit_spring(t, 0.42, w=9.0, z=0.45) * (1.0 - smooth((t - 1.5) / 0.5))
+    p = ab_a(crank=0.3 + 0.2 * smooth(t / 0.3), grip=1.0 - slip, t=t, L=L)
+    p = blend_pose(_filled(p), _filled(kneel_up(t, L)), smooth((t - 0.5) / 1.2))
+    p.pitch = p.pitch - 22.0 * back
+    p.head_pitch = p.head_pitch - 10.0 * back
+    return p
+
+def clip_ab_escape_b(t, L, partner=None):
+    """Висмикує руку донизу до голови, ліва кисть хапається за праве передпліччя (продаж — лікоть), потім лежить."""
+    yank = smooth((t - 0.22) / 0.4)
+    clutch = _win(t, 0.6, 0.9, 1.5, 2.0)
+    p = ab_b(crank=0.3, writhe=0.5 * (1.0 - smooth((t - 0.8) / 0.8)), held=1.0 - yank, sit=0.5 * clutch)
+    if clutch > 0.0:
+        q = Q_FRONT
+        hl = p.hands["l"]
+        ak = BODY["arm"]
+        fore = lambda S: S["r"] + q @ (Vector((0.02, 0.0, 0.46)) * ak) + Vector((0.0, 0.0, 0.12))  # праве зап'ястя перед головою
+        p.hands = dict(p.hands)
+        p.hands["l"] = (lambda S: hl[0](S).lerp(fore(S), clutch), hl[1], hl[2])
+        el = p.elbows["l"]
+        p.elbows = dict(p.elbows)
+        p.elbows["l"] = lambda S: el(S).lerp(S["l"] + q @ Vector((0.1, 0.0, 0.4)) + Vector((0.0, 0.0, 0.3)), clutch)
+        p.fist = {"l": 0.15 + 0.5 * clutch, "r": p.fist["r"]}
+    return p
+
+
+AB_REACH_LEN = 2.9
+
+def clip_ab_reach_a(t, L, partner=None):
+    return ab_a(crank=track(t, [(0.0, 0.3), (0.5, 0.3), (1.1, 0.8), (2.0, 0.8), (2.6, 0.3), (L, 0.3)]), t=t, L=L)
+
+def clip_ab_reach_b(t, L, partner=None):
+    """Тягнеться лівою вперед по мату — до каната (сам канат — Rope_Grab_Front склейкою), потім рука падає."""
+    rc = track(t, [(0.0, 0.0), (0.3, 0.0), (1.1, 1.0), (2.05, 1.0), (2.7, 0.0), (L, 0.0)])
+    cr = track(t, [(0.0, 0.3), (0.5, 0.3), (1.1, 0.8), (2.0, 0.8), (2.6, 0.3), (L, 0.3)])
+    claw = _win(t, 1.1, 1.3, 1.85, 2.05) * math.sin(2 * math.pi * (t - 1.1) / 0.35)
+    p = ab_node_b(crank=cr, reach=rc, sit=0.3 * smooth(rc))
+    p.fist = {"l": 0.3 + 0.25 * claw, "r": p.fist["r"]}
+    return p
+
+
+AB_FAIL_LEN = 1.6
+
+def clip_ab_fail_a(t, L, partner=None):
+    """≤ 6: ривок не вдався — B висмикує руку; кисті A зісковзують, A хитається вперед і повертається в стійку."""
+    st = stance(t, L, sway=0.0)
+    turn = 1.0 - smooth((t - 0.5) / 0.8)
+    st.yaw = 25.0 * turn
+    stum = hit_spring(t, 0.5, w=10.0, z=0.45) * (1.0 - smooth((t - 1.1) / 0.4))
+    st.pitch = st.pitch + 8.0 * turn + 10.0 * stum
+    slip = smooth((t - 0.42) / 0.16)
+    sh = st.hands
+    def hand(s_):
+        def g(S):
+            pw = P(S, "lowerarm_r", 0.88, Vector((0.0, 0.045, 0.0))) if s_ == "l" else P(S, "hand_r", 0.35, Vector((0.0, 0.045, 0.0)))
+            return sh[s_][0](S) if pw is None else pw.lerp(sh[s_][0](S), slip)
+        return g
+    st.hands = {s_: (hand(s_), sh[s_][1], sh[s_][2]) for s_ in "lr"}
+    return st
+
+def clip_ab_fail_b(t, L, partner=None):
+    """Висмикує руку до себе й угору, випрямляється в стійку."""
+    yank = smooth((t - 0.35) / 0.25)
+    p = ab_start_b(t, L)
+    p = _ab_right_on_path(_filled(p), 0.0)
+    wb = _ab_to_b(ab_wrist(0.0))
+    hr = p.hands["r"]
+    pull = lambda S: S["r"] + Vector((-0.08, -0.22, -0.18))          # кисть до своїх грудей
+    p.hands["r"] = (lambda S: wb.lerp(pull(S), yank), hr[1], hr[2])
+    return blend_pose(_filled(p), _filled(stance(t, L, sway=0.0)), smooth((t - 0.55) / 0.8))
+
+
+def clip_ab_partial_a(t, L, partner=None):
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    return ab_a(crank=0.3 + 0.2 * cr, t=t, L=L)
+
+def clip_ab_partial_b(t, L, partner=None):
+    """7–9: захват неповний — B згинає лікоть і тримає його зігнутим, A тягне, але рука не випрямляється."""
+    cr = 0.5 - 0.5 * math.cos(_ph(t, L, 1.6))
+    env = smoothstep_edges(t, L, 0.5)
+    return ab_node_b(crank=0.3 + 0.2 * cr, bent=0.9 * env, writhe=0.5 + 0.3 * env, w=math.sin(_ph(t, L, 0.8)) * env)
+
+
 # ================================================================ реєстр
+LL_CONTACTS = {(a_, b_) for a_ in ("hand_l", "hand_r", "lowerarm_l", "lowerarm_r", "upperarm_l", "spine_03", "spine_02")
+               for b_ in ("calf_r", "foot_r", "ball_r")}
+for _nm, _ln, _fa, _fb, _loop in [
+    ("LegLock_Enter", LL_ENTER_LEN, clip_ll_enter_a, clip_ll_enter_b, False),
+    ("LegLock_Hold_Loop", LL_LOOP, clip_ll_hold_a, clip_ll_hold_b, True),
+    ("LegLock_Tap", LL_TAP_LEN, clip_ll_tap_a, clip_ll_tap_b, False),
+    ("LegLock_Escape", LL_ESC_LEN, clip_ll_escape_a, clip_ll_escape_b, False),
+    ("LegLock_Reach", LL_REACH_LEN, clip_ll_reach_a, clip_ll_reach_b, False),
+    ("LegLock_Enter_Fail", LL_FAIL_LEN, clip_ll_fail_a, clip_ll_fail_b, False),
+    ("LegLock_Hold_Partial_Loop", LL_LOOP, clip_ll_partial_a, clip_ll_partial_b, True),
+] + [(C.name, C.L, crank_a(C), crank_b(C), False) for C in LL_CRANKS]:
+    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, _loop, LL_OFF.copy(), LL_YAW))
+    CENTER_RULE.add(_nm)
+    MOVE_CONTACTS[_nm] = LL_CONTACTS
+CLIP_DEFINES["LegLock_Enter"] = {"A": "leglock_A", "B": "leglock_B"}
+KEEP_OFFSET.add("LegLock_Enter")
+MOVE_CONTACTS["LegLock_Enter_Fail"] = LL_CONTACTS | {(a_, b_) for a_ in ("upperarm_l", "clavicle_l", "spine_03")
+                                                     for b_ in ("foot_r", "ball_r")}
+_LLN = {"A": ("leglock_A", "leglock_A"), "B": ("leglock_B", "leglock_B")}
+MOVE_CLIP_NODES.update({
+    "LegLock_Enter": {"A": ("stance", "leglock_A"), "B": ("lying_back", "leglock_B")},
+    "LegLock_Hold_Loop": _LLN, "LegLock_Reach": _LLN, "LegLock_Hold_Partial_Loop": _LLN,
+    "LegLock_Tap": {"A": ("leglock_A", "kneel_up"), "B": ("leglock_B", "lying_back")},
+    "LegLock_Escape": {"A": ("leglock_A", "kneel_up"), "B": ("leglock_B", "lying_back")},
+    "LegLock_Enter_Fail": {"A": ("stance", "kneel_up"), "B": ("lying_back", "lying_back")},
+})
+for C in LL_CRANKS:
+    MOVE_CLIP_NODES[C.name] = _LLN
+    MOVE_EVENTS[C.name] = [("qte_open", QTE_OPEN, "-", "-"), ("qte_close", QTE_CLOSE, "-", "-"),
+                           ("contact", C.t_pk, "lowerarm_l", "calf_r"), ("sell", C.t_pk + 0.05, "-", "calf_r")]
+MOVE_EVENTS.update({
+    "LegLock_Enter": [("contact", LL_LOCK, "lowerarm_l", "calf_r"), ("sell", LL_LOCK + 0.1, "-", "calf_r")],
+    "LegLock_Tap": [("tap", tt, "-", "hand_r") for tt in LL_TAPS],
+    "LegLock_Escape": [("release", 0.5, "-", "calf_r"), ("sell", 0.75, "-", "calf_r")],
+    "LegLock_Reach": [("reach", 1.1, "-", "hand_l")],
+    "LegLock_Enter_Fail": [("contact", 0.92, "upperarm_l", "foot_r"), ("sell", 0.95, "upperarm_l", "-")],
+})
+for _nm, _fn in [("Rope_Grab_Back", clip_rope_grab_back), ("Rope_Grab_Front", clip_rope_grab_front)]:
+    MOVE_CLIPS.append((_nm, ROPE_GRAB_LEN, _fn, None, False, None, 0))
+    MOVE_EVENTS[_nm] = [("rope_grab", ROPE_GRAB_T, "hand_l", "-")]
+MOVE_CLIP_NODES.update({"Rope_Grab_Back": {"A": ("lying_back", None)}, "Rope_Grab_Front": {"A": ("lying_front", None)}})
+
+AB_CONTACTS = {(a_, b_) for a_ in ("hand_l", "hand_r", "lowerarm_l", "lowerarm_r")
+               for b_ in ("hand_r", "lowerarm_r", "upperarm_r")}
+for _nm, _ln, _fa, _fb, _loop in [
+    ("Armbar_Enter", AB_ENTER_LEN, clip_ab_enter_a, clip_ab_enter_b, False),
+    ("Armbar_Hold_Loop", AB_LOOP, clip_ab_hold_a, clip_ab_hold_b, True),
+    ("Armbar_Tap", AB_TAP_LEN, clip_ab_tap_a, clip_ab_tap_b, False),
+    ("Armbar_Escape", AB_ESC_LEN, clip_ab_escape_a, clip_ab_escape_b, False),
+    ("Armbar_Reach", AB_REACH_LEN, clip_ab_reach_a, clip_ab_reach_b, False),
+    ("Armbar_Enter_Fail", AB_FAIL_LEN, clip_ab_fail_a, clip_ab_fail_b, False),
+    ("Armbar_Hold_Partial_Loop", AB_LOOP, clip_ab_partial_a, clip_ab_partial_b, True),
+] + [(C.name, C.L, ab_crank_a(C), ab_crank_b(C), False) for C in AB_CRANKS]:
+    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, _loop, AB_OFF.copy(), AB_YAW))
+    CENTER_RULE.add(_nm)
+    MOVE_CONTACTS[_nm] = AB_CONTACTS
+CLIP_DEFINES["Armbar_Enter"] = {"A": "armbar_A", "B": "armbar_B"}
+KEEP_OFFSET.add("Armbar_Enter")
+_ABN = {"A": ("armbar_A", "armbar_A"), "B": ("armbar_B", "armbar_B")}
+MOVE_CLIP_NODES.update({
+    "Armbar_Enter": {"A": (None, "armbar_A"), "B": (None, "armbar_B")},
+    "Armbar_Hold_Loop": _ABN, "Armbar_Reach": _ABN, "Armbar_Hold_Partial_Loop": _ABN,
+    "Armbar_Tap": {"A": ("armbar_A", "kneel_up"), "B": ("armbar_B", "lying_front")},
+    "Armbar_Escape": {"A": ("armbar_A", "kneel_up"), "B": ("armbar_B", "lying_front")},
+    "Armbar_Enter_Fail": {"A": (None, "stance"), "B": (None, "stance")},
+})
+for C in AB_CRANKS:
+    MOVE_CLIP_NODES[C.name] = _ABN
+    MOVE_EVENTS[C.name] = [("qte_open", QTE_OPEN, "-", "-"), ("qte_close", QTE_CLOSE, "-", "-"),
+                           ("contact", C.t_pk, "hand_l", "lowerarm_r"), ("sell", C.t_pk + 0.05, "-", "upperarm_r")]
+MOVE_EVENTS.update({
+    "Armbar_Enter": [("sell", AB_LAND, "-", "spine_03"), ("contact", AB_LOCK, "hand_l", "lowerarm_r")],
+    "Armbar_Tap": [("tap", tt, "-", "hand_l") for tt in AB_TAPS],
+    "Armbar_Escape": [("release", 0.45, "-", "lowerarm_r"), ("sell", 0.7, "-", "upperarm_r")],
+    "Armbar_Reach": [("reach", 1.1, "-", "hand_l")],
+    "Armbar_Enter_Fail": [("release", 0.5, "-", "hand_r")],
+})
+
 for _nm, _ln, _fa, _fb, _loop in [
     ("Cover_Enter", COVER_ENTER_LEN, clip_cover_enter_a, clip_cover_enter_b, False),
     ("Cover_Hold_Loop", PIN_HOLD_LEN, clip_cover_hold_a, clip_cover_hold_b, True),
