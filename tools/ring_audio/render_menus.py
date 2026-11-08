@@ -1,10 +1,12 @@
-"""Рендер музики й SFX меню «Рингу» (Вхід, Завантаження, Налаштування).
+"""Рендер музики й SFX меню «Рингу» (Вхід, Завантаження, Налаштування) — брутальний напрям.
 
 Запуск з каталогу tools:
-    python -m ring_audio.render_menus [--out DIR] [--stems DIR] [--only NAME]
+    python -m ring_audio.render_menus [--out DIR] [--stems DIR] [--only NAME|sfx]
 
 Аранжування (послідовності нот, патерни барабанів) — тут; інструменти — synth.py,
 дані лейтмотиву — motif.py, мікс — mix.py, гучність — loudness.py.
+Напрям (власник, 07–08.11.2026): брутально, без радості; мі мінор / фрігійський,
+силові акорди, важкі барабани, перевантажені гітари й бас, низькі духові, метал.
 """
 import argparse
 import sys
@@ -26,9 +28,117 @@ def vq(v):
     return round(min(max(v, 0.1), 1.0) * 10) / 10
 
 
-def play_chord(sg, group, fn, notes, bar, step, strum_ms=5.0, gain=1.0, pan=0.0):
-    for i, n in enumerate(notes):
-        sg.put(group, fn(n), bar, step, gain=gain, pan=pan, ms_off=i * strum_ms)
+# ---------------------------------------------------------------- прості обгортки над сеткою
+def gtr(sg, bar, step, notes, dur_steps, vel, mute=0.09, cab=4300.0, g=0.5):
+    """Двохдоріжкова гітара: два зерна, ліве/праве."""
+    d = sg.dur(dur_steps)
+    for seed, pan in ((1, -0.85), (2, 0.85)):
+        sg.put("gtr", S.chug(tuple(notes), d, vq(vel), seed, mute, cab), bar, step, gain=g, pan=pan)
+
+
+def kick_(sg, bar, step, v=1.0, g=0.95):
+    sg.put("drums", S.kick(vq(v)), bar, step, gain=g)
+
+
+def snare_(sg, bar, step, v=1.0, g=0.85):
+    sg.put("drums", S.snare(vq(v)), bar, step, gain=g, pan=0.05)
+
+
+def tom_(sg, bar, step, midi, v=1.0, g=0.8):
+    pan = {35: -0.25, 40: 0.0, 47: 0.3}.get(midi, 0.0)
+    sg.put("drums", S.tom(midi, vq(v)), bar, step, gain=g, pan=pan)
+
+
+def hat_(sg, bar, step, v=0.5, g=0.5, open_=False):
+    sg.put("drums", S.hat_dull(vq(v), open_), bar, step, gain=g, pan=0.3)
+
+
+def metal_(sg, bar, step, f, dur, v=0.8, seed=1, tau=0.8, g=0.6, pan=0.0):
+    sg.put("fx", S.metal(float(f), dur, vq(v), seed, tau), bar, step, gain=g, pan=pan)
+
+
+def segments(bar):
+    """Відрізки такту з однаковим акордом: [(початок, кінець, акорд)]."""
+    out = []
+    for s in range(16):
+        c = M.chord_at(bar, s)
+        if out and out[-1][2] == c:
+            out[-1][1] = s + 1
+        else:
+            out.append([s, s + 1, c])
+    return [tuple(x) for x in out]
+
+
+def accents(bar):
+    return [[0, 3, 6, 10], [0, 3, 6, 8, 12], [0, 3, 6, 8, 11], [0, 3, 6, 10, 14]][bar % 4]
+
+
+def riff(sg, bar, vs=1.0, ghost=True, cab=4300.0, g=0.5, acc_only=False):
+    """Тихі долонею приглушені 16-ті на корені + акценти, що йдуть за гармонією."""
+    acc = accents(bar)
+    for s in range(16):
+        ch = M.chord_at(bar, s)
+        if s in acc:
+            stab = ch == "Bb" and s >= 14
+            gtr(sg, bar, s, M.power(ch), 2, 0.95 * vs, mute=0.45 if stab else 0.13, cab=cab, g=g)
+        elif ghost and not acc_only and not (bar % 4 == 3 and s == 15):
+            gtr(sg, bar, s, M.power(ch, wide=False), 1, 0.42 * vs, mute=0.07, cab=cab, g=g)
+
+
+def play_bass(sg, bar, vel=0.9, dirt=1.0, g=0.9, acc_only=None):
+    acc = acc_only if acc_only is not None else accents(bar)
+    for i, s in enumerate(acc):
+        nxt = acc[i + 1] if i + 1 < len(acc) else 16
+        ch = M.chord_at(bar, s)
+        sg.put("bass", S.bass_dist(M.ROOTS[ch], sg.dur(nxt - s), vq(vel), dirt), bar, s, gain=g)
+
+
+def sustain(sg, bar, vel=0.5, g=0.35):
+    for a, b, ch in segments(bar):
+        gtr(sg, bar, a, M.power(ch), b - a, vel, mute=None, g=g)
+
+
+def play_motif(sg, first_bar, lead_shifts=(-12,), lead_vel=(0.85,), horn_shifts=(-12,), horn_vel=(0.7,),
+               stabs=True, lead_g=0.55, horn_g=0.5):
+    for b, step, midi, ln in M.motif_notes():
+        d = sg.dur(ln * 0.92)
+        bar = first_bar + b
+        for sh, v in zip(lead_shifts, lead_vel):
+            for seed, pan in ((1, -0.12), (2, 0.12)):
+                sg.put("lead", S.lead(midi + sh, d, vq(v), seed), bar, step, gain=lead_g * 0.7, pan=pan)
+        for sh, v in zip(horn_shifts, horn_vel):
+            if midi + sh >= 33:
+                sg.put("brass", S.horn((midi + sh,), d, vq(v), 0.04, 1), bar, step, gain=horn_g)
+    if stabs:
+        s0, s1 = M.MOTIF_STABS[4]
+        for st, ln in ((s0, 4), (s1, 2)):
+            sg.put("brass", S.horn(M.power("E"), sg.dur(ln * 0.9), 0.9, 0.03, 2), first_bar + 4, st, gain=horn_g * 1.3)
+            gtr(sg, first_bar + 4, st, M.power("E"), ln, 0.95, mute=0.3, g=0.45)
+
+
+def fill(sg, bar, start, vol=1.0):
+    seq = [47, 40, 40, 35, 35, 35, 35, 35]
+    for i, s in enumerate(range(start, 16)):
+        if s >= 14:
+            snare_(sg, bar, s, 0.8 + 0.1 * (s - 14), 0.9)
+        elif (s - start) % 2 == 0:
+            tom_(sg, bar, s, seq[((s - start) // 2) % len(seq)], (0.7 + 0.04 * i) * vol)
+        else:
+            tom_(sg, bar, s, 40, 0.55 * vol)
+
+
+def periodic_tone(n, f, harm=((1, 1.0),), lfo_cycles=2, depth=0.2, detune_cycles=0, phase=0.0):
+    """Строго періодичний за довжиною петлі тон (цілі цикли) — безшовний дрон."""
+    T = n / SR
+    t = np.arange(n) / SR
+    f1 = round(f * T) / T
+    y = np.zeros(n)
+    for k, a in harm:
+        y += a * np.sin(2 * np.pi * f1 * k * t + phase)
+        if detune_cycles:
+            y += 0.7 * a * np.sin(2 * np.pi * (f1 + detune_cycles / T) * k * t + phase + 1.3)
+    y *= 1.0 + depth * np.sin(2 * np.pi * lfo_cycles * t / T)
+    return y
 
 
 # ======================================================================= ВХІД
@@ -39,262 +149,178 @@ def login_section(bar):
 def login_drums(sg, bar):
     sec = login_section(bar)
     odd = bar % 2
-    kicks = [[0, 6, 10], [0, 3, 6, 10]][odd] + ([14] if sec == "D" and odd else [])
-    ghosts = [[7, 15], [9, 14]][odd]
-    opens = {"A": [], "B": [14] if odd else [], "C": [6, 14], "D": [6, 14]}[sec]
-    hv = [1.0, 0.38, 0.7, 0.38] * 4
-    fill_from = {7: 12, 15: 10, 23: 8, 31: 8}.get(bar, 16)
-    breakdown = bar == 22
-    if breakdown:
-        kicks, ghosts = [], []
-    for s in range(16):
-        if s >= fill_from:
-            continue
-        if s in opens:
-            sg.put("drums", S.hat(0.8, True), bar, s, gain=0.55, pan=0.3)
+    fill_from = {7: 12, 15: 8, 23: 8, 31: 12}.get(bar, 16)
+    if sec == "C":
+        # зривка: лише підлогові томи, метал, суб-дропи
+        if bar < 23:
+            for s, m, v in ((0, 40, 0.6), (6, 47, 0.4), (10, 35, 0.5)):
+                tom_(sg, bar, s, m, v)
+            if odd:
+                tom_(sg, bar, 14, 40, 0.45)
         else:
-            v = hv[s] * (0.3 if breakdown or bar == 23 else 0.62)
-            sg.put("drums", S.hat(vq(v)), bar, s, gain=1.0, pan=0.3)
-        if s in kicks:
-            sg.put("drums", S.kick(1.0), bar, s, gain=0.95)
-        if s in (4, 12):
-            if breakdown:
-                sg.put("drums", S.rim(0.8), bar, s, gain=0.7, pan=-0.1)
-            else:
-                sg.put("drums", S.snare(1.0), bar, s, gain=0.85)
-        if s in ghosts:
-            sg.put("drums", S.snare(1.0, True), bar, s, gain=0.45, pan=-0.1)
-    # філи
-    if bar == 7:
-        for s, v in zip((12, 13, 14, 15), (0.45, 0.6, 0.75, 0.95)):
-            sg.put("drums", S.snare(1.0, True), bar, s, gain=v)
-    elif bar == 15:
-        for s, m, v in zip((10, 11, 12, 13, 14, 15), (64, 64, 60, 60, 55, 55), (0.5, 0.6, 0.65, 0.75, 0.85, 0.95)):
-            sg.put("drums", S.tom(m, 1.0), bar, s, gain=v, pan=(-0.3 if m > 60 else 0.3 if m < 58 else 0))
-        sg.put("drums", S.kick(1.0), bar, 14, gain=0.8)
-    elif bar == 23:
-        for s, v in zip((8, 9, 10, 11), (0.35, 0.45, 0.55, 0.7)):
-            sg.put("drums", S.snare(1.0, True), bar, s, gain=v + 0.2)
-        for s, m, v in zip((12, 13, 14, 15), (64, 60, 57, 53), (0.8, 0.85, 0.9, 1.0)):
-            sg.put("drums", S.tom(m, 1.0), bar, s, gain=v, pan=0.35 - 0.2 * (s - 12))
-        sg.put("drums", S.kick(1.0), bar, 8, gain=0.8)
-        sg.put("drums", S.kick(1.0), bar, 12, gain=0.7)
-    elif bar == 31:
-        for s in (8, 10):
-            sg.put("drums", S.kick(1.0), bar, s, gain=0.9)
-        for s, v in zip((10, 12, 13, 14), (0.8, 0.85, 0.9, 1.0)):
-            sg.put("drums", S.snare(1.0), bar, s, gain=v * 0.8)
-        sg.put("drums", S.hat(0.8, True), bar, 15, gain=0.6, pan=0.3)
-        sg.put("drums", S.kick(1.0), bar, 15, gain=0.9)
+            fill(sg, bar, 8, 1.0)
+        return
+    if sec == "D":
+        kicks = [[0, 3, 6, 10], [0, 3, 6, 10, 13, 14]][odd]
+    else:
+        kicks = [[0, 3, 10], [0, 6, 10, 13]][odd]
+    for s in kicks:
+        if s < fill_from:
+            kick_(sg, bar, s, 1.0 if s == 0 else 0.9)
+    if 8 < fill_from:
+        snare_(sg, bar, 8, 1.0)
+    if sec == "D" and odd and 12 < fill_from:
+        snare_(sg, bar, 12, 0.5, 0.7)
+    hv = {"A": 0.45, "B": 0.55, "D": 0.7}[sec]
+    for s in range(2, min(fill_from, 16), 4 if sec == "A" else 2):
+        hat_(sg, bar, s, hv, 0.6, open_=(sec == "D" and s == 14 and odd))
+    if fill_from < 16:
+        fill(sg, bar, fill_from)
+    # крештоп лише в гучних місцях
     if bar == 24:
-        sg.put("drums", S.crash(0.8), bar, 0, gain=0.5, pan=0.2)
-
-
-def bass_notes(bar, sec):
-    """Список (крок, MIDI, довжина, вид) для такту басу."""
-    k = bar % 4
-    if bar == 31:  # хроматичний хід до F
-        return [(0, 36, 2, "note"), (3, 36, 1, "ghost"), (4, 48, 1, "pop"), (6, 36, 1, "note"), (8, 36, 1, "note"),
-                (9, 37, 1, "note"), (10, 38, 1, "note"), (11, 39, 1, "note"), (12, 40, 1, "note"),
-                (13, 41, 1, "note"), (14, 53, 1, "pop"), (15, 41, 1, "ghost")]
-    if bar == 22:
-        return [(0, 34, 4, "note"), (8, 39, 4, "note")]
-    if bar == 23:
-        return [(0, 36, 3, "note"), (6, 36, 1, "ghost"), (8, 36, 3, "note")]
-    if k in (0, 1):
-        r, th = (41, 3) if k == 0 else (37, 4)
-        return [(0, r, 2, "note"), (3, r, 1, "ghost"), (4, r + 12, 1, "pop"), (6, r, 1, "note"),
-                (8, r + 7, 2, "note"), (10, r + th, 1, "note"), (11, r + 12, 1, "pop"), (12, r, 2, "note"),
-                (15, r, 1, "ghost")]
-    if k == 2:
-        return [(0, 34, 2, "note"), (3, 34, 1, "ghost"), (4, 46, 1, "pop"), (6, 34, 1, "note"),
-                (8, 39, 2, "note"), (10, 39, 1, "ghost"), (11, 51, 1, "pop"), (12, 46, 2, "note"),
-                (14, 37, 2, "note")]
-    return [(0, 36, 2, "note"), (3, 36, 1, "ghost"), (4, 48, 1, "pop"), (6, 36, 1, "note"),
-            (8, 39, 2, "note"), (10, 40, 2, "note"), (12, 43, 2, "note"), (14, 41, 2, "note")]
-
-
-def play_bass(sg, bar, sec, notes):
-    for step, midi, ln, kind in notes:
-        if kind == "note" and step == 0 and sec in ("B", "D"):
-            kind = "slap"
-        v = {"note": 0.9, "slap": 0.95, "pop": 0.7, "ghost": 0.55}[kind]
-        sg.put("bass", S.slap_bass(midi, sg.dur(ln * 0.9), vq(v), kind), bar, step, gain=1.0)
-
-
-def play_motif(sg, first_bar, fn_notes, bars=range(8), stabs=None):
-    """fn_notes(bar_abs, step, midi, ln)."""
-    for b, step, midi, ln in M.motif_notes(bars):
-        fn_notes(first_bar + b, step, midi, ln)
-
-
-def brass_motif(sg, first_bar, vel=0.85):
-    def f(bar, step, midi, ln):
-        ch = M.harmonise(midi)
-        d = sg.dur(ln * (0.95 if ln >= 4 else 0.8))
-        v = vq(vel if ln >= 3 else vel - 0.1)
-        sg.put("brass", S.brass(ch, d, v), bar, step, gain=1.0)
-    play_motif(sg, first_bar, f)
-    for b, steps in M.MOTIF_STABS.items():
-        ch = M.fold(M.CHORDS[M.chord_at(b, 0)], 60, 77)
-        for st in steps:
-            sg.put("brass", S.brass(ch, sg.dur(1.4), vq(vel), 1.1), first_bar + b, st, gain=1.0)
+        sg.put("drums", S.crash(1.0), bar, 0, gain=0.55, pan=-0.2)
+    if bar in (0, 8):
+        sg.put("drums", S.crash(0.7), bar, 0, gain=0.4, pan=-0.2)
 
 
 def login_build():
-    sg = X.Song(116, 32, swing=0.09, seed=1160)
+    sg = X.Song(96, 32, seed=11)
     for bar in range(32):
         sec = login_section(bar)
         login_drums(sg, bar)
-        play_bass(sg, bar, sec, bass_notes(bar, sec))
-        # --- Rhodes-акомпанемент (A, B, пів-обсягу в C)
-        if sec in ("A", "B", "C") and bar not in (22, 23):
-            hits = [(0, 3, 0.75), (6, 2, 0.65), (10, 2, 0.7), (14, 2, 0.55)] if sec != "C" else [(0, 4, 0.5), (10, 3, 0.45)]
-            for st, ln, v in hits:
-                notes = M.CHORDS[M.chord_at(bar, st)]
-                if sec == "C":
-                    notes = notes[1:4]
-                play_chord(sg, "keys", lambda n, v=v, ln=ln: S.rhodes(n, sg.dur(ln * 0.9), vq(v), 1.0, 0.0),
-                           notes, bar, st, gain=0.75 if sec != "C" else 0.6, pan=-0.3)
-        if bar in (22, 23):
-            notes = M.CHORDS[M.chord_at(bar, 0)][1:4]
-            play_chord(sg, "keys", lambda n: S.rhodes(n, sg.dur(10), 0.5, 0.8, 0.2), notes, bar, 0, gain=0.6, pan=-0.3)
-        # --- гітара: офбіт-чопи
-        chop_v = {"A": 0.7 if bar >= 4 else 0.0, "B": 0.75, "C": 0.55, "D": 0.85}[sec]
-        if chop_v and bar not in (7, 15, 23):
-            pat = [(2, 1.0), (3, 0.45), (6, 0.9), (10, 1.0), (11, 0.45), (14, 0.85)]
-            if sec == "C":
-                pat = [(2, 1.0), (10, 1.0)]
-            for st, v in pat:
-                if sec != "A" and bar % 2 == 0 and st == 14:
-                    continue
-                ch = M.fold(M.CHORDS[M.chord_at(bar, st)][1:], 62, 77)[:3]
-                sg.put("guitar", S.guitar(ch, 0.065, vq(v * chop_v)), bar, st, gain=1.0, pan=0.35)
-    # --- B: тема на духових (такти 8-15)
-    brass_motif(sg, 8, 0.8)
-    # --- C: тема на Rhodes октавою нижче + гітара-відповідь (16-23)
-    def lead_c(bar, step, midi, ln):
-        sg.put("keys", S.rhodes(midi - 12, sg.dur(ln * 0.95), 0.8 if ln >= 3 else 0.7, 1.0, 0.12), bar, step, gain=0.95, pan=-0.1)
-    play_motif(sg, 16, lead_c)
-    for b in (0, 1, 2, 7):
-        ch = M.fold(M.CHORDS[M.chord_at(16 + b, 6)], 65, 82)
-        hi = ch[-1], ch[-2]
-        for i, n in enumerate(hi):
-            sg.put("guitar", S.guitar((n,), 0.09, 0.8, 1.2), 16 + b, 6 + i, gain=0.9, pan=0.35)
-    for st in (2, 6):  # такт 5 теми: гітарні відповіді-стаби
-        sg.put("guitar", S.guitar(M.fold(M.CHORDS["Fm9"][1:], 62, 77)[:3], 0.07, 0.8, 1.2), 16 + 4, st, gain=0.9, pan=0.35)
-    # --- D: повний склад (24-31)
-    brass_motif(sg, 24, 0.9)
-
-    def lead_d(bar, step, midi, ln):
-        for o, g in ((0, 0.5), (-12, 0.6)):
-            sg.put("keys", S.rhodes(midi + o, sg.dur(ln * 0.95), 0.7, 1.0, 0.0), bar, step, gain=g, pan=-0.15 if o else 0.15)
-    play_motif(sg, 24, lead_d)
+        if sec == "A":
+            riff(sg, bar, 1.0, g=0.6)
+            play_bass(sg, bar, 0.95)
+        elif sec == "B":
+            riff(sg, bar, 0.85)
+            sustain(sg, bar, 0.5, 0.3)
+            play_bass(sg, bar, 0.9)
+        elif sec == "C":
+            if bar % 2 == 0 or bar == 23:
+                riff(sg, bar, 0.7, ghost=False, cab=650.0, g=0.4, acc_only=True)
+            play_bass(sg, bar, 0.4, dirt=0.3, g=0.7, acc_only=[0])
+        else:
+            riff(sg, bar, 1.0, g=0.55)
+            sustain(sg, bar, 0.6, 0.35)
+            play_bass(sg, bar, 1.0)
+    # мелодія
+    play_motif(sg, 8, lead_shifts=(-12, 0), lead_vel=(0.85, 0.5), lead_g=0.55)  # B: тихий дубль на октаву вище для розбірливості
+    for b, step, midi, ln in M.motif_notes():  # C: розстроєний низький дзвін
+        sg.put("keys", S.low_bell(midi - 12, sg.dur(ln * 1.6), 0.85), 16 + b, step, gain=0.5, pan=0.0)
+    for b, step, midi, ln in M.motif_notes():  # C: дзвін на октаву вище, ледь чутно (для розбірливості)
+        sg.put("keys", S.low_bell(midi, sg.dur(ln * 1.2), 0.45, 0.7), 16 + b, step, gain=0.24, pan=0.25)
+    play_motif(sg, 24, lead_shifts=(-12, 0), lead_vel=(0.9, 0.7), horn_shifts=(-12, -24), horn_vel=(0.8, 0.5),
+               lead_g=0.6, horn_g=0.55)  # D: октави
+    # C: низькі духові під дзвоном
+    sg.put("brass", S.horn(M.power("E"), sg.dur(14 * 16 * 0.0 + 4 * 16 * 0.97), 0.5, 0.9, 3), 16, 0, gain=0.28)
+    sg.put("brass", S.horn(M.power("E"), sg.dur(3 * 16 * 0.97), 0.5, 0.9, 4), 20, 0, gain=0.28)
+    sg.put("brass", S.horn(M.power("F"), sg.dur(16 * 0.95), 0.55, 0.6, 5), 23, 0, gain=0.28)
+    # C: суб-дропи і метал
+    for bar, v in ((16, 1.0), (20, 0.9)):
+        sg.put("fx", S.sub_drop(2.4, 78.0, 27.0, v), bar, 0, gain=0.6)
+    for bar, step, f, v, seed in ((16, 0, 160, 0.85, 1), (17, 10, 233, 0.5, 2), (18, 0, 160, 0.8, 3), (19, 10, 233, 0.5, 4),
+                                  (20, 0, 160, 0.8, 5), (21, 10, 233, 0.5, 6), (22, 0, 160, 0.8, 7), (22, 8, 233, 0.7, 8)):
+        metal_(sg, bar, step, f, 2.2, v, seed, 0.9, 0.4, pan=-0.3 if seed % 2 else 0.3)
+    # зворотні наростання перед кожним входом
+    for bar, st, ln in ((7, 8, 8), (15, 8, 8), (23, 0, 16), (31, 8, 8)):
+        sg.put("fx", S.rev_swell(sg.dur(ln), 1.0), bar, st, gain=0.5)
     cfg = dict(
-        gains={"drums": 0.62, "bass": 0.55, "keys": 0.70, "brass": 1.10, "guitar": 1.10, "pad": 0.0, "fx": 0.0},
-        sends={"drums": 0.05, "bass": 0.0, "keys": 0.22, "brass": 0.16, "guitar": 0.12},
-        rt60=1.5, comp=(-7.0, 1.5, 20.0, 200.0), key=M.KEY_NAME,
+        key="Em", rt60=1.5,
+        gains=dict(drums=0.5, bass=0.45, gtr=1.0, lead=1.2, brass=1.2, keys=0.75, pad=0.0, fx=0.5),
+        sends=dict(drums=0.05, gtr=0.05, lead=0.12, brass=0.18, keys=0.35, fx=0.3),
+        bus=dict(drums=[("hp", 28, 0.7)]),
+        comp=(-9.0, 1.8, 20.0, 180.0), sat=1.0,
+        sections=[(i * 8, (i + 1) * 8, "ABCD"[i]) for i in range(4)],
     )
     return sg, cfg
 
 
-# ============================================================== ЗАВАНТАЖЕННЯ
+# ======================================================================= ЗАВАНТАЖЕННЯ
 def loading_build():
-    sg = X.Song(116, 16, swing=0.08, seed=1161)
+    sg = X.Song(96, 16, seed=21)
+    n = sg.n
     for bar in range(16):
-        odd = bar % 2
-        # барабани: легкі
+        for s in (0, 2, 8, 10):  # серцебиття: «буп-буп» двічі на такт
+            kick_(sg, bar, s, 1.0 if s % 8 == 0 else 0.65, g=0.8 if s % 8 == 0 else 0.6)
+        for s in range(0, 16, 2):  # тікання хета
+            hat_(sg, bar, s, 0.8 if s % 4 == 0 else 0.55, 0.55)
+        cab = 800.0 if bar < 8 else 1100.0
+        acc = accents(bar)
         for s in range(16):
-            if s % 2 == 0:
-                sg.put("drums", S.hat(vq(0.42 if s % 4 == 0 else 0.3), False, True), bar, s, gain=0.7, pan=0.25)
-            elif s in (3, 11):
-                sg.put("drums", S.hat(0.2, False, True), bar, s, gain=0.5, pan=0.25)
-        for s in (4, 12):
-            sg.put("drums", S.rim(0.7), bar, s, gain=0.55, pan=-0.1)
-        sg.put("drums", S.kick(0.8, True), bar, 0, gain=0.85)
-        if odd:
-            sg.put("drums", S.kick(0.8, True), bar, 10, gain=0.6)
-        # бас: корені + кілька попів
-        k = bar % 4
-        r = {0: 41, 1: 37, 2: 34, 3: 36}[k]
-        notes = [(0, r, 3, "note"), (6, r, 1, "note"), (8, r if k != 2 else 39, 2, "note"), (12, (r if k != 2 else 39) + 12, 1, "pop")]
-        for st, m, ln, kind in notes:
-            sg.put("bass", S.slap_bass(m, sg.dur(ln * 0.9), 0.7 if kind == "note" else 0.5, kind), bar, st, gain=0.9)
-        # пад + м'який чорд
-        ch = M.CHORDS[M.chord_at(bar, 0)]
-        if k in (0, 2):
-            sg.put("pad", S.pad(tuple(M.fold(ch, 48, 70)), sg.dur(30), 0.5), bar, 0, gain=0.7, vel_jit=0)
-        play_chord(sg, "keys", lambda n: S.rhodes(n, sg.dur(5), 0.5, 0.8, 0.12), ch[1:], bar, 0, gain=0.5, pan=-0.3, strum_ms=7)
-        if bar % 4 == 2:
-            ch2 = M.CHORDS[M.chord_at(bar, 8)]
-            play_chord(sg, "keys", lambda n: S.rhodes(n, sg.dur(5), 0.5, 0.8, 0.12), ch2[1:], bar, 8, gain=0.5, pan=-0.3, strum_ms=7)
-        # дуже тихі чопи на офбітах
-        for st in (6, 14):
-            g3 = M.fold(M.CHORDS[M.chord_at(bar, st)][1:], 62, 77)[:3]
-            sg.put("guitar", S.guitar(g3, 0.06, 0.5), bar, st, gain=0.55, pan=0.35)
-
-    # уривки теми на Rhodes: перші половини тактів 1-4 / 5-8, другі половини — наступні 4 такти
-    def frag(first_bar, motif_bars, half):
-        for b in motif_bars:
-            for step, midi, ln in M.MOTIF[b]:
-                if (step < 8) == half:
-                    sg.put("keys", S.rhodes(midi - 12, sg.dur(ln * 0.95), 0.6, 0.9, 0.1),
-                           first_bar + (b % 4), step, gain=0.8, pan=-0.1)
-    frag(0, range(0, 4), True)
-    frag(4, range(0, 4), False)
-    frag(8, range(4, 8), True)
-    frag(12, range(4, 8), False)
+            ch = M.chord_at(bar, s)
+            if s in acc and bar % 2 == 0:
+                gtr(sg, bar, s, M.power(ch), 2, 0.7, mute=0.13, cab=cab, g=0.35)
+            elif bar >= 8 and s % 2 == 0 and s not in acc:
+                gtr(sg, bar, s, M.power(ch, wide=False), 1, 0.35, mute=0.07, cab=cab, g=0.3)
+        if bar % 2 == 0:
+            sg.put("bass", S.bass_dist(M.ROOTS[M.chord_at(bar, 0)], sg.dur(14), 0.7, 0.35), bar, 0, gain=0.7)
+    # суб-дрон: строго періодичний
+    d = periodic_tone(n, 41.2, harm=((1, 1.0), (2, 0.35)), lfo_cycles=3, depth=0.25, detune_cycles=3)
+    d = d / np.max(np.abs(d)) * 0.5
+    sg.bufs["pad"][:, 0] += d
+    sg.bufs["pad"][:, 1] += d
+    # фрагменти лейтмотиву: половинки тактів 1–4 (такти 1–2 та 3–4 по черзі), темний низький синт
+    for first, halves in ((0, (0, 1)), (6, (2, 3)), (8, (0, 1)), (14, (2, 3))):
+        for k, hb in enumerate(halves):
+            for step, midi, ln in M.MOTIF[hb]:
+                sg.put("lead", S.horn((midi - 12,), sg.dur(ln * 0.95), 0.6, 0.06, 7, 0.6), first + k, step, gain=0.5)
+    # рідкісний металевий «тик» вдалині і наростання перед швом
+    for bar in (3, 7, 11):
+        metal_(sg, bar, 12, 233, 1.2, 0.4, bar, 0.5, 0.5, pan=0.4)
+    sg.put("fx", S.rev_swell(sg.dur(12), 0.7, 95), 15, 4, gain=0.35)
     cfg = dict(
-        gains={"drums": 1.2, "bass": 0.7, "keys": 0.8, "brass": 0.0, "guitar": 0.5, "pad": 0.45, "fx": 0.0},
-        sends={"drums": 0.05, "keys": 0.25, "pad": 0.2, "guitar": 0.12},
-        rt60=1.3, comp=(-16.0, 2.2, 20.0, 180.0), key=M.KEY_NAME,
+        key="Em", rt60=1.8,
+        gains=dict(drums=0.7, bass=0.7, gtr=1.7, lead=1.4, brass=0.8, keys=0.9, pad=0.3, fx=1.0),
+        sends=dict(drums=0.04, gtr=0.1, lead=0.3, brass=0.2, keys=0.3, fx=0.4),
+        bus=dict(),
+        comp=(-18.0, 2.4, 10.0, 140.0), sat=1.0,
+        sections=[(0, 8, "1-8"), (8, 16, "9-16")],
     )
     return sg, cfg
 
 
-# ============================================================== НАЛАШТУВАННЯ
+# ======================================================================= НАЛАШТУВАННЯ
 def settings_build():
-    sg = X.Song(84, 16, swing=0.14, seed=1162)
-    for bar in range(16):
-        cn = M.chord_at_slow(bar, 0)
-        ch = M.CHORDS[cn]
-        root = M.ROOTS[cn] + 12 if M.ROOTS[cn] < 38 else M.ROOTS[cn]
-        # бас
-        sg.put("bass", S.round_bass(root, sg.dur(6), 0.8), bar, 0, gain=0.9)
-        sg.put("bass", S.round_bass(root + 7, sg.dur(3), 0.6), bar, 10, gain=0.8)
-        # Rhodes-акомпанемент
-        play_chord(sg, "keys", lambda n: S.rhodes(n, sg.dur(6), 0.45, 0.6, 0.35), ch[1:], bar, 0, gain=0.55, pan=-0.3, strum_ms=11)
-        play_chord(sg, "keys", lambda n: S.rhodes(n, sg.dur(3), 0.35, 0.6, 0.35), ch[2:], bar, 10, gain=0.4, pan=-0.3, strum_ms=11)
-        # падь на 2 такти
-        if bar % 2 == 0:
-            sg.put("pad", S.pad(tuple(M.fold(ch, 46, 68)), sg.dur(30), 0.5), bar, 0, gain=0.8, vel_jit=0)
-        # ударні: half-time, щітка, приглушені
-        sg.put("drums", S.kick(0.8, True), bar, 0, gain=0.8)
-        if bar % 2 == 1:
-            sg.put("drums", S.kick(0.7, True), bar, 10, gain=0.6)
-        sg.put("drums", S.brush(0.8, 0.32), bar, 8, gain=0.7, pan=-0.1)
-        sg.put("drums", S.rim(0.5), bar, 8, gain=0.25, pan=-0.1)
-        for s in range(0, 16, 2):
-            sg.put("drums", S.hat(vq(0.4 if s % 4 == 0 else 0.25), False, True), bar, s, gain=0.6, pan=0.25)
-
-    # тема: такти 1-4 лейтмотиву, розтягнуті вдвічі (аугментація) на 8 тактів
-    def stretched(first_bar, vel, bright, skip_short):
+    sg = X.Song(70, 16, seed=31)
+    n = sg.n
+    # низький дрон мі з повільним рухом (біття + дихання)
+    d = periodic_tone(n, 41.2, harm=((1, 1.0), (2, 0.5), (3, 0.18)), lfo_cycles=2, depth=0.3, detune_cycles=4)
+    d2 = periodic_tone(n, 82.4, harm=((1, 0.5), (2, 0.2)), lfo_cycles=3, depth=0.4, detune_cycles=2, phase=0.8)
+    d = (d / np.max(np.abs(d))) * 0.55 + (d2 / np.max(np.abs(d2))) * 0.22
+    sg.bufs["pad"][:, 0] += d
+    sg.bufs["pad"][:, 1] += d
+    # падь: Е-Н (мі-сі) і тихе ♭2 (фа), що розв'язується у мі
+    sg.put("pad", S.pad_dark((52, 59), sg.dur(8 * 16 * 0.97), 0.5, 3.0, 3.0, 600.0), 0, 0, gain=0.8)
+    sg.put("pad", S.pad_dark((52, 59), sg.dur(8 * 16 * 0.97), 0.5, 3.0, 3.0, 600.0), 8, 0, gain=0.8)
+    for bar in (6, 14):
+        sg.put("pad", S.pad_dark((65,), sg.dur(2 * 16 * 0.95), 0.4, 3.2, 2.2, 520.0), bar, 0, gain=0.7, pan=0.2)
+        sg.put("pad", S.pad_dark((64, 71), sg.dur(1.6 * 16), 0.45, 2.0, 2.5, 560.0), (bar + 2) % 16, 0, gain=0.7)
+    # низьке піаніно/дзвін: мотив тактів 1–4, розтягнутий до 8 тактів; удруге — рідше
+    for pas, base in ((0, 0), (1, 8)):
         for b, step, midi, ln in M.motif_notes(range(4)):
-            if skip_short and ln <= 1:
+            if pas == 1 and ln < 3:
                 continue
-            gs = (b * 16 + step) * 2
-            sg.put("keys", S.rhodes(midi - 12, sg.dur(ln * 2 * 0.95), vel, bright, 0.35),
-                   first_bar + gs // 16, gs % 16, gain=0.85, pan=0.1)
-    stretched(0, 0.6, 0.7, False)
-    stretched(8, 0.5, 0.5, True)
-    sg.bufs["fx"][:, 0] = S.vinyl(sg.n, 3, 9.0, 0.12)
-    sg.bufs["fx"][:, 1] = S.vinyl(sg.n, 4, 9.0, 0.12)
+            g_ = 2 * (16 * b + step)
+            bar, st = base + g_ // 16, g_ % 16
+            v = 0.8 if pas == 0 else 0.55
+            sg.put("keys", S.low_bell(midi - 12, sg.dur(2 * ln * 0.9), v, 0.6), bar, st, gain=0.5, pan=-0.1)
+    # далекі металеві удари з довгим реверберем
+    for bar, st, f, v in ((1, 0, 160, 0.6), (5, 8, 233, 0.45), (9, 4, 160, 0.55), (12, 12, 233, 0.4)):
+        metal_(sg, bar, st, f, 3.5, v, bar, 1.6, 0.6, pan=0.35 if bar % 2 else -0.35)
+    # ледь чутне серцебиття
+    for bar in range(16):
+        for s in (0, 3, 8, 11):
+            sg.put("drums", S.kick(0.5, True), bar, s, gain=0.22 if s % 8 == 0 else 0.15)
+    # стрічковий шум (у групі без реверба, щоб не розмазувався)
+    sg.bufs["bass"][:, 0] += S.tape(n, 3, 1.0)
+    sg.bufs["bass"][:, 1] += S.tape(n, 4, 1.0)
     cfg = dict(
-        gains={"drums": 0.6, "bass": 0.9, "keys": 0.9, "brass": 0.0, "guitar": 0.0, "pad": 0.55, "fx": 1.0},
-        sends={"drums": 0.08, "keys": 0.3, "pad": 0.25},
-        rt60=1.8, comp=(-20.0, 2.0, 25.0, 250.0), key=M.KEY_NAME,
-        bus={"drums": [("lp", 4200, 0.7)], "keys": [("lp", 6500, 0.7)], "pad": [("lp", 3500, 0.7)]},
-        master_lp=6800, sat=1.4,
+        key="Em", rt60=4.5,
+        gains=dict(drums=1.0, bass=0.9, gtr=1.0, lead=1.0, brass=1.0, keys=1.6, pad=0.5, fx=1.0),
+        sends=dict(keys=0.55, pad=0.12, fx=0.9, drums=0.1),
+        bus=dict(),
+        comp=(-18.0, 1.5, 40.0, 300.0), sat=1.0,
+        sections=[(0, 8, "1-8 перший прохід"), (8, 16, "9-16 рідше")],
     )
     return sg, cfg
 
@@ -313,19 +339,35 @@ def render_track(name, builder, stems_dir=None):
     master, stems = sg.mixdown(cfg["gains"], cfg["sends"], ir, bus_filters=cfg.get("bus"))
     if cfg.get("master_lp"):
         master = np.stack([S.filt(master[:, c], "lp", cfg["master_lp"], 0.7, circular=True) for c in range(2)], axis=1)
+    # вхідний рівень до м'якого обмеження: RMS ≈ -22 дБFS, щоб насичення не плющило динаміку
+    master = master * (10 ** (-22.0 / 20.0) / np.sqrt(np.mean(master ** 2)))
     if cfg.get("sat"):
         k = cfg["sat"]
         master = np.tanh(k * master) / k
     y, g_db, info = X.master_chain(master, -16.0, -1.0, cfg["comp"])
-    # стеми: ті самі підсилення (стискання/ліміт — нелінійні, тож наближено)
     pcm = X.to_pcm16(y)
     yq = pcm.astype(float) / 32768.0
+    bar_n = sg.n / sg.bars
+
+    def sec_rms(sig):
+        out = []
+        for a, b, lab in cfg["sections"]:
+            seg = sig[int(a * bar_n):int(b * bar_n)]
+            out.append((lab, 10 * np.log10(np.mean(seg ** 2) + 1e-12)))
+        return out
+
+    bar_n_ = bar_n
+    sec_stems = {}
+    for k_, v_ in stems.items():
+        sec_stems[k_] = [10 * np.log10(np.mean(v_[int(a_ * bar_n_):int(b_ * bar_n_)] ** 2) + 1e-12) for a_, b_, _l in cfg["sections"]]
+    crest = float(L.sample_peak_db(yq) - 10 * np.log10(np.mean(yq ** 2) + 1e-12) / 1.0)
     res = dict(
         name=name, seconds=sg.n / SR, samples=sg.n, bpm=sg.bpm, bars=sg.bars, key=cfg["key"],
         lufs=L.integrated_loudness(yq), tp=L.true_peak_db(yq), seam=X.seam_report(yq),
         peak=L.sample_peak_db(yq), pcm=pcm, loop="yes", gain_db=g_db,
         stems={k: v for k, v in stems.items()}, gain_lin=10 ** (g_db / 20.0),
         rms={k: float(np.sqrt(np.mean(v ** 2))) for k, v in stems.items()}, took=time.time() - t0,
+        sec_pre=sec_rms(master), sec_stems=sec_stems, sec_post=sec_rms(yq), crest=crest, yq=yq,
     )
     return res
 
@@ -349,61 +391,90 @@ def at(total, items):
     return out
 
 
-def thump(f0=95, f1=48, dur=0.16, tau=0.05):
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    f = f1 + (f0 - f1) * np.exp(-t / 0.025)
-    return S.fade(np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / tau), 0.3, 15)
-
-
-def finish(x, peak_db, tail_room=None, length=None, out_ms=12.0):
+def finish(x, lufs, tail_room=None, length=None, out_ms=12.0, cap_db=-1.6):
+    """Нормалізація SFX до цілі гучності кліпу (dual-mono) з обмеженням піку."""
     x = np.asarray(x, dtype=float)
     if tail_room:
         r = X.room(x, tail_room[0], tail_room[1])
-        x = r.mean(axis=1) * 1.0
+        x = r.mean(axis=1)
     if length:
         x = x[: int(length * SR)]
     x = S.filt(x, "hp", 30.0)
     x = S.fade(x, 0.5, out_ms)
-    x = x * (10 ** (peak_db / 20.0) / (np.max(np.abs(x)) + 1e-12))
-    tp = L.true_peak_db(x)
-    if tp > -1.0:
-        x *= 10 ** ((-1.0 - tp) / 20.0)
+    g = 10 ** ((lufs - L.clip_loudness(np.stack([x, x], 1))) / 20.0)
+    x = x * g
+    pk = L.true_peak_db(x)
+    if pk > cap_db:
+        x = x * 10 ** ((cap_db - pk) / 20.0)
     return x
+
+
+def mid_knock(f, dur, seed, drive=3.0, lp=2200.0):
+    """Середня «плоть» удару: перевантажений тон + шум, щоб SFX чули й на малих динаміках (200-2000 Гц)."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    tone = np.sin(2 * np.pi * f * t) + 0.5 * np.sin(2 * np.pi * 2.01 * f * t)
+    nz = S.filt(S.noise(n, seed), "lp", lp, 0.7)
+    y = np.tanh(drive * (tone * np.exp(-t / (dur * 0.35)) + 0.7 * nz * np.exp(-t / (dur * 0.2))))
+    y = S.filt(y, "hp", 150.0, 0.7)
+    return S.fade(y, 0.2, 8.0)
 
 
 def sfx_all():
     o = {}
-    o["ui_move"] = finish(at(0.075, [(S.wood_click(2600, 0.8), 0, 0.5), (cut(S.rhodes(84, 0.03, 0.6, 0.6), 0.07, 25), 0, 1.0)]), -8.5)
-    o["ui_confirm"] = finish(at(0.24, [(cut(S.brass((53,), 0.1, 0.9, 0.7, 0.8), 0.2, 40), 0, 1.0),
-                                       (thump(), 0, 1.1), (S.wood_click(1100, 0.8), 0, 0.5)]), -3.5)
-    o["ui_back"] = finish(at(0.16, [(cut(S.rhodes(72, 0.05, 0.7), 0.09, 30), 0, 1.0),
-                                    (cut(S.rhodes(68, 0.06, 0.55), 0.1, 45), 0.06, 0.9)]), -8)
-    err = cut(S.brass((65, 66), 0.25, 0.95, 1.0, 0.3, False), 0.32, 70)
-    tt = np.arange(len(err)) / SR
-    err = err * (0.65 + 0.35 * np.sign(np.sin(2 * np.pi * 26 * tt)) * 0.6 + 0.0)
-    err = S.filt(err, "lp", 3200)
-    o["ui_error"] = finish(at(0.34, [(err, 0, 1.0), (thump(70, 45, 0.2, 0.08), 0, 1.0)]), -2.5)
-    o["ui_toggle"] = finish(at(0.12, [(S.wood_click(1500, 0.7), 0, 0.5), (cut(S.rhodes(72, 0.02, 0.5), 0.06, 20), 0, 0.8),
-                                      (S.wood_click(2300, 0.9), 0.05, 0.5), (cut(S.rhodes(80, 0.02, 0.5), 0.06, 25), 0.05, 0.8)]), -9)
-    o["ui_slider"] = finish(at(0.05, [(cut(S.rhodes(84, 0.015, 0.6, 0.6), 0.045, 20), 0, 1.0), (S.wood_click(3000, 0.4, 0.02), 0, 0.3)]), -10)
-    o["ui_tab"] = finish(at(0.17, [(S.swish(0.15, 1200, 6000, 1.0, 91, 0.4), 0, 1.0), (S.wood_click(2200, 0.5), 0, 0.5)]), -6)
-    o["ui_transition"] = finish(at(0.5, [(S.swish(0.42, 300, 6500, 1.0, 92, 0.7), 0, 0.9),
-                                         (cut(S.brass((53, 60, 65), 0.14, 0.9, 1.0, 0.6, False), 0.3, 80), 0.2, 0.9),
-                                         (thump(80, 45, 0.2, 0.07), 0.2, 0.6)]), -3, (0.18, 0.12), length=0.5, out_ms=110)
-    arp = [(cut(S.rhodes(m, 0.1, 0.65), 0.25, 80), i * 0.07, 0.9) for i, m in enumerate((65, 68, 72, 75, 79))]
-    arp.append((cut(S.brass((53, 56, 60, 63), 0.2, 0.55, 0.8, 0.4, False), 0.4, 120), 0.3, 0.7))
-    o["ui_load_done"] = finish(at(0.75, arp), -5, (0.3, 0.12), length=0.8, out_ms=200)
-    t_ = [(0.0, 72, 0.36), (0.388, 75, 0.12), (0.517, 77, 0.26), (1.034, 80, 0.4)]
-    items = []
-    for st, n, d in t_:
-        items.append((cut(S.brass(M.harmonise(n, (0, 2)), d, 0.8, 1.0, 0.5, False), d + 0.08, 50), st, 0.85))
-        items.append((cut(S.rhodes(n, d, 0.7), d + 0.2, 80), st, 0.6))
-    o["ui_login_ok"] = finish(at(1.6, items), -4, (0.35, 0.14))
-    # обрізати хвіст до ~1.38 с
-    x = o["ui_login_ok"]
-    n = int(1.38 * SR)
-    o["ui_login_ok"] = S.fade(x[:n], 0.1, 140)
+    # ui_move: сухий сталевий тик (храповик каната), не солодкий
+    o["ui_move"] = finish(at(0.06, [(S.steel_click(3100, 1.0, 0.05, 380), 0, 1.0)]), -17.0, out_ms=15)
+    # ui_confirm: важкий удар кулаком + низький бум
+    o["ui_confirm"] = finish(at(0.2, [(S.thump(118, 42, 0.2, 0.09, 2.4), 0, 1.0), (S.thump(62, 38, 0.2, 0.14, 1.4), 0, 0.7),
+                                      (S.steel_click(1300, 0.8, 0.03, 200), 0, 0.45),
+                                      (mid_knock(260, 0.14, 21), 0, 0.9)]), -13.0, out_ms=45)
+    # ui_back: приглушений низхідний глухий удар
+    back = S.thump(88, 34, 0.16, 0.07, 1.3)
+    o["ui_back"] = finish(at(0.15, [(S.filt(back, "lp", 420, 0.7, order=2), 0, 0.8),
+                                    (S.filt(mid_knock(190, 0.12, 22, 2.5, 1100.0), "lp", 900, 0.7), 0, 0.9)]), -15.0, out_ms=45)
+    # ui_error: різкий перевантажений дзижчак (кластер мі/фа) + металевий брязк
+    n = int(0.3 * SR)
+    t = np.arange(n) / SR
+    buzz = sum(S.saw(float(S.mtof(m)), n, 0.17 * i) for i, m in enumerate((40, 41, 52, 53, 64, 65)))
+    buzz = buzz * (0.62 + 0.38 * np.sign(np.sin(2 * np.pi * 27 * t)))
+    buzz = np.tanh(4.0 * buzz / np.max(np.abs(buzz)))
+    buzz = S.filt(buzz, "lp", 2300, 0.7) * np.minimum(t / 0.004, 1.0) * np.exp(-t / 0.4)
+    o["ui_error"] = finish(at(0.3, [(buzz / np.max(np.abs(buzz)), 0, 0.9), (S.metal(410.0, 0.25, 1.0, 11, 0.12), 0, 0.8),
+                                    (S.thump(70, 42, 0.2, 0.08, 1.8), 0, 0.7)]), -13.5, out_ms=70)
+    # ui_toggle: сталева засувка / храповик
+    o["ui_toggle"] = finish(at(0.1, [(S.steel_click(2100, 0.8, 0.03, 300), 0, 0.6), (S.steel_click(1700, 0.8, 0.03, 260), 0.032, 0.7),
+                                     (S.steel_click(1150, 1.0, 0.04, 190), 0.065, 1.0)]), -16.5, out_ms=18)
+    # ui_slider: сухий низький тик
+    nn = int(0.04 * SR)
+    tt = np.arange(nn) / SR
+    tick = np.sin(2 * np.pi * 190 * tt) * np.exp(-tt / 0.008) + 0.4 * S.filt(S.noise(nn, 88), "lp", 1600) * np.exp(-tt / 0.003)
+    o["ui_slider"] = finish(at(0.04, [(tick, 0, 1.0)]), -18.0, out_ms=12)
+    # ui_tab: короткий свист, що закінчується ударом
+    o["ui_tab"] = finish(at(0.16, [(S.whoosh(0.1, 2600, 600, 1.0, 93, 0.6), 0, 0.7),
+                                   (S.thump(100, 40, 0.1, 0.05, 1.9), 0.085, 1.0), (S.steel_click(1400, 0.7, 0.03, 220), 0.085, 0.4),
+                                   (mid_knock(240, 0.08, 23), 0.085, 0.8)]),
+                         -14.5, out_ms=35)
+    # ui_transition: зворотний тарілочний наліт у великий удар + свист
+    o["ui_transition"] = finish(at(0.45, [(S.rev_swell(0.17, 1.0, 96, 400, 6500), 0, 0.7),
+                                          (S.thump(82, 32, 0.29, 0.12, 2.3), 0.17, 1.0),
+                                          (S.metal(150.0, 0.25, 1.0, 3, 0.18), 0.17, 0.45),
+                                          (S.whoosh(0.28, 2300, 300, 1.0, 94, 0.08), 0.17, 0.55),
+                                          (mid_knock(220, 0.22, 24), 0.17, 0.9)]), -12.5, out_ms=100)
+    # ui_load_done: низький металевий гонг + тіло силового акорду мі (не яскраво)
+    chord = S.chug(M.power("E"), 0.5, 0.9, 1, None, 2100.0)
+    o["ui_load_done"] = finish(at(0.7, [(S.metal(165.0, 0.65, 1.0, 21, 0.75), 0, 0.9), (chord, 0, 0.8),
+                                        (S.thump(70, 40, 0.3, 0.12, 1.6), 0, 0.6)]), -14.0, (0.3, 0.1), length=0.7, out_ms=230)
+    # ui_login_ok: перші 4 ноти лейтмотиву (Е Е G F) на низькому лід/духових над ударом
+    step = 0.125
+    items = [(S.thump(100, 40, 0.3, 0.12, 2.2), 0, 0.9), (S.metal(160.0, 0.5, 1.0, 5, 0.3), 0, 0.4)]
+    for st, midi, ln in M.MOTIF[0][:4]:
+        d = ln * step
+        d_ = d + (0.3 if st == 6 else 0.04)
+        items.append((cut(S.lead(midi - 12, d_, 0.9, 1), d_ + 0.1, 70), st * step, 0.7))
+        items.append((cut(S.horn((midi - 12,), d_, 0.8, 0.03, 1), d_ + 0.1, 70), st * step, 0.6))
+    items.append((S.chug(M.power("E"), 0.45, 0.9, 1, 0.5, 2400.0), 0, 0.5))
+    x = at(1.6, items)
+    o["ui_login_ok"] = finish(x, -13.0, (0.35, 0.1), length=1.3, out_ms=220)
     return o
 
 
@@ -430,14 +501,18 @@ def main(argv=None):
                     continue
                 X.write_wav(sd / f"{name}_{g}.wav", X.to_pcm16(np.clip(v * r["gain_lin"], -1, 1)))
         s = r["seam"]
-        print(f"{name}: {r['seconds']:.2f} s, {r['bpm']:.3f} BPM, LUFS {r['lufs']:.2f}, TP {r['tp']:.2f} dBTP, "
-              f"шов jump={s['jump']:.5f} (медіана різниць {s['median_adj']:.5f}, p99 {s['p99_adj']:.5f}), "
-              f"RMS10мс кінець/початок {s['rms_end10']:.4f}/{s['rms_start10']:.4f}; "
-              f"RMS стемів " + ", ".join(f"{k}={v:.3f}" for k, v in r["rms"].items()) + f"; {r['took']:.0f} с")
-        manifest.append((name, r["seconds"], r["samples"], f"{r['bpm']:.2f}", r["bars"], "Fm", r["lufs"], r["tp"], "yes"))
-    if not a.only or a.only.startswith("ui_"):
+        print(f"{name}: {r['seconds']:.3f} s, {r['bpm']:.3f} BPM, LUFS {r['lufs']:.2f}, TP {r['tp']:.2f} dBTP, "
+              f"crest {r['crest']:.1f} дБ, шов jump={s['jump']:.5f} (медіана {s['median_adj']:.5f}, p99 {s['p99_adj']:.5f}), "
+              f"RMS10мс кінець/початок {s['rms_end10']:.4f}/{s['rms_start10']:.4f}; {r['took']:.0f} с")
+        print("   секції RMS до мастер-ланцюга (дБ): " + ", ".join(f"{l}={v:.1f}" for l, v in r["sec_pre"]))
+        print("   секції RMS у файлі (дБFS):        " + ", ".join(f"{l}={v:.1f}" for l, v in r["sec_post"]))
+        for k_, v_ in r["sec_stems"].items():
+            print(f"   стем {k_}: " + ", ".join(f"{x:.1f}" for x in v_))
+        print("   RMS стемів: " + ", ".join(f"{k}={v:.3f}" for k, v in r["rms"].items()))
+        manifest.append((name, r["seconds"], r["samples"], f"{r['bpm']:.2f}", r["bars"], r["key"], r["lufs"], r["tp"], "yes"))
+    if not a.only or a.only == "sfx" or a.only.startswith("ui_"):
         for name, x in sfx_all().items():
-            if a.only and a.only != name:
+            if a.only and a.only not in ("sfx", name):
                 continue
             pcm = X.to_pcm16(x, dither=False)
             xq = pcm.astype(float) / 32768.0
@@ -447,7 +522,7 @@ def main(argv=None):
             X.write_wav(out / f"{name}.wav", pcm)
             print(f"{name}: {len(x) / SR * 1000:.0f} мс, пік {L.sample_peak_db(xq):.1f} dBFS, TP {tp:.2f}, "
                   f"гучність кліпу {lufs:.1f} LUFS, мом.макс {L.momentary_max(stereo):.1f}")
-            manifest.append((name, len(x) / SR, len(x), "-", "-", "Fm", lufs, tp, "no"))
+            manifest.append((name, len(x) / SR, len(x), "-", "-", "Em", lufs, tp, "no"))
     if not a.only:
         lines = ["# name | seconds | samples | bpm | bars | key | LUFS | dBTP | loop=whole-clip",
                  "# LUFS: для music_* — інтегральна BS.1770-4; для ui_* — гучність усього кліпу (dual-mono), див. README"]
