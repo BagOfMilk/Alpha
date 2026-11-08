@@ -77,6 +77,16 @@ namespace Game.Gameplay.Ring.UI.Menus
         }
 
         /// <summary>Опитати ввід за кадр і віддати дії екрану. Повертає true, якщо щось прийшло.</summary>
+        /// <summary>
+        /// Меню відкрилось поверх гри (пауза): миша вважається нерухомою, а позиція береться свіжа. Інакше рух миші за грою
+        /// (Poll тоді не кличеться) читався б як рух — і пластина під курсором крала б фокус у «Продовжити» (рев'ю 08.11.2026).
+        /// </summary>
+        public void ResetMouse()
+        {
+            MouseArmed = false;
+            _mx = float.NaN; _my = float.NaN;
+        }
+
         public bool Poll(IMenuNavigable sink, float dt)
         {
             if (Capturing)

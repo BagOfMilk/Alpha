@@ -74,6 +74,12 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>
         void ShowBackstage();
 
+        /// <summary>
+        /// Настрій зали за ажіотажем (0 — тихий гул, як на титулі). Пауза → «На титул» з шоу: інакше оплески матчу лишались
+        /// під музикою титулу (рев'ю 08.11.2026).
+        /// </summary>
+        void CrowdMood(int hype);
+
         /// <summary>Сцена закулісся: null — розмова з букером; ev_* — подія з гостем на місці букера.</summary>
         void SetBackstageScene(string sceneId);
 
