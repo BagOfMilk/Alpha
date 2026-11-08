@@ -105,6 +105,14 @@ namespace Game.Gameplay.Ring
             _menuShotsDir = ReadArg(MenuShotsArg);
             bool review = _shotsDir != null || _menuShotsDir != null || ReadArg("-ring-lookbook") != null || ReadArg("-ring-font-spike") != null;
             _settings = new RingSettingsRuntime(review ? (IRingSettingsStore)new MemorySettingsStore() : new PlayerPrefsSettingsStore(), !review);
+            // огляд масштабу інтерфейсу (90/100/110/120): -ring-uiscale 120 — лише в пам'яті огляду, у налаштування гравця не пишеться
+            int reviewScale;
+            string scaleArg = review ? ReadArg("-ring-uiscale") : null;
+            if (scaleArg != null && int.TryParse(scaleArg, out reviewScale))
+            {
+                _settings.Model.Applied.UiScale = reviewScale;
+                _settings.Model.Applied.Clamp();
+            }
             _settings.ApplyAll();
             _menuInput = new RingMenuInput();
             _menuInput.SetBindings(_settings.Model.Applied.Keys);
@@ -283,7 +291,15 @@ namespace Game.Gameplay.Ring
             }
         }
 
+        /// <summary>Esc у грі: спершу екран закриває своє верхнє (<see cref="RingScreenView.OnBack"/>), інакше — пауза.</summary>
         private void OpenPause()
+        {
+            if (!CanPause) return;
+            if (_view != null && _view.OnBack()) { RingMenuServices.Play(MenuSfx.Back); return; }
+            ShowPause();
+        }
+
+        private void ShowPause()
         {
             if (!CanPause) return;
             string context = _career.Stage == CareerStage.Create ? null
@@ -390,7 +406,7 @@ namespace Game.Gameplay.Ring
         internal WipeTransition Wipe { get { return _wipe; } }
         internal bool OnTitle { get { return _onTitle; } }
         internal PauseOverlay CurrentPause { get { return _pause; } }
-        internal void OpenPauseForShots() { OpenPause(); }
+        internal void OpenPauseForShots() { ShowPause(); }
         internal void Shot(string name)
         {
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_menuShotsDir, string.Format("{0:000}_{1}.png", _menuShot++, name)));

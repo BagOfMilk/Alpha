@@ -34,6 +34,15 @@ namespace Game.Gameplay.Ring.UI
             Root.RegisterCallback<GeometryChangedEvent>(e => Fit());
         }
 
+        public override bool OnBack()
+        {
+            if (!_dev && !_shop) return false;
+            _dev = false; _shop = false;
+            _drawerScroll = null; _drawerOffset = Vector2.zero;
+            Refresh();
+            return true;
+        }
+
         public override void Refresh()
         {
             // покупка в шухляді перебудовує екран: місце в довгому списку «Усе (N)» не губиться (рев'ю 08.11.2026)
@@ -324,7 +333,7 @@ namespace Game.Gameplay.Ring.UI
             return row;
         }
 
-        /// <summary>Шухляда «Розвиток»/«Витрати» (B03 §3): виростає вгору над шапкою ряду, ряд дій не рухається; клік по вкладці закриває (Esc у грі відкриває паузу).</summary>
+        /// <summary>Шухляда «Розвиток»/«Витрати» (B03 §3): виростає вгору над шапкою ряду, ряд дій не рухається; закривають вкладка й Esc (<see cref="OnBack"/>).</summary>
         private VisualElement Drawer()
         {
             var box = ArenaKit.Abs(null, null, ArenaKit.Edge, ArenaKit.HeaderBottom + 50f, 560f, null);
@@ -402,6 +411,9 @@ namespace Game.Gameplay.Ring.UI
         {
             var b = Small(text, () => { if (act()) Host.Save(); Refresh(); }, enabled, RingUi.Gold, hint);
             b.style.marginRight = 4f;
+            // кнопка — одним рядком: стиснута в ряду, «Клініка · 45» ламалась на два (P3 проходу 08.11, кадр 1080)
+            b.style.flexShrink = 0f;
+            b.style.whiteSpace = WhiteSpace.NoWrap;
             return b;
         }
 

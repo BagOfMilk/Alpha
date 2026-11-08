@@ -56,6 +56,12 @@ namespace Game.Gameplay.Ring.UI
         /// <summary>Клавіша L — повний журнал (матч).</summary>
         public virtual void OnToggleLog() { }
 
+        /// <summary>
+        /// Esc / «Назад»: екран закриває верхнє своє (шухляду, розгорнуту картку) і повертає true; false — закривати нічого,
+        /// тоді хост відкриває паузу (ПМ 08.11.2026: «Esc спершу закриває верхнє … і лише тоді, коли закривати нічого, відкриває паузу»).
+        /// </summary>
+        public virtual bool OnBack() { return false; }
+
         /// <summary>Кожен кадр (для ходу суперника з паузою).</summary>
         public virtual void Tick(float unscaledDeltaTime) { }
     }

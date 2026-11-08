@@ -334,6 +334,15 @@ namespace Game.Gameplay.Ring.UI
             Root.RegisterCallback<GeometryChangedEvent>(e => Fit());
         }
 
+        /// <summary>Esc згортає «Розвиток»; інакше — пауза.</summary>
+        public override bool OnBack()
+        {
+            if (!_dev) return false;
+            _dev = false;
+            Refresh();
+            return true;
+        }
+
         /// <summary>
         /// Вузька панель (4:3): між стрічками лише ~220 одиниць — табличка кінцівки й ажіотаж переходять у праву колонку під
         /// стрічку суперника, плита розвитку — нижче (рев'ю 08.11.2026: на 1200 перекривали обидві стрічки).
@@ -516,9 +525,18 @@ namespace Game.Gameplay.Ring.UI
                 pop.style.paddingLeft = 14f; pop.style.paddingRight = 14f; pop.style.paddingTop = 6f; pop.style.paddingBottom = 7f;
                 pop.style.marginTop = 8f;
                 pop.pickingMode = PickingMode.Ignore;
-                var pl = MenuKit.Body(T.Format("c.result.lost_but_loved", r.PopularityBefore, r.PopularityAfter), 17f, RingTheme.Gold, true);
+                // речення й числа — окремими написами: «3 → 5» переноситься цілим, а не «3» в одному рядку й «→ 5» в іншому
+                // (кадр 1080, 08.11.2026; нерозривного пробілу у Fixel немає)
+                pop.style.flexDirection = FlexDirection.Row;
+                pop.style.flexWrap = Wrap.Wrap;
+                var pl = MenuKit.Body(T.Get("c.result.lost_but_loved"), 17f, RingTheme.Gold, true);
                 pl.style.whiteSpace = WhiteSpace.Normal;
+                pl.style.marginRight = 5f;
+                pl.style.flexShrink = 1f;
                 pop.Add(pl);
+                var pn = MenuKit.Body(T.Format("c.result.lost_but_loved.pop", r.PopularityBefore, r.PopularityAfter), 17f, RingTheme.Gold, true);
+                pn.style.whiteSpace = WhiteSpace.NoWrap;
+                pop.Add(pn);
                 col.Add(pop);
             }
 

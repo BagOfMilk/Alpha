@@ -24,6 +24,7 @@ namespace Game.Gameplay.Ring.UI
         private readonly List<ActionTile> _tiles = new List<ActionTile>();
         private Label _hint;
         private VisualElement _row, _head, _gold, _reasonBox, _ropes, _roleHead, _roleTag, _movesBox, _rightCol;
+        private ArenaPlate _movesPlate;
         private string _hintDefault = "";
 
         public CreateScreenView(RingUiContext ctx) : base(ctx)
@@ -40,6 +41,15 @@ namespace Game.Gameplay.Ring.UI
         private int MoveCount() { int n = 0; foreach (var m in Current.StartMoves) n++; return n; }
 
         private static RingPath PathOf(CareerRole r) { return r == CareerRole.Hero ? RingPath.Face : RingPath.Heel; }
+
+        /// <summary>Esc закриває розгорнуту картку «Прийоми»; інакше — пауза.</summary>
+        public override bool OnBack()
+        {
+            if (!_moves) return false;
+            _moves = false;
+            Refresh();
+            return true;
+        }
 
         public override void Refresh()
         {
@@ -162,6 +172,13 @@ namespace Game.Gameplay.Ring.UI
                     _rightCol.Add(_movesBox);
                 }
             }
+            // на вузькій панелі картка лежить поверх рядків характеристик: напівпрозора — крізь неї видно «+3», «Харизма»
+            // (кадр 4:3, 08.11.2026); непрозора там, де під нею афіша, напівпрозора — над 3D
+            if (_movesPlate != null)
+            {
+                _movesPlate.Fill = narrow ? RingTheme.Panel : RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate);
+                _movesPlate.Redraw();
+            }
         }
 
         private ActionTile AddTile(int key, string title, string effect, Action act, string desc)
@@ -214,8 +231,10 @@ namespace Game.Gameplay.Ring.UI
                 input.style.backgroundColor = Color.clear;
                 input.style.borderTopWidth = 0f; input.style.borderBottomWidth = 0f; input.style.borderLeftWidth = 0f; input.style.borderRightWidth = 0f;
                 input.style.color = RingTheme.Text;
-                RingFonts.Apply(input, RingFontRole.Display900);
-                input.style.fontSize = 36f;
+                // Fixel, не display: гравець набирає малими, а малі кириличні display — болгарських форм («в», «к»; Статут
+                // TYPE-03, кадр 1080 08.11.2026). У стрічках ім'я й далі ВЕЛИКИМИ display.
+                RingFonts.Apply(input, RingFontRole.TextBold);
+                input.style.fontSize = 30f;
                 input.style.paddingLeft = 6f;
             }
             well.Add(field);
@@ -334,6 +353,7 @@ namespace Game.Gameplay.Ring.UI
             _movesBox.style.overflow = Overflow.Visible;
             _movesBox.pickingMode = PickingMode.Ignore;
             col.Add(_movesBox);
+            _movesPlate = null;
             var tab = new TabPlate(T.Get("c.hub.create.moves"), MoveCount(), _moves, () => { _moves = !_moves; Refresh(); }, false);
             tab.style.alignSelf = Align.FlexStart;
             tab.style.marginTop = 24f;
@@ -343,7 +363,8 @@ namespace Game.Gameplay.Ring.UI
                 var card = new VisualElement();
                 card.style.marginTop = 8f;
                 card.style.overflow = Overflow.Visible;
-                card.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, StripeW = 5f });
+                _movesPlate = new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, BrandTokens.AlphaPlate), Stripe = RingTheme.Gold, StripeW = 5f };
+                card.Add(_movesPlate);
                 var wrap = new VisualElement();
                 wrap.style.paddingLeft = 20f; wrap.style.paddingRight = 26f; wrap.style.paddingTop = 8f; wrap.style.paddingBottom = 10f;
                 wrap.pickingMode = PickingMode.Ignore;
