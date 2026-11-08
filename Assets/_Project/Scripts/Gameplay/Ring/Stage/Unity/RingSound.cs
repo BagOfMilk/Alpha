@@ -85,6 +85,9 @@ namespace Game.Gameplay.Ring.Stage
 
         public void BellEnd() { StartCoroutine(Repeat(_a.sndBellEnd, 3, 0.32f, 0.9f)); }
 
+        /// <summary>Долоня рефері об мат — на мітці відліку його кліпа (count_1/2/3).</summary>
+        public void Slap() { OneShot(_a.sndMatSlap, 0.9f); }
+
         /// <summary>Звук події матчу: за дією — удар, падіння, приземлення; відлік рефері — долоня об мат.</summary>
         public void OnEvent(MatchEvent ev, float delay, bool pinEnd)
         {

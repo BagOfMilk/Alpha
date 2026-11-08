@@ -92,6 +92,9 @@
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/UI/Models/*.cs" />
     <!-- Ринг (зріз Ворожнеча): моделі екранів — чистий C# без UnityEngine, тим самим прийомом. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Models/*.cs" />
+    <!-- Ринг: таблиця «подія → кліпи» і такт режисера (мітки кліпів) — чистий C#, охоронці RingBeatTests. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingClipTable.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingBeats.cs" />
   </ItemGroup>
 
   <ItemGroup>

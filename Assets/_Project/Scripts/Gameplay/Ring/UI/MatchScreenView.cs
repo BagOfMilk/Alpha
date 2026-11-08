@@ -78,11 +78,14 @@ namespace Game.Gameplay.Ring.UI
             {
                 bool first = _beatSeen < 0;
                 _beatSeen = st.BeatSeq;
-                if (!first && st.BeatEvent != null) RingCallouts.Push(_call, st.BeatEvent, Ctx.Text, _m.IsOver ? _m.Engine.Result.Winner : (MatchWinner?)null);
+                if (!first && st.BeatEvent != null) RingCallouts.Push(_call, st.BeatEvent, st.BeatPhase, Ctx.Text, _m.IsOver ? _m.Engine.Result.Winner : (MatchWinner?)null);
                 // Такт останньої події кроку — табло наздоганяє кадр саме на контакті (а не після всієї серії кліпів).
                 var log = _m.Engine.State.Log;
-                if (!first && st.BeatEvent != null && log.Count > 0 && st.BeatEvent.Seq >= log[log.Count - 1].Seq) { _snapP = null; Refresh(); }
+                if (!first && st.BeatEvent != null && log.Count > 0 && st.BeatEvent.Seq >= log[log.Count - 1].Seq && st.ShownSeq >= st.BeatEvent.Seq) { _snapP = null; Refresh(); }
             }
+            // Журнал відкриває рядок на такті його події (не раніше).
+            int shown = Shown;
+            if (shown != _shownSeen) { _shownSeen = shown; Refresh(); }
             // Режисер дограв — табло наздоганяє кадр (стан ядра показуємо, коли 3D його вже показав).
             bool busy = RingStageHub.Busy;
             if (_wasBusy && !busy) { _wasBusy = false; Refresh(); }
@@ -230,10 +233,15 @@ namespace Game.Gameplay.Ring.UI
 
         // ---------- низ: журнал, підказка, дії ----------
 
+        /// <summary>До якої події журнал уже можна показати: 3D відкриває рядок на такті (без 3D — усе).</summary>
+        private static int Shown { get { return RingStageHub.Has3D ? RingStageHub.Current.ShownSeq : int.MaxValue; } }
+
+        private int _shownSeen = int.MinValue;
+
         private VisualElement BuildLogStrip()
         {
             var t = Ctx.Text;
-            var lines = _m.LogTexts();
+            var lines = _m.LogTexts(Shown);
             var box = Panel(6f, 0.55f);
             box.style.alignSelf = Align.FlexStart;
             box.style.maxWidth = Length.Percent(46f);
@@ -462,7 +470,7 @@ namespace Game.Gameplay.Ring.UI
             p.style.width = Length.Percent(60f);
             p.style.maxWidth = 820f;
             p.Add(RingUi.Heading(t.Get("match.log.full")));
-            foreach (var l in _m.LogTexts()) p.Add(RingUi.Lbl(l, 15f, RingUi.Text));
+            foreach (var l in _m.LogTexts(Shown)) p.Add(RingUi.Lbl(l, 15f, RingUi.Text));
             p.Add(RingUi.Lbl("L", 12f, RingUi.Dim));
             shade.Add(p);
             shade.RegisterCallback<ClickEvent>(e => { _showFullLog = false; Refresh(); });

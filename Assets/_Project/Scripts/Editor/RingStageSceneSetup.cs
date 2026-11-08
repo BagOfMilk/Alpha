@@ -97,6 +97,9 @@ namespace Game.Gameplay.EditorTools
             assets.manifest = Load<TextAsset>("Assets/Art/Animations/ring_anims_manifest.txt");
             assets.promoManifest = Load<TextAsset>("Assets/Art/Animations/ring_promo_manifest.txt");
             assets.entranceManifest = Load<TextAsset>("Assets/Art/Animations/ring_entrance_manifest.txt");
+            assets.events = Load<TextAsset>("Assets/Art/Animations/ring_anims_events.txt");
+            assets.eventsF = Load<TextAsset>("Assets/Art/Animations/ring_anims_f_events.txt");
+            assets.motion = Load<TextAsset>("Assets/Art/Animations/ring_anims_motion.txt");
 
             var stage = host.AddComponent<RingStage3D>();
             stage.assets = assets;
