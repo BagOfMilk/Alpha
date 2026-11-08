@@ -64,7 +64,7 @@ namespace Game.Gameplay.Ring.Stage
             yield return Watch(dir, folder, "ropes");
             dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.Finisher, RollTier.Strong,
                 new MatchEffect(MatchEffectKind.Down, R, 1), new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Center)));
-            yield return Watch(dir, folder, "finisher");
+            yield return Watch(dir, folder, "finisher", Dense ? 0.04f : 0.55f);   // щільно — щоб побачити строб (доступність)
             dir.Enqueue(Ev(MatchEventKind.Kickout, R, MatchActionId.Pin, RollTier.Miss));
             yield return Watch(dir, folder, "pin3");
             dir.Enqueue(new MatchEvent { Kind = MatchEventKind.MatchEnd, Actor = P, Action = MatchActionId.CatchBreath });
@@ -74,14 +74,18 @@ namespace Game.Gameplay.Ring.Stage
             HardExit.Now(0);
         }
 
-        private static IEnumerator Watch(RingMatchDirector dir, string folder, string tag)
+        /// <summary><c>-ring-demo-dense</c>: фінішер знімається кожні 0,04 с (огляд перемикача «Спалахи»).</summary>
+        private static bool Dense { get { return System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-ring-demo-dense") >= 0; } }
+
+        private static IEnumerator Watch(RingMatchDirector dir, string folder, string tag, float step = 0.55f)
         {
             yield return null;
             float t = 0f;
             while (dir.IsBusy && t < 20f)
             {
-                yield return new WaitForSeconds(0.55f);
-                t += 0.55f;
+                if (step < 0.5f) yield return new WaitForSecondsRealtime(step);   // щільно: у реальному часі, крізь сповільнення
+                else yield return new WaitForSeconds(step);
+                t += step;
                 Capture(folder, tag);
             }
         }

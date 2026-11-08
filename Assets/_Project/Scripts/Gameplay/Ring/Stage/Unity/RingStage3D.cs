@@ -65,6 +65,7 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Тремтіння камери (м, с): удар — ледь, фінішер і падіння після кидка — сильніше.</summary>
         public void Shake(float amp, float dur)
         {
+            if (!UI.Menus.RingAccessibility.ScreenShake) return;   // перемикач «Тремтіння екрана» (і «Зменшити рух»)
             if (amp < _shakeAmp * (1f - _shakeT / Mathf.Max(0.01f, _shakeDur))) return;
             _shakeAmp = amp; _shakeDur = dur; _shakeT = 0f;
         }
@@ -78,6 +79,7 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public void TimeWarp(float mul, float realSeconds)
         {
+            if (UI.Menus.RingAccessibility.ReduceMotion) return;   // «Зменшити рух»: без стоп-кадрів і сповільнень
             if (_timeBase < 0f) _timeBase = Time.timeScale;
             if (_timeCo != null) StopCoroutine(_timeCo);
             _timeCo = StartCoroutine(TimeWarpCo(mul, realSeconds));
@@ -171,12 +173,16 @@ namespace Game.Gameplay.Ring.Stage
             RingStageHub.Current = this;
             ShowIdle();
             SnapCamera();
+            UI.Menus.RingAccessibility.ApplyCommandLine();   // демо без меню: перемикачі доступності з командного рядка
             string demo = ReadArg("-ring-demo");
             if (demo != null) StartCoroutine(RingStageDemo.Run(this, _director, demo));
         }
 
         private void OnDestroy()
         {
+            // Сцена закрилась посеред стоп-кадру чи сповільнення — час не лишається уповільненим для решти гри.
+            if (_timeCo != null) StopCoroutine(_timeCo);
+            if (_timeBase >= 0f) { Time.timeScale = _timeBase; _timeBase = -1f; }
             if (RingStageHub.Current == (IRingStage)this) RingStageHub.Current = null;
             if (_player != null) _player.Destroy();
             if (_rival != null) _rival.Destroy();

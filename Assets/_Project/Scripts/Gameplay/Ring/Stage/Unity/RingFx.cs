@@ -168,7 +168,7 @@ namespace Game.Gameplay.Ring.Stage
         private float _flash;
 
         /// <summary>Спалах удару: PAR на мить яскравішають (чистий удар — сильніше, «частково» — ледь).</summary>
-        public void Impact(float strength) { _flash = Mathf.Max(_flash, strength); }
+        public void Impact(float strength) { if (UI.Menus.RingAccessibility.Flashes) _flash = Mathf.Max(_flash, strength); }
 
         /// <summary>Великий момент вступу (назва гри на титантроні): іскри й CO2 біля завіси.</summary>
         public void TitleHit()
@@ -195,7 +195,7 @@ namespace Game.Gameplay.Ring.Stage
             switch (_cue)
             {
                 case "entrance": house = 0.35f; parMul = 0.55f; haze = 1.8f; keyMul = 0.5f; parTint = new Color(1f, 0.45f, 0.4f); break;
-                case "finisher": house = 0.3f; parMul = Strobe() ? 1.8f : 0.15f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
+                case "finisher": house = 0.3f; parMul = UI.Menus.RingAccessibility.Flashes ? (Strobe() ? 1.8f : 0.15f) : 1f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
                 case "victory": house = 1.1f; parMul = 1.3f; haze = 1.3f; keyMul = 1.1f; parTint = Gold; break;
                 case "defeat": house = 0.45f; parMul = 0.35f; haze = 1.5f; keyMul = 0.5f; parTint = new Color(0.45f, 0.58f, 1f); break;
                 default: house = 1f; parMul = 1f; haze = 1f; keyMul = 1f; parTint = Color.clear; break;
@@ -204,7 +204,7 @@ namespace Game.Gameplay.Ring.Stage
             parMul *= 1f + _flash * 1.6f;
             for (int i = 0; i < _par.Count; i++)
             {
-                _par[i].intensity = Mathf.Lerp(_par[i].intensity, _parBase[i] * parMul, _cue == "finisher" || _flash > 0f ? 1f : k);
+                _par[i].intensity = Mathf.Lerp(_par[i].intensity, _parBase[i] * parMul, (_cue == "finisher" && UI.Menus.RingAccessibility.Flashes) || _flash > 0f ? 1f : k);
                 var target = parTint.a > 0f ? Color.Lerp(_parColorBase[i], parTint, 0.75f) : _parColorBase[i];
                 _par[i].color = Color.Lerp(_par[i].color, target, k);
             }

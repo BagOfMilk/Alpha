@@ -317,7 +317,7 @@ namespace UnityEngine.UIElements
 
     public abstract class EventBase<T> : EventBase where T : EventBase<T>, new() { }
 
-    public sealed class ClickEvent : EventBase<ClickEvent> { }
+    public sealed class ClickEvent : EventBase<ClickEvent> { public int button { get { return 0; } } }
 
     public sealed class PointerEnterEvent : EventBase<PointerEnterEvent> { }
 

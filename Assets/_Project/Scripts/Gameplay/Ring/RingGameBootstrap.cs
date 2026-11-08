@@ -78,7 +78,7 @@ namespace Game.Gameplay.Ring
             }
         }
 
-        public bool HasSave { get { return _shotsDir == null && System.IO.File.Exists(SavePath); } }
+        public bool HasSave { get { return _shotsDir == null && RingSaveFile.Exists(SavePath); } }
 
         public void NewGame()
         {
@@ -95,9 +95,15 @@ namespace Game.Gameplay.Ring
         {
             try
             {
-                var lines = System.IO.File.ReadAllLines(SavePath);
-                var c = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
-                c.RestoreState(lines[0]);
+                CareerSession c = null;
+                bool fromBackup;
+                var lines = RingSaveFile.Read(SavePath, l =>
+                {
+                    var t = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
+                    t.RestoreState(l[0]);
+                    c = t;
+                }, out fromBackup);
+                if (fromBackup) Debug.LogWarning("[Ринг] основний сейв зіпсований — продовжено з запасної копії (.bak)");
                 if (lines.Length > 1)
                 {
                     var p = lines[1].Split('|');
@@ -120,7 +126,7 @@ namespace Game.Gameplay.Ring
             if (_career == null || _career.Stage == CareerStage.Title || _career.Stage == CareerStage.Create) return;
             try
             {
-                System.IO.File.WriteAllLines(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
+                RingSaveFile.Write(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
                 InvalidateSaveSummary();
             }
             catch (Exception ex)
@@ -338,9 +344,35 @@ namespace Game.Gameplay.Ring
             // безпечними зонами B01/B08: на 120 % кнопки й рядок стану пішли б за край).
             bool menu = _view is IMenuNavigable || _loading != null || !_bootDone;
             float s = Mathf.Clamp(Screen.height / 900f, 0.65f, 2.4f) * (_settings != null && !menu ? _settings.UiScale : 1f);
-            if (Mathf.Abs(s - _appliedScale) < 0.001f) return;
-            _appliedScale = s;
-            _panel.scale = s;
+            if (Mathf.Abs(s - _appliedScale) >= 0.001f)
+            {
+                _appliedScale = s;
+                _panel.scale = s;
+                _appliedSafe = default(Rect);
+            }
+            ApplySafeArea();
+        }
+
+        private Rect _appliedSafe;
+
+        /// <summary>
+        /// Безпечна зона екрана (виріз камери, заокруглені кути, жести Android; аудит 08.11.2026, В4): корінь UI відступає
+        /// від країв на стільки, скільки система забрала. На ПК безпечна зона — увесь екран, відступи нульові.
+        /// Screen.safeArea — у пікселях від лівого нижнього кута; відступи панелі — у її одиницях (піксель / масштаб).
+        /// </summary>
+        private void ApplySafeArea()
+        {
+            if (_root == null || _panel == null) return;
+            Rect safe = Screen.safeArea;
+            if (safe == _appliedSafe) return;
+            _appliedSafe = safe;
+            float k = 1f / Mathf.Max(0.01f, _panel.scale);
+            float w = Screen.width, h = Screen.height;
+            bool sane = safe.width > 0f && safe.height > 0f;
+            _root.style.left = sane ? Mathf.Max(0f, safe.xMin) * k : 0f;
+            _root.style.right = sane ? Mathf.Max(0f, w - safe.xMax) * k : 0f;
+            _root.style.top = sane ? Mathf.Max(0f, h - safe.yMax) * k : 0f;
+            _root.style.bottom = sane ? Mathf.Max(0f, safe.yMin) * k : 0f;
         }
 
         private bool LoadData()
@@ -416,6 +448,7 @@ namespace Game.Gameplay.Ring
             if (_quitAt > 0f && Time.unscaledTime >= _quitAt) HardExit.Now(0);
             if (_fontSpike) return;   // спайк шрифтів: екран не оновлюється
             TickMenuOverlays();       // завантаження й розріз живуть і до появи кар'єри
+            ApplySafeArea();          // поворот екрана чи зміна вирізу — і на титулі, і в грі
             if (_career == null || _root == null || !_bootDone) return;
             ApplyScale();
             if (ShowStep()) return;
