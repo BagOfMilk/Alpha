@@ -455,3 +455,10 @@ AGPL і CC BY відкидаються. Текстури (зменшені до 
 (`tools/ring_design/titantron/motifs.py`, Pillow, детермінований «шум» — LCG); запечені пули роликів — JSON із того ж композитора.
 Чужих асетів немає; ліцензія — власна робота проєкту. Вихід: `Assets/Art/Ring/Titantron/` (`sprites/`, `pools/`, `manifest.json`,
 `golden.json`), Git LFS за правилом `Assets/Art/**`. Слів у спрайтах немає (правило 27.10); текст ролика — живий, шрифтами з розділу «Шрифти «Рингу»».
+
+### Вісім персонажів «Рингу» й реквізит — власна збірка (07.11.2026)
+
+Персонажі (`tools/blender/ring_cast/` → `Assets/Art/Ring/Cast/<id>/`): тіла, очі, брови, вії й зачіски — зі своїх наборів `Assets/Art/Characters/Kit` (бібліотека MakeHuman, CC0, журнал вище); форма, одяг, татуювання, бороди, стани пошкоджень — власна генерація кодом, текстури — код на основі шкіри набору. Реквізит (`cast_props.py` → `Assets/Art/Ring/Cast/Props/`) — власна генерація; мікрофон — наявний `mic.fbx`. Кліпи (`Assets/Art/Ring/Cast/Anim/`): власні кліпи проєкту (`RING_Moves*`, `RING_Entrance*`, `RING_Promo*`, `ALPHA_Weapons`), Universal Animation Library від Quaternius (CC0, `UAL_License.txt`) і власні пози й переходи поверх них. Імена кісток `mixamorig:` — лише назви: жодних файлів і кліпів Mixamo в проєкті немає.
+
+Сторінка анімацій (`tools/ring_preview/`): three.js r170 (MIT, `vendor/package/LICENSE`, скачано з registry.npmjs.org за дозволом власника 07.11.2026) і шрифт Fixel (OFL 1.1, `fonts/OFL.txt`).
+

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ринг · перегляд анімацій</title>
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{ "imports": {
+    "three": "./vendor/package/build/three.module.js",
+    "three/addons/": "./vendor/package/examples/jsm/" } }
+</script>
+</head>
+<body>
+<header id="top">
+  <div class="brand"><b>РИНГ</b><span>перегляд анімацій</span></div>
+  <nav id="modes" role="tablist" aria-label="Режими">
+    <button role="tab" data-mode="clips" class="on">Кліпи</button>
+    <button role="tab" data-mode="graph">Переходи</button>
+    <button role="tab" data-mode="mix">Мікси</button>
+  </nav>
+  <div class="grow"></div>
+  <div id="status" class="status" aria-live="polite">завантаження…</div>
+</header>
+
+<main>
+  <aside id="left">
+    <section>
+      <h2>Борці</h2>
+      <div id="cast" class="cast"></div>
+    </section>
+    <section id="secPartner">
+      <h2>Партнер для парних кліпів</h2>
+      <select id="partnerSel" aria-label="Партнер"></select>
+    </section>
+    <section id="secLook">
+      <h2>Вигляд</h2>
+      <div class="row"><span class="lbl">Пошкодження</span><div class="seg" id="dmgSeg"><button data-v="0" class="on">0</button><button data-v="1">1</button><button data-v="2">2</button></div></div>
+      <div class="row" id="rowProp"><span class="lbl">Реквізит</span><select id="propSel"></select></div>
+      <div class="row" id="rowOuter"><label class="chk"><input type="checkbox" id="outerChk" checked><span>Халат / плащ</span></label></div>
+      <div id="heldBox" class="held" hidden>
+        <div class="row"><span class="lbl">Стан</span><div class="seg" id="heldSeg"><button data-v="free" class="on">Вільна</button><button data-v="held">У захваті</button></div></div>
+        <div class="row"><button class="btn" id="heldSit">Сидячи</button><button class="btn" id="heldKneel">На колінах</button></div>
+      </div>
+    </section>
+    <section id="secScene">
+      <h2>Сцена</h2>
+      <div class="row"><span class="lbl">Ринг</span><select id="ringSel" aria-label="Ринг"></select></div>
+      <label class="chk"><input type="checkbox" id="gridChk" checked><span>Сітка 1,5 м</span></label>
+      <label class="chk"><input type="checkbox" id="rulerChk" checked><span>Лінійка зросту</span></label>
+      <label class="chk"><input type="checkbox" id="roamChk" checked><span>Рух по рингу <small>(без галочки — на місці, підлога їде)</small></span></label>
+      <label class="chk"><input type="checkbox" id="followChk"><span>Камера за борцем</span></label>
+      <label class="chk"><input type="checkbox" id="ikChk"><span>Ноги: IK по рельєфу</span></label>
+      <label class="chk"><input type="checkbox" id="stairsChk"><span>Сходинки <small>(рельєф)</small></span></label>
+      <div class="row camrow"><span class="lbl">Камера</span>
+        <button class="btn sm" data-cam="3q">3/4</button><button class="btn sm" data-cam="front">Спереду</button><button class="btn sm" data-cam="side">Збоку</button><button class="btn sm" data-cam="top">Згори</button></div>
+    </section>
+  </aside>
+
+  <section id="stage">
+    <canvas id="gl"></canvas>
+    <div id="hud">
+      <div id="hudTitle"></div>
+      <div id="hudSub"></div>
+    </div>
+    <div id="overlay" class="overlay"><div class="spin"></div><div id="overlayTxt">Завантаження…</div></div>
+    <div id="transport">
+      <button class="btn play" id="playBtn" aria-label="Пуск/пауза">⏸</button>
+      <button class="btn tgl" id="repBtn" aria-pressed="true" title="Повтор">⟲<span class="hid"> Повтор</span></button>
+      <div id="tl"><div id="ticks"></div><input type="range" id="timeRange" min="0" max="1000" value="0" aria-label="Час кліпа"></div>
+      <div id="timeTxt" class="mono">0,00 / 0,00 с</div>
+      <label class="spd"><span>×</span><input type="range" id="speedRange" min="0.25" max="2" step="0.05" value="1" aria-label="Швидкість"><b id="speedTxt" class="mono">1,00</b></label>
+    </div>
+  </section>
+
+  <aside id="right">
+    <!-- Кліпи -->
+    <div class="pane" id="paneClips">
+      <div class="tools">
+        <input id="q" type="search" placeholder="Пошук кліпа…" aria-label="Пошук кліпа">
+        <select id="catSel" aria-label="Категорія"></select>
+        <select id="statSel" aria-label="Статус"><option value="">Усі</option><option value="ready">Готові</option><option value="authored">Власні (чорнові)</option><option value="loop">Лише цикли</option><option value="pair">Лише парні</option></select>
+      </div>
+      <div id="clipInfo" class="info"></div>
+      <div id="clipList" class="list"></div>
+    </div>
+    <!-- Переходи -->
+    <div class="pane" id="paneGraph" hidden>
+      <div class="cap">Граф станів: <b id="gActor"></b></div>
+      <svg id="graphSvg" viewBox="0 0 740 430" role="img" aria-label="Граф станів"></svg>
+      <div class="cap">Вихідні ребра зі стану «<b id="gCur"></b>»</div>
+      <div id="edgeBtns" class="edges"></div>
+      <div class="cap">Ваги кросфейду в реальному часі</div>
+      <div id="weights" class="weights"></div>
+      <div class="cap">Ланцюг бою з партнером: <b id="boutPartner"></b></div>
+      <div id="boutSteps" class="steps"></div>
+      <div class="row wrap"><button class="btn gold" id="boutAll">▶ Весь ланцюг</button><button class="btn" id="boutReset">Скинути позиції</button><button class="btn" id="boutStop">Стоп</button></div>
+      <div class="row"><span class="lbl">Підсумок</span><select id="hitSel"></select></div>
+      <div id="boutLog" class="log mono"></div>
+    </div>
+    <!-- Мікси -->
+    <div class="pane" id="paneMix" hidden>
+      <div class="cap">Приклади</div>
+      <div id="mixEx" class="chips"></div>
+      <div class="field"><span>Базовий кліп (цикл)</span><select id="mixBase"></select></div>
+      <div class="field"><span>Верхній шар</span><select id="mixUp"></select></div>
+      <div class="field"><span>Маска верхнього шару</span><select id="mixMask"></select></div>
+      <div class="field"><span>Вага верхнього шару <b id="mixUpTxt" class="mono">1,00</b></span><input type="range" id="mixUpW" min="0" max="1" step="0.01" value="1"></div>
+      <div class="field"><span>Адитивна реакція</span><select id="mixAdd"></select></div>
+      <div class="field"><span>Вага адитивної реакції <b id="mixAddTxt" class="mono">1,00</b></span><input type="range" id="mixAddW" min="0" max="1.5" step="0.01" value="1"></div>
+      <div class="row wrap"><button class="btn gold" id="mixGo">Застосувати / перезапустити</button><label class="chk"><input type="checkbox" id="mixRep" checked><span>Повторювати шар і реакцію</span></label></div>
+      <div class="cap">Ваги</div>
+      <div id="mixWeights" class="weights"></div>
+      <div id="mixNote" class="note"></div>
+    </div>
+  </aside>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ring-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["tools/ring_preview/run.py", "--no-browser", "--port", "8765"],
+      "port": 8765
+    }
+  ]
+}
