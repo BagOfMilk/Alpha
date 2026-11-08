@@ -77,5 +77,15 @@ namespace Game.Gameplay.Ring.Models
         public const int MotionHoldT2Ms = 1100;
         public const int MotionHoldT3Ms = 1500;
         public const int MotionHoldT4Ms = 2600;
+        public const int MotionMenuFocusMs = 120;
+        public const int MotionMenuPressMs = 60;
+        public const int MotionMenuPlateInMs = 180;
+        public const int MotionMenuPlateOutMs = 150;
+        public const int MotionMenuStaggerMs = 60;
+        public const int MotionMenuWipeMs = 260;
+        public const int MotionMenuShakeMs = 320;
+        public const int MotionMenuTipEveryMs = 4500;
+        public const int MotionLoadingMinMs = 1400;
+        public const int MotionMenuMusicFadeMs = 800;
     }
 }

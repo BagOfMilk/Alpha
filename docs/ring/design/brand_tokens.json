@@ -110,7 +110,17 @@
     "holdT1Ms": 800,
     "holdT2Ms": 1100,
     "holdT3Ms": 1500,
-    "holdT4Ms": 2600
+    "holdT4Ms": 2600,
+    "menuFocusMs": 120,
+    "menuPressMs": 60,
+    "menuPlateInMs": 180,
+    "menuPlateOutMs": 150,
+    "menuStaggerMs": 60,
+    "menuWipeMs": 260,
+    "menuShakeMs": 320,
+    "menuTipEveryMs": 4500,
+    "loadingMinMs": 1400,
+    "menuMusicFadeMs": 800
   },
 
   "pairs": [
