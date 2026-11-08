@@ -25,7 +25,8 @@ namespace Game.Gameplay.Ring.Stage
             _crowd = Src("Натовп", true, 0f);
             _sfx = Src("Ефекти", false, 0.9f);
             _sfx2 = Src("Ефекти 2", false, 0.8f);
-            if (_a.sndCrowd != null) { _crowd.clip = _a.sndCrowd; _crowd.Play(); }
+            // ворота звуку (рішення власника 08.11.2026): грає лише схвалене в бібліотеці звуку
+            if (RingSoundGate.Allows(_a.sndCrowd)) { _crowd.clip = _a.sndCrowd; _crowd.Play(); }
             // Меню (ТЗ B08): хост вмикає й вимикає музику зали, коли гравець входить у гру чи повертається на титул.
             RingMenuServices.GameMusic = on => { if (on) Music(_a.musicTitle, 0.55f); else MusicOff(); };
         }
@@ -76,7 +77,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void Music(AudioClip c, float vol)
         {
-            if (c == null) return;
+            if (!RingSoundGate.Allows(c)) return;
             if (_music.clip != c || !_music.isPlaying)
             {
                 _music.clip = c;
@@ -139,7 +140,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void OneShot(AudioClip c, float vol, bool second = false)
         {
-            if (c == null) return;
+            if (!RingSoundGate.Allows(c)) return;
             (second ? _sfx2 : _sfx).PlayOneShot(c, vol * SfxGain);
         }
 

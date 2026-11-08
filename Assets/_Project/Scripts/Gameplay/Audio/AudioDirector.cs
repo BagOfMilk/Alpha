@@ -107,7 +107,8 @@ namespace Game.Gameplay.Audio
         public void Play(SoundCue cue)
         {
             var clip = _library.Get(SoundCueTable.Pick(cue, _counter++));
-            if (clip == null) return;
+            // ворота звуку всієї гри (рішення власника 08.11.2026): грає лише схвалене в бібліотеці звуку «Рингу»
+            if (!Game.Gameplay.Ring.RingSoundGate.Allows(clip)) return;
             var bus = SoundCueTable.BusOf(cue);
             (bus == SoundBus.Ui ? _ui : _sfx).PlayOneShot(clip, SoundSettings.Effective(bus));
         }
@@ -119,6 +120,7 @@ namespace Game.Gameplay.Audio
                 current = key;
                 active = 1 - active;
                 var clip = _library.Get(key);
+                if (!Game.Gameplay.Ring.RingSoundGate.Allows(clip)) clip = null;
                 pair[active].clip = clip;
                 if (clip != null) pair[active].Play(); else pair[active].Stop();
             }
@@ -133,6 +135,7 @@ namespace Game.Gameplay.Audio
         private void Bed(AudioSource source, string key, float volume)
         {
             var clip = key != null ? _library.Get(key) : null;
+            if (!Game.Gameplay.Ring.RingSoundGate.Allows(clip)) clip = null;
             if (source.clip != clip)
             {
                 source.clip = clip;
