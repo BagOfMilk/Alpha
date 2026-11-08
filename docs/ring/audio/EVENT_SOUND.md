@@ -3,11 +3,24 @@
 Критерій М1 (ПМ, 08.11.2026): **«таблиця «подія → звук» без порожніх подій (удар, гонг, рахунок, натовп, QTE, вихід)»**.
 Таблиця в коді — `Gameplay/Ring/Models/RingSoundMap.cs`; грає `Stage/Unity/RingSound.cs`. **Звучить лише схвалене власником**
 у бібліотеці звуку (`docs/ring/audio/SOUND_APPROVALS.md`): доки слот не схвалено, подія мовчить, хоч рядок у таблиці є.
-Охоронець — `RingSoundMapTests`: кожне значення `MatchEventKind` і `MatchActionId` має звук, кожен звук має слоти, слоти є у
-файлах сцени або в бібліотеці, а цей документ не відстає від коду.
+Охоронець — `RingSoundMapTests`. Він перевіряє:
+- кожне значення `MatchEventKind` і `MatchActionId` має звук;
+- кожен наслідок `MatchEffectKind` розглянуто;
+- кожен звук має слоти, а слоти є у файлах сцени або в бібліотеці;
+- цей документ не відстає від коду.
 
-Таблиця ключована **назвами** подій і дій. Тому вона працює й з основною гілкою, й з переробкою бою (`claude/ring-combat-overhaul`):
-там з'являється `Flourish`, а `IntoRopes`, `IntoCorner`, `LeaveRing`, `ReturnToRing` зникають.
+Таблиця ключована **назвами** подій, дій і наслідків. Тому вона працює й з основною гілкою, й з переробкою бою
+(`claude/ring-combat-overhaul`). Там з'являються:
+- подія `Flourish`;
+- дія `Weapon`;
+- наслідок `Place`;
+- поле `MatchEvent.Outside`.
+
+`IntoRopes` і `IntoCorner` там зникають. Поле `Outside` таблиця читає за назвою (`RingSoundMap.OutsideOf`): до злиття
+переробки його немає, і пара вважається на рингу.
+
+Звук іде за тим, що **видно на екрані** (`Stage/RingClipTable`). Удар із провалом — суперник ухиляється, тож удару по тілу
+немає.
 
 ## Звуки й слоти бібліотеки
 
@@ -32,6 +45,13 @@
 | QtePrompt — QTE з'явилось | `qte_prompt` | новий слот | режисер матчу: `RingSound.Qte(RingQte.Prompt)` |
 | QteHit — вдале QTE | `qte_hit` | новий слот | подія `Flourish` (переробка бою: «лише видовище», +1 ажіотажу) |
 | QteMiss — QTE пропущено | `qte_miss` | новий слот | режисер матчу: `RingSound.Qte(RingQte.Miss)` |
+| Whiff — промах | `whiff` | новий слот | удар чи брудний прийом із провалом: суперник ухилився, контакту немає |
+| BarrierHit — удар у бар'єр | `barrier_hit` | новий слот | бій за рингом: удар відкидає суперника на сталевий бар'єр |
+| BarrierSlam — кидок у бар'єр | `barrier_slam` | новий слот | бій за рингом: кидок у бар'єр; предмет із провалом — нападник сам у бар'єр |
+| WeaponChair — стілець | `weapon_chair` | новий слот | предмет 7–9: удар складаним сталевим стільцем |
+| WeaponTable — стіл | `weapon_table` | новий слот | предмет 10+: кидок на стіл, стіл ламається |
+| CountOut — відлік за рингом | `count_out` | новий слот | наслідок `Count`: по звуку на цифру (до трьох за дію) |
+| CrowdSurge — зал здіймається | `crowd_surge` | новий слот | наслідок `Place`: склейка — пара вилетіла за ринг чи повернулась |
 
 Музика не входить у таблицю подій, вона має свої слоти бібліотеки: титул і вступ — `music_rock_theme_loop`; виходи — `music_rock_city_ransom`
 (герой), `music_hammer_of_the_berserker` (Молот), `music_downtown_destruction` (федерація); меню — `music_login`, `music_loading`,
@@ -52,31 +72,57 @@
 | `Endure` | HoldStrain | витримка больового |
 | `Rescue` | Pop | союзник рятує |
 | `TurnEnd` | CrowdBed | ініціатива переходить; окремого удару немає, звучить гул залу |
-| `MatchEnd` | BellEnd (+ MatSlap ×3 на утриманні) | |
+| `MatchEnd` | BellEnd (+ MatSlap ×3 на утриманні) | кінець відліком (`CountOut`) чи подвійним відліком (`DoubleCountOut`): останні цифри CountOut звучать на дії, далі дзвін |
 | `Flourish` | QteHit | лише в переробці бою |
 
 ## Дії (`MatchActionId`, подія `Action`)
 
+Ступінь кидка і місце пари уточнюють звук. Нижче — «на рингу, влучив», далі — винятки.
+
 | Дія | Звук |
 |---|---|
-| `Strike` | Hit |
-| `Dirty` | Hit |
-| `Desperate` | Hit |
-| `Throw` | Slam |
+| `Strike` | Hit; провал — Whiff; за рингом — BarrierHit |
+| `Dirty` | Hit; провал — Whiff |
+| `Desperate` | Hit; провал — Slam (сам падає) |
+| `Throw` | Slam; за рингом — BarrierSlam |
 | `Finisher` | Slam (і спалах, сповільнення 0,4× у режисера) |
 | `HopeSpot` | Slam |
 | `TopRope` | Land |
-| `IntoRopes` | RopeRebound |
-| `IntoCorner` | CornerHit |
+| `IntoRopes` | RopeRebound (лише основна гілка) |
+| `IntoCorner` | CornerHit (лише основна гілка) |
 | `Taunt` | Pop |
 | `Submission` | HoldStrain |
 | `Pin` | PinCover, далі MatSlap на рахунок |
 | `GetUp` | CanvasShuffle |
 | `Recover` | CanvasShuffle |
 | `CatchBreath` | CanvasShuffle |
-| `LeaveRing` | FloorThud |
-| `ReturnToRing` | FloorThud |
+| `LeaveRing` | FloorThud; провал — Lockup (суперник утримався) |
+| `ReturnToRing` | CanvasShuffle (закотив суперника й заліз сам) |
 | `Ally` | Pop |
+| `Weapon` | 10+ — WeaponTable, 7–9 — WeaponChair, провал — BarrierSlam (лише переробка бою) |
+
+## Бій за рингом і наслідки (`MatchEffectKind`)
+
+Бій за рингом — склейкою, рішення власника 08.11.2026 («Лишити в ітерації 1 склейкою»). Запит ПМ 08.11.2026.
+
+| Що | Звук | Як |
+|---|---|---|
+| `Outside` = true, `Strike` | BarrierHit | замість Hit |
+| `Outside` = true, `Throw` | BarrierSlam | замість Slam |
+| `Weapon` | WeaponTable / WeaponChair / BarrierSlam | за ступенем, як у `RingClipTable` |
+| наслідок `Place` | CrowdSurge | через 0,35 с після контакту дії, коли кадр уже на новому місці; і вихід, і повернення |
+| наслідок `Count` | CountOut × Amount (не більше 3) | через 0,7 с після контакту, по 0,6 с між цифрами |
+| кінець `DoubleCountOut` / `CountOut` | CountOut на дії, далі BellEnd | окремого звуку кінця немає |
+
+Інші наслідки звучать дією, що їх спричинила. Власного звуку в них немає свідомо: `Damage`, `Momentum`, `Hype`, `Down`, `Stand`,
+`Stunned`, `Warning`, `RefereeDistracted`, `Token`, `Stamina`; основна гілка — `ZoneChange`, `ApChange`.
+
+**Розбіжність для ПМ.** Запит ПМ називав порядок «10+ стілець, 7–9 стіл». Показ (`RingClipTable` у b478385) ставить навпаки:
+10+ — кидок на стіл, 7–9 — удар стільцем. Звук іде за показом. Якщо показ зміниться, таблицю треба змінити разом із ним.
+
+**У переробці бою не грають** слоти `rope_rebound` і `corner_hit`: дій `IntoRopes`/`IntoCorner` там немає. Прийом «з канатів»
+показується склейкою (`MoveStaging.Ropes`). Звук каната має грати на початку склейки, раніше за контакт, тож кликати його має
+режисер: `RingSound.Play(RingCue.RopeRebound)` на кроці `Cut`. Це — пропозиція для зони режисера.
 
 ## Поза матчем
 

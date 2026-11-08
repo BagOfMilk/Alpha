@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using Game.Core.Ring;
 using Game.Core.Ring.Match;
 
 namespace Game.Gameplay.Ring.Models
@@ -28,7 +30,7 @@ namespace Game.Gameplay.Ring.Models
         CornerHit,
         /// <summary>Падіння за рингом на підлогу.</summary>
         FloorThud,
-        /// <summary>Борець піднімається, переводить подих.</summary>
+        /// <summary>Борець піднімається, переводить подих, закочується в ринг.</summary>
         CanvasShuffle,
         /// <summary>Вибух залу (оплески): великий момент, виклик залу, порятунок союзником.</summary>
         Pop,
@@ -45,18 +47,36 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Вдале QTE (Flourish — лише видовище, рішення власника 08.11.2026).</summary>
         QteHit,
         /// <summary>QTE пропущено.</summary>
-        QteMiss
+        QteMiss,
+        /// <summary>Бій за рингом: удар відкидає суперника на сталевий бар'єр.</summary>
+        BarrierHit,
+        /// <summary>Бій за рингом: кидок у бар'єр; промах предметом — нападник сам летить у бар'єр.</summary>
+        BarrierSlam,
+        /// <summary>Предмет 7–9: удар складаним сталевим стільцем.</summary>
+        WeaponChair,
+        /// <summary>Предмет 10+: кидок на стіл — стіл ламається під тілом.</summary>
+        WeaponTable,
+        /// <summary>Відлік рефері за рингом — один звук на кожну цифру.</summary>
+        CountOut,
+        /// <summary>Склейка місця: пара вилетіла за ринг чи повернулась — зал здіймається.</summary>
+        CrowdSurge,
+        /// <summary>Промах удару: суперник ухилився, контакту немає — лише рух повітря.</summary>
+        Whiff
     }
 
     /// <summary>Звук QTE, який кличе режисер матчу: поява й пропуск. Вдале QTE — подія ядра Flourish (таблиця → <see cref="RingCue.QteHit"/>).</summary>
     public enum RingQte { Prompt = 0, Miss = 1 }
 
     /// <summary>
-    /// Таблиця «подія → звук» (критерій М1: «без порожніх подій» — удар, гонг, рахунок, натовп, QTE, вихід). Чистий C#: що
-    /// звучить, вирішує тут, а грає <c>Stage/Unity/RingSound</c> лише схвалене власником (<see cref="RingSoundApproval"/>).
+    /// Таблиця «подія → звук» (критерій М1: «без порожніх подій» — удар, гонг, рахунок, натовп, QTE, вихід; бій за рингом — запит ПМ
+    /// 08.11.2026). Чистий C#: що звучить, вирішує тут, а грає <c>Stage/Unity/RingSound</c> лише схвалене власником
+    /// (<see cref="RingSoundApproval"/>).
     /// <para>Ключі — НАЗВИ значень переліків ядра, а не самі значення: та сама таблиця працює і з основною гілкою, і з переробкою бою
-    /// (там з'явилась подія <c>Flourish</c>, а <c>IntoRopes</c>/<c>IntoCorner</c>/<c>LeaveRing</c>/<c>ReturnToRing</c> зникли). Охоронець —
-    /// <c>RingSoundMapTests</c>: кожне значення <see cref="MatchEventKind"/> і <see cref="MatchActionId"/> має звук.</para>
+    /// (там з'явились подія <c>Flourish</c>, дія <c>Weapon</c>, наслідок <c>Place</c> і поле <c>MatchEvent.Outside</c>, а
+    /// <c>IntoRopes</c>/<c>IntoCorner</c> зникли). Охоронець — <c>RingSoundMapTests</c>: кожне значення <see cref="MatchEventKind"/>,
+    /// <see cref="MatchActionId"/> і <see cref="MatchEffectKind"/> має рядок.</para>
+    /// <para>Звук іде за тим, що видно на екрані (<c>Stage/RingClipTable</c>): промах удару — ухил без контакту, предмет 10+ — кидок на
+    /// стіл, 7–9 — удар стільцем, провал — нападник сам у бар'єр.</para>
     /// </summary>
     public static class RingSoundMap
     {
@@ -74,7 +94,7 @@ namespace Game.Gameplay.Ring.Models
             { "Endure", RingCue.HoldStrain },
             { "Rescue", RingCue.Pop },
             { "TurnEnd", RingCue.CrowdBed },     // ініціатива переходить: гул залу, без удару
-            { "MatchEnd", RingCue.BellEnd },     // + три долоні, якщо кінець утриманням
+            { "MatchEnd", RingCue.BellEnd },     // + три долоні, якщо кінець утриманням; відлік за рингом — останні цифри на дії
             { "Flourish", RingCue.QteHit },      // переробка бою: вдале QTE
         };
 
@@ -87,17 +107,30 @@ namespace Game.Gameplay.Ring.Models
             { "Finisher", RingCue.Slam },
             { "HopeSpot", RingCue.Slam },
             { "TopRope", RingCue.Land },
-            { "IntoRopes", RingCue.RopeRebound },
-            { "IntoCorner", RingCue.CornerHit },
+            { "IntoRopes", RingCue.RopeRebound },   // лише основна гілка: у переробці бою дії немає
+            { "IntoCorner", RingCue.CornerHit },    // лише основна гілка
             { "Taunt", RingCue.Pop },
             { "Submission", RingCue.HoldStrain },
             { "Pin", RingCue.PinCover },
             { "GetUp", RingCue.CanvasShuffle },
             { "Recover", RingCue.CanvasShuffle },
             { "CatchBreath", RingCue.CanvasShuffle },
-            { "LeaveRing", RingCue.FloorThud },
-            { "ReturnToRing", RingCue.FloorThud },
+            { "LeaveRing", RingCue.FloorThud },     // викинув за канати — пара на підлозі (склейка — наслідок Place)
+            { "ReturnToRing", RingCue.CanvasShuffle }, // закотив суперника в ринг і заліз сам
             { "Ally", RingCue.Pop },
+            { "Weapon", RingCue.WeaponChair },      // переробка бою: предмет за рингом; ступінь — у Refine
+        };
+
+        // Наслідки події, що мають власний звук. Решта звучить дією, яка їх спричинила (None — свідомо, не забуто).
+        private static readonly Dictionary<string, RingCue> Effects = new Dictionary<string, RingCue>
+        {
+            { "Place", RingCue.CrowdSurge },      // переробка бою: склейка — пара за рингом (1) чи знову на рингу (0)
+            { "Count", RingCue.CountOut },        // відлік за рингом зріс на Amount: стільки ж цифр
+            { "Damage", RingCue.None }, { "Momentum", RingCue.None }, { "Hype", RingCue.None }, { "Down", RingCue.None },
+            { "Stand", RingCue.None }, { "Stunned", RingCue.None }, { "Warning", RingCue.None }, { "RefereeDistracted", RingCue.None },
+            { "Token", RingCue.None }, { "Stamina", RingCue.None },
+            { "ZoneChange", RingCue.None },       // лише основна гілка: місце пари там звучить дією LeaveRing/ReturnToRing
+            { "ApChange", RingCue.None },         // лише основна гілка
         };
 
         private static readonly Dictionary<RingCue, string[]> Slots = new Dictionary<RingCue, string[]>
@@ -121,33 +154,99 @@ namespace Game.Gameplay.Ring.Models
             { RingCue.QtePrompt, new[] { "qte_prompt" } },
             { RingCue.QteHit, new[] { "qte_hit" } },
             { RingCue.QteMiss, new[] { "qte_miss" } },
+            { RingCue.BarrierHit, new[] { "barrier_hit" } },
+            { RingCue.BarrierSlam, new[] { "barrier_slam" } },
+            { RingCue.WeaponChair, new[] { "weapon_chair" } },
+            { RingCue.WeaponTable, new[] { "weapon_table" } },
+            { RingCue.CountOut, new[] { "count_out" } },
+            { RingCue.CrowdSurge, new[] { "crowd_surge" } },
+            { RingCue.Whiff, new[] { "whiff" } },
         };
 
         /// <summary>Слоти, яких немає в CC0-наборі сцени (RingStageAssets): нові звуки подій, з теки <see cref="ResourcesFolder"/>.</summary>
         public static readonly string[] NewSlots =
         {
             "lockup", "pin_cover", "hold_strain", "rope_rebound", "corner_hit", "floor_thud", "canvas_shuffle",
-            "qte_prompt", "qte_hit", "qte_miss"
+            "qte_prompt", "qte_hit", "qte_miss",
+            "barrier_hit", "barrier_slam", "weapon_chair", "weapon_table", "count_out", "crowd_surge", "whiff"
         };
 
-        /// <summary>Звук події матчу: для дії й продажу — за дією, інакше — за видом події. None — лише для невідомих назв.</summary>
+        /// <summary>Скільки цифр відліку за рингом грати на один наслідок Count (ядро додає +3 за дію).</summary>
+        public const int MaxCountTicks = 3;
+
+        /// <summary>Звук події матчу без ступеня кидка й місця пари (як у журналі без кидка, на рингу).</summary>
         public static RingCue ForEvent(MatchEventKind kind, MatchActionId action)
         {
-            RingCue c;
-            if (!Kinds.TryGetValue(kind.ToString(), out c)) return RingCue.None;
-            if (c != RingCue.None) return c;
-            return ForAction(action);
+            return ForEvent(kind.ToString(), action.ToString(), false, RollTier.Strong, false);
         }
 
-        /// <summary>Звук дії (подія Action).</summary>
+        /// <summary>Звук події матчу: ступінь кидка й місце пари (бій за рингом) уточнюють звук дії.</summary>
+        public static RingCue ForEvent(MatchEvent ev)
+        {
+            if (ev == null) return RingCue.None;
+            return ForEvent(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier, OutsideOf(ev));
+        }
+
+        /// <summary>
+        /// Звук за назвами (обидва ядра): для дії й продажу — за дією, інакше — за видом події. None — лише для невідомих назв.
+        /// </summary>
+        public static RingCue ForEvent(string kind, string action, bool hasRoll, RollTier tier, bool outside)
+        {
+            RingCue c;
+            if (kind == null || !Kinds.TryGetValue(kind, out c)) return RingCue.None;
+            if (c != RingCue.None) return c;
+            if (action == null || !Actions.TryGetValue(action, out c)) return RingCue.None;
+            return Refine(action, c, hasRoll, tier, outside);
+        }
+
+        /// <summary>Звук дії (подія Action) без ступеня кидка, на рингу.</summary>
         public static RingCue ForAction(MatchActionId action)
         {
             RingCue c;
             return Actions.TryGetValue(action.ToString(), out c) ? c : RingCue.None;
         }
 
+        /// <summary>
+        /// Ступінь кидка й місце пари — так, як показує <c>RingClipTable</c>: удар чи брудний прийом з провалом — ухил без контакту;
+        /// «Вийти з рингу» з провалом — суперник утримався в захваті; відчайдушний з провалом — сам падає; предмет 10+ — стіл, 7–9 —
+        /// стілець, провал — сам у бар'єр; за рингом удар і кидок ідуть у бар'єр.
+        /// </summary>
+        private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside)
+        {
+            if (action == "Weapon")
+                return !hasRoll || tier == RollTier.Partial ? RingCue.WeaponChair : tier == RollTier.Strong ? RingCue.WeaponTable : RingCue.BarrierSlam;
+            if (hasRoll && tier == RollTier.Miss)
+            {
+                if (action == "Strike" || action == "Dirty") return RingCue.Whiff;
+                if (action == "LeaveRing") return RingCue.Lockup;
+                if (action == "Desperate") return RingCue.Slam;
+                return c;
+            }
+            if (outside)
+            {
+                if (action == "Strike") return RingCue.BarrierHit;
+                if (action == "Throw") return RingCue.BarrierSlam;
+            }
+            return c;
+        }
+
+        /// <summary>Звук наслідку події (склейка місця, відлік за рингом); None — наслідок звучить дією, що його спричинила.</summary>
+        public static RingCue ForEffect(MatchEffectKind kind) { return ForEffect(kind.ToString()); }
+
+        public static RingCue ForEffect(string kindName)
+        {
+            RingCue c;
+            return kindName != null && Effects.TryGetValue(kindName, out c) ? c : RingCue.None;
+        }
+
         /// <summary>Чи має вид події власний рядок у таблиці (Action — теж: його звук дає дія).</summary>
         public static bool HasKind(string kindName) { return Kinds.ContainsKey(kindName); }
+
+        /// <summary>Чи має дія рядок у таблиці.</summary>
+        public static bool HasAction(string actionName) { return Actions.ContainsKey(actionName); }
+
+        /// <summary>Чи розглянуто наслідок у таблиці (зі звуком чи свідомо без).</summary>
+        public static bool HasEffect(string effectName) { return Effects.ContainsKey(effectName); }
 
         /// <summary>Слоти бібліотеки звуку, з яких грає цей звук (порожньо — лише для None).</summary>
         public static IReadOnlyList<string> SlotsOf(RingCue cue)
@@ -161,6 +260,31 @@ namespace Game.Gameplay.Ring.Models
         {
             foreach (RingCue c in Enum.GetValues(typeof(RingCue)))
                 if (c != RingCue.None) yield return c;
+        }
+
+        // ---------- місце пари ----------
+
+        private static readonly Dictionary<Type, FieldInfo> OutsideFields = new Dictionary<Type, FieldInfo>();
+
+        /// <summary>
+        /// Чи була пара за рингом, коли дія почалась (<c>MatchEvent.Outside</c> переробки бою). Поле читається за назвою, бо в основному
+        /// ядрі його ще немає: до злиття переробки — завжди false. Після злиття можна читати <c>ev.Outside</c> напряму.
+        /// </summary>
+        public static bool OutsideOf(object ev)
+        {
+            if (ev == null) return false;
+            var t = ev.GetType();
+            FieldInfo f;
+            lock (OutsideFields)
+            {
+                if (!OutsideFields.TryGetValue(t, out f))
+                {
+                    f = t.GetField("Outside", BindingFlags.Public | BindingFlags.Instance);
+                    if (f != null && f.FieldType != typeof(bool)) f = null;
+                    OutsideFields[t] = f;
+                }
+            }
+            return f != null && (bool)f.GetValue(ev);
         }
     }
 }

@@ -187,7 +187,14 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public void Qte(RingQte q) { Play(q == RingQte.Prompt ? RingCue.QtePrompt : RingCue.QteMiss, q == RingQte.Prompt ? 0.7f : 0.85f); }
 
-        /// <summary>Звук події матчу за таблицею <see cref="RingSoundMap"/>; утримання й кікаут — долоня рефері, повтором.</summary>
+        // Бій за рингом: склейка звучить, коли кадр уже на новому місці; відлік — після контакту, цифра за цифрою.
+        private const float SurgeDelay = 0.35f, CountDelay = 0.7f, CountGap = 0.6f;
+
+        /// <summary>
+        /// Звук події матчу за таблицею <see cref="RingSoundMap"/> (зі ступенем кидка й місцем пари) і звуки її наслідків: склейка місця
+        /// (Place) — зал здіймається, відлік за рингом (Count) — по звуку на цифру. Утримання й кікаут — долоня рефері, повтором.
+        /// Кінець матчу відліком чи подвійним відліком: останні цифри звучать на дії, дзвін — режисер (BellEnd).
+        /// </summary>
         public void OnEvent(MatchEvent ev, float delay, bool pinEnd)
         {
             switch (ev.Kind)
@@ -198,11 +205,25 @@ namespace Game.Gameplay.Ring.Stage
                     if (pinEnd) StartCoroutine(Repeat(RingCue.MatSlap, 3, 0.45f, 0.9f, delay));
                     return;
             }
-            var cue = RingSoundMap.ForEvent(ev.Kind, ev.Action);
+            var cue = RingSoundMap.ForEvent(ev);
             // Гул залу вже звучить петлею (гучність веде ажіотаж) — окремого удару в цієї події немає.
-            if (cue == RingCue.None || cue == RingCue.CrowdBed) return;
-            bool pop = cue == RingCue.Pop;
-            Play(cue, pop ? 0.6f : 0.85f, delay, pop);
+            if (cue != RingCue.None && cue != RingCue.CrowdBed)
+            {
+                bool pop = cue == RingCue.Pop;
+                Play(cue, pop ? 0.6f : 0.85f, delay, pop);
+            }
+            bool surged = false, counted = false;
+            for (int i = 0; i < ev.Effects.Count; i++)
+            {
+                var fx = ev.Effects[i];
+                var fc = RingSoundMap.ForEffect(fx.Kind);
+                if (fc == RingCue.CrowdSurge && !surged) { surged = true; Play(RingCue.CrowdSurge, 0.7f, delay + SurgeDelay, true); }
+                else if (fc == RingCue.CountOut && !counted && fx.Amount > 0)
+                {
+                    counted = true;
+                    StartCoroutine(Repeat(RingCue.CountOut, Mathf.Min(fx.Amount, RingSoundMap.MaxCountTicks), CountGap, 0.8f, delay + CountDelay));
+                }
+            }
         }
 
         private void OneShot(AudioClip c, float vol, bool second = false)

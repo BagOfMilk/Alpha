@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Game.Core.Ring;
 using Game.Core.Ring.Match;
 using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
@@ -13,7 +14,8 @@ namespace Game.Tests.EditMode
     /// <summary>
     /// Таблиця «подія → звук» (критерій М1, ПМ 08.11.2026: «таблиця «подія → звук» без порожніх подій (удар, гонг, рахунок, натовп,
     /// QTE, вихід)»): кожне значення переліків подій і дій ядра має звук, кожен звук — слоти бібліотеки, слоти — справжні файли
-    /// або нові слоти бібліотеки звуку, документ таблиці не відстає. Імпорт звуку рингу — моно (пакет П4).
+    /// або нові слоти бібліотеки звуку, документ таблиці не відстає. Імпорт звуку рингу — моно (пакет П4). Бій за рингом (запит ПМ
+    /// 08.11.2026: предмет, удар і кидок у бар'єр, склейка місця, відлік) — за назвами переробки бою, тож тести ходять і з основним ядром.
     /// </summary>
     public class RingSoundMapTests
     {
@@ -55,6 +57,61 @@ namespace Game.Tests.EditMode
             foreach (var c in new[] { RingCue.BellStart, RingCue.BellEnd, RingCue.MatSlap, RingCue.CrowdBed, RingCue.Pop, RingCue.QtePrompt,
                          RingCue.QteHit, RingCue.QteMiss, RingCue.Entrance, RingCue.Hit })
                 Assert.Greater(RingSoundMap.SlotsOf(c).Count, 0, c.ToString());
+        }
+
+        [Test]
+        public void EveryEffectKind_IsConsidered()
+        {
+            // Новий наслідок ядра має з'явитись у таблиці: зі звуком або свідомо без (звучить дією, що його спричинила).
+            var missing = Enum.GetValues(typeof(MatchEffectKind)).Cast<MatchEffectKind>().Where(k => !RingSoundMap.HasEffect(k.ToString())).ToList();
+            Assert.IsEmpty(missing, "наслідки без рядка таблиці: " + string.Join(", ", missing));
+            Assert.AreEqual(RingCue.CountOut, RingSoundMap.ForEffect(MatchEffectKind.Count), "відлік за рингом");
+        }
+
+        [Test]
+        public void OutsideFight_HasSounds_ByName()
+        {
+            // Переробка бою (claude/ring-combat-overhaul): дія Weapon, наслідок Place, поле MatchEvent.Outside.
+            Assert.IsTrue(RingSoundMap.HasAction("Weapon"));
+            Assert.AreEqual(RingCue.CrowdSurge, RingSoundMap.ForEffect("Place"), "склейка місця");
+            Assert.AreEqual(RingCue.CountOut, RingSoundMap.ForEffect("Count"), "відлік за рингом");
+            // предмет — як показує RingClipTable: 10+ кидок на стіл, 7–9 удар стільцем, провал — сам у бар'єр
+            Assert.AreEqual(RingCue.WeaponTable, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Strong, true));
+            Assert.AreEqual(RingCue.WeaponChair, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Partial, true));
+            Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.ForEvent("Action", "Weapon", true, RollTier.Miss, true));
+            // за рингом удар і кидок ідуть у бар'єр; на рингу — як завжди
+            Assert.AreEqual(RingCue.BarrierHit, RingSoundMap.ForEvent("Action", "Strike", true, RollTier.Partial, true));
+            Assert.AreEqual(RingCue.BarrierSlam, RingSoundMap.ForEvent("Action", "Throw", true, RollTier.Strong, true));
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent("Action", "Strike", true, RollTier.Partial, false));
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", "Throw", true, RollTier.Strong, false));
+            // вихід і повернення: падіння на підлогу / закочування; не викинув — пара в захваті
+            Assert.AreEqual(RingCue.FloorThud, RingSoundMap.ForEvent("Action", "LeaveRing", true, RollTier.Strong, false));
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent("Action", "LeaveRing", true, RollTier.Miss, false));
+            Assert.AreEqual(RingCue.CanvasShuffle, RingSoundMap.ForEvent("Action", "ReturnToRing", false, RollTier.Strong, true));
+            foreach (var c in new[] { RingCue.BarrierHit, RingCue.BarrierSlam, RingCue.WeaponChair, RingCue.WeaponTable, RingCue.CountOut, RingCue.CrowdSurge })
+                Assert.Greater(RingSoundMap.SlotsOf(c).Count, 0, c.ToString());
+        }
+
+        [Test]
+        public void Miss_SoundsLikeWhatIsOnScreen()
+        {
+            // Удар із провалом — суперник ухиляється (Center_Sidestep): контакту немає, удар по тілу не звучить.
+            Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent("Action", "Strike", true, RollTier.Miss, false));
+            Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent("Sell", "Strike", true, RollTier.Miss, false), "продаж — гул залу, не удар");
+            Assert.AreEqual(RingCue.Whiff, RingSoundMap.ForEvent("Action", "Dirty", true, RollTier.Miss, false));
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", "Desperate", true, RollTier.Miss, false), "відчайдушний: сам падає");
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent("Action", "Strike", false, RollTier.Miss, false), "без кидка ступінь не читається");
+        }
+
+        private sealed class FakeOutsideEvent { public bool Outside = true; }
+
+        [Test]
+        public void OutsideOf_ReadsTheFieldByName()
+        {
+            Assert.IsTrue(RingSoundMap.OutsideOf(new FakeOutsideEvent()));
+            Assert.IsFalse(RingSoundMap.OutsideOf(new object()));
+            Assert.IsFalse(RingSoundMap.OutsideOf(null));
+            Assert.IsFalse(RingSoundMap.OutsideOf(new MatchEvent()), "нова подія — на рингу (чи поля ще немає)");
         }
 
         [Test]
@@ -113,6 +170,11 @@ namespace Game.Tests.EditMode
                 if (!doc.Contains("`" + k + "`")) missing.Add("подія " + k);
             foreach (MatchActionId a in Enum.GetValues(typeof(MatchActionId)))
                 if (!doc.Contains("`" + a + "`")) missing.Add("дія " + a);
+            foreach (MatchEffectKind e in Enum.GetValues(typeof(MatchEffectKind)))
+                if (RingSoundMap.ForEffect(e) != RingCue.None && !doc.Contains("`" + e + "`")) missing.Add("наслідок " + e);
+            // переробка бою: назви, яких у основному ядрі ще немає
+            foreach (var n in new[] { "Weapon", "Place", "Count", "Outside", "DoubleCountOut", "Flourish" })
+                if (!doc.Contains("`" + n + "`")) missing.Add("переробка бою: " + n);
             foreach (var c in RingSoundMap.AllCues())
                 foreach (var s in RingSoundMap.SlotsOf(c))
                     if (!doc.Contains(s)) missing.Add("слот " + s);
