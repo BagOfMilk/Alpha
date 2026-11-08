@@ -56,13 +56,24 @@
   «Меню».
 - Завантаження тексту за мовою (`RingLanguages.Resource`) у `RingGameBootstrap.cs` («Изучение») і `RingFeudBootstrap.cs`
   (Кар'єра) — запитами після перебазування на основу Етапу 0.
-- Поділ звуку між «Меню» і форком — рядком від них; ПМ дописує сюди.
+- **Поділ звуку** (погоджено «Меню» і форком, 08.11.2026):
+  - **форк звуку** (`local_bc183877…`, гілка `claude/ring-sound-approval-a5975d`) — П4.4: таблиця «подія → звук»,
+    моно, бібліотека й 3 нові варіанти на відмову; `Stage/Unity/RingSound.cs`, `RingSoundMap`, `RingSoundGate.cs`,
+    `Models/RingSoundApproval.cs`, Editor `RingSoundImport`, `tools/ring_audio/library`, `ring_bells*`, `ring_impacts*`,
+    `ring_crowd*`, `ring_music*`, `docs/ring/audio/**`, `.meta` у `Assets/ThirdParty/CC0/Audio/Ring`;
+  - **«Меню»** — `Models/RingAudioMix.cs` (шини, гучність), `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor
+    `RingMenuAudioImport`, `UI/Menus/**`, `RingGameBootstrap.Menus.cs`; ворота звуку «Меню» лише викликає.
+- **Пакет бою** (ядро ПМ + «Изучение» `RingStage3D` / `RingStageDemo` / `RingCine` + форк `RingSound.cs`) іде в
+  основну одним злиттям: окремо одне без одного не збирається. Порядок: Етап 0 → ПМ зливає основну в
+  `claude/ring-combat-overhaul` (merge, без переписування SHA) → «Изучение» і форк роблять гілки від її верхівки →
+  ПМ вливає їх → «так» власника → інтегратор.
 
 **Черга Unity / Blender** (веде ПМ; оновлюється тут):
 1. «Меню» — збірка без Development + офскрін-тури меню й кар'єри (1080p, 720p, 4:3, масштаб 120 %), ~30–40 хв — **іде
    з 08.11 вечора**;
-2. Етап 0 — прохід компіляції основної гілки й коміт згенерованих `.meta` (інтегратор «Відео огляд» з «Изучение»);
-3. «Скилы» — базовий прохід ботом трьох сезонів на основі Етапу 0.
+2. форк звуку — прохід компіляції `RingSound.cs` і `RingSoundImport.cs` на своїй гілці;
+3. Етап 0 — прохід компіляції основної гілки й коміт згенерованих `.meta` (інтегратор «Відео огляд» з «Изучение»);
+4. «Скилы» — базовий прохід ботом трьох сезонів на основі Етапу 0.
 
 **Передача:** правки переробки бою в `CareerContent.cs`, `CareerSession.cs`, `GimmickTests.cs`, `CareerKit.cs`
 (гілка `claude/ring-combat-overhaul`) після злиття переходять у зону Кар'єри. У `b478385` до них додалось
