@@ -360,22 +360,35 @@ namespace Game.Tests.EditMode
         public void Languages_EveryAvailableLanguage_IsFullyTranslated()
         {
             // П4 ПМ 08.11.2026: «Охоронець «кожен ключ перекладено» — одразу, переклад — останнім». Мова в списку — лише повна.
-            var uk = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
-            var ukArt = ReadKeyValueFile(Path.Combine(Root(), "Assets", "Art", "Ring", "ring_strings_uk.txt"));
-            Assert.Greater(ukArt.Count, 10, "рядки арен прочитано");
-            Assert.AreEqual(RingLanguages.Base, RingLanguages.Available[0], "українська — перша й базова");
+            // Джерела тексту охоронець знаходить сам: кожен *_uk.json у Resources/Ring — екрани (ui), ворожнеча (strings),
+            // закулісся (backstage; ПМ 08.11.2026: «закриває дірку: strings_<мова>.json і backstage_<мова>.json») — і рядки арен.
+            // Новий файл тексту одразу вимагає перекладу, переліку руками немає.
+            var sources = TextSources();
+            var names = new List<string>();
+            foreach (var s in sources) names.Add(Path.GetFileName(s));
+            foreach (var must in new[] { "ui_uk.json", "strings_uk.json", "backstage_uk.json", "ring_strings_uk.txt" })
+                Assert.Contains(must, names, "джерело тексту знайдено: " + must);
+            var uk = new Dictionary<string, Dictionary<string, string>>();
             var holes = new List<string>();
+            foreach (var s in sources)
+            {
+                uk[s] = ReadTextFile(s, "uk", holes);
+                Assert.Greater(uk[s].Count, 10, "рядки прочитано: " + Path.GetFileName(s));
+            }
+            Assert.IsEmpty(holes, "український оригінал читається не весь:\n" + string.Join("\n", holes));
+            var ui = uk[sources[0]];
+            Assert.AreEqual(RingLanguages.Base, RingLanguages.Available[0], "українська — перша й базова");
             foreach (var code in RingLanguages.Available)
             {
-                Assert.IsTrue(uk.ContainsKey("m.val.lang." + code), "назва мови " + code + " у перемикачі");
+                Assert.IsTrue(ui.ContainsKey("m.val.lang." + code), "назва мови " + code + " у перемикачі");
                 if (code == RingLanguages.Base) continue;
-                string uiPath = Path.Combine(RingCampaignDriver.Dir(), "ui_" + code + ".json");
-                string artPath = Path.Combine(Root(), "Assets", "Art", "Ring", "ring_strings_" + code + ".txt");
-                if (!File.Exists(uiPath)) { holes.Add(code + ": немає ui_" + code + ".json"); continue; }
-                if (!File.Exists(artPath)) { holes.Add(code + ": немає ring_strings_" + code + ".txt"); continue; }
-                var tr = MiniJson.ParseObject(File.ReadAllText(uiPath));
-                CompareTranslation(code + " ui", ToStrings(uk), ToStrings(tr), holes);
-                CompareTranslation(code + " арени", ukArt, ReadKeyValueFile(artPath), holes);
+                foreach (var s in sources)
+                {
+                    string path = TranslatedPath(s, code);
+                    string what = code + " " + Path.GetFileName(path);
+                    if (!File.Exists(path)) { holes.Add(what + ": файлу немає"); continue; }
+                    CompareTranslation(what, uk[s], ReadTextFile(path, what, holes), holes);
+                }
             }
             Assert.IsEmpty(holes, "мову ввімкнено з дірками:\n" + string.Join("\n", holes));
             Assert.AreEqual("Ring/ui_uk", RingLanguages.Resource("Ring/ui_uk", "xx"), "недоступна мова — українська");
@@ -384,10 +397,66 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingLanguages.Base, v.Language, "збережена недоступна мова — українська");
         }
 
-        private static Dictionary<string, string> ToStrings(Dictionary<string, object> d)
+        /// <summary>
+        /// Мова в списку має й читатися: кожне завантаження файлу тексту (<c>Resources.Load&lt;TextAsset&gt;</c> сталої
+        /// «Ring/…_uk») іде через <see cref="RingLanguages.Resource"/>, інакше перемикач показує перекладене меню, а ворожнеча,
+        /// закулісся й екрани лишаються українськими. Поки доступна лише uk — лише перелік (завантажувачі — зони «Кар'єри»,
+        /// «Изучение» і меню; правка — запитом до ПМ); щойно в <see cref="RingLanguages.Available"/> з'являється друга мова —
+        /// кожне пряме завантаження червоне.
+        /// </summary>
+        [Test]
+        public void Languages_TextLoaders_GoThroughLanguageResource()
         {
+            string dir = Path.Combine(Root(), "Assets", "_Project", "Scripts", "Gameplay", "Ring");
+            var constRx = new Regex("(\\w+)\\s*=\\s*\"Ring/(\\w+)_uk\"");
+            var loadRx = new Regex("Resources\\.Load<TextAsset>\\(\\s*(\\w+)\\s*\\)");
+            var consts = new HashSet<string>();
+            var bases = new HashSet<string>();
+            var files = Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories);
+            foreach (var f in files)
+                foreach (Match m in constRx.Matches(File.ReadAllText(f))) { consts.Add(m.Groups[1].Value); bases.Add(m.Groups[2].Value); }
+            foreach (var must in new[] { "ui", "strings", "backstage" })
+                Assert.IsTrue(bases.Contains(must), "стала шляху «Ring/" + must + "_uk» знайдена — сканер бачить завантажувачі");
+            var direct = new List<string>();
+            foreach (var f in files)
+                foreach (Match m in loadRx.Matches(File.ReadAllText(f)))
+                    if (consts.Contains(m.Groups[1].Value)) direct.Add(Path.GetFileName(f) + ": " + m.Groups[1].Value);
+            if (RingLanguages.Available.Length > 1)
+                Assert.IsEmpty(direct, "мов кілька, а тексти вантажаться без RingLanguages.Resource:\n" + string.Join("\n", direct));
+            TestContext.WriteLine("Прямих завантажень текстів (до другої мови дозволено): " + direct.Count + "\n" + string.Join("\n", direct));
+        }
+
+        /// <summary>Усі джерела видимого тексту українською: спершу ui_uk.json, далі решта *_uk.json Resources/Ring, рядки арен.</summary>
+        private static List<string> TextSources()
+        {
+            var r = new List<string> { Path.Combine(RingCampaignDriver.Dir(), "ui_uk.json") };
+            var more = Directory.GetFiles(RingCampaignDriver.Dir(), "*_uk.json");
+            Array.Sort(more, StringComparer.Ordinal);
+            foreach (var f in more) if (Path.GetFileName(f) != "ui_uk.json") r.Add(f);
+            r.Add(Path.Combine(Root(), "Assets", "Art", "Ring", "ring_strings_uk.txt"));
+            return r;
+        }
+
+        /// <summary>«…/strings_uk.json» + «en» → «…/strings_en.json»; «ring_strings_uk.txt» → «ring_strings_en.txt».</summary>
+        private static string TranslatedPath(string ukPath, string code)
+        {
+            string name = Path.GetFileName(ukPath);
+            string ext = Path.GetExtension(name);
+            string stem = name.Substring(0, name.Length - ext.Length);
+            Assert.IsTrue(stem.EndsWith("_" + RingLanguages.Base, StringComparison.Ordinal), "джерело тексту — *_uk: " + name);
+            return Path.Combine(Path.GetDirectoryName(ukPath), stem.Substring(0, stem.Length - RingLanguages.Base.Length) + code + ext);
+        }
+
+        /// <summary>Рядки файлу тексту: JSON — лише рядкові значення (не-рядок — дірка), .txt — «ключ=текст».</summary>
+        private static Dictionary<string, string> ReadTextFile(string path, string what, List<string> holes)
+        {
+            if (!path.EndsWith(".json", StringComparison.Ordinal)) return ReadKeyValueFile(path);
             var r = new Dictionary<string, string>();
-            foreach (var kv in d) if (kv.Value is string) r[kv.Key] = (string)kv.Value;
+            foreach (var kv in MiniJson.ParseObject(File.ReadAllText(path)))
+            {
+                if (kv.Value is string) r[kv.Key] = (string)kv.Value;
+                else holes.Add(what + ": не рядок " + kv.Key);
+            }
             return r;
         }
 
