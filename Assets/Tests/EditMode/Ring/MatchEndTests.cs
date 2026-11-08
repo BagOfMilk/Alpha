@@ -18,7 +18,7 @@ namespace Game.Tests.EditMode
         public void Pin_ThreeCount_PlayerWins()
         {
             var e = MatchKit.Engine(true, new[] { 11, 3 });
-            e.State.Rival.Damage = 1;
+            e.State.Rival.Damage = 1; MatchKit.NotFresh(e.State.Rival);
             MatchKit.Play(e, MatchActionId.Throw);
             MatchKit.Play(e, MatchActionId.Pin);
             Assert.IsTrue(e.IsOver);
@@ -32,7 +32,7 @@ namespace Game.Tests.EditMode
         public void Pin_RivalPinsPlayer_RivalWins_AndSellIsCounted()
         {
             var e = MatchKit.Engine(false, new[] { 11, 4 });
-            e.State.Player.Damage = 1;
+            e.State.Player.Damage = 1; MatchKit.NotFresh(e.State.Player);
             MatchKit.Play(e, MatchActionId.Throw);
             MatchKit.Play(e, MatchActionId.Pin);
             Assert.AreEqual(MatchWinner.Rival, e.Result.Winner);
@@ -43,7 +43,7 @@ namespace Game.Tests.EditMode
         public void KickoutAtTwo_IsCounted_ForResult()
         {
             var e = MatchKit.Engine(false, new[] { 11, 6 });
-            e.State.Player.Damage = 1;
+            e.State.Player.Damage = 1; MatchKit.NotFresh(e.State.Player);
             MatchKit.Play(e, MatchActionId.Throw);
             MatchKit.Play(e, MatchActionId.Pin);
             Assert.IsFalse(e.IsOver);
@@ -60,7 +60,7 @@ namespace Game.Tests.EditMode
         {
             // утримання 4+2 — «три», напарник розриває; далі больовий 7–9 тримається; друге утримання — рятунку немає
             var e = MatchKit.Engine(false, new[] { 4, 7, 7, 4 }, s => s.PlayerHasAlly = true);
-            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage);
+            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Player);
             e.Perform(MatchActionId.Pin);
             Assert.IsFalse(e.IsOver, "напарник розірвав утримання");
             Assert.IsTrue(e.State.PlayerUsedAlly);
@@ -77,7 +77,7 @@ namespace Game.Tests.EditMode
         public void NoAlly_DisablesActionAndRescue()
         {
             var e = MatchKit.Engine(false, new[] { 4 }, s => { s.PlayerHasAlly = true; s.Stipulations = MatchStipulations.NoAlly; });
-            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage);
+            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Player);
             e.Perform(MatchActionId.Pin);
             Assert.AreEqual(MatchWinner.Rival, e.Result.Winner);
             var f = MatchKit.Engine(true, null, s => { s.PlayerHasAlly = true; s.Stipulations = MatchStipulations.NoAlly; });
@@ -101,7 +101,7 @@ namespace Game.Tests.EditMode
         public void Submission_Strong_FailedEndure_PlayerWinsBySubmission()
         {
             var e = MatchKit.Engine(true, new[] { 11, 5 });
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Rival);
             MatchKit.Play(e, MatchActionId.Submission);
             Assert.AreEqual(MatchEndKind.Submission, e.Result.Kind);
             Assert.AreEqual(MatchWinner.Player, e.Result.Winner);
@@ -113,7 +113,7 @@ namespace Game.Tests.EditMode
         public void Submission_Miss_OpponentBreaksFree_NoEndureRoll()
         {
             var e = MatchKit.Engine(true, new[] { 3 });
-            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage);
+            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = Math.Max(e.State.Rival.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Rival);
             MatchKit.Play(e, MatchActionId.Submission);
             Assert.IsFalse(e.IsOver);
             Assert.IsFalse(e.State.Log.Any(x => x.Kind == MatchEventKind.Endure));
@@ -125,13 +125,13 @@ namespace Game.Tests.EditMode
         {
             var late = MatchKit.Engine(true, new[] { 8, 9 });
             late.State.Round = MatchRules.LateStageRound;
-            late.State.Rival.Posture = Posture.Down; late.State.Rival.Damage = Math.Max(late.State.Rival.Damage, MatchRules.PinMinDamage);
+            late.State.Rival.Posture = Posture.Down; late.State.Rival.Damage = Math.Max(late.State.Rival.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(late.State.Rival);
             MatchKit.Play(late, MatchActionId.Submission);
             var ev = late.State.Log.Last(x => x.Kind == MatchEventKind.Endure);
             Assert.AreEqual(MatchRules.DefenseBase - 2, ev.Modifier, "-1 за 7–9 больового, -1 пізня стадія");
         }
 
-        // Відліку за рингом немає з 08.11.2026: усе в центрі рингу, бої за рингом повернуться з типами матчів (TRPG_DESIGN §9).
+        // Відлік за рингом і подвійний відлік — MatchOutsideTests (бій за рингом склейкою, рішення власника 08.11.2026).
 
         // ---------- дискваліфікація ----------
 
@@ -182,7 +182,7 @@ namespace Game.Tests.EditMode
         public void Result_FinalHypeAndRounds_AreFilled()
         {
             var e = MatchKit.Engine(true, new[] { 11, 3 });
-            e.State.Rival.Damage = 1;
+            e.State.Rival.Damage = 1; MatchKit.NotFresh(e.State.Rival);
             MatchKit.Play(e, MatchActionId.Throw);
             MatchKit.Play(e, MatchActionId.Pin);
             Assert.AreEqual(e.State.Hype, e.Result.FinalHype);
@@ -325,7 +325,7 @@ namespace Game.Tests.EditMode
         public void Ai_PriorityOrder_FinisherThenPinThenSubmission()
         {
             var e = MatchKit.Engine(false);
-            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage); e.State.Player.Damage = 8;
+            e.State.Player.Posture = Posture.Down; e.State.Player.Damage = Math.Max(e.State.Player.Damage, MatchRules.PinMinDamage); MatchKit.NotFresh(e.State.Player); e.State.Player.Damage = 8;
             Assert.AreEqual(MatchActionId.Pin, MatchAi.ChooseAction(e));
             e.State.Player.Damage = 6;
             Assert.AreEqual(MatchActionId.Submission, MatchAi.ChooseAction(e));

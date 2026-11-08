@@ -1,4 +1,4 @@
-namespace Game.Core.Ring.Match
+﻿namespace Game.Core.Ring.Match
 {
     /// <summary>Усі числа матчу в одному місці (TRPG_DESIGN §4). ПЛЕЙСХОЛДЕР: балансуються тут, а не по коду.</summary>
     public static class MatchRules
@@ -44,8 +44,23 @@ namespace Game.Core.Ring.Match
         public const int PinMinDamage = 4;
         /// <summary>Основа захисних кидків «Вирватися» й «Терпіти»: свіжий борець майже не програє з першого покриття.</summary>
         public const int DefenseBase = 2;
+        /// <summary>
+        /// «Свіжий борець» (баланс 08.11.2026, ПЛЕЙСХОЛДЕР): перше накриття проти борця в матчі — +2 до «Вирватися», перший больовий —
+        /// +3 до «Терпіти» (больовий ще й несе штраф від чистого прийому нападника). Без цього ~11 % матчів закінчувались за 3–4 дії
+        /// одним ланцюгом (кидок → трюк → утримання чи больовий), жодного разу не віддавши ініціативи. Однакові +3 давали матч довший
+        /// за 15 дій і перемоги у ворожнечі нижче вилки, однакові +2 лишали ~6 % «розгромів».
+        /// </summary>
+        public const int FirstPinBonus = 2;
+        public const int FirstHoldBonus = 3;
 
         public const int WarningsToDq = 3;
+
+        /// <summary>
+        /// Відлік за рингом (§4.9, ПЛЕЙСХОЛДЕР): кожна дія за рингом — +3; на 10 — програє той, хто лежить; лежать обидва або стоять
+        /// обидва — подвійний відлік (нічия). У матчі «без DQ» відліку немає.
+        /// </summary>
+        public const int OutsideCountStep = 3;
+        public const int OutsideCountLimit = 10;
 
         /// <summary>
         /// Ліміт матчу в діях (§4.11, ПЛЕЙСХОЛДЕР): далі нічия. Зріз 03.11.2026 мав 20 раундів по ~4 дії; ланцюг рахує кожну дію.
@@ -84,16 +99,18 @@ namespace Game.Core.Ring.Match
                 case MatchActionId.Dirty:
                 case MatchActionId.Pin:
                 case MatchActionId.Desperate:
+                case MatchActionId.LeaveRing:
                     return 1;
                 case MatchActionId.Throw:
                 case MatchActionId.Submission:
+                case MatchActionId.Weapon:
                     return 2;
                 case MatchActionId.TopRope:
                     return 3;
                 case MatchActionId.Finisher:
                     return 4;
                 default:
-                    return 0;   // встати, відновитися, напарник, перевести подих, промінь надії
+                    return 0;   // встати, відновитися, напарник, перевести подих, промінь надії, повернутися в ринг
             }
         }
 

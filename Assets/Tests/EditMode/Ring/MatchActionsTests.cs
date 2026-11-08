@@ -17,9 +17,11 @@ namespace Game.Tests.EditMode
     {
         private static UnavailableReason Why(MatchEngine e, MatchActionId id) { return e.Describe(id).Reason; }
 
+        /// <summary>Лежить, ушкоджений до порогу утримання, і вже не свіжий (його накривали й тримали в больовому).</summary>
         private static void Lay(Fighter f)
         {
             f.Posture = Posture.Down; f.Damage = Math.Max(f.Damage, MatchRules.PinMinDamage);
+            MatchKit.NotFresh(f);
         }
 
         // ---------- умови доступності ----------
@@ -58,20 +60,8 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(e.Describe(MatchActionId.Pin).Available);
         }
 
-        [Test]
-        public void Pin_AfterKickoutAtTwo_NeedsAnotherMoveFirst()
-        {
-            // «два»: ініціатива лишається, але накрити знову можна лише після іншого прийому (TRPG_DESIGN §4.6)
-            var e = MatchKit.Engine(true, new[] { 6 });
-            Lay(e.State.Rival);
-            e.Perform(MatchActionId.Pin);
-            Assert.AreEqual(MatchSide.Player, e.CurrentActor);
-            Assert.AreEqual(UnavailableReason.JustPinned, Why(e, MatchActionId.Pin));
-            MatchKit.Play(e, MatchActionId.Submission);
-            Assert.IsFalse(e.IsOver);
-            Assert.AreEqual(MatchSide.Player, e.CurrentActor, "больовий 7–9, «Терпіти» 7–9 — тримається");
-            Assert.IsTrue(e.Describe(MatchActionId.Pin).Available, "після іншого прийому — знову можна");
-        }
+        // «Накрити знову — лише після іншого прийому» (JustPinned) з 08.11.2026 лишився для рятунку напарником:
+        // після «два» ініціатива переходить до того, хто вирвався (MatchEndTests.AllyRescue_BreaksTheThreeCount_OncePerMatch).
 
         [Test]
         public void PinAndSubmission_NeedAccumulatedDamage_TargetNotHurtBelowThreshold()
@@ -582,9 +572,10 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Kickout_AtOne_InitiativeToDefender_AtTwo_StaysWithAttacker()
+        public void Kickout_AtOneAndTwo_InitiativeToDefender()
         {
-            // «раз»: 10+ — ініціатива захиснику; «два»: 7–9 — ажіотаж +2, імпульс +1 тому, хто вирвався, ініціатива лишається
+            // «раз»: 10+ — ініціатива захиснику; «два»: 7–9 — ажіотаж +2, імпульс +1 тому, хто вирвався, і ініціатива теж його
+            // (баланс 08.11.2026: після майже-перемоги — камбек, а не нове накриття тим самим ланцюгом)
             var one = PinReady(null, new[] { 11 });
             one.Perform(MatchActionId.Pin);
             Assert.AreEqual(1, one.State.Rival.KickoutsDone);
@@ -592,10 +583,33 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(MatchSide.Rival, one.CurrentActor);
             var two = PinReady(null, new[] { 6 });
             two.Perform(MatchActionId.Pin);
+            Assert.AreEqual(RollTier.Partial, two.State.Log.Last(x => x.Kind == MatchEventKind.Kickout).Tier);
             Assert.AreEqual(5, two.State.Hype);
             Assert.AreEqual(1, two.State.Rival.Momentum);
             Assert.IsFalse(two.IsOver);
-            Assert.AreEqual(MatchSide.Player, two.CurrentActor);
+            Assert.AreEqual(MatchSide.Rival, two.CurrentActor);
+        }
+
+        [Test]
+        public void FreshWrestler_FirstCoverAndFirstHold_GetBonus_OnlyOnce()
+        {
+            // «Свіжий борець» (баланс 08.11.2026): перше накриття проти борця — +2 до «Вирватися», перший больовий — +3 до «Терпіти»
+            var e = MatchKit.Engine(true, new[] { 8, 4, 8, 4 });
+            e.State.Rival.Posture = Posture.Down; e.State.Rival.Damage = MatchRules.PinMinDamage;
+            Assert.AreEqual(MatchRules.DefenseBase + MatchRules.FirstPinBonus, e.Describe(MatchActionId.Pin).Modifier, "перше накриття");
+            e.State.Rival.PinsFaced = 1;
+            Assert.AreEqual(MatchRules.DefenseBase, e.Describe(MatchActionId.Pin).Modifier, "друге — без бонусу");
+
+            // больовий 7–9 (штраф −1): перший «Терпіти» 4 + 2 + 3 − 1 = 8 — тримається; другий 4 + 2 − 1 = 5 — здався
+            MatchKit.Play(e, MatchActionId.Submission);
+            var first = e.State.Log.Last(x => x.Kind == MatchEventKind.Endure);
+            Assert.AreEqual(MatchRules.DefenseBase + MatchRules.FirstHoldBonus - MatchRules.SubmissionPartialPenalty, first.Modifier);
+            Assert.AreEqual(RollTier.Partial, first.Tier);
+            Assert.AreEqual(1, e.State.Rival.HoldsFaced);
+            MatchKit.Play(e, MatchActionId.Submission);
+            var second = e.State.Log.Last(x => x.Kind == MatchEventKind.Endure);
+            Assert.AreEqual(MatchRules.DefenseBase - MatchRules.SubmissionPartialPenalty, second.Modifier, "другий больовий — без бонусу");
+            Assert.AreEqual(MatchEndKind.Submission, e.Result.Kind);
         }
 
         [Test]
@@ -610,9 +624,10 @@ namespace Game.Tests.EditMode
             e.Commit(0);
             var kick = e.State.Log.Last(x => x.Kind == MatchEventKind.Kickout);
             Assert.AreEqual(10, e.State.Rival.Damage);
-            Assert.AreEqual(MatchRules.DefenseBase - 5, kick.Modifier, "-2 поріг на межі, -3 фінішер");
+            Assert.AreEqual(MatchRules.DefenseBase + MatchRules.FirstPinBonus - 5, kick.Modifier, "+2 перше накриття, -2 поріг на межі, -3 фінішер");
             Assert.AreEqual(Posture.Down, e.State.Rival.Posture);
-            Assert.AreEqual(UnavailableReason.JustPinned, Why(e, MatchActionId.Pin), "фінішер закінчується утриманням");
+            Assert.AreEqual(1, e.State.Rival.PinsFaced, "фінішер закінчується утриманням");
+            Assert.AreEqual(MatchSide.Rival, e.CurrentActor, "вирвався — ініціатива його");
         }
 
         [Test]

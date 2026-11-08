@@ -64,6 +64,12 @@ namespace Game.Tests.EditMode
 
         public static ActionOption Opt(MatchEngine e, MatchActionId id) { return e.Describe(id); }
 
+        /// <summary>
+        /// Борця вже накривали й тримали в больовому: бонус «свіжого» (MatchRules.FirstPinBonus / FirstHoldBonus) не діє. Для тестів,
+        /// що перевіряють інше; сам бонус — MatchActionsTests.FreshWrestler_FirstCoverAndFirstHold_GetBonus_OnlyOnce.
+        /// </summary>
+        public static void NotFresh(Fighter f) { f.PinsFaced = 1; f.HoldsFaced = 1; }
+
         public static ActionOption Find(IReadOnlyList<ActionOption> list, MatchActionId id)
         {
             foreach (var o in list) if (o.Id == id) return o;
@@ -281,12 +287,16 @@ namespace Game.Tests.EditMode
         {
             var e = MatchKit.Engine(true);
             var list = e.GetAvailableActions();
-            Assert.AreEqual(13, list.Count);
+            // усі дії рушія, крім «Променя надії» (той пропонується окремо)
+            Assert.AreEqual(Enum.GetValues(typeof(MatchActionId)).Length - 1, list.Count);
             Assert.AreEqual(list.Count, list.Select(o => o.Id).Distinct().Count());
             Assert.AreEqual(1, MatchKit.Find(list, MatchActionId.Strike).Cost);
             Assert.AreEqual(2, MatchKit.Find(list, MatchActionId.Throw).Cost);
             Assert.AreEqual(3, MatchKit.Find(list, MatchActionId.TopRope).Cost);
             Assert.AreEqual(4, MatchKit.Find(list, MatchActionId.Finisher).Cost);
+            Assert.AreEqual(1, MatchKit.Find(list, MatchActionId.LeaveRing).Cost);
+            Assert.AreEqual(0, MatchKit.Find(list, MatchActionId.ReturnToRing).Cost);
+            Assert.AreEqual(2, MatchKit.Find(list, MatchActionId.Weapon).Cost);
             Assert.IsTrue(MatchKit.Find(list, MatchActionId.CatchBreath).Available);
             Assert.IsNull(MatchKit.Find(list, MatchActionId.HopeSpot), "промінь надії пропонується окремо");
         }

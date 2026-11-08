@@ -206,6 +206,20 @@ namespace Game.Gameplay.Ring.Models
             }
         }
 
+        /// <summary>Пара за рингом (бій за рингом склейкою, рішення власника 08.11.2026).</summary>
+        public bool IsOutside { get { return _e.State.Outside; } }
+        /// <summary>«За рингом» або порожньо (на рингу).</summary>
+        public string PlaceText { get { return IsOutside ? _t.Get("match.place.outside") : ""; } }
+        /// <summary>«Відлік за рингом: 6/10»; порожньо на рингу і в матчі «без DQ» (там відліку немає).</summary>
+        public string CountText
+        {
+            get
+            {
+                if (!IsOutside || (_e.Setup.Stipulations & Game.Core.Ring.MatchStipulations.NoDq) != 0) return "";
+                return _t.Format("match.count", _e.State.OutsideCount, MatchRules.OutsideCountLimit);
+            }
+        }
+
         public string RefereeText { get { return _t.Get(_e.State.RefereeDistracted ? "match.referee.distracted" : "match.referee.watching"); } }
 
         public string TurnText

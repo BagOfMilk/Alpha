@@ -219,12 +219,16 @@ namespace Game.Tests.EditMode
             System.Console.WriteLine("[feel] " + Report(f));
             // Замір 06.11.2026 (поріг фінішера 3): чистий 39 %, частково 44 %, провал 17 %; 5,7 раунду; «на два» у 35 % матчів;
             // середня найдовша серія провалів 0,9; перший поп — після 3,8 дії, без попу 11 % матчів. Межі — з запасом.
+            // Замір 08.11.2026 (ланцюг ініціативи, «свіжий борець», докрутка гравця до 10+): чистий 27 %, частково 42 %, провал 30 %;
+            // 15,0 дії; «на два» у 56 % матчів; найдовша серія провалів 1,3; без попу 2 %.
             int rolls = f.Miss + f.Partial + f.Strong;
             Assert.GreaterOrEqual((double)f.Strong / rolls, 0.25, "чистий успіх має бути частим, а не рідкістю");
             Assert.GreaterOrEqual((double)f.NearFallMatches / f.Matches, 0.25, "«на два» — хоча б у чверті матчів (найгучніший момент вечора)");
             Assert.LessOrEqual((double)f.NoPop / f.Matches, 0.20, "матч без жодного попу залу — не частіше за кожен п'ятий");
             Assert.LessOrEqual((double)f.SumMissStreakMax / f.Matches, 1.5, "серії провалів поспіль — короткі");
-            Assert.LessOrEqual((double)f.Rounds / f.Matches, 6.5, "малий бій лишається коротким (Поправка №11)");
+            // З 08.11.2026 матч рахує дії ланцюга ініціативи, а не раунди: критерій М1 — 8–15 дій (P2-1 проходу 08.11, Поправка №11).
+            double actions = (double)f.Rounds / f.Matches;
+            Assert.That(actions, Is.InRange(8.0, 15.0), "матч — 8–15 дій: не розгром і не тягучка");
         }
     }
 }

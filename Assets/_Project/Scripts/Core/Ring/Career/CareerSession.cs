@@ -29,6 +29,7 @@ namespace Game.Core.Ring.Career
         public static readonly MatchActionId[] UniversalActions =
         {
             MatchActionId.Pin, MatchActionId.Desperate, MatchActionId.HopeSpot, MatchActionId.GetUp,
+            MatchActionId.LeaveRing, MatchActionId.ReturnToRing, MatchActionId.Weapon,
             MatchActionId.Recover, MatchActionId.Ally, MatchActionId.CatchBreath
         };
 

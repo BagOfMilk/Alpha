@@ -23,18 +23,52 @@ namespace Game.Core.Ring.Match
             if (Ok(opts, MatchActionId.Submission) && opp.Damage >= MatchRules.AiSubmissionDamage && Spare(me, MatchActionId.Submission))
                 return MatchActionId.Submission;
             if (Ok(opts, MatchActionId.GetUp)) return MatchActionId.GetUp;
+            var role = me.Side == MatchSide.Player ? e.Setup.PlayerRole : e.Setup.RivalRole;
+            bool noDq = (e.Setup.Stipulations & MatchStipulations.NoDq) != 0;
+            if (e.State.Outside)
+            {
+                MatchActionId outside;
+                if (ChooseOutside(e, opts, me, opp, noDq, out outside)) return outside;
+            }
             // видихся — краще віддати ініціативу, ніж бити з −1
             if (me.Stamina <= 0) return MatchActionId.CatchBreath;
+            // бій за рингом (§4.4): «без DQ» — по предмети; лиходій — по відлік. Щонайбільше раз за матч.
+            if (Ok(opts, MatchActionId.LeaveRing) && !me.LeftRing && opp.IsUpright && Spare(me, MatchActionId.LeaveRing)
+                && (noDq || (role == RingPath.Heel && opp.Damage >= MatchRules.PinMinDamage)))
+                return MatchActionId.LeaveRing;
             if (Ok(opts, MatchActionId.Desperate)) return MatchActionId.Desperate;
             if (Ok(opts, MatchActionId.TopRope) && Spare(me, MatchActionId.TopRope) && opp.Posture != Posture.Standing)
                 return MatchActionId.TopRope;
             if (Ok(opts, MatchActionId.Throw) && Spare(me, MatchActionId.Throw)) return MatchActionId.Throw;
             if (Ok(opts, MatchActionId.Strike)) return MatchActionId.Strike;
             if (Ok(opts, MatchActionId.Taunt) && e.State.Hype < MatchRules.FinisherHype + 2) return MatchActionId.Taunt;
-            var role = me.Side == MatchSide.Player ? e.Setup.PlayerRole : e.Setup.RivalRole;
             if (role == RingPath.Heel && Ok(opts, MatchActionId.Dirty)) return MatchActionId.Dirty;
             if (Ok(opts, MatchActionId.Submission) && Spare(me, MatchActionId.Submission)) return MatchActionId.Submission;
+            // за рингом без сил і без дій — повертатися, а не стояти під відліком
+            if (Ok(opts, MatchActionId.ReturnToRing)) return MatchActionId.ReturnToRing;
             return MatchActionId.CatchBreath;
+        }
+
+        /// <summary>
+        /// За рингом (стоїть на ногах): відлік дійде до 10 цією дією — лишити лежачого суперника під рахунком (дражнити) або
+        /// повертатися; суперник ушкоджений до утримання — закотити його й накрити; «без DQ» — предмет. Інакше — звичайні дії.
+        /// </summary>
+        private static bool ChooseOutside(MatchEngine e, System.Collections.Generic.IReadOnlyList<ActionOption> opts, Fighter me, Fighter opp,
+                                          bool noDq, out MatchActionId id)
+        {
+            id = MatchActionId.CatchBreath;
+            if (!noDq && e.State.OutsideCount + MatchRules.OutsideCountStep >= MatchRules.OutsideCountLimit)
+            {
+                if (opp.Posture == Posture.Down && Ok(opts, MatchActionId.Taunt)) { id = MatchActionId.Taunt; return true; }
+                if (Ok(opts, MatchActionId.ReturnToRing)) { id = MatchActionId.ReturnToRing; return true; }
+                return false;
+            }
+            if (opp.Posture == Posture.Down && opp.Damage >= MatchRules.AiPinDamage && Ok(opts, MatchActionId.ReturnToRing))
+            { id = MatchActionId.ReturnToRing; return true; }
+            if (noDq && Ok(opts, MatchActionId.Weapon) && Spare(me, MatchActionId.Weapon)) { id = MatchActionId.Weapon; return true; }
+            if (noDq && Ok(opts, MatchActionId.ReturnToRing) && me.Stamina <= MatchRules.Cost(MatchActionId.Weapon))
+            { id = MatchActionId.ReturnToRing; return true; }
+            return false;
         }
 
         private static bool Spare(Fighter me, MatchActionId id) { return me.Stamina >= MatchRules.Cost(id) + StaminaReserve; }
@@ -49,11 +83,18 @@ namespace Game.Core.Ring.Match
             return ReactionChoice.Sell;
         }
 
-        /// <summary>Докрутка лише щоб урятувати хід від провалу, і не з-під порога фінішера.</summary>
+        /// <summary>
+        /// Докрутка: урятувати хід від провалу (не з-під порога фінішера). Гравець (ШІ замість людини в замірах і автопрогоні) ще й
+        /// докручує 7–9 до 10+ з надлишку понад поріг фінішера — як живий гравець, що бачить кнопку докрутки. Суперник тримає надлишок
+        /// під фінішер: замір 08.11.2026 — докрутка обома боками дала Молоту в сезоні 3 66 % перемог (вилка гравця 38–68 %).
+        /// </summary>
         public static int ChooseBoost(MatchEngine e)
         {
             var pr = e.PendingRoll;
-            if (pr.PointsToPartial <= 0) return 0;
+            if (pr.PointsToPartial <= 0)
+                return pr.Actor == MatchSide.Player && pr.PointsToStrong > 0 && pr.Action != MatchActionId.Finisher
+                       && pr.Impulse - pr.PointsToStrong >= MatchRules.FinisherMomentum
+                    ? pr.PointsToStrong : 0;
             int left = pr.Impulse - pr.PointsToPartial;
             if (pr.Action == MatchActionId.Finisher || left >= MatchRules.FinisherMomentum || pr.Impulse < MatchRules.FinisherMomentum - 1)
                 return pr.PointsToPartial;

@@ -15,12 +15,16 @@ namespace Game.Core.Ring.Match
         public int ReversalTokens;
         /// <summary>Вирвані утримання: кожне — −1 до наступного «Вирватися».</summary>
         public int KickoutsDone;
+        /// <summary>Скільки разів його накривали і скільки разів він «терпів» больовий: перше — з бонусом свіжого (MatchRules.FirstPinBonus / FirstHoldBonus).</summary>
+        public int PinsFaced, HoldsFaced;
         public int Warnings;
         public bool DesperateUsed;
         /// <summary>«Промінь надії» уже використано (раз за матч на бік).</summary>
         public bool HopeUsed;
         /// <summary>Перки з дією «раз за матч»: уже спрацювали.</summary>
         public bool ComebackGiven, BribeUsed, DirtyCoverUsed, ImproviseUsed;
+        /// <summary>Уже виводив бій за ринг у цьому матчі (ШІ виводить щонайбільше раз).</summary>
+        public bool LeftRing;
 
         public bool IsUpright { get { return Posture != Posture.Down; } }
     }
@@ -43,6 +47,13 @@ namespace Game.Core.Ring.Match
         /// <summary>Скільки разів ініціатива переходила (охоронець «ланцюг не нескінченний»).</summary>
         public int InitiativeChanges;
         public bool AllyUsed;
+        /// <summary>
+        /// Пара за рингом (рішення власника 08.11.2026: бій за рингом лишається в ітерації 1 склейкою — пара або на рингу, або за
+        /// рингом, разом; вихід і повернення — окремим планом без бігу).
+        /// </summary>
+        public bool Outside;
+        /// <summary>Відлік рефері за рингом (0–10); у матчі «без DQ» не йде. Скидається, щойно пара повернулась.</summary>
+        public int OutsideCount;
         /// <summary>Остання дія в поточному ланцюгу (скидається, коли ініціатива переходить).</summary>
         public bool HasLastAction;
         public MatchActionId LastAction;

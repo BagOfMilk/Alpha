@@ -43,7 +43,8 @@ namespace Game.Tests.EditMode
         public void NotInTheDefaultActionList_SoOldScreensDoNotChange()
         {
             var e = PlayerFirst(true);
-            Assert.AreEqual(17, e.GetAvailableActions().Count);
+            // Усі дії рушія, крім самого «Променя надії» (число дій змінювалось: 08.11.2026 прибрано зони, додано «Перевести подих»).
+            Assert.AreEqual(System.Enum.GetValues(typeof(MatchActionId)).Length - 1, e.GetAvailableActions().Count);
             Assert.IsFalse(e.GetAvailableActions().Any(o => o.Id == MatchActionId.HopeSpot));
         }
 

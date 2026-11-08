@@ -16,7 +16,8 @@ namespace Game.Core.Ring.Match
         private static readonly MatchActionId[] ActionOrder =
         {
             MatchActionId.Strike, MatchActionId.Throw, MatchActionId.TopRope, MatchActionId.Taunt, MatchActionId.Dirty,
-            MatchActionId.Submission, MatchActionId.Pin, MatchActionId.Finisher, MatchActionId.Desperate, MatchActionId.GetUp,
+            MatchActionId.Submission, MatchActionId.Pin, MatchActionId.Finisher, MatchActionId.Desperate,
+            MatchActionId.LeaveRing, MatchActionId.ReturnToRing, MatchActionId.Weapon, MatchActionId.GetUp,
             MatchActionId.Recover, MatchActionId.Ally, MatchActionId.CatchBreath
         };
 
@@ -36,6 +37,8 @@ namespace Game.Core.Ring.Match
         private MatchActionId _actionId;
         private MatchSide _actionSide;
         private int _chainIndex;
+        // пара була за рингом, коли дія почалась (відлік рахує лише такі дії)
+        private bool _actionOutside;
 
         public MatchEngine(MatchSetup setup, IDiceRoller dice)
         {
@@ -149,6 +152,7 @@ namespace Game.Core.Ring.Match
         {
             if (id == MatchActionId.CatchBreath) return UnavailableReason.None;
             UnavailableReason r = UnavailableReason.None;
+            bool noDq = (_setup.Stipulations & MatchStipulations.NoDq) != 0;
             switch (id)
             {
                 case MatchActionId.GetUp:
@@ -158,6 +162,7 @@ namespace Game.Core.Ring.Match
                     if (me.HopeUsed) r = UnavailableReason.AlreadyUsed;
                     else if (!_setup.HopeSpotEnabled || me.Damage < MatchRules.HopeMinDamage
                              || me.Damage - opp.Damage < MatchRules.HopeGap) r = UnavailableReason.NotFarBehind;
+                    else if (_s.Outside) r = UnavailableReason.NotInRing;
                     break;
                 case MatchActionId.Recover:
                     if (me.Damage <= 0) r = UnavailableReason.NothingToRecover;
@@ -166,6 +171,7 @@ namespace Game.Core.Ring.Match
                     if (me.Side != MatchSide.Player || !_setup.PlayerHasAlly) r = UnavailableReason.NoAlly;
                     else if ((_setup.Stipulations & MatchStipulations.NoAlly) != 0) r = UnavailableReason.AllyForbidden;
                     else if (_s.AllyUsed) r = UnavailableReason.AlreadyUsed;
+                    else if (_s.Outside) r = UnavailableReason.NotInRing;
                     break;
                 default:
                     if (!me.IsUpright) { r = UnavailableReason.ActorDown; break; }
@@ -178,17 +184,33 @@ namespace Game.Core.Ring.Match
                         case MatchActionId.Taunt:
                             if (opp.Posture == Posture.Standing) r = UnavailableReason.TargetNotDownOrStunned;
                             break;
+                        case MatchActionId.TopRope:
+                            if (_s.Outside) r = UnavailableReason.NotInRing;
+                            break;
                         case MatchActionId.Submission:
-                            if (opp.Posture != Posture.Down) r = UnavailableReason.TargetNotDown;
+                            if (_s.Outside) r = UnavailableReason.NotInRing;
+                            else if (opp.Posture != Posture.Down) r = UnavailableReason.TargetNotDown;
                             else if (opp.Damage < MatchRules.PinMinDamage) r = UnavailableReason.TargetNotHurt;
                             break;
                         case MatchActionId.Pin:
-                            if (opp.Posture != Posture.Down) r = UnavailableReason.TargetNotDown;
+                            if (_s.Outside) r = UnavailableReason.NotInRing;
+                            else if (opp.Posture != Posture.Down) r = UnavailableReason.TargetNotDown;
                             else if (_s.HasLastAction && _s.LastAction == MatchActionId.Pin) r = UnavailableReason.JustPinned;
                             else if (opp.Damage < MatchRules.PinMinDamage) r = UnavailableReason.TargetNotHurt;
                             break;
+                        case MatchActionId.LeaveRing:
+                            if (_s.Outside) r = UnavailableReason.AlreadyOutside;
+                            break;
+                        case MatchActionId.ReturnToRing:
+                            if (!_s.Outside) r = UnavailableReason.NotOutside;
+                            break;
+                        case MatchActionId.Weapon:
+                            if (!_s.Outside) r = UnavailableReason.NotOutside;
+                            else if (!noDq) r = UnavailableReason.NeedNoDq;
+                            break;
                         case MatchActionId.Finisher:
-                            if (me.Momentum < MatchRules.FinisherMomentum) r = UnavailableReason.NeedImpulse;
+                            if (_s.Outside) r = UnavailableReason.NotInRing;
+                            else if (me.Momentum < MatchRules.FinisherMomentum) r = UnavailableReason.NeedImpulse;
                             else if (_s.Hype < MatchRules.FinisherHype) r = UnavailableReason.NeedHype;
                             else if (opp.Damage < MatchRules.FinisherTargetDamage) r = UnavailableReason.TargetNotHurt;
                             break;
@@ -213,6 +235,8 @@ namespace Game.Core.Ring.Match
             {
                 case MatchActionId.Strike:
                 case MatchActionId.Throw:
+                case MatchActionId.LeaveRing:
+                case MatchActionId.Weapon:
                     attr = RingAttr.Strength; return true;
                 case MatchActionId.Submission:
                     attr = RingAttr.Technique; return true;
@@ -268,12 +292,14 @@ namespace Game.Core.Ring.Match
         {
             // «Герой залу»: при ажіотажі 7+ зал тягне героя — +1 до «Вирватися».
             int crowd = Mods(def.Side).HeroOfCrowd && _s.Hype >= MatchRules.HeroOfCrowdHype ? 1 : 0;
-            return MatchRules.DefenseBase + def.Stats.Get(RingAttr.Stamina) - def.KickoutsDone - Threshold(def) - penalty - Late() + Mods(def.Side).KickOutBonus + crowd;
+            int fresh = def.PinsFaced == 0 ? MatchRules.FirstPinBonus : 0;
+            return MatchRules.DefenseBase + fresh + def.Stats.Get(RingAttr.Stamina) - def.KickoutsDone - Threshold(def) - penalty - Late() + Mods(def.Side).KickOutBonus + crowd;
         }
 
         private int EndureMod(Fighter def, int penalty)
         {
-            return MatchRules.DefenseBase + def.Stats.Get(RingAttr.Stamina) - Threshold(def) - penalty - Late();
+            int fresh = def.HoldsFaced == 0 ? MatchRules.FirstHoldBonus : 0;
+            return MatchRules.DefenseBase + fresh + def.Stats.Get(RingAttr.Stamina) - Threshold(def) - penalty - Late();
         }
 
         private int ReverseMod(Fighter def, bool vsFinisher)
@@ -299,6 +325,7 @@ namespace Game.Core.Ring.Match
             _actionId = id; _actionSide = me.Side;
             _actionMod = opt.Modifier;
             _staging = h.Staging ?? (id == MatchActionId.TopRope ? MoveStaging.Corner : MoveStaging.Center);
+            _actionOutside = _s.Outside;
             _s.Chain++;
             _chainIndex = _s.Chain;
             _extraDamage = 0;
@@ -316,6 +343,7 @@ namespace Game.Core.Ring.Match
             if (id == MatchActionId.Finisher) me.Momentum -= MatchRules.FinisherMomentum;
             if (id == MatchActionId.Desperate) me.DesperateUsed = true;
             if (id == MatchActionId.HopeSpot) me.HopeUsed = true;
+            if (id == MatchActionId.LeaveRing) me.LeftRing = true;
             _repeatPending = _s.HasLastAction && _s.LastAction == id && _s.LastMoveKey == _hint.Key;
             _s.HasLastAction = true; _s.LastAction = id; _s.LastMoveKey = _hint.Key;
 
@@ -324,6 +352,7 @@ namespace Game.Core.Ring.Match
                 case MatchActionId.Pin:
                 case MatchActionId.Recover:
                 case MatchActionId.Ally:
+                case MatchActionId.ReturnToRing:
                     Ev(MatchEventKind.Action, me.Side, id);
                     if (_repeatPending) Hype(-1);
                     _repeatPending = false;
@@ -536,6 +565,19 @@ namespace Game.Core.Ring.Match
                     if (miss) break;
                     me.Posture = Posture.Standing; Fx(MatchEffectKind.Stand, me.Side, 1);
                     break;
+                case MatchActionId.LeaveRing:
+                    // викинув суперника за канати й пішов слідом; 10+ — той падає на підлогу. Провал — контратака на рингу.
+                    if (miss) { Dmg(me, 1); break; }
+                    SetOutside(true, me.Side);
+                    Dmg(opp, 1 + extra);
+                    if (strong) { GoDown(opp); Hype(1); }
+                    break;
+                case MatchActionId.Weapon:
+                    // стілець чи стіл за рингом (лише «без DQ»): 10+ — суперник лежить, зал вибухає.
+                    if (miss) { Dmg(me, 1); break; }
+                    if (strong) { Dmg(opp, 3 + extra); GoDown(opp); Hype(2); }
+                    else Dmg(opp, 2 + extra);
+                    break;
             }
             if (partial && !IsOver) ApplyComplication(id, me, opp);
             // «+1 імпульсу за чистий успіх»; відчайдушний дає +3 замість цього
@@ -551,11 +593,13 @@ namespace Game.Core.Ring.Match
             switch (id)
             {
                 case MatchActionId.Strike:
+                case MatchActionId.LeaveRing:
                     if (me.Stamina > 0) { SetStamina(me, me.Stamina - 1); }   // «−1 сила»
                     break;
                 case MatchActionId.Throw:
                 case MatchActionId.TopRope:
                 case MatchActionId.Desperate:
+                case MatchActionId.Weapon:
                     Dmg(me, 1);   // влучив, але ушкодив себе
                     break;
                 case MatchActionId.Taunt:
@@ -602,19 +646,50 @@ namespace Game.Core.Ring.Match
                     _s.AllyUsed = true; _s.PlayerUsedAlly = true; _s.RefereeDistracted = true;
                     Fx(MatchEffectKind.RefereeDistracted, me.Side, 1);
                     break;
+                case MatchActionId.ReturnToRing:
+                    // закотив суперника в ринг і повернувся сам: відлік скинуто, ініціатива лишається (можна накрити)
+                    SetOutside(false, me.Side);
+                    break;
             }
+        }
+
+        /// <summary>Пара змінила місце (склейка в показі); повернення в ринг скидає відлік.</summary>
+        private void SetOutside(bool outside, MatchSide who)
+        {
+            if (_s.Outside == outside) return;
+            _s.Outside = outside;
+            _s.OutsideCount = 0;
+            Fx(MatchEffectKind.Place, who, outside ? 1 : 0);
+        }
+
+        /// <summary>
+        /// Відлік за рингом (§4.9): дія, що почалась і скінчилась за рингом, — +3. На 10 програє той, хто лежить (інший «встиг на
+        /// дев'ять»); лежать обидва чи стоять обидва — подвійний відлік. У матчі «без DQ» відліку немає.
+        /// </summary>
+        private void CountOutside()
+        {
+            if (!_actionOutside || !_s.Outside || IsOver) return;
+            if ((_setup.Stipulations & MatchStipulations.NoDq) != 0) return;
+            _s.OutsideCount += MatchRules.OutsideCountStep;
+            Fx(MatchEffectKind.Count, _actionSide, MatchRules.OutsideCountStep);
+            if (_s.OutsideCount < MatchRules.OutsideCountLimit) return;
+            bool pDown = _s.Player.Posture == Posture.Down, rDown = _s.Rival.Posture == Posture.Down;
+            if (pDown != rDown) End(pDown ? MatchWinner.Rival : MatchWinner.Player, MatchEndKind.CountOut);
+            else End(MatchWinner.Draw, MatchEndKind.DoubleCountOut);
         }
 
         // ---------- утримання й больовий ----------
 
         /// <summary>
-        /// «Вирватися» (§4.6): 10+ — на «раз», ініціатива захиснику; 7–9 — на «два», ажіотаж +2, ініціатива лишається в нападника
-        /// (накрити знову — лише після іншого прийому); 6 і менше — «три», поразка (якщо напарник не розірве рахунок).
+        /// «Вирватися» (§4.6): 10+ — на «раз»; 7–9 — на «два», ажіотаж +2 й імпульс +1. В обох випадках ініціатива переходить до
+        /// захисника. 6 і менше — «три», поразка, якщо напарник не розірве рахунок; тоді ініціатива лишається в нападника, і накрити
+        /// знову він може лише після іншого прийому. Перше накриття проти борця в матчі — з бонусом свіжого (MatchRules.FirstPinBonus).
         /// </summary>
         private void ResolvePin(Fighter att, Fighter def, int penalty)
         {
             int roll = TwoD6.Roll(_dice, "m:kick:" + def.Side);
             int mod = KickoutMod(def, penalty); int total = roll + mod; var tier = TwoD6.TierOf(total);
+            def.PinsFaced++;
             // «Підкуплений суддя»: раз за матч рахунок зупиняється на «два» замість «трьох».
             string perk = null;
             if (tier == RollTier.Miss && Mods(def.Side).BribedRef && !def.BribeUsed) { tier = RollTier.Partial; def.BribeUsed = true; perk = PerkCatalog.BribedRef; }
@@ -646,7 +721,9 @@ namespace Game.Core.Ring.Match
                 Hype(2); AddMomentum(def, 1);
                 if (def.Side == MatchSide.Player) _s.PlayerKickoutsAtTwo++;
             }
-            else if (_s.CurrentActor == att.Side) PassInitiative();
+            // Вирвався — ініціатива його, і на «раз», і на «два» (баланс 08.11.2026, ПЛЕЙСХОЛДЕР): після майже-перемоги — камбек, а не
+            // нове накриття тим самим ланцюгом. Замір: з ініціативою в нападника після «два» чистий успіх гравця падав до 24 %, титул — до 30 %.
+            if (_s.CurrentActor == att.Side) PassInitiative();
         }
 
         /// <summary>«Терпіти» (§4.6): 10+ — вирвався, ініціатива захиснику; 7–9 — тримається (ініціатива в нападника); інакше — здався.</summary>
@@ -654,6 +731,7 @@ namespace Game.Core.Ring.Match
         {
             int roll = TwoD6.Roll(_dice, "m:endure:" + def.Side);
             int mod = EndureMod(def, penalty); int total = roll + mod; var tier = TwoD6.TierOf(total);
+            def.HoldsFaced++;
             var ev = Ev(MatchEventKind.Endure, def.Side, MatchActionId.Submission);
             ev.HasRoll = true; ev.Roll = roll; ev.Modifier = mod; ev.Total = total; ev.Tier = tier;
             if (tier == RollTier.Miss) End(WinnerOf(att.Side), MatchEndKind.Submission);
@@ -695,6 +773,7 @@ namespace Game.Core.Ring.Match
         /// <summary>Дію розв'язано: захисник відновлює «Сили» після прийому, лічильник дій росте, ліміт — нічия (§4.11).</summary>
         private void EndAction()
         {
+            CountOutside();
             _inAction = false;
             _hint = MoveHint.Default;
             if (IsOver) return;
@@ -737,10 +816,10 @@ namespace Game.Core.Ring.Match
 
         private MatchEvent Ev(MatchEventKind kind, MatchSide actor, MatchActionId action)
         {
-            var e = new MatchEvent { Seq = _s.Log.Count, Round = _s.Round, Kind = kind, Actor = actor, Action = action };
+            var e = new MatchEvent { Seq = _s.Log.Count, Round = _s.Round, Kind = kind, Actor = actor, Action = action, Outside = _s.Outside };
             if (_inAction && kind != MatchEventKind.TurnEnd && kind != MatchEventKind.Exchange)
             {
-                e.MoveKey = _hint.Key; e.Staging = _staging; e.ChainIndex = _chainIndex;
+                e.MoveKey = _hint.Key; e.Staging = _staging; e.ChainIndex = _chainIndex; e.Outside = _actionOutside;
             }
             _s.Log.Add(e); _new.Add(e); _cur = e;
             return e;

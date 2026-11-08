@@ -63,18 +63,37 @@ namespace Game.Tests.EditMode
             foreach (var k in kinds)
                 foreach (MatchActionId a in Enum.GetValues(typeof(MatchActionId)))
                     foreach (var t in new[] { RollTier.Miss, RollTier.Partial, RollTier.Strong })
-                        for (int fx = 0; fx < 3; fx++)
-                        {
-                            var ev = new MatchEvent { Kind = k, Action = a, Tier = t, HasRoll = true, Actor = MatchSide.Player };
-                            if (fx == 1) ev.Effects.Add(new MatchEffect(MatchEffectKind.Warning, MatchSide.Player, 1));
-                            if (fx == 2) ev.Effects.Add(new MatchEffect(MatchEffectKind.Stand, MatchSide.Rival, 0));
-                            yield return ev;
-                        }
+                        foreach (bool outside in new[] { false, true })
+                            for (int fx = 0; fx < 3; fx++)
+                            {
+                                var ev = new MatchEvent { Kind = k, Action = a, Tier = t, HasRoll = true, Actor = MatchSide.Player, Outside = outside };
+                                if (fx == 1) ev.Effects.Add(new MatchEffect(MatchEffectKind.Warning, MatchSide.Player, 1));
+                                if (fx == 2) ev.Effects.Add(new MatchEffect(MatchEffectKind.Stand, MatchSide.Rival, 0));
+                                yield return ev;
+                            }
+        }
+
+        /// <summary>
+        /// Події прийомів каталогу кар'єри (<c>career_moves.json</c>): ключ, дія й постановка (центр, канати, кут) — як їх дає рушій
+        /// через <see cref="MoveHint"/>; кожен прийом у трьох ступенях, з «підвівся» і без.
+        /// </summary>
+        private static IEnumerable<MatchEvent> CatalogEvents()
+        {
+            foreach (var m in CareerKit.Content().Moves.All)
+                foreach (var t in new[] { RollTier.Miss, RollTier.Partial, RollTier.Strong })
+                    for (int fx = 0; fx < 2; fx++)
+                    {
+                        var ev = new MatchEvent { Kind = MatchEventKind.Action, Action = m.Action, Tier = t, HasRoll = true, Actor = MatchSide.Player,
+                            MoveKey = m.Id, Staging = m.Staging };
+                        if (fx == 1) ev.Effects.Add(new MatchEffect(MatchEffectKind.Stand, MatchSide.Rival, 0));
+                        yield return ev;
+                    }
         }
 
         private static string Describe(MatchEvent ev, List<StageStep> steps)
         {
-            return ev.Kind + "/" + ev.Action + "/" + ev.Tier + ": " + string.Join(" + ", steps.Select(s => s.Kind + ":" + RingBeats.StepClip(s)));
+            return ev.Kind + "/" + ev.Action + (ev.MoveKey != null ? "[" + ev.MoveKey + "@" + ev.Staging + "]" : "") + "/" + ev.Tier + ": "
+                + string.Join(" + ", steps.Select(s => s.Kind + ":" + (RingBeats.StepClip(s) ?? s.Clip)));
         }
 
         [Test]
@@ -100,7 +119,7 @@ namespace Game.Tests.EditMode
             var ev = Events();
             var L = Lengths();
             int contactPlans = 0;
-            foreach (var e in AllEvents())
+            foreach (var e in AllEvents().Concat(CatalogEvents()))
             {
                 var steps = RingClipTable.Plan(e);
                 var plan = RingBeats.For(steps, ev, n => Len(L, n));
@@ -173,39 +192,94 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Пункт 8 огляду 08.11.2026: «у канати» — кидок Whip_Ropes*, біг і удар спиною в канат (такт — на ударі об канат);
-        /// чисто — ще й відскок і другий канат; «у кут» — Whip_Corner* (такт — на ударі об кут); промах «у кут» — реверс.
+        /// Рішення власника 08.11.2026 (TRPG_DESIGN §4.4, §4.12): прийом із канатів чи кута — склейкою. План 1 — нападник уже на
+        /// канаті чи куті (крок <see cref="StageStepKind.Cut"/>, рівно один і першим), план 2 — приземлення пари в центрі. Склейка
+        /// такту не несе: такт — на контакті приземлення. Прийом у центрі склейки не має зовсім.
         /// </summary>
         [Test]
-        public void IntoRopesAndCorner_RunToTheRopesWithTheBack_AndBeatOnTheHit()
+        public void MovesFromRopesOrCorner_CutFirst_BeatOnTheLanding()
+        {
+            var ev = Events();
+            var L = Lengths();
+            int cuts = 0;
+            foreach (var e in CatalogEvents())
+            {
+                var steps = RingClipTable.Plan(e);
+                string what = Describe(e, steps);
+                int n = steps.Count(s => s.Kind == StageStepKind.Cut);
+                if (e.Staging == MoveStaging.Center && e.Action != MatchActionId.TopRope)
+                {
+                    Assert.AreEqual(0, n, "прийом у центрі — без склейки: " + what);
+                    continue;
+                }
+                cuts++;
+                Assert.AreEqual(1, n, "рівно одна склейка: " + what);
+                Assert.AreEqual(StageStepKind.Cut, steps[0].Kind, "склейка — першим планом: " + what);
+                Assert.AreEqual(e.Actor, steps[0].Actor, "на канаті — нападник: " + what);
+                Assert.AreNotEqual(MoveStaging.Center, steps[0].Perch, what);
+                if (e.Staging != MoveStaging.Center) Assert.AreEqual(e.Staging, steps[0].Perch, "місце плану 1 — з постановки прийому: " + what);
+                Assert.IsNull(RingBeats.StepClip(steps[0]), "склейка такту не несе: " + what);
+                Assert.Greater(steps.Count, 1, "після склейки — приземлення в центрі: " + what);
+                var plan = RingBeats.For(steps, ev, n2 => Len(L, n2));
+                Assert.GreaterOrEqual(plan.Step, 1, "такт — на приземленні, не на склейці: " + what);
+            }
+            Assert.Greater(cuts, 3, "у каталозі є прийоми з канатів і кута");
+        }
+
+        /// <summary>
+        /// Бій за рингом склейкою (власник 08.11.2026): вихід — дія в центрі, далі склейка місця (пара вже за рингом); повернення —
+        /// лише склейка (пара знову на рингу). Склейка такту не несе; прийоми за рингом — без склейок «канати/кут».
+        /// </summary>
+        [Test]
+        public void LeaveAndReturn_CutThePlace_WithoutRunningOrClimbing()
         {
             var ev = Events();
             var L = Lengths();
             foreach (var t in new[] { RollTier.Partial, RollTier.Strong })
             {
-                var e = new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.IntoRopes, Tier = t, HasRoll = true, Actor = MatchSide.Player };
+                var e = new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.LeaveRing, Tier = t, HasRoll = true, Actor = MatchSide.Player };
                 var steps = RingClipTable.Plan(e);
-                Assert.AreEqual(StageStepKind.Whip, steps[0].Kind, t.ToString());
-                StringAssert.StartsWith("Whip_Ropes", steps[0].Clip);
-                StringAssert.StartsWith("Run_", steps[0].Run);
-                StringAssert.StartsWith("Rope_", steps[0].Rope1);
-                Assert.IsFalse(steps[0].Corner);
-                if (t == RollTier.Strong) StringAssert.StartsWith("Rope_", steps[0].Rope2, "чисто — відскок і другий канат");
+                Assert.AreEqual(StageStepKind.Place, steps[steps.Count - 1].Kind, Describe(e, steps));
+                Assert.IsTrue(steps[steps.Count - 1].Outside, "після склейки — за рингом");
+                Assert.AreEqual(1, steps.Count(s => s.Kind == StageStepKind.Place));
                 var plan = RingBeats.For(steps, ev, n => Len(L, n));
-                Assert.AreEqual(BeatSource.RopeHit, plan.Source, "такт — на ударі спиною в канат: " + t);
-                Assert.AreEqual(ev.Time(steps[0].Rope1, "rope_hit"), plan.ClipTime, 1e-5f);
+                Assert.AreNotEqual(StageStepKind.Place, steps[plan.Step].Kind, "такт — на поштовху, не на склейці");
             }
-            foreach (var t in new[] { RollTier.Miss, RollTier.Partial, RollTier.Strong })
+            var miss = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.LeaveRing, Tier = RollTier.Miss, HasRoll = true });
+            Assert.IsFalse(miss.Any(s => s.Kind == StageStepKind.Place), "не викинув — лишаються на рингу");
+            var back = RingClipTable.Plan(new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.ReturnToRing, Outside = true });
+            Assert.AreEqual(1, back.Count);
+            Assert.AreEqual(StageStepKind.Place, back[0].Kind);
+            Assert.IsFalse(back[0].Outside, "склейка: знову на рингу");
+            Assert.Greater(back[0].Hold, 0f);
+            foreach (var e in CatalogEvents())
             {
-                var e = new MatchEvent { Kind = MatchEventKind.Action, Action = MatchActionId.IntoCorner, Tier = t, HasRoll = true, Actor = MatchSide.Player };
-                var steps = RingClipTable.Plan(e);
-                Assert.AreEqual(StageStepKind.Whip, steps[0].Kind, t.ToString());
-                Assert.IsTrue(steps[0].Corner);
-                StringAssert.StartsWith("Whip_Corner", steps[0].Clip);
-                Assert.AreEqual(t == RollTier.Miss ? MatchSide.Rival : MatchSide.Player, steps[0].Actor, "промах — реверс: кидає захисник");
-                var plan = RingBeats.For(steps, ev, n => Len(L, n));
-                Assert.AreEqual(BeatSource.CornerHit, plan.Source, "такт — на ударі об кут: " + t);
+                e.Outside = true;
+                Assert.IsFalse(RingClipTable.Plan(e).Any(s => s.Kind == StageStepKind.Cut), "за рингом склейок канатів і кута немає: " + e.MoveKey);
             }
+        }
+
+        /// <summary>
+        /// Охоронець рішення 08.11.2026 «усе в центрі рингу»: жоден крок режисури не грає ходу, бігу чи кидка в канати — ні для
+        /// подій рушія, ні для прийомів каталогу. Кожен прийом каталогу має кліпи в таблиці.
+        /// </summary>
+        [Test]
+        public void NoStep_WalksOrRunsAcrossTheRing_AndEveryCatalogMoveHasClips()
+        {
+            var L = Lengths();
+            foreach (var e in AllEvents().Concat(CatalogEvents()))
+            {
+                var steps = RingClipTable.Plan(e);
+                foreach (var st in steps)
+                    foreach (var c in st.AllClips())
+                    {
+                        Assert.IsFalse(c.StartsWith("Walk_") || c.StartsWith("Run_") || c.StartsWith("Whip_"),
+                            "хода чи біг по рингу: " + c + " — " + Describe(e, steps));
+                        Assert.IsTrue(L.ContainsKey(c), "кліпа кроку немає в маніфесті: " + c + " — " + Describe(e, steps));
+                    }
+            }
+            foreach (var m in CareerKit.Content().Moves.All)
+                Assert.IsTrue(RingClipTable.KnowsMove(m.Id), "прийом каталогу без кліпів у таблиці: " + m.Id);
         }
 
         /// <summary>Охоронець (2а): кікаут відкривається не раніше «два» рефері; «три» — на третій долоні.</summary>

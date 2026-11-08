@@ -18,7 +18,8 @@ namespace Game.Core.Ring.Match
 
     /// <summary>
     /// Дії матчу (TRPG_DESIGN §4.6). Значення стабільні — на них посилаються UI (ключі «action.N») і журнал. 08.11.2026 прибрано
-    /// 2 «У канати», 3 «У кут», 12 «Вийти з рингу», 13 «Повернутися» — усе в центрі рингу (§4.4); номери не перевикористовувати.
+    /// 2 «У канати» і 3 «У кут» — усе в центрі рингу (§4.4); ці номери не перевикористовувати. 12 і 13 — бій за рингом: власник
+    /// лишив його в ітерації 1 склейкою; значення ті самі, що до переробки.
     /// </summary>
     public enum MatchActionId
     {
@@ -26,15 +27,21 @@ namespace Game.Core.Ring.Match
         /// <summary>«Ризикований трюк» (§4.6): стрибок із канатів чи кута, показ склейкою; кута для нього більше не треба.</summary>
         TopRope = 4,
         Taunt = 5, Dirty = 6, Submission = 7, Pin = 8, Finisher = 9, Desperate = 10, GetUp = 11,
+        /// <summary>«Вийти з рингу»: викинути суперника за канати й піти слідом — пара за рингом (кидок Сили).</summary>
+        LeaveRing = 12,
+        /// <summary>«Повернутися в ринг»: закотити суперника й повернутись; відлік скинуто, ініціатива лишається.</summary>
+        ReturnToRing = 13,
         Recover = 14, Ally = 15,
         /// <summary>«Перевести подих»: +«Сили», ініціатива переходить до суперника.</summary>
         CatchBreath = 16,
         /// <summary>«Промінь надії» (кар'єра): великий прийом слабшого, що не може закінчити матч. Не входить до GetAvailableActions —
         /// пропонується окремо (Describe/HopeSpotAvailable), доки матч не ввімкнув MatchSetup.HopeSpotEnabled.</summary>
-        HopeSpot = 17
+        HopeSpot = 17,
+        /// <summary>«Предмет» за рингом — стілець, стіл (§4.4): лише в матчі «без дискваліфікації» (кидок Сили).</summary>
+        Weapon = 18
     }
 
-    /// <summary>Чому дія недоступна. Значення стабільні (ключі «unavail.N»); 7–10, 20, 21 — зони рингу, прибрані 08.11.2026.</summary>
+    /// <summary>Чому дія недоступна. Значення стабільні (ключі «unavail.N»); 7, 9, 10 — зони рингу, прибрані 08.11.2026.</summary>
     public enum UnavailableReason
     {
         None = 0, WrongPhase = 1,
@@ -43,11 +50,16 @@ namespace Game.Core.Ring.Match
         ActorDown = 3, TargetNotStanding = 4, TargetNotDown = 5,
         /// <summary>«Дражнити» — коли суперник лежить або приголомшений.</summary>
         TargetNotDownOrStunned = 6,
+        /// <summary>Пара за рингом: утримання, больовий, фінішер, трюк — лише на рингу.</summary>
+        NotInRing = 8,
         NeedImpulse = 11, NeedHype = 12, TargetNotHurt = 13, ImpulseTooHigh = 14,
         NotExhausted = 15, AlreadyUsed = 16, NoAlly = 17, AllyForbidden = 18, NotLying = 19,
+        NotOutside = 20, AlreadyOutside = 21,
         NothingToRecover = 22, NotFarBehind = 23,
         /// <summary>Щойно накривав: утримати знову можна лише після іншого прийому.</summary>
-        JustPinned = 24
+        JustPinned = 24,
+        /// <summary>Предмети — лише в матчі «без дискваліфікації».</summary>
+        NeedNoDq = 25
     }
 
     /// <summary>
@@ -56,10 +68,16 @@ namespace Game.Core.Ring.Match
     /// </summary>
     public enum MatchEventKind { Exchange = 0, Action, Sell, Reverse, Kickout, Endure, Rescue, TurnEnd, MatchEnd, Flourish }
 
-    /// <summary>Наслідки подій. 6, 9, 11 (зона, відлік за рингом, AP) прибрано 08.11.2026 разом із зонами й очками дій.</summary>
+    /// <summary>Наслідки подій. 11 (очки дій) прибрано 08.11.2026; 6 — тепер місце пари (1 — за рингом, 0 — на рингу), не зона.</summary>
     public enum MatchEffectKind
     {
-        Damage = 0, Momentum = 1, Hype = 2, Down = 3, Stand = 4, Stunned = 5, Warning = 7, RefereeDistracted = 8, Token = 10,
+        Damage = 0, Momentum = 1, Hype = 2, Down = 3, Stand = 4, Stunned = 5,
+        /// <summary>Пара змінила місце: Amount 1 — за рингом, 0 — знову на рингу. Показ — склейкою.</summary>
+        Place = 6,
+        Warning = 7, RefereeDistracted = 8,
+        /// <summary>Відлік рефері за рингом зріс на Amount.</summary>
+        Count = 9,
+        Token = 10,
         /// <summary>«Сили» (ускладнення 7–9 удару, «Перевести подих»).</summary>
         Stamina = 12
     }
@@ -100,6 +118,8 @@ namespace Game.Core.Ring.Match
         public MoveStaging Staging;
         /// <summary>Місце дії в ланцюгу ініціативи (1 — перша дія того, хто щойно взяв ініціативу).</summary>
         public int ChainIndex;
+        /// <summary>Пара була за рингом, коли дія почалась (показ — план «за рингом»); для «Вийти з рингу» — false.</summary>
+        public bool Outside;
         public List<MatchEffect> Effects = new List<MatchEffect>();
 
         public int EffectSum(MatchEffectKind kind, MatchSide who)

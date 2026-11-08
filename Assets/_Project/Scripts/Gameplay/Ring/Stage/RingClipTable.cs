@@ -31,7 +31,13 @@ namespace Game.Gameplay.Ring.Stage
         /// суперник стоїть у центрі й не рухається; далі — жорстка склейка на наступний крок (приземлення пари в центрі). Ходьби між
         /// планами немає: режисер ставить нападника на місце одразу. Такту не несе — такт на контакті приземлення.
         /// </summary>
-        Cut = 6
+        Cut = 6,
+        /// <summary>
+        /// Склейка місця (бій за рингом, власник 08.11.2026: «Лишити в ітерації 1 склейкою»): після жорсткої склейки пара вже за
+        /// рингом (<see cref="StageStep.Outside"/>) або знову на рингу. Бігу й перелазу через канати на екрані немає. Кліпа не має,
+        /// тримає кадр <see cref="StageStep.Hold"/> с; такту не несе.
+        /// </summary>
+        Place = 7
     }
 
     /// <summary>Один крок режисури: що зіграти й ким. Чисті дані — без рушія, тож таблицю «дія → кліп» видно окремо.</summary>
@@ -56,6 +62,14 @@ namespace Game.Gameplay.Ring.Stage
         public MoveStaging Perch;
         /// <summary>Крок-наслідок, а не сама дія події (суперник підвівся, рефері попереджає): такт на ньому не ставиться.</summary>
         public bool Aside;
+        /// <summary>Склейка місця: true — пара тепер за рингом, false — знову на рингу.</summary>
+        public bool Outside;
+
+        /// <summary>Склейка місця: пара за рингом (<paramref name="outside"/>) чи знову на рингу; кадр тримається <paramref name="hold"/> с.</summary>
+        public static StageStep Place(MatchSide who, bool outside, float hold, string note = null)
+        {
+            return new StageStep { Kind = StageStepKind.Place, Actor = who, Outside = outside, Hold = hold, Cam = StageCam.Overview, Note = note };
+        }
 
         public static StageStep Pair(MatchSide a, string baseName, StageCam cam, string refClip = null, string note = null)
         {
@@ -202,7 +216,8 @@ namespace Game.Gameplay.Ring.Stage
         private static void PlanAction(List<StageStep> list, MatchEvent ev, MatchSide a, MatchSide b, RollTier t)
         {
             bool miss = t == RollTier.Miss, strong = t == RollTier.Strong;
-            bool cut = ev.Staging != MoveStaging.Center;
+            // за рингом склейок «канати/кут» немає: прийом грається там, де пара (план «за рингом» ставить режисер)
+            bool cut = ev.Staging != MoveStaging.Center && !ev.Outside;
 
             MoveClips mc;
             if (ev.MoveKey != null && Moves.TryGetValue(ev.MoveKey, out mc) && ev.Action != MatchActionId.Pin && ev.Action != MatchActionId.GetUp)
@@ -227,7 +242,21 @@ namespace Game.Gameplay.Ring.Stage
                     break;
                 case MatchActionId.Throw:
                     if (miss) list.Add(StageStep.Solo(a, "Bump_Back", StageCam.Close, false, "кидок не вдався: падає сам"));
-                    else list.Add(StageStep.Pair(a, "Bodyslam", StageCam.Big));
+                    else list.Add(StageStep.Pair(a, "Bodyslam", StageCam.Big, null, ev.Outside ? "бракує кидка в бар'єр (набір «за рингом») — боді-слем" : null));
+                    break;
+                case MatchActionId.LeaveRing:
+                    // Вихід за ринг — без бігу й перелазу: поштовх у центрі, склейка — пара вже на підлозі біля бар'єра.
+                    if (miss) { list.Add(StageStep.Pair(a, "Lockup_Stalemate", StageCam.Close, null, "не викинув: суперник утримався")); break; }
+                    list.Add(StageStep.Pair(a, "Center_ShoulderBlock", StageCam.Close, null, "бракує кидка через канати — поштовх"));
+                    list.Add(StageStep.Place(a, true, 0.6f, "склейка: пара за рингом"));
+                    break;
+                case MatchActionId.ReturnToRing:
+                    list.Add(StageStep.Place(a, false, 0.8f, "склейка: пара знову на рингу; бракує закочування (набір «за рингом»)"));
+                    break;
+                case MatchActionId.Weapon:
+                    if (miss) list.Add(StageStep.Solo(a, "Bump_Back", StageCam.Close, false, "предмет не влучив"));
+                    else list.Add(StageStep.Pair(a, strong ? "Center_Lariat_Heavy" : "Center_Headbutt", StageCam.Big, null,
+                        strong ? "бракує кидка на стіл (набір «за рингом»)" : "бракує удару стільцем (набір «за рингом»)"));
                     break;
                 case MatchActionId.TopRope:
                     // Ризикований трюк: склейка — нападник на куті (план 1), далі приземлення в центрі (план 2). Без бігу до кута.
