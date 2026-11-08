@@ -76,6 +76,12 @@ namespace Game.Gameplay.Ring.Models
         public string PlaceText { get { return _t.Get(_runner.Promo.PlaceKey); } }
         public int Act { get { return _runner.Promo.Act; } }
 
+        /// <summary>
+        /// Підпис «Акт N» над назвою; null — у сцен кар'єри (розмова з букером, події поза рингом) актів немає, і «Акт 0» читався
+        /// як помилка (плейтест 08.11.2026, P3).
+        /// </summary>
+        public string ActText { get { return Act > 0 ? _t.Format("promo.act", Act) : null; } }
+
         public PromoViewKind Kind
         {
             get

@@ -42,7 +42,7 @@ namespace Game.Gameplay.Ring.UI
             top.style.justifyContent = Justify.SpaceBetween;
             top.style.alignItems = Align.FlexStart;
             var head = RingUi.Column();
-            head.Add(RingUi.Lbl(t.Format("promo.act", _m.Act), 12f, RingUi.Dim));
+            if (_m.ActText != null) head.Add(RingUi.Lbl(_m.ActText, 12f, RingUi.Dim));
             head.Add(RingUi.Lbl(_m.TitleText, 18f, RingUi.Gold, true));
             head.Add(RingUi.Lbl(_m.PlaceText, 12f, RingUi.Dim));
             // Назва на напівпрозорій плашці в куті: не налазить на ринг у кадрі (3D під UI).

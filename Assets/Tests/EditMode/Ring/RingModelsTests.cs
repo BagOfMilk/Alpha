@@ -160,6 +160,24 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Promo_ActLabel_OnlyWhereThereAreActs()
+        {
+            // плейтест 08.11.2026, P3: у розмові з букером стояло «Акт 0»
+            var t = LoadText();
+            var feud = new PromoScreenModel(RingCampaignDriver.NewCampaign(1).StartPromo(), t);
+            Assert.Greater(feud.Act, 0);
+            AssertClean(feud.ActText, "акт ворожнечі");
+            StringAssert.Contains(feud.Act.ToString(), feud.ActText);
+
+            var s = CareerKit.NewHero(1);
+            var r = s.Backstage();
+            Assert.IsTrue(r.NeedsScene, "сцена не відкрилась: " + r.Reason);
+            var scene = new PromoScreenModel(s.CurrentBackstage, t);
+            Assert.AreEqual(0, scene.Act);
+            Assert.IsNull(scene.ActText, "у сцени кар'єри актів немає — підпису «Акт 0» бути не повинно");
+        }
+
+        [Test]
         public void Promo_CheckPanel_ShowsThreePercentsThatSumTo100_AndRewardsNeedExactCount()
         {
             var t = LoadText();
