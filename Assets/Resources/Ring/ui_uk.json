@@ -168,7 +168,7 @@
  "stip.no_ally": "Напарники заборонені",
  "match.card.damage": "Ушкодження {0}/{1}",
  "match.card.thresholds": "Пороги штрафу: {0} і {1}",
- "match.card.penalty": "штраф −{0}",
+ "match.card.penalty": "штраф −{0} до кидків: ушкодження {1}+",
  "match.card.momentum": "Імпульс {0}/{1}",
  "match.card.tokens": "Жетони реверсу: {0}",
  "match.card.warnings": "Попередження: {0}/{1}",

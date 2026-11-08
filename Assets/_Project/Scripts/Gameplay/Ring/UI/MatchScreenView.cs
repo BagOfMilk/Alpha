@@ -29,6 +29,8 @@ namespace Game.Gameplay.Ring.UI
         private float _overAt = -1f;
         private float _aiTimer;
         private bool _wasBusy;
+        /// <summary>Хід щойно був за суперником, а 3D ще дограє його кліпи — нижня панель пише, чий хід.</summary>
+        private bool _rivalTail;
         private FighterCardModel _snapP, _snapR;
         private bool _showUnavailable;
         private bool _showFullLog;
@@ -57,9 +59,17 @@ namespace Game.Gameplay.Ring.UI
             }
         }
 
+        /// <summary>
+        /// Хід гравця відкривається, коли 3D дограло: ядро передає хід миттєво, і кнопки («Встати», «Вийти з рингу»…)
+        /// світились, поки фінішер суперника ще летів (плейтест 08.11.2026, P1-4). Без 3D — одразу.
+        /// </summary>
+        private bool WaitStage { get { return RingStageHub.Busy && !_m.IsOver; } }
+
         public override void Tick(float dt)
         {
             TickBeat(dt);
+            if (_m.Input == MatchInput.Ai) _rivalTail = true;
+            else if (!RingStageHub.Busy) _rivalTail = false;
             if (_m.Input != MatchInput.Ai) { _aiTimer = 0f; return; }
             // Хід суперника чекає, поки 3D-режисер дограє поточний кліп (потім ще звичайна пауза).
             if (RingStageHub.Busy) { _aiTimer = 0f; return; }
@@ -121,8 +131,8 @@ namespace Game.Gameplay.Ring.UI
             }
             Root.Add(bottom);
 
-            if (_m.Input == MatchInput.PlayerReaction) Root.Add(BuildReactionModal());
-            else if (_m.Input == MatchInput.PlayerBoost) Root.Add(BuildBoostModal());
+            if (!WaitStage && _m.Input == MatchInput.PlayerReaction) Root.Add(BuildReactionModal());
+            else if (!WaitStage && _m.Input == MatchInput.PlayerBoost) Root.Add(BuildBoostModal());
             if (_showFullLog) Root.Add(BuildFullLog());
             Root.Add(_call.Layer);
         }
@@ -272,6 +282,13 @@ namespace Game.Gameplay.Ring.UI
                 return wrap;
             }
             if (_m.Input != MatchInput.PlayerAction) return wrap;
+            if (WaitStage)
+            {
+                // Кліпи суперника ще йдуть — його хід на екрані триває; власні кліпи гравця — панель порожня до кінця.
+                if (_rivalTail) wrap.Add(RingUi.Lbl(t.Format("match.rival.turn", _m.Card(MatchSide.Rival).Name), 15f, RingUi.Heel, true));
+                else { var none = new VisualElement(); none.pickingMode = PickingMode.Ignore; return none; }
+                return wrap;
+            }
 
             _hint = RingUi.Lbl(t.Get("match.hint.default"), 14f, RingUi.Dim);
             _hint.style.marginBottom = 6f;
@@ -487,6 +504,7 @@ namespace Game.Gameplay.Ring.UI
 
         public override void OnDigit(int n)
         {
+            if (WaitStage) return;
             bool done = false;
             switch (_m.Input)
             {
