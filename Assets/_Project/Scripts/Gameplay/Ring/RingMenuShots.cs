@@ -204,7 +204,7 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.6f);
             yield return Snap(h, "pause_resumed");
             // ---- тиждень: пауза з рядком «Сезон · Тиждень» і безпечним «На титул?» ----
-            UI.CareerScreenView.ExpandForShots = true;   // тиждень відкриється з шухлядою «Витрати» — перевірка Esc
+            UI.CareerScreenView.ExpandForShots = true;   // тиждень відкриється з шухлядою (є очки — «Розвиток», P1-5; інакше «Витрати») — перевірка Esc
             h.CurrentView.OnConfirm();                    // «Почати кар'єру» на створенні героя → тиждень
             yield return Wait(1.6f);
             UI.CareerScreenView.ExpandForShots = false;
@@ -214,6 +214,17 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.5f);
             if (h.CurrentPause != null) Debug.LogError("[Ринг] огляд меню: Esc на відкритій шухляді відкрив паузу замість закрити шухляду");
             yield return Snap(h, "week_before_pause");
+            // ---- тривога травми на плитці «Відновлення» (P2-3, 8c3f16b): за сезон бот травмується не завжди, тож травма
+            //      корпусу ставиться лише на кадр і знімається до паузи й збереження ----
+            var injury = h.CareerForShots.State.Injury;
+            int wasInjury = injury[(int)Game.Core.Ring.Career.BodyZone.Body];
+            injury[(int)Game.Core.Ring.Career.BodyZone.Body] = 2;
+            h.CurrentView.Refresh();
+            yield return Wait(0.4f);
+            yield return Snap(h, "week_injury_tile");
+            injury[(int)Game.Core.Ring.Career.BodyZone.Body] = wasInjury;
+            h.CurrentView.Refresh();
+            yield return Wait(0.3f);
             h.OpenPauseForShots();
             yield return Wait(0.6f);
             yield return Snap(h, "pause_week");

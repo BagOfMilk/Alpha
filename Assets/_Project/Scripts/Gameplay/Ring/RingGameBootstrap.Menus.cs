@@ -406,6 +406,8 @@ namespace Game.Gameplay.Ring
         internal WipeTransition Wipe { get { return _wipe; } }
         internal bool OnTitle { get { return _onTitle; } }
         internal PauseOverlay CurrentPause { get { return _pause; } }
+        /// <summary>Огляд: стан кар'єри для кадрів, яких бот сам не дістане (травма на плитці «Відновлення»); тур повертає все назад.</summary>
+        internal CareerSession CareerForShots { get { return _career; } }
         internal void OpenPauseForShots() { ShowPause(); }
         /// <summary>Огляд: той самий шлях, що Esc у грі (спершу <see cref="RingScreenView.OnBack"/>, потім пауза).</summary>
         internal void EscForShots() { OpenPause(); }
