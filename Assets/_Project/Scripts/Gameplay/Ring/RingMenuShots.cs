@@ -204,8 +204,15 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.6f);
             yield return Snap(h, "pause_resumed");
             // ---- тиждень: пауза з рядком «Сезон · Тиждень» і безпечним «На титул?» ----
+            UI.CareerScreenView.ExpandForShots = true;   // тиждень відкриється з шухлядою «Витрати» — перевірка Esc
             h.CurrentView.OnConfirm();                    // «Почати кар'єру» на створенні героя → тиждень
             yield return Wait(1.6f);
+            UI.CareerScreenView.ExpandForShots = false;
+            yield return Snap(h, "week_drawer_open");
+            // ---- Esc спершу закриває верхнє (шухляду), паузи немає (ПМ 08.11.2026) ----
+            h.EscForShots();
+            yield return Wait(0.5f);
+            if (h.CurrentPause != null) Debug.LogError("[Ринг] огляд меню: Esc на відкритій шухляді відкрив паузу замість закрити шухляду");
             yield return Snap(h, "week_before_pause");
             h.OpenPauseForShots();
             yield return Wait(0.6f);

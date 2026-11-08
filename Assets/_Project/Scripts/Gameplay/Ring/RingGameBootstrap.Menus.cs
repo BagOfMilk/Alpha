@@ -407,6 +407,8 @@ namespace Game.Gameplay.Ring
         internal bool OnTitle { get { return _onTitle; } }
         internal PauseOverlay CurrentPause { get { return _pause; } }
         internal void OpenPauseForShots() { ShowPause(); }
+        /// <summary>Огляд: той самий шлях, що Esc у грі (спершу <see cref="RingScreenView.OnBack"/>, потім пауза).</summary>
+        internal void EscForShots() { OpenPause(); }
         internal void Shot(string name)
         {
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_menuShotsDir, string.Format("{0:000}_{1}.png", _menuShot++, name)));
