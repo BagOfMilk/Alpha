@@ -42,13 +42,23 @@
 | **Кар'єра** — нова сесія | `Core/Ring/Career/**`, `Core/Ring/Feud/**`, `Core/Ring/Promo/**`, `Core/Ring/Progression/**`, `Core/Ring/Json/**`, `Core/Ring/RingCampaign.cs`, `Models/DevelopmentScreenModel.cs`, `FeudScreenModel.cs`, `PromoScreenModel.cs`, нові моделі екранів кар'єри, `CareerLooks.cs`, `RingFeudBootstrap.cs`, `RingGameBootstrap.Career.cs`, `RingSaveFile.cs` (після злиття «Скилів»); ресурси `career_backstage.json`, `career_gimmicks.json`, `career_roster.json`, `feud_hammer.json`, `backstage_uk.json`; тести `Career*`, `Feud*`, `Promo*`, `Gimmick*`, `Economy*`, `Progression*`, `Backstage*`, `WeekActions*`, `RingCampaign*`, `MiniJson*` |
 | **Меню** — `local_d8c816ac…` (+ форк звуку `local_bc183877…`) | `Gameplay/Ring/UI/Menus/**`, вигляд екранів кар'єри (`UI/Career/**` B03 v2, `UI/CareerScreens.cs` — на зняття, `FeudScreenView`, `PromoScreenView`, `EndingScreenView`), `UI/RingUi.cs`, `Models/RingText.cs`, `MenuMotion.cs`, `RingSettings.cs`, `RingPause.cs`, `RingAudioMix.cs`, `RingSoundApproval.cs`, `RingGameBootstrap.Menus.cs`, `RingMenuShots.cs`, `RingSoundGate.cs`, `Stage/Unity/RingSound.cs`, `RingMenuAudio.cs`, `RingMenuAssets.cs`, Editor `RingMenuAudioImport`; `sound_approvals.json`, `tools/ring_audio/**`, переклади `ui_<мова>.json` і `ring_strings_<мова>.txt` (крім `uk`); тести `RingMenuModel*`, `RingSoundApproval*`, `MonoBehaviourFileName*` |
 | **Кліпи** — `local_815630bf…` (+ wwe `local_383c333e…`) | `tools/blender/ring_anims*`, `Assets/Art/Animations/RING_Moves*.fbx`, `ring_anims_*.txt`, `docs/ring/ANIM_BRIEF_COMBAT_CENTER.md`, `docs/ring/ANIM_PLAN_ITER2.md`, `docs/research/RING_ANIM_REFERENCES.md` |
-| **Відео огляд** — `local_c3c3cec5…` (інтегратор) | Злиття в основну гілку, `tools/run-offscreen.ps1`, `tools/ring-editor.ps1`, Editor `RingSceneBuilder` (частина BuildPlayer*), `RingLaunchArgs.cs`, `Assets/Settings/URP-*`, `ProjectSettings/QualitySettings.asset`, оточення збірки (Burst) |
+| **Відео огляд** — `local_c3c3cec5…` (інтегратор) | Злиття в основну гілку, `tools/run-offscreen.ps1`, `tools/ring-editor.ps1`, Editor `RingSceneBuilder.Player.cs` (BuildPlayer*), `RingLaunchArgs.cs`, `Assets/Settings/URP-*`, `ProjectSettings/QualitySettings.asset`, оточення збірки (Burst) |
 | **Скилы** — `local_f69d1b50…` (QA) | `.claude/skills/**`, `docs/ring/playtest_*`, `docs/ring/skills_audit_*`. Код інших зон не правити, вади — промптом ПМ |
 | **Арт-директор** — нова сесія замість зниклої | `docs/ring/DESIGN_SYSTEM.md`, `docs/ring/design/**`, `tools/ring_design/**`, `Models/BrandTokens.cs`, `UI/RingTheme.cs`, `UI/RingFonts.cs`, `RingFontSet.cs`, `RingFontSpike.cs`, Editor `RingFontAssets`, шрифти, тести `RingDesignGuard*`, `TitantronAssetsGuard*` |
 
-**Разовий розподіл на Етапі 0** (робить «Изучение» як власник файлів): `RingGameBootstrap.cs` → каркас + partial
-`.Match.cs` (Бій) і `.Career.cs` (Кар'єра); `Editor/RingSceneBuilder.cs` → partial «сцена» («Изучение») і
-`BuildPlayer` («Відео огляд»).
+**Разовий розподіл на Етапі 0** (робить «Изучение» як власник файлів) — **зроблено 08.11.2026, 7f19686**:
+- `RingGameBootstrap.cs` («Изучение», каркас): запуск, UI, кадр, шоу 3D, виходи, `SyncStage`, клавіші, огляд, лукбук;
+- `RingGameBootstrap.Career.cs` (Кар'єра; до її появи — «Изучение»): дані, сейв `ICareerHost`, `MigrateSave`, `Rebind`,
+  `ViewKey` / `MakeView`, `BackstageCtx`, `StartShow`, бот тижня (`BotWeekStep`, `ReviewPerks`, `BotGrow`);
+- `RingGameBootstrap.Match.cs` (Бій): `BotMatchStep`, `ReviewRopes` (у бою — `ReviewMoves`), `BotTurn`, `BeatShots`;
+- `RingGameBootstrap.Menus.cs` («Меню») — без змін;
+- `Editor/RingSceneBuilder.cs` — сцена («Изучение»); `Editor/RingSceneBuilder.Player.cs` — збірка («Відео огляд»).
+
+Межі між ними (від «Изучение»):
+- `SyncStage` у каркасі читає `CareerStage`, `ShowPhase`, `RingStage` і `SeasonRecord`: зміна етапів кар'єри —
+  запит до «Изучение».
+- `SavePath` (`.Career`) знає файл огляду меню `ring_menu_bot.txt` і поле `_menuShotsDir` із `.Menus`.
+- Кадри огляду: ключ із `MatchEvent` (`BeatShots`) — Бій; моменти FX сцени (`FxShots`) — каркас.
 
 **Рішення ПМ (08.11.2026, вечір):**
 - `RingScreenView` — абстрактний клас у `UI/RingUi.cs`, отже зона «Меню». Віртуальний `OnBack()` додає «Меню»;
@@ -104,11 +114,12 @@
    Далі «Изучение» зливає основну a2aef60 у свою гілку (конфлікти — її), інтегратор перемотує основну на результат.
 2. Інтегратор зливає в основну гілку, з тестами після кожного кроку:
    1. бриф `claude/ring-anim-brief-center` до `9a6b5bc` — **злито** (основна = a2aef60, тести 2286/0, 08.11.2026);
-   2. пачку «Изучение»;
+   2. пачку «Изучение» — гілка «Изучение» злила основну в себе (aa69e23, конфлікт лише в RingFx), розподілила файли
+      (7f19686; лінт, тести 2286/0); інтегратор перемотує основну на 7f19686;
    3. «Скилы» (`claude/ring-game-skills-0d696d`, 89ac15d + 931498e). Конфлікти в RingFx, RingStage3D,
       RingStageDemo і RingGameBootstrap — з підтвердженням «Изучение»; доступність — з меню (ca3a7c5), дублі
       прибрати.
-3. Разовий розподіл `RingGameBootstrap` і `RingSceneBuilder` (вище).
+3. Разовий розподіл `RingGameBootstrap` і `RingSceneBuilder` (вище) — **зроблено**, 7f19686.
 4. Перевірки:
    - `git lfs ls-files` до й після злиття, цілість вказівників LFS;
    - прохід компіляції Unity і коміт згенерованих `.meta`;
