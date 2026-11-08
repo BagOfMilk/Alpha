@@ -46,17 +46,6 @@ namespace Game.Gameplay.Ring.UI
             return c;
         }
 
-        protected static Label Chip(string text, Color color)
-        {
-            var l = RingUi.Lbl(text, 13f, color, true);
-            l.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaGlass);
-            l.style.paddingLeft = 7f; l.style.paddingRight = 7f; l.style.paddingTop = 2f; l.style.paddingBottom = 2f;
-            l.style.marginRight = 5f; l.style.marginBottom = 4f;
-            l.style.borderTopLeftRadius = 3f; l.style.borderTopRightRadius = 3f;
-            l.style.borderBottomLeftRadius = 3f; l.style.borderBottomRightRadius = 3f;
-            return l;
-        }
-
         /// <summary>Рядок-підказка екрана: пояснення дії з'являється тут при наведенні (кнопки — однорядкові).</summary>
         protected Label HintLine;
 
@@ -86,16 +75,7 @@ namespace Game.Gameplay.Ring.UI
             e.style.paddingTop = v; e.style.paddingBottom = v; e.style.paddingLeft = h; e.style.paddingRight = h;
         }
 
-        /// <summary>Вузька колонка праворуч (тиждень, кінець сезону): решта екрана — 3D. Спільна з RingUi (ТЗ B00).</summary>
-        protected VisualElement SideColumn() { return RingUi.SideColumn(Root); }
-
         protected static Label Section(string text) { return RingUi.Section(text); }
-
-        protected string NpcName(string id)
-        {
-            var n = C.Content.FindNpc(id);
-            return n != null ? T.Get(n.NameKey) : id;
-        }
 
         protected string PlanText(BookerPlan p) { return RingLabels.PlanName(T, p); }
 
@@ -117,35 +97,6 @@ namespace Game.Gameplay.Ring.UI
                 else if (i.ZoneDamage > 0) parts.Add(T.Format("c.injury.dmg", T.Get("bodyzone." + (int)i.Zone), i.ZoneDamage));
             }
             return parts.Count == 0 ? T.Get("c.injury.none") : string.Join(" · ", parts);
-        }
-
-        /// <summary>Шапка кар'єри: ім'я й ґімік рядком, далі чипи — тиждень, гроші, популярність, довіра, очки; травми — лише якщо є.</summary>
-        protected VisualElement Header()
-        {
-            var col = RingUi.Column();
-            col.style.marginBottom = 6f;
-            var v = C.GetCareerView();
-            col.Add(RingUi.Lbl(v.RingName + "  ·  " + T.Get("gimmick." + C.Content.GimmickOf(v.Gimmick).Key) + " · " + RingLabels.PathName(T, v.Role)
-                + (v.IsChampion ? " · " + T.Get("c.champion") : ""), 16f, RingUi.Gold, true));
-            var chips = RingUi.Row();
-            chips.style.flexWrap = Wrap.Wrap;
-            chips.style.marginTop = 3f;
-            chips.Add(Chip(T.Format("c.season_week", v.Season, v.Week, CareerRules.WeeksInSeason(v.Season)), RingUi.Text));
-            chips.Add(Chip(T.Format("c.money", v.Money), RingUi.Gold));
-            chips.Add(Chip(T.Format("c.popularity", v.Popularity, CareerRules.MaxPopularity), RingUi.Face));
-            chips.Add(Chip(T.Format("c.trust", v.Trust, CareerRules.MaxTrust), RingUi.Text));
-            chips.Add(Chip(T.Format("c.devpoints", v.DevPoints), RingUi.Good));
-            chips.style.flexShrink = 0f;   // У2 арт-директора: стиснута колонка клала травми на чипи
-            col.Add(chips);
-            string inj = InjuryText(v.Injuries);
-            if (inj != T.Get("c.injury.none"))
-            {
-                var il = RingUi.Lbl(inj, 12f, RingUi.Bad);
-                il.style.flexShrink = 0f;
-                il.style.whiteSpace = WhiteSpace.Normal;
-                col.Add(il);
-            }
-            return col;
         }
 
         /// <summary>Розвиток: атрибути, нові прийоми, перки — компактні кнопки, описи в рядку-підказці.</summary>
@@ -294,44 +245,8 @@ namespace Game.Gameplay.Ring.UI
     }
 
     // ============================ титул ============================
-
-    /// <summary>Головне меню після вступу: продовжити, нова кар'єра, повний екран, вихід. Позаду — зала з титантроном.</summary>
-    public sealed class TitleScreenView : CareerScreenView
-    {
-        public TitleScreenView(RingUiContext ctx) : base(ctx) { }
-
-        public override void Refresh()
-        {
-            Root.Clear();
-            RingUi.HudPad(Root);
-            Root.style.justifyContent = Justify.FlexEnd;
-            var box = Glass(14f);
-            box.style.maxWidth = 340f;
-            box.Add(RingUi.Lbl(T.Get("c.game.title"), 30f, RingUi.Gold, true));
-            box.Add(RingUi.Lbl(T.Get("c.game.sub"), 13f, RingUi.Dim));
-            var gap = new VisualElement(); gap.style.height = 8f; box.Add(gap);
-            int n = 1;
-            if (Host.HasSave) box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.continue"), Host.ContinueGame, true, RingUi.Gold, 15f));
-            box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.new"), Host.NewGame, true, RingUi.Good, 15f));
-            box.Add(RingUi.MakeButton(n++ + ". " + T.Get("c.menu.fullscreen"), Host.ToggleFullscreen, true, RingUi.Dim, 14f));
-            box.Add(RingUi.MakeButton(n + ". " + T.Get("c.menu.quit"), Host.Quit, true, RingUi.Bad, 14f));
-            Root.Add(box);
-        }
-
-        public override void OnDigit(int n)
-        {
-            if (!Host.HasSave) n++;
-            switch (n)
-            {
-                case 1: Host.ContinueGame(); break;
-                case 2: Host.NewGame(); break;
-                case 3: Host.ToggleFullscreen(); break;
-                case 4: Host.Quit(); break;
-            }
-        }
-
-        public override void OnConfirm() { if (Host.HasSave) Host.ContinueGame(); else Host.NewGame(); }
-    }
+    // Титул — Menus/TitleMenuView.cs (ТЗ B01 v2 / B08, напрям «Енергія»); старий TitleScreenView прибрано 08.11.2026 — ніхто
+    // його не створював.
 
     // ============================ створення ============================
     // Створення борця — Career/CreateScreenView.cs (ТЗ B03 v2 §7, мова «Арена», 08.11.2026).
