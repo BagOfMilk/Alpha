@@ -71,6 +71,21 @@ namespace Game.Gameplay.Ring.Stage
         void ShowAftermath(bool playerWon);
         MatchEvent BeatEvent { get; }
 
+        /// <summary>
+        /// Фаза такту: 0 — звичайний (контакт); для утримання (кікаут) — 1 «раз», 2 «два», 3 — розв'язка (вирвався чи «три»)
+        /// на мітках кліпа рефері (<c>count_1</c>, <c>count_2</c>, <c>kickout</c>/<c>count_3</c>).
+        /// </summary>
+        int BeatPhase { get; }
+
+        /// <summary>
+        /// Останній номер події (<c>MatchEvent.Seq</c>), яку 3D уже показав (її такт настав): журнал матчу показує рядки лише
+        /// до неї — текст не випереджає тіло (огляд 08.11.2026). Режисер не грає — показано все.
+        /// </summary>
+        int ShownSeq { get; }
+
+        /// <summary>Звіт для огляду: скільки логічних кліпів (без _A/_B) зіграно за запуск із тих, що є в маніфесті рингу.</summary>
+        string PlayedReport();
+
         /// <summary>Закулісся (тиждень): роздягальня, герой і букер.</summary>
         void ShowBackstage();
 

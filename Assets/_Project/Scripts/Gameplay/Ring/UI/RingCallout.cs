@@ -55,6 +55,14 @@ namespace Game.Gameplay.Ring.UI
             _q.Enqueue(new Item { Word = word, Sub = sub ?? "", Color = color, Size = size, Dur = dur });
         }
 
+        /// <summary>Показати одразу, перебивши поточне слово й чергу (розв'язка відліку — точно на кікауті).</summary>
+        public void Now(string word, string sub, Color color, float size, float dur)
+        {
+            _q.Clear();
+            _t = -1f;
+            Push(word, sub, color, size, dur);
+        }
+
         public void Clear() { _q.Clear(); _t = -1f; Layer.style.opacity = 0f; }
 
         public void Tick(float dt)
@@ -83,18 +91,19 @@ namespace Game.Gameplay.Ring.UI
     /// <summary>Що сказати на такт режисера: подія → слово, підрядок і вага (розмір, колір, тривалість).</summary>
     public static class RingCallouts
     {
-        public static void Push(RingCallout c, MatchEvent ev, RingText t, MatchWinner? winner)
+        /// <param name="phase">Фаза такту: 0 — контакт; утримання — 1 «раз», 2 «два», 3 — розв'язка (<c>IRingStage.BeatPhase</c>).</param>
+        public static void Push(RingCallout c, MatchEvent ev, int phase, RingText t, MatchWinner? winner)
         {
             switch (ev.Kind)
             {
                 case MatchEventKind.Kickout:
-                    // Відлік рефері: «раз», «два» — і вирвався на два (найгучніший момент вечора, gdd §4.6) чи «три».
-                    // Пауза — поки нападник накриває (кліп Cover), щоб «раз» не обганяв кадр.
-                    c.Push("", null, RingUi.Text, 0f, 0.7f);
-                    c.Push(t.Get("match.call.one"), null, RingUi.Text, 34f, 0.45f);
-                    c.Push(t.Get("match.call.two"), null, RingUi.Warn, 40f, 0.45f);
-                    if (ev.Tier == RollTier.Miss) c.Push(t.Get("match.call.three"), null, RingUi.Bad, 64f, 1.4f);
-                    else c.Push(t.Get(ev.Tier == RollTier.Partial ? "match.call.kickout.two" : "match.call.kickout"),
+                    // Відлік рефері: «раз», «два» — і вирвався на два (найгучніший момент вечора, gdd §4.6) чи «три». Кожне
+                    // слово — на долоні рефері (мітки count_1/count_2 його кліпа), розв'язка — на мітці kickout чи count_3
+                    // (огляд 08.11.2026: слова йшли за таймером і обганяли відлік).
+                    if (phase == 1) c.Now(t.Get("match.call.one"), null, RingUi.Text, 34f, 0.7f);
+                    else if (phase == 2) c.Now(t.Get("match.call.two"), null, RingUi.Warn, 40f, 0.7f);
+                    else if (ev.Tier == RollTier.Miss) c.Now(t.Get("match.call.three"), null, RingUi.Bad, 64f, 1.4f);
+                    else c.Now(t.Get(ev.Tier == RollTier.Partial ? "match.call.kickout.two" : "match.call.kickout"),
                         ev.Perk != null ? Who(t, ev) + " · " + RingLabels.PerkName(t, ev.Perk) : Who(t, ev), RingUi.Gold, 54f, 1.5f);
                     return;
                 case MatchEventKind.MatchEnd:

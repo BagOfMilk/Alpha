@@ -60,5 +60,12 @@ namespace Game.Gameplay.Ring.Stage
         public TextAsset manifest;
         public TextAsset promoManifest;
         public TextAsset entranceManifest;
+
+        /// <summary>Мітки подій кліпів (контакт, канат, відлік рефері): чоловічий і жіночий набори — <see cref="RingClipEvents"/>.</summary>
+        public TextAsset events;
+        public TextAsset eventsF;
+
+        /// <summary>Зсув кореня кліпів від першого до останнього кадру в одиницях ригу (ring_anims_motion.txt): масштаб тіла для бігу в канати.</summary>
+        public TextAsset motion;
     }
 }

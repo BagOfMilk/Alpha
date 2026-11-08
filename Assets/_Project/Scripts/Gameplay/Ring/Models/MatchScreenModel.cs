@@ -415,13 +415,19 @@ namespace Game.Gameplay.Ring.Models
 
         // ---------- журнал ----------
 
-        /// <summary>Останні записи журналу текстом (найновіший — останній).</summary>
-        public List<string> LogTexts()
+        /// <summary>
+        /// Останні записи журналу текстом (найновіший — останній), лише до події з номером <paramref name="shownSeq"/>
+        /// включно: 3D показує подію пізніше, ніж ядро її порахувало, і рядок не має випереджати тіло (огляд 08.11.2026:
+        /// кікаут був у журналі ще до удару). Без 3D — усе.
+        /// </summary>
+        public List<string> LogTexts(int shownSeq = int.MaxValue)
         {
             var res = new List<string>();
             var log = _e.State.Log;
-            int from = Math.Max(0, log.Count - LogLines);
-            for (int i = from; i < log.Count; i++) res.Add(EventText(log[i]));
+            int end = log.Count;
+            while (end > 0 && log[end - 1].Seq > shownSeq) end--;
+            int from = Math.Max(0, end - LogLines);
+            for (int i = from; i < end; i++) res.Add(EventText(log[i]));
             return res;
         }
 

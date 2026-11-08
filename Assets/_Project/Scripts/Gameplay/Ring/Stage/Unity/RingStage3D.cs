@@ -56,9 +56,45 @@ namespace Game.Gameplay.Ring.Stage
 
         public int BeatSeq { get; private set; }
         public MatchEvent BeatEvent { get; private set; }
+        public int BeatPhase { get; private set; }
+        public int ShownSeq { get; private set; } = int.MaxValue;
 
-        /// <summary>Режисер: ця подія показується зараз (контакт).</summary>
-        public void Beat(MatchEvent ev) { BeatEvent = ev; BeatSeq++; }
+        /// <summary>Мітки подій кліпів (контакт, канат, відлік рефері) — такт режисера матчу.</summary>
+        public RingClipEvents Events { get; private set; } = new RingClipEvents();
+
+        /// <summary>Режисер: ця подія показується зараз (контакт; для утримання — «раз», «два», розв'язка).</summary>
+        public void Beat(MatchEvent ev, int phase = 0) { BeatEvent = ev; BeatPhase = phase; BeatSeq++; }
+
+        /// <summary>Режисер: подія показана повністю (такт настав) — журнал може її показати.</summary>
+        public void Reveal(int seq) { ShownSeq = seq; }
+
+        private readonly HashSet<string> _matchClips = new HashSet<string>();
+        private readonly Dictionary<string, float> _motion = new Dictionary<string, float>();
+
+        /// <summary>Зсув кореня кліпа від першого до останнього кадру, одиниці ригу (ring_anims_motion.txt); 0 — невідомо.</summary>
+        public float MotionNet(string clip)
+        {
+            float v;
+            return _motion.TryGetValue(clip, out v) ? v : 0f;
+        }
+
+        public string PlayedReport()
+        {
+            Func<string, string> logical = n => n.EndsWith("_A") || n.EndsWith("_B") ? n.Substring(0, n.Length - 2) : n;
+            var played = new HashSet<string>();
+            foreach (var n in RingActor.Played) played.Add(logical(n));
+            int inMatch = 0;
+            var runRope = new List<string>();
+            foreach (var n in _matchClips)
+            {
+                if (!played.Contains(n)) continue;
+                inMatch++;
+                if (n.StartsWith("Run_") || n.StartsWith("Rope_") || n.StartsWith("Whip_") || n.StartsWith("Move_Rope")) runRope.Add(n);
+            }
+            runRope.Sort(StringComparer.Ordinal);
+            return string.Format(CultureInfo.InvariantCulture, "[Ринг] кліпи: зіграно {0} логічних з {1} у маніфесті рингу (усього різних {2}); біг, канати, кидки: {3}",
+                inMatch, _matchClips.Count, played.Count, runRope.Count > 0 ? string.Join(", ", runRope) : "—") + "\n" + Watch.Report();
+        }
 
         private float _shakeAmp, _shakeT, _shakeDur;
 
@@ -186,9 +222,21 @@ namespace Game.Gameplay.Ring.Stage
                 _clips[c.name] = c;
             }
             ParseManifest(assets.manifest);
+            foreach (var k in _info.Keys) _matchClips.Add(k.EndsWith("_A") || k.EndsWith("_B") ? k.Substring(0, k.Length - 2) : k);
             ParseManifest(assets.promoManifest);
             ParseManifest(assets.entranceManifest);
-            Debug.Log("[Ринг] 3D: кліпів " + _clips.Count + ", у маніфесті " + _info.Count);
+            Events = RingClipEvents.Parse(assets.events != null ? assets.events.text : null);
+            Events.Add(assets.eventsF != null ? assets.eventsF.text : null);
+            if (assets.motion != null)
+                foreach (var raw in assets.motion.text.Split('\n'))
+                {
+                    var p = raw.Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    float dx, dy;
+                    if (p.Length < 3 || !float.TryParse(p[1], NumberStyles.Float, CultureInfo.InvariantCulture, out dx)
+                        || !float.TryParse(p[2], NumberStyles.Float, CultureInfo.InvariantCulture, out dy)) continue;
+                    _motion[p[0]] = Mathf.Sqrt(dx * dx + dy * dy);
+                }
+            Debug.Log("[Ринг] 3D: кліпів " + _clips.Count + ", у маніфесті " + _info.Count + ", міток подій " + Events.Count);
         }
 
         private void ParseManifest(TextAsset t)
@@ -209,7 +257,9 @@ namespace Game.Gameplay.Ring.Stage
                     // Blender: A дивиться в −Y, праворуч від A — −X. Unity: вперед +Z, вправо +X: (x,y) -> (-x, -y).
                     Offset = new Vector3(-F(p[4]), 0f, -F(p[5])),
                     Rotation = F(p[7]),
-                    EndNode = p[8]
+                    // Колонки 9–10 — вузол пози на початку і в кінці (ring_anims.py). Раніше бралась 9-та (початок), і
+                    // «лежить після кліпа» не спрацьовувало: кинутий після Bodyslam ще й продавав падіння.
+                    EndNode = p.Length > 9 ? p[9] : p[8]
                 };
                 _info[ci.Name] = ci;
             }
@@ -565,16 +615,17 @@ namespace Game.Gameplay.Ring.Stage
             Debug.Log("[Ринг] 3D: гравець slot=" + _player.Slot.position + " renderers=" + rr.Length + (rr.Length > 0 ? " bounds=" + rr[0].bounds + " vis=" + rr[0].isVisible : "") + " scale=" + _player.Model.transform.lossyScale);
         }
 
-        private readonly float[] _camTime = new float[4];
+        private readonly float[] _camTime = new float[5];
 
         /// <summary>Лог частки планів камери за матч (поки режисер грає дії) і скидання лічильника.</summary>
         private void LogCamShare()
         {
-            float sum = _camTime[0] + _camTime[1] + _camTime[2] + _camTime[3];
+            float sum = 0f;
+            for (int i = 0; i < _camTime.Length; i++) sum += _camTime[i];
             if (sum <= 0f) return;
-            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] камера матчу: огляд {0:P0}, ближче {1:P0}, кіно {2:P0}, низька {3:P0} ({4:F0} с дій)",
-                _camTime[0] / sum, _camTime[1] / sum, _camTime[2] / sum, _camTime[3] / sum, sum));
-            for (int i = 0; i < 4; i++) _camTime[i] = 0f;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] камера матчу: огляд {0:P0}, ближче {1:P0}, кіно {2:P0}, низька {3:P0}, кіноплан {4:P0} ({5:F0} с дій)",
+                _camTime[0] / sum, _camTime[1] / sum, _camTime[2] / sum, _camTime[3] / sum, _camTime[4] / sum, sum));
+            for (int i = 0; i < _camTime.Length; i++) _camTime[i] = 0f;
         }
 
         public void ShowAftermath(bool playerWon)
@@ -611,6 +662,7 @@ namespace Game.Gameplay.Ring.Stage
         {
             LeaveShow();
             _mode = RingStageMode.Match;
+            ForgetWatch();
             HideMic();
             _ref.Model.SetActive(true);
             _director.Begin(engine);
@@ -624,6 +676,7 @@ namespace Game.Gameplay.Ring.Stage
         public RingMatchDirector BeginDemoMatch()
         {
             _mode = RingStageMode.Match;
+            ForgetWatch();
             HideMic();
             _ref.Model.SetActive(true);
             _director.BeginDemo();
@@ -924,11 +977,42 @@ namespace Game.Gameplay.Ring.Stage
         {
             // Низький план утримання — склейкою: камера, що пливе з загального плану всередину рингу, пролітала крізь канат.
             if (cam == StageCam.Low && _shot != StageCam.Low) _camInit = false;
+            // Вихід із кіноплану — теж склейкою: наїзд із кіноплану на загальний перелітав ринг (кадр «між планами»).
+            if (_shot == StageCam.Cine && cam != StageCam.Cine) _camInit = false;
             if (_shot != cam) _shotAge = 0f;
             _shot = cam;
         }
 
+        private Vector3 _cinePos, _cineLook;
+        private float _cineFov = 34f;
+
+        /// <summary>
+        /// Кіноплан, порахований режисером (<see cref="RingCine"/>): камера стоїть, де сказано, і дивиться точно на
+        /// <paramref name="look"/> (без зсуву рингу вгору під панель — кадр уже розкладено з урахуванням виносок і панелі).
+        /// <paramref name="cut"/> — склейкою (фінішер, перемога), інакше камера доганяє.
+        /// </summary>
+        public void Cine(Vector3 pos, Vector3 look, float fov, bool cut)
+        {
+            _cinePos = pos; _cineLook = look; _cineFov = fov;
+            if (cut) _camInit = false;
+            if (_shot != StageCam.Cine) _shotAge = 0f;
+            _shot = StageCam.Cine;
+        }
+
+        /// <summary>Пропорції кадру камери (ширина / висота) — для розкладки кіноплану.</summary>
+        public float CamAspect { get { return _cam != null ? _cam.aspect : 16f / 9f; } }
+
         private void SnapCamera() { _camInit = false; }
+
+        /// <summary>Фаз-тест матчу (телепорти, крізь канати, ковзання стоп) — підсумок у <see cref="PlayedReport"/>.</summary>
+        public RingStageWatch Watch { get; } = new RingStageWatch();
+        private readonly RingActor[] _watchActors = new RingActor[3];
+
+        /// <summary>Постаті переставлено поза кадром (новий матч) — фаз-тест починає відлік з нових місць.</summary>
+        private void ForgetWatch()
+        {
+            Watch.Forget(_player); Watch.Forget(_rival); Watch.Forget(_ref);
+        }
 
         private void LateUpdate()
         {
@@ -936,6 +1020,11 @@ namespace Game.Gameplay.Ring.Stage
             if (_player != null) _player.Tick(Time.deltaTime);
             if (_rival != null) _rival.Tick(Time.deltaTime);
             if (_ref != null) _ref.Tick(Time.deltaTime);
+            if (_mode == RingStageMode.Match)
+            {
+                _watchActors[0] = _player; _watchActors[1] = _rival; _watchActors[2] = _ref;
+                Watch.Tick(_watchActors, Time.deltaTime, !_camInit);
+            }
             if (_show != null) _show.TickBooker(Time.deltaTime);
             if (_cam == null) return;
             _shotAge += dt;
@@ -1005,6 +1094,11 @@ namespace Game.Gameplay.Ring.Stage
                         pos = look + new Vector3(-2.4f, 1.1f, -5.2f);
                         fov = 32f;
                         break;
+                    case StageCam.Cine:
+                        pos = _cinePos;
+                        look = _cineLook;
+                        fov = _cineFov;
+                        break;
                     default:
                         look = new Vector3(0f, 1.2f, 0.2f);
                         pos = new Vector3(0f, 6.4f, -8.2f);
@@ -1017,7 +1111,8 @@ namespace Game.Gameplay.Ring.Stage
             Vector3 fwd = (look - pos).normalized;
             Vector3 up = Vector3.Cross(Vector3.Cross(fwd, Vector3.up), fwd).normalized;
             float halfH = (look - pos).magnitude * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
-            Vector3 aim = look - up * (halfH * (show ? 0f : _frameShift));
+            bool cine = !show && _mode != RingStageMode.Promo && _shot == StageCam.Cine;
+            Vector3 aim = look - up * (halfH * (show || cine ? 0f : _frameShift));
             Quaternion rot = Quaternion.LookRotation(aim - pos, Vector3.up);
 
             if (!_camInit)
