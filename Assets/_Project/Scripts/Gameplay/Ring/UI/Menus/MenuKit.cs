@@ -275,7 +275,9 @@ namespace Game.Gameplay.Ring.UI.Menus
             Hint.style.display = string.IsNullOrEmpty(hint) ? DisplayStyle.None : DisplayStyle.Flex;
             Add(Hint);
             RegisterCallback<PointerEnterEvent>(e => { if (_enabled && OnHover != null) OnHover(); });
-            RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && OnClick != null) OnClick(); });
+            // На відпусканні над кнопкою (ClickEvent), а не на натисканні: на дотику палець, що почав прокрутку чи з'їхав, не тисне
+            // кнопку випадково (аудит 08.11.2026, В4).
+            RegisterCallback<ClickEvent>(e => { if (_enabled && e.button == 0 && OnClick != null) OnClick(); });
         }
 
         public bool Enabled { get { return _enabled; } set { _enabled = value; if (!value) State = PlateState.Disabled; else if (State == PlateState.Disabled) State = PlateState.Normal; } }

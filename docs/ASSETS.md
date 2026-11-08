@@ -15,7 +15,7 @@ Cursor Pack у цей дозвіл не входять — стиль панел
 |---|---|---|---|
 | **Fixel** Text (Regular, Medium, SemiBold, Bold) + Display SemiBold — статичні TTF | `Assets/ThirdParty/Fonts/Fixel/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md` |
 | **Noto Serif** (Regular, Italic, Bold) — статичні TTF, unhinted | `Assets/ThirdParty/Fonts/NotoSerif/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md` |
-| **Sofia Sans Extra Condensed** (Bold, ExtraBold, Black) — статичні TTF зі змінного, лише ВЕЛИКІ літери; **Amatic SC** Bold; **Rubik Spray Paint** Regular (06.11.2026, «Ринг», дозволено власником) | `Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/`, `AmaticSC/`, `RubikSprayPaint/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md`, Статут вигляду TYPE-01 |
+| **Fira Sans Extra Condensed** (Bold, ExtraBold, Black; display з 08.11.2026, «Підбери шрифт сам») — `Assets/ThirdParty/Fonts/FiraSansExtraCondensed/`, OFL 1.1; ~~Sofia Sans Extra Condensed~~ (06–08.11.2026, замінено: гостроверха «Л», болгарські малі) — статичні TTF зі змінного; **Amatic SC** Bold; **Rubik Spray Paint** Regular (06.11.2026, «Ринг», дозволено власником) | `Assets/ThirdParty/Fonts/SofiaSansExtraCondensed/`, `AmaticSC/`, `RubikSprayPaint/` | OFL 1.1 (`OFL.txt` поруч) | `Assets/ThirdParty/Fonts/README.md`, Статут вигляду TYPE-01 |
 | **game-icons.net** — 20 значків PNG 512×512 (ресурси, фази, стани, пости) | `Assets/ThirdParty/GameIcons/` | CC BY 3.0 — атрибуція обов'язкова | `Assets/ThirdParty/GameIcons/ATTRIBUTION.md` (автор і посилання на кожен значок) + рядок у титрах внизу титулу |
 
 Пастку variable-шрифту Fixel (нижче) обійдено: взяті статичні накреслення.
@@ -462,3 +462,15 @@ AGPL і CC BY відкидаються. Текстури (зменшені до 
 
 Сторінка анімацій (`tools/ring_preview/`): three.js r170 (MIT, `vendor/package/LICENSE`, скачано з registry.npmjs.org за дозволом власника 07.11.2026) і шрифт Fixel (OFL 1.1, `fonts/OFL.txt`).
 
+
+### Знак, іконка й рамки «Рингу» — власна генерація (06.11.2026)
+
+Печатка, іконка застосунку, канатна рамка й накладка титулу (`tools/ring_design/emblem.py` → `Assets/Art/Ring/Brand/`:
+`app_icon_*.png`, `emblem_seal_*.png`, `rope_frame_1040.png`, `title_overlay.png`) — геометрія кодом, кольори лише з токенів,
+слів у картинках немає («РИНГ» — живий текст шрифтом display). Чужих асетів немає; ліцензія — власна робота проєкту.
+
+### Звук меню «Рингу» — власний синтез (08.11.2026)
+
+Музика й звуки інтерфейсу меню (`tools/ring_audio`, чистий Python/numpy, детерміновано → `Assets/Art/Ring/Audio/Menu/*.wav`,
+маніфест `menu_audio_manifest.txt`, ліцензія `LICENSE.md` у теці): сторонніх семплів, лупів і записів немає, мелодії
+оригінальні, атрибуція не потрібна. У грі звучить лише схвалене власником (`RingSoundGate`, `docs/ring/audio/SOUND_APPROVALS.md`).

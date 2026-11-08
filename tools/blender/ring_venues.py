@@ -1798,8 +1798,9 @@ def build_hall(root):
         light_tree(ent, (sx * 5.8, SY0 + 0.8, SH), (0, 4.0, 1.2), h=2.2, n=3)
     stairs(ent, (0, SY0, 0), 0.0, SH, 3.0, 4)                                                    # сходи зі сцени
     ent.box("Carpet_Red", (0, (SY0 - 1.2 + q) / 2, 0.006), (2.2, SY0 - 1.2 - q, 0.012))           # доріжка до рингу
-    barricade_run(ent, (-1.6, SY0 - 1.3, 0), (-1.6, q, 0))
-    barricade_run(ent, (1.6, SY0 - 1.3, 0), (1.6, q, 0))
+    # Кінчаються за 0,4 м до огорожі рингу: інакше п'яти-підпори двох огорож у куті входять одна в одну (колізії 08.11.2026).
+    barricade_run(ent, (-1.6, SY0 - 1.3, 0), (-1.6, q + 0.4, 0))
+    barricade_run(ent, (1.6, SY0 - 1.3, 0), (1.6, q + 0.4, 0))
     ent.finish()
     empty("anchor_curtain", root, (0, Y1 - 0.8, SH), yaw=180)
     path_anchors(root, [(0, Y1 - 1.4, SH), (0, SY0 + 0.4, SH), (0, SY0 - 1.4, 0), (0, q + 0.4, 0),
@@ -2350,7 +2351,7 @@ def build_arena(root):
         ent.box("LED_Strip", (sx * 1.52, rc_, SH + 0.005), (0.05, ramp_len, 0.02))
         ent.box("LED_Strip", (sx * 1.505, rc_, SH - 0.1), (0.01, ramp_len, 0.04))
         ent.box("Cloth_Black", (sx * 1.51, rc_, SH / 2), (0.01, ramp_len, SH))
-        barricade_run(ent, (sx * 2.6, SY0 - 0.2, 0), (sx * 2.6, RY0, 0))
+        barricade_run(ent, (sx * 2.6, SY0 - 0.2, 0), (sx * 2.6, RY0 + 0.4, 0))   # зазор до огорожі рингу — п'яти не перетинаються
     stairs(ent, (0, SY0 - ramp_len, 0), math.pi, SH, 3.0, 5, "Ramp_Black")
     for k in range(6):
         empty("anchor_pyro_%d" % (k + 1), root, (-10.0 + 4.0 * k, SY0 + 0.3, SH))
@@ -2467,7 +2468,7 @@ def build_arena(root):
 
     # --- зброя
     wp = Parts("weapons", root)
-    chair_stack(wp, (-q + 0.5, q - 0.35, 0), math.pi, 10)                                     # усередині огорожі
+    chair_stack(wp, (-q + 0.5, q - 0.65, 0), math.pi, 10)                                     # усередині огорожі
     folding_table(wp, (q + 0.8, q + 0.6, 0), 0.0)
     ladder(wp, (-q - 0.2, -q - 0.6, 0), (-q - 0.2, -q - 0.05, 3.4))
     trash_can(wp, (q + 0.5, -q - 0.5, 0), "Trash_Grey")

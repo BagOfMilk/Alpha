@@ -475,7 +475,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             _left.style.width = 34f;
             _left.style.flexShrink = 0f;
             _left.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _left.RegisterCallback<PointerDownEvent>(e => { if (Change != null && Kind != RowKind.Key) Change(-1); Refresh(true, false); });
+            _left.RegisterCallback<ClickEvent>(e => { if (Change != null && Kind != RowKind.Key) Change(-1); Refresh(true, false); });
             val.Add(_left);
             _bar = new SegmentBar();
             _bar.style.width = 250f; _bar.style.height = 18f; _bar.style.marginRight = 14f;
@@ -504,14 +504,14 @@ namespace Game.Gameplay.Ring.UI.Menus
             _right.style.width = 34f;
             _right.style.flexShrink = 0f;
             _right.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _right.RegisterCallback<PointerDownEvent>(e => { if (Change != null && Kind != RowKind.Key) Change(1); Refresh(true, false); });
+            _right.RegisterCallback<ClickEvent>(e => { if (Change != null && Kind != RowKind.Key) Change(1); Refresh(true, false); });
             val.Add(_right);
             RegisterCallback<PointerEnterEvent>(e => { if (OnHover != null) OnHover(); });
             // клік по назві: вибір — наступне значення, клавіша — «натисни клавішу»
             _name.pickingMode = PickingMode.Position;
-            _name.RegisterCallback<PointerDownEvent>(e => { if (Change != null && Kind != RowKind.Slider) { Change(1); Refresh(true, false); } });
+            _name.RegisterCallback<ClickEvent>(e => { if (Change != null && Kind != RowKind.Slider) { Change(1); Refresh(true, false); } });
             _keycap.pickingMode = PickingMode.Position;
-            _keycap.RegisterCallback<PointerDownEvent>(e => { if (Change != null && Kind == RowKind.Key) Change(1); });
+            _keycap.RegisterCallback<ClickEvent>(e => { if (Change != null && Kind == RowKind.Key) Change(1); });
         }
 
         public void Refresh(bool focus, bool capturing)

@@ -328,6 +328,14 @@ namespace UnityEngine
         {
             this.x = x; this.y = y; this.width = width; this.height = height;
         }
+        public float xMin { get { return x; } }
+        public float yMin { get { return y; } }
+        public float xMax { get { return x + width; } }
+        public float yMax { get { return y + height; } }
+        public static bool operator ==(Rect a, Rect b) { return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height; }
+        public static bool operator !=(Rect a, Rect b) { return !(a == b); }
+        public override bool Equals(object o) { return o is Rect && (Rect)o == this; }
+        public override int GetHashCode() { return x.GetHashCode() ^ y.GetHashCode() ^ width.GetHashCode() ^ height.GetHashCode(); }
     }
 
     // Мінімум, потрібний IMGUI-розкладці (скрол-позиція, розкид не потрібен —
@@ -414,6 +422,7 @@ namespace UnityEngine
     {
         public static int width { get { return 1280; } }
         public static int height { get { return 720; } }
+        public static Rect safeArea { get { return new Rect(0f, 0f, 1280f, 720f); } }
         public static bool fullScreen { get; set; }
         public static FullScreenMode fullScreenMode { get; set; }
         public static Resolution[] resolutions { get { return new Resolution[0]; } }

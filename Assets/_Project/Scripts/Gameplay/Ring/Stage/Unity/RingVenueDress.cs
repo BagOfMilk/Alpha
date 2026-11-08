@@ -20,6 +20,12 @@ namespace Game.Gameplay.Ring.Stage
         // Повна зала (власник 03.11.2026: «Ми тут АА робимо» — бюджет Android не обмеження): усі стільці детальні.
         public int attendance = 120;
         public float chairNear = 99f;
+        /// <summary>
+        /// Дешевий режим (Статут PERF-01, аудит 08.11.2026, В2): на Низькій графіці видно лише стільки найкращих місць.
+        /// Рівень стає відомим пізніше за збирання зали (налаштування гравця), тому межа діє щокадру, а не при збиранні.
+        /// </summary>
+        public int lowTierAttendance = 60;
+        private int _shownCap = -1;
 
         private sealed class Fan
         {
@@ -34,6 +40,8 @@ namespace Game.Gameplay.Ring.Stage
             public bool Standing;
             public Renderer[] Rends;
             public bool Hidden;
+            /// <summary>Пропускав оновлення (невидимий): щойно стане видимим — оновити в тому ж кадрі, без чекання черги.</summary>
+            public bool Stale = true;
             public int Salt;
         }
 
@@ -43,7 +51,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private readonly List<Fan> _fans = new List<Fan>();
         private readonly List<GameObject> _owned = new List<GameObject>();
-        private Camera _cam;
+        private int _warmUntil;
 
         public int FanCount { get { return _fans.Count; } }
 
@@ -227,11 +235,16 @@ namespace Game.Gameplay.Ring.Stage
                 _fans.Add(fan);
                 foreach (var r in go.GetComponentsInChildren<SkinnedMeshRenderer>())
                 {
-                    r.updateWhenOffscreen = true;
+                    // Межі — сталий куб навколо кореня скелета (2,6 м: сидячий і стоячий з руками вгору), а не перерахунок
+                    // щокадру (updateWhenOffscreen): у бінд-позі межі набору хибні, тож задаємо їх самі (аудит 08.11.2026, В2).
+                    r.updateWhenOffscreen = false;
+                    r.localBounds = new Bounds(r.rootBone != null ? Vector3.zero : new Vector3(0f, 1f, 0f), new Vector3(2.6f, 2.6f, 2.6f));
                     r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
+                fan.Rends = go.GetComponentsInChildren<Renderer>(true);
             }
             Destroy(holder.gameObject);
+            _warmUntil = Time.frameCount + 3;
             Debug.Log("[Ринг] 3D: фанатів " + _fans.Count + " з " + cand.Count + " кандидатів, типів моделей " + protos.Count);
         }
 
@@ -480,14 +493,42 @@ namespace Game.Gameplay.Ring.Stage
         {
             if (_popUntil > 0f && Time.time >= _popUntil) { _popUntil = 0f; ApplyMood(_mood); }
             float t = Time.time;
-            for (int i = 0; i < _fans.Count; i++)
+            // Дешевий натовп (аудит 08.11.2026, В2): невидимих і схованих не рахуємо; далеких — через кадр чи раз на три.
+            // Час петлі абсолютний, тож пропущений кадр не зсуває фазу — фанат лише рідше оновлюється.
+            var cam = Camera.main;
+            Vector3 cp = cam != null ? cam.transform.position : Vector3.zero;
+            int frame = Time.frameCount;
+            int cap = GraphicsTier.IsLow ? Mathf.Min(lowTierAttendance, _fans.Count) : _fans.Count;
+            if (cap != _shownCap)
+            {
+                // Фанати вже впорядковані «найцінніші місця спершу» (BuildCrowd) — ховаємо хвіст.
+                for (int i = 0; i < _fans.Count; i++) if (_fans[i].Go != null) _fans[i].Go.SetActive(i < cap);
+                _shownCap = cap;
+            }
+            for (int i = 0; i < cap; i++)
             {
                 var f = _fans[i];
                 if (!f.Graph.IsValid()) continue;
+                // Перші кадри після збирання isVisible ще не порахований — оновлюємо всіх, щоб ніхто не стояв у бінд-позі.
+                if (frame > _warmUntil && (f.Hidden || !AnyVisible(f))) { f.Stale = true; continue; }
+                if (cam != null && !f.Stale)
+                {
+                    float d2 = (f.Go.transform.position - cp).sqrMagnitude;
+                    int stride = d2 > 25f * 25f ? 3 : d2 > 12f * 12f ? 2 : 1;
+                    if ((frame + i) % stride != 0) continue;
+                }
+                f.Stale = false;
                 float time = ((t * f.Speed) + f.Phase) % f.Length;
                 f.Clip.SetTime(time);
                 f.Graph.Evaluate(0f);
             }
+        }
+
+        private static bool AnyVisible(Fan f)
+        {
+            if (f.Rends == null) return true;
+            for (int i = 0; i < f.Rends.Length; i++) if (f.Rends[i] != null && f.Rends[i].isVisible) return true;
+            return false;
         }
 
         /// <summary>Діагностика натовпу для логу: де перші фанати, чи видні, межі.</summary>

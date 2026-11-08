@@ -81,7 +81,7 @@ namespace Game.Gameplay.Ring
             }
         }
 
-        public bool HasSave { get { return _shotsDir == null && System.IO.File.Exists(SavePath); } }
+        public bool HasSave { get { return _shotsDir == null && RingSaveFile.Exists(SavePath); } }
 
         public void NewGame()
         {
@@ -98,9 +98,15 @@ namespace Game.Gameplay.Ring
         {
             try
             {
-                var lines = System.IO.File.ReadAllLines(SavePath);
-                var c = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
-                c.RestoreState(lines[0]);
+                CareerSession c = null;
+                bool fromBackup;
+                var lines = RingSaveFile.Read(SavePath, l =>
+                {
+                    var t = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
+                    t.RestoreState(l[0]);
+                    c = t;
+                }, out fromBackup);
+                if (fromBackup) Debug.LogWarning("[Ринг] основний сейв зіпсований — продовжено з запасної копії (.bak)");
                 if (lines.Length > 1)
                 {
                     var p = lines[1].Split('|');
@@ -123,7 +129,7 @@ namespace Game.Gameplay.Ring
             if (_career == null || _career.Stage == CareerStage.Title || _career.Stage == CareerStage.Create) return;
             try
             {
-                System.IO.File.WriteAllLines(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
+                RingSaveFile.Write(SavePath, new[] { _career.CaptureState(), HeroBody + "|" + HeroHair });
                 InvalidateSaveSummary();
             }
             catch (Exception ex)
@@ -149,7 +155,12 @@ namespace Game.Gameplay.Ring
                 UI.CareerScreenView.ExpandForShots = true;
                 System.IO.Directory.CreateDirectory(_shotsDir);
                 // Огляд проходить сезон: кліпи й паузи ШІ втричі швидше (кадри ті самі, лише менше чекання).
-                RingTime.Base = 3f;
+                RingTime.Base = 3f;   // час лише через RingTime (правило меню): пауза й «Зменшити рух» множаться на базу
+                // -ring-shot-speed 1 — справжня швидкість (огляд відчуття матчу й анімацій, а не лише екранів).
+                float spd;
+                string sp = ReadArg("-ring-shot-speed");
+                if (sp != null && float.TryParse(sp, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out spd) && spd > 0f)
+                    RingTime.Base = spd;
                 Time.timeScale = RingTime.Scale;
                 int lim;
                 string ls = ReadArg("-ring-shot-limit");
@@ -157,6 +168,8 @@ namespace Game.Gameplay.Ring
                 // Скільки сезонів проходить огляд (за замовчуванням 1; уся ворожнеча з Молотом — 3).
                 string ss = ReadArg("-ring-shot-seasons");
                 if (ss != null && int.TryParse(ss, out lim) && lim > 0) _shotSeasons = lim;
+                // -ring-shot-grow: перед діями тижня бот витрачає очки розвитку, як CareerBot тестів балансу (прийом → атрибут → перк).
+                _shotGrow = RingLaunchArgs.Has("-ring-shot-grow");
             }
             // Меню (ТЗ B08): налаштування з диска, ввід, шари; далі екран завантаження веде справжні кроки старту (Boot).
             InitMenus();
@@ -338,9 +351,35 @@ namespace Game.Gameplay.Ring
             // безпечними зонами B01/B08: на 120 % кнопки й рядок стану пішли б за край).
             bool menu = _view is IMenuNavigable || _loading != null || !_bootDone || _pause != null;
             float s = Mathf.Clamp(Screen.height / 900f, 0.65f, 2.4f) * (_settings != null && !menu ? _settings.UiScale : 1f);
-            if (Mathf.Abs(s - _appliedScale) < 0.001f) return;
-            _appliedScale = s;
-            _panel.scale = s;
+            if (Mathf.Abs(s - _appliedScale) >= 0.001f)
+            {
+                _appliedScale = s;
+                _panel.scale = s;
+                _appliedSafe = default(Rect);
+            }
+            ApplySafeArea();
+        }
+
+        private Rect _appliedSafe;
+
+        /// <summary>
+        /// Безпечна зона екрана (виріз камери, заокруглені кути, жести Android; аудит 08.11.2026, В4): корінь UI відступає
+        /// від країв на стільки, скільки система забрала. На ПК безпечна зона — увесь екран, відступи нульові.
+        /// Screen.safeArea — у пікселях від лівого нижнього кута; відступи панелі — у її одиницях (піксель / масштаб).
+        /// </summary>
+        private void ApplySafeArea()
+        {
+            if (_root == null || _panel == null) return;
+            Rect safe = Screen.safeArea;
+            if (safe == _appliedSafe) return;
+            _appliedSafe = safe;
+            float k = 1f / Mathf.Max(0.01f, _panel.scale);
+            float w = Screen.width, h = Screen.height;
+            bool sane = safe.width > 0f && safe.height > 0f;
+            _root.style.left = sane ? Mathf.Max(0f, safe.xMin) * k : 0f;
+            _root.style.right = sane ? Mathf.Max(0f, w - safe.xMax) * k : 0f;
+            _root.style.top = sane ? Mathf.Max(0f, h - safe.yMax) * k : 0f;
+            _root.style.bottom = sane ? Mathf.Max(0f, safe.yMin) * k : 0f;
         }
 
         private bool LoadData()
@@ -416,6 +455,7 @@ namespace Game.Gameplay.Ring
             if (_quitAt > 0f && Time.unscaledTime >= _quitAt) HardExit.Now(0);
             if (_fontSpike) return;   // спайк шрифтів: екран не оновлюється
             TickMenuOverlays();       // завантаження й розріз живуть і до появи кар'єри
+            ApplySafeArea();          // поворот екрана чи зміна вирізу — і на титулі, і в грі
             if (_career == null || _root == null || !_bootDone) return;
             ApplyScale();
             if (Paused)
@@ -779,12 +819,14 @@ namespace Game.Gameplay.Ring
                     return;
                 }
                 bool week = !_onTitle && _career.Stage == CareerStage.Week && !_career.BackstageOpen;
+                if (week && _shotGrow && BotGrow()) { _view.Refresh(); return; }
                 if (week && (_career.State.ActionsLeft > 0 || _career.State.PromoChoicePending)) _view.OnDigit(1 + _shotDigit++ % 6);
                 else if (_shotPressDigit) _view.OnDigit(1 + _shotDigit++ % 5);
                 else _view.OnConfirm();
                 _shotPressDigit = !_shotPressDigit;
                 return;
             }
+            DumpScreenText(_shotIndex);
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_shotsDir, string.Format("{0:000}_{1}.png", _shotIndex++, Label())));
             bool done = !_onTitle && _career.Stage == CareerStage.SeasonEnd && _career.State.Season >= _shotSeasons && _seasonShots++ >= 3;
             if (done || _shotIndex >= ShotLimit)
@@ -794,6 +836,48 @@ namespace Game.Gameplay.Ring
                 _shotsDir = null;
                 _quitAt = Time.unscaledTime + 1f;
             }
+        }
+
+        private string _lastDump;
+
+        /// <summary>
+        /// Текст екрана поруч із кадром (<c>screens.txt</c> у теці огляду): що саме гравцеві запропоновано й показано — щоб
+        /// розбір проходу не вгадував вибори й числа з картинок. Лише нові екрани (той самий текст не повторюється).
+        /// </summary>
+        private void DumpScreenText(int index)
+        {
+            var sb = new System.Text.StringBuilder();
+            CollectText(_root, sb);
+            string s = sb.ToString();
+            if (s == _lastDump) return;
+            _lastDump = s;
+            System.IO.File.AppendAllText(System.IO.Path.Combine(_shotsDir, "screens.txt"),
+                string.Format("=== {0:000} {1} · t={3:0.0}с ===\n{2}\n", index, Label(), s, Time.realtimeSinceStartup));
+        }
+
+        private static void CollectText(VisualElement e, System.Text.StringBuilder sb)
+        {
+            if (e == null || e.style.display.value == DisplayStyle.None) return;
+            var t = e as TextElement;
+            if (t != null && !string.IsNullOrEmpty(t.text)) sb.Append(t.text.Replace("\n", " / ")).Append('\n');
+            for (int i = 0; i < e.childCount; i++) CollectText(e[i], sb);
+        }
+
+        private bool _shotGrow;
+
+        /// <summary>Одна покупка розвитку за крок (видно в кадрі): перший доступний прийом, атрибут, перк — порядок CareerBot.</summary>
+        private bool BotGrow()
+        {
+            foreach (var m in _career.Content.Moves.All) if (_career.LearnMove(m.Id)) { ShotNote("розвиток: прийом " + m.Id); return true; }
+            foreach (RingAttr a in new[] { RingAttr.Strength, RingAttr.Agility, RingAttr.Technique, RingAttr.Stamina, RingAttr.Charisma })
+                if (_career.BuyAttr(a)) { ShotNote("розвиток: атрибут " + a); return true; }
+            foreach (var pk in PerkCatalog.All) if (_career.BuyPerk(pk.Id)) { ShotNote("розвиток: перк " + pk.Id); return true; }
+            return false;
+        }
+
+        private void ShotNote(string line)
+        {
+            System.IO.File.AppendAllText(System.IO.Path.Combine(_shotsDir, "screens.txt"), "--- бот: " + line + "\n");
         }
 
         private int _seasonShots;

@@ -52,14 +52,19 @@ namespace Game.Gameplay.Ring
             errorKey = null;
             try
             {
-                var lines = System.IO.File.ReadAllLines(SavePath);
-                if (lines.Length == 0 || string.IsNullOrEmpty(lines[0])) { errorKey = "m.error.save.empty"; return false; }
-                var c = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
-                c.RestoreState(lines[0]);
+                CareerSession c = null;
+                bool fromBackup;
+                RingSaveFile.Read(SavePath, l =>
+                {
+                    var t = CareerSession.New(_content, new SeededDiceRoller(_seed), _seed);
+                    t.RestoreState(l[0]);
+                    c = t;
+                }, out fromBackup);
                 _saveSummary = string.Format(_text.Get("m.title.summary"), c.State.Season, c.State.Week);
                 return true;
             }
             catch (System.IO.FileNotFoundException) { errorKey = "m.error.save.missing"; }
+            catch (System.IO.InvalidDataException) { errorKey = "m.error.save.empty"; }
             catch (Exception ex)
             {
                 Debug.LogWarning("[Ринг] сейв не пройшов перевірку: " + ex.Message);
@@ -368,7 +373,10 @@ namespace Game.Gameplay.Ring
                     state = c.CaptureState();
                 }
                 else state = "зіпсовано|42|не сейв";
-                System.IO.File.WriteAllLines(SavePath, new[] { state, "0|0" });
+                // Огляд показує биту кар'єру: запасна копія не повинна її «врятувати».
+                RingSaveFile.Delete(SavePath);
+                if (valid) RingSaveFile.Write(SavePath, new[] { state, "0|0" });
+                else System.IO.File.WriteAllLines(SavePath, new[] { state, "0|0" });
                 _saveSummary = null;
             }
             catch (Exception ex) { Debug.LogWarning("[Ринг] огляд меню: сейв не записано: " + ex.Message); }
