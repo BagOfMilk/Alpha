@@ -201,6 +201,10 @@ namespace Game.Gameplay.Ring.Stage
         private const float CountTail = 0.4f;
         private static float OnScreen(float seconds) { return seconds / RingStage3D.PlaySpeed; }
 
+        // Слід подій, що прийшли в OnEvent: обмін одразу після реверсу 7–9 не звучить удруге (RingSoundTrail → RingSoundMap.ForEvent
+        // з попередньою подією; таблиця звіряє й номер події — обмін мусить іти в журналі відразу за реверсом).
+        private readonly RingSoundTrail _trail = new RingSoundTrail();
+
         /// <summary>
         /// Звук події матчу за таблицею <see cref="RingSoundMap"/> (зі ступенем кидка й місцем пари) і звуки її наслідків: склейка місця
         /// (Place) — зал здіймається, відлік за рингом (Count) — по звуку на цифру. Утримання й кікаут — долоня рефері, повтором.
@@ -212,6 +216,8 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public void OnEvent(MatchEvent ev, float delay, bool pinEnd, RingProp prop = RingProp.Chair)
         {
+            // Слід — до розгалуження: Kickout і MatchEnd теж стають попередньою подією, і слід журналу не рветься.
+            var cue = _trail.Next(ev, prop);
             switch (ev.Kind)
             {
                 case MatchEventKind.Kickout: StartCoroutine(Repeat(RingCue.MatSlap, 2, 0.45f, 0.9f, delay)); return;
@@ -220,7 +226,6 @@ namespace Game.Gameplay.Ring.Stage
                     if (pinEnd) StartCoroutine(Repeat(RingCue.MatSlap, 3, 0.45f, 0.9f, delay));
                     return;
             }
-            var cue = RingSoundMap.ForEvent(ev, prop);
             // Гул залу вже звучить петлею (гучність веде ажіотаж) — окремого удару в цієї події немає.
             if (cue != RingCue.None && cue != RingCue.CrowdBed)
             {

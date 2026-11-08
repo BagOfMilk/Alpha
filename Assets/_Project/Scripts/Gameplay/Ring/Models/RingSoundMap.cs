@@ -17,7 +17,7 @@ namespace Game.Gameplay.Ring.Models
         Land,
         /// <summary>Долоня рефері об мат — рахунок «раз-два-три».</summary>
         MatSlap,
-        /// <summary>Обмін на старті: борці зчіпляються.</summary>
+        /// <summary>Зчіпка: обмін, реверс 7–9 (обмін захватами), провал больового.</summary>
         Lockup,
         /// <summary>Утримання: тіло падає на суперника.</summary>
         PinCover,
@@ -96,7 +96,7 @@ namespace Game.Gameplay.Ring.Models
         // Подія без дії: окремий звук. "Action"/"Sell" — за дією (нижче), "Kickout"/"MatchEnd" грає RingSound повтором долоні й дзвоном.
         private static readonly Dictionary<string, RingCue> Kinds = new Dictionary<string, RingCue>
         {
-            { "Exchange", RingCue.Lockup },
+            { "Exchange", RingCue.Lockup },      // обмін на старті; одразу після реверсу 7–9 — без другого Lockup (ForEvent з prev)
             { "Action", RingCue.None },          // за дією
             { "Sell", RingCue.CrowdBed },        // продаж — до удару; удар звучить на самій дії (раніше звучав двічі, і до контакту)
             { "Reverse", RingCue.Slam },         // 10+ — кидок; 7–9 — обмін захватами, провал — нічого (ступінь — у ForEvent)
@@ -205,6 +205,28 @@ namespace Game.Gameplay.Ring.Models
         {
             if (ev == null) return RingCue.None;
             return ForEvent(ev.Kind.ToString(), ev.Action.ToString(), ev.HasRoll, ev.Tier, ev.Outside, prop, ev.MoveKey);
+        }
+
+        /// <summary>
+        /// Звук події з урахуванням попередньої в журналі (<paramref name="prev"/> — подія, що звучала перед нею, null — немає).
+        /// Обмін (Exchange) одразу після реверсу 7–9 лише вирішує ініціативу: обмін захватами вже прозвучав на самому реверсі
+        /// (кліп <c>Lockup_Exchange</c>), тож другого Lockup немає — лише гул залу. Рішення ПМ 08.11.2026 (docs/ring/F2_DIRECTOR.md
+        /// п. 7 — у гілці <c>claude/ring-combat-overhaul</c>, 7c19e2e). Подає події по одній — <see cref="RingSoundTrail"/>.
+        /// </summary>
+        public static RingCue ForEvent(MatchEvent ev, RingProp prop, MatchEvent prev)
+        {
+            if (IsExchangeAfterPartialReverse(ev, prev)) return RingCue.CrowdBed;
+            return ForEvent(ev, prop);
+        }
+
+        /// <summary>
+        /// Обмін, що йде в журналі одразу за реверсом 7–9 (номер події — на один більший): ядро видає його в тому ж виклику
+        /// (<c>MatchEngine.React</c> → <c>GiveInitiative(RollExchange())</c>). Обмін, що настав пізніше, — не цей випадок.
+        /// </summary>
+        public static bool IsExchangeAfterPartialReverse(MatchEvent ev, MatchEvent prev)
+        {
+            return ev != null && prev != null && ev.Kind == MatchEventKind.Exchange
+                && prev.Kind == MatchEventKind.Reverse && prev.HasRoll && prev.Tier == RollTier.Partial && prev.Seq + 1 == ev.Seq;
         }
 
         /// <summary>
@@ -329,5 +351,23 @@ namespace Game.Gameplay.Ring.Models
                 if (c != RingCue.None) yield return c;
         }
 
+    }
+
+    /// <summary>
+    /// Слід подій для звуку: пам'ятає подію, що звучала перед поточною, і питає таблицю з нею (<see cref="RingSoundMap.ForEvent(MatchEvent, RingProp, MatchEvent)"/>).
+    /// Без Unity, тож тести подають журнал матчу так само, як режисер подає його в <c>RingSound.OnEvent</c>. Між матчами скидати
+    /// не обов'язково: таблиця звіряє номер події, а обмін слідом за реверсом 7–9 ядро видає в тому ж виклику.
+    /// </summary>
+    public sealed class RingSoundTrail
+    {
+        private MatchEvent _prev;
+
+        /// <summary>Звук наступної події; подія стає попередньою для того, що прийде далі.</summary>
+        public RingCue Next(MatchEvent ev, RingProp prop = RingProp.Chair)
+        {
+            var prev = _prev;
+            _prev = ev;
+            return RingSoundMap.ForEvent(ev, prop, prev);
+        }
     }
 }

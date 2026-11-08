@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
 using Game.Core.Ring.Career;
+using Game.Gameplay.Combat;
 using Game.Gameplay.Ring.Models;
 using Game.Gameplay.Ring.Stage;
 using NUnit.Framework;
@@ -173,6 +174,88 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(rev(RollTier.Partial)));
             Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent(rev(RollTier.Miss)), "провал реверсу — на екрані нічого, удару немає");
             Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(MatchEventKind.Reverse, MatchActionId.Throw), "без кидка — кидок");
+        }
+
+        [Test]
+        public void Exchange_AfterPartialReverse_IsNotASecondLockup()
+        {
+            // Рішення ПМ 08.11.2026 (docs/ring/F2_DIRECTOR.md п. 7, гілка claude/ring-combat-overhaul): реверс 7–9 уже показує обмін
+            // захватами (Lockup_Exchange); Exchange, що ядро видає слідом у тому ж виклику, лише вирішує ініціативу — другого Lockup
+            // немає. Ініціатива й гравцю, й супернику.
+            foreach (var dice in new[] { new[] { 8, 2, 12 }, new[] { 8, 12, 2 } })
+            {
+                var e = MatchKit.Engine(true, dice);
+                e.Perform(MatchActionId.Throw);
+                e.React(ReactionChoice.Reverse);
+                var log = e.State.Log;
+                Assert.AreEqual(MatchEventKind.Exchange, log[0].Kind, "журнал починається обміном на старті");
+                Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(log[0], RingProp.Chair, null), "обмін на старті — зчіпка");
+                int r = log.ToList().FindIndex(x => x.Kind == MatchEventKind.Reverse);
+                Assert.Greater(r, 0);
+                Assert.AreEqual(RollTier.Partial, log[r].Tier);
+                Assert.AreEqual(MatchEventKind.Exchange, log[r + 1].Kind, "ядро видає обмін одразу за реверсом 7–9");
+                Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(log[r], RingProp.Chair, log[r - 1]), "реверс 7–9 — обмін захватами");
+                Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent(log[r + 1], RingProp.Chair, log[r]), "обмін слідом — без другого Lockup");
+                int lockups = 0;
+                for (int i = r; i < log.Count; i++)
+                    if (RingSoundMap.ForEvent(log[i], RingProp.Chair, log[i - 1]) == RingCue.Lockup) lockups++;
+                Assert.AreEqual(1, lockups, "від реверсу до кінця виклику — одна зчіпка");
+                // Те саме через слід подій, як режисер подає журнал у RingSound.OnEvent (обмін на старті — до відкриття екрана).
+                var trail = new RingSoundTrail();
+                var heard = new List<RingCue>();
+                for (int i = 1; i < log.Count; i++) heard.Add(trail.Next(log[i]));
+                Assert.AreEqual(1, heard.Count(c => c == RingCue.Lockup), "слід: одна зчіпка — на реверсі");
+                Assert.AreEqual(RingCue.CrowdBed, heard[r], "слід: обмін слідом за реверсом — гул залу");
+            }
+
+            // Лише відразу за реверсом 7–9: інший ступінь, пропуск у журналі чи немає попередньої — звичайний обмін.
+            Func<RollTier, int, MatchEvent> rev = (t, seq) => new MatchEvent { Seq = seq, Kind = MatchEventKind.Reverse, Action = MatchActionId.Throw, HasRoll = true, Tier = t };
+            var ex = new MatchEvent { Seq = 6, Kind = MatchEventKind.Exchange, Action = MatchActionId.CatchBreath, HasRoll = true };
+            Assert.IsTrue(RingSoundMap.IsExchangeAfterPartialReverse(ex, rev(RollTier.Partial, 5)));
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(ex, RingProp.Chair, rev(RollTier.Partial, 4)), "не відразу за реверсом");
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(ex, RingProp.Chair, rev(RollTier.Strong, 5)));
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(ex, RingProp.Chair, rev(RollTier.Miss, 5)));
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(ex, RingProp.Chair, null));
+            var noRoll = rev(RollTier.Partial, 5); noRoll.HasRoll = false;
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(ex, RingProp.Chair, noRoll), "реверс без кидка — ступінь не читається");
+            var act = Act(MatchActionId.Throw, RollTier.Partial); act.Seq = 5;
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(ex, RingProp.Chair, act), "перед обміном дія 7–9, а не реверс");
+            // попередня подія не міняє звуку інших подій
+            Assert.AreEqual(RingCue.Lockup, RingSoundMap.ForEvent(rev(RollTier.Partial, 6), RingProp.Chair, rev(RollTier.Partial, 5)));
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Strong), RingProp.Chair, rev(RollTier.Partial, -1)));
+            Assert.AreEqual(RingCue.None, RingSoundMap.ForEvent(null, RingProp.Chair, rev(RollTier.Partial, 5)));
+        }
+
+        [Test]
+        public void Exchange_AfterPartialReverse_InWholeMatches()
+        {
+            // Повні матчі (ШІ за обидва боки, справжній кубик) крізь слід подій — так, як режисер подає журнал у RingSound.OnEvent:
+            // з події після відкриття екрана (обмін на старті вже показаний), без Kickout і MatchEnd (чинний режисер) і з ними (Ф2).
+            // Кожен обмін одразу за реверсом 7–9 — без другого Lockup; будь-який інший обмін — зчіпка.
+            int pairs = 0;
+            for (int seed = 1; seed <= 200; seed++)
+            {
+                var e = new MatchEngine(MatchKit.Setup(), new SeededDiceRoller((ulong)seed));
+                MatchAutoplay.Run(e, true);
+                var log = e.State.Log;
+                var now = new RingSoundTrail();
+                var f2 = new RingSoundTrail();
+                for (int i = 1; i < log.Count; i++)
+                {
+                    var ev = log[i];
+                    var withAll = f2.Next(ev);
+                    bool fed = ev.Kind != MatchEventKind.Kickout && ev.Kind != MatchEventKind.MatchEnd;
+                    var heard = fed ? now.Next(ev) : withAll;
+                    if (ev.Kind != MatchEventKind.Exchange) continue;
+                    var prev = log[i - 1];
+                    bool after = prev.Kind == MatchEventKind.Reverse && prev.HasRoll && prev.Tier == RollTier.Partial;
+                    var want = after ? RingCue.CrowdBed : RingCue.Lockup;
+                    if (after) pairs++;
+                    Assert.AreEqual(want, heard, "seed " + seed + ", подія " + i + ": чинний режисер");
+                    Assert.AreEqual(want, withAll, "seed " + seed + ", подія " + i + ": режисер Ф2");
+                }
+            }
+            Assert.Greater(pairs, 0, "у прогоні є реверси 7–9 з обміном слідом");
         }
 
         [Test]
