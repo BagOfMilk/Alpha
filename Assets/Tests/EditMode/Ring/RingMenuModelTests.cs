@@ -341,6 +341,69 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Languages_EveryAvailableLanguage_IsFullyTranslated()
+        {
+            // П4 ПМ 08.11.2026: «Охоронець «кожен ключ перекладено» — одразу, переклад — останнім». Мова в списку — лише повна.
+            var uk = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
+            var ukArt = ReadKeyValueFile(Path.Combine(Root(), "Assets", "Art", "Ring", "ring_strings_uk.txt"));
+            Assert.Greater(ukArt.Count, 10, "рядки арен прочитано");
+            Assert.AreEqual(RingLanguages.Base, RingLanguages.Available[0], "українська — перша й базова");
+            var holes = new List<string>();
+            foreach (var code in RingLanguages.Available)
+            {
+                Assert.IsTrue(uk.ContainsKey("m.val.lang." + code), "назва мови " + code + " у перемикачі");
+                if (code == RingLanguages.Base) continue;
+                string uiPath = Path.Combine(RingCampaignDriver.Dir(), "ui_" + code + ".json");
+                string artPath = Path.Combine(Root(), "Assets", "Art", "Ring", "ring_strings_" + code + ".txt");
+                if (!File.Exists(uiPath)) { holes.Add(code + ": немає ui_" + code + ".json"); continue; }
+                if (!File.Exists(artPath)) { holes.Add(code + ": немає ring_strings_" + code + ".txt"); continue; }
+                var tr = MiniJson.ParseObject(File.ReadAllText(uiPath));
+                CompareTranslation(code + " ui", ToStrings(uk), ToStrings(tr), holes);
+                CompareTranslation(code + " арени", ukArt, ReadKeyValueFile(artPath), holes);
+            }
+            Assert.IsEmpty(holes, "мову ввімкнено з дірками:\n" + string.Join("\n", holes));
+            Assert.AreEqual("Ring/ui_uk", RingLanguages.Resource("Ring/ui_uk", "xx"), "недоступна мова — українська");
+            var v = new RingSettingsValues { Language = "xx" };
+            v.Clamp();
+            Assert.AreEqual(RingLanguages.Base, v.Language, "збережена недоступна мова — українська");
+        }
+
+        private static Dictionary<string, string> ToStrings(Dictionary<string, object> d)
+        {
+            var r = new Dictionary<string, string>();
+            foreach (var kv in d) if (kv.Value is string) r[kv.Key] = (string)kv.Value;
+            return r;
+        }
+
+        private static Dictionary<string, string> ReadKeyValueFile(string path)
+        {
+            var r = new Dictionary<string, string>();
+            foreach (var raw in File.ReadAllLines(path))
+            {
+                string line = raw.Trim();
+                if (line.Length == 0 || line[0] == '#') continue;
+                int eq = line.IndexOf('=');
+                if (eq > 0) r[line.Substring(0, eq).Trim()] = line.Substring(eq + 1);
+            }
+            return r;
+        }
+
+        private static void CompareTranslation(string what, Dictionary<string, string> uk, Dictionary<string, string> tr, List<string> holes)
+        {
+            var ph = new Regex("\\{[0-9]+(:[^}]*)?\\}");
+            foreach (var kv in uk)
+            {
+                string t;
+                if (!tr.TryGetValue(kv.Key, out t) || string.IsNullOrEmpty(t)) { holes.Add(what + ": немає " + kv.Key); continue; }
+                var a = new List<string>(); foreach (Match m in ph.Matches(kv.Value)) a.Add(m.Value);
+                var b = new List<string>(); foreach (Match m in ph.Matches(t)) b.Add(m.Value);
+                a.Sort(StringComparer.Ordinal); b.Sort(StringComparer.Ordinal);
+                if (string.Join(",", a) != string.Join(",", b)) holes.Add(what + ": місця підстановки " + kv.Key);
+            }
+            foreach (var k in tr.Keys) if (!uk.ContainsKey(k)) holes.Add(what + ": зайвий ключ " + k);
+        }
+
+        [Test]
         public void MenuTextKeys_AllExistInUiStrings()
         {
             var ui = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));

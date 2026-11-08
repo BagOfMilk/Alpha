@@ -16,6 +16,27 @@ namespace Game.Gameplay.Ring.Models
     /// </summary>
     public enum RingActionShots { Off = 0, Rare = 1, Normal = 2, Often = 3 }
 
+    /// <summary>
+    /// Мови інтерфейсу «Рингу» (Налаштування → Мова). Код потрапляє в <see cref="Available"/>, лише коли перекладено ВСЕ:
+    /// охоронець <c>RingMenuModelTests.Languages_EveryAvailableLanguage_IsFullyTranslated</c> звіряє <c>ui_&lt;код&gt;.json</c> і
+    /// <c>ring_strings_&lt;код&gt;.txt</c> з українськими (ключі й місця підстановки {0}). Англійська — ітерація 1 (П4 ПМ 08.11.2026),
+    /// вмикається додаванням "en" сюди, коли тексти устояться.
+    /// </summary>
+    public static class RingLanguages
+    {
+        public const string Base = "uk";
+        public static readonly string[] Available = { Base };
+
+        public static bool IsAvailable(string code) { return !string.IsNullOrEmpty(code) && Array.IndexOf(Available, code) >= 0; }
+
+        /// <summary>Шлях ресурсу мови: «Ring/ui_uk» + «en» → «Ring/ui_en»; недоступна мова — українська.</summary>
+        public static string Resource(string basePath, string code)
+        {
+            if (!IsAvailable(code) || code == Base || basePath == null || !basePath.EndsWith("_" + Base, StringComparison.Ordinal)) return basePath;
+            return basePath.Substring(0, basePath.Length - Base.Length) + code;
+        }
+    }
+
     /// <summary>Дії, які гравець може перепризначити (Налаштування → Керування). Цифри 1–9 і миша — сталі.</summary>
     public enum RingAction { Up = 0, Down, Left, Right, Confirm, Back, TabPrev, TabNext, Log }
 
@@ -139,7 +160,7 @@ namespace Game.Gameplay.Ring.Models
             if (!Enum.IsDefined(typeof(RingDisplayMode), Display)) Display = RingDisplayMode.Fullscreen;
             if (!Enum.IsDefined(typeof(RingGraphics), Graphics)) Graphics = RingGraphics.Auto;
             if (!Enum.IsDefined(typeof(RingActionShots), ActionShots)) ActionShots = RingActionShots.Normal;
-            if (string.IsNullOrEmpty(Language)) Language = "uk";
+            if (!RingLanguages.IsAvailable(Language)) Language = RingLanguages.Base;
             var def = DefaultKeys();
             foreach (var kv in def)
                 if (!Keys.ContainsKey(kv.Key) || string.IsNullOrEmpty(Keys[kv.Key])) Keys[kv.Key] = kv.Value;
