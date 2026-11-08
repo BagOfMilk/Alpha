@@ -462,3 +462,15 @@ AGPL і CC BY відкидаються. Текстури (зменшені до 
 
 Сторінка анімацій (`tools/ring_preview/`): three.js r170 (MIT, `vendor/package/LICENSE`, скачано з registry.npmjs.org за дозволом власника 07.11.2026) і шрифт Fixel (OFL 1.1, `fonts/OFL.txt`).
 
+
+### Знак, іконка й рамки «Рингу» — власна генерація (06.11.2026)
+
+Печатка, іконка застосунку, канатна рамка й накладка титулу (`tools/ring_design/emblem.py` → `Assets/Art/Ring/Brand/`:
+`app_icon_*.png`, `emblem_seal_*.png`, `rope_frame_1040.png`, `title_overlay.png`) — геометрія кодом, кольори лише з токенів,
+слів у картинках немає («РИНГ» — живий текст шрифтом display). Чужих асетів немає; ліцензія — власна робота проєкту.
+
+### Звук меню «Рингу» — власний синтез (08.11.2026)
+
+Музика й звуки інтерфейсу меню (`tools/ring_audio`, чистий Python/numpy, детерміновано → `Assets/Art/Ring/Audio/Menu/*.wav`,
+маніфест `menu_audio_manifest.txt`, ліцензія `LICENSE.md` у теці): сторонніх семплів, лупів і записів немає, мелодії
+оригінальні, атрибуція не потрібна. У грі звучить лише схвалене власником (`RingSoundGate`, `docs/ring/audio/SOUND_APPROVALS.md`).
