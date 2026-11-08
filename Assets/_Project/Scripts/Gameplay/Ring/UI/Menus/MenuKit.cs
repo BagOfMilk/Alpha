@@ -242,9 +242,17 @@ namespace Game.Gameplay.Ring.UI.Menus
             f.style.justifyContent = Justify.SpaceBetween;
             f.pickingMode = PickingMode.Ignore;
             hints = Body("", BrandTokens.TypeLabel, RingTheme.TextDim);
+            Underlay(hints);
             f.Add(hints);
-            if (!string.IsNullOrEmpty(right)) f.Add(Body(right, BrandTokens.TypeLabel, RingTheme.TextDim));
+            if (!string.IsNullOrEmpty(right)) { var r = Body(right, BrandTokens.TypeLabel, RingTheme.TextDim); Underlay(r); f.Add(r); }
             return f;
+        }
+
+        /// <summary>Підкладка під текстом над живим фоном (Статут ACC-03): тло α AlphaUnderlay, відступи.</summary>
+        public static void Underlay(VisualElement e)
+        {
+            e.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaUnderlay);
+            e.style.paddingLeft = 10f; e.style.paddingRight = 10f; e.style.paddingTop = 3f; e.style.paddingBottom = 3f;
         }
 
         /// <summary>

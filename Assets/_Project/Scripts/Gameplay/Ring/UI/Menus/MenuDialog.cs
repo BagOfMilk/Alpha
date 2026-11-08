@@ -49,7 +49,7 @@ namespace Game.Gameplay.Ring.UI.Menus
                 var btn = MenuKit.Button(options[i].Key, 420f, 56f);
                 btn.style.marginBottom = 10f;
                 btn.style.marginLeft = i * 14f;                   // сходинка — мова «Енергія»
-                btn.OnHover = () => { if (_focus.Set(idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
+                btn.OnHover = () => { if (RingMenuInput.MouseArmed && _focus.Set(idx)) { Sync(); RingMenuServices.Play(MenuSfx.Move); } };
                 btn.OnClick = () => { _focus.Set(idx); Sync(); Choose(); };
                 _buttons.Add(btn);
                 _actions.Add(options[i].Value);

@@ -34,6 +34,13 @@ namespace Game.Gameplay.Ring.UI.Menus
 
         public MenuDevice LastDevice { get; private set; }
 
+        /// <summary>
+        /// Миша рухалась після останньої дії клавіатури чи геймпада: лише тоді наведення ставить фокус. Інакше пластина, що
+        /// в'їхала чи перебудувалась під нерухомим курсором, краде фокус у клавіатури (кадр огляду 08.11.2026).
+        /// </summary>
+        public static bool MouseArmed;
+        private float _mx = float.NaN, _my = float.NaN;
+
         /// <summary>Режим «натисни клавішу» (перепризначення): навігація не йде, наступна клавіша — у <see cref="Captured"/>.</summary>
         public bool Capturing;
         public KeyCode? Captured;
@@ -79,6 +86,9 @@ namespace Game.Gameplay.Ring.UI.Menus
                 return false;
             }
             if (_waitRelease) { if (Input.anyKey) return false; _waitRelease = false; _heldDir = 0; }
+            var mp = Input.mousePosition;
+            if (!float.IsNaN(_mx) && (Math.Abs(mp.x - _mx) > 0.5f || Math.Abs(mp.y - _my) > 0.5f)) MouseArmed = true;
+            _mx = mp.x; _my = mp.y;
             bool any = false;
             // ---- клавіатура (перепризначувані + сталі запасні) ----
             if (Down(RingAction.Confirm) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.KeypadEnter)) { Send(sink, RingAction.Confirm, MenuDevice.Keyboard); any = true; }
@@ -116,6 +126,7 @@ namespace Game.Gameplay.Ring.UI.Menus
         private void Send(IMenuNavigable sink, RingAction a, MenuDevice d)
         {
             LastDevice = d;
+            if (d != MenuDevice.Mouse) MouseArmed = false;
             if (sink != null) sink.OnMenu(a, d);
         }
 

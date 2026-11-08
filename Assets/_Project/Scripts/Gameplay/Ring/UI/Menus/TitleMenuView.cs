@@ -118,7 +118,7 @@ namespace Game.Gameplay.Ring.UI.Menus
                 b.style.marginBottom = PlateGap;
                 b.style.marginLeft = i * Step;
                 if (it == Item.Quit) b.Plate.Stripe = 10f;
-                b.OnHover = () => { if (_mode == Mode.Idle && _dialog == null && _focus.Set(idx)) { SyncFocus(); RingMenuServices.Play(MenuSfx.Move); } };
+                b.OnHover = () => { if (RingMenuInput.MouseArmed && _mode == Mode.Idle && _dialog == null && _focus.Set(idx)) { SyncFocus(); RingMenuServices.Play(MenuSfx.Move); } };
                 b.OnClick = () => { if (_mode == Mode.Idle && _dialog == null) { _focus.Set(idx); SyncFocus(); Activate(); } };
                 _plates.Add(b);
                 enabled.Add(true);
@@ -131,6 +131,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             _status.style.position = Position.Absolute;
             _status.style.left = 80f; _status.style.top = 800f;   // під колонкою (низ пластин — 783 @900)
             _status.style.flexDirection = FlexDirection.Row;
+            MenuKit.Underlay(_status);
             _status.style.alignItems = Align.Center;
             _status.pickingMode = PickingMode.Ignore;
             _spinner = new SlashSpinner();
@@ -330,14 +331,24 @@ namespace Game.Gameplay.Ring.UI.Menus
                 () => _menu.StartGame(continueSave));
         }
 
+        /// <summary>Під налаштуваннями й титрами титул не просвічує (кадр 08.11.2026): ховаємо лого, колонку, рядок стану, підвал.</summary>
+        private void ShowTitleUi(bool on)
+        {
+            var d = on ? DisplayStyle.Flex : DisplayStyle.None;
+            _lockup.style.display = d; _sub.style.display = d; _column.style.display = d; _footer.style.display = d;
+            if (!on) ShowStatus(false);
+        }
+
         private void OpenSettings()
         {
             _mode = Mode.Sub;
+            ShowTitleUi(false);
             _settings = new SettingsPanel(T, _menu, _anim, () =>
             {
                 _settings.Root.RemoveFromHierarchy();
                 _settings = null;
                 _mode = Mode.Idle;
+                ShowTitleUi(true);
                 RingMenuServices.Music(MenuMusic.Login);
                 SyncFocus();
             });
@@ -348,11 +359,13 @@ namespace Game.Gameplay.Ring.UI.Menus
         private void OpenCredits()
         {
             _mode = Mode.Sub;
+            ShowTitleUi(false);
             _credits = new CreditsPanel(T, _anim, () =>
             {
                 _credits.Root.RemoveFromHierarchy();
                 _credits = null;
                 _mode = Mode.Idle;
+                ShowTitleUi(true);
                 SyncFocus();
             });
             Root.Add(_credits.Root);

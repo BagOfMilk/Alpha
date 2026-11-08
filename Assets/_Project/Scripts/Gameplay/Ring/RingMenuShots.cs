@@ -15,6 +15,17 @@ namespace Game.Gameplay.Ring
     {
         private static IEnumerator Wait(float s) { yield return new WaitForSeconds(s); }
 
+        /// <summary>
+        /// Знімок і два кадри очікування: Unity знімає екран у кінці кадру, тож дія в тому самому кадрі потрапила б у знімок
+        /// (кадр «звук» показував уже «Керування» — огляд 08.11.2026).
+        /// </summary>
+        private static IEnumerator Snap(RingGameBootstrap h, string name)
+        {
+            h.Shot(name);
+            yield return null;
+            yield return null;
+        }
+
         private static void Nav(RingGameBootstrap h, RingAction a, MenuDevice d = MenuDevice.Keyboard)
         {
             var nav = h.CurrentView as IMenuNavigable;
@@ -29,9 +40,9 @@ namespace Game.Gameplay.Ring
             while (h.CurrentLoading != null && guard < 15f)
             {
                 float f = h.CurrentLoading.Progress.Shown;
-                if (!s30 && f >= 0.3f) { s30 = true; h.Shot("loading_30"); }
-                if (!s70 && f >= 0.7f) { s70 = true; h.Shot("loading_70"); }
-                if (h.CurrentLoading.CanExit) { h.Shot("loading_100"); yield break; }
+                if (!s30 && f >= 0.3f) { s30 = true; yield return Snap(h, "loading_30"); }
+                if (!s70 && f >= 0.7f) { s70 = true; yield return Snap(h, "loading_70"); }
+                if (h.CurrentLoading.CanExit) { yield return Snap(h, "loading_100"); yield break; }
                 guard += Time.unscaledDeltaTime;
                 yield return null;
             }
@@ -43,72 +54,72 @@ namespace Game.Gameplay.Ring
             float guard = 0f;
             while (!(h.CurrentView is TitleMenuView) && guard < 10f) { guard += Time.unscaledDeltaTime; yield return null; }
             yield return Wait(0.85f);
-            h.Shot("title_intro_word");
+            yield return Snap(h, "title_intro_word");
             yield return Wait(0.5f);
-            h.Shot("title_intro_plates");
+            yield return Snap(h, "title_intro_plates");
             yield return Wait(1.2f);
-            h.Shot("title_idle_continue");
+            yield return Snap(h, "title_idle_continue");
             // ---- фокус по пунктах (клавіатура) ----
             string[] names = { "new", "settings", "credits", "quit" };
             foreach (var n in names)
             {
                 Nav(h, RingAction.Down);
                 yield return Wait(0.3f);
-                h.Shot("title_focus_" + n);
+                yield return Snap(h, "title_focus_" + n);
             }
             Nav(h, RingAction.Down);                      // по колу — знову «Продовжити»
             yield return Wait(0.3f);
             Nav(h, RingAction.Down, MenuDevice.Gamepad);  // підказки підвалу — геймпад
             yield return Wait(0.3f);
-            h.Shot("title_focus_new_pad_hints");
+            yield return Snap(h, "title_focus_new_pad_hints");
             // ---- налаштування ----
             Nav(h, RingAction.Down);                      // «Налаштування»
             yield return Wait(0.25f);
             Nav(h, RingAction.Confirm);
             yield return Wait(0.06f);
-            h.Shot("settings_opening");
+            yield return Snap(h, "settings_opening");
             yield return Wait(0.7f);
-            h.Shot("settings_graphics");
+            yield return Snap(h, "settings_graphics");
             Nav(h, RingAction.Down); Nav(h, RingAction.Down);
             yield return Wait(0.25f);
-            h.Shot("settings_graphics_focus_quality");
+            yield return Snap(h, "settings_graphics_focus_quality");
             Nav(h, RingAction.Right);
             yield return Wait(0.25f);
-            h.Shot("settings_graphics_changed");
+            yield return Snap(h, "settings_graphics_changed");
             Nav(h, RingAction.TabNext);
             yield return Wait(0.5f);
-            h.Shot("settings_sound");
+            yield return Snap(h, "settings_sound");
             Nav(h, RingAction.Down);
             Nav(h, RingAction.Right); Nav(h, RingAction.Right);
             yield return Wait(0.3f);
-            h.Shot("settings_sound_music_up");
+            yield return Snap(h, "settings_sound_music_up");
             Nav(h, RingAction.TabNext);
             yield return Wait(0.5f);
-            h.Shot("settings_controls");
+            yield return Snap(h, "settings_controls");
             Nav(h, RingAction.Confirm);                   // «Вгору» — натисни клавішу
             yield return Wait(0.2f);
-            h.Shot("settings_controls_capture");
+            yield return Snap(h, "settings_controls_capture");
             h.MenuInput.Captured = KeyCode.DownArrow;     // як натиснута клавіша: зайнята «Вниз» — дії міняються
             h.MenuInput.Capturing = false;
             yield return Wait(0.3f);
-            h.Shot("settings_controls_swapped");
+            yield return Snap(h, "settings_controls_swapped");
             Nav(h, RingAction.TabNext);
             yield return Wait(0.5f);
             Nav(h, RingAction.Confirm);                   // «Менше руху» — Так
             yield return Wait(0.25f);
-            h.Shot("settings_access_reduced");
+            yield return Snap(h, "settings_access_reduced");
             Nav(h, RingAction.TabNext);
             yield return Wait(0.5f);
-            h.Shot("settings_language");
+            yield return Snap(h, "settings_language");
             Nav(h, RingAction.Back);                      // незбережені зміни — діалог
             yield return Wait(0.45f);
-            h.Shot("settings_dirty_dialog");
+            yield return Snap(h, "settings_dirty_dialog");
             Nav(h, RingAction.Down);                      // «Відкинути»
             yield return Wait(0.2f);
-            h.Shot("settings_dirty_discard_focus");
+            yield return Snap(h, "settings_dirty_discard_focus");
             Nav(h, RingAction.Confirm);
             yield return Wait(0.6f);
-            h.Shot("title_back_from_settings");
+            yield return Snap(h, "title_back_from_settings");
             // ---- кнопки дій у налаштуваннях: «Застосувати» ----
             Nav(h, RingAction.Confirm);                   // фокус — «Налаштування»
             yield return Wait(0.6f);
@@ -118,10 +129,10 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.2f);
             Nav(h, RingAction.Right); Nav(h, RingAction.Right);
             yield return Wait(0.25f);
-            h.Shot("settings_buttons_focus_apply");
+            yield return Snap(h, "settings_buttons_focus_apply");
             Nav(h, RingAction.Confirm);
             yield return Wait(0.35f);
-            h.Shot("settings_applied_toast");
+            yield return Snap(h, "settings_applied_toast");
             Nav(h, RingAction.Back);
             yield return Wait(0.6f);
             // ---- титри ----
@@ -129,7 +140,7 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.2f);
             Nav(h, RingAction.Confirm);
             yield return Wait(0.6f);
-            h.Shot("credits");
+            yield return Snap(h, "credits");
             Nav(h, RingAction.Back);
             yield return Wait(0.5f);
             // ---- вихід: діалог ----
@@ -137,7 +148,7 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.2f);
             Nav(h, RingAction.Confirm);
             yield return Wait(0.5f);
-            h.Shot("quit_dialog");
+            yield return Snap(h, "quit_dialog");
             Nav(h, RingAction.Back);                      // «Ні»
             yield return Wait(0.5f);
             // ---- помилка сейву ----
@@ -146,24 +157,24 @@ namespace Game.Gameplay.Ring
             yield return Wait(0.25f);
             Nav(h, RingAction.Confirm);
             yield return Wait(0.15f);
-            h.Shot("title_checking");
+            yield return Snap(h, "title_checking");
             yield return Wait(0.5f);
-            h.Shot("title_error");
+            yield return Snap(h, "title_error");
             yield return Wait(0.25f);
-            h.Shot("title_error_after_shake");
+            yield return Snap(h, "title_error_after_shake");
             // ---- успіх: вхід у гру ----
             h.WriteBotSave(true);
             Nav(h, RingAction.Confirm);
             yield return Wait(0.55f);
-            h.Shot("title_success_leaving");
+            yield return Snap(h, "title_success_leaving");
             guard = 0f;
             while (!h.Wipe.Busy && guard < 3f) { guard += Time.unscaledDeltaTime; yield return null; }
             yield return Wait(0.2f);
-            h.Shot("wipe_cover");
+            yield return Snap(h, "wipe_cover");
             guard = 0f;
             while ((h.CurrentLoading != null || h.Wipe.Busy) && guard < 20f) { guard += Time.unscaledDeltaTime; yield return null; }
             yield return Wait(1.0f);
-            h.Shot("game_after_load");
+            yield return Snap(h, "game_after_load");
             Debug.Log("[Ринг] огляд меню: кадри в " + h.MenuShotsDir);
             h.ExitAfterShots();
         }
