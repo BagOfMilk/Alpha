@@ -13,6 +13,21 @@
 - Журнал і HUD — за подіями режисера (P1-4 не повертається: `WaitStage`).
 - Підстановки кліпів — з лічильником; на приймання М1 — нуль.
 
+## API «за рингом» від «Изучение» (гілка `claude/ring-stage-outside` від 1c03451, 08.11.2026)
+
+- `RingStage3D.PairPos(MatchSide, bool outside)` (static) — заміна `ZonePos`: на рингу (±0,85; `MatY`; 0), за рингом —
+  пара на підлозі з одного боку між фартухом і першим рядом; `PairYaw(s, outside)` — обличчям одне до одного.
+- Смуга за рингом: `OutsideAnchor`, `OutsideAlong` (гравець у мінус), `OutsideOut`, `OutsideHalfLength` 2,0 м,
+  `OutsideHalfWidth` 0,85 м; кліп пари з бічним зсувом — зсув B навпіл довкола `OutsideAnchor`.
+- `stage.PerchPos(s, MoveStaging, [clip], out yaw)` (instance, зріст) — таз першого кадру й висота слота: `Rope_*` —
+  свій задній канат (гравець W, суперник E; до суперника < 0,8 м — північний), `Move_Corner_*` — свій дальній кут,
+  `Top_*` — на стійці. `stage.BodyScale(a)` — публічна, перейти на неї.
+- `RingCine.OutsideShot(...)`, `RingCine.PerchShot(...)` — кадр поверх `Frame/FrameAny`; режисер дає точки постатей.
+- `RingStageWatch`: стрибок тазу на склейці `Place` не рахується перетином канатів. Оператори й глядачі в смузі ховаються
+  самі (`KeepOutsideClear`). `MatY`, `RingHalf` — static від залу.
+- Бік за залом обирає `RingVenue.PlanOutside`: спортзал — схід, клубна зала — південь, палац — схід.
+- У Ф2: 11 місць старих зон у `RingMatchDirector` (`ZonePos` тощо) перевести на це API.
+
 ## Звірка зі звуком (форк «Меню», гілка `claude/ring-sound-outside-wip` @ 3979ff6, 08.11.2026)
 
 | № | Що знайшов звук | Рішення ПМ |
