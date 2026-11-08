@@ -423,7 +423,11 @@ namespace UnityEngine.UIElements
         public ScrollView(ScrollViewMode scrollViewMode) { }
 
         public Vector2 scrollOffset { get; set; }
+        public ScrollerVisibility verticalScrollerVisibility { get; set; }
+        public ScrollerVisibility horizontalScrollerVisibility { get; set; }
     }
+
+    public enum ScrollerVisibility { Auto, AlwaysVisible, Hidden }
 
     // ---------------- панель і документ ----------------
 

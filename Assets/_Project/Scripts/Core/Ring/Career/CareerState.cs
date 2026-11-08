@@ -210,6 +210,12 @@ namespace Game.Core.Ring.Career
         public bool FeudResolved;
         /// <summary>Очки розвитку на початок поточного матчу (для підсумку).</summary>
         public int DevPointsAtMatchStart;
+        /// <summary>
+        /// Рекорд поточного сезону для підсумку (плейтест 08.11.2026, P1-7): перемоги, поразки, нічиї; популярність на старті
+        /// сезону. Лише облік — правил не змінює.
+        /// </summary>
+        public readonly int[] SeasonRecord = new int[3];
+        public int SeasonPopStart;
 
         public int GetNpcFeud(string id)
         {
@@ -267,6 +273,7 @@ namespace Game.Core.Ring.Career
             var gr = new List<string>();
             foreach (var g in Grudges) gr.Add(Esc(g));
             sb.Append("|grudges=").Append(string.Join(",", gr));
+            sb.Append("|srec=").Append(Ints(SeasonRecord)).Append("|spop=").Append(SeasonPopStart);
         }
 
         internal void Restore(Dictionary<string, string> kv)
@@ -321,6 +328,10 @@ namespace Game.Core.Ring.Career
             Grudges.Clear();
             if (kv.TryGetValue("grudges", out v))
                 foreach (var g in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) Grudges.Add(Uri.UnescapeDataString(g));
+            // рекорд сезону додано 08.11.2026: старі зліпки — рекорд невідомий (нулі), популярність старту — −1 («не знято»)
+            Array.Clear(SeasonRecord, 0, SeasonRecord.Length);
+            if (kv.TryGetValue("srec", out v)) Fill(SeasonRecord, v);
+            SeasonPopStart = kv.TryGetValue("spop", out v) ? int.Parse(v, CultureInfo.InvariantCulture) : -1;
         }
 
         private static string Need(Dictionary<string, string> kv, string key)

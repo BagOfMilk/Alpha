@@ -430,7 +430,7 @@ namespace Game.Gameplay.Ring.UI
             right.Add(sw);
 
             right.Add(Section(T.Get("c.create.look")));
-            right.Add(Cycler(T.Get("c.create.body") + ": " + BodyName(CareerLooks.HeroBodies[Host.HeroBody]),
+            right.Add(Cycler(T.Get("c.create.body") + ": " + BodyName(Host.HeroBody),
                 d => Host.HeroBody = (Host.HeroBody + d + CareerLooks.HeroBodies.Length) % CareerLooks.HeroBodies.Length));
             right.Add(Cycler(T.Get("c.create.hair") + ": " + HairName(CareerLooks.HeroHair[Host.HeroHair]),
                 d => Host.HeroHair = (Host.HeroHair + d + CareerLooks.HeroHair.Length) % CareerLooks.HeroHair.Length));
@@ -462,11 +462,15 @@ namespace Game.Gameplay.Ring.UI
             return row;
         }
 
-        private string BodyName(string body)
+        /// <summary>
+        /// Тіло — номером і будовою, без національності (плейтест 08.11.2026, P3: «Тіло: чоловік, українець(-ка)» — і національність,
+        /// і «(-ка)» для чоловічого тіла).
+        /// </summary>
+        private string BodyName(int index)
         {
+            string body = CareerLooks.HeroBodies[index];
             string sex = body.StartsWith("body_f_") ? "f" : "m";
-            string culture = body.Substring(7);
-            return T.Get("c.look.sex." + sex) + ", " + T.Get("c.look.culture." + culture);
+            return T.Format("c.look.body", index + 1, CareerLooks.HeroBodies.Length, T.Get("c.look.build." + sex));
         }
 
         private string HairName(string hair)
@@ -513,7 +517,9 @@ namespace Game.Gameplay.Ring.UI
     /// </summary>
     public sealed class WeekScreenView : CareerScreenView
     {
-        private bool _dev;   // акордеон з «Витратами»: в огляді розгорнуто «Витрати», «Розвиток» видно на підсумку шоу
+        // Акордеон з «Витратами». Є очки — розгорнуто «Розвиток» (плейтест 08.11.2026, P1-5: «Розвиток» був згорнутий, бот
+        // проходу накопичив 39 невитрачених очок і виграв 1 матч з 8); «Витрати» — згорнуті (в огляді — коли очок немає).
+        private bool _dev, _accordionSet;
 
         public WeekScreenView(RingUiContext ctx) : base(ctx) { }
 
@@ -523,8 +529,20 @@ namespace Game.Gameplay.Ring.UI
             // Решта екрана — закулісся в 3D (власник 04.11.2026: «Занадто громісткий hud … зроби значно меньше та зручніше»).
             Root.Clear();
             RingUi.HudPad(Root);
-            var col = SideColumn();
+            var side = SideColumn();
+            // Вміст прокручується, кнопка «до вечора» — завжди видна. Без цього при розгорнутому розвитку панелі стискались одна
+            // на одну: травма лягала на кнопки дій, «Умов немає» — під перемикач (огляд pt1, кадр 334).
+            var col = RingUi.Scroll();
+            col.style.flexShrink = 1f;
+            col.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            side.Add(col);
             var w = C.GetWeekView();
+            if (!_accordionSet)
+            {
+                _accordionSet = true;
+                _dev = w.DevPoints > 0;
+                _shop = ExpandForShots && !_dev;
+            }
             var top = Glass(8f);
             top.Add(Header());
             col.Add(top);
@@ -552,7 +570,7 @@ namespace Game.Gameplay.Ring.UI
                 grid.Add(ActionBtn(2, "c.week.train_coach", () => C.Train(true), any && w.Money >= CareerRules.TrainerCost,
                     T.Format("c.week.pay.coach", CareerRules.TrainingPoints + CareerRules.TrainerExtraPoints, CareerRules.TrainerCost)));
                 grid.Add(ActionBtn(3, "week.action.1", () => C.Recover(WorstZone(w), false), any && w.CanRecover,
-                    w.CanRecover ? T.Format("c.week.pay.recover", CareerRules.RecoverZoneHeal) : T.Get("c.week.pay.healthy")));
+                    w.CanRecover ? T.Format("c.week.pay.recover", CareerRules.RecoverZoneHeal) : T.Get("c.week.pay.healthy"), InjuryWarn(w)));
                 grid.Add(ActionBtn(4, "week.action.2", C.Promo, any, T.Format("c.week.pay.promo", chaOdds)));
                 grid.Add(ActionBtn(5, "week.action.3", C.Backstage, any, T.Format("c.week.pay.backstage", chaOdds)));
                 grid.Add(ActionBtn(6, "week.action.4", C.SideJob, any,
@@ -578,7 +596,7 @@ namespace Game.Gameplay.Ring.UI
             var dev = Small((_dev ? "▾ " : "▸ ") + T.Get("dev.title") + " · " + w.DevPoints, () => { _dev = !_dev; if (_dev) _shop = false; Refresh(); }, true, RingUi.Good);
             dev.style.marginTop = 6f;
             col.Add(dev);
-            if (_dev) col.Add(DevelopmentPanel(Refresh));
+            if (_dev) col.Add(DevelopmentPanel(Refresh, 2));
             // Витрати (06.11.2026, пункт 3 плану лупу): гроші проти часу й травми; покупки не займають дій тижня.
             var shop = Small((_shop ? "▾ " : "▸ ") + T.Format("c.shop.title", ShopAvailable()), () => { _shop = !_shop; if (_shop) _dev = false; Refresh(); }, true, RingUi.Dim);
             shop.style.marginTop = 4f;
@@ -586,7 +604,8 @@ namespace Game.Gameplay.Ring.UI
             if (_shop) col.Add(ShopPanel());
             var go = RingUi.PrimaryButton(T.Get("week.end"), OnConfirm, !w.PromoChoicePending);
             go.style.fontSize = 16f;
-            col.Add(go);
+            go.style.flexShrink = 0f;
+            side.Add(go);
         }
 
         private bool _shop = ExpandForShots;
@@ -632,13 +651,31 @@ namespace Game.Gameplay.Ring.UI
         {
             var b = Small(text, () => { if (act()) Host.Save(); Refresh(); }, enabled, RingUi.Gold, hint);
             b.style.marginRight = 4f;
+            // Чип в один рядок («Клініка · 45» переносився на два, плейтест 08.11.2026, P3).
+            b.style.whiteSpace = WhiteSpace.NoWrap;
+            b.style.flexShrink = 0f;
             return b;
         }
 
-        // Дві кнопки в ряд: назва й під нею дрібно віддача (що зміниться, шанс); повний опис — у рядку-підказці при наведенні.
-        private Button ActionBtn(int n, string key, Func<WeekActionResult> act, bool enabled, string pay)
+        /// <summary>
+        /// Травми на кнопці «Відновлення»: «Корпус травмовано: −1 до кидків, ще 2 тиж.» (плейтест 08.11.2026, P2-3: бот двічі
+        /// травмувався й жодного разу не лікувався — у шапці був лише рядок «Корпус: травма, ще 3 тиж.»). Порожньо — травм немає.
+        /// </summary>
+        private string InjuryWarn(WeekView w)
         {
-            var b = Small(n + "  " + T.Get(key) + "\n<size=11><color=#" + BrandTokens.Dim.ToString("X6") + ">" + pay + "</color></size>", () => Do(act()), enabled, RingUi.Gold, T.Get(key + ".desc"));
+            var parts = new List<string>();
+            foreach (var i in w.Injuries)
+                if (i.WeeksLeft > 0)
+                    parts.Add(T.Format("c.injury.warn", T.Get("bodyzone." + (int)i.Zone), C.State.InjuryPenaltyFor(i.Zone), i.WeeksLeft));
+            return string.Join("\n", parts);
+        }
+
+        // Дві кнопки в ряд: назва й під нею дрібно віддача (що зміниться, шанс); повний опис — у рядку-підказці при наведенні.
+        // <paramref name="warn"/> — третій рядок кольором тривоги (травма на «Відновленні»).
+        private Button ActionBtn(int n, string key, Func<WeekActionResult> act, bool enabled, string pay, string warn = null)
+        {
+            string w2 = string.IsNullOrEmpty(warn) ? "" : "\n<size=11><color=#" + BrandTokens.Signal.ToString("X6") + ">" + warn + "</color></size>";
+            var b = Small(n + "  " + T.Get(key) + "\n<size=11><color=#" + BrandTokens.Dim.ToString("X6") + ">" + pay + "</color></size>" + w2, () => Do(act()), enabled, RingUi.Gold, T.Get(key + ".desc"));
             b.style.whiteSpace = WhiteSpace.Normal;
             b.style.unityTextAlign = TextAnchor.MiddleLeft;
             b.style.width = new Length(49f, LengthUnit.Percent);
@@ -650,7 +687,7 @@ namespace Game.Gameplay.Ring.UI
         private string Odds(int mod)
         {
             var c = TwoD6.ChancesOf36(mod);
-            return T.Format("c.week.pay.odds", Pct(c[2]), Pct(c[1]));
+            return T.Format("c.week.pay.odds", Pct(c[2]), Pct(c[1]), Pct(c[0]));
         }
 
         private static int Pct(int of36) { return (int)Math.Round(of36 * 100.0 / 36.0); }
@@ -686,7 +723,8 @@ namespace Game.Gameplay.Ring.UI
         {
             if (!r.Ok) return T.Get("week.reason." + r.Reason);
             var parts = new List<string> { T.Get("week.action." + (int)r.Kind) };
-            if (r.HasRoll) parts.Add(T.Format("c.roll", r.Roll, Signed(r.Modifier), r.Total, RingLabels.TierName(T, r.Tier)));
+            // «кидок 6 + 0 = 6», а не «кидок 6 0 = 6» (плейтест 08.11.2026, P3).
+            if (r.HasRoll) parts.Add(T.Format("c.roll", r.Roll, RingChances.Term(r.Modifier), r.Total, RingLabels.TierName(T, r.Tier)));
             if (r.MoneyDelta != 0) parts.Add(T.Format("c.delta.money", Signed(r.MoneyDelta)));
             if (r.DevPointsDelta != 0) parts.Add(T.Format("c.delta.dev", Signed(r.DevPointsDelta)));
             if (r.TrustDelta != 0) parts.Add(T.Format("c.delta.trust", Signed(r.TrustDelta)));
@@ -717,7 +755,13 @@ namespace Game.Gameplay.Ring.UI
                 // Сила суперника видна заздалегідь: росте разом із гравцем (власник 06.11.2026: «1: за місцем у картці»).
                 // Кегль — мінімальний інформаційний із токенів (Статут вигляду, ТЗ B03); решта картки підніметься в B03.
                 if (c.IsRematch) p.Add(RingUi.Lbl(T.Get("c.card.rematch"), BrandTokens.TypeMinInfo, RingUi.Good));
-                if (c.RivalSteps > 0) p.Add(RingUi.Lbl(T.Format("c.card.rival_form", c.RivalSteps), 12f, RingUi.Heel));
+                // «У формі … ростуть разом із тобою» — лише коли гравець справді виріс; до того — нейтрально, за місцем у картці
+                // (плейтест 08.11.2026, P2-4: червоне попередження вже на першому тижні новачок читав як «щось не так»).
+                if (c.RivalSteps > 0)
+                {
+                    if (C.PlayerGrowth() > 0) p.Add(RingUi.Lbl(T.Format("c.card.rival_form", c.RivalSteps), BrandTokens.TypeMinInfo, RingUi.Heel));
+                    else p.Add(RingUi.Lbl(T.Format(c.IsFeud || c.IsTitle ? "c.card.rival_strong" : "c.card.rival_place", c.RivalSteps), BrandTokens.TypeMinInfo, RingUi.Dim));
+                }
             }
             p.Add(RingUi.Lbl(T.Get("card.pos." + (int)c.Position) + " · " + T.Format("c.card.fee_short", c.Fee), 12f, RingUi.Gold));
             string plan = (c.IsFeud ? "" : T.Get("c.card.plan") + ": " + PlanText(c.Plan) + " · ") + StipText(c.Stipulations);
@@ -828,7 +872,8 @@ namespace Game.Gameplay.Ring.UI
                 p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter), 15f, RingUi.Gold, true));
             if (!(r.PopularityAfter > r.PopularityBefore))
                 p.Add(RingUi.Lbl(T.Format("c.result.pop", r.PopularityBefore, r.PopularityAfter), 13f));
-            p.Add(RingUi.Lbl(T.Format("c.result.trust", r.TrustBefore, r.TrustAfter), 13f));
+            // Довіра — лише якщо змінилась («довіра 1 → 1» — шум, плейтест 08.11.2026, P3).
+            if (r.TrustAfter != r.TrustBefore) p.Add(RingUi.Lbl(T.Format("c.result.trust", r.TrustBefore, r.TrustAfter), BrandTokens.TypeMinInfo));
             // Очки розвитку — одразу після матчу (06.11.2026: наприкінці сезону лишалось 21–24 невитрачених).
             if (C.DevPoints > 0)
             {
@@ -866,10 +911,23 @@ namespace Game.Gameplay.Ring.UI
             var left = Glass(8f);
             left.style.marginTop = 6f;
             left.Add(RingUi.Lbl(T.Format("c.season.title", rep.Season), 18f, RingUi.Gold, true));
+            // Підсумок сезону (плейтест 08.11.2026, P1-7: кінець сезону був панеллю без рекорду й ходу ворожнечі).
+            var rec = C.State.SeasonRecord;
+            left.Add(RingUi.Lbl(T.Format("c.season.record", rec[0], rec[1], rec[2]), 15f, rec[0] > rec[1] ? RingUi.Good : RingUi.Text, true));
+            if (C.State.SeasonPopStart >= 0)
+                left.Add(RingUi.Lbl(T.Format("c.season.pop", C.State.SeasonPopStart, rep.Popularity), BrandTokens.TypeMinInfo, rep.Popularity > C.State.SeasonPopStart ? RingUi.Good : RingUi.Text));
             left.Add(RingUi.Lbl(T.Format("c.season.line", rep.Popularity, rep.Trust, rep.Money), 13f));
+            var hammer = C.Content.FindNpc(CareerContent.HammerId);
+            if (hammer != null)
+            {
+                string hn = T.Get(hammer.NameKey);
+                left.Add(RingUi.Lbl(C.State.FeudResolved ? T.Format("c.season.feud_done", hn)
+                    : T.Format("c.season.feud", hn, C.FeudLevel(CareerContent.HammerId), CareerRules.MaxFeud), BrandTokens.TypeMinInfo, RingUi.Heel));
+            }
             if (rep.Fired) left.Add(RingUi.Lbl(T.Get("season.fired"), 13f, RingUi.Bad, true));
             if (rep.TitleDone) left.Add(RingUi.Lbl(T.Get(rep.TitleWon || rep.BeltIsPlayers ? "c.season.belt_yes" : "c.season.belt_no"), 13f, rep.BeltIsPlayers ? RingUi.Gold : RingUi.Dim));
             else if (rep.TitleEligible) left.Add(RingUi.Lbl(T.Get(rep.IsDefense ? "season.defense" : "season.title_shot"), 13f, RingUi.Gold, true));
+            else if (!rep.Fired) left.Add(RingUi.Lbl(T.Format("c.season.goal", CareerRules.TitleShotTrust, CareerRules.MaxFeud), BrandTokens.TypeMinInfo, RingUi.Dim));
             if (C.CanStartTitleMatch)
             {
                 left.Add(RingUi.PrimaryButton(T.Get("c.season.title_go"), () => { C.StartTitleMatch(); Host.Save(); }));

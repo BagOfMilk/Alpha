@@ -148,6 +148,8 @@ namespace Game.Core.Ring.Career
             State.Money = CareerRules.StartMoney;
             State.BeltHolder = Content.BeltHolderId;
             State.Season = 1; State.Week = 1;
+            Array.Clear(State.SeasonRecord, 0, State.SeasonRecord.Length);
+            State.SeasonPopStart = Popularity;
             StartWeek();
             Stage = CareerStage.Week;
         }
@@ -993,6 +995,7 @@ namespace Game.Core.Ring.Career
             r.DevPointsGained = DevPoints - State.DevPointsAtMatchStart;
             State.LastOpponent = State.Opponent;
             State.LastOutcome = res.Winner == MatchWinner.Player ? 1 : res.Winner == MatchWinner.Rival ? 2 : 3;
+            State.SeasonRecord[State.LastOutcome - 1]++;
             // Реванш одноразовий: перевага «знаю його слабкість» — на один матч; програв і реванш — нової образи немає.
             bool rematch = State.Grudges.Remove(State.Opponent);
             if (res.Winner == MatchWinner.Rival && !rematch && !State.IsTitle) State.Grudges.Add(State.Opponent);
@@ -1205,6 +1208,8 @@ namespace Game.Core.Ring.Career
                 State.Injury[z] = Math.Max(0, State.Injury[z] - 2);
             }
             State.Report = null;
+            Array.Clear(State.SeasonRecord, 0, State.SeasonRecord.Length);
+            State.SeasonPopStart = Popularity;
             State.Season++; State.Week = 1;
             State.Strained = false;
             StartWeek();
