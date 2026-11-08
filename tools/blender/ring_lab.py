@@ -14,13 +14,17 @@ from mathutils import Vector, Matrix, Quaternion
 from mathutils.bvhtree import BVHTree
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# жіноча лабораторія (04.11.2026): сцена lab_scene_f.blend (набір kit_f) — генератор з --female, кліпи в lab_clips_f.
+# Жіночий набір брав чоловічі кліпи як є — на вужчих тілах пари проходили одне в одне на 3–8 см.
+FEMALE = os.path.basename(bpy.data.filepath).startswith("lab_scene_f")
+CLIPS = os.path.join(REPO, "tools", "blender", "lab_clips_f" if FEMALE else "lab_clips")
 G = {}                      # простір імен генератора (RPose, stance, P, apply_w, …)
 LAB = {}                    # стан лабораторії: риги, Rig-обгортки, дії
 
 
 def _load_core():
     argv = sys.argv
-    sys.argv = ["blender", "--", REPO]
+    sys.argv = ["blender", "--", REPO] + (["--female"] if FEMALE else [])
     try:
         src = open(os.path.join(REPO, "tools", "blender", "ring_anims.py"), encoding="utf-8").read()
         G.clear()
@@ -445,7 +449,7 @@ def save_clip(name=None):
     for tag in ("A", "B"):
         out[tag] = [{n: [[round(x, 5) for x in l], [round(x, 5) for x in r]] for n, (l, r) in fr.items()}
                     for fr in LAB["frames"][tag]]
-    d = os.path.join(REPO, "tools", "blender", "lab_clips")
+    d = CLIPS
     os.makedirs(d, exist_ok=True)
     p = os.path.join(d, name + ".json")
     with open(p, "w", encoding="utf-8") as fh:

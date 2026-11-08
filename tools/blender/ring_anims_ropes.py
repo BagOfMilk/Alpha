@@ -51,7 +51,7 @@ def reb_plan(R):
     T = dict(hit=0.66 * k, sink=0.8 * k, push=(0.94 + h) * k, end=(1.62 + h) * k if R.ret else (1.3 + h) * k)
     path_y = [(0.0, 0.0), (0.14 * k, -0.12), (0.5 * k, -(D - 0.55)), (T["hit"], rope_y + gap),
               (T["sink"], rope_y + gap - R.sink), (T["push"], rope_y + gap)]
-    path_y += [(T["push"] + 0.18 * k, rope_y + gap + 0.55), (T["end"], -0.25)] if R.ret else [(T["end"], rope_y + gap + 0.3)]
+    path_y += [(T["push"] + 0.26 * k, rope_y + gap + 0.55), (T["end"], -0.25)]   # поштовх 0,26 с: за 0,18 — ривок опорної ноги if R.ret else [(T["end"], rope_y + gap + 0.3)]
     # повороти — по 0,3 с: швидше кисті «летять» разом із тілом (і на екрані це ривок)
     # розворот спиною — 0,3 с: стопи розставлені під нього (0,42 с давало ковзання стоп 3 см і ривок стегна)
     turn0 = 0.64 * k - max(0.3 * k, 0.3)        # розворот не коротший за 0,3 с і на швидкому варіанті (кисть летіла 0,7 м за кадр)
@@ -106,13 +106,15 @@ def rebound_pose(t, L, R):
     on = track(t, [(0.0, 0.0), (T["hit"] - (0.4 if R.hit == "back" else 0.28), 0.0), (T["hit"], 1.0), (T["push"], 1.0), (min(T["push"] + REL, L - 0.04), 0.0), (L + 0.01, 0.0)])   # з каната — REL с (не далі кінця кліпу: ключі назад у часі давали стрибок кисті на 38 см)
     run = 1.0 - on
     ret_t = max(0.0, t - T["push"])
-    duck = R.duck * smooth(min(1.0, ret_t / 0.2)) if R.ret else 0.0
+    # пірнання на зворотному бігу — глибоко й коротко (під уявну руку суперника), потім випрямляється; було 8 см на весь
+    # зворотний біг — на огляді 04.11.2026 не відрізнялось від звичайного відскоку
+    duck = R.duck * math.sin(math.pi * min(1.0, ret_t / 0.55)) if R.ret else 0.0
     p = RPose(forced=set())
     bob = 0.025 * math.cos(2 * math.pi * t / 0.33) * run
-    p.pelvis = Vector((0.0, track(t, path_y), -0.07 - bob - 0.14 * on - 0.06 * R.crouch * on - 0.03 * R.heavy - 0.08 * duck))
+    p.pelvis = Vector((0.0, track(t, path_y), -0.07 - bob - 0.14 * on - 0.06 * R.crouch * on - 0.03 * R.heavy - 0.3 * duck))
     p.pelvis_yaw = yaw
     hit_tilt = {"side": -2.0, "back": -8.0, "chest": 10.0}[R.hit]
-    p.pitch = (R.lean + 4.0 * R.heavy) * run + hit_tilt * on + 10.0 * duck
+    p.pitch = (R.lean + 4.0 * R.heavy) * run + hit_tilt * on + 40.0 * duck
     # плече в канати — лише трохи: більший крен виносить голову й шию за канат (власник 29.10.2026, кадр «крізь канат»)
     p.roll = (6.0 * R.side if R.hit == "side" else 0.0) * on
     p.yaw = -6.0 * math.cos(2 * math.pi * t / 0.66) * run
@@ -122,6 +124,13 @@ def rebound_pose(t, L, R):
     p.head_yaw = yaw * (1 - on) + look_c * on
     fl, yl = foot_plan_track(t, falls["l"])
     fr, yr = foot_plan_track(t, falls["r"])
+    # ітерація 2: на швидкому розвороті опорна стопа провертається на подушечці разом із тазом (навколо щиколотки —
+    # щиколотка на місці, ковзання 0); нерухома стопа скручувала стегно відносно таза — ривок 84 °/кадр²
+    rate = abs(track(min(L, t + 0.02), path_yaw) - track(max(0.0, t - 0.02), path_yaw)) / 0.04
+    piv = min(1.0, rate / 450.0) * 0.7
+    if piv > 1e-3:
+        yl = yl + (yaw + 10.0 - yl) * piv * smooth((0.1 - fl.z) / 0.03)     # плавно гасне, коли стопа відривається
+        yr = yr + (yaw - 14.0 - yr) * piv * smooth((0.1 - fr.z) / 0.03)
     p.ankles = (fl, fr)
     p.foot_rot = (Quaternion(UP, math.radians(yl)), Quaternion(UP, math.radians(yr)))
     p.knees = (fl + Rz(yl) @ Vector((0.08, -0.9, 0.45)), fr + Rz(yr) @ Vector((-0.08, -0.9, 0.45)))
@@ -152,8 +161,10 @@ def rebound_pose(t, L, R):
             along = fwd_w.x * ((0.42 if R.grip == "elbow" else 0.28) if R.hit == "side" else 0.0) * (0.75 if globals().get("FEMALE") else 1.0)
             # точка хвату — у кінцевій позі (спиною до канатів, курс face), а не від плеча в поточному розвороті:
             # на розвороті плече перетинає середню лінію, і ціль правої кисті стрибала до грудей (кадр 16, 30.10.2026)
-            span = 0.38 * BODY["arm"] * sg
-            rope = Vector(((Rz(face) @ Vector((span, 0.0, 0.0))).x + along, rope_y + 0.04, hz))
+            span = 0.5 * BODY["arm"] * sg
+            # хват — під пахвою, руки по боках (огляд 04.11.2026: у присіді верхній канат на рівні голови — кисті
+            # біля обличчя, «здаюсь»); канат у грі прогинається під руку
+            rope = Vector(((Rz(face) @ Vector((span, 0.0, 0.0))).x + along, rope_y + 0.04, min(hz, S[s_].z - 0.2)))
             # шлях: перед тілом → збоку від свого плеча → канат позаду. Пряма «перед → позаду» на розвороті різала
             # груди на 12–17 см (перевірка рук у грудях, 30.10.2026: «руки из плечей растут»)
             arm_k = BODY["arm"]
@@ -184,21 +195,22 @@ def rebound_pose(t, L, R):
     return p
 
 REBS = [                                       # усі — спиною до канатів (власник 30.10.2026)
+    # огляд 04.11.2026: варіанти не відрізнялись на око — швидкість, прогин, присід і нахил розведені ширше
     Reb("Rope_Back_L"),                                     # розворот через ліве плече
     Reb("Rope_Back_R", side=-1),                            # через праве
-    Reb("Rope_Fast", speed=1.2, sink=0.3),
-    Reb("Rope_Slow_Tired", speed=0.82, sink=0.2, lean=13.0),
-    Reb("Rope_Deep", sink=0.34, crouch=1.0),
-    Reb("Rope_Light", sink=0.15),
-    Reb("Rope_Back_Low", crouch=0.6),
-    Reb("Rope_Elbow_Hook", grip="elbow"),
+    Reb("Rope_Fast", speed=1.45, sink=0.36, lean=3.0),
+    Reb("Rope_Slow_Tired", speed=0.7, sink=0.14, lean=22.0, crouch=0.5),
+    Reb("Rope_Deep", sink=0.42, crouch=1.3),
+    Reb("Rope_Light", sink=0.08, speed=1.15, lean=2.0),
+    Reb("Rope_Back_Low", crouch=1.1, lean=14.0),
+    Reb("Rope_Elbow_Hook", grip="elbow", sink=0.3),
     Reb("Rope_Stop_Lean", ret=False),
     Reb("Rope_Duck_Return", duck=1.0),
-    Reb("Rope_Roar", arm_up=1.0),
-    Reb("Rope_Heavy", heavy=1.0, speed=0.9, sink=0.32),
+    Reb("Rope_Roar", arm_up=1.0, speed=0.9),
+    Reb("Rope_Heavy", heavy=1.4, speed=0.78, sink=0.4, crouch=0.6),
     Reb("Rope_Back_Stop", ret=False, sink=0.2, crouch=0.4),
-    Reb("Rope_Hesitate", hesitate=0.25),
-    Reb("Rope_Back_R_Fast", side=-1, speed=1.2, sink=0.3),
+    Reb("Rope_Hesitate", hesitate=0.45, speed=0.9),
+    Reb("Rope_Back_R_Fast", side=-1, speed=1.45, sink=0.36, lean=3.0),
 ]
 
 def reb_len(R):

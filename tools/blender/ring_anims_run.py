@@ -11,7 +11,7 @@
 class Run:
     """Параметри варіанту бігу."""
     def __init__(self, name, L, stride, duty=0.25, lean=7.0, bounce=0.03, sink=0.06, kick=0.3, knee=0.16,
-                 arms=0.17, elbow=0.0, twist=7.0, head=-4.0, width=0.1, limp=0.0, heavy=0.0, fist=0.55):
+                 arms=0.17, elbow=0.0, twist=7.0, head=-4.0, width=0.1, limp=0.0, heavy=0.0, fist=0.55, clutch=0.0):
         self.__dict__.update({k: v for k, v in locals().items() if k != "self"})
 
 # Манера за статтю (власник 29.10.2026: «різні люди по різному це роблять, чоловіки та дівчата»): у жінок вужча
@@ -27,13 +27,13 @@ def run_pose(t, R):
     p = RPose(forced=set())
     # таз нижче після контакту кожної ноги (двічі за цикл), вище у фазі польоту; кульгання — глибше на хвору
     k = math.cos(2 * math.pi * 2 * (u - R.duty * 0.5))
-    dz = -R.sink - R.bounce * ST["bounce"] * 0.5 * k - R.limp * 0.04 * max(0.0, math.sin(2 * math.pi * u)) - 0.02 * R.heavy
+    dz = -R.sink - R.bounce * ST["bounce"] * 0.5 * k - R.limp * 0.1 * max(0.0, math.sin(2 * math.pi * u)) - 0.02 * R.heavy
     p.pelvis = Vector((0.0, -v * t, dz))
     p.pitch = R.lean + 4.0 * R.heavy
     c = math.cos(2 * math.pi * u)
     p.pelvis_yaw = R.twist * ST["pelvis_twist"] * c         # таз за опорною ногою
     p.yaw = -R.twist * 1.6 * ST["shoulder_twist"] * c         # плечі — назустріч тазу
-    p.roll = 2.5 * math.sin(2 * math.pi * u) + 6.0 * R.limp * math.sin(2 * math.pi * u)
+    p.roll = 2.5 * math.sin(2 * math.pi * u) + 14.0 * R.limp * math.sin(2 * math.pi * u)
     p.head_pitch = R.head
     p.head_yaw = 0.0
     span = v * R.duty * L
@@ -75,24 +75,29 @@ def run_pose(t, R):
         ph = math.cos(2 * math.pi * u) * (-sgn)      # +1 — рука вперед
         return lambda S: S[side] + Vector((0.1 * sgn, -0.06 - sw * ph, -0.32 + 0.1 * max(0.0, ph) + R.elbow))   # кисті вздовж тіла, не поперек грудей
     p.hands = {s_: (hand(s_), FWD + UP * 0.5, LEFT if s_ == "l" else RIGHT) for s_ in "lr"}
+    if R.clutch:                                     # тримається за ребра лівою (огляд 04.11.2026: варіанти не читались)
+        g0 = p.hands["l"][0]
+        p.hands["l"] = (lambda S: g0(S).lerp(S["chest"] + Vector((0.06, -0.13, -0.14)), R.clutch), RIGHT + FWD * 0.3, UP)
     ei = ST["elbow_in"]
     p.elbows = {"l": lambda S: S["l"] + Vector((0.14 - ei, 0.32, -0.28)), "r": lambda S: S["r"] + Vector((-0.14 + ei, 0.32, -0.28))}
     p.fist = {"l": R.fist, "r": R.fist}
     return p
 
 RUNS = [
+    # огляд 04.11.2026 (двічі): Angry/Light/Sprint/Technic/Low не відрізнялись від Run_Loop — розведено нахил, підскок,
+    # висоту рук і присід
     Run("Run_Jog_Loop", 0.8, 2.0, duty=0.29, lean=4.0, bounce=0.025, sink=0.04, kick=0.2, knee=0.1, arms=0.12, twist=5.0),
     Run("Run_Loop", 0.66, 2.6),
-    Run("Run_Sprint_Loop", 0.58, 3.1, duty=0.21, lean=12.0, bounce=0.035, sink=0.07, kick=0.45, knee=0.24, arms=0.19, twist=9.0),
-    Run("Run_Tired_Loop", 0.76, 2.0, duty=0.29, lean=14.0, bounce=0.02, sink=0.08, kick=0.18, knee=0.08, arms=0.08, elbow=-0.06, head=12.0, fist=0.2),
+    Run("Run_Sprint_Loop", 0.56, 3.4, duty=0.19, lean=17.0, bounce=0.035, sink=0.08, kick=0.55, knee=0.3, arms=0.3, twist=10.0, head=-8.0, fist=0.2),
+    Run("Run_Tired_Loop", 0.84, 1.8, duty=0.30, lean=20.0, bounce=0.015, sink=0.13, kick=0.12, knee=0.06, arms=0.05, elbow=-0.12, head=24.0, fist=0.1),
     Run("Run_Limp_Loop", 0.86, 1.8, duty=0.30, lean=8.0, bounce=0.03, sink=0.06, kick=0.18, knee=0.08, arms=0.1, limp=1.0),
-    Run("Run_Heavy_Loop", 0.76, 2.3, duty=0.22, lean=8.0, bounce=0.02, sink=0.09, kick=0.18, knee=0.1, arms=0.14, twist=11.0, heavy=1.0),
-    Run("Run_Light_Loop", 0.6, 2.7, duty=0.22, lean=8.0, bounce=0.045, sink=0.05, kick=0.42, knee=0.22, arms=0.2, twist=6.0, fist=0.3),
-    Run("Run_Technic_Loop", 0.66, 2.5, duty=0.30, lean=6.0, bounce=0.03, sink=0.06, kick=0.3, knee=0.16, arms=0.16, twist=5.0),
-    Run("Run_Angry_Loop", 0.6, 2.8, duty=0.22, lean=14.0, bounce=0.03, sink=0.08, kick=0.38, knee=0.2, arms=0.24, twist=11.0, head=-12.0, fist=0.9),
-    Run("Run_Showoff_Loop", 0.7, 2.4, duty=0.21, lean=2.0, bounce=0.045, sink=0.05, kick=0.3, knee=0.18, arms=0.24, twist=9.0, head=-14.0),
-    Run("Run_Low_Loop", 0.64, 2.6, duty=0.30, lean=18.0, bounce=0.02, sink=0.12, kick=0.3, knee=0.16, arms=0.16, twist=7.0, head=-16.0),
-    Run("Run_Hurt_Body_Loop", 0.8, 2.0, duty=0.29, lean=14.0, bounce=0.02, sink=0.07, kick=0.18, knee=0.08, arms=0.06, twist=3.0, fist=0.2),
+    Run("Run_Heavy_Loop", 0.8, 2.2, duty=0.22, lean=8.0, bounce=0.02, sink=0.13, kick=0.14, knee=0.1, arms=0.14, twist=15.0, width=0.2, heavy=1.0),
+    Run("Run_Light_Loop", 0.56, 2.2, duty=0.2, lean=3.0, bounce=0.085, sink=0.02, kick=0.5, knee=0.26, arms=0.11, elbow=0.08, twist=4.0, head=-8.0, fist=0.15),
+    Run("Run_Technic_Loop", 0.66, 2.4, duty=0.32, lean=3.0, bounce=0.012, sink=0.05, kick=0.22, knee=0.12, arms=0.08, elbow=0.04, twist=2.5, head=-2.0, fist=0.7),
+    Run("Run_Angry_Loop", 0.6, 2.8, duty=0.22, lean=18.0, bounce=0.03, sink=0.09, kick=0.38, knee=0.2, arms=0.3, elbow=0.12, twist=15.0, head=-22.0, width=0.14, fist=1.0),
+    Run("Run_Showoff_Loop", 0.7, 2.4, duty=0.21, lean=-2.0, bounce=0.06, sink=0.04, kick=0.36, knee=0.26, arms=0.34, twist=14.0, head=-20.0),
+    Run("Run_Low_Loop", 0.64, 2.4, duty=0.32, lean=26.0, bounce=0.015, sink=0.2, kick=0.24, knee=0.14, arms=0.14, twist=6.0, head=-28.0, width=0.14),
+    Run("Run_Hurt_Body_Loop", 0.84, 1.9, duty=0.29, lean=18.0, bounce=0.02, sink=0.09, kick=0.16, knee=0.08, arms=0.06, twist=3.0, fist=0.2, clutch=1.0),
 ]
 RUN_LOOPS = {r.name: r for r in RUNS}
 

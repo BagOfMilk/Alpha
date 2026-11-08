@@ -1,6 +1,6 @@
 # Три арени «Рингу» (етап 1, docs/TRPG_DESIGN.md §4.4, §11.1) — від інді до середнього промоушену, без корпорацій.
 #
-#   "C:\Program Files\Blender Foundation\Blender 4.5\blender.exe" -b --python tools/blender/ring_venues.py -- <корінь репо> [gym hall arena] [--look]
+#   "C:\Program Files\Blender Foundation\Blender 4.5\blender.exe" -b --python tools/blender/ring_venues.py -- <корінь репо> [gym hall arena] [--look] [--save-blend]
 #
 #   gym   — шкільний спортзал, інді, ~200 глядачів: ринг 16 футів, розкладні стільці, висувні трибуни, ферма на стійках,
 #           вихід через арку з завісою, роздягальня з шафками;
@@ -31,6 +31,7 @@ from mathutils import Vector, Matrix, Quaternion
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 REPO = args[0] if args else os.getcwd()
 LOOK = "--look" in args
+SAVE_BLEND = "--save-blend" in args     # зберегти сцену кожної арени в Logs/venues/<арена>.blend
 SHOTS = next((a.split("=", 1)[1].split(",") for a in args if a.startswith("--shots=")), None)   # лише ці знімки
 VIDEO = next((a.split("=", 1)[1] for a in args if a.startswith("--video=")), None)              # відео сцени світла
 CHECK = "--check" in args or "--check-raw" in args                                              # перевірка колізій
@@ -3261,5 +3262,15 @@ for vid in WANT:
     if LOOK:
         look(root, info)
         print("VENUE %s: огляд готовий" % vid, flush=True)
+    if SAVE_BLEND:                                   # сцена арени з текстурами, світлом і натовпом — для огляду й ролика
+        os.makedirs(LOOK_DIR, exist_ok=True)
+        for eng in ('BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'):   # огляд закінчується пласким проходом у Workbench
+            try:
+                bpy.context.scene.render.engine = eng
+                break
+            except TypeError:
+                pass
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.join(LOOK_DIR, "%s.blend" % vid), copy=True)
+        print("VENUE %s: сцена %s" % (vid, os.path.join(LOOK_DIR, "%s.blend" % vid)), flush=True)
 if CHECK and CHECK_FAILS:
     raise SystemExit("КОЛІЗІЇ: %d (звіти — Assets/Art/Ring/venue_*_collisions.txt)" % CHECK_FAILS)
