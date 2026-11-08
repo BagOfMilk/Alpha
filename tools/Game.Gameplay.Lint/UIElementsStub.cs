@@ -348,6 +348,13 @@ namespace UnityEngine.UIElements
     public abstract class Focusable : CallbackEventHandler
     {
         public bool focusable { get; set; }
+        public FocusController focusController { get { return null; } }
+        public void Blur() { }
+    }
+
+    public class FocusController
+    {
+        public Focusable focusedElement { get { return null; } }
     }
 
     // ---------------- елементи ----------------

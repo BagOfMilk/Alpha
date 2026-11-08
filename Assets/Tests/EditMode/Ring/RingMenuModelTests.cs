@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using Game.Core.Ring;
+using Game.Core.Ring.Career;
 using Game.Gameplay.Ring.Models;
 using NUnit.Framework;
 using UnityEngine;
@@ -238,12 +239,50 @@ namespace Game.Tests.EditMode
         private static string Root() { return Path.GetDirectoryName(Application.dataPath); }
 
         [Test]
+        public void Time_PauseHoldsThroughWarpEnd_AndResumeRestoresTempo()
+        {
+            try
+            {
+                RingTime.Reset();
+                RingTime.Base = 3f;                       // бот огляду кар'єри — ×3
+                RingTime.Warp = 0.4f;                     // сповільнення фінішера
+                Assert.AreEqual(1.2f, RingTime.Scale, 1e-5);
+                RingTime.Paused = true;
+                Assert.AreEqual(0f, RingTime.Scale, "пауза зупиняє час");
+                RingTime.Warp = 1f;                       // сповільнення скінчилось під паузою
+                Assert.AreEqual(0f, RingTime.Scale, "кінець сповільнення не відпускає паузу");
+                RingTime.Paused = false;
+                Assert.AreEqual(3f, RingTime.Scale, 1e-5, "вихід з паузи — базовий темп, не застарілий множник");
+            }
+            finally { RingTime.Reset(); }
+            Assert.AreEqual(1f, RingTime.Scale);
+        }
+
+        [Test]
+        public void Pause_LeaveToTitle_WarnsExactlyWhenSnapshotLosesProgress()
+        {
+            // безпечно: тиждень між діями, афіша, підсумок шоу, кінець сезону
+            Assert.AreEqual(PauseRules.LeaveSafeKey, PauseRules.LeaveBodyKey(CareerStage.Week, ShowPhase.None, false));
+            Assert.AreEqual(PauseRules.LeaveSafeKey, PauseRules.LeaveBodyKey(CareerStage.Show, ShowPhase.Card, false));
+            Assert.AreEqual(PauseRules.LeaveSafeKey, PauseRules.LeaveBodyKey(CareerStage.Show, ShowPhase.Result, false));
+            Assert.AreEqual(PauseRules.LeaveSafeKey, PauseRules.LeaveBodyKey(CareerStage.SeasonEnd, ShowPhase.None, false));
+            // втрачається: матч і сцена ворожнечі (зліпок відкочує), закулісся (поза зліпком), створення героя (не зберігається)
+            Assert.AreEqual(PauseRules.LeaveShowKey, PauseRules.LeaveBodyKey(CareerStage.Show, ShowPhase.Match, false));
+            Assert.AreEqual(PauseRules.LeaveShowKey, PauseRules.LeaveBodyKey(CareerStage.Show, ShowPhase.Feud, false));
+            Assert.AreEqual(PauseRules.LeaveBackstageKey, PauseRules.LeaveBodyKey(CareerStage.Week, ShowPhase.None, true));
+            Assert.AreEqual(PauseRules.LeaveCreateKey, PauseRules.LeaveBodyKey(CareerStage.Create, ShowPhase.None, false));
+            Assert.IsFalse(PauseRules.LosesProgress(CareerStage.Week, ShowPhase.None, false));
+            Assert.IsTrue(PauseRules.LosesProgress(CareerStage.Show, ShowPhase.Match, false));
+        }
+
+        [Test]
         public void MenuTextKeys_AllExistInUiStrings()
         {
             var ui = MiniJson.ParseObject(CareerKit.Read("ui_uk.json"));
             string dir = Path.Combine(Root(), "Assets", "_Project", "Scripts", "Gameplay", "Ring");
             var files = new List<string>(Directory.GetFiles(Path.Combine(dir, "UI", "Menus"), "*.cs"));
             files.Add(Path.Combine(dir, "RingGameBootstrap.Menus.cs"));
+            files.Add(Path.Combine(dir, "Models", "RingPause.cs"));
             var rx = new Regex("\"(m\\.[a-z0-9_.]+[a-z0-9_])\"");
             var missing = new List<string>();
             int seen = 0;

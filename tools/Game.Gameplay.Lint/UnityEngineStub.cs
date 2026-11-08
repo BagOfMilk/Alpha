@@ -49,6 +49,7 @@ namespace UnityEngine
     public class YieldInstruction { }
     public sealed class Coroutine : YieldInstruction { }
     public sealed class WaitForSeconds : YieldInstruction { public WaitForSeconds(float seconds) { } }
+    public sealed class WaitForSecondsRealtime : YieldInstruction { public WaitForSecondsRealtime(float seconds) { } }
 
     public class GameObject : Object
     {
@@ -91,7 +92,7 @@ namespace UnityEngine
         public Color backgroundColor { get; set; }
     }
 
-    public class AudioListener : Behaviour { }
+    public class AudioListener : Behaviour { public static bool pause { get; set; } }
 
     /// <summary>Ринг: мінімум Mathf для масштабу панелі.</summary>
     public static class Mathf

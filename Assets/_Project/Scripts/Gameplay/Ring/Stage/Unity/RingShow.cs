@@ -437,7 +437,9 @@ namespace Game.Gameplay.Ring.Stage
         private void Update()
         {
             if (_lamp != null && InBackstage)
-                _lamp.intensity = _flicker ? (Mathf.PerlinNoise(Time.time * 7f, 0.3f) > 0.32f ? 3.2f : 0.6f) : 4.5f;
+                // мерехтіння лампи паркінгу; «Спалахи» вимкнено (Налаштування → Доступність) — рівне світло
+                _lamp.intensity = !_flicker ? 4.5f : !Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes ? 3.2f
+                    : (Mathf.PerlinNoise(Time.time * 7f, 0.3f) > 0.32f ? 3.2f : 0.6f);
             if (_guest != null && InBackstage) _guest.Tick(Time.deltaTime);
         }
 

@@ -11,6 +11,30 @@ namespace Game.Gameplay.Ring.UI.Menus
     /// клини, напівтон, канати. Усе малюється кодом (Painter2D) один раз на зміну розміру — рух іде через transform/opacity,
     /// тож щокадрового перемальовування немає (Статут PERF-01). Кольори — лише з <see cref="RingTheme"/>.
     /// </summary>
+    /// <summary>
+    /// Палітра мови меню — «Арена» (власник 08.11.2026: «Кольори якийсь дитячі та добрі, давай дизайн більш схожий на реслінг і
+    /// більш підходящі»): чорна зала, кров (кармін) — колір клину, золото пояса — фокус і головні слова, сталь — другорядне.
+    /// Кобальт з меню прибрано: яскравий синій поруч із жовтим читався як іграшка. Лише токени Статуту, нових кольорів немає;
+    /// ролі зібрані тут, щоб мову міняли в одному місці.
+    /// </summary>
+    public static class MenuPalette
+    {
+        /// <summary>Клин / смуга тла (титул, налаштування, завантаження, пауза).</summary>
+        public static Color Wedge { get { return RingTheme.Crimson; } }
+
+        /// <summary>Напівтон-«зерно» на краю клину і темний край смуги.</summary>
+        public static Color Grit { get { return RingTheme.Bg; } }
+
+        /// <summary>Сталь: другорядні смуги (розріз переходу), плашка колажу.</summary>
+        public static Color Steel { get { return RingTheme.Slate; } }
+
+        /// <summary>Тонка лінія-акцент на темному (пояс чемпіона).</summary>
+        public static Color Trim { get { return RingTheme.Gold; } }
+
+        /// <summary>Рідкі акцентні лінії швидкості.</summary>
+        public static Color Streak { get { return RingTheme.Crimson; } }
+    }
+
     public static class MenuShapes
     {
         public static float SlantK { get { return (float)Math.Tan(BrandTokens.SpaceSlantDeg * Math.PI / 180.0); } }
@@ -204,7 +228,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             float ww = W * WedgeWidth;
             // клин: широкий угорі, звужується донизу — діагональ «удару»
             var wedge = new[] { new Vector2(0, 0), new Vector2(ww, 0), new Vector2(ww * 0.62f, H), new Vector2(0, H) };
-            MenuShapes.Polygon(p, wedge, RingTheme.WithAlpha(RingTheme.Hero, WedgeAlpha));
+            MenuShapes.Polygon(p, wedge, RingTheme.WithAlpha(MenuPalette.Wedge, WedgeAlpha));
             // темна смуга вздовж краю клина — читабельність тексту на ньому (ACC-03)
             var inner = new[] { new Vector2(0, 0), new Vector2(ww * 0.86f, 0), new Vector2(ww * 0.50f, H), new Vector2(0, H) };
             MenuShapes.Polygon(p, inner, RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaUnderlay));
@@ -224,7 +248,7 @@ namespace Game.Gameplay.Ring.UI.Menus
                         float t = (x - x0) / (x1 - x0);
                         float rad = step * 0.42f * (1f - t);
                         if (rad < 0.8f) continue;
-                        MenuShapes.Dot(p, x, y, rad, RingTheme.WithAlpha(RingTheme.HeroText, BrandTokens.AlphaTronDim));
+                        MenuShapes.Dot(p, x, y, rad, RingTheme.WithAlpha(MenuPalette.Grit, BrandTokens.AlphaUnderlay));
                     }
                 }
             }
@@ -274,7 +298,7 @@ namespace Game.Gameplay.Ring.UI.Menus
                 float len = 60f + (s >> 8) % 10000 / 10000f * 260f;
                 float k = 0.36f;   // ≈ 20° — діагональ ліній (декор), не нахил тексту
                 MenuShapes.Line(p, x, y, x + len, y - len * k, i % 5 == 0 ? 3f : 1.5f,
-                    RingTheme.WithAlpha(i % 4 == 0 ? RingTheme.HeroText : RingTheme.Text, BrandTokens.AlphaTronGhost));
+                    RingTheme.WithAlpha(i % 4 == 0 ? MenuPalette.Streak : RingTheme.Text, BrandTokens.AlphaTronGhost));
             }
         }
     }
@@ -316,7 +340,37 @@ namespace Game.Gameplay.Ring.UI.Menus
         }
     }
 
-    /// <summary>Промені позаду печатки на екрані завантаження (дешево: малюються раз, крутиться шар).</summary>
+    /// <summary>
+    /// Титр-плита заголовка (<see cref="MenuKit.Collage"/>): чорна плита зі зрізом 12° і жорсткою тінню, кармінна смуга зліва,
+    /// золота нитка під плитою — палітра «Арена».
+    /// </summary>
+    public sealed class TitleSlab : VisualElement
+    {
+        public TitleSlab()
+        {
+            pickingMode = PickingMode.Ignore;
+            style.overflow = Overflow.Visible;
+            generateVisualContent = Draw;
+        }
+
+        private void Draw(MeshGenerationContext ctx)
+        {
+            var r = contentRect;
+            float w = r.width, h = r.height;
+            if (w < 4f || h < 4f) return;
+            var p = ctx.painter2D;
+            float k = MenuShapes.SlantK, sh = BrandTokens.SpaceShadowOffset;
+            MenuShapes.Trapezoid(p, sh, sh, w, h, k, RingTheme.WithAlpha(RingTheme.Black, BrandTokens.AlphaUnderlay));
+            MenuShapes.Trapezoid(p, 0f, 0f, w, h, k, RingTheme.Bg);
+            MenuShapes.Trapezoid(p, 0f, 0f, h * 0.16f, h, 0f, RingTheme.Crimson);
+            MenuShapes.Trapezoid(p, h * 0.16f, h - 3f, w - h * 0.16f - k * h, 3f, 0f, MenuPalette.Trim);
+        }
+    }
+
+    /// <summary>
+    /// Промені позаду печатки на екрані завантаження — вузькі промені прожекторів (не «сонечко»: кадр 08.11.2026 — широкі сірі
+    /// промені читались як дитяча гра). Дешево: малюються раз, крутиться шар.
+    /// </summary>
     public sealed class Rays : VisualElement
     {
         public Rays()
@@ -331,9 +385,9 @@ namespace Game.Gameplay.Ring.UI.Menus
             float cx = r.width * 0.5f, cy = r.height * 0.5f, R = Math.Min(r.width, r.height) * 0.5f;
             if (R < 4f) return;
             var p = ctx.painter2D;
-            for (int i = 0; i < 12; i++)
+            for (int i = 0; i < 8; i++)
             {
-                double a0 = (i * 30.0 - 6.0) * Math.PI / 180.0, a1 = (i * 30.0 + 6.0) * Math.PI / 180.0;
+                double a0 = (i * 45.0 - 1.6) * Math.PI / 180.0, a1 = (i * 45.0 + 1.6) * Math.PI / 180.0;
                 var tri = new[]
                 {
                     new Vector2(cx, cy),

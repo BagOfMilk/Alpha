@@ -139,13 +139,15 @@ namespace Game.Gameplay.Ring
         {
             _seed = ReadSeed();
             _shotsDir = ReadArg(ShotsArg);
+            RingTime.Reset();         // темп часу однією формулою (пауза, стоп-кадр, огляд ×3) — Models/RingPause.cs
             if (_shotsDir != null)
             {
                 Application.runInBackground = true;
                 UI.CareerScreenView.ExpandForShots = true;
                 System.IO.Directory.CreateDirectory(_shotsDir);
                 // Огляд проходить сезон: кліпи й паузи ШІ втричі швидше (кадри ті самі, лише менше чекання).
-                Time.timeScale = 3f;
+                RingTime.Base = 3f;
+                Time.timeScale = RingTime.Scale;
                 int lim;
                 string ls = ReadArg("-ring-shot-limit");
                 if (ls != null && int.TryParse(ls, out lim) && lim > 0) ShotLimit = lim;
@@ -331,7 +333,7 @@ namespace Game.Gameplay.Ring
             // Еталон 900 рядків (а не 720, як у зрізі): панелі менші, ринг видно (власник 04.11.2026: «зроби значно меньше»).
             // «Розмір інтерфейсу» діє на екрани гри (гнучка розкладка); меню й завантаження — завжди в еталоні 900 (розкладка за
             // безпечними зонами B01/B08: на 120 % кнопки й рядок стану пішли б за край).
-            bool menu = _view is IMenuNavigable || _loading != null || !_bootDone;
+            bool menu = _view is IMenuNavigable || _loading != null || !_bootDone || _pause != null;
             float s = Mathf.Clamp(Screen.height / 900f, 0.65f, 2.4f) * (_settings != null && !menu ? _settings.UiScale : 1f);
             if (Mathf.Abs(s - _appliedScale) < 0.001f) return;
             _appliedScale = s;
@@ -413,6 +415,13 @@ namespace Game.Gameplay.Ring
             TickMenuOverlays();       // завантаження й розріз живуть і до появи кар'єри
             if (_career == null || _root == null || !_bootDone) return;
             ApplyScale();
+            if (Paused)
+            {
+                // пауза: екран гри стоїть (не тікає, клавіш не бере), меню паузи живе в реальному часі
+                PollPause(Input.GetKeyDown(KeyCode.Escape));
+                if (_pause != null) _pause.Tick(Time.unscaledDeltaTime);
+                return;
+            }
             if (ShowStep()) return;
             Sync();
             if (_view == null) return;
@@ -616,6 +625,14 @@ namespace Game.Gameplay.Ring
         {
             if (MenuOverlayBusy) return;          // під завантаженням і розрізом екран клавіш не бере
             if (PollMenuInput()) return;          // меню (вхід, налаштування): свій ввід — клавіатура, геймпад, колесо
+            // пауза (B01 §6.2): Esc (і перепризначене «Назад») або Start геймпада — на будь-якому екрані кар'єри; поки друкується
+            // ім'я (поле вводу у фокусі), паузу відкриває лише Esc — перепризначена літера має друкуватись
+            bool typing = _root.focusController != null && _root.focusController.focusedElement is TextField;
+            if ((Input.GetKeyDown(KeyCode.Escape) || (!typing && (BoundDown(RingAction.Back) || Input.GetKeyDown(KeyCode.JoystickButton7)))) && CanPause)
+            {
+                OpenPause();
+                return;
+            }
             for (int i = 1; i <= 9; i++)
             {
                 if (!Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i - 1))) continue;
@@ -626,11 +643,6 @@ namespace Game.Gameplay.Ring
             if (Input.GetKeyDown(KeyCode.L) || BoundDown(RingAction.Log)) _view.OnToggleLog();
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space) || BoundDown(RingAction.Confirm))
                 _view.OnConfirm();
-            if ((Input.GetKeyDown(KeyCode.Escape) || BoundDown(RingAction.Back)) && !_onTitle && _career.Stage == CareerStage.Week)
-            {
-                Save();
-                _onTitle = true;
-            }
         }
 
         private int _fxSeen;

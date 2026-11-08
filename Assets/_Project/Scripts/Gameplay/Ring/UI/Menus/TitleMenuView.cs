@@ -82,7 +82,8 @@ namespace Game.Gameplay.Ring.UI.Menus
             if (RingMenuArt.RopeFrame != null) _frame.style.backgroundImage = new StyleBackground(RingMenuArt.RopeFrame);
             _word = MenuKit.Display(T.Get("c.game.title"), 132f, RingTheme.Text, RingFontRole.Display900, 0.02f);
             _word.style.unityFontStyleAndWeight = FontStyle.Italic;
-            var shadow = MenuKit.Display(T.Get("c.game.title"), 132f, RingTheme.Villain, RingFontRole.Display900, 0.02f);
+            // тінь слова — чорна: кармінна зливалась би з кармінним клином (палітра «Арена»)
+            var shadow = MenuKit.Display(T.Get("c.game.title"), 132f, RingTheme.Bg, RingFontRole.Display900, 0.02f);
             shadow.style.unityFontStyleAndWeight = FontStyle.Italic;
             shadow.style.position = Position.Absolute;
             shadow.style.translate = new Translate(new Length(BrandTokens.SpaceShadowOffset), new Length(BrandTokens.SpaceShadowOffset * 1.25f));
@@ -262,9 +263,10 @@ namespace Game.Gameplay.Ring.UI.Menus
                     _dialog = new MenuDialog(_anim, T.Get("m.new.title"), T.Get("m.new.body"),
                         new[]
                         {
-                            new KeyValuePair<string, Action>(T.Get("m.new.yes"), () => { _dialog = null; Leave(false); }),
-                            new KeyValuePair<string, Action>(T.Get("m.new.no"), () => { _dialog = null; SyncFocus(); }),
+                            new KeyValuePair<string, Action>(T.Get("m.new.yes"), () => { _dialog = null; ShowColumn(true); Leave(false); }),
+                            new KeyValuePair<string, Action>(T.Get("m.new.no"), () => { _dialog = null; ShowColumn(true); SyncFocus(); }),
                         }, 1, 1);
+                    ShowColumn(false);
                     Root.Add(_dialog.Root);
                     break;
                 case Item.Settings:
@@ -281,8 +283,9 @@ namespace Game.Gameplay.Ring.UI.Menus
                         new[]
                         {
                             new KeyValuePair<string, Action>(T.Get("m.quit.yes"), () => { _dialog = null; _menu.Quit(); }),
-                            new KeyValuePair<string, Action>(T.Get("m.quit.no"), () => { _dialog = null; SyncFocus(); }),
+                            new KeyValuePair<string, Action>(T.Get("m.quit.no"), () => { _dialog = null; ShowColumn(true); SyncFocus(); }),
                         }, 1, 1);
+                    ShowColumn(false);
                     Root.Add(_dialog.Root);
                     break;
             }
@@ -337,6 +340,14 @@ namespace Game.Gameplay.Ring.UI.Menus
             var d = on ? DisplayStyle.Flex : DisplayStyle.None;
             _lockup.style.display = d; _sub.style.display = d; _column.style.display = d; _footer.style.display = d;
             if (!on) ShowStatus(false);
+        }
+
+        /// <summary>Під діалогом (вихід, нова кар'єра) колонка пластин і підвал не просвічують — кадри 08.11.2026: кнопки діалогу
+        /// лягали на пластини титулу. Лого лишається.</summary>
+        private void ShowColumn(bool on)
+        {
+            var d = on ? DisplayStyle.Flex : DisplayStyle.None;
+            _column.style.display = d; _footer.style.display = d;
         }
 
         private void OpenSettings()

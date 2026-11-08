@@ -98,39 +98,52 @@ namespace Game.Gameplay.Ring.Stage
 
         private float _shakeAmp, _shakeT, _shakeDur;
 
-        /// <summary>Тремтіння камери (м, с): удар — ледь, фінішер і падіння після кидка — сильніше.</summary>
+        /// <summary>
+        /// Тремтіння камери (м, с): удар — ледь, фінішер і падіння після кидка — сильніше. Налаштування → Доступність:
+        /// «Тремтіння екрана» вимкнено або «Менше руху» — камера не тремтить (ТЗ B01 §7.8).
+        /// </summary>
         public void Shake(float amp, float dur)
         {
+            if (!Game.Gameplay.Ring.UI.Menus.RingAccessibility.ScreenShake) return;
             if (amp < _shakeAmp * (1f - _shakeT / Mathf.Max(0.01f, _shakeDur))) return;
             _shakeAmp = amp; _shakeDur = dur; _shakeT = 0f;
         }
 
-        private float _timeBase = -1f;
         private Coroutine _timeCo;
 
         /// <summary>
         /// Час на мить: стоп-кадр удару (mul ≈ 0,05 на 0,06 с) чи сповільнення фінішера (0,4 на ~0,9 с). Відносно базового
-        /// темпу (бот огляду грає на ×3), тривалість — реальні секунди.
+        /// темпу (бот огляду грає на ×3), тривалість — реальні секунди без пауз. Темп — через <see cref="Game.Gameplay.Ring.Models.RingTime"/>: кінець
+        /// сповільнення під час паузи гри не відпускає паузу.
         /// </summary>
         public void TimeWarp(float mul, float realSeconds)
         {
-            if (_timeBase < 0f) _timeBase = Time.timeScale;
             if (_timeCo != null) StopCoroutine(_timeCo);
             _timeCo = StartCoroutine(TimeWarpCo(mul, realSeconds));
         }
 
+        private static void SetWarp(float w)
+        {
+            Game.Gameplay.Ring.Models.RingTime.Warp = w;
+            Time.timeScale = Game.Gameplay.Ring.Models.RingTime.Scale;
+        }
+
         private System.Collections.IEnumerator TimeWarpCo(float mul, float realSeconds)
         {
-            Time.timeScale = _timeBase * mul;
-            yield return new WaitForSecondsRealtime(realSeconds);
-            // Плавне повернення за 0,15 с — без смикання.
-            for (float t = 0f; t < 0.15f; t += Time.unscaledDeltaTime)
+            SetWarp(mul);
+            for (float t = 0f; t < realSeconds; )
             {
-                Time.timeScale = Mathf.Lerp(_timeBase * mul, _timeBase, t / 0.15f);
                 yield return null;
+                if (!Game.Gameplay.Ring.Models.RingTime.Paused) t += Time.unscaledDeltaTime;
             }
-            Time.timeScale = _timeBase;
-            _timeBase = -1f;
+            // Плавне повернення за 0,15 с — без смикання.
+            for (float t = 0f; t < 0.15f; )
+            {
+                SetWarp(Mathf.Lerp(mul, 1f, t / 0.15f));
+                yield return null;
+                if (!Game.Gameplay.Ring.Models.RingTime.Paused) t += Time.unscaledDeltaTime;
+            }
+            SetWarp(1f);
             _timeCo = null;
         }
         /// <summary>Частка половини висоти кадру, на яку ринг піднято над центром (внизу — панель дій).</summary>
@@ -208,6 +221,7 @@ namespace Game.Gameplay.Ring.Stage
 
         private void OnDestroy()
         {
+            if (_timeCo != null) SetWarp(1f);   // сповільнення не переживає сцену
             if (RingStageHub.Current == (IRingStage)this) RingStageHub.Current = null;
             if (_player != null) _player.Destroy();
             if (_rival != null) _rival.Destroy();
@@ -1016,7 +1030,8 @@ namespace Game.Gameplay.Ring.Stage
 
         private void LateUpdate()
         {
-            float dt = Time.unscaledDeltaTime;
+            // реальний час — щоб камера жила й під стоп-кадром; але на паузі гри стоїть і вона (рев'ю 08.11.2026)
+            float dt = Game.Gameplay.Ring.Models.RingTime.Paused ? 0f : Time.unscaledDeltaTime;
             if (_player != null) _player.Tick(Time.deltaTime);
             if (_rival != null) _rival.Tick(Time.deltaTime);
             if (_ref != null) _ref.Tick(Time.deltaTime);

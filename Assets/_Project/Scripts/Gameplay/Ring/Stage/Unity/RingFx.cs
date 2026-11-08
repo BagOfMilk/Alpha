@@ -167,8 +167,11 @@ namespace Game.Gameplay.Ring.Stage
 
         private float _flash;
 
-        /// <summary>Спалах удару: PAR на мить яскравішають (чистий удар — сильніше, «частково» — ледь).</summary>
-        public void Impact(float strength) { _flash = Mathf.Max(_flash, strength); }
+        /// <summary>
+        /// Спалах удару: PAR на мить яскравішають (чистий удар — сильніше, «частково» — ледь). Налаштування → Доступність →
+        /// «Спалахи» вимкнено — світло не спалахує.
+        /// </summary>
+        public void Impact(float strength) { if (Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes) _flash = Mathf.Max(_flash, strength); }
 
         /// <summary>Великий момент вступу (назва гри на титантроні): іскри й CO2 біля завіси.</summary>
         public void TitleHit()
@@ -195,7 +198,8 @@ namespace Game.Gameplay.Ring.Stage
             switch (_cue)
             {
                 case "entrance": house = 0.35f; parMul = 0.55f; haze = 1.8f; keyMul = 0.5f; parTint = new Color(1f, 0.45f, 0.4f); break;
-                case "finisher": house = 0.3f; parMul = Strobe() ? 1.8f : 0.15f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
+                // стробоскоп фінішера; «Спалахи» вимкнено — рівне яскраве світло без блимання (фотосенситивність)
+                case "finisher": house = 0.3f; parMul = !Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes ? 1.2f : Strobe() ? 1.8f : 0.15f; haze = 1.4f; keyMul = 0.6f; parTint = White; break;
                 case "victory": house = 1.1f; parMul = 1.3f; haze = 1.3f; keyMul = 1.1f; parTint = Gold; break;
                 case "defeat": house = 0.45f; parMul = 0.35f; haze = 1.5f; keyMul = 0.5f; parTint = new Color(0.45f, 0.58f, 1f); break;
                 default: house = 1f; parMul = 1f; haze = 1f; keyMul = 1f; parTint = Color.clear; break;
@@ -447,7 +451,9 @@ namespace Game.Gameplay.Ring.Stage
         {
             for (float t = 0f; t < dur + 0.5f; t += Time.deltaTime)
             {
-                l.intensity = t < dur ? 6f + Mathf.PerlinNoise(t * 20f, 0f) * 6f : Mathf.Lerp(12f, 0f, (t - dur) / 0.5f);
+                // мерехтіння вогню; «Спалахи» вимкнено — рівне сяйво без миготіння
+                float burn = Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes ? 6f + Mathf.PerlinNoise(t * 20f, 0f) * 6f : 9f;
+                l.intensity = t < dur ? burn : Mathf.Lerp(Game.Gameplay.Ring.UI.Menus.RingAccessibility.Flashes ? 12f : 9f, 0f, (t - dur) / 0.5f);
                 yield return null;
             }
             l.intensity = 0f;
