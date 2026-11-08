@@ -119,6 +119,7 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         public void TimeWarp(float mul, float realSeconds)
         {
+            if (UI.Menus.RingAccessibility.ReduceMotion) return;   // «Зменшити рух»: без стоп-кадрів і сповільнень
             if (_timeCo != null) StopCoroutine(_timeCo);
             _timeCo = StartCoroutine(TimeWarpCo(mul, realSeconds));
         }
@@ -218,6 +219,7 @@ namespace Game.Gameplay.Ring.Stage
             RingStageHub.Current = this;
             ShowIdle();
             SnapCamera();
+            UI.Menus.RingAccessibility.ApplyCommandLine();   // демо без меню: перемикачі доступності з командного рядка
             string demo = ReadArg("-ring-demo");
             if (demo != null) StartCoroutine(RingStageDemo.Run(this, _director, demo));
         }

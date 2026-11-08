@@ -93,6 +93,7 @@ namespace Game.Gameplay.Ring.UI.Menus
             RingAccessibility.ReduceMotion = v.ReduceMotion;
             RingAccessibility.ScreenShake = v.ScreenShake && !v.ReduceMotion;
             RingAccessibility.Flashes = v.Flashes;
+            RingAccessibility.ApplyCommandLine();
         }
 
         private void ApplyDisplay(RingSettingsValues v)
@@ -147,6 +148,25 @@ namespace Game.Gameplay.Ring.UI.Menus
         public static bool ReduceMotion;
         public static bool ScreenShake = true;
         public static bool Flashes = true;
+
+        /// <summary>
+        /// Огляд без зміни налаштувань гравця: <c>-ring-a11y noflash,noshake,calm</c> (через кому) вимикає спалахи,
+        /// тремтіння, стоп-кадри й сповільнення лише на цей запуск — щоб зняти кадри фінішера з перемикачами.
+        /// </summary>
+        public static void ApplyCommandLine()
+        {
+            var args = RingLaunchArgs.All();   // у редакторі — ще й Temp/ring-editor.args
+            for (int i = 0; i + 1 < args.Length; i++)
+            {
+                if (args[i] != "-ring-a11y") continue;
+                foreach (var f in args[i + 1].Split(','))
+                {
+                    if (f == "noflash") Flashes = false;
+                    else if (f == "noshake") ScreenShake = false;
+                    else if (f == "calm") { ReduceMotion = true; ScreenShake = false; }
+                }
+            }
+        }
     }
 }
 

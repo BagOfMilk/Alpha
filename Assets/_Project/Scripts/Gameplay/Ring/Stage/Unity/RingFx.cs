@@ -238,7 +238,7 @@ namespace Game.Gameplay.Ring.Stage
             parMul *= 1f + _flash * 1.6f;
             for (int i = 0; i < _par.Count; i++)
             {
-                _par[i].intensity = Mathf.Lerp(_par[i].intensity, _parBase[i] * parMul, _cue == "finisher" || _flash > 0f ? 1f : k);
+                _par[i].intensity = Mathf.Lerp(_par[i].intensity, _parBase[i] * parMul, (_cue == "finisher" && UI.Menus.RingAccessibility.Flashes) || _flash > 0f ? 1f : k);
                 var target = parTint.a > 0f ? Color.Lerp(_parColorBase[i], parTint, 0.75f) : _parColorBase[i];
                 _par[i].color = Color.Lerp(_par[i].color, target, k);
             }

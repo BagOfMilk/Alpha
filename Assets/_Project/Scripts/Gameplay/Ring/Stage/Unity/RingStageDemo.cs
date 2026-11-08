@@ -90,7 +90,7 @@ namespace Game.Gameplay.Ring.Stage
             yield return Watch(dir, folder, "taunt");
             dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.Finisher, RollTier.Strong,
                 new MatchEffect(MatchEffectKind.Down, R, 1), new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Center)));
-            yield return Watch(dir, folder, "finisher");
+            yield return Watch(dir, folder, "finisher", Dense ? 0.04f : -1f);   // щільно — щоб побачити строб (доступність)
             dir.Enqueue(Ev(MatchEventKind.Kickout, R, MatchActionId.Pin, RollTier.Miss));
             yield return Watch(dir, folder, "pin3");
             dir.Enqueue(new MatchEvent { Kind = MatchEventKind.MatchEnd, Actor = P, Action = MatchActionId.CatchBreath });
@@ -152,15 +152,22 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Крок кадрів під час дії, с гри (<c>-ring-demo-every</c>; щільно — для перевірки контакту й бігу).</summary>
         private static float _every = 0.55f;
 
-        private static IEnumerator Watch(RingMatchDirector dir, string folder, string tag)
+        /// <summary><c>-ring-demo-dense</c>: фінішер знімається кожні 0,04 с (огляд перемикача «Спалахи»).</summary>
+        private static bool Dense { get { return RingLaunchArgs.Has("-ring-demo-dense"); } }
+
+        /// <param name="step">Крок кадрів, с; не задано — <c>-ring-demo-every</c> (<see cref="_every"/>).</param>
+        private static IEnumerator Watch(RingMatchDirector dir, string folder, string tag, float step = -1f)
         {
+            bool realtime = step > 0f && step < 0.5f;   // явний щільний крок (-ring-demo-dense) — у реальному часі, крізь сповільнення
+            if (step <= 0f) step = _every;               // -ring-demo-every лишається в часі гри, як було
             Debug.Log("[Ринг] демо: сегмент " + tag + " з кадру " + _n);
             yield return null;
             float t = 0f;
             while (dir.IsBusy && t < 25f)
             {
-                yield return new WaitForSeconds(_every);
-                t += _every;
+                if (realtime) yield return new WaitForSecondsRealtime(step);
+                else yield return new WaitForSeconds(step);
+                t += step;
                 Capture(folder, tag);
             }
         }
