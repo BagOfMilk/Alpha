@@ -48,12 +48,17 @@
   --alpha-scrim: 0.72;
   --alpha-plate: 0.94;
   --alpha-underlay: 0.62;
+  --alpha-tronGhost: 0.18;
+  --alpha-tronDim: 0.34;
+  --alpha-tronMid: 0.58;
   --size-micro: 13px;
   --size-label: 15px;
   --size-body: 17px;
   --size-lead: 20px;
   --size-title: 28px;
   --size-display: 44px;
+  --size-menu: 34px;
+  --size-logo: 164px;
   --stinger-t0: 36px;
   --stinger-t1: 46px;
   --stinger-t2: 72px;

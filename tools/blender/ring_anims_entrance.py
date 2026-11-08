@@ -170,8 +170,10 @@ class Seq:
     def at(self, t):
         pos, yaw = self.p0, self.y0
         for off, land, tgt, ty, lift in self.ev:
-            if t <= off:
+            if t < off - 1e-6:
                 return pos, yaw, True, None
+            if t <= off:                                   # кадр відриву: стопа ще на місці, але вже не опора (п'ята йде вгору)
+                return pos, yaw, False, None
             if t < land:
                 s = (t - off) / (land - off)
                 h = smooth(clamp01((s - 0.16) / 0.80))
@@ -498,6 +500,10 @@ ENTRANCE_CLIPS = [
     ("Entrance_Corner_Pose", CORNER_LEN, clip_corner, True, None, 2.4),
 ]
 
+# персональні виходи (docs/ring/ENTRANCE_PROFILE.md): біти завіса / хода / бар'єр / вхід у ринг / поза
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ring_anims_entrance_personal.py"), encoding="utf-8").read())
+ENTRANCE_CLIPS += PERSONAL_CLIPS
+
 def entrance_main():
     load_pair()
     armA = bpy.data.objects["Arm_A"]
@@ -527,20 +533,50 @@ def entrance_main():
             continue
         place(armA, Vector(), 0)
         PLANT_LOG.clear()
+        def env_eval(wa, kind=kind):
+            envs, bad_ = "—", []
+            if kind == "climb":
+                ep, ew = env_pen(wa)
+                envs = "сходи %.1f см %s" % (ep, ew)
+                if ep > 2.0:
+                    bad_.append("стопа/коліно у сходинці")
+            if kind == "ropes":
+                cp, cw, lp, lw = rope_pen(wa)
+                envs = "торс %.1f см %s · кінцівки %.1f см %s" % (cp, cw, lp, lw)
+                if cp > 2.0 or lp > 2.0:
+                    bad_.append("канат")
+            if kind in ENV_CHECKS:
+                cp, cw, lp, lw, sag = ENV_CHECKS[kind](wa)
+                envs = "торс %.1f см %s · кінцівки %.1f см %s · прогин %.0f см" % (cp, cw, lp, lw, sag)
+                if cp > 2.0 or lp > 2.0:
+                    bad_.append("канат")
+            if kind == "rollin":
+                ap, aw = apron_pen(wa)
+                envs += " · фартух/підлога %.1f см %s" % (ap, aw)
+                if ap > 2.0:
+                    bad_.append("фартух")
+            if kind == "barrier":
+                bp, bw = barrier_pen(wa)
+                envs = "бар'єр %.1f см %s" % (bp, bw)
+                if bp > 2.0:
+                    bad_.append("бар'єр")
+            return envs, bad_
         sa, sb, wa, wb, q, gaps = bake_clip(rig, rig, name, length, lambda t, L, fa=fa: fa(t, L), None)
-        slide2, sw2 = plant_slide(wa, PLANT_LOG[-len(wa):]) if len(PLANT_LOG) >= len(wa) else (0.0, "")
-        envs = "—"
-        extra_bad = []
-        if kind == "climb":
-            ep, ew = env_pen(wa)
-            envs = "сходи %.1f см %s" % (ep, ew)
-            if ep > 2.0:
-                extra_bad.append("стопа/коліно у сходинці")
-        if kind == "ropes":
-            cp, cw, lp, lw = rope_pen(wa)
-            envs = "торс %.1f см %s · кінцівки %.1f см %s" % (cp, cw, lp, lw)
-            if cp > 2.0 or lp > 2.0:
-                extra_bad.append("канат")
+        plants = list(PLANT_LOG[-len(wa):]) if len(PLANT_LOG) >= len(wa) else None
+        envs, extra_bad = env_eval(wa)
+        # шар оживлення (ring_anims_polish.py) не знає про сходи, канати й фартух: якщо з ним кінцівка заходить в
+        # оточення — кліп печеться без шару (геометрію опор не чіпаємо, як і перекриттям)
+        if extra_bad and globals().get("POLISH"):
+            globals()["POLISH"] = False
+            PLANT_LOG.clear()
+            alt = bake_clip(rig, rig, name, length, lambda t, L, fa=fa: fa(t, L), None)
+            globals()["POLISH"] = True
+            envs2, bad2 = env_eval(alt[2])
+            if len(bad2) < len(extra_bad) or (not fails(alt[4]) and len(bad2) <= len(extra_bad)):
+                sa, sb, wa, wb, q, gaps = alt
+                envs, extra_bad = envs2 + " · без шару оживлення", bad2
+                plants = list(PLANT_LOG[-len(wa):]) if len(PLANT_LOG) >= len(wa) else None
+        slide2, sw2 = plant_slide(wa, plants) if plants else (0.0, "")
         if slide2 > LIMITS["slide"]:
             extra_bad.append("ковзання опори")
         if "--jerk" in _args:                                         # розбір ривків: найгірші кістки й кадри
@@ -558,7 +594,9 @@ def entrance_main():
             for f_ in range(int(_args[_args.index("--dbgarm") + 1]), int(_args[_args.index("--dbgarm") + 2])):
                 w_ = wa[f_][1]
                 r3 = lambda v: "(%.2f,%.2f,%.2f)" % tuple(v)
-                print("DBGARM", name, f_, "sh", r3(w_["upperarm_l"][0]), "elb", r3(w_["lowerarm_l"][0]), "hand", r3(w_["hand_l"][0]), "spine3", r3(w_["spine_03"][0]), flush=True)
+                for s_ in "lr":
+                    print("DBGARM", name, f_, s_, "sh", r3(w_["upperarm_" + s_][0]), "elb", r3(w_["lowerarm_" + s_][0]), "hand", r3(w_["hand_" + s_][0]),
+                          "rel", r3(w_["hand_" + s_][0] - w_["upperarm_" + s_][0]), flush=True)
         if "--dbgleg" in _args:
             for f_ in range(int(_args[_args.index("--dbgleg") + 1]), int(_args[_args.index("--dbgleg") + 2])):
                 w_ = wa[f_][1]
@@ -566,7 +604,7 @@ def entrance_main():
                 for s_ in "lr":
                     th, ca = w_["thigh_" + s_], w_["calf_" + s_]
                     kn = math.degrees((th[0] - th[1]).angle(ca[1] - ca[0]))
-                    row.append("%s knee=%.0f° hip-ank=%.3f ank=(%.2f,%.2f,%.2f)" % (s_, kn, (th[0] - ca[1]).length, ca[1].x, ca[1].y, ca[1].z))
+                    row.append("%s knee=%.0f° hip-ank=%.3f ank=(%.2f,%.2f,%.2f) ball=(%.3f,%.3f,%.3f)" % (s_, kn, (th[0] - ca[1]).length, ca[1].x, ca[1].y, ca[1].z, *w_["foot_" + s_][1]))
                 print("DBGLEG", name, f_, "pel=%.3f,%.3f,%.3f" % tuple(w_["pelvis"][0]), " | ".join(row), flush=True)
         bad = fails(q) + extra_bad
         state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
@@ -592,7 +630,7 @@ def entrance_main():
     strip_constraints(rig)
     actions = {n: write_action(armA, n, s_) for n, s_, arm in samples}
     for n, act in actions.items():
-        if n in ("Entrance_Walk_Loop", "Entrance_Corner_Pose"):               # на ходьбі й у куті — перекриття; на сходах і канатах геометрію не чіпаємо
+        if n in ("Entrance_Walk_Loop", "Entrance_Corner_Pose") or (n.startswith("Entrance_Walk_") and n.endswith("_Loop")):               # на ходьбі й у куті — перекриття; на сходах і канатах геометрію не чіпаємо
             overlap(act, n, True)
     if LOOK:
         os.makedirs(LOOK_DIR, exist_ok=True)

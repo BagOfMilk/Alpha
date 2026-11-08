@@ -1,0 +1,15 @@
+# name | seconds | samples | bpm | bars | key | LUFS | dBTP | loop=whole-clip
+# LUFS: для music_* — інтегральна BS.1770-4; для ui_* — гучність усього кліпу (dual-mono), див. README
+music_login | 80.000 | 3840000 | 96.00 | 32 | Em | -16.00 | -1.74 | loop=yes
+music_loading | 40.000 | 1920000 | 96.00 | 16 | Em | -16.00 | -3.01 | loop=yes
+music_settings | 54.880 | 2634240 | 69.97 | 16 | Em | -16.00 | -3.32 | loop=yes
+ui_move | 0.060 | 2880 | - | - | Em | -17.00 | -1.78 | loop=no
+ui_confirm | 0.200 | 9600 | - | - | Em | -14.52 | -1.60 | loop=no
+ui_back | 0.150 | 7200 | - | - | Em | -15.00 | -3.13 | loop=no
+ui_error | 0.300 | 14400 | - | - | Em | -14.55 | -1.60 | loop=no
+ui_toggle | 0.100 | 4800 | - | - | Em | -16.50 | -1.95 | loop=no
+ui_slider | 0.040 | 1920 | - | - | Em | -18.00 | -8.99 | loop=no
+ui_tab | 0.160 | 7680 | - | - | Em | -14.50 | -1.62 | loop=no
+ui_transition | 0.450 | 21600 | - | - | Em | -15.99 | -1.60 | loop=no
+ui_load_done | 0.700 | 33600 | - | - | Em | -14.03 | -1.60 | loop=no
+ui_login_ok | 1.300 | 62400 | - | - | Em | -13.00 | -1.80 | loop=no

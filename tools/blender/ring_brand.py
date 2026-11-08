@@ -76,6 +76,9 @@ ALPHA = {
     'scrim': 0.72,
     'plate': 0.94,
     'underlay': 0.62,
+    'tronGhost': 0.18,
+    'tronDim': 0.34,
+    'tronMid': 0.58,
 }
 
 

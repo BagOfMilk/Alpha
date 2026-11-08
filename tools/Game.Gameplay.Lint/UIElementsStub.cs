@@ -85,6 +85,93 @@ namespace UnityEngine.UIElements
         public StyleFontDefinition(FontDefinition f) { value = f; }
     }
 
+    // ---------------- перетворення (меню «Рингу», ТЗ B08) ----------------
+
+    public enum AngleUnit { Degree = 0, Gradian = 1, Radian = 2, Turn = 3 }
+
+    public struct Angle
+    {
+        public Angle(float value) { }
+        public Angle(float value, AngleUnit unit) { }
+        public static Angle Degrees(float value) { return new Angle(value); }
+    }
+
+    public struct Rotate
+    {
+        public Rotate(Angle angle) { }
+    }
+
+    public struct StyleRotate
+    {
+        public StyleRotate(Rotate v) { }
+        public static implicit operator StyleRotate(Rotate v) { return new StyleRotate(v); }
+    }
+
+    public struct Translate
+    {
+        public Translate(Length x, Length y) { }
+        public Translate(Length x, Length y, float z) { }
+    }
+
+    public struct StyleTranslate
+    {
+        public StyleTranslate(Translate v) { }
+        public static implicit operator StyleTranslate(Translate v) { return new StyleTranslate(v); }
+    }
+
+    public struct Scale
+    {
+        public Scale(UnityEngine.Vector2 scale) { }
+        public Scale(UnityEngine.Vector3 scale) { }
+    }
+
+    public struct StyleScale
+    {
+        public StyleScale(Scale v) { }
+        public static implicit operator StyleScale(Scale v) { return new StyleScale(v); }
+    }
+
+    public struct TransformOrigin
+    {
+        public TransformOrigin(Length x, Length y) { }
+        public TransformOrigin(Length x, Length y, float z) { }
+    }
+
+    public struct StyleTransformOrigin
+    {
+        public StyleTransformOrigin(TransformOrigin v) { }
+        public static implicit operator StyleTransformOrigin(TransformOrigin v) { return new StyleTransformOrigin(v); }
+    }
+
+    // ---------------- малювання кодом (Painter2D) ----------------
+
+    public enum ArcDirection { Clockwise = 0, CounterClockwise = 1 }
+
+    public enum FillRule { NonZero = 0, OddEven = 1 }
+
+    public enum LineJoin { Miter = 0, Bevel = 1, Round = 2 }
+
+    public class Painter2D
+    {
+        public float lineWidth { get; set; }
+        public UnityEngine.Color strokeColor { get; set; }
+        public UnityEngine.Color fillColor { get; set; }
+        public LineJoin lineJoin { get; set; }
+        public void BeginPath() { }
+        public void ClosePath() { }
+        public void MoveTo(UnityEngine.Vector2 pos) { }
+        public void LineTo(UnityEngine.Vector2 pos) { }
+        public void Arc(UnityEngine.Vector2 center, float radius, Angle startAngle, Angle endAngle, ArcDirection direction = ArcDirection.Clockwise) { }
+        public void Stroke() { }
+        public void Fill(FillRule fillRule = FillRule.NonZero) { }
+    }
+
+    public class MeshGenerationContext
+    {
+        public Painter2D painter2D { get { return null; } }
+        public VisualElement visualElement { get { return null; } }
+    }
+
     /// <summary>Вбудований стиль елемента (у Unity — інтерфейс <c>IStyle</c>); лише ті властивості, які задає наш код.</summary>
     public interface IStyle
     {
@@ -139,6 +226,12 @@ namespace UnityEngine.UIElements
         StyleLength borderTopRightRadius { get; set; }
         StyleLength borderBottomLeftRadius { get; set; }
         StyleLength borderBottomRightRadius { get; set; }
+        // Меню «Рингу» (ТЗ B08): рух лише transform/opacity — без перерахунку розкладки щокадру (PERF-01).
+        StyleTranslate translate { get; set; }
+        StyleScale scale { get; set; }
+        StyleRotate rotate { get; set; }
+        StyleTransformOrigin transformOrigin { get; set; }
+        StyleLength letterSpacing { get; set; }
     }
 
     /// <summary>Фонове зображення елемента (значки шапки, Поправка №12.2).</summary>
@@ -206,6 +299,11 @@ namespace UnityEngine.UIElements
         public StyleLength borderTopRightRadius { get; set; }
         public StyleLength borderBottomLeftRadius { get; set; }
         public StyleLength borderBottomRightRadius { get; set; }
+        public StyleTranslate translate { get; set; }
+        public StyleScale scale { get; set; }
+        public StyleRotate rotate { get; set; }
+        public StyleTransformOrigin transformOrigin { get; set; }
+        public StyleLength letterSpacing { get; set; }
     }
 
     // ---------------- події ----------------
@@ -226,6 +324,20 @@ namespace UnityEngine.UIElements
     public sealed class PointerLeaveEvent : EventBase<PointerLeaveEvent> { }
 
     public sealed class NavigationMoveEvent : EventBase<NavigationMoveEvent> { }
+
+    public sealed class PointerDownEvent : EventBase<PointerDownEvent>
+    {
+        public int button { get { return 0; } }
+        public UnityEngine.Vector3 localPosition { get { return default(UnityEngine.Vector3); } }
+    }
+
+    public sealed class PointerUpEvent : EventBase<PointerUpEvent> { public int button { get { return 0; } } }
+
+    public sealed class WheelEvent : EventBase<WheelEvent> { public UnityEngine.Vector3 delta { get { return default(UnityEngine.Vector3); } } }
+
+    public sealed class KeyDownEvent : EventBase<KeyDownEvent> { public UnityEngine.KeyCode keyCode { get { return UnityEngine.KeyCode.None; } } }
+
+    public sealed class GeometryChangedEvent : EventBase<GeometryChangedEvent> { }
 
     public abstract class CallbackEventHandler
     {
@@ -254,6 +366,16 @@ namespace UnityEngine.UIElements
         public void Insert(int index, VisualElement child) { }
         public void Clear() { }
         public void SetEnabled(bool value) { }
+        // Меню «Рингу»: форми малюються кодом (Painter2D), шари перемикаються без перебудови екрана.
+        public Action<MeshGenerationContext> generateVisualContent { get; set; }
+        public void MarkDirtyRepaint() { }
+        public UnityEngine.Rect contentRect { get { return default(UnityEngine.Rect); } }
+        public UnityEngine.Rect layout { get { return default(UnityEngine.Rect); } }
+        public VisualElement parent { get { return null; } }
+        public int childCount { get { return 0; } }
+        public void Remove(VisualElement element) { }
+        public void RemoveFromHierarchy() { }
+        public void BringToFront() { }
     }
 
     public class TextElement : VisualElement

@@ -1,5 +1,6 @@
 using System.Collections;
 using Game.Core.Ring.Match;
+using Game.Gameplay.Ring.Models;
 using UnityEngine;
 
 namespace Game.Gameplay.Ring.Stage
@@ -25,7 +26,15 @@ namespace Game.Gameplay.Ring.Stage
             _sfx = Src("Ефекти", false, 0.9f);
             _sfx2 = Src("Ефекти 2", false, 0.8f);
             if (_a.sndCrowd != null) { _crowd.clip = _a.sndCrowd; _crowd.Play(); }
+            // Меню (ТЗ B08): хост вмикає й вимикає музику зали, коли гравець входить у гру чи повертається на титул.
+            RingMenuServices.GameMusic = on => { if (on) Music(_a.musicTitle, 0.55f); else MusicOff(); };
         }
+
+        private void OnDestroy() { RingMenuServices.GameMusic = null; }
+
+        // Гучність за шинами налаштувань (ТЗ B08 §5): музика — шина «Музика», натовп і удари — «Ефекти»; Master — в обох.
+        private static float MusicGain { get { return RingAudioMix.Current.Gain(RingBus.Music); } }
+        private static float SfxGain { get { return RingAudioMix.Current.Gain(RingBus.Sfx); } }
 
         private AudioSource Src(string name, bool loop, float vol)
         {
@@ -42,14 +51,19 @@ namespace Game.Gameplay.Ring.Stage
         private void Update()
         {
             float dt = Time.unscaledDeltaTime;
-            if (_music != null) _music.volume = Mathf.MoveTowards(_music.volume, _musicTarget, dt * 0.6f);
-            if (_crowd != null) _crowd.volume = Mathf.MoveTowards(_crowd.volume, _crowdTarget, dt * 0.5f);
+            if (_music != null) _music.volume = Mathf.MoveTowards(_music.volume, _musicTarget * MusicGain, dt * 0.6f);
+            if (_crowd != null) _crowd.volume = Mathf.MoveTowards(_crowd.volume, _crowdTarget * SfxGain, dt * 0.5f);
             if (_music != null && _music.isPlaying && _music.volume <= 0.001f && _musicTarget <= 0f) _music.Stop();
         }
 
         // ============================ музика ============================
 
-        public void TitleMusic() { Music(_a.musicTitle, 0.55f); }
+        /// <summary>Музика вступу: поки меню веде музику (тема входу, ТЗ B08), зала мовчить; без програвача меню — стара петля.</summary>
+        public void TitleMusic()
+        {
+            if (RingMenuServices.Audio != null && RingMenuServices.MenuMusicActive) { MusicOff(); return; }
+            Music(_a.musicTitle, 0.55f);
+        }
 
         /// <summary>Музика виходу: Молот — своя, герой — своя, борці федерації — спільна.</summary>
         public void EntranceMusic(bool player, bool hammer)
@@ -126,7 +140,7 @@ namespace Game.Gameplay.Ring.Stage
         private void OneShot(AudioClip c, float vol, bool second = false)
         {
             if (c == null) return;
-            (second ? _sfx2 : _sfx).PlayOneShot(c, vol);
+            (second ? _sfx2 : _sfx).PlayOneShot(c, vol * SfxGain);
         }
 
         private IEnumerator Delayed(AudioClip c, float delay, float vol)

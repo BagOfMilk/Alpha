@@ -123,6 +123,8 @@
     <!-- Плейтест (docs/PLAYTEST.md): ScreenCapture, OnDemandRendering, logMessageReceived; формат — PlaytestLog, лінтується. -->
     <Compile Remove="../../Assets/_Project/Scripts/Gameplay/Playtest/*.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AudioLibraryBuilder.cs" />
+    <!-- Меню «Рингу» (ТЗ B08): правила імпорту звуку меню — AudioImporter, та сама причина. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingMenuAudioImport.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/LightingSetup.cs" />
     <!-- Поправка №21.1: рівні графіки — асети URP і SerializedObject, як LightingSetup. -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/GraphicsTiersSetup.cs" />

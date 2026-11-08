@@ -81,8 +81,9 @@ def set_feet(p, fl, fr, knee_fwd=None):
     (al, yl), (ar, yr) = fl, fr
     p.ankles = (al, ar)
     p.foot_rot = (Quaternion(UP, math.radians(yl)), Quaternion(UP, math.radians(yr)))
-    p.knees = (al + Rz(yl - STANCE_FOOT_YAW["l"]) @ Vector((0.08, -0.9, 0.45)),
-               ar + Rz(yr - STANCE_FOOT_YAW["r"]) @ Vector((-0.08, -0.9, 0.45)))
+    # полюс коліна назовні 0,22 (було 0,08: на розвороті й у стійці коліна завалювались усередину, огляд 04.11.2026)
+    p.knees = (al + Rz(yl - STANCE_FOOT_YAW["l"]) @ Vector((0.22, -0.9, 0.45)),
+               ar + Rz(yr - STANCE_FOOT_YAW["r"]) @ Vector((-0.22, -0.9, 0.45)))
     return p
 
 def locomote(t, L, base, path, keys_l, keys_r, prog, bob=0.012, run=False):
@@ -240,10 +241,10 @@ def clip_idle_hype(t, L):
 # ---------------------------------------------------------------- рефері
 
 def ref_stand(t, L, sway=1.0):
-    """Рефері: рівно, ноги на ширині стегон, руки вздовж тіла, легке перенесення ваги."""
+    """Рефері: рівно, ноги на ширині стегон, руки вздовж тіла, перенесення ваги з ноги на ногу (видиме: 3,5 см, 04.11.2026 — 1,5 см не читалось)."""
     sh = math.sin(2 * math.pi * t / L)
     p = RPose(feet=(0.12, 0.0), feet_yaw=(8.0, -8.0),
-              pelvis=Vector((0.015 * sh * sway, 0.0, -0.01)), pitch=4.0 + breathe(t, L, 0.6), roll=-1.0 * sh * sway,
+              pelvis=Vector((0.035 * sh * sway, 0.0, -0.01 - 0.008 * abs(sh) * sway)), pitch=4.0 + breathe(t, L, 0.6), roll=-2.5 * sh * sway,
               head_pitch=-2.0, forced=set())
     p.ankles = (REF_FOOT["l"].copy(), REF_FOOT["r"].copy())
     p.hands = {"l": (lambda S: S["l"] + Vector((0.06, -0.03, -0.52)), DOWN + FWD * 0.15, FWD + RIGHT * 0.3),
@@ -667,7 +668,8 @@ def clip_ref_raise_b(t, L, partner=None):
     p.pitch = lerp(16.0, 2.0, up)
     p.head_pitch = -16.0 * k
     st = p.hands
-    p.hands = {"l": (lambda S: lerp(st["l"][0](S), S["l"] + Vector((0.04, -0.06, 0.48)), k), st["l"][1] * (1 - k) + UP * k, st["l"][2] * (1 - k) + FWD * k),
+    # ліва — угору й трохи до рефері: його кисть на її зап'ясті над головами, руки не перехрещуються (04.11.2026)
+    p.hands = {"l": (lambda S: lerp(st["l"][0](S), S["l"] + Vector((0.14, -0.05, 0.47)), k), st["l"][1] * (1 - k) + UP * k, st["l"][2] * (1 - k) + FWD * k),
                "r": (lambda S: lerp(st["r"][0](S), S["r"] + Vector((-0.15, -0.15, 0.4)), k), st["r"][1] * (1 - k) + UP * k, st["r"][2] * (1 - k) + FWD * k)}
     el = p.elbows
     p.elbows = {"l": lambda S: el["l"](S).lerp(S["l"] + Vector((0.3, 0.05, -0.15 + 0.2 * k)), k),
