@@ -191,6 +191,14 @@ namespace Game.Gameplay.Ring.Models
         /// <summary>Фінішери-больові: прийом звучить захватом (<see cref="RingCue.HoldStrain"/>), а не падінням.</summary>
         public static IReadOnlyCollection<string> HoldFinishers { get { return HoldFinisherKeys; } }
 
+        // Повітряні фінішери (категорія aerial у career_moves.json): meteor — з кута, задумано стрибок (RingClipTable поки ставить таран
+        // Center_ShoulderTackle, «бракує стрибка з кута»). Звук іде за задуманим рухом, як у стрибка з канатів (TopRope) — приземлення.
+        // Охоронець — RingSoundMapTests звіряє набір із каталогом прийомів.
+        private static readonly HashSet<string> AerialFinisherKeys = new HashSet<string> { "meteor" };
+
+        /// <summary>Повітряні фінішери: прийом звучить приземленням (<see cref="RingCue.Land"/>), як стрибок з канатів.</summary>
+        public static IReadOnlyCollection<string> AerialFinishers { get { return AerialFinisherKeys; } }
+
         /// <summary>Звук події матчу без ступеня кидка й місця пари (як у журналі без кидка, на рингу).</summary>
         public static RingCue ForEvent(MatchEventKind kind, MatchActionId action)
         {
@@ -283,7 +291,8 @@ namespace Game.Gameplay.Ring.Models
         /// провал — план 7–9, суперник падає, звук той самий, що 7–9 (як у <c>RingClipTable.PlanAction</c>, 9c18c40);
         /// провокація — борцю боляче, оплесків немає (<c>Idle_Hurt_Body_Loop</c>); підйом — той самий кліп, що в «відновитися»
         /// (<c>Idle_Tired_Loop</c>), тож і звук той самий. Провал важить більше за місце: за рингом промах удару — теж ухил.
-        /// Фінішер-больовий (<see cref="HoldFinishers"/>) — захват. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 —
+        /// Фінішер — за ключем прийому (з 2937113 подія фінішера несе ключ ґіміка): больовий (<see cref="HoldFinishers"/>) — захват,
+        /// повітряний (<see cref="AerialFinishers"/>) — приземлення, решта — падіння суперника. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 —
         /// замах повз (бар'єр — другим дотиком); за рингом удар і кидок ідуть у бар'єр.
         /// </summary>
         private static RingCue Refine(string action, RingCue c, bool hasRoll, RollTier tier, bool outside, RingProp prop, string moveKey)
@@ -313,6 +322,7 @@ namespace Game.Gameplay.Ring.Models
                 return c;
             }
             if (action == "Finisher" && moveKey != null && HoldFinisherKeys.Contains(moveKey)) return RingCue.HoldStrain;
+            if (action == "Finisher" && moveKey != null && AerialFinisherKeys.Contains(moveKey)) return RingCue.Land;
             if (outside)
             {
                 if (action == "Strike") return RingCue.BarrierHit;

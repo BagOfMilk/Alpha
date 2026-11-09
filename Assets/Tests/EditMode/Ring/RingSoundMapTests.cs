@@ -276,6 +276,30 @@ namespace Game.Tests.EditMode
             CollectionAssert.AreEqual(expected, RingSoundMap.HoldFinishers.OrderBy(s => s).ToList(), "фінішери-больові каталогу й таблиці звуку");
         }
 
+        [Test]
+        public void AerialFinisher_SoundsLikeALanding()
+        {
+            // Повітряний фінішер (meteor, з кута): задумано стрибок — звук як у стрибка з канатів (TopRope), хоч кліп поки таран («бракує»).
+            foreach (var t in new[] { RollTier.Strong, RollTier.Partial })
+            {
+                Assert.AreEqual(RingCue.Land, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, t, false, "meteor")), "meteor " + t);
+                Assert.AreEqual(RingSoundMap.ForEvent(Act(MatchActionId.TopRope, t)), RingSoundMap.ForEvent(Act(MatchActionId.Finisher, t, false, "meteor")),
+                    "повітряний фінішер звучить як стрибок з канатів");
+            }
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Miss, false, "meteor")), "провал — падіння (Bump_Back)");
+            Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Strong, false, "grand_finale")));
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Strong, false, "meteor")), "ключ змінює лише фінішер");
+            var catalog = MoveCatalog.Load(CareerKit.Read("career_moves.json"));
+            var expected = catalog.All.Where(m => m.Action == MatchActionId.Finisher && m.Category == MoveCategory.Aerial).Select(m => m.Id).OrderBy(s => s).ToList();
+            CollectionAssert.AreEqual(expected, RingSoundMap.AerialFinishers.OrderBy(s => s).ToList(), "повітряні фінішери каталогу й таблиці звуку");
+            // кожен фінішер каталогу має свій звук: больовий — захват, повітряний — приземлення, решта — падіння суперника
+            foreach (var m in catalog.All.Where(x => x.Action == MatchActionId.Finisher))
+            {
+                var want = m.Category == MoveCategory.Submission ? RingCue.HoldStrain : m.Category == MoveCategory.Aerial ? RingCue.Land : RingCue.Slam;
+                Assert.AreEqual(want, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, RollTier.Strong, false, m.Id)), m.Id + " (" + m.Category + ")");
+            }
+        }
+
         // Що показує кліп провалу → який звук (RingClipTable). Новий кліп провалу без рядка тут — червоний тест: спершу вирішити звук.
         private static readonly Dictionary<string, RingCue> MissClipSound = new Dictionary<string, RingCue>
         {
