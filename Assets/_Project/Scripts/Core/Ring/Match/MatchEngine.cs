@@ -302,6 +302,19 @@ namespace Game.Core.Ring.Match
             return MatchRules.DefenseBase + fresh + def.Stats.Get(RingAttr.Stamina) - Threshold(def) - penalty - Late();
         }
 
+        /// <summary>
+        /// Модифікатор «Вирватися» борця <paramref name="defender"/> у цю мить, зі штрафом прийому <paramref name="penalty"/>
+        /// (утримання — 0, фінішер — <see cref="MatchRules.FinisherStrongPinPenalty"/> / <see cref="MatchRules.FinisherPartialPinPenalty"/>).
+        /// Те саме число, що кидає утримання; читач для показу шансів і сценарію демо (RingDemoScript).
+        /// </summary>
+        public int KickoutModifier(MatchSide defender, int penalty) { return KickoutMod(_s.Get(defender), penalty); }
+
+        /// <summary>
+        /// Модифікатор «Терпіти» (больовий) у цю мить; штраф — <see cref="MatchRules.SubmissionStrongPenalty"/> за 10+ нападника,
+        /// <see cref="MatchRules.SubmissionPartialPenalty"/> за 7–9. Те саме число, що кидає больовий.
+        /// </summary>
+        public int EndureModifier(MatchSide defender, int penalty) { return EndureMod(_s.Get(defender), penalty); }
+
         private int ReverseMod(Fighter def, bool vsFinisher)
         {
             return def.Stats.Get(RingAttr.Technique) - Threshold(def) + (vsFinisher ? MatchRules.ReverseVsFinisherPenalty : 0);

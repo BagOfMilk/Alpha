@@ -24,6 +24,8 @@ namespace Game.Gameplay.Ring.Stage
         private readonly Queue<MatchEvent> _q = new Queue<MatchEvent>();
         private bool _running;
         private bool _ended;
+        // Ажіотаж на мить показаної події: рушій рахує наперед, а натовп має жити тим, що на екрані.
+        private int _hype;
 
         private struct Mirror
         {
@@ -67,6 +69,7 @@ namespace Game.Gameplay.Ring.Stage
             _q.Clear();
             _e = e;
             _seen = e != null ? e.State.Log.Count : 0;
+            _hype = e != null ? e.State.Hype : 0;
             if (e != null)
             {
                 _m[0] = new Mirror { Outside = e.State.Outside, Posture = e.State.Player.Posture, Damage = e.State.Player.Damage };
@@ -85,6 +88,32 @@ namespace Game.Gameplay.Ring.Stage
         public void BeginDemo()
         {
             Begin(null);
+        }
+
+        /// <summary>
+        /// Повтор зіграного рушія (демо, <see cref="RingDemoScript"/>): режисер програє журнал від події <paramref name="fromSeq"/>
+        /// (<see cref="DemoMatch.StartCount"/> — після стартового обміну, як живий матч), а кінець бере з
+        /// <see cref="MatchEngine.Result"/> — переможець той, кого назвало ядро. Пара стоїть на рингу, як на старті матчу.
+        /// </summary>
+        public void BeginReplay(MatchEngine e, int fromSeq)
+        {
+            if (e == null) throw new ArgumentNullException("e");
+            Begin(null);
+            _e = e;
+            var log = e.State.Log;
+            _seen = Mathf.Clamp(fromSeq, 0, log.Count);
+            _hype = Mathf.Clamp(e.Setup.StartHype, 0, MatchRules.MaxHype);
+            for (int i = 0; i < _seen; i++) _hype = NextHype(_hype, log[i]);
+            _s.Reveal(_seen - 1);
+            _s.CrowdMood(_hype);
+            if (_s.Sound != null && _seen <= 1) _s.Sound.BellStart();
+        }
+
+        private static int NextHype(int hype, MatchEvent ev)
+        {
+            for (int i = 0; i < ev.Effects.Count; i++)
+                if (ev.Effects[i].Kind == MatchEffectKind.Hype) hype += ev.Effects[i].Amount;
+            return Mathf.Clamp(hype, 0, MatchRules.MaxHype);
         }
 
         public void EndMatch()
@@ -373,8 +402,9 @@ namespace Game.Gameplay.Ring.Stage
                 if (!applied) Apply(ev);
                 // Стан ядра = поза в кадрі: «лежить» без падіння — продаж падінням; «стоїть», а лежить — встає.
                 if (ev.Kind != MatchEventKind.MatchEnd) yield return MatchPoses(ev);
-                // Натовп живе за ажіотажем; кікаут і кінець матчу — вибух залу.
-                if (_e != null) _s.CrowdMood(_e.State.Hype);
+                // Натовп живе за ажіотажем показаної події (не за рушієм, що рахує наперед); кікаут і кінець матчу — вибух залу.
+                _hype = NextHype(_hype, ev);
+                _s.CrowdMood(_hype);
                 if (ev.Kind == MatchEventKind.MatchEnd) _s.CrowdPop();
                 if (ev.Kind == MatchEventKind.MatchEnd) { _ended = true; break; }
                 _afterCut = false;
