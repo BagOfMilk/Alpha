@@ -186,6 +186,14 @@ Counter_BigBoot contact 0.241 foot_r spine_03
 Counter_BigBoot sell 0.338 - spine_03
 Counter_Lariat_Left contact 0.241 upperarm_l spine_03
 Counter_Lariat_Left sell 0.338 - spine_03
+Charge_ShoulderBlock contact 0.207 upperarm_l spine_03
+Charge_ShoulderBlock sell 0.304 - spine_03
+Charge_ShoulderBlock_Heavy contact 0.189 upperarm_l spine_03
+Charge_ShoulderBlock_Heavy sell 0.286 - spine_03
+Charge_ShoulderTackle contact 0.207 upperarm_l spine_03
+Charge_ShoulderTackle sell 0.304 - spine_03
+Charge_ShoulderBlock_NoSell contact 0.207 upperarm_l spine_03
+Charge_ShoulderBlock_NoSell sell 0.304 spine_03 -
 Springboard_Land_Body contact 0.000 spine_03 spine_03
 Springboard_Land_Body sell 0.498 - spine_03
 Springboard_Perch qte_open 0.150 - -

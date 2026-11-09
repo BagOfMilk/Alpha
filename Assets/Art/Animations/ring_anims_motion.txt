@@ -99,4 +99,6 @@ Air_Meteor_Hype 0.000 -0.450 -0.0 0.321
 Air_Swallow 0.000 -0.400 0.0 0.500
 Rope_Return_Tired 0.000 -0.386 -7.0 0.214
 Rope_Return_Stumble 0.000 -0.400 -5.0 0.286
+Corner_Exit_Stagger 0.000 -0.380 0.0 0.173
+Corner_Exit_Shake 0.000 -0.300 0.0 0.176
 Springboard_Perch 0.000 -0.120 0.0 0.120

@@ -2228,6 +2228,242 @@ for _nm, _ln, _fn in (("Rope_Return_Tired", RET_TIRED_LEN, clip_rope_return_tire
 
 
 
+# ================================================================ «Таран» з канатів (shoulder_charge, P2-4) — A біжить ≤ 0,5 м
+# Склейка (ТЗ §5.2, shoulder_charge): A спиною на канатах (Rope_* від rope_hit до виштовху) → цей кадр: A вже за
+# CHG_LEAD до удару, на швидкості бігу, B стоїть у центрі; «стрибка» немає. Удар плечем — уся вага в B: від удару A
+# втрачає швидкість (лишається CHG_KEEP) і за кілька сантиметрів стає (разом ≤ 0,5 м від старту), B — той самий бамп,
+# що в Center_ShoulderBlock*. Тачкл — біжать обидва, кожен ≤ 0,5 м. 7–9 (_NoSell): B не зрушив, хитнувся — A
+# відскакує й падає на спину сам. ≤6 (_Sidestep): B ухиляється вбік (почав ще до склейки), плече A — у порожнечу; A
+# гальмує, спотикається й озирається на B. Кадр починається склейкою: вузла на старті немає.
+CHG_LEAD = 0.32           # м: таз A від старту до удару
+CHG_KEEP = 0.35           # частка швидкості бігу, що лишається в A після удару
+CHG_TD = 0.2              # с: від CHG_KEEP до зупинки
+CHG_RAMP = (0.03, 0.04)   # с до / після удару: удар забирає швидкість (без ривка таза)
+
+
+class Chg(Ctr):
+    """Таран з канатів: та сама дія й реакція, що в Ctr, але A з'являється за lead до удару й стає одразу після."""
+
+    def __init__(self, name, a, b, bx, gap=0.42, run=None, L=2.4, lead=CHG_LEAD, keep=CHG_KEEP, td=CHG_TD, stag_d=None):
+        self.name, self.a, self.b, self.bx, self.gap = name, a, b, bx, gap
+        self.pass_ = False                            # center_b: бамп B — за 0,04 с до удару (A в кадрі лише 0,13 с:
+                                                      #   з 0,12 B падав раніше, ніж A до нього добіг)
+        self.stag_d = stag_d                          # center_b: «stagger» — відхід B після реакції (м)
+        self.run, self.L = run or CT_RUN, L
+        self.v = self.run.stride / self.run.L
+        self.keep, self.td = keep, td
+        r0, r1 = CHG_RAMP
+        self.t_hit = lead / self.v + (1.0 - keep) * r0 * r0 / (2.0 * (r0 + r1))   # tau(t_hit)·v = lead
+        self.t0 = self.t_hit - r0                     # для Ctr: де почалось гальмування
+        self.t_stop = self.t_hit + r1 + td
+        self.y_hit = -self.v * self.tau(self.t_hit)
+        self.y_stop = -self.v * self.tau(self.t_stop)
+
+    def tau(self, t):
+        r0, r1 = CHG_RAMP
+        a, b = self.t_hit - r0, self.t_hit + r1
+        if t <= a:
+            return t
+        if t <= b:
+            u = t - a
+            return a + u - (1.0 - self.keep) * u * u / (2.0 * (b - a))
+        tb = b - a
+        base = a + tb - (1.0 - self.keep) * tb / 2.0
+        u = min(t - b, self.td)
+        return base + self.keep * (u - u * u / (2.0 * self.td))
+
+
+CHARGE = [
+    # B — ліве плече в ліве плече (як Counter_ShoulderBlock): з 0,9 у Center_* між плечима лишалось ~0,5 м повітря
+    Chg("Charge_ShoulderBlock", "block", "back", 0.6, gap=0.4),
+    Chg("Charge_ShoulderBlock_Heavy", "block", "back_fast", 0.56, gap=0.42, run=CT_HEAVY, lead=0.3),
+    Chg("Charge_ShoulderTackle", "block", "run_back", 0.6, gap=0.4),
+    Chg("Charge_ShoulderBlock_NoSell", "nosell", "stagger", 0.12, gap=0.72, stag_d=0.05),   # B хитнувся, не відійшов
+]
+CHG_MISS_LEN = 2.0
+CHG_MISS_TD = 0.35        # с: A гальмує від склейки — 2,5 м/с · 0,35 / 2 ≈ 0,44 м
+CHG_MISS_T = 0.1          # с: плече A — там, де щойно були груди B
+CHG_MISS_BX = 0.62        # B: ліворуч від лінії бігу A (ліве плече в ліве плече)
+CHG_MISS_GAP = 0.3
+CHG_DODGE = 0.38          # м: B відступає вбік (від лінії A)
+
+
+def clip_charge_miss_a(t, L, partner=None):
+    R = CT_RUN
+    p = run_pose(_brake_tau(t, CHG_MISS_TD), R)
+    p = _brake_to_stance(p, t, L, CHG_MISS_TD, dur=0.55)
+    c = _CHG_MISS
+    w = track(t, [(0.0, 0.7), (CHG_MISS_T, 1.0), (CHG_MISS_T + 0.12, 1.0), (CHG_MISS_T + 0.4, 0.0), (99.0, 0.0)])
+    p = _ctr_act(p, t, c, w)
+    ev = lambda v, S: v(S) if callable(v) else v
+    p = _filled(p)
+    tw = smooth((t - (CHG_MISS_T - 0.12)) / 0.1) * (1.0 - smooth((t - CHG_MISS_T - 0.1) / 0.2))
+    p = _tuck(p, tw)                                     # плече вперед: кулаки до грудей, лікті біля ребер, як у блоці
+    # плече в порожнечу: тулуб пірнає вперед, руки ловлять рівновагу, два кроки — і стійка
+    dip = track(t, [(0.0, 0.0), (CHG_MISS_T, 0.0), (CHG_MISS_T + 0.14, 1.0), (CHG_MISS_T + 0.38, 0.45), (0.95, 0.0), (99.0, 0.0)])
+    p.pitch = p.pitch + 22.0 * dip
+    p.head_pitch = p.head_pitch - 10.0 * dip
+    p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.05 * dip))
+    fl = _win(t, CHG_MISS_T + 0.04, CHG_MISS_T + 0.18, 0.6, 0.95)
+    if fl > 0.0:
+        hs = dict(p.hands)
+        for s_, sg, ph in (("l", 1.0, 0.0), ("r", -1.0, 0.5)):
+            g, a_, b_ = hs[s_]
+            hs[s_] = (lambda S, g=g, sg=sg, s_=s_, ph=ph: lerp(ev(g, S), S[s_] + Vector((
+                0.38 * sg, -0.3 - 0.06 * math.sin(2 * math.pi * (t / 0.45 + ph)), -0.08)) * BODY["arm"], fl), a_, b_)
+        p.hands = hs
+    lk = track(t, [(0.0, 0.0), (CHG_MISS_T + 0.15, 0.0), (0.7, 1.0), (L - 0.8, 1.0), (L - 0.15, 0.0), (99.0, 0.0)])
+    p.head_yaw = p.head_yaw + 55.0 * lk                     # озирається на B (ліворуч)
+    p.yaw = p.yaw + 15.0 * lk
+    return p
+
+
+def clip_charge_miss_b(t, L, partner=None):
+    """Крок убік, від лінії A (простір B: − — його право = ліво від A); почав ще до склейки: на першому кадрі права
+    стопа вже в повітрі."""
+    p = stance(t, L, sway=0.0)
+    x = -CHG_DODGE
+    T = CHG_MISS_T
+    p.ankles = steps(t, [(0.0, (0.2, -0.105)), (T - 0.04, (0.2, -0.105)), (T + 0.16, (0.2 + x, -0.105))],
+                        [(-0.12, (-0.2, 0.075)), (T + 0.02, (-0.2 + x, 0.075))])
+    p.foot_rot = (Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0)))
+    sh = track(t, [(-0.12, 0.0), (T + 0.1, 1.0), (99.0, 1.0)])
+    lean = track(t, [(0.0, 0.5), (T, 1.0), (T + 0.25, 0.0), (99.0, 0.0)])
+    p.pelvis = p.pelvis + Vector((x * sh - 0.05 * lean, 0.0, -0.03 * lean))
+    p.roll = p.roll - 10.0 * lean                           # плечі — геть від плеча A
+    p.yaw = p.yaw + 20.0 * lean
+    lk = track(t, [(0.0, 0.3), (T + 0.1, 1.0), (L - 0.8, 1.0), (L - 0.15, 0.0), (99.0, 0.0)])
+    p.head_yaw = 35.0 * lk                                 # проводить A поглядом
+    return p
+
+
+_CHG_MISS = Chg("Charge_Sidestep", "block", "sidestep", CHG_MISS_BX, gap=CHG_MISS_GAP, L=CHG_MISS_LEN)
+_CHG_MISS.t_hit = CHG_MISS_T
+
+def charge_a(c):
+    """center_a + кулаки притиснуті перед грудьми до удару (б'є плече, не руки)."""
+    fa = center_a(c)
+
+    def f(t, L, partner=None):
+        tw = 1.0 - smooth((t - c.t_hit - 0.05) / (0.15 if c.a == "nosell" else 0.3))
+        p = _tuck(fa(t, L, partner), tw)
+        if c.a == "block":                               # тулуб до B (голова ліворуч): плече дістає, ноги — ні
+            p.roll = p.roll + 8.0 * _act_w(t, c)
+        return p
+    return f
+
+
+for _c in CHARGE:
+    MOVE_CLIPS.append((_c.name, _c.L, charge_a(_c),
+                       (lambda fb_: (lambda t, L, partner=None: hands_out_of_torso(fb_(t, L, partner), r=0.19)))(center_b(_c)),
+                       False, _c.b_offset(), 180))
+    CENTER_RULE.add(_c.name)
+    MOVE_CLIP_NODES[_c.name] = {"A": (None, "lying_back" if _c.a == "nosell" else "stance"),
+                                "B": ("stance" if _c.b in ("back", "back_fast") else None, _B_END[_c.b])}
+    MOVE_EVENTS[_c.name] = [("contact", _c.t_hit, "upperarm_l", "spine_03"),
+                            ("sell", _c.t_hit + 0.1, ("spine_03" if _c.a == "nosell" else "-"),
+                             ("-" if _c.a == "nosell" else "spine_03"))]
+    MOVE_CONTACTS[_c.name] = {(a_, b_) for a_ in ("upperarm_l", "spine_03", "clavicle_l")
+                              for b_ in ("spine_03", "spine_02", "spine_01", "neck_01", "head", "upperarm_l", "upperarm_r",
+                                         "clavicle_l", "clavicle_r")}
+_mo = -_CHG_MISS.v * _brake_tau(CHG_MISS_T, CHG_MISS_TD)
+MOVE_CLIPS.append(("Charge_Sidestep", CHG_MISS_LEN, clip_charge_miss_a, clip_charge_miss_b, False,
+                   Vector((CHG_MISS_BX, _mo - CHG_MISS_GAP, 0.0)), 180))
+CENTER_RULE.add("Charge_Sidestep")
+MOVE_CLIP_NODES["Charge_Sidestep"] = {"A": (None, "stance"), "B": (None, "stance")}
+MOVE_EVENTS["Charge_Sidestep"] = []
+
+
+# ================================================================ вихід із кута (corner_drag, P2-4) — одиночні
+# Склейка (ТЗ §5.1, corner_drag): Whip_Corner* до release → план «жертва в куті» (Whip_Corner*_B від corner_hit, далі
+# Move_Corner_Lean_Loop) → цей кадр: жертва вже в центрі й іде від кута, хитаючись (вузла на старті немає), ≤ 0,45 м —
+# і стійка. Stagger — 10+ (і ≤6: нападник, що влетів у кут сам): згорблений, права долоня на попереку, ліва рука
+# ловить рівновагу, три нерівні кроки (ліва — навхрест, права — широко) з хитанням таза. Shake — 7–9 (пом'якшив удар
+# руками): два кроки, трусить головою й руками.
+CEX_STAGGER_LEN, CEX_SHAKE_LEN = 2.2, 1.7
+CEX_D = (0.38, 0.3)       # м: на скільки жертва відходить від кута
+
+
+def _cex_base(t, L, D, lk, rk, dk, xk):
+    p = stance(t, L, sway=0.0)
+    p.ankles = steps(t, lk, rk)
+    p.foot_rot = (Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0)))
+    p.pelvis = p.pelvis + Vector((track(t, xk), -D * track(t, dk), 0.0))
+    return p
+
+
+def _hand_to(p, s_, tgt, fore, up, w, el=None, arc=None):
+    """Кисть до tgt з вагою w; arc — вигин шляху (у середині переходу кисть іде збоку, не крізь тулуб)."""
+    if w <= 0.0:
+        return p
+    p = _filled(p)
+    hs = dict(p.hands)
+    h = lerp_hand((tgt, fore, up), hs[s_], w)
+    if arc is not None:
+        h = ((lambda S, g=h[0], k=math.sin(math.pi * w): g(S) + arc * k),) + tuple(h[1:])
+    hs[s_] = h
+    p.hands = hs
+    if el is not None:
+        e0 = p.elbows[s_]
+        p.elbows = dict(p.elbows)
+        p.elbows[s_] = (lambda S, e0=e0: e0(S).lerp(el(S), w))
+    return p
+
+
+def clip_corner_exit_stagger(t, L, partner=None):
+    D = CEX_D[0]
+    p = _cex_base(t, L, D,
+                  [(0.0, (0.2, -0.105)), (0.06, (0.2, -0.105)), (0.4, (0.1, -0.105 - 0.2)), (0.95, (0.1, -0.105 - 0.2)),
+                   (1.3, (0.2, -0.105 - D))],
+                  [(0.0, (-0.2, 0.075)), (0.42, (-0.2, 0.075)), (0.78, (-0.3, 0.075 - 0.3)), (1.36, (-0.3, 0.075 - 0.3)),
+                   (1.72, (-0.2, 0.075 - D))],
+                  [(0.0, 0.0), (0.1, 0.04), (0.45, 0.42), (0.85, 0.78), (1.4, 0.92), (1.85, 1.0), (99.0, 1.0)],
+                  [(0.0, 0.0), (0.22, -0.04), (0.58, 0.03), (0.95, -0.05), (1.32, 0.02), (1.75, 0.0), (99.0, 0.0)])
+    hurt = 1.0 - smooth((t - 1.3) / 0.6)
+    sx = track(t, [(0.0, 0.0), (0.22, -0.04), (0.58, 0.03), (0.95, -0.05), (1.32, 0.02), (1.75, 0.0), (99.0, 0.0)])
+    p.pitch = p.pitch + 16.0 * hurt
+    p.roll = p.roll - 110.0 * sx * hurt                  # плечі — за тазом, на опорну ногу
+    p.head_pitch = p.head_pitch + 12.0 * hurt
+    p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.03 * hurt))
+    hb = hurt
+    p = _hand_to(p, "r", lambda S: S["pelvis"] + Vector((-0.1, 0.19, 0.13)), DOWN + LEFT * 0.5, RIGHT, hb,
+                 el=lambda S: S["r"] + Vector((-0.32, 0.28, -0.18)), arc=Vector((-0.22, 0.0, -0.05)))
+    fl = hurt
+    wob = math.sin(2.0 * math.pi * t / 0.6)
+    p = _hand_to(p, "l", lambda S: S["l"] + Vector((0.3, -0.26, -0.3 + 0.04 * wob)) * BODY["arm"], FWD + DOWN * 0.6 + LEFT * 0.3,
+                 FWD * 0.3 + RIGHT, fl, el=lambda S: S["l"] + Vector((0.3, 0.05, -0.3)))
+    p.fist = {"l": 0.2, "r": 0.15}
+    return p
+
+
+def clip_corner_exit_shake(t, L, partner=None):
+    D = CEX_D[1]
+    p = _cex_base(t, L, D,
+                  [(0.0, (0.2, -0.105)), (0.1, (0.2, -0.105)), (0.45, (0.2, -0.105 - D))],
+                  [(0.0, (-0.2, 0.075)), (0.5, (-0.2, 0.075)), (0.86, (-0.2, 0.075 - D))],
+                  [(0.0, 0.0), (0.15, 0.08), (0.5, 0.55), (0.92, 1.0), (99.0, 1.0)],
+                  [(0.0, 0.0), (0.28, -0.03), (0.66, 0.03), (1.0, 0.0), (99.0, 0.0)])
+    sh = _win(t, 0.15, 0.3, 0.85, 1.15)
+    p.head_yaw = (p.head_yaw or 0.0) + 20.0 * sh * math.sin(2.0 * math.pi * t / 0.32)     # трусить головою
+    p.head_pitch = p.head_pitch + 8.0 * sh
+    p.pitch = p.pitch + 6.0 * sh
+    for s_, sg, ph in (("l", 1.0, 0.0), ("r", -1.0, 0.25)):
+        w = _win(t, 0.2, 0.35, 0.95, 1.3)
+        p = _hand_to(p, s_, lambda S, s_=s_, sg=sg, ph=ph: S[s_] + Vector((
+            0.12 * sg, -0.1, -0.5 + 0.035 * math.sin(2.0 * math.pi * (t / 0.18 + ph)))) * BODY["arm"],
+            DOWN + FWD * 0.2, FWD + Vector((-0.3 * sg, 0.0, 0.0)), w)                 # трусить руками внизу
+    p.fist = {"l": 0.1, "r": 0.1}
+    return p
+
+
+for _nm, _ln, _fn in (("Corner_Exit_Stagger", CEX_STAGGER_LEN, clip_corner_exit_stagger),
+                      ("Corner_Exit_Shake", CEX_SHAKE_LEN, clip_corner_exit_shake)):
+    MOVE_CLIPS.append((_nm, _ln, _fn, None, False, None, 0))
+    CENTER_RULE.add(_nm)
+    MOVE_CLIP_NODES[_nm] = {"A": (None, "stance")}
+    MOVE_EVENTS[_nm] = []
+
+
 # ================================================================ springboard «Стрибок із канату» (P2-3) — канат → Air → Land
 # Склейка (ТЗ §1.2, springboard): Springboard_Perch — A стоїть на верхньому канаті боком до рингу, балансує, присідає
 # й відштовхується (QTE — тут, до відриву); Springboard_Air — над жертвою (без дуги від каната): кроссбоді — з

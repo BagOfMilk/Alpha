@@ -236,7 +236,9 @@ def center_b(c):
             if t <= c.t_hit - STRIKE_HIT:
                 return lower(stance(t, L, sway=0.0))
             # відходить від удару й там лишається (огляд 04.11.2026: повертався впритул до A — тіла одне в одному)
-            D = 0.45 if c.a == "boot" else 0.35
+            D = getattr(c, "stag_d", None)
+            if D is None:
+                D = 0.45 if c.a == "boot" else 0.35
             u = t - c.t_hit
             q = lower(_stagger_b(t, L, c))
             if u <= 0.0:
