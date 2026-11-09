@@ -32,10 +32,29 @@ namespace Game.Gameplay.Ring.Stage
         public const float PairApart = 0.85f;
         /// <summary>Смуга пари назовні від краю платформи: [0,15; 1,85] м — кліпи пари з бічним зсувом до 0,9 м уміщаються.</summary>
         public const float BandIn = 0.15f, BandOut = 1.85f;
+        /// <summary>
+        /// Зовнішня межа смуги від краю платформи, від найбажанішої: де огорожа ближча за <see cref="BandOut"/> (спортзал — стійки
+        /// огорожі за ~1,6–1,8 м), смуга звужується назовні, а центр пари лишається на <see cref="PairOut"/> від фартуха.
+        /// </summary>
+        public static readonly float[] BandOuts = { BandOut, 1.7f, 1.55f };
         /// <summary>Довжина смуги вздовж боку (половина), від найбажанішої: кліпи пари з поступом 2–3,5 м.</summary>
         public static readonly float[] HalfLengths = { 2.0f, 1.7f, 1.4f };
         /// <summary>Найдальший зсув центру пари вздовж боку від середини боку, м.</summary>
         public const float MaxShift = 1.2f;
+        /// <summary>
+        /// Лінія фартуха, де стоять на фартуху (за канатами), — від краю платформи всередину, м: якір <c>anchor_apron_*</c>
+        /// (<see cref="Plat"/> = якір + 0,15).
+        /// </summary>
+        public const float ApronIn = 0.15f;
+        /// <summary>Півширина тулуба рефері, м.</summary>
+        public const float RefBody = 0.2f;
+        /// <summary>Зріст рефері з волоссям, м — для <see cref="FigureCut"/>.</summary>
+        public const float RefHeight = 1.85f;
+        /// <summary>
+        /// Досяжність тіла борця від його тазу, м: кидок, підйом (боді-слем), падіння. Рефері за рингом стоїть далі за неї від
+        /// лінії пари (огляд 8b, 09.11.2026: рефері за парою на підлозі за 0,35–0,6 м — тіло з боді-слему проходило крізь нього).
+        /// </summary>
+        public const float PairReach = 0.9f;
         /// <summary>Порядок боків: схід, південь (бік жорсткої камери), захід, північ (з неї — вихід).</summary>
         public static readonly string[] SideOrder = { "E", "S", "W", "N" };
 
@@ -73,7 +92,7 @@ namespace Game.Gameplay.Ring.Stage
             if (v._anchors.TryGetValue("anchor_center", out a)) v.MatY = a[1];
             if (v._anchors.TryGetValue("anchor_rope_NE_1", out a)) v.RopeLine = a[0];
             if (v._anchors.TryGetValue("anchor_rope_mid_E_1", out a)) v.PostLine = a[0];
-            if (v._anchors.TryGetValue("anchor_apron_E", out a)) v.Plat = a[0] + 0.15f;
+            if (v._anchors.TryGetValue("anchor_apron_E", out a)) v.Plat = a[0] + ApronIn;
             v._ext = Math.Max(7.0f, v.Plat + 4.0f);
             v.ResetFloor();
             return v;
@@ -207,6 +226,19 @@ namespace Game.Gameplay.Ring.Stage
             for (int j = j0; j <= j1; j++)
                 for (int i = i0; i <= i1; i++)
                     if (_top[j * _n + i] > m) m = _top[j * _n + i];
+            return m;
+        }
+
+        /// <summary>Найвища перешкода в прямокутнику і її місце (центр клітинки); 0 — вільно.</summary>
+        public float HighestIn(float x0, float z0, float x1, float z1, out float x, out float z)
+        {
+            float m = 0f;
+            x = z = 0f;
+            int i0 = Math.Max(0, Ix(Math.Min(x0, x1))), i1 = Math.Min(_n - 1, Ix(Math.Max(x0, x1)));
+            int j0 = Math.Max(0, Ix(Math.Min(z0, z1))), j1 = Math.Min(_n - 1, Ix(Math.Max(z0, z1)));
+            for (int j = j0; j <= j1; j++)
+                for (int i = i0; i <= i1; i++)
+                    if (_top[j * _n + i] > m) { m = _top[j * _n + i]; x = C(i); z = C(j); }
             return m;
         }
 
@@ -350,6 +382,20 @@ namespace Game.Gameplay.Ring.Stage
             public float Ground;
             /// <summary>Найвища перешкода в смузі (0 — вільно).</summary>
             public float Blocked;
+            /// <summary>Де ця перешкода (x, z) — для журналу, коли вільної смуги немає.</summary>
+            public float BlockedX, BlockedZ;
+            /// <summary>Зовнішня межа смуги від краю платформи, м (<see cref="BandOuts"/>; 0 — <see cref="BandOut"/>).</summary>
+            public float Outer;
+
+            /// <summary>Зовнішня межа смуги від краю платформи, м.</summary>
+            public float OuterEdge { get { return Outer > 0f ? Outer : BandOut; } }
+
+            /// <summary>
+            /// Вільна півширина смуги назовні від центру пари (<see cref="PairOut"/>), м: до ближчої з меж — фартуха
+            /// (<see cref="BandIn"/>) чи зовнішньої (<see cref="OuterEdge"/>). Повна смуга — 0,85; звужена до 1,55 (спортзал) — 0,55:
+            /// центр пари при звуженні не рухається, тож половина ширини смуги його завищувала б (рев'ю 8c, 09.11.2026).
+            /// </summary>
+            public float HalfWidth { get { return Math.Min(PairOut - BandIn, OuterEdge - PairOut); } }
 
             public float X { get { return OutX * Dist + AlongX * Shift; } }
             public float Z { get { return OutZ * Dist + AlongZ * Shift; } }
@@ -357,7 +403,7 @@ namespace Game.Gameplay.Ring.Stage
             /// <summary>Прямокутник смуги (x0, z0, x1, z1) з запасом <paramref name="pad"/>.</summary>
             public void Rect(float plat, float pad, out float x0, out float z0, out float x1, out float z1)
             {
-                float oIn = plat + BandIn - pad, oOut = plat + BandOut + pad;
+                float oIn = plat + BandIn - pad, oOut = plat + OuterEdge + pad;
                 float a0 = Shift - HalfLength - pad, a1 = Shift + HalfLength + pad;
                 float px0 = OutX * oIn + AlongX * a0, pz0 = OutZ * oIn + AlongZ * a0;
                 float px1 = OutX * oOut + AlongX * a1, pz1 = OutZ * oOut + AlongZ * a1;
@@ -379,12 +425,14 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>
         /// Обирає місце пари за рингом: перший бік у <see cref="SideOrder"/>, де смуга
         /// [<see cref="BandIn"/>; <see cref="BandOut"/>] від краю платформи на всю довжину <see cref="HalfLengths"/> вільна,
-        /// зі зсувом центру вздовж боку не далі <see cref="MaxShift"/> (найменший зсув — краще). Довша смуга важливіша за
-        /// бажаний бік. Якщо вільної немає — найменш зайнята (Ok = false).
+        /// зі зсувом центру вздовж боку не далі <see cref="MaxShift"/> (найменший зсув — краще). Ширша смуга важливіша за довшу,
+        /// довша — за бажаний бік: де всі боки впираються в огорожу, смуга звужується назовні (<see cref="BandOuts"/>). Якщо
+        /// вільної немає — найменш зайнята (Ok = false) з місцем найвищої перешкоди.
         /// </summary>
         public OutsideSpot PlanOutside()
         {
             var best = new OutsideSpot { Ok = false, Blocked = float.MaxValue };
+            foreach (float outer in BandOuts)
             foreach (float half in HalfLengths)
                 foreach (string side in SideOrder)
                 {
@@ -396,11 +444,11 @@ namespace Game.Gameplay.Ring.Stage
                             var s = new OutsideSpot
                             {
                                 Side = side, OutX = ox, OutZ = oz, AlongX = ax, AlongZ = az,
-                                Shift = (sgn == 0 ? 1f : -1f) * k * Cell, Dist = Plat + PairOut, HalfLength = half
+                                Shift = (sgn == 0 ? 1f : -1f) * k * Cell, Dist = Plat + PairOut, HalfLength = half, Outer = outer
                             };
                             float x0, z0, x1, z1;
                             s.Rect(Plat, 0f, out x0, out z0, out x1, out z1);
-                            s.Blocked = TopIn(x0, z0, x1, z1);
+                            s.Blocked = HighestIn(x0, z0, x1, z1, out s.BlockedX, out s.BlockedZ);
                             s.Ground = GroundAt(s.X, s.Z);
                             if (s.Blocked <= 0f) { s.Ok = true; return s; }
                             if (s.Blocked < best.Blocked) best = s;
@@ -418,9 +466,25 @@ namespace Game.Gameplay.Ring.Stage
         }
 
         /// <summary>
-        /// Чи може тут стояти камера плану «за рингом»: поза рингом (не над платформою), не далі смуги за огорожею,
-        /// на висоті 1,2–3,0 м, не в перешкоді (штатив світла, стіл) і по цей бік огорожі від пари (між камерою й парою
-        /// немає нічого вище 0,9 м).
+        /// Місце рефері, поки пара за рингом (x, z): на фартуху навпроти центру пари, за канатами (<see cref="ApronIn"/> від краю
+        /// платформи; висота — мат), обличчям до пари — звідти рахує відлік (<c>Ref_Count_Outside</c>, <c>CLIP_NEEDS.md</c>:
+        /// «рефері на фартуху рахує»). Тіла пари туди не дістають: від лінії пари до тулуба рефері
+        /// <see cref="PairOut"/> + <see cref="ApronIn"/> − <see cref="RefBody"/> = 0,95 м &gt; <see cref="PairReach"/>, і він на
+        /// 1 м вище підлоги. Камера «за рингом» крізь квадрат рингу не дивиться (<see cref="SeesOutside"/>), тож рефері пару
+        /// не закриває. Смуга пари (і її звуження в спортзалі) на нього не впливає.
+        /// </summary>
+        public static void RefPoint(OutsideSpot s, out float x, out float z)
+        {
+            float o = PairOut + ApronIn;
+            x = s.X - s.OutX * o;
+            z = s.Z - s.OutZ * o;
+        }
+
+        /// <summary>
+        /// Чи може тут стояти камера плану «за рингом»: поза рингом (не над платформою), не далі 2,2 м від краю платформи,
+        /// на висоті 1,2–3,0 м, не в перешкоді (штатив світла, стіл) і бачить центр пари на висоті грудей
+        /// (<see cref="SeesOutside"/>: не крізь ринг, над огорожею й столами). Тіла пари поодинці перевіряє план
+        /// (<c>RingCine.OutsideShot</c>).
         /// </summary>
         public bool OutsideCameraOk(float x, float y, float z, float pairX, float pairZ)
         {
@@ -428,7 +492,119 @@ namespace Game.Gameplay.Ring.Stage
             if (r < Plat + 0.15f || r > Plat + 2.2f) return false;
             if (y < 1.2f || y > 3.0f) return false;
             if (TopDisc(x, z, 0.35f) > y - 0.35f) return false;
-            return TopAlong(x, z, pairX, pairZ) <= 0.9f;
+            return SeesOutside(x, y, z, pairX, GroundAt(pairX, pairZ) + 1.0f, pairZ);
+        }
+
+        /// <summary>
+        /// Півсторона квадрата рингу, крізь який план «за рингом» не дивиться: стійки з подушками кутів і канати (у карті підлоги
+        /// рингу немає — <see cref="MarkTriangle"/>), із запасом на півтулуба борця, щоб стійка не різала тіло в кадрі.
+        /// </summary>
+        public float RingSightHalf { get { return PostLine + 0.3f; } }
+
+        /// <summary>Висота лінії погляду над перешкодою підлоги, м (огорожа, стіл, стільці, голови першого ряду).</summary>
+        public const float SightPad = 0.1f;
+
+        /// <summary>
+        /// Чи бачить камера (x, y, z) точку (tx, ty, tz) за рингом: лінія не заходить у квадрат рингу (<see cref="RingSightHalf"/>:
+        /// камера на сусідньому боці дивилася крізь кутову стійку — огляд п. 8, 09.11.2026) і йде над перешкодами підлоги
+        /// (кожна клітинка під нею нижча за лінію на <see cref="SightPad"/>) — низьку огорожу видно з висоти, стіл — ні.
+        /// </summary>
+        public bool SeesOutside(float x, float y, float z, float tx, float ty, float tz)
+        {
+            if (SegmentHitsSquare(x, z, tx, tz, RingSightHalf)) return false;
+            float len = (float)Math.Sqrt((tx - x) * (tx - x) + (tz - z) * (tz - z));
+            int steps = Math.Max(1, (int)Math.Ceiling(len / Cell));
+            for (int i = 1; i < steps; i++)
+            {
+                float t = i / (float)steps;
+                // Клітинки впритул до камери перевіряє її коло (TopDisc), до цілі — сама ціль (тіло стоїть на вільній підлозі).
+                if (t * len < 0.35f || (1f - t) * len < 0.3f) continue;
+                float h = y + (ty - y) * t;
+                if (TopAt(x + (tx - x) * t, z + (tz - z) * t) > h - SightPad) return false;
+            }
+            return true;
+        }
+
+        /// <summary>Півтовщина кутової стійки з подушками, м — для <see cref="PostInView"/>.</summary>
+        public const float PostPad = 0.35f;
+
+        /// <summary>
+        /// Чи кутова стійка рингу (±<see cref="PostLine"/>; ±<see cref="PostLine"/>) з подушками — на передньому плані кадру:
+        /// перед камерою (x, z) у горизонтальному полі зору (курс (lookX, lookZ), півкут <paramref name="halfFovDeg"/>) і ближче
+        /// за <paramref name="maxDist"/> (відстань до пари). Огляд 8b (09.11.2026): камера «за рингом» біля самого кута дивилася
+        /// вздовж боку — пару видно, але стійка з подушками займала третину кадру. Стійка за парою (тло) — можна.
+        /// </summary>
+        public bool PostInView(float x, float z, float lookX, float lookZ, float halfFovDeg, float maxDist)
+        {
+            float ll = (float)Math.Sqrt(lookX * lookX + lookZ * lookZ);
+            if (ll < 1e-6f) return false;
+            lookX /= ll; lookZ /= ll;
+            for (int sx = -1; sx <= 1; sx += 2)
+                for (int sz = -1; sz <= 1; sz += 2)
+                {
+                    float vx = sx * PostLine - x, vz = sz * PostLine - z;
+                    float d = (float)Math.Sqrt(vx * vx + vz * vz);
+                    if (d >= maxDist) continue;
+                    if (d <= PostPad) return true;
+                    float fwd = vx * lookX + vz * lookZ;
+                    float side = Math.Abs(vx * lookZ - vz * lookX);
+                    double ang = Math.Atan2(side, fwd) * 180.0 / Math.PI;
+                    double pad = Math.Asin(PostPad / d) * 180.0 / Math.PI;
+                    if (ang < halfFovDeg + pad) return true;
+                }
+            return false;
+        }
+
+        /// <summary>
+        /// Чи постать (стоїть на (x, y, z), зріст <paramref name="height"/>, півширина <paramref name="halfWidth"/>) обрізана краєм
+        /// кадру камери (cx, cy, cz) → (lx, ly, lz) з вертикальним кутом <paramref name="fovDeg"/> і сторонами
+        /// <paramref name="aspect"/>: частина тіла в кадрі, частина поза ним. Уся постать у кадрі чи вся поза ним — можна.
+        /// Огляд 8c (09.11.2026): рефері на фартуху біля камери «за рингом» стояв у кадрі без голови (верхній край) чи
+        /// розрізаний бічним краєм. Праворуч і вгору — як у <c>RingCine.Frame</c> (праворуч горизонтально).
+        /// </summary>
+        public static bool FigureCut(float cx, float cy, float cz, float lx, float ly, float lz, float fovDeg, float aspect,
+            float x, float y, float z, float height, float halfWidth)
+        {
+            float fx = lx - cx, fy = ly - cy, fz = lz - cz;
+            float fl = (float)Math.Sqrt(fx * fx + fy * fy + fz * fz);
+            if (fl < 1e-6f) return false;
+            fx /= fl; fy /= fl; fz /= fl;
+            float rx = fz, rz = -fx, rl = (float)Math.Sqrt(rx * rx + rz * rz);
+            if (rl < 1e-6f) return false;
+            rx /= rl; rz /= rl;
+            float ux = fy * rz, uy = fz * rx - fx * rz, uz = -fy * rx;
+            float tanV = (float)Math.Tan(0.5 * fovDeg * Math.PI / 180.0), tanH = tanV * aspect;
+            bool anyIn = false, anyOut = false;
+            float[] hs = { 0.03f, 0.5f, 0.95f, 1.45f, height };
+            for (int i = 0; i < hs.Length; i++)
+                for (int k = -1; k <= 1; k++)
+                {
+                    float px = x + rx * k * halfWidth - cx, py = y + hs[i] - cy, pz = z + rz * k * halfWidth - cz;
+                    float zc = px * fx + py * fy + pz * fz;
+                    float xc = px * rx + pz * rz;
+                    float yc = px * ux + py * uy + pz * uz;
+                    bool inside = zc > 0.05f && Math.Abs(xc) <= zc * tanH && Math.Abs(yc) <= zc * tanV;
+                    if (inside) anyIn = true; else anyOut = true;
+                    if (anyIn && anyOut) return true;
+                }
+            return false;
+        }
+
+        /// <summary>Чи заходить відрізок підлоги (a → b) у квадрат [−h; h]² (Ліанг — Барскі).</summary>
+        public static bool SegmentHitsSquare(float ax, float az, float bx, float bz, float h)
+        {
+            float t0 = 0f, t1 = 1f, dx = bx - ax, dz = bz - az;
+            return Clip(-dx, ax + h, ref t0, ref t1) && Clip(dx, h - ax, ref t0, ref t1)
+                && Clip(-dz, az + h, ref t0, ref t1) && Clip(dz, h - az, ref t0, ref t1) && t0 <= t1;
+        }
+
+        private static bool Clip(float p, float q, ref float t0, ref float t1)
+        {
+            if (Math.Abs(p) < 1e-9f) return q >= 0f;
+            float r = q / p;
+            if (p < 0f) { if (r > t1) return false; if (r > t0) t0 = r; }
+            else { if (r < t0) return false; if (r < t1) t1 = r; }
+            return true;
         }
 
         /// <summary>«М'які» перешкоди (оператори) в прямокутнику — їх сцена ховає, поки пара за рингом.</summary>

@@ -96,6 +96,33 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(2f * RingVenue.PairApart, Math.Sqrt((px - rx) * (px - rx) + (pz - rz) * (pz - rz)), 1e-3f);
         }
 
+        [TestCase("gym")]
+        [TestCase("hall")]
+        [TestCase("arena")]
+        public void Outside_RefereeOnTheApron_ClearOfThePair(string venue)
+        {
+            var v = Load(venue);
+            var s = v.PlanOutside();
+            float x, z;
+            RingVenue.RefPoint(s, out x, out z);
+            float r = Math.Max(Math.Abs(x), Math.Abs(z));
+            // На фартуху: за канатами, на лінії фартуха, навпроти центру пари.
+            Assert.AreEqual(v.Plat - RingVenue.ApronIn, r, 1e-3f, venue + ": рефері не на лінії фартуха");
+            Assert.Greater(r, v.RopeLine, venue + ": рефері всередині канатів");
+            Assert.AreEqual(0f, (x - s.X) * s.AlongX + (z - s.Z) * s.AlongZ, 1e-3f, venue + ": рефері не навпроти центру пари");
+            // Камера «за рингом» крізь квадрат рингу не дивиться — увесь тулуб рефері в ньому, пару він не закриває.
+            Assert.LessOrEqual(r + RingVenue.RefBody, v.RingSightHalf, venue + ": тулуб рефері поза квадратом рингу");
+            // Тіла пари (кидок, підйом — до 0,9 м від тазу) до тулуба рефері не дістають.
+            Assert.GreaterOrEqual(s.Dist - (r + RingVenue.RefBody), RingVenue.PairReach, venue + ": тіла пари дістають рефері");
+            foreach (bool player in new[] { true, false })
+            {
+                float px, pz;
+                RingVenue.PairPoint(s, player, out px, out pz);
+                double d = Math.Sqrt((px - x) * (px - x) + (pz - z) * (pz - z));
+                Assert.GreaterOrEqual(d, 1.0, venue + ": рефері впритул до " + (player ? "гравця" : "суперника"));
+            }
+        }
+
         [Test]
         public void Hall_EastIsBlockedByCommentary()
         {
@@ -168,6 +195,130 @@ namespace Game.Tests.EditMode
             // Ферма над рингом — над головою.
             v.MarkTriangle(-5f, 6f, 3.5f, 5f, 6f, 3.5f, 0f, 6f, 4f);
             Assert.AreEqual(0f, v.TopAt(0f, 3.6f), 1e-4f);
+        }
+
+        [Test]
+        public void OutsideCamera_NotThroughTheCornerPost()
+        {
+            // Огляд п. 8 (09.11.2026): камера на сусідньому боці дивилася на пару крізь кутову стійку — у кадрі стійка й подушки.
+            var v = Load("hall");
+            var s = v.PlanOutside();
+            Assert.AreEqual("S", s.Side);
+            float pairY = v.GroundAt(s.X, s.Z) + 1f;
+            // Камера зі сходу біля кута SE (так її ставив план у клубній залі), лінія до пари йде повз стійку (2,52; −2,52).
+            Assert.IsTrue(RingVenue.SegmentHitsSquare(3.94f, -2.18f, s.X, s.Z, v.RingSightHalf));
+            Assert.IsFalse(v.SeesOutside(3.94f, 2.49f, -2.18f, s.X, pairY, s.Z), "лінія погляду крізь кут рингу");
+            Assert.IsFalse(v.OutsideCameraOk(3.94f, 2.49f, -2.18f, s.X, s.Z), "крізь кут рингу");
+            // Та сама сторона, біля фартуха, — вільно.
+            Assert.IsTrue(v.SeesOutside(2.3f, 2.4f, -v.Plat - 0.3f, s.X, pairY, s.Z), "біля фартуха свого боку");
+            // Квадрат рингу: точка всередині й відрізок, що його оминає.
+            Assert.IsTrue(RingVenue.SegmentHitsSquare(-5f, 0f, 5f, 0f, 2f));
+            Assert.IsFalse(RingVenue.SegmentHitsSquare(-5f, 3f, 5f, 3f, 2f));
+            Assert.IsTrue(RingVenue.SegmentHitsSquare(0.5f, 0.5f, 9f, 9f, 2f));
+            Assert.IsFalse(RingVenue.SegmentHitsSquare(3f, -4f, 4f, 3f, 2f));
+        }
+
+        [Test]
+        public void OutsideCamera_KeepsTheCornerPostOutOfTheForeground()
+        {
+            var v = Load("gym");
+            float h = v.PostLine;
+            // Пара на півночі (z = Plat + 1). Камера біля кута NE (за 0,6 м від стійки), дивиться вздовж боку на пару — стійка в кадрі
+            // ближче за пару (як кадр 172 огляду 8b).
+            float cx = h + 0.4f, cz = h + 0.45f, px = 0.3f, pz = v.Plat + 1f;
+            Assert.IsTrue(v.PostInView(cx, cz, px - cx, pz - cz, 33f, Dist(cx, cz, px, pz)), "стійка біля камери");
+            // Та сама камера, але кадр вузький і повернутий назовні, від стійки, — стійка поза полем зору.
+            Assert.IsFalse(v.PostInView(cx, cz + 0.6f, -0.2f, 1f, 20f, Dist(cx, cz + 0.6f, px, pz)), "стійка збоку поза кадром");
+            // Стійка позаду камери.
+            Assert.IsFalse(v.PostInView(h - 0.8f, h + 0.6f, -1f, 0.3f, 33f, 3f), "стійка позаду");
+            // Стійка далі за пару (тло) — можна, хоч і в полі зору: NE — 7° від осі кадру, але за 4,2 м проти 1,95 до пари
+            // (відсіює відстань, не кут).
+            Assert.IsFalse(v.PostInView(-1.5f, 4.2f, 1f, -0.4f, 33f, Dist(-1.5f, 4.2f, px, pz)), "стійки NE і NW далі за пару (тло)");
+            // Та сама стійка NE, коли пара далі за неї, — передній план (кут — у полі зору).
+            Assert.IsTrue(v.PostInView(-1.5f, 4.2f, 1f, -0.4f, 33f, 6f), "стійка NE ближче за пару");
+            // Камера впритул до стійки — завжди передній план.
+            Assert.IsTrue(v.PostInView(h + 0.2f, h + 0.1f, 0f, 1f, 10f, 5f), "камера в подушці");
+        }
+
+        private static float Dist(float ax, float az, float bx, float bz)
+        {
+            return (float)Math.Sqrt((ax - bx) * (ax - bx) + (az - bz) * (az - bz));
+        }
+
+        [Test]
+        public void OutsideCamera_FigureCutByTheFrameEdge()
+        {
+            const float aspect = 16f / 9f;
+            // Камера на висоті 1 м за 5 м дивиться вздовж +Z: постать посередині — уся в кадрі.
+            Assert.IsFalse(RingVenue.FigureCut(0f, 1f, -5f, 0f, 1f, 0f, 40f, aspect, 0f, 0f, 0f, 1.85f, 0.2f), "уся в кадрі");
+            // Далеко праворуч — уся поза кадром.
+            Assert.IsFalse(RingVenue.FigureCut(0f, 1f, -5f, 0f, 1f, 0f, 40f, aspect, 10f, 0f, 0f, 1.85f, 0.2f), "уся поза кадром");
+            // Позаду камери — поза кадром.
+            Assert.IsFalse(RingVenue.FigureCut(0f, 1f, -5f, 0f, 1f, 0f, 40f, aspect, 0f, 0f, -8f, 1.85f, 0.2f), "позаду камери");
+            // На бічному краї (півширина кадру на 5 м — tan 20° · 16/9 · 5 ≈ 3,24 м) — розрізана.
+            float edge = (float)(Math.Tan(20.0 * Math.PI / 180.0) * aspect * 5.0);
+            Assert.IsTrue(RingVenue.FigureCut(0f, 1f, -5f, 0f, 1f, 0f, 40f, aspect, edge, 0f, 0f, 1.85f, 0.2f), "бічний край");
+            // Стоїть на фартуху (0,5 м) за 3 м: стопи в кадрі, голова (2,35 м) вище верхнього краю (2,09 м) — без голови.
+            Assert.IsTrue(RingVenue.FigureCut(0f, 1f, -3f, 0f, 1f, 0f, 40f, aspect, 0f, 0.5f, 0f, 1.85f, 0.2f), "без голови");
+        }
+
+        [Test]
+        public void OutsideCamera_SeesOverALowBarrier_NotOverATable()
+        {
+            var v = RingVenue.Parse(Text("gym", "anchors"), "gym");
+            float pz = v.Plat + RingVenue.PairOut;
+            // Огорожа 1,04 м за 0,7 м від пари (як стійки огорожі спортзалу), камера ще 0,3 м за нею.
+            v.MarkBox(-4f, pz + 0.65f, 4f, pz + 0.75f, 1.04f);
+            Assert.IsTrue(v.SeesOutside(0.5f, 2.8f, pz + 1.05f, 0f, 0.3f, pz), "з висоти 2,8 м над низькою огорожею видно навіть того, хто лежить");
+            Assert.IsFalse(v.SeesOutside(0.5f, 1.25f, pz + 1.05f, 0f, 0.3f, pz), "з 1,25 м огорожа закриває того, хто лежить");
+            // Високий стіл (2,0 м) посередині між камерою й парою (впритул до камери перешкоди ловить її коло — TopDisc).
+            v.MarkBox(-4f, pz + 0.45f, 4f, pz + 0.55f, 2.0f);
+            Assert.IsFalse(v.SeesOutside(0.5f, 2.8f, pz + 1.15f, 0f, 1f, pz), "крізь високий стіл");
+        }
+
+        [Test]
+        public void Outside_NarrowsTheBand_WhenTheBarrierIsClose()
+        {
+            // Спортзал у грі: стійки огорожі (1,04 м) за ~1,6–1,85 м від краю платформи по всіх боках — смуга [0,15; 1,85] ніде не
+            // вільна (огляд п. 8: «ВІЛЬНОЇ СМУГИ НЕМАЄ», бік N). Смуга звужується назовні, центр пари не рухається.
+            var v = Load("gym");
+            float b0 = v.Plat + 1.62f, b1 = v.Plat + 1.84f, e = b1 + 0.2f;
+            v.MarkBox(-e, b0, e, b1, 1.04f);
+            v.MarkBox(-e, -b1, e, -b0, 1.04f);
+            v.MarkBox(b0, -e, b1, e, 1.04f);
+            v.MarkBox(-b1, -e, -b0, e, 1.04f);
+            var s = v.PlanOutside();
+            Assert.IsTrue(s.Ok, "смуга не знайшлась (" + s.Blocked + " м у " + s.BlockedX + "; " + s.BlockedZ + ")");
+            Assert.Less(s.OuterEdge, RingVenue.BandOut, "смуга мала звузитись");
+            Assert.LessOrEqual(s.OuterEdge, 1.62f, "межа смуги в огорожі");
+            Assert.AreEqual(v.Plat + RingVenue.PairOut, s.Dist, 1e-4f, "центр пари зсунувся");
+            // Вільна півширина назовні від центру пари — до зовнішньої межі (ближчої), не половина смуги.
+            Assert.AreEqual(s.OuterEdge - RingVenue.PairOut, s.HalfWidth, 1e-4f, "півширина звуженої смуги");
+            float x0, z0, x1, z1;
+            s.Rect(v.Plat, 0f, out x0, out z0, out x1, out z1);
+            Assert.AreEqual(0f, v.TopIn(x0, z0, x1, z1), 1e-4f);
+            // Рефері — на фартуху, як і в повній смузі: звуження смуги його не підсуває до пари (огляд 8b — за парою на підлозі
+            // у звуженій смузі він стояв за 0,35 м від лінії пари, і тіло з боді-слему проходило крізь нього).
+            float rx, rz;
+            RingVenue.RefPoint(s, out rx, out rz);
+            Assert.AreEqual(v.Plat - RingVenue.ApronIn, Math.Max(Math.Abs(rx), Math.Abs(rz)), 1e-3f, "рефері не на фартуху");
+            foreach (bool player in new[] { true, false })
+            {
+                float px, pz;
+                RingVenue.PairPoint(s, player, out px, out pz);
+                Assert.GreaterOrEqual(Math.Sqrt((px - rx) * (px - rx) + (pz - rz) * (pz - rz)), 1.0, "рефері впритул до пари");
+            }
+        }
+
+        [Test]
+        public void Outside_FullBand_KeepsTheOldOuterEdge()
+        {
+            foreach (string venue in new[] { "gym", "hall", "arena" })
+            {
+                var s = Load(venue).PlanOutside();
+                Assert.AreEqual(RingVenue.BandOut, s.OuterEdge, 1e-4f, venue);
+                Assert.AreEqual(0.5f * (RingVenue.BandOut - RingVenue.BandIn), s.HalfWidth, 1e-4f, venue + ": півширина повної смуги");
+            }
         }
 
         [Test]

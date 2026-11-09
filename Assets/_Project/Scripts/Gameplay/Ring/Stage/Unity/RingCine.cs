@@ -18,6 +18,11 @@ namespace Game.Gameplay.Ring.Stage
             public Vector3 Pos, Look;
             public float Fov, Distance;
             public bool Ok;
+            /// <summary>
+            /// Чим кадр поступився, коли жоден не виконав м'яких вимог (кутова стійка на передньому плані, рефері обрізаний
+            /// краєм), — тоді <see cref="Ok"/> і перший такий кадр; null — кадр без поступок.
+            /// </summary>
+            public string Compromise;
         }
 
         /// <param name="yawDeg">Курс погляду камери (Unity: 0 — уздовж +Z).</param>
@@ -89,42 +94,118 @@ namespace Game.Gameplay.Ring.Stage
         // ---------------- плани поза центром рингу ----------------
 
         // Курси «за рингом» — кут від напрямку назовні до напрямку вздовж боку: спершу трохи назовні (за парою огорожа й
-        // перший ряд), далі вздовж боку, далі трохи до рингу (за парою фартух).
-        private static readonly float[] OutsideAngles = { 70f, -70f, 82f, -82f, 95f, -95f, 58f, -58f, 110f, -110f, 125f, -125f };
-        private static readonly float[] OutsidePitch = { 14f, 20f, 26f, 32f };
-        private static readonly float[] OutsideFovs = { 40f, 46f, 52f, 58f };
+        // перший ряд), далі вздовж боку, далі трохи до рингу (за парою фартух); наостанок — круто назовні з-над фартуха й круто
+        // до рингу з-за огорожі (вузький коридор спортзалу). Ширші кути й крутіший нахил — запасні, після звичних.
+        private static readonly float[] OutsideAngles = { 70f, -70f, 82f, -82f, 95f, -95f, 58f, -58f, 110f, -110f, 125f, -125f,
+                                                          45f, -45f, 140f, -140f, 30f, -30f, 155f, -155f };
+        private static readonly float[] OutsidePitch = { 14f, 20f, 26f, 32f, 40f };
+        private static readonly float[] OutsideFovs = { 40f, 46f, 52f, 58f, 64f };
 
         /// <summary>
-        /// План «за рингом»: пара на підлозі між фартухом і огорожею. Камера — в коридорі довкола рингу (не в рингу, не над
-        /// платформою, не за огорожею в трибунах, не в штативі світла: <see cref="RingVenue.OutsideCameraOk"/> залу
+        /// План «за рингом»: пара на підлозі між фартухом і огорожею. Камера — довкола рингу (не в рингу, не над платформою,
+        /// не далі 2,2 м від неї, не в штативі світла; кожне тіло пари видно не крізь ринг і над огорожею — <see cref="RingVenue.OutsideCameraOk"/>,
+        /// <see cref="RingVenue.SeesOutside"/> залу
         /// <see cref="RingStage3D.Venue"/>), на висоті 1,2–3 м, з нахилом униз; у кадрі — <paramref name="pts"/> (тіла пари;
         /// додай точку краю фартуха чи реквізиту, щоб і вони лягли в кадр). <paramref name="pairCenter"/> — центр пари на
         /// підлозі, <paramref name="outward"/> — назовні від рингу (<see cref="RingStage3D.OutsideOut"/>).
-        /// Перебір: курс (кут від «назовні», спершу з огорожею за парою), нахил, кут огляду; перший кадр, що вміщає все.
+        /// Перебір: курс (кут від «назовні», спершу з огорожею за парою), нахил, кут огляду; перший кадр, що вміщає все,
+        /// без кутової стійки на передньому плані й без рефері на фартуху, обрізаного краєм кадру (<paramref name="referee"/>,
+        /// типово <see cref="RingStage3D.OutsideRefPos"/>: або весь у кадрі, або поза ним). Коли таких немає — перший, що вміщає
+        /// пару, з поступкою в <see cref="Shot.Compromise"/>.
         /// </summary>
         public static Shot OutsideShot(IList<Vector3> pts, Vector3 pairCenter, Vector3 outward, float aspect,
-            Func<Vector3, bool> allowed = null, IList<float> tops = null)
+            Func<Vector3, bool> allowed = null, IList<float> tops = null, Vector3? referee = null)
         {
             var venue = RingStage3D.Venue;
-            if (allowed == null) allowed = p => venue.OutsideCameraOk(p.x, p.y, p.z, pairCenter.x, pairCenter.z);
+            Vector3 rf = referee ?? RingStage3D.OutsideRefPos;
+            // Камера бачить кожне тіло пари: не крізь ринг (кутова стійка й подушки — огляд п. 8, 09.11.2026) і над перешкодами
+            // підлоги. Точки на рингу (край фартуха) — лише в кадрі, лінію до них не перевіряємо.
+            if (allowed == null) allowed = p =>
+            {
+                if (!venue.OutsideCameraOk(p.x, p.y, p.z, pairCenter.x, pairCenter.z)) return false;
+                for (int i = 0; i < pts.Count; i++)
+                {
+                    Vector3 q = pts[i];
+                    if (Mathf.Max(Mathf.Abs(q.x), Mathf.Abs(q.z)) <= venue.RingSightHalf) continue;
+                    if (!venue.SeesOutside(p.x, p.y, p.z, q.x, q.y, q.z)) return false;
+                }
+                return true;
+            };
             outward.y = 0f;
             if (outward.sqrMagnitude < 1e-6f) outward = Vector3.right;
             outward.Normalize();
             var along = new Vector3(-outward.z, 0f, outward.x);
             var s = new Shot();
+            // Запасні кадри з поступкою: обрізаний рефері гірший за чистий, але кращий за стійку перед парою (вона закриває бій).
+            var refCut = new Shot();
+            var postFront = new Shot();
             foreach (float th in OutsideAngles)
             {
                 float r = th * Mathf.Deg2Rad;
                 // Камера дивиться в цьому напрямку; стоїть — по інший бік пари.
                 Vector3 look = outward * Mathf.Cos(r) + along * Mathf.Sin(r);
                 float yaw = Mathf.Atan2(look.x, look.z) * Mathf.Rad2Deg;
+                // Кути огляду — тут, а не FrameAny: м'які вимоги (стійка, рефері) перевіряються для кожного, бо ширший кут з тим
+                // самим курсом і нахилом може їх виконати (рев'ю 8c).
                 foreach (float pitch in OutsidePitch)
+                foreach (float fov in OutsideFovs)
                 {
-                    s = FrameAny(pts, yaw, pitch, OutsideFovs, aspect, 0.2f, 0.86f, 0.08f, allowed, 1.2f, 7f, tops);
-                    if (s.Ok) return s;
+                    s = Frame(pts, yaw, pitch, fov, aspect, 0.2f, 0.86f, 0.08f, allowed, 1.2f, 7f, tops);
+                    s.Fov = fov;
+                    if (!s.Ok) continue;
+                    if (PostInFront(venue, s, pairCenter, aspect))
+                    {
+                        if (!postFront.Ok) { postFront = s; postFront.Compromise = "кутова стійка на передньому плані"; }
+                        continue;
+                    }
+                    if (RingVenue.FigureCut(s.Pos.x, s.Pos.y, s.Pos.z, s.Look.x, s.Look.y, s.Look.z, s.Fov, aspect,
+                            rf.x, rf.y, rf.z, RingVenue.RefHeight, RingVenue.RefBody))
+                    {
+                        if (!refCut.Ok) { refCut = s; refCut.Compromise = "рефері на фартуху обрізаний краєм кадру"; }
+                        continue;
+                    }
+                    if (RingLaunchArgs.Has("-ring-cine-log")) LogOutside(venue, s, pairCenter, "чистий");
+                    return s;
                 }
             }
-            return s;
+            var best = refCut.Ok ? refCut : postFront;
+            if (!best.Ok) return s;
+            // Кадр з поступкою — у журнал (режисер свого рядка про це не пише; огляд 8e — стійка перед парою в арені).
+            Debug.LogWarning(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "[Ринг] план «за рингом» з поступкою: {0}; камера ({1:0.00}; {2:0.00}; {3:0.00}) → ({4:0.00}; {5:0.00}; {6:0.00}), кут {7:0}°",
+                best.Compromise, best.Pos.x, best.Pos.y, best.Pos.z, best.Look.x, best.Look.y, best.Look.z, best.Fov));
+            return best;
+        }
+
+        /// <summary>
+        /// Журнал кадру «за рингом» (прапорець запуску <c>-ring-cine-log</c>, для оглядів): камера, ціль, кут і найближча кутова
+        /// стійка — відстань від камери й кут від осі кадру проти відстані до пари.
+        /// </summary>
+        private static void LogOutside(RingVenue venue, Shot s, Vector3 pairCenter, string kind)
+        {
+            Vector3 f = s.Look - s.Pos;
+            f.y = 0f;
+            float best = float.MaxValue, ang = 0f;
+            for (int sx = -1; sx <= 1; sx += 2)
+                for (int sz = -1; sz <= 1; sz += 2)
+                {
+                    var v = new Vector3(sx * venue.PostLine - s.Pos.x, 0f, sz * venue.PostLine - s.Pos.z);
+                    if (v.magnitude < best) { best = v.magnitude; ang = Vector3.Angle(f, v); }
+                }
+            Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "[Ринг] план «за рингом» ({0}): камера ({1:0.00}; {2:0.00}; {3:0.00}) → ({4:0.00}; {5:0.00}; {6:0.00}), кут {7:0}°; найближча стійка {8:0.00} м, {9:0}° від осі; до пари {10:0.00} м",
+                kind, s.Pos.x, s.Pos.y, s.Pos.z, s.Look.x, s.Look.y, s.Look.z, s.Fov, best, ang, Flat(pairCenter - s.Pos)));
+        }
+
+        /// <summary>
+        /// Кутова стійка на передньому плані знятого кадру «за рингом» (ближче за пару, у горизонтальному полі зору з його
+        /// кутом) — <see cref="RingVenue.PostInView"/>. Такий кадр відкидаємо: далі інший курс чи нахил.
+        /// </summary>
+        private static bool PostInFront(RingVenue venue, Shot s, Vector3 pairCenter, float aspect)
+        {
+            Vector3 f = s.Look - s.Pos;
+            float halfH = Mathf.Atan(Mathf.Tan(0.5f * s.Fov * Mathf.Deg2Rad) * aspect) * Mathf.Rad2Deg;
+            return venue.PostInView(s.Pos.x, s.Pos.z, f.x, f.z, halfH, Flat(pairCenter - s.Pos));
         }
 
         private static readonly float[] PerchYaws = { 30f, -30f, 45f, -45f, 15f, -15f, 60f, -60f, 0f };
