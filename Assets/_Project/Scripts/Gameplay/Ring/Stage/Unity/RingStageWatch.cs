@@ -75,13 +75,16 @@ namespace Game.Gameplay.Ring.Stage
                 if (t.Has)
                 {
                     float step = new Vector2(hip.x - t.Hip.x, hip.z - t.Hip.z).magnitude;
-                    if (step > TeleportStep && step / dt > TeleportSpeed)
+                    bool jump = step > TeleportStep && step / dt > TeleportSpeed;
+                    if (jump)
                     {
                         if (cut) TeleportsUnderCut++;
                         else { Teleports++; Note(step, a, "телепорт " + F(step) + " м з (" + F(t.Hip.x) + "," + F(t.Hip.z) + ") у (" + F(hip.x) + "," + F(hip.z) + ")", true); }
                     }
+                    // Стрибок (склейка «за ринг» / «у ринг» — подія Place ядра — чи телепорт, уже врахований вище) крізь канати
+                    // не проходить: перетин — лише неперервний рух тазу.
                     bool wasIn = Inside(t.Hip), isIn = Inside(hip);
-                    if (wasIn != isIn && hy < TopRope)
+                    if (wasIn != isIn && hy < TopRope && !jump)
                     {
                         // Вихід борця: сходи → між канатами, перемах, закочування — крізь канати за задумом (ENTRANCE_PROFILE.md).
                         var cc = a.CurrentClip;

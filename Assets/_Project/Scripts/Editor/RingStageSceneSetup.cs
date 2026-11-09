@@ -39,6 +39,26 @@ namespace Game.Gameplay.EditorTools
             assets.venueAnchors = Load<TextAsset>(Art + "venue_gym_anchors.txt");
             assets.venueProps = Load<TextAsset>(Art + "venue_gym_props.txt");
             assets.venueCrowd = Load<TextAsset>(Art + "venue_gym_crowd.txt");
+            // Клубна зала й палац спорту — лише для збірки огляду «за рингом» у трьох залах (-ring-venue hall|arena): Unity
+            // запускають зі змінною середовища RING_REVIEW_VENUES=1. Без неї (гра, збірки інших сесій) у сцені лише спортзал —
+            // посилання на сцену тягнуть FBX у білд і в пам'ять при завантаженні, а з читанням сіток (карта підлоги) — ще й копію
+            // в пам'яті процесора (Статут PERF-01). Текстури їхніх наборів і так у білді (KitSets бере весь маніфест).
+            var venueSets = new List<RingStageAssets.VenueSet>();
+            bool reviewVenues = System.Environment.GetEnvironmentVariable("RING_REVIEW_VENUES") == "1";
+            foreach (string id in reviewVenues ? new[] { "hall", "arena" } : new string[0])
+            {
+                Readable(Art + "venue_" + id + ".fbx");
+                venueSets.Add(new RingStageAssets.VenueSet
+                {
+                    id = id,
+                    venue = Load<GameObject>(Art + "venue_" + id + ".fbx"),
+                    anchors = Load<TextAsset>(Art + "venue_" + id + "_anchors.txt"),
+                    props = Load<TextAsset>(Art + "venue_" + id + "_props.txt"),
+                    crowd = Load<TextAsset>(Art + "venue_" + id + "_crowd.txt"),
+                });
+            }
+            assets.venueSets = venueSets.ToArray();
+            if (reviewVenues) Debug.Log("[Ринг] 3D: RING_REVIEW_VENUES=1 — у сцені ще й зали " + venueSets.Count + " (огляд, не для гри).");
             var crowdClips = new List<AnimationClip>();
             foreach (var o in AssetDatabase.LoadAllAssetsAtPath("Assets/Art/Animations/CROWD_Anims.fbx"))
             {

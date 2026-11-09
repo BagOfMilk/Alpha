@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
 using UnityEngine;
@@ -7,7 +9,9 @@ namespace Game.Gameplay.Ring.Stage
 {
     /// <summary>
     /// Налагоджувальний показ 3D (<c>-ring-demo &lt;тека&gt;</c>): без кампанії й UI програє промо з мікрофоном і набір
-    /// подій матчу (удар, кидок, утримання, ув'язка, фінішер, кінець), знімаючи кадри. Для огляду пар кліпів.
+    /// подій матчу (удар, склейки «канати / кут», вихід за ринг і бій там, повернення, кидок, утримання, фінішер, кінець),
+    /// знімаючи кадри. Для огляду пар кліпів. <c>-ring-outside 1</c> — статичний огляд місць поза центром (за рингом, на
+    /// канаті, на куті), <c>-ring-venue hall|arena</c> — інший зал.
     /// </summary>
     public static class RingStageDemo
     {
@@ -20,6 +24,179 @@ namespace Game.Gameplay.Ring.Stage
             return e;
         }
 
+        /// <summary>Подія прийому кар'єри з постановкою (як від MatchEngine.Perform з MoveHint).</summary>
+        private static MatchEvent Move(MatchSide actor, MatchActionId action, RollTier tier, string key, MoveStaging staging, params MatchEffect[] fx)
+        {
+            var e = Ev(MatchEventKind.Action, actor, action, tier, fx);
+            e.MoveKey = key;
+            e.Staging = staging;
+            return e;
+        }
+
+        /// <summary>Подія, що почалась за рингом (MatchEvent.Outside — як у ядра).</summary>
+        private static MatchEvent Out(MatchEvent e) { e.Outside = true; return e; }
+
+        // ============================ огляд «за рингом» ============================
+
+        /// <summary>
+        /// Статичний огляд місць поза центром (<c>-ring-demo &lt;тека&gt; -ring-outside 1 [-ring-venue hall|arena]</c>), поки
+        /// режисер не вміє кроків Cut/Place: постаті ставляться напряму <see cref="RingStage3D.PairPos"/> і
+        /// <see cref="RingStage3D.PerchPos"/>, кадр — планами <see cref="RingCine.OutsideShot"/> / <see cref="RingCine.PerchShot"/>.
+        /// За рингом — стійка, кидок і ларіат пари (кліп пари розкладено навпіл довкола центру смуги) і загальний план; на
+        /// канаті й на куті — кліп склейки з першого кадру з перевіркою, де таз відносно каната.
+        /// </summary>
+        private static IEnumerator OutsideReview(RingStage3D stage, string folder)
+        {
+            stage.BeginDemoMatch();
+            string v = RingStage3D.Venue.Id;
+            var o = RingStage3D.Outside;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд за рингом: {0}; бік {1}, центр ({2:0.00}; {3:0.00}), смуга ±{4:0.0} м, вільна: {5}",
+                RingStage3D.Venue, o.Side, o.X, o.Z, o.HalfLength, o.Ok ? "так" : "НІ"));
+            RingActor pl = stage.Actor(MatchSide.Player), rv = stage.Actor(MatchSide.Rival), rf = stage.Referee;
+            // Рефері — у рингу біля канатів з боку пари, обличчям до неї (рахує відлік).
+            Vector3 refAt = RingStage3D.OutsideOut * (RingStage3D.RingHalf - 0.45f) + RingStage3D.OutsideAlong * o.Shift;
+            refAt.y = RingStage3D.MatY;
+
+            // 1) Пара в стійці за рингом.
+            Vector3 pp = RingStage3D.PairPos(MatchSide.Player, true), rp = RingStage3D.PairPos(MatchSide.Rival, true);
+            stage.Place(pl, pp, RingStage3D.PairYaw(MatchSide.Player, true), "Ring_Stance_Loop");
+            stage.Place(rv, rp, RingStage3D.PairYaw(MatchSide.Rival, true), "Ring_Stance_Loop");
+            stage.Place(rf, refAt, RingStage3D.YawTo(refAt, RingStage3D.OutsideAnchor), "Ref_Idle_Loop");
+            Forget(stage);
+            yield return OutsideFrame(stage, folder, v + "_outside_stance", 0.8f);
+            stage.SetShot(StageCam.Overview);
+            yield return Shot(folder, v + "_outside_overview", 0.8f);
+
+            // 2) Кидок і ларіат пари за рингом (кліпи ядра для Throw і Weapon): кадри на третині й двох третинах кліпа.
+            foreach (string clip in new[] { "Bodyslam", "Center_Lariat_Heavy" })
+            {
+                if (!PairOutside(stage, clip)) continue;
+                var ca = stage.Clip(clip + "_A");
+                float len = ca != null ? ca.length / RingStage3D.PlaySpeed : 2f;
+                yield return OutsideFrame(stage, folder, v + "_outside_" + clip + "_a", len * 0.33f);
+                yield return new WaitForSeconds(len * 0.3f);
+                Capture(folder, v + "_outside_" + clip + "_b");
+                yield return new WaitForSeconds(len * 0.45f);
+                Capture(folder, v + "_outside_" + clip + "_end");
+                Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] огляд за рингом: {0} — таз A ({1:0.00}; {2:0.00}), B ({3:0.00}; {4:0.00}); у смузі: {5}",
+                    clip, pl.PosePos.x, pl.PosePos.z, rv.PosePos.x, rv.PosePos.z, InBand(pl.PosePos) && InBand(rv.PosePos) ? "так" : "НІ"));
+            }
+
+            // 3) На канаті й на куті (план 1 склейки): гравець — відскок від свого каната, суперник — вихід зі свого кута.
+            stage.Place(pl, RingStage3D.PairPos(MatchSide.Player, false), 90f, "Ring_Stance_Loop");
+            stage.Place(rv, RingStage3D.PairPos(MatchSide.Rival, false), -90f, "Ring_Stance_Loop");
+            stage.Place(rf, RingStage3D.RefPos, 180f, "Ref_Idle_Loop");
+            Forget(stage);
+            yield return null;
+            foreach (var perch in new[] { new KeyValuePair<MatchSide, MoveStaging>(MatchSide.Player, MoveStaging.Ropes),
+                                          new KeyValuePair<MatchSide, MoveStaging>(MatchSide.Rival, MoveStaging.Corner) })
+            {
+                var a = stage.Actor(perch.Key);
+                var victim = stage.Actor(RingClipTable.Opp(perch.Key));
+                string clip = RingClipTable.DefaultPerch(perch.Value);
+                float yaw;
+                Vector3 at = stage.PerchPos(perch.Key, perch.Value, clip, out yaw);
+                var c = stage.Clip(clip, stage.IsFemale(a));
+                if (c == null) { Debug.LogWarning("[Ринг] огляд: немає кліпа " + clip); continue; }
+                a.Slot.position = new Vector3(at.x, at.y, at.z);
+                a.SetHeight(at.y);
+                a.PlayAt(c, false, at, yaw, RingStage3D.PlaySpeed);
+                stage.Watch.Forget(a);
+                var pts = new List<Vector3>();
+                RingCine.Body(pts, new Vector3(at.x, at.y, at.z), stage.BodyScale(a), true);
+                RingCine.Body(pts, victim.PosePos, stage.BodyScale(victim));
+                var shot = RingCine.PerchShot(pts, at, victim.PosePos, stage.CamAspect);
+                if (shot.Ok) stage.Cine(shot.Pos, shot.Look, shot.Fov, true);
+                else { Debug.LogWarning("[Ринг] огляд: план склейки не вмістився — " + clip); stage.SetShot(StageCam.Low); }
+                string tag = v + "_perch_" + (perch.Value == MoveStaging.Ropes ? "ropes" : "corner");
+                float deep = 0f, len = c.length / RingStage3D.PlaySpeed;
+                Vector3 axis = perch.Value == MoveStaging.Ropes ? Quaternion.Euler(0f, yaw, 0f) * Vector3.forward : new Vector3(Mathf.Sign(at.x), 0f, 1f).normalized;
+                int shots = 0;
+                for (float t = 0f; t < len + 0.3f; t += Time.deltaTime)
+                {
+                    yield return null;
+                    var hp = a.PosePos;
+                    deep = Mathf.Max(deep, Mathf.Max(Mathf.Abs(hp.x), Mathf.Abs(hp.z)));
+                    if (shots < 4 && t >= shots * len / 3f) { Capture(folder, tag + "_" + shots); shots++; }
+                }
+                float rope = RingStage3D.Venue.RopeLine;
+                Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                    "[Ринг] огляд склейки: {0} ({1}) — старт тазу ({2:0.00}; {3:0.00}; {4:0.00}), курс {5:0}°, hs {6:0.00}; найдальше від центру {7:0.00} м, канат {8:0.000} (з прогином {9:0.00}) — {10}; вісь ({11:0.00}; {12:0.00})",
+                    clip, perch.Key, at.x, at.y, at.z, yaw, stage.BodyScale(a), deep, rope, rope + 0.45f,
+                    deep <= rope + 0.45f ? "у канатах" : "ЗА КАНАТАМИ", axis.x, axis.z));
+                stage.Place(a, RingStage3D.PairPos(perch.Key, false), perch.Key == MatchSide.Player ? 90f : -90f, "Ring_Stance_Loop");
+                stage.Watch.Forget(a);
+                yield return null;
+            }
+            Debug.Log("[Ринг] огляд за рингом: знято " + _n + " кадрів");
+            Debug.Log(stage.PlayedReport());
+            HardExit.Now(0);
+        }
+
+        private static void Forget(RingStage3D stage)
+        {
+            stage.Watch.Forget(stage.Actor(MatchSide.Player));
+            stage.Watch.Forget(stage.Actor(MatchSide.Rival));
+            stage.Watch.Forget(stage.Referee);
+        }
+
+        /// <summary>Чи таз у смузі пари за рингом (з запасом 0,25 м — кліп пари може хитнути тіло за межу).</summary>
+        private static bool InBand(Vector3 p)
+        {
+            float x0, z0, x1, z1;
+            RingStage3D.Outside.Rect(RingStage3D.Venue.Plat, 0.25f, out x0, out z0, out x1, out z1);
+            return p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1;
+        }
+
+        /// <summary>
+        /// Пару за рингом — у кліп пари: A дивиться вздовж боку, зсув B (бічний і вперед) розкладено навпіл довкола центру
+        /// смуги, тож обидва в смузі; слоти — на підлозі (мати).
+        /// </summary>
+        private static bool PairOutside(RingStage3D stage, string clip)
+        {
+            var ia = stage.Info(clip + "_A");
+            var ca = stage.Clip(clip + "_A");
+            var cb = stage.Clip(clip + "_B");
+            if (ia == null || ca == null || cb == null) { Debug.LogWarning("[Ринг] огляд: немає пари " + clip); return false; }
+            RingActor a = stage.Actor(MatchSide.Player), b = stage.Actor(MatchSide.Rival);
+            Vector3 along = RingStage3D.OutsideAlong, c = RingStage3D.OutsideAnchor;
+            float ya = RingStage3D.YawTo(Vector3.zero, along), yb = ya - ia.Rotation;
+            Vector3 off = Quaternion.Euler(0f, ya, 0f) * new Vector3(ia.Offset.x, 0f, ia.Offset.z);
+            Vector3 pa = c - off * 0.5f, pb = c + off * 0.5f;
+            pa.y = RingStage3D.Venue.GroundAt(pa.x, pa.z);
+            pb.y = RingStage3D.Venue.GroundAt(pb.x, pb.z);
+            a.Slot.SetPositionAndRotation(pa, Quaternion.Euler(0f, ya, 0f));
+            b.Slot.SetPositionAndRotation(pb, Quaternion.Euler(0f, yb, 0f));
+            a.SetHeight(pa.y);
+            b.SetHeight(pb.y);
+            a.Play(ca, false, 0f, RingStage3D.PlaySpeed);
+            b.Play(cb, false, 0f, RingStage3D.PlaySpeed);
+            Forget(stage);
+            return true;
+        }
+
+        /// <summary>Кадр «за рингом»: обидва борці, край фартуха біля пари; камера — планом <see cref="RingCine.OutsideShot"/>.</summary>
+        private static IEnumerator OutsideFrame(RingStage3D stage, string folder, string tag, float wait)
+        {
+            yield return null;
+            RingActor a = stage.Actor(MatchSide.Player), b = stage.Actor(MatchSide.Rival);
+            var pts = new List<Vector3>();
+            Vector3 ga = a.PosePos, gb = b.PosePos;
+            ga.y = a.Slot.position.y; gb.y = b.Slot.position.y;
+            RingCine.Body(pts, ga, stage.BodyScale(a));
+            RingCine.Body(pts, gb, stage.BodyScale(b));
+            // Край фартуха навпроти пари — у кадрі: видно, що пара за рингом.
+            Vector3 apron = RingStage3D.OutsideAnchor - RingStage3D.OutsideOut * RingVenue.PairOut;
+            apron.y = RingStage3D.MatY;
+            pts.Add(apron);
+            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, stage.CamAspect);
+            if (shot.Ok) stage.Cine(shot.Pos, shot.Look, shot.Fov, true);
+            else { Debug.LogWarning("[Ринг] огляд: план «за рингом» не вмістився — " + tag); stage.SetShot(StageCam.Big); }
+            Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] план за рингом {0}: камера ({1:0.00}; {2:0.00}; {3:0.00}) → ({4:0.00}; {5:0.00}; {6:0.00}), кут {7:0}°, {8}",
+                tag, shot.Pos.x, shot.Pos.y, shot.Pos.z, shot.Look.x, shot.Look.y, shot.Look.z, shot.Fov, shot.Ok ? "вмістився" : "НЕ вмістився"));
+            yield return Shot(folder, tag, wait);
+        }
+
         public static IEnumerator Run(RingStage3D stage, RingMatchDirector dir, string folder)
         {
             System.IO.Directory.CreateDirectory(folder);
@@ -27,6 +204,7 @@ namespace Game.Gameplay.Ring.Stage
             yield return new WaitForSeconds(1.0f);
             if (RingStage3D.ReadArg("-ring-locotest") != null) { yield return LocoTest(stage, folder); yield break; }
             if (RingStage3D.ReadArg("-ring-entrances") != null) { yield return Entrances(stage, folder); yield break; }
+            if (RingStage3D.ReadArg("-ring-outside") != null) { yield return OutsideReview(stage, folder); yield break; }
 
             // ---- промо ----
             bool probe = RingStage3D.ReadArg("-ring-probe") != null;
@@ -62,28 +240,41 @@ namespace Game.Gameplay.Ring.Stage
             yield return Watch(dir, folder, "strike");
             dir.Enqueue(Ev(MatchEventKind.Action, R, MatchActionId.Strike, RollTier.Strong));
             yield return Watch(dir, folder, "bigboot");
-            // Кидки в канати й у кут (огляд 08.11.2026, пункт 8): частково — спина в канат і зупинка; чисто — відскок і через
-            // ринг у протилежні канати; у кут; промах у кут — реверс. Між ними — повернення в центр (кінець ходу).
-            dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.IntoRopes, RollTier.Partial,
-                new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Ropes)));
-            yield return Watch(dir, folder, "ropes_partial");
-            dir.Enqueue(Ev(MatchEventKind.TurnEnd, R, MatchActionId.CatchBreath, RollTier.Miss, new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Center)));
-            yield return Watch(dir, folder, "back1");
-            dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.IntoRopes, RollTier.Strong,
-                new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Ropes)));
-            yield return Watch(dir, folder, "ropes_strong");
-            dir.Enqueue(Ev(MatchEventKind.TurnEnd, R, MatchActionId.CatchBreath, RollTier.Miss, new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Center)));
-            yield return Watch(dir, folder, "back2");
-            dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.IntoCorner, RollTier.Partial,
-                new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Corner)));
-            yield return Watch(dir, folder, "corner");
-            dir.Enqueue(Ev(MatchEventKind.TurnEnd, R, MatchActionId.CatchBreath, RollTier.Miss, new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Center)));
-            yield return Watch(dir, folder, "back3");
-            dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.IntoCorner, RollTier.Miss,
-                new MatchEffect(MatchEffectKind.ZoneChange, P, (int)Zone.Corner)));
-            yield return Watch(dir, folder, "corner_miss");
-            dir.Enqueue(Ev(MatchEventKind.TurnEnd, P, MatchActionId.CatchBreath, RollTier.Miss, new MatchEffect(MatchEffectKind.ZoneChange, P, (int)Zone.Center)));
-            yield return Watch(dir, folder, "back4");
+            // Склейки «канати / кут» нового ядра (замість зон — постановка прийому кар'єри, MoveStaging): план 1 — нападник на
+            // канаті чи в куті (RingStage3D.PerchPos), план 2 — приземлення в центрі. Прийоми — з career_moves.json.
+            dir.Enqueue(Move(P, MatchActionId.Strike, RollTier.Strong, "whip", MoveStaging.Ropes,
+                new MatchEffect(MatchEffectKind.Damage, R, 2)));
+            yield return Watch(dir, folder, "whip_ropes");
+            dir.Enqueue(Move(P, MatchActionId.TopRope, RollTier.Strong, "springboard", MoveStaging.Ropes,
+                new MatchEffect(MatchEffectKind.Damage, R, 3), new MatchEffect(MatchEffectKind.Down, R, 1)));
+            yield return Watch(dir, folder, "springboard_ropes");
+            dir.Enqueue(Ev(MatchEventKind.Action, R, MatchActionId.GetUp, RollTier.Strong, new MatchEffect(MatchEffectKind.Stand, R, 1)));
+            yield return Watch(dir, folder, "getup_ropes");
+            dir.Enqueue(Move(R, MatchActionId.TopRope, RollTier.Miss, "swallow_dive", MoveStaging.Corner,
+                new MatchEffect(MatchEffectKind.Down, R, 1)));
+            yield return Watch(dir, folder, "swallow_dive_corner_miss");
+            dir.Enqueue(Ev(MatchEventKind.Action, R, MatchActionId.GetUp, RollTier.Strong, new MatchEffect(MatchEffectKind.Stand, R, 1)));
+            yield return Watch(dir, folder, "getup_corner");
+            // За рингом: «Вийти з рингу» (поштовх, склейка — пара на підлозі між фартухом і огорожею), удар, кидок і предмет
+            // за рингом (подія з Outside = true, відлік рефері +3), «Повернутися в ринг» (склейка — знову на рингу).
+            dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.LeaveRing, RollTier.Strong, new MatchEffect(MatchEffectKind.Place, P, 1)));
+            yield return Watch(dir, folder, "leave_ring");
+            dir.Enqueue(Out(Ev(MatchEventKind.Action, R, MatchActionId.Strike, RollTier.Partial,
+                new MatchEffect(MatchEffectKind.Damage, P, 1), new MatchEffect(MatchEffectKind.Count, R, 3))));
+            yield return Watch(dir, folder, "outside_strike");
+            dir.Enqueue(Out(Ev(MatchEventKind.Action, P, MatchActionId.Throw, RollTier.Strong,
+                new MatchEffect(MatchEffectKind.Damage, R, 3), new MatchEffect(MatchEffectKind.Down, R, 1), new MatchEffect(MatchEffectKind.Count, P, 3))));
+            yield return Watch(dir, folder, "outside_throw");
+            dir.Enqueue(Out(Ev(MatchEventKind.Action, R, MatchActionId.GetUp, RollTier.Strong,
+                new MatchEffect(MatchEffectKind.Stand, R, 1), new MatchEffect(MatchEffectKind.Count, R, 3))));
+            yield return Watch(dir, folder, "outside_getup");
+            dir.Enqueue(Out(Ev(MatchEventKind.Action, P, MatchActionId.Weapon, RollTier.Strong,
+                new MatchEffect(MatchEffectKind.Damage, R, 3), new MatchEffect(MatchEffectKind.Down, R, 1))));
+            yield return Watch(dir, folder, "outside_weapon");
+            dir.Enqueue(Out(Ev(MatchEventKind.Action, P, MatchActionId.ReturnToRing, RollTier.Strong, new MatchEffect(MatchEffectKind.Place, P, 0))));
+            yield return Watch(dir, folder, "return_ring");
+            dir.Enqueue(Ev(MatchEventKind.Action, R, MatchActionId.GetUp, RollTier.Strong, new MatchEffect(MatchEffectKind.Stand, R, 1)));
+            yield return Watch(dir, folder, "getup_ring");
             dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.Throw, RollTier.Strong,
                 new MatchEffect(MatchEffectKind.Damage, R, 3), new MatchEffect(MatchEffectKind.Down, R, 1)));
             yield return Watch(dir, folder, "bodyslam");
@@ -95,7 +286,7 @@ namespace Game.Gameplay.Ring.Stage
             dir.Enqueue(Ev(MatchEventKind.Action, R, MatchActionId.Taunt, RollTier.Strong));
             yield return Watch(dir, folder, "taunt");
             dir.Enqueue(Ev(MatchEventKind.Action, P, MatchActionId.Finisher, RollTier.Strong,
-                new MatchEffect(MatchEffectKind.Down, R, 1), new MatchEffect(MatchEffectKind.ZoneChange, R, (int)Zone.Center)));
+                new MatchEffect(MatchEffectKind.Down, R, 1)));
             yield return Watch(dir, folder, "finisher", Dense ? 0.04f : -1f);   // щільно — щоб побачити строб (доступність)
             dir.Enqueue(Ev(MatchEventKind.Kickout, R, MatchActionId.Pin, RollTier.Miss));
             yield return Watch(dir, folder, "pin3");
