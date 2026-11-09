@@ -279,7 +279,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void AerialFinisher_SoundsLikeALanding()
         {
-            // Повітряний фінішер (meteor, з кута): задумано стрибок — звук як у стрибка з канатів (TopRope), хоч кліп поки таран («бракує»).
+            // Повітряний фінішер (meteor, з кута): стрибок Air_Meteor → Land_Meteor (Ф2 крок 7) — звук як у стрибка з канатів (TopRope).
             foreach (var t in new[] { RollTier.Strong, RollTier.Partial })
             {
                 Assert.AreEqual(RingCue.Land, RingSoundMap.ForEvent(Act(MatchActionId.Finisher, t, false, "meteor")), "meteor " + t);
@@ -307,10 +307,16 @@ namespace Game.Tests.EditMode
             { "Lockup_Stalemate", RingCue.Lockup },        // нічия в захваті
             { "Bump_Back", RingCue.Slam },                 // падіння
             { "Idle_Hurt_Body_Loop", RingCue.CrowdBed },   // борцю боляче: ні удару, ні оплесків
-            // Ф2 кроки 5 і 7 (ПМ, 09.11.2026; звук не змінено — зоні звуку підтвердити, ZONES.md): больовий не взяв — спроба захвату
-            // ноги, яку відбили (той самий Lockup, що мав Lockup_Stalemate); стрибок повз — нападник падає на мат (той самий Slam).
+            // Ф2 кроки 5 і 7 (ПМ, 09.11.2026; зона звуку підтвердила того ж дня за мітками кліпів): больовий не взяв — спроба захвату
+            // ноги, яку відбили поштовхом стопи (contact 0,916, падіння немає) — той самий Lockup, що мав Lockup_Stalemate; стрибок повз —
+            // нападник тулубом об мат (contact 0,463) — той самий Slam.
             { "LegLock_Enter_Fail", RingCue.Lockup },
             { "Land_Swallow_Miss", RingCue.Slam },
+            // Прийоми каталогу (ключ MoveKey, KeyedMoves_SoundAtTheBeat): таран із канатів повз — ухил (контакту немає); метеор повз —
+            // нападник сам падає на мат; стрибок із каната перехоплено — нападника кидають на мат.
+            { "Charge_Sidestep", RingCue.Whiff },
+            { "Land_Meteor_Miss", RingCue.Slam },
+            { "Springboard_Land_Counter", RingCue.Slam },
         };
 
         [Test]
@@ -358,6 +364,51 @@ namespace Game.Tests.EditMode
                     var clip = steps[steps.Count - 1].Clip;
                     Assert.AreEqual(clip == "Bodyslam" ? RingCue.Slam : RingCue.Lockup, cue, "реверс " + t + ": " + clip);
                 }
+        }
+
+        [Test]
+        public void KeyedMoves_SoundAtTheBeat()
+        {
+            // Прийоми каталогу (Ф2 кроки 5 і 7 — власні ланцюги кліпів RingClipTable.PlanMove): звук відповідає кліпу ТАКТУ (RingBeats —
+            // перша мітка удару), бо подія звучить саме там. Такт на склейці (удар тілом об канат чи кут, StageStep.Impact): звук місця дає
+            // режисер (RopeRebound / CornerHit), подія — канат: гул залу (удару немає), кут: удар тілом. Провал — за таблицею кліпів провалу.
+            string dir = Path.Combine(Root(), "Assets", "Art", "Animations");
+            var marks = RingClipEvents.Parse(File.ReadAllText(Path.Combine(dir, "ring_anims_events.txt")));
+            marks.Add(File.ReadAllText(Path.Combine(dir, "ring_anims_f_events.txt")));
+            var catalog = MoveCatalog.Load(CareerKit.Read("career_moves.json"));
+            var contexts = new[] { default(PlanContext), new PlanContext { VictimDown = true } };
+            int place = 0, misses = 0;
+            foreach (var m in catalog.All)
+                foreach (RollTier t in Enum.GetValues(typeof(RollTier)))
+                    foreach (var ctx in contexts)
+                    {
+                        var ev = new MatchEvent { Kind = MatchEventKind.Action, Action = m.Action, HasRoll = true, Tier = t, MoveKey = m.Id, Staging = m.Staging };
+                        var steps = RingClipTable.Plan(ev, ctx);
+                        var beat = RingBeats.For(steps, marks, _ => 0f);
+                        if (beat.Step < 0 || beat.IsCount) continue;
+                        string at = m.Id + " " + t + (ctx.VictimDown ? " (лежачий)" : "") + ": такт на «" + beat.Clip + "»";
+                        var cue = RingSoundMap.ForEvent(ev);
+                        var st = steps[beat.Step];
+                        if (st.Kind == StageStepKind.Cut)
+                        {
+                            place++;
+                            Assert.IsTrue(st.Impact, at + " — склейка без такту");
+                            Assert.AreEqual(st.Perch == MoveStaging.Corner ? RingCue.Hit : RingCue.CrowdBed, cue, at + " (місце " + st.Perch + ")");
+                            continue;
+                        }
+                        if (t != RollTier.Miss) continue;
+                        misses++;
+                        RingCue want;
+                        Assert.IsTrue(MissClipSound.TryGetValue(beat.Clip, out want), at + " — новий кліп провалу, вирішити його звук");
+                        Assert.AreEqual(want, cue, at);
+                    }
+            Assert.Greater(place, 0, "є такти на канаті й у куті");
+            Assert.Greater(misses, 0, "є провали прийомів каталогу");
+            // 10+ «до канатів» — такт не на канаті, а на зустрічному ударі в центрі (Counter_*): удар
+            Assert.AreEqual(RingCue.Hit, RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Strong, false, "whip")), "whip 10+ — зустрічний удар");
+            // за рингом канатів і кута немає — план загальний, і звук теж
+            Assert.AreEqual(RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Miss, true)), RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Miss, true, "corner_drag")));
+            Assert.AreEqual(RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Partial, true)), RingSoundMap.ForEvent(Act(MatchActionId.Strike, RollTier.Partial, true, "whip")));
         }
 
         [Test]
