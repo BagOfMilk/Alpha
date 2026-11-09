@@ -247,6 +247,7 @@ namespace Game.Gameplay.Ring.Stage
         /// </summary>
         private void HardCut(StageCam cam)
         {
+            _outHave = false;   // наступний кадр «за рингом» — новим курсом і склейкою
             _s.Cine(Vector3.zero, Vector3.forward, 40f, true);
             _s.SetShot(cam);
         }
@@ -548,6 +549,9 @@ namespace Game.Gameplay.Ring.Stage
                 if ((st.Kind == StageStepKind.Pair || st.Kind == StageStepKind.Solo) && (_afterCut || st.CutIn || st.ByRoots)) HardCut(cam);
                 else _s.SetShot(cam);
             }
+            // За рингом кадр веде Cine пари (парний крок — сам, OutsidePairShot); одинак, що заходить склейкою (підйом із живота),
+            // — склейкою кадру «за рингом», а не переворотом у кадрі, що пливе.
+            else if (_m[0].Outside && st.Kind == StageStepKind.Solo && (st.CutIn || st.ByRoots)) OutsideNowShot();
             switch (st.Kind)
             {
                 case StageStepKind.Pair: yield return RunPair(st, ev, idx); break;
@@ -796,9 +800,92 @@ namespace Game.Gameplay.Ring.Stage
             foreach (var side in new[] { MatchSide.Player, MatchSide.Rival })
                 RingCine.Body(pts, RingStage3D.PairPos(side, true), _s.BodyScale(_s.Actor(side)));
             AddApron(pts);
-            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, _s.CamAspect);
-            if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, true);
-            else { Debug.LogWarning("[Ринг] 3D: план «за рингом» не вмістився"); HardCut(StageCam.Big); }
+            _outHave = false;
+            if (!OutsideCam(pts, true)) { Debug.LogWarning("[Ринг] 3D: план «за рингом» не вмістився"); HardCut(StageCam.Big); }
+        }
+
+        /// <summary>
+        /// Кадр «за рингом» там, де пара стоїть чи лежить зараз, — склейкою: поза міняється під склейкою (крок <see cref="StageStep.CutIn"/>,
+        /// підйом із живота), а не на очах у кадрі, що пливе.
+        /// </summary>
+        private void OutsideNowShot()
+        {
+            var pts = new List<Vector3>();
+            foreach (var side in new[] { MatchSide.Player, MatchSide.Rival })
+            {
+                Vector3 g = _s.Actor(side).PosePos;
+                g.y = RingStage3D.OutsideAnchor.y;
+                RingCine.Body(pts, g, _s.BodyScale(_s.Actor(side)));
+            }
+            AddApron(pts);
+            if (!OutsideCam(pts, true)) { Debug.LogWarning("[Ринг] 3D: план «за рингом» (склейка) не вмістився"); HardCut(StageCam.Big); }
+        }
+
+        // План «за рингом» тримається (огляд 8e «Изучение», 09.11.2026: камера пари перескакувала між кутами на кожному кроці й
+        // пливла крізь натовп — gym і hall 015, arena 136 у 8b). Наступний кадр спершу пробує той самий курс і нахил; новий курс —
+        // лише якщо старий не вміщає пару, і тоді склейкою, якщо камера переходить за кут (різниця курсу більша за OutsideCutYaw).
+        // Курс (бік, звідки дивиться камера) тримається довше за нахил і кут огляду: спершу той самий нахил, далі будь-який
+        // нахил плану «за рингом», кут огляду — до найширшого. Новий курс — лише якщо старий не вміщає пару ніяк; хід прийому
+        // в кадрі важливіший за відсутність склейки (рецензія ПМ 09.11.2026: склейка — на початку кроку, між прийомами).
+        private bool _outHave;
+        private float _outYaw, _outPitch, _outFov;
+        private const float OutsideCutYaw = 25f;
+        private const float OutsideMaxFov = 58f;
+        private static readonly float[] OutsideKeepPitch = { 14f, 20f, 26f, 32f };
+
+        /// <summary>
+        /// Кадр «за рингом» з гістерезисом: <paramref name="pts"/> — у кадрі, камера — у коридорі довкола рингу
+        /// (<see cref="RingVenue.OutsideCameraOk"/>). <paramref name="cut"/> — склейкою (інакше камера доганяє плавно, а
+        /// перехід за кут — однаково склейкою). Нічого не ставить і повертає false, якщо пара не вміщається.
+        /// </summary>
+        private bool OutsideCam(List<Vector3> pts, bool cut)
+        {
+            var venue = RingStage3D.Venue;
+            Vector3 c = RingStage3D.OutsideAnchor;
+            Func<Vector3, bool> ok = p => venue.OutsideCameraOk(p.x, p.y, p.z, c.x, c.z);
+            var shot = default(RingCine.Shot);
+            if (_outHave)
+            {
+                var fovs = new[] { _outFov, Mathf.Min(_outFov + 6f, OutsideMaxFov), Mathf.Min(_outFov + 12f, OutsideMaxFov), OutsideMaxFov };
+                shot = RingCine.FrameAny(pts, _outYaw, _outPitch, fovs, _s.CamAspect, 0.2f, 0.86f, 0.08f, ok, 1.2f, 7f);
+                for (int i = 0; i < OutsideKeepPitch.Length && !shot.Ok; i++)
+                    shot = RingCine.FrameAny(pts, _outYaw, OutsideKeepPitch[i], fovs, _s.CamAspect, 0.2f, 0.86f, 0.08f, ok, 1.2f, 7f);
+            }
+            if (!shot.Ok) shot = RingCine.OutsideShot(pts, c, RingStage3D.OutsideOut, _s.CamAspect);
+            if (!shot.Ok) return false;
+            Vector3 f = shot.Look - shot.Pos;
+            float yaw = YawOf(f);
+            float pitch = Mathf.Asin(Mathf.Clamp(-f.y / Mathf.Max(1e-4f, f.magnitude), -1f, 1f)) * Mathf.Rad2Deg;
+            bool corner = _outHave && Mathf.Abs(Mathf.DeltaAngle(yaw, _outYaw)) > OutsideCutYaw;
+            _s.Cine(shot.Pos, shot.Look, shot.Fov, cut || !_outHave || corner);
+            _outHave = true;
+            _outYaw = yaw;
+            _outPitch = pitch;
+            _outFov = shot.Fov;
+            return true;
+        }
+
+        /// <summary>
+        /// Тіло на ході кліпа — третина, дві третини, кінець від <paramref name="tFrom"/>: таз зі шляху кліпа на цьому тілі
+        /// (<see cref="Path"/>, система першої миті кліпа з курсом <paramref name="yaw0"/>), перенесений від
+        /// <paramref name="start"/> — де таз на <paramref name="tFrom"/>. Прийом із зсувом пари (ларіат — 2,2 м) не виходить із
+        /// кадру «за рингом» (огляд 8e).
+        /// </summary>
+        private void PathBodies(List<Vector3> into, RingActor a, AnimationClip c, Vector3 start, float yaw0, float tFrom)
+        {
+            if (c == null) return;
+            float[] t; Vector3[] p; float[] y;
+            Path(a, c, c.length - 0.02f, out t, out p, out y);
+            int k = 0;
+            while (k < t.Length - 1 && t[k] < tFrom) k++;
+            float scale = _s.BodyScale(a);
+            for (int s = 1; s <= 3; s++)
+            {
+                int i = k + Mathf.RoundToInt((t.Length - 1 - k) * s / 3f);
+                Vector3 w = start + Rot(yaw0, new Vector3(p[i].x - p[k].x, 0f, p[i].z - p[k].z));
+                w.y = start.y;
+                RingCine.Body(into, w, scale);
+            }
         }
 
         /// <summary>Місце рефері за рингом: на боці пари, за її лінією від рингу (між бійцями, ближче до огорожі).</summary>
@@ -817,17 +904,28 @@ namespace Game.Gameplay.Ring.Stage
             pts.Add(apron);
         }
 
-        /// <summary>Кадр парного кроку за рингом: обидва борці (старт і кінець зсуву пари) і край фартуха; кадр плавно доганяє.</summary>
-        private void OutsidePairShot(RingActor A, RingActor B, Vector3 pAStart, Vector3 pB, Vector3 pA)
+        /// <summary>
+        /// Кадр парного кроку за рингом: обидва борці (старт і кінець зсуву пари), увесь хід кліпів (<paramref name="path"/>) і
+        /// край фартуха; кадр тримає курс (<see cref="OutsideCam"/>). Якщо весь хід не вміщається — старт і контакт.
+        /// <paramref name="cut"/> — пара стала на місця склейкою (за коренями, <see cref="StageStep.CutIn"/>): і кадр склейкою.
+        /// </summary>
+        private void OutsidePairShot(RingActor A, RingActor B, Vector3 pAStart, Vector3 pB, Vector3 pA, List<Vector3> path, bool cut)
         {
             var pts = new List<Vector3>();
             RingCine.Body(pts, pAStart, _s.BodyScale(A));
             RingCine.Body(pts, pB, _s.BodyScale(B));
             RingCine.Body(pts, pA, _s.BodyScale(A));
             AddApron(pts);
-            var shot = RingCine.OutsideShot(pts, RingStage3D.OutsideAnchor, RingStage3D.OutsideOut, _s.CamAspect);
-            if (shot.Ok) _s.Cine(shot.Pos, shot.Look, shot.Fov, false);
-            else { Debug.LogWarning("[Ринг] 3D: план «за рингом» (пара) не вмістився"); _s.SetShot(StageCam.Big); }
+            if (path != null && path.Count > 0)
+            {
+                var all = new List<Vector3>(pts);
+                all.AddRange(path);
+                if (OutsideCam(all, cut)) return;
+            }
+            if (OutsideCam(pts, cut)) return;
+            Debug.LogWarning("[Ринг] 3D: план «за рингом» (пара) не вмістився");
+            _outHave = false;
+            if (cut) HardCut(StageCam.Big); else _s.SetShot(StageCam.Big);
         }
 
         private IEnumerator RunSolo(StageStep st, int idx)
@@ -1097,7 +1195,13 @@ namespace Game.Gameplay.Ring.Stage
             // Фінішер — склейкою в кіноплан до старту кліпа: обидва в кадрі від колін, контакт у кадрі (огляд 07.11.2026:
             // такт приходив, поки камера ще летіла з загального плану).
             if (finisherShot) FinisherShot(A, B, ca, pB, yawA, ia);
-            else if (outside) OutsidePairShot(A, B, pAStart, pB, pA);
+            else if (outside)
+            {
+                var path = new List<Vector3>();
+                PathBodies(path, A, ca, pAStart, yawA, tStart);
+                PathBodies(path, B, cb, pB, yawB, tStart);
+                OutsidePairShot(A, B, pAStart, pB, pA, path, hard);
+            }
 
             // Старт: слот у таз і новий кліп — в тому самому кадрі, обидва разом (з розбігом — посеред бігу).
             A.PlayAtTime(ca, tStart, ia.Loop, pAStart, yawAStart, RingStage3D.PlaySpeed);
@@ -1277,7 +1381,17 @@ namespace Game.Gameplay.Ring.Stage
             }
             _s.Watch.Forget(A); _s.Watch.Forget(B); _s.Watch.Forget(R);
             if (finisherShot) FinisherFrame(A, B, pAc, pBc);
-            else if (outside) OutsidePairShot(A, B, pA0, pB0, pAc);
+            else if (outside)
+            {
+                // Пара за коренями стає на місця жорстко — і кадр «за рингом» склейкою; у кадрі — увесь хід обох.
+                var path = new List<Vector3>();
+                foreach (float f in new[] { 0.33f, 0.66f, 1f })
+                {
+                    RingCine.Body(path, SlotPoint(A, ca, Mathf.Min(ca.length * f, ca.length - 0.02f), slotA, rotA), _s.BodyScale(A));
+                    RingCine.Body(path, SlotPoint(B, cb, Mathf.Min(cb.length * f, cb.length - 0.02f), slotB, rotB), _s.BodyScale(B));
+                }
+                OutsidePairShot(A, B, pA0, pB0, pAc, path, true);
+            }
             PlayInSlot(A, ca, 0f, slotA, rotA, ia.Loop);
             PlayInSlot(B, cb, 0f, slotB, rotB, ib != null && ib.Loop);
             if (st.Count) StartCoroutine(RefCount(ev, B, pAc, st.RefClip));
@@ -1790,7 +1904,7 @@ namespace Game.Gameplay.Ring.Stage
                 // Підйом зі спини, а борець лежить обличчям донизу: кліпа підйому з живота немає — склейкою кадру, не переворотом
                 // на очах (рецензія Ф2 кроків 5 і 7; CLIP_NEEDS §9).
                 bool flip = clip.name == "GetUp_Back" && NodeOf(a) == StageStep.LyingFront;
-                if (flip && !_m[0].Outside) HardCut(StageCam.Overview);
+                if (flip) { if (_m[0].Outside) OutsideNowShot(); else HardCut(StageCam.Overview); }
                 a.PlayHere(clip, false, RingStage3D.PlaySpeed);
                 if (flip) _s.Watch.Forget(a);
                 yield return new WaitForSeconds(Mathf.Min(clip.length, 2.2f) / RingStage3D.PlaySpeed);
