@@ -96,3 +96,7 @@ Ref_Count_Pin_1_Slow 0.000 -0.000 0.0 0.000
 Ref_Count_Pin_2_Half 0.000 0.000 0.0 0.000
 Air_Meteor 0.000 -0.450 0.0 0.450
 Air_Meteor_Hype 0.000 -0.450 -0.0 0.321
+Air_Swallow 0.000 -0.400 0.0 0.500
+Rope_Return_Tired 0.000 -0.386 -10.5 0.214
+Rope_Return_Stumble 0.000 -0.400 -7.5 0.286
+Springboard_Perch 0.000 -0.120 0.0 0.120
