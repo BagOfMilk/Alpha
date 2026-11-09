@@ -326,28 +326,75 @@ def slap_partial(t, tc, stop=0.3):
         return 1.0 - ((t - top) / (tc - top)) ** 2
     return 1.0 - ((stop_t - top) / (tc - top)) ** 2
 
+# P1-1b: рахунок зупиняється — рука завмирає, рефері випрямляється й показує пальцями, скільки було («раз» / «два»;
+# «два» — і на «два з половиною», і при підкупі). Вхід і вихід — через вузол ref_kneel: Ref_Kneel_Down → рахунок →
+# Ref_Kneel_Up сходяться без змішування (раніше кліп стартував уже в нахилі — стрибок тулуба ~34° на склейці).
+REF_IN, REF_OUT = 0.45, 0.5
+REF_SIGN = Vector((-0.17, -0.2, 0.36))       # кисть жесту від правого плеча: вище плеча, трохи вперед і вбік
+REF_SIGN_EL = Vector((-0.32, -0.1, 0.0))     # лікоть — убік на висоті плеча: передпліччя вгору, пальці вгору
+
+
+def _ref_node():
+    return _filled(ref_kneel(0.0, 1.0))
+
+
+def _ref_sign(p, t, t_stop, n):
+    """Від t_stop: тулуб наполовину до вузла (випрямляється, ліва долоня з мату), права кисть угору — n пальців."""
+    k = smooth((t - t_stop) / 0.35)
+    if k <= 1e-4:
+        return p
+    hr, er = p.hands["r"], p.elbows["r"]
+    q = blend_pose(_filled(p), _ref_node(), 0.6 * k)
+    q.hands = dict(q.hands)
+    q.elbows = dict(q.elbows)
+    q.hands["r"] = lerp_hand((lambda S: S["r"] + REF_SIGN, UP, FWD), hr, k)
+    q.elbows["r"] = lambda S: er(S).lerp(S["r"] + REF_SIGN_EL, k)
+    f0 = q.fist["r"]
+    sign = {"thumb": 1.6, "thumb_tuck": 1.0, "index": 0.0,     # великий — через долоню до безіменного
+             "middle": 0.0 if n >= 2 else 1.0, "ring": 1.0, "pinky": 1.0}
+    q.fingers = {"r": {f_: (0.0 if f_ == "thumb_tuck" else f0) * (1 - k) + v * k for f_, v in sign.items()}}
+    return q
+
+
+def _ref_edges(p, t, L):
+    """Початок і кінець кліпу рахунку — точно вузол ref_kneel (пальці — теж до кулака вузла)."""
+    w = max(1.0 - smooth(t / REF_IN), smooth((t - (L - REF_OUT)) / REF_OUT))
+    if w <= 1e-4:
+        return p
+    fo = getattr(p, "fingers", None)
+    n0 = _ref_node()
+    q = blend_pose(_filled(p), n0, w)
+    if fo:
+        q.fingers = {s_: {f_: v * (1 - w) + (0.0 if f_ == "thumb_tuck" else n0.fist[s_]) * w for f_, v in d_.items()}
+                     for s_, d_ in fo.items()}
+    return q
+
+
 def clip_ref_count3_slow(t, L):
-    return count_pose(t, L, SLOW3)
+    return _ref_edges(count_pose(t, L, SLOW3), t, L)
 
 def clip_ref_count2_slow(t, L):
-    return count_pose(t, L, SLOW3[:2], show_two=True)
+    return _ref_edges(_ref_sign(count_pose(t, L, SLOW3[:2], show_two=True), t, SLOW3[1] + 0.18, 2), t, L)
 
 def clip_ref_count1_slow(t, L):
-    return count_pose(t, L, SLOW3[:1], show_two=True)
+    return _ref_edges(_ref_sign(count_pose(t, L, SLOW3[:1], show_two=True), t, SLOW3[0] + 0.18, 1), t, L)
+
+HALF_KICK = SLOW3[2] - 0.1         # «два з половиною»: плече відривається за 0,1 с до «три» (мітка kickout рефері)
+HALF_STOP = 0.08                    # рука завмирає за 0,04 с до мату-удару — ~12 см над матом (h ≈ 0,25)
+
 
 def clip_ref_count2half(t, L):
     p = count_pose(t, L, SLOW3[:2])
-    h3 = slap_partial(t, SLOW3[2])
+    h3 = slap_partial(t, SLOW3[2], stop=HALF_STOP)
     if t > SLOW3[2] - 0.62:
         hr = p.hands["r"]
         def g(S, hr=hr):
             mat = Vector((S["r"].x - 0.06, S["r"].y - 0.12, 0.05))
             top = S["r"] + Vector((-0.08, -0.12, 0.42))
-            stopped = smooth((t - (SLOW3[2] - 0.15)) / 0.35)
-            return lerp(lerp(mat, top, h3), S["r"] + Vector((-0.1, -0.35, 0.2)), stopped)   # завмер — і «два пальці»
+            return lerp(mat, top, h3)                                # третій замах — завмирає над матом
         p.hands = dict(p.hands)
         p.hands["r"] = (g, DOWN * (1 - h3) + (UP + FWD * 0.4) * h3, FWD)
-    return p
+    return _ref_edges(_ref_sign(p, t, SLOW3[2] - HALF_STOP * 0.5 + 0.12, 2), t, L)   # мить завмер — тоді «два»
 
 
 # ================================================================ больовий на ногу (P1-2, leg_lock)
@@ -1525,21 +1572,23 @@ COVER_SHIFT = set()          # зсув пари для жіночого наб�
 MOVE_NODE_POSES["kneel_up"] = lambda: kneel_up(0.0, 2.4)
 for _nm, _ln, _fn in [("Kneel_To_Stance", KNEEL_RISE_LEN, clip_kneel_to_stance),
                       ("Kneel_Disbelief", DISBELIEF_LEN, clip_kneel_disbelief),
-                      ("Ref_Count_Pin_3_Slow", SLOW3[2] + 0.9, clip_ref_count3_slow),
-                      ("Ref_Count_Pin_2_Slow", SLOW3[1] + 1.3, clip_ref_count2_slow),
-                      ("Ref_Count_Pin_1_Slow", SLOW3[0] + 1.3, clip_ref_count1_slow),
-                      ("Ref_Count_Pin_2_Half", SLOW3[2] + 1.0, clip_ref_count2half)]:
+                      ("Ref_Count_Pin_3_Slow", SLOW3[2] + 1.1, clip_ref_count3_slow),
+                      ("Ref_Count_Pin_2_Slow", SLOW3[1] + 1.7, clip_ref_count2_slow),
+                      ("Ref_Count_Pin_1_Slow", SLOW3[0] + 1.7, clip_ref_count1_slow),
+                      ("Ref_Count_Pin_2_Half", SLOW3[2] + 1.4, clip_ref_count2half)]:
     MOVE_CLIPS.append((_nm, _ln, _fn, None, False, None, 0))
     CENTER_RULE.add(_nm)
 MOVE_CLIP_NODES.update({"Kneel_To_Stance": {"A": ("kneel_up", "stance")},
                         "Kneel_Disbelief": {"A": ("kneel_up", "kneel_up")}})
+MOVE_CLIP_NODES.update({_nm: {"A": ("ref_kneel", "ref_kneel")} for _nm in
+                        ("Ref_Count_Pin_3_Slow", "Ref_Count_Pin_2_Slow", "Ref_Count_Pin_1_Slow", "Ref_Count_Pin_2_Half")})
 MOVE_EVENTS.update({
     "Ref_Count_Pin_3_Slow": [("count_%d" % (i + 1), tc, "hand_r", "-") for i, tc in enumerate(SLOW3)],
     "Ref_Count_Pin_2_Slow": [("count_%d" % (i + 1), tc, "hand_r", "-") for i, tc in enumerate(SLOW3[:2])]
                             + [("kickout", SLOW3[1] + 0.2, "-", "-")],
     "Ref_Count_Pin_1_Slow": [("count_1", SLOW3[0], "hand_r", "-"), ("kickout", SLOW3[0] + 0.2, "-", "-")],
     "Ref_Count_Pin_2_Half": [("count_%d" % (i + 1), tc, "hand_r", "-") for i, tc in enumerate(SLOW3[:2])]
-                            + [("kickout", SLOW3[2] - 0.3, "-", "-")],
+                            + [("kickout", HALF_KICK, "-", "-")],
 })
 
 

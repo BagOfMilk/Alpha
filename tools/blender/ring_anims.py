@@ -120,6 +120,27 @@ class RPose(Pose):
         self.pelvis_q = None
         super().__init__(**kw)
 
+_TUCK = {}
+
+def thumb_tuck_axis(rig, s):
+    """Вісь (у просторі кістки thumb_01) повороту великого пальця до мізинця поперек долоні — нормаль долоні."""
+    key = (rig.arm.name, s)
+    if key not in _TUCK:
+        b = rig.arm.data.bones
+        mid0, hand0 = b["middle_01_" + s].head_local, b["hand_" + s].head_local
+        n = (b["index_01_" + s].head_local - b["pinky_01_" + s].head_local).cross(mid0 - hand0).normalized()
+        t0 = b["thumb_01_" + s]
+        tip = b["thumb_03_" + s].tail_local if "thumb_03_" + s in b else t0.tail_local
+        d = tip - t0.head_local
+        to_pinky = b["pinky_01_" + s].head_local - b["index_01_" + s].head_local
+        sign = 1.0 if (Quaternion(n, math.radians(40.0)) @ d).dot(to_pinky) > d.dot(to_pinky) else -1.0
+        m3 = t0.matrix_local.to_3x3().inverted()
+        npalm = n if (b["thumb_02_" + s].head_local - mid0).dot(n) > 0 else -n      # нормаль — у бік долоні
+        # два кроки (підібрано виміром кінчика, 08.11.2026): до мізинця в площині долоні, потім через долоню —
+        # кінчик ~4 см перед долонею над кісточками середнього пальця
+        _TUCK[key] = ((m3 @ (n * sign)).normalized(), (m3 @ (npalm - (mid0 - hand0).normalized())).normalized())
+    return _TUCK[key]
+
 def apply_w(rig, p, partner=None):
     """apply() з alpha_anims, але для ригу будь-де у світі: цілі IK задаються в просторі ригу й переводяться у світ.
     partner — словник «кістка → голова кістки партнера» у просторі ЦЬОГО ригу (для контактів)."""
@@ -150,13 +171,20 @@ def apply_w(rig, p, partner=None):
     for bone, w in (("neck_01", 0.45), ("head", 0.55)):
         if bone in pb:
             pb[bone].rotation_quaternion = local_rot(bone, UP, hy * w) @ local_rot(bone, LEFT, hp * w)
+    fo = getattr(p, "fingers", None) or {}           # окремі пальці поверх кулака: {"r": {"index": 0.0, …}} (жест рахунку)
     for name, ax in rig.finger_axis.items():
         side = name[-1]
         k = name.split("_")[1]
-        amount = p.fist[side] * (70 if k == "01" else 85 if k == "02" else 60)
+        amount = fo.get(side, {}).get(name.split("_")[0], p.fist[side]) * (70 if k == "01" else 85 if k == "02" else 60)
         if name.startswith("thumb"):
             amount *= 0.5
         pb[name].rotation_quaternion = Quaternion(ax, math.radians(amount))
+    for side, d_ in fo.items():                      # великий палець через долоню (жест «раз»/«два»): згин кулака веде
+        tk = d_.get("thumb_tuck", 0.0)               # його лише вздовж лінії кісточок — убік від долоні він не йде
+        if tk > 1e-4 and "thumb_01_" + side in pb:
+            a1, a2 = thumb_tuck_axis(rig, side)
+            q_ = Quaternion(a2, math.radians(90.0 * tk)) @ Quaternion(a1, math.radians(60.0 * tk))
+            pb["thumb_01_" + side].rotation_quaternion = q_ @ pb["thumb_01_" + side].rotation_quaternion
     bpy.context.view_layer.update()
 
     half, split = p.feet
