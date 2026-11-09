@@ -95,6 +95,8 @@
     <!-- Ринг: таблиця «подія → кліпи» і такт режисера (мітки кліпів) — чистий C#, охоронці RingBeatTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingClipTable.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingBeats.cs" />
+    <!-- Ринг: геометрія вимірювача контакту (QA, критерій М1 №4) — чистий C#, охоронці RingCapsuleTests. -->
+    <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/RingCapsules.cs" />
     <!-- Ринг: екран виходу (ТЗ B07) і персональний вихід (ENTRANCE_PROFILE.md) — чистий C#, охоронці EntranceScreenTests, EntranceProfileTests. -->
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/EntranceScreen.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Gameplay/Ring/Stage/EntranceProfile.cs" />
