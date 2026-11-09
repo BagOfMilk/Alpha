@@ -65,6 +65,15 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>Склейка місця: true — пара тепер за рингом, false — знову на рингу.</summary>
         public bool Outside;
 
+        /// <summary>Мітка підстановки в <see cref="Note"/>: «бракує …» — кліпа, якого потребує план, ще немає, грається найближчий наявний.</summary>
+        public const string StandInMark = "бракує";
+
+        /// <summary>
+        /// Крок грає підстановкою (критерій М1 «підстановок кліпів 0»; до кліпів — лічильник). Окремо від відсутнього файлу кліпа:
+        /// прохід 3 «Скилів» показав «підстановок 0», хоча всі фінішери грали важкий ларіат — рахувались лише відсутні файли.
+        /// </summary>
+        public bool IsStandIn { get { return Note != null && Note.IndexOf(StandInMark, System.StringComparison.Ordinal) >= 0; } }
+
         /// <summary>Склейка місця: пара за рингом (<paramref name="outside"/>) чи знову на рингу; кадр тримається <paramref name="hold"/> с.</summary>
         public static StageStep Place(MatchSide who, bool outside, float hold, string note = null)
         {
@@ -157,6 +166,14 @@ namespace Game.Gameplay.Ring.Stage
 
         /// <summary>Чи знає таблиця цей прийом (охоронець: усі прийоми каталогу мають кліпи).</summary>
         public static bool KnowsMove(string key) { return key != null && Moves.ContainsKey(key); }
+
+        /// <summary>Скільки кроків плану грають підстановкою (<see cref="StageStep.IsStandIn"/>): режисер додає до лічильника матчу.</summary>
+        public static int StandIns(List<StageStep> plan)
+        {
+            int n = 0;
+            for (int i = 0; i < plan.Count; i++) if (plan[i].IsStandIn) n++;
+            return n;
+        }
 
         /// <summary>План «на канаті/куті» за замовчуванням, якщо прийом зі склейкою, а свого плану в таблиці не має.</summary>
         public static string DefaultPerch(MoveStaging s) { return s == MoveStaging.Corner ? "Move_Corner_Exit" : "Rope_Back_R_Fast"; }
