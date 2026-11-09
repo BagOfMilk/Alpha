@@ -278,8 +278,9 @@ namespace Game.Gameplay.Ring.Models
 
         /// <summary>
         /// Ступінь кидка й місце пари — так, як показує <c>RingClipTable</c>. Провал: удар чи брудний прийом — ухил без контакту
-        /// (<c>Center_Sidestep</c>); «Вийти з рингу» і больовий — пара в захваті (<c>Lockup_Stalemate</c>); кидок, відчайдушний, промінь
-        /// надії, фінішер і стрибок з канатів — падіння (<c>Bump_Back</c>; у промені надії ядро однаково кладе суперника, звук той самий);
+        /// (<c>Center_Sidestep</c>); «Вийти з рингу» і больовий — пара в захваті (<c>Lockup_Stalemate</c>); кидок, відчайдушний, фінішер
+        /// і стрибок з канатів — падіння (<c>Bump_Back</c>). Промінь надії не підводить цілком (ядро, <c>MatchEngine.ApplyRolled</c>):
+        /// провал — план 7–9, суперник падає, звук той самий, що 7–9 (як у <c>RingClipTable.PlanAction</c>, 9c18c40);
         /// провокація — борцю боляче, оплесків немає (<c>Idle_Hurt_Body_Loop</c>); підйом — той самий кліп, що в «відновитися»
         /// (<c>Idle_Tired_Loop</c>), тож і звук той самий. Провал важить більше за місце: за рингом промах удару — теж ухил.
         /// Фінішер-больовий (<see cref="HoldFinishers"/>) — захват. Предмет 10+ — реквізит режисера (стілець чи стіл), 7–9 — стілець, ≤6 —
@@ -293,6 +294,8 @@ namespace Game.Gameplay.Ring.Models
                 if (tier == RollTier.Strong) return prop == RingProp.Table ? RingCue.WeaponTable : RingCue.WeaponChair;
                 return RingCue.Whiff;
             }
+            // Промінь надії: провал рахується як 7–9 — так само ступінь підміняє таблиця кліпів, тож звук іде за тим самим планом.
+            if (action == "HopeSpot" && hasRoll && tier == RollTier.Miss) tier = RollTier.Partial;
             if (hasRoll && tier == RollTier.Miss)
             {
                 switch (action)
@@ -303,7 +306,6 @@ namespace Game.Gameplay.Ring.Models
                     case "Submission": return RingCue.Lockup;
                     case "Throw":
                     case "Desperate":
-                    case "HopeSpot":
                     case "Finisher":
                     case "TopRope": return RingCue.Slam;
                     case "Taunt": return RingCue.CrowdBed;
