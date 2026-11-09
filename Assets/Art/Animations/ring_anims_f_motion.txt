@@ -86,3 +86,13 @@ Ref_Back_Up 0.000 0.280 0.0 0.147
 Ref_Ask_OK 0.000 0.000 0.0 0.000
 Ref_Admonish 0.000 0.000 0.0 0.000
 Ref_Knocked_Down 0.000 0.423 0.0 0.163
+Rope_Grab_Back 0.000 0.000 0.0 0.000
+Rope_Grab_Front 0.000 0.000 0.0 0.000
+Kneel_To_Stance 0.000 -0.043 0.0 0.031
+Kneel_Disbelief 0.000 0.000 0.0 0.000
+Ref_Count_Pin_3_Slow 0.000 -0.000 0.0 0.000
+Ref_Count_Pin_2_Slow 0.000 0.000 0.0 0.000
+Ref_Count_Pin_1_Slow 0.000 -0.000 0.0 0.000
+Ref_Count_Pin_2_Half 0.000 0.000 0.0 0.000
+Air_Meteor 0.000 -0.450 0.0 0.450
+Air_Meteor_Hype 0.000 -0.450 -0.0 0.321

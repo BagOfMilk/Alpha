@@ -25,8 +25,8 @@
 | `Cover_Hold_Loop` | 6,4, петля | pinned_* | — (тисне в такт 1,6 с) |
 | `Cover_Release` | 1,6 | pinned_A → kneel_up / pinned_B → lying_back | — |
 | `Cover_Kickout_1` / `_2` / `_2_Half` | 2,4 / 2,4 / 2,6 | pinned_A → kneel_up / pinned_B → lying_back | `kickout`, `sell` |
-| `Ref_Count_Pin_3_Slow` | 5,15 | — | `count_1..3`, крок 1,6 с |
-| `Ref_Count_Pin_2_Slow`, `_1_Slow`, `_2_Half` | 3,95 / 2,35 / 5,25 | — | `count_*`, `kickout` |
+| `Ref_Count_Pin_3_Slow` | 5,35 | ref_kneel → ref_kneel | `count_1..3`, крок 1,6 с |
+| `Ref_Count_Pin_2_Slow`, `_1_Slow`, `_2_Half` | 4,35 / 2,75 / 5,65 | ref_kneel → ref_kneel | `count_*`, `kickout`; жест «два» / «раз» / «два» |
 | `Kneel_To_Stance`, `Kneel_Disbelief` | 1,4 / 2,4 | kneel_up → stance / kneel_up | — |
 
 Петля утримання довша за весь рахунок (6,4 с > 5,5 с від накриття до «три»).
@@ -34,16 +34,28 @@
 **Фази для режисера (номінально, точні — у `ring_anims_events.txt`):**
 
 - **Захід.** `Cover_Enter` 1,0 с; `contact` на 0,5. Від `contact` пара в `pinned_*`, далі `Cover_Hold_Loop`.
-- **Рахунок.** `Ref_Count_Pin_3_Slow` запускається разом із `Cover_Hold_Loop`. Удари `count_1` / `count_2` / `count_3` —
-  на 1,05 / 2,65 / 4,25 с, крок 1,6 с; кліп рефері 5,15 с.
+- **Рахунок.** Ступінь кікауту відомий з ядра до рахунку, тож кліп рефері обирається одразу й запускається разом із
+  `Cover_Hold_Loop`:
+
+  | Ступінь | Кліп рефері | Мітки | Після мітки `kickout` |
+  |---|---|---|---|
+  | 10+ (на «раз») | `Ref_Count_Pin_1_Slow`, 2,75 с | `count_1` 1,05, `kickout` 1,25 | рука вгору — «раз» (вказівний) |
+  | 7–9 (на «два») | `Ref_Count_Pin_2_Slow`, 4,35 с | `count_1/2` 1,05 / 2,65, `kickout` 2,85 | «два» (V) |
+  | 7–9 після фінішера | `Ref_Count_Pin_2_Half`, 5,65 с | `count_1/2`, `kickout` 4,15 | третій замах завмирає ~12 см над матом, далі «два» |
+  | провал | `Ref_Count_Pin_3_Slow`, 5,35 с | `count_1/2/3` 1,05 / 2,65 / 4,25 | долоня на маті, далі `Cover_Release` |
+  | підкуп | `Ref_Count_Pin_2_Slow` (мітку `kickout` не брати) | — | «два» |
+
+  Рефері ставиться на коліна `Ref_Kneel_Down` (1,2 с) до рахунку й встає `Ref_Kneel_Up` (1,2 с) після; кліпи рахунку
+  починаються й закінчуються у вузлі `ref_kneel`, склейка — без змішування. Вхід у вузол — у перші 0,45 с, до першого
+  замаху, тож мітки `count_*` від нього не залежать.
 - **Вихід.**
   - Після «три» — `Cover_Release` (1,6 с).
   - Кікаут — `Cover_Kickout_1` / `_2` / `_2_Half` (2,4 / 2,4 / 2,6 с), мітка `kickout` на 0,18 / 0,25 / 0,32 с.
   - Далі A — `Kneel_To_Stance` (1,4 с) або `Kneel_Disbelief` (2,4 с).
 - **Синхрон кікауту з рефері.** Кліп кікауту стартує з петлі утримання так, щоб його `kickout` збігся з `kickout`
   кліпу рефері. Пари: `Ref_Count_Pin_1_Slow` 1,25 с ↔ `Cover_Kickout_1`; `Ref_Count_Pin_2_Slow` 2,85 с ↔
-  `Cover_Kickout_2`; `Ref_Count_Pin_2_Half` 3,95 с ↔ `Cover_Kickout_2_Half`. Тобто кліп кікауту стартує на
-  1,07 / 2,60 / 3,63 с від початку рахунку.
+  `Cover_Kickout_2`; `Ref_Count_Pin_2_Half` 4,15 с ↔ `Cover_Kickout_2_Half`. Тобто кліп кікауту стартує на
+  1,07 / 2,60 / 3,83 с від початку рахунку.
 
 ## P1-2. Больові
 
