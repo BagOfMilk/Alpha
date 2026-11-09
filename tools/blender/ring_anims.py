@@ -1243,6 +1243,9 @@ exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_center.py"), encodi
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_whip.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_ref.py"), encoding="utf-8").read())
 CENTER_RULE = set()     # кліпи нового бою «усе в центрі» (ТЗ ANIM_BRIEF_COMBAT_CENTER §1.1): таз ≤ 0,5 м від старту
+PAIR_MID_RULE = set()   # *_Land (§1.2.3, ПМ 08.11.2026): таз кожного ≤ 0,5 м від середини пари — середини між коренями
+                        # A (нуль простору A) і B (зсув B) — так RingMatchDirector ставить пару в центр рингу
+PAIR_ROOT_MID = [None]  # середина коренів поточної пари (ставить головний цикл перед запіканням)
 KEEP_OFFSET = set()     # кліпи, що задають вузол-пару, але зсув наступних кліпів задано в них самих (не PAIR_AT)
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_combat.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_polish.py"), encoding="utf-8").read())
@@ -1420,13 +1423,15 @@ def quality(name, framesA, framesB, bases):
                 if v > jerk:
                     jerk, jwhere = v, f"{tag}.{n}, кадр {i + 1}"
     q["jerk"] = (jerk, jwhere)
-    # зміщення таза від точки старту (горизонталь) — ТЗ «усе в центрі»: ≤ 0,5 м для кожного з пари
+    # зміщення таза від точки старту (горизонталь) — ТЗ «усе в центрі»: ≤ 0,5 м для кожного з пари;
+    # у *_Land — від середини пари на першому кадрі (PAIR_MID_RULE)
     drift, dwh = 0.0, ""
+    mid = pair_mid(framesA, framesB) if name in PAIR_MID_RULE else None
     for tag, frames in (("A", framesA), ("B", framesB)):
         fr = frames or ()
         if not fr:
             continue
-        p0 = fr[0][1]["pelvis"][0]
+        p0 = mid if mid is not None else fr[0][1]["pelvis"][0]
         for fi, (_, w) in enumerate(fr):
             pp = w["pelvis"][0]
             d_ = math.hypot(pp.x - p0.x, pp.y - p0.y)
@@ -1435,6 +1440,12 @@ def quality(name, framesA, framesB, bases):
     q["drift"] = (drift * 100.0, dwh)
     q["drift_rule"] = name in CENTER_RULE
     return q
+
+def pair_mid(framesA, framesB):
+    """Середина пари: між коренями A і B (A — нуль простору A, B — його зсув), горизонталь."""
+    if not framesA or not framesB:
+        return None
+    return PAIR_ROOT_MID[0]
 
 def residual_twist(arm, cap, s):
     """Скручування кисті відносно передпліччя (°) у знімку cap — після move_twist_to_forearm має бути ≈ 0."""
@@ -1705,8 +1716,9 @@ def main():
               "<поворот ° (+ ліворуч)> <швидкість м/с>"]
     manifest = ["# Кліпи рингу (tools/blender/ring_anims.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> "
                 "<зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>"]
-    drift_rows = ["# Зміщення таза в кліпах (ТЗ «усе в центрі», 08.11.2026): <кліп> <роль A|B|-> <найбільше від старту, м> "
-                  "<кінець dx dy, м (простір A)> <центр 0|1 — кліп нового бою, межа 0,5 м>"]
+    drift_rows = ["# Зміщення таза в кліпах (ТЗ «усе в центрі», 08.11.2026): <кліп> <роль A|B|-> <найбільше від точки відліку, м> "
+                  "<кінець dx dy від старту, м (простір A)> <центр 0|1 — кліп нового бою, межа 0,5 м> "
+                  "<від чого міряли: start — свій таз на першому кадрі | pair — середина пари на першому кадрі (*_Land)>"]
     for name, length, fa, fb, loop, offset, yaw in CLIPS:
         if ONLY and name not in ONLY:
             continue
@@ -1724,6 +1736,7 @@ def main():
             offset = offset * BODY["arm"]                             # відстань пари на витягнуту руку — за руками набору
         place(armA, Vector(), 0)
         place(armB, offset if fb is not None else Vector((0, 50, 0)), yaw if fb is not None else 0)
+        PAIR_ROOT_MID[0] = Vector((offset.x * 0.5, offset.y * 0.5, 0.0)) if fb is not None else None
         sa, sb, wa, wb, q, gaps = bake_clip(rigA, rigB, name, length, fa, fb, loop)
         for role, node_name in CLIP_DEFINES.get(name, {}).items():
             seq, arm_ = (sa, armA) if role == "A" else (sb, armB)
@@ -1742,13 +1755,15 @@ def main():
             if not fr_:
                 continue
             p0_, p1_ = fr_[0][1]["pelvis"][0], fr_[-1][1]["pelvis"][0]
-            md_ = max(math.hypot(w_["pelvis"][0].x - p0_.x, w_["pelvis"][0].y - p0_.y) for _, w_ in fr_)
+            mid_ = pair_mid(wa, wb) if (fb is not None and name in PAIR_MID_RULE) else None
+            ref_ = mid_ if mid_ is not None else p0_
+            md_ = max(math.hypot(w_["pelvis"][0].x - ref_.x, w_["pelvis"][0].y - ref_.y) for _, w_ in fr_)
             drift_rows.append(f"{name}{'_' + role_ if role_ != '-' else ''} {role_} {md_:.3f} {p1_.x - p0_.x:.3f} {p1_.y - p0_.y:.3f} "
-                              f"{int(name in CENTER_RULE)}")
+                              f"{int(name in CENTER_RULE)} {'pair' if mid_ is not None else 'start'}")
         bad = fails(q)
         state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
         if q.get("drift_rule"):
-            state += f" · таз {q['drift'][0]:.0f} см від старту ({q['drift'][1]})"
+            state += f" · таз {q['drift'][0]:.0f} см від {'середини пари' if name in PAIR_MID_RULE else 'старту'} ({q['drift'][1]})"
         if q.get("rope", (0, ""))[0] > LIMITS["rope"]:
             state += f" · за канатом {q['rope'][0]:.0f} см ({q['rope'][1]})"
         if q["hand_jump"][0] > LIMITS["hand_jump"]:

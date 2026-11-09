@@ -1110,9 +1110,10 @@ AIR_LEN = 1.0            # §1.2.2: у фінішері ~1,0 с
 AIR_HYPE_LEN = 1.4       # ефектний: +0,4 с і гвинт навколо осі тіла
 LAND_LEN = 1.4
 PARTIAL_LEN = 2.4
-MISS_LEN = 2.2
+MISS_LEN = 3.0          # ≤6: удар об мат, рачки, на коліна з руками на грудях
 MISS_ROLL = 0.48         # м: відкочується жертва (≤ 0,5)
-MISS_OFF = Vector((0.12, -0.85, 0.0))   # промах: B на 0,25 м далі, ніж у Cover (котиться вздовж польоту A)
+MISS_OFF = Vector((0.0, -0.05, 0.0))  # промах: B лежить уздовж польоту A (180°) під місцем приземлення й котиться
+MISS_YAW = 180                           #   вбік, ліворуч від A, — за правилом середини пари (≤ 0,5 м) інакше не вийти
 
 
 def met_hit_time(z_hit):
@@ -1130,7 +1131,8 @@ MET_HIT_M = met_hit_time(MET_ZHIT_M)
 MET_WING = (Vector((0.55, 0.15, 0.6)), Vector((0.3, 0.25, -0.2)))      # крила (щойно відірвався від кута)
 MET_TUCK = (Vector((-0.05, -0.55, -0.5)), Vector((0.4, 0.0, -0.1)))    # групування: кисті до гомілок
 MET_OPEN = (Vector((0.62, -0.25, 0.5)), Vector((0.35, 0.25, -0.15)))   # розкритий: врозліт до голови (−y тіла — груди)
-MET_SIDE = (Vector((0.85, -0.35, 0.15)), Vector((0.3, 0.3, -0.1)))     # промах: руки вбік, ловить мат
+MET_SIDE = (Vector((0.05, -0.55, 0.5)), Vector((0.12, 0.35, -0.3)))   # промах: руки вперед-униз, вузько, лікті
+                                                                        #   назад (ловить мат, не зачіпає B поруч)
 
 
 def met_arms(p, q, ww, wt, wo, side=0.0):
@@ -1393,7 +1395,55 @@ def clip_land_meteor_partial_b(t, L, partner=None):
     return p
 
 
+MET_PALM_BRACE = (0.22, -0.78)   # × рука: долоня від таза A на маті (x — убік від MET_X, y — уздовж тіла): упор уперед
+MET_PALM_CHEST = (0.16, -0.25)   #   і біля нижніх ребер — відтиснутись (плече лежачи ≈ −0,46)
+
+
+def _met_palms(p, y_s, k, elbows="push"):
+    """Долоні A пласко на маті (пальці до голови, великі — досередини) у нерухомих точках простору пари — кисті не
+    ковзають: k = 0 — упор уперед, куди вдарились; 1 — біля ребер (переставляються дугою). Лікті — угору-назад
+    уздовж тіла, не вбік: поруч лежить B. elbows="fours" — рачки: руки майже прямі, лікті назад."""
+    p = _filled(p)
+    a = BODY["arm"]
+    lift = 0.07 * math.sin(math.pi * k)
+    def pt(sg):
+        b = Vector((MET_X + MET_PALM_BRACE[0] * a * sg, y_s + MET_PALM_BRACE[1] * a, 0.07))
+        c = Vector((MET_X + MET_PALM_CHEST[0] * a * sg, y_s + MET_PALM_CHEST[1] * a, 0.07))
+        return b.lerp(c, k) + Vector((0.0, 0.0, lift))
+    p.hands = {s_: (pt(sg), FWD, RIGHT if s_ == "l" else LEFT) for s_, sg in (("l", 1.0), ("r", -1.0))}
+    ev = Vector((0.04, 0.3, -0.15)) if elbows == "fours" else Vector((0.04, 0.18 + 0.1 * k, 0.22))
+    p.elbows = {s_: (lambda S, s_=s_, v=Vector((ev.x * sg, ev.y, ev.z)): S[s_] + v) for s_, sg in (("l", 1.0), ("r", -1.0))}
+    return p
+
+
+def met_all_fours(y0):
+    """Рачки над місцем, де лежав: стегна прямовисно, коліна на маті під тазом, долоні під плечима (як у продажу
+    Bump_Front_Sell_Knees), зсунуто до MET_X."""
+    lk = BODY["leg"]
+    q = Quaternion(LEFT, math.radians(78.0))
+    kp = body(off_for(Vector((0.0, y0, 0.5 * lk + 0.06))), q, knee_bend=0.0)
+    dx = Vector((MET_X, 0.0, 0.0))
+    kp.pelvis = kp.pelvis + dx
+    kp.ankles = (Vector((MET_X + 0.13, y0 + 0.44 * lk, 0.1)), Vector((MET_X - 0.13, y0 + 0.44 * lk, 0.1)))
+    tip = Quaternion(RIGHT, math.radians(-75.0))
+    kp.foot_rot = (tip, tip)
+    kp.knees = (Vector((MET_X + 0.14, y0 - 0.4, 0.0)), Vector((MET_X - 0.14, y0 - 0.4, 0.0)))
+    kp.pitch, kp.head_pitch, kp.head_yaw = 8.0, 20.0, 0.0
+    kp.hands = {s_: (lambda S, s_=s_, sg=sg: Vector((S[s_].x + 0.02 * sg, S[s_].y,
+                                                    max(0.07, S[s_].z - 0.48 * BODY["arm"]))), q @ UP, DOWN)
+                for s_, sg in (("l", 1.0), ("r", -1.0))}
+    kp.elbows = {s_: (lambda S, s_=s_, sg=sg: S[s_] + Vector((0.1 * sg, 0.15, -0.1))) for s_, sg in (("l", 1.0), ("r", -1.0))}
+    kp.fist = {"l": 0.1, "r": 0.1}
+    kp.forced = set()
+    return kp
+
+
+MISS_KNEEL_DY = 0.42      # м: таз A з мату на коліна — до стоп (коліна лишаються, де були)
+
+
 def clip_land_meteor_miss_a(t, L, partner=None, fall=None):
+    """Грудьми об мат (руки — вузький упор уперед), корчиться на правий бік (від B), відтискається рачки й стає на
+    коліна, тримаючись за груди; кінець — kneel_up (лежачи поруч з B лікті обох не вміщались у 0,5 м від середини)."""
     fall = fall or met_fall_pose
     T = MET_HIT_M
     side = smooth(t / 0.3)
@@ -1401,19 +1451,48 @@ def clip_land_meteor_miss_a(t, L, partner=None, fall=None):
         return fall(t, MET_VX_M, side=side)
     f0 = fall(T, MET_VX_M, side=1.0)
     y_s = MET_Y0 - MET_VX_M * T
-    fl = met_floor(y_s)
+    kp = smooth((t - (T + 0.15)) / 0.45)                                 # долоні — з упору вперед до ребер
+    fl = _met_palms(met_floor(y_s), y_s, kp)
     p = blend_pose(_filled(f0), _filled(fl), smooth((t - T) / 0.12))
     hs = hit_spring(t, T, w=18.0, z=0.35)
     p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.02 * max(0.0, hs) + 0.025 * (1.0 - smooth((t - T - 0.15) / 0.3))))
-    sell = _win(t, T + 0.25, T + 0.6, L - 0.8, L - 0.3)                   # згортається на бік, ліва під груди
+    sell = _win(t, T + 0.15, T + 0.4, T + 0.5, T + 0.7)                   # корчиться на правий бік — від B
     if sell > 0.0:
-        sl = met_floor(y_s, push=0.8, roll=8.0, frog=(0.2, 0.0))
+        sl = _met_palms(met_floor(y_s, push=0.4, roll=-8.0, frog=(0.0, 0.2)), y_s, kp)
         sl.head_pitch = 12.0
         p = blend_pose(_filled(p), _filled(sl), sell)
+    y0 = y_s + MISS_KNEEL_DY
+    w1 = smooth((t - (T + 0.55)) / 0.45)                                  # відтискається рачки
+    if w1 > 0.0:
+        out = blend_pose(_filled(p), _filled(_met_palms(met_all_fours(y0), y_s, 1.0, elbows="fours")), w1)
+        hump = 0.12 * math.sin(math.pi * w1) + 0.02 * min(1.0, w1 * 15.0) * (1.0 - w1)
+        out.pelvis = out.pelvis + Vector((0.0, 0.0, hump))
+        if out.knees:
+            out.knees = tuple(k_ + Vector((0.0, 0.0, hump)) for k_ in out.knees)
+        out.ankles = tuple(a_ + Vector((0.0, 0.0, 0.6 * hump)) for a_ in out.ankles)
+        p = out
+    w2 = smooth((t - (T + 1.0)) / 0.45)                                   # сідає на коліна
+    if w2 > 0.0:
+        lean = 0.5 * (1.0 - smooth((t - (L - 0.7)) / 0.45))
+        kn = _shift_v(kneel_up(t, L, lean=lean), Vector((MET_X, y0 - 0.02, 0.0)))
+        p = blend_pose(_filled(p), _filled(kn), w2)
+        clutch = _win(t, T + 1.1, T + 1.45, L - 0.65, L - 0.25)          # обидві руки — на груди
+        if clutch > 0.0:
+            ev = lambda v, S: v(S) if callable(v) else v
+            hs_ = dict(p.hands)
+            el = dict(p.elbows)
+            for s_, sg in (("l", 1.0), ("r", -1.0)):
+                g0, f0_, u0 = hs_[s_]
+                hs_[s_] = (lambda S, g0=g0, sg=sg: ev(g0, S).lerp(_sw_belly(S) + Vector((0.07 * sg, 0.0, 0.05)),
+                                                                  clutch), f0_, u0)
+                e0 = el[s_]
+                el[s_] = (lambda S, e0=e0, sg=sg, s_=s_: e0(S).lerp(S[s_] + Vector((0.28 * sg, 0.0, -0.3)), clutch))
+            p.hands, p.elbows = hs_, el
+            p.head_pitch = p.head_pitch + 14.0 * clutch
     return p
 
 
-def met_roll_b(k, ka=1.0):
+def met_roll_b(k, ka=1.0, rel=None):
     """Лежачи на спині — перекат через правий бік (від A) на живіт, ≤ 0,5 м; кінець — lying_front, повернутий на 180°
     (вузол не залежить від курсу). Руки посередині — до грудей (не під тілом)."""
     a = -180.0 * k
@@ -1428,7 +1507,7 @@ def met_roll_b(k, ka=1.0):
     wt = max(0.0, 1.0 - wm - we)
     p.hands, p.elbows = {}, {}
     wo = smooth(ka * 0.14 / 0.25)                                          # права — над голову за 0,25 с
-    wer = smooth((k - 0.75) / 0.25)                                        # і лишається там, доки не ляже на живіт
+    wer = smooth((k - 0.75) / 0.25) if rel is None else rel               # і лишається там (rel — коли вниз, у вузол)
     for s_, sg in (("l", 1.0), ("r", -1.0)):
         hm = Vector((0.42 * sg, 0.05, -0.32))
         he = Vector((0.12 * sg, 0.0, 0.32))
@@ -1459,8 +1538,10 @@ def met_roll_b(k, ka=1.0):
 
 
 def clip_land_meteor_miss_b(t, L, partner=None):
-    k = smooth((t - 0.06) / 0.45)
-    p = met_roll_b(k, ka=t / 0.14)
+    k = smooth((t - 0.12) / 0.33)                                          # котиться одразу — до удару A вже на животі
+    # права (з боку A) — над голову раніше, ніж плече ляже на мат, і лежить там витягнута, доки A поруч (лікоть біля
+    # голови, не вбік до A); у вузол (лікоть убік) — коли A вже на колінах
+    p = met_roll_b(k, ka=t / 0.14, rel=smooth((t - (MET_HIT_M + 1.25)) / 0.6))
     br = smooth((t - 0.6) / 0.4) * (1.0 - smooth((t - (L - 0.4)) / 0.35))
     p.pitch = p.pitch - 3.0 * br * (0.5 + 0.5 * math.sin(2 * math.pi * t / 0.9))   # важко дихає
     return p
@@ -1546,7 +1627,6 @@ def clip_land_swallow_b(t, L, partner=None):
     hit = hit_spring(t, T, w=14.0, z=0.3)
     p = pin_b(pinned=smooth((t - T - 0.08) / 0.4), tuck=smooth(t / 0.3), legs=0.45 * max(0.0, hit))
     look = smooth(t / 0.2) * (1.0 - smooth((t - T + 0.08) / 0.1))
-    p.pelvis = p.pelvis + Vector((0.0, 0.0, 0.03 * max(0.0, hit)))
     p.pitch = p.pitch + 10.0 * abs(hit)
     p.head_pitch = p.head_pitch + 22.0 * look - 16.0 * max(0.0, hit)
     return _hand_arc(p, "r", 0.16 * max(0.0, hit))
@@ -1568,7 +1648,7 @@ KNEES_LEN = 2.4
 KNEES_KNEEL = Vector((MET_X, 0.12, 0.0))      # A стає на коліна позаду від місця удару (від B)
 
 
-def _shift(p, v):
+def _shift_v(p, v):
     """Уся поза зі зсувом v (таз, щиколотки, полюси колін); кисті й лікті — від плечей, ідуть самі."""
     p.pelvis = p.pelvis + v
     if p.ankles:
@@ -1620,7 +1700,7 @@ def clip_land_swallow_knees_b(t, L, partner=None):
 def _sw_belly(S):
     """Кисть на своєму животі (під ребрами, спереду)."""
     fwd, lr = _body_ax(S)
-    return S["pelvis"] + (S["chest"] - S["pelvis"]) * 0.45 + fwd * 0.16
+    return S["pelvis"] + (S["chest"] - S["pelvis"]) * 0.7 + fwd * 0.25
 
 
 def clip_land_swallow_knees_a(t, L, partner=None):
@@ -1639,7 +1719,7 @@ def clip_land_swallow_knees_a(t, L, partner=None):
     p.pitch = 28.0 * fold
     w2 = smooth((t - T - 0.25) / 0.75)                                    # на коліна
     lean = 0.55 * (1.0 - smooth((t - (L - 0.75)) / 0.5))
-    kn = _shift(kneel_up(t, L, lean=lean), KNEES_KNEEL)
+    kn = _shift_v(kneel_up(t, L, lean=lean), KNEES_KNEEL)
     if w2 > 0.0:
         p = blend_pose(_filled(p), _filled(kn), w2)
     # ноги: падають униз (коліна на мат), стопи в повітрі, доки не стали на місце вузла
@@ -1661,6 +1741,256 @@ def clip_land_swallow_knees_a(t, L, partner=None):
         p.hands, p.elbows = hs_, el
         p.fist = {"l": 0.3 * (1.0 - clutch) + 0.5 * clutch, "r": 0.3 * (1.0 - clutch) + 0.5 * clutch}
         p.head_pitch = p.head_pitch + 12.0 * clutch
+    return p
+
+
+# ================================================================ зустрічні з місця (whip 10+, P2-2) — A стоїть
+# Склейка (ТЗ §5.1, whip): Whip_Ropes* до release → план «спина в канат» (Rope_* від rope_hit) → цей кадр: B уже біжить
+# назад і за CT_LEAD від контакту, A стоїть на місці (≤ 0,5 м, пів-кроку вперед на удар) і зустрічає. Дія A — та сама
+# накладка, що в Center_* (_ctr_act), реакція B — той самий бамп, що в Center_* (як у шолдер таклі: з бігу, стопи — де
+# стояли в мить удару, доки не піднімуться). Кадр починається склейкою: вузлів на старті немає; A уже чекає (дія
+# почалась), B — на швидкості бігу.
+CT_LEAD = 0.42           # м — B пробігає до контакту (≤ 0,5 м від свого старту)
+
+
+class Cnt:
+    """Зустрічний з місця. a — дія A, як у Ctr; b — реакція B ("back", "back_fast", "side", "flip"); bx — лінія бігу B
+    від A (м, простір A: + — ліворуч від A); gap — від таза A до таза B уздовж Y у мить контакту; lunge — пів-крок A
+    уперед лівою на удар (м)."""
+    pass_ = False
+
+    def __init__(self, name, a, b, bx, gap, lunge=0.2, run=None, L=2.2, lead_b=0.12, reach=None):
+        self.name, self.a, self.b, self.bx, self.gap, self.lunge, self.reach = name, a, b, bx, gap, lunge, reach
+        self.run = run or CT_RUN
+        self.v = self.run.stride / self.run.L
+        self.t_hit = CT_LEAD / self.v
+        self.L, self.lead_b = L, lead_b
+
+    def act_w(self, t):
+        after = 0.14 if self.b == "flip" else 0.35          # на сальто рука одразу йде вниз — ноги B летять над нею
+        return track(t, [(0.0, 0.3), (self.t_hit - 0.03, 1.0), (self.t_hit + 0.08, 1.0), (self.t_hit + after, 0.0),
+                         (99.0, 0.0)])
+
+    def kick_w(self, t):
+        return track(t, [(0.0, 0.35), (self.t_hit - 0.03, 1.0), (self.t_hit + 0.1, 1.0), (self.t_hit + 0.5, 0.0),
+                         (99.0, 0.0)])
+
+    def b_offset(self):
+        return Vector((self.bx, -self.lunge * 0.6 - self.gap - CT_LEAD, 0.0))
+
+
+COUNTERS = [
+    Cnt("Counter_Clothesline", "line", "back", -0.7, 0.47),          # ноги B летять уперед — повз ноги A
+    Cnt("Counter_Clothesline_Flip", "line", "flip", -0.7, 0.45),
+    Cnt("Counter_ShoulderBlock", "block", "back", 0.62, 0.38, lunge=0.15, reach=0.05),   # ліве плече в ліве плече
+    Cnt("Counter_BigBoot", "boot", "back", -0.1, 0.98, lunge=0.0, lead_b=0.03),
+    Cnt("Counter_Lariat_Left", "line_l", "side", 0.85, 0.49, lunge=0.12, reach=0.05),
+]
+
+
+BLOCK_TUCK = (("l", Vector((-0.12, -0.2, -0.2))), ("r", Vector((0.1, -0.2, -0.18))))   # кулаки перед грудьми, від плечей
+
+
+def _tuck(p, w):
+    """Кулаки притиснуті перед грудьми (плечовий блок — б'ються плечима, не руками)."""
+    if w <= 0.0:
+        return p
+    ev = lambda v, S: v(S) if callable(v) else v
+    p = _filled(p)
+    hs = dict(p.hands)
+    for s_, v in BLOCK_TUCK:
+        g, a_, b_ = hs[s_]
+        hs[s_] = (lambda S, g=g, v=v, s_=s_: lerp(ev(g, S), S[s_] + v, w), a_, b_)
+    p.hands = hs
+    p.fist = {s_: lerp(p.fist[s_], 0.8, w) for s_ in "lr"}
+    return p
+
+
+def counter_a(c):
+    """Стоїть у стійці; на удар — пів-кроку лівою вперед (вага в удар), права підтягується після; дія — _ctr_act."""
+    def f(t, L, partner=None):
+        p = stance(t, L, sway=0.0)
+        lg = c.lunge
+        lx = 0.08 if c.a == "block" else 0.0             # блок — крок лівою вперед-ліворуч, до плеча B
+        p.ankles = steps(t, [(0.0, (0.2, -0.105)), (c.t_hit - 0.02, (0.2 + lx, -0.105 - lg))],
+                            [(0.0, (-0.2, 0.075)), (c.t_hit + 0.35, (-0.2, 0.075)), (c.t_hit + 0.7, (-0.2 + lx, 0.075 - lg))])
+        p.foot_rot = (Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0)))
+        ky = track(t, [(0.0, 0.0), (c.t_hit - 0.02, 0.6), (c.t_hit + 0.35, 0.6), (c.t_hit + 0.7, 1.0), (99.0, 1.0)])
+        # таз іде за правою стопою лише після удару (рука вже пішла з грудей B), не тисне руку в B
+        p.pelvis = p.pelvis + Vector((lx * ky, -lg * ky, 0.0))
+        if c.a in ("block", "line_l"):                   # тулуб до B (голова ліворуч): плече чи рука дістає, ноги — ні
+            p.roll = p.roll + 8.0 * c.act_w(t)
+        if c.a == "block":                               # з місця: кулаки притиснуті до грудей, б'є плече (не руки)
+            w = c.act_w(t)
+            ev = lambda v, S: v(S) if callable(v) else v
+            hs = dict(p.hands)
+            for s_, v in BLOCK_TUCK:
+                g, a_, b_ = hs[s_]
+                hs[s_] = (lambda S, g=g, v=v, s_=s_: lerp(ev(g, S), S[s_] + v, w), a_, b_)
+            p.hands = hs
+        return _ctr_act(p, t, c, c.act_w(t))
+    return f
+
+
+def _run_feet_hold(t, t_c, R, reach=None, y_hit=-CT_LEAD):
+    """Стопи бігу після мить t_c: опорна стоїть, де стояла; махова довершує мах і стає туди, куди йшла (без ривка
+    вниз і без ковзання по мату). reach — гальмівний крок: махова стає не далі reach попереду таза в мить удару
+    (y_hit, простір B), за 0,2 с (ноги не летять уперед у ноги A)."""
+    out = []
+    for i, ph0 in enumerate(((t_c / R.L) % 1.0, (t_c / R.L + 0.5) % 1.0)):
+        if ph0 < R.duty:
+            out.append(run_pose(t_c, R).ankles[i].copy())
+            continue
+        T = (1.0 - ph0) * R.L
+        land = run_pose(t_c + T, R).ankles[i]
+        if reach is None or land.y >= y_hit - reach:
+            out.append(run_pose(min(max(t, t_c), t_c + T), R).ankles[i].copy())
+            continue
+        p0 = run_pose(t_c, R).ankles[i]
+        u = min(1.0, max(0.0, (t - t_c) / 0.2))
+        tgt = Vector((p0.x, y_hit - reach, land.z))
+        q = p0.lerp(tgt, smooth(u))
+        q.z = lerp(p0.z, land.z, smooth(u)) + 0.05 * math.sin(math.pi * u)
+        out.append(q)
+    return out
+
+
+def counter_b(c):
+    """Біжить на A; від удару — бамп з місця, де вдарили. Стопи: доки бамп тримає свої стопи на маті, B стоїть на
+    стопах бігу (махова доходить і стає); щойно стопи бампа рушають (відрив), різниця тане — без ковзання."""
+    def hitf(s):
+        if c.b in ("back", "back_fast"):
+            return clip_bump_back(min(BUMP_LEN, s * (1.2 if c.b == "back_fast" else 1.0)), BUMP_LEN)
+        if c.b == "side":
+            return clip_bump_side(min(SBUMP_LEN, s), SBUMP_LEN)
+        return clip_flip_front(min(FLIP_LEN, s), FLIP_LEN)
+
+    cache = {}
+
+    def lift_times(t_c):
+        """Коли стопа бампа рушає з місця (с від початку бампа) і як далеко тоді стопа бігу від неї (м)."""
+        if "l" not in cache:
+            h0 = _shift(hitf(0.0), -CT_LEAD).ankles
+            out = []
+            for i in range(2):
+                s_ = 0.0
+                while s_ < 1.2 and (_shift(hitf(s_), -CT_LEAD).ankles[i] - h0[i]).length < 0.01:
+                    s_ += 0.01
+                rf = _run_feet_hold(t_c + s_, t_c, c.run, c.reach)[i]
+                out.append((s_, (rf - h0[i]).length))
+            cache["l"] = out
+        return cache["l"]
+
+    def f(t, L, partner=None):
+        t_c = c.t_hit - c.lead_b
+        tb = t - t_c
+        if tb <= 0:
+            tw = smooth((t - (c.t_hit - 0.3)) / 0.18) if c.a == "block" else 0.0
+            return _tuck(run_pose(t, c.run), tw)
+        hit = _shift(hitf(tb), -CT_LEAD)
+        h0 = _shift(hitf(0.0), -CT_LEAD).ankles
+        if hit.ankles and h0:
+            lifts = lift_times(t_c)
+            an = []
+            for i, (a_, a0) in enumerate(zip(hit.ankles, h0)):
+                tl, dl = lifts[i]
+                # різниця тане від відриву стопи бампа — тим довше, чим далі стопа бігу від стопи бампа (без ривка)
+                k = smooth((tb - tl) / min(0.45, max(0.18, dl / 1.4)))
+                r_ = _run_feet_hold(t, t_c, c.run, c.reach)[i]
+                an.append(a_ + (r_ - a0) * (1.0 - k))
+            hit.ankles = tuple(an)
+        tw = (smooth((t - (c.t_hit - 0.3)) / 0.18) * (1.0 - smooth((tb - 0.2) / 0.25))) if c.a == "block" else 0.0
+        w = smooth(tb / 0.12)
+        if w >= 1.0:
+            return _tuck(hit, tw)
+        q = blend_pose(_filled(run_pose(t_c, c.run)), _filled(hit), w)
+        q.ankles = hit.ankles
+        return _tuck(q, tw)
+    return f
+
+
+# ================================================================ повернення з канатів (whip 7–9, P2-2) — одиночні
+# Склейка (ТЗ §5.1, whip 7–9): Whip_Ropes_Resist до release → план «спина в канат» → цей кадр: жертва вже біжить назад
+# від канатів на швидкості, гальмує за ≤ 0,45 м і стає в стійку (далі — наступна дія в центрі). Втомлений — з бігу
+# Run_Tired_Loop, важко дихає, руки висять; спотикання — з Run_Jog_Loop, носок чіпляє мат, тулуб пірнає вперед, руки
+# ловлять рівновагу, два кроки — і стійка.
+RET_TIRED_LEN, RET_STUMBLE_LEN = 1.8, 1.4
+
+
+def _brake_tau(t, td):
+    """«Час бігу» з рівним гальмуванням до нуля за td с: шлях — v·td/2."""
+    u = min(t, td)
+    return u - u * u / (2.0 * td)
+
+
+def _brake_to_stance(p, t, L, t_stop, dur=0.5):
+    """Після зупинки — стійка там, де став: ліва стопа, потім права, з підйомом (без ковзання)."""
+    k = smooth((t - t_stop) / dur) if t > t_stop else 0.0
+    if k <= 0.0:
+        return p
+    st = stance(t, L, sway=0.0)
+    _shift(st, p.pelvis.y)
+    frozen = p.ankles
+    q = blend_pose(_filled(p), _filled(st), k)
+
+    def step(a_, b_, w):
+        w = min(1.0, max(0.0, w))
+        m = lerp(a_, b_, smooth(w))
+        return m + Vector((0.0, 0.0, 0.07 * math.sin(math.pi * w) * min(1.0, (a_ - b_).length / 0.015)))
+    dy = Vector((0.0, p.pelvis.y, 0.0))
+    sl, sr_ = foot(0.2, -0.105) + dy, foot(-0.2, 0.075) + dy
+    q.ankles = (step(frozen[0], sl, k / 0.6), step(frozen[1], sr_, (k - 0.4) / 0.6))
+    st_rot = (Quaternion(UP, math.radians(10.0)), Quaternion(UP, math.radians(-14.0)))
+    q.foot_rot = tuple(fr.slerp(r_, k) for fr, r_ in zip(p.foot_rot, st_rot))
+    q.knees = None if k > 0.5 else p.knees
+    return q
+
+
+def _arms_hang(p, w, out=0.1, fwd=-0.1, down=-0.55):
+    if w <= 0.0:
+        return p
+    ev = lambda v, S: v(S) if callable(v) else v
+    p = _filled(p)
+    hs = dict(p.hands)
+    for s_, sg in (("l", 1.0), ("r", -1.0)):
+        g, a_, b_ = hs[s_]
+        hs[s_] = (lambda S, g=g, sg=sg, s_=s_: lerp(ev(g, S), S[s_] + Vector((out * sg, fwd, down)) * BODY["arm"], w), a_, b_)
+    p.hands = hs
+    return p
+
+
+def clip_rope_return_tired(t, L, partner=None):
+    R = RUN_LOOPS["Run_Tired_Loop"]
+    td = 0.36                                            # 2,14 м/с · 0,36 / 2 ≈ 0,39 м
+    p = run_pose(_brake_tau(t, td), R)
+    p = _brake_to_stance(p, t, L, td, dur=0.55)
+    tw = _win(t, 0.15, 0.5, L - 0.75, L - 0.3)          # важко дихає, зігнувся, руки висять — до стійки наприкінці
+    br = 0.5 + 0.5 * math.sin(2.0 * math.pi * t / 0.7)
+    p.pitch = p.pitch + (14.0 + 4.0 * br) * tw
+    p.head_pitch = p.head_pitch + 18.0 * tw
+    p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.03 * tw))
+    return _arms_hang(p, tw)
+
+
+def clip_rope_return_stumble(t, L, partner=None):
+    R = CT_RUN
+    td = 0.32                                            # 2,5 м/с · 0,32 / 2 = 0,40 м
+    p = run_pose(_brake_tau(t, td), R)
+    p = _brake_to_stance(p, t, L, td, dur=0.5)
+    dip = track(t, [(0.0, 0.0), (0.06, 0.0), (0.2, 1.0), (0.42, 0.45), (0.8, 0.0), (99.0, 0.0)])   # пірнає вперед
+    p.pitch = p.pitch + 24.0 * dip
+    p.head_pitch = p.head_pitch - 12.0 * dip
+    p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.05 * dip))
+    fl = _win(t, 0.08, 0.2, 0.5, 0.85)                   # руки вперед-убік — ловить рівновагу
+    if fl > 0.0:
+        ev = lambda v, S: v(S) if callable(v) else v
+        p = _filled(p)
+        hs = dict(p.hands)
+        for s_, sg, ph in (("l", 1.0, 0.0), ("r", -1.0, 0.5)):
+            g, a_, b_ = hs[s_]
+            hs[s_] = (lambda S, g=g, sg=sg, s_=s_, ph=ph: lerp(ev(g, S), S[s_] + Vector((
+                0.38 * sg, -0.3 - 0.06 * math.sin(2 * math.pi * (t / 0.45 + ph)), -0.08)) * BODY["arm"], fl), a_, b_)
+        p.hands = hs
     return p
 
 
@@ -1818,7 +2148,8 @@ MET_CONTACTS = CLIP_CONTACTS["Cover"] | {("thigh_l", "upperarm_l"), ("thigh_r", 
 for _nm, _ln, _fa, _fb in [("Land_Meteor", LAND_LEN, clip_land_meteor_a, clip_land_meteor_b),
                            ("Land_Meteor_Partial", PARTIAL_LEN, clip_land_meteor_partial_a, clip_land_meteor_partial_b),
                            ("Land_Meteor_Miss", MISS_LEN, clip_land_meteor_miss_a, clip_land_meteor_miss_b)]:
-    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, False, MISS_OFF.copy() if _nm.endswith("_Miss") else PIN_OFF.copy(), 90))
+    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, False, MISS_OFF.copy() if _nm.endswith("_Miss") else PIN_OFF.copy(),
+                       MISS_YAW if _nm.endswith("_Miss") else 90))
     CENTER_RULE.add(_nm)
     MOVE_CONTACTS[_nm] = set(MET_CONTACTS)
 MOVE_CONTACTS["Land_Meteor_Partial"] |= {(a_, b_) for a_ in ("spine_03", "spine_02", "upperarm_l", "clavicle_l")
@@ -1826,7 +2157,7 @@ MOVE_CONTACTS["Land_Meteor_Partial"] |= {(a_, b_) for a_ in ("spine_03", "spine_
 MOVE_CLIP_NODES.update({
     "Land_Meteor": {"A": (None, "pinned_A"), "B": ("lying_back", "pinned_B")},
     "Land_Meteor_Partial": {"A": (None, "kneel_up"), "B": ("lying_back", "lying_back")},
-    "Land_Meteor_Miss": {"A": (None, "lying_front"), "B": ("lying_back", "lying_front")},
+    "Land_Meteor_Miss": {"A": (None, "kneel_up"), "B": ("lying_back", "lying_front")},
 })
 MOVE_EVENTS.update({
     "Land_Meteor": [("contact", MET_HIT, "spine_03", "spine_03"), ("sell", MET_HIT + 0.1, "-", "spine_03")],
@@ -1845,7 +2176,7 @@ for _nm, _ln, _fa, _fb, _off in [("Land_Swallow", LAND_LEN, clip_land_swallow_a,
                                   KNEES_OFF),
                                  ("Land_Swallow_Miss", MISS_LEN, clip_land_swallow_miss_a, clip_land_meteor_miss_b,
                                   MISS_OFF)]:
-    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, False, _off.copy(), 90))
+    MOVE_CLIPS.append((_nm, _ln, _fa, _fb, False, _off.copy(), MISS_YAW if _nm.endswith("_Miss") else 90))
     CENTER_RULE.add(_nm)
     MOVE_CONTACTS[_nm] = set(MET_CONTACTS)
 MOVE_CONTACTS["Land_Swallow_Knees"] |= {(a_, b_) for a_ in ("spine_01", "spine_02", "spine_03", "pelvis")
@@ -1853,10 +2184,38 @@ MOVE_CONTACTS["Land_Swallow_Knees"] |= {(a_, b_) for a_ in ("spine_01", "spine_0
 MOVE_CLIP_NODES.update({
     "Land_Swallow": {"A": (None, "pinned_A"), "B": ("lying_back", "pinned_B")},
     "Land_Swallow_Knees": {"A": (None, "kneel_up"), "B": ("lying_back", "lying_back")},
-    "Land_Swallow_Miss": {"A": (None, "lying_front"), "B": ("lying_back", "lying_front")},
+    "Land_Swallow_Miss": {"A": (None, "kneel_up"), "B": ("lying_back", "lying_front")},
 })
 MOVE_EVENTS.update({
     "Land_Swallow": [("contact", MET_HIT, "spine_03", "spine_03"), ("sell", MET_HIT + 0.1, "-", "spine_03")],
     "Land_Swallow_Knees": [("contact", SW_HIT_K, "spine_01", "calf_l"), ("sell", SW_HIT_K + 0.1, "-", "spine_03")],
     "Land_Swallow_Miss": [("contact", MET_HIT_M, "spine_03", "-")],
 })
+
+PAIR_MID_RULE.update({"Land_Meteor", "Land_Meteor_Partial", "Land_Meteor_Miss",
+                      "Land_Swallow", "Land_Swallow_Knees", "Land_Swallow_Miss"})
+
+
+# --- зустрічні з місця (P2-2, whip 10+)
+_CNT_HIT = {"line": ("upperarm_r", "lowerarm_r", "hand_r"), "line_l": ("upperarm_l", "lowerarm_l", "hand_l"),
+            "block": ("upperarm_l", "spine_03", "clavicle_l"), "boot": ("foot_r", "calf_r", "ball_r")}
+_CNT_END = {"back": "lying_back", "back_fast": "lying_back", "flip": "lying_front", "side": None}
+for _c in COUNTERS:
+    MOVE_CLIPS.append((_c.name, _c.L, counter_a(_c),
+                       (lambda fb_: (lambda t, L, partner=None: hands_out_of_torso(fb_(t, L, partner), r=0.19)))(counter_b(_c)),
+                       False, _c.b_offset(), 180))
+    CENTER_RULE.add(_c.name)
+    MOVE_CLIP_NODES[_c.name] = {"A": (None, "stance"), "B": (None, _CNT_END[_c.b])}
+    MOVE_EVENTS[_c.name] = [("contact", _c.t_hit, _CNT_HIT[_c.a][0], "spine_03"), ("sell", _c.t_hit + 0.1, "-", "spine_03")]
+    MOVE_CONTACTS[_c.name] = {(a_, b_) for a_ in _CNT_HIT[_c.a]
+                              for b_ in ("spine_03", "spine_02", "spine_01", "neck_01", "head", "upperarm_l", "upperarm_r",
+                                         "clavicle_l", "clavicle_r")}
+
+
+# --- повернення з канатів (P2-2, whip 7–9)
+for _nm, _ln, _fn in (("Rope_Return_Tired", RET_TIRED_LEN, clip_rope_return_tired),
+                      ("Rope_Return_Stumble", RET_STUMBLE_LEN, clip_rope_return_stumble)):
+    MOVE_CLIPS.append((_nm, _ln, _fn, None, False, None, 0))
+    CENTER_RULE.add(_nm)
+    MOVE_CLIP_NODES[_nm] = {"A": (None, "stance")}
+    MOVE_EVENTS[_nm] = []
