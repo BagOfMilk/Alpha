@@ -1582,6 +1582,20 @@ MOVE_CLIP_NODES.update({"Kneel_To_Stance": {"A": ("kneel_up", "stance")},
                         "Kneel_Disbelief": {"A": ("kneel_up", "kneel_up")}})
 MOVE_CLIP_NODES.update({_nm: {"A": ("ref_kneel", "ref_kneel")} for _nm in
                         ("Ref_Count_Pin_3_Slow", "Ref_Count_Pin_2_Slow", "Ref_Count_Pin_1_Slow", "Ref_Count_Pin_2_Half")})
+
+# P1-1b для старих швидких кліпів рахунку (крок 0,95 с, старий бій): той самий вхід і вихід через ref_kneel, на «два» —
+# той самий жест. Довжини й мітки не змінюються (вхід — до першого замаху, вихід — після останнього удару).
+def clip_ref_count3_node(t, L):
+    return _ref_edges(clip_ref_count3(t, L), t, L)
+
+
+def clip_ref_count2_node(t, L):
+    return _ref_edges(_ref_sign(clip_ref_count2(t, L), t, COUNT2_TIMES[-1] + 0.18, 2), t, L)
+
+
+_OLD_COUNT = {"Ref_Count_Pin_3": clip_ref_count3_node, "Ref_Count_Pin_2": clip_ref_count2_node}
+MOVE_CLIPS[:] = [(r[0], r[1], _OLD_COUNT[r[0]]) + tuple(r[3:]) if r[0] in _OLD_COUNT else r for r in MOVE_CLIPS]
+MOVE_CLIP_NODES.update({_nm: {"A": ("ref_kneel", "ref_kneel")} for _nm in _OLD_COUNT})
 MOVE_EVENTS.update({
     "Ref_Count_Pin_3_Slow": [("count_%d" % (i + 1), tc, "hand_r", "-") for i, tc in enumerate(SLOW3)],
     "Ref_Count_Pin_2_Slow": [("count_%d" % (i + 1), tc, "hand_r", "-") for i, tc in enumerate(SLOW3[:2])]
