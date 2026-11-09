@@ -20,11 +20,22 @@ namespace Game.Tests.EditMode
 
         private static IEnumerable<MatchEvent> Shown(DemoMatch d) { return d.Events.Skip(d.StartCount); }
 
+        /// <summary>
+        /// Храповик підстановок кліпів у планах усіх сценаріїв (09.11.2026, 204ba0c: 101 разом, 16 різних). Лише спадає: коли
+        /// кліпи «Кліпів» (P1–P3) зайдуть у таблицю — знизити до нового числа; критерій М1 — 0.
+        /// </summary>
+        private const int StandInCeiling = 101;
+        private const int StandInKindsCeiling = 16;
+
+        /// <summary>Прийомів у каталозі гри (`Ring/career_moves`) — не менше; випадкова втрата прийому з JSON — червоний тест.</summary>
+        private const int CatalogMovesFloor = 24;
+
         [Test]
         public void EverySpec_PlaysToTheEnd_ThroughTheRealEngine()
         {
             var moves = Moves();
             var specs = RingDemoScript.Specs(moves);
+            Assert.GreaterOrEqual(moves.All.Count, CatalogMovesFloor, "прийоми каталогу гри зникли");
             Assert.AreEqual(11 + moves.All.Count + moves.All.Count(m => m.Action == MatchActionId.Finisher), specs.Count);
             int standIns = 0;
             foreach (var spec in specs)
@@ -39,9 +50,14 @@ namespace Game.Tests.EditMode
                                       + " / " + d.Engine.Result.Winner + ", підстановок кліпів " + si);
             }
             TestContext.WriteLine("сценаріїв " + specs.Count + ", підстановок кліпів разом " + standIns + " (критерій М1 — 0, після кліпів «Кліпів»)");
+            Assert.LessOrEqual(standIns, StandInCeiling, "підстановок кліпів у демо побільшало — храповик лише спадає");
         }
 
+        [TestCase("pin 1", MatchEndKind.Pin, MatchWinner.Player)]
+        [TestCase("pin 2", MatchEndKind.Pin, MatchWinner.Player)]
         [TestCase("pin 3", MatchEndKind.Pin, MatchWinner.Player)]
+        [TestCase("outside", MatchEndKind.Pin, MatchWinner.Player)]
+        [TestCase("warn", MatchEndKind.Pin, MatchWinner.Player)]
         [TestCase("sub", MatchEndKind.Submission, MatchWinner.Player)]
         [TestCase("end countout", MatchEndKind.CountOut, MatchWinner.Player)]
         [TestCase("end double", MatchEndKind.DoubleCountOut, MatchWinner.Draw)]
@@ -95,10 +111,20 @@ namespace Game.Tests.EditMode
             foreach (var m in moves.All)
             {
                 var d = RingDemoScript.Play("move " + m.Id, moves);
-                var tiers = d.Events.Where(ev => ev.Kind == MatchEventKind.Action && ev.HasRoll && ev.MoveKey == m.Id && ev.Action == m.Action)
-                             .Select(ev => ev.Tier).Distinct().ToList();
-                CollectionAssert.AreEquivalent(new[] { RollTier.Miss, RollTier.Partial, RollTier.Strong }, tiers, "move " + m.Id);
+                // саме кроки-показ, а не підготовка (вона теж може грати цей прийом на 10+) — рецензія 204ba0c
+                Assert.AreEqual(3, d.Featured.Count, "move " + m.Id + ": три кидки-показ");
+                foreach (int i in d.Featured)
+                {
+                    var ev = d.Events[i];
+                    Assert.AreEqual(MatchEventKind.Action, ev.Kind, "move " + m.Id);
+                    Assert.AreEqual(m.Id, ev.MoveKey, "move " + m.Id);
+                    Assert.AreEqual(MatchSide.Player, ev.Actor, "move " + m.Id);
+                }
+                CollectionAssert.AreEqual(new[] { RollTier.Strong, RollTier.Partial, RollTier.Miss }, d.Featured.Select(i => d.Events[i].Tier).ToArray(),
+                    "move " + m.Id + ": показ — 10+, 7–9, провал по черзі");
                 Assert.IsTrue(d.Events.Where(ev => ev.MoveKey == m.Id).All(ev => ev.Staging == m.Staging), "move " + m.Id + ": постановка прийому в подіях");
+                Assert.AreEqual(MatchEndKind.Pin, d.Engine.Result.Kind, "move " + m.Id + ": кінцівка — утримання");
+                Assert.AreEqual(MatchWinner.Player, d.Engine.Result.Winner, "move " + m.Id);
             }
         }
 
@@ -185,6 +211,39 @@ namespace Game.Tests.EditMode
                 }
             }
             foreach (var kv in notes) TestContext.WriteLine("— " + kv.Key + " × " + kv.Value);
+            Assert.LessOrEqual(notes.Count, StandInKindsCeiling, "різних підстановок кліпів побільшало — храповик лише спадає");
+        }
+
+        /// <summary>
+        /// Модифікатор, з яким сценарій назвав суму (читачі ядра для показу шансів), — той самий, що рушій записав у подію кидка.
+        /// Похибка ±1 у <see cref="MatchEngine.KickoutModifier"/> / <see cref="MatchEngine.EndureModifier"/> / Describe ступеня
+        /// не змінює, тож лише ця звірка її ловить (рецензія 204ba0c).
+        /// </summary>
+        [Test]
+        public void RollMods_AreTheModifiersTheEngineRolledWith()
+        {
+            var moves = Moves();
+            var kinds = new[]
+            {
+                new KeyValuePair<string, Func<MatchEvent, bool>>("m:kick:", ev => ev.Kind == MatchEventKind.Kickout),
+                new KeyValuePair<string, Func<MatchEvent, bool>>("m:endure:", ev => ev.Kind == MatchEventKind.Endure),
+                new KeyValuePair<string, Func<MatchEvent, bool>>("m:rev:", ev => ev.Kind == MatchEventKind.Reverse),
+                new KeyValuePair<string, Func<MatchEvent, bool>>("m:act:", ev => ev.Kind == MatchEventKind.Action && ev.HasRoll),
+            };
+            int checkedRolls = 0;
+            foreach (var spec in RingDemoScript.Specs(moves))
+            {
+                var d = RingDemoScript.Play(spec, moves);
+                foreach (var k in kinds)
+                {
+                    var mods = d.RollMods.Where(x => x.Key.StartsWith(k.Key, StringComparison.Ordinal)).Select(x => x.Value).ToArray();
+                    var evs = d.Events.Where(k.Value).Select(ev => ev.Modifier).ToArray();
+                    CollectionAssert.AreEqual(evs, mods, spec + ": потік " + k.Key + " — модифікатори сценарію й рушія");
+                    checkedRolls += mods.Length;
+                }
+            }
+            Assert.Greater(checkedRolls, 0);
+            TestContext.WriteLine("звірено кидків: " + checkedRolls);
         }
 
         [Test]

@@ -93,7 +93,9 @@ namespace Game.Gameplay.Ring.Stage
         /// <summary>
         /// Повтор зіграного рушія (демо, <see cref="RingDemoScript"/>): режисер програє журнал від події <paramref name="fromSeq"/>
         /// (<see cref="DemoMatch.StartCount"/> — після стартового обміну, як живий матч), а кінець бере з
-        /// <see cref="MatchEngine.Result"/> — переможець той, кого назвало ядро. Пара стоїть на рингу, як на старті матчу.
+        /// <see cref="MatchEngine.Result"/> — переможець той, кого назвало ядро. Ажіотаж, пози, ушкодження й місце пари
+        /// (ринг чи за рингом) — ті, що лишили події до <paramref name="fromSeq"/>: дзеркало пройде їх так само, як у живому
+        /// матчі, тож повтор із середини журналу стартує з тієї ж розстановки (рецензія 204ba0c).
         /// </summary>
         public void BeginReplay(MatchEngine e, int fromSeq)
         {
@@ -103,7 +105,12 @@ namespace Game.Gameplay.Ring.Stage
             var log = e.State.Log;
             _seen = Mathf.Clamp(fromSeq, 0, log.Count);
             _hype = Mathf.Clamp(e.Setup.StartHype, 0, MatchRules.MaxHype);
-            for (int i = 0; i < _seen; i++) _hype = NextHype(_hype, log[i]);
+            for (int i = 0; i < _seen; i++)
+            {
+                _hype = NextHype(_hype, log[i]);
+                Apply(log[i]);
+            }
+            if (_seen > 0) PlaceCanonical();
             _s.Reveal(_seen - 1);
             _s.CrowdMood(_hype);
             if (_s.Sound != null && _seen <= 1) _s.Sound.BellStart();

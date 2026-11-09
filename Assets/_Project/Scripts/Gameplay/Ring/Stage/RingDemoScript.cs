@@ -62,6 +62,17 @@ namespace Game.Gameplay.Ring.Stage
         public int StartCount;
         /// <summary>Кроки сценарію текстом — для журналу огляду.</summary>
         public readonly List<string> Steps = new List<string>();
+        /// <summary>
+        /// Номери в журналі подій-показу сценарію <c>move &lt;id&gt;</c> — кидків самого прийому (10+, 7–9, провал по черзі), без
+        /// підготовки, яка теж може грати цей прийом.
+        /// </summary>
+        public readonly List<int> Featured = new List<int>();
+        /// <summary>
+        /// Кожен кидок сценарію: потік і модифікатор, з яким сценарій назвав суму (читачі ядра <see cref="MatchEngine.Describe"/>,
+        /// <see cref="MatchEngine.KickoutModifier"/>, <see cref="MatchEngine.EndureModifier"/>, реверс). Тести звіряють його з
+        /// модифікатором, який рушій записав у подію: показ шансів і кидок рахують одне й те саме.
+        /// </summary>
+        public readonly List<KeyValuePair<string, int>> RollMods = new List<KeyValuePair<string, int>>();
 
         public IReadOnlyList<MatchEvent> Events { get { return Engine.State.Log; } }
     }
@@ -301,7 +312,9 @@ namespace Game.Gameplay.Ring.Stage
                 r.Prep(P, m.Action);
                 // больовий: на 10+ тримається (ще хід), на 7–9 вирвався; фінішер — вирвався на «два»
                 RollTier defense = m.Action == MatchActionId.Submission && t == RollTier.Partial ? RollTier.Strong : RollTier.Partial;
+                int from = r.E.State.Log.Count;
                 r.Act(P, m.Action, t, m.Id, defense);
+                r.Feature(from, m);
             }
             r.Finish(P);
         }
@@ -342,6 +355,19 @@ namespace Game.Gameplay.Ring.Stage
 
             public DemoMatch Done() { return _m; }
 
+            /// <summary>Позначає подію-показ прийому <paramref name="m"/>, що з'явилась у журналі від <paramref name="from"/>.</summary>
+            public void Feature(int from, MoveDef m)
+            {
+                var log = E.State.Log;
+                for (int i = from; i < log.Count; i++)
+                    if (log[i].Kind == MatchEventKind.Action && log[i].HasRoll && log[i].MoveKey == m.Id && log[i].Action == m.Action)
+                    {
+                        _m.Featured.Add(i);
+                        return;
+                    }
+                throw Fail("подія-показ прийому «" + m.Id + "» не з'явилась у журналі");
+            }
+
             private Fighter F(MatchSide s) { return E.State.Get(s); }
 
             // ---------- кубик: сума в мить кидка ----------
@@ -352,21 +378,27 @@ namespace Game.Gameplay.Ring.Stage
                     return (stream == "m:ex:p") == (_exTo == MatchSide.Player) ? 12 : 2;
                 if (_b == null) return 7;
                 var def = MatchEngine.Opp(_b.Side);
-                if (stream.StartsWith("m:act:", StringComparison.Ordinal)) return Roll(_b.Tier, _actMod, "кидок нападника");
+                if (stream.StartsWith("m:act:", StringComparison.Ordinal)) return Roll(stream, _b.Tier, _actMod, "кидок нападника");
                 if (stream.StartsWith("m:rev:", StringComparison.Ordinal))
-                    return Roll(_b.Reverse ?? RollTier.Miss, _revMod, "реверс");
+                    return Roll(stream, _b.Reverse ?? RollTier.Miss, _revMod, "реверс");
                 if (stream.StartsWith("m:kick:", StringComparison.Ordinal))
                 {
                     int pen = _b.Action != MatchActionId.Finisher ? 0
                             : _b.Tier == RollTier.Strong ? MatchRules.FinisherStrongPinPenalty : MatchRules.FinisherPartialPinPenalty;
-                    return Roll(_b.Defense, E.KickoutModifier(def, pen), "«Вирватися»");
+                    return Roll(stream, _b.Defense, E.KickoutModifier(def, pen), "«Вирватися»");
                 }
                 if (stream.StartsWith("m:endure:", StringComparison.Ordinal))
                 {
                     int pen = _b.Tier == RollTier.Strong ? MatchRules.SubmissionStrongPenalty : MatchRules.SubmissionPartialPenalty;
-                    return Roll(_b.Defense, E.EndureModifier(def, pen), "«Терпіти»");
+                    return Roll(stream, _b.Defense, E.EndureModifier(def, pen), "«Терпіти»");
                 }
                 throw Fail("непередбачений кидок «" + stream + "»");
+            }
+
+            private int Roll(string stream, RollTier t, int mod, string what)
+            {
+                _m.RollMods.Add(new KeyValuePair<string, int>(stream, mod));
+                return Roll(t, mod, what);
             }
 
             /// <summary>Сума 2d6, що з модифікатором дає ступінь <paramref name="t"/>: 10+ — 11, 7–9 — 8, провал — 4, у межах 2–12.</summary>
