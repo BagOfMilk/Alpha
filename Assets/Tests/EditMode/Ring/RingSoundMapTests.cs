@@ -114,8 +114,11 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(RingCue.Land, RingSoundMap.ForEvent("Action", "TopRope", true, RollTier.Strong, false));
             Assert.AreEqual(RingCue.CrowdBed, RingSoundMap.ForEvent("Action", "Taunt", true, RollTier.Miss, false), "провокація не вдалась: оплесків немає");
             Assert.AreEqual(RingCue.Pop, RingSoundMap.ForEvent("Action", "Taunt", true, RollTier.Strong, false));
-            foreach (var a in new[] { "Throw", "HopeSpot", "Finisher" })
+            foreach (var a in new[] { "Throw", "Finisher" })
                 Assert.AreEqual(RingCue.Slam, RingSoundMap.ForEvent("Action", a, true, RollTier.Miss, false), a + ": падіння");
+            // промінь надії не підводить цілком: провал — як 7–9 (суперник лягає)
+            Assert.AreEqual(RingSoundMap.ForEvent("Action", "HopeSpot", true, RollTier.Partial, false),
+                RingSoundMap.ForEvent("Action", "HopeSpot", true, RollTier.Miss, false), "надія: провал звучить як 7–9");
             // підйом з провалом — той самий кліп, що в «відновитися» (Idle_Tired_Loop), тож і звук той самий
             Assert.AreEqual(RingSoundMap.ForEvent("Action", "Recover", true, RollTier.Strong, false),
                 RingSoundMap.ForEvent("Action", "GetUp", true, RollTier.Miss, false), "підйом з провалом звучить як «відновитися»");
@@ -298,6 +301,16 @@ namespace Game.Tests.EditMode
                 {
                     // той самий кліп, що в «відновитися» — і звук той самий
                     Assert.AreEqual(RingSoundMap.ForEvent(Act(MatchActionId.Recover, RollTier.Strong)), cue, a + ": " + last.Clip);
+                    continue;
+                }
+                if (a == MatchActionId.HopeSpot)
+                {
+                    // Ядро: промінь надії не підводить цілком — провал рахується як 7–9. Таблиця кліпів грає той самий план, що 7–9,
+                    // тож і звук той самий. Розійдуться плани — тест червоний: спершу вирішити звук провалу.
+                    var partial = Act(a, RollTier.Partial);
+                    CollectionAssert.AreEqual(RingClipTable.Plan(partial).Select(s => s.Clip).ToList(),
+                        RingClipTable.Plan(ev).Select(s => s.Clip).ToList(), "надія: провал грається планом 7–9");
+                    Assert.AreEqual(RingSoundMap.ForEvent(partial), cue, "надія: провал звучить як 7–9");
                     continue;
                 }
                 RingCue want;
