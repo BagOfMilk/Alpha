@@ -133,6 +133,8 @@
     <Compile Remove="../../Assets/_Project/Scripts/Editor/AudioLibraryBuilder.cs" />
     <!-- Меню «Рингу» (ТЗ B08): правила імпорту звуку меню — AudioImporter, та сама причина. -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/RingMenuAudioImport.cs" />
+    <!-- Звук рингу (пакет П4 до М1): імпорт моно — AudioImporter, та сама причина. -->
+    <Compile Remove="../../Assets/_Project/Scripts/Editor/RingSoundImport.cs" />
     <Compile Remove="../../Assets/_Project/Scripts/Editor/LightingSetup.cs" />
     <!-- Поправка №21.1: рівні графіки — асети URP і SerializedObject, як LightingSetup. -->
     <Compile Remove="../../Assets/_Project/Scripts/Editor/GraphicsTiersSetup.cs" />
