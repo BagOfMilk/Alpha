@@ -115,67 +115,73 @@ def center_a(c):
             hb = blend_pose(_filled(p), _filled(bb), smooth((t - c.t_hit) / 0.12))
             hb.ankles = bb.ankles
             return hb
-        if c.a in ("line", "line_l"):
-            s_ = "r" if c.a == "line" else "l"
-            sd = -1 if s_ == "r" else 1
-            hold = p.hands[s_]
-            hz = 0.06 if c.b in ("sidestep", "duck") else -0.1                    # промах (B ухилився) — вище, над ним
-            arm = lambda S, s_=s_, sd=sd: S[s_] + Vector((0.55 * sd, -0.12, hz))         # рука вбік, на рівні грудей (на рівні шиї — крізь голову)
-            p.hands = dict(p.hands)
-            p.hands[s_] = (lambda S, h=hold, a_=arm: lerp(h[0](S), a_(S), w), lambda S, h=hold: lerp(h[1] if not callable(h[1]) else h[1](S), Vector((sd, -0.2, 0.0)), w),
-                           lambda S, h=hold: lerp(h[2] if not callable(h[2]) else h[2](S), UP, w))
-            el = p.elbows[s_]
-            p.elbows = dict(p.elbows)
-            p.elbows[s_] = lambda S, e=el, s_=s_, sd=sd: e(S).lerp(S[s_] + Vector((0.3 * sd, 0.15, -0.15)), w)
-            p.yaw = p.yaw + 14.0 * w * (1 if s_ == "r" else -1)
-            p.fist = dict(p.fist); p.fist[s_] = 0.2 + 0.7 * w
-        elif c.a in ("block", "nosell"):
-            p.pitch = p.pitch + 14.0 * w
-            p.yaw = p.yaw - 22.0 * w                              # ліве плече вперед
-            p.roll = p.roll + 6.0 * w
-        elif c.a == "elbow":                                  # лівий лікоть уперед на рівні голови B, кулак біля грудей
-            hold = p.hands["l"]
-            tgt = lambda S: S["l"] + Vector((0.0, -0.18, 0.04))
-            p.hands = dict(p.hands)
-            p.hands["l"] = (lambda S, h=hold: lerp(h[0](S), tgt(S), w), hold[1], hold[2])
-            el = p.elbows["l"]
-            p.elbows = dict(p.elbows)
-            p.elbows["l"] = lambda S, e=el: e(S).lerp(S["l"] + Vector((0.32, -0.3, 0.08)), w)     # лікоть убік — до B
-            p.yaw = p.yaw - 18.0 * w
-        elif c.a == "forearm":
-            hold = p.hands["r"]
-            hit = lambda S: P(S, "spine_03", 0.7, Vector((0.12, 0.21, 0.02))) or (S["r"] + Vector((0.1, -0.55, -0.05)))   # на поверхні грудей B, не в них
-            p.hands = dict(p.hands)
-            p.hands["r"] = (lambda S, h=hold: lerp(h[0](S), hit(S), w), lambda S, h=hold: lerp(h[1] if not callable(h[1]) else h[1](S), FWD + LEFT * 0.6, w),
-                            lambda S, h=hold: lerp(h[2] if not callable(h[2]) else h[2](S), UP, w))
-            el = p.elbows["r"]
-            p.elbows = dict(p.elbows)
-            p.elbows["r"] = lambda S, e=el: e(S).lerp(S["r"] + Vector((0.02, -0.18, -0.3)), w)
-            p.yaw = p.yaw - 20.0 * w
-            p.fist = dict(p.fist); p.fist["r"] = 0.85
-        elif c.a == "head":                                   # лобом у груди, не в голову
-            p.pitch = p.pitch + 48.0 * w                          # лоб — у груди B, нижче його голови
-            p.head_pitch = p.head_pitch + 22.0 * w
-            p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.08 * w))
-        elif c.a in ("boot", "knee"):
-            # опорна — ліва (стоїть там, де стала), права — удар уперед: підошвою в груди або коліном у живіт
-            kw = _act_w(t, c, before=0.28, after=0.4)
-            hip = REST["hip_r"] + p.pelvis
-            if c.a == "boot":
-                kick = hip + Vector((0.0, -0.75 * BODY["leg"], 0.3 * BODY["leg"]))           # підошва — у груди, не в голову
-            else:
-                kick = hip + Vector((0.0, -0.3 * BODY["leg"], 0.0))
-            p.ankles = (p.ankles[0], lerp(p.ankles[1], kick, kw))
-            if c.a == "boot":
-                p.foot_rot = (p.foot_rot[0], p.foot_rot[1].slerp(Quaternion(RIGHT, math.radians(70.0)), kw))
-                p.pitch = p.pitch - 14.0 * kw                     # відхиляється назад, як при ударі ногою
-            else:
-                p.knees = (p.knees[0] if p.knees else None, hip + Vector((0.0, -0.5 * BODY["leg"], 0.12)))
-                p.pitch = p.pitch + 6.0 * kw
-            if p.knees and p.knees[0] is None:
-                p.knees = None
-        return p
+        return _ctr_act(p, t, c, w)
     return f
+
+
+def _ctr_act(p, t, c, w):
+    """Накладка дії A поверх бігу чи стійки (Center_*, Counter_*): рука-«шлагбаум», плече, лікоть, передпліччя,
+    голова, удар ногою чи коліном; w — вага дії (0..1)."""
+    if c.a in ("line", "line_l"):
+        s_ = "r" if c.a == "line" else "l"
+        sd = -1 if s_ == "r" else 1
+        hold = p.hands[s_]
+        hz = 0.06 if c.b in ("sidestep", "duck") else -0.1                    # промах (B ухилився) — вище, над ним
+        arm = lambda S, s_=s_, sd=sd: S[s_] + Vector((0.55 * sd, -0.12, hz))         # рука вбік, на рівні грудей (на рівні шиї — крізь голову)
+        p.hands = dict(p.hands)
+        p.hands[s_] = (lambda S, h=hold, a_=arm: lerp(h[0](S), a_(S), w), lambda S, h=hold: lerp(h[1] if not callable(h[1]) else h[1](S), Vector((sd, -0.2, 0.0)), w),
+                       lambda S, h=hold: lerp(h[2] if not callable(h[2]) else h[2](S), UP, w))
+        el = p.elbows[s_]
+        p.elbows = dict(p.elbows)
+        p.elbows[s_] = lambda S, e=el, s_=s_, sd=sd: e(S).lerp(S[s_] + Vector((0.3 * sd, 0.15, -0.15)), w)
+        p.yaw = p.yaw + 14.0 * w * (1 if s_ == "r" else -1)
+        p.fist = dict(p.fist); p.fist[s_] = 0.2 + 0.7 * w
+    elif c.a in ("block", "nosell"):
+        p.pitch = p.pitch + 14.0 * w
+        p.yaw = p.yaw - 22.0 * w                              # ліве плече вперед
+        p.roll = p.roll + 6.0 * w
+    elif c.a == "elbow":                                  # лівий лікоть уперед на рівні голови B, кулак біля грудей
+        hold = p.hands["l"]
+        tgt = lambda S: S["l"] + Vector((0.0, -0.18, 0.04))
+        p.hands = dict(p.hands)
+        p.hands["l"] = (lambda S, h=hold: lerp(h[0](S), tgt(S), w), hold[1], hold[2])
+        el = p.elbows["l"]
+        p.elbows = dict(p.elbows)
+        p.elbows["l"] = lambda S, e=el: e(S).lerp(S["l"] + Vector((0.32, -0.3, 0.08)), w)     # лікоть убік — до B
+        p.yaw = p.yaw - 18.0 * w
+    elif c.a == "forearm":
+        hold = p.hands["r"]
+        hit = lambda S: P(S, "spine_03", 0.7, Vector((0.12, 0.21, 0.02))) or (S["r"] + Vector((0.1, -0.55, -0.05)))   # на поверхні грудей B, не в них
+        p.hands = dict(p.hands)
+        p.hands["r"] = (lambda S, h=hold: lerp(h[0](S), hit(S), w), lambda S, h=hold: lerp(h[1] if not callable(h[1]) else h[1](S), FWD + LEFT * 0.6, w),
+                        lambda S, h=hold: lerp(h[2] if not callable(h[2]) else h[2](S), UP, w))
+        el = p.elbows["r"]
+        p.elbows = dict(p.elbows)
+        p.elbows["r"] = lambda S, e=el: e(S).lerp(S["r"] + Vector((0.02, -0.18, -0.3)), w)
+        p.yaw = p.yaw - 20.0 * w
+        p.fist = dict(p.fist); p.fist["r"] = 0.85
+    elif c.a == "head":                                   # лобом у груди, не в голову
+        p.pitch = p.pitch + 48.0 * w                          # лоб — у груди B, нижче його голови
+        p.head_pitch = p.head_pitch + 22.0 * w
+        p.pelvis = p.pelvis + Vector((0.0, 0.0, -0.08 * w))
+    elif c.a in ("boot", "knee"):
+        # опорна — ліва (стоїть там, де стала), права — удар уперед: підошвою в груди або коліном у живіт
+        kw = c.kick_w(t) if hasattr(c, "kick_w") else _act_w(t, c, before=0.28, after=0.4)
+        hip = REST["hip_r"] + p.pelvis
+        if c.a == "boot":
+            kick = hip + Vector((0.0, -0.75 * BODY["leg"], 0.3 * BODY["leg"]))           # підошва — у груди, не в голову
+        else:
+            kick = hip + Vector((0.0, -0.3 * BODY["leg"], 0.0))
+        p.ankles = (p.ankles[0], lerp(p.ankles[1], kick, kw))
+        if c.a == "boot":
+            p.foot_rot = (p.foot_rot[0], p.foot_rot[1].slerp(Quaternion(RIGHT, math.radians(70.0)), kw))
+            p.pitch = p.pitch - 14.0 * kw                     # відхиляється назад, як при ударі ногою
+        else:
+            p.knees = (p.knees[0] if p.knees else None, hip + Vector((0.0, -0.5 * BODY["leg"], 0.12)))
+            p.pitch = p.pitch + 6.0 * kw
+        if p.knees and p.knees[0] is None:
+            p.knees = None
+    return p
 
 
 def _stagger_b(t, L, c):
@@ -230,7 +236,9 @@ def center_b(c):
             if t <= c.t_hit - STRIKE_HIT:
                 return lower(stance(t, L, sway=0.0))
             # відходить від удару й там лишається (огляд 04.11.2026: повертався впритул до A — тіла одне в одному)
-            D = 0.45 if c.a == "boot" else 0.35
+            D = getattr(c, "stag_d", None)
+            if D is None:
+                D = 0.45 if c.a == "boot" else 0.35
             u = t - c.t_hit
             q = lower(_stagger_b(t, L, c))
             if u <= 0.0:

@@ -76,8 +76,11 @@ if "--only" in _args:
 FEMALE = "--female" in _args
 DIAG = set(_args[_args.index("--diag") + 1].split(",")) if "--diag" in _args else set()
 SFX = "_F" if FEMALE else ""
-OUT_FBX = os.path.join(REPO, "Assets", "Art", "Animations", "RING_Moves%s.fbx" % SFX)
-MANIFEST = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims%s_manifest.txt" % SFX.lower())
+# --anim-out <тека>: FBX і маніфести — не в Assets (пробні прогони з --only не переписують набір гри)
+ANIM_DIR = _args[_args.index("--anim-out") + 1] if "--anim-out" in _args else os.path.join(REPO, "Assets", "Art", "Animations")
+os.makedirs(ANIM_DIR, exist_ok=True)
+OUT_FBX = os.path.join(ANIM_DIR, "RING_Moves%s.fbx" % SFX)
+MANIFEST = os.path.join(ANIM_DIR, "ring_anims%s_manifest.txt" % SFX.lower())
 LOOK_DIR = os.path.join(REPO, "Logs", "ring_anims" + SFX.lower())
 
 GAP = 0.62          # відстань між тазами в зчепі (м)
@@ -117,6 +120,27 @@ class RPose(Pose):
         self.pelvis_q = None
         super().__init__(**kw)
 
+_TUCK = {}
+
+def thumb_tuck_axis(rig, s):
+    """Вісь (у просторі кістки thumb_01) повороту великого пальця до мізинця поперек долоні — нормаль долоні."""
+    key = (rig.arm.name, s)
+    if key not in _TUCK:
+        b = rig.arm.data.bones
+        mid0, hand0 = b["middle_01_" + s].head_local, b["hand_" + s].head_local
+        n = (b["index_01_" + s].head_local - b["pinky_01_" + s].head_local).cross(mid0 - hand0).normalized()
+        t0 = b["thumb_01_" + s]
+        tip = b["thumb_03_" + s].tail_local if "thumb_03_" + s in b else t0.tail_local
+        d = tip - t0.head_local
+        to_pinky = b["pinky_01_" + s].head_local - b["index_01_" + s].head_local
+        sign = 1.0 if (Quaternion(n, math.radians(40.0)) @ d).dot(to_pinky) > d.dot(to_pinky) else -1.0
+        m3 = t0.matrix_local.to_3x3().inverted()
+        npalm = n if (b["thumb_02_" + s].head_local - mid0).dot(n) > 0 else -n      # нормаль — у бік долоні
+        # два кроки (підібрано виміром кінчика, 08.11.2026): до мізинця в площині долоні, потім через долоню —
+        # кінчик ~4 см перед долонею над кісточками середнього пальця
+        _TUCK[key] = ((m3 @ (n * sign)).normalized(), (m3 @ (npalm - (mid0 - hand0).normalized())).normalized())
+    return _TUCK[key]
+
 def apply_w(rig, p, partner=None):
     """apply() з alpha_anims, але для ригу будь-де у світі: цілі IK задаються в просторі ригу й переводяться у світ.
     partner — словник «кістка → голова кістки партнера» у просторі ЦЬОГО ригу (для контактів)."""
@@ -147,13 +171,20 @@ def apply_w(rig, p, partner=None):
     for bone, w in (("neck_01", 0.45), ("head", 0.55)):
         if bone in pb:
             pb[bone].rotation_quaternion = local_rot(bone, UP, hy * w) @ local_rot(bone, LEFT, hp * w)
+    fo = getattr(p, "fingers", None) or {}           # окремі пальці поверх кулака: {"r": {"index": 0.0, …}} (жест рахунку)
     for name, ax in rig.finger_axis.items():
         side = name[-1]
         k = name.split("_")[1]
-        amount = p.fist[side] * (70 if k == "01" else 85 if k == "02" else 60)
+        amount = fo.get(side, {}).get(name.split("_")[0], p.fist[side]) * (70 if k == "01" else 85 if k == "02" else 60)
         if name.startswith("thumb"):
             amount *= 0.5
         pb[name].rotation_quaternion = Quaternion(ax, math.radians(amount))
+    for side, d_ in fo.items():                      # великий палець через долоню (жест «раз»/«два»): згин кулака веде
+        tk = d_.get("thumb_tuck", 0.0)               # його лише вздовж лінії кісточок — убік від долоні він не йде
+        if tk > 1e-4 and "thumb_01_" + side in pb:
+            a1, a2 = thumb_tuck_axis(rig, side)
+            q_ = Quaternion(a2, math.radians(90.0 * tk)) @ Quaternion(a1, math.radians(60.0 * tk))
+            pb["thumb_01_" + side].rotation_quaternion = q_ @ pb["thumb_01_" + side].rotation_quaternion
     bpy.context.view_layer.update()
 
     half, split = p.feet
@@ -1010,7 +1041,7 @@ CLIP_EVENTS = {
     "Forearm_Strike": [("contact", STRIKE_HIT, "lowerarm_r", "spine_03")],
     "Lockup": [("contact", LOCKUP_HIT, "spine_03", "spine_03")],
 }
-EVENTS = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims%s_events.txt" % SFX.lower())
+EVENTS = os.path.join(ANIM_DIR, "ring_anims%s_events.txt" % SFX.lower())
 
 # ---------------------------------------------------------------- запікання пари і якість
 
@@ -1211,13 +1242,20 @@ exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_sell.py"), encoding
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_center.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_whip.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_ref.py"), encoding="utf-8").read())
+CENTER_RULE = set()     # кліпи нового бою «усе в центрі» (ТЗ ANIM_BRIEF_COMBAT_CENTER §1.1): таз ≤ 0,5 м від старту
+PAIR_MID_RULE = set()   # *_Land (§1.2.3, ПМ 08.11.2026): таз кожного ≤ 0,5 м від середини пари — середини між коренями
+                        # A (нуль простору A) і B (зсув B) — так RingMatchDirector ставить пару в центр рингу
+PAIR_ROOT_MID = [None]  # середина коренів поточної пари (ставить головний цикл перед запіканням)
+KEEP_OFFSET = set()     # кліпи, що задають вузол-пару, але зсув наступних кліпів задано в них самих (не PAIR_AT)
+exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_combat.py"), encoding="utf-8").read())
 exec(open(os.path.join(REPO, "tools", "blender", "ring_anims_polish.py"), encoding="utf-8").read())
 CLIPS += MOVE_CLIPS
 CLIP_NODES.update(MOVE_CLIP_NODES)
 CLIP_EVENTS.update(MOVE_EVENTS)
 NODE_POSES.update(MOVE_NODE_POSES)
 CLIP_CONTACTS.update(MOVE_CONTACTS)
-MOTION = os.path.join(REPO, "Assets", "Art", "Animations", "ring_anims%s_motion.txt" % SFX.lower())
+MOTION = os.path.join(ANIM_DIR, "ring_anims%s_motion.txt" % SFX.lower())
+DRIFT = os.path.join(ANIM_DIR, "ring_anims%s_drift.txt" % SFX.lower())
 
 # ---------------------------------------------------------------- якість
 
@@ -1257,7 +1295,8 @@ SELF_PAIRS = [(arm, body) for arm in ("lowerarm_l", "lowerarm_r", "hand_l", "han
 # Пороги §4.1 плану (docs/TRPG_DESIGN.md §11.2): у см, градусах; ривок — лише у звіт.
 LIMITS = {"slide": 1.5, "pen": 3.0, "self": 2.0, "under": 0.0, "reach": 3.0, "node_deg": 3.0, "node_cm": 2.0,
           "hand_jump": 30.0, "rope": 2.0, "wrist": 15.0, "elbow_in": 0.0,
-          "mpen": 2.0}    # mpen — пара по сітках тіл (ітерація 2, 03.11.2026: капсули пропускали тіло в тілі до 20 см)
+          "mpen": 2.0,
+          "drift": 50.0}  # drift — таз від точки старту по горизонталі (см), лише для CENTER_RULE (бій «усе в центрі», 08.11.2026)    # mpen — пара по сітках тіл (ітерація 2, 03.11.2026: капсули пропускали тіло в тілі до 20 см)
 # wrist — скручування кисті (°), що лишилось після переносу в передпліччя: кисть сама не скручується, шкіра жгутом;
 # elbow_in — лікоть усередині свого тулуба (см): «руки из груди торчат … руки из плечей растут» (власник 30.10.2026)                           # кисть: 9 м/с — швидкість реального удару                                        # см за кадр (30 к/с) — 7,5 м/с
 JERK_WARN = 6.0        # °/кадр² — пік кутового прискорення кістки
@@ -1384,7 +1423,29 @@ def quality(name, framesA, framesB, bases):
                 if v > jerk:
                     jerk, jwhere = v, f"{tag}.{n}, кадр {i + 1}"
     q["jerk"] = (jerk, jwhere)
+    # зміщення таза від точки старту (горизонталь) — ТЗ «усе в центрі»: ≤ 0,5 м для кожного з пари;
+    # у *_Land — від середини пари на першому кадрі (PAIR_MID_RULE)
+    drift, dwh = 0.0, ""
+    mid = pair_mid(framesA, framesB) if name in PAIR_MID_RULE else None
+    for tag, frames in (("A", framesA), ("B", framesB)):
+        fr = frames or ()
+        if not fr:
+            continue
+        p0 = mid if mid is not None else fr[0][1]["pelvis"][0]
+        for fi, (_, w) in enumerate(fr):
+            pp = w["pelvis"][0]
+            d_ = math.hypot(pp.x - p0.x, pp.y - p0.y)
+            if d_ > drift:
+                drift, dwh = d_, f"{tag}, кадр {fi}"
+    q["drift"] = (drift * 100.0, dwh)
+    q["drift_rule"] = name in CENTER_RULE
     return q
+
+def pair_mid(framesA, framesB):
+    """Середина пари: між коренями A і B (A — нуль простору A, B — його зсув), горизонталь."""
+    if not framesA or not framesB:
+        return None
+    return PAIR_ROOT_MID[0]
 
 def residual_twist(arm, cap, s):
     """Скручування кисті відносно передпліччя (°) у знімку cap — після move_twist_to_forearm має бути ≈ 0."""
@@ -1405,6 +1466,8 @@ def fails(q):
     for k in ("slide", "pen", "self", "under", "reach", "hand_jump", "rope", "wrist", "elbow_in", "mpen"):
         if k in q and q[k][0] > LIMITS[k] + 1e-6:
             out.append(k)
+    if q.get("drift_rule") and q["drift"][0] > LIMITS["drift"] + 1e-6:
+        out.append("drift")
     if "node" in q and (q["node"][0] > LIMITS["node_deg"] or q["node"][1] > LIMITS["node_cm"]):
         out.append("node")
     return out
@@ -1489,6 +1552,29 @@ def load_lab_clips(arm, actions):
         print(f"[лабораторія] {clip}: {len(data['A'])} кадрів з {fn}", flush=True)
     return done
 
+def lab_drift(arm):
+    """Зміщення таза лабораторних кліпів (кадри JSON): горизонталь від першого кадру, у просторі ригу."""
+    import json
+    out = []
+    if not os.path.isdir(LAB_DIR):
+        return out
+    m3 = arm.data.bones["pelvis"].matrix_local.to_3x3()
+    for fn in sorted(os.listdir(LAB_DIR)):
+        if not fn.endswith(".json"):
+            continue
+        clip = fn[:-5]
+        data = json.load(open(os.path.join(LAB_DIR, fn), encoding="utf-8"))
+        for role in ("A", "B"):
+            fr = data[role]
+            l0 = Vector(fr[0]["pelvis"][0])
+            ds = [m3 @ (Vector(f_["pelvis"][0]) - l0) for f_ in fr]
+            md = max(math.hypot(d.x, d.y) for d in ds)
+            sg = -1.0 if role == "B" else 1.0            # B розвернутий на 180° (зсув лабораторії — 0 −1,18 0 180)
+            out.append(f"{clip}_{role} {role} {md:.3f} {sg * ds[-1].x:.3f} {sg * ds[-1].y:.3f} {int(clip in CENTER_RULE)}")
+            if clip in CENTER_RULE and md > LIMITS["drift"] / 100.0:
+                print(f"   [центр] {clip}_{role}: таз {md * 100:.0f} см від старту — ПОНАД ПОРІГ", flush=True)
+    return out
+
 # ---------------------------------------------------------------- запуск
 
 def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
@@ -1510,6 +1596,8 @@ def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
             if tag == "B" and fb is None:
                 continue
             start, end = nodes.get(tag, (None, None))
+            if end and end not in NODES:                 # кліп сам задає цей вузол своїм кінцем (CLIP_DEFINES)
+                end = None
             cap = {pb.name: pb.matrix.copy() for pb in rig.arm.pose.bones}
             if "--dbgfeet" in _args and tag == _args[_args.index("--dbgfeet") + 1]:
                 W_ = rig.arm.matrix_world
@@ -1588,6 +1676,8 @@ def bake_clip(rigA, rigB, name, length, fa, fb, loop=False):
         if not seq:
             continue
         start, end = nodes.get(tag, (None, None))
+        if end and end not in NODES:
+            end = None
         if start:
             post.append(node_gap(arm, seq[0], start))
             if post[-1][0] > LIMITS["node_deg"]:
@@ -1626,28 +1716,33 @@ def main():
               "<поворот ° (+ ліворуч)> <швидкість м/с>"]
     manifest = ["# Кліпи рингу (tools/blender/ring_anims.py). <кліп> <роль A|B|-> <довжина с> <петля 0|1> "
                 "<зсув B: x y z (м, простір A)> <поворот B °> <з вузла> <у вузол>"]
+    drift_rows = ["# Зміщення таза в кліпах (ТЗ «усе в центрі», 08.11.2026): <кліп> <роль A|B|-> <найбільше від точки відліку, м> "
+                  "<кінець dx dy від старту, м (простір A)> <центр 0|1 — кліп нового бою, межа 0,5 м> "
+                  "<від чого міряли: start — свій таз на першому кадрі | pair — середина пари на першому кадрі (*_Land)>"]
     for name, length, fa, fb, loop, offset, yaw in CLIPS:
         if ONLY and name not in ONLY:
             continue
         start_b = CLIP_NODES.get(name, {}).get("B", (None, None))[0]
         if fb is not None and start_b in PAIR_AT:
             offset, yaw = PAIR_AT[start_b]                         # ланцюжок: пара стоїть так, як закінчила попередній
-        missing = [n_ for r_ in CLIP_NODES.get(name, {}).values() for n_ in r_ if n_ and n_ not in NODES]
+        own_ = set(CLIP_DEFINES.get(name, {}).values())            # вузол, який задає сам кліп (його кінець), — не «відсутній»
+        missing = [n_ for r_ in CLIP_NODES.get(name, {}).values() for n_ in r_ if n_ and n_ not in NODES and n_ not in own_]
         if missing:
             print(f"   [вузол] {name}: немає вузлів {missing} (запустіть разом з кліпом, що їх задає) — пропущено", flush=True)
             continue
-        if fb is not None and name == "Cover":                     # коротші ноги — A на тій самій відстані наступав на руку B
+        if fb is not None and (name == "Cover" or name in COVER_SHIFT):   # коротші ноги — A на тій самій відстані наступав на руку B
             offset = offset + Vector((0.0, -0.6 * (1.0 - BODY["leg"]), 0.0))
         if fb is not None and name in ARM_SCALED and start_b not in PAIR_AT:
             offset = offset * BODY["arm"]                             # відстань пари на витягнуту руку — за руками набору
         place(armA, Vector(), 0)
         place(armB, offset if fb is not None else Vector((0, 50, 0)), yaw if fb is not None else 0)
+        PAIR_ROOT_MID[0] = Vector((offset.x * 0.5, offset.y * 0.5, 0.0)) if fb is not None else None
         sa, sb, wa, wb, q, gaps = bake_clip(rigA, rigB, name, length, fa, fb, loop)
         for role, node_name in CLIP_DEFINES.get(name, {}).items():
             seq, arm_ = (sa, armA) if role == "A" else (sb, armB)
             if seq:
                 NODES[node_name] = (cap_basis(arm_, seq[-1]), seq[-1]["pelvis"].copy())
-        if fb is not None and name in CLIP_DEFINES:
+        if fb is not None and name in CLIP_DEFINES and name not in KEEP_OFFSET:
             # пара наприкінці: B відносно A — у просторі кореня A (корінь = проєкція таза на мат)
             pa, pbv = wa[-1][1]["pelvis"][0], wb[-1][1]["pelvis"][0]
             rel = Vector((pbv.x - pa.x, pbv.y - pa.y, 0.0))
@@ -1656,8 +1751,19 @@ def main():
         for tag, edge, node, deg, tilt, dz in gaps:
             print(f"   [вузол] {name} {tag} {edge} «{node}»: до доведення — суглоб {deg:.1f}°, нахил таза {tilt:.1f}°, "
                   f"таз {dz:.1f} см ({NODE_WORST[0]})", flush=True)
+        for role_, fr_ in (("A" if fb is not None else "-", wa), ("B", wb if fb is not None else None)):
+            if not fr_:
+                continue
+            p0_, p1_ = fr_[0][1]["pelvis"][0], fr_[-1][1]["pelvis"][0]
+            mid_ = pair_mid(wa, wb) if (fb is not None and name in PAIR_MID_RULE) else None
+            ref_ = mid_ if mid_ is not None else p0_
+            md_ = max(math.hypot(w_["pelvis"][0].x - ref_.x, w_["pelvis"][0].y - ref_.y) for _, w_ in fr_)
+            drift_rows.append(f"{name}{'_' + role_ if role_ != '-' else ''} {role_} {md_:.3f} {p1_.x - p0_.x:.3f} {p1_.y - p0_.y:.3f} "
+                              f"{int(name in CENTER_RULE)} {'pair' if mid_ is not None else 'start'}")
         bad = fails(q)
         state = "OK" if not bad else "ПОНАД ПОРІГ: " + ", ".join(bad)
+        if q.get("drift_rule"):
+            state += f" · таз {q['drift'][0]:.0f} см від {'середини пари' if name in PAIR_MID_RULE else 'старту'} ({q['drift'][1]})"
         if q.get("rope", (0, ""))[0] > LIMITS["rope"]:
             state += f" · за канатом {q['rope'][0]:.0f} см ({q['rope'][1]})"
         if q["hand_jump"][0] > LIMITS["hand_jump"]:
@@ -1709,6 +1815,7 @@ def main():
     actions = {n: write_action(armA, n, s_) for n, s_, arm in samples}
     loop_of = {c[0]: c[4] for c in CLIPS}
     lab = load_lab_clips(armA, actions)
+    drift_rows.extend(lab_drift(armA))
     if POLISH:                                    # ітерація 2: лабораторні кліпи — теж перевірка по сітках (саме те, що йде у FBX)
         report.extend(lab_mesh_report(armA, armB))
     for n, act in actions.items():
@@ -1737,6 +1844,8 @@ def main():
     if not ONLY:
         with open(MOTION, "w", encoding="utf-8", newline="\n") as fh:
             fh.write("\n".join(motion) + "\n")
+        with open(DRIFT, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("\n".join(drift_rows) + "\n")
     with open(EVENTS, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("# Мітки подій кліпів рингу (tools/blender/ring_anims.py): <кліп> <подія> <час с> <кістка A> <кістка B>\n")
         for name, length_, *_ in CLIPS:

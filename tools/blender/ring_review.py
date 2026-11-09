@@ -13,6 +13,8 @@ ONLY = set(args[args.index("--only") + 1].split(",")) if "--only" in args else N
 SFX = "_f" if FEMALE else ""
 ZOOM = float(args[args.index("--zoom") + 1]) if "--zoom" in args else 1.0   # <1 — ближче (контакти)
 DIRS = int(args[args.index("--dirs") + 1]) if "--dirs" in args else 2      # 4 — ще ззаду й зліва
+CZ = float(args[args.index("--cz") + 1]) if "--cz" in args else 0.8          # висота центру кадру (лежачі — 0,35)
+ELEV = float(args[args.index("--elev") + 1]) if "--elev" in args else 0.25   # камера над центром (м)
 ANIM = args[args.index("--anim") + 1] if "--anim" in args else os.path.join(REPO, "Assets", "Art", "Animations")
 OUT = args[args.index("--out") + 1] if "--out" in args else os.path.join(REPO, "Logs", "review" + SFX)
 os.makedirs(OUT, exist_ok=True)
@@ -131,7 +133,7 @@ for p in rows:
         if pair:
             pts.append(B.matrix_world @ B.pose.bones["spine_02"].head)
     lo = Vector((min(p.x for p in pts), min(p.y for p in pts), 0)); hi = Vector((max(p.x for p in pts), max(p.y for p in pts), 0))
-    c0 = (lo + hi) / 2; c0.z = 0.8
+    c0 = (lo + hi) / 2; c0.z = CZ
     span = max((hi - lo).length, 0.8)
     for ai, d in enumerate((Vector((1, 0, 0)), Vector((0, -1, 0)), Vector((-1, 0, 0)), Vector((0, 1, 0)))[:DIRS]):
         for f in frames:
@@ -139,8 +141,8 @@ for p in rows:
             c = c0.copy()
             if not pair:                               # сольний кліп з ходом (біг, канати) — камера за тазом, інакше виходить з кадру
                 pp = A.matrix_world @ A.pose.bones["spine_02"].head
-                c = Vector((pp.x, pp.y, 0.8))
-            cam.location = c + d * (((3.3 + span) if pair else 3.4) * ZOOM) + Vector((0, 0, 0.25))
+                c = Vector((pp.x, pp.y, CZ))
+            cam.location = c + d * (((3.3 + span) if pair else 3.4) * ZOOM) + Vector((0, 0, ELEV))
             cam.rotation_euler = (c - cam.location).to_track_quat('-Z', 'Y').to_euler()
             os.makedirs(os.path.join(OUT, base), exist_ok=True)
             fp = os.path.join(OUT, base, f"{ai}_{f - f0:04d}.png")
