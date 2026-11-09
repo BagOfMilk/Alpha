@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Game.Core.Ring;
 using Game.Core.Ring.Match;
+using Game.Gameplay.Ring.Models;
 using UnityEngine;
 
 namespace Game.Gameplay.Ring.Stage
@@ -61,6 +62,8 @@ namespace Game.Gameplay.Ring.Stage
             _afterCut = false;
             StandIns = 0;
             RunInStarts = 0;
+            OffCenter = 0;
+            _pinSound = null;
             _q.Clear();
             _e = e;
             _seen = e != null ? e.State.Log.Count : 0;
@@ -104,6 +107,43 @@ namespace Game.Gameplay.Ring.Stage
                 while (_seen < log.Count) _q.Enqueue(log[_seen++]);
             }
             if (!_running && _q.Count > 0 && !_ended) StartCoroutine(Run());
+        }
+
+        // ============================ охоронець «у центрі» ============================
+
+        /// <summary>
+        /// Таз борця на рингу — не далі цього від центру рингу по горизонталі, м (план М1, Ф2 крок 8; правило власника
+        /// 30.10.2026 «усе в центрі», рішення 08.11.2026 — бігу по рингу немає). Поза правилом — склейка на канаті чи куті
+        /// (план 1), склейка місця пари, кадр перемоги і пара за рингом. Лежачий і знесений кліпом рахуються: це вада кліпа
+        /// (таз ≤ 0,5 м від старту — CLIP_NEEDS.md), а не режисера; власні розстановки режисера — у <see cref="SettleRadius"/>.
+        /// </summary>
+        public const float CenterLimit = 1.5f;
+
+        /// <summary>Скільки разів за матч таз борця вийшов за <see cref="CenterLimit"/> (раз на борця за подію) — критерій М1 «0».</summary>
+        public int OffCenter { get; private set; }
+
+        private bool _guardOff;
+        private int _offCenterSeen;   // біти борців, уже позначених у поточній події: 1 — гравець, 2 — суперник
+
+        private void LateUpdate()
+        {
+            if (!_running || _ended || _guardOff || _m[0].Outside || _s == null) return;
+            for (int k = 0; k < 2; k++)
+            {
+                int bit = 1 << k;
+                if ((_offCenterSeen & bit) != 0) continue;
+                var side = k == 0 ? MatchSide.Player : MatchSide.Rival;
+                var a = _s.Actor(side);
+                if (a == null) continue;
+                Vector3 p = a.PosePos;
+                float d = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+                if (d <= CenterLimit) continue;
+                _offCenterSeen |= bit;
+                OffCenter++;
+                var c = a.CurrentClip;
+                Debug.LogWarning(string.Format(CultureInfo.InvariantCulture, "[Ринг] таз поза центром: {0} {1:0.00} м > {2:0.0} (кліп {3}; подія {4} {5}; за матч {6})",
+                    side, d, CenterLimit, c != null ? c.name : "—", _ev != null ? _ev.Kind.ToString() : "—", _ev != null ? _ev.Action.ToString() : "—", OffCenter));
+            }
         }
 
         // ============================ дзеркало місця пари і поз ============================
@@ -178,6 +218,17 @@ namespace Game.Gameplay.Ring.Stage
         private BeatPlan _plan;
         private bool _beatFired;
 
+        /// <summary>Подія утримання (Pin), чий звук чекає контакту накриття в наступній події Kickout.</summary>
+        private MatchEvent _pinSound;
+
+        /// <summary>Звук утримання, що чекає: на контакті накриття (<paramref name="delay"/>, с показу) або одразу.</summary>
+        private void FlushPinSound(float delay)
+        {
+            if (_pinSound == null) return;
+            if (_s.Sound != null) _s.Sound.OnEvent(_pinSound, delay, false);
+            _pinSound = null;
+        }
+
         private float ClipLen(string name)
         {
             var c = _s.Info(name + "_A") ?? _s.Info(name);
@@ -250,7 +301,13 @@ namespace Game.Gameplay.Ring.Stage
             _beatFired = true;
             if (_plan.IsCount) _s.Beat(ev, 3); else _s.Beat(ev, 0);
             _s.Reveal(ev.Seq);
-            if (_s.Sound != null && ev.Kind != MatchEventKind.Kickout && ev.Kind != MatchEventKind.MatchEnd) _s.Sound.OnEvent(ev, 0f, false);
+            if (_s.Sound != null && ev.Kind != MatchEventKind.Kickout && ev.Kind != MatchEventKind.MatchEnd)
+            {
+                // Утримання (дія Pin) кроків не має: накриття показує наступна подія — Kickout, кліп Cover. Звук накриття чекає
+                // контакту Cover (звірка зі звуком, п. 2), а не звучить до кліпа.
+                if (ev.Action == MatchActionId.Pin && _plan.Step < 0) _pinSound = ev;
+                else _s.Sound.OnEvent(ev, 0f, false);
+            }
             if (_s.Fx != null && ev.Action == MatchActionId.Finisher && (ev.Kind == MatchEventKind.Action || ev.Kind == MatchEventKind.Sell) && ev.Tier != RollTier.Miss)
                 _s.Fx.Finisher();
             if (IsFinisherHit(ev))
@@ -287,6 +344,8 @@ namespace Game.Gameplay.Ring.Stage
                 bool applied = false;
                 _ev = ev;
                 _beatFired = false;
+                _offCenterSeen = 0;
+                _guardOff = false;
                 _plan = RingBeats.For(steps, _s.Events, ClipLen);
                 int si = RingClipTable.StandIns(steps);
                 if (si > 0)
@@ -295,6 +354,8 @@ namespace Game.Gameplay.Ring.Stage
                     Debug.Log(string.Format(CultureInfo.InvariantCulture, "[Ринг] підстановок кліпів: +{0} (за матч {1}) — {2} {3} {4}",
                         si, StandIns, ev.Kind, ev.Action, ev.MoveKey ?? "—"));
                 }
+                // Звук утримання не губиться: якщо слідом не кікаут (накриття не показане) — одразу, до звуку цієї події.
+                if (ev.Kind != MatchEventKind.Kickout) FlushPinSound(0f);
                 // Кінець матчу — дзвін (після відліку: подія йде слідом за утриманням). Світло-шоу — у RunEnd, на склейці.
                 if (_s.Sound != null && ev.Kind == MatchEventKind.MatchEnd) _s.Sound.BellEnd();
                 // Без кроків (кінець ходу, продаж) — такт одразу.
@@ -307,6 +368,7 @@ namespace Game.Gameplay.Ring.Stage
                 }
                 // Такт, що не настав (кліпа нема чи крок коротший за мітку), — у кінці кроків: текст не губиться.
                 if (!_beatFired) BeatNow(ev);
+                if (ev.Kind == MatchEventKind.Kickout) FlushPinSound(0f);   // кліпа накриття не було — звук утримання наприкінці
                 _s.Reveal(ev.Seq);
                 if (!applied) Apply(ev);
                 // Стан ядра = поза в кадрі: «лежить» без падіння — продаж падінням; «стоїть», а лежить — встає.
@@ -327,6 +389,9 @@ namespace Game.Gameplay.Ring.Stage
 
         private IEnumerator RunStep(StageStep st, MatchEvent ev, int idx)
         {
+            // Поза охоронцем центру: план «на канаті / в куті» (Cut), склейка місця пари (Place: лежачий ковзає з-за рингу) і кадр
+            // перемоги (End: розстановка під камеру).
+            _guardOff = st.Kind == StageStepKind.Cut || st.Kind == StageStepKind.Place || st.Kind == StageStepKind.End;
             // Утримання — низька камера біля мату (рахунок «раз — два»), а не загальний кіноплан.
             // Склейки (Cut, Place) ставлять кадр самі — в ту саму мить, що й стрибок тазу. За рингом кадр веде Cine пари.
             if (st.Kind != StageStepKind.Cut && st.Kind != StageStepKind.Place && !_m[0].Outside)
@@ -412,6 +477,18 @@ namespace Game.Gameplay.Ring.Stage
             a.PlayAt(c, false, at, yaw, RingStage3D.PlaySpeed);
             _s.Watch.Forget(a);
             _s.Watch.Forget(v);
+            float hold = Mathf.Min(c.length, 1.7f);
+            if (_s.Sound != null)
+            {
+                // Звук склейки (звірка зі звуком, п. 4; EVENT_SOUND.md): канат — RopeRebound на мітці rope_hit кліпа (спина в
+                // канаті); кут — CornerHit у мить, коли нападник спирається на стійку: мітка corner_hit / rope_lean, а кліп кута
+                // без мітки (Move_Corner_Exit) стартує вже спертим — одразу. Мітка поза показаним відрізком — теж одразу.
+                bool corner = st.Perch == MoveStaging.Corner;
+                float t = _s.Events.Time(st.Clip, corner ? "corner_hit" : "rope_hit");
+                if (t < 0f && corner) t = _s.Events.Time(st.Clip, "rope_lean");
+                float delay = t >= 0f && t < hold ? t / RingStage3D.PlaySpeed : 0f;
+                _s.Sound.Play(corner ? RingCue.CornerHit : RingCue.RopeRebound, 0.85f, delay);
+            }
             var pts = new List<Vector3>();
             RingCine.Body(pts, at, _s.BodyScale(a), true);
             RingCine.Body(pts, vPos, _s.BodyScale(v));
@@ -423,7 +500,7 @@ namespace Game.Gameplay.Ring.Stage
                 _s.SetShot(StageCam.Low);
             }
             _afterCut = true;
-            yield return new WaitForSeconds(Mathf.Min(c.length, 1.7f) / RingStage3D.PlaySpeed);
+            yield return new WaitForSeconds(hold / RingStage3D.PlaySpeed);
         }
 
         /// <summary>
@@ -524,6 +601,7 @@ namespace Game.Gameplay.Ring.Stage
             }
             else a.PlayHere(clip, false, RingStage3D.PlaySpeed);
             ArmBeat(idx);
+            if (st.Actor == _ev?.Actor) ArmFollowUp(_ev, st.Clip, 0f);
             float len = clip.length / RingStage3D.PlaySpeed;
             if (st.Once) len = Mathf.Min(len, 1.7f);
             yield return new WaitForSeconds(len);
@@ -768,7 +846,33 @@ namespace Game.Gameplay.Ring.Stage
                 }
             }
             ArmBeat(idx, tStart);
+            if (ev != null && sa == ev.Actor) ArmFollowUp(ev, st.Clip, tStart);
+            if (_pinSound != null && ev != null && ev.Kind == MatchEventKind.Kickout)
+            {
+                // Звук накриття — на контакті Cover (груди на груди: мітка contact або виміряна мить кліпа).
+                float tc;
+                BeatSource srcC;
+                bool has = RingBeats.ImpactMark(st.Clip, _s.Events, out tc, out srcC) && tc >= tStart;
+                FlushPinSound(has ? (tc - tStart) / RingStage3D.PlaySpeed : 0f);
+            }
             yield return new WaitForSeconds(len);
+        }
+
+        /// <summary>Мітка другого дотику предмета в кліпі (пропозиція ПМ «Кліпам», <c>CLIP_NEEDS.md</c> §5).</summary>
+        public const string FollowUpMark = "touch_2";
+
+        /// <summary>
+        /// Другий дотик предмета (звірка зі звуком, п. 5; <c>EVENT_SOUND.md</c>): 7–9 — нападник зачепив себе, ≤ 6 — сам у бар'єр.
+        /// Звучить лише на мітці <see cref="FollowUpMark"/> кліпа кроку нападника: без мітки — тиша, а не звук не в такт
+        /// (підстановки «за рингом» міток не мають — до кліпів набору «за рингом» другого дотику не чути).
+        /// </summary>
+        private void ArmFollowUp(MatchEvent ev, string clip, float startAt)
+        {
+            if (_s.Sound == null || ev == null || ev.Kind != MatchEventKind.Action || ev.Action != MatchActionId.Weapon) return;
+            if (ev.Tier == RollTier.Strong) return;
+            float t = _s.Events.Time(RingBeats.MarkBase(clip), FollowUpMark);
+            if (t < startAt) return;
+            _s.Sound.FollowUp(ev, (t - startAt) / RingStage3D.PlaySpeed);
         }
 
         /// <summary>
@@ -1129,14 +1233,20 @@ namespace Game.Gameplay.Ring.Stage
                 Vector3 m = (pp + pr) * 0.5f;
                 pp = m - l * (want * 0.5f);
                 pr = m + l * (want * 0.5f);
-                float lim = RingStage3D.RingHalf - 0.6f;
-                Vector3 sh = Vector3.zero;
-                foreach (var q in new[] { pp, pr })
+                // Пара — усередину кола охоронця центру (зсув обох разом, відстань між ними та сама: 2,2 м < 2 · SettleRadius).
+                for (int it = 0; it < 3; it++)
                 {
-                    if (q.x > lim) sh.x = Mathf.Min(sh.x, lim - q.x); else if (q.x < -lim) sh.x = Mathf.Max(sh.x, -lim - q.x);
-                    if (q.z > lim) sh.z = Mathf.Min(sh.z, lim - q.z); else if (q.z < -lim) sh.z = Mathf.Max(sh.z, -lim - q.z);
+                    Vector3 sh = Vector3.zero;
+                    foreach (var q in new[] { pp, pr })
+                    {
+                        float dq = Mathf.Sqrt(q.x * q.x + q.z * q.z);
+                        if (dq <= SettleRadius) continue;
+                        var over = new Vector3(q.x, 0f, q.z) * ((dq - SettleRadius) / dq);
+                        if (over.sqrMagnitude > sh.sqrMagnitude) sh = over;
+                    }
+                    if (sh.sqrMagnitude < 1e-8f) break;
+                    pp -= sh; pr -= sh;
                 }
-                pp += sh; pr += sh;
                 pp.y = pr.y = RingStage3D.MatY;
             }
             // Лицем до суперника.
@@ -1195,14 +1305,21 @@ namespace Game.Gameplay.Ring.Stage
             yield return Slide(items, 0.15f);
         }
 
-        /// <summary>Де борець стає після події: за рингом — на точці пари, на рингу — там, де стоїть (біля краю — трохи всередину).</summary>
+        /// <summary>
+        /// Де борець стає після події: за рингом — на точці пари, на рингу — там, де стоїть, але не далі
+        /// <see cref="SettleRadius"/> від центру (власні розстановки режисера — у межах охоронця центру, з запасом).
+        /// </summary>
         private Vector3 SettlePos(MatchSide s)
         {
             if (_m[I(s)].Outside) return RingStage3D.PairPos(s, true);
             Vector3 p = _s.Actor(s).PosePos;
-            float lim = RingStage3D.RingHalf - 0.6f;
-            return new Vector3(Mathf.Clamp(p.x, -lim, lim), RingStage3D.MatY, Mathf.Clamp(p.z, -lim, lim));
+            float d = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+            float k = d > SettleRadius ? SettleRadius / d : 1f;
+            return new Vector3(p.x * k, RingStage3D.MatY, p.z * k);
         }
+
+        /// <summary>Найдалі від центру, куди режисер сам ставить борця на рингу після події, м (запас 0,15 до <see cref="CenterLimit"/>).</summary>
+        private const float SettleRadius = CenterLimit - 0.15f;
 
         /// <summary>
         /// Рефері тут не заважає: не ближче 0,85 м до лінії між борцями, у рингу (0,35 м від канатів) і не перед ними з боку
