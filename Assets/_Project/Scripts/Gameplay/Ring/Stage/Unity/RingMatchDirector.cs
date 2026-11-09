@@ -331,11 +331,15 @@ namespace Game.Gameplay.Ring.Stage
             if (_ev != ev || _beatFired) yield break;
             _beatFired = true;
             _s.Beat(ev, 3);
-            _s.CrowdPop();                                                   // зал вибухає на розв'язці відліку, а не в кінці кліпа
+            // Зал вибухає на розв'язці відліку, а не в кінці кліпа — і на рахунку, розірваному напарником: Rescue буває лише
+            // слідом за ним (MatchEngine.ResolvePin), тож вибух (фанати + звук) — тут, на самому розриві. Другий Pop події Rescue
+            // (RingSoundMap Rescue → Pop) — питання зоні звуку (знахідка 5а, 09.11.2026), не прибирати вибух звідси.
+            _s.CrowdPop();
             if (ev.Tier == RollTier.Miss) { if (p.Three && _s.Sound != null) _s.Sound.Slap(); }
-            else
+            else if (ev.Perk != PerkCatalog.BribedRef)
             {
-                // Вирвався: поп залу, спалах і тремтіння — на самому кікауті.
+                // Вирвався: поп залу, спалах і тремтіння — на самому кікауті. Підкуп — рефері зупинився на «два», плеча вгору
+                // немає (кліпа кікауту немає): лише поп залу, без удару.
                 if (_s.Fx != null) _s.Fx.Impact(ev.Tier == RollTier.Partial ? 0.9f : 0.6f);
                 _s.Shake(0.04f, 0.35f);
             }
@@ -1280,6 +1284,7 @@ namespace Game.Gameplay.Ring.Stage
             }
             ArmBeat(idx, tStart, st);
             if (ev != null && sa == ev.Actor) ArmFollowUp(ev, st.Clip, tStart);
+            ArmTaps(ev, st.Clip, tStart);
             if (_pinSound != null && ev != null && ev.Kind == MatchEventKind.Kickout)
             {
                 // Звук накриття — на контакті Cover (груди на груди: мітка contact або виміряна мить кліпа).
@@ -1600,17 +1605,38 @@ namespace Game.Gameplay.Ring.Stage
         public const string FollowUpMark = "touch_2";
 
         /// <summary>
-        /// Другий дотик предмета (звірка зі звуком, п. 5; <c>EVENT_SOUND.md</c>): 7–9 — нападник зачепив себе, ≤ 6 — сам у бар'єр.
-        /// Звучить лише на мітці <see cref="FollowUpMark"/> кліпа кроку нападника: без мітки — тиша, а не звук не в такт
-        /// (підстановки «за рингом» міток не мають — до кліпів набору «за рингом» другого дотику не чути).
+        /// Другий дотик тієї самої дії (звірка зі звуком, п. 5; <c>EVENT_SOUND.md</c>): який звук і чи він є — вирішує зона звуку
+        /// (<see cref="RingSoundMap.FollowUpOf(MatchEvent)"/>; зараз — предмет 7–9 і ≤ 6). Режисер дає лише мить: мітку
+        /// <see cref="FollowUpMark"/> кліпа кроку нападника. Без мітки — тиша, а не звук не в такт (підстановки «за рингом» міток
+        /// не мають). Так другий дотик стрибка з каната (падіння в Springboard_Land_Catch / _Counter, знахідка звуку 1) озветься,
+        /// щойно звук дасть йому звук, а «Кліпи» — мітку, без правки тут.
         /// </summary>
         private void ArmFollowUp(MatchEvent ev, string clip, float startAt)
         {
-            if (_s.Sound == null || ev == null || ev.Kind != MatchEventKind.Action || ev.Action != MatchActionId.Weapon) return;
-            if (ev.Tier == RollTier.Strong) return;
+            if (_s.Sound == null || ev == null || RingSoundMap.FollowUpOf(ev) == RingCue.None) return;
             float t = _s.Events.Time(RingBeats.MarkBase(clip), FollowUpMark);
             if (t < startAt) return;
             _s.Sound.FollowUp(ev, (t - startAt) / RingStage3D.PlaySpeed);
+        }
+
+        /// <summary>
+        /// Больовий, провал («терпіти» не вийшло): стукіт по мату — мітки <c>tap</c> кліпа <c>*_Tap</c> (0,48 / 0,80 / 1,12 с). Перший
+        /// стук — такт події (<see cref="RingBeats"/>, звук захвату); другий і далі — тихий ляпас по мату на своїх мітках (знахідка
+        /// звуку 2, 09.11.2026: звучав лише перший). Крок <c>_Tap</c> — нападника (той, хто тримає), подія — захисника, тож без умови
+        /// «крок актора події».
+        /// </summary>
+        private void ArmTaps(MatchEvent ev, string clip, float startAt)
+        {
+            if (_s.Sound == null || ev == null || ev.Kind != MatchEventKind.Endure || ev.Tier != RollTier.Miss) return;
+            if (clip == null || !clip.EndsWith("_Tap")) return;
+            string mb = RingBeats.MarkBase(clip);
+            for (int n = 1; n < 8; n++)
+            {
+                float t = _s.Events.Time(mb, "tap", n);
+                if (t < 0f) break;
+                if (t < startAt) continue;
+                _s.Sound.Play(RingCue.MatSlap, 0.65f, (t - startAt) / RingStage3D.PlaySpeed, true);
+            }
         }
 
         /// <summary>
