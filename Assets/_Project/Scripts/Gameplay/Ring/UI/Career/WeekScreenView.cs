@@ -133,28 +133,44 @@ namespace Game.Gameplay.Ring.UI
             float gw = narrow ? ArenaKit.GoldWNarrow : ArenaKit.GoldW;
             _gold.style.width = gw;
             _row.style.right = ArenaKit.Edge + gw + 14f;
-            float lift = narrow && _tiles.Count > 3 ? ArenaKit.TileH + 12f : 0f;
+            bool twoRows = narrow && _tiles.Count > 3;
+            // Один ряд вузьких плиток (16:9: ~183 одиниці) — компактні плитки (назва 17, ключ на краї); тексту більше, ніж уміщає
+            // TileH, — ряд росте вгору, а з ним шапка, канати й шухляда (кадри слоту 27, 09.11.2026: «ВІДНОВЛЕНН/Я», шанси під
+            // смугою, рядок травми під плиткою). Щойно змінений режим — висота з наступного кадру, коли текст перерозкладено.
+            float rowW = width - ArenaKit.Edge - (ArenaKit.Edge + gw + 14f);
+            float tileW = _tiles.Count > 0 ? (rowW - 9f * _tiles.Count) / _tiles.Count : 0f;
+            bool compact = !twoRows && tileW < ArenaKit.CompactTileW;
+            bool relaid = false;
+            float need = ArenaKit.TileH;
+            foreach (var t in _tiles) relaid |= t.SetCompact(compact);
+            if (!relaid) foreach (var t in _tiles) need = Mathf.Max(need, t.NeededHeight());
+            float tileH = relaid && !float.IsNaN(_gold.layout.height) && _gold.layout.height > 0f ? _gold.layout.height
+                : Mathf.Min(ArenaKit.TileH + ArenaKit.TileGrowMax, (float)Math.Ceiling(need));
+            float lift = tileH - ArenaKit.TileH + (twoRows ? tileH + 12f : 0f);
             _row.style.height = ArenaKit.TileH + lift;
-            _row.style.flexWrap = lift > 0f ? Wrap.Wrap : Wrap.NoWrap;
+            _row.style.flexWrap = twoRows ? Wrap.Wrap : Wrap.NoWrap;
+            _gold.style.height = tileH;
             foreach (var t in _tiles)
             {
-                t.style.flexBasis = lift > 0f ? Length.Percent(31f) : new Length(0f);
-                t.style.marginBottom = lift > 0f ? 12f : 0f;
+                t.style.height = tileH;
+                t.style.flexBasis = twoRows ? Length.Percent(31f) : new Length(0f);
+                t.style.marginBottom = twoRows ? 12f : 0f;
             }
             if (_ropes != null) _ropes.style.bottom = ArenaKit.RopesBottom + lift;
             if (_header != null) _header.style.bottom = ArenaKit.HeaderBottom + lift;
             if (_drawer != null)
             {
                 _drawer.style.bottom = ArenaKit.HeaderBottom + 50f + lift;
-                // шухляда не закриває афішу (гонорар, план), доки під нею лишається >= 260 на список; інакше — лише до стрічки
-                // суперника (вузька панель, ряд плиток піднятий) — рев'ю 08.11.2026
+                // шухляда не закриває афішу (гонорар, план, суперник), доки під нею лишається >= DrawerMinRoom — далі список
+                // прокручується; менше — лише до стрічки суперника (рев'ю 08.11.2026; поріг 260 при 4:3 клав шухляду на план букера
+                // і суперника — кадри слоту 27, 09.11.2026)
                 float height = Root.layout.height;
                 float bottomY = height - (ArenaKit.HeaderBottom + 50f + lift);
                 bool posterReady = _poster != null && !float.IsNaN(_poster.layout.height) && _poster.layout.height > 0f;
                 if (posterReady && !float.IsNaN(height))
                 {
                     float room = bottomY - (_poster.layout.y + _poster.layout.height) - 12f;
-                    if (room < 260f) room = bottomY - (ArenaKit.Top + ArenaKit.StripH + 12f);
+                    if (room < ArenaKit.DrawerMinRoom) room = bottomY - (ArenaKit.Top + ArenaKit.StripH + 12f);
                     if (room > 120f) _drawer.style.maxHeight = room;
                 }
             }
@@ -170,6 +186,7 @@ namespace Game.Gameplay.Ring.UI
         {
             var t = new ActionTile(key, title, effect, risk, enabled, reason);
             t.OnClick = act;
+            t.OnContentChanged = Fit;   // перенос рядків відомий лише після розкладки — висота ряду за ним
             t.OnHover = () =>
             {
                 foreach (var o in _tiles) o.Focused = o == t;
@@ -355,17 +372,24 @@ namespace Game.Gameplay.Ring.UI
             box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, 0.96f), Stripe = RingTheme.Gold, StripeW = 6f });
             // заголовок і рядок-підказка — над прокруткою: опис пункту й причина «чому недоступно» видні завжди, а не внизу
             // довгого списку (рев'ю 08.11.2026)
-            var top = new VisualElement();
+            // Рядок-підказка — праворуч від заголовка, а не під ним: порожній під заголовком він читався як зайва смуга й з'їдав
+            // висоту списку (кадри слоту 27, 09.11.2026)
+            var top = ArenaKit.Row();
             top.pickingMode = PickingMode.Ignore;
+            top.style.alignItems = Align.Center;
             top.style.paddingLeft = 18f; top.style.paddingRight = 24f; top.style.paddingTop = 8f;
             top.style.flexShrink = 0f;
             var head = MenuKit.Display(_dev ? T.Get("dev.title") : T.Get("c.hub.shop"), 25f, RingTheme.Text, RingFontRole.Display900, 0.02f);
+            head.style.flexShrink = 0f;
             top.Add(head);
             var hint = MakeHint();   // кнопки розвитку й витрат пишуть сюди при наведенні
-            hint.style.marginTop = 2f;
+            hint.style.marginTop = 0f; hint.style.marginLeft = 16f;
+            hint.style.flexGrow = 1f; hint.style.flexShrink = 1f;
+            hint.style.unityTextAlign = TextAnchor.MiddleLeft;
             top.Add(hint);
             box.Add(top);
             var scroll = new ScrollView(ScrollViewMode.Vertical);
+            ArenaKit.ThinScroller(scroll);
             scroll.style.flexShrink = 1f; scroll.style.minHeight = 60f;
             scroll.style.paddingLeft = 18f; scroll.style.paddingRight = 24f; scroll.style.paddingBottom = 10f;
             var content = _dev ? DevelopmentPanel(Refresh, 2) : ShopPanel();

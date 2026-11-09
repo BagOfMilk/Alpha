@@ -99,6 +99,8 @@ namespace Game.Gameplay.Ring.UI.Menus
             _focus.Reset(enabled, 0);   // за замовчуванням — «Продовжити»: Esc/Start/Enter одразу повертають у гру
 
             _footer = MenuKit.Footer(out _hints, null);
+            // під паузою — ряд плиток тижня: напівпрозора підкладка змішувала підказку з їхнім текстом (кадр слоту 27, 09.11.2026)
+            _hints.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaPlate);
             Root.Add(_footer);
             UpdateHints(MenuDevice.Keyboard);
             SyncFocus(true);

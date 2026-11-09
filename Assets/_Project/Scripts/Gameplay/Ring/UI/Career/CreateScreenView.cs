@@ -208,8 +208,9 @@ namespace Game.Gameplay.Ring.UI
             box.Add(label);
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, null, 10f, 34f, null);
-            tag.Add(ArenaKit.Tag(T.Get("gimmick." + C.Content.GimmickOf(_d.Gimmick).Key) + " · ", RingTheme.TextDim));
-            tag.Add(ArenaKit.Tag(RingLabels.PathName(T, path), ArenaKit.RoleText(path)));
+            // пробіл після «·» — на початку наступного напису: кінцевий пробіл напис не малює (кадри слоту 27, 09.11.2026)
+            tag.Add(ArenaKit.Tag(T.Get("gimmick." + C.Content.GimmickOf(_d.Gimmick).Key) + " ·", RingTheme.TextDim));
+            tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(T, path), ArenaKit.RoleText(path)));
             box.Add(tag);
 
             var well = ArenaKit.Abs(24f, 36f, 38f, null, null, 58f);

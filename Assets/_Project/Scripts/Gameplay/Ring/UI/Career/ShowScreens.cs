@@ -26,9 +26,11 @@ namespace Game.Gameplay.Ring.UI
             box.Add(name);
             var tag = ArenaKit.Row();
             ArenaKit.Place(tag, null, 12f, 34f, null);
-            var gimmick = ArenaKit.Tag(t.Get("gimmick." + c.Content.GimmickOf(v.Gimmick).Key) + " · ", RingTheme.TextDim);
+            // пробіл після «·» — на початку наступного напису: кінцевий пробіл напис не малює («ЛЕТУН ·ГЕРОЙ» проти «ГЕРОЙ · ЛЕТУН»
+            // суперника — кадри слоту 27, 09.11.2026)
+            var gimmick = ArenaKit.Tag(t.Get("gimmick." + c.Content.GimmickOf(v.Gimmick).Key) + " ·", RingTheme.TextDim);
             tag.Add(gimmick);
-            tag.Add(ArenaKit.Tag(RingLabels.PathName(t, v.Role), ArenaKit.RoleText(v.Role)));
+            tag.Add(ArenaKit.Tag(" " + RingLabels.PathName(t, v.Role), ArenaKit.RoleText(v.Role)));
             if (v.IsChampion) tag.Add(ArenaKit.Tag(" · " + t.Get("c.champion"), RingTheme.Gold));
             box.Add(tag);
             ArenaKit.FitNameAndTag(box, name, tag, gimmick, true, 40f, 26f);
@@ -653,6 +655,7 @@ namespace Game.Gameplay.Ring.UI
             {
                 var scroll = new ScrollView(ScrollViewMode.Vertical);
                 scroll.style.maxHeight = 380f;
+                ArenaKit.ThinScroller(scroll);   // смуга в стилі «Арена» (кадри слоту 27)
                 var content = DevelopmentPanel(Refresh, 2);
                 content.style.backgroundColor = Color.clear;
                 content.style.borderTopWidth = 0f; content.style.borderBottomWidth = 0f; content.style.borderLeftWidth = 0f; content.style.borderRightWidth = 0f;
@@ -772,6 +775,7 @@ namespace Game.Gameplay.Ring.UI
             box.Add(new ArenaPlate { Fill = RingTheme.WithAlpha(RingTheme.Panel, 0.96f), Stripe = RingTheme.Gold });
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             scroll.style.maxHeight = 270f;
+            ArenaKit.ThinScroller(scroll);   // системна сіра смуга зі стрілками випадала зі стилю (кадри слоту 27)
             scroll.style.paddingLeft = 20f; scroll.style.paddingRight = 14f; scroll.style.paddingTop = 8f; scroll.style.paddingBottom = 10f;
             var head = MenuKit.Display(T.Get("dev.title"), 25f, RingTheme.Text, RingFontRole.Display900, 0.02f);
             head.style.marginBottom = 4f;

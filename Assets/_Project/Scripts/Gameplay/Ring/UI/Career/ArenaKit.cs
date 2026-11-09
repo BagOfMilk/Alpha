@@ -26,6 +26,11 @@ namespace Game.Gameplay.Ring.UI
         public const float RowY = 743f, TileH = 112f;
         public const float GoldW = 273f, GoldWNarrow = 210f;
         public const float NarrowWidth = 1450f;
+        // Плитки ряду: вужчі за CompactTileW в один ряд (16:9 — ~183) — компактні; текст, що не вміщається в TileH, піднімає ряд
+        // не більш ніж на TileGrowMax (кадри слоту 27, 09.11.2026: назви рвались посеред слова, шанси лягали під смугу).
+        public const float CompactTileW = 230f, TileGrowMax = 64f;
+        // Шухляда тижня не налазить на афішу, доки під афішею лишається хоч стільки (далі — прокрутка); менше — до стрічки суперника.
+        public const float DrawerMinRoom = 150f;
         // Низ екрана — відлік ЗНИЗУ: при «Розмірі інтерфейсу» 90–120 % логічна висота панелі 750–1000, а не 900
         public const float RowBottom = 45f, HeaderBottom = 164f, RopesBottom = 210f; // ширша панель — золота плита повна; вужча (4:3, великий масштаб) — вужча
 
@@ -92,6 +97,41 @@ namespace Game.Gameplay.Ring.UI
             s.style.flexGrow = 1f;
             s.pickingMode = PickingMode.Ignore;
             return s;
+        }
+
+        /// <summary>
+        /// Смуга прокрутки мовою «Арена»: тонка темна рейка, золотий повзунок, без стрілок. Системна світло-сіра смуга зі стрілками
+        /// випадала зі стилю (шухляда «Розвиток» на кінці сезону — кадри слоту 27, 09.11.2026). Елементи — за класами USS рушія.
+        /// </summary>
+        public static void ThinScroller(ScrollView s)
+        {
+            var vs = s.Q(className: "unity-scroll-view__vertical-scroller") ?? s.Q(className: "unity-scroller--vertical");
+            if (vs == null) return;
+            vs.style.width = 6f; vs.style.minWidth = 6f;
+            vs.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, BrandTokens.AlphaShade);
+            NoBorder(vs);
+            Hide(vs.Q(className: "unity-scroller__low-button"));
+            Hide(vs.Q(className: "unity-scroller__high-button"));
+            var slider = vs.Q(className: "unity-scroller__slider");
+            if (slider != null) { slider.style.marginTop = 0f; slider.style.marginBottom = 0f; slider.style.marginLeft = 0f; slider.style.marginRight = 0f; }
+            var tracker = vs.Q(className: "unity-base-slider__tracker");
+            if (tracker != null) { tracker.style.backgroundColor = RingTheme.WithAlpha(RingTheme.Bg, 0f); NoBorder(tracker); }
+            var dragger = vs.Q(className: "unity-base-slider__dragger");
+            if (dragger != null)
+            {
+                dragger.style.backgroundColor = RingTheme.Gold;
+                NoBorder(dragger);
+                dragger.style.left = 0f; dragger.style.width = 6f;
+                dragger.style.marginLeft = 0f; dragger.style.marginRight = 0f;
+            }
+            Hide(vs.Q(className: "unity-base-slider__dragger-border"));
+        }
+
+        private static void Hide(VisualElement e) { if (e != null) e.style.display = DisplayStyle.None; }
+
+        private static void NoBorder(VisualElement e)
+        {
+            e.style.borderTopWidth = 0f; e.style.borderBottomWidth = 0f; e.style.borderLeftWidth = 0f; e.style.borderRightWidth = 0f;
         }
 
         /// <summary>Підпис-мітка (display ВЕЛИКИМИ, розряджено) — «ГОЛОВА», «ПОПУЛЯРНІСТЬ».</summary>
@@ -371,9 +411,12 @@ namespace Game.Gameplay.Ring.UI
         private readonly VisualElement _keyBox, _chances, _body, _head, _face;
         private readonly bool _enabled;
         private bool _compact;
+        private float _bodyTop = 10f;
         private bool _focus, _selected;
         public Action OnClick;
         public Action OnHover;
+        /// <summary>Висота тексту плитки змінилась (перенос рядків, компактний режим) — ряд перераховує свою висоту.</summary>
+        public Action OnContentChanged;
         public Color Accent = RingTheme.Gold;
         public Color SelectColor = RingTheme.Gold;
         /// <summary>Вибрана плитка світла (золото) — текст темний; темна заливка ролі (кобальт, кармін) — текст світлий.</summary>
@@ -426,6 +469,11 @@ namespace Game.Gameplay.Ring.UI
             _risk = MenuKit.Body(!enabled && !string.IsNullOrEmpty(reason) ? reason : risk ?? "", BrandTokens.TypeMinInfo, RingTheme.Signal);
             _risk.style.display = string.IsNullOrEmpty(_risk.text) ? DisplayStyle.None : DisplayStyle.Flex;
             body.Add(_risk);
+            // рядки тримають свою висоту: стиснуті flex-ом, вони малювали текст поза собою — назва вилазила над плиткою, рядок
+            // тривоги — під неї (кадри слоту 27); скільки тексту насправді, каже NeededHeight
+            head.style.flexShrink = 0f; _effect.style.flexShrink = 0f; _risk.style.flexShrink = 0f;
+            EventCallback<GeometryChangedEvent> changed = e => { if (OnContentChanged != null) OnContentChanged(); };
+            head.RegisterCallback(changed); _effect.RegisterCallback(changed); _risk.RegisterCallback(changed);
             _chances = new VisualElement();
             _chances.style.position = Position.Absolute;
             _chances.style.left = 18f; _chances.style.bottom = 10f; _chances.style.height = 7f; _chances.style.width = 120f;
@@ -449,14 +497,17 @@ namespace Game.Gameplay.Ring.UI
         /// Компактна плитка (вузька панель — 4:3 чи великий масштаб інтерфейсу; кадри 08.11.2026: на ~120 одиниць ширини назви
         /// рвались посеред слова й вилазили за плитку): кегль назви менший, ключ-цифра сидить на верхньому краї плитки, а не в рядку.
         /// </summary>
-        public void SetCompact(bool on)
+        /// <returns>true — режим змінився (розкладка тексту оновиться в наступному кадрі).</returns>
+        public bool SetCompact(bool on)
         {
-            if (_compact == on) return;
+            if (_compact == on) return false;
             _compact = on;
             _title.style.fontSize = on ? 17f : 21f;
+            _title.style.letterSpacing = new Length((on ? 17f : 21f) * 0.03f);
             _body.style.left = on ? 12f : 18f;
             _body.style.right = on ? 14f : 22f;
-            _body.style.top = on ? 14f : 10f;
+            _bodyTop = on ? 14f : 10f;
+            _body.style.top = _bodyTop;
             _keyBox.RemoveFromHierarchy();
             if (on)
             {
@@ -475,6 +526,28 @@ namespace Game.Gameplay.Ring.UI
                 _key.style.fontSize = 21f;
                 _head.Add(_keyBox);
             }
+            return true;
+        }
+
+        /// <summary>
+        /// Висота, якої плитці треба на весь текст: відступ згори + рядки (назва, ефект, ризик) + низ (зі смугою шансів — місце під
+        /// неї, щоб рядок не лягав під смугу). 0 — розкладки ще немає.
+        /// </summary>
+        public float NeededHeight()
+        {
+            float y = 0f;
+            if (!Bottom(_head, ref y) || !Bottom(_effect, ref y)) return 0f;
+            if (_risk.style.display.value != DisplayStyle.None && !Bottom(_risk, ref y)) return 0f;
+            bool bar = _chances.style.display.value != DisplayStyle.None;
+            return _bodyTop + y + (bar ? 10f + 7f + 6f : 8f);
+        }
+
+        private static bool Bottom(VisualElement e, ref float y)
+        {
+            var r = e.layout;
+            if (float.IsNaN(r.height)) return false;
+            if (r.yMax > y) y = r.yMax;
+            return true;
         }
 
         /// <summary>Смуга шансів 2d6 (частки з 36): промах — сигнал, частково — папір, успіх — золото (ACC-02: число в ефекті поруч).</summary>
@@ -548,8 +621,12 @@ namespace Game.Gameplay.Ring.UI
     /// <summary>Золота плита головної дії (B03: «ПЕРЕЙТИ ДО ВЕЧОРА», «ДАЛІ», «ПОЧАТИ КАР'ЄРУ»): лівий край скошений, слово display Black, «ENTER».</summary>
     public sealed class GoldPlate : VisualElement
     {
+        private const float WordSize = 36f, WordMin = 26f, WordTrack = 0.01f;   // 36 → не нижче 26 (У0, ПМ 09.11.2026)
+        private const float WordLeft = 40f, WordRight = 16f, WordTop = 12f, WordBottom = 6f;
         private readonly bool _enabled;
         private readonly ArenaPlate _plate;
+        private readonly Label _word, _probe;
+        private float _size = WordSize, _fitW = -1f;
 
         public GoldPlate(string text, string keyHint, Action onClick, bool enabled = true)
         {
@@ -557,11 +634,22 @@ namespace Game.Gameplay.Ring.UI
             style.overflow = Overflow.Visible;
             _plate = new ArenaPlate { Fill = enabled ? RingTheme.Gold : RingTheme.PanelRaised, Mirror = true };
             Add(_plate);
-            var word = MenuKit.Display(text, 36f, enabled ? RingTheme.Bg : RingTheme.Disabled, RingFontRole.Display900, 0.01f);
-            word.style.whiteSpace = WhiteSpace.Normal;
-            word.style.position = Position.Absolute;
-            word.style.left = 40f; word.style.right = 16f; word.style.top = 12f;
-            Add(word);
+            Color ink = enabled ? RingTheme.Bg : RingTheme.Disabled;
+            _word = MenuKit.Display(text, WordSize, ink, RingFontRole.Display900, WordTrack);
+            _word.style.whiteSpace = WhiteSpace.Normal;
+            _word.style.position = Position.Absolute;
+            _word.style.left = WordLeft; _word.style.right = WordRight; _word.style.top = WordTop;
+            Add(_word);
+            // Найдовше слово тим самим кеглем, невидиме: плита вужча за слово — кегль меншає, а не рветься посеред слова
+            // («ВОРОЖНЕ/ЧА», «ТИТУЛЬНИ/Й» при 4:3 — кадри слоту 27, 09.11.2026); рядків більше, ніж уміщає висота, — теж.
+            _probe = MenuKit.Display(LongestWord(text), WordSize, ink, RingFontRole.Display900, WordTrack);
+            _probe.style.position = Position.Absolute;
+            _probe.style.left = 0f; _probe.style.top = 0f;
+            _probe.style.opacity = 0f;
+            Add(_probe);
+            RegisterCallback<GeometryChangedEvent>(e => FitWord());
+            _word.RegisterCallback<GeometryChangedEvent>(e => FitWord());
+            _probe.RegisterCallback<GeometryChangedEvent>(e => FitWord());
             var hint = MenuKit.Display(keyHint ?? "", BrandTokens.TypeLabel, enabled ? RingTheme.Bg : RingTheme.Disabled, RingFontRole.Display800, 0.12f);
             hint.style.position = Position.Absolute;
             hint.style.right = 18f; hint.style.bottom = 10f;
@@ -569,6 +657,45 @@ namespace Game.Gameplay.Ring.UI
             RegisterCallback<PointerDownEvent>(e => { if (_enabled && e.button == 0 && onClick != null) onClick(); });
             RegisterCallback<PointerEnterEvent>(e => { if (_enabled) { _plate.Outline = RingTheme.Text; _plate.Redraw(); } });
             RegisterCallback<PointerLeaveEvent>(e => { _plate.Outline = null; _plate.Redraw(); });
+        }
+
+        /// <summary>
+        /// Кегль напису під плиту: ширина слова-проби ∝ кеглю, тож за один крок — пропорційно; зайвий рядок — мінус 2. Нова ширина
+        /// плити (інша роздільність, вузька панель) — підбір заново від повного кегля. Не менше <see cref="WordMin"/>.
+        /// </summary>
+        private void FitWord()
+        {
+            float w = layout.width, h = layout.height, pw = _probe.layout.width, wh = _word.layout.height;
+            if (float.IsNaN(w) || w <= 0f || float.IsNaN(pw) || pw <= 0f || float.IsNaN(wh)) return;
+            if (Mathf.Abs(w - _fitW) > 1f)
+            {
+                _fitW = w;
+                if (_size < WordSize) { SetWordSize(WordSize); return; }
+            }
+            float availW = w - WordLeft - WordRight, availH = h - WordTop - WordBottom;
+            float s = _size;
+            if (pw > availW + 0.5f) s = (float)Math.Floor(_size * availW / pw);
+            else if (wh > availH + 0.5f) s = _size - 2f;
+            s = Mathf.Max(WordMin, s);
+            if (s < _size) SetWordSize(s);
+        }
+
+        private void SetWordSize(float s)
+        {
+            _size = s;
+            foreach (var l in new[] { _word, _probe })
+            {
+                l.style.fontSize = s;
+                l.style.letterSpacing = new Length(s * WordTrack);
+            }
+        }
+
+        private static string LongestWord(string text)
+        {
+            string best = "";
+            foreach (var part in (text ?? "").Split(' '))
+                if (part.Length > best.Length) best = part;
+            return best;
         }
     }
 
