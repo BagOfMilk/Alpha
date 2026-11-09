@@ -106,6 +106,16 @@ namespace Game.Core.Ring
         public int RoundLimit = Match.MatchRules.ActionLimit;
         /// <summary>Кар'єра: слабший бік, що сильно відстає, раз за матч отримує «промінь надії» (ПЛЕЙСХОЛДЕР, TRPG_DESIGN §4). Зріз ворожнечі лишає вимкненим.</summary>
         public bool HopeSpotEnabled;
+        /// <summary>
+        /// Фінішер борця для показу, коли дію «Фінішер» обрано без прийому — ШІ суперника чи загальна кнопка (прохід 3 «Скилів»,
+        /// 3-P1-3: 35 із 35 фінішерів грались одним кліпом, бо в події не було ключа). Ключ прийому каталогу й постановка — лише
+        /// для показу: <see cref="Match.MoveHint.RollMod"/> і <see cref="Match.MoveHint.HypeOnStrong"/> тут нульові, тож кидки й
+        /// ажіотаж ті самі, що без підказки. null — без ключа (запасний кліп таблиці).
+        /// </summary>
+        public Match.MoveHint PlayerFinisher;
+        public Match.MoveHint RivalFinisher;
+
+        public Match.MoveHint FinisherOf(Match.MatchSide s) { return s == Match.MatchSide.Player ? PlayerFinisher : RivalFinisher; }
     }
 
     /// <summary>Підсумок матчу — усе, що ворожнеча читає назад (gdd §3 «Матч → ворожнеча»).</summary>

@@ -327,7 +327,8 @@ namespace Game.Gameplay.Ring.Models
             if (Input != MatchInput.PlayerAction) return false;
             var o = _e.Describe(id);
             if (!o.Available) return false;
-            if (id == MatchActionId.CatchBreath) _e.EndTurn(); else _e.Perform(id);
+            if (id == MatchActionId.CatchBreath) _e.EndTurn();
+            else _e.Perform(id, id == MatchActionId.Finisher ? _e.Setup.FinisherOf(MatchSide.Player) : null);
             return true;
         }
 

@@ -108,7 +108,9 @@ namespace Game.Core.Ring.Match
             {
                 case MatchPhase.AwaitAction:
                     var id = ChooseAction(e);
-                    if (id == MatchActionId.CatchBreath) e.EndTurn(); else e.Perform(id);
+                    // фінішер — своїм прийомом для показу (MatchSetup.FinisherOf: ключ і постановка, без бонусів до кидка)
+                    if (id == MatchActionId.CatchBreath) e.EndTurn();
+                    else e.Perform(id, id == MatchActionId.Finisher ? e.Setup.FinisherOf(e.CurrentActor) : null);
                     break;
                 case MatchPhase.AwaitReaction: e.React(ChooseReaction(e)); break;
                 case MatchPhase.AwaitBoost: e.Commit(ChooseBoost(e)); break;

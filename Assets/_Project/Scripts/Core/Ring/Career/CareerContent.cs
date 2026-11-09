@@ -283,5 +283,15 @@ namespace Game.Core.Ring.Career
             for (int i = 0; i < Gimmicks.Count; i++) if (Gimmicks[i].Id == g) return Gimmicks[i];
             throw new ArgumentException("немає ґіміка " + g);
         }
+
+        /// <summary>
+        /// Фінішер ґіміка для показу (<see cref="MatchSetup.RivalFinisher"/>): ключ прийому й постановка, без бонусу до кидка й
+        /// ажіотажу — ШІ суперника й загальна кнопка грають фінішер своїм кліпом, а правила матчу ті самі.
+        /// </summary>
+        public MoveHint FinisherShow(Gimmick g)
+        {
+            var m = Moves.Get(GimmickOf(g).FinisherMove);
+            return new MoveHint { Key = m.Id, Staging = m.Staging };
+        }
     }
 }

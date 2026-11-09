@@ -839,7 +839,9 @@ namespace Game.Core.Ring.Career
                 RivalStartMomentum = Math.Max(0, Math.Min(10, npc.StartMomentum + State.RivalBoost + rivalMods.StartMomentumBonus)),
                 StartHype = Math.Max(0, Math.Min(10, hype)), PlayerHasAlly = false, Stipulations = State.Stip,
                 Plan = State.IsTitle ? BookerPlan.None : State.Plan, PlayerRole = Feud.State.DominantPath(), RivalRole = npc.Path,
-                HopeSpotEnabled = true
+                HopeSpotEnabled = true,
+                // фінішер для показу — прийом ґіміка (3-P1-3): ключ і постановка, без бонусів до кидка
+                PlayerFinisher = Content.FinisherShow(State.Gimmick), RivalFinisher = Content.FinisherShow(npc.Gimmick)
             };
             _engine = new MatchEngine(setup, Dice);
             State.Phase = ShowPhase.Match;
@@ -853,6 +855,8 @@ namespace Game.Core.Ring.Career
             int steps = RivalStepsNow();
             var e = Feud.StartMatch();
             e.Setup.HopeSpotEnabled = true;
+            e.Setup.PlayerFinisher = Content.FinisherShow(State.Gimmick);
+            e.Setup.RivalFinisher = Content.FinisherShow(Content.FindNpc(CareerContent.HammerId).Gimmick);
             // Молот росте від матчу до матчу ворожнечі (сила за місцем у картці: велике шоу — мейн-івент).
             var hammer = e.State.Rival.Stats.Clone();
             var over = new MatchModifiers();
