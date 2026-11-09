@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -234,22 +234,17 @@ namespace Game.Gameplay.Ring.Stage
             {
                 // Старт зі стану «пара за рингом» (відновлення, демо): рефері — на своєму місці за рингом, кадр — «за рингом».
                 Vector3 rp = OutsideRefPos();
-                _s.Place(_s.Referee, rp, RingStage3D.YawTo(rp, RingStage3D.OutsideAnchor), "Ref_Idle_Loop");
+                _s.Place(_s.Referee, rp, RingStage3D.YawTo(rp, RingStage3D.OutsideAnchor), RefIdle(true));
                 OutsideStillShot();
             }
             else _s.Place(_s.Referee, RingStage3D.RefPos, 180f, "Ref_Idle_Loop");
         }
 
-        /// <summary>
-        /// Склейка кадру на план <paramref name="cam"/> — не наїзд. <see cref="RingStage3D.SetShot"/> склеює лише з кіноплану чи
-        /// в низький план, тож спершу кіноплан-заглушка зі склейкою, у тому самому кадрі одразу змінений на <paramref name="cam"/>
-        /// (камера проміжного плану не бачить). Обхід до публічного <c>RingStage3D.CutTo</c> — запит «Изучение» через ПМ.
-        /// </summary>
+        /// <summary>Склейка кадру на план <paramref name="cam"/> — не наїзд (<see cref="RingStage3D.CutTo"/>, «Изучение» e0d50c2).</summary>
         private void HardCut(StageCam cam)
         {
             _outHave = false;   // наступний кадр «за рингом» — новим курсом і склейкою
-            _s.Cine(Vector3.zero, Vector3.forward, 40f, true);
-            _s.SetShot(cam);
+            _s.CutTo(cam);
         }
 
         // ============================ черга ============================
@@ -783,7 +778,7 @@ namespace Game.Gameplay.Ring.Stage
             StopWalk(R);
             Vector3 rp = o ? OutsideRefPos() : RefSpot(RingStage3D.PairPos(MatchSide.Player, false), RingStage3D.PairPos(MatchSide.Rival, false));
             Vector3 mid = o ? RingStage3D.OutsideAnchor : new Vector3(0f, RingStage3D.MatY, 0f);
-            _s.Place(R, rp, RingStage3D.YawTo(rp, mid), "Ref_Idle_Loop");
+            _s.Place(R, rp, RingStage3D.YawTo(rp, mid), RefIdle(o));
             _s.Watch.Forget(_s.Actor(MatchSide.Player));
             _s.Watch.Forget(_s.Actor(MatchSide.Rival));
             _s.Watch.Forget(R);
@@ -830,26 +825,47 @@ namespace Game.Gameplay.Ring.Stage
         private bool _outHave;
         private float _outYaw, _outPitch, _outFov;
         private const float OutsideCutYaw = 25f;
-        private const float OutsideMaxFov = 58f;
-        private static readonly float[] OutsideKeepPitch = { 14f, 20f, 26f, 32f };
+        // Ті самі межі, що в RingCine.OutsideShot (e0d50c2): нахил до 40°, кут огляду до 64° — запасні.
+        private const float OutsideMaxFov = 64f;
+        private static readonly float[] OutsideKeepPitch = { 14f, 20f, 26f, 32f, 40f };
 
         /// <summary>
         /// Кадр «за рингом» з гістерезисом: <paramref name="pts"/> — у кадрі, камера — у коридорі довкола рингу
         /// (<see cref="RingVenue.OutsideCameraOk"/>). <paramref name="cut"/> — склейкою (інакше камера доганяє плавно, а
         /// перехід за кут — однаково склейкою). Нічого не ставить і повертає false, якщо пара не вміщається.
+        /// Той самий курс береться, лише якщо кадр чистий за правилами <see cref="RingCine.OutsideShot"/> («Изучение», e0d50c2):
+        /// кожне тіло видно не крізь ринг і над огорожею, кутова стійка не на передньому плані, рефері на фартуху не обрізаний.
+        /// Інакше — новий курс від <see cref="RingCine.OutsideShot"/> (той сам пише в журнал, якщо кадр із поступкою).
         /// </summary>
         private bool OutsideCam(List<Vector3> pts, bool cut)
         {
             var venue = RingStage3D.Venue;
             Vector3 c = RingStage3D.OutsideAnchor;
-            Func<Vector3, bool> ok = p => venue.OutsideCameraOk(p.x, p.y, p.z, c.x, c.z);
+            Func<Vector3, bool> ok = p =>
+            {
+                if (!venue.OutsideCameraOk(p.x, p.y, p.z, c.x, c.z)) return false;
+                for (int i = 0; i < pts.Count; i++)
+                {
+                    Vector3 q = pts[i];
+                    if (Mathf.Max(Mathf.Abs(q.x), Mathf.Abs(q.z)) <= venue.RingSightHalf) continue;
+                    if (!venue.SeesOutside(p.x, p.y, p.z, q.x, q.y, q.z)) return false;
+                }
+                return true;
+            };
             var shot = default(RingCine.Shot);
             if (_outHave)
             {
                 var fovs = new[] { _outFov, Mathf.Min(_outFov + 6f, OutsideMaxFov), Mathf.Min(_outFov + 12f, OutsideMaxFov), OutsideMaxFov };
-                shot = RingCine.FrameAny(pts, _outYaw, _outPitch, fovs, _s.CamAspect, 0.2f, 0.86f, 0.08f, ok, 1.2f, 7f);
-                for (int i = 0; i < OutsideKeepPitch.Length && !shot.Ok; i++)
-                    shot = RingCine.FrameAny(pts, _outYaw, OutsideKeepPitch[i], fovs, _s.CamAspect, 0.2f, 0.86f, 0.08f, ok, 1.2f, 7f);
+                for (int i = -1; i < OutsideKeepPitch.Length && !shot.Ok; i++)
+                {
+                    float pt = i < 0 ? _outPitch : OutsideKeepPitch[i];
+                    foreach (float fov in fovs)
+                    {
+                        var s = RingCine.Frame(pts, _outYaw, pt, fov, _s.CamAspect, 0.2f, 0.86f, 0.08f, ok, 1.2f, 7f);
+                        s.Fov = fov;
+                        if (s.Ok && OutsideClean(s, c)) { shot = s; break; }
+                    }
+                }
             }
             if (!shot.Ok) shot = RingCine.OutsideShot(pts, c, RingStage3D.OutsideOut, _s.CamAspect);
             if (!shot.Ok) return false;
@@ -863,6 +879,23 @@ namespace Game.Gameplay.Ring.Stage
             _outPitch = pitch;
             _outFov = shot.Fov;
             return true;
+        }
+
+        /// <summary>
+        /// М'які вимоги кадру «за рингом» — як у <see cref="RingCine.OutsideShot"/>: кутова стійка не ближче за пару в полі зору
+        /// (<see cref="RingVenue.PostInView"/>) і рефері на фартуху або весь у кадрі, або поза ним (<see cref="RingVenue.FigureCut"/>).
+        /// </summary>
+        private bool OutsideClean(RingCine.Shot s, Vector3 pairCenter)
+        {
+            var venue = RingStage3D.Venue;
+            float aspect = _s.CamAspect;
+            Vector3 f = s.Look - s.Pos;
+            float halfH = Mathf.Atan(Mathf.Tan(0.5f * s.Fov * Mathf.Deg2Rad) * aspect) * Mathf.Rad2Deg;
+            float dist = new Vector2(pairCenter.x - s.Pos.x, pairCenter.z - s.Pos.z).magnitude;
+            if (venue.PostInView(s.Pos.x, s.Pos.z, f.x, f.z, halfH, dist)) return false;
+            Vector3 rf = RingStage3D.OutsideRefPos;
+            return !RingVenue.FigureCut(s.Pos.x, s.Pos.y, s.Pos.z, s.Look.x, s.Look.y, s.Look.z, s.Fov, aspect,
+                rf.x, rf.y, rf.z, RingVenue.RefHeight, RingVenue.RefBody);
         }
 
         /// <summary>
@@ -888,13 +921,18 @@ namespace Game.Gameplay.Ring.Stage
             }
         }
 
-        /// <summary>Місце рефері за рингом: на боці пари, за її лінією від рингу (між бійцями, ближче до огорожі).</summary>
-        private static Vector3 OutsideRefPos()
-        {
-            Vector3 p = RingStage3D.OutsideAnchor + RingStage3D.OutsideOut * 0.6f;
-            p.y = RingStage3D.Venue.GroundAt(p.x, p.z);
-            return p;
-        }
+        /// <summary>
+        /// Місце рефері, поки пара за рингом: на фартуху навпроти пари, за канатами (<see cref="RingStage3D.OutsideRefPos"/>,
+        /// «Изучение» e0d50c2). Раніше режисер ставив його на підлогу за 0,6 м від пари — тіло з боді-слему проходило крізь
+        /// рефері (hall 018, власник 09.11.2026: «Ці колізії типу ок?» — ні).
+        /// </summary>
+        private static Vector3 OutsideRefPos() { return RingStage3D.OutsideRefPos; }
+
+        /// <summary>
+        /// Спокій рефері: за рингом — рахує відлік з фартуха (<c>Ref_Count_Outside_Loop</c>, як у огляді «Изучение»), на рингу —
+        /// <c>Ref_Idle_Loop</c>.
+        /// </summary>
+        private static string RefIdle(bool outside) { return outside ? "Ref_Count_Outside_Loop" : "Ref_Idle_Loop"; }
 
         /// <summary>Край фартуха навпроти пари — у кадрі «за рингом»: видно, що пара поза рингом.</summary>
         private static void AddApron(List<Vector3> pts)
@@ -1046,6 +1084,16 @@ namespace Game.Gameplay.Ring.Stage
         }
 
 
+        /// <summary>
+        /// Зсув пари — з жіночого маніфесту (<see cref="RingStage3D.Info(string, bool)"/>, «Изучение» e0d50c2), лише коли обоє
+        /// борців — жінки: жіночий набір знято на двох жіночих тілах. Мішана пара (рідкісна — суперник своєї статі за
+        /// замовчуванням, P2-6) — чоловічий маніфест, як досі; рух жіночого набору (f_motion) поки не читаємо.
+        /// </summary>
+        private bool PairFemale(MatchSide a)
+        {
+            return _s.IsFemale(_s.Actor(a)) && _s.IsFemale(_s.Actor(RingClipTable.Opp(a)));
+        }
+
         private static string BaseOf(string pairClip)
         {
             return pairClip.EndsWith("_A") || pairClip.EndsWith("_B") ? pairClip.Substring(0, pairClip.Length - 2) : pairClip;
@@ -1053,8 +1101,9 @@ namespace Game.Gameplay.Ring.Stage
 
         private IEnumerator RunPair(StageStep st, MatchEvent ev, int idx)
         {
-            var ia = _s.Info(st.Clip + "_A");
-            var ib = _s.Info(st.Clip + "_B");
+            bool fem = PairFemale(st.Actor);
+            var ia = _s.Info(st.Clip + "_A", fem);
+            var ib = _s.Info(st.Clip + "_B", fem);
             var ca = _s.Clip(st.Clip + "_A");
             var cb = _s.Clip(st.Clip + "_B");
             if (ia == null || ca == null || cb == null)
@@ -1181,7 +1230,7 @@ namespace Game.Gameplay.Ring.Stage
                 // Висота слота склейки (верх кута — з підйомом) не лишається на приземленні: PlayAtTime висоти не міняє.
                 A.SetHeight(pAStart.y);
                 if (!bDown && (B.PosePos - pB).sqrMagnitude > 0.0025f) _s.Place(B, pB, yawB, IdleName(sb) ?? "Ring_Stance_Loop");
-                if (!st.Count && (refActor.PosePos - pRef).sqrMagnitude > 0.0025f) _s.Place(refActor, pRef, yawRef, "Ref_Idle_Loop");
+                if (!st.Count && (refActor.PosePos - pRef).sqrMagnitude > 0.0025f) _s.Place(refActor, pRef, yawRef, RefIdle(outside));
                 _s.Watch.Forget(A); _s.Watch.Forget(B); _s.Watch.Forget(refActor);
             }
             else
@@ -1377,7 +1426,7 @@ namespace Game.Gameplay.Ring.Stage
             if (!st.Count)
             {
                 StopWalk(R);
-                if ((R.PosePos - pRef).sqrMagnitude > 0.0025f) _s.Place(R, pRef, RingStage3D.YawTo(pRef, outside ? RingStage3D.OutsideAnchor : mid), "Ref_Idle_Loop");
+                if ((R.PosePos - pRef).sqrMagnitude > 0.0025f) _s.Place(R, pRef, RingStage3D.YawTo(pRef, outside ? RingStage3D.OutsideAnchor : mid), RefIdle(outside));
             }
             _s.Watch.Forget(A); _s.Watch.Forget(B); _s.Watch.Forget(R);
             if (finisherShot) FinisherFrame(A, B, pAc, pBc);
@@ -1452,7 +1501,7 @@ namespace Game.Gameplay.Ring.Stage
             MatchSide sa = st.Actor, sb = RingClipTable.Opp(sa);
             var A = _s.Actor(sa);
             var B = _s.Actor(sb);
-            var ia = _s.Info(st.AnchorPair + "_A");
+            var ia = _s.Info(st.AnchorPair + "_A", PairFemale(sa));
             var caL = _s.Clip(st.AnchorPair + "_A");
             var cbL = _s.Clip(st.AnchorPair + "_B");
             var air = _s.Clip(st.Clip);
@@ -1711,7 +1760,9 @@ namespace Game.Gameplay.Ring.Stage
         private IEnumerator RunEnd(int idx)
         {
             var win = _e != null && _e.Result != null ? _e.Result.Winner : MatchWinner.Player;
-            var ia = _s.Info("Ref_Raise_Hand_A");
+            // Зсув рефері від переможця — за статтю переможця (жіночий маніфест: убік 0,640 проти 0,750 м).
+            var ia = _s.Info("Ref_Raise_Hand_A", win != MatchWinner.Draw
+                && _s.IsFemale(_s.Actor(win == MatchWinner.Player ? MatchSide.Player : MatchSide.Rival)));
             var ca = _s.Clip("Ref_Raise_Hand_A");
             var cb = _s.Clip("Ref_Raise_Hand_B");
             var R = _s.Referee;
@@ -2112,7 +2163,7 @@ namespace Game.Gameplay.Ring.Stage
         {
             AnimationClip over;
             if (a != null && _idleOverride.TryGetValue(a, out over)) return over;
-            if (a == _s.Referee) return _s.Clip("Ref_Idle_Loop");
+            if (a == _s.Referee) return _s.Clip(RefIdle(_m[0].Outside));
             var side = a == _s.Actor(MatchSide.Player) ? MatchSide.Player : MatchSide.Rival;
             string n = IdleName(side);
             return n != null ? _s.Clip(n) : null;
